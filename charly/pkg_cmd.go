@@ -21,6 +21,7 @@ import (
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/vmshared"
 )
 
 // BoxPkgCmd builds native package artifacts for a candy's localpkg sources. The user-facing
@@ -115,7 +116,7 @@ func (c *BoxPkgCmd) Run() error {
 // local_pkg block for the given package format, returning its contract. The
 // per-format build/install/glob/sentinel all come from this config — the only
 // distro knowledge lives in the embedded build vocabulary (charly/charly.yml), never here.
-func lookupLocalPkgDef(dc *buildkit.DistroConfig, format string) *LocalPkgDef {
+func lookupLocalPkgDef(dc *buildkit.DistroConfig, format string) *vmshared.LocalPkgDef {
 	if dc == nil {
 		return nil
 	}

@@ -70,10 +70,10 @@ func resolveVmBackend(configured string) (string, error) {
 		// report the SERVICE inactive while libvirt is fully usable; the
 		// socket (or a real connection) is the only valid signal.
 		startLibvirtUserSession()
-		picked, probed := libvirtSessionSocketWithProbes()
+		picked, probed := vmshared.LibvirtSessionSocketWithProbes()
 		// `picked` is the last-resort dial target; we still need to
 		// confirm it exists. The earlier probes (in `probed`) ARE
-		// already stat'd inside libvirtSessionSocketWithProbes, but
+		// already stat'd inside vmshared.LibvirtSessionSocketWithProbes, but
 		// that function returns the legacy path when neither exists,
 		// so we re-stat here to be sure.
 		if _, err := os.Stat(picked); err == nil {
@@ -97,7 +97,7 @@ func resolveVmBackend(configured string) (string, error) {
 		}
 	}
 	if configured == "qemu" || configured == "auto" {
-		qemuBin := qemuSystemBinary()
+		qemuBin := vmshared.QemuSystemBinary()
 		if _, err := exec.LookPath(qemuBin); err == nil {
 			return "qemu", nil
 		}
@@ -109,7 +109,7 @@ func resolveVmBackend(configured string) (string, error) {
 }
 
 // vmConfiguredBackend returns the backend string to feed resolveVmBackend for
-// a vm entity: the entity's `backend:` pin (VmSpec.Backend) when set, else the
+// a vm entity: the entity's `backend:` pin (vmshared.VmSpec.Backend) when set, else the
 // global vm.backend setting. THE single source so EVERY vm verb (create /
 // destroy / start / stop / console) resolves the SAME backend for a given
 // entity. Without it, `charly vm create` (honoring the pin) and `charly vm destroy`

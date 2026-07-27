@@ -36,7 +36,7 @@ func substrateNodeFromYAML(t *testing.T, doc string) *genericNode {
 //     byte-identical to buildBundleNode(gn) (the former in-proc standaloneKind →
 //     buildBundleNodeInto path); and
 //   - a standalone TEMPLATE-shape node (a bare `vm:` — the PRIMARY VM authoring form) folds
-//     into uf.VM, byte-identical to decodeNodeValue(gn, &VmSpec) (the former
+//     into uf.VM, byte-identical to decodeNodeValue(gn, &vmshared.VmSpec) (the former
 //     buildStandaloneResource path) — the C2-substrate TEMPLATE fold arm that extends F5's
 //     deploy-only fold.
 //

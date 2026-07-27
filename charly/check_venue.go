@@ -126,14 +126,14 @@ func sshForwardEndpoint(e *kit.SSHExecutor, port int) (*CheckEndpoint, error) {
 	// is the per-attempt probe. FATAL fast-fail if ssh has exited (auth/forward
 	// failure) — note cmd.ProcessState is only populated after Wait (cleanup), so
 	// this remains best-effort, as before.
-	cfg := loadedReadiness().WaitCapped(fmt.Sprintf("ssh-forward %s", dest), PollLocal, time.Duration(timeout+5)*time.Second)
-	perr := pollUntil(context.Background(), cfg, func(context.Context) (bool, float64, error) {
+	cfg := loadedReadiness().WaitCapped(fmt.Sprintf("ssh-forward %s", dest), spec.PollLocal, time.Duration(timeout+5)*time.Second)
+	perr := spec.PollUntil(context.Background(), cfg, func(context.Context) (bool, float64, error) {
 		if c, derr := net.DialTimeout("tcp", localAddr, 300*time.Millisecond); derr == nil {
 			_ = c.Close()
 			return true, 0, nil
 		}
 		if cmd.ProcessState != nil && cmd.ProcessState.Exited() {
-			return false, 0, ErrPollFatal // ssh died (auth/forward failure)
+			return false, 0, spec.ErrPollFatal // ssh died (auth/forward failure)
 		}
 		return false, 0, nil
 	})
@@ -309,7 +309,7 @@ func resolveLeafVenue(uf *loaderkit.UnifiedFile, name string) (node spec.BundleN
 // deploy name, NOT its vm: entity — the domain is named after the deploy, P33), a dotted path whose
 // LEAF resolves to a target:vm deployment nested under a non-vm parent (RCA #12 — the deploy owns
 // its OWN domain, keyed off the full dotted path, matching every other vm-state write's canonical
-// vmDomainIdentity(name) scheme), and a dotted path whose ROOT segment is a target:vm deployment (the
+// spec.VmDomainIdentity(name) scheme), and a dotted path whose ROOT segment is a target:vm deployment (the
 // parent deploy owns the domain — the delegate-into-guest shape, e.g. check-arch-vm.arch-host, where
 // the dotted suffix addresses something nested INSIDE that vm's guest, not another vm). Leaf checked
 // first: a leaf that is itself a vm is never a "delegate into it" address. Mirrors
@@ -321,22 +321,22 @@ func checkVmTarget(uf *loaderkit.UnifiedFile, name string) (domainID string, ok 
 	}
 	if idx := strings.Index(name, "."); idx > 0 {
 		if _, venue, ok := resolveLeafVenue(uf, name); ok && venue == "ssh" { // vm (ssh venue)
-			return vmDomainIdentity(name), true
+			return spec.VmDomainIdentity(name), true
 		}
 		root := name[:idx]
 		if entry, present := uf.Bundle[root]; present && nodeTraits(&entry).Venue == "ssh" { // vm (ssh venue)
-			return vmDomainIdentity(root), true
+			return spec.VmDomainIdentity(root), true
 		}
 		return "", false
 	}
 	if uf.VM() != nil {
 		if _, present := uf.VM()[name]; present {
-			return vmDomainIdentity(name), true
+			return spec.VmDomainIdentity(name), true
 		}
 	}
 	if uf.Bundle != nil {
 		if entry, present := uf.Bundle[name]; present && nodeTraits(&entry).Venue == "ssh" { // vm (ssh venue)
-			return vmDomainIdentity(name), true
+			return spec.VmDomainIdentity(name), true
 		}
 	}
 	return "", false

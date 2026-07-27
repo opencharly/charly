@@ -11,6 +11,7 @@ import (
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
 	"gopkg.in/yaml.v3"
 )
 
@@ -21,11 +22,11 @@ import (
 // types, no *Config/registry. What stays HERE needs the loader (LoadBuildConfigForBox),
 // the live *Candy concrete type, or a core-only entry point (ociEmitStep).
 
-// testPacLocalPkgDef returns a LocalPkgDef mirroring build.yml's `pac.local_pkg`
+// testPacLocalPkgDef returns a vmshared.LocalPkgDef mirroring build.yml's `pac.local_pkg`
 // block — the config that drives the localpkg mechanism. Tests use it so they
 // exercise the SAME config-driven path the loader produces, without parsing YAML.
-func testPacLocalPkgDef() *LocalPkgDef {
-	return &LocalPkgDef{
+func testPacLocalPkgDef() *vmshared.LocalPkgDef {
+	return &vmshared.LocalPkgDef{
 		PkgGlob:         "*.pkg.tar.zst",
 		SourceSentinel:  "PKGBUILD",
 		BuildTemplate:   "cd {{.SrcDir}} && PKGDEST={{.PkgDest}} makepkg -sf --noconfirm",
@@ -39,7 +40,7 @@ func testPacLocalPkgDef() *LocalPkgDef {
 // contract — so compileLocalPkgStep resolves it the way it would from build.yml.
 func testPacDistroDef() *spec.ResolvedDistro {
 	return &spec.ResolvedDistro{
-		Format: map[string]*FormatDef{
+		Format: map[string]*vmshared.FormatDef{
 			"pac": {LocalPkg: testPacLocalPkgDef()},
 		},
 	}
@@ -88,15 +89,15 @@ func TestCompileLocalPkgStep(t *testing.T) {
 	}
 
 	// Same candy on an rpm distro → picks the rpm source from the map.
-	rpmImg := &buildkit.ResolvedBox{Name: "charly-fedora", Pkg: "rpm", DistroDef: &spec.ResolvedDistro{Format: map[string]*FormatDef{
-		"rpm": {LocalPkg: &LocalPkgDef{PkgGlob: "*.rpm", SourceSentinel: "*.spec", BuildTemplate: "x", InstallTemplate: "dnf install -y {{.StageDir}}/{{.Glob}}", Probe: "command -v dnf"}},
+	rpmImg := &buildkit.ResolvedBox{Name: "charly-fedora", Pkg: "rpm", DistroDef: &spec.ResolvedDistro{Format: map[string]*vmshared.FormatDef{
+		"rpm": {LocalPkg: &vmshared.LocalPkgDef{PkgGlob: "*.rpm", SourceSentinel: "*.spec", BuildTemplate: "x", InstallTemplate: "dnf install -y {{.StageDir}}/{{.Glob}}", Probe: "command -v dnf"}},
 	}}}
 	if rs, ok := deploykit.CompileLocalPkgStep(l, rpmImg, hostCtx).(*deploykit.LocalPkgInstallStep); !ok || rs.Format != "rpm" || rs.PkgbuildRef != "pkg/fedora" {
 		t.Errorf("rpm distro should pick pkg/fedora via the format map, got %#v", deploykit.CompileLocalPkgStep(l, rpmImg, hostCtx))
 	}
 
 	// Distro with a format but NO localpkg block → nil (no native package).
-	noFmt := deploykit.CompileLocalPkgStep(l, &buildkit.ResolvedBox{Name: "charly-x", Pkg: "rpm", DistroDef: &spec.ResolvedDistro{Format: map[string]*FormatDef{"rpm": {}}}}, hostCtx)
+	noFmt := deploykit.CompileLocalPkgStep(l, &buildkit.ResolvedBox{Name: "charly-x", Pkg: "rpm", DistroDef: &spec.ResolvedDistro{Format: map[string]*vmshared.FormatDef{"rpm": {}}}}, hostCtx)
 	if noFmt != nil {
 		t.Errorf("distro without a localpkg-capable format should compile to nil, got %#v", noFmt)
 	}
@@ -222,7 +223,7 @@ func TestLocalPkgMapRejectsScalar(t *testing.T) {
 // (nil, nil) with no build; DryRun → (nil, nil) logging the plan; an empty builder
 // image (or nil builder def) with packages → error (never a silent drop). Stays in
 // charly because it needs LoadBuildConfigForBox (the loader) to fetch a REAL aur
-// BuilderDef — the image-resolve/ensure closures are nil here since none of these
+// vmshared.BuilderDef — the image-resolve/ensure closures are nil here since none of these
 // cases actually invoke them (empty/dry-run/missing-image all short-circuit first).
 func TestBuildDepPkgsOnHost_EmptyAndDryRun(t *testing.T) {
 	lp := testPacLocalPkgDef()

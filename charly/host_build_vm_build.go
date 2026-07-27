@@ -11,6 +11,7 @@ import (
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
 )
 
 // host_build_vm_build.go — the "vm-build" F10 host-builder: PREP+RESOLVE only (P8b-rest). The
@@ -40,8 +41,8 @@ func noVmEntityErr(boxName string) error {
 		boxName, boxName, boxName)
 }
 
-// resolveVmBuildEntity loads the project + resolves boxName's kind:vm entity into a *VmSpec.
-func resolveVmBuildEntity(dir, boxName string) (*VmSpec, error) {
+// resolveVmBuildEntity loads the project + resolves boxName's kind:vm entity into a *vmshared.VmSpec.
+func resolveVmBuildEntity(dir, boxName string) (*vmshared.VmSpec, error) {
 	uf, ok, ufErr := LoadUnified(dir)
 	if ufErr != nil || !ok || uf.VM() == nil {
 		return nil, noVmEntityErr(boxName)
@@ -55,7 +56,7 @@ func resolveVmBuildEntity(dir, boxName string) (*VmSpec, error) {
 
 // resolveVmBuildBootstrap resolves the distro/builder vocabulary + pre-builds the builder image
 // for a "bootstrap" source.kind, filling reply.{BuilderImageRef,DistroJSON,BuilderJSON}.
-func resolveVmBuildBootstrap(engine string, vmSpec *VmSpec, reply *spec.VmBuildReply) error {
+func resolveVmBuildBootstrap(engine string, vmSpec *vmshared.VmSpec, reply *spec.VmBuildReply) error {
 	distroCfg, builderCfg, lerr := loadBuildYmlSections()
 	if lerr != nil {
 		return fmt.Errorf("loading builder/distro sections from the embedded build vocabulary: %w", lerr)
@@ -128,7 +129,7 @@ func hostBuildVmBuild(_ context.Context, req spec.VmBuildRequest, _ buildEngineC
 		engine = kit.EngineBinary(rt.RunEngine)
 	}
 
-	outputDir, err := filepath.Abs(vmDiskDir(boxName))
+	outputDir, err := filepath.Abs(vmshared.VmDiskDir(boxName))
 	if err != nil {
 		return spec.VmBuildReply{}, err
 	}

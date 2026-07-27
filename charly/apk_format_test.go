@@ -11,6 +11,7 @@ import (
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
 
 	"github.com/opencharly/sdk/kit"
 )
@@ -30,7 +31,7 @@ func TestCompileApkStep(t *testing.T) {
 
 	l := testCandy("test-apps", spec.CandyModel{
 		SourceDir: "/layers/test-apps",
-		Apk: []ApkPackageSpec{
+		Apk: []vmshared.ApkPackageSpec{
 			{Package: "org.fdroid.fdroid", Source: "apk-pure", Arch: "x86_64"},
 			{Apk: "tests/data/x.apk"},
 		},
@@ -62,7 +63,7 @@ func TestCompileApkStep(t *testing.T) {
 // step's Emits=false contract + returns "" — so the dispatch emits nothing.
 func TestOCITargetSkipsApkInstall(t *testing.T) {
 	step := &deploykit.ApkInstallStep{
-		Packages:  []ApkPackageSpec{{Package: "org.fdroid.fdroid"}},
+		Packages:  []vmshared.ApkPackageSpec{{Package: "org.fdroid.fdroid"}},
 		CandyName: "test-apps",
 	}
 	frag, err := ociEmitStep(step, &deploykit.InstallPlan{}, nil, buildEngineContext{})
@@ -78,7 +79,7 @@ func TestOCITargetSkipsApkInstall(t *testing.T) {
 // scan pipeline onto the resulting spec.CandyReader.
 func TestPopulateCandyApk(t *testing.T) {
 	ly := &spec.CandyYAML{
-		Apk: []ApkPackageSpec{
+		Apk: []vmshared.ApkPackageSpec{
 			{Package: "org.fdroid.fdroid", Source: "apk-pure", Arch: "x86_64"},
 		},
 	}

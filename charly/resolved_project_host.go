@@ -303,7 +303,7 @@ func projectResolvedProjectWithBoxes(cfg *Config, layers map[string]spec.CandyRe
 	}
 
 	// build VOCABULARY (the validate ENGINE consumer): the embedded distro/builder/init sections.
-	// DistroDef=spec.ResolvedDistro, BuilderDef=spec.Builder, ResolvedInit=spec.ResolvedInit, so the
+	// DistroDef=spec.ResolvedDistro, vmshared.BuilderDef=spec.Builder, ResolvedInit=spec.ResolvedInit, so the
 	// maps assign straight into the pinned envelope members.
 	if distroCfg != nil {
 		rp.Distro = distroCfg.Distro

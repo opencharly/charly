@@ -103,7 +103,7 @@ func builderStepImage(s *deploykit.BuilderStep, opts deploykit.EmitOpts) (string
 // package-install leg; everything else is a home-artifact builder (pixi/npm/cargo) whose
 // ~/.pixi / ~/.npm-global / ~/.cargo output is tarred into the venue home. An unknown
 // builder with neither shape has no host build script (deploykit.RenderBuilderScript errors on a
-// nil BuilderDef cell); --skip-incompatible skips it.
+// nil vmshared.BuilderDef cell); --skip-incompatible skips it.
 func runVenueBuilderStep(ctx context.Context, exec deploykit.DeployExecutor, venueHome string, build buildEngineContext, s *deploykit.BuilderStep, opts deploykit.EmitOpts) error {
 	if s.LocalPkg == nil {
 		if s.BuilderDef == nil || buildkit.BuilderPhaseTemplate(s.BuilderDef, spec.PhaseInstall, spec.VenueHostNative) == "" {

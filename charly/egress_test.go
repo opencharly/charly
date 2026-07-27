@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/vmshared"
 )
 
 // testPubKey is the SSH test pubkey for the cloud-init egress render test
@@ -162,13 +163,13 @@ func TestValidateTextEgress_RenderedText(t *testing.T) {
 }
 
 // TestRenderCloudInit_OutputValidatesAgainstSchema proves the renderer's real
-// output satisfies the egress gate end to end (RenderCloudInit returns the gate's
+// output satisfies the egress gate end to end (vmshared.RenderCloudInit returns the gate's
 // error directly, so a non-nil err here would mean charly emits cloud-init that
 // its own vendored schema rejects).
 func TestRenderCloudInit_OutputValidatesAgainstSchema(t *testing.T) {
-	spec := &VmSpec{Source: VmSource{Kind: "cloud_image", Distro: "arch", BaseUser: "arch"}}
-	rt := CloudInitRuntimeParams{SSHPublicKey: testPubKey, InjectKeyViaCloudInit: true, InstanceID: "iid-xyz", Hostname: "egress-vm"}
-	if _, _, _, err := RenderCloudInit(spec, rt); err != nil {
+	spec := &vmshared.VmSpec{Source: vmshared.VmSource{Kind: "cloud_image", Distro: "arch", BaseUser: "arch"}}
+	rt := vmshared.CloudInitRuntimeParams{SSHPublicKey: testPubKey, InjectKeyViaCloudInit: true, InstanceID: "iid-xyz", Hostname: "egress-vm"}
+	if _, _, _, err := vmshared.RenderCloudInit(spec, rt); err != nil {
 		t.Fatalf("rendered cloud-init must pass its own egress gate, got: %v", err)
 	}
 }

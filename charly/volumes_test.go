@@ -6,6 +6,7 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
 )
 
 func TestCollectImageVolumesSimple(t *testing.T) {
@@ -17,7 +18,7 @@ func TestCollectImageVolumesSimple(t *testing.T) {
 	layers := map[string]spec.CandyReader{
 		"svc": testCandy("svc",
 			spec.CandyModel{Plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-			spec.CandyView{Volumes: []VolumeYAML{{Name: "data", Path: "~/.myapp"}}},
+			spec.CandyView{Volumes: []vmshared.VolumeYAML{{Name: "data", Path: "~/.myapp"}}},
 		),
 	}
 
@@ -44,11 +45,11 @@ func TestCollectImageVolumesChain(t *testing.T) {
 	layers := map[string]spec.CandyReader{
 		"store": testCandy("store",
 			spec.CandyModel{Plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-			spec.CandyView{Volumes: []VolumeYAML{{Name: "models", Path: "~/.models"}}},
+			spec.CandyView{Volumes: []vmshared.VolumeYAML{{Name: "models", Path: "~/.models"}}},
 		),
 		"app": testCandy("app",
 			spec.CandyModel{Plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-			spec.CandyView{Volumes: []VolumeYAML{{Name: "data", Path: "~/.app"}}},
+			spec.CandyView{Volumes: []vmshared.VolumeYAML{{Name: "data", Path: "~/.app"}}},
 		),
 	}
 
@@ -77,11 +78,11 @@ func TestCollectImageVolumesDedup(t *testing.T) {
 	layers := map[string]spec.CandyReader{
 		"store": testCandy("store",
 			spec.CandyModel{Plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-			spec.CandyView{Volumes: []VolumeYAML{{Name: "data", Path: "~/.base-data"}}},
+			spec.CandyView{Volumes: []vmshared.VolumeYAML{{Name: "data", Path: "~/.base-data"}}},
 		),
 		"override": testCandy("override",
 			spec.CandyModel{Plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-			spec.CandyView{Volumes: []VolumeYAML{{Name: "data", Path: "~/.child-data"}}},
+			spec.CandyView{Volumes: []vmshared.VolumeYAML{{Name: "data", Path: "~/.child-data"}}},
 		),
 	}
 

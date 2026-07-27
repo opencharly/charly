@@ -13,7 +13,7 @@ package check
 // loadedReadiness()→kit.ReadinessProvider() / pollUntil→vmshared.PollUntil /
 // ErrPollFatal→vmshared.ErrPollFatal / PollLocal→vmshared.PollLocal / vmDomainIdentity→
 // vmshared.VmDomainIdentity is the WHOLE of the "no new mechanism" claim for this file (RDD-
-// confirmed by reading sdk/vmshared_aliases.go's own alias table before this move).
+// confirmed by reading sdk/vmshared's own alias/re-export tables before this move).
 //
 // This file is a self-contained LIBRARY of venue-resolution building blocks, consumed by every
 // live-check gather orchestration function this package now carries directly: live_gather.go's

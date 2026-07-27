@@ -227,7 +227,7 @@ func bringUpMembers(node *spec.BundleNode, imageTag string) error {
 			// shared kind:vm entity (memberNode.From) — so member VMs sharing one entity across beds
 			// get distinct, collision-free domains + per-domain disk overlays + ports (P33). The
 			// entity is the disk/spec source (the `bundle add` ref); --domain names this member's domain.
-			memberDomain := vmDomainIdentity(memberKey)
+			memberDomain := spec.VmDomainIdentity(memberKey)
 			_ = proclifecycle.RunCharlySubcommand("vm", "destroy", memberNode.From, "--domain", memberDomain, "--if-exists")
 			if err := proclifecycle.RunCharlySubcommand("vm", "create", memberNode.From, "--domain", memberDomain); err != nil {
 				return fmt.Errorf("peer %q (vm create %s): %w", memberKey, memberNode.From, err)
@@ -280,7 +280,7 @@ func tearDownMembers(node *spec.BundleNode) error {
 			// entity — P33), but bring-up ALSO registered the member in the deploy ledger via
 			// `bundle add`. Reverse that too, or a ledger record survives every teardown and they
 			// accumulate run over run.
-			destroyErr := proclifecycle.RunCharlySubcommand("vm", "destroy", memberNode.From, "--domain", vmDomainIdentity(memberKey), "--if-exists")
+			destroyErr := proclifecycle.RunCharlySubcommand("vm", "destroy", memberNode.From, "--domain", spec.VmDomainIdentity(memberKey), "--if-exists")
 			delErr := proclifecycle.RunCharlySubcommand(deployDelArgv(memberKey)...)
 			err = errors.Join(destroyErr, delErr)
 		case isPodMember(memberNode):

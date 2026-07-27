@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/vmshared"
 )
 
 // TestAMDGFXVersionParsing (parseKFDGFXVersion) + TestGpuUsableViaCDI (gpuUsableViaCDI)
@@ -62,7 +63,7 @@ func TestDetectedDevicesMergeIntoSecurity(t *testing.T) {
 		Devices: []string{"/dev/kvm", "/dev/fuse"},
 	}
 
-	sec := SecurityConfig{
+	sec := vmshared.SecurityConfig{
 		Devices: []string{"/dev/fuse"}, // already has /dev/fuse
 	}
 	sec.Devices = deploykit.AppendUnique(sec.Devices, detected.Devices...)
@@ -74,7 +75,7 @@ func TestDetectedDevicesMergeIntoSecurity(t *testing.T) {
 }
 
 func TestDetectedDevicesInSecurityArgs(t *testing.T) {
-	sec := SecurityConfig{
+	sec := vmshared.SecurityConfig{
 		Devices: []string{"/dev/kvm", "/dev/fuse"},
 	}
 	args := deploykit.SecurityArgs(sec)
@@ -94,7 +95,7 @@ func TestDetectedDevicesInQuadlet(t *testing.T) {
 		Home:        "/workspace",
 		GPU:         true,
 		BindAddress: "127.0.0.1",
-		Security: SecurityConfig{
+		Security: vmshared.SecurityConfig{
 			Devices: []string{"/dev/kvm", "/dev/fuse"},
 		},
 	}
@@ -111,7 +112,7 @@ func TestDetectedDevicesInQuadlet(t *testing.T) {
 }
 
 func TestPrivilegedSkipsDevices(t *testing.T) {
-	sec := SecurityConfig{Privileged: true}
+	sec := vmshared.SecurityConfig{Privileged: true}
 	// When privileged, auto-detected devices should not be merged
 	// (privileged already grants access to all devices)
 	args := deploykit.SecurityArgs(sec)
@@ -174,7 +175,7 @@ func TestAMDGPUGroupsInQuadlet(t *testing.T) {
 		Home:        "/workspace",
 		GPU:         false,
 		BindAddress: "127.0.0.1",
-		Security: SecurityConfig{
+		Security: vmshared.SecurityConfig{
 			Devices:  []string{"/dev/kfd", "/dev/dri/renderD128"},
 			GroupAdd: []string{"keep-groups"},
 		},

@@ -20,6 +20,8 @@ import (
 
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/sshx"
+	"github.com/opencharly/sdk/vmshared"
 )
 
 // SshCmd is the top-level `charly ssh` command group.
@@ -88,7 +90,7 @@ func runSshTunnel(vmName, uri string, forceTCP bool, kind string) error {
 	// set, we preserve socket-ness (and print a spice+unix:// /
 	// vnc+unix:// URL). If --tcp is set or the VM listens on TCP,
 	// we open a 127.0.0.1:<random> listener locally.
-	var tunnel *SSHTunnel
+	var tunnel *sshx.SSHTunnel
 	var cleanup func()
 	var connectURL string
 
@@ -96,11 +98,11 @@ func runSshTunnel(vmName, uri string, forceTCP bool, kind string) error {
 	defer cancel()
 
 	if ep.TunnelNeeded {
-		parsed, err := ParseLibvirtURI(tunnelTarget)
+		parsed, err := vmshared.ParseLibvirtURI(tunnelTarget)
 		if err != nil {
 			return err
 		}
-		tunnel, err = NewSSHTunnel(parsed.Remote)
+		tunnel, err = sshx.NewSSHTunnel(parsed.Remote)
 		if err != nil {
 			return err
 		}

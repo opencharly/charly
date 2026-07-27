@@ -31,14 +31,14 @@ func TestAndroidSpec_EffectiveSerial(t *testing.T) {
 }
 
 func TestApkPackageSpec_Defaults(t *testing.T) {
-	s := ApkPackageSpec{Package: "org.fdroid.fdroid"}
+	s := vmshared.ApkPackageSpec{Package: "org.fdroid.fdroid"}
 	if s.EffectiveSource() != "apk-pure" {
 		t.Errorf("default source = %q, want apk-pure", s.EffectiveSource())
 	}
 	if s.EffectiveArch() != "x86_64" {
 		t.Errorf("default arch = %q, want x86_64", s.EffectiveArch())
 	}
-	s2 := ApkPackageSpec{Package: "x", Source: "f-droid", Arch: "arm64-v8a"}
+	s2 := vmshared.ApkPackageSpec{Package: "x", Source: "f-droid", Arch: "arm64-v8a"}
 	if s2.EffectiveSource() != "f-droid" || s2.EffectiveArch() != "arm64-v8a" {
 		t.Errorf("overrides not honored: %+v", s2)
 	}

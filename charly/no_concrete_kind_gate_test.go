@@ -23,7 +23,7 @@ import (
 // `spec.<Kind>` selector for a concrete kind, but ONLY in files that import the sdk/spec
 // package as `spec` (so a local variable named `spec` with an unrelated field cannot false
 // positive). `Init` is intentionally omitted from the concrete set: the unrelated
-// `ShellSpec.Init` field shares the name; the init de-type (Cutover F) is proven by the
+// `vmshared.ShellSpec.Init` field shares the name; the init de-type (Cutover F) is proven by the
 // service-render / capabilities tests. Allowed and NOT flagged: the Resolved* envelopes
 // (spec.ResolvedVm, …) and per-kind SUB-types the envelope carries (spec.VmSource,
 // spec.LibvirtDomain, spec.Format, …) — those are E-envelope data, not the kind itself.

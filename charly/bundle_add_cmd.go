@@ -598,8 +598,8 @@ func (c *deployAddCmd) printPlans(plans []*deploykit.InstallPlan, opts deploykit
 // for host-target deploys. Returns a zero-value struct for container
 // deploys (the compiler ignores host-only fields there).
 func detectHostContext() deploykit.HostContext {
-	hd, _ := DetectHostDistro()
-	glibc, _ := DetectHostGlibc()
+	hd, _ := vmshared.DetectHostDistro()
+	glibc, _ := vmshared.DetectHostGlibc()
 	if hd == nil {
 		return deploykit.HostContext{}
 	}

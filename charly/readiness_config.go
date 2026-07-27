@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // The host-side executors (sdk/kit) resolve their wait bounds through
@@ -19,23 +20,23 @@ func init() {
 
 // readiness_config.go — charly core's readiness ENTRY. The config→resolved resolver AND the
 // CHARLY_READINESS_* field table live ONCE in sdk/vmshared (ResolveReadiness + the PluginEnv
-// emitter, aliased here as readinessResolve via vmshared_aliases.go), shared with the
+// emitter, aliased here as spec.ResolveReadiness via vmshared_aliases.go), shared with the
 // out-of-process plugins. loadedReadiness feeds the resolver the PROJECT's defaults.readiness —
 // which the plugins cannot LoadUnified to read; the host threads its resolved bounds to them via
-// ResolvedReadiness.PluginEnv (see readinessPluginEnv + LocalTransport.Connect).
+// spec.ResolvedReadiness.PluginEnv (see readinessPluginEnv + LocalTransport.Connect).
 
 // loadedReadiness resolves the project's readiness bounds ONCE (the project defaults.readiness
 // block + CHARLY_READINESS_* env + the named fallbacks, validated). A site deep in the executors
-// with no threaded ResolvedReadiness calls this. On absence/error it falls back to the built-in
+// with no threaded spec.ResolvedReadiness calls this. On absence/error it falls back to the built-in
 // defaults (always safe + never-hang) with a logged warning — a bad config block degrades to the
 // built-in defaults rather than breaking every deploy.
 var (
 	readinessOnce    sync.Once
-	readinessCached  ResolvedReadiness
+	readinessCached  spec.ResolvedReadiness
 	readinessLoading atomic.Bool // re-entrancy guard — see loadedReadiness
 )
 
-func loadedReadiness() ResolvedReadiness {
+func loadedReadiness() spec.ResolvedReadiness {
 	// Re-entrancy guard (sync.Once is NOT re-entrant). The Once's resolver below calls
 	// LoadUnified, which connects the project's kind plugins; each LocalTransport.Connect threads
 	// readiness env via readinessPluginEnv → loadedReadiness — a SAME-goroutine re-entry into this
@@ -46,20 +47,20 @@ func loadedReadiness() ResolvedReadiness {
 	// load) call returns the built-in defaults: a plugin connected to LOAD the config cannot depend
 	// on the not-yet-resolved readiness, and the built-in defaults are always safe + never-hang.
 	if readinessLoading.Load() {
-		rr, _ := readinessResolve(nil)
+		rr, _ := spec.ResolveReadiness(nil)
 		return rr
 	}
 	readinessOnce.Do(func() {
 		readinessLoading.Store(true)
 		defer readinessLoading.Store(false)
-		var def *ReadinessConfig
+		var def *spec.ReadinessConfig
 		if uf, ok, err := LoadUnified("."); err == nil && ok && uf != nil {
 			def = uf.Defaults.Readiness
 		}
-		rr, err := readinessResolve(def)
+		rr, err := spec.ResolveReadiness(def)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "readiness config invalid (%v) — using built-in defaults\n", err)
-			rr, _ = readinessResolve(nil)
+			rr, _ = spec.ResolveReadiness(nil)
 		}
 		readinessCached = rr
 	})
@@ -68,8 +69,8 @@ func loadedReadiness() ResolvedReadiness {
 
 // readinessPluginEnv emits the host's RESOLVED readiness as CHARLY_READINESS_* env entries, for
 // threading into an out-of-process plugin's spawn env (LocalTransport.Connect) — the plugin's own
-// readinessResolve re-reads them, so it honors the project's defaults.readiness without a project
-// loader. The emitter (ResolvedReadiness.PluginEnv) lives in vmshared, beside the resolver.
+// spec.ResolveReadiness re-reads them, so it honors the project's defaults.readiness without a project
+// loader. The emitter (spec.ResolvedReadiness.PluginEnv) lives in vmshared, beside the resolver.
 func readinessPluginEnv() []string {
 	return loadedReadiness().PluginEnv()
 }

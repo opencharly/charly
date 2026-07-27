@@ -4,13 +4,14 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/vmshared"
 )
 
 // Tests for deploy.yml install_opts handling (Task 13).
 
 func TestInstallOptsApplyTo(t *testing.T) {
 	base := deploykit.EmitOpts{}
-	o := &InstallOptsConfig{
+	o := &vmshared.InstallOptsConfig{
 		WithServices:     true,
 		AllowRepoChanges: true,
 		Verify:           true,
@@ -34,11 +35,11 @@ func TestInstallOptsApplyTo(t *testing.T) {
 func TestInstallOptsCLIOverridesWin(t *testing.T) {
 	// CLI sets AllowRootTasks via --allow-root-tasks; deploy.yml
 	// doesn't. The CLI value must not be reset to false by
-	// InstallOptsConfig.ApplyTo. (False → false is a no-op; true
+	// vmshared.InstallOptsConfig.ApplyTo. (False → false is a no-op; true
 	// → true is also idempotent, so the only concern is never
 	// clobbering a true with a false.)
 	base := deploykit.EmitOpts{AllowRootTasks: true}
-	o := &InstallOptsConfig{AllowRootTasks: false}
+	o := &vmshared.InstallOptsConfig{AllowRootTasks: false}
 	got := deploykit.InstallOptsApplyTo(o, base)
 	if !got.AllowRootTasks {
 		t.Errorf("CLI-set AllowRootTasks was overwritten by zero deploy.yml value")
@@ -46,7 +47,7 @@ func TestInstallOptsCLIOverridesWin(t *testing.T) {
 }
 
 func TestInstallOptsNilReceiver(t *testing.T) {
-	var o *InstallOptsConfig
+	var o *vmshared.InstallOptsConfig
 	base := deploykit.EmitOpts{Verify: true}
 	got := deploykit.InstallOptsApplyTo(o, base)
 	if got.Verify != true {
@@ -57,7 +58,7 @@ func TestInstallOptsNilReceiver(t *testing.T) {
 func TestInstallOptsBuilderImageMerge(t *testing.T) {
 	// CLI override wins; deploy.yml fallback applies when CLI empty.
 	cli := deploykit.EmitOpts{BuilderImageOverride: "cli-choice"}
-	o := &InstallOptsConfig{BuilderImage: "yaml-choice"}
+	o := &vmshared.InstallOptsConfig{BuilderImage: "yaml-choice"}
 	got := deploykit.InstallOptsApplyTo(o, cli)
 	if got.BuilderImageOverride != "cli-choice" {
 		t.Errorf("CLI builder image was overwritten: %q", got.BuilderImageOverride)

@@ -10,7 +10,7 @@ import (
 
 // config.go — FLOOR-SLIM Unit 5: the Config TYPE + its box-resolution METHODS moved to
 // sdk/spec (spec/config.go) and sdk/buildkit (buildkit/config_resolve.go); `Config = spec.Config`
-// is now a type alias (vmshared_aliases.go-style pattern), so package main can never add another
+// is now a spec type alias, so package main can never add another
 // method to it. What STAYS here is the genuinely LoadUnified-coupled surface: LoadConfig /
 // LoadConfigRaw (the load entry points) and the ResolveBox/ResolveAllBox THIN WRAPPERS that fill
 // the ONE fallback (loading the project's distro:/builder: vocabulary when the caller didn't

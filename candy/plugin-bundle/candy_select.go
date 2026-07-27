@@ -32,8 +32,8 @@ import (
 //     word:"vm"/"local", OpResolve, …) pattern K4 unit A's lookupLocalTemplate
 //     (node_resolve.go) already proved live (check-preempt-local R10);
 //   - the host-target synthetic box resolves via vmshared.DetectHostDistro/
-//     DetectHostGlibc — already sdk-portable (charly core's own DetectHostDistro is a
-//     bare var-alias to vmshared.DetectHostDistro, vmshared_aliases.go).
+//     DetectHostGlibc — already sdk-portable (charly core references vmshared.DetectHostDistro
+//     directly now — no charly-core alias).
 
 // envelopeCandyModels re-hydrates every candy in the envelope into the map[string]spec.CandyReader
 // deploykit.ResolveCandyOrder wants (rp.Candies/rp.CandyModels is nil-free BY CONSTRUCTION —

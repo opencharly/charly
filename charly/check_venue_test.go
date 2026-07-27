@@ -7,6 +7,7 @@ import (
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
 )
 
 // newVenueTestUF builds a small loaderkit.UnifiedFile covering every venue class the
@@ -14,7 +15,7 @@ import (
 func newVenueTestUF() *loaderkit.UnifiedFile {
 	return &loaderkit.UnifiedFile{
 		PluginKinds: map[string]map[string]json.RawMessage{
-			"vm": rawTemplateMap(map[string]*VmSpec{
+			"vm": rawTemplateMap(map[string]*vmshared.VmSpec{
 				"cachyos-gpu": {}, // bare kind:vm entity
 			}),
 		},
@@ -53,7 +54,7 @@ func TestCheckVmTarget(t *testing.T) {
 		{"k3s-vm.inner", "k3s-vm", true},     // dotted root is the target:vm deploy, leaf unresolvable → root fallback
 		// RCA #12: leaf-vm-under-pod — the pod ROOT is not a vm, but the LEAF
 		// (a Children entry) IS. domainID keys off the FULL dotted path, SANITIZED
-		// by vmDomainIdentity (vmshared.VmDomainIdentity: "." → "-") — the same
+		// by spec.VmDomainIdentity ( "." → "-") — the same
 		// canonical scheme every vm-state write already uses (RCA #6-#9).
 		{"web-pod.web-pod-vm", "web-pod-web-pod-vm", true},
 		// RCA #12 preserved precedent: root-vm-with-guest-suffix. The leaf

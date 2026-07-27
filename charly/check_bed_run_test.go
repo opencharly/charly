@@ -9,6 +9,7 @@ import (
 
 	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
@@ -62,7 +63,7 @@ func TestValidateCheckBeds_VmRefMustResolve(t *testing.T) {
 	}
 	ok := &loaderkit.UnifiedFile{
 		PluginKinds: map[string]map[string]json.RawMessage{
-			"vm": rawTemplateMap(map[string]*VmSpec{"k3s-vm": {}}),
+			"vm": rawTemplateMap(map[string]*vmshared.VmSpec{"k3s-vm": {}}),
 		},
 		Bundle: map[string]spec.BundleNode{
 			"check-k3s-vm": {Target: "vm", From: "k3s-vm", Disposable: new(true)},

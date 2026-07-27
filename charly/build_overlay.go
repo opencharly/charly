@@ -181,7 +181,7 @@ func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ build
 	// from has NO Security() method, so the candy cannot read overlay-candy security itself; the
 	// host prep reads gen.candyByName(name).Security() core-side + carries it. The candy's
 	// renderOverlaySecurityLabel merges each entry on top of BaseSecurity + emits the LABEL directive
-	// (mirrors the former in-core renderOverlaySecurityLabel). SecurityConfig == Security
+	// (mirrors the former in-core renderOverlaySecurityLabel). vmshared.SecurityConfig == Security
 	// (alias), so the carried *Security is the SAME type the former in-core render marshalled.
 	overlayCandySecurity := map[string]*spec.Security{}
 	if gen != nil {

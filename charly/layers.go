@@ -632,8 +632,8 @@ func scanCandyFromLocal(localScanned map[string]spec.ScannedCandy, cfg *Config, 
 	// ref) surfaces, so cross-repo transitive closures are fully materialized.
 	type repoVer struct{ repo, ver string }
 	candidates := make(map[string][]loaderkit.CandyCandidate) // bare ref -> all fetched materializations
-	scanned := make(map[repoVer]map[string]bool)    // (repo, git-tag) -> refs already scanned
-	defaultBranches := make(map[string]string)      // repo → resolved default branch
+	scanned := make(map[repoVer]map[string]bool)              // (repo, git-tag) -> refs already scanned
+	defaultBranches := make(map[string]string)                // repo → resolved default branch
 
 	queue := downloads
 	for len(queue) > 0 {

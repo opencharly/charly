@@ -6,13 +6,14 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
 )
 
 func TestCollectSecurityMergesCapsSmallest(t *testing.T) {
 	// Two candies disagreeing on memory_max — tightest wins.
 	layers := map[string]spec.CandyReader{
-		"big":   testCandy("big", spec.CandyModel{Security: &SecurityConfig{MemoryMax: "8g", MemoryHigh: "7g", Cpus: "8"}}, spec.CandyView{}),
-		"small": testCandy("small", spec.CandyModel{Security: &SecurityConfig{MemoryMax: "4g", MemoryHigh: "3g", Cpus: "2"}}, spec.CandyView{}),
+		"big":   testCandy("big", spec.CandyModel{Security: &vmshared.SecurityConfig{MemoryMax: "8g", MemoryHigh: "7g", Cpus: "8"}}, spec.CandyView{}),
+		"small": testCandy("small", spec.CandyModel{Security: &vmshared.SecurityConfig{MemoryMax: "4g", MemoryHigh: "3g", Cpus: "2"}}, spec.CandyView{}),
 	}
 	cfg := &Config{
 		Box: boxMapOf(map[string]spec.BoxConfig{
@@ -35,13 +36,13 @@ func TestCollectSecurityImageOverridesCaps(t *testing.T) {
 	// Box-level security.memory_max replaces whatever the candies decided,
 	// consistent with how ShmSize is handled.
 	layers := map[string]spec.CandyReader{
-		"chrome": testCandy("chrome", spec.CandyModel{Security: &SecurityConfig{MemoryMax: "6g", ShmSize: "1g"}}, spec.CandyView{}),
+		"chrome": testCandy("chrome", spec.CandyModel{Security: &vmshared.SecurityConfig{MemoryMax: "6g", ShmSize: "1g"}}, spec.CandyView{}),
 	}
 	cfg := &Config{
 		Box: boxMapOf(map[string]spec.BoxConfig{
 			"heavy": {
 				Candy:    []string{"chrome"},
-				Security: &SecurityConfig{MemoryMax: "16g"},
+				Security: &vmshared.SecurityConfig{MemoryMax: "16g"},
 			},
 		}),
 	}
@@ -59,7 +60,7 @@ func TestGenerateQuadletWithMemoryCaps(t *testing.T) {
 		BoxName:  "selkies-desktop",
 		ImageRef: "ghcr.io/test/selkies-desktop:latest",
 		Home:     "/home/user",
-		Security: SecurityConfig{
+		Security: vmshared.SecurityConfig{
 			ShmSize:       "1g",
 			MemoryMax:     "6g",
 			MemoryHigh:    "5g",
@@ -102,7 +103,7 @@ func TestGenerateQuadletWithPrivileged(t *testing.T) {
 		BoxName:  "runner",
 		ImageRef: "ghcr.io/test/runner:latest",
 		Home:     "/workspace",
-		Security: SecurityConfig{Privileged: true},
+		Security: vmshared.SecurityConfig{Privileged: true},
 	}
 	content := deploykit.GenerateQuadlet(cfg)
 	if !containsLine(content, "PodmanArgs=--privileged") {
@@ -118,7 +119,7 @@ func TestGenerateQuadletWithCapAdd(t *testing.T) {
 		BoxName:  "builder",
 		ImageRef: "ghcr.io/test/builder:latest",
 		Home:     "/workspace",
-		Security: SecurityConfig{
+		Security: vmshared.SecurityConfig{
 			CapAdd:      []string{"SYS_ADMIN"},
 			Devices:     []string{"/dev/fuse"},
 			SecurityOpt: []string{"label=disable"},

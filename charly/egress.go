@@ -21,7 +21,18 @@ import (
 	"fmt"
 
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/vmshared"
 )
+
+// init wires the host-side implementations of vmshared's injection seams (hooks.go):
+// vmshared cannot import charly core, so the host installs ValidateEgress (the egress
+// gate below) and UnmarshalEmbeddedDefaults (embed_defaults.go) into vmshared's function
+// vars at startup. Relocated here from the deleted charly/vmshared_aliases.go — this is
+// load-bearing seam wiring, NOT an alias (ZERO-ALIASES v2).
+func init() {
+	vmshared.ValidateEgress = ValidateEgress
+	vmshared.UnmarshalEmbeddedDefaults = unmarshalEmbeddedDefaults
+}
 
 // egressValidate resolves the egress plugin and runs one OpValidate. mode ∈
 // {bytes, text, xml}: "bytes" for serialized YAML/JSON (covers ValidateEgress + the

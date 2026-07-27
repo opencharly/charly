@@ -7,6 +7,7 @@ import (
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
 )
 
 // builderTestImg builds a ResolvedBox carrying the four externalized builders in its BuilderConfig
@@ -17,7 +18,7 @@ func builderTestImg(buildFormats ...string) *buildkit.ResolvedBox {
 		Name:         "t",
 		Home:         "/home/u",
 		BuildFormats: buildFormats,
-		BuilderConfig: &buildkit.BuilderConfig{Builder: map[string]*BuilderDef{
+		BuilderConfig: &buildkit.BuilderConfig{Builder: map[string]*vmshared.BuilderDef{
 			"pixi":  {DetectFiles: []string{"pixi.toml"}},
 			"npm":   {DetectFiles: []string{"package.json"}},
 			"cargo": {DetectFiles: []string{"Cargo.toml"}},

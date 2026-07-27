@@ -51,7 +51,7 @@ func TestOvmfPathsFromEmbedded(t *testing.T) {
 // real files on this host (where the UEFI VM beds boot). Skips only if the host has no
 // edk2-ovmf installed (then no UEFI VM could boot here anyway).
 func TestResolveOvmfPaths_HostFirmwareResolves(t *testing.T) {
-	hd, err := DetectHostDistro()
+	hd, err := vmshared.DetectHostDistro()
 	if err != nil {
 		t.Skipf("cannot detect host distro: %v", err)
 	}

@@ -9,6 +9,7 @@ import (
 
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
 
 	"github.com/opencharly/sdk/deploykit"
 )
@@ -25,7 +26,7 @@ func TestBuildDeployPlan_BuilderPurity_NoPluginRPC(t *testing.T) {
 	img := &buildkit.ResolvedBox{
 		Name: "purity",
 		Home: "/home/u",
-		BuilderConfig: &buildkit.BuilderConfig{Builder: map[string]*BuilderDef{
+		BuilderConfig: &buildkit.BuilderConfig{Builder: map[string]*vmshared.BuilderDef{
 			"pixi": {DetectFiles: []string{"pixi.toml"}},
 		}},
 	}

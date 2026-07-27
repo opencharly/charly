@@ -18,7 +18,7 @@ import (
 // ResolvedSidecar (the host-adapted, generation-ready sidecar form the sidecar plugin's
 // spec.ResolvedSidecar wire type is adapted into) is a deploykit resolved-runtime type
 // now, referenced directly as deploykit.ResolvedSidecar — it moved to sdk/deploykit with
-// the pod config-write mechanism (P11), since its CollectedSecret/VolumeMount/SecurityConfig
+// the pod config-write mechanism (P11), since its CollectedSecret/VolumeMount/vmshared.SecurityConfig
 // fields are all deploykit/vmshared types.
 
 // resolveSidecarsViaPlugin invokes candy/plugin-sidecar's OpResolve leg — the single

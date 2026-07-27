@@ -26,7 +26,7 @@ func stubNoLibvirtSpawn(t *testing.T) {
 // dispatcher run; see plan-please-use-the-plan-atomic-comet H1).
 func TestResolveVmBackend_ExplicitLibvirtMissingSocket(t *testing.T) {
 	// Point XDG_RUNTIME_DIR at a temp dir that has no libvirt sockets.
-	// libvirtSessionSocketWithProbes() reads this env var (vm_libvirt.go).
+	// vmshared.LibvirtSessionSocketWithProbes() reads this env var (vm_libvirt.go).
 	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
 	stubNoLibvirtSpawn(t)
 

@@ -126,7 +126,7 @@ func TestOCITargetEmitSystemPackagesWithLegacyTemplate(t *testing.T) {
 	chdirTemp(t)
 	// Legacy InstallTemplate set; PhaseTemplate returns it for (install, container).
 	distro := &spec.ResolvedDistro{
-		Format: map[string]*FormatDef{
+		Format: map[string]*vmshared.FormatDef{
 			"rpm": {
 				InstallTemplate: "RUN dnf install -y {{join .Packages \" \"}}\n",
 			},
@@ -160,7 +160,7 @@ func TestOCITargetEmitSystemPackagesPrefersNewPhases(t *testing.T) {
 	chdirTemp(t)
 	// Both legacy and new path set; new path must win.
 	distro := &spec.ResolvedDistro{
-		Format: map[string]*FormatDef{
+		Format: map[string]*vmshared.FormatDef{
 			"rpm": {
 				InstallTemplate: "RUN legacy-install\n",
 				Phases: &vmshared.PhaseSet{

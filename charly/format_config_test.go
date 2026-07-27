@@ -268,15 +268,15 @@ func TestDnfConfigInherit(t *testing.T) {
 // TestDistroDefPrimaryFormat proves PrimaryFormat returns the base format
 // (rpm/deb/pac), skipping the secondary `aur` builder format, deterministically.
 func TestDistroDefPrimaryFormat(t *testing.T) {
-	arch := &spec.ResolvedDistro{Format: map[string]*FormatDef{"pac": {}, "aur": {Secondary: true}}}
+	arch := &spec.ResolvedDistro{Format: map[string]*vmshared.FormatDef{"pac": {}, "aur": {Secondary: true}}}
 	if got := arch.PrimaryFormat(); got != "pac" {
 		t.Errorf("arch PrimaryFormat = %q, want pac (aur is secondary)", got)
 	}
-	fedora := &spec.ResolvedDistro{Format: map[string]*FormatDef{"rpm": {}}}
+	fedora := &spec.ResolvedDistro{Format: map[string]*vmshared.FormatDef{"rpm": {}}}
 	if got := fedora.PrimaryFormat(); got != "rpm" {
 		t.Errorf("fedora PrimaryFormat = %q, want rpm", got)
 	}
-	if got := (&spec.ResolvedDistro{Format: map[string]*FormatDef{"aur": {Secondary: true}}}).PrimaryFormat(); got != "" {
+	if got := (&spec.ResolvedDistro{Format: map[string]*vmshared.FormatDef{"aur": {Secondary: true}}}).PrimaryFormat(); got != "" {
 		t.Errorf("aur-only PrimaryFormat = %q, want empty (no base format)", got)
 	}
 	if got := (*spec.ResolvedDistro)(nil).PrimaryFormat(); got != "" {
@@ -313,7 +313,7 @@ func TestDistroConfigFindFormat(t *testing.T) {
 	for _, f := range []string{"rpm", "deb", "pac"} {
 		fd := dc.FindFormat(f)
 		if fd == nil {
-			t.Errorf("FindFormat(%q) = nil, want a FormatDef", f)
+			t.Errorf("FindFormat(%q) = nil, want a vmshared.FormatDef", f)
 			continue
 		}
 		if buildkit.FormatPhaseTemplate(fd, spec.PhaseInstall, spec.VenueHostNative) == "" {

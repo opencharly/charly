@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
 )
 
 // withDetectGPU swaps the package-level DetectGPU probe for the duration of a
@@ -56,12 +57,12 @@ func TestImpliedGPUShared_NoTokenWithoutResourceConfig(t *testing.T) {
 // when host auto-detection is momentarily false (card consumer regardless).
 func TestImpliedGPUShared_SecurityDevicesSignal(t *testing.T) {
 	withDetectGPU(t, false)
-	node := spec.BundleNode{Target: "pod", Security: &SecurityConfig{Devices: []string{"/dev/nvidia0"}}}
+	node := spec.BundleNode{Target: "pod", Security: &vmshared.SecurityConfig{Devices: []string{"/dev/nvidia0"}}}
 	if tok := impliedGPUSharedToken(node, gpuResources()); tok != "nvidia-gpu" {
 		t.Fatalf("a node listing /dev/nvidia0 must imply the token, got %q", tok)
 	}
 	// The CDI device name is the other accepted form.
-	node2 := spec.BundleNode{Target: "pod", Security: &SecurityConfig{Devices: []string{"nvidia.com/gpu=all"}}}
+	node2 := spec.BundleNode{Target: "pod", Security: &vmshared.SecurityConfig{Devices: []string{"nvidia.com/gpu=all"}}}
 	if tok := impliedGPUSharedToken(node2, gpuResources()); tok != "nvidia-gpu" {
 		t.Fatalf("a node listing nvidia.com/gpu must imply the token, got %q", tok)
 	}
@@ -89,7 +90,7 @@ func TestImpliedGPUShared_LocalDeployNotImpliedOnGPUHost(t *testing.T) {
 		t.Fatalf("a local command deploy on a GPU host must NOT imply the nvidia-gpu token, got %q", tok)
 	}
 	// The explicit-device path survives for a local deploy that really lists the nvidia device.
-	explicit := spec.BundleNode{Target: "local", Security: &SecurityConfig{Devices: []string{"nvidia.com/gpu=all"}}}
+	explicit := spec.BundleNode{Target: "local", Security: &vmshared.SecurityConfig{Devices: []string{"nvidia.com/gpu=all"}}}
 	if tok := impliedGPUSharedToken(explicit, res); tok != "nvidia-gpu" {
 		t.Fatalf("a local deploy explicitly listing the nvidia device MUST imply the token, got %q", tok)
 	}

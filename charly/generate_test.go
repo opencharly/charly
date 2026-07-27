@@ -7,6 +7,7 @@ import (
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
 )
 
 // TestCollectBuilderRuntimeEnv_TriggeredEmitsRuntimeEnv is the
@@ -23,7 +24,7 @@ func TestCollectBuilderRuntimeEnv_TriggeredEmitsRuntimeEnv(t *testing.T) {
 	img := &buildkit.ResolvedBox{
 		Home: "/home/user",
 		BuilderConfig: &buildkit.BuilderConfig{
-			Builder: map[string]*BuilderDef{
+			Builder: map[string]*vmshared.BuilderDef{
 				"pixi": {
 					DetectFiles:       []string{"pixi.toml", "pyproject.toml"},
 					RuntimeEnv:        map[string]string{"PIXI_CACHE_DIR": "~/.cache/pixi"},
@@ -58,7 +59,7 @@ func TestCollectBuilderRuntimeEnv_NotTriggered(t *testing.T) {
 	img := &buildkit.ResolvedBox{
 		Home: "/home/user",
 		BuilderConfig: &buildkit.BuilderConfig{
-			Builder: map[string]*BuilderDef{
+			Builder: map[string]*vmshared.BuilderDef{
 				"pixi": {
 					DetectFiles:       []string{"pixi.toml"},
 					RuntimeEnv:        map[string]string{"PIXI_CACHE_DIR": "~/.cache/pixi"},
@@ -89,7 +90,7 @@ func TestCollectBuilderRuntimeEnv_MultipleCandies(t *testing.T) {
 	img := &buildkit.ResolvedBox{
 		Home: "/home/user",
 		BuilderConfig: &buildkit.BuilderConfig{
-			Builder: map[string]*BuilderDef{
+			Builder: map[string]*vmshared.BuilderDef{
 				"pixi": {
 					DetectFiles:       []string{"pixi.toml"},
 					PathContributions: []string{"~/.pixi/bin"},

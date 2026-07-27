@@ -177,6 +177,7 @@ var residueOwner = map[string]string{
 	"check_bed_run.go":              "P12",
 	"check_cmd.go":                  "P12",
 	"check_feature_run.go":          "P12",
+	"check_graphics_endpoint.go":    "P12",
 	"check_members.go":              "P12",
 	"checkrun_charly_verbs.go":      "P12",
 	"check_venue.go":                "P12",
@@ -247,7 +248,6 @@ var residueOwner = map[string]string{
 	"validate_preempt.go":           "P13",
 	"vm_backend_lifecycle.go":       "P11",
 	"vm_lifecycle_preresolve.go":    "P11",
-	"vmshared_aliases.go":           "P15",
 	"volume_cp_tags_cmd.go":         "P11",
 	// — files added by cutovers that landed after the T0 authoring (living tracker) —
 	"alias_collect.go":         "P14",

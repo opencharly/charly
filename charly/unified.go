@@ -7,6 +7,7 @@ import (
 
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
 
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/loaderkit"
@@ -386,9 +387,9 @@ func Distros(uf *loaderkit.UnifiedFile) map[string]*spec.ResolvedDistro {
 
 // Builders reconstructs the name-keyed multi-stage builder vocabulary from
 // uf.PluginKinds["builder"] (the `builder` plugin kind, candy/plugin-builder) into the
-// map[string]*BuilderDef shape the generator consumed when builder was a typed core map.
-func Builders(uf *loaderkit.UnifiedFile) map[string]*BuilderDef {
-	return loaderkit.DecodePluginKindMap[BuilderDef](uf, "builder")
+// map[string]*vmshared.BuilderDef shape the generator consumed when builder was a typed core map.
+func Builders(uf *loaderkit.UnifiedFile) map[string]*vmshared.BuilderDef {
+	return loaderkit.DecodePluginKindMap[vmshared.BuilderDef](uf, "builder")
 }
 
 // resolveInits projects the name-keyed init-system vocabulary from

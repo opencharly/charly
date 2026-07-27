@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/vmshared"
 )
 
 // TestSharedCacheMount_StableID locks in the format that makes BuildKit
@@ -48,7 +49,7 @@ func TestOwnedCacheMount_UIDInID(t *testing.T) {
 // alongside user-writable build caches (makepkg SRCDEST, yay clones — owned),
 // and each renders in its correct form from a single list.
 func TestRenderCacheMountsAuto_Mixed(t *testing.T) {
-	mounts := []CacheMountDef{
+	mounts := []vmshared.CacheMountDef{
 		{Dst: "/var/cache/pacman/pkg", Sharing: "locked"}, // root system cache
 		{Dst: "/tmp/aur-srcdest", Owned: true},            // user build cache
 		{Dst: "/tmp/aur-xdg-cache", Owned: true},          // user build cache
@@ -79,7 +80,7 @@ func TestRenderCacheMounts_Empty(t *testing.T) {
 // TestRenderCacheMounts_TrailingSeparator covers the cacheMountsOwned shape
 // where we need the separator after the last entry (template chains into RUN body).
 func TestRenderCacheMounts_TrailingSeparator(t *testing.T) {
-	mounts := []CacheMountDef{{Dst: "/tmp/pixi-cache"}}
+	mounts := []vmshared.CacheMountDef{{Dst: "/tmp/pixi-cache"}}
 	got := buildkit.RenderCacheMounts(mounts, 1000, 1000, " \\\n    ", true)
 	if !strings.HasSuffix(got, " \\\n    ") {
 		t.Errorf("trailing separator missing; got: %q", got)

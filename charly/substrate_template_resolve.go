@@ -13,6 +13,7 @@ import (
 
 	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
 )
 
 // ResolvedLocal / ResolvedAndroid / ResolvedK8s are the substrate-template value envelopes.
@@ -40,10 +41,10 @@ func resolveK8sViaPlugin(body json.RawMessage) (*ResolvedK8s, error) {
 	return reply.Resolved, nil
 }
 
-// resolveVmViaPlugin projects one opaque vm template body into a *VmSpec
+// resolveVmViaPlugin projects one opaque vm template body into a *vmshared.VmSpec
 // (= *spec.ResolvedVm) via candy/plugin-substrate's OpResolve leg (the vm
 // substrate-value de-type, Cutover L). Returns nil for an empty/absent body.
-func resolveVmViaPlugin(body json.RawMessage) (*VmSpec, error) {
+func resolveVmViaPlugin(body json.RawMessage) (*vmshared.VmSpec, error) {
 	if len(body) == 0 {
 		return nil, nil
 	}

@@ -43,7 +43,7 @@ func debImg(chain ...string) *buildkit.ResolvedBox {
 	return &buildkit.ResolvedBox{
 		Pkg:       "deb",
 		Distro:    chain,
-		DistroDef: &spec.ResolvedDistro{Format: map[string]*FormatDef{"deb": {}}},
+		DistroDef: &spec.ResolvedDistro{Format: map[string]*vmshared.FormatDef{"deb": {}}},
 	}
 }
 
@@ -69,7 +69,7 @@ func fmtImg(format string, chain ...string) *buildkit.ResolvedBox {
 	return &buildkit.ResolvedBox{
 		Pkg:       format,
 		Distro:    chain,
-		DistroDef: &spec.ResolvedDistro{Format: map[string]*FormatDef{format: {}}},
+		DistroDef: &spec.ResolvedDistro{Format: map[string]*vmshared.FormatDef{format: {}}},
 	}
 }
 
@@ -261,7 +261,7 @@ distro:
     package: [vim]
 `)
 	img := &buildkit.ResolvedBox{Pkg: "rpm", Distro: []string{"fedora"},
-		DistroDef: &spec.ResolvedDistro{Format: map[string]*FormatDef{"rpm": {}}}}
+		DistroDef: &spec.ResolvedDistro{Format: map[string]*vmshared.FormatDef{"rpm": {}}}}
 	step := pkgStep(t, deploykit.CompileSystemPackageSteps(l, img, deploykit.HostContext{}))
 	if !reflect.DeepEqual(step.Packages, []string{"vim"}) {
 		t.Errorf("fedora bare reach: packages = %v, want [vim]", step.Packages)
@@ -320,11 +320,11 @@ func TestDistroDefVersionInherits(t *testing.T) {
 // parent's package sections. No Go-side hardcoded inheritance table.
 func TestExpandPackageInheritance(t *testing.T) {
 	dc := &buildkit.DistroConfig{Distro: map[string]*spec.ResolvedDistro{
-		"arch":    {Format: map[string]*FormatDef{"pac": {}, "aur": {Secondary: true}}},
+		"arch":    {Format: map[string]*vmshared.FormatDef{"pac": {}, "aur": {Secondary: true}}},
 		"cachyos": {Inherits: "arch", InheritPackages: true},
-		"debian":  {Format: map[string]*FormatDef{"deb": {}}},
+		"debian":  {Format: map[string]*vmshared.FormatDef{"deb": {}}},
 		"ubuntu":  {Inherits: "debian"}, // format inheritance only
-		"fedora":  {Format: map[string]*FormatDef{"rpm": {}}},
+		"fedora":  {Format: map[string]*vmshared.FormatDef{"rpm": {}}},
 		// transitive opt-in: a grandchild flagged on each hop walks the whole chain
 		"cachyos-edge": {Inherits: "cachyos", InheritPackages: true},
 	}}

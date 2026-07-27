@@ -43,7 +43,7 @@ func TestRunVenueBuilderStepRoutesHomeBuilders(t *testing.T) {
 	}
 }
 
-// D3: a builder with no phase.install.host cell (no resolved BuilderDef) honors
+// D3: a builder with no phase.install.host cell (no resolved vmshared.BuilderDef) honors
 // --skip-incompatible, and hard-errors otherwise pointing at the missing host
 // cell. Routing is by output shape (no LocalPkg → home-artifact path; no host
 // cell there → unsupported), not a hardcoded builder-name list.

@@ -85,7 +85,7 @@ func loadDeployPlugins(dir, deployName string, extraAddCandy []string) error {
 }
 
 // artifactRegisterHandlers maps a candy artifact's declared `register:` hint (the
-// #CandyArtifact.Register field, SDD-sourced in sdk/schema/candy.cue) to the
+// #vmshared.CandyArtifact.Register field, SDD-sourced in sdk/schema/candy.cue) to the
 // post-retrieve processing it triggers. Word-keyed and data-driven (R3): a candy
 // declares the hint on its OWN artifact entry (k3s-server's kubeconfig artifact
 // declares `register: kubeconfig`) — adding a new registration kind means adding ONE

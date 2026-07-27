@@ -54,7 +54,7 @@ func hostBuildConfigResolve(_ context.Context, req spec.ConfigResolveRequest, _ 
 	// handler's `if uf, ok := LoadUnified(dir); ok` branch. VM + Resources are hand-written runtime
 	// types with no CUE def, so they travel as opaque JSON envelopes (VmJSON/ResourcesJSON) the plugin
 	// decodes; they are resolved into locals here so applyCueDefaults runs on the typed value first.
-	var vm *VmSpec
+	var vm *spec.ResolvedVm
 	var resources map[string]*ResolvedResource
 	var claimant string
 	var claimantNode spec.BundleNode
@@ -89,14 +89,14 @@ func hostBuildConfigResolve(_ context.Context, req spec.ConfigResolveRequest, _ 
 	}
 
 	// Materialize #Vm's required-with-default fields (firmware/network-mode/cpu-mode) on the resolved
-	// spec so the plugin's create pipeline receives a fully-defaulted VmSpec (it has no #Vm schema).
+	// spec so the plugin's create pipeline receives a fully-defaulted spec.ResolvedVm (it has no #Vm schema).
 	// This supplies the defaults the vm create pipeline (now in candy/plugin-vm) formerly applied
 	// in-handler via applyCueDefaults. Order-independent vs
 	// the plugin's instance-override / GPU-alloc merge: those touch ONLY libvirt: overlays, never a
 	// defaulted field, and applyCueDefaults fills only unset fields (user values preserved by unify).
 	//
 	// R1 fix (found while verifying an unrelated K5-A cutover — every `charly vm create`/`vm build`
-	// was hard-failing): resolveVmViaPlugin's *VmSpec carries the substrate-template opaque echo
+	// was hard-failing): resolveVmViaPlugin's *spec.ResolvedVm carries the substrate-template opaque echo
 	// (ResolvedVm.Raw, the SAME "raw:" passthrough ResolvedK8s/ResolvedLocal also carry) — but #vm's
 	// CUE schema is CLOSED over the AUTHORED shape and declares no `raw:` field, so re-marshaling the
 	// whole struct here for the unify-with-defaults round-trip failed unify with "raw: field not
@@ -115,7 +115,7 @@ func hostBuildConfigResolve(_ context.Context, req spec.ConfigResolveRequest, _ 
 
 	// Marshal the opaque envelopes AFTER defaulting: VM/Resources are hand-written runtime types with
 	// no CUE def (the SDD opaque-bytes carrier), so the CUE-sourced reply ships them as JSON the plugin
-	// unmarshals back into *VmSpec / map[string]*ResolvedResource at the boundary.
+	// unmarshals back into *spec.ResolvedVm / map[string]*ResolvedResource at the boundary.
 	if vm != nil {
 		b, err := json.Marshal(vm)
 		if err != nil {

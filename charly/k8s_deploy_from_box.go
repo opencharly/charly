@@ -5,6 +5,7 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
 )
 
 // -----------------------------------------------------------------------------
@@ -75,7 +76,7 @@ func DeployFromBox(opts DeployFromBoxOpts) (string, error) {
 		dc.Target = "k8s"
 	}
 	if dc.Kubernetes == nil {
-		dc.Kubernetes = &K8sDeployConfig{}
+		dc.Kubernetes = &vmshared.K8sDeployConfig{}
 	}
 	dc.From = opts.ClusterName
 	if opts.Namespace != "" {

@@ -7,7 +7,7 @@ import (
 	"github.com/opencharly/sdk/spec"
 )
 
-// Note: VmSpec carries no Disposable / Lifecycle fields and
+// Note: vmshared.VmSpec carries no Disposable / Lifecycle fields and
 // the IsDisposableFields helper — disposability is now a DEPLOY
 // property only (see /charly-internals:disposable). The former
 // TestVmSpec_DisposableRoundTrip / TestVmSpec_LifecycleAloneDoesNotAuthorize
