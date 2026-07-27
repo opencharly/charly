@@ -10,7 +10,7 @@ package vm
 
 // ValidateEgress validates a cloud-init artifact (the vmshared hook, called by RegenerateSeedISO →
 // RenderCloudInit) against the egress schema via verb:egress. Wired onto vmshared.ValidateEgress in
-// vmshared_aliases.go's init(). Best-effort graceful-degrade outside a command context (egressValidate).
+// charly/egress.go's init(). Best-effort graceful-degrade outside a command context (egressValidate).
 func ValidateEgress(kind, label string, data []byte) error {
 	return egressValidate(kind, label, "bytes", string(data))
 }
