@@ -31,6 +31,7 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/loaderkit"
+	"github.com/opencharly/sdk/proclifecycle"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -189,7 +190,7 @@ func withMemberTag(args []string, imageTag string) []string {
 //
 // K4-C WALK PORT (landed): the outer switch dispatches on isVmMember/isPodMember, which read
 // the STAMPED DESCENT TRAIT (D-data), not the substrate kind word — and unlike
-// deriveChildExecutorForPath, most bodies here shell out via runCharlySubcommand (a
+// deriveChildExecutorForPath, most bodies here shell out via proclifecycle.RunCharlySubcommand (a
 // `charly <verb>` re-entrant CLI call, itself running IN this same host process — not the
 // HostBuild("cli") reverse-channel reentry an out-of-process plugin would need). This function's
 // BODY is UNCHANGED and stays host-side (providerRegistry + ledger + subprocess-dependent); the
@@ -227,31 +228,31 @@ func bringUpMembers(node *spec.BundleNode, imageTag string) error {
 			// get distinct, collision-free domains + per-domain disk overlays + ports (P33). The
 			// entity is the disk/spec source (the `bundle add` ref); --domain names this member's domain.
 			memberDomain := vmDomainIdentity(memberKey)
-			_ = runCharlySubcommand("vm", "destroy", memberNode.From, "--domain", memberDomain, "--if-exists")
-			if err := runCharlySubcommand("vm", "create", memberNode.From, "--domain", memberDomain); err != nil {
+			_ = proclifecycle.RunCharlySubcommand("vm", "destroy", memberNode.From, "--domain", memberDomain, "--if-exists")
+			if err := proclifecycle.RunCharlySubcommand("vm", "create", memberNode.From, "--domain", memberDomain); err != nil {
 				return fmt.Errorf("peer %q (vm create %s): %w", memberKey, memberNode.From, err)
 			}
 			deploykit.WaitForVmSshReady(memberDomain)
-			if err := runCharlySubcommand(withMemberTag([]string{"bundle", "add", memberKey, memberNode.From}, imageTag)...); err != nil {
+			if err := proclifecycle.RunCharlySubcommand(withMemberTag([]string{"bundle", "add", memberKey, memberNode.From}, imageTag)...); err != nil {
 				return fmt.Errorf("peer %q (vm bundle add): %w", memberKey, err)
 			}
 			// Same nested-local-child gap the isVM bed root closes: plugin-deploy-vm's
 			// PostApply skips target:local children, so deploy them into the guest here.
 			if err := deploykit.DeployNestedLocalChildren(memberKey, memberNode.Children, func(childKey, dotted string) error {
-				return runCharlySubcommand("bundle", "add", dotted)
+				return proclifecycle.RunCharlySubcommand("bundle", "add", dotted)
 			}); err != nil {
 				return fmt.Errorf("peer %q: %w", memberKey, err)
 			}
 		case isPodMember(memberNode):
 			for _, step := range [][]string{{"config", memberKey}, {"start", memberKey}} {
-				if err := runCharlySubcommand(withMemberTag(step, imageTag)...); err != nil {
+				if err := proclifecycle.RunCharlySubcommand(withMemberTag(step, imageTag)...); err != nil {
 					return fmt.Errorf("peer %q (%v): %w", memberKey, step, err)
 				}
 			}
 			deploykit.WaitForContainerReady(memberKey)
 		default:
 			// kind:local member — applies candies in place during bundle add.
-			if err := runCharlySubcommand(withMemberTag([]string{"bundle", "add", memberKey}, imageTag)...); err != nil {
+			if err := proclifecycle.RunCharlySubcommand(withMemberTag([]string{"bundle", "add", memberKey}, imageTag)...); err != nil {
 				return fmt.Errorf("peer %q (bundle add): %w", memberKey, err)
 			}
 		}
@@ -279,13 +280,13 @@ func tearDownMembers(node *spec.BundleNode) error {
 			// entity — P33), but bring-up ALSO registered the member in the deploy ledger via
 			// `bundle add`. Reverse that too, or a ledger record survives every teardown and they
 			// accumulate run over run.
-			destroyErr := runCharlySubcommand("vm", "destroy", memberNode.From, "--domain", vmDomainIdentity(memberKey), "--if-exists")
-			delErr := runCharlySubcommand(deployDelArgv(memberKey)...)
+			destroyErr := proclifecycle.RunCharlySubcommand("vm", "destroy", memberNode.From, "--domain", vmDomainIdentity(memberKey), "--if-exists")
+			delErr := proclifecycle.RunCharlySubcommand(deployDelArgv(memberKey)...)
 			err = errors.Join(destroyErr, delErr)
 		case isPodMember(memberNode):
-			err = runCharlySubcommand("remove", memberKey, "--purge")
+			err = proclifecycle.RunCharlySubcommand("remove", memberKey, "--purge")
 		default:
-			err = runCharlySubcommand(deployDelArgv(memberKey)...)
+			err = proclifecycle.RunCharlySubcommand(deployDelArgv(memberKey)...)
 		}
 		if err != nil {
 			errs = append(errs, fmt.Errorf("peer %q teardown: %w", memberKey, err))

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/loaderkit"
+	"github.com/opencharly/sdk/proclifecycle"
 	"github.com/opencharly/sdk/spec"
 
 	"github.com/alecthomas/kong"
@@ -180,15 +181,15 @@ func TestSortedMemberKeys(t *testing.T) {
 // TestTearDownMembers_RoutingAndOrder: tearDownMembers iterates members in sorted
 // order and routes a pod member to `charly remove --purge`, a non-pod member to
 // `charly bundle del --assume-yes` — the same iteration/routing logic bringUpMembers
-// uses, verified here with the stubbable runCharlySubcommand package var (no side
+// uses, verified here with the stubbable proclifecycle.RunCharlySubcommand package var (no side
 // effects). The flag itself is proven valid against real Kong parsing by
 // TestDeployDelArgv_KongAccepts (this stub-based test cannot — it never invokes
 // flag parsing, which is exactly how a `--yes`/`--force` drift once slipped through).
 func TestTearDownMembers_RoutingAndOrder(t *testing.T) {
-	orig := runCharlySubcommand
-	defer func() { runCharlySubcommand = orig }()
+	orig := proclifecycle.RunCharlySubcommand
+	defer func() { proclifecycle.RunCharlySubcommand = orig }()
 	var calls [][]string
-	runCharlySubcommand = func(args ...string) error {
+	proclifecycle.RunCharlySubcommand = func(args ...string) error {
 		calls = append(calls, args)
 		return nil
 	}
@@ -210,10 +211,10 @@ func TestTearDownMembers_RoutingAndOrder(t *testing.T) {
 
 // TestTearDownMembers_NoMembersNoop: nothing happens when there are no members.
 func TestTearDownMembers_NoMembersNoop(t *testing.T) {
-	orig := runCharlySubcommand
-	defer func() { runCharlySubcommand = orig }()
+	orig := proclifecycle.RunCharlySubcommand
+	defer func() { proclifecycle.RunCharlySubcommand = orig }()
 	called := false
-	runCharlySubcommand = func(args ...string) error { called = true; return nil }
+	proclifecycle.RunCharlySubcommand = func(args ...string) error { called = true; return nil }
 	if err := tearDownMembers(&spec.BundleNode{}); err != nil {
 		t.Fatalf("tearDownMembers(empty): %v", err)
 	}
@@ -223,12 +224,12 @@ func TestTearDownMembers_NoMembersNoop(t *testing.T) {
 }
 
 func TestTearDownMembers_AttemptsAllAndReturnsJoinedErrors(t *testing.T) {
-	orig := runCharlySubcommand
-	defer func() { runCharlySubcommand = orig }()
+	orig := proclifecycle.RunCharlySubcommand
+	defer func() { proclifecycle.RunCharlySubcommand = orig }()
 	firstErr := errors.New("first teardown failed")
 	secondErr := errors.New("second teardown failed")
 	var calls [][]string
-	runCharlySubcommand = func(args ...string) error {
+	proclifecycle.RunCharlySubcommand = func(args ...string) error {
 		calls = append(calls, args)
 		if len(calls) == 1 {
 			return firstErr

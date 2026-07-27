@@ -123,7 +123,7 @@ type deployDelCmd struct {
 // deployDelArgv returns the argv (everything AFTER the charly binary) for a
 // non-interactive `charly bundle del <name>`: the verb, the name, and the ONE valid
 // skip-confirmation flag. Every programmatic teardown builds its command through
-// this single helper — in-process (runCharlySubcommand), out-of-process
+// this single helper — in-process (proclifecycle.RunCharlySubcommand), out-of-process
 // (exec.Command), and the systemd-run TTL timer — so the flag can never drift
 // across call sites again.
 //

@@ -232,7 +232,6 @@ var residueOwner = map[string]string{
 	"render_baked_metadata.go":      "P8b",
 	"render_prep.go":                "P8b",
 	"resource_resolve.go":           "P15",
-	"run_subcommand.go":             "P15",
 	"secrets.go":                    "P11",
 	"service_render.go":             "P8b",
 	"sidecar.go":                    "P11",
