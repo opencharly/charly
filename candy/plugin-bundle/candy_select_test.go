@@ -125,7 +125,7 @@ func TestBuildVmSyntheticBoxRootFallback(t *testing.T) {
 // be set UNCONDITIONALLY, matching NewSpecResolvedBox/resolveBoxSelection's box-construction path.
 func TestSyntheticHostBoxFromEnvelope_SetsBuilderConfig(t *testing.T) {
 	builder := map[string]*spec.Builder{"npm": {}}
-	img := syntheticHostBoxFromEnvelope(builder)
+	img := syntheticHostBoxFromEnvelope(nil, builder)
 	if img.BuilderConfig == nil {
 		t.Fatal("BuilderConfig is nil — compileBuilderSteps will silently skip every builder candy")
 	}
@@ -137,9 +137,32 @@ func TestSyntheticHostBoxFromEnvelope_SetsBuilderConfig(t *testing.T) {
 	// itself must be non-nil — matching NewSpecResolvedBox's own unconditional-set behavior — so
 	// a future caller with a real vocabulary isn't silently gated by an early "img.BuilderConfig
 	// == nil" bail-out elsewhere in the compiler.
-	imgEmpty := syntheticHostBoxFromEnvelope(nil)
+	imgEmpty := syntheticHostBoxFromEnvelope(nil, nil)
 	if imgEmpty.BuilderConfig == nil {
 		t.Error("BuilderConfig is nil even with a nil builder map — must be a non-nil empty struct")
+	}
+}
+
+// TestSyntheticHostBoxFromEnvelope_SetsDistroConfig is the regression guard for #118 task #59:
+// a synthetic box with a nil DistroDef made CompileSystemPackageSteps early-return zero steps —
+// silently skipping EVERY candy's system-package install on a standalone host-adhoc deploy —
+// while the DISTINCT distro:-gated ServicePackaged step (reading img.Distro, not img.DistroDef)
+// still fired, a masked inconsistency RCA'd live via check-charly-vm (deploy-add failed
+// enabling virtqemud.socket because libvirt was never installed). DistroConfig/DistroDef must be
+// set UNCONDITIONALLY, matching NewSpecResolvedBox's own box-construction path.
+func TestSyntheticHostBoxFromEnvelope_SetsDistroConfig(t *testing.T) {
+	distro := map[string]*spec.ResolvedDistro{"fedora": {Format: map[string]*spec.Format{"rpm": {}}}}
+	img := syntheticHostBoxFromEnvelope(distro, nil)
+	if img.DistroConfig == nil {
+		t.Fatal("DistroConfig is nil — CompileSystemPackageSteps will silently skip every candy's packages")
+	}
+
+	// A nil/empty distro map must still leave a non-nil DistroConfig (DistroDef legitimately
+	// resolves to nil when the host distro isn't in the vocabulary — that's a real "unknown
+	// distro" outcome, not the masked-nil-struct bug this guards against).
+	imgEmpty := syntheticHostBoxFromEnvelope(nil, nil)
+	if imgEmpty.DistroConfig == nil {
+		t.Error("DistroConfig is nil even with a nil distro map — must be a non-nil empty struct")
 	}
 }
 
@@ -164,5 +187,33 @@ func TestBuildVmSyntheticBox_SetsBuilderConfig(t *testing.T) {
 	}
 	if _, ok := userImg.BuilderConfig.Builder["npm"]; !ok {
 		t.Errorf("non-root branch: BuilderConfig.Builder missing npm: %+v", userImg.BuilderConfig.Builder)
+	}
+}
+
+// TestBuildVmSyntheticBox_SetsDistroConfig is the regression guard for #118 task #59, covering
+// the vm-adhoc synthetic box: BOTH branches (root fallback, and the non-root cloud_image/
+// bootstrap branch that resolves img.Pkg/BuildFormats but used to leave DistroConfig/DistroDef
+// unset) must resolve a non-nil DistroDef for a distro present in the envelope vocabulary, so
+// CompileSystemPackageSteps actually installs the candy's packages (e.g. libvirt) before the
+// distro:-gated ServicePackaged step tries to enable a unit that package provides.
+func TestBuildVmSyntheticBox_SetsDistroConfig(t *testing.T) {
+	distro := map[string]*spec.ResolvedDistro{
+		"arch": {Format: map[string]*spec.Format{"pac": {}}},
+	}
+
+	rootImg := buildVmSyntheticBox(&spec.ResolvedVm{Source: spec.VmSource{Kind: "bootc"}}, distro, nil)
+	if rootImg.DistroConfig == nil {
+		t.Fatal("root-fallback branch: DistroConfig is nil")
+	}
+
+	userImg := buildVmSyntheticBox(&spec.ResolvedVm{Source: spec.VmSource{Kind: "cloud_image", BaseUser: "arch", Distro: "arch"}}, distro, nil)
+	if userImg.DistroConfig == nil {
+		t.Fatal("non-root branch: DistroConfig is nil")
+	}
+	if userImg.DistroDef == nil {
+		t.Fatal("non-root branch: DistroDef is nil for a distro present in the envelope vocabulary — CompileSystemPackageSteps will silently skip every candy's packages (the check-charly-vm virtqemud.socket regression)")
+	}
+	if userImg.Pkg != "pac" {
+		t.Errorf("non-root branch: Pkg = %q, want pac", userImg.Pkg)
 	}
 }

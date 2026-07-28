@@ -90,19 +90,24 @@ func syntheticBoxForCandySelection(ctx context.Context, exec *sdk.Executor, rp *
 			return img
 		}
 	}
-	return syntheticHostBoxFromEnvelope(rp.Builder)
+	return syntheticHostBoxFromEnvelope(rp.Distro, rp.Builder)
 }
 
 // syntheticHostBoxFromEnvelope mirrors charly/bundle_add_cmd.go's syntheticHostBox — a
 // pure function of the OPERATOR's own process env/uid/gid plus a host distro probe, plus the
-// envelope's builder vocabulary (builder, rp.Builder). BuilderConfig is set UNCONDITIONALLY —
-// matching NewSpecResolvedBox/resolveBoxSelection's own box-construction path (R3) — so a
-// standalone-candy deploy with no base image (target: local/vm/every external substrate) still
-// detects an npm/pixi/cargo/aur-triggering candy's builder step. A synthetic box with a nil
-// BuilderConfig made compileBuilderSteps early-return zero steps, silently skipping the builder
-// DEPLOY leg entirely — a systemic gap RCA'd live via check-builder-vm (#118 task #56):
-// deploy-check-builder-member reported PASS with a zero-step compiled plan.
-func syntheticHostBoxFromEnvelope(builder map[string]*spec.Builder) *buildkit.ResolvedBox {
+// envelope's distro/builder vocabulary (distro/builder, rp.Distro/rp.Builder). DistroConfig/
+// DistroDef and BuilderConfig are set UNCONDITIONALLY — matching NewSpecResolvedBox/
+// resolveBoxSelection's own box-construction path (R3) — so a standalone-candy deploy with no
+// base image (target: local/vm/every external substrate) still gets its system packages
+// installed AND detects an npm/pixi/cargo/aur-triggering candy's builder step. A synthetic box
+// with a nil DistroDef made CompileSystemPackageSteps early-return zero steps (#118 task #59:
+// the guest's system packages — e.g. the virtualization candy's libvirt — silently never
+// install, while the DISTINCT distro:-gated ServicePackaged step still fires since its gate
+// reads img.Distro, not img.DistroDef — a masked inconsistency: check-charly-vm's
+// deploy-add failed enabling virtqemud.socket because libvirt was never installed). A nil
+// BuilderConfig made compileBuilderSteps early-return zero steps the same way (#118 task #56:
+// deploy-check-builder-member reported PASS with a zero-step compiled plan).
+func syntheticHostBoxFromEnvelope(distro map[string]*spec.ResolvedDistro, builder map[string]*spec.Builder) *buildkit.ResolvedBox {
 	hd, _ := vmshared.DetectHostDistro()
 	img := &buildkit.ResolvedBox{
 		Name:          "host-adhoc",
@@ -120,6 +125,8 @@ func syntheticHostBoxFromEnvelope(builder map[string]*spec.Builder) *buildkit.Re
 			img.BuildFormats = []string{hint}
 		}
 	}
+	img.DistroConfig = &buildkit.DistroConfig{Distro: distro}
+	img.DistroDef = img.DistroConfig.ResolveDistro(img.Distro)
 	return img
 }
 
@@ -160,10 +167,16 @@ func syntheticVmBoxFromEnvelope(ctx context.Context, exec *sdk.Executor, rp *spe
 // SAME map, so reconstructing one here from the envelope's copy is byte-identical to the host's
 // former live *buildkit.DistroConfig). builder is rp.Builder, threaded through so this synthetic
 // vm-adhoc box also gets BuilderConfig set (#118 task #56 — see syntheticHostBoxFromEnvelope).
+// DistroConfig/DistroDef are ALSO set unconditionally (#118 task #59 — see
+// syntheticHostBoxFromEnvelope): without DistroDef, CompileSystemPackageSteps silently compiled
+// zero steps for EVERY candy on a standalone vm-adhoc deploy, while the distro:-gated
+// ServicePackaged step (reading img.Distro, a DIFFERENT field) still fired — RCA'd live via
+// check-charly-vm's deploy-add failing to enable virtqemud.socket because libvirt was never
+// installed.
 func buildVmSyntheticBox(vmSpec *spec.ResolvedVm, distro map[string]*spec.ResolvedDistro, builder map[string]*spec.Builder) *buildkit.ResolvedBox {
 	user := vmshared.ResolveCloudInitSSHUser(vmSpec)
 	if user == "" || user == "root" {
-		img := syntheticHostBoxFromEnvelope(builder)
+		img := syntheticHostBoxFromEnvelope(distro, builder)
 		img.Name = "vm-adhoc"
 		img.User = "root"
 		img.Home = "/root"
@@ -181,8 +194,8 @@ func buildVmSyntheticBox(vmSpec *spec.ResolvedVm, distro map[string]*spec.Resolv
 	if distroKey == "" {
 		distroKey = vmSpec.Source.BaseUser
 	}
+	distroCfg := &buildkit.DistroConfig{Distro: distro}
 	if distroKey != "" {
-		distroCfg := &buildkit.DistroConfig{Distro: distro}
 		if def := distroCfg.ResolveDistro([]string{distroKey}); def != nil {
 			img.Distro = distroCfg.ExpandPackageInheritance(buildkit.DistroTagChain(distroKey, def.Version))
 			if pf := def.PrimaryFormat(); pf != "" {
@@ -193,6 +206,8 @@ func buildVmSyntheticBox(vmSpec *spec.ResolvedVm, distro map[string]*spec.Resolv
 			img.Distro = []string{distroKey}
 		}
 	}
+	img.DistroConfig = distroCfg
+	img.DistroDef = distroCfg.ResolveDistro(img.Distro)
 	return img
 }
 
