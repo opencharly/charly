@@ -108,7 +108,6 @@ var kernelFloor = []floorEntry{
 	{"unified_targets.go", "M — the ResolveTarget deploy dispatcher + externalDeployTarget adapter (wire broker deploy routing, kind-blind)"},
 	{"verb_builtins.go", "B — the compiled-in verb dispatch seed"},
 	{"version.go", "D — the CalVer computation (kind-recognition/identity data)"},
-	{"host_build_bake_plugins.go", "M — the bake-plugins F10 host-builder reverse-channel seam (kind-blind)"},
 	{"host_build_config_resolve.go", "M — the config-resolve F10 host-builder (loader/registry reverse-leg the plugin calls back; kind-blind)"},
 	{"host_build_feature.go", "M — the feature F10 host-builder reverse-channel seam (kind-blind)"},
 	{"host_build_hostprobe.go", "M — the host-probe F10 host-builder (host-only hardware/env probe reverse-leg)"},
@@ -169,6 +168,14 @@ var kernelFloor = []floorEntry{
 	{"step_emit_hostbuild.go", "M — the generic \"step-emit\" F10 HostBuild seam (word-keyed stepEmitters dispatch, kind-blind — same shape as the ~25 other host_build_*.go floor entries)"},
 	{"intermediates_shim.go", "M — ComputeIntermediates/GlobalCandyOrder: a *Config→deploykit.IntermediateDefaults adapter wired as a loaderkit.ResolveProjectSeams callback consumed by resolved_project_host.go"},
 	{"resolved_project_host.go", "M — the trimmed \"resolved-project\" F11 resolve handle (K5-Unit-0 keystone); team-lead-ruled to stay core, floor-reclassified here per the same boundary-law shape as its sibling F10/F11 seams"},
+	// Build-tail cone (coneB-buildtail) — spike-verified by call-graph, applying the SAME "thin
+	// backing-body of an already-accepted floor seam" bar the team lead corrected round 1 against
+	// (no capability logic moved to floor this round — only genuine dispatch/bootstrap glue).
+	{"host_build_buildengine.go", "M — the shrunk render-seam-floor consumer (hostBuildPrep/hostBuildContextIgnoreBaseline) + the 6 other buildengine-* K1-loader-witness legs (bootstrap-delicate local scan, git clone/cache, build-time plugin CONNECT registry-M, namespaced-box nested scan+render-prep) resolveBuildEngine reaches for genuinely host-only steps — mirrors host_build_loader.go's loader-* legs, already floor"},
+	{"remote_image.go", "M — ResolveRemoteImage: the direct backing body of the already-floor host_build_remote_image_resolve.go seam (EnsureRepoDownloaded = host git clone/cache, K1/B; LoadConfig/ScanAllCandyWithConfig = core loader) — its own header already declares \"UNTIL-K1... CANNOT leave core\""},
+	{"distro.go", "M/D — detectDistro/installHints/distroPackageManagers/distroFamilyMap: bootstrap-embedded host-detection data + the /etc/os-release parse, SOLE consumer is the already-floor host_build_hostprobe.go; splitting the file to move only the pure parse half saves nothing and inlining the rest would be the forbidden cosmetic-gaming pattern"},
+	{"distro_resolve.go", "M — resolveDistroViaPlugin: a thin providerRegistry-coupled dispatch callback, the direct callee of the already-floor format_config.go (loaderkit.ProjectDistroConfig) — byte-for-byte the same shape as service_render.go's resolveInitConfigViaPlugin, accepted round 1"},
+	{"host_build_vm_build.go", "M — the \"vm-build\" F10 host-builder, PREP+RESOLVE only (its own header: \"the loader + box-store Mechanisms a sdk-only candy cannot run\" — LoadUnified, resolveBootcImageRef needing cfg.Box + local podman-storage inspection, ensureBuilderImageBuilt needing the dispatchBuildEnsure reverse-channel); matches the ~25-entry host_build_*.go floor pattern"},
 }
 
 // residueOwner maps every tracked-for-removal charly/*.go non-test file to its
@@ -209,14 +216,11 @@ var residueOwner = map[string]string{
 	"deploy_nodeform.go":            "P13",
 	"deploy_state_host.go":          "P13",
 	"deploy_tree.go":                "P13",
-	"distro.go":                     "P8b",
-	"distro_resolve.go":             "P8b",
 	"egress.go":                     "P15",
 	"embed_defaults.go":             "P15",
 	"enc.go":                        "P11",
 	"filelock.go":                   "P15",
 	"generate.go":                   "P8b",
-	"host_build_vm_build.go":        "P8b",
 	"k8s_config.go":                 "P11",
 	"layer_secrets.go":              "P8b",
 	"layers.go":                     "P8b",
@@ -232,7 +236,6 @@ var residueOwner = map[string]string{
 	"readiness_config.go":           "P11",
 	"refs.go":                       "P15",
 	"refs_threaded.go":              "P15",
-	"remote_image.go":               "P14",
 	"resource_resolve.go":           "P15",
 	"secrets.go":                    "P11",
 	"sidecar.go":                    "P11",
@@ -247,8 +250,6 @@ var residueOwner = map[string]string{
 	"volume_cp_tags_cmd.go":         "P11",
 	// — files added by cutovers that landed after the T0 authoring (living tracker) —
 	"config_write_host.go":      "P11",
-	"host_build_buildengine.go": "K3", // the buildengine-* reverse legs the plugin-side RESOLVE reaches (U6); dissolve as the legs thin at K4/K5
-	"resolved_project_host.go":  "P8b",
 	"validate_project_host.go":  "P15",
 	// — Cutover A (#168, deploy-dispatch kernel hard-cutover exit): the K4-C
 	// deploy-tree walk port narrows the retired deploy-dispatch spike into 6

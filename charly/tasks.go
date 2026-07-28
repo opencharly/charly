@@ -87,11 +87,11 @@ func (g *Generator) toDeploykit() *deploykit.Generator {
 	}
 	dg.ResolveDetectionBuilderStage = g.resolveDetectionBuilderStageSeam
 	dg.ResolveExternalBuilderStage = g.resolveExternalBuilderStageSeam
-	// EmitBakedPlugins: the S0 baked-plugin BUILD-side seam — bake each composing
-	// candy's bake_plugin binaries into the final image. The host closure is the
-	// existing emitBakedPlugins (stays core: host-builds plugin binaries). Used by
-	// deploykit.Generator.generateContainerfile (#67 render-DRIVE move).
-	dg.EmitBakedPlugins = g.emitBakedPlugins
+	// EmitBakedPlugins: left unwired here — this toDeploykit() Generator's ONLY surviving
+	// caller (resolved_project_host.go's fillNamespacedBoxes) calls RenderPrepBox only, which
+	// never reads EmitBakedPlugins (K3 build-tail move, coneB-buildtail: the real render path
+	// wires deploykit.EmitBakedPlugins directly, no host round-trip — see
+	// render_generator_from_project.go).
 	// CollectBoxVolume: the volume-aggregate seam for data-image label emission.
 	// Wraps the core CollectBoxVolume (reads the live Config + Candy graph). Used by
 	// deploykit.Generator.generateDataImageContainerfile (#67 render-DRIVE move).
