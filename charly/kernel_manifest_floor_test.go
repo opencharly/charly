@@ -61,6 +61,7 @@ var kernelFloor = []floorEntry{
 	{"checkrun_charly_verbs.go", "M — the host reverse-leg surface the EXTERNAL live-container verbs need that a marshalled plugin can't compute for itself: resolveCheckApk (the hostVerbResolver wrapper anchoring a relative committed-APK path against the AUTHORING candy's source tree via kit.ResolveCommittedApk, supplying the host-only h.kr.CandyDirs()/CandyScanErr()) + noVmDisplayDeviceErr (the ONE canonical N/A-skip signal string, R3). Kind-blind host reverse-channel leg"},
 	{"cli_model_cmd.go", "M — the __cli-model host seam (Kong command-tree reflection for the externalized MCP server); a CLI/prescan-adjacent host seam"},
 	{"config.go", "M — the thin host LoadConfig/LoadConfigRaw entry seams over loaderkit.LoadUnified + uf.ProjectConfig, plus buildkitOptsWithVocab (the host projection to buildkit.ResolveOpts loading the project vocabulary). The load ORCHESTRATION moved to loaderkit (#48); this is the thin host loader entry"},
+	{"cue_defaults.go", "M — the in-core CUE defaults application: applyCueDefaults(kind, out) unifies an already-RESOLVED entity's marshaled form with the closed #<Kind> schema (cueKindDef, kind-blind word-dispatch against the shared cueSchemaCtx) to fill schema-declared REQUIRED-with-default fields — the unify-AFTER-merge counterpart to the loader's non-unifying decode. The SAME in-core CUE ingress M as cue_schema.go / cue_node.go; imports only cuelang (no loaderkit)"},
 	{"cue_kind_box.go", "B — the box⊆candy image factory bootstrap root (the discovered-candy pre-check calls it directly)"},
 	{"cue_kind_candy.go", "B — the candy⊻box factory bootstrap root (must exist before any plugin can load; candyIsImage/buildCandy stay core)"},
 	{"cue_loader.go", "M — the per-entity CUE decode (the kind-decode MATERIALIZE: fold parsed config into the typed project view)"},
@@ -81,12 +82,14 @@ var kernelFloor = []floorEntry{
 	{"host_build_deploy_entity_resolve.go", "M — the generic \"deploy-entity-resolve\" HostBuild seam (kind-blind: resolves ANY kind entity by {kind,name} from the project loader for plugins — plugin-kube/-vm/-bundle all consume it; the canonical generic loader-read broker seam)"},
 	{"image.go", "B — the charly box CLI grammar spine (BoxCmd, embeds kong.Plugins for plugin-box's nested subcommands) + FormatCLIError, the top-level Kong error formatter main() calls; BoxPullCmd already externalized to candy/plugin-box (K3 #39)"},
 	{"k8s_config.go", "M — the host-side k8s loader-read HELPER of the FLOORED deploy-entity-resolve seam (findK8sSpec's SOLE caller is host_build_deploy_entity_resolve.go, in kernelFloor): LoadUnified→loaderkit.ProjectTemplates.K8s→resolveK8sViaPlugin, the kind:k8s→ResolvedK8s resolution the generic seam performs for plugin-kube. Same floor-class as its seam; NOT a raw-project move (that would duplicate the seam's resolution + entangle substrate_template_resolve)"},
+	{"load_executor_host.go", "M — the HOST'S OWN loader-entry seam: the permanent typed hostLoaderExecutor the FLOORED config.go/unified.go LoadUnified drives loaderkit through (loaderkit.LoadSeamsFromExecutor, U3, zero marshal) so the host can load its own charly.yml — a plugin host must read its own config to bootstrap; that never leaves core. The host half of the loader-seam M, the same class as host_build_loader_floor.go's permanent legs (distinct from host_build_loader.go's transitional legs, residue). The loaderkit import is the shared P16b import-purity concern config.go/unified.go carry, tracked separately"},
 	{"loader_threaded.go", "D — the kind-recognition threaded-data snapshot the host fills from the registry and threads to the kind-blind parse (the boundary law's canonical D example; untying the loader↔registry cycle)"},
 	{"local_spec.go", "M — the host-side local-template loader-read HELPER of the FLOORED check_cmd.go (findLocalSpec's SOLE caller is check_cmd.go:267, the floored `target: local --verify` path, in kernelFloor): LoadUnified→resolveLocalRefFor→resolveLocalViaPlugin (pure InvokeProvider dispatch — the resolution capability lives in the substrate plugin). Same floor-class as its seam; NOT a raw-project move (identical evidence to k8s_config)"},
 	{"main.go", "B — the Kong parse/dispatch spine + the bootstrap entry point"},
 	{"main_freshness.go", "D — the binary freshness self-identity (os.Executable() vs cwd)"},
 	{"main_repo.go", "B — the --repo project-directory resolver (bootstrap, pre-dispatch)"},
 	{"materialize.go", "M/B — the host-coupled materialize leaf LEGS the relocated loaderkit orchestration (loaderkit.MaterializeLoadedProject, #48) calls back through (hostMaterializeProjectSeams): registry kind-decode dispatch (materializeProject/materializeNodeInto), the bootstrap candyIsImage discovered-manifest fold (foldDiscoveredManifests), and the embedded-defaults merge (materializeDocStream). The walk/merge ORCHESTRATION itself MOVED to sdk/loaderkit at #48"},
+	{"namespace.go", "M — the host namespace-qualified local-template ref resolver: resolveLocalRefFor walks the import namespaces (cfg.Namespaces) then dispatches to resolveLocalViaPlugin (substrate_template_resolve.go — pure InvokeProvider to the substrate plugin). Its SOLE caller is the now-FLOORED local_spec.go; a host helper dispatching to the substrate plugin, NOT a relocation candidate (its own doc + the identical local_spec/k8s_config floor evidence)"},
 	{"node_build.go", "M — the generic entity-body materialize (kind-decode MATERIALIZE)"},
 	{"node_bundle.go", "M — the bundle / resource-member materialize (the ONE member-decode source of truth; kind-decode MATERIALIZE)"},
 	{"node_candy.go", "B — the candy constructor (candyIsImage/buildCandy bootstrap-critical routing stays core)"},
@@ -127,6 +130,7 @@ var kernelFloor = []floorEntry{
 	{"registry_bootstrap.go", "B — the provider-registry seed that must exist before any plugin loads"},
 	{"reserved_registry.go", "B/D/M — the CUE-derived reserved-word sets (D), the VerbCatalog dispatch (M), and normalizeNodeInto (materialize); a bootstrap root"},
 	{"resource_resolve.go", "M — the host registry-dispatch closure (resolveResourceViaPlugin via hostInvoke by word) threaded into loaderkit's kind-blind ResolvePluginKindViaPlugin loop for the resource kind's OpResolve; the resolve ORCHESTRATION is in loaderkit, this host leg is registry-coupled and stays core (the proven injected-closure template)"},
+	{"substrate_template_resolve.go", "M — the host-side per-substrate TEMPLATE-RESOLVE dispatch seam: resolveK8s/Local/Vm/AndroidViaPlugin project an opaque substrate template body into a *Resolved* envelope via invokeSubstrateTemplateResolve → providerRegistry.ResolveKind(\"local\") → candy/plugin-substrate's OpResolve. ZERO capability logic (the resolution lives in the substrate plugin); pure registry-dispatch, the SAME floor-class as resource_resolve.go's host dispatch closure"},
 	{"unified.go", "M — the thin host LoadUnified/Distros/Builders/ApplyDiscover/ProjectCandies delegating seams over loaderkit (the load ORCHESTRATION moved to loaderkit #48), plus canonicalRef (the ResolveRef seam host closure calling EnsureRepoDownloaded) and projectCandiesScanned (the host candy-scan leg threading the registered requireCandyScanner CandyScanner seam + parseCandyYAML). Host loader-entry glue over injected seams"},
 	{"unified_targets.go", "M — the ResolveTarget deploy dispatcher + externalDeployTarget adapter (wire broker deploy routing, kind-blind)"},
 	{"validate.go", "M — the in-core load-time CUE/config-schema validation gate: validateProjectCUESchemas/validateCandyCUESchemas drive validateNodeFormSteps (cue_schema.go), which consumes the floor genericNode (node_parse.go); the spec-only build/distro/builder validators gate charly's embedded vocabulary (charly/charly.yml). Kind-blind schema-conformance at load, coupled to the floor kind-decode materialize M — NOT a per-kind capability (all kind-blind word-dispatch, no compiled-in per-kind body to externalize)"},
@@ -245,25 +249,22 @@ var kernelFloor = []floorEntry{
 //	P14  — status collectors / alias / scaffold / OCI registry+merge → plugins
 //	P15  — residual folds + HostArbiter deletion + K1 loader-orchestration + K5 seam-death + misc CLI utils
 var residueOwner = map[string]string{
-	"builder_venue.go":              "P8b", // buildEngineContext (the type) is floor-worthy core-dispatch infra; runVenueBuilderStep/runVenueHomeArtifactBuilder look like coneA3's deploy-vm domain by function — flagged, not unilaterally split (team-lead ruling)
-	"bundle_members.go":             "P11",
-	"cmd.go":                        "P15",
-	"commands.go":                   "P11",
-	"config_image.go":               "P11",
-	"credential_plugin.go":          "P15",
-	"cue_defaults.go":               "P15",
-	"deploy.go":                     "P13",
-	"deploy_nodeform.go":            "P13",
-	"deploy_tree.go":                "P13",
-	"enc.go":                        "P11",
-	"filelock.go":                   "P15",
-	"layer_secrets.go":              "P8b",
-	"namespace.go":                  "P15",
-	"readiness_config.go":           "P11",
-	"secrets.go":                    "P11",
-	"sidecar.go":                    "P11",
-	"substrate_template_resolve.go": "P15",
-	"update_deploy_dispatch.go":     "P11",
+	"builder_venue.go":          "P8b", // buildEngineContext (the type) is floor-worthy core-dispatch infra; runVenueBuilderStep/runVenueHomeArtifactBuilder look like coneA3's deploy-vm domain by function — flagged, not unilaterally split (team-lead ruling)
+	"bundle_members.go":         "P11",
+	"cmd.go":                    "P15",
+	"commands.go":               "P11",
+	"config_image.go":           "P11",
+	"credential_plugin.go":      "P15",
+	"deploy.go":                 "P13",
+	"deploy_nodeform.go":        "P13",
+	"deploy_tree.go":            "P13",
+	"enc.go":                    "P11",
+	"filelock.go":               "P15",
+	"layer_secrets.go":          "P8b",
+	"readiness_config.go":       "P11",
+	"secrets.go":                "P11",
+	"sidecar.go":                "P11",
+	"update_deploy_dispatch.go": "P11",
 	// — files added by cutovers that landed after the T0 authoring (living tracker) —
 	"config_write_host.go":     "P11",
 	"validate_project_host.go": "P15",
@@ -359,8 +360,7 @@ var residueOwner = map[string]string{
 	// PERMANENT loader legs (bootstrap-phase dispatch / prescan+connect / the D
 	// snapshot) live in host_build_loader_floor.go, classified FLOOR (kernelFloor
 	// above) so residue→0 GREEN stays reachable.
-	"load_executor_host.go": "P15",
-	"host_build_loader.go":  "P15",
+	"host_build_loader.go": "P15",
 }
 
 func TestKernelManifest_CoreIsPinnedToTheFabricFloor(t *testing.T) {
