@@ -14,13 +14,20 @@ import (
 	"github.com/opencharly/sdk/vmshared"
 )
 
-// check_graphics_endpoint.go — the VM-graphics host-endpoint reverse-leg, split out of the
-// floor file check_endpoint_resolve.go so that file stays import-PURE (spec+kit+deploykit
-// only). This leg genuinely drives host SSH-tunnel + libvirt-URI machinery — sshx.NewSSHTunnel
-// embeds golang.org/x/crypto/ssh, which must never enter the floor-legal spec leaf — so it lives
-// in a RESIDUE file that may import sshx + vmshared directly. It eventually folds into
-// candy/plugin-vnc / candy/plugin-spice (the graphics verbs it serves); until then it is tracked
-// residue reaching the vmshared.ParseLibvirtURI + sshx.NewSSHTunnel owning kits directly (no charly alias).
+// check_graphics_endpoint.go — the VM-graphics host-endpoint reverse-leg (resolveVerbGraphics), the
+// IDENTICAL SIBLING of the floor check_endpoint_resolve.go's resolveVerbEndpoint: both are
+// hostVerbResolver methods served over the CheckContext reverse channel (resolveGfx / resolveEp) that
+// register their live forward's teardown on the host check Runner (h.endpointCleanups). The SSH tunnel
+// is RUNNER-LIFECYCLE-BOUND — the RFB/spice client connects THROUGH it for the whole check — so a plugin
+// Invoke could never hold it (it would close before the client connects). It is genuine HOST FABRIC (FLOOR),
+// not a plugin capability.
+//
+// It imports sdk/sshx (golang.org/x/crypto/ssh) DIRECTLY, and that is CORRECT dependency CONTAINMENT, not
+// a violation: relocating the tunnel to any plugin-shared kit (e.g. kit) spreads x/crypto/ssh to every
+// plugin — RCA-proven, ~18 plugin builds break on the missing go.sum entry — so keeping it here confines
+// x/crypto/ssh to this ONE host-fabric file, the analogue of the GPU host-legs using hardware libs. This is
+// the SINGLE contained x/crypto/ssh boundary in charly core (once coneA moves vm_backend_lifecycle out).
+// The libvirt-URI parse rides the floor-legal vmshared.ParseLibvirtURI (no charly alias).
 
 // resolveVerbGraphics resolves a deployment's <kind> display (kind = "vnc" | "spice") to a
 // dialable endpoint. It is venue-aware and REPLACES the former per-verb vnc + spice host
