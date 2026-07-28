@@ -14,6 +14,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -162,4 +163,93 @@ func registerEphemeralIfMarked(node *spec.BundleNode, name string) error {
 // the live provider registry — not unit-testable standalone).
 func isEphemeralPanicError(err error) bool {
 	return err != nil && strings.Contains(err.Error(), sdk.EphemeralPanicMarker)
+}
+
+// -----------------------------------------------------------------------------
+// k3s post-provision dispatch (folded from the former k3s_post.go + k8s_plugin.go,
+// plugin-kube #2 seam-death). Co-located with the artifactRegisterHandlers map above
+// (the "kubeconfig" register hint wires here) + retrieveArtifactsAndK3s, which already
+// owns k3s artifact registration — so the standalone dispatch-shim files drop.
+//
+// The k3s post-provision LOGIC — the retrieved-path check, the guest-forward kubeconfig
+// server rewrite, and the ~/.kube/config merge — lives WHOLESALE in candy/plugin-kube
+// (k3s_post.go there), reached via the SAME out-of-process kube provider the `kube:` check
+// verb uses. The dispatch is WITH the reverse-channel broker (InvokeWithExecutor,
+// kit.ShellExecutor{} — the "broker only, no live venue" idiom) because the plugin's
+// k3s-post-provision method needs the "deploy-entity-resolve" HostBuild seam for its
+// LoadUnified-coupled VM-forward lookup. The `kit` import (kit.ShellExecutor{}, the
+// broker-only dispatch idiom) is UNTIL-plugin-kube-externalization — it exits once
+// invokeKubePluginWithBroker's whole call chain moves into candy/plugin-kube itself.
+// -----------------------------------------------------------------------------
+
+// K3sPostProvision dispatches the k3s-post-provision method to candy/plugin-kube and prints its
+// returned status line. artifactKey is the ENTITY-scoped identity (the shared per-VM cluster cache
+// dir + kubeconfig context — one k3s cluster per VM); deployName is the real per-deploy (domain)
+// identity the port-forward lookup keys off. A "not a k3s-server deploy" (or --dry-run-skipped)
+// outcome round-trips as an EMPTY message (the plugin's own no-op case) — nothing is printed.
+// This is the artifactRegisterHandlers["kubeconfig"] handler (deploy_add_shared.go's map above).
+func K3sPostProvision(artifactKey, deployName string) error {
+	op := &spec.Op{Plugin: "kube", PluginInput: map[string]any{
+		"method": "k3s-post-provision", "artifact_key": artifactKey, "deploy_name": deployName,
+	}}
+	msg, err := invokeKubePluginWithBroker(op)
+	if err != nil {
+		return fmt.Errorf("k3s post-provision %q: %w", artifactKey, err)
+	}
+	if msg != "" {
+		fmt.Fprintln(os.Stderr, msg)
+	}
+	return nil
+}
+
+// K3sPostProvision's registration must match the func(artifactKey, deployName string) error shape
+// artifactRegisterHandlers expects — this compile-time assertion catches a signature drift loudly.
+var _ func(string, string) error = K3sPostProvision
+
+// resolveKubePlugin lazily build-connects candy/plugin-kube if the deploy path has not already (the
+// generic host-adapter seam, F7) and asserts it out-of-process (the ONE placement this plugin ships
+// in — its client-go dependency is never compiled in), returning the *grpcProvider
+// invokeKubePluginWithBroker needs.
+func resolveKubePlugin() (*grpcProvider, error) {
+	prov, ok := connectPluginByWord(ClassVerb, "kube")
+	if !ok {
+		return nil, fmt.Errorf("kube plugin not loaded — the deploy must compose candy/plugin-kube (its provider serves the clientcmd-backed kubeconfig merge); k3s-server requires it")
+	}
+	gp, ok := prov.(*grpcProvider)
+	if !ok {
+		return nil, fmt.Errorf("kube plugin: resolved provider is not out-of-process (%T) — the k3s deploy seam requires the external candy/plugin-kube placement", prov)
+	}
+	return gp, nil
+}
+
+// invokeKubePluginWithBroker dispatches a synthetic kube #Op WITH the reverse-channel broker
+// (InvokeWithExecutor), so the plugin's Invoke can call back HostBuild — the k3s-post-provision
+// leg. kit.ShellExecutor{} is the "broker only, no live venue" idiom (the deploy already ran on its
+// own executor; this finalization step runs entirely on the operator host's own filesystem —
+// ~/.cache/charly + ~/.kube/config). It is a swappable package-level var (like InspectContainer) so
+// K3sPostProvision's callers stay unit-testable without a live plugin.
+var invokeKubePluginWithBroker = func(op *spec.Op) (string, error) {
+	prov, err := resolveKubePlugin()
+	if err != nil {
+		return "", err
+	}
+	params, err := marshalJSON(op)
+	if err != nil {
+		return "", fmt.Errorf("kube plugin: marshal op: %w", err)
+	}
+	res, err := prov.InvokeWithExecutor(context.Background(),
+		&Operation{Reserved: "kube", Op: OpRun, Params: params}, kit.ShellExecutor{}, buildEngineContext{}, false, nil)
+	if err != nil {
+		return "", fmt.Errorf("kube plugin: %w", err)
+	}
+	var pr pluginCheckResult
+	if res != nil && len(res.JSON) > 0 {
+		if uerr := json.Unmarshal(res.JSON, &pr); uerr != nil {
+			return "", fmt.Errorf("kube plugin: decode reply: %w", uerr)
+		}
+	}
+	if pr.Status == "fail" {
+		return pr.Message, fmt.Errorf("kube plugin: %s", pr.Message)
+	}
+	return pr.Message, nil
 }

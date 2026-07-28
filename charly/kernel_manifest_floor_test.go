@@ -209,11 +209,8 @@ var residueOwner = map[string]string{
 	"host_build_render_seam.go":     "P8b",
 	"host_build_vm_build.go":        "P8b",
 	"image.go":                      "P14",
-	"k3s_post.go":                   "P11",
 	"k8s_config.go":                 "P11",
 	"k8s_deploy_from_box.go":        "P14",
-	"k8s_generate.go":               "P11",
-	"k8s_plugin.go":                 "P11",
 	"layer_secrets.go":              "P8b",
 	"layers.go":                     "P8b",
 	"local_spec.go":                 "P11",
@@ -310,10 +307,6 @@ var residueOwner = map[string]string{
 	// passes already applied to the sibling host_build_deploy_{tree_resolve,
 	// node_dispatch,node_del_dispatch,del_resolve,members,config_save}.go seams.
 	"host_build_deploy_entity_resolve.go": "P13",
-	// host_build_k8s_generate.go — single-purpose "k8s-generate-kustomize" seam
-	// wrapping k8s_generate.go's GenerateK8sKustomize (P11) and explicitly
-	// mirroring the deleted k8s_deploy_preresolve.go's (P11) TreeRoot
-	// computation; classified with its k8s-substrate predecessor, P11.
 	// host_build_ephemeral_register.go + ephemeral_dispatch.go — split of the
 	// deleted ephemeral_lifecycle.go (P11, pruned above): the register/teardown
 	// BODY moved to candy/plugin-bundle, leaving (a) a thin HostBuild seam

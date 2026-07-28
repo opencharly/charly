@@ -67,7 +67,7 @@ import (
 // itself is unrelated to that removal — it is InvokeProvider's OWN out-of-process/in-proc
 // discriminator (mirrors the build-context BuildEmitter marker interface, provider_verb.go)
 // and is consumed by host_build_construct_step.go, host_build_pod_config.go,
-// k8s_generate.go, and provider_checkenv.go.
+// k8s_deploy_from_box.go, and provider_checkenv.go.
 type executorInvoker interface {
 	InvokeWithExecutor(ctx context.Context, op *Operation, exec deploykit.DeployExecutor, build buildEngineContext, rebootable bool, cc *checkContextReverseServer) (*Result, error)
 }
