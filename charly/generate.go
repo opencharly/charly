@@ -513,12 +513,6 @@ func (g *Generator) emitBakedPlugins(b *strings.Builder, boxName string, candyOr
 	return nil
 }
 
-// collectBuilderRuntimeEnv → deploykit.Generator.CollectBuilderRuntimeEnv (P8 shim).
-// Used by the host render-prep's deploykit.Generator.buildBakedMetadata (env_candy + path_append labels, K3-U3).
-func (g *Generator) collectBuilderRuntimeEnv(candyOrder []string, img *buildkit.ResolvedBox) []*kit.EnvConfig {
-	return g.toDeploykit().CollectBuilderRuntimeEnv(candyOrder, img)
-}
-
 // descriptionInfo moved to sdk/deploykit (deploykit.DescriptionInfo) in K5-Unit-1 —
 // shared with the deploy state-model body (MergeDeployOntoMetadata reads it). charly
 // call sites (config.go / unified.go / host_build_feature.go / render_baked_metadata.go)
