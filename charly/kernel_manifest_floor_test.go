@@ -174,6 +174,15 @@ var kernelFloor = []floorEntry{
 	{"host_build_buildengine.go", "M — the shrunk render-seam-floor consumer (hostBuildPrep/hostBuildContextIgnoreBaseline) + the 6 other buildengine-* K1-loader-witness legs (bootstrap-delicate local scan, git clone/cache, build-time plugin CONNECT registry-M, namespaced-box nested scan+render-prep) resolveBuildEngine reaches for genuinely host-only steps — mirrors host_build_loader.go's loader-* legs, already floor"},
 	{"distro.go", "M/D — detectDistro/installHints/distroPackageManagers/distroFamilyMap: bootstrap-embedded host-detection data + the /etc/os-release parse, SOLE consumer is the already-floor host_build_hostprobe.go; splitting the file to move only the pure parse half saves nothing and inlining the rest would be the forbidden cosmetic-gaming pattern"},
 	{"distro_resolve.go", "M — resolveDistroViaPlugin: a thin providerRegistry-coupled dispatch callback, the direct callee of the already-floor format_config.go (loaderkit.ProjectDistroConfig) — byte-for-byte the same shape as service_render.go's resolveInitConfigViaPlugin, accepted round 1"},
+	// Build-remnant cone (coneB-buildremnant) — the Generator-cluster reconcile the round-1 rejection
+	// (above, "REJECTED as floor") deferred until the render DRIVE finished leaving core (K3/#67/P11c/
+	// K5-Unit-6b/coneB-buildtail/coneB-pkgcmd): every capability body has now left; what remains in
+	// these 3 files is verified by call-graph (every exported func has a live, non-test caller; zero
+	// dead code) to be thin registry-dispatch/wire-forward M with ZERO capability logic — the SAME bar
+	// the already-floor P8b render-glue cluster above was accepted against.
+	{"generate.go", "M — the shared render-seam-floor Generator TYPE + its two constructors (NewGenerator/newCandyScanGenerator), consumed ONLY by the already-floor F10 host-builders (build_overlay.go's hostBuildOverlay, host_build_buildengine.go, host_build_render_seam.go) — call-graph verified, no caller exists outside those 3 + 2 parity tests. Also carries the registry-coupled verb:oci adopt-user dispatch (ociProvider/invokeOciInspectUser) and the shared OpResolve builder-stage dispatch (resolveBuilderStage/resolveExternalBuilder) — thin providerRegistry.ResolveBuilder/resolve(ClassVerb)-coupled M dispatch, the same shape as the other floor OpResolve seams above. baselineContextIgnore additionally has a hard structural floor reason: it //go:embeds charly/charly.yml, only possible from this module"},
+	{"tasks.go", "M — Generator.toDeploykit() + the 3 ResolveXStageSeam closures + EmitPluginOp: 100% providerRegistry-coupled seam-wiring bridging deploykit's render engine to the core provider registry (EnsureBuildersConnected/ResolveDetectionBuilderStage/ResolveExternalBuilderStage/ResolveInlineBuilder) — zero movable render logic remains, the render DRIVE itself already moved to deploykit in prior cutovers (K3-A/K5-Unit-6b); every function call-graph-verified referenced, no dead code"},
+	{"builder_preresolve.go", "M — ensureBuildersConnected is genuine plugin-loading Mechanism: build-connects the not-yet-connected externalized builder plugin(s) via providerRegistry.ResolveBuilder + loadProjectPlugins, both core-private registry/plugin-loading mechanics no plugin can reach — the connect step tasks.go's EnsureBuildersConnected closure and host_build_render_seam.go call into"},
 }
 
 // residueOwner maps every tracked-for-removal charly/*.go non-test file to its
@@ -189,7 +198,6 @@ var kernelFloor = []floorEntry{
 //	P14  — status collectors / alias / scaffold / OCI registry+merge → plugins
 //	P15  — residual folds + HostArbiter deletion + K1 loader-orchestration + K5 seam-death + misc CLI utils
 var residueOwner = map[string]string{
-	"builder_preresolve.go":         "P8b",
 	"builder_venue.go":              "P8b", // buildEngineContext (the type) is floor-worthy core-dispatch infra; runVenueBuilderStep/runVenueHomeArtifactBuilder look like coneA3's deploy-vm domain by function — flagged, not unilaterally split (team-lead ruling)
 	"host_build_vm_build.go":        "P8b", // the kind:vm bootstrap-builder pre-pass (resolveVmBuildBootstrap/ensureBuilderImageBuilt) is real vm-build capability, not thin dispatch — grouped with builder_venue.go for coneA3's deploy-vm pass to decide move-to-plugin-deploy-vm vs genuine floor (team-lead ruling, reverted from an over-broad floor call)
 	"build_overlay.go":              "P8b",
@@ -218,7 +226,6 @@ var residueOwner = map[string]string{
 	"embed_defaults.go":             "P15",
 	"enc.go":                        "P11",
 	"filelock.go":                   "P15",
-	"generate.go":                   "P8b",
 	"k8s_config.go":                 "P11",
 	"layer_secrets.go":              "P8b",
 	"layers.go":                     "P8b",
@@ -235,7 +242,6 @@ var residueOwner = map[string]string{
 	"secrets.go":                    "P11",
 	"sidecar.go":                    "P11",
 	"substrate_template_resolve.go": "P15",
-	"tasks.go":                      "P8b",
 	"unified.go":                    "P15",
 	"update_deploy_dispatch.go":     "P11",
 	"validate.go":                   "P15",
