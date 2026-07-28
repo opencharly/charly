@@ -37,7 +37,7 @@ import (
 // `charly` verb (so cannot be cli-reentry).
 //
 // The op bodies call the SHARED core helpers runCheckBed uses (bedGPUPrereqMissing,
-// acquireFileLock, bedVmDomains/acquireVmDomainLock, selfSuperprojectOverridePair/
+// kit.AcquireFileLock, bedVmDomains/acquireVmDomainLock, selfSuperprojectOverridePair/
 // mergeRepoOverrides, acquireResourceForClaimant, vmshared.StartLibvirtUserSession,
 // persistBedDeployOverrides, bringUpMembers/tearDownMembers, deploykit.WaitForVmSshReady/
 // deploykit.WaitForContainerReady, bedCheckLevel/bedCheckLiveRefs/…) — those helpers STAY
@@ -55,7 +55,7 @@ type bedSession struct {
 	node      spec.BundleNode // resolved once at setup; drives the members/wait ops
 	bedDomain string          // per-deploy VM domain identity (spec.VmDomainIdentity(bed)); the live domain is charly-<bedDomain>
 	imageTag  string          // per-RUN bed-scoped image tag (<bed>-<calver>); every box build + deploy in the run passes it as --tag (#75)
-	bedUnlock func() error    // acquireFileLock(".check/<bed>/.lock")
+	bedUnlock func() error    // kit.AcquireFileLock(".check/<bed>/.lock")
 	domUnlock []func() error  // acquireVmDomainLock per bedVmDomains, in acquire order
 	lease     *Lease          // acquireResourceForClaimant
 
@@ -240,9 +240,9 @@ func bedSessionSetup(req spec.CheckBedRequest) (spec.CheckBedReply, error) {
 	}()
 
 	// Per-bed exclusive lock — fail-fast on a duplicate concurrent run of the SAME bed.
-	bedUnlock, lockErr := acquireFileLock(filepath.Join(".check", req.Bed, ".lock"), false)
+	bedUnlock, lockErr := kit.AcquireFileLock(filepath.Join(".check", req.Bed, ".lock"), false)
 	if lockErr != nil {
-		if errors.Is(lockErr, errLockBusy) {
+		if errors.Is(lockErr, kit.ErrLockBusy) {
 			return spec.CheckBedReply{}, fmt.Errorf("check bed %q is already running in this project — refusing a concurrent run (lock: .check/%s/.lock)", req.Bed, req.Bed)
 		}
 		return spec.CheckBedReply{}, fmt.Errorf("locking check bed %q: %w", req.Bed, lockErr)
