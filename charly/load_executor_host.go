@@ -12,9 +12,16 @@ import (
 // (candy/plugin-bundle's execLoaderExecutor, the Unit D witness), but reaching each registry-/
 // host-coupled step by calling the host function DIRECTLY (zero marshal, U3). The typed
 // LoaderExecutor interface is what makes that free: a compiled-in placement pays no envelope tax,
-// exactly like the ProjectWalker / Materializer typed seams (spec/loader_seam.go). This wrapper is
-// TRANSITIONAL — deleted by #118 GREEN when the loader's call sites move into their owning plugin
-// (no permanent charly→loaderkit wrapper; IMPORT-PURITY end-state).
+// exactly like the ProjectWalker / Materializer typed seams (spec/loader_seam.go).
+//
+// FLOOR (#118 P15): this is the HOST'S OWN loader-entry seam — the permanent typed LoaderExecutor the
+// floored config.go/unified.go LoadUnified drives loaderkit through so the HOST can load its own
+// charly.yml (a plugin host must read its own config to bootstrap; that never leaves core). It is the
+// host half of the loader-seam M-mechanism, the same class as the floored host_build_loader_floor.go
+// permanent legs — distinct from host_build_loader.go's TRANSITIONAL legs (residue). The loaderkit
+// import is the SAME shared P16b import-purity concern config.go/unified.go carry, tracked separately;
+// it does not make this file transitional (the earlier "deleted at GREEN" framing predated the
+// config/unified floor decision that keeps the host's own loader entry permanent).
 type hostLoaderExecutor struct{}
 
 // LoaderThreaded returns the CURRENT registry-derived snapshot — called FRESH at each DATA-seam

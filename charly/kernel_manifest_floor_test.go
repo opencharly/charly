@@ -62,6 +62,8 @@ var kernelFloor = []floorEntry{
 	{"cli_model_cmd.go", "M — the __cli-model host seam (Kong command-tree reflection for the externalized MCP server); a CLI/prescan-adjacent host seam"},
 	{"commands.go", "M — the host dispatch/stdio fabric: the podUpdateCmd type (the kind-blind `charly update` dispatch struct the FLOORED host_build_pod_lifecycle_dispatch seam constructs → dispatchByDeployTarget → ResolveTarget, no per-kind branch) + isTerminal/defaultIsTerminal (host-process TTY detection, os.Stdout.Stat, un-plugin-able) + containerExists (generic os/exec container probe). Generic dispatch + host-stdio; ZERO deploy capability"},
 	{"config.go", "M — the thin host LoadConfig/LoadConfigRaw entry seams over loaderkit.LoadUnified + uf.ProjectConfig, plus buildkitOptsWithVocab (the host projection to buildkit.ResolveOpts loading the project vocabulary). The load ORCHESTRATION moved to loaderkit (#48); this is the thin host loader entry"},
+	{"credential_plugin.go", "M — the CORE adapter for the externalized credential subsystem: the CredentialStore interface + pluginCredentialStore (forwards every credential op to verb:credential over the provider registry via connectPluginByWord + invokeTyped — the core→verb registry bridge, the same class as preempt.go's arbiterProxy) + the ResolveCredential entry (env-precedence owned by core, which owns the process env) + the byte-compatible wire forms. The ENTIRE store implementation (keyring/config backends, Secret Service, `charly secrets` CLI, GPG .secrets) lives OUT-OF-PROCESS in candy/plugin-secrets (the C2 dep-shed removed go-keyring from core)"},
+	{"cue_defaults.go", "M — the in-core CUE defaults application: applyCueDefaults(kind, out) unifies an already-RESOLVED entity's marshaled form with the closed #<Kind> schema (cueKindDef, kind-blind word-dispatch against the shared cueSchemaCtx) to fill schema-declared REQUIRED-with-default fields — the unify-AFTER-merge counterpart to the loader's non-unifying decode. The SAME in-core CUE ingress M as cue_schema.go / cue_node.go; imports only cuelang (no loaderkit)"},
 	{"cue_kind_box.go", "B — the box⊆candy image factory bootstrap root (the discovered-candy pre-check calls it directly)"},
 	{"cue_kind_candy.go", "B — the candy⊻box factory bootstrap root (must exist before any plugin can load; candyIsImage/buildCandy stay core)"},
 	{"cue_loader.go", "M — the per-entity CUE decode (the kind-decode MATERIALIZE: fold parsed config into the typed project view)"},
@@ -84,12 +86,15 @@ var kernelFloor = []floorEntry{
 	{"host_build_deploy_entity_resolve.go", "M — the generic \"deploy-entity-resolve\" HostBuild seam (kind-blind: resolves ANY kind entity by {kind,name} from the project loader for plugins — plugin-kube/-vm/-bundle all consume it; the canonical generic loader-read broker seam)"},
 	{"image.go", "B — the charly box CLI grammar spine (BoxCmd, embeds kong.Plugins for plugin-box's nested subcommands) + FormatCLIError, the top-level Kong error formatter main() calls; BoxPullCmd already externalized to candy/plugin-box (K3 #39)"},
 	{"k8s_config.go", "M — the host-side k8s loader-read HELPER of the FLOORED deploy-entity-resolve seam (findK8sSpec's SOLE caller is host_build_deploy_entity_resolve.go, in kernelFloor): LoadUnified→loaderkit.ProjectTemplates.K8s→resolveK8sViaPlugin, the kind:k8s→ResolvedK8s resolution the generic seam performs for plugin-kube. Same floor-class as its seam; NOT a raw-project move (that would duplicate the seam's resolution + entangle substrate_template_resolve)"},
+	{"layer_secrets.go", "M — CandyForPlan, the deploy-candy-secrets seam's project-candy-scan HELPER (ScanAllCandyWithConfig + *Config, both core-only loader mechanics no plugin can run itself): reloads the candy map and orders it against a compiled plan set. Kind-blind — no per-kind branch, just plan→candy-name lookup. SOLE real callers are the already-floor host_build_deploy_candy_secrets.go (its own \"deploy-candy-secrets\" seam) and build_overlay.go's hostBuildOverlay (call-graph verified). The secret_requires:/secret_accepts: RESOLUTION this file used to carry (ensureCandySecret/ResolveCandySecret/ResolveSecretForCandy) had no core-only dependency beyond the already-injectable CredentialAccess and relocated to sdk/deploykit/secret_candy_resolve.go (#118 coneB-p8bremainder), shrinking this file to just the loader-coupled half"},
+	{"load_executor_host.go", "M — the HOST'S OWN loader-entry seam: the permanent typed hostLoaderExecutor the FLOORED config.go/unified.go LoadUnified drives loaderkit through (loaderkit.LoadSeamsFromExecutor, U3, zero marshal) so the host can load its own charly.yml — a plugin host must read its own config to bootstrap; that never leaves core. The host half of the loader-seam M, the same class as host_build_loader_floor.go's permanent legs (distinct from host_build_loader.go's transitional legs, residue). The loaderkit import is the shared P16b import-purity concern config.go/unified.go carry, tracked separately"},
 	{"loader_threaded.go", "D — the kind-recognition threaded-data snapshot the host fills from the registry and threads to the kind-blind parse (the boundary law's canonical D example; untying the loader↔registry cycle)"},
 	{"local_spec.go", "M — the host-side local-template loader-read HELPER of the FLOORED check_cmd.go (findLocalSpec's SOLE caller is check_cmd.go:267, the floored `target: local --verify` path, in kernelFloor): LoadUnified→resolveLocalRefFor→resolveLocalViaPlugin (pure InvokeProvider dispatch — the resolution capability lives in the substrate plugin). Same floor-class as its seam; NOT a raw-project move (identical evidence to k8s_config)"},
 	{"main.go", "B — the Kong parse/dispatch spine + the bootstrap entry point"},
 	{"main_freshness.go", "D — the binary freshness self-identity (os.Executable() vs cwd)"},
 	{"main_repo.go", "B — the --repo project-directory resolver (bootstrap, pre-dispatch)"},
 	{"materialize.go", "M/B — the host-coupled materialize leaf LEGS the relocated loaderkit orchestration (loaderkit.MaterializeLoadedProject, #48) calls back through (hostMaterializeProjectSeams): registry kind-decode dispatch (materializeProject/materializeNodeInto), the bootstrap candyIsImage discovered-manifest fold (foldDiscoveredManifests), and the embedded-defaults merge (materializeDocStream). The walk/merge ORCHESTRATION itself MOVED to sdk/loaderkit at #48"},
+	{"namespace.go", "M — the host namespace-qualified local-template ref resolver: resolveLocalRefFor walks the import namespaces (cfg.Namespaces) then dispatches to resolveLocalViaPlugin (substrate_template_resolve.go — pure InvokeProvider to the substrate plugin). Its SOLE caller is the now-FLOORED local_spec.go; a host helper dispatching to the substrate plugin, NOT a relocation candidate (its own doc + the identical local_spec/k8s_config floor evidence)"},
 	{"node_build.go", "M — the generic entity-body materialize (kind-decode MATERIALIZE)"},
 	{"node_bundle.go", "M — the bundle / resource-member materialize (the ONE member-decode source of truth; kind-decode MATERIALIZE)"},
 	{"node_candy.go", "B — the candy constructor (candyIsImage/buildCandy bootstrap-critical routing stays core)"},
@@ -131,6 +136,7 @@ var kernelFloor = []floorEntry{
 	{"registry_bootstrap.go", "B — the provider-registry seed that must exist before any plugin loads"},
 	{"reserved_registry.go", "B/D/M — the CUE-derived reserved-word sets (D), the VerbCatalog dispatch (M), and normalizeNodeInto (materialize); a bootstrap root"},
 	{"resource_resolve.go", "M — the host registry-dispatch closure (resolveResourceViaPlugin via hostInvoke by word) threaded into loaderkit's kind-blind ResolvePluginKindViaPlugin loop for the resource kind's OpResolve; the resolve ORCHESTRATION is in loaderkit, this host leg is registry-coupled and stays core (the proven injected-closure template)"},
+	{"substrate_template_resolve.go", "M — the host-side per-substrate TEMPLATE-RESOLVE dispatch seam: resolveK8s/Local/Vm/AndroidViaPlugin project an opaque substrate template body into a *Resolved* envelope via invokeSubstrateTemplateResolve → providerRegistry.ResolveKind(\"local\") → candy/plugin-substrate's OpResolve. ZERO capability logic (the resolution lives in the substrate plugin); pure registry-dispatch, the SAME floor-class as resource_resolve.go's host dispatch closure"},
 	{"unified.go", "M — the thin host LoadUnified/Distros/Builders/ApplyDiscover/ProjectCandies delegating seams over loaderkit (the load ORCHESTRATION moved to loaderkit #48), plus canonicalRef (the ResolveRef seam host closure calling EnsureRepoDownloaded) and projectCandiesScanned (the host candy-scan leg threading the registered requireCandyScanner CandyScanner seam + parseCandyYAML). Host loader-entry glue over injected seams"},
 	{"unified_targets.go", "M — the ResolveTarget deploy dispatcher + externalDeployTarget adapter (wire broker deploy routing, kind-blind)"},
 	{"update_deploy_dispatch.go", "M — the kind-blind `charly update` deploy-target dispatch kernel: dispatchByDeployTarget (resolveTreeRoot + loadDeployPlugins + ResolveTarget.Rebuild — dispatches by substrate word via the registry, NO per-kind branch) consumed by the FLOORED host_build_pod_lifecycle_dispatch seam; + resolveUpdateDeployNode (pure deploykit.DeployKey lookup) + noteUpdateDisposability (pure transparency print). The deploy-walk dispatch M, sibling of unified_targets.go's ResolveTarget"},
@@ -238,6 +244,26 @@ var kernelFloor = []floorEntry{
 	// coupling; its one dependency was already a generic plugin-reachable seam) — see
 	// host_build_config_resolve.go's shrunk "config-resolve" seam + the CUE Backend field removal.
 	// What remains in these 3 files is genuine floor-M, verified individually below.
+	//
+	// P15 host-seam trio (coneB-p15host) — a MIXED verdict per file, not a uniform floor: filelock.go
+	// was PARTIALLY a removable duplicate (acquireFileLock/errLockBusy carried ZERO charly-specific
+	// behavior — a 1:1 signature pass-through of kit.AcquireFileLock/kit.ErrLockBusy — deleted, every
+	// caller repointed to kit directly, and their genuine lock-semantics test coverage moved to
+	// sdk/kit/filelock_test.go, filling an actual sdk-side coverage gap). host_build_retention_defaults.go
+	// and validate_project_host.go are both genuine, verified floor-M — see their own entries below.
+	{"filelock.go", "M — acquireDeployConfigLock, the ONE remaining wrapper: composes DeployConfigPath() (kit.DefaultDeployConfigPath alias, deploy.go) + kit.AcquireFileLock into the ONE process-shared lock every deploy-config writer serializes through — injected as a callback into deploykit.SaveVmDeployState/RemoveVmDeployEntry (host_build_config_resolve.go) today. Flagged (not fixed here, outside this file's disjoint slice): the whole body is now provably sdk-portable too, since DeployConfigPath is itself a pure kit alias — a future batch could move it to sdk/kit and drop the injected acquireLock parameter"},
+	{"host_build_retention_defaults.go", "M — the retention-defaults F10 host-builder: the ONE thing candy/plugin-clean's retention engine cannot compute itself (defaults.keep_images/keep_check_runs, needing the core LoadConfig loader). Reached by verb:retention's two non-core callers (command:clean's own CLI, candy/plugin-check's post-run prune) — core's own retention callers (plugin-box's post-build prune + box-list-tags) resolve defaults in-process and never touch this seam. Kind-blind generic host-read, call-graph verified single-purpose, zero dead code"},
+	{"validate_project_host.go", "M — the HOST half of the `charly box validate` engine relocation (task #60 Unit B): the validate ENGINE runs in candy/plugin-box, but the host keeps what a plugin structurally CANNOT do — the error-TOLERANT resolved-project projection (validate must run on a broken project) + the host-natural checks needing RAW authored config a projection drops (CUE-schema conformance, build-tunable/merge rules, the box base⊻from XOR) + the two REGISTRY-derived D-data word sets (ProviderCapabilities/ActCapableVerbs) a plugin cannot dial the host registry to enumerate itself. Also carries validateProjectForBuild, the pre-build validation GATE dispatching command:validate by word over the in-proc reverse channel (kind-blind M, registry-by-word) — its own header names the ONE tracked non-kind-blind exception (a legacy word-list arm) already on the orchestrator's tree-final review list"},
+
+	// P8b remainder (coneB-p8bremainder) — builder_venue.go's MIXED verdict resolved: the
+	// VENUE-AGNOSTIC BuilderStep orchestration (runVenueBuilderStep/runVenueHomeArtifactBuilder/
+	// builderStepImage/venueBuilderTarName) took a buildEngineContext parameter only to close
+	// over Cfg/ProjectDir when building the injected image-resolve/ensure closures — the SAME
+	// shape deploykit.BuildDepPkgsOnHost already took directly — so it MOVED to
+	// sdk/deploykit/venue_builder.go, taking resolveImage/ensureImage as explicit parameters
+	// instead (the caller, plugin_executor_reverse.go, builds the closures and passes them in).
+	// What remains is the buildEngineContext struct itself, floored below.
+	{"builder_venue.go", "E — buildEngineContext, the per-invoke host-BUILD-ENGINE DATA envelope the reverse channel carries so RunHostStep can run in-core machinery a HOST-ENGINE step kind needs: it carries *Config/*Generator/*buildkit.ResolvedBox (core-only types) and is threaded across a dozen already-floor host_build_*.go seams (unified_targets.go, build_overlay.go, host_build_pod_config.go, provider_checkenv.go, bundle_from_box_cmd.go, plugin_executor_reverse.go) — a generic envelope no sdk plugin can hold itself, same class as those seams' own floor justification"},
 }
 
 // residueOwner maps every tracked-for-removal charly/*.go non-test file to its
@@ -253,19 +279,10 @@ var kernelFloor = []floorEntry{
 //	P14  — status collectors / alias / scaffold / OCI registry+merge → plugins
 //	P15  — residual folds + HostArbiter deletion + K1 loader-orchestration + K5 seam-death + misc CLI utils
 var residueOwner = map[string]string{
-	"builder_venue.go":              "P8b", // buildEngineContext (the type) is floor-worthy core-dispatch infra; runVenueBuilderStep/runVenueHomeArtifactBuilder look like coneA3's deploy-vm domain by function — flagged, not unilaterally split (team-lead ruling)
-	"cmd.go":                        "P15",
-	"credential_plugin.go":          "P15",
-	"cue_defaults.go":               "P15",
-	"deploy_nodeform.go":            "P13",
-	"enc.go":                        "P11",
-	"filelock.go":                   "P15",
-	"layer_secrets.go":              "P8b",
-	"namespace.go":                  "P15",
-	"secrets.go":                    "P11",
-	"substrate_template_resolve.go": "P15",
-	// — files added by cutovers that landed after the T0 authoring (living tracker) —
-	"validate_project_host.go": "P15",
+	"cmd.go":             "P15",
+	"deploy_nodeform.go": "P13",
+	"enc.go":             "P11",
+	"secrets.go":         "P11",
 	// — Cutover A (#168, deploy-dispatch kernel hard-cutover exit): the K4-C
 	// deploy-tree walk port narrows the retired deploy-dispatch spike into 6
 	// per-position seams (candy/plugin-bundle drives the walk; each seam calls
@@ -342,8 +359,7 @@ var residueOwner = map[string]string{
 	// (bundle_compile_seam.go's dispatch pattern); the family the seam SERVES
 	// (ephemeral lifecycle, explicitly named in P11's "lifecycle" scope) governs
 	// over incidental mechanism-shape similarity to a P13 sibling.
-	"ephemeral_dispatch.go":            "P11",
-	"host_build_retention_defaults.go": "P15",
+	"ephemeral_dispatch.go": "P11",
 	// load_executor_host.go + host_build_loader.go — Unit C/B of the K1-LOADER
 	// RELOCATION (make loaderkit.LoadUnified plugin-callable). load_executor_host.go
 	// is the compiled-in TYPED loaderkit.LoaderExecutor (the charly→loaderkit
@@ -358,8 +374,7 @@ var residueOwner = map[string]string{
 	// PERMANENT loader legs (bootstrap-phase dispatch / prescan+connect / the D
 	// snapshot) live in host_build_loader_floor.go, classified FLOOR (kernelFloor
 	// above) so residue→0 GREEN stays reachable.
-	"load_executor_host.go": "P15",
-	"host_build_loader.go":  "P15",
+	"host_build_loader.go": "P15",
 }
 
 func TestKernelManifest_CoreIsPinnedToTheFabricFloor(t *testing.T) {

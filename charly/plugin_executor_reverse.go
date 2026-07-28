@@ -150,7 +150,14 @@ func (s *executorReverseServer) RunHostStep(ctx context.Context, req *pb.HostSte
 		if herr != nil {
 			return &pb.HostStepReply{Error: fmt.Sprintf("resolve venue home: %v", herr)}, nil
 		}
-		if rerr := runVenueBuilderStep(ctx, s.exec, venueHome, s.build, st, opts); rerr != nil {
+		// The image resolve/ensure seams are INJECTED closures (deploykit.RunVenueBuilderStep
+		// imports no *Config) — closing over s.build.Cfg/s.build.ProjectDir here, the one
+		// genuine core dependency, mirroring the same shape BuildDepPkgsOnHost already took.
+		resolveImage := func(img string) (string, error) { return resolveImageRefForEnsure(img, s.build.Cfg, s.build.ProjectDir) }
+		ensureImage := func(ctx context.Context, img string) error {
+			return dispatchBuildEnsure(ctx, img, s.build.ProjectDir, "", "")
+		}
+		if rerr := deploykit.RunVenueBuilderStep(ctx, s.exec, venueHome, resolveImage, ensureImage, st, opts); rerr != nil {
 			return &pb.HostStepReply{Error: rerr.Error()}, nil
 		}
 		reverseOps = st.Reverse()
