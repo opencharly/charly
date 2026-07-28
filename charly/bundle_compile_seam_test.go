@@ -13,7 +13,7 @@ import (
 // bundle_compile_seam_test.go — the P13-KERNEL step-3 systemd-hardcode fix's seam-path coverage.
 // install_build_test.go exercises deploykit.BuildDeployPlan directly (the pure compiler), entirely
 // bypassing bundle_compile_seam.go's per-whole-deploy compile entry points (compileBoxSelection /
-// compileCandySelection) — zero prior coverage of the by-name, existence-checked active-init
+// compileStandaloneCandySelection) — zero prior coverage of the by-name, existence-checked active-init
 // preresolve (preresolveActiveInitInto) each of them still calls before dispatching to the plugin
 // (K4 unit B moved the CANDY/BOX-REF order+box selection itself plugin-side, but hostCtx
 // construction — including this preresolve — stays host-side for every shape). These tests
@@ -84,7 +84,7 @@ func TestPreresolveActiveInitInto_ContainerVenue_NoOp(t *testing.T) {
 // TestPreresolveActiveInitInto_MachineVenue_ResolvesSystemd is the seam-path integration proof:
 // against the REAL project's build vocabulary (which declares systemd), a MachineVenue compile's
 // preresolve populates hostCtx.ActiveInitName/ActiveInit — exactly what
-// compileBoxSelection/compileCandySelection now do before every deploy-mode compile.
+// compileBoxSelection/compileStandaloneCandySelection now do before every deploy-mode compile.
 func TestPreresolveActiveInitInto_MachineVenue_ResolvesSystemd(t *testing.T) {
 	isolateProviderRegistry(t)
 	dir, cleanup := compilerTestProjectDir(t)

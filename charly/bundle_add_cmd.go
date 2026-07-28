@@ -36,7 +36,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"maps"
 	"os"
 	"path/filepath"
 
@@ -315,21 +314,18 @@ func (c *deployAddCmd) compileNodePlans(target, refStr, tag, path string, addCan
 		}
 	}
 
-	// Only pod/k8s targets resolve a base image context here; host/vm targets' synthetic box now
-	// builds entirely plugin-side (candy/plugin-bundle/candy_select.go, K4 unit B) inside
-	// compileStandaloneCandySelection's compile dispatch.
-	var baseImg *buildkit.ResolvedBox
+	// pod/k8s add_candy overlays compile against the PRIMARY base image; that base is now resolved
+	// plugin-side off the resolved-project envelope (candy/plugin-bundle's ADD-CANDY-ON-BOX shape),
+	// so the host only needs the base's box NAME here — no host-side buildkit.ResolveBox +
+	// scanCandiesForRef. primaryBoxName is set exactly when the OLD host-side ResolveBox(refStr)
+	// would have succeeded (a LOCAL box ref — k8s is an external substrate so `base` above is the
+	// deploy PATH, not the box name, hence this dedicated resolve); a candy/remote primary ref
+	// leaves it "" and the overlay falls back to the standalone-candy compile, matching OLD's
+	// baseImg==nil path.
+	primaryBoxName := ""
 	if (target == "pod" || target == "k8s") && refStr != "" {
-		if bkopts, oerr := buildkitOptsWithVocab(dir, ResolveOpts{}); oerr == nil {
-			if baseResolved, rerr := buildkit.ResolveBox(cfg, refStr, tag, dir, bkopts); rerr == nil {
-				baseImg = baseResolved
-				if distroCfg != nil {
-					baseImg.DistroDef = distroCfg.ResolveDistro(baseImg.Distro)
-				}
-				if builderCfg != nil {
-					baseImg.BuilderConfig = builderCfg
-				}
-			}
+		if pref, perr := ResolveDeployRef(refStr, dir); perr == nil && pref.Kind == RefKindBox && pref.Source != RefSourceRemote {
+			primaryBoxName = pref.Name
 		}
 	}
 	for _, al := range addCandies {
@@ -338,8 +334,8 @@ func (c *deployAddCmd) compileNodePlans(target, refStr, tag, path string, addCan
 			return nil, "", nil, fmt.Errorf("resolving --add-candy %q: %w", al, err)
 		}
 		var alPlans []*deploykit.InstallPlan
-		if baseImg != nil {
-			alPlans, _, _, err = c.compileCandySelection(alRef, cfg, distroCfg, builderCfg, dir, baseImg)
+		if primaryBoxName != "" {
+			alPlans, err = c.compileAddCandyOnBox(alRef, primaryBoxName, dir)
 		} else {
 			alPlans, _, _, err = c.compileRefSelection(alRef, cfg, distroCfg, builderCfg, dir)
 		}
@@ -544,44 +540,6 @@ func (c *deployAddCmd) emitOpts() deploykit.EmitOpts {
 	}
 }
 
-// scanCandiesForRef scans the candy set needed to compile `ref`, returning the
-// candy map plus the map KEY for ref. A LOCAL candy ref keys by its short name.
-// A REMOTE ref (`@host/org/repo/candy/<name>:ver`) is fetched + scanned with
-// its transitive deps — by augmenting cfg with a synthetic image that carries
-// the ref, so the existing CollectRemoteRefs/ScanAllCandy machinery pulls it —
-// and keys by its bare ref. This makes `charly bundle add --add-layer <remote>`
-// (e.g. the VM check beds' add_candy:) fully automatic with no manual pre-fetch.
-func (c *deployAddCmd) scanCandiesForRef(ref *DeployRef, cfg *Config, dir string) (map[string]spec.CandyReader, string, error) {
-	scanCfg := cfg
-	candyKey := ref.Name
-	if ref.Source == RefSourceRemote {
-		aug := *cfg
-		aug.Box = make(spec.BoxMap, len(cfg.Box)+1)
-		maps.Copy(aug.Box, cfg.Box)
-		aug.Box["__charly_addlayer_fetch__"] = spec.EncodeBox(spec.BoxConfig{Candy: []string{ref.Raw}})
-		scanCfg = &aug
-		candyKey = deploykit.BareRef(ref.Raw)
-	}
-	layers, err := ScanAllCandyWithConfig(dir, scanCfg)
-	if err != nil {
-		return nil, "", err
-	}
-	if _, ok := layers[candyKey]; !ok {
-		return nil, "", fmt.Errorf("candy %q not found", ref.Raw)
-	}
-	return layers, candyKey, nil
-}
-
-// pruneContainerInitForSystemd relocated to sdk/deploykit (K4 unit B, core-min wave 3) — a pure
-// function of order+HostContext.MachineVenue with no core-only dependency, now shared (R3) by this
-// file's compileCandyOnBoxSelection (unchanged, the add_candy-on-pod/k8s box-VIEW shape) AND
-// candy/plugin-bundle's candy_select.go/box_select.go (both the candy_ref and box_ref shapes
-// prune plugin-side now, in compile.go, after resolving their own order). See
-// deploykit.PruneContainerInitForSystemd's doc comment for the full rationale.
-func pruneContainerInitForSystemd(order []string, hostCtx deploykit.HostContext) []string {
-	return deploykit.PruneContainerInitForSystemd(order, hostCtx)
-}
-
 func (c *deployAddCmd) printPlans(plans []*deploykit.InstallPlan, opts deploykit.EmitOpts) error {
 	if opts.FormatJSON {
 		return json.NewEncoder(os.Stdout).Encode(plans)
@@ -631,31 +589,6 @@ func (c *deployAddCmd) compileHostContext() deploykit.HostContext {
 		hostCtx.BuilderImage = c.builderImageOverride
 	}
 	return hostCtx
-}
-
-// preresolveBuildersInto runs the host-side builder pre-pass CONNECT half (builder_preresolve.go,
-// FLOOR-SLIM-proper Unit-8) — it no longer populates hostCtx.BuilderContext itself (that RPC half
-// moved to candy/plugin-bundle's OWN preresolveBuilderContexts, called from compile.go's
-// compileDeployPlans over exec.InvokeProvider, which already holds a live executor + the
-// re-hydrated resolved-project envelope those RPCs need). What stays here is genuinely host-only:
-// ensuring EXACTLY the externalized builder plugins the deploy's resolved closure triggers are
-// build-connected BEFORE the compile is dispatched — on-demand + distro-gated (so a fedora deploy
-// never connects aur), using cfg/dir to scan + load scoped to those words (loadProjectPlugins /
-// ScanAllCandyWithConfigOpts are core-private project-loading mechanics no plugin can reach). A
-// connect error (an externalized builder whose plugin won't connect) is FATAL, never a silent skip
-// (R4). Called at ONLY the compileCandyOnBoxSelection compile site now (the add_candy-on-pod/k8s
-// box-VIEW shape, still resolving order/img host-side). Neither compileStandaloneCandySelection
-// NOR compileBoxSelection (K4 unit B, candy-half and box-half) calls this or
-// ensureBuildersConnectedForOrder anymore — candy/plugin-bundle's own preresolveBuilderContexts
-// (compile.go, unconditional for every OpCompile) already S2-lazy-connects
-// the SAME externalized builder plugins via exec.InvokeProvider, so a second host-side pre-connect
-// for that path would be pure duplication (verified live: all 4 builder plugin candies for this
-// repo live in its own candy/ dir, always reachable via S2's project-closure scan).
-func preresolveBuildersInto(hostCtx deploykit.HostContext, cfg *Config, dir string, order []string, layers map[string]spec.CandyReader, img *buildkit.ResolvedBox) (deploykit.HostContext, error) {
-	if err := ensureBuildersConnectedForOrder(context.Background(), cfg, dir, order, layers, img); err != nil {
-		return hostCtx, err
-	}
-	return hostCtx, nil
 }
 
 // syntheticHostBox / syntheticVmBox / resolveVmEntity (host-side) DELETED (K4 unit B, core-min

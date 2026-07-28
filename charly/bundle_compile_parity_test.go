@@ -325,7 +325,7 @@ var _ = os.Chdir
 // builder plugins via exec.InvokeProvider) — the FLOOR-SLIM-proper Unit-8 test-side twin that lets
 // this parity test's "OLD" comparison see the SAME real builder pre-resolution production now runs
 // exclusively plugin-side. ensureBuildersConnected is charly-core's own (unmoved) connect step —
-// same one preresolveBuildersInto calls in production.
+// the SAME on-demand builder connect the deploy compile helpers trigger in production.
 func testPreresolveBuilderContext(t *testing.T, cfg *Config, dir, name string, layer spec.CandyReader, img *buildkit.ResolvedBox) map[string]deploykit.BuilderPreresolved {
 	t.Helper()
 	needed := deploykit.DetectExternalizedBuilders([]string{name}, map[string]spec.CandyReader{name: layer}, externalizedBuilders, img)

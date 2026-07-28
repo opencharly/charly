@@ -66,7 +66,7 @@ func compileDeployPlans(ctx context.Context, exec *sdk.Executor, req *pb.InvokeR
 	// ABSENT from rp.Boxes (the envelope's box loop skips disabled boxes by default) even though
 	// the OLD code resolved it fine. Zero cost today (zero disabled boxes exist repo-wide) —
 	// future-proofing, not a live behavior change.
-	envReq, err := json.Marshal(spec.ResolvedProjectRequest{Dir: r.Dir, ExtraCandyRefs: r.ExtraCandyRefs, IncludeDisabled: r.BoxRef != ""})
+	envReq, err := json.Marshal(spec.ResolvedProjectRequest{Dir: r.Dir, ExtraCandyRefs: r.ExtraCandyRefs, IncludeDisabled: r.BoxRef != "" || r.BaseBoxRef != ""})
 	if err != nil {
 		return nil, fmt.Errorf("bundle compile: marshal envelope request: %w", err)
 	}
@@ -99,6 +99,15 @@ func compileDeployPlans(ctx context.Context, exec *sdk.Executor, req *pb.InvokeR
 	var img *buildkit.ResolvedBox
 	var order []string
 	switch {
+	case r.CandyRef != "" && r.BaseBoxRef != "":
+		// ADD-CANDY-ON-BOX shape (K4 box-half completion): the overlay candy_ref compiled against
+		// the primary base image base_box_ref, both resolved off the envelope (box_select.go).
+		var selErr error
+		order, img, selErr = resolveAddCandyOnBoxSelection(&rp, r)
+		if selErr != nil {
+			return nil, fmt.Errorf("bundle compile: %w", selErr)
+		}
+		order = deploykit.PruneContainerInitForSystemd(order, hostCtx)
 	case r.CandyRef != "":
 		var selErr error
 		order, img, selErr = resolveCandySelection(ctx, exec, &rp, r)
