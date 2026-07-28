@@ -33,10 +33,8 @@ const (
 	podConfigScrubCliEnvKind      = "pod-config-scrub-cli-env"
 	podConfigDetectDevicesKind    = "pod-config-detect-devices"
 	podConfigTunnelResolveKind    = "pod-config-tunnel-resolve"
-	podConfigProvisionSecretsKind = "pod-config-provision-secrets"
 	podConfigInjectEnvKind        = "pod-config-inject-env-provides"
 	podConfigInjectMCPKind        = "pod-config-inject-mcp-provides"
-	podConfigHookSecretEnvKind    = "pod-config-hook-secret-env"
 	podConfigSSHKeyKind           = "pod-config-ssh-key"
 	podConfigListSidecarsKind     = "pod-config-list-sidecars"
 	podConfigBoxEngineKind        = "pod-config-box-engine"
@@ -298,37 +296,6 @@ func hostBuildPodConfigTunnelResolve(_ context.Context, req spec.PodConfigTunnel
 	return spec.PodConfigTunnelResolveReply{TunnelJSON: b}, nil
 }
 
-func hostBuildPodConfigProvisionSecrets(_ context.Context, req spec.PodConfigProvisionSecretsRequest, _ buildEngineContext) (spec.PodConfigProvisionSecretsReply, error) {
-	var meta spec.BoxMetadata
-	if err := json.Unmarshal(req.MetaJSON, &meta); err != nil {
-		return spec.PodConfigProvisionSecretsReply{}, err
-	}
-	candyOwnedSecrets := deploykit.CollectSecretsFromLabels(req.Box, meta.Secret)
-	credBackedSecrets, secretResolutions := CollectCandySecretAccepts(req.Box, req.Instance, &meta)
-	collectedSecrets := append(append([]deploykit.CollectedSecret{}, candyOwnedSecrets...), credBackedSecrets...)
-	collectedSecrets, _ = deploykit.ApplySecretRefresh(collectedSecrets, req.RefreshSecret)
-	provisioned, fallbackEnv, err := ProvisionPodmanSecrets(req.RunEngine, req.Box, req.Instance, collectedSecrets, req.AutoGen)
-	if err != nil {
-		return spec.PodConfigProvisionSecretsReply{}, err
-	}
-	provisionedJSON, err := json.Marshal(provisioned)
-	if err != nil {
-		return spec.PodConfigProvisionSecretsReply{}, err
-	}
-	resolutionsJSON, err := json.Marshal(secretResolutions)
-	if err != nil {
-		return spec.PodConfigProvisionSecretsReply{}, err
-	}
-	backend := resolveSecretBackend()
-	isKeyring := backend == "keyring" || backend == "auto" || backend == ""
-	return spec.PodConfigProvisionSecretsReply{
-		ProvisionedJSON: provisionedJSON,
-		FallbackEnv:     fallbackEnv,
-		ResolutionsJSON: resolutionsJSON,
-		IsKeyring:       isKeyring,
-	}, nil
-}
-
 func hostBuildPodConfigInjectEnv(_ context.Context, req spec.PodConfigInjectEnvProvidesRequest, _ buildEngineContext) (spec.PodConfigInjectEnvProvidesReply, error) {
 	var portMap map[int]int
 	if len(req.PortMapJSON) > 0 {
@@ -363,14 +330,6 @@ func hostBuildPodConfigInjectMCP(_ context.Context, req spec.PodConfigInjectMCPP
 	return spec.PodConfigInjectMCPProvidesReply{Changed: changed}, nil
 }
 
-func hostBuildPodConfigHookSecretEnv(_ context.Context, req spec.PodConfigHookSecretEnvRequest, _ buildEngineContext) (spec.PodConfigHookSecretEnvReply, error) {
-	var meta spec.BoxMetadata
-	if err := json.Unmarshal(req.MetaJSON, &meta); err != nil {
-		return spec.PodConfigHookSecretEnvReply{}, err
-	}
-	return spec.PodConfigHookSecretEnvReply{Env: resolveHookSecretEnv(req.Box, req.Instance, &meta)}, nil
-}
-
 // hostBuildPodConfigCleanDeployEntry wraps deploykit.CleanDeployEntry VERBATIM (Cutover B unit 2
 // remove-verb completion) — the registry-resugar axis of `charly remove`'s deploy-entry cleanup.
 // marshalDeployNode needs the host's plugin-primaries registry to resugar plan steps (the SAME
@@ -393,10 +352,8 @@ var _ = func() bool {
 	registerHostBuilder(podConfigScrubCliEnvKind, typedHostBuilder(podConfigScrubCliEnvKind, hostBuildPodConfigScrubCliEnv))
 	registerHostBuilder(podConfigDetectDevicesKind, typedHostBuilder(podConfigDetectDevicesKind, hostBuildPodConfigDetectDevices))
 	registerHostBuilder(podConfigTunnelResolveKind, typedHostBuilder(podConfigTunnelResolveKind, hostBuildPodConfigTunnelResolve))
-	registerHostBuilder(podConfigProvisionSecretsKind, typedHostBuilder(podConfigProvisionSecretsKind, hostBuildPodConfigProvisionSecrets))
 	registerHostBuilder(podConfigInjectEnvKind, typedHostBuilder(podConfigInjectEnvKind, hostBuildPodConfigInjectEnv))
 	registerHostBuilder(podConfigInjectMCPKind, typedHostBuilder(podConfigInjectMCPKind, hostBuildPodConfigInjectMCP))
-	registerHostBuilder(podConfigHookSecretEnvKind, typedHostBuilder(podConfigHookSecretEnvKind, hostBuildPodConfigHookSecretEnv))
 	registerHostBuilder(podConfigSSHKeyKind, typedHostBuilder(podConfigSSHKeyKind, hostBuildPodConfigSSHKey))
 	registerHostBuilder(podConfigListSidecarsKind, typedHostBuilder(podConfigListSidecarsKind, hostBuildPodConfigListSidecars))
 	registerHostBuilder(podConfigBoxEngineKind, typedHostBuilder(podConfigBoxEngineKind, hostBuildPodConfigBoxEngine))

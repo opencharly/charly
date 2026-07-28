@@ -755,30 +755,14 @@ func updateAllDeployedQuadlets(ctx context.Context, ex *sdk.Executor, rt *kit.Re
 		}
 		envVars = appendAutoDetectedEnv(envVars, detected)
 
-		var provRep spec.PodConfigProvisionSecretsReply
-		_ = hostBuild(ctx, ex, podConfigProvisionSecretsKind, spec.PodConfigProvisionSecretsRequest{
-			MetaJSON: ensureRep.MetaJSON, Box: boxName, Instance: instance, RunEngine: rt.RunEngine, AutoGen: true,
-		}, &provRep)
-		var provisioned []deploykit.CollectedSecret
-		if len(provRep.ProvisionedJSON) > 0 {
-			if err := json.Unmarshal(provRep.ProvisionedJSON, &provisioned); err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: decoding provisioned secrets for %s: %v\n", key, err)
-				continue
-			}
+		provisioned, _, provResolutions, isKeyring, perr := resolvePodProvisionSecrets(ctx, ex, &meta, boxName, instance, rt.RunEngine, true, nil)
+		if perr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: provisioning secrets for %s: %v\n", key, perr)
+			continue
 		}
 		if len(meta.SecretRequire) > 0 {
-			var resolutions []secretResolution
-			if len(provRep.ResolutionsJSON) > 0 {
-				// A silently-discarded decode failure here would leave resolutions empty, making every
-				// secret_require entry look unresolved (or, worse, look resolved if partial-decode
-				// left stale field state) — surfaced instead so this entry is skipped loudly.
-				if err := json.Unmarshal(provRep.ResolutionsJSON, &resolutions); err != nil {
-					fmt.Fprintf(os.Stderr, "Warning: decoding secret resolutions for %s: %v\n", key, err)
-					continue
-				}
-			}
 			missing := 0
-			for _, r := range resolutions {
+			for _, r := range provResolutions {
 				if r.Required && !r.Resolved {
 					missing++
 				}
@@ -787,8 +771,6 @@ func updateAllDeployedQuadlets(ctx context.Context, ex *sdk.Executor, rt *kit.Re
 				fmt.Fprintf(os.Stderr, "Warning: %s has %d unresolved secret_requires entries (quadlet regenerated; image may crashloop on restart)\n", key, missing)
 			}
 		}
-
-		isKeyring := provRep.IsKeyring
 
 		var tunnelCfg *spec.TunnelConfig
 		if meta.Tunnel != nil {

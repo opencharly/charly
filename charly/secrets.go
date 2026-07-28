@@ -22,28 +22,13 @@ func generateAndStoreSecret(service, key string) (val, source string) {
 	return deploykit.GenerateAndStoreSecret(service, key, coreCredentialAccess())
 }
 
-// ProvisionPodmanSecrets creates podman secrets from the credential store (thin core
-// wrapper — the orchestration lives in deploykit.ProvisionPodmanSecrets, unit 6b).
-func ProvisionPodmanSecrets(engine, boxName, instance string, secrets []deploykit.CollectedSecret, autoGenerate bool) (provisioned []deploykit.CollectedSecret, fallbackEnv []string, err error) {
-	return deploykit.ProvisionPodmanSecrets(engine, boxName, instance, secrets, autoGenerate, CredServiceVNC, coreCredentialAccess())
-}
-
-// SecretResolution is the core-facing alias of the moved orchestration's result type
-// (deploykit.SecretResolution, unit 6b) — preserves the SecretResolution name existing
-// callers (Step 5/6's checkMissingSecretRequires) use.
-type SecretResolution = deploykit.SecretResolution
-
-// CollectCandySecretAccepts is the thin core wrapper — the orchestration lives in
-// deploykit.CollectCandySecretAccepts (unit 6b).
-func CollectCandySecretAccepts(boxName, instance string, meta *spec.BoxMetadata) (collected []deploykit.CollectedSecret, resolutions []SecretResolution) {
-	return deploykit.CollectCandySecretAccepts(boxName, instance, meta, CredServiceVNC, coreCredentialAccess())
-}
-
-// resolveHookSecretEnv is the thin core wrapper — the orchestration lives in
-// deploykit.ResolveHookSecretEnv (unit 6b).
-func resolveHookSecretEnv(boxName, instance string, meta *spec.BoxMetadata) []string {
-	return deploykit.ResolveHookSecretEnv(boxName, instance, meta, CredServiceVNC, coreCredentialAccess())
-}
+// The pod-config secret provisioning (ProvisionPodmanSecrets / CollectCandySecretAccepts /
+// resolveHookSecretEnv) + their pod-config-provision-secrets / pod-config-hook-secret-env HostBuild
+// seams are RETIRED (this cone): candy/plugin-deploy-pod (secrets_resolve.go) drives the deploykit
+// secret primitives with its OWN pluginCredentialAccess (verb:credential = candy/plugin-secrets) and
+// resolves the secret backend via kit.LoadRuntimeConfig. generateAndStoreSecret STAYS — its caller
+// ensureCandySecret (layer_secrets.go) is a cross-cone floor consumer (coreCredentialAccess folds
+// plugin-side when that caller relocates).
 
 // LabelSecretEntry represents a secret requirement in an OCI image label.
 // Only metadata is stored — never the secret value. CUE-sourced in spec (boxmetadata.cue, P2B)

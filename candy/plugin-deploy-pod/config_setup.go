@@ -317,41 +317,21 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 		fmt.Fprintf(os.Stderr, "Warning: port conflicts detected:%s", kit.FormatPortConflicts(conflicts, c.Box))
 	}
 
-	var provRep spec.PodConfigProvisionSecretsReply
 	autoGen := c.Password == "auto"
-	if err := hostBuild(ctx, ex, podConfigProvisionSecretsKind, spec.PodConfigProvisionSecretsRequest{
-		MetaJSON: ensureRep.MetaJSON, Box: c.Box, Instance: c.Instance, RunEngine: rt.RunEngine,
-		AutoGen: autoGen, RefreshSecret: c.RefreshSecret,
-	}, &provRep); err != nil {
-		return err
+	provisioned, provFallback, provResolutions, isKeyring, perr := resolvePodProvisionSecrets(ctx, ex, &meta, c.Box, c.Instance, rt.RunEngine, autoGen, c.RefreshSecret)
+	if perr != nil {
+		return perr
 	}
-	var provisioned []deploykit.CollectedSecret
-	if len(provRep.ProvisionedJSON) > 0 {
-		if err := json.Unmarshal(provRep.ProvisionedJSON, &provisioned); err != nil {
-			return fmt.Errorf("decoding provisioned secrets: %w", err)
-		}
-	}
-	for _, kv := range provRep.FallbackEnv {
+	for _, kv := range provFallback {
 		envVars = appendEnvUnique(envVars, kv)
 	}
 	if len(meta.SecretRequire) > 0 {
-		var resolutions []secretResolution
-		if len(provRep.ResolutionsJSON) > 0 {
-			// A silently-discarded decode failure here would make checkMissingSecretRequires evaluate
-			// against an EMPTY resolutions list — indistinguishable from "nothing resolved yet" — and
-			// wrongly report every secret_require as missing, or worse, wrongly pass a genuinely-unmet
-			// requirement if the zero-value happens to satisfy the check.
-			if err := json.Unmarshal(provRep.ResolutionsJSON, &resolutions); err != nil {
-				return fmt.Errorf("decoding secret resolutions: %w", err)
-			}
-		}
-		if err := checkMissingSecretRequires(c.Box, meta.SecretRequire, resolutions); err != nil {
+		if err := checkMissingSecretRequires(c.Box, meta.SecretRequire, provResolutions); err != nil {
 			return err
 		}
 	}
 
 	charlyBin := resolveHostCharlyBin(c.HostEnvJSON)
-	isKeyring := provRep.IsKeyring
 
 	deploySidecarsRaw := map[string]json.RawMessage{}
 	if dc != nil {
@@ -535,11 +515,8 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 			fmt.Fprintf(os.Stderr, "Warning: failed to start %s for post_enable hook: %v\n", svc, err)
 		} else {
 			engine := kit.EngineBinary(rt.RunEngine)
-			var hookRep spec.PodConfigHookSecretEnvReply
-			_ = hostBuild(ctx, ex, podConfigHookSecretEnvKind, spec.PodConfigHookSecretEnvRequest{
-				Box: c.Box, Instance: c.Instance, MetaJSON: ensureRep.MetaJSON,
-			}, &hookRep)
-			hookEnv := append(append([]string{}, c.Env...), hookRep.Env...)
+			hookSecretEnv := resolvePodHookSecretEnv(ctx, ex, &meta, c.Box, c.Instance)
+			hookEnv := append(append([]string{}, c.Env...), hookSecretEnv...)
 			if err := runHook(engine, ctrName, hooks.PostEnable, hookEnv); err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: post_enable hook failed: %v\n", err)
 			}
