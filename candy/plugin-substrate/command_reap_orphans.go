@@ -34,20 +34,13 @@ import (
 	"github.com/alecthomas/kong"
 
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
 // ReapOrphansCmd is the `charly reap-orphans` Kong grammar — moved verbatim from
 // charly/status_reap.go (it carries no flags).
 type ReapOrphansCmd struct{}
-
-// deployDelArgv returns the argv (everything after the charly binary) for a non-interactive
-// `charly bundle del <name>` — a local copy of charly/bundle_add_cmd.go's helper of the same name
-// (a one-line literal; duplicating it here is cheaper and safer than importing charly core for it,
-// mirrors candy/plugin-substrate's own androidDevice/containerRunning precedent, R3).
-func deployDelArgv(name string) []string {
-	return []string{"bundle", "del", name, "--assume-yes"}
-}
 
 // runReapOrphansCLI parses the pass-through args (none expected), then runs the reap.
 func runReapOrphansCLI(ctx context.Context, exec *sdk.Executor, args []string) error {
@@ -99,7 +92,7 @@ func runReapOrphans(ctx context.Context, exec *sdk.Executor) error {
 	for _, name := range orphans {
 		fmt.Printf("reaping orphan %q ...\n", name)
 		exe, _ := os.Executable()
-		delCmd := osexec.Command(exe, deployDelArgv(name)...)
+		delCmd := osexec.Command(exe, deploykit.BundleDelArgv(name)...)
 		delCmd.Stderr = os.Stderr
 		delCmd.Stdout = os.Stdout
 		if rerr := delCmd.Run(); rerr != nil {

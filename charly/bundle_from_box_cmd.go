@@ -55,6 +55,9 @@ func (c *deployFromBoxCmd) Run() error {
 	if err != nil {
 		return err
 	}
+	// hostBuildPodConfigSetup is called directly in-process (not via the wire-registered
+	// HostBuild dispatch), but its signature is fixed by the generic typedHostBuilder contract
+	// every F10 host-builder shares; the buildEngineContext{} arg is unused by this handler.
 	if _, err := hostBuildPodConfigSetup(context.Background(), spec.PodConfigSetupRequest{
 		Box:         name,
 		Instance:    c.Instance,

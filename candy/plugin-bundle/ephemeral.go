@@ -267,7 +267,7 @@ func registerTransientTimer(deployName string, ttl time.Duration) (string, error
 		return "", fmt.Errorf("resolving working directory: %w", err)
 	}
 	unitName := fmt.Sprintf("%s-%d", ephemeralTimerUnitPrefix(deployName), time.Now().Unix())
-	args := registerTransientTimerArgs(unitName, ttl, wd, exe, ephemeralDeployDelArgv(deployName))
+	args := registerTransientTimerArgs(unitName, ttl, wd, exe, deploykit.BundleDelArgv(deployName))
 	cmd := exec.Command("systemd-run", args...)
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -300,13 +300,6 @@ func cancelTransientTimer(unit string) {
 	cmd := exec.Command("systemctl", "--user", "stop", unit)
 	cmd.Stderr = os.Stderr
 	_ = cmd.Run()
-}
-
-// ephemeralDeployDelArgv mirrors charly core's bundle_add_cmd.go:deployDelArgv (a trivial pure
-// helper, duplicated rather than shared across the module boundary — bundle_add_cmd.go itself
-// stays core, a candidate-floor sibling of the FLOOR-SLIM adjudication).
-func ephemeralDeployDelArgv(name string) []string {
-	return []string{"bundle", "del", name, "--assume-yes"}
 }
 
 // persistEphemeralRuntime writes the ephemeralHandle into charly.yml's vm_state.ephemeral (or
@@ -551,7 +544,7 @@ func teardownChildrenRec(dc *deploykit.BundleConfig, parentID string, visited ma
 		if err != nil {
 			return err
 		}
-		cmd := exec.Command(exe, ephemeralDeployDelArgv(delTarget)...)
+		cmd := exec.Command(exe, deploykit.BundleDelArgv(delTarget)...)
 		cmd.Stderr = os.Stderr
 		cmd.Stdout = os.Stdout
 		if err := cmd.Run(); err != nil {

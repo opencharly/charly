@@ -13,8 +13,10 @@ package main
 //   - loadConfigForDeploy — LoadConfig → LoadUnified (K1-loader-family-coupled). Reached by the
 //     resolve-target-add seam + deploy_target_unified.go.
 //   - detectHostContext / resolveDistroDef — the host-fs probes build_overlay.go also uses.
-//   - deployDelCmd + resolveDelNode + podDeploymentArtifactExists + deployDelArgv — the `charly
-//     bundle del` host resolution the deploy-del-resolve seam drives.
+//   - deployDelCmd + resolveDelNode + podDeploymentArtifactExists — the `charly
+//     bundle del` host resolution the deploy-del-resolve seam drives. deployDelArgv itself moved to
+//     sdk/deploykit.BundleDelArgv (R3 hoist, coneB P13 slice) — it was byte-identically duplicated
+//     here, in candy/plugin-bundle, and in candy/plugin-substrate.
 //
 // The former deployAddCmd struct + its dispatchNode/compileNodePlans/emitOpts/printPlans/
 // compileHostContext methods (and the whole bundle_compile_seam.go + host_build_deploy_node_
@@ -39,24 +41,6 @@ import (
 // teardown EXECUTION lives in host_build_deploy_node_del_dispatch.go's hostBuildDeployNodeDelDispatch.
 type deployDelCmd struct {
 	Name string
-}
-
-// deployDelArgv returns the argv (everything AFTER the charly binary) for a
-// non-interactive `charly bundle del <name>`: the verb, the name, and the ONE valid
-// skip-confirmation flag. Every programmatic teardown builds its command through
-// this single helper — in-process (proclifecycle.RunCharlySubcommand), out-of-process
-// (exec.Command), and the systemd-run TTL timer — so the flag can never drift
-// across call sites again.
-//
-// The flag is `--assume-yes`, NOT `--yes`/`--force`: the command:bundle plugin's
-// `charly bundle del` Kong grammar (candy/plugin-bundle) renders its AssumeYes field
-// as --assume-yes because Kong derives the long name from the FIELD (the `long:"yes"`
-// tag is a Kong no-op in the separate-tag form), with `-y` as the short form. A
-// `--yes`/`--force` drift — neither of which Kong accepts — once aborted teardown at
-// arg-parse and silently leaked the resource (see CHANGELOG/); the deploy-del-flag
-// regression test guards this.
-func deployDelArgv(name string) []string {
-	return []string{"bundle", "del", name, "--assume-yes"}
 }
 
 // deriveChildExecutorForPath builds the child executor for a nested node:

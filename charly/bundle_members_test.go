@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/proclifecycle"
 	"github.com/opencharly/sdk/spec"
@@ -201,7 +202,7 @@ func TestTearDownMembers_RoutingAndOrder(t *testing.T) {
 		t.Fatalf("tearDownMembers: %v", err)
 	}
 	want := [][]string{
-		deployDelArgv("alpha-host"),       // sorted first; non-pod → deploy del --assume-yes (unattended)
+		deploykit.BundleDelArgv("alpha-host"),       // sorted first; non-pod → deploy del --assume-yes (unattended)
 		{"remove", "zeta-pod", "--purge"}, // pod → remove --purge
 	}
 	if !reflect.DeepEqual(calls, want) {
@@ -256,7 +257,7 @@ func deployKeysList(m map[string]spec.BundleNode) []string {
 	return out
 }
 
-// TestDeployDelArgv_KongAccepts proves deployDelArgv emits a flag the REAL
+// TestBundleDelArgv_KongAccepts proves deploykit.BundleDelArgv emits a flag the REAL
 // `charly bundle del` Kong grammar accepts, and that the two historically-wrong
 // flags are rejected. The stub-based TestTearDownMembers_RoutingAndOrder asserts
 // arg strings without ever invoking Kong, so it CANNOT catch a flag the binary
@@ -264,12 +265,12 @@ func deployKeysList(m map[string]spec.BundleNode) []string {
 // call sites) shipped while silently aborting teardown at arg-parse and leaking
 // the resource. This test exercises real flag parsing so the drift can never
 // silently re-land.
-func TestDeployDelArgv_KongAccepts(t *testing.T) {
+func TestBundleDelArgv_KongAccepts(t *testing.T) {
 	// delGrammarStub mirrors the command:bundle plugin's `charly bundle del` leaf grammar
 	// (candy/plugin-bundle) — the Kong-tagged field set the real CLI parses. The plugin
 	// owns the grammar now (P13) and a core unit test cannot import a separate module, so
 	// this stub reproduces the exact tag shape (AssumeYes → --assume-yes / -y; the
-	// historically-wrong --yes/--force absent) to keep the deployDelArgv regression guard.
+	// historically-wrong --yes/--force absent) to keep the deploykit.BundleDelArgv regression guard.
 	type delGrammarStub struct {
 		Name            string `arg:""`
 		AssumeYes       bool   `long:"yes" short:"y"`
@@ -294,8 +295,8 @@ func TestDeployDelArgv_KongAccepts(t *testing.T) {
 	}
 	// The helper every programmatic teardown builds its command through must
 	// parse cleanly against the real grammar.
-	if err := parse(deployDelArgv("x")...); err != nil {
-		t.Errorf("deployDelArgv produced args `charly bundle del` rejects: %v (args=%v)", err, deployDelArgv("x"))
+	if err := parse(deploykit.BundleDelArgv("x")...); err != nil {
+		t.Errorf("deploykit.BundleDelArgv produced args `charly bundle del` rejects: %v (args=%v)", err, deploykit.BundleDelArgv("x"))
 	}
 	// -y is the valid short form.
 	if err := parse("bundle", "del", "x", "-y"); err != nil {
