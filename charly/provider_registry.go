@@ -42,6 +42,18 @@ func newRegistry() *Registry {
 
 func provKey(c ProviderClass, word string) string { return string(c) + ":" + word }
 
+// commandParentOf reports a COMMAND provider's declared CommandParent() (the parent it nests under,
+// e.g. "box" for `charly box feature`), or "" for a non-command / top-level provider.
+func commandParentOf(p Provider) string {
+	if p.Class() != ClassCommand {
+		return ""
+	}
+	if ncp, ok := p.(interface{ CommandParent() string }); ok {
+		return ncp.CommandParent()
+	}
+	return ""
+}
+
 // register indexes one provider. It is the single mutation path (R3): it rejects
 // an unknown class and a duplicate (class, word) — fail-fast, like
 // registerCueKind's duplicate panic.
@@ -70,12 +82,47 @@ func (r *Registry) register(p Provider, origin string) error {
 			}
 		}
 	}
+	// Registry uniqueness keys by the plain provKey(class, word). A NESTED command word
+	// (CommandParent()!="") that COLLIDES with an already-registered word is disambiguated by parking
+	// the NESTED provider at "command:<word>:<parent>" instead of rejecting it — a nested command IS a
+	// distinct capability (e.g. `box feature` vs top-level `charly feature`, candy/plugin-feature). The
+	// TOP-LEVEL command always keeps the plain key (deterministic, so the by-word resolve lookups that
+	// want the top-level / uniquely-worded capability are unaffected); if a top-level word arrives
+	// AFTER a nested one already took the plain key, the nested one is relocated to its parent key.
+	// Every NON-colliding registration — the overwhelming default, including every uniquely-worded box
+	// command (`box validate`, `box build`, …) — keys BYTE-IDENTICALLY to before (backward-compatible).
 	k := provKey(class, word)
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if _, dup := r.byKey[k]; dup {
-		return fmt.Errorf("provider %s already registered (origin %s) — refusing duplicate from %s",
-			k, r.origins[k], origin)
+	if existing, dup := r.byKey[k]; dup {
+		newParent := commandParentOf(p)
+		existingParent := commandParentOf(existing)
+		switch {
+		case class == ClassCommand && newParent != "" && existingParent == "":
+			// Incoming NESTED command collides with a TOP-LEVEL one → park the nested at its parent key.
+			pk := k + ":" + newParent
+			if _, dup2 := r.byKey[pk]; dup2 {
+				return fmt.Errorf("provider %s already registered (origin %s) — refusing duplicate from %s", pk, r.origins[pk], origin)
+			}
+			r.byKey[pk] = p
+			r.origins[pk] = origin
+			return nil
+		case class == ClassCommand && newParent == "" && existingParent != "":
+			// Incoming TOP-LEVEL command collides with an already-registered NESTED one → relocate the
+			// nested to its parent key, give the top-level the plain key (top-level wins deterministically).
+			epk := k + ":" + existingParent
+			if _, dup2 := r.byKey[epk]; dup2 {
+				return fmt.Errorf("provider %s already registered (origin %s) — refusing duplicate from %s", epk, r.origins[epk], r.origins[k])
+			}
+			r.byKey[epk] = existing
+			r.origins[epk] = r.origins[k]
+			r.byKey[k] = p
+			r.origins[k] = origin
+			return nil
+		default:
+			return fmt.Errorf("provider %s already registered (origin %s) — refusing duplicate from %s",
+				k, r.origins[k], origin)
+		}
 	}
 	r.byKey[k] = p
 	r.origins[k] = origin
