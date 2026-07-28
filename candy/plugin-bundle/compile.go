@@ -42,9 +42,11 @@ func runBundleCompile(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRep
 	return compileDeployPlans(ctx, exec, req)
 }
 
-// compileDeployPlans re-hydrates the resolved-project envelope + the per-node selection, runs the
-// builder deploy-time pre-pass (FLOOR-SLIM-proper Unit-8 — see builder_preresolve.go), loops
-// deploykit.BuildDeployPlan, and returns the compiled plans as a marshalled DeployCompileReply.
+// compileDeployPlans decodes the OpCompile request, runs the SHARED in-proc compiler
+// (compilePlansForRequest — the SAME function the plugin's own dispatchOne walk calls IN-PROC, with
+// NO OpCompile round-trip), and returns the compiled plans as a marshalled DeployCompileReply. Only
+// the wire decode + view projection live here; the compile itself is the shared fn below (R3 — ONE
+// compile implementation, two entry points: the OpCompile wire leg and the in-proc dispatchOne leg).
 func compileDeployPlans(ctx context.Context, exec *sdk.Executor, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 	var r spec.DeployCompileRequest
 	if len(req.GetParamsJson()) > 0 {
@@ -52,7 +54,46 @@ func compileDeployPlans(ctx context.Context, exec *sdk.Executor, req *pb.InvokeR
 			return nil, fmt.Errorf("bundle compile: decode request: %w", err)
 		}
 	}
+	plans, err := compilePlansForRequest(ctx, exec, r)
+	if err != nil {
+		return nil, err
+	}
 
+	// Project each plan to its InstallPlanView wire form for the host to re-materialize.
+	views := make([]spec.InstallPlanView, 0, len(plans))
+	for _, p := range plans {
+		views = append(views, deploykit.WireView(p))
+	}
+	plansJSON, err := json.Marshal(views)
+	if err != nil {
+		return nil, fmt.Errorf("bundle compile: marshal plans: %w", err)
+	}
+
+	order := make([]string, 0, len(plans))
+	for _, p := range plans {
+		if p.Candy != "" {
+			order = append(order, p.Candy)
+		}
+	}
+	reply := spec.DeployCompileReply{
+		PlansJSON: plansJSON,
+		Base:      r.BoxView.Name,
+		CandySet:  order,
+	}
+	replyJSON, err := json.Marshal(reply)
+	if err != nil {
+		return nil, fmt.Errorf("bundle compile: marshal reply: %w", err)
+	}
+	return &pb.InvokeReply{ResultJson: replyJSON}, nil
+}
+
+// compilePlansForRequest is the SHARED in-proc deploy compiler (K4-C shape-2 extraction): it
+// re-hydrates the resolved-project envelope + the per-node selection, runs the builder deploy-time
+// pre-pass (FLOOR-SLIM-proper Unit-8 — see builder_preresolve.go), loops deploykit.BuildDeployPlan,
+// and returns the compiled []*spec.InstallPlan. BOTH the OpCompile wire handler (compileDeployPlans)
+// AND the plugin's own tree-walk (walk.go dispatchOne → compileNodePlans) call it — the latter
+// IN-PROC with no OpCompile round-trip, killing the former plugin→host→plugin double-bounce.
+func compilePlansForRequest(ctx context.Context, exec *sdk.Executor, r spec.DeployCompileRequest) ([]*spec.InstallPlan, error) {
 	// Fetch the resolved-project envelope via the established HostBuild("resolved-project") seam.
 	// ExtraCandyRefs (an --add-candy / add_candy: ref this compile call's own candy set was
 	// widened with, host-side) widens the ENVELOPE's scan the SAME way, so a remote add-candy
@@ -82,13 +123,32 @@ func compileDeployPlans(ctx context.Context, exec *sdk.Executor, req *pb.InvokeR
 		return nil, fmt.Errorf("bundle compile: decode resolved-project envelope: %w", err)
 	}
 
-	// Re-hydrate the host-side HostContext (ALWAYS host-computed — unchanged for both
-	// selection shapes; see #DeployCompileRequest's doc comment).
+	// Re-hydrate the host-computed HostContext (the MachineVenue probe + glibc + builder-image
+	// override — vmshared.DetectHostDistro is sdk-portable, so the plugin computes these in
+	// dispatchOne; the OpCompile parity path passes a pre-built one).
 	var hostCtx deploykit.HostContext
 	if len(r.HostContextJSON) > 0 {
 		if err := json.Unmarshal(r.HostContextJSON, &hostCtx); err != nil {
 			return nil, fmt.Errorf("bundle compile: decode host context: %w", err)
 		}
+	}
+
+	// Resolve the MachineVenue active init system plugin-side off the envelope's rp.Init (K4-C
+	// shape-2: the former host-side preresolveActiveInitInto, which ran LoadBuildConfigForBox →
+	// initCfg → resolveActiveInitByName, is RETIRED — rp.Init IS initCfg.Init (resolve_project.go),
+	// so the plugin resolves it directly here without a host round-trip). A machine venue runs the
+	// MACHINE'S OWN init; resolve "systemd" BY NAME with an existence check, hard-erroring if absent
+	// (byte-identical to the former host preresolveActiveInitInto/resolveActiveInitByName contract:
+	// "systemd" is the only init a machine venue resolves today). A container-image compile
+	// (MachineVenue==false) is a no-op. Guarded on ActiveInitName=="" so a caller that already
+	// resolved it (none in production post-shape-2; belt-and-suspenders) is never overwritten.
+	if hostCtx.MachineVenue && hostCtx.ActiveInitName == "" {
+		def, ok := rp.Init["systemd"]
+		if !ok || def == nil {
+			return nil, fmt.Errorf("bundle compile: machine-venue deploy requires the \"systemd\" init system, but the resolved-project envelope declares no init.systemd entry")
+		}
+		hostCtx.ActiveInitName = "systemd"
+		hostCtx.ActiveInit = def
 	}
 
 	// Three selection SHAPES (K4 unit B): CandyRef set → the plugin resolves the standalone-candy
@@ -166,25 +226,5 @@ func compileDeployPlans(ctx context.Context, exec *sdk.Executor, req *pb.InvokeR
 		}
 		plans = append(plans, p)
 	}
-
-	// Project each plan to its InstallPlanView wire form for the host to re-materialize.
-	views := make([]spec.InstallPlanView, 0, len(plans))
-	for _, p := range plans {
-		views = append(views, deploykit.WireView(p))
-	}
-	plansJSON, err := json.Marshal(views)
-	if err != nil {
-		return nil, fmt.Errorf("bundle compile: marshal plans: %w", err)
-	}
-
-	reply := spec.DeployCompileReply{
-		PlansJSON: plansJSON,
-		Base:      r.BoxView.Name,
-		CandySet:  order,
-	}
-	replyJSON, err := json.Marshal(reply)
-	if err != nil {
-		return nil, fmt.Errorf("bundle compile: marshal reply: %w", err)
-	}
-	return &pb.InvokeReply{ResultJson: replyJSON}, nil
+	return plans, nil
 }
