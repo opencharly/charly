@@ -719,7 +719,9 @@ func handleDeployDel(ctx context.Context, exec *sdk.Executor, req spec.DeployTar
 		}
 		// The plugin cannot touch charly.yml itself — remove the reply's deploy-entry keys via
 		// the EXISTING "config-persist" HostBuild seam (Remove=true), which already wraps the
-		// SAME core-only removeVmDeployEntry the pre-move code called directly.
+		// SAME deploykit.RemoveVmDeployEntry (sdk/deploykit/vm_deploy_state.go) the pre-move
+		// code called directly (core-only until the F6 vm-lifecycle move relocated its
+		// decision logic to deploykit, coneB-vmlifecycle).
 		if len(ptJSON) > 0 {
 			var ptReply spec.PostTeardownReply
 			if err := json.Unmarshal(ptJSON, &ptReply); err != nil {

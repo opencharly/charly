@@ -140,6 +140,14 @@ func hostBuildConfigResolve(_ context.Context, req spec.ConfigResolveRequest, _ 
 // the plugin cannot hold across the module boundary — a process-shared flock must stay host-side).
 // Remove deletes the entry (vm destroy); else the entity's VmState is saved (create persist-auto-port).
 // Generic action noun "config-persist" (F11 — never a substrate word); P11/P13 reuse it for their state.
+//
+// The VM-SPECIFIC decision logic (ephemeral-state preserve merge, the auto-vs-operator-authored
+// delete decision, stale-dotted-twin prune) lives in deploykit.SaveVmDeployState/
+// RemoveVmDeployEntry (F6 vm-lifecycle move, coneB-vmlifecycle) — this handler is now a thin
+// call-through supplying the two genuinely host-resident primitives those functions cannot hold
+// themselves: acquireDeployConfigLock (a process-shared flock) and saveBundleConfigNodeForm (the
+// plugin-primaries-coupled marshal). The read→decide→write critical section still runs as ONE lock
+// hold inside the deploykit call — atomicity is unchanged, only the decision logic moved.
 const configPersistBuilderKind = "config-persist"
 
 func hostBuildConfigPersist(_ context.Context, req spec.ConfigPersistRequest, _ buildEngineContext) (spec.ConfigPersistReply, error) {
@@ -147,9 +155,9 @@ func hostBuildConfigPersist(_ context.Context, req spec.ConfigPersistRequest, _ 
 		return spec.ConfigPersistReply{}, fmt.Errorf("config-persist: empty deploy key")
 	}
 	if req.Remove {
-		return spec.ConfigPersistReply{}, removeVmDeployEntry(req.Key)
+		return spec.ConfigPersistReply{}, deploykit.RemoveVmDeployEntry(req.Key, acquireDeployConfigLock, saveBundleConfigNodeForm)
 	}
-	return spec.ConfigPersistReply{}, saveVmDeployState(req.Key, req.Entity, req.VmState)
+	return spec.ConfigPersistReply{}, deploykit.SaveVmDeployState(req.Key, req.Entity, req.VmState, acquireDeployConfigLock, saveBundleConfigNodeForm)
 }
 
 var _ = func() bool {

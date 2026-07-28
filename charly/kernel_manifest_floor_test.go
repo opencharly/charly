@@ -263,22 +263,7 @@ var residueOwner = map[string]string{
 	"sidecar.go":                    "P11",
 	"substrate_template_resolve.go": "P15",
 	"update_deploy_dispatch.go":     "P11",
-	// vm_deploy_state.go — F6 vm-lifecycle move (coneB-vmlifecycle), NOT YET LANDED:
-	// saveVmDeployState/removeVmDeployEntry should route through the already-floored
-	// deploy_state_host.go write seam, MOVING their vm-specific caller to plugin-deploy-vm
-	// (team-lead ruling — the generic locked-RMW persist primitives, acquireDeployConfigLock +
-	// saveBundleConfigNodeForm, stay floor; only the VM-specific decision logic — ephemeral-state
-	// preserve merge, the auto-vs-operator-authored delete decision, stale-dotted-twin prune —
-	// moves). Flagged to team-lead: this business logic runs inside the SAME lock-held
-	// load→decide→save critical section the lost-`preemptible:`-config regression (this file's own
-	// RCA #6/#7 comments) was fixed by; moving the decision to a plugin fed by a stale prior read
-	// would reintroduce that exact lost-update race, so the design needs a call before landing
-	// (either a portable deploykit helper taking the lock/save as injected callbacks, or an
-	// RDD-spiked held-lock-across-RPC pattern — nothing in the codebase does the latter today).
-	// vm_lifecycle_preresolve.go (the SIBLING file in this same F6 trio) IS done: it moved down to
-	// kernelFloor (vmAttachResolver only) — see that entry above.
-	"vm_deploy_state.go":    "P11",
-	"volume_cp_tags_cmd.go": "P11",
+	"volume_cp_tags_cmd.go":         "P11",
 	// — files added by cutovers that landed after the T0 authoring (living tracker) —
 	"config_write_host.go":     "P11",
 	"validate_project_host.go": "P15",

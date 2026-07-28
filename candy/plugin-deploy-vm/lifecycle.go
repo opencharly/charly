@@ -684,8 +684,8 @@ func vmPostTeardown(ctx context.Context, exec *sdk.Executor, p lifecycleParams, 
 	// Two entries carry this deploy's state, both keyed by the deploy (never the shared entity):
 	//   - the deploy-state entry the proxy persisted under the deploy name (p.Name), and
 	//   - the port/instance-id entry vm:<domain> runVmSpecCreate persisted.
-	// Removing them by domain (not vm:<entity>) avoids removeVmDeployEntry's From-scan over-matching
-	// sibling beds that share the entity.
+	// Removing them by domain (not vm:<entity>) avoids deploykit.RemoveVmDeployEntry's From-scan
+	// over-matching sibling beds that share the entity.
 	entries := []string{p.Name}
 	if portKey := "vm:" + domain; portKey != p.Name {
 		entries = append(entries, portKey)

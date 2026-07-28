@@ -305,15 +305,15 @@ func cancelTransientTimer(unit string) {
 // persistEphemeralRuntime writes the ephemeralHandle into charly.yml's vm_state.ephemeral (or
 // pod_state / k8s_state for those targets).
 // ephemeralOverlayKey computes the dc.Bundle map key for an ephemeral entry — the SAME
-// dot-sanitized "vm:<domain-identity>" scheme charly/vm_deploy_state.go's saveVmDeployState
-// already uses (via candy/plugin-vm/vm_create_orchestrate.go's hostConfigPersist +
+// dot-sanitized "vm:<domain-identity>" scheme deploykit.SaveVmDeployState (sdk/deploykit/
+// vm_deploy_state.go) already uses (via candy/plugin-vm/vm_create_orchestrate.go's hostConfigPersist +
 // sdk/vmshared.VmDomainIdentity's explicit "." → "-" replacement), NEVER the raw (possibly
 // dotted) deployName directly. RCA #2 (FINAL/K5 unit 6a, the check-sidecar-pod bed's SECOND
 // failure): the raw dotted key round-tripped through kind discrimination fine after the
 // Target/From fix, but was then rejected by the loader's SEPARATE "a deployment key must not
 // contain '.'" check on the very next read (ValidateDeploymentName, sdk/spec/deploy_tree_validate.go) — dots
 // are reserved for dotted-PATH ADDRESSING (`charly bundle del a.b.c`), never a literal dc.Bundle
-// map key. Using the SAME key as saveVmDeployState has a bonus: ephemeral state and vm state
+// map key. Using the SAME key as SaveVmDeployState has a bonus: ephemeral state and vm state
 // (ssh_port, disk_path) end up in ONE overlay entry instead of two — persistEphemeralRuntime's
 // `!ok` fallback covers the edge where ephemeral registration runs BEFORE the vm's own state
 // gets persisted at all (the entry does not exist yet), not "every ephemeral registration ever".
@@ -322,9 +322,9 @@ func cancelTransientTimer(unit string) {
 // runs BEFORE `charly vm create`'s own state writes (the port_auto persist) EVERY TIME —
 // vm_lifecycle_preresolve.go's call order, not incidental — so the two writers landing on this
 // SAME canonical key (post-RCA-#6) is the COMMON case, and the interaction is LOAD-BEARING: a
-// naive wholesale `entry.VmState = state` in saveVmDeployState would silently ERASE the
-// just-registered Ephemeral block on every ordinary Add. saveVmDeployState's own Ephemeral-
-// preservation merge (vm_deploy_state.go) is what makes that safe — see its doc comment.
+// naive wholesale `entry.VmState = state` in SaveVmDeployState would silently ERASE the
+// just-registered Ephemeral block on every ordinary Add. SaveVmDeployState's own Ephemeral-
+// preservation merge (sdk/deploykit/vm_deploy_state.go) is what makes that safe — see its doc comment.
 // Scoped to vm only (VmDomainIdentity is vm/libvirt-domain-specific naming) — correct today
 // since ephemeral is vm-only (validate_ephemeral.go); pod/k8s pick their OWN key scheme when
 // the bed-robustness batch wires their Add/Del paths to this seam.
@@ -340,7 +340,7 @@ func ephemeralOverlayKey(deployName string) string {
 // leftover vm_state field (a hard load failure on every subsequent per-host-overlay read). Seed
 // ONLY the identifying fields (Target/From) from the authored node — an overlay entry is STATE,
 // never structure, so Children/Members are deliberately NOT copied. This mirrors the
-// ALREADY-WORKING charly/vm_deploy_state.go:saveVmDeployState, which sets Target="vm"
+// ALREADY-WORKING sdk/deploykit/vm_deploy_state.go:SaveVmDeployState, which sets Target="vm"
 // unconditionally on a fresh entry — independent proof dotted deploy identities round-trip
 // correctly through dc.Bundle once Target/From are set (the identity itself was never the
 // problem). Pulled out as its own function for unit testability — persistEphemeralRuntime itself
