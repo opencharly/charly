@@ -9,7 +9,7 @@ import (
 )
 
 // box_select.go — the K4 unit B box-half: the PRIMARY pod/k8s image selection
-// (charly/bundle_compile_seam.go's former compileBoxSelection) now runs entirely plugin-side,
+// (the former host-side compileBoxSelection, since-deleted from charly/ core) now runs plugin-side,
 // mirroring candy_select.go's candy-half exactly. The BOX-VIEW shape
 // (compileCandyOnBoxSelection, add_candy on an ALREADY-RESOLVED base image) is UNCHANGED and out
 // of scope — its base image comes from a separate host-side ResolveBox call in
@@ -47,4 +47,33 @@ func resolveBoxSelection(rp *spec.ResolvedProject, req spec.DeployCompileRequest
 		}
 	}
 	return img, compileOrder, nil
+}
+
+// resolveAddCandyOnBoxSelection is the ADD-CANDY-ON-BOX shape (K4 box-half completion): the
+// add_candy overlay (req.CandyRef) compiled against the primary pod/k8s base image
+// (req.BaseBoxRef). The base image comes from rp.Boxes[base_box_ref] as the COMPILE CONTEXT (the
+// SAME ResolvedBoxView the BOX-REF shape reads via NewSpecResolvedBox, R3 — never re-derived), and
+// the overlay's OWN topo order is resolved from the envelope over {BareRef(candy_ref)} widened by
+// extra_candy_refs (mirrors the CANDY shape's resolveCandySelection exactly). Replaces the former
+// host-side buildkit.ResolveBox(baseImg) + scanCandiesForRef path (the former host-side
+// compileCandyOnBoxSelection): the base-box read reuses the primary BOX-REF shape's already-proven
+// envelope parity, and the overlay-order read reuses the CANDY shape's — so this is a COMPOSITION of
+// two already-parity-proven resolutions, not a new resolver.
+func resolveAddCandyOnBoxSelection(rp *spec.ResolvedProject, req spec.DeployCompileRequest) ([]string, *buildkit.ResolvedBox, error) {
+	view, ok := rp.Boxes[req.BaseBoxRef]
+	if !ok {
+		return nil, nil, fmt.Errorf("base box %q not in resolved-project envelope", req.BaseBoxRef)
+	}
+	img := deploykit.NewSpecResolvedBox(view, rp.Distro, rp.Builder)
+
+	candyKey := deploykit.BareRef(req.CandyRef)
+	candyModels := envelopeCandyModels(rp)
+	if _, ok := candyModels[candyKey]; !ok {
+		return nil, nil, fmt.Errorf("add_candy %q not in resolved-project envelope", req.CandyRef)
+	}
+	order, err := deploykit.ResolveCandyOrder([]string{candyKey}, candyModels, nil)
+	if err != nil {
+		return nil, nil, fmt.Errorf("resolving deps for add_candy %s: %w", req.CandyRef, err)
+	}
+	return order, img, nil
 }

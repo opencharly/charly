@@ -151,8 +151,8 @@ func (h *hostVerbResolver) invokeVerbProvider(ctx context.Context, prov Provider
 		}
 	}
 	// A host-coupled verb resolves its own inputs through the GENERIC CheckContextService
-	// reverse-legs (cc.ResolveEndpoint / ResolveGraphicsEndpoint / ResolveClusterContext /
-	// ResolveImageLabel) — this dispatch stays verb-agnostic (the Uniform API Invariant). Those
+	// reverse-legs (cc.ResolveEndpoint / ResolveGraphicsEndpoint / ResolveImageLabel) — this
+	// dispatch stays verb-agnostic (the Uniform API Invariant). Those
 	// reverse-legs open ssh -L forwards / socket bridges DURING the Invoke; drain them (LIFO)
 	// after it returns — the forward must outlive the plugin's dial. Reset per-Invoke so a
 	// leftover from a prior op never leaks in.
@@ -190,7 +190,7 @@ func (h *hostVerbResolver) invokeVerbProvider(ctx context.Context, prov Provider
 		if h.kr.Scenario() != nil {
 			addBg = h.kr.Scenario().AddBackground
 		}
-		cc := &checkContextReverseServer{httpBase: h.kr.HTTPClient(), addBg: addBg, resolveEp: h.resolveVerbEndpoint, resolveGfx: h.resolveVerbGraphics, resolveClusterCtx: h.resolveClusterContext, resolveImgLabel: h.resolveImageLabel}
+		cc := &checkContextReverseServer{httpBase: h.kr.HTTPClient(), addBg: addBg, resolveEp: h.resolveVerbEndpoint, resolveGfx: h.resolveVerbGraphics, resolveImgLabel: h.resolveImageLabel}
 		out, err = ei.InvokeWithExecutor(ctx, op, de, buildEngineContext{}, false, cc)
 	} else {
 		out, err = prov.Invoke(ctx, op)

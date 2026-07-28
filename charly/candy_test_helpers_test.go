@@ -45,7 +45,7 @@ func pixiCandy(t *testing.T, name string) spec.CandyReader {
 }
 
 // testConstructStepExecutor returns the SAME in-proc reverse-channel executor
-// bundle_compile_seam.go's compileViaPlugin threads onto the ctx it hands
+// the invokeOpCompile helper (bundle_compile_parity_test.go) threads onto the ctx it hands
 // command:bundle's OpCompile (K5-A item 1, compile-seam ctx-threading): a test
 // exercising deploykit.BuildDeployPlan/CompileOpSteps directly (in-process, package
 // main) needs a REAL executor reaching the provider registry for any `run: plugin:

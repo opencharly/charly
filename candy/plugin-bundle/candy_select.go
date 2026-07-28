@@ -14,7 +14,7 @@ import (
 )
 
 // candy_select.go — the K4 unit B candy-half: the STANDALONE-candy selection
-// (charly/bundle_compile_seam.go's former compileCandySelection, ctx==nil case only —
+// (the former host-side compileCandySelection, since-deleted from charly/ core, ctx==nil case only —
 // a target-only deploy with no base image, i.e. `target: local`/`vm`/every external
 // substrate) now runs entirely plugin-side, using data already sitting in the
 // resolved-project envelope compileDeployPlans fetches — no LoadUnified, no registry,

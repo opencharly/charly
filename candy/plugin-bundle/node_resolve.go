@@ -16,8 +16,7 @@ import (
 // derivation, R3), resolveVmEntity, resolveNodeOverlays, and
 // resolveNodeTemplate are (almost entirely) pure functions of (node, path)
 // with no executor dependency, so they run plugin-side in the walk
-// (walk.go's dispatchOne) instead of behind the coarse "deploy-node-dispatch"
-// HostBuild seam. resolveNodeTemplate's ONE genuinely host-only piece — the
+// (walk.go's dispatchOne). resolveNodeTemplate's ONE genuinely host-only piece — the
 // kind:local template lookup — used to reach back over the "deploy-entity-
 // resolve" seam's kind="local" case (a per-node LoadUnified call). K4 unit A
 // (core-min wave 3) retired that case: the SAME data already rides the
@@ -37,7 +36,7 @@ import (
 // CLI-flags-to-EmitOpts mapping — MINUS ParentExec/Path/ParentNode, which a
 // live DeployExecutor can never cross the wire to carry: the host fills
 // those in after reconstructing the ancestor executor chain host-side
-// (runDeployNodeDispatch). ParentNode itself is dead code today (grep-
+// (the resolve-target-add seam's reconstructParentExec). ParentNode itself is dead code today (grep-
 // confirmed: no reader anywhere in the tree) — never populated pre- or
 // post-relocation, so its omission here changes nothing.
 func (c *BundleAddCmd) emitOpts() deploykit.EmitOpts {

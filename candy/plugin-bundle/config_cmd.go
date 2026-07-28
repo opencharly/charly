@@ -34,26 +34,9 @@ import (
 // (lifecycle.go, same batch). Fixed prophylactically here rather than left for the next
 // placement change to rediscover.
 
-// fetchResolvedProject fetches the project envelope via the established HostBuild
-// ("resolved-project") seam — the SAME call compile.go's compileDeployPlans makes.
-func fetchResolvedProject(dir string) (*spec.ResolvedProject, error) {
-	if cmdExec == nil {
-		return nil, fmt.Errorf("bundle config: no host reverse channel (command not compiled-in?)")
-	}
-	reqJSON, err := json.Marshal(spec.ResolvedProjectRequest{Dir: dir})
-	if err != nil {
-		return nil, fmt.Errorf("bundle config: marshal resolved-project request: %w", err)
-	}
-	replyJSON, err := cmdExec.HostBuild(cmdCtx, "resolved-project", reqJSON)
-	if err != nil {
-		return nil, fmt.Errorf("bundle config: fetch resolved-project envelope: %w", err)
-	}
-	var rp spec.ResolvedProject
-	if err := json.Unmarshal(replyJSON, &rp); err != nil {
-		return nil, fmt.Errorf("bundle config: decode resolved-project envelope: %w", err)
-	}
-	return &rp, nil
-}
+// fetchResolvedProject moved to compile.go (R3 — the SINGLE resolved-project envelope fetch, shared
+// by the config leg, the per-shape compile, and the walk's ref classification). The 3-arg form takes
+// (dir, extraCandyRefs, includeDisabled); this config caller passes (dir, nil, false).
 
 // saveDeployConfig persists dc via the narrow HostBuild("deploy-config-save") seam.
 func saveDeployConfig(dc *deploykit.BundleConfig) error {
@@ -111,7 +94,7 @@ func runBundleExport(boxes []string, output string, all bool) error {
 	var dc *deploykit.BundleConfig
 	if all {
 		dir, _ := os.Getwd()
-		rp, err := fetchResolvedProject(dir)
+		rp, err := fetchResolvedProject(dir, nil, false)
 		if err != nil {
 			return fmt.Errorf("loading charly.yml: %w", err)
 		}

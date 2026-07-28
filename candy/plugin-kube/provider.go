@@ -103,19 +103,23 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 	}
 
 	// Resolve the `cluster: <profile>` convenience to a concrete kubeconfig context via the
-	// GENERIC cc.ResolveClusterContext reverse-leg — the host reads the project's kind:k8s spec
-	// this out-of-process plugin cannot reach. Replaces the former host-side kube preresolver.
-	// An empty context (no matching profile) falls back to the kubeconfig current-context.
+	// GENERIC "deploy-entity-resolve" HostBuild seam (kind:k8s → ResolvedK8s.KubeconfigContext) —
+	// the SAME seam k3s_post + preresolve already use (R3). The host reads the project's kind:k8s
+	// spec this out-of-process plugin cannot reach. A miss / empty context is a valid result — the
+	// plugin falls back to the kubeconfig current-context (byte-equivalent to the former host-side
+	// findK8sSpec leg, which swallowed every resolve miss to "").
 	if in.Cluster != "" && in.KubeContext == "" {
-		cc, err := sdk.NewCheckContext(req.GetExecutorBrokerId(), req.GetEnvJson())
+		exec, err := sdk.ExecutorForInvoke(ctx, req.GetExecutorBrokerId())
 		if err != nil {
 			return sdk.ResultJSON("fail", fmt.Sprintf("kube: %s: %v", method, err))
 		}
-		kctx, err := cc.ResolveClusterContext(ctx, in.Cluster)
-		if err != nil {
-			return sdk.ResultJSON("fail", fmt.Sprintf("kube: %s: %v", method, err))
+		var reply spec.DeployEntityResolveReply
+		if rerr := k8sEntityResolve(ctx, exec, spec.DeployEntityResolveRequest{Kind: "k8s", Name: in.Cluster}, &reply); rerr == nil && len(reply.EntityJSON) > 0 {
+			var view resolvedK8sView
+			if uerr := json.Unmarshal(reply.EntityJSON, &view); uerr == nil {
+				in.KubeContext = view.KubeconfigContext
+			}
 		}
-		in.KubeContext = kctx
 	}
 
 	conn := connFromInput(&in)
