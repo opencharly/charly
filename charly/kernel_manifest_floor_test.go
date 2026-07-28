@@ -268,7 +268,6 @@ var kernelFloor = []floorEntry{
 var residueOwner = map[string]string{
 	"builder_venue.go":   "P8b", // buildEngineContext (the type) is floor-worthy core-dispatch infra; runVenueBuilderStep/runVenueHomeArtifactBuilder look like coneA3's deploy-vm domain by function — flagged, not unilaterally split (team-lead ruling)
 	"bundle_members.go":  "P11",
-	"cmd.go":             "P15",
 	"config_image.go":    "P11",
 	"deploy_nodeform.go": "P13",
 	"enc.go":             "P11",
