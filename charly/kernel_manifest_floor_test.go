@@ -86,6 +86,7 @@ var kernelFloor = []floorEntry{
 	{"host_build_deploy_entity_resolve.go", "M — the generic \"deploy-entity-resolve\" HostBuild seam (kind-blind: resolves ANY kind entity by {kind,name} from the project loader for plugins — plugin-kube/-vm/-bundle all consume it; the canonical generic loader-read broker seam)"},
 	{"image.go", "B — the charly box CLI grammar spine (BoxCmd, embeds kong.Plugins for plugin-box's nested subcommands) + FormatCLIError, the top-level Kong error formatter main() calls; BoxPullCmd already externalized to candy/plugin-box (K3 #39)"},
 	{"k8s_config.go", "M — the host-side k8s loader-read HELPER of the FLOORED deploy-entity-resolve seam (findK8sSpec's SOLE caller is host_build_deploy_entity_resolve.go, in kernelFloor): LoadUnified→loaderkit.ProjectTemplates.K8s→resolveK8sViaPlugin, the kind:k8s→ResolvedK8s resolution the generic seam performs for plugin-kube. Same floor-class as its seam; NOT a raw-project move (that would duplicate the seam's resolution + entangle substrate_template_resolve)"},
+	{"layer_secrets.go", "M — CandyForPlan, the deploy-candy-secrets seam's project-candy-scan HELPER (ScanAllCandyWithConfig + *Config, both core-only loader mechanics no plugin can run itself): reloads the candy map and orders it against a compiled plan set. Kind-blind — no per-kind branch, just plan→candy-name lookup. SOLE real callers are the already-floor host_build_deploy_candy_secrets.go (its own \"deploy-candy-secrets\" seam) and build_overlay.go's hostBuildOverlay (call-graph verified). The secret_requires:/secret_accepts: RESOLUTION this file used to carry (ensureCandySecret/ResolveCandySecret/ResolveSecretForCandy) had no core-only dependency beyond the already-injectable CredentialAccess and relocated to sdk/deploykit/secret_candy_resolve.go (#118 coneB-p8bremainder), shrinking this file to just the loader-coupled half"},
 	{"load_executor_host.go", "M — the HOST'S OWN loader-entry seam: the permanent typed hostLoaderExecutor the FLOORED config.go/unified.go LoadUnified drives loaderkit through (loaderkit.LoadSeamsFromExecutor, U3, zero marshal) so the host can load its own charly.yml — a plugin host must read its own config to bootstrap; that never leaves core. The host half of the loader-seam M, the same class as host_build_loader_floor.go's permanent legs (distinct from host_build_loader.go's transitional legs, residue). The loaderkit import is the shared P16b import-purity concern config.go/unified.go carry, tracked separately"},
 	{"loader_threaded.go", "D — the kind-recognition threaded-data snapshot the host fills from the registry and threads to the kind-blind parse (the boundary law's canonical D example; untying the loader↔registry cycle)"},
 	{"local_spec.go", "M — the host-side local-template loader-read HELPER of the FLOORED check_cmd.go (findLocalSpec's SOLE caller is check_cmd.go:267, the floored `target: local --verify` path, in kernelFloor): LoadUnified→resolveLocalRefFor→resolveLocalViaPlugin (pure InvokeProvider dispatch — the resolution capability lives in the substrate plugin). Same floor-class as its seam; NOT a raw-project move (identical evidence to k8s_config)"},
@@ -251,6 +252,16 @@ var kernelFloor = []floorEntry{
 	{"filelock.go", "M — acquireDeployConfigLock, the ONE remaining wrapper: composes DeployConfigPath() (kit.DefaultDeployConfigPath alias, deploy.go) + kit.AcquireFileLock into the ONE process-shared lock every deploy-config writer serializes through — injected as a callback into deploykit.SaveVmDeployState/RemoveVmDeployEntry (host_build_config_resolve.go) today. Flagged (not fixed here, outside this file's disjoint slice): the whole body is now provably sdk-portable too, since DeployConfigPath is itself a pure kit alias — a future batch could move it to sdk/kit and drop the injected acquireLock parameter"},
 	{"host_build_retention_defaults.go", "M — the retention-defaults F10 host-builder: the ONE thing candy/plugin-clean's retention engine cannot compute itself (defaults.keep_images/keep_check_runs, needing the core LoadConfig loader). Reached by verb:retention's two non-core callers (command:clean's own CLI, candy/plugin-check's post-run prune) — core's own retention callers (plugin-box's post-build prune + box-list-tags) resolve defaults in-process and never touch this seam. Kind-blind generic host-read, call-graph verified single-purpose, zero dead code"},
 	{"validate_project_host.go", "M — the HOST half of the `charly box validate` engine relocation (task #60 Unit B): the validate ENGINE runs in candy/plugin-box, but the host keeps what a plugin structurally CANNOT do — the error-TOLERANT resolved-project projection (validate must run on a broken project) + the host-natural checks needing RAW authored config a projection drops (CUE-schema conformance, build-tunable/merge rules, the box base⊻from XOR) + the two REGISTRY-derived D-data word sets (ProviderCapabilities/ActCapableVerbs) a plugin cannot dial the host registry to enumerate itself. Also carries validateProjectForBuild, the pre-build validation GATE dispatching command:validate by word over the in-proc reverse channel (kind-blind M, registry-by-word) — its own header names the ONE tracked non-kind-blind exception (a legacy word-list arm) already on the orchestrator's tree-final review list"},
+
+	// P8b remainder (coneB-p8bremainder) — builder_venue.go's MIXED verdict resolved: the
+	// VENUE-AGNOSTIC BuilderStep orchestration (runVenueBuilderStep/runVenueHomeArtifactBuilder/
+	// builderStepImage/venueBuilderTarName) took a buildEngineContext parameter only to close
+	// over Cfg/ProjectDir when building the injected image-resolve/ensure closures — the SAME
+	// shape deploykit.BuildDepPkgsOnHost already took directly — so it MOVED to
+	// sdk/deploykit/venue_builder.go, taking resolveImage/ensureImage as explicit parameters
+	// instead (the caller, plugin_executor_reverse.go, builds the closures and passes them in).
+	// What remains is the buildEngineContext struct itself, floored below.
+	{"builder_venue.go", "E — buildEngineContext, the per-invoke host-BUILD-ENGINE DATA envelope the reverse channel carries so RunHostStep can run in-core machinery a HOST-ENGINE step kind needs: it carries *Config/*Generator/*buildkit.ResolvedBox (core-only types) and is threaded across a dozen already-floor host_build_*.go seams (unified_targets.go, build_overlay.go, host_build_pod_config.go, provider_checkenv.go, bundle_from_box_cmd.go, plugin_executor_reverse.go) — a generic envelope no sdk plugin can hold itself, same class as those seams' own floor justification"},
 }
 
 // residueOwner maps every tracked-for-removal charly/*.go non-test file to its
@@ -266,13 +277,11 @@ var kernelFloor = []floorEntry{
 //	P14  — status collectors / alias / scaffold / OCI registry+merge → plugins
 //	P15  — residual folds + HostArbiter deletion + K1 loader-orchestration + K5 seam-death + misc CLI utils
 var residueOwner = map[string]string{
-	"builder_venue.go":   "P8b", // buildEngineContext (the type) is floor-worthy core-dispatch infra; runVenueBuilderStep/runVenueHomeArtifactBuilder look like coneA3's deploy-vm domain by function — flagged, not unilaterally split (team-lead ruling)
 	"bundle_members.go":  "P11",
 	"cmd.go":             "P15",
 	"config_image.go":    "P11",
 	"deploy_nodeform.go": "P13",
 	"enc.go":             "P11",
-	"layer_secrets.go":   "P8b",
 	"secrets.go":         "P11",
 	// — files added by cutovers that landed after the T0 authoring (living tracker) —
 	"config_write_host.go": "P11",
