@@ -67,6 +67,7 @@ var kernelFloor = []floorEntry{
 	{"cue_normalize.go", "M — the CUE-loader shorthand canonicalizer (a materialize decode helper, kind-blind)"},
 	{"cue_schema.go", "M — the per-entity CUE validator (validateKindValueCUE) the host materialize consults by word; kind-blind registry dispatch"},
 	{"deploy_builtins.go", "B — the deploy-target provider signpost (all five substrates are external; a registry seed)"},
+	{"deploy_state_host.go", "M — the DeployStateHost seam filler + the plugin-primaries registry-coupled marshalDeployNode callback (the host-resident deploy-config WRITE seam every deploy plugin reaches; the plugin-primaries resugar needs the core registry — a generic kind-blind broker-seam half, like host_build_cli)"},
 	{"deploy_target_unified.go", "M — the UnifiedDeployTarget / LifecycleTarget interface (the broker's deploy-routing contract, kind-blind)"},
 	{"devices.go", "GPU — hardware-blocked fold (C14); would fold into plugin-gpu under P15 once GPU R10 is possible"},
 	{"embed_defaults.go", "B — the //go:embed charly.yml default vocabulary (charly-app-specific, not loaderkit-generic) + applyEmbeddedDefaults merging it as the lowest-priority project-wins base; a bootstrap default-config root fed through the same loaderkit loader path"},
@@ -74,6 +75,9 @@ var kernelFloor = []floorEntry{
 	{"gpu_imply.go", "GPU — hardware-blocked fold (C14); revisitable on GPU hardware"},
 	{"gpu_shim.go", "GPU — hardware-blocked fold (C14); revisitable on GPU hardware"},
 	{"host_build_cli.go", "M — the HostBuild(\"cli\") generic reentry host-builder (cli reentry the broker keeps)"},
+	{"host_build_deploy_artifacts_retrieve.go", "M — the generic \"deploy-artifacts-retrieve\" HostBuild seam (kind-blind: CandyForPlan + RetrieveCandyArtifacts over a re-materialized venue; the host-resident half of a generic broker seam plugins consume)"},
+	{"host_build_deploy_candy_secrets.go", "M — the generic \"deploy-candy-secrets\" HostBuild seam (kind-blind loader candy-scan + credential resolve; host-resident broker-seam half)"},
+	{"host_build_deploy_entity_resolve.go", "M — the generic \"deploy-entity-resolve\" HostBuild seam (kind-blind: resolves ANY kind entity by {kind,name} from the project loader for plugins — plugin-kube/-vm/-bundle all consume it; the canonical generic loader-read broker seam)"},
 	{"image.go", "B — the charly box CLI grammar spine (BoxCmd, embeds kong.Plugins for plugin-box's nested subcommands) + FormatCLIError, the top-level Kong error formatter main() calls; BoxPullCmd already externalized to candy/plugin-box (K3 #39)"},
 	{"loader_threaded.go", "D — the kind-recognition threaded-data snapshot the host fills from the registry and threads to the kind-blind parse (the boundary law's canonical D example; untying the loader↔registry cycle)"},
 	{"main.go", "B — the Kong parse/dispatch spine + the bootstrap entry point"},
@@ -233,7 +237,6 @@ var residueOwner = map[string]string{
 	"cue_defaults.go":               "P15",
 	"deploy.go":                     "P13",
 	"deploy_nodeform.go":            "P13",
-	"deploy_state_host.go":          "P13",
 	"deploy_tree.go":                "P13",
 	"enc.go":                        "P11",
 	"filelock.go":                   "P15",
@@ -306,7 +309,6 @@ var residueOwner = map[string]string{
 	// deploy-resolution-67-gated-cone.md) this PR's own prior reconciliation
 	// passes already applied to the sibling host_build_deploy_{tree_resolve,
 	// node_dispatch,node_del_dispatch,del_resolve,members,config_save}.go seams.
-	"host_build_deploy_entity_resolve.go": "P13",
 	// host_build_deploy_candy_secrets.go + host_build_deploy_artifacts_retrieve.go — Cone A
 	// shape 3 (deploy_add_shared.go + k8s_deploy_from_box.go → candy/plugin-bundle): two new
 	// thin HostBuild seams wrapping the genuine floor-M halves of the former core-resident
@@ -318,8 +320,6 @@ var residueOwner = map[string]string{
 	// registry-coupled kube dispatch moved fully plugin-side via exec.InvokeProvider. Classified
 	// with the SAME K4-C deploy-dispatch seam family (P13) as the sibling
 	// host_build_deploy_entity_resolve.go above.
-	"host_build_deploy_candy_secrets.go":      "P13",
-	"host_build_deploy_artifacts_retrieve.go": "P13",
 	// host_build_ephemeral_register.go + ephemeral_dispatch.go — split of the
 	// deleted ephemeral_lifecycle.go (P11, pruned above): the register/teardown
 	// BODY moved to candy/plugin-bundle, leaving (a) a thin HostBuild seam
