@@ -21,8 +21,8 @@ import (
 // returns the wire-safe spec.CheckVenueResolveReply. Each caller then builds its live endpoint /
 // executor from the returned GENERIC spec.VenueDescriptor via the kind-blind kit re-materialization
 // (kit.EndpointForVenue / kit.VenueFromDescriptor) — the same descriptor→executor mechanism
-// candy/plugin-bundle's PrepareVenue dispatch already goes through. This is the SAME generic-forward
-// shape as status_substrate_host.go's status fan-out seam (floor-M).
+// candy/plugin-bundle's PrepareVenue dispatch already goes through. A thin generic host-forward +
+// re-materialize seam serving the check reverse channel (floor-M).
 
 // resolveCheckVenueReply classifies a check target's venue via plugin-check and returns the wire-safe
 // projection. Threads an in-proc reverse-channel executor so the plugin's resolved-project leg reaches

@@ -16,13 +16,14 @@ import (
 // command.go — the externalized `charly status` command. The plugin OWNS the Kong grammar
 // (moved from charly/status.go's StatusCmd) + the declared-nested-tree pre-resolution
 // (nested_tree.go, K5) + the PURE nested-overlay fold (overlay.go) + the render output
-// (render.go). Only the LIVE per-substrate collection (pod/vm/k8s/local/android) stays host-side,
-// reached via the generic "status-substrate" HostBuild seam (charly/status_substrate_host.go).
+// (render.go). Only the LIVE per-substrate collection (pod/vm/k8s/local/android) is the compiled-in
+// verb:status-fanout (candy/plugin-substrate), which the plugin InvokeProvider's DIRECTLY.
 //
 // status is COMPILED-IN (charly.yml compiled_plugins): its Invoke(OpRun) runs in charly's process
-// and gets the in-proc reverse channel (dispatchInProcCommand threads it), so
-// HostBuild("status-substrate") reaches the host collection engine. The out-of-process CliMain
-// path has no reverse channel, so it errors.
+// and gets the in-proc reverse channel (dispatchInProcCommand threads it), and the wire broker now
+// threads that channel onward to the in-proc fan-out, so InvokeProvider(verb:status-fanout) reaches
+// the collection engine and its vm/k8s legs call back the host. The out-of-process CliMain path has
+// no reverse channel, so it errors.
 
 // StatusCmd is the `charly status` Kong grammar — moved verbatim from charly/status.go.
 type StatusCmd struct {
@@ -37,7 +38,7 @@ type StatusCmd struct {
 // parse — StatusCmd carries real flags rather than settings' subcommand tokens, so it uses kong to
 // reparse rather than a manual switch, mirroring plugin-migrate's MigrateCmd), canonicalizes the
 // deploy positional (the SAME deploykit.CanonicalizeDeployArg every deploy-arg CLI verb calls),
-// drives the "status-substrate" HostBuild seam, applies the PURE nested overlay (bulk path only —
+// InvokeProvider's verb:status-fanout, applies the PURE nested overlay (bulk path only —
 // the single-box detail path never carried nested children), and renders exactly as the former
 // in-core StatusCmd.Run did.
 func runStatusCLI(ctx context.Context, exec *sdk.Executor, args []string) error {
@@ -85,18 +86,24 @@ func runStatusCLI(ctx context.Context, exec *sdk.Executor, args []string) error 
 	return RenderDetail(os.Stdout, reply.Single)
 }
 
-// hostStatusSubstrate runs the status-collection engine over the generic "status-substrate"
-// HostBuild kind. exec is nil on the out-of-process CliMain path (no reverse channel) → a clear
-// error, mirroring plugin-settings' credentialCall nil-exec guard (config.go).
+// hostStatusSubstrate runs the whole-subsystem status fan-out by InvokeProvider'ing the compiled-in
+// verb:status-fanout (candy/plugin-substrate) DIRECTLY over the in-proc reverse channel — command:status
+// is compiled-in and dispatchInProcCommand threads it an executor, and the wire broker's in-proc
+// InvokeProvider branch now threads that reverse channel onward to the fan-out (plugin_dispatch_reverse.go),
+// so the fan-out's vm/k8s collectors reach the host (HostBuild("resolved-project") / InvokeProvider(vm→libvirt))
+// for themselves. This retired a former host HostBuild forwarding seam that existed ONLY to patch the
+// broker's in-proc branch missing executor threading manually — an incomplete-seam smell now fixed
+// generically in the broker (the in-proc branch threads the reverse channel uniformly). exec is nil on the
+// out-of-process CliMain path (no reverse channel) → a clear error.
 func hostStatusSubstrate(ctx context.Context, exec *sdk.Executor, req spec.StatusSubstrateRequest) (spec.StatusSubstrateReply, error) {
 	if exec == nil {
-		return spec.StatusSubstrateReply{}, fmt.Errorf("charly status requires compiled-in placement (the status-substrate host seam is unavailable out-of-process)")
+		return spec.StatusSubstrateReply{}, fmt.Errorf("charly status requires compiled-in placement (the status fan-out reverse channel is unavailable out-of-process)")
 	}
 	reqJSON, err := json.Marshal(req)
 	if err != nil {
 		return spec.StatusSubstrateReply{}, err
 	}
-	resJSON, err := exec.HostBuild(ctx, "status-substrate", reqJSON)
+	resJSON, err := exec.InvokeProvider(ctx, "verb", "status-fanout", sdk.OpStatusCollectAll, reqJSON, nil, sdk.InvokeProviderOpts{})
 	if err != nil {
 		return spec.StatusSubstrateReply{}, err
 	}

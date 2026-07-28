@@ -95,7 +95,7 @@ func TestCommandCompileIn_AliasInProc(t *testing.T) {
 // deleted), is now the compiled-in command candy candy/plugin-status — registered IN-PROC as a
 // ClassCommand inprocProvider (NOT a *grpcProvider, NOT a static builtin CommandProvider), so
 // dispatchCommand routes `charly status` to it via Invoke(OpRun) and its render/overlay logic
-// reaches the host collection engine over the HostBuild("status-substrate") reverse channel.
+// reaches the compiled-in verb:status-fanout by InvokeProvider'ing it directly over the reverse channel.
 // (End-to-end CLI dispatch is exercised by the live R10 bed + the candy's own
 // overlay_golden_test.go byte-parity golden.)
 func TestCommandCompileIn_StatusInProc(t *testing.T) {
@@ -334,8 +334,8 @@ func TestCommandProviders_ExtractedReachMCP(t *testing.T) {
 		t.Error("candy.set unexpectedly present in the builtin CLI model — `candy` is now a compiled-in command (candy/plugin-candy, command:candy), a dynamic holder not a builtin CommandProvider")
 	}
 	// status (P14a chunk 2b) is likewise now COMPILED-IN and OWNS its command
-	// (candy/plugin-status reaches the shared collection engine over the generic
-	// HostBuild("status-substrate") seam) — absent from this builtin-only model, a flat leaf
+	// (candy/plugin-status reaches the compiled-in verb:status-fanout by InvokeProvider'ing it
+	// directly) — absent from this builtin-only model, a flat leaf
 	// command with no subcommands, so its CLI-model path is bare "status" (mirrors "clean").
 	if paths["status"] {
 		t.Error("status unexpectedly present in the builtin CLI model — `status` is now a compiled-in command (candy/plugin-status, command:status), a dynamic holder not a builtin CommandProvider")
