@@ -52,6 +52,7 @@ var kernelFloor = []floorEntry{
 	{"agent_target_cmd.go", "M — the __agent-target serve CLI reentry serving the generic remote Provider/PluginMeta gRPC channel (kind-blind; wire broker transport)"},
 	{"bootstrap_phase.go", "M — the bootstrap phase machinery (plugin-loading phase dispatch)"},
 	{"check_endpoint_resolve.go", "M — generic host-endpoint reverse-legs served back over CheckContextService (class-generic, never a per-verb RPC)"},
+	{"check_venue_resolve.go", "M — the host half of the venue-classification seam (#118 check broker-envelope-out): reaches plugin-check's verb:check-resolve classifier (the kind-decode lives THERE, never here) and re-materializes the returned generic spec.VenueDescriptor into a live host DeployExecutor via the kind-blind kit.VenueFromDescriptor / deploykit.ResolveDeployChain — a live executor never crosses the wire. ZERO classification; the same generic-forward+re-materialize shape as status_substrate_host.go's fan-out seam"},
 	{"cli_model_cmd.go", "M — the __cli-model host seam (Kong command-tree reflection for the externalized MCP server); a CLI/prescan-adjacent host seam"},
 	{"cue_kind_box.go", "B — the box⊆candy image factory bootstrap root (the discovered-candy pre-check calls it directly)"},
 	{"cue_kind_candy.go", "B — the candy⊻box factory bootstrap root (must exist before any plugin can load; candyIsImage/buildCandy stay core)"},
@@ -152,6 +153,7 @@ var kernelFloor = []floorEntry{
 	{"host_build_remote_image_resolve.go", "M — the remote-image-resolve seam for plugin-build's ensure fallback AND candy/plugin-box's `box build @ref` (thin ResolveRemoteImage wrapper; drops non-wire fields)"},
 	{"host_build_render_service.go", "M — the render-service host-builder (wraps plugin-init OpResolve + M16 egress gate; two registry consults)"},
 	{"host_exec.go", "M — the --host CLI pre-dispatch reexec decision (shouldReexecForHost runs before Kong dispatches, reading the core CLI struct + command path — the prescan-dispatch spine, mirroring plugin_command_prescan.go / main_repo.go's --repo; ReexecOverSSH body already moved to kit)"},
+	{"status_substrate_host.go", "M — the status-substrate F10 host-builder: a generic HostBuild wire-forward (resolve verb:status-fanout + thread the in-proc reverse-channel executor + invoke; ZERO status business logic — the collectors + enrichment moved to candy/plugin-substrate at K6). Same class as the ~30 host_build_*.go kernelFloor seams; the in-proc reverse channel it threads for the fan-out's vm/k8s legs is host-only (wire broker M)"},
 }
 
 // residueOwner maps every tracked-for-removal charly/*.go non-test file to its
@@ -241,7 +243,6 @@ var residueOwner = map[string]string{
 	"host_build_buildengine.go": "K3", // the buildengine-* reverse legs the plugin-side RESOLVE reaches (U6); dissolve as the legs thin at K4/K5
 	"intermediates_shim.go":     "P8b",
 	"resolved_project_host.go":  "P8b",
-	"status_substrate_host.go":  "P14",
 	"validate_project_host.go":  "P15",
 	// — Cutover A (#168, deploy-dispatch kernel hard-cutover exit): the K4-C
 	// deploy-tree walk port narrows the retired deploy-dispatch spike into 6

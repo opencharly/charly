@@ -97,12 +97,12 @@ func resolveHostVars(refs []string, instance string) (map[string]string, []func(
 			fmt.Fprintf(os.Stderr, "check: ${%s} — invalid port %q\n", key, portStr)
 			continue
 		}
-		venue, verr := resolveCheckVenue(dep, instance)
+		reply, verr := resolveCheckVenueReply(dep, instance)
 		if verr != nil {
 			fmt.Fprintf(os.Stderr, "check: ${%s} — %v\n", key, verr)
 			continue
 		}
-		ep, eerr := resolveCheckEndpoint(venue, port)
+		ep, eerr := kit.EndpointForVenue(reply.Descriptor, port)
 		if eerr != nil {
 			fmt.Fprintf(os.Stderr, "check: ${%s} — %v\n", key, eerr)
 			continue
@@ -139,12 +139,16 @@ func resolveHostVars(refs []string, instance string) (map[string]string, []func(
 // overlay), independent of which venue is active.
 func liveTargetResolver(instance string) func(string) (*kit.CheckVarResolver, deploykit.DeployExecutor, error) {
 	return func(target string) (*kit.CheckVarResolver, deploykit.DeployExecutor, error) {
-		venue, err := resolveCheckVenue(target, instance)
+		reply, err := resolveCheckVenueReply(target, instance)
 		if err != nil {
 			return nil, nil, err
 		}
-		res := liveDeployVarResolver(target, instance, venue)
-		return res, venue.Exec, nil
+		venueExec, err := checkVenueExecFromReply(reply, target)
+		if err != nil {
+			return nil, nil, err
+		}
+		res := liveDeployVarResolver(target, instance, reply)
+		return res, venueExec, nil
 	}
 }
 
@@ -153,8 +157,8 @@ func liveTargetResolver(instance string) func(string) (*kit.CheckVarResolver, de
 // unreadable image label yields an empty resolver (the driven probe then relies
 // on ${HOST:<member>} + literals, which is the common cross-deployment case). Shares
 // the ResolveCheckVarsRuntime primitive with the primary target (R3).
-func liveDeployVarResolver(name, instance string, venue *CheckVenue) *kit.CheckVarResolver {
-	if venue == nil || !venue.IsContainer() {
+func liveDeployVarResolver(name, instance string, reply spec.CheckVenueResolveReply) *kit.CheckVarResolver {
+	if reply.Kind != "container" {
 		return &kit.CheckVarResolver{}
 	}
 	dir, _ := os.Getwd()
@@ -175,10 +179,10 @@ func liveDeployVarResolver(name, instance string, venue *CheckVenue) *kit.CheckV
 	if err != nil {
 		return &kit.CheckVarResolver{}
 	}
-	meta, err := deploykit.ExtractMetadata(venue.Engine, resolvedRef)
+	meta, err := deploykit.ExtractMetadata(reply.Engine, resolvedRef)
 	if err != nil || meta == nil {
 		return &kit.CheckVarResolver{}
 	}
-	res, _ := kit.ResolveCheckVarsRuntime(meta, deployOverlay, venue.Engine, name, venue.Name, instance)
+	res, _ := kit.ResolveCheckVarsRuntime(meta, deployOverlay, reply.Engine, name, reply.Name, instance)
 	return kit.StampCharlyBin(res)
 }

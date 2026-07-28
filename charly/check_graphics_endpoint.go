@@ -42,12 +42,12 @@ func (h *hostVerbResolver) resolveVerbGraphics(kind string) (graphicsEndpoint, e
 	// vnc CONTAINER leg: a non-VM venue publishes RFB on 5900; the ticket comes from the
 	// credential store. spice is VM-only (no container leg), so it skips straight to the vm plugin.
 	if kind == "vnc" {
-		venue, err := resolveCheckVenue(h.kr.Box(), h.kr.Instance())
+		reply, err := resolveCheckVenueReply(h.kr.Box(), h.kr.Instance())
 		if err != nil {
 			return graphicsEndpoint{}, err
 		}
-		if venue.Kind != "vm" {
-			ep, err := resolveCheckEndpoint(venue, 5900)
+		if reply.Kind != "vm" {
+			ep, err := kit.EndpointForVenue(reply.Descriptor, 5900)
 			if err != nil {
 				return graphicsEndpoint{}, fmt.Errorf("VNC server not reachable (port 5900): %w", err)
 			}

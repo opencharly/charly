@@ -38,7 +38,14 @@ func NewProvider() pb.ProviderServer { return &provider{} }
 // lost when `check`'s CLI moved off a static core Kong struct onto this dynamic dispatch plugin.
 func NewMeta() pb.PluginMetaServer {
 	return sdk.NewMeta("2026.198.2131",
-		[]sdk.ProvidedCapability{{Class: "command", Word: "check", Subcommands: sdk.KongSubcommands(&CheckCmd{})}},
+		[]sdk.ProvidedCapability{
+			{Class: "command", Word: "check", Subcommands: sdk.KongSubcommands(&CheckCmd{})},
+			// verb:check-resolve — the INTERNAL venue-classification capability (#118 check
+			// broker-envelope-out): the host's floor reverse-legs call it (OpResolve) to
+			// classify a check target's venue instead of an in-core classifier duplicate. Not a
+			// CLI subcommand (mirrors verb:status-fanout's internal-only dispatch), so no schema.
+			{Class: "verb", Word: "check-resolve"},
+		},
 		nil)
 }
 
