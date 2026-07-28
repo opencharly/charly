@@ -181,9 +181,11 @@ func dispatchCat(args []string) error {
 
 // fetchGrammar is the `charly box fetch [<spec>]` CLI surface (default spec: 'default' →
 // opencharly/charly). The repo resolver is host-coupled, so the plugin re-runs the hidden core
-// `__box-fetch` reentry over HostBuild("cli") — the SAME pattern candy/plugin-box's `pkg` verb
-// uses for `__box-pkg`. The reentry subprocess inherits charly's stdio (it prints the cache path
-// to stdout / its error to stderr) and its exit code rides the CliReply.
+// `__box-fetch` reentry over HostBuild("cli") — the SAME pattern candy/plugin-box's `list` verb
+// uses for `__box-list-tags` (the sibling `pkg` verb's own `__box-pkg` reentry already died this
+// way — its localpkg build engine moved plugin-side, K3 build-tail move). The reentry subprocess
+// inherits charly's stdio (it prints the cache path to stdout / its error to stderr) and its exit
+// code rides the CliReply.
 type fetchGrammar struct {
 	Spec string `arg:"" optional:"" help:"Repo spec (default: 'default' → opencharly/charly)"`
 }
