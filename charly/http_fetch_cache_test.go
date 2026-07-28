@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/vmshared"
 )
 
 // TestFetchQcow2_ReusesUnpinnedCachedImage proves FU-4: an UNPINNED cloud_image
@@ -32,7 +33,7 @@ func TestFetchQcow2_ReusesUnpinnedCachedImage(t *testing.T) {
 	// Unpinned source (no Checksum.Value) pointing at an unreachable URL. With FU-4 the
 	// recorded sum + cached file are reused (no download); without it, the fetcher would
 	// fall through to downloading the unreachable URL and error.
-	got, err := kit.FetchQcow2(VmSource{URL: url, Cache: cacheDir})
+	got, err := kit.FetchQcow2(vmshared.VmSource{URL: url, Cache: cacheDir})
 	if err != nil {
 		t.Fatalf("FetchQcow2 must reuse the cached unpinned image (no re-download), got error: %v", err)
 	}

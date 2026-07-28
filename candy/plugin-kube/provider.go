@@ -21,7 +21,7 @@ import (
 // as env; the kube-exclusive fields ride the desugared plugin input (params.KubeInput —
 // the per-verb fields left core #Op in the schema-compaction cutover). The SAME
 // provider also serves the k3s post-provision finalization the deploy seam needs: that
-// caller (k8s_plugin.go's invokeKubePluginWithBroker) builds a synthetic op ({method:
+// caller (candy/plugin-bundle/secrets_artifacts.go's k3sPostProvision) builds a synthetic op ({method:
 // k3s-post-provision, artifact_key, deploy_name} in the input map) WITH a
 // reverse-channel broker and reads the result's Message. Because the out-of-process
 // verb path does NOT run the host-side matcher
@@ -81,9 +81,9 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 	// k3s-post-provision is the k3s deploy seam (S3, FINAL/K5 unit 6 — relocated
 	// wholesale from charly/k3s_post.go): retrieve-path check, guest-forward kubeconfig
 	// rewrite, and the kubeconfig merge. Dispatched WITH a reverse-channel broker (the
-	// host's k8s_plugin.go uses InvokeWithExecutor, mirroring the deploy:k8s preresolve
-	// leg) because the guest-forward rewrite needs the "deploy-entity-resolve" HostBuild
-	// seam for its LoadUnified-coupled VM lookup.
+	// caller — candy/plugin-bundle's k3sPostProvision — uses exec.InvokeProvider, mirroring the
+	// deploy:k8s preresolve leg) because the guest-forward rewrite needs the "deploy-entity-resolve"
+	// HostBuild seam for its LoadUnified-coupled VM lookup.
 	if method == "k3s-post-provision" {
 		exec, err := sdk.ExecutorForInvoke(ctx, req.GetExecutorBrokerId())
 		if err != nil {
@@ -103,19 +103,23 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 	}
 
 	// Resolve the `cluster: <profile>` convenience to a concrete kubeconfig context via the
-	// GENERIC cc.ResolveClusterContext reverse-leg — the host reads the project's kind:k8s spec
-	// this out-of-process plugin cannot reach. Replaces the former host-side kube preresolver.
-	// An empty context (no matching profile) falls back to the kubeconfig current-context.
+	// GENERIC "deploy-entity-resolve" HostBuild seam (kind:k8s → ResolvedK8s.KubeconfigContext) —
+	// the SAME seam k3s_post + preresolve already use (R3). The host reads the project's kind:k8s
+	// spec this out-of-process plugin cannot reach. A miss / empty context is a valid result — the
+	// plugin falls back to the kubeconfig current-context (byte-equivalent to the former host-side
+	// findK8sSpec leg, which swallowed every resolve miss to "").
 	if in.Cluster != "" && in.KubeContext == "" {
-		cc, err := sdk.NewCheckContext(req.GetExecutorBrokerId(), req.GetEnvJson())
+		exec, err := sdk.ExecutorForInvoke(ctx, req.GetExecutorBrokerId())
 		if err != nil {
 			return sdk.ResultJSON("fail", fmt.Sprintf("kube: %s: %v", method, err))
 		}
-		kctx, err := cc.ResolveClusterContext(ctx, in.Cluster)
-		if err != nil {
-			return sdk.ResultJSON("fail", fmt.Sprintf("kube: %s: %v", method, err))
+		var reply spec.DeployEntityResolveReply
+		if rerr := k8sEntityResolve(ctx, exec, spec.DeployEntityResolveRequest{Kind: "k8s", Name: in.Cluster}, &reply); rerr == nil && len(reply.EntityJSON) > 0 {
+			var view resolvedK8sView
+			if uerr := json.Unmarshal(reply.EntityJSON, &view); uerr == nil {
+				in.KubeContext = view.KubeconfigContext
+			}
 		}
-		in.KubeContext = kctx
 	}
 
 	conn := connFromInput(&in)

@@ -12,11 +12,17 @@ import (
 
 // TestCharlyUpdatePreservesPerHostDeployFields reproduces the operator's scenario
 // through the ACTUAL `charly update <vm>` path: the vm lifecycle hook Rebuild shells
-// `charly vm destroy` (removeVmDeployEntry) then `charly vm create` (saveVmDeployState).
+// `charly vm destroy` (deploykit.RemoveVmDeployEntry) then `charly vm create`
+// (deploykit.SaveVmDeployState), both invoked exactly as host_build_config_resolve.go's
+// hostBuildConfigPersist calls them — with the REAL acquireDeployConfigLock +
+// saveBundleConfigNodeForm callbacks (F6 vm-lifecycle move, coneB-vmlifecycle: the
+// decision logic moved to deploykit, but this test still exercises it end-to-end against
+// a REAL per-host overlay file, complementing deploykit's own fake-backed unit tests).
 // The per-host entry carries `preemptible` (a LOCAL deploy property) + env +
 // tunnel; the destroy→create cycle must NOT clobber any of them. Against the
-// pre-fix removeVmDeployEntry (which delete()d the whole entry) this FAILS —
-// that was the root cause of the lost workstation preemptible.
+// the pre-fix removeVmDeployEntry (which delete()d the whole entry — RemoveVmDeployEntry's
+// current, deploykit-relocated name) this FAILS — that was the root cause of the lost workstation
+// preemptible.
 func TestCharlyUpdatePreservesPerHostDeployFields(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", dir)
@@ -45,13 +51,13 @@ vm:cachyos-gpu:
 		t.Fatal(err)
 	}
 
-	// `charly update <vm>` == destroy (removeVmDeployEntry) THEN create
-	// (saveVmDeployState), keyed on vm:<name>.
-	if err := removeVmDeployEntry("vm:cachyos-gpu"); err != nil {
-		t.Fatalf("removeVmDeployEntry (destroy leg): %v", err)
+	// `charly update <vm>` == destroy (deploykit.RemoveVmDeployEntry) THEN create
+	// (deploykit.SaveVmDeployState), keyed on vm:<name>.
+	if err := deploykit.RemoveVmDeployEntry("vm:cachyos-gpu", acquireDeployConfigLock, saveBundleConfigNodeForm); err != nil {
+		t.Fatalf("RemoveVmDeployEntry (destroy leg): %v", err)
 	}
-	if err := saveVmDeployState("vm:cachyos-gpu", "cachyos-gpu", &spec.VmDeployState{InstanceID: "rebuilt-uuid", SshPort: 2222}); err != nil {
-		t.Fatalf("saveVmDeployState (create leg): %v", err)
+	if err := deploykit.SaveVmDeployState("vm:cachyos-gpu", "cachyos-gpu", &spec.VmDeployState{InstanceID: "rebuilt-uuid", SshPort: 2222}, acquireDeployConfigLock, saveBundleConfigNodeForm); err != nil {
+		t.Fatalf("SaveVmDeployState (create leg): %v", err)
 	}
 
 	// Reload and assert NOTHING operator-authored was dropped by the cycle.
@@ -81,7 +87,7 @@ vm:cachyos-gpu:
 // TestVmDestroyRemovesPureAutoEntry guards the other half: a pure auto-created
 // VM-state entry (target: vm + vm: + vm_state, NO operator config — e.g. a
 // disposable check-bed VM) IS deleted on destroy, so such entries don't
-// accumulate. This is why removeVmDeployEntry existed in the first place.
+// accumulate. This is why deploykit.RemoveVmDeployEntry existed in the first place.
 func TestVmDestroyRemovesPureAutoEntry(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", dir)
@@ -100,8 +106,8 @@ vm:check-cachyos-gpu-vm:
 	if err := os.WriteFile(filepath.Join(cfgDir, "charly.yml"), []byte(yml), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := removeVmDeployEntry("vm:check-cachyos-gpu-vm"); err != nil {
-		t.Fatalf("removeVmDeployEntry: %v", err)
+	if err := deploykit.RemoveVmDeployEntry("vm:check-cachyos-gpu-vm", acquireDeployConfigLock, saveBundleConfigNodeForm); err != nil {
+		t.Fatalf("RemoveVmDeployEntry: %v", err)
 	}
 	dc, err := deploykit.LoadBundleConfig()
 	if err != nil {

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/vmshared"
 )
 
 // resolveBindMounts tests moved to deploy_test.go (TestResolveVolumeBacking*)
@@ -146,7 +147,7 @@ func TestCryptoPasswdRequiresUnmount(t *testing.T) {
 	boxName := "myapp"
 	// We can't call encPasswd() directly because loadEncryptedVolume needs deploy.yml,
 	// so test the logic by simulating what encPasswd() does.
-	mounts := []DeployVolumeConfig{
+	mounts := []vmshared.DeployVolumeConfig{
 		{Name: "secrets", Type: "encrypted"},
 	}
 	storagePath := "/data/enc"

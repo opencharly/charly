@@ -15,8 +15,9 @@ import (
 // ExportAllBox / ParseDeployKey etc. DIRECTLY (already sdk-portable) and the EXISTING
 // HostBuild("resolved-project") seam for export's project-load touch — only the deploy-state
 // SAVE step (import/reset) still needs a seam: saveBundleConfigNodeForm's per-entry marshal
-// callback (marshalBundleNode, deploy_nodeform.go) resugars each plan step via the host-owned
-// pluginPrimaries registry, which a separate-module plugin cannot reach. Generic action noun
+// callback (deploykit.MarshalBundleNode via the marshalDeployNode wrapper) resugars each plan step
+// with the host-owned primaries projection (loaderThreaded().Primaries), which a separate-module
+// plugin reaches as envelope DATA but the host feeds directly here. Generic action noun
 // (F11 — never a substrate word).
 const deployConfigSaveBuilderKind = "deploy-config-save"
 

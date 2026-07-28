@@ -14,8 +14,8 @@ import (
 )
 
 // bootstrap.go — the privileged builder-bootstrap DRIVE (a `from: builder:<name>` image),
-// relocated from charly core's BuildCmd.runPrivilegedBootstrap. The host build-prep seam no
-// longer runs this: it resolves WHICH builder def applies (a charly.yml lookup that needs the
+// relocated from charly core's BuildCmd.runPrivilegedBootstrap. The host no longer runs this:
+// the plugin-side resolve (K3 U6) resolves WHICH builder def applies (a charly.yml lookup that needs the
 // live *Config/*BuilderConfig graph) and rides it back on the per-box descriptor
 // (From/BootstrapBuilderImage/DistroDef/BootstrapBuilder — the buildwire.cue #BuildResolveBox
 // extension), but the actual PRIVILEGED EXEC runs HERE, alongside the podman drive it was
@@ -24,7 +24,7 @@ import (
 // RenderPacstrapExtraConf/RenderRuntimePacmanConf) is already sdk-importable.
 
 // buildDir resolves the empty-Dir convention (a BuildRequest with no Dir means "the process's
-// cwd", the SAME resolution hostBuildBuildResolve applies host-side) — since this candy is
+// cwd", the SAME resolution resolveBuildEngine applies plugin-side) — since this candy is
 // COMPILED-IN (the same process as the host), os.Getwd() here matches the host's resolution.
 // Falls back to "." on an os.Getwd failure (never fatal for a bootstrap-path join).
 func buildDir(reqDir string) string {

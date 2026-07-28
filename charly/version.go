@@ -1,9 +1,9 @@
 package main
 
 import (
-	"fmt"
 	"time"
 
+	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/kit"
 )
 
@@ -47,21 +47,17 @@ func CharlyVersion() string {
 // moment (image build tag, check-run dir, deploy alias). It is NOT the identity
 // of the charly binary — that is CharlyVersion()/BuildCalVer. Never use ComputeCalVer()
 // to report the running binary's version.
+// ComputeCalVer / ComputeCalVerAt delegate to buildkit (K3 build-engine, U6): the computation
+// relocated to sdk/buildkit so candy/plugin-build's plugin-side RESOLVE stamps the SAME tag when the
+// host leaves req.Tag empty (R3, one source). These charly-side names are retained for the ~14 host
+// call sites.
 func ComputeCalVer() string {
-	return ComputeCalVerAt(time.Now().UTC())
+	return buildkit.ComputeCalVer()
 }
 
-// ComputeCalVerAt computes CalVer for a specific time (for testing)
+// ComputeCalVerAt computes CalVer for a specific time (for testing).
 func ComputeCalVerAt(t time.Time) string {
-	year := t.Year()
-	dayOfYear := t.YearDay()
-	// HHMM as a single integer: hour*100 + minute (08:30 -> 0830, 00:00 -> 0000).
-	hhmm := t.Hour()*100 + t.Minute()
-
-	// Canonical CalVer: 4-digit year, 3-digit zero-padded day-of-year, 4-digit
-	// zero-padded HHMM. Every component is fixed-width, so a plain alphanumeric
-	// (lexicographic) sort of CalVer strings is chronological.
-	return fmt.Sprintf("%04d.%03d.%04d", year, dayOfYear, hhmm)
+	return buildkit.ComputeCalVerAt(t)
 }
 
 // CalVer is the parsed YYYY.DDD.HHMM calendar version. The

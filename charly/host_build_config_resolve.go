@@ -23,11 +23,14 @@ import (
 // the host-builder surface) — the first consumer is command:vm, and the pod (P11) + bundle (P13)
 // command families reuse the SAME seam, extending the reply with their own resolved fields.
 //
-// It returns RESOLVED CONFIG DATA only (the LoadUnified/ResolveRuntime/resolveVmBackend outputs the
-// plugin cannot compute host-side); the plugin owns every downstream ACTION (the create pipeline,
-// the preempt-lease acquire, the libvirt engine calls). Backend resolution stays here because it is
-// a host-ENVIRONMENT probe (is the libvirt session socket up, is qemu installed) — the hostprobe
-// category — plus it needs vmConfiguredBackend's LoadUnified pin read.
+// It returns RESOLVED CONFIG DATA only (the LoadUnified/ResolveRuntime outputs the plugin cannot
+// compute host-side); the plugin owns every downstream ACTION (the create pipeline, the
+// preempt-lease acquire, the libvirt engine calls). Backend resolution (resolveVmBackend/
+// vmConfiguredBackend) moved plugin-side (F6 vm-lifecycle move, coneB-vmlifecycle,
+// candy/plugin-vm/vm_backend_resolve.go): it turned out to be a pure host-env probe with zero
+// core-registry coupling, and its one LoadUnified-coupled dependency (the entity's `backend:` pin)
+// already had a generic plugin-reachable seam ("deploy-entity-resolve") every other F6 consumer
+// uses — so the reply no longer carries Backend.
 const configResolveBuilderKind = "config-resolve"
 
 func hostBuildConfigResolve(_ context.Context, req spec.ConfigResolveRequest, _ buildEngineContext) (spec.ConfigResolveReply, error) {
@@ -54,7 +57,7 @@ func hostBuildConfigResolve(_ context.Context, req spec.ConfigResolveRequest, _ 
 	// handler's `if uf, ok := LoadUnified(dir); ok` branch. VM + Resources are hand-written runtime
 	// types with no CUE def, so they travel as opaque JSON envelopes (VmJSON/ResourcesJSON) the plugin
 	// decodes; they are resolved into locals here so applyCueDefaults runs on the typed value first.
-	var vm *VmSpec
+	var vm *spec.ResolvedVm
 	var resources map[string]*ResolvedResource
 	var claimant string
 	var claimantNode spec.BundleNode
@@ -75,28 +78,20 @@ func hostBuildConfigResolve(_ context.Context, req spec.ConfigResolveRequest, _ 
 			deploykit.MergedDeployTree(uf.Bundle, "vm config-resolve"), req.Entity)
 	}
 
-	// Effective backend: the entity's `backend:` pin (vmConfiguredBackend) resolved against the live
-	// host (resolveVmBackend — which also spawns the libvirt user session before probing the socket).
-	backend, err := resolveVmBackend(vmConfiguredBackend(req.Entity, rt.VmBackend))
-	if err != nil {
-		return spec.ConfigResolveReply{}, err
-	}
-	reply.Backend = backend
-
 	if hasClaimant {
 		reply.Claimant = claimant
 		reply.ClaimantNode = &claimantNode
 	}
 
 	// Materialize #Vm's required-with-default fields (firmware/network-mode/cpu-mode) on the resolved
-	// spec so the plugin's create pipeline receives a fully-defaulted VmSpec (it has no #Vm schema).
+	// spec so the plugin's create pipeline receives a fully-defaulted spec.ResolvedVm (it has no #Vm schema).
 	// This supplies the defaults the vm create pipeline (now in candy/plugin-vm) formerly applied
 	// in-handler via applyCueDefaults. Order-independent vs
 	// the plugin's instance-override / GPU-alloc merge: those touch ONLY libvirt: overlays, never a
 	// defaulted field, and applyCueDefaults fills only unset fields (user values preserved by unify).
 	//
 	// R1 fix (found while verifying an unrelated K5-A cutover — every `charly vm create`/`vm build`
-	// was hard-failing): resolveVmViaPlugin's *VmSpec carries the substrate-template opaque echo
+	// was hard-failing): resolveVmViaPlugin's *spec.ResolvedVm carries the substrate-template opaque echo
 	// (ResolvedVm.Raw, the SAME "raw:" passthrough ResolvedK8s/ResolvedLocal also carry) — but #vm's
 	// CUE schema is CLOSED over the AUTHORED shape and declares no `raw:` field, so re-marshaling the
 	// whole struct here for the unify-with-defaults round-trip failed unify with "raw: field not
@@ -115,7 +110,7 @@ func hostBuildConfigResolve(_ context.Context, req spec.ConfigResolveRequest, _ 
 
 	// Marshal the opaque envelopes AFTER defaulting: VM/Resources are hand-written runtime types with
 	// no CUE def (the SDD opaque-bytes carrier), so the CUE-sourced reply ships them as JSON the plugin
-	// unmarshals back into *VmSpec / map[string]*ResolvedResource at the boundary.
+	// unmarshals back into *spec.ResolvedVm / map[string]*ResolvedResource at the boundary.
 	if vm != nil {
 		b, err := json.Marshal(vm)
 		if err != nil {
@@ -145,6 +140,14 @@ func hostBuildConfigResolve(_ context.Context, req spec.ConfigResolveRequest, _ 
 // the plugin cannot hold across the module boundary — a process-shared flock must stay host-side).
 // Remove deletes the entry (vm destroy); else the entity's VmState is saved (create persist-auto-port).
 // Generic action noun "config-persist" (F11 — never a substrate word); P11/P13 reuse it for their state.
+//
+// The VM-SPECIFIC decision logic (ephemeral-state preserve merge, the auto-vs-operator-authored
+// delete decision, stale-dotted-twin prune) lives in deploykit.SaveVmDeployState/
+// RemoveVmDeployEntry (F6 vm-lifecycle move, coneB-vmlifecycle) — this handler is now a thin
+// call-through supplying the two genuinely host-resident primitives those functions cannot hold
+// themselves: acquireDeployConfigLock (a process-shared flock) and saveBundleConfigNodeForm (the
+// plugin-primaries-coupled marshal). The read→decide→write critical section still runs as ONE lock
+// hold inside the deploykit call — atomicity is unchanged, only the decision logic moved.
 const configPersistBuilderKind = "config-persist"
 
 func hostBuildConfigPersist(_ context.Context, req spec.ConfigPersistRequest, _ buildEngineContext) (spec.ConfigPersistReply, error) {
@@ -152,9 +155,9 @@ func hostBuildConfigPersist(_ context.Context, req spec.ConfigPersistRequest, _ 
 		return spec.ConfigPersistReply{}, fmt.Errorf("config-persist: empty deploy key")
 	}
 	if req.Remove {
-		return spec.ConfigPersistReply{}, removeVmDeployEntry(req.Key)
+		return spec.ConfigPersistReply{}, deploykit.RemoveVmDeployEntry(req.Key, acquireDeployConfigLock, saveBundleConfigNodeForm)
 	}
-	return spec.ConfigPersistReply{}, saveVmDeployState(req.Key, req.Entity, req.VmState)
+	return spec.ConfigPersistReply{}, deploykit.SaveVmDeployState(req.Key, req.Entity, req.VmState, acquireDeployConfigLock, saveBundleConfigNodeForm)
 }
 
 var _ = func() bool {

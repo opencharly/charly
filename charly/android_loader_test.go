@@ -50,22 +50,8 @@ func rawTemplateMap[T any](m map[string]*T) map[string]json.RawMessage {
 	return out
 }
 
-// TestMergeRawTemplateMap verifies the root-wins merge semantics for opaque
-// substrate-template maps (local/android after Cutover I).
-func TestMergeRawTemplateMap(t *testing.T) {
-	keep, _ := json.Marshal(&AndroidSpec{Box: "keep"})
-	drop, _ := json.Marshal(&AndroidSpec{Box: "drop"})
-	add, _ := json.Marshal(&AndroidSpec{Box: "add"})
-	dst := map[string]json.RawMessage{"a": keep}
-	src := map[string]json.RawMessage{"a": drop, "b": add}
-	mergeRawTemplateMap(&dst, src)
-	if string(dst["a"]) != string(keep) {
-		t.Errorf("existing entry should win: got %s", dst["a"])
-	}
-	if string(dst["b"]) != string(add) {
-		t.Errorf("new entry should be added: %s", dst["b"])
-	}
-}
+// TestMergeRawTemplateMap relocated to sdk/loaderkit/merge_test.go alongside
+// mergeRawTemplateMap (K1-proper — the merge half of the loader moved to loaderkit).
 
 // TestValidateCheckBeds_Android covers the kind:check bed validation for a
 // top-level target: android bed.
@@ -76,7 +62,7 @@ func TestValidateCheckBeds_Android(t *testing.T) {
 			"bed": {Target: "android", Disposable: new(true)},
 		},
 	}
-	if err := validateCheckBeds(uf); err == nil {
+	if err := loaderkit.ValidateCheckBeds(uf, loaderThreaded()); err == nil {
 		t.Error("target:android bed without android: should fail validation")
 	}
 
@@ -86,7 +72,7 @@ func TestValidateCheckBeds_Android(t *testing.T) {
 			"bed": {Target: "android", From: "ghost", Disposable: new(true)},
 		},
 	}
-	if err := validateCheckBeds(uf2); err == nil {
+	if err := loaderkit.ValidateCheckBeds(uf2, loaderThreaded()); err == nil {
 		t.Error("target:android bed referencing an undefined device should fail")
 	}
 
@@ -99,7 +85,7 @@ func TestValidateCheckBeds_Android(t *testing.T) {
 			"bed": {Target: "android", From: "dev", Disposable: new(true)},
 		},
 	}
-	if err := validateCheckBeds(uf3); err != nil {
+	if err := loaderkit.ValidateCheckBeds(uf3, loaderThreaded()); err != nil {
 		t.Errorf("valid target:android bed should pass, got: %v", err)
 	}
 }

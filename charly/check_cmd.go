@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/deploykit"
@@ -17,11 +18,11 @@ import (
 // and "feature-live" arms moved to candy/plugin-check (live_gather.go's pluginCheckRunLive,
 // feature_run_gather.go's pluginCheckRunFeatureLive — both wired via command.go's Mode
 // short-circuit; "feature-box" was traced and never had a live caller through this seam — see
-// feature_run_gather.go's header). What remains here is used by the new "check-load-plugins" seam
-// (host_build_check_load_plugins.go), by the still-core `charly box feature run` CLI leaf
-// (check_feature_run.go's hostFeatureBox call), and by the external `target: local` deploy's own
-// --verify path (unified_targets.go) — none of which is part of the "live"/"feature-live" check-run
-// modes reached via the check-run seam, so they stay core.
+// feature_run_gather.go's header; "feature-box" is now the plugin-side pluginCheckRunFeatureBox,
+// reached from candy/plugin-box's command:feature over InvokeProvider — cone-C #31). What remains
+// here is used by the new "check-load-plugins" seam (host_build_check_load_plugins.go) and by the
+// external `target: local` deploy's own --verify path (unified_targets.go) — neither is part of the
+// "live"/"feature-live" check-run modes reached via the check-run seam, so they stay core.
 
 // The `charly check` exit-code contract (2 = checks failed, 3 = prereq skip) lives in
 // the sdk (sdk.CheckFailExitCode / sdk.CheckSkippedExitCode); the plugin/main signal it
@@ -82,7 +83,7 @@ func resolveCheckRunnerContext(box, dir string, cfg *Config) checkRunnerContext 
 	// build-connects it only if the plan references libvirt; in a bed CHARLY_REPO_OVERRIDE resolves
 	// the ref to the local superproject under development.
 	addCandy = append(addCandy, vmPluginCandyRef())
-	candyMap, scanErr := ScanAllCandyWithConfigOpts(dir, cfg, ResolveOpts{ExtraCandyRefs: addCandy})
+	candyMap, scanErr := ScanAllCandyWithConfigOpts(dir, cfg, loaderkit.ResolveOpts{ExtraCandyRefs: addCandy})
 	if scanErr != nil {
 		return checkRunnerContext{CandyScanErr: fmt.Errorf("scanning candy source dirs: %w", scanErr)}
 	}

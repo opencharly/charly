@@ -120,8 +120,9 @@ func TestRecoverEphemeralOpPanic(t *testing.T) {
 // a nested deploy's dotted CLI address (e.g. "check-sidecar-pod.check-sidecar-pod-ephvm") is
 // illegal as a literal dc.Bundle map key (sdk/spec/deploy_tree_validate.go's ValidateDeploymentName rejects any
 // '.'), so every ephemeral dc.Bundle accessor MUST key through this sanitized "vm:<domain-id>"
-// form — the SAME scheme charly/vm_deploy_state.go's saveVmDeployState already uses (matching
-// sdk/vmshared.VmDomainIdentity's explicit "." -> "-" replacement) — never the raw deployName.
+// form — the SAME scheme sdk/deploykit/vm_deploy_state.go's SaveVmDeployState already uses
+// (matching sdk/vmshared.VmDomainIdentity's explicit "." -> "-" replacement) — never the raw
+// deployName.
 func TestEphemeralOverlayKey(t *testing.T) {
 	cases := []struct {
 		name       string
@@ -259,14 +260,14 @@ func TestRegisterTransientTimerArgs_PinsWorkingDirectory(t *testing.T) {
 }
 
 func TestEphemeralDeployDelArgv(t *testing.T) {
-	got := ephemeralDeployDelArgv("myapp")
+	got := deploykit.BundleDelArgv("myapp")
 	want := []string{"bundle", "del", "myapp", "--assume-yes"}
 	if len(got) != len(want) {
-		t.Fatalf("ephemeralDeployDelArgv() = %v, want %v", got, want)
+		t.Fatalf("deploykit.BundleDelArgv() = %v, want %v", got, want)
 	}
 	for i := range want {
 		if got[i] != want[i] {
-			t.Errorf("ephemeralDeployDelArgv()[%d] = %q, want %q", i, got[i], want[i])
+			t.Errorf("deploykit.BundleDelArgv()[%d] = %q, want %q", i, got[i], want[i])
 		}
 	}
 }

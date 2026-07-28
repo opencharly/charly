@@ -24,7 +24,7 @@ type executorReverseServer struct {
 	pb.UnimplementedExecutorServiceServer
 	exec deploykit.DeployExecutor
 	// build is the host BUILD-ENGINE context (project Config + dir) the RunHostStep host-engine
-	// leg needs to run a BuilderStep's host build (EnsureImagePresent + BuilderRun resolve
+	// leg needs to run a BuilderStep's host build (dispatchBuildEnsure + BuilderRun resolve
 	// a short / namespace-qualified builder image and fall back to a local `charly box
 	// build`). Zero value for a verb/kind/deploy Invoke that never drives RunHostStep.
 	build buildEngineContext
@@ -116,7 +116,7 @@ func (s *executorReverseServer) GetFile(ctx context.Context, req *pb.GetFileRequ
 // RunHostStep is the HOST-ENGINE channel leg (the generalization of the former F3 build channel): an
 // OUT-OF-PROCESS deploy/step plugin walking an InstallPlan hits one of the six step kinds
 // it CANNOT execute itself because each needs in-core host machinery that cannot move into
-// the leaf plugin/kit package — BuilderStep (podman / BuilderRun / EnsureImagePresent),
+// the leaf plugin/kit package — BuilderStep (podman / BuilderRun / dispatchBuildEnsure),
 // LocalPkgInstallStep (makepkg + pacman/dnf/apt), SystemPackagesStep (the format's
 // phase.install.host template, rendered from the project DistroConfig), an act-verb OpStep
 // (a builtin ProvisionActor shell that needs the in-proc provider registry), an
@@ -150,7 +150,16 @@ func (s *executorReverseServer) RunHostStep(ctx context.Context, req *pb.HostSte
 		if herr != nil {
 			return &pb.HostStepReply{Error: fmt.Sprintf("resolve venue home: %v", herr)}, nil
 		}
-		if rerr := runVenueBuilderStep(ctx, s.exec, venueHome, s.build, st, opts); rerr != nil {
+		// The image resolve/ensure seams are INJECTED closures (deploykit.RunVenueBuilderStep
+		// imports no *Config) — closing over s.build.Cfg/s.build.ProjectDir here, the one
+		// genuine core dependency, mirroring the same shape BuildDepPkgsOnHost already took.
+		resolveImage := func(img string) (string, error) {
+			return resolveImageRefForEnsure(img, s.build.Cfg, s.build.ProjectDir)
+		}
+		ensureImage := func(ctx context.Context, img string) error {
+			return dispatchBuildEnsure(ctx, img, s.build.ProjectDir, "", "")
+		}
+		if rerr := deploykit.RunVenueBuilderStep(ctx, s.exec, venueHome, resolveImage, ensureImage, st, opts); rerr != nil {
 			return &pb.HostStepReply{Error: rerr.Error()}, nil
 		}
 		reverseOps = st.Reverse()
@@ -308,11 +317,11 @@ func rebootVenueAndWait(ctx context.Context, exec deploykit.DeployExecutor, cand
 	// delay is for clean session close, not a correctness-timing workaround.
 	_ = exec.RunSystem(ctx, "(sleep 1; systemctl reboot || reboot) >/dev/null 2>&1 &\nexit 0", opts)
 
-	// BINARY/EDGE readiness (guest down→boot_id-changed) → cap-only via pollUntil (poll.go)
+	// BINARY/EDGE readiness (guest down→boot_id-changed) → cap-only via spec.PollUntil (spec/poll.go)
 	// at the GENEROUS config cap. The marker is frozen "down" for the whole legitimate reboot,
 	// so a no-progress window would be a wrong (too-short) timeout — cap-only is correct here.
-	cfg := loadedReadiness().WaitCapped(fmt.Sprintf("reboot %s", venue), PollRemote, 0)
-	if err := pollUntil(ctx, cfg, func(actx context.Context) (bool, float64, error) {
+	cfg := loadedReadiness().WaitCapped(fmt.Sprintf("reboot %s", venue), spec.PollRemote, 0)
+	if err := spec.PollUntil(ctx, cfg, func(actx context.Context) (bool, float64, error) {
 		out, _, _, rerr := exec.RunCapture(actx, "cat /proc/sys/kernel/random/boot_id 2>/dev/null")
 		if rerr != nil {
 			return false, 0, nil // guest still down or sshd not yet accepting

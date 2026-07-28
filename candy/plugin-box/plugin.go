@@ -4,63 +4,79 @@
 // compiled_plugins (the canonical placement, P15), or cmd/serve serves them OUT-OF-PROCESS when
 // they are not.
 //
-// It serves ELEVEN command capabilities, all NESTED under the `box` parent (CommandParent()=="box",
-// so `charly box generate/validate/new/pkg/pull/build/inspect/list/labels/merge/reconcile` parse +
-// dispatch here while the retained core BoxCmd verb — feature — and the authoring verbs stay in
-// core):
+// It serves TWELVE command capabilities, all NESTED under the `box` parent (CommandParent()=="box",
+// so `charly box generate/validate/new/pkg/pull/build/inspect/list/labels/merge/reconcile/feature`
+// parse + dispatch here while the authoring verbs (candy/plugin-authoring) stay separate — the core
+// BoxCmd holds no verb of its own):
 //
 //   - command:generate — `charly box generate`: builds a spec.BuildRequest and InvokeProvider's the
-//     peer COMPILED-IN build:generate word (candy/plugin-build), which renders the .build/
-//     Containerfile tree host-side over HostBuild("build-prep", GenerateOnly). Zero core reentry.
+//     peer COMPILED-IN build:generate word (candy/plugin-build), which runs the RESOLVE plugin-side
+//     (resolveBuildEngine, K3 U6) and renders the .build/ Containerfile tree. Zero core reentry.
+//
 //   - command:new — `charly box new candy/project/box`: calls kit.ScaffoldCandy / kit.ScaffoldProject
 //     / kit.AddBox directly (the scaffold ENGINE already lives in sdk/kit). Zero core reentry.
+//
 //   - command:validate — `charly box validate`: fetches the error-TOLERANT resolved-project envelope
 //     (HostBuild("validate-project") → spec.ValidateProjectReply) and runs the whole per-kind/op rule
 //     ENGINE + the deploykit resolution-graph checks IN-PLUGIN over that envelope, MERGING the host's
 //     CUE-conformance/tunable/base⊻from diagnostics for the verdict (validate.go / validate_rules.go /
 //     validate_graph.go / validate_check.go).
-//   - command:pkg — `charly box pkg`: reaches the hidden core `__box-pkg` reentry over
-//     HostBuild("cli") (the localpkg build engine needs the host build context, pre-K1).
-//   - command:pull — `charly box pull`: reaches the hidden core `__box-pull` reentry over
-//     HostBuild("cli") (FINAL/K5 unit 6a M4c, pull-first per the build/pull dispersal ruling —
-//     EnsureImagePresent's build-fallback needs the full box-build engine + charly.yml resolution,
-//     which is K1/K3-ENGINE family, not CLI-dispersal residue). The plugin owns ONLY the CLI
-//     grammar (pullGrammar, byte-identical to the former static BoxPullCmd Kong leaf) + reentry
-//     dispatch; BoxPullCmd's Run body is UNCHANGED, unmoved, still core-only.
-//   - command:build — `charly box build`: reaches the hidden core `__box-build` reentry over
-//     HostBuild("cli") (FINAL/K5 unit 6a M4d, the CLI-only mirror of the pull move — BuildCmd.Run()'s
-//     engine, the bootstrap-builder subsystem, remote-ref resolve/download, and retention pruning
-//     are K1/K3-ENGINE family, tracked to move with those waves, not this dispersal). The plugin owns
-//     ONLY the CLI grammar (buildGrammar, byte-identical to the former static BuildCmd Kong leaf) +
-//     reentry dispatch; BuildCmd's Run body is UNCHANGED, unmoved, still core-only.
+//
+//   - command:pkg — `charly box pkg`: runs the localpkg build engine IN-PLUGIN (K3 build-tail
+//     move, coneB-pkgcmd fold) by INVOKING the peer compiled-in build:pkg word (candy/plugin-build)
+//     over InvokeProvider — the former hidden core `__box-pkg` reentry is DELETED, the SAME shape
+//     pull's build:ensure fold and build's build:box fold already established.
+//
+//   - command:pull — `charly box pull`: runs the ensure-image work IN-PLUGIN (K3 #39 fold) by
+//     INVOKING the peer compiled-in build:ensure word (candy/plugin-build) over InvokeProvider —
+//     pull from registry, fall back to a local/remote build when the identifier maps to a project
+//     charly.yml entry. A --tag short-name resolves its registry ref off the resolved-project
+//     envelope (registry/name are tag-independent), so no loader is needed. The former core
+//     BoxPullCmd + its hidden __box-pull reentry are DELETED.
+//   - command:build — `charly box build`: runs the build body IN-PLUGIN (P8b — the former core
+//     BuildCmd + its hidden __box-build reentry are DELETED). dispatchBuild normalizes the box args,
+//     pivots to a remote @ref source (buildkit.DetectRemoteBuildRef detects it sdk-side; the
+//     HostBuild("remote-image-resolve") seam clones/caches the source) when needed, computes the
+//     CalVer tag, holds the build-activity flock (reconstructed from kit primitives), INVOKES the peer
+//     compiled-in build:box word (candy/plugin-build's podman DRIVE) over InvokeProvider, and runs the
+//     post-build retention prune (verb:retention, keep_images off HostBuild("retention-defaults");
+//     skipped for --push). The host-coupled remainder a sdk-only candy cannot do — the remote-ref
+//     clone/cache resolve (ResolveRemoteImage, K1), the build-engine RESOLVE legs, the bootstrap
+//     builder pre-pass — stays behind thin HostBuild seams the candy invokes.
 //   - command:inspect — `charly box inspect`: reads the generic spec.ResolvedProject envelope
 //     (HostBuild("resolved-project")) and prints the resolved box view — snake_case JSON by default,
-//     scalar/box-aggregate fields per --format. The deploy-overlay formats (tunnel/bind_mounts) reenter
-//     the hidden core `__box-inspect-overlay`. See inspect_list.go.
+//     scalar/box-aggregate fields per --format. The deploy-overlay formats (tunnel/bind_mounts) render
+//     in-plugin off the deploy overlay + the resolved-project envelope (no reentry). See inspect_list.go.
+//
 //   - command:list — `charly box list <sub>`: boxes/candies/targets/services/routes/volumes/aliases
-//     from the same envelope; `list tags` reenters the hidden core `__box-list-tags` (podman store).
+//     from the same envelope; `list tags` reaches verb:retention directly over InvokeProvider
+//     (listImageTags, no core reentry — #118).
+//
 //   - command:labels — `charly box labels <ref>`: resolves the local image + prints its OCI labels
 //     directly via sdk/kit (ResolveRuntime/ResolveLocalImageRef/InspectImageLabels) — pure
 //     container-storage probes with zero loader coupling, so this needs NO core reentry (K3
 //     reentry-class dissolution; the former `__box-labels` HostBuild("cli") hop is gone).
+//
 //   - command:merge — `charly box merge`: reads Registry/Tag/Merge settings for one (or every
 //     merge.auto) box off the resolved-project envelope, then reaches verb:oci DIRECTLY via
 //     InvokeProvider (the SAME F10 peer-dispatch leg candy/plugin-build's own post-build inline
 //     merge already uses) — zero core reentry (P14: relocated from charly/merge.go).
+//
 //   - command:reconcile — `charly box reconcile`: aligns cross-repo `@github` git-tag pins to one
 //     target version per repo. Purely sdk/kit + sdk/deploykit + sdk/spec + stdlib YAML — zero
 //     HostBuild, zero InvokeProvider, zero core reentry (Cutover B unit 3+4: relocated from
 //     charly/reconcile.go, which had no core-only coupling at all — the cleanest of this wave's
 //     moves). See reconcile.go.
 //
-// NOT command:feature: `charly box feature run <image>` was ATTEMPTED here (P12a follow-up) and
-// REVERTED — nesting a second "feature" word under `box` panics RegisterBuiltinPluginUnit at
-// process init, because the provider registry's uniqueness key is provKey(class, word) alone
-// (provider_registry.go) with NO CommandParent component, and candy/plugin-feature already owns
-// the TOP-LEVEL {command, feature} word (`charly feature list/pending/validate`). See
-// charly/check_feature_run.go for the retained in-core BoxFeatureCmd/BoxFeatureRunCmd and the
-// full finding (routed to P12b: either rename the nested word, breaking CLI parity, or make the
-// registry key CommandParent-aware, a cross-cutting core change).
+//   - command:feature — `charly box feature run <image>`: build-scope Agent Driven Evaluation
+//     against a disposable container. The COMMAND is a box-nested capability HERE; the ENGINE lives
+//     in candy/plugin-check (where the check runner is), reached over the F10 plugin↔plugin bridge
+//     — dispatchFeature InvokeProvider's command:check's hidden `__feature-box` leaf (Mode:
+//     "feature-box"), the SAME peer-dispatch shape command:build→build:ensure uses. This coexists
+//     with candy/plugin-feature's TOP-LEVEL `command:feature` (`charly feature list/pending/validate`)
+//     because the provider registry's uniqueness key is now CommandParent-aware (cone-C #44):
+//     command:feature:box vs top-level command:feature. The former in-core BoxFeatureCmd/
+//     BoxFeatureRunCmd + hostFeatureBox are DELETED with this move (#31).
 //
 // COMPILED-IN, it dispatches IN-PROC via Invoke(OpRun), so the handlers run in charly's OWN process
 // and inherit charly's real stdio natively. It imports ONLY the sdk module, never charly core.
@@ -81,7 +97,7 @@ import (
 const calver = "2026.198.2131"
 
 // boxCommandWords is the set of command words this plugin serves — all nested under `box`.
-var boxCommandWords = []string{"generate", "validate", "new", "pkg", "pull", "build", "inspect", "list", "labels", "merge", "reconcile"}
+var boxCommandWords = []string{"generate", "validate", "new", "pkg", "pull", "build", "inspect", "list", "labels", "merge", "reconcile", "feature"}
 
 // boxListSubcommands is the `charly box list <sub>` catalog (F-CLI-NEST), matching listSubcommands
 // in inspect_list.go — hand-declared, not reflected, because dispatchList routes on a plain string
@@ -125,9 +141,9 @@ func NewMeta() pb.PluginMetaServer {
 }
 
 // CliMain is the OUT-OF-PROCESS command entry — unreachable in the canonical compiled-in placement.
-// The generate/validate/pkg handlers reach the host reverse channel (build:generate over
-// InvokeProvider, validate-project + __box-pkg over HostBuild), which is unavailable
-// out-of-process, so this errors (like candy/plugin-vm's / candy/plugin-alias's CliMain).
+// The generate/validate/pkg handlers reach the host reverse channel (build:generate / build:pkg
+// over InvokeProvider, validate-project over HostBuild), which is unavailable out-of-process, so
+// this errors (like candy/plugin-vm's / candy/plugin-alias's CliMain).
 func CliMain(_ []string) int {
 	fmt.Fprintln(os.Stderr, "charly box: requires compiled-in placement (the command's host reverse channel is unavailable out-of-process)")
 	return 1

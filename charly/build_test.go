@@ -139,7 +139,7 @@ func TestHostPlatform(t *testing.T) {
 // (GPGME "No data" on SigLevel=Never repos); (3) non-microarch / empty inputs
 // stay clean (no spurious [options], no regression for arch-pacstrap).
 func TestRenderPacstrapExtraConf(t *testing.T) {
-	cachyos := &PacstrapDef{ExtraRepos: []vmshared.PacstrapRepo{
+	cachyos := &vmshared.PacstrapDef{ExtraRepos: []vmshared.PacstrapRepo{
 		{Name: "cachyos-v3", Server: "https://mirror.cachyos.org/repo/x86_64_v3/$repo", SigLevel: "Never"},
 		{Name: "cachyos-core-v3", Server: "https://mirror.cachyos.org/repo/x86_64_v3/$repo", SigLevel: "Never"},
 		{Name: "cachyos", Server: "https://mirror.cachyos.org/repo/$arch/$repo", SigLevel: "Never"},
@@ -157,14 +157,14 @@ func TestRenderPacstrapExtraConf(t *testing.T) {
 
 	// nil / empty → empty fragment (no spurious [options]).
 	if s := buildkit.RenderPacstrapExtraConf(nil); s != "" {
-		t.Errorf("nil PacstrapDef should render empty, got %q", s)
+		t.Errorf("nil vmshared.PacstrapDef should render empty, got %q", s)
 	}
-	if s := buildkit.RenderPacstrapExtraConf(&PacstrapDef{}); s != "" {
-		t.Errorf("no-repos PacstrapDef should render empty, got %q", s)
+	if s := buildkit.RenderPacstrapExtraConf(&vmshared.PacstrapDef{}); s != "" {
+		t.Errorf("no-repos vmshared.PacstrapDef should render empty, got %q", s)
 	}
 
 	// Plain (non-microarch) repo without SigLevel → repo block, no [options].
-	plain := &PacstrapDef{ExtraRepos: []vmshared.PacstrapRepo{
+	plain := &vmshared.PacstrapDef{ExtraRepos: []vmshared.PacstrapRepo{
 		{Name: "extra", Server: "https://example.org/repo/$arch/$repo"},
 	}}
 	got = buildkit.RenderPacstrapExtraConf(plain)

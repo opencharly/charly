@@ -6,14 +6,12 @@ package check
 // construction. Reached from candy/plugin-check's OWN `charly check feature run` CLI leaf
 // (feature_cmd.go) via command.go's Mode:"feature-live" short-circuit.
 //
-// NOTE — "feature-box" was traced and DELIBERATELY NOT ported: Mode:"feature-box" has ZERO live
-// callers through the check-run seam — `charly box feature run <image>` (check_feature_run.go's
-// BoxFeatureRunCmd, the box-grammar CLI leaf that stays core, see its own header for why) calls
-// the CLI-free hostFeatureBox engine DIRECTLY, never through hostCheckRun/HostBuild. Porting a
-// plugin-side twin would have been dead code from the moment it landed (unreachable, R3/R4
-// dead-code territory) — confirmed by grep before writing it, then deleted after writing it once
-// the unreachability was traced. hostFeatureBox stays core, unmoved, still serving its one real
-// caller.
+// The BUILD-scope sibling "feature-box" mode is now feature_box_gather.go's pluginCheckRunFeatureBox
+// (cone-C #31 relocated the former core hostFeatureBox here): `charly box feature run <image>` is
+// candy/plugin-box's command:feature, which InvokeProvider's command:check's hidden `__feature-box`
+// leaf → Mode:"feature-box" → that engine. So both feature modes (deploy-scope feature-live here,
+// build-scope feature-box in the sibling file) live plugin-side; the former in-core BoxFeatureRunCmd
+// + hostFeatureBox are DELETED.
 //
 // The agent-grader resolve reuses agent.go's EXISTING resolveAgentSpec (already the
 // synccreds.go/runlocal.go call pattern for this exact catalog→exec-spec resolve, over

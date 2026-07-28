@@ -12,7 +12,7 @@ import (
 // domain), so the host threads the already-resolved domain identity to the spice/libvirt verbs via
 // kit.Runner.VmTargetName(); without this the operator-side probes looked up the wrong name and failed
 // "domain not found". Post-P33 the domain is named after the DEPLOY, so the check runner sets VmName to
-// the domain identity (vmDomainIdentity of the bed/deploy key), not the entity.
+// the domain identity (spec.VmDomainIdentity of the bed/deploy key), not the entity.
 func TestRunner_VmTargetName(t *testing.T) {
 	// VM deployment: VmName (the per-deploy domain identity) wins, so the operator-side
 	// libvirt/spice verbs address charly-<domainID> = charly-<deploy-name>.

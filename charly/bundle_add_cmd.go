@@ -1,42 +1,29 @@
 package main
 
-// deploy_add_cmd.go — `charly bundle add <name> [<ref>]` and
-// `charly bundle del <name>`. Generic wiring on top of the unified deploy
-// targets: this file does ref resolution, plan compilation, deployID
-// stamping, and dry-run printing, then routes through ResolveTarget →
-// target.Add / target.Del. There is NO per-kind dispatch switch — every
-// kind-specific construction + deploy lives behind its UnifiedDeployTarget
-// adapter (unified_targets_*.go), which consumes the dispatch-merged node
-// from the DeployContext (never re-reading it from disk).
+// bundle_add_cmd.go — the host-side RESIDUE of `charly bundle add`/`charly bundle del` after the
+// K4-C SHAPE-2 cutover. The CLI GRAMMAR + the whole deploy-tree WALK + the per-node COMPILE all
+// live in the command:bundle plugin (candy/plugin-bundle) now — the plugin compiles the InstallPlans
+// IN-PROC and drives the terminal add via the ONE thin HostBuild("resolve-target-add") seam
+// (host_build_resolve_target_add.go). What STAYS here is the floor-M host-only machinery a plugin
+// (a separate module) cannot own:
 //
-// Name semantics:
-//   - literal "host" → deploy to the local machine (target: local)
-//   - any other name → a named container deployment (target: pod), or
-//     whatever target: the resolved charly.yml node declares.
+//   - deriveChildExecutorForPath — the ancestor executor HOP derivation (registry-coupled;
+//     deployTraitDescent needs the providerRegistry). Reached by the resolve-target-add seam's
+//     reconstructParentExec + bundle_members.go + unified_targets.go.
+//   - loadConfigForDeploy — LoadConfig → LoadUnified (K1-loader-family-coupled). Reached by the
+//     resolve-target-add seam + deploy_target_unified.go.
+//   - detectHostContext / resolveDistroDef — the host-fs probes build_overlay.go also uses.
+//   - deployDelCmd + resolveDelNode + podDeploymentArtifactExists — the `charly
+//     bundle del` host resolution the deploy-del-resolve seam drives. deployDelArgv itself moved to
+//     sdk/deploykit.BundleDelArgv (R3 hoist, coneB P13 slice) — it was byte-identically duplicated
+//     here, in candy/plugin-bundle, and in candy/plugin-substrate.
 //
-// P13-KERNEL walk-port precision note (corrects an over-broad "drives from
-// the plugin" claim in the walk-port commit message/CHANGELOG): the
-// pre-order tree WALK itself (the loop deciding traversal order across
-// nested nodes) moved to candy/plugin-bundle/walk.go. The per-node TERMINAL
-// orchestration — dispatchNode below, plus its compile-selection helpers
-// (resolveNodeOverlays/loadConfigForDeploy/compileNodePlans) and the final
-// ResolveTarget dispatch anchor — did NOT move; it remains fully host-side,
-// reached from the plugin behind the ONE coarse
-// HostBuild("deploy-node-dispatch") seam (host_build_deploy_node_dispatch.go).
-// This is genuinely-tracked residue, not an oversight: loadConfigForDeploy
-// calls LoadConfig → LoadUnified, so the compile-selection half is K1-blocked
-// (the K1-blocked family register entry covers it); the ResolveTarget
-// dispatch anchor is registry-coupled the same way every other terminal
-// dispatch point is. Further seam decomposition — splitting dispatchNode's
-// body into narrower host-builders the way the pod-config direction-flip did
-// for BoxConfigSetupCmd/BoxConfigRemoveCmd — is a FLOOR-SLIM/#118-
-// reconciliation candidate, not part of this wave's contract.
+// The former deployAddCmd struct + its dispatchNode/compileNodePlans/emitOpts/printPlans/
+// compileHostContext methods (and the whole bundle_compile_seam.go + host_build_deploy_node_
+// dispatch.go + deploy_ref.go) were DELETED in the shape-2 cutover — the plugin owns that logic now.
 
 import (
-	"context"
-	"encoding/json"
 	"fmt"
-	"maps"
 	"os"
 	"path/filepath"
 
@@ -47,338 +34,14 @@ import (
 	"github.com/opencharly/sdk/vmshared"
 )
 
-// deployAddCmd is the host-side orchestration for `charly bundle add <name> [<ref>]`.
-// The CLI GRAMMAR moved to the command:bundle plugin (candy/plugin-bundle); this struct
-// is reconstructed from spec.DeployAddRequest by the deploy-add host-build seam and its
-// Run() logic runs VERBATIM in charly's own process.
-type deployAddCmd struct {
-	Name string
-	Ref  string
-
-	// Candy overlays (repeatable).
-	AddCandy []string
-
-	// Plan-level flags.
-	Tag      string
-	DryRun   bool
-	NodeOnly bool
-	Format   string
-	Pull     bool
-	Verify   bool
-
-	// Host-only gates.
-	WithServices     bool
-	AllowRepoChanges bool
-	AllowRootTasks   bool
-	SkipIncompatible bool
-	BuilderImage     string
-	AssumeYes        bool
-
-	// Disposable + lifecycle classification (see /charly-internals:disposable).
-	// --disposable writes `disposable: true` into the charly.yml
-	// entry and authorizes autonomous `charly update`. --lifecycle writes
-	// the informational tier tag; it has NO effect on disposability
-	// (no derivation).
-	Disposable bool
-	Lifecycle  string
-
-	// vmEntity is the resolved kind:vm entity name this deploy targets,
-	// populated per-node by dispatchNode from the node's `vm:` cross-ref
-	// (kind:check beds + charly.yml target:vm entries) OR the "vm:<name>"
-	// deploy-key prefix (the CLI `charly bundle add vm:<name>` form). The candy
-	// compiler reads it to build plans against the GUEST's distro/format
-	// (apt/dnf), not the operator host's. Host-derived during dispatch.
-	vmEntity string
-
-	// builderImageOverride is this deploy's effective builder-image override —
-	// opts.BuilderImageOverride, i.e. --builder-image (CLI) with
-	// install_opts.builder_image (deployment / template) merged beneath it — captured
-	// per-node before compileNodePlans so the deploy compile methods can seed
-	// hostCtx.BuilderImage (compileHostContext). Without it a kind:local / vm deploy
-	// whose synthetic box carries no builder map entry for a candy's detection builder
-	// (npm/pixi/cargo/aur) leaves the compiled BuilderStep.BuilderImage EMPTY; the
-	// install_opts.builder_image reached only EmitOpts at APPLY, which does NOT cross
-	// into the out-of-process local/vm deploy walk, so builderStepImage there failed
-	// "no builder image for <builder>". Seeding it at compile makes the image travel IN
-	// the step view (step_view.go round-trips BuilderImage) to the out-of-process walk.
-	// Mirrors the vmEntity per-node field. Host-derived during dispatch.
-	builderImageOverride string
-}
-
 // deployDelCmd resolves a `charly bundle del <name>` target node — the deploy-del-resolve
 // host seam's ONE responsibility (resolveDelNode). The CLI GRAMMAR moved to the
 // command:bundle plugin (candy/plugin-bundle); this struct is reconstructed from
 // spec.DeployDelRequest by hostBuildDeployDelResolve, which populates only Name — the actual
-// teardown EXECUTION (the reverse-ops replay, the AssumeYes/KeepRepoChanges/KeepServices/
-// KeepImage/DryRun flags, and the ReverseExecutor dispatch) now lives in
-// host_build_deploy_node_del_dispatch.go's hostBuildDeployNodeDelDispatch. (This struct's
-// former AssumeYes/KeepRepoChanges/KeepServices/KeepImage/DryRun/Runner fields plus its
-// kit.ReverseExecutor-satisfying methods were a dead-code-radical-removal-batch deletion —
-// never populated by the one real construction site, zero real callers of the methods; the
-// live ReverseExecutor implementor is deploykit.HostReverseExec via TeardownHostDeploy.)
+// teardown EXECUTION lives in host_build_deploy_node_del_dispatch.go's hostBuildDeployNodeDelDispatch.
 type deployDelCmd struct {
 	Name string
 }
-
-// deployDelArgv returns the argv (everything AFTER the charly binary) for a
-// non-interactive `charly bundle del <name>`: the verb, the name, and the ONE valid
-// skip-confirmation flag. Every programmatic teardown builds its command through
-// this single helper — in-process (runCharlySubcommand), out-of-process
-// (exec.Command), and the systemd-run TTL timer — so the flag can never drift
-// across call sites again.
-//
-// The flag is `--assume-yes`, NOT `--yes`/`--force`: the command:bundle plugin's
-// `charly bundle del` Kong grammar (candy/plugin-bundle) renders its AssumeYes field
-// as --assume-yes because Kong derives the long name from the FIELD (the `long:"yes"`
-// tag is a Kong no-op in the separate-tag form), with `-y` as the short form. A
-// `--yes`/`--force` drift — neither of which Kong accepts — once aborted teardown at
-// arg-parse and silently leaked the resource (see CHANGELOG/); the deploy-del-flag
-// regression test guards this.
-func deployDelArgv(name string) []string {
-	return []string{"bundle", "del", name, "--assume-yes"}
-}
-
-// dispatchNode compiles plans for a single node and runs the
-// appropriate target. Factored out of Run so the tree walker can call
-// it once per node.
-//
-// path is the dotted identifier ("", "openclaw-stack", or
-// "openclaw-stack.web.db"). It's propagated via opts.Path so the
-// target's logging can identify which node is executing.
-//
-// node is the resolved BundleNode; nil when the caller provided
-// an explicit ref (Ref != "") with no matching charly.yml entry.
-//
-// parentExec is the DeployExecutor of the enclosing environment; nil
-// at the root. Non-nil means "this node is a child of something" —
-// its target composes a NestedExecutor over parentExec.
-func (c *deployAddCmd) dispatchNode(path string, node *spec.BundleNode, parentExec deploykit.DeployExecutor, dir, target, vmEntity string) error {
-	// The per-node emit opts, ref string, add-candy list, tag, AND target/
-	// vmEntity classification are ALL RESOLVED PLUGIN-SIDE now (resolveNodeOverlays
-	// / resolveNodeTemplate / classifyNodeTarget / resolveVmEntity — W4 pure-helpers
-	// relocation, candy/plugin-bundle/node_resolve.go: all pure functions of
-	// node+path with no LoadUnified/executor dependency) and threaded in via the
-	// deploy-node-dispatch request (c's own fields, populated from the request by
-	// runDeployNodeDispatch) — the host no longer recomputes any of them. c.emitOpts()
-	// below reflects the FINAL resolved gate values (WithServices/AllowRepoChanges/…),
-	// not raw CLI ones; only ParentExec/Path are filled in HERE, because a live
-	// DeployExecutor can never cross the wire. The candy compiler needs vmEntity to
-	// build plans against the GUEST's distro/format (apt/dnf on debian/fedora) rather
-	// than the operator host's (cachyos→pac).
-	opts := c.emitOpts()
-	opts.ParentExec = parentExec
-	opts.Path = path
-	refStr := c.Ref
-	addCandies := c.AddCandy
-	tag := c.Tag
-	c.vmEntity = vmEntity
-
-	cfg, distroCfg, builderCfg, err := loadConfigForDeploy(dir)
-	if err != nil {
-		return err
-	}
-
-	// Capture the deploy's effective builder-image override (CLI --builder-image
-	// over install_opts.builder_image, already merged plugin-side into opts) so the
-	// compile methods seed hostCtx.BuilderImage — see the builderImageOverride field.
-	c.builderImageOverride = opts.BuilderImageOverride
-
-	plans, base, candySet, err := c.compileNodePlans(target, refStr, tag, path, addCandies, cfg, distroCfg, builderCfg, dir)
-	if err != nil {
-		return err
-	}
-
-	// UNTIL-K1-loader: the deployID/AddCandies stamping below STAYS host-side —
-	// it is inseparably sequenced after compileNodePlans (loadConfigForDeploy ->
-	// LoadUnified, genuinely K1-loader-family-coupled), so it moves plugin-side
-	// only when a future K1-loader wave carves loadConfigForDeploy's own
-	// LoadUnified coupling. Not W4 scope (registered separately; W4's pure
-	// helpers relocation deliberately stopped short of this).
-	deployID := deploykit.ComputeDeployID(base, candySet, addCandies)
-	for _, p := range plans {
-		p.DeployID = deployID
-		// Union — don't clobber. The per-alPlan propagation loop above
-		// already populated p.AddCandies with the overlay-candy names
-		// (explicit add_candy + their transitive deps). Plain overwrite
-		// with the user-facing addCandies list drops the transitive
-		// entries, so (e.g.) an overlay declaring add_candy:[k3s-server]
-		// would ship k3s-server but not its k3s base candy — runtime
-		// failure.
-		seen := make(map[string]bool, len(p.AddCandies))
-		for _, al := range p.AddCandies {
-			seen[al] = true
-		}
-		for _, al := range addCandies {
-			if !seen[al] {
-				p.AddCandies = append(p.AddCandies, al)
-				seen[al] = true
-			}
-		}
-	}
-
-	if c.DryRun {
-		return c.printPlans(plans, opts)
-	}
-
-	// UNIFIED dispatch — every kind routes through ResolveTarget → the
-	// adapter's Add. There is no per-kind switch; the kind-specific
-	// construction + deploy lives behind each adapter's Add (which
-	// consumes the dispatch-merged node from dctx, never re-reading it
-	// from disk). classifyNodeTarget already normalized the legacy
-	// "container"/"kubernetes"/"host" spellings to canonical values.
-	//
-	// The deploy KEY is the node's identity. For a top-level deploy
-	// that's c.Name; for a nested node it's the dotted path. Adapters
-	// resolve any kind-specific name (the vm entity, the flattened pod
-	// container name) from that + the node.
-	deployName := c.Name
-	if path != "" {
-		deployName = path
-	}
-
-	// ResolveTarget needs a node carrying target:. For a ref-based deploy
-	// with no charly.yml entry (node == nil), synthesize one from the
-	// classified target so `charly bundle add host ./x.yml` still resolves.
-	resolveNode := node
-	if resolveNode == nil {
-		resolveNode = &spec.BundleNode{Target: target}
-	}
-
-	utgt, err := ResolveTarget(resolveNode, deployName)
-	if err != nil {
-		return fmt.Errorf("resolve target: %w", err)
-	}
-	if tt, ok := utgt.(*pluginDeployTarget); ok {
-		tt.nodeOnly = c.NodeOnly
-	}
-
-	dctx := &DeployContext{
-		Node:       node,
-		Name:       deployName,
-		Dir:        dir,
-		Cfg:        cfg,
-		DistroCfg:  distroCfg,
-		BuilderCfg: builderCfg,
-		Base:       base,
-	}
-
-	return utgt.Add(context.Background(), dctx, plans, opts)
-}
-
-// resolveNodeOverlays and resolveNodeTemplate moved to
-// candy/plugin-bundle/node_resolve.go (W4 pure-helpers relocation): both are
-// (almost entirely) pure functions of node+path/CLI flags — resolveNodeOverlays'
-// only host-only pieces (ParentExec/Path) are filled in directly by
-// dispatchNode above instead; resolveNodeTemplate's one genuinely host-only
-// piece (the LoadUnified-coupled findLocalSpec lookup) now reaches back over
-// the EXISTING "deploy-entity-resolve" seam's new kind="local" case
-// (host_build_deploy_entity_resolve.go) rather than calling findLocalSpec
-// directly — findLocalSpec itself is UNCHANGED, only its caller moved.
-
-// compileNodePlans compiles the InstallPlans for a node, dispatching on the
-// classified target. Target-only deploys (local, vm, android) don't compile a
-// primary image plan — everything comes from add_candy (for android: the
-// candies' apk: packages installed onto the device). For pod/k8s targets the
-// add_candy compiles against the BASE IMAGE's context (distro=fedora, pkg=rpm,
-// …) rather than the operator host's context — otherwise the candy's install
-// tasks pick the wrong distro section and the overlay build fails. Returns the
-// plans, the base identity, and the candy set.
-func (c *deployAddCmd) compileNodePlans(target, refStr, tag, path string, addCandies []string, cfg *Config, distroCfg *buildkit.DistroConfig, builderCfg *buildkit.BuilderConfig, dir string) ([]*deploykit.InstallPlan, string, []string, error) {
-	var plans []*deploykit.InstallPlan
-	var base string
-	var candySet []string
-
-	if target == "local" || isExternalDeploySubstrate(target) {
-		// Target-only deploys (local + every EXTERNAL deploy substrate, incl. the
-		// now-externalized vm/android/k8s — all covered by isExternalDeploySubstrate)
-		// compile no primary image plan — the workload is entirely add_candy: (for an
-		// external substrate, the candies whose plan views/specs the host marshals to the
-		// out-of-process provider). base is the deploy path identity.
-		base = path
-	} else {
-		ref, err := ResolveDeployRef(refStr, dir)
-		if err != nil {
-			return nil, "", nil, fmt.Errorf("resolving ref %q: %w", refStr, err)
-		}
-		// Save c.Tag for the compile selection; restore after.
-		savedTag := c.Tag
-		c.Tag = tag
-		plans, base, candySet, err = c.compileRefSelection(ref, cfg, distroCfg, builderCfg, dir)
-		c.Tag = savedTag
-		if err != nil {
-			return nil, "", nil, err
-		}
-	}
-
-	// Only host/vm targets use syntheticHostBox / syntheticVmBox (handled
-	// inside compileCandySelection); pod/k8s resolve the base image context here.
-	var baseImg *buildkit.ResolvedBox
-	if (target == "pod" || target == "k8s") && refStr != "" {
-		if baseResolved, rerr := ResolveBox(cfg, refStr, tag, dir, ResolveOpts{}); rerr == nil {
-			baseImg = baseResolved
-			if distroCfg != nil {
-				baseImg.DistroDef = distroCfg.ResolveDistro(baseImg.Distro)
-			}
-			if builderCfg != nil {
-				baseImg.BuilderConfig = builderCfg
-			}
-		}
-	}
-	for _, al := range addCandies {
-		alRef, err := ResolveDeployRefAsCandy(al, dir)
-		if err != nil {
-			return nil, "", nil, fmt.Errorf("resolving --add-candy %q: %w", al, err)
-		}
-		var alPlans []*deploykit.InstallPlan
-		if baseImg != nil {
-			alPlans, _, _, err = c.compileCandySelection(alRef, cfg, distroCfg, builderCfg, dir, baseImg)
-		} else {
-			alPlans, _, _, err = c.compileRefSelection(alRef, cfg, distroCfg, builderCfg, dir)
-		}
-		if err != nil {
-			return nil, "", nil, fmt.Errorf("compiling --add-candy %q: %w", al, err)
-		}
-		// Mark each plan's own candy (plus transitive deps) as overlay
-		// candies so the Pod target picks them ALL up — not just the
-		// user-facing ref name (k3s-server without its k3s base dep).
-		overlayNames := make([]string, 0, len(alPlans)+1)
-		for _, p := range alPlans {
-			if p.Candy != "" {
-				overlayNames = append(overlayNames, p.Candy)
-			}
-		}
-		// ALSO carry the ORIGINAL authored add_candy ref `al` (possibly REMOTE/qualified, e.g.
-		// "@github.com/…:vTAG") alongside the bare resolved candy name(s) above. collectOverlayCandies
-		// unions every plan's AddCandies into ResolveOpts.ExtraCandyRefs to widen TWO SEPARATE,
-		// INDEPENDENT resolved-project re-fetches downstream (hostBuildOverlay's own overlay
-		// Generator/envelope + candy/plugin-installstep's getGenerator) — a bare candy name there is a
-		// silent no-op for a REMOTE ref (ScanAllCandyWithConfigOpts's addRef gates on
-		// IsRemoteCandyRef), so without the qualified ref itself those re-fetches never actually fetch
-		// a remote add_candy candy at all, even though it correctly resolved HERE at compile time
-		// (RCA'd K1-alpha regression: check-addcandy-pod's overlay-deploy path, "task emit: candy %q
-		// not found"). A bare-name `al` (a local candy) is a harmless duplicate of the entries above;
-		// every consumer of AddCandies (collectOverlayCandies, candyByName's fallback,
-		// ResolveInitSystem's candyOrder walk) already tolerates an unresolvable extra entry by
-		// skipping it.
-		overlayNames = append(overlayNames, al)
-		for _, p := range alPlans {
-			p.AddCandies = append(p.AddCandies, overlayNames...)
-		}
-		plans = append(plans, alPlans...)
-	}
-	return plans, base, candySet, nil
-}
-
-// classifyNodeTarget and pathLeaf moved to sdk/deploykit (W4 pure-helpers
-// relocation) — both pure functions of node+path, promoted there (not to
-// candy/plugin-bundle alone) because TWO call sites need them: this file's
-// deriveChildExecutorForPath (deriving the ANCESTOR executor chain,
-// host-side, registry-coupled) and candy/plugin-bundle's walk.go (classifying
-// the CURRENT node before dispatch, plugin-side) — deploykit.ClassifyNodeTarget
-// / deploykit.PathLeaf are the ONE shared source (R3), never a duplicated
-// per-side copy. The current-node result rides
-// spec.DeployNodeDispatchRequest.Target/.VmEntity across the wire; the host
-// trusts it as sent rather than recomputing.
 
 // deriveChildExecutorForPath builds the child executor for a nested node:
 // it supplies the current node's flattened container name (derived from the
@@ -394,14 +57,13 @@ func (c *deployAddCmd) compileNodePlans(target, refStr, tag, path string, addCan
 // shape as a Lifecycle:true substrate's already-sanctioned OpPrepareVenue->VenueDescriptor
 // pattern, just for a NESTED hop instead of the root venue.
 //
-// K4-C WALK PORT (landed): the tree WALK now runs plugin-side (candy/plugin-bundle/walk.go).
+// K4-C WALK PORT (landed): the tree WALK runs plugin-side (candy/plugin-bundle/walk.go).
 // This function's BODY is UNCHANGED and stays host-side — it is registry-coupled
-// (deployTraitDescent needs the providerRegistry) — but its CALL SITE moved: the
-// deploy-node-dispatch host-builder (host_build_deploy_node_dispatch.go) re-runs it once per
+// (deployTraitDescent needs the providerRegistry) — but its CALL SITE is the resolve-target-add
+// seam's reconstructParentExec (host_build_resolve_target_add.go), which re-runs it once per
 // ANCESTOR, reconstructing the WHOLE parentExec chain from the ancestor path/node lists the
 // plugin's walk sends, rather than the caller passing a live parentExec through directly. A
-// live DeployExecutor never crosses the wire — no venue-descriptor encoding needed for this
-// hop; the plugin only ever holds paths + nodes.
+// live DeployExecutor never crosses the wire — the plugin only ever holds paths + nodes.
 func deriveChildExecutorForPath(path string, node *spec.BundleNode, parentExec deploykit.DeployExecutor) (deploykit.DeployExecutor, error) {
 	if node == nil {
 		return parentExec, nil
@@ -427,7 +89,7 @@ func deriveChildExecutorForPath(path string, node *spec.BundleNode, parentExec d
 		// The podman container `charly start`/the pod lifecycle creates is
 		// `charly-<flat-path>` (containerName's `charly-` prefix), so the nested
 		// executor MUST target that exact name — every other NestedContainerName
-		// consumer (check_venue.go, build_overlay.go, candy/plugin-adb/preresolve.go)
+		// consumer (build_overlay.go, candy/plugin-adb/preresolve.go)
 		// prepends `charly-`; omitting it here made a nested-child deploy exec into a
 		// nonexistent bare-named container (exit 125 "no such container").
 		name := "charly-" + kit.NestedContainerName(path)
@@ -518,95 +180,18 @@ func podDeploymentArtifactExists(name string) bool {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-func (c *deployAddCmd) emitOpts() deploykit.EmitOpts {
-	return deploykit.EmitOpts{
-		DryRun:               c.DryRun,
-		FormatJSON:           c.Format == "json",
-		AllowRepoChanges:     c.AllowRepoChanges,
-		AllowRootTasks:       c.AllowRootTasks,
-		WithServices:         c.WithServices,
-		SkipIncompatible:     c.SkipIncompatible,
-		AssumeYes:            c.AssumeYes,
-		Verify:               c.Verify,
-		Pull:                 c.Pull,
-		BuilderImageOverride: c.BuilderImage,
-	}
-}
-
-// scanCandiesForRef scans the candy set needed to compile `ref`, returning the
-// candy map plus the map KEY for ref. A LOCAL candy ref keys by its short name.
-// A REMOTE ref (`@host/org/repo/candy/<name>:ver`) is fetched + scanned with
-// its transitive deps — by augmenting cfg with a synthetic image that carries
-// the ref, so the existing CollectRemoteRefs/ScanAllCandy machinery pulls it —
-// and keys by its bare ref. This makes `charly bundle add --add-layer <remote>`
-// (e.g. the VM check beds' add_candy:) fully automatic with no manual pre-fetch.
-func (c *deployAddCmd) scanCandiesForRef(ref *DeployRef, cfg *Config, dir string) (map[string]spec.CandyReader, string, error) {
-	scanCfg := cfg
-	candyKey := ref.Name
-	if ref.Source == RefSourceRemote {
-		aug := *cfg
-		aug.Box = make(spec.BoxMap, len(cfg.Box)+1)
-		maps.Copy(aug.Box, cfg.Box)
-		aug.Box["__charly_addlayer_fetch__"] = spec.EncodeBox(spec.BoxConfig{Candy: []string{ref.Raw}})
-		scanCfg = &aug
-		candyKey = deploykit.BareRef(ref.Raw)
-	}
-	layers, err := ScanAllCandyWithConfig(dir, scanCfg)
-	if err != nil {
-		return nil, "", err
-	}
-	if _, ok := layers[candyKey]; !ok {
-		return nil, "", fmt.Errorf("candy %q not found", ref.Raw)
-	}
-	return layers, candyKey, nil
-}
-
-// pruneContainerInitForSystemd drops the `supervisord` candy (the CONTAINER
-// init system) from a resolved DEPLOY candy order when the target is systemd
-// (host / vm). On a systemd target the OS init is the one and only init system
-// — every candy's `service:` entries render as systemd units — so pulling in
-// supervisord is wrong (it lands installed-but-unused, a second init). Pod/k8s
-// deploys and OCI image builds keep supervisord (it IS their init), so this
-// only affects host/vm deploys. Candies that `require: supervisord` purely for
-// graph ordering are unaffected at runtime — their services run under systemd
-// regardless of whether the supervisord package is present.
-func pruneContainerInitForSystemd(order []string, hostCtx deploykit.HostContext) []string {
-	if !hostCtx.MachineVenue {
-		return order
-	}
-	out := make([]string, 0, len(order))
-	for _, n := range order {
-		if n == "supervisord" {
-			continue
-		}
-		out = append(out, n)
-	}
-	return out
-}
-
-func (c *deployAddCmd) printPlans(plans []*deploykit.InstallPlan, opts deploykit.EmitOpts) error {
-	if opts.FormatJSON {
-		return json.NewEncoder(os.Stdout).Encode(plans)
-	}
-	for _, p := range plans {
-		fmt.Println(deploykit.DescribePlan(p))
-	}
-	return nil
-}
-
-// ---------------------------------------------------------------------------
-// Small glue helpers.
+// Host-context + config helpers (shared with build_overlay.go + the
+// resolve-target-add / deploy_target_unified.go host paths).
 // ---------------------------------------------------------------------------
 
 // detectHostContext builds the HostContext struct used by the compiler
 // for host-target deploys. Returns a zero-value struct for container
-// deploys (the compiler ignores host-only fields there).
+// deploys (the compiler ignores host-only fields there). Consumed by
+// build_overlay.go (the pod-overlay build) host-side; the plugin computes its
+// own twin (candy/plugin-bundle/dispatch.go detectHostContext) for the deploy compile.
 func detectHostContext() deploykit.HostContext {
-	hd, _ := DetectHostDistro()
-	glibc, _ := DetectHostGlibc()
+	hd, _ := vmshared.DetectHostDistro()
+	glibc, _ := vmshared.DetectHostGlibc()
 	if hd == nil {
 		return deploykit.HostContext{}
 	}
@@ -615,142 +200,6 @@ func detectHostContext() deploykit.HostContext {
 		Distro:       hd.PrimaryTag(),
 		GlibcVersion: glibc,
 	}
-}
-
-// compileHostContext returns the deploy-compile HostContext: detectHostContext with
-// this deploy's effective builder-image override (c.builderImageOverride —
-// --builder-image / install_opts.builder_image) seeded onto BuilderImage, so
-// resolveBuilderImage sets the compiled BuilderStep.BuilderImage from it (R3 — the
-// SAME hostCtx.BuilderImage > img.Builder priority every compile already uses). The
-// image then travels IN the step view (step_view.go round-trips BuilderImage) across
-// the process boundary to the out-of-process local/vm deploy walk, where
-// builderStepImage reads it — the ONLY path by which install_opts.builder_image
-// reaches an out-of-process deploy's builder-step image resolution. Empty override →
-// the unchanged path (resolveBuilderImage falls through to img.Builder). The ref (e.g.
-// a namespaced fedora.fedora-builder) is resolved to a concrete image later by
-// BuilderRun → EnsureImagePresent (builder_run.go), so it need not be a full registry
-// ref.
-func (c *deployAddCmd) compileHostContext() deploykit.HostContext {
-	hostCtx := detectHostContext()
-	if c.builderImageOverride != "" {
-		hostCtx.BuilderImage = c.builderImageOverride
-	}
-	return hostCtx
-}
-
-// preresolveBuildersInto runs the host-side builder pre-pass CONNECT half (builder_preresolve.go,
-// FLOOR-SLIM-proper Unit-8) — it no longer populates hostCtx.BuilderContext itself (that RPC half
-// moved to candy/plugin-bundle's OWN preresolveBuilderContexts, called from compile.go's
-// compileDeployPlans over exec.InvokeProvider, which already holds a live executor + the
-// re-hydrated resolved-project envelope those RPCs need). What stays here is genuinely host-only:
-// ensuring EXACTLY the externalized builder plugins the deploy's resolved closure triggers are
-// build-connected BEFORE the compile is dispatched — on-demand + distro-gated (so a fedora deploy
-// never connects aur), using cfg/dir to scan + load scoped to those words (loadProjectPlugins /
-// ScanAllCandyWithConfigOpts are core-private project-loading mechanics no plugin can reach). A
-// connect error (an externalized builder whose plugin won't connect) is FATAL, never a silent skip
-// (R4). Called at every BuildDeployPlan compile site so the connectivity invariant holds uniformly.
-func preresolveBuildersInto(hostCtx deploykit.HostContext, cfg *Config, dir string, order []string, layers map[string]spec.CandyReader, img *buildkit.ResolvedBox) (deploykit.HostContext, error) {
-	if err := ensureBuildersConnectedForOrder(context.Background(), cfg, dir, order, layers, img); err != nil {
-		return hostCtx, err
-	}
-	return hostCtx, nil
-}
-
-// syntheticHostBox returns a minimal ResolvedBox suitable for
-// compiling a single-candy plan against the host. Used when the user
-// invokes `charly bundle add host <candy-ref>` without a containing image.
-//
-// UID/GID/User/Home come from the operator's own process so a candy
-// task carrying `user: ${USER}` resolves to the operator (not root).
-// Without this, resolveUserSpec's `${USER}` branch returns img.UID
-// which would default to 0 — quietly routing the task through
-// ScopeSystem (sudo), installing user-scoped tooling like
-// `cargo install` to /root/.cargo/bin instead of $HOME/.cargo/bin.
-func syntheticHostBox() *buildkit.ResolvedBox {
-	hd, _ := DetectHostDistro()
-	img := &buildkit.ResolvedBox{
-		Name:         "host-adhoc",
-		Home:         os.Getenv("HOME"),
-		User:         os.Getenv("USER"),
-		UID:          os.Getuid(),
-		GID:          os.Getgid(),
-		BuildFormats: []string{},
-	}
-	if hd != nil {
-		img.Distro = append(img.Distro, hd.Tags...)
-		if hint := hd.FormatHint(); hint != "" {
-			img.Pkg = hint
-			img.BuildFormats = []string{hint}
-		}
-	}
-	return img
-}
-
-// resolveVmEntity moved to candy/plugin-bundle's node_resolve.go (W4
-// pure-helpers relocation) — a pure function of deployName+node, now computed
-// plugin-side and threaded in via spec.DeployNodeDispatchRequest.VmEntity
-// (consumed as dispatchNode's vmEntity parameter). This is the single signal
-// the candy compiler uses to pick syntheticVmBox over syntheticHostBox below.
-
-// syntheticVmBox returns a ResolvedBox tuned for `charly bundle add
-// vm:<name>` — the User/UID/GID/Home fields come from the VM spec's SSH
-// config (not the host's env), so `${USER}` in a candy's `user:` field
-// resolves to the GUEST user (e.g. `arch`) and task scope classification
-// dispatches user-scoped tasks to RunUser (bare ssh bash -s) instead of
-// RunSystem (ssh sudo bash -s). Without this, `cargo install taplo-cli`
-// under the pre-commit candy ends up in /root/.cargo/bin/ instead of
-// /home/<user>/.cargo/bin/, and $HOME-anchored candy tests fail.
-//
-// The guest's distro + primary package format are resolved from the VM
-// spec (NOT hardcoded), so a candy deploy onto a debian/ubuntu/fedora VM
-// installs its packages — and the `charly` localpkg — through the guest's own
-// package manager (apt/dnf) instead of pacman. The distro key is the
-// bootstrap `distro:` field (debootstrap/pacstrap VMs) or, for cloud_image
-// VMs, the base_user (cloud images name the default account after the
-// distro: arch/debian/ubuntu/fedora); the format (pac/deb/rpm) comes from
-// the resolved DistroDef's PrimaryFormat.
-//
-// Cloud-image VMs conventionally use uid/gid 1000 for the first non-root
-// user (cloud-init's adopt path respects that). bootc VMs default to
-// root, in which case we fall back to the same syntheticHostBox()
-// semantics (System scope, no per-user path).
-func syntheticVmBox(spec *VmSpec, distroCfg *buildkit.DistroConfig) *buildkit.ResolvedBox {
-	user := vmshared.ResolveCloudInitSSHUser(spec)
-	if user == "" || user == "root" {
-		img := syntheticHostBox()
-		img.Name = "vm-adhoc"
-		img.User = "root"
-		img.Home = "/root"
-		return img
-	}
-	img := &buildkit.ResolvedBox{
-		Name: "vm-adhoc",
-		User: user,
-		UID:  1000,
-		GID:  1000,
-		Home: "/home/" + user,
-	}
-	distroKey := spec.Source.Distro
-	if distroKey == "" {
-		distroKey = spec.Source.BaseUser
-	}
-	if distroKey != "" {
-		if def := distroCfg.ResolveDistro([]string{distroKey}); def != nil {
-			// Full most-specific-first chain (e.g. [ubuntu:24.04, ubuntu]) so a
-			// target:vm deploy reaches per-version tag sections, not only the bare
-			// distro tag — image/VM parity for the distro-cascade resolver. Then
-			// expand inherit_packages: ancestors (a cachyos VM → [cachyos, arch]
-			// so `arch:` candy blocks reach it), mirroring the image-resolve path.
-			img.Distro = distroCfg.ExpandPackageInheritance(buildkit.DistroTagChain(distroKey, def.Version))
-			if pf := def.PrimaryFormat(); pf != "" {
-				img.Pkg = pf
-				img.BuildFormats = []string{pf}
-			}
-		} else {
-			img.Distro = []string{distroKey}
-		}
-	}
-	return img
 }
 
 // resolveDistroDef returns the DistroDef for a given distro tag.
@@ -776,5 +225,3 @@ func loadConfigForDeploy(dir string) (*Config, *buildkit.DistroConfig, *buildkit
 	RegisterBuildVocabulary(distroCfg)
 	return cfg, distroCfg, builderCfg, nil
 }
-
-var _ = context.Background // silence "imported and not used" if future work removes the Background ref

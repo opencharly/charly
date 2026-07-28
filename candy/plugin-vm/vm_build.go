@@ -10,15 +10,17 @@ import (
 	"github.com/opencharly/sdk/spec"
 )
 
-// vm_build.go — the command:vm `charly vm build` DRIVE (P8b-rest: the disk-build ENGINE moved
-// HERE from charly core — the same inversion candy/plugin-build's podman DRIVE already went
-// through behind HostBuild("build-prep") in P8b). The host resolves the kind:vm entity + the
-// build vocabulary + the per-source-kind image refs into the spec.VmBuildReply envelope
-// (HostBuild("vm-build") — LoadUnified, LoadBuildConfigForBox, resolveBootcImageRef,
-// ensureBuilderImageBuilt are loader + box-store Mechanisms a sdk-only candy cannot run); this
-// command runs the actual privileged-container / qemu-img / bootc-install / cloud-init exec
-// itself and prints its own progress to the shared stdio (compiled-in, so os.Stderr is the
-// operator's terminal).
+// vm_build.go — the command:vm `charly vm build` DRIVE (P8b-rest: the disk-build ENGINE moved HERE
+// from charly core — the same inversion candy/plugin-build's podman DRIVE already went through in
+// P8b). PREP+RESOLVE now ALSO runs plugin-side (K3 vm-build move, coneB-buildremnant): resolveVmBuild
+// (vm_build_resolve.go) resolves the kind:vm entity + the build vocabulary + the per-source-kind
+// image refs into the spec.VmBuildReply envelope entirely in-process — the former hidden core
+// HostBuild("vm-build") reentry (charly/host_build_vm_build.go) is DELETED, its LoadUnified /
+// LoadBuildConfigForBox / resolveBootcImageRef / ensureBuilderImageBuilt Mechanisms all now reached
+// through plugin-callable seams (loaderkit.LoadUnified, InvokeProvider(kind, local/distro),
+// InvokeProvider(build, box)) instead of a host round-trip. This command runs the actual
+// privileged-container / qemu-img / bootc-install / cloud-init exec itself and prints its own
+// progress to the shared stdio (compiled-in, so os.Stderr is the operator's terminal).
 type VmBuildCmd struct {
 	Box       string `arg:"" help:"Bootc image name"`
 	Size      string `long:"size" help:"Override disk size (e.g. 20G, '20 GiB')"`
@@ -42,20 +44,12 @@ func (c *VmBuildCmd) Run() error {
 	if cmdExec == nil {
 		return fmt.Errorf("vm build: no host reverse channel (command not compiled-in?)")
 	}
-	reqJSON, err := json.Marshal(spec.VmBuildRequest{
+	reply, err := resolveVmBuild(cmdCtx, cmdExec, spec.VmBuildRequest{
 		Box: c.Box, Size: c.Size, RootSize: c.RootSize, Tag: c.Tag,
 		Type: c.Type, Transport: c.Transport, Console: c.Console, Force: c.Force,
 	})
 	if err != nil {
 		return err
-	}
-	replyJSON, err := cmdExec.HostBuild(cmdCtx, "vm-build", reqJSON)
-	if err != nil {
-		return err
-	}
-	var reply spec.VmBuildReply
-	if err := json.Unmarshal(replyJSON, &reply); err != nil {
-		return fmt.Errorf("decoding vm-build resolve reply: %w", err)
 	}
 
 	var vmSpec VmSpec

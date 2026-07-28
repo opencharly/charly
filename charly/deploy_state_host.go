@@ -17,10 +17,10 @@ import (
 // LoadUnified op via the seam (IMPORT-PURITY: no new charly/*_aliases.go; charly/ calls
 // deploykit.RegisterDeployStateHost directly).
 //
-// The deploy-kind-specific marshal (marshalDeployNode, the struct-body → node-form
-// transform) is NOT a seam op — it is a callback the kind-blind SaveBundleConfig shell
-// takes per entry. The kit stays kind-blind; the marshal lives in charly/deploy_nodeform.go
-// (tracked K4-exit inventory: it moves to its plugin home when K4 moves the consumers).
+// The deploy-kind-specific marshal (the struct-body → node-form transform) is NOT a seam op — it is
+// a callback the kind-blind SaveBundleConfig shell takes per entry. The kit stays kind-blind; the
+// marshal LOGIC now lives in deploykit.MarshalBundleNode (plugin-reachable, primaries threaded as
+// DATA — the deploy_nodeform convergence), and marshalDeployNode below is the thin host wrapper.
 //
 // Nil-safe by design: a plugin/SDK consumer that never writes the per-host ledger leaves
 // DeployStateHost nil and the write paths no-op (the read-only validate/inspect paths).
@@ -45,14 +45,15 @@ func init() {
 	})
 }
 
-// marshalDeployNode is the per-entry callback for deploykit.SaveBundleConfig: it serializes
-// one BundleNode to the compact node-form the per-host overlay loader accepts (the
-// deploy-kind-specific marshal the kind-blind kit shell invokes per entry). The kit cannot
-// import it — it is a core/plugin concern, tracked K4-exit inventory. spec.Deploy IS
-// deploykit.BundleNode (a type alias), so this satisfies SaveBundleConfig's callback
-// signature without a deploykit type reference in deploy_nodeform.go.
+// marshalDeployNode is the per-entry callback for deploykit.SaveBundleConfig: it serializes one
+// BundleNode to the compact node-form the per-host overlay loader accepts. The marshal LOGIC itself
+// now lives in deploykit.MarshalBundleNode (the deploy_nodeform convergence — a pure, plugin-reachable
+// yaml transform); this thin host wrapper only supplies the plan-resugar primaries as DATA
+// (loaderThreaded().Primaries — the SAME registry-derived projection that fills the resolved-project
+// envelope's spec.ResolvedProject.Primaries field). A plugin-side deploy-state writer passes the
+// envelope's Primaries to the IDENTICAL deploykit.MarshalBundleNode, so no marshal knowledge stays core.
 func marshalDeployNode(name string, node *spec.Deploy) (*yaml.Node, error) {
-	return marshalBundleNode(node)
+	return deploykit.MarshalBundleNode(node, loaderThreaded().Primaries)
 }
 
 // saveBundleConfigNodeForm persists a BundleConfig through the kind-blind
@@ -60,9 +61,12 @@ func marshalDeployNode(name string, node *spec.Deploy) (*yaml.Node, error) {
 // (marshalDeployNode) as the per-entry callback. This is the ONE charly/ call site for
 // the deploy-state writer (R3): every charly/ deploy-lifecycle path that persists the
 // per-host overlay calls this helper instead of deploykit.SaveBundleConfig directly.
-// Tracked K4-exit inventory: the marshal + this helper live in charly/ core until K4
-// moves the deploy-lifecycle consumers to their plugin homes (plugin-bundle /
-// plugin-deploy-pod / plugin-check).
+//
+// K4-exit DONE (the deploy_nodeform convergence): the marshal LOGIC moved to
+// deploykit.MarshalBundleNode (pure yaml transform, primaries threaded as DATA), so
+// deploykit.SaveBundleConfig + the whole node-form marshal are now plugin-reachable. This helper
+// stays as the ONE charly/ host call site (R3) that feeds loaderThreaded().Primaries — the residual
+// host-only step is the registry-derived primaries projection, not the marshal itself.
 func saveBundleConfigNodeForm(dc *deploykit.BundleConfig) error {
 	return deploykit.SaveBundleConfig(dc, marshalDeployNode)
 }

@@ -28,7 +28,7 @@ import (
 // metadata, no live Invoke — the K5-A item 2 RPC this plugin was built to prove) + InvokeProvider
 // (dispatch) legs. The ONE remaining non-class:step kind (StepKindExternalPlugin — a `run: plugin:
 // <verb>` step) dispatches to its class:verb provider via InvokeProvider directly, mirroring the
-// former host-only emitPluginFragment/externalPluginStepProvider.EmitOCI contract (no Emits gate —
+// former host-only invokeVerbBuildEmit/externalPluginStepProvider.EmitOCI contract (no Emits gate —
 // a deploy-only plugin's empty OpEmit fragment is a loud failure, never a silent skip, R4).
 
 // emitOCIDispatch decodes the relocated deploykit.OCIEmitStepParams{StepView, PlanView} payload +
@@ -109,7 +109,7 @@ func dispatchClassStep(ctx context.Context, exec *sdk.Executor, word string, pay
 
 // dispatchExternalPluginVerb serves the ONE remaining non-class:step kind (a `run: plugin: <verb>`
 // step): dispatch OpEmit to the class:verb provider via InvokeProvider directly — no Emits gate,
-// matching the former host-only emitPluginFragment/externalPluginStepProvider.EmitOCI contract (a
+// matching the former host-only invokeVerbBuildEmit/externalPluginStepProvider.EmitOCI contract (a
 // deploy-only plugin's empty fragment is a loud failure, never a silent skip, R4).
 func dispatchExternalPluginVerb(ctx context.Context, exec *sdk.Executor, s *deploykit.ExternalPluginStep, env spec.BuildEnv) (string, error) {
 	if s.Op == nil || s.Op.Plugin == "" {

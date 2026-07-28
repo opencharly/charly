@@ -45,7 +45,7 @@ const (
 // newCheckRunner builds a kit.Runner for a check pass, wiring the standard host seams every
 // check runner shares: the verb dispatch (hostVerbResolver — which holds the runner ref and
 // the per-Invoke host endpoint cleanups), the do-mode/context grammar (hostPlanGrammar), and
-// the per-probe never-hang floor (the readiness-config PerAttemptFor(PollLocal) value the core
+// the per-probe never-hang floor (the readiness-config PerAttemptFor(spec.PollLocal) value the core
 // check runner has always used). The caller fills cfg with the per-site fields (Exec/Mode/Env/
 // Box/… and, for a live cross-deployment pass, TargetResolver + HostVars). Verbs/Grammar/
 // ProbeTimeout it sets here are always overridden — a caller never wires them.
@@ -54,7 +54,7 @@ func newCheckRunner(cfg kit.RunnerConfig) *kit.Runner {
 	cfg.Verbs = hvr
 	cfg.Grammar = hostPlanGrammar{}
 	if cfg.ProbeTimeout == 0 {
-		cfg.ProbeTimeout = loadedReadiness().PerAttemptFor(PollLocal)
+		cfg.ProbeTimeout = loadedReadiness().PerAttemptFor(spec.PollLocal)
 	}
 	kr := kit.NewRunner(cfg)
 	hvr.kr = kr

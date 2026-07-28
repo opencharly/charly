@@ -1,10 +1,22 @@
 package main
 
-// filelock.go — charly core's advisory-flock ENTRY. The primitive itself lives in
-// sdk/kit (kit.AcquireFileLock) so it is shared, byte-identical, with the compiled-in
-// candy/plugin-preempt (the resource arbiter's ledger lock) across the module boundary (R3).
-// This file keeps the core alias + the two charly-specific wrappers whose lock paths depend on
-// package-main config resolution the kit primitive cannot reach.
+// filelock.go — charly core's ONE remaining advisory-flock wrapper: acquireDeployConfigLock. The
+// primitive itself lives in sdk/kit (kit.AcquireFileLock/kit.ErrLockBusy) so it is shared,
+// byte-identical, with the compiled-in candy/plugin-preempt (the resource arbiter's ledger lock)
+// across the module boundary (R3). The former acquireFileLock/errLockBusy pass-through aliases
+// carried ZERO charly-specific behavior (a 1:1 signature match to the kit primitives) — deleted
+// (#118, P15 host-seam classification); every caller now calls kit.AcquireFileLock/kit.ErrLockBusy
+// directly, and their lock-semantics test coverage moved to sdk/kit/filelock_test.go (a genuine
+// coverage gap sdk itself had — see that file's own header).
+//
+// acquireDeployConfigLock stays here for now: it is injected as a callback into
+// deploykit.SaveVmDeployState/RemoveVmDeployEntry (host_build_config_resolve.go), a shape that
+// predates the observation below and isn't part of this cutover's disjoint scope. Note for a
+// future batch: DeployConfigPath is ITSELF a pure alias of kit.DefaultDeployConfigPath (deploy.go),
+// so this function's entire body is now provably sdk-portable too — it could move to sdk/kit
+// directly, dropping the injected acquireLock parameter from SaveVmDeployState/RemoveVmDeployEntry
+// entirely. Flagged rather than folded in here since it touches an already-merged sdk signature
+// outside this file's own disjoint slice.
 //
 // Contention semantics (kit.AcquireFileLock's `blocking` arg):
 //   - per-bed check lock      .check/<bed>/.lock                    (fail-fast)
@@ -15,60 +27,9 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
-	"time"
 
 	"github.com/opencharly/sdk/kit"
 )
-
-// errLockBusy is kit.ErrLockBusy — the non-blocking-contention sentinel core callers match with
-// errors.Is (check_bed_run / check_runlocal_cmd).
-var errLockBusy = kit.ErrLockBusy
-
-// acquireFileLock is the core alias of the shared kit primitive.
-func acquireFileLock(path string, blocking bool) (release func() error, err error) {
-	return kit.AcquireFileLock(path, blocking)
-}
-
-// acquireVmImageFetchLock serializes concurrent fetches of the SAME cached VM image across
-// charly processes (keyed by the content-addressed cache path). Two concurrent VM builds of
-// beds sharing one cloud image otherwise race on the shared .part file — one renames it away
-// mid-download under the other, and a resumed partial can mix bytes across an upstream
-// rotation of a mutable `latest` URL.
-
-// acquireLocalPkgBuildLock serializes concurrent host localpkg builds of the SAME source dir
-// (pkg/<fmt>) across charly processes — concurrent makepkg runs share the dir's src/ git
-// working copies and corrupt each other. Keyed by sha256(srcDir) under the user cache so the
-// lock file never pollutes the repo working tree.
-
-// acquireBuildActivityLock registers this build invocation as LIVE for its whole
-// duration: a flocked nonce file whose CONTENT is the build's generate CalVer —
-// the floor of every FROM pin its generated Containerfiles carry. The externalized
-// retention engine (candy/plugin-clean, reached via verb:retention) consults the
-// SAME live set (kit.BuildActivityDir) so a completing sibling build can never
-// untag a pin an in-flight build still resolves — the retention-untag race the
-// concurrent bed fan-out surfaced.
-func acquireBuildActivityLock(calver string) (func() error, error) {
-	dir, err := kit.BuildActivityDir()
-	if err != nil {
-		return nil, err
-	}
-	path := filepath.Join(dir, fmt.Sprintf("build-%d-%d.lock", os.Getpid(), time.Now().UnixNano()))
-	release, err := acquireFileLock(path, true)
-	if err != nil {
-		return nil, fmt.Errorf("build-activity lock: %w", err)
-	}
-	if err := os.WriteFile(path, []byte(calver+"\n"), 0o644); err != nil {
-		_ = release()
-		return nil, fmt.Errorf("build-activity lock: record calver: %w", err)
-	}
-	return func() error {
-		err := release()
-		_ = os.Remove(path)
-		return err
-	}, nil
-}
 
 // acquireDeployConfigLock serializes the read-modify-write of the per-host deploy overlay
 // (~/.config/charly/charly.yml) across concurrent charly processes. Blocking (a config write is
@@ -78,5 +39,5 @@ func acquireDeployConfigLock() (func() error, error) {
 	if err != nil {
 		return nil, fmt.Errorf("deploy-config lock path: %w", err)
 	}
-	return acquireFileLock(path+".lock", true)
+	return kit.AcquireFileLock(path+".lock", true)
 }

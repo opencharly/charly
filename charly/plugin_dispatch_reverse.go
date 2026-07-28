@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/sdk/proto"
@@ -67,7 +68,7 @@ import (
 // itself is unrelated to that removal — it is InvokeProvider's OWN out-of-process/in-proc
 // discriminator (mirrors the build-context BuildEmitter marker interface, provider_verb.go)
 // and is consumed by host_build_construct_step.go, host_build_pod_config.go,
-// k8s_generate.go, and provider_checkenv.go.
+// k8s_deploy_from_box.go, and provider_checkenv.go.
 type executorInvoker interface {
 	InvokeWithExecutor(ctx context.Context, op *Operation, exec deploykit.DeployExecutor, build buildEngineContext, rebootable bool, cc *checkContextReverseServer) (*Result, error)
 }
@@ -109,13 +110,18 @@ func (s *executorReverseServer) InvokeProvider(ctx context.Context, req *pb.Invo
 	)
 	switch class {
 	case ClassVerb:
-		if cv, isCV := prov.(CheckVerbProvider); isCV {
+		if cv, isCV := prov.(CheckVerbProvider); isCV && op.Op == OpRun {
 			// K1-unblock W3 Unit B (operator ruling "path (a)"): a CheckVerbProvider target (a
-			// compiled-in/builtin check verb) dispatches via RunVerb with a live host
-			// CheckContext, never the generic Invoke — builtinVerbBase.Invoke is a deliberate
+			// compiled-in/builtin check verb) dispatched for its CHECK PROBE (OpRun, the runtime
+			// check selector — candy/plugin-check/verb_resolver.go) runs via RunVerb with a live
+			// host CheckContext, never the generic Invoke — builtinVerbBase.Invoke is a deliberate
 			// always-error stub (provider_verb.go), matching hostVerbResolver.RunVerb's own
-			// normal-flow branch exactly (dispatch on the CAPABILITY CLASS, never a verb word —
-			// F11-clean). charly's CheckVerbProvider.RunVerb is hard-typed to *hostVerbResolver
+			// normal-flow branch exactly (dispatch on the CAPABILITY CLASS + the generic op
+			// selector, never a verb word — F11-clean). The OpRun gate is load-bearing (P8b): a
+			// state-provision verb (file/user/unix-group/…) is ALSO a CheckVerbProvider but its
+			// build-emit rides OpEmit, which must fall through to the generic Invoke (its
+			// kitVerbActAdapter.Invoke(OpEmit) → the act shell), not RunVerb (which would deref a
+			// check-less minimal runner). charly's CheckVerbProvider.RunVerb is hard-typed to *hostVerbResolver
 			// (not an interface), so the remote caller's context is built by constructing a
 			// MINIMAL *kit.Runner from the request's env snapshot (decoded into the SAME
 			// CUE-sourced spec.CheckEnv sdk/checkverb.go's out-of-process decode and
@@ -163,8 +169,17 @@ func (s *executorReverseServer) InvokeProvider(ctx context.Context, req *pb.Invo
 			// arm, generalized to any class/op).
 			res, err = inv.InvokeWithExecutor(ctx, op, exec, s.build, s.rebootable, nil)
 		} else {
-			// IN-PROC target (compiled-in / builtin, non-verb): a direct Invoke, no broker needed.
-			res, err = prov.Invoke(ctx, op)
+			// IN-PROC target (compiled-in / builtin, non-verb): thread the in-proc reverse channel
+			// carrying the SAME resolved venue executor + build the out-of-proc branch threads
+			// (honoring any VenueDescriptor override), so the target's OWN HostBuild / InvokeProvider
+			// callbacks reach the host — UNIFORM with the out-of-proc branch above. Before this the
+			// in-proc branch threaded NOTHING, an incomplete wire-broker seam each caller patched with
+			// a manual sdk.ContextWithExecutor (status-substrate / build / command dispatch). Every
+			// in-proc target recovers this via sdk.ExecutorForInvoke(ctx) and FAIL-FASTS when absent
+			// (RDD-enumerated: no in-proc target relies on the executor being absent), so completing
+			// the seam only enables currently-broken callbacks; a pure-data target ignores it.
+			inprocSrv := &executorReverseServer{exec: exec, build: s.build, rebootable: s.rebootable}
+			res, err = prov.Invoke(sdk.ContextWithExecutor(ctx, sdk.NewInProcExecutor(&inprocExecutorClient{srv: inprocSrv})), op)
 		}
 	}
 	if err != nil {

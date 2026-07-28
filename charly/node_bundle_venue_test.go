@@ -47,7 +47,7 @@ func TestFlattenBundleVenues_StampsAndHoists(t *testing.T) {
 		},
 	}}
 
-	if err := flattenBundleVenues(uf); err != nil {
+	if err := loaderkit.FlattenBundleVenues(uf); err != nil {
 		t.Fatalf("flattenBundleVenues: %v", err)
 	}
 
@@ -92,7 +92,7 @@ func TestFlattenBundleVenues_GroupDirectStepRejected(t *testing.T) {
 			},
 		},
 	}}
-	if err := flattenBundleVenues(uf); err == nil {
+	if err := loaderkit.FlattenBundleVenues(uf); err == nil {
 		t.Fatalf("expected error for a direct step under a group bundle, got nil")
 	}
 }
@@ -144,7 +144,7 @@ func TestResolveDottedAgentProvisionedVenue(t *testing.T) {
 // TestOverlayRoundTrip_NestedChildSurvives (Risk 5a) proves the per-host overlay
 // writer round-trips a deployment's NESTED CHILD + derived TARGET even though
 // BundleNode.Children/Target are now yaml:"-" (the writer re-emits them via
-// marshalBundleNode → node-form children). A lossy
+// deploykit.MarshalBundleNode → node-form children). A lossy
 // writer would silently drop the nested child on the next saveDeployState.
 func TestOverlayRoundTrip_NestedChildSurvives(t *testing.T) {
 	dir := t.TempDir()

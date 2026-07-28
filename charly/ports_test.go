@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 )
 
 func TestParseHostPort(t *testing.T) {
@@ -28,7 +29,7 @@ func TestParseHostPort(t *testing.T) {
 		{"127.0.0.1:47998:47998/udp", 47998},
 	}
 	for _, tt := range tests {
-		got, err := ParseHostPort(tt.input)
+		got, err := kit.ParseHostPort(tt.input)
 		if err != nil {
 			t.Errorf("ParseHostPort(%q) error: %v", tt.input, err)
 			continue
@@ -55,7 +56,7 @@ func TestParseContainerPort(t *testing.T) {
 		{"[::1]:8080:80", 80},
 	}
 	for _, tt := range tests {
-		got, err := ParseContainerPort(tt.input)
+		got, err := kit.ParseContainerPort(tt.input)
 		if err != nil {
 			t.Errorf("ParseContainerPort(%q) error: %v", tt.input, err)
 			continue
@@ -93,7 +94,7 @@ func TestParsePortMapping(t *testing.T) {
 		{"", "", 0, 0, "", false},
 	}
 	for _, tt := range tests {
-		got, ok := ParsePortMapping(tt.input)
+		got, ok := kit.ParsePortMapping(tt.input)
 		if ok != tt.wantOK {
 			t.Errorf("ParsePortMapping(%q) ok = %v, want %v", tt.input, ok, tt.wantOK)
 			continue
@@ -111,18 +112,18 @@ func TestParsePortMapping(t *testing.T) {
 
 func TestFormatPortMapping(t *testing.T) {
 	tests := []struct {
-		in   ParsedPortMapping
+		in   kit.ParsedPortMapping
 		want string
 	}{
-		{ParsedPortMapping{Host: 8888, Container: 8888}, "8888:8888"},
-		{ParsedPortMapping{Host: 8080, Container: 80}, "8080:80"},
-		{ParsedPortMapping{BindAddr: "127.0.0.1", Host: 8888, Container: 8888}, "127.0.0.1:8888:8888"},
-		{ParsedPortMapping{BindAddr: "[::1]", Host: 8080, Container: 80}, "[::1]:8080:80"},
-		{ParsedPortMapping{Host: 53, Container: 53, Protocol: "udp"}, "53:53/udp"},
-		{ParsedPortMapping{BindAddr: "127.0.0.1", Host: 53, Container: 53, Protocol: "udp"}, "127.0.0.1:53:53/udp"},
+		{kit.ParsedPortMapping{Host: 8888, Container: 8888}, "8888:8888"},
+		{kit.ParsedPortMapping{Host: 8080, Container: 80}, "8080:80"},
+		{kit.ParsedPortMapping{BindAddr: "127.0.0.1", Host: 8888, Container: 8888}, "127.0.0.1:8888:8888"},
+		{kit.ParsedPortMapping{BindAddr: "[::1]", Host: 8080, Container: 80}, "[::1]:8080:80"},
+		{kit.ParsedPortMapping{Host: 53, Container: 53, Protocol: "udp"}, "53:53/udp"},
+		{kit.ParsedPortMapping{BindAddr: "127.0.0.1", Host: 53, Container: 53, Protocol: "udp"}, "127.0.0.1:53:53/udp"},
 	}
 	for _, tt := range tests {
-		got := FormatPortMapping(tt.in)
+		got := kit.FormatPortMapping(tt.in)
 		if got != tt.want {
 			t.Errorf("FormatPortMapping(%+v) = %q, want %q", tt.in, got, tt.want)
 		}
@@ -139,15 +140,15 @@ func TestParsePortMapping_RoundTripsFormatPortMapping(t *testing.T) {
 		"127.0.0.1:53:53/udp",
 	}
 	for _, in := range inputs {
-		p, ok := ParsePortMapping(in)
+		p, ok := kit.ParsePortMapping(in)
 		if !ok {
 			t.Errorf("ParsePortMapping(%q) failed", in)
 			continue
 		}
 		// Bare "8888" canonicalizes to "8888:8888" — that's expected.
-		got := FormatPortMapping(p)
+		got := kit.FormatPortMapping(p)
 		// Re-parse the formatted form; both must produce the same struct.
-		p2, ok := ParsePortMapping(got)
+		p2, ok := kit.ParsePortMapping(got)
 		if !ok || p2 != p {
 			t.Errorf("round-trip diverged: %q -> %+v -> %q -> %+v", in, p, got, p2)
 		}
@@ -189,7 +190,7 @@ func TestApplyPortOverrides(t *testing.T) {
 	ports := []string{"5900:5900", "18789:18789", "9222:9222", "11434:11434"}
 	overrides := []string{"5901:5900", "11435:11434"}
 
-	result, err := ApplyPortOverrides(ports, overrides)
+	result, err := kit.ApplyPortOverrides(ports, overrides)
 	if err != nil {
 		t.Fatalf("ApplyPortOverrides error: %v", err)
 	}
@@ -209,7 +210,7 @@ func TestApplyPortOverridesUDP(t *testing.T) {
 	ports := []string{"47990:47990", "47998:47998/udp", "47999:47999/udp", "48000:48000/udp"}
 	overrides := []string{"47991:47990", "48001:48000"}
 
-	result, err := ApplyPortOverrides(ports, overrides)
+	result, err := kit.ApplyPortOverrides(ports, overrides)
 	if err != nil {
 		t.Fatalf("ApplyPortOverrides error: %v", err)
 	}
@@ -237,7 +238,7 @@ func TestStripPortSuffix(t *testing.T) {
 		{"47998:47998/udp", "47998:47998", "udp"},
 	}
 	for _, tt := range tests {
-		port, proto := stripPortSuffix(tt.input)
+		port, proto := kit.StripPortSuffix(tt.input)
 		if port != tt.wantPort || proto != tt.wantProto {
 			t.Errorf("stripPortSuffix(%q) = (%q, %q), want (%q, %q)", tt.input, port, proto, tt.wantPort, tt.wantProto)
 		}
@@ -255,7 +256,7 @@ func TestCheckPortAvailabilityUDP(t *testing.T) {
 	port := conn.LocalAddr().(*net.UDPAddr).Port
 	ports := []string{strconv.Itoa(port) + ":" + strconv.Itoa(port) + "/udp"}
 
-	conflicts := CheckPortAvailability(ports, "127.0.0.1", "podman")
+	conflicts := kit.CheckPortAvailability(ports, "127.0.0.1", "podman")
 	if len(conflicts) != 1 {
 		t.Fatalf("expected 1 UDP conflict, got %d", len(conflicts))
 	}
@@ -268,7 +269,7 @@ func TestApplyPortOverridesNoMatch(t *testing.T) {
 	ports := []string{"8000:8000", "9000:9000"}
 	overrides := []string{"5901:5900"} // 5900 not in ports
 
-	result, err := ApplyPortOverrides(ports, overrides)
+	result, err := kit.ApplyPortOverrides(ports, overrides)
 	if err != nil {
 		t.Fatalf("ApplyPortOverrides error: %v", err)
 	}
@@ -282,7 +283,7 @@ func TestApplyPortOverridesNoMatch(t *testing.T) {
 }
 
 func TestApplyPortOverridesInvalid(t *testing.T) {
-	_, err := ApplyPortOverrides([]string{"8000:8000"}, []string{"notaport"})
+	_, err := kit.ApplyPortOverrides([]string{"8000:8000"}, []string{"notaport"})
 	if err == nil {
 		t.Error("expected error for invalid override format")
 	}
@@ -291,7 +292,7 @@ func TestApplyPortOverridesInvalid(t *testing.T) {
 func TestCheckPortAvailabilityOpen(t *testing.T) {
 	// All ports should be available on random high ports
 	ports := []string{"0:0"} // port 0 is always available
-	conflicts := CheckPortAvailability(ports, "127.0.0.1", "podman")
+	conflicts := kit.CheckPortAvailability(ports, "127.0.0.1", "podman")
 	if len(conflicts) != 0 {
 		t.Errorf("expected no conflicts for port 0, got %d", len(conflicts))
 	}
@@ -308,7 +309,7 @@ func TestCheckPortAvailabilityInUse(t *testing.T) {
 	port := ln.Addr().(*net.TCPAddr).Port
 	ports := []string{strconv.Itoa(port) + ":" + strconv.Itoa(port)}
 
-	conflicts := CheckPortAvailability(ports, "127.0.0.1", "podman")
+	conflicts := kit.CheckPortAvailability(ports, "127.0.0.1", "podman")
 	if len(conflicts) != 1 {
 		t.Fatalf("expected 1 conflict, got %d", len(conflicts))
 	}
@@ -318,12 +319,12 @@ func TestCheckPortAvailabilityInUse(t *testing.T) {
 }
 
 func TestFormatPortConflicts(t *testing.T) {
-	conflicts := []PortConflict{
+	conflicts := []kit.PortConflict{
 		{HostPort: 5900, ContPort: 5900, Owner: "charly-sway-browser-vnc", OwnerType: "charly-container"},
 		{HostPort: 11434, ContPort: 11434, Owner: "ollama-1", OwnerType: "container"},
 	}
 
-	output := FormatPortConflicts(conflicts, "my-image")
+	output := kit.FormatPortConflicts(conflicts, "my-image")
 
 	if !containsAll(output, "Port 5900", "charly stop", "Port 11434", "podman stop", "--port") {
 		t.Errorf("FormatPortConflicts output missing expected content:\n%s", output)

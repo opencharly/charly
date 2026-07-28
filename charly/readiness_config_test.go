@@ -5,11 +5,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/opencharly/sdk/spec"
 	"github.com/opencharly/sdk/vmshared"
 )
 
 func TestReadinessConfig_ResolveDefaults(t *testing.T) {
-	rr, err := readinessResolve(nil)
+	rr, err := spec.ResolveReadiness(nil)
 	if err != nil {
 		t.Fatalf("nil/default resolve must succeed: %v", err)
 	}
@@ -22,7 +23,7 @@ func TestReadinessConfig_ResolveDefaults(t *testing.T) {
 }
 
 func TestReadinessConfig_ParseError(t *testing.T) {
-	_, err := readinessResolve(&ReadinessConfig{NoProgress: "ninety"})
+	_, err := spec.ResolveReadiness(&spec.ReadinessConfig{NoProgress: "ninety"})
 	if err == nil || !strings.Contains(err.Error(), "no_progress") {
 		t.Fatalf("bad duration must error, got %v", err)
 	}
@@ -30,19 +31,19 @@ func TestReadinessConfig_ParseError(t *testing.T) {
 
 func TestReadinessConfig_OrderingRejected(t *testing.T) {
 	// poll_interval_heavy (120s) > no_progress (90s default) — the env-bypass case.
-	_, err := readinessResolve(&ReadinessConfig{PollIntervalHeavy: "120s"})
+	_, err := spec.ResolveReadiness(&spec.ReadinessConfig{PollIntervalHeavy: "120s"})
 	if err == nil || !strings.Contains(err.Error(), "no_progress") {
 		t.Fatalf("interval>no_progress must be rejected, got %v", err)
 	}
 	// stop_grace > absolute_cap.
-	_, err = readinessResolve(&ReadinessConfig{StopGrace: "40m"})
+	_, err = spec.ResolveReadiness(&spec.ReadinessConfig{StopGrace: "40m"})
 	if err == nil || !strings.Contains(err.Error(), "absolute_cap") {
 		t.Fatalf("stop_grace>absolute_cap must be rejected, got %v", err)
 	}
 }
 
 func TestReadinessConfig_ValidOverride(t *testing.T) {
-	rr, err := readinessResolve(&ReadinessConfig{NoProgress: "5m", AbsoluteCap: "1h"})
+	rr, err := spec.ResolveReadiness(&spec.ReadinessConfig{NoProgress: "5m", AbsoluteCap: "1h"})
 	if err != nil {
 		t.Fatalf("valid override: %v", err)
 	}

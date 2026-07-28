@@ -113,7 +113,7 @@ func TestResolvePodEncEnsurePlan_ShortCircuit_AllMounted(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	body, err := resolvePodEncEnsurePlan(ctx, nil, dc, "testimg", "")
+	body, err := resolvePodEncEnsurePlan(ctx, nil, dc, "testimg", "", false)
 	if err != nil {
 		t.Fatalf("resolvePodEncEnsurePlan() error: %v (short-circuit should have skipped passphrase resolution entirely)", err)
 	}
@@ -127,7 +127,7 @@ func TestResolvePodEncEnsurePlan_ShortCircuit_AllMounted(t *testing.T) {
 func TestResolvePodEncEnsurePlan_NoVolumesConfiguredReturnsNil(t *testing.T) {
 	dc := &deploykit.BundleConfig{Bundle: map[string]deploykit.BundleNode{}}
 	ctx := context.Background()
-	body, err := resolvePodEncEnsurePlan(ctx, nil, dc, "nonexistent-box", "")
+	body, err := resolvePodEncEnsurePlan(ctx, nil, dc, "nonexistent-box", "", false)
 	if err != nil {
 		t.Fatalf("resolvePodEncEnsurePlan() error: %v", err)
 	}

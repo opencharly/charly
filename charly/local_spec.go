@@ -5,25 +5,18 @@ package main
 // name; returns (nil, err) when the project config FAILS to load — the caller
 // surfaces that error instead of a misleading "unknown template", so a load
 // failure (e.g. a transient discover EACCES from a concurrent sibling build) is
-// never hidden behind a bare not-found. Used by the deploy-add dispatcher to
-// resolve a deployment's `local: <template-name>` reference.
+// never hidden behind a bare not-found.
 //
-// K1-unblock wave 2 (R1 correction, superseding the 2026-07-21 "STAY... K1-permanent...
-// no plugin will ever get direct loader access... FLOOR candidate" note below): that framing
-// conflated "a plugin can't call LoadUnified" (true) with "this consumer must therefore stay
-// core forever" (false, and the same reasoning pattern the operator already overruled on the
-// Axis-B deploy-dispatch cone — a "stays core" verdict is suspect until independently
-// re-verified against the boundary law's E/M/B/D test, never accepted from a prior claim).
-// This file calls LoadUnified directly TODAY only because its ONE caller
-// (bundle_add_cmd.go's deploy dispatcher) is itself still core-resident — it moves alongside
-// that caller, into candy/plugin-bundle, in the K1-unblock wave that relocates the
-// bundle_add_cmd.go dispatch kernel (the operator-confirmed real K4 cutover; see
-// deploy-resolution-67-gated-cone "Axis B"). Nothing here is architecturally permanent; the
-// mechanism when that wave lands is the SAME resolved-project-envelope pattern the sibling
-// consumers in this family (deploy_ref.go, k8s_config.go) already use or are moving to —
-// findLocalSpec ALREADY supports a namespace-qualified `local: <ns>.<tmpl>` ref (via
-// resolveLocalRefFor below), so unlike k8s_config.go's findK8sSpec there is no functional gap
-// to close here — only the caller's own relocation is pending.
+// K4 unit A (core-min wave 3): the deploy-add dispatcher's own `local: <name>`
+// template lookup — this function's former sole reason to stay LoadUnified-coupled
+// — moved to candy/plugin-bundle's lookupLocalTemplate (node_resolve.go), which
+// reads the SAME data off the "resolved-project" envelope's Templates.Local RawBody
+// map (already namespace-qualified by loaderkit.ProjectTemplates) and
+// projects it via the kind:local provider's own OpResolve leg — no LoadUnified, no
+// new seam. findLocalSpec itself is UNCHANGED and stays core: its one remaining
+// caller, check_cmd.go's runLocalDeployScopePlan (the CLI-free check-live gather
+// engine), is registry/LoadUnified-coupled by its own nature and out of this
+// cutover's scope.
 func findLocalSpec(dir, name string) (*ResolvedLocal, error) {
 	if dir == "" || name == "" {
 		return nil, nil

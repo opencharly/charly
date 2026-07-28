@@ -62,54 +62,37 @@ type CLI struct {
 	// the gRPC Describe, is not missed). Reuses collectPluginProviders (R3).
 	PluginProviders PluginProvidersCmd `cmd:"" name:"__plugin-providers" hidden:"" help:"internal: print a candy's plugin.providers (one <class>:<word> per line)"`
 
-	// __box-pkg is the hidden core reentry point behind the COMPILED-IN candy/plugin-box command:pkg
-	// word (nested under `box`): the plugin owns the user-facing `charly box pkg` grammar + dispatch and
-	// reaches this over HostBuild("cli") — the localpkg build needs the host build context the plugin
-	// cannot compute pre-K1. Validation, by contrast, needs no such CLI reentry: the validate ENGINE
-	// lives in plugin-box and dispatches command:validate to the host-side validate-project HostBuild
-	// directly.
-	BoxPkg BoxPkgCmd `cmd:"" name:"__box-pkg" hidden:"" help:"internal: build native package artifacts (reentry behind box pkg)"`
+	// (K3 build-tail move, coneB-pkgcmd: the former hidden __box-pkg reentry is DELETED.
+	// candy/plugin-box's dispatchPkg now InvokeProviders(build:pkg) directly — the SAME shape
+	// dispatchBuild already established for __box-build — so the localpkg build engine
+	// (candy/plugin-build's runBoxPkg) runs entirely plugin-side, reusing the K1-loader seams
+	// resolveBuildEngine already set up (LoadUnified, the scan-local host leg, resolveDistroLeg).)
 
-	// __box-build is the hidden core reentry point behind the COMPILED-IN candy/plugin-box
-	// command:build word (nested under `box`, build/pull dispersal — the CLI-only mirror of the
-	// pull move, M4d): the plugin owns the user-facing `charly box build` grammar + dispatch and
-	// reaches this over HostBuild("cli") — BuildCmd.Run()'s engine (bootstrap-builder, remote-ref
-	// resolution, retention pruning) is K1/K3-family (loader/build-engine cone), not CLI-dispersal
-	// residue, and stays core-only, unmoved. BuildCmd itself is UNCHANGED — only its Kong
-	// attachment point moved. EnsureImagePresent (ensure_image.go) and RemoteImageContext.BuildImage
-	// (remote_image.go) construct + call BuildCmd.Run() DIRECTLY at the Go level (never through
-	// Kong/CLI), so this reentry does not affect them at all.
-	BoxBuild BuildCmd `cmd:"" name:"__box-build" hidden:"" help:"internal: build container boxes (reentry behind box build)"`
+	// (The former hidden `__cmd` deploy-lifecycle reentry behind `charly cmd` is DELETED — cmd.go's
+	// dissolution: candy/plugin-cmd now drives the "pod-cmd" host-builder (cmd's slot in the floored
+	// pod-lifecycle-dispatch family, joining pod-shell) directly over the in-proc reverse channel, so
+	// the interactive Attach needs no hidden CLI reentry — mirroring __box-build's earlier removal.)
 
-	// __box-pull is the hidden core reentry point behind the COMPILED-IN candy/plugin-box command:pull
-	// word (nested under `box`, build/pull dispersal — pull-first per the standing ruling): the plugin
-	// owns the user-facing `charly box pull` grammar + dispatch and reaches this over HostBuild("cli")
-	// — EnsureImagePresent's build-fallback needs the full box-build engine + charly.yml resolution
-	// (BuildCmd.Run, cfg.ResolveBox, ResolveRemoteImage), all still core-only pre the ensure_image.go +
-	// build.go + remote_image.go batch. BoxPullCmd itself is UNCHANGED — only its Kong attachment point
-	// moved (was a direct BoxCmd field; now reached solely via this hidden reentry).
-	BoxPull BoxPullCmd `cmd:"" name:"__box-pull" hidden:"" help:"internal: pull/build-fallback an image (reentry behind box pull)"`
+	// (P8b: the former hidden __box-build reentry is DELETED. candy/plugin-box's dispatchBuild now
+	// runs the `charly box build` body itself — NormalizeBoxArgs → remote-ref pivot
+	// (buildkit.DetectRemoteBuildRef + the HostBuild("remote-image-resolve") seam) → build-activity
+	// flock → InvokeProvider(build:box) → retention prune — so the CLI no longer bounces back through
+	// core over HostBuild("cli"). The host-coupled
+	// remainder (the remote-ref clone/cache resolve, the build-engine RESOLVE legs, the bootstrap
+	// builder pre-pass) stays behind thin HostBuild seams the candy invokes.)
 
-	// __box-inspect-overlay / __box-list-tags are the hidden core reentry points behind the
-	// COMPILED-IN candy/plugin-box command:inspect / command:list words (nested under `box`). The
-	// plugin owns the user-facing grammar + reads the resolved-project envelope; these two reentries
-	// serve ONLY the residue the envelope cannot carry — the DEPLOY-OVERLAY inspect formats
-	// (tunnel/bind_mounts, read from charly.yml) and the STORE-LIVE `list tags` (podman image tags).
-	// K5-doomed: both die when the deploy-overlay + store reads move into the plugin over sdk kits.
-	BoxInspectOverlay InspectOverlayCmd `cmd:"" name:"__box-inspect-overlay" hidden:"" help:"internal: inspect deploy-overlay formats tunnel/bind_mounts (reentry behind box inspect)"`
-	BoxListTags       ListTagsCmd       `cmd:"" name:"__box-list-tags" hidden:"" help:"internal: list locally stored CalVer image tags (reentry behind box list tags)"`
+	// __box-list-tags is GONE (#118, coneB-volumecptags): candy/plugin-box's dispatchList now
+	// reaches verb:retention directly over InvokeProvider (listImageTags, inspect_list.go) — the
+	// SAME peer-dispatch pruneAfterBuild already used in the same module — instead of reentering
+	// core for the store-live tag inventory. The sibling deploy-overlay inspect formats
+	// (tunnel/bind_mounts) moved fully into candy/plugin-box earlier (the former
+	// __box-inspect-overlay reentry is likewise DELETED — it renders from the deploy overlay + the
+	// projector-filled view.Ports, no reentry). `box` now has NO remaining core CLI reentry.
 
-	// __box-fetch / __box-refresh are the hidden core reentry points behind the COMPILED-IN
-	// candy/plugin-authoring command:fetch / command:refresh words (nested under `box`, P14b).
-	// The plugin owns the user-facing `charly box fetch/refresh` grammar + dispatch and reaches
-	// these over HostBuild("cli") — the repo resolver (ResolveProjectRepo → EnsureRepoDownloaded)
-	// is host-coupled (CHARLY_REPO_OVERRIDE + the refs-backend dispatch + the command:migrate
-	// auto-migration), which a sdk-only plugin cannot reach.
-	// K5-doomed: both die when ResolveProjectRepo/EnsureRepoDownloaded move into the plugin over
-	// sdk kits (a `HostBuild("refs-resolve")` seam) — the SAME tracked-residue pattern as the
-	// sibling __box-inspect-overlay / __box-list-tags reentries above (K5 seam-death sweep).
-	BoxFetch   BoxFetchCmd   `cmd:"" name:"__box-fetch" hidden:"" help:"internal: pre-prime the remote-repo cache (reentry behind box fetch)"`
-	BoxRefresh BoxRefreshCmd `cmd:"" name:"__box-refresh" hidden:"" help:"internal: force re-clone of a remote project repo (reentry behind box refresh)"`
+	// __box-fetch / __box-refresh are GONE (K3 build-tail tail, coneB-buildremnant): candy/
+	// plugin-authoring's command:fetch/command:refresh now reach the host-coupled repo resolver
+	// (ResolveProjectRepo → EnsureRepoDownloaded) directly over the generic "box-fetch-resolve"
+	// HostBuild seam (charly/host_build_box_fetch_resolve.go) — no reentry needed.
 
 	// __box-labels is GONE (K3 reentry-class dissolution): candy/plugin-box's `labels` command now
 	// calls kit.ResolveRuntime/ResolveLocalImageRef/InspectImageLabels directly — all pure

@@ -7,10 +7,12 @@
 // loader), reached via the small "retention-defaults" HostBuild seam — the doctrine the vm + pod
 // deploy plugins established (own the work, call back only for the one core-coupled piece).
 //
-// Two capabilities: command:clean (the CLI) and verb:retention (the engine, invoked by core
-// adapters — charly/retention_plugin.go — and by peer plugins — candy/plugin-check's post-run
-// prune — over InvokeProvider, the SAME peer-dispatch pattern verb:credential/verb:gpu/verb:tunnel
-// use). clean is COMPILED-IN (charly.yml compiled_plugins): command:clean's Invoke(OpRun)
+// Two capabilities: command:clean (the CLI) and verb:retention (the engine, invoked by peer
+// plugins — candy/plugin-box's `box list tags`/post-build prune (listImageTags/pruneAfterBuild,
+// #118) and candy/plugin-check's post-run prune — over InvokeProvider, the SAME peer-dispatch
+// pattern verb:credential/verb:gpu/verb:tunnel use; NO core adapter remains (charly/
+// retention_plugin.go, the former core-side listCharlyImageTags caller, is DELETED). clean is
+// COMPILED-IN (charly.yml compiled_plugins): command:clean's Invoke(OpRun)
 // (provider.go) runs in charly's process and gets the in-proc reverse channel that
 // dispatchInProcCommand threads (Seam A), so HostBuild("retention-defaults") reaches the host. The
 // out-of-process placement fork/execs the binary → CliMain, which has NO reverse channel, so the

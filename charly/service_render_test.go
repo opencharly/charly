@@ -210,7 +210,7 @@ func TestRenderServicePackagedWithOverrides(t *testing.T) {
 		UsePackaged: "postgresql.service",
 		Enable:      true,
 		Scope:       "system",
-		Overrides: &ServiceOverrides{
+		Overrides: &vmshared.ServiceOverrides{
 			Env: map[string]string{"PGDATA": "/var/lib/postgresql/data"},
 		},
 	}

@@ -251,18 +251,9 @@ func (t *pluginDeployTarget) Add(ctx context.Context, dctx *DeployContext, plans
 		t.node = dctx.Node
 		t.build = buildEngineContext{Cfg: dctx.Cfg, ProjectDir: dctx.Dir, DistroCfg: dctx.DistroCfg}
 	}
-	var candyList []spec.CandyReader
-	var secretEnv map[string]string
 	dir := ""
 	if dctx != nil {
 		dir = dctx.Dir
-	}
-	if dir != "" {
-		var serr error
-		candyList, secretEnv, serr = prepareCandySecrets(plans, dir)
-		if serr != nil {
-			return fmt.Errorf("external deploy %q: loading candies for secret resolution: %w", t.name, serr)
-		}
 	}
 
 	views := make([]spec.InstallPlanView, 0, len(plans))
@@ -300,21 +291,19 @@ func (t *pluginDeployTarget) Add(ctx context.Context, dctx *DeployContext, plans
 	// candy/plugin-deploy-pod's podPrepareVenue ever calls).
 	ctx = withOverlayBuildInputs(ctx, &overlayBuildInputs{plans: plans, parentExec: opts.ParentExec, parentNode: opts.ParentNode})
 
-	reply, err := t.dispatch(ctx, spec.DeployTargetDispatchRequest{
+	// Secret injection + artifact retrieval + the register-hint-driven k3s-post-provision
+	// dispatch now run PLUGIN-SIDE inside command:bundle's handleDeployApply (Cone A shape 3, see
+	// candy/plugin-bundle/secrets_artifacts.go), wrapped around this SAME dispatch call, in the
+	// SAME relative order (secrets injected before, artifacts+k3s dispatched after) — this Add no
+	// longer needs the reply's ArtifactKey for anything itself.
+	if _, err := t.dispatch(ctx, spec.DeployTargetDispatchRequest{
 		Op: "add", Dir: dir, PlansJSON: plansJSON, OptsJSON: optsJSON, DistroCfgJSON: t.distroCfgJSON(),
 		VenueJSON: t.applyParentExecOverride(opts),
-	})
-	if err != nil {
+	}); err != nil {
 		return err
 	}
 	if opts.DryRun {
 		return nil
-	}
-
-	artifactEnv := deploykit.BuildArtifactEnv(secretEnv, t.node)
-	artifactKey := t.artifactKeyFrom(reply)
-	if err := retrieveArtifactsAndK3s(ctx, t.venueExecutor(), candyList, artifactKey, t.name, artifactEnv, opts); err != nil {
-		return fmt.Errorf("external deploy %q: retrieving candy artifacts: %w", t.name, err)
 	}
 
 	if opts.Verify {
@@ -334,7 +323,7 @@ func (t *pluginDeployTarget) Add(ctx context.Context, dctx *DeployContext, plans
 }
 
 // venueExecutor re-materializes the CURRENT venue (post-Add, whatever the plugin reported back)
-// for core-side steps that need a live executor (retrieveArtifactsAndK3s, --verify). Falls back to
+// for core-side steps that need a live executor (Test, --verify). Falls back to
 // t.exec (the initial placeholder) if no venue has been reported yet (e.g. a dry-run Add).
 func (t *pluginDeployTarget) venueExecutor() deploykit.DeployExecutor {
 	if len(t.venueJSON) == 0 {
@@ -349,18 +338,6 @@ func (t *pluginDeployTarget) venueExecutor() deploykit.DeployExecutor {
 		return t.exec
 	}
 	return exec
-}
-
-// artifactKeyFrom resolves the ENTITY-scoped artifact key a dispatch reply carries, falling
-// back to the deploy's own name — the SAME fallback Add and Update both need (R3, shared here
-// rather than re-inlined per call site) for retrieveArtifactsAndK3s / K3sPostProvision, which key
-// the shared per-VM cluster cache dir + kubeconfig context off it (deployVMForwards' doc comment
-// covers why this differs from t.name, the per-DEPLOY/domain identity used alongside it).
-func (t *pluginDeployTarget) artifactKeyFrom(reply spec.DeployTargetDispatchReply) string {
-	if reply.ArtifactKey != "" {
-		return reply.ArtifactKey
-	}
-	return t.name
 }
 
 func (t *pluginDeployTarget) Update(ctx context.Context, plans []*deploykit.InstallPlan, opts UpdateOpts) error {
@@ -387,37 +364,13 @@ func (t *pluginDeployTarget) Update(ctx context.Context, plans []*deploykit.Inst
 	if err != nil {
 		return err
 	}
-	reply, err := t.dispatch(ctx, spec.DeployTargetDispatchRequest{Op: "update", PlansJSON: plansJSON, OptsJSON: optsJSON, DistroCfgJSON: t.distroCfgJSON()})
-	if err != nil {
+	// The k3s-post-provision re-establishment on update (R1 fix, K1-alpha regression) now runs
+	// PLUGIN-SIDE inside command:bundle's handleDeployApply, gated on kube ALREADY being connected
+	// (candy/plugin-bundle/secrets_artifacts.go's kubeAlreadyConnected — a pure DescribeProvider
+	// query, no connect attempt, no side effect) — see that file's header for the full rationale
+	// this comment used to carry.
+	if _, err := t.dispatch(ctx, spec.DeployTargetDispatchRequest{Op: "update", PlansJSON: plansJSON, OptsJSON: optsJSON, DistroCfgJSON: t.distroCfgJSON()}); err != nil {
 		return err
-	}
-	if opts.DryRun {
-		return nil
-	}
-	// R1 fix (K1-alpha regression): Add() re-establishes a k3s-server deploy's kubeconfig
-	// server-port rewrite via K3sPostProvision (retrieveArtifactsAndK3s's artifactRegisterHandlers
-	// dispatch) — Update() never did, so a fresh `charly update` on a k8s-deploy's k3s-server
-	// member left the merged ~/.kube/config context pointing at whatever host-forwarded port was
-	// current the LAST time Add ran. Re-running the SAME idempotent post-provision here keeps
-	// kubectl/`kube:` checks working across a rebuild without re-retrieving the artifact itself
-	// (its content is unchanged; only the forwarded port can move).
-	//
-	// Gated on the kube plugin ALREADY being connected (a pure providerRegistry.ResolveVerb
-	// lookup — no connect attempt, no side effect): unlike Add, which only reaches
-	// K3sPostProvision when the deploy's OWN candy list declares `register: kubeconfig`
-	// (deploy_add_shared.go's artifactRegisterHandlers), Update has no candyList to run that same
-	// check against. Calling K3sPostProvision unconditionally hard-errors for every OTHER deploy
-	// kind (pod/local/no-k3s) with "kube plugin not loaded" — resolveKubePlugin's connect failure
-	// is a hard error there, not the graceful no-op K3sPostProvision's own doc comment promises
-	// for a merely-absent kubeconfig FILE (caught by TestExternalDeployPlugin_
-	// ReverseChannelEndToEnd, a plain fixture with no candy/plugin-kube composed at all). A
-	// k3s-server deploy's plugin connects during the update path's own plugin-loading (mirroring
-	// Add's collectReferencedPluginWords/loadProjectPlugins), so the registry already reflects
-	// whether THIS deploy actually needs it.
-	if _, ok := providerRegistry.ResolveVerb("kube"); ok {
-		if err := K3sPostProvision(t.artifactKeyFrom(reply), t.name); err != nil {
-			return fmt.Errorf("external deploy %q: re-establishing k3s port-forwards: %w", t.name, err)
-		}
 	}
 	return nil
 }
@@ -430,15 +383,11 @@ func (t *pluginDeployTarget) Test(ctx context.Context, checks []spec.Op, opts Te
 }
 
 func (t *pluginDeployTarget) Del(ctx context.Context, opts DelOpts) error {
-	// Host-side substrate cleanup the plugin cannot do (vm: ephemeral-lifecycle teardown —
-	// systemd timers + libvirt snapshot refcounts). Consulted GENERICALLY by word (pod registers
-	// none). Runs BEFORE the plugin's own teardown, mirroring the pre-S3b PostTeardown ordering
-	// exactly (the hook ran before the substrate's OpPostTeardown Invoke).
-	if hook, ok := lifecyclePostTeardownHookFor(t.word); ok {
-		if herr := hook(t.name, t.node); herr != nil {
-			fmt.Fprintf(os.Stderr, "warning: substrate %q post-teardown host hook: %v\n", t.word, herr)
-		}
-	}
+	// The vm ephemeral-lifecycle teardown (systemd timers + libvirt snapshot refcounts) that used
+	// to run here as a pre-dispatch host hook now runs INSIDE candy/plugin-deploy-vm's own
+	// OpPostTeardown handler (vmPostTeardown, F6 vm-lifecycle move, coneB-vmlifecycle) — it turned
+	// out to need only sdk-portable seams (config-resolve + InvokeProvider), so the hook registry
+	// (lifecyclePostTeardownHook, vm's sole registrant) is deleted rather than kept empty.
 	optsJSON, err := json.Marshal(spec.DeployTargetDelOpts{
 		DryRun: opts.DryRun, AssumeYes: opts.AssumeYes, KeepLedger: opts.KeepLedger, RemoveVolumes: opts.RemoveVolumes,
 		KeepRepoChanges: t.KeepRepoChanges, KeepServices: t.KeepServices, KeepImage: t.KeepImage,

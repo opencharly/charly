@@ -32,8 +32,7 @@ func (c *fakeCC) ResolveEndpoint(context.Context, int) (string, error) { return 
 func (c *fakeCC) ResolveGraphicsEndpoint(context.Context, string) (kit.GraphicsEndpoint, error) {
 	return kit.GraphicsEndpoint{}, nil
 }
-func (c *fakeCC) ResolveClusterContext(context.Context, string) (string, error) { return "", nil }
-func (c *fakeCC) ResolveImageLabel(context.Context, string) (string, error)     { return "", nil }
+func (c *fakeCC) ResolveImageLabel(context.Context, string) (string, error) { return "", nil }
 func (c *fakeCC) DialTimeout() time.Duration                                    { return 3 * time.Second }
 func (c *fakeCC) Box() string                                                   { return "" }
 func (c *fakeCC) Instance() string                                              { return "" }

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 
 	"gopkg.in/yaml.v3"
@@ -515,8 +516,8 @@ func TestCandyPortRelayMultiple(t *testing.T) {
 // fixture: a LOCAL-only project (legacyScanCandiesDirScanned, zero remote refs — the early-return
 // leg of ScanAllCandyWithConfigOpts) with a packaged-service candy + a supplied opts.InitCfg must
 // have InitSystems completed with that SAME InitCfg, exactly like a remote-arbitrated winner would.
-// Before the finalizeScannedCandies choke-point consolidation, locals wrapped inside
-// legacyScanCandiesDir/ProjectCandies with NO InitCfg in scope (PopulateCandyInitSystem ran only
+// Before the loaderkit.FinalizeScannedCandies choke-point consolidation, locals wrapped inside
+// legacyScanCandiesDir/ProjectCandies with NO InitCfg in scope (loaderkit.PopulateCandyInitSystem ran only
 // over the remote `winners` map) — so HasInit was unconditionally false for every local candy
 // regardless of what generate.go supplied. This test FAILS on that shape and passes on the
 // consolidated one.
@@ -538,7 +539,7 @@ func TestScanAllCandyWithConfigOpts_LocalCandyGetsInitSystemsCompletion(t *testi
 		},
 	}}
 
-	layers, err := ScanAllCandyWithConfigOpts(dir, &Config{}, ResolveOpts{InitCfg: initCfg})
+	layers, err := ScanAllCandyWithConfigOpts(dir, &Config{}, loaderkit.ResolveOpts{InitCfg: initCfg})
 	if err != nil {
 		t.Fatalf("ScanAllCandyWithConfigOpts: %v", err)
 	}

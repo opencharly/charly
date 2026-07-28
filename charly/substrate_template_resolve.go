@@ -11,8 +11,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
 )
 
 // ResolvedLocal / ResolvedAndroid / ResolvedK8s are the substrate-template value envelopes.
@@ -40,10 +40,10 @@ func resolveK8sViaPlugin(body json.RawMessage) (*ResolvedK8s, error) {
 	return reply.Resolved, nil
 }
 
-// resolveVmViaPlugin projects one opaque vm template body into a *VmSpec
+// resolveVmViaPlugin projects one opaque vm template body into a *vmshared.VmSpec
 // (= *spec.ResolvedVm) via candy/plugin-substrate's OpResolve leg (the vm
 // substrate-value de-type, Cutover L). Returns nil for an empty/absent body.
-func resolveVmViaPlugin(body json.RawMessage) (*VmSpec, error) {
+func resolveVmViaPlugin(body json.RawMessage) (*vmshared.VmSpec, error) {
 	if len(body) == 0 {
 		return nil, nil
 	}
@@ -107,11 +107,9 @@ func invokeSubstrateTemplateResolve(req spec.SubstrateTemplateResolveRequest) ([
 	return invokeTyped[spec.SubstrateTemplateResolveRequest, json.RawMessage](context.Background(), prov, "local", OpResolve, req)
 }
 
-// resolveAndroids projects the whole opaque android template map into resolved envelopes
-// (loaderkit.ResolvePluginKindViaPlugin — the shared loop every plugin-resolved kind accessor
-// uses). Its sibling resolveLocals died with the validate ENGINE (task #60 — the host's only
-// caller, validateLocalTemplates, moved to plugin-box, which decodes Templates.Local itself off
-// the resolved-project envelope).
-func resolveAndroids(uf *loaderkit.UnifiedFile) map[string]*ResolvedAndroid {
-	return loaderkit.ResolvePluginKindViaPlugin(uf, "android", resolveAndroidViaPlugin)
-}
+// resolveAndroidViaPlugin is the android RESOLVE callback the host threads into
+// loaderkit.ValidateAndroidDevices (the box⊻adb XOR validator relocated to
+// sdk/loaderkit); its former map-shaped wrapper resolveAndroids (the sole caller of which was the
+// relocated validateAndroidDevices) is deleted with the move. Its sibling resolveLocals died with
+// the validate ENGINE (task #60 — the host's only caller, validateLocalTemplates, moved to
+// plugin-box, which decodes Templates.Local itself off the resolved-project envelope).

@@ -109,10 +109,12 @@ func hostWalkSeams() spec.WalkSeams {
 // pass, and the re-entrant connect-then-reload re-snapshots.
 func loaderThreaded() spec.Threaded {
 	t := spec.Threaded{
-		Kinds:            map[string]bool{},
-		DeploySubstrates: map[string]bool{},
-		StructuralKinds:  map[string]bool{},
-		Primaries:        map[string]string{},
+		Kinds:                    map[string]bool{},
+		DeploySubstrates:         map[string]bool{},
+		StructuralKinds:          map[string]bool{},
+		Primaries:                map[string]string{},
+		DeployTraits:             map[string]*spec.DeployTraits{},
+		ExternalDeploySubstrates: map[string]bool{},
 	}
 	for _, p := range providerRegistry.allProviders() {
 		switch p.Class() {
@@ -148,6 +150,32 @@ func loaderThreaded() spec.Threaded {
 	}
 	for w, f := range pluginPrimaries {
 		t.Primaries[w] = f
+	}
+	// K1-LOADER RELOCATION: snapshot each recognized kind/substrate word's DECLARED #DeployTraits
+	// (the SAME deployTraitsFor the loader's per-node descent stamp, loaderkit.StampBundleDescents, calls) so the
+	// venue-hop descent stamp reads DATA, never the registry. A word whose deployTraitsFor is nil
+	// (a non-substrate kind, e.g. group/distro) is left absent — the DATA closure returns nil for
+	// it, matching deployTraitsFor's nil-for-unrecognized-word semantics via DescentFromTraits(nil).
+	for k := range t.Kinds {
+		if tr := deployTraitsFor(k); tr != nil {
+			t.DeployTraits[k] = tr
+		}
+	}
+	for k := range t.DeploySubstrates {
+		if tr := deployTraitsFor(k); tr != nil {
+			t.DeployTraits[k] = tr
+		}
+	}
+	// K1-LOADER RELOCATION: snapshot the EXACT set of words the host's registry-live
+	// isExternalDeploySubstrate accepts, evaluated over every recognized substrate word (the
+	// isExternalDeploySubstrate=true set is a subset of the recognized substrates, since it requires
+	// recognizedDeploySubstrate). loaderkit.ValidateCheckBeds checks membership here instead of
+	// reconstructing the resourceKindSet ∧ externalizedDeploySubstrates ∧ recognizedDeploySubstrate
+	// decision — the byte-exact host predicate is threaded, never approximated.
+	for w := range t.DeploySubstrates {
+		if isExternalDeploySubstrate(w) {
+			t.ExternalDeploySubstrates[w] = true
+		}
 	}
 	return t
 }

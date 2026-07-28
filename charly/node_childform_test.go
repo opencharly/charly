@@ -170,12 +170,3 @@ func TestChildForm_WrongKindChild(t *testing.T) {
 		t.Errorf("rejection must hint at `charly migrate`, got %v", err)
 	}
 }
-
-func mustYAMLNode(t *testing.T, s string) *yaml.Node {
-	t.Helper()
-	var n yaml.Node
-	if err := yaml.Unmarshal([]byte(s), &n); err != nil {
-		t.Fatal(err)
-	}
-	return n.Content[0]
-}

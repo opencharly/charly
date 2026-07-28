@@ -90,7 +90,7 @@ func TestNoSinglePluginAPISurface(t *testing.T) {
 		// proves compliant).
 		"DescribeProvider")
 	assertMethodSet(t, "CheckContextService", pb.CheckContextService_ServiceDesc,
-		"HTTPDo", "AddBackground", "ResolveEndpoint", "ResolveGraphicsEndpoint", "ResolveClusterContext",
+		"HTTPDo", "AddBackground", "ResolveEndpoint", "ResolveGraphicsEndpoint",
 		"ResolveImageLabel")
 
 	// Negative arm (teeth): a re-introduced provider word in a surface MUST be flagged. If this

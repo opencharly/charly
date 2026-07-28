@@ -13,7 +13,7 @@ import (
 // — LOADED HERE (LoadBuildConfigForBox, a genuine core/loader dependency), so this fixture-builder
 // stays in charly even though the render function itself moved.
 
-// builderStepWithDef returns a BuilderStep carrying the resolved BuilderDef for
+// builderStepWithDef returns a BuilderStep carrying the resolved vmshared.BuilderDef for
 // `name` loaded from the project's real charly.yml (plus the embedded default
 // build vocabulary), so deploykit.RenderBuilderScript renders the actual
 // phase.install.host cell.
@@ -106,10 +106,10 @@ func TestRenderAurScriptPackages(t *testing.T) {
 }
 
 func TestRenderBuilderScriptUnknownBuilder(t *testing.T) {
-	// A BuilderStep with no resolved BuilderDef (synthetic / unknown builder)
+	// A BuilderStep with no resolved vmshared.BuilderDef (synthetic / unknown builder)
 	// has no host cell to render → error.
 	s := &deploykit.BuilderStep{Builder: "nonexistent"}
 	if _, err := deploykit.RenderBuilderScript(s, "/home/user"); err == nil {
-		t.Fatalf("expected error for builder with no BuilderDef")
+		t.Fatalf("expected error for builder with no vmshared.BuilderDef")
 	}
 }

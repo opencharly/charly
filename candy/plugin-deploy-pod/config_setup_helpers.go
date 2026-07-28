@@ -65,9 +65,9 @@ func secretDepNames(meta *spec.BoxMetadata) []string {
 	return names
 }
 
-// secretResolution mirrors charly-core's SecretResolution (secrets.go) field-for-field (same
-// default Go json tags — Name/Source/Resolved/Required) so #PodConfigProvisionSecretsReply's
-// ResolutionsJSON round-trips without a shared CUE type (a small, stable, JSON-only boundary).
+// secretResolution is the plugin's JSON-boundary type for #PodConfigProvisionSecretsReply's
+// ResolutionsJSON (default Go json tags — Name/Source/Resolved/Required) so it round-trips
+// without a shared CUE type (a small, stable, JSON-only boundary).
 type secretResolution struct {
 	Name     string
 	Source   string
@@ -755,30 +755,14 @@ func updateAllDeployedQuadlets(ctx context.Context, ex *sdk.Executor, rt *kit.Re
 		}
 		envVars = appendAutoDetectedEnv(envVars, detected)
 
-		var provRep spec.PodConfigProvisionSecretsReply
-		_ = hostBuild(ctx, ex, podConfigProvisionSecretsKind, spec.PodConfigProvisionSecretsRequest{
-			MetaJSON: ensureRep.MetaJSON, Box: boxName, Instance: instance, RunEngine: rt.RunEngine, AutoGen: true,
-		}, &provRep)
-		var provisioned []deploykit.CollectedSecret
-		if len(provRep.ProvisionedJSON) > 0 {
-			if err := json.Unmarshal(provRep.ProvisionedJSON, &provisioned); err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: decoding provisioned secrets for %s: %v\n", key, err)
-				continue
-			}
+		provisioned, _, provResolutions, isKeyring, perr := resolvePodProvisionSecrets(ctx, ex, &meta, boxName, instance, rt.RunEngine, true, nil)
+		if perr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: provisioning secrets for %s: %v\n", key, perr)
+			continue
 		}
 		if len(meta.SecretRequire) > 0 {
-			var resolutions []secretResolution
-			if len(provRep.ResolutionsJSON) > 0 {
-				// A silently-discarded decode failure here would leave resolutions empty, making every
-				// secret_require entry look unresolved (or, worse, look resolved if partial-decode
-				// left stale field state) — surfaced instead so this entry is skipped loudly.
-				if err := json.Unmarshal(provRep.ResolutionsJSON, &resolutions); err != nil {
-					fmt.Fprintf(os.Stderr, "Warning: decoding secret resolutions for %s: %v\n", key, err)
-					continue
-				}
-			}
 			missing := 0
-			for _, r := range resolutions {
+			for _, r := range provResolutions {
 				if r.Required && !r.Resolved {
 					missing++
 				}
@@ -787,8 +771,6 @@ func updateAllDeployedQuadlets(ctx context.Context, ex *sdk.Executor, rt *kit.Re
 				fmt.Fprintf(os.Stderr, "Warning: %s has %d unresolved secret_requires entries (quadlet regenerated; image may crashloop on restart)\n", key, missing)
 			}
 		}
-
-		isKeyring := provRep.IsKeyring
 
 		var tunnelCfg *spec.TunnelConfig
 		if meta.Tunnel != nil {
@@ -804,22 +786,12 @@ func updateAllDeployedQuadlets(ctx context.Context, ex *sdk.Executor, rt *kit.Re
 		var resolvedSidecars []deploykit.ResolvedSidecar
 		podName := ""
 		if len(deploySidecarsRaw) > 0 {
-			dsJSON, _ := json.Marshal(deploySidecarsRaw)
-			ptJSON, _ := json.Marshal(sidecarTemplatesOf(&dc))
-			var sidecarRep spec.PodConfigResolveSidecarsReply
-			if err := hostBuild(ctx, ex, podConfigResolveSidecarsKind, spec.PodConfigResolveSidecarsRequest{
-				DeploySidecarsJSON: dsJSON, ProjectTemplatesJSON: ptJSON, Box: boxName, Instance: instance,
-				RunEngine: rt.RunEngine, AutoGen: true,
-			}, &sidecarRep); err != nil {
+			scRes, err := resolvePodSidecars(ctx, ex, deploySidecarsRaw, sidecarTemplatesOf(&dc), nil, boxName, instance, rt.RunEngine, true, nil)
+			if err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: resolving sidecars for %s: %v\n", key, err)
 				continue
 			}
-			if len(sidecarRep.ResolvedSidecarsJSON) > 0 {
-				if err := json.Unmarshal(sidecarRep.ResolvedSidecarsJSON, &resolvedSidecars); err != nil {
-					fmt.Fprintf(os.Stderr, "Warning: decoding resolved sidecars for %s: %v\n", key, err)
-					continue
-				}
-			}
+			resolvedSidecars = scRes.Sidecars
 			if len(resolvedSidecars) > 0 {
 				podName = kit.PodNameInstance(boxName, instance)
 			}

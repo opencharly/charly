@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -119,7 +121,7 @@ func TestResolveImage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			resolved, err := ResolveBox(cfg, tt.boxName, tt.calverTag, testProjectDir(t), ResolveOpts{})
+			resolved, err := resolveBoxTest(cfg, tt.boxName, tt.calverTag, testProjectDir(t), loaderkit.ResolveOpts{})
 			if err != nil {
 				t.Fatalf("ResolveBox() error = %v", err)
 			}
@@ -153,63 +155,14 @@ func TestResolveImageNotFound(t *testing.T) {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
 
-	_, err = ResolveBox(cfg, "nonexistent", "2026.045.1415", testProjectDir(t), ResolveOpts{})
+	_, err = resolveBoxTest(cfg, "nonexistent", "2026.045.1415", testProjectDir(t), loaderkit.ResolveOpts{})
 	if err == nil {
 		t.Error("ResolveBox() expected error for nonexistent image")
 	}
 }
 
-// TestMergeBoxConfig_BuildTunables guards the regression where new
-// BoxConfig fields are silently dropped during the unified loader's
-// defaults: merge because mergeBoxConfig is a hand-maintained field-by-field
-// merger. The build-speed tunables (jobs / podman_jobs / podman_jobs_cap /
-// context_ignore / cache) MUST survive the merge, or defaults.context_ignore
-// authored in charly.yml never reaches the generator.
-func TestMergeBoxConfig_BuildTunables(t *testing.T) {
-	// dst empty → fills from src (the path that dropped these fields).
-	dst := &spec.BoxConfig{}
-	src := &spec.BoxConfig{
-		Jobs:          new(4),
-		PodmanJobs:    new(0),
-		PodmanJobsCap: new(8),
-		ContextIgnore: []string{"image", ".check"},
-		Cache:         "image",
-		KeepImages:    new(5),
-		KeepCheckRuns: new(10),
-	}
-	mergeBoxConfig(dst, src)
-	if dst.KeepImages == nil || *dst.KeepImages != 5 {
-		t.Errorf("KeepImages not merged from src: %v", dst.KeepImages)
-	}
-	if dst.KeepCheckRuns == nil || *dst.KeepCheckRuns != 10 {
-		t.Errorf("KeepCheckRuns not merged from src: %v", dst.KeepCheckRuns)
-	}
-	if dst.Jobs == nil || *dst.Jobs != 4 {
-		t.Errorf("Jobs not merged from src: %v", dst.Jobs)
-	}
-	if dst.PodmanJobs == nil || *dst.PodmanJobs != 0 {
-		t.Errorf("PodmanJobs (explicit 0) not merged from src: %v", dst.PodmanJobs)
-	}
-	if dst.PodmanJobsCap == nil || *dst.PodmanJobsCap != 8 {
-		t.Errorf("PodmanJobsCap not merged from src: %v", dst.PodmanJobsCap)
-	}
-	if len(dst.ContextIgnore) != 2 {
-		t.Errorf("ContextIgnore not merged from src: %v", dst.ContextIgnore)
-	}
-	if dst.Cache != "image" {
-		t.Errorf("Cache not merged from src: %q", dst.Cache)
-	}
-
-	// dst already set → src must NOT override (per-field "dst wins if set").
-	dst2 := &spec.BoxConfig{Jobs: new(2), Cache: "registry"}
-	mergeBoxConfig(dst2, &spec.BoxConfig{Jobs: new(9), Cache: "image"})
-	if dst2.Jobs == nil || *dst2.Jobs != 2 {
-		t.Errorf("dst Jobs should win, got %v", dst2.Jobs)
-	}
-	if dst2.Cache != "registry" {
-		t.Errorf("dst Cache should win, got %q", dst2.Cache)
-	}
-}
+// TestMergeBoxConfig_BuildTunables relocated to sdk/loaderkit/merge_test.go
+// alongside mergeBoxConfig (K1-proper — the merge half of the loader moved to loaderkit).
 
 func TestImageNames(t *testing.T) {
 	cfg, err := LoadConfig("testdata")
@@ -256,7 +209,7 @@ func TestResolveImageBuilders(t *testing.T) {
 	}
 
 	// Image with no explicit builder inherits defaults.builder
-	resolved, err := ResolveBox(cfg, "uses-default", "test", testProjectDir(t), ResolveOpts{})
+	resolved, err := resolveBoxTest(cfg, "uses-default", "test", testProjectDir(t), loaderkit.ResolveOpts{})
 	if err != nil {
 		t.Fatalf("ResolveBox() error = %v", err)
 	}
@@ -265,7 +218,7 @@ func TestResolveImageBuilders(t *testing.T) {
 	}
 
 	// Image with explicit builder overrides defaults per-type
-	resolved, err = ResolveBox(cfg, "uses-custom", "test", testProjectDir(t), ResolveOpts{})
+	resolved, err = resolveBoxTest(cfg, "uses-custom", "test", testProjectDir(t), loaderkit.ResolveOpts{})
 	if err != nil {
 		t.Fatalf("ResolveBox() error = %v", err)
 	}
@@ -284,7 +237,7 @@ func TestResolveImageBuilders(t *testing.T) {
 			"app": {Candy: []string{}},
 		}),
 	}
-	resolved, err = ResolveBox(cfg2, "app", "test", testProjectDir(t), ResolveOpts{})
+	resolved, err = resolveBoxTest(cfg2, "app", "test", testProjectDir(t), loaderkit.ResolveOpts{})
 	if err != nil {
 		t.Fatalf("ResolveBox() error = %v", err)
 	}
@@ -303,7 +256,7 @@ func TestResolveImageBuilders(t *testing.T) {
 			"my-builder": {Candy: []string{}},
 		}),
 	}
-	resolved, err = ResolveBox(cfg3, "my-builder", "test", testProjectDir(t), ResolveOpts{})
+	resolved, err = resolveBoxTest(cfg3, "my-builder", "test", testProjectDir(t), loaderkit.ResolveOpts{})
 	if err != nil {
 		t.Fatalf("ResolveBox() error = %v", err)
 	}
@@ -320,7 +273,7 @@ func TestResolveImageBuilders(t *testing.T) {
 			"child-img":   {Base: "base-img", Candy: []string{}},
 		}),
 	}
-	resolved, err = ResolveBox(cfg4, "child-img", "test", testProjectDir(t), ResolveOpts{})
+	resolved, err = resolveBoxTest(cfg4, "child-img", "test", testProjectDir(t), loaderkit.ResolveOpts{})
 	if err != nil {
 		t.Fatalf("ResolveBox() error = %v", err)
 	}
@@ -352,7 +305,7 @@ func TestCollectBoxPorts(t *testing.T) {
 		}),
 	}
 
-	got, err := CollectBoxPorts(cfg, layers, "child")
+	got, err := deploykit.CollectBoxPorts(cfg, layers, "child")
 	if err != nil {
 		t.Fatalf("CollectBoxPorts() error = %v", err)
 	}
@@ -370,7 +323,7 @@ func TestFullTag(t *testing.T) {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
 
-	resolved, err := ResolveBox(cfg, "base", "2026.045.1415", testProjectDir(t), ResolveOpts{})
+	resolved, err := resolveBoxTest(cfg, "base", "2026.045.1415", testProjectDir(t), loaderkit.ResolveOpts{})
 	if err != nil {
 		t.Fatalf("ResolveBox() error = %v", err)
 	}
@@ -404,7 +357,7 @@ func TestEnabledField(t *testing.T) {
 	}
 
 	// disabled-image is excluded from ResolveAllBox()
-	all, err := ResolveAllBox(cfg, "test", testProjectDir(t), ResolveOpts{})
+	all, err := resolveAllBoxTest(cfg, testProjectDir(t), loaderkit.ResolveOpts{})
 	if err != nil {
 		t.Fatalf("ResolveAllBox() error = %v", err)
 	}
@@ -413,7 +366,7 @@ func TestEnabledField(t *testing.T) {
 	}
 
 	// ResolveBox returns error for disabled image
-	_, err = ResolveBox(cfg, "disabled-image", "test", testProjectDir(t), ResolveOpts{})
+	_, err = resolveBoxTest(cfg, "disabled-image", "test", testProjectDir(t), loaderkit.ResolveOpts{})
 	if err == nil {
 		t.Error("ResolveBox() should return error for disabled image")
 	}
@@ -422,19 +375,19 @@ func TestEnabledField(t *testing.T) {
 	}
 
 	// Enabled images still work
-	_, err = ResolveBox(cfg, "base", "test", testProjectDir(t), ResolveOpts{})
+	_, err = resolveBoxTest(cfg, "base", "test", testProjectDir(t), loaderkit.ResolveOpts{})
 	if err != nil {
 		t.Errorf("ResolveBox() unexpected error for enabled box: %v", err)
 	}
 
 	// --include-disabled (global) reaches the disabled image
-	_, err = ResolveBox(cfg, "disabled-image", "test", testProjectDir(t), ResolveOpts{IncludeDisabled: true})
+	_, err = resolveBoxTest(cfg, "disabled-image", "test", testProjectDir(t), loaderkit.ResolveOpts{IncludeDisabled: true})
 	if err != nil {
-		t.Errorf("ResolveBox(IncludeDisabled=true) should succeed for disabled image, got: %v", err)
+		t.Errorf("resolveBoxTest(IncludeDisabled=true) should succeed for disabled image, got: %v", err)
 	}
 
 	// --include-disabled scoped to a different name still rejects
-	_, err = ResolveBox(cfg, "disabled-image", "test", testProjectDir(t), ResolveOpts{
+	_, err = resolveBoxTest(cfg, "disabled-image", "test", testProjectDir(t), loaderkit.ResolveOpts{
 		IncludeDisabled:      true,
 		IncludeDisabledNames: map[string]bool{"some-other-image": true},
 	})
@@ -443,7 +396,7 @@ func TestEnabledField(t *testing.T) {
 	}
 
 	// --include-disabled scoped to the requested name succeeds
-	_, err = ResolveBox(cfg, "disabled-image", "test", testProjectDir(t), ResolveOpts{
+	_, err = resolveBoxTest(cfg, "disabled-image", "test", testProjectDir(t), loaderkit.ResolveOpts{
 		IncludeDisabled:      true,
 		IncludeDisabledNames: map[string]bool{"disabled-image": true},
 	})
@@ -459,22 +412,22 @@ func TestEnabledField(t *testing.T) {
 func TestResolveOpts_ShouldIncludeDisabled(t *testing.T) {
 	cases := []struct {
 		name string
-		opts ResolveOpts
+		opts loaderkit.ResolveOpts
 		want map[string]bool // image-name → expected return
 	}{
 		{
 			name: "default opts: never include",
-			opts: ResolveOpts{},
+			opts: loaderkit.ResolveOpts{},
 			want: map[string]bool{"foo": false, "bar": false},
 		},
 		{
 			name: "global IncludeDisabled: include all",
-			opts: ResolveOpts{IncludeDisabled: true},
+			opts: loaderkit.ResolveOpts{IncludeDisabled: true},
 			want: map[string]bool{"foo": true, "bar": true},
 		},
 		{
 			name: "scoped IncludeDisabled: only listed names",
-			opts: ResolveOpts{
+			opts: loaderkit.ResolveOpts{
 				IncludeDisabled:      true,
 				IncludeDisabledNames: map[string]bool{"foo": true},
 			},
@@ -482,7 +435,7 @@ func TestResolveOpts_ShouldIncludeDisabled(t *testing.T) {
 		},
 		{
 			name: "scoped without IncludeDisabled flag: never include (flag is the gate)",
-			opts: ResolveOpts{
+			opts: loaderkit.ResolveOpts{
 				IncludeDisabledNames: map[string]bool{"foo": true},
 			},
 			want: map[string]bool{"foo": false, "bar": false},
@@ -491,7 +444,7 @@ func TestResolveOpts_ShouldIncludeDisabled(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			for image, want := range tc.want {
-				if got := tc.opts.shouldIncludeDisabled(image); got != want {
+				if got := tc.opts.ShouldIncludeDisabled(image); got != want {
 					t.Errorf("shouldIncludeDisabled(%q) = %v, want %v", image, got, want)
 				}
 			}
@@ -546,7 +499,7 @@ func TestResolveImageDistroBaseChain(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			resolved, err := ResolveBox(cfg, tt.boxName, "test", testProjectDir(t), ResolveOpts{})
+			resolved, err := resolveBoxTest(cfg, tt.boxName, "test", testProjectDir(t), loaderkit.ResolveOpts{})
 			if err != nil {
 				t.Fatalf("ResolveBox() error = %v", err)
 			}
@@ -596,7 +549,7 @@ func TestResolveImageBuildBaseChain(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			resolved, err := ResolveBox(cfg, tt.boxName, "test", testProjectDir(t), ResolveOpts{})
+			resolved, err := resolveBoxTest(cfg, tt.boxName, "test", testProjectDir(t), loaderkit.ResolveOpts{})
 			if err != nil {
 				t.Fatalf("ResolveBox() error = %v", err)
 			}

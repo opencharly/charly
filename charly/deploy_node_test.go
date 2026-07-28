@@ -223,7 +223,7 @@ func TestMergeDeployConfigsPreservesAllFields(t *testing.T) {
 	desc := "testing"
 	sec := []vmshared.DeploySecretConfig{{Name: "test"}}
 	sd := map[string]json.RawMessage{"side": json.RawMessage(`{"image":"img"}`)}
-	k8s := &K8sDeployConfig{Namespace: "test-ns"}
+	k8s := &vmshared.K8sDeployConfig{Namespace: "test-ns"}
 	res := &vmshared.DeployResources{}
 	exp := &vmshared.DeployExpose{Host: "example.com", TLS: true}
 	storage := []vmshared.DeployStorage{{Name: "s"}}

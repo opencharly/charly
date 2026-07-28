@@ -10,7 +10,9 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
 )
 
 // host_build_check_bed.go — the transitional "check-bed" host-session seam (P12 Wave-2,
@@ -35,8 +37,8 @@ import (
 // `charly` verb (so cannot be cli-reentry).
 //
 // The op bodies call the SHARED core helpers runCheckBed uses (bedGPUPrereqMissing,
-// acquireFileLock, bedVmDomains/acquireVmDomainLock, selfSuperprojectOverridePair/
-// mergeRepoOverrides, acquireResourceForClaimant, startLibvirtUserSession,
+// kit.AcquireFileLock, bedVmDomains/acquireVmDomainLock, selfSuperprojectOverridePair/
+// mergeRepoOverrides, acquireResourceForClaimant, vmshared.StartLibvirtUserSession,
 // persistBedDeployOverrides, bringUpMembers/tearDownMembers, deploykit.WaitForVmSshReady/
 // deploykit.WaitForContainerReady, bedCheckLevel/bedCheckLiveRefs/…) — those helpers STAY
 // core (shared with runCheckBed + bundle_add_cmd; K-wave relocation inventory, never
@@ -51,9 +53,9 @@ const checkBedBuilderKind = "check-bed"
 type bedSession struct {
 	bed       string
 	node      spec.BundleNode // resolved once at setup; drives the members/wait ops
-	bedDomain string          // per-deploy VM domain identity (vmDomainIdentity(bed)); the live domain is charly-<bedDomain>
+	bedDomain string          // per-deploy VM domain identity (spec.VmDomainIdentity(bed)); the live domain is charly-<bedDomain>
 	imageTag  string          // per-RUN bed-scoped image tag (<bed>-<calver>); every box build + deploy in the run passes it as --tag (#75)
-	bedUnlock func() error    // acquireFileLock(".check/<bed>/.lock")
+	bedUnlock func() error    // kit.AcquireFileLock(".check/<bed>/.lock")
 	domUnlock []func() error  // acquireVmDomainLock per bedVmDomains, in acquire order
 	lease     *Lease          // acquireResourceForClaimant
 
@@ -222,7 +224,7 @@ func bedSessionSetup(req spec.CheckBedRequest) (spec.CheckBedReply, error) {
 	// managed ssh alias (post-P33, keyed by the DEPLOY, not the shared kind:vm entity). Threaded
 	// to the plugin in the reply so its `charly vm create/destroy/start` cli steps pass
 	// --domain <bedDomain> (`vm build` stays entity-scoped); harmless (unused) for non-VM beds.
-	s := &bedSession{bed: req.Bed, node: node, bedDomain: vmDomainIdentity(req.Bed), imageTag: bedRunImageTag(req.Bed, calver)}
+	s := &bedSession{bed: req.Bed, node: node, bedDomain: spec.VmDomainIdentity(req.Bed), imageTag: bedRunImageTag(req.Bed, calver)}
 	if overrideSet {
 		s.repoOvSet = true
 		s.hadRepoOv = hadRepoOverride
@@ -238,9 +240,9 @@ func bedSessionSetup(req spec.CheckBedRequest) (spec.CheckBedReply, error) {
 	}()
 
 	// Per-bed exclusive lock — fail-fast on a duplicate concurrent run of the SAME bed.
-	bedUnlock, lockErr := acquireFileLock(filepath.Join(".check", req.Bed, ".lock"), false)
+	bedUnlock, lockErr := kit.AcquireFileLock(filepath.Join(".check", req.Bed, ".lock"), false)
 	if lockErr != nil {
-		if errors.Is(lockErr, errLockBusy) {
+		if errors.Is(lockErr, kit.ErrLockBusy) {
 			return spec.CheckBedReply{}, fmt.Errorf("check bed %q is already running in this project — refusing a concurrent run (lock: .check/%s/.lock)", req.Bed, req.Bed)
 		}
 		return spec.CheckBedReply{}, fmt.Errorf("locking check bed %q: %w", req.Bed, lockErr)
@@ -288,7 +290,7 @@ func bedSessionSetup(req spec.CheckBedRequest) (spec.CheckBedReply, error) {
 
 	// VM/group beds need the libvirt user-session daemon (probes + the backend resolver). Best-effort.
 	if isVM || isGroup {
-		startLibvirtUserSession()
+		vmshared.StartLibvirtUserSession()
 	}
 
 	// Seed the per-host overlay with the bed's project-declared deploy-shaped overrides BEFORE the
@@ -348,9 +350,9 @@ func bedSessionTeardown(req spec.CheckBedRequest) (spec.CheckBedReply, error) {
 // drives its per-member image-build loop from (charly vm build <from> / box build <image> + check
 // box, BEFORE the members-up op deploys them). Deterministic order (sortedMemberKeys). A vm member's
 // From is the kind:vm ENTITY (build/spec source, entity-scoped — NOT --domain); the per-deploy member
-// domain (vmDomainIdentity(memberKey)) is applied host-side by bringUpMembers, not here.
+// domain (spec.VmDomainIdentity(memberKey)) is applied host-side by bringUpMembers, not here.
 func bedMemberDescriptors(members map[string]*spec.BundleNode) []spec.CheckBedMember {
-	keys := sortedMemberKeys(members)
+	keys := loaderkit.SortedMemberKeys(members)
 	if len(keys) == 0 {
 		return nil
 	}
@@ -368,7 +370,7 @@ func bedMemberDescriptors(members map[string]*spec.BundleNode) []spec.CheckBedMe
 // same fixture image name from different trees racing the store-global
 // short-name→newest-local-CalVer resolution); within one run the builds are already
 // coordinated and different images sharing one tag string stay distinct name:tag
-// pairs. The tag analogue of vmDomainIdentity (#33 domain=deploy-name), #75. Bed
+// pairs. The tag analogue of spec.VmDomainIdentity (#33 domain=deploy-name), #75. Bed
 // names are lowercase-hyphenated and calver is YYYY.DDD.HHMM — both valid OCI tag
 // chars — so no sanitization is needed.
 func bedRunImageTag(bed, calver string) string {

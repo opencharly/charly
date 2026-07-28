@@ -12,6 +12,7 @@ import (
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -41,7 +42,7 @@ type Generator struct {
 	// in NewGenerator regardless — only the per-box emission loop is scoped.
 	RequestedBoxes []string
 
-	// ExtraCandyRefs is the ORIGINAL ResolveOpts.ExtraCandyRefs this Generator was
+	// ExtraCandyRefs is the ORIGINAL loaderkit.ResolveOpts.ExtraCandyRefs this Generator was
 	// constructed with (a pod-overlay deploy's add_candy: refs, possibly REMOTE/
 	// qualified — e.g. "@github.com/…:vTAG"). Candies (bare-keyed, post-scan) cannot
 	// stand in for this: a bare candy NAME re-passed as an ExtraCandyRefs entry is a
@@ -71,11 +72,6 @@ type Generator struct {
 	// relocating onto deploykit.Generator). Containerfiles is a shared map ref so
 	// writes propagate; Candies/Boxes are stable post-NewGenerator.
 	dkGen *deploykit.Generator
-}
-
-// globalOrderForBox → deploykit.Generator.GlobalOrderForBox (P8 shim).
-func (g *Generator) globalOrderForBox(imageCandies []string, parentCandies map[string]bool) ([]string, error) {
-	return g.toDeploykit().GlobalOrderForBox(imageCandies, parentCandies)
 }
 
 // resolveUserContext detects existing user in base image or uses configured values
@@ -124,10 +120,71 @@ func (g *Generator) resolveUserContext(img *buildkit.ResolvedBox) {
 	// else: no user found at UID, will create with configured values
 }
 
+// --- verb:oci adopt-user dispatch (folded from the retired oci_plugin.go) ---
+//
+// The render-seam-floor host Generator's resolveUserContext (above) probes an external base
+// image's /etc/passwd for the adopt-user via the compiled-in candy/plugin-oci (verb:oci); the
+// go-containerregistry engine + the actual probe live OUT-OF-PROCESS there. Core keeps only this
+// thin registry-dispatch, its sole consumer being resolveUserContext (and the render-parity test).
+// verb:oci is a pure INTERNAL RPC keyed by an oci_op ENV discriminator (mirroring the vm plugin's
+// VmOp) — the request struct rides Params, the leg selector rides Env — NOT a `plugin_input`-
+// enveloped check verb. It is COMPILED INTO charly by default (compiled_plugins:), so
+// providerRegistry resolves it in-process and project-lessly; connectPluginByWord covers the
+// baked / project-source coexist paths (the registry-first pattern credential_plugin.go uses).
+
+// ociOpInspectUser is the env-JSON selector matching candy/plugin-oci's ociEnv{OciOp}.
+const ociOpInspectUser = "inspect-user"
+
+// ociProvider resolves verb:oci. Registry-first so a COMPILED-IN plugin resolves in-process and
+// project-lessly; falls back to connectPluginByWord for the baked / project-source coexist paths.
+func ociProvider() (Provider, bool) {
+	if p, ok := providerRegistry.resolve(ClassVerb, "oci"); ok {
+		return p, true
+	}
+	return connectPluginByWord(ClassVerb, "oci")
+}
+
+// invokeOciInspectUser probes a remote image's /etc/passwd for the user at uid via verb:oci,
+// returning the spec.UserInfo (Found=false when no such user / the image can't be inspected).
+func invokeOciInspectUser(ref string, uid int) (spec.UserInfo, error) {
+	prov, ok := ociProvider()
+	if !ok {
+		return spec.UserInfo{}, fmt.Errorf(
+			"oci plugin (verb:oci) did not connect — candy/plugin-oci is compiled into charly " +
+				"(compiled_plugins) by default; on a custom build install it alongside charly " +
+				"(/usr/lib/charly/plugins) or run from a project composing it")
+	}
+	paramsJSON, err := marshalJSON(spec.ImageUserInput{Ref: ref, UID: uid})
+	if err != nil {
+		return spec.UserInfo{}, err
+	}
+	envJSON, err := marshalJSON(map[string]string{"oci_op": ociOpInspectUser})
+	if err != nil {
+		return spec.UserInfo{}, err
+	}
+	out, err := prov.Invoke(context.Background(), &Operation{
+		Reserved: "oci",
+		Op:       OpRun,
+		Params:   paramsJSON,
+		Env:      envJSON,
+	})
+	if err != nil {
+		return spec.UserInfo{}, err
+	}
+	if out == nil {
+		return spec.UserInfo{}, fmt.Errorf("oci: verb:oci returned no result")
+	}
+	var info spec.UserInfo
+	if err := json.Unmarshal(out.JSON, &info); err != nil {
+		return spec.UserInfo{}, fmt.Errorf("oci inspect-user: decode reply: %w", err)
+	}
+	return info, nil
+}
+
 // NewGenerator creates a new generator. opts is propagated through Validate
 // + ResolveAllBox so `charly box build --include-disabled` reaches images
 // flagged enabled: false in charly.yml (without modifying the file).
-func NewGenerator(dir string, tag string, opts ResolveOpts) (*Generator, error) {
+func NewGenerator(dir string, tag string, opts loaderkit.ResolveOpts) (*Generator, error) {
 	cfg, err := LoadConfig(dir)
 	if err != nil {
 		return nil, err
@@ -143,7 +200,7 @@ func NewGenerator(dir string, tag string, opts ResolveOpts) (*Generator, error) 
 
 	// InitCfg threads the init-system host-completion pass INTO the scan pipeline (W9): a
 	// spec.CandyReader is read-only, so InitSystems must be populated BEFORE ScanAllCandyWithConfigOpts
-	// wraps each winning candidate — there is no later separate PopulateCandyInitSystem call anymore.
+	// wraps each winning candidate — there is no later separate loaderkit.PopulateCandyInitSystem call anymore.
 	opts.InitCfg = defaultInitCfg
 	layers, err := ScanAllCandyWithConfigOpts(dir, cfg, opts)
 	if err != nil {
@@ -173,7 +230,7 @@ func NewGenerator(dir string, tag string, opts ResolveOpts) (*Generator, error) 
 
 	// Pre-build validation gate — dispatched to the compiled-in validate capability (candy/plugin-box)
 	// by word with a structured OpValidate op (task #60 (C-refined)); the validate ENGINE no longer
-	// lives in core. validateProjectForBuild returns the ValidationError-equivalent on any finding.
+	// lives in core. validateProjectForBuild returns the loaderkit.ValidationError-equivalent on any finding.
 	if err := validateProjectForBuild(dir, opts); err != nil {
 		return nil, err
 	}
@@ -183,7 +240,11 @@ func NewGenerator(dir string, tag string, opts ResolveOpts) (*Generator, error) 
 		tag = ComputeCalVer()
 	}
 
-	images, err := ResolveAllBox(cfg, tag, dir, opts)
+	bkopts, err := buildkitOptsWithVocab(dir, opts)
+	if err != nil {
+		return nil, err
+	}
+	images, err := buildkit.ResolveAllBox(cfg, tag, dir, bkopts)
 	if err != nil {
 		return nil, err
 	}
@@ -225,50 +286,70 @@ func NewGenerator(dir string, tag string, opts ResolveOpts) (*Generator, error) 
 	return g, nil
 }
 
-// cleanStaleBuildDirs removes image directories in .build/ that don't correspond
-// to any enabled image, and removes leftover files like docker-bake.hcl.
-func (g *Generator) cleanStaleBuildDirs() error {
-	entries, err := os.ReadDir(g.BuildDir)
+// newCandyScanGenerator builds a Generator populated with Config+Candies+Boxes+Dir+BuildDir — a
+// candy scan + a PLAIN per-box buildkit.ResolveBox pass (NO ComputeIntermediates / GlobalCandyOrder
+// / ComputeEffectiveVersions / RenderPrepAll) — the minimal state the render-seam floor's 2
+// remaining reverse-channel consumers need: ensureBuildersConnected touches only Config/Dir;
+// resolveInlineBuilderSeam's resolveBuilderStage reads img.Tags/img.Name off gen.Boxes[boxName]
+// (verified by reading resolveBuilderStage's own body — NOT img.Base/BootstrapBuilderImage, so
+// skipping ComputeIntermediates' auto-intermediate Base-rewrite is safe here). MUCH cheaper than
+// NewGenerator: the build-engine RESOLVE's expensive parts (the candy SCAN's network-bound remote
+// fetches, ComputeIntermediates, GlobalCandyOrder, ComputeEffectiveVersions, RenderPrepAll) now run
+// entirely plugin-side (candy/plugin-build's resolveBuildEngine, K3) — recomputing THOSE again
+// host-side for the render-seam cache was 100% wasted work (proven dead by call-graph: nothing
+// downstream ever read the second Generator's render-prep output); ResolveBox itself is pure,
+// in-memory, and genuinely still needed (RCA'd: a first cut that dropped it entirely broke
+// resolveInlineBuilderSeam's img.Tags/img.Name — caught before merge by re-tracing every reader of
+// gen.Boxes[boxName], not by the box-generate smoke test, which never exercises the inline-builder
+// path). Skips the build-time plugin connect + pre-build validate NewGenerator also runs: both
+// already ran plugin-side (resolveBuildEngine steps 4-5) by the time this is reached through the
+// normal build/generate path, and ensureBuildersConnected connects on demand itself when reached
+// any other way (e.g. the loadRenderGen defensive fallback).
+func newCandyScanGenerator(dir string, includeDisabled bool, extraCandyRefs []string) (*Generator, error) {
+	cfg, err := LoadConfig(dir)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
+		return nil, err
 	}
-	for _, entry := range entries {
-		if entry.IsDir() {
-			name := entry.Name()
-			// Skip charly-managed staging dirs (_candy, _buildconfig, .locks,
-			// transient ._*.tmp.* dirs): they are NOT images, and removing them
-			// races a concurrent build that is COPYing from / locking on them.
-			if strings.HasPrefix(name, "_") || strings.HasPrefix(name, ".") {
-				continue
-			}
-			if _, exists := g.Boxes[name]; !exists {
-				path := filepath.Join(g.BuildDir, name)
-				if err := os.RemoveAll(path); err != nil {
-					return fmt.Errorf("removing stale dir %s: %w", path, err)
-				}
-				fmt.Fprintf(os.Stderr, "Removed stale build dir: .build/%s\n", name)
-			}
-		} else if entry.Name() == "docker-bake.hcl" {
-			// Remove leftover HCL file from pre-charly-build era
-			path := filepath.Join(g.BuildDir, entry.Name())
-			if err := os.Remove(path); err != nil {
-				return fmt.Errorf("removing stale file %s: %w", path, err)
-			}
-			fmt.Fprintf(os.Stderr, "Removed stale file: .build/%s\n", entry.Name())
-		}
+	defaultDistroCfg, _, defaultInitCfg, err := LoadDefaultBuildConfig(dir)
+	if err != nil {
+		return nil, fmt.Errorf("loading default build config: %w", err)
 	}
-	return nil
+	RegisterBuildVocabulary(defaultDistroCfg)
+	opts := loaderkit.ResolveOpts{IncludeDisabled: includeDisabled, ExtraCandyRefs: extraCandyRefs, InitCfg: defaultInitCfg}
+	layers, err := ScanAllCandyWithConfigOpts(dir, cfg, opts)
+	if err != nil {
+		return nil, err
+	}
+	bkopts, err := buildkitOptsWithVocab(dir, opts)
+	if err != nil {
+		return nil, err
+	}
+	images, err := buildkit.ResolveAllBox(cfg, ComputeCalVer(), dir, bkopts)
+	if err != nil {
+		return nil, err
+	}
+	return &Generator{
+		Dir:            dir,
+		Config:         cfg,
+		Candies:        layers,
+		InitConfig:     defaultInitCfg,
+		Boxes:          images,
+		BuildDir:       filepath.Join(dir, ".build"),
+		Containerfiles: make(map[string]string),
+		ExtraCandyRefs: extraCandyRefs,
+	}, nil
 }
 
-// Generate generates all build artifacts
+// baselineContextIgnore reads the context_ignore_baseline list from the embedded charly.yml via
+// the shared minimal decoder; panics if the embed is malformed or the directive is empty (a
+// build-time invariant, never a runtime input). Read ONLY by hostBuildContextIgnoreBaseline
+// (host_build_buildengine.go), the thin data leg candy/plugin-build's writeContextIgnore fetches
+// this bootstrap-embedded fact through (K3 host-prep move — cleanStaleBuildDirs/writeContextIgnore/
+// createRemoteCandyCopies/ensureCharlyBinaryFresh themselves moved to candy/plugin-build/host_prep.go;
+// this ONE piece of static data stays host because a separate Go module cannot //go:embed
+// charly/charly.yml).
 var baselineContextIgnore = parseEmbeddedContextIgnoreBaseline()
 
-// parseEmbeddedContextIgnoreBaseline reads the context_ignore_baseline list from the
-// embedded charly.yml via the shared minimal decoder; panics if the embed is malformed or
-// the directive is empty (a build-time invariant, never a runtime input).
 func parseEmbeddedContextIgnoreBaseline() []string {
 	var doc struct {
 		ContextIgnoreBaseline []string `yaml:"context_ignore_baseline"`
@@ -278,54 +359,6 @@ func parseEmbeddedContextIgnoreBaseline() []string {
 		panic("generate: embedded charly.yml has no context_ignore_baseline: directive")
 	}
 	return doc.ContextIgnoreBaseline
-}
-
-// contextIgnoreFiles are the two engine-native build-context ignore files charly
-// generates. podman reads .containerignore (preferring it) or .dockerignore;
-// docker reads only .dockerignore. Emitting both from one source covers both
-// engines with no divergent hand-maintained dotfile.
-var contextIgnoreFiles = []string{".containerignore", ".dockerignore"}
-
-// writeContextIgnore renders the build-context exclude list
-// (baselineContextIgnore + defaults.context_ignore) into BOTH
-// .containerignore and .dockerignore at the project root (the build context
-// root). Single source of values, two render targets — keeps podman and
-// docker builds in lockstep without a hand-maintained dotfile. Insertion
-// order is deterministic (fixed baseline, then author-ordered config),
-// duplicates collapsed.
-func (g *Generator) writeContextIgnore() error {
-	seen := make(map[string]bool)
-	var patterns []string
-	add := func(p string) {
-		p = strings.TrimSpace(p)
-		if p == "" || seen[p] {
-			return
-		}
-		seen[p] = true
-		patterns = append(patterns, p)
-	}
-	for _, p := range baselineContextIgnore {
-		add(p)
-	}
-	if g.Config != nil {
-		for _, p := range g.Config.Defaults.ContextIgnore {
-			add(p)
-		}
-	}
-
-	var b strings.Builder
-	for _, name := range contextIgnoreFiles {
-		b.Reset()
-		fmt.Fprintf(&b, "# %s (generated -- do not edit; source: defaults.context_ignore in charly.yml)\n", name)
-		for _, p := range patterns {
-			b.WriteString(p)
-			b.WriteByte('\n')
-		}
-		if err := kit.AtomicWriteFile(filepath.Join(g.Dir, name), []byte(b.String()), 0o644); err != nil {
-			return fmt.Errorf("writing %s: %w", name, err)
-		}
-	}
-	return nil
 }
 
 // resolveBuilderStage is the SHARED OpResolve Invoke+decode for the builder BUILDER leg (R3 —
@@ -358,7 +391,7 @@ func resolveBuilderStage(prov Provider, word string, in spec.BuilderResolveInput
 
 // resolveExternalBuilder Invokes an `external_builder:`-selected out-of-tree builder provider's
 // OpResolve and returns the decoded BuilderResolveReply — the BUILDER-leg analogue of
-// emitPluginFragment. It sends a MINIMAL render context (the requesting candy name only — an
+// invokeVerbBuildEmit. It sends a MINIMAL render context (the requesting candy name only — an
 // out-of-tree builder renders a self-contained stage that reads none of the detection fields),
 // then requires a non-empty Stage (a mis-selected word producing no build-context builder fails
 // LOUDLY). Shares the OpResolve Invoke with the detection path via resolveBuilderStage (R3).
@@ -374,90 +407,11 @@ func resolveExternalBuilder(prov Provider, word, candyName string, img *buildkit
 	return reply, nil
 }
 
-// emitBakedPlugins bakes each composing candy's `bake_plugin:` out-of-tree plugin
-// binaries into the FINAL image at bakedPluginDir (/usr/lib/charly/plugins/), so a
-// DEPLOYED container — which has neither the candy source nor a go toolchain — can run
-// an external plugin its in-container charly needs at runtime. It is the BUILD-side half
-// of the S0 baked-plugin seam, the deploy-time counterpart of resolvePluginBinary's
-// bakedPluginBinary fallback (plugin_loader.go): the loader looks for the binary at
-// $CHARLY_PLUGIN_DIR/<bakedPluginFileName(name)> then bakedPluginDir/<bakedPluginFileName(name)>,
-// so the COPY destination here uses the SAME bakedPluginFileName helper (plugin_loader.go,
-// R3). It keys by the plugin candy's LEAF name, NOT the full scanned-set key: the BUILD may
-// resolve the candy under an @github ref while the in-container project sees it bare, so the
-// only identity both halves agree on is the leaf.
-//
-// Called post-main-FROM (right after deploykit EmitExternalBuilderArtifacts) so the COPY lands in
-// the final stage. For each referenced plugin it resolves the candy's SOURCE DIR the SAME
-// way loadProjectPlugins does — g.Candies[key].SourceDir on the scanned set
-// (ScanAllCandyWithConfig) — host-builds the provider binary (buildPluginBinary; the SAME
-// host build the loader runs), stages it into the per-image build context under
-// .build/<boxName>/.plugins/, and emits the COPY + chmod. The binary is CGO-free Go, so it
-// is portable to a SAME-ARCH container; cross-arch baking is a future concern. Dedup is by
-// plugin map-key so a plugin baked by two composing candies is built + copied once.
-func (g *Generator) emitBakedPlugins(b *strings.Builder, boxName string, candyOrder []string) error {
-	baked := map[string]struct{}{}
-	for _, candyName := range candyOrder {
-		layer := g.Candies[candyName]
-		if layer == nil || len(layer.GetBakePlugin()) == 0 {
-			continue
-		}
-		for _, ref := range layer.GetBakePlugin() {
-			// key is the g.Candies map key (used for SourceDir resolution); the baked
-			// FILENAME derives from its leaf via bakedPluginFileName — the stable identity
-			// the build-side and the in-container loader agree on across local/@github refs.
-			key := ref.Bare()
-			if _, done := baked[key]; done {
-				continue
-			}
-			baked[key] = struct{}{}
-			plugin := g.Candies[key]
-			if plugin == nil {
-				return fmt.Errorf("candy %q: bake_plugin %q is not a known plugin candy (not in the scanned candy set)", candyName, key)
-			}
-			if plugin.GetSourceDir() == "" {
-				return fmt.Errorf("candy %q: bake_plugin %q has no source dir to build from", candyName, key)
-			}
-			binPath, err := buildPluginBinary(context.Background(), plugin.GetSourceDir(), key)
-			if err != nil {
-				return fmt.Errorf("candy %q: bake_plugin %q: %w", candyName, key, err)
-			}
-			binName := bakedPluginFileName(key)
-			stageDir := filepath.Join(g.BuildDir, boxName, ".plugins")
-			if err := os.MkdirAll(stageDir, 0o755); err != nil {
-				return fmt.Errorf("candy %q: bake_plugin %q: stage dir: %w", candyName, key, err)
-			}
-			if err := buildkit.CopyFileBytes(binPath, filepath.Join(stageDir, binName)); err != nil {
-				return fmt.Errorf("candy %q: bake_plugin %q: stage binary: %w", candyName, key, err)
-			}
-			ctxRel := fmt.Sprintf(".build/%s/.plugins/%s", boxName, binName)
-			dest := bakedPluginDir + "/" + binName
-			fmt.Fprintf(b, "# Bake plugin %q (required by %q) for in-container charly\n", key, candyName)
-			fmt.Fprintf(b, "COPY %s %s\n", ctxRel, dest)
-			fmt.Fprintf(b, "RUN chmod 0755 %s\n", dest)
-			// Bake a `.providers` words manifest beside the binary so the in-container prescan
-			// (discoverBakedPluginWords) registers the plugin's command word into the grammar
-			// WITHOUT building/connecting it — the binary is resolved + fork/exec'd lazily on
-			// dispatch (dispatchExternalCommand's baked path), so an unrelated `charly <cmd>` in
-			// the container pays nothing.
-			if plugin.IsPluginCandy() && len(plugin.GetPluginProviders()) > 0 {
-				providers := plugin.GetPluginProviders() // each a "<class>:<word>" string
-				manifest := strings.Join(providers, "\n") + "\n"
-				if err := os.WriteFile(filepath.Join(stageDir, binName+".providers"), []byte(manifest), 0o644); err != nil {
-					return fmt.Errorf("candy %q: bake_plugin %q: stage manifest: %w", candyName, key, err)
-				}
-				fmt.Fprintf(b, "COPY %s.providers %s.providers\n", ctxRel, dest)
-			}
-			b.WriteString("\n")
-		}
-	}
-	return nil
-}
-
-// collectBuilderRuntimeEnv → deploykit.Generator.CollectBuilderRuntimeEnv (P8 shim).
-// Used by the host render-prep's buildBakedMetadata (the env_candy + path_append labels).
-func (g *Generator) collectBuilderRuntimeEnv(candyOrder []string, img *buildkit.ResolvedBox) []*kit.EnvConfig {
-	return g.toDeploykit().CollectBuilderRuntimeEnv(candyOrder, img)
-}
+// emitBakedPlugins moved to sdk/deploykit (deploykit.EmitBakedPlugins, K3 build-tail move,
+// coneB-buildtail): buildPluginBinary is 100% pure os/exec (proven by the already-moved
+// ensureCharlyBinaryFresh) — no host-only dependency — so the former "bake-plugins" HostBuild
+// round-trip (charly/host_build_bake_plugins.go, DELETED) is unnecessary; NewRenderGeneratorFromProject
+// wires deploykit.EmitBakedPlugins directly.
 
 // descriptionInfo moved to sdk/deploykit (deploykit.DescriptionInfo) in K5-Unit-1 —
 // shared with the deploy state-model body (MergeDeployOntoMetadata reads it). charly
@@ -522,70 +476,12 @@ func (g *Generator) createRemoteCandyCopies() error {
 	return nil
 }
 
-// remoteBuildConfigCacheRoot derives the repo cache root that a remotely-included
-// build.yml was read from, by stripping the candy subpath off any remote candy's
-// cached Path (every remote candy + the remote build.yml share one repo@version
-// cache). Returns "" when the build-config is local (no remote candies).
-func (g *Generator) remoteBuildConfigCacheRoot() string {
-	for _, l := range g.Candies {
-		if l.GetRemote() && l.GetSourceDir() != "" {
-			suffix := filepath.Join(l.GetSubPathPrefix(), l.GetName()) // e.g. "candy/pixi"
-			if trimmed, ok := strings.CutSuffix(l.GetSourceDir(), suffix); ok {
-				return strings.TrimRight(trimmed, string(filepath.Separator))
-			}
-		}
-	}
-	return ""
-}
-
-// materializeBuildConfigAsset ensures a build-config asset file (referenced by a
-// remotely-included build.yml — e.g. the init header_file) is available in the
-// build context. If the project ships the file locally (local build.yml), relPath
-// is returned unchanged. Otherwise the file is copied from the remote build-config
-// cache into .build/_buildconfig/<relPath> (gitignored, like .build/_candy/) and
-// the build-root-relative path is returned for use as a COPY source.
-func (g *Generator) materializeBuildConfigAsset(relPath string) (string, error) {
-	if relPath == "" {
-		return relPath, nil
-	}
-	if _, err := os.Stat(filepath.Join(g.Dir, relPath)); err == nil {
-		return relPath, nil // local build-config ships the asset; COPY works as-is
-	}
-	root := g.remoteBuildConfigCacheRoot()
-	if root == "" {
-		return relPath, nil // no remote source to pull from; leave as authored
-	}
-	srcAbs := filepath.Join(root, relPath)
-	if _, err := os.Stat(srcAbs); err != nil {
-		return relPath, nil // not in the remote cache either; leave as authored
-	}
-	destAbs := filepath.Join(g.BuildDir, "_buildconfig", relPath)
-	if err := os.MkdirAll(filepath.Dir(destAbs), 0755); err != nil {
-		return relPath, err
-	}
-	if out, err := exec.Command("cp", "-a", srcAbs, destAbs).CombinedOutput(); err != nil {
-		return relPath, fmt.Errorf("materializing build-config asset %s: %s: %w", relPath, string(out), err)
-	}
-	return filepath.ToSlash(filepath.Join(".build", "_buildconfig", relPath)), nil
-}
-
-// rewriteHeaderCopyForRemote rewrites a `COPY <src> <dst>` header directive so its
-// source points at a materialized build-config asset when the original src isn't in
-// the local build context. Plain 3-token COPY only; anything else passes through.
-func (g *Generator) rewriteHeaderCopyForRemote(headerCopy string) (string, error) {
-	fields := strings.Fields(headerCopy)
-	if len(fields) != 3 || fields[0] != "COPY" {
-		return headerCopy, nil
-	}
-	newSrc, err := g.materializeBuildConfigAsset(fields[1])
-	if err != nil {
-		return headerCopy, err
-	}
-	if newSrc == fields[1] {
-		return headerCopy, nil
-	}
-	return fmt.Sprintf("COPY %s %s", newSrc, fields[2]), nil
-}
+// remoteBuildConfigCacheRoot/materializeBuildConfigAsset/rewriteHeaderCopyForRemote deleted
+// (coneB-buildtail): dead in this Generator's only surviving path — their sole caller,
+// EmitInitFragmentStages, runs in deploykit's Generate() per-box render loop, never
+// RenderPrepBox (confirmed by call-graph trace, same finding as ValidateEgress/EmitBakedPlugins).
+// sdk/deploykit/header_copy_remote.go already carries the pure, plugin-side reproduction
+// NewRenderGeneratorFromProject wires directly — no host round-trip needed.
 
 // candyMapKey returns the key under which a candy is stored in g.Candies: the
 // fully-qualified remote ref (RepoPath/SubPathPrefix/Name) for remote candies,
@@ -599,7 +495,7 @@ func (g *Generator) rewriteHeaderCopyForRemote(headerCopy string) (string, error
 // candyByName resolves a candy by its INTRINSIC bare name against g.Candies.
 // It is the FORWARD counterpart of deploykit.CandyMapKey (which maps a candy back to its
 // store key): a LOCAL candy is keyed bare == Name, so the direct lookup hits; a
-// REMOTE candy (e.g. a deploy's add_candy: pulled via ResolveOpts.ExtraCandyRefs)
+// REMOTE candy (e.g. a deploy's add_candy: pulled via loaderkit.ResolveOpts.ExtraCandyRefs)
 // is keyed under its fully-qualified ref (deploykit.CandyMapKey), so the direct bare lookup
 // MISSES and we fall back to matching the candy's own Name. Every call site that
 // holds a bare candy name (a plan step's CandyName; an overlay-candy name from

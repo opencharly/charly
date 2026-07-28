@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 	"github.com/opencharly/sdk/vmshared"
@@ -15,20 +16,27 @@ import (
 // derivation, R3), resolveVmEntity, resolveNodeOverlays, and
 // resolveNodeTemplate are (almost entirely) pure functions of (node, path)
 // with no executor dependency, so they run plugin-side in the walk
-// (walk.go's dispatchOne) instead of behind the coarse "deploy-node-dispatch"
-// HostBuild seam. Their results (target/vm_entity/ref/add_candy/tag/the
-// resolved gate opts) ride the spec.DeployNodeDispatchRequest across the
-// wire; the host-side dispatch trusts them as sent rather than recomputing.
-// resolveNodeTemplate's ONE genuinely host-only piece — the LoadUnified-
-// coupled kind:local template lookup — reaches back over the EXISTING
-// generic "deploy-entity-resolve" seam's kind="local" case (R3: reuse a
-// seam, don't invent one).
+// (walk.go's dispatchOne). resolveNodeTemplate's ONE genuinely host-only piece — the
+// kind:local template lookup — used to reach back over the "deploy-entity-
+// resolve" seam's kind="local" case (a per-node LoadUnified call). K4 unit A
+// (core-min wave 3) retired that case: the SAME data already rides the
+// "resolved-project" envelope's Templates.Local RawBody map (proven,
+// SHIPPED precedent — candy/plugin-box's validateLocalTemplates decodes that
+// exact map with zero LoadUnified access), and the raw→ResolvedLocal
+// PROJECTION is a pure decode candy/plugin-substrate's own OpResolve leg
+// already performs (resolve.go's Local arm — copy fields + stash Raw, no
+// host dependency of its own) — reached here via the SAME generic
+// plugin↔plugin sdk.Executor.InvokeProvider(class:"kind", word:"local",
+// OpResolve, …) leg candy/plugin-check/agent.go already uses for its own
+// kind resolve. Net effect: zero new seam, and one fewer host round-trip
+// class (deploy-entity-resolve's "local" arm is now dead — see
+// host_build_deploy_entity_resolve.go).
 
 // emitOpts mirrors charly/bundle_add_cmd.go's deployAddCmd.emitOpts() — the
 // CLI-flags-to-EmitOpts mapping — MINUS ParentExec/Path/ParentNode, which a
 // live DeployExecutor can never cross the wire to carry: the host fills
 // those in after reconstructing the ancestor executor chain host-side
-// (runDeployNodeDispatch). ParentNode itself is dead code today (grep-
+// (the resolve-target-add seam's reconstructParentExec). ParentNode itself is dead code today (grep-
 // confirmed: no reader anywhere in the tree) — never populated pre- or
 // post-relocation, so its omission here changes nothing.
 func (c *BundleAddCmd) emitOpts() deploykit.EmitOpts {
@@ -94,28 +102,24 @@ func (c *BundleAddCmd) resolveNodeOverlays(path string, node *spec.BundleNode) (
 // overrides — the precedence is CLI > deployment > template — because
 // InstallOptsApplyTo is fill-empty, so applying the template's opts after
 // the deployment's leaves the deployment's values intact and only fills the
-// gaps. The template lookup itself is LoadUnified-coupled, so it reaches
-// back to the host over the "deploy-entity-resolve" seam (kind="local") —
-// an EMPTY reply (no EntityJSON, no error) means "no template by that
-// name" (a real error, distinct from a host-side load failure, which the
-// seam surfaces as an actual error).
+// gaps. The template lookup fetches the resolved-project envelope (the
+// SAME "resolved-project" HostBuild seam bundle-compile already calls) and
+// reads its Templates.Local RawBody map — the map is already
+// namespace-qualified (`ns.tmpl`) by the host's fillNamespacedTemplates, so
+// a plain map lookup on node.From covers both a bare and a qualified ref
+// with no extra recursion. An absent key means "no template by that name"
+// (a real error, distinct from an envelope-fetch failure, which surfaces as
+// an actual error from lookupLocalTemplate).
 func resolveNodeTemplate(target, path string, node *spec.BundleNode, addCandies []string, opts deploykit.EmitOpts) ([]string, deploykit.EmitOpts, error) {
 	if target != "local" || node == nil || node.From == "" {
 		return addCandies, opts, nil
 	}
-	var er spec.DeployEntityResolveReply
-	if err := hostDeploySeamJSON("deploy-entity-resolve", spec.DeployEntityResolveRequest{
-		Kind: "local",
-		Name: node.From,
-	}, &er); err != nil {
+	tmpl, err := lookupLocalTemplate(node.From)
+	if err != nil {
 		return addCandies, opts, fmt.Errorf("deployment %q: resolving kind:local template %q: %w", path, node.From, err)
 	}
-	if len(er.EntityJSON) == 0 {
+	if tmpl == nil {
 		return addCandies, opts, fmt.Errorf("deployment %q: unknown kind:local template %q", path, node.From)
-	}
-	var tmpl spec.ResolvedLocal
-	if err := json.Unmarshal(er.EntityJSON, &tmpl); err != nil {
-		return addCandies, opts, fmt.Errorf("deployment %q: decoding kind:local template %q: %w", path, node.From, err)
 	}
 	// Prepend template candies; deployment add_candy are appended.
 	merged := append([]string(nil), tmpl.Candy...)
@@ -124,6 +128,63 @@ func resolveNodeTemplate(target, path string, node *spec.BundleNode, addCandies 
 	// Fill install_opts gaps from the template.
 	opts = deploykit.InstallOptsApplyTo(tmpl.InstallOpts, opts)
 	return addCandies, opts, nil
+}
+
+// lookupLocalTemplate resolves a (possibly namespace-qualified) kind:local template name into its
+// *spec.ResolvedLocal, entirely via existing generic seams — no LoadUnified, no new HostBuild kind:
+//  1. fetch the resolved-project envelope (HostBuild("resolved-project") — the established seam
+//     compileDeployPlans already calls) and read Templates.Local[name] (the RawBody the host's
+//     fillNamespacedTemplates already qualifies by namespace prefix);
+//  2. project that raw body into a *ResolvedLocal via the "local" kind provider's own OpResolve leg
+//     (sdk.Executor.InvokeProvider(class:"kind", word:"local", …) — the SAME plugin↔plugin dispatch
+//     candy/plugin-check/agent.go already uses for its own kind resolve), reusing
+//     candy/plugin-substrate's existing resolve.go Local arm rather than re-deriving the projection
+//     here (R3).
+//
+// Returns (nil, nil) when the envelope carries no template by that name (never present distinct
+// from empty raw bytes, matched by len(raw)==0 as project_resolved_host.go's cp() never inserts an
+// empty entry).
+func lookupLocalTemplate(name string) (*spec.ResolvedLocal, error) {
+	if cmdExec == nil {
+		return nil, fmt.Errorf("no host reverse channel (command not compiled-in?)")
+	}
+	envReq, err := json.Marshal(spec.ResolvedProjectRequest{})
+	if err != nil {
+		return nil, err
+	}
+	envJSON, err := cmdExec.HostBuild(cmdCtx, "resolved-project", envReq)
+	if err != nil {
+		return nil, fmt.Errorf("fetch resolved-project envelope: %w", err)
+	}
+	var rp struct {
+		Templates *spec.ProjectTemplates `json:"templates,omitempty"`
+	}
+	if err := json.Unmarshal(envJSON, &rp); err != nil {
+		return nil, fmt.Errorf("decode resolved-project envelope: %w", err)
+	}
+	if rp.Templates == nil {
+		return nil, nil
+	}
+	raw, ok := rp.Templates.Local[name]
+	if !ok || len(raw) == 0 {
+		return nil, nil
+	}
+
+	reqJSON, err := json.Marshal(spec.SubstrateTemplateResolveRequest{Local: &spec.LocalResolveInput{Local: raw}})
+	if err != nil {
+		return nil, err
+	}
+	resJSON, err := cmdExec.InvokeProvider(cmdCtx, "kind", "local", sdk.OpResolve, reqJSON, nil, sdk.InvokeProviderOpts{})
+	if err != nil {
+		return nil, fmt.Errorf("resolving kind:local template %q via kind:local provider: %w", name, err)
+	}
+	var reply spec.LocalResolveReply
+	if len(resJSON) > 0 {
+		if err := json.Unmarshal(resJSON, &reply); err != nil {
+			return nil, fmt.Errorf("decode kind:local resolve reply: %w", err)
+		}
+	}
+	return reply.Resolved, nil
 }
 
 // resolveVmEntity returns the kind:vm entity name this node targets, so the

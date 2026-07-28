@@ -1,7 +1,6 @@
 package pod
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -45,10 +44,11 @@ import (
 // RemoveImagesByReference), kit.ResolveRuntime, every kit naming/path helper, TunnelServiceFilename/
 // EncServiceFilename, ContainerImage, ExtractMetadata, and DeployKey.
 //
-// Two further axes remain genuinely host-coupled by DESIGN (not this same DeployStateHost class)
-// and reach the host over their own EXISTING narrow seams (R3 — no new seam invented for either):
-//   - the credential axis (runPreRemoveHook's secret-backed hook env) reuses
-//     pod-config-hook-secret-env, the SAME seam pod-config-setup already calls;
+// The credential axis (runPreRemoveHook's secret-backed hook env) now resolves PLUGIN-SIDE via
+// deploykit.ResolveHookSecretEnv + this plugin's own pluginCredentialAccess (verb:credential) — the
+// former pod-config-hook-secret-env seam is retired (this cone's secrets seam-death). One axis
+// remains genuinely host-coupled by DESIGN (not this same DeployStateHost class) and reaches the
+// host over its own EXISTING narrow seam (R3 — no new seam invented):
 //   - the registry-resugar axis (the deploy-entry cleanup) needs a NEW narrow twin,
 //     pod-config-clean-deploy-entry, mirroring deploy-config-save-state's shape exactly —
 //     the EXISTING deploy-config-save seam does NOT fit: it persists an already-loaded, whole,
@@ -68,20 +68,21 @@ import (
 // (a defer runs at function-return time regardless of path, so "call it last" here reproduces the
 // exact same "always runs, after everything else" semantics).
 
-// podConfigHookSecretEnvKind / podConfigCleanDeployEntryKind / podConfigBoxEngineKind are wire
-// kind strings for charly/host_build_pod_config_seams.go's hostBuildPodConfigHookSecretEnv,
-// hostBuildPodConfigCleanDeployEntry (NEW, this cutover), and hostBuildPodConfigBoxEngine (both
-// EXISTING except CleanDeployEntry, reused as-is) — plain protocol literals (R3: kind names are
-// wire strings, not shared Go symbols, so each consuming module names its own const, same
-// convention as podConfigContainerTunnelKind in remove_tunnel.go). The sibling
-// "pod-config-load-bundle" kind is no longer named here — R3 hoist (charly#176 round 1):
-// resolveSidecarNames now calls the seam via sdk/deploykit.LoadBundleConfigViaSeam, which owns
-// that kind string itself (see this file's resolveSidecarNames doc comment).
+// podConfigCleanDeployEntryKind / podConfigBoxEngineKind are wire kind strings for
+// charly/host_build_pod_config_seams.go's hostBuildPodConfigCleanDeployEntry /
+// hostBuildPodConfigBoxEngine — plain protocol literals (R3: kind names are wire strings, not
+// shared Go symbols, so each consuming module names its own const, same convention as
+// podConfigContainerTunnelKind in remove_tunnel.go). The former pod-config-hook-secret-env kind
+// is GONE (this cone's secrets seam-death): the pre_remove hook env resolves plugin-side via
+// deploykit.ResolveHookSecretEnv + pluginCredentialAccess, no host seam.
 const (
-	podConfigHookSecretEnvKind    = "pod-config-hook-secret-env"
 	podConfigCleanDeployEntryKind = "pod-config-clean-deploy-entry"
 	podConfigBoxEngineKind        = "pod-config-box-engine"
 )
+
+// credServiceVNC mirrors charly/credential_plugin.go's CredServiceVNC (the VNC credential service
+// name deploykit's secret helpers key the auto-generated VNC password under).
+const credServiceVNC = "charly/vnc"
 
 // runHook executes a hook script inside a running container (relocated from charly/hooks.go's
 // RunHook — zero core-registry coupling, its only caller was podRemoveCmd).
@@ -188,9 +189,10 @@ func sidecarNamesFromBundleConfig(dc *deploykit.BundleConfig, boxName, instance 
 }
 
 // runPreRemoveHook runs pre_remove hooks (best-effort). Reads hooks from the running container's
-// OCI labels; the credential-backed hook env is resolved via the EXISTING pod-config-hook-secret-env
-// seam (the SAME one pod-config-setup calls) instead of a local resolveHookSecretEnv — that
-// function is registry/credential-coupled and stays host-side.
+// OCI labels; the credential-backed hook env is resolved PLUGIN-SIDE via deploykit.ResolveHookSecretEnv
+// + this plugin's own pluginCredentialAccess (verb:credential — the SAME drive the enc/start path
+// uses), no host seam (the former pod-config-hook-secret-env seam is retired, this cone's secrets
+// seam-death).
 func runPreRemoveHook(engine, containerName, boxName, instance string, cliEnv []string) {
 	imageRef := kit.ContainerImage(engine, containerName)
 	if imageRef == "" {
@@ -200,18 +202,7 @@ func runPreRemoveHook(engine, containerName, boxName, instance string, cliEnv []
 	if metaErr != nil || meta == nil || meta.Hook == nil || meta.Hook.PreRemove == "" {
 		return
 	}
-	metaJSON, err := json.Marshal(meta)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: marshaling metadata for pre_remove hook env: %v\n", err)
-		return
-	}
-	var secretRep spec.PodConfigHookSecretEnvReply
-	var secretEnv []string
-	if err := hostPodSeamReply(podConfigHookSecretEnvKind, spec.PodConfigHookSecretEnvRequest{
-		Box: boxName, Instance: instance, MetaJSON: metaJSON,
-	}, &secretRep); err == nil {
-		secretEnv = secretRep.Env
-	}
+	secretEnv := deploykit.ResolveHookSecretEnv(boxName, instance, meta, credServiceVNC, pluginCredentialAccess())
 	hookEnv := append(append([]string{}, cliEnv...), secretEnv...)
 	if err := runHook(engine, containerName, meta.Hook.PreRemove, hookEnv); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: pre_remove hook failed: %v\n", err)

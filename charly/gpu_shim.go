@@ -25,7 +25,7 @@ var (
 // gpu_shim.go — the in-core SHIMS for GPU/VFIO host DETECTION (cutover C11). The
 // sysfs/exec detection LOGIC moved into the COMPILED-IN candy/plugin-gpu (verb:gpu);
 // these shims resolve that provider and Invoke it, so the in-core consumers
-// (config_image.go CDI-env sites, `charly doctor`, `charly vm create`, and
+// (`charly doctor`, `charly vm create`, and
 // gpu_allocate.go which already calls DetectVFIO) compile against the SAME symbol names
 // and are invisible above the shim. The DRIVER-SWITCH path (vfio<->nvidia rebind) has NO
 // in-core shim — every consumer (`charly vm gpu`, the arbiter) dispatches verb:gpu directly.
@@ -130,5 +130,5 @@ func detectAMDGFXVersion() string {
 // proper Unit-8 moved these into candy/plugin-preempt/holder_dispatch.go, using the
 // class-agnostic sdk.Executor.InvokeProvider) both call verb:gpu peer-to-peer. No in-core
 // driver-switch shim remains — only the pure detection shims above (gpuProbeReply and its
-// consumers), which stay because `charly doctor`/`config_image.go`/`gpu_allocate.go` are
+// consumers), which stay because `charly doctor`/`gpu_allocate.go` are
 // genuinely in-core callers.

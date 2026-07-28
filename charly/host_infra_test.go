@@ -213,7 +213,7 @@ func TestBuildBuilderRunArgs(t *testing.T) {
 	args := kit.BuildBuilderRunArgs(opts)
 	want := []string{
 		"run", "--rm",
-		"--pull=never", // EnsureImagePresent has already handled the pull/build; suppress podman's auto-pull.
+		"--pull=never", // the injected EnsureImage closure has already handled the pull/build; suppress podman's auto-pull.
 		"--user",       // we don't check the exact uid because it varies
 	}
 	if len(args) < len(want) {

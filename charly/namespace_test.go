@@ -5,6 +5,7 @@ import (
 
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/loaderkit"
 )
 
 // TestImportList_Unmarshal covers the mixed-shape import list: bare strings
@@ -88,9 +89,9 @@ widget:
 	}
 	// app's base (sub.widget) must be classified INTERNAL (resolves via namespace),
 	// not mistaken for an external OCI URL.
-	ri, err := ResolveBox(cfg, "app", "test", root, ResolveOpts{})
+	ri, err := resolveBoxTest(cfg, "app", "test", root, loaderkit.ResolveOpts{})
 	if err != nil {
-		t.Fatalf("ResolveBox(app): %v", err)
+		t.Fatalf("resolveBoxTest(app): %v", err)
 	}
 	if ri.IsExternalBase {
 		t.Error("app.base = sub.widget should be IsExternalBase=false (resolved through namespace)")
@@ -184,7 +185,7 @@ widget:
 		t.Fatalf("LoadUnified: %v", err)
 	}
 	cfg := uf.ProjectConfig()
-	resolved, err := ResolveAllBox(cfg, "test", root, ResolveOpts{})
+	resolved, err := resolveAllBoxTest(cfg, root, loaderkit.ResolveOpts{})
 	if err != nil {
 		t.Fatalf("ResolveAllBox must NOT fail when a namespaced base's builder ref points into the base's own namespace: %v", err)
 	}
@@ -262,7 +263,7 @@ fedora:
 		t.Fatalf("LoadUnified: %v", err)
 	}
 	cfg := uf.ProjectConfig()
-	resolved, err := ResolveAllBox(cfg, "test", root, ResolveOpts{})
+	resolved, err := resolveAllBoxTest(cfg, root, loaderkit.ResolveOpts{})
 	if err != nil {
 		t.Fatalf("ResolveAllBox: %v", err)
 	}

@@ -11,6 +11,7 @@ import (
 
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -54,15 +55,15 @@ func TestCandyRef(t *testing.T) {
 // the Problem-B regression guard: a repo re-tag of an UNCHANGED candy must not
 // warn. Different per-entity versions warn once and the newest version wins.
 func TestPickCandyVersion(t *testing.T) {
-	mk := func(ver, tag string) candyCandidate {
-		return candyCandidate{
-			scanned: spec.ScannedCandy{Model: spec.CandyModel{Name: "x", Version: ver}},
-			version: ver,
-			gitTag:  tag,
-			source:  "github.com/o/r@" + tag,
+	mk := func(ver, tag string) loaderkit.CandyCandidate {
+		return loaderkit.CandyCandidate{
+			Scanned: spec.ScannedCandy{Model: spec.CandyModel{Name: "x", Version: ver}},
+			Version: ver,
+			GitTag:  tag,
+			Source:  "github.com/o/r@" + tag,
 		}
 	}
-	capture := func(fn func() candyCandidate) (candyCandidate, string) {
+	capture := func(fn func() loaderkit.CandyCandidate) (loaderkit.CandyCandidate, string) {
 		old := os.Stderr
 		r, w, _ := os.Pipe()
 		os.Stderr = w
@@ -75,8 +76,8 @@ func TestPickCandyVersion(t *testing.T) {
 	}
 
 	// Same per-entity version, different git tags -> NO warning, newest tag wins.
-	got, warn := capture(func() candyCandidate {
-		return pickCandyVersion("github.com/o/r/layers/x", []candyCandidate{
+	got, warn := capture(func() loaderkit.CandyCandidate {
+		return loaderkit.PickCandyVersion("github.com/o/r/layers/x", []loaderkit.CandyCandidate{
 			mk("2026.141.1600", "v2026.141.1600"),
 			mk("2026.141.1600", "v2026.150.900"),
 		})
@@ -84,19 +85,19 @@ func TestPickCandyVersion(t *testing.T) {
 	if warn != "" {
 		t.Errorf("same per-entity version must not warn, got: %q", warn)
 	}
-	if got.gitTag != "v2026.150.900" {
-		t.Errorf("freshness tiebreak: want newest git tag v2026.150.900, got %q", got.gitTag)
+	if got.GitTag != "v2026.150.900" {
+		t.Errorf("freshness tiebreak: want newest git tag v2026.150.900, got %q", got.GitTag)
 	}
 
 	// Different per-entity versions -> exactly one warning, newest version wins.
-	got, warn = capture(func() candyCandidate {
-		return pickCandyVersion("github.com/o/r/layers/x", []candyCandidate{
+	got, warn = capture(func() loaderkit.CandyCandidate {
+		return loaderkit.PickCandyVersion("github.com/o/r/layers/x", []loaderkit.CandyCandidate{
 			mk("2026.141.1600", "v2026.141.1600"),
 			mk("2026.144.0531", "v2026.144.531"),
 		})
 	})
-	if got.version != "2026.144.0531" {
-		t.Errorf("newest per-entity version must win, got %q", got.version)
+	if got.Version != "2026.144.0531" {
+		t.Errorf("newest per-entity version must win, got %q", got.Version)
 	}
 	if !strings.Contains(warn, "resolved to multiple versions") || !strings.Contains(warn, "2026.144.0531") {
 		t.Errorf("expected one multi-version warning naming the winner, got: %q", warn)
@@ -314,7 +315,7 @@ func TestCollectRemoteRefs(t *testing.T) {
 	// production input and is a false positive for the regression that gap describes
 	// (verified LATENT/unreachable in this repo today, not a reason to leave this
 	// misrepresenting green). Batch #59 reworks this fixture to go through a real
-	// ScanCandy()/finalizeScannedCandies() round-trip instead of hand-building CandyView.
+	// ScanCandy()/loaderkit.FinalizeScannedCandies() round-trip instead of hand-building CandyView.
 	layers := map[string]spec.CandyReader{
 		"pixi": testCandy("pixi", spec.CandyModel{}, spec.CandyView{}),
 		"my-layer": testCandy("my-layer", spec.CandyModel{}, spec.CandyView{Require: []string{
@@ -343,7 +344,7 @@ func TestCollectRemoteRefs(t *testing.T) {
 }
 
 // TestCollectRemoteRefsOptsExtraCandyRefs proves a deploy's add_candy: candy ref
-// (passed via ResolveOpts.ExtraCandyRefs) is collected EVEN WHEN no image references
+// (passed via loaderkit.ResolveOpts.ExtraCandyRefs) is collected EVEN WHEN no image references
 // it — the regression guard for the bed-composition enabler: box/arch's check-arch-vm
 // add_candy's the out-of-tree plugin-spice candy with NO candy in the image closure
 // requiring it, so without ExtraCandyRefs the plugin would never enter the candy scan
@@ -356,12 +357,12 @@ func TestCollectRemoteRefsOptsExtraCandyRefs(t *testing.T) {
 	layers := map[string]spec.CandyReader{"pixi": testCandy("pixi", spec.CandyModel{}, spec.CandyView{})}
 
 	pluginRef := "@github.com/opencharly/charly/candy/plugin-spice:v2026.174.0425"
-	opts := ResolveOpts{ExtraCandyRefs: []string{pluginRef}}
+	opts := loaderkit.ResolveOpts{ExtraCandyRefs: []string{pluginRef}}
 	downloads, err := CollectRemoteRefsOpts(cfg, layers, opts)
 	if err != nil {
 		t.Fatalf("CollectRemoteRefsOpts() error = %v", err)
 	}
-	var got *RemoteDownload
+	var got *loaderkit.RemoteDownload
 	for i := range downloads {
 		if downloads[i].RepoPath == "github.com/opencharly/charly" {
 			got = &downloads[i]
@@ -379,7 +380,7 @@ func TestCollectRemoteRefsOptsExtraCandyRefs(t *testing.T) {
 
 	// A LOCAL ExtraCandyRef is a no-op (already covered by ScanCandy): collecting it
 	// adds no remote download.
-	localOnly, err := CollectRemoteRefsOpts(cfg, layers, ResolveOpts{ExtraCandyRefs: []string{"plugin-spice"}})
+	localOnly, err := CollectRemoteRefsOpts(cfg, layers, loaderkit.ResolveOpts{ExtraCandyRefs: []string{"plugin-spice"}})
 	if err != nil {
 		t.Fatalf("CollectRemoteRefsOpts(local extra) error = %v", err)
 	}
@@ -458,7 +459,7 @@ func TestCollectRemoteRefsOptsIncludeDisabled(t *testing.T) {
 	}
 
 	// Scoped --include-disabled debian-builder → the ref IS collected.
-	opts := ResolveOpts{IncludeDisabled: true, IncludeDisabledNames: map[string]bool{"debian-builder": true}}
+	opts := loaderkit.ResolveOpts{IncludeDisabled: true, IncludeDisabledNames: map[string]bool{"debian-builder": true}}
 	dls, err := CollectRemoteRefsOpts(cfg, layers, opts)
 	if err != nil {
 		t.Fatalf("CollectRemoteRefsOpts() error = %v", err)

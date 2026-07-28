@@ -18,7 +18,6 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -78,23 +77,12 @@ func deployTraitDescent(word string) *spec.DescentDescriptor {
 	return kit.DescentFromTraits(deployTraitsFor(word))
 }
 
-func stampBundleDescents(uf *loaderkit.UnifiedFile) {
-	if uf == nil {
-		return
-	}
-	for name, node := range uf.Bundle {
-		n := node
-		kit.StampDescent(&n, deployTraitsFor)
-		uf.Bundle[name] = n
-	}
-}
-
 // NestedContainerName computes the podman container name used when
 // a container node is nested under a dotted path. Path segments are
 // joined with underscores so the result is a legal podman name.
 // Called by the walker when it knows the full dotted path.
 
-// resolveTreeRoot returns the DeploymentsSection's Images map from
+// resolveTreeRoot returns the top-level Bundle (deploy-node) map from
 // the merged loaderkit.UnifiedFile + local overlay, ready for dotted-path
 // traversal. Handles the project charly.yml + local overlay merge
 // the same way deployAddCmd.Run does today.

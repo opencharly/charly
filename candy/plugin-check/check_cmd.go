@@ -56,6 +56,12 @@ type CheckCmd struct {
 	Live    CheckLiveCmd    `cmd:"" name:"live" help:"Full-stack check against a running deployment"`
 	Feature CheckFeatureCmd `cmd:"" name:"feature" help:"Run a running deployment's baked plan as acceptance tests; agent steps are agent-graded (Agent Driven Evaluation)"`
 
+	// FeatureBox is the HIDDEN build-scope feature-run engine leaf: `charly box feature run <image>`
+	// (candy/plugin-box's command:feature) InvokeProvider's command:check with these args so the
+	// build-scope ADE acceptance runs in plugin-check (where the check runner lives) — the F10
+	// plugin↔plugin bridge (cone-C #31). Never typed by a user (the box command is the surface).
+	FeatureBox CheckFeatureBoxCmd `cmd:"__feature-box" hidden:"" help:"Build-scope feature-run engine (bridged from box feature run)."`
+
 	// — Wave-2 additions (leaf implementations in their own files) —
 	Run            CheckRunCmd       `cmd:"" name:"run" help:"Run a disposable check bed (R10 sequence) or an iterate: entity (AI loop)."`
 	RunLocal       CheckRunLocalCmd  `cmd:"run-local" hidden:"" help:"In-target harness driver (set by the host)."`

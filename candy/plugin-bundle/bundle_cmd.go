@@ -2,7 +2,9 @@ package bundle
 
 import (
 	"fmt"
+	"os"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
@@ -62,6 +64,13 @@ type BundleAddCmd struct {
 	// Disposable + lifecycle classification (see /charly-internals:disposable).
 	Disposable bool   `long:"disposable" help:"Mark this deploy disposable (authorizes autonomous charly update; writes disposable: true into charly.yml)"`
 	Lifecycle  string `long:"lifecycle" help:"Informational tier tag (scratch|dev|test|qa|staging|prod|custom). NO effect on disposability — use --disposable for that."`
+
+	// dir / externalSubstrates are INTERNAL (unexported — Kong ignores them), populated once at the
+	// top of Run() from the deploy-plugins-connect preamble (dir = the host os.Getwd) and the
+	// loader-threaded snapshot (externalSubstrates = the ExternalDeploySubstrates DATA set, byte-
+	// exact to the host's isExternalDeploySubstrate). dispatchOne/compileNodePlans read them per node.
+	dir                string
+	externalSubstrates map[string]bool
 }
 
 // BundleAddCmd's Run() (the plugin-side deploy-tree WALK) lives in walk.go (K4-C walk port).
@@ -70,7 +79,7 @@ type BundleAddCmd struct {
 // deploy-del-resolve / deploy-members-down / deploy-node-del-dispatch seams. The AssumeYes field
 // renders as `--assume-yes` (Kong derives the long name from the FIELD; the `long:"yes"` tag is
 // a no-op in the separate-tag form) with `-y` as the short form — the exact contract
-// charly/bundle_add_cmd.go::deployDelArgv relies on.
+// sdk/deploykit.BundleDelArgv relies on.
 type BundleDelCmd struct {
 	Name string `arg:"" help:"Deploy name (literal 'host' or a container deploy name)"`
 
@@ -81,8 +90,11 @@ type BundleDelCmd struct {
 	DryRun          bool `long:"dry-run" help:"Print the teardown plan without executing"`
 }
 
-// BundleFromBoxCmd is the `charly bundle from-box <ref> [name]` grammar; it forwards to the
-// deploy-from-box host-build seam (a source-less deploy from an image's baked OCI labels).
+// BundleFromBoxCmd is the `charly bundle from-box <ref> [name]` grammar. The pod path (default)
+// forwards to the deploy-from-box host-build seam (a source-less deploy from an image's baked OCI
+// labels); the --cluster path (Cone A shape 3) is handled ENTIRELY plugin-side — see
+// deploy_from_box.go — reaching the k8s cluster lookup + the deploy:k8s substrate directly, no
+// HostBuild round-trip for the k8s branch.
 type BundleFromBoxCmd struct {
 	Ref       string   `arg:"" help:"Full image ref (local or registry), e.g. ghcr.io/opencharly/selkies-kde-nvidia:latest"`
 	Name      string   `arg:"" optional:"" help:"Deploy name (default: the image-ref basename without tag)"`
@@ -94,14 +106,32 @@ type BundleFromBoxCmd struct {
 }
 
 func (c *BundleFromBoxCmd) Run() error {
+	if c.Cluster != "" {
+		dir, _ := os.Getwd()
+		out, err := DeployFromBox(cmdCtx, cmdExec, DeployFromBoxOpts{
+			ImageRef:       c.Ref,
+			DeploymentName: c.Name,
+			Instance:       c.Instance,
+			ClusterName:    c.Cluster,
+			Namespace:      c.Namespace,
+			ProjectDir:     dir,
+		})
+		if err != nil {
+			return err
+		}
+		name := c.Name
+		if name == "" {
+			name = deploykit.DeriveDeploymentName(c.Ref)
+		}
+		fmt.Fprintf(os.Stderr, "Generated Kustomize overlay for %q at %s\n  apply with: kubectl apply -k %s\n", name, out, out)
+		return nil
+	}
 	return hostDeploySeam("deploy-from-box", spec.DeployFromBoxRequest{
-		Ref:       c.Ref,
-		Name:      c.Name,
-		Instance:  c.Instance,
-		Env:       c.Env,
-		Port:      c.Port,
-		Cluster:   c.Cluster,
-		Namespace: c.Namespace,
+		Ref:      c.Ref,
+		Name:     c.Name,
+		Instance: c.Instance,
+		Env:      c.Env,
+		Port:     c.Port,
 	})
 }
 

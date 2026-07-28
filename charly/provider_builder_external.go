@@ -1,6 +1,9 @@
 package main
 
-import "github.com/opencharly/sdk/spec"
+import (
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/spec"
+)
 
 // provider_builder_external.go — the externalized DETECTION-builder registry surface, the
 // builder-class companion of provider_deploy.go's externalizedDeploySubstrates /
@@ -23,13 +26,10 @@ import "github.com/opencharly/sdk/spec"
 
 // externalizedBuilders is THE single source of truth for which builder words are served by an
 // EXTERNAL out-of-process plugin (no in-proc BuilderProvider). A word here resolves through
-// providerRegistry.ResolveBuilder to a *grpcProvider connected at plugin-load time.
-var externalizedBuilders = map[string]bool{
-	"cargo": true,
-	"npm":   true,
-	"pixi":  true,
-	"aur":   true,
-}
+// providerRegistry.ResolveBuilder to a *grpcProvider connected at plugin-load time. The VALUE lives
+// in buildkit (K3 build-engine, U6) so candy/plugin-build's plugin-side RESOLVE reads the same D-fact;
+// this is the charly-core alias to it (R3, one source).
+var externalizedBuilders = buildkit.ExternalizedBuilders
 
 // externalBuilderPlugins maps each externalized builder word to the candy SUBPATH of the plugin
 // that serves it (in the default project repo) — the builder companion of

@@ -11,7 +11,7 @@ import (
 // resolveDelNode (literal "host" / "vm:"-prefix legacy forms / a charly.yml tree entry / a
 // ref-based pod-artifact probe) needs LoadUnified + the on-disk artifact probe, so it stays
 // host-side; the plugin's `charly bundle del` calls this FIRST. Also connects the deployment's
-// out-of-tree plugin candies (loadDeployPlugins), the SAME preamble deploy-tree-resolve runs for
+// out-of-tree plugin candies (loadDeployPlugins), the SAME preamble deploy-plugins-connect runs for
 // Add.
 const deployDelResolveBuilderKind = "deploy-del-resolve"
 

@@ -9,6 +9,7 @@ import (
 
 	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
@@ -43,7 +44,7 @@ func TestValidateCheckBeds_TargetEnum(t *testing.T) {
 			"check-weird": {Target: "k8s", Disposable: new(true)},
 		},
 	}
-	err := validateCheckBeds(uf)
+	err := loaderkit.ValidateCheckBeds(uf, loaderThreaded())
 	if err == nil || !strings.Contains(err.Error(), "unsupported target") {
 		t.Fatalf("expected target-enum error, got %v", err)
 	}
@@ -57,18 +58,18 @@ func TestValidateCheckBeds_VmRefMustResolve(t *testing.T) {
 			"check-k3s-vm": {Target: "vm", From: "k3s-vm", Disposable: new(true)},
 		},
 	}
-	if err := validateCheckBeds(missing); err == nil || !strings.Contains(err.Error(), "not defined") {
+	if err := loaderkit.ValidateCheckBeds(missing, loaderThreaded()); err == nil || !strings.Contains(err.Error(), "not defined") {
 		t.Fatalf("expected missing-vm-ref error, got %v", err)
 	}
 	ok := &loaderkit.UnifiedFile{
 		PluginKinds: map[string]map[string]json.RawMessage{
-			"vm": rawTemplateMap(map[string]*VmSpec{"k3s-vm": {}}),
+			"vm": rawTemplateMap(map[string]*vmshared.VmSpec{"k3s-vm": {}}),
 		},
 		Bundle: map[string]spec.BundleNode{
 			"check-k3s-vm": {Target: "vm", From: "k3s-vm", Disposable: new(true)},
 		},
 	}
-	if err := validateCheckBeds(ok); err != nil {
+	if err := loaderkit.ValidateCheckBeds(ok, loaderThreaded()); err != nil {
 		t.Fatalf("defined vm ref should pass, got %v", err)
 	}
 }
@@ -81,7 +82,7 @@ func TestValidateCheckBeds_LocalRefMustResolve(t *testing.T) {
 			"check-local": {Target: "local", From: "check-local", Disposable: new(true)},
 		},
 	}
-	if err := validateCheckBeds(missing); err == nil || !strings.Contains(err.Error(), "not defined") {
+	if err := loaderkit.ValidateCheckBeds(missing, loaderThreaded()); err == nil || !strings.Contains(err.Error(), "not defined") {
 		t.Fatalf("expected missing-local-ref error, got %v", err)
 	}
 	ok := &loaderkit.UnifiedFile{
@@ -92,7 +93,7 @@ func TestValidateCheckBeds_LocalRefMustResolve(t *testing.T) {
 			"check-local": {Target: "local", From: "check-local", Disposable: new(true)},
 		},
 	}
-	if err := validateCheckBeds(ok); err != nil {
+	if err := loaderkit.ValidateCheckBeds(ok, loaderThreaded()); err != nil {
 		t.Fatalf("defined local ref should pass, got %v", err)
 	}
 }

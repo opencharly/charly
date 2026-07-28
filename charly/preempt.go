@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"sort"
 	"strings"
 
 	"github.com/opencharly/sdk"
@@ -85,7 +84,8 @@ func newResourceArbiter() *arbiterProxy { return &arbiterProxy{} }
 // arbiterInvoke resolves verb:arbiter and Invokes it with an action-tagged input, threading the
 // IN-PROC reverse channel onto the ctx so the plugin's Invoke reaches its host seams over
 // InvokeProvider/HostBuild (always-served generic seams — plugin_executor_reverse.go) — the SAME
-// dispatchBuild in-proc-executor pattern (build.go). Infra failures (no plugin, marshal, invoke)
+// in-proc-executor pattern candy/plugin-box's dispatchBuild / candy/plugin-vm's resolveVmBuild use.
+// Infra failures (no plugin, marshal, invoke)
 // are returned as a Go error; a per-action OP failure rides reply.Error. This is the generic
 // core→verb registry bridge the core lease-lifecycle callers use (core is not a plugin, so it
 // cannot call InvokeProvider itself).
@@ -255,25 +255,5 @@ func dedupeNonEmpty(in []string) []string {
 		seen[s] = true
 		out = append(out, s)
 	}
-	return out
-}
-
-// intersect returns the sorted set intersection of a and b — used by validate_preempt.go's
-// requires_exclusive/requires_shared overlap check (the arbiter's own copy travels with it in
-// candy/plugin-preempt, its separate module).
-func intersect(a, b []string) []string {
-	set := map[string]bool{}
-	for _, s := range a {
-		set[s] = true
-	}
-	var out []string
-	seen := map[string]bool{}
-	for _, s := range b {
-		if set[s] && !seen[s] {
-			seen[s] = true
-			out = append(out, s)
-		}
-	}
-	sort.Strings(out)
 	return out
 }

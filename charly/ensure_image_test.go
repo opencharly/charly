@@ -1,100 +1,104 @@
 package main
 
 import (
-	"context"
+	"errors"
+	"os/exec"
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/kit"
 )
 
-// TestResolveImageRefForEnsure_RemoteRef — `@github.com/...`
-// passes through unchanged; the pull path routes via
-// ResolveRemoteImage at pull time.
-func TestResolveImageRefForEnsure_RemoteRef(t *testing.T) {
-	ref, err := resolveImageRefForEnsure("@github.com/opencharly/charly/check-target:latest", nil, "")
-	if err != nil {
-		t.Fatalf("remote ref err: %v", err)
-	}
-	if !strings.HasPrefix(ref, "@github.com/") {
-		t.Errorf("remote ref should pass through, got %q", ref)
-	}
-}
+func TestEnsureImagePresent(t *testing.T) {
+	// Save and restore original
+	orig := kit.LocalImageExists
+	defer func() { kit.LocalImageExists = orig }()
 
-// TestResolveImageRefForEnsure_FullRef — fully-qualified registry
-// refs pass through unchanged.
-func TestResolveImageRefForEnsure_FullRef(t *testing.T) {
-	ref, err := resolveImageRefForEnsure("ghcr.io/opencharly/check-target:2026.124.1253", nil, "")
-	if err != nil {
-		t.Fatalf("full ref err: %v", err)
-	}
-	if ref != "ghcr.io/opencharly/check-target:2026.124.1253" {
-		t.Errorf("full ref should pass through, got %q", ref)
-	}
-}
-
-// TestResolveImageRefForEnsure_ShortNameRequiresCfg — short names
-// without a *Config error with a friendly message naming charly.yml.
-func TestResolveImageRefForEnsure_ShortNameRequiresCfg(t *testing.T) {
-	_, err := resolveImageRefForEnsure("check-target", nil, "")
-	if err == nil {
-		t.Fatal("expected error for short name with nil cfg")
-	}
-	if !strings.Contains(err.Error(), "charly.yml") {
-		t.Errorf("error should mention charly.yml, got: %v", err)
-	}
-}
-
-// TestBuildableShortName_FullRefBasenameLookup — the build-fallback
-// path for full registry refs reverse-resolves the basename against
-// cfg.Box. This is what lets
-// `ghcr.io/opencharly/arch-builder:<tag>` build locally on a
-// host with no ghcr.io credentials.
-func TestBuildableShortName_FullRefBasenameLookup(t *testing.T) {
-	cfg := &Config{Box: boxMapOf(map[string]spec.BoxConfig{
-		"arch-builder":   {},
-		"fedora-builder": {},
-	})}
-	cases := []struct {
-		image string
-		want  string
-	}{
-		{"ghcr.io/opencharly/arch-builder:2026.122.2252", "arch-builder"},
-		{"ghcr.io/opencharly/fedora-builder:latest", "fedora-builder"},
-		{"localhost:5000/arch-builder:dev", "arch-builder"},
-		{"arch-builder", "arch-builder"},
-		{"some-unknown-image", ""},
-		{"ghcr.io/owner/totally-unknown:v1", ""},
-	}
-	for _, c := range cases {
-		got := buildableShortName(c.image, cfg)
-		if got != c.want {
-			t.Errorf("buildableShortName(%q) = %q, want %q", c.image, got, c.want)
+	t.Run("same engine image exists", func(t *testing.T) {
+		kit.LocalImageExists = func(engine, ref string) bool { return true }
+		rt := &kit.ResolvedRuntime{BuildEngine: "docker", RunEngine: "docker"}
+		if err := ensureImagePresent("myimage:latest", rt); err != nil {
+			t.Errorf("expected no error, got: %v", err)
 		}
-	}
-}
+	})
 
-// TestBuildableShortName_NilCfg returns "" cleanly.
-func TestBuildableShortName_NilCfg(t *testing.T) {
-	if got := buildableShortName("anything", nil); got != "" {
-		t.Errorf("expected '' for nil cfg, got %q", got)
-	}
-}
+	t.Run("same engine image missing", func(t *testing.T) {
+		kit.LocalImageExists = func(engine, ref string) bool { return false }
+		rt := &kit.ResolvedRuntime{BuildEngine: "docker", RunEngine: "docker"}
+		err := ensureImagePresent("myimage:latest", rt)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		if !errors.Is(err, kit.ErrImageNotLocal) {
+			t.Errorf("expected kit.ErrImageNotLocal, got: %v", err)
+		}
+		if !strings.Contains(err.Error(), "myimage:latest") {
+			t.Errorf("expected error to name the missing image, got: %v", err)
+		}
+	})
 
-// TestBuildableShortName_RemoteRef returns "" — remote refs use the
-// remote project's charly.yml; local build is not applicable.
-func TestBuildableShortName_RemoteRef(t *testing.T) {
-	cfg := &Config{Box: boxMapOf(map[string]spec.BoxConfig{"x": {}})}
-	if got := buildableShortName("@github.com/owner/repo/x:tag", cfg); got != "" {
-		t.Errorf("expected '' for remote ref, got %q", got)
-	}
-}
+	t.Run("cross engine already in run engine", func(t *testing.T) {
+		kit.LocalImageExists = func(engine, ref string) bool {
+			return engine == "podman" // exists in run engine
+		}
+		rt := &kit.ResolvedRuntime{BuildEngine: "docker", RunEngine: "podman"}
+		if err := ensureImagePresent("myimage:latest", rt); err != nil {
+			t.Errorf("expected no error, got: %v", err)
+		}
+	})
 
-// TestEnsureImagePresent_EmptyImageErrors guards against silent
-// no-ops on empty input.
-func TestEnsureImagePresent_EmptyImageErrors(t *testing.T) {
-	err := EnsureImagePresent(context.TODO(), "", nil, "")
-	if err == nil {
-		t.Error("expected error on empty image identifier")
-	}
+	t.Run("cross engine missing from both", func(t *testing.T) {
+		kit.LocalImageExists = func(engine, ref string) bool { return false }
+		rt := &kit.ResolvedRuntime{BuildEngine: "docker", RunEngine: "podman"}
+		err := ensureImagePresent("myimage:latest", rt)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		if !errors.Is(err, kit.ErrImageNotLocal) {
+			t.Errorf("expected kit.ErrImageNotLocal, got: %v", err)
+		}
+	})
+
+	t.Run("cross engine needs transfer", func(t *testing.T) {
+		var checks []string
+		kit.LocalImageExists = func(engine, ref string) bool {
+			checks = append(checks, engine)
+			return engine == "docker" // only in build engine
+		}
+		rt := &kit.ResolvedRuntime{BuildEngine: "docker", RunEngine: "podman"}
+		// TransferImage will fail because no real engines, but we verify
+		// the check order: run engine first, then build engine
+		_ = ensureImagePresent("myimage:latest", rt)
+		if len(checks) < 2 {
+			t.Fatalf("expected at least 2 ImageExists checks, got %d", len(checks))
+		}
+		if checks[0] != "podman" {
+			t.Errorf("first check should be run engine (podman), got %s", checks[0])
+		}
+		if checks[1] != "docker" {
+			t.Errorf("second check should be build engine (docker), got %s", checks[1])
+		}
+	})
+
+	t.Run("podman to docker transfer", func(t *testing.T) {
+		// This test requires docker to be in PATH (it execs "docker load")
+		if _, err := exec.LookPath("docker"); err != nil {
+			t.Skip("docker not available, skipping cross-engine transfer test")
+		}
+		kit.LocalImageExists = func(engine, ref string) bool {
+			return engine == "podman" // only in build engine
+		}
+		rt := &kit.ResolvedRuntime{BuildEngine: "podman", RunEngine: "docker"}
+		// TransferImage will fail (no real engines), but we verify EnsureImage
+		// attempts the transfer in the right direction
+		err := ensureImagePresent("myimage:latest", rt)
+		// The error comes from TransferImage trying to exec podman save
+		if err == nil {
+			t.Fatal("expected error from TransferImage (no real engine)")
+		}
+		// It should NOT be a "not found" error — it should be a transfer error
+		if strings.Contains(err.Error(), "not found") {
+			t.Errorf("should have attempted transfer, not reported not-found: %v", err)
+		}
+	})
 }

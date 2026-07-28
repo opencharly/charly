@@ -18,8 +18,6 @@ package main
 
 import (
 	"fmt"
-
-	"gopkg.in/yaml.v3"
 )
 
 // pluginPrimaries maps a plugin verb word to its declared PRIMARY input field —
@@ -52,60 +50,14 @@ func registerPluginPrimary(word, field string) error {
 	return nil
 }
 
-// pluginPrimaryFor returns word's declared primary input field.
+// pluginPrimaryFor returns word's declared primary input field. Used by the
+// plugin-load schema gate's primary cross-check (a host-side registry consult,
+// distinct from the deploy-state writer's resugar, which reads primaries as DATA).
 func pluginPrimaryFor(word string) (string, bool) {
 	f, ok := pluginPrimaries[word]
 	return f, ok
 }
 
-// resugarPlan is the desugar's INVERSE, used by the deploy-state WRITER
-// (deploy_nodeform.go): each step's internal plugin/plugin_input pair rewrites
-// back to the authored `<word>: <input>` sugar (collapsing a single-primary map
-// to the scalar shorthand), so a written file round-trips through the
-// parse-time desugar instead of tripping its authored-envelope ban.
-func resugarPlan(plan *yaml.Node) {
-	if plan == nil || plan.Kind != yaml.SequenceNode {
-		return
-	}
-	for _, st := range plan.Content {
-		if st.Kind != yaml.MappingNode {
-			continue
-		}
-		pluginIdx, inputIdx := -1, -1
-		for i := 0; i+1 < len(st.Content); i += 2 {
-			switch st.Content[i].Value {
-			case "plugin":
-				pluginIdx = i
-			case "plugin_input":
-				inputIdx = i
-			}
-		}
-		if pluginIdx < 0 {
-			continue
-		}
-		word := st.Content[pluginIdx+1].Value
-		input := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
-		if inputIdx >= 0 {
-			input = st.Content[inputIdx+1]
-		}
-		// scalar-collapse: input == {<primary>: <scalar>}
-		if prim, ok := pluginPrimaryFor(word); ok && input.Kind == yaml.MappingNode &&
-			len(input.Content) == 2 && input.Content[0].Value == prim &&
-			input.Content[1].Kind == yaml.ScalarNode {
-			input = input.Content[1]
-		}
-		nc := make([]*yaml.Node, 0, len(st.Content))
-		for i := 0; i+1 < len(st.Content); i += 2 {
-			switch i {
-			case pluginIdx:
-				nc = append(nc, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: word,
-					HeadComment: st.Content[i].HeadComment}, input)
-			case inputIdx:
-				// dropped — folded into the sugar key's value
-			default:
-				nc = append(nc, st.Content[i], st.Content[i+1])
-			}
-		}
-		st.Content = nc
-	}
-}
+// (resugarPlan — the save-side desugar inverse — moved to deploykit.MarshalBundleNode's own
+// resugarPlan in the deploy_nodeform convergence: it reads the primaries D-fact as DATA, so it is
+// plugin-reachable. pluginPrimaryFor above stays here as the host LOAD-path schema-gate consult.)

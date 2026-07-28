@@ -6,6 +6,7 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
 )
 
 func TestCollectImageVolumesSimple(t *testing.T) {
@@ -17,11 +18,11 @@ func TestCollectImageVolumesSimple(t *testing.T) {
 	layers := map[string]spec.CandyReader{
 		"svc": testCandy("svc",
 			spec.CandyModel{Plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-			spec.CandyView{Volumes: []VolumeYAML{{Name: "data", Path: "~/.myapp"}}},
+			spec.CandyView{Volumes: []vmshared.VolumeYAML{{Name: "data", Path: "~/.myapp"}}},
 		),
 	}
 
-	mounts, err := CollectBoxVolume(cfg, layers, "myapp", "/home/user", nil)
+	mounts, err := deploykit.CollectBoxVolume(cfg, layers, "myapp", "/home/user", nil)
 	if err != nil {
 		t.Fatalf("CollectBoxVolume() error = %v", err)
 	}
@@ -44,15 +45,15 @@ func TestCollectImageVolumesChain(t *testing.T) {
 	layers := map[string]spec.CandyReader{
 		"store": testCandy("store",
 			spec.CandyModel{Plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-			spec.CandyView{Volumes: []VolumeYAML{{Name: "models", Path: "~/.models"}}},
+			spec.CandyView{Volumes: []vmshared.VolumeYAML{{Name: "models", Path: "~/.models"}}},
 		),
 		"app": testCandy("app",
 			spec.CandyModel{Plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-			spec.CandyView{Volumes: []VolumeYAML{{Name: "data", Path: "~/.app"}}},
+			spec.CandyView{Volumes: []vmshared.VolumeYAML{{Name: "data", Path: "~/.app"}}},
 		),
 	}
 
-	mounts, err := CollectBoxVolume(cfg, layers, "child", "/home/user", nil)
+	mounts, err := deploykit.CollectBoxVolume(cfg, layers, "child", "/home/user", nil)
 	if err != nil {
 		t.Fatalf("CollectBoxVolume() error = %v", err)
 	}
@@ -77,15 +78,15 @@ func TestCollectImageVolumesDedup(t *testing.T) {
 	layers := map[string]spec.CandyReader{
 		"store": testCandy("store",
 			spec.CandyModel{Plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-			spec.CandyView{Volumes: []VolumeYAML{{Name: "data", Path: "~/.base-data"}}},
+			spec.CandyView{Volumes: []vmshared.VolumeYAML{{Name: "data", Path: "~/.base-data"}}},
 		),
 		"override": testCandy("override",
 			spec.CandyModel{Plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-			spec.CandyView{Volumes: []VolumeYAML{{Name: "data", Path: "~/.child-data"}}},
+			spec.CandyView{Volumes: []vmshared.VolumeYAML{{Name: "data", Path: "~/.child-data"}}},
 		),
 	}
 
-	mounts, err := CollectBoxVolume(cfg, layers, "child", "/home/user", nil)
+	mounts, err := deploykit.CollectBoxVolume(cfg, layers, "child", "/home/user", nil)
 	if err != nil {
 		t.Fatalf("CollectBoxVolume() error = %v", err)
 	}
@@ -109,7 +110,7 @@ func TestCollectImageVolumesNoVolumes(t *testing.T) {
 		"plain": testCandy("plain", spec.CandyModel{Plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}}, spec.CandyView{}),
 	}
 
-	mounts, err := CollectBoxVolume(cfg, layers, "base", "/home/user", nil)
+	mounts, err := deploykit.CollectBoxVolume(cfg, layers, "base", "/home/user", nil)
 	if err != nil {
 		t.Fatalf("CollectBoxVolume() error = %v", err)
 	}
@@ -118,35 +119,5 @@ func TestCollectImageVolumesNoVolumes(t *testing.T) {
 	}
 }
 
-func TestExpandHome(t *testing.T) {
-	tests := []struct {
-		path string
-		home string
-		want string
-	}{
-		{"~/.openclaw", "/home/user", "/home/user/.openclaw"},
-		{"~", "/home/user", "/home/user"},
-		{"$HOME/.config", "/home/user", "/home/user/.config"},
-		{"/absolute/path", "/home/user", "/absolute/path"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.path, func(t *testing.T) {
-			got := expandHome(tt.path, tt.home)
-			if got != tt.want {
-				t.Errorf("expandHome(%q, %q) = %q, want %q", tt.path, tt.home, got, tt.want)
-			}
-		})
-	}
-}
-
-func TestSortVolumeMounts(t *testing.T) {
-	mounts := []deploykit.VolumeMount{
-		{VolumeName: "charly-app-z", ContainerPath: "/z"},
-		{VolumeName: "charly-app-a", ContainerPath: "/a"},
-		{VolumeName: "charly-app-m", ContainerPath: "/m"},
-	}
-	sortVolumeMounts(mounts)
-	if mounts[0].VolumeName != "charly-app-a" || mounts[1].VolumeName != "charly-app-m" || mounts[2].VolumeName != "charly-app-z" {
-		t.Errorf("sortVolumeMounts() result: %v", mounts)
-	}
-}
+// TestExpandHome + TestSortVolumeMounts relocated to sdk/deploykit/volume_collect_test.go
+// alongside the expandVolumeHome + sortVolumeMounts helpers (core-min wave-3 build-cluster split).

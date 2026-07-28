@@ -9,6 +9,7 @@ import (
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
 )
 
 // The var-substitution + user-spec render helpers, the inline-content stager, and
@@ -31,47 +32,43 @@ func (g *Generator) toDeploykit() *deploykit.Generator {
 	dg.Candies = g.Candies
 	dg.Tag = g.Tag
 	dg.Boxes = g.Boxes
+	// Config + InitConfig: the RESOLVE-side inputs the host render-prep pass
+	// (dg.RenderPrepAll/RenderPrepBox, K3-U3) reads to fill the per-box build-render
+	// caches. The plugin-build render path (NewRenderGeneratorFromProject) never
+	// runs render-prep, so it leaves these nil and reads the caches from the envelope.
+	dg.Config = g.Config
+	dg.InitConfig = g.InitConfig
 	dg.BuildDir = g.BuildDir
 	dg.Containerfiles = g.Containerfiles
 	dg.GlobalOrder = g.GlobalOrder
 	dg.RequestedBoxes = g.RequestedBoxes
 	dg.DevLocalPkg = g.DevLocalPkg
 	// EmitPluginOp: the ONLY host seam the render needs — dispatch a non-command
-	// plugin verb through the core Provider registry (a ProvisionActor act-shell,
-	// else the OpEmit fragment). Error strings preserved byte-exact.
+	// plugin verb UNIFORMLY through Invoke(OpEmit) via the core Provider registry.
+	// No package-main concrete-type assert: a state-provision verb self-declares its
+	// act shell via EmitReply.ActScript (see invokeVerbBuildEmit). Registry resolve
+	// stays core (the plugin-render path uses InvokeProvider(OpEmit) directly).
 	dg.EmitPluginOp = func(op *spec.Op, img *buildkit.ResolvedBox) (string, bool, error) {
 		prov, ok := providerRegistry.ResolveVerb(op.Plugin)
 		if !ok {
 			return "", false, fmt.Errorf("run: plugin verb %q is not registered (an external plugin not connected at build time?)", op.Plugin)
 		}
-		if actor, isActor := prov.(ProvisionActor); isActor {
-			script, sok := actor.RenderProvisionScript(op, img.Tags)
-			if !sok {
-				return "", false, fmt.Errorf("run: plugin verb %q is not act-capable (ProvisionActor declined)", op.Plugin)
-			}
-			return script, true, nil
-		}
-		frag, ferr := emitPluginFragment(prov, op, img)
-		if ferr != nil {
-			return "", false, fmt.Errorf("run: plugin verb %q build-emit: %w", op.Plugin, ferr)
-		}
-		return frag, false, nil
+		return invokeVerbBuildEmit(context.Background(), prov, op, img)
 	}
 	dg.CollectBoxPorts = func(boxName string) ([]string, error) {
-		return CollectBoxPorts(g.Config, g.Candies, boxName)
+		return deploykit.CollectBoxPorts(g.Config, g.Candies, boxName)
 	}
-	dg.ValidateEgress = ValidateEgress
-	// ValidateTextEgress: the rendered-Containerfile text gate (kind "rendered_text", mode
-	// "text") — the deploykit writeContainerfile calls it instead of the bytes ValidateEgress
-	// (#67 render-DRIVE move). Wraps core validateTextEgress.
-	dg.ValidateTextEgress = validateTextEgress
+	// ValidateEgress/ValidateTextEgress: left unwired here — this toDeploykit() Generator's ONLY
+	// surviving caller (resolved_project_host.go's fillNamespacedBoxes) calls RenderPrepBox only,
+	// which never reaches Generate()/EmitTraefikRouteStage (confirmed dead by call-graph trace,
+	// egress.go dissolution, coneB-buildtail).
 	// RenderService: the init-cluster service materialization crosses to
 	// candy/plugin-init (OpResolve) + egress-gates host-side. All arg/return types
 	// are spec aliases, so the core func satisfies the seam field directly.
 	dg.RenderService = RenderService
-	// RewriteHeaderCopyForRemote: host-fs materialization of a remote build-config
-	// asset referenced by a stage_header_copy COPY line (stays core).
-	dg.RewriteHeaderCopyForRemote = g.rewriteHeaderCopyForRemote
+	// RewriteHeaderCopyForRemote: left unwired here — same dead-in-this-path finding as
+	// ValidateEgress/EmitBakedPlugins above (its only caller, EmitInitFragmentStages, runs in
+	// Generate()'s per-box render loop, never RenderPrepBox).
 	// writeCandySteps seams: the inline-builder registry resolve (builder-emit
 	// cluster, stays core) and the localpkg image install. ExternalizedBuilders is
 	// the registry fact selecting the branch. RenderLocalPkgImageInstall itself
@@ -89,16 +86,16 @@ func (g *Generator) toDeploykit() *deploykit.Generator {
 	}
 	dg.ResolveDetectionBuilderStage = g.resolveDetectionBuilderStageSeam
 	dg.ResolveExternalBuilderStage = g.resolveExternalBuilderStageSeam
-	// EmitBakedPlugins: the S0 baked-plugin BUILD-side seam — bake each composing
-	// candy's bake_plugin binaries into the final image. The host closure is the
-	// existing emitBakedPlugins (stays core: host-builds plugin binaries). Used by
-	// deploykit.Generator.generateContainerfile (#67 render-DRIVE move).
-	dg.EmitBakedPlugins = g.emitBakedPlugins
+	// EmitBakedPlugins: left unwired here — this toDeploykit() Generator's ONLY surviving
+	// caller (resolved_project_host.go's fillNamespacedBoxes) calls RenderPrepBox only, which
+	// never reads EmitBakedPlugins (K3 build-tail move, coneB-buildtail: the real render path
+	// wires deploykit.EmitBakedPlugins directly, no host round-trip — see
+	// render_generator_from_project.go).
 	// CollectBoxVolume: the volume-aggregate seam for data-image label emission.
 	// Wraps the core CollectBoxVolume (reads the live Config + Candy graph). Used by
 	// deploykit.Generator.generateDataImageContainerfile (#67 render-DRIVE move).
 	dg.CollectBoxVolume = func(boxName, home string) ([]deploykit.VolumeMount, error) {
-		return CollectBoxVolume(g.Config, g.Candies, boxName, home, nil)
+		return deploykit.CollectBoxVolume(g.Config, g.Candies, boxName, home, nil)
 	}
 	g.dkGen = dg
 	return dg
@@ -151,7 +148,7 @@ func (g *Generator) resolveExternalBuilderStageSeam(word, candyName string, img 
 // returning its C10 InlineFragment (or a per-failure error, byte-preserved). The
 // builder-emit cluster (ensureBuildersConnected + registry ResolveBuilder +
 // resolveBuilderStage) is registry-coupled and stays core.
-func (g *Generator) resolveInlineBuilderSeam(candyName, bName string, bDef *BuilderDef, ctx *spec.BuildStageContext, img *buildkit.ResolvedBox) (string, error) {
+func (g *Generator) resolveInlineBuilderSeam(candyName, bName string, bDef *vmshared.BuilderDef, ctx *spec.BuildStageContext, img *buildkit.ResolvedBox) (string, error) {
 	layer := g.Candies[candyName]
 	if err := ensureBuildersConnected(context.Background(), g.Config, g.Dir, []string{bName}); err != nil {
 		return "", fmt.Errorf("candy %q: connect inline builder %q: %w", candyName, bName, err)
@@ -171,41 +168,56 @@ func (g *Generator) resolveInlineBuilderSeam(candyName, bName string, bDef *Buil
 	return reply.InlineFragment, nil
 }
 
-// emitPluginFragment renders a plugin verb's BUILD-context Containerfile fragment
-// via the provider's OpEmit Invoke — placement-agnostic above the registry (in-proc
-// for a builtin, over go-plugin gRPC for an external connected by the build-time
-// plugin connect seam in NewGenerator). The plugin receives its plugin_input as
-// op.Params and a spec.BuildEnv descriptor as op.Env, and returns a spec.EmitReply
-// whose Fragment is spliced verbatim into the generated Containerfile. The build-time
-// half of the operator-authorized build-time plugin execution.
-func emitPluginFragment(prov Provider, op *spec.Op, img *buildkit.ResolvedBox) (string, error) {
-	params, err := marshalJSON(op.PluginInput)
+// invokeVerbBuildEmit renders a plugin verb's BUILD-context Containerfile contribution
+// via a UNIFORM Invoke(OpEmit) — placement-agnostic above the registry (in-proc for a
+// builtin, over go-plugin gRPC for an external connected by the build-time plugin connect
+// seam in NewGenerator), with NO package-main concrete-type assert. The provider receives
+// the FULL op as op.Params (a state-provision act reads SHARED #Op modifiers — mode/content —
+// beyond plugin_input) + a spec.BuildEnv descriptor as op.Env, and returns a spec.EmitReply:
+// a state-provision verb sets ActScript=true and Fragment=the act shell (RUN-wrapped by the
+// caller via EmitCmd — the former ProvisionActor branch), any other verb returns a verbatim
+// Containerfile Fragment (ActScript=false) spliced as-is. An empty non-act fragment is a loud
+// error (a runtime-/deploy-only capability wrongly asked to build-emit; never bake nothing, R4).
+// The build-time half of the operator-authorized build-time plugin execution.
+func invokeVerbBuildEmit(ctx context.Context, prov Provider, op *spec.Op, img *buildkit.ResolvedBox) (string, bool, error) {
+	params, err := marshalJSON(op)
 	if err != nil {
-		return "", fmt.Errorf("marshal plugin_input: %w", err)
+		return "", false, fmt.Errorf("run: plugin verb %q build-emit: marshal op: %w", op.Plugin, err)
 	}
 	var distros []string
 	if img != nil {
 		distros = img.Tags
 	}
-	return invokeOpEmitFragment(context.Background(), prov, op.Plugin, params, spec.BuildEnv{Distros: distros})
+	env, err := marshalJSON(spec.BuildEnv{Distros: distros})
+	if err != nil {
+		return "", false, fmt.Errorf("run: plugin verb %q build-emit: marshal build env: %w", op.Plugin, err)
+	}
+	res, err := prov.Invoke(ctx, &Operation{Reserved: op.Plugin, Op: OpEmit, Params: params, Env: env})
+	if err != nil {
+		return "", false, fmt.Errorf("run: plugin verb %q build-emit: %w", op.Plugin, err)
+	}
+	var reply spec.EmitReply
+	if res != nil && len(res.JSON) > 0 {
+		if uerr := json.Unmarshal(res.JSON, &reply); uerr != nil {
+			return "", false, fmt.Errorf("run: plugin verb %q build-emit: decode OpEmit reply: %w", op.Plugin, uerr)
+		}
+	}
+	if !reply.ActScript && strings.TrimSpace(reply.Fragment) == "" {
+		return "", false, fmt.Errorf("run: plugin verb %q returned an empty OpEmit fragment — it has no build-context act (a runtime-only verb in a build run: step, or a deploy-only step declaring emits without an OpEmit fragment? use context: [runtime] / set emits=false)", op.Plugin)
+	}
+	return reply.Fragment, reply.ActScript, nil
 }
 
-// invokeOpEmitFragment is the ONE OpEmit → EmitReply → empty-guard → Fragment path (R3),
-// shared by the build-context VERB emit (emitPluginFragment, via emitTasks) AND the
-// build-context external-STEP emit (ociEmitStep, F-STEP-EMIT). It Invokes
-// the provider's OpEmit with the already-marshalled params (a verb's plugin_input, or a
-// step's opaque Payload) and the caller-supplied spec.BuildEnv descriptor, decodes the EmitReply,
-// and returns the Containerfile fragment — failing LOUDLY on an empty fragment (a runtime-/deploy-only
-// capability wrongly asked to build-emit; never bake nothing silently, R4). ctx MAY carry an
-// in-proc reverse channel (sdk.ContextWithExecutor) so a HOST-COUPLED plugin can call back
-// HostBuild during its OpEmit; a PURE plugin ignores it and returns the fragment directly.
-func invokeOpEmitFragment(ctx context.Context, prov Provider, word string, params []byte, env spec.BuildEnv) (string, error) {
-	return invokeOpEmitFragmentOpt(ctx, prov, word, params, env, false)
-}
-
-// invokeOpEmitFragmentOpt is the OpEmit → EmitReply → Fragment core shared by the guarding
-// invokeOpEmitFragment and the pod-overlay deploykit.OCITarget's compiler-emitted-step build-emit (R3).
-// allowEmpty controls the empty-fragment guard: false (the default) fails LOUDLY on an empty
+// invokeOpEmitFragmentOpt is the OpEmit → EmitReply → Fragment path for the build-context
+// external-STEP emit (ociEmitStep, F-STEP-EMIT — the pod-overlay deploykit.OCITarget's
+// compiler-emitted-step build-emit). It Invokes the provider's OpEmit with the already-marshalled
+// params (a step's opaque Payload) and the caller-supplied spec.BuildEnv descriptor, decodes the
+// EmitReply, and returns the Containerfile fragment. (The build-context VERB emit is
+// invokeVerbBuildEmit above, which decodes EmitReply.ActScript itself for the uniform
+// state-provision act path — P8b.) ctx MAY carry an in-proc reverse channel
+// (sdk.ContextWithExecutor) so a HOST-COUPLED step plugin can call back HostBuild during its
+// OpEmit; a PURE step plugin ignores it and returns the fragment directly.
+// allowEmpty controls the empty-fragment guard: false fails LOUDLY on an empty
 // fragment — a runtime-/deploy-only capability wrongly asked to build-emit; true permits an empty
 // fragment, used by deploykit.OCITarget for a COMPILER-EMITTED typed step whose render is legitimately empty
 // for a given instance (an empty shell snippet, a packaged service with no overrides + enable=false,

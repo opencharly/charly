@@ -247,22 +247,26 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 	}
 
 	portMap := deploykit.PortMapFromMappings(ports)
-	portMapJSON, _ := json.Marshal(portMap)
 
-	if len(meta.EnvProvide) > 0 {
-		_ = hostBuild(ctx, ex, podConfigInjectEnvKind, spec.PodConfigInjectEnvProvidesRequest{
-			Box: c.Box, Instance: c.Instance, EnvProvides: meta.EnvProvide, PortMapJSON: portMapJSON,
-		}, nil)
-	}
-	if len(meta.MCPProvide) > 0 {
-		mcpJSON, _ := json.Marshal(meta.MCPProvide)
-		_ = hostBuild(ctx, ex, podConfigInjectMCPKind, spec.PodConfigInjectMCPProvidesRequest{
-			Box: c.Box, Instance: c.Instance, MCPProvidesJSON: mcpJSON, PortMapJSON: portMapJSON,
-		}, nil)
-	}
-	dc, err = loadDeploy(ctx, ex, "charly config reload-after-inject")
+	// Env/MCP provides injection (P11 seam-death — see provides_inject.go). The plugin resolves the
+	// provides templates itself and mutates the loaded deploy config in place, persisting through the
+	// SAME loadDeploy→modify→saveBundle path the secrets/sidecar persist uses (R3); the locked
+	// whole-file write stays in the floored saveBundleConfigNodeForm behind pod-config-save-bundle.
+	dc, err = loadDeploy(ctx, ex, "charly config reload-before-inject")
 	if err != nil {
 		return err
+	}
+	provChanged := false
+	if len(meta.EnvProvide) > 0 && injectEnvProvidesInto(dc, c.Box, c.Instance, meta.EnvProvide, portMap) {
+		provChanged = true
+	}
+	if len(meta.MCPProvide) > 0 && injectMCPProvidesInto(dc, c.Box, c.Instance, meta.MCPProvide, portMap) {
+		provChanged = true
+	}
+	if provChanged {
+		if err := saveBundle(ctx, ex, dc); err != nil {
+			return err
+		}
 	}
 
 	if c.SshKey != "" {
@@ -317,43 +321,22 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 		fmt.Fprintf(os.Stderr, "Warning: port conflicts detected:%s", kit.FormatPortConflicts(conflicts, c.Box))
 	}
 
-	var provRep spec.PodConfigProvisionSecretsReply
 	autoGen := c.Password == "auto"
-	if err := hostBuild(ctx, ex, podConfigProvisionSecretsKind, spec.PodConfigProvisionSecretsRequest{
-		MetaJSON: ensureRep.MetaJSON, Box: c.Box, Instance: c.Instance, RunEngine: rt.RunEngine,
-		AutoGen: autoGen, RefreshSecret: c.RefreshSecret,
-	}, &provRep); err != nil {
-		return err
+	provisioned, provFallback, provResolutions, isKeyring, perr := resolvePodProvisionSecrets(ctx, ex, &meta, c.Box, c.Instance, rt.RunEngine, autoGen, c.RefreshSecret)
+	if perr != nil {
+		return perr
 	}
-	var provisioned []deploykit.CollectedSecret
-	if len(provRep.ProvisionedJSON) > 0 {
-		if err := json.Unmarshal(provRep.ProvisionedJSON, &provisioned); err != nil {
-			return fmt.Errorf("decoding provisioned secrets: %w", err)
-		}
-	}
-	for _, kv := range provRep.FallbackEnv {
+	for _, kv := range provFallback {
 		envVars = appendEnvUnique(envVars, kv)
 	}
 	if len(meta.SecretRequire) > 0 {
-		var resolutions []secretResolution
-		if len(provRep.ResolutionsJSON) > 0 {
-			// A silently-discarded decode failure here would make checkMissingSecretRequires evaluate
-			// against an EMPTY resolutions list — indistinguishable from "nothing resolved yet" — and
-			// wrongly report every secret_require as missing, or worse, wrongly pass a genuinely-unmet
-			// requirement if the zero-value happens to satisfy the check.
-			if err := json.Unmarshal(provRep.ResolutionsJSON, &resolutions); err != nil {
-				return fmt.Errorf("decoding secret resolutions: %w", err)
-			}
-		}
-		if err := checkMissingSecretRequires(c.Box, meta.SecretRequire, resolutions); err != nil {
+		if err := checkMissingSecretRequires(c.Box, meta.SecretRequire, provResolutions); err != nil {
 			return err
 		}
 	}
 
 	charlyBin := resolveHostCharlyBin(c.HostEnvJSON)
-	isKeyring := provRep.IsKeyring
 
-	var sidecarRep spec.PodConfigResolveSidecarsReply
 	deploySidecarsRaw := map[string]json.RawMessage{}
 	if dc != nil {
 		if overlay, ok := dc.Bundle[deploykit.DeployKey(c.Box, c.Instance)]; ok {
@@ -371,29 +354,16 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 	var resolvedSidecars []deploykit.ResolvedSidecar
 	var deploySidecars map[string]json.RawMessage
 	if len(deploySidecarsRaw) > 0 {
-		dsJSON, _ := json.Marshal(deploySidecarsRaw)
-		ptJSON, _ := json.Marshal(sidecarTemplatesOf(dc))
-		if err := hostBuild(ctx, ex, podConfigResolveSidecarsKind, spec.PodConfigResolveSidecarsRequest{
-			DeploySidecarsJSON: dsJSON, ProjectTemplatesJSON: ptJSON, CliEnv: c.Env,
-			Box: c.Box, Instance: c.Instance, RunEngine: rt.RunEngine, AutoGen: autoGen,
-			RefreshSecret: c.RefreshSecret,
-		}, &sidecarRep); err != nil {
+		scRes, err := resolvePodSidecars(ctx, ex, deploySidecarsRaw, sidecarTemplatesOf(dc), c.Env, c.Box, c.Instance, rt.RunEngine, autoGen, c.RefreshSecret)
+		if err != nil {
 			return scErr(err)
 		}
-		c.Env = sidecarRep.AppEnv
-		for _, kv := range sidecarRep.ExtraEnv {
+		c.Env = scRes.AppEnv
+		for _, kv := range scRes.ExtraEnv {
 			envVars = appendEnvUnique(envVars, kv)
 		}
-		if len(sidecarRep.PersistOverridesJSON) > 0 {
-			if err := json.Unmarshal(sidecarRep.PersistOverridesJSON, &deploySidecars); err != nil {
-				return fmt.Errorf("decoding sidecar persist overrides: %w", err)
-			}
-		}
-		if len(sidecarRep.ResolvedSidecarsJSON) > 0 {
-			if err := json.Unmarshal(sidecarRep.ResolvedSidecarsJSON, &resolvedSidecars); err != nil {
-				return fmt.Errorf("decoding resolved sidecars: %w", err)
-			}
-		}
+		deploySidecars = scRes.PersistOverrides
+		resolvedSidecars = scRes.Sidecars
 	}
 	envVars = mergeEnvSlices(envVars, c.Env)
 
@@ -502,10 +472,29 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 	}
 
 	if deploykit.HasEncryptedBindMounts(bindMounts) {
-		if err := hostBuild(ctx, ex, podConfigEncMountsKind, spec.PodConfigEncMountsRequest{
-			Box: c.Box, Instance: c.Instance, AutoGen: autoGen, KeepMounted: c.KeepMounted,
-		}, nil); err != nil {
-			return fmt.Errorf("setting up encrypted volumes: %w", err)
+		// Config-setup drives verb:enc DIRECTLY via InvokeProvider — the SAME plan-builders
+		// (resolvePodEncEnsurePlan/resolvePodEncUnmountPlan) + InvokeProvider(verb:enc) the
+		// START/STOP lifecycle path in resolve.go already uses (the retired pod-config-enc-mounts
+		// seam's byte-exact parity: ensure with autoGen, then unmount unless KeepMounted).
+		ensureJSON, encErr := resolvePodEncEnsurePlan(ctx, ex, dc, c.Box, c.Instance, autoGen)
+		if encErr != nil {
+			return fmt.Errorf("setting up encrypted volumes: %w", encErr)
+		}
+		if len(ensureJSON) > 0 {
+			if _, err := ex.InvokeProvider(ctx, "verb", "enc", sdk.OpExecute, ensureJSON, nil, sdk.InvokeProviderOpts{}); err != nil {
+				return fmt.Errorf("setting up encrypted volumes: %w", err)
+			}
+		}
+		if !c.KeepMounted {
+			unmountJSON, unErr := resolvePodEncUnmountPlan(dc, c.Box, c.Instance)
+			if unErr != nil {
+				return fmt.Errorf("unmounting encrypted volumes: %w", unErr)
+			}
+			if len(unmountJSON) > 0 {
+				if _, err := ex.InvokeProvider(ctx, "verb", "enc", sdk.OpExecute, unmountJSON, nil, sdk.InvokeProviderOpts{}); err != nil {
+					return fmt.Errorf("unmounting encrypted volumes: %w", err)
+				}
+			}
 		}
 	}
 
@@ -530,11 +519,8 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 			fmt.Fprintf(os.Stderr, "Warning: failed to start %s for post_enable hook: %v\n", svc, err)
 		} else {
 			engine := kit.EngineBinary(rt.RunEngine)
-			var hookRep spec.PodConfigHookSecretEnvReply
-			_ = hostBuild(ctx, ex, podConfigHookSecretEnvKind, spec.PodConfigHookSecretEnvRequest{
-				Box: c.Box, Instance: c.Instance, MetaJSON: ensureRep.MetaJSON,
-			}, &hookRep)
-			hookEnv := append(append([]string{}, c.Env...), hookRep.Env...)
+			hookSecretEnv := resolvePodHookSecretEnv(ctx, ex, &meta, c.Box, c.Instance)
+			hookEnv := append(append([]string{}, c.Env...), hookSecretEnv...)
 			if err := runHook(engine, ctrName, hooks.PostEnable, hookEnv); err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: post_enable hook failed: %v\n", err)
 			}

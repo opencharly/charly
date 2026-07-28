@@ -4,9 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/opencharly/sdk/buildkit"
-	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/loaderkit"
 )
 
 // builder_preresolve.go — the host-side CONNECT half of the builder deploy-time pre-pass
@@ -29,19 +27,6 @@ import (
 // build-connects just those plugins by their canonical ref (the same on-demand, scoped pattern as
 // connectPluginByWordRef, R3) — NOT a blanket "all four builder plugins" surfaced across an entire
 // box scan. A pure pod deploy (no add_candy) never reaches BuildDeployPlan, so it connects nothing.
-
-// ensureBuildersConnectedForOrder detects the externalized builders order's candies need (the SAME
-// deploykit.DetectExternalizedBuilders call the deleted host-side preresolveBuilderContexts made)
-// and build-connects them — so by the time the OpCompile Invoke reaches candy/plugin-bundle, its
-// own exec.InvokeProvider calls resolve against an already-connected provider (never depending
-// solely on InvokeProvider's S2 lazy-connect fallback).
-func ensureBuildersConnectedForOrder(ctx context.Context, cfg *Config, dir string, order []string, layers map[string]spec.CandyReader, img *buildkit.ResolvedBox) error {
-	needed := deploykit.DetectExternalizedBuilders(order, layers, externalizedBuilders, img)
-	if len(needed) == 0 {
-		return nil
-	}
-	return ensureBuildersConnected(ctx, cfg, dir, needed)
-}
 
 // ensureBuildersConnected build-connects ONLY the not-yet-connected externalized builder plugins in
 // `words`, scoped to those words — the same on-demand, scoped pattern as connectPluginByWordRef
@@ -68,7 +53,7 @@ func ensureBuildersConnected(ctx context.Context, cfg *Config, dir string, words
 	if cfg == nil {
 		return fmt.Errorf("builder plugin connect: no project config (cannot scan %v)", words)
 	}
-	for _, opts := range []ResolveOpts{{}, {ExtraCandyRefs: extraRefs}} {
+	for _, opts := range []loaderkit.ResolveOpts{{}, {ExtraCandyRefs: extraRefs}} {
 		candyMap, scanErr := ScanAllCandyWithConfigOpts(dir, cfg, opts)
 		if scanErr != nil || candyMap == nil {
 			continue

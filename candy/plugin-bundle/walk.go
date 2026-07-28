@@ -1,7 +1,9 @@
 package bundle
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"sort"
 	"strings"
 
@@ -11,12 +13,16 @@ import (
 )
 
 // walk.go — the K4-C WALK PORT: `charly bundle add`/`del`'s tree-walk CONTROL FLOW now runs
-// plugin-side (P13-KERNEL walk port). resolveTreeRoot/resolveDelNode (LoadUnified-coupled) and
+// plugin-side (P13-KERNEL walk port). `add`'s tree resolution now runs loaderkit.LoadUnified
+// PLUGIN-SIDE (K1-LOADER RELOCATION witness, load_executor.go: resolveTreeViaLoader over the
+// reverse-channel LoaderExecutor) — the host keeps only the deploy-plugins-connect preamble
+// (loadDeployPlugins + project dir). resolveDelNode (LoadUnified-coupled) and
 // deriveChildExecutorForPath (registry-coupled — deployTraitDescent needs the providerRegistry)
-// stay host-side behind the deploy-tree-resolve / deploy-del-resolve / deploy-node-dispatch /
-// deploy-node-del-dispatch / deploy-members-up / deploy-members-down seams. The per-node terminal
-// step (resolve+compile+ResolveTarget+Add) reconstructs its OWN parentExec executor chain
-// HOST-side from the ancestor path/node lists this walk sends — a live DeployExecutor never
+// stay host-side behind the deploy-del-resolve / resolve-target-add /
+// deploy-node-del-dispatch / deploy-members-up / deploy-members-down seams. The plugin COMPILES the
+// InstallPlans IN-PROC (K4-C shape-2, dispatch.go) and the per-node terminal ResolveTarget+Add
+// reconstructs its OWN parentExec executor chain HOST-side (resolve-target-add) from the ancestor
+// path/node lists this walk sends — a live DeployExecutor never
 // crosses the wire, so this file holds NO executor plumbing at all: it walks spec.BundleNode's
 // Children map directly (the SAME pre-order deploykit.WalkDeploymentTree drives host-side, with
 // deterministic SortedNestedKeys ordering), threading ancestor context instead of an executor.
@@ -24,20 +30,20 @@ import (
 // Run executes `charly bundle add` (plugin-side walk; the deploy-add host-build seam it used to
 // forward the WHOLE Run() to is retired).
 func (c *BundleAddCmd) Run() error {
-	var tr spec.DeployTreeResolveReply
-	if err := hostDeploySeamJSON("deploy-tree-resolve", spec.DeployTreeResolveRequest{
-		Path:     c.Name,
-		AddCandy: c.AddCandy,
-	}, &tr); err != nil {
+	// Unit D WITNESS: drive loaderkit.LoadUnified PLUGIN-SIDE (over the reverse-channel
+	// execLoaderExecutor) to resolve the deploy tree, instead of the former host resolveTreeRoot
+	// seam — proving command:bundle → loaderkit.LoadUnified end-to-end. The host preamble only
+	// connects out-of-tree deploy plugins + hands back the project dir; rootVenueSSH is read from
+	// the loaded tree's stamped node.Descent (load_executor.go).
+	tree, rootVenueSSH, dir, err := resolveTreeViaLoader(c.Name, c.AddCandy)
+	if err != nil {
 		return err
 	}
-
-	tree := make(map[string]spec.BundleNode, len(tr.Tree))
-	for k, v := range tr.Tree {
-		if v != nil {
-			tree[k] = *v
-		}
-	}
+	// Thread the project dir (host os.Getwd) + the loader-threaded ExternalDeploySubstrates DATA
+	// snapshot onto the command so the per-node compile (dispatchOne → compileNodePlans) runs
+	// entirely plugin-side — the K4-C shape-2 in-proc compile, no OpCompile round-trip.
+	c.dir = dir
+	c.externalSubstrates = fetchExternalSubstrates()
 
 	// Resolve the named root + any dotted-path subtree the user targeted. Supports three call
 	// shapes: `charly bundle add host` (legacy; root = "host"), `charly bundle add
@@ -68,18 +74,17 @@ func (c *BundleAddCmd) Run() error {
 	//
 	// R1 fix (found live while RDD-verifying an unrelated K5-A/W4 cutover): this used to pass
 	// path="" unconditionally, on the claim that "deployName still resolves to c.Name host-side"
-	// — FALSE in the current (post-P13-walk-port) architecture, where the host reconstructs a
-	// FRESH deployAddCmd per dispatch from req.Path alone (runDeployNodeDispatch), so an empty
-	// path meant BOTH the deploy name AND classifyNodeTarget's "host"/"local" literal check were
-	// lost — EVERY ref-based `charly bundle add <name> <ref>` with no existing charly.yml entry
-	// (INCLUDING the literal `host` form) resolved target "pod" (the unconditional fallback) and
-	// deployName "", then failed ResolveTarget with `deployment "": target "pod" ... not
+	// — FALSE: deployName is derived from the path (path, or c.Name at the root when path is empty),
+	// so an empty path meant BOTH the deploy name AND classifyNodeTarget's "host"/"local" literal
+	// check were lost — EVERY ref-based `charly bundle add <name> <ref>` with no existing charly.yml
+	// entry (INCLUDING the literal `host` form) resolved target "pod" (the unconditional fallback)
+	// and deployName "", then failed ResolveTarget with `deployment "": target "pod" ... not
 	// connected` — a total block for this whole call shape. Reproduced live on this branch,
 	// BEFORE this fix, for both `bundle add host <candy>` and `bundle add <fresh-name> <ref>`
 	// (see this repo's CHANGELOG for the pasted repro). Passing c.Name as path lets
 	// classifyNodeTarget's pathLeaf(path) check work (path="host" → target "local") and
-	// compileNode's/dispatchNode's `if path != "" { deployName = path }` carry the real name
-	// through — node stays nil (no charly.yml entry to resolve).
+	// dispatchOne's `if path != "" { deployName = path }` carry the real name through — node stays
+	// nil (no charly.yml entry to resolve).
 	if rootNode == nil {
 		return c.dispatchOne(c.Name, nil, nil, nil)
 	}
@@ -88,10 +93,11 @@ func (c *BundleAddCmd) Run() error {
 	// is ALSO dispatched node-only: its nested target:pod children deploy IN the guest (the
 	// host can't tree-walk a pod-in-VM), so the VM target's Add deploys them itself after the
 	// VM is up (plugin-deploy-vm's PostApply). A host tree walk would wrongly try to deploy
-	// them locally / double-deploy. tr.RootVenueSSH is the host-resolved (registry-backed)
-	// nodeTraits(rootNode).Venue=="ssh" check; the legacy "vm:"-prefixed name form is checked
-	// here too (a pure string check, no registry needed).
-	if c.NodeOnly || tr.RootVenueSSH || strings.HasPrefix(resolvedPath, "vm:") {
+	// them locally / double-deploy. rootVenueSSH is read plugin-side from the loaded root's
+	// stamped node.Descent.Venue=="ssh" (loaderkit.LoadUnified stamps it — byte-identical to the
+	// former host registry-backed nodeTraits(rootNode).Venue check); the legacy "vm:"-prefixed name
+	// form is checked here too (a pure string check, no registry needed).
+	if c.NodeOnly || rootVenueSSH || strings.HasPrefix(resolvedPath, "vm:") {
 		return c.dispatchOne(resolvedPath, rootNode, ancestorPaths, ancestorNodes)
 	}
 
@@ -107,9 +113,9 @@ func (c *BundleAddCmd) Run() error {
 	return hostDeploySeamJSON("deploy-members-up", spec.DeployMembersRequest{Node: rootNode}, nil)
 }
 
-// walk performs a pre-order traversal of node's Children, dispatching each position via the
-// deploy-node-dispatch seam and threading the growing ancestor path/node lists to its
-// descendants — the plugin-side analogue of the OLD in-core WalkDeploymentTree callback, minus
+// walk performs a pre-order traversal of node's Children, dispatching each position via dispatchOne
+// (compile in-proc → resolve-target-add seam) and threading the growing ancestor path/node lists to
+// its descendants — the plugin-side analogue of the OLD in-core WalkDeploymentTree callback, minus
 // any executor plumbing (see the file header).
 func (c *BundleAddCmd) walk(path string, node *spec.BundleNode, ancestorPaths []string, ancestorNodes []spec.BundleNode) error {
 	if err := c.dispatchOne(path, node, ancestorPaths, ancestorNodes); err != nil {
@@ -142,15 +148,14 @@ func sortedChildKeys(children map[string]*spec.BundleNode) []string {
 	return out
 }
 
-// dispatchOne invokes the deploy-node-dispatch seam for ONE tree position.
-// target/vmEntity/ref/add_candy/tag/the resolved gate opts are ALL RESOLVED
-// HERE (classifyNodeTarget/resolveVmEntity/resolveNodeOverlays/
-// resolveNodeTemplate, W4 pure-helpers relocation, node_resolve.go) — pure
-// functions of node+path+CLI-flags with no executor dependency (the ONE
-// LoadUnified-coupled piece, the kind:local template lookup inside
-// resolveNodeTemplate, reaches back to the host over the EXISTING
-// "deploy-entity-resolve" seam) — so the host-side dispatch no longer
-// recomputes any of them; it trusts every field as sent.
+// dispatchOne handles ONE tree position: it resolves the node's target/vmEntity/opts/ref/addCandies/
+// tag PLUGIN-SIDE (classifyNodeTarget/resolveVmEntity/resolveNodeOverlays/resolveNodeTemplate —
+// pure functions, node_resolve.go), COMPILES the InstallPlans IN-PROC (compileNodePlans →
+// compilePlansForRequest, NO OpCompile round-trip), stamps the deployID + AddCandies plugin-side,
+// and — unless --dry-run (which prints the plans plugin-side and returns) — ships the ALREADY-
+// COMPILED plans to the host over the ONE thin HostBuild("resolve-target-add") seam. The host does
+// only the floor-M residue a plugin cannot: reconstruct the ancestor executor chain,
+// loadConfigForDeploy, ResolveTarget + Add. This is the K4-C shape-2 double-bounce elimination.
 func (c *BundleAddCmd) dispatchOne(path string, node *spec.BundleNode, ancestorPaths []string, ancestorNodes []spec.BundleNode) error {
 	target := deploykit.ClassifyNodeTarget(node, path)
 	vmEntity := resolveVmEntity(path, node)
@@ -164,29 +169,76 @@ func (c *BundleAddCmd) dispatchOne(path string, node *spec.BundleNode, ancestorP
 		return err
 	}
 
-	return hostDeploySeamJSON("deploy-node-dispatch", spec.DeployNodeDispatchRequest{
+	// Compile the InstallPlans IN-PROC (the shared compilePlansForRequest — no OpCompile hop).
+	plans, base, candySet, err := c.compileNodePlans(target, refStr, tag, path, addCandies, vmEntity, opts.BuilderImageOverride)
+	if err != nil {
+		return err
+	}
+
+	// Stamp the deployID + union AddCandies (the former host dispatchNode tail — deploykit.
+	// ComputeDeployID is pure; both fields round-trip through InstallPlanView to the host). Union —
+	// don't clobber: the per-plan propagation already populated p.AddCandies with the overlay-candy
+	// names (explicit add_candy + transitive deps); a plain overwrite with the user-facing addCandies
+	// list would drop the transitive entries (an overlay declaring add_candy:[k3s-server] would ship
+	// k3s-server but not its k3s base — runtime failure).
+	deployID := deploykit.ComputeDeployID(base, candySet, addCandies)
+	for _, p := range plans {
+		if p == nil {
+			continue
+		}
+		p.DeployID = deployID
+		seen := make(map[string]bool, len(p.AddCandies))
+		for _, al := range p.AddCandies {
+			seen[al] = true
+		}
+		for _, al := range addCandies {
+			if !seen[al] {
+				p.AddCandies = append(p.AddCandies, al)
+				seen[al] = true
+			}
+		}
+	}
+
+	if c.DryRun {
+		return printPlans(plans, c.Format == "json")
+	}
+
+	// Ship the compiled plans (deployID/AddCandies already stamped) to the host for
+	// ResolveTarget + DeployContext + Add. deployName is the node's identity (path, or c.Name at the
+	// root when path is empty) — matching the former host dispatchNode.
+	views := make([]spec.InstallPlanView, 0, len(plans))
+	for _, p := range plans {
+		if p != nil {
+			views = append(views, deploykit.WireView(p))
+		}
+	}
+	plansJSON, err := json.Marshal(views)
+	if err != nil {
+		return fmt.Errorf("bundle add: marshal compiled plans: %w", err)
+	}
+	deployName := c.Name
+	if path != "" {
+		deployName = path
+	}
+
+	return hostDeploySeamJSON("resolve-target-add", spec.DeployResolveTargetAddRequest{
 		Path:             path,
+		DeployName:       deployName,
 		Node:             node,
+		Target:           target,
+		Dir:              c.dir,
+		PlansJSON:        plansJSON,
 		AncestorPaths:    ancestorPaths,
 		AncestorNodes:    ancestorNodes,
-		Ref:              refStr,
-		AddCandy:         addCandies,
-		Tag:              tag,
-		DryRun:           c.DryRun,
 		NodeOnly:         c.NodeOnly,
-		Format:           c.Format,
 		Pull:             opts.Pull,
 		Verify:           opts.Verify,
 		WithServices:     opts.WithServices,
 		AllowRepoChanges: opts.AllowRepoChanges,
 		AllowRootTasks:   opts.AllowRootTasks,
 		SkipIncompatible: opts.SkipIncompatible,
-		BuilderImage:     opts.BuilderImageOverride,
 		AssumeYes:        c.AssumeYes,
-		Disposable:       c.Disposable,
-		Lifecycle:        c.Lifecycle,
-		Target:           target,
-		VmEntity:         vmEntity,
+		BuilderImage:     opts.BuilderImageOverride,
 	}, nil)
 }
 

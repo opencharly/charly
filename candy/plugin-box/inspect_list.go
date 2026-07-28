@@ -7,15 +7,18 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
 // inspect_list.go — the `charly box inspect` + `charly box list` handlers, relocated OUT of charly
-// core (K5, Collection A). Both are DATA PROJECTIONS over the generic spec.ResolvedProject envelope
-// the host resolves once and ships over the reverse channel (HostBuild("resolved-project")): the
-// plugin never loads the project itself (pre-K1). The two overlay-only inspect formats
-// (tunnel/bind_mounts) + the store-live `list tags` are the M-core residue the plugin reaches via a
-// thin HostBuild("cli") reentry to a retained hidden core command.
+// core (K5, Collection A). Both are DATA PROJECTIONS: inspect over the generic
+// spec.ResolvedProject envelope the host resolves once and ships over the reverse channel
+// (HostBuild("resolved-project")); `list tags` over the verb:retention engine's tag inventory,
+// reached directly via InvokeProvider (listImageTags — #118, the former hidden-core
+// __box-list-tags CLI reentry is DELETED). The plugin never loads the project itself (pre-K1) and,
+// as of the list-tags move, never reenters core for `box list` either.
 
 // resolvedProject fetches the whole resolved-project envelope for the current project dir. Dir is
 // passed explicitly (mirrors dispatchGenerate) though the compiled-in plugin shares charly's cwd; the
@@ -82,26 +85,6 @@ func dispatchInspect(hc *hostClient, args []string) error {
 		return err
 	}
 
-	// tunnel/bind_mounts read the DEPLOY OVERLAY (charly.yml), not the build-mode envelope — reenter
-	// the hidden core __box-inspect-overlay (the M-core residue). Its stdout/stderr are inherited.
-	if g.Format == "tunnel" || g.Format == "bind_mounts" {
-		argv := []string{"__box-inspect-overlay", g.Box, "--format", g.Format}
-		if g.Instance != "" {
-			argv = append(argv, "-i", g.Instance)
-		}
-		if g.IncludeDisabled {
-			argv = append(argv, "--include-disabled")
-		}
-		r, err := hc.cli(false, true, argv...)
-		if err != nil {
-			return err
-		}
-		if r.ExitCode != 0 {
-			return fmt.Errorf("box inspect --format %s failed (exit %d)", g.Format, r.ExitCode)
-		}
-		return nil
-	}
-
 	rp, err := hc.resolvedProject(g.IncludeDisabled)
 	if err != nil {
 		return err
@@ -109,6 +92,18 @@ func dispatchInspect(hc *hostClient, args []string) error {
 	view, ok := rp.Boxes[g.Box]
 	if !ok {
 		return fmt.Errorf("box %q not found in charly.yml", g.Box)
+	}
+
+	// tunnel/bind_mounts read the DEPLOY OVERLAY (charly.yml), not the build-mode envelope. The
+	// deploy-overlay volume/tunnel state is a pure sdk read (deploykit.LoadDeployConfigForRead); the
+	// tunnel resolution's published-port set is the projector-filled box-aggregate view.Ports
+	// (deploykit.ResolveTunnelConfig ignores the candy graph), so no host reentry / project reload is
+	// needed — the former hidden __box-inspect-overlay core command is DELETED (K5 seam-death).
+	switch g.Format {
+	case "bind_mounts":
+		return inspectBindMounts(g.Box, g.Instance)
+	case "tunnel":
+		return inspectTunnel(g.Box, g.Instance, view.Ports)
 	}
 
 	if g.Format == "" {
@@ -120,6 +115,46 @@ func dispatchInspect(hc *hostClient, args []string) error {
 		return nil
 	}
 	return printInspectFormat(view, g.Format)
+}
+
+// inspectBindMounts prints the DEPLOY-OVERLAY (charly.yml) bind-mount config for a box — a pure sdk
+// read of the deploy state (no build-mode envelope). Ported byte-identically from the former core
+// InspectOverlayCmd (K5 seam-death — the hidden __box-inspect-overlay reentry is DELETED).
+func inspectBindMounts(box, instance string) error {
+	if overlay, ok := deploykit.LoadDeployConfigForRead("charly box inspect bind_mounts").Lookup(box, instance); ok {
+		for _, dv := range overlay.Volume {
+			fmt.Printf("%s\t%s\t%s\t%s\n", dv.Name, dv.Host, dv.Path, dv.Type)
+		}
+	}
+	return nil
+}
+
+// inspectTunnel prints the DEPLOY-OVERLAY (charly.yml) tunnel config for a box. The tunnel resolves
+// off the deploy overlay's Tunnel spec + the box-aggregate published-port set (boxPorts, the
+// projector-filled view.Ports — deploykit.ResolveTunnelConfig ignores the candy-reader/candy-list
+// args, so nil is passed). Ported byte-identically from the former core InspectOverlayCmd.
+func inspectTunnel(box, instance string, boxPorts []string) error {
+	overlay, ok := deploykit.LoadDeployConfigForRead("charly box inspect tunnel").Lookup(box, instance)
+	if !ok || overlay.Tunnel == nil {
+		return nil
+	}
+	tc := deploykit.ResolveTunnelConfig(overlay.Tunnel, box, "", nil, nil, map[string]string{}, boxPorts)
+	if tc == nil || len(tc.Ports) == 0 {
+		return nil
+	}
+	fmt.Println("PORT\tACCESS\tPROTOCOL\tHOSTNAME")
+	for _, tp := range tc.Ports {
+		access := "private"
+		if tp.Public {
+			access = "public"
+		}
+		hostname := tp.Hostname
+		if hostname == "" {
+			hostname = "-"
+		}
+		fmt.Printf("%d\t%s\t%s\t%s\n", tp.Port, access, tp.Protocol, hostname)
+	}
+	return nil
 }
 
 // printInspectFormat renders a single --format field from the resolved box view. Scalar fields print
@@ -198,8 +233,10 @@ func printInspectFormat(view spec.ResolvedBoxView, format string) error {
 const listSubcommands = "aliases|boxes|candies|routes|services|targets|volumes|tags"
 
 // dispatchList routes a `charly box list <sub>` word. Every subcommand but `tags` reads the
-// resolved-project envelope; `tags` queries the podman STORE (store-live) and reenters the retained
-// hidden core __box-list-tags command.
+// resolved-project envelope; `tags` queries the podman STORE (store-live) directly via
+// verb:retention (listImageTags) — the SAME peer-dispatch pruneAfterBuild already uses in this
+// module, replacing the former hidden-core __box-list-tags CLI reentry (the K5-doomed residue
+// its own header predicted; charly/volume_cp_tags_cmd.go, deleted, #118).
 func dispatchList(hc *hostClient, args []string) error {
 	if len(args) == 0 {
 		return fmt.Errorf("box list: expected a subcommand (%s)", listSubcommands)
@@ -207,15 +244,11 @@ func dispatchList(hc *hostClient, args []string) error {
 	sub, rest := args[0], args[1:]
 
 	if sub == "tags" {
-		argv := append([]string{"__box-list-tags"}, rest...)
-		r, err := hc.cli(false, true, argv...)
-		if err != nil {
-			return err
+		boxFilter := ""
+		if len(rest) > 0 {
+			boxFilter = rest[0]
 		}
-		if r.ExitCode != 0 {
-			return fmt.Errorf("box list tags failed (exit %d)", r.ExitCode)
-		}
-		return nil
+		return listImageTags(hc, boxFilter)
 	}
 
 	rp, err := hc.resolvedProject(false)
@@ -326,4 +359,70 @@ func listAliases(rp *spec.ResolvedProject) {
 			fmt.Printf("%s\t%s\t%s\n", name, a.Name, a.Command)
 		}
 	}
+}
+
+// listImageTags serves `charly box list tags` — the store-live tag inventory
+// (charly-labeled podman image tags). Reaches verb:retention directly over InvokeProvider (the
+// SAME peer-dispatch pruneAfterBuild already uses in this module, box.go), replacing the former
+// hidden-core __box-list-tags CLI reentry: this is a data projection over the SAME retention
+// engine, not a distinct core Mechanism, so it needs no reentry at all. boxFilter narrows to one
+// box short name ("" = every box).
+func listImageTags(hc *hostClient, boxFilter string) error {
+	dir, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	reqJSON, err := json.Marshal(spec.RetentionRequest{Dir: dir, List: true})
+	if err != nil {
+		return err
+	}
+	resJSON, err := hc.exec.InvokeProvider(hc.ctx, "verb", "retention", sdk.OpRun, reqJSON, nil, sdk.InvokeProviderOpts{})
+	if err != nil {
+		return err
+	}
+	var reply spec.RetentionReply
+	if len(resJSON) > 0 {
+		if uerr := json.Unmarshal(resJSON, &reply); uerr != nil {
+			return uerr
+		}
+	}
+	if reply.Error != "" {
+		return fmt.Errorf("%s", reply.Error)
+	}
+	return printImageTags(reply.TagGroups, boxFilter)
+}
+
+// printImageTags formats + prints the tag inventory, newest-first per box — byte-equivalent to
+// the former charly/volume_cp_tags_cmd.go's ListTagsCmd.Run() output. Split out from
+// listImageTags for unit testability (no executor needed).
+func printImageTags(tags []spec.TagInfo, boxFilter string) error {
+	byBox := map[string][]int{}
+	for i, t := range tags {
+		if boxFilter != "" && t.Box != boxFilter {
+			continue
+		}
+		byBox[t.Box] = append(byBox[t.Box], i)
+	}
+	if len(byBox) == 0 {
+		if boxFilter != "" {
+			return fmt.Errorf("no locally stored charly images for box %s", boxFilter)
+		}
+		return fmt.Errorf("no locally stored charly images")
+	}
+	boxes := make([]string, 0, len(byBox))
+	for b := range byBox {
+		boxes = append(boxes, b)
+	}
+	sort.Strings(boxes)
+	for _, b := range boxes {
+		for _, i := range byBox[b] {
+			t := tags[i]
+			inUse := ""
+			if t.InUse {
+				inUse = "\t(in use)"
+			}
+			fmt.Printf("%s\t%s\t%s%s\n", t.Box, t.Ref, t.Version, inUse)
+		}
+	}
+	return nil
 }

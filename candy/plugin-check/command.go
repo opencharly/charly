@@ -53,14 +53,15 @@ func hostCheckRun(req spec.CheckRunRequest) (kit.CheckRunReply, error) {
 // K1-unblock wave: dispatch is now COMPLETE. Mode:"box"/"live"/"feature-live"/"score" dispatch to
 // this plugin's OWN pluginCheckRunBox/Live/FeatureLive/Score bodies. Mode:"preflight" forwards to
 // the host's "check-run" HostBuild arm (charly/host_build_check_run.go's hostCheckRunPreflight) —
-// the ONE surviving host-anchored body, kept there because its image-ensure leg
-// (EnsureImagePresent) needs the project *Config + BuildCmd's local-build fallback, both deeply
-// host/loader-coupled with no sdk-portable equivalent (see that file's header comment). A nominal
-// "feature-box" mode exists in the wire enum but has ZERO callers through this seam (`charly box
-// feature run` calls the CLI-free hostFeatureBox engine directly — see feature_run_gather.go's
-// header), so it is deliberately NOT cased here — reaching it would be a caller bug, not a
-// routable mode. The former dual-mode fallback (a bare default forwarding EVERY uncased mode to
-// the host) is retired: every mode is now an explicit case or an explicit unknown-mode error.
+// the ONE surviving host-anchored body, kept there because its agent-provisioned filter needs the
+// loaded project's full bundle tree (venueIsAgentProvisioned), with no sdk-portable equivalent (see
+// that file's header comment); its image-ensure leg is dispatchBuildEnsure, itself a call into the
+// compiled-in candy/plugin-build build:ensure word (core-min wave 3). The
+// "feature-box" mode is the BUILD-scope `charly box feature run` engine (pluginCheckRunFeatureBox,
+// feature_box_gather.go — relocated from core hostFeatureBox in cone-C #31): candy/plugin-box's
+// command:feature InvokeProvider's command:check's hidden `__feature-box` leaf, which routes here.
+// The former dual-mode fallback (a bare default forwarding EVERY uncased mode to the host) is
+// retired: every mode is now an explicit case or an explicit unknown-mode error.
 func hostCheckRunCtx(ctx context.Context, req spec.CheckRunRequest) (kit.CheckRunReply, error) {
 	if cmdExec == nil {
 		return kit.CheckRunReply{}, fmt.Errorf("charly check requires compiled-in placement (the check-run host seam is unavailable out-of-process)")
@@ -72,6 +73,8 @@ func hostCheckRunCtx(ctx context.Context, req spec.CheckRunRequest) (kit.CheckRu
 		return pluginCheckRunLive(cmdExec, ctx, req)
 	case "feature-live":
 		return pluginCheckRunFeatureLive(cmdExec, ctx, req)
+	case "feature-box":
+		return pluginCheckRunFeatureBox(cmdExec, ctx, req)
 	case "score":
 		return pluginCheckRunScore(cmdExec, ctx, req)
 	case "preflight":
@@ -81,8 +84,8 @@ func hostCheckRunCtx(ctx context.Context, req spec.CheckRunRequest) (kit.CheckRu
 }
 
 // pluginCheckRunPreflight forwards the "preflight" mode to the host's "check-run" HostBuild seam —
-// see hostCheckRunCtx's header for why this ONE mode stays host-anchored (EnsureImagePresent's
-// *Config/BuildCmd coupling).
+// see hostCheckRunCtx's header for why this ONE mode stays host-anchored (the agent-provisioned
+// filter's project-tree coupling).
 func pluginCheckRunPreflight(ex *sdk.Executor, ctx context.Context, req spec.CheckRunRequest) (kit.CheckRunReply, error) {
 	reqJSON, err := json.Marshal(req)
 	if err != nil {

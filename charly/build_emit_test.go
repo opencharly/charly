@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
 	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -27,21 +29,73 @@ func (stubEmitVerb) Invoke(_ context.Context, op *Operation) (*Result, error) {
 	return &Result{JSON: []byte(`{"fragment":"RUN : > /opt/stubemit-baked"}`)}, nil
 }
 
-// TestEmitPluginFragment_BuildTimeOpEmit is the build-time-plugin-execution core
-// gate: a plugin verb that is NOT a builtin ProvisionActor renders its build-context
-// Containerfile fragment via Invoke(OpEmit), which emitTasks splices verbatim into the
-// generated Containerfile. This proves the dispatch (the operator-authorized build-time
-// plugin execution) extracts the fragment — placement-agnostic, since the stub is reached
-// through the SAME Provider.Invoke an external grpcProvider implements.
-func TestEmitPluginFragment_BuildTimeOpEmit(t *testing.T) {
+// TestInvokeVerbBuildEmit_BuildTimeOpEmit is the build-time-plugin-execution core
+// gate: a plugin verb renders its build-context Containerfile contribution via a UNIFORM
+// Invoke(OpEmit), which emitTasks splices (a fragment verbatim, an act-shell RUN-wrapped).
+// A fragment-emitting verb (ActScript=false) returns its fragment verbatim. This proves the
+// P8b uniform dispatch (no package-main ProvisionActor type-assert) extracts the fragment —
+// placement-agnostic, since the stub is reached through the SAME Provider.Invoke an external
+// grpcProvider implements.
+func TestInvokeVerbBuildEmit_BuildTimeOpEmit(t *testing.T) {
 	op := &spec.Op{Plugin: "stubemit", PluginInput: map[string]any{"marker": "stubemit-baked"}}
 	img := &buildkit.ResolvedBox{Tags: []string{"fedora:43", "fedora"}}
-	frag, err := emitPluginFragment(stubEmitVerb{}, op, img)
+	frag, isScript, err := invokeVerbBuildEmit(context.Background(), stubEmitVerb{}, op, img)
 	if err != nil {
-		t.Fatalf("emitPluginFragment: %v", err)
+		t.Fatalf("invokeVerbBuildEmit: %v", err)
+	}
+	if isScript {
+		t.Fatalf("a fragment-emitting verb (ActScript=false) must not report act-script")
 	}
 	if !strings.Contains(frag, "RUN : > /opt/stubemit-baked") {
 		t.Fatalf("fragment = %q, want the plugin's baked RUN directive", frag)
+	}
+}
+
+// stubActKitVerb is a kit.CheckVerbProvider that ALSO implements kit.ProvisionActor — a
+// state-provision verb (the file/user/mount/… family). Wrapped in a kitVerbActAdapter, its
+// build-context OpEmit must return the RenderProvisionScript act shell with ActScript=true
+// (the render then RUN-wraps it via EmitCmd — the former IsScript=true path).
+type stubActKitVerb struct{}
+
+func (stubActKitVerb) Reserved() string { return "stubact" }
+func (stubActKitVerb) RunVerb(context.Context, kit.CheckContext, *spec.Op) kit.Result {
+	return kit.Result{Status: kit.StatusPass}
+}
+func (stubActKitVerb) RenderProvisionScript(op *spec.Op, distros []string) (string, bool) {
+	return "install -m " + op.Mode + " /dev/null /opt/stubact-provisioned", true
+}
+
+// TestKitVerbActAdapter_OpEmitActScript is the check-coverage gate for the P8b seam-death:
+// a state-provision verb serves OpEmit UNIFORMLY and self-declares its act shell via
+// EmitReply.ActScript=true (the fragment is the raw RenderProvisionScript output, NOT a
+// verbatim Containerfile fragment) — so the render dispatches it through the SAME
+// Invoke(OpEmit) as any other verb, with no package-main concrete-type assert. This test
+// FAILS without the kitVerbActAdapter.Invoke(OpEmit) path.
+func TestKitVerbActAdapter_OpEmitActScript(t *testing.T) {
+	kv := stubActKitVerb{}
+	adapter := kitVerbActAdapter{kitVerbAdapter: kitVerbAdapter{kv: kv}, pa: kv}
+	op := &spec.Op{Plugin: "stubact", Mode: "0644"}
+	params, err := marshalJSON(op)
+	if err != nil {
+		t.Fatalf("marshal op: %v", err)
+	}
+	env, err := marshalJSON(spec.BuildEnv{Distros: []string{"fedora:43", "fedora"}})
+	if err != nil {
+		t.Fatalf("marshal build env: %v", err)
+	}
+	res, err := adapter.Invoke(context.Background(), &Operation{Reserved: "stubact", Op: OpEmit, Params: params, Env: env})
+	if err != nil {
+		t.Fatalf("kitVerbActAdapter.Invoke(OpEmit): %v", err)
+	}
+	var reply spec.EmitReply
+	if err := json.Unmarshal(res.JSON, &reply); err != nil {
+		t.Fatalf("decode EmitReply: %v", err)
+	}
+	if !reply.ActScript {
+		t.Fatalf("a state-provision verb's OpEmit must set ActScript=true (got false)")
+	}
+	if !strings.Contains(reply.Fragment, "/opt/stubact-provisioned") {
+		t.Fatalf("Fragment = %q, want the RenderProvisionScript act shell", reply.Fragment)
 	}
 }
 

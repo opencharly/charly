@@ -36,7 +36,7 @@ func TestRunHostStep_Dispatch(t *testing.T) {
 	}
 
 	t.Run("builder arm", func(t *testing.T) {
-		// A builder with no LocalPkg + nil BuilderDef has no host build cell; under
+		// A builder with no LocalPkg + nil vmshared.BuilderDef has no host build cell; under
 		// --skip-incompatible runVenueBuilderStep returns nil — proving the Builder arm
 		// was taken (the default arm would have errored "not a host-engine step").
 		rep := call(t, &deploykit.BuilderStep{Builder: "npm", CandyName: "x"}, deploykit.EmitOpts{SkipIncompatible: true})

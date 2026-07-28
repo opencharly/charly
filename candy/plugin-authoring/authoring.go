@@ -12,7 +12,8 @@ import (
 
 // dispatchAuthoringCommand routes a box authoring command word to its handler. The pure verbs
 // (set/add-candy/rm-candy/write/cat) run entirely on sdk/kit + stdlib (authoring_edit.go); fetch
-// and refresh reach the host-coupled repo resolver over the reverse channel (hc.cli reentry).
+// and refresh reach the host-coupled repo resolver over the reverse channel (hc.fetchResolve,
+// HostBuild("box-fetch-resolve")).
 func dispatchAuthoringCommand(hc *hostClient, word string, args []string) error {
 	switch word {
 	case "set":
@@ -180,10 +181,11 @@ func dispatchCat(args []string) error {
 // --- box fetch [<spec>] and box refresh [<spec>] ---
 
 // fetchGrammar is the `charly box fetch [<spec>]` CLI surface (default spec: 'default' →
-// opencharly/charly). The repo resolver is host-coupled, so the plugin re-runs the hidden core
-// `__box-fetch` reentry over HostBuild("cli") — the SAME pattern candy/plugin-box's `pkg` verb
-// uses for `__box-pkg`. The reentry subprocess inherits charly's stdio (it prints the cache path
-// to stdout / its error to stderr) and its exit code rides the CliReply.
+// opencharly/charly). The repo resolver is host-coupled (CHARLY_REPO_OVERRIDE + the registered
+// refs-backend download + the command:migrate auto-migration), so the plugin reaches the generic
+// "box-fetch-resolve" HostBuild seam (charly/host_build_box_fetch_resolve.go, K3 build-tail tail,
+// coneB-buildremnant — the former hidden core `__box-fetch` reentry is DELETED) and prints the
+// returned cache path itself.
 type fetchGrammar struct {
 	Spec string `arg:"" optional:"" help:"Repo spec (default: 'default' → opencharly/charly)"`
 }
@@ -193,22 +195,18 @@ func dispatchFetch(hc *hostClient, args []string) error {
 	if done, err := parseLeaf("fetch", &g, args); err != nil || done {
 		return err
 	}
-	spec := g.Spec
-	if spec == "" {
-		spec = "default"
-	}
-	r, err := hc.cli(false, true, "__box-fetch", spec)
+	path, err := hc.fetchResolve(g.Spec, false)
 	if err != nil {
 		return err
 	}
-	if r.ExitCode != 0 {
-		return fmt.Errorf("box fetch failed (exit %d)", r.ExitCode)
-	}
+	fmt.Println(path)
 	return nil
 }
 
 // refreshGrammar is the `charly box refresh [<spec>]` CLI surface — force re-clone of a remote
-// project repo. Re-runs the hidden core `__box-refresh` reentry (see dispatchFetch).
+// project repo. Reaches the same "box-fetch-resolve" HostBuild seam with Refresh=true (see
+// dispatchFetch), which removes the spec's cache entry before resolving — the former hidden core
+// `__box-refresh` reentry is DELETED.
 type refreshGrammar struct {
 	Spec string `arg:"" optional:"" help:"Repo spec (default: 'default' → opencharly/charly)"`
 }
@@ -218,16 +216,10 @@ func dispatchRefresh(hc *hostClient, args []string) error {
 	if done, err := parseLeaf("refresh", &g, args); err != nil || done {
 		return err
 	}
-	spec := g.Spec
-	if spec == "" {
-		spec = "default"
-	}
-	r, err := hc.cli(false, true, "__box-refresh", spec)
+	path, err := hc.fetchResolve(g.Spec, true)
 	if err != nil {
 		return err
 	}
-	if r.ExitCode != 0 {
-		return fmt.Errorf("box refresh failed (exit %d)", r.ExitCode)
-	}
+	fmt.Println(path)
 	return nil
 }

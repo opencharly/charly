@@ -126,7 +126,7 @@ func TestOCITargetEmitSystemPackagesWithLegacyTemplate(t *testing.T) {
 	chdirTemp(t)
 	// Legacy InstallTemplate set; PhaseTemplate returns it for (install, container).
 	distro := &spec.ResolvedDistro{
-		Format: map[string]*FormatDef{
+		Format: map[string]*vmshared.FormatDef{
 			"rpm": {
 				InstallTemplate: "RUN dnf install -y {{join .Packages \" \"}}\n",
 			},
@@ -160,7 +160,7 @@ func TestOCITargetEmitSystemPackagesPrefersNewPhases(t *testing.T) {
 	chdirTemp(t)
 	// Both legacy and new path set; new path must win.
 	distro := &spec.ResolvedDistro{
-		Format: map[string]*FormatDef{
+		Format: map[string]*vmshared.FormatDef{
 			"rpm": {
 				InstallTemplate: "RUN legacy-install\n",
 				Phases: &vmshared.PhaseSet{
@@ -383,7 +383,7 @@ func (f *fakeSkipStep) RequiresGate() spec.Gate   { return spec.GateNone }
 func (f *fakeSkipStep) Reverse() []spec.ReverseOp { return nil }
 
 // TestGeneratorCandyByNameRemoteQualifiedKey guards the add_candy-on-pod overlay
-// build: a REMOTE add_candy candy (fetched via ResolveOpts.ExtraCandyRefs) is keyed
+// build: a REMOTE add_candy candy (fetched via loaderkit.ResolveOpts.ExtraCandyRefs) is keyed
 // in Generator.Candies under its fully-qualified ref, while the compiled plan step's
 // CandyName is the candy's bare intrinsic name. candyByName (the step-emit Op/Builder
 // path's candy resolver) must resolve the bare name to the qualified-key candy, or the

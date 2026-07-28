@@ -12,6 +12,7 @@ import (
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
 
 	"gopkg.in/yaml.v3"
 )
@@ -86,7 +87,7 @@ func TestShellConfig_RejectsUnknownShell(t *testing.T) {
 func TestResolveShellSpec_SelectionRule(t *testing.T) {
 	cfg := &spec.Shell{
 		Init: `check "$(direnv hook ${SHELL_NAME})"`,
-		Fish: &ShellSpec{Init: "direnv hook fish | source"},
+		Fish: &vmshared.ShellSpec{Init: "direnv hook fish | source"},
 	}
 	// fish: per-shell override wins, no substitution.
 	_, body, _, ok := deploykit.ResolveShellSpec(cfg, "fish")
@@ -147,10 +148,10 @@ func TestLabelShellSet_RoundTrip(t *testing.T) {
 			{
 				Origin: "direnv",
 				ID:     "direnv",
-				Generic: &ShellSpec{
+				Generic: &vmshared.ShellSpec{
 					Init: `check "$(direnv hook ${SHELL_NAME})"`,
 				},
-				ByShell: map[string]*ShellSpec{
+				ByShell: map[string]*vmshared.ShellSpec{
 					"fish": {Init: "direnv hook fish | source"},
 				},
 			},

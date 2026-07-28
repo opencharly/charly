@@ -13,7 +13,7 @@ package check
 // loadedReadiness()→kit.ReadinessProvider() / pollUntil→vmshared.PollUntil /
 // ErrPollFatal→vmshared.ErrPollFatal / PollLocal→vmshared.PollLocal / vmDomainIdentity→
 // vmshared.VmDomainIdentity is the WHOLE of the "no new mechanism" claim for this file (RDD-
-// confirmed by reading sdk/vmshared_aliases.go's own alias table before this move).
+// confirmed by reading sdk/vmshared's own alias/re-export tables before this move).
 //
 // This file is a self-contained LIBRARY of venue-resolution building blocks, consumed by every
 // live-check gather orchestration function this package now carries directly: live_gather.go's
@@ -25,13 +25,7 @@ package check
 
 import (
 	"context"
-	"fmt"
-	"net"
-	"os"
-	"os/exec"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
@@ -40,128 +34,14 @@ import (
 	"github.com/opencharly/sdk/vmshared"
 )
 
-// CheckEndpoint is a host-reachable TCP address for a port that lives inside the venue. For a
-// container it's the published port mapping; for a VM / ssh-host it's a `ssh -L` local-forward
-// (closed via Close); for the local host it's the port directly.
-type CheckEndpoint struct {
-	Addr    string
-	cleanup func()
-}
-
-// Close tears down any underlying ssh -L forward. Safe to call on a nil/no-op endpoint.
-func (e *CheckEndpoint) Close() {
-	if e != nil && e.cleanup != nil {
-		e.cleanup()
-	}
-}
-
 // resolveCheckEndpoint returns a host-reachable address for the given in-venue TCP port. The
-// caller MUST Close() the returned endpoint when done.
-func resolveCheckEndpoint(venue *CheckVenue, port int) (*CheckEndpoint, error) {
-	switch venue.Kind {
-	case "container":
-		addr, err := containerPublishedAddr(venue.Engine, venue.Name, port)
-		if err != nil {
-			return nil, err
-		}
-		return &CheckEndpoint{Addr: addr}, nil
-	case "host":
-		if se, ok := venue.Exec.(*kit.SSHExecutor); ok {
-			return sshForwardEndpoint(se, port)
-		}
-		return &CheckEndpoint{Addr: fmt.Sprintf("127.0.0.1:%d", port)}, nil
-	case "vm":
-		return sshForwardEndpoint(&kit.SSHExecutor{Host: kit.VmSshAlias(venue.VMName), ConnectTimeout: 10}, port)
-	}
-	return nil, fmt.Errorf("cannot resolve a port endpoint for venue kind %q", venue.Kind)
-}
-
-// containerPublishedAddr returns the host "ip:port" that maps to <port> inside a running
-// container via `<engine> port`, normalizing 0.0.0.0 / [::] to 127.0.0.1.
-func containerPublishedAddr(engine, containerName string, port int) (string, error) {
-	out, err := exec.Command(engine, "port", containerName, strconv.Itoa(port)).Output()
-	if err != nil {
-		if isHostNetworked(engine, containerName) {
-			return fmt.Sprintf("127.0.0.1:%d", port), nil
-		}
-		return "", fmt.Errorf("no port mapping found for %d in %s", port, containerName)
-	}
-	return kit.ParsePublishedPort(string(out), port)
-}
-
-// sshForwardEndpoint opens a `ssh -NT -L 127.0.0.1:<rand>:127.0.0.1:<port>` forward into the SSH
-// target using the same credential-free system-ssh path as SSHExecutor. Readiness bounds come
-// from kit.ReadinessProvider — in-process this resolves the SAME project defaults.readiness the
-// host resolved, threaded to this plugin process via CHARLY_READINESS_* env at Connect (see
-// charly/readiness_config.go's readinessPluginEnv); no new mechanism, and no host round-trip.
-func sshForwardEndpoint(e *kit.SSHExecutor, port int) (*CheckEndpoint, error) {
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		return nil, fmt.Errorf("reserving local port: %w", err)
-	}
-	localPort := ln.Addr().(*net.TCPAddr).Port
-	_ = ln.Close()
-	localAddr := fmt.Sprintf("127.0.0.1:%d", localPort)
-
-	timeout := e.ConnectTimeout
-	if timeout <= 0 {
-		timeout = 10
-	}
-	args := []string{
-		"-N", "-T",
-		"-o", "ExitOnForwardFailure=yes",
-		"-o", "LogLevel=ERROR",
-		"-o", fmt.Sprintf("ConnectTimeout=%d", timeout),
-		"-L", fmt.Sprintf("127.0.0.1:%d:127.0.0.1:%d", localPort, port),
-	}
-	if e.Port > 0 {
-		args = append(args, "-p", strconv.Itoa(e.Port))
-	}
-	args = append(args, e.Args...)
-	dest := e.Host
-	if e.User != "" {
-		dest = e.User + "@" + e.Host
-	}
-	args = append(args, dest)
-
-	cmd := exec.Command("ssh", args...)
-	cmd.Stderr = os.Stderr
-	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("starting ssh -L forward to %s: %w", dest, err)
-	}
-	cleanup := func() {
-		if cmd.Process != nil {
-			_ = cmd.Process.Kill()
-		}
-		_ = cmd.Wait()
-	}
-
-	cfg := kit.ReadinessProvider().WaitCapped(fmt.Sprintf("ssh-forward %s", dest), vmshared.PollLocal, time.Duration(timeout+5)*time.Second)
-	perr := vmshared.PollUntil(context.Background(), cfg, func(context.Context) (bool, float64, error) {
-		if c, derr := net.DialTimeout("tcp", localAddr, 300*time.Millisecond); derr == nil {
-			_ = c.Close()
-			return true, 0, nil
-		}
-		if cmd.ProcessState != nil && cmd.ProcessState.Exited() {
-			return false, 0, vmshared.ErrPollFatal
-		}
-		return false, 0, nil
-	})
-	if perr == nil {
-		return &CheckEndpoint{Addr: localAddr, cleanup: cleanup}, nil
-	}
-	cleanup()
-	return nil, fmt.Errorf("ssh -L forward to %s:%d did not become ready: %w", dest, port, perr)
-}
-
-// isHostNetworked reports whether the container runs with --network=host (no port mappings to
-// probe).
-func isHostNetworked(engine, containerName string) bool {
-	out, err := exec.Command(engine, "inspect", "--format", "{{.HostConfig.NetworkMode}}", containerName).Output()
-	if err != nil {
-		return false
-	}
-	return strings.TrimSpace(string(out)) == "host"
+// caller MUST Close() the returned endpoint when done. The former CheckEndpoint type + the
+// venue.Kind switch + containerPublishedAddr / sshForwardEndpoint / isHostNetworked bodies
+// relocated to sdk/kit (kit.CheckEndpoint + kit.EndpointForVenue) — the ONE kind-blind resolver
+// dispatched by the venue's generic transport descriptor, shared with charly core (R3). The
+// plugin stamps CheckVenue.Descriptor at construction, exactly like the host side.
+func resolveCheckEndpoint(venue *CheckVenue, port int) (*kit.CheckEndpoint, error) {
+	return kit.EndpointForVenue(venue.Descriptor, port)
 }
 
 // CheckVenue carries a resolved execution venue for an `charly check` verb target.
@@ -172,6 +52,9 @@ type CheckVenue struct {
 	Name     string
 	Instance string
 	VMName   string
+	// Descriptor is the venue's generic transport descriptor (container/ssh/shell), stamped at
+	// construction and consumed by the kind-blind kit.EndpointForVenue (R3, shared with core).
+	Descriptor spec.VenueDescriptor
 }
 
 // IsContainer reports whether the venue is a running container.
@@ -183,7 +66,7 @@ func (v *CheckVenue) IsContainer() bool { return v != nil && v.Kind == "containe
 // bundle tree via the host loader in-process.
 func resolveCheckVenue(ex *sdk.Executor, ctx context.Context, dir, name, instance string) (*CheckVenue, error) {
 	if name == "." {
-		return &CheckVenue{Exec: kit.ShellExecutor{}, Kind: "host"}, nil
+		return &CheckVenue{Exec: kit.ShellExecutor{}, Kind: "host", Descriptor: spec.VenueDescriptor{Kind: "shell"}}, nil
 	}
 
 	rp, err := resolvedProject(ex, ctx, dir)
@@ -196,23 +79,26 @@ func resolveCheckVenue(ex *sdk.Executor, ctx context.Context, dir, name, instanc
 					vexec = chain
 				}
 			}
-			return &CheckVenue{Exec: vexec, Kind: "vm", Name: domainID, VMName: domainID, Instance: instance}, nil
+			return &CheckVenue{Exec: vexec, Kind: "vm", Name: domainID, VMName: domainID, Instance: instance,
+				Descriptor: spec.VenueDescriptor{Kind: "ssh", Host: kit.VmSshAlias(domainID), ConnectTimeout: 10}}, nil
 		}
 		if node, isLocal := checkLocalTarget(tree, name); isLocal {
 			vexec, lerr := deploykit.RootExecutorForDeployNode(&node)
 			if lerr != nil {
 				return nil, lerr
 			}
-			return &CheckVenue{Exec: vexec, Kind: "host", Name: name, Instance: instance}, nil
+			return &CheckVenue{Exec: vexec, Kind: "host", Name: name, Instance: instance,
+				Descriptor: kit.DescriptorFromExecutor(vexec)}, nil
 		}
 		if strings.Contains(name, ".") {
 			if _, chain, chainErr := deploykit.ResolveDeployChain(tree, name, kit.ShellExecutor{}); chainErr == nil && chain != nil {
 				return &CheckVenue{
-					Exec:     chain,
-					Kind:     "container",
-					Engine:   "podman",
-					Name:     "charly-" + kit.NestedContainerName(name),
-					Instance: instance,
+					Exec:       chain,
+					Kind:       "container",
+					Engine:     "podman",
+					Name:       "charly-" + kit.NestedContainerName(name),
+					Instance:   instance,
+					Descriptor: spec.VenueDescriptor{Kind: "container", Engine: "podman", ContainerName: "charly-" + kit.NestedContainerName(name)},
 				}, nil
 			}
 		}
@@ -223,11 +109,12 @@ func resolveCheckVenue(ex *sdk.Executor, ctx context.Context, dir, name, instanc
 		return nil, cerr
 	}
 	return &CheckVenue{
-		Exec:     deploykit.ContainerChain(engine, containerName),
-		Kind:     "container",
-		Engine:   engine,
-		Name:     containerName,
-		Instance: instance,
+		Exec:       deploykit.ContainerChain(engine, containerName),
+		Kind:       "container",
+		Engine:     engine,
+		Name:       containerName,
+		Instance:   instance,
+		Descriptor: spec.VenueDescriptor{Kind: "container", Engine: engine, ContainerName: containerName},
 	}, nil
 }
 

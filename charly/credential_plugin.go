@@ -7,7 +7,6 @@ import (
 	"os"
 	"sync"
 
-	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -24,7 +23,7 @@ import (
 
 // CredServiceVNC is the bare-key credential service (VNC passwords use a bare key; every
 // other service uses a composite "service/key" map key). Kept in core because core
-// consumers (runtime_config.go, secrets.go, vnc_helpers.go) name it directly.
+// consumers (runtime_config.go, vnc_helpers.go) name it directly.
 const CredServiceVNC = "charly/vnc"
 
 // CredentialStore abstracts secret storage backends. The implementation is the
@@ -244,24 +243,6 @@ func ResolveCredential(envVar, service, key, defaultVal string) (value, source s
 		return v, store.Name()
 	}
 	return defaultVal, "default"
-}
-
-// resolveSecretBackend reads the secret_backend setting from env or the core runtime
-// config (enc.go + config_image.go consult it to pick their keyring-wait strategy /
-// quadlet emission). The plugin keeps its OWN copy for its store selection — two modules
-// each reading one config key across the process boundary, not in-module duplication.
-func resolveSecretBackend() string {
-	if v := os.Getenv("CHARLY_SECRET_BACKEND"); v != "" {
-		return v
-	}
-	cfg, err := kit.LoadRuntimeConfig()
-	if err != nil {
-		return "auto"
-	}
-	if cfg.SecretBackend != "" {
-		return cfg.SecretBackend
-	}
-	return "auto"
 }
 
 // credentialHealth runs the doctor keyring/secret-storage probe via verb:credential

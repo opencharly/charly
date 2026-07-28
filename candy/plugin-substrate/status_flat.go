@@ -13,9 +13,9 @@ package substratekind
 // exec.Command("podman","secret","ls",...) with zero host-private state — ported directly, no sdk
 // dependency needed.
 //
-// Served by verb:status-fanout's Invoke(sdk.OpStatusCollectAll) (plugin.go); the host's
-// "status-substrate" HostBuild seam (charly/status_substrate_host.go) is now a THIN, generic
-// dispatch forward — no status-specific business logic remains in core.
+// Served by verb:status-fanout's Invoke(sdk.OpStatusCollectAll) (plugin.go), which command:status
+// InvokeProvider's DIRECTLY over the in-proc reverse channel — no status-specific business logic
+// remains in core (the former host forwarding seam is gone; the broker threads the channel).
 
 import (
 	"context"

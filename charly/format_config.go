@@ -4,8 +4,10 @@ import (
 	"fmt"
 
 	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
 
 	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/loaderkit"
 )
 
 // The DistroConfig / BuilderConfig types and their vocabulary-resolution methods
@@ -14,7 +16,7 @@ import (
 // live in sdk/buildkit now (P3) — every charly/*.go caller references buildkit.DistroConfig /
 // buildkit.BuilderConfig directly (K3 ZERO-ALIASES dissolved charly/buildkit_aliases.go). The
 // (phase, venue) phase-template resolvers moved to sdk/buildkit too (P8b — they are
-// PURE over the CUE-sourced spec types: FormatDef = spec.Format, BuilderDef =
+// PURE over the CUE-sourced spec types: vmshared.FormatDef = spec.Format, vmshared.BuilderDef =
 // spec.Builder, Phase/Venue = spec enums); callers reference buildkit.FormatPhaseTemplate /
 // buildkit.BuilderPhaseTemplate directly (K3 ZERO-ALIASES dissolution — this file keeps only
 // the loader glue).
@@ -28,7 +30,7 @@ import (
 // sections that map directly onto DistroConfig/BuilderConfig/InitConfig.
 type BuildFile struct {
 	Distro  map[string]*spec.ResolvedDistro `yaml:"distro" json:"distro"`
-	Builder map[string]*BuilderDef          `yaml:"builder" json:"builder"`
+	Builder map[string]*vmshared.BuilderDef `yaml:"builder" json:"builder"`
 	Init    map[string]*ResolvedInit        `yaml:"init" json:"init"`
 }
 
@@ -46,7 +48,12 @@ func LoadBuildConfigForBox(dir string) (*buildkit.DistroConfig, *buildkit.Builde
 	if !present {
 		return nil, nil, nil, noCharlyYmlErr(dir)
 	}
-	return ProjectDistroConfig(uf), ProjectBuilderConfig(uf), ProjectInitConfig(uf), nil
+	// The build-vocab projections live in loaderkit (K3 Unit 1 — the ONE home charly core and
+	// candy/plugin-build both call, R3). charly supplies its in-proc registry OpResolve callbacks
+	// for the opaque distro/init bodies; the builder bodies decode purely (no callback).
+	return loaderkit.ProjectDistroConfig(uf, resolveDistroViaPlugin),
+		loaderkit.ProjectBuilderConfig(uf),
+		loaderkit.ProjectInitConfig(uf, resolveInitConfigViaPlugin), nil
 }
 
 // LoadDefaultBuildConfig is retained as an alias for the single-argument form.

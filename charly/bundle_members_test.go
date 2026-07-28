@@ -7,7 +7,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/loaderkit"
+	"github.com/opencharly/sdk/proclifecycle"
 	"github.com/opencharly/sdk/spec"
 
 	"github.com/alecthomas/kong"
@@ -28,7 +30,7 @@ func TestFoldMembers_FoldsTopLevelAndInheritsDisposability(t *testing.T) {
 			},
 		},
 	}}
-	if err := foldMembers(uf); err != nil {
+	if err := loaderkit.FoldMembers(uf); err != nil {
 		t.Fatalf("foldMembers: %v", err)
 	}
 	member, ok := uf.Bundle["chrome"]
@@ -56,7 +58,7 @@ func TestFoldMembers_NonDisposableOwnerDoesNotForceDisposable(t *testing.T) {
 			Members: map[string]*spec.BundleNode{"sidecar": {Target: "pod", Image: "chrome-headless"}},
 		},
 	}}
-	if err := foldMembers(uf); err != nil {
+	if err := loaderkit.FoldMembers(uf); err != nil {
 		t.Fatalf("foldMembers: %v", err)
 	}
 	if uf.Bundle["sidecar"].IsDisposable() {
@@ -71,7 +73,7 @@ func TestFoldMembers_CollisionIsError(t *testing.T) {
 		"web": {Target: "pod", Image: "web"},
 		"bed": {Target: "pod", Image: "web", Members: map[string]*spec.BundleNode{"web": {Target: "pod", Image: "chrome-headless"}}},
 	}}
-	err := foldMembers(uf)
+	err := loaderkit.FoldMembers(uf)
 	if err == nil || !strings.Contains(err.Error(), "collides") {
 		t.Fatalf("expected a collision error, got %v", err)
 	}
@@ -82,7 +84,7 @@ func TestFoldMembers_EmptyMemberIsError(t *testing.T) {
 	uf := &loaderkit.UnifiedFile{Bundle: map[string]spec.BundleNode{
 		"bed": {Target: "pod", Image: "web", Members: map[string]*spec.BundleNode{"chrome": nil}},
 	}}
-	if err := foldMembers(uf); err == nil {
+	if err := loaderkit.FoldMembers(uf); err == nil {
 		t.Fatalf("expected an error for a nil member node")
 	}
 }
@@ -94,7 +96,7 @@ func TestValidateMembers_BadTarget(t *testing.T) {
 			"chrome": {Target: "bogus", Image: "chrome-headless"},
 		}},
 	}}
-	if err := validateMembers(uf); err == nil || !strings.Contains(err.Error(), "unsupported target") {
+	if err := loaderkit.ValidateMembers(uf); err == nil || !strings.Contains(err.Error(), "unsupported target") {
 		t.Fatalf("expected unsupported-target error, got %v", err)
 	}
 }
@@ -112,7 +114,7 @@ func TestValidateMembers_AcceptsCanonicalSubstrates(t *testing.T) {
 				"side": {Target: target, Image: "side-img"},
 			}},
 		}}
-		if err := validateMembers(uf); err != nil {
+		if err := loaderkit.ValidateMembers(uf); err != nil {
 			t.Errorf("canonical deploy substrate %q must be a valid member target, got: %v", target, err)
 		}
 	}
@@ -128,7 +130,7 @@ func TestValidateMembers_RejectsGroup(t *testing.T) {
 			"grp": {Target: "group", Image: "grp-img"},
 		}},
 	}}
-	if err := validateMembers(uf); err == nil || !strings.Contains(err.Error(), "unsupported target") {
+	if err := loaderkit.ValidateMembers(uf); err == nil || !strings.Contains(err.Error(), "unsupported target") {
 		t.Fatalf("group must not be a valid member target, got: %v", err)
 	}
 }
@@ -141,7 +143,7 @@ func TestValidateMembers_AcceptsEmptyTarget(t *testing.T) {
 			"side": {Target: "", Image: "side-img"},
 		}},
 	}}
-	if err := validateMembers(uf); err != nil {
+	if err := loaderkit.ValidateMembers(uf); err != nil {
 		t.Fatalf("the empty target (default pod) must be a valid member target, got: %v", err)
 	}
 }
@@ -154,7 +156,7 @@ func TestValidateMembers_DottedKeyRejected(t *testing.T) {
 			"a.b": {Target: "pod", Image: "chrome-headless"},
 		}},
 	}}
-	if err := validateMembers(uf); err == nil {
+	if err := loaderkit.ValidateMembers(uf); err == nil {
 		t.Fatalf("expected a dotted-key rejection")
 	}
 }
@@ -171,7 +173,7 @@ func TestIsPodMember(t *testing.T) {
 
 // TestSortedMemberKeys is deterministic ascending order.
 func TestSortedMemberKeys(t *testing.T) {
-	got := sortedMemberKeys(map[string]*spec.BundleNode{"c": {}, "a": {}, "b": {}})
+	got := loaderkit.SortedMemberKeys(map[string]*spec.BundleNode{"c": {}, "a": {}, "b": {}})
 	if want := []string{"a", "b", "c"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("sortedMemberKeys = %v, want %v", got, want)
 	}
@@ -180,15 +182,15 @@ func TestSortedMemberKeys(t *testing.T) {
 // TestTearDownMembers_RoutingAndOrder: tearDownMembers iterates members in sorted
 // order and routes a pod member to `charly remove --purge`, a non-pod member to
 // `charly bundle del --assume-yes` — the same iteration/routing logic bringUpMembers
-// uses, verified here with the stubbable runCharlySubcommand package var (no side
+// uses, verified here with the stubbable proclifecycle.RunCharlySubcommand package var (no side
 // effects). The flag itself is proven valid against real Kong parsing by
 // TestDeployDelArgv_KongAccepts (this stub-based test cannot — it never invokes
 // flag parsing, which is exactly how a `--yes`/`--force` drift once slipped through).
 func TestTearDownMembers_RoutingAndOrder(t *testing.T) {
-	orig := runCharlySubcommand
-	defer func() { runCharlySubcommand = orig }()
+	orig := proclifecycle.RunCharlySubcommand
+	defer func() { proclifecycle.RunCharlySubcommand = orig }()
 	var calls [][]string
-	runCharlySubcommand = func(args ...string) error {
+	proclifecycle.RunCharlySubcommand = func(args ...string) error {
 		calls = append(calls, args)
 		return nil
 	}
@@ -200,8 +202,8 @@ func TestTearDownMembers_RoutingAndOrder(t *testing.T) {
 		t.Fatalf("tearDownMembers: %v", err)
 	}
 	want := [][]string{
-		deployDelArgv("alpha-host"),       // sorted first; non-pod → deploy del --assume-yes (unattended)
-		{"remove", "zeta-pod", "--purge"}, // pod → remove --purge
+		deploykit.BundleDelArgv("alpha-host"), // sorted first; non-pod → deploy del --assume-yes (unattended)
+		{"remove", "zeta-pod", "--purge"},     // pod → remove --purge
 	}
 	if !reflect.DeepEqual(calls, want) {
 		t.Fatalf("tearDownMembers calls = %v, want %v", calls, want)
@@ -210,10 +212,10 @@ func TestTearDownMembers_RoutingAndOrder(t *testing.T) {
 
 // TestTearDownMembers_NoMembersNoop: nothing happens when there are no members.
 func TestTearDownMembers_NoMembersNoop(t *testing.T) {
-	orig := runCharlySubcommand
-	defer func() { runCharlySubcommand = orig }()
+	orig := proclifecycle.RunCharlySubcommand
+	defer func() { proclifecycle.RunCharlySubcommand = orig }()
 	called := false
-	runCharlySubcommand = func(args ...string) error { called = true; return nil }
+	proclifecycle.RunCharlySubcommand = func(args ...string) error { called = true; return nil }
 	if err := tearDownMembers(&spec.BundleNode{}); err != nil {
 		t.Fatalf("tearDownMembers(empty): %v", err)
 	}
@@ -223,12 +225,12 @@ func TestTearDownMembers_NoMembersNoop(t *testing.T) {
 }
 
 func TestTearDownMembers_AttemptsAllAndReturnsJoinedErrors(t *testing.T) {
-	orig := runCharlySubcommand
-	defer func() { runCharlySubcommand = orig }()
+	orig := proclifecycle.RunCharlySubcommand
+	defer func() { proclifecycle.RunCharlySubcommand = orig }()
 	firstErr := errors.New("first teardown failed")
 	secondErr := errors.New("second teardown failed")
 	var calls [][]string
-	runCharlySubcommand = func(args ...string) error {
+	proclifecycle.RunCharlySubcommand = func(args ...string) error {
 		calls = append(calls, args)
 		if len(calls) == 1 {
 			return firstErr
@@ -255,7 +257,7 @@ func deployKeysList(m map[string]spec.BundleNode) []string {
 	return out
 }
 
-// TestDeployDelArgv_KongAccepts proves deployDelArgv emits a flag the REAL
+// TestBundleDelArgv_KongAccepts proves deploykit.BundleDelArgv emits a flag the REAL
 // `charly bundle del` Kong grammar accepts, and that the two historically-wrong
 // flags are rejected. The stub-based TestTearDownMembers_RoutingAndOrder asserts
 // arg strings without ever invoking Kong, so it CANNOT catch a flag the binary
@@ -263,12 +265,12 @@ func deployKeysList(m map[string]spec.BundleNode) []string {
 // call sites) shipped while silently aborting teardown at arg-parse and leaking
 // the resource. This test exercises real flag parsing so the drift can never
 // silently re-land.
-func TestDeployDelArgv_KongAccepts(t *testing.T) {
+func TestBundleDelArgv_KongAccepts(t *testing.T) {
 	// delGrammarStub mirrors the command:bundle plugin's `charly bundle del` leaf grammar
 	// (candy/plugin-bundle) — the Kong-tagged field set the real CLI parses. The plugin
 	// owns the grammar now (P13) and a core unit test cannot import a separate module, so
 	// this stub reproduces the exact tag shape (AssumeYes → --assume-yes / -y; the
-	// historically-wrong --yes/--force absent) to keep the deployDelArgv regression guard.
+	// historically-wrong --yes/--force absent) to keep the deploykit.BundleDelArgv regression guard.
 	type delGrammarStub struct {
 		Name            string `arg:""`
 		AssumeYes       bool   `long:"yes" short:"y"`
@@ -293,8 +295,8 @@ func TestDeployDelArgv_KongAccepts(t *testing.T) {
 	}
 	// The helper every programmatic teardown builds its command through must
 	// parse cleanly against the real grammar.
-	if err := parse(deployDelArgv("x")...); err != nil {
-		t.Errorf("deployDelArgv produced args `charly bundle del` rejects: %v (args=%v)", err, deployDelArgv("x"))
+	if err := parse(deploykit.BundleDelArgv("x")...); err != nil {
+		t.Errorf("deploykit.BundleDelArgv produced args `charly bundle del` rejects: %v (args=%v)", err, deploykit.BundleDelArgv("x"))
 	}
 	// -y is the valid short form.
 	if err := parse("bundle", "del", "x", "-y"); err != nil {

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -33,7 +34,7 @@ func TestRemoveBySource(t *testing.T) {
 func TestAllocateAutoPorts(t *testing.T) {
 	containerPorts := []int{2718, 8080, 3000}
 	occupied := map[int]bool{}
-	result, err := AllocateAutoPorts(containerPorts, occupied)
+	result, err := kit.AllocateAutoPorts(containerPorts, occupied)
 	if err != nil {
 		t.Fatalf("AllocateAutoPorts unexpected error: %v", err)
 	}
@@ -64,7 +65,7 @@ func TestAllocateAutoPorts(t *testing.T) {
 func TestResolveDeployPorts(t *testing.T) {
 	// Auto-default: every container port gets a fresh host port; the mapping's
 	// container side matches and the host side is a real (>0) allocated port.
-	got, err := ResolveDeployPorts([]int{2718, 8080, 3000}, nil, nil, nil)
+	got, err := kit.ResolveDeployPorts([]int{2718, 8080, 3000}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -72,14 +73,14 @@ func TestResolveDeployPorts(t *testing.T) {
 		t.Fatalf("ResolveDeployPorts(auto): got %d entries, want 3", len(got))
 	}
 	for i, cp := range []int{2718, 8080, 3000} {
-		pm, ok := ParsePortMapping(got[i])
+		pm, ok := kit.ParsePortMapping(got[i])
 		if !ok || pm.Container != cp || pm.Host <= 0 {
 			t.Errorf("entry %d = %q, want host:%d with a real host port", i, got[i], cp)
 		}
 	}
 
 	// A pin wins for its container port; the rest auto-allocate.
-	got, err = ResolveDeployPorts([]int{2718, 8080}, []string{"28080:8080"}, nil, nil)
+	got, err = kit.ResolveDeployPorts([]int{2718, 8080}, []string{"28080:8080"}, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -88,7 +89,7 @@ func TestResolveDeployPorts(t *testing.T) {
 	}
 
 	// Prior allocation is reused for stability across re-resolution.
-	got, err = ResolveDeployPorts([]int{2718}, nil, []string{"49718:2718"}, nil)
+	got, err = kit.ResolveDeployPorts([]int{2718}, nil, []string{"49718:2718"}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -97,7 +98,7 @@ func TestResolveDeployPorts(t *testing.T) {
 	}
 
 	// A stray "auto" pin token is ignored (treated as no pin → allocate).
-	got, err = ResolveDeployPorts([]int{2718}, []string{"auto"}, nil, nil)
+	got, err = kit.ResolveDeployPorts([]int{2718}, []string{"auto"}, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

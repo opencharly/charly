@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -23,14 +24,14 @@ func TestInitDefLabel_RoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("embeddedDefaults: %v", err)
 	}
-	ic := ProjectInitConfig(uf)
+	ic := loaderkit.ProjectInitConfig(uf, resolveInitConfigViaPlugin)
 	if ic == nil || ic.Init["supervisord"] == nil {
 		t.Fatal("embedded vocabulary missing supervisord init def")
 	}
 	def := ic.Init["supervisord"]
 
 	// Build the runtime-relevant subset exactly as the host render-prep bake seam does
-	// (buildBakedMetadata → spec.BakedLabelSet.InitDef).
+	// (deploykit.Generator.buildBakedMetadata → spec.BakedLabelSet.InitDef, K3-U3).
 	capDef := spec.CapabilityInitDef{
 		Entrypoint:         def.Entrypoint,
 		FallbackEntrypoint: def.FallbackEntrypoint,

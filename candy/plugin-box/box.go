@@ -7,45 +7,30 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
 // hostClient is the box commands' host coupling: it reaches charly's host process over the
-// reverse channel — InvokeProvider (peer plugin dispatch, for generate → build:generate), the
-// HostBuild("resolved-project") envelope fetch (inspect/list), the HostBuild("validate-project")
-// envelope fetch (validate runs the rule ENGINE in-plugin over the reply), or the generic
-// HostBuild("cli") reentry (pkg → the hidden __box-pkg core command, pull → the hidden __box-pull
-// core command, build → the hidden __box-build core command, and inspect/list's overlay/store
-// residue → __box-inspect-overlay / __box-list-tags). The `new` command needs neither (kit
-// scaffolding directly).
+// reverse channel — InvokeProvider (peer plugin dispatch, for generate → build:generate, and for
+// list's store-live tags → verb:retention, listImageTags), the HostBuild("resolved-project")
+// envelope fetch (inspect/list), or the HostBuild("validate-project") envelope fetch (validate
+// runs the rule ENGINE in-plugin over the reply). build runs its body in-plugin (dispatchBuild —
+// InvokeProvider(build:box) + thin HostBuild seams, P8b), no reentry; pkg likewise runs in-plugin
+// (dispatchPkg — InvokeProvider(build:pkg), K3 build-tail move); pull runs the ensure-image work
+// in-plugin via InvokeProvider(build:ensure); inspect's deploy-overlay formats (tunnel/bind_mounts)
+// render in-plugin off the deploy overlay + the resolved-project envelope. None of these reenter
+// core — the generic HostBuild("cli") reentry helper this file used to carry (list's SOLE
+// caller) is DELETED (#118): `box` has no remaining core CLI reentry.
+// The `new` command needs neither (kit scaffolding directly).
 type hostClient struct {
 	ctx  context.Context
 	exec *sdk.Executor
-}
-
-// cli asks the HOST to run `charly <argv>` via the generic "cli" host-builder and returns the
-// CliReply (stdout when capture, the process exit code, any spawn error). Mirrors the alias
-// plugin's host coupling (R3 in shape; each plugin owns its own reverse-channel calls).
-func (h *hostClient) cli(capture, bestEffort bool, argv ...string) (spec.CliReply, error) {
-	reqJSON, err := json.Marshal(spec.CliRequest{Argv: argv, Capture: capture, BestEffort: bestEffort})
-	if err != nil {
-		return spec.CliReply{}, err
-	}
-	resJSON, err := h.exec.HostBuild(h.ctx, "cli", reqJSON)
-	if err != nil {
-		return spec.CliReply{}, err
-	}
-	var r spec.CliReply
-	if uerr := json.Unmarshal(resJSON, &r); uerr != nil {
-		return spec.CliReply{}, uerr
-	}
-	return r, nil
 }
 
 // dispatchBoxCommand routes a box command word to its handler.
@@ -73,9 +58,34 @@ func dispatchBoxCommand(hc *hostClient, word string, args []string) error {
 		return dispatchMerge(hc, args)
 	case "reconcile":
 		return dispatchReconcile(args)
+	case "feature":
+		return dispatchFeature(hc, args)
 	default:
 		return fmt.Errorf("box: unknown command word %q", word)
 	}
+}
+
+// dispatchFeature runs `charly box feature run <image>` — build-scope Agent Driven Evaluation against
+// a disposable container. The ENGINE lives in candy/plugin-check (where the check runner is); this
+// box command bridges to it over the F10 plugin↔plugin reverse leg (cone-C #31, the SAME shape
+// command:build→build:ensure uses): InvokeProvider command:check's HIDDEN `__feature-box` leaf, which
+// routes to plugin-check's Mode:"feature-box" engine. The check output prints to charly's own stdio
+// (compiled-in) and the check-fail exit code propagates back through the returned error.
+func dispatchFeature(hc *hostClient, args []string) error {
+	if len(args) == 0 || args[0] != "run" {
+		return fmt.Errorf("usage: charly box feature run <image> [--format …] [--tag …] [--strict]")
+	}
+	// `run <image> [flags]` → the hidden check leaf `__feature-box <image> [flags]` (drop the `run`
+	// subcommand token — __feature-box takes the image positional directly).
+	fwd := append([]string{"__feature-box"}, args[1:]...)
+	reqJSON, err := json.Marshal(struct {
+		Args []string `json:"args"`
+	}{Args: fwd})
+	if err != nil {
+		return err
+	}
+	_, ierr := hc.exec.InvokeProvider(hc.ctx, "command", "check", sdk.OpRun, reqJSON, nil, sdk.InvokeProviderOpts{})
+	return ierr
 }
 
 // parseLeaf kong-parses args into a single-command grammar struct (positional args + flags, no
@@ -152,22 +162,37 @@ type pkgGrammar struct {
 	Out    string   `long:"out" default:"dist" help:"Output directory for the built package files."`
 }
 
-// dispatchPkg reaches the hidden core `__box-pkg` reentry over HostBuild("cli"): the localpkg build
-// engine (deploykit.BuildLocalPkgOnHost, W3) still needs core's builder-image resolve closures pre-K1. The
-// subprocess inherits charly's stdio (it prints the built file paths + status) and exits 0/1.
+// dispatchPkg runs the `charly box pkg` body IN-PLUGIN (K3 build-tail move, coneB-pkgcmd — the
+// former hidden core `__box-pkg` reentry is DELETED): InvokeProvider(build:pkg) drives the
+// candy/plugin-build engine (runBoxPkg), which loads the project + scans candies via the SAME
+// K1-loader seams resolveBuildEngine established, resolves the requested candy's localpkg source,
+// and builds via deploykit.BuildLocalPkgOnHost (already pure sdk). Byte-equivalent to the former
+// BoxPkgCmd.Run: prints each built file's destination path, error on failure.
 func dispatchPkg(hc *hostClient, args []string) error {
 	var g pkgGrammar
 	if done, err := parseLeaf("pkg", &g, args); err != nil || done {
 		return err
 	}
-	argv := append([]string{"__box-pkg"}, g.Format...)
-	argv = append(argv, "--candy", g.Candy, "--out", g.Out)
-	r, err := hc.cli(false, true, argv...)
+	dir, err := os.Getwd()
 	if err != nil {
 		return err
 	}
-	if r.ExitCode != 0 {
-		return fmt.Errorf("box pkg failed (exit %d)", r.ExitCode)
+	reqJSON, err := json.Marshal(spec.BuildPkgRequest{Format: g.Format, Candy: g.Candy, Out: g.Out, Dir: dir})
+	if err != nil {
+		return err
+	}
+	resJSON, err := hc.exec.InvokeProvider(hc.ctx, "build", "pkg", sdk.OpBuild, reqJSON, nil, sdk.InvokeProviderOpts{})
+	if err != nil {
+		return err
+	}
+	var reply spec.BuildPkgReply
+	if len(resJSON) > 0 {
+		if uerr := json.Unmarshal(resJSON, &reply); uerr != nil {
+			return fmt.Errorf("box pkg: decode reply: %w", uerr)
+		}
+	}
+	if reply.Error != "" {
+		return fmt.Errorf("%s", reply.Error)
 	}
 	return nil
 }
@@ -183,31 +208,53 @@ type pullGrammar struct {
 	Platform string `long:"platform" help:"Target platform (default: host)"`
 }
 
-// dispatchPull reaches the hidden core `__box-pull` reentry over HostBuild("cli"): EnsureImagePresent
-// (BoxPullCmd's Run body, UNCHANGED) still needs the full box-build engine + charly.yml resolution
-// pre the ensure_image.go + build.go + remote_image.go batch. Tag/Platform are omitted from argv when
-// empty (Kong's own zero-value default for an absent flag) rather than passed as an empty string —
-// avoids any flag-parsing divergence between "flag absent" and "flag present with empty value" on the
-// reentered leaf, keeping behavior identical to the un-dispersed command. The subprocess inherits
-// charly's stdio (same "ensure-image: ..." progress lines) and exits 0/1.
+// dispatchPull ensures an image is present in local storage by INVOKING the peer COMPILED-IN
+// build:ensure word (candy/plugin-build) over the InvokeProvider reverse leg — the SAME
+// ensure-image ORCHESTRATION (pull from registry, fall back to a local/remote build when the
+// identifier maps to a project charly.yml entry) the former core BoxPullCmd.Run delegated to via
+// dispatchBuildEnsure, now reached plugin↔plugin (the hidden __box-pull core reentry is DELETED).
+//
+// A --tag override is meaningful ONLY for a short-name input: resolve the canonical registry ref
+// (registry+name from the resolved-project envelope the plugin already reads + the requested tag)
+// so build:ensure's pull/build-fallback picks up the requested tag — byte-identical to the former
+// core Run's `buildkit.ResolveBox(cfg,box,tag).Registry/.Name` → ResolveShellImageRef path, but off
+// the envelope (registry/name are tag-independent), so no loader is needed plugin-side. A
+// full/remote ref already carries its own tag. --platform stays a no-op (the former Run never
+// threaded it to the ensure drive either).
 func dispatchPull(hc *hostClient, args []string) error {
 	var g pullGrammar
 	if done, err := parseLeaf("pull", &g, args); err != nil || done {
 		return err
 	}
-	argv := []string{"__box-pull", g.Box}
-	if g.Tag != "" {
-		argv = append(argv, "--tag", g.Tag)
+	dir, _ := os.Getwd()
+	image := g.Box
+	if g.Tag != "" && !kit.LooksLikeFullRef(g.Box) && !spec.IsRemoteImageRef(kit.StripURLScheme(g.Box)) {
+		rp, err := hc.resolvedProject(false)
+		if err != nil {
+			return fmt.Errorf("short name %q with --tag requires a project directory with charly.yml: %w", g.Box, err)
+		}
+		view, ok := rp.Boxes[g.Box]
+		if !ok {
+			return fmt.Errorf("short name %q with --tag not found in charly.yml", g.Box)
+		}
+		image = kit.ResolveShellImageRef(view.Registry, view.Name, g.Tag)
 	}
-	if g.Platform != "" {
-		argv = append(argv, "--platform", g.Platform)
-	}
-	r, err := hc.cli(false, true, argv...)
+	reqJSON, err := json.Marshal(spec.BuildEnsureRequest{Image: image, Dir: dir})
 	if err != nil {
 		return err
 	}
-	if r.ExitCode != 0 {
-		return fmt.Errorf("box pull failed (exit %d)", r.ExitCode)
+	resJSON, err := hc.exec.InvokeProvider(hc.ctx, "build", "ensure", sdk.OpBuild, reqJSON, nil, sdk.InvokeProviderOpts{})
+	if err != nil {
+		return err
+	}
+	var reply spec.BuildEnsureReply
+	if len(resJSON) > 0 {
+		if err := json.Unmarshal(resJSON, &reply); err != nil {
+			return fmt.Errorf("box pull: decode reply: %w", err)
+		}
+	}
+	if reply.Error != "" {
+		return fmt.Errorf("%s", reply.Error)
 	}
 	return nil
 }
@@ -215,11 +262,11 @@ func dispatchPull(hc *hostClient, args []string) error {
 // --- box build ---
 
 // buildGrammar is the `charly box build [boxes…] [flags]` CLI surface — byte-identical to the
-// former static BuildCmd Kong leaf (FINAL/K5 unit 6a M4d): same positional, same nine flags
-// (including the three env-var-backed tunables), same help text, so `charly box build --help`
-// renders unchanged and CHARLY_BUILD_CACHE/CHARLY_BUILD_JOBS/CHARLY_PODMAN_JOBS keep working —
-// Kong resolves them in-plugin at parse time and the resolved values flow through argv, so the
-// reentered `__box-build` subprocess needs neither the env vars nor to re-parse them itself.
+// former static core build leaf (P8b relocated its Run body into dispatchBuild): same positional,
+// same nine flags (including the three env-var-backed tunables), same help text, so
+// `charly box build --help` renders unchanged and CHARLY_BUILD_CACHE/CHARLY_BUILD_JOBS/
+// CHARLY_PODMAN_JOBS keep working — Kong resolves them in-plugin at parse time and dispatchBuild
+// threads the resolved values into the spec.BuildRequest it invokes build:box with.
 type buildGrammar struct {
 	Boxes           []string `arg:"" optional:"" help:"Boxes to build (default: all enabled; the sentinel 'all' is equivalent). Supports remote refs (github.com/org/repo/box[@version])"`
 	Push            bool     `long:"push" help:"Push to registry after building"`
@@ -233,51 +280,196 @@ type buildGrammar struct {
 	DevLocalPkg     bool     `long:"dev-local-pkg" help:"Build localpkg candies (the charly toolchain) from LOCAL in-development source instead of downloading the published release. Set automatically for disposable check-bed image builds so a bed tests in-development code; never on a production box build."`
 }
 
-// dispatchBuild reaches the hidden core `__box-build` reentry over HostBuild("cli"): BuildCmd's Run
-// body (UNCHANGED — the bootstrap-builder subsystem, remote-ref resolve, retention pruning) is
-// K1/K3-ENGINE family, pre the loader/build-engine waves that will eventually move it. The
-// subprocess inherits charly's stdio (the full build progress output) and exits 0/1.
+// dispatchBuild runs the `charly box build` body IN-PLUGIN (P8b — the former hidden core
+// __box-build reentry is DELETED): NormalizeBoxArgs → remote-ref pivot DETECTION (pure sdk,
+// buildkit.DetectRemoteBuildRef) → resolve any remote ref over the existing
+// HostBuild("remote-image-resolve") seam → compute the CalVer tag ONCE → hold the build-activity
+// flock → InvokeProvider(build:box) (the compiled-in candy/plugin-build podman DRIVE) → post-build
+// retention prune (skipped for --push). The host-coupled remainder a sdk-only candy cannot do — the
+// remote-ref clone/cache resolve (ResolveRemoteImage, K1) and keep_images resolution — is reached
+// over thin HostBuild seams (remote-image-resolve, retention-defaults). Byte-equivalent to the
+// former BuildCmd.Run.
 func dispatchBuild(hc *hostClient, args []string) error {
 	var g buildGrammar
 	if done, err := parseLeaf("build", &g, args); err != nil || done {
 		return err
 	}
-	argv := append([]string{"__box-build"}, g.Boxes...)
-	if g.Push {
-		argv = append(argv, "--push")
-	}
-	if g.Tag != "" {
-		argv = append(argv, "--tag", g.Tag)
-	}
-	if g.Platform != "" {
-		argv = append(argv, "--platform", g.Platform)
-	}
-	if g.Cache != "" {
-		argv = append(argv, "--cache", g.Cache)
-	}
-	if g.NoCache {
-		argv = append(argv, "--no-cache")
-	}
-	if g.Jobs != 0 {
-		argv = append(argv, "--jobs", strconv.Itoa(g.Jobs))
-	}
-	if g.PodmanJobs != 0 {
-		argv = append(argv, "--podman-jobs", strconv.Itoa(g.PodmanJobs))
-	}
-	if g.IncludeDisabled {
-		argv = append(argv, "--include-disabled")
-	}
-	if g.DevLocalPkg {
-		argv = append(argv, "--dev-local-pkg")
-	}
-	r, err := hc.cli(false, true, argv...)
+	dir, err := os.Getwd()
 	if err != nil {
 		return err
 	}
-	if r.ExitCode != 0 {
-		return fmt.Errorf("box build failed (exit %d)", r.ExitCode)
+	// Normalize the `all` sentinel to nil BEFORE any per-name interpretation (remote-ref pivot,
+	// the resolver) so every surface agrees "no specific boxes" means "all enabled".
+	boxes := buildkit.NormalizeBoxArgs(g.Boxes)
+
+	// Compute the build tag ONCE (clock-derived — resolving it twice would diverge) so the
+	// activity-lock floor and the built images agree on ONE CalVer.
+	tag := g.Tag
+	if tag == "" {
+		tag = buildkit.ComputeCalVer()
+	}
+
+	req := spec.BuildRequest{
+		Boxes:           boxes,
+		Tag:             tag,
+		Dir:             dir,
+		IncludeDisabled: g.IncludeDisabled,
+		DevLocalPkg:     g.DevLocalPkg,
+		Push:            g.Push,
+		Platform:        g.Platform,
+		Cache:           g.Cache,
+		NoCache:         g.NoCache,
+		Jobs:            g.Jobs,
+		PodmanJobs:      g.PodmanJobs,
+	}
+
+	// Remote-ref pivot: detection is pure (a box arg that is itself a remote @ref, or a thin
+	// workspace whose sole import auto-pivots a locally-undeclared image to its upstream source);
+	// the K1-coupled RESOLUTION (clone/cache the source, EnsureRepoDownloaded) rides the existing
+	// "remote-image-resolve" host seam. On a hit, reset to a fresh single-box build against the
+	// cached source dir — byte-equivalent to the former buildRemote's `(&BuildCmd{Boxes,Tag}).Run()`,
+	// which dropped every other flag (push/platform/cache/jobs/include-disabled/dev-local-pkg).
+	if remoteRef, ok := buildkit.DetectRemoteBuildRef(dir, boxes); ok {
+		resolved, rerr := hc.remoteImageResolve(remoteRef, tag)
+		if rerr != nil {
+			return rerr
+		}
+		req = spec.BuildRequest{Boxes: []string{resolved.BoxName}, Tag: tag, Dir: resolved.CacheDir}
+	}
+
+	// Retention floor: mark this build LIVE so a concurrent sibling's retention prune respects our
+	// tag floor. Held across the whole build (the candy podman drive) + the post-build prune.
+	release, err := acquireBuildActivityLock(tag)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = release() }()
+
+	// The podman DRIVE runs in the compiled-in candy/plugin-build (build:box), reached over the
+	// InvokeProvider reverse leg — the SAME peer-invoke dispatchGenerate uses for build:generate.
+	reqJSON, err := json.Marshal(req)
+	if err != nil {
+		return err
+	}
+	resJSON, err := hc.exec.InvokeProvider(hc.ctx, "build", "box", sdk.OpBuild, reqJSON, nil, sdk.InvokeProviderOpts{})
+	if err != nil {
+		return err
+	}
+	var reply spec.BuildReply
+	if len(resJSON) > 0 {
+		if uerr := json.Unmarshal(resJSON, &reply); uerr != nil {
+			return fmt.Errorf("box build: decode reply: %w", uerr)
+		}
+	}
+	if reply.Error != "" {
+		return fmt.Errorf("%s", reply.Error)
+	}
+
+	// Reusable-artifact retention (post-step; skipped for --push): prune old CalVer tags + stale
+	// .build/_candy dirs down to defaults.keep_images, via verb:retention, under the lock held above.
+	if !req.Push {
+		pruneAfterBuild(hc, req.Dir)
 	}
 	return nil
+}
+
+// remoteImageResolve resolves a known remote @ref to its cached source dir + short box name over the
+// existing "remote-image-resolve" host seam (host_build_remote_image_resolve.go → ResolveRemoteImage,
+// the K1-coupled clone/cache the sdk-only candy cannot run) — the SAME seam candy/plugin-build's
+// ensure-image fallback reaches. The build then re-dispatches build:box against the returned dir.
+func (h *hostClient) remoteImageResolve(ref, tag string) (spec.RemoteImageResolveReply, error) {
+	reqJSON, err := json.Marshal(spec.RemoteImageResolveRequest{Ref: ref, Tag: tag})
+	if err != nil {
+		return spec.RemoteImageResolveReply{}, err
+	}
+	resJSON, err := h.exec.HostBuild(h.ctx, "remote-image-resolve", reqJSON)
+	if err != nil {
+		return spec.RemoteImageResolveReply{}, err
+	}
+	var reply spec.RemoteImageResolveReply
+	if len(resJSON) > 0 {
+		if uerr := json.Unmarshal(resJSON, &reply); uerr != nil {
+			return spec.RemoteImageResolveReply{}, uerr
+		}
+	}
+	if reply.Error != "" {
+		return spec.RemoteImageResolveReply{}, fmt.Errorf("%s", reply.Error)
+	}
+	if reply.BoxName == "" {
+		return spec.RemoteImageResolveReply{}, fmt.Errorf("remote-image-resolve: empty box name resolving %q", ref)
+	}
+	return reply, nil
+}
+
+// acquireBuildActivityLock registers this build invocation as LIVE for its whole duration: a flocked
+// nonce file whose CONTENT is the build's CalVer — the floor of every FROM pin its generated
+// Containerfiles carry. The externalized retention engine (candy/plugin-clean) consults the SAME live
+// set (kit.BuildActivityDir) so a completing sibling build can never untag a pin an in-flight build
+// still resolves. Reconstructed from the shared kit primitives — byte-equivalent to the former core
+// acquireBuildActivityLock (deleted with charly/build.go in P8b), with no core copy remaining.
+func acquireBuildActivityLock(calver string) (func() error, error) {
+	dir, err := kit.BuildActivityDir()
+	if err != nil {
+		return nil, err
+	}
+	path := filepath.Join(dir, fmt.Sprintf("build-%d-%d.lock", os.Getpid(), time.Now().UnixNano()))
+	release, err := kit.AcquireFileLock(path, true)
+	if err != nil {
+		return nil, fmt.Errorf("build-activity lock: %w", err)
+	}
+	if err := os.WriteFile(path, []byte(calver+"\n"), 0o644); err != nil {
+		_ = release()
+		return nil, fmt.Errorf("build-activity lock: record calver: %w", err)
+	}
+	return func() error {
+		rerr := release()
+		_ = os.Remove(path)
+		return rerr
+	}, nil
+}
+
+// pruneAfterBuild runs the post-build retention prune via verb:retention (BuildPrune scope: tag
+// retention + stale .build/_candy staging dirs). Best-effort, warn-only. keep_images comes from the
+// "retention-defaults" HostBuild seam — a candy cannot LoadConfig itself, so it reaches the SAME
+// defaults resolution `charly clean` and candy/plugin-check's post-run prune hook use. Byte-equivalent
+// to the former core pruneAfterBuild (deleted from charly/retention_plugin.go in P8b).
+func pruneAfterBuild(hc *hostClient, dir string) {
+	keep := 0
+	if defJSON, err := json.Marshal(spec.RetentionRequest{Dir: dir}); err == nil {
+		if defRes, derr := hc.exec.HostBuild(hc.ctx, "retention-defaults", defJSON); derr == nil {
+			var dr spec.RetentionReply
+			if json.Unmarshal(defRes, &dr) == nil {
+				keep = dr.KeepImages
+			}
+		}
+	}
+	reqJSON, err := json.Marshal(spec.RetentionRequest{Dir: dir, BuildPrune: true, KeepImages: keep})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: image retention prune: %v\n", err)
+		return
+	}
+	resJSON, err := hc.exec.InvokeProvider(hc.ctx, "verb", "retention", sdk.OpRun, reqJSON, nil, sdk.InvokeProviderOpts{})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: image retention prune: %v\n", err)
+		return
+	}
+	var reply spec.RetentionReply
+	if len(resJSON) > 0 {
+		if uerr := json.Unmarshal(resJSON, &reply); uerr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: image retention prune: %v\n", uerr)
+			return
+		}
+	}
+	if reply.Error != "" {
+		fmt.Fprintf(os.Stderr, "Warning: image retention prune: %s\n", reply.Error)
+		return
+	}
+	if len(reply.ImageRefs) > 0 {
+		fmt.Fprintf(os.Stderr, "Pruned %d old image tag(s) (keep_images=%d)\n", len(reply.ImageRefs), keep)
+	}
+	if len(reply.BuildDirs) > 0 {
+		fmt.Fprintf(os.Stderr, "Pruned %d build-staging dir(s) under .build/_candy\n", len(reply.BuildDirs))
+	}
 }
 
 // --- box labels ---

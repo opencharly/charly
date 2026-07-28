@@ -3,6 +3,7 @@ package main
 import (
 	"testing"
 
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 	"github.com/opencharly/sdk/vmshared"
 )
@@ -140,9 +141,11 @@ func TestValidateVmNamingGuard(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			errs := &ValidationError{}
-			ValidateVmNamingGuard(tt.name, errs)
-			has := errs.HasErrors()
+			// ValidateVmNamingGuard moved to sdk/loaderkit (K1-LOADER RELOCATION), accumulating
+			// into spec.Diagnostics (RULING 2) rather than the core loaderkit.ValidationError.
+			errs := &spec.Diagnostics{}
+			loaderkit.ValidateVmNamingGuard(tt.name, errs)
+			has := len(errs.Items) > 0
 			if has != tt.shouldError {
 				t.Errorf("ValidateVmNamingGuard(%q) errors=%v, want %v", tt.name, has, tt.shouldError)
 			}

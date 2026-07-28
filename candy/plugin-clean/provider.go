@@ -11,15 +11,16 @@ import (
 )
 
 // provider.go — the Invoke surface for BOTH capabilities this plugin serves: the COMPILED-IN
-// command:clean CLI placement, and verb:retention — the peer/core-adapter entry point into the
+// command:clean CLI placement, and verb:retention — the peer entry point into the
 // retention ENGINE (retention.go) this plugin now OWNS (K1-alpha core-minimization relocation,
 // mirroring verb:credential/verb:gpu/verb:tunnel). The host's command dispatch
 // (provider_command_external.go dispatchInProcCommand) invokes command:clean in-process with the
 // pass-through args + the threaded in-proc reverse channel, so runCleanCLI can HostBuild the ONE
-// remaining host-coupled piece ("retention-defaults"). verb:retention is invoked directly by
-// core adapters (charly/retention_plugin.go) and by peer plugins (candy/plugin-check's post-run
-// prune, over InvokeProvider) with an ALREADY-RESOLVED spec.RetentionRequest — no reverse channel
-// needed for that leg, so it works whether clean is compiled-in or (in principle) out-of-process.
+// remaining host-coupled piece ("retention-defaults"). verb:retention is invoked directly by peer
+// plugins (candy/plugin-box's post-build prune + `box list tags`, candy/plugin-check's post-run
+// prune, all over InvokeProvider — NO core adapter remains, charly/retention_plugin.go is
+// DELETED, #118) with an ALREADY-RESOLVED spec.RetentionRequest — no reverse channel needed for
+// that leg, so it works whether clean is compiled-in or (in principle) out-of-process.
 
 type provider struct{ pb.UnimplementedProviderServer }
 

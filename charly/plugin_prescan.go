@@ -34,6 +34,7 @@ import (
 	"sync"
 
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 	"gopkg.in/yaml.v3"
 )
@@ -54,7 +55,7 @@ var (
 	// build-emit-capable WITHOUT building+connecting the plugin (standalone `charly box
 	// validate`). Additive, best-effort, no-false-negatives: an over-broad recognition is
 	// harmless — a verb that turns out non-build-emit-capable fails loudly at build via
-	// emitPluginFragment's empty-fragment guard. Shares declaredDeployMu (the one lock).
+	// invokeVerbBuildEmit's empty-fragment guard. Shares declaredDeployMu (the one lock).
 	declaredExternalVerb = map[string]bool{}
 	// declaredExternalStep holds the external (out-of-tree) STEP words a project's candy plugin
 	// declarations name — learned POST-SCAN alongside the verbs (registerExternalVerbsFromCandies),
@@ -213,7 +214,7 @@ func finalizeDeclaredKindConnections(need map[string]struct{}) {
 // connectDeclaredKindPlugins host-builds + connects the out-of-process plugins serving the
 // project's declared external KIND words (F4), so a `kind: <plugin-word>` entity decodes via
 // runPluginKind during load. Called at the walk's Boundary seam AFTER the prescan and BEFORE the
-// host materialize (materializeLoadedProject, materialize.go) decodes/folds the entity nodes.
+// host materialize (loaderkit.MaterializeLoadedProject, #48) decodes/folds the entity nodes.
 // The connect re-loads the project (LoadConfig +
 // ScanAllCandyWithConfigOpts → LoadUnified, which fetches @github kind candies too), so it is
 // GUARDED by inKindConnectPass — the nested load skips this pre-pass and DEFERS its kind nodes
@@ -243,7 +244,7 @@ func connectDeclaredKindPlugins(dir string) {
 		recordDeclaredKindConnectError(need, fmt.Errorf("load project configuration: %w", err))
 		return // config load failure → kinds stay unconnected → normalizeNodeInto warn-skips them
 	}
-	candyMap, err := ScanAllCandyWithConfigOpts(dir, cfg, ResolveOpts{})
+	candyMap, err := ScanAllCandyWithConfigOpts(dir, cfg, loaderkit.ResolveOpts{})
 	if err != nil {
 		recordDeclaredKindConnectError(need, fmt.Errorf("scan project candies: %w", err))
 		return
