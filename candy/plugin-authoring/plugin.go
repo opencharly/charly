@@ -23,7 +23,9 @@
 //     (ResolveProjectRepo → EnsureRepoDownloaded: CHARLY_REPO_OVERRIDE + the refs-backend
 //     dispatch + the command:migrate auto-migration) over the generic HostBuild("cli") reverse
 //     channel by re-running the hidden core `__box-fetch` / `__box-refresh` reentry (the SAME
-//     seam candy/plugin-box's `pkg` verb uses for `__box-pkg`). The plugin owns ONLY the
+//     seam candy/plugin-box's `list` verb uses for `__box-list-tags`; the sibling `pkg` verb's
+//     own `__box-pkg` reentry already died this way — its localpkg build engine moved
+//     plugin-side, K3 build-tail move). The plugin owns ONLY the
 //     dispatch + the reentry call; it imports the sdk module alone, never charly core.
 //
 // COMPILED-IN, it dispatches IN-PROC via Invoke(OpRun), so the handlers run in charly's OWN process

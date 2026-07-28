@@ -225,7 +225,6 @@ var residueOwner = map[string]string{
 	"local_spec.go":                 "P11",
 	"namespace.go":                  "P15",
 	"notify.go":                     "P15",
-	"pkg_cmd.go":                    "P15",
 	"plugin_cmd.go":                 "P15",
 	"plugin_command_cmd.go":         "P15",
 	"plugin_command_ssh.go":         "P15",

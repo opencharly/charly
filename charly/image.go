@@ -42,9 +42,12 @@ type BoxCmd struct {
 // build-activity flock → InvokeProvider(build:box) → retention prune), so BuildCmd + the hidden
 // __box-build reentry are DELETED, matching the pull move); and feature at cone-C #31 — `charly box
 // feature run` is now candy/plugin-box's command:feature (bridging to the plugin-check engine over
-// InvokeProvider), the former in-core BoxFeatureCmd/BoxFeatureRunCmd + hostFeatureBox DELETED.
-// pkg_cmd.go documents its own UNTIL-K1 note. See charly/labels.go +
-// candy/plugin-box/{merge_cmd,reconcile,box}.go's dispatchPull/dispatchBuild.
+// InvokeProvider), the former in-core BoxFeatureCmd/BoxFeatureRunCmd + hostFeatureBox DELETED; and
+// pkg at K3 build-tail (coneB-pkgcmd) — candy/plugin-build's build:pkg word (pkg.go) runs the
+// former BoxPkgCmd.Run body ITSELF, reusing the resolveBuildEngine seams (LoadUnified, the
+// scan-local host leg, resolveDistroLeg), dispatched via candy/plugin-box's dispatchPkg over
+// InvokeProvider(build:pkg); pkg_cmd.go + the hidden __box-pkg reentry are DELETED. See
+// charly/labels.go + candy/plugin-box/{merge_cmd,reconcile,box}.go's dispatchPull/dispatchBuild.
 //
 // The host-coupled remainder that DID stay core is the genuine floor a sdk-only candy cannot run:
 // remote_image.go's ResolveRemoteImage (EnsureRepoDownloaded → clone/cache, K1), reached by the

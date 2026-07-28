@@ -15,16 +15,18 @@ import (
 // (candy/plugin-refs), and auto-migrates the cache to the head schema via the command:migrate
 // plugin registry — none of which a sdk-only plugin can reach. So the authoring plugin's
 // dispatchFetch/dispatchRefresh re-run these hidden core commands over the generic HostBuild("cli")
-// reverse channel (the SAME seam candy/plugin-box's `pkg` verb uses for `__box-pkg`), and the
-// host-coupled resolution stays in core. main() registers each as a hidden Kong command; the
+// reverse channel (the SAME seam candy/plugin-box's `list` verb uses for `__box-list-tags`), and
+// the host-coupled resolution stays in core. main() registers each as a hidden Kong command; the
 // reentry subprocess inherits charly's stdio (prints the cache path to stdout / its error to
 // stderr) and its exit code rides the CliReply.
 //
 // K5-doomed: both reentries (and this file) die when ResolveProjectRepo/EnsureRepoDownloaded move
 // into the plugin over sdk kits (a `HostBuild("refs-resolve")` seam) — the SAME tracked-residue
-// pattern as the sibling __box-pkg / __box-list-tags reentries (K5
-// seam-death sweep). The fetch/refresh handlers were already core pre-P14b (they do not ADD core
-// LOC; they stay as the K5-exited hidden reentry, not a permanent facade).
+// pattern as the sibling __box-list-tags reentry (K5 seam-death sweep; __box-pkg's own reentry
+// already DIED this way — its localpkg build engine moved plugin-side, K3 build-tail move — so
+// EnsureRepoDownloaded's Cluster A move follows the SAME shape). The fetch/refresh handlers were
+// already core pre-P14b (they do not ADD core LOC; they stay as the K5-exited hidden reentry, not
+// a permanent facade).
 
 // BoxFetchCmd is the hidden `charly __box-fetch [<spec>]` reentry: pre-prime the remote-repo cache
 // (default spec: 'default' → opencharly/charly) and print the cache path.

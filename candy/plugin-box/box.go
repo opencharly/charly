@@ -20,11 +20,12 @@ import (
 // reverse channel — InvokeProvider (peer plugin dispatch, for generate → build:generate), the
 // HostBuild("resolved-project") envelope fetch (inspect/list), the HostBuild("validate-project")
 // envelope fetch (validate runs the rule ENGINE in-plugin over the reply), or the generic
-// HostBuild("cli") reentry (pkg → the hidden __box-pkg core command, and list's store residue →
-// __box-list-tags). build runs its body in-plugin (dispatchBuild — InvokeProvider(build:box) +
-// thin HostBuild seams, P8b), no reentry; pull runs the ensure-image work in-plugin via
-// InvokeProvider(build:ensure); inspect's deploy-overlay formats (tunnel/bind_mounts)
-// render in-plugin off the deploy overlay + the resolved-project envelope — neither reenters core.
+// HostBuild("cli") reentry (list's store residue → __box-list-tags). build runs its body
+// in-plugin (dispatchBuild — InvokeProvider(build:box) + thin HostBuild seams, P8b), no reentry;
+// pkg likewise runs in-plugin (dispatchPkg — InvokeProvider(build:pkg), K3 build-tail move); pull
+// runs the ensure-image work in-plugin via InvokeProvider(build:ensure); inspect's deploy-overlay
+// formats (tunnel/bind_mounts) render in-plugin off the deploy overlay + the resolved-project
+// envelope — neither reenters core.
 // The `new` command needs neither (kit scaffolding directly).
 type hostClient struct {
 	ctx  context.Context
@@ -179,22 +180,37 @@ type pkgGrammar struct {
 	Out    string   `long:"out" default:"dist" help:"Output directory for the built package files."`
 }
 
-// dispatchPkg reaches the hidden core `__box-pkg` reentry over HostBuild("cli"): the localpkg build
-// engine (deploykit.BuildLocalPkgOnHost, W3) still needs core's builder-image resolve closures pre-K1. The
-// subprocess inherits charly's stdio (it prints the built file paths + status) and exits 0/1.
+// dispatchPkg runs the `charly box pkg` body IN-PLUGIN (K3 build-tail move, coneB-pkgcmd — the
+// former hidden core `__box-pkg` reentry is DELETED): InvokeProvider(build:pkg) drives the
+// candy/plugin-build engine (runBoxPkg), which loads the project + scans candies via the SAME
+// K1-loader seams resolveBuildEngine established, resolves the requested candy's localpkg source,
+// and builds via deploykit.BuildLocalPkgOnHost (already pure sdk). Byte-equivalent to the former
+// BoxPkgCmd.Run: prints each built file's destination path, error on failure.
 func dispatchPkg(hc *hostClient, args []string) error {
 	var g pkgGrammar
 	if done, err := parseLeaf("pkg", &g, args); err != nil || done {
 		return err
 	}
-	argv := append([]string{"__box-pkg"}, g.Format...)
-	argv = append(argv, "--candy", g.Candy, "--out", g.Out)
-	r, err := hc.cli(false, true, argv...)
+	dir, err := os.Getwd()
 	if err != nil {
 		return err
 	}
-	if r.ExitCode != 0 {
-		return fmt.Errorf("box pkg failed (exit %d)", r.ExitCode)
+	reqJSON, err := json.Marshal(spec.BuildPkgRequest{Format: g.Format, Candy: g.Candy, Out: g.Out, Dir: dir})
+	if err != nil {
+		return err
+	}
+	resJSON, err := hc.exec.InvokeProvider(hc.ctx, "build", "pkg", sdk.OpBuild, reqJSON, nil, sdk.InvokeProviderOpts{})
+	if err != nil {
+		return err
+	}
+	var reply spec.BuildPkgReply
+	if len(resJSON) > 0 {
+		if uerr := json.Unmarshal(resJSON, &reply); uerr != nil {
+			return fmt.Errorf("box pkg: decode reply: %w", uerr)
+		}
+	}
+	if reply.Error != "" {
+		return fmt.Errorf("%s", reply.Error)
 	}
 	return nil
 }

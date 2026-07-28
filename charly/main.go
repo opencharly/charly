@@ -62,13 +62,11 @@ type CLI struct {
 	// the gRPC Describe, is not missed). Reuses collectPluginProviders (R3).
 	PluginProviders PluginProvidersCmd `cmd:"" name:"__plugin-providers" hidden:"" help:"internal: print a candy's plugin.providers (one <class>:<word> per line)"`
 
-	// __box-pkg is the hidden core reentry point behind the COMPILED-IN candy/plugin-box command:pkg
-	// word (nested under `box`): the plugin owns the user-facing `charly box pkg` grammar + dispatch and
-	// reaches this over HostBuild("cli") — the localpkg build needs the host build context the plugin
-	// cannot compute pre-K1. Validation, by contrast, needs no such CLI reentry: the validate ENGINE
-	// lives in plugin-box and dispatches command:validate to the host-side validate-project HostBuild
-	// directly.
-	BoxPkg BoxPkgCmd `cmd:"" name:"__box-pkg" hidden:"" help:"internal: build native package artifacts (reentry behind box pkg)"`
+	// (K3 build-tail move, coneB-pkgcmd: the former hidden __box-pkg reentry is DELETED.
+	// candy/plugin-box's dispatchPkg now InvokeProviders(build:pkg) directly — the SAME shape
+	// dispatchBuild already established for __box-build — so the localpkg build engine
+	// (candy/plugin-build's runBoxPkg) runs entirely plugin-side, reusing the K1-loader seams
+	// resolveBuildEngine already set up (LoadUnified, the scan-local host leg, resolveDistroLeg).)
 
 	// (P8b: the former hidden __box-build reentry is DELETED. candy/plugin-box's dispatchBuild now
 	// runs the `charly box build` body itself — NormalizeBoxArgs → remote-ref pivot

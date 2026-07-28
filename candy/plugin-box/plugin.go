@@ -22,8 +22,10 @@
 //     CUE-conformance/tunable/base⊻from diagnostics for the verdict (validate.go / validate_rules.go /
 //     validate_graph.go / validate_check.go).
 //
-//   - command:pkg — `charly box pkg`: reaches the hidden core `__box-pkg` reentry over
-//     HostBuild("cli") (the localpkg build engine needs the host build context, pre-K1).
+//   - command:pkg — `charly box pkg`: runs the localpkg build engine IN-PLUGIN (K3 build-tail
+//     move, coneB-pkgcmd fold) by INVOKING the peer compiled-in build:pkg word (candy/plugin-build)
+//     over InvokeProvider — the former hidden core `__box-pkg` reentry is DELETED, the SAME shape
+//     pull's build:ensure fold and build's build:box fold already established.
 //
 //   - command:pull — `charly box pull`: runs the ensure-image work IN-PLUGIN (K3 #39 fold) by
 //     INVOKING the peer compiled-in build:ensure word (candy/plugin-build) over InvokeProvider —
@@ -138,9 +140,9 @@ func NewMeta() pb.PluginMetaServer {
 }
 
 // CliMain is the OUT-OF-PROCESS command entry — unreachable in the canonical compiled-in placement.
-// The generate/validate/pkg handlers reach the host reverse channel (build:generate over
-// InvokeProvider, validate-project + __box-pkg over HostBuild), which is unavailable
-// out-of-process, so this errors (like candy/plugin-vm's / candy/plugin-alias's CliMain).
+// The generate/validate/pkg handlers reach the host reverse channel (build:generate / build:pkg
+// over InvokeProvider, validate-project over HostBuild), which is unavailable out-of-process, so
+// this errors (like candy/plugin-vm's / candy/plugin-alias's CliMain).
 func CliMain(_ []string) int {
 	fmt.Fprintln(os.Stderr, "charly box: requires compiled-in placement (the command's host reverse channel is unavailable out-of-process)")
 	return 1
