@@ -17,10 +17,14 @@ package check
 // so no NEW envelope field was needed for either). The ONE genuine gap — connecting an
 // out-of-process plugin candy a live plan's verb words reference, the M-mechanism the boundary law
 // keeps core-side — got the new thin "check-load-plugins" HostBuild seam (checkLoadPlugins,
-// command.go), mirroring exactly what resolveCheckRunnerContext already did in-core: VM and GROUP
-// mode call it (matching the ORIGINAL arms, which called resolveCheckRunnerContext); POD mode does
-// NOT (the original checkLivePod never called it either — preserved verbatim, not "fixed", per R5
-// hard-cutover discipline: this port changes NO behavior beyond relocation).
+// command.go), mirroring exactly what resolveCheckRunnerContext already did in-core. It is invoked
+// ONCE at the top of pluginCheckRunLive before the per-kind dispatch, so EVERY arm (pod/vm/local/
+// group) connects the out-of-process check-verb plugins its live plan references — restoring the
+// pre-P12 in-core shape, where CheckLiveCmd.Run's pod path (and every other arm) reached
+// attachCheckRunnerContext → loadProjectPlugins at COMMAND scope. (Task #62: an interim port split
+// this into per-arm calls present on the vm/group arms but MISSING on pod/local, so pod/local beds
+// never connected any out-of-process check verb — mcp/cdp/vnc/dbus/spice — and failed "no provider
+// registered". The single pre-dispatch call is the R3-clean restoration.)
 
 import (
 	"context"
@@ -47,6 +51,10 @@ func pluginCheckRunLive(ex *sdk.Executor, ctx context.Context, req spec.CheckRun
 		return kit.CheckRunReply{}, err
 	}
 	tree := derefDeployTree(rp.Deploy)
+	// Connect the out-of-process check-verb plugins (mcp/cdp/vnc/dbus/spice/…) the live plan
+	// references — ONCE, at command scope, before the per-kind dispatch, so every arm (pod/vm/
+	// local/group) has them connected (task #62; the M-mechanism seam, args uniform across arms).
+	checkLoadPlugins(ex, ctx, req.Name, dir)
 	if _, isVM := checkVmTarget(tree, req.Name); isVM {
 		return pluginCheckLiveVM(ex, ctx, rp, tree, dir, req)
 	}
@@ -324,8 +332,6 @@ func pluginCheckLiveVM(ex *sdk.Executor, ctx context.Context, rp *spec.ResolvedP
 	}
 	set := &kit.LabelDescriptionSet{Deploy: []kit.LabeledDescription{{Origin: "vm:" + vmName, Plan: plan}}}
 
-	checkLoadPlugins(ex, ctx, req.Name, dir)
-
 	// newPluginCheckRunner's VerbResolver reads THIS runner's live Exec() (a back-reference,
 	// plugin_runner.go) on every out-of-process verb dispatch, so `executor` — a plain
 	// (non-dotted) VM target's *kit.SSHExecutor, or the dotted nested chain above — is
@@ -487,8 +493,6 @@ func pluginCheckLiveGroup(ex *sdk.Executor, ctx context.Context, rp *spec.Resolv
 		"IMAGE":    req.Name,
 		"INSTANCE": req.Instance,
 	})
-
-	checkLoadPlugins(ex, ctx, req.Name, dir)
 
 	env, hasRuntime := pluginResolverEnv(resolver)
 	hostVars, hostCleanups := resolveHostVarsForSteps(ex, ctx, dir, plan, req.Instance)
