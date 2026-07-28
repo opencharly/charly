@@ -70,17 +70,13 @@ type CLI struct {
 	// directly.
 	BoxPkg BoxPkgCmd `cmd:"" name:"__box-pkg" hidden:"" help:"internal: build native package artifacts (reentry behind box pkg)"`
 
-	// __box-build is the hidden core reentry point behind the COMPILED-IN candy/plugin-box
-	// command:build word (nested under `box`, build/pull dispersal — the CLI-only mirror of the
-	// pull move, M4d): the plugin owns the user-facing `charly box build` grammar + dispatch and
-	// reaches this over HostBuild("cli") — BuildCmd.Run()'s engine (bootstrap-builder, remote-ref
-	// resolution, retention pruning) is K1/K3-family (loader/build-engine cone), not CLI-dispersal
-	// residue, and stays core-only, unmoved. BuildCmd itself is UNCHANGED — only its Kong
-	// attachment point moved. The former core ensure-image-helper direct Go-level
-	// BuildCmd.Run() constructions (core-min wave 3) are GONE: the ensure-image ORCHESTRATION now
-	// lives in candy/plugin-build's build:ensure word, which reaches the build fallback via its
-	// OWN in-process build:box drive — never through Kong/CLI, so this reentry is unaffected.
-	BoxBuild BuildCmd `cmd:"" name:"__box-build" hidden:"" help:"internal: build container boxes (reentry behind box build)"`
+	// (P8b: the former hidden __box-build reentry is DELETED. candy/plugin-box's dispatchBuild now
+	// runs the `charly box build` body itself — NormalizeBoxArgs → remote-ref pivot
+	// (buildkit.DetectRemoteBuildRef + the HostBuild("remote-image-resolve") seam) → build-activity
+	// flock → InvokeProvider(build:box) → retention prune — so the CLI no longer bounces back through
+	// core over HostBuild("cli"). The host-coupled
+	// remainder (the remote-ref clone/cache resolve, the build-engine RESOLVE legs, the bootstrap
+	// builder pre-pass) stays behind thin HostBuild seams the candy invokes.)
 
 	// __box-list-tags is the hidden core reentry point behind the COMPILED-IN candy/plugin-box
 	// command:list word (nested under `box`). The plugin owns the user-facing grammar + reads the

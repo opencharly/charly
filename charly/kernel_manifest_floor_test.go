@@ -149,7 +149,7 @@ var kernelFloor = []floorEntry{
 	{"host_build_check_load_plugins.go", "M — the check-load-plugins host seam (plugin-LOADING, an in-core M; connects an out-of-proc candy)"},
 	{"host_build_construct_step.go", "M — the construct-step host-builder (registry-resolve of run: plugin: word; clause-M mechanism)"},
 	{"host_build_deploy_config_save_state.go", "M — the deploy-config-save-state substrate-neutral F10 host-builder (generic deploy-state persist)"},
-	{"host_build_remote_image_resolve.go", "M — the remote-image-resolve seam for plugin-build's ensure fallback (thin ResolveRemoteImage wrapper; drops non-wire fields)"},
+	{"host_build_remote_image_resolve.go", "M — the remote-image-resolve seam for plugin-build's ensure fallback AND candy/plugin-box's `box build @ref` (thin ResolveRemoteImage wrapper; drops non-wire fields)"},
 	{"host_build_render_service.go", "M — the render-service host-builder (wraps plugin-init OpResolve + M16 egress gate; two registry consults)"},
 	{"host_exec.go", "M — the --host CLI pre-dispatch reexec decision (shouldReexecForHost runs before Kong dispatches, reading the core CLI struct + command path — the prescan-dispatch spine, mirroring plugin_command_prescan.go / main_repo.go's --repo; ReexecOverSSH body already moved to kit)"},
 }
@@ -169,7 +169,6 @@ var kernelFloor = []floorEntry{
 var residueOwner = map[string]string{
 	"builder_preresolve.go":         "P8b",
 	"builder_venue.go":              "P8b",
-	"build.go":                      "P8b",
 	"build_overlay.go":              "P8b",
 	"bundle_add_cmd.go":             "P13",
 	"bundle_compile_seam.go":        "P13",

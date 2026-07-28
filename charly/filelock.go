@@ -15,9 +15,6 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
-	"time"
 
 	"github.com/opencharly/sdk/kit"
 )
@@ -42,33 +39,11 @@ func acquireFileLock(path string, blocking bool) (release func() error, err erro
 // working copies and corrupt each other. Keyed by sha256(srcDir) under the user cache so the
 // lock file never pollutes the repo working tree.
 
-// acquireBuildActivityLock registers this build invocation as LIVE for its whole
-// duration: a flocked nonce file whose CONTENT is the build's generate CalVer —
-// the floor of every FROM pin its generated Containerfiles carry. The externalized
-// retention engine (candy/plugin-clean, reached via verb:retention) consults the
-// SAME live set (kit.BuildActivityDir) so a completing sibling build can never
-// untag a pin an in-flight build still resolves — the retention-untag race the
-// concurrent bed fan-out surfaced.
-func acquireBuildActivityLock(calver string) (func() error, error) {
-	dir, err := kit.BuildActivityDir()
-	if err != nil {
-		return nil, err
-	}
-	path := filepath.Join(dir, fmt.Sprintf("build-%d-%d.lock", os.Getpid(), time.Now().UnixNano()))
-	release, err := acquireFileLock(path, true)
-	if err != nil {
-		return nil, fmt.Errorf("build-activity lock: %w", err)
-	}
-	if err := os.WriteFile(path, []byte(calver+"\n"), 0o644); err != nil {
-		_ = release()
-		return nil, fmt.Errorf("build-activity lock: record calver: %w", err)
-	}
-	return func() error {
-		err := release()
-		_ = os.Remove(path)
-		return err
-	}, nil
-}
+// The build-activity lock (formerly core's acquireBuildActivityLock) moved to
+// candy/plugin-box's dispatchBuild in P8b, reconstructed there from the SAME shared
+// kit primitives (kit.BuildActivityDir + kit.AcquireFileLock) so the plugin's
+// `charly box build` drive marks its invocation LIVE for the externalized retention
+// engine (candy/plugin-clean) to respect — no core copy remains.
 
 // acquireDeployConfigLock serializes the read-modify-write of the per-host deploy overlay
 // (~/.config/charly/charly.yml) across concurrent charly processes. Blocking (a config write is

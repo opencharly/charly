@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
@@ -236,3 +238,74 @@ var _ = func() bool {
 	registerHostBuilder(vmBuildBuilderKind, typedHostBuilder(vmBuildBuilderKind, hostBuildVmBuild))
 	return true
 }()
+
+// ensureBuilderImageBuilt resolves an internal builder-image name to its newest
+// local CalVer tag, BUILDING it on demand when it isn't in local storage. This
+// makes bootstrap image/VM builds fully automatic — no manual
+// `charly box build <builder>` prerequisite. A ref containing "/" (a full registry
+// ref) is returned unchanged. Consumed by the kind:vm bootstrap path
+// (resolveVmBuildBootstrap above) — the one core caller left after P8b moved the
+// `charly box build` CLI body into candy/plugin-box's dispatchBuild.
+func ensureBuilderImageBuilt(engine, builderRef string) (string, error) {
+	if strings.Contains(builderRef, "/") {
+		return builderRef, nil
+	}
+	if resolved, err := kit.ResolveLocalImageRef(engine, builderRef); err == nil {
+		return resolved, nil
+	}
+	fmt.Fprintf(os.Stderr, "Builder image %q not in local storage — building it automatically...\n", builderRef)
+	// Recurse on the dependency image through the SAME build:box dispatch the CLI uses
+	// (dispatchBoxBuild → the compiled-in candy/plugin-build DRIVE, which runs the RESOLVE
+	// plugin-side over the buildengine-* legs, K3 U6): the podman drive lives in the candy now
+	// (P8b), so the host cannot build inline. The in-proc reverse channel makes this re-entrant
+	// call cheap (no socket).
+	if err := dispatchBoxBuild(spec.BuildRequest{Boxes: []string{builderRef}, IncludeDisabled: true}); err != nil {
+		return "", fmt.Errorf("auto-building builder image %q: %w", builderRef, err)
+	}
+	resolved, err := kit.ResolveLocalImageRef(engine, builderRef)
+	if err != nil {
+		return "", fmt.Errorf("builder image %q still not found after auto-build: %w", builderRef, err)
+	}
+	return resolved, nil
+}
+
+// dispatchBoxBuild routes an image build through the compiled-in plugin word (build:box) over the
+// F10 in-proc reverse channel. The one remaining core caller is ensureBuilderImageBuilt (the kind:vm
+// bootstrap-builder pre-pass); the user-facing `charly box build` CLI runs its body in
+// candy/plugin-box's dispatchBuild, which invokes build:box directly via InvokeProvider.
+func dispatchBoxBuild(req spec.BuildRequest) error { return dispatchBuild("box", req) }
+
+// dispatchBuild invokes the compiled-in build:<word> plugin, threading the IN-PROC reverse
+// channel onto the ctx (sdk.ContextWithExecutor) so the plugin's Invoke reaches HostBuild without
+// a go-plugin broker — the compiled-in placement of the reverse channel. The plugin echoes a
+// spec.BuildReply; a non-empty reply.Error is surfaced as the command error. build:<word> is
+// compiled in (candy/plugin-build in compiled_plugins:), so the provider is always in-proc here.
+func dispatchBuild(word string, req spec.BuildRequest) error {
+	prov, ok := providerRegistry.resolve(ClassBuild, word)
+	if !ok {
+		return fmt.Errorf("build dispatch: no build:%s provider registered (candy/plugin-build must be compiled in via compiled_plugins:)", word)
+	}
+	params, err := marshalJSON(req)
+	if err != nil {
+		return err
+	}
+	// The reverse server carries no venue executor (HostBuild needs only the host build-engine,
+	// reconstructed from req.Dir) and an empty build context (the host-builder rebuilds it from
+	// Dir), so a bare executorReverseServer{} is enough for the HostBuild leg.
+	ctx := sdk.ContextWithExecutor(context.Background(),
+		sdk.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}}))
+	res, err := prov.Invoke(ctx, &Operation{Reserved: word, Op: OpBuild, Params: params})
+	if err != nil {
+		return err
+	}
+	var reply spec.BuildReply
+	if res != nil && len(res.JSON) > 0 {
+		if err := json.Unmarshal(res.JSON, &reply); err != nil {
+			return fmt.Errorf("build dispatch: decode reply: %w", err)
+		}
+	}
+	if reply.Error != "" {
+		return fmt.Errorf("%s", reply.Error)
+	}
+	return nil
+}

@@ -42,8 +42,8 @@ func NewProvider() pb.ProviderServer { return &provider{} }
 // NewMeta advertises the three build-drive capabilities (Class "build", words "box" +
 // "generate" + "ensure", Phase "build") + the plugin's self-contained CUE schema (via
 // sdk.NewMeta → BuildCapabilities). InputDef is "" for all three: the BuildRequest /
-// BuildEnsureRequest is HOST-constructed (by BuildCmd / dispatchBuildEnsure / the box command
-// plugin candy/plugin-box's generate handler), never user-authored in charly.yml, so there is
+// BuildEnsureRequest is HOST-constructed (by candy/plugin-box's dispatchBuild / dispatchBuildEnsure /
+// the box command plugin's generate handler), never user-authored in charly.yml, so there is
 // no plugin_input to validate against a served schema. The self-contained #BuildDispatch def
 // exists only to satisfy the non-empty-schema load gate + document the seam.
 func NewMeta() pb.PluginMetaServer {
