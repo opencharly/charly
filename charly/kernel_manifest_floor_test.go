@@ -230,6 +230,7 @@ var kernelFloor = []floorEntry{
 	{"bundle_add_cmd.go", "M — the host-side residue of `charly bundle add`/`charly bundle del`: deriveChildExecutorForPath already carries its own E/M/D-VERIFIED doc comment (registry-coupled deployTraitDescent, constructs a live DeployExecutor that can't cross the wire); deployDelCmd/resolveDelNode/podDeploymentArtifactExists reconstruct the del-resolve seam's target node from a wire request (registry + deploy-tree + container-store probes); detectHostContext/resolveDistroDef/loadConfigForDeploy are host-fs + already-floor LoadConfig/LoadDefaultBuildConfig/RegisterBuildVocabulary glue shared with the already-floor build_overlay.go"},
 	{"bundle_from_box_cmd.go", "M — deployFromBoxCmd is reconstructed from spec.DeployFromBoxRequest by the already-floor host_build_deploy_from_box.go seam (its sole real caller, call-graph verified); its body calls the already-floor hostBuildPodConfigSetup directly plus a genuinely host-only `systemctl --user start` (the quadlet service the seam's own prior step just wrote can only be started on THIS host)"},
 	{"config_secret_migration.go", "M — MigratePlaintextEnvSecret/scrubSecretCLIEnv/writeDeployBackup: SDK's OWN secret_declare.go doc comment already designates these core (\"inseparable from charly-core today\"), calling DefaultCredentialStore (a provider-registry-coupled host singleton, credential_plugin.go) + saveBundleConfigNodeForm (loader-seam-coupled, deploy_state_host.go) + DeployConfigPath (kit.DefaultDeployConfigPath alias, deploy.go) — none plugin-reachable. Sole real callers are the already-floor host_build_pod_config_seams.go (call-graph verified, zero dead code); the genuinely-pure third of the former file (secret declaration lookups) already relocated to sdk/deploykit's secret_declare.go"},
+	{"config_write_host.go", "M — deployPodPluginCandyRef, the canonical plugin-deploy-pod candy ref (CHARLY_REPO_OVERRIDE bed-redirect + published-fetch); its SOLE caller is invokePodConfigOp in the already-floor host_build_pod_config.go (the F10 pod-config reverse-channel dispatch seam) — a host-resident plugin-connect ref, the exact class as the floored vmPluginCandyRef (vm_plugin_client.go); floor-M, moves with neither loader nor capability"},
 	// F6 vm-lifecycle trio (coneB-vmlifecycle, routed by coneA's partition) — MIXED verdict per
 	// call-graph, not a uniform floor-vs-move: the VM-BACKEND detection capability (resolveVmBackend/
 	// vmConfiguredBackend) MOVED to candy/plugin-vm/vm_backend_resolve.go (zero core-registry
@@ -264,7 +265,6 @@ var residueOwner = map[string]string{
 	"secrets.go":                    "P11",
 	"substrate_template_resolve.go": "P15",
 	// — files added by cutovers that landed after the T0 authoring (living tracker) —
-	"config_write_host.go":     "P11",
 	"validate_project_host.go": "P15",
 	// — Cutover A (#168, deploy-dispatch kernel hard-cutover exit): the K4-C
 	// deploy-tree walk port narrows the retired deploy-dispatch spike into 6
