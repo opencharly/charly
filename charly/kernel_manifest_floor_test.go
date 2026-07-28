@@ -62,6 +62,7 @@ var kernelFloor = []floorEntry{
 	{"cli_model_cmd.go", "M — the __cli-model host seam (Kong command-tree reflection for the externalized MCP server); a CLI/prescan-adjacent host seam"},
 	{"commands.go", "M — the host dispatch/stdio fabric: the podUpdateCmd type (the kind-blind `charly update` dispatch struct the FLOORED host_build_pod_lifecycle_dispatch seam constructs → dispatchByDeployTarget → ResolveTarget, no per-kind branch) + isTerminal/defaultIsTerminal (host-process TTY detection, os.Stdout.Stat, un-plugin-able) + containerExists (generic os/exec container probe). Generic dispatch + host-stdio; ZERO deploy capability"},
 	{"config.go", "M — the thin host LoadConfig/LoadConfigRaw entry seams over loaderkit.LoadUnified + uf.ProjectConfig, plus buildkitOptsWithVocab (the host projection to buildkit.ResolveOpts loading the project vocabulary). The load ORCHESTRATION moved to loaderkit (#48); this is the thin host loader entry"},
+	{"credential_plugin.go", "M — the CORE adapter for the externalized credential subsystem: the CredentialStore interface + pluginCredentialStore (forwards every credential op to verb:credential over the provider registry via connectPluginByWord + invokeTyped — the core→verb registry bridge, the same class as preempt.go's arbiterProxy) + the ResolveCredential entry (env-precedence owned by core, which owns the process env) + the byte-compatible wire forms. The ENTIRE store implementation (keyring/config backends, Secret Service, `charly secrets` CLI, GPG .secrets) lives OUT-OF-PROCESS in candy/plugin-secrets (the C2 dep-shed removed go-keyring from core)"},
 	{"cue_defaults.go", "M — the in-core CUE defaults application: applyCueDefaults(kind, out) unifies an already-RESOLVED entity's marshaled form with the closed #<Kind> schema (cueKindDef, kind-blind word-dispatch against the shared cueSchemaCtx) to fill schema-declared REQUIRED-with-default fields — the unify-AFTER-merge counterpart to the loader's non-unifying decode. The SAME in-core CUE ingress M as cue_schema.go / cue_node.go; imports only cuelang (no loaderkit)"},
 	{"cue_kind_box.go", "B — the box⊆candy image factory bootstrap root (the discovered-candy pre-check calls it directly)"},
 	{"cue_kind_candy.go", "B — the candy⊻box factory bootstrap root (must exist before any plugin can load; candyIsImage/buildCandy stay core)"},
@@ -265,15 +266,14 @@ var kernelFloor = []floorEntry{
 //	P14  — status collectors / alias / scaffold / OCI registry+merge → plugins
 //	P15  — residual folds + HostArbiter deletion + K1 loader-orchestration + K5 seam-death + misc CLI utils
 var residueOwner = map[string]string{
-	"builder_venue.go":              "P8b", // buildEngineContext (the type) is floor-worthy core-dispatch infra; runVenueBuilderStep/runVenueHomeArtifactBuilder look like coneA3's deploy-vm domain by function — flagged, not unilaterally split (team-lead ruling)
-	"bundle_members.go":             "P11",
-	"cmd.go":                        "P15",
-	"config_image.go":               "P11",
-	"credential_plugin.go":          "P15",
-	"deploy_nodeform.go":            "P13",
-	"enc.go":                        "P11",
-	"layer_secrets.go":              "P8b",
-	"secrets.go":                    "P11",
+	"builder_venue.go":   "P8b", // buildEngineContext (the type) is floor-worthy core-dispatch infra; runVenueBuilderStep/runVenueHomeArtifactBuilder look like coneA3's deploy-vm domain by function — flagged, not unilaterally split (team-lead ruling)
+	"bundle_members.go":  "P11",
+	"cmd.go":             "P15",
+	"config_image.go":    "P11",
+	"deploy_nodeform.go": "P13",
+	"enc.go":             "P11",
+	"layer_secrets.go":   "P8b",
+	"secrets.go":         "P11",
 	// — files added by cutovers that landed after the T0 authoring (living tracker) —
 	"config_write_host.go": "P11",
 	// — Cutover A (#168, deploy-dispatch kernel hard-cutover exit): the K4-C
