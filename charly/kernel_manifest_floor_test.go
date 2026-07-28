@@ -156,20 +156,16 @@ var kernelFloor = []floorEntry{
 	// own "stays host" comment): the movable render DRIVE already left in prior cutovers (#67
 	// render-DRIVE move, K5-Unit-6b, P11c, FLOOR-SLIM-proper Unit-8, K5-A item 2 — into
 	// candy/plugin-build, candy/plugin-deploy-pod, candy/plugin-installstep, sdk/deploykit's
-	// header_copy_remote.go/NewRenderGeneratorFromProject). What is LEFT is the residual thin
-	// core-coupled glue that ALREADY-FLOOR files (resolved_project_host.go, host_build_render_seam.go,
-	// host_build_bake_plugins.go) and K3/P13 residue (host_build_buildengine.go, bundle_add_cmd.go)
-	// construct/call NATIVELY (direct Go calls, not over the reverse channel) — moving it would
-	// require editing those other cones' files, out of this cone's scope. See
-	// CONEB-RENDER-SPIKE.md for the full per-file call-graph trace.
-	{"generate.go", "M — the *Generator/NewGenerator resolve-handle: the shared in-process render/resolve state resolved_project_host.go (fillNamespacedBoxes), host_build_render_seam.go, host_build_bake_plugins.go, and host_build_buildengine.go's hostBuildPrep construct/call natively"},
-	{"tasks.go", "M — toDeploykit() + the registry-coupled builder-stage resolve seams (providerRegistry.ResolveBuilder), called directly by host_build_render_seam.go"},
+	// header_copy_remote.go/NewRenderGeneratorFromProject). These 5 are genuine thin registry-
+	// dispatch/wire-forward M with ZERO capability logic — team-lead-audited and accepted (the
+	// Generator-cluster files — generate.go/tasks.go/build_overlay.go/builder_preresolve.go — hold
+	// real build-engine RENDER/PREP logic and were REJECTED as floor; they are the dominant
+	// remaining #118 gate, tracked residue again below, moving into candy/plugin-build/
+	// plugin-deploy-pod).
 	{"service_render.go", "M — RenderService: thin providerRegistry.ResolveKind(\"init\") dispatch, the direct callee of the already-floor host_build_render_service.go"},
 	{"format_config.go", "M/D — LoadBuildConfigForBox: loader-glue (LoadUnified, K1) + registry-callback wiring, a shared cross-cone utility (P13/P15/P11/K3 + candy/plugin-vm all call it)"},
 	{"oci_step_emit.go", "M — dispatchOCIStep: thin word→plugin registry dispatch + reverse-channel forwarder, same shape as the already-floor dispatch_build_ensure.go/deploy_target_dispatch.go"},
 	{"step_emit_hostbuild.go", "M — the generic \"step-emit\" F10 HostBuild seam (word-keyed stepEmitters dispatch, kind-blind — same shape as the ~25 other host_build_*.go floor entries)"},
-	{"build_overlay.go", "M — the \"overlay\" F10 HostBuild seam (prep+resolve only; the render itself already moved to candy/plugin-deploy-pod); a genuine cross-cone coordination point"},
-	{"builder_preresolve.go", "M — ensureBuildersConnected: core-private project-loading (ScanAllCandyWithConfigOpts) + plugin CONNECT (loadProjectPlugins), both established plugin-loading M-mechanisms"},
 	{"intermediates_shim.go", "M — ComputeIntermediates/GlobalCandyOrder: a *Config→deploykit.IntermediateDefaults adapter wired as a loaderkit.ResolveProjectSeams callback consumed by resolved_project_host.go"},
 	{"resolved_project_host.go", "M — the trimmed \"resolved-project\" F11 resolve handle (K5-Unit-0 keystone); team-lead-ruled to stay core, floor-reclassified here per the same boundary-law shape as its sibling F10/F11 seams"},
 }
@@ -187,7 +183,9 @@ var kernelFloor = []floorEntry{
 //	P14  — status collectors / alias / scaffold / OCI registry+merge → plugins
 //	P15  — residual folds + HostArbiter deletion + K1 loader-orchestration + K5 seam-death + misc CLI utils
 var residueOwner = map[string]string{
+	"builder_preresolve.go":         "P8b",
 	"builder_venue.go":              "P8b",
+	"build_overlay.go":              "P8b",
 	"bundle_add_cmd.go":             "P13",
 	"bundle_compile_seam.go":        "P13",
 	"bundle_from_box_cmd.go":        "P13",
@@ -219,6 +217,7 @@ var residueOwner = map[string]string{
 	"embed_defaults.go":             "P15",
 	"enc.go":                        "P11",
 	"filelock.go":                   "P15",
+	"generate.go":                   "P8b",
 	"host_build_vm_build.go":        "P8b",
 	"k8s_config.go":                 "P11",
 	"k8s_deploy_from_box.go":        "P14",
@@ -242,6 +241,7 @@ var residueOwner = map[string]string{
 	"sidecar.go":                    "P11",
 	"ssh.go":                        "P15",
 	"substrate_template_resolve.go": "P15",
+	"tasks.go":                      "P8b",
 	"unified.go":                    "P15",
 	"update_deploy_dispatch.go":     "P11",
 	"validate.go":                   "P15",
