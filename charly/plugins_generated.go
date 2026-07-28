@@ -56,6 +56,7 @@ import (
 	cp_plugin_service "github.com/opencharly/charly/candy/plugin-service"
 	cp_plugin_settings "github.com/opencharly/charly/candy/plugin-settings"
 	cp_plugin_sidecar "github.com/opencharly/charly/candy/plugin-sidecar"
+	cp_plugin_ssh "github.com/opencharly/charly/candy/plugin-ssh"
 	cp_plugin_status "github.com/opencharly/charly/candy/plugin-status"
 	cp_plugin_substrate "github.com/opencharly/charly/candy/plugin-substrate"
 	cp_plugin_tmux "github.com/opencharly/charly/candy/plugin-tmux"
@@ -106,6 +107,7 @@ func init() {
 	registerCompiledPlugin(cp_plugin_tunnel.NewProvider(), cp_plugin_tunnel.NewMeta())
 	registerCompiledPlugin(cp_plugin_tmux.NewProvider(), cp_plugin_tmux.NewMeta())
 	registerCompiledPlugin(cp_plugin_migrate.NewProvider(), cp_plugin_migrate.NewMeta())
+	registerCompiledPlugin(cp_plugin_ssh.NewProvider(), cp_plugin_ssh.NewMeta())
 	registerCompiledPlugin(cp_plugin_clean.NewProvider(), cp_plugin_clean.NewMeta())
 	registerCompiledPlugin(cp_plugin_settings.NewProvider(), cp_plugin_settings.NewMeta())
 	registerCompiledPlugin(cp_plugin_loader.NewProvider(), cp_plugin_loader.NewMeta())

@@ -1,14 +1,12 @@
-package main
+package ssh
 
-// `charly ssh tunnel …` — opens an SSH-forwarded local endpoint pointing
-// at a VM's SPICE/VNC display on a remote libvirt host, for clients
-// that don't natively understand qemu+ssh:// (standalone
-// remote-viewer with TCP addr, TigerVNC, Spicy, etc.).
-//
-// Note: virt-manager and `remote-viewer --connect qemu+ssh://…` do
-// NOT need this command — they auto-forward UNIX sockets over
-// libvirt's own RPC channel. This is strictly for clients that
-// insist on a bare TCP/UNIX socket URL.
+// tunnel.go — the `charly ssh tunnel …` handler (relocated verbatim from charly/ssh.go in the
+// #118 loader+check-tail cone). It opens an SSH-forwarded local endpoint pointing at a VM's
+// SPICE/VNC display on a remote libvirt host, for clients that don't natively understand
+// qemu+ssh:// (standalone remote-viewer with a TCP addr, TigerVNC, Spicy, …). The ONLY thing it
+// reached in charly core was invokeVmPlugin (the display-endpoint resolve); the plugin reaches
+// verb:libvirt DIRECTLY over its in-proc reverse channel (InvokeProvider), so nothing crosses into
+// core. Everything else — sshx tunnels, vmshared URI parse, kit.UnixToTCPBridge — is sdk.
 
 import (
 	"context"
@@ -18,6 +16,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 	"github.com/opencharly/sdk/sshx"
@@ -63,16 +62,37 @@ func (c *SshTunnelVncCmd) Run() error {
 	return runSshTunnel(c.Vm, c.Uri, c.Tcp, "vnc")
 }
 
-// runSshTunnel resolves the VM's display endpoint, opens the
-// appropriate forward, prints a connect URL, and blocks until
-// SIGINT/SIGTERM.
+// vmPluginCandyRef is the canonical candy ref for the out-of-process vm plugin (verb:libvirt),
+// supplied as the InvokeProvider canonical-ref fallback so `charly ssh tunnel` connects go-libvirt
+// even from a project whose candy closure never references plugin-vm directly.
+func vmPluginCandyRef() string { return "@" + spec.DefaultProjectRepo + "/candy/plugin-vm" }
+
+// invokeVmResolve reaches the compiled-in/out-of-process verb:libvirt for a display-endpoint
+// resolve (the go-libvirt resolution the former core invokeVmPlugin performed), over the in-proc
+// reverse channel the command dispatch threads.
+func invokeVmResolve(vmOp, vmName, uri string) (json.RawMessage, bool) {
+	if cmdExec == nil {
+		return nil, false
+	}
+	envJSON, err := json.Marshal(spec.VmPluginEnv{VmOp: vmOp, VmName: vmName, URI: uri})
+	if err != nil {
+		return nil, false
+	}
+	out, err := cmdExec.InvokeProvider(cmdCtx, "verb", "libvirt", sdk.OpRun, nil, envJSON, sdk.InvokeProviderOpts{ExtraRef: vmPluginCandyRef()})
+	if err != nil || out == nil {
+		return nil, false
+	}
+	return out, true
+}
+
+// runSshTunnel resolves the VM's display endpoint, opens the appropriate forward, prints a connect
+// URL, and blocks until SIGINT/SIGTERM.
 func runSshTunnel(vmName, uri string, forceTCP bool, kind string) error {
-	// Resolve the display endpoint via the out-of-process vm plugin (go-libvirt moved there).
 	resolveOp := "resolve-spice"
 	if kind == "vnc" {
 		resolveOp = "resolve-vnc"
 	}
-	raw, ok := invokeVmPlugin(resolveOp, vmName, uri)
+	raw, ok := invokeVmResolve(resolveOp, vmName, uri)
 	if !ok {
 		return fmt.Errorf("vm plugin unavailable (go-libvirt resolution is out-of-process)")
 	}
@@ -86,10 +106,6 @@ func runSshTunnel(vmName, uri string, forceTCP bool, kind string) error {
 	ep := rr.Endpoint
 	tunnelTarget := rr.TunnelTarget
 
-	// Decide transport. If the VM uses a UNIX socket and --tcp is not
-	// set, we preserve socket-ness (and print a spice+unix:// /
-	// vnc+unix:// URL). If --tcp is set or the VM listens on TCP,
-	// we open a 127.0.0.1:<random> listener locally.
 	var tunnel *sshx.SSHTunnel
 	var cleanup func()
 	var connectURL string
@@ -119,13 +135,9 @@ func runSshTunnel(vmName, uri string, forceTCP bool, kind string) error {
 			cleanup = cu
 			connectURL = fmt.Sprintf("%s+unix://%s", kind, localSock)
 		} else {
-			// Local UNIX socket — nothing to forward; just print it.
 			connectURL = fmt.Sprintf("%s+unix://%s", kind, ep.SocketPath)
 		}
 	case ep.IsSocket && forceTCP:
-		// Need to bridge: UNIX (possibly remote) → local TCP.
-		// Reuse the VNC bridge helper for this — it bridges UNIX to
-		// TCP unconditionally.
 		var sockPath string
 		if tunnel != nil {
 			localSock, cu, err := tunnel.ForwardUnix(ctx, ep.SocketPath)
@@ -154,7 +166,6 @@ func runSshTunnel(vmName, uri string, forceTCP bool, kind string) error {
 		}
 		connectURL = fmt.Sprintf("%s://%s", kind, ln.Addr().String())
 	default:
-		// TCP endpoint. Local → no tunnel; remote → SSH forward.
 		if tunnel != nil {
 			localAddr, cu, err := tunnel.ForwardTCP(ctx, ep.Host, ep.Port)
 			if err != nil {
@@ -169,15 +180,9 @@ func runSshTunnel(vmName, uri string, forceTCP bool, kind string) error {
 	}
 
 	fmt.Printf("%s tunnel: %s\n", kind, connectURL)
-	switch kind {
-	case "spice":
-		fmt.Printf("Connect with: remote-viewer %s\n", connectURL)
-	case "vnc":
-		fmt.Printf("Connect with: remote-viewer %s\n", connectURL)
-	}
+	fmt.Printf("Connect with: remote-viewer %s\n", connectURL)
 	fmt.Println("Press Ctrl-C to close the tunnel.")
 
-	// Block on signal.
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	<-sig

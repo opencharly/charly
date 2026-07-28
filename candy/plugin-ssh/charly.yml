@@ -1,0 +1,36 @@
+plugin-ssh:
+    candy:
+        version: 2026.209.0000
+        description: |-
+            COMPILED-IN charly COMMAND-class plugin owning the externalized `charly ssh tunnel
+            spice/vnc` command (#118 loader+check-tail cone). It opens an SSH-forwarded local
+            SPICE/VNC endpoint pointing at a VM's display on a remote libvirt host, for clients that
+            don't natively understand qemu+ssh:// (standalone remote-viewer with a TCP addr,
+            TigerVNC, Spicy). virt-manager and `remote-viewer --connect qemu+ssh://…` do NOT need it.
+
+            The plugin owns the command end to end: the kong grammar (SshCmd → tunnel spice/vnc),
+            the sshx SSH-tunnel machinery, the vmshared libvirt-URI parse, and the kit UNIX→TCP
+            bridge — all sdk libraries. The ONE thing it cannot do itself is the display-endpoint
+            RESOLVE (go-libvirt, out-of-process): it reaches verb:libvirt DIRECTLY over its in-proc
+            reverse channel via InvokeProvider, so no charly-core symbol crosses the boundary.
+
+            ssh is COMPILED-IN (listed in charly/charly.yml compiled_plugins) BECAUSE its
+            Invoke(OpRun) needs the in-proc reverse channel — threaded by dispatchInProcCommand — to
+            reach verb:libvirt. The out-of-process CliMain path has no reverse channel, so it errors.
+            command:ssh dispatches through the compiled-in registry path (registerCompiledPlugin →
+            resolve(ClassCommand,"ssh") → dispatchInProcCommand → Invoke(OpRun)); NewMeta advertises
+            command:ssh with no plugin_input (the args are plain CLI tokens kong-parsed into SshCmd).
+        plugin:
+            source: github.com/opencharly/charly/candy/plugin-ssh
+            providers:
+                - command:ssh
+        plan:
+            - # ADE build-context check: the mandatory ≥1 deterministic check. Mirrors plugin-check's
+              # module-present — a trivial build-context `plugin: command` running `true`. The live
+              # tunnel needs a remote libvirt VM + interactive SIGINT, so it is exercised manually /
+              # by the vm bed roster, not a deterministic check.
+              check: the ssh command plugin ships a buildable Go module (go.mod + the provider package) compiled into charly; the live `charly ssh tunnel spice/vnc` forward is exercised against a remote-libvirt VM manually / by the vm roster
+              id: ssh-module-present
+              context:
+                - build
+              command: "true"

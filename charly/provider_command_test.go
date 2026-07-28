@@ -114,25 +114,28 @@ func TestCommandCompileIn_StatusInProc(t *testing.T) {
 	}
 }
 
-// TestCommandProviders_ExtractedLeafCommands proves every leaf-domain command extracted
-// into a dedicated COMMAND-class provider (ssh — the builtin leaf-domain
-// batch) is (1) registered in providerRegistry as a CommandProvider with the matching
-// Reserved() word, and (2) collected by collectCommandPlugins() and injected into the REAL
-// charly CLI grammar via kong.Plugins, so its subcommand path parses and selects exactly as
-// before the extraction. The test FAILS if any dedicated registration regresses or the
-// command seam stops wiring one of them into the root.
-func TestCommandProviders_ExtractedLeafCommands(t *testing.T) {
-	assertCommandProviderInjected(t, []commandProviderCase{
-		{"ssh", []string{"ssh", "tunnel", "spice", "myvm"}, "ssh tunnel spice <vm>"},
-		// `mcp`, `secrets`, `udev`, `preempt`, `feature`, and `alias` are intentionally
-		// absent: `charly mcp serve` (C1), `charly secrets …` (C2), `charly udev …`,
-		// `charly preempt …` (the second welded-command externalization),
-		// `charly feature …` (the third), and `charly alias …` (P14, candy/plugin-alias — COMPILED-IN)
-		// are now dynamic command candies served by their own plugin (candy/plugin-mcp /
-		// candy/plugin-secrets / candy/plugin-udev / candy/plugin-preempt /
-		// candy/plugin-feature / candy/plugin-alias), NOT builtin CommandProviders. alias's
-		// compiled-in in-proc registration is asserted by TestCommandCompileIn_AliasInProc.
-	})
+// TestCommandCompileIn_SshInProc proves the #118 loader+check-tail ssh extraction: `charly ssh
+// tunnel spice/vnc`, formerly a dedicated builtin CommandProvider (the plugin_command_ssh.go
+// registration, deleted), is now the compiled-in command candy candy/plugin-ssh — registered
+// IN-PROC as a ClassCommand inprocProvider (NOT a *grpcProvider, NOT a static builtin
+// CommandProvider), so dispatchCommand routes `charly ssh` to it via Invoke(OpRun) and its tunnel
+// handler reaches verb:libvirt by InvokeProvider'ing it directly over the reverse channel. (The
+// live SSH-forwarded SPICE/VNC tunnel needs a remote-libvirt VM + interactive SIGINT, exercised
+// manually / by the vm roster.)
+func TestCommandCompileIn_SshInProc(t *testing.T) {
+	prov, ok := providerRegistry.resolve(ClassCommand, "ssh")
+	if !ok {
+		t.Fatal("compiled-in command candy plugin-ssh did not register command:ssh (pluginsgen/compiled_plugins)")
+	}
+	if _, isGrpc := prov.(*grpcProvider); isGrpc {
+		t.Fatal("ssh registered as a *grpcProvider — expected an in-proc inprocProvider (compiled-in placement)")
+	}
+	if _, isInproc := prov.(*inprocProvider); !isInproc {
+		t.Fatalf("ssh provider is %T, want *inprocProvider (compiled-in command, dispatched in-proc)", prov)
+	}
+	if _, isCmdProv := prov.(CommandProvider); isCmdProv {
+		t.Fatal("ssh should NOT be a static CommandProvider — a compiled-in command candy uses the dynamic in-proc command bridge (dispatchCommand → Invoke(OpRun))")
+	}
 }
 
 // TestCommandProviders_DeployLifecycleCommands proves every remaining deploy-lifecycle leaf
@@ -288,9 +291,10 @@ func assertCommandProviderInjected(t *testing.T, cases []commandProviderCase) {
 // became a dynamic command candy with NO declared subcommand catalog — a compiled-in or external
 // command with no catalog is an opaque pass-through Args holder (collectExternalCommandPlugins),
 // never a builtin CommandProvider, so its subcommand leaves are NOT reflected into the
-// out-of-process MCP bridge's (candy/plugin-mcp) tool surface. The still-builtin leaf-domain
-// commands (ssh) that DO stay reflected are covered by TestCommandProviders_ExtractedLeafCommands;
-// `mcp` itself is correctly absent (the MCP server does not expose "start an MCP server" as one of
+// out-of-process MCP bridge's (candy/plugin-mcp) tool surface. `ssh` is now the compiled-in command
+// candy candy/plugin-ssh (command:ssh) that DECLARES a subcommand catalog (like `check` below), so
+// it stays reflected via declaringCommandHolders; its in-proc registration is covered by
+// TestCommandCompileIn_SshInProc. `mcp` itself is correctly absent (the MCP server does not expose "start an MCP server" as one of
 // its own tools). `check` is the ONE exception (F-CLI-NEST, asserted separately below): it DOES
 // declare a subcommand catalog, so buildCLIModel folds its holder in via declaringCommandHolders
 // and its children — check.box included — ARE reflected, restoring the MCP tool discoverability

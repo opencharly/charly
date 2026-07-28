@@ -21,7 +21,14 @@ func cliModelLeafPaths(t *testing.T) map[string]bool {
 
 // TestCLIModel_CoversCommands proves the CLI-export seam enumerates the command tree the
 // out-of-process MCP bridge reflects into tools — hardcoded machinery (version) and commands
-// contributed via CommandProviders (ssh.tunnel.spice; `secrets` is an EXTERNAL command now —
+// contributed via command candies with a declared subcommand catalog (ssh.tunnel — `charly ssh`
+// is now the compiled-in command candy candy/plugin-ssh (#118); its declaringCommandHolders fold
+// reflects the FLAT KongSubcommands catalog [tunnel], so ssh.tunnel IS present. The 3rd-level
+// leaves ssh.tunnel.spice/vnc are NOT — CLISubcommand is a flat {Name,Help} with no nesting, so a
+// top-level command whose subcommand is itself a GROUP (tunnel → spice/vnc) cannot express its leaf
+// tools; this is the SAME documented deep-leaf MCP-discoverability gap the ten externalized flat
+// box verbs share (below), fixed by the generic bare-leaf batch mechanism, NOT a per-command
+// catalog workaround. `secrets` is an EXTERNAL command now —
 // candy/plugin-secrets — so it is absent from this builtin model, as are the C15-externalized
 // clean/settings/candy and the P14 command:alias — candy/plugin-alias — see
 // TestCommandProviders_ExtractedReachMCP. `version` stays a CORE command — pkg/arch's pkgver()
@@ -43,7 +50,7 @@ func cliModelLeafPaths(t *testing.T) map[string]bool {
 // flat command, not a per-command declared-catalog workaround), not fixed speculatively here.
 func TestCLIModel_CoversCommands(t *testing.T) {
 	paths := cliModelLeafPaths(t)
-	for _, want := range []string{"ssh.tunnel.spice", "version"} {
+	for _, want := range []string{"ssh.tunnel", "version"} {
 		if !paths[want] {
 			t.Errorf("CLI model missing leaf %q", want)
 		}
