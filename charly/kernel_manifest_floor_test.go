@@ -152,6 +152,7 @@ var kernelFloor = []floorEntry{
 	{"host_build_remote_image_resolve.go", "M — the remote-image-resolve seam for plugin-build's ensure fallback (thin ResolveRemoteImage wrapper; drops non-wire fields)"},
 	{"host_build_render_service.go", "M — the render-service host-builder (wraps plugin-init OpResolve + M16 egress gate; two registry consults)"},
 	{"host_exec.go", "M — the --host CLI pre-dispatch reexec decision (shouldReexecForHost runs before Kong dispatches, reading the core CLI struct + command path — the prescan-dispatch spine, mirroring plugin_command_prescan.go / main_repo.go's --repo; ReexecOverSSH body already moved to kit)"},
+	{"status_substrate_host.go", "M — the status-substrate F10 host-builder: a generic HostBuild wire-forward (resolve verb:status-fanout + thread the in-proc reverse-channel executor + invoke; ZERO status business logic — the collectors + enrichment moved to candy/plugin-substrate at K6). Same class as the ~30 host_build_*.go kernelFloor seams; the in-proc reverse channel it threads for the fan-out's vm/k8s legs is host-only (wire broker M)"},
 }
 
 // residueOwner maps every tracked-for-removal charly/*.go non-test file to its
@@ -244,7 +245,6 @@ var residueOwner = map[string]string{
 	"host_build_buildengine.go": "K3", // the buildengine-* reverse legs the plugin-side RESOLVE reaches (U6); dissolve as the legs thin at K4/K5
 	"intermediates_shim.go":     "P8b",
 	"resolved_project_host.go":  "P8b",
-	"status_substrate_host.go":  "P14",
 	"validate_project_host.go":  "P15",
 	// — Cutover A (#168, deploy-dispatch kernel hard-cutover exit): the K4-C
 	// deploy-tree walk port narrows the retired deploy-dispatch spike into 6
