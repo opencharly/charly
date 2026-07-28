@@ -3,9 +3,9 @@ package main
 // dispatch_build_ensure.go — the host-side dispatch helper for the build:ensure word (core-min
 // wave 3, build-engine cluster relocation). Every former ensure-image / cross-engine-transfer
 // caller now reaches the compiled-in candy/plugin-build's ensure-image drive through this ONE
-// function, mirroring build.go's dispatchBuild for the box/generate words — the SAME in-proc
-// reverse-channel pattern (a bare executorReverseServer{}, since ensure-image touches only the
-// HOST's own podman storage, never a live deploy venue).
+// function, mirroring candy/plugin-box's dispatchBuild for the box/generate words — the SAME
+// in-proc reverse-channel pattern (a bare executorReverseServer{}, since ensure-image touches only
+// the HOST's own podman storage, never a live deploy venue).
 
 import (
 	"context"

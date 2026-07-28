@@ -237,8 +237,9 @@ func dispatchInProcCommand(prov Provider, d externalCommandDispatch, sub string)
 		return fmt.Errorf("command %q: marshal args: %w", d.word, err)
 	}
 	// Thread the in-proc reverse channel so a compiled-in command's Invoke(OpRun) can call back
-	// HostBuild / InvokeProvider (the command-class analogue of how the build class gets its in-proc
-	// reverse channel — build.go dispatchBuild). Generic: every compiled-in command benefits, so a
+	// HostBuild / InvokeProvider (the command-class analogue of how a compiled-in build/vm-build
+	// drive gets its own in-proc reverse channel — candy/plugin-box's dispatchBuild,
+	// candy/plugin-vm's resolveVmBuild). Generic: every compiled-in command benefits, so a
 	// command plugin can OWN its logic and reach the shared host machinery (e.g. clean's "retention"
 	// HostBuild) instead of forwarding the whole command to a hidden `__<cmd>` core handler. The
 	// executor carries no venue — a command's HostBuild legs reconstruct their engine host-side.
