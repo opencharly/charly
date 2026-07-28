@@ -93,12 +93,21 @@ func (verb) RunVerb(ctx context.Context, cc kit.CheckContext, op *spec.Op) kit.R
 		return kit.Failf("execution error: %v", err)
 	}
 
-	wantExit := 0
-	if op.ExitStatus != nil {
-		wantExit = *op.ExitStatus
-	}
-	if exitCode != wantExit {
-		return kit.Failf("exit=%d, want %d (stderr: %s)", exitCode, wantExit, trimPreview(stderr))
+	// expect_non_zero asserts the command FAILED (any non-zero code) and IGNORES
+	// exit_status — the two are mutually-exclusive intents (any-non-zero vs
+	// exact-code). Otherwise assert the exact code (exit_status, default 0).
+	if in.ExpectNonZero {
+		if exitCode == 0 {
+			return kit.Failf("expected non-zero exit, got 0 (stdout: %s)", trimPreview(stdout))
+		}
+	} else {
+		wantExit := 0
+		if op.ExitStatus != nil {
+			wantExit = *op.ExitStatus
+		}
+		if exitCode != wantExit {
+			return kit.Failf("exit=%d, want %d (stderr: %s)", exitCode, wantExit, trimPreview(stderr))
+		}
 	}
 	if err := sdk.MatchAll(stdout, op.Stdout); err != nil {
 		return kit.Failf("stdout: %v (got: %s)", err, trimPreview(stdout))

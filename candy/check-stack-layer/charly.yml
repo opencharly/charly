@@ -1,6 +1,6 @@
 check-stack-layer:
     candy:
-        version: 2026.174.0100
+        version: 2026.209.1500
         description: |
             Combined kind:layer + kind:pod + DeployTarget smoke on top of check-base-layer
             The second (and final) layer of the check-pod stack. In one layer it
@@ -95,3 +95,12 @@ check-stack-layer:
               service:
                 service: check-sleep
                 running: true
+            # Negative-expect coverage: a command that exits non-zero is asserted as an
+            # EXPECTED failure via expect_non_zero — an assertion the base #Op exit_status
+            # matcher cannot express (it can only assert ONE specific code). `false` exits 1
+            # deterministically and idempotently, so this runs standalone with no agent.
+            - check: command=false is asserted as an expected non-zero exit via expect_non_zero
+              id: check-expect-non-zero
+              command:
+                command: "false"
+                expect_non_zero: true

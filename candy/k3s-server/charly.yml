@@ -1,6 +1,6 @@
 k3s-server:
     candy:
-        version: 2026.155.1203
+        version: 2026.209.1500
         description: |
             A single-node k3s control plane that boots with ServiceLB, Traefik, and local-path-provisioner enabled by default.
             Renders /etc/rancher/k3s/config.yaml (admin-only, disabling no
@@ -92,12 +92,19 @@ k3s-server:
               register: kubeconfig
               mode: "0600"
               # k3s.service reaches systemd "active" when the binary execs, but
-              # /etc/rancher/k3s/k3s.yaml lands ~3-15s later when the API
-              # server finishes starting. The 120s deadline is generous —
-              # cold-boot k3s on a slow host occasionally takes 30-60s before
-              # the kubeconfig appears. File existence is the synchronization
-              # primitive (R4); polling cadence is 1s in retrieveOne.
-              wait_second: 120
+              # /etc/rancher/k3s/k3s.yaml lands later when the API server finishes
+              # starting. The 120s deadline was too tight for a genuinely fresh
+              # deploy: k3s first-boot on a cold libvirt guest (kubelet + the
+              # embedded control plane coming up) is itself ~2m, and it is PRECEDED
+              # by this deploy's own dependency install (ethtool/socat/conntrack/
+              # fuse), so the cumulative wall-clock to the first kubeconfig routinely
+              # exceeded 120s and tripped "timeout after 2m0s waiting for
+              # /etc/rancher/k3s/k3s.yaml" on check-k3s-vm's deploy-add. 300s (5m)
+              # covers first-boot + dep-install with headroom. File existence is the
+              # synchronization primitive (R4); polling cadence is 1s in retrieveOne,
+              # so a fast boot still returns as soon as the file appears — the larger
+              # deadline only raises the ceiling, never the common-case latency.
+              wait_second: 300
               rewrite:
                 # K3S_KUBECONFIG_SERVER wins when set (covers port-forwarded
                 # setups where the host-side port differs from the guest-side
