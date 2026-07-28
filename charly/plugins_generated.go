@@ -20,6 +20,7 @@ import (
 	cp_plugin_candy_kind "github.com/opencharly/charly/candy/plugin-candy-kind"
 	cp_plugin_check "github.com/opencharly/charly/candy/plugin-check"
 	cp_plugin_clean "github.com/opencharly/charly/candy/plugin-clean"
+	cp_plugin_cmd "github.com/opencharly/charly/candy/plugin-cmd"
 	cp_plugin_command "github.com/opencharly/charly/candy/plugin-command"
 	cp_plugin_distro "github.com/opencharly/charly/candy/plugin-distro"
 	cp_plugin_dns "github.com/opencharly/charly/candy/plugin-dns"
@@ -108,6 +109,7 @@ func init() {
 	registerCompiledPlugin(cp_plugin_tmux.NewProvider(), cp_plugin_tmux.NewMeta())
 	registerCompiledPlugin(cp_plugin_migrate.NewProvider(), cp_plugin_migrate.NewMeta())
 	registerCompiledPlugin(cp_plugin_ssh.NewProvider(), cp_plugin_ssh.NewMeta())
+	registerCompiledPlugin(cp_plugin_cmd.NewProvider(), cp_plugin_cmd.NewMeta())
 	registerCompiledPlugin(cp_plugin_clean.NewProvider(), cp_plugin_clean.NewMeta())
 	registerCompiledPlugin(cp_plugin_settings.NewProvider(), cp_plugin_settings.NewMeta())
 	registerCompiledPlugin(cp_plugin_loader.NewProvider(), cp_plugin_loader.NewMeta())

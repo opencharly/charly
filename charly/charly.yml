@@ -69,6 +69,7 @@ compiled_plugins:
     - plugin-tmux
     - plugin-migrate
     - plugin-ssh
+    - plugin-cmd
     - plugin-clean
     - plugin-settings
     - plugin-loader

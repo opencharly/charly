@@ -2,59 +2,43 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"time"
 
 	"github.com/opencharly/sdk/deploykit"
 )
 
-// CmdCmd runs a single command in a running container with optional notification.
+// cmd.go — the hidden `charly __cmd` core reentry (#118 loader+check-tail cone): the
+// deploy-lifecycle-coupled half of the `charly cmd` split. candy/plugin-cmd owns the user-facing
+// `charly cmd` CLI grammar + the completion notification and drives THIS reentry over
+// HostBuild("cli") with inherited stdio for the interactive exec. The reentry runs a single command
+// in a running container via the unified LifecycleTarget → OpAttach (dispatchLifecycleTarget): the
+// host resolves the `<engine> exec -i … sh -c` command, and the owning deploy plugin runs it over
+// the served venue executor via RunInteractive (stdio host-held; `-i` forwards the operator's stdin).
+//
+// This handler is TRACKED RESIDUE (deploy-lifecycle capability), NOT floor: it leaves core when the
+// deploy-lifecycle coupling itself relocates (coneA3) — the same class as build.go's former
+// __box-build reentry, which moved to candy/plugin-box once build:box was InvokeProvider-reachable.
+// Registered as the hidden `__cmd` command in main.go's CLI (mirroring __box-pkg). The
+// running-container gate + the notify container resolve now live plugin-side (candy/plugin-cmd).
+
+// CmdCmd runs a single command in a running container. The user-facing --notify + the container
+// resolve relocated to candy/plugin-cmd; this reentry is the deploy-lifecycle Attach alone.
 type CmdCmd struct {
 	Box      string `arg:"" help:"Box name"`
 	Command  string `arg:"" help:"Command to execute"`
 	Instance string `short:"i" long:"instance" help:"Instance name"`
-	Notify   bool   `long:"notify" negatable:"" default:"true" help:"Send desktop notification on completion (--no-notify to disable)"`
 	Sidecar  string `long:"sidecar" help:"Run in the named SIDECAR container (charly-<box>[-<instance>]-<sidecar>) instead of the app container"`
 }
 
 func (c *CmdCmd) Run() error {
 	c.Box, c.Instance = deploykit.CanonicalizeDeployArg(c.Box, c.Instance)
 
-	// Resolve the target container up-front for the completion notification (the venue whose session
-	// bus the desktop notify drives, and the running-container gate). The exec itself routes through
-	// the unified LifecycleTarget → OpAttach (F12): the host resolves the `<engine> exec -i … sh -c`
-	// command (resolvePodCmdPlan re-resolves the same container host-side), the owning plugin runs it
-	// over the served venue executor via RunInteractive (stdio host-held; `-i` forwards the operator's
-	// stdin). --notify stays a host wrapper — it is a host desktop-bus op, not a venue op.
-	resolve := func() (string, string, error) {
-		if c.Sidecar != "" {
-			return deploykit.ResolveSidecarContainer(c.Box, c.Instance, c.Sidecar)
-		}
-		return deploykit.ResolveContainer(c.Box, c.Instance)
-	}
-	engine, name, err := resolve()
-	if err != nil {
-		return err
-	}
-
 	lt, err := dispatchLifecycleTarget("cmd", c.Box, c.Instance)
 	if err != nil {
 		return err
 	}
-
-	start := time.Now()
-	runErr := lt.Attach(withPodCmdOpts(context.Background(), podCmdOpts{Sidecar: c.Sidecar}), []string{c.Command}, false)
-	elapsed := time.Since(start).Truncate(time.Millisecond)
-
-	if c.Notify {
-		status := "completed"
-		if runErr != nil {
-			status = "failed"
-		}
-		sendVenueNotification(deploykit.ContainerChain(engine, name),
-			fmt.Sprintf("charly: command %s", status),
-			fmt.Sprintf("%s (%s)", c.Command, elapsed))
-	}
-
-	return runErr
+	// The exec routes through the unified LifecycleTarget → OpAttach (F12): the host resolves the
+	// `<engine> exec -i … sh -c` command (resolvePodCmdPlan re-resolves the same container host-side),
+	// the owning plugin runs it over the served venue executor via RunInteractive (stdio host-held;
+	// `-i` forwards the operator's stdin from the plugin-driven HostBuild("cli") inherited streams).
+	return lt.Attach(withPodCmdOpts(context.Background(), podCmdOpts{Sidecar: c.Sidecar}), []string{c.Command}, false)
 }

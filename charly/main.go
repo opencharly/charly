@@ -70,6 +70,13 @@ type CLI struct {
 	// directly.
 	BoxPkg BoxPkgCmd `cmd:"" name:"__box-pkg" hidden:"" help:"internal: build native package artifacts (reentry behind box pkg)"`
 
+	// __cmd — the hidden deploy-lifecycle reentry behind `charly cmd` (#118 loader+check-tail cone).
+	// candy/plugin-cmd owns the user-facing `charly cmd` grammar + the completion notification and
+	// drives this over HostBuild("cli") with inherited stdio for the interactive exec; the
+	// deploy-lifecycle Attach (dispatchLifecycleTarget → OpAttach) cannot cross into a plugin, so it
+	// stays core RESIDUE (gated on the deploy-lifecycle relocation, coneA3), mirroring __box-pkg.
+	Cmd CmdCmd `cmd:"" name:"__cmd" hidden:"" help:"internal: run a command in a running container (reentry behind cmd)"`
+
 	// (P8b: the former hidden __box-build reentry is DELETED. candy/plugin-box's dispatchBuild now
 	// runs the `charly box build` body itself — NormalizeBoxArgs → remote-ref pivot
 	// (buildkit.DetectRemoteBuildRef + the HostBuild("remote-image-resolve") seam) → build-activity
