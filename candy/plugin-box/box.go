@@ -74,9 +74,34 @@ func dispatchBoxCommand(hc *hostClient, word string, args []string) error {
 		return dispatchMerge(hc, args)
 	case "reconcile":
 		return dispatchReconcile(args)
+	case "feature":
+		return dispatchFeature(hc, args)
 	default:
 		return fmt.Errorf("box: unknown command word %q", word)
 	}
+}
+
+// dispatchFeature runs `charly box feature run <image>` — build-scope Agent Driven Evaluation against
+// a disposable container. The ENGINE lives in candy/plugin-check (where the check runner is); this
+// box command bridges to it over the F10 plugin↔plugin reverse leg (cone-C #31, the SAME shape
+// command:build→build:ensure uses): InvokeProvider command:check's HIDDEN `__feature-box` leaf, which
+// routes to plugin-check's Mode:"feature-box" engine. The check output prints to charly's own stdio
+// (compiled-in) and the check-fail exit code propagates back through the returned error.
+func dispatchFeature(hc *hostClient, args []string) error {
+	if len(args) == 0 || args[0] != "run" {
+		return fmt.Errorf("usage: charly box feature run <image> [--format …] [--tag …] [--strict]")
+	}
+	// `run <image> [flags]` → the hidden check leaf `__feature-box <image> [flags]` (drop the `run`
+	// subcommand token — __feature-box takes the image positional directly).
+	fwd := append([]string{"__feature-box"}, args[1:]...)
+	reqJSON, err := json.Marshal(struct {
+		Args []string `json:"args"`
+	}{Args: fwd})
+	if err != nil {
+		return err
+	}
+	_, ierr := hc.exec.InvokeProvider(hc.ctx, "command", "check", sdk.OpRun, reqJSON, nil, sdk.InvokeProviderOpts{})
+	return ierr
 }
 
 // parseLeaf kong-parses args into a single-command grammar struct (positional args + flags, no

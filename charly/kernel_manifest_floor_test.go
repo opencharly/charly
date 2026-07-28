@@ -178,7 +178,6 @@ var residueOwner = map[string]string{
 	"box_fetch_reentry.go":          "P15",
 	"check_bed_run.go":              "P12",
 	"check_cmd.go":                  "P12",
-	"check_feature_run.go":          "P12",
 	"check_graphics_endpoint.go":    "P12",
 	"check_members.go":              "P12",
 	"checkrun_charly_verbs.go":      "P12",

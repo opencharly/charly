@@ -56,12 +56,12 @@ func hostCheckRun(req spec.CheckRunRequest) (kit.CheckRunReply, error) {
 // the ONE surviving host-anchored body, kept there because its agent-provisioned filter needs the
 // loaded project's full bundle tree (venueIsAgentProvisioned), with no sdk-portable equivalent (see
 // that file's header comment); its image-ensure leg is dispatchBuildEnsure, itself a call into the
-// compiled-in candy/plugin-build build:ensure word (core-min wave 3). A nominal
-// "feature-box" mode exists in the wire enum but has ZERO callers through this seam (`charly box
-// feature run` calls the CLI-free hostFeatureBox engine directly — see feature_run_gather.go's
-// header), so it is deliberately NOT cased here — reaching it would be a caller bug, not a
-// routable mode. The former dual-mode fallback (a bare default forwarding EVERY uncased mode to
-// the host) is retired: every mode is now an explicit case or an explicit unknown-mode error.
+// compiled-in candy/plugin-build build:ensure word (core-min wave 3). The
+// "feature-box" mode is the BUILD-scope `charly box feature run` engine (pluginCheckRunFeatureBox,
+// feature_box_gather.go — relocated from core hostFeatureBox in cone-C #31): candy/plugin-box's
+// command:feature InvokeProvider's command:check's hidden `__feature-box` leaf, which routes here.
+// The former dual-mode fallback (a bare default forwarding EVERY uncased mode to the host) is
+// retired: every mode is now an explicit case or an explicit unknown-mode error.
 func hostCheckRunCtx(ctx context.Context, req spec.CheckRunRequest) (kit.CheckRunReply, error) {
 	if cmdExec == nil {
 		return kit.CheckRunReply{}, fmt.Errorf("charly check requires compiled-in placement (the check-run host seam is unavailable out-of-process)")
@@ -73,6 +73,8 @@ func hostCheckRunCtx(ctx context.Context, req spec.CheckRunRequest) (kit.CheckRu
 		return pluginCheckRunLive(cmdExec, ctx, req)
 	case "feature-live":
 		return pluginCheckRunFeatureLive(cmdExec, ctx, req)
+	case "feature-box":
+		return pluginCheckRunFeatureBox(cmdExec, ctx, req)
 	case "score":
 		return pluginCheckRunScore(cmdExec, ctx, req)
 	case "preflight":

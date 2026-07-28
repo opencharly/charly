@@ -37,13 +37,13 @@ func TestNewMeta_DeclaresNestedCommands(t *testing.T) {
 		}
 		got[c.GetWord()] = true
 	}
-	for _, want := range []string{"generate", "validate", "new", "pkg", "pull", "build", "inspect", "list", "labels", "merge", "reconcile"} {
+	for _, want := range []string{"generate", "validate", "new", "pkg", "pull", "build", "inspect", "list", "labels", "merge", "reconcile", "feature"} {
 		if !got[want] {
 			t.Errorf("Describe missing command:%s (got %v)", want, got)
 		}
 	}
-	if len(caps.GetProvided()) != 11 {
-		t.Errorf("want 11 command capabilities, got %d", len(caps.GetProvided()))
+	if len(caps.GetProvided()) != 12 {
+		t.Errorf("want 12 command capabilities, got %d", len(caps.GetProvided()))
 	}
 }
 

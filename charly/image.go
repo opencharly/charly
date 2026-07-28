@@ -11,40 +11,37 @@ import (
 
 // BoxCmd groups build-mode commands that operate on charly.yml.
 //
-// `charly box` is a SHARED command group: the RETAINED verb below is the core
-// grammar spine (feature). The
-// generate/validate/new/pkg/pull/build/inspect/list/labels/merge/reconcile verbs are contributed
-// as NESTED command providers by the COMPILED-IN candy/plugin-box, and the authoring verbs
-// (set/add-candy/rm-candy/fetch/refresh/write/cat) by the COMPILED-IN
-// candy/plugin-authoring (P14b) — each a command:<word> with
-// CommandParent()=="box", attached into the embedded kong.Plugins below. This
-// mirrors how a compiled-in command holder embeds kong.Plugins for its nested
-// external subcommands.
+// `charly box` is a SHARED command group with NO retained core verb: every `charly box <word>`
+// subcommand is contributed as a NESTED command provider (CommandParent()=="box") by a COMPILED-IN
+// plugin — candy/plugin-box's generate/validate/new/pkg/pull/build/inspect/list/labels/merge/
+// reconcile/feature, and candy/plugin-authoring's set/add-candy/rm-candy/fetch/refresh/write/cat
+// (P14b) — attached into the embedded kong.Plugins below. `box feature` (build-scope Agent Driven
+// Evaluation) was the LAST retained core verb; it moved to candy/plugin-box's command:feature (which
+// bridges to the plugin-check engine over InvokeProvider) in cone-C #31, once the CommandParent-aware
+// registry key (#44) let it coexist with candy/plugin-feature's top-level command:feature. So BoxCmd
+// is now PURELY the plugin-attachment holder — the core box grammar knows zero box verbs.
 type BoxCmd struct {
 	// Plugins carries the nested command providers whose CommandParent()=="box"
-	// (candy/plugin-box's generate/validate/new/pkg/pull/build/inspect/list/labels/merge/reconcile
+	// (candy/plugin-box's generate/validate/new/pkg/pull/build/inspect/list/labels/merge/reconcile/feature
 	// + candy/plugin-authoring's set/add-candy/rm-candy/fetch/refresh/write/cat).
 	// main() sets this to collectExternalCommandPlugins()'s nestedByParent["box"]
 	// before kong.Parse.
 	kong.Plugins
-
-	Feature BoxFeatureCmd `cmd:"" help:"Run a box's baked plan steps as acceptance tests against a disposable container (Agent Driven Evaluation, build scope)"`
 }
 
-// MIGRATION INVENTORY (north-star §4.4): the RETAINED verb above (feature) is UNTIL-K5
-// (command-dispersal — every CLI verb becomes a command plugin; main.go knows zero verbs). Each
-// moves to its own command:<word> plugin as its build/deploy-cone engine externalizes (mirroring
-// generate/validate/new/pkg/pull/build/inspect/list/labels/merge/reconcile above, P14-rest trace,
-// 2026-07 — labels externalized fully in K3, merge externalized at P14, reconcile externalized at
-// Cutover B unit 3+4 [it had no core-only coupling at all — see candy/plugin-box/reconcile.go], no
-// host reentry left for any of the three; pull FULLY externalized (K3 #39 fold — candy/plugin-box's
-// dispatchPull now runs the ensure-image work itself via InvokeProvider(build:ensure), reaching the
-// registry ref off the resolved-project envelope; BoxPullCmd + the hidden __box-pull reentry are
-// DELETED), build at M4d [BuildCmd's OWN grammar/dispatch are the compiled-in candy/plugin-box
-// `build` word; its Run body is UNCHANGED and stays behind the hidden `__box-build` reentry over
-// HostBuild("cli")]; see charly/labels.go + candy/plugin-box/merge_cmd.go +
-// candy/plugin-box/reconcile.go + candy/plugin-box/box.go's dispatchPull/dispatchBuild): pkg_cmd.go
-// already documents its own UNTIL-K1 note; feature is the remaining residue in this struct.
+// MIGRATION INVENTORY (north-star §4.4): the box command-dispersal is now COMPLETE for BoxCmd —
+// every `charly box <word>` verb is a command:<word> plugin (candy/plugin-box), so BoxCmd holds no
+// verb of its own (main.go knows zero box verbs; the struct is purely the plugin-attachment holder).
+// Trace: generate/validate/new/pkg/pull/build/inspect/list/labels/merge/reconcile externalized
+// across K3/P14/Cutover-B (labels fully in K3, merge at P14, reconcile at Cutover B unit 3+4 [no
+// core-only coupling — candy/plugin-box/reconcile.go]; pull FULLY externalized at K3 #39 —
+// candy/plugin-box's dispatchPull runs the ensure-image work itself via InvokeProvider(build:ensure);
+// BoxPullCmd + the hidden __box-pull reentry are DELETED; build at M4d — the compiled-in `build`
+// word owns the grammar/dispatch, BuildCmd's Run body stays behind the hidden `__box-build` reentry
+// over HostBuild("cli")); and feature at cone-C #31 — `charly box feature run` is now
+// candy/plugin-box's command:feature (bridging to the plugin-check engine over InvokeProvider), the
+// former in-core BoxFeatureCmd/BoxFeatureRunCmd + hostFeatureBox DELETED. pkg_cmd.go documents its
+// own UNTIL-K1 note. See charly/labels.go + candy/plugin-box/{merge_cmd,reconcile,box}.go.
 //
 // remote_image.go + BuildCmd.Run()'s own internals (bootstrap-builder execution, remote-ref
 // resolve/download/scan, retention pruning) are NOT CLI-dispersal residue — the M4d scoping trace
