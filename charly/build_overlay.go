@@ -152,9 +152,11 @@ func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ build
 		deployName = kit.NestedContainerName(deployName)
 	}
 
-	if _, _, serr := prepareCandySecrets(plans, dir); serr != nil {
+	secretEnv, _, serr := resolveCandySecrets(plans, dir)
+	if serr != nil {
 		return spec.OverlayBuildReply{}, fmt.Errorf("loading candies for secret resolution: %w", serr)
 	}
+	deploykit.InjectSecretsIntoPlans(plans, secretEnv)
 
 	// Stage REMOTE add_candy candies' source trees into .build/_candy/<name>.<version>/ — host-fs
 	// materialization a sdk-only candy cannot do. The candy's FROM scratch COPY references these.

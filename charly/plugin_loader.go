@@ -704,6 +704,53 @@ func pluginProvidesReferencedWord(providers []string, refs map[string]struct{}) 
 // plugin candies — adb/appium/kube/spice/example-* — most unused by any one build or
 // deploy). Errors are returned (not swallowed) so a bed asserting a plugin verb fails
 // loudly if its REFERENCED plugin won't load.
+// loadDeployPlugins connects the project's OUT-OF-TREE plugin candies BEFORE a
+// deploy verb resolves the target, so a deploy whose SUBSTRATE / step / verb is
+// served by an external provider resolves out-of-process. It scans the WHOLE
+// project (ScanAllCandyWithConfigOpts) but loads ONLY the plugin candies the
+// deployment REFERENCES (perf-scoped): collectReferencedPluginWords unions the
+// candy/box plans + candy external_builder selections, and deployNodePluginContext
+// adds the deploy's OWN references — its substrate kind + the inline Op.Plugin words
+// in its FLATTENED bed plan (members hoisted into the root node.Plan). A plugin candy
+// none of whose providers is referenced is skipped (no wasted host build/connect); a
+// REFERENCED one always loads (the reference set is collected COMPLETE — over-load
+// safe, never under). The deployment's add_candy: candies + any caller-supplied extra
+// refs are ADDED to the scan via ExtraCandyRefs (so a REMOTE composed plugin not in
+// the local scan is fetched too, and its words are then collected from its plan). The
+// SAME scan + loadProjectPlugins the check runner uses (resolveCheckRunnerContext) and
+// the bundle-add path uses — so bundle add / bundle del / charly update all connect a
+// deployment's plugins identically (R3). For an external deploy SUBSTRATE this is what
+// turns the pre-scanned placeholder word into a connected grpcProvider that
+// ResolveTarget can route to. Discovery and build/connect failures retain their original cause and
+// abort dispatch; warning-and-continue used to mask a failed build as a downstream missing provider.
+//
+// FLOOR-M (Cone A shape 3 adjudication): this function directly drives loadProjectPlugins, which
+// mutates providerRegistry — a clause-M kernel mechanism (plugin loading) that cannot live in a
+// plugin. Relocated here (from the deleted charly/deploy_add_shared.go) to sit beside its callees
+// collectReferencedPluginWords/loadProjectPlugins (R3) — already the body of two thin HostBuild
+// seams (deploy-plugins-connect, deploy-del-resolve) and called directly by two more core files
+// (pod_lifecycle_verb.go, update_deploy_dispatch.go).
+func loadDeployPlugins(dir, deployName string, extraAddCandy []string) error {
+	cfg, cerr := LoadConfig(dir)
+	if cerr != nil {
+		return fmt.Errorf("load plugin configuration: %w", cerr)
+	}
+	addCandy, refWords := deployNodePluginContext(dir, deployName)
+	extra := append(append([]string(nil), extraAddCandy...), addCandy...)
+	candyMap, scanErr := ScanAllCandyWithConfigOpts(dir, cfg, ResolveOpts{ExtraCandyRefs: extra})
+	if scanErr != nil {
+		return fmt.Errorf("scan deploy plugins: %w", scanErr)
+	}
+	if candyMap == nil {
+		return nil
+	}
+	refs := collectReferencedPluginWords(candyMap, cfg.Box, refWords)
+	if perr := loadProjectPlugins(context.Background(), candyMap, refs); perr != nil {
+		return fmt.Errorf("load deploy plugins: %w", perr)
+	}
+	return nil
+}
+
 func loadProjectPlugins(ctx context.Context, candies map[string]spec.CandyReader, refs map[string]struct{}) error {
 	if err := loadBuiltinPluginUnits(); err != nil {
 		return fmt.Errorf("builtin plugin schema gate: %w", err)

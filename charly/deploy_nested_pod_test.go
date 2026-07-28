@@ -7,20 +7,6 @@ import (
 	"github.com/opencharly/sdk/spec"
 )
 
-func TestDeriveDeploymentName(t *testing.T) {
-	cases := []struct{ ref, want string }{
-		{"ghcr.io/opencharly/selkies-kde-nvidia:2026.153.1026", "selkies-kde-nvidia"},
-		{"localhost/charly-selkies-kde:latest", "charly-selkies-kde"},
-		{"selkies-kde-nvidia", "selkies-kde-nvidia"},
-		{"docker.io/library/redis:7", "redis"},
-	}
-	for _, c := range cases {
-		if got := deriveDeploymentName(c.ref); got != c.want {
-			t.Errorf("deriveDeploymentName(%q) = %q, want %q", c.ref, got, c.want)
-		}
-	}
-}
-
 // TestMergeDeployConfigs_VMNestedSurvivesNestedlessOverlay locks the merge
 // invariant the VM target's nested-pod deploy relies on: a project VM deploy
 // that declares a `nested:` target:pod child, overlaid by a per-host operator

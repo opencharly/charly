@@ -35,16 +35,21 @@ import (
 //     ctx-opts marshals with zero core-only dependency of their own, so there is no reason to move
 //     them; the core-side dispatch caller reads them and threads the result as this file's
 //     OptsJSON request field.
-//   - Secret injection (prepareCandySecrets) + artifact retrieval (retrieveArtifactsAndK3s) +
-//     --verify (checkLocalDeployScope) — all three are K1/registry-family core siblings of
-//     bundle_add_cmd.go with their own core-only dependencies; they stay core, wrapping THIS
-//     file's dispatch call for the substrate-apply step alone.
+//   - --verify (checkLocalDeployScope, charly/unified_targets.go's Add, AFTER this whole dispatch
+//     call returns) — a deep check-engine concern with no candy-secrets/artifact dependency of
+//     its own; out of the Cone A shape 3 cutover's scope (see that file's own comment).
 //
 // What DID move (the substrate-generic core): PrepareVenue, the views+venue marshal +
 // InvokeProvider dispatch to the ACTUAL substrate provider (S1), recordDeploy (the ledger write —
 // DistroCfg now travels as a plain marshalled field, not the core-only buildEngineContext
 // wrapper), recordVenueLedger, prepareReverseState, Del's ledger-read+teardown+PostTeardown,
-// ArtifactKey, PostApply, ready-to-dispatch Start/Stop/Status/Logs/Shell/Attach/Rebuild bodies.
+// ArtifactKey, PostApply, ready-to-dispatch Start/Stop/Status/Logs/Shell/Attach/Rebuild bodies —
+// and, as of Cone A shape 3 (secrets_artifacts.go), the ORCHESTRATION half of secret injection
+// (prepareCandySecrets), artifact retrieval, and the register-hint-driven k3s-post-provision
+// dispatch (retrieveArtifactsAndK3s/K3sPostProvision) — their genuine floor-M halves (the project
+// candy scan, the credential-store touch, the live artifact fetch) stay behind two thin HostBuild
+// seams ("deploy-candy-secrets", "deploy-artifacts-retrieve"), reached from handleDeployApply
+// below.
 //
 // The type these methods used to hang off (the former core-resident deploy target / substrate
 // lifecycle proxy) held a core-private *grpcProvider — a shape that CANNOT move here (core
@@ -195,10 +200,14 @@ func resolveRootExecutor(req spec.DeployTargetDispatchRequest) (deploykit.Deploy
 
 // handleDeployApply is the substrate-generic core of Add/Update (mirrors the former core-resident
 // deploy target's apply body + substrate lifecycle proxy's PrepareVenue). Secret injection,
-// artifact retrieval, and --verify STAY
-// core-side (see the file header) — this handles ONLY the substrate-apply step: PrepareVenue (for
-// a lifecycle substrate), the views+venue marshal, the actual substrate dispatch, recordDeploy,
-// recordVenueLedger.
+// artifact retrieval, and the k3s-post-provision register-hint dispatch run HERE too now (Cone A
+// shape 3 — see secrets_artifacts.go): the genuine floor-M scans (project candy lookup,
+// credential-store touch, live artifact fetch) stay behind thin HostBuild seams, but the
+// ORCHESTRATION — inject BEFORE dispatch, retrieve+dispatch-registers AFTER — runs plugin-side,
+// wrapping PrepareVenue (for a lifecycle substrate), the views+venue marshal, the actual substrate
+// dispatch, recordDeploy, recordVenueLedger. --verify (checkLocalDeployScope) STAYS core-side
+// (charly/unified_targets.go's Add, after this whole dispatch call returns) — it is a deep
+// check-engine concern with no candy-secrets/artifact dependency, out of this cutover's scope.
 func handleDeployApply(ctx context.Context, exec *sdk.Executor, req spec.DeployTargetDispatchRequest, isUpdate bool) (spec.DeployTargetDispatchReply, error) {
 	var reply spec.DeployTargetDispatchReply
 	// Decode directly into the wire-safe spec.LifecycleOpts (R10 bed fix, S3b) — NEVER
@@ -226,6 +235,20 @@ func handleDeployApply(ctx context.Context, exec *sdk.Executor, req spec.DeployT
 			return reply, fmt.Errorf("deploy-dispatch %s: rematerialize plan: %w", req.Op, err)
 		}
 		plans = append(plans, p)
+	}
+
+	// Secret injection (Add only, mirroring the former core Add()'s own prepareCandySecrets call,
+	// which Update() never made) — BEFORE the substrate ever sees the plans, exactly like the
+	// pre-move ordering (secrets resolved before any Emit, since a candy's OpStep body references
+	// the resolved token via env).
+	var secretEnv map[string]string
+	var registerHints []string
+	if !isUpdate {
+		var serr error
+		secretEnv, registerHints, serr = injectCandySecrets(ctx, exec, req.Dir, plans)
+		if serr != nil {
+			return reply, fmt.Errorf("deploy-dispatch %s: %w", req.Op, serr)
+		}
 	}
 
 	dryRun := opts.DryRun
@@ -348,6 +371,37 @@ func handleDeployApply(ctx context.Context, exec *sdk.Executor, req spec.DeployT
 			map[string]any{"opts": opts}, &venueDesc, req.HostEnvJSON)
 		if err != nil {
 			return reply, fmt.Errorf("deploy-dispatch %s: post-apply: %w", req.Op, err)
+		}
+	}
+
+	artifactKey := reply.ArtifactKey
+	if artifactKey == "" {
+		artifactKey = req.Name
+	}
+	if !isUpdate {
+		// Artifact retrieval + register-hint dispatch (Add only, mirrors the former core Add()'s
+		// own retrieveArtifactsAndK3s call — which ran AFTER the whole dispatch, including
+		// PostApply, exactly this position) — the artifactEnv folds secretEnv (resolved above,
+		// BEFORE dispatch) with the merged node's own env: (deploykit.BuildArtifactEnv), matching
+		// the former core Add() exactly.
+		artifactEnv := deploykit.BuildArtifactEnv(secretEnv, req.Node)
+		if err := retrieveArtifactsAndDispatchRegisters(ctx, exec, req.Dir, plans, artifactKey, req.Name, artifactEnv, registerHints); err != nil {
+			return reply, fmt.Errorf("deploy-dispatch %s: %w", req.Op, err)
+		}
+	} else if kubeAlreadyConnected(ctx, exec) {
+		// R1 fix (K1-alpha regression, ported verbatim from the former core Update()): Add()
+		// re-establishes a k3s-server deploy's kubeconfig server-port rewrite via
+		// k3sPostProvision (the register-hint dispatch above) — Update() never did, so a fresh
+		// `charly update` on a k8s-deploy's k3s-server member left the merged ~/.kube/config
+		// context pointing at whatever host-forwarded port was current the LAST time Add ran.
+		// Re-running the SAME idempotent post-provision here keeps kubectl/`kube:` checks
+		// working across a rebuild without re-retrieving the artifact itself (its content is
+		// unchanged; only the forwarded port can move). Gated on kube ALREADY being connected (a
+		// pure DescribeProvider query — no connect attempt, no side effect): Update has no
+		// candyList to consult artifactRegisterHandlers against, so calling k3sPostProvision
+		// unconditionally would hard-error for every OTHER deploy kind (pod/local/no-k3s).
+		if err := k3sPostProvision(ctx, exec, artifactKey, req.Name); err != nil {
+			return reply, fmt.Errorf("deploy-dispatch %s: re-establishing k3s port-forwards: %w", req.Op, err)
 		}
 	}
 
