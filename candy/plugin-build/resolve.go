@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/opencharly/sdk"
@@ -126,15 +127,17 @@ func resolveBuildEngine(ctx context.Context, ex *sdk.Executor, req spec.BuildReq
 		return spec.BuildResolveReply{Error: errString(err)}, nil
 	}
 
-	// --- 7. host-fs PREP + renderGenCache + ensureCharlyBinaryFresh (host leg) ---
-	// The host rebuilds NewGenerator (the render-seam-floor gen it STAYS host for), runs the host-fs
-	// prep (cleanStaleBuildDirs / writeContextIgnore / createRemoteCandyCopies) + populates the
-	// renderGenCache the render-seam floor reuses; ensureCharlyBinaryFresh runs there too (real build
-	// only, never for generate). resolveUserContext is reproduced plugin-side below (step 9).
-	if err := prepLeg(ctx, ex, spec.BuildResolveRequest{
-		Boxes: boxes, Tag: tag, Dir: dir, IncludeDisabled: req.IncludeDisabled,
-		GenerateOnly: generateOnly,
-	}); err != nil {
+	// --- 7. host-fs PREP (plugin-side, pure — K3 host-prep move) + render-seam-cache prep (host leg) ---
+	// The FS prep (cleanStaleBuildDirs / writeContextIgnore / createRemoteCandyCopies /
+	// ensureCharlyBinaryFresh) runs HERE, directly over the already-computed cfg/layers/resolved — no
+	// host round-trip (proven pure by RCA: none of it needs host-only privilege). renderSeamPrepLeg
+	// populates the render-seam-floor's CHEAP candy-scan-only Generator cache (host_build_render_seam.go
+	// / host_build_bake_plugins.go's 3 remaining consumers, none of which touch box-resolve data).
+	// resolveUserContext is reproduced plugin-side below (step 9).
+	if err := runHostFSPrep(ctx, ex, dir, filepath.Join(dir, ".build"), cfg, layers, resolved, boxes, generateOnly); err != nil {
+		return spec.BuildResolveReply{Error: errString(err)}, nil
+	}
+	if err := renderSeamPrepLeg(ctx, ex, spec.ResolvedProjectRequest{Dir: dir, IncludeDisabled: req.IncludeDisabled}); err != nil {
 		return spec.BuildResolveReply{Error: errString(err)}, nil
 	}
 

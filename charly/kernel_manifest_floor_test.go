@@ -153,6 +153,22 @@ var kernelFloor = []floorEntry{
 	{"host_build_remote_image_resolve.go", "M — the remote-image-resolve seam for plugin-build's ensure fallback AND candy/plugin-box's `box build @ref` (thin ResolveRemoteImage wrapper; drops non-wire fields)"},
 	{"host_build_render_service.go", "M — the render-service host-builder (wraps plugin-init OpResolve + M16 egress gate; two registry consults)"},
 	{"host_exec.go", "M — the --host CLI pre-dispatch reexec decision (shouldReexecForHost runs before Kong dispatches, reading the core CLI struct + command path — the prescan-dispatch spine, mirroring plugin_command_prescan.go / main_repo.go's --repo; ReexecOverSSH body already moved to kit)"},
+	// P8b render-glue remainder (CONE B) — spike-verified by call-graph (never trusting a file's
+	// own "stays host" comment): the movable render DRIVE already left in prior cutovers (#67
+	// render-DRIVE move, K5-Unit-6b, P11c, FLOOR-SLIM-proper Unit-8, K5-A item 2 — into
+	// candy/plugin-build, candy/plugin-deploy-pod, candy/plugin-installstep, sdk/deploykit's
+	// header_copy_remote.go/NewRenderGeneratorFromProject). These 5 are genuine thin registry-
+	// dispatch/wire-forward M with ZERO capability logic — team-lead-audited and accepted (the
+	// Generator-cluster files — generate.go/tasks.go/build_overlay.go/builder_preresolve.go — hold
+	// real build-engine RENDER/PREP logic and were REJECTED as floor; they are the dominant
+	// remaining #118 gate, tracked residue again below, moving into candy/plugin-build/
+	// plugin-deploy-pod).
+	{"service_render.go", "M — RenderService: thin providerRegistry.ResolveKind(\"init\") dispatch, the direct callee of the already-floor host_build_render_service.go"},
+	{"format_config.go", "M/D — LoadBuildConfigForBox: loader-glue (LoadUnified, K1) + registry-callback wiring, a shared cross-cone utility (P13/P15/P11/K3 + candy/plugin-vm all call it)"},
+	{"oci_step_emit.go", "M — dispatchOCIStep: thin word→plugin registry dispatch + reverse-channel forwarder, same shape as the already-floor dispatch_build_ensure.go/deploy_target_dispatch.go"},
+	{"step_emit_hostbuild.go", "M — the generic \"step-emit\" F10 HostBuild seam (word-keyed stepEmitters dispatch, kind-blind — same shape as the ~25 other host_build_*.go floor entries)"},
+	{"intermediates_shim.go", "M — ComputeIntermediates/GlobalCandyOrder: a *Config→deploykit.IntermediateDefaults adapter wired as a loaderkit.ResolveProjectSeams callback consumed by resolved_project_host.go"},
+	{"resolved_project_host.go", "M — the trimmed \"resolved-project\" F11 resolve handle (K5-Unit-0 keystone); team-lead-ruled to stay core, floor-reclassified here per the same boundary-law shape as its sibling F10/F11 seams"},
 }
 
 // residueOwner maps every tracked-for-removal charly/*.go non-test file to its
@@ -199,10 +215,7 @@ var residueOwner = map[string]string{
 	"embed_defaults.go":             "P15",
 	"enc.go":                        "P11",
 	"filelock.go":                   "P15",
-	"format_config.go":              "P8b",
 	"generate.go":                   "P8b",
-	"host_build_bake_plugins.go":    "P8b",
-	"host_build_render_seam.go":     "P8b",
 	"host_build_vm_build.go":        "P8b",
 	"k8s_config.go":                 "P11",
 	"layer_secrets.go":              "P8b",
@@ -210,7 +223,6 @@ var residueOwner = map[string]string{
 	"local_spec.go":                 "P11",
 	"namespace.go":                  "P15",
 	"notify.go":                     "P15",
-	"oci_step_emit.go":              "P8b",
 	"pkg_cmd.go":                    "P15",
 	"plugin_cmd.go":                 "P15",
 	"plugin_command_cmd.go":         "P15",
@@ -223,10 +235,8 @@ var residueOwner = map[string]string{
 	"remote_image.go":               "P14",
 	"resource_resolve.go":           "P15",
 	"secrets.go":                    "P11",
-	"service_render.go":             "P8b",
 	"sidecar.go":                    "P11",
 	"ssh.go":                        "P15",
-	"step_emit_hostbuild.go":        "P8b",
 	"substrate_template_resolve.go": "P15",
 	"tasks.go":                      "P8b",
 	"unified.go":                    "P15",
@@ -238,7 +248,6 @@ var residueOwner = map[string]string{
 	// — files added by cutovers that landed after the T0 authoring (living tracker) —
 	"config_write_host.go":      "P11",
 	"host_build_buildengine.go": "K3", // the buildengine-* reverse legs the plugin-side RESOLVE reaches (U6); dissolve as the legs thin at K4/K5
-	"intermediates_shim.go":     "P8b",
 	"resolved_project_host.go":  "P8b",
 	"validate_project_host.go":  "P15",
 	// — Cutover A (#168, deploy-dispatch kernel hard-cutover exit): the K4-C

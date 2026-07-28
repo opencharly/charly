@@ -4,11 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
-	"path/filepath"
-	"slices"
 
-	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 )
@@ -118,44 +114,35 @@ func hostBuildNamespaced(_ context.Context, req spec.BuildResolveRequest, _ buil
 	return *scratch, nil
 }
 
-// hostBuildPrep runs the host-fs build PREP (cleanStaleBuildDirs / writeContextIgnore /
-// createRemoteCandyCopies), populates the render-seam-floor renderGenCache (NewGenerator STAYS host —
-// RULED), runs render-prep on that cached gen, and (real build only) ensureCharlyBinaryFresh. It
-// replaces the host-fs half of the former hostBuildBuildResolve; the resolve ENVELOPE + drive-model
-// are computed plugin-side.
-func hostBuildPrep(_ context.Context, req spec.BuildResolveRequest, _ buildEngineContext) (map[string]string, error) {
+// hostBuildPrep populates the render-seam-floor renderGenCache with a CHEAP candy-scan-only
+// Generator (newCandyScanGenerator) for the render-seam floor's 2 remaining reverse-channel
+// consumers (resolveInlineBuilderSeam/ensureBuildersConnected) + emitBakedPlugins. The host-fs PREP
+// (cleanStaleBuildDirs/writeContextIgnore/createRemoteCandyCopies) and ensureCharlyBinaryFresh moved
+// to candy/plugin-build (K3 host-prep move, coneB-render): they are pure filesystem/exec operations
+// over data (cfg/layers/resolved) the plugin ALREADY computed in its own resolve — no host-only
+// dependency, and running them host-side via a SECOND full NewGenerator (re-scan + re-resolve +
+// re-render-prep) was 100% wasted work (RCA'd by call-graph: the render that ships uses render.go's
+// OWN Generator; the host copy's RenderPrepAll output was never read by anything). See generate.go's
+// newCandyScanGenerator doc.
+func hostBuildPrep(_ context.Context, req spec.ResolvedProjectRequest, _ buildEngineContext) (map[string]string, error) {
 	dir := reqDirOrCwd(req.Dir)
-	boxes := req.Boxes
-	gen, err := NewGenerator(dir, req.Tag, boxResolveOpts(boxes, req.IncludeDisabled))
+	gen, err := newCandyScanGenerator(dir, req.IncludeDisabled, req.ExtraCandyRefs)
 	if err != nil {
 		return nil, err
 	}
-	gen.DevLocalPkg = req.DevLocalPkg
 	// Cache the live Generator for the render-seam host-builder (#67) — the render's host-coupled
 	// seams reach the core funcs through THIS gen. One gen per dir per process.
 	renderGenCache.Store(dir, gen)
-
-	if err := gen.cleanStaleBuildDirs(); err != nil {
-		return nil, fmt.Errorf("cleaning stale build dirs: %w", err)
-	}
-	if err := os.MkdirAll(gen.BuildDir, 0755); err != nil {
-		return nil, fmt.Errorf("creating .build directory: %w", err)
-	}
-	if err := gen.writeContextIgnore(); err != nil {
-		return nil, fmt.Errorf("writing context ignore files: %w", err)
-	}
-	if err := gen.createRemoteCandyCopies(); err != nil {
-		return nil, fmt.Errorf("creating remote candy symlinks: %w", err)
-	}
-	if err := gen.toDeploykit().RenderPrepAll(); err != nil {
-		return nil, err
-	}
-	if !req.GenerateOnly {
-		if err := ensureCharlyBinaryFresh(dir, gen.Boxes, boxes); err != nil {
-			return nil, fmt.Errorf("refreshing charly binary: %w", err)
-		}
-	}
 	return map[string]string{}, nil
+}
+
+// hostBuildContextIgnoreBaseline returns the bootstrap-embedded context_ignore_baseline patterns (a
+// D-category static fact baked into the charly binary's embedded charly.yml) — the ONE piece of
+// writeContextIgnore's former host dependency a plugin genuinely cannot read itself (a SEPARATE Go
+// module/binary has no access to charly/charly.yml's //go:embed). Everything else writeContextIgnore
+// needs (cfg.Defaults.ContextIgnore, the write targets) is already plugin-side.
+func hostBuildContextIgnoreBaseline(_ context.Context, _ struct{}, _ buildEngineContext) ([]string, error) {
+	return baselineContextIgnore, nil
 }
 
 // reqDirOrCwd resolves an empty request dir to the process cwd (the same fallback every build-engine
@@ -193,69 +180,10 @@ func boxResolveOpts(boxes []string, includeDisabled bool) ResolveOpts {
 	return opts
 }
 
-// ensureCharlyBinaryFresh rebuilds candy/charly/bin/charly when any image whose
-// resolved candy chain includes the `charly` candy is in scope for the
-// current build. Without this, podman build would COPY whatever stale
-// binary happens to live at candy/charly/bin/charly — silently baking obsolete
-// CLI behaviour into the image. Skipped (with a one-line warning) when
-// `go` is not on PATH, so an end-user with a packaged charly install does
-// not see a hard error. Reached from the "buildengine-prep" leg (hostBuildPrep) on
-// a real build (never a generate-only pass).
-func ensureCharlyBinaryFresh(dir string, boxes map[string]*buildkit.ResolvedBox, requested []string) error {
-	in := requested
-	if len(in) == 0 {
-		in = make([]string, 0, len(boxes))
-		for name := range boxes {
-			in = append(in, name)
-		}
-	}
-	needs := false
-	for _, name := range in {
-		img, ok := boxes[name]
-		if !ok {
-			continue
-		}
-		if slices.Contains(img.Candy, "charly") {
-			needs = true
-		}
-		if needs {
-			break
-		}
-	}
-	if !needs {
-		return nil
-	}
-
-	binPath := filepath.Join(dir, DefaultCandyDir, "charly", "bin", "charly")
-	srcDir := filepath.Join(dir, "charly")
-
-	// Downstream workspaces (project trees that `import:` upstream
-	// opencharly via `@github.com/...`) don't ship the charly Go source.
-	// Without ./charly to rebuild from, there's nothing to refresh — the
-	// embedded candy chain will use the cached upstream binary at
-	// <upstream-cache>/candy/charly/bin/charly which is already up-to-date
-	// relative to upstream's charly source.
-	if _, err := os.Stat(srcDir); os.IsNotExist(err) {
-		return nil
-	}
-
-	upToDate, err := buildkit.CharlyBinaryUpToDate(binPath, srcDir)
-	if err == nil && upToDate {
-		return nil
-	}
-
-	if _, err := exec.LookPath("go"); err != nil {
-		fmt.Fprintf(os.Stderr, "charly: warning: `go` not on PATH; skipping candy/charly/bin/charly rebuild (image will use existing binary)\n")
-		return nil
-	}
-
-	fmt.Fprintf(os.Stderr, "charly: rebuilding candy/charly/bin/charly from ./charly before image build\n")
-	cmd := exec.Command("go", "build", "-o", binPath, ".")
-	cmd.Dir = srcDir
-	cmd.Stdout = os.Stderr
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
-}
+// ensureCharlyBinaryFresh (the FS-prep quartet — cleanStaleBuildDirs/writeContextIgnore/
+// createRemoteCandyCopies/ensureCharlyBinaryFresh) moved to candy/plugin-build (K3 host-prep move,
+// coneB-render): pure filesystem/exec operations over data (cfg/layers/resolved) the plugin already
+// computes in resolveBuildEngine — no host-only dependency. See candy/plugin-build/host_prep.go.
 
 // Register the buildengine-* legs at package-var init (before any init()).
 var _ = func() bool {
@@ -266,5 +194,6 @@ var _ = func() bool {
 	registerHostBuilder("buildengine-connect-plugins", typedHostBuilder("buildengine-connect-plugins", hostBuildConnectPlugins))
 	registerHostBuilder("buildengine-namespaced", typedHostBuilder("buildengine-namespaced", hostBuildNamespaced))
 	registerHostBuilder("buildengine-prep", typedHostBuilder("buildengine-prep", hostBuildPrep))
+	registerHostBuilder("buildengine-context-ignore-baseline", typedHostBuilder("buildengine-context-ignore-baseline", hostBuildContextIgnoreBaseline))
 	return true
 }()
