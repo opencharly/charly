@@ -34,8 +34,6 @@ const (
 	podConfigScrubCliEnvKind      = "pod-config-scrub-cli-env"
 	podConfigDetectDevicesKind    = "pod-config-detect-devices"
 	podConfigTunnelResolveKind    = "pod-config-tunnel-resolve"
-	podConfigInjectEnvKind        = "pod-config-inject-env-provides"
-	podConfigInjectMCPKind        = "pod-config-inject-mcp-provides"
 	podConfigSSHKeyKind           = "pod-config-ssh-key"
 	podConfigListSidecarsKind     = "pod-config-list-sidecars"
 	podConfigBoxEngineKind        = "pod-config-box-engine"
@@ -297,40 +295,6 @@ func hostBuildPodConfigTunnelResolve(_ context.Context, req spec.PodConfigTunnel
 	return spec.PodConfigTunnelResolveReply{TunnelJSON: b}, nil
 }
 
-func hostBuildPodConfigInjectEnv(_ context.Context, req spec.PodConfigInjectEnvProvidesRequest, _ buildEngineContext) (spec.PodConfigInjectEnvProvidesReply, error) {
-	var portMap map[int]int
-	if len(req.PortMapJSON) > 0 {
-		if err := json.Unmarshal(req.PortMapJSON, &portMap); err != nil {
-			return spec.PodConfigInjectEnvProvidesReply{}, err
-		}
-	}
-	changed, err := injectEnvProvides(req.Box, req.Instance, req.EnvProvides, portMap)
-	if err != nil {
-		return spec.PodConfigInjectEnvProvidesReply{}, err
-	}
-	return spec.PodConfigInjectEnvProvidesReply{Changed: changed}, nil
-}
-
-func hostBuildPodConfigInjectMCP(_ context.Context, req spec.PodConfigInjectMCPProvidesRequest, _ buildEngineContext) (spec.PodConfigInjectMCPProvidesReply, error) {
-	var mcpProvides []spec.MCPServerYAML
-	if len(req.MCPProvidesJSON) > 0 {
-		if err := json.Unmarshal(req.MCPProvidesJSON, &mcpProvides); err != nil {
-			return spec.PodConfigInjectMCPProvidesReply{}, err
-		}
-	}
-	var portMap map[int]int
-	if len(req.PortMapJSON) > 0 {
-		if err := json.Unmarshal(req.PortMapJSON, &portMap); err != nil {
-			return spec.PodConfigInjectMCPProvidesReply{}, err
-		}
-	}
-	changed, err := injectMCPProvides(req.Box, req.Instance, mcpProvides, portMap)
-	if err != nil {
-		return spec.PodConfigInjectMCPProvidesReply{}, err
-	}
-	return spec.PodConfigInjectMCPProvidesReply{Changed: changed}, nil
-}
-
 // hostBuildPodConfigCleanDeployEntry wraps deploykit.CleanDeployEntry VERBATIM (Cutover B unit 2
 // remove-verb completion) — the registry-resugar axis of `charly remove`'s deploy-entry cleanup.
 // marshalDeployNode needs the host's plugin-primaries registry to resugar plan steps (the SAME
@@ -353,8 +317,6 @@ var _ = func() bool {
 	registerHostBuilder(podConfigScrubCliEnvKind, typedHostBuilder(podConfigScrubCliEnvKind, hostBuildPodConfigScrubCliEnv))
 	registerHostBuilder(podConfigDetectDevicesKind, typedHostBuilder(podConfigDetectDevicesKind, hostBuildPodConfigDetectDevices))
 	registerHostBuilder(podConfigTunnelResolveKind, typedHostBuilder(podConfigTunnelResolveKind, hostBuildPodConfigTunnelResolve))
-	registerHostBuilder(podConfigInjectEnvKind, typedHostBuilder(podConfigInjectEnvKind, hostBuildPodConfigInjectEnv))
-	registerHostBuilder(podConfigInjectMCPKind, typedHostBuilder(podConfigInjectMCPKind, hostBuildPodConfigInjectMCP))
 	registerHostBuilder(podConfigSSHKeyKind, typedHostBuilder(podConfigSSHKeyKind, hostBuildPodConfigSSHKey))
 	registerHostBuilder(podConfigListSidecarsKind, typedHostBuilder(podConfigListSidecarsKind, hostBuildPodConfigListSidecars))
 	registerHostBuilder(podConfigBoxEngineKind, typedHostBuilder(podConfigBoxEngineKind, hostBuildPodConfigBoxEngine))

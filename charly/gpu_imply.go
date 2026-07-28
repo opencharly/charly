@@ -14,9 +14,8 @@ import (
 // project config (BundleNode / ResourceDef) to decide whether a deploy CONSUMES the nvidia GPU
 // — used by the arbiter's acquire shim (withImpliedGPUShared auto-promotes a GPU-consuming pod
 // to a SHARED claimant). This operates on the package-main config types + the DetectGPU shim, so
-// it stays in core. (Its former sibling deployNodeSharesGPU, and its claimed config_image.go
-// consumer, was a dead-code-radical-removal-batch deletion — zero real callers; config_image.go
-// never called it.)
+// it stays in core. (Its former sibling deployNodeSharesGPU was a dead-code-radical-removal-batch
+// deletion — zero real callers.)
 
 // nvidiaTokenFromResources returns the `resource:` token whose gpu selector matches the NVIDIA
 // PCI vendor — the arbitration token the auto-detected nvidia GPU device maps onto. "" when no
@@ -49,7 +48,7 @@ func nodeSecurityListsNvidiaDevice(node spec.BundleNode) bool {
 
 // nodeConsumesNvidiaGPU reports whether a deploy node WOULD receive the nvidia GPU device at
 // bring-up. DetectGPU() (the host HAS a usable nvidia GPU) implies consumption ONLY for a POD
-// deploy — a pod auto-gets the nvidia GPU as a CDI device on a GPU host (config_image emits
+// deploy — a pod auto-gets the nvidia GPU as a CDI device on a GPU host (the pod config-setup emits
 // `--device nvidia.com/gpu=all`). A local/host/vm command deploy gets NO container device, so on a
 // GPU workstation it consumes the GPU only when it EXPLICITLY lists an nvidia device in
 // security.devices. Without this pod gate, EVERY local command bed on a GPU host would wrongly
@@ -57,7 +56,7 @@ func nodeSecurityListsNvidiaDevice(node spec.BundleNode) bool {
 // `charly preempt status` assertion — the bed held its OWN implied lease).
 func nodeConsumesNvidiaGPU(node spec.BundleNode) bool {
 	// A GROUP deploy root carries no workload container of its own (it only groups
-	// sibling members), so config_image emits NO `--device nvidia.com/gpu=all` for it
+	// sibling members), so the pod config-setup emits NO `--device nvidia.com/gpu=all` for it
 	// — it never auto-consumes the GPU. Without this gate a group bed root on a GPU host
 	// wrongly acquires an implied nvidia-gpu-shared lease (isPodMember treats its empty
 	// Target as a pod), which broke check-preempt-live-pod: the bed root held an

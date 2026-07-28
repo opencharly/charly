@@ -15,7 +15,7 @@ import (
 // Remove forward their flags via their own HostBuild("pod-config-<leaf>") seam.
 //
 // P13-KERNEL direction-flip: Setup/Remove's former ORCHESTRATION (BoxConfigSetupCmd/
-// BoxConfigRemoveCmd, config_image.go) moved to candy/plugin-deploy-pod (sdk.OpConfigSetup/
+// BoxConfigRemoveCmd, plus the env/mcp provides injection) moved to candy/plugin-deploy-pod (sdk.OpConfigSetup/
 // sdk.OpConfigRemove) — hostBuildPodConfigSetup/Remove now FORWARD onward to the plugin (resolve
 // deploy:pod + InvokeWithExecutor, the SAME primitive InvokeProvider uses, S1) instead of
 // running the orchestration in-core; the plugin calls back the narrow

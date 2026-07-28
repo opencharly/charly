@@ -101,7 +101,7 @@ func TestImpliedGPUShared_LocalDeployNotImpliedOnGPUHost(t *testing.T) {
 }
 
 // I4b. A GROUP deploy root (no workload container, only sibling members) on a GPU
-// host must NOT imply the nvidia-gpu token — config_image emits no CDI device for a
+// host must NOT imply the nvidia-gpu token — the pod config-setup emits no CDI device for a
 // group. Regression: check-preempt-live-pod's group root wrongly held an implied
 // nvidia-gpu lease, masking the members' authored test-lock preemption.
 func TestImpliedGPUShared_GroupRootNotImpliedOnGPUHost(t *testing.T) {

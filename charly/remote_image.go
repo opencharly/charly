@@ -26,7 +26,7 @@ import (
 // HostBuild("remote-image-resolve") seam (host_build_remote_image_resolve.go), then re-dispatches
 // build:box (candy/plugin-build) against the cached source dir; the former RemoteImageContext.BuildImage
 // indirection is deleted. Consumers — commands.go, host_build_box_ref_resolve.go,
-// host_build_remote_image_resolve.go, image.go, config_image.go — reach the resolve half only, so this
+// host_build_remote_image_resolve.go, image.go — reach the resolve half only, so this
 // moves together with the loader wave, not alone.
 
 // RemoteImageContext holds the resolved state of a remote image reference.

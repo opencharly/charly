@@ -247,22 +247,26 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 	}
 
 	portMap := deploykit.PortMapFromMappings(ports)
-	portMapJSON, _ := json.Marshal(portMap)
 
-	if len(meta.EnvProvide) > 0 {
-		_ = hostBuild(ctx, ex, podConfigInjectEnvKind, spec.PodConfigInjectEnvProvidesRequest{
-			Box: c.Box, Instance: c.Instance, EnvProvides: meta.EnvProvide, PortMapJSON: portMapJSON,
-		}, nil)
-	}
-	if len(meta.MCPProvide) > 0 {
-		mcpJSON, _ := json.Marshal(meta.MCPProvide)
-		_ = hostBuild(ctx, ex, podConfigInjectMCPKind, spec.PodConfigInjectMCPProvidesRequest{
-			Box: c.Box, Instance: c.Instance, MCPProvidesJSON: mcpJSON, PortMapJSON: portMapJSON,
-		}, nil)
-	}
-	dc, err = loadDeploy(ctx, ex, "charly config reload-after-inject")
+	// Env/MCP provides injection (P11 seam-death — see provides_inject.go). The plugin resolves the
+	// provides templates itself and mutates the loaded deploy config in place, persisting through the
+	// SAME loadDeploy→modify→saveBundle path the secrets/sidecar persist uses (R3); the locked
+	// whole-file write stays in the floored saveBundleConfigNodeForm behind pod-config-save-bundle.
+	dc, err = loadDeploy(ctx, ex, "charly config reload-before-inject")
 	if err != nil {
 		return err
+	}
+	provChanged := false
+	if len(meta.EnvProvide) > 0 && injectEnvProvidesInto(dc, c.Box, c.Instance, meta.EnvProvide, portMap) {
+		provChanged = true
+	}
+	if len(meta.MCPProvide) > 0 && injectMCPProvidesInto(dc, c.Box, c.Instance, meta.MCPProvide, portMap) {
+		provChanged = true
+	}
+	if provChanged {
+		if err := saveBundle(ctx, ex, dc); err != nil {
+			return err
+		}
 	}
 
 	if c.SshKey != "" {

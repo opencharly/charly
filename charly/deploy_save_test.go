@@ -279,8 +279,8 @@ func TestSaveBundleConfig_AtomicWriteLeavesNoTempLeftover(t *testing.T) {
 // never overwrite the recoverable bytes with a degraded/empty config.
 //
 // This is the single-point defense behind the read-degraded write-backs that go
-// through loadDeployConfigForRead (config_image.go resolved-port / data-seeded /
-// secret-migration) — those would otherwise hand SaveBundleConfig an empty
+// through loadDeployConfigForRead (resolved-port / data-seeded /
+// secret-migration write-backs) — those would otherwise hand SaveBundleConfig an empty
 // BundleConfig and truncate the user's deploy state. It complements (does not
 // replace) loadDeployConfigForWrite's primary abort-on-load-error gate.
 func TestSaveBundleConfig_RefusesToClobberUnloadableConfig(t *testing.T) {

@@ -247,8 +247,8 @@ func ResolveCredential(envVar, service, key, defaultVal string) (value, source s
 }
 
 // resolveSecretBackend reads the secret_backend setting from env or the core runtime
-// config (enc.go + config_image.go consult it to pick their keyring-wait strategy /
-// quadlet emission). The plugin keeps its OWN copy for its store selection — two modules
+// config (enc.go consults it to pick its keyring-wait strategy). The plugin keeps its OWN
+// copy for its store selection — two modules
 // each reading one config key across the process boundary, not in-module duplication.
 func resolveSecretBackend() string {
 	if v := os.Getenv("CHARLY_SECRET_BACKEND"); v != "" {
