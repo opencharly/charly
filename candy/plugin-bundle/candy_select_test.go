@@ -79,7 +79,7 @@ func TestBuildVmSyntheticBoxDistroFormat(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			img := buildVmSyntheticBox(tc.vmSpec, distro)
+			img := buildVmSyntheticBox(tc.vmSpec, distro, nil)
 			if img.User != tc.wantUser {
 				t.Errorf("User = %q, want %q", img.User, tc.wantUser)
 			}
@@ -108,11 +108,61 @@ func TestBuildVmSyntheticBoxRootFallback(t *testing.T) {
 	distro := map[string]*spec.ResolvedDistro{
 		"fedora": {Format: map[string]*spec.Format{"rpm": {}}},
 	}
-	img := buildVmSyntheticBox(&spec.ResolvedVm{Source: spec.VmSource{Kind: "bootc"}}, distro)
+	img := buildVmSyntheticBox(&spec.ResolvedVm{Source: spec.VmSource{Kind: "bootc"}}, distro, nil)
 	if img.User != "root" {
 		t.Errorf("User = %q, want root", img.User)
 	}
 	if img.Home != "/root" {
 		t.Errorf("Home = %q, want /root", img.Home)
+	}
+}
+
+// TestSyntheticHostBoxFromEnvelope_SetsBuilderConfig is the regression guard for #118 task #56:
+// a synthetic box with a nil BuilderConfig made compileBuilderSteps early-return zero steps,
+// silently skipping the npm/pixi/cargo/aur builder DEPLOY leg for EVERY standalone-candy deploy
+// (target: local/vm/every external substrate) — RCA'd live via check-builder-vm
+// (deploy-check-builder-member reported PASS with a zero-step compiled plan). BuilderConfig must
+// be set UNCONDITIONALLY, matching NewSpecResolvedBox/resolveBoxSelection's box-construction path.
+func TestSyntheticHostBoxFromEnvelope_SetsBuilderConfig(t *testing.T) {
+	builder := map[string]*spec.Builder{"npm": {}}
+	img := syntheticHostBoxFromEnvelope(builder)
+	if img.BuilderConfig == nil {
+		t.Fatal("BuilderConfig is nil — compileBuilderSteps will silently skip every builder candy")
+	}
+	if _, ok := img.BuilderConfig.Builder["npm"]; !ok {
+		t.Errorf("BuilderConfig.Builder missing the passed-through npm def: %+v", img.BuilderConfig.Builder)
+	}
+
+	// Even with a nil/empty builder map (no project builder vocabulary resolved), the STRUCT
+	// itself must be non-nil — matching NewSpecResolvedBox's own unconditional-set behavior — so
+	// a future caller with a real vocabulary isn't silently gated by an early "img.BuilderConfig
+	// == nil" bail-out elsewhere in the compiler.
+	imgEmpty := syntheticHostBoxFromEnvelope(nil)
+	if imgEmpty.BuilderConfig == nil {
+		t.Error("BuilderConfig is nil even with a nil builder map — must be a non-nil empty struct")
+	}
+}
+
+// TestBuildVmSyntheticBox_SetsBuilderConfig mirrors the host-box regression guard above for the
+// vm-adhoc synthetic box, covering BOTH branches (root fallback via syntheticHostBoxFromEnvelope,
+// and the non-root user branch's own struct literal).
+func TestBuildVmSyntheticBox_SetsBuilderConfig(t *testing.T) {
+	builder := map[string]*spec.Builder{"npm": {}}
+	distro := map[string]*spec.ResolvedDistro{"fedora": {Format: map[string]*spec.Format{"rpm": {}}}}
+
+	rootImg := buildVmSyntheticBox(&spec.ResolvedVm{Source: spec.VmSource{Kind: "bootc"}}, distro, builder)
+	if rootImg.BuilderConfig == nil {
+		t.Fatal("root-fallback branch: BuilderConfig is nil")
+	}
+	if _, ok := rootImg.BuilderConfig.Builder["npm"]; !ok {
+		t.Errorf("root-fallback branch: BuilderConfig.Builder missing npm: %+v", rootImg.BuilderConfig.Builder)
+	}
+
+	userImg := buildVmSyntheticBox(&spec.ResolvedVm{Source: spec.VmSource{Kind: "cloud_image", BaseUser: "fedora"}}, distro, builder)
+	if userImg.BuilderConfig == nil {
+		t.Fatal("non-root branch: BuilderConfig is nil")
+	}
+	if _, ok := userImg.BuilderConfig.Builder["npm"]; !ok {
+		t.Errorf("non-root branch: BuilderConfig.Builder missing npm: %+v", userImg.BuilderConfig.Builder)
 	}
 }

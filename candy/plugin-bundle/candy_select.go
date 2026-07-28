@@ -90,22 +90,28 @@ func syntheticBoxForCandySelection(ctx context.Context, exec *sdk.Executor, rp *
 			return img
 		}
 	}
-	return syntheticHostBoxFromEnvelope()
+	return syntheticHostBoxFromEnvelope(rp.Builder)
 }
 
 // syntheticHostBoxFromEnvelope mirrors charly/bundle_add_cmd.go's syntheticHostBox — a
-// pure function of the OPERATOR's own process env/uid/gid plus a host distro probe,
-// none of which needs the envelope at all (vmshared.DetectHostDistro is already
-// sdk-portable, called directly — no seam).
-func syntheticHostBoxFromEnvelope() *buildkit.ResolvedBox {
+// pure function of the OPERATOR's own process env/uid/gid plus a host distro probe, plus the
+// envelope's builder vocabulary (builder, rp.Builder). BuilderConfig is set UNCONDITIONALLY —
+// matching NewSpecResolvedBox/resolveBoxSelection's own box-construction path (R3) — so a
+// standalone-candy deploy with no base image (target: local/vm/every external substrate) still
+// detects an npm/pixi/cargo/aur-triggering candy's builder step. A synthetic box with a nil
+// BuilderConfig made compileBuilderSteps early-return zero steps, silently skipping the builder
+// DEPLOY leg entirely — a systemic gap RCA'd live via check-builder-vm (#118 task #56):
+// deploy-check-builder-member reported PASS with a zero-step compiled plan.
+func syntheticHostBoxFromEnvelope(builder map[string]*spec.Builder) *buildkit.ResolvedBox {
 	hd, _ := vmshared.DetectHostDistro()
 	img := &buildkit.ResolvedBox{
-		Name:         "host-adhoc",
-		Home:         os.Getenv("HOME"),
-		User:         os.Getenv("USER"),
-		UID:          os.Getuid(),
-		GID:          os.Getgid(),
-		BuildFormats: []string{},
+		Name:          "host-adhoc",
+		Home:          os.Getenv("HOME"),
+		User:          os.Getenv("USER"),
+		UID:           os.Getuid(),
+		GID:           os.Getgid(),
+		BuildFormats:  []string{},
+		BuilderConfig: &buildkit.BuilderConfig{Builder: builder},
 	}
 	if hd != nil {
 		img.Distro = append(img.Distro, hd.Tags...)
@@ -140,7 +146,7 @@ func syntheticVmBoxFromEnvelope(ctx context.Context, exec *sdk.Executor, rp *spe
 	if vmSpec == nil {
 		return nil, fmt.Errorf("kind:vm entity %q resolved to an empty value", vmEntity)
 	}
-	return buildVmSyntheticBox(vmSpec, rp.Distro), nil
+	return buildVmSyntheticBox(vmSpec, rp.Distro, rp.Builder), nil
 }
 
 // buildVmSyntheticBox is the PURE field-derivation half of syntheticVmBoxFromEnvelope, split out
@@ -152,22 +158,24 @@ func syntheticVmBoxFromEnvelope(ctx context.Context, exec *sdk.Executor, rp *spe
 // guest ran `pacman` and failed with exit 127. distro is rp.Distro (a plain
 // map[string]*spec.ResolvedDistro — buildkit.DistroConfig is just a thin method-holder over that
 // SAME map, so reconstructing one here from the envelope's copy is byte-identical to the host's
-// former live *buildkit.DistroConfig).
-func buildVmSyntheticBox(vmSpec *spec.ResolvedVm, distro map[string]*spec.ResolvedDistro) *buildkit.ResolvedBox {
+// former live *buildkit.DistroConfig). builder is rp.Builder, threaded through so this synthetic
+// vm-adhoc box also gets BuilderConfig set (#118 task #56 — see syntheticHostBoxFromEnvelope).
+func buildVmSyntheticBox(vmSpec *spec.ResolvedVm, distro map[string]*spec.ResolvedDistro, builder map[string]*spec.Builder) *buildkit.ResolvedBox {
 	user := vmshared.ResolveCloudInitSSHUser(vmSpec)
 	if user == "" || user == "root" {
-		img := syntheticHostBoxFromEnvelope()
+		img := syntheticHostBoxFromEnvelope(builder)
 		img.Name = "vm-adhoc"
 		img.User = "root"
 		img.Home = "/root"
 		return img
 	}
 	img := &buildkit.ResolvedBox{
-		Name: "vm-adhoc",
-		User: user,
-		UID:  1000,
-		GID:  1000,
-		Home: "/home/" + user,
+		Name:          "vm-adhoc",
+		User:          user,
+		UID:           1000,
+		GID:           1000,
+		Home:          "/home/" + user,
+		BuilderConfig: &buildkit.BuilderConfig{Builder: builder},
 	}
 	distroKey := vmSpec.Source.Distro
 	if distroKey == "" {
