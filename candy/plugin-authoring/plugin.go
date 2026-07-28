@@ -21,12 +21,11 @@
 //   - command:fetch / command:refresh — `charly box fetch/refresh [<spec>]`: the remote-repo
 //     cache pre-primer / force-re-clone. These reach the host-coupled repo resolver
 //     (ResolveProjectRepo → EnsureRepoDownloaded: CHARLY_REPO_OVERRIDE + the refs-backend
-//     dispatch + the command:migrate auto-migration) over the generic HostBuild("cli") reverse
-//     channel by re-running the hidden core `__box-fetch` / `__box-refresh` reentry (the SAME
-//     seam candy/plugin-box's `list` verb uses for `__box-list-tags`; the sibling `pkg` verb's
-//     own `__box-pkg` reentry already died this way — its localpkg build engine moved
-//     plugin-side, K3 build-tail move). The plugin owns ONLY the
-//     dispatch + the reentry call; it imports the sdk module alone, never charly core.
+//     dispatch + the command:migrate auto-migration) over the generic "box-fetch-resolve"
+//     HostBuild seam (charly/host_build_box_fetch_resolve.go, K3 build-tail tail,
+//     coneB-buildremnant — the former hidden core `__box-fetch` / `__box-refresh` reentries
+//     are DELETED) and print the returned cache path themselves. The plugin owns ONLY the
+//     dispatch + the seam call; it imports the sdk module alone, never charly core.
 //
 // COMPILED-IN, it dispatches IN-PROC via Invoke(OpRun), so the handlers run in charly's OWN process
 // and inherit charly's real stdio natively. It imports ONLY the sdk module, never charly core.
@@ -67,10 +66,10 @@ func NewMeta() pb.PluginMetaServer {
 }
 
 // CliMain is the OUT-OF-PROCESS command entry — unreachable in the canonical compiled-in placement.
-// The fetch/refresh handlers reach the host reverse channel (the __box-fetch/__box-refresh reentry
-// over HostBuild("cli")), which is unavailable out-of-process, so this errors (like
-// candy/plugin-box's / candy/plugin-alias's CliMain). The pure authoring verbs (set/add-candy/
-// rm-candy/write/cat) would work out-of-process, but a command plugin is compiled-in by default.
+// The fetch/refresh handlers reach the host reverse channel (HostBuild("box-fetch-resolve")), which
+// is unavailable out-of-process, so this errors (like candy/plugin-box's / candy/plugin-alias's
+// CliMain). The pure authoring verbs (set/add-candy/rm-candy/write/cat) would work out-of-process,
+// but a command plugin is compiled-in by default.
 func CliMain(_ []string) int {
 	fmt.Fprintln(os.Stderr, "charly box: authoring verbs require compiled-in placement (fetch/refresh reach the host reverse channel, unavailable out-of-process)")
 	return 1
@@ -111,30 +110,33 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 }
 
 // hostClient is the authoring commands' ONE host coupling: it reaches charly's host process over
-// the generic HostBuild("cli") reverse channel (the same seam candy/plugin-box's `pkg` verb uses)
-// to run the hidden core `__box-fetch` / `__box-refresh` reentry — the only host dependency the
-// `fetch`/`refresh` verbs need (the repo resolver is host-coupled: registry + override + migration).
-// Every other verb (set/add-candy/rm-candy/write/cat) is a pure sdk/kit + stdlib operation.
+// the generic "box-fetch-resolve" HostBuild seam — the only host dependency the `fetch`/`refresh`
+// verbs need (the repo resolver is host-coupled: registry + override + migration). Every other verb
+// (set/add-candy/rm-candy/write/cat) is a pure sdk/kit + stdlib operation.
 type hostClient struct {
 	ctx  context.Context
 	exec *sdk.Executor
 }
 
-// cli asks the HOST to run `charly <argv>` via the generic "cli" host-builder and returns the
-// CliReply (stdout when capture, the process exit code, any spawn error). Mirrors the box/alias
-// plugins' host coupling (R3 in shape; each plugin owns its own reverse-channel calls).
-func (h *hostClient) cli(capture, bestEffort bool, argv ...string) (spec.CliReply, error) {
-	reqJSON, err := json.Marshal(spec.CliRequest{Argv: argv, Capture: capture, BestEffort: bestEffort})
-	if err != nil {
-		return spec.CliReply{}, err
+// fetchResolve asks the HOST to resolve spec to its local cache path via the generic
+// "box-fetch-resolve" host-builder (charly/host_build_box_fetch_resolve.go), force-removing the
+// cache entry first when refresh is true. spec defaults to "default" when empty (mirrors the
+// former BoxFetchCmd/BoxRefreshCmd default).
+func (h *hostClient) fetchResolve(spc string, refresh bool) (string, error) {
+	if spc == "" {
+		spc = "default"
 	}
-	resJSON, err := h.exec.HostBuild(h.ctx, "cli", reqJSON)
+	reqJSON, err := json.Marshal(spec.BoxFetchResolveRequest{Spec: spc, Refresh: refresh})
 	if err != nil {
-		return spec.CliReply{}, err
+		return "", err
 	}
-	var r spec.CliReply
+	resJSON, err := h.exec.HostBuild(h.ctx, "box-fetch-resolve", reqJSON)
+	if err != nil {
+		return "", err
+	}
+	var r spec.BoxFetchResolveReply
 	if uerr := json.Unmarshal(resJSON, &r); uerr != nil {
-		return spec.CliReply{}, uerr
+		return "", uerr
 	}
-	return r, nil
+	return r.Path, nil
 }

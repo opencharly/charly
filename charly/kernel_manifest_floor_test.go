@@ -183,6 +183,7 @@ var kernelFloor = []floorEntry{
 	{"generate.go", "M — the shared render-seam-floor Generator TYPE + its two constructors (NewGenerator/newCandyScanGenerator), consumed ONLY by the already-floor F10 host-builders (build_overlay.go's hostBuildOverlay, host_build_buildengine.go, host_build_render_seam.go) — call-graph verified, no caller exists outside those 3 + 2 parity tests. Also carries the registry-coupled verb:oci adopt-user dispatch (ociProvider/invokeOciInspectUser) and the shared OpResolve builder-stage dispatch (resolveBuilderStage/resolveExternalBuilder) — thin providerRegistry.ResolveBuilder/resolve(ClassVerb)-coupled M dispatch, the same shape as the other floor OpResolve seams above. baselineContextIgnore additionally has a hard structural floor reason: it //go:embeds charly/charly.yml, only possible from this module"},
 	{"tasks.go", "M — Generator.toDeploykit() + the 3 ResolveXStageSeam closures + EmitPluginOp: 100% providerRegistry-coupled seam-wiring bridging deploykit's render engine to the core provider registry (EnsureBuildersConnected/ResolveDetectionBuilderStage/ResolveExternalBuilderStage/ResolveInlineBuilder) — zero movable render logic remains, the render DRIVE itself already moved to deploykit in prior cutovers (K3-A/K5-Unit-6b); every function call-graph-verified referenced, no dead code"},
 	{"builder_preresolve.go", "M — ensureBuildersConnected is genuine plugin-loading Mechanism: build-connects the not-yet-connected externalized builder plugin(s) via providerRegistry.ResolveBuilder + loadProjectPlugins, both core-private registry/plugin-loading mechanics no plugin can reach — the connect step tasks.go's EnsureBuildersConnected closure and host_build_render_seam.go call into"},
+	{"host_build_box_fetch_resolve.go", "M — the box-fetch-resolve F10 host-builder wrapping the host-coupled repo resolver (ResolveProjectRepo → EnsureRepoDownloaded: CHARLY_REPO_OVERRIDE + the registered refs-backend download + the command:migrate auto-migration, none of which an sdk-only plugin can run) behind candy/plugin-authoring's command:fetch/command:refresh — same shape as the ~25 other host_build_*.go floor entries; replaces the deleted box_fetch_reentry.go's __box-fetch/__box-refresh reentries"},
 }
 
 // residueOwner maps every tracked-for-removal charly/*.go non-test file to its
@@ -203,7 +204,6 @@ var residueOwner = map[string]string{
 	"bundle_add_cmd.go":             "P13",
 	"bundle_from_box_cmd.go":        "P13",
 	"bundle_members.go":             "P11",
-	"box_fetch_reentry.go":          "P15",
 	"check_bed_run.go":              "P12",
 	"check_cmd.go":                  "P12",
 	"check_graphics_endpoint.go":    "P12",
