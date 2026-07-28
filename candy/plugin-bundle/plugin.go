@@ -10,10 +10,11 @@
 //     K4-C WALK PORT) drive the WHOLE deploy-tree walk plugin-side: the config loader
 //     (resolveTreeRoot/resolveDelNode, LoadUnified-coupled) and the registry-backed executor-chain
 //     derivation (deriveChildExecutorForPath) stay host-side behind six narrow seams —
-//     deploy-plugins-connect / deploy-node-dispatch / deploy-members-up / deploy-members-down /
-//     deploy-del-resolve / deploy-node-del-dispatch — while the tree traversal, the per-node
-//     compile (OpCompile, K4-B), and ResolveTarget → the plugin-side deploy target's Add/Del (the
-//     deploy-node-dispatch / deploy-node-del-dispatch seam tails) are driven from here. `from-box`
+//     deploy-plugins-connect / resolve-target-add / deploy-members-up / deploy-members-down /
+//     deploy-del-resolve / deploy-node-del-dispatch — while the tree traversal AND the per-node
+//     compile (compilePlansForRequest, IN-PROC after K4-C shape-2 — no OpCompile round-trip) run
+//     plugin-side; ResolveTarget → the deploy target's Add/Del is the host tail of the
+//     resolve-target-add / deploy-node-del-dispatch seams. `from-box`
 //     still forwards to HostBuild("deploy-from-box"); the config-management leaves (show/export/
 //     import/reset/status) reach the host via the narrow deploy-config-save seam alone. `path`
 //     resolves plugin-side via kit.DefaultDeployConfigPath (no seam).

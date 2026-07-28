@@ -8,10 +8,53 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
+
+// invokeOpCompile drives command:bundle's KEPT OpCompile leg over an in-proc reverse channel — the
+// SAME shared compilePlansForRequest candy/plugin-bundle's walk.go dispatchOne calls IN-PROC (K4-C
+// shape-2). It replaces the deleted host deployAddCmd.compileViaPlugin (bundle_compile_seam.go) as
+// this parity test's plugin-compile entry point, byte-for-byte the same Invoke(OpCompile) mechanism.
+func invokeOpCompile(t *testing.T, req spec.DeployCompileRequest) ([]*deploykit.InstallPlan, error) {
+	t.Helper()
+	prov, ok := providerRegistry.resolve(ClassCommand, "bundle")
+	if !ok {
+		t.Fatalf("invokeOpCompile: command:bundle provider not loaded (candy/plugin-bundle must be compiled in)")
+	}
+	reqJSON, err := json.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+	ctx := sdk.ContextWithExecutor(context.Background(),
+		sdk.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}}))
+	res, err := prov.Invoke(ctx, &Operation{Reserved: "bundle", Op: sdk.OpCompile, Params: reqJSON})
+	if err != nil {
+		return nil, err
+	}
+	if res == nil || len(res.JSON) == 0 {
+		t.Fatalf("invokeOpCompile: OpCompile returned no reply")
+	}
+	var reply spec.DeployCompileReply
+	if err := json.Unmarshal(res.JSON, &reply); err != nil {
+		return nil, err
+	}
+	var views []spec.InstallPlanView
+	if err := json.Unmarshal(reply.PlansJSON, &views); err != nil {
+		return nil, err
+	}
+	plans := make([]*deploykit.InstallPlan, 0, len(views))
+	for _, v := range views {
+		p, err := deploykit.PlanFromView(v)
+		if err != nil {
+			return nil, err
+		}
+		plans = append(plans, p)
+	}
+	return plans, nil
+}
 
 // isolateProviderRegistry snapshots the global providerRegistry and restores it on cleanup, so the
 // external plugin connections + byKey entries THIS test creates (via LoadUnified(rootDir) →
@@ -195,18 +238,21 @@ func TestBundleCompileParity_PluginRoundTrip(t *testing.T) {
 		if err != nil {
 			t.Fatalf("OLD BuildDeployPlan(%s): %v", name, err)
 		}
-		// NEW: the K4-B plugin compile — host computes the selection, plugin re-hydrates the envelope,
-		// runs its OWN builder pre-pass (ignoring/recomputing hostCtxJSON.BuilderContext — production
-		// never sends one populated any more), loops BuildDeployPlan + projects views, host
+		// NEW: the SHARED in-proc compiler (compilePlansForRequest), reached via the KEPT OpCompile
+		// leg (invokeOpCompile) — the EXACT SAME function candy/plugin-bundle's walk.go dispatchOne
+		// calls IN-PROC (K4-C shape-2), so this OpCompile round-trip proves the compile core the
+		// double-bounce-free dispatchOne relies on is byte-faithful to the direct host BuildDeployPlan.
+		// The plugin re-hydrates the envelope, runs its OWN builder pre-pass (production never sends a
+		// populated BuilderContext any more), loops BuildDeployPlan + projects views; the host
 		// re-materializes via PlanFromView.
-		plans, err := (&deployAddCmd{}).compileViaPlugin(spec.DeployCompileRequest{
+		plans, err := invokeOpCompile(t, spec.DeployCompileRequest{
 			Dir:             dir,
 			BoxView:         boxView,
 			Order:           []string{name}, // single-candy compile, matching the OLD single-candy BuildDeployPlan
 			HostContextJSON: hostCtxJSON,
 		})
 		if err != nil {
-			t.Fatalf("NEW compileViaPlugin(%s): %v", name, err)
+			t.Fatalf("NEW invokeOpCompile(%s): %v", name, err)
 		}
 		if len(plans) != 1 {
 			t.Fatalf("NEW %s: expected 1 plan, got %d (%v)", name, len(plans), planCandyNames(plans))
@@ -274,14 +320,14 @@ func TestBundleCompileParity_PluginRoundTrip(t *testing.T) {
 		}
 		var broke bool
 		for _, name := range exercised {
-			plans, err := (&deployAddCmd{}).compileViaPlugin(spec.DeployCompileRequest{
+			plans, err := invokeOpCompile(t, spec.DeployCompileRequest{
 				Dir:             dir,
 				BoxView:         perturbed,
 				Order:           []string{name},
 				HostContextJSON: emptyHostCtxJSON,
 			})
 			if err != nil {
-				t.Fatalf("perturbed compileViaPlugin(%s): %v", name, err)
+				t.Fatalf("perturbed invokeOpCompile(%s): %v", name, err)
 			}
 			if len(plans) != 1 {
 				t.Fatalf("perturbed %s: expected 1 plan, got %d", name, len(plans))

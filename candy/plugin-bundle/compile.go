@@ -12,23 +12,22 @@ import (
 	"github.com/opencharly/sdk/spec"
 )
 
-// compile.go — the K4-B deploy-COMPILE leg of command:bundle. The host's deployAddCmd.compileNodePlans
-// computes the per-node SELECTION (the resolved box projected to a spec.ResolvedBoxView, the FINAL
-// pruned candy order, the host-side HostContext incl. the preresolved BuilderContext) and Invokes the
-// bundle provider's OpCompile with a spec.DeployCompileRequest; this handler re-hydrates the
-// resolved-project envelope itself via HostBuild("resolved-project") (the established seam — it does
-// NOT receive the whole project in the request), re-hydrates the box vocab via
-// deploykit.NewSpecResolvedBox and each candy model via deploykit.NewSpecCandyModel, loops
-// deploykit.BuildDeployPlan over the host-provided order, projects each plan to its InstallPlanView,
-// and returns []InstallPlanView. The host re-materializes []*InstallPlan from the views via
-// deploykit.PlanFromView.
+// compile.go — the deploy-COMPILE core of command:bundle (compilePlansForRequest). It re-hydrates
+// the resolved-project envelope itself via HostBuild("resolved-project") (the established seam — it
+// does NOT receive the whole project in the request), resolves the per-node SELECTION off that
+// envelope (box_select.go / candy_select.go — the plugin resolves the box view + candy order + the
+// synthetic vm/host box itself, K4 unit B), runs the builder deploy-time pre-pass
+// (builder_preresolve.go), loops deploykit.BuildDeployPlan, and returns []*spec.InstallPlan.
 //
-// The compile CALL SITE lives in the plugin (K4-B); the host only computes the selection +
-// re-materializes. The pure compiler (BuildDeployPlan) is a kind-blind MECHANISM already in
-// sdk/deploykit; this handler is the thin envelope↔plugin glue that moves the loop out of charly/
-// core (the kernel/plugin boundary law: a kind-blind mechanism that is NOT one of the four in-core
-// M's is a plugin). IMPORT-PURITY: imports ONLY github.com/opencharly/sdk (spec/deploykit/proto are
-// subpackages of the sdk module); never charly/.
+// K4-C shape-2: the COMPILE runs entirely PLUGIN-SIDE. The plugin's own tree-walk (walk.go
+// dispatchOne → dispatch.go compileNodePlans) calls compilePlansForRequest IN-PROC — no OpCompile
+// round-trip — killing the former plugin→host→plugin double-bounce. OpCompile (compileDeployPlans)
+// stays as the WIRE leg (the parity test exercises it, and an out-of-process placement would use
+// it), calling the SAME shared compilePlansForRequest (R3 — ONE compile, two entry points). The
+// pure compiler (BuildDeployPlan) is a kind-blind MECHANISM in sdk/deploykit; this file is the thin
+// envelope↔plugin glue that keeps the compile loop out of charly/ core (the kernel/plugin boundary
+// law). IMPORT-PURITY: imports ONLY github.com/opencharly/sdk (spec/deploykit/proto are subpackages
+// of the sdk module); never charly/.
 
 // runBundleCompile serves command:bundle's Invoke(OpCompile): recover the executor, stash the
 // reverse-channel handle, decode the per-node selection, compile via the plugin, and return the
@@ -107,21 +106,11 @@ func compilePlansForRequest(ctx context.Context, exec *sdk.Executor, r spec.Depl
 	// ABSENT from rp.Boxes (the envelope's box loop skips disabled boxes by default) even though
 	// the OLD code resolved it fine. Zero cost today (zero disabled boxes exist repo-wide) —
 	// future-proofing, not a live behavior change.
-	envReq, err := json.Marshal(spec.ResolvedProjectRequest{Dir: r.Dir, ExtraCandyRefs: r.ExtraCandyRefs, IncludeDisabled: r.BoxRef != "" || r.BaseBoxRef != ""})
+	rpPtr, err := fetchResolvedProject(r.Dir, r.ExtraCandyRefs, r.BoxRef != "" || r.BaseBoxRef != "")
 	if err != nil {
-		return nil, fmt.Errorf("bundle compile: marshal envelope request: %w", err)
+		return nil, err
 	}
-	if cmdExec == nil {
-		return nil, fmt.Errorf("bundle compile: no host reverse channel (command not compiled-in?)")
-	}
-	envJSON, err := cmdExec.HostBuild(cmdCtx, "resolved-project", envReq)
-	if err != nil {
-		return nil, fmt.Errorf("bundle compile: fetch resolved-project envelope: %w", err)
-	}
-	var rp spec.ResolvedProject
-	if err := json.Unmarshal(envJSON, &rp); err != nil {
-		return nil, fmt.Errorf("bundle compile: decode resolved-project envelope: %w", err)
-	}
+	rp := *rpPtr
 
 	// Re-hydrate the host-computed HostContext (the MachineVenue probe + glibc + builder-image
 	// override — vmshared.DetectHostDistro is sdk-portable, so the plugin computes these in
@@ -227,4 +216,29 @@ func compilePlansForRequest(ctx context.Context, exec *sdk.Executor, r spec.Depl
 		plans = append(plans, p)
 	}
 	return plans, nil
+}
+
+// fetchResolvedProject fetches + decodes the resolved-project envelope over the established
+// HostBuild("resolved-project") seam. Shared (R3) by compilePlansForRequest (per-shape, with the
+// shape's ExtraCandyRefs/IncludeDisabled) and the walk's per-node ref classification
+// (compileNodePlans → resolveDeployRef, off rp.Boxes/rp.Candies). ExtraCandyRefs widens the scan so
+// a REMOTE add-candy (never reachable from a box's image closure) is present in rp.Candies;
+// includeDisabled mirrors the OLD host ResolveBox's never-check-IsEnabled by-name resolve.
+func fetchResolvedProject(dir string, extraCandyRefs []string, includeDisabled bool) (*spec.ResolvedProject, error) {
+	if cmdExec == nil {
+		return nil, fmt.Errorf("bundle: no host reverse channel (command not compiled-in?)")
+	}
+	envReq, err := json.Marshal(spec.ResolvedProjectRequest{Dir: dir, ExtraCandyRefs: extraCandyRefs, IncludeDisabled: includeDisabled})
+	if err != nil {
+		return nil, fmt.Errorf("bundle: marshal resolved-project request: %w", err)
+	}
+	envJSON, err := cmdExec.HostBuild(cmdCtx, "resolved-project", envReq)
+	if err != nil {
+		return nil, fmt.Errorf("bundle: fetch resolved-project envelope: %w", err)
+	}
+	var rp spec.ResolvedProject
+	if err := json.Unmarshal(envJSON, &rp); err != nil {
+		return nil, fmt.Errorf("bundle: decode resolved-project envelope: %w", err)
+	}
+	return &rp, nil
 }

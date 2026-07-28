@@ -12,7 +12,7 @@ import (
 // deploy_target_dispatch.go — the core-side half of the S3b move: dispatchDeployTarget invokes
 // command:bundle's OpDeployDispatch (the ONE generic envelope every UnifiedDeployTarget/
 // LifecycleTarget method now dispatches through) WITH a live executor, mirroring
-// ephemeral_dispatch.go's dispatchEphemeralOp / bundle_compile_seam.go's compileViaPlugin — the
+// ephemeral_dispatch.go's dispatchEphemeralOp — the
 // SAME "compiled-in in-proc reverse channel" pattern arbiterInvoke (preempt.go) established:
 // thread the executor via sdk.ContextWithExecutor(ctx, sdk.NewInProcExecutor(&inprocExecutorClient
 // {srv: &executorReverseServer{...}})) before calling prov.Invoke — no broker needed, since

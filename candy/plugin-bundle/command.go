@@ -20,15 +20,14 @@ import (
 // dry-run output working exactly as before. Mirrors candy/plugin-vm/command.go.
 
 // Invoke dispatches the COMPILED-IN (in-proc) command:bundle ops: OpRun (the `charly bundle …`
-// CLI pass-through), OpCompile (the K4-B deploy-compile slice — the host's
-// compileNodePlans computes the per-node selection and Invokes OpCompile; runBundleCompile
-// re-hydrates the resolved-project envelope + loops deploykit.BuildDeployPlan), and
-// OpDeployDispatch (S3b — the ONE generic envelope every former UnifiedDeployTarget/
-// LifecycleTarget method dispatches through, see deploy_target.go). The retired
-// K4-C spike's OpDispatch relay (dispatchNode's root-level Add nesting a second HostBuild call)
-// is superseded by the walk port (walk.go): the plugin now drives the WHOLE tree walk itself and
-// calls the deploy-plugins-connect / deploy-node-dispatch / deploy-members-* / deploy-del-resolve /
-// deploy-node-del-dispatch seams directly, no OpDispatch round-trip needed.
+// CLI pass-through), OpCompile (the K4-B deploy-compile slice — runBundleCompile re-hydrates the
+// resolved-project envelope + loops deploykit.BuildDeployPlan via the shared compilePlansForRequest;
+// after K4-C shape-2 the plugin's OWN walk calls that shared fn IN-PROC (dispatch.go compileNodePlans)
+// with no OpCompile round-trip, and OpCompile stays as the wire leg the parity test exercises), and
+// OpDeployDispatch (S3b — the ONE generic envelope every former UnifiedDeployTarget/LifecycleTarget
+// method dispatches through, see deploy_target.go). The plugin drives the WHOLE tree walk itself
+// (walk.go) and calls the deploy-plugins-connect / resolve-target-add / deploy-members-* /
+// deploy-del-resolve / deploy-node-del-dispatch seams directly.
 func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 	switch req.GetOp() {
 	case sdk.OpRun:

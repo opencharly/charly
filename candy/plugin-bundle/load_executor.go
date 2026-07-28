@@ -114,22 +114,22 @@ func (e *execLoaderExecutor) validateLeg(kind string, uf *loaderkit.UnifiedFile)
 // merged tree and whether the root's stamped descent is the "ssh" venue (a vm root → node-only
 // dispatch) — read directly from node.Descent, which loaderkit.LoadUnified stamps (byte-identical to
 // the host's former registry-backed nodeTraits check for a stamped node).
-func resolveTreeViaLoader(path string, addCandy []string) (map[string]spec.BundleNode, bool, error) {
+func resolveTreeViaLoader(path string, addCandy []string) (map[string]spec.BundleNode, bool, string, error) {
 	if cmdExec == nil {
-		return nil, false, fmt.Errorf("bundle deploy-plugins-connect: no host reverse channel (command not compiled-in?)")
+		return nil, false, "", fmt.Errorf("bundle deploy-plugins-connect: no host reverse channel (command not compiled-in?)")
 	}
 	var pre spec.DeployPluginsConnectReply
 	if err := hostDeploySeamJSON("deploy-plugins-connect", spec.DeployPluginsConnectRequest{
 		Path:     path,
 		AddCandy: addCandy,
 	}, &pre); err != nil {
-		return nil, false, err
+		return nil, false, "", err
 	}
 
 	exec := &execLoaderExecutor{ctx: cmdCtx, ex: cmdExec}
 	var projectDC *deploykit.BundleConfig
 	if uf, ok, err := loaderkit.LoadUnified(pre.Dir, loaderkit.LoadSeamsFromExecutor(exec)); err != nil {
-		return nil, false, err
+		return nil, false, "", err
 	} else if ok && uf != nil {
 		projectDC = uf.ProjectBundleConfig()
 	}
@@ -137,12 +137,33 @@ func resolveTreeViaLoader(path string, addCandy []string) (map[string]spec.Bundl
 	localDC, _ := deploykit.LoadBundleConfig()
 	merged := deploykit.MergeDeployConfigs(projectDC, localDC)
 	if merged == nil || merged.Bundle == nil {
-		return nil, false, nil
+		return nil, false, pre.Dir, nil
 	}
 
 	rootVenueSSH := false
 	if node, _, e := deploykit.ResolveNodePath(merged.Bundle, path); e == nil && node != nil && node.Descent != nil {
 		rootVenueSSH = node.Descent.Venue == "ssh"
 	}
-	return merged.Bundle, rootVenueSSH, nil
+	return merged.Bundle, rootVenueSSH, pre.Dir, nil
+}
+
+// fetchExternalSubstrates returns the loader-threaded ExternalDeploySubstrates DATA snapshot (the
+// EXACT set of substrate words for which the host's isExternalDeploySubstrate returns true — K1-
+// LOADER RELOCATION). compileNodePlans consults it (by word, never a per-kind branch) to decide
+// which targets are TARGET-ONLY (no primary image plan): `target == "local" || external[target]`,
+// byte-exact to the former host compileNodePlans condition. A HostBuild failure degrades to an empty
+// set (matching the host's empty-registry semantics — a bare pod deploy still compiles its image).
+func fetchExternalSubstrates() map[string]bool {
+	if cmdExec == nil {
+		return nil
+	}
+	out, err := cmdExec.HostBuild(cmdCtx, "loader-threaded", nil)
+	if err != nil {
+		return nil
+	}
+	var t spec.Threaded
+	if err := json.Unmarshal(out, &t); err != nil {
+		return nil
+	}
+	return t.ExternalDeploySubstrates
 }

@@ -49,16 +49,12 @@ type DeployContext struct {
 	// Dir is the project directory.
 	Dir string
 
-	// Cfg / DistroCfg / BuilderCfg are the configs loaded once by
-	// dispatchNode (loadConfigForDeploy). Reused by each Add so the
-	// construction matches what dispatchNode compiled plans against.
+	// Cfg / DistroCfg / BuilderCfg are the configs loaded once by the
+	// resolve-target-add host seam (loadConfigForDeploy). Reused by each Add
+	// so the construction matches what the plugin compiled plans against.
 	Cfg        *Config
 	DistroCfg  *buildkit.DistroConfig
 	BuilderCfg *buildkit.BuilderConfig
-
-	// Base is the resolved primary base — the image name for pod/k8s,
-	// or the deploy path for target-only kinds (local/vm/android).
-	Base string
 }
 
 // UnifiedDeployTarget is the unified contract all four deploy methods

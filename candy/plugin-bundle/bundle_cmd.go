@@ -62,6 +62,13 @@ type BundleAddCmd struct {
 	// Disposable + lifecycle classification (see /charly-internals:disposable).
 	Disposable bool   `long:"disposable" help:"Mark this deploy disposable (authorizes autonomous charly update; writes disposable: true into charly.yml)"`
 	Lifecycle  string `long:"lifecycle" help:"Informational tier tag (scratch|dev|test|qa|staging|prod|custom). NO effect on disposability — use --disposable for that."`
+
+	// dir / externalSubstrates are INTERNAL (unexported — Kong ignores them), populated once at the
+	// top of Run() from the deploy-plugins-connect preamble (dir = the host os.Getwd) and the
+	// loader-threaded snapshot (externalSubstrates = the ExternalDeploySubstrates DATA set, byte-
+	// exact to the host's isExternalDeploySubstrate). dispatchOne/compileNodePlans read them per node.
+	dir                string
+	externalSubstrates map[string]bool
 }
 
 // BundleAddCmd's Run() (the plugin-side deploy-tree WALK) lives in walk.go (K4-C walk port).

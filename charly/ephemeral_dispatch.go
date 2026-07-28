@@ -21,7 +21,7 @@ import (
 // (validate_ephemeral.go), never silently inert. deploy_add_shared.go's registerEphemeralIfMarked
 // and vm_lifecycle_preresolve.go's vmLifecyclePostTeardown STAY host-side (candidate-floor
 // siblings of bundle_add_cmd.go, pending FLOOR-SLIM adjudication) and reach the plugin here,
-// mirroring bundle_compile_seam.go's compileViaPlugin host→plugin dispatch shape exactly:
+// mirroring deploy_target_dispatch.go's dispatchDeployTarget host→plugin dispatch shape exactly:
 // plugin-bundle is COMPILED-IN, so providerRegistry.resolve is a direct, always-registered
 // lookup — no InvokeProvider lazy-connect needed (safe today; also robust once unit 6b's
 // InvokeProvider generalization lands, since this dispatch already goes through the registry).
@@ -60,7 +60,7 @@ func dispatchEphemeralOp(op string, node *spec.BundleNode, deployName string) er
 	}
 	// command:bundle is compiled-in (in-proc); the reverse server carries no venue executor —
 	// OpEphemeralRegister/Teardown need only the "deploy-config-save" host-build seam, exactly
-	// like dispatchBuild's / compileViaPlugin's in-proc reverse channel.
+	// like dispatchBuild's / dispatchDeployTarget's in-proc reverse channel.
 	ctx := sdk.ContextWithExecutor(context.Background(),
 		sdk.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}}))
 	if _, err := prov.Invoke(ctx, &Operation{Reserved: "bundle", Op: op, Params: reqJSON}); err != nil {
