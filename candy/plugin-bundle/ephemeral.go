@@ -16,8 +16,8 @@ import (
 // refcounts, charly.yml persistence). command:bundle is the substrate-neutral deploy-lifecycle
 // owner: this body is written substrate-agnostic (no vm/pod/k8s branch of its own), reached via
 // the SAME OpEphemeralRegister/OpEphemeralTeardown legs regardless of which substrate calls
-// them. **Only the VM substrate actually calls them TODAY** (vm_lifecycle_preresolve.go, via
-// deploy_add_shared.go's registerEphemeralIfMarked) — pod and k8s Add/Del never reach this code
+// them. **Only the VM substrate actually calls them TODAY** (candy/plugin-deploy-vm's
+// dispatchVmEphemeralRegister / dispatchVmEphemeralTeardown) — pod and k8s Add/Del never reach this code
 // (verified by call-graph, not the deleted charly/ephemeral_lifecycle.go's own header, which
 // falsely claimed "all three target types... call into these functions" — an R1 false-comment
 // instance this move does NOT repeat). Wiring pod/k8s's Add/Del paths to call it too is tracked
@@ -57,7 +57,7 @@ func loadBundleConfig() (*deploykit.BundleConfig, error) {
 
 // ephemeralHandle captures the runtime state returned by registerEphemeral and consumed by
 // teardownEphemeral. Internal to this plugin — the host discards the register reply's payload
-// entirely (registerEphemeralIfMarked only ever checked the error), so this never crosses the
+// entirely (the vm caller only ever checks the error), so this never crosses the
 // wire and needs no CUE def.
 type ephemeralHandle struct {
 	id              string
@@ -73,7 +73,7 @@ type ephemeralHandle struct {
 // registerEphemeral serves OpEphemeralRegister: generate the instance id, resolve nesting +
 // TTL, register the systemd TTL safety net, bump the vm-snapshot + parent-child refcounts, and
 // persist the EphemeralRuntime into charly.yml. Best-effort throughout (warnings to stderr, never
-// fatal) — matching the prior in-core RegisterEphemeralLifecycle contract exactly.
+// fatal) — matching the prior in-core dispatch contract exactly.
 func registerEphemeral(node *spec.Deploy, deployName string) (*ephemeralHandle, error) {
 	if node == nil || !node.IsEphemeral() {
 		return nil, fmt.Errorf("registerEphemeral: node %q is not marked ephemeral", deployName)
@@ -318,8 +318,8 @@ func cancelTransientTimer(unit string) {
 // `!ok` fallback covers the edge where ephemeral registration runs BEFORE the vm's own state
 // gets persisted at all (the entry does not exist yet), not "every ephemeral registration ever".
 // RCA #7 (FINAL/K5 unit 6a, live-probe-caught, updated from an earlier "ordering artifact, not
-// the common case" note that RCA #6's key unification proved WRONG): registerEphemeralIfMarked
-// runs BEFORE `charly vm create`'s own state writes (the port_auto persist) EVERY TIME —
+// the common case" note that RCA #6's key unification proved WRONG): the vm ephemeral register
+// (candy/plugin-deploy-vm's dispatchVmEphemeralRegister) runs BEFORE `charly vm create`'s own state writes (the port_auto persist) EVERY TIME —
 // vm_lifecycle_preresolve.go's call order, not incidental — so the two writers landing on this
 // SAME canonical key (post-RCA-#6) is the COMMON case, and the interaction is LOAD-BEARING: a
 // naive wholesale `entry.VmState = state` in SaveVmDeployState would silently ERASE the

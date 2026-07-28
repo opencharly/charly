@@ -1,4 +1,4 @@
-package main
+package deployvm
 
 import (
 	"errors"
@@ -9,12 +9,13 @@ import (
 )
 
 // TestIsEphemeralPanicError is the regression test for the FINAL/K5 unit 6a RCA #5 finding #2:
-// registerEphemeralIfMarked must distinguish a PANIC-CLASS error (sdk.EphemeralPanicMarker —
+// dispatchVmEphemeralRegister must distinguish a PANIC-CLASS error (sdk.EphemeralPanicMarker —
 // candy/plugin-bundle's recoverEphemeralOpPanic converts a recovered panic into this marker) from
-// an ORDINARY registration error (e.g. systemd-run missing), since only the former is fatal to
-// the Add. A bed-caught nil-map panic inside persistEphemeralRuntime previously vanished
-// silently — "a panicking registration must fail the add, not vanish." Relocated verbatim from
-// the deleted charly/deploy_add_shared_test.go (Cone A shape 3).
+// an ORDINARY registration error (e.g. systemd-run missing), since only the former is fatal to the
+// Add. A bed-caught nil-map panic inside persistEphemeralRuntime previously vanished silently —
+// "a panicking registration must fail the add, not vanish." Ported verbatim from the deleted
+// charly/host_build_ephemeral_register_test.go when the OpEphemeralRegister dispatch moved
+// plugin-side (the teardown twin's mirror).
 func TestIsEphemeralPanicError(t *testing.T) {
 	cases := []struct {
 		name string

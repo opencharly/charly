@@ -18,11 +18,6 @@ import (
 	"github.com/opencharly/sdk/vmshared"
 )
 
-// ephemeralRegisterKind is the generic "ephemeral-register" HostBuild seam
-// (charly/host_build_ephemeral_register.go) — a substrate-agnostic action noun (F11),
-// never a per-substrate word.
-const ephemeralRegisterKind = "ephemeral-register"
-
 // lifecycle.go — the host-side VM venue lifecycle, IMPLEMENTED in the plugin (M4b, clean). The plugin
 // runs ON the host (co-located) but out-of-process; it does the WHOLE venue lifecycle itself over
 // GENERIC seams — sdk/kit for the ssh-config stanza + guest readiness waits + charly delivery,
@@ -290,6 +285,47 @@ func dispatchVmEphemeralTeardown(ctx context.Context, exec *sdk.Executor, p life
 	return nil
 }
 
+// dispatchVmEphemeralRegister runs the vm ephemeral-lifecycle Add-time registration by Invoking
+// command:bundle's OpEphemeralRegister DIRECTLY over the peer reverse channel — the exact mirror of
+// dispatchVmEphemeralTeardown (its OpEphemeralTeardown twin). The registration BODY (systemd
+// transient timer + parent-detection) lives 100% plugin-side in candy/plugin-bundle's
+// registerEphemeral, which reaches the host over ITS OWN reverse channel — so no core dispatch hop
+// is needed (this replaces the retired charly/ephemeral_dispatch.go + charly/host_build_ephemeral_register.go
+// "ephemeral-register" HostBuild seam, which only wrapped this same InvokeProvider behind a host round-trip).
+// A no-op when the node was never marked ephemeral. RCA #5 error classification, ported verbatim from
+// the deleted host-side registerEphemeralIfMarked: an ordinary registration condition (e.g. systemd-run
+// missing) stays a soft, logged warning; a PANIC-CLASS error (sdk.EphemeralPanicMarker — plugin-bundle's
+// recoverEphemeralOpPanic) is returned to FAIL the whole Add ("a panicking registration must fail the
+// add, not vanish"). Pod/k8s never reach it today (tracked to the bed-robustness batch; validate_ephemeral.go
+// makes the gap LOUD at load).
+func dispatchVmEphemeralRegister(ctx context.Context, exec *sdk.Executor, name string, node *spec.BundleNode) error {
+	if node == nil || !node.IsEphemeral() {
+		return nil
+	}
+	reqJSON, err := json.Marshal(spec.EphemeralRegisterRequest{Name: name, Node: node})
+	if err != nil {
+		return fmt.Errorf("marshal ephemeral-register request: %w", err)
+	}
+	_, regErr := exec.InvokeProvider(ctx, "command", "bundle", sdk.OpEphemeralRegister, reqJSON, nil, sdk.InvokeProviderOpts{})
+	if regErr == nil {
+		return nil
+	}
+	if isEphemeralPanicError(regErr) {
+		return fmt.Errorf("ephemeral lifecycle registration: %w", regErr)
+	}
+	fmt.Fprintf(os.Stderr, "warning: ephemeral lifecycle registration: %v\n", regErr)
+	return nil
+}
+
+// isEphemeralPanicError reports whether err was converted from a recovered panic (carries
+// sdk.EphemeralPanicMarker — candy/plugin-bundle's recoverEphemeralOpPanic) rather than an ordinary
+// registration condition. Ported verbatim from the deleted charly/host_build_ephemeral_register.go
+// (extracted as its own pure function purely for testability). A panic-class error is FATAL to the
+// Add; an ordinary condition is a soft warning (RCA #5).
+func isEphemeralPanicError(err error) bool {
+	return err != nil && strings.Contains(err.Error(), sdk.EphemeralPanicMarker)
+}
+
 // vmPrepareVenue runs the FULL host-side VM preflight itself (ssh-config stanza, auto-boot, guest
 // readiness waits, charly delivery) over generic seams, and returns the guest SSH venue descriptor +
 // the VmDeployState patch the host persists. RESOLVES its own LifecyclePrepareInput (FINAL/K5 unit
@@ -298,10 +334,10 @@ func dispatchVmEphemeralTeardown(ctx context.Context, exec *sdk.Executor, p life
 // vmSpec via the generic "deploy-entity-resolve" seam (exactly like candy/plugin-kube/preresolve.go
 // already does for k8s/deploy entities) and resolves sshPort/stateDir/SSHUser/PriorState directly —
 // all pure sdk/deploykit + sdk/kit + sdk/vmshared, no LoadUnified coupling (the plugin is
-// CO-LOCATED on the host, not remote). The ONE piece that genuinely needs to stay host-side is the
-// ephemeral-registration Add-time side effect (systemd transient timer + panic-vs-warning
-// classification, RCA #5) — reached via the new generic "ephemeral-register" HostBuild seam
-// (charly/host_build_ephemeral_register.go), wrapping registerEphemeralIfMarked verbatim.
+// CO-LOCATED on the host, not remote). The ephemeral-registration Add-time side effect (systemd
+// transient timer + panic-vs-warning classification, RCA #5) is dispatched to command:bundle's
+// OpEphemeralRegister DIRECTLY via dispatchVmEphemeralRegister (the mirror of the teardown twin) —
+// no core hop; the registration BODY + its host reverse-channel access live in plugin-bundle.
 func vmPrepareVenue(ctx context.Context, exec *sdk.Executor, p lifecycleParams, host spec.HostEnv) (*pb.InvokeReply, error) {
 	var node spec.BundleNode
 	if err := json.Unmarshal(p.Node, &node); err != nil {
@@ -314,16 +350,12 @@ func vmPrepareVenue(ctx context.Context, exec *sdk.Executor, p lifecycleParams, 
 	}
 	domainID := domainIdentity(p)
 
-	// Ephemeral lifecycle hook (the ONE Add-time host side effect the plugin cannot do itself —
-	// panic-safe TTL ordering). FIRST action, matching the deleted host-side vmLifecyclePrepare's
-	// own ordering. Consumes the MERGED node (never a charly.yml re-read). A panic-class error
-	// (RCA #5) fails the whole vm Add — the host-builder returns it verbatim.
-	ephemeralReqJSON, err := json.Marshal(spec.EphemeralRegisterRequest{Name: p.Name, Node: &node})
-	if err != nil {
-		return nil, fmt.Errorf("plugin-deploy-vm prepare-venue: marshal ephemeral-register request: %w", err)
-	}
-	if _, err := exec.HostBuild(ctx, ephemeralRegisterKind, ephemeralReqJSON); err != nil {
-		return nil, fmt.Errorf("plugin-deploy-vm prepare-venue: ephemeral lifecycle registration: %w", err)
+	// Ephemeral lifecycle registration — FIRST action, matching the deleted host-side
+	// vmLifecyclePrepare's own ordering. Invokes command:bundle's OpEphemeralRegister DIRECTLY (the
+	// mirror of dispatchVmEphemeralTeardown), consuming the MERGED node (never a charly.yml re-read).
+	// A panic-class error (RCA #5) fails the whole vm Add; an ordinary condition is a soft warning.
+	if err := dispatchVmEphemeralRegister(ctx, exec, p.Name, &node); err != nil {
+		return nil, fmt.Errorf("plugin-deploy-vm prepare-venue: %w", err)
 	}
 
 	entityReply, err := entityResolve(ctx, exec, spec.DeployEntityResolveRequest{Kind: "vm", Name: entity, Dir: p.Dir})

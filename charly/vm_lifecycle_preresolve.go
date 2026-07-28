@@ -20,8 +20,10 @@ package main
 //     resolvePriorVmState doc for why the direct call would silently no-op). The registry
 //     (registerLifecyclePostTeardownHook/lifecyclePostTeardownHookFor) had exactly one registrant
 //     (vm) and is deleted as dead code (R5) along with its unified_targets.go call site; core's
-//     TeardownEphemeralLifecycle (ephemeral_dispatch.go) loses its sole caller and is deleted too,
-//     collapsing dispatchEphemeralOp's op-switch into RegisterEphemeralLifecycle directly.
+//     TeardownEphemeralLifecycle (then in ephemeral_dispatch.go) lost its sole caller and was
+//     deleted too. The OpEphemeralRegister dispatch that remained has since ALSO moved plugin-side
+//     (candy/plugin-deploy-vm's dispatchVmEphemeralRegister, the teardown twin's mirror) — the whole
+//     ephemeral_dispatch.go + host_build_ephemeral_register.go host round-trip is retired.
 
 import (
 	"context"

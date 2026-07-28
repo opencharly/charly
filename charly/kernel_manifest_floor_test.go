@@ -162,7 +162,6 @@ var kernelFloor = []floorEntry{
 	{"host_build_pod_config.go", "M — the pod-config F10 reverse-channel dispatch seam (hostEnvJSON host-only; kind-blind)"},
 	{"host_build_pod_config_seams.go", "M — the pod-config F10 host-builders the plugin calls back (loader/registry/credential-coupled reverse-legs)"},
 	{"host_build_pod_lifecycle_dispatch.go", "M — the pod-lifecycle dispatch F10 host-builder wrapping dispatchLifecycleTarget (ResolveTarget+loader+live-executor; kind-blind M)"},
-	{"host_build_ephemeral_register.go", "M — the ephemeral-register generic substrate-agnostic F10 seam"},
 	{"cue_kind_pod.go", "D — the registerCueKind pod clause-D kind-recognition-data registration (host-side PodValue gate validateKindValueCUE consults)"},
 	{"cue_kind_vm.go", "D — the registerCueKind vm clause-D kind-recognition-data registration"},
 	{"cue_kind_local.go", "D — the registerCueKind local clause-D kind-recognition-data registration"},
@@ -339,26 +338,10 @@ var residueOwner = map[string]string{
 	// registry-coupled kube dispatch moved fully plugin-side via exec.InvokeProvider. Classified
 	// with the SAME K4-C deploy-dispatch seam family (P13) as the sibling
 	// host_build_deploy_entity_resolve.go above.
-	// host_build_ephemeral_register.go + ephemeral_dispatch.go — split of the
-	// deleted ephemeral_lifecycle.go (P11, pruned above): the register/teardown
-	// BODY moved to candy/plugin-bundle, leaving (a) a thin HostBuild seam
-	// wrapping registerEphemeralIfMarked (now defined directly in
-	// host_build_ephemeral_register.go itself — Cone A shape 3's floor-M adjudication moved it
-	// verbatim out of the deleted deploy_add_shared.go) so the plugin
-	// can trigger the one host-only side effect it cannot do itself, and (b) the
-	// host→plugin dispatch into command:bundle's OpEphemeralRegister leg (F6
-	// vm-lifecycle move, coneB-vmlifecycle: the OpEphemeralTeardown twin,
-	// TeardownEphemeralLifecycle, is DELETED — its sole caller,
-	// vm_lifecycle_preresolve.go's vmLifecyclePostTeardown, moved plugin-side and now
-	// Invokes command:bundle's OpEphemeralTeardown directly, no core dispatch needed
-	// for an out-of-process caller). Both stay in the "ephemeral" cross-substrate
-	// lifecycle family — the SAME family as the ephemeral load-time validators now
-	// relocated to sdk/loaderkit (validate_ephemeral.go, K1-LOADER RELOCATION) —
-	// rather than following the P13 shape their own comments compare themselves to
-	// (bundle_compile_seam.go's dispatch pattern); the family the seam SERVES
-	// (ephemeral lifecycle, explicitly named in P11's "lifecycle" scope) governs
-	// over incidental mechanism-shape similarity to a P13 sibling.
-	"ephemeral_dispatch.go": "P11",
+	// (ephemeral_dispatch.go + host_build_ephemeral_register.go RETIRED — the OpEphemeralRegister
+	// dispatch moved plugin-side into candy/plugin-deploy-vm's dispatchVmEphemeralRegister, the exact
+	// mirror of its OpEphemeralTeardown twin: vmPrepareVenue now Invokes command:bundle directly, so
+	// the host round-trip + its panic-vs-warning bookkeeping are deleted, not floored.)
 	// load_executor_host.go + host_build_loader.go — Unit C/B of the K1-LOADER
 	// RELOCATION (make loaderkit.LoadUnified plugin-callable). load_executor_host.go
 	// is the compiled-in TYPED loaderkit.LoaderExecutor (the charly→loaderkit
