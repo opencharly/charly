@@ -285,15 +285,22 @@ func NewGenerator(dir string, tag string, opts ResolveOpts) (*Generator, error) 
 	return g, nil
 }
 
-// newCandyScanGenerator builds a Generator populated with ONLY Config+Candies+Dir+BuildDir (a
-// candy scan, no box resolve/intermediates/versions/render-prep) — the minimal state the
-// render-seam floor's 2 remaining reverse-channel consumers (resolveInlineBuilderSeam /
-// ensureBuildersConnected, host_build_render_seam.go) and emitBakedPlugins (host_build_bake_plugins.go)
-// need. MUCH cheaper than NewGenerator: the build-engine RESOLVE (box resolve / intermediates /
-// versions / render-prep) now runs entirely plugin-side (candy/plugin-build's resolveBuildEngine,
-// K3) — recomputing that pipeline again host-side for the render-seam cache was 100% wasted work
-// (proven dead by call-graph: nothing downstream ever read the second Generator's render-prep
-// output). Skips the build-time plugin connect + pre-build validate NewGenerator also runs: both
+// newCandyScanGenerator builds a Generator populated with Config+Candies+Boxes+Dir+BuildDir — a
+// candy scan + a PLAIN per-box buildkit.ResolveBox pass (NO ComputeIntermediates / GlobalCandyOrder
+// / ComputeEffectiveVersions / RenderPrepAll) — the minimal state the render-seam floor's 2
+// remaining reverse-channel consumers need: ensureBuildersConnected touches only Config/Dir;
+// resolveInlineBuilderSeam's resolveBuilderStage reads img.Tags/img.Name off gen.Boxes[boxName]
+// (verified by reading resolveBuilderStage's own body — NOT img.Base/BootstrapBuilderImage, so
+// skipping ComputeIntermediates' auto-intermediate Base-rewrite is safe here). MUCH cheaper than
+// NewGenerator: the build-engine RESOLVE's expensive parts (the candy SCAN's network-bound remote
+// fetches, ComputeIntermediates, GlobalCandyOrder, ComputeEffectiveVersions, RenderPrepAll) now run
+// entirely plugin-side (candy/plugin-build's resolveBuildEngine, K3) — recomputing THOSE again
+// host-side for the render-seam cache was 100% wasted work (proven dead by call-graph: nothing
+// downstream ever read the second Generator's render-prep output); ResolveBox itself is pure,
+// in-memory, and genuinely still needed (RCA'd: a first cut that dropped it entirely broke
+// resolveInlineBuilderSeam's img.Tags/img.Name — caught before merge by re-tracing every reader of
+// gen.Boxes[boxName], not by the box-generate smoke test, which never exercises the inline-builder
+// path). Skips the build-time plugin connect + pre-build validate NewGenerator also runs: both
 // already ran plugin-side (resolveBuildEngine steps 4-5) by the time this is reached through the
 // normal build/generate path, and ensureBuildersConnected connects on demand itself when reached
 // any other way (e.g. the loadRenderGen defensive fallback).
@@ -312,11 +319,20 @@ func newCandyScanGenerator(dir string, includeDisabled bool, extraCandyRefs []st
 	if err != nil {
 		return nil, err
 	}
+	bkopts, err := buildkitOptsWithVocab(dir, opts)
+	if err != nil {
+		return nil, err
+	}
+	images, err := buildkit.ResolveAllBox(cfg, ComputeCalVer(), dir, bkopts)
+	if err != nil {
+		return nil, err
+	}
 	return &Generator{
 		Dir:            dir,
 		Config:         cfg,
 		Candies:        layers,
 		InitConfig:     defaultInitCfg,
+		Boxes:          images,
 		BuildDir:       filepath.Join(dir, ".build"),
 		Containerfiles: make(map[string]string),
 		ExtraCandyRefs: extraCandyRefs,
