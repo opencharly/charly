@@ -54,7 +54,7 @@ var kernelFloor = []floorEntry{
 	{"check_bed_run.go", "M — host-side bed-helper legs the plugin-check bed-runner reaches over HostBuild + the check-bed session seam: bedExternalInPlace (the ONE registry-coupled substrate classification — queries the live provider registry), bedCheckLevel (resolves the box ref against the loaded *UnifiedFile, core-only), persistBedDeployOverrides (threads the registry flag + marshalDeployNode, the K1-tied struct→node serializer). The orchestration moved to deploykit (unit 6b); a marshalled plugin can't compute these host-coupled legs"},
 	{"check_cmd.go", "M — residual host-side check-plumbing serving the check-load-plugins seam (resolveCheckRunnerContext: host plugin-load side effect + committed-APK anchoring) + the `target: local` deploy `--verify` path (checkLocalDeployScope, kind-blind — op.Kind is the step discriminator); the live/feature-live arms already moved to plugin-check. Imports vmshared for the ONE canonical kind-blind address-parser vmshared.SplitVmAddress (strips the legacy `vm:` CLI-address prefix in resolveDeployNodeByPath, R3 — the SAME parser resolveDelNode/bundle_add use; vmshared is an established floor import, cf. service_render.go/unified.go)"},
 	{"check_endpoint_resolve.go", "M — generic host-endpoint reverse-legs served back over CheckContextService (class-generic, never a per-verb RPC)"},
-	{"check_graphics_endpoint.go", "M — the VM-graphics host-endpoint reverse-leg (resolveVerbGraphics), the IDENTICAL SIBLING of check_endpoint_resolve.go's floor resolveVerbEndpoint: a hostVerbResolver method served over the CheckContext reverse channel (resolveGfx) whose live SSH tunnel is Runner-lifecycle-bound (teardown on h.endpointCleanups) — a plugin Invoke could never hold it (it would close before the RFB/spice client connects), so it is genuine host fabric. It imports sdk/sshx (golang.org/x/crypto/ssh) DIRECTLY as CORRECT dependency containment (RCA-proven: relocating the tunnel to any plugin-shared kit spreads x/crypto/ssh to every plugin — ~18 plugin builds break on the missing go.sum), confining it to this ONE host-fabric file — the SINGLE contained x/crypto/ssh boundary in charly core (once coneA moves vm_backend_lifecycle out), the analogue of the GPU host-legs' hardware libs; option-(i) load-bearing unavoidable"},
+	{"check_graphics_endpoint.go", "M — the VM-graphics host-endpoint reverse-leg (resolveVerbGraphics), the IDENTICAL SIBLING of check_endpoint_resolve.go's floor resolveVerbEndpoint: a hostVerbResolver method served over the CheckContext reverse channel (resolveGfx) whose live SSH tunnel is Runner-lifecycle-bound (teardown on h.endpointCleanups) — a plugin Invoke could never hold it (it would close before the RFB/spice client connects), so it is genuine host fabric. It imports sdk/sshx (golang.org/x/crypto/ssh) DIRECTLY as CORRECT dependency containment (RCA-proven: relocating the tunnel to any plugin-shared kit spreads x/crypto/ssh to every plugin — ~18 plugin builds break on the missing go.sum), confining it to this ONE host-fabric file — the SINGLE contained x/crypto/ssh boundary in charly core (vm_backend_lifecycle.go, its former sibling boundary, is now DELETED — F6 vm-lifecycle move, coneB-vmlifecycle), the analogue of the GPU host-legs' hardware libs; option-(i) load-bearing unavoidable"},
 	{"check_members.go", "M — the ${HOST:<member>}/on: cross-deployment probing host reverse-legs (resolveHostVars/liveTargetResolver/liveDeployVarResolver): resolve a driven probe's host-vantage address + open the ssh -L forwards to reach a sibling VM/host member, folded into RunnerConfig.HostVars. A live executor + a host-held SSH forward never cross the process boundary — the host serves them over the check reverse channel (import-pure spec/kit/deploykit, the SAME class as check_endpoint_resolve.go)"},
 	{"check_venue.go", "M — the generic kind-BLIND venue-EXEC helpers the host's check reverse-legs run tool commands through (venueRunSilent/venueHasTool over an already-resolved deploykit.DeployExecutor: availability probes + fire-and-forget actions, ZERO venue classification). The venue CLASSIFIER moved to candy/plugin-check (#52); a live executor can't cross the wire to run these"},
 	{"check_venue_resolve.go", "M — the host half of the venue-classification seam (#118 check broker-envelope-out): reaches plugin-check's verb:check-resolve classifier (the kind-decode lives THERE, never here) and re-materializes the returned generic spec.VenueDescriptor into a live host DeployExecutor via the kind-blind kit.VenueFromDescriptor / deploykit.ResolveDeployChain — a live executor never crosses the wire. ZERO classification; a thin generic host-forward+re-materialize seam serving the check reverse channel"},
@@ -264,29 +264,7 @@ var residueOwner = map[string]string{
 	"sidecar.go":                    "P11",
 	"substrate_template_resolve.go": "P15",
 	"update_deploy_dispatch.go":     "P11",
-	// vm_deploy_state.go — F6 vm-lifecycle move (coneB-vmlifecycle), NOT YET LANDED:
-	// saveVmDeployState/removeVmDeployEntry should route through the already-floored
-	// deploy_state_host.go write seam, MOVING their vm-specific caller to plugin-deploy-vm
-	// (team-lead ruling — the generic locked-RMW persist primitives, acquireDeployConfigLock +
-	// saveBundleConfigNodeForm, stay floor; only the VM-specific decision logic — ephemeral-state
-	// preserve merge, the auto-vs-operator-authored delete decision, stale-dotted-twin prune —
-	// moves). Flagged to team-lead: this business logic runs inside the SAME lock-held
-	// load→decide→save critical section the lost-`preemptible:`-config regression (this file's own
-	// RCA #6/#7 comments) was fixed by; moving the decision to a plugin fed by a stale prior read
-	// would reintroduce that exact lost-update race, so the design needs a call before landing
-	// (either a portable deploykit helper taking the lock/save as injected callbacks, or an
-	// RDD-spiked held-lock-across-RPC pattern — nothing in the codebase does the latter today).
-	// vm_lifecycle_preresolve.go (the SIBLING file in this same F6 trio) IS done: it moved down to
-	// kernelFloor (vmAttachResolver only) — see that entry above.
-	"vm_deploy_state.go": "P11",
-	// vm_backend_lifecycle.go — down to ONE function (startLibvirtUserSession; the vm-backend-
-	// detection capability MOVED to candy/plugin-vm/vm_backend_resolve.go, the SSH-keypair trio
-	// HOISTED to sdk/sshx, R3 — see this file's own doc comment). Cannot fully vacate without ALSO
-	// touching its 2 remaining core callers (bundle_members.go/host_build_check_bed.go) — the
-	// former is coneA's disjoint vm-deploy-lifecycle domain — so this is a cross-cone blocker
-	// flagged to team-lead rather than resolved unilaterally; stays residue pending that call.
-	"vm_backend_lifecycle.go": "P11",
-	"volume_cp_tags_cmd.go":   "P11",
+	"volume_cp_tags_cmd.go":         "P11",
 	// — files added by cutovers that landed after the T0 authoring (living tracker) —
 	"config_write_host.go":     "P11",
 	"validate_project_host.go": "P15",

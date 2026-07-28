@@ -560,7 +560,7 @@ func (c *VmDestroyCmd) Run() error {
 		fmt.Fprintf(os.Stderr, "Deleted disk images in %s\n", qcow2Dir)
 	}
 
-	// Remove the charly.yml vm:<name> entry — the inverse of the saveVmDeployState
+	// Remove the charly.yml vm:<name> entry — the inverse of the deploykit.SaveVmDeployState
 	// that `charly bundle add vm:<name>` (and the ssh.port_auto vm-create persist)
 	// wrote. Destroying the VM removes the deployment, so its config must not
 	// linger; this is what made disposable check-bed VM entries accumulate (the
@@ -569,8 +569,8 @@ func (c *VmDestroyCmd) Run() error {
 	if !c.KeepDeploy {
 		// Key the removed entry by the DOMAIN IDENTITY (vm:<domain>) — that is where the port +
 		// instance-id ledger for THIS domain lives (runVmSpecCreate persists vm:<domain>). Removing
-		// vm:<entity> instead would, via removeVmDeployEntry's From-scan, over-match every sibling
-		// bed sharing the entity — the collision this cutover eliminates.
+		// vm:<entity> instead would, via deploykit.RemoveVmDeployEntry's From-scan, over-match
+		// every sibling bed sharing the entity — the collision this cutover eliminates.
 		deployName := "vm:" + deployKey(domainOr(c.Box, c.Domain), c.Instance)
 		if err := hostConfigPersist(deployName, "", nil, true); err != nil {
 			fmt.Fprintf(os.Stderr, "note: charly.yml entry cleanup (%s): %v\n", deployName, err)

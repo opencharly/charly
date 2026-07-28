@@ -3,18 +3,20 @@ package vm
 import (
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/vmshared"
 )
 
-// stubNoLibvirtSpawn replaces startLibvirtUserSession with a no-op for the
-// duration of the test. resolveVmBackendPlugin spawns the session daemon before
-// probing its socket (so on-demand-autospawn hosts are detected correctly);
-// an un-stubbed real spawn would create a socket inside the test's temp
-// XDG_RUNTIME_DIR and defeat the "no socket present" fixture below.
+// stubNoLibvirtSpawn replaces vmshared.StartLibvirtUserSession with a no-op for
+// the duration of the test. resolveVmBackendPlugin spawns the session daemon
+// before probing its socket (so on-demand-autospawn hosts are detected
+// correctly); an un-stubbed real spawn would create a socket inside the test's
+// temp XDG_RUNTIME_DIR and defeat the "no socket present" fixture below.
 func stubNoLibvirtSpawn(t *testing.T) {
 	t.Helper()
-	orig := startLibvirtUserSession
-	startLibvirtUserSession = func() {}
-	t.Cleanup(func() { startLibvirtUserSession = orig })
+	orig := vmshared.StartLibvirtUserSession
+	vmshared.StartLibvirtUserSession = func() {}
+	t.Cleanup(func() { vmshared.StartLibvirtUserSession = orig })
 }
 
 // TestResolveVmBackendPlugin_ExplicitLibvirtMissingSocket asserts that when

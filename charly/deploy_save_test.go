@@ -440,8 +440,11 @@ bare-pod:
 // TestRemoveVmDeployEntry_SelectiveAndIdempotent pins the deploy-lifecycle
 // cleanup primitive that `charly vm destroy` (vm.go) and `charly bundle del vm:<name>`
 // (the vm lifecycle hook's PostTeardown) rely on to remove a VM's deploy.yml entry on teardown
-// — the inverse of the saveVmDeployState written on add. It proves the two
-// load-bearing properties of the fix:
+// — the inverse of the deploykit.SaveVmDeployState written on add (F6 vm-lifecycle move,
+// coneB-vmlifecycle: the primitive relocated to deploykit.RemoveVmDeployEntry, invoked here with
+// the same acquireDeployConfigLock/saveBundleConfigNodeForm callbacks
+// host_build_config_resolve.go's hostBuildConfigPersist supplies). It proves the two load-bearing
+// properties of the fix:
 //
 //  1. SELECTIVE removal — removing `vm:k3s-vm` strips ONLY that entry; sibling
 //     VM entries (incl. a running, preemptible operator workstation) and pod
@@ -452,7 +455,7 @@ bare-pod:
 //     the "a config whose libvirt domain is already destroyed is STILL cleaned"
 //     behavior (the other half being vm.go's now-non-fatal lookupDomain miss).
 //
-// Without the fix, `charly vm destroy` never called removeVmDeployEntry, so a
+// Without the fix, `charly vm destroy` never called RemoveVmDeployEntry, so a
 // disposable check-bed VM entry lingered in deploy.yml after every bed run.
 func TestRemoveVmDeployEntry_SelectiveAndIdempotent(t *testing.T) {
 	dir := t.TempDir()
@@ -485,15 +488,15 @@ web-app:
 	}
 
 	// (1) Selective removal of the disposable bed VM.
-	if err := removeVmDeployEntry("vm:k3s-vm"); err != nil {
-		t.Fatalf("removeVmDeployEntry(vm:k3s-vm): %v", err)
+	if err := deploykit.RemoveVmDeployEntry("vm:k3s-vm", acquireDeployConfigLock, saveBundleConfigNodeForm); err != nil {
+		t.Fatalf("RemoveVmDeployEntry(vm:k3s-vm): %v", err)
 	}
 	dc, err := deploykit.LoadBundleConfig()
 	if err != nil {
 		t.Fatalf("reload after removal: %v", err)
 	}
 	if _, ok := dc.LookupKey("vm:k3s-vm"); ok {
-		t.Error("vm:k3s-vm still present after removeVmDeployEntry — entry not removed")
+		t.Error("vm:k3s-vm still present after RemoveVmDeployEntry — entry not removed")
 	}
 	if _, ok := dc.LookupKey("vm:cachyos-gpu"); !ok {
 		t.Error("vm:cachyos-gpu (operator workstation) was collateral-removed — selective-removal property violated")
@@ -503,7 +506,7 @@ web-app:
 	}
 
 	// (2) Idempotency: removing the already-gone entry is a clean no-op.
-	if err := removeVmDeployEntry("vm:k3s-vm"); err != nil {
+	if err := deploykit.RemoveVmDeployEntry("vm:k3s-vm", acquireDeployConfigLock, saveBundleConfigNodeForm); err != nil {
 		t.Fatalf("idempotent re-removal of vm:k3s-vm errored: %v", err)
 	}
 	dc2, err := deploykit.LoadBundleConfig()

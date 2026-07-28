@@ -120,8 +120,9 @@ func TestRecoverEphemeralOpPanic(t *testing.T) {
 // a nested deploy's dotted CLI address (e.g. "check-sidecar-pod.check-sidecar-pod-ephvm") is
 // illegal as a literal dc.Bundle map key (sdk/spec/deploy_tree_validate.go's ValidateDeploymentName rejects any
 // '.'), so every ephemeral dc.Bundle accessor MUST key through this sanitized "vm:<domain-id>"
-// form — the SAME scheme charly/vm_deploy_state.go's saveVmDeployState already uses (matching
-// sdk/vmshared.VmDomainIdentity's explicit "." -> "-" replacement) — never the raw deployName.
+// form — the SAME scheme sdk/deploykit/vm_deploy_state.go's SaveVmDeployState already uses
+// (matching sdk/vmshared.VmDomainIdentity's explicit "." -> "-" replacement) — never the raw
+// deployName.
 func TestEphemeralOverlayKey(t *testing.T) {
 	cases := []struct {
 		name       string
