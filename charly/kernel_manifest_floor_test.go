@@ -207,7 +207,7 @@ var kernelFloor = []floorEntry{
 	// Build-tail cone (coneB-buildtail) — spike-verified by call-graph, applying the SAME "thin
 	// backing-body of an already-accepted floor seam" bar the team lead corrected round 1 against
 	// (no capability logic moved to floor this round — only genuine dispatch/bootstrap glue).
-	{"host_build_buildengine.go", "M — the shrunk render-seam-floor consumer (hostBuildPrep/hostBuildContextIgnoreBaseline) + the 6 other buildengine-* K1-loader-witness legs (bootstrap-delicate local scan, git clone/cache, build-time plugin CONNECT registry-M, namespaced-box nested scan+render-prep) resolveBuildEngine reaches for genuinely host-only steps — mirrors host_build_loader.go's loader-* legs, already floor"},
+	{"host_build_buildengine.go", "M — the shrunk render-seam-floor consumer (hostBuildPrep/hostBuildContextIgnoreBaseline) + the 6 other buildengine-* K1-loader-witness legs (bootstrap-delicate local scan, git clone/cache, build-time plugin CONNECT registry-M, namespaced-box nested scan+render-prep) resolveBuildEngine reaches for genuinely host-only steps — mirrors host_build_loader_floor.go's loader-* legs, already floor"},
 	{"distro.go", "M/D — detectDistro/installHints/distroPackageManagers/distroFamilyMap: bootstrap-embedded host-detection data + the /etc/os-release parse, SOLE consumer is the already-floor host_build_hostprobe.go; splitting the file to move only the pure parse half saves nothing and inlining the rest would be the forbidden cosmetic-gaming pattern"},
 	{"distro_resolve.go", "M — resolveDistroViaPlugin: a thin providerRegistry-coupled dispatch callback, the direct callee of the already-floor format_config.go (loaderkit.ProjectDistroConfig) — byte-for-byte the same shape as service_render.go's resolveInitConfigViaPlugin, accepted round 1"},
 	// Build-remnant cone (coneB-buildremnant) — the Generator-cluster reconcile the round-1 rejection
@@ -353,21 +353,6 @@ var residueOwner = map[string]string{
 	// (ephemeral lifecycle, explicitly named in P11's "lifecycle" scope) governs
 	// over incidental mechanism-shape similarity to a P13 sibling.
 	"ephemeral_dispatch.go": "P11",
-	// load_executor_host.go + host_build_loader.go — Unit C/B of the K1-LOADER
-	// RELOCATION (make loaderkit.LoadUnified plugin-callable). load_executor_host.go
-	// is the compiled-in TYPED loaderkit.LoaderExecutor (the charly→loaderkit
-	// wrapper charly.LoadUnified drives through LoadSeamsFromExecutor). host_build_
-	// loader.go holds ONLY the TRANSITIONAL reverse legs — loader-materialize
-	// (drives the RELOCATED loaderkit.MaterializeLoadedProject orchestration over the
-	// host leaf seams, #48 done) + loader-android-validate + loader-preempt-validate
-	// (capability validators that
-	// move to loaderkit reaching the registry via the generic Threaded/InvokeProvider
-	// seam). Both dissolve as the loader's call sites finish moving into their owning
-	// plugin (K1 loader-orchestration, P15 — the SAME owner as unified.go). The
-	// PERMANENT loader legs (bootstrap-phase dispatch / prescan+connect / the D
-	// snapshot) live in host_build_loader_floor.go, classified FLOOR (kernelFloor
-	// above) so residue→0 GREEN stays reachable.
-	"host_build_loader.go": "P15",
 }
 
 func TestKernelManifest_CoreIsPinnedToTheFabricFloor(t *testing.T) {

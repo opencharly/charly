@@ -10,13 +10,14 @@ import (
 	"github.com/opencharly/sdk/spec"
 )
 
-// load_executor.go — the plugin-build LoaderExecutor (K3 build-engine, U6). It is the SAME six-leg
+// load_executor.go — the plugin-build LoaderExecutor (K3 build-engine, U6). It is the SAME six-method
 // loaderkit.LoaderExecutor the K1-LOADER witness (candy/plugin-bundle/load_executor.go) uses, one
 // level up the stack: it lets candy/plugin-build drive loaderkit.LoadUnified ITSELF, plugin-side,
-// so the build-engine RESOLVE runs in the plugin without importing charly core. Each
-// registry-/host-coupled loader step dispatches over sdk.Executor.HostBuild to charly's "loader-*"
-// host legs (charly/host_build_loader.go). Byte-identical shape to the bundle witness — the ONLY
-// difference is the consuming package.
+// so the build-engine RESOLVE runs in the plugin without importing charly core. Its four host-coupled
+// loader steps dispatch over sdk.Executor.HostBuild to charly's "loader-*" host legs
+// (charly/host_build_loader_floor.go); the two capability validators self-serve plugin-side over
+// InvokeProvider(kind, OpResolve). Byte-identical shape to the bundle witness — the ONLY difference is
+// the consuming package.
 type buildLoaderExecutor struct {
 	ctx context.Context
 	ex  *sdk.Executor
@@ -72,20 +73,14 @@ func (e *buildLoaderExecutor) MaterializeLoadedProject(lp *spec.LoadedProject, m
 	return nil
 }
 
-// ValidateAndroidDevices / ValidatePreemptible run the two registry-coupled validators host-side.
+// ValidateAndroidDevices / ValidatePreemptible run the two capability validators PLUGIN-SIDE:
+// loaderkit.ValidateAndroidDevices / ValidatePreemptible in-plugin, threading the resource/vm/android
+// resolve callbacks over InvokeProvider(kind, OpResolve) — no host round-trip (the
+// loader-android-validate / loader-preempt-validate host legs dissolved).
 func (e *buildLoaderExecutor) ValidateAndroidDevices(uf *loaderkit.UnifiedFile) error {
-	return e.validateLeg("loader-android-validate", uf)
+	return loaderkit.ValidateAndroidDevices(uf, loaderkit.ResolveAndroidViaExecutor(e.ctx, e.ex))
 }
 
 func (e *buildLoaderExecutor) ValidatePreemptible(uf *loaderkit.UnifiedFile) error {
-	return e.validateLeg("loader-preempt-validate", uf)
-}
-
-func (e *buildLoaderExecutor) validateLeg(kind string, uf *loaderkit.UnifiedFile) error {
-	reqJSON, err := loaderkit.MarshalMaterialized(uf)
-	if err != nil {
-		return err
-	}
-	_, err = e.ex.HostBuild(e.ctx, kind, reqJSON)
-	return err
+	return loaderkit.ValidatePreemptible(uf, loaderkit.ResolveResourceViaExecutor(e.ctx, e.ex), loaderkit.ResolveVmViaExecutor(e.ctx, e.ex))
 }

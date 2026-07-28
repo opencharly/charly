@@ -11,14 +11,15 @@ import (
 )
 
 // load_executor.go — the plugin-vm LoaderExecutor (K3 vm-build move, coneB-buildremnant). It is the
-// SAME six-leg loaderkit.LoaderExecutor the K1-LOADER witness (candy/plugin-bundle/load_executor.go)
+// SAME six-method loaderkit.LoaderExecutor the K1-LOADER witness (candy/plugin-bundle/load_executor.go)
 // and candy/plugin-build's own witness (load_executor.go) use: it lets candy/plugin-vm drive
 // loaderkit.LoadUnified ITSELF, plugin-side, so `charly vm build`'s PREP+RESOLVE runs in the plugin
-// without importing charly core. Each registry-/host-coupled loader step dispatches over
-// sdk.Executor.HostBuild to charly's "loader-*" host legs (charly/host_build_loader.go /
-// host_build_loader_floor.go). Byte-identical shape to the build-engine witness — the ONLY
-// difference is the consuming package (R3: a small pure wrapper duplicated per-module since separate
-// Go modules cannot import each other's package-private helpers).
+// without importing charly core. Its four host-coupled loader steps dispatch over
+// sdk.Executor.HostBuild to charly's "loader-*" host legs (charly/host_build_loader_floor.go); the two
+// capability validators self-serve plugin-side over InvokeProvider(kind, OpResolve). Byte-identical
+// shape to the build-engine witness — the ONLY difference is the consuming package (R3: a small pure
+// wrapper duplicated per-module since separate Go modules cannot import each other's package-private
+// helpers).
 type vmLoaderExecutor struct {
 	ctx context.Context
 	ex  *sdk.Executor
@@ -74,20 +75,14 @@ func (e *vmLoaderExecutor) MaterializeLoadedProject(lp *spec.LoadedProject, merg
 	return nil
 }
 
-// ValidateAndroidDevices / ValidatePreemptible run the two registry-coupled validators host-side.
+// ValidateAndroidDevices / ValidatePreemptible run the two capability validators PLUGIN-SIDE:
+// loaderkit.ValidateAndroidDevices / ValidatePreemptible in-plugin, threading the resource/vm/android
+// resolve callbacks over InvokeProvider(kind, OpResolve) — no host round-trip (the
+// loader-android-validate / loader-preempt-validate host legs dissolved).
 func (e *vmLoaderExecutor) ValidateAndroidDevices(uf *loaderkit.UnifiedFile) error {
-	return e.validateLeg("loader-android-validate", uf)
+	return loaderkit.ValidateAndroidDevices(uf, loaderkit.ResolveAndroidViaExecutor(e.ctx, e.ex))
 }
 
 func (e *vmLoaderExecutor) ValidatePreemptible(uf *loaderkit.UnifiedFile) error {
-	return e.validateLeg("loader-preempt-validate", uf)
-}
-
-func (e *vmLoaderExecutor) validateLeg(kind string, uf *loaderkit.UnifiedFile) error {
-	reqJSON, err := loaderkit.MarshalMaterialized(uf)
-	if err != nil {
-		return err
-	}
-	_, err = e.ex.HostBuild(e.ctx, kind, reqJSON)
-	return err
+	return loaderkit.ValidatePreemptible(uf, loaderkit.ResolveResourceViaExecutor(e.ctx, e.ex), loaderkit.ResolveVmViaExecutor(e.ctx, e.ex))
 }

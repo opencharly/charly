@@ -31,7 +31,7 @@ import (
 // loaderkit.MaterializeProjectSeams the relocated orchestration (loaderkit.MaterializeLoadedProject,
 // #48) calls back through. The compiled-in placement reaches each leg DIRECTLY (zero marshal); the
 // out-of-module plugin path (candy/plugin-bundle's execLoaderExecutor) drives the SAME orchestration
-// over the single "loader-materialize" host leg (host_build_loader.go), which constructs these SAME
+// over the single "loader-materialize" host leg (host_build_loader_floor.go), which constructs these SAME
 // seams — so both placements are byte-identical.
 func hostMaterializeProjectSeams() loaderkit.MaterializeProjectSeams {
 	return loaderkit.MaterializeProjectSeams{
