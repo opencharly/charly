@@ -20,11 +20,15 @@ import (
 // reentry subprocess inherits charly's stdio (prints the cache path to stdout / its error to
 // stderr) and its exit code rides the CliReply.
 //
-// K5-doomed: both reentries (and this file) die when ResolveProjectRepo/EnsureRepoDownloaded move
-// into the plugin over sdk kits (a `HostBuild("refs-resolve")` seam) — the SAME tracked-residue
-// pattern as the sibling __box-pkg / __box-list-tags reentries (K5
-// seam-death sweep). The fetch/refresh handlers were already core pre-P14b (they do not ADD core
-// LOC; they stay as the K5-exited hidden reentry, not a permanent facade).
+// coneB-ROUTED RESIDUE: this file is the box-fetch/refresh COMMAND reentry, and it relocates to
+// coneB's command:fetch (candy/plugin-box) — the SAME box-command relocation as pkg_cmd→build:pkg.
+// The ENGINE it drives, EnsureRepoDownloaded (via ResolveProjectRepo), STAYS FLOOR (the #118
+// boundary-law ruling: the host git clone/cache ResolveRef-closure orchestration is heavily
+// host-coupled — CHARLY_REPO_OVERRIDE + the refs backend + the command:migrate registry — and is
+// reached by loaderkit via the injected ResolveRef seam; it never moves to loaderkit OR a plugin).
+// So the plugin's dispatchFetch/dispatchRefresh keep driving the FLOOR engine over the
+// HostBuild("cli") reverse channel — only the COMMAND moves. The fetch/refresh handlers were
+// already core pre-P14b (they do not ADD core LOC; they stay as the coneB-exited hidden reentry).
 
 // BoxFetchCmd is the hidden `charly __box-fetch [<spec>]` reentry: pre-prime the remote-repo cache
 // (default spec: 'default' → opencharly/charly) and print the cache path.
