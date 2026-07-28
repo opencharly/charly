@@ -114,8 +114,8 @@ func normalizeNodeInto(gn *genericNode, uf *loaderkit.UnifiedFile) error {
 // document's decomposed nodes) into the typed loaderkit.UnifiedFile, node by node via materializeNodeInto.
 // This is the exact host-side entry the plugin dispatch drops into: the registered loader plugin's
 // spec.ProjectWalker (candy/plugin-loader, over sdk/loaderkit.Walk) builds the
-// spec.LoadedProject/ParsedProject and materializeLoadedProject (materialize.go) calls this per
-// document.
+// spec.LoadedProject/ParsedProject and loaderkit.MaterializeLoadedProject (via the MaterializeProject
+// host seam, #48) calls this per document.
 func materializeProject(pp *spec.ParsedProject, uf *loaderkit.UnifiedFile) error {
 	if pp == nil {
 		return nil

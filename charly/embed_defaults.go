@@ -44,8 +44,8 @@ func embeddedDefaults() (*loaderkit.UnifiedFile, error) {
 // root-wins mergePluginKindsMap (copy a name only when ABSENT). So a project's
 // `distro: fedora` / `sidecar: tailscale` overrides the embedded one. Calling this AFTER
 // all project sources are merged fills only what the project did not define —
-// project-wins is structural, not order-dependent. Called by materializeLoadedProject
-// (materialize.go) for the root AND every namespace child it materializes, so each
+// project-wins is structural, not order-dependent. Called by loaderkit.MaterializeLoadedProject
+// (via the ApplyEmbeddedDefaults host seam, #48) for the root AND every namespace child it materializes, so each
 // project/namespace inherits the default vocabulary + sidecar templates. (Replaces the
 // former explicit mergeDistroMap/mergeBuilderMap/mergeInitMap/mergeResourceMap/mergeSidecarMap calls.)
 func applyEmbeddedDefaults(uf *loaderkit.UnifiedFile) error {
