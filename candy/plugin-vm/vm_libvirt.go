@@ -11,6 +11,7 @@ import (
 
 	libvirt "github.com/digitalocean/go-libvirt"
 	"github.com/digitalocean/go-libvirt/socket/dialers"
+	"github.com/opencharly/sdk/vmshared"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -62,7 +63,7 @@ func connectLibvirt(uri string) (*libvirtConn, error) {
 // makes `charly check libvirt` self-healing on idle-timeout. See the
 // 2026-05-06 R10 follow-up RCA.
 func connectLocalLibvirtSession(parsed LibvirtURI) (*libvirtConn, error) {
-	startLibvirtUserSession()
+	vmshared.StartLibvirtUserSession()
 	sockPath := libvirtSessionSocket()
 	c, err := net.DialTimeout("unix", sockPath, 5*time.Second)
 	if err != nil {

@@ -18,8 +18,9 @@ import (
 // vmConfiguredBackend, which the "config-resolve" HostBuild seam (charly/host_build_config_resolve.go)
 // used to compute host-side and ship over the wire as ConfigResolveReply.Backend. Both pieces are
 // genuinely plugin-portable: resolveVmBackendPlugin is a pure host-env probe (systemctl/virsh/
-// socket-stat via vmshared, zero core-registry coupling) using THIS package's own
-// startLibvirtUserSession (already duplicated here, vm_phaseA_shims.go — R3, a separate module);
+// socket-stat via vmshared, zero core-registry coupling) using vmshared.StartLibvirtUserSession (an
+// R3 hoist — this package used to carry its own duplicate copy, vm_phaseA_shims.go, byte-identical to
+// core's now-deleted vm_backend_lifecycle.go; both collapsed into the ONE sdk/vmshared copy);
 // vmConfiguredBackendPlugin's one dependency (the entity's `backend:` pin) is the generic, kind-blind
 // "deploy-entity-resolve" HostBuild seam every other F6 consumer (kube/adb/bundle/deploy-vm) already
 // calls directly — spec.DeployEntityResolveRequest's own CUE doc names vm_backend_lifecycle's
@@ -31,9 +32,9 @@ import (
 func resolveVmBackendPlugin(configured string) (string, error) {
 	if configured == "libvirt" || configured == "auto" {
 		// Spawn the libvirt session daemon BEFORE probing for its socket — see
-		// startLibvirtUserSession's own doc comment (vm_phaseA_shims.go) for why a cold
+		// vmshared.StartLibvirtUserSession's own doc comment for why a cold
 		// os.Stat() alone false-negatives a fully working libvirt.
-		startLibvirtUserSession()
+		vmshared.StartLibvirtUserSession()
 		picked, probed := vmshared.LibvirtSessionSocketWithProbes()
 		if _, err := os.Stat(picked); err == nil {
 			return "libvirt", nil
