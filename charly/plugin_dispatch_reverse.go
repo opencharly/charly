@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/sdk/proto"
@@ -163,8 +164,17 @@ func (s *executorReverseServer) InvokeProvider(ctx context.Context, req *pb.Invo
 			// arm, generalized to any class/op).
 			res, err = inv.InvokeWithExecutor(ctx, op, exec, s.build, s.rebootable, nil)
 		} else {
-			// IN-PROC target (compiled-in / builtin, non-verb): a direct Invoke, no broker needed.
-			res, err = prov.Invoke(ctx, op)
+			// IN-PROC target (compiled-in / builtin, non-verb): thread the in-proc reverse channel
+			// carrying the SAME resolved venue executor + build the out-of-proc branch threads
+			// (honoring any VenueDescriptor override), so the target's OWN HostBuild / InvokeProvider
+			// callbacks reach the host — UNIFORM with the out-of-proc branch above. Before this the
+			// in-proc branch threaded NOTHING, an incomplete wire-broker seam each caller patched with
+			// a manual sdk.ContextWithExecutor (status-substrate / build / command dispatch). Every
+			// in-proc target recovers this via sdk.ExecutorForInvoke(ctx) and FAIL-FASTS when absent
+			// (RDD-enumerated: no in-proc target relies on the executor being absent), so completing
+			// the seam only enables currently-broken callbacks; a pure-data target ignores it.
+			inprocSrv := &executorReverseServer{exec: exec, build: s.build, rebootable: s.rebootable}
+			res, err = prov.Invoke(sdk.ContextWithExecutor(ctx, sdk.NewInProcExecutor(&inprocExecutorClient{srv: inprocSrv})), op)
 		}
 	}
 	if err != nil {

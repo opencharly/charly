@@ -2,22 +2,23 @@
 // runtime-status get/render surface (table / detail / JSON, --all, --nested). The plugin owns the
 // subcommand grammar (command.go), the declared-nested-tree pre-resolution (nested_tree.go, K5),
 // the PURE nested-overlay fold (overlay.go), and the render output (render.go); only the LIVE
-// per-substrate collection (Collector, the per-substrate collectors) stays in core and is reached
-// via the generic "status-substrate" HostBuild seam. There is no hidden core-command forward — the
-// plugin does the work, calling back for the ONE thing it cannot do itself (live host/venue
-// collection), the doctrine candy/plugin-settings established.
+// per-substrate collection (the pod/vm/k8s/local/android collectors) is the compiled-in
+// verb:status-fanout (candy/plugin-substrate), which the plugin InvokeProvider's directly. There is
+// no hidden core-command forward — the plugin does the work, calling back for the ONE thing it
+// cannot do itself (live host/venue collection), the doctrine candy/plugin-settings established.
 //
 // status is COMPILED-IN (charly.yml compiled_plugins): its Invoke(OpRun) (provider.go) runs in
 // charly's process and gets the in-proc reverse channel that dispatchInProcCommand threads (Seam
-// A), so HostBuild("status-substrate") reaches the host collection engine. The out-of-process
-// placement fork/execs the binary → CliMain, which has NO reverse channel and so errors —
-// status cannot run out-of-process (it needs the status-substrate host seam). NewProvider()/
+// A), and the wire broker threads it onward to the fan-out, so InvokeProvider(verb:status-fanout)
+// reaches the collection engine. The out-of-process placement fork/execs the binary → CliMain,
+// which has NO reverse channel and so errors — status cannot run out-of-process (it needs the
+// in-proc reverse channel to the fan-out). NewProvider()/
 // NewMeta()/CliMain are the standard dual-mode command shape (mirror candy/plugin-settings);
 // NewMeta advertises command:status so the compiled-in registry path (registerCompiledPlugin →
 // resolve(ClassCommand,"status") → dispatchInProcCommand) dispatches it.
 //
 // provider.go ALSO handles sdk.OpStatusCollect — the programmatic status-collection API
-// (distinct from the lifecycle OpStatus a substrate plugin serves): HostBuild("status-substrate")
+// (distinct from the lifecycle OpStatus a substrate plugin serves): InvokeProvider(verb:status-fanout)
 // → the PURE overlay → the overlaid []spec.DeploymentStatus as ResultJson (no render). Any
 // in-process peer can InvokeProvider(class:command, word:status, op:sdk.OpStatusCollect) to get
 // structured status without shelling out to `charly status --json`.

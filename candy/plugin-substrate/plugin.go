@@ -92,9 +92,9 @@ func CliMain(args []string) int {
 // gap the host's closedness-only value gate cannot express (PCI-hostdev field concreteness);
 // pod/k8s/local/android declare no deep check and pay no extra OpValidate round-trip. Also
 // advertises command:reap-orphans and verb:status-fanout (K6) — an INTERNAL-ONLY verb (never
-// authored in a check plan, never a CLI subcommand; reached solely by the host's
-// "status-substrate" HostBuild forward via providerRegistry.resolve + Invoke), mirroring the
-// existing verb:libvirt/verb:credential/verb:arbiter internal-dispatch precedent.
+// authored in a check plan, never a CLI subcommand; reached solely by command:status
+// InvokeProvider'ing it directly over the in-proc reverse channel), mirroring the existing
+// verb:libvirt/verb:credential/verb:arbiter internal-dispatch precedent.
 func NewMeta() pb.PluginMetaServer {
 	caps := make([]sdk.ProvidedCapability, 0, len(substrateWords)+2)
 	for _, w := range substrateWords {
