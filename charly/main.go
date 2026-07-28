@@ -92,19 +92,10 @@ type CLI struct {
 	// K5-doomed: this dies when the store read moves into the plugin over sdk kits.
 	BoxListTags ListTagsCmd `cmd:"" name:"__box-list-tags" hidden:"" help:"internal: list locally stored CalVer image tags (reentry behind box list tags)"`
 
-	// __box-fetch / __box-refresh are the hidden core reentry points behind the COMPILED-IN
-	// candy/plugin-authoring command:fetch / command:refresh words (nested under `box`, P14b).
-	// The plugin owns the user-facing `charly box fetch/refresh` grammar + dispatch and reaches
-	// these over HostBuild("cli") — the repo resolver (ResolveProjectRepo → EnsureRepoDownloaded)
-	// is host-coupled (CHARLY_REPO_OVERRIDE + the refs-backend dispatch + the command:migrate
-	// auto-migration), which a sdk-only plugin cannot reach.
-	// coneB-ROUTED: both are the box-fetch/refresh COMMAND reentries; the COMMAND relocates to
-	// coneB's command:fetch (candy/plugin-box, the box-command domain). The ENGINE,
-	// EnsureRepoDownloaded, STAYS FLOOR (#118: the host git clone/cache ResolveRef-closure
-	// orchestration is reached by loaderkit via the injected ResolveRef seam, never moved) — the
-	// plugin keeps driving it over HostBuild("cli").
-	BoxFetch   BoxFetchCmd   `cmd:"" name:"__box-fetch" hidden:"" help:"internal: pre-prime the remote-repo cache (reentry behind box fetch)"`
-	BoxRefresh BoxRefreshCmd `cmd:"" name:"__box-refresh" hidden:"" help:"internal: force re-clone of a remote project repo (reentry behind box refresh)"`
+	// __box-fetch / __box-refresh are GONE (K3 build-tail tail, coneB-buildremnant): candy/
+	// plugin-authoring's command:fetch/command:refresh now reach the host-coupled repo resolver
+	// (ResolveProjectRepo → EnsureRepoDownloaded) directly over the generic "box-fetch-resolve"
+	// HostBuild seam (charly/host_build_box_fetch_resolve.go) — no reentry needed.
 
 	// __box-labels is GONE (K3 reentry-class dissolution): candy/plugin-box's `labels` command now
 	// calls kit.ResolveRuntime/ResolveLocalImageRef/InspectImageLabels directly — all pure

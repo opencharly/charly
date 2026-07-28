@@ -191,6 +191,15 @@ var kernelFloor = []floorEntry{
 	{"generate.go", "M — the shared render-seam-floor Generator TYPE + its two constructors (NewGenerator/newCandyScanGenerator), consumed ONLY by the already-floor F10 host-builders (build_overlay.go's hostBuildOverlay, host_build_buildengine.go, host_build_render_seam.go) — call-graph verified, no caller exists outside those 3 + 2 parity tests. Also carries the registry-coupled verb:oci adopt-user dispatch (ociProvider/invokeOciInspectUser) and the shared OpResolve builder-stage dispatch (resolveBuilderStage/resolveExternalBuilder) — thin providerRegistry.ResolveBuilder/resolve(ClassVerb)-coupled M dispatch, the same shape as the other floor OpResolve seams above. baselineContextIgnore additionally has a hard structural floor reason: it //go:embeds charly/charly.yml, only possible from this module"},
 	{"tasks.go", "M — Generator.toDeploykit() + the 3 ResolveXStageSeam closures + EmitPluginOp: 100% providerRegistry-coupled seam-wiring bridging deploykit's render engine to the core provider registry (EnsureBuildersConnected/ResolveDetectionBuilderStage/ResolveExternalBuilderStage/ResolveInlineBuilder) — zero movable render logic remains, the render DRIVE itself already moved to deploykit in prior cutovers (K3-A/K5-Unit-6b); every function call-graph-verified referenced, no dead code"},
 	{"builder_preresolve.go", "M — ensureBuildersConnected is genuine plugin-loading Mechanism: build-connects the not-yet-connected externalized builder plugin(s) via providerRegistry.ResolveBuilder + loadProjectPlugins, both core-private registry/plugin-loading mechanics no plugin can reach — the connect step tasks.go's EnsureBuildersConnected closure and host_build_render_seam.go call into"},
+	{"host_build_box_fetch_resolve.go", "M — the box-fetch-resolve F10 host-builder wrapping the host-coupled repo resolver (ResolveProjectRepo → EnsureRepoDownloaded: CHARLY_REPO_OVERRIDE + the registered refs-backend download + the command:migrate auto-migration, none of which an sdk-only plugin can run) behind candy/plugin-authoring's command:fetch/command:refresh — same shape as the ~25 other host_build_*.go floor entries; replaces the deleted box_fetch_reentry.go's __box-fetch/__box-refresh reentries"},
+	// Build-remnant tail (coneB-buildremnant, round 2) — the same reconcile bar as the generate.go
+	// cluster above, unblocked now that generate.go (the Generator TYPE both files depend on) is
+	// itself floor: call-graph verified (every function referenced, zero dead code), zero movable
+	// capability logic (each file's own RENDER/mutate body already left core in a prior cutover —
+	// P11c for build_overlay.go, K1/W9 for layers.go's candy scan pipeline).
+	{"build_overlay.go", "M — hostBuildOverlay is the F10 pod-overlay PREP+RESOLVE host-builder (registered like the ~25 other host_build_*.go floor entries): its own doc comment records the overlay BUILD RENDER already moved to candy/plugin-deploy-pod (P11c); what remains is Generator-coupled prep (NewGenerator/candyByName/createRemoteCandyCopies — all already-floor generate.go machinery) + registry-coupled resolve (projectResolvedProjectWithBoxes/loadProjectForResolve/resolveCandySecrets) + the renderGenCache/overlayBuildContextCache shared with the already-floor host_build_render_seam.go — zero capability RENDER logic left"},
+	{"layers.go", "M — the candy-manifest SCAN pipeline glue: parseCandyYAML/scanLocalCandies/ScanAllCandyWithConfigOpts/scanCandyFromLocal/scanSeamsFor are thin host-closure wiring around already-floor core-private mechanisms (requireLoaderParser/requireCandyScanner's D-clause registry dispatch, buildCandy's B-clause bootstrap routing, decodeEntityViaCUE's M-clause materialize decode) and the already-externalized fix-point (loaderkit.ScanCandyFromLocal, K3 U4-b — this file's own doc comment calls it 'a THIN host wrapper'). The manifest shape-guard validators (rejectLegacyCandyKeys/rejectUnknownCandyTopLevelKeys/looksLikeDistroOrFormatKey) are pure but read the registry-derived build vocabulary RegisterBuildVocabulary populates (called from the already-floor generate.go) — D-adjacent kind-recognition data, not movable capability logic"},
+	{"remote_image.go", "M — ResolveRemoteImage is the UNCHANGED backing body of the already-floor host_build_remote_image_resolve.go's \"remote-image-resolve\" HostBuild seam (a thin wrapper around it, dropping non-wire fields) — its own former \"gated on coneC's Cluster A refs->loaderkit seam landing\" note is resolved now that EnsureRepoDownloaded (refs.go) IS floor; the sole real caller is that already-floor seam (call-graph verified, zero dead code; RemoteImageContext is ResolveRemoteImage's own return type, used only here). The remaining LoadConfig dependency is a DIFFERENT tracked residue (config.go, P15) — a floor file calling a residue function is the same shape layers.go's ApplyDiscover call already established"},
 }
 
 // residueOwner maps every tracked-for-removal charly/*.go non-test file to its
@@ -207,11 +216,9 @@ var kernelFloor = []floorEntry{
 //	P15  — residual folds + HostArbiter deletion + K1 loader-orchestration + K5 seam-death + misc CLI utils
 var residueOwner = map[string]string{
 	"builder_venue.go":              "P8b", // buildEngineContext (the type) is floor-worthy core-dispatch infra; runVenueBuilderStep/runVenueHomeArtifactBuilder look like coneA3's deploy-vm domain by function — flagged, not unilaterally split (team-lead ruling)
-	"build_overlay.go":              "P8b",
 	"bundle_add_cmd.go":             "P13",
 	"bundle_from_box_cmd.go":        "P13",
 	"bundle_members.go":             "P11",
-	"box_fetch_reentry.go":          "P15",
 	"check_bed_run.go":              "P12",
 	"check_cmd.go":                  "P12",
 	"check_graphics_endpoint.go":    "P12",
@@ -232,14 +239,12 @@ var residueOwner = map[string]string{
 	"filelock.go":                   "P15",
 	"k8s_config.go":                 "P11",
 	"layer_secrets.go":              "P8b",
-	"layers.go":                     "P8b",
 	"local_spec.go":                 "P11",
 	"namespace.go":                  "P15",
 	"plugin_cmd.go":                 "P15",
 	"plugin_providers_cmd.go":       "P15",
 	"preempt.go":                    "P15",
 	"readiness_config.go":           "P11",
-	"remote_image.go":               "P14", // ResolveRemoteImage: a build capability (coneB) consuming the FLOOR EnsureRepoDownloaded (the host git clone/cache) + LoadConfig DIRECTLY — no loaderkit seam; EnsureRepoDownloaded stays FLOOR per the #118 ruling (coneC-loader), so this file exits with its build-capability cone, not via a refs move
 	"secrets.go":                    "P11",
 	"sidecar.go":                    "P11",
 	"substrate_template_resolve.go": "P15",
