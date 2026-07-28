@@ -191,6 +191,7 @@ var kernelFloor = []floorEntry{
 	// P11c for build_overlay.go, K1/W9 for layers.go's candy scan pipeline).
 	{"build_overlay.go", "M — hostBuildOverlay is the F10 pod-overlay PREP+RESOLVE host-builder (registered like the ~25 other host_build_*.go floor entries): its own doc comment records the overlay BUILD RENDER already moved to candy/plugin-deploy-pod (P11c); what remains is Generator-coupled prep (NewGenerator/candyByName/createRemoteCandyCopies — all already-floor generate.go machinery) + registry-coupled resolve (projectResolvedProjectWithBoxes/loadProjectForResolve/resolveCandySecrets) + the renderGenCache/overlayBuildContextCache shared with the already-floor host_build_render_seam.go — zero capability RENDER logic left"},
 	{"layers.go", "M — the candy-manifest SCAN pipeline glue: parseCandyYAML/scanLocalCandies/ScanAllCandyWithConfigOpts/scanCandyFromLocal/scanSeamsFor are thin host-closure wiring around already-floor core-private mechanisms (requireLoaderParser/requireCandyScanner's D-clause registry dispatch, buildCandy's B-clause bootstrap routing, decodeEntityViaCUE's M-clause materialize decode) and the already-externalized fix-point (loaderkit.ScanCandyFromLocal, K3 U4-b — this file's own doc comment calls it 'a THIN host wrapper'). The manifest shape-guard validators (rejectLegacyCandyKeys/rejectUnknownCandyTopLevelKeys/looksLikeDistroOrFormatKey) are pure but read the registry-derived build vocabulary RegisterBuildVocabulary populates (called from the already-floor generate.go) — D-adjacent kind-recognition data, not movable capability logic"},
+	{"remote_image.go", "M — ResolveRemoteImage is the UNCHANGED backing body of the already-floor host_build_remote_image_resolve.go's \"remote-image-resolve\" HostBuild seam (a thin wrapper around it, dropping non-wire fields) — its own former \"gated on coneC's Cluster A refs->loaderkit seam landing\" note is resolved now that EnsureRepoDownloaded (refs.go) IS floor; the sole real caller is that already-floor seam (call-graph verified, zero dead code; RemoteImageContext is ResolveRemoteImage's own return type, used only here). The remaining LoadConfig dependency is a DIFFERENT tracked residue (config.go, P15) — a floor file calling a residue function is the same shape layers.go's ApplyDiscover call already established"},
 }
 
 // residueOwner maps every tracked-for-removal charly/*.go non-test file to its
@@ -241,7 +242,6 @@ var residueOwner = map[string]string{
 	"readiness_config.go":           "P11",
 	"refs.go":                       "P15",
 	"refs_threaded.go":              "P15",
-	"remote_image.go":               "P14", // ResolveRemoteImage: a build capability consuming EnsureRepoDownloaded's refs orchestration — gated on coneC's Cluster A refs->loaderkit seam landing (reconciled: not floor, per coneC-loader)
 	"resource_resolve.go":           "P15",
 	"secrets.go":                    "P11",
 	"sidecar.go":                    "P11",
