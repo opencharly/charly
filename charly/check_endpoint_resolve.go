@@ -38,11 +38,11 @@ func resolveVerbEndpointFor(box, instance string, mode RunMode, port int) (addr 
 	if box == "" || mode == RunModeBox {
 		return "", nil, nil
 	}
-	venue, err := resolveCheckVenue(box, instance)
+	reply, err := resolveCheckVenueReply(box, instance)
 	if err != nil {
 		return "", nil, err
 	}
-	ep, err := resolveCheckEndpoint(venue, port)
+	ep, err := kit.EndpointForVenue(reply.Descriptor, port)
 	if err != nil {
 		return "", nil, err
 	}

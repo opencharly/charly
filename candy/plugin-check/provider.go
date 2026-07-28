@@ -23,8 +23,13 @@ type provider struct{ pb.UnimplementedProviderServer }
 // dispatch), stashes it for the deep CLI handlers (setCommandContext), and kong-parses + runs the
 // CheckCmd tree. It RETURNS the error so a non-zero / check-fail exit propagates.
 func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
+	// verb:check-resolve (OpResolve) — the internal venue-classification capability the host's
+	// floor reverse-legs call (#118 check broker-envelope-out); routed here, never the command path.
+	if req.GetOp() == sdk.OpResolve {
+		return resolveVenueForHost(ctx, req)
+	}
 	if req.GetOp() != sdk.OpRun {
-		return nil, fmt.Errorf("plugin-check: unsupported op %q (want %q)", req.GetOp(), sdk.OpRun)
+		return nil, fmt.Errorf("plugin-check: unsupported op %q (want %q or %q)", req.GetOp(), sdk.OpRun, sdk.OpResolve)
 	}
 	var in struct {
 		Args []string `json:"args"`

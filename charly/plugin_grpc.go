@@ -154,20 +154,24 @@ func relayNestedTarget(open *pb.ChannelFrame, upstream sdk.ProviderChannel) (han
 	// node. This permits deployment→SSH→gRPC→tmux and every shorter composition
 	// without a combination-specific branch.
 	if target.Deployment != "" {
-		venue, err := resolveCheckVenue(target.Deployment, target.Instance)
+		reply, err := resolveCheckVenueReply(target.Deployment, target.Instance)
 		if err != nil {
 			return true, fmt.Errorf("provider channel deployment %q: %w", target.Deployment, err)
 		}
-		processExecutor, ok := venue.Exec.(spec.ProcessExecutor)
+		venueExec, err := checkVenueExecFromReply(reply, target.Deployment)
+		if err != nil {
+			return true, fmt.Errorf("provider channel deployment %q: %w", target.Deployment, err)
+		}
+		processExecutor, ok := venueExec.(spec.ProcessExecutor)
 		if !ok {
-			return true, fmt.Errorf("provider channel deployment %q (%s): %w", target.Deployment, venue.Exec.Venue(), spec.ErrNotSupported)
+			return true, fmt.Errorf("provider channel deployment %q (%s): %w", target.Deployment, venueExec.Venue(), spec.ErrNotSupported)
 		}
 		controllerBin, err := activeCharlyBinary()
 		if err != nil {
 			return true, fmt.Errorf("provider channel deployment %q endpoint bootstrap: %w", target.Deployment, err)
 		}
-		fmt.Fprintf(os.Stderr, "provider channel: bootstrap Charly endpoint for deployment %q on %s\n", target.Deployment, venue.Exec.Venue())
-		remoteCharly, err := kit.EnsureCharlyInDeployVenue(upstream.Context(), venue.Exec, controllerBin, CharlyVersion())
+		fmt.Fprintf(os.Stderr, "provider channel: bootstrap Charly endpoint for deployment %q on %s\n", target.Deployment, venueExec.Venue())
+		remoteCharly, err := kit.EnsureCharlyInDeployVenue(upstream.Context(), venueExec, controllerBin, CharlyVersion())
 		if err != nil {
 			return true, fmt.Errorf("provider channel deployment %q endpoint bootstrap: %w", target.Deployment, err)
 		}

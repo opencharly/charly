@@ -52,6 +52,7 @@ var kernelFloor = []floorEntry{
 	{"agent_target_cmd.go", "M — the __agent-target serve CLI reentry serving the generic remote Provider/PluginMeta gRPC channel (kind-blind; wire broker transport)"},
 	{"bootstrap_phase.go", "M — the bootstrap phase machinery (plugin-loading phase dispatch)"},
 	{"check_endpoint_resolve.go", "M — generic host-endpoint reverse-legs served back over CheckContextService (class-generic, never a per-verb RPC)"},
+	{"check_venue_resolve.go", "M — the host half of the venue-classification seam (#118 check broker-envelope-out): reaches plugin-check's verb:check-resolve classifier (the kind-decode lives THERE, never here) and re-materializes the returned generic spec.VenueDescriptor into a live host DeployExecutor via the kind-blind kit.VenueFromDescriptor / deploykit.ResolveDeployChain — a live executor never crosses the wire. ZERO classification; the same generic-forward+re-materialize shape as status_substrate_host.go's fan-out seam"},
 	{"cli_model_cmd.go", "M — the __cli-model host seam (Kong command-tree reflection for the externalized MCP server); a CLI/prescan-adjacent host seam"},
 	{"cue_kind_box.go", "B — the box⊆candy image factory bootstrap root (the discovered-candy pre-check calls it directly)"},
 	{"cue_kind_candy.go", "B — the candy⊻box factory bootstrap root (must exist before any plugin can load; candyIsImage/buildCandy stay core)"},
