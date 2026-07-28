@@ -9,7 +9,7 @@ import (
 )
 
 // box_select.go — the K4 unit B box-half: the PRIMARY pod/k8s image selection
-// (charly/bundle_compile_seam.go's former compileBoxSelection) now runs entirely plugin-side,
+// (the former host-side compileBoxSelection, since-deleted from charly/ core) now runs plugin-side,
 // mirroring candy_select.go's candy-half exactly. The BOX-VIEW shape
 // (compileCandyOnBoxSelection, add_candy on an ALREADY-RESOLVED base image) is UNCHANGED and out
 // of scope — its base image comes from a separate host-side ResolveBox call in
@@ -55,7 +55,7 @@ func resolveBoxSelection(rp *spec.ResolvedProject, req spec.DeployCompileRequest
 // SAME ResolvedBoxView the BOX-REF shape reads via NewSpecResolvedBox, R3 — never re-derived), and
 // the overlay's OWN topo order is resolved from the envelope over {BareRef(candy_ref)} widened by
 // extra_candy_refs (mirrors the CANDY shape's resolveCandySelection exactly). Replaces the former
-// host-side buildkit.ResolveBox(baseImg) + scanCandiesForRef path (charly/bundle_compile_seam.go's
+// host-side buildkit.ResolveBox(baseImg) + scanCandiesForRef path (the former host-side
 // compileCandyOnBoxSelection): the base-box read reuses the primary BOX-REF shape's already-proven
 // envelope parity, and the overlay-order read reuses the CANDY shape's — so this is a COMPOSITION of
 // two already-parity-proven resolutions, not a new resolver.

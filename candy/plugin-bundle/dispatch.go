@@ -1,8 +1,8 @@
 package bundle
 
 // dispatch.go — the K4-C SHAPE-2 per-node COMPILE orchestration, ported PLUGIN-SIDE from the former
-// host charly/bundle_add_cmd.go's deployAddCmd.compileNodePlans + bundle_compile_seam.go's
-// compileRefSelection/compileBoxSelection/compileStandaloneCandySelection/compileAddCandyOnBox.
+// host-side charly/ compile seam (the since-deleted compileNodePlans + compileRefSelection /
+// compileBoxSelection / compileStandaloneCandySelection / compileAddCandyOnBox).
 // The plugin's own tree-walk (walk.go dispatchOne) now COMPILES the InstallPlans IN-PROC via the
 // shared compilePlansForRequest (compile.go) — NO OpCompile round-trip — killing the former
 // plugin→host→plugin double-bounce (plugin dispatchOne → HostBuild("deploy-node-dispatch") → host
@@ -119,7 +119,7 @@ func (c *BundleAddCmd) compileNodePlans(target, refStr, tag, path string, addCan
 }
 
 // compileRefSelection dispatches a primary ref (box vs candy) to the shared in-proc compiler,
-// mirroring the former host bundle_compile_seam.go compileRefSelection → compileBoxSelection /
+// mirroring the former host-side compileRefSelection → compileBoxSelection /
 // compileStandaloneCandySelection. Remote image refs are unsupported (unchanged). base is ref.Name
 // for both shapes (matching the OLD semantics — the compile returns the box view name, but candy-ref
 // units keep ref.Name). candySet is read back off each compiled plan's own Candy name.
