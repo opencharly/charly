@@ -175,7 +175,6 @@ var kernelFloor = []floorEntry{
 	{"remote_image.go", "M — ResolveRemoteImage: the direct backing body of the already-floor host_build_remote_image_resolve.go seam (EnsureRepoDownloaded = host git clone/cache, K1/B; LoadConfig/ScanAllCandyWithConfig = core loader) — its own header already declares \"UNTIL-K1... CANNOT leave core\""},
 	{"distro.go", "M/D — detectDistro/installHints/distroPackageManagers/distroFamilyMap: bootstrap-embedded host-detection data + the /etc/os-release parse, SOLE consumer is the already-floor host_build_hostprobe.go; splitting the file to move only the pure parse half saves nothing and inlining the rest would be the forbidden cosmetic-gaming pattern"},
 	{"distro_resolve.go", "M — resolveDistroViaPlugin: a thin providerRegistry-coupled dispatch callback, the direct callee of the already-floor format_config.go (loaderkit.ProjectDistroConfig) — byte-for-byte the same shape as service_render.go's resolveInitConfigViaPlugin, accepted round 1"},
-	{"host_build_vm_build.go", "M — the \"vm-build\" F10 host-builder, PREP+RESOLVE only (its own header: \"the loader + box-store Mechanisms a sdk-only candy cannot run\" — LoadUnified, resolveBootcImageRef needing cfg.Box + local podman-storage inspection, ensureBuilderImageBuilt needing the dispatchBuildEnsure reverse-channel); matches the ~25-entry host_build_*.go floor pattern"},
 }
 
 // residueOwner maps every tracked-for-removal charly/*.go non-test file to its
@@ -192,7 +191,8 @@ var kernelFloor = []floorEntry{
 //	P15  — residual folds + HostArbiter deletion + K1 loader-orchestration + K5 seam-death + misc CLI utils
 var residueOwner = map[string]string{
 	"builder_preresolve.go":         "P8b",
-	"builder_venue.go":              "P8b",
+	"builder_venue.go":              "P8b", // buildEngineContext (the type) is floor-worthy core-dispatch infra; runVenueBuilderStep/runVenueHomeArtifactBuilder look like coneA3's deploy-vm domain by function — flagged, not unilaterally split (team-lead ruling)
+	"host_build_vm_build.go":        "P8b", // the kind:vm bootstrap-builder pre-pass (resolveVmBuildBootstrap/ensureBuilderImageBuilt) is real vm-build capability, not thin dispatch — grouped with builder_venue.go for coneA3's deploy-vm pass to decide move-to-plugin-deploy-vm vs genuine floor (team-lead ruling, reverted from an over-broad floor call)
 	"build_overlay.go":              "P8b",
 	"bundle_add_cmd.go":             "P13",
 	"bundle_from_box_cmd.go":        "P13",
