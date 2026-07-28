@@ -66,9 +66,9 @@ func (g *Generator) toDeploykit() *deploykit.Generator {
 	// candy/plugin-init (OpResolve) + egress-gates host-side. All arg/return types
 	// are spec aliases, so the core func satisfies the seam field directly.
 	dg.RenderService = RenderService
-	// RewriteHeaderCopyForRemote: host-fs materialization of a remote build-config
-	// asset referenced by a stage_header_copy COPY line (stays core).
-	dg.RewriteHeaderCopyForRemote = g.rewriteHeaderCopyForRemote
+	// RewriteHeaderCopyForRemote: left unwired here — same dead-in-this-path finding as
+	// ValidateEgress/EmitBakedPlugins above (its only caller, EmitInitFragmentStages, runs in
+	// Generate()'s per-box render loop, never RenderPrepBox).
 	// writeCandySteps seams: the inline-builder registry resolve (builder-emit
 	// cluster, stays core) and the localpkg image install. ExternalizedBuilders is
 	// the registry fact selecting the branch. RenderLocalPkgImageInstall itself

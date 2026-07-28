@@ -475,70 +475,12 @@ func (g *Generator) createRemoteCandyCopies() error {
 	return nil
 }
 
-// remoteBuildConfigCacheRoot derives the repo cache root that a remotely-included
-// build.yml was read from, by stripping the candy subpath off any remote candy's
-// cached Path (every remote candy + the remote build.yml share one repo@version
-// cache). Returns "" when the build-config is local (no remote candies).
-func (g *Generator) remoteBuildConfigCacheRoot() string {
-	for _, l := range g.Candies {
-		if l.GetRemote() && l.GetSourceDir() != "" {
-			suffix := filepath.Join(l.GetSubPathPrefix(), l.GetName()) // e.g. "candy/pixi"
-			if trimmed, ok := strings.CutSuffix(l.GetSourceDir(), suffix); ok {
-				return strings.TrimRight(trimmed, string(filepath.Separator))
-			}
-		}
-	}
-	return ""
-}
-
-// materializeBuildConfigAsset ensures a build-config asset file (referenced by a
-// remotely-included build.yml — e.g. the init header_file) is available in the
-// build context. If the project ships the file locally (local build.yml), relPath
-// is returned unchanged. Otherwise the file is copied from the remote build-config
-// cache into .build/_buildconfig/<relPath> (gitignored, like .build/_candy/) and
-// the build-root-relative path is returned for use as a COPY source.
-func (g *Generator) materializeBuildConfigAsset(relPath string) (string, error) {
-	if relPath == "" {
-		return relPath, nil
-	}
-	if _, err := os.Stat(filepath.Join(g.Dir, relPath)); err == nil {
-		return relPath, nil // local build-config ships the asset; COPY works as-is
-	}
-	root := g.remoteBuildConfigCacheRoot()
-	if root == "" {
-		return relPath, nil // no remote source to pull from; leave as authored
-	}
-	srcAbs := filepath.Join(root, relPath)
-	if _, err := os.Stat(srcAbs); err != nil {
-		return relPath, nil // not in the remote cache either; leave as authored
-	}
-	destAbs := filepath.Join(g.BuildDir, "_buildconfig", relPath)
-	if err := os.MkdirAll(filepath.Dir(destAbs), 0755); err != nil {
-		return relPath, err
-	}
-	if out, err := exec.Command("cp", "-a", srcAbs, destAbs).CombinedOutput(); err != nil {
-		return relPath, fmt.Errorf("materializing build-config asset %s: %s: %w", relPath, string(out), err)
-	}
-	return filepath.ToSlash(filepath.Join(".build", "_buildconfig", relPath)), nil
-}
-
-// rewriteHeaderCopyForRemote rewrites a `COPY <src> <dst>` header directive so its
-// source points at a materialized build-config asset when the original src isn't in
-// the local build context. Plain 3-token COPY only; anything else passes through.
-func (g *Generator) rewriteHeaderCopyForRemote(headerCopy string) (string, error) {
-	fields := strings.Fields(headerCopy)
-	if len(fields) != 3 || fields[0] != "COPY" {
-		return headerCopy, nil
-	}
-	newSrc, err := g.materializeBuildConfigAsset(fields[1])
-	if err != nil {
-		return headerCopy, err
-	}
-	if newSrc == fields[1] {
-		return headerCopy, nil
-	}
-	return fmt.Sprintf("COPY %s %s", newSrc, fields[2]), nil
-}
+// remoteBuildConfigCacheRoot/materializeBuildConfigAsset/rewriteHeaderCopyForRemote deleted
+// (coneB-buildtail): dead in this Generator's only surviving path — their sole caller,
+// EmitInitFragmentStages, runs in deploykit's Generate() per-box render loop, never
+// RenderPrepBox (confirmed by call-graph trace, same finding as ValidateEgress/EmitBakedPlugins).
+// sdk/deploykit/header_copy_remote.go already carries the pure, plugin-side reproduction
+// NewRenderGeneratorFromProject wires directly — no host round-trip needed.
 
 // candyMapKey returns the key under which a candy is stored in g.Candies: the
 // fully-qualified remote ref (RepoPath/SubPathPrefix/Name) for remote candies,
