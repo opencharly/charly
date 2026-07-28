@@ -323,6 +323,14 @@ func projectResolvedProjectWithBoxes(cfg *Config, layers map[string]spec.CandyRe
 	// SEPARATE host round-trip for the fact.
 	rp.ExternalizedBuilders = externalizedBuilders
 
+	// primaries (the plugin-verb PRIMARY-field D-fact): the SAME registry-derived word→primary-field
+	// map the LOAD path snapshots (loaderThreaded().Primaries, == the pluginPrimaries table), carried
+	// SAVE-side on the envelope so the deploy-state WRITER's plan resugar (marshalDeployNode →
+	// resugarPlan) reads it as DATA instead of dialing the host provider registry — the K4 keystone
+	// that lets the deploy-state marshal move plugin-side. Registry-derived + project-independent, so
+	// filled unconditionally like ExternalizedBuilders (R3 single source).
+	rp.Primaries = loaderThreaded().Primaries
+
 	if uf != nil {
 		// kind TEMPLATES (validate localtemplates + check-include pod/vm arms + status k8s/adb).
 		rp.Templates = projectTemplates(uf)

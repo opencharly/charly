@@ -51,7 +51,7 @@ var bundleCrossRefKeys = map[string]bool{
 // descent are dropped (target → the discriminator; descent → never persisted, a stored
 // descent trips #DeployValue's descent?: _|_ on reload). Comment-preserving (yaml.v3 node
 // API).
-func marshalBundleNode(node *spec.Deploy) (*yaml.Node, error) {
+func marshalBundleNode(node *spec.Deploy, primaries map[string]string) (*yaml.Node, error) {
 	// Marshal the struct to capture all scalar/collection fields (env, port, volume, ...).
 	nb, err := yaml.Marshal(node)
 	if err != nil {
@@ -82,7 +82,7 @@ func marshalBundleNode(node *spec.Deploy) (*yaml.Node, error) {
 			continue
 		}
 		if k.Value == "plan" {
-			resugarPlan(v)
+			resugarPlan(v, primaries)
 		}
 		value.Content = append(value.Content, k, v)
 	}
@@ -95,7 +95,7 @@ func marshalBundleNode(node *spec.Deploy) (*yaml.Node, error) {
 			return nil
 		}
 		for _, k := range deploykit.SortedNestedKeys(m) {
-			child, cerr := marshalBundleNode(m[k])
+			child, cerr := marshalBundleNode(m[k], primaries)
 			if cerr != nil {
 				return cerr
 			}

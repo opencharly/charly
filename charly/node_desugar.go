@@ -52,7 +52,9 @@ func registerPluginPrimary(word, field string) error {
 	return nil
 }
 
-// pluginPrimaryFor returns word's declared primary input field.
+// pluginPrimaryFor returns word's declared primary input field. Used by the
+// plugin-load schema gate's primary cross-check (a host-side registry consult,
+// distinct from the deploy-state writer's resugar, which reads primaries as DATA).
 func pluginPrimaryFor(word string) (string, bool) {
 	f, ok := pluginPrimaries[word]
 	return f, ok
@@ -63,7 +65,13 @@ func pluginPrimaryFor(word string) (string, bool) {
 // back to the authored `<word>: <input>` sugar (collapsing a single-primary map
 // to the scalar shorthand), so a written file round-trips through the
 // parse-time desugar instead of tripping its authored-envelope ban.
-func resugarPlan(plan *yaml.Node) {
+//
+// primaries is the plugin-verb WORD → primary-field D-fact (the SAME data the
+// resolved-project envelope now carries as spec.ResolvedProject.Primaries and the
+// load path snapshots as spec.Threaded.Primaries): resugar reads it as DATA rather
+// than dialing the host provider registry, so a plugin holding the envelope can drive
+// the identical resugar. The host writer sources it from loaderThreaded().Primaries.
+func resugarPlan(plan *yaml.Node, primaries map[string]string) {
 	if plan == nil || plan.Kind != yaml.SequenceNode {
 		return
 	}
@@ -89,7 +97,7 @@ func resugarPlan(plan *yaml.Node) {
 			input = st.Content[inputIdx+1]
 		}
 		// scalar-collapse: input == {<primary>: <scalar>}
-		if prim, ok := pluginPrimaryFor(word); ok && input.Kind == yaml.MappingNode &&
+		if prim, ok := primaries[word]; ok && input.Kind == yaml.MappingNode &&
 			len(input.Content) == 2 && input.Content[0].Value == prim &&
 			input.Content[1].Kind == yaml.ScalarNode {
 			input = input.Content[1]

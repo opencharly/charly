@@ -52,7 +52,12 @@ func init() {
 // deploykit.BundleNode (a type alias), so this satisfies SaveBundleConfig's callback
 // signature without a deploykit type reference in deploy_nodeform.go.
 func marshalDeployNode(name string, node *spec.Deploy) (*yaml.Node, error) {
-	return marshalBundleNode(node)
+	// The plan-resugar primaries table is now DATA (spec.ResolvedProject.Primaries): the host
+	// sources it from loaderThreaded().Primaries — the SAME registry-derived projection that fills
+	// the resolved-project envelope's Primaries field — instead of marshalBundleNode reaching the
+	// package-private pluginPrimaries global. A plugin-side deploy-state writer passes the envelope's
+	// Primaries to the identical (relocated) marshal, the K4 keystone this decoupling establishes.
+	return marshalBundleNode(node, loaderThreaded().Primaries)
 }
 
 // saveBundleConfigNodeForm persists a BundleConfig through the kind-blind
