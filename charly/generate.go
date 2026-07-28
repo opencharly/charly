@@ -285,50 +285,54 @@ func NewGenerator(dir string, tag string, opts ResolveOpts) (*Generator, error) 
 	return g, nil
 }
 
-// cleanStaleBuildDirs removes image directories in .build/ that don't correspond
-// to any enabled image, and removes leftover files like docker-bake.hcl.
-func (g *Generator) cleanStaleBuildDirs() error {
-	entries, err := os.ReadDir(g.BuildDir)
+// newCandyScanGenerator builds a Generator populated with ONLY Config+Candies+Dir+BuildDir (a
+// candy scan, no box resolve/intermediates/versions/render-prep) — the minimal state the
+// render-seam floor's 2 remaining reverse-channel consumers (resolveInlineBuilderSeam /
+// ensureBuildersConnected, host_build_render_seam.go) and emitBakedPlugins (host_build_bake_plugins.go)
+// need. MUCH cheaper than NewGenerator: the build-engine RESOLVE (box resolve / intermediates /
+// versions / render-prep) now runs entirely plugin-side (candy/plugin-build's resolveBuildEngine,
+// K3) — recomputing that pipeline again host-side for the render-seam cache was 100% wasted work
+// (proven dead by call-graph: nothing downstream ever read the second Generator's render-prep
+// output). Skips the build-time plugin connect + pre-build validate NewGenerator also runs: both
+// already ran plugin-side (resolveBuildEngine steps 4-5) by the time this is reached through the
+// normal build/generate path, and ensureBuildersConnected connects on demand itself when reached
+// any other way (e.g. the loadRenderGen defensive fallback).
+func newCandyScanGenerator(dir string, includeDisabled bool, extraCandyRefs []string) (*Generator, error) {
+	cfg, err := LoadConfig(dir)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
+		return nil, err
 	}
-	for _, entry := range entries {
-		if entry.IsDir() {
-			name := entry.Name()
-			// Skip charly-managed staging dirs (_candy, _buildconfig, .locks,
-			// transient ._*.tmp.* dirs): they are NOT images, and removing them
-			// races a concurrent build that is COPYing from / locking on them.
-			if strings.HasPrefix(name, "_") || strings.HasPrefix(name, ".") {
-				continue
-			}
-			if _, exists := g.Boxes[name]; !exists {
-				path := filepath.Join(g.BuildDir, name)
-				if err := os.RemoveAll(path); err != nil {
-					return fmt.Errorf("removing stale dir %s: %w", path, err)
-				}
-				fmt.Fprintf(os.Stderr, "Removed stale build dir: .build/%s\n", name)
-			}
-		} else if entry.Name() == "docker-bake.hcl" {
-			// Remove leftover HCL file from pre-charly-build era
-			path := filepath.Join(g.BuildDir, entry.Name())
-			if err := os.Remove(path); err != nil {
-				return fmt.Errorf("removing stale file %s: %w", path, err)
-			}
-			fmt.Fprintf(os.Stderr, "Removed stale file: .build/%s\n", entry.Name())
-		}
+	defaultDistroCfg, _, defaultInitCfg, err := LoadDefaultBuildConfig(dir)
+	if err != nil {
+		return nil, fmt.Errorf("loading default build config: %w", err)
 	}
-	return nil
+	RegisterBuildVocabulary(defaultDistroCfg)
+	opts := ResolveOpts{IncludeDisabled: includeDisabled, ExtraCandyRefs: extraCandyRefs, InitCfg: defaultInitCfg}
+	layers, err := ScanAllCandyWithConfigOpts(dir, cfg, opts)
+	if err != nil {
+		return nil, err
+	}
+	return &Generator{
+		Dir:            dir,
+		Config:         cfg,
+		Candies:        layers,
+		InitConfig:     defaultInitCfg,
+		BuildDir:       filepath.Join(dir, ".build"),
+		Containerfiles: make(map[string]string),
+		ExtraCandyRefs: extraCandyRefs,
+	}, nil
 }
 
-// Generate generates all build artifacts
+// baselineContextIgnore reads the context_ignore_baseline list from the embedded charly.yml via
+// the shared minimal decoder; panics if the embed is malformed or the directive is empty (a
+// build-time invariant, never a runtime input). Read ONLY by hostBuildContextIgnoreBaseline
+// (host_build_buildengine.go), the thin data leg candy/plugin-build's writeContextIgnore fetches
+// this bootstrap-embedded fact through (K3 host-prep move — cleanStaleBuildDirs/writeContextIgnore/
+// createRemoteCandyCopies/ensureCharlyBinaryFresh themselves moved to candy/plugin-build/host_prep.go;
+// this ONE piece of static data stays host because a separate Go module cannot //go:embed
+// charly/charly.yml).
 var baselineContextIgnore = parseEmbeddedContextIgnoreBaseline()
 
-// parseEmbeddedContextIgnoreBaseline reads the context_ignore_baseline list from the
-// embedded charly.yml via the shared minimal decoder; panics if the embed is malformed or
-// the directive is empty (a build-time invariant, never a runtime input).
 func parseEmbeddedContextIgnoreBaseline() []string {
 	var doc struct {
 		ContextIgnoreBaseline []string `yaml:"context_ignore_baseline"`
@@ -338,54 +342,6 @@ func parseEmbeddedContextIgnoreBaseline() []string {
 		panic("generate: embedded charly.yml has no context_ignore_baseline: directive")
 	}
 	return doc.ContextIgnoreBaseline
-}
-
-// contextIgnoreFiles are the two engine-native build-context ignore files charly
-// generates. podman reads .containerignore (preferring it) or .dockerignore;
-// docker reads only .dockerignore. Emitting both from one source covers both
-// engines with no divergent hand-maintained dotfile.
-var contextIgnoreFiles = []string{".containerignore", ".dockerignore"}
-
-// writeContextIgnore renders the build-context exclude list
-// (baselineContextIgnore + defaults.context_ignore) into BOTH
-// .containerignore and .dockerignore at the project root (the build context
-// root). Single source of values, two render targets — keeps podman and
-// docker builds in lockstep without a hand-maintained dotfile. Insertion
-// order is deterministic (fixed baseline, then author-ordered config),
-// duplicates collapsed.
-func (g *Generator) writeContextIgnore() error {
-	seen := make(map[string]bool)
-	var patterns []string
-	add := func(p string) {
-		p = strings.TrimSpace(p)
-		if p == "" || seen[p] {
-			return
-		}
-		seen[p] = true
-		patterns = append(patterns, p)
-	}
-	for _, p := range baselineContextIgnore {
-		add(p)
-	}
-	if g.Config != nil {
-		for _, p := range g.Config.Defaults.ContextIgnore {
-			add(p)
-		}
-	}
-
-	var b strings.Builder
-	for _, name := range contextIgnoreFiles {
-		b.Reset()
-		fmt.Fprintf(&b, "# %s (generated -- do not edit; source: defaults.context_ignore in charly.yml)\n", name)
-		for _, p := range patterns {
-			b.WriteString(p)
-			b.WriteByte('\n')
-		}
-		if err := kit.AtomicWriteFile(filepath.Join(g.Dir, name), []byte(b.String()), 0o644); err != nil {
-			return fmt.Errorf("writing %s: %w", name, err)
-		}
-	}
-	return nil
 }
 
 // resolveBuilderStage is the SHARED OpResolve Invoke+decode for the builder BUILDER leg (R3 —
