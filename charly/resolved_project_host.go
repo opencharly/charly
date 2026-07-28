@@ -69,7 +69,13 @@ func projectResolvedProjectWithBoxes(cfg *Config, layers map[string]spec.CandyRe
 		ComputeIntermediates:  ComputeIntermediates,
 		ExternalizedBuilders:  externalizedBuilders,
 	}
-	return loaderkit.ProjectResolvedProject(cfg, layers, uf, distroCfg, builderCfg, initCfg, dir, version, calver, seams, diags, preResolvedBoxes)
+	rp, err := loaderkit.ProjectResolvedProject(cfg, layers, uf, distroCfg, builderCfg, initCfg, dir, version, calver, seams, diags, preResolvedBoxes)
+	if rp != nil {
+		// Primaries: the plugin-verb PRIMARY-field D-fact snapshot (loaderThreaded().Primaries),
+		// carried on the resolved-project envelope for the deploy-tree resugar (envelope keystone, lane3).
+		rp.Primaries = loaderThreaded().Primaries
+	}
+	return rp, err
 }
 
 // fillNamespacedBoxes populates *out with a namespace-QUALIFIED spec.ResolvedBoxView (`fedora.jupyter`,
