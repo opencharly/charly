@@ -193,6 +193,7 @@ var kernelFloor = []floorEntry{
 	// remaining #118 gate, tracked residue again below, moving into candy/plugin-build/
 	// plugin-deploy-pod).
 	{"service_render.go", "M — RenderService: thin providerRegistry.ResolveKind(\"init\") dispatch, the direct callee of the already-floor host_build_render_service.go; also carries the egress-validation dispatch merged from the deleted charly/egress.go (coneB-buildtail) — thin verb:egress registry-dispatch plus the load-bearing vmshared/kit init-seam wiring those SDK packages' own function-var injection points require (they cannot import charly core)"},
+	{"sidecar.go", "M/D — embeddedSidecarBodies ONLY: the go:embed sidecar-template library read (charly-binary-resident default config via embeddedDefaults), served to plugins via the thin list-sidecars seam's BodiesJSON. Binary-resident DATA the plugins cannot hold themselves (clause-D host data read); the sidecar RESOLVE dispatch + adapter already moved to candy/plugin-deploy-pod (this cone's sidecar seam-death). Same class as the embedded-defaults host reads"},
 	{"format_config.go", "M/D — LoadBuildConfigForBox: loader-glue (LoadUnified, K1) + registry-callback wiring, a shared cross-cone utility (P13/P15/P11/K3 + candy/plugin-vm all call it)"},
 	{"oci_step_emit.go", "M — dispatchOCIStep: thin word→plugin registry dispatch + reverse-channel forwarder, same shape as the already-floor dispatch_build_ensure.go/deploy_target_dispatch.go"},
 	{"step_emit_hostbuild.go", "M — the generic \"step-emit\" F10 HostBuild seam (word-keyed stepEmitters dispatch, kind-blind — same shape as the ~25 other host_build_*.go floor entries)"},
@@ -262,7 +263,6 @@ var residueOwner = map[string]string{
 	"layer_secrets.go":              "P8b",
 	"namespace.go":                  "P15",
 	"secrets.go":                    "P11",
-	"sidecar.go":                    "P11",
 	"substrate_template_resolve.go": "P15",
 	// — files added by cutovers that landed after the T0 authoring (living tracker) —
 	"config_write_host.go":     "P11",
