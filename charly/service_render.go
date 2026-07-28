@@ -6,15 +6,94 @@ package main
 // stdout policy mappings — lives in candy/plugin-init's OpResolve. The host builds
 // the entry-derived, home-expanded ServiceRenderContext (pure ServiceEntry
 // projection, no init knowledge) and calls the plugin, then egress-validates.
+//
+// Also carries the egress-validation dispatch (merged from the deleted charly/egress.go,
+// coneB-buildtail dissolution): the validation logic + CUE schemas live in the compiled-in
+// candy/plugin-egress; these functions resolve verb:egress and Invoke its OpValidate. The
+// egress gate proves the config artifacts charly WRITES (cloud-init, k8s manifests, traefik
+// routes, ledger JSON, the Containerfile, systemd/supervisord units, libvirt domain XML)
+// BEFORE the bytes hit disk. host→plugin dispatch (plain resolve+Invoke, NOT the F10
+// plugin→plugin reverse channel) — the pattern of credential_plugin.go. Compiled-in placement
+// keeps it resolvable during build AND deploy with no connect step and no per-call gRPC cost.
+// validateTextEgress below is this file's OWN live call (RenderService's unit-text gate); the
+// two init() functions inject the host implementation into vmshared/kit's swappable seam vars
+// (vmshared/kit cannot import charly core) — LOAD-BEARING wiring, not dead code, even though
+// no other charly/*.go file calls ValidateEgress/ValidateEgressValue directly any more.
 
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
 )
+
+// init wires the host-side implementations of vmshared's injection seams (hooks.go):
+// vmshared cannot import charly core, so the host installs ValidateEgress (the egress gate
+// below) and UnmarshalEmbeddedDefaults (embed_defaults.go) into vmshared's function vars at
+// startup. Relocated here from the deleted charly/egress.go (coneB-buildtail dissolution;
+// egress.go itself was relocated from the deleted charly/vmshared_aliases.go) — this is
+// load-bearing seam wiring, NOT an alias (ZERO-ALIASES v2).
+func init() {
+	vmshared.ValidateEgress = ValidateEgress
+	vmshared.UnmarshalEmbeddedDefaults = unmarshalEmbeddedDefaults
+}
+
+// Inject charly's egress-schema validation into the ledger's record-write path
+// (sdk/kit has no egress subsystem — it calls the kit.ValidateRecord seam).
+func init() { kit.ValidateRecord = ValidateEgressValue }
+
+// egressValidate resolves the egress plugin and runs one OpValidate. mode ∈
+// {bytes, text, xml}: "bytes" for serialized YAML/JSON (covers ValidateEgress + the
+// marshalled ValidateEgressValue), "text" for a rendered non-data string, "xml" for the
+// koala-decoded (best-effort) libvirt domain XML.
+func egressValidate(kind, label, mode, data string) error {
+	prov, ok := providerRegistry.resolve(ClassVerb, "egress")
+	if !ok {
+		return fmt.Errorf("%s: egress plugin (verb:egress) not registered — charly built without candy/plugin-egress", label)
+	}
+	reply, err := invokeTyped[map[string]string, egressReply](context.Background(), prov, "egress", OpValidate,
+		map[string]string{"kind": kind, "label": label, "mode": mode, "data": data})
+	if err != nil {
+		return fmt.Errorf("%s: egress: %w", label, err)
+	}
+	if reply.Error != "" {
+		return errors.New(reply.Error)
+	}
+	return nil
+}
+
+// egressReply is verb:egress's OpValidate reply — a single error string ("" = valid).
+type egressReply struct {
+	Error string `json:"error"`
+}
+
+// ValidateEgress validates already-serialized YAML or JSON bytes against the egress kind's
+// schema before they are written. JSON is a YAML subset, so one ingest path covers both.
+func ValidateEgress(kind, label string, data []byte) error {
+	return egressValidate(kind, label, "bytes", string(data))
+}
+
+// ValidateEgressValue validates an in-memory Go value (a manifest map[string]any, a record
+// struct) by marshalling it to JSON and validating as bytes — faithful for the data values
+// egress gates (k8s manifests, ledger records).
+func ValidateEgressValue(kind, label string, v any) error {
+	data, err := json.Marshal(v)
+	if err != nil {
+		return fmt.Errorf("%s: egress marshal value: %w", label, err)
+	}
+	return egressValidate(kind, label, "bytes", string(data))
+}
+
+// validateTextEgress validates a rendered NON-DATA text artifact (Containerfile, service
+// unit) against the rendered_text string constraint (rejects the "<no value>" template marker).
+func validateTextEgress(label, text string) error {
+	return egressValidate("rendered_text", label, "text", text)
+}
 
 // The render types are shared spec envelopes (host builds them, plugin renders).
 // ResolvedInit is the init de-type's build/label/entrypoint value envelope the
