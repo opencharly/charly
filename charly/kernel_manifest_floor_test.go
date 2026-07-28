@@ -88,7 +88,7 @@ var kernelFloor = []floorEntry{
 	{"image.go", "B — the charly box CLI grammar spine (BoxCmd, embeds kong.Plugins for plugin-box's nested subcommands) + FormatCLIError, the top-level Kong error formatter main() calls; BoxPullCmd already externalized to candy/plugin-box (K3 #39)"},
 	{"k8s_config.go", "M — the host-side k8s loader-read HELPER of the FLOORED deploy-entity-resolve seam (findK8sSpec's SOLE caller is host_build_deploy_entity_resolve.go, in kernelFloor): LoadUnified→loaderkit.ProjectTemplates.K8s→resolveK8sViaPlugin, the kind:k8s→ResolvedK8s resolution the generic seam performs for plugin-kube. Same floor-class as its seam; NOT a raw-project move (that would duplicate the seam's resolution + entangle substrate_template_resolve)"},
 	{"layer_secrets.go", "M — CandyForPlan, the deploy-candy-secrets seam's project-candy-scan HELPER (ScanAllCandyWithConfig + *Config, both core-only loader mechanics no plugin can run itself): reloads the candy map and orders it against a compiled plan set. Kind-blind — no per-kind branch, just plan→candy-name lookup. SOLE real callers are the already-floor host_build_deploy_candy_secrets.go (its own \"deploy-candy-secrets\" seam) and build_overlay.go's hostBuildOverlay (call-graph verified). The secret_requires:/secret_accepts: RESOLUTION this file used to carry (ensureCandySecret/ResolveCandySecret/ResolveSecretForCandy) had no core-only dependency beyond the already-injectable CredentialAccess and relocated to sdk/deploykit/secret_candy_resolve.go (#118 coneB-p8bremainder), shrinking this file to just the loader-coupled half"},
-	{"load_executor_host.go", "M — the HOST'S OWN loader-entry seam: the permanent typed hostLoaderExecutor the FLOORED config.go/unified.go LoadUnified drives loaderkit through (loaderkit.LoadSeamsFromExecutor, U3, zero marshal) so the host can load its own charly.yml — a plugin host must read its own config to bootstrap; that never leaves core. The host half of the loader-seam M, the same class as host_build_loader_floor.go's permanent legs (distinct from host_build_loader.go's transitional legs, residue). The loaderkit import is the shared P16b import-purity concern config.go/unified.go carry, tracked separately"},
+	{"load_executor_host.go", "M — the HOST'S OWN loader-entry seam: the permanent typed hostLoaderExecutor the FLOORED config.go/unified.go LoadUnified drives loaderkit through (loaderkit.LoadSeamsFromExecutor, U3, zero marshal) so the host can load its own charly.yml — a plugin host must read its own config to bootstrap; that never leaves core. The host half of the loader-seam M, the same class as host_build_loader_floor.go's permanent legs. The loaderkit import is the shared P16b import-purity concern config.go/unified.go carry, tracked separately"},
 	{"loader_threaded.go", "D — the kind-recognition threaded-data snapshot the host fills from the registry and threads to the kind-blind parse (the boundary law's canonical D example; untying the loader↔registry cycle)"},
 	{"local_spec.go", "M — the host-side local-template loader-read HELPER of the FLOORED check_cmd.go (findLocalSpec's SOLE caller is check_cmd.go:267, the floored `target: local --verify` path, in kernelFloor): LoadUnified→resolveLocalRefFor→resolveLocalViaPlugin (pure InvokeProvider dispatch — the resolution capability lives in the substrate plugin). Same floor-class as its seam; NOT a raw-project move (identical evidence to k8s_config)"},
 	{"main.go", "B — the Kong parse/dispatch spine + the bootstrap entry point"},
@@ -158,7 +158,7 @@ var kernelFloor = []floorEntry{
 	{"host_build_deploy_node_del_dispatch.go", "M — the deploy-node-del dispatch F10 host-builder (kind-blind dispatch)"},
 	{"host_build_resolve_target_add.go", "M — the resolve-target-add F10 host-builder (K4-C shape-2: the per-node deploy TERMINAL step — reconstruct ancestor exec chain + loadConfigForDeploy + ResolveTarget + Add; kind-blind deploy dispatch, floor-M per the deploy-dispatch ruling). Replaced host_build_deploy_node_dispatch.go when the per-node COMPILE moved plugin-side (double-bounce elimination)"},
 	{"host_build_deploy_plugins_connect.go", "M — the deploy-plugins-connect F10 host-builder (reverse-channel; kind-blind — the K1-LOADER witness preamble: loadDeployPlugins + project dir)"},
-	{"host_build_loader_floor.go", "M/D — the PERMANENT loader reverse legs (loader-bootstrap = bootstrap-phase plugin dispatch; loader-walk = prescan+connectDeclaredKindPlugins; loader-threaded = the registry-derived Threaded D-snapshot) a plugin-side loader always calls back for; the transitional loader legs live in host_build_loader.go (residue)"},
+	{"host_build_loader_floor.go", "M/D — the PERMANENT loader reverse legs (loader-bootstrap = bootstrap-phase plugin dispatch; loader-walk = prescan+connectDeclaredKindPlugins; loader-threaded = the registry-derived Threaded D-snapshot; loader-materialize = the registry kind-decode reverse face for MaterializeLoadedProject) a plugin-side loader always calls back for; the former transitional host_build_loader.go is DISSOLVED — its 2 loader-validate legs moved to the 3 substrate plugins (bundle/build/vm) via loaderkit.Validate*+ResolveVia*Executor"},
 	{"host_build_pod_config.go", "M — the pod-config F10 reverse-channel dispatch seam (hostEnvJSON host-only; kind-blind)"},
 	{"host_build_pod_config_seams.go", "M — the pod-config F10 host-builders the plugin calls back (loader/registry/credential-coupled reverse-legs)"},
 	{"host_build_pod_lifecycle_dispatch.go", "M — the pod-lifecycle dispatch F10 host-builder wrapping dispatchLifecycleTarget (ResolveTarget+loader+live-executor; kind-blind M)"},
@@ -208,7 +208,7 @@ var kernelFloor = []floorEntry{
 	// Build-tail cone (coneB-buildtail) — spike-verified by call-graph, applying the SAME "thin
 	// backing-body of an already-accepted floor seam" bar the team lead corrected round 1 against
 	// (no capability logic moved to floor this round — only genuine dispatch/bootstrap glue).
-	{"host_build_buildengine.go", "M — the shrunk render-seam-floor consumer (hostBuildPrep/hostBuildContextIgnoreBaseline) + the 6 other buildengine-* K1-loader-witness legs (bootstrap-delicate local scan, git clone/cache, build-time plugin CONNECT registry-M, namespaced-box nested scan+render-prep) resolveBuildEngine reaches for genuinely host-only steps — mirrors host_build_loader.go's loader-* legs, already floor"},
+	{"host_build_buildengine.go", "M — the shrunk render-seam-floor consumer (hostBuildPrep/hostBuildContextIgnoreBaseline) + the 6 other buildengine-* K1-loader-witness legs (bootstrap-delicate local scan, git clone/cache, build-time plugin CONNECT registry-M, namespaced-box nested scan+render-prep) resolveBuildEngine reaches for genuinely host-only steps — mirrors host_build_loader_floor.go's loader-* legs, already floor"},
 	{"distro.go", "M/D — detectDistro/installHints/distroPackageManagers/distroFamilyMap: bootstrap-embedded host-detection data + the /etc/os-release parse, SOLE consumer is the already-floor host_build_hostprobe.go; splitting the file to move only the pure parse half saves nothing and inlining the rest would be the forbidden cosmetic-gaming pattern"},
 	{"distro_resolve.go", "M — resolveDistroViaPlugin: a thin providerRegistry-coupled dispatch callback, the direct callee of the already-floor format_config.go (loaderkit.ProjectDistroConfig) — byte-for-byte the same shape as service_render.go's resolveInitConfigViaPlugin, accepted round 1"},
 	// Build-remnant cone (coneB-buildremnant) — the Generator-cluster reconcile the round-1 rejection
@@ -342,21 +342,12 @@ var residueOwner = map[string]string{
 	// dispatch moved plugin-side into candy/plugin-deploy-vm's dispatchVmEphemeralRegister, the exact
 	// mirror of its OpEphemeralTeardown twin: vmPrepareVenue now Invokes command:bundle directly, so
 	// the host round-trip + its panic-vs-warning bookkeeping are deleted, not floored.)
-	// load_executor_host.go + host_build_loader.go — Unit C/B of the K1-LOADER
-	// RELOCATION (make loaderkit.LoadUnified plugin-callable). load_executor_host.go
-	// is the compiled-in TYPED loaderkit.LoaderExecutor (the charly→loaderkit
-	// wrapper charly.LoadUnified drives through LoadSeamsFromExecutor). host_build_
-	// loader.go holds ONLY the TRANSITIONAL reverse legs — loader-materialize
-	// (drives the RELOCATED loaderkit.MaterializeLoadedProject orchestration over the
-	// host leaf seams, #48 done) + loader-android-validate + loader-preempt-validate
-	// (capability validators that
-	// move to loaderkit reaching the registry via the generic Threaded/InvokeProvider
-	// seam). Both dissolve as the loader's call sites finish moving into their owning
-	// plugin (K1 loader-orchestration, P15 — the SAME owner as unified.go). The
-	// PERMANENT loader legs (bootstrap-phase dispatch / prescan+connect / the D
-	// snapshot) live in host_build_loader_floor.go, classified FLOOR (kernelFloor
-	// above) so residue→0 GREEN stays reachable.
-	"host_build_loader.go": "P15",
+	// (host_build_loader.go RETIRED — dissolved: the 3 substrate plugins (bundle/build/vm) self-serve
+	// the loader validators ValidateAndroidDevices + ValidatePreemptible via loaderkit.Validate* +
+	// ResolveVia*Executor (InvokeProvider mid-load); the 2 host validate legs + their registration are
+	// deleted. The PERMANENT loader legs — bootstrap-phase dispatch / prescan+connect / the D snapshot /
+	// the materialize kind-decode reverse face — live in host_build_loader_floor.go, classified FLOOR
+	// (kernelFloor above) so residue→0 GREEN stays reachable.)
 }
 
 func TestKernelManifest_CoreIsPinnedToTheFabricFloor(t *testing.T) {

@@ -19,7 +19,7 @@ import (
 // resolve ORCHESTRATION + drive-model now run plugin-side.
 //
 // Class-generic action-noun kinds (never provider words — the F11 uniform-API gate), mirroring
-// host_build_loader.go's loader-* legs one level up the stack.
+// host_build_loader_floor.go's loader-* legs one level up the stack.
 
 // hostBuildScanLocal runs the local candy scan host-side (RegisterBuildVocabulary is applied first so
 // parseCandyYAML classifies distro/format keys) and returns the UNFINALIZED ScannedCandy map. The

@@ -14,12 +14,14 @@ import (
 // load_executor.go — the K1-LOADER RELOCATION WITNESS (Unit D): command:bundle drives
 // loaderkit.LoadUnified ITSELF, plugin-side, proving a genuine out-of-module plugin can run the
 // whole project loader without importing charly core. execLoaderExecutor implements
-// loaderkit.LoaderExecutor by dispatching each registry-/host-coupled loader step over
-// sdk.Executor.HostBuild to charly's "loader-*" host legs (charly/host_build_loader.go); paired with
-// loaderkit.LoadSeamsFromExecutor, LoadUnified's kind-blind orchestration + the PURE relocated
+// loaderkit.LoaderExecutor by dispatching each registry-coupled loader step over
+// sdk.Executor.HostBuild to charly's "loader-*" host legs (charly/host_build_loader_floor.go); paired
+// with loaderkit.LoadSeamsFromExecutor, LoadUnified's kind-blind orchestration + the PURE relocated
 // LOAD-half seams (flatten/fold/validate-members + the DATA-driven stamp / ephemeral / check-bed
-// validators) run entirely plugin-side. Only these six legs cross the wire; the compiled-in host
-// (charly.LoadUnified) reaches the SAME host funcs directly through the TYPED hostLoaderExecutor.
+// validators) run entirely plugin-side. Only the FOUR host-coupled legs (bootstrap / walk / threaded /
+// materialize) cross the wire; the two capability validators (ValidateAndroidDevices /
+// ValidatePreemptible) now self-serve plugin-side over InvokeProvider(kind, OpResolve). The compiled-in
+// host (charly.LoadUnified) reaches the SAME host funcs directly through the TYPED hostLoaderExecutor.
 type execLoaderExecutor struct {
 	ctx context.Context
 	ex  *sdk.Executor
@@ -84,26 +86,19 @@ func (e *execLoaderExecutor) MaterializeLoadedProject(lp *spec.LoadedProject, me
 	return nil
 }
 
-// ValidateAndroidDevices / ValidatePreemptible run the two registry-coupled validators host-side
-// (loaderkit.UnifiedFile → in-band error).
+// ValidateAndroidDevices runs the kind:android box⊻adb XOR validator PLUGIN-SIDE:
+// loaderkit.ValidateAndroidDevices in-plugin, threading the android resolve callback over
+// InvokeProvider(kind, "local", OpResolve) — no host round-trip (the loader-android-validate host
+// leg dissolved).
 func (e *execLoaderExecutor) ValidateAndroidDevices(uf *loaderkit.UnifiedFile) error {
-	return e.validateLeg("loader-android-validate", uf)
+	return loaderkit.ValidateAndroidDevices(uf, loaderkit.ResolveAndroidViaExecutor(e.ctx, e.ex))
 }
 
+// ValidatePreemptible runs the preemptible/requires_exclusive/requires_shared validator PLUGIN-SIDE:
+// loaderkit.ValidatePreemptible in-plugin, threading the resource/vm resolve callbacks over
+// InvokeProvider(kind, OpResolve) — no host round-trip (the loader-preempt-validate host leg dissolved).
 func (e *execLoaderExecutor) ValidatePreemptible(uf *loaderkit.UnifiedFile) error {
-	return e.validateLeg("loader-preempt-validate", uf)
-}
-
-func (e *execLoaderExecutor) validateLeg(kind string, uf *loaderkit.UnifiedFile) error {
-	// MarshalMaterialized (NOT json.Marshal): both host validators read uf.PluginKinds (android →
-	// uf.Android(), preempt → uf.VM()), which a plain marshal drops — the host would then see zero
-	// entities and mis-validate. This carries them across byte-identically.
-	reqJSON, err := loaderkit.MarshalMaterialized(uf)
-	if err != nil {
-		return err
-	}
-	_, err = e.ex.HostBuild(e.ctx, kind, reqJSON)
-	return err
+	return loaderkit.ValidatePreemptible(uf, loaderkit.ResolveResourceViaExecutor(e.ctx, e.ex), loaderkit.ResolveVmViaExecutor(e.ctx, e.ex))
 }
 
 // resolveTreeViaLoader is the witness entry: it drives loaderkit.LoadUnified PLUGIN-SIDE (over

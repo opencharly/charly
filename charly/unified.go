@@ -190,8 +190,8 @@ func canonicalRef(ref, baseDir string) (key, path string, err error) {
 // kind-blind clause-R capability logic reaching the registry only via a threaded
 // resolve callback (resolveAndroidViaPlugin), the same relocation shape
 // ValidateCheckBeds / ValidateEphemeral took. The host wires it through the
-// LoaderExecutor.ValidateAndroidDevices leg (load_executor_host.go) +
-// host_build_loader.go.
+// LoaderExecutor.ValidateAndroidDevices leg (load_executor_host.go); a plugin-side
+// loader self-serves the SAME validator over InvokeProvider(kind, OpResolve).
 
 // -----------------------------------------------------------------------------
 // Discovery scanner (Part D).
