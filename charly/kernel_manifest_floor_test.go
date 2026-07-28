@@ -236,6 +236,16 @@ var kernelFloor = []floorEntry{
 	// coupling; its one dependency was already a generic plugin-reachable seam) — see
 	// host_build_config_resolve.go's shrunk "config-resolve" seam + the CUE Backend field removal.
 	// What remains in these 3 files is genuine floor-M, verified individually below.
+	//
+	// P15 host-seam trio (coneB-p15host) — a MIXED verdict per file, not a uniform floor: filelock.go
+	// was PARTIALLY a removable duplicate (acquireFileLock/errLockBusy carried ZERO charly-specific
+	// behavior — a 1:1 signature pass-through of kit.AcquireFileLock/kit.ErrLockBusy — deleted, every
+	// caller repointed to kit directly, and their genuine lock-semantics test coverage moved to
+	// sdk/kit/filelock_test.go, filling an actual sdk-side coverage gap). host_build_retention_defaults.go
+	// and validate_project_host.go are both genuine, verified floor-M — see their own entries below.
+	{"filelock.go", "M — acquireDeployConfigLock, the ONE remaining wrapper: composes DeployConfigPath() (kit.DefaultDeployConfigPath alias, deploy.go) + kit.AcquireFileLock into the ONE process-shared lock every deploy-config writer serializes through — injected as a callback into deploykit.SaveVmDeployState/RemoveVmDeployEntry (host_build_config_resolve.go) today. Flagged (not fixed here, outside this file's disjoint slice): the whole body is now provably sdk-portable too, since DeployConfigPath is itself a pure kit alias — a future batch could move it to sdk/kit and drop the injected acquireLock parameter"},
+	{"host_build_retention_defaults.go", "M — the retention-defaults F10 host-builder: the ONE thing candy/plugin-clean's retention engine cannot compute itself (defaults.keep_images/keep_check_runs, needing the core LoadConfig loader). Reached by verb:retention's two non-core callers (command:clean's own CLI, candy/plugin-check's post-run prune) — core's own retention callers (plugin-box's post-build prune + box-list-tags) resolve defaults in-process and never touch this seam. Kind-blind generic host-read, call-graph verified single-purpose, zero dead code"},
+	{"validate_project_host.go", "M — the HOST half of the `charly box validate` engine relocation (task #60 Unit B): the validate ENGINE runs in candy/plugin-box, but the host keeps what a plugin structurally CANNOT do — the error-TOLERANT resolved-project projection (validate must run on a broken project) + the host-natural checks needing RAW authored config a projection drops (CUE-schema conformance, build-tunable/merge rules, the box base⊻from XOR) + the two REGISTRY-derived D-data word sets (ProviderCapabilities/ActCapableVerbs) a plugin cannot dial the host registry to enumerate itself. Also carries validateProjectForBuild, the pre-build validation GATE dispatching command:validate by word over the in-proc reverse channel (kind-blind M, registry-by-word) — its own header names the ONE tracked non-kind-blind exception (a legacy word-list arm) already on the orchestrator's tree-final review list"},
 }
 
 // residueOwner maps every tracked-for-removal charly/*.go non-test file to its
@@ -259,14 +269,12 @@ var residueOwner = map[string]string{
 	"cue_defaults.go":               "P15",
 	"deploy_nodeform.go":            "P13",
 	"enc.go":                        "P11",
-	"filelock.go":                   "P15",
 	"layer_secrets.go":              "P8b",
 	"namespace.go":                  "P15",
 	"secrets.go":                    "P11",
 	"substrate_template_resolve.go": "P15",
 	// — files added by cutovers that landed after the T0 authoring (living tracker) —
-	"config_write_host.go":     "P11",
-	"validate_project_host.go": "P15",
+	"config_write_host.go": "P11",
 	// — Cutover A (#168, deploy-dispatch kernel hard-cutover exit): the K4-C
 	// deploy-tree walk port narrows the retired deploy-dispatch spike into 6
 	// per-position seams (candy/plugin-bundle drives the walk; each seam calls
@@ -343,8 +351,7 @@ var residueOwner = map[string]string{
 	// (bundle_compile_seam.go's dispatch pattern); the family the seam SERVES
 	// (ephemeral lifecycle, explicitly named in P11's "lifecycle" scope) governs
 	// over incidental mechanism-shape similarity to a P13 sibling.
-	"ephemeral_dispatch.go":            "P11",
-	"host_build_retention_defaults.go": "P15",
+	"ephemeral_dispatch.go": "P11",
 	// load_executor_host.go + host_build_loader.go — Unit C/B of the K1-LOADER
 	// RELOCATION (make loaderkit.LoadUnified plugin-callable). load_executor_host.go
 	// is the compiled-in TYPED loaderkit.LoaderExecutor (the charly→loaderkit
