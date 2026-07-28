@@ -10,12 +10,12 @@ import (
 )
 
 // render.go — the plugin-build RENDER DRIVE (#67 render-DRIVE move). plugin-build builds a
-// deploykit.Generator from the resolved-project envelope (returned by HostBuild("build-prep"))
-// via the SHARED deploykit.NewRenderGeneratorFromProject helper (R3/DRY — the ONE construction
+// deploykit.Generator from the resolved-project envelope (produced plugin-side by resolveBuildEngine,
+// K3 U6) via the SHARED deploykit.NewRenderGeneratorFromProject helper (R3/DRY — the ONE construction
 // source candy/plugin-build and candy/plugin-deploy-pod both call), then runs dg.Generate(order)
 // to render Containerfiles. The render reads RESOLVED data (caches on ResolvedBox + CandyModel)
-// WITHOUT the live *Candy/*Config graph — the host build-prep seam filled the caches + projected
-// the envelope. The host-coupled seams (the 9 render-seam methods + EmitBakedPlugins) are wired
+// WITHOUT the live *Candy/*Config graph — the plugin-side resolve filled the caches (render-prep) +
+// projected the envelope. The host-coupled seams (the 9 render-seam methods + EmitBakedPlugins) are wired
 // inside the shared helper; they call back to the host over the in-proc reverse channel
 // (placement-invisible: compiled-in goes in-proc, out-of-process goes over gRPC).
 

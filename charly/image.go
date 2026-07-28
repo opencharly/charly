@@ -1,15 +1,12 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/alecthomas/kong"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
 )
 
 // BoxCmd groups build-mode commands that operate on charly.yml.
@@ -40,73 +37,27 @@ type BoxCmd struct {
 // generate/validate/new/pkg/pull/build/inspect/list/labels/merge/reconcile above, P14-rest trace,
 // 2026-07 — labels externalized fully in K3, merge externalized at P14, reconcile externalized at
 // Cutover B unit 3+4 [it had no core-only coupling at all — see candy/plugin-box/reconcile.go], no
-// host reentry left for any of the three; pull externalized at FINAL/K5 unit 6a M4c, build at M4d
-// [the CLI-only mirror of pull's move: BoxPullCmd/BuildCmd's OWN grammar/dispatch are now the
-// compiled-in candy/plugin-box `pull`/`build` words; both Run bodies are UNCHANGED and stay behind
-// the hidden `__box-pull`/`__box-build` reentries over HostBuild("cli")]; see charly/labels.go +
-// candy/plugin-box/merge_cmd.go + candy/plugin-box/reconcile.go + candy/plugin-box/box.go's
-// dispatchPull/dispatchBuild): pkg_cmd.go already documents its own UNTIL-K1 note; feature is the
-// remaining residue in this struct.
+// host reentry left for any of the three; pull FULLY externalized (K3 #39 fold — candy/plugin-box's
+// dispatchPull now runs the ensure-image work itself via InvokeProvider(build:ensure), reaching the
+// registry ref off the resolved-project envelope; BoxPullCmd + the hidden __box-pull reentry are
+// DELETED), build at M4d [BuildCmd's OWN grammar/dispatch are the compiled-in candy/plugin-box
+// `build` word; its Run body is UNCHANGED and stays behind the hidden `__box-build` reentry over
+// HostBuild("cli")]; see charly/labels.go + candy/plugin-box/merge_cmd.go +
+// candy/plugin-box/reconcile.go + candy/plugin-box/box.go's dispatchPull/dispatchBuild): pkg_cmd.go
+// already documents its own UNTIL-K1 note; feature is the remaining residue in this struct.
 //
 // remote_image.go + BuildCmd.Run()'s own internals (bootstrap-builder execution, remote-ref
 // resolve/download/scan, retention pruning) are NOT CLI-dispersal residue — the M4d scoping trace
 // (FINAL/K5 unit 6a) re-classified them from a K5-dispersal IOU to the K1/K3-ENGINE family
 // (loader/build-engine cone, moves with those waves, never a CLI-verb tail-end guess):
-// RemoteImageContext.BuildImage constructs + calls BuildCmd.Run() DIRECTLY at the Go level, never
-// through Kong/CLI (still true for the CLI-reentry `charly box build @ref` path — buildRemote in
-// build.go), so the command-dispersal move above does not touch it. The former core ensure-image helper
+// buildRemote (build.go) resolves the remote ref host-side (ResolveRemoteImage, K1) then runs the
+// cached source through BuildCmd.Run() DIRECTLY at the Go level, never through Kong/CLI (the
+// CLI-reentry `charly box build @ref` path — the build-DRIVE half moved to build:box in
+// candy/plugin-build, K3 #39), so the command-dispersal move above does not touch it. The former core ensure-image helper
 // (core-min wave 3, build-engine cluster relocation) is DELETED — its ensure-image ORCHESTRATION
 // moved to candy/plugin-build's build:ensure word, dispatched via dispatchBuildEnsure
 // (dispatch_build_ensure.go), which is itself a thin, CLI-independent host helper — not part of
 // this command-dispersal accounting at all.
-
-// BoxPullCmd fetches an image from its registry into the local container
-// engine so deploy-mode commands can read its OCI labels. Accepts three
-// input forms:
-//
-//   - short name (e.g. "jupyter")           — resolves registry + tag via
-//     charly.yml (requires a project directory)
-//   - fully-qualified ref ("ghcr.io/...:v") — pulled as-is
-//   - remote ref ("@github.com/org/repo/box[:version]") — downloads the
-//     repo and pulls the registry ref from its charly.yml
-type BoxPullCmd struct {
-	Box      string `arg:"" help:"Box name (short, resolved via charly.yml), fully-qualified ref, or @github.com/org/repo/box[:version]"`
-	Tag      string `long:"tag" help:"Image CalVer tag when resolving a short name (empty = resolve from charly.yml metadata or error with explicit guidance)"`
-	Platform string `long:"platform" help:"Target platform (default: host)"`
-}
-
-func (c *BoxPullCmd) Run() error {
-	// `charly box pull` is the operator-facing alias for the canonical
-	// dispatchBuildEnsure path (candy/plugin-build's build:ensure word): pull
-	// from registry, fall back to a local build when the identifier maps to
-	// a project charly.yml entry. Same contract as BuilderRun, the check
-	// preflight, and EnsureImage in transfer.go (R3, no per-command
-	// divergence).
-	dir, _ := os.Getwd()
-	if c.Tag != "" {
-		// Tag override: only meaningful for short-name input. Resolve
-		// the canonical short-name ref FIRST so the build-fallback
-		// path picks up the requested tag.
-		if !kit.LooksLikeFullRef(c.Box) && !spec.IsRemoteImageRef(kit.StripURLScheme(c.Box)) {
-			cfg, _ := LoadConfig(dir)
-			if cfg == nil {
-				return fmt.Errorf("short name %q with --tag requires a project directory with charly.yml", c.Box)
-			}
-			resolved, err := ResolveBox(cfg, c.Box, c.Tag, dir, ResolveOpts{})
-			if err != nil {
-				return err
-			}
-			ref := kit.ResolveShellImageRef(resolved.Registry, resolved.Name, c.Tag)
-			return dispatchBuildEnsure(context.Background(), ref, dir, "", "")
-		}
-	}
-	return dispatchBuildEnsure(context.Background(), c.Box, dir, "", "")
-}
-
-// kit.LooksLikeFullRef (P12a: relocated to sdk/kit/local_image.go — it had 4
-// core callers beyond this file, R3 single-source) returns true if the image
-// ref contains a registry segment (a "/" before any ":") — e.g.
-// "ghcr.io/org/name:tag" — so it can be pulled without charly.yml resolution.
 
 // FormatCLIError wraps top-level Kong errors with a friendly recommendation
 // when the underlying cause is a missing local image (kit.ErrImageNotLocal).

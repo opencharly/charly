@@ -19,7 +19,7 @@ import (
 // call — so the render is byte-identical to the pre-move core render (byte-parity by
 // construction). The rich inputs (spec types — Builder, BuildStageContext, Op) ride the opaque
 // Params bytes; the host unmarshals + calls. The live *Generator (gen.Boxes/gen.Candies/
-// gen.Config/gen.Dir) comes from the per-dir renderGenCache populated by build-prep (one gen
+// gen.Config/gen.Dir) comes from the per-dir renderGenCache populated by the buildengine-prep leg (one gen
 // per dir per process) — no per-call reload.
 //
 // K3 render-seam production move: RenderService, the two detection/external builder resolves,
@@ -40,13 +40,14 @@ import (
 // only charly core (package main, which no other package can import) holds — also permanent.
 
 // renderGenCache holds the live *Generator per project dir for the render-seam host-builder.
-// Populated by hostBuildBuildResolve (the first HostBuild in a box build/generate); read by
-// hostBuildRenderSeam. One entry per dir per process — a single `charly box build` is one
-// process, so the cache holds the one gen build-prep loaded (render-prep already run).
+// Populated by the buildengine-prep host leg (hostBuildPrep, K3 U6 — the render-seam-floor
+// NewGenerator STAYS host); read by hostBuildRenderSeam. One entry per dir per process — a single
+// `charly box build` is one process, so the cache holds the one gen the prep leg loaded (render-prep
+// already run).
 var renderGenCache sync.Map
 
 // loadRenderGen returns the cached *Generator for dir, falling back to a fresh NewGenerator
-// (default opts) if the cache is empty (defensive — build-prep always populates it first).
+// (default opts) if the cache is empty (defensive — the buildengine-prep leg always populates it first).
 func loadRenderGen(dir string) *Generator {
 	if v, ok := renderGenCache.Load(dir); ok {
 		return v.(*Generator)

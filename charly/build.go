@@ -54,10 +54,10 @@ func ensureBuilderImageBuilt(engine, builderRef string) (string, error) {
 	}
 	fmt.Fprintf(os.Stderr, "Builder image %q not in local storage — building it automatically...\n", builderRef)
 	// Recurse on the dependency image through the SAME build:box dispatch the CLI uses
-	// (dispatchBoxBuild → the compiled-in candy/plugin-build DRIVE → HostBuild("build-prep")):
-	// the podman drive lives in the candy now (P8b), so the host cannot build inline. The
-	// in-proc reverse channel makes this re-entrant call cheap (no socket). Reached from the
-	// build-prep bootstrap pre-pass AND the vm bootstrap path.
+	// (dispatchBoxBuild → the compiled-in candy/plugin-build DRIVE, which runs the RESOLVE
+	// plugin-side over the buildengine-* legs, K3 U6): the podman drive lives in the candy now
+	// (P8b), so the host cannot build inline. The in-proc reverse channel makes this re-entrant
+	// call cheap (no socket). Reached from the builder-bootstrap pre-pass AND the vm bootstrap path.
 	if err := dispatchBoxBuild(spec.BuildRequest{Boxes: []string{builderRef}, IncludeDisabled: true}); err != nil {
 		return "", fmt.Errorf("auto-building builder image %q: %w", builderRef, err)
 	}
@@ -103,7 +103,7 @@ func (c *BuildCmd) Run() error {
 	}
 
 	// Compute the build tag ONCE host-side so the retention activity-lock floor and
-	// the built images (build-prep's NewGenerator) agree on ONE CalVer —
+	// the built images (the buildengine-prep leg's NewGenerator) agree on ONE CalVer —
 	// ComputeCalVer is clock-derived, so resolving it in two places would diverge.
 	tag := c.Tag
 	if tag == "" {
@@ -121,10 +121,11 @@ func (c *BuildCmd) Run() error {
 	}
 	defer func() { _ = buildActivityRelease() }()
 
-	// The podman DRIVE runs in the compiled-in candy/plugin-build (build:box); the
-	// host is a PREP + RESOLVE-PROJECT envelope seam provider (HostBuild("build-prep")).
-	// P8b reversed the P8 "permanent facade" — the podman DRIVE lives in the candy; #67 moved the
-	// render DRIVE to sdk/deploykit + plugin-build, so the host no longer renders Containerfiles.
+	// The podman DRIVE runs in the compiled-in candy/plugin-build (build:box), which ALSO runs the
+	// build-engine RESOLVE plugin-side (K3 U6 — resolveBuildEngine over the K1 loader legs + the
+	// buildengine-* host legs); the host serves only the coupled legs (scan-local, remote fetch,
+	// connect, prep). P8b moved the podman DRIVE into the candy; #67 moved the render DRIVE to
+	// sdk/deploykit + plugin-build, so the host no longer renders Containerfiles.
 	if err := dispatchBoxBuild(spec.BuildRequest{
 		Boxes:           c.Boxes,
 		Tag:             tag,
@@ -324,12 +325,26 @@ func (c *BuildCmd) buildRemote(ref string) error {
 		tag = ComputeCalVer()
 	}
 
+	// ResolveRemoteImage (repo clone/cache) stays host-side (K1/B). The build DRIVE
+	// routes to build:box in candy/plugin-build via the FULL BuildCmd.Run() pipeline
+	// (retention activity-lock + charly freshness + build:box dispatch + post-build
+	// prune), pointed at the cached source dir by chdir — byte-equivalent to the former
+	// RemoteImageContext.BuildImage indirection, now deleted (K3 #39).
 	ctx, err := ResolveRemoteImage(ref, tag)
 	if err != nil {
 		return err
 	}
 
-	return ctx.BuildImage(nil, tag)
+	origDir, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	if err := os.Chdir(ctx.CacheDir); err != nil {
+		return fmt.Errorf("changing to cache dir: %w", err)
+	}
+	defer os.Chdir(origDir) //nolint:errcheck
+
+	return (&BuildCmd{Boxes: []string{ctx.BoxName}, Tag: tag}).Run()
 }
 
 // ensureCharlyBinaryFresh rebuilds candy/charly/bin/charly when any image whose

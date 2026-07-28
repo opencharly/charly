@@ -103,7 +103,7 @@ type ResolveOpts struct {
 	ExtraCandyRefs []string
 	// InitCfg is the project init: vocabulary (W9), threaded through so
 	// ScanAllCandyWithConfigOpts can run the cross-candy init-system host-completion
-	// pass (the PopulateCandyInitSystem logic) BEFORE wrapping each candy into the
+	// pass (the loaderkit.PopulateCandyInitSystem logic) BEFORE wrapping each candy into the
 	// FINAL spec.CandyReader — a CandyReader is read-only from the caller's side, so
 	// nothing can mutate CandyView.InitSystems after the scan returns. Every caller
 	// that feeds a wire envelope another process reads for HasInit() lookups MUST set
@@ -147,59 +147,35 @@ func (opts ResolveOpts) shouldIncludeDisabled(name string) bool {
 	return opts.IncludeDisabledNames[name]
 }
 
-// toBuildkitOpts projects the box-resolution-relevant subset of opts onto buildkit.ResolveOpts —
-// the ONE conversion point ResolveBox/ResolveAllBox use before delegating.
-func (opts ResolveOpts) toBuildkitOpts() buildkit.ResolveOpts {
+// buildkitOptsWithVocab projects a charly ResolveOpts onto buildkit.ResolveOpts, loading the project
+// build vocabulary (distro:/builder:) when the caller did not already supply it. It is the ONE place
+// the former ResolveBox/ResolveAllBox wrappers' fillBuildConfigFallback + toBuildkitOpts logic lives
+// (K3 U7: the build-engine RESOLVE moved to candy/plugin-build, so charly-side callers now reach the
+// PURE buildkit.ResolveBox / buildkit.ResolveAllBox DIRECTLY over this opts projection — the config.go
+// ResolveBox/ResolveAllBox free-function wrappers are DELETED). BYTE-EQUIVALENT to the former fallback:
+// a caller that already has DistroCfg/BuilderCfg skips the reload; every other caller gets the SAME
+// vocabulary LoadBuildConfigForBox loads for the same dir — the masked-regression this preserves.
+func buildkitOptsWithVocab(dir string, opts ResolveOpts) (buildkit.ResolveOpts, error) {
+	if opts.DistroCfg == nil && opts.BuilderCfg == nil {
+		distroCfg, builderCfg, _, err := LoadBuildConfigForBox(dir)
+		if err != nil {
+			return buildkit.ResolveOpts{}, err
+		}
+		opts.DistroCfg, opts.BuilderCfg = distroCfg, builderCfg
+	}
 	return buildkit.ResolveOpts{
 		IncludeDisabled:      opts.IncludeDisabled,
 		IncludeDisabledNames: opts.IncludeDisabledNames,
 		RequestedBoxes:       opts.RequestedBoxes,
 		DistroCfg:            opts.DistroCfg,
 		BuilderCfg:           opts.BuilderCfg,
-	}
-}
-
-// fillBuildConfigFallback fills opts.DistroCfg/BuilderCfg via LoadBuildConfigForBox when the
-// caller didn't already supply them — the ONE LoadUnified-coupled fallback ResolveBox and
-// ResolveAllBox both need, extracted so it isn't duplicated between the two wrappers below.
-func fillBuildConfigFallback(dir string, opts ResolveOpts) (ResolveOpts, error) {
-	if opts.DistroCfg == nil && opts.BuilderCfg == nil {
-		distroCfg, builderCfg, _, err := LoadBuildConfigForBox(dir)
-		if err != nil {
-			return opts, err
-		}
-		opts.DistroCfg, opts.BuilderCfg = distroCfg, builderCfg
-	}
-	return opts, nil
-}
-
-// ResolveBox resolves a single box's configuration by applying defaults. A thin wrapper: fills
-// the build-config fallback (the ONE LoadUnified-coupled piece) then delegates to
-// buildkit.ResolveBox, which is pure over already-loaded types. Call sites changed from
-// `cfg.ResolveBox(...)` (method syntax — impossible now that Config is a type alias) to
-// `ResolveBox(cfg, ...)` (free-function syntax), same name, byte-identical behavior.
-func ResolveBox(cfg *Config, name string, calverTag string, dir string, opts ResolveOpts) (*buildkit.ResolvedBox, error) {
-	opts, err := fillBuildConfigFallback(dir, opts)
-	if err != nil {
-		return nil, fmt.Errorf("image %s: %w", name, err)
-	}
-	return buildkit.ResolveBox(cfg, name, calverTag, dir, opts.toBuildkitOpts())
-}
-
-// ResolveAllBox resolves all enabled images in the config. opts.IncludeDisabled extends the
-// working set to images marked enabled: false. Thin wrapper — see ResolveBox's doc comment.
-func ResolveAllBox(cfg *Config, calverTag string, dir string, opts ResolveOpts) (map[string]*buildkit.ResolvedBox, error) {
-	opts, err := fillBuildConfigFallback(dir, opts)
-	if err != nil {
-		return nil, fmt.Errorf("resolving build config: %w", err)
-	}
-	return buildkit.ResolveAllBox(cfg, calverTag, dir, opts.toBuildkitOpts())
+	}, nil
 }
 
 // resolveIntPtr resolves a *int value, falling back to 0 when nil. A charly-side copy of the
 // SHAPE of the identical helper now private to sdk/buildkit's ResolveBox (which still needs a
 // 3-arg value/fallback/defaultVal form for its image->defaults->hardcoded chain) — this one serves
-// build.go/build_resolve_host.go/host_build_retention.go, which are OUTSIDE this move's scope and
+// build.go/host_build_retention.go, which are OUTSIDE this move's scope and
 // (verified: every current call site) only ever pass keepImagesFallback/keepCheckRunsFallback,
 // both defined as 0 (retention.go) — so both the fallback AND defaultVal parameters are dropped
 // here (each was an unparam finding on the wider forms, since neither varies across any call

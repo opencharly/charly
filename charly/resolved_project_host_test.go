@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/vmshared"
 
 	"github.com/opencharly/sdk/spec"
@@ -72,7 +73,7 @@ func fullResolvedBoxFixture() *buildkit.ResolvedBox {
 // of the 6 host-only json:"-" compute caches, InitSystem among them, appears in the wire view).
 func TestProjectResolvedBox_CompleteAndNoCacheLeak(t *testing.T) {
 	box := fullResolvedBoxFixture()
-	view := projectResolvedBox(box)
+	view := deploykit.ProjectResolvedBox(box)
 
 	boxJSON, err := json.Marshal(box)
 	if err != nil {
@@ -147,14 +148,14 @@ func fixedResolvedProjectFixture(t *testing.T) *spec.ResolvedProject {
 			ServiceNames:  []string{"charly-daemon"},
 		},
 	)
-	_, candyView, ok := rawCandyPair(candy)
+	_, candyView, ok := deploykit.RawCandyPair(candy)
 	if !ok {
 		t.Fatal("rawCandyPair: candy fixture does not expose RawCandy()")
 	}
 
 	rp := &spec.ResolvedProject{
 		Version: "2026.100.0000",
-		Boxes:   map[string]spec.ResolvedBoxView{"demo": projectResolvedBox(fullResolvedBoxFixture())},
+		Boxes:   map[string]spec.ResolvedBoxView{"demo": deploykit.ProjectResolvedBox(fullResolvedBoxFixture())},
 		Candies: map[string]spec.CandyView{"charly": candyView},
 	}
 	bundle := map[string]spec.BundleNode{"demo-pod": {Target: "pod", Description: "demo deploy"}}
@@ -172,7 +173,7 @@ func fixedResolvedProjectFixture(t *testing.T) *spec.ResolvedProject {
 // TestResolvedProjectCompletesPerInitTriggersBeforeProjection, which exercised the pre-W9
 // resolve-time projectCandyView/*Candy path) is proven at the new SCAN-time choke point by
 // TestScanAllCandyWithConfigOpts_LocalCandyGetsInitSystemsCompletion (layers_test.go) — there is
-// no later separate PopulateCandyInitSystem(map[string]*Candy, ...) call left to exercise here.
+// no later separate loaderkit.PopulateCandyInitSystem(map[string]*Candy, ...) call left to exercise here.
 
 // TestResolvedProject_ByteStableGolden proves the assembled spec.ResolvedProject is deterministic
 // (two marshals identical) and byte-stable against the committed golden. A dropped field, a reordered

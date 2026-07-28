@@ -82,23 +82,14 @@ type CLI struct {
 	// OWN in-process build:box drive — never through Kong/CLI, so this reentry is unaffected.
 	BoxBuild BuildCmd `cmd:"" name:"__box-build" hidden:"" help:"internal: build container boxes (reentry behind box build)"`
 
-	// __box-pull is the hidden core reentry point behind the COMPILED-IN candy/plugin-box command:pull
-	// word (nested under `box`, build/pull dispersal — pull-first per the standing ruling): the plugin
-	// owns the user-facing `charly box pull` grammar + dispatch and reaches this over HostBuild("cli").
-	// BoxPullCmd.Run (core-min wave 3) now DELEGATES its ensure-image work to dispatchBuildEnsure
-	// (candy/plugin-build's build:ensure word) rather than running the pull/build-fallback orchestration
-	// in-core — BoxPullCmd itself is otherwise UNCHANGED, and its Kong attachment point stays this
-	// hidden reentry (was a direct BoxCmd field before build/pull dispersal).
-	BoxPull BoxPullCmd `cmd:"" name:"__box-pull" hidden:"" help:"internal: pull/build-fallback an image (reentry behind box pull)"`
-
-	// __box-inspect-overlay / __box-list-tags are the hidden core reentry points behind the
-	// COMPILED-IN candy/plugin-box command:inspect / command:list words (nested under `box`). The
-	// plugin owns the user-facing grammar + reads the resolved-project envelope; these two reentries
-	// serve ONLY the residue the envelope cannot carry — the DEPLOY-OVERLAY inspect formats
-	// (tunnel/bind_mounts, read from charly.yml) and the STORE-LIVE `list tags` (podman image tags).
-	// K5-doomed: both die when the deploy-overlay + store reads move into the plugin over sdk kits.
-	BoxInspectOverlay InspectOverlayCmd `cmd:"" name:"__box-inspect-overlay" hidden:"" help:"internal: inspect deploy-overlay formats tunnel/bind_mounts (reentry behind box inspect)"`
-	BoxListTags       ListTagsCmd       `cmd:"" name:"__box-list-tags" hidden:"" help:"internal: list locally stored CalVer image tags (reentry behind box list tags)"`
+	// __box-list-tags is the hidden core reentry point behind the COMPILED-IN candy/plugin-box
+	// command:list word (nested under `box`). The plugin owns the user-facing grammar + reads the
+	// resolved-project envelope; this reentry serves ONLY the residue the envelope cannot carry — the
+	// STORE-LIVE `list tags` (podman image tags). The sibling deploy-overlay inspect formats
+	// (tunnel/bind_mounts) moved fully into candy/plugin-box (the former __box-inspect-overlay reentry
+	// is DELETED — it renders from the deploy overlay + the projector-filled view.Ports, no reentry).
+	// K5-doomed: this dies when the store read moves into the plugin over sdk kits.
+	BoxListTags ListTagsCmd `cmd:"" name:"__box-list-tags" hidden:"" help:"internal: list locally stored CalVer image tags (reentry behind box list tags)"`
 
 	// __box-fetch / __box-refresh are the hidden core reentry points behind the COMPILED-IN
 	// candy/plugin-authoring command:fetch / command:refresh words (nested under `box`, P14b).
@@ -108,7 +99,7 @@ type CLI struct {
 	// auto-migration), which a sdk-only plugin cannot reach.
 	// K5-doomed: both die when ResolveProjectRepo/EnsureRepoDownloaded move into the plugin over
 	// sdk kits (a `HostBuild("refs-resolve")` seam) — the SAME tracked-residue pattern as the
-	// sibling __box-inspect-overlay / __box-list-tags reentries above (K5 seam-death sweep).
+	// sibling __box-list-tags reentry above (K5 seam-death sweep).
 	BoxFetch   BoxFetchCmd   `cmd:"" name:"__box-fetch" hidden:"" help:"internal: pre-prime the remote-repo cache (reentry behind box fetch)"`
 	BoxRefresh BoxRefreshCmd `cmd:"" name:"__box-refresh" hidden:"" help:"internal: force re-clone of a remote project repo (reentry behind box refresh)"`
 

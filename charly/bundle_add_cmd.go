@@ -320,13 +320,15 @@ func (c *deployAddCmd) compileNodePlans(target, refStr, tag, path string, addCan
 	// compileStandaloneCandySelection's compile dispatch.
 	var baseImg *buildkit.ResolvedBox
 	if (target == "pod" || target == "k8s") && refStr != "" {
-		if baseResolved, rerr := ResolveBox(cfg, refStr, tag, dir, ResolveOpts{}); rerr == nil {
-			baseImg = baseResolved
-			if distroCfg != nil {
-				baseImg.DistroDef = distroCfg.ResolveDistro(baseImg.Distro)
-			}
-			if builderCfg != nil {
-				baseImg.BuilderConfig = builderCfg
+		if bkopts, oerr := buildkitOptsWithVocab(dir, ResolveOpts{}); oerr == nil {
+			if baseResolved, rerr := buildkit.ResolveBox(cfg, refStr, tag, dir, bkopts); rerr == nil {
+				baseImg = baseResolved
+				if distroCfg != nil {
+					baseImg.DistroDef = distroCfg.ResolveDistro(baseImg.Distro)
+				}
+				if builderCfg != nil {
+					baseImg.BuilderConfig = builderCfg
+				}
 			}
 		}
 	}

@@ -12,13 +12,17 @@ import (
 // remote_image.go — resolves an `@github.com/org/repo/box[:version]` REMOTE ref (NOT an
 // OCI-registry concern despite the filename; the actual go-containerregistry engine lives in
 // candy/plugin-oci) into a full build/run context: clone/cache the repo, load its charly.yml,
-// resolve the box, scan its candies, and (BuildImage) build it.
+// resolve the box, and scan its candies.
 //
-// MIGRATION INVENTORY (north-star §4.4): this file is UNTIL-K1/K3 — the repo-fetch/cache
-// machinery (EnsureRepoDownloaded, LoadConfig, ScanAllCandyWithConfig) is loader-cone (K1),
-// and BuildImage's delegation to BuildCmd is build-cone (K3). Consumers span both cones —
-// build.go, commands.go, host_build_box_ref_resolve.go, image.go, config_image.go
-// (P14-rest trace, 2026-07) — so this moves together with the loader/build waves, not alone.
+// MIGRATION INVENTORY (north-star §4.4): this file is UNTIL-K1 — the repo-fetch/cache
+// machinery (EnsureRepoDownloaded, LoadConfig, ScanAllCandyWithConfig) is loader-cone (K1)
+// and CANNOT leave core (EnsureRepoDownloaded is the host git clone/cache, K1/B; ResolveRemoteImage
+// is ALSO the backing of the "remote-image-resolve" HostBuild seam plugin-build's ensure fallback
+// reaches). The build-DRIVE half is GONE (K3 #39): buildRemote (build.go) now runs the cached
+// source through the full BuildCmd.Run() pipeline (build:box in candy/plugin-build) directly — the
+// former RemoteImageContext.BuildImage indirection is deleted. Consumers — build.go, commands.go,
+// host_build_box_ref_resolve.go, image.go, config_image.go (P14-rest trace, 2026-07) — reach the
+// resolve half only, so this moves together with the loader wave, not alone.
 
 // RemoteImageContext holds the resolved state of a remote image reference.
 // It contains everything needed to pull/build and run the image.
@@ -65,7 +69,11 @@ func ResolveRemoteImage(ref string, tag string) (*RemoteImageContext, error) {
 
 	// Resolve the image
 	calverTag := ComputeCalVer()
-	resolved, err := ResolveBox(cfg, parsed.Name, calverTag, cachePath, ResolveOpts{})
+	bkopts, err := buildkitOptsWithVocab(cachePath, ResolveOpts{})
+	if err != nil {
+		return nil, fmt.Errorf("resolving image %q in %s: %w", parsed.Name, parsed.RepoPath, err)
+	}
+	resolved, err := buildkit.ResolveBox(cfg, parsed.Name, calverTag, cachePath, bkopts)
 	if err != nil {
 		return nil, fmt.Errorf("resolving image %q in %s: %w", parsed.Name, parsed.RepoPath, err)
 	}
@@ -88,24 +96,4 @@ func ResolveRemoteImage(ref string, tag string) (*RemoteImageContext, error) {
 		ImageRef: imageRef,
 		BoxName:  parsed.Name,
 	}, nil
-}
-
-// BuildImage builds the image locally from the cached source.
-func (ctx *RemoteImageContext) BuildImage(_ *kit.ResolvedRuntime, tag string) error {
-	// The generate+build both run inside buildCmd.Run() now that box build dispatches through the
-	// compiled-in candy/plugin-build DRIVE (build:box) — which resolves + renders the .build/ tree
-	// host-side over the build-prep seam, then drives podman — from ctx.CacheDir after the chdir
-	// below. A standalone NewGenerator+Generate preflight here would be redundant work whose .build/
-	// output the candy build drive immediately regenerates.
-	buildCmd := &BuildCmd{
-		Boxes: []string{ctx.BoxName},
-		Tag:   tag,
-	}
-	origDir, _ := os.Getwd()
-	if err := os.Chdir(ctx.CacheDir); err != nil {
-		return fmt.Errorf("changing to cache dir: %w", err)
-	}
-	defer os.Chdir(origDir) //nolint:errcheck
-
-	return buildCmd.Run()
 }

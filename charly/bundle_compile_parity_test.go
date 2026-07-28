@@ -164,7 +164,7 @@ func TestBundleCompileParity_PluginRoundTrip(t *testing.T) {
 	}
 	imgOld.DistroDef = distroCfg.ResolveDistro(imgOld.Distro)
 
-	boxView := projectResolvedBox(imgOld)
+	boxView := deploykit.ProjectResolvedBox(imgOld)
 
 	candidates := []string{"ripgrep", "dev-tools", "pre-commit"}
 	var exercised []string
@@ -263,7 +263,7 @@ func TestBundleCompileParity_PluginRoundTrip(t *testing.T) {
 	// home-anchored candy — so the parity comparison is not vacuously passing on a constant. The
 	// pixi builder step (pre-commit) is home-anchored (cargo/pixi install into $HOME).
 	t.Run("can_fail", func(t *testing.T) {
-		perturbed := projectResolvedBox(imgOld)
+		perturbed := deploykit.ProjectResolvedBox(imgOld)
 		perturbed.Home = "/home/OTHER"
 		// An empty HostContextJSON matches production reality post-Unit-8: the host no longer
 		// pre-populates BuilderContext at all — command:bundle's compileDeployPlans always

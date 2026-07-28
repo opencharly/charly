@@ -2,10 +2,12 @@ package main
 
 import (
 	"testing"
+
+	"github.com/opencharly/sdk/loaderkit"
 )
 
 // resolved_project_namespace_test.go — K1-unblock wave 2: proves the namespace-qualified
-// flattening added to projectTemplates/fillNamespacedBoxes (resolved_project_host.go), and the
+// flattening added to loaderkit.ProjectTemplates/fillNamespacedBoxes (resolved_project_host.go), and the
 // resulting functional fix to findK8sSpec (k8s_config.go), which previously supported ONLY
 // root-scoped `k8s:` entity names.
 
@@ -44,9 +46,9 @@ func TestProjectTemplates_NamespaceQualified(t *testing.T) {
 	if err != nil || !ok || uf == nil {
 		t.Fatalf("LoadUnified(%q): ok=%v err=%v", root, ok, err)
 	}
-	tpl := projectTemplates(uf)
+	tpl := loaderkit.ProjectTemplates(uf)
 	if tpl == nil {
-		t.Fatal("projectTemplates returned nil")
+		t.Fatal("ProjectTemplates returned nil")
 	}
 	if _, ok := tpl.K8s["prod-cluster"]; ok {
 		t.Error("prod-cluster should NOT be visible at root scope (it's namespaced under 'fedora')")

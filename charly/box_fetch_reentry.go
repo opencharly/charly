@@ -22,7 +22,7 @@ import (
 //
 // K5-doomed: both reentries (and this file) die when ResolveProjectRepo/EnsureRepoDownloaded move
 // into the plugin over sdk kits (a `HostBuild("refs-resolve")` seam) — the SAME tracked-residue
-// pattern as the sibling __box-pkg / __box-inspect-overlay / __box-list-tags reentries (K5
+// pattern as the sibling __box-pkg / __box-list-tags reentries (K5
 // seam-death sweep). The fetch/refresh handlers were already core pre-P14b (they do not ADD core
 // LOC; they stay as the K5-exited hidden reentry, not a permanent facade).
 

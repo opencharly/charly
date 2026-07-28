@@ -20,10 +20,11 @@ import (
 // reverse channel — InvokeProvider (peer plugin dispatch, for generate → build:generate), the
 // HostBuild("resolved-project") envelope fetch (inspect/list), the HostBuild("validate-project")
 // envelope fetch (validate runs the rule ENGINE in-plugin over the reply), or the generic
-// HostBuild("cli") reentry (pkg → the hidden __box-pkg core command, pull → the hidden __box-pull
-// core command, build → the hidden __box-build core command, and inspect/list's overlay/store
-// residue → __box-inspect-overlay / __box-list-tags). The `new` command needs neither (kit
-// scaffolding directly).
+// HostBuild("cli") reentry (pkg → the hidden __box-pkg core command, build → the hidden __box-build
+// core command, and list's store residue → __box-list-tags). pull runs the ensure-image work
+// in-plugin via InvokeProvider(build:ensure); inspect's deploy-overlay formats (tunnel/bind_mounts)
+// render in-plugin off the deploy overlay + the resolved-project envelope — neither reenters core.
+// The `new` command needs neither (kit scaffolding directly).
 type hostClient struct {
 	ctx  context.Context
 	exec *sdk.Executor
@@ -183,32 +184,53 @@ type pullGrammar struct {
 	Platform string `long:"platform" help:"Target platform (default: host)"`
 }
 
-// dispatchPull reaches the hidden core `__box-pull` reentry over HostBuild("cli"): BoxPullCmd's Run
-// body (UNCHANGED) still needs the project-directory resolution `charly box pull` runs from — the
-// ensure-image ORCHESTRATION itself (core-min wave 3) now lives in candy/plugin-build's build:ensure
-// word, reached via dispatchBuildEnsure. Tag/Platform are omitted from argv when
-// empty (Kong's own zero-value default for an absent flag) rather than passed as an empty string —
-// avoids any flag-parsing divergence between "flag absent" and "flag present with empty value" on the
-// reentered leaf, keeping behavior identical to the un-dispersed command. The subprocess inherits
-// charly's stdio (same "ensure-image: ..." progress lines) and exits 0/1.
+// dispatchPull ensures an image is present in local storage by INVOKING the peer COMPILED-IN
+// build:ensure word (candy/plugin-build) over the InvokeProvider reverse leg — the SAME
+// ensure-image ORCHESTRATION (pull from registry, fall back to a local/remote build when the
+// identifier maps to a project charly.yml entry) the former core BoxPullCmd.Run delegated to via
+// dispatchBuildEnsure, now reached plugin↔plugin (the hidden __box-pull core reentry is DELETED).
+//
+// A --tag override is meaningful ONLY for a short-name input: resolve the canonical registry ref
+// (registry+name from the resolved-project envelope the plugin already reads + the requested tag)
+// so build:ensure's pull/build-fallback picks up the requested tag — byte-identical to the former
+// core Run's `buildkit.ResolveBox(cfg,box,tag).Registry/.Name` → ResolveShellImageRef path, but off
+// the envelope (registry/name are tag-independent), so no loader is needed plugin-side. A
+// full/remote ref already carries its own tag. --platform stays a no-op (the former Run never
+// threaded it to the ensure drive either).
 func dispatchPull(hc *hostClient, args []string) error {
 	var g pullGrammar
 	if done, err := parseLeaf("pull", &g, args); err != nil || done {
 		return err
 	}
-	argv := []string{"__box-pull", g.Box}
-	if g.Tag != "" {
-		argv = append(argv, "--tag", g.Tag)
+	dir, _ := os.Getwd()
+	image := g.Box
+	if g.Tag != "" && !kit.LooksLikeFullRef(g.Box) && !spec.IsRemoteImageRef(kit.StripURLScheme(g.Box)) {
+		rp, err := hc.resolvedProject(false)
+		if err != nil {
+			return fmt.Errorf("short name %q with --tag requires a project directory with charly.yml: %w", g.Box, err)
+		}
+		view, ok := rp.Boxes[g.Box]
+		if !ok {
+			return fmt.Errorf("short name %q with --tag not found in charly.yml", g.Box)
+		}
+		image = kit.ResolveShellImageRef(view.Registry, view.Name, g.Tag)
 	}
-	if g.Platform != "" {
-		argv = append(argv, "--platform", g.Platform)
-	}
-	r, err := hc.cli(false, true, argv...)
+	reqJSON, err := json.Marshal(spec.BuildEnsureRequest{Image: image, Dir: dir})
 	if err != nil {
 		return err
 	}
-	if r.ExitCode != 0 {
-		return fmt.Errorf("box pull failed (exit %d)", r.ExitCode)
+	resJSON, err := hc.exec.InvokeProvider(hc.ctx, "build", "ensure", sdk.OpBuild, reqJSON, nil, sdk.InvokeProviderOpts{})
+	if err != nil {
+		return err
+	}
+	var reply spec.BuildEnsureReply
+	if len(resJSON) > 0 {
+		if err := json.Unmarshal(resJSON, &reply); err != nil {
+			return fmt.Errorf("box pull: decode reply: %w", err)
+		}
+	}
+	if reply.Error != "" {
+		return fmt.Errorf("%s", reply.Error)
 	}
 	return nil
 }

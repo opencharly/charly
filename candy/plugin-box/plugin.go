@@ -10,8 +10,8 @@
 // core):
 //
 //   - command:generate — `charly box generate`: builds a spec.BuildRequest and InvokeProvider's the
-//     peer COMPILED-IN build:generate word (candy/plugin-build), which renders the .build/
-//     Containerfile tree host-side over HostBuild("build-prep", GenerateOnly). Zero core reentry.
+//     peer COMPILED-IN build:generate word (candy/plugin-build), which runs the RESOLVE plugin-side
+//     (resolveBuildEngine, K3 U6) and renders the .build/ Containerfile tree. Zero core reentry.
 //   - command:new — `charly box new candy/project/box`: calls kit.ScaffoldCandy / kit.ScaffoldProject
 //     / kit.AddBox directly (the scaffold ENGINE already lives in sdk/kit). Zero core reentry.
 //   - command:validate — `charly box validate`: fetches the error-TOLERANT resolved-project envelope
@@ -21,13 +21,12 @@
 //     validate_graph.go / validate_check.go).
 //   - command:pkg — `charly box pkg`: reaches the hidden core `__box-pkg` reentry over
 //     HostBuild("cli") (the localpkg build engine needs the host build context, pre-K1).
-//   - command:pull — `charly box pull`: reaches the hidden core `__box-pull` reentry over
-//     HostBuild("cli") (FINAL/K5 unit 6a M4c, pull-first per the build/pull dispersal ruling —
-//     BoxPullCmd's ensure-image work is now dispatchBuildEnsure, core-min wave 3, which itself
-//     dispatches into the compiled-in candy/plugin-build build:ensure word rather than running
-//     the orchestration in-core). The plugin owns ONLY the CLI
-//     grammar (pullGrammar, byte-identical to the former static BoxPullCmd Kong leaf) + reentry
-//     dispatch; BoxPullCmd's Run body is UNCHANGED, unmoved, still core-only.
+//   - command:pull — `charly box pull`: runs the ensure-image work IN-PLUGIN (K3 #39 fold) by
+//     INVOKING the peer compiled-in build:ensure word (candy/plugin-build) over InvokeProvider —
+//     pull from registry, fall back to a local/remote build when the identifier maps to a project
+//     charly.yml entry. A --tag short-name resolves its registry ref off the resolved-project
+//     envelope (registry/name are tag-independent), so no loader is needed. The former core
+//     BoxPullCmd + its hidden __box-pull reentry are DELETED.
 //   - command:build — `charly box build`: reaches the hidden core `__box-build` reentry over
 //     HostBuild("cli") (FINAL/K5 unit 6a M4d, the CLI-only mirror of the pull move — BuildCmd.Run()'s
 //     engine, the bootstrap-builder subsystem, remote-ref resolve/download, and retention pruning
@@ -36,8 +35,8 @@
 //     reentry dispatch; BuildCmd's Run body is UNCHANGED, unmoved, still core-only.
 //   - command:inspect — `charly box inspect`: reads the generic spec.ResolvedProject envelope
 //     (HostBuild("resolved-project")) and prints the resolved box view — snake_case JSON by default,
-//     scalar/box-aggregate fields per --format. The deploy-overlay formats (tunnel/bind_mounts) reenter
-//     the hidden core `__box-inspect-overlay`. See inspect_list.go.
+//     scalar/box-aggregate fields per --format. The deploy-overlay formats (tunnel/bind_mounts) render
+//     in-plugin off the deploy overlay + the resolved-project envelope (no reentry). See inspect_list.go.
 //   - command:list — `charly box list <sub>`: boxes/candies/targets/services/routes/volumes/aliases
 //     from the same envelope; `list tags` reenters the hidden core `__box-list-tags` (podman store).
 //   - command:labels — `charly box labels <ref>`: resolves the local image + prints its OCI labels

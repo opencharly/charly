@@ -104,14 +104,14 @@ type parityTotals struct {
 // counts into totals.
 func runParityFixture(t *testing.T, fx parityFixture, totals *parityTotals) {
 	t.Helper()
-	// --- live-core path: NewGenerator + render-prep, the SAME recipe hostBuildBuildResolve itself
+	// --- live-core path: NewGenerator + render-prep, the SAME recipe the plugin-side resolveBuildEngine
 	// runs (called in-process directly to avoid standing up the reverse-channel broker). ---
 	gen, err := NewGenerator(fx.dir, "parity", boxResolveOpts([]string{fx.box}, false))
 	if err != nil {
 		t.Fatalf("NewGenerator(%s): %v", fx.box, err)
 	}
-	if err := renderPrepAll(gen); err != nil {
-		t.Fatalf("renderPrepAll: %v", err)
+	if err := gen.toDeploykit().RenderPrepAll(); err != nil {
+		t.Fatalf("RenderPrepAll: %v", err)
 	}
 	img := gen.Boxes[fx.box]
 	if img == nil {
@@ -119,7 +119,7 @@ func runParityFixture(t *testing.T, fx parityFixture, totals *parityTotals) {
 	}
 	gen.resolveUserContext(img)
 
-	// --- project the resolved-project envelope exactly as hostBuildBuildResolve does ---
+	// --- project the resolved-project envelope exactly as the plugin-side resolveBuildEngine does ---
 	lp, err := loadProjectForResolve(fx.dir, boxResolveOpts([]string{fx.box}, false), nil)
 	if err != nil {
 		t.Fatalf("loadProjectForResolve: %v", err)
@@ -149,7 +149,7 @@ func runParityFixture(t *testing.T, fx parityFixture, totals *parityTotals) {
 
 	// --- wire a REAL in-proc executor for the envelope-driven Generator's EmitPluginOp, so a
 	// plugin:-verb candy compares too (the gap the throwaway spike left). Populate renderGenCache
-	// the way hostBuildBuildResolve does (the render-seam's EmitPluginOp/inline-builder handlers
+	// the way the plugin-side resolve does (the render-seam's EmitPluginOp/inline-builder handlers
 	// look the Generator up there by dir). ---
 	renderGenCache.Store(fx.dir, gen)
 	t.Cleanup(func() { renderGenCache.Delete(fx.dir) })

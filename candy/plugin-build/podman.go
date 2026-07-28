@@ -24,8 +24,8 @@ func imageTags(box spec.BuildResolveBox) []string {
 // buildImage builds a single image with the configured engine. The rendered Containerfile is piped
 // via stdin (-f -) to avoid race conditions with concurrent generate overwrites on disk. For
 // Podman --push, the image is built locally (--manifest) without pushing; push happens separately
-// after merge. The privileged builder-bootstrap (from: builder:<name>) already ran HOST-SIDE during
-// build-prep, so this drive never runs it. The Containerfile content is rendered by plugin-build
+// after merge. The privileged builder-bootstrap (from: builder:<name>) already ran up-front in bootstrapImages
+// (staged before this build loop), so this drive never runs it. The Containerfile content is rendered by plugin-build
 // via deploykit.Generator (NOT shipped in the reply — #67 render-DRIVE move).
 func (c driveConfig) buildImage(box spec.BuildResolveBox, containerfile string) error {
 	tags := imageTags(box)

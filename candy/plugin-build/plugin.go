@@ -3,15 +3,15 @@
 // for the two build words `build:box` (the `charly box build` engine) and `build:generate`
 // (the `charly box generate` engine).
 //
-// OWNS THE DRIVE, RESOLVES + MERGES OVER HostBuild. The heavy loader/render RESOLVE (NewGenerator
-// → Generate → the privileged builder-bootstrap → the builder-image ensure) and the layer MERGE
-// stay HOST-SIDE, reached over the F10 HostBuild reverse channel: Invoke marshals a
-// spec.BuildResolveRequest and calls HostBuild("build-prep", …), receiving a
-// spec.BuildResolveReply drive-model (engine/platform/order/levels/per-image descriptors +
-// resolved tunables). The candy then runs podman directly — building each image (Containerfile
-// piped over stdin), gating the post-build inline layer merge on the box's MergeAuto via
-// HostBuild("merge", …), and pushing (podman) after merge. Only the wire envelopes cross the seam;
-// the podman exec happens IN the candy.
+// OWNS THE DRIVE, RUNS THE RESOLVE PLUGIN-SIDE (K3 U6). resolveBuildEngine (resolve.go) runs the
+// whole build-engine RESOLVE ITSELF — loaderkit.LoadUnified over the K1 loader legs, the vocab
+// projection, the candy scan, buildkit.ResolveAllBox + deploykit.ComputeIntermediates/GlobalCandyOrder,
+// render-prep, the envelope, and the drive-model (engine/platform/order/levels/descriptors/tunables) —
+// reaching the host over a small `buildengine-*` HostBuild leg family ONLY for what a sdk-only candy
+// cannot do (the bootstrap-delicate local scan, the git fetch, the build-time plugin connect, the
+// host-fs prep). The layer MERGE crosses to verb:oci via InvokeProvider. The candy then runs podman
+// directly — building each image (Containerfile piped over stdin), gating the inline merge on the
+// box's MergeAuto, and pushing (podman) after merge. The podman exec happens IN the candy.
 //
 // PLACEMENT — COMPILED-IN (listed in the embedded charly/charly.yml compiled_plugins:). `charly
 // box build` / `charly box generate` dispatch it IN-PROCESS: the host threads the reverse channel

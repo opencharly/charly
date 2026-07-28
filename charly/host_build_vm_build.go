@@ -17,7 +17,7 @@ import (
 // host_build_vm_build.go — the "vm-build" F10 host-builder: PREP+RESOLVE only (P8b-rest). The
 // VM-disk build ENGINE (RunPrivileged pacstrap/bootc, BuildCloudImage/BuildBootcVM/BuildBootstrapVM,
 // EmitDiskBuildScript) moved into candy/plugin-vm — the same inversion the box-build engine already
-// went through behind HostBuild("build-prep") in P8b: the plugin owns the podman/qemu-img/bootc-install
+// went through in P8b: the plugin owns the podman/qemu-img/bootc-install
 // exec; the host resolves the kind:vm entity + the build vocabulary + the per-source-kind image refs
 // into the spec.VmBuildReply envelope (LoadUnified, LoadBuildConfigForBox, resolveBootcImageRef,
 // ensureBuilderImageBuilt — the loader + box-store Mechanisms a sdk-only candy cannot run) and returns.

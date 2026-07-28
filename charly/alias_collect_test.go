@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 	"github.com/opencharly/sdk/vmshared"
 )
@@ -21,12 +22,12 @@ func TestCollectImageAliases(t *testing.T) {
 		),
 	}
 
-	aliases, err := CollectBoxAlias(cfg, layers, "myapp")
+	aliases, err := deploykit.CollectBoxAlias(cfg, layers, "myapp")
 	if err != nil {
 		t.Fatalf("CollectBoxAlias() error = %v", err)
 	}
 
-	want := []CollectedAlias{{Name: "svc-cli", Command: "svc-cli-bin"}}
+	want := []spec.CollectedAlias{{Name: "svc-cli", Command: "svc-cli-bin"}}
 	if !reflect.DeepEqual(aliases, want) {
 		t.Errorf("CollectBoxAlias() = %v, want %v", aliases, want)
 	}
@@ -48,7 +49,7 @@ func TestCollectImageAliasesImageOverridesCandy(t *testing.T) {
 		),
 	}
 
-	aliases, err := CollectBoxAlias(cfg, layers, "myapp")
+	aliases, err := deploykit.CollectBoxAlias(cfg, layers, "myapp")
 	if err != nil {
 		t.Fatalf("CollectBoxAlias() error = %v", err)
 	}
@@ -77,7 +78,7 @@ func TestCollectImageAliasesDefaultCommand(t *testing.T) {
 		),
 	}
 
-	aliases, err := CollectBoxAlias(cfg, layers, "myapp")
+	aliases, err := deploykit.CollectBoxAlias(cfg, layers, "myapp")
 	if err != nil {
 		t.Fatalf("CollectBoxAlias() error = %v", err)
 	}

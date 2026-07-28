@@ -73,11 +73,6 @@ type Generator struct {
 	dkGen *deploykit.Generator
 }
 
-// globalOrderForBox → deploykit.Generator.GlobalOrderForBox (P8 shim).
-func (g *Generator) globalOrderForBox(imageCandies []string, parentCandies map[string]bool) ([]string, error) {
-	return g.toDeploykit().GlobalOrderForBox(imageCandies, parentCandies)
-}
-
 // resolveUserContext detects existing user in base image or uses configured values
 func (g *Generator) resolveUserContext(img *buildkit.ResolvedBox) {
 	if !img.IsExternalBase {
@@ -124,6 +119,67 @@ func (g *Generator) resolveUserContext(img *buildkit.ResolvedBox) {
 	// else: no user found at UID, will create with configured values
 }
 
+// --- verb:oci adopt-user dispatch (folded from the retired oci_plugin.go) ---
+//
+// The render-seam-floor host Generator's resolveUserContext (above) probes an external base
+// image's /etc/passwd for the adopt-user via the compiled-in candy/plugin-oci (verb:oci); the
+// go-containerregistry engine + the actual probe live OUT-OF-PROCESS there. Core keeps only this
+// thin registry-dispatch, its sole consumer being resolveUserContext (and the render-parity test).
+// verb:oci is a pure INTERNAL RPC keyed by an oci_op ENV discriminator (mirroring the vm plugin's
+// VmOp) — the request struct rides Params, the leg selector rides Env — NOT a `plugin_input`-
+// enveloped check verb. It is COMPILED INTO charly by default (compiled_plugins:), so
+// providerRegistry resolves it in-process and project-lessly; connectPluginByWord covers the
+// baked / project-source coexist paths (the registry-first pattern credential_plugin.go uses).
+
+// ociOpInspectUser is the env-JSON selector matching candy/plugin-oci's ociEnv{OciOp}.
+const ociOpInspectUser = "inspect-user"
+
+// ociProvider resolves verb:oci. Registry-first so a COMPILED-IN plugin resolves in-process and
+// project-lessly; falls back to connectPluginByWord for the baked / project-source coexist paths.
+func ociProvider() (Provider, bool) {
+	if p, ok := providerRegistry.resolve(ClassVerb, "oci"); ok {
+		return p, true
+	}
+	return connectPluginByWord(ClassVerb, "oci")
+}
+
+// invokeOciInspectUser probes a remote image's /etc/passwd for the user at uid via verb:oci,
+// returning the spec.UserInfo (Found=false when no such user / the image can't be inspected).
+func invokeOciInspectUser(ref string, uid int) (spec.UserInfo, error) {
+	prov, ok := ociProvider()
+	if !ok {
+		return spec.UserInfo{}, fmt.Errorf(
+			"oci plugin (verb:oci) did not connect — candy/plugin-oci is compiled into charly " +
+				"(compiled_plugins) by default; on a custom build install it alongside charly " +
+				"(/usr/lib/charly/plugins) or run from a project composing it")
+	}
+	paramsJSON, err := marshalJSON(spec.ImageUserInput{Ref: ref, UID: uid})
+	if err != nil {
+		return spec.UserInfo{}, err
+	}
+	envJSON, err := marshalJSON(map[string]string{"oci_op": ociOpInspectUser})
+	if err != nil {
+		return spec.UserInfo{}, err
+	}
+	out, err := prov.Invoke(context.Background(), &Operation{
+		Reserved: "oci",
+		Op:       OpRun,
+		Params:   paramsJSON,
+		Env:      envJSON,
+	})
+	if err != nil {
+		return spec.UserInfo{}, err
+	}
+	if out == nil {
+		return spec.UserInfo{}, fmt.Errorf("oci: verb:oci returned no result")
+	}
+	var info spec.UserInfo
+	if err := json.Unmarshal(out.JSON, &info); err != nil {
+		return spec.UserInfo{}, fmt.Errorf("oci inspect-user: decode reply: %w", err)
+	}
+	return info, nil
+}
+
 // NewGenerator creates a new generator. opts is propagated through Validate
 // + ResolveAllBox so `charly box build --include-disabled` reaches images
 // flagged enabled: false in charly.yml (without modifying the file).
@@ -143,7 +199,7 @@ func NewGenerator(dir string, tag string, opts ResolveOpts) (*Generator, error) 
 
 	// InitCfg threads the init-system host-completion pass INTO the scan pipeline (W9): a
 	// spec.CandyReader is read-only, so InitSystems must be populated BEFORE ScanAllCandyWithConfigOpts
-	// wraps each winning candidate — there is no later separate PopulateCandyInitSystem call anymore.
+	// wraps each winning candidate — there is no later separate loaderkit.PopulateCandyInitSystem call anymore.
 	opts.InitCfg = defaultInitCfg
 	layers, err := ScanAllCandyWithConfigOpts(dir, cfg, opts)
 	if err != nil {
@@ -183,7 +239,11 @@ func NewGenerator(dir string, tag string, opts ResolveOpts) (*Generator, error) 
 		tag = ComputeCalVer()
 	}
 
-	images, err := ResolveAllBox(cfg, tag, dir, opts)
+	bkopts, err := buildkitOptsWithVocab(dir, opts)
+	if err != nil {
+		return nil, err
+	}
+	images, err := buildkit.ResolveAllBox(cfg, tag, dir, bkopts)
 	if err != nil {
 		return nil, err
 	}
@@ -454,7 +514,7 @@ func (g *Generator) emitBakedPlugins(b *strings.Builder, boxName string, candyOr
 }
 
 // collectBuilderRuntimeEnv → deploykit.Generator.CollectBuilderRuntimeEnv (P8 shim).
-// Used by the host render-prep's buildBakedMetadata (the env_candy + path_append labels).
+// Used by the host render-prep's deploykit.Generator.buildBakedMetadata (env_candy + path_append labels, K3-U3).
 func (g *Generator) collectBuilderRuntimeEnv(candyOrder []string, img *buildkit.ResolvedBox) []*kit.EnvConfig {
 	return g.toDeploykit().CollectBuilderRuntimeEnv(candyOrder, img)
 }

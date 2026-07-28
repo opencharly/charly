@@ -210,7 +210,7 @@ func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ build
 	}
 
 	// Project the overlay-scoped resolved-project envelope — the SAME projection the box-build
-	// build-prep uses (projectResolvedProjectWithBoxes). gen.Boxes (with the overlay init) are the
+	// resolve uses (projectResolvedProjectWithBoxes / loaderkit.ProjectResolvedProject). gen.Boxes (with the overlay init) are the
 	// pre-resolved boxes; loadProjectForResolve is called with the add_candy refs as ExtraCandyRefs
 	// so lp.layers (the candy scan) includes them → rp.CandyModels includes the add_candy candies →
 	// the candy's deploykit.Generator.Candies has them (candyByName + HasInit resolve).

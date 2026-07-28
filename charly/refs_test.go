@@ -315,7 +315,7 @@ func TestCollectRemoteRefs(t *testing.T) {
 	// production input and is a false positive for the regression that gap describes
 	// (verified LATENT/unreachable in this repo today, not a reason to leave this
 	// misrepresenting green). Batch #59 reworks this fixture to go through a real
-	// ScanCandy()/finalizeScannedCandies() round-trip instead of hand-building CandyView.
+	// ScanCandy()/loaderkit.FinalizeScannedCandies() round-trip instead of hand-building CandyView.
 	layers := map[string]spec.CandyReader{
 		"pixi": testCandy("pixi", spec.CandyModel{}, spec.CandyView{}),
 		"my-layer": testCandy("my-layer", spec.CandyModel{}, spec.CandyView{Require: []string{
@@ -362,7 +362,7 @@ func TestCollectRemoteRefsOptsExtraCandyRefs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CollectRemoteRefsOpts() error = %v", err)
 	}
-	var got *RemoteDownload
+	var got *loaderkit.RemoteDownload
 	for i := range downloads {
 		if downloads[i].RepoPath == "github.com/opencharly/charly" {
 			got = &downloads[i]

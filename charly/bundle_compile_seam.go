@@ -322,7 +322,7 @@ func (c *deployAddCmd) compileCandyOnBoxSelection(ref *DeployRef, cfg *Config, d
 	// REMOTE ref is never reachable from any box's image closure, so without this the plugin's
 	// independent envelope fetch never discovers it (RCA'd K1-alpha regression: check-addcandy-pod/
 	// check-stepkind-emit-pod, "candy not in resolved-project envelope").
-	plans, err := c.compileSelectionViaPlugin(dir, projectResolvedBox(img), order, hostCtx, c.Tag, []string{ref.Raw})
+	plans, err := c.compileSelectionViaPlugin(dir, deploykit.ProjectResolvedBox(img), order, hostCtx, c.Tag, []string{ref.Raw})
 	if err != nil {
 		return nil, "", nil, err
 	}

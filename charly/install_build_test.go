@@ -140,7 +140,7 @@ func loadCompilerFixtures(t *testing.T, boxName string) (*Config, *buildkit.Reso
 	if err != nil {
 		t.Fatalf("ScanAllCandyWithConfig: %v", err)
 	}
-	img, err := ResolveBox(cfg, boxName, "testing", dir, ResolveOpts{})
+	img, err := resolveBoxTest(cfg, boxName, "testing", dir, ResolveOpts{})
 	if err != nil {
 		t.Skipf("ResolveBox(%s): %v (fixture missing?)", boxName, err)
 	}

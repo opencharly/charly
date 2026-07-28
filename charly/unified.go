@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/spec"
 	"github.com/opencharly/sdk/vmshared"
 
@@ -289,47 +288,22 @@ func resolveInits(uf *loaderkit.UnifiedFile) map[string]*ResolvedInit {
 	return loaderkit.ResolvePluginKindViaPlugin(uf, "init", resolveInitConfigViaPlugin)
 }
 
-// ProjectDistroConfig returns the *DistroConfig equivalent (distro: section), decoding
-// the build vocabulary from the distro plugin kind (uf.PluginKinds via Distros(uf)).
-func ProjectDistroConfig(uf *loaderkit.UnifiedFile) *buildkit.DistroConfig {
-	distros := Distros(uf)
-	if len(distros) == 0 {
-		return nil
-	}
-	return &buildkit.DistroConfig{Distro: distros}
-}
-
-// ProjectBuilderConfig returns the *BuilderConfig equivalent (builders: section),
-// decoding the build vocabulary from the builder plugin kind (uf.PluginKinds via
-// Builders(uf)).
-func ProjectBuilderConfig(uf *loaderkit.UnifiedFile) *buildkit.BuilderConfig {
-	builders := Builders(uf)
-	if len(builders) == 0 {
-		return nil
-	}
-	return &buildkit.BuilderConfig{Builder: builders}
-}
-
-// ProjectInitConfig returns the *buildkit.InitConfig equivalent (inits: section), decoding
-// the build vocabulary from the init plugin kind (uf.PluginKinds via resolveInits(uf)).
-func ProjectInitConfig(uf *loaderkit.UnifiedFile) *buildkit.InitConfig {
-	inits := resolveInits(uf)
-	if len(inits) == 0 {
-		return nil
-	}
-	return &buildkit.InitConfig{Init: inits}
-}
+// The build-vocab CONFIG projections (ProjectDistroConfig/ProjectBuilderConfig/ProjectInitConfig)
+// moved to loaderkit (K3 Unit 1 — the ONE home charly core and candy/plugin-build both call, R3).
+// charly callers invoke loaderkit.Project*Config(uf, <registry callback>) directly; the raw
+// per-kind accessors (Distros/Builders/resolveInits) STAY here (they bind charly's in-proc registry
+// OpResolve callbacks and are the map-shaped accessors the tests read).
 
 // ProjectCandies scans or synthesizes a candy per entry in uf.Candy, into its FINAL
 // spec.CandyReader form (W9: the type-Candy move). Thin wrapper over projectCandiesScanned +
-// the ONE choke point (finalizeScannedCandies, no InitCfg in scope for a standalone call) —
+// the ONE choke point (loaderkit.FinalizeScannedCandies, no InitCfg in scope for a standalone call) —
 // see ScanAllCandyWithConfigOpts's doc comment for why completion never happens anywhere else.
 func ProjectCandies(uf *loaderkit.UnifiedFile, rootDir string) (map[string]spec.CandyReader, error) {
 	scanned, err := projectCandiesScanned(uf, rootDir)
 	if err != nil {
 		return nil, err
 	}
-	return finalizeScannedCandies(scanned, nil), nil
+	return loaderkit.FinalizeScannedCandies(scanned, nil), nil
 }
 
 // projectCandiesScanned is ProjectCandies' UNWRAPPED body: scans or synthesizes a candy per

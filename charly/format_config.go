@@ -7,6 +7,7 @@ import (
 	"github.com/opencharly/sdk/vmshared"
 
 	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/loaderkit"
 )
 
 // The DistroConfig / BuilderConfig types and their vocabulary-resolution methods
@@ -47,7 +48,12 @@ func LoadBuildConfigForBox(dir string) (*buildkit.DistroConfig, *buildkit.Builde
 	if !present {
 		return nil, nil, nil, noCharlyYmlErr(dir)
 	}
-	return ProjectDistroConfig(uf), ProjectBuilderConfig(uf), ProjectInitConfig(uf), nil
+	// The build-vocab projections live in loaderkit (K3 Unit 1 — the ONE home charly core and
+	// candy/plugin-build both call, R3). charly supplies its in-proc registry OpResolve callbacks
+	// for the opaque distro/init bodies; the builder bodies decode purely (no callback).
+	return loaderkit.ProjectDistroConfig(uf, resolveDistroViaPlugin),
+		loaderkit.ProjectBuilderConfig(uf),
+		loaderkit.ProjectInitConfig(uf, resolveInitConfigViaPlugin), nil
 }
 
 // LoadDefaultBuildConfig is retained as an alias for the single-argument form.

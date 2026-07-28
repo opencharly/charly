@@ -82,7 +82,7 @@ func hostBuildPodConfigSSHKey(_ context.Context, req spec.PodConfigSSHKeyRequest
 
 func hostBuildPodConfigEnsureImage(_ context.Context, req spec.PodConfigEnsureImageRequest, _ buildEngineContext) (spec.PodConfigEnsureImageReply, error) {
 	podmanRT := &kit.ResolvedRuntime{BuildEngine: req.BuildEngine, RunEngine: "podman"}
-	if err := EnsureImage(req.ImageRef, podmanRT); err != nil {
+	if err := ensureImagePresent(req.ImageRef, podmanRT); err != nil {
 		return spec.PodConfigEnsureImageReply{}, err
 	}
 	meta, err := deploykit.ExtractMetadata("podman", req.ImageRef)
@@ -97,6 +97,35 @@ func hostBuildPodConfigEnsureImage(_ context.Context, req spec.PodConfigEnsureIm
 		return spec.PodConfigEnsureImageReply{}, err
 	}
 	return spec.PodConfigEnsureImageReply{MetaJSON: metaJSON}, nil
+}
+
+// ensureImagePresent guarantees imageRef is available in the run engine's local store — the
+// deploy-cone image-ensure glue folded here from the retired transfer.go (its own header
+// classified it UNTIL-K4/deploy-cone, and its sole consumer was this pod-config-ensure-image
+// seam). Three-tier fallback (each step independent):
+//
+//  1. Already-present short-circuit (LocalImageExists in run engine).
+//  2. Cross-engine transfer (`docker save | podman load`) when build engine != run engine AND
+//     the image is present in the build engine's storage.
+//  3. dispatchBuildEnsure — the compiled-in candy/plugin-build build:ensure word: pulls from the
+//     registry, falling back to a local `charly box build <name>` when the ref maps to a project
+//     charly.yml entry (the SAME code path BuilderRun, the check preflight, and `charly box pull`
+//     all go through — see charly/dispatch_build_ensure.go).
+//
+// Returns kit.ErrImageNotLocal (wrapped with the ref) only when ALL three tiers fail.
+func ensureImagePresent(imageRef string, rt *kit.ResolvedRuntime) error {
+	if kit.LocalImageExists(rt.RunEngine, imageRef) {
+		return nil
+	}
+	// Cross-engine transfer first when applicable: faster than a network pull and works offline.
+	if rt.BuildEngine != rt.RunEngine && kit.LocalImageExists(rt.BuildEngine, imageRef) {
+		return kit.TransferImage(rt.BuildEngine, rt.RunEngine, imageRef)
+	}
+	// Generic ensure: pull, fall back to local build for project images.
+	if err := dispatchBuildEnsure(context.Background(), imageRef, "", rt.BuildEngine, rt.RunEngine); err == nil {
+		return nil
+	}
+	return fmt.Errorf("%w: %s", kit.ErrImageNotLocal, imageRef)
 }
 
 func hostBuildPodConfigResolveRef(_ context.Context, req spec.PodConfigResolveRefRequest, _ buildEngineContext) (spec.PodConfigResolveRefReply, error) {

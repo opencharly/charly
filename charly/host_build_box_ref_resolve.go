@@ -20,6 +20,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
@@ -42,7 +43,11 @@ func resolveImageRefForEnsure(image string, cfg *Config, projectDir string) (str
 	if cfg == nil {
 		return "", fmt.Errorf("short name %q requires a project directory with charly.yml", image)
 	}
-	resolved, err := ResolveBox(cfg, image, "", projectDir, ResolveOpts{})
+	bkopts, err := buildkitOptsWithVocab(projectDir, ResolveOpts{})
+	if err != nil {
+		return "", fmt.Errorf("resolving %q via charly.yml: %w", image, err)
+	}
+	resolved, err := buildkit.ResolveBox(cfg, image, "", projectDir, bkopts)
 	if err != nil {
 		return "", fmt.Errorf("resolving %q via charly.yml: %w", image, err)
 	}
@@ -124,8 +129,10 @@ func hostBuildBoxRefResolve(_ context.Context, req spec.BoxRefResolveRequest, _ 
 	short := buildableShortNameForEnsure(req.Image, cfg)
 	reply.BuildFallbackShort = short
 	if short != "" && cfg != nil {
-		if resolved, err := ResolveBox(cfg, short, "", dir, ResolveOpts{}); err == nil {
-			reply.ProducedRef = kit.ResolveShellImageRef(resolved.Registry, resolved.Name, "")
+		if bkopts, oerr := buildkitOptsWithVocab(dir, ResolveOpts{}); oerr == nil {
+			if resolved, err := buildkit.ResolveBox(cfg, short, "", dir, bkopts); err == nil {
+				reply.ProducedRef = kit.ResolveShellImageRef(resolved.Registry, resolved.Name, "")
+			}
 		}
 	}
 	return reply, nil

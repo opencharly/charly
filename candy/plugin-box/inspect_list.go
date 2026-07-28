@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -82,26 +83,6 @@ func dispatchInspect(hc *hostClient, args []string) error {
 		return err
 	}
 
-	// tunnel/bind_mounts read the DEPLOY OVERLAY (charly.yml), not the build-mode envelope — reenter
-	// the hidden core __box-inspect-overlay (the M-core residue). Its stdout/stderr are inherited.
-	if g.Format == "tunnel" || g.Format == "bind_mounts" {
-		argv := []string{"__box-inspect-overlay", g.Box, "--format", g.Format}
-		if g.Instance != "" {
-			argv = append(argv, "-i", g.Instance)
-		}
-		if g.IncludeDisabled {
-			argv = append(argv, "--include-disabled")
-		}
-		r, err := hc.cli(false, true, argv...)
-		if err != nil {
-			return err
-		}
-		if r.ExitCode != 0 {
-			return fmt.Errorf("box inspect --format %s failed (exit %d)", g.Format, r.ExitCode)
-		}
-		return nil
-	}
-
 	rp, err := hc.resolvedProject(g.IncludeDisabled)
 	if err != nil {
 		return err
@@ -109,6 +90,18 @@ func dispatchInspect(hc *hostClient, args []string) error {
 	view, ok := rp.Boxes[g.Box]
 	if !ok {
 		return fmt.Errorf("box %q not found in charly.yml", g.Box)
+	}
+
+	// tunnel/bind_mounts read the DEPLOY OVERLAY (charly.yml), not the build-mode envelope. The
+	// deploy-overlay volume/tunnel state is a pure sdk read (deploykit.LoadDeployConfigForRead); the
+	// tunnel resolution's published-port set is the projector-filled box-aggregate view.Ports
+	// (deploykit.ResolveTunnelConfig ignores the candy graph), so no host reentry / project reload is
+	// needed — the former hidden __box-inspect-overlay core command is DELETED (K5 seam-death).
+	switch g.Format {
+	case "bind_mounts":
+		return inspectBindMounts(g.Box, g.Instance)
+	case "tunnel":
+		return inspectTunnel(g.Box, g.Instance, view.Ports)
 	}
 
 	if g.Format == "" {
@@ -120,6 +113,46 @@ func dispatchInspect(hc *hostClient, args []string) error {
 		return nil
 	}
 	return printInspectFormat(view, g.Format)
+}
+
+// inspectBindMounts prints the DEPLOY-OVERLAY (charly.yml) bind-mount config for a box — a pure sdk
+// read of the deploy state (no build-mode envelope). Ported byte-identically from the former core
+// InspectOverlayCmd (K5 seam-death — the hidden __box-inspect-overlay reentry is DELETED).
+func inspectBindMounts(box, instance string) error {
+	if overlay, ok := deploykit.LoadDeployConfigForRead("charly box inspect bind_mounts").Lookup(box, instance); ok {
+		for _, dv := range overlay.Volume {
+			fmt.Printf("%s\t%s\t%s\t%s\n", dv.Name, dv.Host, dv.Path, dv.Type)
+		}
+	}
+	return nil
+}
+
+// inspectTunnel prints the DEPLOY-OVERLAY (charly.yml) tunnel config for a box. The tunnel resolves
+// off the deploy overlay's Tunnel spec + the box-aggregate published-port set (boxPorts, the
+// projector-filled view.Ports — deploykit.ResolveTunnelConfig ignores the candy-reader/candy-list
+// args, so nil is passed). Ported byte-identically from the former core InspectOverlayCmd.
+func inspectTunnel(box, instance string, boxPorts []string) error {
+	overlay, ok := deploykit.LoadDeployConfigForRead("charly box inspect tunnel").Lookup(box, instance)
+	if !ok || overlay.Tunnel == nil {
+		return nil
+	}
+	tc := deploykit.ResolveTunnelConfig(overlay.Tunnel, box, "", nil, nil, map[string]string{}, boxPorts)
+	if tc == nil || len(tc.Ports) == 0 {
+		return nil
+	}
+	fmt.Println("PORT\tACCESS\tPROTOCOL\tHOSTNAME")
+	for _, tp := range tc.Ports {
+		access := "private"
+		if tp.Public {
+			access = "public"
+		}
+		hostname := tp.Hostname
+		if hostname == "" {
+			hostname = "-"
+		}
+		fmt.Printf("%d\t%s\t%s\t%s\n", tp.Port, access, tp.Protocol, hostname)
+	}
+	return nil
 }
 
 // printInspectFormat renders a single --format field from the resolved box view. Scalar fields print

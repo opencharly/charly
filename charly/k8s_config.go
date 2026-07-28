@@ -1,6 +1,10 @@
 package main
 
-import "os"
+import (
+	"os"
+
+	"github.com/opencharly/sdk/loaderkit"
+)
 
 // -----------------------------------------------------------------------------
 // vmshared.K8sDeployConfig — the `kubernetes:` sub-block on BundleNode. Part F.
@@ -34,9 +38,9 @@ type K8sPatchTarget struct {
 // project loader itself. Also consumed by k8s_deploy_from_box.go (source-less
 // `charly bundle from-box --target k8s`).
 //
-// K1-unblock wave 2: name is resolved through projectTemplates' namespace-qualified template map
+// K1-unblock wave 2: name is resolved through loaderkit.ProjectTemplates' namespace-qualified template map
 // (the SAME projection resolved_project_host.go's "resolved-project" envelope ships, minus the
-// full box-resolution cost that envelope also pays — projectTemplates is a cheap raw-byte copy, no
+// full box-resolution cost that envelope also pays — loaderkit.ProjectTemplates is a cheap raw-byte copy, no
 // ResolveBox calls) instead of a bare uf.K8s[name] lookup. This is a genuine functional fix, not
 // just a relocation: the bare lookup never supported a namespace-qualified `--cluster ns.name`
 // profile at all; the namespace-flattened map does.
@@ -48,7 +52,7 @@ func findK8sSpec(dir, name string) *ResolvedK8s {
 	if err != nil || uf == nil {
 		return nil
 	}
-	t := projectTemplates(uf)
+	t := loaderkit.ProjectTemplates(uf)
 	if t == nil || t.K8s == nil {
 		return nil
 	}

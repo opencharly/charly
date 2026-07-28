@@ -12,7 +12,7 @@ import (
 
 // vm_build.go — the command:vm `charly vm build` DRIVE (P8b-rest: the disk-build ENGINE moved
 // HERE from charly core — the same inversion candy/plugin-build's podman DRIVE already went
-// through behind HostBuild("build-prep") in P8b). The host resolves the kind:vm entity + the
+// through in P8b). The host resolves the kind:vm entity + the
 // build vocabulary + the per-source-kind image refs into the spec.VmBuildReply envelope
 // (HostBuild("vm-build") — LoadUnified, LoadBuildConfigForBox, resolveBootcImageRef,
 // ensureBuilderImageBuilt are loader + box-store Mechanisms a sdk-only candy cannot run); this

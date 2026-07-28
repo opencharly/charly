@@ -32,6 +32,12 @@ func (g *Generator) toDeploykit() *deploykit.Generator {
 	dg.Candies = g.Candies
 	dg.Tag = g.Tag
 	dg.Boxes = g.Boxes
+	// Config + InitConfig: the RESOLVE-side inputs the host render-prep pass
+	// (dg.RenderPrepAll/RenderPrepBox, K3-U3) reads to fill the per-box build-render
+	// caches. The plugin-build render path (NewRenderGeneratorFromProject) never
+	// runs render-prep, so it leaves these nil and reads the caches from the envelope.
+	dg.Config = g.Config
+	dg.InitConfig = g.InitConfig
 	dg.BuildDir = g.BuildDir
 	dg.Containerfiles = g.Containerfiles
 	dg.GlobalOrder = g.GlobalOrder

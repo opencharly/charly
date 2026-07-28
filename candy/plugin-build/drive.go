@@ -35,44 +35,17 @@ type driveConfig struct {
 	Dir        string // project dir the podman build runs in
 }
 
-// resolveRequest copies the host-constructed spec.BuildRequest 1:1 into the spec.BuildResolveRequest
-// envelope the host build-resolve seam consumes, stamping GenerateOnly. Shared by the build and
-// generate paths (R3): the ONLY difference between them is GenerateOnly.
-func resolveRequest(req spec.BuildRequest, generateOnly bool) spec.BuildResolveRequest {
-	return spec.BuildResolveRequest{
-		Boxes:           req.Boxes,
-		Tag:             req.Tag,
-		Dir:             req.Dir,
-		IncludeDisabled: req.IncludeDisabled,
-		DevLocalPkg:     req.DevLocalPkg,
-		Push:            req.Push,
-		Platform:        req.Platform,
-		Cache:           req.Cache,
-		NoCache:         req.NoCache,
-		Jobs:            int64(req.Jobs),
-		PodmanJobs:      int64(req.PodmanJobs),
-		GenerateOnly:    generateOnly,
-	}
-}
-
-// resolveBuild runs the host loader/prep RESOLVE over the F10 HostBuild seam: it marshals the
-// BuildResolveRequest, calls HostBuild("build-prep", …), and decodes the drive-model reply
-// (envelope + order/levels/boxes/tunables, NO Containerfile content). A resolve FAILURE rides
-// reply.Error (reply-error convention; the RPC itself succeeds) and is surfaced as a Go error.
-// Shared by runBoxBuild + runBoxGenerate (R3). plugin-build renders Containerfiles itself via
+// resolveBuild runs the build-engine RESOLVE PLUGIN-SIDE (K3 U6 inversion): resolveBuildEngine loads
+// the project over the K1 loader legs + a small `buildengine-*` host-leg family, resolves boxes/
+// intermediates/render-prep/order/envelope + the drive-model itself (pure sdk), and returns the same
+// spec.BuildResolveReply (envelope + drive-model, NO Containerfile content) the former host build-prep
+// fat seam produced. A resolve FAILURE rides reply.Error (reply-error convention) and is surfaced as a
+// Go error. Shared by runBoxBuild + runBoxGenerate (R3). plugin-build renders Containerfiles itself via
 // deploykit.Generator (#67 render-DRIVE move).
 func resolveBuild(ctx context.Context, ex *sdk.Executor, req spec.BuildRequest, generateOnly bool) (spec.BuildResolveReply, error) {
-	rrJSON, err := json.Marshal(resolveRequest(req, generateOnly))
+	reply, err := resolveBuildEngine(ctx, ex, req, generateOnly)
 	if err != nil {
 		return spec.BuildResolveReply{}, err
-	}
-	replyJSON, err := ex.HostBuild(ctx, "build-prep", rrJSON)
-	if err != nil {
-		return spec.BuildResolveReply{}, err
-	}
-	var reply spec.BuildResolveReply
-	if err := json.Unmarshal(replyJSON, &reply); err != nil {
-		return spec.BuildResolveReply{}, fmt.Errorf("decode build-prep reply: %w", err)
 	}
 	if reply.Error != "" {
 		return spec.BuildResolveReply{}, fmt.Errorf("%s", reply.Error)
@@ -83,8 +56,8 @@ func resolveBuild(ctx context.Context, ex *sdk.Executor, req spec.BuildRequest, 
 // runBoxBuild is the candy-side image-build DRIVE behind the build:box word: it resolves the
 // drive-model host-side (build-resolve), builds every selected image with the configured engine
 // (per-image lock + inline merge), pushes (podman --push after merge), and returns the built image
-// refs (the BuildReply.Written provenance). The heavy engine RESOLVE + the layer MERGE stay
-// host-side over HostBuild; the podman exec + the build-order orchestration live HERE.
+// refs (the BuildReply.Written provenance). The engine RESOLVE runs plugin-side (resolveBuildEngine,
+// K3 U6); the layer MERGE crosses to verb:oci; the podman exec + the build-order orchestration live HERE.
 func runBoxBuild(ctx context.Context, ex *sdk.Executor, req spec.BuildRequest) ([]string, error) {
 	reply, err := resolveBuild(ctx, ex, req, false)
 	if err != nil {
@@ -141,8 +114,8 @@ func runBoxBuild(ctx context.Context, ex *sdk.Executor, req spec.BuildRequest) (
 	return built, nil
 }
 
-// runBoxGenerate is the candy-side DRIVE behind the build:generate word: it asks the host
-// to prep + resolve the project (build-prep), then renders the .build/ Containerfile tree
+// runBoxGenerate is the candy-side DRIVE behind the build:generate word: it runs the RESOLVE
+// plugin-side (resolveBuildEngine, K3 U6), then renders the .build/ Containerfile tree
 // itself via deploykit.Generator + returns the written Containerfile paths. No podman, no
 // merge — the generate path builds nothing (#67 render-DRIVE move).
 func runBoxGenerate(ctx context.Context, ex *sdk.Executor, req spec.BuildRequest) ([]string, error) {

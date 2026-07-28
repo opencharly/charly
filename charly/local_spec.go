@@ -11,7 +11,7 @@ package main
 // template lookup — this function's former sole reason to stay LoadUnified-coupled
 // — moved to candy/plugin-bundle's lookupLocalTemplate (node_resolve.go), which
 // reads the SAME data off the "resolved-project" envelope's Templates.Local RawBody
-// map (already namespace-qualified by the host's fillNamespacedTemplates) and
+// map (already namespace-qualified by loaderkit.ProjectTemplates) and
 // projects it via the kind:local provider's own OpResolve leg — no LoadUnified, no
 // new seam. findLocalSpec itself is UNCHANGED and stays core: its one remaining
 // caller, check_cmd.go's runLocalDeployScopePlan (the CLI-free check-live gather
