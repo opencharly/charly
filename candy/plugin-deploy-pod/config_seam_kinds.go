@@ -14,7 +14,6 @@ const (
 	podConfigTunnelResolveKind    = "pod-config-tunnel-resolve"
 	podConfigResolveSidecarsKind  = "pod-config-resolve-sidecars"
 	podConfigProvisionSecretsKind = "pod-config-provision-secrets"
-	podConfigEncMountsKind        = "pod-config-enc-mounts"
 	podConfigInjectEnvKind        = "pod-config-inject-env-provides"
 	podConfigInjectMCPKind        = "pod-config-inject-mcp-provides"
 	podConfigHookSecretEnvKind    = "pod-config-hook-secret-env"

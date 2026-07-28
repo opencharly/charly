@@ -502,10 +502,29 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 	}
 
 	if deploykit.HasEncryptedBindMounts(bindMounts) {
-		if err := hostBuild(ctx, ex, podConfigEncMountsKind, spec.PodConfigEncMountsRequest{
-			Box: c.Box, Instance: c.Instance, AutoGen: autoGen, KeepMounted: c.KeepMounted,
-		}, nil); err != nil {
-			return fmt.Errorf("setting up encrypted volumes: %w", err)
+		// Config-setup drives verb:enc DIRECTLY via InvokeProvider — the SAME plan-builders
+		// (resolvePodEncEnsurePlan/resolvePodEncUnmountPlan) + InvokeProvider(verb:enc) the
+		// START/STOP lifecycle path in resolve.go already uses (the retired pod-config-enc-mounts
+		// seam's byte-exact parity: ensure with autoGen, then unmount unless KeepMounted).
+		ensureJSON, encErr := resolvePodEncEnsurePlan(ctx, ex, dc, c.Box, c.Instance, autoGen)
+		if encErr != nil {
+			return fmt.Errorf("setting up encrypted volumes: %w", encErr)
+		}
+		if len(ensureJSON) > 0 {
+			if _, err := ex.InvokeProvider(ctx, "verb", "enc", sdk.OpExecute, ensureJSON, nil, sdk.InvokeProviderOpts{}); err != nil {
+				return fmt.Errorf("setting up encrypted volumes: %w", err)
+			}
+		}
+		if !c.KeepMounted {
+			unmountJSON, unErr := resolvePodEncUnmountPlan(dc, c.Box, c.Instance)
+			if unErr != nil {
+				return fmt.Errorf("unmounting encrypted volumes: %w", unErr)
+			}
+			if len(unmountJSON) > 0 {
+				if _, err := ex.InvokeProvider(ctx, "verb", "enc", sdk.OpExecute, unmountJSON, nil, sdk.InvokeProviderOpts{}); err != nil {
+					return fmt.Errorf("unmounting encrypted volumes: %w", err)
+				}
+			}
 		}
 	}
 

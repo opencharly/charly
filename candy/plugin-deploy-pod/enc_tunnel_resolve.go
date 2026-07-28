@@ -129,7 +129,7 @@ func pluginCredentialAccess(ctx context.Context, ex *sdk.Executor) deploykit.Cre
 // deploykit.LoadBundleConfig() call, which silently degrades outside charly-core (the
 // DeployStateHost placement-dependency class, sdk#84ee126's EncPlanForConfig exists precisely to
 // avoid it here).
-func resolvePodEncEnsurePlan(ctx context.Context, ex *sdk.Executor, dc *deploykit.BundleConfig, box, instance string) (spec.RawBody, error) {
+func resolvePodEncEnsurePlan(ctx context.Context, ex *sdk.Executor, dc *deploykit.BundleConfig, box, instance string, autoGenerate bool) (spec.RawBody, error) {
 	plan, err := deploykit.EncPlanForConfig(dc, box, instance, "", box)
 	if err != nil || len(plan) == 0 {
 		return nil, nil // no encrypted mounts configured (load error swallowed, as before)
@@ -144,7 +144,7 @@ func resolvePodEncEnsurePlan(ctx context.Context, ex *sdk.Executor, dc *deployki
 	if !anyNotReady {
 		return nil, nil
 	}
-	passphrase, err := deploykit.ResolveEncPassphrase(box, false, pluginCredentialAccess(ctx, ex))
+	passphrase, err := deploykit.ResolveEncPassphrase(box, autoGenerate, pluginCredentialAccess(ctx, ex))
 	if err != nil {
 		return nil, fmt.Errorf("resolving enc passphrase for %s: %w", box, err)
 	}

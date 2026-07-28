@@ -63,7 +63,7 @@ func resolvePodStartQuadlet(ctx context.Context, ex *sdk.Executor, box, instance
 	}
 	// Encrypted-volume mounts are skipped in direct-deploy mode (those require systemd-run --scope).
 	if !directDeploy {
-		encJSON, err := resolvePodEncEnsurePlan(ctx, ex, dc, box, instance)
+		encJSON, err := resolvePodEncEnsurePlan(ctx, ex, dc, box, instance, false)
 		if err != nil {
 			return nil, err
 		}
@@ -178,7 +178,7 @@ func resolvePodStartDirect(ctx context.Context, ex *sdk.Executor, box, instance 
 	network := meta.Network
 	entrypoint := resolveEntrypointFromMeta(meta)
 
-	encJSON, err := resolvePodEncEnsurePlan(ctx, ex, dc, box, instance)
+	encJSON, err := resolvePodEncEnsurePlan(ctx, ex, dc, box, instance, false)
 	if err != nil {
 		return nil, err
 	}

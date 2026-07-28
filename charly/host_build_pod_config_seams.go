@@ -35,7 +35,6 @@ const (
 	podConfigTunnelResolveKind    = "pod-config-tunnel-resolve"
 	podConfigResolveSidecarsKind  = "pod-config-resolve-sidecars"
 	podConfigProvisionSecretsKind = "pod-config-provision-secrets"
-	podConfigEncMountsKind        = "pod-config-enc-mounts"
 	podConfigInjectEnvKind        = "pod-config-inject-env-provides"
 	podConfigInjectMCPKind        = "pod-config-inject-mcp-provides"
 	podConfigHookSecretEnvKind    = "pod-config-hook-secret-env"
@@ -395,18 +394,6 @@ func hostBuildPodConfigProvisionSecrets(_ context.Context, req spec.PodConfigPro
 	}, nil
 }
 
-func hostBuildPodConfigEncMounts(_ context.Context, req spec.PodConfigEncMountsRequest, _ buildEngineContext) (spec.PodConfigEncMountsReply, error) {
-	if err := ensureEncryptedMounts(req.Box, req.Instance, req.AutoGen); err != nil {
-		return spec.PodConfigEncMountsReply{}, fmt.Errorf("setting up encrypted volumes: %w", err)
-	}
-	if !req.KeepMounted {
-		if err := encUnmount(req.Box, req.Instance, ""); err != nil {
-			return spec.PodConfigEncMountsReply{}, fmt.Errorf("unmounting encrypted volumes: %w", err)
-		}
-	}
-	return spec.PodConfigEncMountsReply{}, nil
-}
-
 func hostBuildPodConfigInjectEnv(_ context.Context, req spec.PodConfigInjectEnvProvidesRequest, _ buildEngineContext) (spec.PodConfigInjectEnvProvidesReply, error) {
 	var portMap map[int]int
 	if len(req.PortMapJSON) > 0 {
@@ -473,7 +460,6 @@ var _ = func() bool {
 	registerHostBuilder(podConfigTunnelResolveKind, typedHostBuilder(podConfigTunnelResolveKind, hostBuildPodConfigTunnelResolve))
 	registerHostBuilder(podConfigResolveSidecarsKind, typedHostBuilder(podConfigResolveSidecarsKind, hostBuildPodConfigResolveSidecars))
 	registerHostBuilder(podConfigProvisionSecretsKind, typedHostBuilder(podConfigProvisionSecretsKind, hostBuildPodConfigProvisionSecrets))
-	registerHostBuilder(podConfigEncMountsKind, typedHostBuilder(podConfigEncMountsKind, hostBuildPodConfigEncMounts))
 	registerHostBuilder(podConfigInjectEnvKind, typedHostBuilder(podConfigInjectEnvKind, hostBuildPodConfigInjectEnv))
 	registerHostBuilder(podConfigInjectMCPKind, typedHostBuilder(podConfigInjectMCPKind, hostBuildPodConfigInjectMCP))
 	registerHostBuilder(podConfigHookSecretEnvKind, typedHostBuilder(podConfigHookSecretEnvKind, hostBuildPodConfigHookSecretEnv))
