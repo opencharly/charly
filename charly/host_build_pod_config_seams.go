@@ -9,6 +9,7 @@ import (
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/sshx"
 )
 
 // host_build_pod_config_seams.go — the ~16 NARROW "pod-config-*" F10 host-builders the P13-KERNEL
@@ -72,11 +73,11 @@ func hostBuildPodConfigSSHKey(_ context.Context, req spec.PodConfigSSHKeyRequest
 	if req.Flag == "" {
 		return spec.PodConfigSSHKeyReply{}, nil
 	}
-	sshDir, err := containerSSHKeyDir(req.ContainerName)
+	sshDir, err := sshx.ContainerSSHKeyDir(req.ContainerName)
 	if err != nil {
 		return spec.PodConfigSSHKeyReply{}, err
 	}
-	pubkey, err := resolveSSHPubKey(req.Flag, sshDir)
+	pubkey, err := sshx.ResolveSSHPubKey(req.Flag, sshDir)
 	if err != nil {
 		return spec.PodConfigSSHKeyReply{}, fmt.Errorf("resolving SSH key: %w", err)
 	}

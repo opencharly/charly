@@ -217,6 +217,12 @@ var kernelFloor = []floorEntry{
 	{"bundle_add_cmd.go", "M — the host-side residue of `charly bundle add`/`charly bundle del`: deriveChildExecutorForPath already carries its own E/M/D-VERIFIED doc comment (registry-coupled deployTraitDescent, constructs a live DeployExecutor that can't cross the wire); deployDelCmd/resolveDelNode/podDeploymentArtifactExists reconstruct the del-resolve seam's target node from a wire request (registry + deploy-tree + container-store probes); detectHostContext/resolveDistroDef/loadConfigForDeploy are host-fs + already-floor LoadConfig/LoadDefaultBuildConfig/RegisterBuildVocabulary glue shared with the already-floor build_overlay.go"},
 	{"bundle_from_box_cmd.go", "M — deployFromBoxCmd is reconstructed from spec.DeployFromBoxRequest by the already-floor host_build_deploy_from_box.go seam (its sole real caller, call-graph verified); its body calls the already-floor hostBuildPodConfigSetup directly plus a genuinely host-only `systemctl --user start` (the quadlet service the seam's own prior step just wrote can only be started on THIS host)"},
 	{"config_secret_migration.go", "M — MigratePlaintextEnvSecret/scrubSecretCLIEnv/writeDeployBackup: SDK's OWN secret_declare.go doc comment already designates these core (\"inseparable from charly-core today\"), calling DefaultCredentialStore (a provider-registry-coupled host singleton, credential_plugin.go) + saveBundleConfigNodeForm (loader-seam-coupled, deploy_state_host.go) + DeployConfigPath (kit.DefaultDeployConfigPath alias, deploy.go) — none plugin-reachable. Sole real callers are the already-floor host_build_pod_config_seams.go (call-graph verified, zero dead code); the genuinely-pure third of the former file (secret declaration lookups) already relocated to sdk/deploykit's secret_declare.go"},
+	// F6 vm-lifecycle trio (coneB-vmlifecycle, routed by coneA's partition) — MIXED verdict per
+	// call-graph, not a uniform floor-vs-move: the VM-BACKEND detection capability (resolveVmBackend/
+	// vmConfiguredBackend) MOVED to candy/plugin-vm/vm_backend_resolve.go (zero core-registry
+	// coupling; its one dependency was already a generic plugin-reachable seam) — see
+	// host_build_config_resolve.go's shrunk "config-resolve" seam + the CUE Backend field removal.
+	// What remains in these 3 files is genuine floor-M, verified individually below.
 }
 
 // residueOwner maps every tracked-for-removal charly/*.go non-test file to its
@@ -256,9 +262,25 @@ var residueOwner = map[string]string{
 	"sidecar.go":                    "P11",
 	"substrate_template_resolve.go": "P15",
 	"update_deploy_dispatch.go":     "P11",
-	"vm_backend_lifecycle.go":       "P11",
-	"vm_lifecycle_preresolve.go":    "P11",
-	"volume_cp_tags_cmd.go":         "P11",
+	// vm_deploy_state.go / vm_lifecycle_preresolve.go — F6 vm-lifecycle move (coneB-vmlifecycle):
+	// saveVmDeployState/removeVmDeployEntry route through the already-floored deploy_state_host.go
+	// write seam, MOVING their vm-specific caller to plugin-deploy-vm (team-lead ruling — the
+	// generic locked-RMW persist primitives stay floor, only this file's VM-specific caller moves);
+	// vmLifecyclePostTeardown likewise MOVES (plugin-vm already drives libvirt snapshot ops
+	// directly, so the "un-importable by plugin" framing this file's old header carried is R1-stale
+	// — verify + move via ephemeral-teardown, coordinating the TeardownEphemeralLifecycle boundary
+	// with coneA's P11 ephemeral-delete-shim work). vmAttachResolver + the lifecyclePostTeardownHook
+	// registry are the LIKELY-floor remainder, to be confirmed once the move above lands.
+	"vm_deploy_state.go":         "P11",
+	"vm_lifecycle_preresolve.go": "P11",
+	// vm_backend_lifecycle.go — down to ONE function (startLibvirtUserSession; the vm-backend-
+	// detection capability MOVED to candy/plugin-vm/vm_backend_resolve.go, the SSH-keypair trio
+	// HOISTED to sdk/sshx, R3 — see this file's own doc comment). Cannot fully vacate without ALSO
+	// touching its 2 remaining core callers (bundle_members.go/host_build_check_bed.go) — the
+	// former is coneA's disjoint vm-deploy-lifecycle domain — so this is a cross-cone blocker
+	// flagged to team-lead rather than resolved unilaterally; stays residue pending that call.
+	"vm_backend_lifecycle.go": "P11",
+	"volume_cp_tags_cmd.go":   "P11",
 	// — files added by cutovers that landed after the T0 authoring (living tracker) —
 	"config_write_host.go":     "P11",
 	"validate_project_host.go": "P15",
@@ -273,11 +295,6 @@ var residueOwner = map[string]string{
 	// concrete pod-kind behaviour, not a kind-blind mechanism) still runs
 	// host-side behind a thin "pod-<word>" HostBuild seam each; both the seam
 	// and the orchestration it forwards to are P11 pod-deploy-surface residue —
-	// vm_deploy_state.go — renamed from bundle_add_cmd_vm.go (was P13); its
-	// surviving content is the charly.yml config-persist half of VM deploy add
-	// (config-write/lifecycle), the same substrate-persistence theme as the
-	// other P11 vm_*.go / config_write_host.go entries above.
-	"vm_deploy_state.go": "P11",
 	// host_build_pod_lifecycle_dispatch.go — Cutover B-1 (#169): the CONSOLIDATED
 	// replacement for the 7 deleted host_build_pod_{start,stop,shell,logs,update,
 	// service,remove}.go files above (host_build_pod_disposable.go is a separate

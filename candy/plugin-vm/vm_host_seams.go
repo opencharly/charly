@@ -60,8 +60,10 @@ type resolvedConfig struct {
 }
 
 // hostConfigResolve resolves the project config for an entity host-side (LoadUnified/ResolveRuntime/
-// resolveVmBackend/lookupVMClaimant + #Vm defaults + the persisted VmState) — the READ seam. It decodes
-// the opaque VmJSON/ResourcesJSON envelopes into the typed *VmSpec / resource map for the caller.
+// lookupVMClaimant + #Vm defaults + the persisted VmState) — the READ seam. It decodes the opaque
+// VmJSON/ResourcesJSON envelopes into the typed *VmSpec / resource map for the caller, and computes
+// the effective VM backend ITSELF (resolveVmBackendPlugin/vmConfiguredBackendPlugin, F6 vm-lifecycle
+// move, vm_backend_resolve.go) — the "config-resolve" wire reply no longer carries Backend.
 func hostConfigResolve(entity string) (resolvedConfig, error) {
 	if cmdExec == nil {
 		return resolvedConfig{}, fmt.Errorf("config-resolve: no host reverse channel (command not compiled-in?)")
@@ -78,8 +80,12 @@ func hostConfigResolve(entity string) (resolvedConfig, error) {
 	if err := json.Unmarshal(out, &wire); err != nil {
 		return resolvedConfig{}, fmt.Errorf("config-resolve: decode reply: %w", err)
 	}
+	backend, err := resolveVmBackendPlugin(vmConfiguredBackendPlugin(cmdCtx, cmdExec, entity, wire.VmBackend))
+	if err != nil {
+		return resolvedConfig{}, err
+	}
 	cfg := resolvedConfig{
-		Backend:      wire.Backend,
+		Backend:      backend,
 		Claimant:     wire.Claimant,
 		ClaimantNode: wire.ClaimantNode,
 		VmBackend:    wire.VmBackend,
