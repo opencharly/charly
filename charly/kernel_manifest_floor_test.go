@@ -279,74 +279,13 @@ var kernelFloor = []floorEntry{
 //	P14  — status collectors / alias / scaffold / OCI registry+merge → plugins
 //	P15  — residual folds + HostArbiter deletion + K1 loader-orchestration + K5 seam-death + misc CLI utils
 var residueOwner = map[string]string{
-	"cmd.go": "P15",
-	// — Cutover A (#168, deploy-dispatch kernel hard-cutover exit): the K4-C
-	// deploy-tree walk port narrows the retired deploy-dispatch spike into 6
-	// per-position seams (candy/plugin-bundle drives the walk; each seam calls
-	// back a deploy-specific host body — deploy-dispatch is tracked K4 residue,
-	// not permanent core, per the operator's boundary-law overrule) —
-	// — Cutover A's P13-KERNEL direction-flip: each pod-lifecycle CLI command's
-	// GRAMMAR moved to command:<word> (candy/plugin-pod), but the per-command
-	// orchestration BODY (podStartCmd/podStopCmd/podShellCmd/... — R-items,
-	// concrete pod-kind behaviour, not a kind-blind mechanism) still runs
-	// host-side behind a thin "pod-<word>" HostBuild seam each; both the seam
-	// and the orchestration it forwards to are P11 pod-deploy-surface residue —
-	// host_build_pod_lifecycle_dispatch.go — Cutover B-1 (#169): the CONSOLIDATED
-	// replacement for the 7 deleted host_build_pod_{start,stop,shell,logs,update,
-	// service,remove}.go files above (host_build_pod_disposable.go is a separate
-	// concern and keeps its own file/entry). Re-derived from the tree, NOT from
-	// the file's own header comment (never trust code comments): every handler
-	// only CALLS a pre-existing floor Mechanism (dispatchLifecycleTarget /
-	// unified_targets.go's ResolveTarget) or the P15 arbiter (releaseResourceClaim,
-	// arbiter_host.go — itself residue, not floor, contradicting the header's
-	// "stays core" framing for the arbiter bracket) — the defines-vs-calls test
-	// makes this an R-item, not a Mechanism. Same shape and same P11 pod-deploy-
-	// surface classification as the 7 files it replaces; the file's own header
-	// already declines "settled STAYS-CORE precedent" status for its siblings,
-	// citing the deploy-dispatch boundary-law overrule (memory:
-	// deploy-resolution-67-gated-cone.md) — no re-escalation needed.
-	// — FINAL/K5 unit 6 (#171, F6 preresolve + ephemeral cross-substrate move +
-	// credential/bed-session consolidation): 4 new charly/*.go files. Re-derived
-	// from the tree, NOT from any file's own header comment (never trust code
-	// comments — host_build_deploy_entity_resolve.go's own header claims its
-	// LoadUnified call is "a kernel Mechanism, R-E2 stands: it never moves
-	// wholesale," but LoadUnified's own defining file, unified.go, is ITSELF
-	// tracked P15 residue in this same table — a header asserting permanence for
-	// a call target this table already tracks as residue is exactly the
-	// incomplete-seam trap, not evidence).
-	//
-	// host_build_deploy_entity_resolve.go — the generalized "deploy-entity-
-	// resolve" HostBuild seam: its default/"bundle" case calls resolveTreeRoot
-	// (deploy_tree.go, P13), and its "k8s"/"android"/"vm" cases fold in the
-	// entity-lookup bodies formerly split across the three now-deleted P11 files
-	// (android_deploy_cmd.go, android_deploy_preresolve.go,
-	// k8s_deploy_preresolve.go — pruned above). Classified with the K4-C
-	// deploy-dispatch seam family (P13) per the defines-vs-calls test and the
-	// deploy-dispatch boundary-law precedent (memory:
-	// deploy-resolution-67-gated-cone.md) this PR's own prior reconciliation
-	// passes already applied to the sibling host_build_deploy_{tree_resolve,
-	// node_dispatch,node_del_dispatch,del_resolve,members,config_save}.go seams.
-	// host_build_deploy_candy_secrets.go + host_build_deploy_artifacts_retrieve.go — Cone A
-	// shape 3 (deploy_add_shared.go + k8s_deploy_from_box.go → candy/plugin-bundle): two new
-	// thin HostBuild seams wrapping the genuine floor-M halves of the former core-resident
-	// prepareCandySecrets/retrieveArtifactsAndK3s — the project candy scan (CandyForPlan →
-	// ScanAllCandyWithConfig) + the credential-store touch (ResolveSecretForCandy) + the live
-	// artifact fetch (deploykit.RetrieveCandyArtifacts over a re-materialized venue). The
-	// ORCHESTRATION (inject secrets before dispatch, retrieve+dispatch register hints after) now
-	// runs plugin-side (candy/plugin-bundle/secrets_artifacts.go); K3sPostProvision's
-	// registry-coupled kube dispatch moved fully plugin-side via exec.InvokeProvider. Classified
-	// with the SAME K4-C deploy-dispatch seam family (P13) as the sibling
-	// host_build_deploy_entity_resolve.go above.
-	// (ephemeral_dispatch.go + host_build_ephemeral_register.go RETIRED — the OpEphemeralRegister
-	// dispatch moved plugin-side into candy/plugin-deploy-vm's dispatchVmEphemeralRegister, the exact
-	// mirror of its OpEphemeralTeardown twin: vmPrepareVenue now Invokes command:bundle directly, so
-	// the host round-trip + its panic-vs-warning bookkeeping are deleted, not floored.)
-	// (host_build_loader.go RETIRED — dissolved: the 3 substrate plugins (bundle/build/vm) self-serve
-	// the loader validators ValidateAndroidDevices + ValidatePreemptible via loaderkit.Validate* +
-	// ResolveVia*Executor (InvokeProvider mid-load); the 2 host validate legs + their registration are
-	// deleted. The PERMANENT loader legs — bootstrap-phase dispatch / prescan+connect / the D snapshot /
-	// the materialize kind-decode reverse face — live in host_build_loader_floor.go, classified FLOOR
-	// (kernelFloor above) so residue→0 GREEN stays reachable.)
+	// RESIDUE 0 — the #118 core-minimization program is COMPLETE: cmd.go (the last
+	// residue, the __cmd interactive-attach reentry) dissolved into the floored
+	// pod-cmd HostBuilder seam, so every tracked charly/*.go file has either moved to
+	// its owning plugin or been classified into the E/M/B/D fabric floor. This map is
+	// intentionally empty; the kernel-manifest gate is GREEN. (The migration's
+	// per-file classification rationale — Cutovers A/B-1, K5 unit 6, the loader
+	// and ephemeral dissolutions — lives in the repo CHANGELOG/, not here.)
 }
 
 func TestKernelManifest_CoreIsPinnedToTheFabricFloor(t *testing.T) {

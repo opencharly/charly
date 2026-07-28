@@ -2,12 +2,14 @@ package main
 
 import (
 	"context"
+	"errors"
 
+	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
-// host_build_pod_lifecycle_dispatch.go — the CONSOLIDATED "pod-{start,stop,shell,logs,update,
+// host_build_pod_lifecycle_dispatch.go — the CONSOLIDATED "pod-{start,stop,shell,cmd,logs,update,
 // service,remove}" F10 host-builder family (Cutover B unit 2, the pod-lifecycle-CLI-dispatch
 // family), replacing the former host_build_pod_{start,stop,shell,logs,update,service,remove}.go
 // (7 files — plus host_build_pod_disposable.go, which is a DIFFERENT concern, the AI check-harness
@@ -122,10 +124,38 @@ func hostBuildPodRemove(_ context.Context, req spec.PodRemoveRequest, _ buildEng
 	return spec.PodRemoveReply{}, nil
 }
 
+// hostBuildPodCmd serves `charly cmd <box> <command>` — the single-command interactive exec.
+// candy/plugin-cmd owns the CLI grammar + the completion notification and drives THIS seam (the
+// former hidden `charly __cmd` core reentry, dissolved), so cmd joins its interactive sibling
+// hostBuildPodShell in the pod-lifecycle-dispatch family: the SAME irreducible
+// dispatchLifecycleTarget + LifecycleTarget.Attach step (a core M-mechanism a plugin cannot perform),
+// running over the host-held exec.RunInteractive leg (stdio never crosses the wire; the `-i` stream
+// reaches the operator's real terminal — the file-header interactive-safety invariant). tty=false is
+// the single-command form (vs hostBuildPodShell's tty=true interactive shell); Sidecar routes the
+// exec into the named sidecar container.
+func hostBuildPodCmd(_ context.Context, req spec.PodCmdRequest, _ buildEngineContext) (spec.PodCmdReply, error) {
+	lt, err := dispatchLifecycleTarget("cmd", req.Box, req.Instance)
+	if err != nil {
+		return spec.PodCmdReply{}, err
+	}
+	// The container command's non-zero exit rides the REPLY's ExitCode field, NOT the HostBuild error
+	// return (which stringifies the typed *sdk.ExitCodeError, losing the code) — the plugin
+	// reconstructs the typed error from it so the operator sees the command's own code, exactly as the
+	// former __cmd/CliReply.ExitCode path did. A genuine (non-exit-code) failure still propagates as
+	// the error.
+	aerr := lt.Attach(withPodCmdOpts(context.Background(), podCmdOpts{Sidecar: req.Sidecar}), []string{req.Command}, false)
+	var ece *sdk.ExitCodeError
+	if errors.As(aerr, &ece) {
+		return spec.PodCmdReply{ExitCode: ece.Code}, nil
+	}
+	return spec.PodCmdReply{}, aerr
+}
+
 var _ = func() bool {
 	registerHostBuilder("pod-start", typedHostBuilder("pod-start", hostBuildPodStart))
 	registerHostBuilder("pod-stop", typedHostBuilder("pod-stop", hostBuildPodStop))
 	registerHostBuilder("pod-shell", typedHostBuilder("pod-shell", hostBuildPodShell))
+	registerHostBuilder("pod-cmd", typedHostBuilder("pod-cmd", hostBuildPodCmd))
 	registerHostBuilder("pod-logs", typedHostBuilder("pod-logs", hostBuildPodLogs))
 	registerHostBuilder("pod-update", typedHostBuilder("pod-update", hostBuildPodUpdate))
 	registerHostBuilder("pod-service", typedHostBuilder("pod-service", hostBuildPodService))

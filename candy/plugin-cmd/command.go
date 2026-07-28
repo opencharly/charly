@@ -3,11 +3,13 @@ package cmd
 // command.go — the `charly cmd` handler (#118 loader+check-tail cone), the plugin half of the
 // deploy-lifecycle-coupled command split. `charly cmd <box> <command>` runs a single command in a
 // running container with an optional completion notification. The interactive exec itself is
-// deploy-lifecycle machinery (dispatchLifecycleTarget → OpAttach) a plugin cannot perform, so the
-// plugin drives the hidden `charly __cmd` core reentry over the generic HostBuild("cli") seam with
-// INHERITED stdio (Capture:false) — the `-i` interactive stream reaches the operator. The __cmd
-// handler stays core (deploy-lifecycle-coupled RESIDUE, gated on the deploy-lifecycle relocation),
-// NOT floor. The plugin owns the CLI grammar + --notify (a host desktop-bus op) directly.
+// deploy-lifecycle machinery (dispatchLifecycleTarget + LifecycleTarget.Attach) a plugin cannot
+// perform, so the plugin drives the "pod-cmd" host-builder — cmd's slot in the FLOORED
+// pod-lifecycle-dispatch family (host_build_pod_lifecycle_dispatch.go), joining its interactive
+// sibling `charly shell` (pod-shell). The exec runs over the SAME host-held exec.RunInteractive leg
+// (stdio never crosses the wire; the `-i` interactive stream reaches the operator's real terminal),
+// so the former hidden `charly __cmd` core reentry is DISSOLVED. The plugin owns the CLI grammar +
+// --notify (a host desktop-bus op) directly.
 
 import (
 	"encoding/json"
@@ -44,15 +46,8 @@ func (c *CmdCmd) Run() error {
 		return rerr
 	}
 
-	argv := []string{"__cmd", c.Box, c.Command}
-	if c.Instance != "" {
-		argv = append(argv, "-i", c.Instance)
-	}
-	if c.Sidecar != "" {
-		argv = append(argv, "--sidecar", c.Sidecar)
-	}
 	start := time.Now()
-	runErr := hostCli(argv)
+	runErr := hostPodCmd(spec.PodCmdRequest{Box: c.Box, Command: c.Command, Instance: c.Instance, Sidecar: c.Sidecar})
 	elapsed := time.Since(start).Truncate(time.Millisecond)
 
 	if c.Notify {
@@ -68,27 +63,32 @@ func (c *CmdCmd) Run() error {
 	return runErr
 }
 
-// hostCli forks the given `charly <argv>` subcommand over the generic "cli" HostBuild seam with
-// inherited (non-captured) stdio, so the interactive __cmd Attach streams to the operator; the
-// child's exit code round-trips as an *sdk.ExitCodeError so the operator sees the command's own code.
-func hostCli(argv []string) error {
-	reqJSON, err := json.Marshal(spec.CliRequest{Argv: argv, Capture: false})
+// hostPodCmd drives the "pod-cmd" host-builder — the deploy-lifecycle Attach a plugin cannot perform
+// (dispatchLifecycleTarget + LifecycleTarget.Attach). cmd joins its interactive sibling `charly shell`
+// (pod-shell) in the pod-lifecycle-dispatch family: the exec runs over the SAME host-held
+// exec.RunInteractive leg (stdio never crosses the wire; the `-i` interactive stream reaches the
+// operator's real terminal). The container command's non-zero exit rides the reply's ExitCode FIELD
+// (the HostBuild ERROR return stringifies the typed *sdk.ExitCodeError, losing the code), which this
+// reconstructs into an *sdk.ExitCodeError so the operator sees the command's own code — exactly as
+// the former __cmd/CliReply.ExitCode path did.
+func hostPodCmd(req spec.PodCmdRequest) error {
+	if cmdExec == nil {
+		return fmt.Errorf("cmd: no host reverse channel (command not compiled-in?)")
+	}
+	reqJSON, err := json.Marshal(req)
 	if err != nil {
 		return err
 	}
-	out, err := cmdExec.HostBuild(cmdCtx, "cli", reqJSON)
+	out, err := cmdExec.HostBuild(cmdCtx, "pod-cmd", reqJSON)
 	if err != nil {
 		return err
 	}
-	var reply spec.CliReply
+	var reply spec.PodCmdReply
 	if uerr := json.Unmarshal(out, &reply); uerr != nil {
 		return uerr
 	}
-	if reply.Error != "" {
-		return fmt.Errorf("%s", reply.Error)
-	}
 	if reply.ExitCode != 0 {
-		return &sdk.ExitCodeError{Code: reply.ExitCode, Err: fmt.Errorf("command exited %d", reply.ExitCode)}
+		return &sdk.ExitCodeError{Code: reply.ExitCode}
 	}
 	return nil
 }

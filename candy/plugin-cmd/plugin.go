@@ -3,9 +3,10 @@
 // optional desktop notification.
 //
 // cmd is COMPILED-IN (charly.yml compiled_plugins): its Invoke(OpRun) runs in charly's process and
-// gets the in-proc reverse channel (dispatchInProcCommand threads it), so it drives the hidden
-// `charly __cmd` core reentry (the deploy-lifecycle-coupled interactive exec a plugin cannot
-// perform) over HostBuild("cli") with inherited stdio, and sends the completion notification itself.
+// gets the in-proc reverse channel (dispatchInProcCommand threads it), so it drives the "pod-cmd"
+// host-builder (the deploy-lifecycle-coupled interactive exec a plugin cannot perform —
+// dispatchLifecycleTarget + LifecycleTarget.Attach, cmd's slot in the floored pod-lifecycle-dispatch
+// family) with host-held exec.RunInteractive stdio, and sends the completion notification itself.
 // The out-of-process CliMain path has no reverse channel and so errors. The SAME NewProvider()/
 // NewMeta() compile INTO charly in-process — placement is invisible. It imports ONLY the sdk module,
 // never charly core.
@@ -32,9 +33,9 @@ func NewMeta() pb.PluginMetaServer {
 }
 
 // CliMain is the out-of-process CLI entrypoint (only reached when cmd is NOT compiled in). cmd
-// drives the __cmd deploy-lifecycle reentry over the HostBuild("cli") reverse channel, which is
+// drives the "pod-cmd" deploy-lifecycle host-builder over the in-proc reverse channel, which is
 // unavailable out-of-process, so it errors clearly; the canonical placement is compiled-in.
 func CliMain(_ []string) int {
-	fmt.Fprintln(os.Stderr, "charly cmd requires compiled-in placement (the __cmd deploy-lifecycle reverse channel is unavailable out-of-process)")
+	fmt.Fprintln(os.Stderr, "charly cmd requires compiled-in placement (the pod-cmd deploy-lifecycle reverse channel is unavailable out-of-process)")
 	return 1
 }
