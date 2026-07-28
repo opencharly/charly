@@ -15,13 +15,6 @@ import (
 // in that v4 cutover.
 // -----------------------------------------------------------------------------
 
-// K8sPatchTarget identifies which generated resource a patch applies to.
-type K8sPatchTarget struct {
-	Kind      string `yaml:"kind,omitempty" json:"kind,omitempty"`
-	Name      string `yaml:"name,omitempty" json:"name,omitempty"`
-	Namespace string `yaml:"namespace,omitempty" json:"namespace,omitempty"`
-}
-
 // Schema v4: ClusterProfile / LoadClusterProfile / clusters/*.yaml loaders
 // have been removed. Cluster config lives on K8sSpec (kind:k8s entities in
 // charly.yml / k8s.yml). `charly migrate` synthesizes a kind:k8s
