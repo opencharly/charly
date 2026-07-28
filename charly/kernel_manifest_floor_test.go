@@ -211,6 +211,7 @@ var kernelFloor = []floorEntry{
 	// capability logic, zero dead code (every symbol call-graph-verified referenced).
 	{"bundle_add_cmd.go", "M — the host-side residue of `charly bundle add`/`charly bundle del`: deriveChildExecutorForPath already carries its own E/M/D-VERIFIED doc comment (registry-coupled deployTraitDescent, constructs a live DeployExecutor that can't cross the wire); deployDelCmd/resolveDelNode/podDeploymentArtifactExists reconstruct the del-resolve seam's target node from a wire request (registry + deploy-tree + container-store probes); detectHostContext/resolveDistroDef/loadConfigForDeploy are host-fs + already-floor LoadConfig/LoadDefaultBuildConfig/RegisterBuildVocabulary glue shared with the already-floor build_overlay.go"},
 	{"bundle_from_box_cmd.go", "M — deployFromBoxCmd is reconstructed from spec.DeployFromBoxRequest by the already-floor host_build_deploy_from_box.go seam (its sole real caller, call-graph verified); its body calls the already-floor hostBuildPodConfigSetup directly plus a genuinely host-only `systemctl --user start` (the quadlet service the seam's own prior step just wrote can only be started on THIS host)"},
+	{"config_secret_migration.go", "M — MigratePlaintextEnvSecret/scrubSecretCLIEnv/writeDeployBackup: SDK's OWN secret_declare.go doc comment already designates these core (\"inseparable from charly-core today\"), calling DefaultCredentialStore (a provider-registry-coupled host singleton, credential_plugin.go) + saveBundleConfigNodeForm (loader-seam-coupled, deploy_state_host.go) + DeployConfigPath (kit.DefaultDeployConfigPath alias, deploy.go) — none plugin-reachable. Sole real callers are the already-floor host_build_pod_config_seams.go (call-graph verified, zero dead code); the genuinely-pure third of the former file (secret declaration lookups) already relocated to sdk/deploykit's secret_declare.go"},
 }
 
 // residueOwner maps every tracked-for-removal charly/*.go non-test file to its
@@ -232,7 +233,6 @@ var residueOwner = map[string]string{
 	"cmd.go":                        "P15",
 	"commands.go":                   "P11",
 	"config_image.go":               "P11",
-	"config_secret_migration.go":    "P13",
 	"credential_plugin.go":          "P15",
 	"cue_defaults.go":               "P15",
 	"deploy.go":                     "P13",
