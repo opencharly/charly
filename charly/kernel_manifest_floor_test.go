@@ -70,7 +70,7 @@ var kernelFloor = []floorEntry{
 	{"main.go", "B — the Kong parse/dispatch spine + the bootstrap entry point"},
 	{"main_freshness.go", "D — the binary freshness self-identity (os.Executable() vs cwd)"},
 	{"main_repo.go", "B — the --repo project-directory resolver (bootstrap, pre-dispatch)"},
-	{"materialize.go", "M — the host MATERIALIZE half of the K1 walk/materialize split (folds the loaderkit LoadedProject envelope; successor of loader_driver.go, mirrors node_parsed.go's P6 split)"},
+	{"materialize.go", "M/B — the host-coupled materialize leaf LEGS the relocated loaderkit orchestration (loaderkit.MaterializeLoadedProject, #48) calls back through (hostMaterializeProjectSeams): registry kind-decode dispatch (materializeProject/materializeNodeInto), the bootstrap candyIsImage discovered-manifest fold (foldDiscoveredManifests), and the embedded-defaults merge (materializeDocStream). The walk/merge ORCHESTRATION itself MOVED to sdk/loaderkit at #48"},
 	{"node_build.go", "M — the generic entity-body materialize (kind-decode MATERIALIZE)"},
 	{"node_bundle.go", "M — the bundle / resource-member materialize (the ONE member-decode source of truth; kind-decode MATERIALIZE)"},
 	{"node_candy.go", "B — the candy constructor (candyIsImage/buildCandy bootstrap-critical routing stays core)"},
@@ -208,11 +208,8 @@ var residueOwner = map[string]string{
 	"host_build_bake_plugins.go":    "P8b",
 	"host_build_render_seam.go":     "P8b",
 	"host_build_vm_build.go":        "P8b",
-	"k3s_post.go":                   "P11",
 	"k8s_config.go":                 "P11",
 	"k8s_deploy_from_box.go":        "P14",
-	"k8s_generate.go":               "P11",
-	"k8s_plugin.go":                 "P11",
 	"layer_secrets.go":              "P8b",
 	"layers.go":                     "P8b",
 	"local_spec.go":                 "P11",
@@ -303,10 +300,6 @@ var residueOwner = map[string]string{
 	// passes already applied to the sibling host_build_deploy_{tree_resolve,
 	// node_dispatch,node_del_dispatch,del_resolve,members,config_save}.go seams.
 	"host_build_deploy_entity_resolve.go": "P13",
-	// host_build_k8s_generate.go — single-purpose "k8s-generate-kustomize" seam
-	// wrapping k8s_generate.go's GenerateK8sKustomize (P11) and explicitly
-	// mirroring the deleted k8s_deploy_preresolve.go's (P11) TreeRoot
-	// computation; classified with its k8s-substrate predecessor, P11.
 	// host_build_ephemeral_register.go + ephemeral_dispatch.go — split of the
 	// deleted ephemeral_lifecycle.go (P11, pruned above): the register/teardown
 	// BODY moved to candy/plugin-bundle, leaving (a) a thin HostBuild seam
@@ -328,8 +321,9 @@ var residueOwner = map[string]string{
 	// is the compiled-in TYPED loaderkit.LoaderExecutor (the charly→loaderkit
 	// wrapper charly.LoadUnified drives through LoadSeamsFromExecutor). host_build_
 	// loader.go holds ONLY the TRANSITIONAL reverse legs — loader-materialize
-	// (materialize ORCHESTRATION, RULING 1(a), moves to loaderkit at #48) +
-	// loader-android-validate + loader-preempt-validate (capability validators that
+	// (drives the RELOCATED loaderkit.MaterializeLoadedProject orchestration over the
+	// host leaf seams, #48 done) + loader-android-validate + loader-preempt-validate
+	// (capability validators that
 	// move to loaderkit reaching the registry via the generic Threaded/InvokeProvider
 	// seam). Both dissolve as the loader's call sites finish moving into their owning
 	// plugin (K1 loader-orchestration, P15 — the SAME owner as unified.go). The

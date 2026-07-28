@@ -34,7 +34,7 @@ import (
 // — never through this in-proc set. The plugin resolves any --cluster profile to a
 // concrete kubeconfig context via the cc.ResolveClusterContext reverse-leg; the same plugin's
 // clientcmd-backed k3s post-provision finalization (kubeconfig rewrite + merge) routes
-// through it via k8s_plugin.go's invokeKubePluginWithBroker.
+// through it via deploy_add_shared.go's invokeKubePluginWithBroker.
 
 // adb is NOT a built-in verb — it is an EXTERNAL-CHARLY-VERB served out-of-process by
 // candy/plugin-adb (the second dep-shed: the goadb ADB-wire dependency left charly's

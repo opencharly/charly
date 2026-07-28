@@ -10,116 +10,40 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// materialize.go — the root-wins MERGE + per-document/per-namespace ORCHESTRATION half of project
-// loading (#46/K1). K1 split LoadUnified into two halves at a kind-blind seam: the kind-blind
-// WALK+PARSE (import queue + discover + namespaced-import mounts + per-document parse) is reached
-// via the registered loader plugin's spec.ProjectWalker (hostWalkProject, loader_threaded.go) and
-// returns a generic spec.LoadedProject; THIS file replays the host's decode→materialize→merge over
-// that envelope, reconstructing the typed *loaderkit.UnifiedFile exactly as the former inline loadUnifiedInto
-// did.
+// materialize.go — the host-coupled leaf LEGS of project materialize (#46/K1/#48). The per-document/
+// per-namespace root-wins MERGE ORCHESTRATION (the former materializeLoadedProject) RELOCATED to
+// sdk/loaderkit (loaderkit.MaterializeLoadedProject, task #48) — a kind-blind walk+merge MECHANISM
+// that never touches the registry, so it belongs in the sdk kit consumed by plugins, exactly like
+// LoadUnified (#47). This file keeps ONLY the genuinely host-/registry-/bootstrap-coupled leaf legs
+// the loaderkit orchestration calls back through (hostMaterializeProjectSeams): the per-document
+// registry kind-decode (materializeProject → the registered spec.Materializer), the bootstrap-candy-
+// routed discovered-manifest fold (foldDiscoveredManifests / materializeDiscoveredNode — the
+// candyIsImage box⊻layer routing STAYS core, clause B; shared with ApplyDiscover, R3), and the
+// binary-embedded default vocabulary (applyEmbeddedDefaults / materializeDocStream).
 //
-// CORRECTED CLASSIFICATION (K1 unit 1 — supersedes this file's former "stays core, clause M" self-
-// classification, an incomplete-seam self-misclassification the boundary law's own defines-vs-calls
-// test catches: this file never DEFINES the registry/dispatch mechanism, it only CALLS
-// providerRegistry.ResolveKind transitively via materializeProject; "a capability that uses M1-M4
-// is not thereby M1-M4"). What genuinely stays core (clause M, unchanged, in provider_kind_invoke.go
-// + provider_registry.go — see those files) is the ACTUAL registry resolve + live Provider dispatch.
-// What was an R-item — the per-node NOT-FOUND policy (route to the bundle builder / defer-during-
-// connect-pass / warn-and-skip / hard error) — moved to candy/plugin-loader as the spec.Materializer
-// seam (loaderkit.Materialize), reached via materializeNodeInto (node_parsed.go). THIS file's own
-// orchestration (which document, which discovered node, namespace recursion, the root-wins merge)
-// stays core UNCHANGED — it decides WHICH node to fold, never HOW to fold it, and doesn't itself
-// call the registry — its per-node fold call sites (materializeProject / materializeDiscoveredNode)
-// now route through the Materializer seam instead of the deleted normalizeNodeInto.
+// CLASSIFICATION (K1 unit 1 / #48). The ACTUAL registry resolve + live Provider dispatch stays core
+// (clause M, unchanged — provider_kind_invoke.go + provider_registry.go). The per-node NOT-FOUND
+// policy is candy/plugin-loader (loaderkit.Materialize). The walk/merge ORCHESTRATION is
+// sdk/loaderkit (loaderkit.MaterializeLoadedProject). What remains here are the three host leaf legs
+// that ARE registry-/bootstrap-/host-coupled — reached kind-blind by the loaderkit orchestration.
 
-// materializeLoadedProject replays the host's MATERIALIZE + root-wins MERGE over a walk envelope,
-// reconstructing the typed *loaderkit.UnifiedFile identically to the former inline loadUnifiedInto:
-//  1. each document (root file + flat imports, in walk order) — decode its reserved directives into
-//     a fresh sub loaderkit.UnifiedFile, materialize its parsed nodes (registry kind-decode), then root-wins
-//     merge the sub into merged (first-seen wins → root wins);
-//  2. the discovered manifests — register a lazy layer-candy `From:` reference OR materialize the
-//     node, explicit-entry-wins (foldDiscoveredManifests, the SAME per-node handler ApplyDiscover
-//     uses, unified.go, R3);
-//  3. the binary-embedded default vocabulary (project-wins);
-//  4. the mounted namespace subtrees — recurse into merged.Namespaces[alias].
-func materializeLoadedProject(lp *spec.LoadedProject, merged *loaderkit.UnifiedFile, byID map[int64]*loaderkit.UnifiedFile) error {
-	// Register THIS project's *loaderkit.UnifiedFile under its walk-assigned id BEFORE recursing into its
-	// namespaces, so a namespaced cycle-back / diamond REFERENCE mount nested in this subtree
-	// resolves to this SAME pointer — the pointer identity the former loadNamespaceCached preserved
-	// (the intentional main↔cachyos mutual import). byID persists across the WHOLE materialize.
-	if lp.ID != 0 {
-		byID[lp.ID] = merged
+// hostMaterializeProjectSeams wires charly's three host-coupled materialize leaf legs into the
+// loaderkit.MaterializeProjectSeams the relocated orchestration (loaderkit.MaterializeLoadedProject,
+// #48) calls back through. The compiled-in placement reaches each leg DIRECTLY (zero marshal); the
+// out-of-module plugin path (candy/plugin-bundle's execLoaderExecutor) drives the SAME orchestration
+// over the single "loader-materialize" host leg (host_build_loader.go), which constructs these SAME
+// seams — so both placements are byte-identical.
+func hostMaterializeProjectSeams() loaderkit.MaterializeProjectSeams {
+	return loaderkit.MaterializeProjectSeams{
+		MaterializeProject:      materializeProject,
+		FoldDiscoveredManifests: foldDiscoveredManifests,
+		ApplyEmbeddedDefaults:   applyEmbeddedDefaults,
 	}
-	// RootDir (K1-unblock wave 2, R1 fix): this project's OWN base directory, from its root
-	// document's SrcDir — the SAME dir every OTHER doc's mergeUnified(merged, &sub, d.SrcDir) call
-	// below already threads per-document; the root document (lp.Docs[0], always present for both
-	// the top-level project and a mounted namespace) names the project's own directory. See
-	// loaderkit.UnifiedFile.RootDir's doc comment for why a namespace needs this (subUF.projectCandiesScanned
-	// must resolve a discovered candy's relative From: path against ITS OWN dir, not the caller's).
-	if len(lp.Docs) > 0 {
-		merged.RootDir = lp.Docs[0].SrcDir
-	}
-	// 1. Documents (root + flat imports) — root-wins merge, in walk order.
-	for i := range lp.Docs {
-		d := &lp.Docs[i]
-		var sub loaderkit.UnifiedFile
-		if len(d.Directives) > 0 {
-			// Decode the RAW reserved-directive mapping (YAML) into a sub loaderkit.UnifiedFile — the EXACT
-			// decode the former mergeUnifiedDocs did (dirMap → Decode(&sub)), honoring the custom
-			// YAML unmarshalers on import/discover.
-			if err := yaml.Unmarshal(d.Directives, &sub); err != nil {
-				return fmt.Errorf("%s: decoding directives: %w", d.SrcLabel, err)
-			}
-		}
-		// Materialize the document's parsed entity nodes into sub (registry kind-decode).
-		if err := materializeProject(&d.Project, &sub); err != nil {
-			return fmt.Errorf("%s: %w", d.SrcLabel, err)
-		}
-		// Imports are already resolved + flattened into lp.Docs by the walk — drop the sub's Import
-		// so the merge never re-processes them (the former mergeUnifiedDocs cleared sub.Import too).
-		sub.Import = nil
-		loaderkit.NormalizeV4Aliases(&sub)
-		loaderkit.MergeUnified(merged, &sub, d.SrcDir)
-	}
-	// 2. Discovered manifests (explicit-entry-wins), applied after the documents.
-	if err := foldDiscoveredManifests(lp.Discovered, merged); err != nil {
-		return err
-	}
-	// 3. Binary-embedded default vocabulary (project-wins).
-	if err := applyEmbeddedDefaults(merged); err != nil {
-		return err
-	}
-	// 4. Mounted namespaces — each an isolated child loaderkit.UnifiedFile. A REFERENCE mount (cycle-break /
-	// diamond) resolves to the SAME *loaderkit.UnifiedFile already registered under its target id (pointer
-	// identity preserved); a DEFINITION mount materializes its inline child fresh.
-	for i := range lp.Namespaces {
-		nm := lp.Namespaces[i]
-		if nm == nil {
-			continue
-		}
-		if merged.Namespaces == nil {
-			merged.Namespaces = map[string]*loaderkit.UnifiedFile{}
-		}
-		if nm.Ref {
-			shared := byID[nm.RefID]
-			if shared == nil {
-				return fmt.Errorf("namespace %q: dangling reference to project id %d", nm.Alias, nm.RefID)
-			}
-			merged.Namespaces[nm.Alias] = shared
-			continue
-		}
-		sub := &loaderkit.UnifiedFile{}
-		if err := materializeLoadedProject(&nm.Project, sub, byID); err != nil {
-			return err
-		}
-		merged.Namespaces[nm.Alias] = sub
-	}
-	return nil
 }
 
 // foldDiscoveredManifests folds every discovered manifest's parsed nodes into uf
-// — the SHARED loop (R3) both materializeLoadedProject's step 2 (the LoadUnified
-// walk path) AND ApplyDiscover (unified.go, the layers candy-scan path) drive over
+// — the SHARED loop (R3) both loaderkit.MaterializeLoadedProject's step 2 (the LoadUnified
+// walk path, via the FoldDiscoveredManifests seam) AND ApplyDiscover (unified.go, the layers candy-scan path) drive over
 // their respective []spec.DiscoveredManifest.
 func foldDiscoveredManifests(dms []spec.DiscoveredManifest, uf *loaderkit.UnifiedFile) error {
 	for i := range dms {

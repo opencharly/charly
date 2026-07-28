@@ -31,12 +31,12 @@ func (hostLoaderExecutor) WalkProject(dir string, rootData []byte) (spec.LoadedP
 	return hostWalkProject(dir, rootData)
 }
 
-// MaterializeLoadedProject replays the host's per-document/per-namespace MATERIALIZE + root-wins
-// MERGE over the walk envelope (registry kind-decode via the registered spec.Materializer). RULING
-// 1: a TRANSITIONAL host leg — the whole embed+parser+registry orchestration stays host-side until
-// task #48 relocates it into loaderkit.
+// MaterializeLoadedProject replays the per-document/per-namespace MATERIALIZE + root-wins MERGE over
+// the walk envelope. The kind-blind orchestration lives in loaderkit (#48); this compiled-in
+// placement drives it DIRECTLY over the host's three coupled leaf legs (hostMaterializeProjectSeams
+// — registry kind-decode, discovered-manifest fold, embedded defaults), zero marshal.
 func (hostLoaderExecutor) MaterializeLoadedProject(lp *spec.LoadedProject, merged *loaderkit.UnifiedFile, byID map[int64]*loaderkit.UnifiedFile) error {
-	return materializeLoadedProject(lp, merged, byID)
+	return loaderkit.MaterializeLoadedProject(lp, merged, byID, hostMaterializeProjectSeams())
 }
 
 // ValidateAndroidDevices enforces the kind:android box⊻adb XOR (resolves android templates via the

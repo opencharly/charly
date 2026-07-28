@@ -3,14 +3,14 @@ package main
 // egress.go — the in-core SHIM for egress validation (M16). The validation logic + the
 // CUE schemas (incl. the vendored cloud_config) live in the COMPILED-IN candy/plugin-egress;
 // these four public functions resolve verb:egress and Invoke its OpValidate, so every
-// existing caller (generate.go, k8s_generate.go, install_ledger.go, service_render.go,
+// existing caller (generate.go, install_ledger.go, service_render.go,
 // vm_create_spec.go) AND the vmshared.ValidateEgress hook are unchanged. The egress gate
 // proves the config artifacts charly WRITES (cloud-init, k8s manifests, traefik routes,
 // ledger JSON, the Containerfile, systemd/supervisord units, libvirt domain XML) BEFORE the
 // bytes hit disk — the output counterpart to the CUE INGRESS validation in cue_schema.go.
 //
 // host→plugin dispatch (plain resolve+Invoke, NOT the F10 plugin→plugin reverse channel) —
-// the pattern of k8s_plugin.go / credential_plugin.go. Compiled-in placement keeps it
+// the pattern of credential_plugin.go. Compiled-in placement keeps it
 // resolvable during build AND deploy (and the host-side *Via / VM validations) with no
 // connect step and no per-call gRPC cost.
 

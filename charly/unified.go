@@ -230,7 +230,7 @@ func validateAndroidDevices(uf *loaderkit.UnifiedFile) error {
 // mechanism Walk's own depth-0 discover pass already drives internally, reused
 // here directly rather than duplicated. Only the registry-coupled MATERIALIZE
 // fold (foldDiscoveredManifests, materialize.go — shared with
-// materializeLoadedProject's own discovered-manifest step, R3) stays host-side.
+// loaderkit.MaterializeLoadedProject's own discovered-manifest step via the FoldDiscoveredManifests seam, R3) stays host-side.
 func ApplyDiscover(uf *loaderkit.UnifiedFile, rootDir string) error {
 	dms, err := loaderkit.RunDiscover(rootDir, uf.Discover, hostWalkSeams())
 	if err != nil {

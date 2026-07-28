@@ -15,10 +15,10 @@ import (
 // call back for; a leg is RESIDUE only if it DISSOLVES as the loader capability finishes moving into
 // its owning plugin (so residue→0 GREEN stays reachable). This file holds the three legs that
 // dissolve:
-//   - loader-materialize     → materializeLoadedProject: the materialize+merge+embed ORCHESTRATION
-//                              (RULING 1(a) TRANSITIONAL host leg; the per-node kind-DECODE M stays
-//                              host in provider_kind_invoke.go, a SEPARATE floor file). Moves to
-//                              loaderkit at #48.
+//   - loader-materialize     → drives the RELOCATED loaderkit.MaterializeLoadedProject orchestration
+//                              (#48 done) over the host leaf seams (hostMaterializeProjectSeams);
+//                              TRANSITIONAL host leg (the per-node kind-DECODE M stays host in
+//                              provider_kind_invoke.go, a SEPARATE floor file).
 //   - loader-android-validate → validateAndroidDevices: the kind:android box⊻adb XOR validator —
 //                              capability logic (clause R) that moves to loaderkit, reaching the
 //                              registry via the generic Threaded snapshot / InvokeProvider (the way
@@ -38,7 +38,7 @@ func hostBuildLoaderMaterialize(_ context.Context, specJSON []byte, _ buildEngin
 		return nil, fmt.Errorf("loader-materialize host-build: decode request: %w", err)
 	}
 	merged := &loaderkit.UnifiedFile{}
-	if err := materializeLoadedProject(&lp, merged, map[int64]*loaderkit.UnifiedFile{}); err != nil {
+	if err := loaderkit.MaterializeLoadedProject(&lp, merged, map[int64]*loaderkit.UnifiedFile{}, hostMaterializeProjectSeams()); err != nil {
 		return nil, err
 	}
 	// MarshalMaterialized (NOT marshalJSON): UnifiedFile.PluginKinds is json:"-", so a plain marshal

@@ -47,7 +47,7 @@ func coreCredentialAccess() deploykit.CredentialAccess {
 
 // encExecViaPlugin resolves verb:enc and Invokes its OpExecute with the host-prelifted
 // plan. plugin-enc is compiled-in, so this is an in-proc JSON envelope (no socket) —
-// the passphrase never leaves the process. Mirrors egress.go / k8s_generate.go.
+// the passphrase never leaves the process. Mirrors egress.go.
 func encExecViaPlugin(in spec.EncExecInput) error {
 	// Preflight: the mount methods run `gocryptfs -allow_other`, which fusermount3 rejects
 	// unless `user_allow_other` is set in fuse.conf. Fail fast with the exact fix (before any
