@@ -102,6 +102,7 @@ var kernelFloor = []floorEntry{
 	{"plugin_providers_cmd.go", "M/B — the __plugin-providers introspection: prints a candy's declared plugin.providers (<class>:<word>) via collectPluginProviders (plugin_prescan.go, R3). BOOTSTRAP-CYCLE floor by NECESSITY (un-gameable): the parse-time PRESCAN reads a candy's declared providers to decide what to LOAD, BEFORE any plugin loads — a capability the prescan needs in order to load plugins CANNOT itself live in a plugin (bootstrap cycle), so it is plugin-loading fabric. collectPluginProviders is the R3 single source the PKGBUILD's baked .providers manifest + the prescan share"},
 	{"plugin_transport.go", "M — the InProc/Local transport pair (plugin loading)"},
 	{"plugins_generated.go", "B — the compiled-in pluginsgen registry output (reproducibility-gated; a registry seed)"},
+	{"preempt.go", "M — the host-resident half of the resource-arbiter seam: arbiterProxy + arbiterInvoke (the generic core→verb registry bridge — core is not a plugin, so it cannot call InvokeProvider; it resolves verb:arbiter + Invokes over the in-proc reverse channel) + the acquire/release lease shims. The 1225-LOC arbiter LOGIC already moved to candy/plugin-preempt (verb:arbiter, C9). EVERY lease/arbiter caller is a floor host_build_* seam (host_build_check_bed / host_build_arbiter_bracket / host_build_pod_lifecycle_dispatch) or the C14 GPU exception (gpu_allocate/gpu_imply) — ZERO deploy-capability callers; the arbiter-bracket is generic host-arbitration, not deploy-kind-specific. The release brackets are permanently host-resident (gated on the CHARLY_PREEMPT_LEASE host-process env a placement-agnostic plugin cannot own, B-1 IOU #4). Plus gatherResources — the LoadUnified-coupled resource read for its non-arbiter GPU-allocation callers (the C14 exception)"},
 	{"provider.go", "M — the Provider interface (transport-invisible; plugin loading)"},
 	{"provider_builder_external.go", "M — the builder-class word→plugin dispatch (prescan/word-dispatch)"},
 	{"provider_checkenv.go", "M — the verb/check-context dispatch wiring (word→plugin dispatch)"},
@@ -237,7 +238,6 @@ var residueOwner = map[string]string{
 	"layers.go":                     "P8b",
 	"local_spec.go":                 "P11",
 	"namespace.go":                  "P15",
-	"preempt.go":                    "P15",
 	"readiness_config.go":           "P11",
 	"remote_image.go":               "P14", // ResolveRemoteImage: a build capability (coneB) consuming the FLOOR EnsureRepoDownloaded (the host git clone/cache) + LoadConfig DIRECTLY — no loaderkit seam; EnsureRepoDownloaded stays FLOOR per the #118 ruling (coneC-loader), so this file exits with its build-capability cone, not via a refs move
 	"secrets.go":                    "P11",
