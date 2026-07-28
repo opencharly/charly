@@ -98,9 +98,11 @@ type CLI struct {
 	// these over HostBuild("cli") — the repo resolver (ResolveProjectRepo → EnsureRepoDownloaded)
 	// is host-coupled (CHARLY_REPO_OVERRIDE + the refs-backend dispatch + the command:migrate
 	// auto-migration), which a sdk-only plugin cannot reach.
-	// K5-doomed: both die when ResolveProjectRepo/EnsureRepoDownloaded move into the plugin over
-	// sdk kits (a `HostBuild("refs-resolve")` seam) — the SAME tracked-residue pattern as the
-	// sibling __box-list-tags reentry above (K5 seam-death sweep).
+	// coneB-ROUTED: both are the box-fetch/refresh COMMAND reentries; the COMMAND relocates to
+	// coneB's command:fetch (candy/plugin-box, the box-command domain). The ENGINE,
+	// EnsureRepoDownloaded, STAYS FLOOR (#118: the host git clone/cache ResolveRef-closure
+	// orchestration is reached by loaderkit via the injected ResolveRef seam, never moved) — the
+	// plugin keeps driving it over HostBuild("cli").
 	BoxFetch   BoxFetchCmd   `cmd:"" name:"__box-fetch" hidden:"" help:"internal: pre-prime the remote-repo cache (reentry behind box fetch)"`
 	BoxRefresh BoxRefreshCmd `cmd:"" name:"__box-refresh" hidden:"" help:"internal: force re-clone of a remote project repo (reentry behind box refresh)"`
 
