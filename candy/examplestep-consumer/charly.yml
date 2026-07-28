@@ -4,7 +4,7 @@ examplestep-consumer:
         description: |-
             Reference CONSUMER candy for the build-time plugin-execution example. Its
             plan carries a BUILD-context `run:` step `plugin: examplestep` which, at
-            image build, drives charly's build-path plugin connect + emitPluginFragment
+            image build, drives charly's build-path plugin connect + invokeVerbBuildEmit
             seam: the out-of-tree candy/plugin-example-step is host-built + connected
             out-of-process, its OpEmit Invoked, and the returned Containerfile RUN
             spliced into the generated Containerfile — baking /opt/examplestep-baked into

@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/opencharly/sdk/deploykit"
@@ -81,6 +83,45 @@ type kitVerbActAdapter struct {
 
 func (a kitVerbActAdapter) RenderProvisionScript(op *spec.Op, distros []string) (string, bool) {
 	return a.pa.RenderProvisionScript(op, distros)
+}
+
+// Invoke serves the BUILD-context OpEmit for a state-provision verb UNIFORMLY, so the
+// render dispatches every plugin verb through Invoke(OpEmit) with NO package-main
+// concrete-type assert (the former prov.(ProvisionActor) branch in the EmitPluginOp
+// render path). It decodes the full op from op.Params (a state-provision act reads
+// SHARED #Op modifiers — mode/content — beyond plugin_input) + the BuildEnv distros
+// from op.Env, renders the act shell via the kit ProvisionActor, and returns an
+// EmitReply with ActScript=true so the render RUN-wraps it via EmitCmd (byte-identical
+// to the former IsScript=true path) rather than splicing it verbatim. A non-OpEmit op
+// falls through to the embedded in-proc-only Invoke stub (a builtin verb still runs its
+// check via RunVerb, never the wire envelope — the perf invariant is untouched). ok=false
+// from RenderProvisionScript (the verb declined an act form) is the SAME hard error the
+// former render seam raised.
+func (a kitVerbActAdapter) Invoke(ctx context.Context, op *Operation) (*Result, error) {
+	if op.Op != OpEmit {
+		return a.kitVerbAdapter.Invoke(ctx, op)
+	}
+	var sop spec.Op
+	if len(op.Params) > 0 {
+		if err := json.Unmarshal(op.Params, &sop); err != nil {
+			return nil, fmt.Errorf("verb %q OpEmit: decode op: %w", a.kv.Reserved(), err)
+		}
+	}
+	var env spec.BuildEnv
+	if len(op.Env) > 0 {
+		if err := json.Unmarshal(op.Env, &env); err != nil {
+			return nil, fmt.Errorf("verb %q OpEmit: decode build env: %w", a.kv.Reserved(), err)
+		}
+	}
+	script, ok := a.pa.RenderProvisionScript(&sop, env.Distros)
+	if !ok {
+		return nil, fmt.Errorf("run: plugin verb %q is not act-capable (ProvisionActor declined)", a.kv.Reserved())
+	}
+	out, err := marshalJSON(spec.EmitReply{Fragment: script, ActScript: true})
+	if err != nil {
+		return nil, err
+	}
+	return &Result{JSON: out}, nil
 }
 
 // kitVerbActStepAdapter is the variant for a host-coupled verb candy whose kit verb ALSO

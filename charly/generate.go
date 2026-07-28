@@ -418,7 +418,7 @@ func resolveBuilderStage(prov Provider, word string, in spec.BuilderResolveInput
 
 // resolveExternalBuilder Invokes an `external_builder:`-selected out-of-tree builder provider's
 // OpResolve and returns the decoded BuilderResolveReply — the BUILDER-leg analogue of
-// emitPluginFragment. It sends a MINIMAL render context (the requesting candy name only — an
+// invokeVerbBuildEmit. It sends a MINIMAL render context (the requesting candy name only — an
 // out-of-tree builder renders a self-contained stage that reads none of the detection fields),
 // then requires a non-empty Stage (a mis-selected word producing no build-context builder fails
 // LOUDLY). Shares the OpResolve Invoke with the detection path via resolveBuilderStage (R3).
