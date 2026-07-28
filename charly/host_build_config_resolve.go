@@ -23,11 +23,14 @@ import (
 // the host-builder surface) — the first consumer is command:vm, and the pod (P11) + bundle (P13)
 // command families reuse the SAME seam, extending the reply with their own resolved fields.
 //
-// It returns RESOLVED CONFIG DATA only (the LoadUnified/ResolveRuntime/resolveVmBackend outputs the
-// plugin cannot compute host-side); the plugin owns every downstream ACTION (the create pipeline,
-// the preempt-lease acquire, the libvirt engine calls). Backend resolution stays here because it is
-// a host-ENVIRONMENT probe (is the libvirt session socket up, is qemu installed) — the hostprobe
-// category — plus it needs vmConfiguredBackend's LoadUnified pin read.
+// It returns RESOLVED CONFIG DATA only (the LoadUnified/ResolveRuntime outputs the plugin cannot
+// compute host-side); the plugin owns every downstream ACTION (the create pipeline, the
+// preempt-lease acquire, the libvirt engine calls). Backend resolution (resolveVmBackend/
+// vmConfiguredBackend) moved plugin-side (F6 vm-lifecycle move, coneB-vmlifecycle,
+// candy/plugin-vm/vm_backend_resolve.go): it turned out to be a pure host-env probe with zero
+// core-registry coupling, and its one LoadUnified-coupled dependency (the entity's `backend:` pin)
+// already had a generic plugin-reachable seam ("deploy-entity-resolve") every other F6 consumer
+// uses — so the reply no longer carries Backend.
 const configResolveBuilderKind = "config-resolve"
 
 func hostBuildConfigResolve(_ context.Context, req spec.ConfigResolveRequest, _ buildEngineContext) (spec.ConfigResolveReply, error) {
@@ -74,14 +77,6 @@ func hostBuildConfigResolve(_ context.Context, req spec.ConfigResolveRequest, _ 
 		claimant, claimantNode, hasClaimant = deploykit.FindVMClaimant(
 			deploykit.MergedDeployTree(uf.Bundle, "vm config-resolve"), req.Entity)
 	}
-
-	// Effective backend: the entity's `backend:` pin (vmConfiguredBackend) resolved against the live
-	// host (resolveVmBackend — which also spawns the libvirt user session before probing the socket).
-	backend, err := resolveVmBackend(vmConfiguredBackend(req.Entity, rt.VmBackend))
-	if err != nil {
-		return spec.ConfigResolveReply{}, err
-	}
-	reply.Backend = backend
 
 	if hasClaimant {
 		reply.Claimant = claimant
