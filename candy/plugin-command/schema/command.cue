@@ -40,4 +40,12 @@
 	background?: bool @go(Background)
 	// from_host — force host-side execution (equivalent to in_container: false).
 	from_host?: bool @go(FromHost)
+	// expect_non_zero — assert the command FAILS (exit code != 0), whatever the
+	// exact code. The base #Op exit_status matcher can only assert ONE specific
+	// code (exit_status: 1); a command whose failure code is non-deterministic
+	// (127 vs 1 vs 2) or simply "must fail" cannot be expressed that way. When
+	// true, the runner asserts exitCode != 0 and IGNORES exit_status (the two are
+	// mutually-exclusive intents: exact-code vs any-non-zero). Default false =
+	// the historic behaviour (assert exit_status, defaulting to 0).
+	expect_non_zero?: bool @go(ExpectNonZero)
 }
