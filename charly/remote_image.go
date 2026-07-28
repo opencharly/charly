@@ -17,12 +17,16 @@ import (
 // MIGRATION INVENTORY (north-star §4.4): this file is UNTIL-K1 — the repo-fetch/cache
 // machinery (EnsureRepoDownloaded, LoadConfig, ScanAllCandyWithConfig) is loader-cone (K1)
 // and CANNOT leave core (EnsureRepoDownloaded is the host git clone/cache, K1/B; ResolveRemoteImage
-// is ALSO the backing of the "remote-image-resolve" HostBuild seam plugin-build's ensure fallback
-// reaches). The build-DRIVE half is GONE (K3 #39): buildRemote (build.go) now runs the cached
-// source through the full BuildCmd.Run() pipeline (build:box in candy/plugin-build) directly — the
-// former RemoteImageContext.BuildImage indirection is deleted. Consumers — build.go, commands.go,
-// host_build_box_ref_resolve.go, image.go, config_image.go (P14-rest trace, 2026-07) — reach the
-// resolve half only, so this moves together with the loader wave, not alone.
+// is ALSO the backing of the "remote-image-resolve" HostBuild seam, reached BOTH by
+// candy/plugin-build's ensure fallback AND by candy/plugin-box's dispatchBuild for
+// `charly box build @ref`). The build-DRIVE half is GONE (K3 #39, P8b): the remote-ref pivot now
+// runs in candy/plugin-box's dispatchBuild — it DETECTS the pivot purely (buildkit.DetectRemoteBuildRef,
+// a shallow charly.yml peek, sdk-side), reaches ResolveRemoteImage over the thin
+// HostBuild("remote-image-resolve") seam (host_build_remote_image_resolve.go), then re-dispatches
+// build:box (candy/plugin-build) against the cached source dir; the former RemoteImageContext.BuildImage
+// indirection is deleted. Consumers — commands.go, host_build_box_ref_resolve.go,
+// host_build_remote_image_resolve.go, image.go, config_image.go — reach the resolve half only, so this
+// moves together with the loader wave, not alone.
 
 // RemoteImageContext holds the resolved state of a remote image reference.
 // It contains everything needed to pull/build and run the image.

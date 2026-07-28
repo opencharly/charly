@@ -4,7 +4,11 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"slices"
 
+	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 )
@@ -164,6 +168,93 @@ func reqDirOrCwd(dir string) string {
 		return cwd
 	}
 	return dir
+}
+
+// boxResolveOpts builds the ResolveOpts that scope a generate/build to a set of
+// explicitly-named boxes. It is the SINGLE source of the box-selection rule for
+// both `charly box build` and `charly box generate` (R3): an empty slice means
+// "all enabled boxes" (no scoping); a non-empty slice pins those names into the
+// resolved set (RequestedBoxes) and, when --include-disabled is set, relaxes the
+// enabled: false gate for exactly those names (IncludeDisabledNames) so the
+// override never widens the working set globally. Callers pass boxes already run
+// through buildkit.NormalizeBoxArgs.
+func boxResolveOpts(boxes []string, includeDisabled bool) ResolveOpts {
+	opts := ResolveOpts{IncludeDisabled: includeDisabled}
+	if len(boxes) == 0 {
+		return opts
+	}
+	opts.RequestedBoxes = boxes
+	if includeDisabled {
+		opts.IncludeDisabledNames = make(map[string]bool, len(boxes))
+		for _, name := range boxes {
+			opts.IncludeDisabledNames[name] = true
+		}
+	}
+	return opts
+}
+
+// ensureCharlyBinaryFresh rebuilds candy/charly/bin/charly when any image whose
+// resolved candy chain includes the `charly` candy is in scope for the
+// current build. Without this, podman build would COPY whatever stale
+// binary happens to live at candy/charly/bin/charly — silently baking obsolete
+// CLI behaviour into the image. Skipped (with a one-line warning) when
+// `go` is not on PATH, so an end-user with a packaged charly install does
+// not see a hard error. Reached from the "buildengine-prep" leg (hostBuildPrep) on
+// a real build (never a generate-only pass).
+func ensureCharlyBinaryFresh(dir string, boxes map[string]*buildkit.ResolvedBox, requested []string) error {
+	in := requested
+	if len(in) == 0 {
+		in = make([]string, 0, len(boxes))
+		for name := range boxes {
+			in = append(in, name)
+		}
+	}
+	needs := false
+	for _, name := range in {
+		img, ok := boxes[name]
+		if !ok {
+			continue
+		}
+		if slices.Contains(img.Candy, "charly") {
+			needs = true
+		}
+		if needs {
+			break
+		}
+	}
+	if !needs {
+		return nil
+	}
+
+	binPath := filepath.Join(dir, DefaultCandyDir, "charly", "bin", "charly")
+	srcDir := filepath.Join(dir, "charly")
+
+	// Downstream workspaces (project trees that `import:` upstream
+	// opencharly via `@github.com/...`) don't ship the charly Go source.
+	// Without ./charly to rebuild from, there's nothing to refresh — the
+	// embedded candy chain will use the cached upstream binary at
+	// <upstream-cache>/candy/charly/bin/charly which is already up-to-date
+	// relative to upstream's charly source.
+	if _, err := os.Stat(srcDir); os.IsNotExist(err) {
+		return nil
+	}
+
+	upToDate, err := buildkit.CharlyBinaryUpToDate(binPath, srcDir)
+	if err == nil && upToDate {
+		return nil
+	}
+
+	if _, err := exec.LookPath("go"); err != nil {
+		fmt.Fprintf(os.Stderr, "charly: warning: `go` not on PATH; skipping candy/charly/bin/charly rebuild (image will use existing binary)\n")
+		return nil
+	}
+
+	fmt.Fprintf(os.Stderr, "charly: rebuilding candy/charly/bin/charly from ./charly before image build\n")
+	cmd := exec.Command("go", "build", "-o", binPath, ".")
+	cmd.Dir = srcDir
+	cmd.Stdout = os.Stderr
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
 
 // Register the buildengine-* legs at package-var init (before any init()).

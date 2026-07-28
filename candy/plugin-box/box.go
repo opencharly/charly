@@ -7,11 +7,11 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
@@ -20,9 +20,10 @@ import (
 // reverse channel — InvokeProvider (peer plugin dispatch, for generate → build:generate), the
 // HostBuild("resolved-project") envelope fetch (inspect/list), the HostBuild("validate-project")
 // envelope fetch (validate runs the rule ENGINE in-plugin over the reply), or the generic
-// HostBuild("cli") reentry (pkg → the hidden __box-pkg core command, build → the hidden __box-build
-// core command, and list's store residue → __box-list-tags). pull runs the ensure-image work
-// in-plugin via InvokeProvider(build:ensure); inspect's deploy-overlay formats (tunnel/bind_mounts)
+// HostBuild("cli") reentry (pkg → the hidden __box-pkg core command, and list's store residue →
+// __box-list-tags). build runs its body in-plugin (dispatchBuild — InvokeProvider(build:box) +
+// thin HostBuild seams, P8b), no reentry; pull runs the ensure-image work in-plugin via
+// InvokeProvider(build:ensure); inspect's deploy-overlay formats (tunnel/bind_mounts)
 // render in-plugin off the deploy overlay + the resolved-project envelope — neither reenters core.
 // The `new` command needs neither (kit scaffolding directly).
 type hostClient struct {
@@ -263,11 +264,11 @@ func dispatchPull(hc *hostClient, args []string) error {
 // --- box build ---
 
 // buildGrammar is the `charly box build [boxes…] [flags]` CLI surface — byte-identical to the
-// former static BuildCmd Kong leaf (FINAL/K5 unit 6a M4d): same positional, same nine flags
-// (including the three env-var-backed tunables), same help text, so `charly box build --help`
-// renders unchanged and CHARLY_BUILD_CACHE/CHARLY_BUILD_JOBS/CHARLY_PODMAN_JOBS keep working —
-// Kong resolves them in-plugin at parse time and the resolved values flow through argv, so the
-// reentered `__box-build` subprocess needs neither the env vars nor to re-parse them itself.
+// former static core build leaf (P8b relocated its Run body into dispatchBuild): same positional,
+// same nine flags (including the three env-var-backed tunables), same help text, so
+// `charly box build --help` renders unchanged and CHARLY_BUILD_CACHE/CHARLY_BUILD_JOBS/
+// CHARLY_PODMAN_JOBS keep working — Kong resolves them in-plugin at parse time and dispatchBuild
+// threads the resolved values into the spec.BuildRequest it invokes build:box with.
 type buildGrammar struct {
 	Boxes           []string `arg:"" optional:"" help:"Boxes to build (default: all enabled; the sentinel 'all' is equivalent). Supports remote refs (github.com/org/repo/box[@version])"`
 	Push            bool     `long:"push" help:"Push to registry after building"`
@@ -281,51 +282,196 @@ type buildGrammar struct {
 	DevLocalPkg     bool     `long:"dev-local-pkg" help:"Build localpkg candies (the charly toolchain) from LOCAL in-development source instead of downloading the published release. Set automatically for disposable check-bed image builds so a bed tests in-development code; never on a production box build."`
 }
 
-// dispatchBuild reaches the hidden core `__box-build` reentry over HostBuild("cli"): BuildCmd's Run
-// body (UNCHANGED — the bootstrap-builder subsystem, remote-ref resolve, retention pruning) is
-// K1/K3-ENGINE family, pre the loader/build-engine waves that will eventually move it. The
-// subprocess inherits charly's stdio (the full build progress output) and exits 0/1.
+// dispatchBuild runs the `charly box build` body IN-PLUGIN (P8b — the former hidden core
+// __box-build reentry is DELETED): NormalizeBoxArgs → remote-ref pivot DETECTION (pure sdk,
+// buildkit.DetectRemoteBuildRef) → resolve any remote ref over the existing
+// HostBuild("remote-image-resolve") seam → compute the CalVer tag ONCE → hold the build-activity
+// flock → InvokeProvider(build:box) (the compiled-in candy/plugin-build podman DRIVE) → post-build
+// retention prune (skipped for --push). The host-coupled remainder a sdk-only candy cannot do — the
+// remote-ref clone/cache resolve (ResolveRemoteImage, K1) and keep_images resolution — is reached
+// over thin HostBuild seams (remote-image-resolve, retention-defaults). Byte-equivalent to the
+// former BuildCmd.Run.
 func dispatchBuild(hc *hostClient, args []string) error {
 	var g buildGrammar
 	if done, err := parseLeaf("build", &g, args); err != nil || done {
 		return err
 	}
-	argv := append([]string{"__box-build"}, g.Boxes...)
-	if g.Push {
-		argv = append(argv, "--push")
-	}
-	if g.Tag != "" {
-		argv = append(argv, "--tag", g.Tag)
-	}
-	if g.Platform != "" {
-		argv = append(argv, "--platform", g.Platform)
-	}
-	if g.Cache != "" {
-		argv = append(argv, "--cache", g.Cache)
-	}
-	if g.NoCache {
-		argv = append(argv, "--no-cache")
-	}
-	if g.Jobs != 0 {
-		argv = append(argv, "--jobs", strconv.Itoa(g.Jobs))
-	}
-	if g.PodmanJobs != 0 {
-		argv = append(argv, "--podman-jobs", strconv.Itoa(g.PodmanJobs))
-	}
-	if g.IncludeDisabled {
-		argv = append(argv, "--include-disabled")
-	}
-	if g.DevLocalPkg {
-		argv = append(argv, "--dev-local-pkg")
-	}
-	r, err := hc.cli(false, true, argv...)
+	dir, err := os.Getwd()
 	if err != nil {
 		return err
 	}
-	if r.ExitCode != 0 {
-		return fmt.Errorf("box build failed (exit %d)", r.ExitCode)
+	// Normalize the `all` sentinel to nil BEFORE any per-name interpretation (remote-ref pivot,
+	// the resolver) so every surface agrees "no specific boxes" means "all enabled".
+	boxes := buildkit.NormalizeBoxArgs(g.Boxes)
+
+	// Compute the build tag ONCE (clock-derived — resolving it twice would diverge) so the
+	// activity-lock floor and the built images agree on ONE CalVer.
+	tag := g.Tag
+	if tag == "" {
+		tag = buildkit.ComputeCalVer()
+	}
+
+	req := spec.BuildRequest{
+		Boxes:           boxes,
+		Tag:             tag,
+		Dir:             dir,
+		IncludeDisabled: g.IncludeDisabled,
+		DevLocalPkg:     g.DevLocalPkg,
+		Push:            g.Push,
+		Platform:        g.Platform,
+		Cache:           g.Cache,
+		NoCache:         g.NoCache,
+		Jobs:            g.Jobs,
+		PodmanJobs:      g.PodmanJobs,
+	}
+
+	// Remote-ref pivot: detection is pure (a box arg that is itself a remote @ref, or a thin
+	// workspace whose sole import auto-pivots a locally-undeclared image to its upstream source);
+	// the K1-coupled RESOLUTION (clone/cache the source, EnsureRepoDownloaded) rides the existing
+	// "remote-image-resolve" host seam. On a hit, reset to a fresh single-box build against the
+	// cached source dir — byte-equivalent to the former buildRemote's `(&BuildCmd{Boxes,Tag}).Run()`,
+	// which dropped every other flag (push/platform/cache/jobs/include-disabled/dev-local-pkg).
+	if remoteRef, ok := buildkit.DetectRemoteBuildRef(dir, boxes); ok {
+		resolved, rerr := hc.remoteImageResolve(remoteRef, tag)
+		if rerr != nil {
+			return rerr
+		}
+		req = spec.BuildRequest{Boxes: []string{resolved.BoxName}, Tag: tag, Dir: resolved.CacheDir}
+	}
+
+	// Retention floor: mark this build LIVE so a concurrent sibling's retention prune respects our
+	// tag floor. Held across the whole build (the candy podman drive) + the post-build prune.
+	release, err := acquireBuildActivityLock(tag)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = release() }()
+
+	// The podman DRIVE runs in the compiled-in candy/plugin-build (build:box), reached over the
+	// InvokeProvider reverse leg — the SAME peer-invoke dispatchGenerate uses for build:generate.
+	reqJSON, err := json.Marshal(req)
+	if err != nil {
+		return err
+	}
+	resJSON, err := hc.exec.InvokeProvider(hc.ctx, "build", "box", sdk.OpBuild, reqJSON, nil, sdk.InvokeProviderOpts{})
+	if err != nil {
+		return err
+	}
+	var reply spec.BuildReply
+	if len(resJSON) > 0 {
+		if uerr := json.Unmarshal(resJSON, &reply); uerr != nil {
+			return fmt.Errorf("box build: decode reply: %w", uerr)
+		}
+	}
+	if reply.Error != "" {
+		return fmt.Errorf("%s", reply.Error)
+	}
+
+	// Reusable-artifact retention (post-step; skipped for --push): prune old CalVer tags + stale
+	// .build/_candy dirs down to defaults.keep_images, via verb:retention, under the lock held above.
+	if !req.Push {
+		pruneAfterBuild(hc, req.Dir)
 	}
 	return nil
+}
+
+// remoteImageResolve resolves a known remote @ref to its cached source dir + short box name over the
+// existing "remote-image-resolve" host seam (host_build_remote_image_resolve.go → ResolveRemoteImage,
+// the K1-coupled clone/cache the sdk-only candy cannot run) — the SAME seam candy/plugin-build's
+// ensure-image fallback reaches. The build then re-dispatches build:box against the returned dir.
+func (h *hostClient) remoteImageResolve(ref, tag string) (spec.RemoteImageResolveReply, error) {
+	reqJSON, err := json.Marshal(spec.RemoteImageResolveRequest{Ref: ref, Tag: tag})
+	if err != nil {
+		return spec.RemoteImageResolveReply{}, err
+	}
+	resJSON, err := h.exec.HostBuild(h.ctx, "remote-image-resolve", reqJSON)
+	if err != nil {
+		return spec.RemoteImageResolveReply{}, err
+	}
+	var reply spec.RemoteImageResolveReply
+	if len(resJSON) > 0 {
+		if uerr := json.Unmarshal(resJSON, &reply); uerr != nil {
+			return spec.RemoteImageResolveReply{}, uerr
+		}
+	}
+	if reply.Error != "" {
+		return spec.RemoteImageResolveReply{}, fmt.Errorf("%s", reply.Error)
+	}
+	if reply.BoxName == "" {
+		return spec.RemoteImageResolveReply{}, fmt.Errorf("remote-image-resolve: empty box name resolving %q", ref)
+	}
+	return reply, nil
+}
+
+// acquireBuildActivityLock registers this build invocation as LIVE for its whole duration: a flocked
+// nonce file whose CONTENT is the build's CalVer — the floor of every FROM pin its generated
+// Containerfiles carry. The externalized retention engine (candy/plugin-clean) consults the SAME live
+// set (kit.BuildActivityDir) so a completing sibling build can never untag a pin an in-flight build
+// still resolves. Reconstructed from the shared kit primitives — byte-equivalent to the former core
+// acquireBuildActivityLock (deleted with charly/build.go in P8b), with no core copy remaining.
+func acquireBuildActivityLock(calver string) (func() error, error) {
+	dir, err := kit.BuildActivityDir()
+	if err != nil {
+		return nil, err
+	}
+	path := filepath.Join(dir, fmt.Sprintf("build-%d-%d.lock", os.Getpid(), time.Now().UnixNano()))
+	release, err := kit.AcquireFileLock(path, true)
+	if err != nil {
+		return nil, fmt.Errorf("build-activity lock: %w", err)
+	}
+	if err := os.WriteFile(path, []byte(calver+"\n"), 0o644); err != nil {
+		_ = release()
+		return nil, fmt.Errorf("build-activity lock: record calver: %w", err)
+	}
+	return func() error {
+		rerr := release()
+		_ = os.Remove(path)
+		return rerr
+	}, nil
+}
+
+// pruneAfterBuild runs the post-build retention prune via verb:retention (BuildPrune scope: tag
+// retention + stale .build/_candy staging dirs). Best-effort, warn-only. keep_images comes from the
+// "retention-defaults" HostBuild seam — a candy cannot LoadConfig itself, so it reaches the SAME
+// defaults resolution `charly clean` and candy/plugin-check's post-run prune hook use. Byte-equivalent
+// to the former core pruneAfterBuild (deleted from charly/retention_plugin.go in P8b).
+func pruneAfterBuild(hc *hostClient, dir string) {
+	keep := 0
+	if defJSON, err := json.Marshal(spec.RetentionRequest{Dir: dir}); err == nil {
+		if defRes, derr := hc.exec.HostBuild(hc.ctx, "retention-defaults", defJSON); derr == nil {
+			var dr spec.RetentionReply
+			if json.Unmarshal(defRes, &dr) == nil {
+				keep = dr.KeepImages
+			}
+		}
+	}
+	reqJSON, err := json.Marshal(spec.RetentionRequest{Dir: dir, BuildPrune: true, KeepImages: keep})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: image retention prune: %v\n", err)
+		return
+	}
+	resJSON, err := hc.exec.InvokeProvider(hc.ctx, "verb", "retention", sdk.OpRun, reqJSON, nil, sdk.InvokeProviderOpts{})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: image retention prune: %v\n", err)
+		return
+	}
+	var reply spec.RetentionReply
+	if len(resJSON) > 0 {
+		if uerr := json.Unmarshal(resJSON, &reply); uerr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: image retention prune: %v\n", uerr)
+			return
+		}
+	}
+	if reply.Error != "" {
+		fmt.Fprintf(os.Stderr, "Warning: image retention prune: %s\n", reply.Error)
+		return
+	}
+	if len(reply.ImageRefs) > 0 {
+		fmt.Fprintf(os.Stderr, "Pruned %d old image tag(s) (keep_images=%d)\n", len(reply.ImageRefs), keep)
+	}
+	if len(reply.BuildDirs) > 0 {
+		fmt.Fprintf(os.Stderr, "Pruned %d build-staging dir(s) under .build/_candy\n", len(reply.BuildDirs))
+	}
 }
 
 // --- box labels ---

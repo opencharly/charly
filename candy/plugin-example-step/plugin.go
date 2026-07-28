@@ -17,7 +17,7 @@
 // verb-as-step analogue of the deploy-TARGET candy/plugin-example-deploy.
 //
 // The operator-authorized plugin-execution MECHANISM lives in charly (the
-// generate.go NewGenerator build-connect seam + tasks.go emitPluginFragment for
+// generate.go NewGenerator build-connect seam + tasks.go invokeVerbBuildEmit for
 // build; loadDeployPlugins + ExternalPluginStep over the E3b reverse channel for
 // deploy); this module is only the reference PAYLOAD that mechanism builds + executes.
 package examplestep

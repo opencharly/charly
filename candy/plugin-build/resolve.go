@@ -256,7 +256,7 @@ func buildDriveDescriptors(buildSet []string, resolved map[string]*buildkit.Reso
 	return descriptors
 }
 
-// --- pure drive-model tunable resolvers (mirror BuildCmd.resolveBuildTunables / resolveBuildJobs) ---
+// --- pure drive-model tunable resolvers (mirror the former core build tunable resolution) ---
 
 func resolveDriveJobs(jobs int, def spec.BoxConfig) int {
 	if jobs == 0 {

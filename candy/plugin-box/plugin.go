@@ -31,14 +31,16 @@
 //     charly.yml entry. A --tag short-name resolves its registry ref off the resolved-project
 //     envelope (registry/name are tag-independent), so no loader is needed. The former core
 //     BoxPullCmd + its hidden __box-pull reentry are DELETED.
-//
-//   - command:build — `charly box build`: reaches the hidden core `__box-build` reentry over
-//     HostBuild("cli") (FINAL/K5 unit 6a M4d, the CLI-only mirror of the pull move — BuildCmd.Run()'s
-//     engine, the bootstrap-builder subsystem, remote-ref resolve/download, and retention pruning
-//     are K1/K3-ENGINE family, tracked to move with those waves, not this dispersal). The plugin owns
-//     ONLY the CLI grammar (buildGrammar, byte-identical to the former static BuildCmd Kong leaf) +
-//     reentry dispatch; BuildCmd's Run body is UNCHANGED, unmoved, still core-only.
-//
+//   - command:build — `charly box build`: runs the build body IN-PLUGIN (P8b — the former core
+//     BuildCmd + its hidden __box-build reentry are DELETED). dispatchBuild normalizes the box args,
+//     pivots to a remote @ref source (buildkit.DetectRemoteBuildRef detects it sdk-side; the
+//     HostBuild("remote-image-resolve") seam clones/caches the source) when needed, computes the
+//     CalVer tag, holds the build-activity flock (reconstructed from kit primitives), INVOKES the peer
+//     compiled-in build:box word (candy/plugin-build's podman DRIVE) over InvokeProvider, and runs the
+//     post-build retention prune (verb:retention, keep_images off HostBuild("retention-defaults");
+//     skipped for --push). The host-coupled remainder a sdk-only candy cannot do — the remote-ref
+//     clone/cache resolve (ResolveRemoteImage, K1), the build-engine RESOLVE legs, the bootstrap
+//     builder pre-pass — stays behind thin HostBuild seams the candy invokes.
 //   - command:inspect — `charly box inspect`: reads the generic spec.ResolvedProject envelope
 //     (HostBuild("resolved-project")) and prints the resolved box view — snake_case JSON by default,
 //     scalar/box-aggregate fields per --format. The deploy-overlay formats (tunnel/bind_mounts) render
