@@ -65,9 +65,9 @@ func secretDepNames(meta *spec.BoxMetadata) []string {
 	return names
 }
 
-// secretResolution mirrors charly-core's SecretResolution (secrets.go) field-for-field (same
-// default Go json tags — Name/Source/Resolved/Required) so #PodConfigProvisionSecretsReply's
-// ResolutionsJSON round-trips without a shared CUE type (a small, stable, JSON-only boundary).
+// secretResolution is the plugin's JSON-boundary type for #PodConfigProvisionSecretsReply's
+// ResolutionsJSON (default Go json tags — Name/Source/Resolved/Required) so it round-trips
+// without a shared CUE type (a small, stable, JSON-only boundary).
 type secretResolution struct {
 	Name     string
 	Source   string

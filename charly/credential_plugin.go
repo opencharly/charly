@@ -24,7 +24,7 @@ import (
 
 // CredServiceVNC is the bare-key credential service (VNC passwords use a bare key; every
 // other service uses a composite "service/key" map key). Kept in core because core
-// consumers (runtime_config.go, secrets.go, vnc_helpers.go) name it directly.
+// consumers (runtime_config.go, vnc_helpers.go) name it directly.
 const CredServiceVNC = "charly/vnc"
 
 // CredentialStore abstracts secret storage backends. The implementation is the

@@ -75,6 +75,7 @@ var kernelFloor = []floorEntry{
 	{"deploy_state_host.go", "M — the DeployStateHost seam filler + the plugin-primaries registry-coupled marshalDeployNode callback (the host-resident deploy-config WRITE seam every deploy plugin reaches; the plugin-primaries resugar needs the core registry — a generic kind-blind broker-seam half, like host_build_cli)"},
 	{"deploy_target_unified.go", "M — the UnifiedDeployTarget / LifecycleTarget interface (the broker's deploy-routing contract, kind-blind)"},
 	{"deploy_tree.go", "M/D — the kind-blind deploy-trait/tree loader reads: deployTraitsFor/nodeTraits/deployTraitDescent read the STAMPED Descent DATA (clause-D — the loader stamps it into uf.Bundle via StampBundleDescents, NOT a live registry query) consulted by the FLOORED loader/materialize (loader_threaded/node_normalize/node_bundle); resolveTreeRoot merges the project+per-host-overlay bundle (generic LoadUnified read) for the FLOORED check_venue_resolve/check_cmd + bundle_add; effectiveTarget is the empty→\"pod\" default. Kind-blind data/loader mechanism, ZERO per-kind capability"},
+	{"enc.go", "M — coreCredentialAccess, the host credential-store adapter bundling ResolveCredential/DefaultCredentialStore (credential_plugin.go, itself floored) into the deploykit.CredentialAccess shape secret orchestration needs; sole caller is the FLOORED host_build_deploy_candy_secrets.go's deploykit.ResolveSecretForCandy (the deploy-candy-secrets seam) — the credential STORE is plugin-secrets, this is the host adapter the floored seam injects; floor-M, same class as credential_plugin.go"},
 	{"devices.go", "GPU — hardware-blocked fold (C14); would fold into plugin-gpu under P15 once GPU R10 is possible"},
 	{"embed_defaults.go", "B — the //go:embed charly.yml default vocabulary (charly-app-specific, not loaderkit-generic) + applyEmbeddedDefaults merging it as the lowest-priority project-wins base; a bootstrap default-config root fed through the same loaderkit loader path"},
 	{"gpu_allocate.go", "GPU — hardware-blocked fold (C14); revisitable on GPU hardware"},
@@ -281,8 +282,6 @@ var kernelFloor = []floorEntry{
 var residueOwner = map[string]string{
 	"cmd.go":             "P15",
 	"deploy_nodeform.go": "P13",
-	"enc.go":             "P11",
-	"secrets.go":         "P11",
 	// — Cutover A (#168, deploy-dispatch kernel hard-cutover exit): the K4-C
 	// deploy-tree walk port narrows the retired deploy-dispatch spike into 6
 	// per-position seams (candy/plugin-bundle drives the walk; each seam calls
