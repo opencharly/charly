@@ -172,7 +172,6 @@ var kernelFloor = []floorEntry{
 	// backing-body of an already-accepted floor seam" bar the team lead corrected round 1 against
 	// (no capability logic moved to floor this round — only genuine dispatch/bootstrap glue).
 	{"host_build_buildengine.go", "M — the shrunk render-seam-floor consumer (hostBuildPrep/hostBuildContextIgnoreBaseline) + the 6 other buildengine-* K1-loader-witness legs (bootstrap-delicate local scan, git clone/cache, build-time plugin CONNECT registry-M, namespaced-box nested scan+render-prep) resolveBuildEngine reaches for genuinely host-only steps — mirrors host_build_loader.go's loader-* legs, already floor"},
-	{"remote_image.go", "M — ResolveRemoteImage: the direct backing body of the already-floor host_build_remote_image_resolve.go seam (EnsureRepoDownloaded = host git clone/cache, K1/B; LoadConfig/ScanAllCandyWithConfig = core loader) — its own header already declares \"UNTIL-K1... CANNOT leave core\""},
 	{"distro.go", "M/D — detectDistro/installHints/distroPackageManagers/distroFamilyMap: bootstrap-embedded host-detection data + the /etc/os-release parse, SOLE consumer is the already-floor host_build_hostprobe.go; splitting the file to move only the pure parse half saves nothing and inlining the rest would be the forbidden cosmetic-gaming pattern"},
 	{"distro_resolve.go", "M — resolveDistroViaPlugin: a thin providerRegistry-coupled dispatch callback, the direct callee of the already-floor format_config.go (loaderkit.ProjectDistroConfig) — byte-for-byte the same shape as service_render.go's resolveInitConfigViaPlugin, accepted round 1"},
 }
@@ -235,6 +234,7 @@ var residueOwner = map[string]string{
 	"readiness_config.go":           "P11",
 	"refs.go":                       "P15",
 	"refs_threaded.go":              "P15",
+	"remote_image.go":               "P14", // ResolveRemoteImage: a build capability consuming EnsureRepoDownloaded's refs orchestration — gated on coneC's Cluster A refs->loaderkit seam landing (reconciled: not floor, per coneC-loader)
 	"resource_resolve.go":           "P15",
 	"secrets.go":                    "P11",
 	"sidecar.go":                    "P11",
