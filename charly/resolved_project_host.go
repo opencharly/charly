@@ -32,14 +32,14 @@ const resolvedProjectBuilderKind = "resolved-project"
 // capturing opts + the registry) and delegates. When diags is nil it is FAIL-FAST (a per-box ResolveBox
 // failure aborts with an error); when non-nil it is ERROR-TOLERANT (the validate-project path, which
 // appends a diagnostic and skips the box).
-func projectResolvedProject(cfg *Config, layers map[string]spec.CandyReader, uf *loaderkit.UnifiedFile, distroCfg *buildkit.DistroConfig, builderCfg *buildkit.BuilderConfig, initCfg *buildkit.InitConfig, dir, version string, opts ResolveOpts, diags *spec.Diagnostics) (*spec.ResolvedProject, error) {
+func projectResolvedProject(cfg *Config, layers map[string]spec.CandyReader, uf *loaderkit.UnifiedFile, distroCfg *buildkit.DistroConfig, builderCfg *buildkit.BuilderConfig, initCfg *buildkit.InitConfig, dir, version string, opts loaderkit.ResolveOpts, diags *spec.Diagnostics) (*spec.ResolvedProject, error) {
 	return projectResolvedProjectWithBoxes(cfg, layers, uf, distroCfg, builderCfg, initCfg, dir, version, opts, diags, nil)
 }
 
 // projectResolvedProjectWithBoxes is the host wrapper carrying the optional pre-resolved boxes map (the
 // build-prep seam path preserves the render-prep caches; nil resolves fresh). It computes the wall-clock
 // calver, applies the perf pre-fill (below), builds the seams, and calls the relocated assembler.
-func projectResolvedProjectWithBoxes(cfg *Config, layers map[string]spec.CandyReader, uf *loaderkit.UnifiedFile, distroCfg *buildkit.DistroConfig, builderCfg *buildkit.BuilderConfig, initCfg *buildkit.InitConfig, dir, version string, opts ResolveOpts, diags *spec.Diagnostics, preResolvedBoxes map[string]*buildkit.ResolvedBox) (*spec.ResolvedProject, error) {
+func projectResolvedProjectWithBoxes(cfg *Config, layers map[string]spec.CandyReader, uf *loaderkit.UnifiedFile, distroCfg *buildkit.DistroConfig, builderCfg *buildkit.BuilderConfig, initCfg *buildkit.InitConfig, dir, version string, opts loaderkit.ResolveOpts, diags *spec.Diagnostics, preResolvedBoxes map[string]*buildkit.ResolvedBox) (*spec.ResolvedProject, error) {
 	// R1 fix (K1-unblock wave 2): pre-populate opts.DistroCfg/BuilderCfg from the ALREADY-LOADED values,
 	// so the ResolveBox seam's fillBuildConfigFallback guard short-circuits instead of re-running a full
 	// LoadUnified(dir) on EVERY ResolveBox call (the namespaced-box loop is the first real caller; live
@@ -65,7 +65,7 @@ func projectResolvedProjectWithBoxes(cfg *Config, layers map[string]spec.CandyRe
 			fillNamespacedBoxes(nsUF, ic, prefix, calver, dir, opts, rp, visited)
 		},
 		ResolveResources:      resolveResources,
-		ShouldIncludeDisabled: opts.shouldIncludeDisabled,
+		ShouldIncludeDisabled: opts.ShouldIncludeDisabled,
 		ComputeIntermediates:  ComputeIntermediates,
 		ExternalizedBuilders:  externalizedBuilders,
 	}
@@ -124,7 +124,7 @@ func projectResolvedProjectWithBoxes(cfg *Config, layers map[string]spec.CandyRe
 // key can never collide across namespaces for the SAME candy (same content, same key); a genuine
 // name clash between two DIFFERENT candies sharing a bare name is a pre-existing
 // resolver-arbitration concern (`charly box reconcile`), not something this fill introduces.
-func fillNamespacedBoxes(uf *loaderkit.UnifiedFile, initCfg *buildkit.InitConfig, prefix, calver, dir string, opts ResolveOpts, rp *spec.ResolvedProject, visited map[*loaderkit.UnifiedFile]bool) {
+func fillNamespacedBoxes(uf *loaderkit.UnifiedFile, initCfg *buildkit.InitConfig, prefix, calver, dir string, opts loaderkit.ResolveOpts, rp *spec.ResolvedProject, visited map[*loaderkit.UnifiedFile]bool) {
 	if uf == nil || visited[uf] {
 		return
 	}
@@ -192,7 +192,7 @@ func fillNamespacedBoxes(uf *loaderkit.UnifiedFile, initCfg *buildkit.InitConfig
 		subBoxes := map[string]*buildkit.ResolvedBox{}
 		for _, name := range sub.AllBoxNames() {
 			img, ok := sub.BoxConfig(name)
-			if !ok || (!img.IsEnabled() && !opts.shouldIncludeDisabled(name)) {
+			if !ok || (!img.IsEnabled() && !opts.ShouldIncludeDisabled(name)) {
 				continue
 			}
 			resolved, err := buildkit.ResolveBox(sub, name, calver, dir, bkopts)
@@ -243,7 +243,7 @@ func fillNamespacedBoxes(uf *loaderkit.UnifiedFile, initCfg *buildkit.InitConfig
 // host-side callers use directly. It loads the project (fail-fast — a load/resolve error aborts) via
 // the shared loadProjectForResolve, then projects it. The error-TOLERANT sibling the validate-project
 // seam uses is buildResolvedProjectTolerant (validate_project_host.go).
-func buildResolvedProjectFromDir(dir string, opts ResolveOpts) (*spec.ResolvedProject, error) {
+func buildResolvedProjectFromDir(dir string, opts loaderkit.ResolveOpts) (*spec.ResolvedProject, error) {
 	lp, err := loadProjectForResolve(dir, opts, nil)
 	if err != nil {
 		return nil, err
@@ -270,7 +270,7 @@ func hostBuildResolvedProject(_ context.Context, req spec.ResolvedProjectRequest
 		restore := applySelfSuperprojectOverride(dir)
 		defer restore()
 	}
-	rp, err := buildResolvedProjectFromDir(dir, ResolveOpts{IncludeDisabled: req.IncludeDisabled, ExtraCandyRefs: req.ExtraCandyRefs})
+	rp, err := buildResolvedProjectFromDir(dir, loaderkit.ResolveOpts{IncludeDisabled: req.IncludeDisabled, ExtraCandyRefs: req.ExtraCandyRefs})
 	if err != nil {
 		return spec.ResolvedProject{}, err
 	}

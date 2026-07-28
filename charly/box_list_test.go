@@ -3,6 +3,8 @@ package main
 import (
 	"errors"
 	"testing"
+
+	"github.com/opencharly/sdk/loaderkit"
 )
 
 // TestResolvedProject_NoProjectIsEmptyNotError proves the resolved-project envelope (which now backs
@@ -20,7 +22,7 @@ func TestResolvedProject_NoProjectIsEmptyNotError(t *testing.T) {
 		t.Fatalf("LoadConfig(project-less dir) must wrap ErrNoCharlyYml; got %v", err)
 	}
 
-	rp, err := buildResolvedProjectFromDir(empty, ResolveOpts{})
+	rp, err := buildResolvedProjectFromDir(empty, loaderkit.ResolveOpts{})
 	if err != nil {
 		t.Fatalf("buildResolvedProjectFromDir on a project-less dir must not error (empty envelope), got: %v", err)
 	}

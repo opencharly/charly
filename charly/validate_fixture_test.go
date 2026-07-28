@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -89,7 +90,7 @@ func fx(t *testing.T, mycandyBody string) string {
 // substring in want.
 func mustValidateErr(t *testing.T, dir string, want ...string) {
 	t.Helper()
-	err := validateProjectForBuild(dir, ResolveOpts{})
+	err := validateProjectForBuild(dir, loaderkit.ResolveOpts{})
 	if err == nil {
 		t.Fatalf("expected validation error, got nil")
 	}
@@ -103,7 +104,7 @@ func mustValidateErr(t *testing.T, dir string, want ...string) {
 // mustValidateOK runs the real validate gate over dir and fails if it reports any error.
 func mustValidateOK(t *testing.T, dir string) {
 	t.Helper()
-	if err := validateProjectForBuild(dir, ResolveOpts{}); err != nil {
+	if err := validateProjectForBuild(dir, loaderkit.ResolveOpts{}); err != nil {
 		t.Fatalf("expected no validation error, got: %v", err)
 	}
 }
@@ -511,7 +512,7 @@ fedora-img:
           package: [google-chrome]
     plan: [{check: x, command: "true", context: [build]}]`,
 	})
-	if err := validateProjectForBuild(dir, ResolveOpts{}); err != nil && strings.Contains(err.Error(), "no builder.aur configured") {
+	if err := validateProjectForBuild(dir, loaderkit.ResolveOpts{}); err != nil && strings.Contains(err.Error(), "no builder.aur configured") {
 		t.Fatalf("Fedora image (build=[rpm]) must not require builder.aur; got: %v", err)
 	}
 }
@@ -543,7 +544,7 @@ arch-pac-only:
           package: [yay-bin]
     plan: [{check: x, command: "true", context: [build]}]`,
 	})
-	if err := validateProjectForBuild(dir, ResolveOpts{}); err != nil && strings.Contains(err.Error(), "no builder.aur configured") {
+	if err := validateProjectForBuild(dir, loaderkit.ResolveOpts{}); err != nil && strings.Contains(err.Error(), "no builder.aur configured") {
 		t.Fatalf("Arch image build=[pac] (no aur) must not require builder.aur; got: %v", err)
 	}
 }
@@ -719,7 +720,7 @@ bad-disabled:
 	})
 	mustValidateOK(t, dir)
 	// The problem is real — it surfaces under --include-disabled (proves the skip, not a false pass).
-	if err := validateProjectForBuild(dir, ResolveOpts{IncludeDisabled: true}); err == nil ||
+	if err := validateProjectForBuild(dir, loaderkit.ResolveOpts{IncludeDisabled: true}); err == nil ||
 		!strings.Contains(err.Error(), `candy "nonexistent-layer" not found`) {
 		t.Fatalf("--include-disabled should surface the disabled box's missing candy; got: %v", err)
 	}
@@ -1391,7 +1392,7 @@ func TestValidateOps_LowercaseCheckVarInClusterField(t *testing.T) {
       - check: kube addons
         kube: {method: addons, cluster: "${DEPLOY_NAME}"}
         context: [deploy]`)
-	if err := validateProjectForBuild(ok, ResolveOpts{}); err != nil && strings.Contains(err.Error(), "UPPERCASE") {
+	if err := validateProjectForBuild(ok, loaderkit.ResolveOpts{}); err != nil && strings.Contains(err.Error(), "UPPERCASE") {
 		t.Fatalf("uppercase check var should pass: %v", err)
 	}
 }
@@ -1423,7 +1424,7 @@ func TestValidateOps_RejectsRuntimeOnlyActInBuild(t *testing.T) {
 // TestValidateBuildAndDistro_InvalidPkg ← TestValidateInvalidPkg. A build format not in the vocabulary.
 func TestValidateBuildAndDistro_InvalidPkg(t *testing.T) {
 	cfg := &Config{Defaults: spec.BoxConfig{Build: BuildFormats{"invalid"}}, Box: boxMapOf(map[string]spec.BoxConfig{})}
-	errs := &ValidationError{}
+	errs := &loaderkit.ValidationError{}
 	validateBuildAndDistro(cfg, testDistroConfig(), errs)
 	if !errs.HasErrors() || !strings.Contains(errs.Error(), "is not valid") {
 		t.Errorf("want 'is not valid', got: %v", errs.Errors)
@@ -1433,7 +1434,7 @@ func TestValidateBuildAndDistro_InvalidPkg(t *testing.T) {
 // TestValidateBuildAndDistro_InvalidPkgValue ← TestValidateInvalidPkgValue.
 func TestValidateBuildAndDistro_InvalidPkgValue(t *testing.T) {
 	cfg := &Config{Defaults: spec.BoxConfig{Build: BuildFormats{"zypper"}}, Box: boxMapOf(map[string]spec.BoxConfig{})}
-	errs := &ValidationError{}
+	errs := &loaderkit.ValidationError{}
 	validateBuildAndDistro(cfg, testDistroConfig(), errs)
 	if !errs.HasErrors() || !strings.Contains(errs.Error(), "is not valid") {
 		t.Errorf("want 'is not valid', got: %v", errs.Errors)
@@ -1443,7 +1444,7 @@ func TestValidateBuildAndDistro_InvalidPkgValue(t *testing.T) {
 // TestValidateBuildAndDistro_PacValid ← TestValidatePacPkgValue. `pac` is a valid vocabulary format.
 func TestValidateBuildAndDistro_PacValid(t *testing.T) {
 	cfg := &Config{Defaults: spec.BoxConfig{Build: BuildFormats{"pac"}}, Box: boxMapOf(map[string]spec.BoxConfig{})}
-	errs := &ValidationError{}
+	errs := &loaderkit.ValidationError{}
 	validateBuildAndDistro(cfg, testDistroConfig(), errs)
 	if errs.HasErrors() {
 		t.Errorf("pac should be valid, got: %v", errs.Errors)
@@ -1458,7 +1459,7 @@ func TestValidateBuilderRefs_SelfBuilder(t *testing.T) {
 			"myimg": {Candy: []string{"pixi"}, Builder: buildkit.BuilderMap{"pixi": "myimg"}},
 		}),
 	}
-	errs := &ValidationError{}
+	errs := &loaderkit.ValidationError{}
 	validateBuilderRefs(cfg, testBuilderCfg(), errs)
 	if !errs.HasErrors() || !strings.Contains(errs.Error(), "cannot reference self") {
 		t.Errorf("want 'cannot reference self', got: %v", errs.Errors)
@@ -1474,7 +1475,7 @@ func TestValidateBuilderRefs_InheritedSelfNotError(t *testing.T) {
 			"builder": {Candy: []string{"pixi"}},
 		}),
 	}
-	errs := &ValidationError{}
+	errs := &loaderkit.ValidationError{}
 	validateBuilderRefs(cfg, testBuilderCfg(), errs)
 	if errs.HasErrors() {
 		t.Errorf("inherited self-builder should not error, got: %v", errs.Errors)
@@ -1489,7 +1490,7 @@ func TestValidateBuilderRefs_PerImageNotFound(t *testing.T) {
 			"app": {Candy: []string{"pixi"}, Builder: buildkit.BuilderMap{"pixi": "nonexistent"}},
 		}),
 	}
-	errs := &ValidationError{}
+	errs := &loaderkit.ValidationError{}
 	validateBuilderRefs(cfg, testBuilderCfg(), errs)
 	if !errs.HasErrors() || !strings.Contains(errs.Error(), "is not found") {
 		t.Errorf("want 'is not found', got: %v", errs.Errors)

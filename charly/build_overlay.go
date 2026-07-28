@@ -12,6 +12,7 @@ import (
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -121,7 +122,7 @@ func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ build
 	// as actual RUN directives. Thread the deploy's add_candy: refs into the candy scan
 	// (ExtraCandyRefs) so the OpStep build-emit's candyByName resolves each add_candy candy BY NAME.
 	overlayCandies := collectOverlayCandies(plans)
-	gen, _ := NewGenerator(dir, tag, ResolveOpts{ExtraCandyRefs: overlayCandies})
+	gen, _ := NewGenerator(dir, tag, loaderkit.ResolveOpts{ExtraCandyRefs: overlayCandies})
 	var resolvedImg *buildkit.ResolvedBox
 	if gen != nil && gen.Boxes != nil {
 		resolvedImg = gen.Boxes[base]
@@ -217,7 +218,7 @@ func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ build
 	// so lp.layers (the candy scan) includes them → rp.CandyModels includes the add_candy candies →
 	// the candy's deploykit.Generator.Candies has them (candyByName + HasInit resolve).
 	var rp *spec.ResolvedProject
-	lp, lperr := loadProjectForResolve(dir, ResolveOpts{ExtraCandyRefs: overlayCandies}, nil)
+	lp, lperr := loadProjectForResolve(dir, loaderkit.ResolveOpts{ExtraCandyRefs: overlayCandies}, nil)
 	if lperr != nil {
 		return spec.OverlayBuildReply{}, fmt.Errorf("loading project for overlay envelope: %w", lperr)
 	}
@@ -228,7 +229,7 @@ func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ build
 		} else {
 			initCfg = lp.initCfg
 		}
-		rp, err = projectResolvedProjectWithBoxes(lp.cfg, lp.layers, lp.uf, lp.distroCfg, lp.builderCfg, initCfg, dir, lp.version, ResolveOpts{ExtraCandyRefs: overlayCandies}, nil, gen.Boxes)
+		rp, err = projectResolvedProjectWithBoxes(lp.cfg, lp.layers, lp.uf, lp.distroCfg, lp.builderCfg, initCfg, dir, lp.version, loaderkit.ResolveOpts{ExtraCandyRefs: overlayCandies}, nil, gen.Boxes)
 		if err != nil {
 			return spec.OverlayBuildReply{}, fmt.Errorf("projecting overlay resolved-project envelope: %w", err)
 		}

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 
 	"gopkg.in/yaml.v3"
@@ -538,7 +539,7 @@ func TestScanAllCandyWithConfigOpts_LocalCandyGetsInitSystemsCompletion(t *testi
 		},
 	}}
 
-	layers, err := ScanAllCandyWithConfigOpts(dir, &Config{}, ResolveOpts{InitCfg: initCfg})
+	layers, err := ScanAllCandyWithConfigOpts(dir, &Config{}, loaderkit.ResolveOpts{InitCfg: initCfg})
 	if err != nil {
 		t.Fatalf("ScanAllCandyWithConfigOpts: %v", err)
 	}

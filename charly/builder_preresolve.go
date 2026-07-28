@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+
+	"github.com/opencharly/sdk/loaderkit"
 )
 
 // builder_preresolve.go — the host-side CONNECT half of the builder deploy-time pre-pass
@@ -51,7 +53,7 @@ func ensureBuildersConnected(ctx context.Context, cfg *Config, dir string, words
 	if cfg == nil {
 		return fmt.Errorf("builder plugin connect: no project config (cannot scan %v)", words)
 	}
-	for _, opts := range []ResolveOpts{{}, {ExtraCandyRefs: extraRefs}} {
+	for _, opts := range []loaderkit.ResolveOpts{{}, {ExtraCandyRefs: extraRefs}} {
 		candyMap, scanErr := ScanAllCandyWithConfigOpts(dir, cfg, opts)
 		if scanErr != nil || candyMap == nil {
 			continue

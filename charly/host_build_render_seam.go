@@ -8,6 +8,7 @@ import (
 
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -55,7 +56,7 @@ func loadRenderGen(dir string) *Generator {
 	if v, ok := renderGenCache.Load(dir); ok {
 		return v.(*Generator)
 	}
-	g, err := NewGenerator(dir, "", ResolveOpts{})
+	g, err := NewGenerator(dir, "", loaderkit.ResolveOpts{})
 	if err != nil || g == nil {
 		return nil
 	}

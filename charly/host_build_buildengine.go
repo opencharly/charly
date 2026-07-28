@@ -45,7 +45,7 @@ func hostBuildCollectRemoteRefs(_ context.Context, req spec.ResolvedProjectReque
 	if err != nil {
 		return nil, err
 	}
-	opts := ResolveOpts{IncludeDisabled: req.IncludeDisabled, ExtraCandyRefs: req.ExtraCandyRefs}
+	opts := loaderkit.ResolveOpts{IncludeDisabled: req.IncludeDisabled, ExtraCandyRefs: req.ExtraCandyRefs}
 	return CollectRemoteRefsOpts(cfg, loaderkit.FinalizeScannedCandies(localScanned, nil), withLocalRawRefs(opts, localScanned))
 }
 
@@ -157,7 +157,7 @@ func reqDirOrCwd(dir string) string {
 	return dir
 }
 
-// boxResolveOpts builds the ResolveOpts that scope a generate/build to a set of
+// boxResolveOpts builds the loaderkit.ResolveOpts that scope a generate/build to a set of
 // explicitly-named boxes. It is the SINGLE source of the box-selection rule for
 // both `charly box build` and `charly box generate` (R3): an empty slice means
 // "all enabled boxes" (no scoping); a non-empty slice pins those names into the
@@ -165,8 +165,8 @@ func reqDirOrCwd(dir string) string {
 // enabled: false gate for exactly those names (IncludeDisabledNames) so the
 // override never widens the working set globally. Callers pass boxes already run
 // through buildkit.NormalizeBoxArgs.
-func boxResolveOpts(boxes []string, includeDisabled bool) ResolveOpts {
-	opts := ResolveOpts{IncludeDisabled: includeDisabled}
+func boxResolveOpts(boxes []string, includeDisabled bool) loaderkit.ResolveOpts {
+	opts := loaderkit.ResolveOpts{IncludeDisabled: includeDisabled}
 	if len(boxes) == 0 {
 		return opts
 	}

@@ -287,7 +287,7 @@ func cacheBehindHead(path string) bool {
 // CollectRemoteRefsOpts. The overwhelming majority of call sites want
 // enabled-only collection, so they keep this two-arg form.
 func CollectRemoteRefs(cfg *Config, layers map[string]spec.CandyReader) ([]loaderkit.RemoteDownload, error) {
-	return CollectRemoteRefsOpts(cfg, layers, ResolveOpts{})
+	return CollectRemoteRefsOpts(cfg, layers, loaderkit.ResolveOpts{})
 }
 
 // CollectRemoteRefsOpts collects all unique remote refs from charly.yml candy
@@ -296,7 +296,7 @@ func CollectRemoteRefs(cfg *Config, layers map[string]spec.CandyReader) ([]loade
 // an error. Returns a list of loaderkit.RemoteDownload grouped by (repoPath, version).
 //
 // opts gates the disabled-image walk: a disabled image's candy refs are
-// collected when opts.shouldIncludeDisabled(name) is true (i.e. a
+// collected when opts.ShouldIncludeDisabled(name) is true (i.e. a
 // `--include-disabled <name>` build). This keeps the remote-ref FETCH set in
 // lockstep with the RESOLVE set walked by ResolveAllBox / GlobalCandyOrder —
 // the same shouldIncludeDisabled predicate gates both. Without it, a disabled
@@ -305,7 +305,7 @@ func CollectRemoteRefs(cfg *Config, layers map[string]spec.CandyReader) ([]loade
 // order.
 //
 //nolint:gocyclo // depth-first graph walker over base/candy/builder edges; nested loops are essential to the traversal
-func CollectRemoteRefsOpts(cfg *Config, layers map[string]spec.CandyReader, opts ResolveOpts) ([]loaderkit.RemoteDownload, error) {
+func CollectRemoteRefsOpts(cfg *Config, layers map[string]spec.CandyReader, opts loaderkit.ResolveOpts) ([]loaderkit.RemoteDownload, error) {
 	// Collect EVERY distinct (repo, git-tag) a ref is referenced at. The git tag
 	// is only the FETCH coordinate — per-entity-version arbitration (and any
 	// warning) happens AFTER fetch in ScanAllCandyWithConfigOpts, so a re-tag of
@@ -414,7 +414,7 @@ func CollectRemoteRefsOpts(cfg *Config, layers map[string]spec.CandyReader, opts
 	if cfg != nil {
 		for _, imgName := range cfg.AllBoxNames() {
 			img, _ := cfg.BoxConfig(imgName)
-			if !img.IsEnabled() && !opts.shouldIncludeDisabled(imgName) {
+			if !img.IsEnabled() && !opts.ShouldIncludeDisabled(imgName) {
 				continue
 			}
 			if err := collectBox(cfg, imgName); err != nil {

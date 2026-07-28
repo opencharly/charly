@@ -11,6 +11,7 @@ import (
 	"github.com/alecthomas/kong"
 
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -332,7 +333,7 @@ func resolveCommandPluginBinary(ctx context.Context, word string) (string, error
 	if err != nil {
 		return "", fmt.Errorf("command %q: load project: %w", word, err)
 	}
-	candyMap, err := ScanAllCandyWithConfigOpts(dir, cfg, ResolveOpts{})
+	candyMap, err := ScanAllCandyWithConfigOpts(dir, cfg, loaderkit.ResolveOpts{})
 	if err != nil || candyMap == nil {
 		return "", fmt.Errorf("command %q: scan candies: %w", word, err)
 	}
