@@ -231,6 +231,7 @@ var kernelFloor = []floorEntry{
 	{"bundle_from_box_cmd.go", "M — deployFromBoxCmd is reconstructed from spec.DeployFromBoxRequest by the already-floor host_build_deploy_from_box.go seam (its sole real caller, call-graph verified); its body calls the already-floor hostBuildPodConfigSetup directly plus a genuinely host-only `systemctl --user start` (the quadlet service the seam's own prior step just wrote can only be started on THIS host)"},
 	{"config_secret_migration.go", "M — MigratePlaintextEnvSecret/scrubSecretCLIEnv/writeDeployBackup: SDK's OWN secret_declare.go doc comment already designates these core (\"inseparable from charly-core today\"), calling DefaultCredentialStore (a provider-registry-coupled host singleton, credential_plugin.go) + saveBundleConfigNodeForm (loader-seam-coupled, deploy_state_host.go) + DeployConfigPath (kit.DefaultDeployConfigPath alias, deploy.go) — none plugin-reachable. Sole real callers are the already-floor host_build_pod_config_seams.go (call-graph verified, zero dead code); the genuinely-pure third of the former file (secret declaration lookups) already relocated to sdk/deploykit's secret_declare.go"},
 	{"config_write_host.go", "M — deployPodPluginCandyRef, the canonical plugin-deploy-pod candy ref (CHARLY_REPO_OVERRIDE bed-redirect + published-fetch); its SOLE caller is invokePodConfigOp in the already-floor host_build_pod_config.go (the F10 pod-config reverse-channel dispatch seam) — a host-resident plugin-connect ref, the exact class as the floored vmPluginCandyRef (vm_plugin_client.go); floor-M, moves with neither loader nor capability"},
+	{"bundle_members.go", "M — bringUpMembers/tearDownMembers, the ONE shared `peer:` sibling-member bring-up/teardown, shelling out via proclifecycle.RunCharlySubcommand + reading the live registry (nodeTraits) — NOT registry-free; consumed EXCLUSIVELY by the floored F10 host seams host_build_check_bed.go + host_build_deploy_members.go (isPodMember by the floored gpu_imply.go, isVmMember by host_build_check_bed.go) — floor-M, moves with those seams, never alone (the LOAD-half foldMembers/sortedMemberKeys already relocated to loaderkit)"},
 	// F6 vm-lifecycle trio (coneB-vmlifecycle, routed by coneA's partition) — MIXED verdict per
 	// call-graph, not a uniform floor-vs-move: the VM-BACKEND detection capability (resolveVmBackend/
 	// vmConfiguredBackend) MOVED to candy/plugin-vm/vm_backend_resolve.go (zero core-registry
@@ -253,7 +254,6 @@ var kernelFloor = []floorEntry{
 //	P15  — residual folds + HostArbiter deletion + K1 loader-orchestration + K5 seam-death + misc CLI utils
 var residueOwner = map[string]string{
 	"builder_venue.go":              "P8b", // buildEngineContext (the type) is floor-worthy core-dispatch infra; runVenueBuilderStep/runVenueHomeArtifactBuilder look like coneA3's deploy-vm domain by function — flagged, not unilaterally split (team-lead ruling)
-	"bundle_members.go":             "P11",
 	"cmd.go":                        "P15",
 	"credential_plugin.go":          "P15",
 	"cue_defaults.go":               "P15",
