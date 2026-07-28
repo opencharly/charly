@@ -162,6 +162,7 @@ var kernelFloor = []floorEntry{
 	{"check_kit_adapter.go", "M — the in-proc kit-verb registration bridge (plugin-loading/prescan-dispatch M)"},
 	{"pod_lifecycle_dispatch.go", "M — the F6 host-plan-hook word-table + arbiter-bracket host-process env gating (CHARLY_PREEMPT_LEASE; kind-blind)"},
 	{"pod_lifecycle_verb.go", "M — the pod-lifecycle verb dispatch (F6 host-plan-hook; kind-blind)"},
+	{"vm_lifecycle_preresolve.go", "M — down to the F12 attach-resolver (vmAttachResolver) + its registerLifecycleLivePlanHooks registration, the SAME shared word-table pod_lifecycle_dispatch.go registers into (kind-blind M; F6 vm-lifecycle move, coneB-vmlifecycle shrank this from 3 concerns to 1 — vmLifecyclePostTeardown + its now-empty lifecyclePostTeardownHook registry moved/deleted, see this file's own header + unified_targets.go's Del())"},
 	{"vm_plugin_client.go", "M — the host to plugin libvirt client (InvokeProvider dispatch; wire broker)"},
 	{"deploy_target_dispatch.go", "M — the deploy-target dispatch F10 host-builder to command:bundle OpDeployDispatch (one envelope, all substrates; kind-blind)"},
 	{"dispatch_build_ensure.go", "M — the build:ensure in-proc reverse-channel dispatch to plugin-build (mirrors candy/plugin-box's dispatchBuild; kind-blind)"},
@@ -262,17 +263,21 @@ var residueOwner = map[string]string{
 	"sidecar.go":                    "P11",
 	"substrate_template_resolve.go": "P15",
 	"update_deploy_dispatch.go":     "P11",
-	// vm_deploy_state.go / vm_lifecycle_preresolve.go — F6 vm-lifecycle move (coneB-vmlifecycle):
-	// saveVmDeployState/removeVmDeployEntry route through the already-floored deploy_state_host.go
-	// write seam, MOVING their vm-specific caller to plugin-deploy-vm (team-lead ruling — the
-	// generic locked-RMW persist primitives stay floor, only this file's VM-specific caller moves);
-	// vmLifecyclePostTeardown likewise MOVES (plugin-vm already drives libvirt snapshot ops
-	// directly, so the "un-importable by plugin" framing this file's old header carried is R1-stale
-	// — verify + move via ephemeral-teardown, coordinating the TeardownEphemeralLifecycle boundary
-	// with coneA's P11 ephemeral-delete-shim work). vmAttachResolver + the lifecyclePostTeardownHook
-	// registry are the LIKELY-floor remainder, to be confirmed once the move above lands.
-	"vm_deploy_state.go":         "P11",
-	"vm_lifecycle_preresolve.go": "P11",
+	// vm_deploy_state.go — F6 vm-lifecycle move (coneB-vmlifecycle), NOT YET LANDED:
+	// saveVmDeployState/removeVmDeployEntry should route through the already-floored
+	// deploy_state_host.go write seam, MOVING their vm-specific caller to plugin-deploy-vm
+	// (team-lead ruling — the generic locked-RMW persist primitives, acquireDeployConfigLock +
+	// saveBundleConfigNodeForm, stay floor; only the VM-specific decision logic — ephemeral-state
+	// preserve merge, the auto-vs-operator-authored delete decision, stale-dotted-twin prune —
+	// moves). Flagged to team-lead: this business logic runs inside the SAME lock-held
+	// load→decide→save critical section the lost-`preemptible:`-config regression (this file's own
+	// RCA #6/#7 comments) was fixed by; moving the decision to a plugin fed by a stale prior read
+	// would reintroduce that exact lost-update race, so the design needs a call before landing
+	// (either a portable deploykit helper taking the lock/save as injected callbacks, or an
+	// RDD-spiked held-lock-across-RPC pattern — nothing in the codebase does the latter today).
+	// vm_lifecycle_preresolve.go (the SIBLING file in this same F6 trio) IS done: it moved down to
+	// kernelFloor (vmAttachResolver only) — see that entry above.
+	"vm_deploy_state.go": "P11",
 	// vm_backend_lifecycle.go — down to ONE function (startLibvirtUserSession; the vm-backend-
 	// detection capability MOVED to candy/plugin-vm/vm_backend_resolve.go, the SSH-keypair trio
 	// HOISTED to sdk/sshx, R3 — see this file's own doc comment). Cannot fully vacate without ALSO
@@ -348,11 +353,15 @@ var residueOwner = map[string]string{
 	// host_build_ephemeral_register.go itself — Cone A shape 3's floor-M adjudication moved it
 	// verbatim out of the deleted deploy_add_shared.go) so the plugin
 	// can trigger the one host-only side effect it cannot do itself, and (b) the
-	// host→plugin dispatch into command:bundle's Op{Ephemeral,Teardown}
-	// legs. Both stay in the "ephemeral" cross-substrate lifecycle family — the
-	// SAME family as the ephemeral load-time validators now relocated to
-	// sdk/loaderkit (validate_ephemeral.go, K1-LOADER RELOCATION) — rather than
-	// following the P13 shape their own comments compare themselves to
+	// host→plugin dispatch into command:bundle's OpEphemeralRegister leg (F6
+	// vm-lifecycle move, coneB-vmlifecycle: the OpEphemeralTeardown twin,
+	// TeardownEphemeralLifecycle, is DELETED — its sole caller,
+	// vm_lifecycle_preresolve.go's vmLifecyclePostTeardown, moved plugin-side and now
+	// Invokes command:bundle's OpEphemeralTeardown directly, no core dispatch needed
+	// for an out-of-process caller). Both stay in the "ephemeral" cross-substrate
+	// lifecycle family — the SAME family as the ephemeral load-time validators now
+	// relocated to sdk/loaderkit (validate_ephemeral.go, K1-LOADER RELOCATION) —
+	// rather than following the P13 shape their own comments compare themselves to
 	// (bundle_compile_seam.go's dispatch pattern); the family the seam SERVES
 	// (ephemeral lifecycle, explicitly named in P11's "lifecycle" scope) governs
 	// over incidental mechanism-shape similarity to a P13 sibling.

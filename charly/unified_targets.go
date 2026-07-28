@@ -383,15 +383,11 @@ func (t *pluginDeployTarget) Test(ctx context.Context, checks []spec.Op, opts Te
 }
 
 func (t *pluginDeployTarget) Del(ctx context.Context, opts DelOpts) error {
-	// Host-side substrate cleanup the plugin cannot do (vm: ephemeral-lifecycle teardown —
-	// systemd timers + libvirt snapshot refcounts). Consulted GENERICALLY by word (pod registers
-	// none). Runs BEFORE the plugin's own teardown, mirroring the pre-S3b PostTeardown ordering
-	// exactly (the hook ran before the substrate's OpPostTeardown Invoke).
-	if hook, ok := lifecyclePostTeardownHookFor(t.word); ok {
-		if herr := hook(t.name, t.node); herr != nil {
-			fmt.Fprintf(os.Stderr, "warning: substrate %q post-teardown host hook: %v\n", t.word, herr)
-		}
-	}
+	// The vm ephemeral-lifecycle teardown (systemd timers + libvirt snapshot refcounts) that used
+	// to run here as a pre-dispatch host hook now runs INSIDE candy/plugin-deploy-vm's own
+	// OpPostTeardown handler (vmPostTeardown, F6 vm-lifecycle move, coneB-vmlifecycle) — it turned
+	// out to need only sdk-portable seams (config-resolve + InvokeProvider), so the hook registry
+	// (lifecyclePostTeardownHook, vm's sole registrant) is deleted rather than kept empty.
 	optsJSON, err := json.Marshal(spec.DeployTargetDelOpts{
 		DryRun: opts.DryRun, AssumeYes: opts.AssumeYes, KeepLedger: opts.KeepLedger, RemoveVolumes: opts.RemoveVolumes,
 		KeepRepoChanges: t.KeepRepoChanges, KeepServices: t.KeepServices, KeepImage: t.KeepImage,
