@@ -43,15 +43,16 @@ func hostBuildDeployCandySecrets(_ context.Context, req spec.DeployCandySecretsR
 }
 
 // resolveCandySecrets scans dir for the candies backing plans (CandyForPlan) and resolves their
-// secret_requires:/secret_accepts: env (ResolveSecretForCandy) + the distinct artifact register
-// hints present (deploykit.CandyArtifactRegisters) — the shared core both hostBuildDeployCandySecrets
+// secret_requires:/secret_accepts: env (deploykit.ResolveSecretForCandy, supplying coreCredentialAccess
+// as the injected CredentialAccess — enc.go) + the distinct artifact register hints present
+// (deploykit.CandyArtifactRegisters) — the shared core both hostBuildDeployCandySecrets
 // and build_overlay.go's hostBuildOverlay call directly.
 func resolveCandySecrets(plans []*deploykit.InstallPlan, dir string) (map[string]string, []string, error) {
 	candyList, err := CandyForPlan(plans, dir, nil)
 	if err != nil {
 		return nil, nil, err
 	}
-	secretEnv := ResolveSecretForCandy(candyList)
+	secretEnv := deploykit.ResolveSecretForCandy(candyList, coreCredentialAccess())
 	registers := deploykit.CandyArtifactRegisters(candyList)
 	hints := make([]string, 0, len(registers))
 	for register := range registers {
