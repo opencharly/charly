@@ -12,7 +12,6 @@ const (
 	podConfigScrubCliEnvKind      = "pod-config-scrub-cli-env"
 	podConfigDetectDevicesKind    = "pod-config-detect-devices"
 	podConfigTunnelResolveKind    = "pod-config-tunnel-resolve"
-	podConfigResolveSidecarsKind  = "pod-config-resolve-sidecars"
 	podConfigProvisionSecretsKind = "pod-config-provision-secrets"
 	podConfigInjectEnvKind        = "pod-config-inject-env-provides"
 	podConfigInjectMCPKind        = "pod-config-inject-mcp-provides"

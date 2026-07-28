@@ -5,8 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/opencharly/sdk/spec"
 )
 
 // sidecarBodyImage peeks the `image` field of an opaque sidecar body — the kernel
@@ -66,41 +64,5 @@ mysidecar:
 	bc := uf.ProjectBundleConfig()
 	if bc == nil || sidecarBodyImage(t, bc.Sidecar["mysidecar"]) != "example.com/mysidecar:1" {
 		t.Fatalf("ProjectBundleConfig().Sidecar projection lost the sidecar; got %#v", bc)
-	}
-}
-
-// TestSidecarResolve_LiveDispatch exercises the REAL production dispatch seam the
-// sidecar de-type introduced (Cutover D): providerRegistry.ResolveKind("sidecar") →
-// Invoke(OpResolve) → wire round-trip → reply, with the COMPILED-IN
-// candy/plugin-sidecar provider — the exact path a live `charly config` takes. It
-// proves env-routing, the embedded-template merge, and reply decoding all survive
-// the real registry + wire, not just an in-package function call.
-func TestSidecarResolve_LiveDispatch(t *testing.T) {
-	if _, ok := providerRegistry.ResolveKind("sidecar"); !ok {
-		t.Fatal("sidecar kind must resolve to the compiled-in candy/plugin-sidecar provider")
-	}
-	embedded, err := embeddedSidecarBodies()
-	if err != nil {
-		t.Fatalf("embeddedSidecarBodies: %v", err)
-	}
-	reply, err := resolveSidecarsViaPlugin(spec.SidecarResolveInput{
-		EmbeddedTemplates: embedded,
-		DeployOverrides:   map[string]json.RawMessage{"tailscale": json.RawMessage(`{"env":{"TS_HOSTNAME":"e2e"},"parameter":{"tailnet":"example.ts.net"}}`)},
-		CliEnv:            []string{"TS_EXTRA_ARGS=--foo", "APP_VAR=x"},
-		Box:               "e2e-app",
-	})
-	if err != nil {
-		t.Fatalf("resolveSidecarsViaPlugin: %v", err)
-	}
-	// App-only env survives; the TS_ var routed to the sidecar through the wire.
-	if len(reply.AppEnv) != 1 || reply.AppEnv[0] != "APP_VAR=x" {
-		t.Errorf("AppEnv = %v, want [APP_VAR=x]", reply.AppEnv)
-	}
-	// The embedded tailscale template resolved through the compiled-in provider.
-	if len(reply.Sidecars) != 1 || reply.Sidecars[0].Image != "ghcr.io/tailscale/tailscale:latest" {
-		t.Fatalf("resolved sidecars = %+v, want the tailscale image", reply.Sidecars)
-	}
-	if reply.Sidecars[0].Env["TS_HOSTNAME"] != "e2e" {
-		t.Errorf("deploy env override lost through dispatch: %v", reply.Sidecars[0].Env)
 	}
 }

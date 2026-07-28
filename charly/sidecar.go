@@ -2,57 +2,18 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
-
-	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/spec"
 )
 
-// sidecar.go — the HOST side of the `sidecar` kind after the sidecar de-type
-// (Cutover D). ALL sidecar BUSINESS LOGIC — the embedded+project+deploy template
-// merge, CLI env-flag routing, and volume/secret-name + env_from resolution — lives
-// in candy/plugin-sidecar's OpResolve leg. The host holds only OPAQUE sidecar bodies
-// (map[string]json.RawMessage) and consumes the resolved ResolvedSidecar values this
-// file's adapter builds; the quadlet/naming helpers below are pure host machinery.
-
-// ResolvedSidecar (the host-adapted, generation-ready sidecar form the sidecar plugin's
-// spec.ResolvedSidecar wire type is adapted into) is a deploykit resolved-runtime type
-// now, referenced directly as deploykit.ResolvedSidecar — it moved to sdk/deploykit with
-// the pod config-write mechanism (P11), since its CollectedSecret/VolumeMount/vmshared.SecurityConfig
-// fields are all deploykit/vmshared types.
-
-// resolveSidecarsViaPlugin invokes candy/plugin-sidecar's OpResolve leg — the single
-// point where sidecar defs are resolved. The host passes OPAQUE def layers + the CLI
-// env; the plugin returns generation-ready sidecars, the app-only env, and the routed
-// deploy overrides to persist. The kernel reads no spec.Sidecar fields.
-func resolveSidecarsViaPlugin(in spec.SidecarResolveInput) (spec.SidecarResolveReply, error) {
-	reply, err := hostInvoke[spec.SidecarResolveInput, spec.SidecarResolveReply](ClassKind, "sidecar", OpResolve, in)
-	if err != nil {
-		return spec.SidecarResolveReply{}, fmt.Errorf("sidecar resolve: %w", err)
-	}
-	return reply, nil
-}
-
-// resolvedSidecarFromSpec adapts one plugin-resolved spec.ResolvedSidecar into the
-// host's ResolvedSidecar (the quadlet-gen shape).
-func resolvedSidecarFromSpec(s spec.ResolvedSidecar) deploykit.ResolvedSidecar {
-	rs := deploykit.ResolvedSidecar{Name: s.Name, Image: s.Image, Env: s.Env}
-	if s.Security != nil {
-		rs.Security = *s.Security
-	}
-	for _, v := range s.Volume {
-		rs.Volume = append(rs.Volume, deploykit.VolumeMount(v))
-	}
-	for _, sec := range s.Secret {
-		rs.Secret = append(rs.Secret, deploykit.CollectedSecret{
-			Name:       sec.Name,
-			Env:        sec.Env,
-			HostEnv:    sec.HostEnv,
-			SecretName: sec.SecretName,
-		})
-	}
-	return rs
-}
+// sidecar.go — the residual HOST side of the `sidecar` kind: ONLY the go:embed sidecar-template
+// library read. ALL sidecar business logic lives in candy/plugin-sidecar's OpResolve leg; the
+// resolve DISPATCH + adapter + secret-provisioning moved to candy/plugin-deploy-pod
+// (sidecar_resolve.go's resolvePodSidecars, which InvokeProviders kind:sidecar itself — this cone's
+// seam-death, retiring the former resolveSidecarsViaPlugin + resolvedSidecarFromSpec + the fat
+// pod-config-resolve-sidecars seam). embeddedSidecarBodies STAYS core: the go:embed data lives only
+// in the charly binary, served to the plugin via the thin list-sidecars seam's BodiesJSON.
+//
+// The host-adapted generation-ready sidecar form is deploykit.ResolvedSidecar (moved to sdk/deploykit
+// with the pod config-write mechanism, P11).
 
 // embeddedSidecarBodies returns the binary-embedded sidecar-template library (the
 // charly.yml `sidecar:` section) as OPAQUE bodies, read through the unified loader.

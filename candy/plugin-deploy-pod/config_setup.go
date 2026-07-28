@@ -353,7 +353,6 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 	charlyBin := resolveHostCharlyBin(c.HostEnvJSON)
 	isKeyring := provRep.IsKeyring
 
-	var sidecarRep spec.PodConfigResolveSidecarsReply
 	deploySidecarsRaw := map[string]json.RawMessage{}
 	if dc != nil {
 		if overlay, ok := dc.Bundle[deploykit.DeployKey(c.Box, c.Instance)]; ok {
@@ -371,29 +370,16 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 	var resolvedSidecars []deploykit.ResolvedSidecar
 	var deploySidecars map[string]json.RawMessage
 	if len(deploySidecarsRaw) > 0 {
-		dsJSON, _ := json.Marshal(deploySidecarsRaw)
-		ptJSON, _ := json.Marshal(sidecarTemplatesOf(dc))
-		if err := hostBuild(ctx, ex, podConfigResolveSidecarsKind, spec.PodConfigResolveSidecarsRequest{
-			DeploySidecarsJSON: dsJSON, ProjectTemplatesJSON: ptJSON, CliEnv: c.Env,
-			Box: c.Box, Instance: c.Instance, RunEngine: rt.RunEngine, AutoGen: autoGen,
-			RefreshSecret: c.RefreshSecret,
-		}, &sidecarRep); err != nil {
+		scRes, err := resolvePodSidecars(ctx, ex, deploySidecarsRaw, sidecarTemplatesOf(dc), c.Env, c.Box, c.Instance, rt.RunEngine, autoGen, c.RefreshSecret)
+		if err != nil {
 			return scErr(err)
 		}
-		c.Env = sidecarRep.AppEnv
-		for _, kv := range sidecarRep.ExtraEnv {
+		c.Env = scRes.AppEnv
+		for _, kv := range scRes.ExtraEnv {
 			envVars = appendEnvUnique(envVars, kv)
 		}
-		if len(sidecarRep.PersistOverridesJSON) > 0 {
-			if err := json.Unmarshal(sidecarRep.PersistOverridesJSON, &deploySidecars); err != nil {
-				return fmt.Errorf("decoding sidecar persist overrides: %w", err)
-			}
-		}
-		if len(sidecarRep.ResolvedSidecarsJSON) > 0 {
-			if err := json.Unmarshal(sidecarRep.ResolvedSidecarsJSON, &resolvedSidecars); err != nil {
-				return fmt.Errorf("decoding resolved sidecars: %w", err)
-			}
-		}
+		deploySidecars = scRes.PersistOverrides
+		resolvedSidecars = scRes.Sidecars
 	}
 	envVars = mergeEnvSlices(envVars, c.Env)
 

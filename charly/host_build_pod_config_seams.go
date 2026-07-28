@@ -33,7 +33,6 @@ const (
 	podConfigScrubCliEnvKind      = "pod-config-scrub-cli-env"
 	podConfigDetectDevicesKind    = "pod-config-detect-devices"
 	podConfigTunnelResolveKind    = "pod-config-tunnel-resolve"
-	podConfigResolveSidecarsKind  = "pod-config-resolve-sidecars"
 	podConfigProvisionSecretsKind = "pod-config-provision-secrets"
 	podConfigInjectEnvKind        = "pod-config-inject-env-provides"
 	podConfigInjectMCPKind        = "pod-config-inject-mcp-provides"
@@ -61,7 +60,14 @@ func hostBuildPodConfigListSidecars(_ context.Context, _ spec.PodConfigLoadDeplo
 		_ = json.Unmarshal(body, &meta)
 		descriptions[name] = meta.Description
 	}
-	return spec.PodConfigListSidecarsReply{Names: names, Descriptions: descriptions}, nil
+	// BodiesJSON carries the FULL go:embed bodies (the only host-resident piece) so
+	// candy/plugin-deploy-pod's sidecar_resolve.go can InvokeProvider kind:sidecar itself (the
+	// resolve seam-death) — the introspection Names/Descriptions serve `charly config --list-sidecars`.
+	bodiesJSON, err := json.Marshal(templates)
+	if err != nil {
+		return spec.PodConfigListSidecarsReply{}, err
+	}
+	return spec.PodConfigListSidecarsReply{Names: names, Descriptions: descriptions, BodiesJSON: bodiesJSON}, nil
 }
 
 func hostBuildPodConfigSSHKey(_ context.Context, req spec.PodConfigSSHKeyRequest, _ buildEngineContext) (spec.PodConfigSSHKeyReply, error) {
@@ -292,77 +298,6 @@ func hostBuildPodConfigTunnelResolve(_ context.Context, req spec.PodConfigTunnel
 	return spec.PodConfigTunnelResolveReply{TunnelJSON: b}, nil
 }
 
-// hostBuildPodConfigResolveSidecars wraps the former BoxConfigSetupCmd.resolveSidecars body
-// VERBATIM (embeddedSidecarBodies' go:embed data lives only in the charly binary; the plugin
-// dispatch + sidecar-secret provisioning are registry/credential-coupled per the same FINAL/K5
-// family enc.go documents).
-func hostBuildPodConfigResolveSidecars(_ context.Context, req spec.PodConfigResolveSidecarsRequest, _ buildEngineContext) (spec.PodConfigResolveSidecarsReply, error) {
-	var deploySidecars map[string]json.RawMessage
-	if len(req.DeploySidecarsJSON) > 0 {
-		if err := json.Unmarshal(req.DeploySidecarsJSON, &deploySidecars); err != nil {
-			return spec.PodConfigResolveSidecarsReply{}, err
-		}
-	}
-	if len(deploySidecars) == 0 {
-		return spec.PodConfigResolveSidecarsReply{AppEnv: req.CliEnv}, nil
-	}
-	var projectTemplates map[string]json.RawMessage
-	if len(req.ProjectTemplatesJSON) > 0 {
-		if err := json.Unmarshal(req.ProjectTemplatesJSON, &projectTemplates); err != nil {
-			return spec.PodConfigResolveSidecarsReply{}, err
-		}
-	}
-	embedded, err := embeddedSidecarBodies()
-	if err != nil {
-		return spec.PodConfigResolveSidecarsReply{}, fmt.Errorf("resolving sidecars: %w", err)
-	}
-	reply, err := resolveSidecarsViaPlugin(spec.SidecarResolveInput{
-		EmbeddedTemplates: embedded,
-		ProjectTemplates:  projectTemplates,
-		DeployOverrides:   deploySidecars,
-		CliEnv:            req.CliEnv,
-		Box:               req.Box,
-		Instance:          req.Instance,
-	})
-	if err != nil {
-		return spec.PodConfigResolveSidecarsReply{}, fmt.Errorf("resolving sidecars: %w", err)
-	}
-	appEnv := reply.AppEnv
-	resolvedSidecars := make([]deploykit.ResolvedSidecar, 0, len(reply.Sidecars))
-	for _, rs := range reply.Sidecars {
-		resolvedSidecars = append(resolvedSidecars, resolvedSidecarFromSpec(rs))
-	}
-
-	var extraEnv []string
-	for i, sc := range resolvedSidecars {
-		if len(sc.Secret) == 0 {
-			continue
-		}
-		scSecrets, _ := deploykit.ApplySecretRefresh(sc.Secret, req.RefreshSecret)
-		scProvisioned, scFallback, scErr := ProvisionPodmanSecrets(req.RunEngine, req.Box, req.Instance, scSecrets, req.AutoGen)
-		if scErr != nil {
-			continue // best-effort — mirrors the former in-Run() Warning-only handling
-		}
-		resolvedSidecars[i].Secret = scProvisioned
-		extraEnv = append(extraEnv, scFallback...)
-	}
-
-	persistJSON, err := json.Marshal(reply.PersistOverrides)
-	if err != nil {
-		return spec.PodConfigResolveSidecarsReply{}, err
-	}
-	resolvedJSON, err := json.Marshal(resolvedSidecars)
-	if err != nil {
-		return spec.PodConfigResolveSidecarsReply{}, err
-	}
-	return spec.PodConfigResolveSidecarsReply{
-		PersistOverridesJSON: persistJSON,
-		ResolvedSidecarsJSON: resolvedJSON,
-		AppEnv:               appEnv,
-		ExtraEnv:             extraEnv,
-	}, nil
-}
-
 func hostBuildPodConfigProvisionSecrets(_ context.Context, req spec.PodConfigProvisionSecretsRequest, _ buildEngineContext) (spec.PodConfigProvisionSecretsReply, error) {
 	var meta spec.BoxMetadata
 	if err := json.Unmarshal(req.MetaJSON, &meta); err != nil {
@@ -458,7 +393,6 @@ var _ = func() bool {
 	registerHostBuilder(podConfigScrubCliEnvKind, typedHostBuilder(podConfigScrubCliEnvKind, hostBuildPodConfigScrubCliEnv))
 	registerHostBuilder(podConfigDetectDevicesKind, typedHostBuilder(podConfigDetectDevicesKind, hostBuildPodConfigDetectDevices))
 	registerHostBuilder(podConfigTunnelResolveKind, typedHostBuilder(podConfigTunnelResolveKind, hostBuildPodConfigTunnelResolve))
-	registerHostBuilder(podConfigResolveSidecarsKind, typedHostBuilder(podConfigResolveSidecarsKind, hostBuildPodConfigResolveSidecars))
 	registerHostBuilder(podConfigProvisionSecretsKind, typedHostBuilder(podConfigProvisionSecretsKind, hostBuildPodConfigProvisionSecrets))
 	registerHostBuilder(podConfigInjectEnvKind, typedHostBuilder(podConfigInjectEnvKind, hostBuildPodConfigInjectEnv))
 	registerHostBuilder(podConfigInjectMCPKind, typedHostBuilder(podConfigInjectMCPKind, hostBuildPodConfigInjectMCP))
