@@ -49,7 +49,8 @@
 //     in-plugin off the deploy overlay + the resolved-project envelope (no reentry). See inspect_list.go.
 //
 //   - command:list — `charly box list <sub>`: boxes/candies/targets/services/routes/volumes/aliases
-//     from the same envelope; `list tags` reenters the hidden core `__box-list-tags` (podman store).
+//     from the same envelope; `list tags` reaches verb:retention directly over InvokeProvider
+//     (listImageTags, no core reentry — #118).
 //
 //   - command:labels — `charly box labels <ref>`: resolves the local image + prints its OCI labels
 //     directly via sdk/kit (ResolveRuntime/ResolveLocalImageRef/InspectImageLabels) — pure

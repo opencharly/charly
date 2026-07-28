@@ -17,38 +17,20 @@ import (
 )
 
 // hostClient is the box commands' host coupling: it reaches charly's host process over the
-// reverse channel — InvokeProvider (peer plugin dispatch, for generate → build:generate), the
-// HostBuild("resolved-project") envelope fetch (inspect/list), the HostBuild("validate-project")
-// envelope fetch (validate runs the rule ENGINE in-plugin over the reply), or the generic
-// HostBuild("cli") reentry (list's store residue → __box-list-tags). build runs its body
-// in-plugin (dispatchBuild — InvokeProvider(build:box) + thin HostBuild seams, P8b), no reentry;
-// pkg likewise runs in-plugin (dispatchPkg — InvokeProvider(build:pkg), K3 build-tail move); pull
-// runs the ensure-image work in-plugin via InvokeProvider(build:ensure); inspect's deploy-overlay
-// formats (tunnel/bind_mounts) render in-plugin off the deploy overlay + the resolved-project
-// envelope — neither reenters core.
+// reverse channel — InvokeProvider (peer plugin dispatch, for generate → build:generate, and for
+// list's store-live tags → verb:retention, listImageTags), the HostBuild("resolved-project")
+// envelope fetch (inspect/list), or the HostBuild("validate-project") envelope fetch (validate
+// runs the rule ENGINE in-plugin over the reply). build runs its body in-plugin (dispatchBuild —
+// InvokeProvider(build:box) + thin HostBuild seams, P8b), no reentry; pkg likewise runs in-plugin
+// (dispatchPkg — InvokeProvider(build:pkg), K3 build-tail move); pull runs the ensure-image work
+// in-plugin via InvokeProvider(build:ensure); inspect's deploy-overlay formats (tunnel/bind_mounts)
+// render in-plugin off the deploy overlay + the resolved-project envelope. None of these reenter
+// core — the generic HostBuild("cli") reentry helper this file used to carry (list's SOLE
+// caller) is DELETED (#118): `box` has no remaining core CLI reentry.
 // The `new` command needs neither (kit scaffolding directly).
 type hostClient struct {
 	ctx  context.Context
 	exec *sdk.Executor
-}
-
-// cli asks the HOST to run `charly <argv>` via the generic "cli" host-builder and returns the
-// CliReply (stdout when capture, the process exit code, any spawn error). Mirrors the alias
-// plugin's host coupling (R3 in shape; each plugin owns its own reverse-channel calls).
-func (h *hostClient) cli(capture, bestEffort bool, argv ...string) (spec.CliReply, error) {
-	reqJSON, err := json.Marshal(spec.CliRequest{Argv: argv, Capture: capture, BestEffort: bestEffort})
-	if err != nil {
-		return spec.CliReply{}, err
-	}
-	resJSON, err := h.exec.HostBuild(h.ctx, "cli", reqJSON)
-	if err != nil {
-		return spec.CliReply{}, err
-	}
-	var r spec.CliReply
-	if uerr := json.Unmarshal(resJSON, &r); uerr != nil {
-		return spec.CliReply{}, uerr
-	}
-	return r, nil
 }
 
 // dispatchBoxCommand routes a box command word to its handler.

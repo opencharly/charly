@@ -300,7 +300,7 @@ func resolveContainerLocal(ctx context.Context, ex *sdk.Executor, box, instance 
 	return engine, name, nil
 }
 
-// resolveSidecarContainerLocal mirrors charly-core volume_cp_tags_cmd.go's resolveSidecarContainer.
+// resolveSidecarContainerLocal mirrors sdk/deploykit.ResolveSidecarContainer.
 func resolveSidecarContainerLocal(ctx context.Context, ex *sdk.Executor, box, instance, sidecar string) (engine, name string, err error) {
 	rt, err := kit.ResolveRuntime()
 	if err != nil {

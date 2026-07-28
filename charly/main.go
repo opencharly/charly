@@ -83,14 +83,13 @@ type CLI struct {
 	// remainder (the remote-ref clone/cache resolve, the build-engine RESOLVE legs, the bootstrap
 	// builder pre-pass) stays behind thin HostBuild seams the candy invokes.)
 
-	// __box-list-tags is the hidden core reentry point behind the COMPILED-IN candy/plugin-box
-	// command:list word (nested under `box`). The plugin owns the user-facing grammar + reads the
-	// resolved-project envelope; this reentry serves ONLY the residue the envelope cannot carry — the
-	// STORE-LIVE `list tags` (podman image tags). The sibling deploy-overlay inspect formats
-	// (tunnel/bind_mounts) moved fully into candy/plugin-box (the former __box-inspect-overlay reentry
-	// is DELETED — it renders from the deploy overlay + the projector-filled view.Ports, no reentry).
-	// K5-doomed: this dies when the store read moves into the plugin over sdk kits.
-	BoxListTags ListTagsCmd `cmd:"" name:"__box-list-tags" hidden:"" help:"internal: list locally stored CalVer image tags (reentry behind box list tags)"`
+	// __box-list-tags is GONE (#118, coneB-volumecptags): candy/plugin-box's dispatchList now
+	// reaches verb:retention directly over InvokeProvider (listImageTags, inspect_list.go) — the
+	// SAME peer-dispatch pruneAfterBuild already used in the same module — instead of reentering
+	// core for the store-live tag inventory. The sibling deploy-overlay inspect formats
+	// (tunnel/bind_mounts) moved fully into candy/plugin-box earlier (the former
+	// __box-inspect-overlay reentry is likewise DELETED — it renders from the deploy overlay + the
+	// projector-filled view.Ports, no reentry). `box` now has NO remaining core CLI reentry.
 
 	// __box-fetch / __box-refresh are GONE (K3 build-tail tail, coneB-buildremnant): candy/
 	// plugin-authoring's command:fetch/command:refresh now reach the host-coupled repo resolver
