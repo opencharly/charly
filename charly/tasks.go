@@ -58,11 +58,10 @@ func (g *Generator) toDeploykit() *deploykit.Generator {
 	dg.CollectBoxPorts = func(boxName string) ([]string, error) {
 		return deploykit.CollectBoxPorts(g.Config, g.Candies, boxName)
 	}
-	dg.ValidateEgress = ValidateEgress
-	// ValidateTextEgress: the rendered-Containerfile text gate (kind "rendered_text", mode
-	// "text") — the deploykit writeContainerfile calls it instead of the bytes ValidateEgress
-	// (#67 render-DRIVE move). Wraps core validateTextEgress.
-	dg.ValidateTextEgress = validateTextEgress
+	// ValidateEgress/ValidateTextEgress: left unwired here — this toDeploykit() Generator's ONLY
+	// surviving caller (resolved_project_host.go's fillNamespacedBoxes) calls RenderPrepBox only,
+	// which never reaches Generate()/EmitTraefikRouteStage (confirmed dead by call-graph trace,
+	// egress.go dissolution, coneB-buildtail).
 	// RenderService: the init-cluster service materialization crosses to
 	// candy/plugin-init (OpResolve) + egress-gates host-side. All arg/return types
 	// are spec aliases, so the core func satisfies the seam field directly.
