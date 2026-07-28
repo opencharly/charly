@@ -59,7 +59,7 @@ type loadedProject struct {
 // config → empty; a scan failure → zero candies; a unified-load failure → no deploy/template fill), so
 // validate runs on a broken project. The build vocabulary is registered (so ResolveBox resolves
 // distro/builder) exactly as before.
-func loadProjectForResolve(dir string, opts ResolveOpts, diags *spec.Diagnostics) (*loadedProject, error) {
+func loadProjectForResolve(dir string, opts loaderkit.ResolveOpts, diags *spec.Diagnostics) (*loadedProject, error) {
 	lp := &loadedProject{layers: map[string]spec.CandyReader{}}
 
 	cfg, err := LoadConfig(dir)
@@ -137,7 +137,7 @@ func addLoadDiag(diags *spec.Diagnostics, err error) {
 // resolve failures become spec.Diagnostic entries (skip+continue) instead of aborting. Returns the
 // PARTIAL envelope, the loaded raw pieces (which the host-natural checks read), and the resolve
 // diagnostics gathered so far. Used by the validate-project host-builder.
-func buildResolvedProjectTolerant(dir string, opts ResolveOpts) (*spec.ResolvedProject, *loadedProject, spec.Diagnostics) {
+func buildResolvedProjectTolerant(dir string, opts loaderkit.ResolveOpts) (*spec.ResolvedProject, *loadedProject, spec.Diagnostics) {
 	diags := &spec.Diagnostics{}
 	lp, _ := loadProjectForResolve(dir, opts, diags) // tolerant: the error return is always nil
 	if lp.empty {
@@ -169,11 +169,11 @@ func buildResolvedProjectTolerant(dir string, opts ResolveOpts) (*spec.ResolvedP
 // Every function is KIND-BLIND with ONE tracked exception the orchestrator reviews at tree-final: the
 // hardcoded collection-kind WORD LIST inside validateProjectCUESchemas (a legacy root-shape arm; task
 // #60 CONDITION 1 — restructure to cueKindDefs D-data or delete the dead legacy path per the ruling).
-func runHostNaturalValidateChecks(lp *loadedProject, dir string, opts ResolveOpts, diags *spec.Diagnostics) {
+func runHostNaturalValidateChecks(lp *loadedProject, dir string, opts loaderkit.ResolveOpts, diags *spec.Diagnostics) {
 	if lp == nil || lp.cfg == nil {
 		return
 	}
-	errs := &ValidationError{}
+	errs := &loaderkit.ValidationError{}
 	if lp.distroCfg != nil {
 		validateBuildAndDistro(lp.cfg, lp.distroCfg, errs)
 	}
@@ -204,7 +204,7 @@ func hostBuildValidateProject(_ context.Context, req spec.ValidateProjectRequest
 		}
 		dir = d
 	}
-	opts := ResolveOpts{IncludeDisabled: req.IncludeDisabled}
+	opts := loaderkit.ResolveOpts{IncludeDisabled: req.IncludeDisabled}
 	rp, lp, diags := buildResolvedProjectTolerant(dir, opts)
 	runHostNaturalValidateChecks(lp, dir, opts, &diags)
 	fillValidateWordSets(rp, lp)
@@ -273,9 +273,9 @@ var _ = func() bool {
 // directly — it dispatches to the compiled-in validate capability BY WORD with a structured OpValidate
 // op (the SAME registry-dispatch shape the build path already uses for OpEmit/OpResolve) over an in-proc
 // reverse channel, and consumes the returned spec.Diagnostics as a HARD gate (the error text mirrors the
-// former ValidationError.Error() for parity). Kind-blind M (registry-by-word). Named exit K3 — when the
+// former loaderkit.ValidationError.Error() for parity). Kind-blind M (registry-by-word). Named exit K3 — when the
 // build engine itself becomes plugin-build, this call becomes a plugin↔plugin InvokeProvider.
-func validateProjectForBuild(dir string, opts ResolveOpts) error {
+func validateProjectForBuild(dir string, opts loaderkit.ResolveOpts) error {
 	prov, ok := providerRegistry.resolve(ClassCommand, "validate")
 	if !ok {
 		return fmt.Errorf("pre-build validation: the validate capability (command:validate) is not compiled in")

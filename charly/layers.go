@@ -422,7 +422,7 @@ func looksLikeDistroOrFormatKey(key string) bool {
 // full pin, from spec.ScannedCandy.Refs) are harvested here and fed in as ExtraCandyRefs — the
 // SAME mechanism a deploy's add_candy: already uses to reach a ref no base/builder/require edge
 // would otherwise surface. A local (non-remote) ref is a harmless no-op (IsRemoteCandyRef gates it).
-func withLocalRawRefs(opts ResolveOpts, localScanned map[string]spec.ScannedCandy) ResolveOpts {
+func withLocalRawRefs(opts loaderkit.ResolveOpts, localScanned map[string]spec.ScannedCandy) loaderkit.ResolveOpts {
 	extraRefs := append([]string(nil), opts.ExtraCandyRefs...)
 	for _, sc := range localScanned {
 		for _, dep := range sc.Refs.Require {
@@ -440,7 +440,7 @@ func withLocalRawRefs(opts ResolveOpts, localScanned map[string]spec.ScannedCand
 // around ScanAllCandyWithConfigOpts. Most call sites (deploy-mode, runtime,
 // inspect) want enabled-only scanning and keep this two-arg form.
 func ScanAllCandyWithConfig(dir string, cfg *Config) (map[string]spec.CandyReader, error) {
-	return ScanAllCandyWithConfigOpts(dir, cfg, ResolveOpts{})
+	return ScanAllCandyWithConfigOpts(dir, cfg, loaderkit.ResolveOpts{})
 }
 
 // ScanAllCandyWithConfigOpts scans local and remote candies, returning each in its
@@ -461,7 +461,7 @@ func ScanAllCandyWithConfig(dir string, cfg *Config) (map[string]spec.CandyReade
 // IncludedCandy edges, unaffected by initCfg) — loaderkit.FinalizeScannedCandies never mutates
 // its input map (each candidate is completed off a range-loop COPY), so calling it
 // twice (once throwaway, once final) is safe and cheap.
-func ScanAllCandyWithConfigOpts(dir string, cfg *Config, opts ResolveOpts) (map[string]spec.CandyReader, error) {
+func ScanAllCandyWithConfigOpts(dir string, cfg *Config, opts loaderkit.ResolveOpts) (map[string]spec.CandyReader, error) {
 	// 1. Scan local candies (unwrapped — see doc comment above).
 	localScanned, err := scanLocalCandies(dir)
 	if err != nil {
@@ -476,7 +476,7 @@ func ScanAllCandyWithConfigOpts(dir string, cfg *Config, opts ResolveOpts) (map[
 // loaderkit.ScanCandyFromLocal. fillNamespacedBoxes calls this with its own namespace-local
 // (localScanned, cfg) — whose set comes from subUF.projectCandiesScanned(dir), NOT scanLocalCandies
 // — so it reaches the SAME pipeline. Behavior-identical to the pre-move function (same steps 2-5).
-func scanCandyFromLocal(localScanned map[string]spec.ScannedCandy, cfg *Config, opts ResolveOpts) (map[string]spec.CandyReader, error) {
+func scanCandyFromLocal(localScanned map[string]spec.ScannedCandy, cfg *Config, opts loaderkit.ResolveOpts) (map[string]spec.CandyReader, error) {
 	return loaderkit.ScanCandyFromLocal(localScanned, opts.InitCfg, scanSeamsFor(cfg, opts))
 }
 
@@ -487,7 +487,7 @@ func scanCandyFromLocal(localScanned map[string]spec.ScannedCandy, cfg *Config, 
 // wrapped-view walk can't discover a local candy's pinned remote dep alone); EnsureRepo /
 // ScanRemote wrap the host git-cache (+ auto-migrate) and the registry-coupled per-candy manifest
 // scan (parseCandyYAML). candy/plugin-build supplies InvokeProvider-backed closures instead in U6.
-func scanSeamsFor(cfg *Config, opts ResolveOpts) loaderkit.ScanSeams {
+func scanSeamsFor(cfg *Config, opts loaderkit.ResolveOpts) loaderkit.ScanSeams {
 	return loaderkit.ScanSeams{
 		CollectRemoteRefs: func(localScanned map[string]spec.ScannedCandy) ([]loaderkit.RemoteDownload, error) {
 			return CollectRemoteRefsOpts(cfg, loaderkit.FinalizeScannedCandies(localScanned, nil), withLocalRawRefs(opts, localScanned))

@@ -48,7 +48,7 @@ func dispatchOCIStep(stepView spec.InstallStepView, planView spec.InstallPlanVie
 	if build.Generator != nil {
 		env.DevLocalPkg = build.Generator.DevLocalPkg
 		// Thread the host's OWN original add_candy refs (hostBuildOverlay constructed this
-		// Generator with ResolveOpts.ExtraCandyRefs = the deploy's add_candy: refs, possibly
+		// Generator with loaderkit.ResolveOpts.ExtraCandyRefs = the deploy's add_candy: refs, possibly
 		// REMOTE/qualified — e.g. "@github.com/…:vTAG") as ExtraCandyRefs, so
 		// candy/plugin-installstep's getGenerator widens ITS OWN independent "resolved-project"
 		// re-fetch the SAME way. This must be the ORIGINAL refs, NOT a re-derivation from

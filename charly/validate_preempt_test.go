@@ -18,7 +18,7 @@ import (
 // deployNodeSharesGPU, gpu_imply.go, and its dedicated test here were a dead-code-radical-removal-batch
 // deletion — zero real callers.)
 
-// preemptDiagHasErr / preemptDiagText are the ValidationError.HasErrors / .Error analogues over the
+// preemptDiagHasErr / preemptDiagText are the loaderkit.ValidationError.HasErrors / .Error analogues over the
 // spec.Diagnostics loaderkit.ValidatePreemptibleOnNode accumulates into (shared with
 // preempt_schema_test.go, same package).
 func preemptDiagHasErr(d spec.Diagnostics) bool {

@@ -6,6 +6,7 @@ import (
 
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -73,7 +74,7 @@ func ResolveRemoteImage(ref string, tag string) (*RemoteImageContext, error) {
 
 	// Resolve the image
 	calverTag := ComputeCalVer()
-	bkopts, err := buildkitOptsWithVocab(cachePath, ResolveOpts{})
+	bkopts, err := buildkitOptsWithVocab(cachePath, loaderkit.ResolveOpts{})
 	if err != nil {
 		return nil, fmt.Errorf("resolving image %q in %s: %w", parsed.Name, parsed.RepoPath, err)
 	}

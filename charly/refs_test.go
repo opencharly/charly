@@ -344,7 +344,7 @@ func TestCollectRemoteRefs(t *testing.T) {
 }
 
 // TestCollectRemoteRefsOptsExtraCandyRefs proves a deploy's add_candy: candy ref
-// (passed via ResolveOpts.ExtraCandyRefs) is collected EVEN WHEN no image references
+// (passed via loaderkit.ResolveOpts.ExtraCandyRefs) is collected EVEN WHEN no image references
 // it — the regression guard for the bed-composition enabler: box/arch's check-arch-vm
 // add_candy's the out-of-tree plugin-spice candy with NO candy in the image closure
 // requiring it, so without ExtraCandyRefs the plugin would never enter the candy scan
@@ -357,7 +357,7 @@ func TestCollectRemoteRefsOptsExtraCandyRefs(t *testing.T) {
 	layers := map[string]spec.CandyReader{"pixi": testCandy("pixi", spec.CandyModel{}, spec.CandyView{})}
 
 	pluginRef := "@github.com/opencharly/charly/candy/plugin-spice:v2026.174.0425"
-	opts := ResolveOpts{ExtraCandyRefs: []string{pluginRef}}
+	opts := loaderkit.ResolveOpts{ExtraCandyRefs: []string{pluginRef}}
 	downloads, err := CollectRemoteRefsOpts(cfg, layers, opts)
 	if err != nil {
 		t.Fatalf("CollectRemoteRefsOpts() error = %v", err)
@@ -380,7 +380,7 @@ func TestCollectRemoteRefsOptsExtraCandyRefs(t *testing.T) {
 
 	// A LOCAL ExtraCandyRef is a no-op (already covered by ScanCandy): collecting it
 	// adds no remote download.
-	localOnly, err := CollectRemoteRefsOpts(cfg, layers, ResolveOpts{ExtraCandyRefs: []string{"plugin-spice"}})
+	localOnly, err := CollectRemoteRefsOpts(cfg, layers, loaderkit.ResolveOpts{ExtraCandyRefs: []string{"plugin-spice"}})
 	if err != nil {
 		t.Fatalf("CollectRemoteRefsOpts(local extra) error = %v", err)
 	}
@@ -459,7 +459,7 @@ func TestCollectRemoteRefsOptsIncludeDisabled(t *testing.T) {
 	}
 
 	// Scoped --include-disabled debian-builder → the ref IS collected.
-	opts := ResolveOpts{IncludeDisabled: true, IncludeDisabledNames: map[string]bool{"debian-builder": true}}
+	opts := loaderkit.ResolveOpts{IncludeDisabled: true, IncludeDisabledNames: map[string]bool{"debian-builder": true}}
 	dls, err := CollectRemoteRefsOpts(cfg, layers, opts)
 	if err != nil {
 		t.Fatalf("CollectRemoteRefsOpts() error = %v", err)

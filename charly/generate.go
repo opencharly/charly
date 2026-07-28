@@ -12,6 +12,7 @@ import (
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -41,7 +42,7 @@ type Generator struct {
 	// in NewGenerator regardless — only the per-box emission loop is scoped.
 	RequestedBoxes []string
 
-	// ExtraCandyRefs is the ORIGINAL ResolveOpts.ExtraCandyRefs this Generator was
+	// ExtraCandyRefs is the ORIGINAL loaderkit.ResolveOpts.ExtraCandyRefs this Generator was
 	// constructed with (a pod-overlay deploy's add_candy: refs, possibly REMOTE/
 	// qualified — e.g. "@github.com/…:vTAG"). Candies (bare-keyed, post-scan) cannot
 	// stand in for this: a bare candy NAME re-passed as an ExtraCandyRefs entry is a
@@ -183,7 +184,7 @@ func invokeOciInspectUser(ref string, uid int) (spec.UserInfo, error) {
 // NewGenerator creates a new generator. opts is propagated through Validate
 // + ResolveAllBox so `charly box build --include-disabled` reaches images
 // flagged enabled: false in charly.yml (without modifying the file).
-func NewGenerator(dir string, tag string, opts ResolveOpts) (*Generator, error) {
+func NewGenerator(dir string, tag string, opts loaderkit.ResolveOpts) (*Generator, error) {
 	cfg, err := LoadConfig(dir)
 	if err != nil {
 		return nil, err
@@ -229,7 +230,7 @@ func NewGenerator(dir string, tag string, opts ResolveOpts) (*Generator, error) 
 
 	// Pre-build validation gate — dispatched to the compiled-in validate capability (candy/plugin-box)
 	// by word with a structured OpValidate op (task #60 (C-refined)); the validate ENGINE no longer
-	// lives in core. validateProjectForBuild returns the ValidationError-equivalent on any finding.
+	// lives in core. validateProjectForBuild returns the loaderkit.ValidationError-equivalent on any finding.
 	if err := validateProjectForBuild(dir, opts); err != nil {
 		return nil, err
 	}
@@ -314,7 +315,7 @@ func newCandyScanGenerator(dir string, includeDisabled bool, extraCandyRefs []st
 		return nil, fmt.Errorf("loading default build config: %w", err)
 	}
 	RegisterBuildVocabulary(defaultDistroCfg)
-	opts := ResolveOpts{IncludeDisabled: includeDisabled, ExtraCandyRefs: extraCandyRefs, InitCfg: defaultInitCfg}
+	opts := loaderkit.ResolveOpts{IncludeDisabled: includeDisabled, ExtraCandyRefs: extraCandyRefs, InitCfg: defaultInitCfg}
 	layers, err := ScanAllCandyWithConfigOpts(dir, cfg, opts)
 	if err != nil {
 		return nil, err
@@ -494,7 +495,7 @@ func (g *Generator) createRemoteCandyCopies() error {
 // candyByName resolves a candy by its INTRINSIC bare name against g.Candies.
 // It is the FORWARD counterpart of deploykit.CandyMapKey (which maps a candy back to its
 // store key): a LOCAL candy is keyed bare == Name, so the direct lookup hits; a
-// REMOTE candy (e.g. a deploy's add_candy: pulled via ResolveOpts.ExtraCandyRefs)
+// REMOTE candy (e.g. a deploy's add_candy: pulled via loaderkit.ResolveOpts.ExtraCandyRefs)
 // is keyed under its fully-qualified ref (deploykit.CandyMapKey), so the direct bare lookup
 // MISSES and we fall back to matching the candy's own Name. Every call site that
 // holds a bare candy name (a plan step's CandyName; an overlay-candy name from

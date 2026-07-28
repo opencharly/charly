@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -15,10 +16,11 @@ import (
 // LoadConfigRaw (the load entry points) and the ResolveBox/ResolveAllBox THIN WRAPPERS that fill
 // the ONE fallback (loading the project's distro:/builder: vocabulary when the caller didn't
 // supply it) before delegating to buildkit's free functions — the "~35 STAY: LoadConfig/
-// LoadConfigRaw + 2 fallback branches" the original scoping map identified. charly's OWN
-// ResolveOpts stays a FLAT (non-embedding) struct so the ~20 existing `ResolveOpts{Field: ...}`
-// composite-literal call sites across the codebase compile UNCHANGED — an embedding design would
-// break every one of them (Go forbids keyed-literal initialization of a promoted field).
+// LoadConfigRaw + 2 fallback branches" the original scoping map identified. The scan/load options
+// struct (loaderkit.ResolveOpts) + the loader validation accumulator (loaderkit.ValidationError) moved to sdk/loaderkit
+// (resolve_opts.go) in the #118 Cluster-A loader-projection keystone — charly core and the
+// loader-consuming plugins share ONE definition (loaderkit.ResolveOpts / loaderkit.ValidationError,
+// a FLAT non-embedding struct so every `loaderkit.ResolveOpts{Field: ...}` call site stays simple).
 
 // ErrNoCharlyYml is the sentinel wrapped by every "no charly.yml found in the
 // project dir" load error. Callers that treat an absent project as EMPTY rather
@@ -64,90 +66,7 @@ func LoadConfigRaw(dir string) (*Config, error) {
 	return cfg, nil
 }
 
-// ResolveOpts carries optional knobs for ResolveBox. Zero value is the
-// default behavior used by every code path EXCEPT the explicit operational
-// overrides on `charly box build/inspect/validate --include-disabled` —
-// those set IncludeDisabled to bypass the `enabled: false` gate without
-// requiring the operator to flip authored config.
-//
-// IncludeDisabledNames scopes the override: when non-empty, ONLY images in
-// the set bypass the disabled check; other disabled images stay filtered.
-// Used by `charly box build <name> --include-disabled` so widening the
-// working set doesn't surface unrelated disabled-image dep errors (e.g.
-// images with remote candies that aren't fetched yet). Empty + IncludeDisabled
-// = include every disabled image (the inspect/validate behavior).
-//
-// Kept as ONE FLAT struct (not an embedding of buildkit.ResolveOpts) — see the file header.
-type ResolveOpts struct {
-	IncludeDisabled      bool            // skip the `enabled: false` check
-	IncludeDisabledNames map[string]bool // when non-empty, scope IncludeDisabled to these names only
-	// RequestedBoxes are the explicit build targets (`charly box build <name>`).
-	// A qualified name here (e.g. `charly.arch-builder`) is pulled into the resolved
-	// set even when it isn't reachable as a base/builder of a root image — so a
-	// namespaced image can be an on-demand build target, not only a transitive
-	// base. Bare names are ignored here (they resolve through the root loop).
-	RequestedBoxes []string
-	// ExtraCandyRefs are candy refs to collect IN ADDITION to the image/builder/
-	// kind:local-template closure — specifically a DEPLOY's `add_candy:` candies.
-	// The image-closure walk (collectBox) never reaches them (a deploy's add_candy
-	// is not a base/builder/require edge of any image), so a bed that add_candy's a
-	// host-side PLUGIN candy (e.g. plugin-spice for the `spice:` check verb) must
-	// pass its add_candy refs here, or the plugin never enters the candy scan and
-	// loadProjectPlugins can't build/connect it. Remote refs are fetched through the
-	// SAME pipeline (per-entity-version arbitration + SourceDir population); a local
-	// add_candy ref is already covered by ScanCandy and is a no-op here.
-	//
-	// NEVER read by the moved buildkit resolvers (ResolveBox/ResolveAllBox) — consumed solely by
-	// charly/layers.go's ScanAllCandyWithConfigOpts — which is why it stays here rather than
-	// crossing into buildkit.ResolveOpts.
-	ExtraCandyRefs []string
-	// InitCfg is the project init: vocabulary (W9), threaded through so
-	// ScanAllCandyWithConfigOpts can run the cross-candy init-system host-completion
-	// pass (the loaderkit.PopulateCandyInitSystem logic) BEFORE wrapping each candy into the
-	// FINAL spec.CandyReader — a CandyReader is read-only from the caller's side, so
-	// nothing can mutate CandyView.InitSystems after the scan returns. Every caller
-	// that feeds a wire envelope another process reads for HasInit() lookups MUST set
-	// this (generate.go's NewGenerator and validate_project_host.go's
-	// loadProjectForResolve both do — the latter's scan feeds rp.Candies/
-	// rp.CandyModels, which plugin-build's Generator consumes for real Containerfile
-	// emission via EmitInitFragmentStages). A caller that leaves this nil skips the
-	// pass entirely and InitSystems stays empty on every candy — correct only for a
-	// caller with no init-aware consumer downstream.
-	//
-	// NEVER read by the moved buildkit resolvers either — same rationale as ExtraCandyRefs.
-	InitCfg *buildkit.InitConfig
-	// DistroCfg / BuilderCfg are the project's build vocabulary (distro:/builder: —
-	// the SAME triple LoadBuildConfigForBox returns alongside InitCfg), threaded
-	// through so ResolveBox does not re-run LoadUnified on every call (FINAL/K5 unit
-	// 6a DI refactor: config.go's ResolveBox previously called LoadBuildConfigForBox
-	// itself — a REDUNDANT second full project load on top of the caller's own
-	// LoadConfig, and on EVERY iteration of a multi-box loop like ResolveAllBox,
-	// N reloads of the identical project-wide vocabulary). When nil, ResolveBox
-	// FALLS BACK to loading them itself (byte-identical to the prior behavior) — so
-	// this is purely additive: a caller that already has the triple (or loops over
-	// many boxes) sets it once and skips the redundant reload; every other caller is
-	// unaffected. ResolveAllBox is the primary beneficiary (loads once, threads to
-	// every ResolveBox call in its loop).
-	DistroCfg  *buildkit.DistroConfig
-	BuilderCfg *buildkit.BuilderConfig
-}
-
-// shouldIncludeDisabled reports whether name's disabled gate should be
-// bypassed under opts. Centralizes the IncludeDisabled + IncludeDisabledNames
-// interaction so call sites stay simple. Stays here (not buildkit.ResolveOpts.
-// ShouldIncludeDisabled) since it's charly's OWN (unmoved) ResolveOpts type — refs.go,
-// resolved_project_host.go, and validate.go call this directly, unaffected by the move.
-func (opts ResolveOpts) shouldIncludeDisabled(name string) bool {
-	if !opts.IncludeDisabled {
-		return false
-	}
-	if len(opts.IncludeDisabledNames) == 0 {
-		return true
-	}
-	return opts.IncludeDisabledNames[name]
-}
-
-// buildkitOptsWithVocab projects a charly ResolveOpts onto buildkit.ResolveOpts, loading the project
+// buildkitOptsWithVocab projects a loaderkit.ResolveOpts onto buildkit.ResolveOpts, loading the project
 // build vocabulary (distro:/builder:) when the caller did not already supply it. It is the ONE place
 // the former ResolveBox/ResolveAllBox wrappers' fillBuildConfigFallback + toBuildkitOpts logic lives
 // (K3 U7: the build-engine RESOLVE moved to candy/plugin-build, so charly-side callers now reach the
@@ -155,7 +74,7 @@ func (opts ResolveOpts) shouldIncludeDisabled(name string) bool {
 // ResolveBox/ResolveAllBox free-function wrappers are DELETED). BYTE-EQUIVALENT to the former fallback:
 // a caller that already has DistroCfg/BuilderCfg skips the reload; every other caller gets the SAME
 // vocabulary LoadBuildConfigForBox loads for the same dir — the masked-regression this preserves.
-func buildkitOptsWithVocab(dir string, opts ResolveOpts) (buildkit.ResolveOpts, error) {
+func buildkitOptsWithVocab(dir string, opts loaderkit.ResolveOpts) (buildkit.ResolveOpts, error) {
 	if opts.DistroCfg == nil && opts.BuilderCfg == nil {
 		distroCfg, builderCfg, _, err := LoadBuildConfigForBox(dir)
 		if err != nil {

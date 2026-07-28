@@ -67,7 +67,7 @@ func TestProjectTemplates_NamespaceQualified(t *testing.T) {
 // import namespace, in addition to (additive, never replacing) the root-scoped boxes.
 func TestFillNamespacedBoxes_QualifiedView(t *testing.T) {
 	root := writeNamespaceImportFixture(t)
-	rp, err := buildResolvedProjectFromDir(root, ResolveOpts{})
+	rp, err := buildResolvedProjectFromDir(root, loaderkit.ResolveOpts{})
 	if err != nil {
 		t.Fatalf("buildResolvedProjectFromDir: %v", err)
 	}

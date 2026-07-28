@@ -243,8 +243,8 @@ var residueOwner = map[string]string{
 	"vm_lifecycle_preresolve.go":    "P11",
 	"volume_cp_tags_cmd.go":         "P11",
 	// — files added by cutovers that landed after the T0 authoring (living tracker) —
-	"config_write_host.go":      "P11",
-	"validate_project_host.go":  "P15",
+	"config_write_host.go":     "P11",
+	"validate_project_host.go": "P15",
 	// — Cutover A (#168, deploy-dispatch kernel hard-cutover exit): the K4-C
 	// deploy-tree walk port narrows the retired deploy-dispatch spike into 6
 	// per-position seams (candy/plugin-bundle drives the walk; each seam calls

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 	"github.com/opencharly/sdk/vmshared"
 
@@ -140,7 +141,7 @@ func loadCompilerFixtures(t *testing.T, boxName string) (*Config, *buildkit.Reso
 	if err != nil {
 		t.Fatalf("ScanAllCandyWithConfig: %v", err)
 	}
-	img, err := resolveBoxTest(cfg, boxName, "testing", dir, ResolveOpts{})
+	img, err := resolveBoxTest(cfg, boxName, "testing", dir, loaderkit.ResolveOpts{})
 	if err != nil {
 		t.Skipf("ResolveBox(%s): %v (fixture missing?)", boxName, err)
 	}

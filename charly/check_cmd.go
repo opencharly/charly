@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/deploykit"
@@ -82,7 +83,7 @@ func resolveCheckRunnerContext(box, dir string, cfg *Config) checkRunnerContext 
 	// build-connects it only if the plan references libvirt; in a bed CHARLY_REPO_OVERRIDE resolves
 	// the ref to the local superproject under development.
 	addCandy = append(addCandy, vmPluginCandyRef())
-	candyMap, scanErr := ScanAllCandyWithConfigOpts(dir, cfg, ResolveOpts{ExtraCandyRefs: addCandy})
+	candyMap, scanErr := ScanAllCandyWithConfigOpts(dir, cfg, loaderkit.ResolveOpts{ExtraCandyRefs: addCandy})
 	if scanErr != nil {
 		return checkRunnerContext{CandyScanErr: fmt.Errorf("scanning candy source dirs: %w", scanErr)}
 	}
