@@ -18,8 +18,8 @@ import (
 //
 // EXCEPTION — the externalizable dedicated-provider pattern: a provider carrying NO served
 // plugin schema may live in its OWN dedicated plugin_<class>_<name>.go file and self-register
-// via registerDedicatedBuiltin, INTENTIONALLY absent from BOTH this slice and the `providers:`
-// manifest, yet dispatching identically through providerRegistry. This covers a schema-LESS IR
+// from a package-var initializer (RegisterBuiltinProvider), INTENTIONALLY absent from BOTH this
+// slice and the `providers:` manifest, yet dispatching identically through providerRegistry. This covers a schema-LESS IR
 // provider (a deploy-target / step / builder — derived from cross-refs or candy-internal, never
 // user-authored, so no authored input to validate). NO KIND provider remains here: EVERY authoring
 // kind is now an externalized plugin candy routed through runPluginKind — group (candy/plugin-group,
@@ -82,24 +82,6 @@ var builtinProviderInstances = []Provider{
 	// (per-candy stage context + teardown ops) is served over OpCollectContext/OpReverse and
 	// resolved in the host-side build pre-pass (builder_preresolve.go). No in-proc BuilderProvider
 	// remains; the registry resolves a builder word to its connected grpcProvider.
-}
-
-// registerDedicatedBuiltin self-registers a built-in Provider that lives in its OWN
-// dedicated file (the externalizable dedicated-provider pattern): either a schema-less
-// deploy-target / step / builder (no authored input), or a deploy-shape KIND validated by
-// the closed CORE schema rather than a served plugin schema (plugin_group.go /
-// plugin_substrate.go) — neither carries a `providers:`-manifest entry nor a
-// builtinProviderInstances slice membership. Each such file calls this from a
-// package-var initializer, which Go runs before ANY init() — so the per-class
-// bijection gates in init() below observe the registration WITHOUT depending on
-// cross-file init ordering (the alphabetical race the gates were structured to avoid).
-// Returns true so the `var _ = registerDedicatedBuiltin(...)` call site (the codebase's
-// `var _ = func() bool` registration idiom) reads cleanly. RegisterBuiltinProvider panics
-// on a duplicate (class, word), so a provider left in BOTH the manifest/slice and a
-// dedicated file is caught loudly at startup.
-func registerDedicatedBuiltin(p Provider) bool { //nolint:unparam // bool result is the placeholder that keeps the pre-init `var _ = registerDedicatedBuiltin(...)` package-var registration idiom compiling; discarded by design, never consumed
-	RegisterBuiltinProvider(p)
-	return true
 }
 
 // providerManifest is the parsed `providers:` directive — provider class → the

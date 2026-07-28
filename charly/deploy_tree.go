@@ -18,7 +18,6 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -76,15 +75,6 @@ func nodeTraits(node *spec.BundleNode) *spec.DescentDescriptor {
 // few consult sites that hold only a substrate word (not a node). Never nil.
 func deployTraitDescent(word string) *spec.DescentDescriptor {
 	return kit.DescentFromTraits(deployTraitsFor(word))
-}
-
-// stampBundleDescents is the LoadSeams.StampBundleDescents host wiring. K1-LOADER RELOCATION: the
-// stamp LOOP moved to loaderkit.StampBundleDescents (DATA-driven, registry-free); the host supplies
-// the fresh registry-derived Threaded snapshot (loaderThreaded, post-materialize) it reads. The
-// on-the-fly registry resolvers deployTraitsFor / nodeTraits / deployTraitDescent stay host-side for
-// SYNTHETIC (un-stamped) nodes built outside the loader — they are NOT the load path.
-func stampBundleDescents(uf *loaderkit.UnifiedFile) {
-	loaderkit.StampBundleDescents(uf, loaderThreaded())
 }
 
 // NestedContainerName computes the podman container name used when

@@ -7,7 +7,7 @@ import (
 
 // snapshotProviderState captures the process-wide provider-registration state and returns a
 // restore func. The provider registry (`providerRegistry`) is a package global, so a test that
-// registers providers (RegisterPluginProviders / RegisterBuiltinProvider / registerDedicatedBuiltin)
+// registers providers (RegisterPluginProviders / RegisterBuiltinProvider)
 // LEAKS them into every later test in the process — and under `go test -count>1` the SECOND run of
 // the same test hits `register()`'s fail-fast "provider already registered" duplicate guard. A test
 // that registers providers calls

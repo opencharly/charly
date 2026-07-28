@@ -89,7 +89,7 @@ func deriveChildExecutorForPath(path string, node *spec.BundleNode, parentExec d
 		// The podman container `charly start`/the pod lifecycle creates is
 		// `charly-<flat-path>` (containerName's `charly-` prefix), so the nested
 		// executor MUST target that exact name — every other NestedContainerName
-		// consumer (check_venue.go, build_overlay.go, candy/plugin-adb/preresolve.go)
+		// consumer (build_overlay.go, candy/plugin-adb/preresolve.go)
 		// prepends `charly-`; omitting it here made a nested-child deploy exec into a
 		// nonexistent bare-named container (exit 125 "no such container").
 		name := "charly-" + kit.NestedContainerName(path)

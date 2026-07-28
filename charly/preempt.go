@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"sort"
 	"strings"
 
 	"github.com/opencharly/sdk"
@@ -256,25 +255,5 @@ func dedupeNonEmpty(in []string) []string {
 		seen[s] = true
 		out = append(out, s)
 	}
-	return out
-}
-
-// intersect returns the sorted set intersection of a and b — used by validate_preempt.go's
-// requires_exclusive/requires_shared overlap check (the arbiter's own copy travels with it in
-// candy/plugin-preempt, its separate module).
-func intersect(a, b []string) []string {
-	set := map[string]bool{}
-	for _, s := range a {
-		set[s] = true
-	}
-	var out []string
-	seen := map[string]bool{}
-	for _, s := range b {
-		if set[s] && !seen[s] {
-			seen[s] = true
-			out = append(out, s)
-		}
-	}
-	sort.Strings(out)
 	return out
 }

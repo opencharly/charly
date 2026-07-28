@@ -357,7 +357,7 @@ func TestEnabledField(t *testing.T) {
 	}
 
 	// disabled-image is excluded from ResolveAllBox()
-	all, err := resolveAllBoxTest(cfg, "test", testProjectDir(t), loaderkit.ResolveOpts{})
+	all, err := resolveAllBoxTest(cfg, testProjectDir(t), loaderkit.ResolveOpts{})
 	if err != nil {
 		t.Fatalf("ResolveAllBox() error = %v", err)
 	}

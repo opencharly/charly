@@ -185,7 +185,7 @@ widget:
 		t.Fatalf("LoadUnified: %v", err)
 	}
 	cfg := uf.ProjectConfig()
-	resolved, err := resolveAllBoxTest(cfg, "test", root, loaderkit.ResolveOpts{})
+	resolved, err := resolveAllBoxTest(cfg, root, loaderkit.ResolveOpts{})
 	if err != nil {
 		t.Fatalf("ResolveAllBox must NOT fail when a namespaced base's builder ref points into the base's own namespace: %v", err)
 	}
@@ -263,7 +263,7 @@ fedora:
 		t.Fatalf("LoadUnified: %v", err)
 	}
 	cfg := uf.ProjectConfig()
-	resolved, err := resolveAllBoxTest(cfg, "test", root, loaderkit.ResolveOpts{})
+	resolved, err := resolveAllBoxTest(cfg, root, loaderkit.ResolveOpts{})
 	if err != nil {
 		t.Fatalf("ResolveAllBox: %v", err)
 	}

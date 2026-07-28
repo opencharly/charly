@@ -152,7 +152,7 @@ func loaderThreaded() spec.Threaded {
 		t.Primaries[w] = f
 	}
 	// K1-LOADER RELOCATION: snapshot each recognized kind/substrate word's DECLARED #DeployTraits
-	// (the SAME deployTraitsFor the former live stampBundleDescents called per node) so the
+	// (the SAME deployTraitsFor the loader's per-node descent stamp, loaderkit.StampBundleDescents, calls) so the
 	// venue-hop descent stamp reads DATA, never the registry. A word whose deployTraitsFor is nil
 	// (a non-substrate kind, e.g. group/distro) is left absent — the DATA closure returns nil for
 	// it, matching deployTraitsFor's nil-for-unrecognized-word semantics via DescentFromTraits(nil).

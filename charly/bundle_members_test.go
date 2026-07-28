@@ -202,8 +202,8 @@ func TestTearDownMembers_RoutingAndOrder(t *testing.T) {
 		t.Fatalf("tearDownMembers: %v", err)
 	}
 	want := [][]string{
-		deploykit.BundleDelArgv("alpha-host"),       // sorted first; non-pod → deploy del --assume-yes (unattended)
-		{"remove", "zeta-pod", "--purge"}, // pod → remove --purge
+		deploykit.BundleDelArgv("alpha-host"), // sorted first; non-pod → deploy del --assume-yes (unattended)
+		{"remove", "zeta-pod", "--purge"},     // pod → remove --purge
 	}
 	if !reflect.DeepEqual(calls, want) {
 		t.Fatalf("tearDownMembers calls = %v, want %v", calls, want)

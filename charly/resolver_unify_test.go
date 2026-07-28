@@ -102,7 +102,7 @@ func TestResolveAllImage_RequestedQualifiedTarget(t *testing.T) {
 	root, cfg := fixtureNamespacedProject(t)
 
 	// Without RequestedBoxes, sub.widget is not reachable, so not pulled.
-	base, err := resolveAllBoxTest(cfg, "test", root, loaderkit.ResolveOpts{})
+	base, err := resolveAllBoxTest(cfg, root, loaderkit.ResolveOpts{})
 	if err != nil {
 		t.Fatalf("ResolveAllBox: %v", err)
 	}
@@ -111,7 +111,7 @@ func TestResolveAllImage_RequestedQualifiedTarget(t *testing.T) {
 	}
 
 	// With it requested, it is pulled under its fully-qualified key.
-	withReq, err := resolveAllBoxTest(cfg, "test", root, loaderkit.ResolveOpts{RequestedBoxes: []string{"sub.widget"}})
+	withReq, err := resolveAllBoxTest(cfg, root, loaderkit.ResolveOpts{RequestedBoxes: []string{"sub.widget"}})
 	if err != nil {
 		t.Fatalf("resolveAllBoxTest(RequestedImages): %v", err)
 	}
