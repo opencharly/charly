@@ -175,10 +175,11 @@ func pluginResolveSecretBackend() string {
 	return "auto"
 }
 
-// pluginEncExec dispatches verb:enc's OpExecute over the stashed reverse-channel executor — the
-// direct plugin-side analogue of charly/enc.go's encExecViaPlugin (which resolved verb:enc via
-// the core-only providerRegistry). Preserves the exact fuse.conf preflight (fail fast, before any
-// volume mounts partway) and the reply-carried Error surfacing.
+// pluginEncExec dispatches verb:enc's OpExecute over the stashed reverse-channel executor. Every
+// enc caller now drives verb:enc this way via its own InvokeProvider (the former core
+// encExecViaPlugin shim that resolved verb:enc through the core-only providerRegistry is retired).
+// Preserves the exact fuse.conf preflight (fail fast, before any volume mounts partway) and the
+// reply-carried Error surfacing.
 func pluginEncExec(in spec.EncExecInput) error {
 	if in.Method == spec.EncMethodMount || in.Method == spec.EncMethodEnsure {
 		if !deploykit.FuseAllowOtherEnabled() {
