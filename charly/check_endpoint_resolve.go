@@ -84,11 +84,6 @@ func (c hostCheckContext) ResolveGraphicsEndpoint(_ context.Context, kind string
 	return kit.GraphicsEndpoint{Addr: ge.Addr, Socket: ge.Socket, Password: ge.Password, Skip: ge.Skip, SkipMessage: ge.SkipMessage}, nil
 }
 
-// ResolveClusterContext is the in-process CheckContext leg for a k8s cluster-profile context.
-func (c hostCheckContext) ResolveClusterContext(_ context.Context, cluster string) (string, error) {
-	return c.h.resolveClusterContext(cluster)
-}
-
 // resolveImageLabel reads one raw OCI label off the deployment-under-test's image. It is the
 // host-side leg for CheckContext.ResolveImageLabel — the out-of-process mcp verb needs the
 // baked ai.opencharly.mcp_provide label but cannot reach the podman engine / OCI metadata.

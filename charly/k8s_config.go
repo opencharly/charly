@@ -1,8 +1,6 @@
 package main
 
 import (
-	"os"
-
 	"github.com/opencharly/sdk/loaderkit"
 )
 
@@ -32,11 +30,12 @@ type K8sPatchTarget struct {
 // findK8sSpec looks up a K8sSpec by name from the project's charly.yml / k8s.yml
 // via the unified loader. Returns nil if no matching kind:k8s entity exists or if
 // the unified file can't be loaded. This is the CLIENT-GO-FREE cluster-context
-// resolver: the host uses it to resolve a `--cluster <name>` profile to a
-// concrete kubeconfig context (resolveClusterContext, the CheckContext.ResolveClusterContext
-// reverse-leg the out-of-process candy/plugin-kube provider pulls) — the plugin cannot reach the
-// project loader itself. Also consumed by k8s_deploy_from_box.go (source-less
-// `charly bundle from-box --target k8s`).
+// resolver: the host serves it behind the GENERIC "deploy-entity-resolve" HostBuild
+// seam (kind:k8s → ResolvedK8s.KubeconfigContext), which the out-of-process
+// candy/plugin-kube provider Invokes to resolve a `cluster: <name>` profile to a
+// concrete kubeconfig context (both the kube: verb and the k3s/preresolve legs) —
+// the plugin cannot reach the project loader itself. Also consumed by
+// k8s_deploy_from_box.go (source-less `charly bundle from-box --target k8s`).
 //
 // K1-unblock wave 2: name is resolved through loaderkit.ProjectTemplates' namespace-qualified template map
 // (the SAME projection resolved_project_host.go's "resolved-project" envelope ships, minus the
@@ -65,31 +64,4 @@ func findK8sSpec(dir, name string) *ResolvedK8s {
 		return nil
 	}
 	return r
-}
-
-// resolveClusterContext maps a k8s cluster-profile NAME to its kubeconfig context via the
-// project loader (findK8sSpec). It is the host-side leg for CheckContext.ResolveClusterContext
-// — the out-of-process candy/plugin-kube provider builds its rest.Config from kubeconfig +
-// context but cannot reach the project loader, so the plugin PULLS the context through this
-// reverse-leg (replacing the former host op-rewrite). An empty context
-// (no matching kind:k8s profile) is a valid result — the plugin falls back to the kubeconfig
-// current-context (the same behavior the in-tree restConfig had).
-func (h *hostVerbResolver) resolveClusterContext(cluster string) (string, error) {
-	return resolveClusterContextFor(cluster)
-}
-
-// resolveClusterContextFor is resolveClusterContext's h-free core (K1-unblock W3 Unit B, R3
-// extraction) — it never actually read hostVerbResolver state, so this is a straight lift, not a
-// parameterization: usable directly by charly/plugin_dispatch_reverse.go's InvokeProvider
-// detached CheckContext for a CheckVerbProvider target dispatched from a plugin.
-func resolveClusterContextFor(cluster string) (string, error) {
-	if cluster == "" {
-		return "", nil
-	}
-	cwd, _ := os.Getwd()
-	spec := findK8sSpec(cwd, cluster)
-	if spec == nil {
-		return "", nil
-	}
-	return spec.KubeconfigContext, nil
 }
