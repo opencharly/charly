@@ -22,8 +22,8 @@ import (
 // P13). charly/ calls the deploykit path directly (IMPORT-PURITY: no new charly/*_aliases.go;
 // the 1 kind-blind K1-gated op — LoadUnified — reaches core through the DeployStateHost seam
 // charly fills at init — RegisterDeployStateHost; the deploy-kind-specific marshal
-// marshalBundleNode lives in charly/deploy_nodeform.go, supplied as a callback to the
-// kind-blind SaveBundleConfig shell — tracked K4-exit inventory).
+// deploykit.MarshalBundleNode is supplied as a callback to the kind-blind SaveBundleConfig
+// shell — deploy_state_host.go's thin marshalDeployNode wrapper feeds it loaderThreaded().Primaries).
 
 // resolveDeployKeyToBox maps a deploy-key name to the `box:` field of
 // its deploy entry. User (~/.config/charly/charly.yml) wins over project
