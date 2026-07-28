@@ -252,6 +252,44 @@ func resolvePriorVmState(ctx context.Context, exec *sdk.Executor, domainID strin
 	return configReply.VmState, nil
 }
 
+// dispatchVmEphemeralTeardown runs the vm ephemeral-lifecycle teardown (F6 vm-lifecycle move,
+// coneB-vmlifecycle — formerly a host-side pre-dispatch hook, charly/vm_lifecycle_preresolve.go's
+// vmLifecyclePostTeardown; the "un-importable by the plugin" framing that file's header used to
+// carry was stale — the actual teardown WORK (systemd transient timers, libvirt snapshot
+// refcounts) was already 100% plugin-side in candy/plugin-bundle's teardownEphemeral, reached over
+// OpEphemeralTeardown). The persisted VmState (including the runtime Ephemeral record) is read via
+// the SAME "config-resolve" seam vmPrepareVenue uses (resolvePriorVmState) rather than a direct
+// deploykit.LoadDeployConfigForRead call — this plugin runs out-of-process, so a direct call would
+// silently see no DeployStateHost and always return nil (see resolvePriorVmState's own doc for the
+// exact regression that caused). A no-op when the domain was never marked ephemeral. Best-effort:
+// a teardown-dispatch failure is a warning, never a hard failure of the whole Del (matching the
+// pre-move host hook's own best-effort contract, unified_targets.go's former lifecyclePostTeardownHook
+// call site). Pulled out of vmPostTeardown as its own function purely for testability, mirroring
+// resolvePriorVmState's own extraction rationale.
+func dispatchVmEphemeralTeardown(ctx context.Context, exec *sdk.Executor, p lifecycleParams, domain string) error {
+	prior, err := resolvePriorVmState(ctx, exec, domain)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "note: vm ephemeral-teardown: resolving persisted state: %v\n", err)
+		return nil
+	}
+	if prior == nil || prior.Ephemeral == nil {
+		return nil
+	}
+	var node spec.BundleNode
+	if err := json.Unmarshal(p.Node, &node); err != nil {
+		return fmt.Errorf("plugin-deploy-vm post-teardown: decode node: %w", err)
+	}
+	node.VmState = prior
+	reqJSON, err := json.Marshal(spec.EphemeralTeardownRequest{Name: p.Name, Node: &node})
+	if err != nil {
+		return fmt.Errorf("plugin-deploy-vm post-teardown: marshal ephemeral-teardown request: %w", err)
+	}
+	if _, err := exec.InvokeProvider(ctx, "command", "bundle", sdk.OpEphemeralTeardown, reqJSON, nil, sdk.InvokeProviderOpts{}); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: vm ephemeral-teardown: %v\n", err)
+	}
+	return nil
+}
+
 // vmPrepareVenue runs the FULL host-side VM preflight itself (ssh-config stanza, auto-boot, guest
 // readiness waits, charly delivery) over generic seams, and returns the guest SSH venue descriptor +
 // the VmDeployState patch the host persists. RESOLVES its own LifecyclePrepareInput (FINAL/K5 unit
@@ -612,12 +650,19 @@ func vmRebuild(ctx context.Context, exec *sdk.Executor, p lifecycleParams) (*pb.
 }
 
 // vmPostTeardown removes the managed ssh-config stanza (host file I/O the co-located plugin does),
-// stripping the Include line when it was the last managed alias, and ships the charly.yml deploy-entry
-// keys for the host to remove (the plugin cannot touch charly.yml; the ephemeral teardown stays a host
-// hook). Everything keys off the per-deploy DOMAIN IDENTITY so a teardown removes ONLY this deploy's
+// stripping the Include line when it was the last managed alias, runs the vm ephemeral-lifecycle
+// teardown (dispatchVmEphemeralTeardown — F6 vm-lifecycle move, coneB-vmlifecycle), and ships the
+// charly.yml deploy-entry keys for the host to remove (the plugin cannot touch charly.yml itself).
+// Everything keys off the per-deploy DOMAIN IDENTITY so a teardown removes ONLY this deploy's
 // artifacts — never a sibling bed's (the collision this cutover eliminates).
 func vmPostTeardown(ctx context.Context, exec *sdk.Executor, p lifecycleParams, host spec.HostEnv) (*pb.InvokeReply, error) {
 	domain := domainIdentity(p)
+
+	// Ephemeral-lifecycle teardown FIRST (mirrors the pre-move host hook's ordering — it ran
+	// BEFORE the substrate's own OpPostTeardown body).
+	if err := dispatchVmEphemeralTeardown(ctx, exec, p, domain); err != nil {
+		return nil, err
+	}
 
 	// Destroy the libvirt/qemu DOMAIN — `bundle del`'s ONLY domain-teardown owner. The Del path
 	// replays the in-guest ReverseOps and removes host config, but nothing else tore down the venue,

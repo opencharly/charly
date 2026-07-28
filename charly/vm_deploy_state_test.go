@@ -316,51 +316,8 @@ func TestSplitVmAddress_LedgerIdentityRegression(t *testing.T) {
 	}
 }
 
-// TestVmLifecyclePostTeardown_UsesCanonicalKey is the regression test for the FINAL/K5 unit 6a
-// RCA #9 live-probe-caught bug: vmLifecyclePostTeardown used to look up the per-host overlay by
-// the RAW deploy name via a bare LookupKey exact match — but every vm writer persists under the
-// canonical "vm:"+VmDomainIdentity(name) key (dashes, not dots), so the raw name NEVER matched
-// and TeardownEphemeralLifecycle never fired. Proven end-to-end against a real overlay file: a
-// canonically-keyed ephemeral entry gets its Ephemeral block cleared by a single
-// vmLifecyclePostTeardown call, with no mocking of the dispatch chain.
-func TestVmLifecyclePostTeardown_UsesCanonicalKey(t *testing.T) {
-	overlay := filepath.Join(t.TempDir(), "charly.yml")
-	t.Setenv(DeployConfigEnv, overlay)
-
-	const dottedName = "check-sidecar-pod.check-sidecar-pod-ephvm"
-	const canonicalKey = "vm:check-sidecar-pod-check-sidecar-pod-ephvm"
-
-	seed := &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{
-		canonicalKey: {
-			Target: "vm",
-			From:   "eval-vm",
-			VmState: &spec.VmDeployState{
-				SshPort: 12345,
-				Ephemeral: &spec.EphemeralRuntime{
-					ID:            "test-id",
-					Status:        "active",
-					DeployAddress: dottedName,
-				},
-			},
-		},
-	}}
-	if err := saveBundleConfigNodeForm(seed); err != nil {
-		t.Fatalf("seeding overlay: %v", err)
-	}
-
-	if err := vmLifecyclePostTeardown(dottedName, nil); err != nil {
-		t.Fatalf("vmLifecyclePostTeardown: %v", err)
-	}
-
-	dc, err := deploykit.LoadBundleConfig()
-	if err != nil {
-		t.Fatalf("reload: %v", err)
-	}
-	entry, ok := dc.Bundle[canonicalKey]
-	if !ok {
-		t.Fatal("canonical entry vanished entirely — teardown should only clear Ephemeral, not the whole entry")
-	}
-	if entry.VmState != nil && entry.VmState.Ephemeral != nil {
-		t.Error("Ephemeral block was NOT cleared — the canonical-key lookup did not find the entry")
-	}
-}
+// The former TestVmLifecyclePostTeardown_UsesCanonicalKey (the FINAL/K5 unit 6a RCA #9
+// regression test) moved to candy/plugin-deploy-vm/lifecycle_test.go's
+// TestDispatchVmEphemeralTeardown_InvokesBundleProviderWhenEphemeral (F6 vm-lifecycle move,
+// coneB-vmlifecycle): vmLifecyclePostTeardown itself moved there (dispatchVmEphemeralTeardown),
+// so the canonical-key coverage now lives alongside it.

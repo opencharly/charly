@@ -13,18 +13,23 @@ import (
 	"google.golang.org/grpc"
 )
 
-// fakeExecutorServiceClient is a minimal pb.ExecutorServiceClient test double: only HostBuild is
-// implemented (it records the request and returns hostBuildReply/hostBuildErr); every other RPC
-// panics if called, since resolvePriorVmState touches ONLY HostBuild. Lets a test construct a real
-// *sdk.Executor (sdk.NewInProcExecutor) without a live host process — the SAME wiring mechanism
-// charly core's own parity tests use (charly/plugin_installstep_envelope_parity_test.go), applied
-// here from a plugin module.
+// fakeExecutorServiceClient is a minimal pb.ExecutorServiceClient test double: only HostBuild and
+// InvokeProvider are implemented (each records its request and returns a canned reply/error);
+// every other RPC panics if called. Lets a test construct a real *sdk.Executor
+// (sdk.NewInProcExecutor) without a live host process — the SAME wiring mechanism charly core's
+// own parity tests use (charly/plugin_installstep_envelope_parity_test.go), applied here from a
+// plugin module.
 type fakeExecutorServiceClient struct {
 	pb.ExecutorServiceClient
 	gotKind        string
 	gotSpecJSON    []byte
 	hostBuildReply *pb.HostBuildReply
 	hostBuildErr   error
+
+	invokeProviderCalled bool
+	gotInvokeReq         *pb.InvokeProviderRequest
+	invokeProviderReply  *pb.InvokeReply
+	invokeProviderErr    error
 }
 
 func (f *fakeExecutorServiceClient) HostBuild(ctx context.Context, in *pb.HostBuildRequest, opts ...grpc.CallOption) (*pb.HostBuildReply, error) {
@@ -34,6 +39,18 @@ func (f *fakeExecutorServiceClient) HostBuild(ctx context.Context, in *pb.HostBu
 		return nil, f.hostBuildErr
 	}
 	return f.hostBuildReply, nil
+}
+
+func (f *fakeExecutorServiceClient) InvokeProvider(ctx context.Context, in *pb.InvokeProviderRequest, opts ...grpc.CallOption) (*pb.InvokeReply, error) {
+	f.invokeProviderCalled = true
+	f.gotInvokeReq = in
+	if f.invokeProviderErr != nil {
+		return nil, f.invokeProviderErr
+	}
+	if f.invokeProviderReply != nil {
+		return f.invokeProviderReply, nil
+	}
+	return &pb.InvokeReply{ResultJson: []byte("{}")}, nil
 }
 
 // TestResolvePriorVmState_ReadsNonEmptyOutOfProcess is the regression test for the bed-robustness
@@ -91,6 +108,88 @@ func TestResolvePriorVmState_HostBuildErrorPropagates(t *testing.T) {
 	_, err := resolvePriorVmState(context.Background(), ex, "check-charly-vm")
 	if err == nil {
 		t.Fatal("resolvePriorVmState() with a HostBuild transport error: want an error, got nil")
+	}
+}
+
+// TestDispatchVmEphemeralTeardown_InvokesBundleProviderWhenEphemeral is the regression test for
+// the FINAL/K5 unit 6a RCA #9 live-probe-caught bug, ported to this plugin (F6 vm-lifecycle move,
+// coneB-vmlifecycle): the ORIGINAL bug was a lookup by the raw deploy name instead of the
+// canonical "vm:"+VmDomainIdentity(name) key. Here the canonical key is threaded automatically —
+// domainIdentity(p) IS vmshared.VmDomainIdentity(p.Name), and dispatchVmEphemeralTeardown resolves
+// prior state via resolvePriorVmState(domain), so this proves the request reaching "config-resolve"
+// carries the canonical domain, AND that a non-nil Ephemeral record triggers the
+// OpEphemeralTeardown peer-dispatch to command:bundle with the persisted VmState threaded onto the
+// decoded node.
+func TestDispatchVmEphemeralTeardown_InvokesBundleProviderWhenEphemeral(t *testing.T) {
+	wantReply := spec.ConfigResolveReply{VmState: &spec.VmDeployState{
+		SshPort:   12345,
+		Ephemeral: &spec.EphemeralRuntime{ID: "test-id", Status: "active", DeployAddress: "check-sidecar-pod.check-sidecar-pod-ephvm"},
+	}}
+	replyJSON, err := json.Marshal(wantReply)
+	if err != nil {
+		t.Fatalf("marshal fixture reply: %v", err)
+	}
+	fake := &fakeExecutorServiceClient{hostBuildReply: &pb.HostBuildReply{ResultJson: replyJSON}}
+	ex := sdk.NewInProcExecutor(fake)
+
+	const dottedName = "check-sidecar-pod.check-sidecar-pod-ephvm"
+	p := lifecycleParams{Name: dottedName, Node: json.RawMessage(`{"from":"eval-vm"}`)}
+	domain := domainIdentity(p)
+
+	if err := dispatchVmEphemeralTeardown(context.Background(), ex, p, domain); err != nil {
+		t.Fatalf("dispatchVmEphemeralTeardown: %v", err)
+	}
+
+	var gotConfigReq spec.ConfigResolveRequest
+	if err := json.Unmarshal(fake.gotSpecJSON, &gotConfigReq); err != nil {
+		t.Fatalf("decode recorded config-resolve request: %v", err)
+	}
+	if gotConfigReq.Entity != domain {
+		t.Errorf("config-resolve request Entity = %q, want the canonical domain identity %q", gotConfigReq.Entity, domain)
+	}
+
+	if !fake.invokeProviderCalled {
+		t.Fatal("dispatchVmEphemeralTeardown with a non-nil Ephemeral record must Invoke command:bundle's OpEphemeralTeardown — it did not call InvokeProvider at all")
+	}
+	if fake.gotInvokeReq.GetClass() != "command" || fake.gotInvokeReq.GetReserved() != "bundle" || fake.gotInvokeReq.GetOp() != sdk.OpEphemeralTeardown {
+		t.Errorf("InvokeProvider(class=%q, word=%q, op=%q), want (command, bundle, %q)",
+			fake.gotInvokeReq.GetClass(), fake.gotInvokeReq.GetReserved(), fake.gotInvokeReq.GetOp(), sdk.OpEphemeralTeardown)
+	}
+	var gotTeardownReq spec.EphemeralTeardownRequest
+	if err := json.Unmarshal(fake.gotInvokeReq.GetParamsJson(), &gotTeardownReq); err != nil {
+		t.Fatalf("decode recorded ephemeral-teardown request: %v", err)
+	}
+	if gotTeardownReq.Name != dottedName {
+		t.Errorf("EphemeralTeardownRequest.Name = %q, want %q", gotTeardownReq.Name, dottedName)
+	}
+	if gotTeardownReq.Node == nil || gotTeardownReq.Node.VmState == nil || gotTeardownReq.Node.VmState.Ephemeral == nil {
+		t.Fatal("EphemeralTeardownRequest.Node.VmState.Ephemeral is nil — the resolved persisted state must be threaded onto the node before dispatch")
+	}
+	if gotTeardownReq.Node.VmState.Ephemeral.ID != "test-id" {
+		t.Errorf("EphemeralTeardownRequest.Node.VmState.Ephemeral.ID = %q, want %q", gotTeardownReq.Node.VmState.Ephemeral.ID, "test-id")
+	}
+	if gotTeardownReq.Node.From != "eval-vm" {
+		t.Errorf("EphemeralTeardownRequest.Node.From = %q, want %q (the authored node's fields must survive the VmState overlay)", gotTeardownReq.Node.From, "eval-vm")
+	}
+}
+
+// TestDispatchVmEphemeralTeardown_NoEphemeral_SkipsDispatch covers the common non-ephemeral case:
+// a domain with no persisted Ephemeral record must NOT Invoke command:bundle at all.
+func TestDispatchVmEphemeralTeardown_NoEphemeral_SkipsDispatch(t *testing.T) {
+	wantReply := spec.ConfigResolveReply{VmState: &spec.VmDeployState{SshPort: 12345}}
+	replyJSON, err := json.Marshal(wantReply)
+	if err != nil {
+		t.Fatalf("marshal fixture reply: %v", err)
+	}
+	fake := &fakeExecutorServiceClient{hostBuildReply: &pb.HostBuildReply{ResultJson: replyJSON}}
+	ex := sdk.NewInProcExecutor(fake)
+
+	p := lifecycleParams{Name: "check-vm", Node: json.RawMessage(`{}`)}
+	if err := dispatchVmEphemeralTeardown(context.Background(), ex, p, domainIdentity(p)); err != nil {
+		t.Fatalf("dispatchVmEphemeralTeardown: %v", err)
+	}
+	if fake.invokeProviderCalled {
+		t.Error("dispatchVmEphemeralTeardown with no persisted Ephemeral record must not Invoke command:bundle")
 	}
 }
 
