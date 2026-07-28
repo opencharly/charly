@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -133,14 +134,14 @@ func TestValidatePreemptibleOnNode(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			errs := &ValidationError{}
+			var d spec.Diagnostics
 			node := tc.node
-			ValidatePreemptibleOnNode(tc.name, &node, errs)
-			if errs.HasErrors() != tc.wantErr {
-				t.Fatalf("HasErrors=%v want %v (errs=%s)", errs.HasErrors(), tc.wantErr, errs.Error())
+			loaderkit.ValidatePreemptibleOnNode(tc.name, &node, &d)
+			if preemptDiagHasErr(d) != tc.wantErr {
+				t.Fatalf("HasErrors=%v want %v (errs=%s)", preemptDiagHasErr(d), tc.wantErr, preemptDiagText(d))
 			}
-			if tc.contains != "" && !strings.Contains(errs.Error(), tc.contains) {
-				t.Fatalf("error %q does not contain %q", errs.Error(), tc.contains)
+			if tc.contains != "" && !strings.Contains(preemptDiagText(d), tc.contains) {
+				t.Fatalf("error %q does not contain %q", preemptDiagText(d), tc.contains)
 			}
 		})
 	}

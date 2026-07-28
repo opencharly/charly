@@ -19,12 +19,16 @@ import (
 //                              (#48 done) over the host leaf seams (hostMaterializeProjectSeams);
 //                              TRANSITIONAL host leg (the per-node kind-DECODE M stays host in
 //                              provider_kind_invoke.go, a SEPARATE floor file).
-//   - loader-android-validate → validateAndroidDevices: the kind:android box⊻adb XOR validator —
-//                              capability logic (clause R) that moves to loaderkit, reaching the
-//                              registry via the generic Threaded snapshot / InvokeProvider (the way
-//                              ValidateCheckBeds / ValidateEphemeral already relocated).
-//   - loader-preempt-validate → validatePreemptibleUnified: the preemptible / requires_exclusive /
-//                              requires_shared validator — same, moves to loaderkit.
+//   - loader-android-validate → loaderkit.ValidateAndroidDevices: the kind:android box⊻adb XOR
+//                              validator — the capability LOGIC now lives in loaderkit
+//                              (validate_capabilities.go, the way ValidateCheckBeds / ValidateEphemeral
+//                              relocated); this leg supplies ONLY the host registry-resolve callback
+//                              (resolveAndroidViaPlugin) and dissolves as the loader capability
+//                              finishes moving into its owning plugin.
+//   - loader-preempt-validate → loaderkit.ValidatePreemptible: the preemptible / requires_exclusive /
+//                              requires_shared validator — same, LOGIC now in loaderkit; this leg
+//                              supplies ONLY the host registry-resolve callbacks
+//                              (resolveResourceViaPlugin / resolveVmViaPlugin).
 // Each wraps the SAME host function charly.LoadUnified's compiled-in hostLoaderExecutor calls
 // DIRECTLY (Unit C); only a genuine out-of-module plugin (execLoaderExecutor, Unit D) pays the
 // marshal. The compiled-in TYPED placement skips it (U3).
@@ -55,7 +59,7 @@ func hostBuildLoaderAndroidValidate(_ context.Context, specJSON []byte, _ buildE
 	if err := loaderkit.UnmarshalMaterialized(specJSON, &uf); err != nil {
 		return nil, fmt.Errorf("loader-android-validate host-build: decode request: %w", err)
 	}
-	if err := validateAndroidDevices(&uf); err != nil {
+	if err := loaderkit.ValidateAndroidDevices(&uf, resolveAndroidViaPlugin); err != nil {
 		return nil, err
 	}
 	return nil, nil
@@ -70,7 +74,7 @@ func hostBuildLoaderPreemptValidate(_ context.Context, specJSON []byte, _ buildE
 	if err := loaderkit.UnmarshalMaterialized(specJSON, &uf); err != nil {
 		return nil, fmt.Errorf("loader-preempt-validate host-build: decode request: %w", err)
 	}
-	if err := validatePreemptibleUnified(&uf); err != nil {
+	if err := loaderkit.ValidatePreemptible(&uf, resolveResourceViaPlugin, resolveVmViaPlugin); err != nil {
 		return nil, err
 	}
 	return nil, nil

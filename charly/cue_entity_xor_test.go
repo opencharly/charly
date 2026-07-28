@@ -7,7 +7,7 @@ package main
 // dropped disjunctions did.
 //
 //   #Box     base⊻from          → BoxConfig.HasBaseFromConflict / validateBoxBaseFrom (config.go + validate.go)
-//   #Android box⊻adb (exactly1) → validateAndroidDevices (unified.go)
+//   #Android box⊻adb (exactly1) → loaderkit.ValidateAndroidDevices (validate_capabilities.go)
 //   #Check   bed-mode/target    → validateCheckBeds (unified.go) — proven by the
 //                                  existing TestValidateCheckBeds_* suite
 //                                  (TargetEnum rejects k8s = the arm's bed-legal
@@ -84,7 +84,7 @@ func TestAndroidDeviceXOR(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			s := tc.spec
 			uf := androidTestUF(rawTemplateMap(map[string]*AndroidSpec{"dev": &s}))
-			err := validateAndroidDevices(uf)
+			err := loaderkit.ValidateAndroidDevices(uf, resolveAndroidViaPlugin)
 			if tc.reject {
 				if err == nil {
 					t.Errorf("validateAndroidDevices accepted an invalid device (should reject)")
@@ -97,11 +97,11 @@ func TestAndroidDeviceXOR(t *testing.T) {
 
 	// Friendly-message spot-checks (both directions name their failure).
 	both := androidTestUF(rawTemplateMap(map[string]*AndroidSpec{"d": {Box: "e", Adb: &vmshared.AndroidAdbEndpoint{Host: "h:1"}}}))
-	if err := validateAndroidDevices(both); err == nil || !strings.Contains(err.Error(), "both box: and adb:") {
+	if err := loaderkit.ValidateAndroidDevices(both, resolveAndroidViaPlugin); err == nil || !strings.Contains(err.Error(), "both box: and adb:") {
 		t.Errorf("both-source error message: %v", err)
 	}
 	none := androidTestUF(rawTemplateMap(map[string]*AndroidSpec{"d": {}}))
-	if err := validateAndroidDevices(none); err == nil || !strings.Contains(err.Error(), "neither box: nor adb:") {
+	if err := loaderkit.ValidateAndroidDevices(none, resolveAndroidViaPlugin); err == nil || !strings.Contains(err.Error(), "neither box: nor adb:") {
 		t.Errorf("neither-source error message: %v", err)
 	}
 }

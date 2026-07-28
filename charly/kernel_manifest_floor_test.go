@@ -237,7 +237,6 @@ var residueOwner = map[string]string{
 	"unified.go":                    "P15",
 	"update_deploy_dispatch.go":     "P11",
 	"validate.go":                   "P15",
-	"validate_preempt.go":           "P13",
 	"vm_backend_lifecycle.go":       "P11",
 	"vm_lifecycle_preresolve.go":    "P11",
 	"volume_cp_tags_cmd.go":         "P11",

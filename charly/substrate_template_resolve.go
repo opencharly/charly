@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 	"github.com/opencharly/sdk/vmshared"
 )
@@ -108,11 +107,9 @@ func invokeSubstrateTemplateResolve(req spec.SubstrateTemplateResolveRequest) ([
 	return invokeTyped[spec.SubstrateTemplateResolveRequest, json.RawMessage](context.Background(), prov, "local", OpResolve, req)
 }
 
-// resolveAndroids projects the whole opaque android template map into resolved envelopes
-// (loaderkit.ResolvePluginKindViaPlugin — the shared loop every plugin-resolved kind accessor
-// uses). Its sibling resolveLocals died with the validate ENGINE (task #60 — the host's only
-// caller, validateLocalTemplates, moved to plugin-box, which decodes Templates.Local itself off
-// the resolved-project envelope).
-func resolveAndroids(uf *loaderkit.UnifiedFile) map[string]*ResolvedAndroid {
-	return loaderkit.ResolvePluginKindViaPlugin(uf, "android", resolveAndroidViaPlugin)
-}
+// resolveAndroidViaPlugin is the android RESOLVE callback the host threads into
+// loaderkit.ValidateAndroidDevices (the box⊻adb XOR validator relocated to
+// sdk/loaderkit); its former map-shaped wrapper resolveAndroids (the sole caller of which was the
+// relocated validateAndroidDevices) is deleted with the move. Its sibling resolveLocals died with
+// the validate ENGINE (task #60 — the host's only caller, validateLocalTemplates, moved to
+// plugin-box, which decodes Templates.Local itself off the resolved-project envelope).

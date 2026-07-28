@@ -185,34 +185,13 @@ func canonicalRef(ref, baseDir string) (key, path string, err error) {
 // spec.ResourceKinds for the byte-equivalent isExternalDeploySubstrate) instead of the live
 // registry, reached via the LoadSeams.ValidateCheckBeds seam. See loaderkit.ValidateCheckBeds.
 
-// validateAndroidDevices enforces the kind:android device source invariant: a
-// device is EXACTLY ONE of an in-pod emulator (box:) XOR a remote/physical adb
-// endpoint (adb:) — never both, never neither. This is the entity-level XOR the
-// #Android CUE schema formerly expressed via a trailing `& ({box:_} | {adb:_})`
-// disjunction; that was dropped (gengotypes collapses an entity-level disjunction
-// to an empty struct — see schema/android.cue) and the rule moved here. Runs at
-// LOAD time alongside validateCheckBeds, so EVERY command that resolves a device
-// (charly bundle add android:, charly check run, charly box validate, …) sees the
-// same friendly error — the faithful breadth the CUE load-gate had.
-func validateAndroidDevices(uf *loaderkit.UnifiedFile) error {
-	if uf == nil {
-		return nil
-	}
-	for name, spec := range resolveAndroids(uf) {
-		if spec == nil {
-			continue
-		}
-		hasBox := spec.Box != ""
-		hasAdb := spec.Adb != nil
-		switch {
-		case hasBox && hasAdb:
-			return fmt.Errorf("kind:android device %q sets both box: and adb: — a device is EXACTLY ONE of an in-pod emulator (box:) or a remote/physical adb endpoint (adb:)", name)
-		case !hasBox && !hasAdb:
-			return fmt.Errorf("kind:android device %q sets neither box: nor adb: — a device must declare EXACTLY ONE source (box: <kind:box emulator> or adb: {host: …})", name)
-		}
-	}
-	return nil
-}
+// validateAndroidDevices (the kind:android box⊻adb XOR) relocated to
+// sdk/loaderkit (validate_capabilities.go) as loaderkit.ValidateAndroidDevices —
+// kind-blind clause-R capability logic reaching the registry only via a threaded
+// resolve callback (resolveAndroidViaPlugin), the same relocation shape
+// ValidateCheckBeds / ValidateEphemeral took. The host wires it through the
+// LoaderExecutor.ValidateAndroidDevices leg (load_executor_host.go) +
+// host_build_loader.go.
 
 // -----------------------------------------------------------------------------
 // Discovery scanner (Part D).

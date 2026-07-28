@@ -39,15 +39,17 @@ func (hostLoaderExecutor) MaterializeLoadedProject(lp *spec.LoadedProject, merge
 	return loaderkit.MaterializeLoadedProject(lp, merged, byID, hostMaterializeProjectSeams())
 }
 
-// ValidateAndroidDevices enforces the kind:android box⊻adb XOR (resolves android templates via the
-// plugin-substrate provider) — host-coupled, so a leg.
+// ValidateAndroidDevices enforces the kind:android box⊻adb XOR. The VALIDATION LOGIC lives in
+// loaderkit.ValidateAndroidDevices (clause-R capability logic); this leg supplies ONLY the host
+// registry-resolve callback (resolveAndroidViaPlugin) — the genuine host coupling.
 func (hostLoaderExecutor) ValidateAndroidDevices(uf *loaderkit.UnifiedFile) error {
-	return validateAndroidDevices(uf)
+	return loaderkit.ValidateAndroidDevices(uf, resolveAndroidViaPlugin)
 }
 
-// ValidatePreemptible validates preemptible / requires_exclusive / requires_shared across the
-// deploy map, including the resource-vocabulary cross-check (resolves the resource plugin kind +
-// vm/resource entities via the registry) — host-coupled, so a leg.
+// ValidatePreemptible validates preemptible / requires_exclusive / requires_shared across the deploy
+// map, including the resource-vocabulary cross-check. The VALIDATION LOGIC lives in
+// loaderkit.ValidatePreemptible; this leg supplies ONLY the host registry-resolve callbacks
+// (resolveResourceViaPlugin / resolveVmViaPlugin) — the genuine host coupling.
 func (hostLoaderExecutor) ValidatePreemptible(uf *loaderkit.UnifiedFile) error {
-	return validatePreemptibleUnified(uf)
+	return loaderkit.ValidatePreemptible(uf, resolveResourceViaPlugin, resolveVmViaPlugin)
 }
