@@ -38,8 +38,9 @@ import (
 //     after the deploy — the clientcmd merge (mergeKubeconfig, merge.go) called
 //     directly, no separate host round-trip.
 //
-// Dispatched from charly/k8s_plugin.go's invokeKubePluginWithBroker — an
-// InvokeWithExecutor call, so this Invoke has a reverse-channel broker for the
+// Dispatched from candy/plugin-bundle/secrets_artifacts.go's k3sPostProvision (the
+// register-hint handler run after the deploy dispatch) via exec.InvokeProvider("verb","kube") —
+// a broker-carrying Invoke, so this Invoke has a reverse-channel broker for the
 // HostBuild("deploy-entity-resolve")/HostBuild("config-resolve") legs above.
 
 // k3sPostProvisionParams is the {method: "k3s-post-provision", artifact_key,

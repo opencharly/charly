@@ -21,7 +21,7 @@ import (
 // as env; the kube-exclusive fields ride the desugared plugin input (params.KubeInput —
 // the per-verb fields left core #Op in the schema-compaction cutover). The SAME
 // provider also serves the k3s post-provision finalization the deploy seam needs: that
-// caller (k8s_plugin.go's invokeKubePluginWithBroker) builds a synthetic op ({method:
+// caller (candy/plugin-bundle/secrets_artifacts.go's k3sPostProvision) builds a synthetic op ({method:
 // k3s-post-provision, artifact_key, deploy_name} in the input map) WITH a
 // reverse-channel broker and reads the result's Message. Because the out-of-process
 // verb path does NOT run the host-side matcher
@@ -81,9 +81,9 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 	// k3s-post-provision is the k3s deploy seam (S3, FINAL/K5 unit 6 — relocated
 	// wholesale from charly/k3s_post.go): retrieve-path check, guest-forward kubeconfig
 	// rewrite, and the kubeconfig merge. Dispatched WITH a reverse-channel broker (the
-	// host's k8s_plugin.go uses InvokeWithExecutor, mirroring the deploy:k8s preresolve
-	// leg) because the guest-forward rewrite needs the "deploy-entity-resolve" HostBuild
-	// seam for its LoadUnified-coupled VM lookup.
+	// caller — candy/plugin-bundle's k3sPostProvision — uses exec.InvokeProvider, mirroring the
+	// deploy:k8s preresolve leg) because the guest-forward rewrite needs the "deploy-entity-resolve"
+	// HostBuild seam for its LoadUnified-coupled VM lookup.
 	if method == "k3s-post-provision" {
 		exec, err := sdk.ExecutorForInvoke(ctx, req.GetExecutorBrokerId())
 		if err != nil {

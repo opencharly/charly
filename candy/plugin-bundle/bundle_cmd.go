@@ -2,7 +2,9 @@ package bundle
 
 import (
 	"fmt"
+	"os"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
@@ -88,8 +90,11 @@ type BundleDelCmd struct {
 	DryRun          bool `long:"dry-run" help:"Print the teardown plan without executing"`
 }
 
-// BundleFromBoxCmd is the `charly bundle from-box <ref> [name]` grammar; it forwards to the
-// deploy-from-box host-build seam (a source-less deploy from an image's baked OCI labels).
+// BundleFromBoxCmd is the `charly bundle from-box <ref> [name]` grammar. The pod path (default)
+// forwards to the deploy-from-box host-build seam (a source-less deploy from an image's baked OCI
+// labels); the --cluster path (Cone A shape 3) is handled ENTIRELY plugin-side — see
+// deploy_from_box.go — reaching the k8s cluster lookup + the deploy:k8s substrate directly, no
+// HostBuild round-trip for the k8s branch.
 type BundleFromBoxCmd struct {
 	Ref       string   `arg:"" help:"Full image ref (local or registry), e.g. ghcr.io/opencharly/selkies-kde-nvidia:latest"`
 	Name      string   `arg:"" optional:"" help:"Deploy name (default: the image-ref basename without tag)"`
@@ -101,14 +106,32 @@ type BundleFromBoxCmd struct {
 }
 
 func (c *BundleFromBoxCmd) Run() error {
+	if c.Cluster != "" {
+		dir, _ := os.Getwd()
+		out, err := DeployFromBox(cmdCtx, cmdExec, DeployFromBoxOpts{
+			ImageRef:       c.Ref,
+			DeploymentName: c.Name,
+			Instance:       c.Instance,
+			ClusterName:    c.Cluster,
+			Namespace:      c.Namespace,
+			ProjectDir:     dir,
+		})
+		if err != nil {
+			return err
+		}
+		name := c.Name
+		if name == "" {
+			name = deploykit.DeriveDeploymentName(c.Ref)
+		}
+		fmt.Fprintf(os.Stderr, "Generated Kustomize overlay for %q at %s\n  apply with: kubectl apply -k %s\n", name, out, out)
+		return nil
+	}
 	return hostDeploySeam("deploy-from-box", spec.DeployFromBoxRequest{
-		Ref:       c.Ref,
-		Name:      c.Name,
-		Instance:  c.Instance,
-		Env:       c.Env,
-		Port:      c.Port,
-		Cluster:   c.Cluster,
-		Namespace: c.Namespace,
+		Ref:      c.Ref,
+		Name:     c.Name,
+		Instance: c.Instance,
+		Env:      c.Env,
+		Port:     c.Port,
 	})
 }
 

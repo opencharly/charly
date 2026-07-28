@@ -1,4 +1,4 @@
-package main
+package bundle
 
 import (
 	"strings"
@@ -8,13 +8,12 @@ import (
 )
 
 // TestGenerateK8sKustomize_Guards exercises the three pre-dispatch validation guards that run
-// BEFORE GenerateK8sKustomize reaches the deploy:k8s provider (K5-A item 6 — the write+validate
-// body moved into candy/plugin-kube/materialize.go, but these guards stayed host-side since they
-// gate the request BEFORE any dispatch, exactly as the pre-move body did). No provider needs to
-// be registered for these — each guard returns before touching providerRegistry.
+// BEFORE GenerateK8sKustomize reaches the deploy:k8s provider — relocated verbatim from the
+// deleted charly/k8s_generate_test.go (Cone A shape 3). No provider needs to be registered and no
+// executor is needed for these — each guard returns before touching ctx/exec.
 func TestGenerateK8sKustomize_Guards(t *testing.T) {
 	caps := &spec.BoxMetadata{}
-	cluster := &ResolvedK8s{}
+	cluster := &spec.ResolvedK8s{}
 
 	cases := []struct {
 		name string
@@ -39,7 +38,7 @@ func TestGenerateK8sKustomize_Guards(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := GenerateK8sKustomize(tc.opts)
+			_, err := GenerateK8sKustomize(nil, nil, tc.opts)
 			if err == nil {
 				t.Fatalf("expected an error, got nil")
 			}

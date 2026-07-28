@@ -7,22 +7,22 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
 // deployFromBoxCmd is the host-side orchestration for `charly bundle from-box <ref>
 // [name]` — a SOURCE-LESS deploy driven entirely by an image's baked ai.opencharly.* OCI
-// labels, with NO charly.yml project. Two targets:
+// labels, with NO charly.yml project. Pod-only (default): generate + enable a podman quadlet
+// from the image's labels (ports, services, volumes, env, GPU auto-detect), then start the
+// resulting systemd-user service. Reuses the project-free config-setup ORCHESTRATION
+// (P13-KERNEL direction-flip: candy/plugin-deploy-pod's sdk.OpConfigSetup) via
+// #PodConfigSetupRequest.ExplicitRef — no quadlet logic is duplicated.
 //
-//   - pod (default): generate + enable a podman quadlet from the image's labels
-//     (ports, services, volumes, env, GPU auto-detect), then start the resulting
-//     systemd-user service. Reuses the project-free config-setup ORCHESTRATION
-//     (P13-KERNEL direction-flip: candy/plugin-deploy-pod's sdk.OpConfigSetup) via
-//     #PodConfigSetupRequest.ExplicitRef — no quadlet logic is duplicated.
-//   - k8s (--cluster <name>): emit a Kustomize tree via the existing
-//     DeployFromBox (charly/k8s_deploy_from_box.go) — unifying the from-box
-//     surface across both targets.
+// The k8s target (--cluster <name>) is handled ENTIRELY plugin-side now (Cone A shape 3,
+// candy/plugin-bundle/deploy_from_box.go's DeployFromBox) — BundleFromBoxCmd.Run() branches
+// BEFORE ever forwarding to this seam, so this struct never sees a non-empty Cluster/Namespace.
 //
 // This is the in-guest leg of the nested-pod-in-VM capability: a VM guest has
 // `charly` + a cp-box'd image but no project, so the host orchestrates
@@ -32,13 +32,11 @@ import (
 // The CLI GRAMMAR lives in the command:bundle plugin (candy/plugin-bundle); this struct
 // is reconstructed from spec.DeployFromBoxRequest by the deploy-from-box host-build seam.
 type deployFromBoxCmd struct {
-	Ref       string
-	Name      string
-	Instance  string
-	Env       []string
-	Port      []string
-	Cluster   string
-	Namespace string
+	Ref      string
+	Name     string
+	Instance string
+	Env      []string
+	Port     []string
 }
 
 func (c *deployFromBoxCmd) Run() error {
@@ -47,25 +45,7 @@ func (c *deployFromBoxCmd) Run() error {
 	}
 	name := c.Name
 	if name == "" {
-		name = deriveDeploymentName(c.Ref)
-	}
-
-	// K8s path: delegate to the existing source-less K8s deployer.
-	if c.Cluster != "" {
-		dir, _ := os.Getwd()
-		out, err := DeployFromBox(DeployFromBoxOpts{
-			ImageRef:       c.Ref,
-			DeploymentName: name,
-			Instance:       c.Instance,
-			ClusterName:    c.Cluster,
-			Namespace:      c.Namespace,
-			ProjectDir:     dir,
-		})
-		if err != nil {
-			return err
-		}
-		fmt.Fprintf(os.Stderr, "Generated Kustomize overlay for %q at %s\n  apply with: kubectl apply -k %s\n", name, out, out)
-		return nil
+		name = deploykit.DeriveDeploymentName(c.Ref)
 	}
 
 	// Pod path. Reuse the project-free config-setup ORCHESTRATION (now in candy/plugin-deploy-pod,

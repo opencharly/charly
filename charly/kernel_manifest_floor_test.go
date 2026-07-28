@@ -191,7 +191,6 @@ var residueOwner = map[string]string{
 	"cue_defaults.go":               "P15",
 	"cue_node.go":                   "P15",
 	"deploy.go":                     "P13",
-	"deploy_add_shared.go":          "P13",
 	"deploy_nodeform.go":            "P13",
 	"deploy_state_host.go":          "P13",
 	"deploy_tree.go":                "P13",
@@ -207,7 +206,6 @@ var residueOwner = map[string]string{
 	"host_build_render_seam.go":     "P8b",
 	"host_build_vm_build.go":        "P8b",
 	"k8s_config.go":                 "P11",
-	"k8s_deploy_from_box.go":        "P14",
 	"layer_secrets.go":              "P8b",
 	"layers.go":                     "P8b",
 	"local_spec.go":                 "P11",
@@ -296,10 +294,25 @@ var residueOwner = map[string]string{
 	// passes already applied to the sibling host_build_deploy_{tree_resolve,
 	// node_dispatch,node_del_dispatch,del_resolve,members,config_save}.go seams.
 	"host_build_deploy_entity_resolve.go": "P13",
+	// host_build_deploy_candy_secrets.go + host_build_deploy_artifacts_retrieve.go — Cone A
+	// shape 3 (deploy_add_shared.go + k8s_deploy_from_box.go → candy/plugin-bundle): two new
+	// thin HostBuild seams wrapping the genuine floor-M halves of the former core-resident
+	// prepareCandySecrets/retrieveArtifactsAndK3s — the project candy scan (CandyForPlan →
+	// ScanAllCandyWithConfig) + the credential-store touch (ResolveSecretForCandy) + the live
+	// artifact fetch (deploykit.RetrieveCandyArtifacts over a re-materialized venue). The
+	// ORCHESTRATION (inject secrets before dispatch, retrieve+dispatch register hints after) now
+	// runs plugin-side (candy/plugin-bundle/secrets_artifacts.go); K3sPostProvision's
+	// registry-coupled kube dispatch moved fully plugin-side via exec.InvokeProvider. Classified
+	// with the SAME K4-C deploy-dispatch seam family (P13) as the sibling
+	// host_build_deploy_entity_resolve.go above.
+	"host_build_deploy_candy_secrets.go":      "P13",
+	"host_build_deploy_artifacts_retrieve.go": "P13",
 	// host_build_ephemeral_register.go + ephemeral_dispatch.go — split of the
 	// deleted ephemeral_lifecycle.go (P11, pruned above): the register/teardown
 	// BODY moved to candy/plugin-bundle, leaving (a) a thin HostBuild seam
-	// wrapping registerEphemeralIfMarked (deploy_add_shared.go) so the plugin
+	// wrapping registerEphemeralIfMarked (now defined directly in
+	// host_build_ephemeral_register.go itself — Cone A shape 3's floor-M adjudication moved it
+	// verbatim out of the deleted deploy_add_shared.go) so the plugin
 	// can trigger the one host-only side effect it cannot do itself, and (b) the
 	// host→plugin dispatch into command:bundle's Op{Ephemeral,Teardown}
 	// legs. Both stay in the "ephemeral" cross-substrate lifecycle family — the
