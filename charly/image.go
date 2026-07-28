@@ -52,9 +52,12 @@ type BoxCmd struct {
 // The host-coupled remainder that DID stay core is the genuine floor a sdk-only candy cannot run:
 // remote_image.go's ResolveRemoteImage (EnsureRepoDownloaded → clone/cache, K1), reached by the
 // candy over the thin HostBuild("remote-image-resolve") seam (host_build_remote_image_resolve.go); the
-// build-engine RESOLVE legs (host_build_buildengine.go); and the bootstrap-builder pre-pass
-// (ensureBuilderImageBuilt → dispatchBoxBuild, now in host_build_vm_build.go, whose one caller is the
-// kind:vm bootstrap path). The former core ensure-image helper (core-min wave 3, build-engine cluster
+// build-engine RESOLVE legs (host_build_buildengine.go). The bootstrap-builder pre-pass
+// (ensureBuilderImageBuilt/dispatchBoxBuild) externalized FULLY at K3 vm-build move
+// (coneB-buildremnant): candy/plugin-vm's resolveVmBuild (vm_build_resolve.go) now runs
+// `charly vm build`'s PREP+RESOLVE plugin-side, reaching the builder-image auto-build via
+// InvokeProvider(build, box) instead of a core reentry; charly/host_build_vm_build.go is DELETED.
+// The former core ensure-image helper (core-min wave 3, build-engine cluster
 // relocation) is DELETED — its ensure-image ORCHESTRATION moved to candy/plugin-build's build:ensure
 // word, dispatched via dispatchBuildEnsure (dispatch_build_ensure.go), a thin CLI-independent host
 // helper — not part of this command-dispersal accounting at all.

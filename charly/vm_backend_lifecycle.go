@@ -23,33 +23,22 @@ import (
 // plugin; these shared helpers stay because non-CLI core consumers still call
 // them: the config-resolve seam (host_build_config_resolve.go — vmConfiguredBackend),
 // the sibling-member + bed runners (bundle_members.go / check_bed_run.go —
-// startLibvirtUserSession), the container SSH-key helpers (config_image.go /
-// vm_cloud_image.go), and the qcow2-VM host-build seam (host_build_vm_build.go —
-// vmDir, for the per-entity state dir it creates before staging the disk/seed
-// ISO). The FORMER resource-arbiter consumer (preempt.go's startVM/stopVM/vmName
+// startLibvirtUserSession), and the container SSH-key helpers (config_image.go /
+// vm_cloud_image.go). The FORMER resource-arbiter consumer (preempt.go's startVM/stopVM/vmName
 // holder start/stop) moved into candy/plugin-preempt (FLOOR-SLIM-proper Unit-8)
 // with its own vmName/start/stop implementation dispatching verb:libvirt
 // directly via InvokeProvider — so those symbols, and their qemu-backend-only
 // support cluster (vm_qemu_client.go, vm_plugin_client.go's op-reply decoders,
 // vmshared_aliases.go's killQemuByPID), are DELETED here (R5): the CLI's own
 // startVM/stopVM equivalent lives entirely in candy/plugin-vm and never called
-// back into this file's copy. `vmDir` itself STAYS — host_build_vm_build.go is a
-// genuinely separate, still-live consumer (confirmed via git grep across the
-// FULL merged tree, including the just-landed bed-robustness batch) — and now
-// routes through vmshared.VmStateRoot() (the CHARLY_VM_STATE_DIR worktree-scoping
-// override bed-robustness's batch, charly#176, unified every other VM-state path
-// onto), so candy/plugin-preempt's own vmDirPlugin (holder_dispatch.go) matches
-// it symmetrically rather than duplicating the un-scoped literal. The K5 vm
-// status collector (candy/plugin-substrate/status_vm.go) does NOT call
+// back into this file's copy. `vmDir` (the per-entity state dir helper, a thin
+// vmshared.VmStateRoot() wrapper) is ALSO DELETED here (R5, K3 vm-build move,
+// coneB-buildremnant): its one remaining caller, host_build_vm_build.go's
+// hostBuildVmBuild, moved to candy/plugin-vm's resolveVmBuild (vm_build_resolve.go),
+// which calls vmshared.VmStateRoot() directly — no core-side wrapper left to call.
+// The K5 vm status collector (candy/plugin-substrate/status_vm.go) does NOT call
 // resolveVmBackend — it reaches candy/plugin-vm's verb:libvirt directly over
 // InvokeProvider and gates on vmshared.LibvirtSessionSocket() instead.
-
-// vmDir returns the root directory for storing VM state (QEMU backend), honoring the
-// CHARLY_VM_STATE_DIR worktree-scoping override (bed-robustness batch item 6) — the SAME
-// override every other VM-state path in this process now goes through.
-func vmDir() (string, error) {
-	return vmshared.VmStateRoot()
-}
 
 // resolveVmBackend detects the available VM backend.
 // Priority: libvirt → qemu

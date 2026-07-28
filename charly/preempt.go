@@ -85,7 +85,8 @@ func newResourceArbiter() *arbiterProxy { return &arbiterProxy{} }
 // arbiterInvoke resolves verb:arbiter and Invokes it with an action-tagged input, threading the
 // IN-PROC reverse channel onto the ctx so the plugin's Invoke reaches its host seams over
 // InvokeProvider/HostBuild (always-served generic seams — plugin_executor_reverse.go) — the SAME
-// dispatchBuild in-proc-executor pattern (build.go). Infra failures (no plugin, marshal, invoke)
+// in-proc-executor pattern candy/plugin-box's dispatchBuild / candy/plugin-vm's resolveVmBuild use.
+// Infra failures (no plugin, marshal, invoke)
 // are returned as a Go error; a per-action OP failure rides reply.Error. This is the generic
 // core→verb registry bridge the core lease-lifecycle callers use (core is not a plugin, so it
 // cannot call InvokeProvider itself).

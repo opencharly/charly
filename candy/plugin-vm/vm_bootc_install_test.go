@@ -1,4 +1,4 @@
-package main
+package vm
 
 import (
 	"strings"
@@ -7,6 +7,18 @@ import (
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
+
+// withLocalImages swaps kit.ListLocalImages for the duration of the test — R3 duplicate of
+// charly/checkrun_charly_verbs_test.go's helper of the same name (a separate Go module; a pure
+// sdk/kit package-level var swap, zero core coupling).
+func withLocalImages(t *testing.T, images []kit.LocalImageInfo) {
+	t.Helper()
+	orig := kit.ListLocalImages
+	kit.ListLocalImages = func(engine string) ([]kit.LocalImageInfo, error) {
+		return images, nil
+	}
+	t.Cleanup(func() { kit.ListLocalImages = orig })
+}
 
 // TestResolveBootcImageRef_FullRefPassthrough proves a full OCI ref (one
 // containing "/") is returned unchanged — bootc may pull it from a registry, so

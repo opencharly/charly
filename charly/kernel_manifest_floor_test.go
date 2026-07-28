@@ -143,7 +143,7 @@ var kernelFloor = []floorEntry{
 	{"pod_lifecycle_verb.go", "M — the pod-lifecycle verb dispatch (F6 host-plan-hook; kind-blind)"},
 	{"vm_plugin_client.go", "M — the host to plugin libvirt client (InvokeProvider dispatch; wire broker)"},
 	{"deploy_target_dispatch.go", "M — the deploy-target dispatch F10 host-builder to command:bundle OpDeployDispatch (one envelope, all substrates; kind-blind)"},
-	{"dispatch_build_ensure.go", "M — the build:ensure in-proc reverse-channel dispatch to plugin-build (mirrors build.go dispatchBuild; kind-blind)"},
+	{"dispatch_build_ensure.go", "M — the build:ensure in-proc reverse-channel dispatch to plugin-build (mirrors candy/plugin-box's dispatchBuild; kind-blind)"},
 	{"host_build_arbiter_bracket.go", "M — the arbiter-bracket F10 host-builder (os.Setenv CHARLY_PREEMPT_LEASE must run in THE host process; kind-blind)"},
 	{"host_build_box_ref_resolve.go", "M — the box-ref-resolve host-only piece of build:ensure (generic BoxRefResolveRequest; orchestration moved to plugin-build)"},
 	{"host_build_check_load_plugins.go", "M — the check-load-plugins host seam (plugin-LOADING, an in-core M; connects an out-of-proc candy)"},
@@ -199,7 +199,6 @@ var kernelFloor = []floorEntry{
 //	P15  — residual folds + HostArbiter deletion + K1 loader-orchestration + K5 seam-death + misc CLI utils
 var residueOwner = map[string]string{
 	"builder_venue.go":              "P8b", // buildEngineContext (the type) is floor-worthy core-dispatch infra; runVenueBuilderStep/runVenueHomeArtifactBuilder look like coneA3's deploy-vm domain by function — flagged, not unilaterally split (team-lead ruling)
-	"host_build_vm_build.go":        "P8b", // the kind:vm bootstrap-builder pre-pass (resolveVmBuildBootstrap/ensureBuilderImageBuilt) is real vm-build capability, not thin dispatch — grouped with builder_venue.go for coneA3's deploy-vm pass to decide move-to-plugin-deploy-vm vs genuine floor (team-lead ruling, reverted from an over-broad floor call)
 	"build_overlay.go":              "P8b",
 	"bundle_add_cmd.go":             "P13",
 	"bundle_from_box_cmd.go":        "P13",
