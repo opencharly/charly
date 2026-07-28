@@ -1,12 +1,42 @@
 package box
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
+	"os"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/opencharly/sdk/spec"
 )
+
+// captureStdout redirects os.Stdout for the duration of fn and returns everything written to it —
+// the plugin-side twin of the codebase's established captureStderr test pattern (R3: one copy per
+// module, since no shared test-helper import crosses the module boundary).
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+	orig := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	os.Stdout = w
+	defer func() { os.Stdout = orig }()
+
+	done := make(chan struct{})
+	var buf bytes.Buffer
+	go func() {
+		_, _ = io.Copy(&buf, r)
+		close(done)
+	}()
+
+	fn()
+	_ = w.Close()
+	<-done
+	return buf.String()
+}
 
 // TestInspectDefaultJSON_SnakeCaseCanonical is the GOLDEN test locking the DELIBERATE breaking output
 // change: `charly box inspect <box>` (no --format) now marshals the spec.ResolvedBoxView as
@@ -158,5 +188,68 @@ func TestSortedKeys(t *testing.T) {
 	got := sortedKeys(map[string]int{"c": 1, "a": 1, "b": 1})
 	if !reflect.DeepEqual(got, []string{"a", "b", "c"}) {
 		t.Errorf("sortedKeys = %v, want [a b c]", got)
+	}
+}
+
+// TestPrintImageTags_NoTagsErrors proves an empty inventory errors instead of silently printing
+// nothing — mirroring the former charly/volume_cp_tags_cmd.go's ListTagsCmd.Run() contract.
+func TestPrintImageTags_NoTagsErrors(t *testing.T) {
+	if err := printImageTags(nil, ""); err == nil {
+		t.Fatal("printImageTags(nil, \"\") must error, got nil")
+	}
+}
+
+// TestPrintImageTags_BoxFilterNoMatchErrors proves a boxFilter that matches nothing errors with
+// the box name named in the message (not a silent empty success).
+func TestPrintImageTags_BoxFilterNoMatchErrors(t *testing.T) {
+	tags := []spec.TagInfo{{Box: "fedora", Ref: "r1", Version: "v1"}}
+	err := printImageTags(tags, "arch")
+	if err == nil {
+		t.Fatal("printImageTags with a non-matching boxFilter must error, got nil")
+	}
+	if !strings.Contains(err.Error(), "arch") {
+		t.Errorf("error = %q, want it to name the unmatched box %q", err, "arch")
+	}
+}
+
+// TestPrintImageTags_GroupsSortsAndFormats locks in the exact per-line output shape (byte-
+// equivalent to the former ListTagsCmd.Run()): grouped by box (alphabetical), one line per tag
+// tab-separated as box/ref/version, with a "(in use)" suffix only when InUse is set.
+func TestPrintImageTags_GroupsSortsAndFormats(t *testing.T) {
+	tags := []spec.TagInfo{
+		{Box: "fedora", Ref: "fedora:v2", Version: "2026.200.0000", InUse: true},
+		{Box: "arch", Ref: "arch:v1", Version: "2026.100.0000"},
+		{Box: "fedora", Ref: "fedora:v1", Version: "2026.190.0000"},
+	}
+	out := captureStdout(t, func() {
+		if err := printImageTags(tags, ""); err != nil {
+			t.Errorf("printImageTags: %v", err)
+		}
+	})
+	want := "arch\tarch:v1\t2026.100.0000\n" +
+		"fedora\tfedora:v2\t2026.200.0000\t(in use)\n" +
+		"fedora\tfedora:v1\t2026.190.0000\n"
+	if out != want {
+		t.Errorf("printImageTags output =\n%q\nwant\n%q", out, want)
+	}
+}
+
+// TestPrintImageTags_BoxFilterNarrows proves a matching boxFilter excludes every other box's
+// entries entirely.
+func TestPrintImageTags_BoxFilterNarrows(t *testing.T) {
+	tags := []spec.TagInfo{
+		{Box: "fedora", Ref: "fedora:v1", Version: "2026.190.0000"},
+		{Box: "arch", Ref: "arch:v1", Version: "2026.100.0000"},
+	}
+	out := captureStdout(t, func() {
+		if err := printImageTags(tags, "arch"); err != nil {
+			t.Errorf("printImageTags: %v", err)
+		}
+	})
+	if strings.Contains(out, "fedora") {
+		t.Errorf("printImageTags with boxFilter=arch leaked fedora's entry: %q", out)
+	}
+	if !strings.Contains(out, "arch:v1") {
+		t.Errorf("printImageTags with boxFilter=arch missing arch's own entry: %q", out)
 	}
 }

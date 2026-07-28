@@ -264,7 +264,6 @@ var residueOwner = map[string]string{
 	"sidecar.go":                    "P11",
 	"substrate_template_resolve.go": "P15",
 	"update_deploy_dispatch.go":     "P11",
-	"volume_cp_tags_cmd.go":         "P11",
 	// — files added by cutovers that landed after the T0 authoring (living tracker) —
 	"config_write_host.go":     "P11",
 	"validate_project_host.go": "P15",
@@ -346,7 +345,6 @@ var residueOwner = map[string]string{
 	// over incidental mechanism-shape similarity to a P13 sibling.
 	"ephemeral_dispatch.go":            "P11",
 	"host_build_retention_defaults.go": "P15",
-	"retention_plugin.go":              "P15",
 	// load_executor_host.go + host_build_loader.go — Unit C/B of the K1-LOADER
 	// RELOCATION (make loaderkit.LoadUnified plugin-callable). load_executor_host.go
 	// is the compiled-in TYPED loaderkit.LoaderExecutor (the charly→loaderkit

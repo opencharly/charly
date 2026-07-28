@@ -4,14 +4,15 @@ package clean
 // the --deep store-wide dangling-image purge + the charly-labeled image-tag inventory).
 // Relocated from charly/retention.go (K1-alpha core-minimization): this candy is the ONE
 // owner now. `charly clean`'s own CLI (command.go) calls runRetention directly — no wire
-// hop, same package. The three remaining core callers (`charly box build`'s post-build
-// prune, `charly box list tags`, and the check harness's post-run prune) reach it via
-// verb:retention — the same "core adapter resolves+Invokes a compiled-in plugin word"
-// pattern verb:credential/verb:gpu/verb:tunnel already use (charly/retention_plugin.go).
+// hop, same package. The remaining callers — candy/plugin-box's post-build prune
+// (pruneAfterBuild) and `box list tags` (listImageTags), and the check harness's post-run
+// prune — are all PEER PLUGINS reaching it via verb:retention over InvokeProvider, the same
+// peer-dispatch pattern verb:credential/verb:gpu/verb:tunnel use; NO core adapter remains
+// (charly/retention_plugin.go, the former core-side caller, is DELETED — #118).
 //
 // Retention fallback: when defaults.keep_images / keep_check_runs are absent from config,
-// the core adapter resolves 0 ("disabled") so third-party configs get no surprise pruning.
-// The repo's charly.yml opts in (keep_images: 3, keep_check_runs: 3). See /charly-core:clean.
+// the caller resolves 0 ("disabled") so third-party configs get no surprise pruning. The
+// repo's charly.yml opts in (keep_images: 3, keep_check_runs: 3). See /charly-core:clean.
 
 import (
 	"encoding/json"
