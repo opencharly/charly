@@ -144,7 +144,7 @@ func TestResolveDottedAgentProvisionedVenue(t *testing.T) {
 // TestOverlayRoundTrip_NestedChildSurvives (Risk 5a) proves the per-host overlay
 // writer round-trips a deployment's NESTED CHILD + derived TARGET even though
 // BundleNode.Children/Target are now yaml:"-" (the writer re-emits them via
-// marshalBundleNode → node-form children). A lossy
+// deploykit.MarshalBundleNode → node-form children). A lossy
 // writer would silently drop the nested child on the next saveDeployState.
 func TestOverlayRoundTrip_NestedChildSurvives(t *testing.T) {
 	dir := t.TempDir()

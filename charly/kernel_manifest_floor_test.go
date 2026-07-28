@@ -279,8 +279,7 @@ var kernelFloor = []floorEntry{
 //	P14  — status collectors / alias / scaffold / OCI registry+merge → plugins
 //	P15  — residual folds + HostArbiter deletion + K1 loader-orchestration + K5 seam-death + misc CLI utils
 var residueOwner = map[string]string{
-	"cmd.go":             "P15",
-	"deploy_nodeform.go": "P13",
+	"cmd.go": "P15",
 	// — Cutover A (#168, deploy-dispatch kernel hard-cutover exit): the K4-C
 	// deploy-tree walk port narrows the retired deploy-dispatch spike into 6
 	// per-position seams (candy/plugin-bundle drives the walk; each seam calls
