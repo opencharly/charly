@@ -68,6 +68,8 @@ compiled_plugins:
     - plugin-tunnel
     - plugin-tmux
     - plugin-migrate
+    - plugin-ssh
+    - plugin-cmd
     - plugin-clean
     - plugin-settings
     - plugin-loader

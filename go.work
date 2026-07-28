@@ -47,6 +47,8 @@ use ./candy/plugin-installstep
 use ./candy/plugin-tunnel
 use ./candy/plugin-tmux
 use ./candy/plugin-migrate
+use ./candy/plugin-ssh
+use ./candy/plugin-cmd
 use ./candy/plugin-clean
 use ./candy/plugin-settings
 use ./candy/plugin-loader
