@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // validate_vm.go — the "vm" capability's F7/C8 deep OpValidate check (ProvidedCapability.

@@ -9,7 +9,7 @@ import (
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/loaderkit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // host_build_render_seam.go — the "render-seam" host-builder (#67 render-DRIVE move).

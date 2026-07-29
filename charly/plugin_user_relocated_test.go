@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // TestRelocatedUserVerb_DispatchesViaKit proves the MULTI-ROLE `user` verb — relocated to

@@ -9,7 +9,7 @@ import (
 
 	"github.com/opencharly/charly/candy/plugin-spice/params"
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // methods.go is the spice method dispatcher: the 7-method surface moved from

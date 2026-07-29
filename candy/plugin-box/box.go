@@ -13,7 +13,7 @@ import (
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // hostClient is the box commands' host coupling: it reaches charly's host process over the

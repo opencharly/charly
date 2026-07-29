@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // fakeExec is a kit.Executor returning a canned exit — the in-container command RunCapture leg.

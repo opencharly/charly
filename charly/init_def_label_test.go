@@ -8,7 +8,7 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/loaderkit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // TestInitDefLabel_RoundTrip proves the init system is TRUE single-source: the

@@ -20,7 +20,7 @@ package refs
 import (
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
-	pb "github.com/opencharly/sdk/proto"
+	pb "github.com/opencharly/spec/proto"
 )
 
 const calver = "2026.192.0000"

@@ -1,7 +1,7 @@
 package mcp
 
 import (
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 	"strings"
 	"testing"
 

@@ -7,7 +7,7 @@ import (
 	"sync"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // providerRegistry is the ONE process-wide registry of Providers — the unified

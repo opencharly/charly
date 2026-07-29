@@ -10,7 +10,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/opencharly/charly/candy/plugin-mcp/params"
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // methods.go is the mcp method dispatcher + the MCP-protocol client layer, moved from

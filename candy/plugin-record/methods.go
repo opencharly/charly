@@ -10,7 +10,7 @@ import (
 	"github.com/opencharly/charly/candy/plugin-record/params"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // methods.go is the record method dispatcher + the venue-driving layer, ported from

@@ -3,7 +3,7 @@ package main
 import (
 	"log"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // loader_threaded.go — the host side of the unified-config loader seam (P6/K1/#46). It holds the

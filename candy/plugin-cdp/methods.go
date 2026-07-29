@@ -13,7 +13,7 @@ import (
 
 	"github.com/opencharly/charly/candy/plugin-cdp/params"
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // methods.go is the cdp method dispatcher + the CDP-protocol client layer, moved from

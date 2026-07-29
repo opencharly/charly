@@ -23,7 +23,7 @@ import (
 	"os"
 
 	"github.com/opencharly/sdk"
-	pb "github.com/opencharly/sdk/proto"
+	pb "github.com/opencharly/spec/proto"
 )
 
 // NewProvider returns the candy provider.

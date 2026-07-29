@@ -7,7 +7,7 @@ import (
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // sidecar_resolve.go — the pod-config sidecar resolve+adapt+secret-provision, relocated from

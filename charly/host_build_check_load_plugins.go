@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // host_build_check_load_plugins.go — the THIN "check-load-plugins" host seam (K1-unblock wave, arm

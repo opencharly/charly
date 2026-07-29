@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // host_build_construct_step.go — the "construct-step" F10 host-builder (K5-A item 1,

@@ -3,7 +3,7 @@ package main
 import (
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // intermediates_shim.go — W3 (K3 build-engine move). The auto-intermediate-image

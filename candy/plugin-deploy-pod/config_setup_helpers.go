@@ -14,7 +14,7 @@ import (
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // config_setup_helpers.go — pure (no host/loader/registry coupling) helpers ported VERBATIM from

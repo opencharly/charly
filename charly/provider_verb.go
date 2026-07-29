@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // CheckVerbProvider is the typed in-process form of a check-verb Provider: it

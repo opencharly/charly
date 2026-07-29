@@ -22,7 +22,7 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // checkProjection is the resolved check-project projection (the former spec.CheckConfigReply).

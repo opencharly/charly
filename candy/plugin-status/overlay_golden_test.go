@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // overlay_golden_test.go — the candy's byte-parity anchor for applyNestedOverlay (the PURE

@@ -9,7 +9,7 @@ import (
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // preempt.go — the HOST side of the resource arbiter after cutover C9.

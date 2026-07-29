@@ -13,7 +13,7 @@ import (
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/loaderkit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // build_overlay.go — the HOST-SIDE pod-overlay build PREP+RESOLVE seam (M4 + P11c). The pod deploy

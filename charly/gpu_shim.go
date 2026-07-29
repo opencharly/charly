@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // --- GPU pure helpers, aliased from spec ------------------------------------------------------

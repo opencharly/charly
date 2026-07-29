@@ -4,7 +4,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // preflight_images.go — the PURE half of the host-target image preflight (moved from

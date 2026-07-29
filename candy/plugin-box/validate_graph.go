@@ -20,7 +20,7 @@ import (
 
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // validateBoxDAG re-runs the DAG-cycle checks over the resolved box set (ResolveBoxOrder +

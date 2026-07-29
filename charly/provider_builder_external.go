@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/opencharly/sdk/buildkit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // provider_builder_external.go — the externalized DETECTION-builder registry surface, the

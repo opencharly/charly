@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // host_build_render_service.go — the "render-service" F10 host-builder (K5-A item 1

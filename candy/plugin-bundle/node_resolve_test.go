@@ -3,7 +3,7 @@ package bundle
 import (
 	"testing"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // TestResolveVmEntity is the regression guard for the bed-deploy reach bug

@@ -11,8 +11,8 @@ import (
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
-	pb "github.com/opencharly/sdk/proto"
-	"github.com/opencharly/sdk/spec"
+	pb "github.com/opencharly/spec/proto"
+	"github.com/opencharly/spec/spec"
 )
 
 // lifecycle.go — the host-side POD venue lifecycle, externalized out of charly core (M4). The

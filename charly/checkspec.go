@@ -3,7 +3,7 @@ package main
 import (
 	"slices"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // The ${NAME[:arg]} check-variable expansion grammar (ExpandTestVars / TestVarRefs /

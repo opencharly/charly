@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 
 	"github.com/opencharly/sdk/loaderkit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // ResolvedResource / ResolvedGpuSelector are the resource de-type's value envelopes.

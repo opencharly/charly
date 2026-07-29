@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // deploy_target_dispatch.go — the core-side half of the S3b move: dispatchDeployTarget invokes

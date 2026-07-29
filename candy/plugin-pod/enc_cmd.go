@@ -10,7 +10,7 @@ import (
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // enc_cmd.go — the `charly config status|mount|unmount|passwd` leaf BODIES (wave γ port from

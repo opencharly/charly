@@ -16,7 +16,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // resolveSidecars is the OpResolve entry point. It routes CLI env, merges the three

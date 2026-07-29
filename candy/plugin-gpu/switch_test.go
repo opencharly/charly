@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // switch_test.go — the GPU driver-switch unit suite, relocated from charly core

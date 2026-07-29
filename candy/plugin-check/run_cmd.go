@@ -19,7 +19,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // Target-kind strings the plugin's resolveIterateSandbox returns — the plugin classifies

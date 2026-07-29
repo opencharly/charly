@@ -9,7 +9,7 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // deployFromBoxCmd is the host-side orchestration for `charly bundle from-box <ref>

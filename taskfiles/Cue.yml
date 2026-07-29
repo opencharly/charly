@@ -1,10 +1,10 @@
 version: '3'
 
 vars:
-  # Pinned cue CLI — MUST match the sdk submodule's pin (sdk/Taskfile.yml) and
+  # Pinned cue CLI — MUST match the spec submodule's pin (spec/Taskfile.yml) and
   # the embedded cuelang.org/go library so the CLI that runs gengotypes is the
   # same CUE version the library compiles the schema with. The gen task asserts
-  # equality against sdk/Taskfile.yml so the two pins cannot drift silently.
+  # equality against spec/Taskfile.yml so the two pins cannot drift silently.
   CUE_VERSION: v0.16.1
   # sha256 of cue_{{.CUE_VERSION}}_linux_amd64.tar.gz (verified: the extracted
   # binary reports `cue version v0.16.1`). A download whose digest differs is a
@@ -17,27 +17,27 @@ tasks:
   # self-contained schema/*.cue.
   #
   # The BASE schema → spec generation (spec/{cue_types,vocab,version}_gen.go)
-  # lives in the sdk submodule (`cd sdk && task cue:gen`) — the schema and the
-  # types generated from it are one module (github.com/opencharly/sdk). This
-  # task runs the sdk generation FIRST, then the per-plugin params loop, using
-  # the SAME sdk/internal/schemagen + pinned cue CLI (R3: one pipeline).
+  # lives in the spec submodule (`cd spec && task cue:gen`) — the schema and the
+  # types generated from it are one module (github.com/opencharly/spec). This
+  # task runs the spec generation FIRST, then the per-plugin params loop, using
+  # the SAME spec/internal/schemagen + pinned cue CLI (R3: one pipeline).
   # ---------------------------------------------------------------------------
   gen:
-    desc: Regenerate sdk spec + every plugin candy's params from its schema (self-bootstraps the pinned cue CLI into ./bin/cue)
+    desc: Regenerate spec + every plugin candy's params from its schema (self-bootstraps the pinned cue CLI into ./bin/cue)
     dir: "{{.ROOT_DIR}}"
     cmds:
       - |
-        # Pin-equality gate: the superproject and sdk cue pins must match.
+        # Pin-equality gate: the superproject and spec cue pins must match.
         set -euo pipefail
-        SDK_PIN="$(grep -m1 'CUE_VERSION:' sdk/Taskfile.yml | awk '{print $2}')"
-        test "$SDK_PIN" = "{{.CUE_VERSION}}" || {
-          echo "cue:gen: CUE_VERSION pin drift — superproject {{.CUE_VERSION}} vs sdk $SDK_PIN" >&2; exit 1; }
+        SPEC_PIN="$(grep -m1 'CUE_VERSION:' spec/Taskfile.yml | awk '{print $2}')"
+        test "$SPEC_PIN" = "{{.CUE_VERSION}}" || {
+          echo "cue:gen: CUE_VERSION pin drift — superproject {{.CUE_VERSION}} vs spec $SPEC_PIN" >&2; exit 1; }
       - task: bootstrap-cue
       - |
         set -euo pipefail
-        # 1) The sdk (base schema → spec) generation, in its own module.
-        cp bin/cue sdk/bin/cue 2>/dev/null || true
-        ( cd sdk && GOWORK=off task cue:gen )
+        # 1) The spec (base schema → spec) generation, in its own module.
+        cp bin/cue spec/bin/cue 2>/dev/null || true
+        ( cd spec && GOWORK=off task cue:gen )
         # 2) Plugin param structs — each plugin's OWN self-contained schema → its
         #    params package, via the SAME gengotypes pipeline as spec (-pkg=params
         #    header, R3). A plugin schema is self-contained, so it compiles + gens
@@ -53,23 +53,23 @@ tasks:
           mkdir -p "$PARAMS_DIR"
           PDIR="$(mktemp -d)"; mkdir -p "$PDIR/cue.mod"
           cat > "$PDIR/cue.mod/module.cue" <<EOF
-        module: "github.com/opencharly/sdk/schema/params-codegen"
+        module: "github.com/opencharly/spec/schema/params-codegen"
         language: version: "{{.CUE_VERSION}}"
         EOF
-          ( cd sdk && GOWORK=off go run ./internal/schemagen -mode=concat -pkg=params -schema="$ROOT/$SCHEMA_DIR" -out="$PDIR/p.cue" )
+          ( cd spec && GOWORK=off go run ./internal/schemagen -mode=concat -pkg=params -schema="$ROOT/$SCHEMA_DIR" -out="$PDIR/p.cue" )
           ( cd "$PDIR" && "$CUE" exp gengotypes ./p.cue )
           PGEN="$(ls "$PDIR"/cue_types*_gen.go 2>/dev/null | head -1)"
           test -n "$PGEN" || { echo "cue:gen: gengotypes produced no params for $SCHEMA_DIR" >&2; exit 1; }
           cp "$PGEN" "$PARAMS_DIR/cue_types_gen.go"
-          ( cd sdk && GOWORK=off go run ./internal/schemagen -mode=retag -out="$ROOT/$PARAMS_DIR/cue_types_gen.go" )
+          ( cd spec && GOWORK=off go run ./internal/schemagen -mode=retag -out="$ROOT/$PARAMS_DIR/cue_types_gen.go" )
           gofmt -w "$PARAMS_DIR/cue_types_gen.go"
           rm -rf "$PDIR"
           echo "cue:gen: regenerated $PARAMS_DIR/cue_types_gen.go"
         done
-        echo "cue:gen: regenerated sdk/spec + plugin params"
+        echo "cue:gen: regenerated spec + plugin params"
 
   bootstrap-cue:
-    desc: Ensure ./bin/cue is the pinned cue CLI (prefers the sdk checkout's bin/cue, else checksum-verified download)
+    desc: Ensure ./bin/cue is the pinned cue CLI (prefers the spec checkout's bin/cue, else checksum-verified download)
     dir: "{{.ROOT_DIR}}"
     status:
       - test -x bin/cue && bin/cue version 2>/dev/null | grep -q '{{.CUE_VERSION}}'
@@ -77,10 +77,10 @@ tasks:
       - |
         set -euo pipefail
         mkdir -p bin
-        # Prefer the sdk checkout's already-bootstrapped binary, else download the
+        # Prefer the spec checkout's already-bootstrapped binary, else download the
         # pinned release and checksum-verify before extracting.
-        if [ -x sdk/bin/cue ] && sdk/bin/cue version 2>/dev/null | grep -q '{{.CUE_VERSION}}'; then
-          cp sdk/bin/cue bin/cue
+        if [ -x spec/bin/cue ] && spec/bin/cue version 2>/dev/null | grep -q '{{.CUE_VERSION}}'; then
+          cp spec/bin/cue bin/cue
         else
           ARCH="$(uname -m)"
           case "$ARCH" in

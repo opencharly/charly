@@ -10,7 +10,7 @@ import (
 
 	"github.com/opencharly/charly/candy/plugin-vnc/params"
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // methods.go is the vnc method dispatcher: the 7-method surface moved from charly/vnc.go,

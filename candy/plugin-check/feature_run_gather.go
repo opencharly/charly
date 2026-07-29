@@ -27,7 +27,7 @@ import (
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // pluginCheckRunFeatureLive is the "feature-live" mode: deploy-scope ADE acceptance against the

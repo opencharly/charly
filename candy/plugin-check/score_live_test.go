@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // testSubstrateTraits mirrors candy/plugin-substrate/plugin.go's substrateTraits table (the

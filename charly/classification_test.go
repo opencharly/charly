@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // Note: vmshared.VmSpec carries no Disposable / Lifecycle fields and

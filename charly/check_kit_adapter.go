@@ -7,10 +7,10 @@ import (
 	"time"
 
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 
 	"github.com/opencharly/sdk/kit"
-	pb "github.com/opencharly/sdk/proto"
+	pb "github.com/opencharly/spec/proto"
 )
 
 // hostCheckContext adapts the live check pass to kit.CheckContext — the surface a HOST-COUPLED

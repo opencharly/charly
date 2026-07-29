@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 func agentBody(t *testing.T, a spec.Agent) json.RawMessage {

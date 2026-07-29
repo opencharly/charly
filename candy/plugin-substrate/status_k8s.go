@@ -24,7 +24,7 @@ import (
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // collectK8sStatus serves the k8s substrate's OpStatusCollect. It re-hydrates

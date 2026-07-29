@@ -5,7 +5,7 @@ import (
 
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // box_select.go — the K4 unit B box-half: the PRIMARY pod/k8s image selection

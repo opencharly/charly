@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // TestRelocatedExamplerunverbVerb_DispatchesViaKit proves the reference host-coupled

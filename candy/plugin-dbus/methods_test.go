@@ -6,7 +6,7 @@ import (
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // methods_test.go covers the PLUGIN-side helpers ported out-of-process from charly/dbus.go

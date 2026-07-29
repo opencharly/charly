@@ -5,7 +5,7 @@ import (
 
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/loaderkit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 
 	"github.com/opencharly/sdk/deploykit"
 )

@@ -8,7 +8,7 @@ import (
 
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // deploy_target_pod_test.go — guards the pod-overlay BUILD path's host-side invariants after the

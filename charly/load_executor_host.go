@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/opencharly/sdk/loaderkit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // load_executor_host.go — Unit C of the K1-LOADER RELOCATION: the COMPILED-IN, TYPED placement of

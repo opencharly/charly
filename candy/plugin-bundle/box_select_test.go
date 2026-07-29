@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // box_select_test.go — the ADD-CANDY-ON-BOX shape parity guard (K4 box-half completion). The

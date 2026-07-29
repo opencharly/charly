@@ -10,7 +10,7 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/loaderkit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 	"github.com/opencharly/sdk/vmshared"
 
 	"github.com/opencharly/sdk/kit"

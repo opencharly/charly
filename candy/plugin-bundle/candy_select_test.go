@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // candy_select_test.go — relocated (K4 unit B, core-min wave 3) from the DELETED

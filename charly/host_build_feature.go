@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // host_build_feature.go — the generic "feature" F10 host-builder. The externalized `charly feature`

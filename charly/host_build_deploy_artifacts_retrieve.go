@@ -7,7 +7,7 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // host_build_deploy_artifacts_retrieve.go — the "deploy-artifacts-retrieve" F10 host-builder

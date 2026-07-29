@@ -25,7 +25,7 @@ import (
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // dispatchValidate runs the `charly box validate` engine. It parses the grammar, fetches the

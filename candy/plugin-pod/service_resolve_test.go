@@ -3,7 +3,7 @@ package pod
 import (
 	"testing"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // service_resolve_test.go — resolveInitDefFromMeta/initRenderManagementCommand coverage relocated

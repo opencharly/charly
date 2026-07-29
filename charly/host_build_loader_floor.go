@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/opencharly/sdk/loaderkit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // host_build_loader_floor.go — the PERMANENT loader reverse legs (K1-LOADER RELOCATION, Unit B).

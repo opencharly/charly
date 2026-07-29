@@ -10,7 +10,7 @@ import (
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // command.go — the externalized `charly clean` command. The plugin OWNS the flag grammar, the

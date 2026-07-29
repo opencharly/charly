@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // TestFailErrorFor proves the R44 exit-classification: a run whose ONLY failures are podman

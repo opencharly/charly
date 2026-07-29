@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // TestRenderLeaseTable proves the lease-table FORMATTER (moved from charly core) surfaces the arbiter's

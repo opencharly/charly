@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // The remaining IN-CHARLY-MODULE built-in check verb as a CheckVerbProvider (the

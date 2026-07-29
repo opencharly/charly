@@ -4,7 +4,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // gpu_imply.go — the CONFIG-COUPLED GPU-consumer helpers that STAY in core (cutover C9).

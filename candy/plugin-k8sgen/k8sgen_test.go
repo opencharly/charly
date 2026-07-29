@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // TestCheckToProbe_HTTP covers the http: → httpGet shape.

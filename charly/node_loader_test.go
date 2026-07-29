@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/loaderkit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // TestLoadUnified_NodeForm proves the loader parses a unified node-form charly.yml

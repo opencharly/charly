@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // pickMcpEntry — discriminator semantics (relocated into the plugin from the former host-side resolution when the

@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // resolve_f12_test.go — relocated 1:1 from the deleted charly-core shell_test.go's

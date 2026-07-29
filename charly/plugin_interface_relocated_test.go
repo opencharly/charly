@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // TestRelocatedInterfaceVerb_DispatchesViaKit proves the `interface` check verb —

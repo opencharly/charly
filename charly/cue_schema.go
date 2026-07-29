@@ -21,8 +21,8 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/opencharly/sdk/kit"
-	sdkschema "github.com/opencharly/sdk/schema"
-	"github.com/opencharly/sdk/schemaconcat"
+	sdkschema "github.com/opencharly/spec/schema"
+	"github.com/opencharly/spec/schemaconcat"
 )
 
 // schemaFS is the CUE schema source, exported by the SDK module (the contract

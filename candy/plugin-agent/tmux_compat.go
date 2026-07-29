@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/opencharly/sdk/agentkit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // Compat-session CREATION geometry. A detached compat session is created with

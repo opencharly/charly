@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // deployTargetWords is the canonical deploy-target set (the cross-ref-inferred

@@ -29,7 +29,7 @@ import (
 	"time"
 
 	libvirt "github.com/digitalocean/go-libvirt"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 	libvirtxml "libvirt.org/go/libvirtxml"
 )
 

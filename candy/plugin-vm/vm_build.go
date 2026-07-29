@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // vm_build.go — the command:vm `charly vm build` DRIVE (P8b-rest: the disk-build ENGINE moved HERE

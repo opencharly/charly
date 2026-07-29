@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/opencharly/sdk/loaderkit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // host_build_buildengine.go — the thin `buildengine-*` reverse legs the PLUGIN-SIDE build-engine

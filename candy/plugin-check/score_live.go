@@ -29,7 +29,7 @@ import (
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // pluginCheckRunScore is the "score" mode: walk the substituted scoring plan (req.Plan) against

@@ -7,7 +7,7 @@ import (
 	"os"
 
 	"github.com/opencharly/sdk/loaderkit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // host_build_deploy_entity_resolve.go — the "deploy-entity-resolve" F10 host-builder (FINAL/K5

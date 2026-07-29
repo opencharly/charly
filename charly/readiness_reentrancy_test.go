@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // TestLoadedReadiness_ReentrancyGuard locks in the fix for the re-entrant sync.Once deadlock in

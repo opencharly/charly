@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // checkrun_act.go — the runtime do:act execution path.

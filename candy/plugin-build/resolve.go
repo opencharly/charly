@@ -12,7 +12,7 @@ import (
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/loaderkit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // resolve.go — the PLUGIN-SIDE build-engine RESOLVE (K3 build-engine, U6 — the bootstrap-critical

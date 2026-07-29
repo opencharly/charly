@@ -4,7 +4,7 @@ import (
 	"context"
 	"os"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // host_build_deploy_plugins_connect.go — the "deploy-plugins-connect" F10 host-builder, the ONE

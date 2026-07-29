@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // pluginPlanGrammar implements kit.PlanGrammar. Stateless — a package-level value suffices.

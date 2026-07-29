@@ -23,7 +23,7 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // resolveNestedNode walks a dotted path through roots[root].Children, returning the leaf node (or

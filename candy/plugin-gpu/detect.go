@@ -27,7 +27,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 	"golang.org/x/sys/unix"
 )
 

@@ -14,7 +14,7 @@ package main
 
 import (
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // CandyForPlan reloads the candy map and returns the ordered spec.CandyReader

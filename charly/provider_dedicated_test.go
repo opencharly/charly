@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // TestExternalizedBuilders_NoInProcProvider proves the four detection-builders (cargo/npm/pixi/aur)

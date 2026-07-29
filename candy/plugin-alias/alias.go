@@ -11,7 +11,7 @@ import (
 
 	"github.com/alecthomas/kong"
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 const aliasMarker = "# charly-alias"

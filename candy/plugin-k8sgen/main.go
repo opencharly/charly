@@ -11,8 +11,8 @@ import (
 	"fmt"
 
 	"github.com/opencharly/sdk"
-	pb "github.com/opencharly/sdk/proto"
-	"github.com/opencharly/sdk/spec"
+	pb "github.com/opencharly/spec/proto"
+	"github.com/opencharly/spec/spec"
 )
 
 const calver = "2026.181.0001"

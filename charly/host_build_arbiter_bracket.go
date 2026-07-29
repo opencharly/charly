@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // host_build_arbiter_bracket.go — the "arbiter-bracket-acquire"/"arbiter-bracket-release" F10

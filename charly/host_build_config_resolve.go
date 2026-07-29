@@ -8,7 +8,7 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // host_build_config_resolve.go — the generic "config-resolve" F10 host-builder. A COMPILED-IN

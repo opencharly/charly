@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/loaderkit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // TestLoadUnified_AgentPluginKind proves the agent kind→plugin extraction end-to-end

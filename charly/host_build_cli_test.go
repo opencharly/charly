@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 func TestRunCliSubcommandAbsoluteExecutableSurvivesChdir(t *testing.T) {

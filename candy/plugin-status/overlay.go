@@ -2,7 +2,7 @@ package status
 
 import (
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // overlay.go — the PURE nested-deployment overlay for `charly status`, ported verbatim (same

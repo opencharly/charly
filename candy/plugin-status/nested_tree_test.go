@@ -5,7 +5,7 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // nested_tree_test.go — ported from charly/status_nested_test.go (K5): the declared

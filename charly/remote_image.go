@@ -7,7 +7,7 @@ import (
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/loaderkit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // remote_image.go — resolves an `@github.com/org/repo/box[:version]` REMOTE ref (NOT an

@@ -7,7 +7,7 @@ import (
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // host_build_pod_config.go — the "pod-config-<leaf>" F10 host-builders. The `charly config …`

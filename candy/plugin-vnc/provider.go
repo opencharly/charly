@@ -8,8 +8,8 @@ import (
 	"github.com/opencharly/charly/candy/plugin-vnc/params"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
-	pb "github.com/opencharly/sdk/proto"
-	"github.com/opencharly/sdk/spec"
+	pb "github.com/opencharly/spec/proto"
+	"github.com/opencharly/spec/spec"
 )
 
 // provider.go is the out-of-process vnc verb provider — charly's host dispatches a

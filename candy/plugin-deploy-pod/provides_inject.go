@@ -7,7 +7,7 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // provides_inject.go — env_provides / mcp_provides injection into the per-host charly.yml deploy

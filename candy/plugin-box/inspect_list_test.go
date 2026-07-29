@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // captureStdout redirects os.Stdout for the duration of fn and returns everything written to it —

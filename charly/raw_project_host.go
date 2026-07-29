@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/opencharly/sdk/loaderkit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // raw_project_host.go — the CHEAP raw-loader HostBuild seam ("raw-project"), the endgame keystone

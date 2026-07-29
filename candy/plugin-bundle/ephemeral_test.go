@@ -7,7 +7,7 @@ import (
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // TestEphemeralFallbackNode_SeedsIdentityOnly is the regression test for the FINAL/K5 unit 6a

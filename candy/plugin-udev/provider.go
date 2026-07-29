@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	pb "github.com/opencharly/sdk/proto"
+	pb "github.com/opencharly/spec/proto"
 )
 
 // provider.go is the (inert) gRPC half of this command-only plugin. command:udev is

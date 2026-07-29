@@ -26,7 +26,7 @@ import (
 	"syscall"
 
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // runRetention dispatches one verb:retention request to the requested category(ies) and

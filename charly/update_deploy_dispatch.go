@@ -37,7 +37,7 @@ import (
 	"os"
 
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // dispatchByDeployTarget resolves c.Box as a charly.yml entry and

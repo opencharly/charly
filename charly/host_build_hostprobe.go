@@ -8,7 +8,7 @@ import (
 	"strconv"
 
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // exec_LookPath wraps os/exec.LookPath to avoid importing os/exec in syscall code. Relocated from

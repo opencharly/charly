@@ -29,7 +29,7 @@ import (
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // loadBundleConfig reads the per-host deploy overlay (~/.config/charly/charly.yml) via the shared

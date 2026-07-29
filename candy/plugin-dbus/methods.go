@@ -9,7 +9,7 @@ import (
 	"github.com/opencharly/charly/candy/plugin-dbus/params"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // methods.go is the dbus method dispatcher + the venue-driving layer. The 4-method surface

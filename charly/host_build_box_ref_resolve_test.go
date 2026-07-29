@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // TestResolveImageRefForEnsure_FullRef — fully-qualified registry refs pass through unchanged.

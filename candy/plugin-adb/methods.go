@@ -12,7 +12,7 @@ import (
 	"github.com/opencharly/charly/candy/plugin-adb/params"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // methods.go is the adb method dispatcher: the 12-method surface moved from

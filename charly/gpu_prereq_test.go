@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // TestGPUPrereqMissing proves the pre-build GPU fail-fast: a bed whose

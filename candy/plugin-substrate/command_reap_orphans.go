@@ -35,7 +35,7 @@ import (
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // ReapOrphansCmd is the `charly reap-orphans` Kong grammar — moved verbatim from

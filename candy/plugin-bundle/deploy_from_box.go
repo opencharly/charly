@@ -9,7 +9,7 @@ import (
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // deploy_from_box.go — Cone A shape 3: the source-less K8s deploy path (`charly bundle from-box

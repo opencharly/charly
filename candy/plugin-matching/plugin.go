@@ -17,8 +17,8 @@ import (
 
 	"github.com/opencharly/charly/candy/plugin-matching/params"
 	"github.com/opencharly/sdk"
-	pb "github.com/opencharly/sdk/proto"
-	"github.com/opencharly/sdk/spec"
+	pb "github.com/opencharly/spec/proto"
+	"github.com/opencharly/spec/spec"
 )
 
 //go:embed schema/*.cue

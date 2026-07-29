@@ -30,6 +30,7 @@ require (
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	github.com/oklog/run v1.1.0 // indirect
 	github.com/opencharly/sdk v0.2026209.2002
+	github.com/opencharly/spec v0.2026210.518
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/protocolbuffers/txtpbfmt v0.0.0-20260217160748-a481f6a22f94 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
@@ -39,3 +40,5 @@ require (
 )
 
 replace github.com/opencharly/sdk => ../sdk
+
+replace github.com/opencharly/spec => ../spec

@@ -9,7 +9,7 @@ import (
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/loaderkit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // resolve_legs.go — the plugin-side leg helpers the build-engine RESOLVE (resolve.go, U6) reaches the

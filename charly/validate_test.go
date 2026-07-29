@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/loaderkit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // validate_test.go — after the validate ENGINE moved to candy/plugin-box (task #60), this file keeps

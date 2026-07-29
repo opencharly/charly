@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	"github.com/opencharly/sdk"
-	pb "github.com/opencharly/sdk/proto"
-	"github.com/opencharly/sdk/spec"
+	pb "github.com/opencharly/spec/proto"
+	"github.com/opencharly/spec/spec"
 )
 
 // inprocProvider is a Provider backed by a COMPILED-IN plugin candy's

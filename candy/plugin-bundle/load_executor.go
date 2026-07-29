@@ -8,7 +8,7 @@ import (
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/loaderkit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // load_executor.go — the K1-LOADER RELOCATION WITNESS (Unit D): command:bundle drives

@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	pb "github.com/opencharly/sdk/proto"
-	"github.com/opencharly/sdk/spec"
+	pb "github.com/opencharly/spec/proto"
+	"github.com/opencharly/spec/spec"
 )
 
 // plugin_dispatch_reverse_describe_test.go — K5-A item 2: proves the DescribeProvider RPC round

@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // deploy_target_bracket_test.go — coverage for runLifecycleBracket (FLOOR-SLIM-proper Unit-8):

@@ -7,7 +7,7 @@ import (
 	"os"
 
 	"github.com/opencharly/sdk"
-	pb "github.com/opencharly/sdk/proto"
+	pb "github.com/opencharly/spec/proto"
 )
 
 // command.go is the command:vm leg — the `charly vm …` CLI, COMPILED-IN (F8). It dispatches IN-PROC

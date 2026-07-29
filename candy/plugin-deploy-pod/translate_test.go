@@ -3,7 +3,7 @@ package deploypod
 import (
 	"testing"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // translate_test.go — the C10 pod-in-pod build-context path translator tests, MOVED from charly

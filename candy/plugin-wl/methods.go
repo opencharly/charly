@@ -13,7 +13,7 @@ import (
 	"github.com/opencharly/charly/candy/plugin-wl/params"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // methods.go is the wl method dispatcher + the venue-driving layer, ported from

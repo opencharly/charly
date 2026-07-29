@@ -38,7 +38,7 @@ import (
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // classVerb mirrors charly's core-private ClassVerb ProviderClass ("verb") — a plain string

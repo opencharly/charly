@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // arbiter_dispatch_test.go — the C9 externalized-arbiter DISPATCH integration test: it drives the

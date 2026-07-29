@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/opencharly/sdk"
-	pb "github.com/opencharly/sdk/proto"
+	pb "github.com/opencharly/spec/proto"
 )
 
 // provider.go — the Invoke(OpRun) surface for the compiled-in command:ssh placement. The host's

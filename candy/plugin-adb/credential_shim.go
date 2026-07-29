@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // credential_shim.go — deploy-cone cutover 1: resolveGoogleCreds reaches verb:credential

@@ -10,7 +10,7 @@ import (
 
 	"github.com/alecthomas/kong"
 	"github.com/opencharly/sdk/kit"
-	pb "github.com/opencharly/sdk/proto"
+	pb "github.com/opencharly/spec/proto"
 )
 
 // TestCommandParent_NestsUnderBox proves the provider declares the optional CommandParent()

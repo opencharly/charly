@@ -31,8 +31,8 @@ import (
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/proclifecycle"
-	pb "github.com/opencharly/sdk/proto"
-	"github.com/opencharly/sdk/spec"
+	pb "github.com/opencharly/spec/proto"
+	"github.com/opencharly/spec/spec"
 )
 
 const calver = "2026.182.0001"

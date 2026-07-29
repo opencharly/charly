@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // provider_step.go — the pod-overlay build-emit BIJECTION gate. K5-A item 2 relocated the FULL

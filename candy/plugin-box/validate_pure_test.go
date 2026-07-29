@@ -17,7 +17,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // TestLevenshteinDistance ← charly/validate_test.go TestLevenshteinDistance (the host copy is deleted

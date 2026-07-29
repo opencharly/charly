@@ -17,7 +17,7 @@ import (
 	"github.com/opencharly/charly/candy/plugin-appium/params"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // dispatch.go is the appium method dispatcher: the 48-method W3C surface moved from

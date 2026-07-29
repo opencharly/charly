@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // TestRelocatedUnixGroupVerb_DispatchesViaKit proves the MULTI-ROLE `unix_group` verb —

@@ -21,7 +21,7 @@ import (
 
 	"github.com/opencharly/charly/candy/plugin-kube/params"
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // methods.go is the kube method dispatcher: the 13-method probe surface moved

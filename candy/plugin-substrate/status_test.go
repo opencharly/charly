@@ -14,7 +14,7 @@ import (
 
 	"github.com/opencharly/sdk/enginekit"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // status_test.go — the relocated tests for the P14a substrate-collector move.

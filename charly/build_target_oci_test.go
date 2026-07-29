@@ -11,7 +11,7 @@ import (
 	"github.com/opencharly/sdk/vmshared"
 
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // Tests for the pod-overlay step-emit dispatch (charly/oci_step_emit.go's ociEmitStep — the

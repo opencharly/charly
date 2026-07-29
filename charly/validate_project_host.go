@@ -11,7 +11,7 @@ import (
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/loaderkit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // validate_project_host.go — the HOST side of the `charly box validate` engine relocation (task #60,

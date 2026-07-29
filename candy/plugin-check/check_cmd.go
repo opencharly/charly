@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // check_cmd.go — the `charly check` command tree, externalized into candy/plugin-check (P12). Each

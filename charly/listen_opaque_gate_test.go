@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // TestLibvirtListeners_OpaqueNotExpander locks the P1.4 fix: LibvirtGraphicsListeners

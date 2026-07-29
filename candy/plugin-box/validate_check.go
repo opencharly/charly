@@ -16,7 +16,7 @@ import (
 	"slices"
 
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // lowercaseCheckVarPattern matches a ${name} token whose identifier begins lowercase — never a check
