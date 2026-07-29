@@ -14,9 +14,12 @@ import (
 // genuinely host-coupled step a sdk-only candy cannot do: the bootstrap-delicate local candy scan
 // (parseCandyYAML→buildCandy, the B bootstrap root), the git clone/cache + remote manifest scan, the
 // build-time plugin CONNECT (registry M), the namespaced-box pre-computation (embeds a nested
-// scan+render-prep), and the host-fs PREP + the render-seam-floor NewGenerator (RULED: stays host).
-// These legs REPLACE the former fat host build-prep seam (hostBuildBuildResolve, DELETED) — the
-// resolve ORCHESTRATION + drive-model now run plugin-side.
+// scan+render-prep), and the host-fs PREP + the render-seam-floor CHEAP Generator cache-populate
+// (hostBuildPrep → newCandyScanGenerator — RULED: stays host; the EXPENSIVE full-resolve
+// NewGenerator this comment once named is DELETED in #55 step3 3-II, its last production caller —
+// the pod-overlay build_overlay.go seam — relocated onto resolveBuildEngine instead). These legs
+// REPLACE the former fat host build-prep seam (hostBuildBuildResolve, DELETED) — the resolve
+// ORCHESTRATION + drive-model now run plugin-side.
 //
 // Class-generic action-noun kinds (never provider words — the F11 uniform-API gate), mirroring
 // host_build_loader_floor.go's loader-* legs one level up the stack.

@@ -8,7 +8,6 @@ import (
 
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -42,6 +41,11 @@ import (
 // remaining cases have a genuine host-only dependency: EnsureBuilders/InlineBuilder need the live
 // loader's scan+connect machinery (rides K1, #40) AND the provider registry (a permanent kernel
 // M-mechanism — see CLAUDE.md "The kernel/plugin boundary law").
+//
+// #55 step3 3-II CONFIRMED (not moved): this seam's EnsureBuilders/InlineBuilder logic is
+// UNRELATED to that cutover's scope (the pod-overlay envelope relocation) — reviewed and left in
+// place verbatim; only loadRenderGen's cache-miss fallback below changed (the expensive
+// NewGenerator it called is deleted — see that function's own comment).
 
 // renderGenCache holds the live *Generator per project dir for the render-seam host-builder.
 // Populated by the buildengine-prep host leg (hostBuildPrep, K3 U6 — the render-seam-floor
@@ -50,13 +54,18 @@ import (
 // already run).
 var renderGenCache sync.Map
 
-// loadRenderGen returns the cached *Generator for dir, falling back to a fresh NewGenerator
-// (default opts) if the cache is empty (defensive — the buildengine-prep leg always populates it first).
+// loadRenderGen returns the cached *Generator for dir, falling back to the cheap
+// newCandyScanGenerator (default opts) if the cache is empty (defensive — the buildengine-prep
+// leg always populates it first). #55 step3 3-II: the expensive NewGenerator (full
+// buildkit.ResolveAllBox + intermediates + render-prep) is DELETED — every normal build:box/
+// build:generate call already populates renderGenCache unconditionally via hostBuildPrep, so this
+// fallback is provably unreachable in production; kept as the cheap belt-and-suspenders default
+// rather than the deleted expensive one.
 func loadRenderGen(dir string) *Generator {
 	if v, ok := renderGenCache.Load(dir); ok {
 		return v.(*Generator)
 	}
-	g, err := NewGenerator(dir, "", loaderkit.ResolveOpts{})
+	g, err := newCandyScanGenerator(dir, false, nil)
 	if err != nil || g == nil {
 		return nil
 	}

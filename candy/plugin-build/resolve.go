@@ -60,7 +60,7 @@ func resolveBuildEngine(ctx context.Context, ex *sdk.Executor, req spec.BuildReq
 	}
 	boxes := buildkit.NormalizeBoxArgs(req.Boxes)
 
-	rr := spec.ResolvedProjectRequest{Dir: dir, IncludeDisabled: req.IncludeDisabled, ExtraCandyRefs: nil}
+	rr := spec.ResolvedProjectRequest{Dir: dir, IncludeDisabled: req.IncludeDisabled, ExtraCandyRefs: req.ExtraCandyRefs}
 
 	// --- 1. LOAD the project plugin-side (K1 reverse legs) ---
 	exec := &buildLoaderExecutor{ctx: ctx, ex: ex}

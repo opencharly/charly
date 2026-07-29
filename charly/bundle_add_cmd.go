@@ -9,14 +9,19 @@ package main
 //
 //   - deriveChildExecutorForPath — the ancestor executor HOP derivation (registry-coupled;
 //     deployTraitDescent needs the providerRegistry). Reached by the resolve-target-add seam's
-//     reconstructParentExec + bundle_members.go + unified_targets.go.
-//   - loadConfigForDeploy — LoadConfig → LoadUnified (K1-loader-family-coupled). Reached by the
-//     resolve-target-add seam + deploy_target_unified.go.
-//   - detectHostContext / resolveDistroDef — the host-fs probes build_overlay.go also uses.
-//   - deployDelCmd + resolveDelNode + podDeploymentArtifactExists — the `charly
-//     bundle del` host resolution the deploy-del-resolve seam drives. deployDelArgv itself moved to
-//     sdk/deploykit.BundleDelArgv (R3 hoist, coneB P13 slice) — it was byte-identically duplicated
-//     here, in candy/plugin-bundle, and in candy/plugin-substrate.
+//     reconstructParentExec + bundle_members.go + unified_targets.go. DEPLOY-ONLY residue,
+//     DELIBERATELY untouched by #55 step3 3-II (out of that cutover's scope, which relocates only
+//     the pod-overlay BUILD envelope): its eventual plugin relocation is tracked under task #66.
+//   - loadConfigForDeploy / detectHostContext / resolveDistroDef — BUILD-SHARED: LoadConfig →
+//     LoadUnified (K1-loader-family-coupled) + the host-fs distro probes, reached by the
+//     resolve-target-add seam + deploy_target_unified.go AND by build_overlay.go's hostBuildOverlay
+//     (confirmed live, #55 step3 3-II) — kept here unchanged, serving both the deploy-del/add seams
+//     AND the pod-overlay build prep.
+//   - deployDelCmd + resolveDelNode + podDeploymentArtifactExists — the `charly bundle del` host
+//     resolution the deploy-del-resolve seam drives. DEPLOY-ONLY residue, DELIBERATELY untouched by
+//     #55 step3 3-II for the same reason as deriveChildExecutorForPath above (task #66).
+//     deployDelArgv itself moved to sdk/deploykit.BundleDelArgv (R3 hoist, coneB P13 slice) — it
+//     was byte-identically duplicated here, in candy/plugin-bundle, and in candy/plugin-substrate.
 //
 // The former deployAddCmd struct + its dispatchNode/compileNodePlans/emitOpts/printPlans/
 // compileHostContext methods (and the whole bundle_compile_seam.go + host_build_deploy_node_
