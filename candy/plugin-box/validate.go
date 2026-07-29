@@ -200,7 +200,7 @@ func viewToBuildkit(v spec.ResolvedBoxView) *buildkit.ResolvedBox {
 			GID:                   int(v.GID),
 			Home:                  v.Home,
 			UserAdopted:           v.UserAdopted,
-			Builder:               buildkit.BuilderMap(v.Builder),
+			Builder:               spec.BuilderMap(v.Builder),
 			BuilderCapabilities:   v.BuilderCapabilities,
 			Auto:                  v.Auto,
 			Network:               v.Network,

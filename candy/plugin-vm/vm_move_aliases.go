@@ -19,8 +19,8 @@ type (
 	BuilderDef    = vmshared.BuilderDef
 	FormatDef     = vmshared.FormatDef
 	BaseUserDef   = vmshared.BaseUserDef
-	DistroConfig  = buildkit.DistroConfig
-	BuilderConfig = buildkit.BuilderConfig
+	DistroConfig  = spec.DistroConfig
+	BuilderConfig = spec.BuilderConfig
 	ResolvedBox   = buildkit.ResolvedBox
 
 	ResolvedRuntime = kit.ResolvedRuntime

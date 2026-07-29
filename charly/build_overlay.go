@@ -213,7 +213,7 @@ func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ build
 	// contextRelPrefix = buildDir convention).
 	overlayBuildDir := filepath.Join(".build", "overlay-"+deployName)
 	build := buildEngineContext{
-		DistroCfg:        buildkit.WrapDistroDef(podDistroDef),
+		DistroCfg:        spec.WrapDistroDef(podDistroDef),
 		Generator:        &Generator{ExtraCandyRefs: overlayCandies},
 		Box:              &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: base}},
 		ImageBuildDir:    overlayBuildDir,
@@ -287,7 +287,7 @@ func loadOverlayBuildContext(dir string) *buildEngineContext {
 // unresolvable/synthetic base name) — the same defensive floor the OLD code had no equivalent for,
 // since NewGenerator's full resolve either succeeded or the whole build failed loudly; here a
 // best-effort fallback is preferable to hard-failing the overlay prep over a formatting nicety.
-func resolveOverlayBaseDistroDef(dir, base string, distroCfg *buildkit.DistroConfig) *spec.ResolvedDistro {
+func resolveOverlayBaseDistroDef(dir, base string, distroCfg *spec.DistroConfig) *spec.ResolvedDistro {
 	if cfg, cerr := LoadConfig(dir); cerr == nil {
 		RegisterBuildVocabulary(distroCfg)
 		if bkopts, operr := buildkitOptsWithVocab(dir, loaderkit.ResolveOpts{DistroCfg: distroCfg}); operr == nil {

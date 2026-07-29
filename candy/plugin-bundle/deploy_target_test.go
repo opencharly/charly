@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/spec/spec"
@@ -142,9 +141,9 @@ func TestExternalDeploy_FillsPackageRemoveUninstallCmdOnRecord(t *testing.T) {
 	// build vocabulary isn't reachable from this module (no charly-core LoadBuildConfigForBox
 	// here), so this constructs the SAME shape directly (DistroConfig.Distro → per-distro
 	// ResolvedDistro.Format, matching FindFormat's own walk).
-	dc := &buildkit.DistroConfig{
-		Distro: map[string]*buildkit.DistroDef{
-			"arch": {Format: map[string]*buildkit.FormatDef{
+	dc := &spec.DistroConfig{
+		Distro: map[string]*spec.ResolvedDistro{
+			"arch": {Format: map[string]*spec.Format{
 				"pac": {UninstallTemplate: "pacman -Rs --noconfirm {{join .Packages \" \"}}"},
 			}},
 		},

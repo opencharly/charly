@@ -14,7 +14,7 @@ import (
 // (pixi/npm/cargo by detect-file, aur by detect-config) with the given build formats — the gate the
 // scoping fix turns on.
 func builderTestImg(buildFormats ...string) *buildkit.ResolvedBox {
-	return &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "t", Home: "/home/u", BuildFormats: buildFormats}, BuilderConfig: &buildkit.BuilderConfig{Builder: map[string]*vmshared.BuilderDef{
+	return &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "t", Home: "/home/u", BuildFormats: buildFormats}, BuilderConfig: &spec.BuilderConfig{Builder: map[string]*vmshared.BuilderDef{
 		"pixi":  {DetectFiles: []string{"pixi.toml"}},
 		"npm":   {DetectFiles: []string{"package.json"}},
 		"cargo": {DetectFiles: []string{"Cargo.toml"}},

@@ -18,7 +18,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 )
@@ -76,7 +75,7 @@ func validateBuilders(vc *vctx, e *vErr) {
 	}
 	for boxName := range vc.boxes {
 		box := vc.boxes[boxName]
-		resolved := buildkit.BuilderMap(box.Builder)
+		resolved := spec.BuilderMap(box.Builder)
 		buildFmtSet := make(map[string]bool, len(box.BuildFormats))
 		for _, f := range box.BuildFormats {
 			buildFmtSet[f] = true

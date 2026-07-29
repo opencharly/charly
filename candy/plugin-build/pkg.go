@@ -10,7 +10,6 @@ import (
 	"sort"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
@@ -132,7 +131,7 @@ func runBoxPkg(ctx context.Context, ex *sdk.Executor, req spec.BuildPkgRequest) 
 
 // lookupLocalPkgDef finds the first distro in the build config that declares a local_pkg block for
 // the given package format, returning its contract. Byte-identical to the former core function.
-func lookupLocalPkgDef(dc *buildkit.DistroConfig, format string) *deploykit.LocalPkgDef {
+func lookupLocalPkgDef(dc *spec.DistroConfig, format string) *deploykit.LocalPkgDef {
 	if dc == nil {
 		return nil
 	}

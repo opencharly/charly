@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
@@ -1456,7 +1455,7 @@ func TestValidateBuilderRefs_SelfBuilder(t *testing.T) {
 	cfg := &Config{
 		Defaults: spec.BoxConfig{Build: BuildFormats{"rpm"}},
 		Box: boxMapOf(map[string]spec.BoxConfig{
-			"myimg": {Candy: []string{"pixi"}, Builder: buildkit.BuilderMap{"pixi": "myimg"}},
+			"myimg": {Candy: []string{"pixi"}, Builder: spec.BuilderMap{"pixi": "myimg"}},
 		}),
 	}
 	errs := &spec.ValidationError{}
@@ -1470,7 +1469,7 @@ func TestValidateBuilderRefs_SelfBuilder(t *testing.T) {
 // image inheriting defaults.builder that points to itself is NOT an error.
 func TestValidateBuilderRefs_InheritedSelfNotError(t *testing.T) {
 	cfg := &Config{
-		Defaults: spec.BoxConfig{Build: BuildFormats{"rpm"}, Builder: buildkit.BuilderMap{"pixi": "builder", "npm": "builder"}},
+		Defaults: spec.BoxConfig{Build: BuildFormats{"rpm"}, Builder: spec.BuilderMap{"pixi": "builder", "npm": "builder"}},
 		Box: boxMapOf(map[string]spec.BoxConfig{
 			"builder": {Candy: []string{"pixi"}},
 		}),
@@ -1487,7 +1486,7 @@ func TestValidateBuilderRefs_PerImageNotFound(t *testing.T) {
 	cfg := &Config{
 		Defaults: spec.BoxConfig{Build: BuildFormats{"rpm"}},
 		Box: boxMapOf(map[string]spec.BoxConfig{
-			"app": {Candy: []string{"pixi"}, Builder: buildkit.BuilderMap{"pixi": "nonexistent"}},
+			"app": {Candy: []string{"pixi"}, Builder: spec.BuilderMap{"pixi": "nonexistent"}},
 		}),
 	}
 	errs := &spec.ValidationError{}

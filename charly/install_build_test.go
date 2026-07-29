@@ -24,7 +24,7 @@ import (
 // AND succeed with base-only context when none is supplied. The reverse-op derivation that moved
 // out-of-process is covered by plugin/kit/builder_test.go.
 func TestBuildDeployPlan_BuilderPurity_NoPluginRPC(t *testing.T) {
-	img := &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "purity", Home: "/home/u"}, BuilderConfig: &buildkit.BuilderConfig{Builder: map[string]*vmshared.BuilderDef{
+	img := &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "purity", Home: "/home/u"}, BuilderConfig: &spec.BuilderConfig{Builder: map[string]*vmshared.BuilderDef{
 		"pixi": {DetectFiles: []string{"pixi.toml"}},
 	}}}
 	layer := pixiCandy(t, "c")

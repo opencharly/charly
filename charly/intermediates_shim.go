@@ -26,7 +26,7 @@ import (
 // deploykit.ComputeIntermediates — no host callback remains.
 func ComputeIntermediates(boxes map[string]*buildkit.ResolvedBox, layers map[string]spec.CandyReader, cfg *Config, tag string) (map[string]*buildkit.ResolvedBox, error) {
 	defaults := deploykit.IntermediateDefaults{
-		Builder:   buildkit.BuilderMap(cfg.Defaults.Builder),
+		Builder:   spec.BuilderMap(cfg.Defaults.Builder),
 		UID:       cfg.Defaults.UID,
 		User:      cfg.Defaults.User,
 		GID:       cfg.Defaults.GID,

@@ -36,7 +36,7 @@ func TestFilterImagesUnknown(t *testing.T) {
 }
 
 func TestFilterImagesIncludesBuilder(t *testing.T) {
-	images := map[string]*buildkit.ResolvedBox{"builder": {ResolvedBox: spec.ResolvedBox{Name: "builder", IsExternalBase: true}}, "fedora": {ResolvedBox: spec.ResolvedBox{Name: "fedora", IsExternalBase: true, Builder: buildkit.BuilderMap{"pixi": "builder", "npm": "builder"}}}, "app": {ResolvedBox: spec.ResolvedBox{Name: "app", Base: "fedora", IsExternalBase: false, Builder: buildkit.BuilderMap{"pixi": "builder", "npm": "builder"}}}}
+	images := map[string]*buildkit.ResolvedBox{"builder": {ResolvedBox: spec.ResolvedBox{Name: "builder", IsExternalBase: true}}, "fedora": {ResolvedBox: spec.ResolvedBox{Name: "fedora", IsExternalBase: true, Builder: spec.BuilderMap{"pixi": "builder", "npm": "builder"}}}, "app": {ResolvedBox: spec.ResolvedBox{Name: "app", Base: "fedora", IsExternalBase: false, Builder: spec.BuilderMap{"pixi": "builder", "npm": "builder"}}}}
 
 	order := []string{"builder", "fedora", "app"}
 

@@ -64,7 +64,7 @@ func envelopeCandyModels(rp *spec.ResolvedProject) map[string]spec.CandyReader {
 // syntheticBoxForCandySelection). Mirrors charly/bundle_add_cmd.go's former
 // syntheticHostBox/syntheticVmBox exactly (same field derivation), operating on the
 // envelope's rp.Distro/rp.CandyModels/rp.Templates.VM instead of a live *Config/
-// *buildkit.DistroConfig/LoadUnified.
+// *spec.DistroConfig/LoadUnified.
 func resolveCandySelection(ctx context.Context, exec *sdk.Executor, rp *spec.ResolvedProject, req spec.DeployCompileRequest) ([]string, *buildkit.ResolvedBox, error) {
 	candyKey := deploykit.BareRef(req.CandyRef)
 	candyModels := envelopeCandyModels(rp)
@@ -120,7 +120,7 @@ func syntheticHostBoxFromEnvelope(distro map[string]*spec.ResolvedDistro, builde
 			GID:          os.Getgid(),
 			BuildFormats: []string{},
 		},
-		BuilderConfig: &buildkit.BuilderConfig{Builder: builder},
+		BuilderConfig: &spec.BuilderConfig{Builder: builder},
 	}
 	if hd != nil {
 		img.Distro = append(img.Distro, hd.Tags...)
@@ -129,7 +129,7 @@ func syntheticHostBoxFromEnvelope(distro map[string]*spec.ResolvedDistro, builde
 			img.BuildFormats = []string{hint}
 		}
 	}
-	img.DistroConfig = &buildkit.DistroConfig{Distro: distro}
+	img.DistroConfig = &spec.DistroConfig{Distro: distro}
 	img.DistroDef = img.DistroConfig.ResolveDistro(img.Distro)
 	return img
 }
@@ -139,9 +139,9 @@ func syntheticHostBoxFromEnvelope(distro map[string]*spec.ResolvedDistro, builde
 // the vm entity off rp.Templates.VM (the SAME opaque RawBody map the "resolved-project"
 // envelope already carries) and resolving it via the kind:vm provider's own OpResolve
 // leg (the vm-substrate sibling of K4 unit A's kind:local reuse), and the distro
-// cascade off rp.Distro (a plain map[string]*spec.ResolvedDistro — buildkit.DistroConfig
+// cascade off rp.Distro (a plain map[string]*spec.ResolvedDistro — spec.DistroConfig
 // is just a thin method-holder over that SAME map, so reconstructing one here from the
-// envelope's copy is byte-identical to the host's live *buildkit.DistroConfig).
+// envelope's copy is byte-identical to the host's live *spec.DistroConfig).
 func syntheticVmBoxFromEnvelope(ctx context.Context, exec *sdk.Executor, rp *spec.ResolvedProject, vmEntity string) (*buildkit.ResolvedBox, error) {
 	var raw spec.RawBody
 	if rp.Templates != nil {
@@ -167,9 +167,9 @@ func syntheticVmBoxFromEnvelope(ctx context.Context, exec *sdk.Executor, rp *spe
 // guard for the non-arch VM deploy bug: a naive synthetic box used to hardcode
 // Distro:["arch"]/Pkg:"pac" for EVERY non-root VM, so a candy deploy onto a debian/ubuntu/fedora
 // guest ran `pacman` and failed with exit 127. distro is rp.Distro (a plain
-// map[string]*spec.ResolvedDistro — buildkit.DistroConfig is just a thin method-holder over that
+// map[string]*spec.ResolvedDistro — spec.DistroConfig is just a thin method-holder over that
 // SAME map, so reconstructing one here from the envelope's copy is byte-identical to the host's
-// former live *buildkit.DistroConfig). builder is rp.Builder, threaded through so this synthetic
+// former live *spec.DistroConfig). builder is rp.Builder, threaded through so this synthetic
 // vm-adhoc box also gets BuilderConfig set (#118 task #56 — see syntheticHostBoxFromEnvelope).
 // DistroConfig/DistroDef are ALSO set unconditionally (#118 task #59 — see
 // syntheticHostBoxFromEnvelope): without DistroDef, CompileSystemPackageSteps silently compiled
@@ -194,16 +194,16 @@ func buildVmSyntheticBox(vmSpec *spec.ResolvedVm, distro map[string]*spec.Resolv
 			GID:  1000,
 			Home: "/home/" + user,
 		},
-		BuilderConfig: &buildkit.BuilderConfig{Builder: builder},
+		BuilderConfig: &spec.BuilderConfig{Builder: builder},
 	}
 	distroKey := vmSpec.Source.Distro
 	if distroKey == "" {
 		distroKey = vmSpec.Source.BaseUser
 	}
-	distroCfg := &buildkit.DistroConfig{Distro: distro}
+	distroCfg := &spec.DistroConfig{Distro: distro}
 	if distroKey != "" {
 		if def := distroCfg.ResolveDistro([]string{distroKey}); def != nil {
-			img.Distro = distroCfg.ExpandPackageInheritance(buildkit.DistroTagChain(distroKey, def.Version))
+			img.Distro = distroCfg.ExpandPackageInheritance(spec.DistroTagChain(distroKey, def.Version))
 			if pf := def.PrimaryFormat(); pf != "" {
 				img.Pkg = pf
 				img.BuildFormats = []string{pf}

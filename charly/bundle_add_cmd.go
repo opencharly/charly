@@ -32,7 +32,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/vmshared"
@@ -208,7 +207,7 @@ func detectHostContext() deploykit.HostContext {
 }
 
 // resolveDistroDef returns the DistroDef for a given distro tag.
-func resolveDistroDef(cfg *buildkit.DistroConfig, distroTag string) *spec.ResolvedDistro {
+func resolveDistroDef(cfg *spec.DistroConfig, distroTag string) *spec.ResolvedDistro {
 	if cfg == nil || distroTag == "" {
 		return nil
 	}
@@ -218,7 +217,7 @@ func resolveDistroDef(cfg *buildkit.DistroConfig, distroTag string) *spec.Resolv
 // loadConfigForDeploy loads charly.yml + the embedded build vocabulary for the
 // current project directory. Runs RegisterBuildVocabulary as a side effect since
 // the candy scanner needs it.
-func loadConfigForDeploy(dir string) (*Config, *buildkit.DistroConfig, *buildkit.BuilderConfig, error) {
+func loadConfigForDeploy(dir string) (*Config, *spec.DistroConfig, *spec.BuilderConfig, error) {
 	cfg, err := LoadConfig(dir)
 	if err != nil {
 		return nil, nil, nil, err

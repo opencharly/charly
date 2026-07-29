@@ -299,7 +299,7 @@ func resolveIntPtrDrive(v *int) int {
 // boxBuildkitOpts mirrors charly's boxResolveOpts projected onto buildkit.ResolveOpts (the pure
 // resolver's opts), threading the already-projected DistroCfg/BuilderCfg so ResolveAllBox never
 // reloads the vocabulary.
-func boxBuildkitOpts(boxes []string, includeDisabled bool, distroCfg *buildkit.DistroConfig, builderCfg *buildkit.BuilderConfig) buildkit.ResolveOpts {
+func boxBuildkitOpts(boxes []string, includeDisabled bool, distroCfg *spec.DistroConfig, builderCfg *spec.BuilderConfig) buildkit.ResolveOpts {
 	o := buildkit.ResolveOpts{IncludeDisabled: includeDisabled, DistroCfg: distroCfg, BuilderCfg: builderCfg}
 	if len(boxes) > 0 {
 		o.RequestedBoxes = boxes
@@ -317,7 +317,7 @@ func boxBuildkitOpts(boxes []string, includeDisabled bool, distroCfg *buildkit.D
 // ComputeIntermediates shim).
 func intermediateDefaults(cfg *spec.Config) deploykit.IntermediateDefaults {
 	return deploykit.IntermediateDefaults{
-		Builder:   buildkit.BuilderMap(cfg.Defaults.Builder),
+		Builder:   spec.BuilderMap(cfg.Defaults.Builder),
 		UID:       cfg.Defaults.UID,
 		User:      cfg.Defaults.User,
 		GID:       cfg.Defaults.GID,

@@ -4,7 +4,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 
@@ -48,7 +47,7 @@ func cmdOpP(command string) *spec.Op {
 }
 
 // testDistroConfig returns the default DistroConfig from testdata fixtures for tests.
-func testDistroConfig() *buildkit.DistroConfig {
+func testDistroConfig() *spec.DistroConfig {
 	distroCfg, _, _, err := LoadBuildConfigForBox(testdataDir)
 	if err != nil {
 		panic("failed to load distro config from testdata: " + err.Error())
@@ -63,7 +62,7 @@ func testDistroDef(tags ...string) *spec.ResolvedDistro {
 }
 
 // testBuilderCfg returns the default BuilderConfig from testdata fixtures for tests.
-func testBuilderCfg() *buildkit.BuilderConfig {
+func testBuilderCfg() *spec.BuilderConfig {
 	_, builderCfg, _, err := LoadBuildConfigForBox(testdataDir)
 	if err != nil {
 		panic("failed to load builder config from testdata: " + err.Error())

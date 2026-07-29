@@ -13,8 +13,8 @@ import (
 // The DistroConfig / BuilderConfig types and their vocabulary-resolution methods
 // (ResolveDistro / FindFormat / AllFormatNames / ExpandPackageInheritance /
 // ValidBuilderType / BuilderNames / distroTagChain / bareDistroName / wrapDistroDef)
-// live in sdk/buildkit now (P3) — every charly/*.go caller references buildkit.DistroConfig /
-// buildkit.BuilderConfig directly (K3 ZERO-ALIASES dissolved charly/buildkit_aliases.go). The
+// live in sdk/buildkit now (P3) — every charly/*.go caller references spec.DistroConfig /
+// spec.BuilderConfig directly (K3 ZERO-ALIASES dissolved charly/buildkit_aliases.go). The
 // (phase, venue) phase-template resolvers moved to sdk/buildkit too (P8b — they are
 // PURE over the CUE-sourced spec types: vmshared.FormatDef = spec.Format, vmshared.BuilderDef =
 // spec.Builder, Phase/Venue = spec enums); callers reference buildkit.FormatPhaseTemplate /
@@ -40,7 +40,7 @@ type BuildFile struct {
 //
 // The init section is optional: projects without an `inits:` block return a
 // nil *buildkit.InitConfig (no init system, no entrypoint beyond the base image default).
-func LoadBuildConfigForBox(dir string) (*buildkit.DistroConfig, *buildkit.BuilderConfig, *buildkit.InitConfig, error) {
+func LoadBuildConfigForBox(dir string) (*spec.DistroConfig, *spec.BuilderConfig, *buildkit.InitConfig, error) {
 	uf, present, err := LoadUnified(dir)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("loading charly.yml: %w", err)
@@ -57,6 +57,6 @@ func LoadBuildConfigForBox(dir string) (*buildkit.DistroConfig, *buildkit.Builde
 }
 
 // LoadDefaultBuildConfig is retained as an alias for the single-argument form.
-func LoadDefaultBuildConfig(dir string) (*buildkit.DistroConfig, *buildkit.BuilderConfig, *buildkit.InitConfig, error) {
+func LoadDefaultBuildConfig(dir string) (*spec.DistroConfig, *spec.BuilderConfig, *buildkit.InitConfig, error) {
 	return LoadBuildConfigForBox(dir)
 }
