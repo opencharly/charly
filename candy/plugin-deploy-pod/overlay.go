@@ -38,7 +38,7 @@ import (
 // bind-mount volumes for a nested pod-in-pod). The candy consumes it here. The render is
 // byte-faithful to the former in-core PodDeployTarget: the SAME Containerfile structure (FROM
 // scratch stages → FROM base → USER root → OCITarget fragment → service append → security LABEL
-// → USER restore), the SAME podman build + tag scripts (kit.ShellQuote == the core shellSingleQuote
+// → USER restore), the SAME podman build + tag scripts (spec.ShellQuote == the core shellSingleQuote
 // / deployShellQuote, byte-identical), the SAME overlay tag hash. The orchestrator's
 // `charly check run check-pod` bed is the parity gate (R8).
 
@@ -229,7 +229,7 @@ func buildOverlay(ctx context.Context, exec *sdk.Executor, reply spec.OverlayBui
 	}
 
 	buildScript := fmt.Sprintf("%s build -f %s -t %s %s",
-		engineBin, kit.ShellQuote(cfPathInVenue), kit.ShellQuote(overlayRef), kit.ShellQuote(venueBuildContext))
+		engineBin, spec.ShellQuote(cfPathInVenue), spec.ShellQuote(overlayRef), spec.ShellQuote(venueBuildContext))
 	if err := exec.VenueRunSilent(ctx, buildScript); err != nil {
 		return "", fmt.Errorf("overlay build: %w", err)
 	}
@@ -311,7 +311,7 @@ func renderOverlayServices(dg *deploykit.Generator, box *buildkit.ResolvedBox, o
 // overwrites the base's label — or "" if no merge is needed. The EX-
 // `PodDeployTarget.renderOverlaySecurityLabel` body, byte-faithful: same merge semantics
 // (Privileged OR, CgroupNS last-writer, CapAdd/Devices/SecurityOpt/GroupAdd/Mounts appendUnique
-// dedup), same json.Marshal, same LABEL directive (kit.ShellQuote == the core shellSingleQuote,
+// dedup), same json.Marshal, same LABEL directive (spec.ShellQuote == the core shellSingleQuote,
 // byte-identical). Picked up at deploy time by `charly config` via ExtractMetadata.
 func renderOverlaySecurityLabel(reply spec.OverlayBuildReply, overlayCandies []string) string {
 	if reply.BaseImage == "" {
@@ -348,7 +348,7 @@ func renderOverlaySecurityLabel(reply spec.OverlayBuildReply, overlayCandies []s
 	if err != nil {
 		return ""
 	}
-	return fmt.Sprintf("LABEL %s=%s\n", spec.LabelSecurity, kit.ShellQuote(string(data)))
+	return fmt.Sprintf("LABEL %s=%s\n", spec.LabelSecurity, spec.ShellQuote(string(data)))
 }
 
 // tagDeployAlias tags imageRef under <registry>/<deploy-name>:<calver> so deployment-name-keyed
@@ -365,7 +365,7 @@ func tagDeployAlias(ctx context.Context, exec *sdk.Executor, reply spec.OverlayB
 	if aliasRef == imageRef {
 		return nil
 	}
-	tagScript := fmt.Sprintf("%s tag %s %s", engineBin, kit.ShellQuote(imageRef), kit.ShellQuote(aliasRef))
+	tagScript := fmt.Sprintf("%s tag %s %s", engineBin, spec.ShellQuote(imageRef), spec.ShellQuote(aliasRef))
 	if err := exec.VenueRunSilent(ctx, tagScript); err != nil {
 		return fmt.Errorf("deploy-name alias tag: %w", err)
 	}

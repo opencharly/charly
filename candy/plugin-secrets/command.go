@@ -12,7 +12,7 @@ import (
 	"golang.org/x/term"
 	"gopkg.in/yaml.v3"
 
-	"github.com/opencharly/sdk/proclifecycle"
+	"github.com/opencharly/spec/proc"
 )
 
 // command.go is the command:secrets leg of this plugin — the externalized `charly
@@ -37,7 +37,7 @@ func cliMain(args []string) int {
 	// Arm the temp-file kill-survivability signal handler so a Ctrl-C during `secrets gpg
 	// edit` / `decrypt` (which stage a plaintext temp) still reaps the RegisterTempCleanup'd
 	// file (the graceful-exit defer covers normal exit; this covers SIGINT/SIGTERM/SIGHUP).
-	proclifecycle.InstallSignalHandler()
+	proc.InstallSignalHandler()
 	var grp SecretsCmdGroup
 	parser, err := kong.New(&grp,
 		kong.Name("secrets"),

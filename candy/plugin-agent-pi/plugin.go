@@ -15,7 +15,7 @@ import (
 
 	"github.com/opencharly/charly/candy/plugin-agent-pi/params"
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/proc"
 	pb "github.com/opencharly/spec/proto"
 	"github.com/opencharly/spec/spec"
 )
@@ -164,7 +164,7 @@ func startPiProcess(ctx context.Context, path string, environment map[string]any
 
 // watchPiProcessGroup owns the cancel-path shutdown of the runner's process
 // group. On ctx cancel it walks the graceful-first ladder
-// (kit.ShutdownProcessGroup: stdin EOF → grace → SIGTERM the group → grace →
+// (proc.ShutdownProcessGroup: stdin EOF → grace → SIGTERM the group → grace →
 // SIGKILL the group), which returns only after cmd.Wait() has reaped the
 // child. The reaped channel DISARMS the watcher: a cancel arriving after Wait
 // (for example OpenChannel's deferred cancel following a clean stdin-EOF exit)
@@ -173,7 +173,7 @@ func watchPiProcessGroup(ctx context.Context, process *piProcess) {
 	select {
 	case <-process.reaped:
 	case <-ctx.Done():
-		kit.ShutdownProcessGroup(process.cmd, process.stdin, process.reaped)
+		proc.ShutdownProcessGroup(process.cmd, process.stdin, process.reaped)
 	}
 }
 

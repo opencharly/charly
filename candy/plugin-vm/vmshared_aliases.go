@@ -7,9 +7,9 @@
 package vm
 
 import (
-	"github.com/opencharly/sdk/proclifecycle"
-	"github.com/opencharly/sdk/sshx"
 	"github.com/opencharly/sdk/vmshared"
+	"github.com/opencharly/spec/proc"
+	"github.com/opencharly/spec/sshx"
 )
 
 type (
@@ -81,12 +81,12 @@ var (
 	openOutputPath        = vmshared.OpenOutputPath
 	ParseLibvirtURI       = vmshared.ParseLibvirtURI
 	pollUntil             = vmshared.PollUntil
-	RegisterTempCleanup   = proclifecycle.RegisterTempCleanup
+	RegisterTempCleanup   = proc.RegisterTempCleanup
 	RenderQemuArgv        = vmshared.RenderQemuArgv
 	resolveCPUDefaults    = vmshared.ResolveCPUDefaults
 	SmbiosCredForSSH      = vmshared.SmbiosCredForSSH
 	splitPortForward      = vmshared.SplitPortForward
-	UnregisterTempCleanup = proclifecycle.UnregisterTempCleanup
+	UnregisterTempCleanup = proc.UnregisterTempCleanup
 	vmDiskPath            = vmshared.VmDiskPath
 )
 

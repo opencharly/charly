@@ -9,7 +9,7 @@ import (
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/spec/spec"
-	"github.com/opencharly/sdk/sshx"
+	"github.com/opencharly/spec/sshx"
 )
 
 // host_build_pod_config_seams.go — the ~16 NARROW "pod-config-*" F10 host-builders the P13-KERNEL

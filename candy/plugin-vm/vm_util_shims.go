@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk/vmshared"
+	"github.com/opencharly/spec/spec"
 )
 
 // vm_util_shims.go — small host-side helpers the moved VM CLI handlers (P10) reference by their
@@ -11,9 +12,10 @@ import (
 // hint come from sdk/vmshared, dedupeNonEmpty is a pure set helper, and gatherResources reaches the
 // host config-resolve seam (the resolved resource vocabulary the loader owns).
 
-// currentUsername returns $USER (or the "charly" fallback) — vmshared owns the one implementation
-// (ssh_target.go), exported as vmshared.CurrentUsername; aliased here so the moved handlers compile.
-var currentUsername = vmshared.CurrentUsername
+// currentUsername returns $USER (or the "charly" fallback) — the spec contract
+// module owns the one implementation (spec.CurrentUsername, ssh_target.go);
+// aliased here so the moved handlers compile.
+var currentUsername = spec.CurrentUsername
 
 // dedupeNonEmpty trims + dedups a token list (GPU auto-allocation computes the claimant's tokens).
 // Copied verbatim from the former charly/preempt.go — a pure set helper, no core dependency.

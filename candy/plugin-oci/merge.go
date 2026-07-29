@@ -28,7 +28,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/proclifecycle"
+	"github.com/opencharly/spec/proc"
 	pb "github.com/opencharly/spec/proto"
 	"github.com/opencharly/spec/spec"
 )
@@ -592,9 +592,9 @@ func saveAndLoad(binary, ref string) (v1.Image, func(), error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("creating temp file: %w", err)
 	}
-	proclifecycle.RegisterTempCleanup(tmpFile.Name())
+	proc.RegisterTempCleanup(tmpFile.Name())
 
-	cleanup := func() { _ = os.Remove(tmpFile.Name()); proclifecycle.UnregisterTempCleanup(tmpFile.Name()) }
+	cleanup := func() { _ = os.Remove(tmpFile.Name()); proc.UnregisterTempCleanup(tmpFile.Name()) }
 
 	cmd := exec.Command(binary, "save", ref)
 	cmd.Stdout = tmpFile
@@ -628,13 +628,13 @@ func saveImageToDaemon(img v1.Image, ref string, engine string) error {
 	if err != nil {
 		return fmt.Errorf("creating temp file: %w", err)
 	}
-	proclifecycle.RegisterTempCleanup(tmpFile.Name())
+	proc.RegisterTempCleanup(tmpFile.Name())
 	keepOnFail := os.Getenv("CHARLY_MERGE_KEEP_TMP") == "1"
 	loaded := false
 	defer func() {
 		if loaded || !keepOnFail {
 			_ = os.Remove(tmpFile.Name())
-			proclifecycle.UnregisterTempCleanup(tmpFile.Name())
+			proc.UnregisterTempCleanup(tmpFile.Name())
 		} else {
 			fmt.Fprintf(os.Stderr, "CHARLY_MERGE_KEEP_TMP=1: kept failing tarball at %s\n", tmpFile.Name())
 		}

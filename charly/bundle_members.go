@@ -13,7 +13,7 @@ package main
 // RELOCATION): they are registry-free pure maps/tree operations the plugin-callable
 // loaderkit.LoadUnified wires as seams directly. See loaderkit.FoldMembers / loaderkit.SortedMemberKeys
 // / loaderkit.SortedDeployKeys. The DEPLOY-half below (bringUpMembers / tearDownMembers) STAYS
-// host-resident: it shells out via proclifecycle.RunCharlySubcommand + reads the live registry
+// host-resident: it shells out via proc.RunCharlySubcommand + reads the live registry
 // (nodeTraits), so it is NOT registry-free. bringUpMembers / tearDownMembers are the single shared
 // helpers invoked by BOTH the kind:check bed runner (check_bed_run.go) and the operator deploy path
 // (bundle_add_cmd.go) — `peer:` works identically for check and deploy from one codebase. This file
@@ -25,9 +25,9 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/loaderkit"
-	"github.com/opencharly/sdk/proclifecycle"
-	"github.com/opencharly/spec/spec"
 	"github.com/opencharly/sdk/vmshared"
+	"github.com/opencharly/spec/proc"
+	"github.com/opencharly/spec/spec"
 )
 
 // validateMembers / validMemberTarget relocated to sdk/loaderkit (bundle_load.go, K1-LOADER
@@ -58,7 +58,7 @@ func withMemberTag(args []string, imageTag string) []string {
 //
 // K4-C WALK PORT (landed): the outer switch dispatches on isVmMember/isPodMember, which read
 // the STAMPED DESCENT TRAIT (D-data), not the substrate kind word — and unlike
-// deriveChildExecutorForPath, most bodies here shell out via proclifecycle.RunCharlySubcommand (a
+// deriveChildExecutorForPath, most bodies here shell out via proc.RunCharlySubcommand (a
 // `charly <verb>` re-entrant CLI call, itself running IN this same host process — not the
 // HostBuild("cli") reverse-channel reentry an out-of-process plugin would need). This function's
 // BODY is UNCHANGED and stays host-side (providerRegistry + ledger + subprocess-dependent); the
@@ -96,31 +96,31 @@ func bringUpMembers(node *spec.BundleNode, imageTag string) error {
 			// get distinct, collision-free domains + per-domain disk overlays + ports (P33). The
 			// entity is the disk/spec source (the `bundle add` ref); --domain names this member's domain.
 			memberDomain := spec.VmDomainIdentity(memberKey)
-			_ = proclifecycle.RunCharlySubcommand("vm", "destroy", memberNode.From, "--domain", memberDomain, "--if-exists")
-			if err := proclifecycle.RunCharlySubcommand("vm", "create", memberNode.From, "--domain", memberDomain); err != nil {
+			_ = proc.RunCharlySubcommand("vm", "destroy", memberNode.From, "--domain", memberDomain, "--if-exists")
+			if err := proc.RunCharlySubcommand("vm", "create", memberNode.From, "--domain", memberDomain); err != nil {
 				return fmt.Errorf("peer %q (vm create %s): %w", memberKey, memberNode.From, err)
 			}
 			deploykit.WaitForVmSshReady(memberDomain)
-			if err := proclifecycle.RunCharlySubcommand(withMemberTag([]string{"bundle", "add", memberKey, memberNode.From}, imageTag)...); err != nil {
+			if err := proc.RunCharlySubcommand(withMemberTag([]string{"bundle", "add", memberKey, memberNode.From}, imageTag)...); err != nil {
 				return fmt.Errorf("peer %q (vm bundle add): %w", memberKey, err)
 			}
 			// Same nested-local-child gap the isVM bed root closes: plugin-deploy-vm's
 			// PostApply skips target:local children, so deploy them into the guest here.
 			if err := deploykit.DeployNestedLocalChildren(memberKey, memberNode.Children, func(childKey, dotted string) error {
-				return proclifecycle.RunCharlySubcommand("bundle", "add", dotted)
+				return proc.RunCharlySubcommand("bundle", "add", dotted)
 			}); err != nil {
 				return fmt.Errorf("peer %q: %w", memberKey, err)
 			}
 		case isPodMember(memberNode):
 			for _, step := range [][]string{{"config", memberKey}, {"start", memberKey}} {
-				if err := proclifecycle.RunCharlySubcommand(withMemberTag(step, imageTag)...); err != nil {
+				if err := proc.RunCharlySubcommand(withMemberTag(step, imageTag)...); err != nil {
 					return fmt.Errorf("peer %q (%v): %w", memberKey, step, err)
 				}
 			}
 			deploykit.WaitForContainerReady(memberKey)
 		default:
 			// kind:local member — applies candies in place during bundle add.
-			if err := proclifecycle.RunCharlySubcommand(withMemberTag([]string{"bundle", "add", memberKey}, imageTag)...); err != nil {
+			if err := proc.RunCharlySubcommand(withMemberTag([]string{"bundle", "add", memberKey}, imageTag)...); err != nil {
 				return fmt.Errorf("peer %q (bundle add): %w", memberKey, err)
 			}
 		}
@@ -148,13 +148,13 @@ func tearDownMembers(node *spec.BundleNode) error {
 			// entity — P33), but bring-up ALSO registered the member in the deploy ledger via
 			// `bundle add`. Reverse that too, or a ledger record survives every teardown and they
 			// accumulate run over run.
-			destroyErr := proclifecycle.RunCharlySubcommand("vm", "destroy", memberNode.From, "--domain", spec.VmDomainIdentity(memberKey), "--if-exists")
-			delErr := proclifecycle.RunCharlySubcommand(deploykit.BundleDelArgv(memberKey)...)
+			destroyErr := proc.RunCharlySubcommand("vm", "destroy", memberNode.From, "--domain", spec.VmDomainIdentity(memberKey), "--if-exists")
+			delErr := proc.RunCharlySubcommand(deploykit.BundleDelArgv(memberKey)...)
 			err = errors.Join(destroyErr, delErr)
 		case isPodMember(memberNode):
-			err = proclifecycle.RunCharlySubcommand("remove", memberKey, "--purge")
+			err = proc.RunCharlySubcommand("remove", memberKey, "--purge")
 		default:
-			err = proclifecycle.RunCharlySubcommand(deploykit.BundleDelArgv(memberKey)...)
+			err = proc.RunCharlySubcommand(deploykit.BundleDelArgv(memberKey)...)
 		}
 		if err != nil {
 			errs = append(errs, fmt.Errorf("peer %q teardown: %w", memberKey, err))

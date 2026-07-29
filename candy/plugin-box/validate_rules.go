@@ -20,7 +20,6 @@ import (
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/spec/spec"
-	"github.com/opencharly/sdk/vmshared"
 )
 
 var (
@@ -575,7 +574,7 @@ func validateLocalDeployments(vc *vctx, e *vErr) {
 		hostField := strings.TrimSpace(node.Host)
 		isLocalDest := hostField == "" || hostField == "local"
 		if !isLocalDest {
-			if _, perr := vmshared.ParseSSHTarget(hostField); perr != nil {
+			if _, perr := spec.ParseSSHTarget(hostField); perr != nil {
 				e.Add("deployment %q: invalid host %q: %v", name, hostField, perr)
 			}
 			if node.User != "" && strings.Contains(hostField, "@") {

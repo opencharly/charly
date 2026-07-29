@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/sshx"
+	"github.com/opencharly/spec/sshx"
 )
 
 // vmBuildStamp is the content signature of a built disk base (output/qcow2/<entity>/disk.qcow2),
@@ -313,7 +313,7 @@ func resolveSSHPubKeyForSpec(spec *VmSpec, vmStateDir string) (string, error) {
 	if spec.SSH != nil && spec.SSH.KeySource != "" {
 		src = spec.SSH.KeySource
 	}
-	// Delegate to sdk/sshx.ResolveSSHPubKey (R3 hoist, F6 vm-lifecycle move, coneB-vmlifecycle —
+	// Delegate to spec/sshx.ResolveSSHPubKey (R3 hoist, F6 vm-lifecycle move, coneB-vmlifecycle —
 	// was a byte-identical local copy in this package's own vm.go) so we benefit from the same
 	// auto-search + generate-path behavior.
 	return sshx.ResolveSSHPubKey(src, vmStateDir)

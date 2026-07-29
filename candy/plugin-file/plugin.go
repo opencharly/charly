@@ -78,7 +78,7 @@ func (verb) RunVerb(ctx context.Context, cc kit.CheckContext, op *spec.Op) kit.R
   stat -c "%%F|%%a|%%U|%%G" %[1]s
 else
   printf "exists=0|||||\n"
-fi`, kit.ShellQuote(path))
+fi`, spec.ShellQuote(path))
 	stdout, stderr, exit, err := cc.Exec().RunCapture(ctx, probe)
 	if err != nil {
 		return kit.Failf("probe failed: %v (stderr: %s)", err, stderr)
@@ -128,7 +128,7 @@ fi`, kit.ShellQuote(path))
 		}
 	}
 	if f.Sha256 != "" {
-		out, _, exit, err := cc.Exec().RunCapture(ctx, fmt.Sprintf("sha256sum %s", kit.ShellQuote(path)))
+		out, _, exit, err := cc.Exec().RunCapture(ctx, fmt.Sprintf("sha256sum %s", spec.ShellQuote(path)))
 		if err != nil || exit != 0 {
 			return kit.Failf("sha256 probe exit %d err %v", exit, err)
 		}
@@ -147,7 +147,7 @@ fi`, kit.ShellQuote(path))
 func (verb) RenderProvisionScript(op *spec.Op, _ []string) (string, bool) {
 	var in params.FileInput
 	kit.DecodeInput(op.PluginInput, &in)
-	path := kit.ShellQuote(in.File)
+	path := spec.ShellQuote(in.File)
 	var b strings.Builder
 	if op.Content != "" {
 		fmt.Fprintf(&b, "mkdir -p \"$(dirname %s)\" && cat > %s <<'CHARLY_ACT_EOF'\n%s\nCHARLY_ACT_EOF", path, path, op.Content)
@@ -155,14 +155,14 @@ func (verb) RenderProvisionScript(op *spec.Op, _ []string) (string, bool) {
 		fmt.Fprintf(&b, "mkdir -p \"$(dirname %s)\" && touch %s", path, path)
 	}
 	if in.Mode != "" {
-		fmt.Fprintf(&b, " && chmod %s %s", kit.ShellQuote(in.Mode), path)
+		fmt.Fprintf(&b, " && chmod %s %s", spec.ShellQuote(in.Mode), path)
 	}
 	return b.String(), true
 }
 
 // readFile cats a file's contents via the live CheckContext.
 func readFile(ctx context.Context, cc kit.CheckContext, path string) (string, error) {
-	out, stderr, exit, err := cc.Exec().RunCapture(ctx, "cat "+kit.ShellQuote(path))
+	out, stderr, exit, err := cc.Exec().RunCapture(ctx, "cat "+spec.ShellQuote(path))
 	if err != nil {
 		return "", err
 	}

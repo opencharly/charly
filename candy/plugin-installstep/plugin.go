@@ -543,8 +543,8 @@ func renderShellSnippet(v spec.InstallStepView) string {
 	marker := fmt.Sprintf("CHARLY_SHELL_%s_%x", strings.ToUpper(v.Shell), h[:4])
 	return fmt.Sprintf(
 		"RUN mkdir -p %s && cat > %s <<'%s'\n%s\n%s\n",
-		kit.ShellQuote(filepath.Dir(v.Destination)),
-		kit.ShellQuote(v.Destination),
+		spec.ShellQuote(filepath.Dir(v.Destination)),
+		spec.ShellQuote(v.Destination),
 		marker,
 		v.Snippet,
 		marker,

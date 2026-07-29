@@ -47,7 +47,7 @@ func (verb) Reserved() string { return "mount" }
 func (verb) RunVerb(ctx context.Context, cc kit.CheckContext, op *spec.Op) kit.Result {
 	var in params.MountInput
 	kit.DecodeInput(op.PluginInput, &in)
-	mp := kit.ShellQuote(in.Mount)
+	mp := spec.ShellQuote(in.Mount)
 	probe := fmt.Sprintf(`findmnt -n -o SOURCE,FSTYPE,OPTIONS %s 2>/dev/null`, mp)
 	out, _, exit, err := cc.Exec().RunCapture(ctx, probe)
 	if err != nil {
@@ -83,16 +83,16 @@ func (verb) RenderProvisionScript(op *spec.Op, _ []string) (string, bool) {
 	kit.DecodeInput(op.PluginInput, &in)
 	var args []string
 	if in.Filesystem != "" {
-		args = append(args, "-t "+kit.ShellQuote(in.Filesystem))
+		args = append(args, "-t "+spec.ShellQuote(in.Filesystem))
 	}
 	if v, ok := firstMatcherScalar(decodeMatcherList(in.Opts)); ok && v != "" {
-		args = append(args, "-o "+kit.ShellQuote(v))
+		args = append(args, "-o "+spec.ShellQuote(v))
 	}
 	if in.MountSource == "" {
 		return "", false
 	}
 	return fmt.Sprintf("findmnt %[1]s >/dev/null 2>&1 || mount %[2]s %[3]s %[1]s",
-		kit.ShellQuote(in.Mount), strings.Join(args, " "), kit.ShellQuote(in.MountSource)), true
+		spec.ShellQuote(in.Mount), strings.Join(args, " "), spec.ShellQuote(in.MountSource)), true
 }
 
 // decodeMatcherList re-decodes a gengotypes-degraded matcher value (`any`) through the

@@ -9,9 +9,9 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/spec/spec"
-	"github.com/opencharly/sdk/sshx"
 	"github.com/opencharly/sdk/vmshared"
+	"github.com/opencharly/spec/spec"
+	"github.com/opencharly/spec/sshx"
 )
 
 // check_graphics_endpoint.go — the VM-graphics host-endpoint reverse-leg (resolveVerbGraphics), the
@@ -22,7 +22,7 @@ import (
 // Invoke could never hold it (it would close before the client connects). It is genuine HOST FABRIC (FLOOR),
 // not a plugin capability.
 //
-// It imports sdk/sshx (golang.org/x/crypto/ssh) DIRECTLY, and that is CORRECT dependency CONTAINMENT, not
+// It imports spec/sshx (golang.org/x/crypto/ssh) DIRECTLY, and that is CORRECT dependency CONTAINMENT, not
 // a violation: relocating the tunnel to any plugin-shared kit (e.g. kit) spreads x/crypto/ssh to every
 // plugin — RCA-proven, ~18 plugin builds break on the missing go.sum entry — so keeping it here confines
 // x/crypto/ssh to this ONE host-fabric file, the analogue of the GPU host-legs using hardware libs. This is
