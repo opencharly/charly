@@ -15,8 +15,8 @@ import (
 	"github.com/opencharly/sdk"
 	pb "github.com/opencharly/spec/proto"
 	"github.com/opencharly/spec/spec"
-	"github.com/opencharly/sdk/targetkit"
-	"github.com/opencharly/sdk/testkit"
+	"github.com/opencharly/spec/testkit"
+	"github.com/opencharly/spec/transport"
 	"google.golang.org/grpc"
 )
 
@@ -33,7 +33,7 @@ func TestPiGRPCHelperProcess(t *testing.T) {
 	if os.Getenv("CHARLY_PI_GRPC_HELPER") != "1" {
 		return
 	}
-	if err := targetkit.ServeStdio(os.Stdin, os.Stdout, func(server *grpc.Server) {
+	if err := transport.ServeStdio(os.Stdin, os.Stdout, func(server *grpc.Server) {
 		pb.RegisterProviderServer(server, NewProvider())
 	}); err != nil {
 		_, _ = io.WriteString(os.Stderr, err.Error())
@@ -120,7 +120,7 @@ printf '%s\n' '{"type":"agent_end"}'
 	}}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	conn, client, err := targetkit.DialProvider(ctx, target, targetkit.DialOptions{Stderr: io.Discard})
+	conn, client, err := transport.DialProvider(ctx, target, transport.DialOptions{Stderr: io.Discard})
 	if err != nil {
 		t.Fatal(err)
 	}

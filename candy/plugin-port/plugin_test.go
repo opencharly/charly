@@ -33,11 +33,11 @@ func (c *fakeCC) ResolveGraphicsEndpoint(context.Context, string) (kit.GraphicsE
 	return kit.GraphicsEndpoint{}, nil
 }
 func (c *fakeCC) ResolveImageLabel(context.Context, string) (string, error) { return "", nil }
-func (c *fakeCC) DialTimeout() time.Duration                                    { return 3 * time.Second }
-func (c *fakeCC) Box() string                                                   { return "" }
-func (c *fakeCC) Instance() string                                              { return "" }
-func (c *fakeCC) Distros() []string                                             { return nil }
-func (c *fakeCC) AddBackground(int)                                             {}
+func (c *fakeCC) DialTimeout() time.Duration                                { return 3 * time.Second }
+func (c *fakeCC) Box() string                                               { return "" }
+func (c *fakeCC) Instance() string                                          { return "" }
+func (c *fakeCC) Distros() []string                                         { return nil }
+func (c *fakeCC) AddBackground(int)                                         {}
 
 // TestPortVerb_ListeningPass proves the in-container listening probe (cc.Exec, exit 0 =>
 // listening) passes — the Exec leg that crosses the reverse channel out-of-process.

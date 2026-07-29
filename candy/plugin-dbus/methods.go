@@ -8,7 +8,6 @@ import (
 
 	"github.com/opencharly/charly/candy/plugin-dbus/params"
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -92,9 +91,9 @@ func dbusCall(ctx context.Context, ex *sdk.Executor, in *params.DbusInput) (stri
 		return "", err
 	}
 	cmd := sessionBusExport + "gdbus call --session " +
-		"--dest " + kit.ShellQuote(in.Dest) + " " +
-		"--object-path " + kit.ShellQuote(in.Path) + " " +
-		"--method " + kit.ShellQuote(in.Member)
+		"--dest " + spec.ShellQuote(in.Dest) + " " +
+		"--object-path " + spec.ShellQuote(in.Path) + " " +
+		"--method " + spec.ShellQuote(in.Member)
 	for _, a := range args {
 		cmd += " " + a
 	}
@@ -106,8 +105,8 @@ func dbusCall(ctx context.Context, ex *sdk.Executor, in *params.DbusInput) (stri
 func dbusIntrospect(ctx context.Context, ex *sdk.Executor, in *params.DbusInput) (string, error) {
 	return ex.VenueCapture(ctx, sessionBusExport+
 		"gdbus introspect --session "+
-		"--dest "+kit.ShellQuote(in.Dest)+" "+
-		"--object-path "+kit.ShellQuote(in.Path)+" --xml")
+		"--dest "+spec.ShellQuote(in.Dest)+" "+
+		"--object-path "+spec.ShellQuote(in.Path)+" --xml")
 }
 
 // dbusNotify sends a desktop notification via org.freedesktop.Notifications.Notify. text is
@@ -119,7 +118,7 @@ func dbusNotify(ctx context.Context, ex *sdk.Executor, op *spec.Op, in *params.D
 		"--dest=org.freedesktop.Notifications "+
 		"--object-path=/org/freedesktop/Notifications "+
 		"--method=org.freedesktop.Notifications.Notify "+
-		`"charly" 0 "" `+kit.ShellQuote(in.Text)+" "+kit.ShellQuote(op.Description)+` "[]" "{}" -- -1`)
+		`"charly" 0 "" `+spec.ShellQuote(in.Text)+" "+spec.ShellQuote(op.Description)+` "[]" "{}" -- -1`)
 }
 
 // ---------------------------------------------------------------------------
@@ -185,7 +184,7 @@ func gvariantArg(arg string) (string, error) {
 	default:
 		return "", fmt.Errorf("argument %q: unsupported type %q (supported: string, uint32, int32, int64, uint64, boolean, double)", arg, typ)
 	}
-	return kit.ShellQuote(gv), nil
+	return spec.ShellQuote(gv), nil
 }
 
 // gvariantString renders a GVariant double-quoted string literal with backslash escaping.

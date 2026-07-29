@@ -20,8 +20,8 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/spec/spec"
 	"github.com/opencharly/sdk/vmshared"
+	"github.com/opencharly/spec/spec"
 )
 
 // vmPluginEnv mirrors charly/vm_plugin_client.go's internal VM-op envelope —

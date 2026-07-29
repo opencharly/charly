@@ -8,7 +8,7 @@ import (
 	"github.com/alecthomas/kong"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/proclifecycle"
+	"github.com/opencharly/spec/proc"
 	"golang.org/x/term"
 )
 
@@ -274,9 +274,9 @@ func main() {
 	// return and a panic unwind, and an explicit reap after dispatch (below)
 	// covers the os.Exit error / check-fail paths. SIGKILL / crash — the one
 	// class none of these catch — is the plugin SDK's parent-death watch's job.
-	proclifecycle.RegisterShutdownHook(reapPlugins)
-	proclifecycle.InstallSignalHandler()
-	proclifecycle.SweepStaleTemps()
+	proc.RegisterShutdownHook(reapPlugins)
+	proc.InstallSignalHandler()
+	proc.SweepStaleTemps()
 	defer reapPlugins()
 
 	// A dynamic command plugin's command has no Run() method, so dispatch it manually:

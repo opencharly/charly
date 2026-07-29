@@ -22,7 +22,7 @@ import (
 	"github.com/opencharly/sdk/agentkit"
 	pb "github.com/opencharly/spec/proto"
 	"github.com/opencharly/spec/spec"
-	"github.com/opencharly/sdk/targetkit"
+	"github.com/opencharly/spec/transport"
 	"golang.org/x/term"
 	"google.golang.org/grpc"
 )
@@ -2138,7 +2138,7 @@ func dialTargetProvider(ctx context.Context, _ spec.TargetSpec) (*grpc.ClientCon
 	if err != nil {
 		return nil, nil, err
 	}
-	return targetkit.DialProvider(ctx, dialTarget, targetkit.DialOptions{CharlyBinary: bin, Stderr: os.Stderr})
+	return transport.DialProvider(ctx, dialTarget, transport.DialOptions{CharlyBinary: bin, Stderr: os.Stderr})
 }
 
 func terminalTargetSummary(target spec.TargetSpec) string {

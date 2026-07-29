@@ -48,7 +48,7 @@ func (verb) RunVerb(ctx context.Context, cc kit.CheckContext, op *spec.Op) kit.R
 	if in.Running != nil {
 		wantRunning = *in.Running
 	}
-	probe := "pgrep -x " + kit.ShellQuote(in.Process) + " >/dev/null 2>&1"
+	probe := "pgrep -x " + spec.ShellQuote(in.Process) + " >/dev/null 2>&1"
 	_, _, exit, err := cc.Exec().RunCapture(ctx, probe)
 	if err != nil {
 		return kit.Failf("probe: %v", err)

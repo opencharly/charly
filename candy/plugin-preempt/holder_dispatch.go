@@ -15,8 +15,8 @@ import (
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/enginekit"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/spec/spec"
 	"github.com/opencharly/sdk/vmshared"
+	"github.com/opencharly/spec/spec"
 )
 
 // holder_dispatch.go — FLOOR-SLIM-proper Unit-8's arbiter_host.go/preempt.go MOVE: the

@@ -4,8 +4,8 @@ import (
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/spec/spec"
 	"github.com/opencharly/sdk/vmshared"
+	"github.com/opencharly/spec/spec"
 )
 
 // vm_move_aliases.go — package-vm bindings for the shared types the VM CLI handlers (moved out of
@@ -51,7 +51,7 @@ var (
 	PromoteSnapshot             = vmshared.PromoteSnapshot
 	RevertSnapshot              = vmshared.RevertSnapshot
 	IncrementSnapshotRefcount   = vmshared.IncrementSnapshotRefcount
-	deployShellQuote            = kit.ShellQuote
+	deployShellQuote            = spec.ShellQuote
 	EnsureSshConfigInclude      = kit.EnsureSshConfigInclude
 	RemoveSshConfigInclude      = kit.RemoveSshConfigInclude
 	RemoveVmSshStanza           = kit.RemoveVmSshStanza

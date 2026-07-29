@@ -47,7 +47,7 @@ func (verb) Reserved() string { return "unix_group" }
 func (verb) RunVerb(ctx context.Context, cc kit.CheckContext, op *spec.Op) kit.Result {
 	var in params.UnixGroupInput
 	kit.DecodeInput(op.PluginInput, &in)
-	probe := fmt.Sprintf(`getent group %s`, kit.ShellQuote(in.UnixGroup))
+	probe := fmt.Sprintf(`getent group %s`, spec.ShellQuote(in.UnixGroup))
 	out, _, exit, err := cc.Exec().RunCapture(ctx, probe)
 	if err != nil {
 		return kit.Failf("probe: %v", err)
@@ -76,6 +76,6 @@ func (verb) RenderProvisionScript(op *spec.Op, _ []string) (string, bool) {
 	if in.GID != nil {
 		flags += fmt.Sprintf(" -g %d", *in.GID)
 	}
-	name := kit.ShellQuote(in.UnixGroup)
+	name := spec.ShellQuote(in.UnixGroup)
 	return fmt.Sprintf("getent group %[1]s >/dev/null 2>&1 || groupadd%[2]s %[1]s", name, flags), true
 }

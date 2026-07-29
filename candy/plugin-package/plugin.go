@@ -57,7 +57,7 @@ func (verb) RunVerb(ctx context.Context, cc kit.CheckContext, op *spec.Op) kit.R
 		wantInstalled = *in.Installed
 	}
 	name := kit.ResolvePackageName(in.Package, in.PackageMap, cc.Distros())
-	pkgQ := kit.ShellQuote(name)
+	pkgQ := spec.ShellQuote(name)
 	// Emit a DETERMINISTIC token, never rely on the probe's exit code: the raw
 	// `rpm||dpkg||pacman` chain returns the LAST command's exit, so a
 	// genuinely-absent package exits 1 on arch but 127 (command-not-found) on
@@ -108,7 +108,7 @@ func (verb) RunVerb(ctx context.Context, cc kit.CheckContext, op *spec.Op) kit.R
 func (verb) RenderProvisionScript(op *spec.Op, distros []string) (string, bool) {
 	var in params.PackageInput
 	kit.DecodeInput(op.PluginInput, &in)
-	name := kit.ShellQuote(kit.ResolvePackageName(in.Package, in.PackageMap, distros))
+	name := spec.ShellQuote(kit.ResolvePackageName(in.Package, in.PackageMap, distros))
 	return fmt.Sprintf(`if command -v dnf >/dev/null 2>&1; then dnf install -y %[1]s; `+
 		`elif command -v apt-get >/dev/null 2>&1; then apt-get update && apt-get install -y %[1]s; `+
 		`elif command -v pacman >/dev/null 2>&1; then pacman -S --noconfirm %[1]s; `+

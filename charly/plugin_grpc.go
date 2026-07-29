@@ -17,7 +17,7 @@ import (
 	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/spec/proto"
 	"github.com/opencharly/spec/spec"
-	"github.com/opencharly/sdk/targetkit"
+	"github.com/opencharly/spec/transport"
 )
 
 // maxReverseChannelMsgBytes is the max gRPC message size (recv AND send) for the E3b
@@ -180,7 +180,7 @@ func relayNestedTarget(open *pb.ChannelFrame, upstream sdk.ProviderChannel) (han
 		if err != nil {
 			return true, fmt.Errorf("provider channel deployment %q process: %w", target.Deployment, err)
 		}
-		conn, client, err := targetkit.DialProcessProvider(upstream.Context(), process, targetkit.DialOptions{Stderr: os.Stderr})
+		conn, client, err := transport.DialProcessProvider(upstream.Context(), process, transport.DialOptions{Stderr: os.Stderr})
 		if err != nil {
 			return true, fmt.Errorf("provider channel deployment %q gRPC: %w", target.Deployment, errors.Join(err, process.Close()))
 		}
@@ -216,7 +216,7 @@ func relayNestedTarget(open *pb.ChannelFrame, upstream sdk.ProviderChannel) (han
 	if err != nil {
 		return true, fmt.Errorf("provider channel %s endpoint bootstrap: %w", target.Hops[0].Transport, err)
 	}
-	dialOpts := targetkit.DialOptions{CharlyBinary: controllerBin, Stderr: os.Stderr}
+	dialOpts := transport.DialOptions{CharlyBinary: controllerBin, Stderr: os.Stderr}
 	if dialTarget.Hops[0].Transport == "ssh" {
 		sshExec := sshExecutorForTargetHop(dialTarget.Hops[0])
 		fmt.Fprintf(os.Stderr, "provider channel: bootstrap Charly endpoint for SSH target %s\n", sshExec.Venue())
@@ -227,7 +227,7 @@ func relayNestedTarget(open *pb.ChannelFrame, upstream sdk.ProviderChannel) (han
 		fmt.Fprintf(os.Stderr, "provider channel: SSH endpoint ready at %s\n", remoteCharly)
 		dialOpts.RemoteCharlyBinary = remoteCharly
 	}
-	conn, client, err := targetkit.DialProvider(upstream.Context(), dialTarget, dialOpts)
+	conn, client, err := transport.DialProvider(upstream.Context(), dialTarget, dialOpts)
 	if err != nil {
 		return true, err
 	}

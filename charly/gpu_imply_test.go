@@ -4,8 +4,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/opencharly/spec/spec"
 	"github.com/opencharly/sdk/vmshared"
+	"github.com/opencharly/spec/spec"
 )
 
 // withDetectGPU swaps the package-level DetectGPU probe for the duration of a

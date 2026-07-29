@@ -6,10 +6,10 @@ import (
 	"google.golang.org/grpc"
 
 	pb "github.com/opencharly/spec/proto"
-	"github.com/opencharly/sdk/targetkit"
+	"github.com/opencharly/spec/transport"
 )
 
-// AgentTargetInternalCmd is the fixed remote endpoint used by targetkit. It is
+// AgentTargetInternalCmd is the fixed remote endpoint used by transport. It is
 // intentionally generic despite its historical command name: it serves every
 // Provider.Channel class and recursively relays CUE-authored target routes.
 type AgentTargetInternalCmd struct {
@@ -28,8 +28,8 @@ func (c *AgentTargetServeCmd) Run() error {
 		return fmt.Errorf("__agent-target serve: builtin schema gate: %w", err)
 	}
 	set := newServedSet(CharlyVersion(), providerRegistry.allServedUnits())
-	in, out := targetkit.StdioFiles()
-	return targetkit.ServeStdio(in, out, func(server *grpc.Server) {
+	in, out := transport.StdioFiles()
+	return transport.ServeStdio(in, out, func(server *grpc.Server) {
 		pb.RegisterProviderServer(server, &providerGRPCServer{set: set})
 		pb.RegisterPluginMetaServer(server, &metaGRPCServer{set: set})
 	}, grpc.MaxRecvMsgSize(maxReverseChannelMsgBytes), grpc.MaxSendMsgSize(maxReverseChannelMsgBytes))

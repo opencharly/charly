@@ -18,9 +18,9 @@ import (
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/spec/spec"
-	"github.com/opencharly/sdk/sshx"
 	"github.com/opencharly/sdk/vmshared"
+	"github.com/opencharly/spec/spec"
+	"github.com/opencharly/spec/sshx"
 )
 
 // SshCmd is the top-level `charly ssh` command group.

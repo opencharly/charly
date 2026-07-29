@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/spec/proto"
 	"github.com/opencharly/spec/spec"
 )
@@ -55,7 +54,7 @@ const k8sTeardownProbeTimeout = "5s"
 
 // shellSingleQuote is the shared kit helper (R3 — the SAME POSIX single-quoter
 // core + every other plugin alias).
-var shellSingleQuote = kit.ShellQuote
+var shellSingleQuote = spec.ShellQuote
 
 // invokeDeployK8s handles an OpExecute Invoke for the deploy:k8s substrate. It
 // decodes the host-preresolved venue (the generated overlay path), applies the

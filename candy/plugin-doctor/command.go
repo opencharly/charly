@@ -12,8 +12,8 @@ import (
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/spec/spec"
 	"github.com/opencharly/sdk/vmshared"
+	"github.com/opencharly/spec/spec"
 )
 
 // command.go — the externalized `charly doctor` command. The plugin OWNS the ENTIRE host-dependency

@@ -32,8 +32,8 @@ import (
 	"time"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/spec/spec"
 	"github.com/opencharly/sdk/vmshared"
+	"github.com/opencharly/spec/spec"
 )
 
 // repoOverrideEnvName is the env var the check-bed session sets so the cli-forked

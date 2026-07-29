@@ -25,7 +25,6 @@ import (
 	"fmt"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/spec/proto"
 	"github.com/opencharly/spec/spec"
 )
@@ -98,7 +97,7 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 		if marker == "" {
 			marker = "EXAMPLE-STEPKIND-BUILD-BAKED"
 		}
-		fragment := fmt.Sprintf("RUN mkdir -p /etc && printf '%%s\\n' %s > %s\n", kit.ShellQuote(marker), buildMarkerPath)
+		fragment := fmt.Sprintf("RUN mkdir -p /etc && printf '%%s\\n' %s > %s\n", spec.ShellQuote(marker), buildMarkerPath)
 		j, err := json.Marshal(spec.EmitReply{Fragment: fragment})
 		if err != nil {
 			return nil, err
@@ -112,7 +111,7 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 		if in.Marker == "" {
 			in.Marker = "EXAMPLE-STEPKIND-OK"
 		}
-		script := fmt.Sprintf("mkdir -p %s && printf '%%s\\n' %s > %s", markerDir, kit.ShellQuote(in.Marker), markerPath)
+		script := fmt.Sprintf("mkdir -p %s && printf '%%s\\n' %s > %s", markerDir, spec.ShellQuote(in.Marker), markerPath)
 		if err := exec.RunUser(ctx, script, nil); err != nil {
 			return nil, fmt.Errorf("plugin-example-stepkind: write marker: %w", err)
 		}

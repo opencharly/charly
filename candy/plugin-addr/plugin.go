@@ -51,7 +51,7 @@ func (verb) RunVerb(ctx context.Context, cc kit.CheckContext, op *spec.Op) kit.R
 	}
 	if cc.Mode() == kit.ModeBox {
 		host, port := splitHostPort(in.Addr)
-		probe := fmt.Sprintf(`nc -z -w %d %s %s 2>/dev/null`, 3, kit.ShellQuote(host), kit.ShellQuote(port))
+		probe := fmt.Sprintf(`nc -z -w %d %s %s 2>/dev/null`, 3, spec.ShellQuote(host), spec.ShellQuote(port))
 		_, _, exit, err := cc.Exec().RunCapture(ctx, probe)
 		if err != nil {
 			return kit.Failf("probe: %v", err)
