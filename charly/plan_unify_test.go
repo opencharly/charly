@@ -10,7 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 
 	"github.com/opencharly/sdk/kit"
@@ -128,9 +127,9 @@ func TestPlanUnify_RunStepLowersToInstallStepAndReverses(t *testing.T) {
 	layer := testCandy("x", spec.CandyModel{Plan: []spec.Step{{Run: "install redis", Op: spec.Op{Plugin: "package", PluginInput: map[string]any{"package": "redis"}}}}}, spec.CandyView{})
 	steps := testCompileOpSteps(t, layer)
 
-	var sp *deploykit.SystemPackagesStep
+	var sp *spec.SystemPackagesStep
 	for _, s := range steps {
-		if v, ok := s.(*deploykit.SystemPackagesStep); ok {
+		if v, ok := s.(*spec.SystemPackagesStep); ok {
 			sp = v
 		}
 	}

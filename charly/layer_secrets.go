@@ -13,7 +13,6 @@ package main
 // sdk/deploykit/secret_declare.go earlier.
 
 import (
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -21,7 +20,7 @@ import (
 // slice covered by the given plans (both CandiesIncluded for image-level
 // plans and per-plan Candy for candy-only plans). Used by deploy-add to
 // call ResolveSecretForCandy + RetrieveCandyArtifacts.
-func CandyForPlan(plans []*deploykit.InstallPlan, dir string, cfg *Config) ([]spec.CandyReader, error) {
+func CandyForPlan(plans []*spec.InstallPlan, dir string, cfg *Config) ([]spec.CandyReader, error) {
 	layers, err := ScanAllCandyWithConfig(dir, cfg)
 	if err != nil {
 		return nil, err

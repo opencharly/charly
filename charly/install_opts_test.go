@@ -5,12 +5,13 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/vmshared"
+	"github.com/opencharly/spec/spec"
 )
 
 // Tests for deploy.yml install_opts handling (Task 13).
 
 func TestInstallOptsApplyTo(t *testing.T) {
-	base := deploykit.EmitOpts{}
+	base := spec.EmitOpts{}
 	o := &vmshared.InstallOptsConfig{
 		WithServices:     true,
 		AllowRepoChanges: true,
@@ -38,7 +39,7 @@ func TestInstallOptsCLIOverridesWin(t *testing.T) {
 	// vmshared.InstallOptsConfig.ApplyTo. (False → false is a no-op; true
 	// → true is also idempotent, so the only concern is never
 	// clobbering a true with a false.)
-	base := deploykit.EmitOpts{AllowRootTasks: true}
+	base := spec.EmitOpts{AllowRootTasks: true}
 	o := &vmshared.InstallOptsConfig{AllowRootTasks: false}
 	got := deploykit.InstallOptsApplyTo(o, base)
 	if !got.AllowRootTasks {
@@ -48,7 +49,7 @@ func TestInstallOptsCLIOverridesWin(t *testing.T) {
 
 func TestInstallOptsNilReceiver(t *testing.T) {
 	var o *vmshared.InstallOptsConfig
-	base := deploykit.EmitOpts{Verify: true}
+	base := spec.EmitOpts{Verify: true}
 	got := deploykit.InstallOptsApplyTo(o, base)
 	if got.Verify != true {
 		t.Errorf("nil receiver modified opts: %+v", got)
@@ -57,14 +58,14 @@ func TestInstallOptsNilReceiver(t *testing.T) {
 
 func TestInstallOptsBuilderImageMerge(t *testing.T) {
 	// CLI override wins; deploy.yml fallback applies when CLI empty.
-	cli := deploykit.EmitOpts{BuilderImageOverride: "cli-choice"}
+	cli := spec.EmitOpts{BuilderImageOverride: "cli-choice"}
 	o := &vmshared.InstallOptsConfig{BuilderImage: "yaml-choice"}
 	got := deploykit.InstallOptsApplyTo(o, cli)
 	if got.BuilderImageOverride != "cli-choice" {
 		t.Errorf("CLI builder image was overwritten: %q", got.BuilderImageOverride)
 	}
 
-	noCli := deploykit.EmitOpts{}
+	noCli := spec.EmitOpts{}
 	got = deploykit.InstallOptsApplyTo(o, noCli)
 	if got.BuilderImageOverride != "yaml-choice" {
 		t.Errorf("deploy.yml builder fallback not applied: %q", got.BuilderImageOverride)

@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -51,7 +50,7 @@ func TestRelocatedServiceVerb_DispatchesViaKit(t *testing.T) {
 		t.Fatalf("LowersTo = %v, want StepKindServicePackaged", sp.LowersTo())
 	}
 	step := sp.ConstructStep(&spec.Op{PluginInput: map[string]any{"service": "nginx"}}, stepConstructCtx{CandyName: "mylayer"})
-	sps, ok := step.(*deploykit.ServicePackagedStep)
+	sps, ok := step.(*spec.ServicePackagedStep)
 	if !ok {
 		t.Fatalf("ConstructStep returned %T, want *ServicePackagedStep", step)
 	}

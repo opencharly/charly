@@ -125,8 +125,8 @@ func ociTestTarget(build buildEngineContext) *deploykit.OCITarget {
 
 func TestOCITargetEmitShellHook(t *testing.T) {
 	tgt := ociTestTarget(buildEngineContext{})
-	plan := &deploykit.InstallPlan{Candy: "uv", Steps: []spec.InstallStep{
-		&deploykit.ShellHookStep{
+	plan := &spec.InstallPlan{Candy: "uv", Steps: []spec.InstallStep{
+		&spec.ShellHookStep{
 			CandyName: "uv",
 			EnvVars: map[string]string{
 				"UV_INSTALL_DIR": "/usr/local/bin",
@@ -134,7 +134,7 @@ func TestOCITargetEmitShellHook(t *testing.T) {
 			PathAdd: []string{"$HOME/.cargo/bin"},
 		},
 	}}
-	if err := tgt.Emit([]*deploykit.InstallPlan{plan}, deploykit.EmitOpts{}); err != nil {
+	if err := tgt.Emit([]*spec.InstallPlan{plan}, spec.EmitOpts{}); err != nil {
 		t.Fatalf("Emit: %v", err)
 	}
 	got := tgt.String()
@@ -164,8 +164,8 @@ func TestOCITargetEmitSystemPackagesWithLegacyTemplate(t *testing.T) {
 		Boxes:  map[string]spec.ResolvedBoxView{"ripgrep-box": {Name: "ripgrep-box", Distro: []string{"test-distro"}}},
 	})
 	tgt := ociTestTarget(buildEngineContext{Box: &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "ripgrep-box"}}})
-	plan := &deploykit.InstallPlan{Candy: "ripgrep", Steps: []spec.InstallStep{
-		&deploykit.SystemPackagesStep{
+	plan := &spec.InstallPlan{Candy: "ripgrep", Steps: []spec.InstallStep{
+		&spec.SystemPackagesStep{
 			Format:   "rpm",
 			Phase:    spec.PhaseInstall,
 			Packages: []string{"ripgrep"},
@@ -174,7 +174,7 @@ func TestOCITargetEmitSystemPackagesWithLegacyTemplate(t *testing.T) {
 			},
 		},
 	}}
-	if err := tgt.Emit([]*deploykit.InstallPlan{plan}, deploykit.EmitOpts{}); err != nil {
+	if err := tgt.Emit([]*spec.InstallPlan{plan}, spec.EmitOpts{}); err != nil {
 		t.Fatalf("Emit: %v", err)
 	}
 	got := tgt.String()
@@ -203,8 +203,8 @@ func TestOCITargetEmitSystemPackagesPrefersNewPhases(t *testing.T) {
 		Boxes:  map[string]spec.ResolvedBoxView{"foo-box": {Name: "foo-box", Distro: []string{"test-distro"}}},
 	})
 	tgt := ociTestTarget(buildEngineContext{Box: &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "foo-box"}}})
-	plan := &deploykit.InstallPlan{Candy: "foo", Steps: []spec.InstallStep{
-		&deploykit.SystemPackagesStep{
+	plan := &spec.InstallPlan{Candy: "foo", Steps: []spec.InstallStep{
+		&spec.SystemPackagesStep{
 			Format:   "rpm",
 			Phase:    spec.PhaseInstall,
 			Packages: []string{"foo"},
@@ -213,7 +213,7 @@ func TestOCITargetEmitSystemPackagesPrefersNewPhases(t *testing.T) {
 			},
 		},
 	}}
-	if err := tgt.Emit([]*deploykit.InstallPlan{plan}, deploykit.EmitOpts{}); err != nil {
+	if err := tgt.Emit([]*spec.InstallPlan{plan}, spec.EmitOpts{}); err != nil {
 		t.Fatalf("Emit: %v", err)
 	}
 	got := tgt.String()
@@ -244,10 +244,10 @@ func TestOCITargetEmitBuilderInlineViaPlugin(t *testing.T) {
 		Candies:              map[string]spec.CandyView{"mytool": {}},
 	})
 	tgt := ociTestTarget(buildEngineContext{Box: &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "mytool-box", UID: 1000, GID: 1000}}})
-	plan := &deploykit.InstallPlan{Candy: "mytool", Steps: []spec.InstallStep{
-		&deploykit.BuilderStep{Builder: "cargo", CandyName: "mytool", Phase: spec.PhaseInstall},
+	plan := &spec.InstallPlan{Candy: "mytool", Steps: []spec.InstallStep{
+		&spec.BuilderStep{Builder: "cargo", CandyName: "mytool", Phase: spec.PhaseInstall},
 	}}
-	if err := tgt.Emit([]*deploykit.InstallPlan{plan}, deploykit.EmitOpts{}); err != nil {
+	if err := tgt.Emit([]*spec.InstallPlan{plan}, spec.EmitOpts{}); err != nil {
 		t.Fatalf("Emit: %v", err)
 	}
 	got := tgt.String()
@@ -278,10 +278,10 @@ func TestOCITargetEmitBuilderMultiStageViaPlugin(t *testing.T) {
 		Candies:     map[string]spec.CandyView{"mytool": {}},
 	})
 	tgt := ociTestTarget(buildEngineContext{Box: &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "mytool-box", UID: 1000, GID: 1000, Builder: map[string]string{"pixi": "ghcr.io/x/builder:latest"}}}})
-	plan := &deploykit.InstallPlan{Candy: "mytool", Steps: []spec.InstallStep{
-		&deploykit.BuilderStep{Builder: "pixi", CandyName: "mytool", Phase: spec.PhaseInstall},
+	plan := &spec.InstallPlan{Candy: "mytool", Steps: []spec.InstallStep{
+		&spec.BuilderStep{Builder: "pixi", CandyName: "mytool", Phase: spec.PhaseInstall},
 	}}
-	if err := tgt.Emit([]*deploykit.InstallPlan{plan}, deploykit.EmitOpts{}); err != nil {
+	if err := tgt.Emit([]*spec.InstallPlan{plan}, spec.EmitOpts{}); err != nil {
 		t.Fatalf("Emit: %v", err)
 	}
 	got := tgt.String()
@@ -306,10 +306,10 @@ func TestOCITargetEmitLocalPkgInstallViaPlugin(t *testing.T) {
 	lp := testPacLocalPkgDef()
 	lp.DownloadTemplate = "https://github.com/opencharly/charly/releases/latest/download/opencharly-${ARCH}.pkg.tar.zst"
 	tgt := ociTestTarget(buildEngineContext{Box: &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "charly-arch"}}})
-	plan := &deploykit.InstallPlan{Candy: "charly", Steps: []spec.InstallStep{
-		&deploykit.LocalPkgInstallStep{CandyName: "charly", Format: "pac", LocalPkg: lp},
+	plan := &spec.InstallPlan{Candy: "charly", Steps: []spec.InstallStep{
+		&spec.LocalPkgInstallStep{CandyName: "charly", Format: "pac", LocalPkg: lp},
 	}}
-	if err := tgt.Emit([]*deploykit.InstallPlan{plan}, deploykit.EmitOpts{}); err != nil {
+	if err := tgt.Emit([]*spec.InstallPlan{plan}, spec.EmitOpts{}); err != nil {
 		t.Fatalf("Emit: %v", err)
 	}
 	got := tgt.String()
@@ -347,11 +347,11 @@ func TestOCITargetEmitOpViaPlugin(t *testing.T) {
 		Candies:     map[string]spec.CandyView{"mytool": {}},
 	})
 	tgt := ociTestTarget(buildEngineContext{Box: box, ImageBuildDir: dir, ContextRelPrefix: ".build/mytool"})
-	plan := &deploykit.InstallPlan{Candy: "mytool", Steps: []spec.InstallStep{
-		&deploykit.OpStep{Op: &spec.Op{Mkdir: "/opt/foo"}, CandyName: "mytool", ResolvedUser: "root"},
-		&deploykit.OpStep{Op: &spec.Op{Copy: "bin/tool", To: "/opt/foo/tool"}, CandyName: "mytool", ResolvedUser: "root"},
+	plan := &spec.InstallPlan{Candy: "mytool", Steps: []spec.InstallStep{
+		&spec.OpStep{Op: &spec.Op{Mkdir: "/opt/foo"}, CandyName: "mytool", ResolvedUser: "root"},
+		&spec.OpStep{Op: &spec.Op{Copy: "bin/tool", To: "/opt/foo/tool"}, CandyName: "mytool", ResolvedUser: "root"},
 	}}
-	if err := tgt.Emit([]*deploykit.InstallPlan{plan}, deploykit.EmitOpts{}); err != nil {
+	if err := tgt.Emit([]*spec.InstallPlan{plan}, spec.EmitOpts{}); err != nil {
 		t.Fatalf("Emit: %v", err)
 	}
 	got := tgt.String()
@@ -366,10 +366,10 @@ func TestOCITargetEmitOpViaPlugin(t *testing.T) {
 func TestOCITargetSkipsVenueSkip(t *testing.T) {
 	// A step with VenueSkip should be elided entirely.
 	tgt := ociTestTarget(buildEngineContext{})
-	plan := &deploykit.InstallPlan{Candy: "x", Steps: []spec.InstallStep{
+	plan := &spec.InstallPlan{Candy: "x", Steps: []spec.InstallStep{
 		&fakeSkipStep{},
 	}}
-	if err := tgt.Emit([]*deploykit.InstallPlan{plan}, deploykit.EmitOpts{}); err != nil {
+	if err := tgt.Emit([]*spec.InstallPlan{plan}, spec.EmitOpts{}); err != nil {
 		t.Fatalf("Emit: %v", err)
 	}
 	got := tgt.String()
@@ -380,14 +380,14 @@ func TestOCITargetSkipsVenueSkip(t *testing.T) {
 
 func TestOCITargetEmitRepoChange(t *testing.T) {
 	tgt := ociTestTarget(buildEngineContext{})
-	plan := &deploykit.InstallPlan{Candy: "rpmfusion", Steps: []spec.InstallStep{
-		&deploykit.RepoChangeStep{
+	plan := &spec.InstallPlan{Candy: "rpmfusion", Steps: []spec.InstallStep{
+		&spec.RepoChangeStep{
 			Format:  "rpm",
 			File:    "/etc/yum.repos.d/rpmfusion-free.repo",
 			Content: "[rpmfusion-free]\nname=test",
 		},
 	}}
-	if err := tgt.Emit([]*deploykit.InstallPlan{plan}, deploykit.EmitOpts{}); err != nil {
+	if err := tgt.Emit([]*spec.InstallPlan{plan}, spec.EmitOpts{}); err != nil {
 		t.Fatalf("Emit: %v", err)
 	}
 	got := tgt.String()

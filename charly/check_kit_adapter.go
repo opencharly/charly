@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 
 	"github.com/opencharly/sdk/kit"
@@ -165,9 +164,9 @@ func kitStepKindToCharly(k kit.StepKindName) spec.StepKind {
 func materializeStep(desc kit.StepDescriptor, ctx stepConstructCtx) spec.InstallStep {
 	switch {
 	case desc.ServicePackaged != nil:
-		return &deploykit.ServicePackagedStep{
+		return &spec.ServicePackagedStep{
 			Unit:        desc.ServicePackaged.Unit,
-			TargetScope: deploykit.OpStepScope(ctx.RunAsUser),
+			TargetScope: spec.OpStepScope(ctx.RunAsUser),
 			Enable:      desc.ServicePackaged.Enable,
 			CandyName:   ctx.CandyName,
 		}
@@ -175,7 +174,7 @@ func materializeStep(desc kit.StepDescriptor, ctx stepConstructCtx) spec.Install
 		// Repos/Copr/Options come from the top-level package cascade
 		// (compileSystemPackageSteps), NOT a per-op run: {package} step — match the
 		// pre-extraction lowering (Format + PhaseInstall + the cross-distro-resolved name).
-		return &deploykit.SystemPackagesStep{
+		return &spec.SystemPackagesStep{
 			Format:   ctx.PkgFormat,
 			Phase:    spec.PhaseInstall,
 			Packages: []string{kit.ResolvePackageName(desc.SystemPackages.Package, desc.SystemPackages.PackageMap, ctx.DistroTags)},

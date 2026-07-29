@@ -105,7 +105,7 @@ func TestPrepareReverseState_SkipsVenueExecForApkOnlyPlan(t *testing.T) {
 	// apk-only plan → guard skips ResolveHome entirely → no error even though the venue exec would fail.
 	apkExec := &recordingExec{homeErr: context.DeadlineExceeded}
 	apkPlan := &deploykit.InstallPlan{Steps: []spec.InstallStep{
-		&deploykit.ApkInstallStep{Packages: []deploykit.ApkPackageSpec{{Package: "com.example"}}, CandyName: "app"},
+		&spec.ApkInstallStep{Packages: []spec.ApkPackageSpec{{Package: "com.example"}}, CandyName: "app"},
 	}}
 	if err := prepareReverseState(context.Background(), apkExec, []*deploykit.InstallPlan{apkPlan}); err != nil {
 		t.Fatalf("apk-only plan: prepareReverseState should skip the venue exec, got err: %v", err)
@@ -118,7 +118,7 @@ func TestPrepareReverseState_SkipsVenueExecForApkOnlyPlan(t *testing.T) {
 	// failure surfaces (proving the guard didn't over-skip).
 	homeExec := &recordingExec{homeErr: context.DeadlineExceeded}
 	homePlan := &deploykit.InstallPlan{Steps: []spec.InstallStep{
-		&deploykit.ShellHookStep{EnvVars: map[string]string{"P": "{{.Home}}/.npm"}, CandyName: "nodejs"},
+		&spec.ShellHookStep{EnvVars: map[string]string{"P": "{{.Home}}/.npm"}, CandyName: "nodejs"},
 	}}
 	if err := prepareReverseState(context.Background(), homeExec, []*deploykit.InstallPlan{homePlan}); err == nil {
 		t.Error("home-token plan: prepareReverseState should surface the ResolveHome failure, got nil")

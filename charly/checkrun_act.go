@@ -42,7 +42,7 @@ import (
 // deploy targets' actual act-emit path today (the former in-proc renderOpCommand
 // wrapper calling this same seam directly was a dead-code-radical-removal-batch
 // deletion — every deploy target is out-of-process now, so there is no more in-proc
-// deploy caller; RunHostStep's case *deploykit.OpStep below reaches this identical
+// deploy caller; RunHostStep's case *spec.OpStep below reaches this identical
 // seam) — so a state-provision verb provisions identically whether run live, baked
 // into an image, or applied at deploy (R3).
 //

@@ -241,7 +241,7 @@ func resolveDeployNodeByPath(tree map[string]spec.BundleNode, name string) (*spe
 // `charly check live <local>` now runs plugin-side (candy/plugin-check/live_gather.go's
 // pluginCheckLiveLocal), sourcing the SAME plan shape off the resolved-project envelope. Host-
 // context vars only (no HOST_PORT:<N> / CONTAINER_IP). Returns the failure count.
-func checkLocalDeployScope(dir string, node *spec.BundleNode, image, instance, _ string, _ []string, exec deploykit.DeployExecutor, format string) (int, error) { //nolint:unparam // error return kept for symmetry with sibling deploy-scope checks
+func checkLocalDeployScope(dir string, node *spec.BundleNode, image, instance, _ string, _ []string, exec spec.DeployExecutor, format string) (int, error) { //nolint:unparam // error return kept for symmetry with sibling deploy-scope checks
 	results, hadPlan, err := runLocalDeployScopePlan(dir, node, image, instance, exec)
 	if err != nil {
 		return 0, err
@@ -261,7 +261,7 @@ func checkLocalDeployScope(dir string, node *spec.BundleNode, image, instance, _
 // now runs plugin-side (pluginRunLocalDeployScopePlan, candy/plugin-check/live_gather.go). Host-
 // context vars only (no HOST_PORT:<N> / CONTAINER_IP). Folds the ${HOST} CloseHosts teardown
 // (design §6): the ssh -L forwards a VM-peer subject opens are torn down after the plan run.
-func runLocalDeployScopePlan(dir string, node *spec.BundleNode, image, instance string, exec deploykit.DeployExecutor) (results []kit.StepResult, hadPlan bool, err error) { //nolint:unparam // err kept for symmetry; RunPlan never errors here today
+func runLocalDeployScopePlan(dir string, node *spec.BundleNode, image, instance string, exec spec.DeployExecutor) (results []kit.StepResult, hadPlan bool, err error) { //nolint:unparam // err kept for symmetry; RunPlan never errors here today
 	var plan []spec.Step
 	if node != nil && strings.TrimSpace(node.From) != "" {
 		if spec, _ := findLocalSpec(dir, strings.TrimSpace(node.From)); spec != nil {

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/spec/proto"
 	"github.com/opencharly/spec/spec"
@@ -70,7 +69,7 @@ import (
 // and is consumed by host_build_construct_step.go, host_build_pod_config.go,
 // k8s_deploy_from_box.go, and provider_checkenv.go.
 type executorInvoker interface {
-	InvokeWithExecutor(ctx context.Context, op *Operation, exec deploykit.DeployExecutor, build buildEngineContext, rebootable bool, cc *checkContextReverseServer) (*Result, error)
+	InvokeWithExecutor(ctx context.Context, op *Operation, exec spec.DeployExecutor, build buildEngineContext, rebootable bool, cc *checkContextReverseServer) (*Result, error)
 }
 
 func (s *executorReverseServer) InvokeProvider(ctx context.Context, req *pb.InvokeProviderRequest) (*pb.InvokeReply, error) {

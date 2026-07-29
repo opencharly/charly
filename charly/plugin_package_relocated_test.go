@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -52,7 +51,7 @@ func TestRelocatedPackageVerb_DispatchesViaKit(t *testing.T) {
 	}
 	op := &spec.Op{PluginInput: map[string]any{"package": "openssh", "package_map": map[string]any{"fedora": "openssh-server"}}}
 	step := sp.ConstructStep(op, stepConstructCtx{CandyName: "net", PkgFormat: "rpm", DistroTags: []string{"fedora:43", "fedora"}})
-	sps, ok := step.(*deploykit.SystemPackagesStep)
+	sps, ok := step.(*spec.SystemPackagesStep)
 	if !ok {
 		t.Fatalf("ConstructStep returned %T, want *SystemPackagesStep", step)
 	}

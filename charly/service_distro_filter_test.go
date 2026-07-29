@@ -58,7 +58,7 @@ func virtualizationServiceEntries() []spec.ServiceEntry {
 func packagedUnits(steps []spec.InstallStep) []string {
 	var out []string
 	for _, s := range steps {
-		if ps, ok := s.(*deploykit.ServicePackagedStep); ok {
+		if ps, ok := s.(*spec.ServicePackagedStep); ok {
 			out = append(out, ps.Unit)
 		}
 	}
@@ -68,7 +68,7 @@ func packagedUnits(steps []spec.InstallStep) []string {
 func customServiceCount(steps []spec.InstallStep) int {
 	n := 0
 	for _, s := range steps {
-		if _, ok := s.(*deploykit.ServiceCustomStep); ok {
+		if _, ok := s.(*spec.ServiceCustomStep); ok {
 			n++
 		}
 	}

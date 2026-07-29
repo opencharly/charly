@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/spec/spec"
 )
 
 // noopImageSeams are the resolveImage/ensureImage closures for a test that never reaches the
@@ -33,8 +34,8 @@ func TestRunVenueBuilderStepRoutesHomeBuilders(t *testing.T) {
 	}
 	resolveImage, ensureImage := noopImageSeams()
 	for _, b := range []string{"npm", "pixi", "cargo"} {
-		s := &deploykit.BuilderStep{Builder: b, CandyName: "x", CandyDir: "/tmp/x", BuilderDef: bc.Builder[b], BuilderImage: "test-builder:latest"}
-		if err := deploykit.RunVenueBuilderStep(context.Background(), &recordingExec{}, "", resolveImage, ensureImage, s, deploykit.EmitOpts{DryRun: true}); err != nil {
+		s := &spec.BuilderStep{Builder: b, CandyName: "x", CandyDir: "/tmp/x", BuilderDef: bc.Builder[b], BuilderImage: "test-builder:latest"}
+		if err := deploykit.RunVenueBuilderStep(context.Background(), &recordingExec{}, "", resolveImage, ensureImage, s, spec.EmitOpts{DryRun: true}); err != nil {
 			t.Errorf("RunVenueBuilderStep(%s) dry-run routed to home-artifact builder errored: %v", b, err)
 		}
 	}

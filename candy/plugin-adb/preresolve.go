@@ -258,7 +258,7 @@ func collectAndroidInstalls(plans []*deploykit.InstallPlan) ([]spec.ApkPackageSp
 			continue
 		}
 		for _, step := range p.Steps {
-			apkStep, ok := step.(*deploykit.ApkInstallStep)
+			apkStep, ok := step.(*spec.ApkInstallStep)
 			if !ok {
 				continue
 			}

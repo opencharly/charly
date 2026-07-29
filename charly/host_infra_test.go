@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/vmshared"
+	"github.com/opencharly/spec/spec"
 )
 
 // Tests for the four Task-9 host-infra files.
@@ -199,7 +199,7 @@ func TestLedgerFlock(t *testing.T) {
 // ---------------- builder_run.go ----------------
 
 func TestBuildBuilderRunArgs(t *testing.T) {
-	opts := deploykit.BuilderRunOpts{
+	opts := spec.BuilderRunOpts{
 		BuilderImage: "fedora-builder:latest",
 		CandyDir:     "/home/user/layers/pre-commit",
 		HostHome:     "/home/user",
@@ -244,7 +244,7 @@ func TestBuildBuilderRunArgs(t *testing.T) {
 
 func TestBuilderRunDryRun(t *testing.T) {
 	// DryRun should return nil, nil without actually exec'ing.
-	out, err := kit.BuilderRun(context.Background(), deploykit.BuilderRunOpts{
+	out, err := kit.BuilderRun(context.Background(), spec.BuilderRunOpts{
 		BuilderImage: "fedora-builder",
 		DryRun:       true,
 		ScriptBody:   "echo hi",
@@ -329,7 +329,7 @@ func TestRenderManagedBlockStrip(t *testing.T) {
 // subordinate uid that doesn't match the bind-mount owner and writes
 // fail with EACCES.
 func TestBuildBuilderRunArgsRunAsRoot(t *testing.T) {
-	opts := deploykit.BuilderRunOpts{
+	opts := spec.BuilderRunOpts{
 		BuilderImage: "arch-builder:latest",
 		CandyDir:     "/home/user/layers/pre-commit",
 		HostHome:     "/home/user",

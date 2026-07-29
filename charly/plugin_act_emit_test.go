@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/spec/spec"
 )
@@ -24,7 +23,7 @@ import (
 // identical resolveProvisionScript seam live in production) — kept test-local since the
 // tests below still want to exercise the SAME structured-verb-first, act-plugin-fallback
 // resolution renderOpCommand did, not just resolveProvisionScript in isolation.
-func testRenderOpCommand(s *deploykit.OpStep) (string, error) {
+func testRenderOpCommand(s *spec.OpStep) (string, error) {
 	if s.Op == nil {
 		return "", fmt.Errorf("testRenderOpCommand: nil op")
 	}
@@ -43,9 +42,9 @@ func testRenderOpCommand(s *deploykit.OpStep) (string, error) {
 
 // unixGroupActStep is the canonical exercise op: a `run:` step authoring the extracted
 // unix_group verb as a plugin (groupadd checkgrp with gid 4242).
-func unixGroupActStep() *deploykit.OpStep {
+func unixGroupActStep() *spec.OpStep {
 	gid := 4242
-	return &deploykit.OpStep{
+	return &spec.OpStep{
 		Op:        &spec.Op{Plugin: "unix_group", PluginInput: map[string]any{"unix_group": "checkgrp", "gid": gid}},
 		CandyName: "lyr",
 	}
@@ -69,7 +68,7 @@ func TestRenderOpCommand_PluginAct_UnixGroup(t *testing.T) {
 // build/deploy install path — renderOpCommand errors loudly rather than silently dropping
 // the step (R4: no silent drop).
 func TestRenderOpCommand_PluginAct_NotActCapable(t *testing.T) {
-	s := &deploykit.OpStep{Op: &spec.Op{Plugin: "process", PluginInput: map[string]any{"process": "bash"}}}
+	s := &spec.OpStep{Op: &spec.Op{Plugin: "process", PluginInput: map[string]any{"process": "bash"}}}
 	if _, err := testRenderOpCommand(s); err == nil {
 		t.Fatalf("testRenderOpCommand(plugin: process) err=nil, want a not-act-capable error")
 	}
@@ -148,7 +147,7 @@ func TestEmitTasks_PluginAct_File(t *testing.T) {
 
 // renderOpCommand turns a plugin: user run-Op into the idempotent useradd shell.
 func TestRenderOpCommand_PluginAct_User(t *testing.T) {
-	s := &deploykit.OpStep{
+	s := &spec.OpStep{
 		Op:        &spec.Op{Plugin: "user", PluginInput: map[string]any{"user": "svc", "uid": 1500, "home": "/home/svc"}},
 		CandyName: "lyr",
 	}
@@ -165,7 +164,7 @@ func TestRenderOpCommand_PluginAct_User(t *testing.T) {
 
 // renderOpCommand turns a plugin: mount run-Op into the idempotent mount shell.
 func TestRenderOpCommand_PluginAct_Mount(t *testing.T) {
-	s := &deploykit.OpStep{
+	s := &spec.OpStep{
 		Op:        &spec.Op{Plugin: "mount", PluginInput: map[string]any{"mount": "/mnt/data", "mount_source": "/dev/sdb1", "filesystem": "ext4"}},
 		CandyName: "lyr",
 	}
@@ -184,7 +183,7 @@ func TestRenderOpCommand_PluginAct_Mount(t *testing.T) {
 // matcher rides plugin_input and is read via the kernel-param candy's matcher codec
 // (candy/plugin-kernel-param, resolved through the registry as a kit.ProvisionActor).
 func TestRenderOpCommand_PluginAct_KernelParam(t *testing.T) {
-	s := &deploykit.OpStep{
+	s := &spec.OpStep{
 		Op:        &spec.Op{Plugin: "kernel-param", PluginInput: map[string]any{"kernel-param": "vm.swappiness", "value": "10"}},
 		CandyName: "lyr",
 	}
@@ -249,8 +248,8 @@ func TestEmitOp_PluginAct_UnixGroup_OCI(t *testing.T) {
 	stubRenderGen(t, cwd, box)
 	tgt := ociTestTarget(buildEngineContext{Box: box, ImageBuildDir: cwd, ContextRelPrefix: ".build/test-img"})
 	op := rawUnixGroupOp()
-	plan := &deploykit.InstallPlan{Candy: "lyr", Steps: []spec.InstallStep{&deploykit.OpStep{Op: &op, CandyName: "lyr"}}}
-	if err := tgt.Emit([]*deploykit.InstallPlan{plan}, deploykit.EmitOpts{}); err != nil {
+	plan := &spec.InstallPlan{Candy: "lyr", Steps: []spec.InstallStep{&spec.OpStep{Op: &op, CandyName: "lyr"}}}
+	if err := tgt.Emit([]*spec.InstallPlan{plan}, spec.EmitOpts{}); err != nil {
 		t.Fatalf("Emit: %v", err)
 	}
 	out := tgt.String()

@@ -76,9 +76,9 @@ func dispatchOCIStep(stepView spec.InstallStepView, planView spec.InstallPlanVie
 // and plan to their wire views (the SAME serialization the production "oci-emit-step" caller
 // already sends) and forwards through the identical seam. Kept for the existing unit-test suite
 // (apk_format_test.go, build_target_oci_test.go, localpkg_test.go, plugin_externalstep_e2e_test.go),
-// which drives ociEmitStep with concrete spec.InstallStep/deploykit.InstallPlan values rather than
+// which drives ociEmitStep with concrete spec.InstallStep/spec.InstallPlan values rather than
 // pre-marshaled wire views — a real, non-mocked path through the SAME relocated dispatch, not a
 // parallel implementation (R3).
-func ociEmitStep(step spec.InstallStep, plan *deploykit.InstallPlan, distros []string, build buildEngineContext) (string, error) {
-	return dispatchOCIStep(deploykit.StepToView(step), deploykit.WireView(plan), distros, build)
+func ociEmitStep(step spec.InstallStep, plan *spec.InstallPlan, distros []string, build buildEngineContext) (string, error) {
+	return dispatchOCIStep(spec.StepToView(step), spec.WireView(plan), distros, build)
 }

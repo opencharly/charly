@@ -100,7 +100,7 @@ func TestExternalDeployPlugin_ReverseChannelEndToEnd(t *testing.T) {
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 
 	// --- Add: reverse channel applies both markers; candy/plugin-bundle records the ledger. ---
-	if err := tgt.Add(ctx, nil, nil, deploykit.EmitOpts{}); err != nil {
+	if err := tgt.Add(ctx, nil, nil, spec.EmitOpts{}); err != nil {
 		t.Fatalf("Add: %v", err)
 	}
 	mustExist(t, applied, "Add did not write the applied marker over the reverse channel")

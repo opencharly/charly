@@ -137,8 +137,8 @@ func resolveHostVars(refs []string, instance string) (map[string]string, []func(
 // connects to the driver's endpoint (via their out-of-process plugins). ${HOST:<member>}
 // addressing of the SUBJECT rides in via RunnerConfig.HostVars (the kit.Runner.EffectiveEnv
 // overlay), independent of which venue is active.
-func liveTargetResolver(instance string) func(string) (*kit.CheckVarResolver, deploykit.DeployExecutor, error) {
-	return func(target string) (*kit.CheckVarResolver, deploykit.DeployExecutor, error) {
+func liveTargetResolver(instance string) func(string) (*kit.CheckVarResolver, spec.DeployExecutor, error) {
+	return func(target string) (*kit.CheckVarResolver, spec.DeployExecutor, error) {
 		reply, err := resolveCheckVenueReply(target, instance)
 		if err != nil {
 			return nil, nil, err

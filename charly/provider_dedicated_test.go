@@ -3,7 +3,6 @@ package main
 import (
 	"testing"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -57,8 +56,8 @@ func TestExternalizedBuilders_NoInProcProvider(t *testing.T) {
 func TestDedicatedProviders_BulkStepResolveAndAbsent(t *testing.T) {
 	manifest := parseEmbeddedProviderManifest()
 
-	for _, kind := range deploykit.AllStepKinds {
-		if kind == deploykit.StepKindExternalPlugin {
+	for _, kind := range spec.AllStepKinds {
+		if kind == spec.StepKindExternalPlugin {
 			// No ClassStep registry entry exists (or is needed) for this kind — verified structurally
 			// by the bijection gate + the plugin-side Go-level switch, not a runtime registry lookup.
 			if _, ok := providerRegistry.resolve(ClassStep, string(kind)); ok {

@@ -61,7 +61,7 @@ func emitOCIDispatch(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 	var frag string
 	switch {
 	case deploykit.IsExternalStepKind(step.Kind()):
-		s := step.(*deploykit.ExternalStep)
+		s := step.(*spec.ExternalStep)
 		frag, err = dispatchClassStep(ctx, exec, s.Word, s.Payload, env, false)
 	case deploykit.PluginEmitStepWords[step.Kind()] != "":
 		word := deploykit.PluginEmitStepWords[step.Kind()]
@@ -71,7 +71,7 @@ func emitOCIDispatch(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 		}
 		frag, err = dispatchClassStep(ctx, exec, word, payload, env, true)
 	case step.Kind() == deploykit.StepKindExternalPlugin:
-		s := step.(*deploykit.ExternalPluginStep)
+		s := step.(*spec.ExternalPluginStep)
 		frag, err = dispatchExternalPluginVerb(ctx, exec, s, env)
 	default:
 		return nil, fmt.Errorf("oci-dispatch: unknown step kind %q", step.Kind())
@@ -111,7 +111,7 @@ func dispatchClassStep(ctx context.Context, exec *sdk.Executor, word string, pay
 // step): dispatch OpEmit to the class:verb provider via InvokeProvider directly — no Emits gate,
 // matching the former host-only invokeVerbBuildEmit/externalPluginStepProvider.EmitOCI contract (a
 // deploy-only plugin's empty fragment is a loud failure, never a silent skip, R4).
-func dispatchExternalPluginVerb(ctx context.Context, exec *sdk.Executor, s *deploykit.ExternalPluginStep, env spec.BuildEnv) (string, error) {
+func dispatchExternalPluginVerb(ctx context.Context, exec *sdk.Executor, s *spec.ExternalPluginStep, env spec.BuildEnv) (string, error) {
 	if s.Op == nil || s.Op.Plugin == "" {
 		return "", fmt.Errorf("oci-dispatch: external plugin step carries no plugin verb")
 	}

@@ -57,7 +57,7 @@ type deployDelCmd struct {
 // (none|container-exec|ssh|reject) every substrate provider maps itself onto, NOT a
 // switch on the concrete kind word (vm/pod/local/k8s/android never appear here) — so
 // this is legitimate D-data-driven dispatch, not an incomplete per-kind seam. Each case
-// CONSTRUCTS a live deploykit.DeployExecutor from that transport — structurally the SAME
+// CONSTRUCTS a live spec.DeployExecutor from that transport — structurally the SAME
 // shape as a Lifecycle:true substrate's already-sanctioned OpPrepareVenue->VenueDescriptor
 // pattern, just for a NESTED hop instead of the root venue.
 //
@@ -68,7 +68,7 @@ type deployDelCmd struct {
 // ANCESTOR, reconstructing the WHOLE parentExec chain from the ancestor path/node lists the
 // plugin's walk sends, rather than the caller passing a live parentExec through directly. A
 // live DeployExecutor never crosses the wire — the plugin only ever holds paths + nodes.
-func deriveChildExecutorForPath(path string, node *spec.BundleNode, parentExec deploykit.DeployExecutor) (deploykit.DeployExecutor, error) {
+func deriveChildExecutorForPath(path string, node *spec.BundleNode, parentExec spec.DeployExecutor) (spec.DeployExecutor, error) {
 	if node == nil {
 		return parentExec, nil
 	}

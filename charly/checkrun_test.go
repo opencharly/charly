@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/spec/spec"
 )
@@ -51,15 +50,15 @@ func (f *fakeExecutor) ResolveHome(_ context.Context, _ string) (string, error) 
 }
 
 // Stubs satisfying the rest of DeployExecutor — never called by these tests.
-func (f *fakeExecutor) RunSystem(_ context.Context, _ string, _ deploykit.EmitOpts) error { return nil }
-func (f *fakeExecutor) RunUser(_ context.Context, _ string, _ deploykit.EmitOpts) error   { return nil }
-func (f *fakeExecutor) RunBuilder(_ context.Context, _ deploykit.BuilderRunOpts) ([]byte, error) {
+func (f *fakeExecutor) RunSystem(_ context.Context, _ string, _ spec.EmitOpts) error { return nil }
+func (f *fakeExecutor) RunUser(_ context.Context, _ string, _ spec.EmitOpts) error   { return nil }
+func (f *fakeExecutor) RunBuilder(_ context.Context, _ spec.BuilderRunOpts) ([]byte, error) {
 	return nil, nil
 }
-func (f *fakeExecutor) PutFile(_ context.Context, _, _ string, _ uint32, _ bool, _ deploykit.EmitOpts) error {
+func (f *fakeExecutor) PutFile(_ context.Context, _, _ string, _ uint32, _ bool, _ spec.EmitOpts) error {
 	return nil
 }
-func (f *fakeExecutor) GetFile(_ context.Context, _ string, _ bool, _ deploykit.EmitOpts) ([]byte, error) {
+func (f *fakeExecutor) GetFile(_ context.Context, _ string, _ bool, _ spec.EmitOpts) ([]byte, error) {
 	return nil, nil
 }
 
