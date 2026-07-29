@@ -30,28 +30,55 @@ import (
 // seam (deploykit.OCITarget.EmitStepOp → HostBuild("step-emit","oci-emit-step") → ociEmitStep).
 // Home/Distros are empty (the tests that need home resolution or per-step distros are rare; add a
 // dedicated constructor if one arises).
-// stubResolvedProject swaps the "resolved-project" host-builder for one that returns rp verbatim,
-// restoring the original on test cleanup. The 4 former HOST-COUPLED step-emit words
+// stubResolvedProject swaps the compiled-in "build:project" PROVIDER (candy/plugin-build's
+// InvokeProvider("build","project",sdk.OpResolve,...) — the relocated home of the former
+// resolved-project host seam, #55 step3 unit 3b) for one whose Invoke returns rp verbatim,
+// restoring the original registration on test cleanup. The 4 former HOST-COUPLED step-emit words
 // (system-packages/builder/local-pkg-install/op, K5-Unit-6b) no longer read the synthetic
 // buildEngineContext's Generator/Box/BuilderConfig/DistroCfg fields directly — candy/plugin-installstep
-// fetches a real "resolved-project" envelope and renders against it instead, so a test that needs to
-// feed it project structure (a resolved box, its distro/builder vocab, a candy) does so by stubbing
-// this seam, exactly like a real project load would populate it. The per-invocation scalars
-// (Image/DevLocalPkg/ImageBuildDir/ContextRelPrefix) still ride the buildEngineContext passed to
-// ociTestTarget, unchanged.
+// fetches a real resolved-project envelope (now via InvokeProvider, not HostBuild) and renders
+// against it instead, so a test that needs to feed it project structure (a resolved box, its
+// distro/builder vocab, a candy) does so by stubbing the PROVIDER the registry resolves "build:project"
+// to, exactly like a real project load would populate it. providerRegistry.register() fail-fasts on a
+// duplicate (class, word), so the swap manipulates providerRegistry.byKey/origins directly (same
+// pattern registry_testsupport_test.go's snapshotProviderState already uses for the same map) rather
+// than going through register(). The per-invocation scalars (Image/DevLocalPkg/ImageBuildDir/
+// ContextRelPrefix) still ride the buildEngineContext passed to ociTestTarget, unchanged.
 func stubResolvedProject(t *testing.T, rp spec.ResolvedProject) {
 	t.Helper()
-	orig, hadOrig := hostBuilders["resolved-project"]
-	hostBuilders["resolved-project"] = func(_ context.Context, _ []byte, _ buildEngineContext) ([]byte, error) {
-		return json.Marshal(rp)
+	out, err := json.Marshal(rp)
+	if err != nil {
+		t.Fatalf("stubResolvedProject: marshal: %v", err)
 	}
+	key := provKey(ClassBuild, "project")
+	providerRegistry.mu.Lock()
+	orig, hadOrig := providerRegistry.byKey[key]
+	origOrigin := providerRegistry.origins[key]
+	providerRegistry.byKey[key] = stubBuildProjectProvider{json: out}
+	providerRegistry.origins[key] = "test-stub"
+	providerRegistry.mu.Unlock()
 	t.Cleanup(func() {
+		providerRegistry.mu.Lock()
 		if hadOrig {
-			hostBuilders["resolved-project"] = orig
+			providerRegistry.byKey[key] = orig
+			providerRegistry.origins[key] = origOrigin
 		} else {
-			delete(hostBuilders, "resolved-project")
+			delete(providerRegistry.byKey, key)
+			delete(providerRegistry.origins, key)
 		}
+		providerRegistry.mu.Unlock()
 	})
+}
+
+// stubBuildProjectProvider is the fake "build:project" Provider stubResolvedProject installs: its
+// Invoke ignores the request entirely and returns the fixed marshaled spec.ResolvedProject, mirroring
+// the former hostBuilders["resolved-project"] stub func's unconditional return.
+type stubBuildProjectProvider struct{ json json.RawMessage }
+
+func (stubBuildProjectProvider) Reserved() string     { return "project" }
+func (stubBuildProjectProvider) Class() ProviderClass { return ClassBuild }
+func (p stubBuildProjectProvider) Invoke(_ context.Context, _ *Operation) (*Result, error) {
+	return &Result{JSON: p.json}, nil
 }
 
 // chdirTemp creates a fresh temp dir, chdirs into it for the test's duration (restored via
@@ -136,7 +163,7 @@ func TestOCITargetEmitSystemPackagesWithLegacyTemplate(t *testing.T) {
 		Distro: map[string]*spec.ResolvedDistro{"test-distro": distro},
 		Boxes:  map[string]spec.ResolvedBoxView{"ripgrep-box": {Name: "ripgrep-box", Distro: []string{"test-distro"}}},
 	})
-	tgt := ociTestTarget(buildEngineContext{Box: &buildkit.ResolvedBox{Name: "ripgrep-box"}})
+	tgt := ociTestTarget(buildEngineContext{Box: &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "ripgrep-box"}}})
 	plan := &deploykit.InstallPlan{Candy: "ripgrep", Steps: []spec.InstallStep{
 		&deploykit.SystemPackagesStep{
 			Format:   "rpm",
@@ -175,7 +202,7 @@ func TestOCITargetEmitSystemPackagesPrefersNewPhases(t *testing.T) {
 		Distro: map[string]*spec.ResolvedDistro{"test-distro": distro},
 		Boxes:  map[string]spec.ResolvedBoxView{"foo-box": {Name: "foo-box", Distro: []string{"test-distro"}}},
 	})
-	tgt := ociTestTarget(buildEngineContext{Box: &buildkit.ResolvedBox{Name: "foo-box"}})
+	tgt := ociTestTarget(buildEngineContext{Box: &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "foo-box"}}})
 	plan := &deploykit.InstallPlan{Candy: "foo", Steps: []spec.InstallStep{
 		&deploykit.SystemPackagesStep{
 			Format:   "rpm",
@@ -216,7 +243,7 @@ func TestOCITargetEmitBuilderInlineViaPlugin(t *testing.T) {
 		CandyModels:          map[string]spec.CandyModel{"mytool": {Name: "mytool"}},
 		Candies:              map[string]spec.CandyView{"mytool": {}},
 	})
-	tgt := ociTestTarget(buildEngineContext{Box: &buildkit.ResolvedBox{Name: "mytool-box", UID: 1000, GID: 1000}})
+	tgt := ociTestTarget(buildEngineContext{Box: &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "mytool-box", UID: 1000, GID: 1000}}})
 	plan := &deploykit.InstallPlan{Candy: "mytool", Steps: []spec.InstallStep{
 		&deploykit.BuilderStep{Builder: "cargo", CandyName: "mytool", Phase: spec.PhaseInstall},
 	}}
@@ -250,7 +277,7 @@ func TestOCITargetEmitBuilderMultiStageViaPlugin(t *testing.T) {
 		CandyModels: map[string]spec.CandyModel{"mytool": {Name: "mytool"}},
 		Candies:     map[string]spec.CandyView{"mytool": {}},
 	})
-	tgt := ociTestTarget(buildEngineContext{Box: &buildkit.ResolvedBox{Name: "mytool-box", UID: 1000, GID: 1000, Builder: map[string]string{"pixi": "ghcr.io/x/builder:latest"}}})
+	tgt := ociTestTarget(buildEngineContext{Box: &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "mytool-box", UID: 1000, GID: 1000, Builder: map[string]string{"pixi": "ghcr.io/x/builder:latest"}}}})
 	plan := &deploykit.InstallPlan{Candy: "mytool", Steps: []spec.InstallStep{
 		&deploykit.BuilderStep{Builder: "pixi", CandyName: "mytool", Phase: spec.PhaseInstall},
 	}}
@@ -278,7 +305,7 @@ func TestOCITargetEmitBuilderMultiStageViaPlugin(t *testing.T) {
 func TestOCITargetEmitLocalPkgInstallViaPlugin(t *testing.T) {
 	lp := testPacLocalPkgDef()
 	lp.DownloadTemplate = "https://github.com/opencharly/charly/releases/latest/download/opencharly-${ARCH}.pkg.tar.zst"
-	tgt := ociTestTarget(buildEngineContext{Box: &buildkit.ResolvedBox{Name: "charly-arch"}})
+	tgt := ociTestTarget(buildEngineContext{Box: &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "charly-arch"}}})
 	plan := &deploykit.InstallPlan{Candy: "charly", Steps: []spec.InstallStep{
 		&deploykit.LocalPkgInstallStep{CandyName: "charly", Format: "pac", LocalPkg: lp},
 	}}

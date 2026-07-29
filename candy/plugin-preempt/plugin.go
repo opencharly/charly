@@ -8,7 +8,7 @@
 //     arbiter reaches its host dependencies over TWO generic reverse legs (arbiter.go): the VM/
 //     pod lifecycle + GPU driver flip via sdk.Executor.InvokeProvider (FLOOR-SLIM-proper Unit-8,
 //     holder_dispatch.go), and its project deploy tree + resources via
-//     sdk.Executor.HostBuild("resolved-project") (K1-unblock wave 1, retiring the former bespoke
+//     sdk.Executor.InvokeProvider("build","project") (K1-unblock wave 1, retiring the former bespoke
 //     arbiter reverse-RPC channel entirely).
 //   - command:preempt — the operator `charly preempt status`/`restore` CLI. It OWNS the CLI grammar +
 //     the lease-table formatting and reaches its OWN peer capability verb:arbiter DIRECTLY via

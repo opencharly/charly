@@ -89,7 +89,7 @@ func TestK8sTreeRoot(t *testing.T) {
 // TestCollectK8sStatus_TreePresenceAndContext exercises collectK8sStatus's
 // pure per-entry logic (tree-present detection + context resolution) by
 // calling its constituent pieces directly against a real on-disk tree — the
-// HostBuild("resolved-project") fetch itself is proven live by the
+// InvokeProvider("build","project") fetch itself is proven live by the
 // candy/plugin-bundle OpCompile precedent + the check-sidecar-pod R10 bed
 // (charly status --json parity), not re-mocked here.
 func TestCollectK8sStatus_TreePresenceAndContext(t *testing.T) {

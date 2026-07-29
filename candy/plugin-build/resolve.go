@@ -173,7 +173,7 @@ func resolveBuildEngine(ctx context.Context, ex *sdk.Executor, req spec.BuildReq
 	}
 
 	// --- 10. project the resolved-project ENVELOPE (pure loaderkit assembler + plugin seams) ---
-	rp, err := projectResolvedProjectLeg(ctx, ex, cfg, layers, uf, distroCfg, builderCfg, initCfg, dir, uf.Version, tag, req.IncludeDisabled, resolved)
+	rp, err := projectResolvedProjectLeg(ctx, ex, cfg, layers, uf, distroCfg, builderCfg, initCfg, dir, uf.Version, tag, req.IncludeDisabled, resolved, nil)
 	if err != nil {
 		return spec.BuildResolveReply{Error: errString(fmt.Errorf("projecting resolved-project envelope: %w", err))}, nil
 	}

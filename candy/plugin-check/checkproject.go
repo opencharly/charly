@@ -2,8 +2,9 @@ package check
 
 // checkproject.go — the AI-harness check-project PROJECTION, computed PLUGIN-SIDE off the
 // resolved-project envelope (K5-U2/3, the check-config seam's death). The former host "check-config"
-// HostBuild seam is GONE: the plugin fetches the generic resolved-project envelope
-// (HostBuild("resolved-project")) and derives every field the harness leaves consume —
+// host seam is GONE: the plugin fetches the generic resolved-project envelope
+// (InvokeProvider("build","project") — candy/plugin-build's build:project word, #55 step3 unit 3b)
+// and derives every field the harness leaves consume —
 // bed-vs-iterate classification, the iterate sandbox class, the include-expanded scored plan, and
 // the kind:agent catalog — directly from it. The ONE fact the envelope cannot carry (the per-host
 // pod-overlay disposability) rides the thin retained "pod-disposable" host seam.
@@ -96,7 +97,7 @@ func resolvedProject(ex *sdk.Executor, ctx context.Context, dir string) (*spec.R
 	if err != nil {
 		return nil, err
 	}
-	out, err := ex.HostBuild(ctx, "resolved-project", reqJSON)
+	out, err := ex.InvokeProvider(ctx, "build", "project", sdk.OpResolve, reqJSON, nil, sdk.InvokeProviderOpts{})
 	if err != nil {
 		return nil, err
 	}

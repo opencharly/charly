@@ -15,7 +15,8 @@ import (
 // inspect_list.go — the `charly box inspect` + `charly box list` handlers, relocated OUT of charly
 // core (K5, Collection A). Both are DATA PROJECTIONS: inspect over the generic
 // spec.ResolvedProject envelope the host resolves once and ships over the reverse channel
-// (HostBuild("resolved-project")); `list tags` over the verb:retention engine's tag inventory,
+// (InvokeProvider("build","project") — candy/plugin-build's build:project word, #55 step3 unit
+// 3b); `list tags` over the verb:retention engine's tag inventory,
 // reached directly via InvokeProvider (listImageTags — #118, the former hidden-core
 // __box-list-tags CLI reentry is DELETED). The plugin never loads the project itself (pre-K1) and,
 // as of the list-tags move, never reenters core for `box list` either.
@@ -32,7 +33,7 @@ func (h *hostClient) resolvedProject(includeDisabled bool) (*spec.ResolvedProjec
 	if err != nil {
 		return nil, err
 	}
-	resJSON, err := h.exec.HostBuild(h.ctx, "resolved-project", reqJSON)
+	resJSON, err := h.exec.InvokeProvider(h.ctx, "build", "project", sdk.OpResolve, reqJSON, nil, sdk.InvokeProviderOpts{})
 	if err != nil {
 		return nil, err
 	}

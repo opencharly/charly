@@ -13,8 +13,8 @@ import (
 )
 
 // compile.go — the deploy-COMPILE core of command:bundle (compilePlansForRequest). It re-hydrates
-// the resolved-project envelope itself via HostBuild("resolved-project") (the established seam — it
-// does NOT receive the whole project in the request), resolves the per-node SELECTION off that
+// the resolved-project envelope itself via InvokeProvider("build","project") (the established seam —
+// it does NOT receive the whole project in the request), resolves the per-node SELECTION off that
 // envelope (box_select.go / candy_select.go — the plugin resolves the box view + candy order + the
 // synthetic vm/host box itself, K4 unit B), runs the builder deploy-time pre-pass
 // (builder_preresolve.go), loops deploykit.BuildDeployPlan, and returns []*spec.InstallPlan.
@@ -93,7 +93,7 @@ func compileDeployPlans(ctx context.Context, exec *sdk.Executor, req *pb.InvokeR
 // AND the plugin's own tree-walk (walk.go dispatchOne → compileNodePlans) call it — the latter
 // IN-PROC with no OpCompile round-trip, killing the former plugin→host→plugin double-bounce.
 func compilePlansForRequest(ctx context.Context, exec *sdk.Executor, r spec.DeployCompileRequest) ([]*spec.InstallPlan, error) {
-	// Fetch the resolved-project envelope via the established HostBuild("resolved-project") seam.
+	// Fetch the resolved-project envelope via the established InvokeProvider("build","project") seam.
 	// ExtraCandyRefs (an --add-candy / add_candy: ref this compile call's own candy set was
 	// widened with, host-side) widens the ENVELOPE's scan the SAME way, so a remote add-candy
 	// (never reachable from any box's image closure) is actually present in rp.Candies/
@@ -219,7 +219,7 @@ func compilePlansForRequest(ctx context.Context, exec *sdk.Executor, r spec.Depl
 }
 
 // fetchResolvedProject fetches + decodes the resolved-project envelope over the established
-// HostBuild("resolved-project") seam. Shared (R3) by compilePlansForRequest (per-shape, with the
+// InvokeProvider("build","project") seam. Shared (R3) by compilePlansForRequest (per-shape, with the
 // shape's ExtraCandyRefs/IncludeDisabled) and the walk's per-node ref classification
 // (compileNodePlans → resolveDeployRef, off rp.Boxes/rp.Candies). ExtraCandyRefs widens the scan so
 // a REMOTE add-candy (never reachable from a box's image closure) is present in rp.Candies;
@@ -232,7 +232,7 @@ func fetchResolvedProject(dir string, extraCandyRefs []string, includeDisabled b
 	if err != nil {
 		return nil, fmt.Errorf("bundle: marshal resolved-project request: %w", err)
 	}
-	envJSON, err := cmdExec.HostBuild(cmdCtx, "resolved-project", envReq)
+	envJSON, err := cmdExec.InvokeProvider(cmdCtx, "build", "project", sdk.OpResolve, envReq, nil, sdk.InvokeProviderOpts{})
 	if err != nil {
 		return nil, fmt.Errorf("bundle: fetch resolved-project envelope: %w", err)
 	}

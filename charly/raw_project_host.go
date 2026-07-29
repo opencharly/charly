@@ -11,8 +11,9 @@ import (
 // work, not a defer reason). It is the generic kind-blind host-resident half of a broker seam serving
 // ANY consumer — exactly the class as resolved_project_host.go, but WITHOUT the expensive
 // ResolveBox-per-box cost. A plugin that needs only the RAW loader reads (kind templates, the folded
-// deploy tree with stamped Descent, the plugin-primaries D-fact) fetches this via
-// Executor.HostBuild("raw-project") instead of paying the full box resolution resolved-project pays.
+// deploy tree with stamped Descent, the plugin-primaries D-fact), rather than paying the full
+// per-box resolution cost the resolved-project envelope incurs, fetches this cheaper projection
+// via Executor.HostBuild("raw-project") instead.
 //
 // It is a pure DATA PROJECTION over LoadUnified — NOT a new engine: spec.UnifiedFile.ProjectTemplates (a
 // cheap raw-byte template copy), the folded uf.Bundle deploy tree (already Descent-stamped by

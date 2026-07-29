@@ -40,11 +40,7 @@ func deriveCandy(t *testing.T, body string) spec.CandyReader {
 // debImg builds a minimal ResolvedBox with a deb primary format and the given
 // most-specific-first distro tag chain.
 func debImg(chain ...string) *buildkit.ResolvedBox {
-	return &buildkit.ResolvedBox{
-		Pkg:       "deb",
-		Distro:    chain,
-		DistroDef: &spec.ResolvedDistro{Format: map[string]*vmshared.FormatDef{"deb": {}}},
-	}
+	return &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Pkg: "deb", Distro: chain}, DistroDef: &spec.ResolvedDistro{Format: map[string]*vmshared.FormatDef{"deb": {}}}}
 }
 
 func pkgStep(t *testing.T, steps []spec.InstallStep) *deploykit.SystemPackagesStep {
@@ -66,11 +62,7 @@ func pkgStep(t *testing.T, steps []spec.InstallStep) *deploykit.SystemPackagesSt
 // fmtImg builds a minimal ResolvedBox with the given primary package format and
 // most-specific-first distro tag chain.
 func fmtImg(format string, chain ...string) *buildkit.ResolvedBox {
-	return &buildkit.ResolvedBox{
-		Pkg:       format,
-		Distro:    chain,
-		DistroDef: &spec.ResolvedDistro{Format: map[string]*vmshared.FormatDef{format: {}}},
-	}
+	return &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Pkg: format, Distro: chain}, DistroDef: &spec.ResolvedDistro{Format: map[string]*vmshared.FormatDef{format: {}}}}
 }
 
 // TestCascade_FormatFamilyLevel proves the package-format FAMILY level
@@ -260,8 +252,7 @@ distro:
   fedora:
     package: [vim]
 `)
-	img := &buildkit.ResolvedBox{Pkg: "rpm", Distro: []string{"fedora"},
-		DistroDef: &spec.ResolvedDistro{Format: map[string]*vmshared.FormatDef{"rpm": {}}}}
+	img := &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Pkg: "rpm", Distro: []string{"fedora"}}, DistroDef: &spec.ResolvedDistro{Format: map[string]*vmshared.FormatDef{"rpm": {}}}}
 	step := pkgStep(t, deploykit.CompileSystemPackageSteps(l, img, deploykit.HostContext{}))
 	if !reflect.DeepEqual(step.Packages, []string{"vim"}) {
 		t.Errorf("fedora bare reach: packages = %v, want [vim]", step.Packages)

@@ -51,12 +51,7 @@ func testPacDistroDef() *spec.ResolvedDistro {
 // the config-driven LocalPkg; a candy with no source for the target format, or a
 // distro with no localpkg-capable format, compiles to nothing.
 func TestCompileLocalPkgStep(t *testing.T) {
-	img := &buildkit.ResolvedBox{
-		Name:      "charly-host",
-		Pkg:       "pac",
-		DistroDef: testPacDistroDef(),
-		Builder:   map[string]string{"aur": "ghcr.io/opencharly/arch-builder:latest"},
-	}
+	img := &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "charly-host", Pkg: "pac", Builder: map[string]string{"aur": "ghcr.io/opencharly/arch-builder:latest"}}, DistroDef: testPacDistroDef()}
 	hostCtx := deploykit.HostContext{MachineVenue: true, Distro: "arch"}
 
 	// A candy with no localpkg entry for the target format → nil.
@@ -89,7 +84,7 @@ func TestCompileLocalPkgStep(t *testing.T) {
 	}
 
 	// Same candy on an rpm distro → picks the rpm source from the map.
-	rpmImg := &buildkit.ResolvedBox{Name: "charly-fedora", Pkg: "rpm", DistroDef: &spec.ResolvedDistro{Format: map[string]*vmshared.FormatDef{
+	rpmImg := &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "charly-fedora", Pkg: "rpm"}, DistroDef: &spec.ResolvedDistro{Format: map[string]*vmshared.FormatDef{
 		"rpm": {LocalPkg: &vmshared.LocalPkgDef{PkgGlob: "*.rpm", SourceSentinel: "*.spec", BuildTemplate: "x", InstallTemplate: "dnf install -y {{.StageDir}}/{{.Glob}}", Probe: "command -v dnf"}},
 	}}}
 	if rs, ok := deploykit.CompileLocalPkgStep(l, rpmImg, hostCtx).(*deploykit.LocalPkgInstallStep); !ok || rs.Format != "rpm" || rs.PkgbuildRef != "pkg/fedora" {
@@ -97,7 +92,7 @@ func TestCompileLocalPkgStep(t *testing.T) {
 	}
 
 	// Distro with a format but NO localpkg block → nil (no native package).
-	noFmt := deploykit.CompileLocalPkgStep(l, &buildkit.ResolvedBox{Name: "charly-x", Pkg: "rpm", DistroDef: &spec.ResolvedDistro{Format: map[string]*vmshared.FormatDef{"rpm": {}}}}, hostCtx)
+	noFmt := deploykit.CompileLocalPkgStep(l, &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "charly-x", Pkg: "rpm"}, DistroDef: &spec.ResolvedDistro{Format: map[string]*vmshared.FormatDef{"rpm": {}}}}, hostCtx)
 	if noFmt != nil {
 		t.Errorf("distro without a localpkg-capable format should compile to nil, got %#v", noFmt)
 	}
@@ -135,7 +130,7 @@ func TestBuildDeployPlanLocalPkgOrdering(t *testing.T) {
 			{Run: "build", Op: spec.Op{Plugin: "command", PluginInput: map[string]any{"command": "echo install charly"}, RunAs: "root"}},
 		},
 	}, spec.CandyView{})
-	img := &buildkit.ResolvedBox{Name: "host-adhoc", Home: "/root", User: "root", Pkg: "pac", DistroDef: testPacDistroDef()}
+	img := &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "host-adhoc", Home: "/root", User: "root", Pkg: "pac"}, DistroDef: testPacDistroDef()}
 	ctx, ex := testConstructStepExecutor()
 	plan, err := deploykit.BuildDeployPlan(ctx, ex, l, img, deploykit.HostContext{MachineVenue: true, Distro: "arch"})
 	if err != nil {

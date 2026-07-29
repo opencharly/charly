@@ -17,25 +17,35 @@ import (
 // validate_project_host.go — the HOST side of the `charly box validate` engine relocation (task #60,
 // Unit B). The validate ENGINE moves to the compiled-in candy/plugin-box, which runs the pure
 // per-kind/op rules over the resolved-project envelope + re-runs the resolution-graph checks via
-// sdk/deploykit. The HOST keeps ONLY what a plugin structurally CANNOT do:
+// sdk/deploykit.
 //
-//   1. the error-TOLERANT resolved-project projection (validate MUST run on a broken project — a box
-//      that fails to resolve becomes a spec.Diagnostic, not a fatal abort), and
+// #55 step3 unit 3-I relocated reason 1 below (the error-TOLERANT resolved-project projection)
+// onto build:project's OpValidate leg (candy/plugin-build/resolve_project_tolerant.go) — proven
+// portable by 3b's SAME-shaped fail-fast relocation. What STAYS host is reason 2, which a plugin
+// structurally still cannot do:
+//
 //   2. the host-natural checks that need the RAW authored config a projection does not carry: the
 //      CUE-schema conformance trio (manifest bytes + the cue library) + the build-tunable / merge
 //      rules (defaults + per-box tunables dropped from the envelope) + the box base⊻from XOR (raw
-//      pre-resolve base/from, which the tolerant-skipped envelope cannot carry).
+//      pre-resolve base/from, which the tolerant-skipped envelope cannot carry) + the
+//      registry-derived D-data (ProviderCapabilities/ActCapableVerbs — providerRegistry is a
+//      genuine kernel M-mechanism per the boundary law).
 //
-// Both ride back to the plugin over ONE `validate-project` HostBuild seam (#46) as a
-// spec.ValidateProjectReply{Project (tolerant partial), Diagnostics}. The plugin merges these host
-// findings with its own pure-rule + graph findings for the verdict.
+// This now rides back over the SLIMMED `validate-project-checks` HostBuild seam (renamed from
+// `validate-project`, #46) as a spec.ValidateProjectReply{Project (D-data fields ONLY),
+// Diagnostics}. candy/plugin-box's runValidateEngine calls BOTH build:project(OpValidate) (its own
+// tolerant envelope + resolve-diagnostics) AND this leg (host-natural diagnostics + D-data),
+// merges them onto one envelope, then runs its own pure-rule + graph findings for the verdict.
 
-// validateProjectBuilderKind is the F11 hostBuilders key — a generic action noun, never a provider word.
-const validateProjectBuilderKind = "validate-project"
+// validateProjectChecksBuilderKind is the F11 hostBuilders key — a generic action noun, never a
+// provider word. Renamed from "validate-project" (#55 step3 unit 3-I) now that this leg serves
+// ONLY the host-natural-checks half; the tolerant envelope projection moved to build:project.
+const validateProjectChecksBuilderKind = "validate-project-checks"
 
 // diagSeverityError is the spec.Diagnostic severity for a hard validation error (empty defaults to
 // error per the wire contract, but the plugin's HasErrors() classifies non-"warning" as error, so we
-// stamp it explicitly). Shared by projectResolvedProject's tolerant ResolveBox branch.
+// stamp it explicitly). Shared by loadProjectForResolve's tolerant load-error branch and
+// runHostNaturalValidateChecks.
 const diagSeverityError = "error"
 
 // loadedProject bundles the raw loaded pieces the two project builders (fail-fast + tolerant) share:
@@ -52,13 +62,15 @@ type loadedProject struct {
 	empty      bool
 }
 
-// loadProjectForResolve is the ONE load path both buildResolvedProjectFromDir (fail-fast) and
-// buildResolvedProjectTolerant (validate) drive (R3). When diags is nil it is FAIL-FAST: any
+// loadProjectForResolve is the ONE load path both the overlay seam's fail-fast
+// projectResolvedProjectWithBoxes call (charly/build_overlay.go, diags==nil) and
+// hostBuildValidateProjectChecks (diags!=nil, TOLERANT — feeding the host-natural checks below,
+// #55 step3 unit 3-I) drive (R3). When diags is nil it is FAIL-FAST: any
 // LoadConfig/Scan/LoadUnified/ApplyDiscover error aborts with that error. When diags is non-nil it is
 // ERROR-TOLERANT: each such error becomes a spec.Diagnostic and the load continues best-effort (no
 // config → empty; a scan failure → zero candies; a unified-load failure → no deploy/template fill), so
-// validate runs on a broken project. The build vocabulary is registered (so ResolveBox resolves
-// distro/builder) exactly as before.
+// the host-natural checks still run on a broken project. The build vocabulary is registered (so
+// ResolveBox resolves distro/builder) exactly as before.
 func loadProjectForResolve(dir string, opts loaderkit.ResolveOpts, diags *spec.Diagnostics) (*loadedProject, error) {
 	lp := &loadedProject{layers: map[string]spec.CandyReader{}}
 
@@ -133,22 +145,6 @@ func addLoadDiag(diags *spec.Diagnostics, err error) {
 	diags.Items = append(diags.Items, spec.Diagnostic{Severity: diagSeverityError, Message: err.Error()})
 }
 
-// buildResolvedProjectTolerant is the error-TOLERANT sibling of buildResolvedProjectFromDir: load and
-// resolve failures become spec.Diagnostic entries (skip+continue) instead of aborting. Returns the
-// PARTIAL envelope, the loaded raw pieces (which the host-natural checks read), and the resolve
-// diagnostics gathered so far. Used by the validate-project host-builder.
-func buildResolvedProjectTolerant(dir string, opts loaderkit.ResolveOpts) (*spec.ResolvedProject, *loadedProject, spec.Diagnostics) {
-	diags := &spec.Diagnostics{}
-	lp, _ := loadProjectForResolve(dir, opts, diags) // tolerant: the error return is always nil
-	if lp.empty {
-		return &spec.ResolvedProject{}, lp, *diags
-	}
-	// projectResolvedProject with a non-nil diags never returns a Go error (its only error path is the
-	// fail-fast diags==nil branch), so the partial envelope is always usable.
-	rp, _ := projectResolvedProject(lp.cfg, lp.layers, lp.uf, lp.distroCfg, lp.builderCfg, lp.initCfg, dir, lp.version, opts, diags)
-	return rp, lp, *diags
-}
-
 // runHostNaturalValidateChecks runs the validation rules that a plugin structurally CANNOT (they read
 // RAW authored config a projection does not carry) over the loaded project, appending each finding as
 // an error-severity spec.Diagnostic. This is the ONLY validation left host-side after the engine moves
@@ -191,11 +187,20 @@ func runHostNaturalValidateChecks(lp *loadedProject, dir string, opts loaderkit.
 	}
 }
 
-// hostBuildValidateProject is the "validate-project" host-builder (#46): load the project at req.Dir
-// (empty = cwd) TOLERANTLY, project the partial envelope, run the host-natural checks, and return the
-// combined spec.ValidateProjectReply{Project, Diagnostics}. The plugin merges these host diagnostics
-// with its own pure-rule + resolution-graph findings for the final verdict + exit code.
-func hostBuildValidateProject(_ context.Context, req spec.ValidateProjectRequest, _ buildEngineContext) (spec.ValidateProjectReply, error) {
+// hostBuildValidateProjectChecks is the "validate-project-checks" host-builder (#55 step3 unit
+// 3-I) — the SLIMMED remainder of the former "validate-project" seam (#46) after the TOLERANT
+// resolved-project projection relocated onto build:project's OpValidate leg
+// (candy/plugin-build/resolve_project_tolerant.go, which reuses 3b's proven-portable loaderkit
+// primitives instead of this host's LoadConfig/ScanAllCandyWithConfigOpts). This leg's OWN
+// tolerant load (loadProjectForResolve, kept — also still used by build_overlay.go's fail-fast
+// call) exists ONLY to feed the host-natural checks + the registry D-data below with the RAW
+// *Config/*buildkit.DistroConfig/*BuilderConfig a projected envelope does not carry — it no
+// longer projects an envelope itself (projectResolvedProject/buildResolvedProjectTolerant,
+// DELETED). Returns a spec.ValidateProjectReply whose Project carries ONLY
+// ProviderCapabilities/ActCapableVerbs; candy/plugin-box's runValidateEngine calls THIS leg
+// alongside build:project(OpValidate) and merges both replies' Diagnostics + this reply's D-data
+// onto the plugin's own tolerant envelope before running its pure/graph rules.
+func hostBuildValidateProjectChecks(_ context.Context, req spec.ValidateProjectRequest, _ buildEngineContext) (spec.ValidateProjectReply, error) {
 	dir := req.Dir
 	if dir == "" {
 		d, err := os.Getwd()
@@ -205,10 +210,20 @@ func hostBuildValidateProject(_ context.Context, req spec.ValidateProjectRequest
 		dir = d
 	}
 	opts := loaderkit.ResolveOpts{IncludeDisabled: req.IncludeDisabled}
-	rp, lp, diags := buildResolvedProjectTolerant(dir, opts)
-	runHostNaturalValidateChecks(lp, dir, opts, &diags)
+	// loadDiags is DISCARDED (not returned): a LoadConfig/scan/LoadUnified failure here is the SAME
+	// underlying disk-file failure candy/plugin-build's build:project(OpValidate) leg's OWN tolerant
+	// load already reports in envReply.Diagnostics (both legs load the identical charly.yml) —
+	// surfacing it from BOTH legs would duplicate the finding verbatim in the merged verdict (caught
+	// live: a base⊻from CUE-disjunction load failure printed twice before this fix). Only
+	// runHostNaturalValidateChecks's OWN rule findings (checksDiags) are genuinely NEW information
+	// the plugin's envelope resolve cannot produce.
+	loadDiags := &spec.Diagnostics{}
+	lp, _ := loadProjectForResolve(dir, opts, loadDiags) // tolerant: the error return is always nil
+	checksDiags := &spec.Diagnostics{}
+	runHostNaturalValidateChecks(lp, dir, opts, checksDiags)
+	rp := &spec.ResolvedProject{}
 	fillValidateWordSets(rp, lp)
-	return spec.ValidateProjectReply{Project: rp, Diagnostics: diags}, nil
+	return spec.ValidateProjectReply{Project: rp, Diagnostics: *checksDiags}, nil
 }
 
 // fillValidateWordSets projects the two REGISTRY-derived D-data word sets the validate plugin consumes
@@ -264,7 +279,7 @@ func fillValidateWordSets(rp *spec.ResolvedProject, lp *loadedProject) {
 }
 
 var _ = func() bool {
-	registerHostBuilder(validateProjectBuilderKind, typedHostBuilder(validateProjectBuilderKind, hostBuildValidateProject))
+	registerHostBuilder(validateProjectChecksBuilderKind, typedHostBuilder(validateProjectChecksBuilderKind, hostBuildValidateProjectChecks))
 	return true
 }()
 

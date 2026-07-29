@@ -116,7 +116,7 @@ func TestExternalPluginStep_ReverseChannelEndToEnd(t *testing.T) {
 	//    K5-A item 1) lowers a `run: plugin: examplestep` op whose provider is an external
 	//    grpcProvider to an ExternalPluginStep (not an OpStep).
 	layer := testCandy("examplestep-deploy-consumer", spec.CandyModel{}, spec.CandyView{})
-	img := &buildkit.ResolvedBox{Tags: []string{"fedora"}}
+	img := &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Tags: []string{"fedora"}}}
 	userDir, _ := deploykit.ResolveUserSpec(op.RunAs, img)
 	reply, err := hostBuildConstructStep(ctx, spec.ConstructStepRequest{
 		Op: *op, CandyName: layer.GetName(), CandySourceDir: layer.GetSourceDir(),

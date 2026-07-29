@@ -3,7 +3,7 @@ package check
 // venue.go — K1-unblock W3 Unit A: the venue classifier + executor builder relocated from
 // charly/check_venue.go. Every dependency this file had on core-only state (LoadUnified,
 // resolveTreeRoot, the core-private providerRegistry via nodeTraits' synthetic-node fallback) is
-// replaced by the resolved-project envelope (HostBuild("resolved-project")) already fetched by
+// replaced by the resolved-project envelope (InvokeProvider("build","project")) already fetched by
 // resolvedProject (checkproject.go) — a loader-stamped node ALWAYS carries a non-nil .Descent (via
 // the host's stampBundleDescents pass), so the plugin-side nodeTraits below never needs the
 // registry-backed synthetic-node fallback the core version carries for un-stamped nodes built

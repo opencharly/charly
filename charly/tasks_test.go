@@ -14,17 +14,7 @@ import (
 // testResolvedBox returns a ResolvedBox suitable for feeding the
 // task emitters. Uses fedora (rpm) by default with UID/GID 1000.
 func testResolvedBox() *buildkit.ResolvedBox {
-	return &buildkit.ResolvedBox{
-		Name:         "test-img",
-		User:         "user",
-		UID:          1000,
-		GID:          1000,
-		Home:         "/home/user",
-		Pkg:          "rpm",
-		BuildFormats: []string{"rpm"},
-		Tags:         []string{"all", "rpm"},
-		DistroDef:    testDistroDef("fedora"),
-	}
+	return &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "test-img", User: "user", UID: 1000, GID: 1000, Home: "/home/user", Pkg: "rpm", BuildFormats: []string{"rpm"}, Tags: []string{"all", "rpm"}}, DistroDef: testDistroDef("fedora")}
 }
 
 // --- Task.Kind() — exactly-one-verb enforcement ---

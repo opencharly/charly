@@ -103,7 +103,7 @@ func (c *BundleAddCmd) resolveNodeOverlays(path string, node *spec.BundleNode) (
 // InstallOptsApplyTo is fill-empty, so applying the template's opts after
 // the deployment's leaves the deployment's values intact and only fills the
 // gaps. The template lookup fetches the resolved-project envelope (the
-// SAME "resolved-project" HostBuild seam bundle-compile already calls) and
+// SAME InvokeProvider("build","project") seam bundle-compile already calls) and
 // reads its Templates.Local RawBody map — the map is already
 // namespace-qualified (`ns.tmpl`) by the host's fillNamespacedTemplates, so
 // a plain map lookup on node.From covers both a bare and a qualified ref
@@ -132,7 +132,7 @@ func resolveNodeTemplate(target, path string, node *spec.BundleNode, addCandies 
 
 // lookupLocalTemplate resolves a (possibly namespace-qualified) kind:local template name into its
 // *spec.ResolvedLocal, entirely via existing generic seams — no LoadUnified, no new HostBuild kind:
-//  1. fetch the resolved-project envelope (HostBuild("resolved-project") — the established seam
+//  1. fetch the resolved-project envelope (InvokeProvider("build","project") — the established seam
 //     compileDeployPlans already calls) and read Templates.Local[name] (the RawBody the host's
 //     fillNamespacedTemplates already qualifies by namespace prefix);
 //  2. project that raw body into a *ResolvedLocal via the "local" kind provider's own OpResolve leg
@@ -152,7 +152,7 @@ func lookupLocalTemplate(name string) (*spec.ResolvedLocal, error) {
 	if err != nil {
 		return nil, err
 	}
-	envJSON, err := cmdExec.HostBuild(cmdCtx, "resolved-project", envReq)
+	envJSON, err := cmdExec.InvokeProvider(cmdCtx, "build", "project", sdk.OpResolve, envReq, nil, sdk.InvokeProviderOpts{})
 	if err != nil {
 		return nil, fmt.Errorf("fetch resolved-project envelope: %w", err)
 	}

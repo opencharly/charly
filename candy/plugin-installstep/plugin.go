@@ -16,7 +16,7 @@
 //     — a pure function of the step + a few build-context SCALARS; op: the candy's plan.Ops rendered
 //     through the SAME task-emission pipeline WriteCandySteps drives). Rather than calling back a
 //     host-side renderer, this plugin fetches the "resolved-project" envelope ONCE per project dir
-//     (HostBuild("resolved-project"), cached — the SAME generic seam candy/plugin-box/plugin-bundle/
+//     (InvokeProvider("build","project"), cached — the SAME generic seam candy/plugin-box/plugin-bundle/
 //     plugin-check already consume) and constructs its OWN *deploykit.Generator from it via the
 //     SHARED deploykit.NewRenderGeneratorFromProject helper — the identical construction source
 //     candy/plugin-build (the box-build render) and candy/plugin-deploy-pod (the overlay render) use
@@ -26,7 +26,7 @@
 //     for, whether this is a dev-bed build, and the build-context-relative dir an Op step's inline
 //     content stages under) ride the SAME OpEmit Invoke's spec.BuildEnv (op.Env) every word already
 //     receives — Image/DevLocalPkg/ImageBuildDir/ContextRelPrefix — so there is exactly ONE host
-//     round-trip per HOST-COUPLED word's OpEmit: HostBuild("resolved-project"), and only once per
+//     round-trip per HOST-COUPLED word's OpEmit: InvokeProvider("build","project"), and only once per
 //     project dir (cached across every step of the SAME build).
 //
 // The DEPLOY leg for ALL these kinds STAYS in sdk/kit.WalkPlans (walkFile / walkShellHook
@@ -207,7 +207,7 @@ func replyFragment(frag string) (*pb.InvokeReply, error) {
 var genCache sync.Map // string (dir) -> *deploykit.Generator
 
 // getGenerator returns the cached *deploykit.Generator for dir, fetching + constructing it on a
-// cache miss: HostBuild("resolved-project") (the SAME generic envelope seam candy/plugin-box /
+// cache miss: InvokeProvider("build","project") (the SAME generic envelope seam candy/plugin-box /
 // candy/plugin-bundle / candy/plugin-check already consume) → deploykit.NewRenderGeneratorFromProject
 // (the SAME shared construction source candy/plugin-build + candy/plugin-deploy-pod use, R3/DRY).
 func getGenerator(ctx context.Context, exec *sdk.Executor, dir string, devLocalPkg bool, extraCandyRefs []string) (*deploykit.Generator, error) {
@@ -218,7 +218,7 @@ func getGenerator(ctx context.Context, exec *sdk.Executor, dir string, devLocalP
 	if err != nil {
 		return nil, fmt.Errorf("marshal resolved-project request: %w", err)
 	}
-	resJSON, err := exec.HostBuild(ctx, "resolved-project", reqJSON)
+	resJSON, err := exec.InvokeProvider(ctx, "build", "project", sdk.OpResolve, reqJSON, nil, sdk.InvokeProviderOpts{})
 	if err != nil {
 		return nil, fmt.Errorf("host resolved-project: %w", err)
 	}

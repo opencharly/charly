@@ -20,7 +20,7 @@ import (
 // are ALL sdk-portable, so a plugin decodes + dials them exactly like the host did. The ONLY thing
 // that genuinely could not cross the process boundary was never true — it was never attempted.
 //
-// buildStatusRootsTree resolves the declared tree (project, via HostBuild("resolved-project"),
+// buildStatusRootsTree resolves the declared tree (project, via InvokeProvider("build","project"),
 // merged with the operator's per-host overlay via deploykit.LoadBundleConfig) into the wire-safe
 // []spec.StatusNestedNode shape overlay.go's PURE fold (applyNestedOverlay) consumes.
 
@@ -30,13 +30,13 @@ import (
 const nestedProbeTimeout = 4 * time.Second
 
 // resolvedProject fetches the resolved-project envelope over the reverse channel — the same
-// HostBuild("resolved-project") seam candy/plugin-check and candy/plugin-substrate already consume.
+// InvokeProvider("build","project") seam candy/plugin-check and candy/plugin-substrate already consume.
 func resolvedProject(ex *sdk.Executor, ctx context.Context) (*spec.ResolvedProject, error) {
 	reqJSON, err := json.Marshal(spec.ResolvedProjectRequest{Dir: ""})
 	if err != nil {
 		return nil, err
 	}
-	out, err := ex.HostBuild(ctx, "resolved-project", reqJSON)
+	out, err := ex.InvokeProvider(ctx, "build", "project", sdk.OpResolve, reqJSON, nil, sdk.InvokeProviderOpts{})
 	if err != nil {
 		return nil, err
 	}

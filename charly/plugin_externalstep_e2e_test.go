@@ -101,7 +101,7 @@ func TestExternalStepKind_EndToEnd(t *testing.T) {
 	// hand-built one) proves the FULL authoring → compile → wire path.
 	op := &spec.Op{Plugin: "examplestepkind", PluginInput: map[string]any{"marker": "EXTERNAL-STEPKIND-E2E"}}
 	layer := testCandy("plugin-example-stepkind", spec.CandyModel{}, spec.CandyView{})
-	img := &buildkit.ResolvedBox{Tags: []string{"fedora"}}
+	img := &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Tags: []string{"fedora"}}}
 	userDir, _ := deploykit.ResolveUserSpec(op.RunAs, img)
 	constructReply, err := hostBuildConstructStep(context.Background(), spec.ConstructStepRequest{
 		Op: *op, CandyName: layer.GetName(), CandySourceDir: layer.GetSourceDir(),
@@ -130,7 +130,7 @@ func TestExternalStepKind_EndToEnd(t *testing.T) {
 	// returned Containerfile fragment — baking the persistent build marker with the opaque
 	// payload's value (proving the Payload round-trips through OpEmit too, and that a step kind
 	// with an EmitOCI fragment can be EXTERNALIZED — the one addition C1 needs).
-	frag, err := ociEmitStep(step, &deploykit.InstallPlan{Box: "check-stepkind"}, []string{"fedora"}, buildEngineContext{Box: &buildkit.ResolvedBox{Name: "check-stepkind", Tags: []string{"fedora"}}})
+	frag, err := ociEmitStep(step, &deploykit.InstallPlan{Box: "check-stepkind"}, []string{"fedora"}, buildEngineContext{Box: &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "check-stepkind", Tags: []string{"fedora"}}}})
 	if err != nil {
 		t.Fatalf("ociEmitStep(external:examplestepkind): %v", err)
 	}

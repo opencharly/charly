@@ -147,7 +147,7 @@ func (c *BundleShowCmd) Run() error {
 }
 
 // BundleExportCmd is the `charly bundle export [boxes…]` grammar (K4-C: runs plugin-side;
-// --all reaches the project via the established HostBuild("resolved-project") seam).
+// --all reaches the project via the established InvokeProvider("build","project") seam).
 type BundleExportCmd struct {
 	Boxes  []string `arg:"" optional:"" help:"Boxes to export (default: all with overrides)"`
 	Output string   `short:"o" help:"Write to file instead of stdout"`

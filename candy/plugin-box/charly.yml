@@ -17,7 +17,7 @@ plugin-box:
             resolution-graph checks IN-PLUGIN over it, merging the host's CUE-conformance / tunable /
             base⊻from diagnostics for the verdict; `pkg` reaches the hidden core __box-pkg reentry
             over HostBuild("cli"); `inspect` and `list` read the generic spec.ResolvedProject envelope
-            (HostBuild("resolved-project")) — inspect's default JSON is snake_case canonical — with the
+            (InvokeProvider("build","project")) — inspect's default JSON is snake_case canonical — with the
             deploy-overlay formats (inspect tunnel/bind_mounts) + store-live `list tags` reaching the
             hidden core __box-inspect-overlay / __box-list-tags reentries. Their data still needs the
             fully-resolved project / deploy overlay / podman store the plugin cannot compute pre-K1. It

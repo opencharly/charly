@@ -17,7 +17,7 @@ import (
 // grammar + the lease-table formatting; it reaches the arbiter — its OWN peer capability verb:arbiter
 // (compiled-in) — DIRECTLY via InvokeProvider over the in-proc reverse channel. No hidden `__preempt-*`
 // forward, no in-core proxy hop: command:preempt → InvokeProvider → verb:arbiter → (InvokeProvider /
-// HostBuild("resolved-project") → core host seams). preempt is the first compiled-in COMMAND that
+// InvokeProvider("build","project") → core host seams). preempt is the first compiled-in COMMAND that
 // reaches a peer VERB plugin over InvokeProvider (the HostBuild commands reach a terminal host
 // builder; this reaches another plugin). COMPILED-IN because Invoke(OpRun) needs the reverse
 // channel; out-of-process CliMain errors.

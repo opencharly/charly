@@ -37,11 +37,11 @@ import (
 //      (LoadUnified-coupled), and ONLY because it has core-internal callers OUTSIDE the arbiter
 //      (gpu_allocate.go/gpu_imply.go — the operator-deferred GPU auto-allocation exception, not
 //      K-wave inventory). The arbiter itself no longer reaches it: candy/plugin-preempt reads
-//      resources off the generic HostBuild("resolved-project") envelope (rp.Resources) instead.
+//      resources off the generic InvokeProvider("build","project") envelope (rp.Resources) instead.
 //
 //   K1-unblock wave 1 retired the former bespoke arbiter reverse-RPC channel entirely (the
 //   "2 genuinely K1-blocked seams" it carried — gather/resources): candy/plugin-preempt now
-//   reads its deploy tree + resources off HostBuild("resolved-project") and does its own
+//   reads its deploy tree + resources off InvokeProvider("build","project") and does its own
 //   holder-filtering/VM-claimant-lookup in-plugin via the portable sdk/deploykit helpers
 //   (FilterPreemptibleHolders/FindVMClaimant/HolderAddrFor/MergedDeployTree), the SAME functions
 //   host_build_config_resolve.go's VM-claimant lookup now shares (R3). The former host handler,
@@ -222,7 +222,7 @@ func releaseResourceClaim(claimant string) {
 //
 // K1-unblock wave 1 retired gatherDeployNodes/gatherPreemptibleHolders/lookupVMClaimant/
 // holderAddrFor from this file entirely: candy/plugin-preempt now reads its deploy tree off the
-// generic HostBuild("resolved-project") envelope (rp.Deploy) instead of a bespoke "gather"
+// generic InvokeProvider("build","project") envelope (rp.Deploy) instead of a bespoke "gather"
 // reverse RPC, and does its own holder-filtering + VM-claimant lookup in-plugin via the portable
 // sdk/deploykit helpers (FilterPreemptibleHolders/FindVMClaimant/HolderAddrFor/MergedDeployTree —
 // the SAME functions host_build_config_resolve.go's VM-claimant lookup now shares, R3). The

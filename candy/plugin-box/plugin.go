@@ -17,10 +17,11 @@
 //     / kit.AddBox directly (the scaffold ENGINE already lives in sdk/kit). Zero core reentry.
 //
 //   - command:validate — `charly box validate`: fetches the error-TOLERANT resolved-project envelope
-//     (HostBuild("validate-project") → spec.ValidateProjectReply) and runs the whole per-kind/op rule
-//     ENGINE + the deploykit resolution-graph checks IN-PLUGIN over that envelope, MERGING the host's
-//     CUE-conformance/tunable/base⊻from diagnostics for the verdict (validate.go / validate_rules.go /
-//     validate_graph.go / validate_check.go).
+//     (InvokeProvider("build","project",sdk.OpValidate) → spec.ValidateProjectReply, #55 step3 unit
+//     3-I — relocated from the former HostBuild("validate-project")) and runs the whole per-kind/op
+//     rule ENGINE + the deploykit resolution-graph checks IN-PLUGIN over that envelope, MERGING the
+//     host's CUE-conformance/tunable/base⊻from diagnostics (now HostBuild("validate-project-checks"))
+//     for the verdict (validate.go / validate_rules.go / validate_graph.go / validate_check.go).
 //
 //   - command:pkg — `charly box pkg`: runs the localpkg build engine IN-PLUGIN (K3 build-tail
 //     move, coneB-pkgcmd fold) by INVOKING the peer compiled-in build:pkg word (candy/plugin-build)
@@ -46,7 +47,7 @@
 //     builder pre-pass — stays behind thin HostBuild seams the candy invokes.
 //
 //   - command:inspect — `charly box inspect`: reads the generic spec.ResolvedProject envelope
-//     (HostBuild("resolved-project")) and prints the resolved box view — snake_case JSON by default,
+//     (InvokeProvider("build","project")) and prints the resolved box view — snake_case JSON by default,
 //     scalar/box-aggregate fields per --format. The deploy-overlay formats (tunnel/bind_mounts) render
 //     in-plugin off the deploy overlay + the resolved-project envelope (no reentry). See inspect_list.go.
 //

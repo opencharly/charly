@@ -20,7 +20,7 @@ import (
 // projection of the resolved CheckVenue: the generic spec.VenueDescriptor (the host re-materializes a
 // live DeployExecutor from it — a live executor never crosses the wire) plus the scalar venue facts
 // the legs consume. resolveCheckVenue itself reaches the merged deploy tree via this package's own
-// resolvedProject → HostBuild("resolved-project"), so the request carries only name + instance.
+// resolvedProject → InvokeProvider("build","project"), so the request carries only name + instance.
 
 // resolveVenueForHost serves one verb:check-resolve OpResolve: classify name/instance's venue and
 // return its wire-safe projection. It recovers the reverse-channel executor the host threaded (the

@@ -6,7 +6,7 @@ package substratekind
 // each device's status host-side (no goadb — mirrors the original design).
 //
 // Every input this needs turned out to be reachable WITHOUT a new seam:
-//   - the PROJECT deploy tree via HostBuild("resolved-project") — the SAME
+//   - the PROJECT deploy tree via InvokeProvider("build","project") — the SAME
 //     seam status_k8s.go uses (proven live by the K5 lane-A landing).
 //   - the PER-MACHINE overlay (~/.config/charly/charly.yml) via
 //     deploykit.LoadBundleConfig() DIRECTLY — no host round-trip at all, so

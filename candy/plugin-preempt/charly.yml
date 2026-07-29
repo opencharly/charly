@@ -13,7 +13,7 @@ plugin-preempt:
                 driver-mode arbitration math (arbiter.go + arbiter_support.go). The arbiter reaches
                 its HOST dependencies — the project config, the VM/pod lifecycle, the GPU driver
                 flip — that it cannot hold across the module boundary over TWO generic reverse
-                legs: gather/resources read the generic Executor.HostBuild("resolved-project")
+                legs: gather/resources read the generic Executor.InvokeProvider("build","project")
                 envelope (K1-unblock wave 1 — the former bespoke arbiter reverse-RPC channel
                 + its host handler are DELETED); the other 6
                 (running / stop[+wait] / start / switchMode / ensureCDI / gpuCDI) run over
