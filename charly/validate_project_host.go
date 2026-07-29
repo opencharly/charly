@@ -52,7 +52,8 @@ type loadedProject struct {
 	empty      bool
 }
 
-// loadProjectForResolve is the ONE load path both buildResolvedProjectFromDir (fail-fast) and
+// loadProjectForResolve is the ONE load path both the overlay seam's fail-fast
+// loadProjectForResolve+projectResolvedProjectWithBoxes call (charly/build_overlay.go) and
 // buildResolvedProjectTolerant (validate) drive (R3). When diags is nil it is FAIL-FAST: any
 // LoadConfig/Scan/LoadUnified/ApplyDiscover error aborts with that error. When diags is non-nil it is
 // ERROR-TOLERANT: each such error becomes a spec.Diagnostic and the load continues best-effort (no
@@ -133,7 +134,8 @@ func addLoadDiag(diags *spec.Diagnostics, err error) {
 	diags.Items = append(diags.Items, spec.Diagnostic{Severity: diagSeverityError, Message: err.Error()})
 }
 
-// buildResolvedProjectTolerant is the error-TOLERANT sibling of buildResolvedProjectFromDir: load and
+// buildResolvedProjectTolerant is the error-TOLERANT sibling of the overlay seam's fail-fast
+// loadProjectForResolve+projectResolvedProjectWithBoxes call (charly/build_overlay.go): load and
 // resolve failures become spec.Diagnostic entries (skip+continue) instead of aborting. Returns the
 // PARTIAL envelope, the loaded raw pieces (which the host-natural checks read), and the resolve
 // diagnostics gathered so far. Used by the validate-project host-builder.

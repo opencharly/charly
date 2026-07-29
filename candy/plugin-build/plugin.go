@@ -56,6 +56,7 @@ func NewMeta() pb.PluginMetaServer {
 			{Class: "build", Word: "generate", Phase: sdk.PhaseBuild},
 			{Class: "build", Word: "ensure", Phase: sdk.PhaseBuild},
 			{Class: "build", Word: "pkg", Phase: sdk.PhaseBuild},
+			{Class: "build", Word: "project", Phase: sdk.PhaseBuild},
 		},
 		schemaFS)
 }
@@ -76,12 +77,44 @@ type provider struct{ pb.UnimplementedProviderServer }
 // RPC succeeds); an infrastructure failure (no executor, unknown op/word) is returned as a Go
 // error.
 func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
+	word := req.GetReserved()
+
+	// build:project rides OpResolve (#55 step3 unit 3b) — the plugin-side replacement for the
+	// deleted "resolved-project" HostBuild seam, reached via InvokeProvider peer-dispatch. Named
+	// "project" (not "resolve") because the WORD may never collide with an sdk.Op* selector VALUE
+	// (the F11 uniform-API gate, TestNoSinglePluginAPISurface): sdk.OpResolve == "resolve" already,
+	// so a provider word of literally "resolve" would violate it — caught live by that gate.
+	// Every other build word rides OpBuild, checked below.
+	if word == "project" {
+		if req.GetOp() != sdk.OpResolve {
+			return nil, fmt.Errorf("build project: unsupported op %q (only %q)", req.GetOp(), sdk.OpResolve)
+		}
+		ex, err := sdk.ExecutorForInvoke(ctx, req.GetExecutorBrokerId())
+		if err != nil {
+			return nil, fmt.Errorf("build project: reach host reverse channel: %w", err)
+		}
+		var rreq spec.ResolvedProjectRequest
+		if len(req.GetParamsJson()) > 0 {
+			if err := json.Unmarshal(req.GetParamsJson(), &rreq); err != nil {
+				return nil, fmt.Errorf("build project: decode ResolvedProjectRequest: %w", err)
+			}
+		}
+		rp, err := resolveProjectEnvelope(ctx, ex, rreq)
+		if err != nil {
+			return nil, fmt.Errorf("build project: %w", err)
+		}
+		out, err := json.Marshal(rp)
+		if err != nil {
+			return nil, fmt.Errorf("build project: encode reply: %w", err)
+		}
+		return &pb.InvokeReply{ResultJson: out}, nil
+	}
+
 	if req.GetOp() != sdk.OpBuild {
 		return nil, fmt.Errorf("build: unsupported op %q (only %q)", req.GetOp(), sdk.OpBuild)
 	}
-	word := req.GetReserved()
 	if word != "box" && word != "generate" && word != "ensure" && word != "pkg" {
-		return nil, fmt.Errorf("build: unknown build word %q (want box|generate|ensure|pkg)", word)
+		return nil, fmt.Errorf("build: unknown build word %q (want box|generate|ensure|pkg|project)", word)
 	}
 	ex, err := sdk.ExecutorForInvoke(ctx, req.GetExecutorBrokerId())
 	if err != nil {

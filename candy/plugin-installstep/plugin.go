@@ -218,7 +218,7 @@ func getGenerator(ctx context.Context, exec *sdk.Executor, dir string, devLocalP
 	if err != nil {
 		return nil, fmt.Errorf("marshal resolved-project request: %w", err)
 	}
-	resJSON, err := exec.HostBuild(ctx, "resolved-project", reqJSON)
+	resJSON, err := exec.InvokeProvider(ctx, "build", "project", sdk.OpResolve, reqJSON, nil, sdk.InvokeProviderOpts{})
 	if err != nil {
 		return nil, fmt.Errorf("host resolved-project: %w", err)
 	}

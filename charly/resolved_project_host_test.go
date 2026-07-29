@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"flag"
 	"os"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/vmshared"
 
 	"github.com/opencharly/spec/spec"
@@ -180,8 +180,8 @@ func TestResolvedProject_ByteStableGolden(t *testing.T) {
 }
 
 // writeResolvedProjectFixtureProject writes a minimal unified project (charly.yml + one discovered
-// candy) into a temp dir — the hermetic, box-free (no ResolveBox/vocab dependency) fixture the seam
-// round-trip test resolves.
+// candy) into a temp dir — the hermetic, box-free (no ResolveBox/vocab dependency) fixture the
+// projection round-trip test resolves.
 func writeResolvedProjectFixtureProject(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -212,28 +212,20 @@ func writeResolvedProjectFixtureProject(t *testing.T) string {
 	return dir
 }
 
-// TestResolvedProject_SeamRoundTrip proves the plugin-side path: a caller requests the resolved-project
-// envelope over the registered `resolved-project` HostBuild seam (request-decode → host build →
-// reply-encode, exactly what Executor.HostBuild drives over the reverse channel) and decodes
-// spec.ResolvedProject faithfully — the wire contract the ~20k K5 IOU consumers depend on.
-func TestResolvedProject_SeamRoundTrip(t *testing.T) {
+// TestResolvedProject_Projection proves the SHARED projection path (loadProjectForResolve +
+// projectResolvedProject — the same two functions the validate-project and overlay seams call
+// directly, per this file's header) decodes candy/candy-model/vocab data faithfully — the wire
+// contract candy/plugin-build's `build:project` word (the plugin-side envelope-fetch seam,
+// #55 step3 unit 3b) and its ~8 consumers depend on. The seam ROUND TRIP itself (marshal → host
+// dispatch → unmarshal, over InvokeProvider) is proven live by the R10 exploratory run against a
+// real project (box inspect / status / check-project / bundle resolve), not re-created here as a
+// second fixture — this test's job is the SHARED projection logic staying core-resident stays correct.
+func TestResolvedProject_Projection(t *testing.T) {
 	dir := writeResolvedProjectFixtureProject(t)
 
-	fn, ok := hostBuilderFor(resolvedProjectBuilderKind)
-	if !ok {
-		t.Fatal("resolved-project host-builder not registered")
-	}
-	reqJSON, err := json.Marshal(spec.ResolvedProjectRequest{Dir: dir})
+	rp, err := testBuildResolvedProject(t, dir, loaderkit.ResolveOpts{})
 	if err != nil {
-		t.Fatalf("marshal request: %v", err)
-	}
-	replyJSON, err := fn(context.Background(), reqJSON, buildEngineContext{})
-	if err != nil {
-		t.Fatalf("resolved-project host-build: %v", err)
-	}
-	var rp spec.ResolvedProject
-	if err := json.Unmarshal(replyJSON, &rp); err != nil {
-		t.Fatalf("decode spec.ResolvedProject over the seam: %v", err)
+		t.Fatalf("testBuildResolvedProject: %v", err)
 	}
 
 	cv, ok := rp.Candies["rp-fixture"]

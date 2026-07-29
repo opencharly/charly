@@ -4,7 +4,25 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/loaderkit"
+	"github.com/opencharly/spec/spec"
 )
+
+// testBuildResolvedProject is the test-only reproduction of the deleted buildResolvedProjectFromDir
+// (#55 step3 unit 3b moved its production form to candy/plugin-build's resolveProjectEnvelope): load
+// the project fail-fast via loadProjectForResolve, short-circuit to an empty envelope for a
+// project-less dir, else project it via the STILL-CORE projectResolvedProject (shared with the
+// validate-project + overlay seams).
+func testBuildResolvedProject(t *testing.T, dir string, opts loaderkit.ResolveOpts) (*spec.ResolvedProject, error) {
+	t.Helper()
+	lp, err := loadProjectForResolve(dir, opts, nil)
+	if err != nil {
+		return nil, err
+	}
+	if lp.empty {
+		return &spec.ResolvedProject{}, nil
+	}
+	return projectResolvedProject(lp.cfg, lp.layers, lp.uf, lp.distroCfg, lp.builderCfg, lp.initCfg, dir, lp.version, opts, nil)
+}
 
 // resolved_project_namespace_test.go — K1-unblock wave 2: proves the namespace-qualified
 // flattening added to spec.UnifiedFile.ProjectTemplates/fillNamespacedBoxes (resolved_project_host.go), and the
@@ -67,9 +85,9 @@ func TestProjectTemplates_NamespaceQualified(t *testing.T) {
 // import namespace, in addition to (additive, never replacing) the root-scoped boxes.
 func TestFillNamespacedBoxes_QualifiedView(t *testing.T) {
 	root := writeNamespaceImportFixture(t)
-	rp, err := buildResolvedProjectFromDir(root, loaderkit.ResolveOpts{})
+	rp, err := testBuildResolvedProject(t, root, loaderkit.ResolveOpts{})
 	if err != nil {
-		t.Fatalf("buildResolvedProjectFromDir: %v", err)
+		t.Fatalf("testBuildResolvedProject: %v", err)
 	}
 	view, ok := rp.Boxes["fedora.jupyter"]
 	if !ok {

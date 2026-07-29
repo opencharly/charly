@@ -18,8 +18,9 @@ import (
 
 // resolveBoxSelection computes the resolved *buildkit.ResolvedBox and topo-sorted candy order
 // for a primary pod/k8s image deploy (req.BoxRef) from the already-fetched envelope: rp.Boxes[box_ref]
-// is the SAME spec.ResolvedBoxView hostBuildResolvedProject already computed to build the
-// envelope in the first place (no re-derivation — R3), re-hydrated via deploykit.NewSpecResolvedBox
+// is the SAME spec.ResolvedBoxView candy/plugin-build's `build:project` word (resolveProjectEnvelope,
+// #55 step3 unit 3b) already computed to build the envelope in the first place (no re-derivation —
+// R3), re-hydrated via deploykit.NewSpecResolvedBox
 // exactly like the BOX-VIEW shape already does host-side. The candy order comes from img.Candy
 // over the SAME envelopeCandyModels the CANDY shape uses.
 func resolveBoxSelection(rp *spec.ResolvedProject, req spec.DeployCompileRequest) (*buildkit.ResolvedBox, []string, error) {

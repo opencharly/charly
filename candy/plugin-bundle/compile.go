@@ -232,7 +232,7 @@ func fetchResolvedProject(dir string, extraCandyRefs []string, includeDisabled b
 	if err != nil {
 		return nil, fmt.Errorf("bundle: marshal resolved-project request: %w", err)
 	}
-	envJSON, err := cmdExec.HostBuild(cmdCtx, "resolved-project", envReq)
+	envJSON, err := cmdExec.InvokeProvider(cmdCtx, "build", "project", sdk.OpResolve, envReq, nil, sdk.InvokeProviderOpts{})
 	if err != nil {
 		return nil, fmt.Errorf("bundle: fetch resolved-project envelope: %w", err)
 	}

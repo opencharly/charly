@@ -133,7 +133,7 @@ func resolvedProject(ctx context.Context, exec *sdk.Executor) (*spec.ResolvedPro
 	if err != nil {
 		return nil, err
 	}
-	out, err := exec.HostBuild(ctx, "resolved-project", reqJSON)
+	out, err := exec.InvokeProvider(ctx, "build", "project", sdk.OpResolve, reqJSON, nil, sdk.InvokeProviderOpts{})
 	if err != nil {
 		return nil, err
 	}

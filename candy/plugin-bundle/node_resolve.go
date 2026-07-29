@@ -152,7 +152,7 @@ func lookupLocalTemplate(name string) (*spec.ResolvedLocal, error) {
 	if err != nil {
 		return nil, err
 	}
-	envJSON, err := cmdExec.HostBuild(cmdCtx, "resolved-project", envReq)
+	envJSON, err := cmdExec.InvokeProvider(cmdCtx, "build", "project", sdk.OpResolve, envReq, nil, sdk.InvokeProviderOpts{})
 	if err != nil {
 		return nil, fmt.Errorf("fetch resolved-project envelope: %w", err)
 	}

@@ -91,7 +91,7 @@ func fetchResolvedProject(ctx context.Context) (*spec.ResolvedProject, error) {
 	if err != nil {
 		return nil, fmt.Errorf("marshal resolved-project request: %w", err)
 	}
-	envJSON, err := exec.HostBuild(ctx, "resolved-project", envReq)
+	envJSON, err := exec.InvokeProvider(ctx, "build", "project", sdk.OpResolve, envReq, nil, sdk.InvokeProviderOpts{})
 	if err != nil {
 		return nil, fmt.Errorf("fetch resolved-project envelope: %w", err)
 	}

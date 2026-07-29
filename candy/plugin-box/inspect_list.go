@@ -32,7 +32,7 @@ func (h *hostClient) resolvedProject(includeDisabled bool) (*spec.ResolvedProjec
 	if err != nil {
 		return nil, err
 	}
-	resJSON, err := h.exec.HostBuild(h.ctx, "resolved-project", reqJSON)
+	resJSON, err := h.exec.InvokeProvider(h.ctx, "build", "project", sdk.OpResolve, reqJSON, nil, sdk.InvokeProviderOpts{})
 	if err != nil {
 		return nil, err
 	}
