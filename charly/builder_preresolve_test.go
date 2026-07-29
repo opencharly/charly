@@ -14,17 +14,12 @@ import (
 // (pixi/npm/cargo by detect-file, aur by detect-config) with the given build formats — the gate the
 // scoping fix turns on.
 func builderTestImg(buildFormats ...string) *buildkit.ResolvedBox {
-	return &buildkit.ResolvedBox{
-		Name:         "t",
-		Home:         "/home/u",
-		BuildFormats: buildFormats,
-		BuilderConfig: &buildkit.BuilderConfig{Builder: map[string]*vmshared.BuilderDef{
-			"pixi":  {DetectFiles: []string{"pixi.toml"}},
-			"npm":   {DetectFiles: []string{"package.json"}},
-			"cargo": {DetectFiles: []string{"Cargo.toml"}},
-			"aur":   {DetectConfig: "aur"},
-		}},
-	}
+	return &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "t", Home: "/home/u", BuildFormats: buildFormats}, BuilderConfig: &buildkit.BuilderConfig{Builder: map[string]*vmshared.BuilderDef{
+		"pixi":  {DetectFiles: []string{"pixi.toml"}},
+		"npm":   {DetectFiles: []string{"package.json"}},
+		"cargo": {DetectFiles: []string{"Cargo.toml"}},
+		"aur":   {DetectConfig: "aur"},
+	}}}
 }
 
 // aurCandy builds a spec.CandyReader fixture carrying an "aur" FormatSection with the given
@@ -73,7 +68,7 @@ func TestDetectExternalizedBuilders_ScopedAndDistroGated(t *testing.T) {
 	}
 
 	// (5) No BuilderConfig (e.g. a synthetic compile context) → nil, never a panic.
-	if got := deploykit.DetectExternalizedBuilders([]string{"jupyter"}, pixiOnly, externalizedBuilders, &buildkit.ResolvedBox{Name: "x"}); got != nil {
+	if got := deploykit.DetectExternalizedBuilders([]string{"jupyter"}, pixiOnly, externalizedBuilders, &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "x"}}); got != nil {
 		t.Fatalf("nil BuilderConfig surfaced %v, want nil", got)
 	}
 }

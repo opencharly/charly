@@ -79,7 +79,7 @@ func TestCompileServiceSteps_DistroDivergentDaemons(t *testing.T) {
 	layer := testCandy("virtualization", spec.CandyModel{Service: virtualizationServiceEntries()}, spec.CandyView{})
 
 	t.Run("debian systemd (vm) enables only libvirtd.socket", func(t *testing.T) {
-		img := &buildkit.ResolvedBox{Name: "debian-coder", Distro: []string{"debian:13", "debian"}}
+		img := &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "debian-coder", Distro: []string{"debian:13", "debian"}}}
 		steps := testCompileServiceSteps(t, layer, img, deploykit.HostContext{MachineVenue: true})
 		units := packagedUnits(steps)
 		if len(units) != 1 || units[0] != "libvirtd.socket" {
@@ -93,7 +93,7 @@ func TestCompileServiceSteps_DistroDivergentDaemons(t *testing.T) {
 	})
 
 	t.Run("fedora systemd (vm) enables the modular sockets", func(t *testing.T) {
-		img := &buildkit.ResolvedBox{Name: "fedora-coder", Distro: []string{"fedora:43", "fedora"}}
+		img := &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "fedora-coder", Distro: []string{"fedora:43", "fedora"}}}
 		steps := testCompileServiceSteps(t, layer, img, deploykit.HostContext{MachineVenue: true})
 		units := packagedUnits(steps)
 		want := map[string]bool{"virtqemud.socket": true, "virtnetworkd.socket": true}
@@ -103,7 +103,7 @@ func TestCompileServiceSteps_DistroDivergentDaemons(t *testing.T) {
 	})
 
 	t.Run("debian supervisord (oci) runs only the libvirtd exec daemon", func(t *testing.T) {
-		img := &buildkit.ResolvedBox{Name: "debian-coder", Distro: []string{"debian:13", "debian"}}
+		img := &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "debian-coder", Distro: []string{"debian:13", "debian"}}}
 		steps := testCompileServiceSteps(t, layer, img, deploykit.HostContext{})
 		if len(packagedUnits(steps)) != 0 {
 			t.Fatalf("debian supervisord must emit no packaged units, got %v", packagedUnits(steps))
@@ -114,7 +114,7 @@ func TestCompileServiceSteps_DistroDivergentDaemons(t *testing.T) {
 	})
 
 	t.Run("fedora supervisord (oci) runs the two modular exec daemons", func(t *testing.T) {
-		img := &buildkit.ResolvedBox{Name: "fedora-coder", Distro: []string{"fedora:43", "fedora"}}
+		img := &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "fedora-coder", Distro: []string{"fedora:43", "fedora"}}}
 		steps := testCompileServiceSteps(t, layer, img, deploykit.HostContext{})
 		if n := customServiceCount(steps); n != 2 {
 			t.Fatalf("fedora supervisord custom steps = %d, want 2 (virtqemud + virtnetworkd)", n)
@@ -128,7 +128,7 @@ func TestCompileServiceSteps_DistroDivergentDaemons(t *testing.T) {
 	// NOT the operator host — else it keeps the modular [fedora,arch] virtqemud
 	// entries and `systemctl enable virtqemud.socket` fails on the debian guest.
 	t.Run("vm deploy: guest img wins over operator host distro", func(t *testing.T) {
-		img := &buildkit.ResolvedBox{Name: "vm-adhoc", Distro: []string{"debian:13", "debian"}}
+		img := &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "vm-adhoc", Distro: []string{"debian:13", "debian"}}}
 		// The exact hostCtx a vm deploy carries: Target=host, Distro=<operator>.
 		steps := testCompileServiceSteps(t, layer, img, deploykit.HostContext{MachineVenue: true, Distro: "arch"})
 		units := packagedUnits(steps)
@@ -172,7 +172,7 @@ func TestServiceRenderDistros_ImgIsAuthoritative(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := deploykit.ServiceRenderDistros(&buildkit.ResolvedBox{Distro: tc.img}, tc.hostCtx)
+			got := deploykit.ServiceRenderDistros(&buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Distro: tc.img}}, tc.hostCtx)
 			if len(got) != len(tc.want) {
 				t.Fatalf("serviceRenderDistros = %v, want %v", got, tc.want)
 			}
@@ -187,11 +187,11 @@ func TestServiceRenderDistros_ImgIsAuthoritative(t *testing.T) {
 
 func TestPrimaryDistroTag_ImgIsAuthoritative(t *testing.T) {
 	// vm deploy: guest img debian must win over operator arch hostCtx.
-	if got := deploykit.PrimaryDistroTag(&buildkit.ResolvedBox{Distro: []string{"debian:13", "debian"}}, deploykit.HostContext{MachineVenue: true, Distro: "arch"}); got != "debian:13" {
+	if got := deploykit.PrimaryDistroTag(&buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Distro: []string{"debian:13", "debian"}}}, deploykit.HostContext{MachineVenue: true, Distro: "arch"}); got != "debian:13" {
 		t.Fatalf("vm-deploy primaryDistroTag = %q, want debian:13 (guest, not operator arch)", got)
 	}
 	// host deploy: img chain == operator; byte-identical result.
-	if got := deploykit.PrimaryDistroTag(&buildkit.ResolvedBox{Distro: []string{"arch"}}, deploykit.HostContext{MachineVenue: true, Distro: "arch"}); got != "arch" {
+	if got := deploykit.PrimaryDistroTag(&buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Distro: []string{"arch"}}}, deploykit.HostContext{MachineVenue: true, Distro: "arch"}); got != "arch" {
 		t.Fatalf("host primaryDistroTag = %q, want arch", got)
 	}
 	// degenerate fallback.

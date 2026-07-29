@@ -8,24 +8,11 @@ import (
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/vmshared"
+	"github.com/opencharly/spec/spec"
 )
 
 func TestFilterImages(t *testing.T) {
-	images := map[string]*buildkit.ResolvedBox{
-		"fedora": {
-			Name:           "fedora",
-			IsExternalBase: true,
-		},
-		"fedora-test": {
-			Name:           "fedora-test",
-			Base:           "fedora",
-			IsExternalBase: false,
-		},
-		"ubuntu": {
-			Name:           "ubuntu",
-			IsExternalBase: true,
-		},
-	}
+	images := map[string]*buildkit.ResolvedBox{"fedora": {ResolvedBox: spec.ResolvedBox{Name: "fedora", IsExternalBase: true}}, "fedora-test": {ResolvedBox: spec.ResolvedBox{Name: "fedora-test", Base: "fedora", IsExternalBase: false}}, "ubuntu": {ResolvedBox: spec.ResolvedBox{Name: "ubuntu", IsExternalBase: true}}}
 
 	order := []string{"fedora", "ubuntu", "fedora-test"}
 
@@ -41,9 +28,7 @@ func TestFilterImages(t *testing.T) {
 }
 
 func TestFilterImagesUnknown(t *testing.T) {
-	images := map[string]*buildkit.ResolvedBox{
-		"fedora": {Name: "fedora", IsExternalBase: true},
-	}
+	images := map[string]*buildkit.ResolvedBox{"fedora": {ResolvedBox: spec.ResolvedBox{Name: "fedora", IsExternalBase: true}}}
 	_, err := deploykit.FilterBox([]string{"fedora"}, []string{"nonexistent"}, images)
 	if err == nil {
 		t.Error("expected error for unknown image")
@@ -51,23 +36,7 @@ func TestFilterImagesUnknown(t *testing.T) {
 }
 
 func TestFilterImagesIncludesBuilder(t *testing.T) {
-	images := map[string]*buildkit.ResolvedBox{
-		"builder": {
-			Name:           "builder",
-			IsExternalBase: true,
-		},
-		"fedora": {
-			Name:           "fedora",
-			IsExternalBase: true,
-			Builder:        buildkit.BuilderMap{"pixi": "builder", "npm": "builder"},
-		},
-		"app": {
-			Name:           "app",
-			Base:           "fedora",
-			IsExternalBase: false,
-			Builder:        buildkit.BuilderMap{"pixi": "builder", "npm": "builder"},
-		},
-	}
+	images := map[string]*buildkit.ResolvedBox{"builder": {ResolvedBox: spec.ResolvedBox{Name: "builder", IsExternalBase: true}}, "fedora": {ResolvedBox: spec.ResolvedBox{Name: "fedora", IsExternalBase: true, Builder: buildkit.BuilderMap{"pixi": "builder", "npm": "builder"}}}, "app": {ResolvedBox: spec.ResolvedBox{Name: "app", Base: "fedora", IsExternalBase: false, Builder: buildkit.BuilderMap{"pixi": "builder", "npm": "builder"}}}}
 
 	order := []string{"builder", "fedora", "app"}
 
@@ -90,27 +59,7 @@ func TestFilterImagesIncludesBootstrapBuilder(t *testing.T) {
 	// `charly update --build versa` path silently skipped scheduling
 	// cachyos-pacstrap-builder, and runPrivilegedBootstrap then hard-failed
 	// at resolveLocalImageRef with "build the bootstrap_builder_image first".
-	images := map[string]*buildkit.ResolvedBox{
-		"arch": {
-			Name:           "arch",
-			IsExternalBase: true,
-		},
-		"cachyos-pacstrap-builder": {
-			Name:           "cachyos-pacstrap-builder",
-			Base:           "arch",
-			IsExternalBase: false,
-		},
-		"cachyos": {
-			Name:                  "cachyos",
-			IsExternalBase:        true,
-			BootstrapBuilderImage: "cachyos-pacstrap-builder",
-		},
-		"app": {
-			Name:           "app",
-			Base:           "cachyos",
-			IsExternalBase: false,
-		},
-	}
+	images := map[string]*buildkit.ResolvedBox{"arch": {ResolvedBox: spec.ResolvedBox{Name: "arch", IsExternalBase: true}}, "cachyos-pacstrap-builder": {ResolvedBox: spec.ResolvedBox{Name: "cachyos-pacstrap-builder", Base: "arch", IsExternalBase: false}}, "cachyos": {ResolvedBox: spec.ResolvedBox{Name: "cachyos", IsExternalBase: true, BootstrapBuilderImage: "cachyos-pacstrap-builder"}}, "app": {ResolvedBox: spec.ResolvedBox{Name: "app", Base: "cachyos", IsExternalBase: false}}}
 
 	order := []string{"arch", "cachyos-pacstrap-builder", "cachyos", "app"}
 

@@ -38,7 +38,7 @@ func (stubEmitVerb) Invoke(_ context.Context, op *Operation) (*Result, error) {
 // grpcProvider implements.
 func TestInvokeVerbBuildEmit_BuildTimeOpEmit(t *testing.T) {
 	op := &spec.Op{Plugin: "stubemit", PluginInput: map[string]any{"marker": "stubemit-baked"}}
-	img := &buildkit.ResolvedBox{Tags: []string{"fedora:43", "fedora"}}
+	img := &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Tags: []string{"fedora:43", "fedora"}}}
 	frag, isScript, err := invokeVerbBuildEmit(context.Background(), stubEmitVerb{}, op, img)
 	if err != nil {
 		t.Fatalf("invokeVerbBuildEmit: %v", err)
@@ -126,7 +126,7 @@ func (stubResolveBuilder) Invoke(_ context.Context, op *Operation) (*Result, err
 // since the stub is reached through the SAME Provider.Invoke an external grpcProvider
 // implements.
 func TestResolveExternalBuilder_BuildTimeOpResolve(t *testing.T) {
-	img := &buildkit.ResolvedBox{Name: "fedora", Tags: []string{"fedora:43", "fedora"}}
+	img := &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "fedora", Tags: []string{"fedora:43", "fedora"}}}
 	reply, err := resolveExternalBuilder(stubResolveBuilder{}, "stubbuilder", "stubbuilder-consumer", img)
 	if err != nil {
 		t.Fatalf("resolveExternalBuilder: %v", err)

@@ -31,40 +31,8 @@ func canonKey(s string) string { return strings.ToLower(strings.ReplaceAll(s, "_
 // field `charly box inspect` serializes survives the projection and (b) the host-only compute caches
 // are DROPPED (InitSystem is the flagged judgment call: it is json:"-", so inspect never emits it).
 func fullResolvedBoxFixture() *buildkit.ResolvedBox {
-	return &buildkit.ResolvedBox{
-		Name:                  "demo",
-		Version:               "2026.100.0001",
-		EffectiveVersion:      "2026.100.0002",
-		Status:                "working",
-		Info:                  "a demo box",
-		CheckLevel:            "noagent",
-		Base:                  "fedora:43",
-		From:                  "builder:pacstrap",
-		BootstrapBuilderImage: "ghcr.io/opencharly/builder",
-		Platforms:             []string{"linux/amd64"},
-		Tag:                   "2026.100.0003",
-		Registry:              "ghcr.io/opencharly",
-		Pkg:                   "rpm",
-		Distro:                []string{"fedora:43", "fedora"},
-		BuildFormats:          []string{"rpm"},
-		Tags:                  []string{"all", "fedora"},
-		Candy:                 []string{"base", "charly"},
-		User:                  "user",
-		UID:                   1000,
-		GID:                   1000,
-		Home:                  "/home/user",
-		UserAdopted:           true,
-		Merge:                 &vmshared.MergeConfig{Auto: true, MaxMB: 512, MaxTotalMB: 4096},
-		Builder:               buildkit.BuilderMap{"pixi": "ghcr.io/opencharly/pixi"},
-		BuilderCapabilities:   []string{"pixi"},
-		Auto:                  true,
-		Network:               "host",
-		DataImage:             true,
-		IsExternalBase:        true,
-		FullTag:               "ghcr.io/opencharly/demo:2026.100.0003",
-		// Host-only json:"-" compute cache (must NOT leak into the wire view):
-		InitSystem: "supervisord",
-	}
+	return &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "demo", Version: "2026.100.0001", EffectiveVersion: "2026.100.0002", Status: "working", Info: "a demo box", CheckLevel: "noagent", Base: "fedora:43", From: "builder:pacstrap", BootstrapBuilderImage: "ghcr.io/opencharly/builder", Platforms: []string{"linux/amd64"}, Tag: "2026.100.0003", Registry: "ghcr.io/opencharly", Pkg: "rpm", Distro: []string{"fedora:43", "fedora"}, BuildFormats: []string{"rpm"}, Tags: []string{"all", "fedora"}, Candy: []string{"base", "charly"}, User: "user", UID: 1000, GID: 1000, Home: "/home/user", UserAdopted: true, Merge: &vmshared.MergeConfig{Auto: true, MaxMB: 512, MaxTotalMB: 4096}, Builder: buildkit.BuilderMap{"pixi": "ghcr.io/opencharly/pixi"}, BuilderCapabilities: []string{"pixi"}, Auto: true, Network: "host", DataImage: true, IsExternalBase: true, FullTag: "ghcr.io/opencharly/demo:2026.100.0003"}, // Host-only json:"-" compute cache (must NOT leak into the wire view):
+		InitSystem: "supervisord"}
 }
 
 // TestProjectResolvedBox_CompleteAndNoCacheLeak proves the two design invariants of the box view:

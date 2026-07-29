@@ -189,22 +189,7 @@ func TestBundleCompileParity_PluginRoundTrip(t *testing.T) {
 
 	// Hand-built fedora ResolvedBox (the compile target — a real builder config + fedora distro so
 	// the pixi builder step resolves for pre-commit; mirrors the K4-B RDD spike).
-	imgOld := &buildkit.ResolvedBox{
-		Name:             "k4b-parity",
-		EffectiveVersion: "2026.001.0001",
-		Base:             "quay.io/fedora/fedora:43",
-		IsExternalBase:   true,
-		UID:              1000,
-		GID:              1000,
-		User:             "user",
-		Home:             "/home/user",
-		UserAdopted:      true,
-		Distro:           []string{"fedora:43", "fedora"},
-		BuildFormats:     []string{"rpm"},
-		Pkg:              "rpm",
-		DistroConfig:     distroCfg,
-		BuilderConfig:    builderCfg,
-	}
+	imgOld := &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "k4b-parity", EffectiveVersion: "2026.001.0001", Base: "quay.io/fedora/fedora:43", IsExternalBase: true, UID: 1000, GID: 1000, User: "user", Home: "/home/user", UserAdopted: true, Distro: []string{"fedora:43", "fedora"}, BuildFormats: []string{"rpm"}, Pkg: "rpm"}, DistroConfig: distroCfg, BuilderConfig: builderCfg}
 	imgOld.DistroDef = distroCfg.ResolveDistro(imgOld.Distro)
 
 	boxView := deploykit.ProjectResolvedBox(imgOld)

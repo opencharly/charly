@@ -136,7 +136,7 @@ func TestOCITargetEmitSystemPackagesWithLegacyTemplate(t *testing.T) {
 		Distro: map[string]*spec.ResolvedDistro{"test-distro": distro},
 		Boxes:  map[string]spec.ResolvedBoxView{"ripgrep-box": {Name: "ripgrep-box", Distro: []string{"test-distro"}}},
 	})
-	tgt := ociTestTarget(buildEngineContext{Box: &buildkit.ResolvedBox{Name: "ripgrep-box"}})
+	tgt := ociTestTarget(buildEngineContext{Box: &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "ripgrep-box"}}})
 	plan := &deploykit.InstallPlan{Candy: "ripgrep", Steps: []spec.InstallStep{
 		&deploykit.SystemPackagesStep{
 			Format:   "rpm",
@@ -175,7 +175,7 @@ func TestOCITargetEmitSystemPackagesPrefersNewPhases(t *testing.T) {
 		Distro: map[string]*spec.ResolvedDistro{"test-distro": distro},
 		Boxes:  map[string]spec.ResolvedBoxView{"foo-box": {Name: "foo-box", Distro: []string{"test-distro"}}},
 	})
-	tgt := ociTestTarget(buildEngineContext{Box: &buildkit.ResolvedBox{Name: "foo-box"}})
+	tgt := ociTestTarget(buildEngineContext{Box: &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "foo-box"}}})
 	plan := &deploykit.InstallPlan{Candy: "foo", Steps: []spec.InstallStep{
 		&deploykit.SystemPackagesStep{
 			Format:   "rpm",
@@ -216,7 +216,7 @@ func TestOCITargetEmitBuilderInlineViaPlugin(t *testing.T) {
 		CandyModels:          map[string]spec.CandyModel{"mytool": {Name: "mytool"}},
 		Candies:              map[string]spec.CandyView{"mytool": {}},
 	})
-	tgt := ociTestTarget(buildEngineContext{Box: &buildkit.ResolvedBox{Name: "mytool-box", UID: 1000, GID: 1000}})
+	tgt := ociTestTarget(buildEngineContext{Box: &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "mytool-box", UID: 1000, GID: 1000}}})
 	plan := &deploykit.InstallPlan{Candy: "mytool", Steps: []spec.InstallStep{
 		&deploykit.BuilderStep{Builder: "cargo", CandyName: "mytool", Phase: spec.PhaseInstall},
 	}}
@@ -250,7 +250,7 @@ func TestOCITargetEmitBuilderMultiStageViaPlugin(t *testing.T) {
 		CandyModels: map[string]spec.CandyModel{"mytool": {Name: "mytool"}},
 		Candies:     map[string]spec.CandyView{"mytool": {}},
 	})
-	tgt := ociTestTarget(buildEngineContext{Box: &buildkit.ResolvedBox{Name: "mytool-box", UID: 1000, GID: 1000, Builder: map[string]string{"pixi": "ghcr.io/x/builder:latest"}}})
+	tgt := ociTestTarget(buildEngineContext{Box: &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "mytool-box", UID: 1000, GID: 1000, Builder: map[string]string{"pixi": "ghcr.io/x/builder:latest"}}}})
 	plan := &deploykit.InstallPlan{Candy: "mytool", Steps: []spec.InstallStep{
 		&deploykit.BuilderStep{Builder: "pixi", CandyName: "mytool", Phase: spec.PhaseInstall},
 	}}
@@ -278,7 +278,7 @@ func TestOCITargetEmitBuilderMultiStageViaPlugin(t *testing.T) {
 func TestOCITargetEmitLocalPkgInstallViaPlugin(t *testing.T) {
 	lp := testPacLocalPkgDef()
 	lp.DownloadTemplate = "https://github.com/opencharly/charly/releases/latest/download/opencharly-${ARCH}.pkg.tar.zst"
-	tgt := ociTestTarget(buildEngineContext{Box: &buildkit.ResolvedBox{Name: "charly-arch"}})
+	tgt := ociTestTarget(buildEngineContext{Box: &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "charly-arch"}}})
 	plan := &deploykit.InstallPlan{Candy: "charly", Steps: []spec.InstallStep{
 		&deploykit.LocalPkgInstallStep{CandyName: "charly", Format: "pac", LocalPkg: lp},
 	}}

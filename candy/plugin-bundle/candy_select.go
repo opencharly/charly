@@ -110,12 +110,14 @@ func syntheticBoxForCandySelection(ctx context.Context, exec *sdk.Executor, rp *
 func syntheticHostBoxFromEnvelope(distro map[string]*spec.ResolvedDistro, builder map[string]*spec.Builder) *buildkit.ResolvedBox {
 	hd, _ := vmshared.DetectHostDistro()
 	img := &buildkit.ResolvedBox{
-		Name:          "host-adhoc",
-		Home:          os.Getenv("HOME"),
-		User:          os.Getenv("USER"),
-		UID:           os.Getuid(),
-		GID:           os.Getgid(),
-		BuildFormats:  []string{},
+		ResolvedBox: spec.ResolvedBox{
+			Name:         "host-adhoc",
+			Home:         os.Getenv("HOME"),
+			User:         os.Getenv("USER"),
+			UID:          os.Getuid(),
+			GID:          os.Getgid(),
+			BuildFormats: []string{},
+		},
 		BuilderConfig: &buildkit.BuilderConfig{Builder: builder},
 	}
 	if hd != nil {
@@ -183,11 +185,13 @@ func buildVmSyntheticBox(vmSpec *spec.ResolvedVm, distro map[string]*spec.Resolv
 		return img
 	}
 	img := &buildkit.ResolvedBox{
-		Name:          "vm-adhoc",
-		User:          user,
-		UID:           1000,
-		GID:           1000,
-		Home:          "/home/" + user,
+		ResolvedBox: spec.ResolvedBox{
+			Name: "vm-adhoc",
+			User: user,
+			UID:  1000,
+			GID:  1000,
+			Home: "/home/" + user,
+		},
 		BuilderConfig: &buildkit.BuilderConfig{Builder: builder},
 	}
 	distroKey := vmSpec.Source.Distro

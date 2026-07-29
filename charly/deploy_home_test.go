@@ -69,7 +69,7 @@ func TestCompileShellHookStepDefersHome(t *testing.T) {
 			PathAppend: []string{"$HOME/.npm-global/bin"},
 		},
 	}, spec.CandyView{})
-	img := &buildkit.ResolvedBox{Home: "/home/operator"}
+	img := &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Home: "/home/operator"}}
 	step := deploykit.CompileShellHookStep(layer, img)
 	if step == nil {
 		t.Fatal("compileShellHookStep returned nil")
