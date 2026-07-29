@@ -23,7 +23,7 @@ import (
 // DEPENDENCIES (project config, VM/pod lifecycle, the GPU driver flip) it CANNOT hold across the
 // module boundary — it reaches them via TWO generic reverse legs: gather/resources over
 // Executor.InvokeProvider("build","project") (K1-unblock wave 1; #55 step3 unit 3b relocated
-// the seam from HostBuild("resolved-project"); the former bespoke
+// the resolved-project envelope fetch off the former host seam; the bespoke
 // arbiter reverse-RPC channel is deleted), the other 6
 // (running/stop[+wait]/start/switchMode/ensureCDI/gpuCDI) over Executor.InvokeProvider
 // (FLOOR-SLIM-proper Unit-8, holder_dispatch.go).
@@ -127,7 +127,7 @@ func hostResources(ctx context.Context, exec *sdk.Executor) map[string]string {
 }
 
 // resolvedProject fetches + decodes the generic resolved-project envelope over the reverse
-// channel (the SAME HostBuild kind every other resolved-project consumer reads), for the
+// channel (the SAME build:project envelope every other resolved-project consumer reads), for the
 // project rooted at the plugin's current working directory (empty Dir = host cwd).
 func resolvedProject(ctx context.Context, exec *sdk.Executor) (*spec.ResolvedProject, error) {
 	reqJSON, err := json.Marshal(spec.ResolvedProjectRequest{})
