@@ -47,7 +47,7 @@ func hostBuildDeployCandySecrets(_ context.Context, req spec.DeployCandySecretsR
 // as the injected CredentialAccess — enc.go) + the distinct artifact register hints present
 // (deploykit.CandyArtifactRegisters) — the shared core both hostBuildDeployCandySecrets
 // and build_overlay.go's hostBuildOverlay call directly.
-func resolveCandySecrets(plans []*deploykit.InstallPlan, dir string) (map[string]string, []string, error) {
+func resolveCandySecrets(plans []*spec.InstallPlan, dir string) (map[string]string, []string, error) {
 	candyList, err := CandyForPlan(plans, dir, nil)
 	if err != nil {
 		return nil, nil, err
@@ -62,19 +62,19 @@ func resolveCandySecrets(plans []*deploykit.InstallPlan, dir string) (map[string
 }
 
 // decodePlanViews unmarshals a wire []spec.InstallPlanView and re-materializes each into a
-// *deploykit.InstallPlan (== *spec.InstallPlan) — the shared decode both new HostBuild seams in
+// *spec.InstallPlan (== *spec.InstallPlan) — the shared decode both new HostBuild seams in
 // this cutover need, mirroring candy/plugin-bundle/deploy_target.go's own handleDeployApply decode
 // (R3, byte-identical view→plan round trip).
-func decodePlanViews(plansJSON json.RawMessage) ([]*deploykit.InstallPlan, error) {
+func decodePlanViews(plansJSON json.RawMessage) ([]*spec.InstallPlan, error) {
 	var views []spec.InstallPlanView
 	if len(plansJSON) > 0 {
 		if err := json.Unmarshal(plansJSON, &views); err != nil {
 			return nil, fmt.Errorf("decode plans: %w", err)
 		}
 	}
-	plans := make([]*deploykit.InstallPlan, 0, len(views))
+	plans := make([]*spec.InstallPlan, 0, len(views))
 	for _, v := range views {
-		p, err := deploykit.PlanFromView(v)
+		p, err := spec.PlanFromView(v)
 		if err != nil {
 			return nil, fmt.Errorf("rematerialize plan: %w", err)
 		}

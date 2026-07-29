@@ -65,10 +65,10 @@ func TestBuildDeployPlan_BuilderPurity_NoPluginRPC(t *testing.T) {
 	}
 }
 
-func firstBuilderStep(t *testing.T, plan *deploykit.InstallPlan) *deploykit.BuilderStep {
+func firstBuilderStep(t *testing.T, plan *spec.InstallPlan) *spec.BuilderStep {
 	t.Helper()
 	for _, s := range plan.Steps {
-		if bs, ok := s.(*deploykit.BuilderStep); ok {
+		if bs, ok := s.(*spec.BuilderStep); ok {
 			return bs
 		}
 	}
@@ -166,9 +166,9 @@ func TestBuildDeployPlanRipgrep(t *testing.T) {
 
 	// ripgrep is a pure rpm: package candy — expect exactly one
 	// SystemPackagesStep at PhaseInstall with the ripgrep package.
-	var pkgSteps []*deploykit.SystemPackagesStep
+	var pkgSteps []*spec.SystemPackagesStep
 	for _, s := range plan.Steps {
-		if sp, ok := s.(*deploykit.SystemPackagesStep); ok {
+		if sp, ok := s.(*spec.SystemPackagesStep); ok {
 			pkgSteps = append(pkgSteps, sp)
 		}
 	}
@@ -216,9 +216,9 @@ func TestBuildDeployPlanDevTools(t *testing.T) {
 	var pkgCount, taskCount int
 	for _, s := range plan.Steps {
 		switch s.(type) {
-		case *deploykit.SystemPackagesStep:
+		case *spec.SystemPackagesStep:
 			pkgCount++
-		case *deploykit.OpStep:
+		case *spec.OpStep:
 			taskCount++
 		}
 	}
@@ -252,9 +252,9 @@ func TestBuildDeployPlanPixiCandy(t *testing.T) {
 		t.Fatalf("BuildDeployPlan: %v", err)
 	}
 
-	var builders []*deploykit.BuilderStep
+	var builders []*spec.BuilderStep
 	for _, s := range plan.Steps {
-		if bs, ok := s.(*deploykit.BuilderStep); ok {
+		if bs, ok := s.(*spec.BuilderStep); ok {
 			builders = append(builders, bs)
 		}
 	}
@@ -301,14 +301,14 @@ func TestComputeDeployIDDeterminism(t *testing.T) {
 }
 
 func TestMergePlansOrderingAndID(t *testing.T) {
-	p1 := &deploykit.InstallPlan{Candy: "ripgrep", Distro: "fedora:43", Steps: []spec.InstallStep{
-		&deploykit.SystemPackagesStep{Format: "rpm", Phase: spec.PhaseInstall, Packages: []string{"ripgrep"}},
+	p1 := &spec.InstallPlan{Candy: "ripgrep", Distro: "fedora:43", Steps: []spec.InstallStep{
+		&spec.SystemPackagesStep{Format: "rpm", Phase: spec.PhaseInstall, Packages: []string{"ripgrep"}},
 	}}
-	p2 := &deploykit.InstallPlan{Candy: "uv", Distro: "fedora:43", Steps: []spec.InstallStep{
-		&deploykit.OpStep{CandyName: "uv", Op: &spec.Op{Download: "https://…"}},
+	p2 := &spec.InstallPlan{Candy: "uv", Distro: "fedora:43", Steps: []spec.InstallStep{
+		&spec.OpStep{CandyName: "uv", Op: &spec.Op{Download: "https://…"}},
 	}}
 
-	merged := deploykit.MergePlan([]*deploykit.InstallPlan{p1, p2}, "fedora-coder", nil)
+	merged := deploykit.MergePlan([]*spec.InstallPlan{p1, p2}, "fedora-coder", nil)
 	if merged.Box != "fedora-coder" {
 		t.Errorf("merged.Box = %q, want fedora-coder", merged.Box)
 	}
@@ -339,14 +339,14 @@ func TestEnsureServiceSuffix(t *testing.T) {
 }
 
 func TestDescribePlanSummary(t *testing.T) {
-	p := &deploykit.InstallPlan{
+	p := &spec.InstallPlan{
 		Candy:  "x",
 		Box:    "y",
 		Distro: "z",
 		Steps: []spec.InstallStep{
-			&deploykit.SystemPackagesStep{Format: "rpm", Phase: spec.PhaseInstall},
-			&deploykit.SystemPackagesStep{Format: "rpm", Phase: spec.PhaseInstall},
-			&deploykit.OpStep{Op: &spec.Op{Mkdir: "/x"}},
+			&spec.SystemPackagesStep{Format: "rpm", Phase: spec.PhaseInstall},
+			&spec.SystemPackagesStep{Format: "rpm", Phase: spec.PhaseInstall},
+			&spec.OpStep{Op: &spec.Op{Mkdir: "/x"}},
 		},
 	}
 	out := deploykit.DescribePlan(p)

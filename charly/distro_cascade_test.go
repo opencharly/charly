@@ -43,12 +43,12 @@ func debImg(chain ...string) *buildkit.ResolvedBox {
 	return &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Pkg: "deb", Distro: chain}, DistroDef: &spec.ResolvedDistro{Format: map[string]*vmshared.FormatDef{"deb": {}}}}
 }
 
-func pkgStep(t *testing.T, steps []spec.InstallStep) *deploykit.SystemPackagesStep {
+func pkgStep(t *testing.T, steps []spec.InstallStep) *spec.SystemPackagesStep {
 	t.Helper()
-	var found *deploykit.SystemPackagesStep
+	var found *spec.SystemPackagesStep
 	n := 0
 	for _, s := range steps {
-		if sp, ok := s.(*deploykit.SystemPackagesStep); ok {
+		if sp, ok := s.(*spec.SystemPackagesStep); ok {
 			found = sp
 			n++
 		}

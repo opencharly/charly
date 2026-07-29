@@ -113,11 +113,11 @@ func TestExternalStepKind_EndToEnd(t *testing.T) {
 	if constructReply.Step == nil {
 		t.Fatalf("hostBuildConstructStep returned no step — want an externalStep")
 	}
-	routed, err := deploykit.StepFromView(*constructReply.Step)
+	routed, err := spec.StepFromView(*constructReply.Step)
 	if err != nil {
 		t.Fatalf("StepFromView: %v", err)
 	}
-	step, ok := routed.(*deploykit.ExternalStep)
+	step, ok := routed.(*spec.ExternalStep)
 	if !ok {
 		t.Fatalf("hostBuildConstructStep routed a class:step plugin to %T, want *externalStep", routed)
 	}
@@ -130,7 +130,7 @@ func TestExternalStepKind_EndToEnd(t *testing.T) {
 	// returned Containerfile fragment — baking the persistent build marker with the opaque
 	// payload's value (proving the Payload round-trips through OpEmit too, and that a step kind
 	// with an EmitOCI fragment can be EXTERNALIZED — the one addition C1 needs).
-	frag, err := ociEmitStep(step, &deploykit.InstallPlan{Box: "check-stepkind"}, []string{"fedora"}, buildEngineContext{Box: &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "check-stepkind", Tags: []string{"fedora"}}}})
+	frag, err := ociEmitStep(step, &spec.InstallPlan{Box: "check-stepkind"}, []string{"fedora"}, buildEngineContext{Box: &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "check-stepkind", Tags: []string{"fedora"}}}})
 	if err != nil {
 		t.Fatalf("ociEmitStep(external:examplestepkind): %v", err)
 	}
@@ -139,7 +139,7 @@ func TestExternalStepKind_EndToEnd(t *testing.T) {
 	}
 
 	// Project it to the OPAQUE view (Kind "external:<word>" + Payload).
-	view := deploykit.StepToView(step)
+	view := spec.StepToView(step)
 	if view.Kind != "external:examplestepkind" {
 		t.Fatalf("view.Kind = %q, want external:examplestepkind", view.Kind)
 	}

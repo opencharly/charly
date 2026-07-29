@@ -18,7 +18,7 @@ import (
 // SAME shared compilePlansForRequest candy/plugin-bundle's walk.go dispatchOne calls IN-PROC (K4-C
 // shape-2). It replaces the deleted host deployAddCmd.compileViaPlugin (bundle_compile_seam.go) as
 // this parity test's plugin-compile entry point, byte-for-byte the same Invoke(OpCompile) mechanism.
-func invokeOpCompile(t *testing.T, req spec.DeployCompileRequest) ([]*deploykit.InstallPlan, error) {
+func invokeOpCompile(t *testing.T, req spec.DeployCompileRequest) ([]*spec.InstallPlan, error) {
 	t.Helper()
 	prov, ok := providerRegistry.resolve(ClassCommand, "bundle")
 	if !ok {
@@ -45,9 +45,9 @@ func invokeOpCompile(t *testing.T, req spec.DeployCompileRequest) ([]*deploykit.
 	if err := json.Unmarshal(reply.PlansJSON, &views); err != nil {
 		return nil, err
 	}
-	plans := make([]*deploykit.InstallPlan, 0, len(views))
+	plans := make([]*spec.InstallPlan, 0, len(views))
 	for _, v := range views {
-		p, err := deploykit.PlanFromView(v)
+		p, err := spec.PlanFromView(v)
 		if err != nil {
 			return nil, err
 		}
@@ -152,13 +152,13 @@ func isolateProviderRegistry(t *testing.T) {
 // the per-node selection (projectResolvedBox + the candy order + HostContext), Invokes the bundle
 // plugin's OpCompile, the plugin re-hydrates the resolved-project envelope via InvokeProvider("build","project")
 // + loops deploykit.BuildDeployPlan + projects []InstallPlanView, and the host re-materializes
-// []*InstallPlan via deploykit.PlanFromView.
+// []*InstallPlan via spec.PlanFromView.
 //
 // For each fixture candy (across 3 classes — pkg/op/builder) the golden asserts BOTH:
-//  (1) WireView parity: deploykit.WireView(oldPlan) DeepEqual deploykit.WireView(newPlan) — the
+//  (1) WireView parity: spec.WireView(oldPlan) DeepEqual spec.WireView(newPlan) — the
 //      plugin-compiled + re-materialized plan projects to the SAME wire form as the former live
 //      host-compile (the spike's byte-identity check, strengthened to a DeepEqual).
-//  (2) PlanFromView fidelity: deploykit.PlanFromView(deploykit.WireView(newPlan)) DeepEqual newPlan —
+//  (2) PlanFromView fidelity: spec.PlanFromView(spec.WireView(newPlan)) DeepEqual newPlan —
 //      the WireView→PlanFromView round-trip is the identity on a re-materialized plan, proving the
 //      re-materialization step the host now performs loses nothing.
 //
@@ -251,8 +251,8 @@ func TestBundleCompileParity_PluginRoundTrip(t *testing.T) {
 		// YAML-canonicalized `[]string` vs the JSON-round-tripped re-hydrated `[]interface{}` both
 		// serialize to the same bytes and both feed buildSystemPackagesStep's []string conversion
 		// identically — the wire form, not the in-memory Go type, is the contract.)
-		oldView := deploykit.WireView(oldPlan)
-		newView := deploykit.WireView(newPlan)
+		oldView := spec.WireView(oldPlan)
+		newView := spec.WireView(newPlan)
 		ob, _ := json.Marshal(oldView)
 		nb, _ := json.Marshal(newView)
 		if string(ob) != string(nb) {
@@ -260,7 +260,7 @@ func TestBundleCompileParity_PluginRoundTrip(t *testing.T) {
 		}
 
 		// (2) PlanFromView fidelity — WireView→PlanFromView is the identity on the re-materialized plan.
-		reread, err := deploykit.PlanFromView(newView)
+		reread, err := spec.PlanFromView(newView)
 		if err != nil {
 			t.Fatalf("PlanFromView(%s): %v", name, err)
 		}
@@ -317,7 +317,7 @@ func TestBundleCompileParity_PluginRoundTrip(t *testing.T) {
 			if len(plans) != 1 {
 				t.Fatalf("perturbed %s: expected 1 plan, got %d", name, len(plans))
 			}
-			nv := deploykit.WireView(plans[0])
+			nv := spec.WireView(plans[0])
 			nb := string(mustMarshalJSON(t, nv))
 			if nb != oldJSON[name] {
 				broke = true
@@ -330,7 +330,7 @@ func TestBundleCompileParity_PluginRoundTrip(t *testing.T) {
 	})
 }
 
-func planCandyNames(plans []*deploykit.InstallPlan) []string {
+func planCandyNames(plans []*spec.InstallPlan) []string {
 	out := make([]string, 0, len(plans))
 	for _, p := range plans {
 		out = append(out, p.Candy)

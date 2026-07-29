@@ -67,8 +67,8 @@ const overlayBuilderKind = "overlay"
 // HostBuild("overlay") receives them re-attached host-side by the reverse server (the proxy's
 // PrepareVenue set them on the Invoke ctx).
 type overlayBuildInputs struct {
-	plans      []*deploykit.InstallPlan
-	parentExec deploykit.DeployExecutor
+	plans      []*spec.InstallPlan
+	parentExec spec.DeployExecutor
 	parentNode *spec.BundleNode
 }
 
@@ -110,8 +110,8 @@ func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ build
 	// drives the candy's served executor (the host already threads it onto the candy's Invoke ctx),
 	// and the parent node's bind-mount volumes are carried as ParentVolumes so the candy's
 	// translateHostPathToVenue maps host paths → venue paths for the nested podman build.
-	var plans []*deploykit.InstallPlan
-	var parentExec deploykit.DeployExecutor
+	var plans []*spec.InstallPlan
+	var parentExec spec.DeployExecutor
 	var parentNode *spec.BundleNode
 	if in := overlayBuildInputsFrom(ctx); in != nil {
 		plans = in.plans
@@ -188,7 +188,7 @@ func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ build
 	}
 
 	// Serialize the live plans as InstallPlanViews — the candy decodes them via
-	// deploykit.PlanFromView + walks the overlay candies' steps. The live InstallPlan carries
+	// spec.PlanFromView + walks the overlay candies' steps. The live InstallPlan carries
 	// concrete steps; the InstallPlanView is the wire form (R3 — the same step-IR round-trip the
 	// external deploy walk uses).
 	plansView := make([]spec.InstallPlanView, 0, len(plans))
@@ -196,7 +196,7 @@ func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ build
 		if p == nil {
 			continue
 		}
-		plansView = append(plansView, deploykit.WireView(p))
+		plansView = append(plansView, spec.WireView(p))
 	}
 
 	// Cache the overlay buildEngineContext for the "oci-emit-step" step-emitter. The candy's
@@ -304,7 +304,7 @@ func resolveOverlayBaseDistroDef(dir, base string, distroCfg *spec.DistroConfig)
 // it cannot import charly core (R3 — cross-module reuse is fine; the two modules cannot import
 // each other). Used by the overlay prep (hostBuildOverlay) to scope the Generator's ExtraCandyRefs
 // + to read each overlay candy's Security() core-side.
-func collectOverlayCandies(plans []*deploykit.InstallPlan) []string {
+func collectOverlayCandies(plans []*spec.InstallPlan) []string {
 	seen := make(map[string]bool)
 	var out []string
 	for _, p := range plans {

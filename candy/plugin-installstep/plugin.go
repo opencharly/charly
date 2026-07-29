@@ -323,7 +323,7 @@ func emitSystemPackages(dg *deploykit.Generator, view spec.InstallStepView, env 
 	if err != nil {
 		return "", err
 	}
-	s, ok := step.(*deploykit.SystemPackagesStep)
+	s, ok := step.(*spec.SystemPackagesStep)
 	if !ok {
 		return "", fmt.Errorf("plugin-installstep: view kind %q is not a SystemPackagesStep", view.Kind)
 	}
@@ -347,7 +347,7 @@ func emitBuilder(dg *deploykit.Generator, view spec.InstallStepView, env spec.Bu
 	if err != nil {
 		return "", err
 	}
-	s, ok := step.(*deploykit.BuilderStep)
+	s, ok := step.(*spec.BuilderStep)
 	if !ok {
 		return "", fmt.Errorf("plugin-installstep: view kind %q is not a BuilderStep", view.Kind)
 	}
@@ -431,7 +431,7 @@ func emitLocalPkgInstall(view spec.InstallStepView, env spec.BuildEnv) (string, 
 	if err != nil {
 		return "", err
 	}
-	s, ok := step.(*deploykit.LocalPkgInstallStep)
+	s, ok := step.(*spec.LocalPkgInstallStep)
 	if !ok {
 		return "", fmt.Errorf("plugin-installstep: view kind %q is not a LocalPkgInstallStep", view.Kind)
 	}
@@ -449,7 +449,7 @@ func emitOp(dg *deploykit.Generator, view spec.InstallStepView, env spec.BuildEn
 	if err != nil {
 		return "", err
 	}
-	s, ok := step.(*deploykit.OpStep)
+	s, ok := step.(*spec.OpStep)
 	if !ok {
 		return "", fmt.Errorf("plugin-installstep: view kind %q is not an OpStep", view.Kind)
 	}

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -32,8 +31,8 @@ func hostBuildResolveTargetAdd(_ context.Context, req spec.DeployResolveTargetAd
 // mirroring the OLD in-core walk's ancestor-derivation loop. Relocated here from the deleted
 // host_build_deploy_node_dispatch.go (unchanged); deriveChildExecutorForPath stays host-side in
 // bundle_add_cmd.go (registry-coupled — deployTraitDescent needs the providerRegistry).
-func reconstructParentExec(ancestorPaths []string, ancestorNodes []spec.BundleNode) (deploykit.DeployExecutor, error) {
-	var parentExec deploykit.DeployExecutor
+func reconstructParentExec(ancestorPaths []string, ancestorNodes []spec.BundleNode) (spec.DeployExecutor, error) {
+	var parentExec spec.DeployExecutor
 	for i, ap := range ancestorPaths {
 		var anc *spec.BundleNode
 		if i < len(ancestorNodes) {
@@ -62,9 +61,9 @@ func runResolveTargetAdd(req spec.DeployResolveTargetAddRequest) error {
 			return fmt.Errorf("resolve-target-add: decode compiled plans: %w", err)
 		}
 	}
-	plans := make([]*deploykit.InstallPlan, 0, len(views))
+	plans := make([]*spec.InstallPlan, 0, len(views))
 	for _, v := range views {
-		p, perr := deploykit.PlanFromView(v)
+		p, perr := spec.PlanFromView(v)
 		if perr != nil {
 			return fmt.Errorf("resolve-target-add: re-materialize plan: %w", perr)
 		}
@@ -80,7 +79,7 @@ func runResolveTargetAdd(req spec.DeployResolveTargetAddRequest) error {
 	// applied over the CLI flags plugin-side); ParentExec/Path are the two live/local pieces filled
 	// in HERE. DryRun never reaches this seam (a dry-run prints plugin-side and returns), so it is
 	// absent from the request and left false.
-	opts := deploykit.EmitOpts{
+	opts := spec.EmitOpts{
 		AllowRepoChanges:     req.AllowRepoChanges,
 		AllowRootTasks:       req.AllowRootTasks,
 		WithServices:         req.WithServices,

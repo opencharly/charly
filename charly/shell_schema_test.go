@@ -109,7 +109,7 @@ func TestResolveShellSpec_SelectionRule(t *testing.T) {
 // TestShellSnippetStep_ReverseOps — UseDropin=true reverses via
 // rm-file-* per scope; UseDropin=false reverses via remove-managed-block.
 func TestShellSnippetStep_ReverseOps(t *testing.T) {
-	dropin := &deploykit.ShellSnippetStep{
+	dropin := &spec.ShellSnippetStep{
 		CandyName:   "direnv",
 		Shell:       "fish",
 		Snippet:     "direnv hook fish | source\n",
@@ -122,7 +122,7 @@ func TestShellSnippetStep_ReverseOps(t *testing.T) {
 		t.Errorf("dropin Reverse: %+v", ops)
 	}
 
-	managed := &deploykit.ShellSnippetStep{
+	managed := &spec.ShellSnippetStep{
 		CandyName:   "direnv",
 		Shell:       "bash",
 		Snippet:     `check "$(direnv hook bash)"`,

@@ -68,7 +68,7 @@ func TestCompileLocalPkgStep(t *testing.T) {
 	if step == nil {
 		t.Fatal("compileLocalPkgStep returned nil for a candy with a pac localpkg source")
 	}
-	pkg, ok := step.(*deploykit.LocalPkgInstallStep)
+	pkg, ok := step.(*spec.LocalPkgInstallStep)
 	if !ok {
 		t.Fatalf("compileLocalPkgStep returned %T, want *LocalPkgInstallStep", step)
 	}
@@ -87,7 +87,7 @@ func TestCompileLocalPkgStep(t *testing.T) {
 	rpmImg := &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "charly-fedora", Pkg: "rpm"}, DistroDef: &spec.ResolvedDistro{Format: map[string]*vmshared.FormatDef{
 		"rpm": {LocalPkg: &vmshared.LocalPkgDef{PkgGlob: "*.rpm", SourceSentinel: "*.spec", BuildTemplate: "x", InstallTemplate: "dnf install -y {{.StageDir}}/{{.Glob}}", Probe: "command -v dnf"}},
 	}}}
-	if rs, ok := deploykit.CompileLocalPkgStep(l, rpmImg, hostCtx).(*deploykit.LocalPkgInstallStep); !ok || rs.Format != "rpm" || rs.PkgbuildRef != "pkg/fedora" {
+	if rs, ok := deploykit.CompileLocalPkgStep(l, rpmImg, hostCtx).(*spec.LocalPkgInstallStep); !ok || rs.Format != "rpm" || rs.PkgbuildRef != "pkg/fedora" {
 		t.Errorf("rpm distro should pick pkg/fedora via the format map, got %#v", deploykit.CompileLocalPkgStep(l, rpmImg, hostCtx))
 	}
 
@@ -101,7 +101,7 @@ func TestCompileLocalPkgStep(t *testing.T) {
 // TestLocalPkgInstallStepIR exercises the IR contract: kind, scope (system),
 // venue (host-native), gate (none), reverse (no ledger ops — like apk).
 func TestLocalPkgInstallStepIR(t *testing.T) {
-	s := &deploykit.LocalPkgInstallStep{PkgbuildRef: "pkg/arch", CandyName: "charly"}
+	s := &spec.LocalPkgInstallStep{PkgbuildRef: "pkg/arch", CandyName: "charly"}
 	if s.Kind() != spec.StepKindLocalPkgInstall {
 		t.Errorf("Kind() = %q, want %q", s.Kind(), spec.StepKindLocalPkgInstall)
 	}
@@ -139,11 +139,11 @@ func TestBuildDeployPlanLocalPkgOrdering(t *testing.T) {
 	pkgIdx, taskIdx := -1, -1
 	for i, step := range plan.Steps {
 		switch step.(type) {
-		case *deploykit.LocalPkgInstallStep:
+		case *spec.LocalPkgInstallStep:
 			if pkgIdx < 0 {
 				pkgIdx = i
 			}
-		case *deploykit.OpStep:
+		case *spec.OpStep:
 			if taskIdx < 0 {
 				taskIdx = i
 			}
@@ -169,8 +169,8 @@ func TestBuildDeployPlanLocalPkgOrdering(t *testing.T) {
 // pure function of the step + the BuildEnv scalars, no project structure needed), which returns
 // "" for a nil LocalPkg — so ociEmitStep succeeds and returns nothing.
 func TestOCITargetLocalPkgNilContractEmitsNothing(t *testing.T) {
-	step := &deploykit.LocalPkgInstallStep{PkgbuildRef: "pkg/arch", CandyName: "charly"}
-	frag, err := ociEmitStep(step, &deploykit.InstallPlan{}, nil, buildEngineContext{})
+	step := &spec.LocalPkgInstallStep{PkgbuildRef: "pkg/arch", CandyName: "charly"}
+	frag, err := ociEmitStep(step, &spec.InstallPlan{}, nil, buildEngineContext{})
 	if err != nil {
 		t.Fatalf("ociEmitStep(LocalPkgInstallStep, nil LocalPkg) = %v, want nil", err)
 	}
@@ -231,19 +231,19 @@ func TestBuildDepPkgsOnHost_EmptyAndDryRun(t *testing.T) {
 		t.Fatal("aur builder not defined in build.yml")
 	}
 	// Empty packages: pure no-op regardless of builder/dryrun — never shells out.
-	if pkgs, err := deploykit.BuildDepPkgsOnHost(context.Background(), lp, aurDef, "", nil, "", nil, nil, deploykit.EmitOpts{}); err != nil || pkgs != nil {
+	if pkgs, err := deploykit.BuildDepPkgsOnHost(context.Background(), lp, aurDef, "", nil, "", nil, nil, spec.EmitOpts{}); err != nil || pkgs != nil {
 		t.Errorf("empty packages = (%v, %v), want (nil, nil)", pkgs, err)
 	}
 	// DryRun with packages + builder + def: no build, no error.
-	if pkgs, err := deploykit.BuildDepPkgsOnHost(context.Background(), lp, aurDef, "arch-builder:latest", []string{"cloudflared-bin"}, "", nil, nil, deploykit.EmitOpts{DryRun: true}); err != nil || pkgs != nil {
+	if pkgs, err := deploykit.BuildDepPkgsOnHost(context.Background(), lp, aurDef, "arch-builder:latest", []string{"cloudflared-bin"}, "", nil, nil, spec.EmitOpts{DryRun: true}); err != nil || pkgs != nil {
 		t.Errorf("dry-run = (%v, %v), want (nil, nil)", pkgs, err)
 	}
 	// Packages but no builder image (live): hard error, never a silent drop.
-	if _, err := deploykit.BuildDepPkgsOnHost(context.Background(), lp, aurDef, "", []string{"cloudflared-bin"}, "", nil, nil, deploykit.EmitOpts{}); err == nil {
+	if _, err := deploykit.BuildDepPkgsOnHost(context.Background(), lp, aurDef, "", []string{"cloudflared-bin"}, "", nil, nil, spec.EmitOpts{}); err == nil {
 		t.Error("BuildDepPkgsOnHost with packages but no builder image should error")
 	}
 	// Packages + image but nil builder def: hard error.
-	if _, err := deploykit.BuildDepPkgsOnHost(context.Background(), lp, nil, "arch-builder:latest", []string{"cloudflared-bin"}, "", nil, nil, deploykit.EmitOpts{}); err == nil {
+	if _, err := deploykit.BuildDepPkgsOnHost(context.Background(), lp, nil, "arch-builder:latest", []string{"cloudflared-bin"}, "", nil, nil, spec.EmitOpts{}); err == nil {
 		t.Error("BuildDepPkgsOnHost with nil builder def should error")
 	}
 }

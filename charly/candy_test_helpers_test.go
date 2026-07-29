@@ -60,7 +60,7 @@ func testConstructStepExecutor() (context.Context, *sdk.Executor) {
 // testConstructStepExecutor + testResolvedBox() — the fixed shape every
 // compile-timeline test in this package used before K5-A item 1 threaded ctx/exec
 // through CompileOpSteps. t.Fatalf's on error so callers don't have to.
-func testCompileOpSteps(t *testing.T, layer spec.CandyReader) []deploykit.InstallStep {
+func testCompileOpSteps(t *testing.T, layer spec.CandyReader) []spec.InstallStep {
 	t.Helper()
 	ctx, ex := testConstructStepExecutor()
 	steps, err := deploykit.CompileOpSteps(ctx, ex, layer, testResolvedBox())
@@ -76,7 +76,7 @@ func testCompileOpSteps(t *testing.T, layer spec.CandyReader) []deploykit.Instal
 // CompileServiceSteps (needed for the rare systemd-custom-entry render leg, over the
 // "render-service" seam; the packaged/supervisord paths never touch it).
 // t.Fatalf's on error so callers don't have to.
-func testCompileServiceSteps(t *testing.T, layer spec.CandyReader, img *buildkit.ResolvedBox, hostCtx deploykit.HostContext) []deploykit.InstallStep {
+func testCompileServiceSteps(t *testing.T, layer spec.CandyReader, img *buildkit.ResolvedBox, hostCtx deploykit.HostContext) []spec.InstallStep {
 	t.Helper()
 	ctx, ex := testConstructStepExecutor()
 	steps, err := deploykit.CompileServiceSteps(ctx, ex, layer, img, hostCtx)

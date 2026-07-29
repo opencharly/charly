@@ -4,7 +4,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 
 	"github.com/opencharly/sdk/kit"
@@ -15,7 +14,7 @@ import (
 // source a compiled-in kit verb's RunVerb and the host provision/plugin helpers consume. In
 // production newCheckRunner builds one internally (a &hostVerbResolver{} struct literal); a
 // unit test dispatching a single verb (or a host helper directly) wants the resolver.
-func hostVerbResolverFor(exec deploykit.DeployExecutor, mode RunMode, distros ...string) *hostVerbResolver {
+func hostVerbResolverFor(exec spec.DeployExecutor, mode RunMode, distros ...string) *hostVerbResolver {
 	return &hostVerbResolver{kr: kit.NewRunner(kit.RunnerConfig{Exec: exec, Mode: mode, Distros: distros})}
 }
 

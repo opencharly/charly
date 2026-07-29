@@ -22,7 +22,7 @@ import (
 // venue. Built-in providers use the typed DeployExecutor directly (no wire).
 type executorReverseServer struct {
 	pb.UnimplementedExecutorServiceServer
-	exec deploykit.DeployExecutor
+	exec spec.DeployExecutor
 	// build is the host BUILD-ENGINE context (project Config + dir) the RunHostStep host-engine
 	// leg needs to run a BuilderStep's host build (dispatchBuildEnsure + BuilderRun resolve
 	// a short / namespace-qualified builder image and fall back to a local `charly box
@@ -137,7 +137,7 @@ func (s *executorReverseServer) RunHostStep(ctx context.Context, req *pb.HostSte
 	if err := json.Unmarshal(req.GetStepJson(), &view); err != nil {
 		return &pb.HostStepReply{Error: fmt.Sprintf("decode step view: %v", err)}, nil
 	}
-	step, err := deploykit.StepFromView(view)
+	step, err := spec.StepFromView(view)
 	if err != nil {
 		return &pb.HostStepReply{Error: err.Error()}, nil
 	}
@@ -145,7 +145,7 @@ func (s *executorReverseServer) RunHostStep(ctx context.Context, req *pb.HostSte
 
 	var reverseOps []spec.ReverseOp
 	switch st := step.(type) {
-	case *deploykit.BuilderStep:
+	case *spec.BuilderStep:
 		venueHome, herr := s.exec.ResolveHome(ctx, "")
 		if herr != nil {
 			return &pb.HostStepReply{Error: fmt.Sprintf("resolve venue home: %v", herr)}, nil
@@ -163,13 +163,13 @@ func (s *executorReverseServer) RunHostStep(ctx context.Context, req *pb.HostSte
 			return &pb.HostStepReply{Error: rerr.Error()}, nil
 		}
 		reverseOps = st.Reverse()
-	case *deploykit.LocalPkgInstallStep:
+	case *spec.LocalPkgInstallStep:
 		supported := deploykit.VenueHasPkgManager(ctx, s.exec, st.LocalPkg, opts)
 		if rerr := deploykit.ExecLocalPkgInstall(ctx, s.exec, st, supported, s.exec.Venue(), opts); rerr != nil {
 			return &pb.HostStepReply{Error: rerr.Error()}, nil
 		}
 		reverseOps = st.Reverse()
-	case *deploykit.SystemPackagesStep:
+	case *spec.SystemPackagesStep:
 		// The format's phase.install.host template lives in the resolved DistroConfig the
 		// plugin cannot reach — render it host-side (the SAME deploykit.RenderHostPackageCommand
 		// the host-engine deploy paths use, R3) and RunSystem on the venue.
@@ -183,7 +183,7 @@ func (s *executorReverseServer) RunHostStep(ctx context.Context, req *pb.HostSte
 			}
 		}
 		reverseOps = st.Reverse()
-	case *deploykit.OpStep:
+	case *spec.OpStep:
 		// An act-verb OpStep (a `run: plugin: <verb>` whose builtin ProvisionActor shell
 		// needs the in-proc registry). resolveProvisionScript is the SAME Op→act-shell seam
 		// the build-emit path (deploykit.Generator.EmitTasks' `case "plugin"`) uses (R3). A NON-act OpStep
@@ -201,7 +201,7 @@ func (s *executorReverseServer) RunHostStep(ctx context.Context, req *pb.HostSte
 			return &pb.HostStepReply{Error: runErr.Error()}, nil
 		}
 		reverseOps = st.Reverse()
-	case *deploykit.ExternalPluginStep:
+	case *spec.ExternalPluginStep:
 		// A verb served by ANOTHER out-of-process plugin — the host stands up a SECOND
 		// reverse channel on THAT plugin's broker (a nested reverse channel, delegating to
 		// the SAME venue executor s.exec) and Invokes its OpExecute, via the SAME
@@ -216,7 +216,7 @@ func (s *executorReverseServer) RunHostStep(ctx context.Context, req *pb.HostSte
 			return &pb.HostStepReply{Error: rerr.Error()}, nil
 		}
 		reverseOps = reply.ReverseOps
-	case *deploykit.RebootStep:
+	case *spec.RebootStep:
 		// A `reboot: true` layer. ONLY a rebootable venue (a VM guest — s.rebootable, set by
 		// the vm deploy substrate) is rebooted: the host records the guest boot_id, fires the
 		// reboot, and polls until sshd answers AND the boot_id changed (deterministic, not a
@@ -233,7 +233,7 @@ func (s *executorReverseServer) RunHostStep(ctx context.Context, req *pb.HostSte
 			return &pb.HostStepReply{Error: rerr.Error()}, nil
 		}
 		reverseOps = st.Reverse()
-	case *deploykit.ExternalStep:
+	case *spec.ExternalStep:
 		// An EXTERNAL (plugin-contributed) step kind (F3): "external:<word>". The host
 		// dispatches it to its serving class:step plugin's OpExecute over a nested reverse
 		// channel (delegating to the SAME venue executor s.exec) — the generalization of the
@@ -302,7 +302,7 @@ func (s *executorReverseServer) invokeExternalStep(ctx context.Context, class Pr
 // (the SAME readiness primitive + boot_id gate), now driven host-side over the reverse channel
 // so the external vm plugin's walk reboots the guest mid-plan. The SSHExecutor dials fresh per
 // call, so the post-reboot reconnect is automatic.
-func rebootVenueAndWait(ctx context.Context, exec deploykit.DeployExecutor, candyName string, opts deploykit.EmitOpts) error {
+func rebootVenueAndWait(ctx context.Context, exec spec.DeployExecutor, candyName string, opts spec.EmitOpts) error {
 	if opts.DryRun {
 		fmt.Fprintf(os.Stderr, "[dry-run] reboot guest (candy %s) and wait for it to return\n", candyName)
 		return nil
@@ -352,8 +352,8 @@ func errString(err error) string {
 
 // decodeReverseEmitOpts decodes the JSON EmitOpts carried in a RunRequest; an empty
 // payload yields the zero EmitOpts (the common "no options" call).
-func decodeReverseEmitOpts(b []byte) deploykit.EmitOpts {
-	var o deploykit.EmitOpts
+func decodeReverseEmitOpts(b []byte) spec.EmitOpts {
+	var o spec.EmitOpts
 	if len(b) > 0 {
 		_ = json.Unmarshal(b, &o)
 	}

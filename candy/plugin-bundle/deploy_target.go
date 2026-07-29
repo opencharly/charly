@@ -465,9 +465,9 @@ func prepareReverseState(ctx context.Context, exec deploykit.DeployExecutor, pla
 		}
 		for _, step := range p.Steps {
 			switch step.(type) {
-			case *deploykit.ShellHookStep, *deploykit.ShellSnippetStep, *deploykit.FileStep:
+			case *spec.ShellHookStep, *spec.ShellSnippetStep, *spec.FileStep:
 				needsHome = true
-			case *deploykit.ServicePackagedStep:
+			case *spec.ServicePackagedStep:
 				needsServiceProbe = true
 			}
 		}
@@ -492,11 +492,11 @@ func prepareReverseState(ctx context.Context, exec deploykit.DeployExecutor, pla
 		}
 		for _, step := range p.Steps {
 			switch s := step.(type) {
-			case *deploykit.ShellHookStep:
+			case *spec.ShellHookStep:
 				if s.EnvFile == "" && home != "" {
 					s.EnvFile = kit.EnvdFilePath(home, s.CandyName)
 				}
-			case *deploykit.ServicePackagedStep:
+			case *spec.ServicePackagedStep:
 				s.PriorEnabled = venueUnitEnabled(ctx, exec, s.Unit, s.TargetScope)
 			}
 		}

@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/vmshared"
 	"github.com/opencharly/spec/spec"
 )
@@ -166,8 +165,8 @@ func TestRenderServiceHomePortabilityToken(t *testing.T) {
 	}
 	rendered, err := RenderService(entry, testSystemdInitDef(), ServiceRenderContext{
 		Candy:       "selkies",
-		Home:        deploykit.HomeToken,
-		UserUnitDir: deploykit.HomeToken + "/.config/systemd/user",
+		Home:        spec.HomeToken,
+		UserUnitDir: spec.HomeToken + "/.config/systemd/user",
 	})
 	if err != nil {
 		t.Fatalf("RenderService: %v", err)
@@ -188,11 +187,11 @@ func TestRenderServiceHomePortabilityToken(t *testing.T) {
 
 	// Emit-time resolution: a ServiceCustomStep carrying that text resolves to
 	// the real guest home, not the operator's.
-	plan := &deploykit.InstallPlan{Steps: []spec.InstallStep{
-		&deploykit.ServiceCustomStep{Name: "charly-selkies-selkies", UnitText: rendered.UnitText, UnitPath: rendered.UnitPath, TargetScope: spec.ScopeUser},
+	plan := &spec.InstallPlan{Steps: []spec.InstallStep{
+		&spec.ServiceCustomStep{Name: "charly-selkies-selkies", UnitText: rendered.UnitText, UnitPath: rendered.UnitPath, TargetScope: spec.ScopeUser},
 	}}
-	deploykit.ResolveHome(plan, "/home/cachy")
-	cs := plan.Steps[0].(*deploykit.ServiceCustomStep)
+	spec.ResolveHome(plan, "/home/cachy")
+	cs := plan.Steps[0].(*spec.ServiceCustomStep)
 	if !strings.Contains(cs.UnitText, "ExecStart=python3 /home/cachy/.local/bin/selkies-capture-server") {
 		t.Errorf("ResolveHome did not substitute the unit ExecStart; got:\n%s", cs.UnitText)
 	}

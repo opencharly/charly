@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -83,7 +82,7 @@ func assertBalancedHeredoc(t *testing.T, label, out string) {
 // TestRenderTaskCommand_WriteHeredocBalanced covers the deploy-path `write:`
 // task command (`install -m … <<'CHARLY_WRITE' … CHARLY_WRITE`).
 func TestRenderTaskCommand_WriteHeredocBalanced(t *testing.T) {
-	cmd, err := testRenderOpCommand(&deploykit.OpStep{
+	cmd, err := testRenderOpCommand(&spec.OpStep{
 		Op: &spec.Op{Write: "/etc/charly/demo.conf", Content: "key = value\n", Mode: "0644"},
 	})
 	if err != nil {
@@ -100,13 +99,13 @@ func TestRenderTaskCommand_WriteHeredocBalanced(t *testing.T) {
 // (`CHARLY_DROPIN`).
 func TestOCIEmit_HeredocsBalanced(t *testing.T) {
 	tgt := ociTestTarget(buildEngineContext{})
-	plan := &deploykit.InstallPlan{Candy: "demo", Steps: []spec.InstallStep{
-		&deploykit.RepoChangeStep{
+	plan := &spec.InstallPlan{Candy: "demo", Steps: []spec.InstallStep{
+		&spec.RepoChangeStep{
 			Format:  "rpm",
 			File:    "/etc/yum.repos.d/demo.repo",
 			Content: "[demo]\nname=demo\n",
 		},
-		&deploykit.ServicePackagedStep{
+		&spec.ServicePackagedStep{
 			Unit:          "demo.service",
 			TargetScope:   spec.ScopeSystem,
 			Enable:        true,
@@ -115,7 +114,7 @@ func TestOCIEmit_HeredocsBalanced(t *testing.T) {
 			CandyName:     "demo",
 		},
 	}}
-	if err := tgt.Emit([]*deploykit.InstallPlan{plan}, deploykit.EmitOpts{}); err != nil {
+	if err := tgt.Emit([]*spec.InstallPlan{plan}, spec.EmitOpts{}); err != nil {
 		t.Fatalf("Emit: %v", err)
 	}
 	out := tgt.String()

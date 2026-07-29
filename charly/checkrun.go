@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 
 	"github.com/opencharly/sdk/kit"
@@ -66,8 +65,8 @@ func newCheckRunner(cfg kit.RunnerConfig) *kit.Runner {
 // every check runner is constructed with a DeployExecutor, so the widening assertion succeeds;
 // a nil/absent exec yields nil. Used by the host verb dispatch, which needs the full
 // DeployExecutor surface (Venue/PutFile/GetFile) the reverse channel serves.
-func deployExecOf(kr *kit.Runner) deploykit.DeployExecutor {
-	if e, ok := kr.Exec().(deploykit.DeployExecutor); ok {
+func deployExecOf(kr *kit.Runner) spec.DeployExecutor {
+	if e, ok := kr.Exec().(spec.DeployExecutor); ok {
 		return e
 	}
 	return nil

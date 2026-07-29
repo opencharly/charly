@@ -22,7 +22,7 @@ import (
 // because the teardown ops are recorded DYNAMICALLY from the OpExecute reply.
 func TestExternalPluginStep_Derivations(t *testing.T) {
 	t.Cleanup(snapshotProviderState())
-	rootStep := &deploykit.ExternalPluginStep{Op: &spec.Op{Plugin: "examplestep"}, ResolvedUser: "root"}
+	rootStep := &spec.ExternalPluginStep{Op: &spec.Op{Plugin: "examplestep"}, ResolvedUser: "root"}
 	if rootStep.Kind() != spec.StepKindExternalPlugin {
 		t.Fatalf("Kind = %q, want %q", rootStep.Kind(), spec.StepKindExternalPlugin)
 	}
@@ -38,7 +38,7 @@ func TestExternalPluginStep_Derivations(t *testing.T) {
 	if rootStep.Scope() != spec.ScopeSystem {
 		t.Fatalf("Scope(root) = %v, want ScopeSystem", rootStep.Scope())
 	}
-	userStep := &deploykit.ExternalPluginStep{Op: &spec.Op{Plugin: "examplestep"}, ResolvedUser: "1000:1000"}
+	userStep := &spec.ExternalPluginStep{Op: &spec.Op{Plugin: "examplestep"}, ResolvedUser: "1000:1000"}
 	if userStep.Scope() != spec.ScopeUser {
 		t.Fatalf("Scope(1000:1000) = %v, want ScopeUser", userStep.Scope())
 	}
@@ -128,11 +128,11 @@ func TestExternalPluginStep_ReverseChannelEndToEnd(t *testing.T) {
 	if reply.Step == nil {
 		t.Fatalf("hostBuildConstructStep returned no step — want an ExternalPluginStep")
 	}
-	step, err := deploykit.StepFromView(*reply.Step)
+	step, err := spec.StepFromView(*reply.Step)
 	if err != nil {
 		t.Fatalf("StepFromView: %v", err)
 	}
-	eps, ok := step.(*deploykit.ExternalPluginStep)
+	eps, ok := step.(*spec.ExternalPluginStep)
 	if !ok {
 		t.Fatalf("hostBuildConstructStep routed external plugin verb to %T, want *ExternalPluginStep", step)
 	}
@@ -146,7 +146,7 @@ func TestExternalPluginStep_ReverseChannelEndToEnd(t *testing.T) {
 	//    entry point a deploy plugin's kit.WalkPlans dials back into), backed by the local
 	//    ShellExecutor (RunUser → bash -lc, no sudo) so the plugin's marker write runs for
 	//    real. stepJSON round-trips the step through the SAME opaque view the wire carries.
-	stepJSON, err := marshalJSON(deploykit.StepToView(eps))
+	stepJSON, err := marshalJSON(spec.StepToView(eps))
 	if err != nil {
 		t.Fatal(err)
 	}

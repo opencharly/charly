@@ -57,8 +57,8 @@ func TestPodOverlayInlineCopyResolvesUnderContext(t *testing.T) {
 	tgt := ociTestTarget(build)
 
 	op := &spec.Op{Write: "/etc/marker", Content: "POD-ADDCANDY-MARKER-OK v1\n", Mode: "0644", RunAs: "root"}
-	plan := &deploykit.InstallPlan{Candy: "marker", Steps: []spec.InstallStep{&deploykit.OpStep{Op: op, CandyName: "marker", ResolvedUser: "root"}}}
-	if err := tgt.Emit([]*deploykit.InstallPlan{plan}, deploykit.EmitOpts{}); err != nil {
+	plan := &spec.InstallPlan{Candy: "marker", Steps: []spec.InstallStep{&spec.OpStep{Op: op, CandyName: "marker", ResolvedUser: "root"}}}
+	if err := tgt.Emit([]*spec.InstallPlan{plan}, spec.EmitOpts{}); err != nil {
 		t.Fatalf("overlay emit: %v", err)
 	}
 

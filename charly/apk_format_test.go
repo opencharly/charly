@@ -40,7 +40,7 @@ func TestCompileApkStep(t *testing.T) {
 	if step == nil {
 		t.Fatal("compileApkStep returned nil for a candy with apk: entries")
 	}
-	apk, ok := step.(*deploykit.ApkInstallStep)
+	apk, ok := step.(*spec.ApkInstallStep)
 	if !ok {
 		t.Fatalf("compileApkStep returned %T, want *ApkInstallStep", step)
 	}
@@ -62,11 +62,11 @@ func TestCompileApkStep(t *testing.T) {
 // at build time): ociEmitStep routes ApkInstallStep through spliceClassStepEmit, which sees the
 // step's Emits=false contract + returns "" — so the dispatch emits nothing.
 func TestOCITargetSkipsApkInstall(t *testing.T) {
-	step := &deploykit.ApkInstallStep{
+	step := &spec.ApkInstallStep{
 		Packages:  []vmshared.ApkPackageSpec{{Package: "org.fdroid.fdroid"}},
 		CandyName: "test-apps",
 	}
-	frag, err := ociEmitStep(step, &deploykit.InstallPlan{}, nil, buildEngineContext{})
+	frag, err := ociEmitStep(step, &spec.InstallPlan{}, nil, buildEngineContext{})
 	if err != nil {
 		t.Fatalf("ociEmitStep(ApkInstallStep) = %v, want nil (skip)", err)
 	}

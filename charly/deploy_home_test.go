@@ -25,24 +25,24 @@ type recordingExec struct {
 }
 
 func (e *recordingExec) Venue() string { return "rec://test" }
-func (e *recordingExec) RunSystem(_ context.Context, script string, _ deploykit.EmitOpts) error {
+func (e *recordingExec) RunSystem(_ context.Context, script string, _ spec.EmitOpts) error {
 	e.sysScripts = append(e.sysScripts, script)
 	return nil
 }
-func (e *recordingExec) RunUser(_ context.Context, script string, _ deploykit.EmitOpts) error {
+func (e *recordingExec) RunUser(_ context.Context, script string, _ spec.EmitOpts) error {
 	e.userScripts = append(e.userScripts, script)
 	return nil
 }
-func (e *recordingExec) RunBuilder(context.Context, deploykit.BuilderRunOpts) ([]byte, error) {
+func (e *recordingExec) RunBuilder(context.Context, spec.BuilderRunOpts) ([]byte, error) {
 	return nil, nil
 }
-func (e *recordingExec) PutFile(_ context.Context, localPath, remotePath string, _ uint32, _ bool, _ deploykit.EmitOpts) error {
+func (e *recordingExec) PutFile(_ context.Context, localPath, remotePath string, _ uint32, _ bool, _ spec.EmitOpts) error {
 	e.putDest = remotePath
 	b, _ := os.ReadFile(localPath)
 	e.putContent = string(b)
 	return nil
 }
-func (e *recordingExec) GetFile(context.Context, string, bool, deploykit.EmitOpts) ([]byte, error) {
+func (e *recordingExec) GetFile(context.Context, string, bool, spec.EmitOpts) ([]byte, error) {
 	return nil, os.ErrNotExist
 }
 func (e *recordingExec) RunInteractive(context.Context, string) (int, error) {
@@ -89,27 +89,27 @@ func TestCompileShellHookStepDefersHome(t *testing.T) {
 // OpStep cmd bodies alone (those shell-expand $HOME at runtime as the deploy
 // user, already correct on every venue). Idempotent.
 func TestResolveHomeSubstitutesAcrossSteps(t *testing.T) {
-	plan := &deploykit.InstallPlan{Steps: []spec.InstallStep{
-		&deploykit.ShellHookStep{EnvVars: map[string]string{"P": "{{.Home}}/.npm-global"}, PathAdd: []string{"{{.Home}}/bin"}},
-		&deploykit.ShellSnippetStep{Snippet: "export X={{.Home}}/y", Destination: "{{.Home}}/.bashrc", PathAppend: []string{"{{.Home}}/bin"}},
-		&deploykit.FileStep{Dest: "{{.Home}}/.config/foo"},
-		&deploykit.OpStep{Op: &spec.Op{Command: "echo {{.Home}}", Copy: "wrapper"}, To: "{{.Home}}/.local/bin/wrapper"},
+	plan := &spec.InstallPlan{Steps: []spec.InstallStep{
+		&spec.ShellHookStep{EnvVars: map[string]string{"P": "{{.Home}}/.npm-global"}, PathAdd: []string{"{{.Home}}/bin"}},
+		&spec.ShellSnippetStep{Snippet: "export X={{.Home}}/y", Destination: "{{.Home}}/.bashrc", PathAppend: []string{"{{.Home}}/bin"}},
+		&spec.FileStep{Dest: "{{.Home}}/.config/foo"},
+		&spec.OpStep{Op: &spec.Op{Command: "echo {{.Home}}", Copy: "wrapper"}, To: "{{.Home}}/.local/bin/wrapper"},
 	}}
-	deploykit.ResolveHome(plan, "/home/cachy")
+	spec.ResolveHome(plan, "/home/cachy")
 
-	sh := plan.Steps[0].(*deploykit.ShellHookStep)
+	sh := plan.Steps[0].(*spec.ShellHookStep)
 	if sh.EnvVars["P"] != "/home/cachy/.npm-global" || sh.PathAdd[0] != "/home/cachy/bin" {
 		t.Errorf("ShellHookStep not resolved: %+v", sh)
 	}
-	sn := plan.Steps[1].(*deploykit.ShellSnippetStep)
+	sn := plan.Steps[1].(*spec.ShellSnippetStep)
 	if sn.Snippet != "export X=/home/cachy/y" || sn.Destination != "/home/cachy/.bashrc" || sn.PathAppend[0] != "/home/cachy/bin" {
 		t.Errorf("ShellSnippetStep not resolved: %+v", sn)
 	}
-	fs := plan.Steps[2].(*deploykit.FileStep)
+	fs := plan.Steps[2].(*spec.FileStep)
 	if fs.Dest != "/home/cachy/.config/foo" {
 		t.Errorf("FileStep.Dest = %q", fs.Dest)
 	}
-	ts := plan.Steps[3].(*deploykit.OpStep)
+	ts := plan.Steps[3].(*spec.OpStep)
 	if ts.Op.Command != "echo {{.Home}}" {
 		t.Errorf("OpStep.Op.Command should be untouched (runtime $HOME), got %q", ts.Op.Command)
 	}
@@ -121,7 +121,7 @@ func TestResolveHomeSubstitutesAcrossSteps(t *testing.T) {
 	}
 
 	// Idempotent: a second call (token already gone) is a no-op.
-	deploykit.ResolveHome(plan, "/home/other")
+	spec.ResolveHome(plan, "/home/other")
 	if sh.EnvVars["P"] != "/home/cachy/.npm-global" {
 		t.Errorf("ResolveHome not idempotent: %q", sh.EnvVars["P"])
 	}

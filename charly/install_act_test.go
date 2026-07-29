@@ -4,7 +4,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -22,12 +21,12 @@ func TestCompileRunStep_PackagePluginLowersToSystemPackagesWithReversals(t *test
 	}}}}, spec.CandyView{})
 	steps := testCompileOpSteps(t, layer)
 
-	var sp *deploykit.SystemPackagesStep
+	var sp *spec.SystemPackagesStep
 	for _, s := range steps {
-		if _, isOp := s.(*deploykit.OpStep); isOp {
+		if _, isOp := s.(*spec.OpStep); isOp {
 			t.Fatalf("plugin: package run step lowered to a generic OpStep — the load-bearing reversals would be DROPPED; got %#v", s)
 		}
-		if v, ok := s.(*deploykit.SystemPackagesStep); ok {
+		if v, ok := s.(*spec.SystemPackagesStep); ok {
 			sp = v
 		}
 	}
@@ -45,7 +44,7 @@ func TestCompileRunStep_PackagePluginLowersToSystemPackagesWithReversals(t *test
 	// A PhasePrepare step carrying a copr repo reverses to ReverseOpCoprDisable — the OTHER
 	// load-bearing reversal SystemPackagesStep records (and the typed step preserves), which
 	// a generic OpStep cannot express.
-	prep := &deploykit.SystemPackagesStep{Format: "rpm", Phase: spec.PhasePrepare, Copr: []string{"someuser/somerepo"}}
+	prep := &spec.SystemPackagesStep{Format: "rpm", Phase: spec.PhasePrepare, Copr: []string{"someuser/somerepo"}}
 	var sawCopr bool
 	for _, op := range prep.Reverse() {
 		if op.Kind == spec.ReverseOpCoprDisable {
@@ -96,12 +95,12 @@ func TestCompileRunStep_ServicePluginLowersToServicePackagedWithReversals(t *tes
 	}}}}, spec.CandyView{})
 	steps := testCompileOpSteps(t, layer)
 
-	var sp *deploykit.ServicePackagedStep
+	var sp *spec.ServicePackagedStep
 	for _, s := range steps {
-		if _, isOp := s.(*deploykit.OpStep); isOp {
+		if _, isOp := s.(*spec.OpStep); isOp {
 			t.Fatalf("plugin: service run step lowered to a generic OpStep — the load-bearing reversals would be DROPPED; got %#v", s)
 		}
-		if v, ok := s.(*deploykit.ServicePackagedStep); ok {
+		if v, ok := s.(*spec.ServicePackagedStep); ok {
 			sp = v
 		}
 	}
@@ -143,8 +142,8 @@ func TestServicePluginActEmitsIntoBoxBuild(t *testing.T) {
 	}}}}, spec.CandyView{})
 	steps := testCompileOpSteps(t, layer)
 	tgt := ociTestTarget(buildEngineContext{})
-	plan := &deploykit.InstallPlan{Candy: "x", Steps: steps}
-	if err := tgt.Emit([]*deploykit.InstallPlan{plan}, deploykit.EmitOpts{}); err != nil {
+	plan := &spec.InstallPlan{Candy: "x", Steps: steps}
+	if err := tgt.Emit([]*spec.InstallPlan{plan}, spec.EmitOpts{}); err != nil {
 		t.Fatalf("Emit: %v", err)
 	}
 	got := tgt.String()
@@ -170,11 +169,11 @@ func TestCompileActOp_VerbWordWinsOverCollidingStepWord(t *testing.T) {
 	if len(steps) != 1 {
 		t.Fatalf("want exactly 1 compiled step, got %d (%#v)", len(steps), steps)
 	}
-	if es, isExternal := steps[0].(*deploykit.ExternalStep); isExternal {
+	if es, isExternal := steps[0].(*spec.ExternalStep); isExternal {
 		t.Fatalf("run: plugin: file lowered to an externalStep (kind %q) — verb-first precedence regressed; "+
 			"the deploy walk would route it to OpExecute, which the build-emit-only step plugin cannot serve", es.Kind())
 	}
-	op, ok := steps[0].(*deploykit.OpStep)
+	op, ok := steps[0].(*spec.OpStep)
 	if !ok {
 		t.Fatalf("run: plugin: file must lower to an OpStep (the file verb act), got %T", steps[0])
 	}
@@ -193,7 +192,7 @@ func TestCompileOpSteps_FoldsBuildContextRunStepNotCheck(t *testing.T) {
 	steps := testCompileOpSteps(t, layer)
 	pkgCount := 0
 	for _, s := range steps {
-		if _, ok := s.(*deploykit.SystemPackagesStep); ok {
+		if _, ok := s.(*spec.SystemPackagesStep); ok {
 			pkgCount++
 		}
 	}
@@ -221,7 +220,7 @@ func TestCompileOpSteps_RunCommandLowersToOpStep(t *testing.T) {
 	if len(steps) != 1 {
 		t.Fatalf("run: command dropped: %d steps", len(steps))
 	}
-	op, ok := steps[0].(*deploykit.OpStep)
+	op, ok := steps[0].(*spec.OpStep)
 	if !ok || op.Op.Plugin != "command" || op.Op.PluginInput["command"] != "echo hi" {
 		t.Fatalf("run: command not compiled as an OpStep: %#v", steps[0])
 	}

@@ -49,7 +49,7 @@ func resolveCheckVenueReply(name, instance string) (spec.CheckVenueResolveReply,
 // walk cannot resolve (matching the plugin's own dotted-vm fallback); a non-nested target
 // re-materializes directly via kit.VenueFromDescriptor. Zero kind classification — the descriptor's
 // generic transport word (container/ssh/shell) is all either path consults.
-func checkVenueExecFromReply(reply spec.CheckVenueResolveReply, name string) (deploykit.DeployExecutor, error) {
+func checkVenueExecFromReply(reply spec.CheckVenueResolveReply, name string) (spec.DeployExecutor, error) {
 	if reply.Nested {
 		dir, _ := os.Getwd()
 		if roots, _ := resolveTreeRoot(dir); roots != nil {

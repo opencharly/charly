@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -20,25 +19,25 @@ import (
 // class:verb target directly via InvokeProvider, bypassing the (now-deleted) ClassStep
 // "ExternalPlugin" registration entirely.
 
-// pluginEmitStepWords is the host-side alias for deploykit.PluginEmitStepWords (K5-A item 2): the
+// pluginEmitStepWords is the host-side alias for spec.PluginEmitStepWords (K5-A item 2): the
 // map RELOCATED to sdk/deploykit so the plugin-side "oci-dispatch" word (candy/plugin-installstep)
 // can consult the SAME kind→word vocabulary the host's checkStepProviderBijection uses — R3, one
 // source of truth for the 12 compiler-emitted kinds' build-emit word mapping. See
-// deploykit.PluginEmitStepWords for the full doc (categories, host-coupled vs pure).
-var pluginEmitStepWords = deploykit.PluginEmitStepWords
+// spec.PluginEmitStepWords for the full doc (categories, host-coupled vs pure).
+var pluginEmitStepWords = spec.PluginEmitStepWords
 
 // checkStepProviderBijection asserts every InstallStep kind is SERVED. The 12 kinds in
 // pluginEmitStepWords must resolve to a compiled-in class:step plugin declaring a StepContract
 // (its build-emit); the ONE remaining kind (ExternalPlugin) needs NO registry entry at all — its
 // build-emit is an unconditional Go-level type-switch arm in candy/plugin-installstep's
-// "oci-dispatch" word, verified by compilation (deploykit.AllStepKinds is a closed, compile-time
+// "oci-dispatch" word, verified by compilation (spec.AllStepKinds is a closed, compile-time
 // enumeration) rather than a runtime registry lookup. Run in the same init() that registers, after
 // registration (the compiled-in plugins register first — plugins_generated.go's init precedes
 // registry_bootstrap.go's alphabetically, the SAME ordering checkVerbProviderBijection relies on).
 func checkStepProviderBijection() error {
 	var missing []string
-	for _, k := range deploykit.AllStepKinds {
-		if k == deploykit.StepKindExternalPlugin {
+	for _, k := range spec.AllStepKinds {
+		if k == spec.StepKindExternalPlugin {
 			// Handled unconditionally by candy/plugin-installstep's oci-dispatch Go-level switch;
 			// no ClassStep registry entry exists (or is needed) for this kind anymore.
 			continue

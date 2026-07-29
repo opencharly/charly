@@ -33,7 +33,7 @@ func hostBuildDeployArtifactsRetrieve(ctx context.Context, req spec.DeployArtifa
 		return spec.DeployArtifactsRetrieveReply{}, err
 	}
 
-	var exec deploykit.DeployExecutor
+	var exec spec.DeployExecutor
 	if len(req.VenueJSON) > 0 {
 		var d spec.VenueDescriptor
 		if derr := json.Unmarshal(req.VenueJSON, &d); derr != nil {

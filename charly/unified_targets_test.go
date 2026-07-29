@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/spec/spec"
 )
@@ -26,9 +25,9 @@ func TestPluginDeployTarget_ApplyParentExecOverride(t *testing.T) {
 
 	t.Run("non-lifecycle nested child swaps to the parent executor", func(t *testing.T) {
 		tgt := &pluginDeployTarget{hasLifecycle: false, exec: kit.ShellExecutor{}}
-		venueJSON := tgt.applyParentExecOverride(deploykit.EmitOpts{ParentExec: guestSSH})
+		venueJSON := tgt.applyParentExecOverride(spec.EmitOpts{ParentExec: guestSSH})
 
-		if tgt.exec != deploykit.DeployExecutor(guestSSH) {
+		if tgt.exec != spec.DeployExecutor(guestSSH) {
 			t.Fatalf("t.exec = %#v (%T), want the live ParentExec value %#v unchanged — a nested "+
 				"child's plan/step walk (and every RunHostStep/RunSystem/RunUser reverse leg this "+
 				"dispatch threads) must run against the PARENT venue, not the ResolveTarget-time "+
@@ -72,13 +71,13 @@ func TestPluginDeployTarget_ApplyParentExecOverride(t *testing.T) {
 	t.Run("lifecycle substrate (vm/pod) is untouched — it composes its own venue in PrepareVenue", func(t *testing.T) {
 		hostExec := kit.ShellExecutor{}
 		tgt := &pluginDeployTarget{hasLifecycle: true, exec: hostExec}
-		venueJSON := tgt.applyParentExecOverride(deploykit.EmitOpts{ParentExec: guestSSH})
+		venueJSON := tgt.applyParentExecOverride(spec.EmitOpts{ParentExec: guestSSH})
 
 		if venueJSON != nil {
 			t.Fatalf("venue_json = %s, want nil — a lifecycle substrate (vm/pod) must run its OWN "+
 				"PrepareVenue, never have its venue pre-empted by an ancestor's ParentExec", venueJSON)
 		}
-		if tgt.exec != deploykit.DeployExecutor(hostExec) {
+		if tgt.exec != spec.DeployExecutor(hostExec) {
 			t.Fatalf("t.exec = %#v, want unchanged %#v — the lifecycle branch must not mutate t.exec "+
 				"at all (PrepareVenue is the sole venue authority for vm/pod)", tgt.exec, hostExec)
 		}
@@ -87,13 +86,13 @@ func TestPluginDeployTarget_ApplyParentExecOverride(t *testing.T) {
 	t.Run("root (non-nested) deploy is untouched — ParentExec absent", func(t *testing.T) {
 		hostExec := kit.ShellExecutor{}
 		tgt := &pluginDeployTarget{hasLifecycle: false, exec: hostExec}
-		venueJSON := tgt.applyParentExecOverride(deploykit.EmitOpts{})
+		venueJSON := tgt.applyParentExecOverride(spec.EmitOpts{})
 
 		if venueJSON != nil {
 			t.Fatalf("venue_json = %s, want nil for a root deploy with no ParentExec — it must derive "+
 				"its OWN root executor from its own node's host: field, never a phantom parent venue", venueJSON)
 		}
-		if tgt.exec != deploykit.DeployExecutor(hostExec) {
+		if tgt.exec != spec.DeployExecutor(hostExec) {
 			t.Fatalf("t.exec = %#v, want unchanged %#v", tgt.exec, hostExec)
 		}
 	})

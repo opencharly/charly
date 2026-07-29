@@ -45,7 +45,7 @@ import (
 // no-executor and the summary errors; nodeName is the deploy identifier. Shared
 // by Pod/Vm/the local deploy target.Test — the three were byte-identical bar the
 // kind/name labels (R3).
-func runUnifiedTargetChecks(ctx context.Context, exec deploykit.DeployExecutor, kind, nodeName string, checks []spec.Op, opts TestOpts) error {
+func runUnifiedTargetChecks(ctx context.Context, exec spec.DeployExecutor, kind, nodeName string, checks []spec.Op, opts TestOpts) error {
 	onlyIDs := make(map[string]bool, len(opts.OnlyIDs))
 	for _, id := range opts.OnlyIDs {
 		onlyIDs[id] = true
@@ -106,7 +106,7 @@ type pluginDeployTarget struct {
 	// (deploykit.RootExecutorForDeployNode) — the plugin may override it internally for a
 	// lifecycle substrate (PrepareVenue) and reports the FINAL one back via venueJSON, which
 	// subsequent calls on this SAME target reuse (see the venue field below).
-	exec deploykit.DeployExecutor
+	exec spec.DeployExecutor
 
 	// venueJSON is the marshalled spec.VenueDescriptor for the CURRENT venue — nil until the
 	// first "add" dispatch reports one back. Threaded on every subsequent dispatch call
@@ -140,9 +140,9 @@ type pluginDeployTarget struct {
 	paths *kit.LedgerPaths
 }
 
-func (t *pluginDeployTarget) Name() string                       { return t.name }
-func (t *pluginDeployTarget) Kind() string                       { return "host" } // ops run on the host venue via the reverse channel
-func (t *pluginDeployTarget) Executor() deploykit.DeployExecutor { return t.exec }
+func (t *pluginDeployTarget) Name() string                  { return t.name }
+func (t *pluginDeployTarget) Kind() string                  { return "host" } // ops run on the host venue via the reverse channel
+func (t *pluginDeployTarget) Executor() spec.DeployExecutor { return t.exec }
 
 // distroCfgJSON marshals t.build.DistroCfg (a plain sdk/buildkit type, no core-only coupling) for
 // the wire — recordDeploy's ReverseOpPackageRemove uninstall-cmd render needs it, now plugin-side.
@@ -230,7 +230,7 @@ func (t *pluginDeployTarget) dispatch(ctx context.Context, req spec.DeployTarget
 // Extracted as its own method (rather than inlined at the one call site) so the ordering
 // invariant — t.exec is ALWAYS mutated together with the returned venue_json, never one without
 // the other — has a single, directly unit-tested unit (unified_targets_test.go).
-func (t *pluginDeployTarget) applyParentExecOverride(opts deploykit.EmitOpts) json.RawMessage {
+func (t *pluginDeployTarget) applyParentExecOverride(opts spec.EmitOpts) json.RawMessage {
 	if t.hasLifecycle || opts.ParentExec == nil {
 		return nil
 	}
@@ -246,7 +246,7 @@ func (t *pluginDeployTarget) applyParentExecOverride(opts deploykit.EmitOpts) js
 	return pj
 }
 
-func (t *pluginDeployTarget) Add(ctx context.Context, dctx *DeployContext, plans []*deploykit.InstallPlan, opts deploykit.EmitOpts) error {
+func (t *pluginDeployTarget) Add(ctx context.Context, dctx *DeployContext, plans []*spec.InstallPlan, opts spec.EmitOpts) error {
 	if dctx != nil {
 		t.node = dctx.Node
 		t.build = buildEngineContext{Cfg: dctx.Cfg, ProjectDir: dctx.Dir, DistroCfg: dctx.DistroCfg}
@@ -259,7 +259,7 @@ func (t *pluginDeployTarget) Add(ctx context.Context, dctx *DeployContext, plans
 	views := make([]spec.InstallPlanView, 0, len(plans))
 	for _, p := range plans {
 		if p != nil {
-			views = append(views, deploykit.WireView(p))
+			views = append(views, spec.WireView(p))
 		}
 	}
 	plansJSON, err := json.Marshal(views)
@@ -325,7 +325,7 @@ func (t *pluginDeployTarget) Add(ctx context.Context, dctx *DeployContext, plans
 // venueExecutor re-materializes the CURRENT venue (post-Add, whatever the plugin reported back)
 // for core-side steps that need a live executor (Test, --verify). Falls back to
 // t.exec (the initial placeholder) if no venue has been reported yet (e.g. a dry-run Add).
-func (t *pluginDeployTarget) venueExecutor() deploykit.DeployExecutor {
+func (t *pluginDeployTarget) venueExecutor() spec.DeployExecutor {
 	if len(t.venueJSON) == 0 {
 		return t.exec
 	}
@@ -340,11 +340,11 @@ func (t *pluginDeployTarget) venueExecutor() deploykit.DeployExecutor {
 	return exec
 }
 
-func (t *pluginDeployTarget) Update(ctx context.Context, plans []*deploykit.InstallPlan, opts UpdateOpts) error {
+func (t *pluginDeployTarget) Update(ctx context.Context, plans []*spec.InstallPlan, opts UpdateOpts) error {
 	views := make([]spec.InstallPlanView, 0, len(plans))
 	for _, p := range plans {
 		if p != nil {
-			views = append(views, deploykit.WireView(p))
+			views = append(views, spec.WireView(p))
 		}
 	}
 	plansJSON, err := json.Marshal(views)
@@ -353,7 +353,7 @@ func (t *pluginDeployTarget) Update(ctx context.Context, plans []*deploykit.Inst
 	}
 	// Marshals the SAME spec.LifecycleOpts shape Add() does (R3 — one wire shape for the shared
 	// handleDeployApply body both dispatch through, mirroring the pre-move former core-resident
-	// deploy target's Update, which built a plain deploykit.EmitOpts from these exact 5 fields and passed it into
+	// deploy target's Update, which built a plain spec.EmitOpts from these exact 5 fields and passed it into
 	// the SAME shared apply() body Add used, rather than a separate wire shape).
 	// RebuildImage is NEVER read by the apply body — it belongs to Rebuild's own
 	// spec.DeployTargetRebuildOpts — so it is deliberately NOT threaded here.

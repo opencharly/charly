@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/spec/spec"
 )
@@ -46,7 +45,7 @@ func TestOverlayBuildInputsCtxRoundTrip(t *testing.T) {
 	if got := overlayBuildInputsFrom(context.Background()); got != nil {
 		t.Fatalf("overlayBuildInputsFrom on a bare ctx = %v, want nil", got)
 	}
-	plans := []*deploykit.InstallPlan{{Candy: "marker", AddCandies: []string{"marker"}}}
+	plans := []*spec.InstallPlan{{Candy: "marker", AddCandies: []string{"marker"}}}
 	node := &spec.BundleNode{Image: "base"}
 	exec := kit.ShellExecutor{}
 	ctx := withOverlayBuildInputs(context.Background(), &overlayBuildInputs{plans: plans, parentExec: exec, parentNode: node})

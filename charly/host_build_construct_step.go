@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -46,7 +45,7 @@ func hostBuildConstructStep(_ context.Context, req spec.ConstructStepRequest, _ 
 		// EXECUTES its deploy-context effect at deploy over the reverse channel (OpExecute)
 		// and bakes its build-context fragment via OpEmit. Route it to ExternalPluginStep.
 		if _, ok := prov.(executorInvoker); ok {
-			return constructStepReplyFor(&deploykit.ExternalPluginStep{
+			return constructStepReplyFor(&spec.ExternalPluginStep{
 				Op:           op,
 				CandyName:    req.CandyName,
 				ResolvedUser: req.ResolvedUser,
@@ -65,7 +64,7 @@ func hostBuildConstructStep(_ context.Context, req spec.ConstructStepRequest, _ 
 		if carrier, ok := sp.(spec.StepContractCarrier); ok {
 			if sc, ok := carrier.DeclaredStepContract(); ok {
 				payload, _ := marshalJSON(op.PluginInput)
-				return constructStepReplyFor(&deploykit.ExternalStep{
+				return constructStepReplyFor(&spec.ExternalStep{
 					Word:      op.Plugin,
 					ScopeV:    sc.Scope,
 					VenueV:    sc.Venue,
@@ -85,7 +84,7 @@ func constructStepReplyFor(step spec.InstallStep) spec.ConstructStepReply {
 	if step == nil {
 		return spec.ConstructStepReply{}
 	}
-	view := deploykit.StepToView(step)
+	view := spec.StepToView(step)
 	return spec.ConstructStepReply{Step: &view}
 }
 

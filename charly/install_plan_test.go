@@ -16,27 +16,27 @@ import (
 func TestSystemPackagesStepScopeVenueGate(t *testing.T) {
 	tests := []struct {
 		name     string
-		step     *deploykit.SystemPackagesStep
+		step     *spec.SystemPackagesStep
 		wantGate spec.Gate
 	}{
 		{
 			name:     "install phase is ungated",
-			step:     &deploykit.SystemPackagesStep{Format: "rpm", Phase: spec.PhaseInstall, Packages: []string{"ripgrep"}},
+			step:     &spec.SystemPackagesStep{Format: "rpm", Phase: spec.PhaseInstall, Packages: []string{"ripgrep"}},
 			wantGate: spec.GateNone,
 		},
 		{
 			name:     "prepare phase with repos needs allow-repo-changes",
-			step:     &deploykit.SystemPackagesStep{Format: "rpm", Phase: spec.PhasePrepare, Repos: []deploykit.RepoSpec{{}}},
+			step:     &spec.SystemPackagesStep{Format: "rpm", Phase: spec.PhasePrepare, Repos: []spec.RepoSpec{{}}},
 			wantGate: spec.GateAllowRepoChanges,
 		},
 		{
 			name:     "prepare phase with copr needs allow-repo-changes",
-			step:     &deploykit.SystemPackagesStep{Format: "rpm", Phase: spec.PhasePrepare, Copr: []string{"che/nerd-fonts"}},
+			step:     &spec.SystemPackagesStep{Format: "rpm", Phase: spec.PhasePrepare, Copr: []string{"che/nerd-fonts"}},
 			wantGate: spec.GateAllowRepoChanges,
 		},
 		{
 			name:     "prepare phase without repo/copr/modules is ungated",
-			step:     &deploykit.SystemPackagesStep{Format: "rpm", Phase: spec.PhasePrepare},
+			step:     &spec.SystemPackagesStep{Format: "rpm", Phase: spec.PhasePrepare},
 			wantGate: spec.GateNone,
 		},
 	}
@@ -57,7 +57,7 @@ func TestSystemPackagesStepScopeVenueGate(t *testing.T) {
 
 func TestSystemPackagesStepReverse(t *testing.T) {
 	// Install phase → one package-remove op with the tracked packages.
-	s := &deploykit.SystemPackagesStep{
+	s := &spec.SystemPackagesStep{
 		Format:   "rpm",
 		Phase:    spec.PhaseInstall,
 		Packages: []string{"ripgrep", "fd-find"},
@@ -77,7 +77,7 @@ func TestSystemPackagesStepReverse(t *testing.T) {
 	}
 
 	// Prepare phase with copr → one copr-disable per copr entry.
-	s2 := &deploykit.SystemPackagesStep{
+	s2 := &spec.SystemPackagesStep{
 		Format: "rpm",
 		Phase:  spec.PhasePrepare,
 		Copr:   []string{"coolercontrol/coolercontrol", "che/nerd-fonts"},
@@ -105,7 +105,7 @@ func TestBuilderStepScopeByBuilder(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.builder, func(t *testing.T) {
-			s := &deploykit.BuilderStep{Builder: tc.builder}
+			s := &spec.BuilderStep{Builder: tc.builder}
 			if got := s.Scope(); got != tc.want {
 				t.Errorf("Scope() = %v, want %v", got, tc.want)
 			}
@@ -123,7 +123,7 @@ func TestBuilderStepScopeByBuilder(t *testing.T) {
 // itself is covered by plugin/kit/builder_test.go.
 func TestBuilderStepReverse(t *testing.T) {
 	want := []spec.ReverseOp{{Kind: spec.ReverseOpPixiEnvRemove, Targets: []string{"default"}, Scope: spec.ScopeUser, Extra: map[string]string{"layer": "pre-commit"}}}
-	s := &deploykit.BuilderStep{
+	s := &spec.BuilderStep{
 		Builder:            "pixi",
 		CandyName:          "pre-commit",
 		RawStageContext:    map[string]any{"env_name": "default"},
@@ -136,7 +136,7 @@ func TestBuilderStepReverse(t *testing.T) {
 
 	// A step with NO pre-resolved reverse (a custom candy builder, or a direct compile with no
 	// pre-pass) returns nil — Reverse() never derives from RawStageContext anymore.
-	bare := &deploykit.BuilderStep{Builder: "aur", RawStageContext: map[string]any{"packages": []string{"x"}}}
+	bare := &spec.BuilderStep{Builder: "aur", RawStageContext: map[string]any{"packages": []string{"x"}}}
 	if got := bare.Reverse(); got != nil {
 		t.Fatalf("Reverse() with no PreResolvedReverse = %+v, want nil (no in-proc derivation)", got)
 	}
@@ -156,7 +156,7 @@ func TestTaskStepScopeFromResolvedUser(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.user, func(t *testing.T) {
-			s := &deploykit.OpStep{ResolvedUser: tc.user, Op: cmdOpP("true")}
+			s := &spec.OpStep{ResolvedUser: tc.user, Op: cmdOpP("true")}
 			if got := s.Scope(); got != tc.want {
 				t.Errorf("Scope() = %v, want %v", got, tc.want)
 			}
@@ -166,17 +166,17 @@ func TestTaskStepScopeFromResolvedUser(t *testing.T) {
 
 func TestTaskStepCmdGate(t *testing.T) {
 	// root cmd task is gated
-	s := &deploykit.OpStep{ResolvedUser: "root", Op: cmdOpP("dnf install -y foo")}
+	s := &spec.OpStep{ResolvedUser: "root", Op: cmdOpP("dnf install -y foo")}
 	if got := s.RequiresGate(); got != spec.GateAllowRootTasks {
 		t.Errorf("root cmd gate = %v, want allow-root-tasks", got)
 	}
 	// root structured task (mkdir) is NOT gated
-	s = &deploykit.OpStep{ResolvedUser: "root", Op: &spec.Op{Mkdir: "/etc/foo"}}
+	s = &spec.OpStep{ResolvedUser: "root", Op: &spec.Op{Mkdir: "/etc/foo"}}
 	if got := s.RequiresGate(); got != spec.GateNone {
 		t.Errorf("root mkdir gate = %v, want none", got)
 	}
 	// user cmd task is NOT gated
-	s = &deploykit.OpStep{ResolvedUser: "1000:1000", Op: cmdOpP("pixi install")}
+	s = &spec.OpStep{ResolvedUser: "1000:1000", Op: cmdOpP("pixi install")}
 	if got := s.RequiresGate(); got != spec.GateNone {
 		t.Errorf("user cmd gate = %v, want none", got)
 	}
@@ -194,7 +194,7 @@ func TestPathIsSystemScoped(t *testing.T) {
 		"":                        false,
 	}
 	for path, want := range tests {
-		if got := deploykit.PathIsSystemScoped(path); got != want {
+		if got := spec.PathIsSystemScoped(path); got != want {
 			t.Errorf("pathIsSystemScoped(%q) = %v, want %v", path, got, want)
 		}
 	}
@@ -202,7 +202,7 @@ func TestPathIsSystemScoped(t *testing.T) {
 
 func TestServicePackagedStepReverse(t *testing.T) {
 	// With enable + overrides + priorEnabled → all three ops.
-	s := &deploykit.ServicePackagedStep{
+	s := &spec.ServicePackagedStep{
 		Unit:          "postgresql.service",
 		TargetScope:   spec.ScopeSystem,
 		Enable:        true,
@@ -223,14 +223,14 @@ func TestServicePackagedStepReverse(t *testing.T) {
 }
 
 func TestServiceCustomStepRequiresGate(t *testing.T) {
-	s := &deploykit.ServiceCustomStep{Name: "charly-x-y", UnitText: "[Unit]\n", UnitPath: "/etc/systemd/system/charly-x-y.service", TargetScope: spec.ScopeSystem, Enable: true}
+	s := &spec.ServiceCustomStep{Name: "charly-x-y", UnitText: "[Unit]\n", UnitPath: "/etc/systemd/system/charly-x-y.service", TargetScope: spec.ScopeSystem, Enable: true}
 	if got := s.RequiresGate(); got != spec.GateWithServices {
 		t.Errorf("RequiresGate() = %v, want with-services", got)
 	}
 }
 
 func TestShellHookStep(t *testing.T) {
-	s := &deploykit.ShellHookStep{
+	s := &spec.ShellHookStep{
 		CandyName: "pre-commit",
 		EnvVars:   map[string]string{"PIXI_CACHE_DIR": "$HOME/.cache/pixi"},
 		PathAdd:   []string{"/home/user/.pixi/envs/default/bin"},
@@ -246,7 +246,7 @@ func TestShellHookStep(t *testing.T) {
 }
 
 func TestRepoChangeStep(t *testing.T) {
-	s := &deploykit.RepoChangeStep{
+	s := &spec.RepoChangeStep{
 		Format:    "rpm",
 		File:      "/etc/yum.repos.d/rpmfusion-free.repo",
 		Content:   "[rpmfusion-free]\n...",
@@ -265,13 +265,13 @@ func TestRepoChangeStep(t *testing.T) {
 func TestInstallPlanStepsByVenue(t *testing.T) {
 	// Three contiguous system steps, then a user step, then a builder step
 	// → three batches.
-	plan := &deploykit.InstallPlan{
+	plan := &spec.InstallPlan{
 		Steps: []spec.InstallStep{
-			&deploykit.SystemPackagesStep{Format: "rpm", Phase: spec.PhaseInstall, Packages: []string{"a"}},
-			&deploykit.SystemPackagesStep{Format: "rpm", Phase: spec.PhaseInstall, Packages: []string{"b"}},
-			&deploykit.OpStep{ResolvedUser: "root", Op: &spec.Op{Mkdir: "/etc/foo"}},
-			&deploykit.OpStep{ResolvedUser: "1000:1000", Op: &spec.Op{Mkdir: "$HOME/bin"}},
-			&deploykit.BuilderStep{Builder: "pixi"},
+			&spec.SystemPackagesStep{Format: "rpm", Phase: spec.PhaseInstall, Packages: []string{"a"}},
+			&spec.SystemPackagesStep{Format: "rpm", Phase: spec.PhaseInstall, Packages: []string{"b"}},
+			&spec.OpStep{ResolvedUser: "root", Op: &spec.Op{Mkdir: "/etc/foo"}},
+			&spec.OpStep{ResolvedUser: "1000:1000", Op: &spec.Op{Mkdir: "$HOME/bin"}},
+			&spec.BuilderStep{Builder: "pixi"},
 		},
 	}
 	batches := plan.StepsByVenue()
@@ -297,22 +297,22 @@ func TestGateEnabledMatrix(t *testing.T) {
 	tests := []struct {
 		name string
 		gate spec.Gate
-		opts deploykit.EmitOpts
+		opts spec.EmitOpts
 		want bool
 	}{
-		{"none is always enabled", spec.GateNone, deploykit.EmitOpts{}, true},
-		{"repo-changes disabled by default", spec.GateAllowRepoChanges, deploykit.EmitOpts{}, false},
-		{"repo-changes enabled via flag", spec.GateAllowRepoChanges, deploykit.EmitOpts{AllowRepoChanges: true}, true},
-		{"repo-changes enabled via --yes", spec.GateAllowRepoChanges, deploykit.EmitOpts{AssumeYes: true}, true},
-		{"root-tasks disabled by default", spec.GateAllowRootTasks, deploykit.EmitOpts{}, false},
-		{"root-tasks enabled via flag", spec.GateAllowRootTasks, deploykit.EmitOpts{AllowRootTasks: true}, true},
-		{"services disabled by default", spec.GateWithServices, deploykit.EmitOpts{}, false},
-		{"services enabled via flag", spec.GateWithServices, deploykit.EmitOpts{WithServices: true}, true},
-		{"services enabled via --yes", spec.GateWithServices, deploykit.EmitOpts{AssumeYes: true}, true},
+		{"none is always enabled", spec.GateNone, spec.EmitOpts{}, true},
+		{"repo-changes disabled by default", spec.GateAllowRepoChanges, spec.EmitOpts{}, false},
+		{"repo-changes enabled via flag", spec.GateAllowRepoChanges, spec.EmitOpts{AllowRepoChanges: true}, true},
+		{"repo-changes enabled via --yes", spec.GateAllowRepoChanges, spec.EmitOpts{AssumeYes: true}, true},
+		{"root-tasks disabled by default", spec.GateAllowRootTasks, spec.EmitOpts{}, false},
+		{"root-tasks enabled via flag", spec.GateAllowRootTasks, spec.EmitOpts{AllowRootTasks: true}, true},
+		{"services disabled by default", spec.GateWithServices, spec.EmitOpts{}, false},
+		{"services enabled via flag", spec.GateWithServices, spec.EmitOpts{WithServices: true}, true},
+		{"services enabled via --yes", spec.GateWithServices, spec.EmitOpts{AssumeYes: true}, true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := deploykit.GateEnabled(tc.gate, tc.opts); got != tc.want {
+			if got := spec.GateEnabled(tc.gate, tc.opts); got != tc.want {
 				t.Errorf("GateEnabled(%v, %+v) = %v, want %v", tc.gate, tc.opts, got, tc.want)
 			}
 		})
