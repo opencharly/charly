@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/spec/spec"
 )
 
