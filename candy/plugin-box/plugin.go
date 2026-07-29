@@ -33,6 +33,7 @@
 //     charly.yml entry. A --tag short-name resolves its registry ref off the resolved-project
 //     envelope (registry/name are tag-independent), so no loader is needed. The former core
 //     BoxPullCmd + its hidden __box-pull reentry are DELETED.
+//
 //   - command:build — `charly box build`: runs the build body IN-PLUGIN (P8b — the former core
 //     BuildCmd + its hidden __box-build reentry are DELETED). dispatchBuild normalizes the box args,
 //     pivots to a remote @ref source (buildkit.DetectRemoteBuildRef detects it sdk-side; the
@@ -43,6 +44,7 @@
 //     skipped for --push). The host-coupled remainder a sdk-only candy cannot do — the remote-ref
 //     clone/cache resolve (ResolveRemoteImage, K1), the build-engine RESOLVE legs, the bootstrap
 //     builder pre-pass — stays behind thin HostBuild seams the candy invokes.
+//
 //   - command:inspect — `charly box inspect`: reads the generic spec.ResolvedProject envelope
 //     (HostBuild("resolved-project")) and prints the resolved box view — snake_case JSON by default,
 //     scalar/box-aggregate fields per --format. The deploy-overlay formats (tunnel/bind_mounts) render

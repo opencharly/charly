@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/opencharly/spec/spec"
 	"github.com/opencharly/sdk/vmshared"
+	"github.com/opencharly/spec/spec"
 )
 
 func TestReadinessConfig_ResolveDefaults(t *testing.T) {

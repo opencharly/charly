@@ -14,8 +14,8 @@ import (
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/spec/spec"
 	"github.com/opencharly/sdk/vmshared"
+	"github.com/opencharly/spec/spec"
 )
 
 // newPluginCheckRunner builds a kit.Runner for a check pass driven from this plugin, given the

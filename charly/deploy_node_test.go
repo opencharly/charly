@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/spec/spec"
 	"github.com/opencharly/sdk/vmshared"
+	"github.com/opencharly/spec/spec"
 
 	"github.com/opencharly/sdk/deploykit"
 )

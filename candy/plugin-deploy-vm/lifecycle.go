@@ -13,9 +13,9 @@ import (
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/vmshared"
 	pb "github.com/opencharly/spec/proto"
 	"github.com/opencharly/spec/spec"
-	"github.com/opencharly/sdk/vmshared"
 )
 
 // lifecycle.go — the host-side VM venue lifecycle, IMPLEMENTED in the plugin (M4b, clean). The plugin

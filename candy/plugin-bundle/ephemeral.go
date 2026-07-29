@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/spec/spec"
 	"github.com/opencharly/sdk/vmshared"
+	"github.com/opencharly/spec/spec"
 )
 
 // ephemeral.go — the FINAL/K5 unit-6a move of charly/ephemeral_lifecycle.go: cross-substrate

@@ -11,8 +11,8 @@ import (
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/spec/spec"
 	"github.com/opencharly/sdk/vmshared"
+	"github.com/opencharly/spec/spec"
 )
 
 // k3s_post.go — the k3s POST-PROVISION finalization (S3, FINAL/K5 unit 6, Cutover-B

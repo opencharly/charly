@@ -9,8 +9,8 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/spec/spec"
 	"github.com/opencharly/sdk/vmshared"
+	"github.com/opencharly/spec/spec"
 )
 
 // vm_backend_resolve.go — the VM backend detection capability (F6 vm-lifecycle move,

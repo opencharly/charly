@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/opencharly/spec/spec"
 	"github.com/opencharly/sdk/vmshared"
+	"github.com/opencharly/spec/spec"
 )
 
 // host_build_deploy_node_del_dispatch.go — the "deploy-node-del-dispatch" F10 host-builder

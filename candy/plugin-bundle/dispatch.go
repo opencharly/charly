@@ -17,8 +17,8 @@ import (
 	"os"
 
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/spec/spec"
 	"github.com/opencharly/sdk/vmshared"
+	"github.com/opencharly/spec/spec"
 )
 
 // compileNodePlans compiles the InstallPlans for one tree position plugin-side, dispatching on the

@@ -3,8 +3,8 @@ package check
 import (
 	"testing"
 
-	"github.com/opencharly/spec/spec"
 	"github.com/opencharly/sdk/vmshared"
+	"github.com/opencharly/spec/spec"
 )
 
 // TestPluginResolveVmTarget_LeafVmUnderNonVmParent ports charly/check_cmd_test.go's
