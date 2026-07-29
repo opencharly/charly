@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
 )
 
 // sidecarBodyImage peeks the `image` field of an opaque sidecar body — the kernel
@@ -61,7 +63,7 @@ mysidecar:
 	if cfg == nil || sidecarBodyImage(t, cfg.Sidecar["mysidecar"]) != "example.com/mysidecar:1" {
 		t.Fatalf("ProjectConfig().Sidecar projection lost the sidecar; got %#v", cfg)
 	}
-	bc := uf.ProjectBundleConfig()
+	bc := deploykit.ProjectBundleConfig(uf)
 	if bc == nil || sidecarBodyImage(t, bc.Sidecar["mysidecar"]) != "example.com/mysidecar:1" {
 		t.Fatalf("ProjectBundleConfig().Sidecar projection lost the sidecar; got %#v", bc)
 	}

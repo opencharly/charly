@@ -7,7 +7,7 @@ import (
 )
 
 // resolved_project_namespace_test.go — K1-unblock wave 2: proves the namespace-qualified
-// flattening added to loaderkit.ProjectTemplates/fillNamespacedBoxes (resolved_project_host.go), and the
+// flattening added to spec.UnifiedFile.ProjectTemplates/fillNamespacedBoxes (resolved_project_host.go), and the
 // resulting functional fix to findK8sSpec (k8s_config.go), which previously supported ONLY
 // root-scoped `k8s:` entity names.
 
@@ -46,7 +46,7 @@ func TestProjectTemplates_NamespaceQualified(t *testing.T) {
 	if err != nil || !ok || uf == nil {
 		t.Fatalf("LoadUnified(%q): ok=%v err=%v", root, ok, err)
 	}
-	tpl := loaderkit.ProjectTemplates(uf)
+	tpl := uf.ProjectTemplates()
 	if tpl == nil {
 		t.Fatal("ProjectTemplates returned nil")
 	}

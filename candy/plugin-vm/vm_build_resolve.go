@@ -13,8 +13,8 @@ import (
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/loaderkit"
-	"github.com/opencharly/spec/spec"
 	"github.com/opencharly/sdk/vmshared"
+	"github.com/opencharly/spec/spec"
 )
 
 // vm_build_resolve.go — the `charly vm build` PREP+RESOLVE, run PLUGIN-SIDE (K3 vm-build move,
@@ -80,7 +80,7 @@ func resolveDistroLeg(ctx context.Context, ex *sdk.Executor) func(json.RawMessag
 // loadVmProjectUnified loads the project at dir plugin-side via loaderkit.LoadUnified, driven
 // through this package's vmLoaderExecutor witness (the SAME K1-loader seam infra
 // candy/plugin-build's resolveBuildEngine established).
-func loadVmProjectUnified(ctx context.Context, ex *sdk.Executor, dir string) (*loaderkit.UnifiedFile, bool, error) {
+func loadVmProjectUnified(ctx context.Context, ex *sdk.Executor, dir string) (*spec.UnifiedFile, bool, error) {
 	return loaderkit.LoadUnified(dir, loaderkit.LoadSeamsFromExecutor(&vmLoaderExecutor{ctx: ctx, ex: ex}))
 }
 

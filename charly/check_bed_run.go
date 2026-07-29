@@ -25,7 +25,6 @@ package main
 
 import (
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -34,7 +33,7 @@ import (
 // always run at the default rung. Thin wrapper — the classifier lives in
 // deploykit.ResolveBedCheckLevel (unit 6b); this function's own job is resolving the box
 // ref against the loaded project (uf.ProjectConfig(), core-only) before delegating.
-func bedCheckLevel(uf *loaderkit.UnifiedFile, node spec.BundleNode) string {
+func bedCheckLevel(uf *spec.UnifiedFile, node spec.BundleNode) string {
 	if node.Image == "" {
 		return deploykit.ResolveBedCheckLevel(false, "")
 	}

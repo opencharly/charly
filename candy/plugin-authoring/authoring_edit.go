@@ -9,6 +9,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/spec"
 )
 
 // authoring_edit.go — the project-level authoring-EDIT helpers used by the `charly box add-candy`
@@ -77,7 +78,7 @@ func removeCandyFromBox(dir, image, layer string) error {
 // yaml.Node helpers — kept private to this package so the surface is small.
 
 func loadCharlyYAMLNode(dir string) (*yaml.Node, error) {
-	path := filepath.Join(dir, kit.UnifiedFileName)
+	path := filepath.Join(dir, spec.UnifiedFileName)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -148,7 +149,7 @@ func resolveBoxNodeFile(dir, name string) (*yaml.Node, *yaml.Node, string, error
 	// Discovered per-box file box/<name>/charly.yml (the canonical location) — a node-form
 	// `<name>: {candy: {base|from: …}}` IMAGE whose `candy:` value is the image body
 	// (base/from + the candy composition list).
-	boxFile := filepath.Join(dir, kit.DefaultBoxDir, name, kit.UnifiedFileName)
+	boxFile := filepath.Join(dir, kit.DefaultBoxDir, name, spec.UnifiedFileName)
 	if data, rerr := os.ReadFile(boxFile); rerr == nil {
 		var froot yaml.Node
 		if yaml.Unmarshal(data, &froot) == nil {
@@ -162,7 +163,7 @@ func resolveBoxNodeFile(dir, name string) (*yaml.Node, *yaml.Node, string, error
 		return nil, nil, "", err
 	}
 	if n := imageBodyNode(charlyRoot, name); n != nil {
-		return charlyRoot, n, filepath.Join(dir, kit.UnifiedFileName), nil
+		return charlyRoot, n, filepath.Join(dir, spec.UnifiedFileName), nil
 	}
 	for _, ref := range flatLocalImports(charlyRoot) {
 		p := filepath.Join(dir, ref)

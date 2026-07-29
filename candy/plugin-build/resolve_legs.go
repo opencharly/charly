@@ -232,13 +232,13 @@ func inspectUserLeg(ctx context.Context, ex *sdk.Executor, ref string, uid int) 
 // buildengine-namespaced host leg (it embeds a nested scan+render-prep the plugin can't cheaply run);
 // ComputeIntermediates/ShouldIncludeDisabled/ExternalizedBuilders are pure. preResolvedBoxes carries
 // the render-prep caches so the envelope preserves them.
-func projectResolvedProjectLeg(ctx context.Context, ex *sdk.Executor, cfg *spec.Config, layers map[string]spec.CandyReader, uf *loaderkit.UnifiedFile, distroCfg *buildkit.DistroConfig, builderCfg *buildkit.BuilderConfig, initCfg *buildkit.InitConfig, dir, version, calver string, includeDisabled bool, preResolvedBoxes map[string]*buildkit.ResolvedBox) (*spec.ResolvedProject, error) {
+func projectResolvedProjectLeg(ctx context.Context, ex *sdk.Executor, cfg *spec.Config, layers map[string]spec.CandyReader, uf *spec.UnifiedFile, distroCfg *buildkit.DistroConfig, builderCfg *buildkit.BuilderConfig, initCfg *buildkit.InitConfig, dir, version, calver string, includeDisabled bool, preResolvedBoxes map[string]*buildkit.ResolvedBox) (*spec.ResolvedProject, error) {
 	includeNames := map[string]bool{}
 	seams := loaderkit.ResolveProjectSeams{
 		ResolveBox: func(c *spec.Config, name, cv, d string) (*buildkit.ResolvedBox, error) {
 			return buildkit.ResolveBox(c, name, cv, d, buildkit.ResolveOpts{IncludeDisabled: includeDisabled, DistroCfg: distroCfg, BuilderCfg: builderCfg})
 		},
-		FillNamespacedBoxes: func(_ *loaderkit.UnifiedFile, _ *buildkit.InitConfig, prefix, cv, d string, rp *spec.ResolvedProject, _ map[*loaderkit.UnifiedFile]bool) {
+		FillNamespacedBoxes: func(_ *spec.UnifiedFile, _ *buildkit.InitConfig, prefix, cv, d string, rp *spec.ResolvedProject, _ map[*spec.UnifiedFile]bool) {
 			if prefix != "" {
 				return // the host leg does the full namespace recursion; only the root call dispatches
 			}
@@ -248,8 +248,8 @@ func projectResolvedProjectLeg(ctx context.Context, ex *sdk.Executor, cfg *spec.
 			}
 			mergeNamespacedInto(rp, &partial)
 		},
-		ResolveResources: func(u *loaderkit.UnifiedFile) map[string]*spec.ResolvedResource {
-			return loaderkit.ResolvePluginKindViaPlugin(u, "resource", resolveResourceLeg(ctx, ex))
+		ResolveResources: func(u *spec.UnifiedFile) map[string]*spec.ResolvedResource {
+			return spec.ResolvePluginKindViaPlugin(u, "resource", resolveResourceLeg(ctx, ex))
 		},
 		ShouldIncludeDisabled: func(name string) bool {
 			if !includeDisabled {

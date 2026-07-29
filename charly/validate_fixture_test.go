@@ -1424,7 +1424,7 @@ func TestValidateOps_RejectsRuntimeOnlyActInBuild(t *testing.T) {
 // TestValidateBuildAndDistro_InvalidPkg ← TestValidateInvalidPkg. A build format not in the vocabulary.
 func TestValidateBuildAndDistro_InvalidPkg(t *testing.T) {
 	cfg := &Config{Defaults: spec.BoxConfig{Build: BuildFormats{"invalid"}}, Box: boxMapOf(map[string]spec.BoxConfig{})}
-	errs := &loaderkit.ValidationError{}
+	errs := &spec.ValidationError{}
 	validateBuildAndDistro(cfg, testDistroConfig(), errs)
 	if !errs.HasErrors() || !strings.Contains(errs.Error(), "is not valid") {
 		t.Errorf("want 'is not valid', got: %v", errs.Errors)
@@ -1434,7 +1434,7 @@ func TestValidateBuildAndDistro_InvalidPkg(t *testing.T) {
 // TestValidateBuildAndDistro_InvalidPkgValue ← TestValidateInvalidPkgValue.
 func TestValidateBuildAndDistro_InvalidPkgValue(t *testing.T) {
 	cfg := &Config{Defaults: spec.BoxConfig{Build: BuildFormats{"zypper"}}, Box: boxMapOf(map[string]spec.BoxConfig{})}
-	errs := &loaderkit.ValidationError{}
+	errs := &spec.ValidationError{}
 	validateBuildAndDistro(cfg, testDistroConfig(), errs)
 	if !errs.HasErrors() || !strings.Contains(errs.Error(), "is not valid") {
 		t.Errorf("want 'is not valid', got: %v", errs.Errors)
@@ -1444,7 +1444,7 @@ func TestValidateBuildAndDistro_InvalidPkgValue(t *testing.T) {
 // TestValidateBuildAndDistro_PacValid ← TestValidatePacPkgValue. `pac` is a valid vocabulary format.
 func TestValidateBuildAndDistro_PacValid(t *testing.T) {
 	cfg := &Config{Defaults: spec.BoxConfig{Build: BuildFormats{"pac"}}, Box: boxMapOf(map[string]spec.BoxConfig{})}
-	errs := &loaderkit.ValidationError{}
+	errs := &spec.ValidationError{}
 	validateBuildAndDistro(cfg, testDistroConfig(), errs)
 	if errs.HasErrors() {
 		t.Errorf("pac should be valid, got: %v", errs.Errors)
@@ -1459,7 +1459,7 @@ func TestValidateBuilderRefs_SelfBuilder(t *testing.T) {
 			"myimg": {Candy: []string{"pixi"}, Builder: buildkit.BuilderMap{"pixi": "myimg"}},
 		}),
 	}
-	errs := &loaderkit.ValidationError{}
+	errs := &spec.ValidationError{}
 	validateBuilderRefs(cfg, testBuilderCfg(), errs)
 	if !errs.HasErrors() || !strings.Contains(errs.Error(), "cannot reference self") {
 		t.Errorf("want 'cannot reference self', got: %v", errs.Errors)
@@ -1475,7 +1475,7 @@ func TestValidateBuilderRefs_InheritedSelfNotError(t *testing.T) {
 			"builder": {Candy: []string{"pixi"}},
 		}),
 	}
-	errs := &loaderkit.ValidationError{}
+	errs := &spec.ValidationError{}
 	validateBuilderRefs(cfg, testBuilderCfg(), errs)
 	if errs.HasErrors() {
 		t.Errorf("inherited self-builder should not error, got: %v", errs.Errors)
@@ -1490,7 +1490,7 @@ func TestValidateBuilderRefs_PerImageNotFound(t *testing.T) {
 			"app": {Candy: []string{"pixi"}, Builder: buildkit.BuilderMap{"pixi": "nonexistent"}},
 		}),
 	}
-	errs := &loaderkit.ValidationError{}
+	errs := &spec.ValidationError{}
 	validateBuilderRefs(cfg, testBuilderCfg(), errs)
 	if !errs.HasErrors() || !strings.Contains(errs.Error(), "is not found") {
 		t.Errorf("want 'is not found', got: %v", errs.Errors)

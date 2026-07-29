@@ -29,14 +29,14 @@ func injectEnvProvidesInto(dc *deploykit.BundleConfig, boxName, instance string,
 		return false
 	}
 	if dc.Provides == nil {
-		dc.Provides = &deploykit.ProvidesConfig{}
+		dc.Provides = &spec.ProvidesConfig{}
 	}
 	ctrName := kit.ContainerNameInstance(boxName, instance)
 	source := deploykit.DeployKey(boxName, instance)
 	changed := false
 	for _, key := range sortedProvidesKeys(envProvides) {
 		value := deploykit.ResolveTemplate(envProvides[key], ctrName, portMap)
-		resolved := deploykit.EnvProvideEntry{Name: key, Value: value, Source: source}
+		resolved := spec.EnvProvideEntry{Name: key, Value: value, Source: source}
 
 		// Check if already set to same value (dedup by name+source)
 		found := false
@@ -70,7 +70,7 @@ func injectMCPProvidesInto(dc *deploykit.BundleConfig, boxName, instance string,
 		return false
 	}
 	if dc.Provides == nil {
-		dc.Provides = &deploykit.ProvidesConfig{}
+		dc.Provides = &spec.ProvidesConfig{}
 	}
 	ctrName := kit.ContainerNameInstance(boxName, instance)
 	source := deploykit.DeployKey(boxName, instance)

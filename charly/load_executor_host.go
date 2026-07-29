@@ -42,14 +42,14 @@ func (hostLoaderExecutor) WalkProject(dir string, rootData []byte) (spec.LoadedP
 // the walk envelope. The kind-blind orchestration lives in loaderkit (#48); this compiled-in
 // placement drives it DIRECTLY over the host's three coupled leaf legs (hostMaterializeProjectSeams
 // — registry kind-decode, discovered-manifest fold, embedded defaults), zero marshal.
-func (hostLoaderExecutor) MaterializeLoadedProject(lp *spec.LoadedProject, merged *loaderkit.UnifiedFile, byID map[int64]*loaderkit.UnifiedFile) error {
+func (hostLoaderExecutor) MaterializeLoadedProject(lp *spec.LoadedProject, merged *spec.UnifiedFile, byID map[int64]*spec.UnifiedFile) error {
 	return loaderkit.MaterializeLoadedProject(lp, merged, byID, hostMaterializeProjectSeams())
 }
 
 // ValidateAndroidDevices enforces the kind:android box⊻adb XOR. The VALIDATION LOGIC lives in
 // loaderkit.ValidateAndroidDevices (clause-R capability logic); this leg supplies ONLY the host
 // registry-resolve callback (resolveAndroidViaPlugin) — the genuine host coupling.
-func (hostLoaderExecutor) ValidateAndroidDevices(uf *loaderkit.UnifiedFile) error {
+func (hostLoaderExecutor) ValidateAndroidDevices(uf *spec.UnifiedFile) error {
 	return loaderkit.ValidateAndroidDevices(uf, resolveAndroidViaPlugin)
 }
 
@@ -57,6 +57,6 @@ func (hostLoaderExecutor) ValidateAndroidDevices(uf *loaderkit.UnifiedFile) erro
 // map, including the resource-vocabulary cross-check. The VALIDATION LOGIC lives in
 // loaderkit.ValidatePreemptible; this leg supplies ONLY the host registry-resolve callbacks
 // (resolveResourceViaPlugin / resolveVmViaPlugin) — the genuine host coupling.
-func (hostLoaderExecutor) ValidatePreemptible(uf *loaderkit.UnifiedFile) error {
+func (hostLoaderExecutor) ValidatePreemptible(uf *spec.UnifiedFile) error {
 	return loaderkit.ValidatePreemptible(uf, resolveResourceViaPlugin, resolveVmViaPlugin)
 }

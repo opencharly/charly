@@ -11,7 +11,7 @@ import (
 )
 
 // TestLoadUnified_AndroidNodeForm verifies a unified node-form `android` entity
-// loads into loaderkit.UnifiedFile.Android through the standard loader. The legacy
+// loads into spec.UnifiedFile.Android through the standard loader. The legacy
 // kind-keyed routing was deleted in the #NodeDoc-sole-gate cutover — node-form is
 // the only authoring surface.
 func TestLoadUnified_AndroidNodeForm(t *testing.T) {
@@ -57,7 +57,7 @@ func rawTemplateMap[T any](m map[string]*T) map[string]json.RawMessage {
 // top-level target: android bed.
 func TestValidateCheckBeds_Android(t *testing.T) {
 	// android bed without an android: ref → error.
-	uf := &loaderkit.UnifiedFile{
+	uf := &spec.UnifiedFile{
 		Bundle: map[string]spec.BundleNode{
 			"bed": {Target: "android", Disposable: new(true)},
 		},
@@ -67,7 +67,7 @@ func TestValidateCheckBeds_Android(t *testing.T) {
 	}
 
 	// android bed referencing an undefined device → error.
-	uf2 := &loaderkit.UnifiedFile{
+	uf2 := &spec.UnifiedFile{
 		Bundle: map[string]spec.BundleNode{
 			"bed": {Target: "android", From: "ghost", Disposable: new(true)},
 		},
@@ -77,7 +77,7 @@ func TestValidateCheckBeds_Android(t *testing.T) {
 	}
 
 	// android bed referencing a defined device → ok.
-	uf3 := &loaderkit.UnifiedFile{
+	uf3 := &spec.UnifiedFile{
 		PluginKinds: map[string]map[string]json.RawMessage{
 			"android": rawTemplateMap(map[string]*AndroidSpec{"dev": {Box: "android-emulator"}}),
 		},

@@ -14,7 +14,7 @@ import (
 // member steps get a bare venue, nested-child steps a dotted venue, and all are
 // hoisted into the root bundle's flat Plan (member/child Plans cleared).
 func TestFlattenBundleVenues_StampsAndHoists(t *testing.T) {
-	uf := &loaderkit.UnifiedFile{Bundle: map[string]spec.BundleNode{
+	uf := &spec.UnifiedFile{Bundle: map[string]spec.BundleNode{
 		// A pure-GROUP bed whose agent-provisioned member `os` carries a step.
 		"default": {
 			Target: "", // group
@@ -84,7 +84,7 @@ func TestFlattenBundleVenues_StampsAndHoists(t *testing.T) {
 // pure group bundle (no workload container) is a hard error — a group has no
 // venue of its own.
 func TestFlattenBundleVenues_GroupDirectStepRejected(t *testing.T) {
-	uf := &loaderkit.UnifiedFile{Bundle: map[string]spec.BundleNode{
+	uf := &spec.UnifiedFile{Bundle: map[string]spec.BundleNode{
 		"grp": {
 			Target: "", // group, but carries a direct step → illegal
 			Plan: []spec.Step{

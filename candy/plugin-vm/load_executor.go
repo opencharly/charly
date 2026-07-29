@@ -60,7 +60,7 @@ func (e *vmLoaderExecutor) WalkProject(dir string, rootData []byte) (spec.Loaded
 }
 
 // MaterializeLoadedProject runs the host MATERIALIZE + root-wins MERGE (RULING 1 host leg).
-func (e *vmLoaderExecutor) MaterializeLoadedProject(lp *spec.LoadedProject, merged *loaderkit.UnifiedFile, _ map[int64]*loaderkit.UnifiedFile) error {
+func (e *vmLoaderExecutor) MaterializeLoadedProject(lp *spec.LoadedProject, merged *spec.UnifiedFile, _ map[int64]*spec.UnifiedFile) error {
 	reqJSON, err := json.Marshal(lp)
 	if err != nil {
 		return err
@@ -79,10 +79,10 @@ func (e *vmLoaderExecutor) MaterializeLoadedProject(lp *spec.LoadedProject, merg
 // loaderkit.ValidateAndroidDevices / ValidatePreemptible in-plugin, threading the resource/vm/android
 // resolve callbacks over InvokeProvider(kind, OpResolve) — no host round-trip (the
 // loader-android-validate / loader-preempt-validate host legs dissolved).
-func (e *vmLoaderExecutor) ValidateAndroidDevices(uf *loaderkit.UnifiedFile) error {
+func (e *vmLoaderExecutor) ValidateAndroidDevices(uf *spec.UnifiedFile) error {
 	return loaderkit.ValidateAndroidDevices(uf, loaderkit.ResolveAndroidViaExecutor(e.ctx, e.ex))
 }
 
-func (e *vmLoaderExecutor) ValidatePreemptible(uf *loaderkit.UnifiedFile) error {
+func (e *vmLoaderExecutor) ValidatePreemptible(uf *spec.UnifiedFile) error {
 	return loaderkit.ValidatePreemptible(uf, loaderkit.ResolveResourceViaExecutor(e.ctx, e.ex), loaderkit.ResolveVmViaExecutor(e.ctx, e.ex))
 }

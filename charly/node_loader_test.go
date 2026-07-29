@@ -7,13 +7,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
 
 // TestLoadUnified_NodeForm proves the loader parses a unified node-form charly.yml
 // end-to-end: kit.ClassifyDoc → kit.DocShapeNode → validate-before-execute (#NodeDoc) →
-// normalizeNodeInto → the projected loaderkit.UnifiedFile maps. Candy + box + a bundle group
+// normalizeNodeInto → the projected spec.UnifiedFile maps. Candy + box + a bundle group
 // with two alongside pod members + an inline cross-member check.
 func TestLoadUnified_NodeForm(t *testing.T) {
 	dir := t.TempDir()
@@ -49,7 +48,7 @@ shop:
 	if err != nil {
 		t.Fatalf("LoadUnified node-form: %v", err)
 	}
-	if redis, ok := loaderkit.DecodeInlineCandy(uf.Candy["redis"]); !ok {
+	if redis, ok := spec.DecodeInlineCandy(uf.Candy["redis"]); !ok {
 		t.Errorf("candy redis not loaded; candies=%v", mapKeys(uf.Candy))
 	} else if redis.Version != "2026.150.0000" {
 		t.Errorf("candy redis version = %q", redis.Version)

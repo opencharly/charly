@@ -44,7 +44,7 @@ const diagSeverityError = "error"
 type loadedProject struct {
 	cfg        *Config
 	layers     map[string]spec.CandyReader
-	uf         *loaderkit.UnifiedFile // nil when absent or its load/discover errored
+	uf         *spec.UnifiedFile // nil when absent or its load/discover errored
 	distroCfg  *buildkit.DistroConfig
 	builderCfg *buildkit.BuilderConfig
 	initCfg    *buildkit.InitConfig
@@ -173,7 +173,7 @@ func runHostNaturalValidateChecks(lp *loadedProject, dir string, opts loaderkit.
 	if lp == nil || lp.cfg == nil {
 		return
 	}
-	errs := &loaderkit.ValidationError{}
+	errs := &spec.ValidationError{}
 	if lp.distroCfg != nil {
 		validateBuildAndDistro(lp.cfg, lp.distroCfg, errs)
 	}
@@ -273,7 +273,7 @@ var _ = func() bool {
 // directly — it dispatches to the compiled-in validate capability BY WORD with a structured OpValidate
 // op (the SAME registry-dispatch shape the build path already uses for OpEmit/OpResolve) over an in-proc
 // reverse channel, and consumes the returned spec.Diagnostics as a HARD gate (the error text mirrors the
-// former loaderkit.ValidationError.Error() for parity). Kind-blind M (registry-by-word). Named exit K3 — when the
+// former spec.ValidationError.Error() for parity). Kind-blind M (registry-by-word). Named exit K3 — when the
 // build engine itself becomes plugin-build, this call becomes a plugin↔plugin InvokeProvider.
 func validateProjectForBuild(dir string, opts loaderkit.ResolveOpts) error {
 	prov, ok := providerRegistry.resolve(ClassCommand, "validate")

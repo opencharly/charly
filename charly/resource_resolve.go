@@ -7,7 +7,6 @@ package main
 import (
 	"encoding/json"
 
-	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -19,10 +18,10 @@ type (
 
 // resolveResources projects uf.PluginKinds["resource"] (opaque bodies) into
 // *ResolvedResource envelopes via candy/plugin-resource's OpResolve leg
-// (loaderkit.ResolvePluginKindViaPlugin — the shared loop every plugin-resolved kind
+// (spec.ResolvePluginKindViaPlugin — the shared loop every plugin-resolved kind
 // accessor uses).
-func resolveResources(uf *loaderkit.UnifiedFile) map[string]*ResolvedResource {
-	return loaderkit.ResolvePluginKindViaPlugin(uf, "resource", resolveResourceViaPlugin)
+func resolveResources(uf *spec.UnifiedFile) map[string]*ResolvedResource {
+	return spec.ResolvePluginKindViaPlugin(uf, "resource", resolveResourceViaPlugin)
 }
 
 func resolveResourceViaPlugin(body json.RawMessage) (*ResolvedResource, error) {

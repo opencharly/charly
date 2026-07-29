@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 
-	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -15,7 +14,7 @@ import (
 // deploy tree with stamped Descent, the plugin-primaries D-fact) fetches this via
 // Executor.HostBuild("raw-project") instead of paying the full box resolution resolved-project pays.
 //
-// It is a pure DATA PROJECTION over LoadUnified — NOT a new engine: loaderkit.ProjectTemplates (a
+// It is a pure DATA PROJECTION over LoadUnified — NOT a new engine: spec.UnifiedFile.ProjectTemplates (a
 // cheap raw-byte template copy), the folded uf.Bundle deploy tree (already Descent-stamped by
 // LoadUnified), and loaderThreaded().Primaries. Kind-blind throughout: templates/deploy carry OPAQUE
 // bytes the consuming PLUGIN decodes into concrete kinds itself (a plugin may know kinds, the kernel
@@ -36,7 +35,7 @@ func hostBuildRawProject(_ context.Context, req spec.RawProjectRequest, _ buildE
 	}
 	rp := spec.RawProject{Primaries: loaderThreaded().Primaries}
 	if uf != nil {
-		rp.Templates = loaderkit.ProjectTemplates(uf)
+		rp.Templates = uf.ProjectTemplates()
 		if len(uf.Bundle) > 0 {
 			rp.Deploy = make(map[string]*spec.Deploy, len(uf.Bundle))
 			for k, v := range uf.Bundle {

@@ -21,14 +21,14 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/loaderkit"
-	"github.com/opencharly/spec/spec"
 	"github.com/opencharly/sdk/vmshared"
+	"github.com/opencharly/spec/spec"
 )
 
 // androidTestUF wraps a raw android template map into the PluginKinds shape
-// loaderkit.UnifiedFile.Android() now reads (K1 unit-1 follow-up — no dedicated field).
-func androidTestUF(m map[string]json.RawMessage) *loaderkit.UnifiedFile {
-	return &loaderkit.UnifiedFile{PluginKinds: map[string]map[string]json.RawMessage{"android": m}}
+// spec.UnifiedFile.Android() now reads (K1 unit-1 follow-up — no dedicated field).
+func androidTestUF(m map[string]json.RawMessage) *spec.UnifiedFile {
+	return &spec.UnifiedFile{PluginKinds: map[string]map[string]json.RawMessage{"android": m}}
 }
 
 // TestBoxBaseFromXOR_RejectsConflict proves a box authoring BOTH base: and from:
@@ -54,7 +54,7 @@ func TestBoxBaseFromXOR_RejectsConflict(t *testing.T) {
 			}
 			// Integration: the validate-time surface that collects the error.
 			cfg := &Config{Box: boxMapOf(map[string]spec.BoxConfig{"b": tc.box})}
-			errs := &loaderkit.ValidationError{}
+			errs := &spec.ValidationError{}
 			validateBoxBaseFrom(cfg, loaderkit.ResolveOpts{}, errs)
 			if tc.reject && !errs.HasErrors() {
 				t.Errorf("validateBoxBaseFrom accepted a base+from box (should reject)")

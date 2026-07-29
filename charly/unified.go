@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/opencharly/spec/spec"
 	"github.com/opencharly/sdk/vmshared"
+	"github.com/opencharly/spec/spec"
 
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/loaderkit"
@@ -39,7 +39,7 @@ import (
 // UnifiedFileName is the canonical root file of the unified format. The value
 // lives in kit (the importable host-engine shared with out-of-tree plugin candies);
 // this is the in-core alias so every core call site is unchanged.
-const UnifiedFileName = kit.UnifiedFileName
+const UnifiedFileName = spec.UnifiedFileName
 
 // The on-disk charly.yml schema version is a CalVer string (e.g.
 // 2026.141.1530) — the same scheme as image tags. LatestSchemaVersion()
@@ -47,22 +47,22 @@ const UnifiedFileName = kit.UnifiedFileName
 // refuses anything older with a hint pointing at `charly migrate`.
 
 // UnifiedFile (K1 keystone, task #24 unit 1) relocated to sdk/loaderkit — see
-// loaderkit.UnifiedFile. Every field type was already sdk-portable (spec.*/deploykit.*/plain
+// spec.UnifiedFile. Every field type was already sdk-portable (spec.*/deploykit.*/plain
 // maps; Box was already spec.BoxMap via the (now-deleted) boxMap alias, Candy already a plain
 // map[string]json.RawMessage via the (now-deleted) candyMap alias), so the type carried NO
-// charly-core dependency of its own. Every charly/*.go reference is now loaderkit.UnifiedFile.
+// charly-core dependency of its own. Every charly/*.go reference is now spec.UnifiedFile.
 
 // ImportEntry, ImportList, DiscoverConfig, and ScanSpec are the kind-blind
 // config-loader document DIRECTIVE types — relocated to sdk/kit
 // (loader_directives.go) so charly core AND sdk/loaderkit share ONE copy (R3).
-// See kit.ImportEntry / kit.ImportList / kit.DiscoverConfig / kit.ScanSpec.
+// See spec.ImportEntry / spec.ImportList / spec.DiscoverConfig / spec.ScanSpec.
 
 // InlineCandy (K1 keystone, task #24 unit 1) relocated to sdk/loaderkit — see
-// loaderkit.InlineCandy.
+// spec.InlineCandy.
 
 // DeploymentsSection (the legacy v3 plural `deployments:` wrapper type) was
 // DELETED as dead code (radical dead-code removal): after the field-singular
-// cutover (2026-05) loaderkit.UnifiedFile.Bundle is a flat map and Provides moved
+// cutover (2026-05) spec.UnifiedFile.Bundle is a flat map and Provides moved
 // to root level, and the last real referent — migrate_unified.go — is long gone.
 // Its only surviving mentions were prose (deploy_tree.go's resolveTreeRoot doc
 // comment, this file) plus the TestLoadUnified_DeploymentsSection name (which
@@ -101,7 +101,7 @@ const UnifiedFileName = kit.UnifiedFileName
 // ValidateCheckBeds fed exec.LoaderThreaded()) are wired directly to loaderkit inside
 // LoadSeamsFromExecutor. Deleted by #118 GREEN (no permanent charly→loaderkit wrapper;
 // IMPORT-PURITY end-state).
-func LoadUnified(dir string) (*loaderkit.UnifiedFile, bool, error) {
+func LoadUnified(dir string) (*spec.UnifiedFile, bool, error) {
 	return loaderkit.LoadUnified(dir, loaderkit.LoadSeamsFromExecutor(hostLoaderExecutor{}))
 }
 
@@ -177,7 +177,7 @@ func canonicalRef(ref, baseDir string) (key, path string, err error) {
 // sdk/loaderkit share ONE copy (R3).
 
 // CheckBeds relocated to sdk/loaderkit (K1 keystone, task #24 unit 1) — see
-// loaderkit.UnifiedFile.CheckBeds.
+// spec.UnifiedFile.CheckBeds.
 
 // validateCheckBeds / validateIterateBed relocated to sdk/loaderkit (validate_check_beds.go,
 // K1-LOADER RELOCATION LOAD-half) — registry-free kind:check bed validation reading the
@@ -210,7 +210,7 @@ func canonicalRef(ref, baseDir string) (key, path string, err error) {
 // here directly rather than duplicated. Only the registry-coupled MATERIALIZE
 // fold (foldDiscoveredManifests, materialize.go — shared with
 // loaderkit.MaterializeLoadedProject's own discovered-manifest step via the FoldDiscoveredManifests seam, R3) stays host-side.
-func ApplyDiscover(uf *loaderkit.UnifiedFile, rootDir string) error {
+func ApplyDiscover(uf *spec.UnifiedFile, rootDir string) error {
 	dms, err := loaderkit.RunDiscover(rootDir, uf.Discover, hostWalkSeams())
 	if err != nil {
 		return err
@@ -223,12 +223,12 @@ func ApplyDiscover(uf *loaderkit.UnifiedFile, rootDir string) error {
 // (loader_discover.go) so charly core AND sdk/loaderkit share ONE copy (R3).
 
 // -----------------------------------------------------------------------------
-// Projections — extract the existing concrete types from loaderkit.UnifiedFile so the
+// Projections — extract the existing concrete types from spec.UnifiedFile so the
 // existing loaders can become thin wrappers.
 // -----------------------------------------------------------------------------
 
 // ProjectConfig/projectConfigCached/ProjectBundleConfig/VM/Pod/K8s/Local/Android/CheckBeds
-// relocated to sdk/loaderkit as loaderkit.UnifiedFile methods (K1 keystone, task #24 unit 1) —
+// relocated to sdk/loaderkit as spec.UnifiedFile methods (K1 keystone, task #24 unit 1) —
 // they needed no charly-core-only dependency (Config = spec.Config, an alias, so even
 // ProjectConfig's return type was already sdk-native). ResolvePluginKindViaPlugin/
 // DecodePluginKindMap moved too, as exported loaderkit package functions (they already took
@@ -248,23 +248,23 @@ func ApplyDiscover(uf *loaderkit.UnifiedFile, rootDir string) error {
 // (= *spec.ResolvedDistro) — the build-engine value envelope the generator/format code
 // consumes; the kernel never types spec.Distro. Recomputed per call; nil when no distros
 // are configured; a bad entry is skipped rather than poisoning the whole vocabulary.
-func Distros(uf *loaderkit.UnifiedFile) map[string]*spec.ResolvedDistro {
-	return loaderkit.ResolvePluginKindViaPlugin(uf, "distro", resolveDistroViaPlugin)
+func Distros(uf *spec.UnifiedFile) map[string]*spec.ResolvedDistro {
+	return spec.ResolvePluginKindViaPlugin(uf, "distro", resolveDistroViaPlugin)
 }
 
 // Builders reconstructs the name-keyed multi-stage builder vocabulary from
 // uf.PluginKinds["builder"] (the `builder` plugin kind, candy/plugin-builder) into the
 // map[string]*vmshared.BuilderDef shape the generator consumed when builder was a typed core map.
-func Builders(uf *loaderkit.UnifiedFile) map[string]*vmshared.BuilderDef {
-	return loaderkit.DecodePluginKindMap[vmshared.BuilderDef](uf, "builder")
+func Builders(uf *spec.UnifiedFile) map[string]*vmshared.BuilderDef {
+	return spec.DecodePluginKindMap[vmshared.BuilderDef](uf, "builder")
 }
 
 // resolveInits projects the name-keyed init-system vocabulary from
 // uf.PluginKinds["init"] (opaque bodies) into *ResolvedInit value envelopes via
 // candy/plugin-init's OpResolve config leg (the init de-type, Cutover F) — the
 // kernel never types the bodies.
-func resolveInits(uf *loaderkit.UnifiedFile) map[string]*ResolvedInit {
-	return loaderkit.ResolvePluginKindViaPlugin(uf, "init", resolveInitConfigViaPlugin)
+func resolveInits(uf *spec.UnifiedFile) map[string]*ResolvedInit {
+	return spec.ResolvePluginKindViaPlugin(uf, "init", resolveInitConfigViaPlugin)
 }
 
 // The build-vocab CONFIG projections (ProjectDistroConfig/ProjectBuilderConfig/ProjectInitConfig)
@@ -277,7 +277,7 @@ func resolveInits(uf *loaderkit.UnifiedFile) map[string]*ResolvedInit {
 // spec.CandyReader form (W9: the type-Candy move). Thin wrapper over projectCandiesScanned +
 // the ONE choke point (loaderkit.FinalizeScannedCandies, no InitCfg in scope for a standalone call) —
 // see ScanAllCandyWithConfigOpts's doc comment for why completion never happens anywhere else.
-func ProjectCandies(uf *loaderkit.UnifiedFile, rootDir string) (map[string]spec.CandyReader, error) {
+func ProjectCandies(uf *spec.UnifiedFile, rootDir string) (map[string]spec.CandyReader, error) {
 	scanned, err := projectCandiesScanned(uf, rootDir)
 	if err != nil {
 		return nil, err
@@ -290,10 +290,10 @@ func ProjectCandies(uf *loaderkit.UnifiedFile, rootDir string) (map[string]spec.
 // `from:` go through the registered loader plugin's typed CandyScanner seam so directory-based
 // candies behave identically to today. Inline entries synthesize from the embedded CandyYAML
 // (Part A's `directory:` field still applies).
-func projectCandiesScanned(uf *loaderkit.UnifiedFile, rootDir string) (map[string]spec.ScannedCandy, error) {
+func projectCandiesScanned(uf *spec.UnifiedFile, rootDir string) (map[string]spec.ScannedCandy, error) {
 	out := map[string]spec.ScannedCandy{}
 	for name, raw := range uf.Candy {
-		il, ok := loaderkit.DecodeInlineCandy(raw)
+		il, ok := spec.DecodeInlineCandy(raw)
 		if !ok {
 			continue
 		}

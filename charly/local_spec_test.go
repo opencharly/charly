@@ -10,7 +10,7 @@ import (
 )
 
 // TestLoadUnified_LocalMap_Inline verifies that an charly.yml with
-// an inline `local:` map round-trips into loaderkit.UnifiedFile.Local with the
+// an inline `local:` map round-trips into spec.UnifiedFile.Local with the
 // expected fields.
 func TestLoadUnified_LocalMap_Inline(t *testing.T) {
 	dir := t.TempDir()

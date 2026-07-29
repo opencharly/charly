@@ -18,7 +18,7 @@ import (
 // deployNodeSharesGPU, gpu_imply.go, and its dedicated test here were a dead-code-radical-removal-batch
 // deletion — zero real callers.)
 
-// preemptDiagHasErr / preemptDiagText are the loaderkit.ValidationError.HasErrors / .Error analogues over the
+// preemptDiagHasErr / preemptDiagText are the spec.ValidationError.HasErrors / .Error analogues over the
 // spec.Diagnostics loaderkit.ValidatePreemptibleOnNode accumulates into (shared with
 // preempt_schema_test.go, same package).
 func preemptDiagHasErr(d spec.Diagnostics) bool {
@@ -76,7 +76,7 @@ func TestValidateResourceDefs_ExclusiveVenueTrait(t *testing.T) {
 	}
 
 	t.Run("vm (exclusive venue) qemu backend flagged", func(t *testing.T) {
-		uf := &loaderkit.UnifiedFile{
+		uf := &spec.UnifiedFile{
 			PluginKinds: map[string]map[string]json.RawMessage{"resource": resources, "vm": vmEntities},
 			Bundle:      map[string]spec.BundleNode{"mydeploy": mkNode("vm")},
 		}
@@ -87,7 +87,7 @@ func TestValidateResourceDefs_ExclusiveVenueTrait(t *testing.T) {
 	})
 
 	t.Run("pod (non-exclusive venue) never flagged", func(t *testing.T) {
-		uf := &loaderkit.UnifiedFile{
+		uf := &spec.UnifiedFile{
 			PluginKinds: map[string]map[string]json.RawMessage{"resource": resources, "vm": vmEntities},
 			Bundle:      map[string]spec.BundleNode{"mydeploy": mkNode("pod")},
 		}

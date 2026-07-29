@@ -66,9 +66,9 @@ func (e *execLoaderExecutor) WalkProject(dir string, rootData []byte) (spec.Load
 }
 
 // MaterializeLoadedProject runs the host MATERIALIZE + root-wins MERGE (spec.LoadedProject → the
-// merged loaderkit.UnifiedFile). The host leg owns its OWN byID scratch (RULING 1); the plugin
+// merged spec.UnifiedFile). The host leg owns its OWN byID scratch (RULING 1); the plugin
 // passes none and decodes the reply into merged.
-func (e *execLoaderExecutor) MaterializeLoadedProject(lp *spec.LoadedProject, merged *loaderkit.UnifiedFile, _ map[int64]*loaderkit.UnifiedFile) error {
+func (e *execLoaderExecutor) MaterializeLoadedProject(lp *spec.LoadedProject, merged *spec.UnifiedFile, _ map[int64]*spec.UnifiedFile) error {
 	reqJSON, err := json.Marshal(lp)
 	if err != nil {
 		return err
@@ -90,14 +90,14 @@ func (e *execLoaderExecutor) MaterializeLoadedProject(lp *spec.LoadedProject, me
 // loaderkit.ValidateAndroidDevices in-plugin, threading the android resolve callback over
 // InvokeProvider(kind, "local", OpResolve) — no host round-trip (the loader-android-validate host
 // leg dissolved).
-func (e *execLoaderExecutor) ValidateAndroidDevices(uf *loaderkit.UnifiedFile) error {
+func (e *execLoaderExecutor) ValidateAndroidDevices(uf *spec.UnifiedFile) error {
 	return loaderkit.ValidateAndroidDevices(uf, loaderkit.ResolveAndroidViaExecutor(e.ctx, e.ex))
 }
 
 // ValidatePreemptible runs the preemptible/requires_exclusive/requires_shared validator PLUGIN-SIDE:
 // loaderkit.ValidatePreemptible in-plugin, threading the resource/vm resolve callbacks over
 // InvokeProvider(kind, OpResolve) — no host round-trip (the loader-preempt-validate host leg dissolved).
-func (e *execLoaderExecutor) ValidatePreemptible(uf *loaderkit.UnifiedFile) error {
+func (e *execLoaderExecutor) ValidatePreemptible(uf *spec.UnifiedFile) error {
 	return loaderkit.ValidatePreemptible(uf, loaderkit.ResolveResourceViaExecutor(e.ctx, e.ex), loaderkit.ResolveVmViaExecutor(e.ctx, e.ex))
 }
 
@@ -126,7 +126,7 @@ func resolveTreeViaLoader(path string, addCandy []string) (map[string]spec.Bundl
 	if uf, ok, err := loaderkit.LoadUnified(pre.Dir, loaderkit.LoadSeamsFromExecutor(exec)); err != nil {
 		return nil, false, "", err
 	} else if ok && uf != nil {
-		projectDC = uf.ProjectBundleConfig()
+		projectDC = deploykit.ProjectBundleConfig(uf)
 	}
 
 	localDC, _ := deploykit.LoadBundleConfig()

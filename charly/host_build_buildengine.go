@@ -110,7 +110,7 @@ func hostBuildNamespaced(_ context.Context, req spec.BuildResolveRequest, _ buil
 		calver = ComputeCalVer()
 	}
 	scratch := &spec.ResolvedProject{}
-	fillNamespacedBoxes(lp.uf, lp.initCfg, "", calver, dir, opts, scratch, map[*loaderkit.UnifiedFile]bool{})
+	fillNamespacedBoxes(lp.uf, lp.initCfg, "", calver, dir, opts, scratch, map[*spec.UnifiedFile]bool{})
 	return *scratch, nil
 }
 

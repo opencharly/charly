@@ -408,7 +408,7 @@ func registerExternalVerbsFromCandies(candies map[string]spec.CandyReader) {
 // `charly status` / `charly box validate` repo-wide.
 func prescanDeclaredPluginWords(rootData []byte, baseDir string) {
 	var doc struct {
-		Discover kit.DiscoverConfig `yaml:"discover"`
+		Discover spec.DiscoverConfig `yaml:"discover"`
 	}
 	if err := yaml.Unmarshal(rootData, &doc); err != nil || len(doc.Discover) == 0 {
 		return

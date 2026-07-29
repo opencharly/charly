@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/loaderkit"
+	"github.com/opencharly/spec/spec"
 )
 
 // authoredMemberTree is the member subtree both beds author identically: two PEER pod members
@@ -151,7 +151,7 @@ func mustJSON(t *testing.T, v any) string {
 	return string(b)
 }
 
-func bundleKeysFor(uf *loaderkit.UnifiedFile) []string {
+func bundleKeysFor(uf *spec.UnifiedFile) []string {
 	out := make([]string, 0, len(uf.Bundle))
 	for k := range uf.Bundle {
 		out = append(out, k)

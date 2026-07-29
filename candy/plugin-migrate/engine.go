@@ -37,6 +37,7 @@ import (
 	"github.com/opencharly/sdk/kit"
 	sdkschema "github.com/opencharly/spec/schema"
 	"github.com/opencharly/spec/schemaconcat"
+	"github.com/opencharly/spec/spec"
 )
 
 // migCtx is the plugin-local CUE context (this plugin owns the migration engine, so it
@@ -190,11 +191,11 @@ func runMigrations(ctx *MigrateContext, projectOnly bool) (bool, error) {
 	head := kit.LatestSchemaVersion()
 	floor := kit.SchemaFloor()
 
-	rootPath := filepath.Join(ctx.Dir, kit.UnifiedFileName)
+	rootPath := filepath.Join(ctx.Dir, spec.UnifiedFileName)
 	data, err := os.ReadFile(rootPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			_, _ = fmt.Fprintf(out, "no %s in %s — nothing to migrate\n", kit.UnifiedFileName, ctx.Dir)
+			_, _ = fmt.Fprintf(out, "no %s in %s — nothing to migrate\n", spec.UnifiedFileName, ctx.Dir)
 			return false, nil
 		}
 		return false, fmt.Errorf("reading %s: %w", rootPath, err)
@@ -475,7 +476,7 @@ func childMapping(m *yaml.Node, key string) *yaml.Node {
 // universalStampFiles are the project files carrying a top-level schema `version:`
 // stamp. In the single-filename world that is charly.yml alone (box/candy manifests
 // carry a per-ENTITY version nested under their kind value, never a top-level stamp).
-var universalStampFiles = []string{kit.UnifiedFileName}
+var universalStampFiles = []string{spec.UnifiedFileName}
 
 // universalStamp rewrites the top-level `version:` of every stamped project file
 // (and, unless projectOnly, the per-host overlay) to head. Returns changed paths.

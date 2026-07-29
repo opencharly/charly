@@ -117,7 +117,7 @@ func TestEmbeddedDefaults_SameLoaderPath(t *testing.T) {
 	}
 	// Sidecar-template view — sidecar is a plugin kind (candy/plugin-sidecar); the
 	// embedded tailscale template is an OPAQUE body in def.PluginKinds["sidecar"]
-	// from the SAME parse, the SAME loaderkit.UnifiedFile.
+	// from the SAME parse, the SAME spec.UnifiedFile.
 	body, ok := def.PluginKinds["sidecar"]["tailscale"]
 	if !ok {
 		t.Fatal("embedded sidecar tailscale missing from unified parse")

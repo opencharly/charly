@@ -55,15 +55,15 @@ func TestCandyRef(t *testing.T) {
 // the Problem-B regression guard: a repo re-tag of an UNCHANGED candy must not
 // warn. Different per-entity versions warn once and the newest version wins.
 func TestPickCandyVersion(t *testing.T) {
-	mk := func(ver, tag string) loaderkit.CandyCandidate {
-		return loaderkit.CandyCandidate{
+	mk := func(ver, tag string) spec.CandyCandidate {
+		return spec.CandyCandidate{
 			Scanned: spec.ScannedCandy{Model: spec.CandyModel{Name: "x", Version: ver}},
 			Version: ver,
 			GitTag:  tag,
 			Source:  "github.com/o/r@" + tag,
 		}
 	}
-	capture := func(fn func() loaderkit.CandyCandidate) (loaderkit.CandyCandidate, string) {
+	capture := func(fn func() spec.CandyCandidate) (spec.CandyCandidate, string) {
 		old := os.Stderr
 		r, w, _ := os.Pipe()
 		os.Stderr = w
@@ -76,8 +76,8 @@ func TestPickCandyVersion(t *testing.T) {
 	}
 
 	// Same per-entity version, different git tags -> NO warning, newest tag wins.
-	got, warn := capture(func() loaderkit.CandyCandidate {
-		return loaderkit.PickCandyVersion("github.com/o/r/layers/x", []loaderkit.CandyCandidate{
+	got, warn := capture(func() spec.CandyCandidate {
+		return loaderkit.PickCandyVersion("github.com/o/r/layers/x", []spec.CandyCandidate{
 			mk("2026.141.1600", "v2026.141.1600"),
 			mk("2026.141.1600", "v2026.150.900"),
 		})
@@ -90,8 +90,8 @@ func TestPickCandyVersion(t *testing.T) {
 	}
 
 	// Different per-entity versions -> exactly one warning, newest version wins.
-	got, warn = capture(func() loaderkit.CandyCandidate {
-		return loaderkit.PickCandyVersion("github.com/o/r/layers/x", []loaderkit.CandyCandidate{
+	got, warn = capture(func() spec.CandyCandidate {
+		return loaderkit.PickCandyVersion("github.com/o/r/layers/x", []spec.CandyCandidate{
 			mk("2026.141.1600", "v2026.141.1600"),
 			mk("2026.144.0531", "v2026.144.531"),
 		})
