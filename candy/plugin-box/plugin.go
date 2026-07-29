@@ -47,7 +47,7 @@
 //     builder pre-pass — stays behind thin HostBuild seams the candy invokes.
 //
 //   - command:inspect — `charly box inspect`: reads the generic spec.ResolvedProject envelope
-//     (HostBuild("resolved-project")) and prints the resolved box view — snake_case JSON by default,
+//     (InvokeProvider("build","project")) and prints the resolved box view — snake_case JSON by default,
 //     scalar/box-aggregate fields per --format. The deploy-overlay formats (tunnel/bind_mounts) render
 //     in-plugin off the deploy overlay + the resolved-project envelope (no reentry). See inspect_list.go.
 //

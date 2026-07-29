@@ -32,7 +32,7 @@ import (
 // dedicated constructor if one arises).
 // stubResolvedProject swaps the compiled-in "build:project" PROVIDER (candy/plugin-build's
 // InvokeProvider("build","project",sdk.OpResolve,...) — the relocated home of the former
-// HostBuild("resolved-project") seam, #55 step3 unit 3b) for one whose Invoke returns rp verbatim,
+// resolved-project host seam, #55 step3 unit 3b) for one whose Invoke returns rp verbatim,
 // restoring the original registration on test cleanup. The 4 former HOST-COUPLED step-emit words
 // (system-packages/builder/local-pkg-install/op, K5-Unit-6b) no longer read the synthetic
 // buildEngineContext's Generator/Box/BuilderConfig/DistroCfg fields directly — candy/plugin-installstep

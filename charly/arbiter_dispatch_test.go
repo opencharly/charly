@@ -8,7 +8,7 @@ import (
 
 // arbiter_dispatch_test.go — the C9 externalized-arbiter DISPATCH integration test: it drives the
 // EXACT path the check-runner uses at bed bring-up (acquireResourceForClaimant → the in-core proxy
-// → the compiled-in candy/plugin-preempt verb:arbiter → HostBuild("resolved-project") for its
+// → the compiled-in candy/plugin-preempt verb:arbiter → InvokeProvider("build","project") for its
 // gather/resources reads (K1-unblock wave 1) → the lease ledger), then proves the lease SURFACES
 // via the arbiter status dispatch (the generic core→verb registry bridge; the externalized `charly
 // preempt status` reaches it via InvokeProvider instead). This is what the seam-faked unit suite

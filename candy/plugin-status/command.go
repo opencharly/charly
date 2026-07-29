@@ -90,7 +90,7 @@ func runStatusCLI(ctx context.Context, exec *sdk.Executor, args []string) error 
 // verb:status-fanout (candy/plugin-substrate) DIRECTLY over the in-proc reverse channel — command:status
 // is compiled-in and dispatchInProcCommand threads it an executor, and the wire broker's in-proc
 // InvokeProvider branch now threads that reverse channel onward to the fan-out (plugin_dispatch_reverse.go),
-// so the fan-out's vm/k8s collectors reach the host (HostBuild("resolved-project") / InvokeProvider(vm→libvirt))
+// so the fan-out's vm/k8s collectors reach the host (InvokeProvider("build","project") / InvokeProvider(vm→libvirt))
 // for themselves. This retired a former host HostBuild forwarding seam that existed ONLY to patch the
 // broker's in-proc branch missing executor threading manually — an incomplete-seam smell now fixed
 // generically in the broker (the in-proc branch threads the reverse channel uniformly). exec is nil on the

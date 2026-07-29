@@ -183,7 +183,7 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 		// K6: the WHOLE status subsystem fan-out + deploy-cone enrichment (relocated from
 		// charly/status_collector.go). Needs the reverse-channel executor threaded onto ctx
 		// so the vm/k8s per-word collectors it calls (via statusCollect, in-package) can reach
-		// HostBuild("resolved-project") / InvokeProvider("verb","libvirt",...) for themselves —
+		// InvokeProvider("build","project") / InvokeProvider("verb","libvirt",...) for themselves —
 		// exactly the executor context the host's OLD in-core dispatch used to thread.
 		if req.GetReserved() != "status-fanout" {
 			return nil, fmt.Errorf("substrate provider: OpStatusCollectAll unsupported for word %q (want status-fanout)", req.GetReserved())

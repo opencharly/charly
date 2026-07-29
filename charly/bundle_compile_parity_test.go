@@ -150,7 +150,7 @@ func isolateProviderRegistry(t *testing.T) {
 // moved out of charly/ core into candy/plugin-bundle (the command:bundle plugin's OpCompile leg)
 // is byte-faithful to the former in-proc host compile, OVER the FULL plugin seam: the host computes
 // the per-node selection (projectResolvedBox + the candy order + HostContext), Invokes the bundle
-// plugin's OpCompile, the plugin re-hydrates the resolved-project envelope via HostBuild("resolved-project")
+// plugin's OpCompile, the plugin re-hydrates the resolved-project envelope via InvokeProvider("build","project")
 // + loops deploykit.BuildDeployPlan + projects []InstallPlanView, and the host re-materializes
 // []*InstallPlan via deploykit.PlanFromView.
 //

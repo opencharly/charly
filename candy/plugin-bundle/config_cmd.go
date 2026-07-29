@@ -15,7 +15,7 @@ import (
 // config_cmd.go — the K4-C move of the `charly bundle` CONFIG-MANAGEMENT subcommands
 // (show/export/import/reset/status) out of charly core. Every handler below calls ONLY
 // already-sdk-portable deploykit/kit functions; the ONE host touch each needs is a narrow,
-// established seam — HostBuild("resolved-project") for export's project-load (the SAME seam
+// established seam — InvokeProvider("build","project") for export's project-load (the SAME seam
 // compile.go already uses) and HostBuild("deploy-config-save") for import/reset's deploy-state
 // WRITE (the ONE piece that still needs the host: the per-entry marshal callback resugars each
 // plan step via the host-owned pluginPrimaries registry, a live in-process table a separate

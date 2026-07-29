@@ -34,7 +34,7 @@ import (
 // stop-wait gate either).
 //
 // What genuinely remains K1-blocked: `gather` (holder filtering) and `resources` — both now read
-// off the generic HostBuild("resolved-project") envelope instead (K1-unblock wave 1, which
+// off the generic InvokeProvider("build","project") envelope instead (K1-unblock wave 1, which
 // retired the former bespoke arbiter reverse-RPC channel entirely) — see arbiter.go's newArbiter
 // for the two hostGather/hostResources wires.
 //

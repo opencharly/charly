@@ -124,10 +124,10 @@ vm:check-cachyos-gpu-vm:
 // operator's workstation only where the operator opted in, without committing
 // the flag. K1-unblock wave 1: the arbiter's own gather (formerly core-only
 // gatherDeployNodes) moved to candy/plugin-preempt, reading the project half via
-// HostBuild("resolved-project") and merging it host-independently via the portable
+// InvokeProvider("build","project") and merging it host-independently via the portable
 // deploykit.MergedDeployTree — this test exercises that SAME portable merge against a
 // real on-disk project + per-host XDG_CONFIG_HOME overlay (LoadUnified supplies the project
-// half exactly as the "resolved-project" HostBuild seam does host-side).
+// half exactly as the build:project resolve does host-side).
 func TestGatherDeployNodesPerHostWins(t *testing.T) {
 	proj := t.TempDir()
 	// Committed project: cachyos-gpu, NO preemptible.

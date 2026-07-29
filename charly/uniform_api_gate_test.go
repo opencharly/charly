@@ -75,7 +75,7 @@ func TestNoSinglePluginAPISurface(t *testing.T) {
 	// RPC" regression directly.
 	// The arbiter's former bespoke reverse-op class (C9) was a class-generic, action-multiplexed
 	// resource-arbiter host-seam channel — RETIRED by K1-unblock wave 1: its last 2 actions
-	// (gather/resources) now read the generic HostBuild("resolved-project") envelope instead, so
+	// (gather/resources) now read the generic InvokeProvider("build","project") envelope instead, so
 	// the bespoke RPC (and its request/reply proto messages) is deleted rather than kept around
 	// unused.
 	assertMethodSet(t, "ExecutorService", pb.ExecutorService_ServiceDesc,

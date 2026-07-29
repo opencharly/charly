@@ -13,7 +13,7 @@ import (
 // `charly bundle` config-management subcommands (show/export/import/reset/status) moved OUT of
 // charly core into command:bundle (candy/plugin-bundle), calling deploykit.LoadBundleConfig /
 // ExportAllBox / ParseDeployKey etc. DIRECTLY (already sdk-portable) and the EXISTING
-// HostBuild("resolved-project") seam for export's project-load touch — only the deploy-state
+// InvokeProvider("build","project") seam for export's project-load touch — only the deploy-state
 // SAVE step (import/reset) still needs a seam: saveBundleConfigNodeForm's per-entry marshal
 // callback (deploykit.MarshalBundleNode via the marshalDeployNode wrapper) resugars each plan step
 // with the host-owned primaries projection (loaderThreaded().Primaries), which a separate-module

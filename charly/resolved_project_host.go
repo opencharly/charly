@@ -233,9 +233,9 @@ func fillNamespacedBoxes(uf *spec.UnifiedFile, initCfg *buildkit.InitConfig, pre
 	}
 }
 
-// buildResolvedProjectFromDir, hostBuildResolvedProject, the "resolved-project" HostBuild
-// registration, and the resolvedProjectBuilderKind const are DELETED (#55 step3 unit 3b) — that
-// capability moved to candy/plugin-build's `build:project` word (resolveProjectEnvelope), reached
+// The former host-side resolved-project projector function, its host-builder registration, and
+// its F10 kind-const are ALL DELETED (#55 step3 unit 3b — see the repo CHANGELOG for their former
+// names) — that capability moved to candy/plugin-build's `build:project` word (resolveProjectEnvelope), reached
 // via InvokeProvider by its former ~8 consumers. buildResolvedProjectTolerant + this file's own
 // projectResolvedProject wrapper are ALSO DELETED (#55 step3 unit 3-I) — the tolerant envelope
 // projection moved to the SAME build:project word's OpValidate leg

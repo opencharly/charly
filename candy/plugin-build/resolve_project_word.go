@@ -13,12 +13,12 @@ import (
 )
 
 // resolve_project_word.go — the `build:project` word (#55 step3 unit 3b): the PLUGIN-SIDE
-// replacement for charly core's now-deleted "resolved-project" HostBuild seam
+// replacement for charly core's now-deleted resolved-project host seam
 // (charly/resolved_project_host.go's hostBuildResolvedProject/buildResolvedProjectFromDir). The
 // ~8 external consumers (candy/plugin-box, plugin-bundle ×2, plugin-check, plugin-preempt,
-// plugin-installstep, plugin-status, plugin-substrate) that used to call
-// `exec.HostBuild(ctx, "resolved-project", reqJSON)` now call
-// `exec.InvokeProvider(ctx, "build", "resolve", sdk.OpResolve, reqJSON, nil, ...)` instead — a
+// plugin-installstep, plugin-status, plugin-substrate) that used to reach that now-deleted host
+// seam directly now call
+// `exec.InvokeProvider(ctx, "build", "project", sdk.OpResolve, reqJSON, nil, ...)` instead — a
 // class-generic word on the EXISTING `build` provider (candy/plugin-build already owns this exact
 // resolve, box/generate, ensure, pkg), reached over the EXISTING plugin↔plugin InvokeProvider
 // peer-dispatch. No new seam invented (F11).
