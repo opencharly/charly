@@ -38,8 +38,11 @@ type Generator struct {
 	// build path uses to scope `podman build` (R3, build/generate unified). Empty
 	// means "every enabled box" (the bare `charly box generate` / `generate all`
 	// and full `charly box build` behaviour). The whole resolved graph
-	// (intermediates, global candy order, effective versions) is still computed
-	// in NewGenerator regardless — only the per-box emission loop is scoped.
+	// (intermediates, global candy order, effective versions) is computed by
+	// whichever constructor built this Generator (candy/plugin-build's
+	// resolveBuildEngine for a real build/generate drive; #55 step3 3-II deleted
+	// the former host-side NewGenerator that used to do this) — only the
+	// per-box emission loop is scoped by this field.
 	RequestedBoxes []string
 
 	// ExtraCandyRefs is the ORIGINAL loaderkit.ResolveOpts.ExtraCandyRefs this Generator was
@@ -70,7 +73,8 @@ type Generator struct {
 	// toDeploykit() and reused across an image's render so the deploykit-side
 	// per-image builder-reply caches persist across the render methods (which are
 	// relocating onto deploykit.Generator). Containerfiles is a shared map ref so
-	// writes propagate; Candies/Boxes are stable post-NewGenerator.
+	// writes propagate; Candies/Boxes are stable once this Generator's constructor
+	// (newCandyScanGenerator today; the deleted NewGenerator formerly) returns.
 	dkGen *deploykit.Generator
 }
 
@@ -188,18 +192,19 @@ func invokeOciInspectUser(ref string, uid int) (spec.UserInfo, error) {
 // resolveInlineBuilderSeam's resolveBuilderStage reads img.Tags/img.Name off gen.Boxes[boxName]
 // (verified by reading resolveBuilderStage's own body — NOT img.Base/BootstrapBuilderImage, so
 // skipping ComputeIntermediates' auto-intermediate Base-rewrite is safe here). MUCH cheaper than
-// NewGenerator: the build-engine RESOLVE's expensive parts (the candy SCAN's network-bound remote
-// fetches, ComputeIntermediates, GlobalCandyOrder, ComputeEffectiveVersions, RenderPrepAll) now run
-// entirely plugin-side (candy/plugin-build's resolveBuildEngine, K3) — recomputing THOSE again
-// host-side for the render-seam cache was 100% wasted work (proven dead by call-graph: nothing
-// downstream ever read the second Generator's render-prep output); ResolveBox itself is pure,
-// in-memory, and genuinely still needed (RCA'd: a first cut that dropped it entirely broke
-// resolveInlineBuilderSeam's img.Tags/img.Name — caught before merge by re-tracing every reader of
-// gen.Boxes[boxName], not by the box-generate smoke test, which never exercises the inline-builder
-// path). Skips the build-time plugin connect + pre-build validate NewGenerator also runs: both
-// already ran plugin-side (resolveBuildEngine steps 4-5) by the time this is reached through the
-// normal build/generate path, and ensureBuildersConnected connects on demand itself when reached
-// any other way (e.g. the loadRenderGen defensive fallback).
+// the deleted NewGenerator (#55 step3 3-II): the build-engine RESOLVE's expensive parts (the candy
+// SCAN's network-bound remote fetches, ComputeIntermediates, GlobalCandyOrder,
+// ComputeEffectiveVersions, RenderPrepAll) now run entirely plugin-side (candy/plugin-build's
+// resolveBuildEngine, K3) — recomputing THOSE again host-side for the render-seam cache was 100%
+// wasted work (proven dead by call-graph: nothing downstream ever read the second Generator's
+// render-prep output); ResolveBox itself is pure, in-memory, and genuinely still needed (RCA'd: a
+// first cut that dropped it entirely broke resolveInlineBuilderSeam's img.Tags/img.Name — caught
+// before merge by re-tracing every reader of gen.Boxes[boxName], not by the box-generate smoke
+// test, which never exercises the inline-builder path). Skips the build-time plugin connect +
+// pre-build validate the deleted NewGenerator also used to run: both already ran plugin-side
+// (resolveBuildEngine steps 4-5) by the time this is reached through the normal build/generate
+// path, and ensureBuildersConnected connects on demand itself when reached any other way (e.g. the
+// loadRenderGen defensive fallback).
 func newCandyScanGenerator(dir string, includeDisabled bool, extraCandyRefs []string) (*Generator, error) {
 	cfg, err := LoadConfig(dir)
 	if err != nil {

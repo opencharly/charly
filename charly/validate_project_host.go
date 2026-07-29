@@ -62,8 +62,8 @@ type loadedProject struct {
 	empty      bool
 }
 
-// loadProjectForResolve is the ONE load path both the overlay seam's fail-fast
-// projectResolvedProjectWithBoxes call (charly/build_overlay.go, diags==nil) and
+// loadProjectForResolve is the ONE load path both hostBuildNamespaced's fail-fast namespaced-box
+// resolve (host_build_buildengine.go, diags==nil) and
 // hostBuildValidateProjectChecks (diags!=nil, TOLERANT — feeding the host-natural checks below,
 // #55 step3 unit 3-I) drive (R3). When diags is nil it is FAIL-FAST: any
 // LoadConfig/Scan/LoadUnified/ApplyDiscover error aborts with that error. When diags is non-nil it is
@@ -100,7 +100,9 @@ func loadProjectForResolve(dir string, opts loaderkit.ResolveOpts, diags *spec.D
 	}
 
 	// InitCfg threads the init-system host-completion pass into the scan pipeline —
-	// mirrors NewGenerator's opts.InitCfg = defaultInitCfg (charly/generate.go). A
+	// mirrors the SAME opts.InitCfg = defaultInitCfg pattern the deleted NewGenerator
+	// used (#55 step3 3-II; the real build/generate drive threads it plugin-side now,
+	// candy/plugin-build/resolve.go). A
 	// spec.CandyReader is read-only once wrapped, so InitSystems must be populated
 	// before ScanAllCandyWithConfigOpts wraps each candy. Required since #67: this
 	// scan's output (lp.layers) feeds rp.Candies/rp.CandyModels — the wire envelope
@@ -284,12 +286,17 @@ var _ = func() bool {
 }()
 
 // validateProjectForBuild is the pre-build validation GATE (task #60, (C-refined)): the validate ENGINE
-// lives in candy/plugin-box, so `charly box build`/`generate` (NewGenerator) no longer calls Validate()
-// directly — it dispatches to the compiled-in validate capability BY WORD with a structured OpValidate
-// op (the SAME registry-dispatch shape the build path already uses for OpEmit/OpResolve) over an in-proc
+// lives in candy/plugin-box, so `charly box build`/`generate` no longer calls Validate() directly —
+// it dispatches to the compiled-in validate capability BY WORD with a structured OpValidate op (the
+// SAME registry-dispatch shape the build path already uses for OpEmit/OpResolve) over an in-proc
 // reverse channel, and consumes the returned spec.Diagnostics as a HARD gate (the error text mirrors the
-// former spec.ValidationError.Error() for parity). Kind-blind M (registry-by-word). Named exit K3 — when the
-// build engine itself becomes plugin-build, this call becomes a plugin↔plugin InvokeProvider.
+// former spec.ValidationError.Error() for parity). Kind-blind M (registry-by-word). #55 step3 3-II
+// deleted this function's last production caller, the former host-side NewGenerator — the real
+// build/generate drive's own pre-build validate now runs plugin-side (candy/plugin-build/resolve.go
+// step 5, validateProjectLeg, a genuine plugin↔plugin InvokeProvider — the K3 named exit this comment
+// used to describe as future work is DONE). This function survives as test-only coverage (see its
+// callers in validate_fixture_test.go / plugin_installstep_envelope_parity_test.go's
+// testFullResolveGenerator) reproducing the SAME validate dispatch for fixture-driven unit tests.
 func validateProjectForBuild(dir string, opts loaderkit.ResolveOpts) error {
 	prov, ok := providerRegistry.resolve(ClassCommand, "validate")
 	if !ok {

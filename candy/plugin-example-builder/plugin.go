@@ -7,10 +7,12 @@
 // the spliced stage bakes a marker file the runtime check inspects. The BUILDER-leg
 // counterpart of the verb/step candy/plugin-example-step.
 //
-// The operator-authorized build-time plugin-execution MECHANISM lives in charly (the
-// generate.go NewGenerator connect seam + generate.go emitExternalBuilderStages /
-// emitExternalBuilderArtifacts); this module is only the reference PAYLOAD that mechanism
-// builds + executes.
+// The operator-authorized build-time plugin-execution MECHANISM lives plugin-side now
+// (candy/plugin-build's resolveBuildEngine connects it via hostBuildConnectPlugins;
+// candy/plugin-installstep's emitBuilder splices the multi-stage block via kit.BuilderResolve
+// — the former host-side NewGenerator connect seam + the in-core emitExternalBuilderStages/
+// emitExternalBuilderArtifacts splice this comment used to name are both gone); this module is
+// only the reference PAYLOAD that mechanism builds + executes.
 package examplebuilder
 
 import (

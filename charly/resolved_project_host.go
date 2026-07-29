@@ -7,86 +7,44 @@ import (
 	"github.com/opencharly/spec/spec"
 )
 
-// resolved_project_host.go — the SHARED envelope-assembly seam (K5-Unit-0, the S-K5 keystone).
-// #55 step3 unit 3b relocated the "resolved-project" HostBuild seam itself to candy/plugin-build's
-// `build:project` word (resolveProjectEnvelope in candy/plugin-build/resolve_project_word.go),
-// reached by its ~8 former HostBuild consumers via InvokeProvider peer-dispatch instead; unit 3-I
-// relocated the "validate-project" seam's error-TOLERANT half onto the SAME word's OpValidate leg
-// (candy/plugin-build/resolve_project_tolerant.go); unit 3-II (task #71) relocated the LAST
-// production caller of the projectResolvedProjectWithBoxes WRAPPER below — the pod-overlay seam
-// (charly/build_overlay.go's hostBuildOverlay) now fetches its render-prepped envelope itself via
-// InvokeProvider("build","generate",sdk.OpResolve,…) instead of this host wrapper. That WRAPPER
-// (projectResolvedProjectWithBoxes) therefore has ZERO production callers left — only its two test
-// helpers (resolved_project_namespace_test.go, plugin_installstep_envelope_parity_test.go) still
-// call it directly, as a convenient test harness around fillNamespacedBoxes.
+// resolved_project_host.go — the resolved-project envelope's namespaced-box FILL (K5-Unit-0, the
+// S-K5 keystone's last host-resident remainder). #55 step3 unit 3b relocated the "resolved-project"
+// HostBuild seam itself to candy/plugin-build's `build:project` word (resolveProjectEnvelope in
+// candy/plugin-build/resolve_project_word.go), reached by its ~8 former HostBuild consumers via
+// InvokeProvider peer-dispatch instead; unit 3-I relocated the "validate-project" seam's error-
+// TOLERANT half onto the SAME word's OpValidate leg (candy/plugin-build/resolve_project_tolerant.go);
+// unit 3-II (task #71) relocated the pod-overlay seam's own envelope fetch (build_overlay.go's
+// hostBuildOverlay now fetches its render-prepped envelope plugin-side via
+// InvokeProvider("build","generate",sdk.OpResolve,…) instead of calling anything in this file) AND
+// deleted the now-fully-production-dead projectResolvedProjectWithBoxes WRAPPER this file used to
+// carry (zero production callers once the overlay seam stopped calling it — its two former test
+// callers were repointed: resolved_project_namespace_test.go's namespaced-box test now drives the
+// LIVE hostBuildNamespaced directly; plugin_installstep_envelope_parity_test.go's generic-envelope
+// use now calls a test-local reproduction, testProjectResolvedProjectWithBoxes in
+// resolved_project_host_test.go — the wrapper's logic, kept test-side since no OTHER core-resident
+// caller needs that exact "project an envelope from a live cfg/layers/uf/pre-resolved-boxes" shape
+// anymore, R3).
 //
-// **What this means for full deletion (correcting the 3-II dispatch's premise that "overlay was
-// [this file's] last user"): it was NOT — host_build_buildengine.go's hostBuildNamespaced calls
-// fillNamespacedBoxes DIRECTLY (not through the projectResolvedProjectWithBoxes wrapper) on behalf
-// of candy/plugin-build's OWN build/generate drive's namespaced-box resolution — a completely
-// separate, still-live production concern from the overlay envelope this cutover relocates. This
-// file therefore CANNOT be deleted in full: fillNamespacedBoxes (the actual namespace-recursion
-// function) stays, a genuine still-needed capability with no other owner. Only
-// projectResolvedProjectWithBoxes (the thin wrapper around it) is now production-dead — kept
-// solely as the two tests' harness function rather than duplicating its ~15-line seam-construction
-// into each test file (R3). A future cutover that relocates hostBuildNamespaced's own caller
-// (candy/plugin-build's own resolveBuildEngine, which already runs plugin-side) onto a plugin-side
-// namespaced-box resolution is the actual named exit for this file's full deletion — NOT tracked
-// here as a new task; flagged to the #55 step3 orchestrator for the next fabric-tail wave.
+// What REMAINS in this file is fillNamespacedBoxes alone — a genuinely still-needed capability with
+// no other owner: host_build_buildengine.go's hostBuildNamespaced calls it DIRECTLY (not through
+// any wrapper) on behalf of candy/plugin-build's own build/generate drive's namespaced-box
+// resolution, a live production concern unrelated to the overlay envelope 3-II relocated. A future
+// cutover that relocates hostBuildNamespaced's own caller onto a plugin-side namespaced-box
+// resolution is the actual named exit for this file's full deletion — NOT tracked here as a new
+// task; flagged to the #55 step3 orchestrator for the next fabric-tail wave.
 //
-// It is a DATA PROJECTION over the resolve engines that already exist — ResolveBox (per enabled
-// box) + ScanAllCandy + the folded uf.Bundle deploy tree — serialized into the generic
+// fillNamespacedBoxes is a DATA PROJECTION over the resolve engines that already exist — ResolveBox
+// (per enabled box) + ScanAllCandy + the folded uf.Bundle deploy tree — serialized into the generic
 // spec.ResolvedProject. It is NOT a new engine: it copies fields the existing engines populate,
 // dropping the host-only json:"-" compute-cache pointers of ResolvedBox that are never wire data
 // (DistroConfig/DistroDef/BuilderConfig/InitSystem/InitDef/CandyCaps).
 
-// projectResolvedProjectWithBoxes is the host wrapper carrying the optional pre-resolved boxes map (the
-// build-prep seam path preserves the render-prep caches; nil resolves fresh). It computes the wall-clock
-// calver, applies the perf pre-fill (below), builds the seams, and calls the relocated assembler.
-func projectResolvedProjectWithBoxes(cfg *Config, layers map[string]spec.CandyReader, uf *spec.UnifiedFile, distroCfg *buildkit.DistroConfig, builderCfg *buildkit.BuilderConfig, initCfg *buildkit.InitConfig, dir, version string, opts loaderkit.ResolveOpts, diags *spec.Diagnostics, preResolvedBoxes map[string]*buildkit.ResolvedBox) (*spec.ResolvedProject, error) {
-	// R1 fix (K1-unblock wave 2): pre-populate opts.DistroCfg/BuilderCfg from the ALREADY-LOADED values,
-	// so the ResolveBox seam's fillBuildConfigFallback guard short-circuits instead of re-running a full
-	// LoadUnified(dir) on EVERY ResolveBox call (the namespaced-box loop is the first real caller; live
-	// timing showed 80 boxes × ~750ms reload = 69s otherwise). Behavior-identical (same dir → same
-	// vocabulary every call). Stays HOST so the ResolveBox/FillNamespacedBoxes closures capture the
-	// filled opts — keeping the relocated assembler opts-agnostic.
-	if opts.DistroCfg == nil {
-		opts.DistroCfg = distroCfg
-	}
-	if opts.BuilderCfg == nil {
-		opts.BuilderCfg = builderCfg
-	}
-	calver := ComputeCalVer()
-	seams := loaderkit.ResolveProjectSeams{
-		ResolveBox: func(cfg *spec.Config, name, calver, dir string) (*buildkit.ResolvedBox, error) {
-			bkopts, oerr := buildkitOptsWithVocab(dir, opts)
-			if oerr != nil {
-				return nil, oerr
-			}
-			return buildkit.ResolveBox(cfg, name, calver, dir, bkopts)
-		},
-		FillNamespacedBoxes: func(nsUF *spec.UnifiedFile, ic *buildkit.InitConfig, prefix, calver, dir string, rp *spec.ResolvedProject, visited map[*spec.UnifiedFile]bool) {
-			fillNamespacedBoxes(nsUF, ic, prefix, calver, dir, opts, rp, visited)
-		},
-		ResolveResources:      resolveResources,
-		ShouldIncludeDisabled: opts.ShouldIncludeDisabled,
-		ComputeIntermediates:  ComputeIntermediates,
-		ExternalizedBuilders:  externalizedBuilders,
-	}
-	rp, err := loaderkit.ProjectResolvedProject(cfg, layers, uf, distroCfg, builderCfg, initCfg, dir, version, calver, seams, diags, preResolvedBoxes)
-	if rp != nil {
-		// Primaries: the plugin-verb PRIMARY-field D-fact snapshot (loaderThreaded().Primaries),
-		// carried on the resolved-project envelope for the deploy-tree resugar (envelope keystone, lane3).
-		rp.Primaries = loaderThreaded().Primaries
-	}
-	return rp, err
-}
-
 // fillNamespacedBoxes populates *out with a namespace-QUALIFIED spec.ResolvedBoxView (`fedora.jupyter`,
 // or `ns1.ns2.name` for a nested import) for every box reachable from cfg's import namespaces,
-// recursively (cfg's OWN boxes are filled by the root loop in projectResolvedProjectWithBoxes — this
-// only adds the namespaced ones, matching fillBoxPlans's exact prefix-recursion shape and its SAME
-// layers/visited-cycle-guard contract). A namespaced box that fails to resolve (e.g. references a
+// recursively (the caller fills cfg's OWN root-scope boxes separately — hostBuildNamespaced's own
+// scratch envelope carries ONLY the namespaced additions this function contributes; the general
+// root+namespaced projection lives in testProjectResolvedProjectWithBoxes's production-equivalent
+// recipe, resolved_project_host_test.go). A namespaced box that fails to resolve (e.g. references a
 // builder unreachable from the root project's build context) is SKIPPED, never fatal — this fill is
 // best-effort/additive by design, unlike the root-box loop's optional fail-fast (diags == nil) mode,
 // because a namespace's own box graph may be only PARTIALLY reachable from THIS project's resolve
@@ -180,7 +138,8 @@ func fillNamespacedBoxes(uf *spec.UnifiedFile, initCfg *buildkit.InitConfig, pre
 		}
 		// Resolve EVERY box in this namespace's own config first (so a sibling-base lookup —
 		// parentCandies via deploykit.CandyProvidedByBox — resolves against an ALREADY-populated
-		// map, mirroring NewGenerator+RenderPrepAll's two-phase shape for the root project), then
+		// map, mirroring the deleted NewGenerator+RenderPrepAll's two-phase shape the root project's
+		// resolve still follows (now via candy/plugin-build's resolveBuildEngine, #55 step3 3-II)), then
 		// render-prep each one through the SAME deploykit.Generator.RenderPrepBox the root project
 		// uses (R3 — no duplicated logic): a namespaced box that participates in ANOTHER project's
 		// build (e.g. a builder/base referenced via `builder: <ns>.<name>` / `base: <ns>.<name>`, like
@@ -251,9 +210,10 @@ func fillNamespacedBoxes(uf *spec.UnifiedFile, initCfg *buildkit.InitConfig, pre
 // projection moved to the SAME build:project word's OpValidate leg
 // (candy/plugin-build/resolve_project_tolerant.go); loadProjectForResolve (validate_project_host.go)
 // stays, now feeding ONLY the host-natural raw-config checks (hostBuildValidateProjectChecks) rather
-// than an envelope projection. #55 step3 unit 3-II relocated the overlay seam's own
-// projectResolvedProjectWithBoxes call (build_overlay.go no longer calls loadProjectForResolve or
-// projectResolvedProjectWithBoxes — see this file's header) — that WRAPPER is now production-dead,
-// test-only. fillNamespacedBoxes STAYS: host_build_buildengine.go's hostBuildNamespaced calls it
-// directly for plugin-build's own namespaced-box resolution, a still-live, unrelated production
-// concern — see this file's header for the corrected full-deletion story.
+// than an envelope projection. #55 step3 unit 3-II relocated the overlay seam's own envelope fetch
+// (build_overlay.go no longer calls loadProjectForResolve at all) AND DELETED
+// projectResolvedProjectWithBoxes itself (production-dead once the overlay seam stopped calling it
+// — radical-dead-code-removal, per validator finding on PR #196; its two former test callers were
+// repointed, see this file's header). fillNamespacedBoxes STAYS: host_build_buildengine.go's
+// hostBuildNamespaced calls it directly for plugin-build's own namespaced-box resolution, a
+// still-live, unrelated production concern — see this file's header for the full-deletion story.

@@ -9,15 +9,16 @@ plugin-build:
             relocation — the former core ensure-image + cross-engine-transfer helpers): pull an
             image, falling back to a local (or remote-cached) build reached via the SAME in-process
             build:box drive this candy already owns — no new build seam. The heavy loader/render
-            RESOLVE (NewGenerator → Generate → the privileged builder-bootstrap → the builder-image
-            ensure) and the layer MERGE stay host-side, reached over the F10 HostBuild reverse
-            channel: Invoke marshals a spec.BuildResolveRequest and calls HostBuild("build-resolve",
-            …), receives a spec.BuildResolveReply drive-model (engine/platform/order/levels/per-image
-            descriptors + resolved tunables), then runs podman directly — building each image
-            (Containerfile piped over stdin), gating the inline layer merge on the box's MergeAuto
-            via HostBuild("merge", …), and pushing (podman) after merge; build:generate renders the
-            .build/ Containerfile tree host-side and returns the written paths (no podman, no
-            merge); build:ensure reaches HostBuild("box-ref-resolve", …) / HostBuild
+            RESOLVE runs PLUGIN-SIDE ITSELF (resolveBuildEngine, K3 U6 — the former host-side
+            NewGenerator this candy used to call over HostBuild is DELETED, #55 step3 3-II), reaching
+            the host only for what a sdk-only candy structurally cannot do (the bootstrap-delicate
+            local scan, the git fetch, the build-time plugin connect, the host-fs prep) over a small
+            `buildengine-*` HostBuild leg family; the layer MERGE crosses to verb:oci via
+            InvokeProvider (no HostBuild("merge") seam). The candy then runs podman directly —
+            building each image (Containerfile piped over stdin), gating the inline merge on the
+            box's MergeAuto, and pushing (podman) after merge; build:generate renders the .build/
+            Containerfile tree in its own code (via sdk/deploykit, #67) and returns the written paths
+            (no podman, no merge); build:ensure reaches HostBuild("box-ref-resolve", …) / HostBuild
             ("remote-image-resolve", …) to resolve a project-authored / remote image identifier
             against charly.yml, then execs `podman pull`/`podman tag` directly (no seam needed for
             that — same host, same privilege as the build drive's own podman exec). Only the wire

@@ -48,10 +48,10 @@ import (
 // NewGenerator it called is deleted — see that function's own comment).
 
 // renderGenCache holds the live *Generator per project dir for the render-seam host-builder.
-// Populated by the buildengine-prep host leg (hostBuildPrep, K3 U6 — the render-seam-floor
-// NewGenerator STAYS host); read by hostBuildRenderSeam. One entry per dir per process — a single
-// `charly box build` is one process, so the cache holds the one gen the prep leg loaded (render-prep
-// already run).
+// Populated by the buildengine-prep host leg (hostBuildPrep, K3 U6 — via the cheap
+// newCandyScanGenerator now; #55 step3 3-II deleted the expensive NewGenerator this floor used to
+// run); read by hostBuildRenderSeam. One entry per dir per process — a single `charly box build`
+// is one process, so the cache holds the one gen the prep leg loaded (render-prep already run).
 var renderGenCache sync.Map
 
 // loadRenderGen returns the cached *Generator for dir, falling back to the cheap

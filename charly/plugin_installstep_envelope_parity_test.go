@@ -197,9 +197,9 @@ func runParityFixture(t *testing.T, fx parityFixture, totals *parityTotals) {
 	if lp.empty {
 		t.Fatalf("loadProjectForResolve returned empty project for %s", fx.dir)
 	}
-	rp, err := projectResolvedProjectWithBoxes(lp.cfg, lp.layers, lp.uf, lp.distroCfg, lp.builderCfg, gen.InitConfig, fx.dir, lp.version, boxResolveOpts([]string{fx.box}, false), nil, gen.Boxes)
+	rp, err := testProjectResolvedProjectWithBoxes(lp.cfg, lp.layers, lp.uf, lp.distroCfg, lp.builderCfg, gen.InitConfig, fx.dir, lp.version, boxResolveOpts([]string{fx.box}, false), nil, gen.Boxes)
 	if err != nil {
-		t.Fatalf("projectResolvedProjectWithBoxes: %v", err)
+		t.Fatalf("testProjectResolvedProjectWithBoxes: %v", err)
 	}
 	rp.GlobalOrder = gen.GlobalOrder
 	rp.ExternalizedBuilders = externalizedBuilders

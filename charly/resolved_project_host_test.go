@@ -212,14 +212,73 @@ func writeResolvedProjectFixtureProject(t *testing.T) string {
 	return dir
 }
 
+// testProjectResolvedProjectWithBoxes is the test-only reproduction of the deleted production
+// projectResolvedProjectWithBoxes (#55 step3 3-II: its last production caller, the pod-overlay
+// seam, now fetches its render-prepped envelope plugin-side instead via
+// InvokeProvider("build","generate",OpResolve,…) — candy/plugin-build's own resolveBuildEngine runs
+// the SAME loaderkit.ProjectResolvedProject call this test-side reproduction makes, wiring the
+// SAME core-only ResolveProjectSeams closures (fillNamespacedBoxes/resolveResources/
+// ComputeIntermediates/externalizedBuilders) a plugin-side caller cannot supply itself). Kept
+// test-side because this exact "project a *spec.ResolvedProject from a live cfg/layers/uf/
+// pre-resolved-boxes" shape has no OTHER core-resident caller anymore, and this file's + the
+// parity test's coverage still needs it directly (not through a cross-module Invoke).
+func testProjectResolvedProjectWithBoxes(cfg *Config, layers map[string]spec.CandyReader, uf *spec.UnifiedFile, distroCfg *buildkit.DistroConfig, builderCfg *buildkit.BuilderConfig, initCfg *buildkit.InitConfig, dir, version string, opts loaderkit.ResolveOpts, diags *spec.Diagnostics, preResolvedBoxes map[string]*buildkit.ResolvedBox) (*spec.ResolvedProject, error) {
+	if opts.DistroCfg == nil {
+		opts.DistroCfg = distroCfg
+	}
+	if opts.BuilderCfg == nil {
+		opts.BuilderCfg = builderCfg
+	}
+	calver := ComputeCalVer()
+	seams := loaderkit.ResolveProjectSeams{
+		ResolveBox: func(cfg *spec.Config, name, calver, dir string) (*buildkit.ResolvedBox, error) {
+			bkopts, oerr := buildkitOptsWithVocab(dir, opts)
+			if oerr != nil {
+				return nil, oerr
+			}
+			return buildkit.ResolveBox(cfg, name, calver, dir, bkopts)
+		},
+		FillNamespacedBoxes: func(nsUF *spec.UnifiedFile, ic *buildkit.InitConfig, prefix, calver, dir string, rp *spec.ResolvedProject, visited map[*spec.UnifiedFile]bool) {
+			fillNamespacedBoxes(nsUF, ic, prefix, calver, dir, opts, rp, visited)
+		},
+		ResolveResources:      resolveResources,
+		ShouldIncludeDisabled: opts.ShouldIncludeDisabled,
+		ComputeIntermediates:  ComputeIntermediates,
+		ExternalizedBuilders:  externalizedBuilders,
+	}
+	rp, err := loaderkit.ProjectResolvedProject(cfg, layers, uf, distroCfg, builderCfg, initCfg, dir, version, calver, seams, diags, preResolvedBoxes)
+	if rp != nil {
+		rp.Primaries = loaderThreaded().Primaries
+	}
+	return rp, err
+}
+
+// testBuildResolvedProject is the test-only reproduction of the deleted buildResolvedProjectFromDir
+// (#55 step3 unit 3b moved its production form to candy/plugin-build's resolveProjectEnvelope): load
+// the project fail-fast via loadProjectForResolve, short-circuit to an empty envelope for a
+// project-less dir, else project it via testProjectResolvedProjectWithBoxes (preResolvedBoxes=nil
+// for a fresh per-box resolve).
+func testBuildResolvedProject(t *testing.T, dir string, opts loaderkit.ResolveOpts) (*spec.ResolvedProject, error) {
+	t.Helper()
+	lp, err := loadProjectForResolve(dir, opts, nil)
+	if err != nil {
+		return nil, err
+	}
+	if lp.empty {
+		return &spec.ResolvedProject{}, nil
+	}
+	return testProjectResolvedProjectWithBoxes(lp.cfg, lp.layers, lp.uf, lp.distroCfg, lp.builderCfg, lp.initCfg, dir, lp.version, opts, nil, nil)
+}
+
 // TestResolvedProject_Projection proves the SHARED projection path (loadProjectForResolve +
-// projectResolvedProject — the same two functions the validate-project and overlay seams call
-// directly, per this file's header) decodes candy/candy-model/vocab data faithfully — the wire
-// contract candy/plugin-build's `build:project` word (the plugin-side envelope-fetch seam,
-// #55 step3 unit 3b) and its ~8 consumers depend on. The seam ROUND TRIP itself (marshal → host
-// dispatch → unmarshal, over InvokeProvider) is proven live by the R10 exploratory run against a
-// real project (box inspect / status / check-project / bundle resolve), not re-created here as a
-// second fixture — this test's job is the SHARED projection logic staying core-resident stays correct.
+// loaderkit.ProjectResolvedProject, wired via testProjectResolvedProjectWithBoxes — the test-only
+// reproduction of the deleted projectResolvedProjectWithBoxes, #55 step3 3-II) decodes
+// candy/candy-model/vocab data faithfully — the wire contract candy/plugin-build's `build:project`
+// word (the plugin-side envelope-fetch seam, #55 step3 unit 3b) and its ~8 consumers depend on. The
+// seam ROUND TRIP itself (marshal → host dispatch → unmarshal, over InvokeProvider) is proven live
+// by the R10 exploratory run against a real project (box inspect / status / check-project / bundle
+// resolve), not re-created here as a second fixture — this test's job is the SHARED projection
+// logic staying core-resident stays correct.
 func TestResolvedProject_Projection(t *testing.T) {
 	dir := writeResolvedProjectFixtureProject(t)
 
