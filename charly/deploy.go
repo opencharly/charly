@@ -48,7 +48,7 @@ func resolveDeployKeyToBox(key, instance string) string {
 	// Project-level fallback.
 	if dir, err := os.Getwd(); err == nil {
 		if uf, ok, _ := LoadUnified(dir); ok && uf != nil {
-			if pc := uf.ProjectBundleConfig(); pc != nil {
+			if pc := deploykit.ProjectBundleConfig(uf); pc != nil {
 				if entry, ok := pc.Bundle[key]; ok && entry.Image != "" {
 					return entry.Image
 				}

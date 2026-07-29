@@ -62,7 +62,7 @@ func TestMaterializeSeam_RealFixtureDeterministic(t *testing.T) {
 	// Materializer/dispatch chain writes: Box/Candy/Bundle (dedicated fields) + PluginKinds (which
 	// ALSO now carries the 5 standalone-substrate-TEMPLATE kinds vm/pod/k8s/local/android — K1
 	// unit-1 follow-up, foldStandaloneTemplateReply's generic fold, node_normalize.go). PluginKinds
-	// is json:"-" on loaderkit.UnifiedFile so it's compared explicitly, not via a whole-struct marshal which
+	// is json:"-" on spec.UnifiedFile so it's compared explicitly, not via a whole-struct marshal which
 	// would silently skip it.
 	fields := []struct {
 		name string

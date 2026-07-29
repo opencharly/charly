@@ -4,14 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 	"gopkg.in/yaml.v3"
 )
 
 // node_parsed.go — the host MATERIALIZE half of the P6/K1-unit-1 (#46) parse/materialize seam.
 // The PARSE (yaml → spec.ParsedProject) runs in the loader plugin via sdk/loaderkit; here the
-// host folds the ParsedProject back into the typed *loaderkit.UnifiedFile. parsedNodeToGeneric reconstructs
+// host folds the ParsedProject back into the typed *spec.UnifiedFile. parsedNodeToGeneric reconstructs
 // the genericNode the TRUE clause-M dispatch (runPluginKind, provider_kind_invoke.go) reads from
 // a ParsedNode's opaque JSON body; materializeProject / materializeNodeInto drive the registered
 // spec.Materializer (candy/plugin-loader) per node — the former in-core not-found DISPATCH POLICY
@@ -57,7 +56,7 @@ func parsedNodeToGeneric(pn spec.ParsedNode) (*genericNode, error) {
 // Pre-seeds the spec.MaterializedProject accumulator from uf's CURRENT maps (so repeated calls
 // across a document's node list ACCUMULATE rather than reset — maps are reference types, so this
 // is a cheap map-header copy, not a deep copy) and copies the result back after.
-func materializeNodeInto(pn spec.ParsedNode, uf *loaderkit.UnifiedFile) error {
+func materializeNodeInto(pn spec.ParsedNode, uf *spec.UnifiedFile) error {
 	acc := spec.MaterializedProject{
 		Box: uf.Box, Candy: uf.Candy, Bundle: uf.Bundle, PluginKinds: uf.PluginKinds,
 	}
@@ -98,11 +97,11 @@ func genericToParsedNode(gn *genericNode) (spec.ParsedNode, error) {
 
 // normalizeNodeInto is the TEST-FACING bridge into the K1 unit-1 Materializer pipeline: it
 // converts gn back to a spec.ParsedNode (genericToParsedNode) and runs materializeNodeInto —
-// preserving the pre-K1 call shape (*genericNode, *loaderkit.UnifiedFile) for tests that build a genericNode
+// preserving the pre-K1 call shape (*genericNode, *spec.UnifiedFile) for tests that build a genericNode
 // fixture directly. Production load paths (materializeProject / materializeDiscoveredNode) never
 // call this; they already hold a genuine spec.ParsedNode from the registered DocParser/
 // ProjectWalker and call materializeNodeInto directly.
-func normalizeNodeInto(gn *genericNode, uf *loaderkit.UnifiedFile) error {
+func normalizeNodeInto(gn *genericNode, uf *spec.UnifiedFile) error {
 	pn, err := genericToParsedNode(gn)
 	if err != nil {
 		return err
@@ -111,12 +110,12 @@ func normalizeNodeInto(gn *genericNode, uf *loaderkit.UnifiedFile) error {
 }
 
 // materializeProject folds a whole spec.ParsedProject (the loader plugin's WalkProject reply — one
-// document's decomposed nodes) into the typed loaderkit.UnifiedFile, node by node via materializeNodeInto.
+// document's decomposed nodes) into the typed spec.UnifiedFile, node by node via materializeNodeInto.
 // This is the exact host-side entry the plugin dispatch drops into: the registered loader plugin's
 // spec.ProjectWalker (candy/plugin-loader, over sdk/loaderkit.Walk) builds the
 // spec.LoadedProject/ParsedProject and loaderkit.MaterializeLoadedProject (via the MaterializeProject
 // host seam, #48) calls this per document.
-func materializeProject(pp *spec.ParsedProject, uf *loaderkit.UnifiedFile) error {
+func materializeProject(pp *spec.ParsedProject, uf *spec.UnifiedFile) error {
 	if pp == nil {
 		return nil
 	}

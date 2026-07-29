@@ -185,7 +185,7 @@ func reconcileTargetVersion(remote bool, repo string, vers map[string]bool) (str
 // candy/ directories carry the rest.
 func reconcileCandidateFiles(dir string) []string {
 	seen := map[string]struct{}{}
-	if p := filepath.Join(dir, kit.UnifiedFileName); kit.FileExists(p) {
+	if p := filepath.Join(dir, spec.UnifiedFileName); kit.FileExists(p) {
 		seen[filepath.Clean(p)] = struct{}{}
 	}
 	// Scan every YAML under the discovered box/ and candy/ directories. A per-box charly.yml

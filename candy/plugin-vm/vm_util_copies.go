@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/spec"
 )
 
 // vm_util_copies.go — small pure host helpers the moved VM CLI handlers reference by their former core
@@ -19,7 +20,7 @@ import (
 // port READ is config state, so it reads reply.VmState via the config-resolve seam.
 
 // UnifiedFileName is the project config filename ("charly.yml") — kit owns the one copy.
-const UnifiedFileName = kit.UnifiedFileName
+const UnifiedFileName = spec.UnifiedFileName
 
 // resolveVmSshUser picks the guest SSH user from the resolved spec (verbatim from core).
 func resolveVmSshUser(spec *VmSpec) string {

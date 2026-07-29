@@ -13,7 +13,7 @@ import (
 
 // resolveDistroViaPlugin projects one opaque distro body into a *DistroDef
 // (= *spec.ResolvedDistro) via candy/plugin-distro's OpResolve leg. Consumed by
-// Distros(uf) (unified.go) via loaderkit.ResolvePluginKindViaPlugin — the shared loop every
+// Distros(uf) (unified.go) via spec.ResolvePluginKindViaPlugin — the shared loop every
 // plugin-resolved kind accessor uses.
 func resolveDistroViaPlugin(body json.RawMessage) (*spec.ResolvedDistro, error) {
 	reply, err := hostInvoke[spec.DistroResolveInput, spec.DistroResolveReply](ClassKind, "distro", OpResolve, spec.DistroResolveInput{Distro: body})

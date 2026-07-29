@@ -8,6 +8,7 @@ import (
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/spec"
 )
 
 // dispatchAuthoringCommand routes a box authoring command word to its handler. The pure verbs
@@ -61,7 +62,7 @@ func dispatchSet(args []string) error {
 	if err != nil {
 		return err
 	}
-	target := filepath.Join(dir, kit.UnifiedFileName)
+	target := filepath.Join(dir, spec.UnifiedFileName)
 	if _, err := os.Stat(target); os.IsNotExist(err) {
 		return fmt.Errorf("charly.yml not found in %s; run `charly box new project .` to scaffold one", dir)
 	}

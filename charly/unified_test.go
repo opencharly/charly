@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/loaderkit"
+	"github.com/opencharly/spec/spec"
 )
 
 // helper — write a file under root, creating parent directories as needed
@@ -280,7 +280,7 @@ chrome:
 	if err := ApplyDiscover(uf, root); err != nil {
 		t.Fatalf("ApplyDiscover: %v", err)
 	}
-	il, ok := loaderkit.DecodeInlineCandy(uf.Candy["chrome"])
+	il, ok := spec.DecodeInlineCandy(uf.Candy["chrome"])
 	if !ok {
 		t.Fatal("candy.chrome missing")
 	}

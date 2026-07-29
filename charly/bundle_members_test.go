@@ -20,7 +20,7 @@ import (
 // owner, and a disposable owner's disposability is inherited (so a kind:check
 // bed's destroy+rebuild is authorized to tear the member down too).
 func TestFoldMembers_FoldsTopLevelAndInheritsDisposability(t *testing.T) {
-	uf := &loaderkit.UnifiedFile{Bundle: map[string]spec.BundleNode{
+	uf := &spec.UnifiedFile{Bundle: map[string]spec.BundleNode{
 		"check-cross-pod-cdp": {
 			Target:     "pod",
 			Image:      "web",
@@ -51,7 +51,7 @@ func TestFoldMembers_FoldsTopLevelAndInheritsDisposability(t *testing.T) {
 // TestFoldMembers_NonDisposableOwnerDoesNotForceDisposable: a member of a
 // non-disposable owner is NOT auto-promoted to disposable (no autonomy granted).
 func TestFoldMembers_NonDisposableOwnerDoesNotForceDisposable(t *testing.T) {
-	uf := &loaderkit.UnifiedFile{Bundle: map[string]spec.BundleNode{
+	uf := &spec.UnifiedFile{Bundle: map[string]spec.BundleNode{
 		"prod": {
 			Target:  "pod",
 			Image:   "web",
@@ -69,7 +69,7 @@ func TestFoldMembers_NonDisposableOwnerDoesNotForceDisposable(t *testing.T) {
 // TestFoldMembers_CollisionIsError: a member name colliding with an existing
 // deploy/bed/member entry is a hard error (globally-unique member names).
 func TestFoldMembers_CollisionIsError(t *testing.T) {
-	uf := &loaderkit.UnifiedFile{Bundle: map[string]spec.BundleNode{
+	uf := &spec.UnifiedFile{Bundle: map[string]spec.BundleNode{
 		"web": {Target: "pod", Image: "web"},
 		"bed": {Target: "pod", Image: "web", Members: map[string]*spec.BundleNode{"web": {Target: "pod", Image: "chrome-headless"}}},
 	}}
@@ -81,7 +81,7 @@ func TestFoldMembers_CollisionIsError(t *testing.T) {
 
 // TestFoldMembers_EmptyMemberIsError: a nil member node is rejected.
 func TestFoldMembers_EmptyMemberIsError(t *testing.T) {
-	uf := &loaderkit.UnifiedFile{Bundle: map[string]spec.BundleNode{
+	uf := &spec.UnifiedFile{Bundle: map[string]spec.BundleNode{
 		"bed": {Target: "pod", Image: "web", Members: map[string]*spec.BundleNode{"chrome": nil}},
 	}}
 	if err := loaderkit.FoldMembers(uf); err == nil {
@@ -91,7 +91,7 @@ func TestFoldMembers_EmptyMemberIsError(t *testing.T) {
 
 // TestValidateMembers_BadTarget rejects an unsupported member target kind.
 func TestValidateMembers_BadTarget(t *testing.T) {
-	uf := &loaderkit.UnifiedFile{Bundle: map[string]spec.BundleNode{
+	uf := &spec.UnifiedFile{Bundle: map[string]spec.BundleNode{
 		"bed": {Target: "pod", Image: "web", Members: map[string]*spec.BundleNode{
 			"chrome": {Target: "bogus", Image: "chrome-headless"},
 		}},
@@ -109,7 +109,7 @@ func TestValidateMembers_BadTarget(t *testing.T) {
 // cannot pass. This is the check-coverage gate for the incomplete-seam fix.
 func TestValidateMembers_AcceptsCanonicalSubstrates(t *testing.T) {
 	for _, target := range deployTargetWords {
-		uf := &loaderkit.UnifiedFile{Bundle: map[string]spec.BundleNode{
+		uf := &spec.UnifiedFile{Bundle: map[string]spec.BundleNode{
 			"bed": {Target: "pod", Image: "web", Members: map[string]*spec.BundleNode{
 				"side": {Target: target, Image: "side-img"},
 			}},
@@ -125,7 +125,7 @@ func TestValidateMembers_AcceptsCanonicalSubstrates(t *testing.T) {
 // is NOT a valid peer-member target — the kind-blind predicate must not over-accept
 // every resource kind.
 func TestValidateMembers_RejectsGroup(t *testing.T) {
-	uf := &loaderkit.UnifiedFile{Bundle: map[string]spec.BundleNode{
+	uf := &spec.UnifiedFile{Bundle: map[string]spec.BundleNode{
 		"bed": {Target: "pod", Image: "web", Members: map[string]*spec.BundleNode{
 			"grp": {Target: "group", Image: "grp-img"},
 		}},
@@ -138,7 +138,7 @@ func TestValidateMembers_RejectsGroup(t *testing.T) {
 // TestValidateMembers_AcceptsEmptyTarget documents the "" default (defaults to
 // pod) is a valid member target under the kind-blind predicate.
 func TestValidateMembers_AcceptsEmptyTarget(t *testing.T) {
-	uf := &loaderkit.UnifiedFile{Bundle: map[string]spec.BundleNode{
+	uf := &spec.UnifiedFile{Bundle: map[string]spec.BundleNode{
 		"bed": {Target: "pod", Image: "web", Members: map[string]*spec.BundleNode{
 			"side": {Target: "", Image: "side-img"},
 		}},
@@ -151,7 +151,7 @@ func TestValidateMembers_AcceptsEmptyTarget(t *testing.T) {
 // TestValidateMembers_DottedKeyRejected: a member key with a dot collides with the
 // nested dotted-path addressing grammar.
 func TestValidateMembers_DottedKeyRejected(t *testing.T) {
-	uf := &loaderkit.UnifiedFile{Bundle: map[string]spec.BundleNode{
+	uf := &spec.UnifiedFile{Bundle: map[string]spec.BundleNode{
 		"bed": {Target: "pod", Image: "web", Members: map[string]*spec.BundleNode{
 			"a.b": {Target: "pod", Image: "chrome-headless"},
 		}},

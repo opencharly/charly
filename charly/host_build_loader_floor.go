@@ -61,7 +61,7 @@ func hostBuildLoaderThreaded(_ context.Context, _ []byte, _ buildEngineContext) 
 }
 
 // hostBuildLoaderMaterialize replays the host MATERIALIZE + root-wins MERGE over the walk envelope
-// (spec.LoadedProject → the merged loaderkit.UnifiedFile). The host leg OWNS its own byID scratch map
+// (spec.LoadedProject → the merged spec.UnifiedFile). The host leg OWNS its own byID scratch map
 // (RULING 1) — the plugin passes none; it unmarshals the reply into its own `merged`. The kind-blind
 // orchestration lives in loaderkit (#48); this compiled-in leg drives it over the host's registry-
 // coupled leaf seams (hostMaterializeProjectSeams: the provider_kind_invoke.go kind-DECODE M,
@@ -71,8 +71,8 @@ func hostBuildLoaderMaterialize(_ context.Context, specJSON []byte, _ buildEngin
 	if err := json.Unmarshal(specJSON, &lp); err != nil {
 		return nil, fmt.Errorf("loader-materialize host-build: decode request: %w", err)
 	}
-	merged := &loaderkit.UnifiedFile{}
-	if err := loaderkit.MaterializeLoadedProject(&lp, merged, map[int64]*loaderkit.UnifiedFile{}, hostMaterializeProjectSeams()); err != nil {
+	merged := &spec.UnifiedFile{}
+	if err := loaderkit.MaterializeLoadedProject(&lp, merged, map[int64]*spec.UnifiedFile{}, hostMaterializeProjectSeams()); err != nil {
 		return nil, err
 	}
 	// MarshalMaterialized (NOT marshalJSON): UnifiedFile.PluginKinds is json:"-", so a plain marshal

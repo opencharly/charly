@@ -40,7 +40,7 @@ func init() {
 			if !ok || uf == nil {
 				return nil, nil
 			}
-			return uf.ProjectBundleConfig(), nil
+			return deploykit.ProjectBundleConfig(uf), nil
 		},
 	})
 }

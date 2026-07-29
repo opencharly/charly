@@ -500,7 +500,7 @@ func scanSeamsFor(cfg *Config, opts loaderkit.ResolveOpts) loaderkit.ScanSeams {
 }
 
 // The per-entity candy-version arbiter (candyCandidate + pickCandyVersion) moved
-// to sdk/loaderkit (candy_version.go) as loaderkit.CandyCandidate /
+// to sdk/loaderkit (candy_version.go) as spec.CandyCandidate /
 // loaderkit.PickCandyVersion — a kind-blind MECHANISM (boundary-law clause M)
 // with zero core coupling. scanCandyFromLocal above calls it directly.
 

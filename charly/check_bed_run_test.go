@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/loaderkit"
-	"github.com/opencharly/spec/spec"
 	"github.com/opencharly/sdk/vmshared"
+	"github.com/opencharly/spec/spec"
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
@@ -20,7 +20,7 @@ import (
 // block was removed — a bed IS a disposable bundle); a non-disposable deploy is
 // NOT a bed.
 func TestCheckBeds_DerivesFromDisposableBundles(t *testing.T) {
-	uf := &loaderkit.UnifiedFile{
+	uf := &spec.UnifiedFile{
 		Bundle: map[string]spec.BundleNode{
 			"sample-pod-bed":   {Target: "pod", Image: "sample-image", Disposable: new(true)},
 			"sample-vm-bed":    {Target: "vm", From: "sample-vm", Disposable: new(true)},
@@ -39,7 +39,7 @@ func TestCheckBeds_DerivesFromDisposableBundles(t *testing.T) {
 
 // TestValidateCheckBeds_TargetEnum asserts an unsupported target is rejected.
 func TestValidateCheckBeds_TargetEnum(t *testing.T) {
-	uf := &loaderkit.UnifiedFile{
+	uf := &spec.UnifiedFile{
 		Bundle: map[string]spec.BundleNode{
 			"check-weird": {Target: "k8s", Disposable: new(true)},
 		},
@@ -53,7 +53,7 @@ func TestValidateCheckBeds_TargetEnum(t *testing.T) {
 // TestValidateCheckBeds_VmRefMustResolve asserts a vm-target bed whose vm:
 // entity is undefined is rejected, and that a defined entity passes.
 func TestValidateCheckBeds_VmRefMustResolve(t *testing.T) {
-	missing := &loaderkit.UnifiedFile{
+	missing := &spec.UnifiedFile{
 		Bundle: map[string]spec.BundleNode{
 			"check-k3s-vm": {Target: "vm", From: "k3s-vm", Disposable: new(true)},
 		},
@@ -61,7 +61,7 @@ func TestValidateCheckBeds_VmRefMustResolve(t *testing.T) {
 	if err := loaderkit.ValidateCheckBeds(missing, loaderThreaded()); err == nil || !strings.Contains(err.Error(), "not defined") {
 		t.Fatalf("expected missing-vm-ref error, got %v", err)
 	}
-	ok := &loaderkit.UnifiedFile{
+	ok := &spec.UnifiedFile{
 		PluginKinds: map[string]map[string]json.RawMessage{
 			"vm": rawTemplateMap(map[string]*vmshared.VmSpec{"k3s-vm": {}}),
 		},
@@ -77,7 +77,7 @@ func TestValidateCheckBeds_VmRefMustResolve(t *testing.T) {
 // TestValidateCheckBeds_LocalRefMustResolve asserts a local-target bed whose
 // local: template is undefined is rejected, and that a defined one passes.
 func TestValidateCheckBeds_LocalRefMustResolve(t *testing.T) {
-	missing := &loaderkit.UnifiedFile{
+	missing := &spec.UnifiedFile{
 		Bundle: map[string]spec.BundleNode{
 			"check-local": {Target: "local", From: "check-local", Disposable: new(true)},
 		},
@@ -85,7 +85,7 @@ func TestValidateCheckBeds_LocalRefMustResolve(t *testing.T) {
 	if err := loaderkit.ValidateCheckBeds(missing, loaderThreaded()); err == nil || !strings.Contains(err.Error(), "not defined") {
 		t.Fatalf("expected missing-local-ref error, got %v", err)
 	}
-	ok := &loaderkit.UnifiedFile{
+	ok := &spec.UnifiedFile{
 		PluginKinds: map[string]map[string]json.RawMessage{
 			"local": rawTemplateMap(map[string]*LocalSpec{"check-local": {}}),
 		},

@@ -17,9 +17,9 @@ import (
 // the ONE fallback (loading the project's distro:/builder: vocabulary when the caller didn't
 // supply it) before delegating to buildkit's free functions — the "~35 STAY: LoadConfig/
 // LoadConfigRaw + 2 fallback branches" the original scoping map identified. The scan/load options
-// struct (loaderkit.ResolveOpts) + the loader validation accumulator (loaderkit.ValidationError) moved to sdk/loaderkit
+// struct (loaderkit.ResolveOpts) + the loader validation accumulator (spec.ValidationError) moved to sdk/loaderkit
 // (resolve_opts.go) in the #118 Cluster-A loader-projection keystone — charly core and the
-// loader-consuming plugins share ONE definition (loaderkit.ResolveOpts / loaderkit.ValidationError,
+// loader-consuming plugins share ONE definition (loaderkit.ResolveOpts / spec.ValidationError,
 // a FLAT non-embedding struct so every `loaderkit.ResolveOpts{Field: ...}` call site stays simple).
 
 // ErrNoCharlyYml is the sentinel wrapped by every "no charly.yml found in the

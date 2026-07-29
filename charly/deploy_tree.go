@@ -83,7 +83,7 @@ func deployTraitDescent(word string) *spec.DescentDescriptor {
 // Called by the walker when it knows the full dotted path.
 
 // resolveTreeRoot returns the top-level Bundle (deploy-node) map from
-// the merged loaderkit.UnifiedFile + local overlay, ready for dotted-path
+// the merged spec.UnifiedFile + local overlay, ready for dotted-path
 // traversal. Handles the project charly.yml + local overlay merge
 // the same way deployAddCmd.Run does today.
 func resolveTreeRoot(dir string) (map[string]spec.BundleNode, error) {
@@ -91,7 +91,7 @@ func resolveTreeRoot(dir string) (map[string]spec.BundleNode, error) {
 	if uf, ok, err := LoadUnified(dir); err != nil {
 		return nil, err
 	} else if ok && uf != nil {
-		projectDC = uf.ProjectBundleConfig()
+		projectDC = deploykit.ProjectBundleConfig(uf)
 	}
 	localDC, _ := deploykit.LoadBundleConfig()
 	merged := deploykit.MergeDeployConfigs(projectDC, localDC)

@@ -9,6 +9,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/spec"
 )
 
 // command.go — the externalized `charly candy` command (the candy-manifest authoring tree: set /
@@ -147,7 +148,7 @@ func candyManifestPath(name string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	candyYml := filepath.Join(dir, kit.DefaultCandyDir, name, kit.UnifiedFileName)
+	candyYml := filepath.Join(dir, kit.DefaultCandyDir, name, spec.UnifiedFileName)
 	if _, err := os.Stat(candyYml); err != nil {
 		return "", fmt.Errorf("candy %q not found at %s", name, candyYml)
 	}

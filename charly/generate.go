@@ -230,7 +230,7 @@ func NewGenerator(dir string, tag string, opts loaderkit.ResolveOpts) (*Generato
 
 	// Pre-build validation gate — dispatched to the compiled-in validate capability (candy/plugin-box)
 	// by word with a structured OpValidate op (task #60 (C-refined)); the validate ENGINE no longer
-	// lives in core. validateProjectForBuild returns the loaderkit.ValidationError-equivalent on any finding.
+	// lives in core. validateProjectForBuild returns the spec.ValidationError-equivalent on any finding.
 	if err := validateProjectForBuild(dir, opts); err != nil {
 		return nil, err
 	}

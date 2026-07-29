@@ -108,7 +108,7 @@ func TestResolveDeployPorts(t *testing.T) {
 }
 
 func TestPodAwareEnvProvides(t *testing.T) {
-	entries := []deploykit.EnvProvideEntry{
+	entries := []spec.EnvProvideEntry{
 		{Name: "OLLAMA_HOST", Value: "http://charly-combined:11434", Source: "combined-image"},
 		{Name: "PGHOST", Value: "charly-postgresql", Source: "postgresql-image"},
 	}
@@ -130,7 +130,7 @@ func TestPodAwareEnvProvides(t *testing.T) {
 
 func TestPodAwareEnvProvidesLocalPrecedence(t *testing.T) {
 	// Both local and remote provide the same env var name
-	entries := []deploykit.EnvProvideEntry{
+	entries := []spec.EnvProvideEntry{
 		{Name: "OLLAMA_HOST", Value: "http://charly-combined:11434", Source: "combined-image"},
 		{Name: "OLLAMA_HOST", Value: "http://charly-standalone:11434", Source: "standalone"},
 	}
@@ -146,7 +146,7 @@ func TestPodAwareEnvProvidesLocalPrecedence(t *testing.T) {
 
 func TestPodAwareEnvProvidesCrossContainer(t *testing.T) {
 	// Consumer is a different image — all entries are remote
-	entries := []deploykit.EnvProvideEntry{
+	entries := []spec.EnvProvideEntry{
 		{Name: "OLLAMA_HOST", Value: "http://charly-ollama:11434", Source: "ollama-image"},
 	}
 

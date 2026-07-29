@@ -16,15 +16,15 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// loaderkit.ValidationError (the loader validation accumulator) RELOCATED to sdk/loaderkit (resolve_opts.go)
-// in the #118 Cluster-A loader-projection keystone — charly core reaches it as loaderkit.ValidationError.
+// spec.ValidationError (the loader validation accumulator) RELOCATED to sdk/loaderkit (resolve_opts.go)
+// in the #118 Cluster-A loader-projection keystone — charly core reaches it as spec.ValidationError.
 
 // validateCandyCUESchemas validates each loaded candy's on-disk manifest against
 // the candy CUE schema (via validateCandyManifestCUE — #Candy for a legacy
 // kind-keyed manifest, #NodeDoc for a node-form manifest). This is the sole
 // candy-schema validator; the former hand-written Go candy validators are
 // deleted. Inline/synthesized candies with no manifest file on disk are skipped.
-func validateCandyCUESchemas(layers map[string]spec.CandyReader, errs *loaderkit.ValidationError) {
+func validateCandyCUESchemas(layers map[string]spec.CandyReader, errs *spec.ValidationError) {
 	for name, c := range layers {
 		if c == nil || c.GetSourceDir() == "" {
 			continue
@@ -47,7 +47,7 @@ func validateCandyCUESchemas(layers map[string]spec.CandyReader, errs *loaderkit
 // boxes are validated when `charly box validate` runs in that submodule). The
 // other collection kinds are read from the root-shape files. Candies are
 // handled by validateCandyCUESchemas.
-func validateProjectCUESchemas(cfg *Config, dir string, opts loaderkit.ResolveOpts, errs *loaderkit.ValidationError) {
+func validateProjectCUESchemas(cfg *Config, dir string, opts loaderkit.ResolveOpts, errs *spec.ValidationError) {
 	// Boxes: BoxConfig has no Name field (the name is the cfg.Box map key), so
 	// inject it into the wire form before validating against #Box. Marshal the
 	// resolved struct back to YAML and run it through the same ingest path the
@@ -117,7 +117,7 @@ func validateProjectCUESchemas(cfg *Config, dir string, opts loaderkit.ResolveOp
 // without this explicit pass a base+from box would slip past `charly box
 // validate`. Both seams call the ONE predicate BoxConfig.HasBaseFromConflict (R3).
 // Neither field set stays valid (a scratch box) — only BOTH is a conflict.
-func validateBoxBaseFrom(cfg *Config, opts loaderkit.ResolveOpts, errs *loaderkit.ValidationError) {
+func validateBoxBaseFrom(cfg *Config, opts loaderkit.ResolveOpts, errs *spec.ValidationError) {
 	for name, img := range cfg.EachBox {
 		if !img.IsEnabled() && !opts.ShouldIncludeDisabled(name) {
 			continue
@@ -168,7 +168,7 @@ func boxEntityWireYAML(name string, box spec.BoxConfig) ([]byte, error) {
 // validateBuildAndDistro validates build: and distro: entries.
 // build: entries are checked against the embedded distro format definitions (charly/charly.yml).
 // distro: is free-form (any string, including distro:version).
-func validateBuildAndDistro(cfg *Config, distroCfg *buildkit.DistroConfig, errs *loaderkit.ValidationError) {
+func validateBuildAndDistro(cfg *Config, distroCfg *buildkit.DistroConfig, errs *spec.ValidationError) {
 	validateBuild := func(context string, build BuildFormats) {
 		for _, b := range build {
 			if !distroCfg.ValidFormat(b) {
@@ -204,7 +204,7 @@ func validateBuildAndDistro(cfg *Config, distroCfg *buildkit.DistroConfig, errs 
 // validateRoutes validates route file declarations in candies
 
 // validateMergeConfig validates merge configuration
-func validateMergeConfig(cfg *Config, errs *loaderkit.ValidationError) {
+func validateMergeConfig(cfg *Config, errs *spec.ValidationError) {
 	// box-entity merge.max_mb >= 0 is enforced by #BoxMerge; the `defaults:`
 	// block is NOT validated against #Box, so its check stays here.
 	if m := cfg.Defaults.Merge; m != nil && m.MaxMB < 0 {
@@ -223,7 +223,7 @@ var validBuildCacheModes = map[string]bool{
 // the allow-list, and no empty context_ignore entries. These are project-wide
 // defaults; values are validated wherever they appear so a typo surfaces at
 // `charly box validate` rather than silently mis-driving a build.
-func validateBuildTunables(cfg *Config, errs *loaderkit.ValidationError) {
+func validateBuildTunables(cfg *Config, errs *spec.ValidationError) {
 	check := func(name string, ic spec.BoxConfig) {
 		if ic.Jobs != nil && *ic.Jobs < 1 {
 			errs.Add("%s: jobs must be >= 1, got %d", name, *ic.Jobs)
@@ -266,7 +266,7 @@ func validateBuildTunables(cfg *Config, errs *loaderkit.ValidationError) {
 // (over the resolved builder map + ResolveCandyOrder) moved to the validate plugin (envelope-portable);
 // this reference-validation half stays host (like validateBuildAndDistro) and rides reply.Diagnostics.
 // Kind-blind: builder/build TYPE words are checked against the runtime builder vocab, no kind switch.
-func validateBuilderRefs(cfg *Config, builderCfg *buildkit.BuilderConfig, errs *loaderkit.ValidationError) {
+func validateBuilderRefs(cfg *Config, builderCfg *buildkit.BuilderConfig, errs *spec.ValidationError) {
 	// Validate defaults.builder entries.
 	for typ, builder := range cfg.Defaults.Builder {
 		if !builderCfg.ValidBuilderType(typ) {
@@ -319,7 +319,7 @@ func validateBuilderRefs(cfg *Config, builderCfg *buildkit.BuilderConfig, errs *
 }
 
 // validateRemoteCandies checks remote candy consistency
-func validateRemoteCandies(cfg *Config, layers map[string]spec.CandyReader, errs *loaderkit.ValidationError) {
+func validateRemoteCandies(cfg *Config, layers map[string]spec.CandyReader, errs *spec.ValidationError) {
 	// Check version conflicts (same repo referenced with different versions)
 	_, err := CollectRemoteRefs(cfg, layers)
 	if err != nil {

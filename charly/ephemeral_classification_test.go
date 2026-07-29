@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/loaderkit"
-	"github.com/opencharly/spec/spec"
 	"github.com/opencharly/sdk/vmshared"
+	"github.com/opencharly/spec/spec"
 )
 
 // TestBundleNode_LifecycleAloneDoesNotAuthorize verifies the
@@ -142,7 +142,7 @@ func TestValidateVmNamingGuard(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// ValidateVmNamingGuard moved to sdk/loaderkit (K1-LOADER RELOCATION), accumulating
-			// into spec.Diagnostics (RULING 2) rather than the core loaderkit.ValidationError.
+			// into spec.Diagnostics (RULING 2) rather than the core spec.ValidationError.
 			errs := &spec.Diagnostics{}
 			loaderkit.ValidateVmNamingGuard(tt.name, errs)
 			has := len(errs.Items) > 0

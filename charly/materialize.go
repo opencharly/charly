@@ -45,7 +45,7 @@ func hostMaterializeProjectSeams() loaderkit.MaterializeProjectSeams {
 // — the SHARED loop (R3) both loaderkit.MaterializeLoadedProject's step 2 (the LoadUnified
 // walk path, via the FoldDiscoveredManifests seam) AND ApplyDiscover (unified.go, the layers candy-scan path) drive over
 // their respective []spec.DiscoveredManifest.
-func foldDiscoveredManifests(dms []spec.DiscoveredManifest, uf *loaderkit.UnifiedFile) error {
+func foldDiscoveredManifests(dms []spec.DiscoveredManifest, uf *spec.UnifiedFile) error {
 	for i := range dms {
 		dm := &dms[i]
 		for j := range dm.Docs {
@@ -67,7 +67,7 @@ func foldDiscoveredManifests(dms []spec.DiscoveredManifest, uf *loaderkit.Unifie
 // core (bootstrap-critical box⊻layer routing) — it reconstructs the genericNode from pn itself
 // (parsedNodeToGeneric is pure; pn.Disc already carries the discriminator candyIsImage's caller
 // needs, so callers no longer pre-compute gn, R3).
-func materializeDiscoveredNode(pn spec.ParsedNode, dir, rootDir, manifest string, uf *loaderkit.UnifiedFile) error {
+func materializeDiscoveredNode(pn spec.ParsedNode, dir, rootDir, manifest string, uf *spec.UnifiedFile) error {
 	if pn.Disc == "candy" {
 		gn, err := parsedNodeToGeneric(pn)
 		if err != nil {
@@ -82,7 +82,7 @@ func materializeDiscoveredNode(pn spec.ParsedNode, dir, rootDir, manifest string
 			if relErr != nil {
 				rel = dir
 			}
-			uf.SetCandy(name, &loaderkit.InlineCandy{From: rel, Manifest: manifest})
+			uf.SetCandy(name, &spec.InlineCandy{From: rel, Manifest: manifest})
 			return nil
 		}
 	}
@@ -96,7 +96,7 @@ func materializeDiscoveredNode(pn spec.ParsedNode, dir, rootDir, manifest string
 // mergeUnifiedDocs call (K1 deleted mergeUnifiedDocs). The embedded vocab has no reserved
 // directives (import/discover) to consume, so this stays a plain host parse — it does not touch the
 // walk. srcLabel labels diagnostics.
-func materializeDocStream(data []byte, srcLabel string, uf *loaderkit.UnifiedFile) error {
+func materializeDocStream(data []byte, srcLabel string, uf *spec.UnifiedFile) error {
 	parser := requireLoaderParser()
 	decoder := yaml.NewDecoder(bytes.NewReader(data))
 	for docIdx := 0; ; docIdx++ {
@@ -126,7 +126,7 @@ func materializeDocStream(data []byte, srcLabel string, uf *loaderkit.UnifiedFil
 		if err != nil {
 			return fmt.Errorf("%s: %w", label, err)
 		}
-		var sub loaderkit.UnifiedFile
+		var sub spec.UnifiedFile
 		if len(directives) > 0 {
 			dirMap := &yaml.Node{Kind: yaml.MappingNode}
 			for k, v := range directives {

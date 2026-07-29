@@ -8,6 +8,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/spec"
 )
 
 // TestAppendCandyPackages_UnderCandyWrapper guards that add-<fmt> writes packages INSIDE the
@@ -19,7 +20,7 @@ func TestAppendCandyPackages_UnderCandyWrapper(t *testing.T) {
 	if err := os.MkdirAll(candyDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(candyDir, kit.UnifiedFileName),
+	if err := os.WriteFile(filepath.Join(candyDir, spec.UnifiedFileName),
 		[]byte("foo:\n    candy:\n        version: 2026.001.0001\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -28,7 +29,7 @@ func TestAppendCandyPackages_UnderCandyWrapper(t *testing.T) {
 	if err := appendCandyPackages("foo", "rpm", []string{"ripgrep", "ripgrep"}); err != nil {
 		t.Fatalf("appendCandyPackages: %v", err)
 	}
-	data, _ := os.ReadFile(filepath.Join(candyDir, kit.UnifiedFileName))
+	data, _ := os.ReadFile(filepath.Join(candyDir, spec.UnifiedFileName))
 	var root map[string]any
 	if err := yaml.Unmarshal(data, &root); err != nil {
 		t.Fatalf("re-parse: %v\n%s", err, data)
@@ -62,7 +63,7 @@ func TestCandySet_DescendsIntoCandyBody(t *testing.T) {
 	if err := os.MkdirAll(candyDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(candyDir, kit.UnifiedFileName),
+	if err := os.WriteFile(filepath.Join(candyDir, spec.UnifiedFileName),
 		[]byte("bar:\n    candy:\n        version: 2026.001.0001\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +72,7 @@ func TestCandySet_DescendsIntoCandyBody(t *testing.T) {
 	if err := candySet("bar", "version", "2026.186.0000"); err != nil {
 		t.Fatalf("candySet: %v", err)
 	}
-	data, _ := os.ReadFile(filepath.Join(candyDir, kit.UnifiedFileName))
+	data, _ := os.ReadFile(filepath.Join(candyDir, spec.UnifiedFileName))
 	var root map[string]any
 	if err := yaml.Unmarshal(data, &root); err != nil {
 		t.Fatalf("re-parse: %v\n%s", err, data)
