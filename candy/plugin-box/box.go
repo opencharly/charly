@@ -18,8 +18,9 @@ import (
 
 // hostClient is the box commands' host coupling: it reaches charly's host process over the
 // reverse channel — InvokeProvider (peer plugin dispatch, for generate → build:generate, and for
-// list's store-live tags → verb:retention, listImageTags), the HostBuild("resolved-project")
-// envelope fetch (inspect/list), or the HostBuild("validate-project") envelope fetch (validate
+// list's store-live tags → verb:retention, listImageTags), the InvokeProvider("build","project")
+// envelope fetch (inspect/list — sdk.OpResolve; validate — sdk.OpValidate, #55 step3 unit 3-I,
+// MERGED with the HostBuild("validate-project-checks") host-natural diagnostics) fetch (validate
 // runs the rule ENGINE in-plugin over the reply). build runs its body in-plugin (dispatchBuild —
 // InvokeProvider(build:box) + thin HostBuild seams, P8b), no reentry; pkg likewise runs in-plugin
 // (dispatchPkg — InvokeProvider(build:pkg), K3 build-tail move); pull runs the ensure-image work

@@ -11,29 +11,24 @@ import (
 // after #55 step3 unit 3b relocated the "resolved-project" HostBuild seam itself to
 // candy/plugin-build's `build:project` word (resolveProjectEnvelope in
 // candy/plugin-build/resolve_project_word.go), reached by its ~8 former HostBuild consumers via
-// InvokeProvider peer-dispatch instead. What REMAINS here is genuinely SHARED infrastructure two
-// OTHER core HostBuild seams still call DIRECTLY (not through a HostBuild round-trip — same
-// process, same package): the "validate-project" seam's error-TOLERANT
-// buildResolvedProjectTolerant (charly/validate_project_host.go) and the "overlay" seam's
-// pre-resolved-boxes projectResolvedProjectWithBoxes call (charly/build_overlay.go). It is also the
-// SAME fillNamespacedBoxes the "buildengine-namespaced" leg (charly/host_build_buildengine.go's
-// hostBuildNamespaced) calls on behalf of candy/plugin-build's OWN build/generate drive — so this
-// file cannot be deleted wholesale without breaking `charly box validate`, pod-overlay builds, AND
-// plugin-build's own namespaced-box resolution. It is a DATA PROJECTION over the resolve engines
-// that already exist — ResolveBox (per enabled box) + ScanAllCandy + the folded uf.Bundle deploy
-// tree — serialized into the generic spec.ResolvedProject. It is NOT a new engine: it copies fields
-// the existing engines populate, dropping the host-only json:"-" compute-cache pointers of
-// ResolvedBox that are never wire data (DistroConfig/DistroDef/BuilderConfig/InitSystem/InitDef/
-// CandyCaps).
-
-// projectResolvedProject is the host wrapper for the relocated envelope assembler
-// (loaderkit.ProjectResolvedProject, K3 build-engine Unit 2). It builds the host-coupled seams (closures
-// capturing opts + the registry) and delegates. When diags is nil it is FAIL-FAST (a per-box ResolveBox
-// failure aborts with an error); when non-nil it is ERROR-TOLERANT (the validate-project path, which
-// appends a diagnostic and skips the box).
-func projectResolvedProject(cfg *Config, layers map[string]spec.CandyReader, uf *spec.UnifiedFile, distroCfg *buildkit.DistroConfig, builderCfg *buildkit.BuilderConfig, initCfg *buildkit.InitConfig, dir, version string, opts loaderkit.ResolveOpts, diags *spec.Diagnostics) (*spec.ResolvedProject, error) {
-	return projectResolvedProjectWithBoxes(cfg, layers, uf, distroCfg, builderCfg, initCfg, dir, version, opts, diags, nil)
-}
+// InvokeProvider peer-dispatch instead, and unit 3-I relocated the "validate-project" seam's
+// error-TOLERANT half onto the SAME word's OpValidate leg
+// (candy/plugin-build/resolve_project_tolerant.go) — the former buildResolvedProjectTolerant
+// (charly/validate_project_host.go), the ONLY OTHER caller of this file's now-deleted
+// projectResolvedProject wrapper, is GONE. What REMAINS here is genuinely SHARED infrastructure
+// TWO OTHER seams still call DIRECTLY (not through a HostBuild round-trip — same process, same
+// package): the "overlay" seam's pre-resolved-boxes projectResolvedProjectWithBoxes call
+// (charly/build_overlay.go) and the SAME fillNamespacedBoxes the "buildengine-namespaced" leg
+// (charly/host_build_buildengine.go's hostBuildNamespaced) calls on behalf of candy/plugin-build's
+// OWN build/generate drive — so this file cannot be deleted wholesale without breaking pod-overlay
+// builds AND plugin-build's own namespaced-box resolution (task #71, 3-II, is the named exit: the
+// overlay seam genuinely needs charly/generate.go's NewGenerator gen.Boxes output — RDD-confirmed,
+// see build_overlay.go's header — so this file's remaining full deletion rides that cluster's
+// relocation, not this one). It is a DATA PROJECTION over the resolve engines that already exist —
+// ResolveBox (per enabled box) + ScanAllCandy + the folded uf.Bundle deploy tree — serialized into
+// the generic spec.ResolvedProject. It is NOT a new engine: it copies fields the existing engines
+// populate, dropping the host-only json:"-" compute-cache pointers of ResolvedBox that are never
+// wire data (DistroConfig/DistroDef/BuilderConfig/InitSystem/InitDef/CandyCaps).
 
 // projectResolvedProjectWithBoxes is the host wrapper carrying the optional pre-resolved boxes map (the
 // build-prep seam path preserves the render-prep caches; nil resolves fresh). It computes the wall-clock
@@ -241,8 +236,13 @@ func fillNamespacedBoxes(uf *spec.UnifiedFile, initCfg *buildkit.InitConfig, pre
 // buildResolvedProjectFromDir, hostBuildResolvedProject, the "resolved-project" HostBuild
 // registration, and the resolvedProjectBuilderKind const are DELETED (#55 step3 unit 3b) — that
 // capability moved to candy/plugin-build's `build:project` word (resolveProjectEnvelope), reached
-// via InvokeProvider by its former ~8 consumers. loadProjectForResolve (validate_project_host.go)
-// remains the load path buildResolvedProjectTolerant (the validate-project seam) uses; the
-// overlay seam (build_overlay.go) calls loadProjectForResolve + projectResolvedProjectWithBoxes
-// directly too — both STAY, since projectResolvedProject/projectResolvedProjectWithBoxes/
-// fillNamespacedBoxes above are genuinely SHARED across those two seams (see this file's header).
+// via InvokeProvider by its former ~8 consumers. buildResolvedProjectTolerant + this file's own
+// projectResolvedProject wrapper are ALSO DELETED (#55 step3 unit 3-I) — the tolerant envelope
+// projection moved to the SAME build:project word's OpValidate leg
+// (candy/plugin-build/resolve_project_tolerant.go); loadProjectForResolve (validate_project_host.go)
+// stays, now feeding ONLY the host-natural raw-config checks (hostBuildValidateProjectChecks) rather
+// than an envelope projection. The overlay seam (build_overlay.go) calls loadProjectForResolve +
+// projectResolvedProjectWithBoxes directly — both STAY (task #71, 3-II, is the named exit for this
+// file's remaining full deletion), since projectResolvedProjectWithBoxes/fillNamespacedBoxes above
+// are genuinely SHARED between the overlay seam and plugin-build's own namespaced-box resolution
+// (see this file's header).

@@ -10,8 +10,10 @@ import (
 // testBuildResolvedProject is the test-only reproduction of the deleted buildResolvedProjectFromDir
 // (#55 step3 unit 3b moved its production form to candy/plugin-build's resolveProjectEnvelope): load
 // the project fail-fast via loadProjectForResolve, short-circuit to an empty envelope for a
-// project-less dir, else project it via the STILL-CORE projectResolvedProject (shared with the
-// validate-project + overlay seams).
+// project-less dir, else project it via the STILL-CORE projectResolvedProjectWithBoxes (shared with
+// the overlay seam; preResolvedBoxes=nil for a fresh per-box resolve — the plain projectResolvedProject
+// wrapper this used to call was deleted as production-dead once #55 step3 unit 3-I relocated its
+// ONLY other caller, buildResolvedProjectTolerant, onto build:project).
 func testBuildResolvedProject(t *testing.T, dir string, opts loaderkit.ResolveOpts) (*spec.ResolvedProject, error) {
 	t.Helper()
 	lp, err := loadProjectForResolve(dir, opts, nil)
@@ -21,7 +23,7 @@ func testBuildResolvedProject(t *testing.T, dir string, opts loaderkit.ResolveOp
 	if lp.empty {
 		return &spec.ResolvedProject{}, nil
 	}
-	return projectResolvedProject(lp.cfg, lp.layers, lp.uf, lp.distroCfg, lp.builderCfg, lp.initCfg, dir, lp.version, opts, nil)
+	return projectResolvedProjectWithBoxes(lp.cfg, lp.layers, lp.uf, lp.distroCfg, lp.builderCfg, lp.initCfg, dir, lp.version, opts, nil, nil)
 }
 
 // resolved_project_namespace_test.go — K1-unblock wave 2: proves the namespace-qualified

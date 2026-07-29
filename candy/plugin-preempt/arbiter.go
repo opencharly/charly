@@ -22,7 +22,8 @@ import (
 // ledger, GPU-resource poisoning, owner liveness, and the driver-mode arbitration math. Its host
 // DEPENDENCIES (project config, VM/pod lifecycle, the GPU driver flip) it CANNOT hold across the
 // module boundary — it reaches them via TWO generic reverse legs: gather/resources over
-// Executor.HostBuild("resolved-project") (K1-unblock wave 1; the former bespoke
+// Executor.InvokeProvider("build","project") (K1-unblock wave 1; #55 step3 unit 3b relocated
+// the seam from HostBuild("resolved-project"); the former bespoke
 // arbiter reverse-RPC channel is deleted), the other 6
 // (running/stop[+wait]/start/switchMode/ensureCDI/gpuCDI) over Executor.InvokeProvider
 // (FLOOR-SLIM-proper Unit-8, holder_dispatch.go).
@@ -49,7 +50,7 @@ type ResourceArbiter struct {
 }
 
 // newArbiter wires the production seams. `gather`/`resources` read the generic
-// HostBuild("resolved-project") envelope (K1-unblock wave 1 — the ONLY 2 of the original 8 host
+// InvokeProvider("build","project") envelope (K1-unblock wave 1 — the ONLY 2 of the original 8 host
 // seams that are genuinely K1-blocked, LoadUnified project-config coupled — no longer need a
 // bespoke reverse RPC to reach it); the other 6 (running/stop/start/switchMode/ensureCDI/gpuCDI)
 // are FLOOR-SLIM-proper Unit-8's MOVE — they run directly in this plugin (holder_dispatch.go),
@@ -105,7 +106,7 @@ func invokeArbiter(ctx context.Context, exec *sdk.Executor, in spec.ArbiterInvok
 // gather/resources used to be the ONLY 2 of the original 8 host seams that were genuinely
 // K1-blocked (LoadUnified project-config coupled) — reached over a bespoke pair of
 // "gather"/"resources" reverse RPCs served by a now-deleted host handler. Both now read
-// off the SAME generic HostBuild("resolved-project") envelope every other resolved-project
+// off the SAME generic InvokeProvider("build","project") envelope every other resolved-project
 // consumer uses (candy/plugin-check, candy/plugin-substrate, candy/plugin-installstep, …) and do
 // their OWN filtering/projection in-plugin via the portable sdk/deploykit helpers — no bespoke
 // per-capability host seam remains for either. This retires the bespoke "gather"/"resources"

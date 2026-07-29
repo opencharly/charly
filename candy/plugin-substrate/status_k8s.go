@@ -8,7 +8,7 @@ package substratekind
 // the referenced cluster/context, never live pod health (that is a `kube:`
 // check, candy/plugin-kube). Every input this needs (the folded project
 // deploy tree, the kind:k8s template bodies) is fetched from the host via the
-// established HostBuild("resolved-project") seam (already proven in
+// established InvokeProvider("build","project") seam (already proven in
 // production by candy/plugin-bundle's OpCompile) — resolving the referenced
 // k8s template itself needs no cross-plugin hop at all: this SAME provider
 // already implements the k8s substrate-template resolve (resolve.go), so it's
@@ -77,7 +77,7 @@ func collectK8sStatus(ctx context.Context, req spec.SubstrateStatusRequest) (spe
 }
 
 // fetchResolvedProject re-hydrates the resolved-project envelope over the
-// established HostBuild("resolved-project") seam (candy/plugin-bundle's
+// established InvokeProvider("build","project") seam (candy/plugin-bundle's
 // OpCompile proves this composition in production). Dir is left empty — a
 // compiled-in substrate plugin shares the host process's cwd, so the host-side
 // "resolved-project" handler's own os.Getwd() already resolves the right

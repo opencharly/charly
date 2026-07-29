@@ -2,12 +2,16 @@ package box
 
 // validate.go — the `charly box validate` ENGINE (task #60, Unit C). The validation engine moved OUT
 // of charly core INTO this compiled-in plugin: dispatchValidate fetches the error-TOLERANT resolved
-// project ENVELOPE from the host (HostBuild("validate-project") → spec.ValidateProjectReply) and runs
-// EVERY pure per-kind/op rule + the deploykit resolution-graph checks over that envelope — reading
-// spec.CandyModel / spec.CandyView / spec.ResolvedBoxView INSTEAD of the runtime *Candy/*Config graph.
-// The host keeps ONLY what a plugin structurally cannot do (the CUE-conformance / build-tunable / merge
-// / base⊻from / remote-candy checks — already emitted as reply.Diagnostics by validate_project_host.go);
-// the plugin MERGES those host diagnostics with its own findings for the final verdict + exit code.
+// project ENVELOPE via candy/plugin-build's `build:project` word's OpValidate leg
+// (InvokeProvider("build","project",sdk.OpValidate) → spec.ValidateProjectReply, #55 step3 unit 3-I —
+// relocated from the former HostBuild("validate-project")) and runs EVERY pure per-kind/op rule + the
+// deploykit resolution-graph checks over that envelope — reading spec.CandyModel / spec.CandyView /
+// spec.ResolvedBoxView INSTEAD of the runtime *Candy/*Config graph. The host keeps ONLY what a plugin
+// structurally cannot do (the CUE-conformance / build-tunable / merge / base⊻from / remote-candy checks
+// + the registry D-data — emitted as a SECOND reply.Diagnostics/Project by the now-slimmed
+// HostBuild("validate-project-checks"), charly/validate_project_host.go's hostBuildValidateProjectChecks);
+// the plugin MERGES both host diagnostics sets + the D-data fields with its own findings for the final
+// verdict + exit code.
 //
 // It imports ONLY the sdk module (sdk, sdk/spec, sdk/kit, sdk/deploykit, sdk/buildkit, sdk/vmshared) —
 // never charly core. Pure helpers the core validator kept (findSimilarName / levenshtein /
@@ -49,41 +53,67 @@ func dispatchValidate(hc *hostClient, args []string) error {
 	return emitVerdict(merged)
 }
 
-// runValidateEngine fetches the error-TOLERANT resolved-project envelope + host diagnostics
-// (HostBuild("validate-project")), runs every ported rule over the envelope, and returns the MERGED
-// spec.Diagnostics — the host-natural + resolve diagnostics UNION the plugin's per-kind/op findings.
-// Shared by the `charly box validate` CLI verdict (dispatchValidate → emitVerdict) AND the pre-build
-// gate structured op (Invoke(OpValidate), consumed by core generate.go). ctx/exec are the reverse
+// runValidateEngine fetches the error-TOLERANT resolved-project envelope via build:project's
+// OpValidate leg AND the host-natural checks + D-data via the slimmed "validate-project-checks"
+// HostBuild leg (#55 step3 unit 3-I split), merges both diagnostics sets + the D-data fields onto
+// one envelope, runs every ported rule over it, and returns the MERGED spec.Diagnostics — the
+// host-natural + resolve diagnostics UNION the plugin's per-kind/op findings. Shared by the
+// `charly box validate` CLI verdict (dispatchValidate → emitVerdict) AND the pre-build gate
+// structured op (Invoke(OpValidate), consumed by core generate.go). ctx/exec are the reverse
 // channel to the host (in-proc when compiled-in).
 func runValidateEngine(ctx context.Context, exec *sdk.Executor, dir string, includeDisabled bool) (spec.Diagnostics, error) {
 	reqJSON, err := json.Marshal(spec.ValidateProjectRequest{Dir: dir, IncludeDisabled: includeDisabled})
 	if err != nil {
 		return spec.Diagnostics{}, err
 	}
-	resJSON, err := exec.HostBuild(ctx, validateProjectBuilderKind, reqJSON)
+
+	envJSON, err := exec.InvokeProvider(ctx, "build", "project", sdk.OpValidate, reqJSON, nil, sdk.InvokeProviderOpts{})
 	if err != nil {
-		return spec.Diagnostics{}, err
+		return spec.Diagnostics{}, fmt.Errorf("box validate: build:project resolve: %w", err)
 	}
-	var reply spec.ValidateProjectReply
-	if len(resJSON) > 0 {
-		if uerr := json.Unmarshal(resJSON, &reply); uerr != nil {
-			return spec.Diagnostics{}, fmt.Errorf("box validate: decode reply: %w", uerr)
+	var envReply spec.ValidateProjectReply
+	if len(envJSON) > 0 {
+		if uerr := json.Unmarshal(envJSON, &envReply); uerr != nil {
+			return spec.Diagnostics{}, fmt.Errorf("box validate: decode build:project reply: %w", uerr)
 		}
 	}
-	vc := newVctx(reply.Project)
+
+	checksJSON, err := exec.HostBuild(ctx, validateProjectChecksBuilderKind, reqJSON)
+	if err != nil {
+		return spec.Diagnostics{}, fmt.Errorf("box validate: host-natural checks: %w", err)
+	}
+	var checksReply spec.ValidateProjectReply
+	if len(checksJSON) > 0 {
+		if uerr := json.Unmarshal(checksJSON, &checksReply); uerr != nil {
+			return spec.Diagnostics{}, fmt.Errorf("box validate: decode host-natural-checks reply: %w", uerr)
+		}
+	}
+
+	project := envReply.Project
+	if project == nil {
+		project = &spec.ResolvedProject{}
+	}
+	if checksReply.Project != nil {
+		project.ProviderCapabilities = checksReply.Project.ProviderCapabilities
+		project.ActCapableVerbs = checksReply.Project.ActCapableVerbs
+	}
+
+	vc := newVctx(project)
 	e := &vErr{}
 	runAllValidations(vc, e)
-	merged := reply.Diagnostics
+	merged := envReply.Diagnostics
+	merged.Items = append(merged.Items, checksReply.Diagnostics.Items...)
 	for _, m := range e.msgs {
 		merged.Items = append(merged.Items, spec.Diagnostic{Severity: "error", Message: m})
 	}
 	return merged, nil
 }
 
-// validateProjectBuilderKind is the F11 host-builder kind the host serves the tolerant
-// resolved-project projection + host-natural diagnostics under (validate_project_host.go). A generic
-// action noun, never a provider word.
-const validateProjectBuilderKind = "validate-project"
+// validateProjectChecksBuilderKind is the F11 host-builder kind the host serves the host-natural
+// checks + registry D-data under (charly/validate_project_host.go's hostBuildValidateProjectChecks
+// — renamed from "validate-project" in #55 step3 unit 3-I, now that the tolerant envelope
+// projection moved to build:project's OpValidate leg). A generic action noun, never a provider word.
+const validateProjectChecksBuilderKind = "validate-project-checks"
 
 // vErr accumulates the plugin's own validation findings (the host's ride in reply.Diagnostics).
 type vErr struct{ msgs []string }

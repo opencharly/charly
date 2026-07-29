@@ -86,28 +86,51 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 	// so a provider word of literally "resolve" would violate it — caught live by that gate.
 	// Every other build word rides OpBuild, checked below.
 	if word == "project" {
-		if req.GetOp() != sdk.OpResolve {
-			return nil, fmt.Errorf("build project: unsupported op %q (only %q)", req.GetOp(), sdk.OpResolve)
-		}
-		ex, err := sdk.ExecutorForInvoke(ctx, req.GetExecutorBrokerId())
-		if err != nil {
-			return nil, fmt.Errorf("build project: reach host reverse channel: %w", err)
-		}
-		var rreq spec.ResolvedProjectRequest
-		if len(req.GetParamsJson()) > 0 {
-			if err := json.Unmarshal(req.GetParamsJson(), &rreq); err != nil {
-				return nil, fmt.Errorf("build project: decode ResolvedProjectRequest: %w", err)
+		switch req.GetOp() {
+		case sdk.OpResolve:
+			ex, err := sdk.ExecutorForInvoke(ctx, req.GetExecutorBrokerId())
+			if err != nil {
+				return nil, fmt.Errorf("build project: reach host reverse channel: %w", err)
 			}
+			var rreq spec.ResolvedProjectRequest
+			if len(req.GetParamsJson()) > 0 {
+				if err := json.Unmarshal(req.GetParamsJson(), &rreq); err != nil {
+					return nil, fmt.Errorf("build project: decode ResolvedProjectRequest: %w", err)
+				}
+			}
+			rp, err := resolveProjectEnvelope(ctx, ex, rreq)
+			if err != nil {
+				return nil, fmt.Errorf("build project: %w", err)
+			}
+			out, err := json.Marshal(rp)
+			if err != nil {
+				return nil, fmt.Errorf("build project: encode reply: %w", err)
+			}
+			return &pb.InvokeReply{ResultJson: out}, nil
+
+		case sdk.OpValidate:
+			// #55 step3 unit 3-I: the error-TOLERANT resolve half of the former validate-project
+			// HostBuild seam, relocated onto the SAME "project" word via a second Op (resolve_project_tolerant.go).
+			ex, err := sdk.ExecutorForInvoke(ctx, req.GetExecutorBrokerId())
+			if err != nil {
+				return nil, fmt.Errorf("build project: reach host reverse channel: %w", err)
+			}
+			var vreq spec.ValidateProjectRequest
+			if len(req.GetParamsJson()) > 0 {
+				if err := json.Unmarshal(req.GetParamsJson(), &vreq); err != nil {
+					return nil, fmt.Errorf("build project: decode ValidateProjectRequest: %w", err)
+				}
+			}
+			rp, diags := resolveProjectEnvelopeTolerant(ctx, ex, vreq)
+			out, err := json.Marshal(spec.ValidateProjectReply{Project: &rp, Diagnostics: diags})
+			if err != nil {
+				return nil, fmt.Errorf("build project: encode reply: %w", err)
+			}
+			return &pb.InvokeReply{ResultJson: out}, nil
+
+		default:
+			return nil, fmt.Errorf("build project: unsupported op %q (want %q or %q)", req.GetOp(), sdk.OpResolve, sdk.OpValidate)
 		}
-		rp, err := resolveProjectEnvelope(ctx, ex, rreq)
-		if err != nil {
-			return nil, fmt.Errorf("build project: %w", err)
-		}
-		out, err := json.Marshal(rp)
-		if err != nil {
-			return nil, fmt.Errorf("build project: encode reply: %w", err)
-		}
-		return &pb.InvokeReply{ResultJson: out}, nil
 	}
 
 	if req.GetOp() != sdk.OpBuild {

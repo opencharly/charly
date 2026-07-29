@@ -232,7 +232,11 @@ func inspectUserLeg(ctx context.Context, ex *sdk.Executor, ref string, uid int) 
 // buildengine-namespaced host leg (it embeds a nested scan+render-prep the plugin can't cheaply run);
 // ComputeIntermediates/ShouldIncludeDisabled/ExternalizedBuilders are pure. preResolvedBoxes carries
 // the render-prep caches so the envelope preserves them.
-func projectResolvedProjectLeg(ctx context.Context, ex *sdk.Executor, cfg *spec.Config, layers map[string]spec.CandyReader, uf *spec.UnifiedFile, distroCfg *buildkit.DistroConfig, builderCfg *buildkit.BuilderConfig, initCfg *buildkit.InitConfig, dir, version, calver string, includeDisabled bool, preResolvedBoxes map[string]*buildkit.ResolvedBox) (*spec.ResolvedProject, error) {
+// diags, when non-nil, makes the resolve TOLERANT (loaderkit.ProjectResolvedProject skips a box
+// whose ResolveBox fails instead of aborting — mirroring the deleted host projector's tolerant
+// branch, buildResolvedProjectTolerant); pass nil for the FAIL-FAST behavior 3b's resolveProjectEnvelope
+// relies on (byte-for-byte parity with the original host projector).
+func projectResolvedProjectLeg(ctx context.Context, ex *sdk.Executor, cfg *spec.Config, layers map[string]spec.CandyReader, uf *spec.UnifiedFile, distroCfg *buildkit.DistroConfig, builderCfg *buildkit.BuilderConfig, initCfg *buildkit.InitConfig, dir, version, calver string, includeDisabled bool, preResolvedBoxes map[string]*buildkit.ResolvedBox, diags *spec.Diagnostics) (*spec.ResolvedProject, error) {
 	includeNames := map[string]bool{}
 	seams := loaderkit.ResolveProjectSeams{
 		ResolveBox: func(c *spec.Config, name, cv, d string) (*buildkit.ResolvedBox, error) {
@@ -265,7 +269,7 @@ func projectResolvedProjectLeg(ctx context.Context, ex *sdk.Executor, cfg *spec.
 		},
 		ExternalizedBuilders: buildkit.ExternalizedBuilders,
 	}
-	return loaderkit.ProjectResolvedProject(cfg, layers, uf, distroCfg, builderCfg, initCfg, dir, version, calver, seams, nil, preResolvedBoxes)
+	return loaderkit.ProjectResolvedProject(cfg, layers, uf, distroCfg, builderCfg, initCfg, dir, version, calver, seams, diags, preResolvedBoxes)
 }
 
 // mergeNamespacedInto folds the pre-computed namespaced boxes/candies into rp additively (never
