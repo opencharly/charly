@@ -9,7 +9,6 @@ import (
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/spec/spec"
-	"github.com/opencharly/sdk/sshx"
 )
 
 // host_build_pod_config_seams.go — the ~16 NARROW "pod-config-*" F10 host-builders the P13-KERNEL
@@ -34,7 +33,6 @@ const (
 	podConfigScrubCliEnvKind      = "pod-config-scrub-cli-env"
 	podConfigDetectDevicesKind    = "pod-config-detect-devices"
 	podConfigTunnelResolveKind    = "pod-config-tunnel-resolve"
-	podConfigSSHKeyKind           = "pod-config-ssh-key"
 	podConfigListSidecarsKind     = "pod-config-list-sidecars"
 	podConfigBoxEngineKind        = "pod-config-box-engine"
 	podConfigContainerTunnelKind  = "pod-config-container-tunnel"
@@ -65,21 +63,6 @@ func hostBuildPodConfigListSidecars(_ context.Context, _ spec.PodConfigLoadDeplo
 		return spec.PodConfigListSidecarsReply{}, err
 	}
 	return spec.PodConfigListSidecarsReply{Names: names, Descriptions: descriptions, BodiesJSON: bodiesJSON}, nil
-}
-
-func hostBuildPodConfigSSHKey(_ context.Context, req spec.PodConfigSSHKeyRequest, _ buildEngineContext) (spec.PodConfigSSHKeyReply, error) {
-	if req.Flag == "" {
-		return spec.PodConfigSSHKeyReply{}, nil
-	}
-	sshDir, err := sshx.ContainerSSHKeyDir(req.ContainerName)
-	if err != nil {
-		return spec.PodConfigSSHKeyReply{}, err
-	}
-	pubkey, err := sshx.ResolveSSHPubKey(req.Flag, sshDir)
-	if err != nil {
-		return spec.PodConfigSSHKeyReply{}, fmt.Errorf("resolving SSH key: %w", err)
-	}
-	return spec.PodConfigSSHKeyReply{Pubkey: pubkey}, nil
 }
 
 func hostBuildPodConfigEnsureImage(_ context.Context, req spec.PodConfigEnsureImageRequest, _ buildEngineContext) (spec.PodConfigEnsureImageReply, error) {
@@ -317,7 +300,6 @@ var _ = func() bool {
 	registerHostBuilder(podConfigScrubCliEnvKind, typedHostBuilder(podConfigScrubCliEnvKind, hostBuildPodConfigScrubCliEnv))
 	registerHostBuilder(podConfigDetectDevicesKind, typedHostBuilder(podConfigDetectDevicesKind, hostBuildPodConfigDetectDevices))
 	registerHostBuilder(podConfigTunnelResolveKind, typedHostBuilder(podConfigTunnelResolveKind, hostBuildPodConfigTunnelResolve))
-	registerHostBuilder(podConfigSSHKeyKind, typedHostBuilder(podConfigSSHKeyKind, hostBuildPodConfigSSHKey))
 	registerHostBuilder(podConfigListSidecarsKind, typedHostBuilder(podConfigListSidecarsKind, hostBuildPodConfigListSidecars))
 	registerHostBuilder(podConfigBoxEngineKind, typedHostBuilder(podConfigBoxEngineKind, hostBuildPodConfigBoxEngine))
 	registerHostBuilder(podConfigContainerTunnelKind, typedHostBuilder(podConfigContainerTunnelKind, hostBuildPodConfigContainerTunnel))

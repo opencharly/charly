@@ -13,6 +13,7 @@ import (
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/sshx"
 	pb "github.com/opencharly/spec/proto"
 	"github.com/opencharly/spec/spec"
 )
@@ -271,12 +272,20 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 
 	if c.SshKey != "" {
 		cName := kit.ContainerNameInstance(c.Box, c.Instance)
-		var sshRep spec.PodConfigSSHKeyReply
-		if err := hostBuild(ctx, ex, podConfigSSHKeyKind, spec.PodConfigSSHKeyRequest{Flag: c.SshKey, ContainerName: cName}, &sshRep); err != nil {
+		// SSH pubkey resolution is a pure host-fs op (reads ~/.ssh, generates into
+		// ~/.local/share/charly/ssh/<name>) that plugin-deploy-pod runs directly on the
+		// host it deploys to — the SAME sshx path candy/plugin-vm's vm_cloud_image.go uses
+		// for VM cloud-init keys, no HostBuild seam needed.
+		sshDir, err := sshx.ContainerSSHKeyDir(cName)
+		if err != nil {
 			return err
 		}
-		if sshRep.Pubkey != "" {
-			c.Env = append(c.Env, "SSH_AUTHORIZED_KEYS="+sshRep.Pubkey)
+		pubkey, err := sshx.ResolveSSHPubKey(c.SshKey, sshDir)
+		if err != nil {
+			return fmt.Errorf("resolving SSH key: %w", err)
+		}
+		if pubkey != "" {
+			c.Env = append(c.Env, "SSH_AUTHORIZED_KEYS="+pubkey)
 		}
 	}
 

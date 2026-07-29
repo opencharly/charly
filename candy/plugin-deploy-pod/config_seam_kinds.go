@@ -12,7 +12,6 @@ const (
 	podConfigScrubCliEnvKind    = "pod-config-scrub-cli-env"
 	podConfigDetectDevicesKind  = "pod-config-detect-devices"
 	podConfigTunnelResolveKind  = "pod-config-tunnel-resolve"
-	podConfigSSHKeyKind         = "pod-config-ssh-key"
 	podConfigListSidecarsKind   = "pod-config-list-sidecars"
 	podConfigBoxEngineKind      = "pod-config-box-engine"
 	podConfigProjectVolumeKind  = "pod-config-project-volume"
