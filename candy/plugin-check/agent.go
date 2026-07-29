@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // AgentOutputFormatStreamJSON is the explicit non-default value of

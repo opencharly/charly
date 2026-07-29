@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 	"github.com/opencharly/sdk/vmshared"
 
 	"github.com/opencharly/sdk/buildkit"

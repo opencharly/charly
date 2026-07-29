@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 func resolveSubstrateTemplate(in spec.SubstrateTemplateResolveRequest) ([]byte, error) {

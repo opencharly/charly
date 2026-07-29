@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // live_cmd.go — the `charly check live` leaf. It gathers no config itself: the full-stack live

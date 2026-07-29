@@ -6,7 +6,7 @@ import (
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // oci_step_emit.go — the host-side half of the pod-overlay step-emit dispatch. K5-A item 2

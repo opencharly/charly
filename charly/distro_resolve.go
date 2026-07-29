@@ -8,7 +8,7 @@ package main
 import (
 	"encoding/json"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // resolveDistroViaPlugin projects one opaque distro body into a *DistroDef

@@ -18,7 +18,7 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // deployTraitsFor resolves a substrate word's DECLARED #DeployTraits (P9) from the provider

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // host_build_deploy_config_save_state.go — the "deploy-config-save-state" F10 host-builder.

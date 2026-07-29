@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // vm_gpu_shim.go — the command:vm plugin's bridge to verb:gpu, the plugin-side twin of core's

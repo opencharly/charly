@@ -26,7 +26,7 @@ package bundle
 
 import (
 	"github.com/opencharly/sdk"
-	pb "github.com/opencharly/sdk/proto"
+	pb "github.com/opencharly/spec/proto"
 )
 
 // calver is the plugin's advertised version; kept in lockstep with candy/plugin-bundle/charly.yml.

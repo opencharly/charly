@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // host_build_deploy_config_save.go — the "deploy-config-save" F10 host-builder (K4-C). The

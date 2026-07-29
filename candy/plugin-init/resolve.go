@@ -14,7 +14,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // renderServiceUnit renders one service into a RenderedService using the chosen

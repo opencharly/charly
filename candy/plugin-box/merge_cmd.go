@@ -7,7 +7,7 @@ import (
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // merge_cmd.go — the `charly box merge` handler (P14: relocated OUT of charly core;

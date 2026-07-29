@@ -20,8 +20,8 @@ import (
 	"github.com/charmbracelet/x/vt"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
-	pb "github.com/opencharly/sdk/proto"
-	"github.com/opencharly/sdk/spec"
+	pb "github.com/opencharly/spec/proto"
+	"github.com/opencharly/spec/spec"
 )
 
 const tmuxPane = "run:0.0"

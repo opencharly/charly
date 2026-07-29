@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // withLocalImages swaps kit.ListLocalImages for the duration of the test — R3 duplicate of

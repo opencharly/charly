@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // imageTags computes the tags for an image. charly is CalVer-only — it never emits `:latest`.

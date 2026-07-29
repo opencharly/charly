@@ -6,8 +6,8 @@ import (
 	"os"
 
 	"github.com/opencharly/sdk/deploykit"
-	pb "github.com/opencharly/sdk/proto"
-	"github.com/opencharly/sdk/spec"
+	pb "github.com/opencharly/spec/proto"
+	"github.com/opencharly/spec/spec"
 )
 
 // config_write.go — the POD config-WRITE Op (P11, Q1=(a)). Under Ruling C the config-WRITE (the

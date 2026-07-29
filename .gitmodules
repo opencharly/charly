@@ -29,3 +29,7 @@
 [submodule "sdk"]
 	path = sdk
 	url = git@github.com:opencharly/sdk.git
+[submodule "spec"]
+	path = spec
+	url = git@github.com:opencharly/spec.git
+	branch = main

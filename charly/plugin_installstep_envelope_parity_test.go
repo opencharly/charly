@@ -13,7 +13,7 @@ import (
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // plugin_installstep_envelope_parity_test.go — the mandatory R10 parity gate for K5-Unit-6b

@@ -10,7 +10,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // command.go — the externalized `charly preempt` command (status / restore). The plugin OWNS the CLI

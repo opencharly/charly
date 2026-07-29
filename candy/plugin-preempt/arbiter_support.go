@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // arbiter_support.go — the arbiter's pure/host-local helpers (cutover C9), moved from charly

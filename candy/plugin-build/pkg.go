@@ -13,7 +13,7 @@ import (
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/loaderkit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // pkg.go — the candy-side DRIVE behind the build:pkg word (K3 build-tail move, coneB-pkgcmd): build

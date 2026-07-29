@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // preresolve_test.go — relocated from charly/android_deploy_preresolve_test.go +

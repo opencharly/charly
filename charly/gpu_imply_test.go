@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 	"github.com/opencharly/sdk/vmshared"
 )
 

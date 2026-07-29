@@ -14,7 +14,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 	"gopkg.in/yaml.v3"
 )
 

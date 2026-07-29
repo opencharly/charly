@@ -7,8 +7,8 @@ import (
 	"os"
 
 	"github.com/opencharly/sdk"
-	pb "github.com/opencharly/sdk/proto"
-	"github.com/opencharly/sdk/spec"
+	pb "github.com/opencharly/spec/proto"
+	"github.com/opencharly/spec/spec"
 )
 
 // command.go is the command:bundle leg — the `charly bundle …` CLI, COMPILED-IN (F8). It dispatches

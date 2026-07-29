@@ -10,7 +10,7 @@ import (
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // command.go — the externalized `charly status` command. The plugin OWNS the Kong grammar

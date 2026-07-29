@@ -10,7 +10,7 @@ import (
 	"github.com/alecthomas/kong"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // cli_model_cmd.go implements `charly __cli-model` — the hidden seam that emits charly's

@@ -8,7 +8,7 @@ import (
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // builder_preresolve.go — the DEPLOY-TIME builder-IR pre-pass (FLOOR-SLIM-proper Unit-8, spike-

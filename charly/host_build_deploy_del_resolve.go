@@ -4,7 +4,7 @@ import (
 	"context"
 	"os"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // host_build_deploy_del_resolve.go — the "deploy-del-resolve" F10 host-builder (K4-C walk port).

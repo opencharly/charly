@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // The host-side executors (sdk/kit) resolve their wait bounds through

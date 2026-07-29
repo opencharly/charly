@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // vm_host_seams.go — the command:vm plugin's bridge to the host. The VM CLI handlers moved out of

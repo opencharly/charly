@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 func TestPreflightImageCandidates_EmptyPlan(t *testing.T) {

@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/loaderkit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // TestReservedWordRegistry_KindBijection proves every CUE kind (spec.KindWords)

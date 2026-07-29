@@ -6,8 +6,8 @@ import (
 	"fmt"
 
 	"github.com/opencharly/sdk"
-	pb "github.com/opencharly/sdk/proto"
-	"github.com/opencharly/sdk/spec"
+	pb "github.com/opencharly/spec/proto"
+	"github.com/opencharly/spec/spec"
 )
 
 // provider serves the placement-neutral terminal:tmux and agent-runtime:tmux

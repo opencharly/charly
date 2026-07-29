@@ -8,7 +8,7 @@ import (
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // resolve.go — the P13-KERNEL step-4(ii) direction-flip: the pod START/STOP plan resolution

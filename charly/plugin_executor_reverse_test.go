@@ -11,7 +11,7 @@ import (
 	"google.golang.org/grpc/test/bufconn"
 
 	"github.com/opencharly/sdk/deploykit"
-	pb "github.com/opencharly/sdk/proto"
+	pb "github.com/opencharly/spec/proto"
 )
 
 // reverseFakeExec is a fake DeployExecutor that records the scripts it is asked to run

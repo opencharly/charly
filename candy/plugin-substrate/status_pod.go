@@ -21,7 +21,7 @@ import (
 
 	"github.com/opencharly/sdk/enginekit"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // collectPodStatus serves the pod substrate's OpStatusCollect. req.Single

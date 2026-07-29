@@ -9,7 +9,7 @@ import (
 	"github.com/opencharly/sdk/vmshared"
 
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // blockingExecutor blocks RunCapture until the per-probe context is cancelled

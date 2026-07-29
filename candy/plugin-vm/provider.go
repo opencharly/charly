@@ -23,8 +23,8 @@ import (
 	"github.com/opencharly/charly/candy/plugin-vm/params"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
-	pb "github.com/opencharly/sdk/proto"
-	"github.com/opencharly/sdk/spec"
+	pb "github.com/opencharly/spec/proto"
+	"github.com/opencharly/spec/spec"
 )
 
 // vmEnv is the plugin-side decode of the host's CheckEnv (for a `libvirt:` check — the run mode

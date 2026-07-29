@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // host_build_deploy_from_box.go — the "deploy-from-box" F10 host-builder. The `charly

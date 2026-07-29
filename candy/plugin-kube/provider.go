@@ -8,8 +8,8 @@ import (
 	"github.com/opencharly/charly/candy/plugin-kube/params"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
-	pb "github.com/opencharly/sdk/proto"
-	"github.com/opencharly/sdk/spec"
+	pb "github.com/opencharly/spec/proto"
+	"github.com/opencharly/spec/spec"
 )
 
 // provider.go is the out-of-process provider for ALL of plugin-kube's capabilities.

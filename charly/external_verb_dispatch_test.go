@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // fakeExternalVerb is an OUT-OF-PROCESS-style verb Provider: a real Provider for a live

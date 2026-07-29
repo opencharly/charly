@@ -12,7 +12,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // defaultAgentTimeout is the resolved Timeout when an entry leaves it empty —

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // TestRelocatedKernelParamVerb_DispatchesViaKit proves the MULTI-ROLE `kernel-param` verb

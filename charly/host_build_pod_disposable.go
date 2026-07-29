@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // host_build_pod_disposable.go — the THIN "pod-disposable" host seam (K5-U2/3). It resolves the ONE

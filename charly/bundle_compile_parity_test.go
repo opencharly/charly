@@ -11,7 +11,7 @@ import (
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // invokeOpCompile drives command:bundle's KEPT OpCompile leg over an in-proc reverse channel — the

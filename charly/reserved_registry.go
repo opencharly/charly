@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // setFromSlice builds an O(1) membership set from a CUE-derived vocabulary slice.

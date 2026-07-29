@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // withMockLibvirtDomains swaps the package-level listLibvirtCharlyDomains

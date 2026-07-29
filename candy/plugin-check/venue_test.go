@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // venue_test.go — the venue-CLASSIFIER unit coverage (checkVmTarget / checkLocalTarget /

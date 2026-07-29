@@ -13,7 +13,7 @@ import (
 	"fmt"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // dispatchBuildEnsure ensures image is present in local podman storage, falling back to a local

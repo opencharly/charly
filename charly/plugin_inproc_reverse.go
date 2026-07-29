@@ -5,7 +5,7 @@ import (
 
 	"google.golang.org/grpc"
 
-	pb "github.com/opencharly/sdk/proto"
+	pb "github.com/opencharly/spec/proto"
 )
 
 // plugin_inproc_reverse.go — the IN-PROCESS reverse channel for a COMPILED-IN plugin.

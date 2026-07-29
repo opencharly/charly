@@ -9,7 +9,7 @@ import (
 
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/loaderkit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 
 	"cuelang.org/go/cue"
 	"github.com/opencharly/sdk/kit"

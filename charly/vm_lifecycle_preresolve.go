@@ -30,7 +30,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // vmAttachResolver builds the F12 #PodLiveStdioPlan for `charly shell <vm-deploy>` / `charly cmd

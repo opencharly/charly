@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // TestNoOvTokensInSource asserts the ov→charly rebrand left NO `OV_` token in

@@ -15,7 +15,7 @@ import (
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // overlay.go — the pod-overlay BUILD RENDER, DISSOLVED out of charly core into the candy (P11c).

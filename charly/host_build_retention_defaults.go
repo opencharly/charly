@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // host_build_retention_defaults.go — the ONE thing the externalized retention engine

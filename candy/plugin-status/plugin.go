@@ -30,7 +30,7 @@ import (
 	"os"
 
 	"github.com/opencharly/sdk"
-	pb "github.com/opencharly/sdk/proto"
+	pb "github.com/opencharly/spec/proto"
 )
 
 // calver is this plugin candy's CalVer identity (matches charly.yml version:).

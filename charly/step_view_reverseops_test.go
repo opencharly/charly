@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // TestStepToView_CapturesReverseOps proves the Fork-A capture: stepToView computes each

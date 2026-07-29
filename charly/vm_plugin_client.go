@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // vm_plugin_client.go is the HOST→plugin client for the internal VM-resolution ops. The go-libvirt

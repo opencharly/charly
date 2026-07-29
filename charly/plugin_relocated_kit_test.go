@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // relocatedVerbCase is one sub-case of a relocated-kit-verb dispatch test: a fakeExecutor

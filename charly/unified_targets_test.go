@@ -6,7 +6,7 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // TestPluginDeployTarget_ApplyParentExecOverride is the regression test for the FIX ROUND bug

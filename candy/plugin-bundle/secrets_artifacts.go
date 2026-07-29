@@ -8,7 +8,7 @@ import (
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // secrets_artifacts.go — Cone A shape 3: the ORCHESTRATION that used to live core-side in

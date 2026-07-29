@@ -6,7 +6,7 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // bundle_cmd.go — the command:bundle CLI GRAMMAR (P13). The `charly bundle …` Kong tree

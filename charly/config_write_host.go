@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // config_write_host.go — the canonical plugin-deploy-pod candy ref. P13-KERNEL direction-flip:

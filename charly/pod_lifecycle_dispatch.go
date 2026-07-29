@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // podStartOptsCtxKey threads the direct-mode `charly start` CLI extras (--env/--port/--volume/

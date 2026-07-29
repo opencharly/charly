@@ -18,7 +18,7 @@ import (
 	"time"
 
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // localLedgerPaths is the swappable ledger-paths resolver, defaulting to the

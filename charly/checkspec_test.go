@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // Ensures Kind() returns the correct verb for each single-verb Check and

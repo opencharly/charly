@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // feature_cmd.go — the `charly check feature run` leaf (Agent Driven Evaluation, DEPLOY scope). It

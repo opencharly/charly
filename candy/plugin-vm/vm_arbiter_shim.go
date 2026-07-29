@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // vm_arbiter_shim.go — the moved VM CLI's preempt/resource-arbitration reach. The arbiter LOGIC lives

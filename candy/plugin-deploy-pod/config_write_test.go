@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/deploykit"
-	pb "github.com/opencharly/sdk/proto"
-	"github.com/opencharly/sdk/spec"
+	pb "github.com/opencharly/spec/proto"
+	"github.com/opencharly/spec/spec"
 )
 
 // config_write_test.go — the BYTE-PARITY harness for the pod config-WRITE (P11). It locks that

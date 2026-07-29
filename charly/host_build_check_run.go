@@ -7,7 +7,7 @@ import (
 
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/loaderkit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // host_build_check_run.go — the "check-run" F10 host-builder (P12), now serving EXACTLY ONE mode:

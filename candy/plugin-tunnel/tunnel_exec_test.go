@@ -13,7 +13,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/charly/candy/plugin-tunnel/params"
-	pb "github.com/opencharly/sdk/proto"
+	pb "github.com/opencharly/spec/proto"
 )
 
 // TestInvoke_PlanWireRoundTrip proves the FULL wire path both callers use: the

@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/opencharly/sdk/enginekit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // Probe is the union root. Implementations are either HostProbe (network

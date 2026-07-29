@@ -13,12 +13,12 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/loaderkit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 
 	"cuelang.org/go/cue"
 
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/schemaconcat"
+	"github.com/opencharly/spec/schemaconcat"
 )
 
 // compileBasePlusServed compiles charly's BASE schema concatenated with served

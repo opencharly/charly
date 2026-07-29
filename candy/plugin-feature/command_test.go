@@ -3,7 +3,7 @@ package feature
 import (
 	"testing"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // TestPlanSteps_FlattensKeywordAgentCheck proves planSteps (the transform K3 moved here from

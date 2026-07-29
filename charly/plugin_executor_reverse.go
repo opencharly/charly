@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk/deploykit"
-	pb "github.com/opencharly/sdk/proto"
-	"github.com/opencharly/sdk/spec"
+	pb "github.com/opencharly/spec/proto"
+	"github.com/opencharly/spec/spec"
 )
 
 // executorReverseServer is the HOST side of the E3b reverse channel: it serves the

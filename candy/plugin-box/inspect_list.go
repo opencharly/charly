@@ -9,7 +9,7 @@ import (
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // inspect_list.go — the `charly box inspect` + `charly box list` handlers, relocated OUT of charly

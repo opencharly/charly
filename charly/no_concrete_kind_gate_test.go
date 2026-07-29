@@ -60,7 +60,7 @@ func TestNoConcreteKindInKernel(t *testing.T) {
 			} else {
 				name = path[strings.LastIndex(path, "/")+1:]
 			}
-			if path == "github.com/opencharly/sdk/spec" && name == "spec" {
+			if path == "github.com/opencharly/spec/spec" && name == "spec" {
 				importsSpec = true
 				break
 			}

@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // TestMergeGrammar_Parse confirms `box merge` accepts the optional box positional + the

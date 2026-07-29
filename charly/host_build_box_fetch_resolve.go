@@ -7,7 +7,7 @@ import (
 
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/loaderkit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // host_build_box_fetch_resolve.go — the "box-fetch-resolve" F10 host-builder behind

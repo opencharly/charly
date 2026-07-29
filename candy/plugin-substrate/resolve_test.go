@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // TestResolveVm_FieldCopy covers the vm substrate-value de-type (Cutover L): OpResolve

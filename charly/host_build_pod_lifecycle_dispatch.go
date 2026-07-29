@@ -6,7 +6,7 @@ import (
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // host_build_pod_lifecycle_dispatch.go — the CONSOLIDATED "pod-{start,stop,shell,cmd,logs,update,

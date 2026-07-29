@@ -19,7 +19,7 @@ import (
 	"syscall"
 
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // pinPersistentXDGRuntimeDir relocates XDG_RUNTIME_DIR to a persistent path under

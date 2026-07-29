@@ -7,7 +7,7 @@ import (
 
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/loaderkit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // validate_preempt_test.go — tests for the preempt capability validators, now relocated to

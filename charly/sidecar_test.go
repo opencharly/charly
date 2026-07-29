@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // TestFindPodSidecarQuadlets_* DELETED (Cutover B unit 2, R1 dead-code catch): findPodSidecarQuadlets

@@ -7,7 +7,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // credential_plugin.go is the CORE adapter for the externalized credential subsystem.

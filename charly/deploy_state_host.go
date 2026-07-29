@@ -4,7 +4,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // deploy_state_host.go — the charly-side filler for the sdk/deploykit DeployStateHost

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // This file implements the two pre-resolution helpers for the credential-

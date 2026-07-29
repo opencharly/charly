@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // enc_tunnel_resolve_test.go — unit coverage for the wave γ port of

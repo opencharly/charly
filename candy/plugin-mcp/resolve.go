@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // resolve.go builds the mcp check endpoint from the GENERIC reverse-legs, replacing the former

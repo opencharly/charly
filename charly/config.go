@@ -6,7 +6,7 @@ import (
 
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/loaderkit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // config.go — FLOOR-SLIM Unit 5: the Config TYPE + its box-resolution METHODS moved to

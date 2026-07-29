@@ -14,7 +14,7 @@ import (
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/vmshared"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 var updateResolvedProjectGolden = flag.Bool("update-resolved-project-golden", false,

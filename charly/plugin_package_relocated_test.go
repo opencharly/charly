@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // TestRelocatedPackageVerb_DispatchesViaKit proves the THREE-role `package` verb —

@@ -9,7 +9,7 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // walk.go — the K4-C WALK PORT: `charly bundle add`/`del`'s tree-walk CONTROL FLOW now runs

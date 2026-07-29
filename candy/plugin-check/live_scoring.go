@@ -23,7 +23,7 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // scoredStep pairs a plan step with its stable declaration-order id so the ids stay consistent

@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // install.go is the SINGLE Android app-install path (R3), living in this out-of-tree

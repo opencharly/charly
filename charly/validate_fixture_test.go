@@ -8,7 +8,7 @@ import (
 
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/loaderkit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // validate_fixture_test.go — the (c') converted-test infrastructure (task #60): the validate ENGINE

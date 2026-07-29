@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // TestKitVerbOutOfProcess_HTTPDoEndToEnd proves the FULL F2 CheckContextService reverse

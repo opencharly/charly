@@ -7,7 +7,7 @@ import (
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/loaderkit"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/spec/spec"
 )
 
 // load_executor.go — the plugin-build LoaderExecutor (K3 build-engine, U6). It is the SAME six-method
