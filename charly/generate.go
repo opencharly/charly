@@ -38,8 +38,11 @@ type Generator struct {
 	// build path uses to scope `podman build` (R3, build/generate unified). Empty
 	// means "every enabled box" (the bare `charly box generate` / `generate all`
 	// and full `charly box build` behaviour). The whole resolved graph
-	// (intermediates, global candy order, effective versions) is still computed
-	// in NewGenerator regardless — only the per-box emission loop is scoped.
+	// (intermediates, global candy order, effective versions) is computed by
+	// whichever constructor built this Generator (candy/plugin-build's
+	// resolveBuildEngine for a real build/generate drive; #55 step3 3-II deleted
+	// the former host-side NewGenerator that used to do this) — only the
+	// per-box emission loop is scoped by this field.
 	RequestedBoxes []string
 
 	// ExtraCandyRefs is the ORIGINAL loaderkit.ResolveOpts.ExtraCandyRefs this Generator was
@@ -70,7 +73,8 @@ type Generator struct {
 	// toDeploykit() and reused across an image's render so the deploykit-side
 	// per-image builder-reply caches persist across the render methods (which are
 	// relocating onto deploykit.Generator). Containerfiles is a shared map ref so
-	// writes propagate; Candies/Boxes are stable post-NewGenerator.
+	// writes propagate; Candies/Boxes are stable once this Generator's constructor
+	// (newCandyScanGenerator today; the deleted NewGenerator formerly) returns.
 	dkGen *deploykit.Generator
 }
 
@@ -181,111 +185,6 @@ func invokeOciInspectUser(ref string, uid int) (spec.UserInfo, error) {
 	return info, nil
 }
 
-// NewGenerator creates a new generator. opts is propagated through Validate
-// + ResolveAllBox so `charly box build --include-disabled` reaches images
-// flagged enabled: false in charly.yml (without modifying the file).
-func NewGenerator(dir string, tag string, opts loaderkit.ResolveOpts) (*Generator, error) {
-	cfg, err := LoadConfig(dir)
-	if err != nil {
-		return nil, err
-	}
-
-	// Load default build config early — needed for RegisterBuildVocabulary before candy scanning.
-	// Post-unified-cutover this reads charly.yml directly (no format_config: pointer).
-	defaultDistroCfg, _, defaultInitCfg, err := LoadDefaultBuildConfig(dir)
-	if err != nil {
-		return nil, fmt.Errorf("loading default build config: %w", err)
-	}
-	RegisterBuildVocabulary(defaultDistroCfg)
-
-	// InitCfg threads the init-system host-completion pass INTO the scan pipeline (W9): a
-	// spec.CandyReader is read-only, so InitSystems must be populated BEFORE ScanAllCandyWithConfigOpts
-	// wraps each winning candidate — there is no later separate loaderkit.PopulateCandyInitSystem call anymore.
-	opts.InitCfg = defaultInitCfg
-	layers, err := ScanAllCandyWithConfigOpts(dir, cfg, opts)
-	if err != nil {
-		return nil, err
-	}
-
-	// Build-time plugin connect (operator-authorized build-time plugin execution).
-	// Connect the project's OUT-OF-TREE plugin candies so an external step/builder/verb
-	// provider is registered + dialable DURING image generation — the SAME loader the
-	// deploy/check paths use (loadDeployPlugins / resolveCheckRunnerContext), transport-
-	// invisible above the registry. A BUILTIN plugin is already registered via init() and
-	// needs no connect; only an EXTERNAL one is host-built + connected here. This is what
-	// lets a `run:` plugin verb (and a plugin builder) EXECUTE at build time to emit its
-	// Containerfile fragment, placement-agnostically: in-proc for a builtin, over go-plugin
-	// gRPC for an external. Best-effort: a connect failure on a plugin the build actually
-	// USES fails loudly at emit (emitTasks' OpEmit dispatch), never silently mis-builds.
-	// PERF-SCOPED: connect ONLY the plugins the candy plans (run-step verbs) + candy
-	// external_builder selections + box plans reference — an unreferenced box/<distro>
-	// plugin candy is not host-built. No deploy substrate / add_candy at build (no deploy).
-	// A detection-builder's build-time multi-stage is resolved by its plugin's OpResolve leg
-	// (C10, kit.BuilderResolve); the deploykit EmitBuilderStages render connects those builder plugins on-demand
-	// (ensureBuildersConnected), so they are NOT collected here.
-	buildRefs := collectReferencedPluginWords(layers, cfg.Box, nil)
-	if perr := loadProjectPlugins(context.Background(), layers, buildRefs); perr != nil {
-		fmt.Fprintf(os.Stderr, "warning: build-time plugin load: %v\n", perr)
-	}
-
-	// Pre-build validation gate — dispatched to the compiled-in validate capability (candy/plugin-box)
-	// by word with a structured OpValidate op (task #60 (C-refined)); the validate ENGINE no longer
-	// lives in core. validateProjectForBuild returns the spec.ValidationError-equivalent on any finding.
-	if err := validateProjectForBuild(dir, opts); err != nil {
-		return nil, err
-	}
-
-	// Compute CalVer if tag not specified
-	if tag == "" {
-		tag = ComputeCalVer()
-	}
-
-	bkopts, err := buildkitOptsWithVocab(dir, opts)
-	if err != nil {
-		return nil, err
-	}
-	images, err := buildkit.ResolveAllBox(cfg, tag, dir, bkopts)
-	if err != nil {
-		return nil, err
-	}
-
-	// Compute and inject auto-intermediate images
-	updated, err := ComputeIntermediates(images, layers, cfg, tag)
-	if err != nil {
-		return nil, fmt.Errorf("computing intermediates: %w", err)
-	}
-	images = updated
-
-	// Compute global candy order for consistent cross-image ordering
-	globalOrder, err := GlobalCandyOrder(images, layers)
-	if err != nil {
-		return nil, fmt.Errorf("computing global candy order: %w", err)
-	}
-
-	g := &Generator{
-		Dir:            dir,
-		Config:         cfg,
-		Candies:        layers,
-		InitConfig:     defaultInitCfg,
-		Tag:            tag,
-		Boxes:          images,
-		BuildDir:       filepath.Join(dir, ".build"),
-		Containerfiles: make(map[string]string),
-		GlobalOrder:    globalOrder,
-		RequestedBoxes: opts.RequestedBoxes,
-		ExtraCandyRefs: opts.ExtraCandyRefs,
-	}
-
-	// Derive each image's content-stable identity (ai.opencharly.version)
-	// from per-entity versions now that the base chain + auto-intermediates are
-	// materialized (the build render/version-compute machinery, sdk/deploykit).
-	if err := deploykit.ComputeEffectiveVersions(g.Boxes, g.Candies); err != nil {
-		return nil, err
-	}
-
-	return g, nil
-}
-
 // newCandyScanGenerator builds a Generator populated with Config+Candies+Boxes+Dir+BuildDir — a
 // candy scan + a PLAIN per-box buildkit.ResolveBox pass (NO ComputeIntermediates / GlobalCandyOrder
 // / ComputeEffectiveVersions / RenderPrepAll) — the minimal state the render-seam floor's 2
@@ -293,18 +192,19 @@ func NewGenerator(dir string, tag string, opts loaderkit.ResolveOpts) (*Generato
 // resolveInlineBuilderSeam's resolveBuilderStage reads img.Tags/img.Name off gen.Boxes[boxName]
 // (verified by reading resolveBuilderStage's own body — NOT img.Base/BootstrapBuilderImage, so
 // skipping ComputeIntermediates' auto-intermediate Base-rewrite is safe here). MUCH cheaper than
-// NewGenerator: the build-engine RESOLVE's expensive parts (the candy SCAN's network-bound remote
-// fetches, ComputeIntermediates, GlobalCandyOrder, ComputeEffectiveVersions, RenderPrepAll) now run
-// entirely plugin-side (candy/plugin-build's resolveBuildEngine, K3) — recomputing THOSE again
-// host-side for the render-seam cache was 100% wasted work (proven dead by call-graph: nothing
-// downstream ever read the second Generator's render-prep output); ResolveBox itself is pure,
-// in-memory, and genuinely still needed (RCA'd: a first cut that dropped it entirely broke
-// resolveInlineBuilderSeam's img.Tags/img.Name — caught before merge by re-tracing every reader of
-// gen.Boxes[boxName], not by the box-generate smoke test, which never exercises the inline-builder
-// path). Skips the build-time plugin connect + pre-build validate NewGenerator also runs: both
-// already ran plugin-side (resolveBuildEngine steps 4-5) by the time this is reached through the
-// normal build/generate path, and ensureBuildersConnected connects on demand itself when reached
-// any other way (e.g. the loadRenderGen defensive fallback).
+// the deleted NewGenerator (#55 step3 3-II): the build-engine RESOLVE's expensive parts (the candy
+// SCAN's network-bound remote fetches, ComputeIntermediates, GlobalCandyOrder,
+// ComputeEffectiveVersions, RenderPrepAll) now run entirely plugin-side (candy/plugin-build's
+// resolveBuildEngine, K3) — recomputing THOSE again host-side for the render-seam cache was 100%
+// wasted work (proven dead by call-graph: nothing downstream ever read the second Generator's
+// render-prep output); ResolveBox itself is pure, in-memory, and genuinely still needed (RCA'd: a
+// first cut that dropped it entirely broke resolveInlineBuilderSeam's img.Tags/img.Name — caught
+// before merge by re-tracing every reader of gen.Boxes[boxName], not by the box-generate smoke
+// test, which never exercises the inline-builder path). Skips the build-time plugin connect +
+// pre-build validate the deleted NewGenerator also used to run: both already ran plugin-side
+// (resolveBuildEngine steps 4-5) by the time this is reached through the normal build/generate
+// path, and ensureBuildersConnected connects on demand itself when reached any other way (e.g. the
+// loadRenderGen defensive fallback).
 func newCandyScanGenerator(dir string, includeDisabled bool, extraCandyRefs []string) (*Generator, error) {
 	cfg, err := LoadConfig(dir)
 	if err != nil {

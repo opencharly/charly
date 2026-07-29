@@ -13,6 +13,10 @@ package main
 // generic "box-ref-resolve" HostBuild action noun. builder_venue.go's injected ResolveImage
 // closure calls resolveImageRefForEnsure directly (same package, same process — no seam hop
 // needed there); only the out-of-process plugin reaches this via HostBuild.
+//
+// #55 step3 3-II CONFIRMED (not moved): build:ensure's box-ref resolve is UNRELATED to that
+// cutover's scope (the pod-overlay BUILD envelope's relocation) — its logic stays verbatim,
+// tracked K1/K3 loader-cone residue as documented above.
 
 import (
 	"context"

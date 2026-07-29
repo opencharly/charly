@@ -20,6 +20,12 @@ import (
 // safety net — not the primary connect path, for the same reason this pre-pass always scoped its
 // connect precisely rather than relying on a blanket "all four builder plugins" load).
 //
+// #55 step3 3-II CONFIRMED (not moved): this file's DEPLOY-time builder-connect pre-pass is
+// UNRELATED to that cutover's scope (the pod-overlay BUILD envelope's relocation onto
+// candy/plugin-build's resolveBuildEngine) — its own project-loading dependency
+// (loadProjectPlugins/ScanAllCandyWithConfigOpts) is core-private K1-loader-cone residue, reviewed
+// and left in place as-is.
+//
 // CONNECTION IS PRECISELY SCOPED + ON-DEMAND. detects exactly the builders the deploy's RESOLVED
 // closure triggers — applying the SAME distro/build-format gate the generator's deploykit
 // CandyNeedsBuilder applies, so a fedora deploy never connects aur (even when a multi-distro candy

@@ -777,8 +777,10 @@ func loadProjectPlugins(ctx context.Context, candies map[string]spec.CandyReader
 		}
 		// Idempotent re-load: loadProjectPlugins runs on EVERY connect path (build,
 		// deploy, check), and a single process that builds AND deploys connects twice
-		// (e.g. `charly bundle add` → loadDeployPlugins, then the pod-overlay
-		// NewGenerator's build-time connect seam). Skip a plugin already connected FROM
+		// (e.g. `charly bundle add` → loadDeployPlugins, then candy/plugin-build's
+		// resolveBuildEngine reaching hostBuildConnectPlugins for its own build-time
+		// connect step — #55 step3 3-II deleted the former host-side NewGenerator that
+		// used to run this). Skip a plugin already connected FROM
 		// THE SAME SOURCE in this process — short-circuiting the whole build+connect+
 		// schema-append+register before any of it runs a second time. A SAME word
 		// already registered from a DIFFERENT origin is a genuine bijection collision

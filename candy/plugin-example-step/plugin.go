@@ -16,10 +16,12 @@
 // Authored as a candy `run:` step (`plugin: examplestep`, a verb), it is the
 // verb-as-step analogue of the deploy-TARGET candy/plugin-example-deploy.
 //
-// The operator-authorized plugin-execution MECHANISM lives in charly (the
-// generate.go NewGenerator build-connect seam + tasks.go invokeVerbBuildEmit for
-// build; loadDeployPlugins + ExternalPluginStep over the E3b reverse channel for
-// deploy); this module is only the reference PAYLOAD that mechanism builds + executes.
+// The operator-authorized plugin-execution MECHANISM lives in charly + candy/plugin-build (the
+// build-time plugin connect — hostBuildConnectPlugins, reached from candy/plugin-build's
+// resolveBuildEngine; the former host-side NewGenerator that used to run this connect itself is
+// deleted — + tasks.go invokeVerbBuildEmit for build; loadDeployPlugins + ExternalPluginStep over
+// the E3b reverse channel for deploy); this module is only the reference PAYLOAD that mechanism
+// builds + executes.
 package examplestep
 
 import (

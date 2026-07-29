@@ -219,8 +219,9 @@ func (stubIdemVerb) Invoke(context.Context, *Operation) (*Result, error) {
 // loadProjectPlugins safe to call on every connect path (build + deploy + check) in one
 // process without the duplicate-registration warning: a same-source re-load is a no-op
 // (skip), while a different-source collision on the same word still errors (the bijection
-// backstop). Without the guard, `charly bundle add` (loadDeployPlugins then the pod-overlay
-// NewGenerator connect seam) warns on the second load.
+// backstop). Without the guard, a single process reaching multiple connect paths in one run
+// (e.g. `charly bundle add`'s loadDeployPlugins, then a pod-overlay build reaching
+// candy/plugin-build's resolveBuildEngine's own hostBuildConnectPlugins) warns on the second load.
 func TestPluginAlreadyConnected_Idempotent(t *testing.T) {
 	t.Cleanup(snapshotProviderState())
 	const src = "github.com/test/idem-plugin"

@@ -16,9 +16,10 @@ import (
 )
 
 // resolve.go — the PLUGIN-SIDE build-engine RESOLVE (K3 build-engine, U6 — the bootstrap-critical
-// inversion). candy/plugin-build runs the whole NewGenerator+build-prep RESOLVE ITSELF, over the K1
-// loader reverse legs + a small `buildengine-*` host-leg family, reaching the host ONLY for what a
-// sdk-only candy structurally cannot do:
+// inversion). candy/plugin-build runs the whole build-prep RESOLVE ITSELF (the full recipe the
+// deleted host-side NewGenerator used to run, #55 step3 3-II), over the K1 loader reverse legs + a
+// small `buildengine-*` host-leg family, reaching the host ONLY for what a sdk-only candy
+// structurally cannot do:
 //
 //   - the config LOAD               → loaderkit.LoadUnified(dir, LoadSeamsFromExecutor(ex))  [K1, landed]
 //   - the local candy SCAN          → HostBuild("buildengine-scan-local")  (bootstrap-delicate
@@ -31,7 +32,8 @@ import (
 //   - the host-fs PREP + user probe  → HostBuild("buildengine-prep")  (cleanStaleBuildDirs /
 //                                     writeContextIgnore / createRemoteCandyCopies / resolveUserContext /
 //                                     ensureCharlyBinaryFresh + the render-seam-floor renderGenCache;
-//                                     NewGenerator STAYS host for the render-seam floor — RULED)
+//                                     populated by the CHEAP newCandyScanGenerator now — #55 step3
+//                                     3-II deleted the expensive NewGenerator this floor used to run)
 //
 // Everything else — buildkit.ResolveAllBox / deploykit.ComputeIntermediates / GlobalCandyOrder /
 // ComputeEffectiveVersions / RenderPrepAll / ResolveBoxOrder / ResolveBoxLevels / the drive-model
@@ -48,7 +50,7 @@ import (
 // validate, resolve, intermediates, render-prep, order, user-context, envelope, drive-model) run
 // plugin-side; one branch per step, mirroring the former host hostBuildBuildResolve.
 //
-//nolint:gocyclo // resolve orchestrator — the linear NewGenerator sequence (load, vocab, scan, connect,
+//nolint:gocyclo // resolve orchestrator — the linear sequence (load, vocab, scan, connect,
 func resolveBuildEngine(ctx context.Context, ex *sdk.Executor, req spec.BuildRequest, generateOnly bool) (spec.BuildResolveReply, error) {
 	dir := req.Dir
 	if dir == "" {
@@ -60,7 +62,7 @@ func resolveBuildEngine(ctx context.Context, ex *sdk.Executor, req spec.BuildReq
 	}
 	boxes := buildkit.NormalizeBoxArgs(req.Boxes)
 
-	rr := spec.ResolvedProjectRequest{Dir: dir, IncludeDisabled: req.IncludeDisabled, ExtraCandyRefs: nil}
+	rr := spec.ResolvedProjectRequest{Dir: dir, IncludeDisabled: req.IncludeDisabled, ExtraCandyRefs: req.ExtraCandyRefs}
 
 	// --- 1. LOAD the project plugin-side (K1 reverse legs) ---
 	exec := &buildLoaderExecutor{ctx: ctx, ex: ex}
@@ -91,7 +93,7 @@ func resolveBuildEngine(ctx context.Context, ex *sdk.Executor, req spec.BuildReq
 
 	// --- 4. build-time plugin CONNECT (registry M — host leg) ---
 	if err := hostVoidLeg(ctx, ex, "buildengine-connect-plugins", rr); err != nil {
-		// Best-effort, mirroring NewGenerator: a connect failure warns; a plugin the build actually
+		// Best-effort, mirroring the deleted NewGenerator's behavior: a connect failure warns; a plugin the build actually
 		// USES fails loudly later at OpEmit/OpResolve.
 		fmt.Fprintf(os.Stderr, "warning: build-time plugin load: %v\n", err)
 	}
@@ -104,7 +106,9 @@ func resolveBuildEngine(ctx context.Context, ex *sdk.Executor, req spec.BuildReq
 	// --- 6. RESOLVE boxes (pure sdk) ---
 	// Stamp the build tag ONCE plugin-side when the host leaves it empty (bare `charly box generate`,
 	// the builder-bootstrap re-dispatch), then thread it to the prep + namespaced legs so the host's
-	// NewGenerator uses the SAME tag (ComputeCalVer is clock-derived — computing it twice would diverge).
+	// hostBuildNamespaced (host_build_buildengine.go — the deleted NewGenerator's namespaced-box leg
+	// used to need this too) uses the SAME tag (ComputeCalVer is clock-derived — computing it twice
+	// would diverge).
 	tag := req.Tag
 	if tag == "" {
 		tag = buildkit.ComputeCalVer()

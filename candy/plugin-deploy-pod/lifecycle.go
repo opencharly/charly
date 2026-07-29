@@ -301,8 +301,8 @@ func podPrepareVenue(ctx context.Context, exec *sdk.Executor, p lifecycleParams)
 		return nil, fmt.Errorf("plugin-deploy-pod prepare-venue: %s", reply.Error)
 	}
 
-	// The base box name — the key into reply.ResolvedProject.Boxes — is the SAME base the host prep
-	// used (req.Image / req.DeployName).
+	// The base box name — the key into the render-prepped envelope's Boxes (fetched below via the
+	// build:generate resolve call) — is the SAME base the host prep used (req.Image / req.DeployName).
 	baseName := p.Image
 	if baseName == "" {
 		baseName = p.Name
@@ -320,8 +320,44 @@ func podPrepareVenue(ctx context.Context, exec *sdk.Executor, p lifecycleParams)
 			}
 		}
 	} else {
+		// Overlay path: fetch the render-prepped resolved-project envelope OURSELVES (#55 step3
+		// 3-II) — via the SAME plugin-side resolveBuildEngine pipeline candy/plugin-build's own
+		// build:box/build:generate drive runs, reached as a peer through
+		// InvokeProvider("build","generate",OpResolve,…) rather than the host's (now-deleted)
+		// NewGenerator reconstruction. This is the ONLY caller of the "generate"+OpResolve branch
+		// outside plugin-build's own drive — it needs the SAME render-prep caches
+		// (InitSystem/InitDef/BakedMetadata) build:project's deliberately-lean resolve never
+		// populates (RDD-proven live, see build_overlay.go's header). Scope it to just the base box
+		// + the overlay's add_candy refs (ExtraCandyRefs), threading Dir so the plugin resolves the
+		// SAME project.
+		plans := make([]*spec.InstallPlan, 0, len(reply.Plans))
+		for _, v := range reply.Plans {
+			plan, perr := deploykit.PlanFromView(v)
+			if perr != nil {
+				return nil, fmt.Errorf("plugin-deploy-pod prepare-venue: decode plan: %w", perr)
+			}
+			plans = append(plans, plan)
+		}
+		overlayCandies := collectOverlayCandies(plans)
+		breq := spec.BuildRequest{Boxes: []string{baseName}, ExtraCandyRefs: overlayCandies, Dir: p.Dir}
+		breqJSON, merr := json.Marshal(breq)
+		if merr != nil {
+			return nil, fmt.Errorf("plugin-deploy-pod prepare-venue: marshal build-generate-resolve request: %w", merr)
+		}
+		resolveJSON, ierr := exec.InvokeProvider(ctx, "build", "generate", sdk.OpResolve, breqJSON, nil, sdk.InvokeProviderOpts{})
+		if ierr != nil {
+			return nil, fmt.Errorf("plugin-deploy-pod prepare-venue: build-generate-resolve: %w", ierr)
+		}
+		var resolveReply spec.BuildResolveReply
+		if uerr := json.Unmarshal(resolveJSON, &resolveReply); uerr != nil {
+			return nil, fmt.Errorf("plugin-deploy-pod prepare-venue: decode build-generate-resolve reply: %w", uerr)
+		}
+		if resolveReply.Error != "" {
+			return nil, fmt.Errorf("plugin-deploy-pod prepare-venue: build-generate-resolve: %s", resolveReply.Error)
+		}
+
 		// Overlay path: render the overlay Containerfile in the candy + podman build + tag.
-		overlayRef, berr := buildOverlay(ctx, exec, reply, p.Dir, baseName, opts)
+		overlayRef, berr := buildOverlay(ctx, exec, reply, resolveReply.ResolvedProject, plans, p.Dir, baseName, opts)
 		if berr != nil {
 			return nil, berr
 		}

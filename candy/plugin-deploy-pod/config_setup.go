@@ -256,10 +256,7 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 	if err != nil {
 		return err
 	}
-	provChanged := false
-	if len(meta.EnvProvide) > 0 && injectEnvProvidesInto(dc, c.Box, c.Instance, meta.EnvProvide, portMap) {
-		provChanged = true
-	}
+	provChanged := len(meta.EnvProvide) > 0 && injectEnvProvidesInto(dc, c.Box, c.Instance, meta.EnvProvide, portMap)
 	if len(meta.MCPProvide) > 0 && injectMCPProvidesInto(dc, c.Box, c.Instance, meta.MCPProvide, portMap) {
 		provChanged = true
 	}

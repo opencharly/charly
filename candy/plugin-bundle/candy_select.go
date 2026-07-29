@@ -37,9 +37,11 @@ import (
 
 // envelopeCandyModels re-hydrates every candy in the envelope into the map[string]spec.CandyReader
 // deploykit.ResolveCandyOrder wants (rp.Candies/rp.CandyModels is nil-free BY CONSTRUCTION —
-// resolved_project_host.go's projectResolvedProjectWithBoxes skips a nil host-scan entry before
-// it ever enters the envelope, `if c == nil { continue }` — so this map matches the OLD host
-// scan's "layers[name] != nil" filtered view exactly, without a separate filter step here).
+// sdk/loaderkit's ProjectResolvedProject (the shared assembler candy/plugin-build's
+// resolveBuildEngine and the host's own test-only reproduction both call into) skips a nil
+// host-scan entry before it ever enters the envelope, `if c == nil { continue }` — so this map
+// matches the OLD host scan's "layers[name] != nil" filtered view exactly, without a separate
+// filter step here).
 // Shared (R3) by the CANDY shape (resolveCandySelection) and the BOX-REF shape
 // (resolveBoxSelection) — both need the FULL candy map, not just their own final order, since
 // deploykit.ResolveCandyOrder needs the whole graph to expand composition + transitive deps.

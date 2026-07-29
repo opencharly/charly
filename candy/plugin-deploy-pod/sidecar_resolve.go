@@ -13,7 +13,7 @@ import (
 // sidecar_resolve.go — the pod-config sidecar resolve+adapt+secret-provision, relocated from
 // charly/host_build_pod_config_seams.go's hostBuildPodConfigResolveSidecars (seam-death, this cone).
 // The former fat "pod-config-resolve-sidecars" HostBuild seam is RETIRED: the plugin fetches the
-// go:embed sidecar library via the THIN list-sidecars seam (its BodiesJSON — the only host-resident
+// embedded sidecar library via the THIN list-sidecars seam (its BodiesJSON — the only host-resident
 // piece, since embeddedSidecarBodies' data lives only in the charly binary), InvokeProviders
 // kind:sidecar directly (RDD-proven live — plugin-build/bundle/check already InvokeProvider kind:*),
 // adapts the reply, and provisions sidecar secrets ITSELF via deploykit.ProvisionPodmanSecrets +

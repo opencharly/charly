@@ -133,6 +133,37 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 		}
 	}
 
+	// build:generate's resolve-only Op (#55 step3 3-II): runs resolveBuildEngine (the FULL
+	// render-prepped envelope + drive-model) WITHOUT renderContainerfiles' Containerfile-write
+	// side effect — scoped by req.Boxes + req.ExtraCandyRefs. Lets a caller that needs a
+	// render-prepped box (InitSystem/InitDef/BakedMetadata populated — see
+	// spec.ResolvedBoxView's own doc comment: those fields are filled ONLY in the build-render
+	// projection) without triggering a write to .build/<box>/Containerfile as a side effect —
+	// the pod-overlay relocation is the first consumer, reusing resolveBuildEngine verbatim
+	// (RDD-proven live: spec-3-II spike confirmed InitSystem/InitDef/BakedMetadata populate on
+	// this Op, empty on build:project's deliberately-lean resolve).
+	if word == "generate" && req.GetOp() == sdk.OpResolve {
+		ex, err := sdk.ExecutorForInvoke(ctx, req.GetExecutorBrokerId())
+		if err != nil {
+			return nil, fmt.Errorf("build generate resolve: reach host reverse channel: %w", err)
+		}
+		var breq spec.BuildRequest
+		if len(req.GetParamsJson()) > 0 {
+			if err := json.Unmarshal(req.GetParamsJson(), &breq); err != nil {
+				return nil, fmt.Errorf("build generate resolve: decode BuildRequest: %w", err)
+			}
+		}
+		reply, err := resolveBuild(ctx, ex, breq, true)
+		if err != nil {
+			return nil, fmt.Errorf("build generate resolve: %w", err)
+		}
+		out, err := json.Marshal(reply)
+		if err != nil {
+			return nil, fmt.Errorf("build generate resolve: encode reply: %w", err)
+		}
+		return &pb.InvokeReply{ResultJson: out}, nil
+	}
+
 	if req.GetOp() != sdk.OpBuild {
 		return nil, fmt.Errorf("build: unsupported op %q (only %q)", req.GetOp(), sdk.OpBuild)
 	}

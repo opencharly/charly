@@ -13,6 +13,7 @@ import (
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -97,6 +98,77 @@ type parityTotals struct {
 	builderCompares    int
 }
 
+// testFullResolveGenerator is the test-only reproduction of the deleted production NewGenerator
+// (#55 step3 3-II: its last production caller, the pod-overlay build seam, now reaches this SAME
+// recipe plugin-side via candy/plugin-build's resolveBuildEngine instead — a separate Go module
+// this host-side parity test cannot call into). This parity gate's whole POINT is comparing the
+// LIVE-CORE resolve path against the envelope-driven one, so it needs its OWN full-resolve
+// baseline — reproduced verbatim from NewGenerator's former body (LoadConfig → build vocabulary →
+// candy scan → build-time plugin connect → pre-build validate → ResolveAllBox →
+// ComputeIntermediates → GlobalCandyOrder → ComputeEffectiveVersions), mirroring the SAME
+// test-only-reproduction pattern resolved_project_namespace_test.go's testBuildResolvedProject
+// already uses for the deleted projectResolvedProject wrapper.
+func testFullResolveGenerator(t *testing.T, dir, tag string, opts loaderkit.ResolveOpts) *Generator {
+	t.Helper()
+	cfg, err := LoadConfig(dir)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	defaultDistroCfg, _, defaultInitCfg, err := LoadDefaultBuildConfig(dir)
+	if err != nil {
+		t.Fatalf("LoadDefaultBuildConfig: %v", err)
+	}
+	RegisterBuildVocabulary(defaultDistroCfg)
+	opts.InitCfg = defaultInitCfg
+	layers, err := ScanAllCandyWithConfigOpts(dir, cfg, opts)
+	if err != nil {
+		t.Fatalf("ScanAllCandyWithConfigOpts: %v", err)
+	}
+	buildRefs := collectReferencedPluginWords(layers, cfg.Box, nil)
+	if perr := loadProjectPlugins(context.Background(), layers, buildRefs); perr != nil {
+		t.Logf("warning: build-time plugin load: %v", perr)
+	}
+	if err := validateProjectForBuild(dir, opts); err != nil {
+		t.Fatalf("validateProjectForBuild: %v", err)
+	}
+	if tag == "" {
+		tag = ComputeCalVer()
+	}
+	bkopts, err := buildkitOptsWithVocab(dir, opts)
+	if err != nil {
+		t.Fatalf("buildkitOptsWithVocab: %v", err)
+	}
+	images, err := buildkit.ResolveAllBox(cfg, tag, dir, bkopts)
+	if err != nil {
+		t.Fatalf("buildkit.ResolveAllBox: %v", err)
+	}
+	images, err = ComputeIntermediates(images, layers, cfg, tag)
+	if err != nil {
+		t.Fatalf("ComputeIntermediates: %v", err)
+	}
+	globalOrder, err := GlobalCandyOrder(images, layers)
+	if err != nil {
+		t.Fatalf("GlobalCandyOrder: %v", err)
+	}
+	g := &Generator{
+		Dir:            dir,
+		Config:         cfg,
+		Candies:        layers,
+		InitConfig:     defaultInitCfg,
+		Tag:            tag,
+		Boxes:          images,
+		BuildDir:       filepath.Join(dir, ".build"),
+		Containerfiles: make(map[string]string),
+		GlobalOrder:    globalOrder,
+		RequestedBoxes: opts.RequestedBoxes,
+		ExtraCandyRefs: opts.ExtraCandyRefs,
+	}
+	if err := deploykit.ComputeEffectiveVersions(g.Boxes, g.Candies); err != nil {
+		t.Fatalf("ComputeEffectiveVersions: %v", err)
+	}
+	return g
+}
+
 // runParityFixture resolves ONE fixture box through BOTH the live-core Generator
 // (gen.toDeploykit()) and the envelope-driven Generator (deploykit.NewRenderGeneratorFromProject —
 // the exact constructor candy/plugin-installstep now calls) and asserts EmitTasks/
@@ -104,12 +176,10 @@ type parityTotals struct {
 // counts into totals.
 func runParityFixture(t *testing.T, fx parityFixture, totals *parityTotals) {
 	t.Helper()
-	// --- live-core path: NewGenerator + render-prep, the SAME recipe the plugin-side resolveBuildEngine
-	// runs (called in-process directly to avoid standing up the reverse-channel broker). ---
-	gen, err := NewGenerator(fx.dir, "parity", boxResolveOpts([]string{fx.box}, false))
-	if err != nil {
-		t.Fatalf("NewGenerator(%s): %v", fx.box, err)
-	}
+	// --- live-core path: the full resolve recipe + render-prep, the SAME recipe the plugin-side
+	// resolveBuildEngine runs (called in-process directly to avoid standing up the reverse-channel
+	// broker). ---
+	gen := testFullResolveGenerator(t, fx.dir, "parity", boxResolveOpts([]string{fx.box}, false))
 	if err := gen.toDeploykit().RenderPrepAll(); err != nil {
 		t.Fatalf("RenderPrepAll: %v", err)
 	}
@@ -127,9 +197,9 @@ func runParityFixture(t *testing.T, fx parityFixture, totals *parityTotals) {
 	if lp.empty {
 		t.Fatalf("loadProjectForResolve returned empty project for %s", fx.dir)
 	}
-	rp, err := projectResolvedProjectWithBoxes(lp.cfg, lp.layers, lp.uf, lp.distroCfg, lp.builderCfg, gen.InitConfig, fx.dir, lp.version, boxResolveOpts([]string{fx.box}, false), nil, gen.Boxes)
+	rp, err := testProjectResolvedProjectWithBoxes(lp.cfg, lp.layers, lp.uf, lp.distroCfg, lp.builderCfg, gen.InitConfig, fx.dir, lp.version, boxResolveOpts([]string{fx.box}, false), nil, gen.Boxes)
 	if err != nil {
-		t.Fatalf("projectResolvedProjectWithBoxes: %v", err)
+		t.Fatalf("testProjectResolvedProjectWithBoxes: %v", err)
 	}
 	rp.GlobalOrder = gen.GlobalOrder
 	rp.ExternalizedBuilders = externalizedBuilders

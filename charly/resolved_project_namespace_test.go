@@ -1,30 +1,11 @@
 package main
 
 import (
+	"context"
 	"testing"
 
-	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
-
-// testBuildResolvedProject is the test-only reproduction of the deleted buildResolvedProjectFromDir
-// (#55 step3 unit 3b moved its production form to candy/plugin-build's resolveProjectEnvelope): load
-// the project fail-fast via loadProjectForResolve, short-circuit to an empty envelope for a
-// project-less dir, else project it via the STILL-CORE projectResolvedProjectWithBoxes (shared with
-// the overlay seam; preResolvedBoxes=nil for a fresh per-box resolve — the plain projectResolvedProject
-// wrapper this used to call was deleted as production-dead once #55 step3 unit 3-I relocated its
-// ONLY other caller, buildResolvedProjectTolerant, onto build:project).
-func testBuildResolvedProject(t *testing.T, dir string, opts loaderkit.ResolveOpts) (*spec.ResolvedProject, error) {
-	t.Helper()
-	lp, err := loadProjectForResolve(dir, opts, nil)
-	if err != nil {
-		return nil, err
-	}
-	if lp.empty {
-		return &spec.ResolvedProject{}, nil
-	}
-	return projectResolvedProjectWithBoxes(lp.cfg, lp.layers, lp.uf, lp.distroCfg, lp.builderCfg, lp.initCfg, dir, lp.version, opts, nil, nil)
-}
 
 // resolved_project_namespace_test.go — K1-unblock wave 2: proves the namespace-qualified
 // flattening added to spec.UnifiedFile.ProjectTemplates/fillNamespacedBoxes (resolved_project_host.go), and the
@@ -84,12 +65,16 @@ func TestProjectTemplates_NamespaceQualified(t *testing.T) {
 
 // TestFillNamespacedBoxes_QualifiedView proves the resolved-project envelope's rp.Boxes carries a
 // namespace-qualified spec.ResolvedBoxView ("fedora.jupyter") for a box reachable only through an
-// import namespace, in addition to (additive, never replacing) the root-scoped boxes.
+// import namespace, in addition to (additive, never replacing) the root-scoped boxes. Drives the
+// LIVE hostBuildNamespaced (host_build_buildengine.go) directly — the production caller of
+// fillNamespacedBoxes candy/plugin-build's resolveBuildEngine reaches for its own namespaced-box
+// resolution (#55 step3 3-II deleted the dead projectResolvedProjectWithBoxes wrapper this test
+// used to go through instead).
 func TestFillNamespacedBoxes_QualifiedView(t *testing.T) {
 	root := writeNamespaceImportFixture(t)
-	rp, err := testBuildResolvedProject(t, root, loaderkit.ResolveOpts{})
+	rp, err := hostBuildNamespaced(context.Background(), spec.BuildResolveRequest{Dir: root}, buildEngineContext{})
 	if err != nil {
-		t.Fatalf("testBuildResolvedProject: %v", err)
+		t.Fatalf("hostBuildNamespaced: %v", err)
 	}
 	view, ok := rp.Boxes["fedora.jupyter"]
 	if !ok {

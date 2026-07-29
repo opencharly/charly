@@ -171,7 +171,9 @@ func (g *Generator) resolveInlineBuilderSeam(candyName, bName string, bDef *vmsh
 // invokeVerbBuildEmit renders a plugin verb's BUILD-context Containerfile contribution
 // via a UNIFORM Invoke(OpEmit) — placement-agnostic above the registry (in-proc for a
 // builtin, over go-plugin gRPC for an external connected by the build-time plugin connect
-// seam in NewGenerator), with NO package-main concrete-type assert. The provider receives
+// seam — hostBuildConnectPlugins, reached from candy/plugin-build's resolveBuildEngine;
+// #55 step3 3-II deleted the former host-side NewGenerator that used to run this connect
+// itself), with NO package-main concrete-type assert. The provider receives
 // the FULL op as op.Params (a state-provision act reads SHARED #Op modifiers — mode/content —
 // beyond plugin_input) + a spec.BuildEnv descriptor as op.Env, and returns a spec.EmitReply:
 // a state-provision verb sets ActScript=true and Fragment=the act shell (RUN-wrapped by the
