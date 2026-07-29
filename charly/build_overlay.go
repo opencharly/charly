@@ -12,6 +12,7 @@ import (
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -33,16 +34,22 @@ import (
 // (charly/step_emit_hostbuild.go's stepEmitOCIEmitStep → dispatchOCIStep), which reads ONLY
 // build.Box.Name (env.Image) and build.Generator.DevLocalPkg/ExtraCandyRefs (env.DevLocalPkg/
 // ExtraCandyRefs — the latter is the RCA'd fix that widens candy/plugin-installstep's OWN
-// independent envelope re-fetch for the SAME overlay candies, still required). build.DistroCfg has
-// no confirmed live reader on this path (traced: dispatchOCIStep never touches it) — kept populated
-// via the SAME cheap LoadDefaultBuildConfig this file already called, sourced from the operator
-// host's own distro (detectHostContext) rather than the base image's resolved distro tag (which
-// required the deleted NewGenerator to know) — flagged for the check-pod-overlay R10 byte-equivalence
-// gate to specifically confirm this is truly unread, since it is the one behavior-adjacent
-// simplification in this shrink that isn't independently proven by a wire-type read.
+// independent envelope re-fetch for the SAME overlay candies, still required). build.DistroCfg
+// itself has no confirmed live reader on the step-emit path today (traced: dispatchOCIStep never
+// touches it — the step-emit words that DO care about distro/format read it off their OWN
+// candy-side envelope's box.DistroDef, derived from the box's wire-carried .Distro tag, not from
+// this host struct) — but the podDistroDef VALUE it wraps still MUST reflect the BASE IMAGE's own
+// distro (R1 FIX, caught by team-lead's code reading: the former detectHostContext() fallback used
+// the OPERATOR HOST's distro, a live cross-distro bug on any host whose distro differs from the
+// base image's — e.g. an Arch/CachyOS host building a Fedora-based overlay). Sourced via a cheap,
+// standalone buildkit.ResolveBox for JUST the base box name (no candy scan needed — the base
+// image's own declared distro: list is independent of the overlay candies), mirroring exactly what
+// the deleted NewGenerator's gen.Boxes[base].Distro gave the OLD code; detectHostContext() is now
+// ONLY a last-resort fallback if that lightweight resolve fails.
 //
 // The candy (plugin-deploy-pod podPrepareVenue) calls this shrunk seam via HostBuild("overlay")
-// AFTER its own new resolve call, constructs its deploykit.Generator via the shared
+// FIRST (to learn reply.Plans, needed to compute the overlay candy set), THEN makes its own
+// render-prepped resolve call, constructs its deploykit.Generator via the shared
 // deploykit.NewRenderGeneratorFromProject (unchanged, #67/P11c), renders the overlay Containerfile
 // in its own code, and runs podman build + the alias tag via the served executor. The per-step
 // Containerfile fragments are rendered HOST-SIDE via the generic "step-emit" host-builder
@@ -136,12 +143,13 @@ func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ build
 	// createRemoteCandyCopies, K3 host-prep move) before this seam is ever reached.
 	overlayCandies := collectOverlayCandies(plans)
 
-	// DistroDef sourced from the operator host's own distro (detectHostContext) — NOT the base
-	// image's resolved distro tag, which required the now-deleted NewGenerator to know. Traced
-	// (dispatchOCIStep, charly/oci_step_emit.go): this path has no confirmed live reader of
-	// build.DistroCfg today: flagged for the check-pod-overlay R10 byte-equivalence gate to
-	// specifically confirm.
-	podDistroDef := resolveDistroDef(distroCfg, detectHostContext().Distro)
+	// DistroDef sourced from the BASE IMAGE's own resolved distro tag, NOT the operator host's
+	// (R1 FIX, caught by team-lead's code reading: an overlay layers ON the base image, so its
+	// per-step distro-format rendering must target the BASE's distro — this host runs Arch/CachyOS
+	// while check-pod-overlay's base is Fedora, so the former detectHostContext() fallback was a
+	// live cross-distro bug waiting for a reader, not merely a latent one). See
+	// resolveOverlayBaseDistroDef's own doc for the cheap resolve + fallback shape.
+	podDistroDef := resolveOverlayBaseDistroDef(dir, base, distroCfg)
 
 	var baseRef string
 	switch {
@@ -265,6 +273,30 @@ func loadOverlayBuildContext(dir string) *buildEngineContext {
 		return nil
 	}
 	return v.(*buildEngineContext)
+}
+
+// resolveOverlayBaseDistroDef resolves the pod-overlay's per-step distro-format vocabulary from the
+// BASE IMAGE's OWN declared distro tag (R1 FIX — team-lead's code reading: the overlay layers ON
+// the base image, so system-packages/format rendering must target the BASE's distro, never the
+// operator HOST's — an Arch/CachyOS host building a Fedora-based overlay is a live, not merely
+// latent, cross-distro bug). A cheap, standalone buildkit.ResolveBox for JUST the named base box —
+// no candy scan, no ExtraCandyRefs needed, since a box's own distro: list is independent of which
+// candies later get overlaid onto it — mirrors exactly what the deleted NewGenerator's
+// gen.Boxes[base].Distro gave the OLD code, without needing the deleted full-resolve machinery.
+// Falls back to the operator host's own distro ONLY if that lightweight resolve fails (e.g. an
+// unresolvable/synthetic base name) — the same defensive floor the OLD code had no equivalent for,
+// since NewGenerator's full resolve either succeeded or the whole build failed loudly; here a
+// best-effort fallback is preferable to hard-failing the overlay prep over a formatting nicety.
+func resolveOverlayBaseDistroDef(dir, base string, distroCfg *buildkit.DistroConfig) *spec.ResolvedDistro {
+	if cfg, cerr := LoadConfig(dir); cerr == nil {
+		RegisterBuildVocabulary(distroCfg)
+		if bkopts, operr := buildkitOptsWithVocab(dir, loaderkit.ResolveOpts{DistroCfg: distroCfg}); operr == nil {
+			if resolvedBase, rerr := buildkit.ResolveBox(cfg, base, "", dir, bkopts); rerr == nil && resolvedBase != nil && len(resolvedBase.Distro) > 0 {
+				return resolveDistroDef(distroCfg, resolvedBase.Distro[0])
+			}
+		}
+	}
+	return resolveDistroDef(distroCfg, detectHostContext().Distro)
 }
 
 // collectOverlayCandies returns the set of candy names declared as add_candy in any plan's meta.

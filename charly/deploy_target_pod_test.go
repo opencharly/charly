@@ -69,13 +69,15 @@ func TestPodOverlayInlineCopyResolvesUnderContext(t *testing.T) {
 	}
 }
 
-// TestCreateRemoteCandyCopies_StagesRemoteCandySource guards the add_candy-on-pod overlay build for
-// a REMOTE candy: createRemoteCandyCopies (the host-side prep step, build_overlay.go) must stage
-// the remote candy's source tree under .build/_candy/<name>.<version>/ so the candy's
-// `FROM scratch AS <name>` + `COPY <candyCopySource>/ /` resolves. Without it the real overlay build
-// fails at `COPY .build/_candy/<name>.<version>/: no such file or directory`. The per-candy scratch-
-// stage Containerfile emission now lives in the candy (overlay.go); this core test locks the HOST-SIDE
-// staging the candy's render depends on (hostBuildOverlay calls gen.createRemoteCandyCopies).
+// TestCreateRemoteCandyCopies_StagesRemoteCandySource guards Generator.createRemoteCandyCopies
+// itself: for a REMOTE candy, it must stage the remote candy's source tree under
+// .build/_candy/<name>.<version>/ so the candy's `FROM scratch AS <name>` +
+// `COPY <candyCopySource>/ /` resolves. Without it the real overlay build fails at
+// `COPY .build/_candy/<name>.<version>/: no such file or directory`. #55 step3 3-II: hostBuildOverlay
+// no longer calls this itself — remote-candy staging now runs plugin-side as part of
+// candy/plugin-build's resolveBuildEngine (runHostFSPrep, K3 host-prep move), before the overlay
+// seam is ever reached. This test exercises the method directly (still a real, reachable core
+// function — retention semantics unrelated to hostBuildOverlay's own prep body).
 func TestCreateRemoteCandyCopies_StagesRemoteCandySource(t *testing.T) {
 	ctxRoot := t.TempDir() // the build-context root (the project dir)
 	old, err := os.Getwd()
@@ -113,6 +115,52 @@ func TestCreateRemoteCandyCopies_StagesRemoteCandySource(t *testing.T) {
 	staged := filepath.Join(ctxRoot, ".build", "_candy", "marker."+ver, "copied.dat")
 	if _, err := os.Stat(staged); err != nil {
 		t.Fatalf("remote overlay candy source not staged at %s (the per-candy scratch stage's COPY would fail): %v", staged, err)
+	}
+}
+
+// TestResolveOverlayBaseDistroDef_UsesBaseImageDistroNotHost is the regression for a REAL
+// cross-distro bug (#55 step3-II, caught by team-lead's code reading before it shipped): the
+// pod-overlay's per-step distro-format vocabulary MUST come from the BASE IMAGE's own declared
+// distro (box/fedora's "fedora" box declares `distro: [fedora]`, format `rpm`), never from the
+// operator host's distro — a real, not merely latent, bug on any host whose distro differs from
+// the base image's (this repo's dev host is commonly Arch/CachyOS, format `pac`/`aur`; the base
+// this test resolves is Fedora). Asserts the resolved def carries the `rpm` format (proving the
+// BASE box's distro won) and does NOT carry `pac`/`aur` (proving the HOST's distro did not leak
+// in) — this assertion would FAIL on the buggy detectHostContext()-sourced code when run on an
+// Arch/CachyOS host, exactly the live failure mode team-lead flagged.
+func TestResolveOverlayBaseDistroDef_UsesBaseImageDistroNotHost(t *testing.T) {
+	repoRoot, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(filepath.Dir(repoRoot), "box", "fedora")
+	const base = "fedora"
+
+	t.Cleanup(snapshotProviderState())
+
+	distroCfg, _, _, err := LoadDefaultBuildConfig(dir)
+	if err != nil {
+		t.Fatalf("LoadDefaultBuildConfig: %v", err)
+	}
+
+	def := resolveOverlayBaseDistroDef(dir, base, distroCfg)
+	if def == nil {
+		t.Fatalf("resolveOverlayBaseDistroDef(%s): nil def (fixture problem — base box %q must resolve)", base, base)
+	}
+	if _, ok := def.Format["rpm"]; !ok {
+		formats := make([]string, 0, len(def.Format))
+		for f := range def.Format {
+			formats = append(formats, f)
+		}
+		t.Fatalf("resolved def has formats %v, want \"rpm\" present (the base image's OWN distro, fedora) — "+
+			"a missing rpm format means the base box's distro tag was NOT used", formats)
+	}
+	for _, hostOnlyFormat := range []string{"pac", "aur"} {
+		if _, ok := def.Format[hostOnlyFormat]; ok {
+			t.Errorf("resolved def unexpectedly carries format %q — this is the OPERATOR HOST's distro "+
+				"(Arch/CachyOS) leaking into the BASE IMAGE's (fedora) per-step rendering, exactly the "+
+				"regression team-lead's code reading caught", hostOnlyFormat)
+		}
 	}
 }
 
