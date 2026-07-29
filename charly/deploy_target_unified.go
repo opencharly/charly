@@ -23,7 +23,6 @@ package main
 import (
 	"context"
 
-	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 )
@@ -53,8 +52,8 @@ type DeployContext struct {
 	// resolve-target-add host seam (loadConfigForDeploy). Reused by each Add
 	// so the construction matches what the plugin compiled plans against.
 	Cfg        *Config
-	DistroCfg  *buildkit.DistroConfig
-	BuilderCfg *buildkit.BuilderConfig
+	DistroCfg  *spec.DistroConfig
+	BuilderCfg *spec.BuilderConfig
 }
 
 // UnifiedDeployTarget is the unified contract all four deploy methods

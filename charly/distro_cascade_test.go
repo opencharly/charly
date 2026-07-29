@@ -282,14 +282,14 @@ func TestDistroTagChain(t *testing.T) {
 		{"", "", nil},
 	}
 	for _, c := range cases {
-		if got := buildkit.DistroTagChain(c.distro, c.version); !reflect.DeepEqual(got, c.want) {
+		if got := spec.DistroTagChain(c.distro, c.version); !reflect.DeepEqual(got, c.want) {
 			t.Errorf("distroTagChain(%q,%q) = %v, want %v", c.distro, c.version, got, c.want)
 		}
 	}
 }
 
 func TestDistroDefVersionInherits(t *testing.T) {
-	dc := &buildkit.DistroConfig{Distro: map[string]*spec.ResolvedDistro{
+	dc := &spec.DistroConfig{Distro: map[string]*spec.ResolvedDistro{
 		"debian": {Version: "13", Bootstrap: vmshared.BootstrapDef{InstallCmd: "apt"}},
 		"ubuntu": {Inherits: "debian", Version: "24.04", Bootstrap: vmshared.BootstrapDef{InstallCmd: "apt"}},
 		"cachy":  {Inherits: "debian", Bootstrap: vmshared.BootstrapDef{InstallCmd: "apt"}}, // no own version
@@ -310,7 +310,7 @@ func TestDistroDefVersionInherits(t *testing.T) {
 // while a distro that only sets inherits: (ubuntu → debian) does NOT pull the
 // parent's package sections. No Go-side hardcoded inheritance table.
 func TestExpandPackageInheritance(t *testing.T) {
-	dc := &buildkit.DistroConfig{Distro: map[string]*spec.ResolvedDistro{
+	dc := &spec.DistroConfig{Distro: map[string]*spec.ResolvedDistro{
 		"arch":    {Format: map[string]*vmshared.FormatDef{"pac": {}, "aur": {Secondary: true}}},
 		"cachyos": {Inherits: "arch", InheritPackages: true},
 		"debian":  {Format: map[string]*vmshared.FormatDef{"deb": {}}},
@@ -341,7 +341,7 @@ func TestExpandPackageInheritance(t *testing.T) {
 		})
 	}
 	// nil config returns input unchanged (no panic).
-	if got := (*buildkit.DistroConfig)(nil).ExpandPackageInheritance([]string{"cachyos"}); !reflect.DeepEqual(got, []string{"cachyos"}) {
+	if got := (*spec.DistroConfig)(nil).ExpandPackageInheritance([]string{"cachyos"}); !reflect.DeepEqual(got, []string{"cachyos"}) {
 		t.Errorf("nil dc must return input unchanged, got %v", got)
 	}
 }

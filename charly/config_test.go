@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
@@ -198,13 +197,13 @@ func TestResolveImageBuilders(t *testing.T) {
 			Registry:  "ghcr.io/test",
 			Build:     BuildFormats{"rpm"},
 			Platforms: []string{"linux/amd64"},
-			Builder:   buildkit.BuilderMap{"pixi": "default-builder", "npm": "default-builder"},
+			Builder:   spec.BuilderMap{"pixi": "default-builder", "npm": "default-builder"},
 		},
 		Box: boxMapOf(map[string]spec.BoxConfig{
 			"default-builder": {Candy: []string{}},
 			"custom-builder":  {Candy: []string{}},
 			"uses-default":    {Candy: []string{}},
-			"uses-custom":     {Candy: []string{}, Builder: buildkit.BuilderMap{"pixi": "custom-builder"}},
+			"uses-custom":     {Candy: []string{}, Builder: spec.BuilderMap{"pixi": "custom-builder"}},
 		}),
 	}
 
@@ -250,7 +249,7 @@ func TestResolveImageBuilders(t *testing.T) {
 		Defaults: spec.BoxConfig{
 			Build:     BuildFormats{"rpm"},
 			Platforms: []string{"linux/amd64"},
-			Builder:   buildkit.BuilderMap{"pixi": "my-builder"},
+			Builder:   spec.BuilderMap{"pixi": "my-builder"},
 		},
 		Box: boxMapOf(map[string]spec.BoxConfig{
 			"my-builder": {Candy: []string{}},
@@ -268,7 +267,7 @@ func TestResolveImageBuilders(t *testing.T) {
 	cfg4 := &Config{
 		Defaults: spec.BoxConfig{Build: BuildFormats{"pac"}, Platforms: []string{"linux/amd64"}},
 		Box: boxMapOf(map[string]spec.BoxConfig{
-			"base-img":    {Build: BuildFormats{"pac"}, Candy: []string{}, Builder: buildkit.BuilderMap{"aur": "aur-builder"}},
+			"base-img":    {Build: BuildFormats{"pac"}, Candy: []string{}, Builder: spec.BuilderMap{"aur": "aur-builder"}},
 			"aur-builder": {Candy: []string{}},
 			"child-img":   {Base: "base-img", Candy: []string{}},
 		}),

@@ -236,7 +236,7 @@ func inspectUserLeg(ctx context.Context, ex *sdk.Executor, ref string, uid int) 
 // whose ResolveBox fails instead of aborting — mirroring the deleted host projector's tolerant
 // branch, buildResolvedProjectTolerant); pass nil for the FAIL-FAST behavior 3b's resolveProjectEnvelope
 // relies on (byte-for-byte parity with the original host projector).
-func projectResolvedProjectLeg(ctx context.Context, ex *sdk.Executor, cfg *spec.Config, layers map[string]spec.CandyReader, uf *spec.UnifiedFile, distroCfg *buildkit.DistroConfig, builderCfg *buildkit.BuilderConfig, initCfg *buildkit.InitConfig, dir, version, calver string, includeDisabled bool, preResolvedBoxes map[string]*buildkit.ResolvedBox, diags *spec.Diagnostics) (*spec.ResolvedProject, error) {
+func projectResolvedProjectLeg(ctx context.Context, ex *sdk.Executor, cfg *spec.Config, layers map[string]spec.CandyReader, uf *spec.UnifiedFile, distroCfg *spec.DistroConfig, builderCfg *spec.BuilderConfig, initCfg *buildkit.InitConfig, dir, version, calver string, includeDisabled bool, preResolvedBoxes map[string]*buildkit.ResolvedBox, diags *spec.Diagnostics) (*spec.ResolvedProject, error) {
 	includeNames := map[string]bool{}
 	seams := loaderkit.ResolveProjectSeams{
 		ResolveBox: func(c *spec.Config, name, cv, d string) (*buildkit.ResolvedBox, error) {

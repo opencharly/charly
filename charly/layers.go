@@ -9,7 +9,6 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 
@@ -87,7 +86,7 @@ var (
 // never from a Go constant. Safe to call repeatedly; a nil
 // config clears the caches (the shape guard then fails open — no false
 // positives).
-func RegisterBuildVocabulary(dc *buildkit.DistroConfig) {
+func RegisterBuildVocabulary(dc *spec.DistroConfig) {
 	candyYAMLFormatNames = make(map[string]bool)
 	candyYAMLDistroNames = make(map[string]bool)
 	if dc == nil {

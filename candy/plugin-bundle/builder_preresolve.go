@@ -75,7 +75,7 @@ func preresolveBuilderContexts(ctx context.Context, exec *sdk.Executor, order []
 // builder-specific stage-context keys — the plugin-side twin of the deleted
 // charly/builder_preresolve.go's invokeBuilderCollect (identical input construction; the ONLY
 // change is the dispatch call).
-func invokeBuilderCollect(ctx context.Context, exec *sdk.Executor, word string, layer spec.CandyReader, bDef *buildkit.BuilderDef, img *buildkit.ResolvedBox) (map[string]any, error) {
+func invokeBuilderCollect(ctx context.Context, exec *sdk.Executor, word string, layer spec.CandyReader, bDef *spec.Builder, img *buildkit.ResolvedBox) (map[string]any, error) {
 	in := spec.BuilderCollectInput{Candy: layer.GetName(), Builder: word, Home: img.Home}
 	if bDef.DetectConfig != "" {
 		if sec := layer.FormatSection(bDef.DetectConfig); sec != nil {

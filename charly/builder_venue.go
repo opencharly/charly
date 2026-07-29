@@ -19,6 +19,7 @@ package main
 
 import (
 	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/spec/spec"
 )
 
 // buildEngineContext is the host-ENGINE context the reverse channel carries so the
@@ -37,7 +38,7 @@ type buildEngineContext struct {
 	// DistroCfg is the resolved distro: vocabulary the SystemPackagesStep host render
 	// (deploykit.RenderHostPackageCommand) needs to look up the format's phase.install.host
 	// template. Zero for an Invoke whose plan has no SystemPackagesStep.
-	DistroCfg *buildkit.DistroConfig
+	DistroCfg *spec.DistroConfig
 
 	// The following are populated ONLY by the pod-overlay BUILD-emit path (the
 	// buildEngineContext). They no longer feed an in-core renderer directly (the former

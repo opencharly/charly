@@ -55,8 +55,8 @@ type loadedProject struct {
 	cfg        *Config
 	layers     map[string]spec.CandyReader
 	uf         *spec.UnifiedFile // nil when absent or its load/discover errored
-	distroCfg  *buildkit.DistroConfig
-	builderCfg *buildkit.BuilderConfig
+	distroCfg  *spec.DistroConfig
+	builderCfg *spec.BuilderConfig
 	initCfg    *buildkit.InitConfig
 	version    string
 	empty      bool
@@ -196,7 +196,7 @@ func runHostNaturalValidateChecks(lp *loadedProject, dir string, opts loaderkit.
 // primitives instead of this host's LoadConfig/ScanAllCandyWithConfigOpts). This leg's OWN
 // tolerant load (loadProjectForResolve, kept — also still used by build_overlay.go's fail-fast
 // call) exists ONLY to feed the host-natural checks + the registry D-data below with the RAW
-// *Config/*buildkit.DistroConfig/*BuilderConfig a projected envelope does not carry — it no
+// *Config/*spec.DistroConfig/*BuilderConfig a projected envelope does not carry — it no
 // longer projects an envelope itself (projectResolvedProject/buildResolvedProjectTolerant,
 // DELETED). Returns a spec.ValidateProjectReply whose Project carries ONLY
 // ProviderCapabilities/ActCapableVerbs; candy/plugin-box's runValidateEngine calls THIS leg

@@ -532,7 +532,7 @@ func ledgerPathsFor(ledgerRoot string) (*kit.LedgerPaths, error) {
 
 // recordDeploy persists the external deploy's teardown ops + provenance into the ledger via the
 // SAME sdk/kit install_ledger.go path the pre-move core function used. DistroCfgJSON (a plain
-// marshalled *buildkit.DistroConfig — a sdk type with zero core-only coupling, unlike the
+// marshalled *spec.DistroConfig — a sdk type with zero core-only coupling, unlike the
 // core-only buildEngineContext wrapper it used to travel inside) fills a package-remove ReverseOp's
 // UninstallCmd, matching recordDeploy's original renderUninstall closure exactly.
 func recordDeploy(name, word string, distroCfgJSON json.RawMessage, ledgerRoot string, reply spec.DeployReply) error {
@@ -547,9 +547,9 @@ func recordDeploy(name, word string, distroCfgJSON json.RawMessage, ledgerRoot s
 	id := deploykit.ComputeDeployID(name, nil, nil)
 	reverseOps := reply.ReverseOps
 
-	var distroCfg *buildkit.DistroConfig
+	var distroCfg *spec.DistroConfig
 	if len(distroCfgJSON) > 0 {
-		distroCfg = &buildkit.DistroConfig{}
+		distroCfg = &spec.DistroConfig{}
 		if err := json.Unmarshal(distroCfgJSON, distroCfg); err != nil {
 			return fmt.Errorf("deploy-dispatch: decode distro config: %w", err)
 		}

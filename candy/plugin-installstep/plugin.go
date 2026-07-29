@@ -314,7 +314,7 @@ func emitHostCoupled(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 
 // emitSystemPackages renders the SystemPackages InstallStep's BUILD-context (container-venue)
 // Containerfile fragment: reconstruct the concrete step from the wire view, resolve the box's
-// DistroDef from the resolved-project envelope (nil-safe — buildkit.WrapDistroDef/FindFormat
+// DistroDef from the resolved-project envelope (nil-safe — spec.WrapDistroDef/FindFormat
 // tolerate a nil def, producing the SAME "no distro definition" error the former in-core render
 // did for a synthetic/no-box path), and render the format's phase.install.container template via
 // the SAME sdk/buildkit render buildkit.RenderSystemPackagesFragment the box-build path shares.
@@ -331,7 +331,7 @@ func emitSystemPackages(dg *deploykit.Generator, view spec.InstallStepView, env 
 	if img := dg.Boxes[env.Image]; img != nil {
 		distroDef = img.DistroDef
 	}
-	return buildkit.RenderSystemPackagesFragment(s.Format, s.Phase, s.RawInstallContext, buildkit.WrapDistroDef(distroDef))
+	return buildkit.RenderSystemPackagesFragment(s.Format, s.Phase, s.RawInstallContext, spec.WrapDistroDef(distroDef))
 }
 
 // emitBuilder renders the Builder InstallStep's BUILD-context (container-venue) Containerfile

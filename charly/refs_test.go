@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
@@ -499,7 +498,7 @@ func TestCollectRemoteRefsDefaultsBuilderTransitiveCandies(t *testing.T) {
 	// builder edge was actually followed (it was absent before the fix, because
 	// the raw per-image img.Builder these images carry is empty).
 	cfg := &Config{
-		Defaults: spec.BoxConfig{Builder: buildkit.BuilderMap{"pixi": "charly.fedora-builder"}},
+		Defaults: spec.BoxConfig{Builder: spec.BuilderMap{"pixi": "charly.fedora-builder"}},
 		Box: boxMapOf(map[string]spec.BoxConfig{
 			"bazzite": {
 				Base:  "ghcr.io/ublue-os/bazzite:stable", // external base

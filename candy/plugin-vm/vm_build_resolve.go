@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/loaderkit"
@@ -122,7 +121,7 @@ func resolveVmBuildEntity(ctx context.Context, ex *sdk.Executor, dir, boxName st
 // plugin-side (mirrors charly/format_config.go's LoadBuildConfigForBox, minus the Init projection
 // vm-build never needs): LoadUnified + loaderkit.ProjectDistroConfig(resolveDistroLeg) +
 // loaderkit.ProjectBuilderConfig (pure, no callback).
-func loadVmBuildYmlSections(ctx context.Context, ex *sdk.Executor, dir string) (*buildkit.DistroConfig, *buildkit.BuilderConfig, error) {
+func loadVmBuildYmlSections(ctx context.Context, ex *sdk.Executor, dir string) (*spec.DistroConfig, *spec.BuilderConfig, error) {
 	uf, ok, err := loadVmProjectUnified(ctx, ex, dir)
 	if err != nil {
 		return nil, nil, fmt.Errorf("loading charly.yml: %w", err)

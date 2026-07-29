@@ -7,7 +7,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 
@@ -168,7 +167,7 @@ func boxEntityWireYAML(name string, box spec.BoxConfig) ([]byte, error) {
 // validateBuildAndDistro validates build: and distro: entries.
 // build: entries are checked against the embedded distro format definitions (charly/charly.yml).
 // distro: is free-form (any string, including distro:version).
-func validateBuildAndDistro(cfg *Config, distroCfg *buildkit.DistroConfig, errs *spec.ValidationError) {
+func validateBuildAndDistro(cfg *Config, distroCfg *spec.DistroConfig, errs *spec.ValidationError) {
 	validateBuild := func(context string, build BuildFormats) {
 		for _, b := range build {
 			if !distroCfg.ValidFormat(b) {
@@ -266,7 +265,7 @@ func validateBuildTunables(cfg *Config, errs *spec.ValidationError) {
 // (over the resolved builder map + ResolveCandyOrder) moved to the validate plugin (envelope-portable);
 // this reference-validation half stays host (like validateBuildAndDistro) and rides reply.Diagnostics.
 // Kind-blind: builder/build TYPE words are checked against the runtime builder vocab, no kind switch.
-func validateBuilderRefs(cfg *Config, builderCfg *buildkit.BuilderConfig, errs *spec.ValidationError) {
+func validateBuilderRefs(cfg *Config, builderCfg *spec.BuilderConfig, errs *spec.ValidationError) {
 	// Validate defaults.builder entries.
 	for typ, builder := range cfg.Defaults.Builder {
 		if !builderCfg.ValidBuilderType(typ) {
