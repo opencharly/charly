@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/hostenv"
 )
 
 // command.go — the externalized `charly settings` command. The plugin OWNS the get/set/list/reset/path
@@ -59,7 +59,7 @@ func runSettingsCLI(ctx context.Context, exec *sdk.Executor, args []string) erro
 			fmt.Printf("%-15s %-10s (%s)\n", v.Key, v.Value, v.Source)
 		}
 	case "path":
-		path, err := kit.RuntimeConfigPath()
+		path, err := hostenv.RuntimeConfigPath()
 		if err != nil {
 			return err
 		}

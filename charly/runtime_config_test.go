@@ -6,14 +6,15 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/hostenv"
 )
 
 func TestLoadRuntimeConfig_Missing(t *testing.T) {
 	// Point to a non-existent path
-	orig := kit.RuntimeConfigPath
-	defer func() { kit.RuntimeConfigPath = orig }()
+	orig := hostenv.RuntimeConfigPath
+	defer func() { hostenv.RuntimeConfigPath = orig }()
 
-	kit.RuntimeConfigPath = func() (string, error) {
+	hostenv.RuntimeConfigPath = func() (string, error) {
 		return filepath.Join(t.TempDir(), "nonexistent", "config.yml"), nil
 	}
 
@@ -30,9 +31,9 @@ func TestSaveAndLoadRuntimeConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.yml")
 
-	orig := kit.RuntimeConfigPath
-	defer func() { kit.RuntimeConfigPath = orig }()
-	kit.RuntimeConfigPath = func() (string, error) { return configPath, nil }
+	orig := hostenv.RuntimeConfigPath
+	defer func() { hostenv.RuntimeConfigPath = orig }()
+	hostenv.RuntimeConfigPath = func() (string, error) { return configPath, nil }
 
 	cfg := &kit.RuntimeConfig{
 		Engine:  kit.EngineConfig{Build: "podman", Run: "docker"},
@@ -58,9 +59,9 @@ func TestSaveAndLoadRuntimeConfig(t *testing.T) {
 }
 
 func TestResolveRuntime_Defaults(t *testing.T) {
-	orig := kit.RuntimeConfigPath
-	defer func() { kit.RuntimeConfigPath = orig }()
-	kit.RuntimeConfigPath = func() (string, error) {
+	orig := hostenv.RuntimeConfigPath
+	defer func() { hostenv.RuntimeConfigPath = orig }()
+	hostenv.RuntimeConfigPath = func() (string, error) {
 		return filepath.Join(t.TempDir(), "config.yml"), nil
 	}
 
@@ -97,9 +98,9 @@ func TestResolveRuntime_EnvOverridesConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.yml")
 
-	orig := kit.RuntimeConfigPath
-	defer func() { kit.RuntimeConfigPath = orig }()
-	kit.RuntimeConfigPath = func() (string, error) { return configPath, nil }
+	orig := hostenv.RuntimeConfigPath
+	defer func() { hostenv.RuntimeConfigPath = orig }()
+	hostenv.RuntimeConfigPath = func() (string, error) { return configPath, nil }
 
 	// Write config with podman
 	cfg := &kit.RuntimeConfig{Engine: kit.EngineConfig{Build: "podman"}}
@@ -124,9 +125,9 @@ func TestResolveRuntime_EnvOverridesConfig(t *testing.T) {
 }
 
 func TestResolveRuntime_InvalidEngine(t *testing.T) {
-	orig := kit.RuntimeConfigPath
-	defer func() { kit.RuntimeConfigPath = orig }()
-	kit.RuntimeConfigPath = func() (string, error) {
+	orig := hostenv.RuntimeConfigPath
+	defer func() { hostenv.RuntimeConfigPath = orig }()
+	hostenv.RuntimeConfigPath = func() (string, error) {
 		return filepath.Join(t.TempDir(), "config.yml"), nil
 	}
 
@@ -143,9 +144,9 @@ func TestResolveRuntime_InvalidEngine(t *testing.T) {
 }
 
 func TestResolveRuntime_InvalidRunMode(t *testing.T) {
-	orig := kit.RuntimeConfigPath
-	defer func() { kit.RuntimeConfigPath = orig }()
-	kit.RuntimeConfigPath = func() (string, error) {
+	orig := hostenv.RuntimeConfigPath
+	defer func() { hostenv.RuntimeConfigPath = orig }()
+	hostenv.RuntimeConfigPath = func() (string, error) {
 		return filepath.Join(t.TempDir(), "config.yml"), nil
 	}
 
@@ -181,9 +182,9 @@ func TestAutoEnable_EnvValue1(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.yml")
 
-	orig := kit.RuntimeConfigPath
-	defer func() { kit.RuntimeConfigPath = orig }()
-	kit.RuntimeConfigPath = func() (string, error) { return configPath, nil }
+	orig := hostenv.RuntimeConfigPath
+	defer func() { hostenv.RuntimeConfigPath = orig }()
+	hostenv.RuntimeConfigPath = func() (string, error) { return configPath, nil }
 
 	_ = os.Unsetenv("CHARLY_BUILD_ENGINE")
 	_ = os.Unsetenv("CHARLY_RUN_ENGINE")
@@ -205,9 +206,9 @@ func TestBindAddress_InvalidEnv(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.yml")
 
-	orig := kit.RuntimeConfigPath
-	defer func() { kit.RuntimeConfigPath = orig }()
-	kit.RuntimeConfigPath = func() (string, error) { return configPath, nil }
+	orig := hostenv.RuntimeConfigPath
+	defer func() { hostenv.RuntimeConfigPath = orig }()
+	hostenv.RuntimeConfigPath = func() (string, error) { return configPath, nil }
 
 	_ = os.Unsetenv("CHARLY_BUILD_ENGINE")
 	_ = os.Unsetenv("CHARLY_RUN_ENGINE")
@@ -236,9 +237,9 @@ func TestSystemdUserAvailable_EmptyXDG(t *testing.T) {
 	t.Setenv("XDG_RUNTIME_DIR", "")
 
 	dir := t.TempDir()
-	orig := kit.SystemdUserRuntimeDir
-	defer func() { kit.SystemdUserRuntimeDir = orig }()
-	kit.SystemdUserRuntimeDir = func() string { return dir }
+	orig := hostenv.SystemdUserRuntimeDir
+	defer func() { hostenv.SystemdUserRuntimeDir = orig }()
+	hostenv.SystemdUserRuntimeDir = func() string { return dir }
 
 	if kit.SystemdUserAvailable() {
 		t.Error("SystemdUserAvailable() = true with empty XDG_RUNTIME_DIR; want false")
@@ -250,10 +251,10 @@ func TestSystemdUserAvailable_EmptyXDG(t *testing.T) {
 func TestSystemdUserAvailable_DirMissing(t *testing.T) {
 	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
 
-	orig := kit.SystemdUserRuntimeDir
-	defer func() { kit.SystemdUserRuntimeDir = orig }()
+	orig := hostenv.SystemdUserRuntimeDir
+	defer func() { hostenv.SystemdUserRuntimeDir = orig }()
 	missing := filepath.Join(t.TempDir(), "definitely-not-a-systemd-dir")
-	kit.SystemdUserRuntimeDir = func() string { return missing }
+	hostenv.SystemdUserRuntimeDir = func() string { return missing }
 
 	if kit.SystemdUserAvailable() {
 		t.Error("SystemdUserAvailable() = true with missing /run/user/<uid>/systemd; want false")
@@ -270,9 +271,9 @@ func TestSystemdUserAvailable_DirIsFile(t *testing.T) {
 	if err := os.WriteFile(filePath, []byte{}, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	orig := kit.SystemdUserRuntimeDir
-	defer func() { kit.SystemdUserRuntimeDir = orig }()
-	kit.SystemdUserRuntimeDir = func() string { return filePath }
+	orig := hostenv.SystemdUserRuntimeDir
+	defer func() { hostenv.SystemdUserRuntimeDir = orig }()
+	hostenv.SystemdUserRuntimeDir = func() string { return filePath }
 
 	if kit.SystemdUserAvailable() {
 		t.Error("SystemdUserAvailable() = true with regular file at probed path; want false")
@@ -290,9 +291,9 @@ func TestSystemdUserAvailable_AllPresent(t *testing.T) {
 	if err := os.Mkdir(dirPath, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	orig := kit.SystemdUserRuntimeDir
-	defer func() { kit.SystemdUserRuntimeDir = orig }()
-	kit.SystemdUserRuntimeDir = func() string { return dirPath }
+	orig := hostenv.SystemdUserRuntimeDir
+	defer func() { hostenv.SystemdUserRuntimeDir = orig }()
+	hostenv.SystemdUserRuntimeDir = func() string { return dirPath }
 
 	if !kit.SystemdUserAvailable() {
 		t.Error("SystemdUserAvailable() = false with all signals present; want true")

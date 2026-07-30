@@ -2,7 +2,7 @@
 // runtime-configuration get/set/list/path/reset surface. The plugin owns BOTH the subcommand
 // grammar/output AND the config subsystem itself (config.go, wave γ): read/write
 // ~/.config/charly/config.yml (GetConfigValue/SetConfigValue/ListConfigValues/ResetConfigValue/
-// kit.RuntimeConfigPath) is pure sdk/kit file I/O; the credential-store touches (vnc.password.*,
+// hostenv.RuntimeConfigPath) is pure host-env file I/O; the credential-store touches (vnc.password.*,
 // secret_backend) + runtime-engine resolution dispatch verb:credential / call sdk/kit directly. No
 // core round-trip — the former generic "settings" HostBuild seam is retired.
 //

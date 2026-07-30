@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/hostenv"
 )
 
 // config_test.go — ported from charly/runtime_config_test.go (wave γ, the config-subsystem
@@ -21,9 +22,9 @@ func TestSetConfigValue_Validates(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.yml")
 
-	orig := kit.RuntimeConfigPath
-	defer func() { kit.RuntimeConfigPath = orig }()
-	kit.RuntimeConfigPath = func() (string, error) { return configPath, nil }
+	orig := hostenv.RuntimeConfigPath
+	defer func() { hostenv.RuntimeConfigPath = orig }()
+	hostenv.RuntimeConfigPath = func() (string, error) { return configPath, nil }
 
 	err := SetConfigValue(testCtx, nil, "engine.build", "containerd")
 	if err == nil {
@@ -53,9 +54,9 @@ func TestResetConfigValue(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.yml")
 
-	orig := kit.RuntimeConfigPath
-	defer func() { kit.RuntimeConfigPath = orig }()
-	kit.RuntimeConfigPath = func() (string, error) { return configPath, nil }
+	orig := hostenv.RuntimeConfigPath
+	defer func() { hostenv.RuntimeConfigPath = orig }()
+	hostenv.RuntimeConfigPath = func() (string, error) { return configPath, nil }
 
 	if err := SetConfigValue(testCtx, nil, "engine.build", "podman"); err != nil {
 		t.Fatal(err)
@@ -74,9 +75,9 @@ func TestResetConfigValue_All(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.yml")
 
-	orig := kit.RuntimeConfigPath
-	defer func() { kit.RuntimeConfigPath = orig }()
-	kit.RuntimeConfigPath = func() (string, error) { return configPath, nil }
+	orig := hostenv.RuntimeConfigPath
+	defer func() { hostenv.RuntimeConfigPath = orig }()
+	hostenv.RuntimeConfigPath = func() (string, error) { return configPath, nil }
 
 	if err := SetConfigValue(testCtx, nil, "engine.build", "podman"); err != nil {
 		t.Fatal(err)
@@ -98,9 +99,9 @@ func TestListConfigValues(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.yml")
 
-	orig := kit.RuntimeConfigPath
-	defer func() { kit.RuntimeConfigPath = orig }()
-	kit.RuntimeConfigPath = func() (string, error) { return configPath, nil }
+	orig := hostenv.RuntimeConfigPath
+	defer func() { hostenv.RuntimeConfigPath = orig }()
+	hostenv.RuntimeConfigPath = func() (string, error) { return configPath, nil }
 
 	_ = os.Unsetenv("CHARLY_BUILD_ENGINE")
 	_ = os.Unsetenv("CHARLY_RUN_ENGINE")
@@ -149,9 +150,9 @@ func TestListConfigValues(t *testing.T) {
 }
 
 func TestGetConfigValue_UnknownKey(t *testing.T) {
-	orig := kit.RuntimeConfigPath
-	defer func() { kit.RuntimeConfigPath = orig }()
-	kit.RuntimeConfigPath = func() (string, error) {
+	orig := hostenv.RuntimeConfigPath
+	defer func() { hostenv.RuntimeConfigPath = orig }()
+	hostenv.RuntimeConfigPath = func() (string, error) {
 		return filepath.Join(t.TempDir(), "config.yml"), nil
 	}
 
@@ -161,7 +162,7 @@ func TestGetConfigValue_UnknownKey(t *testing.T) {
 	}
 }
 
-// assertConfigKeySetGetReset points kit.RuntimeConfigPath at a fresh temp config and
+// assertConfigKeySetGetReset points hostenv.RuntimeConfigPath at a fresh temp config and
 // exercises one config key's set/get/invalid/reset lifecycle: set valid1 + read
 // it back, set valid2 + read it back, reject invalid, then reset to empty.
 // Shared by the per-key *_SetGetReset tests (R3).
@@ -170,9 +171,9 @@ func assertConfigKeySetGetReset(t *testing.T, key, valid1, valid2, invalid strin
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.yml")
 
-	orig := kit.RuntimeConfigPath
-	t.Cleanup(func() { kit.RuntimeConfigPath = orig })
-	kit.RuntimeConfigPath = func() (string, error) { return configPath, nil }
+	orig := hostenv.RuntimeConfigPath
+	t.Cleanup(func() { hostenv.RuntimeConfigPath = orig })
+	hostenv.RuntimeConfigPath = func() (string, error) { return configPath, nil }
 
 	// First valid value.
 	if err := SetConfigValue(testCtx, nil, key, valid1); err != nil {
@@ -218,9 +219,9 @@ func TestAutoEnable_EnvOverridesConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.yml")
 
-	orig := kit.RuntimeConfigPath
-	defer func() { kit.RuntimeConfigPath = orig }()
-	kit.RuntimeConfigPath = func() (string, error) { return configPath, nil }
+	orig := hostenv.RuntimeConfigPath
+	defer func() { hostenv.RuntimeConfigPath = orig }()
+	hostenv.RuntimeConfigPath = func() (string, error) { return configPath, nil }
 
 	_ = os.Unsetenv("CHARLY_BUILD_ENGINE")
 	_ = os.Unsetenv("CHARLY_RUN_ENGINE")
@@ -249,9 +250,9 @@ func TestAutoEnable_ListConfigValues(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.yml")
 
-	orig := kit.RuntimeConfigPath
-	defer func() { kit.RuntimeConfigPath = orig }()
-	kit.RuntimeConfigPath = func() (string, error) { return configPath, nil }
+	orig := hostenv.RuntimeConfigPath
+	defer func() { hostenv.RuntimeConfigPath = orig }()
+	hostenv.RuntimeConfigPath = func() (string, error) { return configPath, nil }
 
 	_ = os.Unsetenv("CHARLY_BUILD_ENGINE")
 	_ = os.Unsetenv("CHARLY_RUN_ENGINE")
@@ -291,9 +292,9 @@ func TestBindAddress_EnvOverridesConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.yml")
 
-	orig := kit.RuntimeConfigPath
-	defer func() { kit.RuntimeConfigPath = orig }()
-	kit.RuntimeConfigPath = func() (string, error) { return configPath, nil }
+	orig := hostenv.RuntimeConfigPath
+	defer func() { hostenv.RuntimeConfigPath = orig }()
+	hostenv.RuntimeConfigPath = func() (string, error) { return configPath, nil }
 
 	_ = os.Unsetenv("CHARLY_BUILD_ENGINE")
 	_ = os.Unsetenv("CHARLY_RUN_ENGINE")
