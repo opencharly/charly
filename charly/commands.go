@@ -4,7 +4,7 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/container"
 )
 
 // isTerminal reports whether stdout is connected to a terminal. Package-level var for testability.
@@ -31,7 +31,7 @@ func defaultIsTerminal() bool {
 // bare `container inspect` succeeds for any existing container, so its exit status is the signal.
 // Relocated from the deleted shell.go (Cutover B unit 2) — still used by bundle_add_cmd.go.
 var containerExists = func(engine, name string) bool {
-	binary := kit.EngineBinary(engine)
+	binary := container.EngineBinary(engine)
 	return exec.Command(binary, "container", "inspect", name).Run() == nil
 }
 
