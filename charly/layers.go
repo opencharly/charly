@@ -13,7 +13,6 @@ import (
 	"github.com/opencharly/spec/spec"
 
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/loaderkit"
 	"gopkg.in/yaml.v3"
 )
 
@@ -131,15 +130,15 @@ const DefaultBoxDir = kit.DefaultBoxDir
 // form (W9: the type-Candy move — core never holds a concrete Candy struct; every
 // candy is a spec.CandyModel + spec.CandyView pair scanned by the registered loader
 // plugin's typed CandyScanner seam, then wrapped via deploykit.NewSpecCandyModel).
-// Delegates to scanLocalCandies + the ONE choke point (loaderkit.FinalizeScannedCandies, no
-// InitCfg in scope for a standalone call) — see ScanAllCandyWithConfigOpts's doc
-// comment for why a local candy is NEVER wrapped anywhere else.
+// Delegates to scanLocalCandies + the ONE choke point (FinalizeScannedCandies, reached via the
+// ProjectLoader seam, no InitCfg in scope for a standalone call) — see ScanAllCandyWithConfigOpts's
+// doc comment for why a local candy is NEVER wrapped anywhere else.
 func ScanCandy(dir string) (map[string]spec.CandyReader, error) {
 	scanned, err := scanLocalCandies(dir)
 	if err != nil {
 		return nil, err
 	}
-	return loaderkit.FinalizeScannedCandies(scanned, nil), nil
+	return requireProjectLoader().FinalizeScannedCandies(scanned, nil), nil
 }
 
 // scanLocalCandies is the UNWRAPPED local-scan dispatcher — the ONE place every construction
@@ -472,24 +471,25 @@ func ScanAllCandyWithConfigOpts(dir string, cfg *Config, opts spec.ResolveOpts) 
 // scanCandyFromLocal is ScanAllCandyWithConfigOpts's step-2-onward body (remote-ref collect,
 // fix-point fetch, per-entity-version arbitration, host-completion + finalize) — now a THIN host
 // wrapper (K3 U4-b) that builds the ScanSeams host-coupled legs and delegates the pure fix-point to
-// loaderkit.ScanCandyFromLocal. fillNamespacedBoxes calls this with its own namespace-local
-// (localScanned, cfg) — whose set comes from subUF.projectCandiesScanned(dir), NOT scanLocalCandies
-// — so it reaches the SAME pipeline. Behavior-identical to the pre-move function (same steps 2-5).
+// the loaderkit scan mechanism through the ProjectLoader seam (requireProjectLoader). fillNamespacedBoxes
+// calls this with its own namespace-local (localScanned, cfg) — whose set comes from
+// subUF.projectCandiesScanned(dir), NOT scanLocalCandies — so it reaches the SAME pipeline.
+// Behavior-identical to the pre-move function (same steps 2-5).
 func scanCandyFromLocal(localScanned map[string]spec.ScannedCandy, cfg *Config, opts spec.ResolveOpts) (map[string]spec.CandyReader, error) {
-	return loaderkit.ScanCandyFromLocal(localScanned, opts.InitCfg, scanSeamsFor(cfg, opts))
+	return requireProjectLoader().ScanCandyFromLocal(localScanned, opts.InitCfg, scanSeamsFor(cfg, opts))
 }
 
-// scanSeamsFor builds the host closures loaderkit.ScanCandyFromLocal reaches: cfg+opts are captured
-// here so they never cross into loaderkit (the opts-agnostic seam pattern, mirroring the U2
+// scanSeamsFor builds the host closures the loaderkit scan mechanism reaches through the seam: cfg+opts
+// are captured here so they never cross into loaderkit (the opts-agnostic seam pattern, mirroring the U2
 // ResolveProjectSeams closures). CollectRemoteRefs threads the throwaway nil-initCfg finalize +
 // withLocalRawRefs the reachability walk needs (see withLocalRawRefs' doc comment for why the
 // wrapped-view walk can't discover a local candy's pinned remote dep alone); EnsureRepo /
 // ScanRemote wrap the host git-cache (+ auto-migrate) and the registry-coupled per-candy manifest
 // scan (parseCandyYAML). candy/plugin-build supplies InvokeProvider-backed closures instead in U6.
-func scanSeamsFor(cfg *Config, opts spec.ResolveOpts) loaderkit.ScanSeams {
-	return loaderkit.ScanSeams{
+func scanSeamsFor(cfg *Config, opts spec.ResolveOpts) spec.ScanSeams {
+	return spec.ScanSeams{
 		CollectRemoteRefs: func(localScanned map[string]spec.ScannedCandy) ([]spec.RemoteDownload, error) {
-			return CollectRemoteRefsOpts(cfg, loaderkit.FinalizeScannedCandies(localScanned, nil), withLocalRawRefs(opts, localScanned))
+			return CollectRemoteRefsOpts(cfg, requireProjectLoader().FinalizeScannedCandies(localScanned, nil), withLocalRawRefs(opts, localScanned))
 		},
 		EnsureRepo: EnsureRepoDownloaded,
 		ScanRemote: func(cacheDir, repoPath string, wantRefs map[string]bool) (map[string]spec.ScannedCandy, error) {

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -49,7 +48,7 @@ func hostBuildCollectRemoteRefs(_ context.Context, req spec.ResolvedProjectReque
 		return nil, err
 	}
 	opts := spec.ResolveOpts{IncludeDisabled: req.IncludeDisabled, ExtraCandyRefs: req.ExtraCandyRefs}
-	return CollectRemoteRefsOpts(cfg, loaderkit.FinalizeScannedCandies(localScanned, nil), withLocalRawRefs(opts, localScanned))
+	return CollectRemoteRefsOpts(cfg, requireProjectLoader().FinalizeScannedCandies(localScanned, nil), withLocalRawRefs(opts, localScanned))
 }
 
 // hostBuildEnsureRepo resolves a (repo, version) to a local cache dir (the ScanSeams.EnsureRepo leg),

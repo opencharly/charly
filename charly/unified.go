@@ -8,7 +8,6 @@ import (
 	"github.com/opencharly/spec/spec"
 
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/loaderkit"
 )
 
 // -----------------------------------------------------------------------------
@@ -84,9 +83,8 @@ const UnifiedFileName = spec.UnifiedFileName
 
 // gateSchemaVersion (K1 keystone, task #24 unit 2) relocated to sdk/loaderkit —
 // see loaderkit.GateSchemaVersion (called only from loaderkit.LoadUnified now).
-// loaderkit.NormalizeV4Aliases is a retired no-op invoked only inside loaderkit's
-// own materialize walk; charly's materialize.go per-document fold no longer calls
-// it (#55 C3b dropped the dead call site).
+// The retired NormalizeV4Aliases no-op + its two loaderkit-internal call sites were
+// deleted as dead code (#55 C3b-ii).
 
 // LoadUnified drives the whole-project load through the registered spec.ProjectLoader SEAM
 // (requireProjectLoader) — it NO LONGER calls loaderkit.LoadUnified directly (#55 import-purity
@@ -204,14 +202,14 @@ func canonicalRef(ref, baseDir string) (key, path string, err error) {
 // relative to rootDir (the dir containing charly.yml).
 //
 // K1 keystone (task #24) unit 3: the WALK+PARSE half (find directories, read +
-// classify + gate + parse each manifest's documents) relocated to
-// loaderkit.RunDiscover — the SAME walker.runDiscover/parseDiscoveredManifest
-// mechanism Walk's own depth-0 discover pass already drives internally, reused
-// here directly rather than duplicated. Only the registry-coupled MATERIALIZE
-// fold (foldDiscoveredManifests, materialize.go — shared with
+// classify + gate + parse each manifest's documents) lives in loaderkit.RunDiscover,
+// reached via the ProjectLoader seam (requireProjectLoader, #55 C3b-ii) — the SAME
+// walker.runDiscover/parseDiscoveredManifest mechanism Walk's own depth-0 discover
+// pass already drives internally, reused here rather than duplicated. Only the
+// registry-coupled MATERIALIZE fold (foldDiscoveredManifests, materialize.go — shared with
 // loaderkit.MaterializeLoadedProject's own discovered-manifest step via the FoldDiscoveredManifests seam, R3) stays host-side.
 func ApplyDiscover(uf *spec.UnifiedFile, rootDir string) error {
-	dms, err := loaderkit.RunDiscover(rootDir, uf.Discover, hostWalkSeams())
+	dms, err := requireProjectLoader().RunDiscover(rootDir, uf.Discover, hostWalkSeams())
 	if err != nil {
 		return err
 	}
@@ -275,14 +273,15 @@ func resolveInits(uf *spec.UnifiedFile) map[string]*ResolvedInit {
 
 // ProjectCandies scans or synthesizes a candy per entry in uf.Candy, into its FINAL
 // spec.CandyReader form (W9: the type-Candy move). Thin wrapper over projectCandiesScanned +
-// the ONE choke point (loaderkit.FinalizeScannedCandies, no InitCfg in scope for a standalone call) —
-// see ScanAllCandyWithConfigOpts's doc comment for why completion never happens anywhere else.
+// the ONE choke point (FinalizeScannedCandies, reached via the ProjectLoader seam, no InitCfg in scope
+// for a standalone call) — see ScanAllCandyWithConfigOpts's doc comment for why completion never
+// happens anywhere else.
 func ProjectCandies(uf *spec.UnifiedFile, rootDir string) (map[string]spec.CandyReader, error) {
 	scanned, err := projectCandiesScanned(uf, rootDir)
 	if err != nil {
 		return nil, err
 	}
-	return loaderkit.FinalizeScannedCandies(scanned, nil), nil
+	return requireProjectLoader().FinalizeScannedCandies(scanned, nil), nil
 }
 
 // projectCandiesScanned is ProjectCandies' UNWRAPPED body: scans or synthesizes a candy per

@@ -144,6 +144,23 @@ func (*provider) ValidatePreemptible(uf *spec.UnifiedFile, resolveResource func(
 	return loaderkit.ValidatePreemptible(uf, resolveResource, resolveVm)
 }
 
+// ScanCandyFromLocal / RunDiscover / FinalizeScannedCandies implement the candy-scan + discover ops on
+// spec.ProjectLoader (#55 C3b-ii): charly core reaches the loaderkit scan/discover MECHANISM through
+// this compiled-in seam (no wire envelope) instead of importing loaderkit. The fix-point / discover /
+// finalize LOGIC stays in the ONE copy in sdk/loaderkit; the host supplies the ScanSeams / WalkSeams
+// host-coupled closures.
+func (*provider) ScanCandyFromLocal(localScanned map[string]spec.ScannedCandy, initCfg *spec.InitConfig, seams spec.ScanSeams) (map[string]spec.CandyReader, error) {
+	return loaderkit.ScanCandyFromLocal(localScanned, initCfg, seams)
+}
+
+func (*provider) RunDiscover(rootDir string, specs []spec.ScanSpec, seams spec.WalkSeams) ([]spec.DiscoveredManifest, error) {
+	return loaderkit.RunDiscover(rootDir, specs, seams)
+}
+
+func (*provider) FinalizeScannedCandies(scanned map[string]spec.ScannedCandy, initCfg *spec.InitConfig) map[string]spec.CandyReader {
+	return loaderkit.FinalizeScannedCandies(scanned, initCfg)
+}
+
 // Invoke serves the out-of-process placement. The compiled-in placement uses the typed ParseDoc
 // above; the wire OpLoad path (carrying the document + threaded data as JSON) lands with
 // out-of-process loader support.
