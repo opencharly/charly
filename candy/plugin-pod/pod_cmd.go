@@ -1,6 +1,7 @@
 package pod
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -523,8 +525,9 @@ func (c *ConfigRemoveCmd) Run() error {
 
 // UpdateCmd updates an image (pulls/builds the latest), preserves the existing deploy config
 // (user-overlay state untouched), and restarts the service to pick up the new image — the
-// `charly update` grammar. Registry-bound (resolveTreeRoot/loadDeployPlugins/ResolveTarget —
-// core Mechanisms) — forwards via HostBuild("pod-update").
+// `charly update` grammar. Resolves the deploy tree PLUGIN-SIDE (loaderkit.ResolveMergedTreeViaExecutor,
+// #55 Cone A Unit 3b) and threads it in; the host's remaining loadDeployPlugins/ResolveTarget are
+// core Mechanisms — forwards via HostBuild("pod-update").
 type UpdateCmd struct {
 	Box       string `arg:"" help:"Deploy name (resolved via charly.yml) OR box name. For deploys, the target's update strategy is auto-selected (pod=systemctl restart with new image; vm=in-guest candy re-apply; local=idempotent re-apply)."`
 	Tag       string `long:"tag" help:"Image CalVer tag (empty = newest local CalVer resolved via the ai.opencharly.version OCI label)"`
@@ -540,6 +543,13 @@ func (c *UpdateCmd) Run() error {
 		return fmt.Errorf("remote refs are not accepted here; run 'charly box pull %s' first", c.Box)
 	}
 	c.Box, c.Instance = deploykit.CanonicalizeDeployArg(c.Box, c.Instance)
+	// Resolve the merged deploy tree PLUGIN-SIDE and thread it into the seam as DATA — the #55 Cone
+	// A Unit 3b tree-threading that replaced the host dispatchByDeployTarget's former core
+	// resolveTreeRoot read.
+	treeJSON, err := resolveDeployTreeJSON(c.Box)
+	if err != nil {
+		return err
+	}
 	return hostPodSeam("pod-update", spec.PodUpdateRequest{
 		Box:       c.Box,
 		Tag:       c.Tag,
@@ -548,7 +558,30 @@ func (c *UpdateCmd) Run() error {
 		Seed:      c.Seed,
 		ForceSeed: c.ForceSeed,
 		DataFrom:  c.DataFrom,
+		TreeJSON:  treeJSON,
 	})
+}
+
+// resolveDeployTreeJSON resolves the merged project+operator deploy tree PLUGIN-SIDE
+// (loaderkit.ResolveMergedTreeViaExecutor) and marshals it for threading into the "pod-update" host
+// seam as DATA, so the host dispatchByDeployTarget stops re-loading the tree via the core
+// resolveTreeRoot (#55 Cone A Unit 3b). The "deploy-plugins-connect" preamble connects the
+// deployment's out-of-tree plugin candies (the host's ResolveTarget needs them) and returns the
+// project dir the loader loads from — the SAME preamble command:bundle's resolveTreeViaLoader runs.
+// A tree-absent project marshals to a null tree, which the host handler reports as "no charly.yml".
+func resolveDeployTreeJSON(deployName string) ([]byte, error) {
+	if cmdExec == nil {
+		return nil, fmt.Errorf("pod update: no host reverse channel (command not compiled-in?)")
+	}
+	var pre spec.DeployPluginsConnectReply
+	if err := hostPodSeamReply("deploy-plugins-connect", spec.DeployPluginsConnectRequest{Path: deployName}, &pre); err != nil {
+		return nil, err
+	}
+	tree, err := loaderkit.ResolveMergedTreeViaExecutor(cmdCtx, cmdExec, pre.Dir)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(tree)
 }
 
 func (c *CpCmd) Run() error {

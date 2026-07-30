@@ -9,6 +9,7 @@ import (
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/loaderkit"
 	pb "github.com/opencharly/spec/proto"
 	"github.com/opencharly/spec/spec"
 )
@@ -50,8 +51,16 @@ func invokeK8sPreresolve(ctx context.Context, req *pb.InvokeRequest) (*pb.Invoke
 
 	node := p.Node
 	if node == nil {
+		// Resolve the merged deploy tree PLUGIN-SIDE and thread it into the seam as DATA — the #55
+		// Cone A Unit 3b tree-threading that replaced the host's former core resolveTreeRoot read.
+		// The enclosing OpDeployDispatch already connected the deployment's plugins
+		// (command:bundle's resolveTreeViaLoader), so this reuses that connect (no re-dial mid-Invoke).
+		treeJSON, terr := resolveDeployTreeJSON(ctx, exec, p.Dir)
+		if terr != nil {
+			return nil, fmt.Errorf("deploy:k8s preresolve: resolve deploy tree: %w", terr)
+		}
 		var reply spec.DeployEntityResolveReply
-		if err := k8sEntityResolve(ctx, exec, spec.DeployEntityResolveRequest{Kind: "deploy", Name: p.Name, Dir: p.Dir}, &reply); err != nil {
+		if err := k8sEntityResolve(ctx, exec, spec.DeployEntityResolveRequest{Kind: "deploy", Name: p.Name, Dir: p.Dir, TreeJSON: treeJSON}, &reply); err != nil {
 			return nil, fmt.Errorf("deploy:k8s preresolve: resolve deploy %q: %w", p.Name, err)
 		}
 		node = reply.Node
@@ -146,6 +155,39 @@ func invokeK8sPreresolve(ctx context.Context, req *pb.InvokeRequest) (*pb.Invoke
 // ClusterJSON, via ClusterRaw), so both consumers read the identical host-resolved cluster spec.
 type resolvedK8sView struct {
 	KubeconfigContext string `json:"kubeconfig_context"`
+}
+
+// resolveDeployTreeJSON resolves the merged project+operator deploy tree PLUGIN-SIDE
+// (loaderkit.ResolveMergedTreeViaExecutor) and marshals it for threading into the
+// "deploy-entity-resolve" seam as DATA (#55 Cone A Unit 3b), so the host stops re-loading the tree
+// via the core resolveTreeRoot. A tree-absent project marshals to a null tree, which the host
+// handler reports as a not-found for the deploy/bundle name.
+func resolveDeployTreeJSON(ctx context.Context, exec *sdk.Executor, dir string) ([]byte, error) {
+	tree, err := loaderkit.ResolveMergedTreeViaExecutor(ctx, exec, dir)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(tree)
+}
+
+// hostProjectDir resolves the project directory via the "deploy-plugins-connect" host seam — the
+// SAME preamble command:bundle's resolveTreeViaLoader runs (it returns os.Getwd() host-side + connects
+// the deployment's plugins). Used by a leg that has no dispatch-threaded p.Dir of its own (the
+// post-provision k3s hint handler) to feed resolveDeployTreeJSON.
+func hostProjectDir(ctx context.Context, exec *sdk.Executor, deployName string) (string, error) {
+	reqJSON, err := json.Marshal(spec.DeployPluginsConnectRequest{Path: deployName})
+	if err != nil {
+		return "", err
+	}
+	resJSON, err := exec.HostBuild(ctx, "deploy-plugins-connect", reqJSON)
+	if err != nil {
+		return "", err
+	}
+	var reply spec.DeployPluginsConnectReply
+	if err := json.Unmarshal(resJSON, &reply); err != nil {
+		return "", err
+	}
+	return reply.Dir, nil
 }
 
 // k8sEntityResolve Invokes the "deploy-entity-resolve" HostBuild seam and decodes the reply.

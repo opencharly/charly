@@ -33,6 +33,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 
@@ -72,9 +73,15 @@ func (c *podUpdateCmd) dispatchByDeployTarget() error {
 	if err != nil {
 		return fmt.Errorf("getwd: %w", err)
 	}
-	tree, err := resolveTreeRoot(dir)
-	if err != nil {
-		return fmt.Errorf("loading deploy tree from %s: %w", dir, err)
+	// command:update (plugin-pod) resolved the merged deploy tree PLUGIN-SIDE
+	// (loaderkit.ResolveMergedTreeViaExecutor) and threaded it in — consume it instead of
+	// re-loading via the core resolveTreeRoot (#55 Cone A Unit 3b). An absent/empty tree yields the
+	// same "no charly.yml" error a nil resolveTreeRoot result produced.
+	var tree map[string]spec.BundleNode
+	if len(c.TreeJSON) > 0 {
+		if err := json.Unmarshal(c.TreeJSON, &tree); err != nil {
+			return fmt.Errorf("decoding threaded deploy tree: %w", err)
+		}
 	}
 	if tree == nil {
 		return fmt.Errorf("no charly.yml found relative to %s; charly update requires a deploy name. To refresh an image artifact only, use 'charly box pull %s'", dir, c.Box)

@@ -92,6 +92,7 @@ func hostBuildPodUpdate(_ context.Context, req spec.PodUpdateRequest, _ buildEng
 	cmd := podUpdateCmd{
 		Box: req.Box, Tag: req.Tag, Build: req.Build, Instance: req.Instance,
 		Seed: req.Seed, ForceSeed: req.ForceSeed, DataFrom: req.DataFrom,
+		TreeJSON: req.TreeJSON,
 	}
 	return spec.PodUpdateReply{}, cmd.dispatchByDeployTarget()
 }
