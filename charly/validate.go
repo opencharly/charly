@@ -7,7 +7,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 
 	"cuelang.org/go/cue"
@@ -15,8 +14,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// spec.ValidationError (the loader validation accumulator) RELOCATED to sdk/loaderkit (resolve_opts.go)
-// in the #118 Cluster-A loader-projection keystone — charly core reaches it as spec.ValidationError.
+// spec.ValidationError (the loader validation accumulator) lives in the dedicated spec module
+// (#55 Phase B) — charly core reaches it as spec.ValidationError.
 
 // validateCandyCUESchemas validates each loaded candy's on-disk manifest against
 // the candy CUE schema (via validateCandyManifestCUE — #Candy for a legacy
@@ -46,7 +45,7 @@ func validateCandyCUESchemas(layers map[string]spec.CandyReader, errs *spec.Vali
 // boxes are validated when `charly box validate` runs in that submodule). The
 // other collection kinds are read from the root-shape files. Candies are
 // handled by validateCandyCUESchemas.
-func validateProjectCUESchemas(cfg *Config, dir string, opts loaderkit.ResolveOpts, errs *spec.ValidationError) {
+func validateProjectCUESchemas(cfg *Config, dir string, opts spec.ResolveOpts, errs *spec.ValidationError) {
 	// Boxes: BoxConfig has no Name field (the name is the cfg.Box map key), so
 	// inject it into the wire form before validating against #Box. Marshal the
 	// resolved struct back to YAML and run it through the same ingest path the
@@ -116,7 +115,7 @@ func validateProjectCUESchemas(cfg *Config, dir string, opts loaderkit.ResolveOp
 // without this explicit pass a base+from box would slip past `charly box
 // validate`. Both seams call the ONE predicate BoxConfig.HasBaseFromConflict (R3).
 // Neither field set stays valid (a scratch box) — only BOTH is a conflict.
-func validateBoxBaseFrom(cfg *Config, opts loaderkit.ResolveOpts, errs *spec.ValidationError) {
+func validateBoxBaseFrom(cfg *Config, opts spec.ResolveOpts, errs *spec.ValidationError) {
 	for name, img := range cfg.EachBox {
 		if !img.IsEnabled() && !opts.ShouldIncludeDisabled(name) {
 			continue

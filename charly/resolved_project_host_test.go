@@ -222,7 +222,7 @@ func writeResolvedProjectFixtureProject(t *testing.T) string {
 // test-side because this exact "project a *spec.ResolvedProject from a live cfg/layers/uf/
 // pre-resolved-boxes" shape has no OTHER core-resident caller anymore, and this file's + the
 // parity test's coverage still needs it directly (not through a cross-module Invoke).
-func testProjectResolvedProjectWithBoxes(cfg *Config, layers map[string]spec.CandyReader, uf *spec.UnifiedFile, distroCfg *spec.DistroConfig, builderCfg *spec.BuilderConfig, initCfg *buildkit.InitConfig, dir, version string, opts loaderkit.ResolveOpts, diags *spec.Diagnostics, preResolvedBoxes map[string]*buildkit.ResolvedBox) (*spec.ResolvedProject, error) {
+func testProjectResolvedProjectWithBoxes(cfg *Config, layers map[string]spec.CandyReader, uf *spec.UnifiedFile, distroCfg *spec.DistroConfig, builderCfg *spec.BuilderConfig, initCfg *buildkit.InitConfig, dir, version string, opts spec.ResolveOpts, diags *spec.Diagnostics, preResolvedBoxes map[string]*buildkit.ResolvedBox) (*spec.ResolvedProject, error) {
 	if opts.DistroCfg == nil {
 		opts.DistroCfg = distroCfg
 	}
@@ -256,7 +256,7 @@ func testProjectResolvedProjectWithBoxes(cfg *Config, layers map[string]spec.Can
 // testBkOpts reproduces the former core build-vocab resolve-opts projection (removed in #55 Cluster-B — charly
 // core no longer names buildkit.ResolveOpts): fill the build vocabulary via resolveVocabOpts, then
 // project onto buildkit.ResolveOpts (a test MAY import buildkit; only non-test charly may not).
-func testBkOpts(dir string, opts loaderkit.ResolveOpts) (buildkit.ResolveOpts, error) {
+func testBkOpts(dir string, opts spec.ResolveOpts) (buildkit.ResolveOpts, error) {
 	vopts, err := resolveVocabOpts(dir, opts)
 	if err != nil {
 		return buildkit.ResolveOpts{}, err
@@ -293,7 +293,7 @@ func testComputeIntermediates(boxes map[string]*buildkit.ResolvedBox, layers map
 // the project fail-fast via loadProjectForResolve, short-circuit to an empty envelope for a
 // project-less dir, else project it via testProjectResolvedProjectWithBoxes (preResolvedBoxes=nil
 // for a fresh per-box resolve).
-func testBuildResolvedProject(t *testing.T, dir string, opts loaderkit.ResolveOpts) (*spec.ResolvedProject, error) {
+func testBuildResolvedProject(t *testing.T, dir string, opts spec.ResolveOpts) (*spec.ResolvedProject, error) {
 	t.Helper()
 	lp, err := loadProjectForResolve(dir, opts, nil)
 	if err != nil {
@@ -317,7 +317,7 @@ func testBuildResolvedProject(t *testing.T, dir string, opts loaderkit.ResolveOp
 func TestResolvedProject_Projection(t *testing.T) {
 	dir := writeResolvedProjectFixtureProject(t)
 
-	rp, err := testBuildResolvedProject(t, dir, loaderkit.ResolveOpts{})
+	rp, err := testBuildResolvedProject(t, dir, spec.ResolveOpts{})
 	if err != nil {
 		t.Fatalf("testBuildResolvedProject: %v", err)
 	}

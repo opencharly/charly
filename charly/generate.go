@@ -11,7 +11,6 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -44,7 +43,7 @@ type Generator struct {
 	// per-box emission loop is scoped by this field.
 	RequestedBoxes []string
 
-	// ExtraCandyRefs is the ORIGINAL loaderkit.ResolveOpts.ExtraCandyRefs this Generator was
+	// ExtraCandyRefs is the ORIGINAL spec.ResolveOpts.ExtraCandyRefs this Generator was
 	// constructed with (a pod-overlay deploy's add_candy: refs, possibly REMOTE/
 	// qualified — e.g. "@github.com/…:vTAG"). Candies (bare-keyed, post-scan) cannot
 	// stand in for this: a bare candy NAME re-passed as an ExtraCandyRefs entry is a
@@ -107,7 +106,7 @@ func newCandyScanGenerator(dir string, includeDisabled bool, extraCandyRefs []st
 		return nil, fmt.Errorf("loading default build config: %w", err)
 	}
 	RegisterBuildVocabulary(defaultDistroCfg)
-	opts := loaderkit.ResolveOpts{IncludeDisabled: includeDisabled, ExtraCandyRefs: extraCandyRefs, InitCfg: defaultInitCfg}
+	opts := spec.ResolveOpts{IncludeDisabled: includeDisabled, ExtraCandyRefs: extraCandyRefs, InitCfg: defaultInitCfg}
 	layers, err := ScanAllCandyWithConfigOpts(dir, cfg, opts)
 	if err != nil {
 		return nil, err
@@ -291,7 +290,7 @@ func (g *Generator) createRemoteCandyCopies() error {
 // candyByName resolves a candy by its INTRINSIC bare name against g.Candies.
 // It is the FORWARD counterpart of deploykit.CandyMapKey (which maps a candy back to its
 // store key): a LOCAL candy is keyed bare == Name, so the direct lookup hits; a
-// REMOTE candy (e.g. a deploy's add_candy: pulled via loaderkit.ResolveOpts.ExtraCandyRefs)
+// REMOTE candy (e.g. a deploy's add_candy: pulled via spec.ResolveOpts.ExtraCandyRefs)
 // is keyed under its fully-qualified ref (deploykit.CandyMapKey), so the direct bare lookup
 // MISSES and we fall back to matching the candy's own Name. Every call site that
 // holds a bare candy name (a plan step's CandyName; an overlay-candy name from

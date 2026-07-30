@@ -3,7 +3,6 @@ package main
 import (
 	"testing"
 
-	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -54,7 +53,7 @@ widget:
 func TestResolveImage_QualifiedDelegates(t *testing.T) {
 	root, cfg := fixtureNamespacedProject(t)
 
-	ri, err := resolveBoxTest(cfg, "sub.widget", "test", root, loaderkit.ResolveOpts{})
+	ri, err := resolveBoxTest(cfg, "sub.widget", "test", root, spec.ResolveOpts{})
 	if err != nil {
 		t.Fatalf("ResolveBox(\"sub.widget\") must resolve via namespace delegation: %v", err)
 	}
@@ -66,11 +65,11 @@ func TestResolveImage_QualifiedDelegates(t *testing.T) {
 	}
 
 	// Bare names still resolve in root, unchanged.
-	if _, err := resolveBoxTest(cfg, "app", "test", root, loaderkit.ResolveOpts{}); err != nil {
+	if _, err := resolveBoxTest(cfg, "app", "test", root, spec.ResolveOpts{}); err != nil {
 		t.Errorf("bare ResolveBox(\"app\") regressed: %v", err)
 	}
 	// A genuinely-missing namespace still errors clearly.
-	if _, err := resolveBoxTest(cfg, "nope.widget", "test", root, loaderkit.ResolveOpts{}); err == nil {
+	if _, err := resolveBoxTest(cfg, "nope.widget", "test", root, spec.ResolveOpts{}); err == nil {
 		t.Error("ResolveBox(\"nope.widget\") should error: no such namespace")
 	}
 }
@@ -102,7 +101,7 @@ func TestResolveAllImage_RequestedQualifiedTarget(t *testing.T) {
 	root, cfg := fixtureNamespacedProject(t)
 
 	// Without RequestedBoxes, sub.widget is not reachable, so not pulled.
-	base, err := resolveAllBoxTest(cfg, root, loaderkit.ResolveOpts{})
+	base, err := resolveAllBoxTest(cfg, root, spec.ResolveOpts{})
 	if err != nil {
 		t.Fatalf("ResolveAllBox: %v", err)
 	}
@@ -111,7 +110,7 @@ func TestResolveAllImage_RequestedQualifiedTarget(t *testing.T) {
 	}
 
 	// With it requested, it is pulled under its fully-qualified key.
-	withReq, err := resolveAllBoxTest(cfg, root, loaderkit.ResolveOpts{RequestedBoxes: []string{"sub.widget"}})
+	withReq, err := resolveAllBoxTest(cfg, root, spec.ResolveOpts{RequestedBoxes: []string{"sub.widget"}})
 	if err != nil {
 		t.Fatalf("resolveAllBoxTest(RequestedImages): %v", err)
 	}

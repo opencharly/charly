@@ -2,7 +2,6 @@ package main
 
 import (
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -85,7 +84,7 @@ import (
 // key can never collide across namespaces for the SAME candy (same content, same key); a genuine
 // name clash between two DIFFERENT candies sharing a bare name is a pre-existing
 // resolver-arbitration concern (`charly box reconcile`), not something this fill introduces.
-func fillNamespacedBoxes(uf *spec.UnifiedFile, initCfg *spec.InitConfig, prefix, calver, dir string, opts loaderkit.ResolveOpts, rp *spec.ResolvedProject, visited map[*spec.UnifiedFile]bool) {
+func fillNamespacedBoxes(uf *spec.UnifiedFile, initCfg *spec.InitConfig, prefix, calver, dir string, opts spec.ResolveOpts, rp *spec.ResolvedProject, visited map[*spec.UnifiedFile]bool) {
 	if uf == nil || visited[uf] {
 		return
 	}

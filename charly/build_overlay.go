@@ -11,7 +11,6 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/loaderkit"
 	specexec "github.com/opencharly/spec/exec"
 	"github.com/opencharly/spec/spec"
 )
@@ -290,7 +289,7 @@ func loadOverlayBuildContext(dir string) *buildEngineContext {
 func resolveOverlayBaseDistroDef(dir, base string, distroCfg *spec.DistroConfig) *spec.ResolvedDistro {
 	if cfg, cerr := LoadConfig(dir); cerr == nil {
 		RegisterBuildVocabulary(distroCfg)
-		if vopts, operr := resolveVocabOpts(dir, loaderkit.ResolveOpts{DistroCfg: distroCfg}); operr == nil {
+		if vopts, operr := resolveVocabOpts(dir, spec.ResolveOpts{DistroCfg: distroCfg}); operr == nil {
 			if resolvedBase, rerr := deploykit.ResolveSpecBox(cfg, base, "", dir, specResolveOpts(vopts)); rerr == nil && resolvedBase != nil && len(resolvedBase.Distro) > 0 {
 				return resolveDistroDef(distroCfg, resolvedBase.Distro[0])
 			}

@@ -34,7 +34,6 @@ import (
 	"sync"
 
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 	"gopkg.in/yaml.v3"
 )
@@ -244,7 +243,7 @@ func connectDeclaredKindPlugins(dir string) {
 		recordDeclaredKindConnectError(need, fmt.Errorf("load project configuration: %w", err))
 		return // config load failure → kinds stay unconnected → normalizeNodeInto warn-skips them
 	}
-	candyMap, err := ScanAllCandyWithConfigOpts(dir, cfg, loaderkit.ResolveOpts{})
+	candyMap, err := ScanAllCandyWithConfigOpts(dir, cfg, spec.ResolveOpts{})
 	if err != nil {
 		recordDeclaredKindConnectError(need, fmt.Errorf("scan project candies: %w", err))
 		return

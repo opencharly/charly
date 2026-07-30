@@ -26,7 +26,6 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -48,7 +47,7 @@ func resolveImageRefForEnsure(image string, cfg *Config, projectDir string) (str
 	if cfg == nil {
 		return "", fmt.Errorf("short name %q requires a project directory with charly.yml", image)
 	}
-	vopts, err := resolveVocabOpts(projectDir, loaderkit.ResolveOpts{})
+	vopts, err := resolveVocabOpts(projectDir, spec.ResolveOpts{})
 	if err != nil {
 		return "", fmt.Errorf("resolving %q via charly.yml: %w", image, err)
 	}
@@ -134,7 +133,7 @@ func hostBuildBoxRefResolve(_ context.Context, req spec.BoxRefResolveRequest, _ 
 	short := buildableShortNameForEnsure(req.Image, cfg)
 	reply.BuildFallbackShort = short
 	if short != "" && cfg != nil {
-		if vopts, oerr := resolveVocabOpts(dir, loaderkit.ResolveOpts{}); oerr == nil {
+		if vopts, oerr := resolveVocabOpts(dir, spec.ResolveOpts{}); oerr == nil {
 			if resolved, err := deploykit.ResolveSpecBox(cfg, short, "", dir, specResolveOpts(vopts)); err == nil && resolved != nil {
 				reply.ProducedRef = kit.ResolveShellImageRef(resolved.Registry, resolved.Name, "")
 			}

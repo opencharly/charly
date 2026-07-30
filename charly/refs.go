@@ -265,7 +265,7 @@ func cacheBehindHead(path string) bool {
 // CollectRemoteRefsOpts. The overwhelming majority of call sites want
 // enabled-only collection, so they keep this two-arg form.
 func CollectRemoteRefs(cfg *Config, layers map[string]spec.CandyReader) ([]loaderkit.RemoteDownload, error) {
-	return CollectRemoteRefsOpts(cfg, layers, loaderkit.ResolveOpts{})
+	return CollectRemoteRefsOpts(cfg, layers, spec.ResolveOpts{})
 }
 
 // CollectRemoteRefsOpts collects all unique remote refs from charly.yml candy
@@ -283,7 +283,7 @@ func CollectRemoteRefs(cfg *Config, layers map[string]spec.CandyReader) ([]loade
 // order.
 //
 //nolint:gocyclo // depth-first graph walker over base/candy/builder edges; nested loops are essential to the traversal
-func CollectRemoteRefsOpts(cfg *Config, layers map[string]spec.CandyReader, opts loaderkit.ResolveOpts) ([]loaderkit.RemoteDownload, error) {
+func CollectRemoteRefsOpts(cfg *Config, layers map[string]spec.CandyReader, opts spec.ResolveOpts) ([]loaderkit.RemoteDownload, error) {
 	// Collect EVERY distinct (repo, git-tag) a ref is referenced at. The git tag
 	// is only the FETCH coordinate — per-entity-version arbitration (and any
 	// warning) happens AFTER fetch in ScanAllCandyWithConfigOpts, so a re-tag of

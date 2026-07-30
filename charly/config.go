@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -17,10 +16,11 @@ import (
 // the ONE fallback (loading the project's distro:/builder: vocabulary when the caller didn't
 // supply it) before delegating to buildkit's free functions — the "~35 STAY: LoadConfig/
 // LoadConfigRaw + 2 fallback branches" the original scoping map identified. The scan/load options
-// struct (loaderkit.ResolveOpts) + the loader validation accumulator (spec.ValidationError) moved to sdk/loaderkit
-// (resolve_opts.go) in the #118 Cluster-A loader-projection keystone — charly core and the
-// loader-consuming plugins share ONE definition (loaderkit.ResolveOpts / spec.ValidationError,
-// a FLAT non-embedding struct so every `loaderkit.ResolveOpts{Field: ...}` call site stays simple).
+// struct (spec.ResolveOpts) + the loader validation accumulator (spec.ValidationError) live in the
+// dedicated spec module (ResolveOpts relocated there in the #55 loader cascade; ValidationError in
+// #55 Phase B) — charly core and the loader-consuming plugins share ONE definition (spec.ResolveOpts /
+// spec.ValidationError, a FLAT non-embedding struct so every `spec.ResolveOpts{Field: ...}` call site
+// stays simple).
 
 // ErrNoCharlyYml is the sentinel wrapped by every "no charly.yml found in the
 // project dir" load error. Callers that treat an absent project as EMPTY rather
@@ -66,8 +66,8 @@ func LoadConfigRaw(dir string) (*Config, error) {
 	return cfg, nil
 }
 
-// resolveVocabOpts fills a loaderkit.ResolveOpts' build vocabulary (distro:/builder:) when the
-// caller did not already supply it, returning the vocabulary-complete loaderkit.ResolveOpts. It is
+// resolveVocabOpts fills a spec.ResolveOpts' build vocabulary (distro:/builder:) when the
+// caller did not already supply it, returning the vocabulary-complete spec.ResolveOpts. It is
 // the ONE place the former ResolveBox/ResolveAllBox wrappers' fillBuildConfigFallback logic lives:
 // a caller that already has DistroCfg/BuilderCfg skips the reload; every other caller gets the SAME
 // vocabulary LoadBuildConfigForBox loads for the same dir (the masked-regression this preserves).
@@ -75,22 +75,22 @@ func LoadConfigRaw(dir string) (*Config, error) {
 // (buildkit.ResolveBox / ResolveAllBox) runs inside the deploykit box-resolve bridge
 // (deploykit.ResolveSpecBox / ResolveAllSpecBoxes / FillNamespaceBoxViews), fed the spec-typed
 // deploykit.SpecResolveOpts this projects to via specResolveOpts.
-func resolveVocabOpts(dir string, opts loaderkit.ResolveOpts) (loaderkit.ResolveOpts, error) {
+func resolveVocabOpts(dir string, opts spec.ResolveOpts) (spec.ResolveOpts, error) {
 	if opts.DistroCfg == nil && opts.BuilderCfg == nil {
 		distroCfg, builderCfg, _, err := LoadBuildConfigForBox(dir)
 		if err != nil {
-			return loaderkit.ResolveOpts{}, err
+			return spec.ResolveOpts{}, err
 		}
 		opts.DistroCfg, opts.BuilderCfg = distroCfg, builderCfg
 	}
 	return opts, nil
 }
 
-// specResolveOpts projects a vocabulary-complete loaderkit.ResolveOpts onto the spec-typed,
+// specResolveOpts projects a vocabulary-complete spec.ResolveOpts onto the spec-typed,
 // loaderkit-free deploykit.SpecResolveOpts the deploykit box-resolve bridge consumes (deploykit
 // cannot import loaderkit — loaderkit imports deploykit). DistroCfg/BuilderCfg are alias-equal
 // (spec.DistroConfig == buildkit.DistroConfig), so the field copy is a plain re-type.
-func specResolveOpts(opts loaderkit.ResolveOpts) deploykit.SpecResolveOpts {
+func specResolveOpts(opts spec.ResolveOpts) deploykit.SpecResolveOpts {
 	return deploykit.SpecResolveOpts{
 		IncludeDisabled:      opts.IncludeDisabled,
 		IncludeDisabledNames: opts.IncludeDisabledNames,
