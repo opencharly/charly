@@ -1,7 +1,6 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
@@ -86,7 +85,7 @@ import (
 // key can never collide across namespaces for the SAME candy (same content, same key); a genuine
 // name clash between two DIFFERENT candies sharing a bare name is a pre-existing
 // resolver-arbitration concern (`charly box reconcile`), not something this fill introduces.
-func fillNamespacedBoxes(uf *spec.UnifiedFile, initCfg *buildkit.InitConfig, prefix, calver, dir string, opts loaderkit.ResolveOpts, rp *spec.ResolvedProject, visited map[*spec.UnifiedFile]bool) {
+func fillNamespacedBoxes(uf *spec.UnifiedFile, initCfg *spec.InitConfig, prefix, calver, dir string, opts loaderkit.ResolveOpts, rp *spec.ResolvedProject, visited map[*spec.UnifiedFile]bool) {
 	if uf == nil || visited[uf] {
 		return
 	}
@@ -148,56 +147,21 @@ func fillNamespacedBoxes(uf *spec.UnifiedFile, initCfg *buildkit.InitConfig, pre
 		// WriteLabels panics on a nil BakedMetadata the moment `charly box generate`/`build` reaches
 		// it (RCA'd K1-alpha regression: this fill previously called bare ResolveBox only, which
 		// never populates the render-render caches at all).
-		bkopts, oerr := buildkitOptsWithVocab(dir, opts)
+		vopts, oerr := resolveVocabOpts(dir, opts)
 		if oerr != nil {
 			continue // vocab load failed → skip this namespace (matches the former per-box ResolveBox erroring)
 		}
-		subBoxes := map[string]*buildkit.ResolvedBox{}
-		for _, name := range sub.AllBoxNames() {
-			img, ok := sub.BoxConfig(name)
-			if !ok || (!img.IsEnabled() && !opts.ShouldIncludeDisabled(name)) {
-				continue
-			}
-			resolved, err := buildkit.ResolveBox(sub, name, calver, dir, bkopts)
-			if err != nil {
-				continue
-			}
-			subBoxes[name] = resolved
-		}
-		if len(subBoxes) > 0 {
-			tempGen := &Generator{Config: sub, Candies: nsLayers, InitConfig: initCfg, Dir: dir, Boxes: subBoxes}
-			for name, resolved := range subBoxes {
-				fullKey := child + "." + name
-				// A box the CURRENT build actually needs (e.g. box/cachyos's `cachyos-pacstrap-
-				// builder` basing on `arch.arch`) is ALREADY correctly present in rp.Boxes by this
-				// point — the build-prep seam's own buildkit.ResolveAllBox->resolveNamespacedBases
-				// pull (demand-driven, requalifying Base/Builder to the fully-qualified ancestor,
-				// e.g. arch-builder's `base: arch` -> `arch.arch`) plus this function caller's own
-				// auto-intermediates fold already added it, render-prepped, with correctly
-				// requalified cross-references. THIS loop's bare `ResolveBox(sub, name, …)` does
-				// NOT requalify Base/Builder (they stay namespace-relative, e.g. plain "arch") — a
-				// harmless orientation-only gap for boxes nobody's build actually uses (never fed
-				// to Generate(order), so a stale Base never gets dereferenced), but overwriting an
-				// ALREADY-correct entry with this uncorrected one breaks the real build the moment
-				// Generate resolves that box's base image (RCA'd K1-alpha regression #2: fixing
-				// WriteLabels's nil BakedMetadata via render-prep here, uncovered THIS pre-existing
-				// gap one layer deeper — ResolveBaseImage panics on the non-requalified `arch`
-				// lookup finding no such key in dg.Boxes). Never overwrite a demand-pulled entry.
-				if _, exists := rp.Boxes[fullKey]; exists {
-					continue
-				}
-				// Best-effort, matching this fill's existing tolerance: a namespaced box whose
-				// render-prep fails (e.g. a required capability missing) is projected WITHOUT the
-				// render caches rather than dropped outright — it just can't be USED as a builder/
-				// base stage, exactly as before this fix for every OTHER box in this loop.
-				_ = tempGen.toDeploykit().RenderPrepBox(name)
-				view := deploykit.ProjectResolvedBox(resolved)
-				if rp.Boxes == nil {
-					rp.Boxes = map[string]spec.ResolvedBoxView{}
-				}
-				rp.Boxes[fullKey] = view
-			}
-		}
+		// #55 Cluster-B: the buildkit-coupled render-prep DRIVE (per-box ResolveBox +
+		// RenderPrepBox + ProjectResolvedBox) moved to the deploykit box-resolve bridge, because
+		// it WRITES buildkit host-render caches (BakedMetadata/RenderCandyOrder/…) no *spec.ResolvedBox
+		// holds — a namespaced box that participates in ANOTHER project's build (a builder/base via
+		// `builder: <ns>.<name>` / `base: <ns>.<name>`, like box/cachyos's `arch.arch`) needs those
+		// caches or WriteLabels panics on nil BakedMetadata. FillNamespaceBoxViews SKIPS a box the
+		// build already demand-pulled into rp.Boxes with correctly-requalified Base/Builder (never
+		// overwrites it with this loop's non-requalified bare resolve — RCA'd K1-alpha regression
+		// #2). Byte-equivalent to the former in-core inner block; the render-prep + skip semantics
+		// are preserved verbatim inside the helper.
+		deploykit.FillNamespaceBoxViews(sub, nsLayers, initCfg, child, calver, dir, specResolveOpts(vopts), rp)
 		fillNamespacedBoxes(subUF, initCfg, child, calver, dir, opts, rp, visited)
 	}
 }

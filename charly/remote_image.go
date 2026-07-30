@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
@@ -35,7 +35,7 @@ type RemoteImageContext struct {
 	Ref      spec.ParsedRef
 	CacheDir string
 	Config   *Config
-	Resolved *buildkit.ResolvedBox
+	Resolved *spec.ResolvedBox
 	Candies  map[string]spec.CandyReader
 	ImageRef string // registry/name:tag for pull
 	BoxName  string // short name (e.g. "openclaw-browser")
@@ -74,11 +74,11 @@ func ResolveRemoteImage(ref string, tag string) (*RemoteImageContext, error) {
 
 	// Resolve the image
 	calverTag := ComputeCalVer()
-	bkopts, err := buildkitOptsWithVocab(cachePath, loaderkit.ResolveOpts{})
+	vopts, err := resolveVocabOpts(cachePath, loaderkit.ResolveOpts{})
 	if err != nil {
 		return nil, fmt.Errorf("resolving image %q in %s: %w", parsed.Name, parsed.RepoPath, err)
 	}
-	resolved, err := buildkit.ResolveBox(cfg, parsed.Name, calverTag, cachePath, bkopts)
+	resolved, err := deploykit.ResolveSpecBox(cfg, parsed.Name, calverTag, cachePath, specResolveOpts(vopts))
 	if err != nil {
 		return nil, fmt.Errorf("resolving image %q in %s: %w", parsed.Name, parsed.RepoPath, err)
 	}

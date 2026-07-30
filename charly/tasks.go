@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/vmshared"
 	"github.com/opencharly/spec/spec"
@@ -31,7 +30,10 @@ func (g *Generator) toDeploykit() *deploykit.Generator {
 	dg.Dir = g.Dir
 	dg.Candies = g.Candies
 	dg.Tag = g.Tag
-	dg.Boxes = g.Boxes
+	// g.Boxes is wire-clean *spec.ResolvedBox (#55 Cluster-B); the deploykit render Generator
+	// holds *buildkit.ResolvedBox (its host-render caches). WrapSpecBoxes re-wraps each — the
+	// cache pointers are nil until this Generator's RenderPrep pass fills them.
+	dg.Boxes = deploykit.WrapSpecBoxes(g.Boxes)
 	// Config + InitConfig: the RESOLVE-side inputs the host render-prep pass
 	// (dg.RenderPrepAll/RenderPrepBox, K3-U3) reads to fill the per-box build-render
 	// caches. The plugin-build render path (NewRenderGeneratorFromProject) never
@@ -48,7 +50,7 @@ func (g *Generator) toDeploykit() *deploykit.Generator {
 	// No package-main concrete-type assert: a state-provision verb self-declares its
 	// act shell via EmitReply.ActScript (see invokeVerbBuildEmit). Registry resolve
 	// stays core (the plugin-render path uses InvokeProvider(OpEmit) directly).
-	dg.EmitPluginOp = func(op *spec.Op, img *buildkit.ResolvedBox) (string, bool, error) {
+	dg.EmitPluginOp = func(op *spec.Op, img *spec.ResolvedBox) (string, bool, error) {
 		prov, ok := providerRegistry.ResolveVerb(op.Plugin)
 		if !ok {
 			return "", false, fmt.Errorf("run: plugin verb %q is not registered (an external plugin not connected at build time?)", op.Plugin)
@@ -106,7 +108,7 @@ func (g *Generator) toDeploykit() *deploykit.Generator {
 // from the registry (its "not connected" error byte-preserved) and Invoke its OpResolve
 // leg (resolveBuilderStage). deploykit builds the render input (BuildStageContext +
 // BuilderResolveInputFrom) and passes it here; the registry resolve + Invoke stays core.
-func (g *Generator) resolveDetectionBuilderStageSeam(builderName string, in spec.BuilderResolveInput, img *buildkit.ResolvedBox) (spec.BuilderResolveReply, error) {
+func (g *Generator) resolveDetectionBuilderStageSeam(builderName string, in spec.BuilderResolveInput, img *spec.ResolvedBox) (spec.BuilderResolveReply, error) {
 	var zero spec.BuilderResolveReply
 	prov, ok := providerRegistry.ResolveBuilder(builderName)
 	if !ok {
@@ -120,7 +122,7 @@ func (g *Generator) resolveDetectionBuilderStageSeam(builderName string, in spec
 // provider (its not-registered + compiled-in + resolve errors byte-preserved), assert it
 // is an EXTERNAL grpcProvider, and Invoke its OpResolve leg (resolveExternalBuilder, the
 // minimal candy-name-only input). Registry-coupled, stays core.
-func (g *Generator) resolveExternalBuilderStageSeam(word, candyName string, img *buildkit.ResolvedBox) (spec.BuilderResolveReply, error) {
+func (g *Generator) resolveExternalBuilderStageSeam(word, candyName string, img *spec.ResolvedBox) (spec.BuilderResolveReply, error) {
 	var zero spec.BuilderResolveReply
 	prov, ok := providerRegistry.ResolveBuilder(word)
 	if !ok {
@@ -148,7 +150,7 @@ func (g *Generator) resolveExternalBuilderStageSeam(word, candyName string, img 
 // returning its C10 InlineFragment (or a per-failure error, byte-preserved). The
 // builder-emit cluster (ensureBuildersConnected + registry ResolveBuilder +
 // resolveBuilderStage) is registry-coupled and stays core.
-func (g *Generator) resolveInlineBuilderSeam(candyName, bName string, bDef *vmshared.BuilderDef, ctx *spec.BuildStageContext, img *buildkit.ResolvedBox) (string, error) {
+func (g *Generator) resolveInlineBuilderSeam(candyName, bName string, bDef *vmshared.BuilderDef, ctx *spec.BuildStageContext, img *spec.ResolvedBox) (string, error) {
 	layer := g.Candies[candyName]
 	if err := ensureBuildersConnected(context.Background(), g.Config, g.Dir, []string{bName}); err != nil {
 		return "", fmt.Errorf("candy %q: connect inline builder %q: %w", candyName, bName, err)
@@ -181,7 +183,7 @@ func (g *Generator) resolveInlineBuilderSeam(candyName, bName string, bDef *vmsh
 // Containerfile Fragment (ActScript=false) spliced as-is. An empty non-act fragment is a loud
 // error (a runtime-/deploy-only capability wrongly asked to build-emit; never bake nothing, R4).
 // The build-time half of the operator-authorized build-time plugin execution.
-func invokeVerbBuildEmit(ctx context.Context, prov Provider, op *spec.Op, img *buildkit.ResolvedBox) (string, bool, error) {
+func invokeVerbBuildEmit(ctx context.Context, prov Provider, op *spec.Op, img *spec.ResolvedBox) (string, bool, error) {
 	params, err := marshalJSON(op)
 	if err != nil {
 		return "", false, fmt.Errorf("run: plugin verb %q build-emit: marshal op: %w", op.Plugin, err)

@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 )
@@ -53,7 +52,7 @@ func TestPodOverlayInlineCopyResolvesUnderContext(t *testing.T) {
 	// The overlay buildEngineContext threads ImageBuildDir == ContextRelPrefix == the overlay
 	// build dir (the invariant hostBuildOverlay's prep sets, riding the BuildEnv scalars onto the
 	// class:step OpEmit).
-	build := buildEngineContext{Box: &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "base"}}, ImageBuildDir: relBuildDir, ContextRelPrefix: relBuildDir}
+	build := buildEngineContext{Box: &spec.ResolvedBox{Name: "base"}, ImageBuildDir: relBuildDir, ContextRelPrefix: relBuildDir}
 	tgt := ociTestTarget(build)
 
 	op := &spec.Op{Write: "/etc/marker", Content: "POD-ADDCANDY-MARKER-OK v1\n", Mode: "0644", RunAs: "root"}

@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/loaderkit"
@@ -25,9 +24,9 @@ type Generator struct {
 	// (ActiveInit/ResolveInitSystem) runs over Candies + candyOrder and lives
 	// on the Generator — one project init config threaded to the build + pod-
 	// overlay emit sites, NOT carried on each ResolvedBox (decoupled in P3).
-	InitConfig     *buildkit.InitConfig
+	InitConfig     *spec.InitConfig
 	Tag            string
-	Boxes          map[string]*buildkit.ResolvedBox
+	Boxes          map[string]*spec.ResolvedBox
 	BuildDir       string
 	Containerfiles map[string]string // cached content per image (used by charly build to pipe via stdin)
 	GlobalOrder    []string          // popularity-weighted global candy order for cache optimization
@@ -79,7 +78,7 @@ type Generator struct {
 }
 
 // resolveUserContext detects existing user in base image or uses configured values
-func (g *Generator) resolveUserContext(img *buildkit.ResolvedBox) {
+func (g *Generator) resolveUserContext(img *spec.ResolvedBox) {
 	if !img.IsExternalBase {
 		// Internal base - inherit from parent, but respect explicit overrides
 		parentImg := g.Boxes[img.Base]
@@ -220,11 +219,15 @@ func newCandyScanGenerator(dir string, includeDisabled bool, extraCandyRefs []st
 	if err != nil {
 		return nil, err
 	}
-	bkopts, err := buildkitOptsWithVocab(dir, opts)
+	vopts, err := resolveVocabOpts(dir, opts)
 	if err != nil {
 		return nil, err
 	}
-	images, err := buildkit.ResolveAllBox(cfg, ComputeCalVer(), dir, bkopts)
+	// #55 Cluster-B: the PURE per-box resolve runs inside the deploykit box-resolve bridge
+	// (kit→kit), returning wire-clean *spec.ResolvedBox — the render-seam floor's 2 consumers
+	// (resolveInlineBuilderSeam/ensureBuildersConnected) read only Name/Tags off these. NOT the
+	// resolved-project envelope InvokeProvider path (would recurse an in-flight build:generate).
+	images, err := deploykit.ResolveAllSpecBoxes(cfg, ComputeCalVer(), dir, specResolveOpts(vopts))
 	if err != nil {
 		return nil, err
 	}
@@ -268,7 +271,7 @@ func parseEmbeddedContextIgnoreBaseline() []string {
 // provider's OpResolve, and returns the decoded reply UNVALIDATED — the caller enforces the
 // emptiness rule appropriate to its path (external_builder + detection multi-stage require a
 // non-empty Stage; the inline cargo path requires a non-empty InlineFragment).
-func resolveBuilderStage(prov Provider, word string, in spec.BuilderResolveInput, img *buildkit.ResolvedBox) (spec.BuilderResolveReply, error) {
+func resolveBuilderStage(prov Provider, word string, in spec.BuilderResolveInput, img *spec.ResolvedBox) (spec.BuilderResolveReply, error) {
 	var zero spec.BuilderResolveReply
 	params, err := marshalJSON(in)
 	if err != nil {
@@ -295,7 +298,7 @@ func resolveBuilderStage(prov Provider, word string, in spec.BuilderResolveInput
 // out-of-tree builder renders a self-contained stage that reads none of the detection fields),
 // then requires a non-empty Stage (a mis-selected word producing no build-context builder fails
 // LOUDLY). Shares the OpResolve Invoke with the detection path via resolveBuilderStage (R3).
-func resolveExternalBuilder(prov Provider, word, candyName string, img *buildkit.ResolvedBox) (spec.BuilderResolveReply, error) {
+func resolveExternalBuilder(prov Provider, word, candyName string, img *spec.ResolvedBox) (spec.BuilderResolveReply, error) {
 	var zero spec.BuilderResolveReply
 	reply, err := resolveBuilderStage(prov, word, spec.BuilderResolveInput{Candy: candyName}, img)
 	if err != nil {
