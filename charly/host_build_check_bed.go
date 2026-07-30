@@ -320,8 +320,8 @@ func bedSessionSetup(req spec.CheckBedRequest) (spec.CheckBedReply, error) {
 		ImageTag:       s.imageTag,
 		LocalRef:       node.From, // local bed ref
 		VMDomains:      domains,
-		CheckLiveRefs:  deploykit.BedCheckLiveRefs(req.Bed, node.Children),
-		ChildKeys:      deploykit.SortedNestedKeys(node.Children),
+		CheckLiveRefs:  spec.BedCheckLiveRefs(req.Bed, node.Children),
+		ChildKeys:      spec.SortedNestedKeys(node.Children),
 		LocalChildKeys: bedLocalChildKeys(node.Children),
 		Members:        bedMemberDescriptors(node.Members),
 		RunBuild:       kit.CheckLevelReaches(level, kit.CheckLevelBuild),
@@ -386,7 +386,7 @@ func bedRunImageTag(bed, calver string) string {
 // host-side re-deploy would be wrong).
 func bedLocalChildKeys(children map[string]*spec.BundleNode) []string {
 	var out []string
-	for _, childKey := range deploykit.SortedNestedKeys(children) {
+	for _, childKey := range spec.SortedNestedKeys(children) {
 		child := children[childKey]
 		if child != nil && nodeTraits(child).HostRooted { // local (host-rooted shell venue)
 			out = append(out, childKey)

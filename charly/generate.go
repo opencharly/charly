@@ -263,7 +263,7 @@ func (g *Generator) createRemoteCandyCopies() error {
 			_ = os.RemoveAll(tmp)
 			return fmt.Errorf("copying remote candy %s: %s: %w", ref, string(out), err)
 		}
-		if err := kit.InstallDirAtomic(tmp, filepath.Join(candyRoot, deploykit.CandyStageDirName(layer))); err != nil {
+		if err := kit.InstallDirAtomic(tmp, filepath.Join(candyRoot, spec.CandyStageDirName(layer))); err != nil {
 			return fmt.Errorf("installing remote candy %s: %w", ref, err)
 		}
 	}

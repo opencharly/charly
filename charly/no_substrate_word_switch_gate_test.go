@@ -15,7 +15,7 @@ import (
 // that keep the descent/traits de-branching from regrowing. A DEPLOY CONSULT site (one that
 // branches on HOW a substrate BEHAVES — which venue it uses, whether it is a machine, whether
 // it is a chain leaf) must read the node's stamped #DeployTraits off node.Descent (via
-// nodeTraits / deployTraitDescent / deployNodeVenue), NEVER a comparison `node.Target == "vm"`
+// nodeTraits / deployTraitDescent / nodeDescentVenue), NEVER a comparison `node.Target == "vm"`
 // against a concrete substrate kind word (the kernel/plugin boundary law: a switch on a kind
 // word is an incomplete seam). The DECLARED trait table lives in candy/plugin-substrate; the
 // kernel consults it BY TRAIT.

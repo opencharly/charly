@@ -74,7 +74,7 @@ func hostBuildConfigResolve(_ context.Context, req spec.ConfigResolveRequest, _ 
 		// lease for — K1-unblock wave 1: the portable deploykit.FindVMClaimant (also used
 		// plugin-side by candy/plugin-preempt off the resolved-project envelope, R3) replaces the
 		// former core-only lookupVMClaimant, over the SAME per-host-overlay-merged tree.
-		claimant, claimantNode, hasClaimant = deploykit.FindVMClaimant(
+		claimant, claimantNode, hasClaimant = spec.FindVMClaimant(
 			deploykit.MergedDeployTree(uf.Bundle, "vm config-resolve"), req.Entity)
 	}
 

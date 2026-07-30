@@ -205,7 +205,7 @@ func deployNodePluginContext(dir, name string) (addCandy []string, refWords []st
 				refWords = append(refWords, v)
 			}
 		}
-		for _, ck := range deploykit.SortedNestedKeys(n.Children) {
+		for _, ck := range spec.SortedNestedKeys(n.Children) {
 			visit(n.Children[ck])
 		}
 	}

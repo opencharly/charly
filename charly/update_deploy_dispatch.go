@@ -37,7 +37,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -61,7 +60,7 @@ import (
 // dc.Lookup(c.Box, c.Instance). On miss the error reports the full key.
 func resolveUpdateDeployNode(tree map[string]spec.BundleNode, image, instance string) (*spec.BundleNode, error) {
 	key := spec.DeployKey(image, instance)
-	node, _, err := deploykit.ResolveNodePath(tree, key)
+	node, _, err := spec.ResolveNodePath(tree, key)
 	if err != nil || node == nil {
 		return nil, fmt.Errorf("no deploy named %q in charly.yml. To refresh an image artifact only, use 'charly box pull %s'", key, image)
 	}

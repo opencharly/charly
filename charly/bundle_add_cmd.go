@@ -83,7 +83,7 @@ func deriveChildExecutorForPath(path string, node *spec.BundleNode, parentExec s
 	// own classification of the CURRENT node, R3); the executor HOP is then selected by that
 	// word's DECLARED descent transport (the same closed nesting vocabulary AppendHopForFlatPath
 	// consumes), never by a second switch on the kind word.
-	switch deployTraitDescent(deploykit.ClassifyNodeTarget(node, path)).Transport {
+	switch deployTraitDescent(spec.ClassifyNodeTarget(node, path)).Transport {
 	case "none":
 		// local (host-rooted shell) + android (parent venue) share the parent venue: android
 		// reaches the device via published ports / the endpoint; no executor hop.

@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -174,7 +173,7 @@ func acquireDispatch(action, claimant string, tokens []string, node spec.BundleN
 		Action:    action,
 		Claimant:  claimant,
 		Tokens:    tokens,
-		ClaimAddr: deploykit.HolderAddrFor(claimant, node),
+		ClaimAddr: spec.HolderAddrFor(claimant, node),
 		Transient: transient,
 	})
 	if err != nil {

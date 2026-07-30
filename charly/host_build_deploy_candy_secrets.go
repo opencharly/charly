@@ -53,7 +53,7 @@ func resolveCandySecrets(plans []*spec.InstallPlan, dir string) (map[string]stri
 		return nil, nil, err
 	}
 	secretEnv := deploykit.ResolveSecretForCandy(candyList, coreCredentialAccess())
-	registers := deploykit.CandyArtifactRegisters(candyList)
+	registers := spec.CandyArtifactRegisters(candyList)
 	hints := make([]string, 0, len(registers))
 	for register := range registers {
 		hints = append(hints, register)
