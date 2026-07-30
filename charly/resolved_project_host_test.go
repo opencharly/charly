@@ -232,7 +232,7 @@ func testProjectResolvedProjectWithBoxes(cfg *Config, layers map[string]spec.Can
 	calver := ComputeCalVer()
 	seams := loaderkit.ResolveProjectSeams{
 		ResolveBox: func(cfg *spec.Config, name, calver, dir string) (*buildkit.ResolvedBox, error) {
-			bkopts, oerr := buildkitOptsWithVocab(dir, opts)
+			bkopts, oerr := testBkOpts(dir, opts)
 			if oerr != nil {
 				return nil, oerr
 			}
@@ -243,7 +243,7 @@ func testProjectResolvedProjectWithBoxes(cfg *Config, layers map[string]spec.Can
 		},
 		ResolveResources:      resolveResources,
 		ShouldIncludeDisabled: opts.ShouldIncludeDisabled,
-		ComputeIntermediates:  ComputeIntermediates,
+		ComputeIntermediates:  testComputeIntermediates,
 		ExternalizedBuilders:  externalizedBuilders,
 	}
 	rp, err := loaderkit.ProjectResolvedProject(cfg, layers, uf, distroCfg, builderCfg, initCfg, dir, version, calver, seams, diags, preResolvedBoxes)
@@ -251,6 +251,41 @@ func testProjectResolvedProjectWithBoxes(cfg *Config, layers map[string]spec.Can
 		rp.Primaries = loaderThreaded().Primaries
 	}
 	return rp, err
+}
+
+// testBkOpts reproduces the former core build-vocab resolve-opts projection (removed in #55 Cluster-B — charly
+// core no longer names buildkit.ResolveOpts): fill the build vocabulary via resolveVocabOpts, then
+// project onto buildkit.ResolveOpts (a test MAY import buildkit; only non-test charly may not).
+func testBkOpts(dir string, opts loaderkit.ResolveOpts) (buildkit.ResolveOpts, error) {
+	vopts, err := resolveVocabOpts(dir, opts)
+	if err != nil {
+		return buildkit.ResolveOpts{}, err
+	}
+	return buildkit.ResolveOpts{
+		IncludeDisabled:      vopts.IncludeDisabled,
+		IncludeDisabledNames: vopts.IncludeDisabledNames,
+		RequestedBoxes:       vopts.RequestedBoxes,
+		DistroCfg:            vopts.DistroCfg,
+		BuilderCfg:           vopts.BuilderCfg,
+	}, nil
+}
+
+// testComputeIntermediates reproduces the former core ComputeIntermediates shim (deleted in #55
+// Cluster-B; its production form is candy/plugin-build/resolve_legs.go): lift cfg.Defaults into a
+// deploykit.IntermediateDefaults and delegate to deploykit.ComputeIntermediates.
+func testComputeIntermediates(boxes map[string]*buildkit.ResolvedBox, layers map[string]spec.CandyReader, cfg *spec.Config, tag string) (map[string]*buildkit.ResolvedBox, error) {
+	defaults := deploykit.IntermediateDefaults{
+		Builder:   spec.BuilderMap(cfg.Defaults.Builder),
+		UID:       cfg.Defaults.UID,
+		User:      cfg.Defaults.User,
+		GID:       cfg.Defaults.GID,
+		Merge:     cfg.Defaults.Merge,
+		Registry:  cfg.Defaults.Registry,
+		Platforms: cfg.Defaults.Platforms,
+		Distro:    cfg.Defaults.Distro,
+		Build:     cfg.Defaults.Build,
+	}
+	return deploykit.ComputeIntermediates(boxes, layers, defaults, tag)
 }
 
 // testBuildResolvedProject is the test-only reproduction of the deleted buildResolvedProjectFromDir

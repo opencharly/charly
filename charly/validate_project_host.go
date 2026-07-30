@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
@@ -57,7 +56,7 @@ type loadedProject struct {
 	uf         *spec.UnifiedFile // nil when absent or its load/discover errored
 	distroCfg  *spec.DistroConfig
 	builderCfg *spec.BuilderConfig
-	initCfg    *buildkit.InitConfig
+	initCfg    *spec.InitConfig
 	version    string
 	empty      bool
 }

@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/loaderkit"
@@ -25,9 +24,9 @@ type Generator struct {
 	// (ActiveInit/ResolveInitSystem) runs over Candies + candyOrder and lives
 	// on the Generator — one project init config threaded to the build + pod-
 	// overlay emit sites, NOT carried on each ResolvedBox (decoupled in P3).
-	InitConfig     *buildkit.InitConfig
+	InitConfig     *spec.InitConfig
 	Tag            string
-	Boxes          map[string]*buildkit.ResolvedBox
+	Boxes          map[string]*spec.ResolvedBox
 	BuildDir       string
 	Containerfiles map[string]string // cached content per image (used by charly build to pipe via stdin)
 	GlobalOrder    []string          // popularity-weighted global candy order for cache optimization
@@ -78,113 +77,6 @@ type Generator struct {
 	dkGen *deploykit.Generator
 }
 
-// resolveUserContext detects existing user in base image or uses configured values
-func (g *Generator) resolveUserContext(img *buildkit.ResolvedBox) {
-	if !img.IsExternalBase {
-		// Internal base - inherit from parent, but respect explicit overrides
-		parentImg := g.Boxes[img.Base]
-		origCfg, _ := g.Config.BoxConfig(img.Name)
-
-		if origCfg.User == "" {
-			img.User = parentImg.User
-		}
-		if origCfg.UID == nil {
-			img.UID = parentImg.UID
-		}
-		if origCfg.GID == nil {
-			img.GID = parentImg.GID
-		}
-
-		// Resolve home directory
-		switch {
-		case img.User == "root":
-			img.Home = "/root"
-		case origCfg.User == "" && origCfg.UID == nil:
-			img.Home = parentImg.Home
-		default:
-			img.Home = fmt.Sprintf("/home/%s", img.User)
-		}
-		return
-	}
-
-	// External base - try to detect existing user at configured UID via verb:oci
-	// (the go-containerregistry adopt-user probe lives in candy/plugin-oci now).
-	userInfo, err := invokeOciInspectUser(img.Base, img.UID)
-	if err != nil {
-		// Can't inspect, use configured defaults
-		return
-	}
-
-	if userInfo.Found {
-		// Found existing user - use their info
-		img.User = userInfo.Name
-		img.Home = userInfo.Home
-		img.GID = userInfo.GID
-	}
-	// else: no user found at UID, will create with configured values
-}
-
-// --- verb:oci adopt-user dispatch (folded from the retired oci_plugin.go) ---
-//
-// The render-seam-floor host Generator's resolveUserContext (above) probes an external base
-// image's /etc/passwd for the adopt-user via the compiled-in candy/plugin-oci (verb:oci); the
-// go-containerregistry engine + the actual probe live OUT-OF-PROCESS there. Core keeps only this
-// thin registry-dispatch, its sole consumer being resolveUserContext (and the render-parity test).
-// verb:oci is a pure INTERNAL RPC keyed by an oci_op ENV discriminator (mirroring the vm plugin's
-// VmOp) — the request struct rides Params, the leg selector rides Env — NOT a `plugin_input`-
-// enveloped check verb. It is COMPILED INTO charly by default (compiled_plugins:), so
-// providerRegistry resolves it in-process and project-lessly; connectPluginByWord covers the
-// baked / project-source coexist paths (the registry-first pattern credential_plugin.go uses).
-
-// ociOpInspectUser is the env-JSON selector matching candy/plugin-oci's ociEnv{OciOp}.
-const ociOpInspectUser = "inspect-user"
-
-// ociProvider resolves verb:oci. Registry-first so a COMPILED-IN plugin resolves in-process and
-// project-lessly; falls back to connectPluginByWord for the baked / project-source coexist paths.
-func ociProvider() (Provider, bool) {
-	if p, ok := providerRegistry.resolve(ClassVerb, "oci"); ok {
-		return p, true
-	}
-	return connectPluginByWord(ClassVerb, "oci")
-}
-
-// invokeOciInspectUser probes a remote image's /etc/passwd for the user at uid via verb:oci,
-// returning the spec.UserInfo (Found=false when no such user / the image can't be inspected).
-func invokeOciInspectUser(ref string, uid int) (spec.UserInfo, error) {
-	prov, ok := ociProvider()
-	if !ok {
-		return spec.UserInfo{}, fmt.Errorf(
-			"oci plugin (verb:oci) did not connect — candy/plugin-oci is compiled into charly " +
-				"(compiled_plugins) by default; on a custom build install it alongside charly " +
-				"(/usr/lib/charly/plugins) or run from a project composing it")
-	}
-	paramsJSON, err := marshalJSON(spec.ImageUserInput{Ref: ref, UID: uid})
-	if err != nil {
-		return spec.UserInfo{}, err
-	}
-	envJSON, err := marshalJSON(map[string]string{"oci_op": ociOpInspectUser})
-	if err != nil {
-		return spec.UserInfo{}, err
-	}
-	out, err := prov.Invoke(context.Background(), &Operation{
-		Reserved: "oci",
-		Op:       OpRun,
-		Params:   paramsJSON,
-		Env:      envJSON,
-	})
-	if err != nil {
-		return spec.UserInfo{}, err
-	}
-	if out == nil {
-		return spec.UserInfo{}, fmt.Errorf("oci: verb:oci returned no result")
-	}
-	var info spec.UserInfo
-	if err := json.Unmarshal(out.JSON, &info); err != nil {
-		return spec.UserInfo{}, fmt.Errorf("oci inspect-user: decode reply: %w", err)
-	}
-	return info, nil
-}
-
 // newCandyScanGenerator builds a Generator populated with Config+Candies+Boxes+Dir+BuildDir — a
 // candy scan + a PLAIN per-box buildkit.ResolveBox pass (NO ComputeIntermediates / GlobalCandyOrder
 // / ComputeEffectiveVersions / RenderPrepAll) — the minimal state the render-seam floor's 2
@@ -220,11 +112,15 @@ func newCandyScanGenerator(dir string, includeDisabled bool, extraCandyRefs []st
 	if err != nil {
 		return nil, err
 	}
-	bkopts, err := buildkitOptsWithVocab(dir, opts)
+	vopts, err := resolveVocabOpts(dir, opts)
 	if err != nil {
 		return nil, err
 	}
-	images, err := buildkit.ResolveAllBox(cfg, ComputeCalVer(), dir, bkopts)
+	// #55 Cluster-B: the PURE per-box resolve runs inside the deploykit box-resolve bridge
+	// (kit→kit), returning wire-clean *spec.ResolvedBox — the render-seam floor's 2 consumers
+	// (resolveInlineBuilderSeam/ensureBuildersConnected) read only Name/Tags off these. NOT the
+	// resolved-project envelope InvokeProvider path (would recurse an in-flight build:generate).
+	images, err := deploykit.ResolveAllSpecBoxes(cfg, ComputeCalVer(), dir, specResolveOpts(vopts))
 	if err != nil {
 		return nil, err
 	}
@@ -268,7 +164,7 @@ func parseEmbeddedContextIgnoreBaseline() []string {
 // provider's OpResolve, and returns the decoded reply UNVALIDATED — the caller enforces the
 // emptiness rule appropriate to its path (external_builder + detection multi-stage require a
 // non-empty Stage; the inline cargo path requires a non-empty InlineFragment).
-func resolveBuilderStage(prov Provider, word string, in spec.BuilderResolveInput, img *buildkit.ResolvedBox) (spec.BuilderResolveReply, error) {
+func resolveBuilderStage(prov Provider, word string, in spec.BuilderResolveInput, img *spec.ResolvedBox) (spec.BuilderResolveReply, error) {
 	var zero spec.BuilderResolveReply
 	params, err := marshalJSON(in)
 	if err != nil {
@@ -295,7 +191,7 @@ func resolveBuilderStage(prov Provider, word string, in spec.BuilderResolveInput
 // out-of-tree builder renders a self-contained stage that reads none of the detection fields),
 // then requires a non-empty Stage (a mis-selected word producing no build-context builder fails
 // LOUDLY). Shares the OpResolve Invoke with the detection path via resolveBuilderStage (R3).
-func resolveExternalBuilder(prov Provider, word, candyName string, img *buildkit.ResolvedBox) (spec.BuilderResolveReply, error) {
+func resolveExternalBuilder(prov Provider, word, candyName string, img *spec.ResolvedBox) (spec.BuilderResolveReply, error) {
 	var zero spec.BuilderResolveReply
 	reply, err := resolveBuilderStage(prov, word, spec.BuilderResolveInput{Candy: candyName}, img)
 	if err != nil {

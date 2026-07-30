@@ -246,7 +246,7 @@ func TestEmitOp_PluginAct_UnixGroup_OCI(t *testing.T) {
 	// render-seam that stays host-coupled (a Go-level ProvisionActor type-assertion), so it needs
 	// renderGenCache seeded too (a SEPARATE cache from the resolved-project stub above).
 	stubRenderGen(t, cwd, box)
-	tgt := ociTestTarget(buildEngineContext{Box: box, ImageBuildDir: cwd, ContextRelPrefix: ".build/test-img"})
+	tgt := ociTestTarget(buildEngineContext{Box: &box.ResolvedBox, ImageBuildDir: cwd, ContextRelPrefix: ".build/test-img"})
 	op := rawUnixGroupOp()
 	plan := &spec.InstallPlan{Candy: "lyr", Steps: []spec.InstallStep{&spec.OpStep{Op: &op, CandyName: "lyr"}}}
 	if err := tgt.Emit([]*spec.InstallPlan{plan}, spec.EmitOpts{}); err != nil {

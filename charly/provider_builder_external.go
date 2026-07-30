@@ -1,7 +1,6 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -27,9 +26,10 @@ import (
 // externalizedBuilders is THE single source of truth for which builder words are served by an
 // EXTERNAL out-of-process plugin (no in-proc BuilderProvider). A word here resolves through
 // providerRegistry.ResolveBuilder to a *grpcProvider connected at plugin-load time. The VALUE lives
-// in buildkit (K3 build-engine, U6) so candy/plugin-build's plugin-side RESOLVE reads the same D-fact;
-// this is the charly-core alias to it (R3, one source).
-var externalizedBuilders = buildkit.ExternalizedBuilders
+// in spec (#55 import-purity) so candy/plugin-build's plugin-side RESOLVE reads the same D-fact AND
+// charly core reaches it over its spec+proto-only import surface; this is the charly-core alias to it
+// (R3, one source).
+var externalizedBuilders = spec.ExternalizedBuilders
 
 // externalBuilderPlugins maps each externalized builder word to the candy SUBPATH of the plugin
 // that serves it (in the default project repo) — the builder companion of

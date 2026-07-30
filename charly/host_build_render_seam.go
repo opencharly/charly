@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 )
@@ -76,7 +75,7 @@ func loadRenderGen(dir string) *Generator {
 // renderSeamGenBox loads the cached Generator + the named box for a render-seam method.
 // Returns a non-nil errReply (for the caller to return) if either is missing — the shared
 // load+guard boilerplate of every box-coupled render-seam method (R3).
-func renderSeamGenBox(dir, boxName, method string) (gen *Generator, img *buildkit.ResolvedBox, errReply *spec.RenderSeamReply) {
+func renderSeamGenBox(dir, boxName, method string) (gen *Generator, img *spec.ResolvedBox, errReply *spec.RenderSeamReply) {
 	gen = loadRenderGen(dir)
 	if gen == nil {
 		return nil, nil, &spec.RenderSeamReply{Error: fmt.Sprintf("render-seam %s: no generator for dir %q", method, dir)}

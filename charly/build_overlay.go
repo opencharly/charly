@@ -9,7 +9,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/loaderkit"
@@ -215,7 +214,7 @@ func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ build
 	build := buildEngineContext{
 		DistroCfg:        spec.WrapDistroDef(podDistroDef),
 		Generator:        &Generator{ExtraCandyRefs: overlayCandies},
-		Box:              &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: base}},
+		Box:              &spec.ResolvedBox{Name: base},
 		ImageBuildDir:    overlayBuildDir,
 		ContextRelPrefix: overlayBuildDir,
 	}
@@ -290,8 +289,8 @@ func loadOverlayBuildContext(dir string) *buildEngineContext {
 func resolveOverlayBaseDistroDef(dir, base string, distroCfg *spec.DistroConfig) *spec.ResolvedDistro {
 	if cfg, cerr := LoadConfig(dir); cerr == nil {
 		RegisterBuildVocabulary(distroCfg)
-		if bkopts, operr := buildkitOptsWithVocab(dir, loaderkit.ResolveOpts{DistroCfg: distroCfg}); operr == nil {
-			if resolvedBase, rerr := buildkit.ResolveBox(cfg, base, "", dir, bkopts); rerr == nil && resolvedBase != nil && len(resolvedBase.Distro) > 0 {
+		if vopts, operr := resolveVocabOpts(dir, loaderkit.ResolveOpts{DistroCfg: distroCfg}); operr == nil {
+			if resolvedBase, rerr := deploykit.ResolveSpecBox(cfg, base, "", dir, specResolveOpts(vopts)); rerr == nil && resolvedBase != nil && len(resolvedBase.Distro) > 0 {
 				return resolveDistroDef(distroCfg, resolvedBase.Distro[0])
 			}
 		}

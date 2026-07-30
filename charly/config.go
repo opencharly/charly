@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
@@ -66,29 +66,38 @@ func LoadConfigRaw(dir string) (*Config, error) {
 	return cfg, nil
 }
 
-// buildkitOptsWithVocab projects a loaderkit.ResolveOpts onto buildkit.ResolveOpts, loading the project
-// build vocabulary (distro:/builder:) when the caller did not already supply it. It is the ONE place
-// the former ResolveBox/ResolveAllBox wrappers' fillBuildConfigFallback + toBuildkitOpts logic lives
-// (K3 U7: the build-engine RESOLVE moved to candy/plugin-build, so charly-side callers now reach the
-// PURE buildkit.ResolveBox / buildkit.ResolveAllBox DIRECTLY over this opts projection — the config.go
-// ResolveBox/ResolveAllBox free-function wrappers are DELETED). BYTE-EQUIVALENT to the former fallback:
+// resolveVocabOpts fills a loaderkit.ResolveOpts' build vocabulary (distro:/builder:) when the
+// caller did not already supply it, returning the vocabulary-complete loaderkit.ResolveOpts. It is
+// the ONE place the former ResolveBox/ResolveAllBox wrappers' fillBuildConfigFallback logic lives:
 // a caller that already has DistroCfg/BuilderCfg skips the reload; every other caller gets the SAME
-// vocabulary LoadBuildConfigForBox loads for the same dir — the masked-regression this preserves.
-func buildkitOptsWithVocab(dir string, opts loaderkit.ResolveOpts) (buildkit.ResolveOpts, error) {
+// vocabulary LoadBuildConfigForBox loads for the same dir (the masked-regression this preserves).
+// #55 Cluster-B: charly core no longer names buildkit.ResolveOpts — the actual pure resolve
+// (buildkit.ResolveBox / ResolveAllBox) runs inside the deploykit box-resolve bridge
+// (deploykit.ResolveSpecBox / ResolveAllSpecBoxes / FillNamespaceBoxViews), fed the spec-typed
+// deploykit.SpecResolveOpts this projects to via specResolveOpts.
+func resolveVocabOpts(dir string, opts loaderkit.ResolveOpts) (loaderkit.ResolveOpts, error) {
 	if opts.DistroCfg == nil && opts.BuilderCfg == nil {
 		distroCfg, builderCfg, _, err := LoadBuildConfigForBox(dir)
 		if err != nil {
-			return buildkit.ResolveOpts{}, err
+			return loaderkit.ResolveOpts{}, err
 		}
 		opts.DistroCfg, opts.BuilderCfg = distroCfg, builderCfg
 	}
-	return buildkit.ResolveOpts{
+	return opts, nil
+}
+
+// specResolveOpts projects a vocabulary-complete loaderkit.ResolveOpts onto the spec-typed,
+// loaderkit-free deploykit.SpecResolveOpts the deploykit box-resolve bridge consumes (deploykit
+// cannot import loaderkit — loaderkit imports deploykit). DistroCfg/BuilderCfg are alias-equal
+// (spec.DistroConfig == buildkit.DistroConfig), so the field copy is a plain re-type.
+func specResolveOpts(opts loaderkit.ResolveOpts) deploykit.SpecResolveOpts {
+	return deploykit.SpecResolveOpts{
 		IncludeDisabled:      opts.IncludeDisabled,
 		IncludeDisabledNames: opts.IncludeDisabledNames,
 		RequestedBoxes:       opts.RequestedBoxes,
 		DistroCfg:            opts.DistroCfg,
 		BuilderCfg:           opts.BuilderCfg,
-	}, nil
+	}
 }
 
 // resolveIntPtr resolves a *int value, falling back to 0 when nil. A charly-side copy of the
