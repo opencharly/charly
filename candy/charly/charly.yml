@@ -12,7 +12,7 @@ charly:
             (the `charly-mcp` server, the `*-charly` showcases, nested-pod orchestrators).
             Images that only need transient in-container `charly` (the dbus delegation
             path) need NOT bake it — the host copies `charly` in on demand
-            (`EnsureCharlyInVenue`; see `/charly-tools:charly`).
+            (`EnsureCharlyInDeployVenue`; see `/charly-tools:charly`).
         candy:
             - virtualization
             - gocryptfs

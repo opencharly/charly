@@ -205,7 +205,7 @@ func EnsureRepoDownloaded(repoPath, version string) (string, error) {
 		// stale export (the kit.DownloadRepo provenance check) — a plain cache hit would
 		// freeze the branch at its first-download content forever (the pre-#146 @main
 		// protocol skew). Immutable coordinates (tags, SHAs) keep the offline cache hit.
-		path, err = activeRefsDownloader.Download(repoPath, version)
+		path, err = requireRefsDownloader().Download(repoPath, version)
 	}
 	if err != nil {
 		return "", err
