@@ -25,7 +25,7 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/loaderkit"
-	"github.com/opencharly/sdk/vmshared"
+	"github.com/opencharly/spec/hostenv"
 	"github.com/opencharly/spec/proc"
 	"github.com/opencharly/spec/spec"
 )
@@ -90,7 +90,7 @@ func bringUpMembers(node *spec.BundleNode, imageTag string) error {
 			// deploy the VM node — `bundle add <member> <vm-entity>` (the VM-template
 			// ref, like the isVM root's deploy-add), not the bare pod/local form.
 			// Best-effort pre-destroy clears a stale domain from an interrupted run.
-			vmshared.StartLibvirtUserSession()
+			hostenv.StartLibvirtUserSession()
 			// The member's libvirt domain is named after the MEMBER deploy (memberKey), not the
 			// shared kind:vm entity (memberNode.From) — so member VMs sharing one entity across beds
 			// get distinct, collision-free domains + per-domain disk overlays + ports (P33). The

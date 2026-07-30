@@ -8,7 +8,6 @@ import (
 
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/vmshared"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -148,7 +147,7 @@ func (g *Generator) resolveExternalBuilderStageSeam(word, candyName string, img 
 // returning its C10 InlineFragment (or a per-failure error, byte-preserved). The
 // builder-emit cluster (ensureBuildersConnected + registry ResolveBuilder +
 // resolveBuilderStage) is registry-coupled and stays core.
-func (g *Generator) resolveInlineBuilderSeam(candyName, bName string, bDef *vmshared.BuilderDef, ctx *spec.BuildStageContext, img *buildkit.ResolvedBox) (string, error) {
+func (g *Generator) resolveInlineBuilderSeam(candyName, bName string, bDef *spec.BuilderDef, ctx *spec.BuildStageContext, img *buildkit.ResolvedBox) (string, error) {
 	layer := g.Candies[candyName]
 	if err := ensureBuildersConnected(context.Background(), g.Config, g.Dir, []string{bName}); err != nil {
 		return "", fmt.Errorf("candy %q: connect inline builder %q: %w", candyName, bName, err)

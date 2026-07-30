@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/opencharly/sdk/vmshared"
 	"github.com/opencharly/spec/spec"
 
 	"github.com/opencharly/sdk/kit"
@@ -254,9 +253,9 @@ func Distros(uf *spec.UnifiedFile) map[string]*spec.ResolvedDistro {
 
 // Builders reconstructs the name-keyed multi-stage builder vocabulary from
 // uf.PluginKinds["builder"] (the `builder` plugin kind, candy/plugin-builder) into the
-// map[string]*vmshared.BuilderDef shape the generator consumed when builder was a typed core map.
-func Builders(uf *spec.UnifiedFile) map[string]*vmshared.BuilderDef {
-	return spec.DecodePluginKindMap[vmshared.BuilderDef](uf, "builder")
+// map[string]*spec.BuilderDef shape the generator consumed when builder was a typed core map.
+func Builders(uf *spec.UnifiedFile) map[string]*spec.BuilderDef {
+	return spec.DecodePluginKindMap[spec.BuilderDef](uf, "builder")
 }
 
 // resolveInits projects the name-keyed init-system vocabulary from

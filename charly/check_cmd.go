@@ -12,7 +12,6 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/vmshared"
 )
 
 // check_cmd.go — the residual host-side check-project plumbing after the K1-unblock wave's "live"
@@ -224,9 +223,9 @@ func deployNodePluginContext(dir, name string) (addCandy []string, refWords []st
 // descending node.Children for each dotted segment (the SAME nested-tree shape
 // ResolveDeployChain walks). A bare name is the top-level entry; a dotted name
 // (root.child[.grandchild…]) is the nested child the bed runner deploys via `charly bundle
-// add <root>.<child>`. A leading "vm:" is stripped first via vmshared.SplitVmAddress (RCA #8/#9,
+// add <root>.<child>`. A leading "vm:" is stripped first via spec.SplitVmAddress (RCA #8/#9,
 // FINAL/K5 unit 6a, live-probe-caught) — the SAME legacy-vm CLI-addressing convention
-// resolveDelNode / vmshared.VmNameFromDeployName already honor elsewhere (`charly bundle del vm:<name>`
+// resolveDelNode / spec.VmNameFromDeployName already honor elsewhere (`charly bundle del vm:<name>`
 // / `vm:<parent.child>`): without stripping it, `tree["vm:"+parts[0]]` never matches (the tree
 // is keyed by the plain name), so a "vm:"-prefixed dotted address silently resolved to
 // nothing here — deployNodePluginContext (this function's one caller) then collected ZERO
@@ -236,7 +235,7 @@ func deployNodePluginContext(dir, name string) (addCandy []string, refWords []st
 // fine while the CONNECT silently failed — the gap surfaced only later, when dispatch needed
 // the never-connected provider. Returns false when any segment is absent.
 func resolveDeployNodeByPath(tree map[string]spec.BundleNode, name string) (*spec.BundleNode, bool) {
-	name, _ = vmshared.SplitVmAddress(name)
+	name, _ = spec.SplitVmAddress(name)
 	parts := strings.Split(name, ".")
 	root, ok := tree[parts[0]]
 	if !ok {

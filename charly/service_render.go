@@ -16,9 +16,16 @@ package main
 // plugin→plugin reverse channel) — the pattern of credential_plugin.go. Compiled-in placement
 // keeps it resolvable during build AND deploy with no connect step and no per-call gRPC cost.
 // validateTextEgress below is this file's OWN live call (RenderService's unit-text gate); the
-// two init() functions inject the host implementation into vmshared/kit's swappable seam vars
-// (vmshared/kit cannot import charly core) — LOAD-BEARING wiring, not dead code, even though
-// no other charly/*.go file calls ValidateEgress/ValidateEgressValue directly any more.
+// init() function injects the host egress validator into sdk/kit's swappable ValidateRecord seam
+// (sdk/kit cannot import charly core) — LOAD-BEARING wiring, not dead code, even though no other
+// charly/*.go file calls ValidateEgress/ValidateEgressValue directly any more.
+//
+// The former vmshared.ValidateEgress / vmshared.UnmarshalEmbeddedDefaults host fills were DELETED
+// (#55 vmshared Bucket D): their only consumers (vmshared.RenderCloudInit's egress gate,
+// ovmf_paths' embedded-defaults parse) run EXCLUSIVELY in candy/plugin-vm, which fills those seams
+// itself (candy/plugin-vm/vmshared_aliases.go). No charly-process path — direct or via any sdk kit
+// charly imports — ever reaches them, so charly's fills were redundant; this drops charly's last
+// sdk/vmshared import.
 
 import (
 	"context"
@@ -28,20 +35,8 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/vmshared"
 	"github.com/opencharly/spec/spec"
 )
-
-// init wires the host-side implementations of vmshared's injection seams (hooks.go):
-// vmshared cannot import charly core, so the host installs ValidateEgress (the egress gate
-// below) and UnmarshalEmbeddedDefaults (embed_defaults.go) into vmshared's function vars at
-// startup. Relocated here from the deleted charly/egress.go (coneB-buildtail dissolution;
-// egress.go itself was relocated from the deleted charly/vmshared_aliases.go) — this is
-// load-bearing seam wiring, NOT an alias (ZERO-ALIASES v2).
-func init() {
-	vmshared.ValidateEgress = ValidateEgress
-	vmshared.UnmarshalEmbeddedDefaults = unmarshalEmbeddedDefaults
-}
 
 // Inject charly's egress-schema validation into the ledger's record-write path
 // (sdk/kit has no egress subsystem — it calls the kit.ValidateRecord seam).

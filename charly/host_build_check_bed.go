@@ -11,7 +11,7 @@ import (
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/loaderkit"
-	"github.com/opencharly/sdk/vmshared"
+	"github.com/opencharly/spec/hostenv"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -38,7 +38,7 @@ import (
 //
 // The op bodies call the SHARED core helpers runCheckBed uses (bedGPUPrereqMissing,
 // kit.AcquireFileLock, bedVmDomains/acquireVmDomainLock, selfSuperprojectOverridePair/
-// mergeRepoOverrides, acquireResourceForClaimant, vmshared.StartLibvirtUserSession,
+// mergeRepoOverrides, acquireResourceForClaimant, hostenv.StartLibvirtUserSession,
 // persistBedDeployOverrides, bringUpMembers/tearDownMembers, deploykit.WaitForVmSshReady/
 // deploykit.WaitForContainerReady, bedCheckLevel/bedCheckLiveRefs/…) — those helpers STAY
 // core (shared with runCheckBed + bundle_add_cmd; K-wave relocation inventory, never
@@ -290,7 +290,7 @@ func bedSessionSetup(req spec.CheckBedRequest) (spec.CheckBedReply, error) {
 
 	// VM/group beds need the libvirt user-session daemon (probes + the backend resolver). Best-effort.
 	if isVM || isGroup {
-		vmshared.StartLibvirtUserSession()
+		hostenv.StartLibvirtUserSession()
 	}
 
 	// Seed the per-host overlay with the bed's project-declared deploy-shaped overrides BEFORE the

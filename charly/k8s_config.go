@@ -1,7 +1,7 @@
 package main
 
 // -----------------------------------------------------------------------------
-// vmshared.K8sDeployConfig — the `kubernetes:` sub-block on BundleNode. Part F.
+// spec.K8sDeploy — the `kubernetes:` sub-block on BundleNode. Part F.
 //
 // Schema v4: deploy-side K8s knobs (namespace, workload kind override,
 // patches, raw manifests) stay here. Cluster-wide policy (kubeconfig

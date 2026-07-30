@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/vmshared"
 	"github.com/opencharly/spec/spec"
 	"github.com/opencharly/spec/sshx"
 )
@@ -27,7 +26,7 @@ import (
 // plugin — RCA-proven, ~18 plugin builds break on the missing go.sum entry — so keeping it here confines
 // x/crypto/ssh to this ONE host-fabric file, the analogue of the GPU host-legs using hardware libs. This is
 // the SINGLE contained x/crypto/ssh boundary in charly core (once coneA moves vm_backend_lifecycle out).
-// The libvirt-URI parse rides the floor-legal vmshared.ParseLibvirtURI (no charly alias).
+// The libvirt-URI parse rides the floor-legal spec.ParseLibvirtURI (no charly alias).
 
 // resolveVerbGraphics resolves a deployment's <kind> display (kind = "vnc" | "spice") to a
 // dialable endpoint. It is venue-aware and REPLACES the former per-verb vnc + spice host
@@ -111,7 +110,7 @@ func (h *hostVerbResolver) resolveVerbGraphics(kind string) (graphicsEndpoint, e
 
 	// Remote (qemu+ssh://) — open an SSH tunnel forwarding the endpoint to a local address;
 	// register the teardown on the Runner (the tunnel carries the live connection).
-	parsed, perr := vmshared.ParseLibvirtURI(rr.TunnelTarget)
+	parsed, perr := spec.ParseLibvirtURI(rr.TunnelTarget)
 	if perr != nil {
 		return graphicsEndpoint{}, perr
 	}

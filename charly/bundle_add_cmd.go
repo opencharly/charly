@@ -35,7 +35,7 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/vmshared"
+	"github.com/opencharly/spec/hostenv"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -137,7 +137,7 @@ func (c *deployDelCmd) resolveDelNode(tree map[string]spec.BundleNode) (*spec.Bu
 		return &spec.BundleNode{Target: "local"}, "local", nil
 	}
 	// RCA #9 (FINAL/K5 unit 6a, live-probe-caught): try the REAL tree resolution FIRST — now
-	// "vm:"-prefix-aware via resolveDeployNodeByPath's own vmshared.SplitVmAddress use (RCA #8) — instead
+	// "vm:"-prefix-aware via resolveDeployNodeByPath's own spec.SplitVmAddress use (RCA #8) — instead
 	// of unconditionally short-circuiting to a synthetic Target-only placeholder for ANY
 	// "vm:"-prefixed name. The old unconditional shortcut meant a "vm:"-prefixed del NEVER saw
 	// the tree at all: it "resolved" successfully with a bare node (no From, no children), which
@@ -154,7 +154,7 @@ func (c *deployDelCmd) resolveDelNode(tree map[string]spec.BundleNode) (*spec.Bu
 			return &n, n.Target, nil
 		}
 	}
-	if _, isVm := vmshared.SplitVmAddress(c.Name); isVm {
+	if _, isVm := spec.SplitVmAddress(c.Name); isVm {
 		// Fallback ONLY for a genuine tree-absence: a "vm:"-prefixed address with no matching
 		// tree entry (the deploy was removed from charly.yml, or never had one — e.g. a bare
 		// `charly vm create --domain` with no deploy entry). The synthetic Target-only
@@ -197,8 +197,8 @@ func podDeploymentArtifactExists(name string) bool {
 // build_overlay.go (the pod-overlay build) host-side; the plugin computes its
 // own twin (candy/plugin-bundle/dispatch.go detectHostContext) for the deploy compile.
 func detectHostContext() deploykit.HostContext {
-	hd, _ := vmshared.DetectHostDistro()
-	glibc, _ := vmshared.DetectHostGlibc()
+	hd, _ := hostenv.DetectHostDistro()
+	glibc, _ := hostenv.DetectHostGlibc()
 	if hd == nil {
 		return deploykit.HostContext{}
 	}

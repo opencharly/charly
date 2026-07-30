@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/opencharly/sdk/vmshared"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -40,10 +39,10 @@ func resolveK8sViaPlugin(body json.RawMessage) (*ResolvedK8s, error) {
 	return reply.Resolved, nil
 }
 
-// resolveVmViaPlugin projects one opaque vm template body into a *vmshared.VmSpec
-// (= *spec.ResolvedVm) via candy/plugin-substrate's OpResolve leg (the vm
+// resolveVmViaPlugin projects one opaque vm template body into a *spec.ResolvedVm
+// via candy/plugin-substrate's OpResolve leg (the vm
 // substrate-value de-type, Cutover L). Returns nil for an empty/absent body.
-func resolveVmViaPlugin(body json.RawMessage) (*vmshared.VmSpec, error) {
+func resolveVmViaPlugin(body json.RawMessage) (*spec.ResolvedVm, error) {
 	if len(body) == 0 {
 		return nil, nil
 	}
