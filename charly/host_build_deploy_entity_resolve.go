@@ -32,9 +32,9 @@ func hostBuildDeployEntityResolve(_ context.Context, req spec.DeployEntityResolv
 		//
 		// The invoking plugin threads the merged deploy tree it already resolved PLUGIN-SIDE
 		// (loaderkit.ResolveMergedTreeViaExecutor) — this case consumes it instead of re-loading
-		// via the core resolveTreeRoot (#55 Cone A Unit 3b tree-threading, mirroring the
+		// the tree host-side (#55 Cone A Unit 3b tree-threading, mirroring the
 		// deploy-del-resolve seam). An absent/empty tree ⇒ nil map ⇒ a not-found for req.Name,
-		// exactly as a nil resolveTreeRoot result produced.
+		// exactly as a nil host-tree-read result produced.
 		var tree map[string]spec.BundleNode
 		if len(req.TreeJSON) > 0 {
 			if err := json.Unmarshal(req.TreeJSON, &tree); err != nil {

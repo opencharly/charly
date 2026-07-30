@@ -146,8 +146,8 @@ func TestHasChildren(t *testing.T) {
 // TestMergeDeployConfigsLocalCutoverFields locks in the field-level merge for
 // the kind:local target fields: Local, User,
 // SSHArgs. Without these, target:local deployments authored in the project
-// deploy.yml lost their template ref + ssh overrides whenever resolveTreeRoot
-// merged via MergeDeployConfigs(projectDC, localDC), leaving the local deploy
+// deploy.yml lost their template ref + ssh overrides whenever the merged deploy
+// tree was built via MergeDeployConfigs(projectDC, localDC), leaving the local deploy
 // with an empty candy list and a silent no-op install.
 //
 // Fixture name `charly-cachyos` matches the deployment key (renamed from `qc`

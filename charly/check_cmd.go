@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 
@@ -104,6 +105,24 @@ func resolveCheckRunnerContext(box, dir string, cfg *Config) checkRunnerContext 
 	return checkRunnerContext{CandyDirs: candyDirsFromScan(candyMap)}
 }
 
+// resolveMergedDeployTree returns the top-level Bundle (deploy-node) map — the merged project
+// charly.yml + per-host operator overlay, ready for dotted-path traversal — the host-side
+// merged-tree read the two remaining check host seams need (deployNodePluginContext below +
+// check_venue_resolve.go's checkVenueExecFromReply). It replaces the DELETED deploy_tree.go
+// host merged-tree read (#55 LOADER cone): instead of a host-resident sdk/deploykit projection+merge
+// (the incomplete seam a floor-M read must not carry), it drives the LOADER CAPABILITY —
+// loaderkit.ResolveMergedTreeViaExecutor over an in-proc host reverse channel (the SAME
+// executorReverseServer path command:validate / command:bundle drive) — so the deploykit
+// projection/overlay/merge lives INSIDE loaderkit, off charly core, and this read routes through
+// the loader broker exactly like every Cone A Unit 3 dispatch reader. The in-proc executor reaches
+// only the compiled-in loader-* + pod-config-load-bundle host legs (it never runs the
+// deploy-plugins-connect seam), so a PRE-CONNECT caller (deployNodePluginContext feeding
+// loadDeployPlugins BEFORE any out-of-process plugin connects) never recurses.
+func resolveMergedDeployTree(dir string) (map[string]spec.BundleNode, error) {
+	ex := sdk.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}})
+	return loaderkit.ResolveMergedTreeViaExecutor(context.Background(), ex, dir)
+}
+
 // deployNodePluginContext resolves the deploy/bed node named `name` in the project at
 // `dir` ONCE (the SAME project-bundle loader the deploy walker uses) and returns the
 // two plugin-loading inputs the check runner (resolveCheckRunnerContext) and the deploy
@@ -125,7 +144,7 @@ func resolveCheckRunnerContext(box, dir string, cfg *Config) checkRunnerContext 
 // collects candy + box references; a genuinely missing reference fails loudly at
 // dispatch, never silently mis-deploys).
 func deployNodePluginContext(dir, name string) (addCandy []string, refWords []string) {
-	tree, err := resolveTreeRoot(dir)
+	tree, err := resolveMergedDeployTree(dir)
 	if err != nil || tree == nil {
 		return nil, nil
 	}

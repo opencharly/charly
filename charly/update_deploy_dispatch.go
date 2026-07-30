@@ -9,7 +9,7 @@ package main
 // user-facing surface is just one verb.
 //
 // TRACKED P13-KERNEL EXIT (DEPLOY-wave audit, 2026-07-20; R1-corrected 2026-07-23 —
-// K1-UNBLOCK wave-4 spike): resolveTreeRoot/loadDeployPlugins/ResolveTarget were
+// K1-UNBLOCK wave-4 spike): the host tree read / loadDeployPlugins / ResolveTarget were
 // framed here as blocked on a NOT-YET-BUILT "venue-scoped-executor-session seam" —
 // that framing is now STALE. The seam already exists and is live: InvokeProvider's
 // caller-supplied VenueDescriptorJson self-description (plugin_dispatch_reverse.go)
@@ -75,8 +75,8 @@ func (c *podUpdateCmd) dispatchByDeployTarget() error {
 	}
 	// command:update (plugin-pod) resolved the merged deploy tree PLUGIN-SIDE
 	// (loaderkit.ResolveMergedTreeViaExecutor) and threaded it in — consume it instead of
-	// re-loading via the core resolveTreeRoot (#55 Cone A Unit 3b). An absent/empty tree yields the
-	// same "no charly.yml" error a nil resolveTreeRoot result produced.
+	// re-loading the tree host-side (#55 Cone A Unit 3b). An absent/empty tree yields the
+	// same "no charly.yml" error a nil host-tree-read result produced.
 	var tree map[string]spec.BundleNode
 	if len(c.TreeJSON) > 0 {
 		if err := json.Unmarshal(c.TreeJSON, &tree); err != nil {

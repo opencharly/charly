@@ -109,7 +109,7 @@ func TestCollectAndroidDeployNodes_TopLevel(t *testing.T) {
 }
 
 // Per-machine overlay overrides the project projection per key (mirrors
-// resolveTreeRoot's MergeDeployConfigs(projectDC, localDC) precedence).
+// the merged-tree read's MergeDeployConfigs(projectDC, localDC) precedence).
 func TestCollectAndroidDeployNodes_PerMachineWinsPerKey(t *testing.T) {
 	rp := &spec.ResolvedProject{
 		Deploy: map[string]*spec.Deploy{"phone": {Target: "android", From: "dev"}},

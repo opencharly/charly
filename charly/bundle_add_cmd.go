@@ -145,9 +145,9 @@ func (c *deployDelCmd) resolveDelNode(tree map[string]spec.BundleNode) (*spec.Bu
 	// fail to find the node) until dispatch itself failed. A real node also lets Del's teardown
 	// hooks see the deploy's actual From/Children, which the synthetic placeholder never carried.
 	// tree is threaded PLUGIN-SIDE by command:bundle (resolveTreeViaLoader) — the #55 Cone A Unit 3a
-	// tree-threading that replaced this function's former host resolveTreeRoot(cwd) read; a
+	// tree-threading that replaced this function's former host merged-tree read (cwd); a
 	// nil/empty tree falls through to the "vm:"-prefix / pod-artifact fallbacks below, exactly as a
-	// nil resolveTreeRoot result did.
+	// nil host-tree-read result did.
 	if tree != nil {
 		if node, ok := resolveDeployNodeByPath(tree, c.Name); ok && node.Target != "" {
 			n := *node

@@ -197,7 +197,7 @@ func mergedNestedRoots(ex *sdk.Executor, ctx context.Context) (map[string]deploy
 }
 
 // mergedNestedRootsFrom is the PURE merge step: project deploy tree (project then local overlay
-// wins per key, deploykit.MergeDeployConfigs — the SAME precedence resolveTreeRoot uses),
+// wins per key, deploykit.MergeDeployConfigs — the SAME precedence the merged-tree read uses),
 // callable directly from a test with in-memory fixtures (no LoadBundleConfig I/O).
 func mergedNestedRootsFrom(rp *spec.ResolvedProject, perMachine *deploykit.BundleConfig) map[string]deploykit.BundleNode {
 	projectBundle := make(map[string]deploykit.BundleNode, len(rp.Deploy))

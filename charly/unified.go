@@ -64,8 +64,8 @@ const UnifiedFileName = spec.UnifiedFileName
 // DELETED as dead code (radical dead-code removal): after the field-singular
 // cutover (2026-05) spec.UnifiedFile.Bundle is a flat map and Provides moved
 // to root level, and the last real referent — migrate_unified.go — is long gone.
-// Its only surviving mentions were prose (deploy_tree.go's resolveTreeRoot doc
-// comment, this file) plus the TestLoadUnified_DeploymentsSection name (which
+// Its only surviving mentions were prose (this file) plus the
+// TestLoadUnified_DeploymentsSection name (which
 // tests that the legacy `deployments:` YAML key is hard-rejected at load, never
 // the Go type). No code constructed or consumed it.
 

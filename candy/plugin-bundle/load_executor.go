@@ -19,7 +19,7 @@ import (
 // validators over InvokeProvider(kind, OpResolve). resolveTreeViaLoader below just calls that helper.
 
 // resolveTreeViaLoader is the witness entry: it drives loaderkit.LoadUnifiedViaExecutor PLUGIN-SIDE
-// to resolve the `charly bundle add` deploy tree, replacing the former host resolveTreeRoot seam. The
+// to resolve the `charly bundle add` deploy tree, replacing the former host-resident merged-tree read. The
 // host "deploy-plugins-connect" preamble connects the deployment's out-of-tree plugin candies
 // (registry-coupled) and hands back the project dir; the project load + local-overlay merge
 // (deploykit.LoadBundleConfig / MergeDeployConfigs) are pure sdk. It returns the merged tree and

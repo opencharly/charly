@@ -558,8 +558,8 @@ var ErrNotSupportedOnExternal = fmt.Errorf("lifecycle operation not supported on
 // ---------------------------------------------------------------------------
 
 // ResolveTarget returns the UnifiedDeployTarget for `name`, dispatching on the node's canonical
-// target. The node MUST be the dispatch-merged BundleNode (project+operator field merge from
-// resolveTreeRoot) — the adapter consumes node fields (Nested/Env/ephemeral/disposable) directly
+// target. The node MUST be the dispatch-merged BundleNode (project+operator field-merged deploy
+// tree) — the adapter consumes node fields (Nested/Env/ephemeral/disposable) directly
 // and NEVER re-reads them from disk.
 //
 // Errors:

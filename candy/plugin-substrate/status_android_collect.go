@@ -90,7 +90,7 @@ func collectAndroidStatus(ctx context.Context, req spec.SubstrateStatusRequest) 
 
 // collectAndroidDeployNodes is the SINGLE enumeration of every target:android
 // deploy node, merging the resolved-project's deploy tree with the
-// per-machine overlay (local wins per key, mirroring resolveTreeRoot's
+// per-machine overlay (local wins per key, mirroring the merged-tree read's
 // MergeDeployConfigs precedence), then pre-order walking every root so nested
 // devices are discovered with their full dotted path.
 func collectAndroidDeployNodes(rp *spec.ResolvedProject, perMachine *deploykit.BundleConfig) []androidDeployNode {

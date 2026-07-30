@@ -44,7 +44,8 @@ func resolveCheckVenueReply(name, instance string) (spec.CheckVenueResolveReply,
 // classification — the host half of the seam (a live executor never crosses the wire, so the plugin
 // returns only the descriptor + nested marker and the host rebuilds the executor by the SAME
 // generic mechanisms the core original used). A NESTED target rebuilds its N-hop chain host-side via
-// the kind-blind deploykit.ResolveDeployChain off resolveTreeRoot (byte-identical to the deleted
+// the kind-blind deploykit.ResolveDeployChain off the shared host merged-tree read
+// (resolveMergedDeployTree, byte-identical to the deleted
 // core resolveCheckVenue's own dotted-path branch), degrading to the single-hop descriptor when the
 // walk cannot resolve (matching the plugin's own dotted-vm fallback); a non-nested target
 // re-materializes directly via kit.VenueFromDescriptor. Zero kind classification — the descriptor's
@@ -52,7 +53,7 @@ func resolveCheckVenueReply(name, instance string) (spec.CheckVenueResolveReply,
 func checkVenueExecFromReply(reply spec.CheckVenueResolveReply, name string) (spec.DeployExecutor, error) {
 	if reply.Nested {
 		dir, _ := os.Getwd()
-		if roots, _ := resolveTreeRoot(dir); roots != nil {
+		if roots, _ := resolveMergedDeployTree(dir); roots != nil {
 			if _, chain, chainErr := deploykit.ResolveDeployChain(roots, name, kit.ShellExecutor{}); chainErr == nil && chain != nil {
 				return chain, nil
 			}

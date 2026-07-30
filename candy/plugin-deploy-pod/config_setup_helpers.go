@@ -320,8 +320,8 @@ func persistResourceCaps(ctx context.Context, ex *sdk.Executor, dc **deploykit.B
 // enc-data, type: encrypted}]`) — which the per-host overlay `loadDeploy` reads (LoadBundleConfig,
 // ~/.config/charly/charly.yml) never carries on its own. Resolved PLUGIN-SIDE (#55 Cone A Unit 3a):
 // the former "pod-config-project-volume" host seam (which re-loaded the merged tree via the core
-// resolveTreeRoot) is DELETED — this reads the SAME merged project+operator tree itself via
-// loaderkit.ResolveMergedTreeViaExecutor (the plugin-safe resolveTreeRoot twin), keyed by
+// the former host merged-tree read) is DELETED — this reads the SAME merged project+operator tree itself via
+// loaderkit.ResolveMergedTreeViaExecutor (the plugin-safe merged-tree resolver), keyed by
 // DeployKey exactly as the seam did. dir comes from the "deploy-plugins-connect" seam (the
 // authoritative host project dir + the kind-plugin connect the loader needs). Returns (nil, nil)
 // when the project declares no override for this deploy (or there is no project — labels-only).

@@ -10,7 +10,7 @@ import (
 
 // host_seams.go — the command:bundle plugin's bridge to the host. The bundle CLI handlers moved out
 // of charly core (P13). `add`/`del` now drive their WHOLE deploy-tree walk plugin-side (walk.go,
-// the K4-C walk port) — LoadUnified-coupled config resolution (resolveTreeRoot/resolveDelNode) and
+// the K4-C walk port) — LoadUnified-coupled config resolution (the merged-tree read/resolveDelNode) and
 // registry-coupled executor-chain derivation (deriveChildExecutorForPath) are core Mechanisms a
 // plugin cannot import (separate module), so the walk reaches them via six narrow host-build
 // seams: deploy-plugins-connect, resolve-target-add (the per-node ResolveTarget+Add terminal step —

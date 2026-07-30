@@ -545,7 +545,7 @@ func (c *UpdateCmd) Run() error {
 	c.Box, c.Instance = deploykit.CanonicalizeDeployArg(c.Box, c.Instance)
 	// Resolve the merged deploy tree PLUGIN-SIDE and thread it into the seam as DATA — the #55 Cone
 	// A Unit 3b tree-threading that replaced the host dispatchByDeployTarget's former core
-	// resolveTreeRoot read.
+	// merged-tree read.
 	treeJSON, err := resolveDeployTreeJSON(c.Box)
 	if err != nil {
 		return err
@@ -565,7 +565,7 @@ func (c *UpdateCmd) Run() error {
 // resolveDeployTreeJSON resolves the merged project+operator deploy tree PLUGIN-SIDE
 // (loaderkit.ResolveMergedTreeViaExecutor) and marshals it for threading into the "pod-update" host
 // seam as DATA, so the host dispatchByDeployTarget stops re-loading the tree via the core
-// resolveTreeRoot (#55 Cone A Unit 3b). The "deploy-plugins-connect" preamble connects the
+// a host merged-tree read (#55 Cone A Unit 3b). The "deploy-plugins-connect" preamble connects the
 // deployment's out-of-tree plugin candies (the host's ResolveTarget needs them) and returns the
 // project dir the loader loads from — the SAME preamble command:bundle's resolveTreeViaLoader runs.
 // A tree-absent project marshals to a null tree, which the host handler reports as "no charly.yml".

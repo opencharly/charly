@@ -2,7 +2,7 @@ package check
 
 // venue.go — K1-unblock W3 Unit A: the venue classifier + executor builder relocated from
 // charly/check_venue.go. Every dependency this file had on core-only state (LoadUnified,
-// resolveTreeRoot, the core-private providerRegistry via nodeTraits' synthetic-node fallback) is
+// the host merged-tree read, the core-private providerRegistry via nodeTraits' synthetic-node fallback) is
 // replaced by the resolved-project envelope (InvokeProvider("build","project")) already fetched by
 // resolvedProject (checkproject.go) — a loader-stamped node ALWAYS carries a non-nil .Descent (via
 // the host's stampBundleDescents pass), so the plugin-side nodeTraits below never needs the
@@ -62,7 +62,7 @@ func (v *CheckVenue) IsContainer() bool { return v != nil && v.Kind == "containe
 
 // resolveCheckVenue maps an `charly check` verb's <name> argument to an execution venue, off the
 // resolved-project envelope's Deploy tree (rp.Deploy) instead of a direct LoadUnified/
-// resolveTreeRoot call — the ONLY change from the core original, which read the SAME merged
+// merged-tree-read call — the ONLY change from the core original, which read the SAME merged
 // bundle tree via the host loader in-process.
 func resolveCheckVenue(ex *sdk.Executor, ctx context.Context, dir, name, instance string) (*CheckVenue, error) {
 	if name == "." {

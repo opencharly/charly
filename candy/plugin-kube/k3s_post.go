@@ -151,9 +151,9 @@ func deployVMForwards(ctx context.Context, exec *sdk.Executor, entityRef, deploy
 		vmEntity = e
 	} else {
 		// Resolve the merged deploy tree PLUGIN-SIDE and thread it into the seam as DATA — the #55
-		// Cone A Unit 3b tree-threading that replaced the host's former core resolveTreeRoot read.
+		// Cone A Unit 3b tree-threading that replaced the host's former core merged-tree read.
 		// This runs POST-deploy (no dispatch-threaded dir), so it resolves the project dir via the
-		// "deploy-plugins-connect" seam (os.Getwd() host-side, the SAME dir resolveTreeRoot used).
+		// "deploy-plugins-connect" seam (os.Getwd() host-side, the SAME dir the host loader used).
 		dir, derr := hostProjectDir(ctx, exec, deployName)
 		if derr != nil {
 			return nil, nil //nolint:nilerr // best-effort: see below

@@ -73,7 +73,7 @@ type podUpdateCmd struct {
 	DataFrom  string
 	// TreeJSON is the merged deploy tree command:update (plugin-pod) resolved PLUGIN-SIDE and
 	// threaded into the "pod-update" seam (#55 Cone A Unit 3b), so dispatchByDeployTarget consumes
-	// it instead of the core resolveTreeRoot. Marshalled map[string]spec.BundleNode.
+	// it instead of a core host-side merged-tree read. Marshalled map[string]spec.BundleNode.
 	TreeJSON []byte
 }
 

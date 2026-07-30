@@ -52,7 +52,7 @@ func invokeK8sPreresolve(ctx context.Context, req *pb.InvokeRequest) (*pb.Invoke
 	node := p.Node
 	if node == nil {
 		// Resolve the merged deploy tree PLUGIN-SIDE and thread it into the seam as DATA — the #55
-		// Cone A Unit 3b tree-threading that replaced the host's former core resolveTreeRoot read.
+		// Cone A Unit 3b tree-threading that replaced the host's former core merged-tree read.
 		// The enclosing OpDeployDispatch already connected the deployment's plugins
 		// (command:bundle's resolveTreeViaLoader), so this reuses that connect (no re-dial mid-Invoke).
 		treeJSON, terr := resolveDeployTreeJSON(ctx, exec, p.Dir)
@@ -160,7 +160,7 @@ type resolvedK8sView struct {
 // resolveDeployTreeJSON resolves the merged project+operator deploy tree PLUGIN-SIDE
 // (loaderkit.ResolveMergedTreeViaExecutor) and marshals it for threading into the
 // "deploy-entity-resolve" seam as DATA (#55 Cone A Unit 3b), so the host stops re-loading the tree
-// via the core resolveTreeRoot. A tree-absent project marshals to a null tree, which the host
+// via a core host merged-tree read. A tree-absent project marshals to a null tree, which the host
 // handler reports as a not-found for the deploy/bundle name.
 func resolveDeployTreeJSON(ctx context.Context, exec *sdk.Executor, dir string) ([]byte, error) {
 	tree, err := loaderkit.ResolveMergedTreeViaExecutor(ctx, exec, dir)

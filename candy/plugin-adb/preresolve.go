@@ -58,7 +58,7 @@ func invokeAndroidPreresolve(ctx context.Context, req *pb.InvokeRequest) (*pb.In
 	node := p.Node
 	if node == nil {
 		// Resolve the merged deploy tree PLUGIN-SIDE and thread it into the seam as DATA — the #55
-		// Cone A Unit 3b tree-threading that replaced the host's former core resolveTreeRoot read.
+		// Cone A Unit 3b tree-threading that replaced the host's former core merged-tree read.
 		// The enclosing OpDeployDispatch already connected the deployment's plugins
 		// (command:bundle's resolveTreeViaLoader), so this reuses that connect (no re-dial mid-Invoke).
 		treeJSON, terr := resolveDeployTreeJSON(ctx, exec, p.Dir)
@@ -124,7 +124,7 @@ func invokeAndroidPreresolve(ctx context.Context, req *pb.InvokeRequest) (*pb.In
 // resolveDeployTreeJSON resolves the merged project+operator deploy tree PLUGIN-SIDE
 // (loaderkit.ResolveMergedTreeViaExecutor) and marshals it for threading into the
 // "deploy-entity-resolve" seam as DATA (#55 Cone A Unit 3b), so the host stops re-loading the tree
-// via the core resolveTreeRoot. Called only in the node==nil fallback, where the enclosing
+// via a core host merged-tree read. Called only in the node==nil fallback, where the enclosing
 // OpDeployDispatch has already connected the deployment's plugins — so no re-connect is needed and
 // dir is the dispatch-threaded project dir. A tree-absent project marshals to a null tree, which the
 // host handler reports as a not-found for the deploy name.
