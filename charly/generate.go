@@ -119,7 +119,7 @@ func newCandyScanGenerator(dir string, includeDisabled bool, extraCandyRefs []st
 	// (kit→kit), returning wire-clean *spec.ResolvedBox — the render-seam floor's 2 consumers
 	// (resolveInlineBuilderSeam/ensureBuildersConnected) read only Name/Tags off these. NOT the
 	// resolved-project envelope InvokeProvider path (would recurse an in-flight build:generate).
-	images, err := deploykit.ResolveAllSpecBoxes(cfg, ComputeCalVer(), dir, specResolveOpts(vopts))
+	images, err := deploykit.ResolveAllSpecBoxes(cfg, ComputeCalVer(), dir, vopts)
 	if err != nil {
 		return nil, err
 	}

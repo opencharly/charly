@@ -290,7 +290,7 @@ func resolveOverlayBaseDistroDef(dir, base string, distroCfg *spec.DistroConfig)
 	if cfg, cerr := LoadConfig(dir); cerr == nil {
 		RegisterBuildVocabulary(distroCfg)
 		if vopts, operr := resolveVocabOpts(dir, spec.ResolveOpts{DistroCfg: distroCfg}); operr == nil {
-			if resolvedBase, rerr := deploykit.ResolveSpecBox(cfg, base, "", dir, specResolveOpts(vopts)); rerr == nil && resolvedBase != nil && len(resolvedBase.Distro) > 0 {
+			if resolvedBase, rerr := deploykit.ResolveSpecBox(cfg, base, "", dir, vopts); rerr == nil && resolvedBase != nil && len(resolvedBase.Distro) > 0 {
 				return resolveDistroDef(distroCfg, resolvedBase.Distro[0])
 			}
 		}

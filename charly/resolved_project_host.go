@@ -160,7 +160,7 @@ func fillNamespacedBoxes(uf *spec.UnifiedFile, initCfg *spec.InitConfig, prefix,
 		// overwrites it with this loop's non-requalified bare resolve — RCA'd K1-alpha regression
 		// #2). Byte-equivalent to the former in-core inner block; the render-prep + skip semantics
 		// are preserved verbatim inside the helper.
-		deploykit.FillNamespaceBoxViews(sub, nsLayers, initCfg, child, calver, dir, specResolveOpts(vopts), rp)
+		deploykit.FillNamespaceBoxViews(sub, nsLayers, initCfg, child, calver, dir, vopts, rp)
 		fillNamespacedBoxes(subUF, initCfg, child, calver, dir, opts, rp, visited)
 	}
 }

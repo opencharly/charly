@@ -51,7 +51,7 @@ func resolveImageRefForEnsure(image string, cfg *Config, projectDir string) (str
 	if err != nil {
 		return "", fmt.Errorf("resolving %q via charly.yml: %w", image, err)
 	}
-	resolved, err := deploykit.ResolveSpecBox(cfg, image, "", projectDir, specResolveOpts(vopts))
+	resolved, err := deploykit.ResolveSpecBox(cfg, image, "", projectDir, vopts)
 	if err != nil {
 		return "", fmt.Errorf("resolving %q via charly.yml: %w", image, err)
 	}
@@ -134,7 +134,7 @@ func hostBuildBoxRefResolve(_ context.Context, req spec.BoxRefResolveRequest, _ 
 	reply.BuildFallbackShort = short
 	if short != "" && cfg != nil {
 		if vopts, oerr := resolveVocabOpts(dir, spec.ResolveOpts{}); oerr == nil {
-			if resolved, err := deploykit.ResolveSpecBox(cfg, short, "", dir, specResolveOpts(vopts)); err == nil && resolved != nil {
+			if resolved, err := deploykit.ResolveSpecBox(cfg, short, "", dir, vopts); err == nil && resolved != nil {
 				reply.ProducedRef = kit.ResolveShellImageRef(resolved.Registry, resolved.Name, "")
 			}
 		}

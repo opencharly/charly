@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -73,8 +72,9 @@ func LoadConfigRaw(dir string) (*Config, error) {
 // vocabulary LoadBuildConfigForBox loads for the same dir (the masked-regression this preserves).
 // #55 Cluster-B: charly core no longer names buildkit.ResolveOpts — the actual pure resolve
 // (buildkit.ResolveBox / ResolveAllBox) runs inside the deploykit box-resolve bridge
-// (deploykit.ResolveSpecBox / ResolveAllSpecBoxes / FillNamespaceBoxViews), fed the spec-typed
-// deploykit.SpecResolveOpts this projects to via specResolveOpts.
+// (deploykit.ResolveSpecBox / ResolveAllSpecBoxes / FillNamespaceBoxViews), which since #55 2b
+// consumes the SHARED spec.ResolveOpts DIRECTLY (the former deploykit.SpecResolveOpts twin +
+// this charly projector are dissolved now that ResolveOpts lives in spec, which deploykit imports).
 func resolveVocabOpts(dir string, opts spec.ResolveOpts) (spec.ResolveOpts, error) {
 	if opts.DistroCfg == nil && opts.BuilderCfg == nil {
 		distroCfg, builderCfg, _, err := LoadBuildConfigForBox(dir)
@@ -84,20 +84,6 @@ func resolveVocabOpts(dir string, opts spec.ResolveOpts) (spec.ResolveOpts, erro
 		opts.DistroCfg, opts.BuilderCfg = distroCfg, builderCfg
 	}
 	return opts, nil
-}
-
-// specResolveOpts projects a vocabulary-complete spec.ResolveOpts onto the spec-typed,
-// loaderkit-free deploykit.SpecResolveOpts the deploykit box-resolve bridge consumes (deploykit
-// cannot import loaderkit — loaderkit imports deploykit). DistroCfg/BuilderCfg are alias-equal
-// (spec.DistroConfig == buildkit.DistroConfig), so the field copy is a plain re-type.
-func specResolveOpts(opts spec.ResolveOpts) deploykit.SpecResolveOpts {
-	return deploykit.SpecResolveOpts{
-		IncludeDisabled:      opts.IncludeDisabled,
-		IncludeDisabledNames: opts.IncludeDisabledNames,
-		RequestedBoxes:       opts.RequestedBoxes,
-		DistroCfg:            opts.DistroCfg,
-		BuilderCfg:           opts.BuilderCfg,
-	}
 }
 
 // resolveIntPtr resolves a *int value, falling back to 0 when nil. A charly-side copy of the

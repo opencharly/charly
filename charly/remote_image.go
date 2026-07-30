@@ -77,7 +77,7 @@ func ResolveRemoteImage(ref string, tag string) (*RemoteImageContext, error) {
 	if err != nil {
 		return nil, fmt.Errorf("resolving image %q in %s: %w", parsed.Name, parsed.RepoPath, err)
 	}
-	resolved, err := deploykit.ResolveSpecBox(cfg, parsed.Name, calverTag, cachePath, specResolveOpts(vopts))
+	resolved, err := deploykit.ResolveSpecBox(cfg, parsed.Name, calverTag, cachePath, vopts)
 	if err != nil {
 		return nil, fmt.Errorf("resolving image %q in %s: %w", parsed.Name, parsed.RepoPath, err)
 	}
