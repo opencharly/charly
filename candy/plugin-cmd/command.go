@@ -46,8 +46,13 @@ func (c *CmdCmd) Run() error {
 		return rerr
 	}
 
+	// #55 K4 seam-completion: resolve the per-host deploy node plugin-side and thread it as DATA, so
+	// the host's dispatchLifecycleTarget operates on it instead of re-reading the per-host config
+	// itself (byte-identical to the retired core resolveLifecycleDeployNode; box/instance MUST match
+	// the request's Box/Instance — the host derives deployName = DeployKey from those).
+	cmdNode, _ := deploykit.ResolveLifecycleDeployNodeViaSeam(cmdCtx, cmdExec, c.Box, c.Instance)
 	start := time.Now()
-	runErr := hostPodCmd(spec.PodCmdRequest{Box: c.Box, Command: c.Command, Instance: c.Instance, Sidecar: c.Sidecar})
+	runErr := hostPodCmd(spec.PodCmdRequest{Box: c.Box, Command: c.Command, Instance: c.Instance, Sidecar: c.Sidecar, Node: cmdNode})
 	elapsed := time.Since(start).Truncate(time.Millisecond)
 
 	if c.Notify {

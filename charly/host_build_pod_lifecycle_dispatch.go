@@ -51,18 +51,18 @@ import (
 // production on exactly this mechanism.
 
 func hostBuildPodStart(_ context.Context, req spec.PodStartRequest, _ buildEngineContext) (spec.PodStartReply, error) {
-	return spec.PodStartReply{}, startViaLifecycle(req.Box, req.Instance, podStartOpts{
+	return spec.PodStartReply{}, startViaLifecycle(req.Node, spec.DeployKey(req.Box, req.Instance), podStartOpts{
 		Env: req.Env, EnvFile: req.EnvFile, Port: req.Port, VolumeFlag: req.VolumeFlag,
 		Bind: req.Bind, NoAutoDetect: req.NoAutoDetect,
 	})
 }
 
 func hostBuildPodStop(_ context.Context, req spec.PodStopRequest, _ buildEngineContext) (spec.PodStopReply, error) {
-	return spec.PodStopReply{}, stopViaLifecycle(req.Box, req.Instance, req.Unmount)
+	return spec.PodStopReply{}, stopViaLifecycle(req.Node, spec.DeployKey(req.Box, req.Instance), req.Unmount)
 }
 
 func hostBuildPodShell(_ context.Context, req spec.PodShellRequest, _ buildEngineContext) (spec.PodShellReply, error) {
-	lt, err := dispatchLifecycleTarget("shell", req.Box, req.Instance)
+	lt, err := dispatchLifecycleTarget("shell", req.Node, spec.DeployKey(req.Box, req.Instance))
 	if err != nil {
 		return spec.PodShellReply{}, err
 	}
@@ -81,7 +81,7 @@ func hostBuildPodShell(_ context.Context, req spec.PodShellRequest, _ buildEngin
 }
 
 func hostBuildPodLogs(_ context.Context, req spec.PodLogsRequest, _ buildEngineContext) (spec.PodLogsReply, error) {
-	lt, err := dispatchLifecycleTarget("logs", req.Box, req.Instance)
+	lt, err := dispatchLifecycleTarget("logs", req.Node, spec.DeployKey(req.Box, req.Instance))
 	if err != nil {
 		return spec.PodLogsReply{}, err
 	}
@@ -101,7 +101,7 @@ func hostBuildPodUpdate(_ context.Context, req spec.PodUpdateRequest, _ buildEng
 // service_resolve.go), so this handler does ONLY the irreducible dispatchLifecycleTarget +
 // LifecycleTarget.Shell step, exactly like start/stop/logs/update above.
 func hostBuildPodService(_ context.Context, req spec.PodServiceRequest, _ buildEngineContext) (spec.PodServiceReply, error) {
-	lt, err := dispatchLifecycleTarget("service", req.Box, req.Instance)
+	lt, err := dispatchLifecycleTarget("service", req.Node, spec.DeployKey(req.Box, req.Instance))
 	if err != nil {
 		return spec.PodServiceReply{}, err
 	}
@@ -133,7 +133,7 @@ func hostBuildPodRemove(_ context.Context, req spec.PodRemoveRequest, _ buildEng
 // the single-command form (vs hostBuildPodShell's tty=true interactive shell); Sidecar routes the
 // exec into the named sidecar container.
 func hostBuildPodCmd(_ context.Context, req spec.PodCmdRequest, _ buildEngineContext) (spec.PodCmdReply, error) {
-	lt, err := dispatchLifecycleTarget("cmd", req.Box, req.Instance)
+	lt, err := dispatchLifecycleTarget("cmd", req.Node, spec.DeployKey(req.Box, req.Instance))
 	if err != nil {
 		return spec.PodCmdReply{}, err
 	}

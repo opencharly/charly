@@ -6,8 +6,6 @@ import (
 	"os"
 
 	"github.com/opencharly/spec/spec"
-
-	"github.com/opencharly/sdk/deploykit"
 )
 
 // pod_lifecycle_verb.go — the `charly start` / `charly stop` VERBS routed through the unified
@@ -15,39 +13,35 @@ import (
 // OpStart/OpStop body (via the F6 dispatch + arbiter bracket, pod_lifecycle_dispatch.go); the former
 // inline runDirect/runQuadlet/StopCmd bodies are DELETED. This mirrors `charly update`'s
 // dispatchByDeployTarget (update_deploy_dispatch.go) — one verb, one substrate-agnostic dispatch, no
-// per-kind code. The deploy node comes from the per-host deploy config (dc.Bundle[key]) — the SAME
-// source StartCmd's arbiter claim + status read already used — with a synthesized pod node fallback
-// for a deploy that has a quadlet but no dc entry (a legacy configure path; the plugin only needs
-// Target=pod + the box/instance to resolve the plan).
+// per-kind code.
+//
+// #55 K4 seam-completion: the per-host deploy NODE arrives as DATA (spec.Deploy). The command:pod /
+// command:cmd plugin ALREADY resolves it plugin-side (deploykit.ResolveLifecycleDeployNodeViaSeam over
+// the shared pod-config-load-bundle seam — the dc.Bundle[key] lookup + the container/""→pod Target
+// normalization + the {Target:pod} fallback for a bare image with no deploy entry) and threads it into
+// the pod-lifecycle HostBuild requests. So the host no longer re-reads the per-host config here (the
+// former resolveLifecycleDeployNode + its deploykit.LoadDeployConfigForRead are deleted): the config
+// READ is a plugin loading capability, not a host M. What STAYS is EXACTLY the one step that cannot
+// cross the plugin boundary — connect + ResolveTarget + the live-executor composition, a core (M)
+// Mechanism per the kernel/plugin boundary law.
 
-// resolveLifecycleDeployNode resolves the deploy node for a start/stop verb from the per-host config.
-func resolveLifecycleDeployNode(box, instance string) (*spec.BundleNode, string) {
-	key := spec.DeployKey(box, instance)
-	if dc := deploykit.LoadDeployConfigForRead("charly start/stop"); dc != nil {
-		if node, ok := dc.Bundle[key]; ok {
-			n := node
-			if n.Target == "" || n.Target == "container" {
-				n.Target = "pod"
-			}
-			return &n, key
-		}
+// dispatchLifecycleTarget resolves the plugin-supplied deploy node → its LifecycleTarget (connecting
+// external substrate plugins first, R3 with bundle add / update), returning a clear error for a
+// targetless substrate. The node is DATA the calling command plugin already resolved; the host does
+// ONLY the irreducible core-M dispatch.
+func dispatchLifecycleTarget(verb string, node *spec.BundleNode, deployName string) (LifecycleTarget, error) {
+	if node == nil {
+		return nil, fmt.Errorf("charly %s %s: no deploy node supplied by the command plugin", verb, deployName)
 	}
-	return &spec.BundleNode{Target: "pod"}, key
-}
-
-// dispatchLifecycleTarget resolves the deploy → its LifecycleTarget (connecting external substrate
-// plugins first, R3 with bundle add / update), returning a clear error for a targetless substrate.
-func dispatchLifecycleTarget(verb, box, instance string) (LifecycleTarget, error) {
-	node, deployName := resolveLifecycleDeployNode(box, instance)
 	dir, _ := os.Getwd()
 	if err := loadDeployPlugins(dir, deployName, nil); err != nil {
 		return nil, err
 	}
 	// A bare box with NO deploy entry (an UNCONFIGURED image `charly shell`/`cmd`/`logs` targets — the
-	// former standalone-podman path) synthesizes a {Target:"pod"} node that no tree node references, so
-	// the reference-scoped loadDeployPlugins never built its substrate plugin. Connect the substrate
-	// deploy provider by word (idempotent — a no-op once registered; local-first, network-free) so the
-	// interactive/logs legs work on an unconfigured image, not only on a configured deploy.
+	// former standalone-podman path) is a {Target:"pod"} node the plugin synthesized that no tree node
+	// references, so the reference-scoped loadDeployPlugins never built its substrate plugin. Connect the
+	// substrate deploy provider by word (idempotent — a no-op once registered; local-first, network-free)
+	// so the interactive/logs legs work on an unconfigured image, not only on a configured deploy.
 	if node.Target != "" {
 		connectPluginByWord(ClassDeployTarget, node.Target)
 	}
@@ -64,8 +58,8 @@ func dispatchLifecycleTarget(verb, box, instance string) (LifecycleTarget, error
 
 // startViaLifecycle drives `charly start` through LifecycleTarget.Start; the direct-mode CLI extras
 // ride the ctx (podStartOpts) into the pod start-plan hook.
-func startViaLifecycle(box, instance string, opts podStartOpts) error {
-	lt, err := dispatchLifecycleTarget("start", box, instance)
+func startViaLifecycle(node *spec.BundleNode, deployName string, opts podStartOpts) error {
+	lt, err := dispatchLifecycleTarget("start", node, deployName)
 	if err != nil {
 		return err
 	}
@@ -73,8 +67,8 @@ func startViaLifecycle(box, instance string, opts podStartOpts) error {
 }
 
 // stopViaLifecycle drives `charly stop` through LifecycleTarget.Stop; --unmount rides the ctx.
-func stopViaLifecycle(box, instance string, unmount bool) error {
-	lt, err := dispatchLifecycleTarget("stop", box, instance)
+func stopViaLifecycle(node *spec.BundleNode, deployName string, unmount bool) error {
+	lt, err := dispatchLifecycleTarget("stop", node, deployName)
 	if err != nil {
 		return err
 	}

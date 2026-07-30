@@ -75,7 +75,20 @@ func (c *StartCmd) Run() error {
 		VolumeFlag:   c.VolumeFlag,
 		Bind:         c.Bind,
 		NoAutoDetect: c.NoAutoDetect,
+		Node:         lifecycleNode(c.Box, c.Instance),
 	})
+}
+
+// lifecycleNode resolves the per-host deploy overlay entry to thread as DATA into the pod-lifecycle
+// HostBuild requests (spec.PodStartRequest.Node et al.) — #55 K4 seam-completion: the host's
+// dispatchLifecycleTarget operates on this *spec.Deploy instead of re-reading the per-host config
+// itself (the config READ is a plugin loading capability, not a host M; see the shared
+// deploykit.ResolveLifecycleDeployNodeViaSeam, byte-identical to the retired core
+// resolveLifecycleDeployNode). The box/instance MUST match the request's Box/Instance — the host
+// derives deployName = DeployKey(req.Box, req.Instance), which must key the SAME node.
+func lifecycleNode(box, instance string) *spec.Deploy {
+	n, _ := deploykit.ResolveLifecycleDeployNodeViaSeam(cmdCtx, cmdExec, box, instance)
+	return n
 }
 
 // StopCmd stops a running container started by StartCmd — the `charly stop` grammar.
@@ -97,6 +110,7 @@ func (c *StopCmd) Run() error {
 		Box:      boxName,
 		Instance: c.Instance,
 		Unmount:  c.Unmount,
+		Node:     lifecycleNode(boxName, c.Instance),
 	})
 }
 
@@ -136,6 +150,7 @@ func (c *LogsCmd) Run() error {
 		Follow:   c.Follow,
 		Instance: c.Instance,
 		Sidecar:  c.Sidecar,
+		Node:     lifecycleNode(c.Box, c.Instance),
 	})
 }
 
@@ -208,6 +223,7 @@ func (c *ShellCmd) Run() error {
 		VolumeFlag:   c.VolumeFlag,
 		Bind:         c.Bind,
 		NoAutoDetect: c.NoAutoDetect,
+		Node:         lifecycleNode(c.Box, c.Instance),
 	})
 }
 
@@ -234,7 +250,7 @@ func (c *ServiceStatusCmd) Run() error {
 	if err != nil {
 		return err
 	}
-	return hostPodSeam("pod-service", spec.PodServiceRequest{Box: c.Box, Instance: c.Instance, Argv: argv})
+	return hostPodSeam("pod-service", spec.PodServiceRequest{Box: c.Box, Instance: c.Instance, Argv: argv, Node: lifecycleNode(c.Box, c.Instance)})
 }
 
 // ServiceStartCmd starts a service
@@ -249,7 +265,7 @@ func (c *ServiceStartCmd) Run() error {
 	if err != nil {
 		return err
 	}
-	return hostPodSeam("pod-service", spec.PodServiceRequest{Box: c.Box, Instance: c.Instance, Argv: argv})
+	return hostPodSeam("pod-service", spec.PodServiceRequest{Box: c.Box, Instance: c.Instance, Argv: argv, Node: lifecycleNode(c.Box, c.Instance)})
 }
 
 // ServiceStopCmd stops a service
@@ -264,7 +280,7 @@ func (c *ServiceStopCmd) Run() error {
 	if err != nil {
 		return err
 	}
-	return hostPodSeam("pod-service", spec.PodServiceRequest{Box: c.Box, Instance: c.Instance, Argv: argv})
+	return hostPodSeam("pod-service", spec.PodServiceRequest{Box: c.Box, Instance: c.Instance, Argv: argv, Node: lifecycleNode(c.Box, c.Instance)})
 }
 
 // ServiceRestartCmd restarts a service
@@ -279,7 +295,7 @@ func (c *ServiceRestartCmd) Run() error {
 	if err != nil {
 		return err
 	}
-	return hostPodSeam("pod-service", spec.PodServiceRequest{Box: c.Box, Instance: c.Instance, Argv: argv})
+	return hostPodSeam("pod-service", spec.PodServiceRequest{Box: c.Box, Instance: c.Instance, Argv: argv, Node: lifecycleNode(c.Box, c.Instance)})
 }
 
 // VolumeCmd groups the named-volume verbs — the `charly volume` grammar. NOT registry-bound (pure
