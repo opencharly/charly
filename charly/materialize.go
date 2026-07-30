@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 	"gopkg.in/yaml.v3"
 )
@@ -28,13 +27,13 @@ import (
 // that ARE registry-/bootstrap-/host-coupled — reached kind-blind by the loaderkit orchestration.
 
 // hostMaterializeProjectSeams wires charly's three host-coupled materialize leaf legs into the
-// loaderkit.MaterializeProjectSeams the relocated orchestration (loaderkit.MaterializeLoadedProject,
+// spec.MaterializeProjectSeams the relocated orchestration (loaderkit.MaterializeLoadedProject,
 // #48) calls back through. The compiled-in placement reaches each leg DIRECTLY (zero marshal); the
 // out-of-module plugin path (candy/plugin-bundle's execLoaderExecutor) drives the SAME orchestration
 // over the single "loader-materialize" host leg (host_build_loader_floor.go), which constructs these SAME
 // seams — so both placements are byte-identical.
-func hostMaterializeProjectSeams() loaderkit.MaterializeProjectSeams {
-	return loaderkit.MaterializeProjectSeams{
+func hostMaterializeProjectSeams() spec.MaterializeProjectSeams {
+	return spec.MaterializeProjectSeams{
 		MaterializeProject:      materializeProject,
 		FoldDiscoveredManifests: foldDiscoveredManifests,
 		ApplyEmbeddedDefaults:   applyEmbeddedDefaults,
@@ -140,8 +139,7 @@ func materializeDocStream(data []byte, srcLabel string, uf *spec.UnifiedFile) er
 			return fmt.Errorf("%s: %w", label, err)
 		}
 		sub.Import = nil
-		loaderkit.NormalizeV4Aliases(&sub)
-		loaderkit.MergeUnified(uf, &sub, "")
+		spec.MergeUnified(uf, &sub, "")
 	}
 	return nil
 }

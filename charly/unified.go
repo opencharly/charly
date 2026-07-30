@@ -82,10 +82,11 @@ const UnifiedFileName = spec.UnifiedFileName
 // Loader entry point.
 // -----------------------------------------------------------------------------
 
-// gateSchemaVersion / normalizeV4Aliases (K1 keystone, task #24 unit 2) relocated
-// to sdk/loaderkit — see loaderkit.GateSchemaVersion (called only from
-// loaderkit.LoadUnified now) / loaderkit.NormalizeV4Aliases (called directly by
-// materialize.go's per-document fold).
+// gateSchemaVersion (K1 keystone, task #24 unit 2) relocated to sdk/loaderkit —
+// see loaderkit.GateSchemaVersion (called only from loaderkit.LoadUnified now).
+// loaderkit.NormalizeV4Aliases is a retired no-op invoked only inside loaderkit's
+// own materialize walk; charly's materialize.go per-document fold no longer calls
+// it (#55 C3b dropped the dead call site).
 
 // LoadUnified drives the whole-project load through the registered spec.ProjectLoader SEAM
 // (requireProjectLoader) — it NO LONGER calls loaderkit.LoadUnified directly (#55 import-purity
@@ -161,17 +162,19 @@ func canonicalRef(ref, baseDir string) (key, path string, err error) {
 // -----------------------------------------------------------------------------
 
 // mergeUnified + mergeRawTemplateMap + mergePluginKindsMap + mergeDeployMaps +
-// mergeBoxConfig (K1-proper, task #24 follow-up) relocated to sdk/loaderkit
-// (merge.go) — the kind-blind document MERGE half of the loader. They are pure
-// map/struct merges over an already-parsed UnifiedFile with zero charly-core
-// coupling (spec.*/kit.*/json only), so they belong in the sdk loaderkit consumed
-// by the loader plugin, not in charly/ core (boundary law clause M). See
-// loaderkit.MergeUnified (called from materialize.go) / loaderkit.MergePluginKindsMap
-// (called from embed_defaults.go).
+// mergeBoxConfig (K1-proper, task #24 follow-up) — the kind-blind document MERGE
+// half of the loader. They are pure map/struct merges over an already-parsed
+// UnifiedFile with zero charly-core coupling (spec-only), so they live in the
+// dedicated spec module (#55 C3b relocated them from sdk/loaderkit/merge.go, the
+// same import-purity route MaterializeProjectSeams + MergePluginKindsMap took) —
+// so charly core reaches them WITHOUT importing loaderkit. See spec.MergeUnified
+// (called from materialize.go) / spec.MergePluginKindsMap (called from
+// embed_defaults.go).
 
-// anchorScanSpecs (kit.AnchorScanSpecs) is the discover-path anchoring helper
-// — relocated to sdk/kit (loader_directives.go) so charly core AND
-// sdk/loaderkit share ONE copy (R3).
+// anchorScanSpecs (spec.AnchorScanSpecs) is the discover-path anchoring helper
+// — resident in the spec module (load_directives.go, #55 C3b, moved with
+// MergeUnified which calls it); sdk/kit keeps a forwarder so charly core AND
+// sdk/loaderkit + sdk/kit share ONE copy (R3).
 
 // CheckBeds relocated to sdk/loaderkit (K1 keystone, task #24 unit 1) — see
 // spec.UnifiedFile.CheckBeds.
