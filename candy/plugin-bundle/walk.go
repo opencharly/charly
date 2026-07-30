@@ -258,8 +258,20 @@ func (c *BundleDelCmd) Run() error {
 	}
 	defer lock.Release() //nolint:errcheck
 
+	// Resolve the merged deploy tree PLUGIN-SIDE (also connects the deployment's plugins) and
+	// thread it into the seam as DATA — the #55 Cone A Unit 3a tree-threading that replaced the
+	// host resolveDelNode's former core resolveTreeRoot read. A tree-absent project yields a nil
+	// tree, which resolveDelNode handles via its non-tree fallbacks (vm-prefix / pod-artifact).
+	tree, _, _, err := resolveTreeViaLoader(c.Name, nil)
+	if err != nil {
+		return err
+	}
+	treeJSON, err := json.Marshal(tree)
+	if err != nil {
+		return err
+	}
 	var dr spec.DeployDelResolveReply
-	if err := hostDeploySeamJSON("deploy-del-resolve", spec.DeployDelResolveRequest{Name: c.Name}, &dr); err != nil {
+	if err := hostDeploySeamJSON("deploy-del-resolve", spec.DeployDelResolveRequest{Name: c.Name, TreeJSON: treeJSON}, &dr); err != nil {
 		return err
 	}
 

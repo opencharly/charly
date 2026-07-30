@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
@@ -38,7 +37,6 @@ const (
 	podConfigBoxEngineKind        = "pod-config-box-engine"
 	podConfigContainerTunnelKind  = "pod-config-container-tunnel"
 	podConfigCleanDeployEntryKind = "pod-config-clean-deploy-entry"
-	podConfigProjectVolumeKind    = "pod-config-project-volume"
 )
 
 func hostBuildPodConfigListSidecars(_ context.Context, _ spec.PodConfigLoadDeployRequest, _ buildEngineContext) (spec.PodConfigListSidecarsReply, error) {
@@ -139,31 +137,6 @@ func hostBuildPodConfigLoadDeploy(_ context.Context, req spec.PodConfigLoadDeplo
 		return spec.PodConfigLoadDeployReply{}, err
 	}
 	return spec.PodConfigLoadDeployReply{ConfigJSON: b}, nil
-}
-
-// hostBuildPodConfigProjectVolume resolves req.Box/req.Instance's PROJECT-declared `volume:`
-// override via the SAME merged project+operator tree `charly bundle add` walks
-// (resolveTreeRoot, deploy_tree.go) — never the per-host overlay alone. Scoped to ONE deploy key
-// so it stays a narrow, single-purpose read: it does not perturb any other Setup logic that reads
-// the bare per-host overlay via #PodConfigLoadDeployRequest.
-func hostBuildPodConfigProjectVolume(_ context.Context, req spec.PodConfigProjectVolumeRequest, _ buildEngineContext) (spec.PodConfigProjectVolumeReply, error) {
-	dir, err := os.Getwd()
-	if err != nil {
-		return spec.PodConfigProjectVolumeReply{}, err
-	}
-	tree, err := resolveTreeRoot(dir)
-	if err != nil {
-		return spec.PodConfigProjectVolumeReply{}, err
-	}
-	node, ok := tree[spec.DeployKey(req.Box, req.Instance)]
-	if !ok || len(node.Volume) == 0 {
-		return spec.PodConfigProjectVolumeReply{}, nil
-	}
-	b, err := json.Marshal(node.Volume)
-	if err != nil {
-		return spec.PodConfigProjectVolumeReply{}, err
-	}
-	return spec.PodConfigProjectVolumeReply{VolumeJSON: b}, nil
 }
 
 func hostBuildPodConfigSaveBundle(_ context.Context, req spec.PodConfigSaveBundleRequest, _ buildEngineContext) (spec.PodConfigSaveBundleReply, error) {
@@ -306,6 +279,5 @@ var _ = func() bool {
 	registerHostBuilder(podConfigBoxEngineKind, typedHostBuilder(podConfigBoxEngineKind, hostBuildPodConfigBoxEngine))
 	registerHostBuilder(podConfigContainerTunnelKind, typedHostBuilder(podConfigContainerTunnelKind, hostBuildPodConfigContainerTunnel))
 	registerHostBuilder(podConfigCleanDeployEntryKind, typedHostBuilder(podConfigCleanDeployEntryKind, hostBuildPodConfigCleanDeployEntry))
-	registerHostBuilder(podConfigProjectVolumeKind, typedHostBuilder(podConfigProjectVolumeKind, hostBuildPodConfigProjectVolume))
 	return true
 }()

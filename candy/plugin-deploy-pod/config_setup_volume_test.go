@@ -20,28 +20,21 @@ import (
 // `volume: [{name: enc-data, type: encrypted}]`, never reached the per-host overlay charly config
 // reads from, because Setup's deployVolumes resolution consulted only CLI flags, the
 // CHARLY_VOLUMES_<BOX> env var, and the overlay itself — never the project). It answers HostBuild
-// for the two seams the project-declared-volume fallback touches ("pod-config-project-volume" the
-// read, "pod-config-save-bundle" the persist) and records every call in order, so a test can
-// assert both WHAT was resolved/persisted and WHETHER the project seam was ever consulted (a
-// higher-priority source — CLI/env/overlay — must short-circuit BEFORE calling it at all). Every
-// other RPC panics if called (mirrors candy/plugin-deploy-vm/lifecycle_test.go's
-// fakeExecutorServiceClient — the established plugin-side test-double shape, R3).
+// for the persist seam ("pod-config-save-bundle") and records every call in order. The project-read
+// leg is stubbed via stubProjectVolume (the loadProjectVolume package var) rather than a HostBuild
+// case: since the #55 Cone A Unit 3a seam-collapse, loadProjectVolume self-resolves the merged tree
+// over the reverse channel (deploy-plugins-connect + loaderkit.ResolveMergedTreeViaExecutor) — a
+// multi-leg loader path a single HostBuild-kind stub cannot canned-reply. Every other RPC panics if
+// called (mirrors candy/plugin-deploy-vm/lifecycle_test.go's fakeExecutorServiceClient, R3).
 type fakeVolumeExecutorServiceClient struct {
 	pb.ExecutorServiceClient
-	calls              []string
-	projectVolumeReply *pb.HostBuildReply
-	projectVolumeErr   error
-	savedConfigJSON    []byte
+	calls           []string
+	savedConfigJSON []byte
 }
 
 func (f *fakeVolumeExecutorServiceClient) HostBuild(_ context.Context, in *pb.HostBuildRequest, _ ...grpc.CallOption) (*pb.HostBuildReply, error) {
 	f.calls = append(f.calls, in.GetKind())
 	switch in.GetKind() {
-	case podConfigProjectVolumeKind:
-		if f.projectVolumeErr != nil {
-			return nil, f.projectVolumeErr
-		}
-		return f.projectVolumeReply, nil
 	case podConfigSaveBundleKind:
 		var req spec.PodConfigSaveBundleRequest
 		if err := json.Unmarshal(in.GetSpecJson(), &req); err != nil {
@@ -53,13 +46,24 @@ func (f *fakeVolumeExecutorServiceClient) HostBuild(_ context.Context, in *pb.Ho
 	panic("fakeVolumeExecutorServiceClient: unexpected HostBuild kind " + in.GetKind())
 }
 
-func marshalHostBuildReply(t *testing.T, v any) *pb.HostBuildReply {
+// projectVolumeStub replaces the loadProjectVolume package var for a test — the project-consult leg
+// of resolveDeployVolumes' precedence chain. `called` records whether the fallback fired at all, so
+// a test asserts both WHAT the project declared and WHETHER a higher-priority source (CLI/env/
+// overlay) short-circuited BEFORE the project was ever consulted.
+type projectVolumeStub struct {
+	vols   []spec.DeployVolume
+	err    error
+	called bool
+}
+
+func (s *projectVolumeStub) install(t *testing.T) {
 	t.Helper()
-	b, err := json.Marshal(v)
-	if err != nil {
-		t.Fatalf("marshal fixture reply: %v", err)
+	orig := loadProjectVolume
+	loadProjectVolume = func(_ context.Context, _ *sdk.Executor, _, _ string) ([]spec.DeployVolume, error) {
+		s.called = true
+		return s.vols, s.err
 	}
-	return &pb.HostBuildReply{ResultJson: b}
+	t.Cleanup(func() { loadProjectVolume = orig })
 }
 
 func containsKind(calls []string, kind string) bool {
@@ -80,13 +84,9 @@ func containsKind(calls []string, kind string) bool {
 // and check-enc-pod's encrypted bind mount was silently never established.
 func TestResolveDeployVolumes_ProjectDeclaredFallback(t *testing.T) {
 	wantVolumes := []spec.DeployVolume{{Name: "enc-data", Type: "encrypted"}}
-	volJSON, err := json.Marshal(wantVolumes)
-	if err != nil {
-		t.Fatalf("marshal fixture volumes: %v", err)
-	}
-	fake := &fakeVolumeExecutorServiceClient{
-		projectVolumeReply: marshalHostBuildReply(t, spec.PodConfigProjectVolumeReply{VolumeJSON: volJSON}),
-	}
+	stub := &projectVolumeStub{vols: wantVolumes}
+	stub.install(t)
+	fake := &fakeVolumeExecutorServiceClient{}
 	ex := sdk.NewInProcExecutor(fake)
 	c := &spec.PodConfigSetupRequest{Box: "check-enc-pod"}
 	var dc *deploykit.BundleConfig
@@ -97,6 +97,9 @@ func TestResolveDeployVolumes_ProjectDeclaredFallback(t *testing.T) {
 	}
 	if len(got) != 1 || got[0].Name != "enc-data" || got[0].Type != "encrypted" {
 		t.Fatalf("resolveDeployVolumes() = %+v, want the project-declared volume", got)
+	}
+	if !stub.called {
+		t.Error("resolveDeployVolumes() did not consult the project — the project-declared fallback must fire with no CLI/env/overlay source")
 	}
 
 	if dc == nil {
@@ -118,6 +121,8 @@ func TestResolveDeployVolumes_ProjectDeclaredFallback(t *testing.T) {
 // volume entry, ALREADY marked checked, wins over the project declaration, and the project seam
 // is NEVER consulted (the fake has no project-volume reply configured — a call would panic).
 func TestResolveDeployVolumes_OverlayWinsOverProject(t *testing.T) {
+	stub := &projectVolumeStub{}
+	stub.install(t)
 	fake := &fakeVolumeExecutorServiceClient{}
 	ex := sdk.NewInProcExecutor(fake)
 	c := &spec.PodConfigSetupRequest{Box: "check-enc-pod"}
@@ -135,8 +140,11 @@ func TestResolveDeployVolumes_OverlayWinsOverProject(t *testing.T) {
 	if len(got) != 1 || got[0].Name != "already-set" {
 		t.Fatalf("resolveDeployVolumes() = %+v, want the overlay's existing volume unchanged", got)
 	}
+	if stub.called {
+		t.Error("resolveDeployVolumes() consulted the project — the fallback must never fire once VolumeProjectChecked is set")
+	}
 	if len(fake.calls) != 0 {
-		t.Errorf("resolveDeployVolumes() HostBuild calls = %v, want none — the project fallback must never fire once VolumeProjectChecked is set", fake.calls)
+		t.Errorf("resolveDeployVolumes() HostBuild calls = %v, want none", fake.calls)
 	}
 }
 
@@ -148,6 +156,8 @@ func TestResolveDeployVolumes_OverlayWinsOverProject(t *testing.T) {
 // a resolved port from an unrelated earlier Setup stage). The fake has no project-volume reply
 // configured, so a call would panic.
 func TestResolveDeployVolumes_AlreadyCheckedVolumeLessSkipsProjectLookup(t *testing.T) {
+	stub := &projectVolumeStub{}
+	stub.install(t)
 	fake := &fakeVolumeExecutorServiceClient{}
 	ex := sdk.NewInProcExecutor(fake)
 	c := &spec.PodConfigSetupRequest{Box: "preempt-vm-taker", Instance: ""}
@@ -165,8 +175,11 @@ func TestResolveDeployVolumes_AlreadyCheckedVolumeLessSkipsProjectLookup(t *test
 	if len(got) != 0 {
 		t.Fatalf("resolveDeployVolumes() = %+v, want empty — this member's overlay declares no volume", got)
 	}
+	if stub.called {
+		t.Error("resolveDeployVolumes() consulted the project — a deploy with VolumeProjectChecked=true must never re-consult it")
+	}
 	if len(fake.calls) != 0 {
-		t.Errorf("resolveDeployVolumes() HostBuild calls = %v, want none — a deploy with VolumeProjectChecked=true must never re-consult the project", fake.calls)
+		t.Errorf("resolveDeployVolumes() HostBuild calls = %v, want none", fake.calls)
 	}
 }
 
@@ -181,13 +194,9 @@ func TestResolveDeployVolumes_AlreadyCheckedVolumeLessSkipsProjectLookup(t *test
 // instead: the project fallback must still fire, find the volume, apply it, mark
 // VolumeProjectChecked true, and leave the pre-existing ResolvedPort untouched.
 func TestResolveDeployVolumes_PortedDeployProjectVolumeAppliedOnFirstConfig(t *testing.T) {
-	volJSON, err := json.Marshal([]spec.DeployVolume{{Name: "enc-data", Type: "encrypted"}})
-	if err != nil {
-		t.Fatalf("marshal fixture volumes: %v", err)
-	}
-	fake := &fakeVolumeExecutorServiceClient{
-		projectVolumeReply: marshalHostBuildReply(t, spec.PodConfigProjectVolumeReply{VolumeJSON: volJSON}),
-	}
+	stub := &projectVolumeStub{vols: []spec.DeployVolume{{Name: "enc-data", Type: "encrypted"}}}
+	stub.install(t)
+	fake := &fakeVolumeExecutorServiceClient{}
 	ex := sdk.NewInProcExecutor(fake)
 	c := &spec.PodConfigSetupRequest{Box: "check-enc-pod"}
 	key := spec.DeployKey("check-enc-pod", "")
@@ -205,8 +214,8 @@ func TestResolveDeployVolumes_PortedDeployProjectVolumeAppliedOnFirstConfig(t *t
 	if len(got) != 1 || got[0].Name != "enc-data" {
 		t.Fatalf("resolveDeployVolumes() = %+v, want the project-declared volume even though the port block already created the overlay key", got)
 	}
-	if !containsKind(fake.calls, podConfigProjectVolumeKind) {
-		t.Errorf("resolveDeployVolumes() calls = %v, want a pod-config-project-volume call — a ported deploy's first config must still consult the project", fake.calls)
+	if !stub.called {
+		t.Error("resolveDeployVolumes() did not consult the project — a ported deploy's first config must still consult it")
 	}
 	entry, ok := dc.Bundle[key]
 	if !ok {
@@ -223,6 +232,8 @@ func TestResolveDeployVolumes_PortedDeployProjectVolumeAppliedOnFirstConfig(t *t
 // TestResolveDeployVolumes_CLIFlagWinsOverProject asserts precedence: a CLI --volume flag wins
 // over the project declaration, and the project seam is NEVER consulted.
 func TestResolveDeployVolumes_CLIFlagWinsOverProject(t *testing.T) {
+	stub := &projectVolumeStub{}
+	stub.install(t)
 	fake := &fakeVolumeExecutorServiceClient{}
 	ex := sdk.NewInProcExecutor(fake)
 	c := &spec.PodConfigSetupRequest{Box: "check-enc-pod", VolumeFlag: []string{"data:bind:/tmp/x"}}
@@ -235,8 +246,11 @@ func TestResolveDeployVolumes_CLIFlagWinsOverProject(t *testing.T) {
 	if len(got) != 1 || got[0].Name != "data" {
 		t.Fatalf("resolveDeployVolumes() = %+v, want the CLI-flag volume", got)
 	}
+	if stub.called {
+		t.Error("resolveDeployVolumes() consulted the project — a CLI flag must short-circuit before the project fallback")
+	}
 	if len(fake.calls) != 0 {
-		t.Errorf("resolveDeployVolumes() HostBuild calls = %v, want none — a CLI flag must short-circuit before the project fallback", fake.calls)
+		t.Errorf("resolveDeployVolumes() HostBuild calls = %v, want none", fake.calls)
 	}
 }
 
@@ -248,9 +262,9 @@ func TestResolveDeployVolumes_CLIFlagWinsOverProject(t *testing.T) {
 // persisting anything here is what caused the round-2 regression (a project re-query on every
 // single re-config of every volume-less deploy).
 func TestResolveDeployVolumes_NoProjectDeclaration(t *testing.T) {
-	fake := &fakeVolumeExecutorServiceClient{
-		projectVolumeReply: marshalHostBuildReply(t, spec.PodConfigProjectVolumeReply{}),
-	}
+	stub := &projectVolumeStub{}
+	stub.install(t)
+	fake := &fakeVolumeExecutorServiceClient{}
 	ex := sdk.NewInProcExecutor(fake)
 	c := &spec.PodConfigSetupRequest{Box: "no-volumes-here"}
 	var dc *deploykit.BundleConfig
@@ -281,13 +295,15 @@ func TestResolveDeployVolumes_NoProjectDeclaration(t *testing.T) {
 // transport error (e.g. no reverse channel) on the project-volume read must surface as an error,
 // never a silent empty result.
 func TestResolveDeployVolumes_ProjectHostBuildErrorPropagates(t *testing.T) {
-	fake := &fakeVolumeExecutorServiceClient{projectVolumeErr: errors.New("no host reverse channel")}
+	stub := &projectVolumeStub{err: errors.New("no host reverse channel")}
+	stub.install(t)
+	fake := &fakeVolumeExecutorServiceClient{}
 	ex := sdk.NewInProcExecutor(fake)
 	c := &spec.PodConfigSetupRequest{Box: "check-enc-pod"}
 	var dc *deploykit.BundleConfig
 
 	if _, err := resolveDeployVolumes(context.Background(), ex, c, &dc); err == nil {
-		t.Fatal("resolveDeployVolumes() with a HostBuild transport error on the project-volume seam: want an error, got nil")
+		t.Fatal("resolveDeployVolumes() with a project-resolution transport error: want an error, got nil")
 	}
 }
 
@@ -302,13 +318,9 @@ func TestResolveDeployVolumes_ProjectHostBuildErrorPropagates(t *testing.T) {
 // creates the overlay key before the volume fallback ever inspects it. This test FAILS against
 // the round-2 `!ok`-gated shape (392fcbe) and PASSES against the VolumeProjectChecked-gated fix.
 func TestConfigFlow_PortResolutionThenResolveDeployVolumes_ProjectVolumeStillApplied(t *testing.T) {
-	volJSON, err := json.Marshal([]spec.DeployVolume{{Name: "enc-data", Type: "encrypted"}})
-	if err != nil {
-		t.Fatalf("marshal fixture volumes: %v", err)
-	}
-	fake := &fakeVolumeExecutorServiceClient{
-		projectVolumeReply: marshalHostBuildReply(t, spec.PodConfigProjectVolumeReply{VolumeJSON: volJSON}),
-	}
+	stub := &projectVolumeStub{vols: []spec.DeployVolume{{Name: "enc-data", Type: "encrypted"}}}
+	stub.install(t)
+	fake := &fakeVolumeExecutorServiceClient{}
 	ex := sdk.NewInProcExecutor(fake)
 	c := &spec.PodConfigSetupRequest{Box: "check-enc-pod"}
 	key := spec.DeployKey(c.Box, c.Instance)
@@ -353,8 +365,8 @@ func TestConfigFlow_PortResolutionThenResolveDeployVolumes_ProjectVolumeStillApp
 	if len(got) != 1 || got[0].Name != "enc-data" {
 		t.Fatalf("resolveDeployVolumes() = %+v, want the project-declared volume — the port block's prior write must not suppress the project consult", got)
 	}
-	if !containsKind(fake.calls, podConfigProjectVolumeKind) {
-		t.Errorf("resolveDeployVolumes() calls = %v, want a pod-config-project-volume call", fake.calls)
+	if !stub.called {
+		t.Error("resolveDeployVolumes() did not consult the project after the port block ran")
 	}
 	postEntry, ok := dc.Bundle[key]
 	if !ok {

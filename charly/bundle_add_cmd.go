@@ -132,7 +132,7 @@ func deriveChildExecutorForPath(path string, node *spec.BundleNode, parentExec s
 // direct-mode deploy). A mistyped/unknown name has no artifact and is rejected
 // loudly, instead of being silently synthesized into a pod del that tears down
 // nothing and then fails with a misleading "unknown target pod".
-func (c *deployDelCmd) resolveDelNode() (*spec.BundleNode, string, error) {
+func (c *deployDelCmd) resolveDelNode(tree map[string]spec.BundleNode) (*spec.BundleNode, string, error) {
 	if c.Name == "host" {
 		return &spec.BundleNode{Target: "local"}, "local", nil
 	}
@@ -144,12 +144,14 @@ func (c *deployDelCmd) resolveDelNode() (*spec.BundleNode, string, error) {
 	// masked the SEPARATE connect-preamble bug RCA #8 fixed (resolveDeployNodeByPath used to also
 	// fail to find the node) until dispatch itself failed. A real node also lets Del's teardown
 	// hooks see the deploy's actual From/Children, which the synthetic placeholder never carried.
-	if cwd, _ := os.Getwd(); cwd != "" {
-		if tree, _ := resolveTreeRoot(cwd); tree != nil {
-			if node, ok := resolveDeployNodeByPath(tree, c.Name); ok && node.Target != "" {
-				n := *node
-				return &n, n.Target, nil
-			}
+	// tree is threaded PLUGIN-SIDE by command:bundle (resolveTreeViaLoader) — the #55 Cone A Unit 3a
+	// tree-threading that replaced this function's former host resolveTreeRoot(cwd) read; a
+	// nil/empty tree falls through to the "vm:"-prefix / pod-artifact fallbacks below, exactly as a
+	// nil resolveTreeRoot result did.
+	if tree != nil {
+		if node, ok := resolveDeployNodeByPath(tree, c.Name); ok && node.Target != "" {
+			n := *node
+			return &n, n.Target, nil
 		}
 	}
 	if _, isVm := vmshared.SplitVmAddress(c.Name); isVm {

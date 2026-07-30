@@ -14,6 +14,7 @@ import (
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -317,23 +318,30 @@ func persistResourceCaps(ctx context.Context, ex *sdk.Executor, dc **deploykit.B
 // loadProjectVolume resolves the deploy's PROJECT-declared `volume:` override — the entity as
 // authored in the PROJECT's own charly.yml (e.g. a disposable check bed's `volume: [{name:
 // enc-data, type: encrypted}]`) — which the per-host overlay `loadDeploy` reads (LoadBundleConfig,
-// ~/.config/charly/charly.yml) never carries on its own. Genuinely loader-coupled (LoadUnified is
-// a core Mechanism a plugin cannot import), so it calls back the narrow "pod-config-project-volume"
-// seam. Returns (nil, nil) when the project declares no override for this deploy (or there is no
-// project at all — the labels-only deploy path).
-func loadProjectVolume(ctx context.Context, ex *sdk.Executor, box, instance string) ([]spec.DeployVolume, error) {
-	var rep spec.PodConfigProjectVolumeReply
-	if err := hostBuild(ctx, ex, podConfigProjectVolumeKind, spec.PodConfigProjectVolumeRequest{Box: box, Instance: instance}, &rep); err != nil {
-		return nil, err
-	}
-	if len(rep.VolumeJSON) == 0 {
+// ~/.config/charly/charly.yml) never carries on its own. Resolved PLUGIN-SIDE (#55 Cone A Unit 3a):
+// the former "pod-config-project-volume" host seam (which re-loaded the merged tree via the core
+// resolveTreeRoot) is DELETED — this reads the SAME merged project+operator tree itself via
+// loaderkit.ResolveMergedTreeViaExecutor (the plugin-safe resolveTreeRoot twin), keyed by
+// DeployKey exactly as the seam did. dir comes from the "deploy-plugins-connect" seam (the
+// authoritative host project dir + the kind-plugin connect the loader needs). Returns (nil, nil)
+// when the project declares no override for this deploy (or there is no project — labels-only).
+// loadProjectVolume is a package var (not a plain func) so resolveDeployVolumes' precedence tests
+// can stub the project-consult leg directly — the loader-over-executor path it now drives cannot be
+// mocked through a single HostBuild-kind stub the way the former one-shot seam could.
+var loadProjectVolume = func(ctx context.Context, ex *sdk.Executor, box, instance string) ([]spec.DeployVolume, error) {
+	var pre spec.DeployPluginsConnectReply
+	if err := hostBuild(ctx, ex, deployPluginsConnectKind, spec.DeployPluginsConnectRequest{Path: box}, &pre); err != nil || pre.Dir == "" {
 		return nil, nil
 	}
-	var volumes []spec.DeployVolume
-	if err := json.Unmarshal(rep.VolumeJSON, &volumes); err != nil {
+	tree, err := loaderkit.ResolveMergedTreeViaExecutor(ctx, ex, pre.Dir)
+	if err != nil {
 		return nil, err
 	}
-	return volumes, nil
+	node, ok := tree[spec.DeployKey(box, instance)]
+	if !ok || len(node.Volume) == 0 {
+		return nil, nil
+	}
+	return node.Volume, nil
 }
 
 // persistDeployVolumes mirrors persistResourceCaps' Security-write shape for Volume: seeds the

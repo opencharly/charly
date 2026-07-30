@@ -14,7 +14,6 @@ const (
 	podConfigSSHKeyKind         = "pod-config-ssh-key"
 	podConfigListSidecarsKind   = "pod-config-list-sidecars"
 	podConfigBoxEngineKind      = "pod-config-box-engine"
-	podConfigProjectVolumeKind  = "pod-config-project-volume"
 )
 
 // deployConfigSaveStateKind is the substrate-neutral "deploy-config-save-state" HostBuild kind
