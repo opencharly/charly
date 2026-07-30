@@ -93,14 +93,10 @@ func runPodConfigSetup(ctx context.Context, ex *sdk.Executor, c *spec.PodConfigS
 	return runConfig(ctx, ex, rt, c)
 }
 
-// resolveDeployRef mirrors the former BoxConfigSetupCmd.resolveDeployRef via the
-// "pod-config-resolve-ref" seam (loader + local podman-store coupled).
+// resolveDeployRef mirrors the former BoxConfigSetupCmd.resolveDeployRef, resolved plugin-side
+// (the "pod-config-resolve-ref" seam-collapse, #55 Cone A Unit 2 — see resolve_ref.go).
 func resolveDeployRef(ctx context.Context, ex *sdk.Executor, c *spec.PodConfigSetupRequest) (deployBoxName, imageRef string, err error) {
-	var rep spec.PodConfigResolveRefReply
-	err = hostBuild(ctx, ex, podConfigResolveRefKind, spec.PodConfigResolveRefRequest{
-		Box: c.Box, Instance: c.Instance, Tag: c.Tag, ExplicitRef: c.ExplicitRef,
-	}, &rep)
-	return rep.DeployBoxName, rep.ImageRef, err
+	return resolveDeployRefLocal(ctx, ex, c.Box, c.Instance, c.Tag, c.ExplicitRef)
 }
 
 func loadDeploy(ctx context.Context, ex *sdk.Executor, caller string) (*deploykit.BundleConfig, error) {
@@ -219,11 +215,8 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 		usingResolvedOverlay = ov != "" && ov == imageRef
 	}
 	if meta.Registry != "" && !kit.LooksLikeFullRef(imageRef) && c.ExplicitRef == "" && !usingResolvedOverlay {
-		var rep spec.PodConfigResolveRefReply
-		if err := hostBuild(ctx, ex, podConfigResolveRefKind, spec.PodConfigResolveRefRequest{
-			Box: deployBoxName, Instance: "", Tag: c.Tag,
-		}, &rep); err == nil {
-			imageRef = rep.ImageRef
+		if _, ref, e := resolveDeployRefLocal(ctx, ex, deployBoxName, "", c.Tag, ""); e == nil {
+			imageRef = ref
 		}
 	}
 

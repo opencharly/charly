@@ -93,8 +93,8 @@ func withRunTag(args []string, tag string) []string {
 
 // configStartArgs builds the `charly config`/`charly start` argv for a pod bed's config+start
 // steps. An add_candy: overlay bed's FRESH artifact to verify is the overlay `deploy-add` just
-// built + persisted (resolved via resolveDeployResolvedImage, now correctly discriminated as a
-// pod entry — the bundleDiscForEntity resolved_image fix) — NOT the base image's own --tag build
+// built + persisted (resolved via the persisted resolved_image (BundleNode.ResolvedImage),
+// correctly discriminated as a pod entry — the bundleDiscForEntity resolved_image fix) — NOT the base image's own --tag build
 // ref. Passing --tag here would force config/start to deploy <base-image>:<imageTag> (an
 // existing, but WRONG, un-overlaid reference), silently dropping every add_candy candy from the
 // running container. A non-overlay bed (hasAddCandy=false) keeps --tag unchanged (no regression):

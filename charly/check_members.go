@@ -163,18 +163,40 @@ func liveDeployVarResolver(name, instance string, reply spec.CheckVenueResolveRe
 	}
 	dir, _ := os.Getwd()
 	var projectCfg *Config
+	var projectBundle *deploykit.BundleConfig
 	var deployOverlay *spec.BundleNode
 	if uf, ok, _ := LoadUnified(dir); ok && uf != nil {
 		projectCfg = uf.ProjectConfig()
+		projectBundle = deploykit.ProjectBundleConfig(uf)
 	}
+	// perHostImg is the per-host deploy overlay's declared box (DeployKey then bare key), the
+	// user-side branch of the former host deploy-key→box resolver.
+	perHostImg := ""
 	if dc := deploykit.LoadDeployConfigForRead("charly check live on:"); dc != nil {
 		if entry, ok := dc.Bundle[spec.DeployKey(name, instance)]; ok {
 			deployOverlay = &entry
 		} else if entry, ok := dc.Bundle[name]; ok {
 			deployOverlay = &entry
 		}
+		if entry, ok := dc.Bundle[spec.DeployKey(name, instance)]; ok && entry.Image != "" {
+			perHostImg = entry.Image
+		} else if entry, ok := dc.Bundle[name]; ok && entry.Image != "" {
+			perHostImg = entry.Image
+		}
 	}
-	imageRef := resolveDeployBoxName(name, instance)
+	// Resolve the deploy key → box name INLINE — the former host box-name resolver, collapsed into
+	// candy/plugin-deploy-pod (#55 Cone A Unit 2's deploy-config-resolve seam death). This
+	// host-side check-plumbing consumer resolves from the project + overlay it already loaded:
+	// per-host overlay Image wins over the project config, falling back to the key itself (the
+	// key==image convention). Byte-equivalent to the deleted host resolver.
+	imageRef := name
+	if perHostImg != "" {
+		imageRef = perHostImg
+	} else if projectBundle != nil {
+		if entry, ok := projectBundle.Bundle[name]; ok && entry.Image != "" {
+			imageRef = entry.Image
+		}
+	}
 	resolvedRef, err := resolveImageRefForEnsure(imageRef, projectCfg, dir)
 	if err != nil {
 		return &kit.CheckVarResolver{}

@@ -123,11 +123,10 @@ func resolvePodRuntimeImage(ctx context.Context, ex *sdk.Executor, box, instance
 		}
 	}
 
-	var refRep spec.PodConfigResolveRefReply
-	if err := hostBuild(ctx, ex, podConfigResolveRefKind, spec.PodConfigResolveRefRequest{Box: box, Instance: instance, Tag: tag}, &refRep); err != nil {
+	_, imageRef, err := resolveDeployRefLocal(ctx, ex, box, instance, tag, "")
+	if err != nil {
 		return nil, err
 	}
-	imageRef := refRep.ImageRef
 	var ensureRep spec.PodConfigEnsureImageReply
 	if err := hostBuild(ctx, ex, podConfigEnsureImageKind, spec.PodConfigEnsureImageRequest{ImageRef: imageRef, BuildEngine: rt.BuildEngine}, &ensureRep); err != nil {
 		return nil, err
@@ -146,9 +145,8 @@ func resolvePodRuntimeImage(ctx context.Context, ex *sdk.Executor, box, instance
 	cliVolumes := parseVolumeFlagsCLI(volumeFlag, bind)
 	volumes, bindMounts := deploykit.ResolveVolumeBacking(box, instance, meta.Volume, mergeVolumeConfigsLocal(deployVolumes, cliVolumes), meta.Home, rt.EncryptedStoragePath, rt.VolumesPath)
 	if meta.Registry != "" {
-		var refRep2 spec.PodConfigResolveRefReply
-		if err := hostBuild(ctx, ex, podConfigResolveRefKind, spec.PodConfigResolveRefRequest{Box: box, Instance: instance, Tag: tag}, &refRep2); err == nil {
-			imageRef = refRep2.ImageRef
+		if _, ref, e := resolveDeployRefLocal(ctx, ex, box, instance, tag, ""); e == nil {
+			imageRef = ref
 		}
 	}
 	return &podRuntimeImage{detected: detected, engine: engine, imageRef: imageRef, meta: &meta, dc: dc, volumes: volumes, bindMounts: bindMounts}, nil

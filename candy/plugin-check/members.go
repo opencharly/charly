@@ -131,9 +131,10 @@ func liveDeployVarResolver(ex *sdk.Executor, ctx context.Context, dir, name, ins
 
 // resolveDeployBoxName maps a deploy-key name to the box/image it deploys, off the
 // resolved-project envelope's merged deploy tree (rp.Deploy[key].Image already carries the
-// user-overlay-wins-over-project value the core original's two-step LoadDeployConfigForRead +
-// LoadUnified lookup recomputed) — falling back to the key itself (the key==image convention),
-// matching charly/deploy.go's resolveDeployBoxName exactly.
+// user-overlay-wins-over-project value a two-step LoadDeployConfigForRead + LoadUnified lookup
+// would recompute) — falling back to the key itself (the key==image convention). This is
+// plugin-check's own envelope-based resolver (the pod config/start path's equivalent lives
+// plugin-side in candy/plugin-deploy-pod's resolve_ref.go, #55 Cone A Unit 2).
 func resolveDeployBoxName(rp *spec.ResolvedProject, key, instance string) string {
 	if key == "" {
 		return key

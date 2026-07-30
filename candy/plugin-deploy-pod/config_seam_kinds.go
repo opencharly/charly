@@ -4,7 +4,6 @@ package deploypod
 // charly/host_build_pod_config_seams.go's registrations exactly (R3: one name list, two sides).
 const (
 	podConfigEnsureImageKind    = "pod-config-ensure-image"
-	podConfigResolveRefKind     = "pod-config-resolve-ref"
 	podConfigLoadDeployKind     = "pod-config-load-deploy"
 	podConfigSaveBundleKind     = "pod-config-save-bundle"
 	podConfigLoadBundleKind     = "pod-config-load-bundle"

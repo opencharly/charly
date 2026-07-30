@@ -684,9 +684,8 @@ func updateAllDeployedQuadlets(ctx context.Context, ex *sdk.Executor, rt *kit.Re
 
 		imageRef, _ := extractQuadletImageLine(qpath)
 		if imageRef == "" {
-			var rep spec.PodConfigResolveRefReply
-			if err := hostBuild(ctx, ex, podConfigResolveRefKind, spec.PodConfigResolveRefRequest{Box: boxName}, &rep); err == nil {
-				imageRef = rep.ImageRef
+			if _, ref, e := resolveDeployRefLocal(ctx, ex, boxName, "", "", ""); e == nil {
+				imageRef = ref
 			}
 		}
 		var ensureRep spec.PodConfigEnsureImageReply

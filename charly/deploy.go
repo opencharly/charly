@@ -1,104 +1,23 @@
 package main
 
 import (
-	"os"
-
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/spec/spec"
 )
 
-// deploy.go — the deploy KEY→image RESOLVERS + the DeployConfigPath/Env seam pointers.
-// (The former shellOverlayToEntry/MergeDeployShell were deleted as dead code — zero
-// real callers — and the field they served, #Deploy.shell, was itself retired outright
-// by the validation-correctness batch: it had NO production consumer anywhere in this
-// repo's history, so removing the authoring surface was the honest fix rather than
-// finishing a never-wired feature. See sdk/schema/version.cue's #SchemaVersion history
-// comment + the "strip-deploy-shell-overlay" migration-table entry.) The deploy
-// STATE-MODEL body (LoadBundleConfig / SaveBundleConfig /
-// LoadDeployConfigForRead / LoadDeployConfigForWrite / MergeDeployOntoMetadata /
-// CleanDeployEntry / SaveDeployState / ExportAllBox + the spec.SaveDeployStateInput type +
-// the pure helpers scopeVolumesToDeployKey / descriptionInfo / isSameBaseBox / removeBySource /
-// removeByExactSource) MOVED to sdk/deploykit in K5-Unit-1 (the S-K5 keystone that unblocks
-// P13). charly/ calls the deploykit path directly (IMPORT-PURITY: no new charly/*_aliases.go;
-// the 1 kind-blind K1-gated op — LoadUnified — reaches core through the DeployStateHost seam
-// charly fills at init — RegisterDeployStateHost; the deploy-kind-specific marshal
-// deploykit.MarshalBundleNode is supplied as a callback to the kind-blind SaveBundleConfig
-// shell — deploy_state_host.go's thin marshalDeployNode wrapper feeds it loaderThreaded().Primaries).
-
-// resolveDeployKeyToBox maps a deploy-key name to the `box:` field of
-// its deploy entry. User (~/.config/charly/charly.yml) wins over project
-// (charly.yml/check.yml) — the same precedence the check runner and
-// `charly config` use. Returns "" when no entry declares a box for the key
-// (caller decides the fallback). Implements the Pattern-B (arbitrary
-// deploy-key + version-pin) and kind:check-bed (key != box) lookups.
-// See /charly-core:deploy "Two supported deploy patterns".
-func resolveDeployKeyToBox(key, instance string) string {
-	if key == "" {
-		return ""
-	}
-	// User-side first.
-	if dc := deploykit.LoadDeployConfigForRead("resolveDeployKeyToBox"); dc != nil {
-		if entry, ok := dc.Bundle[spec.DeployKey(key, instance)]; ok && entry.Image != "" {
-			return entry.Image
-		}
-		if entry, ok := dc.Bundle[key]; ok && entry.Image != "" {
-			return entry.Image
-		}
-	}
-	// Project-level fallback.
-	if dir, err := os.Getwd(); err == nil {
-		if uf, ok, _ := LoadUnified(dir); ok && uf != nil {
-			if pc := deploykit.ProjectBundleConfig(uf); pc != nil {
-				if entry, ok := pc.Bundle[key]; ok && entry.Image != "" {
-					return entry.Image
-				}
-			}
-		}
-	}
-	return ""
-}
-
-// resolveDeployResolvedImage returns the concrete overlay image ref a pod
-// deploy's add_candy: overlay build persisted (BundleNode.ResolvedImage), or ""
-// when none is recorded. This is charly-written PER-HOST runtime state (written
-// by PrepareVenue via deploykit.SaveDeployState, like resolved_port), so it is read ONLY
-// from the per-host charly.yml — never the project config, which carries no
-// resolved_image. When set, resolveDeployRef deploys THIS exact overlay (with
-// the add_candy: layers) instead of re-resolving the base image: short-name by
-// a CalVer sort the overlay alias can lose to the base on a same-minute build.
-func resolveDeployResolvedImage(key, instance string) string {
-	if key == "" {
-		return ""
-	}
-	if dc := deploykit.LoadDeployConfigForRead("resolveDeployResolvedImage"); dc != nil {
-		if entry, ok := dc.Bundle[spec.DeployKey(key, instance)]; ok && entry.ResolvedImage != "" {
-			return entry.ResolvedImage
-		}
-		if entry, ok := dc.Bundle[key]; ok && entry.ResolvedImage != "" {
-			return entry.ResolvedImage
-		}
-	}
-	return ""
-}
-
-// resolveDeployBoxName is THE single deploy-key→image-name resolver used
-// by every deploy-mode command that starts from a deploy key (charly config /
-// start / shell / check live). It returns the deploy entry's declared
-// `box:` (resolveDeployKeyToBox), falling back to the key itself when
-// no entry declares one (the key==image convention). Before this was
-// shared, `charly config` resolved key→image but `charly start`/`charly shell`/
-// `charly check live` treated the key AS the image — so a kind:check bed
-// (check-jupyter-pod → jupyter) or any Pattern-B deploy resolved a
-// different (wrong/unresolvable) image per command. `charly update` reaches the
-// same value via its already-resolved merged-tree node (node.Image), so it
-// reads that directly rather than re-loading config here.
-func resolveDeployBoxName(key, instance string) string {
-	if img := resolveDeployKeyToBox(key, instance); img != "" {
-		return img
-	}
-	return key
-}
+// deploy.go — the DeployConfigPath/DeployConfigEnv charly.yml-path seam pointers.
+//
+// The deploy-key→image RESOLVERS that once lived here (the per-host + PROJECT deploy-key→box
+// loader-read + the resolved_image overlay preference) MOVED into candy/plugin-deploy-pod
+// (resolve_ref.go's resolveDeployRefLocal) in #55 Cone A Unit 2, the deploy-config-resolve
+// reverse-leg SEAM COLLAPSE. The pod plugin now self-resolves plugin-side (per-host via the
+// deploy-config load seam + PROJECT via the shared loaderkit.LoadUnifiedViaExecutor helper), so
+// the host seam and these host-side resolvers are gone — deploy.go no longer imports sdk/deploykit
+// or sdk/spec. The check-plumbing consumer (check_members.go) resolves the box name INLINE from the
+// project + overlay it already loads. See each repo's CHANGELOG/ for the collapse (retired names).
+//
+// The deploy STATE-MODEL body (LoadBundleConfig / SaveBundleConfig / LoadDeployConfigForRead /
+// LoadDeployConfigForWrite / MergeDeployOntoMetadata / CleanDeployEntry / SaveDeployState /
+// ExportAllBox + the pure helpers) had already MOVED to sdk/deploykit in K5-Unit-1.
 
 // DeployConfigPath returns the path to the deploy overlay file. Package-level var for
 // testability (tests inject a temp path, same pattern as RuntimeConfigPath). The resolver

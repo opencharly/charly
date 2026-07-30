@@ -26,7 +26,6 @@ import (
 
 const (
 	podConfigEnsureImageKind      = "pod-config-ensure-image"
-	podConfigResolveRefKind       = "pod-config-resolve-ref"
 	podConfigLoadDeployKind       = "pod-config-load-deploy"
 	podConfigSaveBundleKind       = "pod-config-save-bundle"
 	podConfigLoadBundleKind       = "pod-config-load-bundle"
@@ -128,20 +127,6 @@ func ensureImagePresent(imageRef string, rt *kit.ResolvedRuntime) error {
 		return nil
 	}
 	return fmt.Errorf("%w: %s", kit.ErrImageNotLocal, imageRef)
-}
-
-func hostBuildPodConfigResolveRef(_ context.Context, req spec.PodConfigResolveRefRequest, _ buildEngineContext) (spec.PodConfigResolveRefReply, error) {
-	if req.ExplicitRef != "" {
-		return spec.PodConfigResolveRefReply{DeployBoxName: req.ExplicitRef, ImageRef: req.ExplicitRef}, nil
-	}
-	deployBoxName := resolveDeployBoxName(req.Box, req.Instance)
-	imageRef := ""
-	if ov := resolveDeployResolvedImage(req.Box, req.Instance); ov != "" && kit.LocalImageExists("podman", ov) {
-		imageRef = ov
-	} else {
-		imageRef = kit.ResolveShellImageRef("", deployBoxName, req.Tag)
-	}
-	return spec.PodConfigResolveRefReply{DeployBoxName: deployBoxName, ImageRef: imageRef}, nil
 }
 
 func hostBuildPodConfigLoadDeploy(_ context.Context, req spec.PodConfigLoadDeployRequest, _ buildEngineContext) (spec.PodConfigLoadDeployReply, error) {
@@ -309,7 +294,6 @@ func hostBuildPodConfigCleanDeployEntry(_ context.Context, req spec.PodConfigCle
 
 var _ = func() bool {
 	registerHostBuilder(podConfigEnsureImageKind, typedHostBuilder(podConfigEnsureImageKind, hostBuildPodConfigEnsureImage))
-	registerHostBuilder(podConfigResolveRefKind, typedHostBuilder(podConfigResolveRefKind, hostBuildPodConfigResolveRef))
 	registerHostBuilder(podConfigLoadDeployKind, typedHostBuilder(podConfigLoadDeployKind, hostBuildPodConfigLoadDeploy))
 	registerHostBuilder(podConfigSaveBundleKind, typedHostBuilder(podConfigSaveBundleKind, hostBuildPodConfigSaveBundle))
 	registerHostBuilder(podConfigLoadBundleKind, typedHostBuilder(podConfigLoadBundleKind, hostBuildPodConfigLoadBundle))
