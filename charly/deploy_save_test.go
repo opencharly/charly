@@ -121,7 +121,7 @@ deploy:
 		Disposable:    true,
 		Box:           "newimage",
 		Target:        "pod",
-	}, marshalDeployNode)
+	}, marshalDeployNode, nil)
 
 	afterBytes, _ := os.ReadFile(path)
 	if !bytes.Equal(initialBytes, afterBytes) {
@@ -156,7 +156,7 @@ existing-deploy:
 		Disposable:    true,
 		Box:           "newimage",
 		Target:        "pod",
-	}, marshalDeployNode)
+	}, marshalDeployNode, nil)
 
 	dc, err := deploykit.LoadBundleConfig()
 	if err != nil {
@@ -211,7 +211,7 @@ existing:
 		Disposable:    true,
 		Box:           "would-clobber",
 		Target:        "vm",
-	}, marshalDeployNode)
+	}, marshalDeployNode, nil)
 
 	dc, err := deploykit.LoadBundleConfig()
 	if err != nil {

@@ -68,5 +68,9 @@ func marshalDeployNode(name string, node *spec.Deploy) (*yaml.Node, error) {
 // stays as the ONE charly/ host call site (R3) that feeds loaderThreaded().Primaries — the residual
 // host-only step is the registry-derived primaries projection, not the marshal itself.
 func saveBundleConfigNodeForm(dc *deploykit.BundleConfig) error {
-	return deploykit.SaveBundleConfig(dc, marshalDeployNode)
+	// nil reader: this is the IN-PROCESS host write path (config-resolve / pod-config seams /
+	// secret-migration), where DeployStateHost is always registered, so the fail-safe re-check
+	// falls back to the host's LoadBundleConfig. A plugin-side writer supplies its own reader
+	// instead (#55 K4 config-write seam-collapse — the deploy-config-save host leg is deleted).
+	return deploykit.SaveBundleConfig(dc, marshalDeployNode, nil)
 }

@@ -31,7 +31,11 @@ func hostBuildDeployConfigSaveState(_ context.Context, req spec.DeployConfigSave
 	if err := json.Unmarshal(req.InputJSON, &input); err != nil {
 		return spec.DeployConfigSaveStateReply{}, err
 	}
-	deploykit.SaveDeployState(req.Box, req.Instance, input, marshalDeployNode)
+	// nil reader: the IN-PROCESS host write path (DeployStateHost always registered here), so the
+	// re-read falls back to the host's LoadDeployConfigForWrite. command:bundle now writes deploy-state
+	// PLUGIN-SIDE, but candy/plugin-deploy-pod still reaches this seam (its pod-config-* seam family) —
+	// its plugin-side repoint is the named exit for the Unit-2 pod-config-resolve collapse (#55 K4).
+	deploykit.SaveDeployState(req.Box, req.Instance, input, marshalDeployNode, nil)
 	return spec.DeployConfigSaveStateReply{}, nil
 }
 

@@ -157,8 +157,8 @@ func (c *BundleExportCmd) Run() error {
 	return runBundleExport(c.Boxes, c.Output, c.All)
 }
 
-// BundleImportCmd is the `charly bundle import <files…>` grammar (K4-C: runs plugin-side;
-// the SAVE step alone reaches the host via the narrow HostBuild("deploy-config-save") seam).
+// BundleImportCmd is the `charly bundle import <files…>` grammar (K4-C: runs plugin-side; the
+// SAVE step writes plugin-side too — deploykit.SaveBundleConfig, #55 K4 config-write seam-collapse).
 type BundleImportCmd struct {
 	Files   []string `arg:"" help:"Deploy YAML files to import (merged left-to-right)"`
 	Replace bool     `help:"Replace entire charly.yml instead of merging with existing"`
@@ -170,7 +170,7 @@ func (c *BundleImportCmd) Run() error {
 }
 
 // BundleResetCmd is the `charly bundle reset [box]` grammar (K4-C: runs plugin-side; the SAVE
-// step alone reaches the host via the narrow HostBuild("deploy-config-save") seam).
+// step writes plugin-side too — deploykit.SaveBundleConfig, #55 K4 config-write seam-collapse).
 type BundleResetCmd struct {
 	Box      string `arg:"" optional:"" help:"Box to reset (omit to clear all)"`
 	Instance string `short:"i" long:"instance" help:"Instance name"`

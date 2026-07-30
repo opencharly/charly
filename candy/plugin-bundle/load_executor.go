@@ -78,3 +78,25 @@ func fetchExternalSubstrates() map[string]bool {
 	}
 	return t.ExternalDeploySubstrates
 }
+
+// fetchLoaderPrimaries returns the loader-threaded Primaries DATA snapshot (plugin-verb WORD →
+// scalar-sugar primary field — the SAME registry-derived map candy/plugin-build's resolve fills
+// spec.ResolvedProject.Primaries from, and the host's deleted deploy-config-save leg fed
+// deploykit.MarshalBundleNode via loaderThreaded().Primaries). The node-form deploy-state WRITE
+// (saveDeployConfig / persistDeployState) reads it here so command:bundle resugars each plan step
+// PLUGIN-SIDE — no host round-trip through the deleted deploy-config-save seam (#55 K4). A
+// HostBuild failure degrades to an empty map (a plan with no plugin-verb sugar marshals identically).
+func fetchLoaderPrimaries() map[string]string {
+	if cmdExec == nil {
+		return nil
+	}
+	out, err := cmdExec.HostBuild(cmdCtx, "loader-threaded", nil)
+	if err != nil {
+		return nil
+	}
+	var t spec.Threaded
+	if err := json.Unmarshal(out, &t); err != nil {
+		return nil
+	}
+	return t.Primaries
+}

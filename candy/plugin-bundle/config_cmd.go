@@ -1,7 +1,6 @@
 package bundle
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -14,13 +13,15 @@ import (
 
 // config_cmd.go — the K4-C move of the `charly bundle` CONFIG-MANAGEMENT subcommands
 // (show/export/import/reset/status) out of charly core. Every handler below calls ONLY
-// already-sdk-portable deploykit/kit functions; the ONE host touch each needs is a narrow,
-// established seam — InvokeProvider("build","project") for export's project-load (the SAME seam
-// compile.go already uses) and HostBuild("deploy-config-save") for import/reset's deploy-state
-// WRITE (the ONE piece that still needs the host: the per-entry marshal callback resugars each
-// plan step via the host-owned pluginPrimaries registry, a live in-process table a separate
-// module cannot reach). IMPORT-PURITY: imports ONLY github.com/opencharly/sdk (deploykit/kit/
-// spec are subpackages); never charly/.
+// already-sdk-portable deploykit/kit functions. The reads/writes reach the host ONLY for what a
+// separate module genuinely cannot hold: InvokeProvider("build","project") for export's
+// project-load (the SAME seam compile.go already uses), the "pod-config-load-bundle" read seam
+// (loadBundleConfig), and the "loader-threaded" Primaries snapshot. import/reset's deploy-state
+// WRITE now runs PLUGIN-SIDE — deploykit.SaveBundleConfig with the plugin's OWN loader-backed
+// reader + a marshal callback that resugars each plan step from the loader-threaded Primaries
+// (deployMarshalNode), NOT the deleted host "deploy-config-save" seam (#55 K4 config-write
+// seam-collapse). IMPORT-PURITY: imports ONLY github.com/opencharly/sdk (deploykit/kit/spec are
+// subpackages); never charly/.
 //
 // Bed-robustness batch item 5 (the placement-dependent silent-no-op class): every READ below
 // goes through the package-local loadBundleConfig() (ephemeral.go), which resolves the per-host
@@ -38,13 +39,24 @@ import (
 // by the config leg, the per-shape compile, and the walk's ref classification). The 3-arg form takes
 // (dir, extraCandyRefs, includeDisabled); this config caller passes (dir, nil, false).
 
-// saveDeployConfig persists dc via the narrow HostBuild("deploy-config-save") seam.
-func saveDeployConfig(dc *deploykit.BundleConfig) error {
-	configJSON, err := json.Marshal(dc)
-	if err != nil {
-		return fmt.Errorf("bundle config: marshal deploy config: %w", err)
+// deployMarshalNode builds the per-entry node-form marshal callback deploykit.SaveBundleConfig /
+// SaveDeployState take. It resugars each plan step via the loader-threaded Primaries snapshot
+// (fetchLoaderPrimaries) — the SAME registry-derived D-fact the deleted host deploy-config-save
+// leg fed to deploykit.MarshalBundleNode via loaderThreaded().Primaries. Sourcing Primaries
+// PLUGIN-SIDE is what lets the deploy-state WRITE run here instead of over a host seam (#55 K4).
+func deployMarshalNode() func(name string, node *deploykit.BundleNode) (*yaml.Node, error) {
+	primaries := fetchLoaderPrimaries()
+	return func(_ string, node *deploykit.BundleNode) (*yaml.Node, error) {
+		return deploykit.MarshalBundleNode(node, primaries)
 	}
-	return hostDeploySeam("deploy-config-save", spec.DeployConfigSaveRequest{ConfigJSON: configJSON})
+}
+
+// saveDeployConfig persists dc PLUGIN-SIDE via deploykit.SaveBundleConfig directly (#55 K4
+// config-write seam-collapse — the narrow HostBuild("deploy-config-save") host leg is deleted).
+// loadBundleConfig is the plugin's own loader-backed reader for the write path's fail-safe
+// re-check, so the write no longer depends on the host's DeployStateHost registration.
+func saveDeployConfig(dc *deploykit.BundleConfig) error {
+	return deploykit.SaveBundleConfig(dc, deployMarshalNode(), loadBundleConfig)
 }
 
 func marshalConfigToStdout(dc *deploykit.BundleConfig) error {

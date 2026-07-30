@@ -151,7 +151,6 @@ var kernelFloor = []floorEntry{
 	{"host_build_check_run.go", "M — the check-run reverse-channel seam (preflight + host feature dispatch; kind-blind)"},
 	{"host_build_deploy_from_box.go", "M — the deploy-from-box F10 host-builder (reverse-channel; kind-blind)"},
 	{"host_build_pod_disposable.go", "M — the pod-disposable F11 seam serving plugin-check (reverse-channel; kind-blind)"},
-	{"host_build_deploy_config_save.go", "M — the deploy-config-save F10 host-builder (charly.yml persist host-only reverse-leg)"},
 	{"host_build_deploy_del_resolve.go", "M — the deploy-del-resolve F10 host-builder (reverse-channel; kind-blind)"},
 	{"host_build_deploy_members.go", "M — the deploy-members F10 host-builder (reverse-channel; kind-blind)"},
 	{"host_build_deploy_node_del_dispatch.go", "M — the deploy-node-del dispatch F10 host-builder (kind-blind dispatch)"},

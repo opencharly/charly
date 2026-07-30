@@ -24,9 +24,10 @@ import (
 // as its own bed-robustness-batch item (their dispatch lives in candy/plugin-deploy-pod /
 // candy/plugin-pod, outside this unit's scope); `ephemeral: true` on a pod/k8s deploy is
 // rejected at load time in the meantime (charly/validate_ephemeral.go) rather than silently
-// no-op'd. Config persistence goes through the ALREADY-EXISTING seam pair on BOTH legs: reads route
-// through "pod-config-load-bundle" (loadBundleConfig below) and writes through "deploy-config-save"
-// (saveDeployConfig, config_cmd.go). Calling deploykit.LoadBundleConfig() directly — relying on the
+// no-op'd. Config persistence: reads route through the "pod-config-load-bundle" seam
+// (loadBundleConfig below); writes run PLUGIN-SIDE via deploykit.SaveBundleConfig
+// (saveDeployConfig, config_cmd.go — #55 K4 config-write seam-collapse, no host deploy-config-save
+// seam). Calling deploykit.LoadBundleConfig() directly — relying on the
 // compiled-in placement's shared process-wide deploykit.DeployStateHost var — is the
 // placement-dependent silent-degradation anti-pattern this program has already fixed twice
 // (candy/plugin-pod's resolveSidecarNames + engine-resolution, remove_orchestration.go): correct

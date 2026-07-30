@@ -68,6 +68,13 @@ func runDeployDispatch(ctx context.Context, ireq *pb.InvokeRequest) (*pb.InvokeR
 	if err != nil {
 		return nil, fmt.Errorf("bundle deploy-dispatch: reach host reverse channel: %w", err)
 	}
+	// Stash the reverse-channel executor in the package vars for THIS dispatch, exactly as every
+	// other command:bundle Invoke op does (OpRun/OpEphemeral*/OpResolve — command.go/compile.go).
+	// This dispatch was the lone op that omitted it (it threaded exec explicitly); persistDeployState
+	// now writes deploy-state PLUGIN-SIDE (deploykit.SaveDeployState with the loader-backed reader +
+	// loader-threaded Primaries) instead of over the deleted deploy-config-save-state host seam, and
+	// those helpers read cmdCtx/cmdExec — safe under the single-command-per-process invariant (#55 K4).
+	setCommandContext(ctx, exec)
 	var req spec.DeployTargetDispatchRequest
 	if err := json.Unmarshal(ireq.GetParamsJson(), &req); err != nil {
 		return nil, fmt.Errorf("bundle deploy-dispatch: decode request: %w", err)
@@ -276,7 +283,7 @@ func handleDeployApply(ctx context.Context, exec *sdk.Executor, req spec.DeployT
 				fmt.Println(note)
 			}
 			if len(pvReply.State) > 0 {
-				if err := persistDeployState(ctx, exec, req.Name, pvReply.State); err != nil {
+				if err := persistDeployState(req.Name, pvReply.State); err != nil {
 					return reply, err
 				}
 			}
@@ -408,27 +415,22 @@ func handleDeployApply(ctx context.Context, exec *sdk.Executor, req spec.DeployT
 	return reply, nil
 }
 
-// persistDeployState routes a PrepareVenue reply's opaque State patch through the
-// "deploy-config-save-state" HostBuild seam (Q2, S3b — reused + renamed from
-// "pod-config-save-deploy-state": deploykit.SaveDeployState has a silent DeployStateHost==nil
-// no-op guard set only by charly-core's own init(), so calling it directly from THIS process would
-// silently drop the write; the seam runs it host-side, where the guard is always satisfied).
-func persistDeployState(ctx context.Context, exec *sdk.Executor, name string, stateJSON json.RawMessage) error {
+// persistDeployState writes a PrepareVenue reply's opaque State patch to the per-host deploy
+// overlay PLUGIN-SIDE via deploykit.SaveDeployState directly (#55 K4 config-write seam-collapse —
+// the "deploy-config-save-state" host leg is deleted). loadBundleConfig is the plugin's own
+// loader-backed reader (the "pod-config-load-bundle" seam), so SaveDeployState no longer depends on
+// the charly-init DeployStateHost registration (the former reason this routed host-side); the
+// node-form marshal resugars via loader-threaded Primaries (deployMarshalNode). cmdCtx/cmdExec are
+// stashed at the top of runDeployDispatch, so the package-based helpers resolve here. SaveDeployState
+// is best-effort (stderr warnings, no error return) — matching the host-side write it replaces.
+func persistDeployState(name string, stateJSON json.RawMessage) error {
 	var in spec.SaveDeployStateInput
 	if err := json.Unmarshal(stateJSON, &in); err != nil {
 		return fmt.Errorf("decode prepare-venue state: %w", err)
 	}
 	boxKey, instKey := spec.ParseDeployKey(name)
-	inputJSON, err := json.Marshal(in)
-	if err != nil {
-		return err
-	}
-	reqJSON, err := json.Marshal(spec.DeployConfigSaveStateRequest{Box: boxKey, Instance: instKey, InputJSON: inputJSON})
-	if err != nil {
-		return err
-	}
-	_, err = exec.HostBuild(ctx, "deploy-config-save-state", reqJSON)
-	return err
+	deploykit.SaveDeployState(boxKey, instKey, in, deployMarshalNode(), loadBundleConfig)
+	return nil
 }
 
 // preresolveSubstrate reaches an android/k8s substrate's own OpPreresolve (F1/F6) — the
