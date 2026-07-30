@@ -4,7 +4,6 @@ import (
 	_ "embed"
 	"fmt"
 
-	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -54,6 +53,6 @@ func applyEmbeddedDefaults(uf *spec.UnifiedFile) error {
 	if err != nil {
 		return err
 	}
-	loaderkit.MergePluginKindsMap(&uf.PluginKinds, def.PluginKinds)
+	spec.MergePluginKindsMap(&uf.PluginKinds, def.PluginKinds)
 	return nil
 }
