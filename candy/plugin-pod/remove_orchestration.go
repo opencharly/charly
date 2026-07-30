@@ -49,10 +49,10 @@ import (
 // former pod-config-hook-secret-env seam is retired (this cone's secrets seam-death). One axis
 // remains genuinely host-coupled by DESIGN (not this same DeployStateHost class) and reaches the
 // host over its own EXISTING narrow seam (R3 — no new seam invented):
-//   - the registry-resugar axis (the deploy-entry cleanup) needs a NEW narrow twin,
-//     pod-config-clean-deploy-entry, mirroring deploy-config-save-state's shape exactly —
-//     the EXISTING deploy-config-save seam does NOT fit: it persists an already-loaded, whole,
-//     already-mutated BundleConfig (bundle import/reset's use case, no internal load, no lock, no
+//   - the registry-resugar axis (the deploy-entry cleanup) needs a NEW narrow seam,
+//     pod-config-clean-deploy-entry, with a host-owns-load+lock+mutate+save shape —
+//     the plugin-side whole-config deploy-state write does NOT fit: it persists an already-loaded,
+//     whole, already-mutated BundleConfig (bundle import/reset's use case, no internal load, no lock, no
 //     entry-removal/provides-cleanup logic), whereas deploykit.CleanDeployEntry loads its OWN
 //     BundleConfig under a file lock, does the entry-removal + provides-cleanup + empty-file-delete
 //     decision internally, and returns nothing — a fundamentally different, narrower operation.
@@ -210,8 +210,8 @@ func runPreRemoveHook(engine, containerName, boxName, instance string, cliEnv []
 }
 
 // cleanDeployEntry asks the host to run deploykit.CleanDeployEntry(box, instance, marshalDeployNode)
-// via the NEW narrow pod-config-clean-deploy-entry seam (see the file header for why the EXISTING
-// deploy-config-save seam does not fit).
+// via the NEW narrow pod-config-clean-deploy-entry seam (see the file header for why it needs its
+// own host-owns-load+lock+mutate+save seam rather than the plugin-side whole-config write).
 func cleanDeployEntry(boxName, instance string) error {
 	return hostPodSeam(podConfigCleanDeployEntryKind, spec.PodConfigCleanDeployEntryRequest{Box: boxName, Instance: instance})
 }

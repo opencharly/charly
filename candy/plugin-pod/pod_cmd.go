@@ -30,8 +30,8 @@ import (
 // quadlet/container-teardown/hook/cleanup body (remove_orchestration.go's runPodRemove) — runs
 // HERE now. Two axes still reach the host, each over its own EXISTING narrow seam (no new
 // mechanism, R3): the credential-backed hook env (pod-config-hook-secret-env) and the deploy-entry
-// cleanup's registry-resugar (the NEW pod-config-clean-deploy-entry, a narrow twin of
-// deploy-config-save-state — the existing deploy-config-save seam's shape doesn't fit, see
+// cleanup's registry-resugar (the NEW pod-config-clean-deploy-entry, a narrow host-owns-
+// load+lock+mutate+save seam — the plugin-side whole-config deploy-state writes don't fit, see
 // remove_orchestration.go's header for the demonstrated mismatch). The arbiter-release bracket
 // (CHARLY_PREEMPT_LEASE-gated host-process state) stays under the EXISTING "pod-remove" HostBuild
 // kind, deferred here as the LAST step — same shape as pod start/stop's own bracket.
@@ -163,7 +163,8 @@ func (c *LogsCmd) Run() error {
 // (runPodRemove, remove_orchestration.go), reaching the host only for the two genuinely
 // host-coupled axes (the credential-backed hook env via the EXISTING pod-config-hook-secret-env
 // seam, and the deploy-entry cleanup via the NEW pod-config-clean-deploy-entry seam — see
-// remove_orchestration.go's header for why the existing deploy-config-save seam doesn't fit). The
+// remove_orchestration.go's header for why it needs its own host-owns-load+lock+mutate+save seam
+// rather than the plugin-side whole-config deploy-state write). The
 // arbiter-release bracket stays host-side under the EXISTING "pod-remove" HostBuild kind — same
 // shape as pod start/stop's own bracket — deferred here as the LAST step so it always runs,
 // mirroring the former core `defer releaseResourceClaim(...)` semantics exactly.

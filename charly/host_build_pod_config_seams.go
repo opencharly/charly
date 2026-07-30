@@ -255,11 +255,11 @@ func hostBuildPodConfigTunnelResolve(_ context.Context, req spec.PodConfigTunnel
 
 // hostBuildPodConfigCleanDeployEntry wraps deploykit.CleanDeployEntry VERBATIM (Cutover B unit 2
 // remove-verb completion) — the registry-resugar axis of `charly remove`'s deploy-entry cleanup.
-// marshalDeployNode needs the host's plugin-primaries registry to resugar plan steps (the SAME
-// K4-exit family CleanDeployEntry's own callers document), so this narrow twin of
-// hostBuildDeployConfigSaveState (host_build_deploy_config_save_state.go) stays host-side rather
-// than forcing the wrong-shaped deploy-config-save seam to fit (see
-// #PodConfigCleanDeployEntryRequest's doc comment).
+// marshalDeployNode needs the host's plugin-primaries registry to resugar plan steps, so this seam
+// stays host-side, wrapping deploykit.CleanDeployEntry with the host marshalDeployNode (see
+// #PodConfigCleanDeployEntryRequest's doc comment). Its own plugin-side collapse — sourcing
+// Primaries via the generic loader-threaded leg like the #55 K4 deploy-state writes already do — is
+// a pod-config-seam follow-on cone, not this unit.
 func hostBuildPodConfigCleanDeployEntry(_ context.Context, req spec.PodConfigCleanDeployEntryRequest, _ buildEngineContext) (spec.PodConfigCleanDeployEntryReply, error) {
 	deploykit.CleanDeployEntry(req.Box, req.Instance, marshalDeployNode)
 	return spec.PodConfigCleanDeployEntryReply{}, nil

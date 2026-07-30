@@ -214,8 +214,9 @@ func resolvePodStartDirect(ctx context.Context, ex *sdk.Executor, box, instance 
 		if err != nil {
 			return nil, err
 		}
-		inputJSON, _ := json.Marshal(spec.SaveDeployStateInput{Ports: ports, SetPorts: true})
-		_ = hostBuild(ctx, ex, deployConfigSaveStateKind, spec.DeployConfigSaveStateRequest{Box: box, Instance: instance, InputJSON: inputJSON}, nil)
+		// #55 K4: write the recomputed ports PLUGIN-SIDE (deploykit.SaveDeployState), not over the
+		// deleted "deploy-config-save-state" host seam.
+		deploySaveState(ctx, ex, box, instance, spec.SaveDeployStateInput{Ports: ports, SetPorts: true})
 	}
 	if conflicts := kit.CheckPortAvailability(ports, rt.BindAddress, engine); len(conflicts) > 0 {
 		return nil, fmt.Errorf("port conflicts detected:%s", kit.FormatPortConflicts(conflicts, box))

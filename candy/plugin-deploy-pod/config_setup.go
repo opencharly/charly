@@ -384,12 +384,9 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 		Sidecar: deploySidecars, Tunnel: meta.Tunnel, SecretNames: secretDepNames(&meta),
 		Box: deployBoxName, Target: "pod",
 	}
-	inputJSON, _ := json.Marshal(saveInput)
-	if err := hostBuild(ctx, ex, deployConfigSaveStateKind, spec.DeployConfigSaveStateRequest{
-		Box: c.Box, Instance: c.Instance, InputJSON: inputJSON,
-	}, nil); err != nil {
-		return err
-	}
+	// #55 K4: write deploy-state PLUGIN-SIDE (deploykit.SaveDeployState via the generic loader-threaded
+	// Primaries leg + loadDeploy reader), not over the deleted "deploy-config-save-state" host seam.
+	deploySaveState(ctx, ex, c.Box, c.Instance, saveInput)
 
 	if rt.RunMode == "direct" {
 		return runConfigDirect(qcfg, bindMounts, resolvedSidecars, tunnelCfg)

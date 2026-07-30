@@ -138,9 +138,9 @@ func rewriteK3sServerToForward(ctx context.Context, exec *sdk.Executor, retrieve
 // compiled-in) — DeployStateHost is wired ONLY by charly-core's own init(), so a
 // direct call here silently found nothing (a `LookupKey` miss, ok=false) every
 // single time regardless of what was actually persisted on disk, exactly the
-// silent-out-of-process-degradation class of bug the "deploy-config-save-state"
-// seam (Q2, S3b) was introduced to prevent for the WRITE half — this closes the
-// matching gap on the READ half. R10 bed regression: check-k8s-deploy's
+// silent-out-of-process-degradation class of bug the deploy-state WRITE path
+// guards against (plugin-side via a loader-backed reader since #55 K4) for the
+// WRITE half — this closes the matching gap on the READ half. R10 bed regression: check-k8s-deploy's
 // bring-up-members failed with "auto port_forward \"auto:6443\" has no persisted
 // host-port allocation" even though `charly vm create`'s own persist (verified via
 // a live isolated CHARLY_DEPLOY_CONFIG repro, RDD) landed correctly and stayed
