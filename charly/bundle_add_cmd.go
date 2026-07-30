@@ -35,6 +35,7 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	specexec "github.com/opencharly/spec/exec"
 	"github.com/opencharly/spec/hostenv"
 	"github.com/opencharly/spec/spec"
 )
@@ -89,7 +90,7 @@ func deriveChildExecutorForPath(path string, node *spec.BundleNode, parentExec s
 		if parentExec != nil {
 			return parentExec, nil
 		}
-		return kit.ShellExecutor{}, nil
+		return specexec.ShellExecutor{}, nil
 	case "container-exec":
 		// The podman container `charly start`/the pod lifecycle creates is
 		// `charly-<flat-path>` (containerName's `charly-` prefix), so the nested
@@ -97,17 +98,17 @@ func deriveChildExecutorForPath(path string, node *spec.BundleNode, parentExec s
 		// consumer (build_overlay.go, candy/plugin-adb/preresolve.go)
 		// prepends `charly-`; omitting it here made a nested-child deploy exec into a
 		// nonexistent bare-named container (exit 125 "no such container").
-		name := "charly-" + kit.NestedContainerName(path)
-		engineJump := kit.JumpPodmanExec
+		name := "charly-" + specexec.NestedContainerName(path)
+		engineJump := specexec.JumpPodmanExec
 		if node.Engine == "docker" {
-			engineJump = kit.JumpDockerExec
+			engineJump = specexec.JumpDockerExec
 		}
 		if parentExec == nil {
-			parentExec = kit.ShellExecutor{}
+			parentExec = specexec.ShellExecutor{}
 		}
-		return &kit.NestedExecutor{
+		return &specexec.NestedExecutor{
 			Parent: parentExec,
-			Jump:   kit.NestedJump{Kind: engineJump, Target: name},
+			Jump:   specexec.NestedJump{Kind: engineJump, Target: name},
 		}, nil
 	case "ssh":
 		return deploykit.VmChildExecutor(parentExec, path)
@@ -175,7 +176,7 @@ func (c *deployDelCmd) resolveDelNode(tree map[string]spec.BundleNode) (*spec.Bu
 // that lets a ref-based `charly bundle del <name>` with no charly.yml entry still tear a real pod
 // down, while a mistyped name (no artifact) is rejected.
 func podDeploymentArtifactExists(name string) bool {
-	cn := kit.NestedContainerName(name)
+	cn := specexec.NestedContainerName(name)
 	if dir, err := kit.QuadletDir(); err == nil {
 		for _, suffix := range []string{".container", ".pod"} {
 			if _, err := os.Stat(filepath.Join(dir, "charly-"+cn+suffix)); err == nil {

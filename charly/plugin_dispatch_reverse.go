@@ -8,6 +8,7 @@ import (
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
+	specexec "github.com/opencharly/spec/exec"
 	pb "github.com/opencharly/spec/proto"
 	"github.com/opencharly/spec/spec"
 )
@@ -18,7 +19,7 @@ import (
 // (deploy/step/check/build) can reach them — the generalization of the RunHostStep ExternalPlugin
 // arm (one fixed OpExecute step) to "invoke ANY provider/op" + "request a host build".
 //
-// MIGRATION INVENTORY: this file's `kit` import (kit.VenueFromDescriptor, the S1
+// MIGRATION INVENTORY: this file's `kit` import (specexec.VenueFromDescriptor, the S1
 // venue-scoped-executor-session re-materialization below) is UNTIL-FLOOR-SLIM-proper — it
 // exits with the reverse-broker floor slimming, at which point the venue re-materialization
 // this seam performs moves into the generic reverse-channel broker mechanism itself (clause-M,
@@ -40,7 +41,7 @@ import (
 // none, e.g. a verb/kind Invoke with no deploy-context broker). A caller with no enclosing executor
 // of its own may instead supply a SELF-DESCRIBED venue via req.VenueDescriptorJson (a marshalled
 // spec.VenueDescriptor): the host re-materializes a FRESH DeployExecutor from it
-// (kit.VenueFromDescriptor, the SAME re-materialization candy/plugin-bundle's own PrepareVenue
+// (specexec.VenueFromDescriptor, the SAME re-materialization candy/plugin-bundle's own PrepareVenue
 // dispatch already goes through) and threads THAT instead of s.exec. Absent — byte-identical prior
 // behavior.
 //
@@ -97,7 +98,7 @@ func (s *executorReverseServer) InvokeProvider(ctx context.Context, req *pb.Invo
 		if derr := json.Unmarshal(vdj, &d); derr != nil {
 			return nil, fmt.Errorf("InvokeProvider %s:%s: decode venue descriptor: %w", class, word, derr)
 		}
-		fresh, verr := kit.VenueFromDescriptor(d)
+		fresh, verr := specexec.VenueFromDescriptor(d)
 		if verr != nil {
 			return nil, fmt.Errorf("InvokeProvider %s:%s: materialize venue: %w", class, word, verr)
 		}

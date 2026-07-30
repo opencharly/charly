@@ -12,6 +12,7 @@ import (
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/loaderkit"
+	specexec "github.com/opencharly/spec/exec"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -164,7 +165,7 @@ func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ build
 
 	deployName := req.DeployName
 	if strings.Contains(deployName, ".") {
-		deployName = kit.NestedContainerName(deployName)
+		deployName = specexec.NestedContainerName(deployName)
 	}
 
 	secretEnv, _, serr := resolveCandySecrets(plans, dir)

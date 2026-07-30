@@ -56,7 +56,7 @@ import (
 //   implementation used charly-core-private mechanisms (providerRegistry,
 //   connectPluginByWordRef), which now dispatch instead via the class-agnostic
 //   sdk.Executor.InvokeProvider — never because the work itself needed a live LoadUnified
-//   project. The readiness-gated stop-wait (formerly waitStoppedHost) uses kit.ReadinessProvider
+//   project. The readiness-gated stop-wait (formerly waitStoppedHost) uses spec.ReadinessProvider
 //   directly in the plugin — the SAME project-aware resolver charly-core's own init() injects,
 //   shared in-process by this compiled-in placement, so no new host seam was needed for it either.
 //

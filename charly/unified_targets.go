@@ -37,6 +37,7 @@ import (
 	"github.com/opencharly/spec/spec"
 
 	"github.com/opencharly/sdk/kit"
+	specexec "github.com/opencharly/spec/exec"
 )
 
 // runUnifiedTargetChecks runs a deploy-scope check list via a live-mode Runner
@@ -218,9 +219,9 @@ func (t *pluginDeployTarget) dispatch(ctx context.Context, req spec.DeployTarget
 // reverse leg this dispatch call drives (RunSystem/RunUser/RunHostStep/…). Because a live Go
 // interface value cannot itself cross the []byte wire to the plugin's decoded
 // spec.DeployTargetDispatchRequest, the SAME executor is ALSO flattened into the returned
-// venue_json (kit.DescriptorFromExecutor) — deriveChildExecutorForPath's "ssh" transport hop
-// (bundle_add_cmd.go) is always a plain *kit.SSHExecutor for a single vm-guest hop, never a
-// composed *kit.NestedExecutor, so it round-trips faithfully. The caller threads the result as
+// venue_json (specexec.DescriptorFromExecutor) — deriveChildExecutorForPath's "ssh" transport hop
+// (bundle_add_cmd.go) is always a plain *specexec.SSHExecutor for a single vm-guest hop, never a
+// composed *specexec.NestedExecutor, so it round-trips faithfully. The caller threads the result as
 // the dispatch request's VenueJSON, so resolveRootExecutor (candy/plugin-bundle/deploy_target.go)
 // re-materializes the IDENTICAL guest venue instead of falling back to
 // deploykit.RootExecutorForDeployNode(req.Node), which — for a nested child carrying no `host:`
@@ -235,7 +236,7 @@ func (t *pluginDeployTarget) applyParentExecOverride(opts spec.EmitOpts) json.Ra
 		return nil
 	}
 	t.exec = opts.ParentExec
-	d := kit.DescriptorFromExecutor(opts.ParentExec)
+	d := specexec.DescriptorFromExecutor(opts.ParentExec)
 	if d.Kind == "" {
 		return nil
 	}
@@ -333,7 +334,7 @@ func (t *pluginDeployTarget) venueExecutor() spec.DeployExecutor {
 	if err := json.Unmarshal(t.venueJSON, &d); err != nil {
 		return t.exec
 	}
-	exec, err := kit.VenueFromDescriptor(d)
+	exec, err := specexec.VenueFromDescriptor(d)
 	if err != nil || exec == nil {
 		return t.exec
 	}

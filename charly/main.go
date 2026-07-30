@@ -8,6 +8,7 @@ import (
 	"github.com/alecthomas/kong"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/hostenv"
 	"github.com/opencharly/spec/proc"
 	"golang.org/x/term"
 )
@@ -164,7 +165,7 @@ func main() {
 	// Load project .env into process environment before any config resolution.
 	// Real env vars take precedence over .env values.
 	if dir, err := os.Getwd(); err == nil {
-		if err := kit.LoadProcessDotenv(dir); err != nil {
+		if err := hostenv.LoadProcessDotenv(dir); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: loading .env: %v\n", err)
 		}
 	}

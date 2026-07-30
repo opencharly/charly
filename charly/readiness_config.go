@@ -6,16 +6,15 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/spec/spec"
 )
 
-// The host-side executors (sdk/kit) resolve their wait bounds through
-// kit.ReadinessProvider. Point it at the project-aware loadedReadiness so an
-// SSHExecutor's wait-for-SSH honors the project's defaults.readiness (kit's
-// own default is the built-in bounds — safe, but project-unaware).
+// The host/guest executors (spec/exec) resolve their wait bounds through
+// spec.ReadinessProvider. Point it at the project-aware loadedReadiness so an
+// SSHExecutor's wait-for-SSH honors the project's defaults.readiness (the
+// built-in default is the fallback bounds — safe, but project-unaware).
 func init() {
-	kit.ReadinessProvider = loadedReadiness
+	spec.ReadinessProvider = loadedReadiness
 }
 
 // readiness_config.go — charly core's readiness ENTRY. The config→resolved resolver AND the

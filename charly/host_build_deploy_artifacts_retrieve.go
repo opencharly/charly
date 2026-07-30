@@ -7,6 +7,7 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	specexec "github.com/opencharly/spec/exec"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -15,7 +16,7 @@ import (
 // (charly's own deleted deploy_add_shared.go) — re-scanning the project for the deploy's candies
 // (CandyForPlan, same ScanAllCandyWithConfig coupling as the sibling deploy-candy-secrets seam)
 // and pulling back each one's declared `artifacts:` via deploykit.RetrieveCandyArtifacts over the
-// deploy's OWN venue executor (re-materialized from venue_json — the SAME kit.VenueFromDescriptor
+// deploy's OWN venue executor (re-materialized from venue_json — the SAME specexec.VenueFromDescriptor
 // conversion every other venue-consuming seam uses). Runs AFTER the substrate dispatch succeeds
 // (the venue must already exist) — candy/plugin-bundle's handleDeployApply calls this once, Add
 // only. The register-hint-driven k3s-post-provision DISPATCH itself is NOT here: that decision +
@@ -39,14 +40,14 @@ func hostBuildDeployArtifactsRetrieve(ctx context.Context, req spec.DeployArtifa
 		if derr := json.Unmarshal(req.VenueJSON, &d); derr != nil {
 			return spec.DeployArtifactsRetrieveReply{}, fmt.Errorf("deploy-artifacts-retrieve: decode venue descriptor: %w", derr)
 		}
-		e, verr := kit.VenueFromDescriptor(d)
+		e, verr := specexec.VenueFromDescriptor(d)
 		if verr != nil {
 			return spec.DeployArtifactsRetrieveReply{}, fmt.Errorf("deploy-artifacts-retrieve: materialize venue: %w", verr)
 		}
 		exec = e
 	}
 	if exec == nil {
-		exec = kit.ShellExecutor{}
+		exec = specexec.ShellExecutor{}
 	}
 
 	if err := deploykit.RetrieveCandyArtifacts(ctx, exec, candyList, kit.SanitizeDeployName(req.ArtifactKey), req.ArtifactEnv, spec.EmitOpts{}, loadedReadiness()); err != nil {
