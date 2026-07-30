@@ -3,7 +3,6 @@ package main
 import (
 	"time"
 
-	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -60,22 +59,22 @@ func ComputeCalVerAt(t time.Time) string {
 	return spec.ComputeCalVerAt(t)
 }
 
-// CalVer is the parsed YYYY.DDD.HHMM calendar version. The
-// parsed type + its parser live in sdk/kit so BOTH core (the loader
-// version gate) and the candy (the migration chain) import the ONE copy; these
-// zero-churn aliases keep every core call site unchanged. (The struct is kept out
-// of spec because spec already binds `CalVer = string`, the CUE wire scalar.)
-type CalVer = kit.CalVer
+// CalVer is the parsed YYYY.DDD.HHMM calendar version. The parsed type + its parser live in spec
+// (spec.ParsedCalVer, #55 value extraction) so BOTH core (the loader version gate) and the candy
+// (the migration chain) reference the ONE copy; these zero-churn aliases keep every core call site
+// unchanged. (The struct is named ParsedCalVer in spec because spec already binds `CalVer = string`,
+// the CUE wire scalar.)
+type CalVer = spec.ParsedCalVer
 
-// ParseCalVer is the strict canonical "YYYY.DDD.HHMM" parser (see kit.ParseCalVer):
+// ParseCalVer is the strict canonical "YYYY.DDD.HHMM" parser (see spec.ParseCalVer):
 // a non-canonical value parses as ok=false, which the schema gate and migration
 // runner treat as "older than every real CalVer".
-var ParseCalVer = kit.ParseCalVer
+var ParseCalVer = spec.ParseCalVer
 
 // LatestSchemaVersion is the HEAD schema CalVer — the curated constant every
 // versioned file is stamped to and the value the load-time gate requires. The
-// authoritative value lives in kit (shared with the candy's migration registry,
+// authoritative value lives in spec (shared with the candy's migration registry,
 // whose calver-schema step stamps to it); this is the in-core shim.
 func LatestSchemaVersion() CalVer {
-	return kit.LatestSchemaVersion()
+	return spec.LatestSchemaCalVer()
 }

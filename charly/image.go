@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/alecthomas/kong"
-	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/spec"
 )
 
 // BoxCmd groups build-mode commands that operate on charly.yml.
@@ -63,20 +63,20 @@ type BoxCmd struct {
 // helper — not part of this command-dispersal accounting at all.
 
 // FormatCLIError wraps top-level Kong errors with a friendly recommendation
-// when the underlying cause is a missing local image (kit.ErrImageNotLocal).
+// when the underlying cause is a missing local image (spec.ErrImageNotLocal).
 // Called from main() just before FatalIfErrorf so the exit path still passes
 // through Kong's standard error rendering.
 func FormatCLIError(err error) error {
 	if err == nil {
 		return nil
 	}
-	if errors.Is(err, kit.ErrImageNotLocal) {
+	if errors.Is(err, spec.ErrImageNotLocal) {
 		// ExtractMetadata (or any other wrapper — a compiled-in command plugin's generic
 		// dispatchInProcCommand "command %q: %w" wrap included, K3 reentry-class dissolution)
 		// renders as "...image not found in local storage: <ref>"; find the marker WHEREVER it
 		// lands in the message (not just as a whole-message prefix — that broke the moment a
 		// command-dispatch wrap started prefixing it) and pull out the ref from after it.
-		marker := kit.ErrImageNotLocal.Error() + ": "
+		marker := spec.ErrImageNotLocal.Error() + ": "
 		msg := err.Error()
 		if idx := strings.LastIndex(msg, marker); idx >= 0 {
 			ref := msg[idx+len(marker):]

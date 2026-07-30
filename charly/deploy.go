@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/spec"
 )
 
 // deploy.go — the DeployConfigPath/DeployConfigEnv charly.yml-path seam pointers.
@@ -21,9 +21,9 @@ import (
 
 // DeployConfigPath returns the path to the deploy overlay file. Package-level var for
 // testability (tests inject a temp path, same pattern as RuntimeConfigPath). The resolver
-// body lives in kit.DefaultDeployConfigPath — ONE definition shared with the out-of-module
+// body lives in spec.DefaultDeployConfigPath — ONE definition shared with the out-of-module
 // candy/plugin-migrate (R3).
-var DeployConfigPath = kit.DefaultDeployConfigPath
+var DeployConfigPath = spec.DefaultDeployConfigPath
 
 // DeployConfigEnv overrides the per-host deploy-config PATH. A check bed sets it (via the
 // bed runner) to a PER-BED isolated file so CONCURRENT beds never share — and corrupt —
@@ -31,4 +31,4 @@ var DeployConfigPath = kit.DefaultDeployConfigPath
 // resolved_port/quadlet state never pollutes the operator's persistent config. The 2026-07
 // maxjobs-load corruption (`node "…": kind:group: #GroupInput.resolved_port: field not
 // allowed`) was concurrent beds racing the shared read-modify-write of this one file.
-const DeployConfigEnv = kit.DeployConfigEnv
+const DeployConfigEnv = spec.DeployConfigEnv

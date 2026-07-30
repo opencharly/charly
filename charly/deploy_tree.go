@@ -13,12 +13,11 @@ package main
 // venue is still alive to accept teardown commands.
 
 import (
-	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/spec/spec"
 )
 
 // deployTraitsFor resolves a substrate word's DECLARED #DeployTraits (P9) from the provider
-// registry — the SINGLE plugin-declared source kit.StampDescent stamps onto node.Descent, and
+// registry — the SINGLE plugin-declared source spec.StampDescent stamps onto node.Descent, and
 // the on-the-fly resolver nodeTraits falls back to for a synthetic (un-stamped) node. The
 // substrate kinds are compiled-in (registered at init), so this resolves EVERYWHERE, including
 // project-less commands, with no prescan/schema bump. Returns nil for a word that is not a
@@ -63,14 +62,14 @@ func nodeTraits(node *spec.BundleNode) *spec.DescentDescriptor {
 	if node != nil && node.Descent != nil {
 		return node.Descent
 	}
-	return kit.DescentFromTraits(deployTraitsFor(effectiveTarget(node)))
+	return spec.DescentFromTraits(deployTraitsFor(effectiveTarget(node)))
 }
 
 // deployTraitDescent is the WORD-level analogue of nodeTraits (P9): it resolves a substrate
 // word's DECLARED traits from the registry and returns the derived descent descriptor, for the
 // few consult sites that hold only a substrate word (not a node). Never nil.
 func deployTraitDescent(word string) *spec.DescentDescriptor {
-	return kit.DescentFromTraits(deployTraitsFor(word))
+	return spec.DescentFromTraits(deployTraitsFor(word))
 }
 
 // NestedContainerName computes the podman container name used when
