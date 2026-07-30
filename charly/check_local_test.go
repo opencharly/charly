@@ -3,8 +3,8 @@ package main
 import (
 	"testing"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	specexec "github.com/opencharly/spec/exec"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -20,7 +20,7 @@ import (
 
 func TestRootExecutorForDeployNode(t *testing.T) {
 	// nil node → host shell.
-	if e, err := deploykit.RootExecutorForDeployNode(nil); err != nil {
+	if e, err := specexec.RootExecutorForDeployNode(nil); err != nil {
 		t.Fatalf("nil node: %v", err)
 	} else if _, ok := e.(kit.ShellExecutor); !ok {
 		t.Errorf("nil node → %T, want ShellExecutor", e)
@@ -28,7 +28,7 @@ func TestRootExecutorForDeployNode(t *testing.T) {
 
 	// host: "" and host: "local" → host shell.
 	for _, host := range []string{"", "local"} {
-		e, err := deploykit.RootExecutorForDeployNode(&spec.BundleNode{Target: "local", Host: host})
+		e, err := specexec.RootExecutorForDeployNode(&spec.BundleNode{Target: "local", Host: host})
 		if err != nil {
 			t.Fatalf("host=%q: %v", host, err)
 		}
@@ -38,7 +38,7 @@ func TestRootExecutorForDeployNode(t *testing.T) {
 	}
 
 	// host: "user@box" → SSH with the inline user.
-	e, err := deploykit.RootExecutorForDeployNode(&spec.BundleNode{Target: "local", Host: "alice@box"})
+	e, err := specexec.RootExecutorForDeployNode(&spec.BundleNode{Target: "local", Host: "alice@box"})
 	if err != nil {
 		t.Fatalf("user@box: %v", err)
 	}
@@ -51,7 +51,7 @@ func TestRootExecutorForDeployNode(t *testing.T) {
 	}
 
 	// host: "box" + user: "u" → SSH with the node.User (Ansible-style override).
-	e, err = deploykit.RootExecutorForDeployNode(&spec.BundleNode{Target: "local", Host: "box", User: "u"})
+	e, err = specexec.RootExecutorForDeployNode(&spec.BundleNode{Target: "local", Host: "box", User: "u"})
 	if err != nil {
 		t.Fatalf("box+user: %v", err)
 	}
@@ -71,7 +71,7 @@ func TestResolveDeployChain_LocalNoHop(t *testing.T) {
 	roots := map[string]spec.BundleNode{
 		"workstation": {Target: "local"},
 	}
-	node, chain, err := deploykit.ResolveDeployChain(stampTestDescents(roots), "workstation", kit.ShellExecutor{})
+	node, chain, err := specexec.ResolveDeployChain(stampTestDescents(roots), "workstation", kit.ShellExecutor{})
 	if err != nil {
 		t.Fatalf("local node must resolve without error: %v", err)
 	}

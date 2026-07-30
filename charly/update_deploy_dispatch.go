@@ -16,7 +16,7 @@ package main
 // already lets an out-of-process cold-start caller materialize a fresh executor with
 // NO incoming executor of its own, and a COMPILED-IN candy/plugin-bundle (dual-
 // placement, same host process) can construct one directly via the already-portable
-// sdk/deploykit.RootExecutorForDeployNode — no IPC round-trip needed at all for the
+// specexec.RootExecutorForDeployNode (deploykit re-exports it for plugin callers) — no IPC round-trip for the
 // common local-target case. This file's dispatch kernel moving is therefore
 // straightforward-but-large RELOCATION work (resolved-project envelope for the
 // deploy tree + the two portable executor-construction primitives above +

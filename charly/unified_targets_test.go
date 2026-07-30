@@ -37,7 +37,7 @@ func TestPluginDeployTarget_ApplyParentExecOverride(t *testing.T) {
 		if len(venueJSON) == 0 {
 			t.Fatalf("applyParentExecOverride returned empty venue_json for a non-nil ParentExec — " +
 				"candy/plugin-bundle's resolveRootExecutor has nothing to re-materialize from and " +
-				"silently falls back to deploykit.RootExecutorForDeployNode(req.Node), which for a " +
+				"silently falls back to specexec.RootExecutorForDeployNode(req.Node), which for a " +
 				"nested child (no host: field of its own) resolves the OPERATOR'S HOST — exactly " +
 				"the regression this fix closes")
 		}

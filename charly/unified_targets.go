@@ -33,7 +33,6 @@ import (
 	"os"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 
 	"github.com/opencharly/sdk/kit"
@@ -104,7 +103,7 @@ type pluginDeployTarget struct {
 	node *spec.BundleNode
 
 	// exec is the INITIAL executor ResolveTarget computed from the node's host: field
-	// (deploykit.RootExecutorForDeployNode) — the plugin may override it internally for a
+	// (specexec.RootExecutorForDeployNode) — the plugin may override it internally for a
 	// lifecycle substrate (PrepareVenue) and reports the FINAL one back via venueJSON, which
 	// subsequent calls on this SAME target reuse (see the venue field below).
 	exec spec.DeployExecutor
@@ -224,7 +223,7 @@ func (t *pluginDeployTarget) dispatch(ctx context.Context, req spec.DeployTarget
 // composed *specexec.NestedExecutor, so it round-trips faithfully. The caller threads the result as
 // the dispatch request's VenueJSON, so resolveRootExecutor (candy/plugin-bundle/deploy_target.go)
 // re-materializes the IDENTICAL guest venue instead of falling back to
-// deploykit.RootExecutorForDeployNode(req.Node), which — for a nested child carrying no `host:`
+// specexec.RootExecutorForDeployNode(req.Node), which — for a nested child carrying no `host:`
 // field of its own — silently defaults to the operator's host ShellExecutor (the bug: every
 // plain-vm nested child's plan/step walk ran on the OPERATOR'S HOST instead of the guest venue).
 //
@@ -589,7 +588,7 @@ func ResolveTarget(node *spec.BundleNode, name string) (UnifiedDeployTarget, err
 	if !ok {
 		return nil, fmt.Errorf("deployment %q: target %q has no in-process resolver and is not an out-of-proc plugin provider", name, node.Target)
 	}
-	exec, perr := deploykit.RootExecutorForDeployNode(node)
+	exec, perr := specexec.RootExecutorForDeployNode(node)
 	if perr != nil {
 		return nil, fmt.Errorf("deployment %q: %w", name, perr)
 	}
