@@ -1,46 +1,50 @@
 package main
 
-// layer_secrets.go — the deploy-scoped candy scanner backing the "deploy-candy-secrets" seam
-// (host_build_deploy_candy_secrets.go). The secret_requires:/secret_accepts: RESOLUTION logic
-// this file used to carry (ensureCandySecret/ResolveCandySecret/ResolveSecretForCandy) had no
-// core-only dependency beyond the credential-store access GenerateAndStoreSecret already took as
-// an INJECTED CredentialAccess — relocated to sdk/deploykit/secret_candy_resolve.go (#118
-// coneB-p8bremainder), taking coreCredentialAccess() (enc.go) as that injected value at its call
-// site (host_build_deploy_candy_secrets.go's resolveCandySecrets). The ONE thing genuinely left —
-// CandyForPlan, below — needs ScanAllCandyWithConfig + *Config, both core-only (the loader).
+// layer_secrets.go — the deploy-scoped candy scanner + candy-secret RESOLVER used HOST-SIDE by the
+// pod-overlay build (build_overlay.go's hostBuildOverlay). CandyForPlan needs ScanAllCandyWithConfig
+// + *Config (both core-only, the loader), so it stays host-resident; the pure plan→candy SELECTION
+// it applies is the shared deploykit.SelectCandiesForPlans (R3, the SAME pick candy/plugin-bundle
+// runs plugin-side over the resolved-project envelope's candy set — #55 K4). The secret_requires:/
+// secret_accepts: RESOLUTION (ResolveSecretForCandy) lives in sdk/deploykit; resolveCandySecrets
+// below is the thin host wrapper feeding it CandyForPlan's scan + coreCredentialAccess (enc.go).
 //
-// P13-KERNEL fold-in: InjectSecretsIntoPlans (the pure plan-injection half) relocated to
-// sdk/deploykit/secret_declare.go earlier.
+// #55 K4 (this cone): command:bundle's deploy-add path resolves candy secrets + retrieves artifacts
+// PLUGIN-SIDE (candy/plugin-bundle/secrets_artifacts.go — envelope candy set + verb:credential
+// CredentialAccess + deploykit.RetrieveCandyArtifacts over its live venue), so the former
+// "deploy-candy-secrets" / "deploy-artifacts-retrieve" host seams are DELETED. resolveCandySecrets
+// stays only for build_overlay.go's pod-overlay build (already host-side code, no round trip to pay).
 
 import (
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 )
 
-// CandyForPlan reloads the candy map and returns the ordered spec.CandyReader
-// slice covered by the given plans (both CandiesIncluded for image-level
-// plans and per-plan Candy for candy-only plans). Used by deploy-add to
-// call ResolveSecretForCandy + RetrieveCandyArtifacts.
+// CandyForPlan reloads the candy map (ScanAllCandyWithConfig — core-only loader) and returns the
+// ordered spec.CandyReader slice covered by the given plans, via the shared
+// deploykit.SelectCandiesForPlans pick (CandiesIncluded topo order + per-plan Candy).
 func CandyForPlan(plans []*spec.InstallPlan, dir string, cfg *Config) ([]spec.CandyReader, error) {
 	layers, err := ScanAllCandyWithConfig(dir, cfg)
 	if err != nil {
 		return nil, err
 	}
-	seen := map[string]bool{}
-	var ordered []spec.CandyReader
-	pick := func(name string) {
-		if name == "" || seen[name] {
-			return
-		}
-		seen[name] = true
-		if l, ok := layers[name]; ok {
-			ordered = append(ordered, l)
-		}
+	return deploykit.SelectCandiesForPlans(plans, layers), nil
+}
+
+// resolveCandySecrets scans dir for the candies backing plans (CandyForPlan) and resolves their
+// secret_requires:/secret_accepts: env (deploykit.ResolveSecretForCandy, supplying coreCredentialAccess
+// as the injected CredentialAccess — enc.go) + the distinct artifact register hints present
+// (spec.CandyArtifactRegisters). Host-side; the pod-overlay build (build_overlay.go's hostBuildOverlay)
+// is its sole caller — the deploy-add path resolves these PLUGIN-SIDE now (#55 K4).
+func resolveCandySecrets(plans []*spec.InstallPlan, dir string) (map[string]string, []string, error) {
+	candyList, err := CandyForPlan(plans, dir, nil)
+	if err != nil {
+		return nil, nil, err
 	}
-	for _, p := range plans {
-		for _, name := range p.CandiesIncluded {
-			pick(name)
-		}
-		pick(p.Candy)
+	secretEnv := deploykit.ResolveSecretForCandy(candyList, coreCredentialAccess())
+	registers := spec.CandyArtifactRegisters(candyList)
+	hints := make([]string, 0, len(registers))
+	for register := range registers {
+		hints = append(hints, register)
 	}
-	return ordered, nil
+	return secretEnv, hints, nil
 }

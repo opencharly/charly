@@ -34,7 +34,7 @@ func TestArtifactRegisterHandlers_KubeconfigWired(t *testing.T) {
 // charly/deploy_add_shared_test.go's TestRetrieveArtifactsAndK3s_DispatchesByDeclarationNotName:
 // dispatchRegisterHints dispatches to the registered handler for a register hint present in the
 // resolved set, and does NOT dispatch when the hint is absent — the register-hint set itself
-// (deploykit.CandyArtifactRegisters, computed host-side by the "deploy-candy-secrets" seam) is
+// (deploykit.CandyArtifactRegisters, computed PLUGIN-SIDE over the envelope candy set — #55 K4) is
 // what carries the declaration-not-name behavior; this test proves the plugin-side dispatch loop
 // consuming that set is itself correct and word-keyed (never a hardcoded candy name).
 func TestDispatchRegisterHints_DispatchesByDeclarationNotName(t *testing.T) {

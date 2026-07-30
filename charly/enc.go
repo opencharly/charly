@@ -13,9 +13,10 @@ import (
 // config_setup.go) — the former pod-config-enc-mounts HostBuild seam + its core encExecViaPlugin/
 // encUnmount/ensureEncryptedMounts/resolveEncPassphrase shims are RETIRED (this cone).
 //
-// coreCredentialAccess is the survivor: the host credential-store adapter the FLOORED
-// host_build_deploy_candy_secrets.go seam injects into deploykit.ResolveSecretForCandy (the
-// deploy-candy-secrets seam). The credential STORE itself is plugin-secrets; this is the host
+// coreCredentialAccess is the survivor: the host credential-store adapter layer_secrets.go's
+// resolveCandySecrets injects into deploykit.ResolveSecretForCandy for the pod-overlay build
+// (build_overlay.go — the deploy-candy-secrets host seam was DELETED in #55 K4; command:bundle
+// resolves secrets plugin-side). The credential STORE itself is plugin-secrets; this is the host
 // adapter — floor-M, the same class as credential_plugin.go. (The former secrets.go
 // generateAndStoreSecret wrapper is deleted — its layer-secret caller resolves via deploykit
 // directly after coneB's layer_secrets→deploykit move.)

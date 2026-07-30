@@ -17,8 +17,8 @@ import (
 // piece, since embeddedSidecarBodies' data lives only in the charly binary), InvokeProviders
 // kind:sidecar directly (RDD-proven live — plugin-build/bundle/check already InvokeProvider kind:*),
 // adapts the reply, and provisions sidecar secrets ITSELF via deploykit.ProvisionPodmanSecrets +
-// its own pluginCredentialAccess (the SAME credential drive enc_tunnel_resolve.go / lifecycle.go
-// already use — no core round-trip).
+// the SHARED deploykit.CredentialAccessViaExecutor (the SAME credential drive enc_tunnel_resolve.go /
+// lifecycle.go use — no core round-trip).
 
 // credServiceVNC mirrors charly/credential_plugin.go's CredServiceVNC (the VNC credential service
 // name deploykit.ProvisionPodmanSecrets keys the auto-generated VNC password under). A plain stable
@@ -85,7 +85,7 @@ func resolvePodSidecars(ctx context.Context, ex *sdk.Executor, deploySidecars, p
 		resolved = append(resolved, resolvedSidecarFromSpec(rs))
 	}
 	var extraEnv []string
-	cred := pluginCredentialAccess(ctx, ex)
+	cred := deploykit.CredentialAccessViaExecutor(ctx, ex)
 	for i, sc := range resolved {
 		if len(sc.Secret) == 0 {
 			continue

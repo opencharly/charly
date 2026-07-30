@@ -12,9 +12,9 @@ import (
 
 // secrets_resolve.go — pod-config secret provisioning + hook-secret-env, relocated from
 // charly/host_build_pod_config_seams.go's hostBuildPodConfigProvisionSecrets / HookSecretEnv
-// (seam-death, this cone). The plugin drives the deploykit secret primitives with its OWN
-// pluginCredentialAccess (verb:credential = candy/plugin-secrets — the SAME credential drive
-// enc_tunnel_resolve.go / sidecar_resolve.go already use) and resolves the secret backend itself via
+// (seam-death, this cone). The plugin drives the deploykit secret primitives with the SHARED
+// deploykit.CredentialAccessViaExecutor (verb:credential = candy/plugin-secrets — the SAME credential
+// drive enc_tunnel_resolve.go / sidecar_resolve.go use) and resolves the secret backend itself via
 // kit.LoadRuntimeConfig (sdk/kit, plugin-importable). The former pod-config-provision-secrets /
 // pod-config-hook-secret-env HostBuild seams + core secrets.go's ProvisionPodmanSecrets /
 // CollectCandySecretAccepts / resolveHookSecretEnv shims are RETIRED.
@@ -23,7 +23,7 @@ import (
 // podman secrets, and reports the resolutions + isKeyring flag — the plugin-side port of the former
 // hostBuildPodConfigProvisionSecrets seam.
 func resolvePodProvisionSecrets(ctx context.Context, ex *sdk.Executor, meta *spec.BoxMetadata, box, instance, runEngine string, autoGen bool, refreshSecret []string) (provisioned []deploykit.CollectedSecret, fallbackEnv []string, resolutions []secretResolution, isKeyring bool, err error) {
-	cred := pluginCredentialAccess(ctx, ex)
+	cred := deploykit.CredentialAccessViaExecutor(ctx, ex)
 	candyOwned := deploykit.CollectSecretsFromLabels(box, meta.Secret)
 	credBacked, dkResolutions := deploykit.CollectCandySecretAccepts(box, instance, meta, credServiceVNC, cred)
 	collected := append(append([]deploykit.CollectedSecret{}, candyOwned...), credBacked...)
@@ -57,5 +57,5 @@ func secretBackendIsKeyring() bool {
 // resolvePodHookSecretEnv resolves the post_enable hook's secret env — the plugin-side port of the
 // former hostBuildPodConfigHookSecretEnv seam.
 func resolvePodHookSecretEnv(ctx context.Context, ex *sdk.Executor, meta *spec.BoxMetadata, box, instance string) []string {
-	return deploykit.ResolveHookSecretEnv(box, instance, meta, credServiceVNC, pluginCredentialAccess(ctx, ex))
+	return deploykit.ResolveHookSecretEnv(box, instance, meta, credServiceVNC, deploykit.CredentialAccessViaExecutor(ctx, ex))
 }

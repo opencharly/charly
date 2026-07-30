@@ -44,12 +44,11 @@ import (
 // DistroCfg now travels as a plain marshalled field, not the core-only buildEngineContext
 // wrapper), recordVenueLedger, prepareReverseState, Del's ledger-read+teardown+PostTeardown,
 // ArtifactKey, PostApply, ready-to-dispatch Start/Stop/Status/Logs/Shell/Attach/Rebuild bodies —
-// and, as of Cone A shape 3 (secrets_artifacts.go), the ORCHESTRATION half of secret injection
-// (prepareCandySecrets), artifact retrieval, and the register-hint-driven k3s-post-provision
-// dispatch (retrieveArtifactsAndK3s/K3sPostProvision) — their genuine floor-M halves (the project
-// candy scan, the credential-store touch, the live artifact fetch) stay behind two thin HostBuild
-// seams ("deploy-candy-secrets", "deploy-artifacts-retrieve"), reached from handleDeployApply
-// below.
+// and (secrets_artifacts.go) secret injection (prepareCandySecrets), artifact retrieval, and the
+// register-hint-driven k3s-post-provision dispatch (retrieveArtifactsAndK3s/K3sPostProvision) — all
+// PLUGIN-SIDE as of #55 K4: the candy set comes from the resolved-project envelope, secrets resolve
+// via the shared verb:credential CredentialAccess, and artifacts pull via deploykit.RetrieveCandyArtifacts
+// (the former "deploy-candy-secrets" / "deploy-artifacts-retrieve" host seams are DELETED).
 //
 // The type these methods used to hang off (the former core-resident deploy target / substrate
 // lifecycle proxy) held a core-private *grpcProvider — a shape that CANNOT move here (core
