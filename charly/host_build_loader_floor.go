@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -72,12 +71,14 @@ func hostBuildLoaderMaterialize(_ context.Context, specJSON []byte, _ buildEngin
 		return nil, fmt.Errorf("loader-materialize host-build: decode request: %w", err)
 	}
 	merged := &spec.UnifiedFile{}
-	if err := loaderkit.MaterializeLoadedProject(&lp, merged, map[int64]*spec.UnifiedFile{}, hostMaterializeProjectSeams()); err != nil {
+	pl := requireProjectLoader()
+	if err := pl.MaterializeLoadedProject(&lp, merged, map[int64]*spec.UnifiedFile{}, hostMaterializeProjectSeams()); err != nil {
 		return nil, err
 	}
 	// MarshalMaterialized (NOT marshalJSON): UnifiedFile.PluginKinds is json:"-", so a plain marshal
 	// would DROP every standalone-template / plugin-kind entity plugin-side (the R10 bed regression).
-	return loaderkit.MarshalMaterialized(merged)
+	// Both reached through the plugin-loader spec.ProjectLoader seam (#55 2b C3 — no loaderkit import).
+	return pl.MarshalMaterialized(merged)
 }
 
 // Register the PERMANENT loader legs at package-var init (before any init()).

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -39,24 +38,25 @@ func (hostLoaderExecutor) WalkProject(dir string, rootData []byte) (spec.LoadedP
 }
 
 // MaterializeLoadedProject replays the per-document/per-namespace MATERIALIZE + root-wins MERGE over
-// the walk envelope. The kind-blind orchestration lives in loaderkit (#48); this compiled-in
-// placement drives it DIRECTLY over the host's three coupled leaf legs (hostMaterializeProjectSeams
-// — registry kind-decode, discovered-manifest fold, embedded defaults), zero marshal.
+// the walk envelope. The kind-blind orchestration lives in loaderkit (#48), reached through the
+// compiled-in plugin-loader spec.ProjectLoader seam (#55 2b C3 — so charly core never imports
+// loaderkit); this leg supplies ONLY the host's three coupled leaf legs (hostMaterializeProjectSeams
+// — registry kind-decode, discovered-manifest fold, embedded defaults).
 func (hostLoaderExecutor) MaterializeLoadedProject(lp *spec.LoadedProject, merged *spec.UnifiedFile, byID map[int64]*spec.UnifiedFile) error {
-	return loaderkit.MaterializeLoadedProject(lp, merged, byID, hostMaterializeProjectSeams())
+	return requireProjectLoader().MaterializeLoadedProject(lp, merged, byID, hostMaterializeProjectSeams())
 }
 
 // ValidateAndroidDevices enforces the kind:android box⊻adb XOR. The VALIDATION LOGIC lives in
-// loaderkit.ValidateAndroidDevices (clause-R capability logic); this leg supplies ONLY the host
-// registry-resolve callback (resolveAndroidViaPlugin) — the genuine host coupling.
+// loaderkit (reached through the plugin-loader seam); this leg supplies ONLY the host registry-resolve
+// callback (resolveAndroidViaPlugin) — the genuine host coupling.
 func (hostLoaderExecutor) ValidateAndroidDevices(uf *spec.UnifiedFile) error {
-	return loaderkit.ValidateAndroidDevices(uf, resolveAndroidViaPlugin)
+	return requireProjectLoader().ValidateAndroidDevices(uf, resolveAndroidViaPlugin)
 }
 
 // ValidatePreemptible validates preemptible / requires_exclusive / requires_shared across the deploy
-// map, including the resource-vocabulary cross-check. The VALIDATION LOGIC lives in
-// loaderkit.ValidatePreemptible; this leg supplies ONLY the host registry-resolve callbacks
+// map, including the resource-vocabulary cross-check. The VALIDATION LOGIC lives in loaderkit (reached
+// through the plugin-loader seam); this leg supplies ONLY the host registry-resolve callbacks
 // (resolveResourceViaPlugin / resolveVmViaPlugin) — the genuine host coupling.
 func (hostLoaderExecutor) ValidatePreemptible(uf *spec.UnifiedFile) error {
-	return loaderkit.ValidatePreemptible(uf, resolveResourceViaPlugin, resolveVmViaPlugin)
+	return requireProjectLoader().ValidatePreemptible(uf, resolveResourceViaPlugin, resolveVmViaPlugin)
 }

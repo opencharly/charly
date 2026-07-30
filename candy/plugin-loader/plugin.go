@@ -26,6 +26,7 @@ package loader
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/opencharly/sdk"
@@ -120,6 +121,27 @@ func (*provider) MaterializeNode(pn spec.ParsedNode, t spec.Threaded, seams spec
 // implementing this same interface.
 func (*provider) LoadUnified(dir string, exec spec.LoaderExecutor) (*spec.UnifiedFile, bool, error) {
 	return loaderkit.LoadUnified(dir, loaderkit.LoadSeamsFromExecutor(exec))
+}
+
+// MaterializeLoadedProject / MarshalMaterialized / ValidateAndroidDevices / ValidatePreemptible
+// implement the whole-project loader ops on spec.ProjectLoader (#55 2b C3): charly core reaches the
+// loaderkit materialize/validate MECHANISM through this compiled-in seam (no wire envelope) instead of
+// importing loaderkit itself. The orchestration/validation LOGIC stays in the ONE copy in sdk/loaderkit;
+// the host supplies the registry-/host-coupled seams + resolve callbacks.
+func (*provider) MaterializeLoadedProject(lp *spec.LoadedProject, merged *spec.UnifiedFile, byID map[int64]*spec.UnifiedFile, seams spec.MaterializeProjectSeams) error {
+	return loaderkit.MaterializeLoadedProject(lp, merged, byID, seams)
+}
+
+func (*provider) MarshalMaterialized(uf *spec.UnifiedFile) ([]byte, error) {
+	return loaderkit.MarshalMaterialized(uf)
+}
+
+func (*provider) ValidateAndroidDevices(uf *spec.UnifiedFile, resolveAndroid func(json.RawMessage) (*spec.ResolvedAndroid, error)) error {
+	return loaderkit.ValidateAndroidDevices(uf, resolveAndroid)
+}
+
+func (*provider) ValidatePreemptible(uf *spec.UnifiedFile, resolveResource func(json.RawMessage) (*spec.ResolvedResource, error), resolveVm func(json.RawMessage) (*spec.ResolvedVm, error)) error {
+	return loaderkit.ValidatePreemptible(uf, resolveResource, resolveVm)
 }
 
 // Invoke serves the out-of-process placement. The compiled-in placement uses the typed ParseDoc
