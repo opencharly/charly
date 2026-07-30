@@ -3,8 +3,8 @@ package main
 import (
 	"time"
 
-	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/spec"
 )
 
 // BuildCalVer is the CalVer build identity of THIS binary, injected at compile
@@ -47,17 +47,17 @@ func CharlyVersion() string {
 // moment (image build tag, check-run dir, deploy alias). It is NOT the identity
 // of the charly binary — that is CharlyVersion()/BuildCalVer. Never use ComputeCalVer()
 // to report the running binary's version.
-// ComputeCalVer / ComputeCalVerAt delegate to buildkit (K3 build-engine, U6): the computation
-// relocated to sdk/buildkit so candy/plugin-build's plugin-side RESOLVE stamps the SAME tag when the
-// host leaves req.Tag empty (R3, one source). These charly-side names are retained for the ~14 host
-// call sites.
+// ComputeCalVer / ComputeCalVerAt delegate to spec (#55 import-purity): the computation lives in
+// spec (spec.ComputeCalVer) so candy/plugin-build's plugin-side RESOLVE stamps the SAME tag when the
+// host leaves req.Tag empty (R3, one source) AND charly core reaches it over its spec+proto-only
+// import surface. These charly-side names are retained for the ~14 host call sites.
 func ComputeCalVer() string {
-	return buildkit.ComputeCalVer()
+	return spec.ComputeCalVer()
 }
 
 // ComputeCalVerAt computes CalVer for a specific time (for testing).
 func ComputeCalVerAt(t time.Time) string {
-	return buildkit.ComputeCalVerAt(t)
+	return spec.ComputeCalVerAt(t)
 }
 
 // CalVer is the parsed YYYY.DDD.HHMM calendar version. The
