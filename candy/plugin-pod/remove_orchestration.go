@@ -144,7 +144,7 @@ var dropOverlayImagesByRef = kit.RemoveImagesByReference
 func purgeDeployArtifacts(engine, boxName, instance string) {
 	removeVolumes(engine, boxName, instance)
 	deploykit.RemoveEncryptedVolumes(boxName, instance)
-	dropOverlayImagesByRef(engine, deploykit.DeployKey(boxName, instance)+"-overlay")
+	dropOverlayImagesByRef(engine, spec.DeployKey(boxName, instance)+"-overlay")
 }
 
 // resolveSidecarNames returns the sorted set of sidecar key names attached to this deploy via
@@ -176,7 +176,7 @@ func sidecarNamesFromBundleConfig(dc *deploykit.BundleConfig, boxName, instance 
 	if dc == nil {
 		return nil
 	}
-	entry, ok := dc.Bundle[deploykit.DeployKey(boxName, instance)]
+	entry, ok := dc.Bundle[spec.DeployKey(boxName, instance)]
 	if !ok || len(entry.Sidecar) == 0 {
 		return nil
 	}

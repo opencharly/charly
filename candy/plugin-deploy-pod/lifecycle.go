@@ -119,7 +119,7 @@ func podStart(ctx context.Context, exec *sdk.Executor, p lifecycleParams) (*pb.I
 	if err := json.Unmarshal(p.Plan, &opts); err != nil {
 		return nil, fmt.Errorf("plugin-deploy-pod start: decode opts: %w", err)
 	}
-	box, instance := deploykit.ParseDeployKey(p.Name)
+	box, instance := spec.ParseDeployKey(p.Name)
 	planPtr, err := resolvePodStartPlan(ctx, exec, box, instance, opts)
 	if err != nil {
 		return nil, fmt.Errorf("plugin-deploy-pod start: resolve plan: %w", err)
@@ -150,7 +150,7 @@ func podStop(ctx context.Context, exec *sdk.Executor, p lifecycleParams) (*pb.In
 	if err := json.Unmarshal(p.Plan, &opts); err != nil {
 		return nil, fmt.Errorf("plugin-deploy-pod stop: decode opts: %w", err)
 	}
-	box, instance := deploykit.ParseDeployKey(p.Name)
+	box, instance := spec.ParseDeployKey(p.Name)
 	planPtr, err := resolvePodStopPlan(ctx, exec, box, instance, opts.Unmount)
 	if err != nil {
 		return nil, fmt.Errorf("plugin-deploy-pod stop: resolve plan: %w", err)
@@ -416,7 +416,7 @@ func podAttach(ctx context.Context, exec *sdk.Executor, p lifecycleParams) (*pb.
 	if err := json.Unmarshal(p.Plan, &opts); err != nil {
 		return nil, fmt.Errorf("plugin-deploy-pod attach: decode opts: %w", err)
 	}
-	box, instance := deploykit.ParseDeployKey(p.Name)
+	box, instance := spec.ParseDeployKey(p.Name)
 	plan, err := resolvePodAttachPlan(ctx, exec, box, instance, opts)
 	if err != nil {
 		return nil, fmt.Errorf("plugin-deploy-pod attach: resolve plan: %w", err)
@@ -438,7 +438,7 @@ func podLogs(ctx context.Context, exec *sdk.Executor, p lifecycleParams) (*pb.In
 	if err := json.Unmarshal(p.Opts, &opts); err != nil {
 		return nil, fmt.Errorf("plugin-deploy-pod logs: decode opts: %w", err)
 	}
-	box, instance := deploykit.ParseDeployKey(p.Name)
+	box, instance := spec.ParseDeployKey(p.Name)
 	plan, err := resolvePodLogsPlan(ctx, exec, box, instance, opts)
 	if err != nil {
 		return nil, fmt.Errorf("plugin-deploy-pod logs: resolve plan: %w", err)

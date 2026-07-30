@@ -191,7 +191,7 @@ func resolvePodStartDirect(ctx context.Context, ex *sdk.Executor, box, instance 
 	startAccepted := deploykit.AcceptedEnvSet(meta.EnvAccept, meta.EnvRequire)
 	var startGlobalEnv []string
 	if dc != nil {
-		startGlobalEnv = dc.GlobalEnvForImage(deploykit.DeployKey(box, instance), startCtrName, startAccepted)
+		startGlobalEnv = dc.GlobalEnvForImage(spec.DeployKey(box, instance), startCtrName, startAccepted)
 	}
 	envVars, err := kit.ResolveEnvVars(startGlobalEnv, deployEnv, "", workspaceBindHost(bindMounts), opts.EnvFile, opts.Env)
 	if err != nil {
@@ -216,7 +216,7 @@ func resolvePodStartDirect(ctx context.Context, ex *sdk.Executor, box, instance 
 		if err != nil {
 			return nil, err
 		}
-		inputJSON, _ := json.Marshal(deploykit.SaveDeployStateInput{Ports: ports, SetPorts: true})
+		inputJSON, _ := json.Marshal(spec.SaveDeployStateInput{Ports: ports, SetPorts: true})
 		_ = hostBuild(ctx, ex, deployConfigSaveStateKind, spec.DeployConfigSaveStateRequest{Box: box, Instance: instance, InputJSON: inputJSON}, nil)
 	}
 	if conflicts := kit.CheckPortAvailability(ports, rt.BindAddress, engine); len(conflicts) > 0 {

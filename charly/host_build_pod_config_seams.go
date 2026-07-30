@@ -170,7 +170,7 @@ func hostBuildPodConfigProjectVolume(_ context.Context, req spec.PodConfigProjec
 	if err != nil {
 		return spec.PodConfigProjectVolumeReply{}, err
 	}
-	node, ok := tree[deploykit.DeployKey(req.Box, req.Instance)]
+	node, ok := tree[spec.DeployKey(req.Box, req.Instance)]
 	if !ok || len(node.Volume) == 0 {
 		return spec.PodConfigProjectVolumeReply{}, nil
 	}

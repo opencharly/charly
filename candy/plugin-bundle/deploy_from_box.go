@@ -78,7 +78,7 @@ func DeployFromBox(ctx context.Context, exec *sdk.Executor, opts DeployFromBoxOp
 	// 3. Derive deployment name if not provided (use image basename without tag).
 	deployName := opts.DeploymentName
 	if deployName == "" {
-		deployName = deploykit.DeriveDeploymentName(opts.ImageRef)
+		deployName = spec.DeriveDeploymentName(opts.ImageRef)
 	}
 
 	// 4. Build the deployment spec from the per-machine overlay if any.

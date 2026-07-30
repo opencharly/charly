@@ -168,7 +168,7 @@ func liveDeployVarResolver(name, instance string, reply spec.CheckVenueResolveRe
 		projectCfg = uf.ProjectConfig()
 	}
 	if dc := deploykit.LoadDeployConfigForRead("charly check live on:"); dc != nil {
-		if entry, ok := dc.Bundle[deploykit.DeployKey(name, instance)]; ok {
+		if entry, ok := dc.Bundle[spec.DeployKey(name, instance)]; ok {
 			deployOverlay = &entry
 		} else if entry, ok := dc.Bundle[name]; ok {
 			deployOverlay = &entry

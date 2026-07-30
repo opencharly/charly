@@ -454,7 +454,7 @@ func (t *pluginDeployTarget) Start(ctx context.Context) error {
 		if !ok {
 			return fmt.Errorf("substrate %q: declares bracketed_lifecycle but registers no Start plan hook", t.word)
 		}
-		box, instance := deploykit.ParseDeployKey(t.name)
+		box, instance := spec.ParseDeployKey(t.name)
 		var err error
 		optsJSON, err = planHook(ctx, box, instance)
 		if err != nil {
@@ -478,7 +478,7 @@ func (t *pluginDeployTarget) Stop(ctx context.Context) error {
 		if !ok {
 			return fmt.Errorf("substrate %q: declares bracketed_lifecycle but registers no Stop plan hook", t.word)
 		}
-		box, instance := deploykit.ParseDeployKey(t.name)
+		box, instance := spec.ParseDeployKey(t.name)
 		var err error
 		optsJSON, err = planHook(ctx, box, instance)
 		if err != nil {
@@ -533,7 +533,7 @@ func (t *pluginDeployTarget) Attach(ctx context.Context, cmd []string, tty bool)
 	if !ok {
 		return fmt.Errorf("substrate %q: interactive attach not supported", t.word)
 	}
-	box, instance := deploykit.ParseDeployKey(t.name)
+	box, instance := spec.ParseDeployKey(t.name)
 	planJSON, err := planHook(ctx, box, instance, cmd, tty)
 	if err != nil {
 		return err

@@ -34,7 +34,6 @@ import (
 	"github.com/alecthomas/kong"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -92,7 +91,7 @@ func runReapOrphans(ctx context.Context, exec *sdk.Executor) error {
 	for _, name := range orphans {
 		fmt.Printf("reaping orphan %q ...\n", name)
 		exe, _ := os.Executable()
-		delCmd := osexec.Command(exe, deploykit.BundleDelArgv(name)...)
+		delCmd := osexec.Command(exe, spec.BundleDelArgv(name)...)
 		delCmd.Stderr = os.Stderr
 		delCmd.Stdout = os.Stdout
 		if rerr := delCmd.Run(); rerr != nil {

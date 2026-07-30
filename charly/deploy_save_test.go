@@ -116,7 +116,7 @@ deploy:
 	// discarded → dc = empty → entry.Disposable = true → SaveBundleConfig
 	// truncates the file. With the post-fix code, the load error
 	// propagates and saveDeployState aborts before any write.
-	deploykit.SaveDeployState("newimage", "", deploykit.SaveDeployStateInput{
+	deploykit.SaveDeployState("newimage", "", spec.SaveDeployStateInput{
 		SetDisposable: true,
 		Disposable:    true,
 		Box:           "newimage",
@@ -151,7 +151,7 @@ existing-deploy:
 		t.Fatalf("write initial: %v", err)
 	}
 
-	deploykit.SaveDeployState("newimage", "", deploykit.SaveDeployStateInput{
+	deploykit.SaveDeployState("newimage", "", spec.SaveDeployStateInput{
 		SetDisposable: true,
 		Disposable:    true,
 		Box:           "newimage",
@@ -206,7 +206,7 @@ existing:
 		t.Fatalf("write initial: %v", err)
 	}
 
-	deploykit.SaveDeployState("existing", "", deploykit.SaveDeployStateInput{
+	deploykit.SaveDeployState("existing", "", spec.SaveDeployStateInput{
 		SetDisposable: true,
 		Disposable:    true,
 		Box:           "would-clobber",

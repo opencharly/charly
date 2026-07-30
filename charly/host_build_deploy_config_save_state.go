@@ -27,7 +27,7 @@ import (
 const deployConfigSaveStateKind = "deploy-config-save-state"
 
 func hostBuildDeployConfigSaveState(_ context.Context, req spec.DeployConfigSaveStateRequest, _ buildEngineContext) (spec.DeployConfigSaveStateReply, error) {
-	var input deploykit.SaveDeployStateInput
+	var input spec.SaveDeployStateInput
 	if err := json.Unmarshal(req.InputJSON, &input); err != nil {
 		return spec.DeployConfigSaveStateReply{}, err
 	}

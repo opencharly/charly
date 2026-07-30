@@ -22,7 +22,7 @@ import (
 
 // resolveLifecycleDeployNode resolves the deploy node for a start/stop verb from the per-host config.
 func resolveLifecycleDeployNode(box, instance string) (*spec.BundleNode, string) {
-	key := deploykit.DeployKey(box, instance)
+	key := spec.DeployKey(box, instance)
 	if dc := deploykit.LoadDeployConfigForRead("charly start/stop"); dc != nil {
 		if node, ok := dc.Bundle[key]; ok {
 			n := node

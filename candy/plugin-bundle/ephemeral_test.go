@@ -260,14 +260,14 @@ func TestRegisterTransientTimerArgs_PinsWorkingDirectory(t *testing.T) {
 }
 
 func TestEphemeralDeployDelArgv(t *testing.T) {
-	got := deploykit.BundleDelArgv("myapp")
+	got := spec.BundleDelArgv("myapp")
 	want := []string{"bundle", "del", "myapp", "--assume-yes"}
 	if len(got) != len(want) {
-		t.Fatalf("deploykit.BundleDelArgv() = %v, want %v", got, want)
+		t.Fatalf("spec.BundleDelArgv() = %v, want %v", got, want)
 	}
 	for i := range want {
 		if got[i] != want[i] {
-			t.Errorf("deploykit.BundleDelArgv()[%d] = %q, want %q", i, got[i], want[i])
+			t.Errorf("spec.BundleDelArgv()[%d] = %q, want %q", i, got[i], want[i])
 		}
 	}
 }

@@ -110,7 +110,7 @@ func liveDeployVarResolver(ex *sdk.Executor, ctx context.Context, dir, name, ins
 	}
 	var deployOverlay *spec.BundleNode
 	if dc := deploykit.LoadDeployConfigForRead("charly check live on:"); dc != nil {
-		if entry, ok := dc.Bundle[deploykit.DeployKey(name, instance)]; ok {
+		if entry, ok := dc.Bundle[spec.DeployKey(name, instance)]; ok {
 			deployOverlay = &entry
 		} else if entry, ok := dc.Bundle[name]; ok {
 			deployOverlay = &entry
@@ -139,7 +139,7 @@ func resolveDeployBoxName(rp *spec.ResolvedProject, key, instance string) string
 		return key
 	}
 	if dc := deploykit.LoadDeployConfigForRead("resolveDeployBoxName"); dc != nil {
-		if entry, ok := dc.Bundle[deploykit.DeployKey(key, instance)]; ok && entry.Image != "" {
+		if entry, ok := dc.Bundle[spec.DeployKey(key, instance)]; ok && entry.Image != "" {
 			return entry.Image
 		}
 		if entry, ok := dc.Bundle[key]; ok && entry.Image != "" {

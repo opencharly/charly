@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/spec/spec"
 )
@@ -45,7 +44,7 @@ func (c *deployFromBoxCmd) Run() error {
 	}
 	name := c.Name
 	if name == "" {
-		name = deploykit.DeriveDeploymentName(c.Ref)
+		name = spec.DeriveDeploymentName(c.Ref)
 	}
 
 	// Pod path. Reuse the project-free config-setup ORCHESTRATION (now in candy/plugin-deploy-pod,

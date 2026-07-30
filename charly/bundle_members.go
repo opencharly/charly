@@ -149,12 +149,12 @@ func tearDownMembers(node *spec.BundleNode) error {
 			// `bundle add`. Reverse that too, or a ledger record survives every teardown and they
 			// accumulate run over run.
 			destroyErr := proc.RunCharlySubcommand("vm", "destroy", memberNode.From, "--domain", spec.VmDomainIdentity(memberKey), "--if-exists")
-			delErr := proc.RunCharlySubcommand(deploykit.BundleDelArgv(memberKey)...)
+			delErr := proc.RunCharlySubcommand(spec.BundleDelArgv(memberKey)...)
 			err = errors.Join(destroyErr, delErr)
 		case isPodMember(memberNode):
 			err = proc.RunCharlySubcommand("remove", memberKey, "--purge")
 		default:
-			err = proc.RunCharlySubcommand(deploykit.BundleDelArgv(memberKey)...)
+			err = proc.RunCharlySubcommand(spec.BundleDelArgv(memberKey)...)
 		}
 		if err != nil {
 			errs = append(errs, fmt.Errorf("peer %q teardown: %w", memberKey, err))

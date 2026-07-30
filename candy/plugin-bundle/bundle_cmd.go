@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/spec/spec"
 )
@@ -79,7 +78,7 @@ type BundleAddCmd struct {
 // deploy-del-resolve / deploy-members-down / deploy-node-del-dispatch seams. The AssumeYes field
 // renders as `--assume-yes` (Kong derives the long name from the FIELD; the `long:"yes"` tag is
 // a no-op in the separate-tag form) with `-y` as the short form — the exact contract
-// sdk/deploykit.BundleDelArgv relies on.
+// spec.BundleDelArgv relies on.
 type BundleDelCmd struct {
 	Name string `arg:"" help:"Deploy name (literal 'host' or a container deploy name)"`
 
@@ -121,7 +120,7 @@ func (c *BundleFromBoxCmd) Run() error {
 		}
 		name := c.Name
 		if name == "" {
-			name = deploykit.DeriveDeploymentName(c.Ref)
+			name = spec.DeriveDeploymentName(c.Ref)
 		}
 		fmt.Fprintf(os.Stderr, "Generated Kustomize overlay for %q at %s\n  apply with: kubectl apply -k %s\n", name, out, out)
 		return nil

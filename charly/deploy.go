@@ -5,6 +5,7 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/spec"
 )
 
 // deploy.go — the deploy KEY→image RESOLVERS + the DeployConfigPath/Env seam pointers.
@@ -16,7 +17,7 @@ import (
 // comment + the "strip-deploy-shell-overlay" migration-table entry.) The deploy
 // STATE-MODEL body (LoadBundleConfig / SaveBundleConfig /
 // LoadDeployConfigForRead / LoadDeployConfigForWrite / MergeDeployOntoMetadata /
-// CleanDeployEntry / SaveDeployState / ExportAllBox + the deploykit.SaveDeployStateInput type +
+// CleanDeployEntry / SaveDeployState / ExportAllBox + the spec.SaveDeployStateInput type +
 // the pure helpers scopeVolumesToDeployKey / descriptionInfo / isSameBaseBox / removeBySource /
 // removeByExactSource) MOVED to sdk/deploykit in K5-Unit-1 (the S-K5 keystone that unblocks
 // P13). charly/ calls the deploykit path directly (IMPORT-PURITY: no new charly/*_aliases.go;
@@ -38,7 +39,7 @@ func resolveDeployKeyToBox(key, instance string) string {
 	}
 	// User-side first.
 	if dc := deploykit.LoadDeployConfigForRead("resolveDeployKeyToBox"); dc != nil {
-		if entry, ok := dc.Bundle[deploykit.DeployKey(key, instance)]; ok && entry.Image != "" {
+		if entry, ok := dc.Bundle[spec.DeployKey(key, instance)]; ok && entry.Image != "" {
 			return entry.Image
 		}
 		if entry, ok := dc.Bundle[key]; ok && entry.Image != "" {
@@ -71,7 +72,7 @@ func resolveDeployResolvedImage(key, instance string) string {
 		return ""
 	}
 	if dc := deploykit.LoadDeployConfigForRead("resolveDeployResolvedImage"); dc != nil {
-		if entry, ok := dc.Bundle[deploykit.DeployKey(key, instance)]; ok && entry.ResolvedImage != "" {
+		if entry, ok := dc.Bundle[spec.DeployKey(key, instance)]; ok && entry.ResolvedImage != "" {
 			return entry.ResolvedImage
 		}
 		if entry, ok := dc.Bundle[key]; ok && entry.ResolvedImage != "" {

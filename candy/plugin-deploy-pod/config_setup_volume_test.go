@@ -102,7 +102,7 @@ func TestResolveDeployVolumes_ProjectDeclaredFallback(t *testing.T) {
 	if dc == nil {
 		t.Fatal("resolveDeployVolumes() left dc nil — a project-declared hit must seed the overlay (persistDeployVolumes)")
 	}
-	entry, ok := dc.Bundle[deploykit.DeployKey("check-enc-pod", "")]
+	entry, ok := dc.Bundle[spec.DeployKey("check-enc-pod", "")]
 	if !ok || len(entry.Volume) != 1 || entry.Volume[0].Name != "enc-data" {
 		t.Fatalf("overlay entry.Volume = %+v, want the persisted project-declared volume", entry.Volume)
 	}
@@ -122,7 +122,7 @@ func TestResolveDeployVolumes_OverlayWinsOverProject(t *testing.T) {
 	ex := sdk.NewInProcExecutor(fake)
 	c := &spec.PodConfigSetupRequest{Box: "check-enc-pod"}
 	dc := &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{
-		deploykit.DeployKey("check-enc-pod", ""): {
+		spec.DeployKey("check-enc-pod", ""): {
 			Volume:               []spec.DeployVolume{{Name: "already-set", Type: "bind"}},
 			VolumeProjectChecked: true,
 		},
@@ -155,7 +155,7 @@ func TestResolveDeployVolumes_AlreadyCheckedVolumeLessSkipsProjectLookup(t *test
 		// Already checked once (the project genuinely declares nothing for this key) AND
 		// carries an unrelated ResolvedPort from an earlier Setup stage — VolumeProjectChecked
 		// is the ONLY signal that must gate the fallback, not the port field's presence.
-		deploykit.DeployKey("preempt-vm-taker", ""): {ResolvedPort: []string{"8080:8080"}, VolumeProjectChecked: true},
+		spec.DeployKey("preempt-vm-taker", ""): {ResolvedPort: []string{"8080:8080"}, VolumeProjectChecked: true},
 	}}
 
 	got, err := resolveDeployVolumes(context.Background(), ex, c, &dc)
@@ -190,7 +190,7 @@ func TestResolveDeployVolumes_PortedDeployProjectVolumeAppliedOnFirstConfig(t *t
 	}
 	ex := sdk.NewInProcExecutor(fake)
 	c := &spec.PodConfigSetupRequest{Box: "check-enc-pod"}
-	key := deploykit.DeployKey("check-enc-pod", "")
+	key := spec.DeployKey("check-enc-pod", "")
 	dc := &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{
 		// Simulates the port-resolution block's write, which runs BEFORE resolveDeployVolumes
 		// in the real config_setup.go sequence: the key exists, VolumeProjectChecked is the
@@ -265,7 +265,7 @@ func TestResolveDeployVolumes_NoProjectDeclaration(t *testing.T) {
 	if dc == nil {
 		t.Fatal("resolveDeployVolumes() left dc nil — the checked-marker must be persisted even when the project declares nothing")
 	}
-	entry, ok := dc.Bundle[deploykit.DeployKey("no-volumes-here", "")]
+	entry, ok := dc.Bundle[spec.DeployKey("no-volumes-here", "")]
 	if !ok || !entry.VolumeProjectChecked {
 		t.Fatalf("overlay entry = %+v (ok=%v), want VolumeProjectChecked=true persisted", entry, ok)
 	}
@@ -311,7 +311,7 @@ func TestConfigFlow_PortResolutionThenResolveDeployVolumes_ProjectVolumeStillApp
 	}
 	ex := sdk.NewInProcExecutor(fake)
 	c := &spec.PodConfigSetupRequest{Box: "check-enc-pod"}
-	key := deploykit.DeployKey(c.Box, c.Instance)
+	key := spec.DeployKey(c.Box, c.Instance)
 	var dc *deploykit.BundleConfig
 
 	// --- Stage 1: replicate config_setup.go's port-resolution block (runConfig, the lines

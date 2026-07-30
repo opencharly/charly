@@ -20,8 +20,9 @@ package main
 //   - deployDelCmd + resolveDelNode + podDeploymentArtifactExists — the `charly bundle del` host
 //     resolution the deploy-del-resolve seam drives. DEPLOY-ONLY residue, DELIBERATELY untouched by
 //     #55 step3 3-II for the same reason as deriveChildExecutorForPath above (task #66).
-//     deployDelArgv itself moved to sdk/deploykit.BundleDelArgv (R3 hoist, coneB P13 slice) — it
-//     was byte-identically duplicated here, in candy/plugin-bundle, and in candy/plugin-substrate.
+//     deployDelArgv itself moved to spec.BundleDelArgv (R3 hoist, coneB P13 slice; the value
+//     vocabulary relocated deploykit → spec in #55 Cone V) — it was byte-identically duplicated
+//     here, in candy/plugin-bundle, and in candy/plugin-substrate.
 //
 // The former deployAddCmd struct + its dispatchNode/compileNodePlans/emitOpts/printPlans/
 // compileHostContext methods (and the whole bundle_compile_seam.go + host_build_deploy_node_

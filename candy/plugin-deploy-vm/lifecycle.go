@@ -528,7 +528,7 @@ func vmPrepareVenue(ctx context.Context, exec *sdk.Executor, p lifecycleParams, 
 	// VmDeployState patch... the plugin can't touch charly.yml... Carry the prior instance-id/
 	// disk/seed forward"). That WAS a SECOND, independent writer of vm_state — this reply's State
 	// used to round-trip through substrate_lifecycle_grpc.go's generic PrepareVenue persist
-	// (deploykit.SaveDeployState), keyed by deploykit.ParseDeployKey(name) — the RAW, UNSANITIZED
+	// (deploykit.SaveDeployState), keyed by spec.ParseDeployKey(name) — the RAW, UNSANITIZED
 	// deploy name — never the canonical "vm:"+VmDomainIdentity(name) key
 	// candy/plugin-vm/vm_create_orchestrate.go's hostConfigPersist already writes authoritatively.
 	// For a NESTED deploy (a dotted name), that second write poisoned the per-host overlay: every

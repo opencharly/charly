@@ -39,7 +39,7 @@ func TestHostBuildPodConfigResolveRef_PrefersPersistedOverlay(t *testing.T) {
 	t.Setenv(kit.DeployConfigEnv, cfgPath)
 
 	// Persist the overlay ref exactly as PrepareVenue does.
-	deploykit.SaveDeployState("check-addcandy-pod", "", deploykit.SaveDeployStateInput{
+	deploykit.SaveDeployState("check-addcandy-pod", "", spec.SaveDeployStateInput{
 		Box:           "check-pod",
 		Target:        "pod",
 		ResolvedImage: overlayRef,
