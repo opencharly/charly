@@ -488,7 +488,7 @@ func scanCandyFromLocal(localScanned map[string]spec.ScannedCandy, cfg *Config, 
 // scan (parseCandyYAML). candy/plugin-build supplies InvokeProvider-backed closures instead in U6.
 func scanSeamsFor(cfg *Config, opts spec.ResolveOpts) loaderkit.ScanSeams {
 	return loaderkit.ScanSeams{
-		CollectRemoteRefs: func(localScanned map[string]spec.ScannedCandy) ([]loaderkit.RemoteDownload, error) {
+		CollectRemoteRefs: func(localScanned map[string]spec.ScannedCandy) ([]spec.RemoteDownload, error) {
 			return CollectRemoteRefsOpts(cfg, loaderkit.FinalizeScannedCandies(localScanned, nil), withLocalRawRefs(opts, localScanned))
 		},
 		EnsureRepo: EnsureRepoDownloaded,

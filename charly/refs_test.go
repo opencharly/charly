@@ -361,7 +361,7 @@ func TestCollectRemoteRefsOptsExtraCandyRefs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CollectRemoteRefsOpts() error = %v", err)
 	}
-	var got *loaderkit.RemoteDownload
+	var got *spec.RemoteDownload
 	for i := range downloads {
 		if downloads[i].RepoPath == "github.com/opencharly/charly" {
 			got = &downloads[i]

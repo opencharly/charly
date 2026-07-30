@@ -6,7 +6,6 @@ import (
 	"os"
 
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -28,7 +27,7 @@ func hostBuildBoxFetchResolve(_ context.Context, req spec.BoxFetchResolveRequest
 		return spec.BoxFetchResolveReply{}, fmt.Errorf("box-fetch-resolve: empty spec")
 	}
 	if req.Refresh {
-		repoPath, version := loaderkit.NormalizeRepoSpec(req.Spec)
+		repoPath, version := spec.NormalizeRepoSpec(req.Spec)
 		if version == "" {
 			branch, err := kit.GitDefaultBranch(kit.RepoGitURL(repoPath))
 			if err != nil {

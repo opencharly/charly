@@ -10,7 +10,6 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/hostenv"
 	"github.com/opencharly/spec/spec"
 )
@@ -352,7 +351,7 @@ func bedSessionTeardown(req spec.CheckBedRequest) (spec.CheckBedReply, error) {
 // From is the kind:vm ENTITY (build/spec source, entity-scoped — NOT --domain); the per-deploy member
 // domain (spec.VmDomainIdentity(memberKey)) is applied host-side by bringUpMembers, not here.
 func bedMemberDescriptors(members map[string]*spec.BundleNode) []spec.CheckBedMember {
-	keys := loaderkit.SortedMemberKeys(members)
+	keys := spec.SortedMemberKeys(members)
 	if len(keys) == 0 {
 		return nil
 	}

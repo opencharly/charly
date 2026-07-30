@@ -91,7 +91,7 @@ func requireCandyScanner() spec.CandyScanner {
 //
 // RepoIdentity + the root-identity seed are DELIBERATELY left unset here: that logic (the
 // import-namespace cycle-break) is pure fs/git/yaml — no registry coupling — so the loader plugin
-// composes it ITSELF (sdk/loaderkit.RepoIdentity / RootRepoIdentity, defaulted in
+// composes it ITSELF (sdk/spec.RepoIdentity / RootRepoIdentity, defaulted in
 // candy/plugin-loader's WalkProject when the host leaves these zero) rather than charly core
 // holding that logic just to thread a function value through a struct literal.
 func hostWalkProject(dir string, rootData []byte) (spec.LoadedProject, error) {

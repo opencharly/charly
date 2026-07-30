@@ -4,26 +4,26 @@ import (
 	"fmt"
 
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/loaderkit"
+	"github.com/opencharly/spec/spec"
 )
 
-// DefaultProjectRepo, NormalizeRepoSpec — relocated (K1/W9): DefaultProjectRepo (a plain string
-// constant, wide non-loader-cone consumer set) → sdk/spec as generic vocab; NormalizeRepoSpec (the
-// --repo spec normalization mechanism, consumed only by already-loader-cone-coupled files) →
-// sdk/loaderkit. charly/*.go call sites now reference spec.DefaultProjectRepo /
-// loaderkit.NormalizeRepoSpec directly (ZERO-ALIASES — no alias reintroduced here).
+// DefaultProjectRepo, NormalizeRepoSpec — both live in the dedicated spec module: DefaultProjectRepo
+// (a plain string constant, wide non-loader-cone consumer set) as generic vocab; NormalizeRepoSpec
+// (the --repo spec normalization helper, pure string logic) relocated there in the #55 2b Class A
+// loader cascade. charly/*.go call sites reference spec.DefaultProjectRepo / spec.NormalizeRepoSpec
+// directly (ZERO-ALIASES — no alias reintroduced here).
 
 // ResolveProjectRepo turns a --repo spec into a local cache path that can
 // be passed to os.Chdir. Reuses the existing remote-candy cache machinery
 // (RepoCacheDir, EnsureRepoDownloaded) so we don't have a second copy of
 // "clone-and-cache".
-func ResolveProjectRepo(spec string) (string, error) {
-	if spec == "" {
+func ResolveProjectRepo(repoSpec string) (string, error) {
+	if repoSpec == "" {
 		return "", fmt.Errorf("empty --repo spec")
 	}
-	repoPath, version := loaderkit.NormalizeRepoSpec(spec)
+	repoPath, version := spec.NormalizeRepoSpec(repoSpec)
 	if repoPath == "" {
-		return "", fmt.Errorf("invalid --repo spec %q", spec)
+		return "", fmt.Errorf("invalid --repo spec %q", repoSpec)
 	}
 	if version == "" {
 		branch, err := kit.GitDefaultBranch(kit.RepoGitURL(repoPath))

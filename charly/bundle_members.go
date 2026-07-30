@@ -11,8 +11,8 @@ package main
 // The LOAD-half — foldMembers / sortedMemberKeys / sortedDeployKeys plus the venue-flatten pass —
 // relocated to sdk/loaderkit (bundle_load.go) per the lead's U1 SPLIT ruling (K1-LOADER
 // RELOCATION): they are registry-free pure maps/tree operations the plugin-callable
-// loaderkit.LoadUnified wires as seams directly. See loaderkit.FoldMembers / loaderkit.SortedMemberKeys
-// / loaderkit.SortedDeployKeys. The DEPLOY-half below (bringUpMembers / tearDownMembers) STAYS
+// loaderkit.LoadUnified wires as seams directly. See loaderkit.FoldMembers / spec.SortedMemberKeys
+// / spec.SortedDeployKeys. The DEPLOY-half below (bringUpMembers / tearDownMembers) STAYS
 // host-resident: it shells out via proc.RunCharlySubcommand + reads the live registry
 // (nodeTraits), so it is NOT registry-free. bringUpMembers / tearDownMembers are the single shared
 // helpers invoked by BOTH the kind:check bed runner (check_bed_run.go) and the operator deploy path
@@ -24,7 +24,6 @@ import (
 	"fmt"
 
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/hostenv"
 	"github.com/opencharly/spec/proc"
 	"github.com/opencharly/spec/spec"
@@ -68,7 +67,7 @@ func bringUpMembers(node *spec.BundleNode, imageTag string) error {
 	if node == nil || len(node.Members) == 0 {
 		return nil
 	}
-	for _, memberKey := range loaderkit.SortedMemberKeys(node.Members) {
+	for _, memberKey := range spec.SortedMemberKeys(node.Members) {
 		memberNode := node.Members[memberKey]
 		// Seed the per-host charly.yml with the member's deploy-shaped overrides
 		// (port / volume / env / security / network) so its declared port:
@@ -139,7 +138,7 @@ func tearDownMembers(node *spec.BundleNode) error {
 		return nil
 	}
 	var errs []error
-	for _, memberKey := range loaderkit.SortedMemberKeys(node.Members) {
+	for _, memberKey := range spec.SortedMemberKeys(node.Members) {
 		memberNode := node.Members[memberKey]
 		var err error
 		switch {

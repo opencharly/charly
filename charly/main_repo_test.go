@@ -10,7 +10,7 @@ import (
 
 // TestNormalizeRepoSpec (all four spec shapes + the "default" sentinel) and
 // TestCharlyRepo_DefaultExpansion (the "default" case alone) moved with the relocated code to
-// sdk/loaderkit/repo_identity_test.go (K1/W9) — loaderkit.NormalizeRepoSpec's own test now covers
+// sdk/loaderkit/repo_identity_test.go (K1/W9) — spec.NormalizeRepoSpec's own test now covers
 // them; kept here only the genuine INTEGRATION tests that spawn the real binary.
 
 // TestCharlyRepo_FlagChdir verifies that --repo / CHARLY_PROJECT_REPO drives main()

@@ -38,7 +38,7 @@ func hostBuildScanLocal(_ context.Context, req spec.ResolvedProjectRequest, _ bu
 // hostBuildCollectRemoteRefs runs the reachability-scoped remote-ref walk (the ScanSeams.CollectRemoteRefs
 // leg). It reloads cfg + the local scan host-side (deterministic — identical to the plugin's), so the
 // wrapped-view walk sees the SAME withLocalRawRefs augmentation the in-core scan used.
-func hostBuildCollectRemoteRefs(_ context.Context, req spec.ResolvedProjectRequest, _ buildEngineContext) ([]loaderkit.RemoteDownload, error) {
+func hostBuildCollectRemoteRefs(_ context.Context, req spec.ResolvedProjectRequest, _ buildEngineContext) ([]spec.RemoteDownload, error) {
 	dir := reqDirOrCwd(req.Dir)
 	cfg, err := LoadConfig(dir)
 	if err != nil {
