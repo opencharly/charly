@@ -152,7 +152,7 @@ func (c *flatCollector) collectFlat(ctx context.Context, includeAll bool) ([]spe
 		if results[i].Kind != results[j].Kind {
 			return results[i].Kind < results[j].Kind
 		}
-		return deploykit.DeployKey(results[i].Image, results[i].Instance) < deploykit.DeployKey(results[j].Image, results[j].Instance)
+		return spec.DeployKey(results[i].Image, results[i].Instance) < spec.DeployKey(results[j].Image, results[j].Instance)
 	})
 	return results, opts, nil
 }
@@ -324,7 +324,7 @@ func (c *flatCollector) lookupDeploy(box, instance, joinedContainerName string) 
 		return spec.BundleNode{}, false
 	}
 	if box != "" {
-		if dn, ok := c.deploy.Bundle[deploykit.DeployKey(box, instance)]; ok {
+		if dn, ok := c.deploy.Bundle[spec.DeployKey(box, instance)]; ok {
 			return dn, true
 		}
 		if dn, ok := c.deploy.Bundle[box]; ok && instance == "" {

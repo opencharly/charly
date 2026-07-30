@@ -414,11 +414,11 @@ func handleDeployApply(ctx context.Context, exec *sdk.Executor, req spec.DeployT
 // no-op guard set only by charly-core's own init(), so calling it directly from THIS process would
 // silently drop the write; the seam runs it host-side, where the guard is always satisfied).
 func persistDeployState(ctx context.Context, exec *sdk.Executor, name string, stateJSON json.RawMessage) error {
-	var in deploykit.SaveDeployStateInput
+	var in spec.SaveDeployStateInput
 	if err := json.Unmarshal(stateJSON, &in); err != nil {
 		return fmt.Errorf("decode prepare-venue state: %w", err)
 	}
-	boxKey, instKey := deploykit.ParseDeployKey(name)
+	boxKey, instKey := spec.ParseDeployKey(name)
 	inputJSON, err := json.Marshal(in)
 	if err != nil {
 		return err

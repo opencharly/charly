@@ -1,7 +1,6 @@
 package status
 
 import (
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -45,7 +44,7 @@ func applyNestedOverlay(rows []spec.DeploymentStatus, roots []spec.StatusNestedN
 	// and a declared child can claim its own flat row.
 	byKey := make(map[string]int, len(rows))
 	for i := range rows {
-		byKey[deploykit.DeployKey(rows[i].Image, rows[i].Instance)] = i
+		byKey[spec.DeployKey(rows[i].Image, rows[i].Instance)] = i
 	}
 
 	// claimed records the flat-row indices that have been MOVED into a nested position. They are

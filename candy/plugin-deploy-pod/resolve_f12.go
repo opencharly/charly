@@ -49,7 +49,7 @@ func resolvePodShellPlan(ctx context.Context, ex *sdk.Executor, box, instance st
 	shellAccepted := deploykit.AcceptedEnvSet(meta.EnvAccept, meta.EnvRequire)
 	var shellGlobalEnv []string
 	if dc != nil {
-		shellGlobalEnv = dc.GlobalEnvForImage(deploykit.DeployKey(box, instance), shellCtrName, shellAccepted)
+		shellGlobalEnv = dc.GlobalEnvForImage(spec.DeployKey(box, instance), shellCtrName, shellAccepted)
 	}
 	envVars, err := kit.ResolveEnvVars(shellGlobalEnv, meta.Env, "", workspaceBindHost(bindMounts), opts.EnvFile, opts.Env)
 	if err != nil {

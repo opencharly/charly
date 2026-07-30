@@ -32,7 +32,7 @@ func injectEnvProvidesInto(dc *deploykit.BundleConfig, boxName, instance string,
 		dc.Provides = &spec.ProvidesConfig{}
 	}
 	ctrName := kit.ContainerNameInstance(boxName, instance)
-	source := deploykit.DeployKey(boxName, instance)
+	source := spec.DeployKey(boxName, instance)
 	changed := false
 	for _, key := range sortedProvidesKeys(envProvides) {
 		value := deploykit.ResolveTemplate(envProvides[key], ctrName, portMap)
@@ -73,7 +73,7 @@ func injectMCPProvidesInto(dc *deploykit.BundleConfig, boxName, instance string,
 		dc.Provides = &spec.ProvidesConfig{}
 	}
 	ctrName := kit.ContainerNameInstance(boxName, instance)
-	source := deploykit.DeployKey(boxName, instance)
+	source := spec.DeployKey(boxName, instance)
 	changed := false
 
 	// Remove stale entries from this source (handles name changes on re-config)

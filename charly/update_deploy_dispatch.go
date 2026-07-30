@@ -59,7 +59,7 @@ import (
 // paths (`a.b.c`) still walk. Mirrors the composition `charly start` uses via
 // dc.Lookup(c.Box, c.Instance). On miss the error reports the full key.
 func resolveUpdateDeployNode(tree map[string]spec.BundleNode, image, instance string) (*spec.BundleNode, error) {
-	key := deploykit.DeployKey(image, instance)
+	key := spec.DeployKey(image, instance)
 	node, _, err := deploykit.ResolveNodePath(tree, key)
 	if err != nil || node == nil {
 		return nil, fmt.Errorf("no deploy named %q in charly.yml. To refresh an image artifact only, use 'charly box pull %s'", key, image)
@@ -148,7 +148,7 @@ func noteUpdateDisposability(node *spec.BundleNode, image, instance string) {
 	if node == nil || node.IsDisposable() {
 		return
 	}
-	key := deploykit.DeployKey(image, instance)
+	key := spec.DeployKey(image, instance)
 	lifecycle := node.Lifecycle
 	if lifecycle == "" {
 		lifecycle = "(unset)"

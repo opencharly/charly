@@ -181,7 +181,7 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 	}
 
 	if dc != nil {
-		key := deploykit.DeployKey(c.Box, c.Instance)
+		key := spec.DeployKey(c.Box, c.Instance)
 		overlay := dc.Bundle[key]
 		containerPorts := kit.ContainerPortsFromMappings(meta.Port)
 		if len(containerPorts) > 0 || len(overlay.Port) > 0 {
@@ -281,7 +281,7 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 	acceptedEnv := deploykit.AcceptedEnvSet(meta.EnvAccept, meta.EnvRequire)
 	var globalEnv []string
 	if dc != nil {
-		globalEnv = dc.GlobalEnvForImage(deploykit.DeployKey(c.Box, c.Instance), ctrName, acceptedEnv)
+		globalEnv = dc.GlobalEnvForImage(spec.DeployKey(c.Box, c.Instance), ctrName, acceptedEnv)
 	}
 	envVars, envErr := kit.ResolveEnvVars(globalEnv, meta.Env, "", workspaceBindHost(bindMounts), c.EnvFile, c.Env)
 	if envErr != nil {
@@ -336,7 +336,7 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 
 	deploySidecarsRaw := map[string]json.RawMessage{}
 	if dc != nil {
-		if overlay, ok := dc.Bundle[deploykit.DeployKey(c.Box, c.Instance)]; ok {
+		if overlay, ok := dc.Bundle[spec.DeployKey(c.Box, c.Instance)]; ok {
 			deploySidecarsRaw = overlay.Sidecar
 		}
 	}
@@ -385,7 +385,7 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 		qcfg.Env = appendAutoDetectedEnv(qcfg.Env, detected)
 	}
 
-	saveInput := deploykit.SaveDeployStateInput{
+	saveInput := spec.SaveDeployStateInput{
 		Ports: ports, SetPorts: len(c.Port) > 0, Env: kit.EnvPairsToMap(c.Env), CleanEnv: c.Clean,
 		EnvFile: quadletEnvFile, Network: resolvedNetwork, Security: &security, Volume: deployVolumes,
 		Sidecar: deploySidecars, Tunnel: meta.Tunnel, SecretNames: secretDepNames(&meta),
@@ -525,7 +525,7 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 	}
 
 	if c.UpdateAll {
-		if err := updateAllDeployedQuadlets(ctx, ex, rt, deploykit.DeployKey(c.Box, c.Instance), charlyBin); err != nil {
+		if err := updateAllDeployedQuadlets(ctx, ex, rt, spec.DeployKey(c.Box, c.Instance), charlyBin); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: could not update all quadlets: %v\n", err)
 		}
 	}
@@ -534,7 +534,7 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 		reDc, _ := loadDeploy(ctx, ex, "charly config mcp_requires check")
 		var mcpServers []spec.MCPProvideEntry
 		if reDc != nil && reDc.Provides != nil {
-			mcpServers = spec.PodAwareMCPProvides(reDc.Provides.MCP, deploykit.DeployKey(c.Box, c.Instance), kit.ContainerNameInstance(c.Box, c.Instance))
+			mcpServers = spec.PodAwareMCPProvides(reDc.Provides.MCP, spec.DeployKey(c.Box, c.Instance), kit.ContainerNameInstance(c.Box, c.Instance))
 		}
 		warnMissingMCPRequires(c.Box, meta.MCPRequire, mcpServers)
 	}

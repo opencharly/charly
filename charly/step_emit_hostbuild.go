@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -93,7 +92,7 @@ var _ = func() bool {
 // dispatchOCIStep (charly/oci_step_emit.go) — the THIN host-side half of the K5-A item 2 relocation
 // whose dispatch DECISION now lives in candy/plugin-installstep's "oci-dispatch" word. The candy
 // (candy/plugin-deploy-pod podPrepareVenue) constructs a deploykit.OCITarget whose EmitStepOp
-// seam calls HostBuild("step-emit", {Word:"oci-emit-step", Payload: deploykit.OCIEmitStepParams{
+// seam calls HostBuild("step-emit", {Word:"oci-emit-step", Payload: spec.OCIEmitStepParams{
 // Dir, StepView, PlanView}, Distros}) for each step; this handler no longer reconstructs the
 // concrete step/plan Go objects at all — it forwards the wire views AS-IS, since dispatchOCIStep's
 // own peer (candy/plugin-installstep) does the reconstruction.
@@ -108,7 +107,7 @@ var _ = func() bool {
 // "resolved-project"-built Generator (K5-Unit-6b), so the dispatch into class:step plugins for
 // those words is a single Invoke with no re-entrant HostBuild("step-emit").
 func stepEmitOCIEmitStep(req spec.StepEmitRequest, build buildEngineContext) (string, error) {
-	var p deploykit.OCIEmitStepParams
+	var p spec.OCIEmitStepParams
 	if len(req.Payload) > 0 {
 		if err := json.Unmarshal(req.Payload, &p); err != nil {
 			return "", fmt.Errorf("decode oci-emit-step params: %w", err)

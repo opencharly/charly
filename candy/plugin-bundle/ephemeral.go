@@ -267,7 +267,7 @@ func registerTransientTimer(deployName string, ttl time.Duration) (string, error
 		return "", fmt.Errorf("resolving working directory: %w", err)
 	}
 	unitName := fmt.Sprintf("%s-%d", ephemeralTimerUnitPrefix(deployName), time.Now().Unix())
-	args := registerTransientTimerArgs(unitName, ttl, wd, exe, deploykit.BundleDelArgv(deployName))
+	args := registerTransientTimerArgs(unitName, ttl, wd, exe, spec.BundleDelArgv(deployName))
 	cmd := exec.Command("systemd-run", args...)
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -544,7 +544,7 @@ func teardownChildrenRec(dc *deploykit.BundleConfig, parentID string, visited ma
 		if err != nil {
 			return err
 		}
-		cmd := exec.Command(exe, deploykit.BundleDelArgv(delTarget)...)
+		cmd := exec.Command(exe, spec.BundleDelArgv(delTarget)...)
 		cmd.Stderr = os.Stderr
 		cmd.Stdout = os.Stdout
 		if err := cmd.Run(); err != nil {

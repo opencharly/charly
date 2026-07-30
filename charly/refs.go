@@ -10,7 +10,6 @@ import (
 	"sync"
 
 	"github.com/opencharly/sdk/buildkit"
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
@@ -297,11 +296,11 @@ func CollectRemoteRefsOpts(cfg *Config, layers map[string]spec.CandyReader, opts
 
 	addRef := func(ref, source string) error {
 		_ = source
-		if !deploykit.IsRemoteCandyRef(ref) {
+		if !spec.IsRemoteCandyRefString(ref) {
 			return nil
 		}
 		parsed := spec.ParseRemoteRef(ref)
-		bareRef := deploykit.BareRef(ref)
+		bareRef := spec.BareCandyRef(ref)
 		version := parsed.Version
 		if version == "" {
 			// No version specified -- resolve to default branch

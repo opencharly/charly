@@ -96,7 +96,7 @@ func MigratePlaintextEnvSecret(dc *deploykit.BundleConfig, meta *spec.BoxMetadat
 		return 0, nil
 	}
 
-	key := deploykit.DeployKey(image, instance)
+	key := spec.DeployKey(image, instance)
 	entry, ok := dc.Bundle[key]
 	if !ok || len(entry.Env) == 0 {
 		return 0, nil

@@ -94,7 +94,7 @@ func (g *Generator) toDeploykit() *deploykit.Generator {
 	// CollectBoxVolume: the volume-aggregate seam for data-image label emission.
 	// Wraps the core CollectBoxVolume (reads the live Config + Candy graph). Used by
 	// deploykit.Generator.generateDataImageContainerfile (#67 render-DRIVE move).
-	dg.CollectBoxVolume = func(boxName, home string) ([]deploykit.VolumeMount, error) {
+	dg.CollectBoxVolume = func(boxName, home string) ([]spec.VolumeMount, error) {
 		return deploykit.CollectBoxVolume(g.Config, g.Candies, boxName, home, nil)
 	}
 	g.dkGen = dg

@@ -59,7 +59,7 @@ func pluginCheckRunFeatureLive(ex *sdk.Executor, ctx context.Context, req spec.C
 	}
 	var deployOverlay *spec.BundleNode
 	if dc := deploykit.LoadDeployConfigForRead("charly check feature run"); dc != nil {
-		if entry, ok := dc.Bundle[deploykit.DeployKey(req.Name, req.Instance)]; ok {
+		if entry, ok := dc.Bundle[spec.DeployKey(req.Name, req.Instance)]; ok {
 			deployOverlay = &entry
 		} else if entry, ok := dc.Bundle[req.Name]; ok {
 			deployOverlay = &entry

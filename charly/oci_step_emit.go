@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -61,7 +60,7 @@ func dispatchOCIStep(stepView spec.InstallStepView, planView spec.InstallPlanVie
 		// check-addcandy-pod's overlay-deploy path, "task emit: candy %q not found").
 		env.ExtraCandyRefs = build.Generator.ExtraCandyRefs
 	}
-	params, err := marshalJSON(deploykit.OCIEmitStepParams{StepView: stepView, PlanView: planView})
+	params, err := marshalJSON(spec.OCIEmitStepParams{StepView: stepView, PlanView: planView})
 	if err != nil {
 		return "", fmt.Errorf("oci-emit-step: marshal dispatch params: %w", err)
 	}

@@ -5,7 +5,6 @@ import (
 	"errors"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -120,7 +119,7 @@ func hostBuildPodService(_ context.Context, req spec.PodServiceRequest, _ buildE
 // reproducing the former core `defer releaseResourceClaim(...)`'s "always runs, after everything
 // else" semantics.
 func hostBuildPodRemove(_ context.Context, req spec.PodRemoveRequest, _ buildEngineContext) (spec.PodRemoveReply, error) {
-	releaseResourceClaim(deploykit.DeployKey(req.Box, req.Instance))
+	releaseResourceClaim(spec.DeployKey(req.Box, req.Instance))
 	return spec.PodRemoveReply{}, nil
 }
 

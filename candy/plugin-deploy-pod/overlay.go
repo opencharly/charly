@@ -103,7 +103,7 @@ func buildOverlay(ctx context.Context, exec *sdk.Executor, reply spec.OverlayBui
 		Home:    home,
 		Distros: distros,
 		EmitStepOp: func(step spec.InstallStep, plan *spec.InstallPlan, stepDistros []string) (string, error) {
-			params := deploykit.OCIEmitStepParams{
+			params := spec.OCIEmitStepParams{
 				Dir:      dir,
 				StepView: deploykit.StepToView(step),
 				PlanView: deploykit.WireView(plan),

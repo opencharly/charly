@@ -134,7 +134,7 @@ func cellKind(k spec.SubstrateKind) string {
 }
 
 // cellBox returns "image" or "image/instance". The slash-separated form
-// matches deploykit.DeployKey(): both charly.yml and `charly ... -i <inst>` use it, so the
+// matches spec.DeployKey(): both charly.yml and `charly ... -i <inst>` use it, so the
 // table label aligns with the operator's mental model.
 func cellBox(s spec.DeploymentStatus) string {
 	if s.Instance == "" {

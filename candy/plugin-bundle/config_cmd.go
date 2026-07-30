@@ -77,7 +77,7 @@ func runBundleShow(box, instance string) error {
 		return nil
 	}
 	if box != "" {
-		key := deploykit.DeployKey(box, instance)
+		key := spec.DeployKey(box, instance)
 		entry, ok := dc.Bundle[key]
 		if !ok {
 			fmt.Printf("No overrides for box %q\n", key)
@@ -206,7 +206,7 @@ func runBundleReset(box, instance string) error {
 		return nil
 	}
 
-	key := deploykit.DeployKey(box, instance)
+	key := spec.DeployKey(box, instance)
 	if _, ok := dc.Bundle[key]; !ok {
 		fmt.Printf("No overrides for box %q\n", key)
 		return nil
@@ -256,7 +256,7 @@ func runBundleStatus() error {
 	stemToDeploy := make(map[string]string)
 	if dc != nil {
 		for key := range dc.Bundle {
-			img, inst := deploykit.ParseDeployKey(key)
+			img, inst := spec.ParseDeployKey(key)
 			stem := strings.TrimPrefix(kit.ContainerNameInstance(img, inst), "charly-")
 			deployToStem[key] = stem
 			stemToDeploy[stem] = key

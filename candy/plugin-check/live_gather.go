@@ -105,7 +105,7 @@ func pluginCheckLivePod(ex *sdk.Executor, ctx context.Context, rp *spec.Resolved
 		projectPlan = entry.Plan
 	}
 	if dc := deploykit.LoadDeployConfigForRead("charly check live"); dc != nil {
-		if entry, ok := dc.Bundle[deploykit.DeployKey(req.Name, req.Instance)]; ok {
+		if entry, ok := dc.Bundle[spec.DeployKey(req.Name, req.Instance)]; ok {
 			localPlan = entry.Plan
 			deployOverlay = &entry
 		} else if entry, ok := dc.Bundle[req.Name]; ok {
@@ -430,7 +430,7 @@ func pluginRunLocalDeployScopePlan(ex *sdk.Executor, ctx context.Context, rp *sp
 		plan = append(plan, node.Plan...)
 	}
 	if dc := deploykit.LoadDeployConfigForRead("charly check live"); dc != nil {
-		if entry, ok := dc.Bundle[deploykit.DeployKey(image, instance)]; ok {
+		if entry, ok := dc.Bundle[spec.DeployKey(image, instance)]; ok {
 			plan = append(plan, entry.Plan...)
 		} else if entry, ok := dc.Bundle[image]; ok {
 			plan = append(plan, entry.Plan...)

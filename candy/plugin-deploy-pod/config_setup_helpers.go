@@ -293,7 +293,7 @@ func persistResourceCaps(ctx context.Context, ex *sdk.Executor, dc **deploykit.B
 	if (*dc).Bundle == nil {
 		(*dc).Bundle = make(map[string]spec.BundleNode)
 	}
-	key := deploykit.DeployKey(c.Box, c.Instance)
+	key := spec.DeployKey(c.Box, c.Instance)
 	entry := (*dc).Bundle[key]
 	if entry.Security == nil {
 		entry.Security = &spec.SecurityConfig{}
@@ -350,7 +350,7 @@ func persistDeployVolumes(ctx context.Context, ex *sdk.Executor, dc **deploykit.
 	if (*dc).Bundle == nil {
 		(*dc).Bundle = make(map[string]spec.BundleNode)
 	}
-	key := deploykit.DeployKey(c.Box, c.Instance)
+	key := spec.DeployKey(c.Box, c.Instance)
 	entry := (*dc).Bundle[key]
 	entry.Volume = volumes
 	entry.VolumeProjectChecked = true
@@ -394,7 +394,7 @@ func resolveDeployVolumes(ctx context.Context, ex *sdk.Executor, c *spec.PodConf
 		return deployVolumes, nil
 	}
 	if *dc != nil {
-		if overlay, ok := (*dc).Bundle[deploykit.DeployKey(c.Box, c.Instance)]; ok && overlay.VolumeProjectChecked {
+		if overlay, ok := (*dc).Bundle[spec.DeployKey(c.Box, c.Instance)]; ok && overlay.VolumeProjectChecked {
 			// The project has already been consulted once for this key: the overlay is
 			// authoritative, whether or not it carries a volume. Never re-consult the
 			// project on this path (the round-2 perf/correctness regression this bit closes).
@@ -627,7 +627,7 @@ func provisionData(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntim
 	if dc == nil {
 		dc = &deploykit.BundleConfig{Bundle: make(map[string]spec.BundleNode)}
 	}
-	key := deploykit.DeployKey(c.Box, c.Instance)
+	key := spec.DeployKey(c.Box, c.Instance)
 	imgDeploy := dc.Bundle[key]
 	for i := range imgDeploy.Volume {
 		for _, entry := range dataMeta.DataEntries {
@@ -672,7 +672,7 @@ func updateAllDeployedQuadlets(ctx context.Context, ex *sdk.Executor, rt *kit.Re
 		if key == skipBox {
 			continue
 		}
-		boxName, instance := deploykit.ParseDeployKey(key)
+		boxName, instance := spec.ParseDeployKey(key)
 		qdir, err := kit.QuadletDir()
 		if err != nil {
 			continue
@@ -702,7 +702,7 @@ func updateAllDeployedQuadlets(ctx context.Context, ex *sdk.Executor, rt *kit.Re
 
 		updateCtrName := kit.ContainerNameInstance(boxName, instance)
 		updateAccepted := deploykit.AcceptedEnvSet(meta.EnvAccept, meta.EnvRequire)
-		globalEnv := dc.GlobalEnvForImage(deploykit.DeployKey(boxName, instance), updateCtrName, updateAccepted)
+		globalEnv := dc.GlobalEnvForImage(spec.DeployKey(boxName, instance), updateCtrName, updateAccepted)
 		envVars, err := kit.ResolveEnvVars(globalEnv, meta.Env, "", "", "", nil)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: could not resolve env for %s: %v\n", key, err)
@@ -888,7 +888,7 @@ func prepareQuadletEnv(c *spec.PodConfigSetupRequest, dc *deploykit.BundleConfig
 		}
 	}
 	if quadletEnvFile == "" && dc != nil {
-		if overlay, ok := dc.Bundle[deploykit.DeployKey(c.Box, c.Instance)]; ok && overlay.EnvFile != "" {
+		if overlay, ok := dc.Bundle[spec.DeployKey(c.Box, c.Instance)]; ok && overlay.EnvFile != "" {
 			quadletEnvFile = kit.ExpandHostHome(overlay.EnvFile)
 		}
 	}

@@ -31,12 +31,12 @@ import (
 // former host-only invokeVerbBuildEmit/externalPluginStepProvider.EmitOCI contract (no Emits gate —
 // a deploy-only plugin's empty OpEmit fragment is a loud failure, never a silent skip, R4).
 
-// emitOCIDispatch decodes the relocated deploykit.OCIEmitStepParams{StepView, PlanView} payload +
+// emitOCIDispatch decodes the relocated spec.OCIEmitStepParams{StepView, PlanView} payload +
 // the caller's spec.BuildEnv (Distros/Image/DevLocalPkg/ImageBuildDir/ContextRelPrefix, forwarded
 // from the host's cached overlay buildEngineContext), reconstructs the step, and dispatches to
 // whichever peer provider serves its pod-overlay Containerfile fragment.
 func emitOCIDispatch(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
-	var p deploykit.OCIEmitStepParams
+	var p spec.OCIEmitStepParams
 	if len(req.GetParamsJson()) > 0 {
 		if err := json.Unmarshal(req.GetParamsJson(), &p); err != nil {
 			return nil, fmt.Errorf("plugin-installstep: decode oci-dispatch params: %w", err)

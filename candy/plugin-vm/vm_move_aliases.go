@@ -58,7 +58,7 @@ var (
 	ListVmSshAliases            = kit.ListVmSshAliases
 	VmSshAlias                  = kit.VmSshAlias
 	WriteVmSshStanza            = kit.WriteVmSshStanza
-	deployKey                   = deploykit.DeployKey
+	deployKey                   = spec.DeployKey
 	sshParamsForVm              = deploykit.SSHParamsForVm
 	vmDiskDir                   = vmshared.VmDiskDir
 	parseTaskMode               = kit.ParseTaskMode

@@ -272,7 +272,7 @@ func runLocalDeployScopePlan(dir string, node *spec.BundleNode, image, instance 
 		plan = append(plan, node.Plan...)
 	}
 	if dc := deploykit.LoadDeployConfigForRead("charly check live"); dc != nil {
-		if entry, ok := dc.Bundle[deploykit.DeployKey(image, instance)]; ok {
+		if entry, ok := dc.Bundle[spec.DeployKey(image, instance)]; ok {
 			plan = append(plan, entry.Plan...)
 		} else if entry, ok := dc.Bundle[image]; ok {
 			plan = append(plan, entry.Plan...)

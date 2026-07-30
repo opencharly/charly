@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/proc"
 	"github.com/opencharly/spec/spec"
@@ -202,8 +201,8 @@ func TestTearDownMembers_RoutingAndOrder(t *testing.T) {
 		t.Fatalf("tearDownMembers: %v", err)
 	}
 	want := [][]string{
-		deploykit.BundleDelArgv("alpha-host"), // sorted first; non-pod → deploy del --assume-yes (unattended)
-		{"remove", "zeta-pod", "--purge"},     // pod → remove --purge
+		spec.BundleDelArgv("alpha-host"),  // sorted first; non-pod → deploy del --assume-yes (unattended)
+		{"remove", "zeta-pod", "--purge"}, // pod → remove --purge
 	}
 	if !reflect.DeepEqual(calls, want) {
 		t.Fatalf("tearDownMembers calls = %v, want %v", calls, want)
@@ -257,7 +256,7 @@ func deployKeysList(m map[string]spec.BundleNode) []string {
 	return out
 }
 
-// TestBundleDelArgv_KongAccepts proves deploykit.BundleDelArgv emits a flag the REAL
+// TestBundleDelArgv_KongAccepts proves spec.BundleDelArgv emits a flag the REAL
 // `charly bundle del` Kong grammar accepts, and that the two historically-wrong
 // flags are rejected. The stub-based TestTearDownMembers_RoutingAndOrder asserts
 // arg strings without ever invoking Kong, so it CANNOT catch a flag the binary
@@ -270,7 +269,7 @@ func TestBundleDelArgv_KongAccepts(t *testing.T) {
 	// (candy/plugin-bundle) — the Kong-tagged field set the real CLI parses. The plugin
 	// owns the grammar now (P13) and a core unit test cannot import a separate module, so
 	// this stub reproduces the exact tag shape (AssumeYes → --assume-yes / -y; the
-	// historically-wrong --yes/--force absent) to keep the deploykit.BundleDelArgv regression guard.
+	// historically-wrong --yes/--force absent) to keep the spec.BundleDelArgv regression guard.
 	type delGrammarStub struct {
 		Name            string `arg:""`
 		AssumeYes       bool   `long:"yes" short:"y"`
@@ -295,8 +294,8 @@ func TestBundleDelArgv_KongAccepts(t *testing.T) {
 	}
 	// The helper every programmatic teardown builds its command through must
 	// parse cleanly against the real grammar.
-	if err := parse(deploykit.BundleDelArgv("x")...); err != nil {
-		t.Errorf("deploykit.BundleDelArgv produced args `charly bundle del` rejects: %v (args=%v)", err, deploykit.BundleDelArgv("x"))
+	if err := parse(spec.BundleDelArgv("x")...); err != nil {
+		t.Errorf("spec.BundleDelArgv produced args `charly bundle del` rejects: %v (args=%v)", err, spec.BundleDelArgv("x"))
 	}
 	// -y is the valid short form.
 	if err := parse("bundle", "del", "x", "-y"); err != nil {
