@@ -111,6 +111,17 @@ func (*provider) MaterializeNode(pn spec.ParsedNode, t spec.Threaded, seams spec
 	return loaderkit.Materialize(pn, t, seams, acc)
 }
 
+// LoadUnified implements spec.ProjectLoader — the typed whole-project LOAD-ENTRY the host calls to
+// load a project's charly.yml (compiled-in, no wire envelope): it drives the ONE copy of the
+// kind-blind load orchestration in sdk/loaderkit (loaderkit.LoadUnified) over a LoadSeams built from
+// the host-supplied registry-/host-coupled legs (exec, a spec.LoaderExecutor). So charly core reaches
+// the loader mechanism ONLY through this spec-typed seam — it never imports loaderkit to load its own
+// config (#55 loader-keystone). An alternative loader plugin serves a different whole-project load by
+// implementing this same interface.
+func (*provider) LoadUnified(dir string, exec spec.LoaderExecutor) (*spec.UnifiedFile, bool, error) {
+	return loaderkit.LoadUnified(dir, loaderkit.LoadSeamsFromExecutor(exec))
+}
+
 // Invoke serves the out-of-process placement. The compiled-in placement uses the typed ParseDoc
 // above; the wire OpLoad path (carrying the document + threaded data as JSON) lands with
 // out-of-process loader support.

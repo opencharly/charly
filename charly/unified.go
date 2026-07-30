@@ -87,21 +87,19 @@ const UnifiedFileName = spec.UnifiedFileName
 // loaderkit.LoadUnified now) / loaderkit.NormalizeV4Aliases (called directly by
 // materialize.go's per-document fold).
 
-// LoadUnified (K1 keystone, task #24 unit 2) is now a THIN, TRANSITIONAL WRAPPER: the kind-blind
+// LoadUnified drives the whole-project load through the registered spec.ProjectLoader SEAM
+// (requireProjectLoader) — it NO LONGER calls loaderkit.LoadUnified directly (#55 import-purity
+// keystone, the terminal shape). The host passes its own hostLoaderExecutor{} (the typed
+// spec.LoaderExecutor reaching each registry-/host-coupled load step by calling the host function
+// DIRECTLY — zero marshal, a compiled-in TYPED placement pays no envelope tax); the COMPILED-IN
+// candy/plugin-loader implements spec.ProjectLoader and internally runs
+// loaderkit.LoadUnified(dir, loaderkit.LoadSeamsFromExecutor(exec)). The seam is registered at init
+// (before main), so the host resolves it before loading its own charly.yml — no bootstrap cycle.
+// charly core holds only the seam interface (spec) + the host executor legs; the kind-blind
 // orchestration (bootstrap phase, schema gates, walk, materialize, venue flatten, member fold,
-// descent stamp, the validation chain) relocated to loaderkit.LoadUnified. Unit C of the K1-LOADER
-// RELOCATION makes those seams PLUGIN-CALLABLE: rather than hand-building a loaderkit.LoadSeams from
-// charly's host functions, this wrapper drives loaderkit.LoadUnified through
-// loaderkit.LoadSeamsFromExecutor over a hostLoaderExecutor — the SAME seam constructor a genuine
-// out-of-module plugin uses (candy/plugin-bundle's execLoaderExecutor witness), but reaching each
-// registry-/host-coupled step by calling the host function DIRECTLY (zero marshal, U3 — a
-// compiled-in TYPED placement pays no envelope tax). The PURE LOAD-half seams (FlattenBundleVenues /
-// FoldMembers / ValidateMembers, plus the DATA-driven StampBundleDescents / ValidateEphemeral /
-// ValidateCheckBeds fed exec.LoaderThreaded()) are wired directly to loaderkit inside
-// LoadSeamsFromExecutor. Deleted by #118 GREEN (no permanent charly→loaderkit wrapper;
-// IMPORT-PURITY end-state).
+// descent stamp, the validation chain) lives in loaderkit (sdk), driven by the plugin.
 func LoadUnified(dir string) (*spec.UnifiedFile, bool, error) {
-	return loaderkit.LoadUnified(dir, loaderkit.LoadSeamsFromExecutor(hostLoaderExecutor{}))
+	return requireProjectLoader().LoadUnified(dir, hostLoaderExecutor{})
 }
 
 // validateDeploymentTree / validateDeployRequiresBox / validateDeploymentChildren /

@@ -51,6 +51,23 @@ func requireProjectWalker() spec.ProjectWalker {
 	return activeProjectWalker
 }
 
+// activeProjectLoader is the registered whole-project LOAD-ENTRY — the spec.ProjectLoader of the
+// compiled-in loader plugin (candy/plugin-loader), wired at registration (plugin_inproc.go). It is
+// how charly core loads its own charly.yml WITHOUT importing loaderkit (#55 loader-keystone): the
+// host drives loaderkit.LoadUnified THROUGH this spec-typed seam, supplying the registry-/host-
+// coupled legs as a hostLoaderExecutor. No in-core fallback, mirroring activeProjectWalker: a nil
+// loader means the loader plugin was not compiled in — a FATAL, never a silent fallback
+// (requireProjectLoader).
+var activeProjectLoader spec.ProjectLoader
+
+// requireProjectLoader returns the registered loader or FATALs with a clear message.
+func requireProjectLoader() spec.ProjectLoader {
+	if activeProjectLoader == nil {
+		log.Fatal("no loader plugin registered — charly was built without candy/plugin-loader (the config front-end)")
+	}
+	return activeProjectLoader
+}
+
 // activeCandyScanner is the registered CANDY-SCAN — the spec.CandyScanner of the compiled-in
 // loader plugin (candy/plugin-loader), wired at registration (plugin_inproc.go). No in-core
 // fallback, mirroring activeProjectWalker: a nil scanner means the loader plugin was not compiled
