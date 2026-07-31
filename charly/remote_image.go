@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/container"
 	"github.com/opencharly/spec/refs"
 	"github.com/opencharly/spec/spec"
 )
@@ -90,7 +90,7 @@ func ResolveRemoteImage(ref string, tag string) (*RemoteImageContext, error) {
 	}
 
 	// Build the registry image ref for pulling
-	imageRef := kit.ResolveShellImageRef(resolved.Registry, resolved.Name, tag)
+	imageRef := container.ResolveShellImageRef(resolved.Registry, resolved.Name, tag)
 
 	return &RemoteImageContext{
 		Ref:      *parsed,
