@@ -33,7 +33,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	specexec "github.com/opencharly/spec/exec"
 	"github.com/opencharly/spec/hostenv"
@@ -77,7 +76,7 @@ func deriveChildExecutorForPath(path string, node *spec.BundleNode, parentExec s
 	if !node.HasChildren() {
 		return parentExec, nil
 	}
-	// P9: deploykit.ClassifyNodeTarget produces the child's substrate WORD (dispatch
+	// P9: spec.ClassifyNodeTarget produces the child's substrate WORD (dispatch
 	// classification, with the ref-based host/local PathLeaf fallback — W4 pure-helpers
 	// relocation moved this pure function to sdk/deploykit, shared with candy/plugin-bundle's
 	// own classification of the CURRENT node, R3); the executor HOP is then selected by that
@@ -197,13 +196,13 @@ func podDeploymentArtifactExists(name string) bool {
 // deploys (the compiler ignores host-only fields there). Consumed by
 // build_overlay.go (the pod-overlay build) host-side; the plugin computes its
 // own twin (candy/plugin-bundle/dispatch.go detectHostContext) for the deploy compile.
-func detectHostContext() deploykit.HostContext {
+func detectHostContext() spec.HostContext {
 	hd, _ := hostenv.DetectHostDistro()
 	glibc, _ := hostenv.DetectHostGlibc()
 	if hd == nil {
-		return deploykit.HostContext{}
+		return spec.HostContext{}
 	}
-	return deploykit.HostContext{
+	return spec.HostContext{
 		MachineVenue: true,
 		Distro:       hd.PrimaryTag(),
 		GlibcVersion: glibc,
