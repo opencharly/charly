@@ -117,8 +117,8 @@ func opEffectiveContexts(c *spec.Op) []spec.ExecContext {
 }
 
 // InContext reports whether the op is legal in ctx per its effective contexts. Its
-// deploykit.OpInContext DI-hook registration lives in layers.go (which already imports
-// deploykit) so this file needs no kit/deploykit import at all (K3, #39).
+// spec.OpInContext DI-hook registration lives in layers.go (which already imports spec)
+// so this file needs no kit/deploykit import at all (K3, #39).
 func opInContext(c *spec.Op, ctx spec.ExecContext) bool {
 	return slices.Contains(opEffectiveContexts(c), ctx)
 }

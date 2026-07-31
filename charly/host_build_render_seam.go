@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -105,8 +104,8 @@ func renderSeamResult(method string, result any) (spec.RenderSeamReply, error) {
 //nolint:gocyclo // by-Method dispatch switch — one case per render seam (the 2 remaining loader-gated host-coupled seams); splitting each into a method scatters a single dispatch without reducing the real branch surface.
 func hostBuildRenderSeam(_ context.Context, req spec.RenderSeamRequest, _ buildEngineContext) (spec.RenderSeamReply, error) {
 	switch req.Method {
-	case deploykit.RenderSeamInlineBuilder:
-		var p deploykit.InlineBuilderParams
+	case spec.RenderSeamInlineBuilder:
+		var p spec.InlineBuilderParams
 		if err := json.Unmarshal(req.Params, &p); err != nil {
 			return spec.RenderSeamReply{}, fmt.Errorf("render-seam %s: decode params: %w", req.Method, err)
 		}
@@ -118,10 +117,10 @@ func hostBuildRenderSeam(_ context.Context, req spec.RenderSeamRequest, _ buildE
 		if err != nil {
 			return spec.RenderSeamReply{Error: err.Error()}, nil
 		}
-		return renderSeamResult(req.Method, deploykit.InlineBuilderResult{Fragment: frag})
+		return renderSeamResult(req.Method, spec.InlineBuilderResult{Fragment: frag})
 
-	case deploykit.RenderSeamEnsureBuilders:
-		var p deploykit.EnsureBuildersParams
+	case spec.RenderSeamEnsureBuilders:
+		var p spec.EnsureBuildersParams
 		if err := json.Unmarshal(req.Params, &p); err != nil {
 			return spec.RenderSeamReply{}, fmt.Errorf("render-seam %s: decode params: %w", req.Method, err)
 		}

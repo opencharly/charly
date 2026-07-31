@@ -33,14 +33,13 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/spec/spec"
 )
 
 // Inject charly's egress-schema validation into the ledger's record-write path
-// (sdk/kit has no egress subsystem — it calls the kit.ValidateRecord seam).
-func init() { kit.ValidateRecord = ValidateEgressValue }
+// (the sdk libraries have no egress subsystem — the ledger calls the spec.ValidateRecord
+// seam, which charly fills here at init).
+func init() { spec.ValidateRecord = ValidateEgressValue }
 
 // egressValidate resolves the egress plugin and runs one OpValidate. mode ∈
 // {bytes, text, xml}: "bytes" for serialized YAML/JSON (covers ValidateEgress + the
@@ -110,7 +109,7 @@ func RenderService(entry *spec.ServiceEntry, def *ResolvedInit, ctx ServiceRende
 	if def == nil || def.ServiceSchema == nil {
 		return nil, fmt.Errorf("RenderService: init system has no service_schema")
 	}
-	ctx = deploykit.BuildServiceRenderContext(entry, ctx)
+	ctx = spec.BuildServiceRenderContext(entry, ctx)
 	rendered, err := renderServiceViaPlugin(spec.ServiceRenderInput{Init: def.Raw, Ctx: ctx})
 	if err != nil {
 		return nil, err

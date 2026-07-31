@@ -9,10 +9,8 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 
-	"github.com/opencharly/sdk/kit"
 	"gopkg.in/yaml.v3"
 )
 
@@ -111,14 +109,14 @@ func RegisterBuildVocabulary(dc *spec.DistroConfig) {
 // holds candy definitions. The discover: block overrides it per project
 // for discovery; write/resolve paths fall back to this default. Renaming the
 // candy directory project-wide is a one-line change here.
-// The value lives in kit (the importable host-engine shared with out-of-tree
+// The value lives in spec (the types-only fabric module shared with out-of-tree
 // plugin candies); these are the in-core aliases.
-const DefaultCandyDir = kit.DefaultCandyDir
+const DefaultCandyDir = spec.DefaultCandyDir
 
 // DefaultBoxDir is the on-disk directory that holds box definitions,
 // discovered per-box as <DefaultBoxDir>/<name>/<UnifiedFileName>. Symmetric with
 // DefaultCandyDir; the discover: block overrides it per project.
-const DefaultBoxDir = kit.DefaultBoxDir
+const DefaultBoxDir = spec.DefaultBoxDir
 
 // The per-directory discovery manifest filename is the ONE filename the code
 // knows — UnifiedFileName ("charly.yml", defined in unified.go). There is no
@@ -504,7 +502,8 @@ func scanSeamsFor(cfg *Config, opts spec.ResolveOpts) spec.ScanSeams {
 // with zero core coupling. scanCandyFromLocal above calls it directly.
 
 // Inject the VerbCatalog-coupled op-context classifier (checkspec.go's opInContext) into
-// deploykit's swappable seam (deploykit itself holds no VerbCatalog — that vocabulary is
-// core, reserved_registry.go). Hosted here (not checkspec.go) so checkspec.go needs no
-// kit/deploykit import at all (K3, #39) — this file already imports deploykit.
-func init() { deploykit.OpInContext = opInContext }
+// spec's swappable seam (spec holds no VerbCatalog — that vocabulary is core,
+// reserved_registry.go; the seam var moved to spec so the fabric libraries read it without
+// a deploykit import, #55 import-purity cone-render). Hosted here (not checkspec.go) so
+// checkspec.go needs no kit/deploykit import at all (K3, #39).
+func init() { spec.OpInContext = opInContext }
