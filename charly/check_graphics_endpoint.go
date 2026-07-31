@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/checkhost"
 	"github.com/opencharly/spec/spec"
 	"github.com/opencharly/spec/sshx"
 )
@@ -53,12 +53,12 @@ func (h *hostVerbResolver) resolveVerbGraphics(kind string) (graphicsEndpoint, e
 			return graphicsEndpoint{}, err
 		}
 		if reply.Kind != "vm" {
-			ep, err := kit.EndpointForVenue(reply.Descriptor, 5900)
+			ep, err := checkhost.EndpointForVenue(reply.Descriptor, 5900)
 			if err != nil {
 				return graphicsEndpoint{}, fmt.Errorf("VNC server not reachable (port 5900): %w", err)
 			}
 			h.endpointCleanups = append(h.endpointCleanups, ep.Close)
-			return graphicsEndpoint{Addr: ep.Addr, Password: resolveVNCPassword(kit.ResolveBoxName(h.cc.Box()), h.cc.Instance())}, nil
+			return graphicsEndpoint{Addr: ep.Addr, Password: resolveVNCPassword(spec.ResolveBoxName(h.cc.Box()), h.cc.Instance())}, nil
 		}
 	}
 
@@ -85,7 +85,7 @@ func (h *hostVerbResolver) resolveVerbGraphics(kind string) (graphicsEndpoint, e
 	// bridgeSocket exposes a UNIX socket as a local TCP listener for the TCP-only RFB client
 	// (vnc), registering the listener for teardown. Only vnc needs it; spice dials the socket.
 	bridgeSocket := func(socketPath string) (string, error) {
-		br, berr := kit.UnixToTCPBridge(socketPath)
+		br, berr := checkhost.UnixToTCPBridge(socketPath)
 		if berr != nil {
 			return "", berr
 		}
