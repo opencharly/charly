@@ -30,18 +30,21 @@ import (
 
 // bedCheckLevel resolves the acceptance-depth rung for a bed from its box's authored
 // check_level (none → DefaultCheckLevel). VM / local beds carry no box image, so they
-// always run at the default rung. Thin wrapper — the classifier lives in
-// deploykit.ResolveBedCheckLevel (unit 6b); this function's own job is resolving the box
-// ref against the loaded project (uf.ProjectConfig(), core-only) before delegating.
+// always run at the default rung. The classifier (ResolveBedCheckLevel) was a thin
+// deploykit wrapper over the spec.DefaultCheckLevel / spec.ResolveCheckLevel helpers —
+// now inlined to those spec helpers (#55 CHECK-ENGINE cone Option A — a pure string-ladder
+// classifier charly core reaches importing zero deploykit), so this function's own job is
+// resolving the box ref against the loaded project (uf.ProjectConfig(), core-only) before
+// applying the spec ladder.
 func bedCheckLevel(uf *spec.UnifiedFile, node spec.BundleNode) string {
 	if node.Image == "" {
-		return deploykit.ResolveBedCheckLevel(false, "")
+		return spec.DefaultCheckLevel
 	}
 	bc, _, ok := uf.ProjectConfig().ResolveBoxRef(node.Image)
 	if !ok {
-		return deploykit.ResolveBedCheckLevel(false, "")
+		return spec.DefaultCheckLevel
 	}
-	return deploykit.ResolveBedCheckLevel(true, bc.CheckLevel)
+	return spec.ResolveCheckLevel(bc.CheckLevel)
 }
 
 // bedExternalInPlace reports whether a bed ROOT's substrate is an EXTERNAL deploy substrate
@@ -67,6 +70,17 @@ func bedExternalInPlace(target string) bool {
 // ONE genuinely registry-coupled classification (bedExternalInPlace, which queries the live
 // provider registry) and threading it through, plus supplying marshalDeployNode (the
 // K1-tied struct→node-form serializer core alone can call).
+//
+// TRACKED-GATED deploykit import (#55 coneA): deploykit.PersistBedDeployOverrides calls
+// deploykit.SaveBundleConfig which REQUIRES a non-nil marshalNode callback (deploy_file.go:161),
+// and marshalDeployNode is the K1-tied struct→node serializer in charly/deploy_state_host.go:55
+// (coneC's DeployStateHost seam — a Go func callback that cannot cross the process boundary; a
+// plugin has no equivalent, confirmed by grep). Named exit: coneC's DeployStateHost seam-death /
+// marshalDeployNode envelope — when that envelope lands (terminus #85 territory), marshalDeployNode
+// + bedExternalInPlace become reachable over a HostBuild reverse leg, the plugin-check bed runner
+// calls deploykit.PersistBedDeployOverrides itself, and check_bed_run sheds deploykit. This is the
+// boundary-law "host-boundary-object" trap's legal form: the shed is BLOCKED until coneC's envelope
+// lands (in-flight), NOT a permanence argument — when the envelope lands, this MUST shed.
 func persistBedDeployOverrides(name string, node spec.BundleNode) {
 	deploykit.PersistBedDeployOverrides(name, node, bedExternalInPlace(node.Target), marshalDeployNode)
 }
