@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
+	"fmt"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/checkhost"
 	"github.com/opencharly/spec/container"
 	"github.com/opencharly/spec/spec"
@@ -97,25 +97,34 @@ func (h *hostVerbResolver) resolveImageLabel(label string) (string, error) {
 // resolveImageLabelFor is resolveImageLabel's box/instance/mode-parameterized core (K1-unblock W3
 // Unit B, R3 extraction) — see resolveVerbEndpointFor's doc comment for the shared rationale.
 //
-// TRACKED-GATED deploykit import (#55 coneA): deploykit.ResolveContainer depends on the
-// deploykit-only ResolveBoxEngineForDeploy (kit cannot import deploykit), so it cannot move to a
-// spec fabric slice alongside ContainerImageRef/InspectImageLabels (which DID move to
-// spec/container). Named exit: coneB-box-resolve (the box-resolve keystone) — when the
-// box-resolve family envelopes out, ResolveContainer reaches a spec slice or a seam and
-// check_endpoint_resolve sheds deploykit. In-flight (coneB2), NOT permanent floor.
+// deploykit shed (#55 coneB-box-resolve): the former deploykit.ResolveContainer(box, instance)
+// is now consumed via the EXISTING verb:check-resolve seam (resolveCheckVenueReply →
+// candy/plugin-check venue.go), which already runs ResolveContainer plugin-side and projects
+// (engine, containerName) byte-identically into reply.Descriptor for a container venue — the SAME
+// seam the sibling resolveVerbEndpointFor uses. No kit import is added (IMPORT-PURITY): the engine
+// override the former ResolveBoxEngineForDeploy read from the per-host deploy config is resolved
+// plugin-side now and crosses the wire as reply.Descriptor.Engine.
 func resolveImageLabelFor(box, instance string, mode RunMode, label string) (string, error) {
 	if box == "" || mode == RunModeBox {
 		return "", nil
 	}
-	engine, containerName, err := deploykit.ResolveContainer(box, instance)
+	reply, err := resolveCheckVenueReply(box, instance)
 	if err != nil {
 		return "", err
 	}
-	imageRef, err := container.ContainerImageRef(engine, containerName)
+	// ResolveContainer resolved ONLY a plain running container; resolveCheckVenue additionally
+	// classifies VM/local/nested venues. Guard to the plain (non-nested) container venue so the
+	// label read succeeds ONLY where the former path did — a non-container or dotted-nested name
+	// has no podman-inspectable image label here (the former deploykit.ResolveContainer errored
+	// on those; a not-running plain container's error still propagates verbatim via the reply).
+	if reply.Descriptor.Kind != "container" || reply.Nested {
+		return "", fmt.Errorf("container for %s is not running", box)
+	}
+	imageRef, err := container.ContainerImageRef(reply.Descriptor.Engine, reply.Descriptor.ContainerName)
 	if err != nil {
 		return "", err
 	}
-	labels, err := container.InspectImageLabels(engine, imageRef)
+	labels, err := container.InspectImageLabels(reply.Descriptor.Engine, imageRef)
 	if err != nil {
 		return "", err
 	}
