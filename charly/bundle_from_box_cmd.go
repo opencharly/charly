@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/hostenv"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -50,7 +50,7 @@ func (c *deployFromBoxCmd) Run() error {
 	// Pod path. Reuse the project-free config-setup ORCHESTRATION (now in candy/plugin-deploy-pod,
 	// the P13-KERNEL direction-flip) via ExplicitRef: it reads the image's labels, builds the
 	// QuadletConfig, writes + enables the quadlet, and daemon-reloads — all with no charly.yml.
-	rt, err := kit.ResolveRuntime()
+	rt, err := hostenv.ResolveRuntime()
 	if err != nil {
 		return err
 	}

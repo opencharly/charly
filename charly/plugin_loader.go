@@ -16,7 +16,7 @@ import (
 
 	"cuelang.org/go/cue"
 
-	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/lock"
 	"github.com/opencharly/spec/schemaconcat"
 )
 
@@ -222,7 +222,7 @@ func buildPluginBinary(ctx context.Context, srcDir, name string) (string, error)
 	// connect" mid-fan-out because its binary was momentarily half-written. A blocking per-binary file
 	// lock makes the second builder wait for the first, never collide (R4: a synchronization primitive,
 	// not a retry).
-	release, lockErr := kit.AcquireFileLock(bin+".lock", true)
+	release, lockErr := lock.AcquireFileLock(bin+".lock", true)
 	if lockErr != nil {
 		return "", fmt.Errorf("plugin %q: acquire build lock: %w", name, lockErr)
 	}
