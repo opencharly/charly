@@ -34,6 +34,7 @@ import (
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -68,9 +69,10 @@ func runBoxEnsure(ctx context.Context, ex *sdk.Executor, req spec.BuildEnsureReq
 }
 
 // ensureViaResolveAndBuild implements tier 3. A remote (@github.com/...) ref resolves via the
-// "remote-image-resolve" seam (ResolveRemoteImage host-side); every other identifier resolves
-// via "box-ref-resolve" (ResolveBox / FindBoxByLeaf host-side). Both branches mirror the deleted
-// core ensure-image helper's algorithm verbatim: check existence of the resolved ref, attempt a
+// "remote-image-resolve" seam (host-side clone/cache; the box-RESOLVE + registry pull ref now run
+// plugin-side — see resolveRemoteImageRef); every other identifier resolves via "box-ref-resolve"
+// (ResolveBox / FindBoxByLeaf host-side). Both branches mirror the deleted core ensure-image
+// helper's algorithm verbatim: check existence of the resolved ref, attempt a
 // pull, and on failure fall back to a build.
 func ensureViaResolveAndBuild(ctx context.Context, ex *sdk.Executor, image, dir string) error {
 	stripped := kit.StripURLScheme(image)
@@ -82,29 +84,67 @@ func ensureViaResolveAndBuild(ctx context.Context, ex *sdk.Executor, image, dir 
 
 func ensureRemoteRef(ctx context.Context, ex *sdk.Executor, image, stripped string) error {
 	rr, rerr := remoteImageResolve(ctx, ex, stripped, "")
-	if rerr == nil && rr.Error == "" && rr.ImageRef != "" {
-		if kit.LocalImageExists("podman", rr.ImageRef) {
-			fmt.Fprintf(os.Stderr, "ensure-image: %s present\n", rr.ImageRef)
+	if rerr != nil || rr.Error != "" {
+		errMsg := rr.Error
+		if rerr != nil {
+			errMsg = rerr.Error()
+		}
+		fmt.Fprintf(os.Stderr, "ensure-image: resolve %s: %s\n", image, errMsg)
+		return fmt.Errorf("ensure-image %q: pull failed and remote build failed: %s", image, errMsg)
+	}
+	// Compute the registry pull ref PLUGIN-SIDE: the "remote-image-resolve" host seam now does
+	// ONLY the git clone/cache (K1 loader wave — sheds deploykit.ResolveSpecBox from charly
+	// core); the plugin loads the cached repo's cfg via the K1 loader reverse legs + reads the
+	// box's registry/name itself (byte-identical to the former host-side deploykit.ResolveSpecBox
+	// → ResolveShellImageRef path: img.Registry || cfg.Defaults.Registry, buildkit
+	// config_resolve.go:101-103). An empty ref (box not found / no registry configured) skips the
+	// pull attempt and falls straight to the build fallback — preserving the former behavior
+	// where a remote box with no resolvable pull ref just built from source.
+	imageRef := resolveRemoteImageRef(ctx, ex, rr.CacheDir, rr.BoxName)
+	if imageRef != "" {
+		if kit.LocalImageExists("podman", imageRef) {
+			fmt.Fprintf(os.Stderr, "ensure-image: %s present\n", imageRef)
 			return nil
 		}
-		fmt.Fprintf(os.Stderr, "ensure-image: pulling %s\n", rr.ImageRef)
-		if err := podmanPull(ctx, rr.ImageRef); err == nil {
+		fmt.Fprintf(os.Stderr, "ensure-image: pulling %s\n", imageRef)
+		if err := podmanPull(ctx, imageRef); err == nil {
 			return nil
 		} else {
-			fmt.Fprintf(os.Stderr, "ensure-image: pull %s failed: %v\n", rr.ImageRef, err)
+			fmt.Fprintf(os.Stderr, "ensure-image: pull %s failed: %v\n", imageRef, err)
 		}
-		fmt.Fprintf(os.Stderr, "ensure-image: building remote %s from cached source\n", image)
-		if _, berr := runBoxBuild(ctx, ex, spec.BuildRequest{Boxes: []string{rr.BoxName}, Dir: rr.CacheDir}); berr != nil {
-			return fmt.Errorf("ensure-image %q: pull failed and remote build failed: %w", image, berr)
-		}
-		return nil
 	}
-	errMsg := rr.Error
-	if rerr != nil {
-		errMsg = rerr.Error()
+	fmt.Fprintf(os.Stderr, "ensure-image: building remote %s from cached source\n", image)
+	if _, berr := runBoxBuild(ctx, ex, spec.BuildRequest{Boxes: []string{rr.BoxName}, Dir: rr.CacheDir}); berr != nil {
+		return fmt.Errorf("ensure-image %q: pull failed and remote build failed: %w", image, berr)
 	}
-	fmt.Fprintf(os.Stderr, "ensure-image: resolve %s: %s\n", image, errMsg)
-	return fmt.Errorf("ensure-image %q: pull failed and remote build failed: %s", image, errMsg)
+	return nil
+}
+
+// resolveRemoteImageRef computes the registry pull ref for a remote box PLUGIN-SIDE, loading the
+// cached repo's cfg via the K1 loader reverse legs (the host "remote-image-resolve" seam now does
+// ONLY the git clone/cache — K1 loader wave, deploykit.ResolveSpecBox shed from charly core). It
+// returns "" if the box can't be loaded/found, so the caller skips the pull and falls back to a
+// build. Byte-identical Registry/Name to the former host-side deploykit.ResolveSpecBox path:
+// resolved.Registry = img.Registry || cfg.Defaults.Registry (buildkit/config_resolve.go:101-103),
+// then kit.ResolveShellImageRef (the re-export of container.ResolveShellImageRef the former host
+// path used). The tag is "" — the caller (ensureRemoteRef) passes an empty tag to the seam, so the
+// former host ImageRef was likewise tag-less.
+func resolveRemoteImageRef(ctx context.Context, ex *sdk.Executor, dir, boxName string) string {
+	exec := &buildLoaderExecutor{ctx: ctx, ex: ex}
+	uf, ok, err := loaderkit.LoadUnified(dir, loaderkit.LoadSeamsFromExecutor(exec))
+	if err != nil || !ok || uf == nil {
+		return ""
+	}
+	cfg := uf.ProjectConfig()
+	img, ok := cfg.BoxConfig(boxName)
+	if !ok {
+		return ""
+	}
+	registry := img.Registry
+	if registry == "" {
+		registry = cfg.Defaults.Registry
+	}
+	return kit.ResolveShellImageRef(registry, boxName, "")
 }
 
 func ensureProjectRef(ctx context.Context, ex *sdk.Executor, image, dir string) error {

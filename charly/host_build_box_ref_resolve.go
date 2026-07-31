@@ -35,8 +35,8 @@ const boxRefResolveBuilderKind = "box-ref-resolve"
 // registry ref usable for `LocalImageExists`. Short names need cfg; full refs pass through.
 // (Ported verbatim from the deleted former core ensure-image helper file; the remote-ref branch is gone —
 // callers of THIS function, both host-internal (builder_venue.go) and the build:ensure plugin
-// via the box-ref-resolve seam, already route a remote `@github.com/...` ref through
-// ResolveRemoteImage / the "remote-image-resolve" seam instead of calling this.)
+// via the box-ref-resolve seam, already route a remote `@github.com/...` ref through the
+// "remote-image-resolve" seam instead of calling this.)
 func resolveImageRefForEnsure(image string, cfg *Config, projectDir string) (string, error) {
 	if image == "" {
 		return "", fmt.Errorf("empty image")

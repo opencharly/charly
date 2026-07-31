@@ -50,8 +50,9 @@ type BoxCmd struct {
 // charly/labels.go + candy/plugin-box/{merge_cmd,reconcile,box}.go's dispatchPull/dispatchBuild.
 //
 // The host-coupled remainder that DID stay core is the genuine floor a sdk-only candy cannot run:
-// remote_image.go's ResolveRemoteImage (EnsureRepoDownloaded → clone/cache, K1), reached by the
-// candy over the thin HostBuild("remote-image-resolve") seam (host_build_remote_image_resolve.go); the
+// the git clone/cache (EnsureRepoDownloaded → clone/cache, K1), reached by the candy over the thin
+// HostBuild("remote-image-resolve") seam (host_build_remote_image_resolve.go — K1 loader wave: the
+// box-RESOLVE moved plugin-side, the backing file DELETED); the
 // build-engine RESOLVE legs (host_build_buildengine.go). The bootstrap-builder pre-pass
 // (ensureBuilderImageBuilt/dispatchBoxBuild) externalized FULLY at K3 vm-build move
 // (coneB-buildremnant): candy/plugin-vm's resolveVmBuild (vm_build_resolve.go) now runs
