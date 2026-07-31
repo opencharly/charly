@@ -31,6 +31,7 @@ import (
 	"os"
 
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/spec/proto"
 	"github.com/opencharly/spec/spec"
@@ -83,7 +84,10 @@ func verifyChecksRunOps(ex *sdk.Executor, ctx context.Context, venueExec spec.De
 	crs := runner.Run(ctx, in.Ops)
 	out := make([]kit.StepResult, 0, len(crs))
 	for i := range crs {
-		out = append(out, kit.StepResult{Result: crs[i]})
+		// crs[i] is the engine kit.CheckResult (with the DeadlineExceeded flag the retry loop
+		// reads); the StepResult wire field carries the embedded spec.CheckResult only
+		// (DeadlineExceeded is engine-internal, json:"-"), so extract it here.
+		out = append(out, kit.StepResult{Result: crs[i].CheckResult})
 	}
 	return out
 }
@@ -92,11 +96,30 @@ func verifyChecksRunOps(ex *sdk.Executor, ctx context.Context, venueExec spec.De
 // core runLocalDeployScopePlan RunPlan drive (byte-mirroring live_gather.go's
 // pluginRunLocalDeployScopePlan: host-context env via venueExec.ResolveHome, ${HOST:} host-vars, the
 // cross-deployment TargetResolver — all rebuilt from {dir, box, instance}, none crossing the wire).
+//
+// The per-host charly.yml OVERLAY merge (the deploy-entry `check:` extends/overrides) lives HERE
+// now (#55 CHECK-ENGINE cone Option A — relocated from the former core runLocalDeployScopePlan so
+// the core `target: local` --verify path imports zero deploykit). The host threads the base plan
+// (kind:local template + deploy node, assembled core-side in check_cmd.go's runLocalDeployScopePlan);
+// this handler appends the per-host overlay entry's plan — keyed by DeployKey(box, instance) with
+// the bare-image fallback, the SAME precedence the core read used — before driving RunPlan, so the
+// final plan run by the plugin is byte-identical to the former core-assembled one (base + overlay).
 func verifyChecksRunPlan(ex *sdk.Executor, ctx context.Context, venueExec spec.DeployExecutor, in spec.VerifyChecksRequest) []kit.StepResult {
 	user := os.Getenv("USER")
 	home, herr := venueExec.ResolveHome(ctx, user)
 	if herr != nil || home == "" {
 		home = os.Getenv("HOME")
+	}
+	// Append the per-host overlay entry's plan (relocated from the former core
+	// runLocalDeployScopePlan — see the header). DeployKey(box, instance) with the bare-image
+	// fallback, the SAME precedence the core read used.
+	plan := in.Plan
+	if dc := deploykit.LoadDeployConfigForRead("charly check live"); dc != nil {
+		if entry, ok := dc.Bundle[spec.DeployKey(in.Box, in.Instance)]; ok {
+			plan = append(plan, entry.Plan...)
+		} else if entry, ok := dc.Bundle[in.Box]; ok {
+			plan = append(plan, entry.Plan...)
+		}
 	}
 	resolver := kit.NewRuntimeCheckVarResolver(map[string]string{
 		"IMAGE":    in.Box,
@@ -105,7 +128,7 @@ func verifyChecksRunPlan(ex *sdk.Executor, ctx context.Context, venueExec spec.D
 		"HOME":     home,
 	})
 	env, hasRuntime := pluginResolverEnv(resolver)
-	hostVars, hostCleanups := resolveHostVarsForSteps(ex, ctx, in.Dir, in.Plan, in.Instance)
+	hostVars, hostCleanups := resolveHostVarsForSteps(ex, ctx, in.Dir, plan, in.Instance)
 	defer kit.CloseHostCleanups(hostCleanups)
 
 	runner := newPluginCheckRunner(ex, ctx, spec.CheckEnv{
@@ -124,7 +147,7 @@ func verifyChecksRunPlan(ex *sdk.Executor, ctx context.Context, venueExec spec.D
 		HostVars:       hostVars,
 		TargetResolver: pluginVenueResolver(ex, ctx, in.Dir, in.Instance),
 	})
-	set := &kit.LabelDescriptionSet{Deploy: []kit.LabeledDescription{{Origin: "local:" + in.Box, Plan: in.Plan}}}
+	set := &kit.LabelDescriptionSet{Deploy: []kit.LabeledDescription{{Origin: "local:" + in.Box, Plan: plan}}}
 	return kit.RunPlan(ctx, runner, set, false)
 }
 

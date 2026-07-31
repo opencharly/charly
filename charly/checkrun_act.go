@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -84,7 +83,7 @@ func (h *hostVerbResolver) runProvisionAct(ctx context.Context, c *spec.Op, verb
 	if h.cc.Mode() == RunModeBox {
 		return skipf(c, "do: act not meaningful under charly check box (no running target)"), true
 	}
-	_, stderr, exit, err := h.cc.Exec().RunCapture(ctx, kit.WrapContainerCommand(script))
+	_, stderr, exit, err := h.cc.Exec().RunCapture(ctx, spec.WrapContainerCommand(script))
 	if err != nil {
 		return failf(c, "act %s: execution error: %v", verb, err), true
 	}
