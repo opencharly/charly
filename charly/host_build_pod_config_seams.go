@@ -6,7 +6,8 @@ import (
 	"fmt"
 
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/container"
+	"github.com/opencharly/spec/hostenv"
 	"github.com/opencharly/spec/spec"
 	"github.com/opencharly/spec/sshx"
 )
@@ -77,7 +78,7 @@ func hostBuildPodConfigSSHKey(_ context.Context, req spec.PodConfigSSHKeyRequest
 }
 
 func hostBuildPodConfigEnsureImage(_ context.Context, req spec.PodConfigEnsureImageRequest, _ buildEngineContext) (spec.PodConfigEnsureImageReply, error) {
-	podmanRT := &kit.ResolvedRuntime{BuildEngine: req.BuildEngine, RunEngine: "podman"}
+	podmanRT := &hostenv.ResolvedRuntime{BuildEngine: req.BuildEngine, RunEngine: "podman"}
 	if err := ensureImagePresent(req.ImageRef, podmanRT); err != nil {
 		return spec.PodConfigEnsureImageReply{}, err
 	}
@@ -108,20 +109,20 @@ func hostBuildPodConfigEnsureImage(_ context.Context, req spec.PodConfigEnsureIm
 //     charly.yml entry (the SAME code path BuilderRun, the check preflight, and `charly box pull`
 //     all go through — see charly/dispatch_build_ensure.go).
 //
-// Returns kit.ErrImageNotLocal (wrapped with the ref) only when ALL three tiers fail.
-func ensureImagePresent(imageRef string, rt *kit.ResolvedRuntime) error {
-	if kit.LocalImageExists(rt.RunEngine, imageRef) {
+// Returns spec.ErrImageNotLocal (wrapped with the ref) only when ALL three tiers fail.
+func ensureImagePresent(imageRef string, rt *hostenv.ResolvedRuntime) error {
+	if container.LocalImageExists(rt.RunEngine, imageRef) {
 		return nil
 	}
 	// Cross-engine transfer first when applicable: faster than a network pull and works offline.
-	if rt.BuildEngine != rt.RunEngine && kit.LocalImageExists(rt.BuildEngine, imageRef) {
-		return kit.TransferImage(rt.BuildEngine, rt.RunEngine, imageRef)
+	if rt.BuildEngine != rt.RunEngine && container.LocalImageExists(rt.BuildEngine, imageRef) {
+		return container.TransferImage(rt.BuildEngine, rt.RunEngine, imageRef)
 	}
 	// Generic ensure: pull, fall back to local build for project images.
 	if err := dispatchBuildEnsure(context.Background(), imageRef, "", rt.BuildEngine, rt.RunEngine); err == nil {
 		return nil
 	}
-	return fmt.Errorf("%w: %s", kit.ErrImageNotLocal, imageRef)
+	return fmt.Errorf("%w: %s", spec.ErrImageNotLocal, imageRef)
 }
 
 func hostBuildPodConfigLoadDeploy(_ context.Context, req spec.PodConfigLoadDeployRequest, _ buildEngineContext) (spec.PodConfigLoadDeployReply, error) {
@@ -171,8 +172,8 @@ func hostBuildPodConfigBoxEngine(_ context.Context, req spec.PodConfigBoxEngineR
 // (remove_tunnel.go) is a SEPARATE caller of this SAME seam, so it stays registered). Reads the
 // RUNNING container's baked image ref (registry/podman-store coupled — genuinely host-only).
 func hostBuildPodConfigContainerTunnel(_ context.Context, req spec.PodConfigContainerTunnelRequest, _ buildEngineContext) (spec.PodConfigContainerTunnelReply, error) {
-	ctrName := kit.ContainerNameInstance(req.Box, req.Instance)
-	imageRef := kit.ContainerImage("podman", ctrName)
+	ctrName := spec.ContainerNameInstance(req.Box, req.Instance)
+	imageRef := container.ContainerImage("podman", ctrName)
 	if imageRef == "" {
 		return spec.PodConfigContainerTunnelReply{}, nil
 	}
