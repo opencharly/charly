@@ -62,17 +62,23 @@ func runUnifiedTargetChecks(ctx context.Context, exec spec.DeployExecutor, kind,
 	if exec == nil {
 		return fmt.Errorf("%s %q: no executor configured", kind, nodeName)
 	}
-	runner := newCheckRunner(kit.RunnerConfig{Exec: exec, Mode: RunModeLive})
-	results := runner.Run(ctx, filtered)
+	// The check DRIVE runs PLUGIN-SIDE via command:check OpVerifyChecks (#55 CHECK-ENGINE cone
+	// Unit 2 — the former in-proc newCheckRunner + kit.Runner.Run construction moved off core). The
+	// reply is the sanctioned []kit.StepResult wire (the plugin wraps each raw-Op verdict as a
+	// StepResult), so a failure is read off r.Result.
+	results, err := dispatchVerifyChecks(ctx, exec, spec.VerifyChecksRequest{Ops: filtered, Mode: "live"})
+	if err != nil {
+		return fmt.Errorf("%s %q: %w", kind, nodeName, err)
+	}
 	failed := 0
 	for _, r := range results {
-		if r.Status == spec.StatusFail {
+		if r.Result.Status == spec.StatusFail {
 			failed++
 			id := ""
-			if r.Op != nil {
-				id = r.Op.ID
+			if r.Result.Op != nil {
+				id = r.Result.Op.ID
 			}
-			fmt.Fprintf(os.Stderr, "FAIL %s: %s\n", id, r.Message)
+			fmt.Fprintf(os.Stderr, "FAIL %s: %s\n", id, r.Result.Message)
 			if opts.StopOnFail {
 				return fmt.Errorf("test stopped at first failure: %s", id)
 			}

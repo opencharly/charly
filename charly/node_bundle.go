@@ -8,8 +8,9 @@ package main
 //   - RESOURCE children become members — alongside siblings (Peer) under a
 //     `bundle` group, inside-venue children (Nested) under a resource (pod-in-vm);
 //   - STEP children become Plan steps whose venue is their position in the tree.
-// Cross-member addressing is ${HOST:<member>} (resolved by position; see
-// check_members.go). NO data-node children here (deploy config is value-carried),
+// Cross-member addressing is ${HOST:<member>} (resolved by position; the host-var
+// resolution lives plugin-side in candy/plugin-check/members.go). NO data-node
+// children here (deploy config is value-carried),
 // so #BundleArm narrows children to resources + steps.
 
 import (

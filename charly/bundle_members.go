@@ -5,7 +5,8 @@ package main
 // A BundleNode's `peer:` map declares companion deployments brought up
 // ALONGSIDE it on the shared `charly` network (NOT nested inside it). The canonical
 // case is a Chrome driver pod that CDP-probes a web-server subject via a check
-// with `on: <peer>` (see check_members.go); members are reachable by
+// with `on: <peer>` (the cross-deployment `on:`/`${HOST:}` resolution lives
+// plugin-side in candy/plugin-check/members.go); members are reachable by
 // `${HOST:<name>}` and are never check-live'd themselves.
 //
 // The LOAD-half — foldMembers / sortedMemberKeys / sortedDeployKeys plus the venue-flatten pass —

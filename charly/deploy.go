@@ -12,8 +12,9 @@ import (
 // reverse-leg SEAM COLLAPSE. The pod plugin now self-resolves plugin-side (per-host via the
 // deploy-config load seam + PROJECT via the shared loaderkit.LoadUnifiedViaExecutor helper), so
 // the host seam and these host-side resolvers are gone — deploy.go no longer imports sdk/deploykit
-// or sdk/spec. The check-plumbing consumer (check_members.go) resolves the box name INLINE from the
-// project + overlay it already loads. See each repo's CHANGELOG/ for the collapse (retired names).
+// or sdk/spec. The check-plumbing consumer resolves the box name INLINE from the project + overlay
+// it already loads — plugin-side now, in candy/plugin-check/members.go (resolveDeployBoxName). See
+// each repo's CHANGELOG/ for the collapse (retired names).
 //
 // The deploy STATE-MODEL body (LoadBundleConfig / SaveBundleConfig / LoadDeployConfigForRead /
 // LoadDeployConfigForWrite / MergeDeployOntoMetadata / CleanDeployEntry / SaveDeployState /

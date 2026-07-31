@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -279,7 +280,7 @@ func checkLocalDeployScope(dir string, node *spec.BundleNode, image, instance, _
 // now runs plugin-side (pluginRunLocalDeployScopePlan, candy/plugin-check/live_gather.go). Host-
 // context vars only (no HOST_PORT:<N> / CONTAINER_IP). Folds the ${HOST} CloseHosts teardown
 // (design §6): the ssh -L forwards a VM-peer subject opens are torn down after the plan run.
-func runLocalDeployScopePlan(dir string, node *spec.BundleNode, image, instance string, exec spec.DeployExecutor) (results []kit.StepResult, hadPlan bool, err error) { //nolint:unparam // err kept for symmetry; RunPlan never errors here today
+func runLocalDeployScopePlan(dir string, node *spec.BundleNode, image, instance string, exec spec.DeployExecutor) (results []kit.StepResult, hadPlan bool, err error) {
 	var plan []spec.Step
 	if node != nil && strings.TrimSpace(node.From) != "" {
 		if spec, _ := findLocalSpec(dir, strings.TrimSpace(node.From)); spec != nil {
@@ -296,42 +297,57 @@ func runLocalDeployScopePlan(dir string, node *spec.BundleNode, image, instance 
 			plan = append(plan, entry.Plan...)
 		}
 	}
-
-	user := os.Getenv("USER")
-	home, herr := exec.ResolveHome(context.Background(), user)
-	if herr != nil || home == "" {
-		home = os.Getenv("HOME")
-	}
-	resolver := kit.NewRuntimeCheckVarResolver(map[string]string{
-		"IMAGE":    image,
-		"INSTANCE": instance,
-		"USER":     user,
-		"HOME":     home,
-	})
-
 	if len(plan) == 0 {
 		return nil, false, nil
 	}
-	set := &kit.LabelDescriptionSet{Deploy: []kit.LabeledDescription{{Origin: "local:" + image, Plan: plan}}}
-	env, hasRuntime := resolverEnv(resolver)
-	// Generic cross-deployment support (on: driver + ${HOST:<member>}) — a local SUBJECT bed
-	// can drive a peer too (R3). Capture + defer-close the ssh -L cleanups (design §6 leak fix):
-	// the pre-P12 local path discarded them, so a local subject driving a VM peer via
-	// ${HOST:<member>:<port>} leaked the forward.
-	hostVars, hostCleanups := resolveHostVarsForSteps(plan, instance)
-	defer kit.CloseHostCleanups(hostCleanups)
-	runner := newCheckRunner(kit.RunnerConfig{
-		Exec:           exec,
-		Mode:           RunModeLive,
-		Env:            env,
-		HasRuntime:     hasRuntime,
-		Box:            image,
-		Instance:       instance,
-		VerifyOnly:     true,
-		HostVars:       hostVars,
-		TargetResolver: venueResolver(instance),
+	// The RunPlan-DRIVE moved PLUGIN-SIDE (command:check OpVerifyChecks, #55 CHECK-ENGINE cone
+	// Unit 2): the plugin rebuilds the host-context env (USER/HOME via the venue's ResolveHome),
+	// the ${HOST:<member>} host-vars, and the cross-deployment TargetResolver from {dir, box,
+	// instance} — none of which cross the wire (plugin-check already does this for check-live). What
+	// STAYS core is exactly this plan ASSEMBLY (kind:local template via findLocalSpec + deploy node
+	// + per-host overlay) — the deploy/K4 named exit keeps its loader + deploy kit.
+	results, err = dispatchVerifyChecks(context.Background(), exec, spec.VerifyChecksRequest{
+		Plan: plan, Mode: "live", Box: image, Instance: instance, VerifyOnly: true, Dir: dir,
 	})
-	return kit.RunPlan(context.Background(), runner, set, false), true, nil
+	if err != nil {
+		return nil, true, err
+	}
+	return results, true, nil
+}
+
+// dispatchVerifyChecks drives a deploy-scope check pass PLUGIN-SIDE via command:check's
+// OpVerifyChecks (#55 CHECK-ENGINE cone Unit 2). The host holds a live venue executor but no longer
+// builds the in-proc kit.Runner — that construction (the former checkrun.go newCheckRunner +
+// planrun_adapter.go venueResolver) moved into candy/plugin-check, shedding both files' sdk/kit
+// imports. A live executor cannot cross the wire, so it is flattened to a spec.VenueDescriptor
+// (kit.DescriptorFromExecutor) the plugin re-materializes via kit.VenueFromDescriptor — the SAME
+// mechanism candy/plugin-bundle's resolveRootExecutor uses. An in-proc reverse channel is threaded
+// (the deploy_target_dispatch.go / check_venue_resolve.go idiom) so the plugin's own verb-dispatch
+// (InvokeProvider) + local-verify resolvedProject (HostBuild) legs reach the host. The reply is the
+// sanctioned sdk/kit []StepResult wire.
+func dispatchVerifyChecks(ctx context.Context, exec spec.DeployExecutor, req spec.VerifyChecksRequest) ([]kit.StepResult, error) {
+	prov, ok := providerRegistry.resolve(ClassCommand, "check")
+	if !ok {
+		return nil, fmt.Errorf("verify-checks: command:check provider not loaded (candy/plugin-check must be compiled in via compiled_plugins:)")
+	}
+	req.Venue = kit.DescriptorFromExecutor(exec)
+	reqJSON, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("verify-checks: marshal request: %w", err)
+	}
+	invokeCtx := sdk.ContextWithExecutor(ctx,
+		sdk.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{exec: exec}}))
+	res, err := prov.Invoke(invokeCtx, &Operation{Reserved: "check", Op: sdk.OpVerifyChecks, Params: reqJSON})
+	if err != nil {
+		return nil, fmt.Errorf("verify-checks: command:check plugin: %w", err)
+	}
+	var out []kit.StepResult
+	if res != nil && len(res.JSON) > 0 {
+		if uerr := json.Unmarshal(res.JSON, &out); uerr != nil {
+			return nil, fmt.Errorf("verify-checks: decode reply: %w", uerr)
+		}
+	}
+	return out, nil
 }
 
 // containerImageRef + containerImage (the live-container image-ref

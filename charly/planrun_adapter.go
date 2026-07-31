@@ -7,20 +7,20 @@ import (
 	"time"
 
 	"github.com/opencharly/spec/spec"
-
-	"github.com/opencharly/sdk/kit"
 )
 
 // hostCheckCarrier is the spec-backed carrier that backs a hostVerbResolver's live CheckContext
 // legs (Exec/Mode/HTTPDo/Box/Instance/Distros/DialTimeout/AddBackground) WITHOUT core referencing
 // kit.Runner (#55 CHECK-ENGINE cone — the reverse-channel rendezvous no longer imports the engine).
-// It carries the CheckEnv scalars plus a LIVE exec getter (SwapVenue-aware: the in-proc plan drive
+// It carries the CheckEnv scalars plus a LIVE exec getter (SwapVenue-aware: a live plan drive
 // captures the running kit.Runner so a cross-deployment `on:`/${HOST:member} step's mid-plan venue
 // swap is reflected — a FROZEN executor was the check-k3s-vm cross-deployment SIGSEGV class) + the
-// host HTTP base client + a nil-safe background-PID sink. Two producers fill it: the reverse-channel
-// path (plugin_dispatch_reverse.go — from the wire CheckEnv snapshot, fixed venue) and the in-proc
-// plan drive (checkrun.go newCheckRunner — projected off the kit.Runner it still builds as its
-// engine). Zero kit in the carrier itself.
+// host HTTP base client + a nil-safe background-PID sink. In PRODUCTION the reverse-channel path
+// (plugin_dispatch_reverse.go — from the wire CheckEnv snapshot, fixed venue) is now the SOLE
+// producer: the in-proc plan drive that once also filled it (checkrun.go newCheckRunner, projected
+// off a live kit.Runner) moved PLUGIN-SIDE (command:check OpVerifyChecks, #55 CHECK-ENGINE cone Unit
+// 2) and survives only as the test-only carrierFromRunner (checkrun_helpers_test.go). Zero kit in
+// the carrier itself.
 type hostCheckCarrier struct {
 	execFn       func() spec.DeployExecutor // live getter (SwapVenue-aware); accessed via Exec()
 	mode         spec.CheckRunMode
@@ -144,26 +144,9 @@ func (hostPlanGrammar) ContextsLabel(op *spec.Op) string {
 	return fmt.Sprintf("%v", opEffectiveContexts(op))
 }
 
-// venueResolver adapts the core liveTargetResolver (an `on:` DRIVER venue → *kit.CheckVarResolver +
-// DeployExecutor) to the kit.VenueResolver seam (venue → kit.Executor + env + hasRuntime) the
-// runner's per-step SwapVenue drives. It always returns a non-nil env map so SwapVenue swaps the
-// engine env for the driver venue (matching the former "always swap the resolver" behaviour: a
-// driver with no resolvable vars clears the base env rather than leaking the subject's).
-func venueResolver(instance string) kit.VenueResolver {
-	resolve := liveTargetResolver(instance)
-	return func(venue string) (kit.Executor, map[string]string, bool, error) {
-		res, exec, err := resolve(venue)
-		if err != nil {
-			return nil, nil, false, err
-		}
-		env := map[string]string{}
-		hasRuntime := false
-		if res != nil {
-			if res.Env != nil {
-				env = res.Env
-			}
-			hasRuntime = res.HasRuntime
-		}
-		return exec, env, hasRuntime, nil
-	}
-}
+// The former venueResolver — the `on:` DRIVER venue → kit.VenueResolver adapter for the IN-PROC
+// plan drive — is DELETED (#55 CHECK-ENGINE cone Unit 2): the deploy-scope check DRIVE moved
+// PLUGIN-SIDE (command:check OpVerifyChecks), where candy/plugin-check's pluginVenueResolver +
+// members.go rebuild the cross-deployment resolution over the check reverse channel. The core
+// liveTargetResolver/resolveHostVars cluster it wrapped (charly/check_members.go) went dead with it
+// and was removed in the same cutover.
