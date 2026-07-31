@@ -9,7 +9,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/refs"
 	"github.com/opencharly/spec/spec"
 )
@@ -377,7 +376,7 @@ func CollectRemoteRefsOpts(cfg *Config, layers map[string]spec.CandyReader, opts
 			edges = append(edges, img.Base)
 		}
 		if len(img.Candy) > 0 {
-			edges = append(edges, deploykit.EffectiveBuilderNames(c, name, img)...)
+			edges = append(edges, spec.EffectiveBuilderForBox(c, name, img).AllBuilder()...)
 		}
 		for _, ref := range edges {
 			if _, tc, ok := c.ResolveBoxRef(ref); ok {
