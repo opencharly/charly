@@ -18,6 +18,7 @@ import (
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -50,7 +51,10 @@ func (c *CmdCmd) Run() error {
 	// the host's dispatchLifecycleTarget operates on it instead of re-reading the per-host config
 	// itself (byte-identical to the retired core resolveLifecycleDeployNode; box/instance MUST match
 	// the request's Box/Instance — the host derives deployName = DeployKey from those).
-	cmdNode, _ := deploykit.ResolveLifecycleDeployNodeViaSeam(cmdCtx, cmdExec, c.Box, c.Instance)
+	// #55 coneC Unit C2: the resolver moved from deploykit.ResolveLifecycleDeployNodeViaSeam (the
+	// deleted host bundle-config loader-seam round-trip) to the cycle-free
+	// loaderkit.ResolveLifecycleDeployNodeViaExecutor (plugin-side, over the reverse channel).
+	cmdNode, _ := loaderkit.ResolveLifecycleDeployNodeViaExecutor(cmdCtx, cmdExec, c.Box, c.Instance)
 	start := time.Now()
 	runErr := hostPodCmd(spec.PodCmdRequest{Box: c.Box, Command: c.Command, Instance: c.Instance, Sidecar: c.Sidecar, Node: cmdNode})
 	elapsed := time.Since(start).Truncate(time.Millisecond)

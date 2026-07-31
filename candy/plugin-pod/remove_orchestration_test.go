@@ -44,7 +44,7 @@ func TestPurgeDeployArtifacts_DropsOverlay(t *testing.T) {
 // TestSidecarNamesFromBundleConfig covers the pure extraction logic resolveSidecarNames' seam call
 // feeds into — enumerating EXACT sidecar names attached to a deploy so `charly remove`'s
 // quadlet-mode sidecar sweep never over-matches a same-image sibling instance. Split out of
-// resolveSidecarNames (Cutover B unit 2: that function now calls the pod-config-load-bundle seam,
+// resolveSidecarNames (Cutover B unit 2: that function now calls the loaderkit overlay read,
 // which needs a live reverse channel a plain unit test doesn't have — see remove_orchestration.go's
 // header) so this logic — the part charly/remove_sidecar_test.go actually exercised — stays
 // unit-testable directly against a constructed *deploykit.BundleConfig, no YAML/loader/seam needed.

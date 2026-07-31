@@ -20,8 +20,8 @@ import (
 // The former "pod-config-enc-ensure-plan" / "pod-config-enc-unmount-plan" /
 // "pod-config-container-tunnel" HostBuild seams are RETIRED here — every caller in resolve.go now
 // builds its own plan via deploykit.EncPlanForConfig/EncPlanForConfig's sibling functions (sdk#84ee126,
-// the wave γ DeployStateHost fix) given a dc it ALREADY holds (or loads once via the EXISTING
-// "pod-config-load-bundle" seam, loadDeploy — never the bare deploykit.LoadBundleConfig()/
+// the wave γ DeployStateHost fix) given a dc it ALREADY holds (or loads once via loadDeploy, the
+// cycle-free loaderkit.LoadHostBundleConfigViaExecutor read — never the bare deploykit.LoadBundleConfig()/
 // LoadDeployConfigForRead() a plugin cannot safely reach, per the DeployStateHost placement-
 // dependency class). The credential touch (enc-ensure's passphrase resolution) dispatches
 // verb:credential via the SHARED deploykit.CredentialAccessViaExecutor helper (R3 — the ONE
@@ -33,8 +33,8 @@ import (
 // InvokeProviders verb:enc with, or (nil, nil) when no encrypted volume is configured OR every
 // one is already mounted (the keyring-resilient fast path — direct port of
 // charly/pod_lifecycle_resolve.go's resolvePodEncEnsure). dc is loaded ONCE by the caller (either
-// reused from an already-loaded podRuntimeImage.dc, or freshly loaded via loadDeploy — the
-// EXISTING "pod-config-load-bundle" seam) — never re-derived from a bare
+// reused from an already-loaded podRuntimeImage.dc, or freshly loaded via loadDeploy, the
+// cycle-free loaderkit.LoadHostBundleConfigViaExecutor read) — never re-derived from a bare
 // deploykit.LoadBundleConfig() call, which silently degrades outside charly-core (the
 // DeployStateHost placement-dependency class, sdk#84ee126's EncPlanForConfig exists precisely to
 // avoid it here).

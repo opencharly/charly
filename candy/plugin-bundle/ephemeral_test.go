@@ -295,8 +295,8 @@ func TestEffectiveEphemeralTTL_Default(t *testing.T) {
 }
 
 // TestEphemeralByIDFromBundleConfig covers the pure scan lookupEphemeralByID applies once it has
-// an already-loaded BundleConfig — the seam-coupled LOAD itself (loadBundleConfig, over
-// "pod-config-load-bundle") needs a live reverse channel and is not unit-testable standalone
+// an already-loaded BundleConfig — the reverse-channel-coupled LOAD itself (loadBundleConfig, the
+// loaderkit overlay read) needs a live reverse channel and is not unit-testable standalone
 // (mirrors candy/plugin-pod/remove_orchestration.go's sidecarNamesFromBundleConfig split).
 func TestEphemeralByIDFromBundleConfig(t *testing.T) {
 	dc := &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{

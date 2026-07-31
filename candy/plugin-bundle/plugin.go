@@ -16,7 +16,7 @@
 //     plugin-side; ResolveTarget → the deploy target's Add/Del is the host tail of the
 //     resolve-target-add / deploy-node-del-dispatch seams. `from-box`
 //     still forwards to HostBuild("deploy-from-box"); the config-management leaves (show/export/
-//     import/reset/status) run plugin-side — reads via "pod-config-load-bundle", writes via
+//     import/reset/status) run plugin-side — reads via loaderkit.LoadHostBundleConfigViaExecutor, writes via
 //     deploykit.SaveBundleConfig directly (#55 K4 config-write seam-collapse). `path`
 //     resolves plugin-side via kit.DefaultDeployConfigPath (no seam).
 //

@@ -10,6 +10,7 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -27,12 +28,13 @@ import (
 // but transitively reaches DeployStateHost is placement-DEPENDENT: correct when compiled into the
 // SAME OS process as charly-core (today's default), silently wrong (empty/ignored, no error) the
 // moment it runs in a genuinely out-of-process plugin binary — exactly the class of bug the
-// project's existing pod-config-load-bundle/pod-config-box-engine seams already exist to prevent
+// project's host bundle-config loader + pod-config-box-engine seams already exist to prevent
 // for OTHER call sites; this port had simply not been checked against that same list yet. TWO
-// functions below needed rerouting through their EXISTING seams instead of calling deploykit
+// functions below needed rerouting through those seams instead of calling deploykit
 // directly (R3 — no new seam invented for either):
 //   - resolveSidecarNames: was calling deploykit.LoadBundleConfig() raw — now goes through the
-//     EXISTING pod-config-load-bundle seam.
+//     cycle-free loaderkit.LoadHostBundleConfigViaExecutor helper (retiring the former host
+//     bundle-config loader seam).
 //   - runPodRemove's engine resolution: deploykit.ResolveBoxEngineForDeploy transitively calls
 //     LoadBundleConfig too (via LoadDeployConfigForRead) — now goes through the EXISTING
 //     pod-config-box-engine seam (the SAME one host_build_pod_config_seams.go already serves).
@@ -148,22 +150,22 @@ func purgeDeployArtifacts(engine, boxName, instance string) {
 }
 
 // resolveSidecarNames returns the sorted set of sidecar key names attached to this deploy via
-// charly.yml. Relocated from charly/commands.go — its raw deploykit.LoadBundleConfig() call is
-// REROUTED through the shared deploykit.LoadBundleConfigViaSeam helper (an RDD-caught fix, see
-// this file's header): LoadBundleConfig silently no-ops unless deploykit.DeployStateHost is set,
-// which happens ONLY in charly-core's own init(), so a plugin calling it directly would silently
-// see no sidecars to clean up whenever NOT compiled into the charly-core process. R3 hoist
-// (charly#176 round 1): this function used to carry its own local marshal/HostBuild/unmarshal
-// copy of the "pod-config-load-bundle" seam call — the SAME pattern
-// candy/plugin-bundle/ephemeral.go, candy/plugin-status/nested_tree.go, and
-// candy/plugin-substrate/status_flat.go each independently re-derived; sdk/deploykit's
-// LoadBundleConfigViaSeam is now the ONE shared implementation all four call. Kept as a thin
-// seam-calling wrapper (untested at unit level, same as every other pod-config-* seam call —
-// proved live by the disposable bed) around sidecarNamesFromBundleConfig, the pure extraction
-// logic the ORIGINAL unit test actually exercised, kept independently testable without a reverse
-// channel.
+// charly.yml. Relocated from charly/commands.go — the per-host overlay read is now
+// loaderkit.LoadHostBundleConfigViaExecutor (#55 coneC Unit C2: the cycle-free plugin-side helper
+// that replaced the deleted deploykit.LoadBundleConfigViaSeam host-seam
+// round-trip). The bare deploykit.LoadBundleConfig silently no-ops unless
+// deploykit.DeployStateHost is set (charly-core's own init() only), so a plugin calling it
+// directly would silently see no sidecars to clean up whenever NOT compiled into the charly-core
+// process — the loaderkit helper drives LoadUnified over the reverse channel instead. R3 hoist
+// (charly#176 round 1): the former LoadBundleConfigViaSeam itself hoisted four near-identical
+// local copies (candy/plugin-bundle/ephemeral.go, candy/plugin-status/nested_tree.go,
+// candy/plugin-substrate/status_flat.go, this one); the C2 helper is now the ONE shared
+// implementation all four call. Kept as a thin wrapper (untested at unit level, same as every
+// other overlay read — proved live by the disposable bed) around sidecarNamesFromBundleConfig,
+// the pure extraction logic the ORIGINAL unit test actually exercised, kept independently
+// testable without a reverse channel.
 func resolveSidecarNames(boxName, instance string) []string {
-	dc, err := deploykit.LoadBundleConfigViaSeam(cmdCtx, cmdExec, "charly remove sidecar sweep")
+	dc, err := loaderkit.LoadHostBundleConfigViaExecutor(cmdCtx, cmdExec)
 	if err != nil || dc == nil {
 		return nil
 	}

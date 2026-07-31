@@ -8,7 +8,7 @@ package substratekind
 // Every dependency this needed turned out reachable without a new seam, mirroring the android
 // status collector's own precedent:
 //   - the per-host deploy overlay reads through loadBundleConfig (status_flat.go) — the
-//     "pod-config-load-bundle" HostBuild seam, NOT deploykit.LoadBundleConfig() directly (bed-
+//     cycle-free loaderkit.LoadHostBundleConfigViaExecutor read, NOT deploykit.LoadBundleConfig() directly (bed-
 //     robustness batch item 5: a direct call silently degrades to an empty config out-of-process,
 //     since deploykit.DeployStateHost is only ever registered by charly core's own init()).
 //   - the pod/k8s liveness probes are plain podman/kubectl exec calls — no core coupling at all.

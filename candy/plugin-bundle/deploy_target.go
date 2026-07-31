@@ -417,7 +417,7 @@ func handleDeployApply(ctx context.Context, exec *sdk.Executor, req spec.DeployT
 // persistDeployState writes a PrepareVenue reply's opaque State patch to the per-host deploy
 // overlay PLUGIN-SIDE via deploykit.SaveDeployState directly (#55 K4 config-write seam-collapse —
 // the "deploy-config-save-state" host leg is deleted). loadBundleConfig is the plugin's own
-// loader-backed reader (the "pod-config-load-bundle" seam), so SaveDeployState no longer depends on
+// loader-backed reader (loaderkit.LoadHostBundleConfigViaExecutor), so SaveDeployState no longer depends on
 // the charly-init DeployStateHost registration (the former reason this routed host-side); the
 // node-form marshal resugars via loader-threaded Primaries (deployMarshalNode). cmdCtx/cmdExec are
 // stashed at the top of runDeployDispatch, so the package-based helpers resolve here. SaveDeployState

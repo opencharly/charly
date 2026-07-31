@@ -8,7 +8,6 @@ const (
 	podConfigEnsureImageKind    = "pod-config-ensure-image"
 	podConfigLoadDeployKind     = "pod-config-load-deploy"
 	podConfigSaveBundleKind     = "pod-config-save-bundle"
-	podConfigLoadBundleKind     = "pod-config-load-bundle"
 	podConfigDetectDevicesKind  = "pod-config-detect-devices"
 	podConfigTunnelResolveKind  = "pod-config-tunnel-resolve"
 	podConfigSSHKeyKind         = "pod-config-ssh-key"
