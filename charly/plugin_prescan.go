@@ -33,7 +33,6 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/spec/spec"
 	"gopkg.in/yaml.v3"
 )
@@ -412,19 +411,19 @@ func prescanDeclaredPluginWords(rootData []byte, baseDir string) {
 	if err := yaml.Unmarshal(rootData, &doc); err != nil || len(doc.Discover) == 0 {
 		return
 	}
-	for _, spec := range doc.Discover {
-		if spec.Path == "" {
+	for _, disc := range doc.Discover {
+		if disc.Path == "" {
 			continue
 		}
-		manifest := spec.Manifest
+		manifest := disc.Manifest
 		if manifest == "" {
 			manifest = UnifiedFileName
 		}
-		root := spec.Path
+		root := disc.Path
 		if !filepath.IsAbs(root) {
 			root = filepath.Join(baseDir, root)
 		}
-		dirs, err := kit.FindEntityDirs(root, manifest, spec.Recursive)
+		dirs, err := spec.FindEntityDirs(root, manifest, disc.Recursive)
 		if err != nil {
 			continue
 		}

@@ -10,7 +10,6 @@ import (
 	"github.com/opencharly/spec/spec"
 
 	"cuelang.org/go/cue"
-	"github.com/opencharly/sdk/kit"
 	"gopkg.in/yaml.v3"
 )
 
@@ -127,7 +126,7 @@ func validateBoxBaseFrom(cfg *Config, opts spec.ResolveOpts, errs *spec.Validati
 }
 
 // isNodeFormFile reports whether any document in a YAML file is unified
-// node-form (kit.ClassifyDoc → kit.DocShapeNode). Used to skip the legacy
+// node-form (spec.ClassifyDoc → spec.DocShapeNode). Used to skip the legacy
 // root-shape collection validator on node-form manifests (whose entities are
 // validated at load + via the resolved cfg.Box path).
 func isNodeFormFile(data []byte) bool {
@@ -137,7 +136,7 @@ func isNodeFormFile(data []byte) bool {
 		if err := dec.Decode(&node); err != nil {
 			break
 		}
-		if shape, err := kit.ClassifyDoc(&node); err == nil && shape == kit.DocShapeNode {
+		if shape, err := spec.ClassifyDoc(&node); err == nil && shape == spec.DocShapeNode {
 			return true
 		}
 	}
