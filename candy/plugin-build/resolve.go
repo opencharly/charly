@@ -141,7 +141,12 @@ func resolveBuildEngine(ctx context.Context, ex *sdk.Executor, req spec.BuildReq
 	if err := runHostFSPrep(ctx, ex, dir, filepath.Join(dir, ".build"), cfg, layers, resolved, boxes, generateOnly); err != nil {
 		return spec.BuildResolveReply{Error: errString(err)}, nil
 	}
-	if err := renderSeamPrepLeg(ctx, ex, spec.ResolvedProjectRequest{Dir: dir, IncludeDisabled: req.IncludeDisabled}); err != nil {
+	// Push the already-resolved boxes (buildkit.ResolveAllBox above + ComputeIntermediates) to the
+	// host's buildengine-prep leg so the render-seam-floor Generator cache stores wire-clean
+	// *spec.ResolvedBox WITHOUT the host re-resolving via deploykit.ResolveAllSpecBoxes — the
+	// plugin already resolved them (the SAME primitive). #55 coneB2 Class B. Superset of the old
+	// host ResolveAllBox-only set (intermediates included); Name/Tags identical, calver-independent.
+	if err := renderSeamPrepLeg(ctx, ex, spec.ResolvedProjectRequest{Dir: dir, IncludeDisabled: req.IncludeDisabled, Boxes: deploykit.SpecBoxes(resolved)}); err != nil {
 		return spec.BuildResolveReply{Error: errString(err)}, nil
 	}
 

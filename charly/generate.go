@@ -8,7 +8,6 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/lock"
 	"github.com/opencharly/spec/spec"
 )
@@ -64,26 +63,29 @@ type Generator struct {
 }
 
 // newCandyScanGenerator builds a Generator populated with Config+Candies+Boxes+Dir+BuildDir — a
-// candy scan + a PLAIN per-box buildkit.ResolveBox pass (NO ComputeIntermediates / GlobalCandyOrder
-// / ComputeEffectiveVersions / RenderPrepAll) — the minimal state the render-seam floor's 2
-// remaining reverse-channel consumers need: ensureBuildersConnected touches only Config/Dir;
-// resolveInlineBuilderSeam's resolveBuilderStage reads img.Tags/img.Name off gen.Boxes[boxName]
-// (verified by reading resolveBuilderStage's own body — NOT img.Base/BootstrapBuilderImage, so
-// skipping ComputeIntermediates' auto-intermediate Base-rewrite is safe here). MUCH cheaper than
-// the deleted NewGenerator (#55 step3 3-II): the build-engine RESOLVE's expensive parts (the candy
-// SCAN's network-bound remote fetches, ComputeIntermediates, GlobalCandyOrder,
-// ComputeEffectiveVersions, RenderPrepAll) now run entirely plugin-side (candy/plugin-build's
-// resolveBuildEngine, K3) — recomputing THOSE again host-side for the render-seam cache was 100%
-// wasted work (proven dead by call-graph: nothing downstream ever read the second Generator's
-// render-prep output); ResolveBox itself is pure, in-memory, and genuinely still needed (RCA'd: a
-// first cut that dropped it entirely broke resolveInlineBuilderSeam's img.Tags/img.Name — caught
-// before merge by re-tracing every reader of gen.Boxes[boxName], not by the box-generate smoke
-// test, which never exercises the inline-builder path). Skips the build-time plugin connect +
-// pre-build validate the deleted NewGenerator also used to run: both already ran plugin-side
-// (resolveBuildEngine steps 4-5) by the time this is reached through the normal build/generate
-// path, and ensureBuildersConnected connects on demand itself when reached any other way (e.g. the
-// loadRenderGen defensive fallback).
-func newCandyScanGenerator(dir string, includeDisabled bool, extraCandyRefs []string) (*Generator, error) {
+// candy scan + the caller-supplied resolved-box set (NO ComputeIntermediates / GlobalCandyOrder
+// / ComputeEffectiveVersions / RenderPrepAll, and NO host-side box resolve) — the minimal state
+// the render-seam floor's 2 remaining reverse-channel consumers need: ensureBuildersConnected
+// touches only Config/Dir; resolveInlineBuilderSeam's resolveBuilderStage reads img.Tags/img.Name
+// off gen.Boxes[boxName] (verified by reading resolveBuilderStage's own body — NOT
+// img.Base/BootstrapBuilderImage, so skipping ComputeIntermediates' auto-intermediate Base-rewrite
+// is safe here). MUCH cheaper than the deleted NewGenerator (#55 step3 3-II): the build-engine
+// RESOLVE's expensive parts (the candy SCAN's network-bound remote fetches, the box RESOLVE,
+// ComputeIntermediates, GlobalCandyOrder, ComputeEffectiveVersions, RenderPrepAll) now run
+// entirely plugin-side (candy/plugin-build's resolveBuildEngine, K3) — recomputing THOSE again
+// host-side for the render-seam cache was 100% wasted work (proven dead by call-graph: nothing
+// downstream ever read the second Generator's render-prep output). The boxes themselves are now
+// PUSHED by the plugin (#55 coneB2 Class B): candy/plugin-build's resolveBuildEngine resolves them
+// via buildkit.ResolveAllBox + deploykit.SpecBoxes and ships them on #ResolvedProjectRequest.boxes;
+// hostBuildPrep passes them through here. RCA'd: a first cut that dropped the boxes entirely broke
+// resolveInlineBuilderSeam's img.Tags/img.Name — caught before merge by re-tracing every reader of
+// gen.Boxes[boxName], not by the box-generate smoke test, which never exercises the inline-builder
+// path. Skips the build-time plugin connect + pre-build validate the deleted NewGenerator also used
+// to run: both already ran plugin-side (resolveBuildEngine steps 4-5) by the time this is reached
+// through the normal build/generate path, and ensureBuildersConnected connects on demand itself when
+// reached any other way (e.g. the loadRenderGen defensive fallback, which passes a nil boxes map —
+// provably unreachable in production).
+func newCandyScanGenerator(dir string, includeDisabled bool, extraCandyRefs []string, boxes map[string]*spec.ResolvedBox) (*Generator, error) {
 	cfg, err := LoadConfig(dir)
 	if err != nil {
 		return nil, err
@@ -98,24 +100,17 @@ func newCandyScanGenerator(dir string, includeDisabled bool, extraCandyRefs []st
 	if err != nil {
 		return nil, err
 	}
-	vopts, err := resolveVocabOpts(dir, opts)
-	if err != nil {
-		return nil, err
-	}
-	// #55 Cluster-B: the PURE per-box resolve runs inside the deploykit box-resolve bridge
-	// (kit→kit), returning wire-clean *spec.ResolvedBox — the render-seam floor's 2 consumers
-	// (resolveInlineBuilderSeam/ensureBuildersConnected) read only Name/Tags off these. NOT the
+	// #55 coneB2 Class B: the box RESOLVE no longer runs host-side (no deploykit import). The
+	// render-seam floor's 2 consumers (resolveInlineBuilderSeam/ensureBuildersConnected) read only
+	// Name/Tags off the PUSHED boxes — supplied by the plugin (buildkit.ResolveAllBox +
+	// deploykit.SpecBoxes over #ResolvedProjectRequest.boxes), NOT recomputed here. NOT the
 	// resolved-project envelope InvokeProvider path (would recurse an in-flight build:generate).
-	images, err := deploykit.ResolveAllSpecBoxes(cfg, ComputeCalVer(), dir, vopts)
-	if err != nil {
-		return nil, err
-	}
 	return &Generator{
 		Dir:            dir,
 		Config:         cfg,
 		Candies:        layers,
 		InitConfig:     defaultInitCfg,
-		Boxes:          images,
+		Boxes:          boxes,
 		BuildDir:       filepath.Join(dir, ".build"),
 		Containerfiles: make(map[string]string),
 		ExtraCandyRefs: extraCandyRefs,

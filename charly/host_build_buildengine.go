@@ -128,7 +128,7 @@ func hostBuildNamespaced(_ context.Context, req spec.BuildResolveRequest, _ buil
 // newCandyScanGenerator doc.
 func hostBuildPrep(_ context.Context, req spec.ResolvedProjectRequest, _ buildEngineContext) (map[string]string, error) {
 	dir := reqDirOrCwd(req.Dir)
-	gen, err := newCandyScanGenerator(dir, req.IncludeDisabled, req.ExtraCandyRefs)
+	gen, err := newCandyScanGenerator(dir, req.IncludeDisabled, req.ExtraCandyRefs, req.Boxes)
 	if err != nil {
 		return nil, err
 	}
