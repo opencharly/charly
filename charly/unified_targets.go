@@ -33,10 +33,8 @@ import (
 	"os"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/spec/spec"
-
-	"github.com/opencharly/sdk/kit"
 	specexec "github.com/opencharly/spec/exec"
+	"github.com/opencharly/spec/spec"
 )
 
 // runUnifiedTargetChecks runs a deploy-scope check list via a live-mode Runner
@@ -138,12 +136,13 @@ type pluginDeployTarget struct {
 	// by Add from the DeployContext.
 	build buildEngineContext
 
-	// paths OPTIONALLY overrides the ledger root — a TEST redirecting to a temp dir instead of the
-	// operator's real ~/.config/opencharly/installed/, mirroring the pre-S3b former core-resident
-	// deploy target's settable `paths *kit.LedgerPaths` field exactly (same injection pattern, threaded to the
-	// plugin as req.LedgerRoot since a live *kit.LedgerPaths cannot cross the wire). nil (the
-	// default) — the plugin uses kit.DefaultLedgerPaths().
-	paths *kit.LedgerPaths
+	// ledgerRoot OPTIONALLY overrides the ledger root — a TEST redirecting to a temp dir instead of the
+	// operator's real ~/.config/opencharly/installed/, threaded to the plugin as req.LedgerRoot (a live
+	// *kit.LedgerPaths cannot cross the wire, so only the Root string is injected — #55 coneD
+	// import-purity: the field dropped its *kit.LedgerPaths type, so this file no longer imports
+	// sdk/kit; tests keep kit.LedgerPaths for their OWN ledger I/O and inject only .Root here). ""
+	// (the default) — the plugin uses kit.DefaultLedgerPaths().
+	ledgerRoot string
 }
 
 func (t *pluginDeployTarget) Name() string                  { return t.name }
@@ -197,8 +196,8 @@ func (t *pluginDeployTarget) dispatch(ctx context.Context, req spec.DeployTarget
 	if len(t.venueJSON) > 0 && len(req.VenueJSON) == 0 {
 		req.VenueJSON = t.venueJSON
 	}
-	if t.paths != nil && req.LedgerRoot == "" {
-		req.LedgerRoot = t.paths.Root
+	if t.ledgerRoot != "" && req.LedgerRoot == "" {
+		req.LedgerRoot = t.ledgerRoot
 	}
 	reply, err := dispatchDeployTarget(ctx, req, t.exec, t.build, t.hasLifecycle)
 	if err != nil {
