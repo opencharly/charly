@@ -4,7 +4,9 @@ import (
 	"context"
 
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/checkhost"
+	"github.com/opencharly/spec/container"
+	"github.com/opencharly/spec/spec"
 )
 
 // check_endpoint_resolve.go — the generic host-endpoint reverse-legs (H part 2). Class-generic
@@ -42,7 +44,7 @@ func resolveVerbEndpointFor(box, instance string, mode RunMode, port int) (addr 
 	if err != nil {
 		return "", nil, err
 	}
-	ep, err := kit.EndpointForVenue(reply.Descriptor, port)
+	ep, err := checkhost.EndpointForVenue(reply.Descriptor, port)
 	if err != nil {
 		return "", nil, err
 	}
@@ -50,7 +52,7 @@ func resolveVerbEndpointFor(box, instance string, mode RunMode, port int) (addr 
 }
 
 // graphicsEndpoint is the host-resolved dialable VM graphics endpoint (the in-proc twin of
-// kit.GraphicsEndpoint). Exactly one of Addr / Socket is set; Skip=true means no such device.
+// spec.CheckGraphicsEndpoint). Exactly one of Addr / Socket is set; Skip=true means no such device.
 type graphicsEndpoint struct {
 	Addr, Socket, Password string
 	Skip                   bool
@@ -76,12 +78,12 @@ func (c hostCheckContext) ResolveEndpoint(_ context.Context, port int) (string, 
 }
 
 // ResolveGraphicsEndpoint is the in-process CheckContext leg for VM graphics endpoints.
-func (c hostCheckContext) ResolveGraphicsEndpoint(_ context.Context, kind string) (kit.GraphicsEndpoint, error) {
+func (c hostCheckContext) ResolveGraphicsEndpoint(_ context.Context, kind string) (spec.CheckGraphicsEndpoint, error) {
 	ge, err := c.h.resolveVerbGraphics(kind)
 	if err != nil {
-		return kit.GraphicsEndpoint{}, err
+		return spec.CheckGraphicsEndpoint{}, err
 	}
-	return kit.GraphicsEndpoint{Addr: ge.Addr, Socket: ge.Socket, Password: ge.Password, Skip: ge.Skip, SkipMessage: ge.SkipMessage}, nil
+	return spec.CheckGraphicsEndpoint{Addr: ge.Addr, Socket: ge.Socket, Password: ge.Password, Skip: ge.Skip, SkipMessage: ge.SkipMessage}, nil
 }
 
 // resolveImageLabel reads one raw OCI label off the deployment-under-test's image. It is the
@@ -94,6 +96,13 @@ func (h *hostVerbResolver) resolveImageLabel(label string) (string, error) {
 
 // resolveImageLabelFor is resolveImageLabel's box/instance/mode-parameterized core (K1-unblock W3
 // Unit B, R3 extraction) — see resolveVerbEndpointFor's doc comment for the shared rationale.
+//
+// TRACKED-GATED deploykit import (#55 coneA): deploykit.ResolveContainer depends on the
+// deploykit-only ResolveBoxEngineForDeploy (kit cannot import deploykit), so it cannot move to a
+// spec fabric slice alongside ContainerImageRef/InspectImageLabels (which DID move to
+// spec/container). Named exit: coneB-box-resolve (the box-resolve keystone) — when the
+// box-resolve family envelopes out, ResolveContainer reaches a spec slice or a seam and
+// check_endpoint_resolve sheds deploykit. In-flight (coneB2), NOT permanent floor.
 func resolveImageLabelFor(box, instance string, mode RunMode, label string) (string, error) {
 	if box == "" || mode == RunModeBox {
 		return "", nil
@@ -102,11 +111,11 @@ func resolveImageLabelFor(box, instance string, mode RunMode, label string) (str
 	if err != nil {
 		return "", err
 	}
-	imageRef, err := kit.ContainerImageRef(engine, containerName)
+	imageRef, err := container.ContainerImageRef(engine, containerName)
 	if err != nil {
 		return "", err
 	}
-	labels, err := kit.InspectImageLabels(engine, imageRef)
+	labels, err := container.InspectImageLabels(engine, imageRef)
 	if err != nil {
 		return "", err
 	}

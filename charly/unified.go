@@ -216,8 +216,9 @@ func ApplyDiscover(uf *spec.UnifiedFile, rootDir string) error {
 }
 
 // findEntityDirs (kit.FindEntityDirs) + discoverSkipDir (kit.DiscoverSkipDir)
-// are the discover-walk PRIMITIVES — relocated to sdk/kit
-// (loader_discover.go) so charly core AND sdk/loaderkit share ONE copy (R3).
+// are the discover-walk PRIMITIVES — relocated to spec/spec
+// (loader_discover.go), re-exported by sdk/kit, so charly core AND
+// sdk/loaderkit share ONE copy (R3).
 
 // -----------------------------------------------------------------------------
 // Projections — extract the existing concrete types from spec.UnifiedFile so the

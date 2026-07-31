@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/lock"
 	specexec "github.com/opencharly/spec/exec"
 	"github.com/opencharly/spec/hostenv"
 	"github.com/opencharly/spec/spec"
@@ -240,9 +240,9 @@ func bedSessionSetup(req spec.CheckBedRequest) (spec.CheckBedReply, error) {
 	}()
 
 	// Per-bed exclusive lock — fail-fast on a duplicate concurrent run of the SAME bed.
-	bedUnlock, lockErr := kit.AcquireFileLock(filepath.Join(".check", req.Bed, ".lock"), false)
+	bedUnlock, lockErr := lock.AcquireFileLock(filepath.Join(".check", req.Bed, ".lock"), false)
 	if lockErr != nil {
-		if errors.Is(lockErr, kit.ErrLockBusy) {
+		if errors.Is(lockErr, lock.ErrLockBusy) {
 			return spec.CheckBedReply{}, fmt.Errorf("check bed %q is already running in this project — refusing a concurrent run (lock: .check/%s/.lock)", req.Bed, req.Bed)
 		}
 		return spec.CheckBedReply{}, fmt.Errorf("locking check bed %q: %w", req.Bed, lockErr)
@@ -255,9 +255,9 @@ func bedSessionSetup(req spec.CheckBedRequest) (spec.CheckBedReply, error) {
 	// Per-DOMAIN serialization for VM beds (sorted → no deadlock across a multi-domain bed).
 	// Keyed by the DEPLOY (req.Bed) post-P33, so distinct beds sharing one kind:vm entity get
 	// distinct, collision-free domains + run fully parallel.
-	domains := kit.BedVmDomains(req.Bed, node)
+	domains := lock.BedVmDomains(req.Bed, node)
 	for _, domain := range domains {
-		du, derr := kit.AcquireVmDomainLock(domain)
+		du, derr := lock.AcquireVmDomainLock(domain)
 		if derr != nil {
 			return spec.CheckBedReply{}, fmt.Errorf("locking vm domain %s for bed %q: %w", domain, req.Bed, derr)
 		}
@@ -325,9 +325,9 @@ func bedSessionSetup(req spec.CheckBedRequest) (spec.CheckBedReply, error) {
 		ChildKeys:      spec.SortedNestedKeys(node.Children),
 		LocalChildKeys: bedLocalChildKeys(node.Children),
 		Members:        bedMemberDescriptors(node.Members),
-		RunBuild:       kit.CheckLevelReaches(level, kit.CheckLevelBuild),
-		RunRuntime:     kit.CheckLevelReaches(level, kit.CheckLevelNoAgent),
-		RunAgent:       kit.CheckLevelReaches(level, kit.CheckLevelAgent),
+		RunBuild:       spec.CheckLevelReaches(level, spec.CheckLevelBuild),
+		RunRuntime:     spec.CheckLevelReaches(level, spec.CheckLevelNoAgent),
+		RunAgent:       spec.CheckLevelReaches(level, spec.CheckLevelAgent),
 	}, nil
 }
 
