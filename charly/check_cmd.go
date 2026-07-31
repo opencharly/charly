@@ -114,12 +114,12 @@ func resolveCheckRunnerContext(box, dir string, cfg *Config) checkRunnerContext 
 // executorReverseServer path command:validate / command:bundle drive) — so the deploykit
 // projection/overlay/merge lives INSIDE loaderkit, off charly core, and this read routes through
 // the loader broker exactly like every Cone A Unit 3 dispatch reader. The in-proc executor reaches
-// only the compiled-in loader-* + pod-config-load-bundle host legs (it never runs the
+// only the compiled-in loader-* host legs (it never runs the
 // deploy-plugins-connect seam), so a PRE-CONNECT caller (deployNodePluginContext feeding
 // loadDeployPlugins BEFORE any out-of-process plugin connects) never recurses.
 //
 // TRACKED-GATED loaderkit import (#55 coneA): ResolveMergedTreeViaExecutor does the per-host
-// operator-overlay merge (LoadBundleConfigViaSeam + MergeDeployConfigs) that the
+// operator-overlay merge (loaderkit.LoadHostBundleConfigViaExecutor + MergeDeployConfigs) that the
 // spec.ProjectLoader.LoadUnified seam does NOT expose (LoadUnified returns the PROJECT-only tree,
 // loadmodel.go Bundle has no overlay field), so repointing to LoadUnified would DROP operator
 // overrides (verified — not byte-equivalent). Named exit: the resolveMergedDeployTree envelope

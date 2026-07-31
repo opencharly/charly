@@ -40,8 +40,8 @@ import (
 // deploykit calls that "looked" portable (resolveSidecarNames' LoadBundleConfig,
 // runPodRemove's ResolveBoxEngineForDeploy) transitively depend on deploykit.DeployStateHost,
 // which only charly-core's own init() populates — so both were rerouted through their own
-// EXISTING seams (pod-config-load-bundle, pod-config-box-engine) instead of calling deploykit
-// directly.
+// EXISTING seams (the host bundle-config loader, now retired by the loaderkit helper, and
+// pod-config-box-engine) instead of calling deploykit directly.
 
 // StartCmd launches a container with supervisord in the background — the `charly start` grammar.
 type StartCmd struct {
@@ -84,12 +84,14 @@ func (c *StartCmd) Run() error {
 // lifecycleNode resolves the per-host deploy overlay entry to thread as DATA into the pod-lifecycle
 // HostBuild requests (spec.PodStartRequest.Node et al.) — #55 K4 seam-completion: the host's
 // dispatchLifecycleTarget operates on this *spec.Deploy instead of re-reading the per-host config
-// itself (the config READ is a plugin loading capability, not a host M; see the shared
-// deploykit.ResolveLifecycleDeployNodeViaSeam, byte-identical to the retired core
+// itself (the config READ is a plugin loading capability, not a host M; #55 coneC Unit C2 moved
+// the resolver from deploykit.ResolveLifecycleDeployNodeViaSeam — the deleted
+// host bundle-config loader-seam round-trip — to the cycle-free plugin-side
+// loaderkit.ResolveLifecycleDeployNodeViaExecutor, byte-identical to the retired core
 // resolveLifecycleDeployNode). The box/instance MUST match the request's Box/Instance — the host
 // derives deployName = DeployKey(req.Box, req.Instance), which must key the SAME node.
 func lifecycleNode(box, instance string) *spec.Deploy {
-	n, _ := deploykit.ResolveLifecycleDeployNodeViaSeam(cmdCtx, cmdExec, box, instance)
+	n, _ := loaderkit.ResolveLifecycleDeployNodeViaExecutor(cmdCtx, cmdExec, box, instance)
 	return n
 }
 

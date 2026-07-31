@@ -27,7 +27,6 @@ const (
 	podConfigEnsureImageKind      = "pod-config-ensure-image"
 	podConfigLoadDeployKind       = "pod-config-load-deploy"
 	podConfigSaveBundleKind       = "pod-config-save-bundle"
-	podConfigLoadBundleKind       = "pod-config-load-bundle"
 	podConfigDetectDevicesKind    = "pod-config-detect-devices"
 	podConfigTunnelResolveKind    = "pod-config-tunnel-resolve"
 	podConfigSSHKeyKind           = "pod-config-ssh-key"
@@ -145,18 +144,6 @@ func hostBuildPodConfigSaveBundle(_ context.Context, req spec.PodConfigSaveBundl
 	return spec.PodConfigSaveBundleReply{}, saveBundleConfigNodeForm(&dc)
 }
 
-func hostBuildPodConfigLoadBundle(_ context.Context, _ spec.PodConfigLoadDeployRequest, _ buildEngineContext) (spec.PodConfigLoadBundleReply, error) {
-	dc, err := deploykit.LoadBundleConfig()
-	if err != nil || dc == nil {
-		return spec.PodConfigLoadBundleReply{}, err
-	}
-	b, err := json.Marshal(dc)
-	if err != nil {
-		return spec.PodConfigLoadBundleReply{}, err
-	}
-	return spec.PodConfigLoadBundleReply{ConfigJSON: b}, nil
-}
-
 func hostBuildPodConfigDetectDevices(_ context.Context, req spec.PodConfigDetectDevicesRequest, _ buildEngineContext) (spec.PodConfigDetectDevicesReply, error) {
 	var detected DetectedDevices
 	if !req.NoAutoDetect {
@@ -238,7 +225,6 @@ var _ = func() bool {
 	registerHostBuilder(podConfigEnsureImageKind, typedHostBuilder(podConfigEnsureImageKind, hostBuildPodConfigEnsureImage))
 	registerHostBuilder(podConfigLoadDeployKind, typedHostBuilder(podConfigLoadDeployKind, hostBuildPodConfigLoadDeploy))
 	registerHostBuilder(podConfigSaveBundleKind, typedHostBuilder(podConfigSaveBundleKind, hostBuildPodConfigSaveBundle))
-	registerHostBuilder(podConfigLoadBundleKind, typedHostBuilder(podConfigLoadBundleKind, hostBuildPodConfigLoadBundle))
 	registerHostBuilder(podConfigDetectDevicesKind, typedHostBuilder(podConfigDetectDevicesKind, hostBuildPodConfigDetectDevices))
 	registerHostBuilder(podConfigTunnelResolveKind, typedHostBuilder(podConfigTunnelResolveKind, hostBuildPodConfigTunnelResolve))
 	registerHostBuilder(podConfigSSHKeyKind, typedHostBuilder(podConfigSSHKeyKind, hostBuildPodConfigSSHKey))

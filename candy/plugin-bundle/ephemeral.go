@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/vmshared"
 	"github.com/opencharly/spec/spec"
 )
@@ -24,8 +25,8 @@ import (
 // as its own bed-robustness-batch item (their dispatch lives in candy/plugin-deploy-pod /
 // candy/plugin-pod, outside this unit's scope); `ephemeral: true` on a pod/k8s deploy is
 // rejected at load time in the meantime (charly/validate_ephemeral.go) rather than silently
-// no-op'd. Config persistence: reads route through the "pod-config-load-bundle" seam
-// (loadBundleConfig below); writes run PLUGIN-SIDE via deploykit.SaveBundleConfig
+// no-op'd. Config persistence: reads route through the cycle-free loaderkit.LoadHostBundleConfigViaExecutor
+// read (loadBundleConfig below); writes run PLUGIN-SIDE via deploykit.SaveBundleConfig
 // (saveDeployConfig, config_cmd.go — #55 K4 config-write seam-collapse, no host deploy-config-save
 // seam). Calling deploykit.LoadBundleConfig() directly — relying on the
 // compiled-in placement's shared process-wide deploykit.DeployStateHost var — is the
@@ -42,18 +43,18 @@ import (
 // core dependencies (os/exec + os.Executable + a self-invoked `charly bundle del`) and needed no
 // seam even before this move — confirmed by the unit-1 design note this cutover executes.
 
-// loadBundleConfig reads the per-host deploy overlay via the shared
-// deploykit.LoadBundleConfigViaSeam helper (the "pod-config-load-bundle" HostBuild seam,
-// placement-invariant — works identically compiled-in or out-of-process). R3 hoist (charly#176
-// round 1): this used to re-derive the marshal/HostBuild/unmarshal sequence locally, the SAME
-// pattern candy/plugin-pod/remove_orchestration.go's resolveSidecarNames,
-// candy/plugin-status/nested_tree.go, and candy/plugin-substrate/status_flat.go each carried as
-// their own near-identical copy — a fresh pr-validator review correctly rejected landing a 3rd
-// and 4th copy of one pattern in a single cutover; sdk/deploykit.LoadBundleConfigViaSeam is now
-// the ONE shared implementation all four call. Returns (nil, nil) on an absent/empty overlay,
-// matching deploykit.LoadBundleConfig's own contract.
+// loadBundleConfig reads the per-host deploy overlay via the cycle-free plugin-side helper
+// loaderkit.LoadHostBundleConfigViaExecutor (#55 coneC Unit C2 — this retired the former
+// deploykit.LoadBundleConfigViaSeam host-handler round-trip; loaderkit already imports deploykit,
+// so the helper lives there and a plugin calls it directly — placement-invariant, works identically
+// compiled-in or out-of-process). R3 hoist
+// (charly#176 round 1): the former LoadBundleConfigViaSeam itself hoisted four near-identical
+// local copies (candy/plugin-pod/remove_orchestration.go's resolveSidecarNames,
+// candy/plugin-status/nested_tree.go, candy/plugin-substrate/status_flat.go, this one); the C2
+// helper is now the ONE shared implementation all four call. Returns (nil, nil) on an
+// absent/empty overlay, matching deploykit.LoadBundleConfig's own contract.
 func loadBundleConfig() (*deploykit.BundleConfig, error) {
-	return deploykit.LoadBundleConfigViaSeam(cmdCtx, cmdExec, "command:bundle ephemeral lifecycle")
+	return loaderkit.LoadHostBundleConfigViaExecutor(cmdCtx, cmdExec)
 }
 
 // ephemeralHandle captures the runtime state returned by registerEphemeral and consumed by
@@ -189,8 +190,8 @@ func descentVenue(node *spec.Deploy) string {
 }
 
 // effectiveEphemeralTTL computes the TTL for a deploy, clipping to the parent ephemeral's
-// remaining TTL when nested. parentID may be empty. The seam-coupled parent LOOKUP
-// (lookupEphemeralByID → loadBundleConfig, "pod-config-load-bundle") is not unit-testable
+// remaining TTL when nested. parentID may be empty. The reverse-channel-coupled parent LOOKUP
+// (lookupEphemeralByID → loadBundleConfig, the loaderkit overlay read) is not unit-testable
 // standalone (needs a live reverse channel — covered by the bed instead); the CLIPPING MATH
 // itself is pulled into clipTTLToParent, which IS unit-tested (ephemeral_test.go), mirroring
 // candy/plugin-pod/remove_orchestration.go's sidecarNamesFromBundleConfig split.

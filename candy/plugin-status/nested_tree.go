@@ -9,6 +9,7 @@ import (
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -160,24 +161,20 @@ func nestedChildKind(child *deploykit.BundleNode) spec.SubstrateKind {
 	}
 }
 
-// loadBundleConfig reads the per-host deploy overlay (~/.config/charly/charly.yml) via the shared
-// deploykit.LoadBundleConfigViaSeam helper (the "pod-config-load-bundle" HostBuild seam —
-// bed-robustness batch item 5, the DeployStateHost out-of-process-read audit — the operator ruling
-// extending the fix beyond plugin-deploy-vm/plugin-bundle to every unvetted grep hit in this
-// class, including this file, which this function's own header comment used to claim was fine to
-// call "exactly like the host did" — that claim was stale: sdk-portable does NOT mean
-// placement-safe, since deploykit.DeployStateHost is only ever registered by charly core's own
-// init(), never by an out-of-process plugin process). R3 hoist (charly#176 round 1): this used to
-// carry its own local marshal/HostBuild/unmarshal copy of the seam call, the SAME pattern
-// candy/plugin-substrate's status_flat.go, candy/plugin-bundle/ephemeral.go, and
-// candy/plugin-pod/remove_orchestration.go each independently carried — a fresh pr-validator
-// review correctly rejected the "plugin modules can't cross-import each other" justification for
-// landing a 3rd/4th copy of one pattern in a single cutover (an sdk kit IS exactly the mechanism
-// this project uses to share code across plugin module boundaries); sdk/deploykit's
-// LoadBundleConfigViaSeam is now the ONE shared implementation all four call. Returns (nil, nil)
-// on an absent/empty overlay, matching deploykit.LoadBundleConfig's own contract.
+// loadBundleConfig reads the per-host deploy overlay (~/.config/charly/charly.yml) via the
+// cycle-free plugin-side helper loaderkit.LoadHostBundleConfigViaExecutor (#55 coneC Unit C2 —
+// this retired the former deploykit.LoadBundleConfigViaSeam host-handler round-trip;
+// loaderkit already imports deploykit so the
+// helper lives there and a plugin calls it directly, placement-invariant — the bare
+// deploykit.LoadBundleConfig silently no-ops outside charly-core's own init() since
+// deploykit.DeployStateHost is only ever registered there, never by an out-of-process plugin
+// process). R3 hoist (charly#176 round 1): the former LoadBundleConfigViaSeam itself hoisted four
+// near-identical local copies (candy/plugin-substrate's status_flat.go,
+// candy/plugin-bundle/ephemeral.go, candy/plugin-pod/remove_orchestration.go, this one); the C2
+// helper is now the ONE shared implementation all four call. Returns (nil, nil) on an
+// absent/empty overlay, matching deploykit.LoadBundleConfig's own contract.
 func loadBundleConfig(ex *sdk.Executor, ctx context.Context) (*deploykit.BundleConfig, error) {
-	return deploykit.LoadBundleConfigViaSeam(ctx, ex, "candy/plugin-status nested tree")
+	return loaderkit.LoadHostBundleConfigViaExecutor(ctx, ex)
 }
 
 // mergedNestedRoots returns the declared deployment tree (project + per-machine overlay) — the

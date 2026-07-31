@@ -14,8 +14,8 @@ import (
 // WRITE runs PLUGIN-SIDE via deploykit.SaveDeployState directly, instead of over the deleted
 // "deploy-config-save-state" host seam. Mirrors candy/plugin-bundle's plugin-side write: Primaries come
 // from the GENERIC "loader-threaded" HostBuild leg (the SAME leg plugin-build/-bundle/-vm already call —
-// no new seam), and the current-state re-read is the candy's own loadDeploy (the "pod-config-load-bundle"
-// seam), so SaveDeployState no longer needs charly's DeployStateHost registration.
+// no new seam), and the current-state re-read is the candy's own loadDeploy (the cycle-free
+// loaderkit.LoadHostBundleConfigViaExecutor read), so SaveDeployState no longer needs charly's DeployStateHost registration.
 
 // fetchLoaderPrimaries returns the loader-threaded Primaries DATA snapshot (plugin-verb WORD →
 // scalar-sugar primary field) via the generic "loader-threaded" host builder — the SAME map

@@ -19,7 +19,7 @@ import (
 // deploy-del-resolve, and deploy-node-del-dispatch (the per-node ResolveTarget+Del terminal step).
 // `from-box` still forwards its WHOLE command to
 // HostBuild("deploy-from-box"). The config-management ops (show/export/import/reset/status) run
-// plugin-side — reads via the "pod-config-load-bundle" seam, writes via deploykit.SaveBundleConfig
+// plugin-side — reads via loaderkit.LoadHostBundleConfigViaExecutor, writes via deploykit.SaveBundleConfig
 // directly (#55 K4 config-write seam-collapse; the host "deploy-config-save" leg is deleted).
 // command:bundle is COMPILED-IN and dispatches
 // exactly ONE `charly bundle …` invocation per process, so the reverse-channel executor is stashed

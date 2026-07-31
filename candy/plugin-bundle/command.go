@@ -49,7 +49,7 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 // #EphemeralRegisterRequest and register the ephemeral instance (FINAL/K5 unit 6a — the
 // ephemeral_lifecycle.go move). Stashes the reverse-channel executor via setCommandContext
 // (mirroring runBundleCompile) so persistEphemeralRuntime's saveDeployConfig call can reach the
-// reverse channel — the "pod-config-load-bundle" read + the "loader-threaded" Primaries snapshot
+// reverse channel — the loaderkit.LoadHostBundleConfigViaExecutor overlay read + the "loader-threaded" Primaries snapshot
 // its PLUGIN-SIDE deploykit.SaveBundleConfig write needs (#55 K4 — no host deploy-config-save seam).
 func runEphemeralRegister(ctx context.Context, req *pb.InvokeRequest) (reply *pb.InvokeReply, retErr error) {
 	defer recoverEphemeralOpPanic(&retErr)

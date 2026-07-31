@@ -29,35 +29,34 @@ import (
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
 
-// loadBundleConfig reads the per-host deploy overlay (~/.config/charly/charly.yml) via the shared
-// deploykit.LoadBundleConfigViaSeam helper (the "pod-config-load-bundle" HostBuild seam —
-// bed-robustness batch item 5, the DeployStateHost out-of-process-read audit — the operator ruling
-// extending the fix beyond plugin-deploy-vm/plugin-bundle to every unvetted grep hit in this
-// class). candy/plugin-substrate is compiled-in TODAY (in go.work's compiled_plugins list), so the
-// sibling `deploykit.LoadBundleConfig()` direct calls this replaces were CORRECT only by that
-// per-BUILD placement accident — dual-placement is a per-BUILD choice, never an authoring
-// guarantee (the same reasoning already applied to plugin-bundle's dormant twin, config_cmd.go).
-// R3 hoist (charly#176 round 1): this used to carry its own local marshal/HostBuild/unmarshal copy
-// of the seam call, the SAME pattern candy/plugin-status/nested_tree.go,
-// candy/plugin-bundle/ephemeral.go, and candy/plugin-pod/remove_orchestration.go each
-// independently carried — a fresh pr-validator review correctly rejected the "plugin modules can't
-// cross-import each other" justification for landing a 3rd/4th copy of one pattern in a single
-// cutover; sdk/deploykit's LoadBundleConfigViaSeam is now the ONE shared implementation all four
-// call. This package still resolves its OWN executor via ctx (sdk.ExecutorForInvoke) before
-// delegating — the multi-call-per-process pattern this VERB provider needs (unlike plugin-bundle's
-// COMMAND-plugin package-var, which assumes exactly one `charly bundle …` dispatch per process —
-// unsafe to reuse here); HOW a caller obtains its executor stays outside the shared seam's
-// concern. Returns (nil, nil) on an absent/empty overlay, matching deploykit.LoadBundleConfig's
-// own contract.
+// loadBundleConfig reads the per-host deploy overlay (~/.config/charly/charly.yml) via the
+// cycle-free plugin-side helper loaderkit.LoadHostBundleConfigViaExecutor (#55 coneC Unit C2 —
+// this retired the former deploykit.LoadBundleConfigViaSeam host-handler round-trip;
+// loaderkit already imports deploykit so the
+// helper lives there and a plugin calls it directly, placement-invariant — the bare
+// deploykit.LoadBundleConfig silently no-ops outside charly-core's own init() since
+// deploykit.DeployStateHost is only ever registered there; candy/plugin-substrate is compiled-in
+// TODAY, so the sibling `deploykit.LoadBundleConfig()` direct calls this replaces were CORRECT
+// only by that per-BUILD placement accident — dual-placement is a per-BUILD choice, never an
+// authoring guarantee). R3 hoist (charly#176 round 1): the former LoadBundleConfigViaSeam itself
+// hoisted four near-identical local copies (candy/plugin-status/nested_tree.go,
+// candy/plugin-bundle/ephemeral.go, candy/plugin-pod/remove_orchestration.go, this one); the C2
+// helper is now the ONE shared implementation all four call. This package still resolves its OWN
+// executor via ctx (sdk.ExecutorForInvoke) before delegating — the multi-call-per-process pattern
+// this VERB provider needs (unlike plugin-bundle's COMMAND-plugin package-var, which assumes
+// exactly one `charly bundle …` dispatch per process — unsafe to reuse here); HOW a caller
+// obtains its executor stays outside the shared helper's concern. Returns (nil, nil) on an
+// absent/empty overlay, matching deploykit.LoadBundleConfig's own contract.
 func loadBundleConfig(ctx context.Context) (*deploykit.BundleConfig, error) {
 	ex, err := sdk.ExecutorForInvoke(ctx, 0)
 	if err != nil {
 		return nil, fmt.Errorf("load bundle config: reach host reverse channel: %w", err)
 	}
-	return deploykit.LoadBundleConfigViaSeam(ctx, ex, "candy/plugin-substrate status")
+	return loaderkit.LoadHostBundleConfigViaExecutor(ctx, ex)
 }
 
 // runStatusFanout is the sdk.OpStatusCollectAll entry point (plugin.go): req.Single selects the

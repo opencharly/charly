@@ -661,12 +661,12 @@ func provisionData(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntim
 // c.HostEnvJSON) — never re-derived here via os.Executable(), which would resolve to the PLUGIN
 // binary for this out-of-process placement (the same bug class documented on resolveHostCharlyBin).
 func updateAllDeployedQuadlets(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, skipBox string, charlyBin string) error {
-	var loadRep spec.PodConfigLoadBundleReply
-	if err := hostBuild(ctx, ex, podConfigLoadBundleKind, spec.PodConfigLoadDeployRequest{}, &loadRep); err != nil || len(loadRep.ConfigJSON) == 0 {
-		return nil
-	}
-	var dc deploykit.BundleConfig
-	if err := json.Unmarshal(loadRep.ConfigJSON, &dc); err != nil {
+	// loaderkit.LoadHostBundleConfigViaExecutor (#55 coneC Unit C2 — this retired the former
+	// host bundle-config loader-seam round-trip): the cycle-free plugin-side overlay
+	// read, byte-identical to the 8 sibling rewires (plugin-bundle/ephemeral, plugin-pod/enc_cmd,
+	// plugin-pod/remove_orchestration, plugin-status/nested_tree, plugin-substrate/status_flat).
+	dc, err := loaderkit.LoadHostBundleConfigViaExecutor(ctx, ex)
+	if err != nil || dc == nil {
 		return nil
 	}
 
@@ -706,7 +706,7 @@ func updateAllDeployedQuadlets(ctx context.Context, ex *sdk.Executor, rt *kit.Re
 		if err := json.Unmarshal(ensureRep.MetaJSON, &meta); err != nil {
 			continue
 		}
-		deploykit.MergeDeployOntoMetadata(&meta, &dc, boxName, instance)
+		deploykit.MergeDeployOntoMetadata(&meta, dc, boxName, instance)
 
 		updateCtrName := kit.ContainerNameInstance(boxName, instance)
 		updateAccepted := deploykit.AcceptedEnvSet(meta.EnvAccept, meta.EnvRequire)
@@ -794,7 +794,7 @@ func updateAllDeployedQuadlets(ctx context.Context, ex *sdk.Executor, rt *kit.Re
 		var resolvedSidecars []deploykit.ResolvedSidecar
 		podName := ""
 		if len(deploySidecarsRaw) > 0 {
-			scRes, err := resolvePodSidecars(ctx, ex, deploySidecarsRaw, sidecarTemplatesOf(&dc), nil, boxName, instance, rt.RunEngine, true, nil)
+			scRes, err := resolvePodSidecars(ctx, ex, deploySidecarsRaw, sidecarTemplatesOf(dc), nil, boxName, instance, rt.RunEngine, true, nil)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: resolving sidecars for %s: %v\n", key, err)
 				continue

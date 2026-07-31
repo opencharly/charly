@@ -15,8 +15,8 @@ import (
 // (show/export/import/reset/status) out of charly core. Every handler below calls ONLY
 // already-sdk-portable deploykit/kit functions. The reads/writes reach the host ONLY for what a
 // separate module genuinely cannot hold: InvokeProvider("build","project") for export's
-// project-load (the SAME seam compile.go already uses), the "pod-config-load-bundle" read seam
-// (loadBundleConfig), and the "loader-threaded" Primaries snapshot. import/reset's deploy-state
+// project-load (the SAME seam compile.go already uses), the loaderkit.LoadHostBundleConfigViaExecutor
+// overlay read (loadBundleConfig), and the "loader-threaded" Primaries snapshot. import/reset's deploy-state
 // WRITE now runs PLUGIN-SIDE — deploykit.SaveBundleConfig with the plugin's OWN loader-backed
 // reader + a marshal callback that resugars each plan step from the loader-threaded Primaries
 // (deployMarshalNode), NOT the deleted host "deploy-config-save" seam (#55 K4 config-write
@@ -25,7 +25,7 @@ import (
 //
 // Bed-robustness batch item 5 (the placement-dependent silent-no-op class): every READ below
 // goes through the package-local loadBundleConfig() (ephemeral.go), which resolves the per-host
-// overlay via the "pod-config-load-bundle" HostBuild seam — NEVER the raw deploykit.LoadBundleConfig()
+// overlay via the cycle-free loaderkit.LoadHostBundleConfigViaExecutor read — NEVER the raw deploykit.LoadBundleConfig()
 // (which no-ops errorlessly unless the calling process happens to have registered
 // deploykit.DeployStateHost at init — true ONLY while command:bundle stays compiled-in, a
 // per-BUILD placement fact, never an authoring guarantee). This was DORMANT (not an active bug)
