@@ -10,7 +10,6 @@ import (
 	"sync"
 
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/spec/refs"
 	"github.com/opencharly/spec/spec"
 )
@@ -254,7 +253,7 @@ func cacheBehindHead(path string) bool {
 	if err != nil {
 		return true // no charly.yml → never-migrated → migrate
 	}
-	cv, ok := ParseCalVer(kit.FirstYAMLVersionLine(data))
+	cv, ok := ParseCalVer(spec.FirstYAMLVersionLine(data))
 	if !ok {
 		return true
 	}
