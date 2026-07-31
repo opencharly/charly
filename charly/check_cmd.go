@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/report"
 	specexec "github.com/opencharly/spec/exec"
 	"github.com/opencharly/spec/spec"
@@ -109,27 +108,27 @@ func resolveCheckRunnerContext(box, dir string, cfg *Config) checkRunnerContext 
 // merged-tree read the two remaining check host seams need (deployNodePluginContext below +
 // check_venue_resolve.go's checkVenueExecFromReply). It replaces the DELETED deploy_tree.go
 // host merged-tree read (#55 LOADER cone): instead of a host-resident sdk/deploykit projection+merge
-// (the incomplete seam a floor-M read must not carry), it drives the LOADER CAPABILITY —
-// loaderkit.ResolveMergedTreeViaExecutor over an in-proc host reverse channel (the SAME
-// executorReverseServer path command:validate / command:bundle drive) — so the deploykit
+// (the incomplete seam a floor-M read must not carry), it drives the LOADER CAPABILITY — the
+// spec.ProjectLoader.ResolveMergedDeployTree seam (#55 coneA Q2(1)), which runs the
+// loaderkit.ResolveMergedTreeViaExecutor project+overlay merge INSIDE the loader plugin over the
+// in-proc host reverse channel (the SAME executorReverseServer path command:validate /
+// command:bundle drive, threaded on ctx via sdk.ContextWithExecutor) — so the deploykit
 // projection/overlay/merge lives INSIDE loaderkit, off charly core, and this read routes through
 // the loader broker exactly like every Cone A Unit 3 dispatch reader. The in-proc executor reaches
 // only the compiled-in loader-* host legs (it never runs the
 // deploy-plugins-connect seam), so a PRE-CONNECT caller (deployNodePluginContext feeding
 // loadDeployPlugins BEFORE any out-of-process plugin connects) never recurses.
 //
-// TRACKED-GATED loaderkit import (#55 coneA): ResolveMergedTreeViaExecutor does the per-host
-// operator-overlay merge (loaderkit.LoadHostBundleConfigViaExecutor + MergeDeployConfigs) that the
-// spec.ProjectLoader.LoadUnified seam does NOT expose (LoadUnified returns the PROJECT-only tree,
-// loadmodel.go Bundle has no overlay field), so repointing to LoadUnified would DROP operator
-// overrides (verified — not byte-equivalent). Named exit: the resolveMergedDeployTree envelope
-// (a new ProjectLoader seam method returning the merged tree, OR the K1 loader-floor envelope) —
-// in-flight, NOT permanent floor; when it lands, check_cmd sheds loaderkit (call the seam, not
-// loaderkit). NOT the boundary-law "host-boundary-object" trap: the merge IS a loader mechanism
-// the plugin can drive; the shed is blocked only until the seam exposes it.
+// check_cmd.go imports NO loaderkit (#55 coneA Q2(1) shed): the per-host operator-overlay merge
+// (loaderkit.LoadHostBundleConfigViaExecutor + MergeDeployConfigs) that spec.ProjectLoader.LoadUnified
+// does NOT expose (LoadUnified returns the PROJECT-only tree, loadmodel.go Bundle has no overlay
+// field, so repointing to LoadUnified would DROP operator overrides — verified not byte-equivalent)
+// is now reached through the ResolveMergedDeployTree seam method, not a direct loaderkit call.
+// NOT the boundary-law "host-boundary-object" trap: the merge IS a loader mechanism the plugin
+// drives; the shed landed once the seam exposed it.
 func resolveMergedDeployTree(dir string) (map[string]spec.BundleNode, error) {
-	ex := sdk.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}})
-	return loaderkit.ResolveMergedTreeViaExecutor(context.Background(), ex, dir)
+	ctx := sdk.ContextWithExecutor(context.Background(), sdk.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}}))
+	return requireProjectLoader().ResolveMergedDeployTree(ctx, dir)
 }
 
 // deployNodePluginContext resolves the deploy/bed node named `name` in the project at

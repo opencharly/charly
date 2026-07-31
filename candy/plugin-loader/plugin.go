@@ -123,6 +123,21 @@ func (*provider) LoadUnified(dir string, exec spec.LoaderExecutor) (*spec.Unifie
 	return loaderkit.LoadUnified(dir, loaderkit.LoadSeamsFromExecutor(exec))
 }
 
+// ResolveMergedDeployTree implements spec.ProjectLoader — the merged project+overlay deploy-node
+// tree read the host's check seams need (compiled-in, no wire envelope): it drives the ONE copy
+// of the loaderkit project+per-host-overlay projection+merge (loaderkit.ResolveMergedTreeViaExecutor)
+// over the in-proc executor the host threaded on ctx (sdk.ContextWithExecutor →
+// sdk.ExecutorFromContext — the SAME in-proc reverse-channel path ExecutorForInvoke uses for
+// Invoke). So charly core reaches the merged-tree read ONLY through this spec-typed seam — it
+// never imports loaderkit for it (#55 coneA Q2(1), check_cmd.go sheds its loaderkit import).
+func (*provider) ResolveMergedDeployTree(ctx context.Context, dir string) (map[string]spec.BundleNode, error) {
+	ex, ok := sdk.ExecutorFromContext(ctx)
+	if !ok {
+		return nil, fmt.Errorf("resolve merged deploy tree: no host reverse channel on context (command not compiled-in?)")
+	}
+	return loaderkit.ResolveMergedTreeViaExecutor(ctx, ex, dir)
+}
+
 // MaterializeLoadedProject / MarshalMaterialized / ValidateAndroidDevices / ValidatePreemptible
 // implement the whole-project loader ops on spec.ProjectLoader (#55 2b C3): charly core reaches the
 // loaderkit materialize/validate MECHANISM through this compiled-in seam (no wire envelope) instead of
