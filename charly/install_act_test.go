@@ -56,32 +56,6 @@ func TestCompileRunStep_PackagePluginLowersToSystemPackagesWithReversals(t *test
 	}
 }
 
-// The package act renders into the box build: a build-context run: {plugin: package} step,
-// emitted through the REAL box-build path (writeCandySteps→emitTasks), renders the
-// dnf/apt/pacman install of the package as a Containerfile RUN via the provider's
-// ProvisionActor (resolveProvisionScript: the ONE Op→act-shell seam). This proves the
-// box-build `case "plugin"` seam handles the extracted package verb (not as an "unknown
-// verb"), parallel to TestServicePluginActEmitsIntoBoxBuild for the typed pod-overlay path.
-func TestPackagePluginActEmitsIntoBoxBuild(t *testing.T) {
-	dir := t.TempDir()
-	layer := testCandy("lyr", spec.CandyModel{}, spec.CandyView{})
-	g := &Generator{BuildDir: dir}
-	op := spec.Op{Plugin: "package", PluginInput: map[string]any{"package": "redis"}}
-	var b strings.Builder
-	if _, err := g.toDeploykit().EmitTasks(&b, layer, testResolvedBox(), []spec.Op{op}, dir, ".build/test-img"); err != nil {
-		t.Fatalf("emitTasks: %v", err)
-	}
-	out := b.String()
-	for _, want := range []string{"RUN", "dnf install", "pacman -S", "redis"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("emitTasks Containerfile = %q, want substring %q", out, want)
-		}
-	}
-	if strings.Contains(out, `unknown verb "plugin"`) {
-		t.Errorf("the raw plugin: package op was DROPPED as an unknown verb (the box-build regression):\n%s", out)
-	}
-}
-
 // The REVERSAL-PRESERVATION GATE for the service→plugin extraction: a
 // run: {plugin: service} step is the TYPED-STEP OUTLIER — compileActOp MUST construct a
 // *ServicePackagedStep (NOT a generic OpStep), so its Reverse() records the LOAD-BEARING

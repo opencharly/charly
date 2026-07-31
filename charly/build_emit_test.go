@@ -10,46 +10,6 @@ import (
 	"github.com/opencharly/spec/spec"
 )
 
-// stubEmitVerb is an in-proc Provider that emits a build-time Containerfile
-// fragment via OpEmit — the same Provider.Invoke interface a real OUT-OF-PROCESS
-// grpcProvider satisfies, so this exercises the placement-agnostic build-emit
-// dispatch without a subprocess (the gRPC path is covered by the plugin transport
-// round-trip tests).
-type stubEmitVerb struct{}
-
-func (stubEmitVerb) Reserved() string     { return "stubemit" }
-func (stubEmitVerb) Class() ProviderClass { return ClassVerb }
-func (stubEmitVerb) Invoke(_ context.Context, op *Operation) (*Result, error) {
-	if op.Op != OpEmit {
-		return &Result{JSON: []byte(`{}`)}, nil
-	}
-	// A real plugin would tailor the fragment from op.Params (plugin_input) + op.Env
-	// (spec.BuildEnv); the stub returns a deterministic RUN proving it ran at build.
-	return &Result{JSON: []byte(`{"fragment":"RUN : > /opt/stubemit-baked"}`)}, nil
-}
-
-// TestInvokeVerbBuildEmit_BuildTimeOpEmit is the build-time-plugin-execution core
-// gate: a plugin verb renders its build-context Containerfile contribution via a UNIFORM
-// Invoke(OpEmit), which emitTasks splices (a fragment verbatim, an act-shell RUN-wrapped).
-// A fragment-emitting verb (ActScript=false) returns its fragment verbatim. This proves the
-// P8b uniform dispatch (no package-main ProvisionActor type-assert) extracts the fragment —
-// placement-agnostic, since the stub is reached through the SAME Provider.Invoke an external
-// grpcProvider implements.
-func TestInvokeVerbBuildEmit_BuildTimeOpEmit(t *testing.T) {
-	op := &spec.Op{Plugin: "stubemit", PluginInput: map[string]any{"marker": "stubemit-baked"}}
-	img := &spec.ResolvedBox{Tags: []string{"fedora:43", "fedora"}}
-	frag, isScript, err := invokeVerbBuildEmit(context.Background(), stubEmitVerb{}, op, img)
-	if err != nil {
-		t.Fatalf("invokeVerbBuildEmit: %v", err)
-	}
-	if isScript {
-		t.Fatalf("a fragment-emitting verb (ActScript=false) must not report act-script")
-	}
-	if !strings.Contains(frag, "RUN : > /opt/stubemit-baked") {
-		t.Fatalf("fragment = %q, want the plugin's baked RUN directive", frag)
-	}
-}
-
 // stubActKitVerb is a kit.CheckVerbProvider that ALSO implements kit.ProvisionActor — a
 // state-provision verb (the file/user/mount/… family). Wrapped in a kitVerbActAdapter, its
 // build-context OpEmit must return the RenderProvisionScript act shell with ActScript=true
@@ -95,46 +55,6 @@ func TestKitVerbActAdapter_OpEmitActScript(t *testing.T) {
 	}
 	if !strings.Contains(reply.Fragment, "/opt/stubact-provisioned") {
 		t.Fatalf("Fragment = %q, want the RenderProvisionScript act shell", reply.Fragment)
-	}
-}
-
-// stubResolveBuilder is an in-proc Provider that resolves a build-time BUILDER stage
-// via OpResolve — the same Provider.Invoke interface a real OUT-OF-PROCESS grpcProvider
-// satisfies, so this exercises the placement-agnostic build-prep dispatch (the
-// BUILDER leg) without a subprocess (the gRPC path is covered by the plugin transport
-// round-trip tests).
-type stubResolveBuilder struct{}
-
-func (stubResolveBuilder) Reserved() string     { return "stubbuilder" }
-func (stubResolveBuilder) Class() ProviderClass { return ClassBuilder }
-func (stubResolveBuilder) Invoke(_ context.Context, op *Operation) (*Result, error) {
-	if op.Op != OpResolve {
-		return &Result{JSON: []byte(`{}`)}, nil
-	}
-	// A real plugin would tailor the stage from op.Params (the requesting candy) +
-	// op.Env (spec.BuildEnv); the stub returns a deterministic multi-stage block + a
-	// COPY --from proving it ran at build.
-	return &Result{JSON: []byte(`{"stage":"FROM scratch AS stubbuilder-stage\nRUN : > /built\n","copy_artifacts":["COPY --from=stubbuilder-stage /built /opt/stubbuilder-artifact"]}`)}, nil
-}
-
-// TestResolveExternalBuilder_BuildTimeOpResolve is the build-time-plugin-execution
-// BUILDER-leg gate: an external builder provider renders its build-context multi-stage
-// block via Invoke(OpResolve), which deploykit.EmitExternalBuilderStages splices pre-main-FROM
-// (the Stage) and deploykit.EmitExternalBuilderArtifacts splices post-main-FROM (the
-// CopyArtifacts). This proves the resolve helper extracts both — placement-agnostic,
-// since the stub is reached through the SAME Provider.Invoke an external grpcProvider
-// implements.
-func TestResolveExternalBuilder_BuildTimeOpResolve(t *testing.T) {
-	img := &spec.ResolvedBox{Name: "fedora", Tags: []string{"fedora:43", "fedora"}}
-	reply, err := resolveExternalBuilder(stubResolveBuilder{}, "stubbuilder", "stubbuilder-consumer", img)
-	if err != nil {
-		t.Fatalf("resolveExternalBuilder: %v", err)
-	}
-	if !strings.Contains(reply.Stage, "FROM scratch AS stubbuilder-stage") {
-		t.Fatalf("Stage = %q, want the plugin's multi-stage FROM…AS block", reply.Stage)
-	}
-	if len(reply.CopyArtifacts) != 1 || !strings.Contains(reply.CopyArtifacts[0], "COPY --from=stubbuilder-stage /built /opt/stubbuilder-artifact") {
-		t.Fatalf("CopyArtifacts = %v, want the plugin's single COPY --from directive", reply.CopyArtifacts)
 	}
 }
 

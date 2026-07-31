@@ -13,8 +13,8 @@ import (
 // plugin-build's deploykit.Generator render calls back to the host for the REMAINING
 // host-coupled seams (EmitPluginOp, inline-builder, ensure-builders) via
 // HostBuild("render-seam", RenderSeamRequest{Method, Params}). This builder dispatches by
-// Method to the corresponding CORE function — the EXACT funcs the core toDeploykit closures
-// call — so the render is byte-identical to the pre-move core render (byte-parity by
+// Method to the corresponding CORE function (resolveInlineBuilderSeam / ensureBuildersConnected)
+// — so the render is byte-identical to the pre-move core render (byte-parity by
 // construction). The rich inputs (spec types — Builder, BuildStageContext, Op) ride the opaque
 // Params bytes; the host unmarshals + calls. The live *Generator (gen.Boxes/gen.Candies/
 // gen.Config/gen.Dir) comes from the per-dir renderGenCache populated by the buildengine-prep leg (one gen

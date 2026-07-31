@@ -56,7 +56,7 @@ func opActsInBuildDeploy(c *spec.Op) bool {
 		// Not connected — the standalone `charly box validate` path, where external plugins are not
 		// built+connected. Trust a verb the parse-time prescan saw a plugin candy declare
 		// (registerDeclaredExternalVerb): it is build-emit-capable until the BUILD (which DOES connect it
-		// via the connect seam) proves otherwise at invokeVerbBuildEmit's empty-fragment guard. A BUILTIN
+		// via the connect seam) proves otherwise at candy/plugin-build's plugin-verb OpEmit empty-fragment guard. A BUILTIN
 		// verb always resolves above, so this branch is reached only for a genuinely external,
 		// not-yet-connected verb — never for a runtime-only builtin (which is correctly rejected).
 		return isDeclaredExternalVerb(c.Plugin)
@@ -76,7 +76,7 @@ func opActsInBuildDeploy(c *spec.Op) bool {
 	}
 	// A CONNECTED external (out-of-process) verb is build-emit-capable via Invoke(OpEmit); the host
 	// cannot type-assert capability across the process boundary, so it is trusted here and gated at build
-	// by invokeVerbBuildEmit's empty-fragment guard.
+	// by candy/plugin-build's plugin-verb OpEmit empty-fragment guard.
 	_, isExternal := prov.(*grpcProvider)
 	return isExternal
 }

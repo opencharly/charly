@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
@@ -62,18 +61,6 @@ type Generator struct {
 	// passes `--dev-local-pkg`), so a bed always tests the in-development charly;
 	// a production box build leaves it false. See deploykit.RenderLocalPkgImageInstall.
 	DevLocalPkg bool
-
-	// (The per-image builder-reply caches externalBuilderReplies/detectionBuilderReplies
-	// moved to the deploykit render Generator with the BUILDER-render engine, K3-A; the
-	// dkGen memo below keeps them stable across an image's render methods.)
-
-	// dkGen caches the sdk/deploykit render Generator (P8). Built once by
-	// toDeploykit() and reused across an image's render so the deploykit-side
-	// per-image builder-reply caches persist across the render methods (which are
-	// relocating onto deploykit.Generator). Containerfiles is a shared map ref so
-	// writes propagate; Candies/Boxes are stable once this Generator's constructor
-	// (newCandyScanGenerator today; the deleted NewGenerator formerly) returns.
-	dkGen *deploykit.Generator
 }
 
 // newCandyScanGenerator builds a Generator populated with Config+Candies+Boxes+Dir+BuildDir — a
@@ -180,24 +167,6 @@ func resolveBuilderStage(prov Provider, word string, in spec.BuilderResolveInput
 	var reply spec.BuilderResolveReply
 	if err := json.Unmarshal(res.JSON, &reply); err != nil {
 		return zero, fmt.Errorf("decode OpResolve reply: %w", err)
-	}
-	return reply, nil
-}
-
-// resolveExternalBuilder Invokes an `external_builder:`-selected out-of-tree builder provider's
-// OpResolve and returns the decoded BuilderResolveReply — the BUILDER-leg analogue of
-// invokeVerbBuildEmit. It sends a MINIMAL render context (the requesting candy name only — an
-// out-of-tree builder renders a self-contained stage that reads none of the detection fields),
-// then requires a non-empty Stage (a mis-selected word producing no build-context builder fails
-// LOUDLY). Shares the OpResolve Invoke with the detection path via resolveBuilderStage (R3).
-func resolveExternalBuilder(prov Provider, word, candyName string, img *spec.ResolvedBox) (spec.BuilderResolveReply, error) {
-	var zero spec.BuilderResolveReply
-	reply, err := resolveBuilderStage(prov, word, spec.BuilderResolveInput{Candy: candyName}, img)
-	if err != nil {
-		return zero, err
-	}
-	if strings.TrimSpace(reply.Stage) == "" {
-		return zero, fmt.Errorf("external builder %q returned an empty OpResolve stage — it has no build-context builder", word)
 	}
 	return reply, nil
 }

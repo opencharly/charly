@@ -80,70 +80,14 @@ func rawUnixGroupOp() spec.Op {
 	return spec.Op{Plugin: "unix_group", PluginInput: map[string]any{"unix_group": "checkgrp", "gid": 4242}}
 }
 
-// emitTasks IS the real box-build emit path (writeCandySteps → g.emitTasks walks the
-// candy's runOps straight here). It must render a RAW plugin: unix_group run-Op — with NO
-// pre-conversion — into a Containerfile RUN carrying the groupadd. This guards the box-build
-// `case "plugin"` seam DIRECTLY: the box build never goes through the pod-overlay OpStep
-// build-emit, so a missing `case "plugin"` in emitTasks would silently drop the groupadd as
-// `# unknown verb "plugin"` even if the overlay path stayed green.
-func TestEmitTasks_PluginAct_UnixGroup(t *testing.T) {
-	dir := t.TempDir()
-	layer := testCandy("lyr", spec.CandyModel{}, spec.CandyView{})
-	g := &Generator{BuildDir: dir}
-	var b strings.Builder
-	if _, err := g.toDeploykit().EmitTasks(&b, layer, testResolvedBox(), []spec.Op{rawUnixGroupOp()}, dir, ".build/test-img"); err != nil {
-		t.Fatalf("emitTasks: %v", err)
-	}
-	out := b.String()
-	for _, want := range []string{"RUN", "groupadd", "checkgrp", "4242"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("emitTasks Containerfile = %q, want substring %q", out, want)
-		}
-	}
-	if strings.Contains(out, `unknown verb "plugin"`) {
-		t.Errorf("the raw plugin op was DROPPED as an unknown verb (the box-build regression):\n%s", out)
-	}
-}
-
-// rawFileRunOp is the RAW plan op the box build walks straight into emitTasks for a
-// run: file step — Plugin set, file/mode in plugin_input, content a SHARED #Op modifier.
-func rawFileRunOp() spec.Op {
-	return spec.Op{Plugin: "file", PluginInput: map[string]any{"file": "/etc/app/seed.conf", "mode": "0600"}, Content: "hello"}
-}
-
-// TestEmitTasks_PluginAct_File is the main-repo equivalent of the box/fedora check-pod
-// generate `grep -c 'unknown verb' Containerfile == 0`: it runs the REAL box-build emit
-// path (g.emitTasks) on a raw plugin: file run-Op and proves it renders the RUNTIME
-// file-creation (mkdir/cat+chmod) into a Containerfile RUN — NOT dropped as
-// `# unknown verb "plugin"`. file's act reaches the SAME resolveProvisionScript seam as
-// unix_group, so this guards the file ProvisionActor wiring end-to-end through the
-// install-emit pipeline.
-func TestEmitTasks_PluginAct_File(t *testing.T) {
-	dir := t.TempDir()
-	layer := testCandy("lyr", spec.CandyModel{}, spec.CandyView{})
-	g := &Generator{BuildDir: dir}
-	var b strings.Builder
-	if _, err := g.toDeploykit().EmitTasks(&b, layer, testResolvedBox(), []spec.Op{rawFileRunOp()}, dir, ".build/test-img"); err != nil {
-		t.Fatalf("emitTasks: %v", err)
-	}
-	out := b.String()
-	for _, want := range []string{"RUN", "mkdir", "/etc/app/seed.conf", "chmod", "0600"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("emitTasks Containerfile = %q, want substring %q", out, want)
-		}
-	}
-	if strings.Contains(out, "unknown verb") {
-		t.Errorf("the raw plugin: file op was DROPPED as an unknown verb (the box-build regression):\n%s", out)
-	}
-}
-
-// The other extracted state-provision verbs (user / kernel-param / mount) reach the SAME
+// The extracted state-provision verbs (user / kernel-param / mount) reach the SAME
 // resolveProvisionScript seam through renderOpCommand — each renders its act shell from
 // plugin_input via its provider's ProvisionActor. One renderOpCommand assertion per verb
-// proves the act half emits at the local/vm deploy seam; the box-build emitTasks seam is
-// verb-agnostic (it calls resolveProvisionScript too — proven generic by
-// TestEmitTasks_PluginAct_UnixGroup, TestEmitTasks_PluginAct_File and
-// TestEmitTasks_PluginAct_KernelParam below).
+// proves the act half emits at the local/vm deploy seam. The box-build emitTasks seam is
+// verb-agnostic (it dispatches every non-command plugin verb through the EmitPluginOp seam);
+// that dispatch is proven generically in sdk/deploykit (TestEmitTasks_PluginVerb_DispatchesToSeam_Verbatim
+// + _ActScriptWrappedInRun) — the former charly toDeploykit()-based box-build assertions were
+// relocated there in #55 cone-render Unit A (the charly EmitPluginOp bridge was production-dead).
 
 // renderOpCommand turns a plugin: user run-Op into the idempotent useradd shell.
 func TestRenderOpCommand_PluginAct_User(t *testing.T) {
@@ -195,33 +139,6 @@ func TestRenderOpCommand_PluginAct_KernelParam(t *testing.T) {
 		if !strings.Contains(cmd, want) {
 			t.Errorf("renderOpCommand = %q, want substring %q", cmd, want)
 		}
-	}
-}
-
-// rawKernelParamOp is the RAW plan op the box build walks straight into emitTasks.
-func rawKernelParamOp() spec.Op {
-	return spec.Op{Plugin: "kernel-param", PluginInput: map[string]any{"kernel-param": "vm.swappiness", "value": "10"}}
-}
-
-// emitTasks (the REAL box-build emit path) must render a RAW plugin: kernel-param run-Op
-// into a Containerfile RUN carrying the sysctl write — proving the box-build `case "plugin"`
-// seam is verb-agnostic across the extracted state-provision verbs (not unix_group-special).
-func TestEmitTasks_PluginAct_KernelParam(t *testing.T) {
-	dir := t.TempDir()
-	layer := testCandy("lyr", spec.CandyModel{}, spec.CandyView{})
-	g := &Generator{BuildDir: dir}
-	var b strings.Builder
-	if _, err := g.toDeploykit().EmitTasks(&b, layer, testResolvedBox(), []spec.Op{rawKernelParamOp()}, dir, ".build/test-img"); err != nil {
-		t.Fatalf("emitTasks: %v", err)
-	}
-	out := b.String()
-	for _, want := range []string{"RUN", "sysctl -w", "vm.swappiness", "10"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("emitTasks Containerfile = %q, want substring %q", out, want)
-		}
-	}
-	if strings.Contains(out, `unknown verb "plugin"`) {
-		t.Errorf("the raw plugin op was DROPPED as an unknown verb:\n%s", out)
 	}
 }
 
