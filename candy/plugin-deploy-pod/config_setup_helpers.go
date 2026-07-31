@@ -51,7 +51,8 @@ func resolveHostCharlyBin(hostEnvJSON []byte) string {
 	return bin
 }
 
-// secretDepNames mirrors charly/config_secret_migration.go's secretDepNames.
+// secretDepNames is the slice-returning sibling of secretDeclaredOnBox in secret_migration.go
+// (the credential-backed env var names an image declares via secret_accepts/secret_requires).
 func secretDepNames(meta *spec.BoxMetadata) []string {
 	if meta == nil || (len(meta.SecretRequire) == 0 && len(meta.SecretAccept) == 0) {
 		return nil
