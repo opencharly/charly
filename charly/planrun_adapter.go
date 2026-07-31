@@ -3,11 +3,70 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"time"
 
 	"github.com/opencharly/spec/spec"
 
 	"github.com/opencharly/sdk/kit"
 )
+
+// hostCheckCarrier is the spec-backed carrier that backs a hostVerbResolver's live CheckContext
+// legs (Exec/Mode/HTTPDo/Box/Instance/Distros/DialTimeout/AddBackground) WITHOUT core referencing
+// kit.Runner (#55 CHECK-ENGINE cone — the reverse-channel rendezvous no longer imports the engine).
+// It carries the CheckEnv scalars plus a LIVE exec getter (SwapVenue-aware: the in-proc plan drive
+// captures the running kit.Runner so a cross-deployment `on:`/${HOST:member} step's mid-plan venue
+// swap is reflected — a FROZEN executor was the check-k3s-vm cross-deployment SIGSEGV class) + the
+// host HTTP base client + a nil-safe background-PID sink. Two producers fill it: the reverse-channel
+// path (plugin_dispatch_reverse.go — from the wire CheckEnv snapshot, fixed venue) and the in-proc
+// plan drive (checkrun.go newCheckRunner — projected off the kit.Runner it still builds as its
+// engine). Zero kit in the carrier itself.
+type hostCheckCarrier struct {
+	execFn       func() spec.DeployExecutor // live getter (SwapVenue-aware); accessed via Exec()
+	mode         spec.CheckRunMode
+	box          string
+	vmName       string
+	instance     string
+	distros      []string
+	dialTimeout  time.Duration
+	httpBase     *http.Client
+	addBg        func(pid int) // nil when there is no scenario context (a no-op AddBackground)
+	candyDirs    map[string]string
+	candyScanErr error
+}
+
+// The accessors mirror the kit.Runner method names the check dispatch reads, so the reverse-channel
+// + host-verb-resolver call sites are a clean field-name swap (kr→cc), not a re-shape.
+func (c *hostCheckCarrier) Exec() spec.DeployExecutor { // live (SwapVenue-aware), nil-safe
+	if c == nil || c.execFn == nil {
+		return nil
+	}
+	return c.execFn()
+}
+func (c *hostCheckCarrier) Mode() spec.CheckRunMode      { return c.mode }
+func (c *hostCheckCarrier) Box() string                  { return c.box }
+func (c *hostCheckCarrier) Instance() string             { return c.instance }
+func (c *hostCheckCarrier) Distros() []string            { return c.distros }
+func (c *hostCheckCarrier) DialTimeout() time.Duration   { return c.dialTimeout }
+func (c *hostCheckCarrier) HTTPClient() *http.Client     { return c.httpBase }
+func (c *hostCheckCarrier) CandyDirs() map[string]string { return c.candyDirs }
+func (c *hostCheckCarrier) CandyScanErr() error          { return c.candyScanErr }
+
+// AddBg registers a host-side background PID (nil-safe: a no-op when there is no scenario context).
+func (c *hostCheckCarrier) AddBg(pid int) {
+	if c != nil && c.addBg != nil {
+		c.addBg(pid)
+	}
+}
+
+// VmTargetName mirrors kit.Runner.VmTargetName: the VM domain-target (vmName, else box) the host
+// vm/spice/libvirt legs hand the plugin.
+func (c *hostCheckCarrier) VmTargetName() string {
+	if c.vmName != "" {
+		return c.vmName
+	}
+	return c.box
+}
 
 // planrun_adapter.go — the host seams the check-engine plan walk (kit.RunOne/RunPlan) drives
 // through. The walk lives in sdk/kit and consumes the runner (kit.Runner, kit.PlanContext) plus
@@ -21,11 +80,11 @@ import (
 // context: the reverse-leg endpoint/graphics/cluster/image-label resolution (check_endpoint_
 // resolve.go), the out-of-process verb Invoke (provider_checkenv.go), the do:act runner
 // (checkrun_act.go), and the committed-APK anchoring (checkrun_charly_verbs.go). It holds the
-// kit.Runner ref (to read engine state + build the CheckContext) and OWNS the per-Invoke
-// endpointCleanups (the host reverse-leg lifecycle — NOT on kit.Runner, which a plugin module
-// lacks the machinery for).
+// spec-backed hostCheckCarrier (the CheckContext engine-state legs, projected off the live venue —
+// NOT kit.Runner, so this rendezvous imports only spec) and OWNS the per-Invoke endpointCleanups
+// (the host reverse-leg lifecycle — which a plugin module lacks the machinery for).
 type hostVerbResolver struct {
-	kr *kit.Runner
+	cc *hostCheckCarrier
 	// endpointCleanups holds the ssh -L forwards opened by the ResolveEndpoint/ResolveGraphics
 	// reverse-legs DURING the current verb's Invoke; invokeVerbProvider closes them AFTER the
 	// Invoke returns (the forward must outlive the plugin's dial). Per-Invoke.

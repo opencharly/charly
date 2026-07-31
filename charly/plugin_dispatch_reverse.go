@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/kit"
 	specexec "github.com/opencharly/spec/exec"
 	pb "github.com/opencharly/spec/proto"
 	"github.com/opencharly/spec/spec"
@@ -144,15 +144,26 @@ func (s *executorReverseServer) InvokeProvider(ctx context.Context, req *pb.Invo
 			if env.Mode == "box" {
 				mode = RunModeBox
 			}
-			minimalRunner := kit.NewRunner(kit.RunnerConfig{
-				Exec:        exec,
-				Mode:        mode,
-				Box:         env.Box,
-				Instance:    env.Instance,
-				Distros:     env.Distros,
-				DialTimeout: time.Duration(env.DialTimeoutNs),
-			})
-			hvr := &hostVerbResolver{kr: minimalRunner}
+			dialTimeout := time.Duration(env.DialTimeoutNs)
+			if dialTimeout <= 0 {
+				dialTimeout = 3 * time.Second // kit.NewRunner's zero-DialTimeout default
+			}
+			// The reverse-channel venue is FIXED for this single RunVerb (no in-plan SwapVenue), so
+			// execFn returns the one materialized executor; box/instance/distros/mode ride the
+			// CheckEnv snapshot; httpBase mirrors kit.NewRunner's zero-HTTPClient 10s default; there
+			// is no scenario context (addBg nil → AddBackground is a no-op). No kit.Runner: the
+			// carrier IS the CheckContext backing (#55 CHECK-ENGINE cone).
+			fixedExec := exec
+			carrier := &hostCheckCarrier{
+				execFn:      func() spec.DeployExecutor { return fixedExec },
+				mode:        mode,
+				box:         env.Box,
+				instance:    env.Instance,
+				distros:     env.Distros,
+				dialTimeout: dialTimeout,
+				httpBase:    &http.Client{Timeout: 10 * time.Second},
+			}
+			hvr := &hostVerbResolver{cc: carrier}
 			cr := cv.RunVerb(ctx, hvr, &op2)
 			hvr.runEndpointCleanups()
 			resJSON, merr := json.Marshal(cr)

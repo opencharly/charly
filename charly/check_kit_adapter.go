@@ -25,20 +25,20 @@ type hostCheckContext struct{ h *hostVerbResolver }
 
 var _ kit.CheckContext = hostCheckContext{}
 
-func (c hostCheckContext) Exec() kit.Executor         { return c.h.kr.Exec() }
-func (c hostCheckContext) DialTimeout() time.Duration { return c.h.kr.DialTimeout() }
+func (c hostCheckContext) Exec() kit.Executor         { return c.h.cc.Exec() }
+func (c hostCheckContext) DialTimeout() time.Duration { return c.h.cc.DialTimeout() }
 
 // HTTPDo issues the request from the host (in-process) via the SHARED host HTTP-do path
 // (kit.DoHTTPRequest — the SAME builder the out-of-process CheckContextService.HTTPDo uses, R3),
-// derived from the engine's base client.
+// derived from the carrier's base client.
 func (c hostCheckContext) HTTPDo(ctx context.Context, req kit.HTTPRequest) (kit.HTTPResponse, error) {
-	return kit.DoHTTPRequest(ctx, c.h.kr.HTTPClient(), req)
+	return kit.DoHTTPRequest(ctx, c.h.cc.HTTPClient(), req)
 }
-func (c hostCheckContext) Box() string           { return c.h.kr.Box() }
-func (c hostCheckContext) Instance() string      { return c.h.kr.Instance() }
-func (c hostCheckContext) Distros() []string     { return c.h.kr.Distros() }
-func (c hostCheckContext) AddBackground(pid int) { c.h.kr.Scenario().AddBackground(pid) }
-func (c hostCheckContext) Mode() kit.RunMode     { return c.h.kr.Mode() }
+func (c hostCheckContext) Box() string           { return c.h.cc.Box() }
+func (c hostCheckContext) Instance() string      { return c.h.cc.Instance() }
+func (c hostCheckContext) Distros() []string     { return c.h.cc.Distros() }
+func (c hostCheckContext) AddBackground(pid int) { c.h.cc.AddBg(pid) }
+func (c hostCheckContext) Mode() kit.RunMode     { return c.h.cc.Mode() }
 
 // kitVerbAdapter wraps a COMPILED-IN host-coupled verb candy's kit.CheckVerbProvider
 // as a package-main CheckVerbProvider, so runOne dispatches it through the SAME

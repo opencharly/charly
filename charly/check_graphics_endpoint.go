@@ -41,14 +41,14 @@ import (
 // endpoint + nil err = no live venue (box-mode / no-box); Skip=true = the VM declares no
 // graphics device of that kind (an N/A skip).
 func (h *hostVerbResolver) resolveVerbGraphics(kind string) (graphicsEndpoint, error) {
-	if h.kr.Box() == "" || h.kr.Mode() == RunModeBox {
+	if h.cc.Box() == "" || h.cc.Mode() == RunModeBox {
 		return graphicsEndpoint{}, nil
 	}
 
 	// vnc CONTAINER leg: a non-VM venue publishes RFB on 5900; the ticket comes from the
 	// credential store. spice is VM-only (no container leg), so it skips straight to the vm plugin.
 	if kind == "vnc" {
-		reply, err := resolveCheckVenueReply(h.kr.Box(), h.kr.Instance())
+		reply, err := resolveCheckVenueReply(h.cc.Box(), h.cc.Instance())
 		if err != nil {
 			return graphicsEndpoint{}, err
 		}
@@ -58,13 +58,13 @@ func (h *hostVerbResolver) resolveVerbGraphics(kind string) (graphicsEndpoint, e
 				return graphicsEndpoint{}, fmt.Errorf("VNC server not reachable (port 5900): %w", err)
 			}
 			h.endpointCleanups = append(h.endpointCleanups, ep.Close)
-			return graphicsEndpoint{Addr: ep.Addr, Password: resolveVNCPassword(kit.ResolveBoxName(h.kr.Box()), h.kr.Instance())}, nil
+			return graphicsEndpoint{Addr: ep.Addr, Password: resolveVNCPassword(kit.ResolveBoxName(h.cc.Box()), h.cc.Instance())}, nil
 		}
 	}
 
 	// VM leg (vnc + spice): resolve the VM's <graphics type='kind'> via the out-of-process vm
 	// plugin. CHARLY_LIBVIRT_URI selects a remote hypervisor.
-	raw, ok := invokeVmPlugin("resolve-"+kind, h.kr.VmTargetName(), os.Getenv("CHARLY_LIBVIRT_URI"))
+	raw, ok := invokeVmPlugin("resolve-"+kind, h.cc.VmTargetName(), os.Getenv("CHARLY_LIBVIRT_URI"))
 	if !ok {
 		return graphicsEndpoint{}, fmt.Errorf("vm plugin unavailable (go-libvirt resolution is out-of-process)")
 	}

@@ -15,7 +15,9 @@ import (
 // candy that runs a plan drives the SAME loop. The host-coupled surfaces stay in charly core
 // behind the injected seams built here — the verb dispatch (hostVerbResolver), the do-mode/
 // context grammar (hostPlanGrammar), and the per-step venue swap (venueResolver) — plus the
-// live-verb CheckContext (hostCheckContext) wrapping the runner. newCheckRunner wires them.
+// live-verb CheckContext (hostCheckContext) over the spec-backed hostCheckCarrier the runner
+// projects into (carrierFromRunner), so the rendezvous reads engine state without importing
+// kit.Runner. newCheckRunner wires them.
 //
 // FLOOR-SLIM Unit 4: the former package-main CheckStatus/CheckResult/TestPass/TestFail/TestSkip
 // aliases are DELETED. spec.CheckResult (CUE-sourced, sdk/schema/checkresult.cue) is the
@@ -42,8 +44,9 @@ const (
 )
 
 // newCheckRunner builds a kit.Runner for a check pass, wiring the standard host seams every
-// check runner shares: the verb dispatch (hostVerbResolver — which holds the runner ref and
-// the per-Invoke host endpoint cleanups), the do-mode/context grammar (hostPlanGrammar), and
+// check runner shares: the verb dispatch (hostVerbResolver — which holds the spec-backed carrier
+// projected off the runner + the per-Invoke host endpoint cleanups), the do-mode/context grammar
+// (hostPlanGrammar), and
 // the per-probe never-hang floor (the readiness-config PerAttemptFor(spec.PollLocal) value the core
 // check runner has always used). The caller fills cfg with the per-site fields (Exec/Mode/Env/
 // Box/… and, for a live cross-deployment pass, TargetResolver + HostVars). Verbs/Grammar/
@@ -56,20 +59,39 @@ func newCheckRunner(cfg kit.RunnerConfig) *kit.Runner {
 		cfg.ProbeTimeout = loadedReadiness().PerAttemptFor(spec.PollLocal)
 	}
 	kr := kit.NewRunner(cfg)
-	hvr.kr = kr
+	hvr.cc = carrierFromRunner(kr)
 	return kr
 }
 
-// deployExecOf recovers the concrete DeployExecutor a kit.Runner was built with. The runner
-// stores its venue executor as the narrow kit.Executor (kit cannot import DeployExecutor), but
-// every check runner is constructed with a DeployExecutor, so the widening assertion succeeds;
-// a nil/absent exec yields nil. Used by the host verb dispatch, which needs the full
-// DeployExecutor surface (Venue/PutFile/GetFile) the reverse channel serves.
-func deployExecOf(kr *kit.Runner) spec.DeployExecutor {
-	if e, ok := kr.Exec().(spec.DeployExecutor); ok {
-		return e
+// carrierFromRunner projects a live kit.Runner into the hostCheckCarrier that backs a
+// hostVerbResolver's CheckContext legs — the in-proc plan-drive producer (newCheckRunner + the
+// unit-test helpers). execFn + addBg capture the runner LIVE (a mid-plan SwapVenue / a late
+// SetScenario is reflected — the reason exec is a getter, not a frozen value); the scalars
+// snapshot the static engine state. The narrow kit.Executor widens to spec.DeployExecutor (every
+// check runner is built with one; a nil/absent exec yields nil).
+func carrierFromRunner(kr *kit.Runner) *hostCheckCarrier {
+	return &hostCheckCarrier{
+		execFn: func() spec.DeployExecutor {
+			if e, ok := kr.Exec().(spec.DeployExecutor); ok {
+				return e
+			}
+			return nil
+		},
+		mode:        kr.Mode(),
+		box:         kr.Box(),
+		vmName:      kr.VmName(),
+		instance:    kr.Instance(),
+		distros:     kr.Distros(),
+		dialTimeout: kr.DialTimeout(),
+		httpBase:    kr.HTTPClient(),
+		addBg: func(pid int) {
+			if s := kr.Scenario(); s != nil {
+				s.AddBackground(pid)
+			}
+		},
+		candyDirs:    kr.CandyDirs(),
+		candyScanErr: kr.CandyScanErr(),
 	}
-	return nil
 }
 
 // resolverEnv projects a *kit.CheckVarResolver into the kit.RunnerConfig Env + HasRuntime pair

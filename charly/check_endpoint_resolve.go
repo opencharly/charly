@@ -21,7 +21,7 @@ import (
 // any opened ssh -L forward (VM/ssh venue) for post-Invoke teardown. Empty addr + nil err
 // = no live venue (box-mode / no-box) — the verb's own no-endpoint skip then fires.
 func (h *hostVerbResolver) resolveVerbEndpoint(port int) (string, error) {
-	addr, cleanup, err := resolveVerbEndpointFor(h.kr.Box(), h.kr.Instance(), h.kr.Mode(), port)
+	addr, cleanup, err := resolveVerbEndpointFor(h.cc.Box(), h.cc.Instance(), h.cc.Mode(), port)
 	if cleanup != nil {
 		h.endpointCleanups = append(h.endpointCleanups, cleanup)
 	}
@@ -89,7 +89,7 @@ func (c hostCheckContext) ResolveGraphicsEndpoint(_ context.Context, kind string
 // baked ai.opencharly.mcp_provide label but cannot reach the podman engine / OCI metadata.
 // Empty value (no live deployment, or the label absent) is a valid result.
 func (h *hostVerbResolver) resolveImageLabel(label string) (string, error) {
-	return resolveImageLabelFor(h.kr.Box(), h.kr.Instance(), h.kr.Mode(), label)
+	return resolveImageLabelFor(h.cc.Box(), h.cc.Instance(), h.cc.Mode(), label)
 }
 
 // resolveImageLabelFor is resolveImageLabel's box/instance/mode-parameterized core (K1-unblock W3
