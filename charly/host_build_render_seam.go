@@ -53,17 +53,20 @@ import (
 var renderGenCache sync.Map
 
 // loadRenderGen returns the cached *Generator for dir, falling back to the cheap
-// newCandyScanGenerator (default opts) if the cache is empty (defensive — the buildengine-prep
-// leg always populates it first). #55 step3 3-II: the expensive NewGenerator (full
+// newCandyScanGenerator (default opts, NO boxes) if the cache is empty (defensive — the
+// buildengine-prep leg always populates it first, pushing the plugin-resolved boxes on
+// #ResolvedProjectRequest.boxes). #55 step3 3-II: the expensive NewGenerator (full
 // buildkit.ResolveAllBox + intermediates + render-prep) is DELETED — every normal build:box/
 // build:generate call already populates renderGenCache unconditionally via hostBuildPrep, so this
 // fallback is provably unreachable in production; kept as the cheap belt-and-suspenders default
-// rather than the deleted expensive one.
+// (now box-less — a reachable cache miss would surface as renderSeamGenBox's "box not found"
+// rather than silently re-resolving) rather than the deleted expensive one. #55 coneB2 Class B:
+// the fallback passes a nil boxes map (the box RESOLVE shed from the host).
 func loadRenderGen(dir string) *Generator {
 	if v, ok := renderGenCache.Load(dir); ok {
 		return v.(*Generator)
 	}
-	g, err := newCandyScanGenerator(dir, false, nil)
+	g, err := newCandyScanGenerator(dir, false, nil, nil)
 	if err != nil || g == nil {
 		return nil
 	}

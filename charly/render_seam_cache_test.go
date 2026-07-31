@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/spec/spec"
 )
 
 // render_seam_cache_test.go — the regression for the K3 host-prep move (coneB-render): a first cut
@@ -22,11 +23,14 @@ import (
 // newCandyScanGenerator's output directly against a fresh buildkit.ResolveBox call — the SAME
 // primitive it wraps — rather than diffing two Generators.
 
-// TestNewCandyScanGeneratorPopulatesBoxes proves the cheap render-seam-floor constructor resolves
-// every requested box (needed for resolveInlineBuilderSeam's img.Tags/img.Name — see
+// TestNewCandyScanGeneratorPopulatesBoxes proves the cheap render-seam-floor constructor STORES
+// the caller-pushed box set (needed for resolveInlineBuilderSeam's img.Tags/img.Name — see
 // resolveBuilderStage) with the SAME Name/Tags a direct buildkit.ResolveBox call would produce,
 // using a real project fixture (box/fedora's "fedora-builder", a builder-based image exercising a
-// real distro/tags resolve).
+// real distro/tags resolve). #55 coneB2 Class B: the boxes are now PUSHED (mimicking
+// candy/plugin-build's resolveBuildEngine — buildkit.ResolveAllBox + the &b.ResolvedBox projection
+// that deploykit.SpecBoxes performs in production) rather than self-resolved via
+// deploykit.ResolveAllSpecBoxes; the constructor itself no longer imports deploykit.
 func TestNewCandyScanGeneratorPopulatesBoxes(t *testing.T) {
 	repoRoot, err := os.Getwd()
 	if err != nil {
@@ -37,7 +41,29 @@ func TestNewCandyScanGeneratorPopulatesBoxes(t *testing.T) {
 
 	t.Cleanup(snapshotProviderState())
 
-	cheap, err := newCandyScanGenerator(dir, false, nil)
+	// Resolve the box set the way plugin-build does (buildkit.ResolveAllBox + the spec projection).
+	cfg, err := LoadConfig(dir)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	distroCfg, _, _, err := LoadDefaultBuildConfig(dir)
+	if err != nil {
+		t.Fatalf("LoadDefaultBuildConfig: %v", err)
+	}
+	RegisterBuildVocabulary(distroCfg)
+	resolved, err := buildkit.ResolveAllBox(cfg, "", dir, buildkit.ResolveOpts{})
+	if err != nil {
+		t.Fatalf("buildkit.ResolveAllBox: %v", err)
+	}
+	specBoxes := make(map[string]*spec.ResolvedBox, len(resolved))
+	for name, b := range resolved {
+		if b == nil {
+			continue
+		}
+		specBoxes[name] = &b.ResolvedBox
+	}
+
+	cheap, err := newCandyScanGenerator(dir, false, nil, specBoxes)
 	if err != nil {
 		t.Fatalf("newCandyScanGenerator: %v", err)
 	}
@@ -53,12 +79,7 @@ func TestNewCandyScanGeneratorPopulatesBoxes(t *testing.T) {
 		t.Fatalf("Tags is empty — resolveBuilderStage's spec.BuildEnv{Distros: img.Tags} would carry no distro info")
 	}
 
-	distroCfg, _, _, err := LoadDefaultBuildConfig(dir)
-	if err != nil {
-		t.Fatalf("LoadDefaultBuildConfig: %v", err)
-	}
-	RegisterBuildVocabulary(distroCfg)
-	direct, err := buildkit.ResolveBox(cheap.Config, boxName, "", dir, buildkit.ResolveOpts{})
+	direct, err := buildkit.ResolveBox(cfg, boxName, "", dir, buildkit.ResolveOpts{})
 	if err != nil {
 		t.Fatalf("buildkit.ResolveBox: %v", err)
 	}
