@@ -11,6 +11,7 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/refs"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -189,19 +190,19 @@ func EnsureRepoDownloaded(repoPath, version string) (string, error) {
 	} else if ok {
 		return dir, nil
 	}
-	cached, err := kit.IsRepoCached(repoPath, version)
+	cached, err := refs.IsRepoCached(repoPath, version)
 	if err != nil {
 		return "", err
 	}
 	var path string
-	if cached && !kit.IsMutableRef(version) {
-		path, err = kit.RepoCachePath(repoPath, version)
+	if cached && !refs.IsMutableRef(version) {
+		path, err = refs.RepoCachePath(repoPath, version)
 	} else {
 		// The cache-miss DOWNLOAD dispatches through the registered refs backend (P7):
 		// the compiled-in candy/plugin-refs (git) by default, swappable for an OCI/S3 plugin.
 		// A MUTABLE ref (a branch such as main, or the unversioned default branch) always
 		// delegates: the downloader re-resolves the ref's current commit and refreshes a
-		// stale export (the kit.DownloadRepo provenance check) — a plain cache hit would
+		// stale export (the refs.DownloadRepo provenance check) — a plain cache hit would
 		// freeze the branch at its first-download content forever (the pre-#146 @main
 		// protocol skew). Immutable coordinates (tags, SHAs) keep the offline cache hit.
 		path, err = requireRefsDownloader().Download(repoPath, version)
@@ -306,8 +307,8 @@ func CollectRemoteRefsOpts(cfg *Config, layers map[string]spec.CandyReader, opts
 			if branch, ok := defaultBranches[parsed.RepoPath]; ok {
 				version = branch
 			} else {
-				repoURL := kit.RepoGitURL(parsed.RepoPath)
-				branch, err := kit.GitDefaultBranch(repoURL)
+				repoURL := refs.RepoGitURL(parsed.RepoPath)
+				branch, err := refs.GitDefaultBranch(repoURL)
 				if err != nil {
 					return fmt.Errorf("%s: cannot resolve default branch for %s: %w", source, parsed.RepoPath, err)
 				}

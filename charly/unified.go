@@ -5,9 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/opencharly/spec/refs"
 	"github.com/opencharly/spec/spec"
-
-	"github.com/opencharly/sdk/kit"
 )
 
 // -----------------------------------------------------------------------------
@@ -119,7 +118,7 @@ func canonicalRef(ref, baseDir string) (key, path string, err error) {
 		parsed := spec.ParseRemoteRef(ref)
 		version := parsed.Version
 		if version == "" {
-			branch, e := kit.GitDefaultBranch(kit.RepoGitURL(parsed.RepoPath))
+			branch, e := refs.GitDefaultBranch(refs.RepoGitURL(parsed.RepoPath))
 			if e != nil {
 				return "", "", fmt.Errorf("resolving default branch for %s: %w", parsed.RepoPath, e)
 			}

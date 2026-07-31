@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/refs"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -29,13 +29,13 @@ func hostBuildBoxFetchResolve(_ context.Context, req spec.BoxFetchResolveRequest
 	if req.Refresh {
 		repoPath, version := spec.NormalizeRepoSpec(req.Spec)
 		if version == "" {
-			branch, err := kit.GitDefaultBranch(kit.RepoGitURL(repoPath))
+			branch, err := refs.GitDefaultBranch(refs.RepoGitURL(repoPath))
 			if err != nil {
 				return spec.BoxFetchResolveReply{}, fmt.Errorf("resolving default branch for %s: %w", repoPath, err)
 			}
 			version = branch
 		}
-		cachePath, err := kit.RepoCachePath(repoPath, version)
+		cachePath, err := refs.RepoCachePath(repoPath, version)
 		if err != nil {
 			return spec.BoxFetchResolveReply{}, err
 		}

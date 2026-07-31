@@ -6,6 +6,7 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/refs"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -50,8 +51,8 @@ func ResolveRemoteImage(ref string, tag string) (*RemoteImageContext, error) {
 
 	version := parsed.Version
 	if version == "" {
-		repoURL := kit.RepoGitURL(parsed.RepoPath)
-		tag, err := kit.GitLatestTag(repoURL)
+		repoURL := refs.RepoGitURL(parsed.RepoPath)
+		tag, err := refs.GitLatestTag(repoURL)
 		if err != nil {
 			return nil, fmt.Errorf("resolving latest version for %s: %w", parsed.RepoPath, err)
 		}

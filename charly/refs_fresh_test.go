@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/refs"
 )
 
 // stubRefsDownloader counts Download invocations and returns a canned path,
@@ -88,10 +88,10 @@ func TestRefsDownloaderRegisteredAtInit(t *testing.T) {
 // Guard the kit classifier contract the core decision relies on (the full
 // matrix lives in sdk/kit's TestIsMutableRef).
 func TestIsMutableRefCoreContract(t *testing.T) {
-	if !kit.IsMutableRef("main") || !kit.IsMutableRef("") {
+	if !refs.IsMutableRef("main") || !refs.IsMutableRef("") {
 		t.Fatal("branches and the unversioned default branch are mutable")
 	}
-	if kit.IsMutableRef("v2026.201.0706") || kit.IsMutableRef("2d731456b0b8cfbe2e19b64de75b4d652d2fc94c") {
+	if refs.IsMutableRef("v2026.201.0706") || refs.IsMutableRef("2d731456b0b8cfbe2e19b64de75b4d652d2fc94c") {
 		t.Fatal("tags and full SHAs are immutable")
 	}
 }

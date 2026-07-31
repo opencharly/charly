@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/refs"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -26,7 +26,7 @@ func ResolveProjectRepo(repoSpec string) (string, error) {
 		return "", fmt.Errorf("invalid --repo spec %q", repoSpec)
 	}
 	if version == "" {
-		branch, err := kit.GitDefaultBranch(kit.RepoGitURL(repoPath))
+		branch, err := refs.GitDefaultBranch(refs.RepoGitURL(repoPath))
 		if err != nil {
 			return "", fmt.Errorf("resolving default branch for %s: %w", repoPath, err)
 		}
