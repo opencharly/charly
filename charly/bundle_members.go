@@ -23,7 +23,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/opencharly/sdk/deploykit"
+	specexec "github.com/opencharly/spec/exec"
 	"github.com/opencharly/spec/hostenv"
 	"github.com/opencharly/spec/proc"
 	"github.com/opencharly/spec/spec"
@@ -99,13 +99,13 @@ func bringUpMembers(node *spec.BundleNode, imageTag string) error {
 			if err := proc.RunCharlySubcommand("vm", "create", memberNode.From, "--domain", memberDomain); err != nil {
 				return fmt.Errorf("peer %q (vm create %s): %w", memberKey, memberNode.From, err)
 			}
-			deploykit.WaitForVmSshReady(memberDomain)
+			specexec.WaitForVmSshReady(memberDomain)
 			if err := proc.RunCharlySubcommand(withMemberTag([]string{"bundle", "add", memberKey, memberNode.From}, imageTag)...); err != nil {
 				return fmt.Errorf("peer %q (vm bundle add): %w", memberKey, err)
 			}
 			// Same nested-local-child gap the isVM bed root closes: plugin-deploy-vm's
 			// PostApply skips target:local children, so deploy them into the guest here.
-			if err := deploykit.DeployNestedLocalChildren(memberKey, memberNode.Children, func(childKey, dotted string) error {
+			if err := spec.DeployNestedLocalChildren(memberKey, memberNode.Children, func(childKey, dotted string) error {
 				return proc.RunCharlySubcommand("bundle", "add", dotted)
 			}); err != nil {
 				return fmt.Errorf("peer %q: %w", memberKey, err)
@@ -116,7 +116,7 @@ func bringUpMembers(node *spec.BundleNode, imageTag string) error {
 					return fmt.Errorf("peer %q (%v): %w", memberKey, step, err)
 				}
 			}
-			deploykit.WaitForContainerReady(memberKey)
+			specexec.WaitForContainerReady(memberKey)
 		default:
 			// kind:local member — applies candies in place during bundle add.
 			if err := proc.RunCharlySubcommand(withMemberTag([]string{"bundle", "add", memberKey}, imageTag)...); err != nil {

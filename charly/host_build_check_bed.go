@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	specexec "github.com/opencharly/spec/exec"
 	"github.com/opencharly/spec/hostenv"
 	"github.com/opencharly/spec/spec"
 )
@@ -38,10 +38,11 @@ import (
 // The op bodies call the SHARED core helpers runCheckBed uses (bedGPUPrereqMissing,
 // kit.AcquireFileLock, bedVmDomains/acquireVmDomainLock, selfSuperprojectOverridePair/
 // mergeRepoOverrides, acquireResourceForClaimant, hostenv.StartLibvirtUserSession,
-// persistBedDeployOverrides, bringUpMembers/tearDownMembers, deploykit.WaitForVmSshReady/
-// deploykit.WaitForContainerReady, bedCheckLevel/bedCheckLiveRefs/…) — those helpers STAY
-// core (shared with runCheckBed + bundle_add_cmd; K-wave relocation inventory, never
-// aliased).
+// persistBedDeployOverrides, bringUpMembers/tearDownMembers, bedCheckLevel/bedCheckLiveRefs/…)
+// — those helpers STAY core (shared with runCheckBed + bundle_add_cmd; K-wave relocation
+// inventory, never aliased). The venue-readiness GATES moved to spec/exec
+// (specexec.WaitForVmSshReady/WaitForContainerReady, #55 K4) — pure process pollers, not
+// bed-session state.
 //
 // TRANSITIONAL host seam — dies at K5: post-loaderkit the plugin holds its own flock via
 // sdk/kit (filelock/install_ledger/deployconfig, the delivered K4-B state family), computes the
@@ -136,9 +137,9 @@ func hostBuildCheckBed(_ context.Context, req spec.CheckBedRequest, _ buildEngin
 		if nodeTraits(&s.node).Venue == "ssh" { // vm (ssh venue)
 			// Wait on the per-deploy DOMAIN IDENTITY (charly-<bedDomain> is the live domain +
 			// managed ssh alias, post-P33), NOT the shared kind:vm entity (node.From).
-			deploykit.WaitForVmSshReady(s.bedDomain)
+			specexec.WaitForVmSshReady(s.bedDomain)
 		} else {
-			deploykit.WaitForContainerReady(req.Bed)
+			specexec.WaitForContainerReady(req.Bed)
 		}
 		return spec.CheckBedReply{}, nil
 	case "teardown":
@@ -381,7 +382,7 @@ func bedRunImageTag(bed, calver string) string {
 
 // bedLocalChildKeys is the HOST-ROOTED (kind:local) subset of a node's nested children, in
 // sortedNestedKeys order — the set a VM root deploys host-side (mirroring
-// deploykit.DeployNestedLocalChildren: a VM's nested CONTAINER children are deployed
+// spec.DeployNestedLocalChildren: a VM's nested CONTAINER children are deployed
 // in-guest by plugin-deploy-vm's PostApply, so a
 // host-side re-deploy would be wrong).
 func bedLocalChildKeys(children map[string]*spec.BundleNode) []string {
