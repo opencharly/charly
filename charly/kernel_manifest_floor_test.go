@@ -181,7 +181,7 @@ var kernelFloor = []floorEntry{
 	{"host_build_construct_step.go", "M — the construct-step host-builder (registry-resolve of run: plugin: word; clause-M mechanism)"},
 	{"host_build_remote_image_resolve.go", "M — the remote-image-resolve seam for plugin-build's ensure fallback AND candy/plugin-box's `box build @ref` (thin ResolveRemoteImage wrapper; drops non-wire fields)"},
 	{"host_build_render_service.go", "M — the render-service host-builder (wraps plugin-init OpResolve + M16 egress gate; two registry consults)"},
-	{"host_exec.go", "M — the --host CLI pre-dispatch reexec decision (shouldReexecForHost runs before Kong dispatches, reading the core CLI struct + command path — the prescan-dispatch spine, mirroring plugin_command_prescan.go / main_repo.go's --repo; ReexecOverSSH body already moved to kit)"},
+	{"host_exec.go", "M — the --host CLI pre-dispatch reexec decision (shouldReexecForHost runs before Kong dispatches, reading the core CLI struct + command path — the prescan-dispatch spine, mirroring plugin_command_prescan.go / main_repo.go's --repo; ReexecOverSSH body already moved to spec/hostenv #55 coneG)"},
 	// P8b render-glue remainder (CONE B) — spike-verified by call-graph (never trusting a file's
 	// own "stays host" comment): the movable render DRIVE already left in prior cutovers (#67
 	// render-DRIVE move, K5-Unit-6b, P11c, FLOOR-SLIM-proper Unit-8, K5-A item 2 — into
