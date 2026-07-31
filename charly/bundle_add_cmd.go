@@ -33,7 +33,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/opencharly/sdk/kit"
 	specexec "github.com/opencharly/spec/exec"
 	"github.com/opencharly/spec/hostenv"
 	"github.com/opencharly/spec/spec"
@@ -176,7 +175,7 @@ func (c *deployDelCmd) resolveDelNode(tree map[string]spec.BundleNode) (*spec.Bu
 // down, while a mistyped name (no artifact) is rejected.
 func podDeploymentArtifactExists(name string) bool {
 	cn := specexec.NestedContainerName(name)
-	if dir, err := kit.QuadletDir(); err == nil {
+	if dir, err := spec.QuadletDir(); err == nil {
 		for _, suffix := range []string{".container", ".pod"} {
 			if _, err := os.Stat(filepath.Join(dir, "charly-"+cn+suffix)); err == nil {
 				return true
