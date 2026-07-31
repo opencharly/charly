@@ -70,10 +70,17 @@ var schemaFS embed.FS
 
 const calver = "2026.203.0900"
 
-// opEmit mirrors charly's OpEmit selector ("emit"). This plugin serves ONLY the build-context
-// emit leg — every other op is a no-op acknowledgment (the deploy leg is sdk/kit.WalkPlans,
-// never this plugin).
-const opEmit = "emit"
+// opEmit mirrors charly's OpEmit selector ("emit"); opExecute mirrors charly's OpExecute
+// selector ("execute"). This plugin serves BOTH legs of the compiler-emitted InstallStep
+// kinds: the BUILD-context emit leg (OpEmit — the pod-overlay Containerfile fragment) AND the
+// DEPLOY-context host-engine leg (OpExecute — the Builder / LocalPkgInstall / SystemPackages
+// step bodies the wire broker relocates here so charly/plugin_executor_reverse.go stops
+// importing sdk/deploykit, #55 coneD finale). Every other op is a no-op acknowledgment; the
+// plugin-renderable deploy kinds (File / ShellHook / …) still live in sdk/kit.WalkPlans.
+const (
+	opEmit    = "emit"
+	opExecute = "execute"
+)
 
 // The step words this plugin serves. The word is the lowercase-hyphenated reserved name; the host
 // maps each InstallStep kind to its word in pluginEmitStepWords (charly/provider_step.go).
@@ -157,10 +164,16 @@ func NewMeta() pb.PluginMetaServer {
 
 type provider struct{ pb.UnimplementedProviderServer }
 
-// Invoke serves the BUILD-context OpEmit leg: decode the compiler-produced spec.InstallStepView
-// (op.Params), render the word's Containerfile fragment, and return it as a spec.EmitReply. Any op
-// other than OpEmit is a no-op ack (the deploy leg lives in sdk/kit.WalkPlans, not here).
+// Invoke serves BOTH legs of the compiler-emitted InstallStep kinds: the BUILD-context OpEmit
+// leg (decode the compiler-produced spec.InstallStepView, render the word's Containerfile
+// fragment, return it as a spec.EmitReply) AND the DEPLOY-context OpExecute leg (run the
+// host-engine step BODY — Builder / LocalPkgInstall / SystemPackages — on the live venue, via
+// execDeployStep). Any op other than OpEmit/OpExecute is a no-op ack; the plugin-renderable
+// deploy kinds (File / ShellHook / …) still live in sdk/kit.WalkPlans, never this plugin.
 func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
+	if req.GetOp() == opExecute {
+		return execDeployStep(ctx, req)
+	}
 	if req.GetOp() != opEmit {
 		return &pb.InvokeReply{ResultJson: []byte("{}")}, nil
 	}
@@ -197,6 +210,78 @@ func replyFragment(frag string) (*pb.InvokeReply, error) {
 		return nil, err
 	}
 	return &pb.InvokeReply{ResultJson: j}, nil
+}
+
+// execDeployStep serves the DEPLOY-context OpExecute leg for the three HOST-ENGINE step kinds
+// the wire broker (charly/plugin_executor_reverse.go's executorReverseServer.RunHostStep) used
+// to run host-side via sdk/deploykit. The broker now dispatches those three bodies HERE over
+// InvokeProvider(ClassStep, <word>, OpExecute) so charly/plugin_executor_reverse.go stops
+// importing sdk/deploykit (#55 coneD finale); this plugin already imports sdk/deploykit for
+// its BUILD-emit leg, so the bodies run UNCHANGED (R3 — one body, relocated, not duplicated).
+//
+// The live, non-serializable inputs (the TYPED spec.DeployExecutor venue, the image-resolve/
+// ensure closures the Builder leg injects, the resolved DistroCfg, the EmitOpts) cannot cross
+// the []byte wire — so the broker threads them via the in-proc ctx (sdk.ContextWithHostStepDeps,
+// the same overlayBuildInputs pattern charly/build_overlay.go uses for live plans + the parent
+// venue). This plugin is compiled-in, so the ctx carries them; a nil deps (an out-of-process
+// placement, or a ctx that never carried them) fails loudly at the one step that needs them,
+// never a silent wrong result. The plugin recovers the deps + runs the SAME deploykit body the
+// broker used to run, returning the step's recorded ReverseOps as a spec.DeployReply.
+func execDeployStep(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
+	var view spec.InstallStepView
+	if len(req.GetParamsJson()) > 0 {
+		if err := json.Unmarshal(req.GetParamsJson(), &view); err != nil {
+			return nil, fmt.Errorf("plugin-installstep: decode InstallStepView for %q deploy: %w", req.GetReserved(), err)
+		}
+	}
+	step, err := spec.StepFromView(view)
+	if err != nil {
+		return nil, fmt.Errorf("plugin-installstep: reconstruct step for %q deploy: %w", req.GetReserved(), err)
+	}
+	deps := sdk.HostStepDepsFromCtx(ctx)
+	if deps == nil || deps.Exec == nil {
+		return nil, fmt.Errorf("plugin-installstep: deploy step %q missing host-step deps (the wire broker threads the typed executor + closures via sdk.ContextWithHostStepDeps for a compiled-in placement; none recovered on this ctx)", req.GetReserved())
+	}
+	opts := deps.Opts
+
+	var reverseOps []spec.ReverseOp
+	switch st := step.(type) {
+	case *spec.BuilderStep:
+		venueHome, herr := deps.Exec.ResolveHome(ctx, "")
+		if herr != nil {
+			return nil, fmt.Errorf("plugin-installstep: resolve venue home for %q deploy: %w", req.GetReserved(), herr)
+		}
+		// deps.ResolveImage / deps.EnsureImage close over the host *Config + the build-ensure
+		// dispatch (charly-internal — coneK1b's #8 keeps resolveImageRefForEnsure's definition;
+		// the broker constructs the closures, this plugin only invokes them).
+		if rerr := deploykit.RunVenueBuilderStep(ctx, deps.Exec, venueHome, deps.ResolveImage, deps.EnsureImage, st, opts); rerr != nil {
+			return nil, rerr
+		}
+		reverseOps = st.Reverse()
+	case *spec.LocalPkgInstallStep:
+		supported := deploykit.VenueHasPkgManager(ctx, deps.Exec, st.LocalPkg, opts)
+		if rerr := deploykit.ExecLocalPkgInstall(ctx, deps.Exec, st, supported, deps.Exec.Venue(), opts); rerr != nil {
+			return nil, rerr
+		}
+		reverseOps = st.Reverse()
+	case *spec.SystemPackagesStep:
+		// The format's phase.install.host template lives in the resolved DistroConfig the broker
+		// threads (deps.DistroCfg); render it + RunSystem on the venue (the SAME
+		// deploykit.RenderHostPackageCommand the host-engine deploy paths use, R3).
+		cmd, rerr := deploykit.RenderHostPackageCommand(deps.DistroCfg, st)
+		if rerr != nil {
+			return nil, rerr
+		}
+		if cmd != "" { // empty = no host render for this phase (a clean no-op, not an error)
+			if rerr := deps.Exec.RunSystem(ctx, cmd, opts); rerr != nil {
+				return nil, fmt.Errorf("system packages %s: %w", st.Format, rerr)
+			}
+		}
+		reverseOps = st.Reverse()
+	default:
+		return nil, fmt.Errorf("plugin-installstep: OpExecute for %q is not a deploy-leg host-engine step (only builder / local-pkg-install / system-packages route here; execute every other kind via RunSystem/RunUser/PutFile)", req.GetReserved())
+	}
+	return sdk.BuildDeployReply(reverseOps, "", "")
 }
 
 // genCache holds the *deploykit.Generator built from the "resolved-project" envelope, keyed by

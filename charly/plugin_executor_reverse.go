@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk"
 	pb "github.com/opencharly/spec/proto"
 	"github.com/opencharly/spec/spec"
 )
@@ -146,43 +146,48 @@ func (s *executorReverseServer) RunHostStep(ctx context.Context, req *pb.HostSte
 	var reverseOps []spec.ReverseOp
 	switch st := step.(type) {
 	case *spec.BuilderStep:
-		venueHome, herr := s.exec.ResolveHome(ctx, "")
-		if herr != nil {
-			return &pb.HostStepReply{Error: fmt.Sprintf("resolve venue home: %v", herr)}, nil
-		}
-		// The image resolve/ensure seams are INJECTED closures (deploykit.RunVenueBuilderStep
-		// imports no *Config) — closing over s.build.Cfg/s.build.ProjectDir here, the one
-		// genuine core dependency, mirroring the same shape BuildDepPkgsOnHost already took.
+		// The Builder / LocalPkgInstall / SystemPackages deploy-leg BODIES run plugin-side now
+		// (candy/plugin-installstep's OpExecute, #55 coneD finale) so this file stops importing
+		// sdk/deploykit. The wire-broker dispatch STAYS core-M (this switch); the body is served
+		// over the SAME InvokeProvider(ClassStep, <word>, OpExecute) seam the ExternalPluginStep
+		// + ExternalStep arms below use (R3 — one shared dispatch). The image resolve/ensure
+		// seams are INJECTED closures (deploykit.RunVenueBuilderStep imports no *Config) closing
+		// over s.build.Cfg/s.build.ProjectDir — the one genuine core dependency (coneK1b's #8
+		// keeps resolveImageRefForEnsure's definition; this is its caller, relocated). The
+		// closures + the TYPED venue executor + DistroCfg + opts are live, non-serializable
+		// values, so they thread via sdk.ContextWithHostStepDeps (in-proc, the overlayBuildInputs
+		// pattern — charly/build_overlay.go threads live plans + the parent venue the same way).
 		resolveImage := func(img string) (string, error) {
 			return resolveImageRefForEnsure(img, s.build.Cfg, s.build.ProjectDir)
 		}
 		ensureImage := func(ctx context.Context, img string) error {
 			return dispatchBuildEnsure(ctx, img, s.build.ProjectDir, "", "")
 		}
-		if rerr := deploykit.RunVenueBuilderStep(ctx, s.exec, venueHome, resolveImage, ensureImage, st, opts); rerr != nil {
-			return &pb.HostStepReply{Error: rerr.Error()}, nil
-		}
-		reverseOps = st.Reverse()
-	case *spec.LocalPkgInstallStep:
-		supported := deploykit.VenueHasPkgManager(ctx, s.exec, st.LocalPkg, opts)
-		if rerr := deploykit.ExecLocalPkgInstall(ctx, s.exec, st, supported, s.exec.Venue(), opts); rerr != nil {
-			return &pb.HostStepReply{Error: rerr.Error()}, nil
-		}
-		reverseOps = st.Reverse()
-	case *spec.SystemPackagesStep:
-		// The format's phase.install.host template lives in the resolved DistroConfig the
-		// plugin cannot reach — render it host-side (the SAME deploykit.RenderHostPackageCommand
-		// the host-engine deploy paths use, R3) and RunSystem on the venue.
-		cmd, rerr := deploykit.RenderHostPackageCommand(s.build.DistroCfg, st)
+		deps := &sdk.HostStepDeps{Exec: s.exec, ResolveImage: resolveImage, EnsureImage: ensureImage, DistroCfg: s.build.DistroCfg, Opts: opts}
+		reply, rerr := s.invokeExternalStep(sdk.ContextWithHostStepDeps(ctx, deps), ClassStep, pluginEmitStepWords[spec.StepKindBuilder], req.GetStepJson())
 		if rerr != nil {
 			return &pb.HostStepReply{Error: rerr.Error()}, nil
 		}
-		if cmd != "" { // empty = no host render for this phase (a clean no-op, not an error)
-			if rerr := s.exec.RunSystem(ctx, cmd, opts); rerr != nil {
-				return &pb.HostStepReply{Error: fmt.Sprintf("system packages %s: %v", st.Format, rerr)}, nil
-			}
+		reverseOps = reply.ReverseOps
+	case *spec.LocalPkgInstallStep:
+		// The LocalPkgInstall body (deploykit.VenueHasPkgManager + ExecLocalPkgInstall) runs
+		// plugin-side; only the typed venue executor + opts thread (no closures/DistroCfg needed).
+		deps := &sdk.HostStepDeps{Exec: s.exec, DistroCfg: s.build.DistroCfg, Opts: opts}
+		reply, rerr := s.invokeExternalStep(sdk.ContextWithHostStepDeps(ctx, deps), ClassStep, pluginEmitStepWords[spec.StepKindLocalPkgInstall], req.GetStepJson())
+		if rerr != nil {
+			return &pb.HostStepReply{Error: rerr.Error()}, nil
 		}
-		reverseOps = st.Reverse()
+		reverseOps = reply.ReverseOps
+	case *spec.SystemPackagesStep:
+		// The SystemPackages body (deploykit.RenderHostPackageCommand over the resolved
+		// DistroCfg + RunSystem on the venue) runs plugin-side; the DistroCfg threads via
+		// HostStepDeps (the plugin cannot reach the host's distro vocabulary otherwise).
+		deps := &sdk.HostStepDeps{Exec: s.exec, DistroCfg: s.build.DistroCfg, Opts: opts}
+		reply, rerr := s.invokeExternalStep(sdk.ContextWithHostStepDeps(ctx, deps), ClassStep, pluginEmitStepWords[spec.StepKindSystemPackages], req.GetStepJson())
+		if rerr != nil {
+			return &pb.HostStepReply{Error: rerr.Error()}, nil
+		}
+		reverseOps = reply.ReverseOps
 	case *spec.OpStep:
 		// An act-verb OpStep (a `run: plugin: <verb>` whose builtin ProvisionActor shell
 		// needs the in-proc registry). resolveProvisionScript is the SAME Op→act-shell seam
