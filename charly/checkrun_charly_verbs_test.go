@@ -5,39 +5,40 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/opencharly/spec/container"
 	"github.com/opencharly/spec/spec"
-
-	"github.com/opencharly/sdk/kit"
 )
 
 // --- §F resolveLocalImageRef tests ---
 
-// withLocalImages swaps kit.ListLocalImages for the duration of the test.
-func withLocalImages(t *testing.T, images []kit.LocalImageInfo) {
+// withLocalImages swaps container.ListLocalImages for the duration of the test.
+// #55 coneB: the resolution family relocated to spec/container; container.ResolveLocalImageRef
+// reads container's OWN ListLocalImages var (the kit re-export is a value-copy that no longer
+// affects the body) — swap the one the callee reads.
+func withLocalImages(t *testing.T, images []container.LocalImageInfo) {
 	t.Helper()
-	orig := kit.ListLocalImages
-	kit.ListLocalImages = func(engine string) ([]kit.LocalImageInfo, error) {
+	orig := container.ListLocalImages
+	container.ListLocalImages = func(engine string) ([]container.LocalImageInfo, error) {
 		return images, nil
 	}
-	t.Cleanup(func() { kit.ListLocalImages = orig })
+	t.Cleanup(func() { container.ListLocalImages = orig })
 }
 
-// withLocalImageExists swaps kit.LocalImageExists for the duration of the test.
-// P12a: kit.ResolveLocalImageRef (moved from charly's resolveLocalImageRef) reads
-// kit's OWN LocalImageExists var, not core's `LocalImageExists = kit.LocalImageExists`
-// alias (a value-copy at init, not a live reference) — swap the one the callee reads.
+// withLocalImageExists swaps container.LocalImageExists for the duration of the test.
+// #55 coneB: container.ResolveLocalImageRef reads container's OWN LocalImageExists var —
+// swap the one the callee reads.
 func withLocalImageExists(t *testing.T, match func(engine, ref string) bool) {
 	t.Helper()
-	orig := kit.LocalImageExists
-	kit.LocalImageExists = match
-	t.Cleanup(func() { kit.LocalImageExists = orig })
+	orig := container.LocalImageExists
+	container.LocalImageExists = match
+	t.Cleanup(func() { container.LocalImageExists = orig })
 }
 
 func TestResolveLocalImageRef_FullRefPresent(t *testing.T) {
 	withLocalImageExists(t, func(engine, ref string) bool {
 		return ref == "ghcr.io/opencharly/jupyter:latest"
 	})
-	got, err := kit.ResolveLocalImageRef("podman", "ghcr.io/opencharly/jupyter:latest")
+	got, err := container.ResolveLocalImageRef("podman", "ghcr.io/opencharly/jupyter:latest")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -48,14 +49,14 @@ func TestResolveLocalImageRef_FullRefPresent(t *testing.T) {
 
 func TestResolveLocalImageRef_FullRefAbsent(t *testing.T) {
 	withLocalImageExists(t, func(engine, ref string) bool { return false })
-	_, err := kit.ResolveLocalImageRef("podman", "ghcr.io/acme/missing:latest")
+	_, err := container.ResolveLocalImageRef("podman", "ghcr.io/acme/missing:latest")
 	if err == nil || !strings.Contains(err.Error(), "image not found in local storage") {
-		t.Errorf("expected kit.ErrImageNotLocal, got: %v", err)
+		t.Errorf("expected spec.ErrImageNotLocal, got: %v", err)
 	}
 }
 
 func TestResolveLocalImageRef_ShortNameLabelMatch(t *testing.T) {
-	withLocalImages(t, []kit.LocalImageInfo{
+	withLocalImages(t, []container.LocalImageInfo{
 		{
 			Names:  []string{"ghcr.io/opencharly/jupyter:latest"},
 			Labels: map[string]string{spec.LabelBox: "jupyter"},
@@ -65,7 +66,7 @@ func TestResolveLocalImageRef_ShortNameLabelMatch(t *testing.T) {
 			Labels: map[string]string{spec.LabelBox: "filebrowser"},
 		},
 	})
-	got, err := kit.ResolveLocalImageRef("podman", "jupyter")
+	got, err := container.ResolveLocalImageRef("podman", "jupyter")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -76,10 +77,10 @@ func TestResolveLocalImageRef_ShortNameLabelMatch(t *testing.T) {
 
 func TestResolveLocalImageRef_ShortNameNameMatchFallback(t *testing.T) {
 	// No charly label → falls back to repo-name trailing component match.
-	withLocalImages(t, []kit.LocalImageInfo{
+	withLocalImages(t, []container.LocalImageInfo{
 		{Names: []string{"ghcr.io/someone-else/jupyter:latest"}},
 	})
-	got, err := kit.ResolveLocalImageRef("podman", "jupyter")
+	got, err := container.ResolveLocalImageRef("podman", "jupyter")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -90,7 +91,7 @@ func TestResolveLocalImageRef_ShortNameNameMatchFallback(t *testing.T) {
 
 func TestResolveLocalImageRef_ShortNameLabelPreferredOverName(t *testing.T) {
 	// Both a label-matched image AND a name-matched image exist; label wins.
-	withLocalImages(t, []kit.LocalImageInfo{
+	withLocalImages(t, []container.LocalImageInfo{
 		{
 			Names:  []string{"ghcr.io/someone-else/jupyter:latest"},
 			Labels: map[string]string{}, // name-only
@@ -100,7 +101,7 @@ func TestResolveLocalImageRef_ShortNameLabelPreferredOverName(t *testing.T) {
 			Labels: map[string]string{spec.LabelBox: "jupyter"},
 		},
 	})
-	got, err := kit.ResolveLocalImageRef("podman", "jupyter")
+	got, err := container.ResolveLocalImageRef("podman", "jupyter")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -110,23 +111,23 @@ func TestResolveLocalImageRef_ShortNameLabelPreferredOverName(t *testing.T) {
 }
 
 func TestResolveLocalImageRef_ShortNameAmbiguousError(t *testing.T) {
-	withLocalImages(t, []kit.LocalImageInfo{
+	withLocalImages(t, []container.LocalImageInfo{
 		{Names: []string{"ghcr.io/one/jupyter:latest"}},
 		{Names: []string{"ghcr.io/two/jupyter:latest"}},
 	})
-	_, err := kit.ResolveLocalImageRef("podman", "jupyter")
+	_, err := container.ResolveLocalImageRef("podman", "jupyter")
 	if err == nil || !strings.Contains(err.Error(), "ambiguous") {
 		t.Errorf("expected ambiguous error, got: %v", err)
 	}
 }
 
 func TestResolveLocalImageRef_ShortNameNoMatch(t *testing.T) {
-	withLocalImages(t, []kit.LocalImageInfo{
+	withLocalImages(t, []container.LocalImageInfo{
 		{Names: []string{"ghcr.io/opencharly/jupyter:latest"}},
 	})
-	_, err := kit.ResolveLocalImageRef("podman", "filebrowser")
+	_, err := container.ResolveLocalImageRef("podman", "filebrowser")
 	if err == nil || !strings.Contains(err.Error(), "image not found in local storage") {
-		t.Errorf("expected kit.ErrImageNotLocal, got: %v", err)
+		t.Errorf("expected spec.ErrImageNotLocal, got: %v", err)
 	}
 }
 

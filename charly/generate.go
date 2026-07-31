@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/lock"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -232,7 +232,7 @@ func (g *Generator) createRemoteCandyCopies() error {
 			_ = os.RemoveAll(tmp)
 			return fmt.Errorf("copying remote candy %s: %s: %w", ref, string(out), err)
 		}
-		if err := kit.InstallDirAtomic(tmp, filepath.Join(candyRoot, spec.CandyStageDirName(layer))); err != nil {
+		if err := lock.InstallDirAtomic(tmp, filepath.Join(candyRoot, spec.CandyStageDirName(layer))); err != nil {
 			return fmt.Errorf("installing remote candy %s: %w", ref, err)
 		}
 	}

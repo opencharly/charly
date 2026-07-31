@@ -10,7 +10,7 @@ import (
 	"sync"
 
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/container"
 	specexec "github.com/opencharly/spec/exec"
 	"github.com/opencharly/spec/spec"
 )
@@ -155,7 +155,7 @@ func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ build
 	case tag != "":
 		baseRef = base + ":" + tag
 	default:
-		if resolved, rerr := kit.ResolveNewestLocalCalVer("podman", base); rerr == nil && resolved != "" {
+		if resolved, rerr := container.ResolveNewestLocalCalVer("podman", base); rerr == nil && resolved != "" {
 			baseRef = resolved
 		} else {
 			baseRef = base
@@ -180,7 +180,7 @@ func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ build
 	var baseUser string
 	var baseSecurity *spec.Security
 	baseRegistry := readImageRegistry("podman", baseRef)
-	if baseMeta, merr := deploykit.ExtractMetadata("podman", baseRef); merr == nil && baseMeta != nil {
+	if baseMeta, merr := container.ExtractMetadata("podman", baseRef); merr == nil && baseMeta != nil {
 		baseUser = baseMeta.User
 		sec := baseMeta.Security
 		baseSecurity = &sec

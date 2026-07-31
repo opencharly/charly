@@ -8,6 +8,7 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/loaderkit"
+	"github.com/opencharly/spec/container"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -68,10 +69,12 @@ func TestInitDefLabel_RoundTrip(t *testing.T) {
 		t.Fatalf("bake seam did not emit %s with payload %s; got: %q", spec.LabelInitDef, payload, emitted)
 	}
 
-	// Parse path: deploykit.ExtractMetadata reads the label value podman returns (raw JSON).
-	orig := deploykit.InspectLabels
-	defer func() { deploykit.InspectLabels = orig }()
-	deploykit.InspectLabels = func(engine, imageRef string) (map[string]string, error) {
+	// Parse path: container.ExtractMetadata reads the label value podman returns (raw JSON).
+	// #55 coneB: ExtractMetadata relocated to spec/container; it reads container's OWN InspectLabels
+	// var (the deploykit re-export is a value-copy that no longer affects the body) — override that.
+	orig := container.InspectLabels
+	defer func() { container.InspectLabels = orig }()
+	container.InspectLabels = func(engine, imageRef string) (map[string]string, error) {
 		return map[string]string{
 			spec.LabelVersion: "2026.001.0000",
 			spec.LabelBox:     "round-trip",
@@ -79,7 +82,7 @@ func TestInitDefLabel_RoundTrip(t *testing.T) {
 			spec.LabelInitDef: string(payload),
 		}, nil
 	}
-	meta, err := deploykit.ExtractMetadata("podman", "round-trip")
+	meta, err := container.ExtractMetadata("podman", "round-trip")
 	if err != nil {
 		t.Fatalf("ExtractMetadata: %v", err)
 	}

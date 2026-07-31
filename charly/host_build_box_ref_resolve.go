@@ -25,7 +25,7 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/container"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -41,7 +41,7 @@ func resolveImageRefForEnsure(image string, cfg *Config, projectDir string) (str
 	if image == "" {
 		return "", fmt.Errorf("empty image")
 	}
-	if kit.LooksLikeFullRef(image) {
+	if container.LooksLikeFullRef(image) {
 		return image, nil
 	}
 	if cfg == nil {
@@ -55,7 +55,7 @@ func resolveImageRefForEnsure(image string, cfg *Config, projectDir string) (str
 	if err != nil {
 		return "", fmt.Errorf("resolving %q via charly.yml: %w", image, err)
 	}
-	return kit.ResolveShellImageRef(resolved.Registry, resolved.Name, ""), nil
+	return container.ResolveShellImageRef(resolved.Registry, resolved.Name, ""), nil
 }
 
 // buildableShortNameForEnsure returns the short name (project charly.yml key) this identifier
@@ -74,7 +74,7 @@ func buildableShortNameForEnsure(image string, cfg *Config) string {
 	if cfg == nil || cfg.Box == nil || image == "" {
 		return ""
 	}
-	stripped := kit.StripURLScheme(image)
+	stripped := spec.StripURLScheme(image)
 	if spec.IsRemoteImageRef(stripped) {
 		return ""
 	}
@@ -135,7 +135,7 @@ func hostBuildBoxRefResolve(_ context.Context, req spec.BoxRefResolveRequest, _ 
 	if short != "" && cfg != nil {
 		if vopts, oerr := resolveVocabOpts(dir, spec.ResolveOpts{}); oerr == nil {
 			if resolved, err := deploykit.ResolveSpecBox(cfg, short, "", dir, vopts); err == nil && resolved != nil {
-				reply.ProducedRef = kit.ResolveShellImageRef(resolved.Registry, resolved.Name, "")
+				reply.ProducedRef = container.ResolveShellImageRef(resolved.Registry, resolved.Name, "")
 			}
 		}
 	}
