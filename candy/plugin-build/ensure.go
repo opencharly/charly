@@ -16,14 +16,21 @@ package build
 //  2. Cross-engine transfer (`docker save | podman load`) when the build engine != the run
 //     engine AND the image is present in the build engine's storage.
 //  3. Resolve + pull + build-fallback: resolve the identifier against the project's charly.yml
-//     via the "box-ref-resolve" HostBuild seam (a remote @github.com/... ref instead routes
-//     through "remote-image-resolve"), attempt `podman pull`, and on failure fall back to a
-//     local build — reached via the SAME in-process runBoxBuild this candy already owns for the
+//     PLUGIN-SIDE via the K1 loader reverse legs (loaderkit.LoadUnified — a remote
+//     @github.com/... ref instead routes through "remote-image-resolve" for the git clone/cache,
+//     then resolveRemoteImageRef), attempt `podman pull`, and on failure fall back to a local
+//     build — reached via the SAME in-process runBoxBuild this candy already owns for the
 //     build:box word (no new build seam), tag-aliasing the produced image onto a pinned-tag
 //     input ref when the two differ.
 //
-// Only tier 3 needs the host at all (project-coupled resolution); tiers 1-2 and the podman
-// pull/tag exec are pure sdk/kit + os/exec, no HostBuild round trip.
+// Tier 3 needs NO host round trip anymore: the box-ref resolve (ExistsRef/PullRef/
+// BuildFallbackShort/ProducedRef) is computed plugin-side off the cfg the K1 loader reverse legs
+// return (byte-identical Registry/Name to the former host-side deploykit.ResolveSpecBox path —
+// buildkit config_resolve.go:101-103: resolved.Registry = img.Registry || cfg.Defaults.Registry,
+// resolved.Name = leaf after namespace descent). The "box-ref-resolve" HostBuild seam is DELETED
+// (#55 coneK1 #8 — deploykit.ResolveSpecBox shed from the build:ensure path; the host file keeps
+// only resolveImageRefForEnsure for the builder-venue reverse leg, coneD territory). Tiers 1-2
+// and the podman pull/tag exec are pure sdk/kit + os/exec.
 
 import (
 	"context"
@@ -31,6 +38,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
@@ -50,10 +58,9 @@ func runBoxEnsure(ctx context.Context, ex *sdk.Executor, req spec.BuildEnsureReq
 
 	// Tier 1: already present. Only matches a FULL ref (podman/docker "image exists" needs a
 	// real storage key — a bare short name never matches here); a short name's existence check
-	// happens in tier 3 via the resolved ref from the "box-ref-resolve" seam. Prints the SAME
-	// "present" line the former core ensure-image helper's top-level short-circuit did, so every
-	// caller (charly box pull included) sees consistent progress output regardless of which tier
-	// hit.
+	// happens in tier 3 via the plugin-side resolved ref. Prints the SAME "present" line the
+	// former core ensure-image helper's top-level short-circuit did, so every caller (charly box
+	// pull included) sees consistent progress output regardless of which tier hit.
 	if kit.LocalImageExists(runEngine, req.Image) {
 		fmt.Fprintf(os.Stderr, "ensure-image: %s present\n", req.Image)
 		return nil
@@ -69,11 +76,12 @@ func runBoxEnsure(ctx context.Context, ex *sdk.Executor, req spec.BuildEnsureReq
 }
 
 // ensureViaResolveAndBuild implements tier 3. A remote (@github.com/...) ref resolves via the
-// "remote-image-resolve" seam (host-side clone/cache; the box-RESOLVE + registry pull ref now run
-// plugin-side — see resolveRemoteImageRef); every other identifier resolves via "box-ref-resolve"
-// (ResolveBox / FindBoxByLeaf host-side). Both branches mirror the deleted core ensure-image
-// helper's algorithm verbatim: check existence of the resolved ref, attempt a
-// pull, and on failure fall back to a build.
+// "remote-image-resolve" seam (host-side clone/cache ONLY; the box-RESOLVE + registry pull ref
+// run plugin-side — see resolveRemoteImageRef); every other identifier resolves PLUGIN-SIDE
+// (ensureProjectRef loads the cfg via the K1 loader reverse legs + resolves Registry/Name
+// directly, no host seam). Both branches mirror the deleted core ensure-image helper's algorithm
+// verbatim: check existence of the resolved ref, attempt a pull, and on failure fall back to a
+// build.
 func ensureViaResolveAndBuild(ctx context.Context, ex *sdk.Executor, image, dir string) error {
 	stripped := kit.StripURLScheme(image)
 	if spec.IsRemoteImageRef(stripped) {
@@ -148,10 +156,25 @@ func resolveRemoteImageRef(ctx context.Context, ex *sdk.Executor, dir, boxName s
 }
 
 func ensureProjectRef(ctx context.Context, ex *sdk.Executor, image, dir string) error {
-	br, err := boxRefResolve(ctx, ex, image, dir)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "ensure-image: resolve %s: %v\n", image, err)
-		br = spec.BoxRefResolveReply{}
+	// Plugin-side self-resolve (#55 coneK1 #8): load the project cfg via the K1 loader reverse
+	// legs + compute all 4 box-ref reply fields directly — NO "box-ref-resolve" HostBuild seam
+	// (deleted) and NO deploykit.ResolveSpecBox (the host-side deploykit call is shed from this
+	// path). Byte-identical Registry/Name to the former host path: resolved.Registry =
+	// img.Registry || cfg.Defaults.Registry, resolved.Name = leaf after namespace descent
+	// (buildkit/config_resolve.go:101-103), then kit.ResolveShellImageRef. A nil cfg (load
+	// failed / no charly.yml) mirrors the former host behavior where LoadConfig erroring left
+	// cfg nil → resolveImageRefForEnsure errored → ExistsRef/PullRef empty + build-fallback
+	// attempted against a nil cfg (→ "" → the "no buildable short-name match" error).
+	cfg := loadProjectCfgForEnsure(ctx, ex, dir)
+
+	var br spec.BoxRefResolveReply
+	if ref := resolveImageRefPlugin(image, cfg); ref != "" {
+		br.ExistsRef = ref
+		br.PullRef = ref
+	}
+	br.BuildFallbackShort = buildableShortNamePlugin(image, cfg)
+	if br.BuildFallbackShort != "" {
+		br.ProducedRef = resolveImageRefPlugin(br.BuildFallbackShort, cfg)
 	}
 
 	if br.ExistsRef != "" && kit.LocalImageExists("podman", br.ExistsRef) {
@@ -194,21 +217,96 @@ func ensureProjectRef(ctx context.Context, ex *sdk.Executor, image, dir string) 
 	return nil
 }
 
-// boxRefResolve calls the "box-ref-resolve" HostBuild seam.
-func boxRefResolve(ctx context.Context, ex *sdk.Executor, image, dir string) (spec.BoxRefResolveReply, error) {
-	reqJSON, err := json.Marshal(spec.BoxRefResolveRequest{Image: image, Dir: dir})
-	if err != nil {
-		return spec.BoxRefResolveReply{}, err
+// loadProjectCfgForEnsure loads the project cfg for the build:ensure plugin-side resolve, via the
+// K1 loader reverse legs (the SAME load path resolveRemoteImageRef uses). Returns nil on any
+// load failure / absent charly.yml so the callers fall through to the build-fallback / "no
+// buildable short-name match" error exactly as the former host path did when LoadConfig erroring
+// left cfg nil.
+func loadProjectCfgForEnsure(ctx context.Context, ex *sdk.Executor, dir string) *spec.Config {
+	exec := &buildLoaderExecutor{ctx: ctx, ex: ex}
+	uf, ok, err := loaderkit.LoadUnified(dir, loaderkit.LoadSeamsFromExecutor(exec))
+	if err != nil || !ok || uf == nil {
+		return nil
 	}
-	replyJSON, err := ex.HostBuild(ctx, "box-ref-resolve", reqJSON)
-	if err != nil {
-		return spec.BoxRefResolveReply{}, err
+	return uf.ProjectConfig()
+}
+
+// resolveImageRefPlugin converts a user-authored image identifier into a fully-qualified
+// registry ref usable for `LocalImageExists` / `podman pull`, PLUGIN-SIDE. Full refs pass
+// through; short / qualified names resolve against cfg via the namespace-aware ResolveBoxRef
+// (byte-identical to the former host resolveImageRefForEnsure → deploykit.ResolveSpecBox →
+// buildkit.ResolveBox path: namespace descent via SplitNamespaceRef, resolved.Name = leaf,
+// resolved.Registry = img.Registry || nsCfg.Defaults.Registry, then ResolveShellImageRef).
+// Returns "" when the identifier can't be resolved (nil cfg, box not found) so the caller skips
+// the pull and falls back to a build — mirroring the former host path where a resolve error left
+// ExistsRef/PullRef empty.
+func resolveImageRefPlugin(image string, cfg *spec.Config) string {
+	if image == "" {
+		return ""
 	}
-	var reply spec.BoxRefResolveReply
-	if err := json.Unmarshal(replyJSON, &reply); err != nil {
-		return spec.BoxRefResolveReply{}, fmt.Errorf("decode box-ref-resolve reply: %w", err)
+	if kit.LooksLikeFullRef(image) {
+		return image
 	}
-	return reply, nil
+	if cfg == nil {
+		return ""
+	}
+	img, nsCfg, ok := cfg.ResolveBoxRef(image)
+	if !ok {
+		return ""
+	}
+	registry := img.Registry
+	if registry == "" {
+		registry = nsCfg.Defaults.Registry
+	}
+	return kit.ResolveShellImageRef(registry, spec.LeafName(image), "")
+}
+
+// buildableShortNamePlugin returns the short name (project charly.yml key) this identifier maps
+// to, or "" when no local build-fallback is possible. Ported verbatim from the former host
+// buildableShortNameForEnsure (charly/host_build_box_ref_resolve.go, deleted in this cutover):
+// the host builder is gone, the plugin owns the build-fallback resolve now.
+//
+// Algorithm:
+//   - Short names (no slash, no @prefix) are returned as-is when `cfg.Box[name]` exists.
+//   - Full registry refs have their basename (last path segment, before the tag) extracted and
+//     resolved via FindBoxByLeaf, which searches the root image map AND every imported
+//     namespace.
+//   - Remote `@github.com/...` refs are skipped (defense-in-depth; ensureViaResolveAndBuild
+//     routes a remote ref through ensureRemoteRef before it would ever reach this function).
+func buildableShortNamePlugin(image string, cfg *spec.Config) string {
+	if cfg == nil || cfg.Box == nil || image == "" {
+		return ""
+	}
+	stripped := spec.StripURLScheme(image)
+	if spec.IsRemoteImageRef(stripped) {
+		return ""
+	}
+	// Strip tag if present. Be careful: a registry like "localhost:5000/foo" has a colon
+	// BEFORE the first slash that's the port, not the tag separator.
+	work := image
+	firstSlash := strings.Index(work, "/")
+	lastColon := strings.LastIndex(work, ":")
+	if lastColon >= 0 && (firstSlash < 0 || lastColon > firstSlash) {
+		work = work[:lastColon]
+	}
+	// Take the last path segment.
+	if i := strings.LastIndex(work, "/"); i >= 0 {
+		work = work[i+1:]
+	}
+	if work == "" {
+		return ""
+	}
+	// A QUALIFIED (namespaced) input resolves directly — `fedora.fedora-builder` names a
+	// buildable image as-is; the leaf lookup below can never match a dotted ref.
+	if strings.Contains(work, ".") {
+		if _, _, ok := cfg.ResolveBoxRef(work); ok {
+			return work
+		}
+	}
+	if q, ok := cfg.FindBoxByLeaf(work); ok {
+		return q
+	}
+	return ""
 }
 
 // remoteImageResolve calls the "remote-image-resolve" HostBuild seam.

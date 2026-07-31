@@ -18,11 +18,13 @@ plugin-build:
             building each image (Containerfile piped over stdin), gating the inline merge on the
             box's MergeAuto, and pushing (podman) after merge; build:generate renders the .build/
             Containerfile tree in its own code (via sdk/deploykit, #67) and returns the written paths
-            (no podman, no merge); build:ensure reaches HostBuild("box-ref-resolve", …) / HostBuild
-            ("remote-image-resolve", …) to resolve a project-authored / remote image identifier
-            against charly.yml, then execs `podman pull`/`podman tag` directly (no seam needed for
-            that — same host, same privilege as the build drive's own podman exec). Only the wire
-            envelopes cross the seam; the podman exec happens IN the candy. COMPILED-IN (in the
+            (no podman, no merge); build:ensure resolves a project-authored image identifier
+            against charly.yml PLUGIN-SIDE (loaderkit.LoadUnified via the K1 loader reverse legs —
+            no "box-ref-resolve" HostBuild seam, shed #55 coneK1 #8) and a remote
+            @github.com/... identifier via HostBuild("remote-image-resolve", …) (git clone/cache
+            ONLY, then plugin-side resolve), then execs `podman pull`/`podman tag` directly (no
+            seam needed for that — same host, same privilege as the build drive's own podman exec).
+            Only the wire envelopes cross the seam; the podman exec happens IN the candy. COMPILED-IN (in the
             embedded compiled_plugins:) — `charly box build` / `charly box generate` / every
             dispatchBuildEnsure caller dispatch it IN-PROCESS, the host threading the reverse
             channel onto the Invoke context so HostBuild is reachable without a go-plugin broker.
