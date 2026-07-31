@@ -12,7 +12,7 @@
 //     keyring re-probe (reset) over go-plugin gRPC. The host go-builds this binary and
 //     serves it OUT-OF-PROCESS via LocalTransport, so the keyring backend dispatches
 //     through the provider registry exactly like a built-in — every core credential
-//     consumer (enc.go / secrets.go / layer_secrets.go / config_secret_migration.go /
+//     consumer (enc.go / secrets.go / layer_secrets.go /
 //     runtime_config.go / vnc_helpers.go) is unchanged.
 //
 //   - command:secrets — `charly secrets …`, the externalized secrets CLI (list / get /

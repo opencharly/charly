@@ -153,24 +153,13 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 		return err
 	}
 
-	var migRep spec.PodConfigMigrateSecretsReply
-	dcJSON, _ := json.Marshal(dc)
-	if err := hostBuild(ctx, ex, podConfigMigrateSecretsKind, spec.PodConfigMigrateSecretsRequest{
-		ConfigJSON: dcJSON, MetaJSON: ensureRep.MetaJSON, Box: c.Box, Instance: c.Instance,
-	}, &migRep); err == nil && len(migRep.ConfigJSON) > 0 {
-		// A partial/failed decode here would leave dc a hybrid of the pre- and post-migration shape
-		// (json.Unmarshal can populate fields before erroring) — never silently discarded.
-		if err := json.Unmarshal(migRep.ConfigJSON, &dc); err != nil {
-			return fmt.Errorf("decoding migrated deploy config: %w", err)
-		}
-	}
-
-	var scrubRep spec.PodConfigScrubCliEnvReply
-	if err := hostBuild(ctx, ex, podConfigScrubCliEnvKind, spec.PodConfigScrubCliEnvRequest{
-		CliEnv: c.Env, MetaJSON: ensureRep.MetaJSON,
-	}, &scrubRep); err == nil {
-		c.Env = scrubRep.Cleaned
-	}
+	// Migrate plaintext env secrets + scrub CLI env credentials PLUGIN-SIDE (#55 coneC Unit C4):
+	// the former HostBuild round-trip to charly's host_build_pod_config_seams.go host builders is
+	// deleted; the logic relocated to secret_migration.go in this package. migrate mutates dc
+	// in-place + persists via saveBundle; scrub mutates c.Env in-place. Both best-effort — matching
+	// the former `err == nil` swallow (a credential-store failure keeps the plaintext/CLI value).
+	_, _ = migratePlaintextEnvSecret(ctx, ex, dc, &meta, c.Box, c.Instance)
+	c.Env, _ = scrubSecretCLIEnv(ctx, ex, c.Env, &meta)
 
 	if err := persistResourceCaps(ctx, ex, &dc, c); err != nil {
 		return fmt.Errorf("persisting resource caps: %w", err)

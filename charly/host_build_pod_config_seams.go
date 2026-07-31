@@ -28,8 +28,6 @@ const (
 	podConfigLoadDeployKind       = "pod-config-load-deploy"
 	podConfigSaveBundleKind       = "pod-config-save-bundle"
 	podConfigLoadBundleKind       = "pod-config-load-bundle"
-	podConfigMigrateSecretsKind   = "pod-config-migrate-secrets"
-	podConfigScrubCliEnvKind      = "pod-config-scrub-cli-env"
 	podConfigDetectDevicesKind    = "pod-config-detect-devices"
 	podConfigTunnelResolveKind    = "pod-config-tunnel-resolve"
 	podConfigSSHKeyKind           = "pod-config-ssh-key"
@@ -159,35 +157,6 @@ func hostBuildPodConfigLoadBundle(_ context.Context, _ spec.PodConfigLoadDeployR
 	return spec.PodConfigLoadBundleReply{ConfigJSON: b}, nil
 }
 
-func hostBuildPodConfigMigrateSecrets(_ context.Context, req spec.PodConfigMigrateSecretsRequest, _ buildEngineContext) (spec.PodConfigMigrateSecretsReply, error) {
-	var dc deploykit.BundleConfig
-	if err := json.Unmarshal(req.ConfigJSON, &dc); err != nil {
-		return spec.PodConfigMigrateSecretsReply{}, err
-	}
-	var meta spec.BoxMetadata
-	if err := json.Unmarshal(req.MetaJSON, &meta); err != nil {
-		return spec.PodConfigMigrateSecretsReply{}, err
-	}
-	migrated, err := MigratePlaintextEnvSecret(&dc, &meta, req.Box, req.Instance)
-	if err != nil {
-		return spec.PodConfigMigrateSecretsReply{}, err
-	}
-	b, merr := json.Marshal(&dc)
-	if merr != nil {
-		return spec.PodConfigMigrateSecretsReply{}, merr
-	}
-	return spec.PodConfigMigrateSecretsReply{ConfigJSON: b, Migrated: migrated}, nil
-}
-
-func hostBuildPodConfigScrubCliEnv(_ context.Context, req spec.PodConfigScrubCliEnvRequest, _ buildEngineContext) (spec.PodConfigScrubCliEnvReply, error) {
-	var meta spec.BoxMetadata
-	if err := json.Unmarshal(req.MetaJSON, &meta); err != nil {
-		return spec.PodConfigScrubCliEnvReply{}, err
-	}
-	cleaned, imported := scrubSecretCLIEnv(req.CliEnv, &meta)
-	return spec.PodConfigScrubCliEnvReply{Cleaned: cleaned, Imported: imported}, nil
-}
-
 func hostBuildPodConfigDetectDevices(_ context.Context, req spec.PodConfigDetectDevicesRequest, _ buildEngineContext) (spec.PodConfigDetectDevicesReply, error) {
 	var detected DetectedDevices
 	if !req.NoAutoDetect {
@@ -270,8 +239,6 @@ var _ = func() bool {
 	registerHostBuilder(podConfigLoadDeployKind, typedHostBuilder(podConfigLoadDeployKind, hostBuildPodConfigLoadDeploy))
 	registerHostBuilder(podConfigSaveBundleKind, typedHostBuilder(podConfigSaveBundleKind, hostBuildPodConfigSaveBundle))
 	registerHostBuilder(podConfigLoadBundleKind, typedHostBuilder(podConfigLoadBundleKind, hostBuildPodConfigLoadBundle))
-	registerHostBuilder(podConfigMigrateSecretsKind, typedHostBuilder(podConfigMigrateSecretsKind, hostBuildPodConfigMigrateSecrets))
-	registerHostBuilder(podConfigScrubCliEnvKind, typedHostBuilder(podConfigScrubCliEnvKind, hostBuildPodConfigScrubCliEnv))
 	registerHostBuilder(podConfigDetectDevicesKind, typedHostBuilder(podConfigDetectDevicesKind, hostBuildPodConfigDetectDevices))
 	registerHostBuilder(podConfigTunnelResolveKind, typedHostBuilder(podConfigTunnelResolveKind, hostBuildPodConfigTunnelResolve))
 	registerHostBuilder(podConfigSSHKeyKind, typedHostBuilder(podConfigSSHKeyKind, hostBuildPodConfigSSHKey))
