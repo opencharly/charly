@@ -14,8 +14,9 @@ plugin-vm:
             host-only Mechanisms over generic seams: the config loader + deploy-ledger READ via
             HostBuild("config-resolve"), the deploy-ledger WRITE plugin-side via
             deploykit.SaveVmDeployState/RemoveVmDeployEntry directly (#55 coneC-dsh β2 — the
-            config-persist host seam is deleted), the VM-disk build engine via
-            HostBuild("vm-build"), egress via verb:egress, preempt via verb:arbiter, GPU via verb:gpu.
+            config-persist host seam is deleted), the VM-disk build engine plugin-side
+            (candy/plugin-vm/vm_build_resolve.go — the former HostBuild("vm-build") is deleted),
+            egress via verb:egress, preempt via verb:arbiter, GPU via verb:gpu.
             All of it is backed by go-libvirt + kata-containers/govmm + libvirt.org/go/libvirtxml,
             compiled into charly for this canonical placement. The `libvirt:` verb dispatches through
             the provider registry exactly like a built-in (the `libvirt: <method>` sugar desugars to

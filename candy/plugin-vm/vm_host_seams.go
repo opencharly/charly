@@ -14,8 +14,9 @@ import (
 // vm_host_seams.go — the command:vm plugin's bridge to the host. The VM CLI handlers moved out of
 // charly core (P10); the config loader + runtime-settings store + deploy ledger + egress subsystem
 // are core Mechanisms a plugin cannot import (separate module), so the handlers reach them over the
-// in-proc reverse channel: config → HostBuild("config-resolve"), ledger writes → HostBuild(
-// "config-persist"), egress → InvokeProvider(verb:egress). command:vm is COMPILED-IN and dispatches
+// in-proc reverse channel: config → HostBuild("config-resolve"), ledger writes plugin-side
+// (candy/plugin-vm/vm_host_persist.go — the former HostBuild("config-persist") is DELETED),
+// egress → InvokeProvider(verb:egress). command:vm is COMPILED-IN and dispatches
 // exactly ONE `charly vm …` invocation per process, so the reverse-channel executor is stashed in a
 // package var at Invoke(OpRun) entry (setCommandContext) — race-free single-command-per-process.
 

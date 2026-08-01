@@ -309,7 +309,7 @@ type pluginBinarySpec struct {
 
 // hostBuildPluginBinary is the "plugin-binary" host-builder (F10): build a candy's plugin provider
 // binary on the host (buildPluginBinary — go build on the host toolchain), returning {"path": …}.
-// The concrete host-build proving the HostBuild capability; M13/M14 register "kustomize"/"image".
+// The concrete host-build proving the HostBuild capability.
 func hostBuildPluginBinary(ctx context.Context, spec pluginBinarySpec, _ buildEngineContext) (map[string]string, error) {
 	if spec.CandyDir == "" || spec.Name == "" {
 		return nil, fmt.Errorf("plugin-binary host-build: spec requires candy_dir + name")

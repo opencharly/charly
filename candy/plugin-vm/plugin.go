@@ -14,8 +14,10 @@
 //     so the handlers run in charly's OWN process and inherit charly's real stdio/TTY natively
 //     (`charly vm console` / `charly vm ssh` stay interactive). They own the CLI + the libvirt/qemu
 //     engine (in-package) and reach the host-only Mechanisms over generic seams: the config loader +
-//     deploy ledger via HostBuild("config-resolve"/"config-persist"), the VM-disk build engine via
-//     HostBuild("vm-build"), egress via verb:egress, preempt via verb:arbiter, GPU via verb:gpu.
+//     deploy ledger via HostBuild("config-resolve") (ledger writes plugin-side via
+//     candy/plugin-vm/vm_host_persist.go — the former config-persist HostBuild is DELETED),
+//     the VM-disk build engine plugin-side (candy/plugin-vm/vm_build_resolve.go — the former
+//     HostBuild("vm-build") is DELETED), egress via verb:egress, preempt via verb:arbiter, GPU via verb:gpu.
 //
 // A standalone Go module (its own go.mod) carrying the go-libvirt + kata-containers/govmm +
 // libvirt.org/go/libvirtxml stack, compiled into charly for the canonical placement. Both

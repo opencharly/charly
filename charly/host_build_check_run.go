@@ -70,7 +70,7 @@ func hostCheckRunPreflight(ctx context.Context, req spec.CheckRunRequest, _ buil
 // DELETED with the move.
 
 // Register the check-run host-builder at package-var init (before any init(), like the
-// config-resolve / cli / vm-build builders).
+// config-resolve / cli / buildengine-prep builders).
 var _ = func() bool {
 	registerHostBuilder(checkRunBuilderKind, typedHostBuilder(checkRunBuilderKind, hostCheckRunPreflight))
 	return true

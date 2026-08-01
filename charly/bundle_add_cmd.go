@@ -43,7 +43,7 @@ import (
 // deployDelCmd resolves a `charly bundle del <name>` target node — the deploy-del-resolve
 // host seam's ONE responsibility (resolveDelNode). The CLI GRAMMAR moved to the
 // command:bundle plugin (candy/plugin-bundle); this struct is reconstructed from
-// spec.DeployDelRequest by hostBuildDeployDelResolve, which populates only Name — the actual
+// spec.DeployDelResolveRequest by hostBuildDeployDelResolve, which populates only Name — the actual
 // teardown EXECUTION lives in host_build_deploy_node_del_dispatch.go's hostBuildDeployNodeDelDispatch.
 type deployDelCmd struct {
 	Name string
