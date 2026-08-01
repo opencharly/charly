@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -56,7 +55,7 @@ import (
 //   implementation used charly-core-private mechanisms (providerRegistry,
 //   connectPluginByWordRef), which now dispatch instead via the class-agnostic
 //   sdk.Executor.InvokeProvider — never because the work itself needed a live LoadUnified
-//   project. The readiness-gated stop-wait (formerly waitStoppedHost) uses kit.ReadinessProvider
+//   project. The readiness-gated stop-wait (formerly waitStoppedHost) uses spec.ReadinessProvider
 //   directly in the plugin — the SAME project-aware resolver charly-core's own init() injects,
 //   shared in-process by this compiled-in placement, so no new host seam was needed for it either.
 //
@@ -174,7 +173,7 @@ func acquireDispatch(action, claimant string, tokens []string, node spec.BundleN
 		Action:    action,
 		Claimant:  claimant,
 		Tokens:    tokens,
-		ClaimAddr: deploykit.HolderAddrFor(claimant, node),
+		ClaimAddr: spec.HolderAddrFor(claimant, node),
 		Transient: transient,
 	})
 	if err != nil {

@@ -36,8 +36,7 @@ func TestComputeEffectiveVersions(t *testing.T) {
 		"derived":     {ResolvedBox: spec.ResolvedBox{Name: "derived", Candy: []string{"a", "b"}, IsExternalBase: true, Base: "quay.io/x:1"}},                             // bare base: candyless + external + dedicated version (what `charly migrate` backfills).
 		"barebase":    {ResolvedBox: spec.ResolvedBox{Name: "barebase", Version: "2026.300.0000", IsExternalBase: true, Base: "quay.io/x:1"}},                             // candyless on an INTERNAL base -> recurse to the base's effective version.
 		"passthrough": {ResolvedBox: spec.ResolvedBox{Name: "passthrough", Base: "barebase"}}}
-	g := &Generator{Boxes: images, Candies: layers}
-	if err := deploykit.ComputeEffectiveVersions(g.Boxes, g.Candies); err != nil {
+	if err := deploykit.ComputeEffectiveVersions(images, layers); err != nil {
 		t.Fatalf("ComputeEffectiveVersions: %v", err)
 	}
 
@@ -55,20 +54,21 @@ func TestComputeEffectiveVersions(t *testing.T) {
 
 	// A candy bump propagates to a deriving image's identity.
 	layers["b"] = testCandy("b", spec.CandyModel{Version: "2026.400.0000"}, spec.CandyView{})
-	g2 := &Generator{Boxes: map[string]*buildkit.ResolvedBox{"derived": {ResolvedBox: spec.ResolvedBox{Name: "derived", Candy: []string{"a", "b"}, IsExternalBase: true, Base: "quay.io/x:1"}}}, Candies: layers}
-	if err := deploykit.ComputeEffectiveVersions(g2.Boxes, g2.Candies); err != nil {
+	// deploykit.ComputeEffectiveVersions operates on the deploykit render Generator's box type
+	// (map[string]*buildkit.ResolvedBox — the vocab-carrying render box). #55 Cluster-B: charly's
+	// own Generator.Boxes is now the wire-clean *spec.ResolvedBox, so this build-render test drives
+	// the deploykit types directly rather than through a charly Generator wrapper.
+	derived := map[string]*buildkit.ResolvedBox{"derived": {ResolvedBox: spec.ResolvedBox{Name: "derived", Candy: []string{"a", "b"}, IsExternalBase: true, Base: "quay.io/x:1"}}}
+	if err := deploykit.ComputeEffectiveVersions(derived, layers); err != nil {
 		t.Fatal(err)
 	}
-	if got := g2.Boxes["derived"].EffectiveVersion; got != "2026.400.0000" {
+	if got := derived["derived"].EffectiveVersion; got != "2026.400.0000" {
 		t.Errorf("after candy bump: EffectiveVersion = %q, want 2026.400.0000", got)
 	}
 
 	// Hard error: candyless external-base image with no version (no fallback).
-	gErr := &Generator{
-		Boxes:   map[string]*buildkit.ResolvedBox{"orphan": {ResolvedBox: spec.ResolvedBox{Name: "orphan", IsExternalBase: true, Base: "quay.io/x:1"}}},
-		Candies: map[string]spec.CandyReader{},
-	}
-	if err := deploykit.ComputeEffectiveVersions(gErr.Boxes, gErr.Candies); err == nil {
+	orphan := map[string]*buildkit.ResolvedBox{"orphan": {ResolvedBox: spec.ResolvedBox{Name: "orphan", IsExternalBase: true, Base: "quay.io/x:1"}}}
+	if err := deploykit.ComputeEffectiveVersions(orphan, map[string]spec.CandyReader{}); err == nil {
 		t.Error("expected a hard error for a candyless external-base image with no version:")
 	}
 }
@@ -106,8 +106,7 @@ func TestBakePluginImpliesRequire_FeedsEffectiveVersion(t *testing.T) {
 	images := map[string]*buildkit.ResolvedBox{ // An image composing ONLY the consumer candy. Its EffectiveVersion must
 		// reflect the baked plugin's (higher) version, reached via the implied require.
 		"img": {ResolvedBox: spec.ResolvedBox{Name: "img", Candy: []string{"consumer-candy"}, IsExternalBase: true, Base: "quay.io/x:1"}}}
-	g := &Generator{Boxes: images, Candies: layers}
-	if err := deploykit.ComputeEffectiveVersions(g.Boxes, g.Candies); err != nil {
+	if err := deploykit.ComputeEffectiveVersions(images, layers); err != nil {
 		t.Fatalf("ComputeEffectiveVersions: %v", err)
 	}
 	if got := images["img"].EffectiveVersion; got != "2026.200.0000" {
@@ -116,11 +115,11 @@ func TestBakePluginImpliesRequire_FeedsEffectiveVersion(t *testing.T) {
 
 	// Bumping the baked plugin's version bumps the composing image's identity.
 	layers["plugin-baked"] = testCandy("plugin-baked", spec.CandyModel{Version: "2026.300.0000"}, spec.CandyView{})
-	g2 := &Generator{Boxes: map[string]*buildkit.ResolvedBox{"img": {ResolvedBox: spec.ResolvedBox{Name: "img", Candy: []string{"consumer-candy"}, IsExternalBase: true, Base: "quay.io/x:1"}}}, Candies: layers}
-	if err := deploykit.ComputeEffectiveVersions(g2.Boxes, g2.Candies); err != nil {
+	images2 := map[string]*buildkit.ResolvedBox{"img": {ResolvedBox: spec.ResolvedBox{Name: "img", Candy: []string{"consumer-candy"}, IsExternalBase: true, Base: "quay.io/x:1"}}}
+	if err := deploykit.ComputeEffectiveVersions(images2, layers); err != nil {
 		t.Fatal(err)
 	}
-	if got := g2.Boxes["img"].EffectiveVersion; got != "2026.300.0000" {
+	if got := images2["img"].EffectiveVersion; got != "2026.300.0000" {
 		t.Fatalf("after baked-plugin bump: EffectiveVersion = %q, want 2026.300.0000", got)
 	}
 

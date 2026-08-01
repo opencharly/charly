@@ -130,7 +130,7 @@ func TestExternalStepKind_EndToEnd(t *testing.T) {
 	// returned Containerfile fragment — baking the persistent build marker with the opaque
 	// payload's value (proving the Payload round-trips through OpEmit too, and that a step kind
 	// with an EmitOCI fragment can be EXTERNALIZED — the one addition C1 needs).
-	frag, err := ociEmitStep(step, &spec.InstallPlan{Box: "check-stepkind"}, []string{"fedora"}, buildEngineContext{Box: &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "check-stepkind", Tags: []string{"fedora"}}}})
+	frag, err := ociEmitStep(step, &spec.InstallPlan{Box: "check-stepkind"}, []string{"fedora"}, buildEngineContext{Box: &spec.ResolvedBox{Name: "check-stepkind", Tags: []string{"fedora"}}})
 	if err != nil {
 		t.Fatalf("ociEmitStep(external:examplestepkind): %v", err)
 	}

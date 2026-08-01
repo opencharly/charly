@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/kit"
+	specexec "github.com/opencharly/spec/exec"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -44,7 +44,7 @@ func invokePodConfigOp(ctx context.Context, op string, reqJSON []byte) ([]byte, 
 	if !ok {
 		return nil, fmt.Errorf("deploy:pod provider does not support the executor reverse channel (%s)", op)
 	}
-	res, err := inv.InvokeWithExecutor(ctx, &Operation{Reserved: "pod", Op: op, Params: reqJSON}, kit.ShellExecutor{}, buildEngineContext{}, false, nil)
+	res, err := inv.InvokeWithExecutor(ctx, &Operation{Reserved: "pod", Op: op, Params: reqJSON}, specexec.ShellExecutor{}, buildEngineContext{}, false, nil)
 	if err != nil {
 		return nil, fmt.Errorf("deploy:pod %s: %w", op, err)
 	}

@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -89,7 +88,7 @@ func fx(t *testing.T, mycandyBody string) string {
 // substring in want.
 func mustValidateErr(t *testing.T, dir string, want ...string) {
 	t.Helper()
-	err := validateProjectForBuild(dir, loaderkit.ResolveOpts{})
+	err := validateProjectForBuild(dir, spec.ResolveOpts{})
 	if err == nil {
 		t.Fatalf("expected validation error, got nil")
 	}
@@ -103,7 +102,7 @@ func mustValidateErr(t *testing.T, dir string, want ...string) {
 // mustValidateOK runs the real validate gate over dir and fails if it reports any error.
 func mustValidateOK(t *testing.T, dir string) {
 	t.Helper()
-	if err := validateProjectForBuild(dir, loaderkit.ResolveOpts{}); err != nil {
+	if err := validateProjectForBuild(dir, spec.ResolveOpts{}); err != nil {
 		t.Fatalf("expected no validation error, got: %v", err)
 	}
 }
@@ -511,7 +510,7 @@ fedora-img:
           package: [google-chrome]
     plan: [{check: x, command: "true", context: [build]}]`,
 	})
-	if err := validateProjectForBuild(dir, loaderkit.ResolveOpts{}); err != nil && strings.Contains(err.Error(), "no builder.aur configured") {
+	if err := validateProjectForBuild(dir, spec.ResolveOpts{}); err != nil && strings.Contains(err.Error(), "no builder.aur configured") {
 		t.Fatalf("Fedora image (build=[rpm]) must not require builder.aur; got: %v", err)
 	}
 }
@@ -543,7 +542,7 @@ arch-pac-only:
           package: [yay-bin]
     plan: [{check: x, command: "true", context: [build]}]`,
 	})
-	if err := validateProjectForBuild(dir, loaderkit.ResolveOpts{}); err != nil && strings.Contains(err.Error(), "no builder.aur configured") {
+	if err := validateProjectForBuild(dir, spec.ResolveOpts{}); err != nil && strings.Contains(err.Error(), "no builder.aur configured") {
 		t.Fatalf("Arch image build=[pac] (no aur) must not require builder.aur; got: %v", err)
 	}
 }
@@ -719,7 +718,7 @@ bad-disabled:
 	})
 	mustValidateOK(t, dir)
 	// The problem is real — it surfaces under --include-disabled (proves the skip, not a false pass).
-	if err := validateProjectForBuild(dir, loaderkit.ResolveOpts{IncludeDisabled: true}); err == nil ||
+	if err := validateProjectForBuild(dir, spec.ResolveOpts{IncludeDisabled: true}); err == nil ||
 		!strings.Contains(err.Error(), `candy "nonexistent-layer" not found`) {
 		t.Fatalf("--include-disabled should surface the disabled box's missing candy; got: %v", err)
 	}
@@ -1391,7 +1390,7 @@ func TestValidateOps_LowercaseCheckVarInClusterField(t *testing.T) {
       - check: kube addons
         kube: {method: addons, cluster: "${DEPLOY_NAME}"}
         context: [deploy]`)
-	if err := validateProjectForBuild(ok, loaderkit.ResolveOpts{}); err != nil && strings.Contains(err.Error(), "UPPERCASE") {
+	if err := validateProjectForBuild(ok, spec.ResolveOpts{}); err != nil && strings.Contains(err.Error(), "UPPERCASE") {
 		t.Fatalf("uppercase check var should pass: %v", err)
 	}
 }

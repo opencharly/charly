@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 
 	"github.com/opencharly/spec/spec"
@@ -21,8 +22,18 @@ func hostBuildDeployDelResolve(_ context.Context, req spec.DeployDelResolveReque
 			return spec.DeployDelResolveReply{}, err
 		}
 	}
+	// The command:bundle plugin threads the merged deploy tree it already resolved PLUGIN-SIDE
+	// (resolveTreeViaLoader) — resolveDelNode consumes it instead of re-loading the tree host-side
+	// (#55 Cone A Unit 3a tree-threading). An absent tree ⇒ nil map ⇒ resolveDelNode's non-tree
+	// fallbacks, exactly as a nil host-tree-read result was handled.
+	var tree map[string]spec.BundleNode
+	if len(req.TreeJSON) > 0 {
+		if err := json.Unmarshal(req.TreeJSON, &tree); err != nil {
+			return spec.DeployDelResolveReply{}, err
+		}
+	}
 	c := &deployDelCmd{Name: req.Name}
-	node, kind, err := c.resolveDelNode()
+	node, kind, err := c.resolveDelNode(tree)
 	if err != nil {
 		return spec.DeployDelResolveReply{}, err
 	}

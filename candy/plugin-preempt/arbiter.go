@@ -12,6 +12,7 @@ import (
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 	"gopkg.in/yaml.v3"
 )
@@ -150,6 +151,11 @@ func resolvedProject(ctx context.Context, exec *sdk.Executor) (*spec.ResolvedPro
 // deploy-config overlay, exactly as the former core-only gatherDeployNodes merged them. Errors
 // degrade to an empty tree (never fail the caller) — mirroring the former LoadUnified(".")
 // graceful-degrade (project-less invocations, e.g. a bare `charly preempt status`, are legal).
+//
+// #55 coneC-dsh β2+δ seam-death: MergedDeployTree now takes a reader (placement-invariant —
+// loaderkit.LoadHostBundleConfigViaExecutor), so the compiled-in arbiter no longer relies on the
+// DeployStateHost host seam (deleted in δ); the per-host overlay loads the SAME way plugin-bundle's
+// writes do, works identically compiled-in or out-of-process.
 func resolvedDeployTree(ctx context.Context, exec *sdk.Executor, context string) map[string]spec.BundleNode {
 	rp, err := resolvedProject(ctx, exec)
 	if err != nil {
@@ -162,7 +168,9 @@ func resolvedDeployTree(ctx context.Context, exec *sdk.Executor, context string)
 			project[name] = *node
 		}
 	}
-	return deploykit.MergedDeployTree(project, context)
+	return deploykit.MergedDeployTree(project, context, func() (*deploykit.BundleConfig, error) {
+		return loaderkit.LoadHostBundleConfigViaExecutor(ctx, exec)
+	})
 }
 
 // --- acquire -----------------------------------------------------------------------------------

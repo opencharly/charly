@@ -4,88 +4,35 @@ import (
 	"fmt"
 
 	"github.com/opencharly/spec/spec"
-
-	"github.com/opencharly/sdk/kit"
 )
 
-// checkrun.go — check-runner CONSTRUCTION + the package-main result-model bindings.
+// checkrun.go — the package-main RunMode binding + the check-verdict result helpers.
 //
-// The check-engine driver itself is kit.Runner (sdk/kit/runner.go, relocated from core in
-// P12): it implements kit.PlanContext and carries the shared engine state, so any plugin
-// candy that runs a plan drives the SAME loop. The host-coupled surfaces stay in charly core
-// behind the injected seams built here — the verb dispatch (hostVerbResolver), the do-mode/
-// context grammar (hostPlanGrammar), and the per-step venue swap (venueResolver) — plus the
-// live-verb CheckContext (hostCheckContext) wrapping the runner. newCheckRunner wires them.
+// The check-engine driver itself is kit.Runner (sdk/kit/runner.go). The host-coupled surfaces —
+// the verb dispatch (hostVerbResolver), the do-mode/context grammar (hostPlanGrammar), and the
+// live-verb CheckContext carrier (hostCheckCarrier) — stay in charly core (planrun_adapter.go),
+// PRODUCED for the check reverse channel by plugin_dispatch_reverse.go from the wire CheckEnv
+// snapshot. The IN-PROC plan-drive construction (the former newCheckRunner + carrierFromRunner +
+// resolverEnv) is GONE from production: the deploy-scope check DRIVE moved PLUGIN-SIDE
+// (command:check OpVerifyChecks, #55 CHECK-ENGINE cone Unit 2 — candy/plugin-check's
+// newPluginCheckRunner), so charly core no longer builds a kit.Runner itself and this file no
+// longer imports sdk/kit. The three former constructors survive only as a test helper
+// (checkrun_helpers_test.go) that exercises the STILL-LIVE hostVerbResolver dispatch surface.
 //
-// FLOOR-SLIM Unit 4: the former package-main CheckStatus/CheckResult/TestPass/TestFail/TestSkip
-// aliases are DELETED. spec.CheckResult (CUE-sourced, sdk/schema/checkresult.cue) is the
-// verdict envelope every registry-coupled floor file (provider.go/provider_verb.go/
-// verb_builtins.go/unified_targets.go/provider_checkenv.go, plus this file's passf/failf/skipf)
-// now references DIRECTLY — zero new sdk/kit import. sdk/kit.CheckResult (the engine's richer
-// internal type, embedding spec.CheckResult + the engine-internal DeadlineExceeded retry
-// signal that never crosses the wire) is used only inside sdk/kit + candy/plugin-check, which
-// already import kit. spec.StatusPass/StatusFail/StatusSkip are the verdict constants.
-//
-// RunMode selects routing rules for a check pass. It is a package-main binding onto kit.RunMode
-// (relocated with the runner); RunModeLive/RunModeBox map to kit.ModeLive/kit.ModeBox.
+// RunMode selects routing rules for a check pass. It is a package-main binding onto the CUE-sourced
+// spec.CheckRunMode; RunModeLive/RunModeBox map to spec.CheckModeLive/spec.CheckModeBox.
 //
 //   - RunModeLive: charly check live — against a running container. In-container
 //     probes via Exec; host-side verbs (http/dns/addr) from the charly process.
 //   - RunModeBox: charly check box — against a disposable container
 //     (podman run --rm). All probes via Exec; host-side reachability is
 //     not meaningful and those checks are skipped.
-type RunMode = kit.RunMode
+type RunMode = spec.CheckRunMode
 
 const (
-	RunModeLive = kit.ModeLive
-	RunModeBox  = kit.ModeBox
+	RunModeLive = spec.CheckModeLive
+	RunModeBox  = spec.CheckModeBox
 )
-
-// newCheckRunner builds a kit.Runner for a check pass, wiring the standard host seams every
-// check runner shares: the verb dispatch (hostVerbResolver — which holds the runner ref and
-// the per-Invoke host endpoint cleanups), the do-mode/context grammar (hostPlanGrammar), and
-// the per-probe never-hang floor (the readiness-config PerAttemptFor(spec.PollLocal) value the core
-// check runner has always used). The caller fills cfg with the per-site fields (Exec/Mode/Env/
-// Box/… and, for a live cross-deployment pass, TargetResolver + HostVars). Verbs/Grammar/
-// ProbeTimeout it sets here are always overridden — a caller never wires them.
-func newCheckRunner(cfg kit.RunnerConfig) *kit.Runner {
-	hvr := &hostVerbResolver{}
-	cfg.Verbs = hvr
-	cfg.Grammar = hostPlanGrammar{}
-	if cfg.ProbeTimeout == 0 {
-		cfg.ProbeTimeout = loadedReadiness().PerAttemptFor(spec.PollLocal)
-	}
-	kr := kit.NewRunner(cfg)
-	hvr.kr = kr
-	return kr
-}
-
-// deployExecOf recovers the concrete DeployExecutor a kit.Runner was built with. The runner
-// stores its venue executor as the narrow kit.Executor (kit cannot import DeployExecutor), but
-// every check runner is constructed with a DeployExecutor, so the widening assertion succeeds;
-// a nil/absent exec yields nil. Used by the host verb dispatch, which needs the full
-// DeployExecutor surface (Venue/PutFile/GetFile) the reverse channel serves.
-func deployExecOf(kr *kit.Runner) spec.DeployExecutor {
-	if e, ok := kr.Exec().(spec.DeployExecutor); ok {
-		return e
-	}
-	return nil
-}
-
-// resolverEnv projects a *kit.CheckVarResolver into the kit.RunnerConfig Env + HasRuntime pair
-// (nil-safe — a nil resolver yields no env, no runtime state).
-func resolverEnv(res *kit.CheckVarResolver) (map[string]string, bool) {
-	if res == nil {
-		return nil, false
-	}
-	return res.Env, res.HasRuntime
-}
-
-// CHARLY_BIN stamping (StampCharlyBin / NewRuntimeCheckVarResolver / CurrentCharlyExecutable)
-// moved to sdk/kit (checkvars_charlybin.go, CHECK-cone move) — every dependency was already
-// portable (os.Executable, strings.TrimSpace, kit.CheckVarResolver), and both check
-// (check_members.go) and deploy (check_cmd.go's local --verify path) call sites need it, so
-// it lives in the shared kit rather than either cone's plugin (R3).
 
 // ---------------------------------------------------------------------------
 // Result helpers

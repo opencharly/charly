@@ -7,12 +7,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 
-	"github.com/opencharly/sdk/buildkit"
-	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/loaderkit"
+	"github.com/opencharly/spec/lock"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -25,9 +21,9 @@ type Generator struct {
 	// (ActiveInit/ResolveInitSystem) runs over Candies + candyOrder and lives
 	// on the Generator — one project init config threaded to the build + pod-
 	// overlay emit sites, NOT carried on each ResolvedBox (decoupled in P3).
-	InitConfig     *buildkit.InitConfig
+	InitConfig     *spec.InitConfig
 	Tag            string
-	Boxes          map[string]*buildkit.ResolvedBox
+	Boxes          map[string]*spec.ResolvedBox
 	BuildDir       string
 	Containerfiles map[string]string // cached content per image (used by charly build to pipe via stdin)
 	GlobalOrder    []string          // popularity-weighted global candy order for cache optimization
@@ -45,7 +41,7 @@ type Generator struct {
 	// per-box emission loop is scoped by this field.
 	RequestedBoxes []string
 
-	// ExtraCandyRefs is the ORIGINAL loaderkit.ResolveOpts.ExtraCandyRefs this Generator was
+	// ExtraCandyRefs is the ORIGINAL spec.ResolveOpts.ExtraCandyRefs this Generator was
 	// constructed with (a pod-overlay deploy's add_candy: refs, possibly REMOTE/
 	// qualified — e.g. "@github.com/…:vTAG"). Candies (bare-keyed, post-scan) cannot
 	// stand in for this: a bare candy NAME re-passed as an ExtraCandyRefs entry is a
@@ -64,148 +60,32 @@ type Generator struct {
 	// passes `--dev-local-pkg`), so a bed always tests the in-development charly;
 	// a production box build leaves it false. See deploykit.RenderLocalPkgImageInstall.
 	DevLocalPkg bool
-
-	// (The per-image builder-reply caches externalBuilderReplies/detectionBuilderReplies
-	// moved to the deploykit render Generator with the BUILDER-render engine, K3-A; the
-	// dkGen memo below keeps them stable across an image's render methods.)
-
-	// dkGen caches the sdk/deploykit render Generator (P8). Built once by
-	// toDeploykit() and reused across an image's render so the deploykit-side
-	// per-image builder-reply caches persist across the render methods (which are
-	// relocating onto deploykit.Generator). Containerfiles is a shared map ref so
-	// writes propagate; Candies/Boxes are stable once this Generator's constructor
-	// (newCandyScanGenerator today; the deleted NewGenerator formerly) returns.
-	dkGen *deploykit.Generator
-}
-
-// resolveUserContext detects existing user in base image or uses configured values
-func (g *Generator) resolveUserContext(img *buildkit.ResolvedBox) {
-	if !img.IsExternalBase {
-		// Internal base - inherit from parent, but respect explicit overrides
-		parentImg := g.Boxes[img.Base]
-		origCfg, _ := g.Config.BoxConfig(img.Name)
-
-		if origCfg.User == "" {
-			img.User = parentImg.User
-		}
-		if origCfg.UID == nil {
-			img.UID = parentImg.UID
-		}
-		if origCfg.GID == nil {
-			img.GID = parentImg.GID
-		}
-
-		// Resolve home directory
-		switch {
-		case img.User == "root":
-			img.Home = "/root"
-		case origCfg.User == "" && origCfg.UID == nil:
-			img.Home = parentImg.Home
-		default:
-			img.Home = fmt.Sprintf("/home/%s", img.User)
-		}
-		return
-	}
-
-	// External base - try to detect existing user at configured UID via verb:oci
-	// (the go-containerregistry adopt-user probe lives in candy/plugin-oci now).
-	userInfo, err := invokeOciInspectUser(img.Base, img.UID)
-	if err != nil {
-		// Can't inspect, use configured defaults
-		return
-	}
-
-	if userInfo.Found {
-		// Found existing user - use their info
-		img.User = userInfo.Name
-		img.Home = userInfo.Home
-		img.GID = userInfo.GID
-	}
-	// else: no user found at UID, will create with configured values
-}
-
-// --- verb:oci adopt-user dispatch (folded from the retired oci_plugin.go) ---
-//
-// The render-seam-floor host Generator's resolveUserContext (above) probes an external base
-// image's /etc/passwd for the adopt-user via the compiled-in candy/plugin-oci (verb:oci); the
-// go-containerregistry engine + the actual probe live OUT-OF-PROCESS there. Core keeps only this
-// thin registry-dispatch, its sole consumer being resolveUserContext (and the render-parity test).
-// verb:oci is a pure INTERNAL RPC keyed by an oci_op ENV discriminator (mirroring the vm plugin's
-// VmOp) — the request struct rides Params, the leg selector rides Env — NOT a `plugin_input`-
-// enveloped check verb. It is COMPILED INTO charly by default (compiled_plugins:), so
-// providerRegistry resolves it in-process and project-lessly; connectPluginByWord covers the
-// baked / project-source coexist paths (the registry-first pattern credential_plugin.go uses).
-
-// ociOpInspectUser is the env-JSON selector matching candy/plugin-oci's ociEnv{OciOp}.
-const ociOpInspectUser = "inspect-user"
-
-// ociProvider resolves verb:oci. Registry-first so a COMPILED-IN plugin resolves in-process and
-// project-lessly; falls back to connectPluginByWord for the baked / project-source coexist paths.
-func ociProvider() (Provider, bool) {
-	if p, ok := providerRegistry.resolve(ClassVerb, "oci"); ok {
-		return p, true
-	}
-	return connectPluginByWord(ClassVerb, "oci")
-}
-
-// invokeOciInspectUser probes a remote image's /etc/passwd for the user at uid via verb:oci,
-// returning the spec.UserInfo (Found=false when no such user / the image can't be inspected).
-func invokeOciInspectUser(ref string, uid int) (spec.UserInfo, error) {
-	prov, ok := ociProvider()
-	if !ok {
-		return spec.UserInfo{}, fmt.Errorf(
-			"oci plugin (verb:oci) did not connect — candy/plugin-oci is compiled into charly " +
-				"(compiled_plugins) by default; on a custom build install it alongside charly " +
-				"(/usr/lib/charly/plugins) or run from a project composing it")
-	}
-	paramsJSON, err := marshalJSON(spec.ImageUserInput{Ref: ref, UID: uid})
-	if err != nil {
-		return spec.UserInfo{}, err
-	}
-	envJSON, err := marshalJSON(map[string]string{"oci_op": ociOpInspectUser})
-	if err != nil {
-		return spec.UserInfo{}, err
-	}
-	out, err := prov.Invoke(context.Background(), &Operation{
-		Reserved: "oci",
-		Op:       OpRun,
-		Params:   paramsJSON,
-		Env:      envJSON,
-	})
-	if err != nil {
-		return spec.UserInfo{}, err
-	}
-	if out == nil {
-		return spec.UserInfo{}, fmt.Errorf("oci: verb:oci returned no result")
-	}
-	var info spec.UserInfo
-	if err := json.Unmarshal(out.JSON, &info); err != nil {
-		return spec.UserInfo{}, fmt.Errorf("oci inspect-user: decode reply: %w", err)
-	}
-	return info, nil
 }
 
 // newCandyScanGenerator builds a Generator populated with Config+Candies+Boxes+Dir+BuildDir — a
-// candy scan + a PLAIN per-box buildkit.ResolveBox pass (NO ComputeIntermediates / GlobalCandyOrder
-// / ComputeEffectiveVersions / RenderPrepAll) — the minimal state the render-seam floor's 2
-// remaining reverse-channel consumers need: ensureBuildersConnected touches only Config/Dir;
-// resolveInlineBuilderSeam's resolveBuilderStage reads img.Tags/img.Name off gen.Boxes[boxName]
-// (verified by reading resolveBuilderStage's own body — NOT img.Base/BootstrapBuilderImage, so
-// skipping ComputeIntermediates' auto-intermediate Base-rewrite is safe here). MUCH cheaper than
-// the deleted NewGenerator (#55 step3 3-II): the build-engine RESOLVE's expensive parts (the candy
-// SCAN's network-bound remote fetches, ComputeIntermediates, GlobalCandyOrder,
-// ComputeEffectiveVersions, RenderPrepAll) now run entirely plugin-side (candy/plugin-build's
-// resolveBuildEngine, K3) — recomputing THOSE again host-side for the render-seam cache was 100%
-// wasted work (proven dead by call-graph: nothing downstream ever read the second Generator's
-// render-prep output); ResolveBox itself is pure, in-memory, and genuinely still needed (RCA'd: a
-// first cut that dropped it entirely broke resolveInlineBuilderSeam's img.Tags/img.Name — caught
-// before merge by re-tracing every reader of gen.Boxes[boxName], not by the box-generate smoke
-// test, which never exercises the inline-builder path). Skips the build-time plugin connect +
-// pre-build validate the deleted NewGenerator also used to run: both already ran plugin-side
-// (resolveBuildEngine steps 4-5) by the time this is reached through the normal build/generate
-// path, and ensureBuildersConnected connects on demand itself when reached any other way (e.g. the
-// loadRenderGen defensive fallback).
-func newCandyScanGenerator(dir string, includeDisabled bool, extraCandyRefs []string) (*Generator, error) {
+// candy scan + the caller-supplied resolved-box set (NO ComputeIntermediates / GlobalCandyOrder
+// / ComputeEffectiveVersions / RenderPrepAll, and NO host-side box resolve) — the minimal state
+// the render-seam floor's 2 remaining reverse-channel consumers need: ensureBuildersConnected
+// touches only Config/Dir; resolveInlineBuilderSeam's resolveBuilderStage reads img.Tags/img.Name
+// off gen.Boxes[boxName] (verified by reading resolveBuilderStage's own body — NOT
+// img.Base/BootstrapBuilderImage, so skipping ComputeIntermediates' auto-intermediate Base-rewrite
+// is safe here). MUCH cheaper than the deleted NewGenerator (#55 step3 3-II): the build-engine
+// RESOLVE's expensive parts (the candy SCAN's network-bound remote fetches, the box RESOLVE,
+// ComputeIntermediates, GlobalCandyOrder, ComputeEffectiveVersions, RenderPrepAll) now run
+// entirely plugin-side (candy/plugin-build's resolveBuildEngine, K3) — recomputing THOSE again
+// host-side for the render-seam cache was 100% wasted work (proven dead by call-graph: nothing
+// downstream ever read the second Generator's render-prep output). The boxes themselves are now
+// PUSHED by the plugin (#55 coneB2 Class B): candy/plugin-build's resolveBuildEngine resolves them
+// via buildkit.ResolveAllBox + deploykit.SpecBoxes and ships them on #ResolvedProjectRequest.boxes;
+// hostBuildPrep passes them through here. RCA'd: a first cut that dropped the boxes entirely broke
+// resolveInlineBuilderSeam's img.Tags/img.Name — caught before merge by re-tracing every reader of
+// gen.Boxes[boxName], not by the box-generate smoke test, which never exercises the inline-builder
+// path. Skips the build-time plugin connect + pre-build validate the deleted NewGenerator also used
+// to run: both already ran plugin-side (resolveBuildEngine steps 4-5) by the time this is reached
+// through the normal build/generate path, and ensureBuildersConnected connects on demand itself when
+// reached any other way (e.g. the loadRenderGen defensive fallback, which passes a nil boxes map —
+// provably unreachable in production).
+func newCandyScanGenerator(dir string, includeDisabled bool, extraCandyRefs []string, boxes map[string]*spec.ResolvedBox) (*Generator, error) {
 	cfg, err := LoadConfig(dir)
 	if err != nil {
 		return nil, err
@@ -215,25 +95,22 @@ func newCandyScanGenerator(dir string, includeDisabled bool, extraCandyRefs []st
 		return nil, fmt.Errorf("loading default build config: %w", err)
 	}
 	RegisterBuildVocabulary(defaultDistroCfg)
-	opts := loaderkit.ResolveOpts{IncludeDisabled: includeDisabled, ExtraCandyRefs: extraCandyRefs, InitCfg: defaultInitCfg}
+	opts := spec.ResolveOpts{IncludeDisabled: includeDisabled, ExtraCandyRefs: extraCandyRefs, InitCfg: defaultInitCfg}
 	layers, err := ScanAllCandyWithConfigOpts(dir, cfg, opts)
 	if err != nil {
 		return nil, err
 	}
-	bkopts, err := buildkitOptsWithVocab(dir, opts)
-	if err != nil {
-		return nil, err
-	}
-	images, err := buildkit.ResolveAllBox(cfg, ComputeCalVer(), dir, bkopts)
-	if err != nil {
-		return nil, err
-	}
+	// #55 coneB2 Class B: the box RESOLVE no longer runs host-side (no deploykit import). The
+	// render-seam floor's 2 consumers (resolveInlineBuilderSeam/ensureBuildersConnected) read only
+	// Name/Tags off the PUSHED boxes — supplied by the plugin (buildkit.ResolveAllBox +
+	// deploykit.SpecBoxes over #ResolvedProjectRequest.boxes), NOT recomputed here. NOT the
+	// resolved-project envelope InvokeProvider path (would recurse an in-flight build:generate).
 	return &Generator{
 		Dir:            dir,
 		Config:         cfg,
 		Candies:        layers,
 		InitConfig:     defaultInitCfg,
-		Boxes:          images,
+		Boxes:          boxes,
 		BuildDir:       filepath.Join(dir, ".build"),
 		Containerfiles: make(map[string]string),
 		ExtraCandyRefs: extraCandyRefs,
@@ -268,7 +145,7 @@ func parseEmbeddedContextIgnoreBaseline() []string {
 // provider's OpResolve, and returns the decoded reply UNVALIDATED — the caller enforces the
 // emptiness rule appropriate to its path (external_builder + detection multi-stage require a
 // non-empty Stage; the inline cargo path requires a non-empty InlineFragment).
-func resolveBuilderStage(prov Provider, word string, in spec.BuilderResolveInput, img *buildkit.ResolvedBox) (spec.BuilderResolveReply, error) {
+func resolveBuilderStage(prov Provider, word string, in spec.BuilderResolveInput, img *spec.ResolvedBox) (spec.BuilderResolveReply, error) {
 	var zero spec.BuilderResolveReply
 	params, err := marshalJSON(in)
 	if err != nil {
@@ -285,24 +162,6 @@ func resolveBuilderStage(prov Provider, word string, in spec.BuilderResolveInput
 	var reply spec.BuilderResolveReply
 	if err := json.Unmarshal(res.JSON, &reply); err != nil {
 		return zero, fmt.Errorf("decode OpResolve reply: %w", err)
-	}
-	return reply, nil
-}
-
-// resolveExternalBuilder Invokes an `external_builder:`-selected out-of-tree builder provider's
-// OpResolve and returns the decoded BuilderResolveReply — the BUILDER-leg analogue of
-// invokeVerbBuildEmit. It sends a MINIMAL render context (the requesting candy name only — an
-// out-of-tree builder renders a self-contained stage that reads none of the detection fields),
-// then requires a non-empty Stage (a mis-selected word producing no build-context builder fails
-// LOUDLY). Shares the OpResolve Invoke with the detection path via resolveBuilderStage (R3).
-func resolveExternalBuilder(prov Provider, word, candyName string, img *buildkit.ResolvedBox) (spec.BuilderResolveReply, error) {
-	var zero spec.BuilderResolveReply
-	reply, err := resolveBuilderStage(prov, word, spec.BuilderResolveInput{Candy: candyName}, img)
-	if err != nil {
-		return zero, err
-	}
-	if strings.TrimSpace(reply.Stage) == "" {
-		return zero, fmt.Errorf("external builder %q returned an empty OpResolve stage — it has no build-context builder", word)
 	}
 	return reply, nil
 }
@@ -368,7 +227,7 @@ func (g *Generator) createRemoteCandyCopies() error {
 			_ = os.RemoveAll(tmp)
 			return fmt.Errorf("copying remote candy %s: %s: %w", ref, string(out), err)
 		}
-		if err := kit.InstallDirAtomic(tmp, filepath.Join(candyRoot, deploykit.CandyStageDirName(layer))); err != nil {
+		if err := lock.InstallDirAtomic(tmp, filepath.Join(candyRoot, spec.CandyStageDirName(layer))); err != nil {
 			return fmt.Errorf("installing remote candy %s: %w", ref, err)
 		}
 	}
@@ -395,7 +254,7 @@ func (g *Generator) createRemoteCandyCopies() error {
 // candyByName resolves a candy by its INTRINSIC bare name against g.Candies.
 // It is the FORWARD counterpart of deploykit.CandyMapKey (which maps a candy back to its
 // store key): a LOCAL candy is keyed bare == Name, so the direct lookup hits; a
-// REMOTE candy (e.g. a deploy's add_candy: pulled via loaderkit.ResolveOpts.ExtraCandyRefs)
+// REMOTE candy (e.g. a deploy's add_candy: pulled via spec.ResolveOpts.ExtraCandyRefs)
 // is keyed under its fully-qualified ref (deploykit.CandyMapKey), so the direct bare lookup
 // MISSES and we fall back to matching the candy's own Name. Every call site that
 // holds a bare candy name (a plan step's CandyName; an overlay-candy name from

@@ -24,24 +24,26 @@ package main
 // earlier — pure over an already-stamped spec.BundleNode, zero core-state coupling.
 
 import (
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 )
 
 // bedCheckLevel resolves the acceptance-depth rung for a bed from its box's authored
 // check_level (none → DefaultCheckLevel). VM / local beds carry no box image, so they
-// always run at the default rung. Thin wrapper — the classifier lives in
-// deploykit.ResolveBedCheckLevel (unit 6b); this function's own job is resolving the box
-// ref against the loaded project (uf.ProjectConfig(), core-only) before delegating.
+// always run at the default rung. The classifier (ResolveBedCheckLevel) was a thin
+// deploykit wrapper over the spec.DefaultCheckLevel / spec.ResolveCheckLevel helpers —
+// now inlined to those spec helpers (#55 CHECK-ENGINE cone Option A — a pure string-ladder
+// classifier charly core reaches importing zero deploykit), so this function's own job is
+// resolving the box ref against the loaded project (uf.ProjectConfig(), core-only) before
+// applying the spec ladder.
 func bedCheckLevel(uf *spec.UnifiedFile, node spec.BundleNode) string {
 	if node.Image == "" {
-		return deploykit.ResolveBedCheckLevel(false, "")
+		return spec.DefaultCheckLevel
 	}
 	bc, _, ok := uf.ProjectConfig().ResolveBoxRef(node.Image)
 	if !ok {
-		return deploykit.ResolveBedCheckLevel(false, "")
+		return spec.DefaultCheckLevel
 	}
-	return deploykit.ResolveBedCheckLevel(true, bc.CheckLevel)
+	return spec.ResolveCheckLevel(bc.CheckLevel)
 }
 
 // bedExternalInPlace reports whether a bed ROOT's substrate is an EXTERNAL deploy substrate
@@ -62,11 +64,12 @@ func bedExternalInPlace(target string) bool {
 	return isExternalDeploySubstrate(target) && deployTraitDescent(target).Venue != "container"
 }
 
-// persistBedDeployOverrides is the thin core wrapper — the orchestration lives in
-// deploykit.PersistBedDeployOverrides (unit 6b). This function's own job is computing the
-// ONE genuinely registry-coupled classification (bedExternalInPlace, which queries the live
-// provider registry) and threading it through, plus supplying marshalDeployNode (the
-// K1-tied struct→node-form serializer core alone can call).
-func persistBedDeployOverrides(name string, node spec.BundleNode) {
-	deploykit.PersistBedDeployOverrides(name, node, bedExternalInPlace(node.Target), marshalDeployNode)
-}
+// persistBedDeployOverrides + its deploykit import MOVED PLUGIN-SIDE to candy/plugin-check's bed
+// runner (#55 coneC-dsh β1 — the deploy-nodeform marshal envelope landed via K4: plugins build their own
+// loader-threaded marshalNode via fetchLoaderPrimaries + a loader-backed reader via
+// loaderkit.LoadHostBundleConfigViaExecutor, so the bed-root + member persist no longer need the
+// K1-tied host wrapper). The host seam threads the bed-root BundleNode (with nested Members) as
+// CheckBedReply.NodeJSON; the plugin calls deploykit.PersistBedDeployOverrides itself. bedExternalInPlace
+// STAYS host-side (it queries the live provider registry via isExternalDeploySubstrate) — used to fill
+// CheckBedReply.IsExternal for the bed root; a member's externalInPlace is derivable from its stamped
+// Descent (Venue parent/none → in-place) in the plugin.

@@ -28,7 +28,7 @@ import (
 
 // DeployContext carries everything an Add needs from the generic
 // dispatchNode pre-stage: the dispatch-merged BundleNode (the
-// project+operator field-level merge from resolveTreeRoot — the SINGLE
+// project+operator field-level merged deploy tree — the SINGLE
 // source of truth for node fields like Nested/Env/ephemeral/disposable,
 // NEVER re-read via loadDeployConfigForRead inside an Add), the deploy
 // name + project dir, the loaded image/distro/builder configs, and the

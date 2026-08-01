@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/hostenv"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -19,9 +19,9 @@ func TestRunPodConfigRemove_DirectModeAllowed(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.yml")
 
-	orig := kit.RuntimeConfigPath
-	defer func() { kit.RuntimeConfigPath = orig }()
-	kit.RuntimeConfigPath = func() (string, error) { return configPath, nil }
+	orig := hostenv.RuntimeConfigPath
+	defer func() { hostenv.RuntimeConfigPath = orig }()
+	hostenv.RuntimeConfigPath = func() (string, error) { return configPath, nil }
 
 	_ = os.Unsetenv("CHARLY_BUILD_ENGINE")
 	_ = os.Unsetenv("CHARLY_RUN_ENGINE")

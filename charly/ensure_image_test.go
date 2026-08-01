@@ -6,31 +6,33 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/container"
+	"github.com/opencharly/spec/hostenv"
+	"github.com/opencharly/spec/spec"
 )
 
 func TestEnsureImagePresent(t *testing.T) {
 	// Save and restore original
-	orig := kit.LocalImageExists
-	defer func() { kit.LocalImageExists = orig }()
+	orig := container.LocalImageExists
+	defer func() { container.LocalImageExists = orig }()
 
 	t.Run("same engine image exists", func(t *testing.T) {
-		kit.LocalImageExists = func(engine, ref string) bool { return true }
-		rt := &kit.ResolvedRuntime{BuildEngine: "docker", RunEngine: "docker"}
+		container.LocalImageExists = func(engine, ref string) bool { return true }
+		rt := &hostenv.ResolvedRuntime{BuildEngine: "docker", RunEngine: "docker"}
 		if err := ensureImagePresent("myimage:latest", rt); err != nil {
 			t.Errorf("expected no error, got: %v", err)
 		}
 	})
 
 	t.Run("same engine image missing", func(t *testing.T) {
-		kit.LocalImageExists = func(engine, ref string) bool { return false }
-		rt := &kit.ResolvedRuntime{BuildEngine: "docker", RunEngine: "docker"}
+		container.LocalImageExists = func(engine, ref string) bool { return false }
+		rt := &hostenv.ResolvedRuntime{BuildEngine: "docker", RunEngine: "docker"}
 		err := ensureImagePresent("myimage:latest", rt)
 		if err == nil {
 			t.Fatal("expected error")
 		}
-		if !errors.Is(err, kit.ErrImageNotLocal) {
-			t.Errorf("expected kit.ErrImageNotLocal, got: %v", err)
+		if !errors.Is(err, spec.ErrImageNotLocal) {
+			t.Errorf("expected spec.ErrImageNotLocal, got: %v", err)
 		}
 		if !strings.Contains(err.Error(), "myimage:latest") {
 			t.Errorf("expected error to name the missing image, got: %v", err)
@@ -38,34 +40,34 @@ func TestEnsureImagePresent(t *testing.T) {
 	})
 
 	t.Run("cross engine already in run engine", func(t *testing.T) {
-		kit.LocalImageExists = func(engine, ref string) bool {
+		container.LocalImageExists = func(engine, ref string) bool {
 			return engine == "podman" // exists in run engine
 		}
-		rt := &kit.ResolvedRuntime{BuildEngine: "docker", RunEngine: "podman"}
+		rt := &hostenv.ResolvedRuntime{BuildEngine: "docker", RunEngine: "podman"}
 		if err := ensureImagePresent("myimage:latest", rt); err != nil {
 			t.Errorf("expected no error, got: %v", err)
 		}
 	})
 
 	t.Run("cross engine missing from both", func(t *testing.T) {
-		kit.LocalImageExists = func(engine, ref string) bool { return false }
-		rt := &kit.ResolvedRuntime{BuildEngine: "docker", RunEngine: "podman"}
+		container.LocalImageExists = func(engine, ref string) bool { return false }
+		rt := &hostenv.ResolvedRuntime{BuildEngine: "docker", RunEngine: "podman"}
 		err := ensureImagePresent("myimage:latest", rt)
 		if err == nil {
 			t.Fatal("expected error")
 		}
-		if !errors.Is(err, kit.ErrImageNotLocal) {
-			t.Errorf("expected kit.ErrImageNotLocal, got: %v", err)
+		if !errors.Is(err, spec.ErrImageNotLocal) {
+			t.Errorf("expected spec.ErrImageNotLocal, got: %v", err)
 		}
 	})
 
 	t.Run("cross engine needs transfer", func(t *testing.T) {
 		var checks []string
-		kit.LocalImageExists = func(engine, ref string) bool {
+		container.LocalImageExists = func(engine, ref string) bool {
 			checks = append(checks, engine)
 			return engine == "docker" // only in build engine
 		}
-		rt := &kit.ResolvedRuntime{BuildEngine: "docker", RunEngine: "podman"}
+		rt := &hostenv.ResolvedRuntime{BuildEngine: "docker", RunEngine: "podman"}
 		// TransferImage will fail because no real engines, but we verify
 		// the check order: run engine first, then build engine
 		_ = ensureImagePresent("myimage:latest", rt)
@@ -85,10 +87,10 @@ func TestEnsureImagePresent(t *testing.T) {
 		if _, err := exec.LookPath("docker"); err != nil {
 			t.Skip("docker not available, skipping cross-engine transfer test")
 		}
-		kit.LocalImageExists = func(engine, ref string) bool {
+		container.LocalImageExists = func(engine, ref string) bool {
 			return engine == "podman" // only in build engine
 		}
-		rt := &kit.ResolvedRuntime{BuildEngine: "podman", RunEngine: "docker"}
+		rt := &hostenv.ResolvedRuntime{BuildEngine: "podman", RunEngine: "docker"}
 		// TransferImage will fail (no real engines), but we verify EnsureImage
 		// attempts the transfer in the right direction
 		err := ensureImagePresent("myimage:latest", rt)

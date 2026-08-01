@@ -8,7 +8,7 @@
 //     (runBundleCommand → kong-parse the BundleCmd tree — command.go), so the handlers run in
 //     charly's OWN process and inherit charly's real stdio/TTY natively. `add`/`del` (walk.go, the
 //     K4-C WALK PORT) drive the WHOLE deploy-tree walk plugin-side: the config loader
-//     (resolveTreeRoot/resolveDelNode, LoadUnified-coupled) and the registry-backed executor-chain
+//     (the merged-tree read/resolveDelNode, LoadUnified-coupled) and the registry-backed executor-chain
 //     derivation (deriveChildExecutorForPath) stay host-side behind six narrow seams —
 //     deploy-plugins-connect / resolve-target-add / deploy-members-up / deploy-members-down /
 //     deploy-del-resolve / deploy-node-del-dispatch — while the tree traversal AND the per-node
@@ -16,7 +16,8 @@
 //     plugin-side; ResolveTarget → the deploy target's Add/Del is the host tail of the
 //     resolve-target-add / deploy-node-del-dispatch seams. `from-box`
 //     still forwards to HostBuild("deploy-from-box"); the config-management leaves (show/export/
-//     import/reset/status) reach the host via the narrow deploy-config-save seam alone. `path`
+//     import/reset/status) run plugin-side — reads via loaderkit.LoadHostBundleConfigViaExecutor, writes via
+//     deploykit.SaveBundleConfig directly (#55 K4 config-write seam-collapse). `path`
 //     resolves plugin-side via kit.DefaultDeployConfigPath (no seam).
 //
 // A standalone Go module (its own go.mod) importing ONLY the sdk module, compiled into charly for

@@ -121,7 +121,7 @@ deploy:
 		Disposable:    true,
 		Box:           "newimage",
 		Target:        "pod",
-	}, marshalDeployNode)
+	}, testBedMarshalNode, testLoadBundleConfig)
 
 	afterBytes, _ := os.ReadFile(path)
 	if !bytes.Equal(initialBytes, afterBytes) {
@@ -156,9 +156,9 @@ existing-deploy:
 		Disposable:    true,
 		Box:           "newimage",
 		Target:        "pod",
-	}, marshalDeployNode)
+	}, testBedMarshalNode, testLoadBundleConfig)
 
-	dc, err := deploykit.LoadBundleConfig()
+	dc, err := testLoadBundleConfig()
 	if err != nil {
 		t.Fatalf("reload after save: %v", err)
 	}
@@ -211,9 +211,9 @@ existing:
 		Disposable:    true,
 		Box:           "would-clobber",
 		Target:        "vm",
-	}, marshalDeployNode)
+	}, testBedMarshalNode, testLoadBundleConfig)
 
-	dc, err := deploykit.LoadBundleConfig()
+	dc, err := testLoadBundleConfig()
 	if err != nil {
 		t.Fatalf("reload after save: %v", err)
 	}
@@ -246,7 +246,7 @@ func TestSaveBundleConfig_AtomicWriteLeavesNoTempLeftover(t *testing.T) {
 	dc := &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{
 		"foo": {Target: "pod", Image: "foo"},
 	}}
-	if err := saveBundleConfigNodeForm(dc); err != nil {
+	if err := testSaveDeployConfig(dc); err != nil {
 		t.Fatalf("SaveBundleConfig: %v", err)
 	}
 	// No .tmp leftovers in the config dir.
@@ -311,12 +311,12 @@ func TestSaveBundleConfig_RefusesToClobberUnloadableConfig(t *testing.T) {
 
 	// Sanity: the fixture really is rejected by the loader (otherwise the test
 	// would pass vacuously).
-	if _, lerr := deploykit.LoadBundleConfig(); lerr == nil {
+	if _, lerr := testLoadBundleConfig(); lerr == nil {
 		t.Fatal("fixture loaded cleanly; expected it to be rejected by the node-form gate")
 	}
 
 	// A write that would otherwise truncate must be REFUSED.
-	err := saveBundleConfigNodeForm(&deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{
+	err := testSaveDeployConfig(&deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{
 		"new-entry": {Target: "pod", Image: "new-entry"},
 	}})
 	if err == nil {
@@ -341,12 +341,12 @@ func TestSaveBundleConfig_RefusesToClobberUnloadableConfig(t *testing.T) {
 	if err := os.Remove(path); err != nil {
 		t.Fatalf("remove: %v", err)
 	}
-	if err := saveBundleConfigNodeForm(&deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{
+	if err := testSaveDeployConfig(&deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{
 		"new-entry": {Target: "pod", Image: "new-entry"},
 	}}); err != nil {
 		t.Fatalf("SaveBundleConfig on an absent file should succeed: %v", err)
 	}
-	dc, err := deploykit.LoadBundleConfig()
+	dc, err := testLoadBundleConfig()
 	if err != nil {
 		t.Fatalf("reload after clean save: %v", err)
 	}
@@ -386,7 +386,7 @@ bare-pod:
 		t.Fatalf("write: %v", err)
 	}
 
-	dc, err := deploykit.LoadBundleConfig()
+	dc, err := testLoadBundleConfig()
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
@@ -421,7 +421,7 @@ bare-pod:
 		t.Error("bare-pod.IsDisposable() returned true for absent disposable field")
 	}
 
-	if err := saveBundleConfigNodeForm(dc); err != nil {
+	if err := testSaveDeployConfig(dc); err != nil {
 		t.Fatalf("save: %v", err)
 	}
 
@@ -442,8 +442,9 @@ bare-pod:
 // (the vm lifecycle hook's PostTeardown) rely on to remove a VM's deploy.yml entry on teardown
 // — the inverse of the deploykit.SaveVmDeployState written on add (F6 vm-lifecycle move,
 // coneB-vmlifecycle: the primitive relocated to deploykit.RemoveVmDeployEntry, invoked here with
-// the same acquireDeployConfigLock/saveBundleConfigNodeForm callbacks
-// host_build_config_resolve.go's hostBuildConfigPersist supplies). It proves the two load-bearing
+// the same acquireDeployConfigLock + the test-local testSaveDeployConfig/testLoadBundleConfig
+// callbacks that stand in for the deleted host save callback + DeployStateHost-backed
+// nil reader, #55 coneC-dsh δ). It proves the two load-bearing
 // properties of the fix:
 //
 //  1. SELECTIVE removal — removing `vm:k3s-vm` strips ONLY that entry; sibling
@@ -488,10 +489,10 @@ web-app:
 	}
 
 	// (1) Selective removal of the disposable bed VM.
-	if err := deploykit.RemoveVmDeployEntry("vm:k3s-vm", acquireDeployConfigLock, saveBundleConfigNodeForm); err != nil {
+	if err := deploykit.RemoveVmDeployEntry("vm:k3s-vm", acquireDeployConfigLock, testSaveDeployConfig, testLoadBundleConfig); err != nil {
 		t.Fatalf("RemoveVmDeployEntry(vm:k3s-vm): %v", err)
 	}
-	dc, err := deploykit.LoadBundleConfig()
+	dc, err := testLoadBundleConfig()
 	if err != nil {
 		t.Fatalf("reload after removal: %v", err)
 	}
@@ -506,10 +507,10 @@ web-app:
 	}
 
 	// (2) Idempotency: removing the already-gone entry is a clean no-op.
-	if err := deploykit.RemoveVmDeployEntry("vm:k3s-vm", acquireDeployConfigLock, saveBundleConfigNodeForm); err != nil {
+	if err := deploykit.RemoveVmDeployEntry("vm:k3s-vm", acquireDeployConfigLock, testSaveDeployConfig, testLoadBundleConfig); err != nil {
 		t.Fatalf("idempotent re-removal of vm:k3s-vm errored: %v", err)
 	}
-	dc2, err := deploykit.LoadBundleConfig()
+	dc2, err := testLoadBundleConfig()
 	if err != nil {
 		t.Fatalf("reload after idempotent re-removal: %v", err)
 	}

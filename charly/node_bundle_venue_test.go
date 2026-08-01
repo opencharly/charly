@@ -164,11 +164,11 @@ func TestOverlayRoundTrip_NestedChildSurvives(t *testing.T) {
 			},
 		},
 	}}
-	if err := saveBundleConfigNodeForm(dc); err != nil {
+	if err := testSaveDeployConfig(dc); err != nil {
 		t.Fatalf("SaveBundleConfig: %v", err)
 	}
 
-	dc2, err := deploykit.LoadBundleConfig()
+	dc2, err := testLoadBundleConfig()
 	if err != nil {
 		t.Fatalf("LoadBundleConfig (round-trip): %v", err)
 	}
@@ -216,10 +216,10 @@ func TestOverlayRoundTrip_GroupMembersSurvive(t *testing.T) {
 			},
 		},
 	}}
-	if err := saveBundleConfigNodeForm(dc); err != nil {
+	if err := testSaveDeployConfig(dc); err != nil {
 		t.Fatalf("SaveBundleConfig: %v", err)
 	}
-	dc2, err := deploykit.LoadBundleConfig()
+	dc2, err := testLoadBundleConfig()
 	if err != nil {
 		t.Fatalf("LoadBundleConfig (round-trip) — a memberless group bed fails validateCheckBeds: %v", err)
 	}
@@ -247,9 +247,9 @@ func TestPersistBedDeployOverrides_GroupBedNotPersisted(t *testing.T) {
 		Disposable: &disposable,
 		Members:    map[string]*spec.BundleNode{"web": {Target: "pod", Image: "web"}},
 	}
-	persistBedDeployOverrides("check-cross-pod-cdp", groupBed)
+	deploykit.PersistBedDeployOverrides("check-cross-pod-cdp", groupBed, bedExternalInPlace(groupBed.Target), testBedMarshalNode, testLoadBundleConfig)
 
-	dc, err := deploykit.LoadBundleConfig()
+	dc, err := testLoadBundleConfig()
 	if err != nil {
 		t.Fatalf("overlay poisoned by persisting a group bed root: %v", err)
 	}

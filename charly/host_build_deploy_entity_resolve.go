@@ -29,9 +29,17 @@ func hostBuildDeployEntityResolve(_ context.Context, req spec.DeployEntityResolv
 		// deployVMForwards, S3, resolves an entityRef that may be a bundle key, needing the
 		// node's From field for one hop into a "vm" lookup) — same lookup as the
 		// default/"deploy" case, no separate mechanism.
-		tree, err := resolveTreeRoot(dir)
-		if err != nil {
-			return spec.DeployEntityResolveReply{}, fmt.Errorf("deploy-entity-resolve: resolve deploy tree: %w", err)
+		//
+		// The invoking plugin threads the merged deploy tree it already resolved PLUGIN-SIDE
+		// (loaderkit.ResolveMergedTreeViaExecutor) — this case consumes it instead of re-loading
+		// the tree host-side (#55 Cone A Unit 3b tree-threading, mirroring the
+		// deploy-del-resolve seam). An absent/empty tree ⇒ nil map ⇒ a not-found for req.Name,
+		// exactly as a nil host-tree-read result produced.
+		var tree map[string]spec.BundleNode
+		if len(req.TreeJSON) > 0 {
+			if err := json.Unmarshal(req.TreeJSON, &tree); err != nil {
+				return spec.DeployEntityResolveReply{}, fmt.Errorf("deploy-entity-resolve: decode threaded deploy tree: %w", err)
+			}
 		}
 		n, ok := tree[req.Name]
 		if !ok {

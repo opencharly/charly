@@ -12,11 +12,14 @@ package main
 //     reconstructParentExec + bundle_members.go + unified_targets.go. DEPLOY-ONLY residue,
 //     DELIBERATELY untouched by #55 step3 3-II (out of that cutover's scope, which relocates only
 //     the pod-overlay BUILD envelope): its eventual plugin relocation is tracked under task #66.
-//   - loadConfigForDeploy / detectHostContext / resolveDistroDef — BUILD-SHARED: LoadConfig →
-//     LoadUnified (K1-loader-family-coupled) + the host-fs distro probes, reached by the
-//     resolve-target-add seam + deploy_target_unified.go AND by build_overlay.go's hostBuildOverlay
-//     (confirmed live, #55 step3 3-II) — kept here unchanged, serving both the deploy-del/add seams
-//     AND the pod-overlay build prep.
+//   - loadConfigForDeploy — BUILD-SHARED: LoadConfig → LoadUnified (K1-loader-family-coupled) +
+//     the host-fs distro probes, reached by the resolve-target-add seam + deploy_target_unified.go
+//     AND by build_overlay.go's hostBuildOverlay (confirmed live, #55 step3 3-II) — kept here
+//     unchanged, serving both the deploy-del/add seams AND the pod-overlay build prep.
+//     (detectHostContext + resolveDistroDef were DELETED in #55 coneB-br2 Group 2 — their sole
+//     caller resolveOverlayBaseDistroDef was dropped when build.DistroCfg was proven dead on the
+//     overlay step-emit path; the plugin uses its own twin candy/plugin-bundle/dispatch.go
+//     detectHostContext for the deploy compile.)
 //   - deployDelCmd + resolveDelNode + podDeploymentArtifactExists — the `charly bundle del` host
 //     resolution the deploy-del-resolve seam drives. DEPLOY-ONLY residue, DELIBERATELY untouched by
 //     #55 step3 3-II for the same reason as deriveChildExecutorForPath above (task #66).
@@ -33,16 +36,14 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/vmshared"
+	specexec "github.com/opencharly/spec/exec"
 	"github.com/opencharly/spec/spec"
 )
 
 // deployDelCmd resolves a `charly bundle del <name>` target node — the deploy-del-resolve
 // host seam's ONE responsibility (resolveDelNode). The CLI GRAMMAR moved to the
 // command:bundle plugin (candy/plugin-bundle); this struct is reconstructed from
-// spec.DeployDelRequest by hostBuildDeployDelResolve, which populates only Name — the actual
+// spec.DeployDelResolveRequest by hostBuildDeployDelResolve, which populates only Name — the actual
 // teardown EXECUTION lives in host_build_deploy_node_del_dispatch.go's hostBuildDeployNodeDelDispatch.
 type deployDelCmd struct {
 	Name string
@@ -76,20 +77,20 @@ func deriveChildExecutorForPath(path string, node *spec.BundleNode, parentExec s
 	if !node.HasChildren() {
 		return parentExec, nil
 	}
-	// P9: deploykit.ClassifyNodeTarget produces the child's substrate WORD (dispatch
+	// P9: spec.ClassifyNodeTarget produces the child's substrate WORD (dispatch
 	// classification, with the ref-based host/local PathLeaf fallback — W4 pure-helpers
 	// relocation moved this pure function to sdk/deploykit, shared with candy/plugin-bundle's
 	// own classification of the CURRENT node, R3); the executor HOP is then selected by that
 	// word's DECLARED descent transport (the same closed nesting vocabulary AppendHopForFlatPath
 	// consumes), never by a second switch on the kind word.
-	switch deployTraitDescent(deploykit.ClassifyNodeTarget(node, path)).Transport {
+	switch deployTraitDescent(spec.ClassifyNodeTarget(node, path)).Transport {
 	case "none":
 		// local (host-rooted shell) + android (parent venue) share the parent venue: android
 		// reaches the device via published ports / the endpoint; no executor hop.
 		if parentExec != nil {
 			return parentExec, nil
 		}
-		return kit.ShellExecutor{}, nil
+		return specexec.ShellExecutor{}, nil
 	case "container-exec":
 		// The podman container `charly start`/the pod lifecycle creates is
 		// `charly-<flat-path>` (containerName's `charly-` prefix), so the nested
@@ -97,20 +98,20 @@ func deriveChildExecutorForPath(path string, node *spec.BundleNode, parentExec s
 		// consumer (build_overlay.go, candy/plugin-adb/preresolve.go)
 		// prepends `charly-`; omitting it here made a nested-child deploy exec into a
 		// nonexistent bare-named container (exit 125 "no such container").
-		name := "charly-" + kit.NestedContainerName(path)
-		engineJump := kit.JumpPodmanExec
+		name := "charly-" + specexec.NestedContainerName(path)
+		engineJump := specexec.JumpPodmanExec
 		if node.Engine == "docker" {
-			engineJump = kit.JumpDockerExec
+			engineJump = specexec.JumpDockerExec
 		}
 		if parentExec == nil {
-			parentExec = kit.ShellExecutor{}
+			parentExec = specexec.ShellExecutor{}
 		}
-		return &kit.NestedExecutor{
+		return &specexec.NestedExecutor{
 			Parent: parentExec,
-			Jump:   kit.NestedJump{Kind: engineJump, Target: name},
+			Jump:   specexec.NestedJump{Kind: engineJump, Target: name},
 		}, nil
 	case "ssh":
-		return deploykit.VmChildExecutor(parentExec, path)
+		return specexec.VmChildExecutor(parentExec, path)
 	case "reject":
 		return nil, fmt.Errorf("k8s targets cannot have children")
 	}
@@ -132,27 +133,29 @@ func deriveChildExecutorForPath(path string, node *spec.BundleNode, parentExec s
 // direct-mode deploy). A mistyped/unknown name has no artifact and is rejected
 // loudly, instead of being silently synthesized into a pod del that tears down
 // nothing and then fails with a misleading "unknown target pod".
-func (c *deployDelCmd) resolveDelNode() (*spec.BundleNode, string, error) {
+func (c *deployDelCmd) resolveDelNode(tree map[string]spec.BundleNode) (*spec.BundleNode, string, error) {
 	if c.Name == "host" {
 		return &spec.BundleNode{Target: "local"}, "local", nil
 	}
 	// RCA #9 (FINAL/K5 unit 6a, live-probe-caught): try the REAL tree resolution FIRST — now
-	// "vm:"-prefix-aware via resolveDeployNodeByPath's own vmshared.SplitVmAddress use (RCA #8) — instead
+	// "vm:"-prefix-aware via resolveDeployNodeByPath's own spec.SplitVmAddress use (RCA #8) — instead
 	// of unconditionally short-circuiting to a synthetic Target-only placeholder for ANY
 	// "vm:"-prefixed name. The old unconditional shortcut meant a "vm:"-prefixed del NEVER saw
 	// the tree at all: it "resolved" successfully with a bare node (no From, no children), which
 	// masked the SEPARATE connect-preamble bug RCA #8 fixed (resolveDeployNodeByPath used to also
 	// fail to find the node) until dispatch itself failed. A real node also lets Del's teardown
 	// hooks see the deploy's actual From/Children, which the synthetic placeholder never carried.
-	if cwd, _ := os.Getwd(); cwd != "" {
-		if tree, _ := resolveTreeRoot(cwd); tree != nil {
-			if node, ok := resolveDeployNodeByPath(tree, c.Name); ok && node.Target != "" {
-				n := *node
-				return &n, n.Target, nil
-			}
+	// tree is threaded PLUGIN-SIDE by command:bundle (resolveTreeViaLoader) — the #55 Cone A Unit 3a
+	// tree-threading that replaced this function's former host merged-tree read (cwd); a
+	// nil/empty tree falls through to the "vm:"-prefix / pod-artifact fallbacks below, exactly as a
+	// nil host-tree-read result did.
+	if tree != nil {
+		if node, ok := resolveDeployNodeByPath(tree, c.Name); ok && node.Target != "" {
+			n := *node
+			return &n, n.Target, nil
 		}
 	}
-	if _, isVm := vmshared.SplitVmAddress(c.Name); isVm {
+	if _, isVm := spec.SplitVmAddress(c.Name); isVm {
 		// Fallback ONLY for a genuine tree-absence: a "vm:"-prefixed address with no matching
 		// tree entry (the deploy was removed from charly.yml, or never had one — e.g. a bare
 		// `charly vm create --domain` with no deploy entry). The synthetic Target-only
@@ -173,8 +176,8 @@ func (c *deployDelCmd) resolveDelNode() (*spec.BundleNode, string, error) {
 // that lets a ref-based `charly bundle del <name>` with no charly.yml entry still tear a real pod
 // down, while a mistyped name (no artifact) is rejected.
 func podDeploymentArtifactExists(name string) bool {
-	cn := kit.NestedContainerName(name)
-	if dir, err := kit.QuadletDir(); err == nil {
+	cn := specexec.NestedContainerName(name)
+	if dir, err := spec.QuadletDir(); err == nil {
 		for _, suffix := range []string{".container", ".pod"} {
 			if _, err := os.Stat(filepath.Join(dir, "charly-"+cn+suffix)); err == nil {
 				return true
@@ -185,35 +188,14 @@ func podDeploymentArtifactExists(name string) bool {
 }
 
 // ---------------------------------------------------------------------------
-// Host-context + config helpers (shared with build_overlay.go + the
-// resolve-target-add / deploy_target_unified.go host paths).
+// Config helpers (shared with build_overlay.go + the resolve-target-add /
+// deploy_target_unified.go host paths).
 // ---------------------------------------------------------------------------
-
-// detectHostContext builds the HostContext struct used by the compiler
-// for host-target deploys. Returns a zero-value struct for container
-// deploys (the compiler ignores host-only fields there). Consumed by
-// build_overlay.go (the pod-overlay build) host-side; the plugin computes its
-// own twin (candy/plugin-bundle/dispatch.go detectHostContext) for the deploy compile.
-func detectHostContext() deploykit.HostContext {
-	hd, _ := vmshared.DetectHostDistro()
-	glibc, _ := vmshared.DetectHostGlibc()
-	if hd == nil {
-		return deploykit.HostContext{}
-	}
-	return deploykit.HostContext{
-		MachineVenue: true,
-		Distro:       hd.PrimaryTag(),
-		GlibcVersion: glibc,
-	}
-}
-
-// resolveDistroDef returns the DistroDef for a given distro tag.
-func resolveDistroDef(cfg *spec.DistroConfig, distroTag string) *spec.ResolvedDistro {
-	if cfg == nil || distroTag == "" {
-		return nil
-	}
-	return cfg.ResolveDistro([]string{distroTag})
-}
+// detectHostContext + resolveDistroDef were DELETED in #55 coneB-br2 Group 2:
+// their sole caller resolveOverlayBaseDistroDef (build_overlay.go) was dropped
+// when build.DistroCfg was proven dead on the overlay step-emit path. The plugin
+// computes its own twin (candy/plugin-bundle/dispatch.go detectHostContext) for
+// the deploy compile.
 
 // loadConfigForDeploy loads charly.yml + the embedded build vocabulary for the
 // current project directory. Runs RegisterBuildVocabulary as a side effect since

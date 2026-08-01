@@ -16,7 +16,7 @@ package check
 // isScored/scoredPlanOrigin (score.go, Unit A), deploykit.ResolveDeployChain/
 // RootExecutorForDeployNode/ContainerChain, resolveHostVarsForSteps (members.go), and
 // newPluginCheckRunner (plugin_runner.go) for the per-bucket runner. deployRoots comes off the
-// resolved-project envelope (derefDeployTree(rp.Deploy)) instead of resolveTreeRoot(cwd) — the
+// resolved-project envelope (derefDeployTree(rp.Deploy)) instead of a host merged-tree read(cwd) — the
 // SAME project-level tree Unit A/B already established as the envelope's Deploy projection.
 
 import (
@@ -67,7 +67,7 @@ func pluginRunCheckLive(ex *sdk.Executor, ctx context.Context, scoreName string,
 
 	dir, _ := os.Getwd()
 	var deployRoots map[string]spec.BundleNode
-	// Best-effort, matching the core original's own resolveTreeRoot(cwd) tolerance (a missing/
+	// Best-effort, matching the core original's own merged-tree-read(cwd) tolerance (a missing/
 	// absent project never fails scoring — a plan whose steps address a bare venue by container
 	// name still scores via pluginResolveScoringChain's roots==nil fallback). A nil ex (unit
 	// tests; no reverse channel) skips the envelope fetch entirely rather than dereferencing nil.
@@ -256,7 +256,7 @@ func pluginScoreOneVenueBucket(ex *sdk.Executor, ctx context.Context, dir string
 
 // pluginResolveScoringChain returns the DeployExecutor chain that reaches `venue` — the port of
 // charly/check_runner_live.go's resolveScoringChain, off the envelope-derived deployRoots instead
-// of a fresh resolveTreeRoot(cwd) call.
+// of a fresh merged-tree-read(cwd) call.
 func pluginResolveScoringChain(roots map[string]spec.BundleNode, venue string) (deploykit.DeployExecutor, error) {
 	if strings.Contains(venue, ".") && roots != nil {
 		_, chain, err := deploykit.ResolveDeployChain(roots, venue, kit.ShellExecutor{})

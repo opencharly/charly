@@ -10,7 +10,7 @@ import (
 
 // host_seams.go — the command:bundle plugin's bridge to the host. The bundle CLI handlers moved out
 // of charly core (P13). `add`/`del` now drive their WHOLE deploy-tree walk plugin-side (walk.go,
-// the K4-C walk port) — LoadUnified-coupled config resolution (resolveTreeRoot/resolveDelNode) and
+// the K4-C walk port) — LoadUnified-coupled config resolution (the merged-tree read/resolveDelNode) and
 // registry-coupled executor-chain derivation (deriveChildExecutorForPath) are core Mechanisms a
 // plugin cannot import (separate module), so the walk reaches them via six narrow host-build
 // seams: deploy-plugins-connect, resolve-target-add (the per-node ResolveTarget+Add terminal step —
@@ -18,9 +18,10 @@ import (
 // the host half does only ResolveTarget+Add, no compile), deploy-members-up/-down,
 // deploy-del-resolve, and deploy-node-del-dispatch (the per-node ResolveTarget+Del terminal step).
 // `from-box` still forwards its WHOLE command to
-// HostBuild("deploy-from-box"), and the whole-file config-management ops (show/export/import/
-// reset/status) reach the host via the narrow HostBuild("deploy-config-save") seam alone — both
-// running the existing core orchestration VERBATIM. command:bundle is COMPILED-IN and dispatches
+// HostBuild("deploy-from-box"). The config-management ops (show/export/import/reset/status) run
+// plugin-side — reads via loaderkit.LoadHostBundleConfigViaExecutor, writes via deploykit.SaveBundleConfig
+// directly (#55 K4 config-write seam-collapse; the host "deploy-config-save" leg is deleted).
+// command:bundle is COMPILED-IN and dispatches
 // exactly ONE `charly bundle …` invocation per process, so the reverse-channel executor is stashed
 // in a package var at Invoke(OpRun) entry (setCommandContext) — race-free single-command-per-process.
 // Mirrors candy/plugin-vm/vm_host_seams.go.

@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/vmshared"
@@ -33,7 +32,7 @@ import (
 // dispatchBuild already drives, mirroring build.go's dispatchBuild — the pattern that ALSO backs
 // candy/plugin-build's own build:ensure fallback); resolveBootcImageRef + vmDir + the deploy-state
 // read are already 100% pure sdk (kit.ResolveLocalImageRef, vmshared.VmStateRoot,
-// deploykit.LoadDeployConfigForRead) with zero core coupling.
+// loaderkit.LoadHostBundleConfigViaExecutor) with zero core coupling.
 
 // knownVmSourceKinds lists the source.kind values `charly vm build` supports. Used by the
 // unsupported-kind error message so adding a new kind keeps the enumeration in sync with the switch.
@@ -284,8 +283,10 @@ func resolveVmBuild(ctx context.Context, ex *sdk.Executor, req spec.VmBuildReque
 	}
 
 	var existingState *spec.VmDeployState
-	if e, ok := deploykit.LoadDeployConfigForRead("charly vm build").LookupKey("vm:" + boxName); ok {
-		existingState = e.VmState
+	if dc, derr := loaderkit.LoadHostBundleConfigViaExecutor(ctx, ex); derr == nil && dc != nil {
+		if e, ok := dc.LookupKey("vm:" + boxName); ok {
+			existingState = e.VmState
+		}
 	}
 
 	vmJSON, err := json.Marshal(vmSpec)

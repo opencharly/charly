@@ -9,14 +9,14 @@ package main
 // user-facing surface is just one verb.
 //
 // TRACKED P13-KERNEL EXIT (DEPLOY-wave audit, 2026-07-20; R1-corrected 2026-07-23 —
-// K1-UNBLOCK wave-4 spike): resolveTreeRoot/loadDeployPlugins/ResolveTarget were
+// K1-UNBLOCK wave-4 spike): the host tree read / loadDeployPlugins / ResolveTarget were
 // framed here as blocked on a NOT-YET-BUILT "venue-scoped-executor-session seam" —
 // that framing is now STALE. The seam already exists and is live: InvokeProvider's
 // caller-supplied VenueDescriptorJson self-description (plugin_dispatch_reverse.go)
 // already lets an out-of-process cold-start caller materialize a fresh executor with
 // NO incoming executor of its own, and a COMPILED-IN candy/plugin-bundle (dual-
 // placement, same host process) can construct one directly via the already-portable
-// sdk/deploykit.RootExecutorForDeployNode — no IPC round-trip needed at all for the
+// specexec.RootExecutorForDeployNode (deploykit re-exports it for plugin callers) — no IPC round-trip for the
 // common local-target case. This file's dispatch kernel moving is therefore
 // straightforward-but-large RELOCATION work (resolved-project envelope for the
 // deploy tree + the two portable executor-construction primitives above +
@@ -33,10 +33,10 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -60,7 +60,7 @@ import (
 // dc.Lookup(c.Box, c.Instance). On miss the error reports the full key.
 func resolveUpdateDeployNode(tree map[string]spec.BundleNode, image, instance string) (*spec.BundleNode, error) {
 	key := spec.DeployKey(image, instance)
-	node, _, err := deploykit.ResolveNodePath(tree, key)
+	node, _, err := spec.ResolveNodePath(tree, key)
 	if err != nil || node == nil {
 		return nil, fmt.Errorf("no deploy named %q in charly.yml. To refresh an image artifact only, use 'charly box pull %s'", key, image)
 	}
@@ -72,9 +72,15 @@ func (c *podUpdateCmd) dispatchByDeployTarget() error {
 	if err != nil {
 		return fmt.Errorf("getwd: %w", err)
 	}
-	tree, err := resolveTreeRoot(dir)
-	if err != nil {
-		return fmt.Errorf("loading deploy tree from %s: %w", dir, err)
+	// command:update (plugin-pod) resolved the merged deploy tree PLUGIN-SIDE
+	// (loaderkit.ResolveMergedTreeViaExecutor) and threaded it in — consume it instead of
+	// re-loading the tree host-side (#55 Cone A Unit 3b). An absent/empty tree yields the
+	// same "no charly.yml" error a nil host-tree-read result produced.
+	var tree map[string]spec.BundleNode
+	if len(c.TreeJSON) > 0 {
+		if err := json.Unmarshal(c.TreeJSON, &tree); err != nil {
+			return fmt.Errorf("decoding threaded deploy tree: %w", err)
+		}
 	}
 	if tree == nil {
 		return fmt.Errorf("no charly.yml found relative to %s; charly update requires a deploy name. To refresh an image artifact only, use 'charly box pull %s'", dir, c.Box)

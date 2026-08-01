@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 
-	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/hostenv"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -41,7 +41,7 @@ func hostBuildConfigResolve(_ context.Context, req spec.ConfigResolveRequest, _ 
 		}
 	}
 
-	rt, err := kit.ResolveRuntime()
+	rt, err := hostenv.ResolveRuntime()
 	if err != nil {
 		return spec.ConfigResolveReply{}, err
 	}
@@ -59,9 +59,6 @@ func hostBuildConfigResolve(_ context.Context, req spec.ConfigResolveRequest, _ 
 	// decodes; they are resolved into locals here so applyCueDefaults runs on the typed value first.
 	var vm *spec.ResolvedVm
 	var resources map[string]*ResolvedResource
-	var claimant string
-	var claimantNode spec.BundleNode
-	var hasClaimant bool
 	if uf, ok, ufErr := LoadUnified(dir); ufErr == nil && ok && uf != nil {
 		if uf.VM() != nil {
 			vm, _ = resolveVmViaPlugin(uf.VM()[req.Entity])
@@ -70,17 +67,16 @@ func hostBuildConfigResolve(_ context.Context, req spec.ConfigResolveRequest, _ 
 			}
 		}
 		resources = resolveResources(uf)
-		// The exclusive-resource claimant (requires_exclusive) the handler acquires a preempt
-		// lease for — K1-unblock wave 1: the portable deploykit.FindVMClaimant (also used
-		// plugin-side by candy/plugin-preempt off the resolved-project envelope, R3) replaces the
-		// former core-only lookupVMClaimant, over the SAME per-host-overlay-merged tree.
-		claimant, claimantNode, hasClaimant = deploykit.FindVMClaimant(
-			deploykit.MergedDeployTree(uf.Bundle, "vm config-resolve"), req.Entity)
-	}
-
-	if hasClaimant {
-		reply.Claimant = claimant
-		reply.ClaimantNode = &claimantNode
+		// #55 coneC-dsh β2 config-RESOLVE shed: the host no longer calls deploykit.MergedDeployTree +
+		// spec.FindVMClaimant (the per-host-overlay-merged Claimant lookup). It now ships the PROJECT
+		// deploy tree (uf.Bundle) as BundleJSON; the plugin (candy/plugin-vm hostConfigResolve) merges
+		// it with the per-host overlay ITSELF via deploykit.MergedDeployTree(bundle, ctx, reader) +
+		// spec.FindVMClaimant (placement-invariant — the reader is loaderkit.LoadHostBundleConfigViaExecutor,
+		// so the Claimant computation no longer depends on the deleted host DeployStateHost seam). This
+		// drops the last deploykit import from this file.
+		if bundleJSON, mErr := json.Marshal(uf.Bundle); mErr == nil {
+			reply.BundleJSON = bundleJSON
+		}
 	}
 
 	// Materialize #Vm's required-with-default fields (firmware/network-mode/cpu-mode) on the resolved
@@ -128,40 +124,44 @@ func hostBuildConfigResolve(_ context.Context, req spec.ConfigResolveRequest, _ 
 
 	// The persisted deploy-ledger runtime state (READ half): the plugin's build reuses the persisted
 	// ssh_port and its create regenerates the seed ISO from this prior state (idempotent auto-port).
-	if entry, ok := deploykit.LoadDeployConfigForRead("config-resolve").LookupKey("vm:" + req.Entity); ok {
-		reply.VmState = entry.VmState
+	// #55 coneC-dsh β2 config-RESOLVE (Approach X): the host reads VmState spec-ONLY via a second
+	// LoadUnified over the per-host overlay dir — NO deploykit.LoadDeployConfigForRead (which would
+	// route through the deleted DeployStateHost seam). LoadUnified(perHostConfigDir).Bundle is
+	// byte-equivalent to deploykit.LoadBundleConfig().Bundle (ProjectBundleConfig just extracts
+	// uf.Bundle, deploy_file.go:81-110) for the VmState lookup key "vm:"+entity. The host keeps
+	// filling VmState because THREE plugins consume it (plugin-vm hostConfigResolve + plugin-kube
+	// hostConfigResolveVmState + plugin-deploy-vm lifecycle) — only the Claimant moved plugin-side.
+	//
+	// R1 documented-divergence: LoadDeployConfigForRead emitted a legacy-`deploy.yml`-filename
+	// stderr warning on a host still on the legacy filename (deploy_file.go:92-96); this spec-only
+	// LoadUnified path does NOT emit that warning. The migration guard itself is NOT lost — it
+	// still fires on every OTHER LoadBundleConfig caller (the β1 plugin-side readers + SaveBundleConfig
+	// fail-safe re-reads) which return the error properly. Only this config-resolve VmState READ no
+	// longer routes through the deploykit file-shell owning the guard. On a legacy-deploy.yml host
+	// both paths produce the SAME load-bearing outcome (nil VmState — the prior LoadDeployConfigForRead
+	// already degraded to empty there); only the stderr diagnostic line differs.
+	if path, perr := spec.DefaultDeployConfigPath(); perr == nil {
+		if ovUf, ok2, _ := LoadUnified(filepath.Dir(path)); ok2 && ovUf != nil {
+			if entry, ok := ovUf.Bundle["vm:"+req.Entity]; ok {
+				reply.VmState = entry.VmState
+			}
+		}
 	}
 
 	return reply, nil
 }
 
-// hostBuildConfigPersist is the WRITE twin of hostBuildConfigResolve: the host applies a command
-// plugin's deploy-ledger persist/remove under the blocking acquireDeployConfigLock (a core Mechanism
-// the plugin cannot hold across the module boundary — a process-shared flock must stay host-side).
-// Remove deletes the entry (vm destroy); else the entity's VmState is saved (create persist-auto-port).
-// Generic action noun "config-persist" (F11 — never a substrate word); P11/P13 reuse it for their state.
-//
-// The VM-SPECIFIC decision logic (ephemeral-state preserve merge, the auto-vs-operator-authored
-// delete decision, stale-dotted-twin prune) lives in deploykit.SaveVmDeployState/
-// RemoveVmDeployEntry (F6 vm-lifecycle move, coneB-vmlifecycle) — this handler is now a thin
-// call-through supplying the two genuinely host-resident primitives those functions cannot hold
-// themselves: acquireDeployConfigLock (a process-shared flock) and saveBundleConfigNodeForm (the
-// plugin-primaries-coupled marshal). The read→decide→write critical section still runs as ONE lock
-// hold inside the deploykit call — atomicity is unchanged, only the decision logic moved.
-const configPersistBuilderKind = "config-persist"
-
-func hostBuildConfigPersist(_ context.Context, req spec.ConfigPersistRequest, _ buildEngineContext) (spec.ConfigPersistReply, error) {
-	if req.Key == "" {
-		return spec.ConfigPersistReply{}, fmt.Errorf("config-persist: empty deploy key")
-	}
-	if req.Remove {
-		return spec.ConfigPersistReply{}, deploykit.RemoveVmDeployEntry(req.Key, acquireDeployConfigLock, saveBundleConfigNodeForm)
-	}
-	return spec.ConfigPersistReply{}, deploykit.SaveVmDeployState(req.Key, req.Entity, req.VmState, acquireDeployConfigLock, saveBundleConfigNodeForm)
-}
+// The "config-persist" host-builder is DELETED (#55 coneC-dsh β2 config-PERSIST shed): the
+// command:vm + command:bundle plugins now call deploykit.SaveVmDeployState/RemoveVmDeployEntry
+// directly with their own lock + marshal + reader (candy/plugin-vm/vm_host_persist.go +
+// candy/plugin-bundle/deploy_target.go), over the existing reader-callback precedent. The
+// config-RESOLVE leg is ALSO off deploykit (#55 coneC-dsh β2 config-RESOLVE shed): the host ships
+// the PROJECT bundle as BundleJSON (the plugin merges the per-host overlay + computes the Claimant
+// itself via deploykit.MergedDeployTree+spec.FindVMClaimant) + reads VmState spec-only via LoadUnified
+// of the per-host overlay dir. host_build_config_resolve.go imports ONLY spec/* (+ hostenv) — ZERO
+// deploykit.
 
 var _ = func() bool {
 	registerHostBuilder(configResolveBuilderKind, typedHostBuilder(configResolveBuilderKind, hostBuildConfigResolve))
-	registerHostBuilder(configPersistBuilderKind, typedHostBuilder(configPersistBuilderKind, hostBuildConfigPersist))
 	return true
 }()

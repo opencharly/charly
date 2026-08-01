@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/hostenv"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -22,9 +22,9 @@ func TestRunPodConfigSetup_DirectModeAllowed(t *testing.T) {
 	configPath := filepath.Join(tmpDir, "config.yml")
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, "xdg"))
 
-	orig := kit.RuntimeConfigPath
-	defer func() { kit.RuntimeConfigPath = orig }()
-	kit.RuntimeConfigPath = func() (string, error) { return configPath, nil }
+	orig := hostenv.RuntimeConfigPath
+	defer func() { hostenv.RuntimeConfigPath = orig }()
+	hostenv.RuntimeConfigPath = func() (string, error) { return configPath, nil }
 
 	_ = os.Unsetenv("CHARLY_BUILD_ENGINE")
 	_ = os.Unsetenv("CHARLY_RUN_ENGINE")

@@ -67,23 +67,23 @@ func TestPodDeploymentArtifactExists(t *testing.T) {
 // and no pod artifact is rejected with "no such deployment", not silently synthesized into a pod del
 // that tears down nothing and then fails with a misleading "unknown target pod".
 func TestResolveDelNode_TypoRejected(t *testing.T) {
-	t.Chdir(t.TempDir()) // an empty project dir → resolveTreeRoot finds no entry
+	t.Chdir(t.TempDir()) // a nil threaded tree → resolveDelNode finds no entry (empty-project equivalent)
 	t.Setenv("HOME", t.TempDir())
 	prev := containerExists
 	containerExists = func(engine, name string) bool { return false }
 	t.Cleanup(func() { containerExists = prev })
 
-	if _, _, err := (&deployDelCmd{Name: "zzz-mistyped-name"}).resolveDelNode(); err == nil {
+	if _, _, err := (&deployDelCmd{Name: "zzz-mistyped-name"}).resolveDelNode(nil); err == nil {
 		t.Fatal("a mistyped name must be rejected, not synthesized into a pod del")
 	} else if !strings.Contains(err.Error(), "no such deployment") {
 		t.Fatalf("error must say 'no such deployment', got: %v", err)
 	}
 
 	// The legacy prefixes still resolve without an artifact.
-	if _, kind, err := (&deployDelCmd{Name: "host"}).resolveDelNode(); err != nil || kind != "local" {
+	if _, kind, err := (&deployDelCmd{Name: "host"}).resolveDelNode(nil); err != nil || kind != "local" {
 		t.Fatalf(`"host" must resolve to local, got kind=%q err=%v`, kind, err)
 	}
-	if _, kind, err := (&deployDelCmd{Name: "vm:arch"}).resolveDelNode(); err != nil || kind != "vm" {
+	if _, kind, err := (&deployDelCmd{Name: "vm:arch"}).resolveDelNode(nil); err != nil || kind != "vm" {
 		t.Fatalf(`"vm:arch" must resolve to vm, got kind=%q err=%v`, kind, err)
 	}
 }

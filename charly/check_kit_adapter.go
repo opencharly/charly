@@ -6,51 +6,51 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/opencharly/spec/checkstep"
 	"github.com/opencharly/spec/spec"
 
-	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/spec/proto"
 )
 
-// hostCheckContext adapts the live check pass to kit.CheckContext — the surface a HOST-COUPLED
+// hostCheckContext adapts the live check pass to spec.CheckContext — the surface a HOST-COUPLED
 // verb candy consumes. It wraps the *hostVerbResolver (which holds the kit.Runner engine state +
 // the per-Invoke endpoint cleanups) rather than the runner directly, so the six host-reverse legs
 // (HTTPDo + the four Resolve* podman/go-libvirt/ssh ops) share ONE cleanup lifecycle with the
 // out-of-process dispatch. The engine-state legs read the kit.Runner accessors; the host-reverse
 // legs (check_endpoint_resolve.go) call the SAME resolveVerb* machinery the out-of-proc
 // checkContextReverseServer uses — one source, two consumers, endpoint-identical (R3).
-// DeployExecutor satisfies kit.Executor structurally, so Exec() returns the runner's straight
+// DeployExecutor satisfies spec.CheckExecutor structurally, so Exec() returns the runner's straight
 // through.
 type hostCheckContext struct{ h *hostVerbResolver }
 
-var _ kit.CheckContext = hostCheckContext{}
+var _ spec.CheckContext = hostCheckContext{}
 
-func (c hostCheckContext) Exec() kit.Executor         { return c.h.kr.Exec() }
-func (c hostCheckContext) DialTimeout() time.Duration { return c.h.kr.DialTimeout() }
+func (c hostCheckContext) Exec() spec.CheckExecutor   { return c.h.cc.Exec() }
+func (c hostCheckContext) DialTimeout() time.Duration { return c.h.cc.DialTimeout() }
 
 // HTTPDo issues the request from the host (in-process) via the SHARED host HTTP-do path
-// (kit.DoHTTPRequest — the SAME builder the out-of-process CheckContextService.HTTPDo uses, R3),
-// derived from the engine's base client.
-func (c hostCheckContext) HTTPDo(ctx context.Context, req kit.HTTPRequest) (kit.HTTPResponse, error) {
-	return kit.DoHTTPRequest(ctx, c.h.kr.HTTPClient(), req)
+// (spec.DoHTTPRequest — the SAME builder the out-of-process CheckContextService.HTTPDo uses, R3),
+// derived from the carrier's base client.
+func (c hostCheckContext) HTTPDo(ctx context.Context, req spec.CheckHTTPRequest) (spec.CheckHTTPResponse, error) {
+	return spec.DoHTTPRequest(ctx, c.h.cc.HTTPClient(), req)
 }
-func (c hostCheckContext) Box() string           { return c.h.kr.Box() }
-func (c hostCheckContext) Instance() string      { return c.h.kr.Instance() }
-func (c hostCheckContext) Distros() []string     { return c.h.kr.Distros() }
-func (c hostCheckContext) AddBackground(pid int) { c.h.kr.Scenario().AddBackground(pid) }
-func (c hostCheckContext) Mode() kit.RunMode     { return c.h.kr.Mode() }
+func (c hostCheckContext) Box() string             { return c.h.cc.Box() }
+func (c hostCheckContext) Instance() string        { return c.h.cc.Instance() }
+func (c hostCheckContext) Distros() []string       { return c.h.cc.Distros() }
+func (c hostCheckContext) AddBackground(pid int)   { c.h.cc.AddBg(pid) }
+func (c hostCheckContext) Mode() spec.CheckRunMode { return c.h.cc.Mode() }
 
-// kitVerbAdapter wraps a COMPILED-IN host-coupled verb candy's kit.CheckVerbProvider
+// kitVerbAdapter wraps a COMPILED-IN host-coupled verb candy's checkstep.CheckVerbProvider
 // as a package-main CheckVerbProvider, so runOne dispatches it through the SAME
 // providerRegistry path as an typed builtin verb. It passes the live check context
-// (hostCheckContext over the *hostVerbResolver) as a kit.CheckContext and converts the
+// (hostCheckContext over the *hostVerbResolver) as a spec.CheckContext and converts the
 // returned kit.Result back to a CheckResult (stamping Op + Verb). It embeds
 // builtinVerbBase for Class()=ClassVerb + the in-proc-only Invoke stub — a kit verb is
 // in-process only (RunVerb needs the live host context, which cannot cross a process
 // boundary).
 type kitVerbAdapter struct {
 	builtinVerbBase
-	kv kit.CheckVerbProvider
+	kv spec.CheckVerbProvider
 	// primary is the capability's declared scalar-sugar primary input field
 	// (ProvidedCapability.Primary), lifted from Describe at registration.
 	primary string
@@ -69,15 +69,15 @@ func (a kitVerbAdapter) RunVerb(ctx context.Context, h *hostVerbResolver, op *sp
 }
 
 // kitVerbActAdapter is the kitVerbAdapter variant for a host-coupled verb candy whose
-// kit.CheckVerbProvider ALSO implements kit.ProvisionActor — a MULTI-ROLE state-provision
+// checkstep.CheckVerbProvider ALSO implements checkstep.ProvisionActor — a MULTI-ROLE state-provision
 // verb (a check: probe AND a run:/build-act shell renderer). It adds the package-main
 // ProvisionActor role, delegating RenderProvisionScript to the kit verb. A pure check verb
 // stays a plain kitVerbAdapter, so it is NOT mis-resolved as a ProvisionActor by the act
 // dispatch (resolveProvisionScript's type-assert); registerCompiledCheckVerb picks this
-// variant only when the candy implements kit.ProvisionActor.
+// variant only when the candy implements checkstep.ProvisionActor.
 type kitVerbActAdapter struct {
 	kitVerbAdapter
-	pa kit.ProvisionActor
+	pa checkstep.ProvisionActor
 }
 
 func (a kitVerbActAdapter) RenderProvisionScript(op *spec.Op, distros []string) (string, bool) {
@@ -124,17 +124,17 @@ func (a kitVerbActAdapter) Invoke(ctx context.Context, op *Operation) (*Result, 
 }
 
 // kitVerbActStepAdapter is the variant for a host-coupled verb candy whose kit verb ALSO
-// implements kit.StepProvider — a TYPED-STEP state-provision verb (service/package) whose
+// implements checkstep.StepProvider — a TYPED-STEP state-provision verb (service/package) whose
 // build/deploy act lowers into a typed InstallStep, not a shell. It adds the package-main
 // TypedStepProvider role (LowersTo + ConstructStep), materializing the candy's
-// kit.StepDescriptor into the real ServicePackagedStep / SystemPackagesStep — so
+// checkstep.StepDescriptor into the real ServicePackagedStep / SystemPackagesStep — so
 // hostBuildConstructStep (the "construct-step" seam handler) lowers it exactly as
 // the typed builtin verb did, and the load-bearing
 // Reverse() stays in package main. Embeds kitVerbActAdapter (service/package are also
 // ProvisionActors — the runtime act-shell half).
 type kitVerbActStepAdapter struct {
 	kitVerbActAdapter
-	sp kit.StepProvider
+	sp checkstep.StepProvider
 }
 
 func (a kitVerbActStepAdapter) LowersTo() spec.StepKind {
@@ -145,23 +145,23 @@ func (a kitVerbActStepAdapter) ConstructStep(op *spec.Op, ctx stepConstructCtx) 
 	return materializeStep(a.sp.ConstructStepDescriptor(op), ctx)
 }
 
-// kitStepKindToCharly maps the kit's StepKindName to charly's internal StepKind enum.
-func kitStepKindToCharly(k kit.StepKindName) spec.StepKind {
+// kitStepKindToCharly maps the checkstep.StepKindName to charly's internal StepKind enum.
+func kitStepKindToCharly(k checkstep.StepKindName) spec.StepKind {
 	switch k {
-	case kit.StepKindServicePackaged:
+	case checkstep.StepKindServicePackaged:
 		return spec.StepKindServicePackaged
-	case kit.StepKindSystemPackages:
+	case checkstep.StepKindSystemPackages:
 		return spec.StepKindSystemPackages
 	}
 	panic("kitStepKindToCharly: unknown kit step kind " + string(k))
 }
 
 // materializeStep rebuilds the real package-main InstallStep from a candy's
-// kit.StepDescriptor and the pre-resolved stepConstructCtx (the run-as-resolved scope,
+// checkstep.StepDescriptor and the pre-resolved stepConstructCtx (the run-as-resolved scope,
 // the candy name, the image package format + distro tags — the 4 scalars this function
 // actually reads, never a full layer/img handle). The load-bearing Reverse() lives on
 // the built step (package main), unchanged from the typed builtin verb's ConstructStep.
-func materializeStep(desc kit.StepDescriptor, ctx stepConstructCtx) spec.InstallStep {
+func materializeStep(desc checkstep.StepDescriptor, ctx stepConstructCtx) spec.InstallStep {
 	switch {
 	case desc.ServicePackaged != nil:
 		return &spec.ServicePackagedStep{
@@ -177,7 +177,7 @@ func materializeStep(desc kit.StepDescriptor, ctx stepConstructCtx) spec.Install
 		return &spec.SystemPackagesStep{
 			Format:   ctx.PkgFormat,
 			Phase:    spec.PhaseInstall,
-			Packages: []string{kit.ResolvePackageName(desc.SystemPackages.Package, desc.SystemPackages.PackageMap, ctx.DistroTags)},
+			Packages: []string{checkstep.ResolvePackageName(desc.SystemPackages.Package, desc.SystemPackages.PackageMap, ctx.DistroTags)},
 		}
 	default:
 		panic("materializeStep: empty StepDescriptor for verb in candy " + ctx.CandyName)
@@ -185,7 +185,7 @@ func materializeStep(desc kit.StepDescriptor, ctx stepConstructCtx) spec.Install
 }
 
 // registerCompiledCheckVerb registers a COMPILED-IN host-coupled verb candy: it wraps
-// the candy's kit.CheckVerbProvider in a kitVerbAdapter and registers it (with the
+// the candy's checkstep.CheckVerbProvider in a kitVerbAdapter and registers it (with the
 // candy's CUE schema) through the SAME RegisterBuiltinPluginUnit gate an
 // typed builtin verb uses (schema gated at process start, origin "builtin", so the
 // coexist switch treats it like any compiled-in plugin). Called from the generated
@@ -196,7 +196,7 @@ func materializeStep(desc kit.StepDescriptor, ctx stepConstructCtx) spec.Install
 // subdir — the SAME concat contract a builtin/external schema goes through (R3). A
 // read/concat failure is a build-time invariant violation (panic, like
 // loadBuiltinPluginUnits).
-func registerCompiledCheckVerb(kv kit.CheckVerbProvider, meta pb.PluginMetaServer) {
+func registerCompiledCheckVerb(kv spec.CheckVerbProvider, meta pb.PluginMetaServer) {
 	// Read the concatenated CUE schema + the input-def map from the candy's shared NewMeta
 	// (the SAME Describe → BuildCapabilities the out-of-process placement serves), so a kit
 	// candy provides ONE NewMeta for both placements — no exported SchemaFS/SchemaDir/InputDefs
@@ -222,15 +222,15 @@ func registerCompiledCheckVerb(kv kit.CheckVerbProvider, meta pb.PluginMetaServe
 		}
 	}
 	var prov Provider = base
-	// A multi-role state-provision verb's kit verb also implements kit.ProvisionActor —
+	// A multi-role state-provision verb's kit verb also implements checkstep.ProvisionActor —
 	// register the act-aware variant so the act dispatch (resolveProvisionScript) resolves
 	// its RenderProvisionScript. A pure check verb stays the plain adapter (no act role).
-	// A TYPED-STEP verb (service/package) additionally implements kit.StepProvider — wrap
+	// A TYPED-STEP verb (service/package) additionally implements checkstep.StepProvider — wrap
 	// the act variant once more so hostBuildConstructStep resolves it as a TypedStepProvider.
-	if pa, ok := kv.(kit.ProvisionActor); ok {
+	if pa, ok := kv.(checkstep.ProvisionActor); ok {
 		act := kitVerbActAdapter{kitVerbAdapter: base, pa: pa}
 		prov = act
-		if sp, ok := kv.(kit.StepProvider); ok {
+		if sp, ok := kv.(checkstep.StepProvider); ok {
 			prov = kitVerbActStepAdapter{kitVerbActAdapter: act, sp: sp}
 		}
 	}

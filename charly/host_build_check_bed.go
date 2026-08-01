@@ -2,16 +2,16 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
 
-	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/loaderkit"
-	"github.com/opencharly/sdk/vmshared"
+	specexec "github.com/opencharly/spec/exec"
+	"github.com/opencharly/spec/hostenv"
+	"github.com/opencharly/spec/lock"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -38,11 +38,12 @@ import (
 //
 // The op bodies call the SHARED core helpers runCheckBed uses (bedGPUPrereqMissing,
 // kit.AcquireFileLock, bedVmDomains/acquireVmDomainLock, selfSuperprojectOverridePair/
-// mergeRepoOverrides, acquireResourceForClaimant, vmshared.StartLibvirtUserSession,
-// persistBedDeployOverrides, bringUpMembers/tearDownMembers, deploykit.WaitForVmSshReady/
-// deploykit.WaitForContainerReady, bedCheckLevel/bedCheckLiveRefs/…) — those helpers STAY
-// core (shared with runCheckBed + bundle_add_cmd; K-wave relocation inventory, never
-// aliased).
+// mergeRepoOverrides, acquireResourceForClaimant, hostenv.StartLibvirtUserSession,
+// persistBedDeployOverrides, bringUpMembers/tearDownMembers, bedCheckLevel/bedCheckLiveRefs/…)
+// — those helpers STAY core (shared with runCheckBed + bundle_add_cmd; K-wave relocation
+// inventory, never aliased). The venue-readiness GATES moved to spec/exec
+// (specexec.WaitForVmSshReady/WaitForContainerReady, #55 K4) — pure process pollers, not
+// bed-session state.
 //
 // TRANSITIONAL host seam — dies at K5: post-loaderkit the plugin holds its own flock via
 // sdk/kit (filelock/install_ledger/deployconfig, the delivered K4-B state family), computes the
@@ -137,9 +138,9 @@ func hostBuildCheckBed(_ context.Context, req spec.CheckBedRequest, _ buildEngin
 		if nodeTraits(&s.node).Venue == "ssh" { // vm (ssh venue)
 			// Wait on the per-deploy DOMAIN IDENTITY (charly-<bedDomain> is the live domain +
 			// managed ssh alias, post-P33), NOT the shared kind:vm entity (node.From).
-			deploykit.WaitForVmSshReady(s.bedDomain)
+			specexec.WaitForVmSshReady(s.bedDomain)
 		} else {
-			deploykit.WaitForContainerReady(req.Bed)
+			specexec.WaitForContainerReady(req.Bed)
 		}
 		return spec.CheckBedReply{}, nil
 	case "teardown":
@@ -240,9 +241,9 @@ func bedSessionSetup(req spec.CheckBedRequest) (spec.CheckBedReply, error) {
 	}()
 
 	// Per-bed exclusive lock — fail-fast on a duplicate concurrent run of the SAME bed.
-	bedUnlock, lockErr := kit.AcquireFileLock(filepath.Join(".check", req.Bed, ".lock"), false)
+	bedUnlock, lockErr := lock.AcquireFileLock(filepath.Join(".check", req.Bed, ".lock"), false)
 	if lockErr != nil {
-		if errors.Is(lockErr, kit.ErrLockBusy) {
+		if errors.Is(lockErr, lock.ErrLockBusy) {
 			return spec.CheckBedReply{}, fmt.Errorf("check bed %q is already running in this project — refusing a concurrent run (lock: .check/%s/.lock)", req.Bed, req.Bed)
 		}
 		return spec.CheckBedReply{}, fmt.Errorf("locking check bed %q: %w", req.Bed, lockErr)
@@ -255,9 +256,9 @@ func bedSessionSetup(req spec.CheckBedRequest) (spec.CheckBedReply, error) {
 	// Per-DOMAIN serialization for VM beds (sorted → no deadlock across a multi-domain bed).
 	// Keyed by the DEPLOY (req.Bed) post-P33, so distinct beds sharing one kind:vm entity get
 	// distinct, collision-free domains + run fully parallel.
-	domains := kit.BedVmDomains(req.Bed, node)
+	domains := lock.BedVmDomains(req.Bed, node)
 	for _, domain := range domains {
-		du, derr := kit.AcquireVmDomainLock(domain)
+		du, derr := lock.AcquireVmDomainLock(domain)
 		if derr != nil {
 			return spec.CheckBedReply{}, fmt.Errorf("locking vm domain %s for bed %q: %w", domain, req.Bed, derr)
 		}
@@ -290,16 +291,16 @@ func bedSessionSetup(req spec.CheckBedRequest) (spec.CheckBedReply, error) {
 
 	// VM/group beds need the libvirt user-session daemon (probes + the backend resolver). Best-effort.
 	if isVM || isGroup {
-		vmshared.StartLibvirtUserSession()
+		hostenv.StartLibvirtUserSession()
 	}
 
-	// Seed the per-host overlay with the bed's project-declared deploy-shaped overrides BEFORE the
-	// plugin's `charly config` step. persistBedDeployOverrides self-skips group + local + external
-	// in-place; guarded to the non-VM path here so it matches runCheckBed EXACTLY (which seeds only
-	// the pod/default root at :811 — a VM root's seed is pointless: a VM bed runs no `charly config`).
-	if !isVM {
-		persistBedDeployOverrides(req.Bed, node)
-	}
+	// The bed-root + member deploy-override PERSIST moved PLUGIN-SIDE to candy/plugin-check's
+	// bed runner (#55 coneC-dsh β1 — check_bed_run.go's persistBedDeployOverrides wrapper + its
+	// deploykit import shed). The host now threads the bed-root BundleNode (with nested Members)
+	// serialized as NodeJSON; the plugin calls deploykit.PersistBedDeployOverrides itself with its
+	// own loader-threaded marshalNode + reader (the deployMarshalNode/deployConfigReader pattern),
+	// guarding the root persist by !IsVM (matching the former host guard — a VM bed runs no
+	// `charly config`) and persisting each member from NodeJSON's nested peer map.
 
 	bedSessMu.Lock()
 	bedSessions[req.Bed] = s
@@ -307,6 +308,7 @@ func bedSessionSetup(req spec.CheckBedRequest) (spec.CheckBedReply, error) {
 	inserted = true
 
 	level := bedCheckLevel(uf, node)
+	nodeJSON, _ := json.Marshal(node) // spec.Deploy round-trips cleanly (Members=peer, Children=nested, Descent — all json-tagged)
 	return spec.CheckBedReply{
 		Calver:         calver,
 		LogDir:         logDir,
@@ -314,6 +316,7 @@ func bedSessionSetup(req spec.CheckBedRequest) (spec.CheckBedReply, error) {
 		IsLocal:        isLocal,
 		IsGroup:        isGroup,
 		IsExternal:     isExternal,
+		NodeJSON:       nodeJSON,   // bed-root BundleNode (Members nested) — the plugin-side persist source
 		Image:          node.Image, // "" for vm/local/group
 		HasAddCandy:    len(node.AddCandy) > 0,
 		VMTemplate:     node.From,   // vm bed template (the ENTITY — `charly vm build` builds off this)
@@ -321,13 +324,13 @@ func bedSessionSetup(req spec.CheckBedRequest) (spec.CheckBedReply, error) {
 		ImageTag:       s.imageTag,
 		LocalRef:       node.From, // local bed ref
 		VMDomains:      domains,
-		CheckLiveRefs:  deploykit.BedCheckLiveRefs(req.Bed, node.Children),
-		ChildKeys:      deploykit.SortedNestedKeys(node.Children),
+		CheckLiveRefs:  spec.BedCheckLiveRefs(req.Bed, node.Children),
+		ChildKeys:      spec.SortedNestedKeys(node.Children),
 		LocalChildKeys: bedLocalChildKeys(node.Children),
 		Members:        bedMemberDescriptors(node.Members),
-		RunBuild:       kit.CheckLevelReaches(level, kit.CheckLevelBuild),
-		RunRuntime:     kit.CheckLevelReaches(level, kit.CheckLevelNoAgent),
-		RunAgent:       kit.CheckLevelReaches(level, kit.CheckLevelAgent),
+		RunBuild:       spec.CheckLevelReaches(level, spec.CheckLevelBuild),
+		RunRuntime:     spec.CheckLevelReaches(level, spec.CheckLevelNoAgent),
+		RunAgent:       spec.CheckLevelReaches(level, spec.CheckLevelAgent),
 	}, nil
 }
 
@@ -352,7 +355,7 @@ func bedSessionTeardown(req spec.CheckBedRequest) (spec.CheckBedReply, error) {
 // From is the kind:vm ENTITY (build/spec source, entity-scoped — NOT --domain); the per-deploy member
 // domain (spec.VmDomainIdentity(memberKey)) is applied host-side by bringUpMembers, not here.
 func bedMemberDescriptors(members map[string]*spec.BundleNode) []spec.CheckBedMember {
-	keys := loaderkit.SortedMemberKeys(members)
+	keys := spec.SortedMemberKeys(members)
 	if len(keys) == 0 {
 		return nil
 	}
@@ -382,12 +385,12 @@ func bedRunImageTag(bed, calver string) string {
 
 // bedLocalChildKeys is the HOST-ROOTED (kind:local) subset of a node's nested children, in
 // sortedNestedKeys order — the set a VM root deploys host-side (mirroring
-// deploykit.DeployNestedLocalChildren: a VM's nested CONTAINER children are deployed
+// spec.DeployNestedLocalChildren: a VM's nested CONTAINER children are deployed
 // in-guest by plugin-deploy-vm's PostApply, so a
 // host-side re-deploy would be wrong).
 func bedLocalChildKeys(children map[string]*spec.BundleNode) []string {
 	var out []string
-	for _, childKey := range deploykit.SortedNestedKeys(children) {
+	for _, childKey := range spec.SortedNestedKeys(children) {
 		child := children[childKey]
 		if child != nil && nodeTraits(child).HostRooted { // local (host-rooted shell venue)
 			out = append(out, childKey)

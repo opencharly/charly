@@ -2,7 +2,7 @@ package check
 
 // venue.go — K1-unblock W3 Unit A: the venue classifier + executor builder relocated from
 // charly/check_venue.go. Every dependency this file had on core-only state (LoadUnified,
-// resolveTreeRoot, the core-private providerRegistry via nodeTraits' synthetic-node fallback) is
+// the host merged-tree read, the core-private providerRegistry via nodeTraits' synthetic-node fallback) is
 // replaced by the resolved-project envelope (InvokeProvider("build","project")) already fetched by
 // resolvedProject (checkproject.go) — a loader-stamped node ALWAYS carries a non-nil .Descent (via
 // the host's stampBundleDescents pass), so the plugin-side nodeTraits below never needs the
@@ -10,7 +10,7 @@ package check
 // outside the loader (this package never builds one). Everything else — the poll/readiness/SSH
 // forwarding machinery, the container/VM/host classification, the dotted-path tree walk — was
 // ALREADY portable via existing sdk/vmshared + sdk/kit primitives; the mechanical rename
-// loadedReadiness()→kit.ReadinessProvider() / pollUntil→vmshared.PollUntil /
+// loadedReadiness()→spec.ReadinessProvider() / pollUntil→vmshared.PollUntil /
 // ErrPollFatal→vmshared.ErrPollFatal / PollLocal→vmshared.PollLocal / vmDomainIdentity→
 // vmshared.VmDomainIdentity is the WHOLE of the "no new mechanism" claim for this file (RDD-
 // confirmed by reading sdk/vmshared's own alias/re-export tables before this move).
@@ -62,7 +62,7 @@ func (v *CheckVenue) IsContainer() bool { return v != nil && v.Kind == "containe
 
 // resolveCheckVenue maps an `charly check` verb's <name> argument to an execution venue, off the
 // resolved-project envelope's Deploy tree (rp.Deploy) instead of a direct LoadUnified/
-// resolveTreeRoot call — the ONLY change from the core original, which read the SAME merged
+// merged-tree-read call — the ONLY change from the core original, which read the SAME merged
 // bundle tree via the host loader in-process.
 func resolveCheckVenue(ex *sdk.Executor, ctx context.Context, dir, name, instance string) (*CheckVenue, error) {
 	if name == "." {

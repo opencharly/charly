@@ -9,8 +9,6 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/buildkit"
-	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -57,7 +55,7 @@ type loadedProject struct {
 	uf         *spec.UnifiedFile // nil when absent or its load/discover errored
 	distroCfg  *spec.DistroConfig
 	builderCfg *spec.BuilderConfig
-	initCfg    *buildkit.InitConfig
+	initCfg    *spec.InitConfig
 	version    string
 	empty      bool
 }
@@ -71,7 +69,7 @@ type loadedProject struct {
 // config → empty; a scan failure → zero candies; a unified-load failure → no deploy/template fill), so
 // the host-natural checks still run on a broken project. The build vocabulary is registered (so
 // ResolveBox resolves distro/builder) exactly as before.
-func loadProjectForResolve(dir string, opts loaderkit.ResolveOpts, diags *spec.Diagnostics) (*loadedProject, error) {
+func loadProjectForResolve(dir string, opts spec.ResolveOpts, diags *spec.Diagnostics) (*loadedProject, error) {
 	lp := &loadedProject{layers: map[string]spec.CandyReader{}}
 
 	cfg, err := LoadConfig(dir)
@@ -167,7 +165,7 @@ func addLoadDiag(diags *spec.Diagnostics, err error) {
 // Every function is KIND-BLIND with ONE tracked exception the orchestrator reviews at tree-final: the
 // hardcoded collection-kind WORD LIST inside validateProjectCUESchemas (a legacy root-shape arm; task
 // #60 CONDITION 1 — restructure to cueKindDefs D-data or delete the dead legacy path per the ruling).
-func runHostNaturalValidateChecks(lp *loadedProject, dir string, opts loaderkit.ResolveOpts, diags *spec.Diagnostics) {
+func runHostNaturalValidateChecks(lp *loadedProject, dir string, opts spec.ResolveOpts, diags *spec.Diagnostics) {
 	if lp == nil || lp.cfg == nil {
 		return
 	}
@@ -211,7 +209,7 @@ func hostBuildValidateProjectChecks(_ context.Context, req spec.ValidateProjectR
 		}
 		dir = d
 	}
-	opts := loaderkit.ResolveOpts{IncludeDisabled: req.IncludeDisabled}
+	opts := spec.ResolveOpts{IncludeDisabled: req.IncludeDisabled}
 	// loadDiags is DISCARDED (not returned): a LoadConfig/scan/LoadUnified failure here is the SAME
 	// underlying disk-file failure candy/plugin-build's build:project(OpValidate) leg's OWN tolerant
 	// load already reports in envReply.Diagnostics (both legs load the identical charly.yml) —
@@ -297,7 +295,7 @@ var _ = func() bool {
 // used to describe as future work is DONE). This function survives as test-only coverage (see its
 // callers in validate_fixture_test.go / plugin_installstep_envelope_parity_test.go's
 // testFullResolveGenerator) reproducing the SAME validate dispatch for fixture-driven unit tests.
-func validateProjectForBuild(dir string, opts loaderkit.ResolveOpts) error {
+func validateProjectForBuild(dir string, opts spec.ResolveOpts) error {
 	prov, ok := providerRegistry.resolve(ClassCommand, "validate")
 	if !ok {
 		return fmt.Errorf("pre-build validation: the validate capability (command:validate) is not compiled in")

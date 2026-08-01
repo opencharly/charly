@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/opencharly/sdk/buildkit"
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -15,8 +13,8 @@ import (
 // plugin-build's deploykit.Generator render calls back to the host for the REMAINING
 // host-coupled seams (EmitPluginOp, inline-builder, ensure-builders) via
 // HostBuild("render-seam", RenderSeamRequest{Method, Params}). This builder dispatches by
-// Method to the corresponding CORE function — the EXACT funcs the core toDeploykit closures
-// call — so the render is byte-identical to the pre-move core render (byte-parity by
+// Method to the corresponding CORE function (resolveInlineBuilderSeam / ensureBuildersConnected)
+// — so the render is byte-identical to the pre-move core render (byte-parity by
 // construction). The rich inputs (spec types — Builder, BuildStageContext, Op) ride the opaque
 // Params bytes; the host unmarshals + calls. The live *Generator (gen.Boxes/gen.Candies/
 // gen.Config/gen.Dir) comes from the per-dir renderGenCache populated by the buildengine-prep leg (one gen
@@ -55,17 +53,20 @@ import (
 var renderGenCache sync.Map
 
 // loadRenderGen returns the cached *Generator for dir, falling back to the cheap
-// newCandyScanGenerator (default opts) if the cache is empty (defensive — the buildengine-prep
-// leg always populates it first). #55 step3 3-II: the expensive NewGenerator (full
+// newCandyScanGenerator (default opts, NO boxes) if the cache is empty (defensive — the
+// buildengine-prep leg always populates it first, pushing the plugin-resolved boxes on
+// #ResolvedProjectRequest.boxes). #55 step3 3-II: the expensive NewGenerator (full
 // buildkit.ResolveAllBox + intermediates + render-prep) is DELETED — every normal build:box/
 // build:generate call already populates renderGenCache unconditionally via hostBuildPrep, so this
 // fallback is provably unreachable in production; kept as the cheap belt-and-suspenders default
-// rather than the deleted expensive one.
+// (now box-less — a reachable cache miss would surface as renderSeamGenBox's "box not found"
+// rather than silently re-resolving) rather than the deleted expensive one. #55 coneB2 Class B:
+// the fallback passes a nil boxes map (the box RESOLVE shed from the host).
 func loadRenderGen(dir string) *Generator {
 	if v, ok := renderGenCache.Load(dir); ok {
 		return v.(*Generator)
 	}
-	g, err := newCandyScanGenerator(dir, false, nil)
+	g, err := newCandyScanGenerator(dir, false, nil, nil)
 	if err != nil || g == nil {
 		return nil
 	}
@@ -76,7 +77,7 @@ func loadRenderGen(dir string) *Generator {
 // renderSeamGenBox loads the cached Generator + the named box for a render-seam method.
 // Returns a non-nil errReply (for the caller to return) if either is missing — the shared
 // load+guard boilerplate of every box-coupled render-seam method (R3).
-func renderSeamGenBox(dir, boxName, method string) (gen *Generator, img *buildkit.ResolvedBox, errReply *spec.RenderSeamReply) {
+func renderSeamGenBox(dir, boxName, method string) (gen *Generator, img *spec.ResolvedBox, errReply *spec.RenderSeamReply) {
 	gen = loadRenderGen(dir)
 	if gen == nil {
 		return nil, nil, &spec.RenderSeamReply{Error: fmt.Sprintf("render-seam %s: no generator for dir %q", method, dir)}
@@ -106,8 +107,8 @@ func renderSeamResult(method string, result any) (spec.RenderSeamReply, error) {
 //nolint:gocyclo // by-Method dispatch switch — one case per render seam (the 2 remaining loader-gated host-coupled seams); splitting each into a method scatters a single dispatch without reducing the real branch surface.
 func hostBuildRenderSeam(_ context.Context, req spec.RenderSeamRequest, _ buildEngineContext) (spec.RenderSeamReply, error) {
 	switch req.Method {
-	case deploykit.RenderSeamInlineBuilder:
-		var p deploykit.InlineBuilderParams
+	case spec.RenderSeamInlineBuilder:
+		var p spec.InlineBuilderParams
 		if err := json.Unmarshal(req.Params, &p); err != nil {
 			return spec.RenderSeamReply{}, fmt.Errorf("render-seam %s: decode params: %w", req.Method, err)
 		}
@@ -119,10 +120,10 @@ func hostBuildRenderSeam(_ context.Context, req spec.RenderSeamRequest, _ buildE
 		if err != nil {
 			return spec.RenderSeamReply{Error: err.Error()}, nil
 		}
-		return renderSeamResult(req.Method, deploykit.InlineBuilderResult{Fragment: frag})
+		return renderSeamResult(req.Method, spec.InlineBuilderResult{Fragment: frag})
 
-	case deploykit.RenderSeamEnsureBuilders:
-		var p deploykit.EnsureBuildersParams
+	case spec.RenderSeamEnsureBuilders:
+		var p spec.EnsureBuildersParams
 		if err := json.Unmarshal(req.Params, &p); err != nil {
 			return spec.RenderSeamReply{}, fmt.Errorf("render-seam %s: decode params: %w", req.Method, err)
 		}

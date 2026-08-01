@@ -81,8 +81,9 @@ func TestExternalDeployPlugin_ReverseChannelEndToEnd(t *testing.T) {
 	}
 
 	// 3. A real lifecycle target: a unique deploy name (so the /tmp scratch dir is private to
-	//    this run) and a TEMP ledger (never the operator's, threaded via pluginDeployTarget.paths
-	//    → req.LedgerRoot — S3b's wire-safe equivalent of the pre-move settable `paths` field).
+	//    this run) and a TEMP ledger (never the operator's, threaded via pluginDeployTarget.ledgerRoot
+	//    → req.LedgerRoot — S3b's wire-safe equivalent of the pre-move settable `paths` field; only
+	//    the Root string is injected, the full *kit.LedgerPaths stays test-side for read-back).
 	name := fmt.Sprintf("e3deploy-%d", time.Now().UnixNano())
 	root := t.TempDir()
 	paths := &kit.LedgerPaths{
@@ -92,7 +93,7 @@ func TestExternalDeployPlugin_ReverseChannelEndToEnd(t *testing.T) {
 		LockFile: filepath.Join(root, ".lock"),
 	}
 	tgt.name = name
-	tgt.paths = paths
+	tgt.ledgerRoot = paths.Root
 
 	dir := filepath.Join("/tmp", "charly-exampledeploy", name)
 	applied := filepath.Join(dir, "applied")

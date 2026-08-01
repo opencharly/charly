@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/refs"
 )
 
 // stubRefsDownloader counts Download invocations and returns a canned path,
@@ -71,13 +71,27 @@ func TestEnsureRepoDownloaded_MutableRefAlwaysDelegates(t *testing.T) {
 	}
 }
 
+// TestRefsDownloaderRegisteredAtInit proves the #55 "drop the kit.DefaultDownloader{} bootstrap
+// default" is safe (the RDD assumption): the compiled-in candy/plugin-refs registers
+// activeRefsDownloader at init (plugins_generated.go's init() → registerCompiledPlugin → the
+// spec.RefsDownloader seam in plugin_inproc.go), which Go runs before main() and therefore before
+// any @github resolution can call EnsureRepoDownloaded. A non-nil downloader at test time (tests
+// run after package init, like main) is the deterministic, offline proof that no fetch can observe
+// the nil pre-init default — requireRefsDownloader() never FATALs on the default binary. It FAILS
+// if plugin-refs stops registering or is dropped from compiled_plugins.
+func TestRefsDownloaderRegisteredAtInit(t *testing.T) {
+	if activeRefsDownloader == nil {
+		t.Fatal("candy/plugin-refs must register activeRefsDownloader at init (before any resolution) — nil means the bootstrap fetch backend is unset")
+	}
+}
+
 // Guard the kit classifier contract the core decision relies on (the full
 // matrix lives in sdk/kit's TestIsMutableRef).
 func TestIsMutableRefCoreContract(t *testing.T) {
-	if !kit.IsMutableRef("main") || !kit.IsMutableRef("") {
+	if !refs.IsMutableRef("main") || !refs.IsMutableRef("") {
 		t.Fatal("branches and the unversioned default branch are mutable")
 	}
-	if kit.IsMutableRef("v2026.201.0706") || kit.IsMutableRef("2d731456b0b8cfbe2e19b64de75b4d652d2fc94c") {
+	if refs.IsMutableRef("v2026.201.0706") || refs.IsMutableRef("2d731456b0b8cfbe2e19b64de75b4d652d2fc94c") {
 		t.Fatal("tags and full SHAs are immutable")
 	}
 }

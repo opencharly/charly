@@ -10,9 +10,10 @@ import (
 
 // bundle_cmd.go — the command:bundle CLI GRAMMAR (P13). The `charly bundle …` Kong tree
 // moved OUT of charly core into this plugin candy; the deploy ORCHESTRATION stayed core
-// behind the deploy-add / deploy-del / deploy-from-box / deploy-config host-build seams
-// (mirroring how the box-build engine stayed core behind HostBuild("image") in P8 and the
-// VM-disk engine behind HostBuild("vm-build") in P10). Every leaf here is THIN: it carries
+// behind the resolve-target-add / deploy-del-resolve / deploy-from-box / deploy-config
+// host-build seams (mirroring how the box-build engine stayed core behind HostBuild("image")
+// in P8; the VM-disk engine moved plugin-side to candy/plugin-vm/vm_build_resolve.go — the
+// former HostBuild("vm-build") is DELETED). Every leaf here is THIN: it carries
 // the authored Kong flags and forwards them, as the matching sdk/spec wire request, to its
 // seam via hostDeploySeam — the host reconstructs the core orchestration struct and runs
 // its Run() logic VERBATIM. The lone exception is `path`, which resolves entirely plugin-side
@@ -157,8 +158,8 @@ func (c *BundleExportCmd) Run() error {
 	return runBundleExport(c.Boxes, c.Output, c.All)
 }
 
-// BundleImportCmd is the `charly bundle import <files…>` grammar (K4-C: runs plugin-side;
-// the SAVE step alone reaches the host via the narrow HostBuild("deploy-config-save") seam).
+// BundleImportCmd is the `charly bundle import <files…>` grammar (K4-C: runs plugin-side; the
+// SAVE step writes plugin-side too — deploykit.SaveBundleConfig, #55 K4 config-write seam-collapse).
 type BundleImportCmd struct {
 	Files   []string `arg:"" help:"Deploy YAML files to import (merged left-to-right)"`
 	Replace bool     `help:"Replace entire charly.yml instead of merging with existing"`
@@ -170,7 +171,7 @@ func (c *BundleImportCmd) Run() error {
 }
 
 // BundleResetCmd is the `charly bundle reset [box]` grammar (K4-C: runs plugin-side; the SAVE
-// step alone reaches the host via the narrow HostBuild("deploy-config-save") seam).
+// step writes plugin-side too — deploykit.SaveBundleConfig, #55 K4 config-write seam-collapse).
 type BundleResetCmd struct {
 	Box      string `arg:"" optional:"" help:"Box to reset (omit to clear all)"`
 	Instance string `short:"i" long:"instance" help:"Instance name"`

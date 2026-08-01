@@ -20,9 +20,9 @@ import (
 	cueyaml "cuelang.org/go/encoding/yaml"
 	"gopkg.in/yaml.v3"
 
-	"github.com/opencharly/sdk/kit"
 	sdkschema "github.com/opencharly/spec/schema"
 	"github.com/opencharly/spec/schemaconcat"
+	"github.com/opencharly/spec/spec"
 )
 
 // schemaFS is the CUE schema source, exported by the SDK module (the contract
@@ -214,7 +214,7 @@ func validateEntityNodeRec(gn *genericNode, path string) error {
 		// validateCandyManifestCUE scope): an IMAGE entity (base:/from:) mixes
 		// build fields that stay non-concrete until merge and is gated by the
 		// #NodeDoc structural pass + decode validation instead.
-		if m := kit.MappingRoot(body); m != nil {
+		if m := spec.MappingRoot(body); m != nil {
 			for i := 0; i+1 < len(m.Content); i += 2 {
 				if k := m.Content[i].Value; k == "base" || k == "from" {
 					return nil

@@ -1,6 +1,7 @@
 package bundle
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -38,7 +39,7 @@ func TestGenerateK8sKustomize_Guards(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := GenerateK8sKustomize(nil, nil, tc.opts)
+			_, err := GenerateK8sKustomize(context.TODO(), nil, tc.opts)
 			if err == nil {
 				t.Fatalf("expected an error, got nil")
 			}

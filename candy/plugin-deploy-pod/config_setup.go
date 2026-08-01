@@ -13,6 +13,7 @@ import (
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/loaderkit"
 	pb "github.com/opencharly/spec/proto"
 	"github.com/opencharly/spec/spec"
 )
@@ -93,37 +94,40 @@ func runPodConfigSetup(ctx context.Context, ex *sdk.Executor, c *spec.PodConfigS
 	return runConfig(ctx, ex, rt, c)
 }
 
-// resolveDeployRef mirrors the former BoxConfigSetupCmd.resolveDeployRef via the
-// "pod-config-resolve-ref" seam (loader + local podman-store coupled).
+// resolveDeployRef mirrors the former BoxConfigSetupCmd.resolveDeployRef, resolved plugin-side
+// (the "pod-config-resolve-ref" seam-collapse, #55 Cone A Unit 2 — see resolve_ref.go).
 func resolveDeployRef(ctx context.Context, ex *sdk.Executor, c *spec.PodConfigSetupRequest) (deployBoxName, imageRef string, err error) {
-	var rep spec.PodConfigResolveRefReply
-	err = hostBuild(ctx, ex, podConfigResolveRefKind, spec.PodConfigResolveRefRequest{
-		Box: c.Box, Instance: c.Instance, Tag: c.Tag, ExplicitRef: c.ExplicitRef,
-	}, &rep)
-	return rep.DeployBoxName, rep.ImageRef, err
+	return resolveDeployRefLocal(ctx, ex, c.Box, c.Instance, c.Tag, c.ExplicitRef)
 }
 
+// loadDeploy reads the per-host charly.yml overlay PLUGIN-SIDE via the cycle-free
+// loaderkit.LoadHostBundleConfigViaExecutor read (#55 coneC-dsh — the pod-config-load-deploy host
+// seam is DELETED). caller is the warning-context tag (matching the former host leg's
+// LoadDeployConfigForRead(caller) swallow): a load error degrades to (nil, nil) + a stderr warning,
+// so a config setup that finds no overlay proceeds with image-label-driven behavior (the same
+// graceful degradation the host leg made).
 func loadDeploy(ctx context.Context, ex *sdk.Executor, caller string) (*deploykit.BundleConfig, error) {
-	var rep spec.PodConfigLoadDeployReply
-	if err := hostBuild(ctx, ex, podConfigLoadDeployKind, spec.PodConfigLoadDeployRequest{Caller: caller}, &rep); err != nil {
-		return nil, err
-	}
-	if len(rep.ConfigJSON) == 0 {
+	dc, err := loaderkit.LoadHostBundleConfigViaExecutor(ctx, ex)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: %s: charly.yml unavailable for read: %v\n", caller, err)
 		return nil, nil
 	}
-	var dc deploykit.BundleConfig
-	if err := json.Unmarshal(rep.ConfigJSON, &dc); err != nil {
-		return nil, err
-	}
-	return &dc, nil
+	return dc, nil
 }
 
-func saveBundle(ctx context.Context, ex *sdk.Executor, dc *deploykit.BundleConfig) error {
-	b, err := json.Marshal(dc)
-	if err != nil {
-		return err
-	}
-	return hostBuild(ctx, ex, podConfigSaveBundleKind, spec.PodConfigSaveBundleRequest{ConfigJSON: b}, nil)
+// saveBundle persists dc PLUGIN-SIDE via deploykit.SaveBundleConfig directly (#55 coneC-dsh — the
+// pod-config-save-bundle host seam is DELETED). The marshal resugars via loader-threaded Primaries
+// (deployMarshalNode) + the failsafe re-read uses the loader-backed reader (deployConfigReader), so
+// the write no longer depends on the charly-init DeployStateHost registration.
+//
+// It is a package var (not a plain func) so resolveDeployVolumes' precedence tests can stub the
+// persist leg directly (saveBundleStub, config_setup_volume_test.go) — the SAME testability pattern
+// loadProjectVolume already uses. The real path drives deploykit.SaveBundleConfig (a filesystem
+// write to ~/.config/charly/charly.yml) + 4 loader HostBuild seams (loader-threaded/-bootstrap/
+// -walk/-materialize) via deployConfigReader/deployMarshalNode, a multi-leg path a unit test must
+// not drive against the operator's real per-host overlay.
+var saveBundle = func(ctx context.Context, ex *sdk.Executor, dc *deploykit.BundleConfig) error {
+	return deploykit.SaveBundleConfig(dc, deployMarshalNode(ctx, ex), deployConfigReader(ctx, ex))
 }
 
 //nolint:gocyclo // ported 1:1 from charly-core BoxConfigSetupCmd.runConfig — see the file header; splitting further would fragment the seam-call sequencing across files for no clarity gain
@@ -143,44 +147,50 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 	if err != nil {
 		return err
 	}
-	var ensureRep spec.PodConfigEnsureImageReply
-	if err := hostBuild(ctx, ex, podConfigEnsureImageKind, spec.PodConfigEnsureImageRequest{ImageRef: imageRef, BuildEngine: rt.BuildEngine}, &ensureRep); err != nil {
+	if err := hostBuild(ctx, ex, podConfigEnsureImageKind, spec.PodConfigEnsureImageRequest{ImageRef: imageRef, BuildEngine: rt.BuildEngine}, nil); err != nil {
 		return err
 	}
-	var meta spec.BoxMetadata
-	if err := json.Unmarshal(ensureRep.MetaJSON, &meta); err != nil {
+	// ExtractMetadata PLUGIN-SIDE (#55 coneC-dsh — the pod-config-ensure-image host seam shrinks to
+	// the host-coupled ensureImagePresent leg; the deploykit label extract runs here, shedding the
+	// host leg's deploykit import).
+	metaPtr, err := deploykit.ExtractMetadata("podman", imageRef)
+	if err != nil {
 		return err
 	}
+	if metaPtr == nil {
+		return fmt.Errorf("image %s has no embedded metadata; rebuild with latest charly", imageRef)
+	}
+	meta := *metaPtr
 
 	dc, err := loadDeploy(ctx, ex, "charly config")
 	if err != nil {
 		return err
 	}
 
-	var migRep spec.PodConfigMigrateSecretsReply
-	dcJSON, _ := json.Marshal(dc)
-	if err := hostBuild(ctx, ex, podConfigMigrateSecretsKind, spec.PodConfigMigrateSecretsRequest{
-		ConfigJSON: dcJSON, MetaJSON: ensureRep.MetaJSON, Box: c.Box, Instance: c.Instance,
-	}, &migRep); err == nil && len(migRep.ConfigJSON) > 0 {
-		// A partial/failed decode here would leave dc a hybrid of the pre- and post-migration shape
-		// (json.Unmarshal can populate fields before erroring) — never silently discarded.
-		if err := json.Unmarshal(migRep.ConfigJSON, &dc); err != nil {
-			return fmt.Errorf("decoding migrated deploy config: %w", err)
-		}
-	}
-
-	var scrubRep spec.PodConfigScrubCliEnvReply
-	if err := hostBuild(ctx, ex, podConfigScrubCliEnvKind, spec.PodConfigScrubCliEnvRequest{
-		CliEnv: c.Env, MetaJSON: ensureRep.MetaJSON,
-	}, &scrubRep); err == nil {
-		c.Env = scrubRep.Cleaned
-	}
+	// Migrate plaintext env secrets + scrub CLI env credentials PLUGIN-SIDE (#55 coneC Unit C4):
+	// the former HostBuild round-trip to charly's host_build_pod_config_seams.go host builders is
+	// deleted; the logic relocated to secret_migration.go in this package. migrate mutates dc
+	// in-place + persists via saveBundle; scrub mutates c.Env in-place. Both best-effort — matching
+	// the former `err == nil` swallow (a credential-store failure keeps the plaintext/CLI value).
+	_, _ = migratePlaintextEnvSecret(ctx, ex, dc, &meta, c.Box, c.Instance)
+	c.Env, _ = scrubSecretCLIEnv(ctx, ex, c.Env, &meta)
 
 	if err := persistResourceCaps(ctx, ex, &dc, c); err != nil {
 		return fmt.Errorf("persisting resource caps: %w", err)
 	}
 
-	if dc != nil {
+	// Guard dc.Bundle (not only dc): coneC-dsh's loadDeploy → loaderkit.LoadHostBundleConfigViaExecutor
+	// returns a NON-NIL &deploykit.BundleConfig{} with a nil Bundle on an absent per-host overlay
+	// (the bed's XDG-isolated empty temp dir; the operator's ~/.config/charly before the first deploy
+	// add) — matching deploykit.LoadBundleConfig's absent/empty contract so reap-orphans and other
+	// range-without-nil-guard callers keep working. The former LoadDeployConfigForRead returned nil
+	// for absent, so the pre-coneC-dsh `if dc != nil` guard skipped this block entirely (graceful
+	// degradation: no overlay → no prior resolved ports → image-label defaults, meta.Port below).
+	// The non-nil-&BundleConfig{} return keeps that contract for the rangers but makes `if dc != nil`
+	// always true, so the guard must also check dc.Bundle: an absent overlay (nil Bundle) skips port
+	// resolution — exactly the graceful degradation the loadDeploy comment names. Writing to a nil
+	// Bundle here was the coneC-dsh regression (assignment-to-nil-map panic, config_setup.go:193).
+	if dc != nil && dc.Bundle != nil {
 		key := spec.DeployKey(c.Box, c.Instance)
 		overlay := dc.Bundle[key]
 		containerPorts := kit.ContainerPortsFromMappings(meta.Port)
@@ -219,22 +229,17 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 		usingResolvedOverlay = ov != "" && ov == imageRef
 	}
 	if meta.Registry != "" && !kit.LooksLikeFullRef(imageRef) && c.ExplicitRef == "" && !usingResolvedOverlay {
-		var rep spec.PodConfigResolveRefReply
-		if err := hostBuild(ctx, ex, podConfigResolveRefKind, spec.PodConfigResolveRefRequest{
-			Box: deployBoxName, Instance: "", Tag: c.Tag,
-		}, &rep); err == nil {
-			imageRef = rep.ImageRef
+		if _, ref, e := resolveDeployRefLocal(ctx, ex, deployBoxName, "", c.Tag, ""); e == nil {
+			imageRef = ref
 		}
 	}
 
 	var tunnelCfg *spec.TunnelConfig
 	if meta.Tunnel != nil {
-		var tRep spec.PodConfigTunnelResolveReply
-		if err := hostBuild(ctx, ex, podConfigTunnelResolveKind, spec.PodConfigTunnelResolveRequest(ensureRep), &tRep); err == nil && len(tRep.TunnelJSON) > 0 {
-			var tc spec.TunnelConfig
-			if json.Unmarshal(tRep.TunnelJSON, &tc) == nil {
-				tunnelCfg = &tc
-			}
+		// TunnelConfigFromMetadata PLUGIN-SIDE (#55 coneC-dsh — the pod-config-tunnel-resolve host
+		// seam is DELETED; pure deploykit, no host coupling).
+		if tc := deploykit.TunnelConfigFromMetadata(&meta); tc != nil {
+			tunnelCfg = tc
 		}
 	}
 
@@ -251,7 +256,8 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 	// Env/MCP provides injection (P11 seam-death — see provides_inject.go). The plugin resolves the
 	// provides templates itself and mutates the loaded deploy config in place, persisting through the
 	// SAME loadDeploy→modify→saveBundle path the secrets/sidecar persist uses (R3); the locked
-	// whole-file write stays in the floored saveBundleConfigNodeForm behind pod-config-save-bundle.
+	// whole-file write + marshal resugar run plugin-side via deploykit.SaveBundleConfig (the former
+	// pod-config-save-bundle host seam + the host save-callback are deleted, #55 coneC-dsh).
 	dc, err = loadDeploy(ctx, ex, "charly config reload-before-inject")
 	if err != nil {
 		return err
@@ -391,12 +397,9 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 		Sidecar: deploySidecars, Tunnel: meta.Tunnel, SecretNames: secretDepNames(&meta),
 		Box: deployBoxName, Target: "pod",
 	}
-	inputJSON, _ := json.Marshal(saveInput)
-	if err := hostBuild(ctx, ex, deployConfigSaveStateKind, spec.DeployConfigSaveStateRequest{
-		Box: c.Box, Instance: c.Instance, InputJSON: inputJSON,
-	}, nil); err != nil {
-		return err
-	}
+	// #55 K4: write deploy-state PLUGIN-SIDE (deploykit.SaveDeployState via the generic loader-threaded
+	// Primaries leg + loadDeploy reader), not over the deleted "deploy-config-save-state" host seam.
+	deploySaveState(ctx, ex, c.Box, c.Instance, saveInput)
 
 	if rt.RunMode == "direct" {
 		return runConfigDirect(qcfg, bindMounts, resolvedSidecars, tunnelCfg)

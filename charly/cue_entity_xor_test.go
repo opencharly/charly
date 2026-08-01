@@ -55,7 +55,7 @@ func TestBoxBaseFromXOR_RejectsConflict(t *testing.T) {
 			// Integration: the validate-time surface that collects the error.
 			cfg := &Config{Box: boxMapOf(map[string]spec.BoxConfig{"b": tc.box})}
 			errs := &spec.ValidationError{}
-			validateBoxBaseFrom(cfg, loaderkit.ResolveOpts{}, errs)
+			validateBoxBaseFrom(cfg, spec.ResolveOpts{}, errs)
 			if tc.reject && !errs.HasErrors() {
 				t.Errorf("validateBoxBaseFrom accepted a base+from box (should reject)")
 			}

@@ -28,6 +28,13 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 	if req.GetOp() == sdk.OpResolve {
 		return resolveVenueForHost(ctx, req)
 	}
+	// verb:… — no; command:check's DEPLOY-VERIFY drive (OpVerifyChecks, #55 CHECK-ENGINE cone
+	// Unit 2): run a deploy-scope check pass plugin-side over the threaded live venue, so charly
+	// core's checkrun.go + planrun_adapter.go shed their sdk/kit imports. Routed here, never the
+	// command CLI path (which parses `charly check …` args).
+	if req.GetOp() == sdk.OpVerifyChecks {
+		return verifyChecksForHost(ctx, req)
+	}
 	if req.GetOp() != sdk.OpRun {
 		return nil, fmt.Errorf("plugin-check: unsupported op %q (want %q or %q)", req.GetOp(), sdk.OpRun, sdk.OpResolve)
 	}

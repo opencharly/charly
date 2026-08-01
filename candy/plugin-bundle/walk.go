@@ -31,7 +31,7 @@ import (
 // forward the WHOLE Run() to is retired).
 func (c *BundleAddCmd) Run() error {
 	// Unit D WITNESS: drive loaderkit.LoadUnified PLUGIN-SIDE (over the reverse-channel
-	// execLoaderExecutor) to resolve the deploy tree, instead of the former host resolveTreeRoot
+	// execLoaderExecutor) to resolve the deploy tree, instead of the former host merged-tree read
 	// seam — proving command:bundle → loaderkit.LoadUnified end-to-end. The host preamble only
 	// connects out-of-tree deploy plugins + hands back the project dir; rootVenueSSH is read from
 	// the loaded tree's stamped node.Descent (load_executor.go).
@@ -110,6 +110,11 @@ func (c *BundleAddCmd) Run() error {
 	if c.DryRun {
 		return nil
 	}
+	// Persist each sibling member's deploy-shaped overrides PLUGIN-SIDE BEFORE the host
+	// "deploy-members-up" seam runs bringUpMembers (which no longer persists itself — #55 coneC-dsh
+	// β1), so the member's declared port/volume/env + arbiter role are seeded by the time its own
+	// `charly config`/`charly start` runs. Best-effort, mirroring the former bringUpMembers persist.
+	persistMemberDeployOverrides(rootNode)
 	return hostDeploySeamJSON("deploy-members-up", spec.DeployMembersRequest{Node: rootNode}, nil)
 }
 
@@ -258,8 +263,20 @@ func (c *BundleDelCmd) Run() error {
 	}
 	defer lock.Release() //nolint:errcheck
 
+	// Resolve the merged deploy tree PLUGIN-SIDE (also connects the deployment's plugins) and
+	// thread it into the seam as DATA — the #55 Cone A Unit 3a tree-threading that replaced the
+	// host resolveDelNode's former core merged-tree read. A tree-absent project yields a nil
+	// tree, which resolveDelNode handles via its non-tree fallbacks (vm-prefix / pod-artifact).
+	tree, _, _, err := resolveTreeViaLoader(c.Name, nil)
+	if err != nil {
+		return err
+	}
+	treeJSON, err := json.Marshal(tree)
+	if err != nil {
+		return err
+	}
 	var dr spec.DeployDelResolveReply
-	if err := hostDeploySeamJSON("deploy-del-resolve", spec.DeployDelResolveRequest{Name: c.Name}, &dr); err != nil {
+	if err := hostDeploySeamJSON("deploy-del-resolve", spec.DeployDelResolveRequest{Name: c.Name, TreeJSON: treeJSON}, &dr); err != nil {
 		return err
 	}
 

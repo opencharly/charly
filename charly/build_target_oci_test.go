@@ -110,7 +110,7 @@ func chdirTemp(t *testing.T) string {
 // through step-emit. Restored via t.Cleanup.
 func stubRenderGen(t *testing.T, dir string, box *buildkit.ResolvedBox) {
 	t.Helper()
-	gen := &Generator{Dir: dir, Boxes: map[string]*buildkit.ResolvedBox{box.Name: box}}
+	gen := &Generator{Dir: dir, Boxes: map[string]*spec.ResolvedBox{box.Name: &box.ResolvedBox}}
 	renderGenCache.Store(dir, gen)
 	t.Cleanup(func() { renderGenCache.Delete(dir) })
 }
@@ -163,7 +163,7 @@ func TestOCITargetEmitSystemPackagesWithLegacyTemplate(t *testing.T) {
 		Distro: map[string]*spec.ResolvedDistro{"test-distro": distro},
 		Boxes:  map[string]spec.ResolvedBoxView{"ripgrep-box": {Name: "ripgrep-box", Distro: []string{"test-distro"}}},
 	})
-	tgt := ociTestTarget(buildEngineContext{Box: &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "ripgrep-box"}}})
+	tgt := ociTestTarget(buildEngineContext{Box: &spec.ResolvedBox{Name: "ripgrep-box"}})
 	plan := &spec.InstallPlan{Candy: "ripgrep", Steps: []spec.InstallStep{
 		&spec.SystemPackagesStep{
 			Format:   "rpm",
@@ -202,7 +202,7 @@ func TestOCITargetEmitSystemPackagesPrefersNewPhases(t *testing.T) {
 		Distro: map[string]*spec.ResolvedDistro{"test-distro": distro},
 		Boxes:  map[string]spec.ResolvedBoxView{"foo-box": {Name: "foo-box", Distro: []string{"test-distro"}}},
 	})
-	tgt := ociTestTarget(buildEngineContext{Box: &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "foo-box"}}})
+	tgt := ociTestTarget(buildEngineContext{Box: &spec.ResolvedBox{Name: "foo-box"}})
 	plan := &spec.InstallPlan{Candy: "foo", Steps: []spec.InstallStep{
 		&spec.SystemPackagesStep{
 			Format:   "rpm",
@@ -243,7 +243,7 @@ func TestOCITargetEmitBuilderInlineViaPlugin(t *testing.T) {
 		CandyModels:          map[string]spec.CandyModel{"mytool": {Name: "mytool"}},
 		Candies:              map[string]spec.CandyView{"mytool": {}},
 	})
-	tgt := ociTestTarget(buildEngineContext{Box: &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "mytool-box", UID: 1000, GID: 1000}}})
+	tgt := ociTestTarget(buildEngineContext{Box: &spec.ResolvedBox{Name: "mytool-box", UID: 1000, GID: 1000}})
 	plan := &spec.InstallPlan{Candy: "mytool", Steps: []spec.InstallStep{
 		&spec.BuilderStep{Builder: "cargo", CandyName: "mytool", Phase: spec.PhaseInstall},
 	}}
@@ -277,7 +277,7 @@ func TestOCITargetEmitBuilderMultiStageViaPlugin(t *testing.T) {
 		CandyModels: map[string]spec.CandyModel{"mytool": {Name: "mytool"}},
 		Candies:     map[string]spec.CandyView{"mytool": {}},
 	})
-	tgt := ociTestTarget(buildEngineContext{Box: &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "mytool-box", UID: 1000, GID: 1000, Builder: map[string]string{"pixi": "ghcr.io/x/builder:latest"}}}})
+	tgt := ociTestTarget(buildEngineContext{Box: &spec.ResolvedBox{Name: "mytool-box", UID: 1000, GID: 1000, Builder: map[string]string{"pixi": "ghcr.io/x/builder:latest"}}})
 	plan := &spec.InstallPlan{Candy: "mytool", Steps: []spec.InstallStep{
 		&spec.BuilderStep{Builder: "pixi", CandyName: "mytool", Phase: spec.PhaseInstall},
 	}}
@@ -305,7 +305,7 @@ func TestOCITargetEmitBuilderMultiStageViaPlugin(t *testing.T) {
 func TestOCITargetEmitLocalPkgInstallViaPlugin(t *testing.T) {
 	lp := testPacLocalPkgDef()
 	lp.DownloadTemplate = "https://github.com/opencharly/charly/releases/latest/download/opencharly-${ARCH}.pkg.tar.zst"
-	tgt := ociTestTarget(buildEngineContext{Box: &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "charly-arch"}}})
+	tgt := ociTestTarget(buildEngineContext{Box: &spec.ResolvedBox{Name: "charly-arch"}})
 	plan := &spec.InstallPlan{Candy: "charly", Steps: []spec.InstallStep{
 		&spec.LocalPkgInstallStep{CandyName: "charly", Format: "pac", LocalPkg: lp},
 	}}
@@ -346,7 +346,7 @@ func TestOCITargetEmitOpViaPlugin(t *testing.T) {
 		CandyModels: map[string]spec.CandyModel{"mytool": {Name: "mytool"}},
 		Candies:     map[string]spec.CandyView{"mytool": {}},
 	})
-	tgt := ociTestTarget(buildEngineContext{Box: box, ImageBuildDir: dir, ContextRelPrefix: ".build/mytool"})
+	tgt := ociTestTarget(buildEngineContext{Box: &box.ResolvedBox, ImageBuildDir: dir, ContextRelPrefix: ".build/mytool"})
 	plan := &spec.InstallPlan{Candy: "mytool", Steps: []spec.InstallStep{
 		&spec.OpStep{Op: &spec.Op{Mkdir: "/opt/foo"}, CandyName: "mytool", ResolvedUser: "root"},
 		&spec.OpStep{Op: &spec.Op{Copy: "bin/tool", To: "/opt/foo/tool"}, CandyName: "mytool", ResolvedUser: "root"},
@@ -410,7 +410,7 @@ func (f *fakeSkipStep) RequiresGate() spec.Gate   { return spec.GateNone }
 func (f *fakeSkipStep) Reverse() []spec.ReverseOp { return nil }
 
 // TestGeneratorCandyByNameRemoteQualifiedKey guards the add_candy-on-pod overlay
-// build: a REMOTE add_candy candy (fetched via loaderkit.ResolveOpts.ExtraCandyRefs) is keyed
+// build: a REMOTE add_candy candy (fetched via spec.ResolveOpts.ExtraCandyRefs) is keyed
 // in Generator.Candies under its fully-qualified ref, while the compiled plan step's
 // CandyName is the candy's bare intrinsic name. candyByName (the step-emit Op/Builder
 // path's candy resolver) must resolve the bare name to the qualified-key candy, or the

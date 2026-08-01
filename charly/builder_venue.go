@@ -18,7 +18,6 @@ package main
 // own floor justification.
 
 import (
-	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -51,7 +50,7 @@ type buildEngineContext struct {
 	// LocalPkgInstall DEPLOY leg is deploykit.ExecLocalPkgInstall (separate host-engine paths
 	// driven via RunHostStep), which read none of them.
 	Generator *Generator
-	Box       *buildkit.ResolvedBox
+	Box       *spec.ResolvedBox
 	// ImageBuildDir is the per-image (pod-overlay) build dir — rides the class:step OpEmit's
 	// BuildEnv.ImageBuildDir so candy/plugin-installstep's emitLocalPkgInstall can stage a
 	// dev-mode locally-built package the SAME way deploykit's renderLocalPkgImageDevInstall did. It

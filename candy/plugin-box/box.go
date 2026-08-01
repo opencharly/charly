@@ -287,7 +287,7 @@ type buildGrammar struct {
 // HostBuild("remote-image-resolve") seam → compute the CalVer tag ONCE → hold the build-activity
 // flock → InvokeProvider(build:box) (the compiled-in candy/plugin-build podman DRIVE) → post-build
 // retention prune (skipped for --push). The host-coupled remainder a sdk-only candy cannot do — the
-// remote-ref clone/cache resolve (ResolveRemoteImage, K1) and keep_images resolution — is reached
+// remote-ref clone/cache (EnsureRepoDownloaded, K1) and keep_images resolution — is reached
 // over thin HostBuild seams (remote-image-resolve, retention-defaults). Byte-equivalent to the
 // former BuildCmd.Run.
 func dispatchBuild(hc *hostClient, args []string) error {
@@ -375,9 +375,10 @@ func dispatchBuild(hc *hostClient, args []string) error {
 }
 
 // remoteImageResolve resolves a known remote @ref to its cached source dir + short box name over the
-// existing "remote-image-resolve" host seam (host_build_remote_image_resolve.go → ResolveRemoteImage,
-// the K1-coupled clone/cache the sdk-only candy cannot run) — the SAME seam candy/plugin-build's
-// ensure-image fallback reaches. The build then re-dispatches build:box against the returned dir.
+// existing "remote-image-resolve" host seam (host_build_remote_image_resolve.go → EnsureRepoDownloaded,
+// the K1-coupled clone/cache the sdk-only candy cannot run; the box-RESOLVE itself runs plugin-side
+// in candy/plugin-build's ensureRemoteRef) — the SAME seam candy/plugin-build's ensure-image fallback
+// reaches. The build then re-dispatches build:box against the returned dir.
 func (h *hostClient) remoteImageResolve(ref, tag string) (spec.RemoteImageResolveReply, error) {
 	reqJSON, err := json.Marshal(spec.RemoteImageResolveRequest{Ref: ref, Tag: tag})
 	if err != nil {

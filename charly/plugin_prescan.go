@@ -33,8 +33,6 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 	"gopkg.in/yaml.v3"
 )
@@ -55,7 +53,7 @@ var (
 	// build-emit-capable WITHOUT building+connecting the plugin (standalone `charly box
 	// validate`). Additive, best-effort, no-false-negatives: an over-broad recognition is
 	// harmless — a verb that turns out non-build-emit-capable fails loudly at build via
-	// invokeVerbBuildEmit's empty-fragment guard. Shares declaredDeployMu (the one lock).
+	// candy/plugin-build's plugin-verb OpEmit (InvokeProvider) empty-fragment guard. Shares declaredDeployMu (the one lock).
 	declaredExternalVerb = map[string]bool{}
 	// declaredExternalStep holds the external (out-of-tree) STEP words a project's candy plugin
 	// declarations name — learned POST-SCAN alongside the verbs (registerExternalVerbsFromCandies),
@@ -244,7 +242,7 @@ func connectDeclaredKindPlugins(dir string) {
 		recordDeclaredKindConnectError(need, fmt.Errorf("load project configuration: %w", err))
 		return // config load failure → kinds stay unconnected → normalizeNodeInto warn-skips them
 	}
-	candyMap, err := ScanAllCandyWithConfigOpts(dir, cfg, loaderkit.ResolveOpts{})
+	candyMap, err := ScanAllCandyWithConfigOpts(dir, cfg, spec.ResolveOpts{})
 	if err != nil {
 		recordDeclaredKindConnectError(need, fmt.Errorf("scan project candies: %w", err))
 		return
@@ -413,19 +411,19 @@ func prescanDeclaredPluginWords(rootData []byte, baseDir string) {
 	if err := yaml.Unmarshal(rootData, &doc); err != nil || len(doc.Discover) == 0 {
 		return
 	}
-	for _, spec := range doc.Discover {
-		if spec.Path == "" {
+	for _, disc := range doc.Discover {
+		if disc.Path == "" {
 			continue
 		}
-		manifest := spec.Manifest
+		manifest := disc.Manifest
 		if manifest == "" {
 			manifest = UnifiedFileName
 		}
-		root := spec.Path
+		root := disc.Path
 		if !filepath.IsAbs(root) {
 			root = filepath.Join(baseDir, root)
 		}
-		dirs, err := kit.FindEntityDirs(root, manifest, spec.Recursive)
+		dirs, err := spec.FindEntityDirs(root, manifest, disc.Recursive)
 		if err != nil {
 			continue
 		}

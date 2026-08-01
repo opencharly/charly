@@ -14,11 +14,11 @@ import (
 // config, relocated from charly-core's config_image.go (P11 seam-death — the
 // pod-config-inject-env-provides / pod-config-inject-mcp-provides HostBuild seams are DELETED). The
 // plugin resolves the provides templates ITSELF (deploykit.ResolveTemplate) and mutates the loaded
-// BundleConfig in place; runConfig persists via the EXISTING saveBundle seam — the SAME
+// BundleConfig in place; runConfig persists via the EXISTING plugin-side saveBundle seam — the SAME
 // loadDeploy→modify→saveBundle pattern the secrets/sidecar persist already uses (R3). The locked
-// whole-file write + the host-only marshalDeployNode resugar stay in the FLOORED
-// saveBundleConfigNodeForm (charly/deploy_state_host.go), reached over the pod-config-save-bundle
-// seam — so no per-kind provides knowledge remains in core.
+// whole-file write + the marshal resugar run plugin-side via deploykit.SaveBundleConfig (the former
+// host pod-config-save-bundle seam + the host save-callback are deleted, #55 coneC-dsh) — so no
+// per-kind provides knowledge remains in core.
 
 // injectEnvProvidesInto resolves env_provides templates and stores them in dc.Provides.Env.
 // Returns true if any env vars were added or changed. portMap is a {containerPort -> hostPort}

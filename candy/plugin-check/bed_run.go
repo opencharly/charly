@@ -93,8 +93,8 @@ func withRunTag(args []string, tag string) []string {
 
 // configStartArgs builds the `charly config`/`charly start` argv for a pod bed's config+start
 // steps. An add_candy: overlay bed's FRESH artifact to verify is the overlay `deploy-add` just
-// built + persisted (resolved via resolveDeployResolvedImage, now correctly discriminated as a
-// pod entry — the bundleDiscForEntity resolved_image fix) — NOT the base image's own --tag build
+// built + persisted (resolved via the persisted resolved_image (BundleNode.ResolvedImage),
+// correctly discriminated as a pod entry — the bundleDiscForEntity resolved_image fix) — NOT the base image's own --tag build
 // ref. Passing --tag here would force config/start to deploy <base-image>:<imageTag> (an
 // existing, but WRONG, un-overlaid reference), silently dropping every add_candy candy from the
 // running container. A non-overlay bed (hasAddCandy=false) keeps --tag unchanged (no regression):
@@ -151,6 +151,13 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 	defer func() {
 		_, _ = bedHostBuild(ex, ctx, spec.CheckBedRequest{Op: "teardown", Bed: name, OK: res.OK})
 	}()
+
+	// Seed the per-host overlay with the bed ROOT's + each MEMBER's project-declared deploy-shaped
+	// overrides PLUGIN-SIDE (#55 coneC-dsh β1 — the former host-side persistBedDeployOverrides wrapper
+	// shed from charly core). The host seam threads the bed-root BundleNode (with nested peer Members)
+	// as d.NodeJSON; persistBedDeployOverridePluginSide calls deploykit.PersistBedDeployOverrides with
+	// plugin-side marshalNode + reader, BEFORE the build/config/start/members-up steps read the overlay.
+	persistBedDeployOverridePluginSide(ctx, ex, name, d)
 
 	// Acceptance-depth gating comes from the descriptor (the box's check_level rung,
 	// resolved host-side): RunBuild → build-context acceptance (check box); RunRuntime

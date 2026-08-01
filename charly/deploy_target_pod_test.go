@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 )
@@ -53,7 +52,7 @@ func TestPodOverlayInlineCopyResolvesUnderContext(t *testing.T) {
 	// The overlay buildEngineContext threads ImageBuildDir == ContextRelPrefix == the overlay
 	// build dir (the invariant hostBuildOverlay's prep sets, riding the BuildEnv scalars onto the
 	// class:step OpEmit).
-	build := buildEngineContext{Box: &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "base"}}, ImageBuildDir: relBuildDir, ContextRelPrefix: relBuildDir}
+	build := buildEngineContext{Box: &spec.ResolvedBox{Name: "base"}, ImageBuildDir: relBuildDir, ContextRelPrefix: relBuildDir}
 	tgt := ociTestTarget(build)
 
 	op := &spec.Op{Write: "/etc/marker", Content: "POD-ADDCANDY-MARKER-OK v1\n", Mode: "0644", RunAs: "root"}
@@ -115,52 +114,6 @@ func TestCreateRemoteCandyCopies_StagesRemoteCandySource(t *testing.T) {
 	staged := filepath.Join(ctxRoot, ".build", "_candy", "marker."+ver, "copied.dat")
 	if _, err := os.Stat(staged); err != nil {
 		t.Fatalf("remote overlay candy source not staged at %s (the per-candy scratch stage's COPY would fail): %v", staged, err)
-	}
-}
-
-// TestResolveOverlayBaseDistroDef_UsesBaseImageDistroNotHost is the regression for a REAL
-// cross-distro bug (#55 step3-II, caught by team-lead's code reading before it shipped): the
-// pod-overlay's per-step distro-format vocabulary MUST come from the BASE IMAGE's own declared
-// distro (box/fedora's "fedora" box declares `distro: [fedora]`, format `rpm`), never from the
-// operator host's distro — a real, not merely latent, bug on any host whose distro differs from
-// the base image's (this repo's dev host is commonly Arch/CachyOS, format `pac`/`aur`; the base
-// this test resolves is Fedora). Asserts the resolved def carries the `rpm` format (proving the
-// BASE box's distro won) and does NOT carry `pac`/`aur` (proving the HOST's distro did not leak
-// in) — this assertion would FAIL on the buggy detectHostContext()-sourced code when run on an
-// Arch/CachyOS host, exactly the live failure mode team-lead flagged.
-func TestResolveOverlayBaseDistroDef_UsesBaseImageDistroNotHost(t *testing.T) {
-	repoRoot, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	dir := filepath.Join(filepath.Dir(repoRoot), "box", "fedora")
-	const base = "fedora"
-
-	t.Cleanup(snapshotProviderState())
-
-	distroCfg, _, _, err := LoadDefaultBuildConfig(dir)
-	if err != nil {
-		t.Fatalf("LoadDefaultBuildConfig: %v", err)
-	}
-
-	def := resolveOverlayBaseDistroDef(dir, base, distroCfg)
-	if def == nil {
-		t.Fatalf("resolveOverlayBaseDistroDef(%s): nil def (fixture problem — base box %q must resolve)", base, base)
-	}
-	if _, ok := def.Format["rpm"]; !ok {
-		formats := make([]string, 0, len(def.Format))
-		for f := range def.Format {
-			formats = append(formats, f)
-		}
-		t.Fatalf("resolved def has formats %v, want \"rpm\" present (the base image's OWN distro, fedora) — "+
-			"a missing rpm format means the base box's distro tag was NOT used", formats)
-	}
-	for _, hostOnlyFormat := range []string{"pac", "aur"} {
-		if _, ok := def.Format[hostOnlyFormat]; ok {
-			t.Errorf("resolved def unexpectedly carries format %q — this is the OPERATOR HOST's distro "+
-				"(Arch/CachyOS) leaking into the BASE IMAGE's (fedora) per-step rendering, exactly the "+
-				"regression team-lead's code reading caught", hostOnlyFormat)
-		}
 	}
 }
 

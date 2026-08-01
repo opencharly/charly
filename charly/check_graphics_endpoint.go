@@ -8,8 +8,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/vmshared"
+	"github.com/opencharly/spec/checkhost"
 	"github.com/opencharly/spec/spec"
 	"github.com/opencharly/spec/sshx"
 )
@@ -27,7 +26,7 @@ import (
 // plugin — RCA-proven, ~18 plugin builds break on the missing go.sum entry — so keeping it here confines
 // x/crypto/ssh to this ONE host-fabric file, the analogue of the GPU host-legs using hardware libs. This is
 // the SINGLE contained x/crypto/ssh boundary in charly core (once coneA moves vm_backend_lifecycle out).
-// The libvirt-URI parse rides the floor-legal vmshared.ParseLibvirtURI (no charly alias).
+// The libvirt-URI parse rides the floor-legal spec.ParseLibvirtURI (no charly alias).
 
 // resolveVerbGraphics resolves a deployment's <kind> display (kind = "vnc" | "spice") to a
 // dialable endpoint. It is venue-aware and REPLACES the former per-verb vnc + spice host
@@ -42,30 +41,30 @@ import (
 // endpoint + nil err = no live venue (box-mode / no-box); Skip=true = the VM declares no
 // graphics device of that kind (an N/A skip).
 func (h *hostVerbResolver) resolveVerbGraphics(kind string) (graphicsEndpoint, error) {
-	if h.kr.Box() == "" || h.kr.Mode() == RunModeBox {
+	if h.cc.Box() == "" || h.cc.Mode() == RunModeBox {
 		return graphicsEndpoint{}, nil
 	}
 
 	// vnc CONTAINER leg: a non-VM venue publishes RFB on 5900; the ticket comes from the
 	// credential store. spice is VM-only (no container leg), so it skips straight to the vm plugin.
 	if kind == "vnc" {
-		reply, err := resolveCheckVenueReply(h.kr.Box(), h.kr.Instance())
+		reply, err := resolveCheckVenueReply(h.cc.Box(), h.cc.Instance())
 		if err != nil {
 			return graphicsEndpoint{}, err
 		}
 		if reply.Kind != "vm" {
-			ep, err := kit.EndpointForVenue(reply.Descriptor, 5900)
+			ep, err := checkhost.EndpointForVenue(reply.Descriptor, 5900)
 			if err != nil {
 				return graphicsEndpoint{}, fmt.Errorf("VNC server not reachable (port 5900): %w", err)
 			}
 			h.endpointCleanups = append(h.endpointCleanups, ep.Close)
-			return graphicsEndpoint{Addr: ep.Addr, Password: resolveVNCPassword(kit.ResolveBoxName(h.kr.Box()), h.kr.Instance())}, nil
+			return graphicsEndpoint{Addr: ep.Addr, Password: resolveVNCPassword(spec.ResolveBoxName(h.cc.Box()), h.cc.Instance())}, nil
 		}
 	}
 
 	// VM leg (vnc + spice): resolve the VM's <graphics type='kind'> via the out-of-process vm
 	// plugin. CHARLY_LIBVIRT_URI selects a remote hypervisor.
-	raw, ok := invokeVmPlugin("resolve-"+kind, h.kr.VmTargetName(), os.Getenv("CHARLY_LIBVIRT_URI"))
+	raw, ok := invokeVmPlugin("resolve-"+kind, h.cc.VmTargetName(), os.Getenv("CHARLY_LIBVIRT_URI"))
 	if !ok {
 		return graphicsEndpoint{}, fmt.Errorf("vm plugin unavailable (go-libvirt resolution is out-of-process)")
 	}
@@ -86,7 +85,7 @@ func (h *hostVerbResolver) resolveVerbGraphics(kind string) (graphicsEndpoint, e
 	// bridgeSocket exposes a UNIX socket as a local TCP listener for the TCP-only RFB client
 	// (vnc), registering the listener for teardown. Only vnc needs it; spice dials the socket.
 	bridgeSocket := func(socketPath string) (string, error) {
-		br, berr := kit.UnixToTCPBridge(socketPath)
+		br, berr := checkhost.UnixToTCPBridge(socketPath)
 		if berr != nil {
 			return "", berr
 		}
@@ -111,7 +110,7 @@ func (h *hostVerbResolver) resolveVerbGraphics(kind string) (graphicsEndpoint, e
 
 	// Remote (qemu+ssh://) — open an SSH tunnel forwarding the endpoint to a local address;
 	// register the teardown on the Runner (the tunnel carries the live connection).
-	parsed, perr := vmshared.ParseLibvirtURI(rr.TunnelTarget)
+	parsed, perr := spec.ParseLibvirtURI(rr.TunnelTarget)
 	if perr != nil {
 		return graphicsEndpoint{}, perr
 	}

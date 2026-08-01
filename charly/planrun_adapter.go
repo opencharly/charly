@@ -3,11 +3,70 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"time"
 
 	"github.com/opencharly/spec/spec"
-
-	"github.com/opencharly/sdk/kit"
 )
+
+// hostCheckCarrier is the spec-backed carrier that backs a hostVerbResolver's live CheckContext
+// legs (Exec/Mode/HTTPDo/Box/Instance/Distros/DialTimeout/AddBackground) WITHOUT core referencing
+// kit.Runner (#55 CHECK-ENGINE cone — the reverse-channel rendezvous no longer imports the engine).
+// It carries the CheckEnv scalars plus a LIVE exec getter (SwapVenue-aware: a live plan drive
+// captures the running kit.Runner so a cross-deployment `on:`/${HOST:member} step's mid-plan venue
+// swap is reflected — a FROZEN executor was the check-k3s-vm cross-deployment SIGSEGV class) + the
+// host HTTP base client + a nil-safe background-PID sink. In PRODUCTION the reverse-channel path
+// (plugin_dispatch_reverse.go — from the wire CheckEnv snapshot, fixed venue) is now the SOLE
+// producer: the in-proc plan drive that once also filled it (checkrun.go newCheckRunner, projected
+// off a live kit.Runner) moved PLUGIN-SIDE (command:check OpVerifyChecks, #55 CHECK-ENGINE cone Unit
+// 2) and survives only as the test-only carrierFromRunner (checkrun_helpers_test.go). Zero kit in
+// the carrier itself.
+type hostCheckCarrier struct {
+	execFn       func() spec.DeployExecutor // live getter (SwapVenue-aware); accessed via Exec()
+	mode         spec.CheckRunMode
+	box          string
+	vmName       string
+	instance     string
+	distros      []string
+	dialTimeout  time.Duration
+	httpBase     *http.Client
+	addBg        func(pid int) // nil when there is no scenario context (a no-op AddBackground)
+	candyDirs    map[string]string
+	candyScanErr error
+}
+
+// The accessors mirror the kit.Runner method names the check dispatch reads, so the reverse-channel
+// + host-verb-resolver call sites are a clean field-name swap (kr→cc), not a re-shape.
+func (c *hostCheckCarrier) Exec() spec.DeployExecutor { // live (SwapVenue-aware), nil-safe
+	if c == nil || c.execFn == nil {
+		return nil
+	}
+	return c.execFn()
+}
+func (c *hostCheckCarrier) Mode() spec.CheckRunMode      { return c.mode }
+func (c *hostCheckCarrier) Box() string                  { return c.box }
+func (c *hostCheckCarrier) Instance() string             { return c.instance }
+func (c *hostCheckCarrier) Distros() []string            { return c.distros }
+func (c *hostCheckCarrier) DialTimeout() time.Duration   { return c.dialTimeout }
+func (c *hostCheckCarrier) HTTPClient() *http.Client     { return c.httpBase }
+func (c *hostCheckCarrier) CandyDirs() map[string]string { return c.candyDirs }
+func (c *hostCheckCarrier) CandyScanErr() error          { return c.candyScanErr }
+
+// AddBg registers a host-side background PID (nil-safe: a no-op when there is no scenario context).
+func (c *hostCheckCarrier) AddBg(pid int) {
+	if c != nil && c.addBg != nil {
+		c.addBg(pid)
+	}
+}
+
+// VmTargetName mirrors kit.Runner.VmTargetName: the VM domain-target (vmName, else box) the host
+// vm/spice/libvirt legs hand the plugin.
+func (c *hostCheckCarrier) VmTargetName() string {
+	if c.vmName != "" {
+		return c.vmName
+	}
+	return c.box
+}
 
 // planrun_adapter.go — the host seams the check-engine plan walk (kit.RunOne/RunPlan) drives
 // through. The walk lives in sdk/kit and consumes the runner (kit.Runner, kit.PlanContext) plus
@@ -21,11 +80,11 @@ import (
 // context: the reverse-leg endpoint/graphics/cluster/image-label resolution (check_endpoint_
 // resolve.go), the out-of-process verb Invoke (provider_checkenv.go), the do:act runner
 // (checkrun_act.go), and the committed-APK anchoring (checkrun_charly_verbs.go). It holds the
-// kit.Runner ref (to read engine state + build the CheckContext) and OWNS the per-Invoke
-// endpointCleanups (the host reverse-leg lifecycle — NOT on kit.Runner, which a plugin module
-// lacks the machinery for).
+// spec-backed hostCheckCarrier (the CheckContext engine-state legs, projected off the live venue —
+// NOT kit.Runner, so this rendezvous imports only spec) and OWNS the per-Invoke endpointCleanups
+// (the host reverse-leg lifecycle — which a plugin module lacks the machinery for).
 type hostVerbResolver struct {
-	kr *kit.Runner
+	cc *hostCheckCarrier
 	// endpointCleanups holds the ssh -L forwards opened by the ResolveEndpoint/ResolveGraphics
 	// reverse-legs DURING the current verb's Invoke; invokeVerbProvider closes them AFTER the
 	// Invoke returns (the forward must outlive the plugin's dial). Per-Invoke.
@@ -85,26 +144,9 @@ func (hostPlanGrammar) ContextsLabel(op *spec.Op) string {
 	return fmt.Sprintf("%v", opEffectiveContexts(op))
 }
 
-// venueResolver adapts the core liveTargetResolver (an `on:` DRIVER venue → *kit.CheckVarResolver +
-// DeployExecutor) to the kit.VenueResolver seam (venue → kit.Executor + env + hasRuntime) the
-// runner's per-step SwapVenue drives. It always returns a non-nil env map so SwapVenue swaps the
-// engine env for the driver venue (matching the former "always swap the resolver" behaviour: a
-// driver with no resolvable vars clears the base env rather than leaking the subject's).
-func venueResolver(instance string) kit.VenueResolver {
-	resolve := liveTargetResolver(instance)
-	return func(venue string) (kit.Executor, map[string]string, bool, error) {
-		res, exec, err := resolve(venue)
-		if err != nil {
-			return nil, nil, false, err
-		}
-		env := map[string]string{}
-		hasRuntime := false
-		if res != nil {
-			if res.Env != nil {
-				env = res.Env
-			}
-			hasRuntime = res.HasRuntime
-		}
-		return exec, env, hasRuntime, nil
-	}
-}
+// The former venueResolver — the `on:` DRIVER venue → kit.VenueResolver adapter for the IN-PROC
+// plan drive — is DELETED (#55 CHECK-ENGINE cone Unit 2): the deploy-scope check DRIVE moved
+// PLUGIN-SIDE (command:check OpVerifyChecks), where candy/plugin-check's pluginVenueResolver +
+// members.go rebuild the cross-deployment resolution over the check reverse channel. The core
+// liveTargetResolver/resolveHostVars cluster it wrapped (charly/check_members.go) went dead with it
+// and was removed in the same cutover.

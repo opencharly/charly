@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"fmt"
 
-	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/checkhost"
+	"github.com/opencharly/spec/container"
+	"github.com/opencharly/spec/spec"
 )
 
 // check_endpoint_resolve.go — the generic host-endpoint reverse-legs (H part 2). Class-generic
@@ -21,7 +23,7 @@ import (
 // any opened ssh -L forward (VM/ssh venue) for post-Invoke teardown. Empty addr + nil err
 // = no live venue (box-mode / no-box) — the verb's own no-endpoint skip then fires.
 func (h *hostVerbResolver) resolveVerbEndpoint(port int) (string, error) {
-	addr, cleanup, err := resolveVerbEndpointFor(h.kr.Box(), h.kr.Instance(), h.kr.Mode(), port)
+	addr, cleanup, err := resolveVerbEndpointFor(h.cc.Box(), h.cc.Instance(), h.cc.Mode(), port)
 	if cleanup != nil {
 		h.endpointCleanups = append(h.endpointCleanups, cleanup)
 	}
@@ -42,7 +44,7 @@ func resolveVerbEndpointFor(box, instance string, mode RunMode, port int) (addr 
 	if err != nil {
 		return "", nil, err
 	}
-	ep, err := kit.EndpointForVenue(reply.Descriptor, port)
+	ep, err := checkhost.EndpointForVenue(reply.Descriptor, port)
 	if err != nil {
 		return "", nil, err
 	}
@@ -50,7 +52,7 @@ func resolveVerbEndpointFor(box, instance string, mode RunMode, port int) (addr 
 }
 
 // graphicsEndpoint is the host-resolved dialable VM graphics endpoint (the in-proc twin of
-// kit.GraphicsEndpoint). Exactly one of Addr / Socket is set; Skip=true means no such device.
+// spec.CheckGraphicsEndpoint). Exactly one of Addr / Socket is set; Skip=true means no such device.
 type graphicsEndpoint struct {
 	Addr, Socket, Password string
 	Skip                   bool
@@ -76,12 +78,12 @@ func (c hostCheckContext) ResolveEndpoint(_ context.Context, port int) (string, 
 }
 
 // ResolveGraphicsEndpoint is the in-process CheckContext leg for VM graphics endpoints.
-func (c hostCheckContext) ResolveGraphicsEndpoint(_ context.Context, kind string) (kit.GraphicsEndpoint, error) {
+func (c hostCheckContext) ResolveGraphicsEndpoint(_ context.Context, kind string) (spec.CheckGraphicsEndpoint, error) {
 	ge, err := c.h.resolveVerbGraphics(kind)
 	if err != nil {
-		return kit.GraphicsEndpoint{}, err
+		return spec.CheckGraphicsEndpoint{}, err
 	}
-	return kit.GraphicsEndpoint{Addr: ge.Addr, Socket: ge.Socket, Password: ge.Password, Skip: ge.Skip, SkipMessage: ge.SkipMessage}, nil
+	return spec.CheckGraphicsEndpoint{Addr: ge.Addr, Socket: ge.Socket, Password: ge.Password, Skip: ge.Skip, SkipMessage: ge.SkipMessage}, nil
 }
 
 // resolveImageLabel reads one raw OCI label off the deployment-under-test's image. It is the
@@ -89,24 +91,40 @@ func (c hostCheckContext) ResolveGraphicsEndpoint(_ context.Context, kind string
 // baked ai.opencharly.mcp_provide label but cannot reach the podman engine / OCI metadata.
 // Empty value (no live deployment, or the label absent) is a valid result.
 func (h *hostVerbResolver) resolveImageLabel(label string) (string, error) {
-	return resolveImageLabelFor(h.kr.Box(), h.kr.Instance(), h.kr.Mode(), label)
+	return resolveImageLabelFor(h.cc.Box(), h.cc.Instance(), h.cc.Mode(), label)
 }
 
 // resolveImageLabelFor is resolveImageLabel's box/instance/mode-parameterized core (K1-unblock W3
 // Unit B, R3 extraction) — see resolveVerbEndpointFor's doc comment for the shared rationale.
+//
+// deploykit shed (#55 coneB-box-resolve): the former deploykit.ResolveContainer(box, instance)
+// is now consumed via the EXISTING verb:check-resolve seam (resolveCheckVenueReply →
+// candy/plugin-check venue.go), which already runs ResolveContainer plugin-side and projects
+// (engine, containerName) byte-identically into reply.Descriptor for a container venue — the SAME
+// seam the sibling resolveVerbEndpointFor uses. No kit import is added (IMPORT-PURITY): the engine
+// override the former ResolveBoxEngineForDeploy read from the per-host deploy config is resolved
+// plugin-side now and crosses the wire as reply.Descriptor.Engine.
 func resolveImageLabelFor(box, instance string, mode RunMode, label string) (string, error) {
 	if box == "" || mode == RunModeBox {
 		return "", nil
 	}
-	engine, containerName, err := deploykit.ResolveContainer(box, instance)
+	reply, err := resolveCheckVenueReply(box, instance)
 	if err != nil {
 		return "", err
 	}
-	imageRef, err := kit.ContainerImageRef(engine, containerName)
+	// ResolveContainer resolved ONLY a plain running container; resolveCheckVenue additionally
+	// classifies VM/local/nested venues. Guard to the plain (non-nested) container venue so the
+	// label read succeeds ONLY where the former path did — a non-container or dotted-nested name
+	// has no podman-inspectable image label here (the former deploykit.ResolveContainer errored
+	// on those; a not-running plain container's error still propagates verbatim via the reply).
+	if reply.Descriptor.Kind != "container" || reply.Nested {
+		return "", fmt.Errorf("container for %s is not running", box)
+	}
+	imageRef, err := container.ContainerImageRef(reply.Descriptor.Engine, reply.Descriptor.ContainerName)
 	if err != nil {
 		return "", err
 	}
-	labels, err := kit.InspectImageLabels(engine, imageRef)
+	labels, err := container.InspectImageLabels(reply.Descriptor.Engine, imageRef)
 	if err != nil {
 		return "", err
 	}

@@ -27,7 +27,7 @@ func TestRunTaggedImageRefPinsArtifactCheckToBedBuild(t *testing.T) {
 // TestConfigStartArgs_AddCandyOmitsTag proves the K5-A item 2 overlay-plans-fix companion bug fix
 // (bug 3 of 3, check-pod-overlay's R10): an add_candy: overlay bed's config/start steps must NOT
 // pass --tag <base-build-tag> — doing so forces config/start to deploy the un-overlaid base image
-// (hostBuildPodConfigResolveRef's explicit-ref-wins contract bypasses resolveDeployResolvedImage),
+// (the pod plugin resolver's explicit-ref-wins contract bypasses the persisted resolved_image lookup),
 // silently dropping every add_candy candy from the running container. A non-overlay bed's
 // freshness proof is unchanged (still --tag'd) — no regression for the common case.
 func TestConfigStartArgs_AddCandyOmitsTag(t *testing.T) {

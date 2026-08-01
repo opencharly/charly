@@ -66,8 +66,9 @@ var deployTargetWords = func() []string {
 // candy/plugin-bundle's runLifecycleBracket, which is gated on the DECLARED
 // bracketed_lifecycle trait — pod-only, see deployTraitsFor's doc comment); the
 // ssh-config / charly.yml-entry / ephemeral
-// teardown bookkeeping is the vm's own hostBuildConfigPersist writer
-// (charly/vm_deploy_state.go).
+// teardown bookkeeping is the vm plugin's OWN deploy-ledger persist path
+// (candy/plugin-vm/vm_host_persist.go — #55 coneC-dsh β2: the config-persist host-builder is deleted;
+// the plugin calls deploykit.SaveVmDeployState/RemoveVmDeployEntry directly).
 //
 // pod is served by candy/plugin-deploy-pod, but unlike vm its plugin WALKS NOTHING: pod bakes
 // its install steps INTO the image at build time, so its PrepareVenue (podPrepareVenue) builds

@@ -43,7 +43,7 @@
 //     compiled-in build:box word (candy/plugin-build's podman DRIVE) over InvokeProvider, and runs the
 //     post-build retention prune (verb:retention, keep_images off HostBuild("retention-defaults");
 //     skipped for --push). The host-coupled remainder a sdk-only candy cannot do — the remote-ref
-//     clone/cache resolve (ResolveRemoteImage, K1), the build-engine RESOLVE legs, the bootstrap
+//     clone/cache (EnsureRepoDownloaded, K1), the build-engine RESOLVE legs, the bootstrap
 //     builder pre-pass — stays behind thin HostBuild seams the candy invokes.
 //
 //   - command:inspect — `charly box inspect`: reads the generic spec.ResolvedProject envelope

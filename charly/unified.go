@@ -5,11 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/opencharly/sdk/vmshared"
+	"github.com/opencharly/spec/refs"
 	"github.com/opencharly/spec/spec"
-
-	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/loaderkit"
 )
 
 // -----------------------------------------------------------------------------
@@ -64,8 +61,8 @@ const UnifiedFileName = spec.UnifiedFileName
 // DELETED as dead code (radical dead-code removal): after the field-singular
 // cutover (2026-05) spec.UnifiedFile.Bundle is a flat map and Provides moved
 // to root level, and the last real referent — migrate_unified.go — is long gone.
-// Its only surviving mentions were prose (deploy_tree.go's resolveTreeRoot doc
-// comment, this file) plus the TestLoadUnified_DeploymentsSection name (which
+// Its only surviving mentions were prose (this file) plus the
+// TestLoadUnified_DeploymentsSection name (which
 // tests that the legacy `deployments:` YAML key is hard-rejected at load, never
 // the Go type). No code constructed or consumed it.
 
@@ -83,26 +80,24 @@ const UnifiedFileName = spec.UnifiedFileName
 // Loader entry point.
 // -----------------------------------------------------------------------------
 
-// gateSchemaVersion / normalizeV4Aliases (K1 keystone, task #24 unit 2) relocated
-// to sdk/loaderkit — see loaderkit.GateSchemaVersion (called only from
-// loaderkit.LoadUnified now) / loaderkit.NormalizeV4Aliases (called directly by
-// materialize.go's per-document fold).
+// gateSchemaVersion (K1 keystone, task #24 unit 2) relocated to sdk/loaderkit —
+// see loaderkit.GateSchemaVersion (called only from loaderkit.LoadUnified now).
+// The retired NormalizeV4Aliases no-op + its two loaderkit-internal call sites were
+// deleted as dead code (#55 C3b-ii).
 
-// LoadUnified (K1 keystone, task #24 unit 2) is now a THIN, TRANSITIONAL WRAPPER: the kind-blind
+// LoadUnified drives the whole-project load through the registered spec.ProjectLoader SEAM
+// (requireProjectLoader) — it NO LONGER calls loaderkit.LoadUnified directly (#55 import-purity
+// keystone, the terminal shape). The host passes its own hostLoaderExecutor{} (the typed
+// spec.LoaderExecutor reaching each registry-/host-coupled load step by calling the host function
+// DIRECTLY — zero marshal, a compiled-in TYPED placement pays no envelope tax); the COMPILED-IN
+// candy/plugin-loader implements spec.ProjectLoader and internally runs
+// loaderkit.LoadUnified(dir, loaderkit.LoadSeamsFromExecutor(exec)). The seam is registered at init
+// (before main), so the host resolves it before loading its own charly.yml — no bootstrap cycle.
+// charly core holds only the seam interface (spec) + the host executor legs; the kind-blind
 // orchestration (bootstrap phase, schema gates, walk, materialize, venue flatten, member fold,
-// descent stamp, the validation chain) relocated to loaderkit.LoadUnified. Unit C of the K1-LOADER
-// RELOCATION makes those seams PLUGIN-CALLABLE: rather than hand-building a loaderkit.LoadSeams from
-// charly's host functions, this wrapper drives loaderkit.LoadUnified through
-// loaderkit.LoadSeamsFromExecutor over a hostLoaderExecutor — the SAME seam constructor a genuine
-// out-of-module plugin uses (candy/plugin-bundle's execLoaderExecutor witness), but reaching each
-// registry-/host-coupled step by calling the host function DIRECTLY (zero marshal, U3 — a
-// compiled-in TYPED placement pays no envelope tax). The PURE LOAD-half seams (FlattenBundleVenues /
-// FoldMembers / ValidateMembers, plus the DATA-driven StampBundleDescents / ValidateEphemeral /
-// ValidateCheckBeds fed exec.LoaderThreaded()) are wired directly to loaderkit inside
-// LoadSeamsFromExecutor. Deleted by #118 GREEN (no permanent charly→loaderkit wrapper;
-// IMPORT-PURITY end-state).
+// descent stamp, the validation chain) lives in loaderkit (sdk), driven by the plugin.
 func LoadUnified(dir string) (*spec.UnifiedFile, bool, error) {
-	return loaderkit.LoadUnified(dir, loaderkit.LoadSeamsFromExecutor(hostLoaderExecutor{}))
+	return requireProjectLoader().LoadUnified(dir, hostLoaderExecutor{})
 }
 
 // validateDeploymentTree / validateDeployRequiresBox / validateDeploymentChildren /
@@ -123,7 +118,7 @@ func canonicalRef(ref, baseDir string) (key, path string, err error) {
 		parsed := spec.ParseRemoteRef(ref)
 		version := parsed.Version
 		if version == "" {
-			branch, e := kit.GitDefaultBranch(kit.RepoGitURL(parsed.RepoPath))
+			branch, e := refs.GitDefaultBranch(refs.RepoGitURL(parsed.RepoPath))
 			if e != nil {
 				return "", "", fmt.Errorf("resolving default branch for %s: %w", parsed.RepoPath, e)
 			}
@@ -164,17 +159,19 @@ func canonicalRef(ref, baseDir string) (key, path string, err error) {
 // -----------------------------------------------------------------------------
 
 // mergeUnified + mergeRawTemplateMap + mergePluginKindsMap + mergeDeployMaps +
-// mergeBoxConfig (K1-proper, task #24 follow-up) relocated to sdk/loaderkit
-// (merge.go) — the kind-blind document MERGE half of the loader. They are pure
-// map/struct merges over an already-parsed UnifiedFile with zero charly-core
-// coupling (spec.*/kit.*/json only), so they belong in the sdk loaderkit consumed
-// by the loader plugin, not in charly/ core (boundary law clause M). See
-// loaderkit.MergeUnified (called from materialize.go) / loaderkit.MergePluginKindsMap
-// (called from embed_defaults.go).
+// mergeBoxConfig (K1-proper, task #24 follow-up) — the kind-blind document MERGE
+// half of the loader. They are pure map/struct merges over an already-parsed
+// UnifiedFile with zero charly-core coupling (spec-only), so they live in the
+// dedicated spec module (#55 C3b relocated them from sdk/loaderkit/merge.go, the
+// same import-purity route MaterializeProjectSeams + MergePluginKindsMap took) —
+// so charly core reaches them WITHOUT importing loaderkit. See spec.MergeUnified
+// (called from materialize.go) / spec.MergePluginKindsMap (called from
+// embed_defaults.go).
 
-// anchorScanSpecs (kit.AnchorScanSpecs) is the discover-path anchoring helper
-// — relocated to sdk/kit (loader_directives.go) so charly core AND
-// sdk/loaderkit share ONE copy (R3).
+// anchorScanSpecs (spec.AnchorScanSpecs) is the discover-path anchoring helper
+// — resident in the spec module (load_directives.go, #55 C3b, moved with
+// MergeUnified which calls it); sdk/kit keeps a forwarder so charly core AND
+// sdk/loaderkit + sdk/kit share ONE copy (R3).
 
 // CheckBeds relocated to sdk/loaderkit (K1 keystone, task #24 unit 1) — see
 // spec.UnifiedFile.CheckBeds.
@@ -204,14 +201,14 @@ func canonicalRef(ref, baseDir string) (key, path string, err error) {
 // relative to rootDir (the dir containing charly.yml).
 //
 // K1 keystone (task #24) unit 3: the WALK+PARSE half (find directories, read +
-// classify + gate + parse each manifest's documents) relocated to
-// loaderkit.RunDiscover — the SAME walker.runDiscover/parseDiscoveredManifest
-// mechanism Walk's own depth-0 discover pass already drives internally, reused
-// here directly rather than duplicated. Only the registry-coupled MATERIALIZE
-// fold (foldDiscoveredManifests, materialize.go — shared with
+// classify + gate + parse each manifest's documents) lives in loaderkit.RunDiscover,
+// reached via the ProjectLoader seam (requireProjectLoader, #55 C3b-ii) — the SAME
+// walker.runDiscover/parseDiscoveredManifest mechanism Walk's own depth-0 discover
+// pass already drives internally, reused here rather than duplicated. Only the
+// registry-coupled MATERIALIZE fold (foldDiscoveredManifests, materialize.go — shared with
 // loaderkit.MaterializeLoadedProject's own discovered-manifest step via the FoldDiscoveredManifests seam, R3) stays host-side.
 func ApplyDiscover(uf *spec.UnifiedFile, rootDir string) error {
-	dms, err := loaderkit.RunDiscover(rootDir, uf.Discover, hostWalkSeams())
+	dms, err := requireProjectLoader().RunDiscover(rootDir, uf.Discover, hostWalkSeams())
 	if err != nil {
 		return err
 	}
@@ -219,8 +216,9 @@ func ApplyDiscover(uf *spec.UnifiedFile, rootDir string) error {
 }
 
 // findEntityDirs (kit.FindEntityDirs) + discoverSkipDir (kit.DiscoverSkipDir)
-// are the discover-walk PRIMITIVES — relocated to sdk/kit
-// (loader_discover.go) so charly core AND sdk/loaderkit share ONE copy (R3).
+// are the discover-walk PRIMITIVES — relocated to spec/spec
+// (loader_discover.go), re-exported by sdk/kit, so charly core AND
+// sdk/loaderkit share ONE copy (R3).
 
 // -----------------------------------------------------------------------------
 // Projections — extract the existing concrete types from spec.UnifiedFile so the
@@ -254,9 +252,9 @@ func Distros(uf *spec.UnifiedFile) map[string]*spec.ResolvedDistro {
 
 // Builders reconstructs the name-keyed multi-stage builder vocabulary from
 // uf.PluginKinds["builder"] (the `builder` plugin kind, candy/plugin-builder) into the
-// map[string]*vmshared.BuilderDef shape the generator consumed when builder was a typed core map.
-func Builders(uf *spec.UnifiedFile) map[string]*vmshared.BuilderDef {
-	return spec.DecodePluginKindMap[vmshared.BuilderDef](uf, "builder")
+// map[string]*spec.BuilderDef shape the generator consumed when builder was a typed core map.
+func Builders(uf *spec.UnifiedFile) map[string]*spec.BuilderDef {
+	return spec.DecodePluginKindMap[spec.BuilderDef](uf, "builder")
 }
 
 // resolveInits projects the name-keyed init-system vocabulary from
@@ -275,14 +273,15 @@ func resolveInits(uf *spec.UnifiedFile) map[string]*ResolvedInit {
 
 // ProjectCandies scans or synthesizes a candy per entry in uf.Candy, into its FINAL
 // spec.CandyReader form (W9: the type-Candy move). Thin wrapper over projectCandiesScanned +
-// the ONE choke point (loaderkit.FinalizeScannedCandies, no InitCfg in scope for a standalone call) —
-// see ScanAllCandyWithConfigOpts's doc comment for why completion never happens anywhere else.
+// the ONE choke point (FinalizeScannedCandies, reached via the ProjectLoader seam, no InitCfg in scope
+// for a standalone call) — see ScanAllCandyWithConfigOpts's doc comment for why completion never
+// happens anywhere else.
 func ProjectCandies(uf *spec.UnifiedFile, rootDir string) (map[string]spec.CandyReader, error) {
 	scanned, err := projectCandiesScanned(uf, rootDir)
 	if err != nil {
 		return nil, err
 	}
-	return loaderkit.FinalizeScannedCandies(scanned, nil), nil
+	return requireProjectLoader().FinalizeScannedCandies(scanned, nil), nil
 }
 
 // projectCandiesScanned is ProjectCandies' UNWRAPPED body: scans or synthesizes a candy per

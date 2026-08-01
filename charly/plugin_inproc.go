@@ -134,4 +134,10 @@ func registerCompiledPlugin(srv pb.ProviderServer, meta pb.PluginMetaServer) {
 	if mz, ok := srv.(spec.Materializer); ok {
 		activeMaterializer = mz
 	}
+	// The SAME compiled-in loader plugin (#55 loader-keystone) ALSO exposes the typed whole-project
+	// LOAD-ENTRY via spec.ProjectLoader — wire it as the active loader so LoadUnified drives it (no
+	// wire envelope), instead of charly core importing sdk/loaderkit to load its own config.
+	if pl, ok := srv.(spec.ProjectLoader); ok {
+		activeProjectLoader = pl
+	}
 }

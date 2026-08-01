@@ -9,9 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/opencharly/sdk/buildkit"
-	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/loaderkit"
+	"github.com/opencharly/spec/refs"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -52,7 +50,7 @@ const RepoOverrideEnv = "CHARLY_REPO_OVERRIDE"
 // normalizeOverrideRepoPath canonicalizes the LHS of a CHARLY_REPO_OVERRIDE pair to
 // the repo-root form ParseRemoteRef yields, so `opencharly/charly` and
 // `github.com/opencharly/charly` both match (same auto-prefix rule as
-// loaderkit.NormalizeRepoSpec, since W9's main_repo.go relocation).
+// spec.NormalizeRepoSpec, since W9's main_repo.go relocation).
 func normalizeOverrideRepoPath(rp string) string {
 	rp = strings.TrimSpace(strings.TrimSuffix(rp, "/"))
 	if i := strings.Index(rp, "/"); i > 0 && !strings.Contains(rp[:i], ".") {
@@ -124,7 +122,7 @@ func selfSuperprojectOverridePair(projectDir string) string {
 	if superDir == "" {
 		return "" // not a submodule — its candies already resolve from the local tree
 	}
-	identity := loaderkit.RootRepoIdentity(superDir)
+	identity := spec.RootRepoIdentity(superDir)
 	if identity == "" {
 		return ""
 	}
@@ -190,22 +188,22 @@ func EnsureRepoDownloaded(repoPath, version string) (string, error) {
 	} else if ok {
 		return dir, nil
 	}
-	cached, err := kit.IsRepoCached(repoPath, version)
+	cached, err := refs.IsRepoCached(repoPath, version)
 	if err != nil {
 		return "", err
 	}
 	var path string
-	if cached && !kit.IsMutableRef(version) {
-		path, err = kit.RepoCachePath(repoPath, version)
+	if cached && !refs.IsMutableRef(version) {
+		path, err = refs.RepoCachePath(repoPath, version)
 	} else {
 		// The cache-miss DOWNLOAD dispatches through the registered refs backend (P7):
 		// the compiled-in candy/plugin-refs (git) by default, swappable for an OCI/S3 plugin.
 		// A MUTABLE ref (a branch such as main, or the unversioned default branch) always
 		// delegates: the downloader re-resolves the ref's current commit and refreshes a
-		// stale export (the kit.DownloadRepo provenance check) — a plain cache hit would
+		// stale export (the refs.DownloadRepo provenance check) — a plain cache hit would
 		// freeze the branch at its first-download content forever (the pre-#146 @main
 		// protocol skew). Immutable coordinates (tags, SHAs) keep the offline cache hit.
-		path, err = activeRefsDownloader.Download(repoPath, version)
+		path, err = requireRefsDownloader().Download(repoPath, version)
 	}
 	if err != nil {
 		return "", err
@@ -254,7 +252,7 @@ func cacheBehindHead(path string) bool {
 	if err != nil {
 		return true // no charly.yml → never-migrated → migrate
 	}
-	cv, ok := ParseCalVer(kit.FirstYAMLVersionLine(data))
+	cv, ok := ParseCalVer(spec.FirstYAMLVersionLine(data))
 	if !ok {
 		return true
 	}
@@ -264,14 +262,14 @@ func cacheBehindHead(path string) bool {
 // CollectRemoteRefs is the default-opts wrapper (enabled images only) around
 // CollectRemoteRefsOpts. The overwhelming majority of call sites want
 // enabled-only collection, so they keep this two-arg form.
-func CollectRemoteRefs(cfg *Config, layers map[string]spec.CandyReader) ([]loaderkit.RemoteDownload, error) {
-	return CollectRemoteRefsOpts(cfg, layers, loaderkit.ResolveOpts{})
+func CollectRemoteRefs(cfg *Config, layers map[string]spec.CandyReader) ([]spec.RemoteDownload, error) {
+	return CollectRemoteRefsOpts(cfg, layers, spec.ResolveOpts{})
 }
 
 // CollectRemoteRefsOpts collects all unique remote refs from charly.yml candy
 // lists and candy manifest depends/candy fields. Different candies from the same repo
 // can use different versions. Only the same bare ref at conflicting versions is
-// an error. Returns a list of loaderkit.RemoteDownload grouped by (repoPath, version).
+// an error. Returns a list of spec.RemoteDownload grouped by (repoPath, version).
 //
 // opts gates the disabled-image walk: a disabled image's candy refs are
 // collected when opts.ShouldIncludeDisabled(name) is true (i.e. a
@@ -283,7 +281,7 @@ func CollectRemoteRefs(cfg *Config, layers map[string]spec.CandyReader) ([]loade
 // order.
 //
 //nolint:gocyclo // depth-first graph walker over base/candy/builder edges; nested loops are essential to the traversal
-func CollectRemoteRefsOpts(cfg *Config, layers map[string]spec.CandyReader, opts loaderkit.ResolveOpts) ([]loaderkit.RemoteDownload, error) {
+func CollectRemoteRefsOpts(cfg *Config, layers map[string]spec.CandyReader, opts spec.ResolveOpts) ([]spec.RemoteDownload, error) {
 	// Collect EVERY distinct (repo, git-tag) a ref is referenced at. The git tag
 	// is only the FETCH coordinate — per-entity-version arbitration (and any
 	// warning) happens AFTER fetch in ScanAllCandyWithConfigOpts, so a re-tag of
@@ -307,8 +305,8 @@ func CollectRemoteRefsOpts(cfg *Config, layers map[string]spec.CandyReader, opts
 			if branch, ok := defaultBranches[parsed.RepoPath]; ok {
 				version = branch
 			} else {
-				repoURL := kit.RepoGitURL(parsed.RepoPath)
-				branch, err := kit.GitDefaultBranch(repoURL)
+				repoURL := refs.RepoGitURL(parsed.RepoPath)
+				branch, err := refs.GitDefaultBranch(repoURL)
 				if err != nil {
 					return fmt.Errorf("%s: cannot resolve default branch for %s: %w", source, parsed.RepoPath, err)
 				}
@@ -378,7 +376,7 @@ func CollectRemoteRefsOpts(cfg *Config, layers map[string]spec.CandyReader, opts
 			edges = append(edges, img.Base)
 		}
 		if len(img.Candy) > 0 {
-			edges = append(edges, buildkit.EffectiveBuilderForBox(c, name, img).AllBuilder()...)
+			edges = append(edges, spec.EffectiveBuilderForBox(c, name, img).AllBuilder()...)
 		}
 		for _, ref := range edges {
 			if _, tc, ok := c.ResolveBoxRef(ref); ok {
@@ -438,16 +436,16 @@ func CollectRemoteRefsOpts(cfg *Config, layers map[string]spec.CandyReader, opts
 		}
 	}
 
-	// Emit one loaderkit.RemoteDownload per distinct (repo, git-tag). A bare ref pinned at
+	// Emit one spec.RemoteDownload per distinct (repo, git-tag). A bare ref pinned at
 	// two git tags yields two downloads (both fetched); the post-fetch
 	// arbitration keeps one materialization per bare ref.
-	var result []loaderkit.RemoteDownload
+	var result []spec.RemoteDownload
 	for key, refs := range pairs {
 		refList := make([]string, 0, len(refs))
 		for ref := range refs {
 			refList = append(refList, ref)
 		}
-		result = append(result, loaderkit.RemoteDownload{
+		result = append(result, spec.RemoteDownload{
 			RepoPath: key.repo,
 			Version:  key.ver,
 			Refs:     refList,

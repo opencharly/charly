@@ -15,13 +15,13 @@ import (
 // production newCheckRunner builds one internally (a &hostVerbResolver{} struct literal); a
 // unit test dispatching a single verb (or a host helper directly) wants the resolver.
 func hostVerbResolverFor(exec spec.DeployExecutor, mode RunMode, distros ...string) *hostVerbResolver {
-	return &hostVerbResolver{kr: kit.NewRunner(kit.RunnerConfig{Exec: exec, Mode: mode, Distros: distros})}
+	return &hostVerbResolver{cc: carrierFromRunner(kit.NewRunner(kit.RunnerConfig{Exec: exec, Mode: mode, Distros: distros}))}
 }
 
 // hostVerbResolverWithCandyDirs builds a *hostVerbResolver over a kit.Runner carrying the given
 // committed-APK anchoring state — for exercising resolveCheckApk directly.
 func hostVerbResolverWithCandyDirs(dirs map[string]string, scanErr error) *hostVerbResolver {
-	return &hostVerbResolver{kr: kit.NewRunner(kit.RunnerConfig{CandyDirs: dirs, CandyScanErr: scanErr})}
+	return &hostVerbResolver{cc: carrierFromRunner(kit.NewRunner(kit.RunnerConfig{CandyDirs: dirs, CandyScanErr: scanErr}))}
 }
 
 // testdataDir is the project directory used by test fixtures. Tests read

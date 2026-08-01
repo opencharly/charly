@@ -172,7 +172,7 @@ func TestIsPodMember(t *testing.T) {
 
 // TestSortedMemberKeys is deterministic ascending order.
 func TestSortedMemberKeys(t *testing.T) {
-	got := loaderkit.SortedMemberKeys(map[string]*spec.BundleNode{"c": {}, "a": {}, "b": {}})
+	got := spec.SortedMemberKeys(map[string]*spec.BundleNode{"c": {}, "a": {}, "b": {}})
 	if want := []string{"a", "b", "c"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("sortedMemberKeys = %v, want %v", got, want)
 	}

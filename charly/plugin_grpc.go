@@ -14,7 +14,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/kit"
+	specexec "github.com/opencharly/spec/exec"
 	pb "github.com/opencharly/spec/proto"
 	"github.com/opencharly/spec/spec"
 	"github.com/opencharly/spec/transport"
@@ -171,7 +171,7 @@ func relayNestedTarget(open *pb.ChannelFrame, upstream sdk.ProviderChannel) (han
 			return true, fmt.Errorf("provider channel deployment %q endpoint bootstrap: %w", target.Deployment, err)
 		}
 		fmt.Fprintf(os.Stderr, "provider channel: bootstrap Charly endpoint for deployment %q on %s\n", target.Deployment, venueExec.Venue())
-		remoteCharly, err := kit.EnsureCharlyInDeployVenue(upstream.Context(), venueExec, controllerBin, CharlyVersion())
+		remoteCharly, err := specexec.EnsureCharlyInDeployVenue(upstream.Context(), venueExec, controllerBin, CharlyVersion())
 		if err != nil {
 			return true, fmt.Errorf("provider channel deployment %q endpoint bootstrap: %w", target.Deployment, err)
 		}
@@ -220,7 +220,7 @@ func relayNestedTarget(open *pb.ChannelFrame, upstream sdk.ProviderChannel) (han
 	if dialTarget.Hops[0].Transport == "ssh" {
 		sshExec := sshExecutorForTargetHop(dialTarget.Hops[0])
 		fmt.Fprintf(os.Stderr, "provider channel: bootstrap Charly endpoint for SSH target %s\n", sshExec.Venue())
-		remoteCharly, err := kit.EnsureCharlyInDeployVenue(upstream.Context(), sshExec, controllerBin, CharlyVersion())
+		remoteCharly, err := specexec.EnsureCharlyInDeployVenue(upstream.Context(), sshExec, controllerBin, CharlyVersion())
 		if err != nil {
 			return true, fmt.Errorf("provider channel SSH endpoint bootstrap for %s: %w", sshExec.Venue(), err)
 		}
@@ -273,7 +273,7 @@ func activeCharlyBinary() (string, error) {
 	return path, nil
 }
 
-func sshExecutorForTargetHop(hop spec.TargetHop) *kit.SSHExecutor {
+func sshExecutorForTargetHop(hop spec.TargetHop) *specexec.SSHExecutor {
 	args := make([]string, 0, 2+2*len(hop.Options))
 	if hop.IdentityFile != "" {
 		args = append(args, "-i", hop.IdentityFile)
@@ -286,7 +286,7 @@ func sshExecutorForTargetHop(hop spec.TargetHop) *kit.SSHExecutor {
 	for _, key := range keys {
 		args = append(args, "-o", key+"="+hop.Options[key])
 	}
-	return &kit.SSHExecutor{User: hop.User, Host: hop.Address, Port: int(hop.Port), Args: args}
+	return &specexec.SSHExecutor{User: hop.User, Host: hop.Address, Port: int(hop.Port), Args: args}
 }
 
 func relayProviderChannels(upstream sdk.ProviderChannel, downstream pb.Provider_ChannelClient) error {

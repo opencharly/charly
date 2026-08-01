@@ -9,11 +9,8 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 
-	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/loaderkit"
 	"gopkg.in/yaml.v3"
 )
 
@@ -112,14 +109,14 @@ func RegisterBuildVocabulary(dc *spec.DistroConfig) {
 // holds candy definitions. The discover: block overrides it per project
 // for discovery; write/resolve paths fall back to this default. Renaming the
 // candy directory project-wide is a one-line change here.
-// The value lives in kit (the importable host-engine shared with out-of-tree
+// The value lives in spec (the types-only fabric module shared with out-of-tree
 // plugin candies); these are the in-core aliases.
-const DefaultCandyDir = kit.DefaultCandyDir
+const DefaultCandyDir = spec.DefaultCandyDir
 
 // DefaultBoxDir is the on-disk directory that holds box definitions,
 // discovered per-box as <DefaultBoxDir>/<name>/<UnifiedFileName>. Symmetric with
 // DefaultCandyDir; the discover: block overrides it per project.
-const DefaultBoxDir = kit.DefaultBoxDir
+const DefaultBoxDir = spec.DefaultBoxDir
 
 // The per-directory discovery manifest filename is the ONE filename the code
 // knows — UnifiedFileName ("charly.yml", defined in unified.go). There is no
@@ -131,15 +128,15 @@ const DefaultBoxDir = kit.DefaultBoxDir
 // form (W9: the type-Candy move — core never holds a concrete Candy struct; every
 // candy is a spec.CandyModel + spec.CandyView pair scanned by the registered loader
 // plugin's typed CandyScanner seam, then wrapped via deploykit.NewSpecCandyModel).
-// Delegates to scanLocalCandies + the ONE choke point (loaderkit.FinalizeScannedCandies, no
-// InitCfg in scope for a standalone call) — see ScanAllCandyWithConfigOpts's doc
-// comment for why a local candy is NEVER wrapped anywhere else.
+// Delegates to scanLocalCandies + the ONE choke point (FinalizeScannedCandies, reached via the
+// ProjectLoader seam, no InitCfg in scope for a standalone call) — see ScanAllCandyWithConfigOpts's
+// doc comment for why a local candy is NEVER wrapped anywhere else.
 func ScanCandy(dir string) (map[string]spec.CandyReader, error) {
 	scanned, err := scanLocalCandies(dir)
 	if err != nil {
 		return nil, err
 	}
-	return loaderkit.FinalizeScannedCandies(scanned, nil), nil
+	return requireProjectLoader().FinalizeScannedCandies(scanned, nil), nil
 }
 
 // scanLocalCandies is the UNWRAPPED local-scan dispatcher — the ONE place every construction
@@ -421,7 +418,7 @@ func looksLikeDistroOrFormatKey(key string) bool {
 // full pin, from spec.ScannedCandy.Refs) are harvested here and fed in as ExtraCandyRefs — the
 // SAME mechanism a deploy's add_candy: already uses to reach a ref no base/builder/require edge
 // would otherwise surface. A local (non-remote) ref is a harmless no-op (IsRemoteCandyRef gates it).
-func withLocalRawRefs(opts loaderkit.ResolveOpts, localScanned map[string]spec.ScannedCandy) loaderkit.ResolveOpts {
+func withLocalRawRefs(opts spec.ResolveOpts, localScanned map[string]spec.ScannedCandy) spec.ResolveOpts {
 	extraRefs := append([]string(nil), opts.ExtraCandyRefs...)
 	for _, sc := range localScanned {
 		for _, dep := range sc.Refs.Require {
@@ -439,7 +436,7 @@ func withLocalRawRefs(opts loaderkit.ResolveOpts, localScanned map[string]spec.S
 // around ScanAllCandyWithConfigOpts. Most call sites (deploy-mode, runtime,
 // inspect) want enabled-only scanning and keep this two-arg form.
 func ScanAllCandyWithConfig(dir string, cfg *Config) (map[string]spec.CandyReader, error) {
-	return ScanAllCandyWithConfigOpts(dir, cfg, loaderkit.ResolveOpts{})
+	return ScanAllCandyWithConfigOpts(dir, cfg, spec.ResolveOpts{})
 }
 
 // ScanAllCandyWithConfigOpts scans local and remote candies, returning each in its
@@ -460,7 +457,7 @@ func ScanAllCandyWithConfig(dir string, cfg *Config) (map[string]spec.CandyReade
 // IncludedCandy edges, unaffected by initCfg) — loaderkit.FinalizeScannedCandies never mutates
 // its input map (each candidate is completed off a range-loop COPY), so calling it
 // twice (once throwaway, once final) is safe and cheap.
-func ScanAllCandyWithConfigOpts(dir string, cfg *Config, opts loaderkit.ResolveOpts) (map[string]spec.CandyReader, error) {
+func ScanAllCandyWithConfigOpts(dir string, cfg *Config, opts spec.ResolveOpts) (map[string]spec.CandyReader, error) {
 	// 1. Scan local candies (unwrapped — see doc comment above).
 	localScanned, err := scanLocalCandies(dir)
 	if err != nil {
@@ -472,24 +469,27 @@ func ScanAllCandyWithConfigOpts(dir string, cfg *Config, opts loaderkit.ResolveO
 // scanCandyFromLocal is ScanAllCandyWithConfigOpts's step-2-onward body (remote-ref collect,
 // fix-point fetch, per-entity-version arbitration, host-completion + finalize) — now a THIN host
 // wrapper (K3 U4-b) that builds the ScanSeams host-coupled legs and delegates the pure fix-point to
-// loaderkit.ScanCandyFromLocal. fillNamespacedBoxes calls this with its own namespace-local
-// (localScanned, cfg) — whose set comes from subUF.projectCandiesScanned(dir), NOT scanLocalCandies
-// — so it reaches the SAME pipeline. Behavior-identical to the pre-move function (same steps 2-5).
-func scanCandyFromLocal(localScanned map[string]spec.ScannedCandy, cfg *Config, opts loaderkit.ResolveOpts) (map[string]spec.CandyReader, error) {
-	return loaderkit.ScanCandyFromLocal(localScanned, opts.InitCfg, scanSeamsFor(cfg, opts))
+// the loaderkit scan mechanism through the ProjectLoader seam (requireProjectLoader). The ROOT
+// project's ScanAllCandyWithConfigOpts calls this with its own (localScanned, cfg); the
+// namespaced-box resolve used to call it too (via the deleted host namespaced-box fill), but that fold
+// now runs plugin-side — candy/plugin-build's foldNamespaceScanEntries calls loaderkit.
+// ScanCandyFromLocal directly over the host's per-namespace NamespaceScanReply inputs.
+// Behavior-identical to the pre-move function (same steps 2-5).
+func scanCandyFromLocal(localScanned map[string]spec.ScannedCandy, cfg *Config, opts spec.ResolveOpts) (map[string]spec.CandyReader, error) {
+	return requireProjectLoader().ScanCandyFromLocal(localScanned, opts.InitCfg, scanSeamsFor(cfg, opts))
 }
 
-// scanSeamsFor builds the host closures loaderkit.ScanCandyFromLocal reaches: cfg+opts are captured
-// here so they never cross into loaderkit (the opts-agnostic seam pattern, mirroring the U2
+// scanSeamsFor builds the host closures the loaderkit scan mechanism reaches through the seam: cfg+opts
+// are captured here so they never cross into loaderkit (the opts-agnostic seam pattern, mirroring the U2
 // ResolveProjectSeams closures). CollectRemoteRefs threads the throwaway nil-initCfg finalize +
 // withLocalRawRefs the reachability walk needs (see withLocalRawRefs' doc comment for why the
 // wrapped-view walk can't discover a local candy's pinned remote dep alone); EnsureRepo /
 // ScanRemote wrap the host git-cache (+ auto-migrate) and the registry-coupled per-candy manifest
 // scan (parseCandyYAML). candy/plugin-build supplies InvokeProvider-backed closures instead in U6.
-func scanSeamsFor(cfg *Config, opts loaderkit.ResolveOpts) loaderkit.ScanSeams {
-	return loaderkit.ScanSeams{
-		CollectRemoteRefs: func(localScanned map[string]spec.ScannedCandy) ([]loaderkit.RemoteDownload, error) {
-			return CollectRemoteRefsOpts(cfg, loaderkit.FinalizeScannedCandies(localScanned, nil), withLocalRawRefs(opts, localScanned))
+func scanSeamsFor(cfg *Config, opts spec.ResolveOpts) spec.ScanSeams {
+	return spec.ScanSeams{
+		CollectRemoteRefs: func(localScanned map[string]spec.ScannedCandy) ([]spec.RemoteDownload, error) {
+			return CollectRemoteRefsOpts(cfg, requireProjectLoader().FinalizeScannedCandies(localScanned, nil), withLocalRawRefs(opts, localScanned))
 		},
 		EnsureRepo: EnsureRepoDownloaded,
 		ScanRemote: func(cacheDir, repoPath string, wantRefs map[string]bool) (map[string]spec.ScannedCandy, error) {
@@ -504,7 +504,8 @@ func scanSeamsFor(cfg *Config, opts loaderkit.ResolveOpts) loaderkit.ScanSeams {
 // with zero core coupling. scanCandyFromLocal above calls it directly.
 
 // Inject the VerbCatalog-coupled op-context classifier (checkspec.go's opInContext) into
-// deploykit's swappable seam (deploykit itself holds no VerbCatalog — that vocabulary is
-// core, reserved_registry.go). Hosted here (not checkspec.go) so checkspec.go needs no
-// kit/deploykit import at all (K3, #39) — this file already imports deploykit.
-func init() { deploykit.OpInContext = opInContext }
+// spec's swappable seam (spec holds no VerbCatalog — that vocabulary is core,
+// reserved_registry.go; the seam var moved to spec so the fabric libraries read it without
+// a deploykit import, #55 import-purity cone-render). Hosted here (not checkspec.go) so
+// checkspec.go needs no kit/deploykit import at all (K3, #39).
+func init() { spec.OpInContext = opInContext }

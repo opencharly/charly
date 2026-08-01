@@ -74,7 +74,7 @@ func TestBoxResolveOpts(t *testing.T) {
 }
 
 // TestBuildResolveOptsParity locks in that build and generate produce the SAME
-// loaderkit.ResolveOpts for the same selection — the whole point of R3-unifying them.
+// spec.ResolveOpts for the same selection — the whole point of R3-unifying them.
 func TestBuildResolveOptsParity(t *testing.T) {
 	for _, sel := range [][]string{nil, {"fedora"}, {"fedora", "arch"}} {
 		for _, incl := range []bool{false, true} {

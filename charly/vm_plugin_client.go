@@ -39,7 +39,7 @@ func invokeVmPlugin(vmOp, vmName, uri string) (json.RawMessage, bool) {
 // the verb:libvirt provider). Core RPCs verb:libvirt directly + unconditionally, but the plugin
 // candy is external (not in compiled_plugins, not in any box's image closure), so the VM-RPC load
 // paths — the invokeVmPluginEnv out-call here (via connectPluginByWordRef) + the check runner
-// (resolveCheckRunnerContext) — must pull it in via loaderkit.ResolveOpts.ExtraCandyRefs (its documented purpose: a host-side plugin candy
+// (resolveCheckRunnerContext) — must pull it in via spec.ResolveOpts.ExtraCandyRefs (its documented purpose: a host-side plugin candy
 // outside the image closure). In a check bed CHARLY_REPO_OVERRIDE redirects it to the local
 // superproject under development; outside a bed it fetches the published candy.
 func vmPluginCandyRef() string {

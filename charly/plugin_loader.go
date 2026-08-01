@@ -12,12 +12,11 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 
 	"cuelang.org/go/cue"
 
-	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/lock"
 	"github.com/opencharly/spec/schemaconcat"
 )
 
@@ -223,7 +222,7 @@ func buildPluginBinary(ctx context.Context, srcDir, name string) (string, error)
 	// connect" mid-fan-out because its binary was momentarily half-written. A blocking per-binary file
 	// lock makes the second builder wait for the first, never collide (R4: a synchronization primitive,
 	// not a retry).
-	release, lockErr := kit.AcquireFileLock(bin+".lock", true)
+	release, lockErr := lock.AcquireFileLock(bin+".lock", true)
 	if lockErr != nil {
 		return "", fmt.Errorf("plugin %q: acquire build lock: %w", name, lockErr)
 	}
@@ -526,7 +525,7 @@ func connectPluginByWord(class ProviderClass, word string) (Provider, bool) {
 }
 
 // connectPluginByWordRef is connectPluginByWord with an optional CANONICAL candy ref appended to
-// the source scan (loaderkit.ResolveOpts.ExtraCandyRefs) — for a host out-call to a plugin whose candy the
+// the source scan (spec.ResolveOpts.ExtraCandyRefs) — for a host out-call to a plugin whose candy the
 // project's closure references NOWHERE (e.g. a box/<distro> project that RPCs verb:libvirt but
 // vendors no candy requiring candy/plugin-vm). connectBakedPlugin's registry-resolve-first check
 // makes it idempotent: after the first connect, every subsequent call returns the registered
@@ -551,9 +550,9 @@ func connectPluginByWordRef(class ProviderClass, word, extraRef string) (Provide
 	// keeps the common case network-free — adding the remote ref unconditionally would make a local
 	// op (e.g. `charly vm list` in the main repo) attempt a github fetch even when candy/plugin-vm
 	// is local. Mirrors the deleted ensureVmPluginConnected two-pass.
-	passes := []loaderkit.ResolveOpts{{}}
+	passes := []spec.ResolveOpts{{}}
 	if extraRef != "" {
-		passes = append(passes, loaderkit.ResolveOpts{ExtraCandyRefs: []string{extraRef}})
+		passes = append(passes, spec.ResolveOpts{ExtraCandyRefs: []string{extraRef}})
 	}
 	for _, opts := range passes {
 		candyMap, scanErr := ScanAllCandyWithConfigOpts(dir, cfg, opts)
@@ -738,7 +737,7 @@ func loadDeployPlugins(dir, deployName string, extraAddCandy []string) error {
 	}
 	addCandy, refWords := deployNodePluginContext(dir, deployName)
 	extra := append(append([]string(nil), extraAddCandy...), addCandy...)
-	candyMap, scanErr := ScanAllCandyWithConfigOpts(dir, cfg, loaderkit.ResolveOpts{ExtraCandyRefs: extra})
+	candyMap, scanErr := ScanAllCandyWithConfigOpts(dir, cfg, spec.ResolveOpts{ExtraCandyRefs: extra})
 	if scanErr != nil {
 		return fmt.Errorf("scan deploy plugins: %w", scanErr)
 	}

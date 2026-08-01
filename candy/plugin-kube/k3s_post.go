@@ -138,9 +138,9 @@ func rewriteK3sServerToForward(ctx context.Context, exec *sdk.Executor, retrieve
 // compiled-in) — DeployStateHost is wired ONLY by charly-core's own init(), so a
 // direct call here silently found nothing (a `LookupKey` miss, ok=false) every
 // single time regardless of what was actually persisted on disk, exactly the
-// silent-out-of-process-degradation class of bug the "deploy-config-save-state"
-// seam (Q2, S3b) was introduced to prevent for the WRITE half — this closes the
-// matching gap on the READ half. R10 bed regression: check-k8s-deploy's
+// silent-out-of-process-degradation class of bug the deploy-state WRITE path
+// guards against (plugin-side via a loader-backed reader since #55 K4) for the
+// WRITE half — this closes the matching gap on the READ half. R10 bed regression: check-k8s-deploy's
 // bring-up-members failed with "auto port_forward \"auto:6443\" has no persisted
 // host-port allocation" even though `charly vm create`'s own persist (verified via
 // a live isolated CHARLY_DEPLOY_CONFIG repro, RDD) landed correctly and stayed
@@ -150,8 +150,20 @@ func deployVMForwards(ctx context.Context, exec *sdk.Executor, entityRef, deploy
 	if e, cut := strings.CutPrefix(entityRef, "vm:"); cut {
 		vmEntity = e
 	} else {
+		// Resolve the merged deploy tree PLUGIN-SIDE and thread it into the seam as DATA — the #55
+		// Cone A Unit 3b tree-threading that replaced the host's former core merged-tree read.
+		// This runs POST-deploy (no dispatch-threaded dir), so it resolves the project dir via the
+		// "deploy-plugins-connect" seam (os.Getwd() host-side, the SAME dir the host loader used).
+		dir, derr := hostProjectDir(ctx, exec, deployName)
+		if derr != nil {
+			return nil, nil //nolint:nilerr // best-effort: see below
+		}
+		treeJSON, terr := resolveDeployTreeJSON(ctx, exec, dir)
+		if terr != nil {
+			return nil, nil //nolint:nilerr // best-effort: see below
+		}
 		var reply spec.DeployEntityResolveReply
-		if err := k8sEntityResolve(ctx, exec, spec.DeployEntityResolveRequest{Kind: "bundle", Name: entityRef}, &reply); err != nil || reply.Node == nil {
+		if err := k8sEntityResolve(ctx, exec, spec.DeployEntityResolveRequest{Kind: "bundle", Name: entityRef, Dir: dir, TreeJSON: treeJSON}, &reply); err != nil || reply.Node == nil {
 			return nil, nil //nolint:nilerr // best-effort: a resolve miss means "no forward", not a hard failure
 		} else {
 			vmEntity = reply.Node.From

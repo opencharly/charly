@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -38,7 +37,7 @@ func hostBuildScanLocal(_ context.Context, req spec.ResolvedProjectRequest, _ bu
 // hostBuildCollectRemoteRefs runs the reachability-scoped remote-ref walk (the ScanSeams.CollectRemoteRefs
 // leg). It reloads cfg + the local scan host-side (deterministic — identical to the plugin's), so the
 // wrapped-view walk sees the SAME withLocalRawRefs augmentation the in-core scan used.
-func hostBuildCollectRemoteRefs(_ context.Context, req spec.ResolvedProjectRequest, _ buildEngineContext) ([]loaderkit.RemoteDownload, error) {
+func hostBuildCollectRemoteRefs(_ context.Context, req spec.ResolvedProjectRequest, _ buildEngineContext) ([]spec.RemoteDownload, error) {
 	dir := reqDirOrCwd(req.Dir)
 	cfg, err := LoadConfig(dir)
 	if err != nil {
@@ -48,8 +47,8 @@ func hostBuildCollectRemoteRefs(_ context.Context, req spec.ResolvedProjectReque
 	if err != nil {
 		return nil, err
 	}
-	opts := loaderkit.ResolveOpts{IncludeDisabled: req.IncludeDisabled, ExtraCandyRefs: req.ExtraCandyRefs}
-	return CollectRemoteRefsOpts(cfg, loaderkit.FinalizeScannedCandies(localScanned, nil), withLocalRawRefs(opts, localScanned))
+	opts := spec.ResolveOpts{IncludeDisabled: req.IncludeDisabled, ExtraCandyRefs: req.ExtraCandyRefs}
+	return CollectRemoteRefsOpts(cfg, requireProjectLoader().FinalizeScannedCandies(localScanned, nil), withLocalRawRefs(opts, localScanned))
 }
 
 // hostBuildEnsureRepo resolves a (repo, version) to a local cache dir (the ScanSeams.EnsureRepo leg),
@@ -97,24 +96,83 @@ func hostBuildConnectPlugins(_ context.Context, req spec.ResolvedProjectRequest,
 	return map[string]string{}, nil
 }
 
-// hostBuildNamespaced pre-computes the namespace-qualified box views + each namespace's own candy scan
-// (the ResolveProjectSeams.FillNamespacedBoxes leg — it embeds a nested scan + render-prep the plugin
-// can't cheaply run). Returns a PARTIAL spec.ResolvedProject carrying only Boxes/Candies/CandyModels,
-// which the plugin merges additively.
-func hostBuildNamespaced(_ context.Context, req spec.BuildResolveRequest, _ buildEngineContext) (spec.ResolvedProject, error) {
+// hostBuildNamespaced recurses the project's import-namespace tree ONCE and returns a FLAT
+// spec.NamespaceScanReply: one entry per namespace carrying its PRE-fix-point scanned candies +
+// the namespace-scoped INITIAL remote-download set (the ResolveProjectSeams.FillNamespacedBoxes leg
+// — K1 loader-cone fabric-tail, #55). The plugin (candy/plugin-build's FillNamespacedBoxes seam)
+// iterates the list and runs the candy-scan fetch fix-point (loaderkit.ScanCandyFromLocal) +
+// deploykit.RawCandyPair + deploykit.FillNamespaceBoxViews plugin-side — the deploykit calls left
+// core when charly/resolved_project_host.go was deleted (the file's own L26-32 named exit). The
+// host keeps ONLY the genuinely host-coupled steps: projectCandiesScanned (reads subUF.Candy
+// in-memory — the R1 fix) + the reachability walk (CollectRemoteRefsOpts over the namespace's own
+// cfg). initCfg/calver/dir come from the plugin's own resolve context and are NOT duplicated here.
+// Best-effort/additive: a project-less or unresolvable dir returns an empty reply.
+func hostBuildNamespaced(_ context.Context, req spec.BuildResolveRequest, _ buildEngineContext) (spec.NamespaceScanReply, error) {
 	dir := reqDirOrCwd(req.Dir)
 	opts := boxResolveOpts(nil, req.IncludeDisabled)
 	lp, err := loadProjectForResolve(dir, opts, nil)
 	if err != nil || lp.empty || lp.uf == nil {
-		return spec.ResolvedProject{}, nil // best-effort/additive
+		return spec.NamespaceScanReply{}, nil // best-effort/additive
 	}
-	calver := req.Tag
-	if calver == "" {
-		calver = ComputeCalVer()
+	reply := spec.NamespaceScanReply{}
+	collectNamespaceScanEntries(lp.uf, "", dir, opts, &reply, map[*spec.UnifiedFile]bool{})
+	return reply, nil
+}
+
+// collectNamespaceScanEntries recurses uf.Namespaces and appends one spec.NamespaceScanEntry per
+// namespace (FLAT, nested-qualified by child = prefix+"."+ns) to reply. dir is the OUTER project
+// dir — the fallback for a namespace's own RootDir when resolving a discovered candy's From: path
+// (a namespace's candy paths are relative to the NAMESPACE's root, not the caller's; matches the
+// deleted host namespaced-box fill's nsDir fallback). The visited cycle-guard mirrors the deleted fill.
+// A namespace whose candy scan fails contributes an empty (skipped) entry — best-effort/additive,
+// never fatal, matching the deleted fill's tolerance.
+func collectNamespaceScanEntries(uf *spec.UnifiedFile, prefix, dir string, opts spec.ResolveOpts, reply *spec.NamespaceScanReply, visited map[*spec.UnifiedFile]bool) {
+	if uf == nil || visited[uf] {
+		return
 	}
-	scratch := &spec.ResolvedProject{}
-	fillNamespacedBoxes(lp.uf, lp.initCfg, "", calver, dir, opts, scratch, map[*spec.UnifiedFile]bool{})
-	return *scratch, nil
+	visited[uf] = true
+	for ns, subUF := range uf.Namespaces {
+		if subUF == nil {
+			continue
+		}
+		child := ns
+		if prefix != "" {
+			child = prefix + "." + ns
+		}
+		sub := subUF.ProjectConfig()
+		nsDir := subUF.RootDir
+		if nsDir == "" {
+			nsDir = dir
+		}
+		// projectCandiesScanned reads subUF.Candy directly (no re-load, no directory mismatch —
+		// the R1 fix preserved from the deleted host namespaced-box fill): covers BOTH a namespace's
+		// own local discover:-found candies AND its inline candy: nodes.
+		var scanned map[string]spec.ScannedCandy
+		if localScanned, lErr := projectCandiesScanned(subUF, nsDir); lErr == nil {
+			scanned = localScanned
+		}
+		// The ONE cfg-coupled step: the namespace-scoped reachability walk over the namespace's
+		// own cfg + its candies' raw @-refs — byte-identical to scanSeamsFor(sub,
+		// opts).CollectRemoteRefs(scanned) (the deleted host namespaced-box fill's scan seam): it
+		// runs UNCONDITIONALLY, because CollectRemoteRefsOpts walks sub.Box (the namespace's boxes)
+		// to collect the boxes' candy @-refs — independent of whether the namespace has ANY local
+		// candies. A namespace that VENDORS NO candies of its own but whose boxes pin remote candies
+		// (the distro-fedora case: every candy is an @github.com/opencharly/charly/candy/<name>:<tag>
+		// ref) still has box candy refs to fetch; the former `if len(scanned) > 0` guard skipped the
+		// walk for such a namespace, dropping the box candy refs so the plugin's fix-point fetched
+		// nothing → "candy not found" on every namespaced box (R1 RCA: bisect first-bad = coneK1load
+		// b367e5d5). The plugin's ScanSeams.CollectRemoteRefs returns this verbatim;
+		// EnsureRepo/ScanRemote still round-trip to the cfg-agnostic host legs for the transitive
+		// fetch. FinalizeScannedCandies / withLocalRawRefs are nil/empty-safe (range over nil is a
+		// no-op), so an empty `scanned` degrades to a boxes-only walk — exactly origin/main's shape.
+		downloads, _ := CollectRemoteRefsOpts(sub, requireProjectLoader().FinalizeScannedCandies(scanned, nil), withLocalRawRefs(opts, scanned))
+		reply.Entries = append(reply.Entries, spec.NamespaceScanEntry{
+			Child:     child,
+			Scanned:   scanned,
+			Downloads: downloads,
+		})
+		collectNamespaceScanEntries(subUF, child, dir, opts, reply, visited)
+	}
 }
 
 // hostBuildPrep populates the render-seam-floor renderGenCache with a CHEAP candy-scan-only
@@ -129,7 +187,7 @@ func hostBuildNamespaced(_ context.Context, req spec.BuildResolveRequest, _ buil
 // newCandyScanGenerator doc.
 func hostBuildPrep(_ context.Context, req spec.ResolvedProjectRequest, _ buildEngineContext) (map[string]string, error) {
 	dir := reqDirOrCwd(req.Dir)
-	gen, err := newCandyScanGenerator(dir, req.IncludeDisabled, req.ExtraCandyRefs)
+	gen, err := newCandyScanGenerator(dir, req.IncludeDisabled, req.ExtraCandyRefs, req.Boxes)
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +218,7 @@ func reqDirOrCwd(dir string) string {
 	return dir
 }
 
-// boxResolveOpts builds the loaderkit.ResolveOpts that scope a generate/build to a set of
+// boxResolveOpts builds the spec.ResolveOpts that scope a generate/build to a set of
 // explicitly-named boxes. It is the SINGLE source of the box-selection rule for
 // both `charly box build` and `charly box generate` (R3): an empty slice means
 // "all enabled boxes" (no scoping); a non-empty slice pins those names into the
@@ -168,8 +226,8 @@ func reqDirOrCwd(dir string) string {
 // enabled: false gate for exactly those names (IncludeDisabledNames) so the
 // override never widens the working set globally. Callers pass boxes already run
 // through buildkit.NormalizeBoxArgs.
-func boxResolveOpts(boxes []string, includeDisabled bool) loaderkit.ResolveOpts {
-	opts := loaderkit.ResolveOpts{IncludeDisabled: includeDisabled}
+func boxResolveOpts(boxes []string, includeDisabled bool) spec.ResolveOpts {
+	opts := spec.ResolveOpts{IncludeDisabled: includeDisabled}
 	if len(boxes) == 0 {
 		return opts
 	}

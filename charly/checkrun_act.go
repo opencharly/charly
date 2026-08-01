@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -77,14 +76,14 @@ func resolveProvisionScript(op *spec.Op, distros []string) (string, bool) {
 // observe verb) so the caller falls through to the normal dispatch. Resolution
 // (incl. the `plugin:` indirection) is the shared resolveProvisionScript.
 func (h *hostVerbResolver) runProvisionAct(ctx context.Context, c *spec.Op, verb string) (spec.CheckResult, bool) {
-	script, ok := resolveProvisionScript(c, h.kr.Distros())
+	script, ok := resolveProvisionScript(c, h.cc.Distros())
 	if !ok {
 		return spec.CheckResult{}, false
 	}
-	if h.kr.Mode() == RunModeBox {
+	if h.cc.Mode() == RunModeBox {
 		return skipf(c, "do: act not meaningful under charly check box (no running target)"), true
 	}
-	_, stderr, exit, err := h.kr.Exec().RunCapture(ctx, kit.WrapContainerCommand(script))
+	_, stderr, exit, err := h.cc.Exec().RunCapture(ctx, spec.WrapContainerCommand(script))
 	if err != nil {
 		return failf(c, "act %s: execution error: %v", verb, err), true
 	}

@@ -123,8 +123,8 @@ func TestCompileServiceSteps_DistroDivergentDaemons(t *testing.T) {
 
 	// Regression guard for the R10 failure: a `target: vm` deploy compiles the
 	// plan with the GUEST img (the synthetic vm box → img.Distro=[debian:13,debian])
-	// but detectHostContext() defaults hostCtx.MachineVenue=true + the OPERATOR's
-	// distro (e.g. "arch"). The service filter MUST scope to the guest (img),
+	// but the former detectHostContext() (DELETED in #55 coneB-br2 Group 2) defaulted
+	// hostCtx.MachineVenue=true + the OPERATOR's distro (e.g. "arch"). The service filter MUST scope to the guest (img),
 	// NOT the operator host — else it keeps the modular [fedora,arch] virtqemud
 	// entries and `systemctl enable virtqemud.socket` fails on the debian guest.
 	t.Run("vm deploy: guest img wins over operator host distro", func(t *testing.T) {

@@ -4,7 +4,7 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/container"
 )
 
 // isTerminal reports whether stdout is connected to a terminal. Package-level var for testability.
@@ -31,7 +31,7 @@ func defaultIsTerminal() bool {
 // bare `container inspect` succeeds for any existing container, so its exit status is the signal.
 // Relocated from the deleted shell.go (Cutover B unit 2) — still used by bundle_add_cmd.go.
 var containerExists = func(engine, name string) bool {
-	binary := kit.EngineBinary(engine)
+	binary := container.EngineBinary(engine)
 	return exec.Command(binary, "container", "inspect", name).Run() == nil
 }
 
@@ -47,9 +47,10 @@ var containerExists = func(engine, name string) bool {
 // candy/plugin-pod). Cutover B unit 2: the plugin now performs the remote-ref/CanonicalizeDeployArg
 // validation itself (candy/plugin-pod's UpdateCmd.Run()) before reaching HostBuild("pod-update")
 // (host_build_pod_lifecycle_dispatch.go), which constructs this struct directly and calls
-// dispatchByDeployTarget() — no more Run()-VERBATIM reconstruction. dispatchByDeployTarget's
-// resolveTreeRoot/loadDeployPlugins/ResolveTarget (update_deploy_dispatch.go) remain core
-// Mechanisms (the project loader + provider registry) a plugin cannot import or hold.
+// dispatchByDeployTarget() — no more Run()-VERBATIM reconstruction. command:update resolves the
+// deploy tree PLUGIN-SIDE and threads it in (#55 Cone A Unit 3b); dispatchByDeployTarget's remaining
+// loadDeployPlugins/ResolveTarget (update_deploy_dispatch.go) are core Mechanisms (the provider
+// registry) a plugin cannot import or hold.
 //
 // This verb handles the destroy-free update path for every target. The
 // first arg accepts EITHER a deploy name (looked up in charly.yml —
@@ -70,6 +71,10 @@ type podUpdateCmd struct {
 	Seed      bool
 	ForceSeed bool
 	DataFrom  string
+	// TreeJSON is the merged deploy tree command:update (plugin-pod) resolved PLUGIN-SIDE and
+	// threaded into the "pod-update" seam (#55 Cone A Unit 3b), so dispatchByDeployTarget consumes
+	// it instead of a core host-side merged-tree read. Marshalled map[string]spec.BundleNode.
+	TreeJSON []byte
 }
 
 // podRemoveCmd (+ purgeDeployArtifacts, dropOverlayImagesByRef, runPreRemoveHook,

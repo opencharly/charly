@@ -5,14 +5,15 @@ package main
 // A BundleNode's `peer:` map declares companion deployments brought up
 // ALONGSIDE it on the shared `charly` network (NOT nested inside it). The canonical
 // case is a Chrome driver pod that CDP-probes a web-server subject via a check
-// with `on: <peer>` (see check_members.go); members are reachable by
+// with `on: <peer>` (the cross-deployment `on:`/`${HOST:}` resolution lives
+// plugin-side in candy/plugin-check/members.go); members are reachable by
 // `${HOST:<name>}` and are never check-live'd themselves.
 //
 // The LOAD-half — foldMembers / sortedMemberKeys / sortedDeployKeys plus the venue-flatten pass —
 // relocated to sdk/loaderkit (bundle_load.go) per the lead's U1 SPLIT ruling (K1-LOADER
 // RELOCATION): they are registry-free pure maps/tree operations the plugin-callable
-// loaderkit.LoadUnified wires as seams directly. See loaderkit.FoldMembers / loaderkit.SortedMemberKeys
-// / loaderkit.SortedDeployKeys. The DEPLOY-half below (bringUpMembers / tearDownMembers) STAYS
+// loaderkit.LoadUnified wires as seams directly. See loaderkit.FoldMembers / spec.SortedMemberKeys
+// / spec.SortedDeployKeys. The DEPLOY-half below (bringUpMembers / tearDownMembers) STAYS
 // host-resident: it shells out via proc.RunCharlySubcommand + reads the live registry
 // (nodeTraits), so it is NOT registry-free. bringUpMembers / tearDownMembers are the single shared
 // helpers invoked by BOTH the kind:check bed runner (check_bed_run.go) and the operator deploy path
@@ -23,9 +24,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/loaderkit"
-	"github.com/opencharly/sdk/vmshared"
+	specexec "github.com/opencharly/spec/exec"
+	"github.com/opencharly/spec/hostenv"
 	"github.com/opencharly/spec/proc"
 	"github.com/opencharly/spec/spec"
 )
@@ -68,20 +68,18 @@ func bringUpMembers(node *spec.BundleNode, imageTag string) error {
 	if node == nil || len(node.Members) == 0 {
 		return nil
 	}
-	for _, memberKey := range loaderkit.SortedMemberKeys(node.Members) {
+	for _, memberKey := range spec.SortedMemberKeys(node.Members) {
 		memberNode := node.Members[memberKey]
-		// Seed the per-host charly.yml with the member's deploy-shaped overrides
-		// (port / volume / env / security / network) so its declared port:
-		// publishes to the host — the cross-deployment cdp/vnc/mcp probe reaches
-		// the driver via that host-published port. This ALSO seeds the member's
-		// resource-arbitration role (preemptible holder / requires_exclusive
-		// claimant), so a preemptible-holder member + a requires_exclusive-claimant
-		// member drive the arbiter through the member's own `charly start` (the
-		// group live-preemption shape — see check-preempt-live-pod). A member node
-		// is NON-disposable (foldMembers marks only the folded top-level copy), so
-		// this never writes a disposable bed the overlay's validateCheckBeds would
-		// reject.
-		persistBedDeployOverrides(memberKey, *memberNode)
+		// The member's deploy-shaped override PERSIST (port / volume / env / security / network +
+		// the resource-arbitration role) moved PLUGIN-SIDE to candy/plugin-check's bed runner (bed
+		// path, from CheckBedReply.NodeJSON's nested peer map) and candy/plugin-bundle's walk
+		// (operator path, from rootNode.Members) — #55 coneC-dsh β1. The plugin calls
+		// deploykit.PersistBedDeployOverrides BEFORE this host `members-up`/`deploy-members-up` seam
+		// fires, so the member's declared port: publishes + its preemptible/requires_exclusive role
+		// is seeded by the time the member's own `charly config`/`charly start` runs here (the
+		// group live-preemption shape — see check-preempt-live-pod). A member node is NON-disposable
+		// (foldMembers marks only the folded top-level copy), so this never writes a disposable bed
+		// the overlay's validateCheckBeds would reject.
 		switch {
 		case isVmMember(memberNode):
 			// VM member: full libvirt lifecycle, mirroring the isVM bed root
@@ -90,7 +88,7 @@ func bringUpMembers(node *spec.BundleNode, imageTag string) error {
 			// deploy the VM node — `bundle add <member> <vm-entity>` (the VM-template
 			// ref, like the isVM root's deploy-add), not the bare pod/local form.
 			// Best-effort pre-destroy clears a stale domain from an interrupted run.
-			vmshared.StartLibvirtUserSession()
+			hostenv.StartLibvirtUserSession()
 			// The member's libvirt domain is named after the MEMBER deploy (memberKey), not the
 			// shared kind:vm entity (memberNode.From) — so member VMs sharing one entity across beds
 			// get distinct, collision-free domains + per-domain disk overlays + ports (P33). The
@@ -100,13 +98,13 @@ func bringUpMembers(node *spec.BundleNode, imageTag string) error {
 			if err := proc.RunCharlySubcommand("vm", "create", memberNode.From, "--domain", memberDomain); err != nil {
 				return fmt.Errorf("peer %q (vm create %s): %w", memberKey, memberNode.From, err)
 			}
-			deploykit.WaitForVmSshReady(memberDomain)
+			specexec.WaitForVmSshReady(memberDomain)
 			if err := proc.RunCharlySubcommand(withMemberTag([]string{"bundle", "add", memberKey, memberNode.From}, imageTag)...); err != nil {
 				return fmt.Errorf("peer %q (vm bundle add): %w", memberKey, err)
 			}
 			// Same nested-local-child gap the isVM bed root closes: plugin-deploy-vm's
 			// PostApply skips target:local children, so deploy them into the guest here.
-			if err := deploykit.DeployNestedLocalChildren(memberKey, memberNode.Children, func(childKey, dotted string) error {
+			if err := spec.DeployNestedLocalChildren(memberKey, memberNode.Children, func(childKey, dotted string) error {
 				return proc.RunCharlySubcommand("bundle", "add", dotted)
 			}); err != nil {
 				return fmt.Errorf("peer %q: %w", memberKey, err)
@@ -117,7 +115,7 @@ func bringUpMembers(node *spec.BundleNode, imageTag string) error {
 					return fmt.Errorf("peer %q (%v): %w", memberKey, step, err)
 				}
 			}
-			deploykit.WaitForContainerReady(memberKey)
+			specexec.WaitForContainerReady(memberKey)
 		default:
 			// kind:local member — applies candies in place during bundle add.
 			if err := proc.RunCharlySubcommand(withMemberTag([]string{"bundle", "add", memberKey}, imageTag)...); err != nil {
@@ -139,7 +137,7 @@ func tearDownMembers(node *spec.BundleNode) error {
 		return nil
 	}
 	var errs []error
-	for _, memberKey := range loaderkit.SortedMemberKeys(node.Members) {
+	for _, memberKey := range spec.SortedMemberKeys(node.Members) {
 		memberNode := node.Members[memberKey]
 		var err error
 		switch {

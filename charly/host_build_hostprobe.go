@@ -7,7 +7,8 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/container"
+	"github.com/opencharly/spec/hostenv"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -55,7 +56,7 @@ func hostBuildHostProbe(_ context.Context, req spec.HostProbeRequest, _ buildEng
 			}
 		}
 		if engine != "" {
-			reply.GPUFlags = kit.GPURunArgs(engine)
+			reply.GPUFlags = container.GPURunArgs(engine)
 		}
 	}
 	reply.AMDGPU = DetectAMDGPU()
@@ -103,7 +104,7 @@ func hostBuildHostProbe(_ context.Context, req spec.HostProbeRequest, _ buildEng
 	reply.DistroFamilyMap = distroFamilyMap
 
 	// Core-owned config path (the plugin stats it for the permissions check).
-	if p, err := kit.RuntimeConfigPath(); err == nil {
+	if p, err := hostenv.RuntimeConfigPath(); err == nil {
 		reply.ConfigPath = p
 	}
 

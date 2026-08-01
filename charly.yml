@@ -2048,7 +2048,7 @@ check-migrate-local:
               context:
                 - runtime
               command:
-                command: 'd=$(mktemp -d); printf "version: 2026.186.2323\n" > "$d/charly.yml"; ${CHARLY_BIN} migrate --dir "$d" --project-only; rc=$?; rm -rf "$d"; exit $rc'
+                command: 'd=$(mktemp -d); printf "version: 2026.204.1223\n" > "$d/charly.yml"; ${CHARLY_BIN} migrate --dir "$d" --project-only; rc=$?; rm -rf "$d"; exit $rc'
                 in_container: false
             - check: charly migrate --dry-run touches nothing (exit 0, prints the dry-run trailer)
               id: migrate-dry-run-noop

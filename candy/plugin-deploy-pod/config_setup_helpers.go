@@ -14,6 +14,7 @@ import (
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -50,7 +51,8 @@ func resolveHostCharlyBin(hostEnvJSON []byte) string {
 	return bin
 }
 
-// secretDepNames mirrors charly/config_secret_migration.go's secretDepNames.
+// secretDepNames is the slice-returning sibling of secretDeclaredOnBox in secret_migration.go
+// (the credential-backed env var names an image declares via secret_accepts/secret_requires).
 func secretDepNames(meta *spec.BoxMetadata) []string {
 	if meta == nil || (len(meta.SecretRequire) == 0 && len(meta.SecretAccept) == 0) {
 		return nil
@@ -317,23 +319,30 @@ func persistResourceCaps(ctx context.Context, ex *sdk.Executor, dc **deploykit.B
 // loadProjectVolume resolves the deploy's PROJECT-declared `volume:` override — the entity as
 // authored in the PROJECT's own charly.yml (e.g. a disposable check bed's `volume: [{name:
 // enc-data, type: encrypted}]`) — which the per-host overlay `loadDeploy` reads (LoadBundleConfig,
-// ~/.config/charly/charly.yml) never carries on its own. Genuinely loader-coupled (LoadUnified is
-// a core Mechanism a plugin cannot import), so it calls back the narrow "pod-config-project-volume"
-// seam. Returns (nil, nil) when the project declares no override for this deploy (or there is no
-// project at all — the labels-only deploy path).
-func loadProjectVolume(ctx context.Context, ex *sdk.Executor, box, instance string) ([]spec.DeployVolume, error) {
-	var rep spec.PodConfigProjectVolumeReply
-	if err := hostBuild(ctx, ex, podConfigProjectVolumeKind, spec.PodConfigProjectVolumeRequest{Box: box, Instance: instance}, &rep); err != nil {
-		return nil, err
-	}
-	if len(rep.VolumeJSON) == 0 {
+// ~/.config/charly/charly.yml) never carries on its own. Resolved PLUGIN-SIDE (#55 Cone A Unit 3a):
+// the former "pod-config-project-volume" host seam (which re-loaded the merged tree via the core
+// the former host merged-tree read) is DELETED — this reads the SAME merged project+operator tree itself via
+// loaderkit.ResolveMergedTreeViaExecutor (the plugin-safe merged-tree resolver), keyed by
+// DeployKey exactly as the seam did. dir comes from the "deploy-plugins-connect" seam (the
+// authoritative host project dir + the kind-plugin connect the loader needs). Returns (nil, nil)
+// when the project declares no override for this deploy (or there is no project — labels-only).
+// loadProjectVolume is a package var (not a plain func) so resolveDeployVolumes' precedence tests
+// can stub the project-consult leg directly — the loader-over-executor path it now drives cannot be
+// mocked through a single HostBuild-kind stub the way the former one-shot seam could.
+var loadProjectVolume = func(ctx context.Context, ex *sdk.Executor, box, instance string) ([]spec.DeployVolume, error) {
+	var pre spec.DeployPluginsConnectReply
+	if err := hostBuild(ctx, ex, deployPluginsConnectKind, spec.DeployPluginsConnectRequest{Path: box}, &pre); err != nil || pre.Dir == "" {
 		return nil, nil
 	}
-	var volumes []spec.DeployVolume
-	if err := json.Unmarshal(rep.VolumeJSON, &volumes); err != nil {
+	tree, err := loaderkit.ResolveMergedTreeViaExecutor(ctx, ex, pre.Dir)
+	if err != nil {
 		return nil, err
 	}
-	return volumes, nil
+	node, ok := tree[spec.DeployKey(box, instance)]
+	if !ok || len(node.Volume) == 0 {
+		return nil, nil
+	}
+	return node.Volume, nil
 }
 
 // persistDeployVolumes mirrors persistResourceCaps' Security-write shape for Volume: seeds the
@@ -585,15 +594,14 @@ func provisionData(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntim
 				dataRef = resolved
 			}
 		}
-		var ensureRep spec.PodConfigEnsureImageReply
-		if err := hostBuild(ctx, ex, podConfigEnsureImageKind, spec.PodConfigEnsureImageRequest{ImageRef: dataRef, BuildEngine: rt.BuildEngine}, &ensureRep); err != nil {
+		if err := hostBuild(ctx, ex, podConfigEnsureImageKind, spec.PodConfigEnsureImageRequest{ImageRef: dataRef, BuildEngine: rt.BuildEngine}, nil); err != nil {
 			return fmt.Errorf("extracting metadata from data image %s: %w", dataRef, err)
 		}
-		var dm spec.BoxMetadata
-		if err := json.Unmarshal(ensureRep.MetaJSON, &dm); err != nil {
+		dm, err := deploykit.ExtractMetadata("podman", dataRef)
+		if err != nil || dm == nil {
 			return fmt.Errorf("extracting metadata from data image %s: %w", dataRef, err)
 		}
-		dataMeta = &dm
+		dataMeta = dm
 	}
 
 	if len(dataMeta.DataEntries) == 0 {
@@ -652,12 +660,12 @@ func provisionData(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntim
 // c.HostEnvJSON) — never re-derived here via os.Executable(), which would resolve to the PLUGIN
 // binary for this out-of-process placement (the same bug class documented on resolveHostCharlyBin).
 func updateAllDeployedQuadlets(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, skipBox string, charlyBin string) error {
-	var loadRep spec.PodConfigLoadBundleReply
-	if err := hostBuild(ctx, ex, podConfigLoadBundleKind, spec.PodConfigLoadDeployRequest{}, &loadRep); err != nil || len(loadRep.ConfigJSON) == 0 {
-		return nil
-	}
-	var dc deploykit.BundleConfig
-	if err := json.Unmarshal(loadRep.ConfigJSON, &dc); err != nil {
+	// loaderkit.LoadHostBundleConfigViaExecutor (#55 coneC Unit C2 — this retired the former
+	// host bundle-config loader-seam round-trip): the cycle-free plugin-side overlay
+	// read, byte-identical to the 8 sibling rewires (plugin-bundle/ephemeral, plugin-pod/enc_cmd,
+	// plugin-pod/remove_orchestration, plugin-status/nested_tree, plugin-substrate/status_flat).
+	dc, err := loaderkit.LoadHostBundleConfigViaExecutor(ctx, ex)
+	if err != nil || dc == nil {
 		return nil
 	}
 
@@ -684,21 +692,20 @@ func updateAllDeployedQuadlets(ctx context.Context, ex *sdk.Executor, rt *kit.Re
 
 		imageRef, _ := extractQuadletImageLine(qpath)
 		if imageRef == "" {
-			var rep spec.PodConfigResolveRefReply
-			if err := hostBuild(ctx, ex, podConfigResolveRefKind, spec.PodConfigResolveRefRequest{Box: boxName}, &rep); err == nil {
-				imageRef = rep.ImageRef
+			if _, ref, e := resolveDeployRefLocal(ctx, ex, boxName, "", "", ""); e == nil {
+				imageRef = ref
 			}
 		}
-		var ensureRep spec.PodConfigEnsureImageReply
-		if err := hostBuild(ctx, ex, podConfigEnsureImageKind, spec.PodConfigEnsureImageRequest{ImageRef: imageRef, BuildEngine: rt.BuildEngine}, &ensureRep); err != nil {
+		if err := hostBuild(ctx, ex, podConfigEnsureImageKind, spec.PodConfigEnsureImageRequest{ImageRef: imageRef, BuildEngine: rt.BuildEngine}, nil); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: could not read metadata for %s, skipping quadlet update\n", key)
 			continue
 		}
-		var meta spec.BoxMetadata
-		if err := json.Unmarshal(ensureRep.MetaJSON, &meta); err != nil {
+		metaPtr, err := deploykit.ExtractMetadata("podman", imageRef)
+		if err != nil || metaPtr == nil {
 			continue
 		}
-		deploykit.MergeDeployOntoMetadata(&meta, &dc, boxName, instance)
+		meta := *metaPtr
+		deploykit.MergeDeployOntoMetadata(&meta, dc, boxName, instance)
 
 		updateCtrName := kit.ContainerNameInstance(boxName, instance)
 		updateAccepted := deploykit.AcceptedEnvSet(meta.EnvAccept, meta.EnvRequire)
@@ -774,19 +781,15 @@ func updateAllDeployedQuadlets(ctx context.Context, ex *sdk.Executor, rt *kit.Re
 
 		var tunnelCfg *spec.TunnelConfig
 		if meta.Tunnel != nil {
-			var tRep spec.PodConfigTunnelResolveReply
-			if err := hostBuild(ctx, ex, podConfigTunnelResolveKind, spec.PodConfigTunnelResolveRequest(ensureRep), &tRep); err == nil && len(tRep.TunnelJSON) > 0 {
-				var tc spec.TunnelConfig
-				if json.Unmarshal(tRep.TunnelJSON, &tc) == nil {
-					tunnelCfg = &tc
-				}
+			if tc := deploykit.TunnelConfigFromMetadata(&meta); tc != nil {
+				tunnelCfg = tc
 			}
 		}
 
 		var resolvedSidecars []deploykit.ResolvedSidecar
 		podName := ""
 		if len(deploySidecarsRaw) > 0 {
-			scRes, err := resolvePodSidecars(ctx, ex, deploySidecarsRaw, sidecarTemplatesOf(&dc), nil, boxName, instance, rt.RunEngine, true, nil)
+			scRes, err := resolvePodSidecars(ctx, ex, deploySidecarsRaw, sidecarTemplatesOf(dc), nil, boxName, instance, rt.RunEngine, true, nil)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: resolving sidecars for %s: %v\n", key, err)
 				continue

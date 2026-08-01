@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/kit"
+	specexec "github.com/opencharly/spec/exec"
 	pb "github.com/opencharly/spec/proto"
 	"github.com/opencharly/spec/spec"
 )
@@ -18,7 +19,7 @@ import (
 // (deploy/step/check/build) can reach them — the generalization of the RunHostStep ExternalPlugin
 // arm (one fixed OpExecute step) to "invoke ANY provider/op" + "request a host build".
 //
-// MIGRATION INVENTORY: this file's `kit` import (kit.VenueFromDescriptor, the S1
+// MIGRATION INVENTORY: this file's `kit` import (specexec.VenueFromDescriptor, the S1
 // venue-scoped-executor-session re-materialization below) is UNTIL-FLOOR-SLIM-proper — it
 // exits with the reverse-broker floor slimming, at which point the venue re-materialization
 // this seam performs moves into the generic reverse-channel broker mechanism itself (clause-M,
@@ -40,7 +41,7 @@ import (
 // none, e.g. a verb/kind Invoke with no deploy-context broker). A caller with no enclosing executor
 // of its own may instead supply a SELF-DESCRIBED venue via req.VenueDescriptorJson (a marshalled
 // spec.VenueDescriptor): the host re-materializes a FRESH DeployExecutor from it
-// (kit.VenueFromDescriptor, the SAME re-materialization candy/plugin-bundle's own PrepareVenue
+// (specexec.VenueFromDescriptor, the SAME re-materialization candy/plugin-bundle's own PrepareVenue
 // dispatch already goes through) and threads THAT instead of s.exec. Absent — byte-identical prior
 // behavior.
 //
@@ -97,7 +98,7 @@ func (s *executorReverseServer) InvokeProvider(ctx context.Context, req *pb.Invo
 		if derr := json.Unmarshal(vdj, &d); derr != nil {
 			return nil, fmt.Errorf("InvokeProvider %s:%s: decode venue descriptor: %w", class, word, derr)
 		}
-		fresh, verr := kit.VenueFromDescriptor(d)
+		fresh, verr := specexec.VenueFromDescriptor(d)
 		if verr != nil {
 			return nil, fmt.Errorf("InvokeProvider %s:%s: materialize venue: %w", class, word, verr)
 		}
@@ -143,15 +144,26 @@ func (s *executorReverseServer) InvokeProvider(ctx context.Context, req *pb.Invo
 			if env.Mode == "box" {
 				mode = RunModeBox
 			}
-			minimalRunner := kit.NewRunner(kit.RunnerConfig{
-				Exec:        exec,
-				Mode:        mode,
-				Box:         env.Box,
-				Instance:    env.Instance,
-				Distros:     env.Distros,
-				DialTimeout: time.Duration(env.DialTimeoutNs),
-			})
-			hvr := &hostVerbResolver{kr: minimalRunner}
+			dialTimeout := time.Duration(env.DialTimeoutNs)
+			if dialTimeout <= 0 {
+				dialTimeout = 3 * time.Second // kit.NewRunner's zero-DialTimeout default
+			}
+			// The reverse-channel venue is FIXED for this single RunVerb (no in-plan SwapVenue), so
+			// execFn returns the one materialized executor; box/instance/distros/mode ride the
+			// CheckEnv snapshot; httpBase mirrors kit.NewRunner's zero-HTTPClient 10s default; there
+			// is no scenario context (addBg nil → AddBackground is a no-op). No kit.Runner: the
+			// carrier IS the CheckContext backing (#55 CHECK-ENGINE cone).
+			fixedExec := exec
+			carrier := &hostCheckCarrier{
+				execFn:      func() spec.DeployExecutor { return fixedExec },
+				mode:        mode,
+				box:         env.Box,
+				instance:    env.Instance,
+				distros:     env.Distros,
+				dialTimeout: dialTimeout,
+				httpBase:    &http.Client{Timeout: 10 * time.Second},
+			}
+			hvr := &hostVerbResolver{cc: carrier}
 			cr := cv.RunVerb(ctx, hvr, &op2)
 			hvr.runEndpointCleanups()
 			resJSON, merr := json.Marshal(cr)
@@ -297,7 +309,7 @@ type pluginBinarySpec struct {
 
 // hostBuildPluginBinary is the "plugin-binary" host-builder (F10): build a candy's plugin provider
 // binary on the host (buildPluginBinary — go build on the host toolchain), returning {"path": …}.
-// The concrete host-build proving the HostBuild capability; M13/M14 register "kustomize"/"image".
+// The concrete host-build proving the HostBuild capability.
 func hostBuildPluginBinary(ctx context.Context, spec pluginBinarySpec, _ buildEngineContext) (map[string]string, error) {
 	if spec.CandyDir == "" || spec.Name == "" {
 		return nil, fmt.Errorf("plugin-binary host-build: spec requires candy_dir + name")

@@ -26,6 +26,7 @@ package loader
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/opencharly/sdk"
@@ -109,6 +110,70 @@ func (*provider) ScanRemoteCandy(repoDir, repoPath string, wantRefs map[string]b
 // this candy never touches the registry directly). K1 unit 1.
 func (*provider) MaterializeNode(pn spec.ParsedNode, t spec.Threaded, seams spec.MaterializeSeams, acc *spec.MaterializedProject) error {
 	return loaderkit.Materialize(pn, t, seams, acc)
+}
+
+// LoadUnified implements spec.ProjectLoader — the typed whole-project LOAD-ENTRY the host calls to
+// load a project's charly.yml (compiled-in, no wire envelope): it drives the ONE copy of the
+// kind-blind load orchestration in sdk/loaderkit (loaderkit.LoadUnified) over a LoadSeams built from
+// the host-supplied registry-/host-coupled legs (exec, a spec.LoaderExecutor). So charly core reaches
+// the loader mechanism ONLY through this spec-typed seam — it never imports loaderkit to load its own
+// config (#55 loader-keystone). An alternative loader plugin serves a different whole-project load by
+// implementing this same interface.
+func (*provider) LoadUnified(dir string, exec spec.LoaderExecutor) (*spec.UnifiedFile, bool, error) {
+	return loaderkit.LoadUnified(dir, loaderkit.LoadSeamsFromExecutor(exec))
+}
+
+// ResolveMergedDeployTree implements spec.ProjectLoader — the merged project+overlay deploy-node
+// tree read the host's check seams need (compiled-in, no wire envelope): it drives the ONE copy
+// of the loaderkit project+per-host-overlay projection+merge (loaderkit.ResolveMergedTreeViaExecutor)
+// over the in-proc executor the host threaded on ctx (sdk.ContextWithExecutor →
+// sdk.ExecutorFromContext — the SAME in-proc reverse-channel path ExecutorForInvoke uses for
+// Invoke). So charly core reaches the merged-tree read ONLY through this spec-typed seam — it
+// never imports loaderkit for it (#55 coneA Q2(1), check_cmd.go sheds its loaderkit import).
+func (*provider) ResolveMergedDeployTree(ctx context.Context, dir string) (map[string]spec.BundleNode, error) {
+	ex, ok := sdk.ExecutorFromContext(ctx)
+	if !ok {
+		return nil, fmt.Errorf("resolve merged deploy tree: no host reverse channel on context (command not compiled-in?)")
+	}
+	return loaderkit.ResolveMergedTreeViaExecutor(ctx, ex, dir)
+}
+
+// MaterializeLoadedProject / MarshalMaterialized / ValidateAndroidDevices / ValidatePreemptible
+// implement the whole-project loader ops on spec.ProjectLoader (#55 2b C3): charly core reaches the
+// loaderkit materialize/validate MECHANISM through this compiled-in seam (no wire envelope) instead of
+// importing loaderkit itself. The orchestration/validation LOGIC stays in the ONE copy in sdk/loaderkit;
+// the host supplies the registry-/host-coupled seams + resolve callbacks.
+func (*provider) MaterializeLoadedProject(lp *spec.LoadedProject, merged *spec.UnifiedFile, byID map[int64]*spec.UnifiedFile, seams spec.MaterializeProjectSeams) error {
+	return loaderkit.MaterializeLoadedProject(lp, merged, byID, seams)
+}
+
+func (*provider) MarshalMaterialized(uf *spec.UnifiedFile) ([]byte, error) {
+	return loaderkit.MarshalMaterialized(uf)
+}
+
+func (*provider) ValidateAndroidDevices(uf *spec.UnifiedFile, resolveAndroid func(json.RawMessage) (*spec.ResolvedAndroid, error)) error {
+	return loaderkit.ValidateAndroidDevices(uf, resolveAndroid)
+}
+
+func (*provider) ValidatePreemptible(uf *spec.UnifiedFile, resolveResource func(json.RawMessage) (*spec.ResolvedResource, error), resolveVm func(json.RawMessage) (*spec.ResolvedVm, error)) error {
+	return loaderkit.ValidatePreemptible(uf, resolveResource, resolveVm)
+}
+
+// ScanCandyFromLocal / RunDiscover / FinalizeScannedCandies implement the candy-scan + discover ops on
+// spec.ProjectLoader (#55 C3b-ii): charly core reaches the loaderkit scan/discover MECHANISM through
+// this compiled-in seam (no wire envelope) instead of importing loaderkit. The fix-point / discover /
+// finalize LOGIC stays in the ONE copy in sdk/loaderkit; the host supplies the ScanSeams / WalkSeams
+// host-coupled closures.
+func (*provider) ScanCandyFromLocal(localScanned map[string]spec.ScannedCandy, initCfg *spec.InitConfig, seams spec.ScanSeams) (map[string]spec.CandyReader, error) {
+	return loaderkit.ScanCandyFromLocal(localScanned, initCfg, seams)
+}
+
+func (*provider) RunDiscover(rootDir string, specs []spec.ScanSpec, seams spec.WalkSeams) ([]spec.DiscoveredManifest, error) {
+	return loaderkit.RunDiscover(rootDir, specs, seams)
+}
+
+func (*provider) FinalizeScannedCandies(scanned map[string]spec.ScannedCandy, initCfg *spec.InitConfig) map[string]spec.CandyReader {
+	return loaderkit.FinalizeScannedCandies(scanned, initCfg)
 }
 
 // Invoke serves the out-of-process placement. The compiled-in placement uses the typed ParseDoc

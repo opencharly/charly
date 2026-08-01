@@ -3,8 +3,7 @@ package main
 import (
 	"time"
 
-	"github.com/opencharly/sdk/buildkit"
-	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/spec"
 )
 
 // BuildCalVer is the CalVer build identity of THIS binary, injected at compile
@@ -47,35 +46,35 @@ func CharlyVersion() string {
 // moment (image build tag, check-run dir, deploy alias). It is NOT the identity
 // of the charly binary — that is CharlyVersion()/BuildCalVer. Never use ComputeCalVer()
 // to report the running binary's version.
-// ComputeCalVer / ComputeCalVerAt delegate to buildkit (K3 build-engine, U6): the computation
-// relocated to sdk/buildkit so candy/plugin-build's plugin-side RESOLVE stamps the SAME tag when the
-// host leaves req.Tag empty (R3, one source). These charly-side names are retained for the ~14 host
-// call sites.
+// ComputeCalVer / ComputeCalVerAt delegate to spec (#55 import-purity): the computation lives in
+// spec (spec.ComputeCalVer) so candy/plugin-build's plugin-side RESOLVE stamps the SAME tag when the
+// host leaves req.Tag empty (R3, one source) AND charly core reaches it over its spec+proto-only
+// import surface. These charly-side names are retained for the ~14 host call sites.
 func ComputeCalVer() string {
-	return buildkit.ComputeCalVer()
+	return spec.ComputeCalVer()
 }
 
 // ComputeCalVerAt computes CalVer for a specific time (for testing).
 func ComputeCalVerAt(t time.Time) string {
-	return buildkit.ComputeCalVerAt(t)
+	return spec.ComputeCalVerAt(t)
 }
 
-// CalVer is the parsed YYYY.DDD.HHMM calendar version. The
-// parsed type + its parser live in sdk/kit so BOTH core (the loader
-// version gate) and the candy (the migration chain) import the ONE copy; these
-// zero-churn aliases keep every core call site unchanged. (The struct is kept out
-// of spec because spec already binds `CalVer = string`, the CUE wire scalar.)
-type CalVer = kit.CalVer
+// CalVer is the parsed YYYY.DDD.HHMM calendar version. The parsed type + its parser live in spec
+// (spec.ParsedCalVer, #55 value extraction) so BOTH core (the loader version gate) and the candy
+// (the migration chain) reference the ONE copy; these zero-churn aliases keep every core call site
+// unchanged. (The struct is named ParsedCalVer in spec because spec already binds `CalVer = string`,
+// the CUE wire scalar.)
+type CalVer = spec.ParsedCalVer
 
-// ParseCalVer is the strict canonical "YYYY.DDD.HHMM" parser (see kit.ParseCalVer):
+// ParseCalVer is the strict canonical "YYYY.DDD.HHMM" parser (see spec.ParseCalVer):
 // a non-canonical value parses as ok=false, which the schema gate and migration
 // runner treat as "older than every real CalVer".
-var ParseCalVer = kit.ParseCalVer
+var ParseCalVer = spec.ParseCalVer
 
 // LatestSchemaVersion is the HEAD schema CalVer — the curated constant every
 // versioned file is stamped to and the value the load-time gate requires. The
-// authoritative value lives in kit (shared with the candy's migration registry,
+// authoritative value lives in spec (shared with the candy's migration registry,
 // whose calver-schema step stamps to it); this is the in-core shim.
 func LatestSchemaVersion() CalVer {
-	return kit.LatestSchemaVersion()
+	return spec.LatestSchemaCalVer()
 }

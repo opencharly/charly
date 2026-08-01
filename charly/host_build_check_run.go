@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -36,7 +34,7 @@ const checkRunBuilderKind = "check-run"
 // R3-shared build-engine helper, now a call into the compiled-in build:ensure plugin word rather
 // than an in-core function. Registered directly as the "check-run" host-builder (single-mode kind
 // — the former Mode switch collapsed once every other mode moved plugin-side).
-func hostCheckRunPreflight(ctx context.Context, req spec.CheckRunRequest, _ buildEngineContext) (kit.CheckRunReply, error) {
+func hostCheckRunPreflight(ctx context.Context, req spec.CheckRunRequest, _ buildEngineContext) (spec.CheckRunReply, error) {
 	dir := req.Dir
 	if dir == "" {
 		if cwd, err := os.Getwd(); err == nil {
@@ -45,24 +43,24 @@ func hostCheckRunPreflight(ctx context.Context, req spec.CheckRunRequest, _ buil
 	}
 	uf, ok, err := LoadUnified(dir)
 	if err != nil {
-		return kit.CheckRunReply{}, err
+		return spec.CheckRunReply{}, err
 	}
 	if !ok || uf == nil {
-		return kit.CheckRunReply{}, fmt.Errorf("check-run preflight: no charly.yml in %s", dir)
+		return spec.CheckRunReply{}, fmt.Errorf("check-run preflight: no charly.yml in %s", dir)
 	}
 	if _, has := uf.Bundle[req.Name]; !has {
-		return kit.CheckRunReply{}, fmt.Errorf("check-run preflight: no entity %q in %s", req.Name, dir)
+		return spec.CheckRunReply{}, fmt.Errorf("check-run preflight: no entity %q in %s", req.Name, dir)
 	}
 	fmt.Fprintf(os.Stderr, "preflight: ensuring %d image(s) present in podman storage\n", len(req.Filter))
 	for _, ref := range req.Filter {
-		if loaderkit.VenueIsAgentProvisioned(uf, ref) {
+		if spec.VenueIsAgentProvisioned(uf, ref) {
 			continue
 		}
 		if err := dispatchBuildEnsure(ctx, ref, dir, "", ""); err != nil {
-			return kit.CheckRunReply{}, fmt.Errorf("preflight: %w", err)
+			return spec.CheckRunReply{}, fmt.Errorf("preflight: %w", err)
 		}
 	}
-	return kit.CheckRunReply{}, nil
+	return spec.CheckRunReply{}, nil
 }
 
 // hostFeatureBox (the build-scope `charly box feature run` engine) RELOCATED to candy/plugin-check
@@ -72,7 +70,7 @@ func hostCheckRunPreflight(ctx context.Context, req spec.CheckRunRequest, _ buil
 // DELETED with the move.
 
 // Register the check-run host-builder at package-var init (before any init(), like the
-// config-resolve / cli / vm-build builders).
+// config-resolve / cli / buildengine-prep builders).
 var _ = func() bool {
 	registerHostBuilder(checkRunBuilderKind, typedHostBuilder(checkRunBuilderKind, hostCheckRunPreflight))
 	return true

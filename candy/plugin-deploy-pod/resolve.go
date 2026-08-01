@@ -73,14 +73,22 @@ func resolvePodStartQuadlet(ctx context.Context, ex *sdk.Executor, box, instance
 	return plan, nil
 }
 
-// boxEngineForDeploy wraps the "pod-config-box-engine" seam (ResolveBoxEngineForDeploy — reads the
-// per-host deploy config's Engine override, loader-coupled).
+// boxEngineForDeploy reads the per-host deploy config's Engine override PLUGIN-SIDE via loadDeploy
+// (the cycle-free loaderkit read) — replicating deploykit.ResolveBoxEngineForDeploy's lookup WITHOUT
+// the DeployStateHost package-var dependency (a plugin calling the raw deploykit function would
+// silently no-op out-of-process — the placement-dependency hazard). #55 coneC-dsh — the
+// pod-config-box-engine host seam is DELETED.
 func boxEngineForDeploy(ctx context.Context, ex *sdk.Executor, box, instance, globalEngine string) (string, error) {
-	var rep spec.PodConfigBoxEngineReply
-	if err := hostBuild(ctx, ex, podConfigBoxEngineKind, spec.PodConfigBoxEngineRequest{Box: box, Instance: instance, GlobalEngine: globalEngine}, &rep); err != nil {
+	dc, err := loadDeploy(ctx, ex, "ResolveBoxEngineForDeploy")
+	if err != nil {
 		return globalEngine, err
 	}
-	return rep.Engine, nil
+	if dc != nil {
+		if entry, ok := dc.Lookup(box, instance); ok && entry.Engine != "" {
+			return entry.Engine, nil
+		}
+	}
+	return globalEngine, nil
 }
 
 // podRuntimeImage is the resolved pod image context shared by the start-plan resolver and the F12
@@ -123,19 +131,21 @@ func resolvePodRuntimeImage(ctx context.Context, ex *sdk.Executor, box, instance
 		}
 	}
 
-	var refRep spec.PodConfigResolveRefReply
-	if err := hostBuild(ctx, ex, podConfigResolveRefKind, spec.PodConfigResolveRefRequest{Box: box, Instance: instance, Tag: tag}, &refRep); err != nil {
+	_, imageRef, err := resolveDeployRefLocal(ctx, ex, box, instance, tag, "")
+	if err != nil {
 		return nil, err
 	}
-	imageRef := refRep.ImageRef
-	var ensureRep spec.PodConfigEnsureImageReply
-	if err := hostBuild(ctx, ex, podConfigEnsureImageKind, spec.PodConfigEnsureImageRequest{ImageRef: imageRef, BuildEngine: rt.BuildEngine}, &ensureRep); err != nil {
+	if err := hostBuild(ctx, ex, podConfigEnsureImageKind, spec.PodConfigEnsureImageRequest{ImageRef: imageRef, BuildEngine: rt.BuildEngine}, nil); err != nil {
 		return nil, err
 	}
-	var meta spec.BoxMetadata
-	if err := json.Unmarshal(ensureRep.MetaJSON, &meta); err != nil {
+	metaPtr, err := deploykit.ExtractMetadata("podman", imageRef)
+	if err != nil {
 		return nil, err
 	}
+	if metaPtr == nil {
+		return nil, fmt.Errorf("image %s has no embedded metadata; rebuild with latest charly", imageRef)
+	}
+	meta := *metaPtr
 	if meta.Engine != "" {
 		engine = meta.Engine
 	}
@@ -146,9 +156,8 @@ func resolvePodRuntimeImage(ctx context.Context, ex *sdk.Executor, box, instance
 	cliVolumes := parseVolumeFlagsCLI(volumeFlag, bind)
 	volumes, bindMounts := deploykit.ResolveVolumeBacking(box, instance, meta.Volume, mergeVolumeConfigsLocal(deployVolumes, cliVolumes), meta.Home, rt.EncryptedStoragePath, rt.VolumesPath)
 	if meta.Registry != "" {
-		var refRep2 spec.PodConfigResolveRefReply
-		if err := hostBuild(ctx, ex, podConfigResolveRefKind, spec.PodConfigResolveRefRequest{Box: box, Instance: instance, Tag: tag}, &refRep2); err == nil {
-			imageRef = refRep2.ImageRef
+		if _, ref, e := resolveDeployRefLocal(ctx, ex, box, instance, tag, ""); e == nil {
+			imageRef = ref
 		}
 	}
 	return &podRuntimeImage{detected: detected, engine: engine, imageRef: imageRef, meta: &meta, dc: dc, volumes: volumes, bindMounts: bindMounts}, nil
@@ -216,8 +225,9 @@ func resolvePodStartDirect(ctx context.Context, ex *sdk.Executor, box, instance 
 		if err != nil {
 			return nil, err
 		}
-		inputJSON, _ := json.Marshal(spec.SaveDeployStateInput{Ports: ports, SetPorts: true})
-		_ = hostBuild(ctx, ex, deployConfigSaveStateKind, spec.DeployConfigSaveStateRequest{Box: box, Instance: instance, InputJSON: inputJSON}, nil)
+		// #55 K4: write the recomputed ports PLUGIN-SIDE (deploykit.SaveDeployState), not over the
+		// deleted "deploy-config-save-state" host seam.
+		deploySaveState(ctx, ex, box, instance, spec.SaveDeployStateInput{Ports: ports, SetPorts: true})
 	}
 	if conflicts := kit.CheckPortAvailability(ports, rt.BindAddress, engine); len(conflicts) > 0 {
 		return nil, fmt.Errorf("port conflicts detected:%s", kit.FormatPortConflicts(conflicts, box))

@@ -4,8 +4,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/opencharly/sdk/buildkit"
-	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -17,10 +15,11 @@ import (
 // the ONE fallback (loading the project's distro:/builder: vocabulary when the caller didn't
 // supply it) before delegating to buildkit's free functions — the "~35 STAY: LoadConfig/
 // LoadConfigRaw + 2 fallback branches" the original scoping map identified. The scan/load options
-// struct (loaderkit.ResolveOpts) + the loader validation accumulator (spec.ValidationError) moved to sdk/loaderkit
-// (resolve_opts.go) in the #118 Cluster-A loader-projection keystone — charly core and the
-// loader-consuming plugins share ONE definition (loaderkit.ResolveOpts / spec.ValidationError,
-// a FLAT non-embedding struct so every `loaderkit.ResolveOpts{Field: ...}` call site stays simple).
+// struct (spec.ResolveOpts) + the loader validation accumulator (spec.ValidationError) live in the
+// dedicated spec module (ResolveOpts relocated there in the #55 loader cascade; ValidationError in
+// #55 Phase B) — charly core and the loader-consuming plugins share ONE definition (spec.ResolveOpts /
+// spec.ValidationError, a FLAT non-embedding struct so every `spec.ResolveOpts{Field: ...}` call site
+// stays simple).
 
 // ErrNoCharlyYml is the sentinel wrapped by every "no charly.yml found in the
 // project dir" load error. Callers that treat an absent project as EMPTY rather
@@ -66,29 +65,25 @@ func LoadConfigRaw(dir string) (*Config, error) {
 	return cfg, nil
 }
 
-// buildkitOptsWithVocab projects a loaderkit.ResolveOpts onto buildkit.ResolveOpts, loading the project
-// build vocabulary (distro:/builder:) when the caller did not already supply it. It is the ONE place
-// the former ResolveBox/ResolveAllBox wrappers' fillBuildConfigFallback + toBuildkitOpts logic lives
-// (K3 U7: the build-engine RESOLVE moved to candy/plugin-build, so charly-side callers now reach the
-// PURE buildkit.ResolveBox / buildkit.ResolveAllBox DIRECTLY over this opts projection — the config.go
-// ResolveBox/ResolveAllBox free-function wrappers are DELETED). BYTE-EQUIVALENT to the former fallback:
+// resolveVocabOpts fills a spec.ResolveOpts' build vocabulary (distro:/builder:) when the
+// caller did not already supply it, returning the vocabulary-complete spec.ResolveOpts. It is
+// the ONE place the former ResolveBox/ResolveAllBox wrappers' fillBuildConfigFallback logic lives:
 // a caller that already has DistroCfg/BuilderCfg skips the reload; every other caller gets the SAME
-// vocabulary LoadBuildConfigForBox loads for the same dir — the masked-regression this preserves.
-func buildkitOptsWithVocab(dir string, opts loaderkit.ResolveOpts) (buildkit.ResolveOpts, error) {
+// vocabulary LoadBuildConfigForBox loads for the same dir (the masked-regression this preserves).
+// #55 Cluster-B: charly core no longer names buildkit.ResolveOpts — the actual pure resolve
+// (buildkit.ResolveBox / ResolveAllBox) runs inside the deploykit box-resolve bridge
+// (deploykit.ResolveSpecBox / ResolveAllSpecBoxes / FillNamespaceBoxViews), which since #55 2b
+// consumes the SHARED spec.ResolveOpts DIRECTLY (the former deploykit.SpecResolveOpts twin +
+// this charly projector are dissolved now that ResolveOpts lives in spec, which deploykit imports).
+func resolveVocabOpts(dir string, opts spec.ResolveOpts) (spec.ResolveOpts, error) {
 	if opts.DistroCfg == nil && opts.BuilderCfg == nil {
 		distroCfg, builderCfg, _, err := LoadBuildConfigForBox(dir)
 		if err != nil {
-			return buildkit.ResolveOpts{}, err
+			return spec.ResolveOpts{}, err
 		}
 		opts.DistroCfg, opts.BuilderCfg = distroCfg, builderCfg
 	}
-	return buildkit.ResolveOpts{
-		IncludeDisabled:      opts.IncludeDisabled,
-		IncludeDisabledNames: opts.IncludeDisabledNames,
-		RequestedBoxes:       opts.RequestedBoxes,
-		DistroCfg:            opts.DistroCfg,
-		BuilderCfg:           opts.BuilderCfg,
-	}, nil
+	return opts, nil
 }
 
 // resolveIntPtr resolves a *int value, falling back to 0 when nil. A charly-side copy of the

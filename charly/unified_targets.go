@@ -33,10 +33,8 @@ import (
 	"os"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/deploykit"
+	specexec "github.com/opencharly/spec/exec"
 	"github.com/opencharly/spec/spec"
-
-	"github.com/opencharly/sdk/kit"
 )
 
 // runUnifiedTargetChecks runs a deploy-scope check list via a live-mode Runner
@@ -62,17 +60,23 @@ func runUnifiedTargetChecks(ctx context.Context, exec spec.DeployExecutor, kind,
 	if exec == nil {
 		return fmt.Errorf("%s %q: no executor configured", kind, nodeName)
 	}
-	runner := newCheckRunner(kit.RunnerConfig{Exec: exec, Mode: RunModeLive})
-	results := runner.Run(ctx, filtered)
+	// The check DRIVE runs PLUGIN-SIDE via command:check OpVerifyChecks (#55 CHECK-ENGINE cone
+	// Unit 2 — the former in-proc newCheckRunner + kit.Runner.Run construction moved off core). The
+	// reply is the sanctioned []kit.StepResult wire (the plugin wraps each raw-Op verdict as a
+	// StepResult), so a failure is read off r.Result.
+	results, err := dispatchVerifyChecks(ctx, exec, spec.VerifyChecksRequest{Ops: filtered, Mode: "live"})
+	if err != nil {
+		return fmt.Errorf("%s %q: %w", kind, nodeName, err)
+	}
 	failed := 0
 	for _, r := range results {
-		if r.Status == spec.StatusFail {
+		if r.Result.Status == spec.StatusFail {
 			failed++
 			id := ""
-			if r.Op != nil {
-				id = r.Op.ID
+			if r.Result.Op != nil {
+				id = r.Result.Op.ID
 			}
-			fmt.Fprintf(os.Stderr, "FAIL %s: %s\n", id, r.Message)
+			fmt.Fprintf(os.Stderr, "FAIL %s: %s\n", id, r.Result.Message)
 			if opts.StopOnFail {
 				return fmt.Errorf("test stopped at first failure: %s", id)
 			}
@@ -103,7 +107,7 @@ type pluginDeployTarget struct {
 	node *spec.BundleNode
 
 	// exec is the INITIAL executor ResolveTarget computed from the node's host: field
-	// (deploykit.RootExecutorForDeployNode) — the plugin may override it internally for a
+	// (specexec.RootExecutorForDeployNode) — the plugin may override it internally for a
 	// lifecycle substrate (PrepareVenue) and reports the FINAL one back via venueJSON, which
 	// subsequent calls on this SAME target reuse (see the venue field below).
 	exec spec.DeployExecutor
@@ -132,12 +136,13 @@ type pluginDeployTarget struct {
 	// by Add from the DeployContext.
 	build buildEngineContext
 
-	// paths OPTIONALLY overrides the ledger root — a TEST redirecting to a temp dir instead of the
-	// operator's real ~/.config/opencharly/installed/, mirroring the pre-S3b former core-resident
-	// deploy target's settable `paths *kit.LedgerPaths` field exactly (same injection pattern, threaded to the
-	// plugin as req.LedgerRoot since a live *kit.LedgerPaths cannot cross the wire). nil (the
-	// default) — the plugin uses kit.DefaultLedgerPaths().
-	paths *kit.LedgerPaths
+	// ledgerRoot OPTIONALLY overrides the ledger root — a TEST redirecting to a temp dir instead of the
+	// operator's real ~/.config/opencharly/installed/, threaded to the plugin as req.LedgerRoot (a live
+	// *kit.LedgerPaths cannot cross the wire, so only the Root string is injected — #55 coneD
+	// import-purity: the field dropped its *kit.LedgerPaths type, so this file no longer imports
+	// sdk/kit; tests keep kit.LedgerPaths for their OWN ledger I/O and inject only .Root here). ""
+	// (the default) — the plugin uses kit.DefaultLedgerPaths().
+	ledgerRoot string
 }
 
 func (t *pluginDeployTarget) Name() string                  { return t.name }
@@ -191,8 +196,8 @@ func (t *pluginDeployTarget) dispatch(ctx context.Context, req spec.DeployTarget
 	if len(t.venueJSON) > 0 && len(req.VenueJSON) == 0 {
 		req.VenueJSON = t.venueJSON
 	}
-	if t.paths != nil && req.LedgerRoot == "" {
-		req.LedgerRoot = t.paths.Root
+	if t.ledgerRoot != "" && req.LedgerRoot == "" {
+		req.LedgerRoot = t.ledgerRoot
 	}
 	reply, err := dispatchDeployTarget(ctx, req, t.exec, t.build, t.hasLifecycle)
 	if err != nil {
@@ -218,12 +223,12 @@ func (t *pluginDeployTarget) dispatch(ctx context.Context, req spec.DeployTarget
 // reverse leg this dispatch call drives (RunSystem/RunUser/RunHostStep/…). Because a live Go
 // interface value cannot itself cross the []byte wire to the plugin's decoded
 // spec.DeployTargetDispatchRequest, the SAME executor is ALSO flattened into the returned
-// venue_json (kit.DescriptorFromExecutor) — deriveChildExecutorForPath's "ssh" transport hop
-// (bundle_add_cmd.go) is always a plain *kit.SSHExecutor for a single vm-guest hop, never a
-// composed *kit.NestedExecutor, so it round-trips faithfully. The caller threads the result as
+// venue_json (specexec.DescriptorFromExecutor) — deriveChildExecutorForPath's "ssh" transport hop
+// (bundle_add_cmd.go) is always a plain *specexec.SSHExecutor for a single vm-guest hop, never a
+// composed *specexec.NestedExecutor, so it round-trips faithfully. The caller threads the result as
 // the dispatch request's VenueJSON, so resolveRootExecutor (candy/plugin-bundle/deploy_target.go)
 // re-materializes the IDENTICAL guest venue instead of falling back to
-// deploykit.RootExecutorForDeployNode(req.Node), which — for a nested child carrying no `host:`
+// specexec.RootExecutorForDeployNode(req.Node), which — for a nested child carrying no `host:`
 // field of its own — silently defaults to the operator's host ShellExecutor (the bug: every
 // plain-vm nested child's plan/step walk ran on the OPERATOR'S HOST instead of the guest venue).
 //
@@ -235,7 +240,7 @@ func (t *pluginDeployTarget) applyParentExecOverride(opts spec.EmitOpts) json.Ra
 		return nil
 	}
 	t.exec = opts.ParentExec
-	d := kit.DescriptorFromExecutor(opts.ParentExec)
+	d := specexec.DescriptorFromExecutor(opts.ParentExec)
 	if d.Kind == "" {
 		return nil
 	}
@@ -333,7 +338,7 @@ func (t *pluginDeployTarget) venueExecutor() spec.DeployExecutor {
 	if err := json.Unmarshal(t.venueJSON, &d); err != nil {
 		return t.exec
 	}
-	exec, err := kit.VenueFromDescriptor(d)
+	exec, err := specexec.VenueFromDescriptor(d)
 	if err != nil || exec == nil {
 		return t.exec
 	}
@@ -558,8 +563,8 @@ var ErrNotSupportedOnExternal = fmt.Errorf("lifecycle operation not supported on
 // ---------------------------------------------------------------------------
 
 // ResolveTarget returns the UnifiedDeployTarget for `name`, dispatching on the node's canonical
-// target. The node MUST be the dispatch-merged BundleNode (project+operator field merge from
-// resolveTreeRoot) — the adapter consumes node fields (Nested/Env/ephemeral/disposable) directly
+// target. The node MUST be the dispatch-merged BundleNode (project+operator field-merged deploy
+// tree) — the adapter consumes node fields (Nested/Env/ephemeral/disposable) directly
 // and NEVER re-reads them from disk.
 //
 // Errors:
@@ -588,7 +593,7 @@ func ResolveTarget(node *spec.BundleNode, name string) (UnifiedDeployTarget, err
 	if !ok {
 		return nil, fmt.Errorf("deployment %q: target %q has no in-process resolver and is not an out-of-proc plugin provider", name, node.Target)
 	}
-	exec, perr := deploykit.RootExecutorForDeployNode(node)
+	exec, perr := specexec.RootExecutorForDeployNode(node)
 	if perr != nil {
 		return nil, fmt.Errorf("deployment %q: %w", name, perr)
 	}

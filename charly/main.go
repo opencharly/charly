@@ -7,7 +7,7 @@ import (
 
 	"github.com/alecthomas/kong"
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/hostenv"
 	"github.com/opencharly/spec/proc"
 	"golang.org/x/term"
 )
@@ -164,7 +164,7 @@ func main() {
 	// Load project .env into process environment before any config resolution.
 	// Real env vars take precedence over .env values.
 	if dir, err := os.Getwd(); err == nil {
-		if err := kit.LoadProcessDotenv(dir); err != nil {
+		if err := hostenv.LoadProcessDotenv(dir); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: loading .env: %v\n", err)
 		}
 	}
@@ -207,11 +207,11 @@ func main() {
 	// command like `settings`, `version`, or `ssh tunnel`). Doing
 	// this AFTER Kong parse ensures --help / invalid-flag cases print
 	// locally; doing it BEFORE ctx.Run() ensures no local state is
-	// touched when we're about to forward the command. kit.ReexecOverSSH
-	// (S6, relocated from host_exec.go) is pure stdlib+sdk/kit — this
-	// dispatch glue resolves the two charly-core-only inputs (the active
-	// controller binary, this binary's CalVer identity) it cannot resolve
-	// itself and threads them in.
+	// touched when we're about to forward the command. hostenv.ReexecOverSSH
+	// (#55 coneG, relocated from sdk/kit — a host primitive, now a spec
+	// fabric slice) is pure stdlib+spec — this dispatch glue resolves the
+	// two charly-core-only inputs (the active controller binary, this
+	// binary's CalVer identity) it cannot resolve itself and threads them in.
 	if shouldReexecForHost(&cli, ctx.Command()) {
 		controllerBin, err := activeCharlyBinary()
 		if err != nil {
@@ -219,7 +219,7 @@ func main() {
 			os.Exit(2)
 		}
 		wantTTY := term.IsTerminal(int(os.Stdin.Fd()))
-		os.Exit(kit.ReexecOverSSH(cli.Host, cli.HostIdentityFile, cli.HostOption, controllerBin, CharlyVersion(), wantTTY))
+		os.Exit(hostenv.ReexecOverSSH(cli.Host, cli.HostIdentityFile, cli.HostOption, controllerBin, CharlyVersion(), wantTTY))
 	}
 
 	// Resolve --repo before --dir. Both end up driving the same chdir

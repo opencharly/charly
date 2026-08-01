@@ -8,6 +8,7 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/refs"
 	"github.com/opencharly/spec/spec"
 	"gopkg.in/yaml.v3"
 )
@@ -158,10 +159,10 @@ func dispatchReconcile(args []string) error {
 
 // reconcileTargetVersion picks the version every pin of repo should align to: the newest remote
 // tag when remote is set, else the newest already-referenced version (CalVer/semver via
-// kit.CompareSemver).
+// refs.CompareSemver).
 func reconcileTargetVersion(remote bool, repo string, vers map[string]bool) (string, error) {
 	if remote {
-		latest, err := kit.GitLatestTag(kit.RepoGitURL(repo))
+		latest, err := refs.GitLatestTag(refs.RepoGitURL(repo))
 		if err != nil {
 			return "", fmt.Errorf("resolving newest remote tag for %s: %w", repo, err)
 		}
@@ -172,7 +173,7 @@ func reconcileTargetVersion(remote bool, repo string, vers map[string]bool) (str
 	}
 	newest := ""
 	for v := range vers {
-		if newest == "" || kit.CompareSemver(v, newest) > 0 {
+		if newest == "" || refs.CompareSemver(v, newest) > 0 {
 			newest = v
 		}
 	}

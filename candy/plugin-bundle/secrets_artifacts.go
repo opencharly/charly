@@ -11,82 +11,78 @@ import (
 	"github.com/opencharly/spec/spec"
 )
 
-// secrets_artifacts.go — Cone A shape 3: the ORCHESTRATION that used to live core-side in
+// secrets_artifacts.go — the deploy-add secret+artifact ORCHESTRATION that used to live core-side in
 // charly/deploy_add_shared.go (prepareCandySecrets / retrieveArtifactsAndK3s / K3sPostProvision),
-// wrapping handleDeployApply's substrate dispatch (deploy_target.go). The genuine floor-M pieces
-// (the project candy scan, the credential-store touch, the live artifact fetch) stay host-side
-// behind two thin HostBuild seams ("deploy-candy-secrets", "deploy-artifacts-retrieve"); the
-// DECISION of what to do with their results — inject secrets into the in-proc plans BEFORE
-// dispatch, and dispatch the register-hint-driven k3s-post-provision AFTER artifact retrieval —
-// runs HERE, plugin-side, reaching candy/plugin-kube directly via exec.InvokeProvider (F10) instead
-// of the former core resolveKubePlugin/connectPluginByWord/InvokeWithExecutor registry dance.
+// wrapping handleDeployApply's substrate dispatch (deploy_target.go). #55 K4 collapsed the two host
+// seams ("deploy-candy-secrets" / "deploy-artifacts-retrieve") entirely: the candy set comes from the
+// resolved-project envelope command:bundle ALREADY fetched (candiesForPlans → envelopeCandyModels +
+// deploykit.SelectCandiesForPlans, no host scan), secret resolution runs plugin-side via the shared
+// deploykit.CredentialAccessViaExecutor (verb:credential), and artifact retrieval runs plugin-side via
+// deploykit.RetrieveCandyArtifacts. The DECISION of what to do with the results — inject secrets into
+// the in-proc plans BEFORE dispatch, and dispatch the register-hint-driven k3s-post-provision AFTER
+// artifact retrieval — runs HERE, reaching candy/plugin-kube directly via exec.InvokeProvider (F10)
+// instead of the former core resolveKubePlugin/connectPluginByWord/InvokeWithExecutor registry dance.
 
-// injectCandySecrets resolves the candies backing plans (project scan + credential-store lookup,
-// via the "deploy-candy-secrets" HostBuild seam) and injects the resolved env into plans' TaskSteps
-// IN-PROC via the already-portable deploykit.InjectSecretsIntoPlans — no plan mutation crosses the
-// wire, only the resolved secret_env does. Returns the resolved secret_env (the caller folds it
-// into the artifact-retrieval env via deploykit.BuildArtifactEnv, matching the former core Add()'s
-// own reuse of prepareCandySecrets's secretEnv) and the register hints (e.g. "kubeconfig") the
-// caller consults AFTER the substrate dispatch + artifact retrieval to decide whether to dispatch
-// k3sPostProvision. A no-op (nil, nil, no error) when dir is empty, mirroring the former core
-// Add()'s own `if dir != "" { ... }` guard.
+// candiesForPlans resolves the candies backing plans PLUGIN-SIDE from the resolved-project envelope
+// (envelopeCandyModels — the SAME candy set command:bundle already fetched to compile the plans) +
+// the shared deploykit.SelectCandiesForPlans pick. #55 K4: no host scan, no "deploy-candy-secrets"
+// seam — the envelope already holds every candy the plan references (by construction).
+func candiesForPlans(dir string, plans []*deploykit.InstallPlan) ([]spec.CandyReader, error) {
+	rp, err := fetchResolvedProject(dir, nil, false)
+	if err != nil {
+		return nil, err
+	}
+	return deploykit.SelectCandiesForPlans(plans, envelopeCandyModels(rp)), nil
+}
+
+// injectCandySecrets resolves the candies backing plans + their secret_requires:/secret_accepts: env
+// PLUGIN-SIDE (deploykit.ResolveSecretForCandy over the shared verb:credential CredentialAccess) and
+// injects it into plans' TaskSteps via deploykit.InjectSecretsIntoPlans — #55 K4 config-write cone,
+// no host "deploy-candy-secrets" seam. Returns the resolved secret_env (the caller folds it into the
+// artifact-retrieval env) + the register hints (e.g. "kubeconfig") the caller consults AFTER the
+// substrate dispatch + artifact retrieval to decide whether to dispatch k3sPostProvision. A no-op
+// (nil, nil, no error) when dir is empty, mirroring the former core Add()'s `if dir != "" { ... }`.
 func injectCandySecrets(ctx context.Context, exec *sdk.Executor, dir string, plans []*deploykit.InstallPlan) (map[string]string, []string, error) {
 	if dir == "" {
 		return nil, nil, nil
 	}
-	views := make([]spec.InstallPlanView, 0, len(plans))
-	for _, p := range plans {
-		if p != nil {
-			views = append(views, deploykit.WireView(p))
-		}
-	}
-	plansJSON, err := json.Marshal(views)
-	if err != nil {
-		return nil, nil, fmt.Errorf("marshal plans for secret resolution: %w", err)
-	}
-	reqJSON, err := json.Marshal(spec.DeployCandySecretsRequest{Dir: dir, PlansJSON: plansJSON})
-	if err != nil {
-		return nil, nil, err
-	}
-	resJSON, err := exec.HostBuild(ctx, "deploy-candy-secrets", reqJSON)
+	candyList, err := candiesForPlans(dir, plans)
 	if err != nil {
 		return nil, nil, fmt.Errorf("loading candies for secret resolution: %w", err)
 	}
-	var reply spec.DeployCandySecretsReply
-	if len(resJSON) > 0 {
-		if err := json.Unmarshal(resJSON, &reply); err != nil {
-			return nil, nil, fmt.Errorf("decode deploy-candy-secrets reply: %w", err)
-		}
+	secretEnv := deploykit.ResolveSecretForCandy(candyList, deploykit.CredentialAccessViaExecutor(ctx, exec))
+	registers := spec.CandyArtifactRegisters(candyList)
+	hints := make([]string, 0, len(registers))
+	for register := range registers {
+		hints = append(hints, register)
 	}
-	deploykit.InjectSecretsIntoPlans(plans, reply.SecretEnv)
-	return reply.SecretEnv, reply.RegisterHints, nil
+	deploykit.InjectSecretsIntoPlans(plans, secretEnv)
+	return secretEnv, hints, nil
 }
 
-// retrieveArtifactsAndDispatchRegisters pulls back the deploy's candy artifacts (via the
-// "deploy-artifacts-retrieve" HostBuild seam, over the ALREADY-established venue) and then
+// retrieveArtifactsAndDispatchRegisters pulls back the deploy's candy artifacts PLUGIN-SIDE
+// (deploykit.RetrieveCandyArtifacts — #55 K4, no "deploy-artifacts-retrieve" host seam) and then
 // dispatches whichever register hint handlers apply (dispatchRegisterHints below). The caller
 // (handleDeployApply) only reaches this on the non-dry-run, substrate-dispatch-succeeded path —
 // dryRun is handled entirely by that earlier early-return, so this function is never itself
 // called under dry-run (matching the former retrieveArtifactsAndK3s's own DryRun early-return,
 // one level up).
 func retrieveArtifactsAndDispatchRegisters(ctx context.Context, exec *sdk.Executor, dir string, plans []*deploykit.InstallPlan, artifactKey, deployName string, artifactEnv map[string]string, registerHints []string) error {
-	views := make([]spec.InstallPlanView, 0, len(plans))
-	for _, p := range plans {
-		if p != nil {
-			views = append(views, deploykit.WireView(p))
-		}
-	}
-	plansJSON, err := json.Marshal(views)
+	candyList, err := candiesForPlans(dir, plans)
 	if err != nil {
-		return fmt.Errorf("marshal plans for artifact retrieval: %w", err)
+		return fmt.Errorf("loading candies for artifact retrieval: %w", err)
 	}
-	reqJSON, err := json.Marshal(spec.DeployArtifactsRetrieveRequest{
-		Dir: dir, PlansJSON: plansJSON, ArtifactKey: artifactKey, DeployName: deployName, ArtifactEnv: artifactEnv,
-	})
-	if err != nil {
-		return err
-	}
-	if _, err := exec.HostBuild(ctx, "deploy-artifacts-retrieve", reqJSON); err != nil {
+	// Readiness: spec.ResolveReadiness(nil) reads CHARLY_READINESS_* env + built-in defaults —
+	// byte-identical to the host TODAY (zero configs set defaults.readiness:). NAMED EXIT #87
+	// (spec.Threaded CUE-sourcing): threading the project defaults.readiness: block plugin-side is
+	// deferred there — spec.Threaded is a hand-written wire type today, so readiness must NOT ride it;
+	// env+defaults is the SDD-compliant + currently-equivalent path. A nil config never errors.
+	readiness, _ := spec.ResolveReadiness(nil)
+	// Byte-equivalent to the deleted "deploy-artifacts-retrieve" seam: it re-materialized the venue
+	// from req.VenueJSON, which this path never set → it always fell to a host ShellExecutor (the
+	// artifacts are pulled to the operator host via podman, matching k3sPostProvision's own
+	// shell-venue idiom, which explicitly runs on the operator host's filesystem).
+	if err := deploykit.RetrieveCandyArtifacts(ctx, kit.ShellExecutor{}, candyList, kit.SanitizeDeployName(artifactKey), artifactEnv, spec.EmitOpts{}, readiness); err != nil {
 		return fmt.Errorf("retrieving candy artifacts: %w", err)
 	}
 	return dispatchRegisterHints(ctx, exec, artifactKey, deployName, registerHints)
