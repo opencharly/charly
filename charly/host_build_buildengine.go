@@ -153,13 +153,19 @@ func collectNamespaceScanEntries(uf *spec.UnifiedFile, prefix, dir string, opts 
 		}
 		// The ONE cfg-coupled step: the namespace-scoped reachability walk over the namespace's
 		// own cfg + its candies' raw @-refs — byte-identical to scanSeamsFor(sub,
-		// opts).CollectRemoteRefs(scanned) (the deleted host namespaced-box fill's scan seam). The
-		// plugin's ScanSeams.CollectRemoteRefs returns this verbatim; EnsureRepo/ScanRemote still
-		// round-trip to the cfg-agnostic host legs for the transitive fetch.
-		var downloads []spec.RemoteDownload
-		if len(scanned) > 0 {
-			downloads, _ = CollectRemoteRefsOpts(sub, requireProjectLoader().FinalizeScannedCandies(scanned, nil), withLocalRawRefs(opts, scanned))
-		}
+		// opts).CollectRemoteRefs(scanned) (the deleted host namespaced-box fill's scan seam): it
+		// runs UNCONDITIONALLY, because CollectRemoteRefsOpts walks sub.Box (the namespace's boxes)
+		// to collect the boxes' candy @-refs — independent of whether the namespace has ANY local
+		// candies. A namespace that VENDORS NO candies of its own but whose boxes pin remote candies
+		// (the distro-fedora case: every candy is an @github.com/opencharly/charly/candy/<name>:<tag>
+		// ref) still has box candy refs to fetch; the former `if len(scanned) > 0` guard skipped the
+		// walk for such a namespace, dropping the box candy refs so the plugin's fix-point fetched
+		// nothing → "candy not found" on every namespaced box (R1 RCA: bisect first-bad = coneK1load
+		// b367e5d5). The plugin's ScanSeams.CollectRemoteRefs returns this verbatim;
+		// EnsureRepo/ScanRemote still round-trip to the cfg-agnostic host legs for the transitive
+		// fetch. FinalizeScannedCandies / withLocalRawRefs are nil/empty-safe (range over nil is a
+		// no-op), so an empty `scanned` degrades to a boxes-only walk — exactly origin/main's shape.
+		downloads, _ := CollectRemoteRefsOpts(sub, requireProjectLoader().FinalizeScannedCandies(scanned, nil), withLocalRawRefs(opts, scanned))
 		reply.Entries = append(reply.Entries, spec.NamespaceScanEntry{
 			Child:     child,
 			Scanned:   scanned,
