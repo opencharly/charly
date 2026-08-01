@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"flag"
 	"os"
@@ -217,7 +218,7 @@ func writeResolvedProjectFixtureProject(t *testing.T) string {
 // seam, now fetches its render-prepped envelope plugin-side instead via
 // InvokeProvider("build","generate",OpResolve,…) — candy/plugin-build's own resolveBuildEngine runs
 // the SAME loaderkit.ProjectResolvedProject call this test-side reproduction makes, wiring the
-// SAME core-only ResolveProjectSeams closures (fillNamespacedBoxes/resolveResources/
+// SAME core-resident ResolveProjectSeams closures (foldNamespaceScanInProc/resolveResources/
 // ComputeIntermediates/externalizedBuilders) a plugin-side caller cannot supply itself). Kept
 // test-side because this exact "project a *spec.ResolvedProject from a live cfg/layers/uf/
 // pre-resolved-boxes" shape has no OTHER core-resident caller anymore, and this file's + the
@@ -238,8 +239,11 @@ func testProjectResolvedProjectWithBoxes(cfg *Config, layers map[string]spec.Can
 			}
 			return buildkit.ResolveBox(cfg, name, calver, dir, bkopts)
 		},
-		FillNamespacedBoxes: func(nsUF *spec.UnifiedFile, ic *buildkit.InitConfig, prefix, calver, dir string, rp *spec.ResolvedProject, visited map[*spec.UnifiedFile]bool) {
-			fillNamespacedBoxes(nsUF, ic, prefix, calver, dir, opts, rp, visited)
+		FillNamespacedBoxes: func(rootUF *spec.UnifiedFile, ic *buildkit.InitConfig, prefix, calver, dir string, rp *spec.ResolvedProject, _ map[*spec.UnifiedFile]bool) {
+			if prefix != "" {
+				return // the host leg does the full namespace recursion; only the root call dispatches
+			}
+			foldNamespaceScanInProc(rootUF, ic, calver, dir, opts, distroCfg, builderCfg, rp)
 		},
 		ResolveResources:      resolveResources,
 		ShouldIncludeDisabled: opts.ShouldIncludeDisabled,
@@ -251,6 +255,81 @@ func testProjectResolvedProjectWithBoxes(cfg *Config, layers map[string]spec.Can
 		rp.Primaries = loaderThreaded().Primaries
 	}
 	return rp, err
+}
+
+// foldNamespaceScanInProc is the test-side reproduction of candy/plugin-build's
+// foldNamespaceScanEntries production fold over the buildengine-namespaced scan reply: fetch the
+// host's FLAT NamespaceScanReply (hostBuildNamespaced, in-process — no hostBuildJSON round-trip
+// needed for a test), then for each entry descend the root uf.Namespaces tree to recover the
+// namespace's *spec.Config, run the candy-scan fetch fix-point (loaderkit.ScanCandyFromLocal over
+// the host-pre-computed scanned + downloads, with the host's OWN EnsureRepo/ScanRemote since the
+// test is in-process), then deploykit.RawCandyPair + deploykit.FillNamespaceBoxViews — the same
+// deploykit calls the deleted host namespaced-box fill ran, now plugin-side in production. Kept
+// test-side (mirroring testProjectResolvedProjectWithBoxes/testBkOpts/testComputeIntermediates)
+// because no core-resident caller needs the fold; a test MAY import deploykit/loaderkit.
+func foldNamespaceScanInProc(rootUF *spec.UnifiedFile, ic *buildkit.InitConfig, calver, dir string, opts spec.ResolveOpts, distroCfg *spec.DistroConfig, builderCfg *spec.BuilderConfig, rp *spec.ResolvedProject) {
+	reply, err := hostBuildNamespaced(context.Background(), spec.BuildResolveRequest{Dir: dir, Tag: calver, IncludeDisabled: opts.IncludeDisabled}, buildEngineContext{})
+	if err != nil || len(reply.Entries) == 0 {
+		return
+	}
+	vopts := spec.ResolveOpts{IncludeDisabled: opts.IncludeDisabled, DistroCfg: distroCfg, BuilderCfg: builderCfg, InitCfg: ic}
+	for _, entry := range reply.Entries {
+		subUF := descendNamespaceUF(rootUF, entry.Child)
+		if subUF == nil {
+			continue
+		}
+		sub := subUF.ProjectConfig()
+		seams := spec.ScanSeams{
+			CollectRemoteRefs: func(_ map[string]spec.ScannedCandy) ([]spec.RemoteDownload, error) {
+				return entry.Downloads, nil
+			},
+			EnsureRepo: EnsureRepoDownloaded,
+			ScanRemote: func(cacheDir, repoPath string, wantRefs map[string]bool) (map[string]spec.ScannedCandy, error) {
+				return requireCandyScanner().ScanRemoteCandy(cacheDir, repoPath, wantRefs, parseCandyYAML)
+			},
+		}
+		nsLayers, scanErr := loaderkit.ScanCandyFromLocal(entry.Scanned, ic, seams)
+		if scanErr != nil {
+			continue // best-effort/additive, matching the deleted host fill's tolerance
+		}
+		for name, c := range nsLayers {
+			if c == nil {
+				continue
+			}
+			m, v, ok := deploykit.RawCandyPair(c)
+			if !ok {
+				continue
+			}
+			if rp.Candies == nil {
+				rp.Candies = map[string]spec.CandyView{}
+				rp.CandyModels = map[string]spec.CandyModel{}
+			}
+			if _, exists := rp.CandyModels[name]; !exists {
+				rp.Candies[name] = v
+				rp.CandyModels[name] = m
+			}
+		}
+		deploykit.FillNamespaceBoxViews(sub, nsLayers, ic, entry.Child, calver, dir, vopts, rp)
+	}
+}
+
+// descendNamespaceUF is the test-side in-process copy of candy/plugin-build's
+// resolveNamespaceUFByPath: descend the root uf.Namespaces tree by the dotted child path to the
+// namespace's *spec.UnifiedFile. (A test cannot import candy/plugin-build; the 3-line descent is
+// reproduced here rather than promoted to spec for one test caller.)
+func descendNamespaceUF(rootUF *spec.UnifiedFile, child string) *spec.UnifiedFile {
+	if child == "" {
+		return rootUF
+	}
+	uf := rootUF
+	for _, part := range strings.Split(child, ".") {
+		next := uf.Namespaces[part]
+		if next == nil {
+			return nil
+		}
+		uf = next
+	}
+	return uf
 }
 
 // testBkOpts reproduces the former core build-vocab resolve-opts projection (removed in #55 Cluster-B — charly

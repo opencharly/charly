@@ -96,24 +96,77 @@ func hostBuildConnectPlugins(_ context.Context, req spec.ResolvedProjectRequest,
 	return map[string]string{}, nil
 }
 
-// hostBuildNamespaced pre-computes the namespace-qualified box views + each namespace's own candy scan
-// (the ResolveProjectSeams.FillNamespacedBoxes leg — it embeds a nested scan + render-prep the plugin
-// can't cheaply run). Returns a PARTIAL spec.ResolvedProject carrying only Boxes/Candies/CandyModels,
-// which the plugin merges additively.
-func hostBuildNamespaced(_ context.Context, req spec.BuildResolveRequest, _ buildEngineContext) (spec.ResolvedProject, error) {
+// hostBuildNamespaced recurses the project's import-namespace tree ONCE and returns a FLAT
+// spec.NamespaceScanReply: one entry per namespace carrying its PRE-fix-point scanned candies +
+// the namespace-scoped INITIAL remote-download set (the ResolveProjectSeams.FillNamespacedBoxes leg
+// — K1 loader-cone fabric-tail, #55). The plugin (candy/plugin-build's FillNamespacedBoxes seam)
+// iterates the list and runs the candy-scan fetch fix-point (loaderkit.ScanCandyFromLocal) +
+// deploykit.RawCandyPair + deploykit.FillNamespaceBoxViews plugin-side — the deploykit calls left
+// core when charly/resolved_project_host.go was deleted (the file's own L26-32 named exit). The
+// host keeps ONLY the genuinely host-coupled steps: projectCandiesScanned (reads subUF.Candy
+// in-memory — the R1 fix) + the reachability walk (CollectRemoteRefsOpts over the namespace's own
+// cfg). initCfg/calver/dir come from the plugin's own resolve context and are NOT duplicated here.
+// Best-effort/additive: a project-less or unresolvable dir returns an empty reply.
+func hostBuildNamespaced(_ context.Context, req spec.BuildResolveRequest, _ buildEngineContext) (spec.NamespaceScanReply, error) {
 	dir := reqDirOrCwd(req.Dir)
 	opts := boxResolveOpts(nil, req.IncludeDisabled)
 	lp, err := loadProjectForResolve(dir, opts, nil)
 	if err != nil || lp.empty || lp.uf == nil {
-		return spec.ResolvedProject{}, nil // best-effort/additive
+		return spec.NamespaceScanReply{}, nil // best-effort/additive
 	}
-	calver := req.Tag
-	if calver == "" {
-		calver = ComputeCalVer()
+	reply := spec.NamespaceScanReply{}
+	collectNamespaceScanEntries(lp.uf, "", dir, opts, &reply, map[*spec.UnifiedFile]bool{})
+	return reply, nil
+}
+
+// collectNamespaceScanEntries recurses uf.Namespaces and appends one spec.NamespaceScanEntry per
+// namespace (FLAT, nested-qualified by child = prefix+"."+ns) to reply. dir is the OUTER project
+// dir — the fallback for a namespace's own RootDir when resolving a discovered candy's From: path
+// (a namespace's candy paths are relative to the NAMESPACE's root, not the caller's; matches the
+// deleted host namespaced-box fill's nsDir fallback). The visited cycle-guard mirrors the deleted fill.
+// A namespace whose candy scan fails contributes an empty (skipped) entry — best-effort/additive,
+// never fatal, matching the deleted fill's tolerance.
+func collectNamespaceScanEntries(uf *spec.UnifiedFile, prefix, dir string, opts spec.ResolveOpts, reply *spec.NamespaceScanReply, visited map[*spec.UnifiedFile]bool) {
+	if uf == nil || visited[uf] {
+		return
 	}
-	scratch := &spec.ResolvedProject{}
-	fillNamespacedBoxes(lp.uf, lp.initCfg, "", calver, dir, opts, scratch, map[*spec.UnifiedFile]bool{})
-	return *scratch, nil
+	visited[uf] = true
+	for ns, subUF := range uf.Namespaces {
+		if subUF == nil {
+			continue
+		}
+		child := ns
+		if prefix != "" {
+			child = prefix + "." + ns
+		}
+		sub := subUF.ProjectConfig()
+		nsDir := subUF.RootDir
+		if nsDir == "" {
+			nsDir = dir
+		}
+		// projectCandiesScanned reads subUF.Candy directly (no re-load, no directory mismatch —
+		// the R1 fix preserved from the deleted host namespaced-box fill): covers BOTH a namespace's
+		// own local discover:-found candies AND its inline candy: nodes.
+		var scanned map[string]spec.ScannedCandy
+		if localScanned, lErr := projectCandiesScanned(subUF, nsDir); lErr == nil {
+			scanned = localScanned
+		}
+		// The ONE cfg-coupled step: the namespace-scoped reachability walk over the namespace's
+		// own cfg + its candies' raw @-refs — byte-identical to scanSeamsFor(sub,
+		// opts).CollectRemoteRefs(scanned) (the deleted host namespaced-box fill's scan seam). The
+		// plugin's ScanSeams.CollectRemoteRefs returns this verbatim; EnsureRepo/ScanRemote still
+		// round-trip to the cfg-agnostic host legs for the transitive fetch.
+		var downloads []spec.RemoteDownload
+		if len(scanned) > 0 {
+			downloads, _ = CollectRemoteRefsOpts(sub, requireProjectLoader().FinalizeScannedCandies(scanned, nil), withLocalRawRefs(opts, scanned))
+		}
+		reply.Entries = append(reply.Entries, spec.NamespaceScanEntry{
+			Child:     child,
+			Scanned:   scanned,
+			Downloads: downloads,
+		})
+		collectNamespaceScanEntries(subUF, child, dir, opts, reply, visited)
+	}
 }
 
 // hostBuildPrep populates the render-seam-floor renderGenCache with a CHEAP candy-scan-only

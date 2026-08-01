@@ -1,16 +1,15 @@
 package main
 
 import (
-	"context"
 	"testing"
 
 	"github.com/opencharly/spec/spec"
 )
 
 // resolved_project_namespace_test.go — K1-unblock wave 2: proves the namespace-qualified
-// flattening added to spec.UnifiedFile.ProjectTemplates/fillNamespacedBoxes (resolved_project_host.go), and the
-// resulting functional fix to findK8sSpec (k8s_config.go), which previously supported ONLY
-// root-scoped `k8s:` entity names.
+// flattening added to spec.UnifiedFile.ProjectTemplates (and the namespaced-box resolve the deleted
+// resolved_project_host.go's namespaced-box fill used to drive), and the resulting functional fix to
+// findK8sSpec (k8s_config.go), which previously supported ONLY root-scoped `k8s:` entity names.
 
 // writeNamespaceImportFixture builds a minimal 2-repo-style namespace import: the root imports
 // "fedora.yml" under the "fedora" alias, which declares one resolvable box (jupyter) and one
@@ -66,15 +65,16 @@ func TestProjectTemplates_NamespaceQualified(t *testing.T) {
 // TestFillNamespacedBoxes_QualifiedView proves the resolved-project envelope's rp.Boxes carries a
 // namespace-qualified spec.ResolvedBoxView ("fedora.jupyter") for a box reachable only through an
 // import namespace, in addition to (additive, never replacing) the root-scoped boxes. Drives the
-// LIVE hostBuildNamespaced (host_build_buildengine.go) directly — the production caller of
-// fillNamespacedBoxes candy/plugin-build's resolveBuildEngine reaches for its own namespaced-box
-// resolution (#55 step3 3-II deleted the dead projectResolvedProjectWithBoxes wrapper this test
-// used to go through instead).
+// FULL resolve (hostBuildNamespaced's FLAT NamespaceScanReply → the plugin-side fold:
+// loaderkit.ScanCandyFromLocal + deploykit.RawCandyPair + deploykit.FillNamespaceBoxViews) via
+// testBuildResolvedProject — the test-side reproduction of candy/plugin-build's resolveBuildEngine
+// namespaced-box resolution (#55 K1 loader-cone fabric-tail deleted the host namespaced-box fill;
+// the deploykit calls relocated plugin-side, reproduced test-side by foldNamespaceScanInProc).
 func TestFillNamespacedBoxes_QualifiedView(t *testing.T) {
 	root := writeNamespaceImportFixture(t)
-	rp, err := hostBuildNamespaced(context.Background(), spec.BuildResolveRequest{Dir: root}, buildEngineContext{})
+	rp, err := testBuildResolvedProject(t, root, spec.ResolveOpts{})
 	if err != nil {
-		t.Fatalf("hostBuildNamespaced: %v", err)
+		t.Fatalf("testBuildResolvedProject: %v", err)
 	}
 	view, ok := rp.Boxes["fedora.jupyter"]
 	if !ok {

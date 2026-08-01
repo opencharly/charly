@@ -469,9 +469,11 @@ func ScanAllCandyWithConfigOpts(dir string, cfg *Config, opts spec.ResolveOpts) 
 // scanCandyFromLocal is ScanAllCandyWithConfigOpts's step-2-onward body (remote-ref collect,
 // fix-point fetch, per-entity-version arbitration, host-completion + finalize) — now a THIN host
 // wrapper (K3 U4-b) that builds the ScanSeams host-coupled legs and delegates the pure fix-point to
-// the loaderkit scan mechanism through the ProjectLoader seam (requireProjectLoader). fillNamespacedBoxes
-// calls this with its own namespace-local (localScanned, cfg) — whose set comes from
-// subUF.projectCandiesScanned(dir), NOT scanLocalCandies — so it reaches the SAME pipeline.
+// the loaderkit scan mechanism through the ProjectLoader seam (requireProjectLoader). The ROOT
+// project's ScanAllCandyWithConfigOpts calls this with its own (localScanned, cfg); the
+// namespaced-box resolve used to call it too (via the deleted host namespaced-box fill), but that fold
+// now runs plugin-side — candy/plugin-build's foldNamespaceScanEntries calls loaderkit.
+// ScanCandyFromLocal directly over the host's per-namespace NamespaceScanReply inputs.
 // Behavior-identical to the pre-move function (same steps 2-5).
 func scanCandyFromLocal(localScanned map[string]spec.ScannedCandy, cfg *Config, opts spec.ResolveOpts) (map[string]spec.CandyReader, error) {
 	return requireProjectLoader().ScanCandyFromLocal(localScanned, opts.InitCfg, scanSeamsFor(cfg, opts))
