@@ -2,57 +2,64 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/container"
 	specexec "github.com/opencharly/spec/exec"
 	"github.com/opencharly/spec/spec"
 )
 
 // build_overlay.go — the HOST-SIDE pod-overlay build prep seam (M4 + P11c, SHRUNK further in #55
-// step3 3-II). The overlay's render-prepped resolved-project envelope now comes from
-// candy/plugin-deploy-pod's OWN InvokeProvider("build","generate",sdk.OpResolve,{Boxes:[base],
-// ExtraCandyRefs:overlayCandies}) call — the SAME plugin-side resolveBuildEngine pipeline the main
-// build:box/build:generate drive already runs (RDD-proven live: InitSystem/InitDef/BakedMetadata
-// populate on this Op, unlike build:project's deliberately-lean resolve) — instead of this host
-// seam reconstructing a separate *Generator via the now-DELETED NewGenerator. That plugin-side
-// resolveBuildEngine call ALSO already stages remote add_candy: candy sources (runHostFSPrep's
-// createRemoteCandyCopies, K3 host-prep move) and resolves per-candy security (spec.CandyModel.Security
-// is wire-carried; the candy computes it itself via candyByName(dg.Candies,name).Security(), no host
-// fetch needed). What GENUINELY remains host-only here: the base-image metadata a live podman
-// executor must read (BaseUser/BaseSecurity/BaseRegistry, via ExtractMetadata + the OCI registry
-// label — a sdk-only candy cannot exec podman inspect itself), and re-attaching the LIVE plans +
-// parent venue that ride the ctx (overlayBuildInputs, set by the host's own PrepareVenue dispatch,
-// never serialized) — plus a minimal buildEngineContext for the "oci-emit-step" step-emitter
+// step3 3-II, then the #55 coneB-br2 cutover shed its last sdk/deploykit imports). The overlay's
+// render-prepped resolved-project envelope now comes from candy/plugin-deploy-pod's OWN
+// InvokeProvider("build","generate",sdk.OpResolve,{Boxes:[base],ExtraCandyRefs:overlayCandies}) call
+// — the SAME plugin-side resolveBuildEngine pipeline the main build:box/build:generate drive already
+// runs (RDD-proven live: InitSystem/InitDef/BakedMetadata populate on this Op, unlike
+// build:project's deliberately-lean resolve) — instead of this host seam reconstructing a separate
+// *Generator via the now-DELETED NewGenerator. That plugin-side resolveBuildEngine call ALSO
+// already stages remote add_candy: candy sources (runHostFSPrep's createRemoteCandyCopies, K3
+// host-prep move) and resolves per-candy security (spec.CandyModel.Security is wire-carried; the
+// candy computes it itself via candyByName(dg.Candies,name).Security(), no host fetch needed).
+// candy/plugin-deploy-pod's buildOverlay ALSO resolves the overlay candies' secret_requires:/
+// secret_accepts: env PLUGIN-SIDE (deploykit.SelectCandiesForPlans + ResolveSecretForCandy over
+// deploykit.CredentialAccessViaExecutor + InjectSecretsIntoPlans, mirroring
+// candy/plugin-bundle/secrets_artifacts.go) — the former host-side resolveCandySecrets +
+// InjectSecretsIntoPlans + the enc.go coreCredentialAccess adapter + layer_secrets.go are DELETED
+// in the coneB-br2 cutover (the deploykit import this file carried for them is gone).
+//
+// What GENUINELY remains host-only here: the base-image metadata a live podman executor must read
+// (BaseUser/BaseSecurity/BaseRegistry, via ExtractMetadata + the OCI registry label — a sdk-only
+// candy cannot exec podman inspect itself), and re-attaching the LIVE plans + parent venue that
+// ride the ctx (overlayBuildInputs, set by the host's own PrepareVenue dispatch, never serialized)
+// — plus a minimal buildEngineContext for the "oci-emit-step" step-emitter
 // (charly/step_emit_hostbuild.go's stepEmitOCIEmitStep → dispatchOCIStep), which reads ONLY
 // build.Box.Name (env.Image) and build.Generator.DevLocalPkg/ExtraCandyRefs (env.DevLocalPkg/
-// ExtraCandyRefs — the latter is the RCA'd fix that widens candy/plugin-installstep's OWN
-// independent envelope re-fetch for the SAME overlay candies, still required). build.DistroCfg
-// itself has no confirmed live reader on the step-emit path today (traced: dispatchOCIStep never
-// touches it — the step-emit words that DO care about distro/format read it off their OWN
-// candy-side envelope's box.DistroDef, derived from the box's wire-carried .Distro tag, not from
-// this host struct) — but the podDistroDef VALUE it wraps still MUST reflect the BASE IMAGE's own
-// distro (R1 FIX, caught by team-lead's code reading: the former detectHostContext() fallback used
-// the OPERATOR HOST's distro, a live cross-distro bug on any host whose distro differs from the
-// base image's — e.g. an Arch/CachyOS host building a Fedora-based overlay). Sourced via a cheap,
-// standalone buildkit.ResolveBox for JUST the base box name (no candy scan needed — the base
-// image's own declared distro: list is independent of the overlay candies), mirroring exactly what
-// the deleted NewGenerator's gen.Boxes[base].Distro gave the OLD code; detectHostContext() is now
-// ONLY a last-resort fallback if that lightweight resolve fails.
+// ExtraCandyRefs — the latter widens candy/plugin-installstep's OWN independent envelope re-fetch
+// for the SAME overlay candies). build.DistroCfg is nil on the overlay path: the step-emit words
+// that care about distro/format read their OWN candy-side envelope's box.DistroDef (derived from
+// the box's wire-carried .Distro tag — the base-distro render is plugin-side via
+// dg.Boxes[env.Image].DistroDef in candy/plugin-installstep's emitSystemPackages, K5-A/C1.2), NOT
+// this host struct; the former resolveOverlayBaseDistroDef host resolve (deploykit.ResolveSpecBox
+// for the base .Distro) was DEAD on the step-emit path and is DELETED (R1 doc-divergence: the prior
+// comment claimed it "MUST reflect the base distro" but the trace proved no live reader —
+// dispatchOCIStep never touched it). nil is the safe value (safer than the former
+// detectHostContext() operator-host fallback that was the original cross-distro bug;
+// detectHostContext + resolveDistroDef were DELETED in #55 coneB-br2 Group 2 — their sole caller
+// resolveOverlayBaseDistroDef above was dropped, deadening them; the deploy compile uses the
+// plugin's own twin candy/plugin-bundle/dispatch.go detectHostContext).
 //
 // The candy (plugin-deploy-pod podPrepareVenue) calls this shrunk seam via HostBuild("overlay")
 // FIRST (to learn reply.Plans, needed to compute the overlay candy set), THEN makes its own
 // render-prepped resolve call, constructs its deploykit.Generator via the shared
-// deploykit.NewRenderGeneratorFromProject (unchanged, #67/P11c), renders the overlay Containerfile
-// in its own code, and runs podman build + the alias tag via the served executor. The per-step
-// Containerfile fragments are rendered HOST-SIDE via the generic "step-emit" host-builder
-// (HostBuild("step-emit", "oci-emit-step") → ociEmitStep), unchanged by this cutover.
+// deploykit.NewRenderGeneratorFromProject (unchanged, #67/P11c), resolves + injects the overlay
+// candies' secrets plugin-side, renders the overlay Containerfile in its own code, and runs
+// podman build + the alias tag via the served executor. The per-step Containerfile fragments are
+// rendered HOST-SIDE via the generic "step-emit" host-builder (HostBuild("step-emit",
+// "oci-emit-step") → ociEmitStep), unchanged by this cutover.
 
 // overlayBuilderKind is the F10 hostBuilders key for the pod-overlay build — a generic action noun,
 // the pod-substrate sibling of "image"/"containerfiles"/"plugin-binary"/"cli". Deliberately NOT a
@@ -123,11 +130,6 @@ func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ build
 		parentVolumes = parentNode.Volume
 	}
 
-	distroCfg, _, _, err := LoadDefaultBuildConfig(dir)
-	if err != nil {
-		return spec.OverlayBuildReply{}, fmt.Errorf("load build config: %w", err)
-	}
-
 	base := req.Image
 	if base == "" {
 		base = req.DeployName
@@ -141,14 +143,6 @@ func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ build
 	// part of the candy's OWN InvokeProvider("build","generate",...) resolve (runHostFSPrep's
 	// createRemoteCandyCopies, K3 host-prep move) before this seam is ever reached.
 	overlayCandies := collectOverlayCandies(plans)
-
-	// DistroDef sourced from the BASE IMAGE's own resolved distro tag, NOT the operator host's
-	// (R1 FIX, caught by team-lead's code reading: an overlay layers ON the base image, so its
-	// per-step distro-format rendering must target the BASE's distro — this host runs Arch/CachyOS
-	// while check-pod-overlay's base is Fedora, so the former detectHostContext() fallback was a
-	// live cross-distro bug waiting for a reader, not merely a latent one). See
-	// resolveOverlayBaseDistroDef's own doc for the cheap resolve + fallback shape.
-	podDistroDef := resolveOverlayBaseDistroDef(dir, base, distroCfg)
 
 	var baseRef string
 	switch {
@@ -166,12 +160,6 @@ func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ build
 	if strings.Contains(deployName, ".") {
 		deployName = specexec.NestedContainerName(deployName)
 	}
-
-	secretEnv, _, serr := resolveCandySecrets(plans, dir)
-	if serr != nil {
-		return spec.OverlayBuildReply{}, fmt.Errorf("loading candies for secret resolution: %w", serr)
-	}
-	deploykit.InjectSecretsIntoPlans(plans, secretEnv)
 
 	// Base-image metadata (ExtractMetadata + the registry label) — the candy emits the post-overlay
 	// USER restore + the security LABEL from these (it cannot run podman inspect itself). The
@@ -212,7 +200,7 @@ func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ build
 	// contextRelPrefix = buildDir convention).
 	overlayBuildDir := filepath.Join(".build", "overlay-"+deployName)
 	build := buildEngineContext{
-		DistroCfg:        spec.WrapDistroDef(podDistroDef),
+		DistroCfg:        spec.WrapDistroDef(nil),
 		Generator:        &Generator{ExtraCandyRefs: overlayCandies},
 		Box:              &spec.ResolvedBox{Name: base},
 		ImageBuildDir:    overlayBuildDir,
@@ -240,17 +228,18 @@ var _ = func() bool {
 
 // overlayBuildContextCache holds the live overlay buildEngineContext per project dir for the
 // "step-emit" host-builder's "oci-emit-step" emitter (P11c). Populated by hostBuildOverlay's
-// prep+resolve (the overlay core *Generator + DistroDef/BuilderConfig/Box/ImageBuildDir/
-// ContextRelPrefix, constructed with the deploy's add_candy refs as ExtraCandyRefs); read by the
-// "oci-emit-step" step-emitter when an OUT-OF-PROCESS caller (candy/plugin-deploy-pod) invokes
-// HostBuild("step-emit", {Word:"oci-emit-step", …}) — the live buildEngineContext cannot cross the
-// wire, so the candy passes only the Dir key + the host looks up the cached context. One entry per
-// dir per process — mirrors renderGenCache (the box-build's per-dir Generator cache for its
-// render-seam). The render-seam host-builder (hostBuildRenderSeam) reads the overlay core
-// *Generator from renderGenCache[dir] (the overlay prep stores it there too, so the render-seam
-// handlers — RenderService for GenerateInitFragments — work for the overlay unchanged); this cache
-// holds the FULL buildEngineContext the step-emit emitter needs (DistroCfg/BuilderConfig/Box/
-// ImageBuildDir/ContextRelPrefix alongside the Generator).
+// prep (the overlay core *Generator + Box/ImageBuildDir/ContextRelPrefix, constructed with the
+// deploy's add_candy refs as ExtraCandyRefs; DistroCfg is nil on the overlay path — see this
+// file's header); read by the "oci-emit-step" step-emitter when an OUT-OF-PROCESS caller
+// (candy/plugin-deploy-pod) invokes HostBuild("step-emit", {Word:"oci-emit-step", …}) — the live
+// buildEngineContext cannot cross the wire, so the candy passes only the Dir key + the host looks
+// up the cached context. One entry per dir per process — mirrors renderGenCache (the box-build's
+// per-dir Generator cache for its render-seam). The render-seam host-builder (hostBuildRenderSeam)
+// reads the overlay core *Generator from renderGenCache[dir] (the overlay prep stores it there
+// too, so the render-seam handlers — RenderService for GenerateInitFragments — work for the
+// overlay unchanged); this cache holds the buildEngineContext the step-emit emitter needs
+// (Box/ImageBuildDir/ContextRelPrefix alongside the Generator — dispatchOCIStep reads only
+// build.Box.Name + build.Generator.DevLocalPkg/ExtraCandyRefs, never DistroCfg).
 var overlayBuildContextCache sync.Map
 
 // storeOverlayBuildContext caches the overlay buildEngineContext for dir (the "oci-emit-step"
@@ -272,30 +261,6 @@ func loadOverlayBuildContext(dir string) *buildEngineContext {
 		return nil
 	}
 	return v.(*buildEngineContext)
-}
-
-// resolveOverlayBaseDistroDef resolves the pod-overlay's per-step distro-format vocabulary from the
-// BASE IMAGE's OWN declared distro tag (R1 FIX — team-lead's code reading: the overlay layers ON
-// the base image, so system-packages/format rendering must target the BASE's distro, never the
-// operator HOST's — an Arch/CachyOS host building a Fedora-based overlay is a live, not merely
-// latent, cross-distro bug). A cheap, standalone buildkit.ResolveBox for JUST the named base box —
-// no candy scan, no ExtraCandyRefs needed, since a box's own distro: list is independent of which
-// candies later get overlaid onto it — mirrors exactly what the deleted NewGenerator's
-// gen.Boxes[base].Distro gave the OLD code, without needing the deleted full-resolve machinery.
-// Falls back to the operator host's own distro ONLY if that lightweight resolve fails (e.g. an
-// unresolvable/synthetic base name) — the same defensive floor the OLD code had no equivalent for,
-// since NewGenerator's full resolve either succeeded or the whole build failed loudly; here a
-// best-effort fallback is preferable to hard-failing the overlay prep over a formatting nicety.
-func resolveOverlayBaseDistroDef(dir, base string, distroCfg *spec.DistroConfig) *spec.ResolvedDistro {
-	if cfg, cerr := LoadConfig(dir); cerr == nil {
-		RegisterBuildVocabulary(distroCfg)
-		if vopts, operr := resolveVocabOpts(dir, spec.ResolveOpts{DistroCfg: distroCfg}); operr == nil {
-			if resolvedBase, rerr := deploykit.ResolveSpecBox(cfg, base, "", dir, vopts); rerr == nil && resolvedBase != nil && len(resolvedBase.Distro) > 0 {
-				return resolveDistroDef(distroCfg, resolvedBase.Distro[0])
-			}
-		}
-	}
-	return resolveDistroDef(distroCfg, detectHostContext().Distro)
 }
 
 // collectOverlayCandies returns the set of candy names declared as add_candy in any plan's meta.

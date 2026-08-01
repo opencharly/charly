@@ -12,11 +12,14 @@ package main
 //     reconstructParentExec + bundle_members.go + unified_targets.go. DEPLOY-ONLY residue,
 //     DELIBERATELY untouched by #55 step3 3-II (out of that cutover's scope, which relocates only
 //     the pod-overlay BUILD envelope): its eventual plugin relocation is tracked under task #66.
-//   - loadConfigForDeploy / detectHostContext / resolveDistroDef — BUILD-SHARED: LoadConfig →
-//     LoadUnified (K1-loader-family-coupled) + the host-fs distro probes, reached by the
-//     resolve-target-add seam + deploy_target_unified.go AND by build_overlay.go's hostBuildOverlay
-//     (confirmed live, #55 step3 3-II) — kept here unchanged, serving both the deploy-del/add seams
-//     AND the pod-overlay build prep.
+//   - loadConfigForDeploy — BUILD-SHARED: LoadConfig → LoadUnified (K1-loader-family-coupled) +
+//     the host-fs distro probes, reached by the resolve-target-add seam + deploy_target_unified.go
+//     AND by build_overlay.go's hostBuildOverlay (confirmed live, #55 step3 3-II) — kept here
+//     unchanged, serving both the deploy-del/add seams AND the pod-overlay build prep.
+//     (detectHostContext + resolveDistroDef were DELETED in #55 coneB-br2 Group 2 — their sole
+//     caller resolveOverlayBaseDistroDef was dropped when build.DistroCfg was proven dead on the
+//     overlay step-emit path; the plugin uses its own twin candy/plugin-bundle/dispatch.go
+//     detectHostContext for the deploy compile.)
 //   - deployDelCmd + resolveDelNode + podDeploymentArtifactExists — the `charly bundle del` host
 //     resolution the deploy-del-resolve seam drives. DEPLOY-ONLY residue, DELIBERATELY untouched by
 //     #55 step3 3-II for the same reason as deriveChildExecutorForPath above (task #66).
@@ -34,7 +37,6 @@ import (
 	"path/filepath"
 
 	specexec "github.com/opencharly/spec/exec"
-	"github.com/opencharly/spec/hostenv"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -186,35 +188,14 @@ func podDeploymentArtifactExists(name string) bool {
 }
 
 // ---------------------------------------------------------------------------
-// Host-context + config helpers (shared with build_overlay.go + the
-// resolve-target-add / deploy_target_unified.go host paths).
+// Config helpers (shared with build_overlay.go + the resolve-target-add /
+// deploy_target_unified.go host paths).
 // ---------------------------------------------------------------------------
-
-// detectHostContext builds the HostContext struct used by the compiler
-// for host-target deploys. Returns a zero-value struct for container
-// deploys (the compiler ignores host-only fields there). Consumed by
-// build_overlay.go (the pod-overlay build) host-side; the plugin computes its
-// own twin (candy/plugin-bundle/dispatch.go detectHostContext) for the deploy compile.
-func detectHostContext() spec.HostContext {
-	hd, _ := hostenv.DetectHostDistro()
-	glibc, _ := hostenv.DetectHostGlibc()
-	if hd == nil {
-		return spec.HostContext{}
-	}
-	return spec.HostContext{
-		MachineVenue: true,
-		Distro:       hd.PrimaryTag(),
-		GlibcVersion: glibc,
-	}
-}
-
-// resolveDistroDef returns the DistroDef for a given distro tag.
-func resolveDistroDef(cfg *spec.DistroConfig, distroTag string) *spec.ResolvedDistro {
-	if cfg == nil || distroTag == "" {
-		return nil
-	}
-	return cfg.ResolveDistro([]string{distroTag})
-}
+// detectHostContext + resolveDistroDef were DELETED in #55 coneB-br2 Group 2:
+// their sole caller resolveOverlayBaseDistroDef (build_overlay.go) was dropped
+// when build.DistroCfg was proven dead on the overlay step-emit path. The plugin
+// computes its own twin (candy/plugin-bundle/dispatch.go detectHostContext) for
+// the deploy compile.
 
 // loadConfigForDeploy loads charly.yml + the embedded build vocabulary for the
 // current project directory. Runs RegisterBuildVocabulary as a side effect since
