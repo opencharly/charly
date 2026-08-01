@@ -6,15 +6,17 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 )
 
-// The var-substitution + user-spec render helpers, the inline-content stager, and
-// the per-verb Containerfile-line emitters all live in sdk/deploykit (tasks_emit.go);
-// every caller (here and in check_kit_adapter.go / host_build_construct_step.go) references
-// deploykit.TaskKnownNames / deploykit.ResolveUserSpec / deploykit.EmitCmd / etc.
-// directly (K3 ZERO-ALIASES dissolution).
+// The var-substitution + user-spec render helpers, the inline-content stager, and the
+// per-verb Containerfile-line emitters live in sdk/deploykit (tasks_emit.go), reached by the
+// candy/plugin layers and by charly's own tests (e.g. deploykit.ResolveUserSpec). charly CORE
+// no longer imports deploykit: this file's inline-builder seam builds its spec.BuilderResolveInput
+// via spec.BuilderResolveInputFrom — relocated to spec/spec (buildwire_render.go, #55 coneK3tasks),
+// the cone-render precedent (a render primitive in spec/spec so the host shares ONE source with
+// the plugins and needs no kit import). The builder-emit cluster (ensureBuildersConnected +
+// registry ResolveBuilder + resolveBuilderStage) is registry-coupled and stays core.
 
 // resolveInlineBuilderSeam is the core impl wired onto deploykit's
 // ResolveInlineBuilder seam: connect + OpResolve an externalized INLINE builder,
@@ -30,7 +32,7 @@ func (g *Generator) resolveInlineBuilderSeam(candyName, bName string, bDef *spec
 	if !ok {
 		return "", fmt.Errorf("candy %q: inline builder %q is externalized but its plugin is not connected", candyName, bName)
 	}
-	in := deploykit.BuilderResolveInputFrom(layer.GetName(), bName, bDef, ctx)
+	in := spec.BuilderResolveInputFrom(layer.GetName(), bName, bDef, ctx)
 	reply, err := resolveBuilderStage(prov, bName, in, img)
 	if err != nil {
 		return "", fmt.Errorf("candy %q: inline builder %q resolve: %w", candyName, bName, err)

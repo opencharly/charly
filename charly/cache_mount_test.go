@@ -6,6 +6,7 @@ import (
 
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/vmshared"
+	"github.com/opencharly/spec/spec"
 )
 
 // TestSharedCacheMount_StableID locks in the format that makes BuildKit
@@ -54,7 +55,7 @@ func TestRenderCacheMountsAuto_Mixed(t *testing.T) {
 		{Dst: "/tmp/aur-srcdest", Owned: true},            // user build cache
 		{Dst: "/tmp/aur-xdg-cache", Owned: true},          // user build cache
 	}
-	out := buildkit.RenderCacheMountsAuto(mounts, 1000, 1000, " ", false)
+	out := spec.RenderCacheMountsAuto(mounts, 1000, 1000, " ", false)
 	if !strings.Contains(out, "id=charly-var-cache-pacman-pkg,dst=/var/cache/pacman/pkg,sharing=locked") {
 		t.Errorf("pacman entry must stay shared/locked (no uid):\n%s", out)
 	}
@@ -72,7 +73,7 @@ func TestRenderCacheMountsAuto_Mixed(t *testing.T) {
 // TestRenderCacheMounts_Empty must NOT emit a trailing separator when the
 // slice is empty — otherwise generated Containerfiles get a stray `\` line.
 func TestRenderCacheMounts_Empty(t *testing.T) {
-	if got := buildkit.RenderCacheMounts(nil, -1, 0, " \\\n    ", true); got != "" {
+	if got := spec.RenderCacheMounts(nil, -1, 0, " \\\n    ", true); got != "" {
 		t.Errorf("empty mounts must produce empty string, got: %q", got)
 	}
 }
@@ -81,7 +82,7 @@ func TestRenderCacheMounts_Empty(t *testing.T) {
 // where we need the separator after the last entry (template chains into RUN body).
 func TestRenderCacheMounts_TrailingSeparator(t *testing.T) {
 	mounts := []vmshared.CacheMountDef{{Dst: "/tmp/pixi-cache"}}
-	got := buildkit.RenderCacheMounts(mounts, 1000, 1000, " \\\n    ", true)
+	got := spec.RenderCacheMounts(mounts, 1000, 1000, " \\\n    ", true)
 	if !strings.HasSuffix(got, " \\\n    ") {
 		t.Errorf("trailing separator missing; got: %q", got)
 	}
