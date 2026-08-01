@@ -2,15 +2,16 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
 
-	"github.com/opencharly/spec/lock"
 	specexec "github.com/opencharly/spec/exec"
 	"github.com/opencharly/spec/hostenv"
+	"github.com/opencharly/spec/lock"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -293,13 +294,13 @@ func bedSessionSetup(req spec.CheckBedRequest) (spec.CheckBedReply, error) {
 		hostenv.StartLibvirtUserSession()
 	}
 
-	// Seed the per-host overlay with the bed's project-declared deploy-shaped overrides BEFORE the
-	// plugin's `charly config` step. persistBedDeployOverrides self-skips group + local + external
-	// in-place; guarded to the non-VM path here so it matches runCheckBed EXACTLY (which seeds only
-	// the pod/default root at :811 — a VM root's seed is pointless: a VM bed runs no `charly config`).
-	if !isVM {
-		persistBedDeployOverrides(req.Bed, node)
-	}
+	// The bed-root + member deploy-override PERSIST moved PLUGIN-SIDE to candy/plugin-check's
+	// bed runner (#55 coneC-dsh β1 — check_bed_run.go's persistBedDeployOverrides wrapper + its
+	// deploykit import shed). The host now threads the bed-root BundleNode (with nested Members)
+	// serialized as NodeJSON; the plugin calls deploykit.PersistBedDeployOverrides itself with its
+	// own loader-threaded marshalNode + reader (the deployMarshalNode/deployConfigReader pattern),
+	// guarding the root persist by !IsVM (matching the former host guard — a VM bed runs no
+	// `charly config`) and persisting each member from NodeJSON's nested peer map.
 
 	bedSessMu.Lock()
 	bedSessions[req.Bed] = s
@@ -307,6 +308,7 @@ func bedSessionSetup(req spec.CheckBedRequest) (spec.CheckBedReply, error) {
 	inserted = true
 
 	level := bedCheckLevel(uf, node)
+	nodeJSON, _ := json.Marshal(node) // spec.Deploy round-trips cleanly (Members=peer, Children=nested, Descent — all json-tagged)
 	return spec.CheckBedReply{
 		Calver:         calver,
 		LogDir:         logDir,
@@ -314,6 +316,7 @@ func bedSessionSetup(req spec.CheckBedRequest) (spec.CheckBedReply, error) {
 		IsLocal:        isLocal,
 		IsGroup:        isGroup,
 		IsExternal:     isExternal,
+		NodeJSON:       nodeJSON,   // bed-root BundleNode (Members nested) — the plugin-side persist source
 		Image:          node.Image, // "" for vm/local/group
 		HasAddCandy:    len(node.AddCandy) > 0,
 		VMTemplate:     node.From,   // vm bed template (the ENTITY — `charly vm build` builds off this)

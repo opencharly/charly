@@ -70,18 +70,16 @@ func bringUpMembers(node *spec.BundleNode, imageTag string) error {
 	}
 	for _, memberKey := range spec.SortedMemberKeys(node.Members) {
 		memberNode := node.Members[memberKey]
-		// Seed the per-host charly.yml with the member's deploy-shaped overrides
-		// (port / volume / env / security / network) so its declared port:
-		// publishes to the host — the cross-deployment cdp/vnc/mcp probe reaches
-		// the driver via that host-published port. This ALSO seeds the member's
-		// resource-arbitration role (preemptible holder / requires_exclusive
-		// claimant), so a preemptible-holder member + a requires_exclusive-claimant
-		// member drive the arbiter through the member's own `charly start` (the
-		// group live-preemption shape — see check-preempt-live-pod). A member node
-		// is NON-disposable (foldMembers marks only the folded top-level copy), so
-		// this never writes a disposable bed the overlay's validateCheckBeds would
-		// reject.
-		persistBedDeployOverrides(memberKey, *memberNode)
+		// The member's deploy-shaped override PERSIST (port / volume / env / security / network +
+		// the resource-arbitration role) moved PLUGIN-SIDE to candy/plugin-check's bed runner (bed
+		// path, from CheckBedReply.NodeJSON's nested peer map) and candy/plugin-bundle's walk
+		// (operator path, from rootNode.Members) — #55 coneC-dsh β1. The plugin calls
+		// deploykit.PersistBedDeployOverrides BEFORE this host `members-up`/`deploy-members-up` seam
+		// fires, so the member's declared port: publishes + its preemptible/requires_exclusive role
+		// is seeded by the time the member's own `charly config`/`charly start` runs here (the
+		// group live-preemption shape — see check-preempt-live-pod). A member node is NON-disposable
+		// (foldMembers marks only the folded top-level copy), so this never writes a disposable bed
+		// the overlay's validateCheckBeds would reject.
 		switch {
 		case isVmMember(memberNode):
 			// VM member: full libvirt lifecycle, mirroring the isVM bed root

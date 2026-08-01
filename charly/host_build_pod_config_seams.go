@@ -5,36 +5,32 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/container"
 	"github.com/opencharly/spec/hostenv"
 	"github.com/opencharly/spec/spec"
 	"github.com/opencharly/spec/sshx"
 )
 
-// host_build_pod_config_seams.go — the ~16 NARROW "pod-config-*" F10 host-builders the P13-KERNEL
-// direction-flip introduces (sdk/schema/seam.cue). The former BoxConfigSetupCmd/BoxConfigRemoveCmd
-// ORCHESTRATION (runConfig's sequencing, resolveDeployRef's dispatch, prepareQuadletEnv,
-// parseVolumeFlags, persistResourceCaps' decision, runConfigDirect, directPodmanArgs,
-// directDeployMarker*, checkMissingEnvRequires/checkMissingSecretRequires/warnMissingMCPRequires,
-// updateAllDeployedQuadlets, BoxConfigRemoveCmd) MOVED to candy/plugin-deploy-pod
-// (config_setup.go / config_remove.go, sdk.OpConfigSetup / sdk.OpConfigRemove). Each seam below
-// wraps an EXISTING core function VERBATIM — unchanged internally — for the pieces that are
-// genuinely host/loader/registry/credential-coupled (the ledger's registered FINAL/K5 IOU family
-// for credential-store/enc.go internals; the DeployStateHost nil-seam for loader access; the
-// embedded (via a Go embed directive) sidecar template data that lives only in the charly binary).
+// host_build_pod_config_seams.go — the NARROW "pod-config-*" F10 host-builders that REMAIN host-side
+// after the #55 coneC-dsh pod-config seam-collapse: the pieces that are genuinely host/loader/embed-
+// coupled — the image-ensure (podman store + dispatchBuildEnsure), the device detection
+// (DetectHostDevices/EnsureCDI), the embedded sidecar template bodies (go:embed, live only in the
+// charly binary), and the SSH-key resolution. The six deploykit-only legs
+// (pod-config-load-deploy / -save-bundle / -box-engine / -tunnel-resolve / -container-tunnel /
+// -clean-deploy-entry) are DELETED — candy/plugin-deploy-pod + candy/plugin-pod now call
+// deploykit/loaderkit directly (loaderkit.LoadHostBundleConfigViaExecutor for the overlay read,
+// fetchLoaderPrimaries/deployMarshalNode for the node-form marshal, deploykit.ExtractMetadata /
+// TunnelConfigFromMetadata / CleanDeployEntry / SaveBundleConfig for the bodies), shedding this
+// file's sdk/deploykit import. The pod-config-ensure-image leg SHRANK: the host leg keeps the
+// host-coupled ensureImagePresent (podman store + build:ensure dispatch) and the plugin calls
+// deploykit.ExtractMetadata itself. The former BoxConfigSetupCmd/BoxConfigRemoveCmd ORCHESTRATION
+// moved to candy/plugin-deploy-pod (config_setup.go / config_remove.go) in P13-KERNEL.
 
 const (
-	podConfigEnsureImageKind      = "pod-config-ensure-image"
-	podConfigLoadDeployKind       = "pod-config-load-deploy"
-	podConfigSaveBundleKind       = "pod-config-save-bundle"
-	podConfigDetectDevicesKind    = "pod-config-detect-devices"
-	podConfigTunnelResolveKind    = "pod-config-tunnel-resolve"
-	podConfigSSHKeyKind           = "pod-config-ssh-key"
-	podConfigListSidecarsKind     = "pod-config-list-sidecars"
-	podConfigBoxEngineKind        = "pod-config-box-engine"
-	podConfigContainerTunnelKind  = "pod-config-container-tunnel"
-	podConfigCleanDeployEntryKind = "pod-config-clean-deploy-entry"
+	podConfigEnsureImageKind   = "pod-config-ensure-image"
+	podConfigDetectDevicesKind = "pod-config-detect-devices"
+	podConfigSSHKeyKind        = "pod-config-ssh-key"
+	podConfigListSidecarsKind  = "pod-config-list-sidecars"
 )
 
 func hostBuildPodConfigListSidecars(_ context.Context, _ spec.PodConfigLoadDeployRequest, _ buildEngineContext) (spec.PodConfigListSidecarsReply, error) {
@@ -77,23 +73,18 @@ func hostBuildPodConfigSSHKey(_ context.Context, req spec.PodConfigSSHKeyRequest
 	return spec.PodConfigSSHKeyReply{Pubkey: pubkey}, nil
 }
 
+// hostBuildPodConfigEnsureImage is the HOST-COUPLED half of pod-config-ensure-image (#55 coneC-dsh
+// seam-collapse): it guarantees imageRef is present in the run engine's local store (ensureImagePresent
+// — podman store + dispatchBuildEnsure). The deploykit.ExtractMetadata label extract that USED to
+// run here is now done PLUGIN-SIDE by candy/plugin-deploy-pod / candy/plugin-pod (the host leg
+// returns an empty reply; the plugin calls deploykit.ExtractMetadata itself), shedding this file's
+// deploykit import. The plugin passes nil for the reply destination (hostBuild's rep==nil path).
 func hostBuildPodConfigEnsureImage(_ context.Context, req spec.PodConfigEnsureImageRequest, _ buildEngineContext) (spec.PodConfigEnsureImageReply, error) {
 	podmanRT := &hostenv.ResolvedRuntime{BuildEngine: req.BuildEngine, RunEngine: "podman"}
 	if err := ensureImagePresent(req.ImageRef, podmanRT); err != nil {
 		return spec.PodConfigEnsureImageReply{}, err
 	}
-	meta, err := deploykit.ExtractMetadata("podman", req.ImageRef)
-	if err != nil {
-		return spec.PodConfigEnsureImageReply{}, err
-	}
-	if meta == nil {
-		return spec.PodConfigEnsureImageReply{}, fmt.Errorf("image %s has no embedded metadata; rebuild with latest charly", req.ImageRef)
-	}
-	metaJSON, err := json.Marshal(meta)
-	if err != nil {
-		return spec.PodConfigEnsureImageReply{}, err
-	}
-	return spec.PodConfigEnsureImageReply{MetaJSON: metaJSON}, nil
+	return spec.PodConfigEnsureImageReply{}, nil
 }
 
 // ensureImagePresent guarantees imageRef is available in the run engine's local store — the
@@ -125,26 +116,6 @@ func ensureImagePresent(imageRef string, rt *hostenv.ResolvedRuntime) error {
 	return fmt.Errorf("%w: %s", spec.ErrImageNotLocal, imageRef)
 }
 
-func hostBuildPodConfigLoadDeploy(_ context.Context, req spec.PodConfigLoadDeployRequest, _ buildEngineContext) (spec.PodConfigLoadDeployReply, error) {
-	dc := deploykit.LoadDeployConfigForRead(req.Caller)
-	if dc == nil {
-		return spec.PodConfigLoadDeployReply{}, nil
-	}
-	b, err := json.Marshal(dc)
-	if err != nil {
-		return spec.PodConfigLoadDeployReply{}, err
-	}
-	return spec.PodConfigLoadDeployReply{ConfigJSON: b}, nil
-}
-
-func hostBuildPodConfigSaveBundle(_ context.Context, req spec.PodConfigSaveBundleRequest, _ buildEngineContext) (spec.PodConfigSaveBundleReply, error) {
-	var dc deploykit.BundleConfig
-	if err := json.Unmarshal(req.ConfigJSON, &dc); err != nil {
-		return spec.PodConfigSaveBundleReply{}, err
-	}
-	return spec.PodConfigSaveBundleReply{}, saveBundleConfigNodeForm(&dc)
-}
-
 func hostBuildPodConfigDetectDevices(_ context.Context, req spec.PodConfigDetectDevicesRequest, _ buildEngineContext) (spec.PodConfigDetectDevicesReply, error) {
 	var detected DetectedDevices
 	if !req.NoAutoDetect {
@@ -161,77 +132,10 @@ func hostBuildPodConfigDetectDevices(_ context.Context, req spec.PodConfigDetect
 	return spec.PodConfigDetectDevicesReply{DetectedJSON: b}, nil
 }
 
-func hostBuildPodConfigBoxEngine(_ context.Context, req spec.PodConfigBoxEngineRequest, _ buildEngineContext) (spec.PodConfigBoxEngineReply, error) {
-	return spec.PodConfigBoxEngineReply{Engine: deploykit.ResolveBoxEngineForDeploy(req.Box, req.Instance, req.GlobalEngine)}, nil
-}
-
-// hostBuildPodConfigContainerTunnel resolves the tunnel config (charly.yml-only; labels never
-// carry tunnel) a caller starts/stops/tears down. STILL core-resident (wave γ narrowed its
-// candy/plugin-deploy-pod start/stop callers to their own local resolvePodTunnelPlan —
-// enc_tunnel_resolve.go — but candy/plugin-pod's `charly remove` teardown path
-// (remove_tunnel.go) is a SEPARATE caller of this SAME seam, so it stays registered). Reads the
-// RUNNING container's baked image ref (registry/podman-store coupled — genuinely host-only).
-func hostBuildPodConfigContainerTunnel(_ context.Context, req spec.PodConfigContainerTunnelRequest, _ buildEngineContext) (spec.PodConfigContainerTunnelReply, error) {
-	ctrName := spec.ContainerNameInstance(req.Box, req.Instance)
-	imageRef := container.ContainerImage("podman", ctrName)
-	if imageRef == "" {
-		return spec.PodConfigContainerTunnelReply{}, nil
-	}
-	meta, err := deploykit.ExtractMetadata("podman", imageRef)
-	if err != nil || meta == nil {
-		return spec.PodConfigContainerTunnelReply{}, nil
-	}
-	dc := deploykit.LoadDeployConfigForRead("charly tunnel resolve")
-	deploykit.MergeDeployOntoMetadata(meta, dc, req.Box, req.Instance)
-	if meta.Tunnel == nil {
-		return spec.PodConfigContainerTunnelReply{}, nil
-	}
-	tc := deploykit.TunnelConfigFromMetadata(meta)
-	b, err := json.Marshal(tc)
-	if err != nil {
-		return spec.PodConfigContainerTunnelReply{}, err
-	}
-	return spec.PodConfigContainerTunnelReply{TunnelJSON: b}, nil
-}
-
-func hostBuildPodConfigTunnelResolve(_ context.Context, req spec.PodConfigTunnelResolveRequest, _ buildEngineContext) (spec.PodConfigTunnelResolveReply, error) {
-	var meta spec.BoxMetadata
-	if err := json.Unmarshal(req.MetaJSON, &meta); err != nil {
-		return spec.PodConfigTunnelResolveReply{}, err
-	}
-	if meta.Tunnel == nil {
-		return spec.PodConfigTunnelResolveReply{}, nil
-	}
-	tc := deploykit.TunnelConfigFromMetadata(&meta)
-	b, err := json.Marshal(tc)
-	if err != nil {
-		return spec.PodConfigTunnelResolveReply{}, err
-	}
-	return spec.PodConfigTunnelResolveReply{TunnelJSON: b}, nil
-}
-
-// hostBuildPodConfigCleanDeployEntry wraps deploykit.CleanDeployEntry VERBATIM (Cutover B unit 2
-// remove-verb completion) — the registry-resugar axis of `charly remove`'s deploy-entry cleanup.
-// marshalDeployNode needs the host's plugin-primaries registry to resugar plan steps, so this seam
-// stays host-side, wrapping deploykit.CleanDeployEntry with the host marshalDeployNode (see
-// #PodConfigCleanDeployEntryRequest's doc comment). Its own plugin-side collapse — sourcing
-// Primaries via the generic loader-threaded leg like the #55 K4 deploy-state writes already do — is
-// a pod-config-seam follow-on cone, not this unit.
-func hostBuildPodConfigCleanDeployEntry(_ context.Context, req spec.PodConfigCleanDeployEntryRequest, _ buildEngineContext) (spec.PodConfigCleanDeployEntryReply, error) {
-	deploykit.CleanDeployEntry(req.Box, req.Instance, marshalDeployNode)
-	return spec.PodConfigCleanDeployEntryReply{}, nil
-}
-
 var _ = func() bool {
 	registerHostBuilder(podConfigEnsureImageKind, typedHostBuilder(podConfigEnsureImageKind, hostBuildPodConfigEnsureImage))
-	registerHostBuilder(podConfigLoadDeployKind, typedHostBuilder(podConfigLoadDeployKind, hostBuildPodConfigLoadDeploy))
-	registerHostBuilder(podConfigSaveBundleKind, typedHostBuilder(podConfigSaveBundleKind, hostBuildPodConfigSaveBundle))
 	registerHostBuilder(podConfigDetectDevicesKind, typedHostBuilder(podConfigDetectDevicesKind, hostBuildPodConfigDetectDevices))
-	registerHostBuilder(podConfigTunnelResolveKind, typedHostBuilder(podConfigTunnelResolveKind, hostBuildPodConfigTunnelResolve))
 	registerHostBuilder(podConfigSSHKeyKind, typedHostBuilder(podConfigSSHKeyKind, hostBuildPodConfigSSHKey))
 	registerHostBuilder(podConfigListSidecarsKind, typedHostBuilder(podConfigListSidecarsKind, hostBuildPodConfigListSidecars))
-	registerHostBuilder(podConfigBoxEngineKind, typedHostBuilder(podConfigBoxEngineKind, hostBuildPodConfigBoxEngine))
-	registerHostBuilder(podConfigContainerTunnelKind, typedHostBuilder(podConfigContainerTunnelKind, hostBuildPodConfigContainerTunnel))
-	registerHostBuilder(podConfigCleanDeployEntryKind, typedHostBuilder(podConfigCleanDeployEntryKind, hostBuildPodConfigCleanDeployEntry))
 	return true
 }()

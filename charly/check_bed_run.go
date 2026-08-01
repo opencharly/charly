@@ -24,7 +24,6 @@ package main
 // earlier — pure over an already-stamped spec.BundleNode, zero core-state coupling.
 
 import (
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -65,22 +64,12 @@ func bedExternalInPlace(target string) bool {
 	return isExternalDeploySubstrate(target) && deployTraitDescent(target).Venue != "container"
 }
 
-// persistBedDeployOverrides is the thin core wrapper — the orchestration lives in
-// deploykit.PersistBedDeployOverrides (unit 6b). This function's own job is computing the
-// ONE genuinely registry-coupled classification (bedExternalInPlace, which queries the live
-// provider registry) and threading it through, plus supplying marshalDeployNode (the
-// K1-tied struct→node-form serializer core alone can call).
-//
-// TRACKED-GATED deploykit import (#55 coneA): deploykit.PersistBedDeployOverrides calls
-// deploykit.SaveBundleConfig which REQUIRES a non-nil marshalNode callback (deploy_file.go:161),
-// and marshalDeployNode is the K1-tied struct→node serializer in charly/deploy_state_host.go:55
-// (coneC's DeployStateHost seam — a Go func callback that cannot cross the process boundary; a
-// plugin has no equivalent, confirmed by grep). Named exit: coneC's DeployStateHost seam-death /
-// marshalDeployNode envelope — when that envelope lands (terminus #85 territory), marshalDeployNode
-// + bedExternalInPlace become reachable over a HostBuild reverse leg, the plugin-check bed runner
-// calls deploykit.PersistBedDeployOverrides itself, and check_bed_run sheds deploykit. This is the
-// boundary-law "host-boundary-object" trap's legal form: the shed is BLOCKED until coneC's envelope
-// lands (in-flight), NOT a permanence argument — when the envelope lands, this MUST shed.
-func persistBedDeployOverrides(name string, node spec.BundleNode) {
-	deploykit.PersistBedDeployOverrides(name, node, bedExternalInPlace(node.Target), marshalDeployNode)
-}
+// persistBedDeployOverrides + its deploykit import MOVED PLUGIN-SIDE to candy/plugin-check's bed
+// runner (#55 coneC-dsh β1 — the marshalDeployNode envelope landed via K4: plugins build their own
+// loader-threaded marshalNode via fetchLoaderPrimaries + a loader-backed reader via
+// loaderkit.LoadHostBundleConfigViaExecutor, so the bed-root + member persist no longer need the
+// K1-tied host wrapper). The host seam threads the bed-root BundleNode (with nested Members) as
+// CheckBedReply.NodeJSON; the plugin calls deploykit.PersistBedDeployOverrides itself. bedExternalInPlace
+// STAYS host-side (it queries the live provider registry via isExternalDeploySubstrate) — used to fill
+// CheckBedReply.IsExternal for the bed root; a member's externalInPlace is derivable from its stamped
+// Descent (Venue parent/none → in-place) in the plugin.

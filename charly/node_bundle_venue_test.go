@@ -247,7 +247,7 @@ func TestPersistBedDeployOverrides_GroupBedNotPersisted(t *testing.T) {
 		Disposable: &disposable,
 		Members:    map[string]*spec.BundleNode{"web": {Target: "pod", Image: "web"}},
 	}
-	persistBedDeployOverrides("check-cross-pod-cdp", groupBed)
+	deploykit.PersistBedDeployOverrides("check-cross-pod-cdp", groupBed, bedExternalInPlace(groupBed.Target), testBedMarshalNode, nil)
 
 	dc, err := deploykit.LoadBundleConfig()
 	if err != nil {

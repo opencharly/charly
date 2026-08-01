@@ -152,6 +152,13 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 		_, _ = bedHostBuild(ex, ctx, spec.CheckBedRequest{Op: "teardown", Bed: name, OK: res.OK})
 	}()
 
+	// Seed the per-host overlay with the bed ROOT's + each MEMBER's project-declared deploy-shaped
+	// overrides PLUGIN-SIDE (#55 coneC-dsh β1 — the former host-side persistBedDeployOverrides wrapper
+	// shed from charly core). The host seam threads the bed-root BundleNode (with nested peer Members)
+	// as d.NodeJSON; persistBedDeployOverridePluginSide calls deploykit.PersistBedDeployOverrides with
+	// plugin-side marshalNode + reader, BEFORE the build/config/start/members-up steps read the overlay.
+	persistBedDeployOverridePluginSide(ctx, ex, name, d)
+
 	// Acceptance-depth gating comes from the descriptor (the box's check_level rung,
 	// resolved host-side): RunBuild → build-context acceptance (check box); RunRuntime
 	// → deploy/runtime acceptance (check live + feature run --no-agent); RunAgent → +

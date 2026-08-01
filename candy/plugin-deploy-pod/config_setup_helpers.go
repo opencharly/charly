@@ -594,15 +594,14 @@ func provisionData(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntim
 				dataRef = resolved
 			}
 		}
-		var ensureRep spec.PodConfigEnsureImageReply
-		if err := hostBuild(ctx, ex, podConfigEnsureImageKind, spec.PodConfigEnsureImageRequest{ImageRef: dataRef, BuildEngine: rt.BuildEngine}, &ensureRep); err != nil {
+		if err := hostBuild(ctx, ex, podConfigEnsureImageKind, spec.PodConfigEnsureImageRequest{ImageRef: dataRef, BuildEngine: rt.BuildEngine}, nil); err != nil {
 			return fmt.Errorf("extracting metadata from data image %s: %w", dataRef, err)
 		}
-		var dm spec.BoxMetadata
-		if err := json.Unmarshal(ensureRep.MetaJSON, &dm); err != nil {
+		dm, err := deploykit.ExtractMetadata("podman", dataRef)
+		if err != nil || dm == nil {
 			return fmt.Errorf("extracting metadata from data image %s: %w", dataRef, err)
 		}
-		dataMeta = &dm
+		dataMeta = dm
 	}
 
 	if len(dataMeta.DataEntries) == 0 {
@@ -697,15 +696,15 @@ func updateAllDeployedQuadlets(ctx context.Context, ex *sdk.Executor, rt *kit.Re
 				imageRef = ref
 			}
 		}
-		var ensureRep spec.PodConfigEnsureImageReply
-		if err := hostBuild(ctx, ex, podConfigEnsureImageKind, spec.PodConfigEnsureImageRequest{ImageRef: imageRef, BuildEngine: rt.BuildEngine}, &ensureRep); err != nil {
+		if err := hostBuild(ctx, ex, podConfigEnsureImageKind, spec.PodConfigEnsureImageRequest{ImageRef: imageRef, BuildEngine: rt.BuildEngine}, nil); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: could not read metadata for %s, skipping quadlet update\n", key)
 			continue
 		}
-		var meta spec.BoxMetadata
-		if err := json.Unmarshal(ensureRep.MetaJSON, &meta); err != nil {
+		metaPtr, err := deploykit.ExtractMetadata("podman", imageRef)
+		if err != nil || metaPtr == nil {
 			continue
 		}
+		meta := *metaPtr
 		deploykit.MergeDeployOntoMetadata(&meta, dc, boxName, instance)
 
 		updateCtrName := kit.ContainerNameInstance(boxName, instance)
@@ -782,12 +781,8 @@ func updateAllDeployedQuadlets(ctx context.Context, ex *sdk.Executor, rt *kit.Re
 
 		var tunnelCfg *spec.TunnelConfig
 		if meta.Tunnel != nil {
-			var tRep spec.PodConfigTunnelResolveReply
-			if err := hostBuild(ctx, ex, podConfigTunnelResolveKind, spec.PodConfigTunnelResolveRequest(ensureRep), &tRep); err == nil && len(tRep.TunnelJSON) > 0 {
-				var tc spec.TunnelConfig
-				if json.Unmarshal(tRep.TunnelJSON, &tc) == nil {
-					tunnelCfg = &tc
-				}
+			if tc := deploykit.TunnelConfigFromMetadata(&meta); tc != nil {
+				tunnelCfg = tc
 			}
 		}
 

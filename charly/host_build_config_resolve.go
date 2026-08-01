@@ -155,9 +155,9 @@ func hostBuildConfigPersist(_ context.Context, req spec.ConfigPersistRequest, _ 
 		return spec.ConfigPersistReply{}, fmt.Errorf("config-persist: empty deploy key")
 	}
 	if req.Remove {
-		return spec.ConfigPersistReply{}, deploykit.RemoveVmDeployEntry(req.Key, acquireDeployConfigLock, saveBundleConfigNodeForm)
+		return spec.ConfigPersistReply{}, deploykit.RemoveVmDeployEntry(req.Key, acquireDeployConfigLock, saveBundleConfigNodeForm, nil)
 	}
-	return spec.ConfigPersistReply{}, deploykit.SaveVmDeployState(req.Key, req.Entity, req.VmState, acquireDeployConfigLock, saveBundleConfigNodeForm)
+	return spec.ConfigPersistReply{}, deploykit.SaveVmDeployState(req.Key, req.Entity, req.VmState, acquireDeployConfigLock, saveBundleConfigNodeForm, nil)
 }
 
 var _ = func() bool {

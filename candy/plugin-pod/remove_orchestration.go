@@ -1,6 +1,7 @@
 package pod
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -12,6 +13,7 @@ import (
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
+	"gopkg.in/yaml.v3"
 )
 
 // remove_orchestration.go — the FULL `charly remove` body (Cutover B unit 2 remove-verb
@@ -69,18 +71,6 @@ import (
 // LAST step, mirroring the former `defer releaseResourceClaim(...)` at the top of podRemoveCmd.Run()
 // (a defer runs at function-return time regardless of path, so "call it last" here reproduces the
 // exact same "always runs, after everything else" semantics).
-
-// podConfigCleanDeployEntryKind / podConfigBoxEngineKind are wire kind strings for
-// charly/host_build_pod_config_seams.go's hostBuildPodConfigCleanDeployEntry /
-// hostBuildPodConfigBoxEngine — plain protocol literals (R3: kind names are wire strings, not
-// shared Go symbols, so each consuming module names its own const, same convention as
-// podConfigContainerTunnelKind in remove_tunnel.go). The former pod-config-hook-secret-env kind
-// is GONE (this cone's secrets seam-death): the pre_remove hook env resolves plugin-side via
-// deploykit.ResolveHookSecretEnv + pluginCredentialAccess, no host seam.
-const (
-	podConfigCleanDeployEntryKind = "pod-config-clean-deploy-entry"
-	podConfigBoxEngineKind        = "pod-config-box-engine"
-)
 
 // credServiceVNC mirrors charly/credential_plugin.go's CredServiceVNC (the VNC credential service
 // name deploykit's secret helpers key the auto-generated VNC password under).
@@ -211,11 +201,35 @@ func runPreRemoveHook(engine, containerName, boxName, instance string, cliEnv []
 	}
 }
 
-// cleanDeployEntry asks the host to run deploykit.CleanDeployEntry(box, instance, marshalDeployNode)
-// via the NEW narrow pod-config-clean-deploy-entry seam (see the file header for why it needs its
-// own host-owns-load+lock+mutate+save seam rather than the plugin-side whole-config write).
+// podMarshalNode builds the per-entry node-form marshal callback deploykit.CleanDeployEntry takes.
+// It resugars each plan step via the loader-threaded Primaries snapshot (HostBuild("loader-threaded")
+// — the SAME permanent D-fact leg candy/plugin-bundle/plugin-deploy-pod use), so the clean runs
+// PLUGIN-SIDE without the charly-init DeployStateHost registration (#55 coneC-dsh — the
+// pod-config-clean-deploy-entry host seam is DELETED). A HostBuild failure degrades to an empty
+// map (a plan with no plugin-verb sugar marshals identically).
+func podMarshalNode() func(name string, node *deploykit.BundleNode) (*yaml.Node, error) {
+	primaries := map[string]string{}
+	if cmdExec != nil {
+		if out, err := cmdExec.HostBuild(cmdCtx, "loader-threaded", nil); err == nil {
+			var t spec.Threaded
+			if json.Unmarshal(out, &t) == nil {
+				primaries = t.Primaries
+			}
+		}
+	}
+	return func(_ string, node *deploykit.BundleNode) (*yaml.Node, error) {
+		return deploykit.MarshalBundleNode(node, primaries)
+	}
+}
+
+// cleanDeployEntry runs deploykit.CleanDeployEntry PLUGIN-SIDE (#55 coneC-dsh — the
+// pod-config-clean-deploy-entry host seam is DELETED). The reader is the cycle-free
+// loaderkit.LoadHostBundleConfigViaExecutor read (loadPodBundleConfig); the marshal resugars via
+// loader-threaded Primaries (podMarshalNode). Best-effort (deploykit.CleanDeployEntry swallows its
+// own errors with stderr warnings) — matching the former host leg.
 func cleanDeployEntry(boxName, instance string) error {
-	return hostPodSeam(podConfigCleanDeployEntryKind, spec.PodConfigCleanDeployEntryRequest{Box: boxName, Instance: instance})
+	deploykit.CleanDeployEntry(boxName, instance, podMarshalNode(), loadPodBundleConfig)
+	return nil
 }
 
 // runPodRemove is the full `charly remove` orchestration, ported verbatim from the former
@@ -229,17 +243,17 @@ func runPodRemove(box, instance string, purge, keepDeploy bool, cliEnv []string)
 		return err
 	}
 
-	// Resolve per-image engine from the per-host deploy config (no charly.yml dependency).
-	// Rerouted through the EXISTING pod-config-box-engine seam (RDD-caught fix, see this file's
-	// header): deploykit.ResolveBoxEngineForDeploy transitively calls LoadBundleConfig too, which
-	// silently no-ops outside the charly-core process.
-	var boxEngineRep spec.PodConfigBoxEngineReply
-	if err := hostPodSeamReply(podConfigBoxEngineKind, spec.PodConfigBoxEngineRequest{
-		Box: boxName, Instance: instance, GlobalEngine: rt.RunEngine,
-	}, &boxEngineRep); err != nil {
-		return err
+	// Resolve per-image engine from the per-host deploy config PLUGIN-SIDE (loadPodBundleConfig —
+	// the cycle-free loaderkit read), replicating deploykit.ResolveBoxEngineForDeploy's lookup
+	// WITHOUT the DeployStateHost package-var dependency (a plugin calling the raw deploykit
+	// function would silently no-op out-of-process). #55 coneC-dsh — the pod-config-box-engine host
+	// seam is DELETED.
+	runEngine := rt.RunEngine
+	if dc, _ := loadPodBundleConfig(); dc != nil {
+		if entry, ok := dc.Lookup(boxName, instance); ok && entry.Engine != "" {
+			runEngine = entry.Engine
+		}
 	}
-	runEngine := boxEngineRep.Engine
 	engine := kit.EngineBinary(runEngine)
 	containerName := kit.ContainerNameInstance(boxName, instance)
 

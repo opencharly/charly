@@ -105,8 +105,13 @@ func TestValidateCheckBeds_LocalRefMustResolve(t *testing.T) {
 // source port/security/network from the IMAGE LABELS (gating port writes behind
 // an operator -p), so the bed's `port: 45434:11434` remap silently fell back to
 // the image default and collided with a same-image production deploy at start.
-// persistBedDeployOverrides seeds the bed node's overrides up front so the
-// existing charly config -> MergeDeployOntoMetadata -> quadlet path honors them.
+// deploykit.PersistBedDeployOverrides seeds the bed node's overrides up front so the
+// existing charly config -> MergeDeployOntoMetadata -> quadlet path honors them. The former
+// host-side persistBedDeployOverrides wrapper moved PLUGIN-SIDE to candy/plugin-check
+// (#55 coneC-dsh β1); this test calls deploykit.PersistBedDeployOverrides directly with a test-local
+// marshalNode (deploykit.MarshalBundleNode, nil primaries — the bed has no plugin-verb sugar) + a
+// nil reader (the DeployStateHost-backed fallback), verifying the SAME seed behavior the plugin-side
+// bed persist relies on.
 func TestPersistBedDeployOverrides_SeedsPortBeforeConfig(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", dir)
@@ -136,7 +141,8 @@ ollama:
 		Disposable: new(true),
 		Lifecycle:  "dev",
 	}
-	persistBedDeployOverrides("check-cachyos-ollama-pod", bed)
+	marshalNode := testBedMarshalNode
+	deploykit.PersistBedDeployOverrides("check-cachyos-ollama-pod", bed, bedExternalInPlace(bed.Target), marshalNode, nil)
 
 	dc, err := deploykit.LoadBundleConfig()
 	if err != nil {

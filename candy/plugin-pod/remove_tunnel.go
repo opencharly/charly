@@ -6,6 +6,8 @@ import (
 	"fmt"
 
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/spec/container"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -22,19 +24,28 @@ import (
 // No new seam was invented for this: both pieces (config-resolve seam, verb:tunnel provider) already
 // existed and were already load-bearing for pod start/stop before this leaf reused them for remove.
 
-// resolveContainerTunnel asks the host to resolve the running container's tunnel config (nil if
-// none configured or on any resolution error — best-effort, matching the former core
-// stopTunnelForImage's own best-effort framing).
+// resolveContainerTunnel resolves the running container's tunnel config PLUGIN-SIDE (#55 coneC-dsh
+// — the pod-config-container-tunnel host seam is DELETED). Reads the container's baked image ref
+// (container.ContainerImage — spec/container, plugin-reachable), extracts its metadata, merges the
+// per-host overlay (loadPodBundleConfig — the cycle-free loaderkit read), and resolves the tunnel
+// config. nil if none configured or on any resolution error — best-effort, matching the former
+// host leg's own best-effort framing.
 func resolveContainerTunnel(box, instance string) *spec.TunnelConfig {
-	var rep spec.PodConfigContainerTunnelReply
-	if err := hostPodSeamReply(podConfigContainerTunnelKind, spec.PodConfigContainerTunnelRequest{Box: box, Instance: instance}, &rep); err != nil || len(rep.TunnelJSON) == 0 {
+	ctrName := spec.ContainerNameInstance(box, instance)
+	imageRef := container.ContainerImage("podman", ctrName)
+	if imageRef == "" {
 		return nil
 	}
-	var tc spec.TunnelConfig
-	if json.Unmarshal(rep.TunnelJSON, &tc) != nil {
+	meta, err := deploykit.ExtractMetadata("podman", imageRef)
+	if err != nil || meta == nil {
 		return nil
 	}
-	return &tc
+	dc, _ := loadPodBundleConfig()
+	deploykit.MergeDeployOntoMetadata(meta, dc, box, instance)
+	if meta.Tunnel == nil {
+		return nil
+	}
+	return deploykit.TunnelConfigFromMetadata(meta)
 }
 
 // podTunnelStop composes verb:tunnel over InvokeProvider — byte-identical in shape to
@@ -65,9 +76,3 @@ func podTunnelStop(cfg *spec.TunnelConfig) error {
 	}
 	return nil
 }
-
-// podConfigContainerTunnelKind is the wire kind string for charly/host_build_pod_config_seams.go's
-// hostBuildPodConfigContainerTunnel — a plain protocol literal (R3: the SAME string
-// candy/plugin-deploy-pod/resolve.go's three call sites already use for the identical seam; kind
-// names are wire strings, not shared Go symbols, so each consuming module names its own const).
-const podConfigContainerTunnelKind = "pod-config-container-tunnel"

@@ -53,10 +53,10 @@ vm:cachyos-gpu:
 
 	// `charly update <vm>` == destroy (deploykit.RemoveVmDeployEntry) THEN create
 	// (deploykit.SaveVmDeployState), keyed on vm:<name>.
-	if err := deploykit.RemoveVmDeployEntry("vm:cachyos-gpu", acquireDeployConfigLock, saveBundleConfigNodeForm); err != nil {
+	if err := deploykit.RemoveVmDeployEntry("vm:cachyos-gpu", acquireDeployConfigLock, saveBundleConfigNodeForm, nil); err != nil {
 		t.Fatalf("RemoveVmDeployEntry (destroy leg): %v", err)
 	}
-	if err := deploykit.SaveVmDeployState("vm:cachyos-gpu", "cachyos-gpu", &spec.VmDeployState{InstanceID: "rebuilt-uuid", SshPort: 2222}, acquireDeployConfigLock, saveBundleConfigNodeForm); err != nil {
+	if err := deploykit.SaveVmDeployState("vm:cachyos-gpu", "cachyos-gpu", &spec.VmDeployState{InstanceID: "rebuilt-uuid", SshPort: 2222}, acquireDeployConfigLock, saveBundleConfigNodeForm, nil); err != nil {
 		t.Fatalf("SaveVmDeployState (create leg): %v", err)
 	}
 
@@ -106,7 +106,7 @@ vm:check-cachyos-gpu-vm:
 	if err := os.WriteFile(filepath.Join(cfgDir, "charly.yml"), []byte(yml), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := deploykit.RemoveVmDeployEntry("vm:check-cachyos-gpu-vm", acquireDeployConfigLock, saveBundleConfigNodeForm); err != nil {
+	if err := deploykit.RemoveVmDeployEntry("vm:check-cachyos-gpu-vm", acquireDeployConfigLock, saveBundleConfigNodeForm, nil); err != nil {
 		t.Fatalf("RemoveVmDeployEntry: %v", err)
 	}
 	dc, err := deploykit.LoadBundleConfig()

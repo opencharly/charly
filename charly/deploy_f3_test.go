@@ -36,12 +36,13 @@ func TestPersistBedDeployOverrides_SkipsLocalBed(t *testing.T) {
 
 	// A LOCAL bed — persisting it would write an un-loadable `local:` cross-ref.
 	disp := true
-	persistBedDeployOverrides("check-local", spec.BundleNode{
+	localBed := spec.BundleNode{
 		Target:     "local",
 		From:       "check-local-app",
 		Disposable: &disp,
 		Lifecycle:  "dev",
-	})
+	}
+	deploykit.PersistBedDeployOverrides("check-local", localBed, bedExternalInPlace(localBed.Target), testBedMarshalNode, nil)
 
 	dc, err := deploykit.LoadBundleConfig()
 	if err != nil {
@@ -55,10 +56,11 @@ func TestPersistBedDeployOverrides_SkipsLocalBed(t *testing.T) {
 
 	// A POD bed is STILL persisted (the skip is not too broad). Non-disposable so it
 	// is a plain deploy entry, not a check bed subject to validateCheckBeds.
-	persistBedDeployOverrides("pod-deploy-x", spec.BundleNode{
+	podBed := spec.BundleNode{
 		Target: "pod",
 		Image:  "pod-deploy-x",
-	})
+	}
+	deploykit.PersistBedDeployOverrides("pod-deploy-x", podBed, bedExternalInPlace(podBed.Target), testBedMarshalNode, nil)
 	dc2, err := deploykit.LoadBundleConfig()
 	if err != nil {
 		t.Fatalf("reload after pod-bed persist: %v", err)
@@ -94,16 +96,18 @@ func TestPersistBedDeployOverrides_RoundtripsArbiterFields(t *testing.T) {
 
 	// The two roles of the group live-preemption bed: a requires_exclusive CLAIMANT
 	// member and a preemptible HOLDER member.
-	persistBedDeployOverrides("preempt-taker", spec.BundleNode{
+	takerBed := spec.BundleNode{
 		Target:            "pod",
 		Image:             "check-pod",
 		RequiresExclusive: []string{"test-lock"},
-	})
-	persistBedDeployOverrides("preempt-holder", spec.BundleNode{
+	}
+	holderBed := spec.BundleNode{
 		Target:      "pod",
 		Image:       "check-pod",
 		Preemptible: &spec.PreemptibleConfig{Holds: []string{"test-lock"}, Restore: "always"},
-	})
+	}
+	deploykit.PersistBedDeployOverrides("preempt-taker", takerBed, bedExternalInPlace(takerBed.Target), testBedMarshalNode, nil)
+	deploykit.PersistBedDeployOverrides("preempt-holder", holderBed, bedExternalInPlace(holderBed.Target), testBedMarshalNode, nil)
 
 	dc, err := deploykit.LoadBundleConfig()
 	if err != nil {

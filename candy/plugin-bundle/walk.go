@@ -110,6 +110,11 @@ func (c *BundleAddCmd) Run() error {
 	if c.DryRun {
 		return nil
 	}
+	// Persist each sibling member's deploy-shaped overrides PLUGIN-SIDE BEFORE the host
+	// "deploy-members-up" seam runs bringUpMembers (which no longer persists itself — #55 coneC-dsh
+	// β1), so the member's declared port/volume/env + arbiter role are seeded by the time its own
+	// `charly config`/`charly start` runs. Best-effort, mirroring the former bringUpMembers persist.
+	persistMemberDeployOverrides(rootNode)
 	return hostDeploySeamJSON("deploy-members-up", spec.DeployMembersRequest{Node: rootNode}, nil)
 }
 

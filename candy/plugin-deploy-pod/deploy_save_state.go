@@ -34,16 +34,34 @@ func fetchLoaderPrimaries(ctx context.Context, ex *sdk.Executor) map[string]stri
 	return t.Primaries
 }
 
+// deployMarshalNode builds the per-entry node-form marshal callback deploykit.SaveBundleConfig /
+// SaveDeployState / CleanDeployEntry take. It resugars each plan step via the loader-threaded
+// Primaries snapshot (fetchLoaderPrimaries) — the SAME registry-derived D-fact the deleted host
+// deploy-config-save leg fed to deploykit.MarshalBundleNode via loaderThreaded().Primaries.
+// Sourcing Primaries PLUGIN-SIDE is what lets the deploy-state WRITE run here instead of over a
+// host seam (#55 coneC-dsh — the pod-config-* seams collapse plugin-side).
+func deployMarshalNode(ctx context.Context, ex *sdk.Executor) func(name string, node *deploykit.BundleNode) (*yaml.Node, error) {
+	primaries := fetchLoaderPrimaries(ctx, ex)
+	return func(_ string, node *deploykit.BundleNode) (*yaml.Node, error) {
+		return deploykit.MarshalBundleNode(node, primaries)
+	}
+}
+
+// deployConfigReader is the loader-backed reader callback deploykit.SaveBundleConfig /
+// CleanDeployEntry / SaveVmDeployState take for their load-mutate-save + failsafe re-check — the
+// cycle-free loaderkit.LoadHostBundleConfigViaExecutor read, so the write no longer depends on the
+// charly-init DeployStateHost package var (#55 coneC-dsh).
+func deployConfigReader(ctx context.Context, ex *sdk.Executor) func() (*deploykit.BundleConfig, error) {
+	return func() (*deploykit.BundleConfig, error) { return loadDeploy(ctx, ex, "deploy-write") }
+}
+
 // deploySaveState persists a SaveDeployStateInput to the per-host deploy overlay PLUGIN-SIDE. The
 // marshal callback resugars via loader-threaded Primaries; the reader (the candy's loadDeploy) supplies
 // the current-state re-read SaveDeployState performs, so the write needs no charly-init DeployStateHost.
 // SaveDeployState is best-effort (stderr warnings, no error return) — matching the host-side write it
 // replaces (the deleted seam returned nil on success too).
 func deploySaveState(ctx context.Context, ex *sdk.Executor, box, instance string, input spec.SaveDeployStateInput) {
-	primaries := fetchLoaderPrimaries(ctx, ex)
-	marshalNode := func(_ string, node *deploykit.BundleNode) (*yaml.Node, error) {
-		return deploykit.MarshalBundleNode(node, primaries)
-	}
+	marshalNode := deployMarshalNode(ctx, ex)
 	reader := func() (*deploykit.BundleConfig, error) { return loadDeploy(ctx, ex, "deploy-save-state") }
 	deploykit.SaveDeployState(box, instance, input, marshalNode, reader)
 }

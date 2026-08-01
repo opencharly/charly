@@ -488,7 +488,7 @@ web-app:
 	}
 
 	// (1) Selective removal of the disposable bed VM.
-	if err := deploykit.RemoveVmDeployEntry("vm:k3s-vm", acquireDeployConfigLock, saveBundleConfigNodeForm); err != nil {
+	if err := deploykit.RemoveVmDeployEntry("vm:k3s-vm", acquireDeployConfigLock, saveBundleConfigNodeForm, nil); err != nil {
 		t.Fatalf("RemoveVmDeployEntry(vm:k3s-vm): %v", err)
 	}
 	dc, err := deploykit.LoadBundleConfig()
@@ -506,7 +506,7 @@ web-app:
 	}
 
 	// (2) Idempotency: removing the already-gone entry is a clean no-op.
-	if err := deploykit.RemoveVmDeployEntry("vm:k3s-vm", acquireDeployConfigLock, saveBundleConfigNodeForm); err != nil {
+	if err := deploykit.RemoveVmDeployEntry("vm:k3s-vm", acquireDeployConfigLock, saveBundleConfigNodeForm, nil); err != nil {
 		t.Fatalf("idempotent re-removal of vm:k3s-vm errored: %v", err)
 	}
 	dc2, err := deploykit.LoadBundleConfig()
