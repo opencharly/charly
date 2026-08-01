@@ -42,9 +42,9 @@ func TestPersistBedDeployOverrides_SkipsLocalBed(t *testing.T) {
 		Disposable: &disp,
 		Lifecycle:  "dev",
 	}
-	deploykit.PersistBedDeployOverrides("check-local", localBed, bedExternalInPlace(localBed.Target), testBedMarshalNode, nil)
+	deploykit.PersistBedDeployOverrides("check-local", localBed, bedExternalInPlace(localBed.Target), testBedMarshalNode, testLoadBundleConfig)
 
-	dc, err := deploykit.LoadBundleConfig()
+	dc, err := testLoadBundleConfig()
 	if err != nil {
 		t.Fatalf("overlay unloadable after local-bed persist (it should have been SKIPPED): %v", err)
 	}
@@ -60,8 +60,8 @@ func TestPersistBedDeployOverrides_SkipsLocalBed(t *testing.T) {
 		Target: "pod",
 		Image:  "pod-deploy-x",
 	}
-	deploykit.PersistBedDeployOverrides("pod-deploy-x", podBed, bedExternalInPlace(podBed.Target), testBedMarshalNode, nil)
-	dc2, err := deploykit.LoadBundleConfig()
+	deploykit.PersistBedDeployOverrides("pod-deploy-x", podBed, bedExternalInPlace(podBed.Target), testBedMarshalNode, testLoadBundleConfig)
+	dc2, err := testLoadBundleConfig()
 	if err != nil {
 		t.Fatalf("reload after pod-bed persist: %v", err)
 	}
@@ -106,10 +106,10 @@ func TestPersistBedDeployOverrides_RoundtripsArbiterFields(t *testing.T) {
 		Image:       "check-pod",
 		Preemptible: &spec.PreemptibleConfig{Holds: []string{"test-lock"}, Restore: "always"},
 	}
-	deploykit.PersistBedDeployOverrides("preempt-taker", takerBed, bedExternalInPlace(takerBed.Target), testBedMarshalNode, nil)
-	deploykit.PersistBedDeployOverrides("preempt-holder", holderBed, bedExternalInPlace(holderBed.Target), testBedMarshalNode, nil)
+	deploykit.PersistBedDeployOverrides("preempt-taker", takerBed, bedExternalInPlace(takerBed.Target), testBedMarshalNode, testLoadBundleConfig)
+	deploykit.PersistBedDeployOverrides("preempt-holder", holderBed, bedExternalInPlace(holderBed.Target), testBedMarshalNode, testLoadBundleConfig)
 
-	dc, err := deploykit.LoadBundleConfig()
+	dc, err := testLoadBundleConfig()
 	if err != nil {
 		t.Fatalf("reload per-host overlay: %v", err)
 	}

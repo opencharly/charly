@@ -17,8 +17,8 @@ plugin-check:
             the kit-Runner through the in-core VerbResolver + returns the []StepResult the plugin
             formats. The check ENGINE itself (the Runner + plan walk + grammar) lives in sdk/kit as a
             library both the host seam and any plugin import. "check-run" is a class-generic action
-            noun, not a provider word (F11). The harness reaches the config loader + deploy ledger via
-            HostBuild("config-resolve"/"config-persist"), re-invokes `charly` build/deploy/check
+            noun, not a provider word (F11). The harness reaches the config loader + deploy-ledger READ via
+            HostBuild("config-resolve"), re-invokes `charly` build/deploy/check
             subcommands via HostBuild("cli"), and resolves the agent CLI via InvokeProvider(kind:
             agent). No plugin-specific command LOGIC is left in core — this is the same "plugin owns
             the logic + a generic seam for the core-coupled bits" doctrine the vm + clean + pod deploy

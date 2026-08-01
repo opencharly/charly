@@ -18,7 +18,7 @@ package deploypod
 // deploykit.CredentialAccessViaExecutor + the plugin-side saveBundle + kit.DefaultDeployConfigPath,
 // so they run identically compiled-in or out-of-process (the plugin-side reverse channel the
 // rest of candy/plugin-deploy-pod already uses). The former charly-core DefaultCredentialStore
-// host singleton + saveBundleConfigNodeForm loader-seam are gone — no host round-trip.
+// host singleton + host deploy-state save-callback loader-seam are gone — no host round-trip.
 
 import (
 	"context"

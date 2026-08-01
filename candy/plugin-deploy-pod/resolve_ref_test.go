@@ -18,10 +18,10 @@ import (
 func TestResolvedOverlayImage(t *testing.T) {
 	const overlayRef = "check-addcandy-pod-overlay:abc123"
 	cases := []struct {
-		name     string
-		bundle   map[string]deploykit.BundleNode
+		name      string
+		bundle    map[string]deploykit.BundleNode
 		box, inst string
-		want     string
+		want      string
 	}{
 		{
 			name:   "deploy-key entry wins",

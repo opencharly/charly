@@ -59,6 +59,23 @@ func saveDeployConfig(dc *deploykit.BundleConfig) error {
 	return deploykit.SaveBundleConfig(dc, deployMarshalNode(), loadBundleConfig)
 }
 
+// bundleAcquireDeployConfigLock serializes the read-modify-write of the per-host deploy overlay
+// (~/.config/charly/charly.yml) for a plugin-side deploy-state write. Blocking (a config write is
+// brief). The SAME lock charly/filelock.go's acquireDeployConfigLock holds (the spec/lock primitive
+// via kit.AcquireFileLock, R3) — added for the #55 coneC-dsh β2 config-PERSIST shed (the deleted
+// "config-persist" host-builder supplied this lock host-side; the post-teardown entry removal in
+// deploy_target.go now calls deploykit.RemoveVmDeployEntry directly with this plugin-side lock).
+// A future batch may consolidate the charly + plugin-bundle + plugin-vm copies into one shared
+// kit/spec helper (flagged in charly/filelock.go); for now each supplies its own, per the coneC-dsh
+// β2 scope.
+func bundleAcquireDeployConfigLock() (func() error, error) {
+	path, err := kit.DefaultDeployConfigPath()
+	if err != nil {
+		return nil, fmt.Errorf("deploy-config lock path: %w", err)
+	}
+	return kit.AcquireFileLock(path+".lock", true)
+}
+
 func marshalConfigToStdout(dc *deploykit.BundleConfig) error {
 	data, err := yaml.Marshal(dc)
 	if err != nil {

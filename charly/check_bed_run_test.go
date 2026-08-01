@@ -142,9 +142,9 @@ ollama:
 		Lifecycle:  "dev",
 	}
 	marshalNode := testBedMarshalNode
-	deploykit.PersistBedDeployOverrides("check-cachyos-ollama-pod", bed, bedExternalInPlace(bed.Target), marshalNode, nil)
+	deploykit.PersistBedDeployOverrides("check-cachyos-ollama-pod", bed, bedExternalInPlace(bed.Target), marshalNode, testLoadBundleConfig)
 
-	dc, err := deploykit.LoadBundleConfig()
+	dc, err := testLoadBundleConfig()
 	if err != nil {
 		t.Fatalf("reload after seed: %v", err)
 	}

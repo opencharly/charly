@@ -65,7 +65,7 @@ func bedExternalInPlace(target string) bool {
 }
 
 // persistBedDeployOverrides + its deploykit import MOVED PLUGIN-SIDE to candy/plugin-check's bed
-// runner (#55 coneC-dsh β1 — the marshalDeployNode envelope landed via K4: plugins build their own
+// runner (#55 coneC-dsh β1 — the deploy-nodeform marshal envelope landed via K4: plugins build their own
 // loader-threaded marshalNode via fetchLoaderPrimaries + a loader-backed reader via
 // loaderkit.LoadHostBundleConfigViaExecutor, so the bed-root + member persist no longer need the
 // K1-tied host wrapper). The host seam threads the bed-root BundleNode (with nested Members) as

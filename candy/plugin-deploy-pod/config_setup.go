@@ -245,7 +245,8 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 	// Env/MCP provides injection (P11 seam-death — see provides_inject.go). The plugin resolves the
 	// provides templates itself and mutates the loaded deploy config in place, persisting through the
 	// SAME loadDeploy→modify→saveBundle path the secrets/sidecar persist uses (R3); the locked
-	// whole-file write stays in the floored saveBundleConfigNodeForm behind pod-config-save-bundle.
+	// whole-file write + marshal resugar run plugin-side via deploykit.SaveBundleConfig (the former
+	// pod-config-save-bundle host seam + the host save-callback are deleted, #55 coneC-dsh).
 	dc, err = loadDeploy(ctx, ex, "charly config reload-before-inject")
 	if err != nil {
 		return err

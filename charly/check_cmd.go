@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/spec/report"
 	specexec "github.com/opencharly/spec/exec"
+	"github.com/opencharly/spec/report"
 	"github.com/opencharly/spec/spec"
 )
 

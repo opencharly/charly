@@ -34,10 +34,10 @@ func (c hostCheckContext) DialTimeout() time.Duration { return c.h.cc.DialTimeou
 func (c hostCheckContext) HTTPDo(ctx context.Context, req spec.CheckHTTPRequest) (spec.CheckHTTPResponse, error) {
 	return spec.DoHTTPRequest(ctx, c.h.cc.HTTPClient(), req)
 }
-func (c hostCheckContext) Box() string       { return c.h.cc.Box() }
-func (c hostCheckContext) Instance() string  { return c.h.cc.Instance() }
-func (c hostCheckContext) Distros() []string  { return c.h.cc.Distros() }
-func (c hostCheckContext) AddBackground(pid int) { c.h.cc.AddBg(pid) }
+func (c hostCheckContext) Box() string             { return c.h.cc.Box() }
+func (c hostCheckContext) Instance() string        { return c.h.cc.Instance() }
+func (c hostCheckContext) Distros() []string       { return c.h.cc.Distros() }
+func (c hostCheckContext) AddBackground(pid int)   { c.h.cc.AddBg(pid) }
 func (c hostCheckContext) Mode() spec.CheckRunMode { return c.h.cc.Mode() }
 
 // kitVerbAdapter wraps a COMPILED-IN host-coupled verb candy's checkstep.CheckVerbProvider

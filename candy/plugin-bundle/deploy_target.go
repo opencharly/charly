@@ -718,22 +718,19 @@ func handleDeployDel(ctx context.Context, exec *sdk.Executor, req spec.DeployTar
 		if err != nil {
 			return reply, fmt.Errorf("deploy-dispatch del: post-teardown: %w", err)
 		}
-		// The plugin cannot touch charly.yml itself — remove the reply's deploy-entry keys via
-		// the EXISTING "config-persist" HostBuild seam (Remove=true), which already wraps the
-		// SAME deploykit.RemoveVmDeployEntry (sdk/deploykit/vm_deploy_state.go) the pre-move
-		// code called directly (core-only until the F6 vm-lifecycle move relocated its
-		// decision logic to deploykit, coneB-vmlifecycle).
+		// Remove the post-teardown reply's deploy-entry keys from charly.yml PLUGIN-SIDE via
+		// deploykit.RemoveVmDeployEntry directly (#55 coneC-dsh β2 config-PERSIST shed — the former
+		// "config-persist" HostBuild seam is deleted; the plugin reuses its OWN deployMarshalNode +
+		// loadBundleConfig + bundleAcquireDeployConfigLock, the SAME three primitives the deleted
+		// host-builder injected, R3 — the deploy-state WRITE pattern this package already uses for
+		// SaveDeployState at line 431).
 		if len(ptJSON) > 0 {
 			var ptReply spec.PostTeardownReply
 			if err := json.Unmarshal(ptJSON, &ptReply); err != nil {
 				return reply, fmt.Errorf("deploy-dispatch del: decode post-teardown reply: %w", err)
 			}
 			for _, key := range ptReply.RemoveEntries {
-				cpReqJSON, merr := json.Marshal(spec.ConfigPersistRequest{Key: key, Remove: true})
-				if merr != nil {
-					return reply, merr
-				}
-				if _, err := exec.HostBuild(ctx, "config-persist", cpReqJSON); err != nil {
+				if err := deploykit.RemoveVmDeployEntry(key, bundleAcquireDeployConfigLock, saveDeployConfig, loadBundleConfig); err != nil {
 					fmt.Printf("warning: deploy-dispatch del: removing charly.yml entry %q: %v\n", key, err)
 				}
 			}

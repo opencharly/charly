@@ -13,11 +13,12 @@ import (
 // TestCharlyUpdatePreservesPerHostDeployFields reproduces the operator's scenario
 // through the ACTUAL `charly update <vm>` path: the vm lifecycle hook Rebuild shells
 // `charly vm destroy` (deploykit.RemoveVmDeployEntry) then `charly vm create`
-// (deploykit.SaveVmDeployState), both invoked exactly as host_build_config_resolve.go's
-// hostBuildConfigPersist calls them — with the REAL acquireDeployConfigLock +
-// saveBundleConfigNodeForm callbacks (F6 vm-lifecycle move, coneB-vmlifecycle: the
-// decision logic moved to deploykit, but this test still exercises it end-to-end against
-// a REAL per-host overlay file, complementing deploykit's own fake-backed unit tests).
+// (deploykit.SaveVmDeployState), both invoked with the REAL acquireDeployConfigLock +
+// the test-local save/reader callbacks (testSaveDeployConfig/testLoadBundleConfig — the
+// #55 coneC-dsh δ test-local stand-ins for the deleted host save callback + the
+// DeployStateHost-backed nil reader; F6 vm-lifecycle move, coneB-vmlifecycle: the decision logic
+// moved to deploykit, but this test still exercises it end-to-end against a REAL per-host overlay
+// file, complementing deploykit's own fake-backed unit tests).
 // The per-host entry carries `preemptible` (a LOCAL deploy property) + env +
 // tunnel; the destroy→create cycle must NOT clobber any of them. Against the
 // the pre-fix removeVmDeployEntry (which delete()d the whole entry — RemoveVmDeployEntry's
@@ -53,15 +54,15 @@ vm:cachyos-gpu:
 
 	// `charly update <vm>` == destroy (deploykit.RemoveVmDeployEntry) THEN create
 	// (deploykit.SaveVmDeployState), keyed on vm:<name>.
-	if err := deploykit.RemoveVmDeployEntry("vm:cachyos-gpu", acquireDeployConfigLock, saveBundleConfigNodeForm, nil); err != nil {
+	if err := deploykit.RemoveVmDeployEntry("vm:cachyos-gpu", acquireDeployConfigLock, testSaveDeployConfig, testLoadBundleConfig); err != nil {
 		t.Fatalf("RemoveVmDeployEntry (destroy leg): %v", err)
 	}
-	if err := deploykit.SaveVmDeployState("vm:cachyos-gpu", "cachyos-gpu", &spec.VmDeployState{InstanceID: "rebuilt-uuid", SshPort: 2222}, acquireDeployConfigLock, saveBundleConfigNodeForm, nil); err != nil {
+	if err := deploykit.SaveVmDeployState("vm:cachyos-gpu", "cachyos-gpu", &spec.VmDeployState{InstanceID: "rebuilt-uuid", SshPort: 2222}, acquireDeployConfigLock, testSaveDeployConfig, testLoadBundleConfig); err != nil {
 		t.Fatalf("SaveVmDeployState (create leg): %v", err)
 	}
 
 	// Reload and assert NOTHING operator-authored was dropped by the cycle.
-	dc, err := deploykit.LoadBundleConfig()
+	dc, err := testLoadBundleConfig()
 	if err != nil {
 		t.Fatalf("LoadBundleConfig: %v", err)
 	}
@@ -106,10 +107,10 @@ vm:check-cachyos-gpu-vm:
 	if err := os.WriteFile(filepath.Join(cfgDir, "charly.yml"), []byte(yml), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := deploykit.RemoveVmDeployEntry("vm:check-cachyos-gpu-vm", acquireDeployConfigLock, saveBundleConfigNodeForm, nil); err != nil {
+	if err := deploykit.RemoveVmDeployEntry("vm:check-cachyos-gpu-vm", acquireDeployConfigLock, testSaveDeployConfig, testLoadBundleConfig); err != nil {
 		t.Fatalf("RemoveVmDeployEntry: %v", err)
 	}
-	dc, err := deploykit.LoadBundleConfig()
+	dc, err := testLoadBundleConfig()
 	if err != nil {
 		t.Fatalf("LoadBundleConfig: %v", err)
 	}
@@ -161,7 +162,7 @@ cachyos-gpu:
 	if err != nil || !ok || uf == nil {
 		t.Fatalf("LoadUnified(%q): ok=%v err=%v", proj, ok, err)
 	}
-	nodes := deploykit.MergedDeployTree(uf.Bundle, "test")
+	nodes := deploykit.MergedDeployTree(uf.Bundle, "test", testLoadBundleConfig)
 	node, ok := nodes["cachyos-gpu"]
 	if !ok {
 		t.Fatal("cachyos-gpu not gathered")
