@@ -136,10 +136,18 @@ func requireUnversionedSource(t *testing.T, dir string) {
 }
 
 // copyCandyFixReplace copies a candy module tree to dst, rewriting go.mod's
-// `replace github.com/opencharly/sdk => ../../sdk` to the ABSOLUTE sdk dir (derived
-// from charlyDir's parent) so buildPluginBinary resolves it from the temp project
-// location.
+// RELATIVE `replace github.com/opencharly/{sdk,spec} => ../../{sdk,spec}` directives
+// to the ABSOLUTE repo-submodule dirs (derived from charlyDir's parent — the repo
+// root) so buildPluginBinary resolves them from the temp project location. A candy
+// go.mod carries BOTH replaces (the sdk contract + the spec contract module it
+// depends on transitively); a relative `=> ../../spec` staged into a temp project
+// resolves to `<temp>/spec`, which does not exist, so the out-of-process `go build`
+// fails with "reading ../../spec/go.mod: no such file" unless the spec replace is
+// rewritten to the absolute spec dir exactly as the sdk replace is.
 func copyCandyFixReplace(src, dst, charlyDir string) error {
+	repoRoot := filepath.Dir(charlyDir)
+	sdkDir := filepath.Join(repoRoot, "sdk")
+	specDir := filepath.Join(repoRoot, "spec")
 	return filepath.WalkDir(src, func(p string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -154,14 +162,16 @@ func copyCandyFixReplace(src, dst, charlyDir string) error {
 			return err
 		}
 		if d.Name() == "go.mod" {
-			sdkDir := filepath.Join(filepath.Dir(charlyDir), "sdk")
 			var fixed []string
 			for _, line := range strings.Split(string(b), "\n") {
-				if strings.HasPrefix(strings.TrimSpace(line), "replace github.com/opencharly/sdk") {
+				switch {
+				case strings.HasPrefix(strings.TrimSpace(line), "replace github.com/opencharly/sdk"):
 					fixed = append(fixed, "replace github.com/opencharly/sdk => "+sdkDir)
-					continue
+				case strings.HasPrefix(strings.TrimSpace(line), "replace github.com/opencharly/spec"):
+					fixed = append(fixed, "replace github.com/opencharly/spec => "+specDir)
+				default:
+					fixed = append(fixed, line)
 				}
-				fixed = append(fixed, line)
 			}
 			b = []byte(strings.Join(fixed, "\n"))
 		}
