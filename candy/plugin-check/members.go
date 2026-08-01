@@ -21,6 +21,7 @@ import (
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -109,14 +110,14 @@ func liveDeployVarResolver(ex *sdk.Executor, ctx context.Context, dir, name, ins
 		return &kit.CheckVarResolver{}
 	}
 	var deployOverlay *spec.BundleNode
-	if dc := deploykit.LoadDeployConfigForRead("charly check live on:"); dc != nil {
+	if dc, derr := loaderkit.LoadHostBundleConfigViaExecutor(ctx, ex); derr == nil && dc != nil {
 		if entry, ok := dc.Bundle[spec.DeployKey(name, instance)]; ok {
 			deployOverlay = &entry
 		} else if entry, ok := dc.Bundle[name]; ok {
 			deployOverlay = &entry
 		}
 	}
-	imageRef := resolveDeployBoxName(rp, name, instance)
+	imageRef := resolveDeployBoxName(ctx, ex, rp, name, instance)
 	resolvedRef, err := resolveImageRefForEnsure(rp, imageRef)
 	if err != nil {
 		return &kit.CheckVarResolver{}
@@ -135,11 +136,11 @@ func liveDeployVarResolver(ex *sdk.Executor, ctx context.Context, dir, name, ins
 // would recompute) — falling back to the key itself (the key==image convention). This is
 // plugin-check's own envelope-based resolver (the pod config/start path's equivalent lives
 // plugin-side in candy/plugin-deploy-pod's resolve_ref.go, #55 Cone A Unit 2).
-func resolveDeployBoxName(rp *spec.ResolvedProject, key, instance string) string {
+func resolveDeployBoxName(ctx context.Context, ex *sdk.Executor, rp *spec.ResolvedProject, key, instance string) string {
 	if key == "" {
 		return key
 	}
-	if dc := deploykit.LoadDeployConfigForRead("resolveDeployBoxName"); dc != nil {
+	if dc, derr := loaderkit.LoadHostBundleConfigViaExecutor(ctx, ex); derr == nil && dc != nil {
 		if entry, ok := dc.Bundle[spec.DeployKey(key, instance)]; ok && entry.Image != "" {
 			return entry.Image
 		}

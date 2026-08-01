@@ -31,8 +31,8 @@ import (
 	"os"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/loaderkit"
 	pb "github.com/opencharly/spec/proto"
 	"github.com/opencharly/spec/spec"
 )
@@ -114,7 +114,7 @@ func verifyChecksRunPlan(ex *sdk.Executor, ctx context.Context, venueExec spec.D
 	// runLocalDeployScopePlan — see the header). DeployKey(box, instance) with the bare-image
 	// fallback, the SAME precedence the core read used.
 	plan := in.Plan
-	if dc := deploykit.LoadDeployConfigForRead("charly check live"); dc != nil {
+	if dc, derr := loaderkit.LoadHostBundleConfigViaExecutor(ctx, ex); derr == nil && dc != nil {
 		if entry, ok := dc.Bundle[spec.DeployKey(in.Box, in.Instance)]; ok {
 			plan = append(plan, entry.Plan...)
 		} else if entry, ok := dc.Bundle[in.Box]; ok {

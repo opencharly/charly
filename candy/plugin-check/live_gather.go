@@ -38,6 +38,7 @@ import (
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/vmshared"
 	"github.com/opencharly/spec/spec"
 )
@@ -104,7 +105,7 @@ func pluginCheckLivePod(ex *sdk.Executor, ctx context.Context, rp *spec.Resolved
 	} else if entry, ok := tree[req.Name]; ok {
 		projectPlan = entry.Plan
 	}
-	if dc := deploykit.LoadDeployConfigForRead("charly check live"); dc != nil {
+	if dc, derr := loaderkit.LoadHostBundleConfigViaExecutor(ctx, ex); derr == nil && dc != nil {
 		if entry, ok := dc.Bundle[spec.DeployKey(req.Name, req.Instance)]; ok {
 			localPlan = entry.Plan
 			deployOverlay = &entry
@@ -115,7 +116,7 @@ func pluginCheckLivePod(ex *sdk.Executor, ctx context.Context, rp *spec.Resolved
 	}
 	overlayPlan := append(append([]spec.Step(nil), projectPlan...), localPlan...)
 
-	imageRef := resolveDeployBoxName(rp, req.Name, req.Instance)
+	imageRef := resolveDeployBoxName(ctx, ex, rp, req.Name, req.Instance)
 	resolvedRef, err := resolveImageRefForEnsure(rp, imageRef)
 	if err != nil {
 		return kit.CheckRunReply{}, fmt.Errorf("resolving deploy box %q: %w", imageRef, err)
@@ -228,7 +229,7 @@ func pluginVmHostdevCount(sp *vmshared.VmSpec) int {
 // pluginLoadVmCheckPlans aggregates the VM deployment's check plan from the project tree, the
 // per-machine deploy overlay, and add_candy deploy-scope steps — the port of
 // charly/check_cmd.go's CheckLiveCmd.loadVmCheckPlans.
-func pluginLoadVmCheckPlans(rp *spec.ResolvedProject, tree map[string]spec.BundleNode, name, vmName string, nestedLeaf *spec.BundleNode, user string, port int) (plan []spec.Step, outUser string, outPort int, err error) {
+func pluginLoadVmCheckPlans(ctx context.Context, ex *sdk.Executor, rp *spec.ResolvedProject, tree map[string]spec.BundleNode, name, vmName string, nestedLeaf *spec.BundleNode, user string, port int) (plan []spec.Step, outUser string, outPort int, err error) {
 	outUser, outPort = user, port
 	var projectPlan, localPlan []spec.Step
 	var addCandies []string
@@ -245,7 +246,7 @@ func pluginLoadVmCheckPlans(rp *spec.ResolvedProject, tree map[string]spec.Bundl
 			addCandies = entry.AddCandy
 		}
 	}
-	if dc := deploykit.LoadDeployConfigForRead("charly check vm"); dc != nil {
+	if dc, derr := loaderkit.LoadHostBundleConfigViaExecutor(ctx, ex); derr == nil && dc != nil {
 		entry, ok, ferr := deploykit.FindVmDeployNode(dc.Bundle, name, vmName)
 		if ferr != nil {
 			return nil, "", 0, fmt.Errorf("resolving local vm deploy state for %q: %w", name, ferr)
@@ -279,7 +280,7 @@ func pluginCheckLiveVM(ex *sdk.Executor, ctx context.Context, rp *spec.ResolvedP
 		return kit.CheckRunReply{}, err
 	}
 
-	plan, user, port, err := pluginLoadVmCheckPlans(rp, tree, req.Name, vmName, nestedLeaf, user, port)
+	plan, user, port, err := pluginLoadVmCheckPlans(ctx, ex, rp, tree, req.Name, vmName, nestedLeaf, user, port)
 	if err != nil {
 		return kit.CheckRunReply{}, err
 	}
@@ -429,7 +430,7 @@ func pluginRunLocalDeployScopePlan(ex *sdk.Executor, ctx context.Context, rp *sp
 	if node != nil {
 		plan = append(plan, node.Plan...)
 	}
-	if dc := deploykit.LoadDeployConfigForRead("charly check live"); dc != nil {
+	if dc, derr := loaderkit.LoadHostBundleConfigViaExecutor(ctx, ex); derr == nil && dc != nil {
 		if entry, ok := dc.Bundle[spec.DeployKey(image, instance)]; ok {
 			plan = append(plan, entry.Plan...)
 		} else if entry, ok := dc.Bundle[image]; ok {

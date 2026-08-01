@@ -27,6 +27,7 @@ import (
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -45,7 +46,7 @@ func pluginCheckRunFeatureLive(ex *sdk.Executor, ctx context.Context, req spec.C
 	if err != nil {
 		return kit.CheckRunReply{}, err
 	}
-	imageRef := resolveDeployBoxName(rp, req.Name, req.Instance)
+	imageRef := resolveDeployBoxName(ctx, ex, rp, req.Name, req.Instance)
 	resolvedRef, err := resolveImageRefForEnsure(rp, imageRef)
 	if err != nil {
 		return kit.CheckRunReply{}, fmt.Errorf("resolving deploy box %q: %w", imageRef, err)
@@ -58,7 +59,7 @@ func pluginCheckRunFeatureLive(ex *sdk.Executor, ctx context.Context, req spec.C
 		return kit.CheckRunReply{NoSteps: true}, nil
 	}
 	var deployOverlay *spec.BundleNode
-	if dc := deploykit.LoadDeployConfigForRead("charly check feature run"); dc != nil {
+	if dc, derr := loaderkit.LoadHostBundleConfigViaExecutor(ctx, ex); derr == nil && dc != nil {
 		if entry, ok := dc.Bundle[spec.DeployKey(req.Name, req.Instance)]; ok {
 			deployOverlay = &entry
 		} else if entry, ok := dc.Bundle[req.Name]; ok {
