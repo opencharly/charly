@@ -5,19 +5,28 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/container"
 	"github.com/opencharly/spec/spec"
 )
 
-// withLocalImages swaps kit.ListLocalImages for the duration of the test — R3 duplicate of
+// withLocalImages swaps container.ListLocalImages for the duration of the test — R3 duplicate of
 // charly/checkrun_charly_verbs_test.go's helper of the same name (a separate Go module; a pure
-// sdk/kit package-level var swap, zero core coupling).
+// spec/container package-level var swap, zero core coupling).
+//
+// #55 coneB: the local-image resolution family relocated to spec/container. resolveBootcImageRef
+// calls kit.ResolveLocalImageRef, whose body is container.ResolveLocalImageRef — and that body
+// reads container's OWN ListLocalImages var (the kit.ListLocalImages re-export is a value-copy
+// taken once at init, so reassigning the kit re-export no longer reaches the relocated callee —
+// see the testability note at sdk/kit/local_image.go:13-16). Swap the var the callee actually reads.
+// kit.LocalImageInfo is a type alias for container.LocalImageInfo, so the fixture literals are
+// unchanged.
 func withLocalImages(t *testing.T, images []kit.LocalImageInfo) {
 	t.Helper()
-	orig := kit.ListLocalImages
-	kit.ListLocalImages = func(engine string) ([]kit.LocalImageInfo, error) {
+	orig := container.ListLocalImages
+	container.ListLocalImages = func(engine string) ([]container.LocalImageInfo, error) {
 		return images, nil
 	}
-	t.Cleanup(func() { kit.ListLocalImages = orig })
+	t.Cleanup(func() { container.ListLocalImages = orig })
 }
 
 // TestResolveBootcImageRef_FullRefPassthrough proves a full OCI ref (one
