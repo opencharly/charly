@@ -179,7 +179,18 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 		return fmt.Errorf("persisting resource caps: %w", err)
 	}
 
-	if dc != nil {
+	// Guard dc.Bundle (not only dc): coneC-dsh's loadDeploy → loaderkit.LoadHostBundleConfigViaExecutor
+	// returns a NON-NIL &deploykit.BundleConfig{} with a nil Bundle on an absent per-host overlay
+	// (the bed's XDG-isolated empty temp dir; the operator's ~/.config/charly before the first deploy
+	// add) — matching deploykit.LoadBundleConfig's absent/empty contract so reap-orphans and other
+	// range-without-nil-guard callers keep working. The former LoadDeployConfigForRead returned nil
+	// for absent, so the pre-coneC-dsh `if dc != nil` guard skipped this block entirely (graceful
+	// degradation: no overlay → no prior resolved ports → image-label defaults, meta.Port below).
+	// The non-nil-&BundleConfig{} return keeps that contract for the rangers but makes `if dc != nil`
+	// always true, so the guard must also check dc.Bundle: an absent overlay (nil Bundle) skips port
+	// resolution — exactly the graceful degradation the loadDeploy comment names. Writing to a nil
+	// Bundle here was the coneC-dsh regression (assignment-to-nil-map panic, config_setup.go:193).
+	if dc != nil && dc.Bundle != nil {
 		key := spec.DeployKey(c.Box, c.Instance)
 		overlay := dc.Bundle[key]
 		containerPorts := kit.ContainerPortsFromMappings(meta.Port)
