@@ -41,7 +41,6 @@ func TestExternalKind_PrescanConnectDecode(t *testing.T) {
 	if err := copyCandyFixReplace(srcCandy, dstCandy, charlyDir); err != nil {
 		t.Fatalf("stage candy: %v", err)
 	}
-	requireUnversionedSource(t, dstCandy)
 	rootYAML := `version: ` + LatestSchemaVersion().String() + `
 discover:
     - path: candy
@@ -99,7 +98,6 @@ func TestExternalKind_OpValidateRejectsInvalidBody(t *testing.T) {
 	if err := copyCandyFixReplace(srcCandy, dstCandy, charlyDir); err != nil {
 		t.Fatalf("stage candy: %v", err)
 	}
-	requireUnversionedSource(t, dstCandy)
 	rootYAML := `version: ` + LatestSchemaVersion().String() + `
 discover:
     - path: candy
@@ -126,13 +124,6 @@ func pluginKindKeys(uf *spec.UnifiedFile) []string {
 		out = append(out, k)
 	}
 	return out
-}
-
-func requireUnversionedSource(t *testing.T, dir string) {
-	t.Helper()
-	if pluginSourceHasGitRevision(dir, pluginBuildEnv(os.Environ(), dir)) {
-		t.Fatal("staged candy must remain an unversioned source fixture")
-	}
 }
 
 // copyCandyFixReplace copies a candy module tree to dst, rewriting go.mod's

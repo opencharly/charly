@@ -36,9 +36,6 @@ func TestPluginBuildEnvKeepsVCSStampingReadOnly(t *testing.T) {
 	if !strings.Contains(joined, "PWD="+srcDir) {
 		t.Fatalf("plugin build environment did not bind the real source worktree:\n%s", joined)
 	}
-	if !pluginSourceHasGitRevision(srcDir, env) {
-		t.Fatal("real source worktree was not classified as VCS-stampable")
-	}
 }
 
 func TestPluginBuildEnvNoGitSourceDoesNotInheritGitIdentity(t *testing.T) {
@@ -55,46 +52,40 @@ func TestPluginBuildEnvNoGitSourceDoesNotInheritGitIdentity(t *testing.T) {
 	if !strings.Contains(joined, "PWD="+srcDir) {
 		t.Fatalf("non-Git source did not receive its own working directory:\n%s", joined)
 	}
-	if pluginSourceHasGitRevision(srcDir, env) {
-		t.Fatal("non-Git source was incorrectly classified as VCS-stampable")
-	}
 }
 
-// TestPluginBuildVCSFlag_TestBinaryAlwaysSkipsAutoDetect is the charly#178
-// test-harness-fragility regression test. It uses a real Git-backed srcDir
-// (this checkout's own charly/ directory — pluginSourceHasGitRevision is
-// TRUE for it) to prove both halves of the fix:
-//   - isTestBinary=false (the production branch) still resolves to
-//     "-buildvcs=auto" — the pre-existing behavior for a real project's
-//     out-of-process plugin connect / bake_plugin: image embedding is
-//     UNCHANGED by this fix;
-//   - isTestBinary=true forces "-buildvcs=false" even though the SAME
-//     source has a real Git revision — the exact override that removes the
-//     git-status-walk race under this project's many linked worktrees
-//     (the reproducible "error obtaining VCS status: exit status 128"
-//     failures the PR validator reproduced 3x on charly#178's thread).
-//
-// pluginBuildVCSFlag (the wrapper buildPluginBinary actually calls) is
-// exercised too: since this IS a "go test" binary, testing.Testing() is
-// always true here, so it must resolve to "-buildvcs=false" against the
-// very same git-backed srcDir that would otherwise auto-detect — proving
-// the real call path (not just the pure decision function) carries the flag
-// through correctly.
-func TestPluginBuildVCSFlag_TestBinaryAlwaysSkipsAutoDetect(t *testing.T) {
+// TestPluginBuildVCSFlag_AlwaysFalseBothContexts is the charly#178 regression
+// test. The original charly#178 cutover fixed the TEST-binary path
+// (-buildvcs=false) but left PRODUCTION as -buildvcs=auto "for a future
+// consumer" — a consumer that does not exist (zero readers of the VCS stamp
+// across . + spec + sdk + plugins). The production -buildvcs=auto hits a
+// DETERMINISTIC Go bug (NOT a concurrency race — a single invocation reproduces
+// it): `go build -buildvcs=auto ./cmd/serve` fails with "error obtaining VCS
+// status: exit status 128" (FATAL in Go 1.26) in a linked worktree OUTSIDE the
+// main repo path (e.g. /tmp/...), succeeding in the main checkout and in
+// worktrees UNDER the main repo path → the plugin fails to load → "no provider
+// registered for builder:…" → the check-pod canary FAILS at [image-build]. The
+// fix: ALL plugin builds (test AND production) use -buildvcs=false, removing
+// the git-status walk that hits the Go worktree bug at its source. This test
+// proves both contexts resolve to -buildvcs=false against a real Git-backed
+// srcDir (this checkout's own charly/ directory) — the case that used to
+// auto-detect.
+func TestPluginBuildVCSFlag_AlwaysFalseBothContexts(t *testing.T) {
 	srcDir, err := filepath.Abs(".")
 	if err != nil {
 		t.Fatal(err)
 	}
 	env := pluginBuildEnv(os.Environ(), srcDir)
-	if !pluginSourceHasGitRevision(srcDir, env) {
-		t.Fatalf("fixture precondition failed: %s is not classified as VCS-stampable", srcDir)
-	}
 
-	if got := pluginBuildVCSFlagForContext(srcDir, env, false); got != "-buildvcs=auto" {
-		t.Fatalf("production context (isTestBinary=false) on a real Git source: got %q, want -buildvcs=auto (this fix must not change production behavior)", got)
+	// Both the production context (isTestBinary=false) and the test-binary
+	// context (isTestBinary=true) must resolve to -buildvcs=false — the
+	// auto-detect that hits the Go worktree bug is gone for ALL plugin builds
+	// (charly#178).
+	if got := pluginBuildVCSFlagForContext(srcDir, env, false); got != "-buildvcs=false" {
+		t.Fatalf("production context (isTestBinary=false) on a real Git source: got %q, want -buildvcs=false (charly#178: the production auto-detect Go worktree bug is removed)", got)
 	}
 	if got := pluginBuildVCSFlagForContext(srcDir, env, true); got != "-buildvcs=false" {
-		t.Fatalf("test-binary context (isTestBinary=true) on a real Git source: got %q, want -buildvcs=false (the race-causing auto-detect must be skipped)", got)
+		t.Fatalf("test-binary context (isTestBinary=true) on a real Git source: got %q, want -buildvcs=false", got)
 	}
 
 	// The real call path: pluginBuildVCSFlag defers to testing.Testing(), which
@@ -110,9 +101,6 @@ func TestPluginBuildVCSFlag_TestBinaryAlwaysSkipsAutoDetect(t *testing.T) {
 func TestPluginBuildVCSFlag_NoGitSourceStaysFalseRegardless(t *testing.T) {
 	srcDir := t.TempDir()
 	env := pluginBuildEnv(os.Environ(), srcDir)
-	if pluginSourceHasGitRevision(srcDir, env) {
-		t.Fatalf("fixture precondition failed: %s was classified as VCS-stampable", srcDir)
-	}
 	if got := pluginBuildVCSFlagForContext(srcDir, env, false); got != "-buildvcs=false" {
 		t.Fatalf("production context on a non-Git source: got %q, want -buildvcs=false", got)
 	}

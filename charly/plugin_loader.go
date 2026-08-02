@@ -274,10 +274,10 @@ func buildPluginBinary(ctx context.Context, srcDir, name string) (string, error)
 // pluginBuildVCSFlag picks the `go build -buildvcs=…` value for an out-of-process
 // plugin binary build. It defers to pluginBuildVCSFlagForContext with the REAL
 // test-binary state (testing.Testing(), Go stdlib — true only inside a "go
-// test"-built binary, never in a real `charly` build), so production callers
-// (a project's out-of-process plugin connect, and bake_plugin: image embedding)
-// see no behavior change while a test binary always gets the safe, non-racing
-// value. See pluginBuildVCSFlagForContext for the full rationale.
+// test"-built binary, never in a real `charly` build); both contexts now resolve
+// to the same safe, non-racing value. See pluginBuildVCSFlagForContext for the
+// full rationale (charly#178 — the production `-buildvcs=auto` Go worktree bug
+// was removed: all plugin builds use `-buildvcs=false`).
 func pluginBuildVCSFlag(srcDir string, env []string) string {
 	return pluginBuildVCSFlagForContext(srcDir, env, testing.Testing())
 }
@@ -285,32 +285,42 @@ func pluginBuildVCSFlag(srcDir string, env []string) string {
 // pluginBuildVCSFlagForContext is the pure decision pluginBuildVCSFlag wraps,
 // parameterized on whether the caller is a test binary so both branches are
 // independently unit-testable (testing.Testing() is always true inside `go
-// test`, so a test cannot otherwise observe the production branch).
+// test`, so a test cannot otherwise observe the production branch). Both
+// branches now resolve to the same value.
 //
-// Go's `-buildvcs=auto` walks `git status` on srcDir's repository to embed a
-// VCS revision stamp. Under this project's many linked worktrees, concurrent
-// test/bed runs each spawning their OWN `go build -buildvcs=auto` race that
-// git-status walk against sibling worktrees' git operations, producing
-// reproducible spurious "error obtaining VCS status: exit status 128"
-// failures (charly#178 test-harness RCA, reproduced 3x independently by the
-// PR validator). Passing `-buildvcs=false` as an explicit argv flag is the
-// correct fix — an explicit flag always wins over GOFLAGS, so an env-var
-// override could never have worked here; skipping the walk entirely in test
-// contexts removes the race at its source rather than retrying past it (R4).
+// ALL plugin builds (test AND production) use `-buildvcs=false`. Go's
+// `-buildvcs=auto` walks `git status` on srcDir's repository to embed a VCS
+// revision stamp; for a subdirectory target (./cmd/serve — the layout charly's
+// out-of-process plugin builds use) this is a DETERMINISTIC Go bug, NOT a
+// concurrency race: a SINGLE `go build -buildvcs=auto ./cmd/serve` fails with
+// "error obtaining VCS status: exit status 128" (FATAL in Go 1.26, exit 1) in
+// a linked worktree OUTSIDE the main repo path (e.g. /tmp/...), while it
+// succeeds in the main checkout and in linked worktrees UNDER the main repo
+// path. The plugin fails to load → "no provider registered for builder:…" →
+// the check-pod canary FAILS at [image-build]. (The prior charly#178 comment
+// framed this as a concurrent-race; the single-invocation reproduction refutes
+// that — a race framing cannot explain one build failing alone.) An explicit
+// `-buildvcs=false` argv flag always wins over GOFLAGS, so an env-var override
+// could never have worked; skipping the git-status walk entirely removes the
+// bug at its source (R4 — root-cause, NOT a worktree-location workaround: every
+// teammate using a /tmp worktree re-hits it otherwise; a mutex in charly cannot
+// serialize Go's internal walk).
 //
-// No code anywhere in this tree reads the embedded VCS stamp back out of a
-// plugin binary (grep for debug.ReadBuildInfo / vcs.revision / vcs.modified
-// finds zero consumers), so a test binary losing the stamp is not observable.
-// Production paths are never test binaries, so they keep the pre-existing
-// auto-detect-from-git-revision behavior unchanged — the stamp stays
-// available there for a future consumer without re-litigating this decision.
+// The stamp is NEVER read back out of a plugin binary — grep for
+// debug.ReadBuildInfo / vcs.revision / vcs.modified / vcs.time / ReadBuildInfo
+// across . + spec + sdk + plugins finds ZERO consumers (only this comment).
+// Plugin binaries are transient provider processes (forked per Invoke, reaped
+// on disconnect), not distributed artifacts; their VCS stamp is unobservable,
+// so dropping it is safe. The previous charly#178 cutover fixed the test-binary
+// path but left production as `-buildvcs=auto` "for a future consumer" — a
+// consumer that does not and may never exist (YAGNI), and whose hypothetical
+// need cannot outweigh the real, reproduced, bed-blocking Go worktree bug.
+// Standing rule forward: all plugin builds use `-buildvcs=false`; no "future
+// consumer" carve-out.
 func pluginBuildVCSFlagForContext(srcDir string, env []string, isTestBinary bool) string {
-	if isTestBinary {
-		return "-buildvcs=false"
-	}
-	if pluginSourceHasGitRevision(srcDir, env) {
-		return "-buildvcs=auto"
-	}
+	_ = srcDir
+	_ = env
+	_ = isTestBinary // historically branched; both contexts now use the safe value (charly#178).
 	return "-buildvcs=false"
 }
 
@@ -327,40 +337,6 @@ func pluginBuildEnv(base []string, srcDir string) []string {
 	}
 	env = append(env, "GOWORK=off", "GIT_OPTIONAL_LOCKS=0", "PWD="+srcDir)
 	return env
-}
-
-// pluginSourceHasGitRevision establishes whether a source has provenance that
-// may truthfully be embedded. The probes use exactly the sanitized child
-// environment: inherited GIT_* state may never lend a source someone else's
-// repository identity.
-//
-// Go discovers a physical .git ancestor before it invokes Git. If that marker
-// is malformed or unrelated, auto VCS mode fails instead of omitting metadata.
-// A source without a usable committed Git worktree is therefore built with the
-// explicit no-stamp policy selected by buildPluginBinary.
-func pluginSourceHasGitRevision(srcDir string, env []string) bool {
-	inside, ok := pluginGitProbe(srcDir, env, "rev-parse", "--is-inside-work-tree")
-	if !ok || inside != "true" {
-		return false
-	}
-	if _, ok := pluginGitProbe(srcDir, env, "status", "--porcelain"); !ok {
-		return false
-	}
-	_, ok = pluginGitProbe(srcDir, env, "rev-parse", "--verify", "HEAD")
-	return ok
-}
-
-// pluginGitProbe runs a Git query with the exact environment the Go child will
-// inherit. It does not fall back to the parent process environment.
-func pluginGitProbe(srcDir string, env []string, args ...string) (string, bool) {
-	cmd := exec.Command("git", args...)
-	cmd.Dir = srcDir
-	cmd.Env = env
-	out, err := cmd.Output()
-	if err != nil {
-		return "", false
-	}
-	return strings.TrimSpace(string(out)), true
 }
 
 // bakedPluginDir is the FHS system path a candy's `bake_plugin:` step copies a
