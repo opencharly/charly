@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
+	specexec "github.com/opencharly/spec/exec"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -51,9 +51,9 @@ func pixiCandy(t *testing.T, name string) spec.CandyReader {
 // main) needs a REAL executor reaching the provider registry for any `run: plugin:
 // <word>` op, exactly as the real compile path does — the "construct-step" HostBuild
 // seam has no other way to be reached from a plain function call.
-func testConstructStepExecutor() (context.Context, *sdk.Executor) {
-	ex := sdk.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}})
-	return sdk.ContextWithExecutor(context.Background(), ex), ex
+func testConstructStepExecutor() (context.Context, *specexec.Executor) {
+	ex := specexec.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}})
+	return specexec.ContextWithExecutor(context.Background(), ex), ex
 }
 
 // testCompileOpSteps drives deploykit.CompileOpSteps with a fresh

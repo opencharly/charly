@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/opencharly/sdk"
+	"github.com/opencharly/spec/ops"
 )
 
 // Provider is the ONE extension abstraction. Every reserved word — every kind,
@@ -136,23 +136,23 @@ type PluginUnit struct {
 // constants (sdk/ops.go) — the SINGLE SOURCE shared with compiled-in / out-of-tree plugin
 // candies, so a kind candy's Invoke can compare req.GetOp() against the same value (R3).
 const (
-	OpRun      = sdk.OpRun
-	OpLoad     = sdk.OpLoad
-	OpValidate = sdk.OpValidate
-	OpEmit     = sdk.OpEmit
-	OpExecute  = sdk.OpExecute
-	OpResolve  = sdk.OpResolve
-	OpBuild    = sdk.OpBuild
+	OpRun      = ops.OpRun
+	OpLoad     = ops.OpLoad
+	OpValidate = ops.OpValidate
+	OpEmit     = ops.OpEmit
+	OpExecute  = ops.OpExecute
+	OpResolve  = ops.OpResolve
+	OpBuild    = ops.OpBuild
 
 	// Deploy-time builder-IR legs of an externalized detection-builder (cargo/npm/pixi/aur);
 	// invoked host-side in the build PRE-PASS, never inside the pure BuildDeployPlan compile.
-	OpCollectContext = sdk.OpCollectContext
-	OpReverse        = sdk.OpReverse
+	OpCollectContext = ops.OpCollectContext
+	OpReverse        = ops.OpReverse
 
 	// OpConfigWrite — the POD config-WRITE Op (P11): `charly config` (host) Invokes the deploy:pod
 	// plugin to render + write the quadlet/.pod/sidecar/tunnel files (Ruling C — the plugin owns the
 	// config-WRITE; resolve + host side-effects stay in the host command).
-	OpConfigWrite = sdk.OpConfigWrite
+	OpConfigWrite = ops.OpConfigWrite
 )
 
 // marshalParams / unmarshalResult are the small helpers the in-proc adapters and

@@ -10,8 +10,11 @@ import (
 
 	"github.com/alecthomas/kong"
 
-	"github.com/opencharly/sdk"
+	"github.com/opencharly/spec/climodel"
+	specexec "github.com/opencharly/spec/exec"
+	"github.com/opencharly/spec/ops"
 	"github.com/opencharly/spec/spec"
+	"github.com/opencharly/spec/transport"
 )
 
 // externalCommandDispatch pairs an OUT-OF-PROCESS command word with the dynamic Kong holder
@@ -27,8 +30,8 @@ type externalCommandDispatch struct {
 	// (F-CLI-NEST — one level of DECLARED subcommands, each still ending in a pass-through leaf)
 	// when it isn't.
 	holder      any
-	field       string              // the exported holder field name (Kong needs exported fields)
-	subcommands []sdk.CLISubcommand // non-empty => the NESTED holder shape; empty => the flat shape
+	field       string                   // the exported holder field name (Kong needs exported fields)
+	subcommands []climodel.CLISubcommand // non-empty => the NESTED holder shape; empty => the flat shape
 }
 
 // collectExternalCommandPlugins builds a dynamic Kong subcommand for every OUT-OF-PROCESS
@@ -65,7 +68,7 @@ func collectExternalCommandPlugins() (topLevel kong.Plugins, nestedByParent map[
 		}
 		word := p.Reserved()
 		field := exportedCommandField(word)
-		var subs []sdk.CLISubcommand
+		var subs []climodel.CLISubcommand
 		if sc, ok := p.(commandSubcommandCarrier); ok {
 			subs = sc.declaredSubcommands()
 		}
@@ -119,7 +122,7 @@ type NestedCommandProvider interface {
 // Describe has run) keeps today's flat holder unchanged.
 type commandSubcommandCarrier interface {
 	Provider
-	declaredSubcommands() []sdk.CLISubcommand
+	declaredSubcommands() []climodel.CLISubcommand
 }
 
 // commandPathKey strips the trailing " <args>" placeholder Kong renders for a command's
@@ -166,7 +169,7 @@ func resolveCommandDispatch(kongCommand string, table map[string]externalCommand
 // `cmd:""` node (shows in `--help`, walkable by `charly __cli-model`) instead of an opaque
 // passthrough. The plugin parses its own flags beyond that (its CLI grammar owns that contract),
 // so the core needs no per-flag knowledge here either way.
-func externalCommandHolder(word, field string, subcommands []sdk.CLISubcommand) any {
+func externalCommandHolder(word, field string, subcommands []climodel.CLISubcommand) any {
 	bodyType := passthroughArgsType()
 	if len(subcommands) > 0 {
 		bodyType = nestedSubcommandType(subcommands)
@@ -195,7 +198,7 @@ func passthroughArgsType() reflect.Type {
 
 // nestedSubcommandType builds the F-CLI-NEST inner struct: one named `cmd:""` field per declared
 // subcommand, each a pointer to its own pass-through Args leaf.
-func nestedSubcommandType(subcommands []sdk.CLISubcommand) reflect.Type {
+func nestedSubcommandType(subcommands []climodel.CLISubcommand) reflect.Type {
 	fields := make([]reflect.StructField, 0, len(subcommands))
 	for _, sc := range subcommands {
 		fields = append(fields, reflect.StructField{
@@ -242,9 +245,9 @@ func dispatchInProcCommand(prov Provider, d externalCommandDispatch, sub string)
 	// command plugin can OWN its logic and reach the shared host machinery (e.g. clean's "retention"
 	// HostBuild) instead of forwarding the whole command to a hidden `__<cmd>` core handler. The
 	// executor carries no venue — a command's HostBuild legs reconstruct their engine host-side.
-	ctx := sdk.ContextWithExecutor(context.Background(),
-		sdk.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}}))
-	if _, err := prov.Invoke(ctx, &Operation{Reserved: d.word, Op: sdk.OpRun, Params: params}); err != nil {
+	ctx := specexec.ContextWithExecutor(context.Background(),
+		specexec.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}}))
+	if _, err := prov.Invoke(ctx, &Operation{Reserved: d.word, Op: ops.OpRun, Params: params}); err != nil {
 		return fmt.Errorf("command %q: %w", d.word, err)
 	}
 	return nil
@@ -365,12 +368,12 @@ func findCommandPluginCandy(candies map[string]spec.CandyReader, word string) (s
 }
 
 // commandExecEnv is charly's process environment with the go-plugin handshake cookie STRIPPED
-// (so the fork/exec'd plugin runs in CLI mode, not serve mode — see sdk.IsServeMode) plus
+// (so the fork/exec'd plugin runs in CLI mode, not serve mode — see transport.IsServeMode) plus
 // CHARLY_BIN stamped with charly's own executable, so a command plugin that shells BACK to
 // charly (the MCP bridge fork/execs `charly __cli-model` + `charly <cmd>`) calls the SAME
 // binary that dispatched it, not whatever `charly` is on PATH — matching LocalTransport.
 func commandExecEnv(word string) []string {
-	cookie := sdk.Handshake.MagicCookieKey + "="
+	cookie := transport.Handshake.MagicCookieKey + "="
 	src := os.Environ()
 	env := make([]string, 0, len(src)+1)
 	for _, e := range src {

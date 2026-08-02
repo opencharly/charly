@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/opencharly/sdk"
+	specexec "github.com/opencharly/spec/exec"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -54,7 +54,7 @@ import (
 //   (holder_dispatch.go) — they were reached over this seam only because their ORIGINAL
 //   implementation used charly-core-private mechanisms (providerRegistry,
 //   connectPluginByWordRef), which now dispatch instead via the class-agnostic
-//   sdk.Executor.InvokeProvider — never because the work itself needed a live LoadUnified
+//   specexec.Executor.InvokeProvider — never because the work itself needed a live LoadUnified
 //   project. The readiness-gated stop-wait (formerly waitStoppedHost) uses spec.ReadinessProvider
 //   directly in the plugin — the SAME project-aware resolver charly-core's own init() injects,
 //   shared in-process by this compiled-in placement, so no new host seam was needed for it either.
@@ -93,8 +93,8 @@ func arbiterInvoke(in spec.ArbiterInvokeInput) (spec.ArbiterInvokeReply, error) 
 	if !ok {
 		return spec.ArbiterInvokeReply{}, fmt.Errorf("resource arbiter (verb:arbiter) not registered — charly built without candy/plugin-preempt")
 	}
-	ctx := sdk.ContextWithExecutor(context.Background(),
-		sdk.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}}))
+	ctx := specexec.ContextWithExecutor(context.Background(),
+		specexec.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}}))
 	reply, err := invokeTyped[spec.ArbiterInvokeInput, spec.ArbiterInvokeReply](ctx, prov, "arbiter", OpRun, in)
 	if err != nil {
 		return spec.ArbiterInvokeReply{}, fmt.Errorf("arbiter %s: %w", in.Action, err)

@@ -6,7 +6,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/opencharly/sdk"
+	"github.com/opencharly/spec/phase"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -195,7 +195,7 @@ func (r *Registry) RegisterPluginProviders(ps []Provider, origin string, conn io
 		// gp.preresolve, set from its Describe capability in buildUnit) need NO separate
 		// registration here anymore — pluginDeployTarget (unified_targets.go) reads them directly
 		// off the resolved *grpcProvider in ResolveTarget, and candy/plugin-bundle reaches the
-		// substrate's OpPrepareVenue/OpPreresolve itself via sdk.Executor.InvokeProvider. The
+		// substrate's OpPrepareVenue/OpPreresolve itself via specexec.Executor.InvokeProvider. The
 		// former wire-backed per-substrate lifecycle/preresolve registries (this loop used to
 		// populate them here — see CHANGELOG/2026.203.0212.md) are deleted — nothing reads them
 		// anymore.
@@ -271,7 +271,7 @@ func (r *Registry) allProviders() []Provider {
 	return out
 }
 
-// phaseOfProvider returns a provider's lifecycle phase (F9), defaulting to sdk.PhaseRuntime for a
+// phaseOfProvider returns a provider's lifecycle phase (F9), defaulting to phase.PhaseRuntime for a
 // provider that declares none / is not a spec.PhaseCarrier. K4-C relocation from the deleted
 // install_plan.go — its sole caller (providersInPhase, below).
 func phaseOfProvider(p Provider) string {
@@ -280,7 +280,7 @@ func phaseOfProvider(p Provider) string {
 			return ph
 		}
 	}
-	return sdk.PhaseRuntime
+	return phase.PhaseRuntime
 }
 
 // providersInPhase returns every registered provider whose lifecycle phase (F9) equals phase, in

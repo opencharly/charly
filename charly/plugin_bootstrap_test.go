@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk"
+	"github.com/opencharly/spec/phase"
 )
 
 // zzWireTestBootstrapProvider is a MARKER-GATED bootstrap provider for the F9-wiring test: it
@@ -18,7 +18,7 @@ type zzWireTestBootstrapProvider struct{}
 
 func (zzWireTestBootstrapProvider) Reserved() string     { return "zzf9wiretest" }
 func (zzWireTestBootstrapProvider) Class() ProviderClass { return ClassVerb }
-func (zzWireTestBootstrapProvider) PluginPhase() string  { return sdk.PhaseBootstrap }
+func (zzWireTestBootstrapProvider) PluginPhase() string  { return phase.PhaseBootstrap }
 func (zzWireTestBootstrapProvider) Invoke(_ context.Context, op *Operation) (*Result, error) {
 	var in struct {
 		Config string `json:"config"`
@@ -67,7 +67,7 @@ func TestBootstrapTransformReachesParse(t *testing.T) {
 // no-op). The phase flag travels over Describe (buildUnitInProc) onto the inprocProvider.
 func TestBootstrapPhase_ExampleEnumeratedAndNoOp(t *testing.T) {
 	found := false
-	for _, p := range providerRegistry.providersInPhase(sdk.PhaseBootstrap) {
+	for _, p := range providerRegistry.providersInPhase(phase.PhaseBootstrap) {
 		if p.Reserved() == "examplebootstrap" {
 			found = true
 		}
@@ -89,7 +89,7 @@ type zzFakeBootstrapProvider struct{}
 
 func (zzFakeBootstrapProvider) Reserved() string     { return "zzfakebootstrap" }
 func (zzFakeBootstrapProvider) Class() ProviderClass { return ClassVerb }
-func (zzFakeBootstrapProvider) PluginPhase() string  { return sdk.PhaseBootstrap }
+func (zzFakeBootstrapProvider) PluginPhase() string  { return phase.PhaseBootstrap }
 func (zzFakeBootstrapProvider) Invoke(_ context.Context, op *Operation) (*Result, error) {
 	out, err := marshalJSON(map[string]string{"config": "TRANSFORMED-BY-BOOTSTRAP"})
 	if err != nil {
@@ -103,7 +103,7 @@ func (zzFakeBootstrapProvider) Invoke(_ context.Context, op *Operation) (*Result
 // provider list (NOT the global registry), so the transforming fake cannot pollute the hot-path
 // runBootstrapPhase that every other test's LoadUnified runs.
 func TestBootstrapPhase_TransformApplied(t *testing.T) {
-	if phaseOfProvider(zzFakeBootstrapProvider{}) != sdk.PhaseBootstrap {
+	if phaseOfProvider(zzFakeBootstrapProvider{}) != phase.PhaseBootstrap {
 		t.Fatal("fake bootstrap provider not classified PhaseBootstrap")
 	}
 	out := runBootstrapPhaseWith([]byte("version: 1\n"), []Provider{zzFakeBootstrapProvider{}})

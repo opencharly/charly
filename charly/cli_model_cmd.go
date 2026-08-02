@@ -9,12 +9,13 @@ import (
 
 	"github.com/alecthomas/kong"
 
-	"github.com/opencharly/sdk"
+	"github.com/opencharly/spec/climodel"
+	"github.com/opencharly/spec/clireflect"
 	"github.com/opencharly/spec/spec"
 )
 
 // cli_model_cmd.go implements `charly __cli-model` — the hidden seam that emits charly's
-// kong command tree as an sdk.CLIModel JSON document on stdout. It is the host half of the
+// kong command tree as an spec.CLIModel JSON document on stdout. It is the host half of the
 // CLI-reflection contract: an external COMMAND plugin that must mirror the WHOLE charly CLI
 // (the `charly mcp serve` MCP bridge in candy/plugin-mcp) fork/execs this command to learn
 // every leaf + its args WITHOUT importing the package-main CLI struct, then drives each
@@ -36,8 +37,8 @@ func (CliModelCmd) Run() error {
 
 // buildCLIModel reflects the CLI struct (+ the builtin command-provider grammar, so an
 // extracted command like `ssh` is described identically to a hardcoded field) into an
-// sdk.CLIModel — the same model walk the MCP server formerly did in-process, now implemented
-// ONCE in sdk.BuildCLIModel (R3) so every command plugin and the host emit the same CUE-generated
+// spec.CLIModel — the same model walk the MCP server formerly did in-process, now implemented
+// ONCE in clireflect.BuildCLIModel (R3) so every command plugin and the host emit the same CUE-generated
 // contract. EXTERNAL and COMPILED-IN command CANDIES with NO declared subcommand catalog (mcp /
 // secrets / udev / vm / alias — dynamic opaque pass-through Args holders) are NOT reflected here —
 // they dispatch via syscall.Exec or an in-proc Invoke(OpRun), carrying no per-subcommand shape the
@@ -52,7 +53,7 @@ func buildCLIModel() (*spec.CLIModel, error) {
 	declaringTop, declaringNested := declaringCommandHolders(extCmdTable)
 	modelCLI.Plugins = append(modelCLI.Plugins, declaringTop...)
 	modelCLI.Box.Plugins = append(modelCLI.Box.Plugins, declaringNested["box"]...)
-	model, err := sdk.BuildCLIModel(&modelCLI, "charly", CharlyVersion(), "")
+	model, err := clireflect.BuildCLIModel(&modelCLI, "charly", CharlyVersion(), "")
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +78,7 @@ func buildCLIModel() (*spec.CLIModel, error) {
 		}
 	}
 	sort.Slice(model.Leaves, func(i, j int) bool { return model.Leaves[i].Path < model.Leaves[j].Path })
-	if err := sdk.ValidateGenerated("#CLIModel", model); err != nil {
+	if err := climodel.ValidateGenerated("#CLIModel", model); err != nil {
 		return nil, err
 	}
 	return model, nil
@@ -87,7 +88,7 @@ func buildCLIModel() (*spec.CLIModel, error) {
 // DECLARED a subcommand catalog (F-CLI-NEST) — bucketed top-level vs CommandParent-nested by its
 // dispatch-table key ("check" vs "box list") — so buildCLIModel can fold them into the reflected
 // model while PRESERVING the exclusion above for every other (flat, undeclared) command-class
-// capability. The per-leaf kong-reflection walk itself now lives in sdk.BuildCLIModel (R3, moved
+// capability. The per-leaf kong-reflection walk itself now lives in clireflect.BuildCLIModel (R3, moved
 // out from this file alongside the CommandModel/CUE-generated protocol pipeline) — this helper
 // only selects WHICH holders join that walk.
 func declaringCommandHolders(table map[string]externalCommandDispatch) (top kong.Plugins, nestedByParent map[string]kong.Plugins) {

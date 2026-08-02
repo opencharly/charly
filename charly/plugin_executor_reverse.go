@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/opencharly/sdk"
+	specexec "github.com/opencharly/spec/exec"
 	pb "github.com/opencharly/spec/proto"
 	"github.com/opencharly/spec/spec"
 )
@@ -155,7 +155,7 @@ func (s *executorReverseServer) RunHostStep(ctx context.Context, req *pb.HostSte
 		// over s.build.Cfg/s.build.ProjectDir — the one genuine core dependency (coneK1b's #8
 		// keeps resolveImageRefForEnsure's definition; this is its caller, relocated). The
 		// closures + the TYPED venue executor + DistroCfg + opts are live, non-serializable
-		// values, so they thread via sdk.ContextWithHostStepDeps (in-proc, the overlayBuildInputs
+		// values, so they thread via specexec.ContextWithHostStepDeps (in-proc, the overlayBuildInputs
 		// pattern — charly/build_overlay.go threads live plans + the parent venue the same way).
 		resolveImage := func(img string) (string, error) {
 			return resolveImageRefForEnsure(img, s.build.Cfg, s.build.ProjectDir)
@@ -163,8 +163,8 @@ func (s *executorReverseServer) RunHostStep(ctx context.Context, req *pb.HostSte
 		ensureImage := func(ctx context.Context, img string) error {
 			return dispatchBuildEnsure(ctx, img, s.build.ProjectDir, "", "")
 		}
-		deps := &sdk.HostStepDeps{Exec: s.exec, ResolveImage: resolveImage, EnsureImage: ensureImage, DistroCfg: s.build.DistroCfg, Opts: opts}
-		reply, rerr := s.invokeExternalStep(sdk.ContextWithHostStepDeps(ctx, deps), ClassStep, pluginEmitStepWords[spec.StepKindBuilder], req.GetStepJson())
+		deps := &specexec.HostStepDeps{Exec: s.exec, ResolveImage: resolveImage, EnsureImage: ensureImage, DistroCfg: s.build.DistroCfg, Opts: opts}
+		reply, rerr := s.invokeExternalStep(specexec.ContextWithHostStepDeps(ctx, deps), ClassStep, pluginEmitStepWords[spec.StepKindBuilder], req.GetStepJson())
 		if rerr != nil {
 			return &pb.HostStepReply{Error: rerr.Error()}, nil
 		}
@@ -172,8 +172,8 @@ func (s *executorReverseServer) RunHostStep(ctx context.Context, req *pb.HostSte
 	case *spec.LocalPkgInstallStep:
 		// The LocalPkgInstall body (deploykit.VenueHasPkgManager + ExecLocalPkgInstall) runs
 		// plugin-side; only the typed venue executor + opts thread (no closures/DistroCfg needed).
-		deps := &sdk.HostStepDeps{Exec: s.exec, DistroCfg: s.build.DistroCfg, Opts: opts}
-		reply, rerr := s.invokeExternalStep(sdk.ContextWithHostStepDeps(ctx, deps), ClassStep, pluginEmitStepWords[spec.StepKindLocalPkgInstall], req.GetStepJson())
+		deps := &specexec.HostStepDeps{Exec: s.exec, DistroCfg: s.build.DistroCfg, Opts: opts}
+		reply, rerr := s.invokeExternalStep(specexec.ContextWithHostStepDeps(ctx, deps), ClassStep, pluginEmitStepWords[spec.StepKindLocalPkgInstall], req.GetStepJson())
 		if rerr != nil {
 			return &pb.HostStepReply{Error: rerr.Error()}, nil
 		}
@@ -182,8 +182,8 @@ func (s *executorReverseServer) RunHostStep(ctx context.Context, req *pb.HostSte
 		// The SystemPackages body (deploykit.RenderHostPackageCommand over the resolved
 		// DistroCfg + RunSystem on the venue) runs plugin-side; the DistroCfg threads via
 		// HostStepDeps (the plugin cannot reach the host's distro vocabulary otherwise).
-		deps := &sdk.HostStepDeps{Exec: s.exec, DistroCfg: s.build.DistroCfg, Opts: opts}
-		reply, rerr := s.invokeExternalStep(sdk.ContextWithHostStepDeps(ctx, deps), ClassStep, pluginEmitStepWords[spec.StepKindSystemPackages], req.GetStepJson())
+		deps := &specexec.HostStepDeps{Exec: s.exec, DistroCfg: s.build.DistroCfg, Opts: opts}
+		reply, rerr := s.invokeExternalStep(specexec.ContextWithHostStepDeps(ctx, deps), ClassStep, pluginEmitStepWords[spec.StepKindSystemPackages], req.GetStepJson())
 		if rerr != nil {
 			return &pb.HostStepReply{Error: rerr.Error()}, nil
 		}

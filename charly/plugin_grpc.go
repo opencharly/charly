@@ -13,7 +13,7 @@ import (
 
 	"google.golang.org/grpc"
 
-	"github.com/opencharly/sdk"
+	"github.com/opencharly/spec/climodel"
 	specexec "github.com/opencharly/spec/exec"
 	pb "github.com/opencharly/spec/proto"
 	"github.com/opencharly/spec/spec"
@@ -34,7 +34,7 @@ const maxReverseChannelMsgBytes = 512 << 20 // 512 MiB
 // The handshake, dispense key, and go-plugin glue are shared with out-of-tree
 // plugins via the importable plugin/sdk package (R3) — charly serves charly's
 // Provider abstraction here; an external plugin serves the proto services directly
-// via sdk.Serve.
+// via transport.Serve.
 
 // ProvidedCap is one served capability plus the CUE def that validates its
 // plugin_input — the structured form of the proto ProvidedCapability, carried on
@@ -114,7 +114,7 @@ func (s *providerGRPCServer) InvokeStream(req *pb.InvokeRequest, srv pb.Provider
 }
 
 func (s *providerGRPCServer) Channel(srv pb.Provider_ChannelServer) error {
-	open, err := sdk.ReceiveChannelOpen(srv)
+	open, err := transport.ReceiveChannelOpen(srv)
 	if err != nil {
 		return err
 	}
@@ -125,7 +125,7 @@ func (s *providerGRPCServer) Channel(srv pb.Provider_ChannelServer) error {
 	if !ok {
 		return fmt.Errorf("plugin serve: no provider %s:%s", open.GetClass(), open.GetReserved())
 	}
-	channel, ok := p.(sdk.ChannelProvider)
+	channel, ok := p.(transport.ChannelProvider)
 	if !ok {
 		return fmt.Errorf("plugin serve: provider %s:%s has no bidirectional channel", open.GetClass(), open.GetReserved())
 	}
@@ -137,7 +137,7 @@ func (s *providerGRPCServer) Channel(srv pb.Provider_ChannelServer) error {
 // same Provider.Channel on that node. A terminal/tmux hop remains domain data
 // for the selected provider, which is how tmux-over-gRPC composes with either
 // local or SSH gRPC without a combination-specific implementation.
-func relayNestedTarget(open *pb.ChannelFrame, upstream sdk.ProviderChannel) (handled bool, returnErr error) {
+func relayNestedTarget(open *pb.ChannelFrame, upstream transport.ProviderChannel) (handled bool, returnErr error) {
 	if len(open.GetTargetJson()) == 0 {
 		return false, nil
 	}
@@ -145,7 +145,7 @@ func relayNestedTarget(open *pb.ChannelFrame, upstream sdk.ProviderChannel) (han
 	if err := json.Unmarshal(open.GetTargetJson(), &target); err != nil {
 		return true, fmt.Errorf("provider channel target: %w", err)
 	}
-	if err := sdk.ValidateGenerated("#TargetSpec", target); err != nil {
+	if err := climodel.ValidateGenerated("#TargetSpec", target); err != nil {
 		return true, fmt.Errorf("provider channel target: %w", err)
 	}
 	// Deployment is an orthogonal placement selector, not a transport kind.
@@ -192,7 +192,7 @@ func relayNestedTarget(open *pb.ChannelFrame, upstream sdk.ProviderChannel) (han
 			return true, err
 		}
 		open.TargetJson = placed
-		downstream, err := sdk.OpenProviderChannel(upstream.Context(), client, open)
+		downstream, err := transport.OpenProviderChannel(upstream.Context(), client, open)
 		if err != nil {
 			return true, err
 		}
@@ -232,7 +232,7 @@ func relayNestedTarget(open *pb.ChannelFrame, upstream sdk.ProviderChannel) (han
 		return true, err
 	}
 	defer func() { returnErr = errors.Join(returnErr, conn.Close()) }()
-	downstream, err := sdk.OpenProviderChannel(upstream.Context(), client, open)
+	downstream, err := transport.OpenProviderChannel(upstream.Context(), client, open)
 	if err != nil {
 		return true, err
 	}
@@ -289,8 +289,8 @@ func sshExecutorForTargetHop(hop spec.TargetHop) *specexec.SSHExecutor {
 	return &specexec.SSHExecutor{User: hop.User, Host: hop.Address, Port: int(hop.Port), Args: args}
 }
 
-func relayProviderChannels(upstream sdk.ProviderChannel, downstream pb.Provider_ChannelClient) error {
-	return sdk.RelayChannel(upstream, downstream)
+func relayProviderChannels(upstream transport.ProviderChannel, downstream pb.Provider_ChannelClient) error {
+	return transport.RelayChannel(upstream, downstream)
 }
 
 type metaGRPCServer struct {
@@ -305,7 +305,7 @@ func (m *metaGRPCServer) Describe(_ context.Context, _ *pb.Empty) (*pb.Capabilit
 	}
 	return &pb.Capabilities{
 		Calver:          m.set.calver,
-		ProtocolVersion: sdk.ProtocolVersion,
+		ProtocolVersion: transport.ProtocolVersion,
 		Provided:        provided,
 		SchemaCue:       m.set.schemaCUE,
 	}, nil
@@ -314,7 +314,7 @@ func (m *metaGRPCServer) Describe(_ context.Context, _ *pb.Empty) (*pb.Capabilit
 // --- client side: a connected plugin → charly Providers ---
 
 // describe reads a connected plugin's capability manifest.
-func describe(ctx context.Context, conn *sdk.Conn) (*pb.Capabilities, error) {
+func describe(ctx context.Context, conn *transport.Conn) (*pb.Capabilities, error) {
 	return conn.Meta.Describe(ctx, &pb.Empty{})
 }
 
@@ -326,7 +326,7 @@ func describe(ctx context.Context, conn *sdk.Conn) (*pb.Capabilities, error) {
 // executorInvoker discriminator, satisfied SOLELY by *grpcProvider, is what routes it).
 type grpcProvider struct {
 	capMeta
-	conn       *sdk.Conn
+	conn       *transport.Conn
 	lifecycle  bool // set ONLY for a class:deploy capability bringing its OWN host-side venue lifecycle (F6)
 	preresolve bool // set ONLY for a class:deploy capability declaring a host-side preresolve step (F6)
 }
@@ -344,8 +344,8 @@ func (g *grpcProvider) Invoke(ctx context.Context, op *Operation) (*Result, erro
 // OpenChannel makes the generic bidirectional channel placement-invisible. It
 // forwards the already-validated open frame and then relays both directions;
 // agent and terminal semantics remain entirely in the target plugin.
-func (g *grpcProvider) OpenChannel(open *pb.ChannelFrame, upstream sdk.ProviderChannel) error {
-	downstream, err := sdk.OpenProviderChannel(upstream.Context(), g.conn.Provider, open)
+func (g *grpcProvider) OpenChannel(open *pb.ChannelFrame, upstream transport.ProviderChannel) error {
+	downstream, err := transport.OpenProviderChannel(upstream.Context(), g.conn.Provider, open)
 	if err != nil {
 		return err
 	}
@@ -416,7 +416,7 @@ func (g *grpcProvider) InvokeWithExecutor(ctx context.Context, op *Operation, ex
 // gRPC-backed Providers AND the served CUE schema (source + per-capability input
 // defs). This is THE client-side construction — identical for an external plugin
 // and a builtin served out-of-process; the host never reads a candy schema/ dir.
-func buildUnit(conn *sdk.Conn, caps *pb.Capabilities) (*PluginUnit, error) {
+func buildUnit(conn *transport.Conn, caps *pb.Capabilities) (*PluginUnit, error) {
 	// Version gate — a readable refusal here, never a later wire panic.
 	// ProtocolVersion is the ENFORCED wire-compatibility gate: a plugin built
 	// against a different charly proto/SDK speaks a different contract and is
@@ -424,9 +424,9 @@ func buildUnit(conn *sdk.Conn, caps *pb.Capabilities) (*PluginUnit, error) {
 	// surfaced in the refusal for the operator but NOT an equality gate — plugins
 	// are independent repos at independent CalVers, and a same-host builtin served
 	// out-of-process may advertise an empty/unstamped CalVer (identical binary).
-	if caps.GetProtocolVersion() != sdk.ProtocolVersion {
+	if caps.GetProtocolVersion() != transport.ProtocolVersion {
 		return nil, fmt.Errorf("plugin protocol version mismatch: plugin advertises protocol %d (CalVer %q), host requires protocol %d — rebuild the plugin against this charly",
-			caps.GetProtocolVersion(), caps.GetCalver(), sdk.ProtocolVersion)
+			caps.GetProtocolVersion(), caps.GetCalver(), transport.ProtocolVersion)
 	}
 	// The capability-lift loop is shared with buildUnitInProc via liftCapabilities (R3); the grpc
 	// factory adds the out-of-process extras — the connection plus the class:deploy lifecycle /

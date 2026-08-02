@@ -4,7 +4,8 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/opencharly/sdk"
+	"github.com/opencharly/spec/ops"
+	"github.com/opencharly/spec/phase"
 )
 
 // runBootstrapPhase invokes every PhaseBootstrap provider's OpBootstrap on the raw project config
@@ -25,7 +26,7 @@ import (
 // construction). A no-op bootstrap plugin returns the bytes unchanged. Returns the bytes after all
 // bootstrap transforms (the input unchanged when no bootstrap plugin is registered).
 func runBootstrapPhase(data []byte) []byte {
-	return runBootstrapPhaseWith(data, providerRegistry.providersInPhase(sdk.PhaseBootstrap))
+	return runBootstrapPhaseWith(data, providerRegistry.providersInPhase(phase.PhaseBootstrap))
 }
 
 // runBootstrapPhaseWith is the injectable core of runBootstrapPhase — it invokes each given
@@ -38,7 +39,7 @@ func runBootstrapPhaseWith(data []byte, providers []Provider) []byte {
 		if err != nil {
 			continue
 		}
-		res, err := p.Invoke(context.Background(), &Operation{Reserved: p.Reserved(), Op: sdk.OpBootstrap, Params: params})
+		res, err := p.Invoke(context.Background(), &Operation{Reserved: p.Reserved(), Op: ops.OpBootstrap, Params: params})
 		if err != nil || res == nil || len(res.JSON) == 0 {
 			continue
 		}

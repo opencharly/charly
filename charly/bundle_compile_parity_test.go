@@ -8,9 +8,10 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
+	specexec "github.com/opencharly/spec/exec"
+	"github.com/opencharly/spec/ops"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -28,9 +29,9 @@ func invokeOpCompile(t *testing.T, req spec.DeployCompileRequest) ([]*spec.Insta
 	if err != nil {
 		return nil, err
 	}
-	ctx := sdk.ContextWithExecutor(context.Background(),
-		sdk.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}}))
-	res, err := prov.Invoke(ctx, &Operation{Reserved: "bundle", Op: sdk.OpCompile, Params: reqJSON})
+	ctx := specexec.ContextWithExecutor(context.Background(),
+		specexec.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}}))
+	res, err := prov.Invoke(ctx, &Operation{Reserved: "bundle", Op: ops.OpCompile, Params: reqJSON})
 	if err != nil {
 		return nil, err
 	}

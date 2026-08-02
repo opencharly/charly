@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/opencharly/sdk"
 	specexec "github.com/opencharly/spec/exec"
+	"github.com/opencharly/spec/ops"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -33,9 +33,9 @@ func resolveCheckVenueReply(name, instance string) (spec.CheckVenueResolveReply,
 	if !ok {
 		return spec.CheckVenueResolveReply{}, fmt.Errorf("check-resolve: plugin-check (verb:check-resolve) not registered — charly built without the plugin-check candy")
 	}
-	ctx := sdk.ContextWithExecutor(context.Background(), sdk.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}}))
+	ctx := specexec.ContextWithExecutor(context.Background(), specexec.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}}))
 	return invokeTyped[spec.CheckVenueResolveRequest, spec.CheckVenueResolveReply](
-		ctx, prov, "check-resolve", sdk.OpResolve,
+		ctx, prov, "check-resolve", ops.OpResolve,
 		spec.CheckVenueResolveRequest{Name: name, Instance: instance})
 }
 

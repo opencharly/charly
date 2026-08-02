@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/spec/ops"
 	pb "github.com/opencharly/spec/proto"
 	"github.com/opencharly/spec/spec"
 	"google.golang.org/grpc"
@@ -56,7 +57,7 @@ func TestNoSinglePluginAPISurface(t *testing.T) {
 	}{
 		{"sdk.Op* selector values", allOpSelectorValues()},
 		{"sdk.ProvidedCapability field names", structFieldNames(reflect.TypeOf(sdk.ProvidedCapability{}))},
-		{"sdk.StepContract field names", structFieldNames(reflect.TypeOf(sdk.StepContract{}))},
+		{"spec.StepContract field names", structFieldNames(reflect.TypeOf(spec.StepContract{}))},
 		{"ExecutorService RPC method names", serviceMethodNames(pb.ExecutorService_ServiceDesc)},
 		{"CheckContextService RPC method names", serviceMethodNames(pb.CheckContextService_ServiceDesc)},
 		{"Provider RPC method names", serviceMethodNames(pb.Provider_ServiceDesc)},
@@ -158,11 +159,11 @@ func buildProviderWordUniverse() map[string]bool {
 // new Op MUST be added here so the gate scans it.
 func allOpSelectorValues() []string {
 	return []string{
-		sdk.OpRun, sdk.OpLoad, sdk.OpValidate, sdk.OpEmit, sdk.OpExecute, sdk.OpResolve,
-		sdk.OpCollectContext, sdk.OpReverse,
-		sdk.OpPrepareVenue, sdk.OpArtifactKey, sdk.OpPostApply, sdk.OpTeardownExecutor, sdk.OpPostTeardown,
-		sdk.OpStart, sdk.OpStop, sdk.OpStatus, sdk.OpLogs, sdk.OpShell, sdk.OpRebuild,
-		sdk.OpPreresolve, sdk.OpBootstrap,
+		ops.OpRun, ops.OpLoad, ops.OpValidate, ops.OpEmit, ops.OpExecute, ops.OpResolve,
+		ops.OpCollectContext, ops.OpReverse,
+		ops.OpPrepareVenue, ops.OpArtifactKey, ops.OpPostApply, ops.OpTeardownExecutor, ops.OpPostTeardown,
+		ops.OpStart, ops.OpStop, ops.OpStatus, ops.OpLogs, ops.OpShell, ops.OpRebuild,
+		ops.OpPreresolve, ops.OpBootstrap,
 	}
 }
 
