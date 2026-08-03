@@ -17,6 +17,22 @@ import (
 // target), moved to candy/plugin-check/score_live_test.go's TestPluginResolveScoringChain_Local
 // (K1-unblock wave arm 3 — the scoring-chain resolver itself moved plugin-side).
 
+// stampTestDescents stamps the descent descriptor from the substrate's declared #DeployTraits
+// (via charly's own deployTraitsFor registry lookup + spec.StampDescent directly — #55 K4 cone3:
+// moved here, its only remaining charly caller, when the duplicate charly/deploy_chain_test.go was
+// deleted in favor of the already-relocated candy/plugin-bundle/deploy_chain_test.go twin), so a
+// BundleNode literal built directly in a test (bypassing the loader) runs against a
+// realistically-stamped node instead of tripping the nil-descent guard.
+func stampTestDescents(roots map[string]spec.BundleNode) map[string]spec.BundleNode {
+	out := make(map[string]spec.BundleNode, len(roots))
+	for k, v := range roots {
+		n := v
+		spec.StampDescent(&n, deployTraitsFor)
+		out[k] = n
+	}
+	return out
+}
+
 func TestRootExecutorForDeployNode(t *testing.T) {
 	// nil node → host shell.
 	if e, err := exec.RootExecutorForDeployNode(nil); err != nil {

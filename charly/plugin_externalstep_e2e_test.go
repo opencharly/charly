@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/exec"
 	pb "github.com/opencharly/spec/proto"
 	"github.com/opencharly/spec/spec"
 )
@@ -151,7 +151,7 @@ func TestExternalStepKind_EndToEnd(t *testing.T) {
 
 	// Walk it via the host's RunHostStep OPEN DEFAULT ARM (stepFromView rebuilds the externalStep
 	// from the carried contract + Payload; invokeExternalStep dispatches OpExecute to the plugin).
-	srv := &executorReverseServer{exec: kit.ShellExecutor{}}
+	srv := &executorReverseServer{exec: exec.ShellExecutor{}}
 	reply, err := srv.RunHostStep(ctx, &pb.HostStepRequest{StepJson: stepJSON})
 	if err != nil {
 		t.Fatalf("RunHostStep: %v", err)

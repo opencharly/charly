@@ -16,7 +16,7 @@ import (
 	"path/filepath"
 
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/spec"
 	"gopkg.in/yaml.v3"
 )
 
@@ -33,7 +33,7 @@ func testBedMarshalNode(_ string, node *deploykit.BundleNode) (*yaml.Node, error
 // tests inject this reader directly, reading the per-host overlay (the temp XDG_CONFIG_HOME
 // charly.yml the tests write) through the SAME LoadUnified path the deleted seam used.
 func testLoadBundleConfig() (*deploykit.BundleConfig, error) {
-	path, err := kit.DefaultDeployConfigPath()
+	path, err := spec.DefaultDeployConfigPath()
 	if err != nil {
 		return nil, nil
 	}
