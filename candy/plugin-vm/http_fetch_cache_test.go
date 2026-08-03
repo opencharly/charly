@@ -1,4 +1,8 @@
-package main
+package vm
+
+// Relocated from charly/http_fetch_cache_test.go (#55 decoupling cone, Batch
+// C): TestFetchQcow2_ReusesUnpinnedCachedImage asserts kit.FetchQcow2 directly
+// — zero charly coupling.
 
 import (
 	"crypto/sha256"
