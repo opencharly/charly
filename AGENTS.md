@@ -280,10 +280,10 @@ handoffs, validator phases, and workflow mechanics belong to
 
 ## Hooks
 
-Hooks point to this rulebook and skills. They enforce only deterministic
-command mechanics such as bypass flags, force-push, direct-main push,
-untokenizable commit commands, configured staged lint, and forbidden alias
-forms. The fresh validator alone judges attribution truth, change class,
+Hooks enforce only deterministic command mechanics such as bypass flags,
+force-push, direct-main push, untokenizable commit commands, configured staged
+lint, and forbidden alias forms. There is no reminder-hook layer: rule
+knowledge lives in the rulebooks and skills. The fresh validator alone judges attribution truth, change class,
 changelog coverage, architecture, and R0–R10 proof. Hooks guard mechanics;
 agents judge policy and evidence.
 
