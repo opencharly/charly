@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/vmshared"
 	"github.com/opencharly/spec/spec"
 
 	"gopkg.in/yaml.v3"
@@ -124,10 +123,10 @@ func TestLabelShellSet_RoundTrip(t *testing.T) {
 			{
 				Origin: "direnv",
 				ID:     "direnv",
-				Generic: &vmshared.ShellSpec{
+				Generic: &spec.ShellSpec{
 					Init: `check "$(direnv hook ${SHELL_NAME})"`,
 				},
-				ByShell: map[string]*vmshared.ShellSpec{
+				ByShell: map[string]*spec.ShellSpec{
 					"fish": {Init: "direnv hook fish | source"},
 				},
 			},

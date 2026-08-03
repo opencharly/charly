@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"github.com/opencharly/sdk/vmshared"
+	"github.com/opencharly/spec/hostenv"
 )
 
 // Tests for the four Task-9 host-infra files.
@@ -26,7 +26,7 @@ func TestDetectHostDistroFedora43(t *testing.T) {
 		{``, "", "", false},
 	}
 	for _, tc := range tests {
-		k, v, ok := vmshared.SplitOsReleaseLine(tc.line)
+		k, v, ok := hostenv.SplitOsReleaseLine(tc.line)
 		if k != tc.k || v != tc.v || ok != tc.ok {
 			t.Errorf("splitOsReleaseLine(%q) = (%q, %q, %v); want (%q, %q, %v)",
 				tc.line, k, v, ok, tc.k, tc.v, tc.ok)
@@ -36,22 +36,22 @@ func TestDetectHostDistroFedora43(t *testing.T) {
 
 func TestHostDistroTagsAndFormatHint(t *testing.T) {
 	tests := []struct {
-		hd      *vmshared.HostDistro
+		hd      *hostenv.HostDistro
 		wantTag string
 		wantFmt string
 	}{
 		{
-			hd:      &vmshared.HostDistro{ID: "fedora", VersionID: "43"},
+			hd:      &hostenv.HostDistro{ID: "fedora", VersionID: "43"},
 			wantTag: "fedora:43",
 			wantFmt: "rpm",
 		},
 		{
-			hd:      &vmshared.HostDistro{ID: "ubuntu", VersionID: "24.04", IDLike: []string{"debian"}},
+			hd:      &hostenv.HostDistro{ID: "ubuntu", VersionID: "24.04", IDLike: []string{"debian"}},
 			wantTag: "ubuntu:24.04",
 			wantFmt: "deb",
 		},
 		{
-			hd:      &vmshared.HostDistro{ID: "arch"},
+			hd:      &hostenv.HostDistro{ID: "arch"},
 			wantTag: "arch",
 			wantFmt: "pac",
 		},
@@ -76,7 +76,7 @@ func TestParseGlibcVersion(t *testing.T) {
 		"":                                          "",
 	}
 	for in, want := range tests {
-		if got := vmshared.ParseGlibcVersion(in); got != want {
+		if got := hostenv.ParseGlibcVersion(in); got != want {
 			t.Errorf("parseGlibcVersion(%q) = %q, want %q", in, got, want)
 		}
 	}
@@ -96,7 +96,7 @@ func TestCompareGlibc(t *testing.T) {
 		{"2.39", "", 0},
 	}
 	for _, tc := range tests {
-		if got := vmshared.CompareGlibc(tc.a, tc.b); got != tc.want {
+		if got := hostenv.CompareGlibc(tc.a, tc.b); got != tc.want {
 			t.Errorf("CompareGlibc(%q, %q) = %d, want %d", tc.a, tc.b, got, tc.want)
 		}
 	}

@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/spec/proto"
@@ -101,7 +100,7 @@ func TestExternalStepKind_EndToEnd(t *testing.T) {
 	// hand-built one) proves the FULL authoring → compile → wire path.
 	op := &spec.Op{Plugin: "examplestepkind", PluginInput: map[string]any{"marker": "EXTERNAL-STEPKIND-E2E"}}
 	layer := testCandy("plugin-example-stepkind", spec.CandyModel{}, spec.CandyView{})
-	img := &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Tags: []string{"fedora"}}}
+	img := &spec.BuildResolvedBox{ResolvedBox: spec.ResolvedBox{Tags: []string{"fedora"}}}
 	userDir, _ := deploykit.ResolveUserSpec(op.RunAs, img)
 	constructReply, err := hostBuildConstructStep(context.Background(), spec.ConstructStepRequest{
 		Op: *op, CandyName: layer.GetName(), CandySourceDir: layer.GetSourceDir(),

@@ -7,8 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/buildkit"
-
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 )
@@ -107,7 +105,7 @@ func chdirTemp(t *testing.T) string {
 // perform) — which a `run: plugin:` verb Op reaches via dg.EmitTasks' `case "plugin"` even when
 // the OUTER op-step render (system-packages/builder/local-pkg-install/op) no longer round-trips
 // through step-emit. Restored via t.Cleanup.
-func stubRenderGen(t *testing.T, dir string, box *buildkit.ResolvedBox) {
+func stubRenderGen(t *testing.T, dir string, box *spec.BuildResolvedBox) {
 	t.Helper()
 	gen := &Generator{Dir: dir, Boxes: map[string]*spec.ResolvedBox{box.Name: &box.ResolvedBox}}
 	renderGenCache.Store(dir, gen)

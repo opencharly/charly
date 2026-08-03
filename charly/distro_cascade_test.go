@@ -4,7 +4,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/opencharly/sdk/vmshared"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -50,9 +49,9 @@ func TestDistroTagChain(t *testing.T) {
 
 func TestDistroDefVersionInherits(t *testing.T) {
 	dc := &spec.DistroConfig{Distro: map[string]*spec.ResolvedDistro{
-		"debian": {Version: "13", Bootstrap: vmshared.BootstrapDef{InstallCmd: "apt"}},
-		"ubuntu": {Inherits: "debian", Version: "24.04", Bootstrap: vmshared.BootstrapDef{InstallCmd: "apt"}},
-		"cachy":  {Inherits: "debian", Bootstrap: vmshared.BootstrapDef{InstallCmd: "apt"}}, // no own version
+		"debian": {Version: "13", Bootstrap: spec.Bootstrap{InstallCmd: "apt"}},
+		"ubuntu": {Inherits: "debian", Version: "24.04", Bootstrap: spec.Bootstrap{InstallCmd: "apt"}},
+		"cachy":  {Inherits: "debian", Bootstrap: spec.Bootstrap{InstallCmd: "apt"}}, // no own version
 	}}
 	if v := dc.ResolveInherits(dc.Distro["ubuntu"], 10).Version; v != "24.04" {
 		t.Errorf("ubuntu version = %q, want 24.04 (child wins)", v)
@@ -71,11 +70,11 @@ func TestDistroDefVersionInherits(t *testing.T) {
 // parent's package sections. No Go-side hardcoded inheritance table.
 func TestExpandPackageInheritance(t *testing.T) {
 	dc := &spec.DistroConfig{Distro: map[string]*spec.ResolvedDistro{
-		"arch":    {Format: map[string]*vmshared.FormatDef{"pac": {}, "aur": {Secondary: true}}},
+		"arch":    {Format: map[string]*spec.Format{"pac": {}, "aur": {Secondary: true}}},
 		"cachyos": {Inherits: "arch", InheritPackages: true},
-		"debian":  {Format: map[string]*vmshared.FormatDef{"deb": {}}},
+		"debian":  {Format: map[string]*spec.Format{"deb": {}}},
 		"ubuntu":  {Inherits: "debian"}, // format inheritance only
-		"fedora":  {Format: map[string]*vmshared.FormatDef{"rpm": {}}},
+		"fedora":  {Format: map[string]*spec.Format{"rpm": {}}},
 		// transitive opt-in: a grandchild flagged on each hop walks the whole chain
 		"cachyos-edge": {Inherits: "cachyos", InheritPackages: true},
 	}}

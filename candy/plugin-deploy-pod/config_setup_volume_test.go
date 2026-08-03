@@ -376,7 +376,7 @@ func TestConfigFlow_PortResolutionThenResolveDeployVolumes_ProjectVolumeStillApp
 	}
 	overlay := dc.Bundle[key]
 	if len(containerPorts) > 0 || len(overlay.Port) > 0 {
-		resolved, rErr := kit.ResolveDeployPorts(containerPorts, overlay.Port, overlay.ResolvedPort, dc.OccupiedHostPorts(key))
+		resolved, rErr := kit.ResolveDeployPorts(containerPorts, overlay.Port, overlay.ResolvedPort, deploykit.OccupiedHostPorts(dc, key))
 		if rErr != nil {
 			t.Fatalf("kit.ResolveDeployPorts() error = %v", rErr)
 		}
