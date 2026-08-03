@@ -1,4 +1,4 @@
-package main
+package authoring
 
 import (
 	"os"
@@ -10,6 +10,10 @@ import (
 
 	"github.com/opencharly/sdk/kit"
 )
+
+// Relocated from charly/scaffold_project_test.go (#55 decoupling cone, Batch B) — both tests
+// exercise kit.ScaffoldProject / kit.AddBox directly, zero charly coupling (the create-side ENGINE
+// shared with this candy's own command:new).
 
 // TestScaffoldProject covers the happy path + the don't-clobber guard.
 // Doesn't run `box validate`, that's exercised in TestScaffoldProject_AddImageRoundtrip.
@@ -86,8 +90,6 @@ func TestScaffoldProject_AddImageRoundtrip(t *testing.T) {
 }
 
 // The AddCandyToBox / RemoveCandyFromBox edit-helper tests
-// (TestAddCandyToImage / TestRemoveCandyFromImage / TestEditCandy_ImportedBoxFile) moved WITH the
-// helpers to candy/plugin-authoring (authoring_edit_test.go) when the box authoring command family
-// externalized (P14b). The two tests below cover kit.ScaffoldProject / kit.AddBox (the create-side
-// ENGINE that stays in sdk/kit, shared with candy/plugin-box's command:new) — they exercise the
-// kit scaffolder from core and remain here.
+// (TestAddCandyToImage / TestRemoveCandyFromImage / TestEditCandy_ImportedBoxFile) live alongside
+// the helpers in this candy's own authoring_edit_test.go (P14b). The two tests above cover
+// kit.ScaffoldProject / kit.AddBox (the create-side ENGINE shared with command:new).

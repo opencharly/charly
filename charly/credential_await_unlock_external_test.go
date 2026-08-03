@@ -2,12 +2,30 @@ package main
 
 import (
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/opencharly/sdk/buildkit"
 )
+
+// copyFileBytesFixture is a trivial local stand-in for buildkit.CopyFileBytes, used here only to
+// stage a built plugin binary into a temp dir — not itself under test.
+func copyFileBytesFixture(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = in.Close() }()
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = out.Close() }()
+	if _, err := io.Copy(out, in); err != nil {
+		return err
+	}
+	return out.Close()
+}
 
 // TestCredentialAwaitUnlock_ExternalEndToEnd is the LIVE proof that the externalized
 // keyring-unlock waiter runs OUT-OF-PROCESS (the godbus dep-shed cutover). It builds the
@@ -50,7 +68,7 @@ func TestCredentialAwaitUnlock_ExternalEndToEnd(t *testing.T) {
 	//    (one class:word per line).
 	pluginDir := t.TempDir()
 	staged := filepath.Join(pluginDir, "plugin-secrets")
-	if err := buildkit.CopyFileBytes(bin, staged); err != nil {
+	if err := copyFileBytesFixture(bin, staged); err != nil {
 		t.Fatalf("stage plugin binary: %v", err)
 	}
 	if err := os.Chmod(staged, 0o755); err != nil {
