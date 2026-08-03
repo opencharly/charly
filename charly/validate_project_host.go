@@ -8,7 +8,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/opencharly/sdk"
+	specexec "github.com/opencharly/spec/exec"
+	"github.com/opencharly/spec/ops"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -304,9 +305,9 @@ func validateProjectForBuild(dir string, opts spec.ResolveOpts) error {
 	if err != nil {
 		return err
 	}
-	ctx := sdk.ContextWithExecutor(context.Background(),
-		sdk.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}}))
-	res, err := prov.Invoke(ctx, &Operation{Reserved: "validate", Op: sdk.OpValidate, Params: reqJSON})
+	ctx := specexec.ContextWithExecutor(context.Background(),
+		specexec.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}}))
+	res, err := prov.Invoke(ctx, &Operation{Reserved: "validate", Op: ops.OpValidate, Params: reqJSON})
 	if err != nil {
 		return err
 	}

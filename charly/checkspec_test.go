@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -221,39 +220,11 @@ func TestMatcher_RejectsMultiKey(t *testing.T) {
 	}
 }
 
-// Full-Check in-place expansion across all string-bearing fields.
-func TestCheck_ExpandVars(t *testing.T) {
-	// file is now a plugin verb; its path + owner ride plugin_input. opExpandVars walks the
-	// PluginInput map (kit.ExpandAnyVars), so ${HOME} / ${MISSING} resolve there exactly as they
-	// did when file/owner were base #Op string fields. Command stays an #Op modifier.
-	c := spec.Op{
-		Plugin: "file",
-		PluginInput: map[string]any{
-			"file":  "${HOME}/.redis",
-			"owner": "${MISSING}",
-		},
-		Command: "redis-cli -p ${HOST_PORT:6379}",
-	}
-	env := map[string]string{
-		"HOME":           "/home/user",
-		"HOST_PORT:6379": "16379",
-	}
-	missing := kit.ExpandOpVars(&c, env)
-
-	if got := c.PluginInput["file"]; got != "/home/user/.redis" {
-		t.Errorf("plugin_input.file = %q", got)
-	}
-	if c.Command != "redis-cli -p 16379" {
-		t.Errorf("Command = %q", c.Command)
-	}
-	if got := c.PluginInput["owner"]; got != "${MISSING}" {
-		t.Errorf("plugin_input.owner should remain unresolved: %q", got)
-	}
-	wantMissing := []string{"MISSING"}
-	if !reflect.DeepEqual(missing, wantMissing) {
-		t.Errorf("missing = %v, want %v", missing, wantMissing)
-	}
-}
+// TestCheck_ExpandVars (Full-Check in-place expansion across all string-bearing
+// fields, exercising kit.ExpandOpVars on a spec.Op) moved to
+// sdk/kit/checkvars_expand_test.go as TestExpandOpVars (#55 K3 Cone 4) — the
+// function under test is kit's own, and a bare spec.Op fixture needs no charly
+// loader machinery.
 
 // JSON-side scalar shorthand for Matcher / MatcherList: mirrors the YAML
 // shorthand so hand-crafted OCI labels with `"stdout":"OK"` parse the
@@ -319,15 +290,10 @@ func TestMatcherList_UnmarshalJSON_Shorthand(t *testing.T) {
 	}
 }
 
-// Verifies the extended ${NAME[:arg]} regex does not regress plain ${NAME}
-// references (backward compatibility with deploykit.TaskVarRefPattern consumers).
-func TestTestVarRefPattern_BackwardCompatible(t *testing.T) {
-	got := kit.TestVarRefs("${HOME}/x ${USER}")
-	want := []string{"HOME", "USER"}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("got %v, want %v", got, want)
-	}
-}
+// TestTestVarRefPattern_BackwardCompatible (kit.TestVarRefs dedup/order
+// assertion) DELETED as a duplicate of sdk/kit/checkvars_expand_test.go's
+// TestTestVarRefs, which already proves the same function's dedup + order
+// behavior directly in the kit package (#55 K3 Cone 4).
 
 // The former TestContainsList_BareSequenceDefaultsToContains /
 // TestContainsList_RealWorldHarnessProbe tested the base #Op `contains` load
@@ -364,10 +330,7 @@ stdout: PONG
 // pulls a submatch from the value before storing in the
 // ScenarioContext.Captures stash.
 
-// DEPLOY_NAME is deploy-scope (resolved only against a live deployment), so a
-// build-scope check referencing it must be rejected by the validator.
-func TestIsRuntimeOnlyVar_DeployName(t *testing.T) {
-	if !kit.IsRuntimeOnlyVar("DEPLOY_NAME") {
-		t.Error("DEPLOY_NAME must be runtime-only")
-	}
-}
+// TestIsRuntimeOnlyVar_DeployName (DEPLOY_NAME is deploy-scope, resolved only
+// against a live deployment) DELETED as a duplicate of sdk/kit/checkvars_expand_test.go's
+// TestIsRuntimeOnlyVar, whose case table already asserts {"DEPLOY_NAME", true}
+// directly in the kit package (#55 K3 Cone 4).

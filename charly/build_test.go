@@ -1,132 +1,79 @@
 package main
 
 import (
-	"reflect"
+	"fmt"
+	"regexp"
+	"sort"
 	"strings"
 	"testing"
+	"text/template"
 
-	"github.com/opencharly/sdk/buildkit"
-	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/vmshared"
 	"github.com/opencharly/spec/spec"
 )
 
-func TestFilterImages(t *testing.T) {
-	images := map[string]*buildkit.ResolvedBox{"fedora": {ResolvedBox: spec.ResolvedBox{Name: "fedora", IsExternalBase: true}}, "fedora-test": {ResolvedBox: spec.ResolvedBox{Name: "fedora-test", Base: "fedora", IsExternalBase: false}}, "ubuntu": {ResolvedBox: spec.ResolvedBox{Name: "ubuntu", IsExternalBase: true}}}
+// testPacstrapMicroarchRe / testRenderPacstrapExtraConf / testRenderRuntimePacmanConf are thin
+// local ports of sdk/buildkit's pure, stdlib-only pacstrap renderers (build_helpers.go) — their
+// own correctness is ALREADY directly covered by sdk/buildkit/build_helpers_test.go
+// (TestRenderRuntimePacmanConf: nil/blank/verbatim/template/malformed-template cases). This
+// file's OWN test is a white-box check of charly's OWN production box/cachyos distro config
+// (LoadBuildConfigForBox), not of the renderers in isolation — mirroring the dedup already
+// applied to this file's sibling TestHostPlatform/TestRenderPacstrapExtraConf removals.
+var testPacstrapMicroarchRe = regexp.MustCompile(`x86_64_v[0-9]+`)
 
-	order := []string{"fedora", "ubuntu", "fedora-test"}
+func testRenderPacstrapExtraConf(p *spec.Pacstrap) string {
+	if p == nil || len(p.ExtraRepos) == 0 {
+		return ""
+	}
+	seen := map[string]bool{}
+	var microarch []string
+	for _, r := range p.ExtraRepos {
+		for _, m := range testPacstrapMicroarchRe.FindAllString(r.Server, -1) {
+			if !seen[m] {
+				seen[m] = true
+				microarch = append(microarch, m)
+			}
+		}
+	}
+	sort.Strings(microarch)
 
-	// Request only fedora-test — should pull in fedora as dependency
-	filtered, err := deploykit.FilterBox(order, []string{"fedora-test"}, images)
+	var b strings.Builder
+	if len(microarch) > 0 {
+		fmt.Fprintf(&b, "[options]\nArchitecture = x86_64 %s\n", strings.Join(microarch, " "))
+	}
+	for _, r := range p.ExtraRepos {
+		fmt.Fprintf(&b, "[%s]\nServer = %s\n", r.Name, r.Server)
+		if r.SigLevel != "" {
+			fmt.Fprintf(&b, "SigLevel = %s\n", r.SigLevel)
+		}
+	}
+	return b.String()
+}
+
+func testRenderRuntimePacmanConf(p *spec.Pacstrap) (string, error) {
+	if p == nil || strings.TrimSpace(p.RuntimePacmanConf) == "" {
+		return "", nil
+	}
+	tmpl, err := template.New("runtime_pacman_conf").Parse(p.RuntimePacmanConf)
 	if err != nil {
-		t.Fatalf("deploykit.FilterBox() error: %v", err)
+		return "", fmt.Errorf("parsing runtime_pacman_conf template: %w", err)
 	}
-	want := []string{"fedora", "fedora-test"}
-	if !reflect.DeepEqual(filtered, want) {
-		t.Errorf("deploykit.FilterBox() = %v, want %v", filtered, want)
+	var b strings.Builder
+	if err := tmpl.Execute(&b, p); err != nil {
+		return "", fmt.Errorf("rendering runtime_pacman_conf: %w", err)
 	}
+	return b.String(), nil
 }
 
-func TestFilterImagesUnknown(t *testing.T) {
-	images := map[string]*buildkit.ResolvedBox{"fedora": {ResolvedBox: spec.ResolvedBox{Name: "fedora", IsExternalBase: true}}}
-	_, err := deploykit.FilterBox([]string{"fedora"}, []string{"nonexistent"}, images)
-	if err == nil {
-		t.Error("expected error for unknown image")
-	}
-}
+// TestFilterImages / TestFilterImagesUnknown / TestFilterImagesIncludesBuilder /
+// TestFilterImagesIncludesBootstrapBuilder relocated to candy/plugin-bundle (#55 decoupling,
+// Batch A) — they asserted deploykit.FilterBox directly, zero charly coupling.
 
-func TestFilterImagesIncludesBuilder(t *testing.T) {
-	images := map[string]*buildkit.ResolvedBox{"builder": {ResolvedBox: spec.ResolvedBox{Name: "builder", IsExternalBase: true}}, "fedora": {ResolvedBox: spec.ResolvedBox{Name: "fedora", IsExternalBase: true, Builder: spec.BuilderMap{"pixi": "builder", "npm": "builder"}}}, "app": {ResolvedBox: spec.ResolvedBox{Name: "app", Base: "fedora", IsExternalBase: false, Builder: spec.BuilderMap{"pixi": "builder", "npm": "builder"}}}}
-
-	order := []string{"builder", "fedora", "app"}
-
-	// Request only app — should pull in fedora (base) and builder
-	filtered, err := deploykit.FilterBox(order, []string{"app"}, images)
-	if err != nil {
-		t.Fatalf("deploykit.FilterBox() error: %v", err)
-	}
-	want := []string{"builder", "fedora", "app"}
-	if !reflect.DeepEqual(filtered, want) {
-		t.Errorf("deploykit.FilterBox() = %v, want %v", filtered, want)
-	}
-}
-
-func TestFilterImagesIncludesBootstrapBuilder(t *testing.T) {
-	// Regression: 2026-05 cachyos / cachyos-pacstrap-builder bug. Requesting
-	// the downstream `app` (base: cachyos) must pull cachyos-pacstrap-builder
-	// into the filtered set even though it's referenced via the dedicated
-	// BootstrapBuilderImage field, not via Builder map. Without this, the
-	// `charly update --build versa` path silently skipped scheduling
-	// cachyos-pacstrap-builder, and runPrivilegedBootstrap then hard-failed
-	// at resolveLocalImageRef with "build the bootstrap_builder_image first".
-	images := map[string]*buildkit.ResolvedBox{"arch": {ResolvedBox: spec.ResolvedBox{Name: "arch", IsExternalBase: true}}, "cachyos-pacstrap-builder": {ResolvedBox: spec.ResolvedBox{Name: "cachyos-pacstrap-builder", Base: "arch", IsExternalBase: false}}, "cachyos": {ResolvedBox: spec.ResolvedBox{Name: "cachyos", IsExternalBase: true, BootstrapBuilderImage: "cachyos-pacstrap-builder"}}, "app": {ResolvedBox: spec.ResolvedBox{Name: "app", Base: "cachyos", IsExternalBase: false}}}
-
-	order := []string{"arch", "cachyos-pacstrap-builder", "cachyos", "app"}
-
-	filtered, err := deploykit.FilterBox(order, []string{"app"}, images)
-	if err != nil {
-		t.Fatalf("deploykit.FilterBox() error: %v", err)
-	}
-	want := []string{"arch", "cachyos-pacstrap-builder", "cachyos", "app"}
-	if !reflect.DeepEqual(filtered, want) {
-		t.Errorf("deploykit.FilterBox() = %v, want %v", filtered, want)
-	}
-}
-
-func TestHostPlatform(t *testing.T) {
-	p := buildkit.HostPlatform()
-	// Should start with linux/
-	if p != "linux/amd64" && p != "linux/arm64" {
-		t.Logf("buildkit.HostPlatform() = %q (non-standard arch, that's OK)", p)
-	}
-}
-
-// TestRenderPacstrapExtraConf locks in the shared pacstrap pacman.conf renderer:
-// (1) a microarch repo (CachyOS x86_64_v3) yields an [options] Architecture
-// directive — the fix for "package architecture is not valid"; (2) per-repo
-// SigLevel is always emitted — the fix for the VM bootstrap path dropping it
-// (GPGME "No data" on SigLevel=Never repos); (3) non-microarch / empty inputs
-// stay clean (no spurious [options], no regression for arch-pacstrap).
-func TestRenderPacstrapExtraConf(t *testing.T) {
-	cachyos := &vmshared.PacstrapDef{ExtraRepos: []vmshared.PacstrapRepo{
-		{Name: "cachyos-v3", Server: "https://mirror.cachyos.org/repo/x86_64_v3/$repo", SigLevel: "Never"},
-		{Name: "cachyos-core-v3", Server: "https://mirror.cachyos.org/repo/x86_64_v3/$repo", SigLevel: "Never"},
-		{Name: "cachyos", Server: "https://mirror.cachyos.org/repo/$arch/$repo", SigLevel: "Never"},
-	}}
-	got := buildkit.RenderPacstrapExtraConf(cachyos)
-	if !strings.Contains(got, "[options]\nArchitecture = x86_64 x86_64_v3\n") {
-		t.Errorf("missing/incorrect Architecture directive for x86_64_v3 repos:\n%s", got)
-	}
-	if strings.Count(got, "SigLevel = Never") != 3 {
-		t.Errorf("expected SigLevel emitted for all 3 repos, got:\n%s", got)
-	}
-	if strings.Count(got, "Architecture =") != 1 {
-		t.Errorf("expected exactly one Architecture directive (deduped), got:\n%s", got)
-	}
-
-	// nil / empty → empty fragment (no spurious [options]).
-	if s := buildkit.RenderPacstrapExtraConf(nil); s != "" {
-		t.Errorf("nil vmshared.PacstrapDef should render empty, got %q", s)
-	}
-	if s := buildkit.RenderPacstrapExtraConf(&vmshared.PacstrapDef{}); s != "" {
-		t.Errorf("no-repos vmshared.PacstrapDef should render empty, got %q", s)
-	}
-
-	// Plain (non-microarch) repo without SigLevel → repo block, no [options].
-	plain := &vmshared.PacstrapDef{ExtraRepos: []vmshared.PacstrapRepo{
-		{Name: "extra", Server: "https://example.org/repo/$arch/$repo"},
-	}}
-	got = buildkit.RenderPacstrapExtraConf(plain)
-	if strings.Contains(got, "[options]") {
-		t.Errorf("plain repo should not emit [options]/Architecture, got:\n%s", got)
-	}
-	if !strings.Contains(got, "[extra]\nServer = https://example.org/repo/$arch/$repo\n") {
-		t.Errorf("plain repo block missing, got:\n%s", got)
-	}
-	if strings.Contains(got, "SigLevel") {
-		t.Errorf("no SigLevel set → none should be emitted, got:\n%s", got)
-	}
-}
+// TestHostPlatform / TestRenderPacstrapExtraConf were removed as duplicates (K3
+// cone2 test closure): both asserted buildkit.HostPlatform / buildkit.RenderPacstrapExtraConf
+// directly against literal fixtures — zero charly coupling — and sdk/buildkit/build_helpers_test.go
+// already carries the same (and, for RenderPacstrapExtraConf, a strictly more thorough:
+// sorted multi-token dedup, table-driven nil/empty/plain/microarch cases) coverage against
+// the same buildkit functions, verified live before deletion.
 
 // TestCachyosRuntimePacmanConf locks in the booted-guest /etc/pacman.conf the
 // cachyos pacstrap writes into the rootfs. Single-source guard: runtime_pacman_conf
@@ -134,7 +81,11 @@ func TestRenderPacstrapExtraConf(t *testing.T) {
 // second hand-maintained copy), so the install + runtime configs cannot drift.
 // Regression guard for the "config file /etc/pacman.conf could not be read"
 // deploy failure AND for the cachyos-extra HTML-stub repo (must be absent from
-// BOTH configs, by construction, now that extra_repo is the single source).
+// BOTH configs, by construction, now that extra_repo is the single source). This
+// test stays in charly — it is a white-box check of charly's OWN production
+// box/cachyos distro config (loaded via LoadBuildConfigForBox), not of the pure
+// buildkit render functions in isolation (those have their own coverage in
+// sdk/buildkit/build_helpers_test.go).
 func TestCachyosRuntimePacmanConf(t *testing.T) {
 	distroCfg, _, _, err := LoadBuildConfigForBox(repoRootDir(t))
 	if err != nil {
@@ -150,7 +101,7 @@ func TestCachyosRuntimePacmanConf(t *testing.T) {
 		t.Errorf("runtime_pacman_conf must derive its repo list from extra_repo via {{ range .ExtraRepos }} (single source), got:\n%s", cachyos.Pacstrap.RuntimePacmanConf)
 	}
 	// Render it the way the bootstrap paths do.
-	rc, err := buildkit.RenderRuntimePacmanConf(cachyos.Pacstrap)
+	rc, err := testRenderRuntimePacmanConf(cachyos.Pacstrap)
 	if err != nil {
 		t.Fatalf("renderRuntimePacmanConf: %v", err)
 	}
@@ -168,7 +119,7 @@ func TestCachyosRuntimePacmanConf(t *testing.T) {
 	if strings.Contains(rc, "cachyos-extra") {
 		t.Errorf("runtime_pacman_conf must NOT include cachyos-extra:\n%s", rc)
 	}
-	if strings.Contains(buildkit.RenderPacstrapExtraConf(cachyos.Pacstrap), "cachyos-extra") {
+	if strings.Contains(testRenderPacstrapExtraConf(cachyos.Pacstrap), "cachyos-extra") {
 		t.Errorf("install (extra_repo) config must NOT include cachyos-extra either — single source of truth")
 	}
 }

@@ -6,19 +6,18 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/spec/spec"
 )
 
-// stubActKitVerb is a kit.CheckVerbProvider that ALSO implements kit.ProvisionActor — a
+// stubActKitVerb is a spec.CheckVerbProvider that ALSO implements checkstep.ProvisionActor — a
 // state-provision verb (the file/user/mount/… family). Wrapped in a kitVerbActAdapter, its
 // build-context OpEmit must return the RenderProvisionScript act shell with ActScript=true
 // (the render then RUN-wraps it via EmitCmd — the former IsScript=true path).
 type stubActKitVerb struct{}
 
 func (stubActKitVerb) Reserved() string { return "stubact" }
-func (stubActKitVerb) RunVerb(context.Context, kit.CheckContext, *spec.Op) kit.Result {
-	return kit.Result{Status: kit.StatusPass}
+func (stubActKitVerb) RunVerb(context.Context, spec.CheckContext, *spec.Op) spec.CheckVerbResult {
+	return spec.CheckVerbResult{Status: spec.StatusPass}
 }
 func (stubActKitVerb) RenderProvisionScript(op *spec.Op, distros []string) (string, bool) {
 	return "install -m " + op.Mode + " /dev/null /opt/stubact-provisioned", true

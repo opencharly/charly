@@ -10,7 +10,7 @@ import (
 // IsRuntimeOnlyVar / ExpandOpVars / ExpandAnyVars / CollectAnyStrings / the runtime-var
 // prefixes) lives ONCE in sdk/kit (checkvars_expand.go) so a plugin candy that runs a plan
 // expands ${VAR}s identically. package main references these directly as kit.X; the
-// check SEMANTICS that consult spec.VerbCatalog (opEffectiveDo / opActsInBuildDeploy) stay below.
+// check SEMANTICS that consult spec.VerbCatalog (opActsInBuildDeploy and kin) stay below.
 
 // ---------------------------------------------------------------------------
 // Unified verb vocabulary — execution context, do-mode, and the VerbCatalog
@@ -79,23 +79,6 @@ func opActsInBuildDeploy(c *spec.Op) bool {
 	// by candy/plugin-build's plugin-verb OpEmit empty-fragment guard.
 	_, isExternal := prov.(*grpcProvider)
 	return isExternal
-}
-
-// EffectiveDo returns the op's resolved do-mode: the keyword-stamped intentDo
-// wins (set by the enclosing Step at run/collect time), else the verb's
-// VerbCatalog default, else DoAssert.
-func opEffectiveDo(c *spec.Op) spec.DoMode {
-	switch spec.DoMode(c.IntentDo) {
-	case spec.DoAct, spec.DoAssert, spec.DoInstruct:
-		return spec.DoMode(c.IntentDo)
-	}
-	verb, err := c.Kind()
-	if err == nil {
-		if vs, ok := spec.VerbCatalog[verb]; ok && vs.DefaultDo != "" {
-			return vs.DefaultDo
-		}
-	}
-	return spec.DoAssert
 }
 
 // EffectiveContexts returns the op's resolved execution contexts: an explicit

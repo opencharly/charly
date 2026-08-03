@@ -5,8 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/buildkit"
-	"github.com/opencharly/sdk/vmshared"
+	"github.com/opencharly/spec/hostenv"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -244,11 +243,11 @@ func TestDnfConfigParse(t *testing.T) {
 func TestDnfConfigInherit(t *testing.T) {
 	dc := &spec.DistroConfig{Distro: map[string]*spec.ResolvedDistro{
 		"fedora": {
-			Bootstrap: vmshared.BootstrapDef{InstallCmd: "dnf install -y"},
-			Dnf:       &vmshared.DnfConfig{MaxParallelDownloads: 10, Fastestmirror: true},
+			Bootstrap: spec.Bootstrap{InstallCmd: "dnf install -y"},
+			Dnf:       &spec.Dnf{MaxParallelDownloads: 10, Fastestmirror: true},
 		},
-		"fedora-child":  {Inherits: "fedora"},                                                    // no own Dnf → inherits
-		"fedora-child2": {Inherits: "fedora", Dnf: &vmshared.DnfConfig{MaxParallelDownloads: 3}}, // own Dnf wins
+		"fedora-child":  {Inherits: "fedora"},                                          // no own Dnf → inherits
+		"fedora-child2": {Inherits: "fedora", Dnf: &spec.Dnf{MaxParallelDownloads: 3}}, // own Dnf wins
 	}}
 
 	got := dc.ResolveDistro([]string{"fedora-child"})
@@ -268,15 +267,15 @@ func TestDnfConfigInherit(t *testing.T) {
 // TestDistroDefPrimaryFormat proves PrimaryFormat returns the base format
 // (rpm/deb/pac), skipping the secondary `aur` builder format, deterministically.
 func TestDistroDefPrimaryFormat(t *testing.T) {
-	arch := &spec.ResolvedDistro{Format: map[string]*vmshared.FormatDef{"pac": {}, "aur": {Secondary: true}}}
+	arch := &spec.ResolvedDistro{Format: map[string]*spec.Format{"pac": {}, "aur": {Secondary: true}}}
 	if got := arch.PrimaryFormat(); got != "pac" {
 		t.Errorf("arch PrimaryFormat = %q, want pac (aur is secondary)", got)
 	}
-	fedora := &spec.ResolvedDistro{Format: map[string]*vmshared.FormatDef{"rpm": {}}}
+	fedora := &spec.ResolvedDistro{Format: map[string]*spec.Format{"rpm": {}}}
 	if got := fedora.PrimaryFormat(); got != "rpm" {
 		t.Errorf("fedora PrimaryFormat = %q, want rpm", got)
 	}
-	if got := (&spec.ResolvedDistro{Format: map[string]*vmshared.FormatDef{"aur": {Secondary: true}}}).PrimaryFormat(); got != "" {
+	if got := (&spec.ResolvedDistro{Format: map[string]*spec.Format{"aur": {Secondary: true}}}).PrimaryFormat(); got != "" {
 		t.Errorf("aur-only PrimaryFormat = %q, want empty (no base format)", got)
 	}
 	if got := (*spec.ResolvedDistro)(nil).PrimaryFormat(); got != "" {
@@ -292,12 +291,12 @@ func TestFormatForDistroID(t *testing.T) {
 		"arch": "pac", "cachyos": "pac", "endeavouros": "pac", "unknown-distro": "",
 	}
 	for id, want := range cases {
-		if got := vmshared.FormatForDistroID(id); got != want {
+		if got := hostenv.FormatForDistroID(id); got != want {
 			t.Errorf("formatForDistroID(%q) = %q, want %q", id, got, want)
 		}
 	}
 	// FormatHint walks ID then ID_LIKE through the same table.
-	hd := &vmshared.HostDistro{ID: "weird", IDLike: []string{"arch"}}
+	hd := &hostenv.HostDistro{ID: "weird", IDLike: []string{"arch"}}
 	if got := hd.FormatHint(); got != "pac" {
 		t.Errorf("FormatHint via ID_LIKE = %q, want pac", got)
 	}
@@ -313,10 +312,10 @@ func TestDistroConfigFindFormat(t *testing.T) {
 	for _, f := range []string{"rpm", "deb", "pac"} {
 		fd := dc.FindFormat(f)
 		if fd == nil {
-			t.Errorf("FindFormat(%q) = nil, want a vmshared.FormatDef", f)
+			t.Errorf("FindFormat(%q) = nil, want a spec.Format", f)
 			continue
 		}
-		if buildkit.FormatPhaseTemplate(fd, spec.PhaseInstall, spec.VenueHostNative) == "" {
+		if spec.FormatPhaseTemplate(fd, spec.PhaseInstall, spec.VenueHostNative) == "" {
 			t.Errorf("format %q has no phase.install.host cell", f)
 		}
 		if fd.UninstallTemplate == "" {

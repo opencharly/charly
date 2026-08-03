@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/opencharly/sdk"
+	specexec "github.com/opencharly/spec/exec"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -38,8 +38,8 @@ func dispatchOCIStep(stepView spec.InstallStepView, planView spec.InstallPlanVie
 	if !ok {
 		return "", fmt.Errorf("oci-emit-step: class:step provider %q not connected at build time", "oci-dispatch")
 	}
-	ctx := sdk.ContextWithExecutor(context.Background(),
-		sdk.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{build: build}}))
+	ctx := specexec.ContextWithExecutor(context.Background(),
+		specexec.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{build: build}}))
 	env := spec.BuildEnv{Distros: distros, ImageBuildDir: build.ImageBuildDir, ContextRelPrefix: build.ContextRelPrefix}
 	if build.Box != nil {
 		env.Image = build.Box.Name

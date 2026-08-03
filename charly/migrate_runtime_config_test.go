@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/spec/hostenv"
 )
 
@@ -21,7 +20,7 @@ func TestLoadRuntimeConfig_CleanConfigOK(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "config.yml"), []byte("secret_backend: keyring\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := kit.LoadRuntimeConfig(); err != nil {
+	if _, err := hostenv.LoadRuntimeConfig(); err != nil {
 		t.Fatalf("clean config should load, got: %v", err)
 	}
 }

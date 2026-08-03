@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/spec"
 )
 
 // TestFormatCLIError_ExtractsRefRegardlessOfWrapping proves FormatCLIError's marker search finds
-// the image ref whether kit.ErrImageNotLocal is the WHOLE message (the direct ExtractMetadata
+// the image ref whether spec.ErrImageNotLocal is the WHOLE message (the direct ExtractMetadata
 // caller shape) or wrapped by an outer layer (dispatchInProcCommand's "command %q: %w" — the
 // compiled-in command-plugin dispatch every command word goes through, K3 reentry-class
 // dissolution: candy/plugin-box's `labels` command was the first ErrImageNotLocal caller to run
@@ -17,7 +17,7 @@ func TestFormatCLIError_ExtractsRefRegardlessOfWrapping(t *testing.T) {
 	const ref = "totally-nonexistent-image-xyz"
 	want := fmt.Sprintf("image %q is not available locally.\nRun 'charly box pull %s' to fetch it first", ref, ref)
 
-	direct := fmt.Errorf("%w: %s", kit.ErrImageNotLocal, ref)
+	direct := fmt.Errorf("%w: %s", spec.ErrImageNotLocal, ref)
 	if got := FormatCLIError(direct).Error(); got != want {
 		t.Errorf("direct (unwrapped) case: FormatCLIError(%v) = %q, want %q", direct, got, want)
 	}

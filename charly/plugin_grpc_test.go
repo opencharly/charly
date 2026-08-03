@@ -11,9 +11,9 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
 
-	"github.com/opencharly/sdk"
 	pb "github.com/opencharly/spec/proto"
 	"github.com/opencharly/spec/spec"
+	"github.com/opencharly/spec/transport"
 )
 
 // testVerbProvider is an in-proc Provider used to exercise the gRPC contract.
@@ -61,7 +61,7 @@ func TestPluginGRPCRoundTrip(t *testing.T) {
 	}
 	defer func() { _ = conn.Close() }()
 
-	pc := &sdk.Conn{Provider: pb.NewProviderClient(conn), Meta: pb.NewPluginMetaClient(conn)}
+	pc := &transport.Conn{Provider: pb.NewProviderClient(conn), Meta: pb.NewPluginMetaClient(conn)}
 
 	caps, err := describe(context.Background(), pc)
 	if err != nil {
@@ -117,7 +117,7 @@ func TestPluginGRPCRoundTrip(t *testing.T) {
 func TestBuildUnitRefusesProtocolMismatch(t *testing.T) {
 	caps := &pb.Capabilities{
 		Calver:          "2026.172.0001",
-		ProtocolVersion: sdk.ProtocolVersion + 1, // a plugin built against a different charly
+		ProtocolVersion: transport.ProtocolVersion + 1, // a plugin built against a different charly
 		Provided:        []*pb.ProvidedCapability{{Class: "verb", Word: "externalprobe", InputDef: "#ExternalprobeInput"}},
 		SchemaCue:       "#ExternalprobeInput: {marker?: string}\n",
 	}

@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/opencharly/sdk"
 	specexec "github.com/opencharly/spec/exec"
+	"github.com/opencharly/spec/ops"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -15,8 +15,8 @@ import (
 // Remove forward their flags via their own HostBuild("pod-config-<leaf>") seam.
 //
 // P13-KERNEL direction-flip: Setup/Remove's former ORCHESTRATION (BoxConfigSetupCmd/
-// BoxConfigRemoveCmd, plus the env/mcp provides injection) moved to candy/plugin-deploy-pod (sdk.OpConfigSetup/
-// sdk.OpConfigRemove) — hostBuildPodConfigSetup/Remove now FORWARD onward to the plugin (resolve
+// BoxConfigRemoveCmd, plus the env/mcp provides injection) moved to candy/plugin-deploy-pod (ops.OpConfigSetup/
+// ops.OpConfigRemove) — hostBuildPodConfigSetup/Remove now FORWARD onward to the plugin (resolve
 // deploy:pod + InvokeWithExecutor, the SAME primitive InvokeProvider uses, S1) instead of
 // running the orchestration in-core; the plugin calls back the narrow
 // "pod-config-*" seams in host_build_pod_config_seams.go for the host/loader/registry/
@@ -66,7 +66,7 @@ func hostBuildPodConfigSetup(ctx context.Context, req spec.PodConfigSetupRequest
 	if err != nil {
 		return rep, err
 	}
-	resJSON, err := invokePodConfigOp(ctx, sdk.OpConfigSetup, reqJSON)
+	resJSON, err := invokePodConfigOp(ctx, ops.OpConfigSetup, reqJSON)
 	if err != nil {
 		return rep, err
 	}
@@ -82,7 +82,7 @@ func hostBuildPodConfigRemove(ctx context.Context, req spec.PodConfigRemoveReque
 	if err != nil {
 		return rep, err
 	}
-	resJSON, err := invokePodConfigOp(ctx, sdk.OpConfigRemove, reqJSON)
+	resJSON, err := invokePodConfigOp(ctx, ops.OpConfigRemove, reqJSON)
 	if err != nil {
 		return rep, err
 	}

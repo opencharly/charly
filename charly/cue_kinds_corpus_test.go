@@ -14,10 +14,24 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/spec/spec"
 	"gopkg.in/yaml.v3"
 )
+
+// hasMappingKey reports whether the yaml mapping node m has an entry named key —
+// the same "base"/"from" image-vs-layer discriminator check production's
+// validateEntityNodeRec (cue_schema.go) runs, inlined here (test-only, single use).
+func hasMappingKey(m *yaml.Node, key string) bool {
+	if m == nil || m.Kind != yaml.MappingNode {
+		return false
+	}
+	for i := 0; i+1 < len(m.Content); i += 2 {
+		if m.Content[i].Value == key {
+			return true
+		}
+	}
+	return false
+}
 
 // parseCorpusDocs decodes a corpus file's YAML multi-document stream and runs
 // each document through the SAME parse the loader uses (activeLoaderParser.ParseDoc) — which desugars
@@ -102,7 +116,7 @@ func TestCueBox_Corpus(t *testing.T) {
 			if gn.disc != "candy" || gn.discValue == nil || gn.discValue.Kind != yaml.MappingNode {
 				continue
 			}
-			if kit.MapValue(gn.discValue, "base") == nil && kit.MapValue(gn.discValue, "from") == nil {
+			if !hasMappingKey(gn.discValue, "base") && !hasMappingKey(gn.discValue, "from") {
 				continue // a layer fragment, not an image — validated as #Candy elsewhere
 			}
 			b, merr := yaml.Marshal(gn.discValue)

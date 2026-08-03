@@ -2,8 +2,6 @@ package main
 
 import (
 	"testing"
-
-	"github.com/opencharly/spec/spec"
 )
 
 // resolved_project_namespace_test.go — K1-unblock wave 2: proves the namespace-qualified
@@ -62,35 +60,14 @@ func TestProjectTemplates_NamespaceQualified(t *testing.T) {
 	}
 }
 
-// TestFillNamespacedBoxes_QualifiedView proves the resolved-project envelope's rp.Boxes carries a
-// namespace-qualified spec.ResolvedBoxView ("fedora.jupyter") for a box reachable only through an
-// import namespace, in addition to (additive, never replacing) the root-scoped boxes. Drives the
-// FULL resolve (hostBuildNamespaced's FLAT NamespaceScanReply → the plugin-side fold:
-// loaderkit.ScanCandyFromLocal + deploykit.RawCandyPair + deploykit.FillNamespaceBoxViews) via
-// testBuildResolvedProject — the test-side reproduction of candy/plugin-build's resolveBuildEngine
-// namespaced-box resolution (#55 K1 loader-cone fabric-tail deleted the host namespaced-box fill;
-// the deploykit calls relocated plugin-side, reproduced test-side by foldNamespaceScanInProc).
-func TestFillNamespacedBoxes_QualifiedView(t *testing.T) {
-	root := writeNamespaceImportFixture(t)
-	rp, err := testBuildResolvedProject(t, root, spec.ResolveOpts{})
-	if err != nil {
-		t.Fatalf("testBuildResolvedProject: %v", err)
-	}
-	view, ok := rp.Boxes["fedora.jupyter"]
-	if !ok {
-		keys := make([]string, 0, len(rp.Boxes))
-		for k := range rp.Boxes {
-			keys = append(keys, k)
-		}
-		t.Fatalf("fedora.jupyter missing from the namespace-flattened rp.Boxes: keys=%v", keys)
-	}
-	if view.Base != "quay.io/fedora/fedora:43" {
-		t.Errorf("fedora.jupyter Base = %q, want quay.io/fedora/fedora:43", view.Base)
-	}
-	if _, ok := rp.Boxes["jupyter"]; ok {
-		t.Error("jupyter should NOT be visible at root scope (it's namespaced under 'fedora')")
-	}
-}
+// TestFillNamespacedBoxes_QualifiedView moved to
+// candy/plugin-build/resolved_project_projection_test.go (#55 decoupling cone, Batch B): it drove
+// the namespaced-box resolve through testBuildResolvedProject, a test-side reproduction of DELETED
+// production code (charly/resolved_project_host.go's namespaced-box fill) whose production home is
+// now candy/plugin-build (resolveBuildEngine → projectResolvedProjectLeg). The moved test exercises
+// that PRODUCTION function directly, stubbing the "buildengine-namespaced" HostBuild leg via a fake
+// executor (the same pattern candy/plugin-deploy-vm/lifecycle_test.go already uses) instead of
+// reproducing charly-core-only loader internals a plugin cannot import.
 
 // TestFindK8sSpec_NamespaceQualified is the end-to-end functional proof: findK8sSpec — previously
 // a bare uf.K8s[name] lookup with NO namespace support at all — now resolves a namespace-qualified

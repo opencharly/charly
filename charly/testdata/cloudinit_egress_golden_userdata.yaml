@@ -1,0 +1,13 @@
+bootcmd:
+    - systemctl mask ssh.socket || true
+hostname: egress-vm
+runcmd:
+    - pacman -S --needed --noconfirm openssh curl tar
+    - sh -c 'echo "PerSourcePenalties no" > /etc/ssh/sshd_config.d/99-charly-guest-hardening.conf && sshd -t || rm -f /etc/ssh/sshd_config.d/99-charly-guest-hardening.conf'
+    - systemctl unmask ssh.socket || true
+    - systemctl enable --now sshd
+users:
+    - default
+    - name: arch
+      ssh_authorized_keys:
+        - ssh-ed25519 AAAATESTKEY user@host

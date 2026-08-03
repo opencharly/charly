@@ -139,9 +139,9 @@ func TestDescribeProvider_ViaInProcExecutorClient(t *testing.T) {
 	if contract == nil {
 		t.Fatal("contract = nil, want the fake's declared contract")
 	}
-	if contract.Scope != fake.contract.Scope.String() || contract.Venue != int(fake.contract.Venue) ||
-		contract.Gate != string(fake.contract.Gate) || contract.Emits != fake.contract.Emits {
+	if contract.Scope != fake.contract.Scope || contract.Venue != fake.contract.Venue ||
+		contract.Gate != fake.contract.Gate || contract.Emits != fake.contract.Emits {
 		t.Errorf("contract = %+v, want {Scope:%q Venue:%d Gate:%q Emits:%v}",
-			contract, fake.contract.Scope.String(), fake.contract.Venue, fake.contract.Gate, fake.contract.Emits)
+			contract, fake.contract.Scope.String(), int(fake.contract.Venue), string(fake.contract.Gate), fake.contract.Emits)
 	}
 }

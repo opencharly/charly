@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -72,7 +71,7 @@ func (c *hostCheckCarrier) VmTargetName() string {
 // through. The walk lives in sdk/kit and consumes the runner (kit.Runner, kit.PlanContext) plus
 // two host-supplied interfaces: kit.VerbResolver (verb dispatch, satisfied by the core provider
 // registry) and kit.PlanGrammar (the VerbCatalog do-mode/context grammar). The grammar the walk
-// consults (VerbCatalog / opEffectiveDo / opEffectiveContexts) and the verb dispatch (the
+// consults (VerbCatalog / opEffectiveContexts) and the verb dispatch (the
 // provider registry) STAY in core behind these seams.
 
 // hostVerbResolver is the verb-dispatch seam — the ONE thing the walk needs from the core
@@ -116,32 +115,6 @@ func (h *hostVerbResolver) RunVerb(ctx context.Context, op *spec.Op) (spec.Check
 // the verb has no act path (the walk falls through to the assert dispatch).
 func (h *hostVerbResolver) RunProvisionAct(ctx context.Context, op *spec.Op, verb string) (spec.CheckResult, bool) {
 	return h.runProvisionAct(ctx, op, verb)
-}
-
-// hostPlanGrammar adapts the core VerbCatalog do-mode + execution-context grammar to
-// kit.PlanGrammar. ExecContext never crosses the kit seam — InContext takes a bool (runtime vs
-// build) and ContextsLabel pre-formats the effective-contexts list for the skip message.
-type hostPlanGrammar struct{}
-
-// EffectiveDo resolves op's do-mode (the keyword-stamped intentDo wins, else the verb's
-// VerbCatalog default, else DoAssert).
-func (hostPlanGrammar) EffectiveDo(op *spec.Op) spec.DoMode { return opEffectiveDo(op) }
-
-// InContext reports whether op is legal in the run's active context: runtime=true → the live
-// (runtime) context, runtime=false → the box (build) context.
-func (hostPlanGrammar) InContext(op *spec.Op, runtime bool) bool {
-	wantCtx := spec.CtxBuild
-	if runtime {
-		wantCtx = spec.CtxRuntime
-	}
-	return opInContext(op, wantCtx)
-}
-
-// ContextsLabel is op's effective-contexts list pre-formatted for the context-skip message —
-// the SAME %v rendering the former core ContextSkipReason used, so the message is
-// byte-identical.
-func (hostPlanGrammar) ContextsLabel(op *spec.Op) string {
-	return fmt.Sprintf("%v", opEffectiveContexts(op))
 }
 
 // The former venueResolver — the `on:` DRIVER venue → kit.VenueResolver adapter for the IN-PROC

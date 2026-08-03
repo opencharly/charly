@@ -7,8 +7,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/opencharly/sdk"
 	specexec "github.com/opencharly/spec/exec"
+	"github.com/opencharly/spec/ops"
 	"github.com/opencharly/spec/report"
 	"github.com/opencharly/spec/spec"
 )
@@ -24,8 +24,8 @@ import (
 // "live"/"feature-live" check-run modes reached via the check-run seam, so they stay core.
 
 // The `charly check` exit-code contract (2 = checks failed, 3 = prereq skip) lives in
-// the sdk (sdk.CheckFailExitCode / sdk.CheckSkippedExitCode); the plugin/main signal it
-// across the module boundary via *sdk.ExitCodeError. The `charly check` CLI + its
+// the sdk (exitcode.CheckFailExitCode / exitcode.CheckSkippedExitCode); the plugin/main signal it
+// across the module boundary via *exitcode.ExitCodeError. The `charly check` CLI + its
 // exit-code plumbing live in command:check (candy/plugin-check).
 
 // candyDirsFromScan extracts the candy-name → SourceDir map from a scanned candy
@@ -112,7 +112,7 @@ func resolveCheckRunnerContext(box, dir string, cfg *Config) checkRunnerContext 
 // spec.ProjectLoader.ResolveMergedDeployTree seam (#55 coneA Q2(1)), which runs the
 // loaderkit.ResolveMergedTreeViaExecutor project+overlay merge INSIDE the loader plugin over the
 // in-proc host reverse channel (the SAME executorReverseServer path command:validate /
-// command:bundle drive, threaded on ctx via sdk.ContextWithExecutor) — so the deploykit
+// command:bundle drive, threaded on ctx via specexec.ContextWithExecutor) — so the deploykit
 // projection/overlay/merge lives INSIDE loaderkit, off charly core, and this read routes through
 // the loader broker exactly like every Cone A Unit 3 dispatch reader. The in-proc executor reaches
 // only the compiled-in loader-* host legs (it never runs the
@@ -127,7 +127,7 @@ func resolveCheckRunnerContext(box, dir string, cfg *Config) checkRunnerContext 
 // NOT the boundary-law "host-boundary-object" trap: the merge IS a loader mechanism the plugin
 // drives; the shed landed once the seam exposed it.
 func resolveMergedDeployTree(dir string) (map[string]spec.BundleNode, error) {
-	ctx := sdk.ContextWithExecutor(context.Background(), sdk.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}}))
+	ctx := specexec.ContextWithExecutor(context.Background(), specexec.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}}))
 	return requireProjectLoader().ResolveMergedDeployTree(ctx, dir)
 }
 
@@ -344,9 +344,9 @@ func dispatchVerifyChecks(ctx context.Context, exec spec.DeployExecutor, req spe
 	if err != nil {
 		return nil, fmt.Errorf("verify-checks: marshal request: %w", err)
 	}
-	invokeCtx := sdk.ContextWithExecutor(ctx,
-		sdk.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{exec: exec}}))
-	res, err := prov.Invoke(invokeCtx, &Operation{Reserved: "check", Op: sdk.OpVerifyChecks, Params: reqJSON})
+	invokeCtx := specexec.ContextWithExecutor(ctx,
+		specexec.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{exec: exec}}))
+	res, err := prov.Invoke(invokeCtx, &Operation{Reserved: "check", Op: ops.OpVerifyChecks, Params: reqJSON})
 	if err != nil {
 		return nil, fmt.Errorf("verify-checks: command:check plugin: %w", err)
 	}

@@ -4,7 +4,7 @@ package main
 //
 // UnifiedDeployTarget/LifecycleTarget via pluginDeployTarget (S3b — the thin, DATA-ONLY proxy left
 // behind once the deploy dispatch orchestration moved to candy/plugin-bundle over the ONE generic
-// sdk.OpDeployDispatch envelope, see candy/plugin-bundle/deploy_target.go and
+// ops.OpDeployDispatch envelope, see candy/plugin-bundle/deploy_target.go and
 // CHANGELOG/2026.203.0212.md for the full migration narrative), and the ResolveTarget dispatcher.
 // ALL FIVE substrates
 // (local/vm/pod/k8s/android) are EXTERNAL — each resolves to pluginDeployTarget, which holds ONLY
@@ -12,7 +12,7 @@ package main
 // core-private *grpcProvider (that type is constructed at plugin-CONNECT time — clause-M, cannot
 // move — so nothing holding one can live in a plugin). Every method dispatches to
 // candy/plugin-bundle's Invoke(OpDeployDispatch), discriminated by an `op` field, which in turn
-// reaches the ACTUAL substrate provider via its own sdk.Executor.InvokeProvider (S1).
+// reaches the ACTUAL substrate provider via its own specexec.Executor.InvokeProvider (S1).
 //
 // Two things stay core-resident by design, wrapping the dispatch rather than living inside it:
 //   - The arbiter acquire/release BRACKET (Start/Stop only) — CHARLY_PREEMPT_LEASE is a
@@ -32,8 +32,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/opencharly/sdk"
 	specexec "github.com/opencharly/spec/exec"
+	"github.com/opencharly/spec/exitcode"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -518,7 +518,7 @@ func (t *pluginDeployTarget) Shell(ctx context.Context, cmd []string) error {
 		fmt.Print(reply.Output)
 	}
 	if reply.ExitCode != 0 {
-		return &sdk.ExitCodeError{Code: int(reply.ExitCode)}
+		return &exitcode.ExitCodeError{Code: int(reply.ExitCode)}
 	}
 	return nil
 }
@@ -548,7 +548,7 @@ func (t *pluginDeployTarget) Attach(ctx context.Context, cmd []string, tty bool)
 		return err
 	}
 	if reply.ExitCode != 0 {
-		return &sdk.ExitCodeError{Code: int(reply.ExitCode)}
+		return &exitcode.ExitCodeError{Code: int(reply.ExitCode)}
 	}
 	return nil
 }

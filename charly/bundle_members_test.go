@@ -4,161 +4,18 @@ import (
 	"errors"
 	"io"
 	"reflect"
-	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/proc"
 	"github.com/opencharly/spec/spec"
 
 	"github.com/alecthomas/kong"
 )
 
-// TestFoldMembers_FoldsTopLevelAndInheritsDisposability verifies a member is
-// registered as a top-level addressable Bundle entry, MemberOf points at the
-// owner, and a disposable owner's disposability is inherited (so a kind:check
-// bed's destroy+rebuild is authorized to tear the member down too).
-func TestFoldMembers_FoldsTopLevelAndInheritsDisposability(t *testing.T) {
-	uf := &spec.UnifiedFile{Bundle: map[string]spec.BundleNode{
-		"check-cross-pod-cdp": {
-			Target:     "pod",
-			Image:      "web",
-			Disposable: new(true),
-			Members: map[string]*spec.BundleNode{
-				"chrome": {Target: "pod", Image: "chrome-headless"},
-			},
-		},
-	}}
-	if err := loaderkit.FoldMembers(uf); err != nil {
-		t.Fatalf("foldMembers: %v", err)
-	}
-	member, ok := uf.Bundle["chrome"]
-	if !ok {
-		t.Fatalf("member 'chrome' was not folded into the Bundle map: %v", deployKeysList(uf.Bundle))
-	}
-	if member.MemberOf != "check-cross-pod-cdp" {
-		t.Errorf("member.MemberOf = %q, want check-cross-pod-cdp", member.MemberOf)
-	}
-	if member.Image != "chrome-headless" {
-		t.Errorf("member.Image = %q, want chrome-headless", member.Image)
-	}
-	if !member.IsDisposable() {
-		t.Errorf("folded member should inherit the disposable owner's disposability")
-	}
-}
-
-// TestFoldMembers_NonDisposableOwnerDoesNotForceDisposable: a member of a
-// non-disposable owner is NOT auto-promoted to disposable (no autonomy granted).
-func TestFoldMembers_NonDisposableOwnerDoesNotForceDisposable(t *testing.T) {
-	uf := &spec.UnifiedFile{Bundle: map[string]spec.BundleNode{
-		"prod": {
-			Target:  "pod",
-			Image:   "web",
-			Members: map[string]*spec.BundleNode{"sidecar": {Target: "pod", Image: "chrome-headless"}},
-		},
-	}}
-	if err := loaderkit.FoldMembers(uf); err != nil {
-		t.Fatalf("foldMembers: %v", err)
-	}
-	if uf.Bundle["sidecar"].IsDisposable() {
-		t.Errorf("member of a non-disposable owner must not be disposable")
-	}
-}
-
-// TestFoldMembers_CollisionIsError: a member name colliding with an existing
-// deploy/bed/member entry is a hard error (globally-unique member names).
-func TestFoldMembers_CollisionIsError(t *testing.T) {
-	uf := &spec.UnifiedFile{Bundle: map[string]spec.BundleNode{
-		"web": {Target: "pod", Image: "web"},
-		"bed": {Target: "pod", Image: "web", Members: map[string]*spec.BundleNode{"web": {Target: "pod", Image: "chrome-headless"}}},
-	}}
-	err := loaderkit.FoldMembers(uf)
-	if err == nil || !strings.Contains(err.Error(), "collides") {
-		t.Fatalf("expected a collision error, got %v", err)
-	}
-}
-
-// TestFoldMembers_EmptyMemberIsError: a nil member node is rejected.
-func TestFoldMembers_EmptyMemberIsError(t *testing.T) {
-	uf := &spec.UnifiedFile{Bundle: map[string]spec.BundleNode{
-		"bed": {Target: "pod", Image: "web", Members: map[string]*spec.BundleNode{"chrome": nil}},
-	}}
-	if err := loaderkit.FoldMembers(uf); err == nil {
-		t.Fatalf("expected an error for a nil member node")
-	}
-}
-
-// TestValidateMembers_BadTarget rejects an unsupported member target kind.
-func TestValidateMembers_BadTarget(t *testing.T) {
-	uf := &spec.UnifiedFile{Bundle: map[string]spec.BundleNode{
-		"bed": {Target: "pod", Image: "web", Members: map[string]*spec.BundleNode{
-			"chrome": {Target: "bogus", Image: "chrome-headless"},
-		}},
-	}}
-	if err := loaderkit.ValidateMembers(uf); err == nil || !strings.Contains(err.Error(), "unsupported target") {
-		t.Fatalf("expected unsupported-target error, got %v", err)
-	}
-}
-
-// TestValidateMembers_AcceptsCanonicalSubstrates proves the kind-blind
-// validation: a peer member whose target is any of the CANONICAL deploy substrates
-// (consulted via the deployTargetWords D-data set, not a compiled-in per-kind
-// switch on the consumer) is ACCEPTED. Non-vacuous — asserts all 5 (pod/vm/local/
-// k8s/android), so a silently-empty canonical set or a broken membership check
-// cannot pass. This is the check-coverage gate for the incomplete-seam fix.
-func TestValidateMembers_AcceptsCanonicalSubstrates(t *testing.T) {
-	for _, target := range deployTargetWords {
-		uf := &spec.UnifiedFile{Bundle: map[string]spec.BundleNode{
-			"bed": {Target: "pod", Image: "web", Members: map[string]*spec.BundleNode{
-				"side": {Target: target, Image: "side-img"},
-			}},
-		}}
-		if err := loaderkit.ValidateMembers(uf); err != nil {
-			t.Errorf("canonical deploy substrate %q must be a valid member target, got: %v", target, err)
-		}
-	}
-}
-
-// TestValidateMembers_RejectsGroup guards the kind-boundary: `group` is a
-// spec.ResourceKinds kind but NOT a deploy substrate (no deploy provider), so it
-// is NOT a valid peer-member target — the kind-blind predicate must not over-accept
-// every resource kind.
-func TestValidateMembers_RejectsGroup(t *testing.T) {
-	uf := &spec.UnifiedFile{Bundle: map[string]spec.BundleNode{
-		"bed": {Target: "pod", Image: "web", Members: map[string]*spec.BundleNode{
-			"grp": {Target: "group", Image: "grp-img"},
-		}},
-	}}
-	if err := loaderkit.ValidateMembers(uf); err == nil || !strings.Contains(err.Error(), "unsupported target") {
-		t.Fatalf("group must not be a valid member target, got: %v", err)
-	}
-}
-
-// TestValidateMembers_AcceptsEmptyTarget documents the "" default (defaults to
-// pod) is a valid member target under the kind-blind predicate.
-func TestValidateMembers_AcceptsEmptyTarget(t *testing.T) {
-	uf := &spec.UnifiedFile{Bundle: map[string]spec.BundleNode{
-		"bed": {Target: "pod", Image: "web", Members: map[string]*spec.BundleNode{
-			"side": {Target: "", Image: "side-img"},
-		}},
-	}}
-	if err := loaderkit.ValidateMembers(uf); err != nil {
-		t.Fatalf("the empty target (default pod) must be a valid member target, got: %v", err)
-	}
-}
-
-// TestValidateMembers_DottedKeyRejected: a member key with a dot collides with the
-// nested dotted-path addressing grammar.
-func TestValidateMembers_DottedKeyRejected(t *testing.T) {
-	uf := &spec.UnifiedFile{Bundle: map[string]spec.BundleNode{
-		"bed": {Target: "pod", Image: "web", Members: map[string]*spec.BundleNode{
-			"a.b": {Target: "pod", Image: "chrome-headless"},
-		}},
-	}}
-	if err := loaderkit.ValidateMembers(uf); err == nil {
-		t.Fatalf("expected a dotted-key rejection")
-	}
-}
+// TestFoldMembers_* / TestValidateMembers_* relocated to
+// candy/plugin-loader/bundle_members_test.go (#55 decoupling cone, Batch C) —
+// they asserted loaderkit.FoldMembers / loaderkit.ValidateMembers directly,
+// zero charly coupling.
 
 // TestIsPodMember covers the pod-vs-other routing used by bringUp/tearDownMembers.
 func TestIsPodMember(t *testing.T) {
@@ -246,14 +103,6 @@ func TestTearDownMembers_AttemptsAllAndReturnsJoinedErrors(t *testing.T) {
 	if len(calls) != 2 {
 		t.Fatalf("tearDownMembers stopped early: calls = %v", calls)
 	}
-}
-
-func deployKeysList(m map[string]spec.BundleNode) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	return out
 }
 
 // TestBundleDelArgv_KongAccepts proves spec.BundleDelArgv emits a flag the REAL

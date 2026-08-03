@@ -709,13 +709,13 @@ func updateAllDeployedQuadlets(ctx context.Context, ex *sdk.Executor, rt *kit.Re
 
 		updateCtrName := kit.ContainerNameInstance(boxName, instance)
 		updateAccepted := deploykit.AcceptedEnvSet(meta.EnvAccept, meta.EnvRequire)
-		globalEnv := dc.GlobalEnvForImage(spec.DeployKey(boxName, instance), updateCtrName, updateAccepted)
+		globalEnv := deploykit.GlobalEnvForImage(dc, spec.DeployKey(boxName, instance), updateCtrName, updateAccepted)
 		envVars, err := kit.ResolveEnvVars(globalEnv, meta.Env, "", "", "", nil)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: could not resolve env for %s: %v\n", key, err)
 			continue
 		}
-		envVars = kit.EnrichNoProxy(envVars, dc.DeployedContainerNames())
+		envVars = kit.EnrichNoProxy(envVars, deploykit.DeployedContainerNames(dc))
 		resolvedNetwork, _ := kit.ResolveNetwork(meta.Network, rt.RunEngine)
 
 		var detectRep spec.PodConfigDetectDevicesReply

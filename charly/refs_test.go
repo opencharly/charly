@@ -1,147 +1,23 @@
 package main
 
 import (
-	"bytes"
-	"io"
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
 
-func TestCandyRef(t *testing.T) {
-	tests := []struct {
-		raw      string
-		bare     string
-		version  string
-		isRemote bool
-	}{
-		{"python", "python", "", false},
-		{"@github.com/org/repo/layers/cuda:v1.0.0", "github.com/org/repo/layers/cuda", "v1.0.0", true},
-		{"@github.com/org/repo/layers/cuda", "github.com/org/repo/layers/cuda", "", true},
-	}
-	for _, tt := range tests {
-		r := deploykit.CandyRef{Raw: tt.raw}
-		if got := r.Bare(); got != tt.bare {
-			t.Errorf("CandyRef{%q}.Bare() = %q, want %q", tt.raw, got, tt.bare)
-		}
-		if got := r.Version(); got != tt.version {
-			t.Errorf("CandyRef{%q}.Version() = %q, want %q", tt.raw, got, tt.version)
-		}
-		if got := r.IsRemote(); got != tt.isRemote {
-			t.Errorf("CandyRef{%q}.IsRemote() = %v, want %v", tt.raw, got, tt.isRemote)
-		}
-	}
-	// A resolved sibling key overrides Bare() but leaves Raw (and thus the
-	// transitive-fetch view) intact.
-	r := deploykit.CandyRef{Raw: "ffmpeg", Resolved: "github.com/org/repo/layers/ffmpeg"}
-	if r.Bare() != "github.com/org/repo/layers/ffmpeg" {
-		t.Errorf("resolved Bare() = %q", r.Bare())
-	}
-	if r.Raw != "ffmpeg" {
-		t.Errorf("resolved must leave Raw intact, got %q", r.Raw)
-	}
-}
+// TestCandyRef relocated to candy/plugin-bundle (#55 decoupling, Batch A) — it asserted
+// deploykit.CandyRef directly, zero charly dep.
 
-// TestPickCandyVersion covers the per-entity-version arbiter (the sole
-// candy-version resolver). Same per-entity `version:` across different git tags
-// resolves with NO warning — the newest git tag wins for freshness — which is
-// the Problem-B regression guard: a repo re-tag of an UNCHANGED candy must not
-// warn. Different per-entity versions warn once and the newest version wins.
-func TestPickCandyVersion(t *testing.T) {
-	mk := func(ver, tag string) spec.CandyCandidate {
-		return spec.CandyCandidate{
-			Scanned: spec.ScannedCandy{Model: spec.CandyModel{Name: "x", Version: ver}},
-			Version: ver,
-			GitTag:  tag,
-			Source:  "github.com/o/r@" + tag,
-		}
-	}
-	capture := func(fn func() spec.CandyCandidate) (spec.CandyCandidate, string) {
-		old := os.Stderr
-		r, w, _ := os.Pipe()
-		os.Stderr = w
-		got := fn()
-		_ = w.Close()
-		os.Stderr = old
-		var buf bytes.Buffer
-		_, _ = io.Copy(&buf, r)
-		return got, buf.String()
-	}
+// TestPickCandyVersion relocated to candy/plugin-loader (#55 decoupling; Batch A executed this
+// move on Batch C's behalf per the cross-batch file-ownership matrix) — it asserted
+// loaderkit.PickCandyVersion directly, zero charly dep.
 
-	// Same per-entity version, different git tags -> NO warning, newest tag wins.
-	got, warn := capture(func() spec.CandyCandidate {
-		return loaderkit.PickCandyVersion("github.com/o/r/layers/x", []spec.CandyCandidate{
-			mk("2026.141.1600", "v2026.141.1600"),
-			mk("2026.141.1600", "v2026.150.900"),
-		})
-	})
-	if warn != "" {
-		t.Errorf("same per-entity version must not warn, got: %q", warn)
-	}
-	if got.GitTag != "v2026.150.900" {
-		t.Errorf("freshness tiebreak: want newest git tag v2026.150.900, got %q", got.GitTag)
-	}
-
-	// Different per-entity versions -> exactly one warning, newest version wins.
-	got, warn = capture(func() spec.CandyCandidate {
-		return loaderkit.PickCandyVersion("github.com/o/r/layers/x", []spec.CandyCandidate{
-			mk("2026.141.1600", "v2026.141.1600"),
-			mk("2026.144.0531", "v2026.144.531"),
-		})
-	})
-	if got.Version != "2026.144.0531" {
-		t.Errorf("newest per-entity version must win, got %q", got.Version)
-	}
-	if !strings.Contains(warn, "resolved to multiple versions") || !strings.Contains(warn, "2026.144.0531") {
-		t.Errorf("expected one multi-version warning naming the winner, got: %q", warn)
-	}
-}
-
-func TestStripVersion(t *testing.T) {
-	tests := []struct {
-		ref     string
-		wantRef string
-		wantVer string
-	}{
-		{"@github.com/org/repo/layers/cuda:v1.0.0", "@github.com/org/repo/layers/cuda", "v1.0.0"},
-		{"@github.com/org/repo/layers/cuda:main", "@github.com/org/repo/layers/cuda", "main"},
-		{"@github.com/org/repo/layers/cuda", "@github.com/org/repo/layers/cuda", ""},
-		{"pixi", "pixi", ""},
-		{"my-layer", "my-layer", ""},
-	}
-
-	for _, tt := range tests {
-		gotRef, gotVer := deploykit.StripVersion(tt.ref)
-		if gotRef != tt.wantRef || gotVer != tt.wantVer {
-			t.Errorf("StripVersion(%q) = (%q, %q), want (%q, %q)", tt.ref, gotRef, gotVer, tt.wantRef, tt.wantVer)
-		}
-	}
-}
-
-func TestBareRef(t *testing.T) {
-	tests := []struct {
-		ref  string
-		want string
-	}{
-		{"@github.com/org/repo/layers/cuda:v1.0.0", "github.com/org/repo/layers/cuda"},
-		{"@github.com/org/repo/layers/cuda", "github.com/org/repo/layers/cuda"},
-		{"pixi", "pixi"},
-		{"my-layer", "my-layer"},
-	}
-
-	for _, tt := range tests {
-		got := deploykit.BareRef(tt.ref)
-		if got != tt.want {
-			t.Errorf("BareRef(%q) = %q, want %q", tt.ref, got, tt.want)
-		}
-	}
-}
+// TestStripVersion / TestBareRef relocated to candy/plugin-bundle (#55 decoupling, Batch A) —
+// they asserted deploykit.StripVersion/BareRef directly, zero charly dep.
 
 func TestParseRemoteRef(t *testing.T) {
 	tests := []struct {
@@ -170,27 +46,8 @@ func TestParseRemoteRef(t *testing.T) {
 	}
 }
 
-func TestIsRemoteCandyRef(t *testing.T) {
-	tests := []struct {
-		ref  string
-		want bool
-	}{
-		{"pixi", false},
-		{"my-layer", false},
-		{"@github.com/org/repo/layers/cuda", true},
-		{"@github.com/opencharly/charly/layers/cuda", true},
-		{"@gitlab.com/org/repo/layers/cuda", true},
-		{"@github.com/org/repo/layers/cuda:v1.0.0", true},
-		{"github.com/org/repo/layers/cuda", false}, // no @ prefix = not remote
-	}
-
-	for _, tt := range tests {
-		got := deploykit.IsRemoteCandyRef(tt.ref)
-		if got != tt.want {
-			t.Errorf("IsRemoteCandyRef(%q) = %v, want %v", tt.ref, got, tt.want)
-		}
-	}
-}
+// TestIsRemoteCandyRef relocated to candy/plugin-bundle (#55 decoupling, Batch A) — it
+// asserted deploykit.IsRemoteCandyRef directly, zero charly dep.
 
 func TestIsRemoteImageRef(t *testing.T) {
 	tests := []struct {
@@ -262,7 +119,7 @@ func TestScanRemoteCandies(t *testing.T) {
 	}
 
 	pyml := layers["github.com/opencharly/ml-layers/candy/python-ml"]
-	if !deploykit.NewSpecCandyModel(pyml.Model, pyml.View).HasFile("pixi.toml") {
+	if !testCandy(pyml.View.Name, pyml.Model, pyml.View).HasFile("pixi.toml") {
 		t.Error("python-ml should have pixi.toml")
 	}
 	// A remote candy's plain-name sibling dep is qualified at scan time to the
@@ -373,8 +230,8 @@ func TestCollectRemoteRefsOptsExtraCandyRefs(t *testing.T) {
 	if got.Version != "v2026.174.0425" {
 		t.Errorf("plugin-spice download version = %q, want %q", got.Version, "v2026.174.0425")
 	}
-	if !slices.Contains(got.Refs, deploykit.BareRef(pluginRef)) {
-		t.Errorf("plugin-spice download refs = %v, want to contain %q", got.Refs, deploykit.BareRef(pluginRef))
+	if !slices.Contains(got.Refs, spec.BareCandyRef(pluginRef)) {
+		t.Errorf("plugin-spice download refs = %v, want to contain %q", got.Refs, spec.BareCandyRef(pluginRef))
 	}
 
 	// A LOCAL ExtraCandyRef is a no-op (already covered by ScanCandy): collecting it
@@ -546,8 +403,9 @@ func TestCollectRemoteRefsSameCandyBothTagsCollected(t *testing.T) {
 	// Same bare ref at two git tags: collection now emits BOTH (the git tag is
 	// only the FETCH coordinate). Per-entity-version arbitration (newest-wins,
 	// or no-warning when the candy's own version: matches) happens AFTER fetch in
-	// pickCandyVersion — see TestPickCandyVersion. Collection's job is just to
-	// fetch every distinct (repo, git-tag).
+	// loaderkit.PickCandyVersion — see candy/plugin-loader's TestPickCandyVersion
+	// (#55 decoupling, Batch A). Collection's job is just to fetch every distinct
+	// (repo, git-tag).
 	cfg := &Config{
 		Box: boxMapOf(map[string]spec.BoxConfig{
 			"myapp": {

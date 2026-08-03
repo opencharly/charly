@@ -3,12 +3,8 @@ package main
 import (
 	"context"
 	"os"
-	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/buildkit"
-	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -59,31 +55,8 @@ func (e *recordingExec) ResolveHome(context.Context, string) (string, error) {
 	return e.homeReturn, nil
 }
 
-// D1: the compiler defers home — env.d values carry the {{.Home}} token, not a
-// baked image home, so each deploy target resolves them against the real
-// destination home at emit.
-func TestCompileShellHookStepDefersHome(t *testing.T) {
-	layer := testCandy("nodejs", spec.CandyModel{
-		Env: &kit.EnvConfig{
-			Vars:       map[string]string{"NPM_CONFIG_PREFIX": "~/.npm-global"},
-			PathAppend: []string{"$HOME/.npm-global/bin"},
-		},
-	}, spec.CandyView{})
-	img := &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Home: "/home/operator"}}
-	step := deploykit.CompileShellHookStep(layer, img)
-	if step == nil {
-		t.Fatal("compileShellHookStep returned nil")
-	}
-	if got := step.EnvVars["NPM_CONFIG_PREFIX"]; got != "{{.Home}}/.npm-global" {
-		t.Errorf("env value = %q, want token-deferred {{.Home}}/.npm-global (NOT baked img.Home)", got)
-	}
-	if got := step.PathAdd[0]; got != "{{.Home}}/.npm-global/bin" {
-		t.Errorf("path_append = %q, want {{.Home}}/.npm-global/bin", got)
-	}
-	if strings.Contains(step.EnvVars["NPM_CONFIG_PREFIX"], "/home/operator") {
-		t.Error("compile baked the image home into env.d — that's the VM $HOME bug")
-	}
-}
+// TestCompileShellHookStepDefersHome relocated to candy/plugin-bundle (#55 decoupling, Batch
+// A) — it asserted deploykit.CompileShellHookStep directly, zero charly coupling.
 
 // D1: ResolveHome substitutes the token in every home-bearing field but leaves
 // OpStep cmd bodies alone (those shell-expand $HOME at runtime as the deploy

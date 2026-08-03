@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/alecthomas/kong"
-	"github.com/opencharly/sdk"
+	"github.com/opencharly/spec/exitcode"
 	"github.com/opencharly/spec/hostenv"
 	"github.com/opencharly/spec/proc"
 	"golang.org/x/term"
@@ -54,7 +54,7 @@ type CLI struct {
 	Box         BoxCmd                 `cmd:"" name:"box" help:"Build, generate, inspect, and pull container boxes (reads charly.yml)"`
 	Plugin      PluginInternalCmd      `cmd:"" name:"__plugin" hidden:"" help:"internal: plugin server/relay plumbing"`
 	AgentTarget AgentTargetInternalCmd `cmd:"" name:"__agent-target" hidden:"" help:"internal: serve generic provider gRPC over stdio"`
-	CliModel    CliModelCmd            `cmd:"" name:"__cli-model" hidden:"" help:"internal: emit the CLI command tree as JSON (sdk.CLIModel) for the out-of-process MCP bridge"`
+	CliModel    CliModelCmd            `cmd:"" name:"__cli-model" hidden:"" help:"internal: emit the CLI command tree as JSON (spec.CLIModel) for the out-of-process MCP bridge"`
 
 	// __plugin-providers prints a candy's plugin.providers (one <class>:<word> per line) —
 	// the single source the PKGBUILD uses to bake the host /usr/lib/charly/plugins/.providers
@@ -302,10 +302,10 @@ func main() {
 	// 1 = command error (Kong's FatalIfErrorf default), 2 = check checks
 	// failed, 3 = skipped for an absent host prereq. The check command family is the
 	// candy/plugin-check command plugin, which signals its exit code across the module
-	// boundary via *sdk.ExitCodeError (the host cannot classify the plugin's own error
-	// TYPES). `charly box feature run` (core) uses the SAME sdk.ExitCodeError contract.
+	// boundary via *exitcode.ExitCodeError (the host cannot classify the plugin's own error
+	// TYPES). `charly box feature run` (core) uses the SAME exitcode.ExitCodeError contract.
 	if err != nil {
-		if ece, ok := errors.AsType[*sdk.ExitCodeError](err); ok && ece.Code != 0 {
+		if ece, ok := errors.AsType[*exitcode.ExitCodeError](err); ok && ece.Code != 0 {
 			fmt.Fprintln(os.Stderr, FormatCLIError(err))
 			os.Exit(ece.Code) //nolint:gocritic // reapPlugins() called explicitly above before this os.Exit; the deferred reap is a redundant safety net
 		}

@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"github.com/opencharly/sdk/vmshared"
+	"github.com/opencharly/spec/spec"
 )
 
 // A richly-populated vm entity exercising every subtree applyCueDefaults must
@@ -60,9 +60,9 @@ libvirt:
 
 // defaultedFidelitySpec unmarshals the fixture (firmware unset) and runs
 // applyCueDefaults, returning the result for the per-subtree fidelity checks.
-func defaultedFidelitySpec(t *testing.T) *vmshared.VmSpec {
+func defaultedFidelitySpec(t *testing.T) *spec.VmSpec {
 	t.Helper()
-	var spec vmshared.VmSpec
+	var spec spec.VmSpec
 	if err := decodeViaCUEForTest(t, fidelityVmYAML, &spec); err != nil {
 		t.Fatalf("unmarshal fixture: %v", err)
 	}
@@ -163,7 +163,7 @@ func TestApplyCueDefaults_PreservesLibvirtDevices(t *testing.T) {
 
 // A vm that explicitly sets firmware must keep it (default never clobbers).
 func TestApplyCueDefaults_VmPreservesSetFirmware(t *testing.T) {
-	var spec vmshared.VmSpec
+	var spec spec.VmSpec
 	if err := decodeViaCUEForTest(t, "firmware: uefi-insecure\nsource:\n  kind: cloud_image\n  url: https://x/i.qcow2\n", &spec); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}

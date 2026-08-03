@@ -65,27 +65,6 @@ func LoadConfigRaw(dir string) (*Config, error) {
 	return cfg, nil
 }
 
-// resolveVocabOpts fills a spec.ResolveOpts' build vocabulary (distro:/builder:) when the
-// caller did not already supply it, returning the vocabulary-complete spec.ResolveOpts. It is
-// the ONE place the former ResolveBox/ResolveAllBox wrappers' fillBuildConfigFallback logic lives:
-// a caller that already has DistroCfg/BuilderCfg skips the reload; every other caller gets the SAME
-// vocabulary LoadBuildConfigForBox loads for the same dir (the masked-regression this preserves).
-// #55 Cluster-B: charly core no longer names buildkit.ResolveOpts — the actual pure resolve
-// (buildkit.ResolveBox / ResolveAllBox) runs inside the deploykit box-resolve bridge
-// (deploykit.ResolveSpecBox / ResolveAllSpecBoxes / FillNamespaceBoxViews), which since #55 2b
-// consumes the SHARED spec.ResolveOpts DIRECTLY (the former deploykit.SpecResolveOpts twin +
-// this charly projector are dissolved now that ResolveOpts lives in spec, which deploykit imports).
-func resolveVocabOpts(dir string, opts spec.ResolveOpts) (spec.ResolveOpts, error) {
-	if opts.DistroCfg == nil && opts.BuilderCfg == nil {
-		distroCfg, builderCfg, _, err := LoadBuildConfigForBox(dir)
-		if err != nil {
-			return spec.ResolveOpts{}, err
-		}
-		opts.DistroCfg, opts.BuilderCfg = distroCfg, builderCfg
-	}
-	return opts, nil
-}
-
 // resolveIntPtr resolves a *int value, falling back to 0 when nil. A charly-side copy of the
 // SHAPE of the identical helper now private to sdk/buildkit's ResolveBox (which still needs a
 // 3-arg value/fallback/defaultVal form for its image->defaults->hardcoded chain) — this one serves

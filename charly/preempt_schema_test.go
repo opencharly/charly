@@ -1,11 +1,8 @@
 package main
 
 import (
-	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -57,11 +54,14 @@ func TestPreemptibleConfig_UnmarshalYAML(t *testing.T) {
 	if got := listForm.PreemptionHolds(); len(got) != 2 || got[0] != "gpu" || got[1] != "tpu" {
 		t.Fatalf("list shorthand holds = %v, want [gpu tpu]", got)
 	}
-	if deploykit.PreemptEffectiveStop(listForm.Preemptible) != spec.PreemptStopShutdown {
-		t.Errorf("default stop = %q, want shutdown", deploykit.PreemptEffectiveStop(listForm.Preemptible))
-	}
-	if deploykit.PreemptEffectiveRestore(listForm.Preemptible) != spec.PreemptRestoreAlways {
-		t.Errorf("default restore = %q, want always", deploykit.PreemptEffectiveRestore(listForm.Preemptible))
+	// The default-stop/default-restore RESOLUTION behavior (PreemptEffectiveStop/
+	// PreemptEffectiveRestore) moved to sdk/deploykit/preempt_effective_test.go
+	// (#55 K3 Cone 4) — those functions only read the decoded struct's fields, so a
+	// literal *spec.PreemptibleConfig fixture proves them without a CUE decode. This
+	// test keeps ONLY the decode-shape assertion (list shorthand → Holds, defaults
+	// left unset on the decoded struct).
+	if listForm.Preemptible.Stop != "" || listForm.Preemptible.Restore != "" {
+		t.Errorf("list-shorthand decode should leave Stop/Restore unset (defaults resolved by PreemptEffective*, not the decoder): %+v", listForm.Preemptible)
 	}
 
 	// Block form.
@@ -70,8 +70,8 @@ func TestPreemptibleConfig_UnmarshalYAML(t *testing.T) {
 	if err := decodeViaCUEForTest(t, blockYAML, &blockForm); err != nil {
 		t.Fatalf("block unmarshal: %v", err)
 	}
-	if deploykit.PreemptEffectiveRestore(blockForm.Preemptible) != spec.PreemptRestoreSuccess {
-		t.Errorf("block restore = %q, want on-success", deploykit.PreemptEffectiveRestore(blockForm.Preemptible))
+	if blockForm.Preemptible.Restore != "on-success" {
+		t.Errorf("block decode restore = %q, want on-success (verbatim, pre-default-resolution)", blockForm.Preemptible.Restore)
 	}
 
 	// Scalar (e.g. `preemptible: true`) is rejected — a holder must name what
@@ -83,66 +83,13 @@ func TestPreemptibleConfig_UnmarshalYAML(t *testing.T) {
 	}
 }
 
-func TestValidatePreemptibleOnNode(t *testing.T) {
-	cases := []struct {
-		name     string
-		node     spec.BundleNode
-		wantErr  bool
-		contains string
-	}{
-		{
-			name: "valid holder",
-			node: spec.BundleNode{Preemptible: &spec.PreemptibleConfig{Holds: []string{"gpu"}}},
-		},
-		{
-			name: "valid claimant",
-			node: spec.BundleNode{RequiresExclusive: []string{"gpu"}},
-		},
-		{
-			name:     "empty holds",
-			node:     spec.BundleNode{Preemptible: &spec.PreemptibleConfig{}},
-			wantErr:  true,
-			contains: "must list at least one",
-		},
-		{
-			name:     "bad stop",
-			node:     spec.BundleNode{Preemptible: &spec.PreemptibleConfig{Holds: []string{"gpu"}, Stop: "pause"}},
-			wantErr:  true,
-			contains: "not supported",
-		},
-		{
-			name:     "bad restore",
-			node:     spec.BundleNode{Preemptible: &spec.PreemptibleConfig{Holds: []string{"gpu"}, Restore: "maybe"}},
-			wantErr:  true,
-			contains: "is invalid",
-		},
-		{
-			name:     "empty requires token",
-			node:     spec.BundleNode{RequiresExclusive: []string{""}},
-			wantErr:  true,
-			contains: "empty token",
-		},
-		{
-			name: "self-contention",
-			node: spec.BundleNode{
-				Preemptible:       &spec.PreemptibleConfig{Holds: []string{"gpu"}},
-				RequiresExclusive: []string{"gpu"},
-			},
-			wantErr:  true,
-			contains: "cannot both hold and require",
-		},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			var d spec.Diagnostics
-			node := tc.node
-			loaderkit.ValidatePreemptibleOnNode(tc.name, &node, &d)
-			if preemptDiagHasErr(d) != tc.wantErr {
-				t.Fatalf("HasErrors=%v want %v (errs=%s)", preemptDiagHasErr(d), tc.wantErr, preemptDiagText(d))
-			}
-			if tc.contains != "" && !strings.Contains(preemptDiagText(d), tc.contains) {
-				t.Fatalf("error %q does not contain %q", preemptDiagText(d), tc.contains)
-			}
-		})
-	}
-}
+// TestValidatePreemptibleOnNode relocated to candy/plugin-loader (#55 decoupling; Batch A
+// executed this move on Batch C's behalf per the cross-batch file-ownership matrix) — it
+// asserted loaderkit.ValidatePreemptibleOnNode directly, zero charly dep. NOTE: in THIS
+// worktree, preemptDiagHasErr/preemptDiagText (used above by TestPreemptibleConfig_
+// UnmarshalYAML's siblings — actually defined in/used by validate_preempt_test.go, Batch C's
+// file, NOT this one) remain defined there and are STILL used by validate_preempt_test.go's
+// own tests even after this move — so there is nothing dead to clean up on this batch's side;
+// Batch C's own worktree may have already extracted them into a separate
+// preempt_diag_helpers_test.go, which doesn't exist here (separate worktrees) — flagging this
+// for the merge/orchestrator rather than guessing at post-merge dead code.

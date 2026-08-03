@@ -1,16 +1,11 @@
 package main
 
 import (
+	"os"
 	"testing"
 
-	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/vmshared"
+	"github.com/opencharly/spec/spec"
 )
-
-// testPubKey is the SSH test pubkey for the cloud-init egress render test
-// (TestRenderCloudInit_OutputValidatesAgainstSchema). Formerly shared from
-// cloud_init_render_test.go, which relocated to sdk/vmshared/.
-const testPubKey = "ssh-ed25519 AAAATESTKEY user@host"
 
 // Egress-validation coverage. The teeth tests (the *BadFails cases) are the ones
 // that would PASS — wrongly — if the egress gate did not exist: they assert that
@@ -106,28 +101,28 @@ func TestValidateEgressValue_Kustomization(t *testing.T) {
 }
 
 func TestValidateEgressValue_DeployRecord(t *testing.T) {
-	good := &kit.DeployRecord{
-		SchemaVersion: kit.LedgerSchemaVersion, DeployID: "abc123", Image: "ghcr.io/x/y:tag",
+	good := &spec.DeployRecord{
+		SchemaVersion: spec.LedgerSchemaVersion, DeployID: "abc123", Image: "ghcr.io/x/y:tag",
 		Target: "host", Candy: []string{"ripgrep"}, DeployedAt: "2026-06-15T00:00:00Z",
 	}
 	if err := ValidateEgressValue("deploy_record", "good deploy rec", good); err != nil {
 		t.Fatalf("valid deploy record should pass, got: %v", err)
 	}
-	bad := &kit.DeployRecord{Image: "x", Target: "host", DeployedAt: "t"} // empty DeployID
+	bad := &spec.DeployRecord{Image: "x", Target: "host", DeployedAt: "t"} // empty DeployID
 	if err := ValidateEgressValue("deploy_record", "bad deploy rec", bad); err == nil {
 		t.Fatal("deploy record with empty deploy_id must be REJECTED, got nil")
 	}
 }
 
 func TestValidateEgressValue_CandyRecord(t *testing.T) {
-	good := &kit.CandyRecord{
-		SchemaVersion: kit.LedgerSchemaVersion, Candy: "ripgrep",
+	good := &spec.CandyRecord{
+		SchemaVersion: spec.LedgerSchemaVersion, Candy: "ripgrep",
 		DeployedBy: []string{"abc123"}, DeployedAt: "2026-06-15T00:00:00Z",
 	}
 	if err := ValidateEgressValue("candy_record", "good candy rec", good); err != nil {
 		t.Fatalf("valid candy record should pass, got: %v", err)
 	}
-	bad := &kit.CandyRecord{DeployedAt: "t"} // empty Candy
+	bad := &spec.CandyRecord{DeployedAt: "t"} // empty Candy
 	if err := ValidateEgressValue("candy_record", "bad candy rec", bad); err == nil {
 		t.Fatal("candy record with empty candy must be REJECTED, got nil")
 	}
@@ -162,14 +157,29 @@ func TestValidateTextEgress_RenderedText(t *testing.T) {
 	}
 }
 
-// TestRenderCloudInit_OutputValidatesAgainstSchema proves the renderer's real
-// output satisfies the egress gate end to end (vmshared.RenderCloudInit returns the gate's
-// error directly, so a non-nil err here would mean charly emits cloud-init that
-// its own vendored schema rejects).
+// TestRenderCloudInit_OutputValidatesAgainstSchema proves the real cloud-init renderer's real
+// output satisfies charly's real egress gate end to end — driven from a GOLDEN fixture
+// (tools/golden-cloudinit, mirroring tools/golden-compile's precedent) rather than a live
+// sdk/vmshared.RenderCloudInit call, so this file needs no sdk import. The golden fixture was
+// captured by actually running RenderCloudInit with the SAME VmSpec/CloudInitRuntimeParams this
+// test used to construct live (see tools/golden-cloudinit/main.go), with vmshared's OWN
+// permissive ValidateEgress stub (sdk/vmshared/egress_seam_test.go's exact wiring) — so the
+// checked-in bytes are exactly what the real renderer produces; THIS test is what proves those
+// real bytes pass charly's REAL ValidateEgress, the assertion that actually matters here (a
+// non-nil err would mean charly emits cloud-init that its own vendored schema rejects).
 func TestRenderCloudInit_OutputValidatesAgainstSchema(t *testing.T) {
-	spec := &vmshared.VmSpec{Source: vmshared.VmSource{Kind: "cloud_image", Distro: "arch", BaseUser: "arch"}}
-	rt := vmshared.CloudInitRuntimeParams{SSHPublicKey: testPubKey, InjectKeyViaCloudInit: true, InstanceID: "iid-xyz", Hostname: "egress-vm"}
-	if _, _, _, err := vmshared.RenderCloudInit(spec, rt); err != nil {
-		t.Fatalf("rendered cloud-init must pass its own egress gate, got: %v", err)
+	userData, err := os.ReadFile("testdata/cloudinit_egress_golden_userdata.yaml")
+	if err != nil {
+		t.Fatalf("reading golden user-data fixture: %v", err)
+	}
+	if err := ValidateEgress("cloud_config", "golden cloud-init user-data", userData); err != nil {
+		t.Fatalf("golden cloud-init user-data must pass the real egress gate, got: %v", err)
+	}
+	metaData, err := os.ReadFile("testdata/cloudinit_egress_golden_metadata.yaml")
+	if err != nil {
+		t.Fatalf("reading golden meta-data fixture: %v", err)
+	}
+	if err := ValidateEgress("cloud_init_meta", "golden cloud-init meta-data", metaData); err != nil {
+		t.Fatalf("golden cloud-init meta-data must pass the real egress gate, got: %v", err)
 	}
 }

@@ -4,7 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/opencharly/sdk"
+	"github.com/opencharly/spec/climodel"
+	"github.com/opencharly/spec/phase"
 	pb "github.com/opencharly/spec/proto"
 	"github.com/opencharly/spec/spec"
 )
@@ -26,16 +27,16 @@ import (
 type capMeta struct {
 	class            ProviderClass
 	word             string
-	contract         *spec.StepContract  // set ONLY for a class:step capability declaring a StepContract (F3); nil otherwise
-	structural       bool                // set ONLY for a class:kind capability that decodes a STRUCTURAL entity (F5)
-	validates        bool                // set ONLY for a class:kind capability serving a deep OpValidate check (F7/C8)
-	phase            string              // the plugin lifecycle phase (F9; sdk.Phase*, normalized — "" → runtime)
-	primary          string              // set ONLY for a class:verb capability declaring a scalar-sugar primary input field
-	traits           *spec.DeployTraits  // set ONLY for a SUBSTRATE class:kind capability declaring #DeployTraits (P9); nil otherwise
-	cmdParent        string              // set ONLY for a COMPILED-IN class:command capability nesting under a parent command word (e.g. "box" for `charly box generate`); "" → a top-level command
-	subcmds          []sdk.CLISubcommand // set ONLY for a class:command capability declaring a subcommand catalog (F-CLI-NEST); empty → the flat pass-through holder
-	commandModel     *spec.CLIModel      // set ONLY for class:command; CUE-generated reflected leaf grammar
-	commandModelJSON []byte              // exact validated transport payload, preserved across relays
+	contract         *spec.StepContract       // set ONLY for a class:step capability declaring a StepContract (F3); nil otherwise
+	structural       bool                     // set ONLY for a class:kind capability that decodes a STRUCTURAL entity (F5)
+	validates        bool                     // set ONLY for a class:kind capability serving a deep OpValidate check (F7/C8)
+	phase            string                   // the plugin lifecycle phase (F9; sdk.Phase*, normalized — "" → runtime)
+	primary          string                   // set ONLY for a class:verb capability declaring a scalar-sugar primary input field
+	traits           *spec.DeployTraits       // set ONLY for a SUBSTRATE class:kind capability declaring #DeployTraits (P9); nil otherwise
+	cmdParent        string                   // set ONLY for a COMPILED-IN class:command capability nesting under a parent command word (e.g. "box" for `charly box generate`); "" → a top-level command
+	subcmds          []climodel.CLISubcommand // set ONLY for a class:command capability declaring a subcommand catalog (F-CLI-NEST); empty → the flat pass-through holder
+	commandModel     *spec.CLIModel           // set ONLY for class:command; CUE-generated reflected leaf grammar
+	commandModelJSON []byte                   // exact validated transport payload, preserved across relays
 }
 
 func (m capMeta) Reserved() string     { return m.word }
@@ -98,7 +99,7 @@ func (m capMeta) DeclaredDeployTraits() *spec.DeployTraits { return m.traits }
 // declaredSubcommands implements commandSubcommandCarrier (provider_command_external.go) — a
 // class:command capability's DECLARED one-level-deep CLI subcommand catalog (F-CLI-NEST), empty
 // for every capability that doesn't declare one (preserving today's flat pass-through holder).
-func (m capMeta) declaredSubcommands() []sdk.CLISubcommand { return m.subcmds }
+func (m capMeta) declaredSubcommands() []climodel.CLISubcommand { return m.subcmds }
 
 // buildCapMeta lifts one advertised pb.ProvidedCapability into the shared capMeta both provider
 // twins embed — the class/word plus the class-gated contract/structural/validates/phase/primary
@@ -114,7 +115,7 @@ func buildCapMeta(c *pb.ProvidedCapability) (capMeta, error) {
 		if err := json.Unmarshal(raw, &model); err != nil {
 			return capMeta{}, fmt.Errorf("command %s model: %w", m.word, err)
 		}
-		if err := sdk.ValidateGenerated("#CLIModel", model); err != nil {
+		if err := climodel.ValidateGenerated("#CLIModel", model); err != nil {
 			return capMeta{}, fmt.Errorf("command %s model: %w", m.word, err)
 		}
 		m.commandModel = &model
@@ -135,7 +136,7 @@ func buildCapMeta(c *pb.ProvidedCapability) (capMeta, error) {
 		m.validates = true
 	}
 	// Every capability declares a lifecycle PHASE (F9; normalized, default runtime).
-	m.phase = sdk.NormalizePhase(c.GetPhase())
+	m.phase = phase.NormalizePhase(c.GetPhase())
 	if m.class == ClassVerb {
 		m.primary = c.GetPrimary()
 	}
@@ -144,7 +145,7 @@ func buildCapMeta(c *pb.ProvidedCapability) (capMeta, error) {
 	// pass-through, and buildCLIModel synthesizes a "<word>.<name>" leaf per entry for MCP.
 	if m.class == ClassCommand {
 		for _, sc := range c.GetSubcommands() {
-			m.subcmds = append(m.subcmds, sdk.CLISubcommand{Name: sc.GetName(), Help: sc.GetHelp()})
+			m.subcmds = append(m.subcmds, climodel.CLISubcommand{Name: sc.GetName(), Help: sc.GetHelp()})
 		}
 	}
 	// A SUBSTRATE class:kind capability may declare #DeployTraits (P9): kit.StampDescent stamps

@@ -10,7 +10,7 @@ import (
 	"github.com/hashicorp/go-hclog"
 	plugin "github.com/hashicorp/go-plugin"
 
-	"github.com/opencharly/sdk"
+	"github.com/opencharly/spec/transport"
 )
 
 // PluginTransport connects to a plugin and returns its self-contained unit (its
@@ -68,8 +68,8 @@ func (t *LocalTransport) Connect(ctx context.Context) (*PluginUnit, io.Closer, e
 		cmd.Env = append(cmd.Env, "CHARLY_BIN="+exe)
 	}
 	client := plugin.NewClient(&plugin.ClientConfig{
-		HandshakeConfig:  sdk.Handshake,
-		Plugins:          sdk.PluginMap(nil, nil),
+		HandshakeConfig:  transport.Handshake,
+		Plugins:          transport.PluginMap(nil, nil),
 		Cmd:              cmd,
 		AllowedProtocols: []plugin.Protocol{plugin.ProtocolGRPC},
 		AutoMTLS:         true,
@@ -99,12 +99,12 @@ func connectAndDescribe(ctx context.Context, client *plugin.Client) (*PluginUnit
 		client.Kill()
 		return nil, fmt.Errorf("plugin client: %w", err)
 	}
-	raw, err := rpc.Dispense(sdk.DispenseKey)
+	raw, err := rpc.Dispense(transport.DispenseKey)
 	if err != nil {
 		client.Kill()
 		return nil, fmt.Errorf("plugin dispense: %w", err)
 	}
-	conn, ok := raw.(*sdk.Conn)
+	conn, ok := raw.(*transport.Conn)
 	if !ok {
 		client.Kill()
 		return nil, fmt.Errorf("plugin: unexpected dispensed type %T", raw)

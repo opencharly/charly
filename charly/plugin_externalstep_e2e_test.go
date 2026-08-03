@@ -8,9 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/buildkit"
-	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/exec"
 	pb "github.com/opencharly/spec/proto"
 	"github.com/opencharly/spec/spec"
 )
@@ -101,8 +99,13 @@ func TestExternalStepKind_EndToEnd(t *testing.T) {
 	// hand-built one) proves the FULL authoring → compile → wire path.
 	op := &spec.Op{Plugin: "examplestepkind", PluginInput: map[string]any{"marker": "EXTERNAL-STEPKIND-E2E"}}
 	layer := testCandy("plugin-example-stepkind", spec.CandyModel{}, spec.CandyView{})
-	img := &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Tags: []string{"fedora"}}}
-	userDir, _ := deploykit.ResolveUserSpec(op.RunAs, img)
+	img := &spec.BuildResolvedBox{ResolvedBox: spec.ResolvedBox{Tags: []string{"fedora"}}}
+	// op.RunAs is unset for this fixture, so the real sdk/deploykit.ResolveUserSpec (already
+	// directly unit-tested in sdk/deploykit/tasks_emit_test.go::TestResolveUserSpec) collapses to
+	// "0" — this class:step (non-verb) op never reads ResolvedUser anyway (hostBuildConstructStep's
+	// class:step branch builds the ExternalStep from CandyName alone), so testResolveRunAsUser's
+	// minimal root/0/empty stand-in (candy_test_helpers_test.go) is exact here, not an approximation.
+	userDir := testResolveRunAsUser(op.RunAs)
 	constructReply, err := hostBuildConstructStep(context.Background(), spec.ConstructStepRequest{
 		Op: *op, CandyName: layer.GetName(), CandySourceDir: layer.GetSourceDir(),
 		ResolvedUser: userDir, PkgFormat: img.Pkg, DistroTags: img.Tags,
@@ -152,7 +155,7 @@ func TestExternalStepKind_EndToEnd(t *testing.T) {
 
 	// Walk it via the host's RunHostStep OPEN DEFAULT ARM (stepFromView rebuilds the externalStep
 	// from the carried contract + Payload; invokeExternalStep dispatches OpExecute to the plugin).
-	srv := &executorReverseServer{exec: kit.ShellExecutor{}}
+	srv := &executorReverseServer{exec: exec.ShellExecutor{}}
 	reply, err := srv.RunHostStep(ctx, &pb.HostStepRequest{StepJson: stepJSON})
 	if err != nil {
 		t.Fatalf("RunHostStep: %v", err)

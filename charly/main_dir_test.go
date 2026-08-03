@@ -91,10 +91,18 @@ func TestCharlyDir_Errors(t *testing.T) {
 // buildCharlyBinary compiles charly into the test temp dir. Cached per-test via
 // t.TempDir. Go build is <1s on a warm module cache, well within test
 // budget.
+//
+// -buildvcs=false (charly#178): a linked git worktree OUTSIDE the main repo
+// path (e.g. /tmp/...) hits a deterministic Go VCS-status-walk bug ("error
+// obtaining VCS status: exit status 128") on any `go build` invocation. The
+// standing rule (see pluginBuildVCSFlagForContext) is that every charly
+// binary build — production AND test — passes -buildvcs=false unconditionally;
+// the VCS stamp has zero consumers (verified: no debug.ReadBuildInfo /
+// vcs.revision / vcs.modified / vcs.time reader anywhere in this tree).
 func buildCharlyBinary(t *testing.T) string {
 	t.Helper()
 	out := filepath.Join(t.TempDir(), "charly")
-	cmd := exec.Command("go", "build", "-o", out, ".")
+	cmd := exec.Command("go", "build", "-buildvcs=false", "-o", out, ".")
 	if buildOut, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("go build: %v\n%s", err, buildOut)
 	}

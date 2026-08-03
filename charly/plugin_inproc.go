@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/opencharly/sdk"
 	pb "github.com/opencharly/spec/proto"
 	"github.com/opencharly/spec/spec"
+	"github.com/opencharly/spec/transport"
 )
 
 // inprocProvider is a Provider backed by a COMPILED-IN plugin candy's
@@ -33,8 +33,8 @@ func (p *inprocProvider) Invoke(ctx context.Context, op *Operation) (*Result, er
 	return &Result{JSON: rep.GetResultJson()}, nil
 }
 
-func (p *inprocProvider) OpenChannel(open *pb.ChannelFrame, stream sdk.ProviderChannel) error {
-	channel, ok := p.srv.(sdk.ChannelProvider)
+func (p *inprocProvider) OpenChannel(open *pb.ChannelFrame, stream transport.ProviderChannel) error {
+	channel, ok := p.srv.(transport.ChannelProvider)
 	if !ok {
 		return fmt.Errorf("compiled-in provider %s:%s has no bidirectional channel", p.class, p.word)
 	}
@@ -54,9 +54,9 @@ func buildUnitInProc(meta pb.PluginMetaServer, srv pb.ProviderServer) (*PluginUn
 	if err != nil {
 		return nil, fmt.Errorf("compiled-in plugin describe: %w", err)
 	}
-	if caps.GetProtocolVersion() != sdk.ProtocolVersion {
+	if caps.GetProtocolVersion() != transport.ProtocolVersion {
 		return nil, fmt.Errorf("compiled-in plugin protocol version mismatch: plugin advertises protocol %d (CalVer %q), host requires protocol %d",
-			caps.GetProtocolVersion(), caps.GetCalver(), sdk.ProtocolVersion)
+			caps.GetProtocolVersion(), caps.GetCalver(), transport.ProtocolVersion)
 	}
 	// The capability-lift loop is shared with buildUnit via liftCapabilities (R3): the compiled-in
 	// factory wraps the SAME capMeta in an inprocProvider (its only extra is the in-proc

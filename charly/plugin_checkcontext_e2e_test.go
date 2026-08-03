@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/exec"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -80,7 +80,7 @@ func TestKitVerbOutOfProcess_HTTPDoEndToEnd(t *testing.T) {
 		}
 		out, iErr := gp.InvokeWithExecutor(ctx,
 			&Operation{Reserved: "http", Op: OpRun, Params: params, Env: envJSON},
-			kit.ShellExecutor{}, buildEngineContext{}, false, cc)
+			exec.ShellExecutor{}, buildEngineContext{}, false, cc)
 		if iErr != nil {
 			t.Fatalf("InvokeWithExecutor: %v", iErr)
 		}

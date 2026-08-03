@@ -3,9 +3,14 @@ package main
 import (
 	"testing"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 )
+
+// testBundleDoc is a fixture decode target matching deploykit.BundleConfig's shape
+// (Bundle map[string]spec.BundleNode, yaml key "deploy") without importing deploykit.
+type testBundleDoc struct {
+	Bundle map[string]spec.BundleNode `yaml:"deploy" json:"deploy"`
+}
 
 // Note: vmshared.VmSpec carries no Disposable / Lifecycle fields and
 // the IsDisposableFields helper — disposability is now a DEPLOY
@@ -67,7 +72,7 @@ deploy:
   fedora-coder-scratch:
     disposable: true
 `
-	var cfg deploykit.BundleConfig
+	var cfg testBundleDoc
 	if err := decodeViaCUEForTest(t, yamlStr, &cfg); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}

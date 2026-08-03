@@ -6,7 +6,8 @@ import (
 
 	"github.com/alecthomas/kong"
 
-	"github.com/opencharly/sdk"
+	"github.com/opencharly/spec/climodel"
+	"github.com/opencharly/spec/transport"
 )
 
 // TestExternalCommandExecPlan_PassthroughArgs proves the external-command FORK/EXEC path: a
@@ -47,7 +48,7 @@ func assertExternalCommandExecPlan(t *testing.T, word, bakedBin string, parse, w
 	t.Helper()
 	// Set the go-plugin handshake cookie so the strip is non-trivial (assertCommandEnv checks
 	// it is absent from the built exec env — otherwise the plugin would enter serve mode).
-	t.Setenv(sdk.Handshake.MagicCookieKey, sdk.Handshake.MagicCookieValue)
+	t.Setenv(transport.Handshake.MagicCookieKey, transport.Handshake.MagicCookieValue)
 	bakedPluginBinaries[provKey(ClassCommand, word)] = bakedBin
 	defer delete(bakedPluginBinaries, provKey(ClassCommand, word))
 
@@ -136,7 +137,7 @@ func TestExternalCommandExecPlan_NestedCheckCommand(t *testing.T) {
 // declares one (candy/plugin-check, candy/plugin-box's "list" word).
 func TestExternalCommandHolder_DeclaredSubcommands(t *testing.T) {
 	const word = "zzexecdeclared"
-	subs := []sdk.CLISubcommand{
+	subs := []climodel.CLISubcommand{
 		{Name: "live", Help: "run the live check"},
 		{Name: "box", Help: "run the box check"},
 	}
@@ -187,10 +188,10 @@ func equalStrings(a, b []string) bool {
 }
 
 // assertCommandEnv checks commandExecEnv stripped the go-plugin handshake cookie (so the
-// fork/exec'd plugin runs in CLI mode, not serve mode — sdk.IsServeMode) and stamped CHARLY_BIN.
+// fork/exec'd plugin runs in CLI mode, not serve mode — transport.IsServeMode) and stamped CHARLY_BIN.
 func assertCommandEnv(t *testing.T, env []string, word string) {
 	t.Helper()
-	cookie := sdk.Handshake.MagicCookieKey + "="
+	cookie := transport.Handshake.MagicCookieKey + "="
 	hasBin := false
 	hasWord := false
 	for _, e := range env {

@@ -5,7 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/opencharly/sdk"
+	specexec "github.com/opencharly/spec/exec"
+	"github.com/opencharly/spec/ops"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -14,11 +15,11 @@ import (
 // LifecycleTarget method now dispatches through) WITH a live executor, mirroring
 // ephemeral_dispatch.go's dispatchEphemeralOp — the
 // SAME "compiled-in in-proc reverse channel" pattern arbiterInvoke (preempt.go) established:
-// thread the executor via sdk.ContextWithExecutor(ctx, sdk.NewInProcExecutor(&inprocExecutorClient
+// thread the executor via specexec.ContextWithExecutor(ctx, specexec.NewInProcExecutor(&inprocExecutorClient
 // {srv: &executorReverseServer{...}})) before calling prov.Invoke — no broker needed, since
 // command:bundle is COMPILED-IN (an inprocProvider). The plugin's own OpDeployDispatch handler
-// recovers this SAME executor via sdk.ExecutorForInvoke(ctx, brokerID) (ctx-first) and threads it
-// onward to the ACTUAL substrate provider via its own sdk.Executor.InvokeProvider (S1) — core
+// recovers this SAME executor via specexec.ExecutorForInvoke(ctx, brokerID) (ctx-first) and threads it
+// onward to the ACTUAL substrate provider via its own specexec.Executor.InvokeProvider (S1) — core
 // never touches the substrate's *grpcProvider directly once this call returns.
 func dispatchDeployTarget(ctx context.Context, req spec.DeployTargetDispatchRequest, exec spec.DeployExecutor, build buildEngineContext, rebootable bool) (spec.DeployTargetDispatchReply, error) {
 	prov, ok := providerRegistry.resolve(ClassCommand, "bundle")
@@ -29,9 +30,9 @@ func dispatchDeployTarget(ctx context.Context, req spec.DeployTargetDispatchRequ
 	if err != nil {
 		return spec.DeployTargetDispatchReply{}, fmt.Errorf("deploy-dispatch %s: marshal request: %w", req.Op, err)
 	}
-	invokeCtx := sdk.ContextWithExecutor(ctx,
-		sdk.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{exec: exec, build: build, rebootable: rebootable}}))
-	res, err := prov.Invoke(invokeCtx, &Operation{Reserved: "bundle", Op: sdk.OpDeployDispatch, Params: reqJSON})
+	invokeCtx := specexec.ContextWithExecutor(ctx,
+		specexec.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{exec: exec, build: build, rebootable: rebootable}}))
+	res, err := prov.Invoke(invokeCtx, &Operation{Reserved: "bundle", Op: ops.OpDeployDispatch, Params: reqJSON})
 	if err != nil {
 		return spec.DeployTargetDispatchReply{}, fmt.Errorf("deploy-dispatch %s: bundle plugin: %w", req.Op, err)
 	}

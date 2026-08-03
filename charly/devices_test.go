@@ -3,9 +3,6 @@ package main
 import (
 	"reflect"
 	"testing"
-
-	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/vmshared"
 )
 
 // TestAMDGFXVersionParsing (parseKFDGFXVersion) + TestGpuUsableViaCDI (gpuUsableViaCDI)
@@ -14,7 +11,10 @@ import (
 // shim var (swapped with a fake) and the DetectedDevices struct. (appendAutoDetectedEnv
 // and appendGroupsForAMDGPU, and the tests solely exercising them, were a
 // dead-code-radical-removal-batch deletion — zero real callers anywhere; appendEnvUnique
-// remains live via a different real caller.)
+// remains live via a different real caller.) TestDetectedDevicesInSecurityArgs/
+// TestPrivilegedSkipsDevices/TestDetectedDevicesInQuadlet/TestAMDGPUGroupsInQuadlet
+// relocated to candy/plugin-bundle (#55 decoupling, Batch A) — they asserted
+// deploykit.SecurityArgs/GenerateQuadlet directly with zero charly coupling.
 
 func TestDetectHostDevicesWithGPU(t *testing.T) {
 	orig := DetectHostDevices
@@ -57,70 +57,11 @@ func TestDetectHostDevicesNoGPU(t *testing.T) {
 	}
 }
 
-func TestDetectedDevicesMergeIntoSecurity(t *testing.T) {
-	detected := DetectedDevices{
-		GPU:     false,
-		Devices: []string{"/dev/kvm", "/dev/fuse"},
-	}
-
-	sec := vmshared.SecurityConfig{
-		Devices: []string{"/dev/fuse"}, // already has /dev/fuse
-	}
-	sec.Devices = deploykit.AppendUnique(sec.Devices, detected.Devices...)
-
-	want := []string{"/dev/fuse", "/dev/kvm"}
-	if !reflect.DeepEqual(sec.Devices, want) {
-		t.Errorf("merged Devices = %v, want %v", sec.Devices, want)
-	}
-}
-
-func TestDetectedDevicesInSecurityArgs(t *testing.T) {
-	sec := vmshared.SecurityConfig{
-		Devices: []string{"/dev/kvm", "/dev/fuse"},
-	}
-	args := deploykit.SecurityArgs(sec)
-	want := []string{
-		"--device", "/dev/kvm",
-		"--device", "/dev/fuse",
-	}
-	if !reflect.DeepEqual(args, want) {
-		t.Errorf("SecurityArgs = %v, want %v", args, want)
-	}
-}
-
-func TestDetectedDevicesInQuadlet(t *testing.T) {
-	cfg := deploykit.QuadletConfig{
-		BoxName:     "test",
-		ImageRef:    "test:latest",
-		Home:        "/workspace",
-		GPU:         true,
-		BindAddress: "127.0.0.1",
-		Security: vmshared.SecurityConfig{
-			Devices: []string{"/dev/kvm", "/dev/fuse"},
-		},
-	}
-	content := deploykit.GenerateQuadlet(cfg)
-	if !containsLine(content, "AddDevice=nvidia.com/gpu=all") {
-		t.Error("expected AddDevice=nvidia.com/gpu=all for GPU")
-	}
-	if !containsLine(content, "AddDevice=/dev/kvm") {
-		t.Error("expected AddDevice=/dev/kvm")
-	}
-	if !containsLine(content, "AddDevice=/dev/fuse") {
-		t.Error("expected AddDevice=/dev/fuse")
-	}
-}
-
-func TestPrivilegedSkipsDevices(t *testing.T) {
-	sec := vmshared.SecurityConfig{Privileged: true}
-	// When privileged, auto-detected devices should not be merged
-	// (privileged already grants access to all devices)
-	args := deploykit.SecurityArgs(sec)
-	want := []string{"--privileged"}
-	if !reflect.DeepEqual(args, want) {
-		t.Errorf("SecurityArgs(privileged) = %v, want %v", args, want)
-	}
-}
+// TestDetectedDevicesMergeIntoSecurity was removed as a duplicate (K3 cone2
+// test closure): the only behavior under test was deploykit.AppendUnique's
+// (itself a kit.AppendUnique re-export, sdk/deploykit/kit_aliases.go) dedup
+// merge — no charly-specific logic — already covered directly by
+// sdk/kit/append_unique_test.go:TestAppendUnique, verified live before deletion.
 
 func TestDetectHostDevicesWithAMDGPU(t *testing.T) {
 	orig := DetectHostDevices
@@ -165,27 +106,6 @@ func TestDetectHostDevicesWithBothGPUs(t *testing.T) {
 	}
 	if !detected.AMDGPU {
 		t.Error("expected AMDGPU=true")
-	}
-}
-
-func TestAMDGPUGroupsInQuadlet(t *testing.T) {
-	cfg := deploykit.QuadletConfig{
-		BoxName:     "test-amd",
-		ImageRef:    "test-amd:latest",
-		Home:        "/workspace",
-		GPU:         false,
-		BindAddress: "127.0.0.1",
-		Security: vmshared.SecurityConfig{
-			Devices:  []string{"/dev/kfd", "/dev/dri/renderD128"},
-			GroupAdd: []string{"keep-groups"},
-		},
-	}
-	content := deploykit.GenerateQuadlet(cfg)
-	if !containsLine(content, "GroupAdd=keep-groups") {
-		t.Error("expected GroupAdd=keep-groups in quadlet")
-	}
-	if !containsLine(content, "AddDevice=/dev/kfd") {
-		t.Error("expected AddDevice=/dev/kfd in quadlet")
 	}
 }
 

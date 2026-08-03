@@ -19,7 +19,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/exec"
 	pb "github.com/opencharly/spec/proto"
 	"github.com/opencharly/spec/spec"
 )
@@ -76,7 +76,7 @@ func requireLoopbackSSH(t *testing.T) (sshUser, sshHost string) {
 	if err != nil {
 		t.Skipf("no current user: %v", err)
 	}
-	exec := kit.SSHExecutor{User: u.Username, Host: "127.0.0.1", ConnectTimeout: 5}
+	exec := exec.SSHExecutor{User: u.Username, Host: "127.0.0.1", ConnectTimeout: 5}
 	stdout, stderr, exit, err := exec.RunCapture(context.Background(), "echo ssh-preflight-ok")
 	if err != nil || exit != 0 || !strings.Contains(stdout, "ssh-preflight-ok") {
 		t.Skipf("loopback SSH not reachable (err=%v exit=%d stderr=%q) — skipping SSH fixture", err, exit, stderr)
@@ -214,9 +214,9 @@ func TestInvokeProvider_VenueDescriptor_OutOfProcessCaller_SSHOverridesOwnShellE
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Drive A WITH its OWN reverse channel (kit.ShellExecutor{} — a real, host-local venue,
+	// Drive A WITH its OWN reverse channel (exec.ShellExecutor{} — a real, host-local venue,
 	// DIFFERENT from the SSH descriptor A asks the host to materialize for the peer).
-	res, err := gpA.InvokeWithExecutor(context.Background(), &Operation{Reserved: "exampledispatch", Op: OpRun, Params: params}, kit.ShellExecutor{}, buildEngineContext{}, false, nil)
+	res, err := gpA.InvokeWithExecutor(context.Background(), &Operation{Reserved: "exampledispatch", Op: OpRun, Params: params}, exec.ShellExecutor{}, buildEngineContext{}, false, nil)
 	if err != nil {
 		t.Fatalf("InvokeWithExecutor (OOP caller, ssh descriptor for peer): %v", err)
 	}

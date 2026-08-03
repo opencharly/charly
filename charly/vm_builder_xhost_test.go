@@ -1,42 +1,36 @@
 package main
 
 import (
-	"context"
 	"testing"
-
-	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/spec/spec"
 )
 
-// noopImageSeams are the resolveImage/ensureImage closures for a test that never reaches the
-// aur/LocalPkg branch (dry-run or a pre-branch error) — deploykit.RunVenueBuilderStep takes them
-// as explicit parameters (relocated #118 coneB-p8bremainder; TestResolveBuilderImage and
-// TestRunVenueBuilderStepUnknown, which needed no project-loader fixture, moved with it to
-// sdk/deploykit/venue_builder_test.go).
-func noopImageSeams() (func(string) (string, error), func(context.Context, string) error) {
-	return func(string) (string, error) { return "", nil }, func(context.Context, string) error { return nil }
-}
-
-// D3: npm/pixi/cargo are routed to the cross-host home-artifact builder by
-// OUTPUT SHAPE (no LocalPkg + a phase.install.host cell), not by builder name.
-// Verified via the dry-run path so no podman is spawned. Builder defs come from
-// the REAL build.yml so the routing exercises the config-driven host cells — this is the
-// ONE genuine core (project-loader) dependency the ported deploykit test can't replicate, so
-// this integration-style test STAYS in charly. After target:vm externalized, the VM builder leg
-// runs over the host-engine reverse channel (RunHostStep → deploykit.RunVenueBuilderStep, the
-// SAME venue-agnostic helper the former in-proc VM-target builder leg used — R3), so the test
-// exercises deploykit.RunVenueBuilderStep directly, with the SAME injected-closure shape
-// plugin_executor_reverse.go's RunHostStep uses.
-func TestRunVenueBuilderStepRoutesHomeBuilders(t *testing.T) {
+// TestRunVenueBuilderStepRoutesHomeBuilders_LoaderShape is the CHARLY-LOADER half of the D3
+// routing property (#55 final-tail split-by-assertion round, team-lead directive 2026-08-03):
+// npm/pixi/cargo are routed to the cross-host home-artifact builder by OUTPUT SHAPE (no LocalPkg
+// + a phase.install.host cell), not by builder name — this test proves the REAL committed
+// build.yml actually produces that shape for all three builders (LoadBuildConfigForBox is
+// charly's own project loader, a genuine core dependency with no sdk equivalent). The ROUTING
+// decision itself (given a BuilderDef with this shape, deploykit.RunVenueBuilderStep dispatches
+// to the home-artifact builder) is proven directly, with a literal fixture, by
+// sdk/deploykit/venue_builder_test.go's TestRunVenueBuilderStepRoutesHomeBuilders_LiteralFixture
+// — the two tests are complementary (config-parsing vs mechanism-routing), not duplicates, and
+// together restore the original single test's full coverage with zero sdk import here.
+func TestRunVenueBuilderStepRoutesHomeBuilders_LoaderShape(t *testing.T) {
 	_, bc, _, err := LoadBuildConfigForBox(repoRootDir(t))
 	if err != nil {
 		t.Fatalf("LoadBuildConfigForBox: %v", err)
 	}
-	resolveImage, ensureImage := noopImageSeams()
 	for _, b := range []string{"npm", "pixi", "cargo"} {
-		s := &spec.BuilderStep{Builder: b, CandyName: "x", CandyDir: "/tmp/x", BuilderDef: bc.Builder[b], BuilderImage: "test-builder:latest"}
-		if err := deploykit.RunVenueBuilderStep(context.Background(), &recordingExec{}, "", resolveImage, ensureImage, s, spec.EmitOpts{DryRun: true}); err != nil {
-			t.Errorf("RunVenueBuilderStep(%s) dry-run routed to home-artifact builder errored: %v", b, err)
+		def := bc.Builder[b]
+		if def == nil {
+			t.Fatalf("builder %q missing from build.yml", b)
+		}
+		// LocalPkg (the OTHER half of the routing condition, s.LocalPkg == nil) is not part of
+		// the loaded BuilderDef at all — it comes from the candy's own `localpkg:` declaration,
+		// compiled separately by the deploy-plan compiler; npm/pixi/cargo candies simply never
+		// declare one, which is exactly why they take the home-artifact path.
+		if def.Phases == nil || def.Phases.Install == nil || def.Phases.Install.Host == "" {
+			t.Errorf("builder %q has no phase.install.host cell in build.yml — the home-artifact routing decision has nothing to dispatch on", b)
 		}
 	}
 }

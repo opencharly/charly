@@ -3,16 +3,64 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/buildkit"
-	"github.com/opencharly/sdk/vmshared"
-
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 )
+
+// testOCITarget is a thin, byte-faithful local port of sdk/deploykit.OCITarget (oci_target.go)
+// — the kind-blind Containerfile walker's OWN logic is pure string assembly over spec-native
+// types (spec.InstallPlan/InstallStep/spec.ResolveHome), with zero engine coupling of its own;
+// its correctness is ALREADY separately covered by sdk/deploykit/oci_target_test.go (e.g.
+// TestOCITarget_EmitElidesVenueSkipAndEmptyFragments). This file's OWN tests exercise the REAL
+// charly-side dispatch (ociEmitStep → dispatchOCIStep → candy/plugin-installstep) through the
+// SAME EmitStepOp seam shape the real deploykit.OCITarget wires in production — only the walker
+// harness driving that dispatch is ported locally, never the dispatch itself.
+type testOCITarget struct {
+	Home       string
+	Distros    []string
+	EmitStepOp func(step spec.InstallStep, plan *spec.InstallPlan, distros []string) (string, error)
+	buf        strings.Builder
+}
+
+func (t *testOCITarget) Emit(plans []*spec.InstallPlan, _ spec.EmitOpts) error {
+	for _, plan := range plans {
+		if plan == nil {
+			continue
+		}
+		if t.Home != "" {
+			spec.ResolveHome(plan, t.Home)
+		}
+		fmt.Fprintf(&t.buf, "# Layer: %s\n", plan.Candy)
+		for _, step := range plan.Steps {
+			if step == nil || step.Venue() == spec.VenueSkip {
+				continue
+			}
+			var frag string
+			var err error
+			if t.EmitStepOp != nil {
+				frag, err = t.EmitStepOp(step, plan, t.Distros)
+			}
+			if err != nil {
+				return fmt.Errorf("testOCITarget.Emit(%s): %w", plan.Candy, err)
+			}
+			if frag == "" {
+				continue
+			}
+			t.buf.WriteString(frag)
+			if !strings.HasSuffix(frag, "\n") {
+				t.buf.WriteString("\n")
+			}
+		}
+		t.buf.WriteString("\n")
+	}
+	return nil
+}
+
+func (t *testOCITarget) String() string { return t.buf.String() }
 
 // Tests for the pod-overlay step-emit dispatch (charly/oci_step_emit.go's ociEmitStep — the
 // Go-object-typed test entry point after the P11c overlay-walker relocation to sdk/deploykit; the
@@ -108,15 +156,15 @@ func chdirTemp(t *testing.T) string {
 // perform) — which a `run: plugin:` verb Op reaches via dg.EmitTasks' `case "plugin"` even when
 // the OUTER op-step render (system-packages/builder/local-pkg-install/op) no longer round-trips
 // through step-emit. Restored via t.Cleanup.
-func stubRenderGen(t *testing.T, dir string, box *buildkit.ResolvedBox) {
+func stubRenderGen(t *testing.T, dir string, box *spec.BuildResolvedBox) {
 	t.Helper()
 	gen := &Generator{Dir: dir, Boxes: map[string]*spec.ResolvedBox{box.Name: &box.ResolvedBox}}
 	renderGenCache.Store(dir, gen)
 	t.Cleanup(func() { renderGenCache.Delete(dir) })
 }
 
-func ociTestTarget(build buildEngineContext) *deploykit.OCITarget {
-	return &deploykit.OCITarget{
+func ociTestTarget(build buildEngineContext) *testOCITarget {
+	return &testOCITarget{
 		EmitStepOp: func(step spec.InstallStep, plan *spec.InstallPlan, d []string) (string, error) {
 			return ociEmitStep(step, plan, d, build)
 		},
@@ -153,7 +201,7 @@ func TestOCITargetEmitSystemPackagesWithLegacyTemplate(t *testing.T) {
 	chdirTemp(t)
 	// Legacy InstallTemplate set; PhaseTemplate returns it for (install, container).
 	distro := &spec.ResolvedDistro{
-		Format: map[string]*vmshared.FormatDef{
+		Format: map[string]*spec.Format{
 			"rpm": {
 				InstallTemplate: "RUN dnf install -y {{join .Packages \" \"}}\n",
 			},
@@ -187,11 +235,11 @@ func TestOCITargetEmitSystemPackagesPrefersNewPhases(t *testing.T) {
 	chdirTemp(t)
 	// Both legacy and new path set; new path must win.
 	distro := &spec.ResolvedDistro{
-		Format: map[string]*vmshared.FormatDef{
+		Format: map[string]*spec.Format{
 			"rpm": {
 				InstallTemplate: "RUN legacy-install\n",
-				Phases: &vmshared.PhaseSet{
-					Install: &vmshared.PhaseTemplates{
+				Phases: &spec.PhaseSet{
+					Install: &spec.PhaseTemplates{
 						Container: "RUN new-install {{join .Packages \" \"}}\n",
 					},
 				},
@@ -363,20 +411,12 @@ func TestOCITargetEmitOpViaPlugin(t *testing.T) {
 	}
 }
 
-func TestOCITargetSkipsVenueSkip(t *testing.T) {
-	// A step with VenueSkip should be elided entirely.
-	tgt := ociTestTarget(buildEngineContext{})
-	plan := &spec.InstallPlan{Candy: "x", Steps: []spec.InstallStep{
-		&fakeSkipStep{},
-	}}
-	if err := tgt.Emit([]*spec.InstallPlan{plan}, spec.EmitOpts{}); err != nil {
-		t.Fatalf("Emit: %v", err)
-	}
-	got := tgt.String()
-	if strings.Contains(got, "FAKE") {
-		t.Errorf("skip step was rendered: %s", got)
-	}
-}
+// TestOCITargetSkipsVenueSkip was removed as a duplicate (K3 cone2 test closure):
+// VenueSkip elision is walker-level behavior (deploykit.OCITarget.Emit), already
+// proven in isolation by sdk/deploykit/oci_target_test.go's
+// TestOCITarget_EmitElidesVenueSkipAndEmptyFragments — same assertion (a
+// VenueSkip step never reaches the rendered output), verified live before
+// deletion.
 
 func TestOCITargetEmitRepoChange(t *testing.T) {
 	tgt := ociTestTarget(buildEngineContext{})
@@ -398,16 +438,6 @@ func TestOCITargetEmitRepoChange(t *testing.T) {
 		t.Errorf("missing repo content: %s", got)
 	}
 }
-
-// fakeSkipStep is a synthetic InstallStep used to verify VenueSkip
-// elision. Returns Venue=VenueSkip and marker content in its Kind.
-type fakeSkipStep struct{}
-
-func (f *fakeSkipStep) Kind() spec.StepKind       { return "FAKE" }
-func (f *fakeSkipStep) Scope() spec.Scope         { return spec.ScopeUser }
-func (f *fakeSkipStep) Venue() spec.Venue         { return spec.VenueSkip }
-func (f *fakeSkipStep) RequiresGate() spec.Gate   { return spec.GateNone }
-func (f *fakeSkipStep) Reverse() []spec.ReverseOp { return nil }
 
 // TestGeneratorCandyByNameRemoteQualifiedKey guards the add_candy-on-pod overlay
 // build: a REMOTE add_candy candy (fetched via spec.ResolveOpts.ExtraCandyRefs) is keyed

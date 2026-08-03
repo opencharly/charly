@@ -1,141 +1,44 @@
 package main
 
+// poll_probe_neverhang_test.go — TestRunner_PerProbeNeverHang + blockingExecutor and
+// TestRunner_ProbeNeverHang_HonorsAuthorTimeout relocated to sdk/kit's own test suite (#55
+// decoupling cone, Batch D — sdk/kit/runner_test.go): the load-robustness per-probe never-hang
+// regression and the ProbeNeverHang floor-vs-author-timeout calculation both assert
+// kit.Runner's OWN behavior, with zero real charly dispatch coupling once driven via
+// RunnerConfig{ProbeTimeout: ...} directly instead of a charly-constructed kit.Runner. The
+// readiness-floor-wiring assertion (newCheckRunner's construction sets ProbeTimeout from the
+// readiness table) moved to candy/plugin-check/plugin_runner_floor_test.go, since that
+// construction itself moved plugin-side in the #55 CHECK-ENGINE cone.
+
 import (
-	"context"
-	"strings"
 	"testing"
-	"time"
 
-	"github.com/opencharly/sdk/vmshared"
-
-	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/spec/spec"
 )
-
-// blockingExecutor blocks RunCapture until the per-probe context is cancelled
-// for any command containing blockOn (simulating a wedged `podman exec` under
-// heavy load), and delegates everything else to the embedded fakeExecutor. It
-// HONORS the passed ctx (the never-hang contract), so the only thing that can
-// unblock it is the per-probe deadline this cutover introduced.
-type blockingExecutor struct {
-	*fakeExecutor
-	blockOn string
-}
-
-func (b *blockingExecutor) RunInteractive(context.Context, string) (int, error) {
-	return -1, spec.ErrNotSupported
-}
-func (b *blockingExecutor) RunStream(context.Context, string) (int, error) {
-	return -1, spec.ErrNotSupported
-}
-func (b *blockingExecutor) RunCapture(ctx context.Context, cmd string) (string, string, int, error) {
-	if b.blockOn != "" && strings.Contains(cmd, b.blockOn) {
-		<-ctx.Done() // wedged: only the per-probe deadline frees us
-		return "", "blocked", 0, ctx.Err()
-	}
-	return b.fakeExecutor.RunCapture(ctx, cmd)
-}
-
-// TestRunner_PerProbeNeverHang is the load-robustness regression guard: a single
-// wedged probe must be cancelled INDIVIDUALLY (at ProbeTimeout) and the pass must
-// continue to the next probe — instead of hanging the whole pass until the bed
-// runner's outer timeout SIGKILLs the entire `charly check live` subprocess.
-//
-// Without the per-probe never-hang (the ctx-shadow in runOne), probe 1's
-// RunCapture blocks on a never-cancelled context.Background() FOREVER, so r.Run
-// never returns and the 5s watchdog below fails the test. With the fix, probe 1
-// fails fast and probe 2 still runs and passes.
-func TestRunner_PerProbeNeverHang(t *testing.T) {
-	fake := &fakeExecutor{responses: []fakeResponse{
-		{matchPrefix: "echo healthy", stdout: "ok\n"},
-	}}
-	be := &blockingExecutor{fakeExecutor: fake, blockOn: "WEDGEPROBE"}
-	// a tight per-probe bound for the test
-	r := newCheckRunner(kit.RunnerConfig{Exec: be, Mode: RunModeLive, Env: map[string]string{}, ProbeTimeout: 100 * time.Millisecond})
-
-	checks := []spec.Op{
-		{Plugin: "command", PluginInput: map[string]any{"command": "WEDGEPROBE check"}},                      // wedges → must be cancelled at ProbeTimeout
-		{Plugin: "command", PluginInput: map[string]any{"command": "echo healthy"}, Stdout: matcherEq("ok")}, // must still run after the wedge
-	}
-
-	done := make(chan []kit.CheckResult, 1)
-	go func() { done <- r.Run(context.Background(), checks) }()
-
-	select {
-	case results := <-done:
-		if len(results) != 2 {
-			t.Fatalf("want 2 results, got %d", len(results))
-		}
-		if results[0].Status != spec.StatusFail {
-			t.Errorf("wedged probe: want spec.StatusFail (cancelled at per-probe deadline), got %v (%s)", results[0].Status, results[0].Message)
-		}
-		if results[1].Status != spec.StatusPass {
-			t.Errorf("probe after the wedge: want spec.StatusPass (pass continued), got %v (%s)", results[1].Status, results[1].Message)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("r.Run hung on the wedged probe — per-probe never-hang not enforced (the whole-pass-guillotine regression)")
-	}
-}
-
-// matcherEq builds a MatcherList asserting equality, mirroring the scalar YAML form.
-func matcherEq(s string) spec.MatcherList { return spec.MatcherList{{Op: "equals", Value: s}} }
-
-// TestRunner_ProbeNeverHang_HonorsAuthorTimeout: the per-probe ceiling is the
-// floor (ProbeTimeout) unless the author declared a LONGER timeout:, which must
-// be honored (+a small buffer) so a legitimately-slow probe is never cut short.
-func TestRunner_ProbeNeverHang_HonorsAuthorTimeout(t *testing.T) {
-	r := kit.NewRunner(kit.RunnerConfig{ProbeTimeout: 120 * time.Second})
-	cases := []struct {
-		name    string
-		timeout string
-		want    time.Duration
-	}{
-		{"no timeout → floor", "", 120 * time.Second},
-		{"shorter timeout → floor", "10s", 120 * time.Second},
-		{"longer timeout → honored + buffer", "5m", 5*time.Minute + 30*time.Second},
-		{"unparseable → floor", "nonsense", 120 * time.Second},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got := r.ProbeNeverHang(&spec.Op{Timeout: tc.timeout})
-			if got != tc.want {
-				t.Errorf("ProbeNeverHang(timeout=%q) = %s, want %s", tc.timeout, got, tc.want)
-			}
-		})
-	}
-	// A runner built the production way (newCheckRunner) gets the readiness per-attempt
-	// floor as its per-probe never-hang, not the zero-value; that floor is
-	// readinessPerAttemptFallback when no readiness config is loaded. (The bare
-	// kit.NewRunner zero-value fallback is a kit-internal defensive const the host path
-	// never hits, since newCheckRunner always sets ProbeTimeout from the readiness table.)
-	if got := newCheckRunner(kit.RunnerConfig{}).ProbeNeverHang(&spec.Op{}); got != vmshared.ReadinessPerAttemptFallback {
-		t.Errorf("newCheckRunner default: got %s, want readiness floor %s", got, vmshared.ReadinessPerAttemptFallback)
-	}
-}
 
 // TestResolvedReadiness_PerAttemptHeavyForPollHeavy proves PollHeavy conds get
 // the generous whole-pass per-attempt while every other class keeps the tight
 // single-probe per-attempt — the poll.go half of the load-robustness fix.
 func TestResolvedReadiness_PerAttemptHeavyForPollHeavy(t *testing.T) {
 	var rr spec.ResolvedReadiness // zero value → all fallback constants
-	if rr.PerAttemptFor(vmshared.PollHeavy) != vmshared.ReadinessPerAttemptHeavyFallback {
-		t.Fatalf("perAttemptHeavy fallback = %s, want %s", rr.PerAttemptFor(vmshared.PollHeavy), vmshared.ReadinessPerAttemptHeavyFallback)
+	if rr.PerAttemptFor(spec.PollHeavy) != spec.ReadinessPerAttemptHeavyFallback {
+		t.Fatalf("perAttemptHeavy fallback = %s, want %s", rr.PerAttemptFor(spec.PollHeavy), spec.ReadinessPerAttemptHeavyFallback)
 	}
-	for _, class := range []vmshared.PollClass{spec.PollLocal, spec.PollRemote} {
+	for _, class := range []spec.PollClass{spec.PollLocal, spec.PollRemote} {
 		if got := rr.WaitCapped("x", class, 0).PerAttempt; got != rr.PerAttemptFor(spec.PollLocal) {
 			t.Errorf("WaitCapped(class=%d).PerAttempt = %s, want single-probe %s", class, got, rr.PerAttemptFor(spec.PollLocal))
 		}
 	}
-	if got := rr.WaitCapped("x", vmshared.PollHeavy, 0).PerAttempt; got != rr.PerAttemptFor(vmshared.PollHeavy) {
-		t.Errorf("WaitCapped(PollHeavy).PerAttempt = %s, want heavy %s", got, rr.PerAttemptFor(vmshared.PollHeavy))
+	if got := rr.WaitCapped("x", spec.PollHeavy, 0).PerAttempt; got != rr.PerAttemptFor(spec.PollHeavy) {
+		t.Errorf("WaitCapped(PollHeavy).PerAttempt = %s, want heavy %s", got, rr.PerAttemptFor(spec.PollHeavy))
 	}
-	if got := rr.Wait("x", vmshared.PollHeavy).PerAttempt; got != rr.PerAttemptFor(vmshared.PollHeavy) {
-		t.Errorf("Wait(PollHeavy).PerAttempt = %s, want heavy %s", got, rr.PerAttemptFor(vmshared.PollHeavy))
+	if got := rr.Wait("x", spec.PollHeavy).PerAttempt; got != rr.PerAttemptFor(spec.PollHeavy) {
+		t.Errorf("Wait(PollHeavy).PerAttempt = %s, want heavy %s", got, rr.PerAttemptFor(spec.PollHeavy))
 	}
 	// The heavy bound must be generously larger than the single-probe one — the
 	// whole point is to stop the 120s mid-pass guillotine.
-	if rr.PerAttemptFor(vmshared.PollHeavy) <= rr.PerAttemptFor(spec.PollLocal) {
-		t.Errorf("perAttemptHeavy (%s) must be > perAttempt (%s)", rr.PerAttemptFor(vmshared.PollHeavy), rr.PerAttemptFor(spec.PollLocal))
+	if rr.PerAttemptFor(spec.PollHeavy) <= rr.PerAttemptFor(spec.PollLocal) {
+		t.Errorf("perAttemptHeavy (%s) must be > perAttempt (%s)", rr.PerAttemptFor(spec.PollHeavy), rr.PerAttemptFor(spec.PollLocal))
 	}
 }
 

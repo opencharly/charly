@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/spec"
 )
 
 // TestMatchImageGlob_FullRefAndLastSegment relocated to
@@ -11,10 +11,10 @@ import (
 // moved with the rest of the retention engine).
 
 func TestSidecarContainerNameInstance_Shape(t *testing.T) {
-	if got := kit.SidecarContainerNameInstance("selkies-labwc", "", "tailscale"); got != "charly-selkies-labwc-tailscale" {
+	if got := spec.SidecarContainerNameInstance("selkies-labwc", "", "tailscale"); got != "charly-selkies-labwc-tailscale" {
 		t.Errorf("base sidecar name = %q", got)
 	}
-	if got := kit.SidecarContainerNameInstance("selkies-labwc", "82.1.2.3", "tailscale"); got != "charly-selkies-labwc-82.1.2.3-tailscale" {
+	if got := spec.SidecarContainerNameInstance("selkies-labwc", "82.1.2.3", "tailscale"); got != "charly-selkies-labwc-82.1.2.3-tailscale" {
 		t.Errorf("instance sidecar name = %q", got)
 	}
 }

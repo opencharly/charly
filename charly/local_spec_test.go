@@ -6,7 +6,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/exec"
+	"github.com/opencharly/spec/spec"
 )
 
 // TestLoadUnified_LocalMap_Inline verifies that an charly.yml with
@@ -79,10 +80,10 @@ deploy:
 
 // TestVmSshAlias confirms the deterministic alias derivation.
 func TestVmSshAlias(t *testing.T) {
-	if got := kit.VmSshAlias("arch-vm"); got != "charly-arch-vm" {
+	if got := spec.VmSshAlias("arch-vm"); got != "charly-arch-vm" {
 		t.Errorf("VmSshAlias(arch-vm) = %q, want charly-arch-vm", got)
 	}
-	if got := kit.VmSshAlias("k3s-vm"); got != "charly-k3s-vm" {
+	if got := spec.VmSshAlias("k3s-vm"); got != "charly-k3s-vm" {
 		t.Errorf("VmSshAlias(k3s-vm) = %q, want charly-k3s-vm", got)
 	}
 }
@@ -91,7 +92,7 @@ func TestVmSshAlias(t *testing.T) {
 // contains zero credential overrides — no -i, no StrictHostKeyChecking,
 // no UserKnownHostsFile. ssh(1) reads ~/.ssh/config + ssh-agent.
 func TestSshExecutor_NoCredentials(t *testing.T) {
-	e := &kit.SSHExecutor{Host: "charly-arch-vm"}
+	e := &exec.SSHExecutor{Host: "charly-arch-vm"}
 	args := e.SSHBaseArgs()
 	for _, a := range args {
 		if a == "-i" {
@@ -113,7 +114,7 @@ func TestSshExecutor_NoCredentials(t *testing.T) {
 // TestSshExecutor_WithUserPortArgs confirms the argv when caller
 // pre-parsed user/port from a destination string.
 func TestSshExecutor_WithUserPortArgs(t *testing.T) {
-	e := &kit.SSHExecutor{
+	e := &exec.SSHExecutor{
 		User: "ubuntu",
 		Host: "ci-runner-3.lan",
 		Port: 2222,

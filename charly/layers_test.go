@@ -1,17 +1,54 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/spec/spec"
 
 	"gopkg.in/yaml.v3"
 )
+
+// toStringSliceFixture / toMapSliceFixture are trivial LOCAL reproductions of
+// buildkit.ToStringSlice / ToMapSlice (raw-YAML-decode `any` shape converters) — not themselves
+// under test here, just test-input decoding for candy.Raw fields.
+func toStringSliceFixture(v any) []string {
+	switch val := v.(type) {
+	case []string:
+		return val
+	case []any:
+		result := make([]string, len(val))
+		for i, e := range val {
+			result[i] = fmt.Sprint(e)
+		}
+		return result
+	default:
+		return nil
+	}
+}
+
+func toMapSliceFixture(v any) []map[string]any {
+	switch val := v.(type) {
+	case []any:
+		result := make([]map[string]any, 0, len(val))
+		for _, e := range val {
+			if m, ok := e.(map[string]any); ok {
+				result = append(result, m)
+			}
+		}
+		return result
+	case []map[string]any:
+		result := make([]map[string]any, len(val))
+		copy(result, val)
+		return result
+	default:
+		return nil
+	}
+}
 
 // testBareRefs returns the bare map-key form of each ref, for assertions comparing a
 // candy's resolved Require list against an expected bare-name slice.
@@ -187,11 +224,11 @@ func TestCandyPacTool(t *testing.T) {
 		t.Error("pac-tool should have no pac format section (distro.arch → tag section)")
 	}
 	// Test raw fields accessible for templates
-	repos := buildkit.ToMapSlice(arch.Raw["repo"])
+	repos := toMapSliceFixture(arch.Raw["repo"])
 	if len(repos) != 1 {
 		t.Errorf("arch repos count = %d, want 1", len(repos))
 	}
-	options := buildkit.ToStringSlice(arch.Raw["options"])
+	options := toStringSliceFixture(arch.Raw["options"])
 	if !reflect.DeepEqual(options, []string{"--needed"}) {
 		t.Errorf("arch options = %v, want [--needed]", options)
 	}
@@ -531,7 +568,7 @@ func TestScanAllCandyWithConfigOpts_LocalCandyGetsInitSystemsCompletion(t *testi
 		t.Fatal(err)
 	}
 
-	initCfg := &buildkit.InitConfig{Init: map[string]*ResolvedInit{
+	initCfg := &spec.InitConfig{Init: map[string]*ResolvedInit{
 		"supervisord": {
 			CandyFields:   []string{"service"},
 			ServiceSchema: &spec.InitServiceSchema{SupportsPackaged: true},

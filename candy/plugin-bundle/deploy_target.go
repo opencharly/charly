@@ -391,7 +391,7 @@ func handleDeployApply(ctx context.Context, exec *sdk.Executor, req spec.DeployT
 		// BEFORE dispatch) with the merged node's own env: (deploykit.BuildArtifactEnv), matching
 		// the former core Add() exactly.
 		artifactEnv := deploykit.BuildArtifactEnv(secretEnv, req.Node)
-		if err := retrieveArtifactsAndDispatchRegisters(ctx, exec, req.Dir, plans, artifactKey, req.Name, artifactEnv, registerHints); err != nil {
+		if err := retrieveArtifactsAndDispatchRegisters(ctx, exec, localExec, req.Dir, plans, artifactKey, req.Name, artifactEnv, registerHints); err != nil {
 			return reply, fmt.Errorf("deploy-dispatch %s: %w", req.Op, err)
 		}
 	} else if kubeAlreadyConnected(ctx, exec) {

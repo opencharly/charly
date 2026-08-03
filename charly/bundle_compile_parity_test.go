@@ -1,18 +1,51 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"maps"
 	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
-	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/buildkit"
-	"github.com/opencharly/sdk/deploykit"
+	specexec "github.com/opencharly/spec/exec"
+	"github.com/opencharly/spec/ops"
 	"github.com/opencharly/spec/spec"
 )
+
+// compilerTestProjectDir chdirs to the project root (the repo root that owns candy/) and returns
+// a cleanup callback. Relocated here from the deleted charly/install_build_test.go (#55
+// decoupling, Batch A) — this test is its last remaining consumer (per the ambiguous-item ruling
+// 3: TestBundleCompileParity_PluginRoundTrip's "OLD" side and invokeOpCompile's "NEW" side both
+// need charly-internal registry/dispatch machinery unreachable from an out-of-module plugin
+// package, so this file STAYS in charly rather than moving).
+//
+// The marker is the `candy/` directory (the repo root owns it; the charly/ package dir does NOT).
+// Walking up for the `charly.yml` FILENAME hits the tracked `charly/charly.yml` embedded providers
+// manifest FIRST (it shadows the repo-root charly.yml), so ResolveBox("fedora-coder") then fails
+// and this test would vacuously SKIP — the root-cause of the prior vacuous-skip runs. `candy/`
+// disambiguates: only the repo root has it.
+func compilerTestProjectDir(t *testing.T) (string, func()) { //nolint:unparam // test helper returns (dir, cleanup); dir kept for symmetry
+	t.Helper()
+	prev, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	dir := prev
+	for range 6 {
+		if info, err := os.Stat(filepath.Join(dir, "candy")); err == nil && info.IsDir() {
+			if err := os.Chdir(dir); err != nil {
+				t.Fatalf("chdir %s: %v", dir, err)
+			}
+			return dir, func() { _ = os.Chdir(prev) }
+		}
+		dir = filepath.Dir(dir)
+	}
+	t.Skipf("project root (candy/) not found walking up from %s; skipping", prev)
+	return "", func() {}
+}
 
 // invokeOpCompile drives command:bundle's KEPT OpCompile leg over an in-proc reverse channel — the
 // SAME shared compilePlansForRequest candy/plugin-bundle's walk.go dispatchOne calls IN-PROC (K4-C
@@ -28,9 +61,9 @@ func invokeOpCompile(t *testing.T, req spec.DeployCompileRequest) ([]*spec.Insta
 	if err != nil {
 		return nil, err
 	}
-	ctx := sdk.ContextWithExecutor(context.Background(),
-		sdk.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}}))
-	res, err := prov.Invoke(ctx, &Operation{Reserved: "bundle", Op: sdk.OpCompile, Params: reqJSON})
+	ctx := specexec.ContextWithExecutor(context.Background(),
+		specexec.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}}))
+	res, err := prov.Invoke(ctx, &Operation{Reserved: "bundle", Op: ops.OpCompile, Params: reqJSON})
 	if err != nil {
 		return nil, err
 	}
@@ -149,15 +182,36 @@ func isolateProviderRegistry(t *testing.T) {
 // bundle_compile_parity_test.go — the K4-B compile-parity golden. Proves the deploy COMPILE slice
 // moved out of charly/ core into candy/plugin-bundle (the command:bundle plugin's OpCompile leg)
 // is byte-faithful to the former in-proc host compile, OVER the FULL plugin seam: the host computes
-// the per-node selection (projectResolvedBox + the candy order + HostContext), Invokes the bundle
-// plugin's OpCompile, the plugin re-hydrates the resolved-project envelope via InvokeProvider("build","project")
-// + loops deploykit.BuildDeployPlan + projects []InstallPlanView, and the host re-materializes
-// []*InstallPlan via spec.PlanFromView.
+// the per-node selection (a hand-built ResolvedBoxView + the candy order + HostContext), Invokes
+// the bundle plugin's OpCompile, the plugin re-hydrates the resolved-project envelope via
+// InvokeProvider("build","project") + loops deploykit.BuildDeployPlan + projects []InstallPlanView,
+// and the host re-materializes []*InstallPlan via spec.PlanFromView.
+//
+// THE GOLDEN (#55 K3 cone 1 redesign): the OLD side used to call deploykit.BuildDeployPlan
+// directly, in-process — an sdk mechanism-kit dependency the import-purity gate forbids in
+// charly/ (this file was its last holder; the value-type leg had already dropped its
+// buildkit import). BuildDeployPlan is a pure function (candy/plugin-bundle's own
+// TestBuildDeployPlan_BuilderPurity_NoPluginRPC proves it never dials a plugin itself) computed
+// from data that is ITSELF deterministic and reproducible offline: the fedora/rpm distro
+// vocabulary is a documented PURE field-copy of the checked-in charly/charly.yml (candy/
+// plugin-distro's OpResolve, see its resolve.go), and the pixi builder's deploy-time context/
+// reverse ops are thin dispatches to the PUBLIC, pure sdk/kit.BuilderCollectContext/BuilderReverse
+// (candy/plugin-builder-pixi/plugin.go). tools/golden-compile (its own standalone module, mirroring
+// the tools/gomod-canonical precedent) computes this OLD-side ground truth offline and writes it to
+// the checked-in charly/testdata/bundle_compile_parity_golden.json — this file now loads that golden
+// via plain encoding/json instead of computing it live, so it needs no sdk import at all. The NEW
+// side (invokeOpCompile) is UNCHANGED: it was always charly-internal registry/dispatch machinery,
+// never an sdk import.
+//
+// Regenerate the golden with `go run ./tools/golden-compile` (from the repo root) whenever the
+// compiler (sdk/deploykit's BuildDeployPlan or its sub-compilers) or one of the three fixture
+// candies (candy/ripgrep, candy/dev-tools, candy/pre-commit) changes in a way that alters its
+// compiled InstallPlan — a stale golden fails this test loudly (a wire-form diff), never silently.
 //
 // For each fixture candy (across 3 classes — pkg/op/builder) the golden asserts BOTH:
-//  (1) WireView parity: spec.WireView(oldPlan) DeepEqual spec.WireView(newPlan) — the
+//  (1) WireView parity: the golden's frozen OLD wire view byte-equals spec.WireView(newPlan) — the
 //      plugin-compiled + re-materialized plan projects to the SAME wire form as the former live
-//      host-compile (the spike's byte-identity check, strengthened to a DeepEqual).
+//      host-compile (the spike's byte-identity check).
 //  (2) PlanFromView fidelity: spec.PlanFromView(spec.WireView(newPlan)) DeepEqual newPlan —
 //      the WireView→PlanFromView round-trip is the identity on a re-materialized plan, proving the
 //      re-materialization step the host now performs loses nothing.
@@ -176,23 +230,21 @@ func TestBundleCompileParity_PluginRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
-	distroCfg, builderCfg, _, err := LoadDefaultBuildConfig(dir)
-	if err != nil {
-		t.Fatalf("LoadDefaultBuildConfig: %v", err)
-	}
-	RegisterBuildVocabulary(distroCfg)
-
 	layers, err := ScanAllCandyWithConfig(dir, cfg)
 	if err != nil {
 		t.Fatalf("ScanAllCandyWithConfig: %v", err)
 	}
 
-	// Hand-built fedora ResolvedBox (the compile target — a real builder config + fedora distro so
-	// the pixi builder step resolves for pre-commit; mirrors the K4-B RDD spike).
-	imgOld := &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "k4b-parity", EffectiveVersion: "2026.001.0001", Base: "quay.io/fedora/fedora:43", IsExternalBase: true, UID: 1000, GID: 1000, User: "user", Home: "/home/user", UserAdopted: true, Distro: []string{"fedora:43", "fedora"}, BuildFormats: []string{"rpm"}, Pkg: "rpm"}, DistroConfig: distroCfg, BuilderConfig: builderCfg}
-	imgOld.DistroDef = distroCfg.ResolveDistro(imgOld.Distro)
+	golden := loadCompileParityGolden(t, dir)
 
-	boxView := deploykit.ProjectResolvedBox(imgOld)
+	// The SAME hand-built fedora ResolvedBoxView the OLD-side golden generator
+	// (tools/golden-compile) constructs its ResolvedBox from — kept in field lockstep with it
+	// (mirrors the K4-B RDD spike).
+	boxView := spec.ResolvedBoxView{
+		Name: "k4b-parity", EffectiveVersion: "2026.001.0001", Base: "quay.io/fedora/fedora:43",
+		IsExternalBase: true, UID: 1000, GID: 1000, User: "user", Home: "/home/user",
+		UserAdopted: true, Distro: []string{"fedora:43", "fedora"}, BuildFormats: []string{"rpm"}, Pkg: "rpm",
+	}
 
 	candidates := []string{"ripgrep", "dev-tools", "pre-commit"}
 	var exercised []string
@@ -204,37 +256,26 @@ func TestBundleCompileParity_PluginRoundTrip(t *testing.T) {
 			t.Logf("fixture %q not present in layers; skipping", name)
 			continue
 		}
-		// FLOOR-SLIM-proper Unit-8: candy/plugin-bundle's own compileDeployPlans now ALWAYS runs
-		// the builder deploy-time pre-pass itself (over exec.InvokeProvider) before its BuildDeployPlan
-		// loop — the host no longer pre-populates hostCtx.BuilderContext at all (builder_preresolve.go
-		// keeps only the CONNECT step). So OLD must ALSO see a REAL, populated BuilderContext (computed
-		// here via the host's own STILL-live providerRegistry — this test process has the pixi/npm/
-		// cargo/aur plugins connected from ScanAllCandyWithConfig above) for the comparison to be
-		// apples-to-apples; an artificially-empty hostCtx on both sides would silently stop exercising
-		// the pixi-builder reverse_ops the "pre-commit" fixture is specifically chosen to cover.
-		hostCtx := deploykit.HostContext{BuilderContext: testPreresolveBuilderContext(t, cfg, dir, name, layer, imgOld)}
-		hostCtxJSON, err := json.Marshal(hostCtx)
-		if err != nil {
-			t.Fatalf("marshal host context (%s): %v", name, err)
+		oldView, ok := golden[name]
+		if !ok {
+			t.Fatalf("golden fixture missing candy %q — regenerate with `go run ./tools/golden-compile`", name)
 		}
-		// OLD: the former live host-compile (BuildDeployPlan over the runtime *Candy graph).
-		oldCtx, oldEx := testConstructStepExecutor()
-		oldPlan, err := deploykit.BuildDeployPlan(oldCtx, oldEx, layer, imgOld, hostCtx)
-		if err != nil {
-			t.Fatalf("OLD BuildDeployPlan(%s): %v", name, err)
-		}
+
 		// NEW: the SHARED in-proc compiler (compilePlansForRequest), reached via the KEPT OpCompile
 		// leg (invokeOpCompile) — the EXACT SAME function candy/plugin-bundle's walk.go dispatchOne
-		// calls IN-PROC (K4-C shape-2), so this OpCompile round-trip proves the compile core the
-		// double-bounce-free dispatchOne relies on is byte-faithful to the direct host BuildDeployPlan.
-		// The plugin re-hydrates the envelope, runs its OWN builder pre-pass (production never sends a
-		// populated BuilderContext any more), loops BuildDeployPlan + projects views; the host
-		// re-materializes via PlanFromView.
+		// calls IN-PROC (K4-C shape-2). Empty HostContextJSON matches production reality post-Unit-8:
+		// the host no longer pre-populates BuilderContext at all — command:bundle's
+		// compileDeployPlans always recomputes it itself over its own exec.InvokeProvider pre-pass,
+		// regardless of what (if anything) rides the wire.
+		emptyHostCtxJSON, err := json.Marshal(spec.HostContext{})
+		if err != nil {
+			t.Fatalf("marshal empty host context: %v", err)
+		}
 		plans, err := invokeOpCompile(t, spec.DeployCompileRequest{
 			Dir:             dir,
 			BoxView:         boxView,
-			Order:           []string{name}, // single-candy compile, matching the OLD single-candy BuildDeployPlan
-			HostContextJSON: hostCtxJSON,
+			Order:           []string{name}, // single-candy compile, matching the golden's single-candy BuildDeployPlan
+			HostContextJSON: emptyHostCtxJSON,
 		})
 		if err != nil {
 			t.Fatalf("NEW invokeOpCompile(%s): %v", name, err)
@@ -244,19 +285,14 @@ func TestBundleCompileParity_PluginRoundTrip(t *testing.T) {
 		}
 		newPlan := plans[0]
 
-		// (1) WireView parity — the plugin-compiled plan projects to the SAME wire form. The wire
-		// form (JSON) is what crosses the plugin boundary, so byte-identity of the marshaled WireView
-		// is the honest parity test. (A struct-level reflect.DeepEqual would false-negative on a
-		// benign Go-type narrowing in the OPAQUE RawInstallContext carry-through: the live candy's
-		// YAML-canonicalized `[]string` vs the JSON-round-tripped re-hydrated `[]interface{}` both
-		// serialize to the same bytes and both feed buildSystemPackagesStep's []string conversion
-		// identically — the wire form, not the in-memory Go type, is the contract.)
-		oldView := spec.WireView(oldPlan)
+		// (1) WireView parity — the plugin-compiled plan projects to the SAME wire form the frozen
+		// golden captured. The wire form (JSON) is what crosses the plugin boundary, so
+		// byte-identity against the golden is the honest parity test.
 		newView := spec.WireView(newPlan)
 		ob, _ := json.Marshal(oldView)
 		nb, _ := json.Marshal(newView)
 		if string(ob) != string(nb) {
-			t.Fatalf("PARITY BREAK on %q (WireView wire form differs):\n--- OLD ---\n%s\n--- NEW ---\n%s", name, ob, nb)
+			t.Fatalf("PARITY BREAK on %q (WireView wire form differs from the golden — regenerate with `go run ./tools/golden-compile` if this is an intentional compiler change):\n--- GOLDEN ---\n%s\n--- NEW ---\n%s", name, ob, nb)
 		}
 
 		// (2) PlanFromView fidelity — WireView→PlanFromView is the identity on the re-materialized plan.
@@ -294,12 +330,9 @@ func TestBundleCompileParity_PluginRoundTrip(t *testing.T) {
 	// home-anchored candy — so the parity comparison is not vacuously passing on a constant. The
 	// pixi builder step (pre-commit) is home-anchored (cargo/pixi install into $HOME).
 	t.Run("can_fail", func(t *testing.T) {
-		perturbed := deploykit.ProjectResolvedBox(imgOld)
+		perturbed := boxView // value copy — spec.ResolvedBoxView is a plain struct
 		perturbed.Home = "/home/OTHER"
-		// An empty HostContextJSON matches production reality post-Unit-8: the host no longer
-		// pre-populates BuilderContext at all — command:bundle's compileDeployPlans always
-		// recomputes it itself, regardless of what (if anything) rides the wire.
-		emptyHostCtxJSON, err := json.Marshal(deploykit.HostContext{})
+		emptyHostCtxJSON, err := json.Marshal(spec.HostContext{})
 		if err != nil {
 			t.Fatalf("marshal empty host context: %v", err)
 		}
@@ -347,83 +380,24 @@ func mustMarshalJSON(t *testing.T, v any) []byte {
 	return b
 }
 
-// silence the os import if compilerTestProjectDir's cleanup is the only consumer in some build configs.
-var _ = os.Chdir
-
-// testPreresolveBuilderContext mirrors candy/plugin-bundle/builder_preresolve.go's
-// preresolveBuilderContexts for a SINGLE candy, but dispatches via the host's OWN
-// providerRegistry/Invoke (available in-process here, unlike a real plugin, which reaches the same
-// builder plugins via exec.InvokeProvider) — the FLOOR-SLIM-proper Unit-8 test-side twin that lets
-// this parity test's "OLD" comparison see the SAME real builder pre-resolution production now runs
-// exclusively plugin-side. ensureBuildersConnected is charly-core's own (unmoved) connect step —
-// the SAME on-demand builder connect the deploy compile helpers trigger in production.
-func testPreresolveBuilderContext(t *testing.T, cfg *Config, dir, name string, layer spec.CandyReader, img *buildkit.ResolvedBox) map[string]deploykit.BuilderPreresolved {
+// loadCompileParityGolden reads the checked-in OLD-side ground truth
+// (charly/testdata/bundle_compile_parity_golden.json, keyed by candy name) that
+// tools/golden-compile computes offline — see this file's top doc comment. dir is the repo root
+// compilerTestProjectDir resolved (the marker candy/ directory's parent).
+func loadCompileParityGolden(t *testing.T, dir string) map[string]spec.InstallPlanView {
 	t.Helper()
-	needed := deploykit.DetectExternalizedBuilders([]string{name}, map[string]spec.CandyReader{name: layer}, externalizedBuilders, img)
-	if len(needed) == 0 {
-		return nil
+	path := filepath.Join(dir, "charly", "testdata", "bundle_compile_parity_golden.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read golden fixture %s: %v (regenerate with `go run ./tools/golden-compile`)", path, err)
 	}
-	if err := ensureBuildersConnected(context.Background(), cfg, dir, needed); err != nil {
-		// Connect can legitimately no-op-succeed here (every needed builder is already connected
-		// from ScanAllCandyWithConfig's project load above) — only fail loudly on a REAL gap.
-		for _, w := range needed {
-			if _, ok := providerRegistry.ResolveBuilder(w); !ok {
-				t.Fatalf("testPreresolveBuilderContext(%s): builder %q not connected: %v", name, w, err)
-			}
-		}
+	// The generator normalizes repo-root-absolute paths (candy_dir/ctx_path) to a ${REPO_ROOT}
+	// token so the golden is worktree-independent; substitute THIS tree's resolved root back in
+	// (the paired replace in tools/golden-compile's main).
+	data = bytes.ReplaceAll(data, []byte("${REPO_ROOT}"), []byte(dir))
+	var golden map[string]spec.InstallPlanView
+	if err := json.Unmarshal(data, &golden); err != nil {
+		t.Fatalf("decode golden fixture %s: %v", path, err)
 	}
-	var out map[string]deploykit.BuilderPreresolved
-	for _, bName := range needed {
-		if img.BuilderConfig == nil {
-			continue
-		}
-		bDef := img.BuilderConfig.Builder[bName]
-		if bDef == nil || !deploykit.CandyNeedsBuilderStep(layer, bDef) {
-			continue
-		}
-		prov, ok := providerRegistry.ResolveBuilder(bName)
-		if !ok {
-			t.Fatalf("testPreresolveBuilderContext(%s): builder %q is externalized but not connected", name, bName)
-		}
-		in := spec.BuilderCollectInput{Candy: layer.GetName(), Builder: bName, Home: img.Home}
-		if bDef.DetectConfig != "" {
-			if sec := layer.FormatSection(bDef.DetectConfig); sec != nil {
-				in.Packages = append([]string(nil), sec.Packages...)
-				if raw, ok := sec.Raw["replaces"]; ok {
-					if list, ok := deploykit.StringSliceFromYAML(raw); ok {
-						in.Replaces = list
-					}
-				}
-			}
-		}
-		params, err := marshalJSON(in)
-		if err != nil {
-			t.Fatalf("testPreresolveBuilderContext(%s): marshal collect-context input: %v", name, err)
-		}
-		res, err := prov.Invoke(context.Background(), &Operation{Reserved: bName, Op: OpCollectContext, Params: params})
-		if err != nil {
-			t.Fatalf("testPreresolveBuilderContext(%s): builder %q collect-context: %v", name, bName, err)
-		}
-		var collectReply spec.BuilderCollectReply
-		if err := json.Unmarshal(res.JSON, &collectReply); err != nil {
-			t.Fatalf("testPreresolveBuilderContext(%s): decode collect-context reply: %v", name, err)
-		}
-		revParams, err := marshalJSON(spec.BuilderReverseInput{Candy: layer.GetName(), Builder: bName, Context: collectReply.Context})
-		if err != nil {
-			t.Fatalf("testPreresolveBuilderContext(%s): marshal reverse input: %v", name, err)
-		}
-		revRes, err := prov.Invoke(context.Background(), &Operation{Reserved: bName, Op: OpReverse, Params: revParams})
-		if err != nil {
-			t.Fatalf("testPreresolveBuilderContext(%s): builder %q reverse: %v", name, bName, err)
-		}
-		var reverseReply spec.BuilderReverseReply
-		if err := json.Unmarshal(revRes.JSON, &reverseReply); err != nil {
-			t.Fatalf("testPreresolveBuilderContext(%s): decode reverse reply: %v", name, err)
-		}
-		if out == nil {
-			out = map[string]deploykit.BuilderPreresolved{}
-		}
-		out[deploykit.BuilderCtxKey(layer.GetName(), bName)] = deploykit.BuilderPreresolved{Context: collectReply.Context, Reverse: reverseReply.ReverseOps}
-	}
-	return out
+	return golden
 }

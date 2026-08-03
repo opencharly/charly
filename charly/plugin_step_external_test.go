@@ -5,16 +5,49 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/opencharly/sdk/buildkit"
-	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/kit"
+	specexec "github.com/opencharly/spec/exec"
 	pb "github.com/opencharly/spec/proto"
 	"github.com/opencharly/spec/spec"
 )
+
+// testRunReverseOpPluginScript is a thin local port of sdk/kit.RunReverseOps'
+// ReverseOpPluginScript case (reversePluginScript + runScriptReverse/runUserShellReverse,
+// stdlib-only local exec.Command with no ReverseRunner/DryRun — the "long-standing
+// host-teardown path" the real functions document as their own no-runner fallback). This test's
+// assertion is the record-and-replay CONTRACT for the ONE reverse-op kind an external plugin
+// step ever records (ReverseOpPluginScript) — the other 15 kinds RunReverseOps dispatches are
+// substantial per-format teardown logic covered by sdk/kit's own test suite, not duplicated here.
+// A kind other than ReverseOpPluginScript is a loud failure (never a silent no-op), so a future
+// fixture needing broader coverage is forced to extend this, not silently pass vacuously.
+func testRunReverseOpPluginScript(t *testing.T, ops []spec.ReverseOp) {
+	t.Helper()
+	for _, op := range ops {
+		if op.Kind != spec.ReverseOpPluginScript {
+			t.Fatalf("testRunReverseOpPluginScript: unsupported reverse-op kind %q (only plugin-script is ported here)", op.Kind)
+		}
+		script := strings.TrimSpace(op.Extra[spec.ReverseOpPluginScriptKey])
+		if script == "" {
+			continue
+		}
+		var cmd *exec.Cmd
+		if op.Scope == spec.ScopeUser {
+			cmd = exec.Command("bash", "-lc", script)
+		} else {
+			cmd = exec.Command("sudo", "bash", "-lc", script)
+		}
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			fmt.Fprintf(os.Stderr, "reverse: %s failed: %v\n", op.Kind, err)
+		}
+	}
+}
 
 // TestExternalPluginStep_Derivations proves the IR derivations of the new step kind
 // (no plugin process needed): Kind/Venue are fixed; Scope follows the resolved user
@@ -116,8 +149,8 @@ func TestExternalPluginStep_ReverseChannelEndToEnd(t *testing.T) {
 	//    K5-A item 1) lowers a `run: plugin: examplestep` op whose provider is an external
 	//    grpcProvider to an ExternalPluginStep (not an OpStep).
 	layer := testCandy("examplestep-deploy-consumer", spec.CandyModel{}, spec.CandyView{})
-	img := &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Tags: []string{"fedora"}}}
-	userDir, _ := deploykit.ResolveUserSpec(op.RunAs, img)
+	img := &spec.BuildResolvedBox{ResolvedBox: spec.ResolvedBox{Tags: []string{"fedora"}}}
+	userDir := testResolveRunAsUser(op.RunAs)
 	reply, err := hostBuildConstructStep(ctx, spec.ConstructStepRequest{
 		Op: *op, CandyName: layer.GetName(), CandySourceDir: layer.GetSourceDir(),
 		ResolvedUser: userDir, PkgFormat: img.Pkg, DistroTags: img.Tags,
@@ -150,7 +183,7 @@ func TestExternalPluginStep_ReverseChannelEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv := &executorReverseServer{exec: kit.ShellExecutor{}}
+	srv := &executorReverseServer{exec: specexec.ShellExecutor{}}
 	rep, err := srv.RunHostStep(ctx, &pb.HostStepRequest{StepJson: stepJSON})
 	if err != nil {
 		t.Fatalf("RunHostStep: %v", err)
@@ -171,7 +204,7 @@ func TestExternalPluginStep_ReverseChannelEndToEnd(t *testing.T) {
 	// 5. Teardown: replaying the recorded plugin-script reverse op removes the markers
 	//    (record-and-replay — the `charly bundle del` contract). Local runner (nil
 	//    Runner → local bash, user scope, no sudo).
-	kit.RunReverseOps(reverseOps, &deploykit.HostReverseExec{})
+	testRunReverseOpPluginScript(t, reverseOps)
 	mustNotExist(t, probe, "reverse op replay did not remove the probe marker")
 	mustNotExist(t, applied, "reverse op replay did not remove the applied marker")
 }

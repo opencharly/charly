@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/opencharly/sdk"
+	"github.com/opencharly/spec/exitcode"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -42,10 +42,10 @@ import (
 // the operator's REAL terminal unconditionally. The actual interactive/streaming subprocess spawn
 // (`podman exec -it`/`podman logs -f`, wired to real os.Stdin/os.Stdout) is itself architecturally
 // pinned to the host process too: candy/plugin-deploy-pod's podAttach/podLogs (lifecycle.go) call
-// the *sdk.Executor RPC-client stub of exec.RunInteractive/RunStream, which always lands on
+// the *specexec.Executor RPC-client stub of exec.RunInteractive/RunStream, which always lands on
 // charly/plugin_executor_reverse.go's executorReverseServer — living ONLY in the charly binary,
 // bridged identically whether the calling plugin is compiled-in (plugin_inproc_reverse.go, a direct
-// Go call) or out-of-process (sdk.ExecutorFromInvoke's go-plugin GRPCBroker dial). Proven, not
+// Go call) or out-of-process (specexec.ExecutorFromInvoke's go-plugin GRPCBroker dial). Proven, not
 // hypothetical: candy/plugin-deploy-pod is NOT in charly.yml's compiled_plugins: today — it already
 // ships out-of-process by default, and `charly shell`/`cmd`/`logs -f` already work against it in
 // production on exactly this mechanism.
@@ -139,12 +139,12 @@ func hostBuildPodCmd(_ context.Context, req spec.PodCmdRequest, _ buildEngineCon
 		return spec.PodCmdReply{}, err
 	}
 	// The container command's non-zero exit rides the REPLY's ExitCode field, NOT the HostBuild error
-	// return (which stringifies the typed *sdk.ExitCodeError, losing the code) — the plugin
+	// return (which stringifies the typed *exitcode.ExitCodeError, losing the code) — the plugin
 	// reconstructs the typed error from it so the operator sees the command's own code, exactly as the
 	// former __cmd/CliReply.ExitCode path did. A genuine (non-exit-code) failure still propagates as
 	// the error.
 	aerr := lt.Attach(withPodCmdOpts(context.Background(), podCmdOpts{Sidecar: req.Sidecar}), []string{req.Command}, false)
-	var ece *sdk.ExitCodeError
+	var ece *exitcode.ExitCodeError
 	if errors.As(aerr, &ece) {
 		return spec.PodCmdReply{ExitCode: ece.Code}, nil
 	}
