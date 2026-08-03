@@ -1,4 +1,4 @@
-package main
+package bundle
 
 import (
 	"testing"
@@ -7,6 +7,10 @@ import (
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 )
+
+// service_distro_filter_test.go — relocated from charly/service_distro_filter_test.go (#55
+// decoupling, Batch A): all 4 tests assert deploykit.ServiceEntryAppliesToDistro/
+// CompileServiceSteps/ServiceRenderDistros/PrimaryDistroTag directly, zero charly coupling.
 
 // serviceEntryAppliesToDistro is the render-time filter that lets ONE candy
 // carry per-distro-DIVERGENT service entries (the modular virtqemud.socket +

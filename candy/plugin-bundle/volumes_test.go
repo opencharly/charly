@@ -1,4 +1,4 @@
-package main
+package bundle
 
 import (
 	"reflect"
@@ -9,8 +9,11 @@ import (
 	"github.com/opencharly/spec/spec"
 )
 
+// volumes_test.go — relocated from charly/volumes_test.go (#55 decoupling, Batch A): all 4
+// tests assert deploykit.CollectBoxVolume directly, zero charly dep.
+
 func TestCollectImageVolumesSimple(t *testing.T) {
-	cfg := &Config{
+	cfg := &spec.Config{
 		Box: boxMapOf(map[string]spec.BoxConfig{
 			"myapp": {Candy: []string{"svc"}},
 		}),
@@ -36,7 +39,7 @@ func TestCollectImageVolumesSimple(t *testing.T) {
 }
 
 func TestCollectImageVolumesChain(t *testing.T) {
-	cfg := &Config{
+	cfg := &spec.Config{
 		Box: boxMapOf(map[string]spec.BoxConfig{
 			"base":  {Candy: []string{"store"}},
 			"child": {Base: "base", Candy: []string{"app"}},
@@ -69,7 +72,7 @@ func TestCollectImageVolumesChain(t *testing.T) {
 }
 
 func TestCollectImageVolumesDedup(t *testing.T) {
-	cfg := &Config{
+	cfg := &spec.Config{
 		Box: boxMapOf(map[string]spec.BoxConfig{
 			"base":  {Candy: []string{"store"}},
 			"child": {Base: "base", Candy: []string{"override"}},
@@ -101,7 +104,7 @@ func TestCollectImageVolumesDedup(t *testing.T) {
 }
 
 func TestCollectImageVolumesNoVolumes(t *testing.T) {
-	cfg := &Config{
+	cfg := &spec.Config{
 		Box: boxMapOf(map[string]spec.BoxConfig{
 			"base": {Candy: []string{"plain"}},
 		}),
@@ -118,6 +121,3 @@ func TestCollectImageVolumesNoVolumes(t *testing.T) {
 		t.Errorf("expected 0 mounts, got %v", mounts)
 	}
 }
-
-// TestExpandHome + TestSortVolumeMounts relocated to sdk/deploykit/volume_collect_test.go
-// alongside the expandVolumeHome + sortVolumeMounts helpers (core-min wave-3 build-cluster split).

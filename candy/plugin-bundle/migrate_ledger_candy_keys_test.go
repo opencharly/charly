@@ -1,4 +1,4 @@
-package main
+package bundle
 
 import (
 	"os"
@@ -8,6 +8,9 @@ import (
 
 	"github.com/opencharly/sdk/kit"
 )
+
+// migrate_ledger_candy_keys_test.go — relocated from charly/migrate_ledger_candy_keys_test.go (#55
+// decoupling, Batch A): zero charly coupling.
 
 // TestReadCandyRecord_GatesPreCutover proves the ledger read path hard-rejects a
 // pre-cutover record (no schema_version) with an actionable error.

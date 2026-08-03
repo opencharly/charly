@@ -1,4 +1,4 @@
-package main
+package bundle
 
 import (
 	"strings"
@@ -9,7 +9,8 @@ import (
 	"github.com/opencharly/sdk/kit"
 )
 
-// Tests for renderDownloadScript — the host-side download executor.
+// download_task_test.go — relocated from charly/download_task_test.go (#55 decoupling, Batch A):
+// all 5 tests assert kit.RenderDownloadScript directly, zero charly coupling.
 
 func TestDownloadScriptPlain(t *testing.T) {
 	task := &spec.Op{

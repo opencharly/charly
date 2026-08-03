@@ -1,4 +1,4 @@
-package main
+package bundle
 
 import (
 	"os"
@@ -8,6 +8,9 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 )
+
+// migrate_local_deploy_test.go — relocated from charly/migrate_local_deploy_test.go (#55
+// decoupling, Batch A): zero charly coupling.
 
 // TestLoadBundleConfig_LegacySchemaErrors exercises the load-time guard:
 // a deploy.yml with `images:` at top level errors with a remediation hint

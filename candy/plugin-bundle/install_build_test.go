@@ -1,29 +1,29 @@
-package main
+package bundle
 
 import (
-	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/opencharly/sdk/buildkit"
-	"github.com/opencharly/sdk/vmshared"
-	"github.com/opencharly/spec/spec"
-
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/spec/spec"
 )
+
+// install_build_test.go — relocated from charly/install_build_test.go (#55 decoupling, Batch A):
+// every test here asserts deploykit.BuildDeployPlan / the install-compile helpers directly, zero
+// charly coupling.
 
 // TestBuildDeployPlan_BuilderPurity_NoPluginRPC is the externalization purity gate (operator
 // requirement): BuildDeployPlan is a PURE function of its inputs and NEVER dials a builder plugin.
 // The externalized detection-builder's stage context + teardown ops are resolved out-of-process in
 // the host-side build PRE-PASS and threaded in via HostContext.BuilderContext; the compiler only
-// READS that pre-populated map. This test connects NO plugin, so if the compiler tried to RPC a
-// builder it would fail/skip — instead it must succeed and faithfully reflect the supplied data,
-// AND succeed with base-only context when none is supplied. The reverse-op derivation that moved
-// out-of-process is covered by plugin/kit/builder_test.go.
+// READS that pre-populated map. This test connects NO plugin (a nil executor — the candy fixture
+// carries no `plugin:` verb step), so if the compiler tried to RPC a builder it would fail/skip —
+// instead it must succeed and faithfully reflect the supplied data, AND succeed with base-only
+// context when none is supplied.
 func TestBuildDeployPlan_BuilderPurity_NoPluginRPC(t *testing.T) {
-	img := &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "purity", Home: "/home/u"}, BuilderConfig: &spec.BuilderConfig{Builder: map[string]*vmshared.BuilderDef{
+	img := &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "purity", Home: "/home/u"}, BuilderConfig: &spec.BuilderConfig{Builder: map[string]*buildkit.BuilderDef{
 		"pixi": {DetectFiles: []string{"pixi.toml"}},
 	}}}
 	layer := pixiCandy(t, "c")
@@ -75,83 +75,20 @@ func firstBuilderStep(t *testing.T, plan *spec.InstallPlan) *spec.BuilderStep {
 	return nil
 }
 
-// Integration-ish tests for BuildDeployPlan using the project's own
-// candy definitions. Not unit tests in the strict sense (they read
-// real YAML via LoadConfig + ScanAllCandyWithConfig) but they catch
-// compile-time regressions that pure unit tests can't.
-
-// compilerTestProjectDir chdirs to the project root (the repo root that owns candy/)
-// and returns a cleanup callback. The compiler tests rely on being able to LoadConfig
-// from the repo-root charly.yml + scan the real candy/ fixtures.
-//
-// The marker is the `candy/` directory (the repo root owns it; the charly/ package dir does
-// NOT). Walking up for the `charly.yml` FILENAME hits the tracked `charly/charly.yml` embedded
-// providers manifest FIRST (it shadows the repo-root charly.yml), so ResolveBox("fedora-coder")
-// then fails and every TestBuildDeployPlan* vacuously SKIPs — the root-cause of the prior
-// vacuous-skip runs. `candy/` disambiguates: only the repo root has it.
-func compilerTestProjectDir(t *testing.T) (string, func()) { //nolint:unparam // test helper returns (dir, cleanup); dir kept for symmetry
-	t.Helper()
-	prev, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd: %v", err)
-	}
-	// Walk up from current to find the project root (the `candy/` dir marker).
-	dir := prev
-	for range 6 {
-		if info, err := os.Stat(filepath.Join(dir, "candy")); err == nil && info.IsDir() {
-			if err := os.Chdir(dir); err != nil {
-				t.Fatalf("chdir %s: %v", dir, err)
-			}
-			return dir, func() { _ = os.Chdir(prev) }
-		}
-		dir = filepath.Dir(dir)
-	}
-	t.Skipf("project root (candy/) not found walking up from %s; skipping", prev)
-	return "", func() {}
-}
-
-// loadCompilerFixtures loads charly.yml + candies from the project and
-// resolves the "fedora-coder" image. Returns nil, nil if fixtures can't
-// load (used to gracefully skip in CI environments that might not have
-// the fixture candies present).
-func loadCompilerFixtures(t *testing.T, boxName string) (*Config, *buildkit.ResolvedBox, map[string]spec.CandyReader) {
-	t.Helper()
-	dir, _ := os.Getwd()
-	cfg, err := LoadConfig(dir)
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	// RegisterBuildVocabulary must run before candy scanning so format sections
-	// (rpm:/deb:/pac:) are recognized. Post-unified-cutover LoadDefaultBuildConfig
-	// reads charly.yml directly.
-	{
-		_ = cfg
-		distroCfg, _, _, err := LoadDefaultBuildConfig(dir)
-		if err != nil {
-			t.Fatalf("LoadDefaultBuildConfig: %v", err)
-		}
-		RegisterBuildVocabulary(distroCfg)
-	}
-	layers, err := ScanAllCandyWithConfig(dir, cfg)
-	if err != nil {
-		t.Fatalf("ScanAllCandyWithConfig: %v", err)
-	}
-	img, err := resolveBoxTest(cfg, boxName, "testing", dir)
-	if err != nil {
-		t.Skipf("ResolveBox(%s): %v (fixture missing?)", boxName, err)
-	}
-	return cfg, img, layers
-}
+// TestBuildDeployPlanRipgrep/DevTools/PixiCandy are integration-ish tests for BuildDeployPlan
+// against this repo's OWN real candy definitions (ripgrep / dev-tools / pre-commit) — relocated
+// from charly/install_build_test.go's loadCompilerFixtures, which drove the full charly project
+// loader (LoadConfig/ScanAllCandyWithConfig/resolveBoxTest against "fedora-coder") to source these
+// fixtures. That whole-project loader is charly-core territory this out-of-module plugin package
+// cannot reach standalone, so the fixture is sourced instead via loadRealCandy (reads the real
+// candy/<name>/charly.yml directly, pure loaderkit.ScanInlineCandy — no project load, no
+// registry) against a synthetic fedora-rpm image (fedoraCoderLikeImg) standing in for the real
+// project's resolved "fedora-coder" box. The layer content (packages/tasks/builders) is real; only
+// the consuming image's exact inheritance chain is synthetic.
 
 func TestBuildDeployPlanRipgrep(t *testing.T) {
-	_, cleanup := compilerTestProjectDir(t)
-	defer cleanup()
-
-	_, img, layers := loadCompilerFixtures(t, "fedora-coder")
-	ripgrep, ok := layers["ripgrep"]
-	if !ok {
-		t.Skip("ripgrep layer not present in fixtures")
-	}
+	ripgrep := loadRealCandy(t, "ripgrep")
+	img := fedoraCoderLikeImg()
 
 	ctx, ex := testConstructStepExecutor()
 	plan, err := deploykit.BuildDeployPlan(ctx, ex, ripgrep, img, deploykit.HostContext{})
@@ -196,14 +133,8 @@ func TestBuildDeployPlanRipgrep(t *testing.T) {
 }
 
 func TestBuildDeployPlanDevTools(t *testing.T) {
-	_, cleanup := compilerTestProjectDir(t)
-	defer cleanup()
-
-	_, img, layers := loadCompilerFixtures(t, "fedora-coder")
-	dt, ok := layers["dev-tools"]
-	if !ok {
-		t.Skip("dev-tools layer not present in fixtures")
-	}
+	dt := loadRealCandy(t, "dev-tools")
+	img := fedoraCoderLikeImg()
 
 	ctx, ex := testConstructStepExecutor()
 	plan, err := deploykit.BuildDeployPlan(ctx, ex, dt, img, deploykit.HostContext{})
@@ -232,18 +163,11 @@ func TestBuildDeployPlanDevTools(t *testing.T) {
 }
 
 func TestBuildDeployPlanPixiCandy(t *testing.T) {
-	_, cleanup := compilerTestProjectDir(t)
-	defer cleanup()
-
-	_, img, layers := loadCompilerFixtures(t, "fedora-coder")
-	// pre-commit candy uses pixi builder (has pixi.toml).
-	pc, ok := layers["pre-commit"]
-	if !ok {
-		t.Skip("pre-commit layer not present in fixtures")
-	}
+	pc := loadRealCandy(t, "pre-commit")
 	if !pc.HasFile("pixi.toml") {
 		t.Skip("pre-commit doesn't have pixi.toml (fixture changed)")
 	}
+	img := fedoraCoderLikeImg()
 
 	ctx, ex := testConstructStepExecutor()
 	plan, err := deploykit.BuildDeployPlan(ctx, ex, pc, img, deploykit.HostContext{})

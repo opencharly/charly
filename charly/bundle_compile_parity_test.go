@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"maps"
 	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -14,6 +15,38 @@ import (
 	"github.com/opencharly/spec/ops"
 	"github.com/opencharly/spec/spec"
 )
+
+// compilerTestProjectDir chdirs to the project root (the repo root that owns candy/) and returns
+// a cleanup callback. Relocated here from the deleted charly/install_build_test.go (#55
+// decoupling, Batch A) — this test is its last remaining consumer (per the ambiguous-item ruling
+// 3: TestBundleCompileParity_PluginRoundTrip's "OLD" side and invokeOpCompile's "NEW" side both
+// need charly-internal registry/dispatch machinery unreachable from an out-of-module plugin
+// package, so this file STAYS in charly rather than moving).
+//
+// The marker is the `candy/` directory (the repo root owns it; the charly/ package dir does NOT).
+// Walking up for the `charly.yml` FILENAME hits the tracked `charly/charly.yml` embedded providers
+// manifest FIRST (it shadows the repo-root charly.yml), so ResolveBox("fedora-coder") then fails
+// and this test would vacuously SKIP — the root-cause of the prior vacuous-skip runs. `candy/`
+// disambiguates: only the repo root has it.
+func compilerTestProjectDir(t *testing.T) (string, func()) { //nolint:unparam // test helper returns (dir, cleanup); dir kept for symmetry
+	t.Helper()
+	prev, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	dir := prev
+	for range 6 {
+		if info, err := os.Stat(filepath.Join(dir, "candy")); err == nil && info.IsDir() {
+			if err := os.Chdir(dir); err != nil {
+				t.Fatalf("chdir %s: %v", dir, err)
+			}
+			return dir, func() { _ = os.Chdir(prev) }
+		}
+		dir = filepath.Dir(dir)
+	}
+	t.Skipf("project root (candy/) not found walking up from %s; skipping", prev)
+	return "", func() {}
+}
 
 // invokeOpCompile drives command:bundle's KEPT OpCompile leg over an in-proc reverse channel — the
 // SAME shared compilePlansForRequest candy/plugin-bundle's walk.go dispatchOne calls IN-PROC (K4-C

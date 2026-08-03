@@ -2,11 +2,8 @@ package main
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"testing"
 
-	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	specexec "github.com/opencharly/spec/exec"
 	"github.com/opencharly/spec/spec"
@@ -26,22 +23,6 @@ func testCandy(name string, m spec.CandyModel, v spec.CandyView) spec.CandyReade
 	m.Name = name
 	v.Name = name
 	return deploykit.NewSpecCandyModel(m, v)
-}
-
-// pixiCandy builds a spec.CandyReader fixture that owns a REAL pixi.toml at a fresh t.TempDir(),
-// so the specCandyAdapter's live fs-probe HasFile("pixi.toml") reports it — mirroring production's
-// *Candy.HasFile() semantics the old map[string]*Candy{..., HasPixiToml: true} fixtures exercised.
-// Identical precedent: sdk/deploykit/intermediates_move_test.go's pixiCandy helper (W3/#36) — that
-// sibling keeps CandyModel/CandyView params since its callers vary them; every charly-side call
-// site only needs the pixi.toml probe + a name, so this one drops both (no callsite ever varies
-// them — widen back to a (m, v) signature if a future test needs to).
-func pixiCandy(t *testing.T, name string) spec.CandyReader {
-	t.Helper()
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "pixi.toml"), []byte(""), 0o644); err != nil {
-		t.Fatalf("write pixi.toml: %v", err)
-	}
-	return testCandy(name, spec.CandyModel{SourceDir: dir}, spec.CandyView{})
 }
 
 // testConstructStepExecutor returns the SAME in-proc reverse-channel executor
@@ -70,18 +51,6 @@ func testCompileOpSteps(t *testing.T, layer spec.CandyReader) []spec.InstallStep
 	return steps
 }
 
-// testCompileServiceSteps drives deploykit.CompileServiceSteps with a fresh
-// testConstructStepExecutor — every service-compile test in this package used a bare
-// 3-arg call before K5-A item 1 increment B threaded ctx/exec through
-// CompileServiceSteps (needed for the rare systemd-custom-entry render leg, over the
-// "render-service" seam; the packaged/supervisord paths never touch it).
-// t.Fatalf's on error so callers don't have to.
-func testCompileServiceSteps(t *testing.T, layer spec.CandyReader, img *buildkit.ResolvedBox, hostCtx deploykit.HostContext) []spec.InstallStep {
-	t.Helper()
-	ctx, ex := testConstructStepExecutor()
-	steps, err := deploykit.CompileServiceSteps(ctx, ex, layer, img, hostCtx)
-	if err != nil {
-		t.Fatalf("CompileServiceSteps: %v", err)
-	}
-	return steps
-}
+// testCompileServiceSteps (the deploykit.CompileServiceSteps-driving twin of testCompileOpSteps
+// above) relocated to candy/plugin-bundle (#55 decoupling, Batch A) with its own copy — its
+// last charly-side consumer, service_distro_filter_test.go, moved there too.

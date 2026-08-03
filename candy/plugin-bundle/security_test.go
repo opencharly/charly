@@ -1,4 +1,4 @@
-package main
+package bundle
 
 import (
 	"slices"
@@ -9,13 +9,17 @@ import (
 	"github.com/opencharly/spec/spec"
 )
 
+// security_test.go — relocated from charly/security_test.go (#55 decoupling, Batch A): all 5
+// tests assert deploykit.CollectSecurity/GenerateQuadlet directly; `Config` was a charly-local
+// alias for spec.Config (`type Config = spec.Config`) — used here fully-qualified.
+
 func TestCollectSecurityMergesCapsSmallest(t *testing.T) {
 	// Two candies disagreeing on memory_max — tightest wins.
 	layers := map[string]spec.CandyReader{
 		"big":   testCandy("big", spec.CandyModel{Security: &vmshared.SecurityConfig{MemoryMax: "8g", MemoryHigh: "7g", Cpus: "8"}}, spec.CandyView{}),
 		"small": testCandy("small", spec.CandyModel{Security: &vmshared.SecurityConfig{MemoryMax: "4g", MemoryHigh: "3g", Cpus: "2"}}, spec.CandyView{}),
 	}
-	cfg := &Config{
+	cfg := &spec.Config{
 		Box: boxMapOf(map[string]spec.BoxConfig{
 			"test": {Candy: []string{"big", "small"}},
 		}),
@@ -38,7 +42,7 @@ func TestCollectSecurityImageOverridesCaps(t *testing.T) {
 	layers := map[string]spec.CandyReader{
 		"chrome": testCandy("chrome", spec.CandyModel{Security: &vmshared.SecurityConfig{MemoryMax: "6g", ShmSize: "1g"}}, spec.CandyView{}),
 	}
-	cfg := &Config{
+	cfg := &spec.Config{
 		Box: boxMapOf(map[string]spec.BoxConfig{
 			"heavy": {
 				Candy:    []string{"chrome"},
@@ -84,19 +88,6 @@ func TestGenerateQuadletWithMemoryCaps(t *testing.T) {
 		}
 	}
 }
-
-// TestNormalizeCgroupSize + TestFormatCPUQuota moved to sdk/deploykit
-// (quadlet_test.go) with the NormalizeCgroupSize/FormatCPUQuota helpers in P11.
-// TestSecurityArgs* + TestAppendUnique/TestIpcModeBlocksShmSize/TestMaxShmSize/
-// TestParseShmBytes/TestMinCap/TestMinCpus moved to sdk/deploykit/security_test.go
-// with the CollectSecurity split (W9) — SecurityArgs/ResourceCapArgs/AppendUnique/
-// the byte-size helpers now live there exclusively.
-
-// TestBuildStartArgsWithPrivileged DELETED (Cutover B unit 2): buildStartArgs was dead code (zero
-// non-test callers — candy/plugin-deploy-pod's resolve.go self-resolves the full start plan since
-// P13-KERNEL step-4(ii)); its --privileged coverage now lives on that plugin's own resolve tests.
-// TestBuildShellArgsWithCapAdd relocated to candy/plugin-deploy-pod/resolve_f12_test.go
-// (buildShellArgs moved, P13-KERNEL step-4(ii)).
 
 func TestGenerateQuadletWithPrivileged(t *testing.T) {
 	cfg := deploykit.QuadletConfig{

@@ -1,6 +1,8 @@
-package main
+package bundle
 
 import (
+	"bytes"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +11,34 @@ import (
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/spec/spec"
 )
+
+// reverse_ops_test.go — relocated from charly/reverse_ops_test.go (#55 decoupling, Batch A):
+// all 7 tests assert kit.RunReverseOps directly via a trivial local mockReverseExecutor, zero
+// charly coupling. captureStderr is this package's own copy of charly's stderr_capture_test.go
+// helper (R3: one copy per package, not shared across the module boundary).
+
+func captureStderr(t *testing.T, fn func()) string {
+	t.Helper()
+	orig := os.Stderr
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	os.Stderr = w
+	defer func() { os.Stderr = orig }()
+
+	done := make(chan struct{})
+	var buf bytes.Buffer
+	go func() {
+		_, _ = io.Copy(&buf, r)
+		close(done)
+	}()
+
+	fn()
+	_ = w.Close()
+	<-done
+	return buf.String()
+}
 
 // mockReverseExecutor always dry-runs for testing.
 type mockReverseExecutor struct {
@@ -165,10 +195,6 @@ func TestReverseOpsOrderIsReversed(t *testing.T) {
 	_ = os.WriteFile(pathA, []byte("x"), 0644)
 	_ = os.WriteFile(pathB, []byte("x"), 0644)
 	orderLog := filepath.Join(tmp, "order.log")
-	// Custom test by patching: we only verify the final state (both
-	// files removed) because runReverseOp internals don't let us
-	// inspect order directly without more plumbing. Keeping this
-	// narrow since the behavior is obvious from the loop direction.
 	ops := []spec.ReverseOp{
 		{Kind: spec.ReverseOpRmFileUser, Targets: []string{pathA}, Scope: spec.ScopeUser},
 		{Kind: spec.ReverseOpRmFileUser, Targets: []string{pathB}, Scope: spec.ScopeUser},

@@ -3,143 +3,18 @@ package main
 import (
 	"testing"
 
-	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 
 	"github.com/opencharly/sdk/deploykit"
 )
 
-// TestFlattenBundleVenues_StampsAndHoists verifies the loader venue pass:
-// member steps get a bare venue, nested-child steps a dotted venue, and all are
-// hoisted into the root bundle's flat Plan (member/child Plans cleared).
-func TestFlattenBundleVenues_StampsAndHoists(t *testing.T) {
-	uf := &spec.UnifiedFile{Bundle: map[string]spec.BundleNode{
-		// A pure-GROUP bed whose agent-provisioned member `os` carries a step.
-		"default": {
-			Target: "", // group
-			Members: map[string]*spec.BundleNode{
-				"os": {
-					Target:           "pod",
-					AgentProvisioned: true,
-					Plan: []spec.Step{
-						{Check: "marker present", Op: spec.Op{Plugin: "file", PluginInput: map[string]any{"file": "/etc/charly-os-marker"}}},
-					},
-				},
-			},
-		},
-		// A WORKLOAD bed (own container) with a direct step AND a nested child.
-		"cross": {
-			Target: "pod",
-			Image:  "web",
-			Plan: []spec.Step{
-				{Check: "web serves marker", Op: spec.Op{Plugin: "http", PluginInput: map[string]any{"http": "http://127.0.0.1:8080/"}}},
-			},
-			Children: map[string]*spec.BundleNode{
-				"migrate": {
-					Target:           "pod",
-					AgentProvisioned: true,
-					Plan: []spec.Step{
-						{Check: "migration ran", Op: cmdOp("test -f /done")},
-					},
-				},
-			},
-		},
-	}}
+// TestFlattenBundleVenues_StampsAndHoists / TestFlattenBundleVenues_GroupDirectStepRejected
+// relocated to candy/plugin-loader (#55 decoupling; Batch A executed this move on Batch C's
+// behalf per the cross-batch file-ownership matrix) — they asserted
+// loaderkit.FlattenBundleVenues directly, zero charly dep.
 
-	if err := loaderkit.FlattenBundleVenues(uf); err != nil {
-		t.Fatalf("flattenBundleVenues: %v", err)
-	}
-
-	// default: one step hoisted, venue == bare member name "os".
-	def := uf.Bundle["default"]
-	if len(def.Plan) != 1 {
-		t.Fatalf("default: want 1 hoisted step, got %d", len(def.Plan))
-	}
-	if def.Plan[0].Venue != "os" {
-		t.Errorf("default member step venue = %q, want %q", def.Plan[0].Venue, "os")
-	}
-	if p := def.Members["os"].Plan; len(p) != 0 {
-		t.Errorf("default member os.Plan should be cleared after hoist, got %d steps", len(p))
-	}
-
-	// cross: root step venue == "cross"; nested-child step venue == "cross.migrate".
-	cross := uf.Bundle["cross"]
-	if len(cross.Plan) != 2 {
-		t.Fatalf("cross: want 2 steps (root + hoisted child), got %d", len(cross.Plan))
-	}
-	venues := map[string]bool{}
-	for _, s := range cross.Plan {
-		venues[s.Venue] = true
-	}
-	if !venues["cross"] {
-		t.Errorf("cross: missing root-venue step (venue %q); got venues %v", "cross", venues)
-	}
-	if !venues["cross.migrate"] {
-		t.Errorf("cross: missing nested-child dotted venue %q; got venues %v", "cross.migrate", venues)
-	}
-}
-
-// TestFlattenBundleVenues_GroupDirectStepRejected verifies a direct step under a
-// pure group bundle (no workload container) is a hard error — a group has no
-// venue of its own.
-func TestFlattenBundleVenues_GroupDirectStepRejected(t *testing.T) {
-	uf := &spec.UnifiedFile{Bundle: map[string]spec.BundleNode{
-		"grp": {
-			Target: "", // group, but carries a direct step → illegal
-			Plan: []spec.Step{
-				{Check: "stray", Op: cmdOp("true")},
-			},
-		},
-	}}
-	if err := loaderkit.FlattenBundleVenues(uf); err == nil {
-		t.Fatalf("expected error for a direct step under a group bundle, got nil")
-	}
-}
-
-// TestResolveDottedAgentProvisionedVenue (Risk 5b) proves ResolveDeployChain reaches a 3-level
-// agent-provisioned venue (vm → pod → pod) written into a scratch deploy-tree map — without a
-// live connection (the chain is built, not dialed). This is the unit-level proof the
-// coordinator's R10 live bed round-trip will exercise end-to-end. The SCORER half of this test
-// (the AI harness's scoring-chain resolver routing the same dotted venue) moved to
-// candy/plugin-check/score_live_test.go's TestPluginResolveDottedAgentProvisionedVenue
-// (K1-unblock wave arm 3 — the scoring-chain resolver itself moved plugin-side).
-func TestResolveDottedAgentProvisionedVenue(t *testing.T) {
-	roots := map[string]spec.BundleNode{
-		"nested-check-vm": {
-			Target:           "vm",
-			From:             "nested-check-vm",
-			AgentProvisioned: true,
-			Children: map[string]*spec.BundleNode{
-				"inner-app-pod": {
-					Target:           "pod",
-					AgentProvisioned: true,
-					Children: map[string]*spec.BundleNode{
-						"nested-redis-pod": {
-							Target:           "pod",
-							AgentProvisioned: true,
-						},
-					},
-				},
-			},
-		},
-	}
-	const dotted = "nested-check-vm.inner-app-pod.nested-redis-pod"
-
-	leaf, chain, err := deploykit.ResolveDeployChain(stampTestDescents(roots), dotted, kit.ShellExecutor{})
-	if err != nil {
-		t.Fatalf("ResolveDeployChain(%q): %v", dotted, err)
-	}
-	if leaf == nil {
-		t.Fatalf("ResolveDeployChain(%q): nil leaf", dotted)
-	}
-	if deploykit.ClassifyTarget(leaf) != "pod" {
-		t.Errorf("leaf target = %q, want pod", deploykit.ClassifyTarget(leaf))
-	}
-	if chain == nil {
-		t.Fatalf("ResolveDeployChain(%q): nil chain", dotted)
-	}
-}
+// TestResolveDottedAgentProvisionedVenue relocated to candy/plugin-bundle (#55 decoupling,
+// Batch A) — it asserted deploykit.ResolveDeployChain/ClassifyTarget directly, zero charly dep.
 
 // TestOverlayRoundTrip_NestedChildSurvives (Risk 5a) proves the per-host overlay
 // writer round-trips a deployment's NESTED CHILD + derived TARGET even though

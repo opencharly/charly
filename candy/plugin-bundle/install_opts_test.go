@@ -1,4 +1,4 @@
-package main
+package bundle
 
 import (
 	"testing"
@@ -8,7 +8,8 @@ import (
 	"github.com/opencharly/spec/spec"
 )
 
-// Tests for deploy.yml install_opts handling (Task 13).
+// install_opts_test.go — relocated from charly/install_opts_test.go (#55 decoupling, Batch A):
+// all 4 tests assert deploykit.InstallOptsApplyTo directly, zero charly coupling.
 
 func TestInstallOptsApplyTo(t *testing.T) {
 	base := spec.EmitOpts{}

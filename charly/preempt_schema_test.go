@@ -1,11 +1,9 @@
 package main
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -83,66 +81,13 @@ func TestPreemptibleConfig_UnmarshalYAML(t *testing.T) {
 	}
 }
 
-func TestValidatePreemptibleOnNode(t *testing.T) {
-	cases := []struct {
-		name     string
-		node     spec.BundleNode
-		wantErr  bool
-		contains string
-	}{
-		{
-			name: "valid holder",
-			node: spec.BundleNode{Preemptible: &spec.PreemptibleConfig{Holds: []string{"gpu"}}},
-		},
-		{
-			name: "valid claimant",
-			node: spec.BundleNode{RequiresExclusive: []string{"gpu"}},
-		},
-		{
-			name:     "empty holds",
-			node:     spec.BundleNode{Preemptible: &spec.PreemptibleConfig{}},
-			wantErr:  true,
-			contains: "must list at least one",
-		},
-		{
-			name:     "bad stop",
-			node:     spec.BundleNode{Preemptible: &spec.PreemptibleConfig{Holds: []string{"gpu"}, Stop: "pause"}},
-			wantErr:  true,
-			contains: "not supported",
-		},
-		{
-			name:     "bad restore",
-			node:     spec.BundleNode{Preemptible: &spec.PreemptibleConfig{Holds: []string{"gpu"}, Restore: "maybe"}},
-			wantErr:  true,
-			contains: "is invalid",
-		},
-		{
-			name:     "empty requires token",
-			node:     spec.BundleNode{RequiresExclusive: []string{""}},
-			wantErr:  true,
-			contains: "empty token",
-		},
-		{
-			name: "self-contention",
-			node: spec.BundleNode{
-				Preemptible:       &spec.PreemptibleConfig{Holds: []string{"gpu"}},
-				RequiresExclusive: []string{"gpu"},
-			},
-			wantErr:  true,
-			contains: "cannot both hold and require",
-		},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			var d spec.Diagnostics
-			node := tc.node
-			loaderkit.ValidatePreemptibleOnNode(tc.name, &node, &d)
-			if preemptDiagHasErr(d) != tc.wantErr {
-				t.Fatalf("HasErrors=%v want %v (errs=%s)", preemptDiagHasErr(d), tc.wantErr, preemptDiagText(d))
-			}
-			if tc.contains != "" && !strings.Contains(preemptDiagText(d), tc.contains) {
-				t.Fatalf("error %q does not contain %q", preemptDiagText(d), tc.contains)
-			}
-		})
-	}
-}
+// TestValidatePreemptibleOnNode relocated to candy/plugin-loader (#55 decoupling; Batch A
+// executed this move on Batch C's behalf per the cross-batch file-ownership matrix) — it
+// asserted loaderkit.ValidatePreemptibleOnNode directly, zero charly dep. NOTE: in THIS
+// worktree, preemptDiagHasErr/preemptDiagText (used above by TestPreemptibleConfig_
+// UnmarshalYAML's siblings — actually defined in/used by validate_preempt_test.go, Batch C's
+// file, NOT this one) remain defined there and are STILL used by validate_preempt_test.go's
+// own tests even after this move — so there is nothing dead to clean up on this batch's side;
+// Batch C's own worktree may have already extracted them into a separate
+// preempt_diag_helpers_test.go, which doesn't exist here (separate worktrees) — flagging this
+// for the merge/orchestrator rather than guessing at post-merge dead code.

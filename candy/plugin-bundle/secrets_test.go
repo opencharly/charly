@@ -1,15 +1,22 @@
-package main
+package bundle
 
 import (
+	"os"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/opencharly/sdk/deploykit"
 )
 
-// TestCollectSecretsFromLabels / TestSecretArgs relocated to
-// sdk/deploykit/secret_probe_test.go (Cutover B-1 fix round — the functions
-// themselves moved there and are no longer duplicated in this package).
+// secrets_test.go — relocated from charly/secrets_test.go (#55 decoupling, Batch A):
+// TestQuadletSecretDirectives/TestQuadletSecretEnvDirectives assert deploykit.GenerateQuadlet
+// directly, zero charly coupling; the Step-4 ResolveSecretValue tests need a
+// CredentialResolver-shaped callback — charly's own version is backed by its
+// package-main-internal CredentialStore adapter (credential_plugin.go), so this ports a
+// standalone in-memory fake (mirroring charly/credential_fake_test.go's fakeCredentialStore) +
+// a local closure replicating ResolveCredential's env-var-then-store precedence, rather than
+// reaching into charly core.
 
 func TestQuadletSecretDirectives(t *testing.T) {
 	cfg := deploykit.QuadletConfig{
@@ -122,33 +129,64 @@ func TestQuadletSecretEnvDirectives(t *testing.T) {
 	}
 }
 
-// TestCredServiceForSecret / TestCredKeyForSecret relocated to
-// sdk/deploykit/secret_probe_test.go alongside CredServiceForSecret/
-// CredKeyForSecret themselves.
-
 // ---------------------------------------------------------------------------
 // Step 4 tests: credential resolution for secret_accepts / secret_requires.
-// These exercise deploykit.ResolveSecretValue's new Service/Key override path and
-// CollectCandySecretAccepts against an in-memory ConfigFileStore backed by a
-// temp directory. They do not touch podman (which would require a live
-// daemon); the RotateOnConfig short-circuit bypass is validated by the live
-// integration tests in plan §8.3 (rotation test).
+// These exercise deploykit.ResolveSecretValue's Service/Key override path against
+// an in-memory fake credential store. They do not touch podman or a real
+// credential-store plugin.
 // ---------------------------------------------------------------------------
 
-// withIsolatedCredentialStore sets up the ConfigFileStore backend in a temp
-// directory and forces the credential store singleton to re-probe so tests
-// start from a clean slate. Returns the ConfigFileStore for direct seeding.
-//
-// SECURITY: this helper also unsets common credential env vars (OPENROUTER_API_KEY,
-// OLLAMA_API_KEY, IMMICH_API_KEY, WEBUI_ADMIN_PASSWORD) so the test process cannot
-// accidentally resolve — and print in a failure diff — a real user credential
-// that happens to be set in the outer shell. All Step 4 tests below use
-// synthetic env var names (TEST_OV_*) that can never match a real credential,
-// but these defensive unsets are belt-and-braces for future test additions.
+// fakeCredentialStore is a standalone in-memory credential map — the test-fixture twin of
+// charly/credential_fake_test.go's fakeCredentialStore (that one is wired into charly's own
+// CredentialStore adapter singleton, which lives package-main-side and this out-of-module
+// plugin package cannot reach).
+type fakeCredentialStore struct {
+	mu sync.Mutex
+	m  map[string]string // "service\x00key" → value
+}
+
+func newFakeCredentialStore() *fakeCredentialStore {
+	return &fakeCredentialStore{m: map[string]string{}}
+}
+
+func fakeCredKey(service, key string) string { return service + "\x00" + key }
+
+func (f *fakeCredentialStore) Set(service, key, value string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.m[fakeCredKey(service, key)] = value
+	return nil
+}
+
+func (f *fakeCredentialStore) Get(service, key string) string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.m[fakeCredKey(service, key)]
+}
+
+// testResolveCredential mirrors charly's ResolveCredential precedence: an env var override
+// first, then the fake store lookup — the CredentialResolver-shaped callback
+// deploykit.ResolveSecretValue takes as its 5th parameter.
+func testResolveCredential(store *fakeCredentialStore) deploykit.CredentialResolver {
+	return func(envVar, service, key, defaultVal string) (value, source string) {
+		if envVar != "" {
+			if v := os.Getenv(envVar); v != "" {
+				return v, "env"
+			}
+		}
+		if v := store.Get(service, key); v != "" {
+			return v, "config"
+		}
+		return defaultVal, "default"
+	}
+}
+
+// withIsolatedCredentialStore returns a fresh fake store, after defensively unsetting common
+// credential env var names so no real user credential in the outer shell can leak into a test
+// assertion (belt-and-braces; every test below uses synthetic TEST_* env var names that can
+// never match a real credential).
 func withIsolatedCredentialStore(t *testing.T) *fakeCredentialStore {
 	t.Helper()
-	// Defensive unsets: prevent any real credential in the outer shell from
-	// leaking into test assertions (which may print the resolved value).
 	for _, name := range []string{
 		"OPENROUTER_API_KEY", "OLLAMA_API_KEY", "IMMICH_API_KEY",
 		"WEBUI_ADMIN_PASSWORD", "TELEGRAM_BOT_TOKEN", "SLACK_BOT_TOKEN",
@@ -156,22 +194,16 @@ func withIsolatedCredentialStore(t *testing.T) *fakeCredentialStore {
 	} {
 		t.Setenv(name, "")
 	}
-	return installFakeCredentialStore(t)
+	return newFakeCredentialStore()
 }
 
-// TestResolveSecretValueServiceKeyOverride — the new Service/Key override
-// path on deploykit.ResolveSecretValue queries the credential store at the exact path
-// the candy author requested (via `key: charly/api-key/routea`) and returns the
-// value verbatim. The default fallback chain is NOT used when both Service
-// and Key are set.
-//
-// Uses synthetic env var name (TEST_CHARLY_CRED_ROUTEA_KEY) so an accidental
-// assertion-diff cannot print a real user credential from the outer shell.
+// TestResolveSecretValueServiceKeyOverride — the Service/Key override path on
+// deploykit.ResolveSecretValue queries the credential store at the exact path the candy
+// author requested (via `key: charly/api-key/routea`) and returns the value verbatim. The
+// default fallback chain is NOT used when both Service and Key are set.
 func TestResolveSecretValueServiceKeyOverride(t *testing.T) {
 	store := withIsolatedCredentialStore(t)
 
-	// Seed two distinct synthetic values at two different paths. The override
-	// path must win over the default path.
 	if err := store.Set("charly/api-key", "routea", "test-from-override"); err != nil {
 		t.Fatalf("Set charly/api-key/routea: %v", err)
 	}
@@ -187,7 +219,7 @@ func TestResolveSecretValueServiceKeyOverride(t *testing.T) {
 		Key:            "routea",
 		RotateOnConfig: true,
 	}
-	val, src := deploykit.ResolveSecretValue(cs, "openwebui", "", CredServiceVNC, ResolveCredential)
+	val, src := deploykit.ResolveSecretValue(cs, "openwebui", "", "charly/vnc", testResolveCredential(store))
 	if val != "test-from-override" {
 		t.Errorf("resolveSecretValue value mismatch, source=%q", src)
 	}
@@ -196,18 +228,12 @@ func TestResolveSecretValueServiceKeyOverride(t *testing.T) {
 	}
 }
 
-// TestResolveSecretValueServiceKeyOverrideMissing — when the override path is
-// set but the credential store has no value there, deploykit.ResolveSecretValue returns
-// ("", "default") immediately without falling back to the legacy chain. This
-// matters for the secret_requires hard-fail path: we want the failure to be
-// visible at the exact key the candy author specified, not masked by a
-// fallback lookup that happens to find something elsewhere.
+// TestResolveSecretValueServiceKeyOverrideMissing — when the override path is set but the
+// credential store has no value there, deploykit.ResolveSecretValue returns ("", "default")
+// immediately without falling back to the legacy chain.
 func TestResolveSecretValueServiceKeyOverrideMissing(t *testing.T) {
 	store := withIsolatedCredentialStore(t)
 
-	// Seed only the default-chain path — the override path is empty. If the
-	// override branch falls through to the legacy chain, the test catches it
-	// by getting a non-empty value.
 	if err := store.Set("charly/secret", "TEST_CHARLY_CRED_ROUTEB_KEY", "legacy-chain-value"); err != nil {
 		t.Fatalf("Set default path: %v", err)
 	}
@@ -219,7 +245,7 @@ func TestResolveSecretValueServiceKeyOverrideMissing(t *testing.T) {
 		Key:            "routeb", // override path is empty in the seeded store
 		RotateOnConfig: true,
 	}
-	val, src := deploykit.ResolveSecretValue(cs, "openwebui", "", CredServiceVNC, ResolveCredential)
+	val, src := deploykit.ResolveSecretValue(cs, "openwebui", "", "charly/vnc", testResolveCredential(store))
 	if val != "" {
 		t.Errorf("resolveSecretValue returned a non-empty value (source=%q) — the override branch must not fall through to the legacy chain", src)
 	}
@@ -228,9 +254,8 @@ func TestResolveSecretValueServiceKeyOverrideMissing(t *testing.T) {
 	}
 }
 
-// TestResolveSecretValueLegacyChainUnchanged — when Service/Key are both
-// empty, the legacy chain (used by candy-owned db-password secrets) still
-// works: env var → charly/secret/<podman-name> → charly/secret/<bare-name>.
+// TestResolveSecretValueLegacyChainUnchanged — when Service/Key are both empty, the legacy
+// chain (used by candy-owned db-password secrets) still works: env var → charly/secret/<name>.
 func TestResolveSecretValueLegacyChainUnchanged(t *testing.T) {
 	store := withIsolatedCredentialStore(t)
 
@@ -244,7 +269,7 @@ func TestResolveSecretValueLegacyChainUnchanged(t *testing.T) {
 		SecretName: "db-password",
 		// Service / Key left empty — use legacy chain
 	}
-	val, _ := deploykit.ResolveSecretValue(cs, "immich", "", CredServiceVNC, ResolveCredential)
+	val, _ := deploykit.ResolveSecretValue(cs, "immich", "", "charly/vnc", testResolveCredential(store))
 	if val != "legacy-value" {
 		t.Errorf("legacy chain value = %q, want %q", val, "legacy-value")
 	}
