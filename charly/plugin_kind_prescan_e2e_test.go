@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/spec/spec"
+	"github.com/opencharly/spec/testkit"
 )
 
 // TestExternalKind_PrescanConnectDecode proves F4 END-TO-END: a `kind: examplekind` entity whose
@@ -38,7 +39,7 @@ func TestExternalKind_PrescanConnectDecode(t *testing.T) {
 	// the host build resolves it from the temp location) + a root entity using `kind: examplekind`.
 	dir := t.TempDir()
 	dstCandy := filepath.Join(dir, "candy", "plugin-example-kind")
-	if err := copyCandyFixReplace(srcCandy, dstCandy, charlyDir); err != nil {
+	if err := testkit.CopyCandyFixReplace(srcCandy, dstCandy, charlyDir); err != nil {
 		t.Fatalf("stage candy: %v", err)
 	}
 	rootYAML := `version: ` + LatestSchemaVersion().String() + `
@@ -75,7 +76,7 @@ my-example-kind:
 // Validates=true serves a deep OpValidate check the host dispatches at load, and error-severity
 // Diagnostics FAIL the load — beyond the static CUE input-def gate (which #ExamplekindInput's open
 // `marker?: string` would pass). The sentinel marker "INVALID" trips plugin-example-kind's
-// OpValidate. Builds the real plugin OOP, so -short-gated; reuses copyCandyFixReplace.
+// OpValidate. Builds the real plugin OOP, so -short-gated; reuses testkit.CopyCandyFixReplace.
 func TestExternalKind_OpValidateRejectsInvalidBody(t *testing.T) {
 	t.Cleanup(snapshotProviderState())
 	if testing.Short() {
@@ -95,7 +96,7 @@ func TestExternalKind_OpValidateRejectsInvalidBody(t *testing.T) {
 
 	dir := t.TempDir()
 	dstCandy := filepath.Join(dir, "candy", "plugin-example-kind")
-	if err := copyCandyFixReplace(srcCandy, dstCandy, charlyDir); err != nil {
+	if err := testkit.CopyCandyFixReplace(srcCandy, dstCandy, charlyDir); err != nil {
 		t.Fatalf("stage candy: %v", err)
 	}
 	rootYAML := `version: ` + LatestSchemaVersion().String() + `
@@ -124,48 +125,4 @@ func pluginKindKeys(uf *spec.UnifiedFile) []string {
 		out = append(out, k)
 	}
 	return out
-}
-
-// copyCandyFixReplace copies a candy module tree to dst, rewriting go.mod's
-// RELATIVE `replace github.com/opencharly/{sdk,spec} => ../../{sdk,spec}` directives
-// to the ABSOLUTE repo-submodule dirs (derived from charlyDir's parent — the repo
-// root) so buildPluginBinary resolves them from the temp project location. A candy
-// go.mod carries BOTH replaces (the sdk contract + the spec contract module it
-// depends on transitively); a relative `=> ../../spec` staged into a temp project
-// resolves to `<temp>/spec`, which does not exist, so the out-of-process `go build`
-// fails with "reading ../../spec/go.mod: no such file" unless the spec replace is
-// rewritten to the absolute spec dir exactly as the sdk replace is.
-func copyCandyFixReplace(src, dst, charlyDir string) error {
-	repoRoot := filepath.Dir(charlyDir)
-	sdkDir := filepath.Join(repoRoot, "sdk")
-	specDir := filepath.Join(repoRoot, "spec")
-	return filepath.WalkDir(src, func(p string, d os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		rel, _ := filepath.Rel(src, p)
-		target := filepath.Join(dst, rel)
-		if d.IsDir() {
-			return os.MkdirAll(target, 0o755)
-		}
-		b, err := os.ReadFile(p)
-		if err != nil {
-			return err
-		}
-		if d.Name() == "go.mod" {
-			var fixed []string
-			for _, line := range strings.Split(string(b), "\n") {
-				switch {
-				case strings.HasPrefix(strings.TrimSpace(line), "replace github.com/opencharly/sdk"):
-					fixed = append(fixed, "replace github.com/opencharly/sdk => "+sdkDir)
-				case strings.HasPrefix(strings.TrimSpace(line), "replace github.com/opencharly/spec"):
-					fixed = append(fixed, "replace github.com/opencharly/spec => "+specDir)
-				default:
-					fixed = append(fixed, line)
-				}
-			}
-			b = []byte(strings.Join(fixed, "\n"))
-		}
-		return os.WriteFile(target, b, 0o644)
-	})
 }

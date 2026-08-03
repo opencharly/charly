@@ -1,4 +1,4 @@
-package main
+package gomodcanonical
 
 import (
 	"os"
@@ -20,9 +20,17 @@ import (
 // per-module dependency shed). plugin-spice's extra `=> ./third_party/spice` replace
 // is the SOLE sanctioned outlier (vendored upstream). Drift here is a maintainability
 // regression; `task plugins:tidy` is the companion sweep that keeps go.sum in step.
+//
+// Relocated (#55 decoupling cone, Batch D) from charly/plugin_gomod_canonical_test.go:
+// this is pure plugin-go.mod-file HYGIENE (string assertions on go.mod TEXT — it makes
+// no Go import of any sdk package, and imports nothing itself), unrelated to any charly
+// core logic, so it lives in its own standalone module rather than in charly/ or the
+// plugins/ submodule (which carries no Go code at all — skills/docs/config only). The
+// glob is adjusted for the new location: tools/gomod-canonical/ is two levels below the
+// repo root (tools/gomod-canonical -> tools -> root), where charly/ was only one level
+// below (charly -> root).
 func TestCandyGoModsAreCanonical(t *testing.T) {
-	// go test runs in the charly/ package dir; candy/ is its sibling under the repo root.
-	mods, err := filepath.Glob(filepath.Join("..", "candy", "plugin-*", "go.mod"))
+	mods, err := filepath.Glob(filepath.Join("..", "..", "candy", "plugin-*", "go.mod"))
 	if err != nil {
 		t.Fatal(err)
 	}

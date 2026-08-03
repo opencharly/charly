@@ -2,6 +2,7 @@ package command
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -9,11 +10,15 @@ import (
 	"github.com/opencharly/spec/spec"
 )
 
-// fakeExec is a kit.Executor returning a canned exit — the in-container command RunCapture leg.
-type fakeExec struct{ exit int }
+// fakeExec is a kit.Executor returning a canned stdout + exit — the in-container command
+// RunCapture leg.
+type fakeExec struct {
+	stdout string
+	exit   int
+}
 
 func (f *fakeExec) RunCapture(context.Context, string) (string, string, int, error) {
-	return "", "", f.exit, nil
+	return f.stdout, "", f.exit, nil
 }
 func (f *fakeExec) Kind() string { return "container" }
 
@@ -77,4 +82,52 @@ func TestCommandVerb_ExactCodeUnaffected(t *testing.T) {
 	if res := runCommandVerb(3, map[string]any{"command": "exit 3"}, &want3); res.Status != kit.StatusPass {
 		t.Fatalf("exit_status=3, exit=3: want pass, got %v: %s", res.Status, res.Message)
 	}
+}
+
+// runCommandVerbOut is runCommandVerb's stdout-carrying variant, for matcher assertions
+// (Stdout equals/contains/matches) rather than a bare exit-status check.
+func runCommandVerbOut(stdout string, exit int, input map[string]any) kit.Result {
+	cc := &fakeCC{mode: kit.ModeLive, exec: &fakeExec{stdout: stdout, exit: exit}}
+	return verb{}.RunVerb(context.Background(), cc, &spec.Op{PluginInput: input})
+}
+
+// TestCommandVerb_StdoutMatchers: exit/stdout matcher evaluation. Relocated from
+// charly/checkrun_test.go's TestRunner_CommandVerb (#55 decoupling cone, Batch D) —
+// mirrors candy/plugin-port and candy/plugin-http's own test pattern (R3), and reuses this
+// file's OWN existing fakeCC/fakeExec/runCommandVerb fixtures (extended with a stdout
+// field) rather than introducing a parallel fixture shape.
+func TestCommandVerb_StdoutMatchers(t *testing.T) {
+	t.Run("exit ok stdout equals", func(t *testing.T) {
+		op := map[string]any{"command": "redis-cli ping"}
+		res := verb{}.RunVerb(context.Background(), &fakeCC{mode: kit.ModeLive, exec: &fakeExec{stdout: "PONG\n", exit: 0}},
+			&spec.Op{PluginInput: op, Stdout: spec.MatcherList{{Op: "equals", Value: "PONG"}}})
+		if res.Status != kit.StatusPass {
+			t.Errorf("expected pass, got %+v", res)
+		}
+	})
+
+	t.Run("stdout contains list", func(t *testing.T) {
+		op := map[string]any{"command": "status"}
+		res := verb{}.RunVerb(context.Background(), &fakeCC{mode: kit.ModeLive, exec: &fakeExec{stdout: "ready ok running", exit: 0}},
+			&spec.Op{PluginInput: op, Stdout: spec.MatcherList{{Op: "contains", Value: []any{"ready", "ok"}}}})
+		if res.Status != kit.StatusPass {
+			t.Errorf("expected pass, got %+v", res)
+		}
+	})
+
+	t.Run("exit mismatch", func(t *testing.T) {
+		res := runCommandVerbOut("", 2, map[string]any{"command": "fail-cmd"})
+		if res.Status != kit.StatusFail || !strings.Contains(res.Message, "exit=2") {
+			t.Errorf("expected exit failure, got %+v", res)
+		}
+	})
+
+	t.Run("matches regex", func(t *testing.T) {
+		op := map[string]any{"command": "uptime"}
+		res := verb{}.RunVerb(context.Background(), &fakeCC{mode: kit.ModeLive, exec: &fakeExec{stdout: "load average: 0.12 0.34 0.56\n", exit: 0}},
+			&spec.Op{PluginInput: op, Stdout: spec.MatcherList{{Op: "matches", Value: `load average: [\d.]+`}}})
+		if res.Status != kit.StatusPass {
+			t.Errorf("expected pass, got %+v", res)
+		}
+	})
 }

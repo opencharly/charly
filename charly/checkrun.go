@@ -16,8 +16,12 @@ import (
 // resolverEnv) is GONE from production: the deploy-scope check DRIVE moved PLUGIN-SIDE
 // (command:check OpVerifyChecks, #55 CHECK-ENGINE cone Unit 2 — candy/plugin-check's
 // newPluginCheckRunner), so charly core no longer builds a kit.Runner itself and this file no
-// longer imports sdk/kit. The three former constructors survive only as a test helper
-// (checkrun_helpers_test.go) that exercises the STILL-LIVE hostVerbResolver dispatch surface.
+// longer imports sdk/kit. The three former constructors are now fully DELETED (#55 decoupling
+// cone, Batch D): charly-side tests drive the live dispatch surface through the PRODUCTION
+// OpVerifyChecks seam instead (dispatchCheckOpsMode, checkrun_helpers_test.go); the engine's own
+// semantics (variable expansion, RunPlan keyword/mode handling, ProbeNeverHang) are covered in
+// sdk/kit's own test suite, and each verb's own RunVerb logic in its owning candy/plugin-<verb>
+// module's plugin_test.go.
 //
 // RunMode selects routing rules for a check pass. It is a package-main binding onto the CUE-sourced
 // spec.CheckRunMode; RunModeLive/RunModeBox map to spec.CheckModeLive/spec.CheckModeBox.

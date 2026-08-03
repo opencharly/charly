@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -12,8 +11,6 @@ import (
 	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/vmshared"
 	"github.com/opencharly/spec/spec"
-
-	"github.com/opencharly/sdk/kit"
 )
 
 // The install-retry race remedy (installWithRetry) moved out of core with the deploy
@@ -150,74 +147,8 @@ func TestResolveCheckApk(t *testing.T) {
 	}
 }
 
-// stubAdbExternalVerb is an out-of-process-style `adb` verb Provider (NOT a
-// CheckVerbProvider) — the shape adb takes after the adb → external-plugin dep-shed.
-// runOne dispatches it via the else-branch (invokeVerbProvider), where the committed-APK
-// Origin is consumed by resolveCheckApk host-side BEFORE the wire Invoke (which the stub
-// never reaches here, because resolveCheckApk errors first).
-type stubAdbExternalVerb struct{}
-
-func (stubAdbExternalVerb) Reserved() string     { return "adb" }
-func (stubAdbExternalVerb) Class() ProviderClass { return ClassVerb }
-func (stubAdbExternalVerb) Invoke(context.Context, *Operation) (*Result, error) {
-	return &Result{JSON: []byte(`{"status":"pass","message":"stub"}`)}, nil
-}
-
-// TestRunPlan_StampsStepOrigin is the regression guard for the per-step Origin
-// propagation (description_run.go: op.Origin = fs.origin). The candy-group
-// Origin lives ONCE on the LabeledDescription and is NOT baked per-step in the
-// OCI label; RunPlan must re-stamp it onto each dispatched Op, or an adb/appium
-// committed-APK check sees an empty c.Origin and cannot anchor its fixture —
-// the live android-emulator-pod "no such file" bug.
-//
-// adb is now an EXTERNAL-CHARLY-VERB, so the committed-APK anchoring (resolveCheckApk)
-// runs inside invokeVerbProvider (the out-of-process dispatch path): we register a stub
-// adb provider so runOne reaches it, and author the explicit runtime `context:` a real
-// external-verb step carries (the VerbCatalog default-context left core with the verb).
-// We then drive an `adb: install` apk check whose CandyDirs is empty with a sentinel
-// CandyScanErr set. WITH the origin stamped, resolveCheckApk reaches the CandyDirs-miss
-// branch and reports the SCAN ERROR; WITHOUT it, c.Origin is empty and resolveCheckApk
-// fails with "not a candy origin" instead. Asserting the sentinel appears in the step
-// result proves the origin reached the Op.
-func TestRunPlan_StampsStepOrigin(t *testing.T) {
-	// Snapshot BEFORE any registration so the stub adb provider AND its served schema are
-	// undone on cleanup — the ONE reset pattern, hermetic under `-count>1`.
-	t.Cleanup(snapshotProviderState())
-	// Register the stub external adb provider for the duration of this test (adb is no
-	// longer a builtin, so the global registry slot is free).
-	if err := providerRegistry.register(stubAdbExternalVerb{}, "test:stub-adb"); err != nil {
-		t.Fatalf("register stub adb provider: %v", err)
-	}
-	// Post schema-compaction, dispatch validates plugin_input against the verb's
-	// registered input def BEFORE invoking (validateAuthoredPluginInput) — serve a
-	// permissive stub def for verb:adb the way the real plugin's Describe would
-	// (it must declare the frozen `method` primary; the trailing `...` admits the
-	// per-method modifiers like apk).
-	if err := registerPluginUnitSchema("test:stub-adb", PluginSchema{
-		CueSource: "#StubAdbInput: {method: string, ...}\n",
-		InputDefs: map[string]string{"verb:adb": "#StubAdbInput"},
-	}); err != nil {
-		t.Fatalf("register stub adb schema: %v", err)
-	}
-
-	// resolveCheckApk errors before any subprocess; Box satisfies the image-context guard.
-	r := newCheckRunner(kit.RunnerConfig{Mode: RunModeLive, Box: "android-emulator", CandyScanErr: errors.New("scan-sentinel-boom")})
-	set := &kit.LabelDescriptionSet{
-		Candy: []kit.LabeledDescription{{
-			Origin:      "candy:github.com/owner/repo/candy/android-emulator-layer",
-			Description: "android apps install",
-			Plan: []spec.Step{{
-				Op: spec.Op{ID: "adb-install-apidemos", Plugin: "adb", PluginInput: map[string]any{"method": "install", "apk": "./tests/data/ApiDemos-debug.apk"}, Context: []string{"runtime"}},
-			}},
-		}},
-	}
-	res := kit.RunPlan(context.Background(), r, set, false)
-	if len(res) != 1 {
-		t.Fatalf("want 1 step result, got %d", len(res))
-	}
-	msg := res[0].Result.Message
-	if !strings.Contains(msg, "scan-sentinel-boom") {
-		t.Fatalf("step Origin was not stamped onto the dispatched Op — resolveCheckApk "+
-			"did not reach the candy-keyed branch (got message: %q)", msg)
-	}
-}
+// TestRunPlan_StampsStepOrigin (the per-step Origin re-stamping regression guard) moved to
+// sdk/kit/planrun_dispatch_test.go (#55 decoupling cone, Batch D) — the assertion subject is
+// kit.RunPlan's OWN stamping mechanism (op.Origin = fs.origin), a kit capability, verified
+// there directly against a stub VerbResolver rather than round-tripping through a stub
+// external adb provider + a scan-error sentinel message.

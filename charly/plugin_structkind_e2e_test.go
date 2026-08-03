@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/spec/spec"
+	"github.com/opencharly/spec/testkit"
 )
 
 // authoredMemberTree is the member subtree both beds author identically: two PEER pod members
@@ -43,7 +44,7 @@ const authoredMemberTree = `    web:
 // cross-member plan, same deploy-config). This is the HIGHEST-risk F5 assumption (a plugin
 // reconstructs the AUTHORED member tree, not a synthesized stand-in); it is the foundation for
 // externalizing the seven builtin structural kind decoders (group first). Builds the real plugin
-// OOP, so -short-gated. Reuses copyCandyFixReplace from plugin_kind_prescan_e2e_test.go (same package).
+// OOP, so -short-gated. Reuses testkit.CopyCandyFixReplace.
 func TestExternalStructKind_StructuralDecode(t *testing.T) {
 	t.Cleanup(snapshotProviderState())
 	if testing.Short() {
@@ -64,7 +65,7 @@ func TestExternalStructKind_StructuralDecode(t *testing.T) {
 
 	// --- Bed 1: the EXTERNAL structural plugin kind (examplestructkind) ---
 	pluginDir := t.TempDir()
-	if err := copyCandyFixReplace(srcCandy, filepath.Join(pluginDir, "candy", "plugin-example-structkind"), charlyDir); err != nil {
+	if err := testkit.CopyCandyFixReplace(srcCandy, filepath.Join(pluginDir, "candy", "plugin-example-structkind"), charlyDir); err != nil {
 		t.Fatalf("stage candy: %v", err)
 	}
 	// The deploy-config scalars (disposable/lifecycle/description) ride op.Params; the AUTHORED

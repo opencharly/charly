@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -133,15 +132,21 @@ func TestResolveLocalImageRef_ShortNameNoMatch(t *testing.T) {
 
 // --- live-container verb box-mode skip ---
 
+// TestLiveVerb_SkipsUnderBoxMode: relocated from its own newFakeRunner-based construction to
+// drive the PRODUCTION seam (command:check's OpVerifyChecks, dispatchCheckOpsMode →
+// dispatchVerifyChecks) — this test asserts CHARLY's OWN dispatch (the context-vs-mode skip
+// gate, hostPlanGrammar/opInContext), not a kit-only semantic, so it stays in charly (#55
+// decoupling cone, Batch D).
 func TestLiveVerb_SkipsUnderBoxMode(t *testing.T) {
-	r, _ := newFakeRunner(t, RunModeBox, "jupyter")
 	// A live verb's runtime-context legality rides the AUTHORED `context:` since
 	// the live-verb externalization (the generic `plugin` verb itself is
 	// context-permissive) — a wl step authors context: [runtime], exactly as the
 	// real candies do.
-	res := r.Run(context.Background(), []spec.Op{{Plugin: "wl", PluginInput: map[string]any{"method": "status"}, Context: []string{"runtime"}}})
+	res := dispatchCheckOpsMode(t, "box", []spec.Op{
+		{Plugin: "wl", PluginInput: map[string]any{"method": "status"}, Context: []string{"runtime"}},
+	})
 	if len(res) != 1 || res[0].Status != spec.StatusSkip {
-		t.Fatalf("expected skip under RunModeBox, got %+v", res[0])
+		t.Fatalf("expected skip under box mode, got %+v", res[0])
 	}
 	// A runtime-context step is skipped in box mode by the context-vs-mode
 	// gate (the unified-Op replacement for the per-verb "needs a running
