@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/vmshared"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -106,7 +105,7 @@ func TestNoteUpdateDisposability(t *testing.T) {
 		},
 		{
 			name:     "ephemeral implies disposable — no note",
-			node:     &spec.BundleNode{Ephemeral: &vmshared.EphemeralLifetime{}},
+			node:     &spec.BundleNode{Ephemeral: &spec.EphemeralLifetime{}},
 			image:    "scratch-pod",
 			wantNote: false,
 		},

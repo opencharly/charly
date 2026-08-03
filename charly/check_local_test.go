@@ -3,8 +3,7 @@ package main
 import (
 	"testing"
 
-	"github.com/opencharly/sdk/kit"
-	specexec "github.com/opencharly/spec/exec"
+	"github.com/opencharly/spec/exec"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -20,29 +19,29 @@ import (
 
 func TestRootExecutorForDeployNode(t *testing.T) {
 	// nil node → host shell.
-	if e, err := specexec.RootExecutorForDeployNode(nil); err != nil {
+	if e, err := exec.RootExecutorForDeployNode(nil); err != nil {
 		t.Fatalf("nil node: %v", err)
-	} else if _, ok := e.(kit.ShellExecutor); !ok {
+	} else if _, ok := e.(exec.ShellExecutor); !ok {
 		t.Errorf("nil node → %T, want ShellExecutor", e)
 	}
 
 	// host: "" and host: "local" → host shell.
 	for _, host := range []string{"", "local"} {
-		e, err := specexec.RootExecutorForDeployNode(&spec.BundleNode{Target: "local", Host: host})
+		e, err := exec.RootExecutorForDeployNode(&spec.BundleNode{Target: "local", Host: host})
 		if err != nil {
 			t.Fatalf("host=%q: %v", host, err)
 		}
-		if _, ok := e.(kit.ShellExecutor); !ok {
+		if _, ok := e.(exec.ShellExecutor); !ok {
 			t.Errorf("host=%q → %T, want ShellExecutor", host, e)
 		}
 	}
 
 	// host: "user@box" → SSH with the inline user.
-	e, err := specexec.RootExecutorForDeployNode(&spec.BundleNode{Target: "local", Host: "alice@box"})
+	e, err := exec.RootExecutorForDeployNode(&spec.BundleNode{Target: "local", Host: "alice@box"})
 	if err != nil {
 		t.Fatalf("user@box: %v", err)
 	}
-	ssh, ok := e.(*kit.SSHExecutor)
+	ssh, ok := e.(*exec.SSHExecutor)
 	if !ok {
 		t.Fatalf("user@box → %T, want *SSHExecutor", e)
 	}
@@ -51,11 +50,11 @@ func TestRootExecutorForDeployNode(t *testing.T) {
 	}
 
 	// host: "box" + user: "u" → SSH with the node.User (Ansible-style override).
-	e, err = specexec.RootExecutorForDeployNode(&spec.BundleNode{Target: "local", Host: "box", User: "u"})
+	e, err = exec.RootExecutorForDeployNode(&spec.BundleNode{Target: "local", Host: "box", User: "u"})
 	if err != nil {
 		t.Fatalf("box+user: %v", err)
 	}
-	ssh, ok = e.(*kit.SSHExecutor)
+	ssh, ok = e.(*exec.SSHExecutor)
 	if !ok {
 		t.Fatalf("box+user → %T, want *SSHExecutor", e)
 	}
@@ -71,14 +70,14 @@ func TestResolveDeployChain_LocalNoHop(t *testing.T) {
 	roots := map[string]spec.BundleNode{
 		"workstation": {Target: "local"},
 	}
-	node, chain, err := specexec.ResolveDeployChain(stampTestDescents(roots), "workstation", kit.ShellExecutor{})
+	node, chain, err := exec.ResolveDeployChain(stampTestDescents(roots), "workstation", exec.ShellExecutor{})
 	if err != nil {
 		t.Fatalf("local node must resolve without error: %v", err)
 	}
 	if node == nil || node.Target != "local" {
 		t.Fatalf("resolved node = %+v, want Target=local", node)
 	}
-	if _, ok := chain.(kit.ShellExecutor); !ok {
+	if _, ok := chain.(exec.ShellExecutor); !ok {
 		t.Errorf("local node added a hop: chain = %T, want ShellExecutor (no hop)", chain)
 	}
 }

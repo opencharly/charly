@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/exec"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -21,10 +21,10 @@ import (
 // vice versa) fails this test immediately instead of surfacing as a silent host-execution bug
 // only a live disposable bed catches.
 func TestPluginDeployTarget_ApplyParentExecOverride(t *testing.T) {
-	guestSSH := &kit.SSHExecutor{User: "arch", Host: "charly-eval-vm", Port: 2222, ConnectTimeout: 10}
+	guestSSH := &exec.SSHExecutor{User: "arch", Host: "charly-eval-vm", Port: 2222, ConnectTimeout: 10}
 
 	t.Run("non-lifecycle nested child swaps to the parent executor", func(t *testing.T) {
-		tgt := &pluginDeployTarget{hasLifecycle: false, exec: kit.ShellExecutor{}}
+		tgt := &pluginDeployTarget{hasLifecycle: false, exec: exec.ShellExecutor{}}
 		venueJSON := tgt.applyParentExecOverride(spec.EmitOpts{ParentExec: guestSSH})
 
 		if tgt.exec != spec.DeployExecutor(guestSSH) {
@@ -52,16 +52,16 @@ func TestPluginDeployTarget_ApplyParentExecOverride(t *testing.T) {
 				"shell/empty descriptor that re-materializes to the host)", got, want)
 		}
 
-		// Round-trip through the real inverse (kit.VenueFromDescriptor) to prove
+		// Round-trip through the real inverse (exec.VenueFromDescriptor) to prove
 		// candy/plugin-bundle's resolveRootExecutor would ACTUALLY re-materialize the guest, not
 		// merely that the intermediate JSON looks right.
-		reExec, err := kit.VenueFromDescriptor(got)
+		reExec, err := exec.VenueFromDescriptor(got)
 		if err != nil {
-			t.Fatalf("kit.VenueFromDescriptor(%+v): %v", got, err)
+			t.Fatalf("exec.VenueFromDescriptor(%+v): %v", got, err)
 		}
-		reSSH, ok := reExec.(*kit.SSHExecutor)
+		reSSH, ok := reExec.(*exec.SSHExecutor)
 		if !ok {
-			t.Fatalf("re-materialized executor = %T, want *kit.SSHExecutor (the guest)", reExec)
+			t.Fatalf("re-materialized executor = %T, want *exec.SSHExecutor (the guest)", reExec)
 		}
 		if reSSH.Host != guestSSH.Host || reSSH.Port != guestSSH.Port || reSSH.User != guestSSH.User {
 			t.Fatalf("re-materialized executor = %+v, want a guest connection matching %+v", reSSH, guestSSH)
@@ -69,7 +69,7 @@ func TestPluginDeployTarget_ApplyParentExecOverride(t *testing.T) {
 	})
 
 	t.Run("lifecycle substrate (vm/pod) is untouched — it composes its own venue in PrepareVenue", func(t *testing.T) {
-		hostExec := kit.ShellExecutor{}
+		hostExec := exec.ShellExecutor{}
 		tgt := &pluginDeployTarget{hasLifecycle: true, exec: hostExec}
 		venueJSON := tgt.applyParentExecOverride(spec.EmitOpts{ParentExec: guestSSH})
 
@@ -84,7 +84,7 @@ func TestPluginDeployTarget_ApplyParentExecOverride(t *testing.T) {
 	})
 
 	t.Run("root (non-nested) deploy is untouched — ParentExec absent", func(t *testing.T) {
-		hostExec := kit.ShellExecutor{}
+		hostExec := exec.ShellExecutor{}
 		tgt := &pluginDeployTarget{hasLifecycle: false, exec: hostExec}
 		venueJSON := tgt.applyParentExecOverride(spec.EmitOpts{})
 

@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/spec/hostenv"
 )
 
@@ -18,7 +17,7 @@ func TestLoadRuntimeConfig_Missing(t *testing.T) {
 		return filepath.Join(t.TempDir(), "nonexistent", "config.yml"), nil
 	}
 
-	cfg, err := kit.LoadRuntimeConfig()
+	cfg, err := hostenv.LoadRuntimeConfig()
 	if err != nil {
 		t.Fatalf("expected nil error for missing config, got: %v", err)
 	}
@@ -35,15 +34,15 @@ func TestSaveAndLoadRuntimeConfig(t *testing.T) {
 	defer func() { hostenv.RuntimeConfigPath = orig }()
 	hostenv.RuntimeConfigPath = func() (string, error) { return configPath, nil }
 
-	cfg := &kit.RuntimeConfig{
-		Engine:  kit.EngineConfig{Build: "podman", Run: "docker"},
+	cfg := &hostenv.RuntimeConfig{
+		Engine:  hostenv.EngineConfig{Build: "podman", Run: "docker"},
 		RunMode: "quadlet",
 	}
-	if err := kit.SaveRuntimeConfig(cfg); err != nil {
+	if err := hostenv.SaveRuntimeConfig(cfg); err != nil {
 		t.Fatalf("SaveRuntimeConfig() error: %v", err)
 	}
 
-	loaded, err := kit.LoadRuntimeConfig()
+	loaded, err := hostenv.LoadRuntimeConfig()
 	if err != nil {
 		t.Fatalf("LoadRuntimeConfig() error: %v", err)
 	}
@@ -70,7 +69,7 @@ func TestResolveRuntime_Defaults(t *testing.T) {
 		_ = os.Unsetenv(key)
 	}
 
-	rt, err := kit.ResolveRuntime()
+	rt, err := hostenv.ResolveRuntime()
 	if err != nil {
 		t.Fatalf("ResolveRuntime() error: %v", err)
 	}
@@ -103,8 +102,8 @@ func TestResolveRuntime_EnvOverridesConfig(t *testing.T) {
 	hostenv.RuntimeConfigPath = func() (string, error) { return configPath, nil }
 
 	// Write config with podman
-	cfg := &kit.RuntimeConfig{Engine: kit.EngineConfig{Build: "podman"}}
-	if err := kit.SaveRuntimeConfig(cfg); err != nil {
+	cfg := &hostenv.RuntimeConfig{Engine: hostenv.EngineConfig{Build: "podman"}}
+	if err := hostenv.SaveRuntimeConfig(cfg); err != nil {
 		t.Fatal(err)
 	}
 
@@ -115,7 +114,7 @@ func TestResolveRuntime_EnvOverridesConfig(t *testing.T) {
 	_ = os.Unsetenv("CHARLY_RUN_MODE")
 	_ = os.Unsetenv("CHARLY_BIND_ADDRESS")
 
-	rt, err := kit.ResolveRuntime()
+	rt, err := hostenv.ResolveRuntime()
 	if err != nil {
 		t.Fatalf("ResolveRuntime() error: %v", err)
 	}
@@ -137,7 +136,7 @@ func TestResolveRuntime_InvalidEngine(t *testing.T) {
 	_ = os.Unsetenv("CHARLY_RUN_MODE")
 	_ = os.Unsetenv("CHARLY_BIND_ADDRESS")
 
-	_, err := kit.ResolveRuntime()
+	_, err := hostenv.ResolveRuntime()
 	if err == nil {
 		t.Error("expected error for invalid engine")
 	}
@@ -156,7 +155,7 @@ func TestResolveRuntime_InvalidRunMode(t *testing.T) {
 	_ = os.Setenv("CHARLY_RUN_MODE", "swarm")
 	defer os.Unsetenv("CHARLY_RUN_MODE") //nolint:errcheck
 
-	_, err := kit.ResolveRuntime()
+	_, err := hostenv.ResolveRuntime()
 	if err == nil {
 		t.Error("expected error for invalid run_mode")
 	}
@@ -171,7 +170,7 @@ func TestResolveValue(t *testing.T) {
 		{"", "", "docker", "docker"},
 	}
 	for _, tt := range tests {
-		got := kit.ResolveValue(tt.env, tt.cfg, tt.def)
+		got := hostenv.ResolveValue(tt.env, tt.cfg, tt.def)
 		if got != tt.want {
 			t.Errorf("ResolveValue(%q, %q, %q) = %q, want %q", tt.env, tt.cfg, tt.def, got, tt.want)
 		}
@@ -193,7 +192,7 @@ func TestAutoEnable_EnvValue1(t *testing.T) {
 	_ = os.Setenv("CHARLY_AUTO_ENABLE", "1")
 	defer os.Unsetenv("CHARLY_AUTO_ENABLE") //nolint:errcheck
 
-	rt, err := kit.ResolveRuntime()
+	rt, err := hostenv.ResolveRuntime()
 	if err != nil {
 		t.Fatalf("ResolveRuntime() error: %v", err)
 	}
@@ -217,7 +216,7 @@ func TestBindAddress_InvalidEnv(t *testing.T) {
 	_ = os.Setenv("CHARLY_BIND_ADDRESS", "10.0.0.1")
 	defer os.Unsetenv("CHARLY_BIND_ADDRESS") //nolint:errcheck
 
-	_, err := kit.ResolveRuntime()
+	_, err := hostenv.ResolveRuntime()
 	if err == nil {
 		t.Error("expected error for invalid bind_address")
 	}
@@ -226,7 +225,7 @@ func TestBindAddress_InvalidEnv(t *testing.T) {
 // TestDetectRunMode_NonPodmanEngine — runEngine != "podman" is always
 // "direct" regardless of systemd state.
 func TestDetectRunMode_NonPodmanEngine(t *testing.T) {
-	if got := kit.DetectRunMode("docker"); got != "direct" {
+	if got := hostenv.DetectRunMode("docker"); got != "direct" {
 		t.Errorf("detectRunMode(docker) = %q, want direct", got)
 	}
 }
@@ -241,7 +240,7 @@ func TestSystemdUserAvailable_EmptyXDG(t *testing.T) {
 	defer func() { hostenv.SystemdUserRuntimeDir = orig }()
 	hostenv.SystemdUserRuntimeDir = func() string { return dir }
 
-	if kit.SystemdUserAvailable() {
+	if hostenv.SystemdUserAvailable() {
 		t.Error("SystemdUserAvailable() = true with empty XDG_RUNTIME_DIR; want false")
 	}
 }
@@ -256,7 +255,7 @@ func TestSystemdUserAvailable_DirMissing(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "definitely-not-a-systemd-dir")
 	hostenv.SystemdUserRuntimeDir = func() string { return missing }
 
-	if kit.SystemdUserAvailable() {
+	if hostenv.SystemdUserAvailable() {
 		t.Error("SystemdUserAvailable() = true with missing /run/user/<uid>/systemd; want false")
 	}
 }
@@ -275,7 +274,7 @@ func TestSystemdUserAvailable_DirIsFile(t *testing.T) {
 	defer func() { hostenv.SystemdUserRuntimeDir = orig }()
 	hostenv.SystemdUserRuntimeDir = func() string { return filePath }
 
-	if kit.SystemdUserAvailable() {
+	if hostenv.SystemdUserAvailable() {
 		t.Error("SystemdUserAvailable() = true with regular file at probed path; want false")
 	}
 }
@@ -295,7 +294,7 @@ func TestSystemdUserAvailable_AllPresent(t *testing.T) {
 	defer func() { hostenv.SystemdUserRuntimeDir = orig }()
 	hostenv.SystemdUserRuntimeDir = func() string { return dirPath }
 
-	if !kit.SystemdUserAvailable() {
+	if !hostenv.SystemdUserAvailable() {
 		t.Error("SystemdUserAvailable() = false with all signals present; want true")
 	}
 }

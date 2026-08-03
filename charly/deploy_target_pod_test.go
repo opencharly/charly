@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -104,7 +103,7 @@ func TestCreateRemoteCandyCopies_StagesRemoteCandySource(t *testing.T) {
 	gen := &Generator{
 		Dir:      ctxRoot,
 		BuildDir: filepath.Join(ctxRoot, ".build"), // == g.Dir + "/.build" (the Generator constructors' shared default)
-		Candies:  map[string]spec.CandyReader{deploykit.CandyMapKey(candy): candy},
+		Candies:  map[string]spec.CandyReader{spec.CandyMapKey(candy): candy},
 	}
 
 	if err := gen.createRemoteCandyCopies(); err != nil {

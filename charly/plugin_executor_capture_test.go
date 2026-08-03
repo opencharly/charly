@@ -7,18 +7,18 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/exec"
 	pb "github.com/opencharly/spec/proto"
 )
 
 // TestExecutorReverse_CaptureAndGetFile proves the new CHECK-VERB reverse-channel legs:
 // executorReverseServer.RunCapture returns stdout/stderr/exit separately (a non-zero exit
 // rides ExitCode, NOT Error) and GetFile reads a venue file — the wire-backed
-// kit.Executor.RunCapture/GetFile surface an out-of-process exec-based check verb
+// exec.Executor.RunCapture/GetFile surface an out-of-process exec-based check verb
 // (record/dbus — and wl when it externalizes) drives over the E3b broker. Backed by a real
 // ShellExecutor (host venue).
 func TestExecutorReverse_CaptureAndGetFile(t *testing.T) {
-	srv := &executorReverseServer{exec: kit.ShellExecutor{}}
+	srv := &executorReverseServer{exec: exec.ShellExecutor{}}
 	ctx := context.Background()
 
 	rep, err := srv.RunCapture(ctx, &pb.RunRequest{Script: "echo hello; echo oops >&2; exit 3"})

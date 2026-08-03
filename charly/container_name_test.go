@@ -3,10 +3,10 @@ package main
 import (
 	"testing"
 
-	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/spec"
 )
 
-// container_name_test.go — kit.ContainerName/kit.ContainerNameInstance regression coverage,
+// container_name_test.go — spec.ContainerName/spec.ContainerNameInstance regression coverage,
 // relocated from the deleted start_test.go (Cutover B unit 2: buildStartArgs/resolveEntrypointFromMeta
 // were dead code — zero non-test callers — and deleted with the rest of start_test.go; these two
 // cases test unrelated, still-live sdk/kit helpers and are preserved here).
@@ -21,7 +21,7 @@ func TestContainerName(t *testing.T) {
 		{"ubuntu", "charly-ubuntu"},
 	}
 	for _, tt := range tests {
-		got := kit.ContainerName(tt.image)
+		got := spec.ContainerName(tt.image)
 		if got != tt.want {
 			t.Errorf("containerName(%q) = %q, want %q", tt.image, got, tt.want)
 		}
@@ -39,7 +39,7 @@ func TestContainerNameInstance(t *testing.T) {
 		{"ollama", "gpu2", "charly-ollama-gpu2"},
 	}
 	for _, tt := range tests {
-		got := kit.ContainerNameInstance(tt.image, tt.instance)
+		got := spec.ContainerNameInstance(tt.image, tt.instance)
 		if got != tt.want {
 			t.Errorf("containerNameInstance(%q, %q) = %q, want %q", tt.image, tt.instance, got, tt.want)
 		}

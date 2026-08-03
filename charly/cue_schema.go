@@ -8,8 +8,8 @@ package main
 // `pod:`/`k8s:`/… collection map) and unifies it with #<Kind>; a unified
 // node-form document is validated whole against #NodeDoc — the sole load gate.
 // The legacy shape-routing + hand-written validators are deleted; CUE is the
-// single schema source, and it travels WITH the SDK (github.com/opencharly/sdk
-// owns schema + the generated spec types in one module).
+// single schema source, and it travels WITH the spec module (github.com/opencharly/spec
+// owns schema + the generated spec types).
 
 import (
 	"fmt"

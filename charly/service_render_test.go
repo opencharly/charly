@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/vmshared"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -63,7 +62,7 @@ func withRaw(ri *ResolvedInit) *ResolvedInit {
 func testSystemdInitDef() *ResolvedInit {
 	return withRaw(&ResolvedInit{
 		ManagementTool: "systemctl",
-		ServiceSchema: &vmshared.ServiceSchemaDef{
+		ServiceSchema: &spec.InitServiceSchema{
 			ServiceTemplate:    testSystemdServiceTemplate,
 			UnitPathTemplate:   testSystemdUnitPathTemplate,
 			DropinTemplate:     testSystemdDropinTemplate,
@@ -76,7 +75,7 @@ func testSystemdInitDef() *ResolvedInit {
 func testSupervisordInitDef() *ResolvedInit {
 	return withRaw(&ResolvedInit{
 		ManagementTool: "supervisorctl",
-		ServiceSchema: &vmshared.ServiceSchemaDef{
+		ServiceSchema: &spec.InitServiceSchema{
 			ServiceTemplate:  testSupervisordServiceTemplate,
 			UnitPathTemplate: `/etc/supervisord.d/{{.Candy}}-{{.Name}}.conf`,
 			SupportsPackaged: false,
@@ -209,7 +208,7 @@ func TestRenderServicePackagedWithOverrides(t *testing.T) {
 		UsePackaged: "postgresql.service",
 		Enable:      true,
 		Scope:       "system",
-		Overrides: &vmshared.ServiceOverrides{
+		Overrides: &spec.CandyServiceOverrides{
 			Env: map[string]string{"PGDATA": "/var/lib/postgresql/data"},
 		},
 	}
