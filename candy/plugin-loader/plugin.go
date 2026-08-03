@@ -224,6 +224,17 @@ func (*provider) ResourceChildren(pn spec.ParsedNode) []spec.ParsedNode {
 	return loaderkit.ResourceChildren(pn)
 }
 
+// ValidateCandyManifestCUE / ValidateNodeFormSteps implement spec.ProjectLoader — the typed
+// box-validate entity-tree walk the host calls (compiled-in, no wire envelope): delegate to the
+// ONE copy in sdk/loaderkit (K1 unit 3c).
+func (*provider) ValidateCandyManifestCUE(path string, data []byte, t spec.Threaded, parser spec.DocParser, cs spec.CueSchema) error {
+	return loaderkit.ValidateCandyManifestCUE(path, data, t, parser, cs)
+}
+
+func (*provider) ValidateNodeFormSteps(path string, data []byte, t spec.Threaded, parser spec.DocParser, cs spec.CueSchema) error {
+	return loaderkit.ValidateNodeFormSteps(path, data, t, parser, cs)
+}
+
 // ResolveMergedDeployTree implements spec.ProjectLoader — the merged project+overlay deploy-node
 // tree read the host's check seams need (compiled-in, no wire envelope): it drives the ONE copy
 // of the loaderkit project+per-host-overlay projection+merge (loaderkit.ResolveMergedTreeViaExecutor)
