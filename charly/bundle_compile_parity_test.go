@@ -188,8 +188,8 @@ func isolateProviderRegistry(t *testing.T) {
 // and the host re-materializes []*InstallPlan via spec.PlanFromView.
 //
 // THE GOLDEN (#55 K3 cone 1 redesign): the OLD side used to call deploykit.BuildDeployPlan
-// directly, in-process — the reason this file imported github.com/opencharly/sdk/deploykit, the
-// one remaining import-purity violation on this file (the value-type leg already dropped its
+// directly, in-process — an sdk mechanism-kit dependency the import-purity gate forbids in
+// charly/ (this file was its last holder; the value-type leg had already dropped its
 // buildkit import). BuildDeployPlan is a pure function (candy/plugin-bundle's own
 // TestBuildDeployPlan_BuilderPurity_NoPluginRPC proves it never dials a plugin itself) computed
 // from data that is ITSELF deterministic and reproducible offline: the fedora/rpm distro
