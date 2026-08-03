@@ -11,6 +11,7 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/exec"
 	pb "github.com/opencharly/spec/proto"
 	"github.com/opencharly/spec/spec"
 )
@@ -149,7 +150,7 @@ func TestExternalPluginStep_ReverseChannelEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv := &executorReverseServer{exec: kit.ShellExecutor{}}
+	srv := &executorReverseServer{exec: exec.ShellExecutor{}}
 	rep, err := srv.RunHostStep(ctx, &pb.HostStepRequest{StepJson: stepJSON})
 	if err != nil {
 		t.Fatalf("RunHostStep: %v", err)
