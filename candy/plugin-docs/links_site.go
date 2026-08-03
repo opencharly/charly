@@ -13,6 +13,12 @@ import (
 // internalLinkPattern matches a markdown link to a site-absolute path — `](/foo/bar/)`.
 var internalLinkPattern = regexp.MustCompile(`\]\((/[^)\s"']*)\)`)
 
+// frontmatterLinkPattern matches a site-absolute target in a YAML frontmatter field — the
+// `link:` of a Starlight splash-page hero action, for instance. Those are real navigation
+// targets that never appear in the markdown body, so a markdown-only scan leaves the most
+// prominent links on the site (the home page's call-to-action buttons) unchecked.
+var frontmatterLinkPattern = regexp.MustCompile(`(?m)^\s*(?:-\s+)?link:\s*["']?(/[^\s"']*)`)
+
 // verifySiteLinks resolves EVERY site-absolute markdown link in the content tree against the
 // pages that tree actually emits, and fails if any of them points at nothing.
 //
@@ -42,7 +48,11 @@ func verifySiteLinks(outRoot string) error {
 		if err != nil {
 			return fmt.Errorf("read %s: %w", p.file, err)
 		}
-		for _, m := range internalLinkPattern.FindAllStringSubmatch(string(raw), -1) {
+		matches := internalLinkPattern.FindAllStringSubmatch(string(raw), -1)
+		if front, _ := splitFrontmatter(string(raw)); front != "" {
+			matches = append(matches, frontmatterLinkPattern.FindAllStringSubmatch(front, -1)...)
+		}
+		for _, m := range matches {
 			target := m[1]
 			// Strip fragment and query — a link to an on-page anchor resolves to its page.
 			if i := strings.IndexAny(target, "#?"); i >= 0 {

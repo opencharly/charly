@@ -88,3 +88,37 @@ func TestVerifySiteLinksResolvesIndexRoutes(t *testing.T) {
 		t.Errorf("index routes should resolve, got: %v", err)
 	}
 }
+
+// TestVerifySiteLinksCoversFrontmatterLinks closes the gap round 3 flagged: a Starlight splash
+// page declares its call-to-action targets as `link:` fields in YAML frontmatter, which never
+// appear in the markdown body. Those are the most prominent links on the site, so a markdown-only
+// scan left exactly the wrong ones unchecked.
+func TestVerifySiteLinksCoversFrontmatterLinks(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		"index.mdx": strings.Join([]string{
+			"---",
+			"title: Home",
+			"hero:",
+			"  actions:",
+			"    - text: Get started",
+			"      link: /start/install/",
+			"    - text: Missing",
+			"      link: /nope/",
+			"---",
+			"",
+			"Body.",
+		}, "\n"),
+		"start/install.md": "x\n",
+	})
+
+	err := verifySiteLinks(root)
+	if err == nil {
+		t.Fatal("expected a dead frontmatter link to be reported, got nil")
+	}
+	if !strings.Contains(err.Error(), "/nope/") {
+		t.Errorf("error should name the dead frontmatter target, got: %v", err)
+	}
+	if strings.Contains(err.Error(), "/start/install/") {
+		t.Errorf("a resolving frontmatter link was reported as dead: %v", err)
+	}
+}

@@ -94,6 +94,10 @@ func generate(root, out string) error {
 	if err := generateRecipesIndex(out, skills, market); err != nil {
 		return err
 	}
+	// Count the landing page in the recipes tally. Leaving it out made the generator under-report
+	// by one, and that off-by-one was then copied into a CHANGELOG — a tally nobody can reconcile
+	// against the tree is worse than no tally.
+	skillPages++
 	if err := generateVision(root, out); err != nil {
 		return err
 	}
