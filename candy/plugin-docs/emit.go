@@ -64,8 +64,13 @@ func yamlString(s string) string {
 }
 
 // firstLine reduces an authored multi-paragraph description to its opening SENTENCE for the
-// frontmatter `description:` (which Starlight renders as the page subtitle and meta tag). The
-// full prose still appears in the page body.
+// frontmatter `description:` (which Starlight renders as the page subtitle and meta tag).
+//
+// What happens to the REMAINDER differs by page kind, and the difference matters: an entity page
+// writes the full description into its body (writeCandyPage / the plugin pages), so nothing is
+// lost. A skill recipe card does NOT — generateSkills emits only the skill's markdown body — so
+// for those the truncated remainder is dropped from the site entirely. That is why the 11
+// harness references living in skill frontmatter `description:` fields are published nowhere.
 //
 // Descriptions are authored as hard-wrapped block scalars, so cutting at the first newline would
 // truncate mid-sentence ("… the generator that"). Instead the first paragraph is unwrapped and

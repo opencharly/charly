@@ -35,7 +35,7 @@ var skillRefPattern = regexp.MustCompile("(?s)([^`]?)(`?)/charly-([a-z][a-z0-9-]
 var referencePathPattern = regexp.MustCompile("`references/([a-z0-9-]+)\\.md`")
 
 // danglingRef is a reference that resolves to nothing. It is an ERROR, never a silent dead link:
-// the corpus is clean today (all 256 distinct targets resolve), so failing closed keeps it clean
+// the corpus is clean today (all 257 distinct targets resolve), so failing closed keeps it clean
 // and turns the docs build into a corpus-wide integrity check the repo otherwise lacks.
 type danglingRef struct {
 	Source string // the file the bad reference was found in

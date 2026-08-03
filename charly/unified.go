@@ -288,7 +288,8 @@ func ProjectCandies(uf *spec.UnifiedFile, rootDir string) (map[string]spec.Candy
 // entry in uf.Candy, into its pre-completion, pre-finalize spec.ScannedCandy form. Entries with
 // `from:` go through the registered loader plugin's typed CandyScanner seam so directory-based
 // candies behave identically to today. Inline entries synthesize from the embedded CandyYAML and
-// have no source directory of their own.
+// take their DECLARING FILE's directory as SourceDir — rootDir here, or the namespace sub-file's
+// dir when one declares them (host_build_buildengine.go); see ScanInlineCandy's own contract.
 func projectCandiesScanned(uf *spec.UnifiedFile, rootDir string) (map[string]spec.ScannedCandy, error) {
 	out := map[string]spec.ScannedCandy{}
 	for name, raw := range uf.Candy {
