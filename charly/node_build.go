@@ -4,8 +4,8 @@ package main
 // model. An entity node's kind value IS its complete body (scalars, collections,
 // and the desugared `plan:` list all inline — see node_parse.go/node_desugar.go),
 // so "assembly" reduces to a defensive clone: the body decodes through the
-// EXISTING per-kind CUE decoder (decodeEntityViaCUE) unchanged, and the strict
-// typing comes from the COMPLETE per-kind def (#Candy/#Deploy/…). Sub-ENTITY
+// EXISTING per-kind CUE decoder (ProjectLoader.DecodeEntityViaCUE, sdk/loaderkit) unchanged, and
+// the strict typing comes from the COMPLETE per-kind def (#Candy/#Deploy/…). Sub-ENTITY
 // children (bundle members, nested deployments) are handled by the per-kind
 // constructor (node_bundle.go), never folded here. The former data/step
 // child-node fold arms were DELETED with the child-node shape.
@@ -43,11 +43,28 @@ func entityBodyMapping(gn *genericNode) (*yaml.Node, error) {
 }
 
 // decodeNodeValue decodes gn's body via the shared CUE entity decoder into out
-// (a *struct).
+// (a *struct). Routed through the ProjectLoader seam — the decode mechanism itself lives in
+// loaderkit (K1 unit 1), never imported directly by core.
 func decodeNodeValue(gn *genericNode, out any) error {
 	body, err := assembleEntityBody(gn)
 	if err != nil {
 		return err
 	}
-	return decodeEntityViaCUE(body, reflect.TypeOf(out).Elem(), out, "node "+gn.name)
+	return requireProjectLoader().DecodeEntityViaCUE(body, reflect.TypeOf(out).Elem(), out, "node "+gn.name)
+}
+
+// cloneYAMLNode deep-copies a node by marshal+reparse (no cycles in raw input). Kept here (not
+// routed through the seam) because entityBodyMapping's need is a PURE node clone with zero
+// CUE/registry coupling — unlike DecodeEntityViaCUE's internal clone step, which is now part of the
+// relocated CUE-decode mechanism itself (sdk/loaderkit/decode_entity.go).
+func cloneYAMLNode(node *yaml.Node) (*yaml.Node, error) {
+	b, err := yaml.Marshal(node)
+	if err != nil {
+		return nil, err
+	}
+	var out yaml.Node
+	if err := yaml.Unmarshal(b, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
 }

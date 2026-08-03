@@ -3,11 +3,9 @@ package main
 import (
 	"os"
 	"path/filepath"
-	"reflect"
 	"testing"
 
 	"github.com/opencharly/spec/spec"
-	"gopkg.in/yaml.v3"
 )
 
 // The pure localpkg-mechanism tests (ResolveLocalPkgDir, BuildLocalPkgOnHost,
@@ -63,39 +61,9 @@ func TestOCITargetLocalPkgNilContractEmitsNothing(t *testing.T) {
 	}
 }
 
-// TestLocalPkgMapRejectsScalar proves the candy-manifest localpkg: field is CUE-CLOSED to the
-// per-format map shape (schema/candy.cue: `localpkg?: {pac?: string, rpm?: string, deb?:
-// string}`) — a legacy scalar form is rejected at CUE decode time (struct vs string type
-// mismatch), and the per-format map decodes into CandyYAML.LocalPkg. The rejection moved from a
-// hand-written LocalPkgMap.UnmarshalYAML (deleted with *Candy) to the schema itself (SDD): the
-// decode path is the SAME decodeEntityViaCUE every candy manifest goes through.
-func TestLocalPkgMapRejectsScalar(t *testing.T) {
-	decode := func(body string) (spec.CandyYAML, error) {
-		var doc yaml.Node
-		if err := yaml.Unmarshal([]byte(body), &doc); err != nil {
-			t.Fatalf("parse: %v", err)
-		}
-		root := spec.MappingRoot(&doc)
-		if root == nil {
-			t.Fatalf("test candy body is not a mapping")
-		}
-		var ly spec.CandyYAML
-		err := decodeEntityViaCUE(root, reflect.TypeOf(spec.CandyYAML{}), &ly, "test-candy")
-		return ly, err
-	}
-
-	if _, err := decode("name: t\nlocalpkg: pkg/arch\n"); err == nil {
-		t.Error("scalar localpkg: should be rejected by CUE (per-format map shape), got nil error")
-	}
-
-	ly, err := decode("name: t\nlocalpkg:\n  pac: pkg/arch\n  rpm: pkg/fedora\n")
-	if err != nil {
-		t.Fatalf("map form should decode, got %v", err)
-	}
-	if ly.LocalPkg["pac"] != "pkg/arch" || ly.LocalPkg["rpm"] != "pkg/fedora" {
-		t.Errorf("decoded map = %v", ly.LocalPkg)
-	}
-}
+// TestLocalPkgMapRejectsScalar (the candy-manifest localpkg: field is CUE-CLOSED to the
+// per-format map shape) relocated to sdk/loaderkit/decode_entity_test.go (K1 unit 1) — it exercises
+// ONLY spec.CandyYAML + loaderkit.DecodeEntityViaCUE, zero charly-core dependency.
 
 // TestBuildDepPkgsOnHost_EmptyAndDryRun relocated to candy/plugin-bundle (#55 decoupling,
 // Batch A; fixture-reworked to a synthetic aur builder def, since every asserted case

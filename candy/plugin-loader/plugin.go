@@ -28,6 +28,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/loaderkit"
@@ -121,6 +122,13 @@ func (*provider) MaterializeNode(pn spec.ParsedNode, t spec.Threaded, seams spec
 // implementing this same interface.
 func (*provider) LoadUnified(dir string, exec spec.LoaderExecutor) (*spec.UnifiedFile, bool, error) {
 	return loaderkit.LoadUnified(dir, loaderkit.LoadSeamsFromExecutor(exec))
+}
+
+// DecodeEntityViaCUE implements spec.ProjectLoader — the typed per-entity CUE decode the host calls
+// for every kind/candy/node-form decode (compiled-in, no wire envelope): delegates to the ONE copy
+// of the relocated shorthand-normalize + CUE-ingest + Decode mechanism in sdk/loaderkit (K1 unit 1).
+func (*provider) DecodeEntityViaCUE(node *yaml.Node, t reflect.Type, out any, label string) error {
+	return loaderkit.DecodeEntityViaCUE(node, t, out, label)
 }
 
 // ResolveMergedDeployTree implements spec.ProjectLoader — the merged project+overlay deploy-node

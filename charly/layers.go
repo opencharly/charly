@@ -275,7 +275,7 @@ func parseCandyYAML(path string) (*spec.CandyYAML, error) {
 		// the AUTHORED form — not at load, where it would reject minimal in-tree
 		// fixtures and slow the hot path. See cue-loader-switch-design.
 		var ly spec.CandyYAML
-		if err := decodeEntityViaCUE(body, reflect.TypeOf(spec.CandyYAML{}), &ly, path); err != nil {
+		if err := requireProjectLoader().DecodeEntityViaCUE(body, reflect.TypeOf(spec.CandyYAML{}), &ly, path); err != nil {
 			return nil, err
 		}
 		return &ly, nil

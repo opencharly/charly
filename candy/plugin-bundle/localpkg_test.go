@@ -17,9 +17,11 @@ import (
 // (the project loader) — none of its assertions actually inspect that def's fields (every case
 // short-circuits on empty-packages/dry-run/missing-image/nil-def before touching it), so it is
 // reworked here with a synthetic fixture def instead. TestLocalPkgInstallStepIR/
-// TestOCITargetLocalPkgNilContractEmitsNothing (white-box ociEmitStep)/TestLocalPkgMapRejectsScalar
-// (white-box decodeEntityViaCUE)/TestLocalPkgDef_RoundTripFromBuildYML (white-box
-// LoadBuildConfigForBox) stay in charly.
+// TestOCITargetLocalPkgNilContractEmitsNothing (white-box ociEmitStep)/TestLocalPkgDef_
+// RoundTripFromBuildYML (white-box LoadBuildConfigForBox) stay in charly.
+// TestLocalPkgMapRejectsScalar (white-box decodeEntityViaCUE) moved on to
+// sdk/loaderkit/decode_entity_test.go (K1 unit 1) — it exercises the relocated CUE-decode
+// mechanism directly, zero charly-core dependency, so it no longer belongs in either place.
 
 // testPacLocalPkgDef returns a vmshared.LocalPkgDef mirroring build.yml's `pac.local_pkg`
 // block — the config that drives the localpkg mechanism. Tests use it so they
