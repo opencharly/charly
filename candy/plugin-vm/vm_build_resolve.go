@@ -18,9 +18,9 @@ import (
 // vm_build_resolve.go — the `charly vm build` PREP+RESOLVE, run PLUGIN-SIDE (K3 vm-build move,
 // coneB-buildremnant — the former hidden charly/host_build_vm_build.go HostBuild("vm-build") reentry
 // is DELETED). Every dependency the host seam used to justify staying core is now plugin-reachable:
-// the kind:vm entity load goes through loaderkit.LoadUnified (the SAME K1-loader seam
-// candy/plugin-build's build-engine resolve already uses, via this package's OWN vmLoaderExecutor,
-// load_executor.go) + the vm template projection over InvokeProvider(kind, local, OpResolve) (the
+// the kind:vm entity load goes through loaderkit.LoadUnifiedViaExecutor (the SAME hoisted K1-loader
+// seam candy/plugin-build's build-engine resolve uses, K3-W2) + the vm template projection over
+// InvokeProvider(kind, local, OpResolve) (the
 // SAME substrate-template-resolve leg charly/substrate_template_resolve.go's resolveVmViaPlugin
 // already dispatches to — command:vm reaches it itself instead of round-tripping through core); the
 // distro/builder build vocabulary goes through loaderkit.ProjectDistroConfig/ProjectBuilderConfig
@@ -75,11 +75,12 @@ func resolveDistroLeg(ctx context.Context, ex *sdk.Executor) func(json.RawMessag
 	}
 }
 
-// loadVmProjectUnified loads the project at dir plugin-side via loaderkit.LoadUnified, driven
-// through this package's vmLoaderExecutor witness (the SAME K1-loader seam infra
-// candy/plugin-build's resolveBuildEngine established).
+// loadVmProjectUnified loads the project at dir plugin-side via loaderkit.LoadUnifiedViaExecutor —
+// the SAME hoisted K1-loader seam infra candy/plugin-build's resolveBuildEngine uses (K3-W2: the
+// per-candy vmLoaderExecutor copy was hoisted into loaderkit as the ONE canonical
+// executorLoaderExecutor, R3).
 func loadVmProjectUnified(ctx context.Context, ex *sdk.Executor, dir string) (*spec.UnifiedFile, bool, error) {
-	return loaderkit.LoadUnified(dir, loaderkit.LoadSeamsFromExecutor(&vmLoaderExecutor{ctx: ctx, ex: ex}))
+	return loaderkit.LoadUnifiedViaExecutor(ctx, ex, dir)
 }
 
 // resolveVmBuildEntity loads the project + resolves boxName's kind:vm entity into a *VmSpec, entirely

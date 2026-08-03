@@ -22,7 +22,7 @@ import (
 // Invokes build:pkg directly (the SAME shape as build:box/build:generate/build:ensure).
 //
 // Reuses the EXACT K1-loader seam infrastructure resolveBuildEngine (resolve.go) established: LOAD
-// via loaderkit.LoadUnified(loaderkit.LoadSeamsFromExecutor), local candy SCAN via the
+// via loaderkit.LoadUnifiedViaExecutor, local candy SCAN via the
 // buildengine-scan-local host leg + loaderkit.ScanCandyFromLocal, and distro VOCABULARY via
 // resolveDistroLeg's InvokeProvider(kind:distro) closure — no host registry callback dragged into
 // the plugin. deploykit.BuildLocalPkgOnHost / ResolveLocalPkgDir / CleanupBuiltPackageFiles are
@@ -51,8 +51,7 @@ func runBoxPkg(ctx context.Context, ex *sdk.Executor, req spec.BuildPkgRequest) 
 	}
 
 	// --- LOAD the project plugin-side (K1 reverse legs, mirrors resolveBuildEngine step 1) ---
-	loaderEx := &buildLoaderExecutor{ctx: ctx, ex: ex}
-	uf, ok, err := loaderkit.LoadUnified(dir, loaderkit.LoadSeamsFromExecutor(loaderEx))
+	uf, ok, err := loaderkit.LoadUnifiedViaExecutor(ctx, ex, dir)
 	if err != nil {
 		return nil, err
 	}

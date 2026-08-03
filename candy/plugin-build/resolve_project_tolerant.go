@@ -52,8 +52,7 @@ func resolveProjectEnvelopeTolerant(ctx context.Context, ex *sdk.Executor, req s
 		}
 	}
 
-	loadExec := &buildLoaderExecutor{ctx: ctx, ex: ex}
-	uf, ok, err := loaderkit.LoadUnified(dir, loaderkit.LoadSeamsFromExecutor(loadExec))
+	uf, ok, err := loaderkit.LoadUnifiedViaExecutor(ctx, ex, dir)
 	if err != nil {
 		// A real load failure (schema gate, parse error, …) — tolerant: diagnose, empty envelope.
 		addDiag(err)
@@ -99,6 +98,6 @@ func resolveProjectEnvelopeTolerant(ctx context.Context, ex *sdk.Executor, req s
 	if rp == nil {
 		rp = &spec.ResolvedProject{}
 	}
-	rp.Primaries = loadExec.LoaderThreaded().Primaries
+	rp.Primaries = loaderkit.LoaderThreadedViaExecutor(ctx, ex).Primaries
 	return *rp, diags
 }
