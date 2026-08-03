@@ -1,27 +1,37 @@
 package main
 
 import (
-	"os"
-	"path/filepath"
+	"net/http"
+	"time"
 
 	"github.com/opencharly/spec/spec"
-
-	"github.com/opencharly/sdk/kit"
 )
 
-// hostVerbResolverFor builds a *hostVerbResolver over a kit.Runner with the given venue
-// executor + mode (+ optional distro tags) — the in-proc host CheckContext / verb-dispatch
-// source a compiled-in kit verb's RunVerb and the host provision/plugin helpers consume. In
-// production newCheckRunner builds one internally (a &hostVerbResolver{} struct literal); a
-// unit test dispatching a single verb (or a host helper directly) wants the resolver.
+// hostVerbResolverFor builds a *hostVerbResolver over a directly-constructed hostCheckCarrier
+// (the SAME struct-literal shape production fills from a wire snapshot in
+// plugin_dispatch_reverse.go — no kit.Runner involved) with the given venue executor + mode (+
+// optional distro tags) — the in-proc host CheckContext / verb-dispatch source a compiled-in
+// kit verb's RunVerb and the host provision/plugin helpers consume. dialTimeout/httpBase mirror
+// kit.NewRunner's own zero-value defaults (3s / 10s) so fixture behavior stays unchanged.
 func hostVerbResolverFor(exec spec.DeployExecutor, mode RunMode, distros ...string) *hostVerbResolver {
-	return &hostVerbResolver{cc: carrierFromRunner(kit.NewRunner(kit.RunnerConfig{Exec: exec, Mode: mode, Distros: distros}))}
+	return &hostVerbResolver{cc: &hostCheckCarrier{
+		execFn:      func() spec.DeployExecutor { return exec },
+		mode:        mode,
+		distros:     distros,
+		dialTimeout: 3 * time.Second,
+		httpBase:    &http.Client{Timeout: 10 * time.Second},
+	}}
 }
 
-// hostVerbResolverWithCandyDirs builds a *hostVerbResolver over a kit.Runner carrying the given
-// committed-APK anchoring state — for exercising resolveCheckApk directly.
+// hostVerbResolverWithCandyDirs builds a *hostVerbResolver over a hostCheckCarrier carrying the
+// given committed-APK anchoring state — for exercising resolveCheckApk directly.
 func hostVerbResolverWithCandyDirs(dirs map[string]string, scanErr error) *hostVerbResolver {
-	return &hostVerbResolver{cc: carrierFromRunner(kit.NewRunner(kit.RunnerConfig{CandyDirs: dirs, CandyScanErr: scanErr}))}
+	return &hostVerbResolver{cc: &hostCheckCarrier{
+		dialTimeout:  3 * time.Second,
+		httpBase:     &http.Client{Timeout: 10 * time.Second},
+		candyDirs:    dirs,
+		candyScanErr: scanErr,
+	}}
 }
 
 // testdataDir is the project directory used by test fixtures. Tests read
@@ -67,32 +77,4 @@ func testBuilderCfg() *spec.BuilderConfig {
 		panic("failed to load builder config from testdata: " + err.Error())
 	}
 	return builderCfg
-}
-
-// testProjectDir writes a minimal valid charly.yml (+ build.yml) to a
-// tmpdir and returns its path. Use when a test needs a real project dir
-// argument for Validate / ResolveBox calls that no longer tolerate dir="".
-// The emitted project has fedora + arch + debian + ubuntu distros and
-// a pixi builder — enough to cover most fixture Configs without error.
-func testProjectDir(t interface {
-	TempDir() string
-	Fatalf(string, ...any)
-	Helper()
-}) string {
-	t.Helper()
-	tmpdir := t.TempDir()
-	// Reuse testdata's build.yml (and testdata itself as the helper's dir when
-	// the caller didn't need tmpdir specifically) — it's a complete fixture.
-	root := []byte("version: 2026.204.1223\nimport: [build.yml]\n")
-	if err := os.WriteFile(filepath.Join(tmpdir, "charly.yml"), root, 0644); err != nil {
-		t.Fatalf("writing charly.yml: %v", err)
-	}
-	src, err := os.ReadFile("testdata/build.yml")
-	if err != nil {
-		t.Fatalf("reading testdata/build.yml: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(tmpdir, "build.yml"), src, 0644); err != nil {
-		t.Fatalf("writing build.yml: %v", err)
-	}
-	return tmpdir
 }

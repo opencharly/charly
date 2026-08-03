@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/buildkit"
-	"github.com/opencharly/sdk/vmshared"
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
@@ -153,7 +152,7 @@ func TestOCITargetEmitSystemPackagesWithLegacyTemplate(t *testing.T) {
 	chdirTemp(t)
 	// Legacy InstallTemplate set; PhaseTemplate returns it for (install, container).
 	distro := &spec.ResolvedDistro{
-		Format: map[string]*vmshared.FormatDef{
+		Format: map[string]*spec.Format{
 			"rpm": {
 				InstallTemplate: "RUN dnf install -y {{join .Packages \" \"}}\n",
 			},
@@ -187,11 +186,11 @@ func TestOCITargetEmitSystemPackagesPrefersNewPhases(t *testing.T) {
 	chdirTemp(t)
 	// Both legacy and new path set; new path must win.
 	distro := &spec.ResolvedDistro{
-		Format: map[string]*vmshared.FormatDef{
+		Format: map[string]*spec.Format{
 			"rpm": {
 				InstallTemplate: "RUN legacy-install\n",
-				Phases: &vmshared.PhaseSet{
-					Install: &vmshared.PhaseTemplates{
+				Phases: &spec.PhaseSet{
+					Install: &spec.PhaseTemplates{
 						Container: "RUN new-install {{join .Packages \" \"}}\n",
 					},
 				},
