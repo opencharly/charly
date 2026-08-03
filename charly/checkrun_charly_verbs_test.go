@@ -135,7 +135,7 @@ func TestResolveLocalImageRef_ShortNameNoMatch(t *testing.T) {
 // TestLiveVerb_SkipsUnderBoxMode: relocated from its own newFakeRunner-based construction to
 // drive the PRODUCTION seam (command:check's OpVerifyChecks, dispatchCheckOpsMode →
 // dispatchVerifyChecks) — this test asserts CHARLY's OWN dispatch (the context-vs-mode skip
-// gate, hostPlanGrammar/opInContext), not a kit-only semantic, so it stays in charly (#55
+// gate, opInContext), not a kit-only semantic, so it stays in charly (#55
 // decoupling cone, Batch D).
 func TestLiveVerb_SkipsUnderBoxMode(t *testing.T) {
 	// A live verb's runtime-context legality rides the AUTHORED `context:` since

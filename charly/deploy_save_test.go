@@ -198,7 +198,7 @@ existing:
 // (the vm lifecycle hook's PostTeardown) rely on to remove a VM's deploy.yml entry on teardown
 // — the inverse of the deploykit.SaveVmDeployState written on add (F6 vm-lifecycle move,
 // coneB-vmlifecycle: the primitive relocated to deploykit.RemoveVmDeployEntry, invoked here with
-// the same acquireDeployConfigLock + the test-local testSaveDeployConfig/testLoadBundleConfig
+// the deploy-config lock + the test-local testSaveDeployConfig/testLoadBundleConfig
 // callbacks that stand in for the deleted host save callback + DeployStateHost-backed
 // nil reader, #55 coneC-dsh δ). It proves the two load-bearing
 // properties of the fix:

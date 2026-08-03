@@ -6,7 +6,7 @@ package main
 //
 // K1 LOADER WAVE: the seam does ONLY the git clone/cache (EnsureRepoDownloaded — K1/B host floor,
 // refs.go) + version resolution, returning the cached source dir + the box's short name. The former
-// host-side box-RESOLVE this seam used to run (LoadConfig + resolveVocabOpts + deploykit.ResolveSpecBox
+// host-side box-RESOLVE this seam used to run (LoadConfig + the vocab fill + deploykit.ResolveSpecBox
 // + ScanAllCandyWithConfig) — and the registry pull ref it produced — MOVED PLUGIN-SIDE: the calling
 // plugin (candy/plugin-build's ensureRemoteRef) loads the cached repo's cfg via the K1 loader reverse
 // legs + reads the box's registry/name itself (loaderkit.LoadUnified +

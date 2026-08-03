@@ -7,11 +7,6 @@ import (
 	"github.com/opencharly/spec/spec"
 )
 
-// testPubKey mirrors tools/golden-cloudinit/main.go's OWN fixture constant of the same name
-// (kept in lockstep by inspection — both are tiny, stable literals) — documented here only, no
-// longer used to drive a live render (see TestRenderCloudInit_OutputValidatesAgainstSchema).
-const testPubKey = "ssh-ed25519 AAAATESTKEY user@host"
-
 // Egress-validation coverage. The teeth tests (the *BadFails cases) are the ones
 // that would PASS — wrongly — if the egress gate did not exist: they assert that
 // a malformed artifact is REJECTED before it could ever be written.

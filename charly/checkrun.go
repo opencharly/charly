@@ -9,7 +9,7 @@ import (
 // checkrun.go — the package-main RunMode binding + the check-verdict result helpers.
 //
 // The check-engine driver itself is kit.Runner (sdk/kit/runner.go). The host-coupled surfaces —
-// the verb dispatch (hostVerbResolver), the do-mode/context grammar (hostPlanGrammar), and the
+// the verb dispatch (hostVerbResolver), the do-mode/context grammar (opInContext/opEffectiveContexts), and the
 // live-verb CheckContext carrier (hostCheckCarrier) — stay in charly core (planrun_adapter.go),
 // PRODUCED for the check reverse channel by plugin_dispatch_reverse.go from the wire CheckEnv
 // snapshot. The IN-PROC plan-drive construction (the former newCheckRunner + carrierFromRunner +

@@ -19,7 +19,7 @@ import (
 // InvokeProvider reverse channel for every builtin verb.
 //
 // This helper drives the handful of check-engine tests that genuinely assert CHARLY's OWN dispatch
-// (e.g. the context-vs-mode skip gate, hostPlanGrammar/opInContext) through that SAME production seam
+// (e.g. the context-vs-mode skip gate, opInContext) through that SAME production seam
 // — dispatchVerifyChecks against a REAL local shell venue (specexec.ShellExecutor{}), never a
 // directly-constructed kit.Runner (which would test a construction path production no longer uses).
 // Tests asserting kit.RunOne/kit.RunPlan's OWN wrapper semantics, or a specific verb's OWN RunVerb

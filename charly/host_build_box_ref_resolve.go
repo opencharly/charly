@@ -16,7 +16,7 @@ package main
 // #55 coneB-br2: this file SHEDS its deploykit import via the #8 cfg.ResolveBoxRef pattern (the
 // SAME byte-identical shed coneK1 #8 BANKED for candy/plugin-build/ensure.go's resolveImageRefPlugin
 // — reads ONLY Registry+Name, NOT .Distro; cfg.ResolveBoxRef is pure config-nav, no build
-// vocabulary / resolveVocabOpts needed). The function STAYS host-side (its sole prod caller,
+// vocabulary fill needed). The function STAYS host-side (its sole prod caller,
 // plugin_executor_reverse.go's BuilderStep ResolveImage closure, is host-internal — coneD's
 // separate territory to move the CALLER plugin-side one day); the FILE's deploykit import is gone
 // NOW, regardless of that caller move. This REFUTES the prior "this file KEEPS its deploykit
@@ -43,7 +43,7 @@ import (
 // resolved.Name = leaf, resolved.Registry = img.Registry || nsCfg.Defaults.Registry, then
 // ResolveShellImageRef). projectDir is retained in the signature for the host-internal caller
 // but no longer needed for the resolve (cfg.ResolveBoxRef is pure config-nav — no build
-// vocabulary / resolveVocabOpts).
+// vocabulary fill).
 func resolveImageRefForEnsure(image string, cfg *Config, projectDir string) (string, error) {
 	_ = projectDir
 	if image == "" {
