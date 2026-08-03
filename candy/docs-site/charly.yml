@@ -16,9 +16,11 @@ docs-site:
             candy's copy: source may not traverse above its own directory (`..` is rejected at
             validate time), and there is no schema field for pointing a candy at a sibling
             directory. Cloning the published repository is the schema-legal path, and it happens
-            to test the more useful thing — the exact source Cloudflare builds. The consequence is
-            an ordering dependency: this candy builds against the docs repo's `main`, so docs
-            content must land there before this box (and the check-docs bed above it) go green.
+            to test the more useful thing — the exact source Cloudflare builds. It fetches an
+            IMMUTABLE COMMIT (`DOCS_REF` below), never a branch: that is what keeps the clone
+            layer's cache key moving with the pin. The consequence is an ordering dependency —
+            docs content must be merged, and `DOCS_REF` re-pinned to that merge, before this box
+            (and the check-docs bed above it) prove the new content.
 
             The checks below assert the site's SHAPE, not merely its existence: a generated CLI
             page, a candy page carrying its published acceptance plan, a recipe card from the
@@ -69,8 +71,8 @@ docs-site:
               #
               # This check is the reason the cache defect cannot recur silently: the first version
               # of this bed cloned with a constant `--branch main`, so podman's layer key never
-              # moved when docs main advanced, and the bed reported PASS for four runs while
-              # building docs@7e82b67. A stale layer now FAILS here instead.
+              # moved when docs main advanced, and every run reported PASS while building
+              # docs@7e82b67. A stale layer now FAILS here instead.
               check: the cloned site is the pinned commit, not a stale cached layer
               id: docs-site-pinned-commit
               exit_status: 0
