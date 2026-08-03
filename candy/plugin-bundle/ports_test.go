@@ -1,4 +1,4 @@
-package main
+package bundle
 
 import (
 	"net"
@@ -9,6 +9,12 @@ import (
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 )
+
+// ports_test.go — relocated from charly/ports_test.go (#55 decoupling, Batch A): every test
+// asserts a kit port-parsing function or deploykit.LocalizePort directly, zero charly dep.
+// TestLocalizePort (from charly/shell_test.go, also Batch A) is folded in here — same target
+// function (deploykit.LocalizePort), distinct edge cases from TestLocalizePort_PreservesIPv4Prefix
+// (not a true R3 duplicate).
 
 func TestParseHostPort(t *testing.T) {
 	tests := []struct {
@@ -152,6 +158,34 @@ func TestParsePortMapping_RoundTripsFormatPortMapping(t *testing.T) {
 		if !ok || p2 != p {
 			t.Errorf("round-trip diverged: %q -> %+v -> %q -> %+v", in, p, got, p2)
 		}
+	}
+}
+
+// TestLocalizePort covers deploykit.LocalizePort's basic behavior across bare/explicit/UDP
+// forms (relocated from charly/shell_test.go).
+func TestLocalizePort(t *testing.T) {
+	tests := []struct {
+		input    string
+		bindAddr string
+		want     string
+	}{
+		{"80:8000", "127.0.0.1", "127.0.0.1:80:8000"},
+		{"8080:8080", "127.0.0.1", "127.0.0.1:8080:8080"},
+		{"8080", "127.0.0.1", "127.0.0.1:8080:8080"},
+		{"9090", "127.0.0.1", "127.0.0.1:9090:9090"},
+		{"80:8000", "0.0.0.0", "0.0.0.0:80:8000"},
+		{"8080", "0.0.0.0", "0.0.0.0:8080:8080"},
+		{"47998:47998/udp", "127.0.0.1", "127.0.0.1:47998:47998/udp"},
+		{"48000/udp", "127.0.0.1", "127.0.0.1:48000:48000/udp"},
+		{"47990:47990/tcp", "127.0.0.1", "127.0.0.1:47990:47990/tcp"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.bindAddr+"/"+tt.input, func(t *testing.T) {
+			got := deploykit.LocalizePort(tt.input, tt.bindAddr)
+			if got != tt.want {
+				t.Errorf("localizePort(%q, %q) = %q, want %q", tt.input, tt.bindAddr, got, tt.want)
+			}
+		})
 	}
 }
 

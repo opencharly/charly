@@ -1,4 +1,4 @@
-package main
+package bundle
 
 import (
 	"testing"
@@ -6,6 +6,9 @@ import (
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 )
+
+// deploy_nested_pod_test.go — relocated from charly/deploy_nested_pod_test.go (#55 decoupling,
+// Batch A): single test asserts deploykit.MergeDeployConfigs directly, zero charly dep.
 
 // TestMergeDeployConfigs_VMNestedSurvivesNestedlessOverlay locks the merge
 // invariant the VM target's nested-pod deploy relies on: a project VM deploy

@@ -1,4 +1,4 @@
-package main
+package bundle
 
 import (
 	"reflect"
@@ -6,6 +6,10 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 )
+
+// aur_replaces_test.go — relocated from charly/aur_replaces_test.go (#55 decoupling, Batch A):
+// both tests assert deploykit.StringSliceFromYAML / ExtractStringSlice directly, zero charly
+// coupling.
 
 // TestStringSliceFromYAML covers the three input shapes the helper
 // must tolerate: pre-stringified slice, []interface{} (the YAML
@@ -67,5 +71,32 @@ func TestExtractStringSlice_AurReplacesShape(t *testing.T) {
 	// Absent key returns empty.
 	if got := deploykit.ExtractStringSlice(ctx, "absent-key"); len(got) != 0 {
 		t.Errorf("absent key: got %v, want []", got)
+	}
+}
+
+// TestExtractStringSliceHandlesBothShapes — relocated from charly/install_plan_test.go (#55
+// decoupling, Batch A; R3 consolidation: near-duplicate deploykit.ExtractStringSlice coverage
+// of TestExtractStringSlice_AurReplacesShape above, kept in the SAME file rather than
+// scattered across two — this test additionally exercises the direct []string input shape,
+// the nil-map case, and a missing key against a []string-backed map, none of which the
+// AUR-shaped test above covers).
+func TestExtractStringSliceHandlesBothShapes(t *testing.T) {
+	// []string
+	m1 := map[string]any{"k": []string{"a", "b"}}
+	if got := deploykit.ExtractStringSlice(m1, "k"); len(got) != 2 || got[0] != "a" {
+		t.Errorf("extractStringSlice([]string) = %v, want [a b]", got)
+	}
+	// []interface{} (as produced by yaml.v3 when unmarshaling into map[string]interface{})
+	m2 := map[string]any{"k": []any{"a", "b"}}
+	if got := deploykit.ExtractStringSlice(m2, "k"); len(got) != 2 || got[0] != "a" {
+		t.Errorf("extractStringSlice([]interface{}) = %v, want [a b]", got)
+	}
+	// Missing key → nil
+	if got := deploykit.ExtractStringSlice(m1, "missing"); got != nil {
+		t.Errorf("missing key returned %v, want nil", got)
+	}
+	// Nil map → nil
+	if got := deploykit.ExtractStringSlice(nil, "k"); got != nil {
+		t.Errorf("nil map returned %v, want nil", got)
 	}
 }

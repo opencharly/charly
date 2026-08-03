@@ -1,16 +1,9 @@
 package main
 
 import (
-	"context"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/vmshared"
-	"github.com/opencharly/spec/spec"
 )
 
 // Tests for the four Task-9 host-infra files.
@@ -109,153 +102,14 @@ func TestCompareGlibc(t *testing.T) {
 	}
 }
 
-// ---------------- install_ledger.go ----------------
+// TestLedgerRoundTrip / TestLedgerRefcount / TestLedgerFlock / withTempLedger relocated to
+// candy/plugin-bundle (#55 decoupling, Batch A) — they asserted kit ledger functions directly,
+// zero charly dep.
 
-func withTempLedger(t *testing.T) *kit.LedgerPaths {
-	t.Helper()
-	root := t.TempDir()
-	return &kit.LedgerPaths{
-		Root:     root,
-		Deploys:  filepath.Join(root, "deploys"),
-		Candies:  filepath.Join(root, "layers"),
-		LockFile: filepath.Join(root, ".lock"),
-	}
-}
-
-func TestLedgerRoundTrip(t *testing.T) {
-	paths := withTempLedger(t)
-	rec := &kit.DeployRecord{
-		DeployID:   "abc123",
-		Image:      "fedora-coder",
-		Target:     "host",
-		Candy:      []string{"ripgrep", "uv"},
-		DeployedAt: "2026-04-21T00:00:00Z",
-	}
-	if err := kit.WriteDeployRecord(paths, rec); err != nil {
-		t.Fatalf("write: %v", err)
-	}
-	got, err := kit.ReadDeployRecord(paths, "abc123")
-	if err != nil || got == nil {
-		t.Fatalf("read: %v / %+v", err, got)
-	}
-	if got.Image != "fedora-coder" || len(got.Candy) != 2 {
-		t.Errorf("round-trip broken: %+v", got)
-	}
-}
-
-func TestLedgerRefcount(t *testing.T) {
-	paths := withTempLedger(t)
-	// Deploy A and B both include ripgrep.
-	if err := kit.AddCandyDeployment(paths, "ripgrep", "deploy-A", nil); err != nil {
-		t.Fatal(err)
-	}
-	if err := kit.AddCandyDeployment(paths, "ripgrep", "deploy-B", nil); err != nil {
-		t.Fatal(err)
-	}
-	rec, _ := kit.ReadCandyRecord(paths, "ripgrep")
-	if len(rec.DeployedBy) != 2 {
-		t.Errorf("DeployedBy = %v, want 2 entries", rec.DeployedBy)
-	}
-
-	// Remove A — ripgrep stays.
-	_, shouldRemove, err := kit.RemoveCandyDeployment(paths, "ripgrep", "deploy-A")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if shouldRemove {
-		t.Errorf("shouldRemove=true after removing one of two deployers")
-	}
-	rec, _ = kit.ReadCandyRecord(paths, "ripgrep")
-	if len(rec.DeployedBy) != 1 || rec.DeployedBy[0] != "deploy-B" {
-		t.Errorf("after decrement: %v", rec.DeployedBy)
-	}
-
-	// Remove B — ripgrep should fully teardown.
-	_, shouldRemove, err = kit.RemoveCandyDeployment(paths, "ripgrep", "deploy-B")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !shouldRemove {
-		t.Errorf("shouldRemove=false when DeployedBy drains to empty")
-	}
-}
-
-func TestLedgerFlock(t *testing.T) {
-	paths := withTempLedger(t)
-	lock, err := kit.AcquireLedgerLock(paths)
-	if err != nil {
-		t.Fatalf("acquire: %v", err)
-	}
-	// Can't easily test contention without a second process — at least
-	// verify release succeeds and the lock file exists.
-	if _, err := os.Stat(paths.LockFile); err != nil {
-		t.Errorf("lock file not created: %v", err)
-	}
-	if err := lock.Release(); err != nil {
-		t.Errorf("release: %v", err)
-	}
-}
-
-// ---------------- builder_run.go ----------------
-
-func TestBuildBuilderRunArgs(t *testing.T) {
-	opts := spec.BuilderRunOpts{
-		BuilderImage: "fedora-builder:latest",
-		CandyDir:     "/home/user/layers/pre-commit",
-		HostHome:     "/home/user",
-		BindMounts: map[string]string{
-			"/home/user/.pixi": "/home/user/.pixi",
-		},
-		Env: map[string]string{
-			"PIXI_CACHE_DIR": "/home/user/.cache/charly/pixi",
-		},
-	}
-	args := kit.BuildBuilderRunArgs(opts)
-	want := []string{
-		"run", "--rm",
-		"--pull=never", // the injected EnsureImage closure has already handled the pull/build; suppress podman's auto-pull.
-		"--user",       // we don't check the exact uid because it varies
-	}
-	if len(args) < len(want) {
-		t.Fatalf("args too short: %v", args)
-	}
-	for i, w := range want {
-		if args[i] != w {
-			t.Errorf("args[%d] = %q, want %q (full: %v)", i, args[i], w, args)
-		}
-	}
-	// Verify critical pieces are present.
-	fullCmd := strings.Join(args, " ")
-	mustContain := []string{
-		"fedora-builder:latest",
-		"-v /home/user/.pixi:/home/user/.pixi:rw",
-		"-v /home/user/layers/pre-commit:/work:ro",
-		"-e HOME=/home/user",
-		"-e PIXI_CACHE_DIR=/home/user/.cache/charly/pixi",
-		"-w /work",
-		"bash -s",
-	}
-	for _, m := range mustContain {
-		if !strings.Contains(fullCmd, m) {
-			t.Errorf("missing %q in args: %s", m, fullCmd)
-		}
-	}
-}
-
-func TestBuilderRunDryRun(t *testing.T) {
-	// DryRun should return nil, nil without actually exec'ing.
-	out, err := kit.BuilderRun(context.Background(), spec.BuilderRunOpts{
-		BuilderImage: "fedora-builder",
-		DryRun:       true,
-		ScriptBody:   "echo hi",
-	})
-	if err != nil {
-		t.Errorf("dry-run should not error: %v", err)
-	}
-	if out != nil {
-		t.Errorf("dry-run should return nil output; got %q", out)
-	}
-}
+// TestBuildBuilderRunArgs / TestBuilderRunDryRun / TestBuildBuilderRunArgsRunAsRoot relocated to
+// candy/plugin-build (#55 decoupling; Batch A executed this move on Batch B's behalf per the
+// cross-batch file-ownership matrix) — they asserted kit.BuildBuilderRunArgs/BuilderRun
+// directly, zero charly coupling.
 
 // ---------------- shell_profile.go ----------------
 //
@@ -275,69 +129,6 @@ func TestBuilderRunDryRun(t *testing.T) {
 // deploykit injected-seam pattern collapsed to a direct kit.RemoveEnvdFile
 // call).
 
-// TestRemoveManagedBlockAt proves the LOCAL per-candy teardown strip (the live path
-// reverseRemoveManaged takes when runner==nil): a candy's fenced shell-snippet block is
-// removed from an rc file the user also owns, leaving the user's own content intact.
-func TestRemoveManagedBlockAt(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, ".bashrc")
-	begin, end := kit.MarkersForTag("mycandy")
-	content := "export USER_VAR=1\n" + begin + "\nexport CANDY_VAR=2\n" + end + "\nalias ll='ls -l'\n"
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := kit.RemoveManagedBlockAt(path, "mycandy"); err != nil {
-		t.Fatalf("RemoveManagedBlockAt: %v", err)
-	}
-	got, _ := os.ReadFile(path)
-	if strings.Contains(string(got), "CANDY_VAR") || strings.Contains(string(got), begin) {
-		t.Errorf("per-candy managed block not stripped:\n%s", got)
-	}
-	if !strings.Contains(string(got), "USER_VAR") || !strings.Contains(string(got), "alias ll") {
-		t.Errorf("user content lost during strip:\n%s", got)
-	}
-}
-
-// TestRenderManagedBlockStrip proves the REMOTE per-candy teardown strip (the live path
-// reverseRemoveManaged takes when runner!=nil): the rendered POSIX-sh script, run through
-// a real shell, strips exactly the candy's fence pair in place and preserves the rest.
-func TestRenderManagedBlockStrip(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, ".bashrc")
-	begin, end := kit.MarkersForTag("mycandy")
-	content := "export USER_VAR=1\n" + begin + "\nexport CANDY_VAR=2\n" + end + "\nalias ll='ls -l'\n"
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if out, err := exec.Command("sh", "-c", kit.RenderManagedBlockStrip(path, "mycandy")).CombinedOutput(); err != nil {
-		t.Fatalf("strip script failed: %v\n%s", err, out)
-	}
-	got, _ := os.ReadFile(path)
-	if strings.Contains(string(got), "CANDY_VAR") || strings.Contains(string(got), begin) {
-		t.Errorf("remote strip left the managed block:\n%s", got)
-	}
-	if !strings.Contains(string(got), "USER_VAR") || !strings.Contains(string(got), "alias ll") {
-		t.Errorf("remote strip lost user content:\n%s", got)
-	}
-}
-
-// TestBuildBuilderRunArgsRunAsRoot asserts the RunAsRoot path emits
-// `--user 0:0`. the local deploy target.execBuilder always sets RunAsRoot=true
-// because rootless podman maps in-container uid 0 to the operator's host
-// uid; bind-mounts of $HOME/.cargo / $HOME/.npm-global / etc. are then
-// writable. Without this flag the in-container user is mapped to a
-// subordinate uid that doesn't match the bind-mount owner and writes
-// fail with EACCES.
-func TestBuildBuilderRunArgsRunAsRoot(t *testing.T) {
-	opts := spec.BuilderRunOpts{
-		BuilderImage: "arch-builder:latest",
-		CandyDir:     "/home/user/layers/pre-commit",
-		HostHome:     "/home/user",
-		RunAsRoot:    true,
-	}
-	args := kit.BuildBuilderRunArgs(opts)
-	full := strings.Join(args, " ")
-	if !strings.Contains(full, "--user 0:0") {
-		t.Errorf("RunAsRoot did not emit --user 0:0; got: %s", full)
-	}
-}
+// TestRemoveManagedBlockAt / TestRenderManagedBlockStrip relocated to candy/plugin-bundle (#55
+// decoupling, Batch A) — they asserted kit.RemoveManagedBlockAt/RenderManagedBlockStrip
+// directly, zero charly dep.

@@ -3,7 +3,6 @@ package main
 import (
 	"testing"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -319,23 +318,6 @@ func TestGateEnabledMatrix(t *testing.T) {
 	}
 }
 
-func TestExtractStringSliceHandlesBothShapes(t *testing.T) {
-	// []string
-	m1 := map[string]any{"k": []string{"a", "b"}}
-	if got := deploykit.ExtractStringSlice(m1, "k"); len(got) != 2 || got[0] != "a" {
-		t.Errorf("extractStringSlice([]string) = %v, want [a b]", got)
-	}
-	// []interface{} (as produced by yaml.v3 when unmarshaling into map[string]interface{})
-	m2 := map[string]any{"k": []any{"a", "b"}}
-	if got := deploykit.ExtractStringSlice(m2, "k"); len(got) != 2 || got[0] != "a" {
-		t.Errorf("extractStringSlice([]interface{}) = %v, want [a b]", got)
-	}
-	// Missing key → nil
-	if got := deploykit.ExtractStringSlice(m1, "missing"); got != nil {
-		t.Errorf("missing key returned %v, want nil", got)
-	}
-	// Nil map → nil
-	if got := deploykit.ExtractStringSlice(nil, "k"); got != nil {
-		t.Errorf("nil map returned %v, want nil", got)
-	}
-}
+// TestExtractStringSliceHandlesBothShapes relocated to candy/plugin-bundle (#55 decoupling,
+// Batch A; consolidated with aur_replaces_test.go's TestExtractStringSlice_AurReplacesShape,
+// R3) — it asserted deploykit.ExtractStringSlice directly, zero charly dep.

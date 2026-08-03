@@ -1,4 +1,4 @@
-package main
+package bundle
 
 import (
 	"strings"
@@ -6,6 +6,9 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 )
+
+// deploy_name_guard_test.go — relocated from charly/deploy_name_guard_test.go (#55 decoupling,
+// Batch A): single test asserts deploykit.RejectImageRefAsDeployName directly, zero charly dep.
 
 // A tagged registry image ref used AS a deploy name produces a charly.yml key with registry-host
 // dots, which the loader rejects (dots are reserved for dotted-path addressing) — so config

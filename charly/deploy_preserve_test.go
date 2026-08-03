@@ -175,33 +175,7 @@ cachyos-gpu:
 	}
 }
 
-// TestMergeDeployConfigsPreservesPreemptible covers the project↔per-host overlay
-// merge — the documented former drop-site for Disposable/Lifecycle. The
-// committed project profile (no preemptible) merged with the per-host overlay
-// (preemptible) must keep the per-host flag, regardless of merge order.
-func TestMergeDeployConfigsPreservesPreemptible(t *testing.T) {
-	project := &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{
-		"cachyos-gpu": {Target: "vm", From: "cachyos-gpu"}, // committed: NO preemptible
-	}}
-	perHost := &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{
-		"cachyos-gpu": {Preemptible: &spec.PreemptibleConfig{Holds: []string{"nvidia-gpu"}}}, // local opt-in
-	}}
-	for _, tc := range []struct {
-		name    string
-		configs []*deploykit.BundleConfig
-	}{
-		{"project then per-host", []*deploykit.BundleConfig{project, perHost}},
-		{"per-host then project", []*deploykit.BundleConfig{perHost, project}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			merged := deploykit.MergeDeployConfigs(tc.configs...)
-			node := merged.Bundle["cachyos-gpu"]
-			if node.Preemptible == nil || len(node.Preemptible.Holds) != 1 {
-				t.Errorf("merge DROPPED per-host preemptible: got %+v", node.Preemptible)
-			}
-			if node.From != "cachyos-gpu" {
-				t.Errorf("merge lost committed vm field: got %q", node.From)
-			}
-		})
-	}
-}
+// TestMergeDeployConfigsPreservesPreemptible relocated to candy/plugin-bundle (#55
+// decoupling, Batch A) — unlike its 3 siblings above (which genuinely need charly's own
+// LoadUnified for a loader-integration round-trip and stay per ruling 1), it asserted
+// deploykit.MergeDeployConfigs directly against plain literal fixtures, zero charly dep.

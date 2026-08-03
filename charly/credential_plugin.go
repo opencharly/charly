@@ -14,12 +14,14 @@ import (
 // The ENTIRE store implementation (keyring + config backends, the Secret Service client,
 // the `charly secrets` CLI, the GPG `.secrets` surface) lives OUT-OF-PROCESS in
 // candy/plugin-secrets — the C2 dep-shed removed github.com/zalando/go-keyring from
-// charly/go.mod. Every core credential consumer (enc.go, secrets.go, layer_secrets.go,
-// runtime_config.go, vnc_helpers.go, migrate_charly_cutover4.go)
-// keeps using the SAME CredentialStore interface + the SAME
-// ResolveCredential entry point; pluginCredentialStore forwards every call to
-// verb:credential over the provider registry (built from candy source on a dev host, or
-// the baked /usr/lib/charly/plugins binary on an installed host / in a deployed container).
+// charly/go.mod. The remaining in-core credential consumer is check_endpoint_resolve.go
+// (VNC password resolution for the live check endpoint); every credential-consuming
+// capability named in earlier cutovers here (enc.go, secrets.go, layer_secrets.go,
+// runtime_config.go, vnc_helpers.go, migrate_charly_cutover4.go) has since relocated
+// out-of-process (e.g. enc.go → candy/plugin-enc) or been removed. pluginCredentialStore
+// forwards every call to verb:credential over the provider registry (built from candy
+// source on a dev host, or the baked /usr/lib/charly/plugins binary on an installed host /
+// in a deployed container).
 
 // CredServiceVNC is the bare-key credential service (VNC passwords use a bare key; every
 // other service uses a composite "service/key" map key). Kept in core because core
@@ -27,8 +29,7 @@ import (
 const CredServiceVNC = "charly/vnc"
 
 // CredentialStore abstracts secret storage backends. The implementation is the
-// out-of-process pluginCredentialStore; tests inject an in-memory fake via
-// setDefaultCredentialStoreForTest.
+// out-of-process pluginCredentialStore.
 type CredentialStore interface {
 	Get(service, key string) (string, error)
 	Set(service, key, value string) error
@@ -39,7 +40,9 @@ type CredentialStore interface {
 
 // credentialResolver is the richer-resolution seam: a store that can classify a lookup's
 // source (env/keyring/config/locked/unavailable/default) implements it, so
-// ResolveCredential surfaces "locked"/"unavailable" to enc.go's keyring-wait loop.
+// ResolveCredential surfaces the full source classification to its callers (the encryption
+// keyring-wait loop now lives out-of-process in candy/plugin-enc, reached over verb:credential
+// rather than this in-core function directly).
 type credentialResolver interface {
 	resolve(service, key string) (value, source string)
 }
@@ -184,38 +187,19 @@ func (s pluginCredentialStore) health() (*CredentialHealth, error) {
 }
 
 var (
-	defaultStoreMu       sync.Mutex
-	defaultStoreVal      CredentialStore
-	defaultStoreOverride CredentialStore // test seam (setDefaultCredentialStoreForTest)
+	defaultStoreMu  sync.Mutex
+	defaultStoreVal CredentialStore
 )
 
 // DefaultCredentialStore returns the active credential store — the out-of-process
-// pluginCredentialStore, or a test-injected fake.
+// pluginCredentialStore.
 func DefaultCredentialStore() CredentialStore {
 	defaultStoreMu.Lock()
 	defer defaultStoreMu.Unlock()
-	if defaultStoreOverride != nil {
-		return defaultStoreOverride
-	}
 	if defaultStoreVal == nil {
 		defaultStoreVal = pluginCredentialStore{}
 	}
 	return defaultStoreVal
-}
-
-// setDefaultCredentialStoreForTest injects a fake store so consumer tests exercise the
-// credential-consuming code paths WITHOUT building/connecting the out-of-process plugin.
-func setDefaultCredentialStoreForTest(s CredentialStore) {
-	defaultStoreMu.Lock()
-	defaultStoreOverride = s
-	defaultStoreMu.Unlock()
-}
-
-// resetDefaultCredentialStoreForTest clears the test override.
-func resetDefaultCredentialStoreForTest() {
-	defaultStoreMu.Lock()
-	defaultStoreOverride = nil
-	defaultStoreMu.Unlock()
 }
 
 // ResolveCredential checks an env var override, then the active store. Returns the value
