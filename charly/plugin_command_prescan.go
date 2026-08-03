@@ -17,6 +17,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/opencharly/spec/spec"
 )
 
 // prescanProjectCommandWords learns the external COMMAND words the pre-parse project directory
@@ -29,7 +31,7 @@ func prescanProjectCommandWords() {
 	if dir == "" {
 		return
 	}
-	data, err := os.ReadFile(filepath.Join(dir, UnifiedFileName))
+	data, err := os.ReadFile(filepath.Join(dir, spec.UnifiedFileName))
 	if err != nil {
 		return
 	}

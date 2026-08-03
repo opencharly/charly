@@ -54,13 +54,13 @@ autorestart={{supervisordRestart .Restart}}
 // withRaw sets .Raw to the fixture's own marshalled JSON — since ResolvedInit's
 // tags match spec.Init, the plugin render decodes .Raw back into a spec.Init with
 // the ServiceSchema, exactly as production does.
-func withRaw(ri *ResolvedInit) *ResolvedInit {
+func withRaw(ri *spec.ResolvedInit) *spec.ResolvedInit {
 	ri.Raw, _ = json.Marshal(ri)
 	return ri
 }
 
-func testSystemdInitDef() *ResolvedInit {
-	return withRaw(&ResolvedInit{
+func testSystemdInitDef() *spec.ResolvedInit {
+	return withRaw(&spec.ResolvedInit{
 		ManagementTool: "systemctl",
 		ServiceSchema: &spec.InitServiceSchema{
 			ServiceTemplate:    testSystemdServiceTemplate,
@@ -72,8 +72,8 @@ func testSystemdInitDef() *ResolvedInit {
 	})
 }
 
-func testSupervisordInitDef() *ResolvedInit {
-	return withRaw(&ResolvedInit{
+func testSupervisordInitDef() *spec.ResolvedInit {
+	return withRaw(&spec.ResolvedInit{
 		ManagementTool: "supervisorctl",
 		ServiceSchema: &spec.InitServiceSchema{
 			ServiceTemplate:  testSupervisordServiceTemplate,
@@ -93,7 +93,7 @@ func TestRenderServiceCustomSystemd(t *testing.T) {
 		Scope:   "system",
 		Enable:  true,
 	}
-	rendered, err := RenderService(entry, testSystemdInitDef(), ServiceRenderContext{
+	rendered, err := RenderService(entry, testSystemdInitDef(), spec.ServiceRenderContext{
 		Candy:         "ollama",
 		SystemUnitDir: "/etc/systemd/system",
 	})
@@ -134,7 +134,7 @@ func TestRenderServiceWantedBy(t *testing.T) {
 		After:    []string{"graphical-session.target"},
 		WantedBy: []string{"graphical-session.target"},
 	}
-	rendered, err := RenderService(entry, testSystemdInitDef(), ServiceRenderContext{
+	rendered, err := RenderService(entry, testSystemdInitDef(), spec.ServiceRenderContext{
 		Candy:       "session-capture",
 		UserUnitDir: "/home/cachy/.config/systemd/user",
 	})
@@ -162,7 +162,7 @@ func TestRenderServiceHomePortabilityToken(t *testing.T) {
 		Scope:  "user",
 		Enable: true,
 	}
-	rendered, err := RenderService(entry, testSystemdInitDef(), ServiceRenderContext{
+	rendered, err := RenderService(entry, testSystemdInitDef(), spec.ServiceRenderContext{
 		Candy:       "selkies",
 		Home:        spec.HomeToken,
 		UserUnitDir: spec.HomeToken + "/.config/systemd/user",
@@ -212,7 +212,7 @@ func TestRenderServicePackagedWithOverrides(t *testing.T) {
 			Env: map[string]string{"PGDATA": "/var/lib/postgresql/data"},
 		},
 	}
-	rendered, err := RenderService(entry, testSystemdInitDef(), ServiceRenderContext{
+	rendered, err := RenderService(entry, testSystemdInitDef(), spec.ServiceRenderContext{
 		Candy:         "postgresql",
 		SystemUnitDir: "/etc/systemd/system",
 	})
@@ -237,7 +237,7 @@ func TestRenderServicePackagedOnSupervisordRefuses(t *testing.T) {
 		UsePackaged: "postgresql.service",
 		Enable:      true,
 	}
-	_, err := RenderService(entry, testSupervisordInitDef(), ServiceRenderContext{Candy: "pg"})
+	_, err := RenderService(entry, testSupervisordInitDef(), spec.ServiceRenderContext{Candy: "pg"})
 	if err == nil {
 		t.Fatalf("expected error rendering use_packaged on supervisord, got nil")
 	}
@@ -252,7 +252,7 @@ func TestRenderServiceCustomSupervisord(t *testing.T) {
 		Exec:    "/usr/bin/ollama serve",
 		Restart: "always",
 	}
-	rendered, err := RenderService(entry, testSupervisordInitDef(), ServiceRenderContext{Candy: "ollama"})
+	rendered, err := RenderService(entry, testSupervisordInitDef(), spec.ServiceRenderContext{Candy: "ollama"})
 	if err != nil {
 		t.Fatalf("RenderService: %v", err)
 	}
@@ -274,7 +274,7 @@ func TestRenderServiceUserScope(t *testing.T) {
 		Scope:  "user",
 		Enable: true,
 	}
-	rendered, err := RenderService(entry, testSystemdInitDef(), ServiceRenderContext{
+	rendered, err := RenderService(entry, testSystemdInitDef(), spec.ServiceRenderContext{
 		Candy:       "x",
 		UserUnitDir: "/home/user/.config/systemd/user",
 	})

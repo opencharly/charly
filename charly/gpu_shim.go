@@ -4,47 +4,22 @@ import (
 	"github.com/opencharly/spec/spec"
 )
 
-// --- GPU pure helpers, aliased from spec ------------------------------------------------------
-//
-// nvidiaVendorID is still consumed in-core (gpu_imply.go's GPU-implied-shared check);
-// normalizePCIVendor/selectGPUByVendor by gpu_allocate.go's auto-allocation. The driver-MODE
-// consts (vfio/nvidia) and host-driver-name consts are consumed ONLY by the DRIVER-SWITCH path,
-// which is entirely out-of-core now (candy/plugin-gpu + candy/plugin-vm + candy/plugin-preempt
-// dispatch verb:gpu peer-to-peer) — no in-core alias needed for those.
-
-const nvidiaVendorID = spec.NvidiaVendorID
-
-// normalizePCIVendor / selectGPUByVendor are the pure GPU-selection helpers (spec) used by
-// auto-allocation (gpu_allocate.go); kept as package-var aliases so those call sites are
-// unchanged.
-var (
-	normalizePCIVendor = spec.NormalizePCIVendor
-	selectGPUByVendor  = spec.SelectGPUByVendor
-)
-
 // gpu_shim.go — the in-core SHIMS for GPU/VFIO host DETECTION (cutover C11). The
 // sysfs/exec detection LOGIC moved into the COMPILED-IN candy/plugin-gpu (verb:gpu);
 // these shims resolve that provider and Invoke it, so the in-core consumers
 // (`charly doctor`, `charly vm create`, and
-// gpu_allocate.go which already calls DetectVFIO) compile against the SAME symbol names
-// and are invisible above the shim. The DRIVER-SWITCH path (vfio<->nvidia rebind) has NO
-// in-core shim — every consumer (`charly vm gpu`, the arbiter) dispatches verb:gpu directly.
+// gpu_allocate.go which already calls DetectVFIO) get a plain function/var call. The
+// DRIVER-SWITCH path (vfio<->nvidia rebind) has NO in-core shim — every consumer
+// (`charly vm gpu`, the arbiter) dispatches verb:gpu directly.
 //
 // host→plugin dispatch mirrors k8sgen/egress (plain resolve+Invoke). Compiled-in
 // placement keeps verb:gpu resolvable with no connect step and runs the probe IN-PROC
 // (so MemlockLimitBytes reads charly's OWN RLIMIT_MEMLOCK — the semantics the callers
-// expect). The detection RESULT types alias package spec so consumers keep referring
-// to VFIOReport/VFIOGpu/VFIOPCIDevice/DetectedDevices unchanged.
-
-// Type aliases — the detection result types live in package spec (the SDK-importable
-// home the plugin also constructs them from) and are aliased here so every package-main
-// consumer compiles unchanged (R3, invisible above the shim).
-type (
-	VFIOReport      = spec.VFIOReport
-	VFIOGpu         = spec.VFIOGpu
-	VFIOPCIDevice   = spec.VFIOPCIDevice
-	DetectedDevices = spec.DetectedDevices
-)
+// expect). W0 deleted the former in-core type/const/var ALIASES onto spec.* (the
+// nvidiaVendorID/normalizePCIVendor/selectGPUByVendor/VFIOReport/VFIOGpu/VFIOPCIDevice/
+// DetectedDevices re-exports, which evaded the *_aliases.go glob by filename) — every
+// consumer reads spec.NvidiaVendorID/spec.NormalizePCIVendor/spec.SelectGPUByVendor/
+// spec.VFIOReport/spec.VFIOGpu/spec.VFIOPCIDevice/spec.DetectedDevices directly.
 
 // gpuProbeReply resolves verb:gpu and Invokes it with the action-multiplexed input.
 // plugin-gpu is compiled-in, so resolve never misses in a correctly-built binary; a
@@ -71,10 +46,10 @@ var DetectAMDGPU = func() bool {
 // DetectVFIO probes the host for IOMMU readiness and passthrough-capable GPUs.
 // Package-level var for testability (mirrors DetectGPU). The pci_class_labels table
 // stays in core (devices.go); the shim threads it to the plugin.
-var DetectVFIO = func() VFIOReport {
+var DetectVFIO = func() spec.VFIOReport {
 	reply := gpuProbeReply(spec.GpuProbeInput{Action: "detect-vfio", PCIClassLabels: pciClassLabels})
 	if reply.Vfio == nil {
-		return VFIOReport{}
+		return spec.VFIOReport{}
 	}
 	return *reply.Vfio
 }
@@ -82,14 +57,14 @@ var DetectVFIO = func() VFIOReport {
 // DetectHostDevices probes the host for available devices. Package-level var for
 // testability. The device_patterns + gpu_vendors tables stay in core (devices.go); the
 // shim threads them to the plugin.
-var DetectHostDevices = func() DetectedDevices {
+var DetectHostDevices = func() spec.DetectedDevices {
 	reply := gpuProbeReply(spec.GpuProbeInput{
 		Action:         "detect-host-devices",
 		DevicePatterns: devicePatterns,
 		GpuVendors:     gpuRenderVendors,
 	})
 	if reply.HostDevices == nil {
-		return DetectedDevices{}
+		return spec.DetectedDevices{}
 	}
 	return *reply.HostDevices
 }

@@ -14,7 +14,7 @@ type relocatedVerbCase struct {
 	desc        string
 	matchPrefix string
 	exit        int
-	mode        RunMode
+	mode        spec.CheckRunMode
 	input       map[string]any
 	want        spec.Status
 }

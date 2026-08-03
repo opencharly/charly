@@ -23,13 +23,13 @@ import (
 // R3). A plugin baked into the image is unaffected; nothing surfaces builder words across an entire
 // box scan.
 
-// externalizedBuilders is THE single source of truth for which builder words are served by an
+// spec.ExternalizedBuilders is THE single source of truth for which builder words are served by an
 // EXTERNAL out-of-process plugin (no in-proc BuilderProvider). A word here resolves through
 // providerRegistry.ResolveBuilder to a *grpcProvider connected at plugin-load time. The VALUE lives
 // in spec (#55 import-purity) so candy/plugin-build's plugin-side RESOLVE reads the same D-fact AND
-// charly core reaches it over its spec+proto-only import surface; this is the charly-core alias to it
-// (R3, one source).
-var externalizedBuilders = spec.ExternalizedBuilders
+// charly core reaches it over its spec+proto-only import surface (R3, one source). (W0 deleted the
+// former in-core externalizedBuilders alias — every consumer reads spec.ExternalizedBuilders
+// directly.)
 
 // externalBuilderPlugins maps each externalized builder word to the candy SUBPATH of the plugin
 // that serves it (in the default project repo) — the builder companion of

@@ -117,7 +117,7 @@ func ensureImagePresent(imageRef string, rt *hostenv.ResolvedRuntime) error {
 }
 
 func hostBuildPodConfigDetectDevices(_ context.Context, req spec.PodConfigDetectDevicesRequest, _ buildEngineContext) (spec.PodConfigDetectDevicesReply, error) {
-	var detected DetectedDevices
+	var detected spec.DetectedDevices
 	if !req.NoAutoDetect {
 		detected = DetectHostDevices()
 		LogDetectedDevices(detected)

@@ -27,7 +27,7 @@ import (
 type BuildFile struct {
 	Distro  map[string]*spec.ResolvedDistro `yaml:"distro" json:"distro"`
 	Builder map[string]*spec.BuilderDef     `yaml:"builder" json:"builder"`
-	Init    map[string]*ResolvedInit        `yaml:"init" json:"init"`
+	Init    map[string]*spec.ResolvedInit   `yaml:"init" json:"init"`
 }
 
 // LoadBuildConfigForBox loads distro, builder, and init configs for the

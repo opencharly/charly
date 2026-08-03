@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"github.com/opencharly/spec/spec"
 	"os"
 	"path/filepath"
 	"testing"
@@ -27,7 +28,7 @@ codex:
     description: OpenAI Codex CLI
     command: [codex, exec, "${PROMPT}"]
 `
-	if err := os.WriteFile(filepath.Join(dir, UnifiedFileName), []byte(doc), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, spec.UnifiedFileName), []byte(doc), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	uf, _, err := LoadUnified(dir)

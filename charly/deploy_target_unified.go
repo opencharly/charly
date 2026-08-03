@@ -50,7 +50,7 @@ type DeployContext struct {
 	// Cfg / DistroCfg / BuilderCfg are the configs loaded once by the
 	// resolve-target-add host seam (loadConfigForDeploy). Reused by each Add
 	// so the construction matches what the plugin compiled plans against.
-	Cfg        *Config
+	Cfg        *spec.Config
 	DistroCfg  *spec.DistroConfig
 	BuilderCfg *spec.BuilderConfig
 }

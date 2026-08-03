@@ -32,7 +32,7 @@ import (
 // step). The ENGINE itself is never carried across the process boundary — only this
 // descriptor is.
 type buildEngineContext struct {
-	Cfg        *Config
+	Cfg        *spec.Config
 	ProjectDir string
 	// DistroCfg is the resolved distro: vocabulary the SystemPackagesStep host render
 	// (deploykit.RenderHostPackageCommand) needs to look up the format's phase.install.host

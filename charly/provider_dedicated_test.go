@@ -17,7 +17,7 @@ func TestExternalizedBuilders_NoInProcProvider(t *testing.T) {
 	byKey := builtinInstanceMap()
 	manifest := parseEmbeddedProviderManifest()
 	for _, word := range []string{"cargo", "npm", "pixi", "aur"} {
-		if !externalizedBuilders[word] {
+		if !spec.ExternalizedBuilders[word] {
 			t.Fatalf("builder %q must be in externalizedBuilders (single source of truth)", word)
 		}
 		if _, ok := externalBuilderPlugins[word]; !ok {
@@ -67,7 +67,7 @@ func TestDedicatedProviders_BulkStepResolveAndAbsent(t *testing.T) {
 		}
 		// The 12 plugin-served kinds' build-emit externalized to candy/plugin-installstep: served by
 		// a compiled-in class:step plugin (lowercase word, StepContract).
-		word, isPlugin := pluginEmitStepWords[kind]
+		word, isPlugin := spec.PluginEmitStepWords[kind]
 		if !isPlugin {
 			t.Fatalf("step:%s is neither StepKindExternalPlugin nor in pluginEmitStepWords — an uncategorized kind", kind)
 		}

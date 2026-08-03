@@ -26,9 +26,9 @@ import (
 // pattern candy/plugin-deploy-vm/lifecycle_test.go already uses.
 //
 // charly/resolved_project_namespace_test.go's OTHER two tests (TestProjectTemplates_NamespaceQualified,
-// TestFindK8sSpec_NamespaceQualified) test charly-core's OWN LoadUnified/findK8sSpec directly and
-// stayed in charly untouched — they have zero sdk import and cannot move (those functions don't
-// exist in this plugin).
+// TestHostBuildDeployEntityResolve_K8sNamespaceQualified) test charly-core's OWN LoadUnified /
+// "deploy-entity-resolve" HostBuild seam directly and stayed in charly untouched — they have zero
+// sdk import and cannot move (that seam doesn't exist in this plugin).
 
 // fakeNamespaceExecutorServiceClient answers ONLY the "buildengine-namespaced" HostBuild leg
 // projectResolvedProjectLeg's FillNamespacedBoxes seam ALWAYS calls (unconditionally, even for a

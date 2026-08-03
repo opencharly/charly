@@ -107,7 +107,7 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 	// the SAME seam k3s_post + preresolve already use (R3). The host reads the project's kind:k8s
 	// spec this out-of-process plugin cannot reach. A miss / empty context is a valid result — the
 	// plugin falls back to the kubeconfig current-context (byte-equivalent to the former host-side
-	// findK8sSpec leg, which swallowed every resolve miss to "").
+	// direct-LoadUnified lookup, which swallowed every resolve miss to "").
 	if in.Cluster != "" && in.KubeContext == "" {
 		exec, err := sdk.ExecutorForInvoke(ctx, req.GetExecutorBrokerId())
 		if err != nil {

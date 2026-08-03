@@ -164,7 +164,7 @@ func (s *executorReverseServer) RunHostStep(ctx context.Context, req *pb.HostSte
 			return dispatchBuildEnsure(ctx, img, s.build.ProjectDir, "", "")
 		}
 		deps := &specexec.HostStepDeps{Exec: s.exec, ResolveImage: resolveImage, EnsureImage: ensureImage, DistroCfg: s.build.DistroCfg, Opts: opts}
-		reply, rerr := s.invokeExternalStep(specexec.ContextWithHostStepDeps(ctx, deps), ClassStep, pluginEmitStepWords[spec.StepKindBuilder], req.GetStepJson())
+		reply, rerr := s.invokeExternalStep(specexec.ContextWithHostStepDeps(ctx, deps), ClassStep, spec.PluginEmitStepWords[spec.StepKindBuilder], req.GetStepJson())
 		if rerr != nil {
 			return &pb.HostStepReply{Error: rerr.Error()}, nil
 		}
@@ -173,7 +173,7 @@ func (s *executorReverseServer) RunHostStep(ctx context.Context, req *pb.HostSte
 		// The LocalPkgInstall body (deploykit.VenueHasPkgManager + ExecLocalPkgInstall) runs
 		// plugin-side; only the typed venue executor + opts thread (no closures/DistroCfg needed).
 		deps := &specexec.HostStepDeps{Exec: s.exec, DistroCfg: s.build.DistroCfg, Opts: opts}
-		reply, rerr := s.invokeExternalStep(specexec.ContextWithHostStepDeps(ctx, deps), ClassStep, pluginEmitStepWords[spec.StepKindLocalPkgInstall], req.GetStepJson())
+		reply, rerr := s.invokeExternalStep(specexec.ContextWithHostStepDeps(ctx, deps), ClassStep, spec.PluginEmitStepWords[spec.StepKindLocalPkgInstall], req.GetStepJson())
 		if rerr != nil {
 			return &pb.HostStepReply{Error: rerr.Error()}, nil
 		}
@@ -183,7 +183,7 @@ func (s *executorReverseServer) RunHostStep(ctx context.Context, req *pb.HostSte
 		// DistroCfg + RunSystem on the venue) runs plugin-side; the DistroCfg threads via
 		// HostStepDeps (the plugin cannot reach the host's distro vocabulary otherwise).
 		deps := &specexec.HostStepDeps{Exec: s.exec, DistroCfg: s.build.DistroCfg, Opts: opts}
-		reply, rerr := s.invokeExternalStep(specexec.ContextWithHostStepDeps(ctx, deps), ClassStep, pluginEmitStepWords[spec.StepKindSystemPackages], req.GetStepJson())
+		reply, rerr := s.invokeExternalStep(specexec.ContextWithHostStepDeps(ctx, deps), ClassStep, spec.PluginEmitStepWords[spec.StepKindSystemPackages], req.GetStepJson())
 		if rerr != nil {
 			return &pb.HostStepReply{Error: rerr.Error()}, nil
 		}

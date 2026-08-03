@@ -41,7 +41,7 @@ import (
 // their canonical ref (a box/<distro> submodule deploy that triggers a builder but vendors the
 // plugin nowhere; under CHARLY_REPO_OVERRIDE the ref resolves to the local superproject). A builder
 // whose plugin still will not connect is a LOUD error (R4).
-func ensureBuildersConnected(ctx context.Context, cfg *Config, dir string, words []string) error {
+func ensureBuildersConnected(ctx context.Context, cfg *spec.Config, dir string, words []string) error {
 	refs := map[string]struct{}{}
 	var extraRefs []string
 	for _, w := range words {

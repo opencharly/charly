@@ -155,7 +155,7 @@ func repoRootDir(t *testing.T) string {
 		// The repo root holds the unified charly.yml entry point. build.yml is no
 		// longer a reliable marker — it's embedded in the binary, and the charly/
 		// source dir carries the embed-source build.yml.
-		if _, err := os.Stat(filepath.Join(dir, UnifiedFileName)); err == nil {
+		if _, err := os.Stat(filepath.Join(dir, spec.UnifiedFileName)); err == nil {
 			return dir
 		}
 		parent := filepath.Dir(dir)

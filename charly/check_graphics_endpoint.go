@@ -41,7 +41,7 @@ import (
 // endpoint + nil err = no live venue (box-mode / no-box); Skip=true = the VM declares no
 // graphics device of that kind (an N/A skip).
 func (h *hostVerbResolver) resolveVerbGraphics(kind string) (graphicsEndpoint, error) {
-	if h.cc.Box() == "" || h.cc.Mode() == RunModeBox {
+	if h.cc.Box() == "" || h.cc.Mode() == spec.CheckModeBox {
 		return graphicsEndpoint{}, nil
 	}
 

@@ -6,7 +6,7 @@ import (
 	"github.com/opencharly/spec/spec"
 )
 
-// checkrun.go — the package-main RunMode binding + the check-verdict result helpers.
+// checkrun.go — the check-verdict result helpers.
 //
 // The check-engine driver itself is kit.Runner (sdk/kit/runner.go). The host-coupled surfaces —
 // the verb dispatch (hostVerbResolver), the do-mode/context grammar (opInContext/opEffectiveContexts), and the
@@ -23,20 +23,15 @@ import (
 // sdk/kit's own test suite, and each verb's own RunVerb logic in its owning candy/plugin-<verb>
 // module's plugin_test.go.
 //
-// RunMode selects routing rules for a check pass. It is a package-main binding onto the CUE-sourced
-// spec.CheckRunMode; RunModeLive/RunModeBox map to spec.CheckModeLive/spec.CheckModeBox.
+// spec.CheckRunMode selects routing rules for a check pass (W0 deleted the former in-core
+// RunMode/RunModeLive/RunModeBox aliases — every consumer reads spec.CheckRunMode/
+// spec.CheckModeLive/spec.CheckModeBox directly):
 //
-//   - RunModeLive: charly check live — against a running container. In-container
+//   - spec.CheckModeLive: charly check live — against a running container. In-container
 //     probes via Exec; host-side verbs (http/dns/addr) from the charly process.
-//   - RunModeBox: charly check box — against a disposable container
+//   - spec.CheckModeBox: charly check box — against a disposable container
 //     (podman run --rm). All probes via Exec; host-side reachability is
 //     not meaningful and those checks are skipped.
-type RunMode = spec.CheckRunMode
-
-const (
-	RunModeLive = spec.CheckModeLive
-	RunModeBox  = spec.CheckModeBox
-)
 
 // ---------------------------------------------------------------------------
 // Result helpers

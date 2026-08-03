@@ -33,10 +33,8 @@ import (
 //     (`---` separated) node-form documents work naturally.
 // -----------------------------------------------------------------------------
 
-// UnifiedFileName is the canonical root file of the unified format. The value
-// lives in kit (the importable host-engine shared with out-of-tree plugin candies);
-// this is the in-core alias so every core call site is unchanged.
-const UnifiedFileName = spec.UnifiedFileName
+// spec.UnifiedFileName is the canonical root file of the unified format (W0 deleted the
+// former in-core UnifiedFileName alias — every consumer reads spec.UnifiedFileName directly).
 
 // The on-disk charly.yml schema version is a CalVer string (e.g.
 // 2026.141.1530) — the same scheme as image tags. LatestSchemaVersion()
@@ -258,10 +256,10 @@ func Builders(uf *spec.UnifiedFile) map[string]*spec.BuilderDef {
 }
 
 // resolveInits projects the name-keyed init-system vocabulary from
-// uf.PluginKinds["init"] (opaque bodies) into *ResolvedInit value envelopes via
+// uf.PluginKinds["init"] (opaque bodies) into *spec.ResolvedInit value envelopes via
 // candy/plugin-init's OpResolve config leg (the init de-type, Cutover F) — the
 // kernel never types the bodies.
-func resolveInits(uf *spec.UnifiedFile) map[string]*ResolvedInit {
+func resolveInits(uf *spec.UnifiedFile) map[string]*spec.ResolvedInit {
 	return spec.ResolvePluginKindViaPlugin(uf, "init", resolveInitConfigViaPlugin)
 }
 
@@ -305,7 +303,7 @@ func projectCandiesScanned(uf *spec.UnifiedFile, rootDir string) (map[string]spe
 			}
 			manifest := il.Manifest
 			if manifest == "" {
-				manifest = UnifiedFileName
+				manifest = spec.UnifiedFileName
 			}
 			m, v, refs, err := requireCandyScanner().ScanCandyManifest(p, name, manifest, parseCandyYAML)
 			if err != nil {

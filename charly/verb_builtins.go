@@ -33,7 +33,7 @@ import (
 // invokeVerbProvider (the else-branch in runOne) once the loader registers its grpcProvider
 // — never through this in-proc set. The plugin resolves any --cluster profile to a
 // concrete kubeconfig context via the GENERIC "deploy-entity-resolve" HostBuild seam
-// (kind:k8s → ResolvedK8s.KubeconfigContext); the same plugin's clientcmd-backed k3s
+// (kind:k8s → spec.ResolvedK8s.KubeconfigContext); the same plugin's clientcmd-backed k3s
 // post-provision finalization (kubeconfig rewrite + merge) routes through it via
 // deploy_add_shared.go's invokeKubePluginWithBroker.
 

@@ -18,8 +18,8 @@ type KubeInput struct {
 	Label string `yaml:"label,omitempty" json:"label,omitempty"`
 
 	// cluster — a kind:k8s cluster template name; the HOST preresolves it to a
-	// concrete kube_context (findK8sSpec needs the project loader) and leaves the
-	// authored key in place, so the input def admits both.
+	// concrete kube_context (the "deploy-entity-resolve" HostBuild seam needs the
+	// project loader) and leaves the authored key in place, so the input def admits both.
 	Cluster string `yaml:"cluster,omitempty" json:"cluster,omitempty"`
 
 	// manifest — the multi-doc YAML path (apply/delete).

@@ -11,20 +11,20 @@ import (
 // nvidiaReport builds a synthetic VFIOReport with one NVIDIA GPU (vendor
 // 0x10de) whose IOMMU group has two functions (the canonical RTX 4080 shape:
 // VGA + audio), plus an AMD display GPU that must NOT be selected.
-func nvidiaReport() VFIOReport {
+func nvidiaReport() spec.VFIOReport {
 	// VFIOGpu is flattened (SDD conversion) — spread via the shared
 	// spec.NewVFIOGpu constructor instead of the former embedded-field literal.
 	nvidia := spec.NewVFIOGpu(spec.VFIOPCIDevice{Addr: "0000:01:00.0", VendorID: "0x10de", DeviceID: "0x2702", IOMMUGroup: 13, Driver: "vfio-pci"})
-	nvidia.GroupMembers = []VFIOPCIDevice{
+	nvidia.GroupMembers = []spec.VFIOPCIDevice{
 		{Addr: "0000:01:00.0", VendorID: "0x10de", IOMMUGroup: 13},
 		{Addr: "0000:01:00.1", VendorID: "0x10de", IOMMUGroup: 13},
 	}
 	amd := spec.NewVFIOGpu(spec.VFIOPCIDevice{Addr: "0000:19:00.0", VendorID: "0x1002", DeviceID: "0x13c0", IOMMUGroup: 25, Driver: "amdgpu"})
-	amd.GroupMembers = []VFIOPCIDevice{{Addr: "0000:19:00.0", VendorID: "0x1002", IOMMUGroup: 25}}
-	return VFIOReport{
+	amd.GroupMembers = []spec.VFIOPCIDevice{{Addr: "0000:19:00.0", VendorID: "0x1002", IOMMUGroup: 25}}
+	return spec.VFIOReport{
 		IOMMUEnabled: true,
 		IOMMUKind:    "amd",
-		GPUs:         []VFIOGpu{nvidia, amd},
+		GPUs:         []spec.VFIOGpu{nvidia, amd},
 	}
 }
 
@@ -33,7 +33,7 @@ func TestNormalizePCIVendor(t *testing.T) {
 		"0x10de": "0x10de", "10de": "0x10de", "0X10DE": "0x10de", "10DE": "0x10de", "": "",
 	}
 	for in, want := range cases {
-		if got := normalizePCIVendor(in); got != want {
+		if got := spec.NormalizePCIVendor(in); got != want {
 			t.Errorf("normalizePCIVendor(%q) = %q, want %q", in, got, want)
 		}
 	}
@@ -41,30 +41,30 @@ func TestNormalizePCIVendor(t *testing.T) {
 
 func TestSelectGPUByVendor(t *testing.T) {
 	rep := nvidiaReport()
-	g, ok := selectGPUByVendor(rep, "10DE") // case/prefix-insensitive
+	g, ok := spec.SelectGPUByVendor(rep, "10DE") // case/prefix-insensitive
 	if !ok {
 		t.Fatal("expected to select the NVIDIA GPU")
 	}
 	if g.Addr != "0000:01:00.0" {
 		t.Errorf("selected %s, want 0000:01:00.0 (NVIDIA, not the AMD card)", g.Addr)
 	}
-	if _, ok := selectGPUByVendor(rep, "0x8086"); ok {
+	if _, ok := spec.SelectGPUByVendor(rep, "0x8086"); ok {
 		t.Error("expected no match for absent Intel vendor 0x8086")
 	}
-	if _, ok := selectGPUByVendor(VFIOReport{}, "0x10de"); ok {
+	if _, ok := spec.SelectGPUByVendor(spec.VFIOReport{}, "0x10de"); ok {
 		t.Error("expected no match on an empty report")
 	}
 }
 
 func TestRequiredGPUResource(t *testing.T) {
-	resources := map[string]*ResolvedResource{"nvidia-gpu": {Gpu: &ResolvedGpuSelector{Vendor: "0x10de"}}}
+	resources := map[string]*spec.ResolvedResource{"nvidia-gpu": {Gpu: &spec.ResolvedGpuSelector{Vendor: "0x10de"}}}
 	node := spec.BundleNode{Target: "vm", From: "gpu-vm", RequiresExclusive: []string{"nvidia-gpu"}}
 	tok, sel, ok := requiredGPUResource(&node, resources)
 	if !ok || tok != "nvidia-gpu" || sel.Vendor != "0x10de" {
 		t.Fatalf("requiredGPUResource = (%q,%v,%v), want nvidia-gpu/0x10de/true", tok, sel, ok)
 	}
 	// A token with no gpu selector (free arbitration token) → not a GPU resource.
-	free := map[string]*ResolvedResource{"some-lock": {}}
+	free := map[string]*spec.ResolvedResource{"some-lock": {}}
 	if _, _, ok := requiredGPUResource(&spec.BundleNode{RequiresExclusive: []string{"some-lock"}}, free); ok {
 		t.Error("a selector-less resource token must not trigger GPU allocation")
 	}
@@ -88,7 +88,7 @@ nvidia-gpu:
 some-lock:
   resource: {}
 `
-	if err := os.WriteFile(filepath.Join(dir, UnifiedFileName), []byte(doc), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, spec.UnifiedFileName), []byte(doc), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	uf, _, err := LoadUnified(dir)

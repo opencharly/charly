@@ -153,7 +153,7 @@ func TestScanAllCandiesNoRemote(t *testing.T) {
 }
 
 func TestCollectRemoteRefs(t *testing.T) {
-	cfg := &Config{
+	cfg := &spec.Config{
 		Box: boxMapOf(map[string]spec.BoxConfig{
 			"myapp": {
 				Candy: []string{
@@ -209,7 +209,7 @@ func TestCollectRemoteRefs(t *testing.T) {
 func TestCollectRemoteRefsOptsExtraCandyRefs(t *testing.T) {
 	// An image config that references NOTHING remote — proves the add_candy ref is
 	// collected via ExtraCandyRefs, not via any image-closure edge.
-	cfg := &Config{Box: boxMapOf(map[string]spec.BoxConfig{"arch": {Candy: []string{"pixi"}}})}
+	cfg := &spec.Config{Box: boxMapOf(map[string]spec.BoxConfig{"arch": {Candy: []string{"pixi"}}})}
 	layers := map[string]spec.CandyReader{"pixi": testCandy("pixi", spec.CandyModel{}, spec.CandyView{})}
 
 	pluginRef := "@github.com/opencharly/charly/candy/plugin-spice:v2026.174.0425"
@@ -250,7 +250,7 @@ func TestCollectRemoteRefsLocalTemplate(t *testing.T) {
 	// path as image candy: lists (regression guard for the 2026-05 CachyOS
 	// migration, where the charly-cachyos kind:local template composes 30 remote
 	// @-ref candies — previously invisible to CollectRemoteRefs).
-	cfg := &Config{
+	cfg := &spec.Config{
 		Box: boxMapOf(map[string]spec.BoxConfig{
 			"myapp": {
 				Candy: []string{
@@ -295,7 +295,7 @@ func TestCollectRemoteRefsOptsIncludeDisabled(t *testing.T) {
 	// 2026-05 deb-family split: no enabled debian image references `pixi`, so a
 	// disabled `debian-builder --include-disabled` would otherwise hit
 	// "unknown layer .../pixi" in computing global candy order.
-	cfg := &Config{
+	cfg := &spec.Config{
 		Box: boxMapOf(map[string]spec.BoxConfig{
 			"debian-builder": {
 				Enabled: new(false),
@@ -354,7 +354,7 @@ func TestCollectRemoteRefsDefaultsBuilderTransitiveCandies(t *testing.T) {
 	// a DISTINCT repo, so it appears in downloads ONLY if the defaults-supplied
 	// builder edge was actually followed (it was absent before the fix, because
 	// the raw per-image img.Builder these images carry is empty).
-	cfg := &Config{
+	cfg := &spec.Config{
 		Defaults: spec.BoxConfig{Builder: spec.BuilderMap{"pixi": "charly.fedora-builder"}},
 		Box: boxMapOf(map[string]spec.BoxConfig{
 			"bazzite": {
@@ -363,7 +363,7 @@ func TestCollectRemoteRefsDefaultsBuilderTransitiveCandies(t *testing.T) {
 				// NO per-image Builder: — supplied by defaults.builder above.
 			},
 		}),
-		Namespaces: map[string]*Config{
+		Namespaces: map[string]*spec.Config{
 			"charly": {
 				Box: boxMapOf(map[string]spec.BoxConfig{
 					"fedora-builder": {
@@ -406,7 +406,7 @@ func TestCollectRemoteRefsSameCandyBothTagsCollected(t *testing.T) {
 	// loaderkit.PickCandyVersion — see candy/plugin-loader's TestPickCandyVersion
 	// (#55 decoupling, Batch A). Collection's job is just to fetch every distinct
 	// (repo, git-tag).
-	cfg := &Config{
+	cfg := &spec.Config{
 		Box: boxMapOf(map[string]spec.BoxConfig{
 			"myapp": {
 				Candy: []string{
@@ -440,7 +440,7 @@ func TestCollectRemoteRefsSameCandyBothTagsCollected(t *testing.T) {
 
 func TestCollectRemoteRefsDifferentCandiesSameRepo(t *testing.T) {
 	// Different candies from same repo at different versions should be OK
-	cfg := &Config{
+	cfg := &spec.Config{
 		Box: boxMapOf(map[string]spec.BoxConfig{
 			"myapp": {
 				Candy: []string{

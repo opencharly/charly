@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/opencharly/spec/spec"
 )
 
 // devices.go — the KEPT core GPU/device surface after cutover C11 externalized the
@@ -16,9 +18,10 @@ import (
 //     (appendEnvUnique) and LogDetectedDevices.
 // The sysfs/exec detection PRIMITIVES (DetectGPU / DetectAMDGPU / DetectVFIO /
 // DetectHostDevices / EnsureCDI / MemlockLimitBytes / VfioGroupAccessible + their
-// impls + the VFIOReport/VFIOGpu/VFIOPCIDevice/DetectedDevices types) now live in
-// candy/plugin-gpu; core reaches them through the resolve+Invoke shims + type aliases
-// in gpu_shim.go.
+// impls + the spec.VFIOReport/VFIOGpu/VFIOPCIDevice/DetectedDevices envelope types) now
+// live in candy/plugin-gpu; core reaches them through the resolve+Invoke shims in
+// gpu_shim.go (W0: the former in-core type/const/var aliases onto spec.* are deleted —
+// every consumer reads spec.* directly).
 
 // AutoDetectFlags provides --no-autodetect CLI flag via Kong.
 // Embed in command structs that support device auto-detection.
@@ -82,7 +85,7 @@ func parseEmbeddedPCIClassLabels() map[string]string {
 }
 
 // LogDetectedDevices prints detected devices to stderr.
-func LogDetectedDevices(detected DetectedDevices) {
+func LogDetectedDevices(detected spec.DetectedDevices) {
 	var parts []string
 	if detected.GPU {
 		parts = append(parts, "NVIDIA GPU (CDI)")

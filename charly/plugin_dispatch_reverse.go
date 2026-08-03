@@ -139,9 +139,9 @@ func (s *executorReverseServer) InvokeProvider(ctx context.Context, req *pb.Invo
 					return nil, fmt.Errorf("InvokeProvider %s:%s: decode op: %w", class, word, derr)
 				}
 			}
-			mode := RunModeLive
+			mode := spec.CheckModeLive
 			if env.Mode == "box" {
-				mode = RunModeBox
+				mode = spec.CheckModeBox
 			}
 			dialTimeout := time.Duration(env.DialTimeoutNs)
 			if dialTimeout <= 0 {

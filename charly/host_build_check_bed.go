@@ -96,7 +96,7 @@ func (s *bedSession) release(ok bool) {
 		}
 	}
 	if s.cfgSet {
-		_ = os.Unsetenv(DeployConfigEnv)
+		_ = os.Unsetenv(spec.DeployConfigEnv)
 		_ = os.RemoveAll(s.cfgDir)
 	}
 	for i := len(s.domUnlock) - 1; i >= 0; i-- {
@@ -267,9 +267,9 @@ func bedSessionSetup(req spec.CheckBedRequest) (spec.CheckBedReply, error) {
 
 	// Isolate this bed's EPHEMERAL deploy state to a PER-BED config file so CONCURRENT beds never
 	// share the operator's ~/.config/charly/charly.yml. Only set (and own cleanup) when not already set.
-	if _, already := os.LookupEnv(DeployConfigEnv); !already {
+	if _, already := os.LookupEnv(spec.DeployConfigEnv); !already {
 		if cfgDir, mkErr := os.MkdirTemp("", "charly-bed-cfg-"+req.Bed+"-"); mkErr == nil {
-			_ = os.Setenv(DeployConfigEnv, filepath.Join(cfgDir, "charly.yml"))
+			_ = os.Setenv(spec.DeployConfigEnv, filepath.Join(cfgDir, "charly.yml"))
 			s.cfgSet = true
 			s.cfgDir = cfgDir
 		}

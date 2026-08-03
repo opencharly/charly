@@ -48,14 +48,16 @@ type credentialResolver interface {
 }
 
 // credentialHealther is the doctor seam: a store that can report keyring / secret-storage
-// health implements it (candy/plugin-doctor renders its checks from CredentialHealth,
+// health implements it (candy/plugin-doctor renders its checks from spec.CredentialHealth,
 // fetched host-side via the hostprobe host-build seam).
 type credentialHealther interface {
-	health() (*CredentialHealth, error)
+	health() (*spec.CredentialHealth, error)
 }
 
-// credentialInput / credentialReply / CredentialHealth are the verb:credential wire forms,
-// byte-compatible with candy/plugin-secrets (verb_credential.go).
+// credentialInput / credentialReply / spec.CredentialHealth are the verb:credential wire forms,
+// byte-compatible with candy/plugin-secrets (verb_credential.go). (W0 deleted the former
+// in-core CredentialHealth alias — every consumer reads spec.CredentialHealth directly; it
+// is homed in sdk/spec, shared by core + plugin-doctor, R3.)
 type credentialInput struct {
 	Method  string `json:"method"`
 	Service string `json:"service,omitempty"`
@@ -64,17 +66,13 @@ type credentialInput struct {
 }
 
 type credentialReply struct {
-	Value  string            `json:"value,omitempty"`
-	Source string            `json:"source,omitempty"`
-	Keys   []string          `json:"keys,omitempty"`
-	Name   string            `json:"name,omitempty"`
-	Error  string            `json:"error,omitempty"`
-	Health *CredentialHealth `json:"health,omitempty"`
+	Value  string                 `json:"value,omitempty"`
+	Source string                 `json:"source,omitempty"`
+	Keys   []string               `json:"keys,omitempty"`
+	Name   string                 `json:"name,omitempty"`
+	Error  string                 `json:"error,omitempty"`
+	Health *spec.CredentialHealth `json:"health,omitempty"`
 }
-
-// CredentialHealth is the keyring/secret-storage diagnostic verb:credential `health` returns; the
-// externalized candy/plugin-doctor renders it. Now homed in sdk/spec (core + plugin-doctor consumers, R3).
-type CredentialHealth = spec.CredentialHealth
 
 // pluginCredentialStore dispatches every credential operation to verb:credential.
 type pluginCredentialStore struct{}
@@ -178,7 +176,7 @@ func (s pluginCredentialStore) awaitUnlock(ctx context.Context, service, key str
 	return r.Value, r.Source, nil
 }
 
-func (s pluginCredentialStore) health() (*CredentialHealth, error) {
+func (s pluginCredentialStore) health() (*spec.CredentialHealth, error) {
 	r, err := s.call(credentialInput{Method: "health"})
 	if err != nil {
 		return nil, err
@@ -231,7 +229,7 @@ func ResolveCredential(envVar, service, key, defaultVal string) (value, source s
 
 // credentialHealth runs the doctor keyring/secret-storage probe via verb:credential
 // `health` (the plugin owns the Secret Service now).
-func credentialHealth() (*CredentialHealth, error) {
+func credentialHealth() (*spec.CredentialHealth, error) {
 	store := DefaultCredentialStore()
 	if h, ok := store.(credentialHealther); ok {
 		return h.health()

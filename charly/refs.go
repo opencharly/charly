@@ -248,11 +248,11 @@ func autoMigrateCacheProjectOnly(path string) error {
 // HEAD. A cache already at HEAD with charly.yml returns false — the fast,
 // silent path.
 func cacheBehindHead(path string) bool {
-	data, err := os.ReadFile(filepath.Join(path, UnifiedFileName))
+	data, err := os.ReadFile(filepath.Join(path, spec.UnifiedFileName))
 	if err != nil {
 		return true // no charly.yml → never-migrated → migrate
 	}
-	cv, ok := ParseCalVer(spec.FirstYAMLVersionLine(data))
+	cv, ok := spec.ParseCalVer(spec.FirstYAMLVersionLine(data))
 	if !ok {
 		return true
 	}
@@ -262,7 +262,7 @@ func cacheBehindHead(path string) bool {
 // CollectRemoteRefs is the default-opts wrapper (enabled images only) around
 // CollectRemoteRefsOpts. The overwhelming majority of call sites want
 // enabled-only collection, so they keep this two-arg form.
-func CollectRemoteRefs(cfg *Config, layers map[string]spec.CandyReader) ([]spec.RemoteDownload, error) {
+func CollectRemoteRefs(cfg *spec.Config, layers map[string]spec.CandyReader) ([]spec.RemoteDownload, error) {
 	return CollectRemoteRefsOpts(cfg, layers, spec.ResolveOpts{})
 }
 
@@ -281,7 +281,7 @@ func CollectRemoteRefs(cfg *Config, layers map[string]spec.CandyReader) ([]spec.
 // order.
 //
 //nolint:gocyclo // depth-first graph walker over base/candy/builder edges; nested loops are essential to the traversal
-func CollectRemoteRefsOpts(cfg *Config, layers map[string]spec.CandyReader, opts spec.ResolveOpts) ([]spec.RemoteDownload, error) {
+func CollectRemoteRefsOpts(cfg *spec.Config, layers map[string]spec.CandyReader, opts spec.ResolveOpts) ([]spec.RemoteDownload, error) {
 	// Collect EVERY distinct (repo, git-tag) a ref is referenced at. The git tag
 	// is only the FETCH coordinate — per-entity-version arbitration (and any
 	// warning) happens AFTER fetch in ScanAllCandyWithConfigOpts, so a re-tag of
@@ -336,9 +336,9 @@ func CollectRemoteRefsOpts(cfg *Config, layers map[string]spec.CandyReader, opts
 	// candies pinned at a different ecosystem tag, which the one-candy-one-version
 	// invariant (tracker) then correctly — but spuriously — rejected. The
 	// per-(Config,name) `collected` set also breaks the main<->cachyos cycle.
-	collected := map[*Config]map[string]bool{}
-	var collectBox func(c *Config, name string) error
-	collectBox = func(c *Config, name string) error {
+	collected := map[*spec.Config]map[string]bool{}
+	var collectBox func(c *spec.Config, name string) error
+	collectBox = func(c *spec.Config, name string) error {
 		seen := collected[c]
 		if seen == nil {
 			seen = map[string]bool{}

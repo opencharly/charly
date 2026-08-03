@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/opencharly/spec/spec"
 )
 
 // CheckBinaryFreshness verifies the running charly binary isn't stale relative
@@ -218,7 +220,7 @@ func findCharlySourceRoot(start string) string {
 	cur := start
 	for range 12 {
 		if statExists(filepath.Join(cur, "charly", "main.go")) &&
-			statExists(filepath.Join(cur, UnifiedFileName)) {
+			statExists(filepath.Join(cur, spec.UnifiedFileName)) {
 			return cur
 		}
 		parent := filepath.Dir(cur)

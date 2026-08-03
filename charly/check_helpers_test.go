@@ -13,7 +13,7 @@ import (
 // optional distro tags) — the in-proc host CheckContext / verb-dispatch source a compiled-in
 // kit verb's RunVerb and the host provision/plugin helpers consume. dialTimeout/httpBase mirror
 // kit.NewRunner's own zero-value defaults (3s / 10s) so fixture behavior stays unchanged.
-func hostVerbResolverFor(exec spec.DeployExecutor, mode RunMode, distros ...string) *hostVerbResolver {
+func hostVerbResolverFor(exec spec.DeployExecutor, mode spec.CheckRunMode, distros ...string) *hostVerbResolver {
 	return &hostVerbResolver{cc: &hostCheckCarrier{
 		execFn:      func() spec.DeployExecutor { return exec },
 		mode:        mode,

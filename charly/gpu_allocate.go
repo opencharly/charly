@@ -39,9 +39,9 @@ func bedGPUPrereqMissing(node spec.BundleNode) (token, vendor string, missing bo
 // lazily-invoked host VFIO detector, return the first token whose GPU vendor has
 // no matching card. detect is called AT MOST ONCE, only when a GPU-selector
 // token is actually present (so a non-GPU bed never probes hardware).
-func gpuPrereqMissing(tokens []string, resources map[string]*ResolvedResource, detect func() VFIOReport) (token, vendor string, missing bool) {
+func gpuPrereqMissing(tokens []string, resources map[string]*spec.ResolvedResource, detect func() spec.VFIOReport) (token, vendor string, missing bool) {
 	detected := false
-	var rep VFIOReport
+	var rep spec.VFIOReport
 	for _, tok := range tokens {
 		rdef := resources[tok]
 		if rdef == nil || rdef.Gpu == nil {
@@ -51,8 +51,8 @@ func gpuPrereqMissing(tokens []string, resources map[string]*ResolvedResource, d
 			rep = detect()
 			detected = true
 		}
-		v := normalizePCIVendor(rdef.Gpu.Vendor)
-		if _, found := selectGPUByVendor(rep, v); !found {
+		v := spec.NormalizePCIVendor(rdef.Gpu.Vendor)
+		if _, found := spec.SelectGPUByVendor(rep, v); !found {
 			return tok, v, true
 		}
 	}
@@ -62,7 +62,7 @@ func gpuPrereqMissing(tokens []string, resources map[string]*ResolvedResource, d
 // requiredGPUResource scans a claimant's requires_exclusive tokens for the
 // first that maps to a `resource:` carrying a gpu selector. Returns the token,
 // the selector, and ok=false when the claimant needs no GPU resource.
-func requiredGPUResource(cnode *spec.BundleNode, resources map[string]*ResolvedResource) (string, *ResolvedGpuSelector, bool) {
+func requiredGPUResource(cnode *spec.BundleNode, resources map[string]*spec.ResolvedResource) (string, *spec.ResolvedGpuSelector, bool) {
 	if cnode == nil {
 		return "", nil, false
 	}

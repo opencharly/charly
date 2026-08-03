@@ -233,7 +233,7 @@ func releaseResourceClaim(claimant string) {
 
 // gatherResources loads the token -> ResourceDef map (the gpu selector that drives the mode
 // flip) from the project charly.yml. nil when none / unreadable.
-func gatherResources() map[string]*ResolvedResource {
+func gatherResources() map[string]*spec.ResolvedResource {
 	if uf, ok, err := LoadUnified("."); err == nil && ok && uf != nil {
 		return resolveResources(uf)
 	}

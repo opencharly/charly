@@ -8,7 +8,7 @@ import (
 	"github.com/opencharly/spec/spec"
 )
 
-// CheckEnv is the SERIALIZABLE subset of a *Runner that crosses the wire to an
+// spec.CheckEnv is the SERIALIZABLE subset of a *Runner that crosses the wire to an
 // out-of-process verb provider. A *Runner cannot be marshalled (it holds a live
 // DeployExecutor + closures), so a verb provider receives this snapshot as the
 // Operation.Env. It carries only what a marshallable verb needs; verbs that reach
@@ -20,12 +20,12 @@ import (
 // InvokeProvider-backed VerbResolver marshal, and this file's own InvokeProvider detached-
 // CheckContext construction (plugin_dispatch_reverse.go) all share, replacing what were three
 // independently hand-maintained mirrors of the same wire contract with one CUE def + one
-// generated struct (R3/SDD).
-type CheckEnv = spec.CheckEnv
+// generated struct (R3/SDD). (W0 deleted the former in-core CheckEnv alias — every consumer
+// reads spec.CheckEnv directly.)
 
-func runModeName(m RunMode) string {
+func runModeName(m spec.CheckRunMode) string {
 	switch m {
-	case RunModeBox:
+	case spec.CheckModeBox:
 		return "box"
 	default:
 		return "live"
@@ -34,16 +34,16 @@ func runModeName(m RunMode) string {
 
 // snapshotCheckEnv captures the serializable invocation context for a verb
 // provider call.
-func snapshotCheckEnv(cc *hostCheckCarrier, _ *spec.Op) *CheckEnv {
+func snapshotCheckEnv(cc *hostCheckCarrier, _ *spec.Op) *spec.CheckEnv {
 	// Box is the verb's TARGET name across the wire. For a VM deployment it must be the per-deploy
 	// DOMAIN IDENTITY (VmTargetName) — the out-of-process vm/spice/libvirt plugins prefix charly-
 	// onto it to address the live domain and cannot LoadUnified to compute it themselves (the
 	// go-libvirt shed dropped that in-core remap). A pod/k8s/android deployment leaves VmName empty,
 	// so VmTargetName() == Box (unchanged).
-	ce := &CheckEnv{Box: cc.VmTargetName(), Instance: cc.Instance(), Distros: cc.Distros(), Mode: runModeName(cc.Mode()), DialTimeoutNs: int64(cc.DialTimeout())}
+	ce := &spec.CheckEnv{Box: cc.VmTargetName(), Instance: cc.Instance(), Distros: cc.Distros(), Mode: runModeName(cc.Mode()), DialTimeoutNs: int64(cc.DialTimeout())}
 	// The container name is meaningful only for a live (non-box) run with a real box —
 	// the same condition under which a live-container verb runs at all.
-	if cc.Mode() != RunModeBox && cc.Box() != "" && cc.Box() != "." {
+	if cc.Mode() != spec.CheckModeBox && cc.Box() != "" && cc.Box() != "." {
 		ce.ContainerName = spec.ContainerNameInstance(spec.ResolveBoxName(cc.Box()), cc.Instance())
 	}
 	if de := cc.Exec(); de != nil {

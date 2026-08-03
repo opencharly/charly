@@ -90,19 +90,16 @@ func validateTextEgress(label, text string) error {
 }
 
 // The render types are shared spec envelopes (host builds them, plugin renders).
-// ResolvedInit is the init de-type's build/label/entrypoint value envelope the
-// kernel consumes instead of the concrete spec.Init.
-type (
-	ServiceRenderContext = spec.ServiceRenderContext
-	RenderedService      = spec.RenderedService
-	KeyValue             = spec.KeyValue
-	ResolvedInit         = spec.ResolvedInit
-)
+// spec.ResolvedInit is the init de-type's build/label/entrypoint value envelope the
+// kernel consumes instead of the concrete spec.Init. (W0 deleted the former in-core
+// ServiceRenderContext/RenderedService/KeyValue/ResolvedInit aliases — every consumer
+// reads spec.ServiceRenderContext/spec.RenderedService/spec.KeyValue/spec.ResolvedInit
+// directly; KeyValue itself had zero live callers, pure residue.)
 
 // RenderService renders a ServiceEntry into a RenderedService via candy/plugin-init.
 // (Transitional: the typed initDef is marshalled to the plugin; the init config goes
 // fully opaque in F's finalize step.)
-func RenderService(entry *spec.ServiceEntry, def *ResolvedInit, ctx ServiceRenderContext) (*RenderedService, error) {
+func RenderService(entry *spec.ServiceEntry, def *spec.ResolvedInit, ctx spec.ServiceRenderContext) (*spec.RenderedService, error) {
 	if entry == nil {
 		return nil, fmt.Errorf("RenderService: nil entry")
 	}
@@ -125,7 +122,7 @@ func RenderService(entry *spec.ServiceEntry, def *ResolvedInit, ctx ServiceRende
 }
 
 // renderServiceViaPlugin invokes candy/plugin-init's OpResolve service-render leg.
-func renderServiceViaPlugin(in spec.ServiceRenderInput) (*RenderedService, error) {
+func renderServiceViaPlugin(in spec.ServiceRenderInput) (*spec.RenderedService, error) {
 	out, err := invokeInitResolve(spec.InitResolveRequest{Render: &in})
 	if err != nil {
 		return nil, err
@@ -137,14 +134,14 @@ func renderServiceViaPlugin(in spec.ServiceRenderInput) (*RenderedService, error
 		}
 	}
 	if reply.Rendered == nil {
-		return &RenderedService{}, nil
+		return &spec.RenderedService{}, nil
 	}
 	return reply.Rendered, nil
 }
 
 // resolveInitConfigViaPlugin invokes candy/plugin-init's OpResolve config leg,
-// projecting one opaque init body into a *ResolvedInit (legs 2–4 value envelope).
-func resolveInitConfigViaPlugin(body json.RawMessage) (*ResolvedInit, error) {
+// projecting one opaque init body into a *spec.ResolvedInit (legs 2–4 value envelope).
+func resolveInitConfigViaPlugin(body json.RawMessage) (*spec.ResolvedInit, error) {
 	out, err := invokeInitResolve(spec.InitResolveRequest{Config: &spec.InitResolveInput{Init: body}})
 	if err != nil {
 		return nil, err
