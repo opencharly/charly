@@ -56,22 +56,10 @@ func TestSelectGPUByVendor(t *testing.T) {
 	}
 }
 
-func TestRequiredGPUResource(t *testing.T) {
-	resources := map[string]*spec.ResolvedResource{"nvidia-gpu": {Gpu: &spec.ResolvedGpuSelector{Vendor: "0x10de"}}}
-	node := spec.BundleNode{Target: "vm", From: "gpu-vm", RequiresExclusive: []string{"nvidia-gpu"}}
-	tok, sel, ok := requiredGPUResource(&node, resources)
-	if !ok || tok != "nvidia-gpu" || sel.Vendor != "0x10de" {
-		t.Fatalf("requiredGPUResource = (%q,%v,%v), want nvidia-gpu/0x10de/true", tok, sel, ok)
-	}
-	// A token with no gpu selector (free arbitration token) → not a GPU resource.
-	free := map[string]*spec.ResolvedResource{"some-lock": {}}
-	if _, _, ok := requiredGPUResource(&spec.BundleNode{RequiresExclusive: []string{"some-lock"}}, free); ok {
-		t.Error("a selector-less resource token must not trigger GPU allocation")
-	}
-	if _, _, ok := requiredGPUResource(nil, resources); ok {
-		t.Error("nil claimant → no GPU resource")
-	}
-}
+// TestRequiredGPUResource relocated implicitly: requiredGPUResource was deleted from
+// charly/gpu_allocate.go as dead code (A1, K-wave W3) — its cited caller (validate_preempt.go)
+// was already deleted in 54657305, and candy/plugin-vm/gpu_allocate.go's identical live copy
+// carries its own coverage.
 
 // TestResourceKind_Loads verifies a node-form resource: kind loads through the plugin
 // path (runPluginKind → uf.PluginKinds["resource"], validated against the served
