@@ -287,8 +287,8 @@ func ProjectCandies(uf *spec.UnifiedFile, rootDir string) (map[string]spec.Candy
 // projectCandiesScanned is ProjectCandies' UNWRAPPED body: scans or synthesizes a candy per
 // entry in uf.Candy, into its pre-completion, pre-finalize spec.ScannedCandy form. Entries with
 // `from:` go through the registered loader plugin's typed CandyScanner seam so directory-based
-// candies behave identically to today. Inline entries synthesize from the embedded CandyYAML
-// (Part A's `directory:` field still applies).
+// candies behave identically to today. Inline entries synthesize from the embedded CandyYAML and
+// have no source directory of their own.
 func projectCandiesScanned(uf *spec.UnifiedFile, rootDir string) (map[string]spec.ScannedCandy, error) {
 	out := map[string]spec.ScannedCandy{}
 	for name, raw := range uf.Candy {
