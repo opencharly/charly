@@ -91,7 +91,17 @@ func generate(root, out string) error {
 	if err != nil {
 		return err
 	}
+	if err := generateRecipesIndex(out, skills, market); err != nil {
+		return err
+	}
 	if err := generateVision(root, out); err != nil {
+		return err
+	}
+
+	// The whole-site link gate runs LAST, over generated and hand-authored pages alike — the
+	// harness cross-reference gate above only ever covered `/charly-<plugin>:<skill>` references
+	// inside skill bodies, which is why a dead `/recipes/` link once shipped on a green build.
+	if err := verifySiteLinks(out); err != nil {
 		return err
 	}
 
