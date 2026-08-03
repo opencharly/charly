@@ -61,12 +61,16 @@ func TestSubstrateKind_BothShapesByteEquivalent(t *testing.T) {
                 image: migrator
 `
 	depGn := substrateNodeFromYAML(t, depDoc)
+	depPn, err := genericToParsedNode(depGn)
+	if err != nil {
+		t.Fatalf("genericToParsedNode: %v", err)
+	}
 	prov, ok := providerRegistry.ResolveKind("pod")
 	if !ok {
 		t.Fatal("pod kind must resolve to the compiled-in candy/plugin-substrate provider")
 	}
 	var acc spec.MaterializedProject
-	if err := foldSubstrateKind(prov, depGn, &acc); err != nil {
+	if err := foldSubstrateKind(prov, depPn, &acc); err != nil {
 		t.Fatalf("foldSubstrateKind (deploy): %v", err)
 	}
 	bn, ok := acc.Bundle["substrate-dep"]
@@ -76,9 +80,9 @@ func TestSubstrateKind_BothShapesByteEquivalent(t *testing.T) {
 	if acc.PluginKinds["pod"]["substrate-dep"] != nil {
 		t.Fatal("deploy shape also landed in acc.PluginKinds[\"pod\"] — must be acc.Bundle ONLY")
 	}
-	baseBn, err := buildBundleNode(depGn)
+	baseBn, err := requireProjectLoader().BuildBundleNode(depPn, loaderThreaded())
 	if err != nil {
-		t.Fatalf("baseline buildBundleNode: %v", err)
+		t.Fatalf("baseline BuildBundleNode: %v", err)
 	}
 	if got, want := mustJSON(t, bn), mustJSON(t, *baseBn); got != want {
 		t.Fatalf("DEPLOY-shape plugin fold != direct core decode\n plugin: %s\n core:   %s", got, want)
@@ -97,12 +101,16 @@ func TestSubstrateKind_BothShapesByteEquivalent(t *testing.T) {
         firmware: uefi-insecure
 `
 	tmplGn := substrateNodeFromYAML(t, tmplDoc)
+	tmplPn, err := genericToParsedNode(tmplGn)
+	if err != nil {
+		t.Fatalf("genericToParsedNode: %v", err)
+	}
 	vprov, ok := providerRegistry.ResolveKind("vm")
 	if !ok {
 		t.Fatal("vm kind must resolve to the compiled-in candy/plugin-substrate provider")
 	}
 	var acc2 spec.MaterializedProject
-	if err := foldSubstrateKind(vprov, tmplGn, &acc2); err != nil {
+	if err := foldSubstrateKind(vprov, tmplPn, &acc2); err != nil {
 		t.Fatalf("foldSubstrateKind (template): %v", err)
 	}
 	vm, ok := acc2.PluginKinds["vm"]["substrate-tmpl"]
@@ -117,9 +125,9 @@ func TestSubstrateKind_BothShapesByteEquivalent(t *testing.T) {
 	// pre-decode, and cross-check that both decode to the SAME ResolvedVm (the byte form
 	// differs from the old typed decode only by non-omitempty empties + key order — the
 	// consumer, resolveVmViaPlugin, is unaffected).
-	baseTmpl, err := entityBodyJSON(tmplGn)
+	baseTmpl, err := requireProjectLoader().EntityBodyJSON(tmplPn)
 	if err != nil {
-		t.Fatalf("baseline entityBodyJSON: %v", err)
+		t.Fatalf("baseline EntityBodyJSON: %v", err)
 	}
 	if got, want := string(vm), string(baseTmpl); got != want {
 		t.Fatalf("TEMPLATE-shape plugin fold != generic pre-decode\n plugin: %s\n core:   %s", got, want)

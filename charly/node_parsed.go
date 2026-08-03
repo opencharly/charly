@@ -10,20 +10,22 @@ import (
 
 // node_parsed.go — the host MATERIALIZE half of the P6/K1-unit-1 (#46) parse/materialize seam.
 // The PARSE (yaml → spec.ParsedProject) runs in the loader plugin via sdk/loaderkit; here the
-// host folds the ParsedProject back into the typed *spec.UnifiedFile. parsedNodeToGeneric reconstructs
-// the genericNode the TRUE clause-M dispatch (runPluginKind, provider_kind_invoke.go) reads from
-// a ParsedNode's opaque JSON body; materializeProject / materializeNodeInto drive the registered
-// spec.Materializer (candy/plugin-loader) per node — the former in-core not-found DISPATCH POLICY
-// (normalizeNodeInto) moved out of core; this file keeps the accumulator seed/copy-back plumbing
-// plus the genericNode reconstruction the DecodeEntity/BuildBundleEntity seam callbacks
-// (loader_threaded.go) need.
+// host folds the ParsedProject back into the typed *spec.UnifiedFile. materializeProject /
+// materializeNodeInto drive the registered spec.Materializer (candy/plugin-loader) per node — the
+// former in-core not-found DISPATCH POLICY (normalizeNodeInto) moved out of core; this file keeps
+// the accumulator seed/copy-back plumbing. Since K1 unit 3b, the TRUE clause-M dispatch
+// (provider_kind_invoke.go) threads spec.ParsedNode straight through its own call chain — it no
+// longer reconstructs genericNode for its main flow; parsedNodeToGeneric/genericToParsedNode
+// survive as the LOCAL, small-footprint bridge to genericNode ONLY where a call genuinely needs
+// it: the bootstrap-critical candyIsImage/buildCandy routing (clause B — provider_kind_invoke.go's
+// foldCandyKind, materialize.go's materializeDiscoveredNode, layers.go's candy-manifest parse) and
+// validateKindValueCUE's raw discValue shape check.
 
-// parsedNodeToGeneric reconstructs the genericNode the host-side kind DISPATCH (runPluginKind,
-// buildBundleNodeInto — provider_kind_invoke.go/node_bundle.go, the TRUE clause-M mechanism) reads
-// from a spec.ParsedNode: the JSON body becomes the discValue mapping node the fold + the
-// substrate/candy host-pre-decode read (entityBodyMapping / buildBundleNode use gn.discValue
-// only). Called from the DecodeEntity/BuildBundleEntity seam callbacks the registered
-// spec.Materializer plugin calls back into — no re-entrancy back into the loader plugin.
+// parsedNodeToGeneric reconstructs the genericNode a bootstrap-critical clause-B call
+// (candyIsImage/buildCandy) or the raw-discValue-shape check (validateKindValueCUE,
+// provider_kind_invoke.go) needs, from a spec.ParsedNode: the JSON body becomes the discValue
+// mapping node those calls read directly. Pure (no registry/host coupling) — safe to call
+// wherever a genericNode is genuinely needed, never a re-entrant load.
 func parsedNodeToGeneric(pn spec.ParsedNode) (*genericNode, error) {
 	gn := &genericNode{name: pn.Name, disc: pn.Disc, discClass: "entity"}
 	if len(pn.Body) > 0 {
@@ -68,10 +70,13 @@ func materializeNodeInto(pn spec.ParsedNode, uf *spec.UnifiedFile) error {
 }
 
 // genericToParsedNode is the INVERSE of parsedNodeToGeneric: it rebuilds the wire-safe
-// spec.ParsedNode a *genericNode fixture represents. Production code never needs this (a real
-// genericNode is always reconstructed FROM a spec.ParsedNode, never the other way around) — it
-// exists solely so tests that build a *genericNode fixture by hand (rather than parsing real YAML)
-// can still exercise the K1 unit-1 Materializer pipeline via normalizeNodeInto below.
+// spec.ParsedNode a *genericNode represents. Used in production by node_build.go's decodeNodeValue
+// (the ONE genericNode-typed core wrapper still standing, for node_candy.go's bootstrap-critical
+// buildCandy) to reach the relocated entity-body-assembly + CUE-decode mechanism (sdk/loaderkit, K1
+// unit 3b) — genericNode never crosses the ProjectLoader seam itself, only its wire-safe
+// spec.ParsedNode form does. Also exercised by tests that build a *genericNode fixture by hand
+// (rather than parsing real YAML) to drive the K1 unit-1 Materializer pipeline via
+// normalizeNodeInto below.
 func genericToParsedNode(gn *genericNode) (spec.ParsedNode, error) {
 	pn := spec.ParsedNode{Name: gn.name, Disc: gn.disc}
 	if gn.discValue != nil {

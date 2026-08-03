@@ -204,7 +204,12 @@ func TestCueKinds_Corpus(t *testing.T) {
 			// KEPT value def (#CandyValue / #<Kind>Value) — the SAME host-side
 			// closedness gate the loader runs (validateKindValueCUE) over the real
 			// corpus.
-			if verr := validateKindValueCUE(gn); verr != nil {
+			pn, perr := genericToParsedNode(gn)
+			if perr != nil {
+				t.Errorf("FAIL %s:%s.%s: genericToParsedNode: %v", f, gn.disc, gn.name, perr)
+				continue
+			}
+			if verr := validateKindValueCUE(pn); verr != nil {
 				t.Errorf("FAIL %s:%s.%s: %v", f, gn.disc, gn.name, verr)
 				continue
 			}

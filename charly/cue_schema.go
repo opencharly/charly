@@ -111,8 +111,8 @@ func validateEntityClosedCUE(kind, label string, entity cue.Value) error {
 // #Kind does not model — those are gated by #NodeDoc's deploy arm, not here.
 // plugin_input: stays open (a plugin step's params are validated by the
 // plugin's own spliced schema, not base #Op).
-func assembleAndValidateEntitySteps(gn *genericNode, label string) error {
-	body, err := assembleEntityBody(gn)
+func assembleAndValidateEntitySteps(pn spec.ParsedNode, label string) error {
+	body, err := requireProjectLoader().AssembleEntityBody(pn)
 	if err != nil {
 		return fmt.Errorf("%s: assemble: %w", label, err)
 	}
@@ -178,18 +178,15 @@ func validateNodeFormSteps(path string, data []byte) error {
 	if err := yaml.Unmarshal(data, &ydoc); err != nil {
 		return fmt.Errorf("%s: yaml: %w", path, err)
 	}
-	// The ONE node-form parse is the registered config front-end (P6, sdk/loaderkit); the
-	// genericNode validateEntityNodeRec consumes is reconstructed from each ParsedNode.
+	// The ONE node-form parse is the registered config front-end (P6, sdk/loaderkit); its
+	// spec.ParsedNode reply threads straight into validateEntityNodeRec (K1 unit 3b) — no
+	// genericNode reconstruction needed here anymore.
 	_, pp, err := requireLoaderParser().ParseDoc(&ydoc, loaderThreaded())
 	if err != nil {
 		return fmt.Errorf("%s: parse: %w", path, err)
 	}
 	for i := range pp.Nodes {
-		gn, gerr := parsedNodeToGeneric(pp.Nodes[i])
-		if gerr != nil {
-			return fmt.Errorf("%s: %w", path, gerr)
-		}
-		if verr := validateEntityNodeRec(gn, path); verr != nil {
+		if verr := validateEntityNodeRec(pp.Nodes[i], path); verr != nil {
 			return verr
 		}
 	}
@@ -202,14 +199,14 @@ func validateNodeFormSteps(path string, data []byte) error {
 // additionally validated concretely against #CandyValue (version+description
 // required, unknown inline fields rejected) — the box-validate counterpart of
 // the load-time host-side validateKindValueCUE (which is closedness-only).
-func validateEntityNodeRec(gn *genericNode, path string) error {
-	if err := assembleAndValidateEntitySteps(gn, fmt.Sprintf("%s: %s", path, gn.name)); err != nil {
+func validateEntityNodeRec(pn spec.ParsedNode, path string) error {
+	if err := assembleAndValidateEntitySteps(pn, fmt.Sprintf("%s: %s", path, pn.Name)); err != nil {
 		return err
 	}
-	if gn.disc == "candy" {
-		body, err := assembleEntityBody(gn)
+	if pn.Disc == "candy" {
+		body, err := requireProjectLoader().AssembleEntityBody(pn)
 		if err != nil {
-			return fmt.Errorf("%s: %s: assemble: %w", path, gn.name, err)
+			return fmt.Errorf("%s: %s: assemble: %w", path, pn.Name, err)
 		}
 		// The concrete gate covers LAYER manifests only (the pre-cutover
 		// validateCandyManifestCUE scope): an IMAGE entity (base:/from:) mixes
@@ -224,9 +221,9 @@ func validateEntityNodeRec(gn *genericNode, path string) error {
 		}
 		b, err := yaml.Marshal(body)
 		if err != nil {
-			return fmt.Errorf("%s: %s: marshal: %w", path, gn.name, err)
+			return fmt.Errorf("%s: %s: marshal: %w", path, pn.Name, err)
 		}
-		cv, err := cueDocFromYAML(fmt.Sprintf("%s: %s", path, gn.name), b)
+		cv, err := cueDocFromYAML(fmt.Sprintf("%s: %s", path, pn.Name), b)
 		if err != nil {
 			return err
 		}
@@ -235,14 +232,15 @@ func validateEntityNodeRec(gn *genericNode, path string) error {
 			return fmt.Errorf("%s: #CandyValue schema not found: %w", path, cdef.Err())
 		}
 		if verr := cv.Unify(cdef).Validate(cue.Concrete(true)); verr != nil {
-			return fmt.Errorf("%s: candy %q: %s", path, gn.name, errors.Details(verr, nil))
+			return fmt.Errorf("%s: candy %q: %s", path, pn.Name, errors.Details(verr, nil))
 		}
 	}
-	for _, ch := range gn.children {
-		if ch.discClass == "entity" {
-			if err := validateEntityNodeRec(ch, path); err != nil {
-				return err
-			}
+	// Every pn.Children entry is an entity child by construction (the parse-time desugar already
+	// separates step/data children into the plan/body fields before a spec.ParsedNode ever reaches
+	// here — see node_parse.go), so no discClass filter is needed.
+	for _, ch := range pn.Children {
+		if err := validateEntityNodeRec(*ch, path); err != nil {
+			return err
 		}
 	}
 	return nil

@@ -183,6 +183,47 @@ func (*provider) FoldStandaloneTemplateReply(disc, name string, replyJSON json.R
 	return loaderkit.FoldStandaloneTemplateReply(disc, name, replyJSON, acc)
 }
 
+// AssembleEntityBody / DecodeNodeValue / EntityBodyJSON / BuildBundleNode /
+// BuildResourceMemberChildren / BuildBundleNodeInto / IsDeployShape / DecodeStandaloneTemplateJSON /
+// ResourceChildren implement spec.ProjectLoader — the typed entity-body assembly +
+// bundle/resource-member tree-builder mechanism the host calls (compiled-in, no wire envelope):
+// delegate to the ONE copy in sdk/loaderkit (K1 unit 3b).
+func (*provider) AssembleEntityBody(pn spec.ParsedNode) (*yaml.Node, error) {
+	return loaderkit.AssembleEntityBody(pn)
+}
+
+func (*provider) DecodeNodeValue(pn spec.ParsedNode, out any) error {
+	return loaderkit.DecodeNodeValue(pn, out)
+}
+
+func (*provider) EntityBodyJSON(pn spec.ParsedNode) (json.RawMessage, error) {
+	return loaderkit.EntityBodyJSON(pn)
+}
+
+func (*provider) BuildBundleNode(pn spec.ParsedNode, t spec.Threaded) (*spec.BundleNode, error) {
+	return loaderkit.BuildBundleNode(pn, t)
+}
+
+func (*provider) BuildResourceMemberChildren(pn spec.ParsedNode, t spec.Threaded) (map[string]*spec.BundleNode, error) {
+	return loaderkit.BuildResourceMemberChildren(pn, t)
+}
+
+func (*provider) BuildBundleNodeInto(pn spec.ParsedNode, t spec.Threaded, acc *spec.MaterializedProject) error {
+	return loaderkit.BuildBundleNodeInto(pn, t, acc)
+}
+
+func (*provider) IsDeployShape(pn spec.ParsedNode) bool {
+	return loaderkit.IsDeployShape(pn)
+}
+
+func (*provider) DecodeStandaloneTemplateJSON(pn spec.ParsedNode, t spec.Threaded) (json.RawMessage, error) {
+	return loaderkit.DecodeStandaloneTemplateJSON(pn, t)
+}
+
+func (*provider) ResourceChildren(pn spec.ParsedNode) []spec.ParsedNode {
+	return loaderkit.ResourceChildren(pn)
+}
+
 // ResolveMergedDeployTree implements spec.ProjectLoader — the merged project+overlay deploy-node
 // tree read the host's check seams need (compiled-in, no wire envelope): it drives the ONE copy
 // of the loaderkit project+per-host-overlay projection+merge (loaderkit.ResolveMergedTreeViaExecutor)
