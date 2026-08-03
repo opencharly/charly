@@ -5,67 +5,18 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/buildkit"
-	"github.com/opencharly/sdk/vmshared"
 )
 
 // TestFilterImages / TestFilterImagesUnknown / TestFilterImagesIncludesBuilder /
 // TestFilterImagesIncludesBootstrapBuilder relocated to candy/plugin-bundle (#55 decoupling,
 // Batch A) — they asserted deploykit.FilterBox directly, zero charly coupling.
 
-func TestHostPlatform(t *testing.T) {
-	p := buildkit.HostPlatform()
-	// Should start with linux/
-	if p != "linux/amd64" && p != "linux/arm64" {
-		t.Logf("buildkit.HostPlatform() = %q (non-standard arch, that's OK)", p)
-	}
-}
-
-// TestRenderPacstrapExtraConf locks in the shared pacstrap pacman.conf renderer:
-// (1) a microarch repo (CachyOS x86_64_v3) yields an [options] Architecture
-// directive — the fix for "package architecture is not valid"; (2) per-repo
-// SigLevel is always emitted — the fix for the VM bootstrap path dropping it
-// (GPGME "No data" on SigLevel=Never repos); (3) non-microarch / empty inputs
-// stay clean (no spurious [options], no regression for arch-pacstrap).
-func TestRenderPacstrapExtraConf(t *testing.T) {
-	cachyos := &vmshared.PacstrapDef{ExtraRepos: []vmshared.PacstrapRepo{
-		{Name: "cachyos-v3", Server: "https://mirror.cachyos.org/repo/x86_64_v3/$repo", SigLevel: "Never"},
-		{Name: "cachyos-core-v3", Server: "https://mirror.cachyos.org/repo/x86_64_v3/$repo", SigLevel: "Never"},
-		{Name: "cachyos", Server: "https://mirror.cachyos.org/repo/$arch/$repo", SigLevel: "Never"},
-	}}
-	got := buildkit.RenderPacstrapExtraConf(cachyos)
-	if !strings.Contains(got, "[options]\nArchitecture = x86_64 x86_64_v3\n") {
-		t.Errorf("missing/incorrect Architecture directive for x86_64_v3 repos:\n%s", got)
-	}
-	if strings.Count(got, "SigLevel = Never") != 3 {
-		t.Errorf("expected SigLevel emitted for all 3 repos, got:\n%s", got)
-	}
-	if strings.Count(got, "Architecture =") != 1 {
-		t.Errorf("expected exactly one Architecture directive (deduped), got:\n%s", got)
-	}
-
-	// nil / empty → empty fragment (no spurious [options]).
-	if s := buildkit.RenderPacstrapExtraConf(nil); s != "" {
-		t.Errorf("nil vmshared.PacstrapDef should render empty, got %q", s)
-	}
-	if s := buildkit.RenderPacstrapExtraConf(&vmshared.PacstrapDef{}); s != "" {
-		t.Errorf("no-repos vmshared.PacstrapDef should render empty, got %q", s)
-	}
-
-	// Plain (non-microarch) repo without SigLevel → repo block, no [options].
-	plain := &vmshared.PacstrapDef{ExtraRepos: []vmshared.PacstrapRepo{
-		{Name: "extra", Server: "https://example.org/repo/$arch/$repo"},
-	}}
-	got = buildkit.RenderPacstrapExtraConf(plain)
-	if strings.Contains(got, "[options]") {
-		t.Errorf("plain repo should not emit [options]/Architecture, got:\n%s", got)
-	}
-	if !strings.Contains(got, "[extra]\nServer = https://example.org/repo/$arch/$repo\n") {
-		t.Errorf("plain repo block missing, got:\n%s", got)
-	}
-	if strings.Contains(got, "SigLevel") {
-		t.Errorf("no SigLevel set → none should be emitted, got:\n%s", got)
-	}
-}
+// TestHostPlatform / TestRenderPacstrapExtraConf were removed as duplicates (K3
+// cone2 test closure): both asserted buildkit.HostPlatform / buildkit.RenderPacstrapExtraConf
+// directly against literal fixtures — zero charly coupling — and sdk/buildkit/build_helpers_test.go
+// already carries the same (and, for RenderPacstrapExtraConf, a strictly more thorough:
+// sorted multi-token dedup, table-driven nil/empty/plain/microarch cases) coverage against
+// the same buildkit functions, verified live before deletion.
 
 // TestCachyosRuntimePacmanConf locks in the booted-guest /etc/pacman.conf the
 // cachyos pacstrap writes into the rootfs. Single-source guard: runtime_pacman_conf
@@ -73,7 +24,11 @@ func TestRenderPacstrapExtraConf(t *testing.T) {
 // second hand-maintained copy), so the install + runtime configs cannot drift.
 // Regression guard for the "config file /etc/pacman.conf could not be read"
 // deploy failure AND for the cachyos-extra HTML-stub repo (must be absent from
-// BOTH configs, by construction, now that extra_repo is the single source).
+// BOTH configs, by construction, now that extra_repo is the single source). This
+// test stays in charly — it is a white-box check of charly's OWN production
+// box/cachyos distro config (loaded via LoadBuildConfigForBox), not of the pure
+// buildkit render functions in isolation (those have their own coverage in
+// sdk/buildkit/build_helpers_test.go).
 func TestCachyosRuntimePacmanConf(t *testing.T) {
 	distroCfg, _, _, err := LoadBuildConfigForBox(repoRootDir(t))
 	if err != nil {

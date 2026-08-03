@@ -407,6 +407,52 @@ func TestEnabledField(t *testing.T) {
 	}
 }
 
+// TestResolveAllBox_ResolveBoxParity proves buildkit.ResolveAllBox's per-box projection and a
+// direct buildkit.ResolveBox call agree on Tags for a builder-based image (relocated from
+// charly/render_seam_cache_test.go, K3 cone2 test closure, split by assertion: the RESOLVER-OUTPUT
+// half of the former TestNewCandyScanGeneratorPopulatesBoxes — whether ResolveAllBox/ResolveBox
+// produce consistent, non-empty Tags — belongs here as capability coverage of the resolve engine;
+// the CACHE-BEHAVIOR half — whether charly's newCandyScanGenerator stores a pushed box set
+// verbatim — stayed in charly with a literal fixture, since this plugin can't reach charly's
+// constructor). A literal *spec.Config fixture (mirroring box/fedora's real "fedora-builder"
+// image shape: a fedora-distro, rpm-format, builder-produced box) replaces the original test's
+// real box/fedora disk read — ResolvedBox.Tags is derived purely from the box's own
+// Distro/BuildFormats fields (config_resolve.go: `Tags = append([]string{"all"}, Distro...,
+// BuildFormats...)`), so no populated DistroCfg/BuilderCfg is needed for this claim.
+func TestResolveAllBox_ResolveBoxParity(t *testing.T) {
+	const boxName = "fedora-builder"
+	cfg := &spec.Config{
+		Box: boxMapOfFixture(map[string]spec.BoxConfig{
+			boxName: {
+				Base:    "quay.io/fedora/fedora:43",
+				Distro:  []string{"fedora"},
+				Build:   []string{"rpm"},
+				Produce: []string{"pixi", "npm"},
+			},
+		}),
+	}
+
+	all, err := buildkit.ResolveAllBox(cfg, "test", "", resolveOptsFixture(spec.ResolveOpts{}))
+	if err != nil {
+		t.Fatalf("ResolveAllBox: %v", err)
+	}
+	viaAll := all[boxName]
+	if viaAll == nil {
+		t.Fatalf("ResolveAllBox: box %q not resolved", boxName)
+	}
+	if len(viaAll.Tags) == 0 {
+		t.Fatal("Tags is empty — a builder-based image must carry distro/build-format tags")
+	}
+
+	direct, err := buildkit.ResolveBox(cfg, boxName, "test", "", resolveOptsFixture(spec.ResolveOpts{}))
+	if err != nil {
+		t.Fatalf("ResolveBox: %v", err)
+	}
+	if !reflect.DeepEqual(viaAll.Tags, direct.Tags) {
+		t.Errorf("ResolveAllBox/ResolveBox Tags mismatch: %v vs %v", viaAll.Tags, direct.Tags)
+	}
+}
+
 func TestResolveImageDistroBaseChain(t *testing.T) {
 	// Tests that distro: tags propagate through the entire base chain,
 	// not just the immediate parent.
