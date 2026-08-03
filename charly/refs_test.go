@@ -468,75 +468,9 @@ func TestCollectRemoteRefsDifferentCandiesSameRepo(t *testing.T) {
 // production path (candy/plugin-deploy-pod/overlay.go reaches it directly), and
 // the sdk-side test now covers it against that Generator directly.
 
-// TestRepoOverrideDir covers the CHARLY_REPO_OVERRIDE parser: exact + short-form
-// match, miss, multi-pair, and the loud-failure cases (malformed, missing dir,
-// non-directory). The RDD local-override is the supported "verify before push".
-func TestRepoOverrideDir(t *testing.T) {
-	dir := t.TempDir()
-	file := filepath.Join(dir, "afile")
-	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	t.Run("unset", func(t *testing.T) {
-		t.Setenv(RepoOverrideEnv, "")
-		if d, ok, err := repoOverrideDir("github.com/opencharly/charly"); ok || d != "" || err != nil {
-			t.Fatalf("want empty/false/nil, got %q %v %v", d, ok, err)
-		}
-	})
-
-	t.Run("exact match", func(t *testing.T) {
-		t.Setenv(RepoOverrideEnv, "github.com/opencharly/charly="+dir)
-		d, ok, err := repoOverrideDir("github.com/opencharly/charly")
-		if err != nil || !ok || d != dir {
-			t.Fatalf("want %q/true/nil, got %q %v %v", dir, d, ok, err)
-		}
-	})
-
-	t.Run("short form auto-prefixes github.com", func(t *testing.T) {
-		t.Setenv(RepoOverrideEnv, "opencharly/charly="+dir)
-		d, ok, err := repoOverrideDir("github.com/opencharly/charly")
-		if err != nil || !ok || d != dir {
-			t.Fatalf("want %q/true/nil, got %q %v %v", dir, d, ok, err)
-		}
-	})
-
-	t.Run("non-matching repo falls through", func(t *testing.T) {
-		t.Setenv(RepoOverrideEnv, "github.com/other/repo="+dir)
-		if d, ok, err := repoOverrideDir("github.com/opencharly/charly"); ok || d != "" || err != nil {
-			t.Fatalf("want empty/false/nil, got %q %v %v", d, ok, err)
-		}
-	})
-
-	t.Run("second pair matches", func(t *testing.T) {
-		t.Setenv(RepoOverrideEnv, "github.com/a/b=/nope, opencharly/charly="+dir)
-		d, ok, err := repoOverrideDir("github.com/opencharly/charly")
-		if err != nil || !ok || d != dir {
-			t.Fatalf("want %q/true/nil, got %q %v %v", dir, d, ok, err)
-		}
-	})
-
-	t.Run("malformed entry errors", func(t *testing.T) {
-		t.Setenv(RepoOverrideEnv, "no-equals-sign")
-		if _, _, err := repoOverrideDir("github.com/opencharly/charly"); err == nil {
-			t.Fatal("want error for malformed entry, got nil")
-		}
-	})
-
-	t.Run("missing dir errors", func(t *testing.T) {
-		t.Setenv(RepoOverrideEnv, "opencharly/charly=/does/not/exist/anywhere")
-		if _, _, err := repoOverrideDir("github.com/opencharly/charly"); err == nil {
-			t.Fatal("want error for missing dir, got nil")
-		}
-	})
-
-	t.Run("non-directory errors", func(t *testing.T) {
-		t.Setenv(RepoOverrideEnv, "opencharly/charly="+file)
-		if _, _, err := repoOverrideDir("github.com/opencharly/charly"); err == nil {
-			t.Fatal("want error for non-directory target, got nil")
-		}
-	})
-}
+// TestRepoOverrideDir (the CHARLY_REPO_OVERRIDE parser: exact + short-form match, miss,
+// multi-pair, and the loud-failure cases) moved to sdk/loaderkit/refs_collect_test.go (K1 unit 4)
+// — repoOverrideDir itself relocated there.
 
 // TestEnsureRepoDownloaded_Override proves the override short-circuits the cache
 // + remote fetch entirely (offline: no network, ignores the :vTAG version) and

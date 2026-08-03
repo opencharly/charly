@@ -288,6 +288,17 @@ func (*provider) FinalizeScannedCandies(scanned map[string]spec.ScannedCandy, in
 	return loaderkit.FinalizeScannedCandies(scanned, initCfg)
 }
 
+// EnsureRepoDownloaded / CollectRemoteRefsOpts implement spec.ProjectLoader — the typed remote-repo
+// fetch orchestration + candy-ref collection mechanism the host calls (compiled-in, no wire
+// envelope): delegate to the ONE copy in sdk/loaderkit (K1 unit 4).
+func (*provider) EnsureRepoDownloaded(repoPath, version string, seams spec.RefsCollectSeams) (string, error) {
+	return loaderkit.EnsureRepoDownloaded(repoPath, version, seams)
+}
+
+func (*provider) CollectRemoteRefsOpts(cfg *spec.Config, layers map[string]spec.CandyReader, opts spec.ResolveOpts, seams spec.RefsCollectSeams) ([]spec.RemoteDownload, error) {
+	return loaderkit.CollectRemoteRefsOpts(cfg, layers, opts, seams)
+}
+
 // Invoke serves the out-of-process placement. The compiled-in placement uses the typed ParseDoc
 // above; the wire OpLoad path (carrying the document + threaded data as JSON) lands with
 // out-of-process loader support.
