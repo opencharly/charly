@@ -67,7 +67,7 @@ func injectCandySecrets(ctx context.Context, exec *sdk.Executor, dir string, pla
 // dryRun is handled entirely by that earlier early-return, so this function is never itself
 // called under dry-run (matching the former retrieveArtifactsAndK3s's own DryRun early-return,
 // one level up).
-func retrieveArtifactsAndDispatchRegisters(ctx context.Context, exec *sdk.Executor, dir string, plans []*deploykit.InstallPlan, artifactKey, deployName string, artifactEnv map[string]string, registerHints []string) error {
+func retrieveArtifactsAndDispatchRegisters(ctx context.Context, exec *sdk.Executor, venueExec deploykit.DeployExecutor, dir string, plans []*deploykit.InstallPlan, artifactKey, deployName string, artifactEnv map[string]string, registerHints []string) error {
 	candyList, err := candiesForPlans(dir, plans)
 	if err != nil {
 		return fmt.Errorf("loading candies for artifact retrieval: %w", err)
@@ -78,11 +78,19 @@ func retrieveArtifactsAndDispatchRegisters(ctx context.Context, exec *sdk.Execut
 	// deferred there — spec.Threaded is a hand-written wire type today, so readiness must NOT ride it;
 	// env+defaults is the SDD-compliant + currently-equivalent path. A nil config never errors.
 	readiness, _ := spec.ResolveReadiness(nil)
-	// Byte-equivalent to the deleted "deploy-artifacts-retrieve" seam: it re-materialized the venue
-	// from req.VenueJSON, which this path never set → it always fell to a host ShellExecutor (the
-	// artifacts are pulled to the operator host via podman, matching k3sPostProvision's own
-	// shell-venue idiom, which explicitly runs on the operator host's filesystem).
-	if err := deploykit.RetrieveCandyArtifacts(ctx, kit.ShellExecutor{}, candyList, kit.SanitizeDeployName(artifactKey), artifactEnv, spec.EmitOpts{}, readiness); err != nil {
+	// The artifact READ must run on the deploy's VENUE executor — a VM deploy's artifact
+	// (e.g. k3s-server's /etc/rancher/k3s/k3s.yaml) lives INSIDE the guest, reachable only
+	// over the venue's SSH executor (SSHExecutor.GetFile's sudo-cat path exists for exactly
+	// this file). The prior hardcoded kit.ShellExecutor{} polled the OPERATOR HOST's
+	// filesystem for a guest path — "No such file or directory" for the full wait, then a
+	// timeout against a perfectly healthy guest (the check-k3s-vm R10 catch; the old core
+	// retrieveArtifactsAndK3s used the live venue executor, so the "always fell to a host
+	// ShellExecutor" byte-equivalence claim was wrong for lifecycle substrates). For a pod
+	// deploy the venue executor IS the host shell, so that path is unchanged.
+	if venueExec == nil {
+		venueExec = kit.ShellExecutor{}
+	}
+	if err := deploykit.RetrieveCandyArtifacts(ctx, venueExec, candyList, kit.SanitizeDeployName(artifactKey), artifactEnv, spec.EmitOpts{}, readiness); err != nil {
 		return fmt.Errorf("retrieving candy artifacts: %w", err)
 	}
 	return dispatchRegisterHints(ctx, exec, artifactKey, deployName, registerHints)
