@@ -4,12 +4,9 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/opencharly/spec/spec"
-
-	"github.com/opencharly/sdk/deploykit"
 )
 
 // The SaveDeployState-based tests below (TestSaveDeployState_AbortOnInvalidExistingFile,
@@ -20,12 +17,17 @@ import (
 // persistDeployState/deploykit.RemoveVmDeployEntry) via deploy_dispatch_seam_test_helpers_test.go's
 // testDispatchLifecycleAdd/Del, instead of calling deploykit.SaveDeployState/RemoveVmDeployEntry
 // directly — HIGHER fidelity (round-trips production's actual write path, not just the library
-// call) and it kills the sdk import for these four. The remaining SaveBundleConfig-based tests
-// (AtomicWrite/RefusesToClobberUnloadable/DisposableFalseRoundTrip) stay on the direct
-// deploykit.SaveBundleConfig call — the only found production seam (the `charly bundle
-// import`/`reset` CLI dispatch) takes FILE input, not an arbitrary in-memory *BundleConfig
-// literal, and doesn't cleanly re-express these tests' exact-structure assertions; STOP-reported
-// to the operator rather than force-converted.
+// call) and it kills the sdk import for these four.
+//
+// TestSaveBundleConfig_AtomicWriteLeavesNoTempLeftover / _RefusesToClobberUnloadableConfig /
+// TestBundleNode_DisposableFalseRoundTrip relocated (#55 final-tail split-by-assertion round,
+// team-lead directive 2026-08-03): each split into a WRITER-BEHAVIOR half (deploykit.
+// SaveBundleConfig's OWN atomic-write / abort-on-unloadable-read / explicit-false round-trip
+// contract — genuine deploykit-mechanism behavior) that moved to
+// candy/plugin-bundle/deploy_state_writer_test.go, and (DisposableFalseRoundTrip only) a
+// CHARLY-LOADER half (does LoadUnified correctly parse the *bool Disposable field) that stays
+// here as TestBundleNode_DisposableFalseRoundTrip_Loader, reading a checked-in literal fixture —
+// no sdk import needed for either half.
 
 // TestDeployConfigLookup_NilSafe / TestDeployConfigLookup_PresentAndAbsent relocated to
 // candy/plugin-bundle (#55 decoupling, Batch A) — pure in-memory *deploykit.BundleConfig
@@ -188,214 +190,6 @@ existing:
 	}
 	if entry.Disposable == nil || !*entry.Disposable {
 		t.Error("Disposable not applied (this field SHOULD update)")
-	}
-}
-
-// TestSaveBundleConfig_AtomicWriteSurvivesIntermediateFailure pins the
-// tempfile + rename atomic-write guarantee: if the marshal step succeeds
-// but the rename step fails (simulated by making the target path a
-// directory), the prior on-disk file MUST remain intact.
-//
-// We can't easily inject a failure into os.Rename in a unit test, so
-// this test exercises the happy path's atomicity properties (file mode,
-// no .tmp leftovers) as a regression guard for the implementation shape.
-func TestSaveBundleConfig_AtomicWriteLeavesNoTempLeftover(t *testing.T) {
-	dir := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", dir)
-	if err := os.MkdirAll(filepath.Join(dir, "charly"), 0700); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	dc := &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{
-		"foo": {Target: "pod", Image: "foo"},
-	}}
-	if err := testSaveDeployConfig(dc); err != nil {
-		t.Fatalf("SaveBundleConfig: %v", err)
-	}
-	// No .tmp leftovers in the config dir.
-	entries, err := os.ReadDir(filepath.Join(dir, "charly"))
-	if err != nil {
-		t.Fatalf("readdir: %v", err)
-	}
-	for _, e := range entries {
-		if filepath.Ext(e.Name()) == ".tmp" || (len(e.Name()) > 4 && e.Name()[:4] == ".dep") {
-			if e.Name() != "deploy.yml" {
-				t.Errorf("leftover tempfile: %s", e.Name())
-			}
-		}
-	}
-	// File mode is 0600 (matches the original os.WriteFile(0600) contract).
-	info, err := os.Stat(filepath.Join(dir, "charly", "charly.yml"))
-	if err != nil {
-		t.Fatalf("stat: %v", err)
-	}
-	if info.Mode().Perm() != 0600 {
-		t.Errorf("file mode = %o; want 0600", info.Mode().Perm())
-	}
-}
-
-// TestSaveBundleConfig_RefusesToClobberUnloadableConfig pins the per-host
-// persist fail-safe: when the on-disk ~/.config/charly/charly.yml currently
-// FAILS to load (e.g. the per-host migrate-path bug left it `version: <HEAD>` +
-// a legacy `deploy:` map that the node-form loader gate rejects), SaveBundleConfig
-// MUST abort with a `charly migrate` hint and leave the file byte-identical —
-// never overwrite the recoverable bytes with a degraded/empty config.
-//
-// This is the single-point defense behind the read-degraded write-backs that go
-// through loadDeployConfigForRead (resolved-port / data-seeded /
-// secret-migration write-backs) — those would otherwise hand SaveBundleConfig an empty
-// BundleConfig and truncate the user's deploy state. It complements (does not
-// replace) loadDeployConfigForWrite's primary abort-on-load-error gate.
-func TestSaveBundleConfig_RefusesToClobberUnloadableConfig(t *testing.T) {
-	dir := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", dir)
-	if err := os.MkdirAll(filepath.Join(dir, "charly"), 0o700); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	// A config the unified loader REJECTS: a legacy top-level `deploy:` map at
-	// HEAD version (the exact shape the per-host migrate-path bug produced —
-	// kit.ClassifyDoc hard-rejects it as legacy kind-keyed config).
-	rejected := "version: " + LatestSchemaVersion().String() + "\n" +
-		"provides:\n" +
-		"    env:\n" +
-		"        - name: SOME_URL\n" +
-		"          value: http://example/api\n" +
-		"          source: legacy\n" +
-		"deploy:\n" +
-		"    web:\n" +
-		"        box: web\n" +
-		"    api:\n" +
-		"        box: api\n"
-	path := filepath.Join(dir, "charly", "charly.yml")
-	if err := os.WriteFile(path, []byte(rejected), 0o600); err != nil {
-		t.Fatalf("write rejected config: %v", err)
-	}
-	initialBytes, _ := os.ReadFile(path)
-
-	// Sanity: the fixture really is rejected by the loader (otherwise the test
-	// would pass vacuously).
-	if _, lerr := testLoadBundleConfig(); lerr == nil {
-		t.Fatal("fixture loaded cleanly; expected it to be rejected by the node-form gate")
-	}
-
-	// A write that would otherwise truncate must be REFUSED.
-	err := testSaveDeployConfig(&deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{
-		"new-entry": {Target: "pod", Image: "new-entry"},
-	}})
-	if err == nil {
-		t.Fatal("SaveBundleConfig overwrote an unloadable config; expected a refuse-to-clobber error")
-	}
-	if !strings.Contains(err.Error(), "fails to load") {
-		t.Errorf("error should explain the refusal to overwrite, got: %v", err)
-	}
-
-	// The recoverable bytes are intact — nothing truncated, nothing deleted.
-	afterBytes, readErr := os.ReadFile(path)
-	if readErr != nil {
-		t.Fatalf("config file went missing after refused write: %v", readErr)
-	}
-	if !bytes.Equal(initialBytes, afterBytes) {
-		t.Errorf("SaveBundleConfig mutated an unloadable config despite refusing\n--- before ---\n%s\n--- after ---\n%s", initialBytes, afterBytes)
-	}
-
-	// Positive control: once the unloadable file is gone (here: removed, as the
-	// migration would have replaced it with a clean node-form file), a normal
-	// save proceeds — the guard only blocks a present-but-unloadable file.
-	if err := os.Remove(path); err != nil {
-		t.Fatalf("remove: %v", err)
-	}
-	if err := testSaveDeployConfig(&deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{
-		"new-entry": {Target: "pod", Image: "new-entry"},
-	}}); err != nil {
-		t.Fatalf("SaveBundleConfig on an absent file should succeed: %v", err)
-	}
-	dc, err := testLoadBundleConfig()
-	if err != nil {
-		t.Fatalf("reload after clean save: %v", err)
-	}
-	if _, ok := dc.Bundle["new-entry"]; !ok {
-		t.Errorf("clean save did not persist new-entry; got keys %v", bundleKeys(dc))
-	}
-}
-
-// TestBundleNode_DisposableFalseRoundTrip pins the *bool Disposable
-// fix: an operator's explicit `disposable: false` must survive YAML
-// unmarshal → re-marshal. With the prior `Disposable bool` +
-// `omitempty` declaration, `false` was indistinguishable from "absent"
-// at marshal time so the explicit lockdown intent was silently erased
-// on the next saveDeployState. With *bool, nil=absent and &false=
-// explicit lockdown both round-trip faithfully.
-func TestBundleNode_DisposableFalseRoundTrip(t *testing.T) {
-	dir := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", dir)
-	if err := os.MkdirAll(filepath.Join(dir, "charly"), 0o700); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	src := `version: 2026.204.1223
-locked-pod:
-    pod:
-        image: foo
-        disposable: false
-open-pod:
-    pod:
-        image: bar
-        disposable: true
-bare-pod:
-    pod:
-        image: baz
-`
-	path := filepath.Join(dir, "charly", "charly.yml")
-	if err := os.WriteFile(path, []byte(src), 0o600); err != nil {
-		t.Fatalf("write: %v", err)
-	}
-
-	dc, err := testLoadBundleConfig()
-	if err != nil {
-		t.Fatalf("load: %v", err)
-	}
-
-	if dc == nil {
-		t.Fatal("LoadBundleConfig returned nil")
-	}
-	locked := dc.Bundle["locked-pod"]
-	if locked.Disposable == nil {
-		t.Fatal("locked-pod: explicit `disposable: false` parsed as nil; should be &false")
-	}
-	if *locked.Disposable {
-		t.Errorf("locked-pod: disposable = %v, want false", *locked.Disposable)
-	}
-	if locked.IsDisposable() {
-		t.Error("locked-pod.IsDisposable() returned true despite explicit disposable: false")
-	}
-
-	open := dc.Bundle["open-pod"]
-	if open.Disposable == nil || !*open.Disposable {
-		t.Errorf("open-pod: disposable = %v, want &true", open.Disposable)
-	}
-	if !open.IsDisposable() {
-		t.Error("open-pod.IsDisposable() returned false despite explicit disposable: true")
-	}
-
-	bare := dc.Bundle["bare-pod"]
-	if bare.Disposable != nil {
-		t.Errorf("bare-pod: disposable = %v, want nil (field absent in source)", bare.Disposable)
-	}
-	if bare.IsDisposable() {
-		t.Error("bare-pod.IsDisposable() returned true for absent disposable field")
-	}
-
-	if err := testSaveDeployConfig(dc); err != nil {
-		t.Fatalf("save: %v", err)
-	}
-
-	out, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read after save: %v", err)
-	}
-	if !bytes.Contains(out, []byte("disposable: false")) {
-		t.Errorf("re-serialized deploy.yml dropped explicit `disposable: false`:\n%s", string(out))
-	}
-	if !bytes.Contains(out, []byte("disposable: true")) {
-		t.Errorf("re-serialized deploy.yml dropped explicit `disposable: true`:\n%s", string(out))
 	}
 }
 
