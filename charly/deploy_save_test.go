@@ -12,6 +12,21 @@ import (
 	"github.com/opencharly/sdk/deploykit"
 )
 
+// The SaveDeployState-based tests below (TestSaveDeployState_AbortOnInvalidExistingFile,
+// _PersistsImageAndTargetForNewEntry, _DoesNotClobberExistingImageTarget) and
+// TestRemoveVmDeployEntry_SelectiveAndIdempotent were converted (team-lead directive,
+// 2026-08-03 seam-drive spike) to drive the REAL production seam
+// (dispatchDeployTarget → command:bundle's Invoke(OpDeployDispatch) → handleDeployApply/Del →
+// persistDeployState/deploykit.RemoveVmDeployEntry) via deploy_dispatch_seam_test_helpers_test.go's
+// testDispatchLifecycleAdd/Del, instead of calling deploykit.SaveDeployState/RemoveVmDeployEntry
+// directly — HIGHER fidelity (round-trips production's actual write path, not just the library
+// call) and it kills the sdk import for these four. The remaining SaveBundleConfig-based tests
+// (AtomicWrite/RefusesToClobberUnloadable/DisposableFalseRoundTrip) stay on the direct
+// deploykit.SaveBundleConfig call — the only found production seam (the `charly bundle
+// import`/`reset` CLI dispatch) takes FILE input, not an arbitrary in-memory *BundleConfig
+// literal, and doesn't cleanly re-express these tests' exact-structure assertions; STOP-reported
+// to the operator rather than force-converted.
+
 // TestDeployConfigLookup_NilSafe / TestDeployConfigLookup_PresentAndAbsent relocated to
 // candy/plugin-bundle (#55 decoupling, Batch A) — pure in-memory *deploykit.BundleConfig
 // fixtures, zero charly dep.
@@ -53,17 +68,20 @@ deploy:
 	}
 	initialBytes, _ := os.ReadFile(path)
 
-	// Attempt to write the disposable flag for a brand-new entry. With
-	// the pre-fix code, this would call deploykit.LoadBundleConfig() → err →
-	// discarded → dc = empty → entry.Disposable = true → SaveBundleConfig
-	// truncates the file. With the post-fix code, the load error
-	// propagates and saveDeployState aborts before any write.
-	deploykit.SaveDeployState("newimage", "", spec.SaveDeployStateInput{
+	// Attempt to write the disposable flag for a brand-new entry, through the REAL
+	// production seam (persistDeployState calls deploykit.SaveDeployState internally). With the
+	// pre-fix code, this would call deploykit.LoadBundleConfig() → err → discarded → dc = empty
+	// → entry.Disposable = true → SaveBundleConfig truncates the file. With the post-fix code,
+	// the load error propagates and saveDeployState aborts before any write — the DISPATCH may
+	// therefore surface an error too (tolerated here; the assertion that matters is byte-identity
+	// below, not whether the dispatch call itself reports the abort).
+	p := testSeamProvider(t)
+	_ = testDispatchLifecycleAddTolerant(t, p, "newimage", spec.SaveDeployStateInput{
 		SetDisposable: true,
 		Disposable:    true,
 		Box:           "newimage",
 		Target:        "pod",
-	}, testBedMarshalNode, testLoadBundleConfig)
+	})
 
 	afterBytes, _ := os.ReadFile(path)
 	if !bytes.Equal(initialBytes, afterBytes) {
@@ -93,12 +111,13 @@ existing-deploy:
 		t.Fatalf("write initial: %v", err)
 	}
 
-	deploykit.SaveDeployState("newimage", "", spec.SaveDeployStateInput{
+	p := testSeamProvider(t)
+	testDispatchLifecycleAdd(t, p, "newimage", spec.SaveDeployStateInput{
 		SetDisposable: true,
 		Disposable:    true,
 		Box:           "newimage",
 		Target:        "pod",
-	}, testBedMarshalNode, testLoadBundleConfig)
+	})
 
 	dc, err := testLoadBundleConfig()
 	if err != nil {
@@ -148,12 +167,13 @@ existing:
 		t.Fatalf("write initial: %v", err)
 	}
 
-	deploykit.SaveDeployState("existing", "", spec.SaveDeployStateInput{
+	p := testSeamProvider(t)
+	testDispatchLifecycleAdd(t, p, "existing", spec.SaveDeployStateInput{
 		SetDisposable: true,
 		Disposable:    true,
 		Box:           "would-clobber",
 		Target:        "vm",
-	}, testBedMarshalNode, testLoadBundleConfig)
+	})
 
 	dc, err := testLoadBundleConfig()
 	if err != nil {
@@ -430,10 +450,19 @@ web-app:
 		t.Fatalf("write initial: %v", err)
 	}
 
-	// (1) Selective removal of the disposable bed VM.
-	if err := deploykit.RemoveVmDeployEntry("vm:k3s-vm", acquireDeployConfigLock, testSaveDeployConfig, testLoadBundleConfig); err != nil {
-		t.Fatalf("RemoveVmDeployEntry(vm:k3s-vm): %v", err)
-	}
+	// A REAL production teardown ("charly bundle del vm:k3s-vm") only reaches
+	// deploykit.RemoveVmDeployEntry via handleDeployDel's OpPostTeardown leg, gated on a ledger
+	// DeployRecord existing for the name (an unrecorded name is a no-op teardown, matching
+	// production's own idempotent-absent-record contract) — so the seam-driven equivalent of
+	// "this VM was deployed" is a real add-dispatch first (a benign no-op state patch: the
+	// pre-seeded vm_state/ssh_port/ssh_user fields are untouched by SaveDeployStateInput, which
+	// only ever sets Image/Target/Disposable).
+	p := testSeamProvider(t)
+	testDispatchLifecycleAdd(t, p, "vm:k3s-vm", spec.SaveDeployStateInput{})
+
+	// (1) Selective removal of the disposable bed VM, through the REAL production seam
+	// (dispatchDeployTarget("del") → handleDeployDel → OpPostTeardown → deploykit.RemoveVmDeployEntry).
+	testDispatchLifecycleDel(t, p, "vm:k3s-vm", []string{"vm:k3s-vm"})
 	dc, err := testLoadBundleConfig()
 	if err != nil {
 		t.Fatalf("reload after removal: %v", err)
@@ -448,10 +477,11 @@ web-app:
 		t.Error("web-app pod deploy was collateral-removed — selective-removal property violated")
 	}
 
-	// (2) Idempotency: removing the already-gone entry is a clean no-op.
-	if err := deploykit.RemoveVmDeployEntry("vm:k3s-vm", acquireDeployConfigLock, testSaveDeployConfig, testLoadBundleConfig); err != nil {
-		t.Fatalf("idempotent re-removal of vm:k3s-vm errored: %v", err)
-	}
+	// (2) Idempotency: removing the already-gone entry is a clean no-op — the ledger record is
+	// ALSO gone now (deleted alongside the deploy state by (1)'s teardown), so this re-exercises
+	// handleDeployDel's own "nothing recorded — idempotent teardown" short-circuit (an even
+	// stronger proof of the contract than calling RemoveVmDeployEntry a second time directly).
+	testDispatchLifecycleDel(t, p, "vm:k3s-vm", []string{"vm:k3s-vm"})
 	dc2, err := testLoadBundleConfig()
 	if err != nil {
 		t.Fatalf("reload after idempotent re-removal: %v", err)
