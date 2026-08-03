@@ -247,28 +247,19 @@ func releaseResourceClaim(claimant string) {
 // host_build_check_bed.go is itself K1-gated data-projection territory, B2). gpu_imply.go's
 // former caller moved to candy/plugin-preempt (K-wave W3a A2) and no longer uses this function.
 //
-// buildPluginCandyRef is the canonical plugin-build candy ref (mirrors deployPodPluginCandyRef/
-// vmPluginCandyRef): in a check bed CHARLY_REPO_OVERRIDE redirects it to the local superproject
-// under development; outside a bed it fetches the published candy. Sole caller: gatherResources.
-func buildPluginCandyRef() string {
-	return "@" + spec.DefaultProjectRepo + "/candy/plugin-build"
-}
-
 // gatherResources loads the token -> ResourceDef map (the gpu selector that drives the mode
 // flip) via the SAME generic InvokeProvider("build","project") envelope every other
 // resolved-project consumer uses (K-wave W3a A2 rewire) — replacing the former LoadUnified(".")
 // K1-coupled read, retiring that dependency NOW rather than waiting for #12 (this function's own
-// former "genuinely K1-blocked" status no longer holds). nil on any resolve/connect/decode
-// failure — this function's existing "nil when none/unreadable" contract, unchanged.
+// former "genuinely K1-blocked" status no longer holds). candy/plugin-build is COMPILED IN
+// (charly/charly.yml compiled_plugins:), so this is the plain resolve+typed-reply shape —
+// hostInvokeOr (provider_invoke.go), the SAME core→verb registry bridge arbiterInvoke uses for
+// verb:arbiter — never a connect-on-demand (that machinery is for an EXTERNAL plugin; an R1
+// self-correction of this function's first cut, which wrongly treated plugin-build as external).
+// Zero value (nil Resources) on any resolve/invoke/decode failure — this function's existing "nil
+// when none/unreadable" contract, unchanged.
 func gatherResources() map[string]*spec.ResolvedResource {
-	prov, ok := connectPluginByWordRef(ClassBuild, "project", buildPluginCandyRef())
-	if !ok {
-		return nil
-	}
-	rp, err := invokeTyped[spec.ResolvedProjectRequest, spec.ResolvedProject](context.Background(), prov, "project", OpResolve, spec.ResolvedProjectRequest{})
-	if err != nil {
-		return nil
-	}
+	rp := hostInvokeOr[spec.ResolvedProjectRequest, spec.ResolvedProject](ClassBuild, "project", OpResolve, spec.ResolvedProjectRequest{}, "gather-resources")
 	return rp.Resources
 }
 
