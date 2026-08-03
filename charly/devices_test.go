@@ -3,9 +3,6 @@ package main
 import (
 	"reflect"
 	"testing"
-
-	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/vmshared"
 )
 
 // TestAMDGFXVersionParsing (parseKFDGFXVersion) + TestGpuUsableViaCDI (gpuUsableViaCDI)
@@ -60,22 +57,11 @@ func TestDetectHostDevicesNoGPU(t *testing.T) {
 	}
 }
 
-func TestDetectedDevicesMergeIntoSecurity(t *testing.T) {
-	detected := DetectedDevices{
-		GPU:     false,
-		Devices: []string{"/dev/kvm", "/dev/fuse"},
-	}
-
-	sec := vmshared.SecurityConfig{
-		Devices: []string{"/dev/fuse"}, // already has /dev/fuse
-	}
-	sec.Devices = deploykit.AppendUnique(sec.Devices, detected.Devices...)
-
-	want := []string{"/dev/fuse", "/dev/kvm"}
-	if !reflect.DeepEqual(sec.Devices, want) {
-		t.Errorf("merged Devices = %v, want %v", sec.Devices, want)
-	}
-}
+// TestDetectedDevicesMergeIntoSecurity was removed as a duplicate (K3 cone2
+// test closure): the only behavior under test was deploykit.AppendUnique's
+// (itself a kit.AppendUnique re-export, sdk/deploykit/kit_aliases.go) dedup
+// merge — no charly-specific logic — already covered directly by
+// sdk/kit/append_unique_test.go:TestAppendUnique, verified live before deletion.
 
 func TestDetectHostDevicesWithAMDGPU(t *testing.T) {
 	orig := DetectHostDevices

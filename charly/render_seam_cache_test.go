@@ -1,11 +1,8 @@
 package main
 
 import (
-	"os"
-	"path/filepath"
 	"testing"
 
-	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -16,54 +13,35 @@ import (
 // never exercises the inline-builder reverse-channel seam. Caught by tracing every reader of the
 // cached Generator (per the team-lead's watch-point), not by the box-generate smoke test.
 //
-// #55 step3 3-II: the former "full NewGenerator" comparison baseline is GONE — NewGenerator itself
-// is deleted (its last production caller, the pod-overlay seam, now reaches the SAME render-prepped
-// resolve plugin-side via candy/plugin-build's resolveBuildEngine, a separate Go module this
-// host-side test cannot call into). The assertion below is rewritten to check
-// newCandyScanGenerator's output directly against a fresh buildkit.ResolveBox call — the SAME
-// primitive it wraps — rather than diffing two Generators.
+// K3 cone2 test closure, split by assertion (mirroring candy/plugin-build/namespace_resolve_test.go's
+// documented precedent: "a test asserting ResolveBox/ResolveAllBox OUTPUT is resolver-capability
+// coverage... what the loader PRODUCED stays charly's to test, what ResolveBox MAKES of it is this
+// plugin's"). The former single test bundled two concerns: (a) does buildkit.ResolveAllBox/ResolveBox
+// produce sane, mutually-consistent Tags for a real builder-based image (a resolver-OUTPUT claim) —
+// moved to candy/plugin-build/box_resolve_test.go's TestResolveAllBox_ResolveBoxParity with a literal
+// *spec.Config fixture in place of a real box/fedora disk read; (b) does newCandyScanGenerator STORE
+// the caller-pushed box set verbatim, keyed by name, without dropping fields (a cache-BEHAVIOR
+// claim — the actual regression this file guards) — kept here, now with a literal fabricated
+// *spec.ResolvedBox fixture instead of a real buildkit.ResolveAllBox/box-fedora round trip, since
+// newCandyScanGenerator stores its `boxes` argument verbatim (charly/generate.go's
+// `Boxes: boxes`) with no validation against the loaded project's own box set.
 
 // TestNewCandyScanGeneratorPopulatesBoxes proves the cheap render-seam-floor constructor STORES
 // the caller-pushed box set (needed for resolveInlineBuilderSeam's img.Tags/img.Name — see
-// resolveBuilderStage) with the SAME Name/Tags a direct buildkit.ResolveBox call would produce,
-// using a real project fixture (box/fedora's "fedora-builder", a builder-based image exercising a
-// real distro/tags resolve). #55 coneB2 Class B: the boxes are now PUSHED (mimicking
-// candy/plugin-build's resolveBuildEngine — buildkit.ResolveAllBox + the &b.ResolvedBox projection
-// that deploykit.SpecBoxes performs in production) rather than self-resolved via
-// deploykit.ResolveAllSpecBoxes; the constructor itself no longer imports deploykit.
+// resolveBuilderStage) verbatim — a literal *spec.ResolvedBox fixture round-trips through
+// newCandyScanGenerator's `boxes` parameter into `cheap.Boxes[name]` unchanged. #55 coneB2 Class B:
+// the boxes are PUSHED (mimicking candy/plugin-build's resolveBuildEngine — buildkit.ResolveAllBox +
+// the &b.ResolvedBox projection deploykit.SpecBoxes performs in production) rather than
+// self-resolved; the constructor itself no longer imports deploykit, so this test needs no
+// buildkit/deploykit import either — it only exercises the STORE, not the resolve.
 func TestNewCandyScanGeneratorPopulatesBoxes(t *testing.T) {
-	repoRoot, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	dir := filepath.Join(filepath.Dir(repoRoot), "box", "fedora")
-	const boxName = "fedora-builder"
-
 	t.Cleanup(snapshotProviderState())
 
-	// Resolve the box set the way plugin-build does (buildkit.ResolveAllBox + the spec projection).
-	cfg, err := LoadConfig(dir)
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	distroCfg, _, _, err := LoadDefaultBuildConfig(dir)
-	if err != nil {
-		t.Fatalf("LoadDefaultBuildConfig: %v", err)
-	}
-	RegisterBuildVocabulary(distroCfg)
-	resolved, err := buildkit.ResolveAllBox(cfg, "", dir, buildkit.ResolveOpts{})
-	if err != nil {
-		t.Fatalf("buildkit.ResolveAllBox: %v", err)
-	}
-	specBoxes := make(map[string]*spec.ResolvedBox, len(resolved))
-	for name, b := range resolved {
-		if b == nil {
-			continue
-		}
-		specBoxes[name] = &b.ResolvedBox
-	}
+	const boxName = "fedora-builder"
+	pushed := &spec.ResolvedBox{Name: boxName, Tags: []string{"fedora", "rpm"}}
+	specBoxes := map[string]*spec.ResolvedBox{boxName: pushed}
 
-	cheap, err := newCandyScanGenerator(dir, false, nil, specBoxes)
+	cheap, err := newCandyScanGenerator(testdataDir, false, nil, specBoxes)
 	if err != nil {
 		t.Fatalf("newCandyScanGenerator: %v", err)
 	}
@@ -72,23 +50,13 @@ func TestNewCandyScanGeneratorPopulatesBoxes(t *testing.T) {
 		t.Fatalf("newCandyScanGenerator: box %q not found in Boxes — the render-seam floor's "+
 			"RenderSeamInlineBuilder case would fail 'box not found' for every request", boxName)
 	}
+	if cheapImg != pushed {
+		t.Fatalf("newCandyScanGenerator: Boxes[%q] = %v, want the exact pushed *spec.ResolvedBox (stored verbatim, no copy/re-resolve)", boxName, cheapImg)
+	}
 	if cheapImg.Name != boxName {
 		t.Errorf("Name = %q, want %q", cheapImg.Name, boxName)
 	}
 	if len(cheapImg.Tags) == 0 {
 		t.Fatalf("Tags is empty — resolveBuilderStage's spec.BuildEnv{Distros: img.Tags} would carry no distro info")
-	}
-
-	direct, err := buildkit.ResolveBox(cfg, boxName, "", dir, buildkit.ResolveOpts{})
-	if err != nil {
-		t.Fatalf("buildkit.ResolveBox: %v", err)
-	}
-	if len(direct.Tags) != len(cheapImg.Tags) {
-		t.Fatalf("Tags = %v, want %v (parity with a direct buildkit.ResolveBox call)", cheapImg.Tags, direct.Tags)
-	}
-	for i := range direct.Tags {
-		if cheapImg.Tags[i] != direct.Tags[i] {
-			t.Errorf("Tags[%d] = %q, want %q", i, cheapImg.Tags[i], direct.Tags[i])
-		}
 	}
 }

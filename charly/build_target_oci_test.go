@@ -360,20 +360,12 @@ func TestOCITargetEmitOpViaPlugin(t *testing.T) {
 	}
 }
 
-func TestOCITargetSkipsVenueSkip(t *testing.T) {
-	// A step with VenueSkip should be elided entirely.
-	tgt := ociTestTarget(buildEngineContext{})
-	plan := &spec.InstallPlan{Candy: "x", Steps: []spec.InstallStep{
-		&fakeSkipStep{},
-	}}
-	if err := tgt.Emit([]*spec.InstallPlan{plan}, spec.EmitOpts{}); err != nil {
-		t.Fatalf("Emit: %v", err)
-	}
-	got := tgt.String()
-	if strings.Contains(got, "FAKE") {
-		t.Errorf("skip step was rendered: %s", got)
-	}
-}
+// TestOCITargetSkipsVenueSkip was removed as a duplicate (K3 cone2 test closure):
+// VenueSkip elision is walker-level behavior (deploykit.OCITarget.Emit), already
+// proven in isolation by sdk/deploykit/oci_target_test.go's
+// TestOCITarget_EmitElidesVenueSkipAndEmptyFragments — same assertion (a
+// VenueSkip step never reaches the rendered output), verified live before
+// deletion.
 
 func TestOCITargetEmitRepoChange(t *testing.T) {
 	tgt := ociTestTarget(buildEngineContext{})
@@ -396,16 +388,6 @@ func TestOCITargetEmitRepoChange(t *testing.T) {
 	}
 }
 
-// fakeSkipStep is a synthetic InstallStep used to verify VenueSkip
-// elision. Returns Venue=VenueSkip and marker content in its Kind.
-type fakeSkipStep struct{}
-
-func (f *fakeSkipStep) Kind() spec.StepKind       { return "FAKE" }
-func (f *fakeSkipStep) Scope() spec.Scope         { return spec.ScopeUser }
-func (f *fakeSkipStep) Venue() spec.Venue         { return spec.VenueSkip }
-func (f *fakeSkipStep) RequiresGate() spec.Gate   { return spec.GateNone }
-func (f *fakeSkipStep) Reverse() []spec.ReverseOp { return nil }
-
 // TestGeneratorCandyByNameRemoteQualifiedKey guards the add_candy-on-pod overlay
 // build: a REMOTE add_candy candy (fetched via spec.ResolveOpts.ExtraCandyRefs) is keyed
 // in Generator.Candies under its fully-qualified ref, while the compiled plan step's
@@ -415,8 +397,8 @@ func (f *fakeSkipStep) Reverse() []spec.ReverseOp { return nil }
 // add_candy-on-pod-overlay "candy not found" build failure.
 func TestGeneratorCandyByNameRemoteQualifiedKey(t *testing.T) {
 	gen := &Generator{Candies: map[string]spec.CandyReader{
-		"github.com/org/repo/candy/marker": testCandy("marker", spec.CandyModel{}, spec.CandyView{}),
-		"local-layer":                      testCandy("local-layer", spec.CandyModel{}, spec.CandyView{}),
+		"github.com/org/repo/candy/marker": deploykit.NewSpecCandyModel(spec.CandyModel{Name: "marker"}, spec.CandyView{Name: "marker"}),
+		"local-layer":                      deploykit.NewSpecCandyModel(spec.CandyModel{Name: "local-layer"}, spec.CandyView{Name: "local-layer"}),
 	}}
 
 	// Exact (local) key — bare == .Name — still resolves directly.

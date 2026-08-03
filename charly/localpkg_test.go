@@ -42,26 +42,9 @@ func testPacLocalPkgDef() *vmshared.LocalPkgDef {
 	}
 }
 
-// TestLocalPkgInstallStepIR exercises the IR contract: kind, scope (system),
-// venue (host-native), gate (none), reverse (no ledger ops — like apk).
-func TestLocalPkgInstallStepIR(t *testing.T) {
-	s := &spec.LocalPkgInstallStep{PkgbuildRef: "pkg/arch", CandyName: "charly"}
-	if s.Kind() != spec.StepKindLocalPkgInstall {
-		t.Errorf("Kind() = %q, want %q", s.Kind(), spec.StepKindLocalPkgInstall)
-	}
-	if s.Scope() != spec.ScopeSystem {
-		t.Errorf("Scope() = %v, want ScopeSystem", s.Scope())
-	}
-	if s.Venue() != spec.VenueHostNative {
-		t.Errorf("Venue() = %v, want VenueHostNative", s.Venue())
-	}
-	if s.RequiresGate() != spec.GateNone {
-		t.Errorf("RequiresGate() = %v, want GateNone", s.RequiresGate())
-	}
-	if s.Reverse() != nil {
-		t.Errorf("Reverse() = %v, want nil (OS package is the substrate's own, not ledger-reversed)", s.Reverse())
-	}
-}
+// TestLocalPkgInstallStepIR relocated to spec/spec/install_step_vocab_test.go
+// (K3 cone2 test closure): pure IR-contract assertion on spec.LocalPkgInstallStep
+// (Kind/Scope/Venue/RequiresGate/Reverse), zero charly-core dependency.
 
 // TestOCITargetLocalPkgNilContractEmitsNothing proves a localpkg step with NO LocalPkg
 // contract (LocalPkg==nil — a distro with no localpkg-capable format) renders nothing at image
