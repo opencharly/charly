@@ -2401,10 +2401,20 @@ docs-site-app:
         base: quay.io/fedora/fedora:43
         description: |-
             The documentation-site box: a minimal Fedora base composing the docs-site candy,
-            which copies the docs/ submodule's site source in, installs its node dependencies
-            from the committed lockfile, and runs the production Astro build. Every check the
-            candy ships is build-context, so `charly check box docs-site-app` proves the whole
-            site builds and has the right shape without deploying anything.
+            which clones the published docs repo, installs its node dependencies from the
+            committed lockfile, and runs the production Astro build. The candy's checks run in
+            BOTH contexts, so `charly check box docs-site-app` proves the site builds and has the
+            right shape without deploying anything, and `charly check live` re-proves the same
+            shape against the running pod — which is what makes the bed's fresh-rebuild leg
+            assert the site rather than merely that the container is up.
+        # The distro tag chain is load-bearing, not decoration: the package resolver walks the
+        # IMAGE's declared chain most-specific-first, so a box that declares `base:` alone
+        # matches no per-distro section and silently installs nothing. Omitting it is why the
+        # first bed run died with `git: command not found` — docs-site's distro.fedora.package
+        # never resolved, and no dnf step was emitted at all. Mirrors check-k8s-deploy-app.
+        distro:
+            - fedora:43
+            - fedora
         candy:
             - docs-site
 check-docs:
