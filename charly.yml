@@ -2381,3 +2381,74 @@ check-gpu-local:
               command:
                 command: ${CHARLY_BIN} vm gpu list
                 in_container: false
+
+# =============================================================================
+# docs-site-app + check-docs — the R10 bed for the opencharly.ai documentation site.
+#
+# The bed builds the SITE ITSELF inside a disposable box: `npm ci` against the committed
+# lockfile, then the production Astro build, then a set of checks asserting the built site's
+# SHAPE. It is the acceptance gate for candy/plugin-docs (the runtime `charly docs` plugin) and
+# for the docs/ submodule's committed content together — a generator regression and a site-source
+# regression both surface here, at image build, rather than as a broken deploy on Cloudflare.
+#
+# The load-bearing assertion lives in the docs-site candy: a page for a plugin that is NOT in
+# compiled_plugins (plugin-cdp), rendering both its runtime placement and its CUE parameter
+# schema. That step fails the moment the generator narrows to documenting only what is compiled
+# into the binary — the exact failure mode the catalog design exists to prevent.
+# =============================================================================
+docs-site-app:
+    candy:
+        version: 2026.215.1207
+        base: quay.io/fedora/fedora:43
+        description: |-
+            The documentation-site box: a minimal Fedora base composing the docs-site candy,
+            which clones the published docs repo, installs its node dependencies from the
+            committed lockfile, and runs the production Astro build. The candy's checks run in
+            BOTH contexts, so `charly check box docs-site-app` proves the site builds and has the
+            right shape without deploying anything, and `charly check live` re-proves the same
+            shape against the running pod — which is what makes the bed's fresh-rebuild leg
+            assert the site rather than merely that the container is up.
+        # The distro tag chain is load-bearing, not decoration: the package resolver walks the
+        # IMAGE's declared chain most-specific-first, so a box that declares `base:` alone
+        # matches no per-distro section and silently installs nothing. Omitting it is why the
+        # first bed run died with `git: command not found` — docs-site's distro.fedora.package
+        # never resolved, and no dnf step was emitted at all. Mirrors check-k8s-deploy-app.
+        distro:
+            - fedora:43
+            - fedora
+        candy:
+            - docs-site
+check-docs:
+    pod:
+        image: docs-site-app
+        disposable: true
+        lifecycle: dev
+        description: >-
+            R10 bed for the opencharly.ai documentation site. Deploying it to steady state proves
+            the docs-site box — whose image build ran `npm ci` + the production Astro build and
+            asserted the built site's shape (a generated CLI page, a candy page carrying its
+            published acceptance plan, a recipe card with rewritten cross-references, a RUNTIME
+            out-of-process plugin's page with its CUE schema, and the provider cross-index) —
+            builds, starts, and stays up. The generator's own cross-reference integrity gate (an
+            unresolvable /charly-x:y reference fails generation) is covered by the plugin's Go
+            tests plus `task docs:drift` on the host; this bed covers the artifact those produce.
+        plan:
+            - check: the docs-site pod reached steady state (the built site's box runs)
+              id: docs-pod-running
+              exit_status: 0
+              stdout:
+                - contains: '"kind": "pod"'
+                - contains: check-docs
+              context:
+                - runtime
+              command:
+                command: ${CHARLY_BIN} status --json
+                in_container: false
+            - check: the built site is present in the running container, entry point included
+              id: docs-pod-site-present
+              exit_status: 0
+              stdout:
+                - contains: OpenCharly
+              context:
+                - runtime
+              command: cat /srv/docs/dist/index.html
