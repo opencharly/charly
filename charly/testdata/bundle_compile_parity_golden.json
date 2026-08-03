@@ -1,0 +1,381 @@
+{
+  "dev-tools": {
+    "box": "k4b-parity",
+    "version": "2026.165.0843",
+    "distro": "fedora:43",
+    "candy": "dev-tools",
+    "candies_included": [
+      "dev-tools"
+    ],
+    "steps": [
+      {
+        "kind": "SystemPackages",
+        "reverse_ops": [
+          {
+            "kind": "package-remove",
+            "format": "rpm",
+            "targets": [
+              "bat",
+              "bpftrace",
+              "fdupes",
+              "html2text",
+              "htop",
+              "mosh",
+              "neovim",
+              "podman-compose",
+              "rclone",
+              "restic",
+              "ripgrep",
+              "squashfuse",
+              "strace",
+              "sysstat",
+              "yamllint",
+              "yq",
+              "zoxide",
+              "android-tools",
+              "apptainer",
+              "apptainer-suid",
+              "arch-install-scripts",
+              "asciinema",
+              "bcc",
+              "bpftop",
+              "bridge-utils",
+              "debootstrap",
+              "direnv",
+              "dislocker",
+              "ecryptfs-utils",
+              "fastfetch",
+              "fd-find",
+              "fuse-devel",
+              "fuse-dislocker",
+              "fuse3-devel",
+              "jdupes",
+              "podman-machine",
+              "podman-remote",
+              "podman-tui",
+              "qemu-kvm",
+              "qemu-user-binfmt",
+              "qemu-user-static",
+              "ShellCheck",
+              "thefuck"
+            ]
+          }
+        ],
+        "format": "rpm",
+        "phase": 1,
+        "packages": [
+          "bat",
+          "bpftrace",
+          "fdupes",
+          "html2text",
+          "htop",
+          "mosh",
+          "neovim",
+          "podman-compose",
+          "rclone",
+          "restic",
+          "ripgrep",
+          "squashfuse",
+          "strace",
+          "sysstat",
+          "yamllint",
+          "yq",
+          "zoxide",
+          "android-tools",
+          "apptainer",
+          "apptainer-suid",
+          "arch-install-scripts",
+          "asciinema",
+          "bcc",
+          "bpftop",
+          "bridge-utils",
+          "debootstrap",
+          "direnv",
+          "dislocker",
+          "ecryptfs-utils",
+          "fastfetch",
+          "fd-find",
+          "fuse-devel",
+          "fuse-dislocker",
+          "fuse3-devel",
+          "jdupes",
+          "podman-machine",
+          "podman-remote",
+          "podman-tui",
+          "qemu-kvm",
+          "qemu-user-binfmt",
+          "qemu-user-static",
+          "ShellCheck",
+          "thefuck"
+        ],
+        "options": [
+          "--setopt=tsflags=noscripts"
+        ],
+        "cache_mount": [
+          {
+            "dst": "/var/cache/libdnf5",
+            "sharing": "locked"
+          }
+        ],
+        "raw_install_context": {
+          "options": [
+            "--setopt=tsflags=noscripts"
+          ],
+          "package": [
+            "bat",
+            "bpftrace",
+            "fdupes",
+            "html2text",
+            "htop",
+            "mosh",
+            "neovim",
+            "podman-compose",
+            "rclone",
+            "restic",
+            "ripgrep",
+            "squashfuse",
+            "strace",
+            "sysstat",
+            "yamllint",
+            "yq",
+            "zoxide",
+            "android-tools",
+            "apptainer",
+            "apptainer-suid",
+            "arch-install-scripts",
+            "asciinema",
+            "bcc",
+            "bpftop",
+            "bridge-utils",
+            "debootstrap",
+            "direnv",
+            "dislocker",
+            "ecryptfs-utils",
+            "fastfetch",
+            "fd-find",
+            "fuse-devel",
+            "fuse-dislocker",
+            "fuse3-devel",
+            "jdupes",
+            "podman-machine",
+            "podman-remote",
+            "podman-tui",
+            "qemu-kvm",
+            "qemu-user-binfmt",
+            "qemu-user-static",
+            "ShellCheck",
+            "thefuck"
+          ]
+        }
+      },
+      {
+        "kind": "Op",
+        "gate": "allow-root-tasks",
+        "candy_name": "dev-tools",
+        "candy_dir": "/tmp/k3-cone1/candy/dev-tools",
+        "op": {
+          "plugin": "command",
+          "plugin_input": {
+            "command": "if [ -f /usr/bin/batcat ] \u0026\u0026 [ ! -e /usr/bin/bat ]; then\n  ln -sf /usr/bin/batcat /usr/bin/bat\nfi\n"
+          },
+          "run_as": "root"
+        },
+        "ctx_path": "/tmp/k3-cone1/candy/dev-tools",
+        "resolved_user": "0"
+      }
+    ]
+  },
+  "pre-commit": {
+    "box": "k4b-parity",
+    "version": "2026.166.1751",
+    "distro": "fedora:43",
+    "candy": "pre-commit",
+    "candies_included": [
+      "pre-commit"
+    ],
+    "steps": [
+      {
+        "kind": "SystemPackages",
+        "reverse_ops": [
+          {
+            "kind": "package-remove",
+            "format": "rpm",
+            "targets": [
+              "pre-commit"
+            ]
+          }
+        ],
+        "format": "rpm",
+        "phase": 1,
+        "packages": [
+          "pre-commit"
+        ],
+        "cache_mount": [
+          {
+            "dst": "/var/cache/libdnf5",
+            "sharing": "locked"
+          }
+        ],
+        "raw_install_context": {
+          "package": [
+            "pre-commit"
+          ]
+        }
+      },
+      {
+        "kind": "Builder",
+        "scope": 1,
+        "venue": 1,
+        "candy_name": "pre-commit",
+        "candy_dir": "/tmp/k3-cone1/candy/pre-commit",
+        "phase": 1,
+        "builder": "npm",
+        "raw_stage_context": {
+          "builder": "npm",
+          "home": "/home/user",
+          "layer": "pre-commit"
+        },
+        "builder_def": {
+          "detect_file": [
+            "package.json"
+          ],
+          "cache_mount": [
+            {
+              "dst": "/tmp/npm-cache"
+            }
+          ],
+          "phase": {
+            "install": {
+              "host": "set -e\nif [ ! -f /work/package.json ]; then echo 'no package.json in /work' \u003e\u00262; exit 1; fi\nSTAGE=$(mktemp -d)\ncp /work/package.json \"$STAGE/package.json\"\ncd \"$STAGE\"\nnode -e 'var d=require(\"./package.json\").dependencies||{};for(var[n,v]of Object.entries(d))console.log(v===\"*\"?n:n+\"@\"+v)' | xargs -r npm install -g\nrm -rf \"$STAGE\"\n"
+            }
+          },
+          "kind": "",
+          "privileged": false
+        }
+      },
+      {
+        "kind": "Builder",
+        "scope": 1,
+        "venue": 1,
+        "reverse_ops": [
+          {
+            "kind": "pixi-env-remove",
+            "targets": [
+              "default"
+            ],
+            "scope": 1,
+            "extra": {
+              "layer": "pre-commit"
+            }
+          }
+        ],
+        "candy_name": "pre-commit",
+        "candy_dir": "/tmp/k3-cone1/candy/pre-commit",
+        "phase": 1,
+        "builder": "pixi",
+        "raw_stage_context": {
+          "builder": "pixi",
+          "env_name": "default",
+          "home": "/home/user",
+          "layer": "pre-commit"
+        },
+        "builder_def": {
+          "detect_file": [
+            "pixi.toml",
+            "pyproject.toml",
+            "environment.yml"
+          ],
+          "cache_mount": [
+            {
+              "dst": "/tmp/pixi-cache"
+            },
+            {
+              "dst": "/tmp/rattler-cache"
+            }
+          ],
+          "env": {
+            "PIXI_CACHE_DIR": "/tmp/pixi-cache",
+            "RATTLER_CACHE_DIR": "/tmp/rattler-cache"
+          },
+          "runtime_env": {
+            "PIXI_CACHE_DIR": "~/.cache/pixi",
+            "RATTLER_CACHE_DIR": "~/.cache/rattler"
+          },
+          "manylinux_fix": "RUN grep -q 'system-requirements' {{.Manifest}} || printf '\\n[system-requirements]\\nlibc = { family = \"glibc\", version = \"2.39\" }\\n' \u003e\u003e {{.Manifest}}\n",
+          "build_script": "build.sh",
+          "phase": {
+            "install": {
+              "host": "set -e\ncd \"$HOME\"\nif [ -f /work/pixi.toml ]; then manifest=pixi.toml\nelif [ -f /work/pyproject.toml ]; then manifest=pyproject.toml\nelif [ -f /work/environment.yml ]; then manifest=environment.yml\nelse echo 'no pixi manifest found in /work' \u003e\u00262; exit 1; fi\ncp /work/$manifest $manifest\nif [ -f /work/pixi.lock ]; then cp /work/pixi.lock pixi.lock; fi\n# Ensure manylinux glibc requirement is present so cross-distro compat holds.\ngrep -q 'system-requirements' $manifest || printf '\\n[system-requirements]\\nlibc = { family = \"glibc\", version = \"2.39\" }\\n' \u003e\u003e $manifest\ncase \"$manifest\" in\n  pixi.toml)\n    if [ -f pixi.lock ]; then pixi install --frozen\n    else pixi install; fi ;;\n  pyproject.toml) pixi install --manifest-path pyproject.toml ;;\n  environment.yml) pixi project import environment.yml \u0026\u0026 pixi install ;;\nesac\nif [ -f /work/build.sh ]; then bash /work/build.sh; fi\nrm -f $manifest pixi.lock\n"
+            }
+          },
+          "install_command": {
+            "environment.yml": "pixi project import environment.yml \u0026\u0026 pixi install",
+            "pixi.toml": "pixi install",
+            "pixi.toml+lock": "pixi install --frozen",
+            "pyproject.toml": "pixi install --manifest-path pyproject.toml"
+          },
+          "path_contribution": [
+            "~/.pixi/bin",
+            "~/.pixi/envs/default/bin"
+          ],
+          "kind": "",
+          "privileged": false
+        }
+      },
+      {
+        "kind": "Op",
+        "scope": 1,
+        "candy_name": "pre-commit",
+        "candy_dir": "/tmp/k3-cone1/candy/pre-commit",
+        "op": {
+          "plugin": "command",
+          "plugin_input": {
+            "command": "cargo install taplo-cli --locked"
+          },
+          "run_as": "${USER}"
+        },
+        "ctx_path": "/tmp/k3-cone1/candy/pre-commit",
+        "resolved_user": "1000"
+      }
+    ]
+  },
+  "ripgrep": {
+    "box": "k4b-parity",
+    "version": "2026.144.1443",
+    "distro": "fedora:43",
+    "candy": "ripgrep",
+    "candies_included": [
+      "ripgrep"
+    ],
+    "steps": [
+      {
+        "kind": "SystemPackages",
+        "reverse_ops": [
+          {
+            "kind": "package-remove",
+            "format": "rpm",
+            "targets": [
+              "ripgrep"
+            ]
+          }
+        ],
+        "format": "rpm",
+        "phase": 1,
+        "packages": [
+          "ripgrep"
+        ],
+        "cache_mount": [
+          {
+            "dst": "/var/cache/libdnf5",
+            "sharing": "locked"
+          }
+        ],
+        "raw_install_context": {
+          "package": [
+            "ripgrep"
+          ]
+        }
+      }
+    ]
+  }
+}
