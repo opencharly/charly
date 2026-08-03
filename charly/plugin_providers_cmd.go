@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/opencharly/spec/spec"
 	"gopkg.in/yaml.v3"
 )
 
@@ -22,7 +23,7 @@ type PluginProvidersCmd struct {
 }
 
 func (c *PluginProvidersCmd) Run() error {
-	data, err := os.ReadFile(filepath.Join(c.Dir, UnifiedFileName))
+	data, err := os.ReadFile(filepath.Join(c.Dir, spec.UnifiedFileName))
 	if err != nil {
 		return fmt.Errorf("reading candy manifest: %w", err)
 	}

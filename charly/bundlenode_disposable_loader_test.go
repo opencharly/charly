@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/spec/spec"
 	"os"
 	"path/filepath"
 	"testing"
@@ -31,7 +32,7 @@ bare-pod:
     pod:
         image: baz
 `
-	if err := os.WriteFile(filepath.Join(dir, UnifiedFileName), []byte(src), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, spec.UnifiedFileName), []byte(src), 0o644); err != nil {
 		t.Fatalf("write fixture: %v", err)
 	}
 

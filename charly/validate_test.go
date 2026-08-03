@@ -38,7 +38,7 @@ func TestValidateBuildTunables(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			cfg := &Config{Defaults: tc.ic, Box: boxMapOf(map[string]spec.BoxConfig{})}
+			cfg := &spec.Config{Defaults: tc.ic, Box: boxMapOf(map[string]spec.BoxConfig{})}
 			errs := &spec.ValidationError{}
 			validateBuildTunables(cfg, errs)
 			if tc.wantErr == "" {

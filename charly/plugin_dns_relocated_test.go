@@ -14,10 +14,8 @@ import (
 func TestRelocatedDNSVerb_DispatchesViaKit(t *testing.T) {
 	assertRelocatedVerbDispatch(t, "dns", []relocatedVerbCase{
 		// ModeBox, getent exit 0 (resolvable) + resolvable:true → pass.
-		{"getent-ok + resolvable:true", "getent hosts", 0, RunModeBox,
-			map[string]any{"dns": "localhost", "resolvable": true}, spec.StatusPass},
+		{"getent-ok + resolvable:true", "getent hosts", 0, spec.CheckModeBox, map[string]any{"dns": "localhost", "resolvable": true}, spec.StatusPass},
 		// ModeBox, getent exit 2 (not resolvable) + resolvable:false → pass.
-		{"getent-fail + resolvable:false", "getent hosts", 2, RunModeBox,
-			map[string]any{"dns": "no.such.host.invalid", "resolvable": false}, spec.StatusPass},
+		{"getent-fail + resolvable:false", "getent hosts", 2, spec.CheckModeBox, map[string]any{"dns": "no.such.host.invalid", "resolvable": false}, spec.StatusPass},
 	})
 }

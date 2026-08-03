@@ -80,7 +80,7 @@ func (h *hostVerbResolver) runProvisionAct(ctx context.Context, c *spec.Op, verb
 	if !ok {
 		return spec.CheckResult{}, false
 	}
-	if h.cc.Mode() == RunModeBox {
+	if h.cc.Mode() == spec.CheckModeBox {
 		return skipf(c, "do: act not meaningful under charly check box (no running target)"), true
 	}
 	_, stderr, exit, err := h.cc.Exec().RunCapture(ctx, spec.WrapContainerCommand(script))

@@ -2,7 +2,9 @@ package main
 
 // resource_resolve.go — the HOST side of the `resource` kind after the resource
 // de-type (Cutover G). candy/plugin-resource's OpResolve projects an authored
-// resource into a ResolvedResource; the GPU arbiter consumes it, never spec.Resource.
+// resource into a spec.ResolvedResource; the GPU arbiter consumes it, never spec.Resource.
+// (W0 deleted the former in-core ResolvedResource/ResolvedGpuSelector aliases — every
+// consumer reads spec.ResolvedResource/spec.ResolvedGpuSelector directly.)
 
 import (
 	"encoding/json"
@@ -10,21 +12,15 @@ import (
 	"github.com/opencharly/spec/spec"
 )
 
-// ResolvedResource / ResolvedGpuSelector are the resource de-type's value envelopes.
-type (
-	ResolvedResource    = spec.ResolvedResource
-	ResolvedGpuSelector = spec.ResolvedGpuSelector
-)
-
 // resolveResources projects uf.PluginKinds["resource"] (opaque bodies) into
-// *ResolvedResource envelopes via candy/plugin-resource's OpResolve leg
+// *spec.ResolvedResource envelopes via candy/plugin-resource's OpResolve leg
 // (spec.ResolvePluginKindViaPlugin — the shared loop every plugin-resolved kind
 // accessor uses).
-func resolveResources(uf *spec.UnifiedFile) map[string]*ResolvedResource {
+func resolveResources(uf *spec.UnifiedFile) map[string]*spec.ResolvedResource {
 	return spec.ResolvePluginKindViaPlugin(uf, "resource", resolveResourceViaPlugin)
 }
 
-func resolveResourceViaPlugin(body json.RawMessage) (*ResolvedResource, error) {
+func resolveResourceViaPlugin(body json.RawMessage) (*spec.ResolvedResource, error) {
 	reply, err := hostInvoke[spec.ResourceResolveInput, spec.ResourceResolveReply](ClassKind, "resource", OpResolve, spec.ResourceResolveInput{Resource: body})
 	if err != nil {
 		return nil, err

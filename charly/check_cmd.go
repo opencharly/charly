@@ -62,7 +62,7 @@ type checkRunnerContext struct {
 // populated CandyDirs, so a committed-APK check passed under check live yet failed to anchor
 // ("0 candies scanned") under feature run. Any RunModeLive runner that executes a baked plan
 // MUST fold its result into the RunnerConfig (CandyDirs + CandyScanErr).
-func resolveCheckRunnerContext(box, dir string, cfg *Config) checkRunnerContext {
+func resolveCheckRunnerContext(box, dir string, cfg *spec.Config) checkRunnerContext {
 	// Scan the RESOLVED candy set ONCE (local + @github-fetched): it carries each
 	// candy's SourceDir (committed-APK anchoring) AND its `plugin:` block, so one
 	// scan feeds BOTH consumers (R3). A box that vendors all its candies via @github

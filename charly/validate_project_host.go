@@ -51,7 +51,7 @@ const diagSeverityError = "error"
 // the config, the scanned candies, the discovered unified file, the build vocabulary, and the schema
 // version. empty marks a project-less directory (ErrNoCharlyYml → the empty-project contract).
 type loadedProject struct {
-	cfg        *Config
+	cfg        *spec.Config
 	layers     map[string]spec.CandyReader
 	uf         *spec.UnifiedFile // nil when absent or its load/discover errored
 	distroCfg  *spec.DistroConfig

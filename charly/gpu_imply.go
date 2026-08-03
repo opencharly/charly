@@ -20,10 +20,10 @@ import (
 // nvidiaTokenFromResources returns the `resource:` token whose gpu selector matches the NVIDIA
 // PCI vendor — the arbitration token the auto-detected nvidia GPU device maps onto. "" when no
 // gpu-backed nvidia token is configured. Lowest token name wins on a degenerate multi-match.
-func nvidiaTokenFromResources(resources map[string]*ResolvedResource) string {
+func nvidiaTokenFromResources(resources map[string]*spec.ResolvedResource) string {
 	best := ""
 	for tok, rdef := range resources {
-		if rdef != nil && rdef.Gpu != nil && normalizePCIVendor(rdef.Gpu.Vendor) == nvidiaVendorID {
+		if rdef != nil && rdef.Gpu != nil && spec.NormalizePCIVendor(rdef.Gpu.Vendor) == spec.NvidiaVendorID {
 			if best == "" || tok < best {
 				best = tok
 			}
@@ -73,7 +73,7 @@ func nodeConsumesNvidiaGPU(node spec.BundleNode) bool {
 // impliedGPUSharedToken returns the gpu-backed `resource:` token a node implicitly claims as
 // SHARED because it consumes the auto-detected nvidia GPU device — "" when the node is not a
 // GPU consumer, claims a resource exclusively, or no gpu token is configured.
-func impliedGPUSharedToken(node spec.BundleNode, resources map[string]*ResolvedResource) string {
+func impliedGPUSharedToken(node spec.BundleNode, resources map[string]*spec.ResolvedResource) string {
 	if len(node.RequiredExclusive()) > 0 {
 		return ""
 	}
@@ -86,7 +86,7 @@ func impliedGPUSharedToken(node spec.BundleNode, resources map[string]*ResolvedR
 // applyImpliedGPUShared returns node with its RequiresShared unioned with the implied gpu
 // token — a no-op copy when nothing is implied OR the node already claims the token. Pure
 // (resources injected) so it is unit-testable without disk.
-func applyImpliedGPUShared(node spec.BundleNode, resources map[string]*ResolvedResource) spec.BundleNode {
+func applyImpliedGPUShared(node spec.BundleNode, resources map[string]*spec.ResolvedResource) spec.BundleNode {
 	tok := impliedGPUSharedToken(node, resources)
 	if tok == "" || slices.Contains(node.RequiresShared, tok) {
 		return node

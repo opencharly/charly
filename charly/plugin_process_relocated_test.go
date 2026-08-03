@@ -16,10 +16,8 @@ import (
 func TestRelocatedProcessVerb_DispatchesViaKit(t *testing.T) {
 	assertRelocatedVerbDispatch(t, "process", []relocatedVerbCase{
 		// pgrep finds the process (exit 0) + running:true → pass.
-		{"found + running:true", "pgrep", 0, RunModeLive,
-			map[string]any{"process": "sleep", "running": true}, spec.StatusPass},
+		{"found + running:true", "pgrep", 0, spec.CheckModeLive, map[string]any{"process": "sleep", "running": true}, spec.StatusPass},
 		// pgrep does not find it (exit 1) + running:true → fail.
-		{"absent + running:true", "pgrep", 1, RunModeLive,
-			map[string]any{"process": "absent", "running": true}, spec.StatusFail},
+		{"absent + running:true", "pgrep", 1, spec.CheckModeLive, map[string]any{"process": "absent", "running": true}, spec.StatusFail},
 	})
 }

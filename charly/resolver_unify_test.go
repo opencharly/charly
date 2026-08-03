@@ -18,7 +18,7 @@ import (
 // (namespaced, external fedora base). `app` does NOT base off `sub.widget`, so
 // `sub.widget` is NOT reachable as a base — exercising the explicit-target and
 // direct-resolve paths rather than the base-reachability pull.
-func fixtureNamespacedProject(t *testing.T) (string, *Config) {
+func fixtureNamespacedProject(t *testing.T) (string, *spec.Config) {
 	t.Helper()
 	root := t.TempDir()
 	writeFixture(t, root, "charly.yml", `version: 2026.204.1223

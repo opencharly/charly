@@ -79,12 +79,11 @@ func invokeAndroidPreresolve(ctx context.Context, req *pb.InvokeRequest) (*pb.In
 	if err := hostEntityResolve(ctx, exec, spec.DeployEntityResolveRequest{Kind: "android", Name: node.From, Dir: p.Dir}, &entReply); err != nil {
 		return nil, fmt.Errorf("deploy %q: resolving kind:android device %q: %w", p.Name, node.From, err)
 	}
-	var res spec.AndroidEntityResolution
-	if err := json.Unmarshal(entReply.EntityJSON, &res); err != nil {
-		return nil, fmt.Errorf("deploy %q: decode android entity resolution: %w", p.Name, err)
-	}
+	// entReply.EntityJSON carries the ResolvedAndroid envelope verbatim (W0 deleted the one-off
+	// AndroidEntityResolution wrapper this seam used to require — every kind:<word> lookup, k8s/vm
+	// included, ships its Resolved* envelope unwrapped).
 	var spc spec.ResolvedAndroid
-	if err := json.Unmarshal(res.SpecJSON, &spc); err != nil {
+	if err := json.Unmarshal(entReply.EntityJSON, &spc); err != nil {
 		return nil, fmt.Errorf("deploy %q: decode kind:android spec: %w", p.Name, err)
 	}
 

@@ -36,8 +36,8 @@ func (h *hostVerbResolver) resolveVerbEndpoint(port int) (string, error) {
 // detached CheckContext for a CheckVerbProvider target dispatched from a plugin. Returns the
 // opened endpoint's cleanup func (nil when none was opened) for the caller's OWN cleanup-list
 // bookkeeping — hostVerbResolver's list, or the detached context's own.
-func resolveVerbEndpointFor(box, instance string, mode RunMode, port int) (addr string, cleanup func(), err error) {
-	if box == "" || mode == RunModeBox {
+func resolveVerbEndpointFor(box, instance string, mode spec.CheckRunMode, port int) (addr string, cleanup func(), err error) {
+	if box == "" || mode == spec.CheckModeBox {
 		return "", nil, nil
 	}
 	reply, err := resolveCheckVenueReply(box, instance)
@@ -104,8 +104,8 @@ func (h *hostVerbResolver) resolveImageLabel(label string) (string, error) {
 // seam the sibling resolveVerbEndpointFor uses. No kit import is added (IMPORT-PURITY): the engine
 // override the former ResolveBoxEngineForDeploy read from the per-host deploy config is resolved
 // plugin-side now and crosses the wire as reply.Descriptor.Engine.
-func resolveImageLabelFor(box, instance string, mode RunMode, label string) (string, error) {
-	if box == "" || mode == RunModeBox {
+func resolveImageLabelFor(box, instance string, mode spec.CheckRunMode, label string) (string, error) {
+	if box == "" || mode == spec.CheckModeBox {
 		return "", nil
 	}
 	reply, err := resolveCheckVenueReply(box, instance)

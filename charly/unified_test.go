@@ -326,8 +326,8 @@ discover:
 	}
 	// The string shorthand and the object form both default Manifest to the
 	// single unified filename (configurable per spec via `manifest:` in charly.yml).
-	if uf.Discover[0].Manifest != UnifiedFileName || uf.Discover[1].Manifest != UnifiedFileName {
-		t.Errorf("Manifest defaults = %q,%q, want %q", uf.Discover[0].Manifest, uf.Discover[1].Manifest, UnifiedFileName)
+	if uf.Discover[0].Manifest != spec.UnifiedFileName || uf.Discover[1].Manifest != spec.UnifiedFileName {
+		t.Errorf("Manifest defaults = %q,%q, want %q", uf.Discover[0].Manifest, uf.Discover[1].Manifest, spec.UnifiedFileName)
 	}
 }
 

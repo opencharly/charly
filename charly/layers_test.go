@@ -564,18 +564,18 @@ func TestScanAllCandyWithConfigOpts_LocalCandyGetsInitSystemsCompletion(t *testi
 		t.Fatal(err)
 	}
 	body := "candy:\n  name: svc\n  service:\n    - name: myd\n      use_packaged: myd.service\n      enable: true\n      scope: system\n"
-	if err := os.WriteFile(filepath.Join(candyDir, UnifiedFileName), []byte(body), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(candyDir, spec.UnifiedFileName), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	initCfg := &spec.InitConfig{Init: map[string]*ResolvedInit{
+	initCfg := &spec.InitConfig{Init: map[string]*spec.ResolvedInit{
 		"supervisord": {
 			CandyFields:   []string{"service"},
 			ServiceSchema: &spec.InitServiceSchema{SupportsPackaged: true},
 		},
 	}}
 
-	layers, err := ScanAllCandyWithConfigOpts(dir, &Config{}, spec.ResolveOpts{InitCfg: initCfg})
+	layers, err := ScanAllCandyWithConfigOpts(dir, &spec.Config{}, spec.ResolveOpts{InitCfg: initCfg})
 	if err != nil {
 		t.Fatalf("ScanAllCandyWithConfigOpts: %v", err)
 	}

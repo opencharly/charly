@@ -417,7 +417,7 @@ func prescanDeclaredPluginWords(rootData []byte, baseDir string) {
 		}
 		manifest := disc.Manifest
 		if manifest == "" {
-			manifest = UnifiedFileName
+			manifest = spec.UnifiedFileName
 		}
 		root := disc.Path
 		if !filepath.IsAbs(root) {

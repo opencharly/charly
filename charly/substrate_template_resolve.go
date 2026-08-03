@@ -4,7 +4,10 @@ package main
 // TEMPLATES after the substrate-template de-type (Cutover I). The kernel stores
 // local:/android: template bodies opaquely (uf.Local / uf.Android are
 // map[string]json.RawMessage) and consumes candy/plugin-substrate's OpResolve
-// projection (ResolvedLocal / ResolvedAndroid) — never spec.Local / spec.Android.
+// projection (spec.ResolvedLocal / spec.ResolvedAndroid) — never spec.Local / spec.Android.
+// (W0: the former ResolvedLocal/ResolvedAndroid/ResolvedK8s in-package aliases are deleted — every
+// caller reads spec.* directly; resolveK8sViaPlugin died with its only caller, findK8sSpec,
+// relocated into host_build_deploy_entity_resolve.go's kind-blind resolveEntityTemplate.)
 
 import (
 	"context"
@@ -13,31 +16,6 @@ import (
 
 	"github.com/opencharly/spec/spec"
 )
-
-// ResolvedLocal / ResolvedAndroid / ResolvedK8s are the substrate-template value envelopes.
-type (
-	ResolvedLocal   = spec.ResolvedLocal
-	ResolvedAndroid = spec.ResolvedAndroid
-	ResolvedK8s     = spec.ResolvedK8s
-)
-
-// resolveK8sViaPlugin projects one opaque k8s cluster template body into a *ResolvedK8s
-// via candy/plugin-substrate's OpResolve leg (the k8s substrate-value de-type, Cutover K).
-func resolveK8sViaPlugin(body json.RawMessage) (*ResolvedK8s, error) {
-	out, err := invokeSubstrateTemplateResolve(spec.SubstrateTemplateResolveRequest{
-		K8s: &spec.K8sResolveInput{K8s: body},
-	})
-	if err != nil {
-		return nil, err
-	}
-	var reply spec.K8sResolveReply
-	if len(out) > 0 {
-		if err := json.Unmarshal(out, &reply); err != nil {
-			return nil, fmt.Errorf("k8s resolve: decode reply: %w", err)
-		}
-	}
-	return reply.Resolved, nil
-}
 
 // resolveVmViaPlugin projects one opaque vm template body into a *spec.ResolvedVm
 // via candy/plugin-substrate's OpResolve leg (the vm
@@ -61,9 +39,9 @@ func resolveVmViaPlugin(body json.RawMessage) (*spec.ResolvedVm, error) {
 	return reply.Resolved, nil
 }
 
-// resolveLocalViaPlugin projects one opaque local template body into a *ResolvedLocal
+// resolveLocalViaPlugin projects one opaque local template body into a *spec.ResolvedLocal
 // via candy/plugin-substrate's OpResolve leg.
-func resolveLocalViaPlugin(body json.RawMessage) (*ResolvedLocal, error) {
+func resolveLocalViaPlugin(body json.RawMessage) (*spec.ResolvedLocal, error) {
 	out, err := invokeSubstrateTemplateResolve(spec.SubstrateTemplateResolveRequest{
 		Local: &spec.LocalResolveInput{Local: body},
 	})
@@ -80,8 +58,8 @@ func resolveLocalViaPlugin(body json.RawMessage) (*ResolvedLocal, error) {
 }
 
 // resolveAndroidViaPlugin projects one opaque android template body into a
-// *ResolvedAndroid.
-func resolveAndroidViaPlugin(body json.RawMessage) (*ResolvedAndroid, error) {
+// *spec.ResolvedAndroid.
+func resolveAndroidViaPlugin(body json.RawMessage) (*spec.ResolvedAndroid, error) {
 	out, err := invokeSubstrateTemplateResolve(spec.SubstrateTemplateResolveRequest{
 		Android: &spec.AndroidResolveInput{Android: body},
 	})

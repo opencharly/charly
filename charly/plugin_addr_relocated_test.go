@@ -14,10 +14,8 @@ import (
 func TestRelocatedAddrVerb_DispatchesViaKit(t *testing.T) {
 	assertRelocatedVerbDispatch(t, "addr", []relocatedVerbCase{
 		// ModeBox, nc exit 0 (reachable) + reachable:true → pass.
-		{"nc-up + reachable:true", "nc -z", 0, RunModeBox,
-			map[string]any{"addr": "127.0.0.1:22", "reachable": true}, spec.StatusPass},
+		{"nc-up + reachable:true", "nc -z", 0, spec.CheckModeBox, map[string]any{"addr": "127.0.0.1:22", "reachable": true}, spec.StatusPass},
 		// ModeBox, nc exit 1 (unreachable) + reachable:false → pass.
-		{"nc-down + reachable:false", "nc -z", 1, RunModeBox,
-			map[string]any{"addr": "127.0.0.1:1", "reachable": false}, spec.StatusPass},
+		{"nc-down + reachable:false", "nc -z", 1, spec.CheckModeBox, map[string]any{"addr": "127.0.0.1:1", "reachable": false}, spec.StatusPass},
 	})
 }

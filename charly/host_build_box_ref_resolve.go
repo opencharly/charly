@@ -44,7 +44,7 @@ import (
 // ResolveShellImageRef). projectDir is retained in the signature for the host-internal caller
 // but no longer needed for the resolve (cfg.ResolveBoxRef is pure config-nav — no build
 // vocabulary fill).
-func resolveImageRefForEnsure(image string, cfg *Config, projectDir string) (string, error) {
+func resolveImageRefForEnsure(image string, cfg *spec.Config, projectDir string) (string, error) {
 	_ = projectDir
 	if image == "" {
 		return "", fmt.Errorf("empty image")

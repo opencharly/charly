@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/opencharly/spec/spec"
 )
 
 // TestLoadUnified_AndroidNodeForm verifies a unified node-form `android` entity
@@ -20,16 +22,23 @@ pixel9a-36:
     device: pixel_9a
     api_level: 36
 `
-	if err := os.WriteFile(filepath.Join(dir, UnifiedFileName), []byte(doc), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, spec.UnifiedFileName), []byte(doc), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	uf, _, err := LoadUnified(dir)
 	if err != nil {
 		t.Fatalf("LoadUnified(android node-form): %v", err)
 	}
-	got := lookupAndroidSpec(uf, "pixel9a-36")
-	if got == nil {
+	body, ok := uf.Android()["pixel9a-36"]
+	if !ok {
 		t.Fatalf("android node-form entity not registered in uf.Android(); got %v", uf.Android())
+	}
+	got, err := resolveAndroidViaPlugin(body)
+	if err != nil {
+		t.Fatalf("resolveAndroidViaPlugin: %v", err)
+	}
+	if got == nil {
+		t.Fatal("resolveAndroidViaPlugin returned a nil spec")
 	}
 	if got.Box != "android-emulator" || got.Device != "pixel_9a" || got.ApiLevel != 36 {
 		t.Errorf("android spec round-trip wrong: %+v", got)

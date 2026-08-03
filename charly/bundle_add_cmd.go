@@ -200,7 +200,7 @@ func podDeploymentArtifactExists(name string) bool {
 // loadConfigForDeploy loads charly.yml + the embedded build vocabulary for the
 // current project directory. Runs RegisterBuildVocabulary as a side effect since
 // the candy scanner needs it.
-func loadConfigForDeploy(dir string) (*Config, *spec.DistroConfig, *spec.BuilderConfig, error) {
+func loadConfigForDeploy(dir string) (*spec.Config, *spec.DistroConfig, *spec.BuilderConfig, error) {
 	cfg, err := LoadConfig(dir)
 	if err != nil {
 		return nil, nil, nil, err

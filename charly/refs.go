@@ -135,12 +135,12 @@ func autoMigrateCacheProjectOnly(path string) error {
 // CollectRemoteRefs is the default-opts wrapper (enabled images only) around
 // CollectRemoteRefsOpts. The overwhelming majority of call sites want
 // enabled-only collection, so they keep this two-arg form.
-func CollectRemoteRefs(cfg *Config, layers map[string]spec.CandyReader) ([]spec.RemoteDownload, error) {
+func CollectRemoteRefs(cfg *spec.Config, layers map[string]spec.CandyReader) ([]spec.RemoteDownload, error) {
 	return CollectRemoteRefsOpts(cfg, layers, spec.ResolveOpts{})
 }
 
 // CollectRemoteRefsOpts collects all unique remote refs from charly.yml candy
 // lists and candy manifest depends/candy fields.
-func CollectRemoteRefsOpts(cfg *Config, layers map[string]spec.CandyReader, opts spec.ResolveOpts) ([]spec.RemoteDownload, error) {
+func CollectRemoteRefsOpts(cfg *spec.Config, layers map[string]spec.CandyReader, opts spec.ResolveOpts) ([]spec.RemoteDownload, error) {
 	return requireProjectLoader().CollectRemoteRefsOpts(cfg, layers, opts, refsCollectSeams())
 }

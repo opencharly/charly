@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/opencharly/spec/spec"
 )
 
 // android_prescan_test.go — the CORE-side loader-mechanism coverage for deploy:android (FINAL/K5
@@ -45,7 +47,7 @@ func TestAndroidDeploySubstrate_Prescan(t *testing.T) {
 
 	// Simulate the loader's parse-time prescan over candy/plugin-adb's manifest shape.
 	dir := t.TempDir()
-	manifest := filepath.Join(dir, UnifiedFileName)
+	manifest := filepath.Join(dir, spec.UnifiedFileName)
 	if err := os.WriteFile(manifest, []byte(`plugin-adb:
   plugin-adb-decl:
     plugin:

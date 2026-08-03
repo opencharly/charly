@@ -17,7 +17,7 @@ import (
 // registry-coupled calls it made are now the established plugin↔host idioms every OTHER shape in
 // this cutover uses:
 //
-//   - findK8sSpec(dir, name) (a direct core LoadUnified-coupled call) → the ALREADY-EXISTING
+//   - the former charly-core direct LoadUnified-coupled k8s-spec lookup → the ALREADY-EXISTING
 //     generic "deploy-entity-resolve" HostBuild seam, kind="k8s" (host_build_deploy_entity_resolve.go),
 //     which already marshals the FULL *spec.ResolvedK8s into EntityJSON for candy/plugin-kube's own
 //     cluster-context resolution — no new seam needed, this one already serves exactly this lookup.
@@ -123,9 +123,9 @@ func DeployFromBox(ctx context.Context, exec *sdk.Executor, opts DeployFromBoxOp
 
 // resolveK8sSpec resolves a kind:k8s cluster template by name via the generic
 // "deploy-entity-resolve" HostBuild seam (kind="k8s") — the plugin-side twin of the former core
-// findK8sSpec, which needed LoadUnified directly. A resolve miss (no charly.yml, no declared
-// cluster, a decode failure) degrades to nil, matching the former function's own swallow-to-nil
-// contract (downstream Kustomize emission handles a nil cluster).
+// direct-LoadUnified k8s-spec lookup. A resolve miss (no charly.yml, no declared cluster, a decode
+// failure) degrades to nil, matching the former function's own swallow-to-nil contract (downstream
+// Kustomize emission handles a nil cluster).
 func resolveK8sSpec(ctx context.Context, exec *sdk.Executor, dir, name string) *spec.ResolvedK8s {
 	if exec == nil || dir == "" || name == "" {
 		return nil

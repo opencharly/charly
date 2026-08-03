@@ -15,7 +15,7 @@ import (
 // Generator holds state for generating build artifacts
 type Generator struct {
 	Dir     string
-	Config  *Config
+	Config  *spec.Config
 	Candies map[string]spec.CandyReader
 	// InitConfig is the project init: vocabulary. Init-system resolution
 	// (ActiveInit/ResolveInitSystem) runs over Candies + candyOrder and lives

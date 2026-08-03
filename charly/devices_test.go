@@ -3,6 +3,8 @@ package main
 import (
 	"reflect"
 	"testing"
+
+	"github.com/opencharly/spec/spec"
 )
 
 // TestAMDGFXVersionParsing (parseKFDGFXVersion) + TestGpuUsableViaCDI (gpuUsableViaCDI)
@@ -20,8 +22,8 @@ func TestDetectHostDevicesWithGPU(t *testing.T) {
 	orig := DetectHostDevices
 	defer func() { DetectHostDevices = orig }()
 
-	DetectHostDevices = func() DetectedDevices {
-		return DetectedDevices{
+	DetectHostDevices = func() spec.DetectedDevices {
+		return spec.DetectedDevices{
 			GPU:     true,
 			Devices: []string{"/dev/kvm", "/dev/dri/renderD128"},
 		}
@@ -41,8 +43,8 @@ func TestDetectHostDevicesNoGPU(t *testing.T) {
 	orig := DetectHostDevices
 	defer func() { DetectHostDevices = orig }()
 
-	DetectHostDevices = func() DetectedDevices {
-		return DetectedDevices{
+	DetectHostDevices = func() spec.DetectedDevices {
+		return spec.DetectedDevices{
 			GPU:     false,
 			Devices: []string{"/dev/fuse"},
 		}
@@ -67,8 +69,8 @@ func TestDetectHostDevicesWithAMDGPU(t *testing.T) {
 	orig := DetectHostDevices
 	defer func() { DetectHostDevices = orig }()
 
-	DetectHostDevices = func() DetectedDevices {
-		return DetectedDevices{
+	DetectHostDevices = func() spec.DetectedDevices {
+		return spec.DetectedDevices{
 			AMDGPU:        true,
 			AMDGFXVersion: "10.3.0",
 			Devices:       []string{"/dev/kfd", "/dev/dri/renderD128"},
@@ -91,8 +93,8 @@ func TestDetectHostDevicesWithBothGPUs(t *testing.T) {
 	orig := DetectHostDevices
 	defer func() { DetectHostDevices = orig }()
 
-	DetectHostDevices = func() DetectedDevices {
-		return DetectedDevices{
+	DetectHostDevices = func() spec.DetectedDevices {
+		return spec.DetectedDevices{
 			GPU:           true,
 			AMDGPU:        true,
 			AMDGFXVersion: "11.0.0",
@@ -115,8 +117,8 @@ func TestRenderNodeDetection(t *testing.T) {
 
 	// The real defaultDetectHostDevices picks the first renderD* from Devices.
 	// Here we verify the struct carries the field correctly through the pipeline.
-	DetectHostDevices = func() DetectedDevices {
-		return DetectedDevices{
+	DetectHostDevices = func() spec.DetectedDevices {
+		return spec.DetectedDevices{
 			AMDGPU:     true,
 			RenderNode: "/dev/dri/renderD128",
 			Devices:    []string{"/dev/kfd", "/dev/dri/renderD128", "/dev/dri/renderD129"},
@@ -133,8 +135,8 @@ func TestRenderNodeNoDevices(t *testing.T) {
 	orig := DetectHostDevices
 	defer func() { DetectHostDevices = orig }()
 
-	DetectHostDevices = func() DetectedDevices {
-		return DetectedDevices{
+	DetectHostDevices = func() spec.DetectedDevices {
+		return spec.DetectedDevices{
 			Devices: []string{"/dev/kfd", "/dev/kvm"},
 		}
 	}

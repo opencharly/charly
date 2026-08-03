@@ -25,7 +25,7 @@ import (
 // function (not a Config method — Config is a type alias now, package main can add no more
 // methods to it): callers changed from `cfg.resolveLocalRef(ref)` to
 // `resolveLocalRefFor(cfg, ref)`.
-func resolveLocalRefFor(cfg *Config, ref string) (*ResolvedLocal, bool) {
+func resolveLocalRefFor(cfg *spec.Config, ref string) (*spec.ResolvedLocal, bool) {
 	if ns, rest, ok := spec.SplitNamespaceRef(ref); ok {
 		sub, ok := cfg.Namespaces[ns]
 		if !ok {

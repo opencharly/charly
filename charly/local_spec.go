@@ -1,5 +1,7 @@
 package main
 
+import "github.com/opencharly/spec/spec"
+
 // findLocalSpec looks up a LocalSpec by name from the unified loader.
 // Returns (nil, nil) when the project loads but has no `local:` entry by that
 // name; returns (nil, err) when the project config FAILS to load — the caller
@@ -17,7 +19,7 @@ package main
 // caller, check_cmd.go's runLocalDeployScopePlan (the CLI-free check-live gather
 // engine), is registry/LoadUnified-coupled by its own nature and out of this
 // cutover's scope.
-func findLocalSpec(dir, name string) (*ResolvedLocal, error) {
+func findLocalSpec(dir, name string) (*spec.ResolvedLocal, error) {
 	if dir == "" || name == "" {
 		return nil, nil
 	}
@@ -32,6 +34,6 @@ func findLocalSpec(dir, name string) (*ResolvedLocal, error) {
 	// `local:` map exactly as before, while a qualified `local: <ns>.<tmpl>`
 	// ref descends into the imported namespace. resolveLocalRef tolerates a nil
 	// Local map, so the previous explicit nil-guard is no longer needed.
-	spec, _ := resolveLocalRefFor(uf.ProjectConfig(), name)
-	return spec, nil
+	rsvd, _ := resolveLocalRefFor(uf.ProjectConfig(), name)
+	return rsvd, nil
 }

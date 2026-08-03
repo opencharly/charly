@@ -67,7 +67,7 @@ func TestKitVerbOutOfProcess_HTTPDoEndToEnd(t *testing.T) {
 	// The host serves BOTH reverse services on the broker: ExecutorService (the venue) +
 	// CheckContextService (HTTPDo) — the SAME wiring invokeVerbProvider uses for a live check.
 	cc := &checkContextReverseServer{httpBase: &http.Client{Timeout: 10 * time.Second}}
-	envJSON, err := marshalJSON(&CheckEnv{Mode: "live", VenueKind: "host"})
+	envJSON, err := marshalJSON(&spec.CheckEnv{Mode: "live", VenueKind: "host"})
 	if err != nil {
 		t.Fatal(err)
 	}

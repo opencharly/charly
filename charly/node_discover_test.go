@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/opencharly/spec/spec"
 )
 
 // TestLoadUnified_NodeForm_Discovery proves discovered node-form candy + box
@@ -56,7 +58,7 @@ discover:
 	}
 }
 
-func boxConfigKeys(c *Config) []string {
+func boxConfigKeys(c *spec.Config) []string {
 	out := make([]string, 0, len(c.Box))
 	for k := range c.Box {
 		out = append(out, k)
