@@ -15,6 +15,9 @@ includes:
   plugins:
     taskfile: ./taskfiles/Plugins.yml
     dir: "{{.ROOT_DIR}}"
+  docs:
+    taskfile: ./taskfiles/Docs.yml
+    dir: "{{.ROOT_DIR}}"
 
 tasks:
   default:

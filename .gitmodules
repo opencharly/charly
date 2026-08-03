@@ -33,3 +33,6 @@
 	path = spec
 	url = git@github.com:opencharly/spec.git
 	branch = main
+[submodule "docs"]
+	path = docs
+	url = git@github.com:opencharly/docs.git

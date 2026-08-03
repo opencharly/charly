@@ -18,9 +18,11 @@ box, VM, and command has a dedicated recipe card (skill) — ~290 skills
 across 25 plugins. See `plugins/README.md` for the full index.
 
 
-> **New here?** [VISION.md](VISION.md) is the one-page thesis — why OpenCharly
-> secures the box and fills it with the whole candy store, and where the
-> factory is heading.
+> **New here?** Start at **[opencharly.ai](https://opencharly.ai)** — the
+> documentation site, with a quickstart, the core concepts, and a generated
+> reference for every candy, box, plugin and verb. [VISION.md](VISION.md) is the
+> one-page thesis — why OpenCharly secures the box and fills it with the whole
+> candy store, and where the factory is heading.
 
 ## Table of contents
 
@@ -795,6 +797,9 @@ consumed via `charly config --data-from <data-image>`.
 
 See `plugins/README.md` for the authoritative skill index and this repo's
 [`CHANGELOG/`](CHANGELOG/README.md) (one file per CalVer version) for the dated history of cutovers.
+Every catalog above is published as browsable pages at
+[opencharly.ai](https://opencharly.ai), generated from these same definitions by
+`charly docs generate` (see `/charly-build:docs`).
 
 ## Troubleshooting
 

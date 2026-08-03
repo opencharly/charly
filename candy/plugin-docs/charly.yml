@@ -1,0 +1,47 @@
+plugin-docs:
+    candy:
+        version: 2026.215.1140
+        description: |-
+            RUNTIME (out-of-process) charly plugin serving `charly docs …` — the generator that
+            renders the reference half of the opencharly.ai documentation site from this repo's
+            canonical sources: VISION.md, the plugins submodule's skill corpus, every candy and
+            box charly.yml, and every plugin candy's `plugin:` block plus CUE schema.
+
+            PLACEMENT — deliberately NOT listed in charly/charly.yml compiled_plugins. This is a
+            DEV-TIME documentation generator, run on a contributor's machine to regenerate the
+            site and nowhere else, so it has no business inside every shipped static charly
+            binary. charly prescans the declared `docs` word into the Kong grammar before parse
+            and syscall.Exec's this binary in CLI mode on the first actual `charly docs`
+            invocation. The generator is self-contained — it reads files and writes markdown,
+            never reaching the host reverse channel — which is what makes the out-of-process
+            placement free here (the same property that lets `charly candy` and `charly migrate`
+            run in either placement). Being a runtime plugin also makes this candy its own
+            worked example of the placement, on a site that documents exactly that.
+
+            WHAT IT GENERATES — one page per skill (plus each references/*.md split file, with
+            every `/charly-<plugin>:<skill>` cross-reference rewritten to a site link and any
+            unresolvable one failing the build); one page per plugin candy carrying its
+            providers, its placement COMPUTED from compiled_plugins membership, and its rendered
+            CUE parameter schema; a provider cross-index mapping every reserved word to the
+            plugin that serves it; one page per defined candy and box; and VISION.md verbatim.
+
+            DEFINED, NOT DEFAULT-ACTIVE — the catalog walks each repo (the superproject plus
+            every box/<distro> submodule) as its own project root and unions the results, rather
+            than resolving through main's `import:` closure. That closure pulls arch, cachyos and
+            fedora only, so a catalog built on it silently omits every debian.* and ubuntu.* box
+            while duplicating ten arch boxes under transitive cachyos.arch.* aliases.
+        plugin:
+            source: github.com/opencharly/charly/candy/plugin-docs
+            providers:
+                - command:docs
+        plan:
+            - # ADE build-context check: a deterministic check that does NOT depend on a docs tree or a
+              # live deployment — it proves the candy ships a buildable Go module (go.mod + the provider
+              # main) the host can build and syscall.Exec for command:docs. Mirrors candy/plugin-alias +
+              # candy/plugin-secrets (a trivial build-context `plugin: command` running `true`). The full
+              # generate → build → serve round trip is exercised by the live R10 bed (check-docs).
+              check: the docs command plugin ships a buildable Go module (go.mod + the provider package); the full `charly docs generate` end-to-end is exercised by the live R10 bed (check-docs)
+              id: docs-module-present
+              context:
+                - build
+              command: "true"

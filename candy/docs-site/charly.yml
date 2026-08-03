@@ -1,0 +1,125 @@
+docs-site:
+    candy:
+        version: 2026.215.1207
+        description: |-
+            The Astro + Starlight toolchain for the opencharly.ai documentation site, plus a
+            production build of the published site itself, built inside the box.
+
+            This candy is what makes the docs site provable rather than merely deployable: it
+            clones the opencharly/docs repository, runs a clean `npm ci` against its committed
+            lockfile, and builds the production site into /srv/docs/dist. A build failure — a bad
+            frontmatter scalar, a Starlight config a version bump invalidated, a page whose
+            markdown will not parse — fails the IMAGE BUILD, which builds from the same input
+            Cloudflare Pages does, so the box catches it before a deploy can.
+
+            WHY IT CLONES rather than copying the docs/ submodule out of the working tree: a
+            candy's copy: source may not traverse above its own directory (`..` is rejected at
+            validate time), and there is no schema field for pointing a candy at a sibling
+            directory. Cloning the published repository is the schema-legal path, and it happens
+            to test the more useful thing — the exact source Cloudflare builds. The consequence is
+            an ordering dependency: this candy builds against the docs repo's `main`, so docs
+            content must land there before this box (and the check-docs bed above it) go green.
+
+            The checks below assert the site's SHAPE, not merely its existence: a generated CLI
+            page, a candy page carrying its published acceptance plan, a recipe card from the
+            skill corpus with its cross-references rewritten into site links, and — the
+            load-bearing one — the page of a plugin that is NOT compiled into the charly binary,
+            rendering both its runtime placement and its CUE parameter schema. That last check is
+            what fails if the generator ever narrows to documenting only the default-active set.
+        require:
+            - nodejs
+        var:
+            DOCS_REPO: https://github.com/opencharly/docs.git
+            DOCS_REF: main
+        distro:
+            fedora:
+                package:
+                    - git
+        plan:
+            - run: clone the published documentation site source
+              command: |
+                rm -rf /srv/docs
+                git clone --depth 1 --branch "${DOCS_REF}" "${DOCS_REPO}" /srv/docs
+              run_as: root
+
+            - run: install the site's node dependencies from the committed lockfile
+              command: |
+                cd /srv/docs
+                npm ci --no-audit --no-fund
+              run_as: root
+              cache:
+                - /root/.npm
+
+            - run: build the production site
+              command: |
+                cd /srv/docs
+                npm run build
+              run_as: root
+
+            - check: node is installed and reports a parseable major version
+              id: docs-site-node-present
+              exit_status: 0
+              stdout:
+                - matches: "v[0-9]+\\."
+              context:
+                - build
+              command: node --version
+
+            - check: the production build produced the site entry point
+              id: docs-site-index-built
+              file:
+                file: /srv/docs/dist/index.html
+                exists: true
+              context:
+                - build
+
+            - check: the built site carries a GENERATED CLI reference page (proves the cli tree was emitted and rendered)
+              id: docs-site-cli-page
+              exit_status: 0
+              stdout:
+                - contains: charly docs
+              context:
+                - build
+              command: cat /srv/docs/dist/reference/cli/docs/index.html
+
+            - check: a generated candy page publishes its plan as a runnable acceptance spec (the ADE surface a reader can see without cloning anything)
+              id: docs-site-candy-acceptance-plan
+              exit_status: 0
+              stdout:
+                - contains: Acceptance plan
+              context:
+                - build
+              command: cat /srv/docs/dist/reference/candy/ripgrep/index.html
+
+            - check: a recipe card from the skill corpus rendered, with its harness cross-references rewritten into working site links
+              id: docs-site-recipe-card
+              exit_status: 0
+              stdout:
+                - contains: /recipes/internals/
+              context:
+                - build
+              command: cat /srv/docs/dist/recipes/check/check/index.html
+
+            - # THE load-bearing check. plugin-cdp is NOT in charly/charly.yml compiled_plugins — it
+              # loads out-of-process over gRPC. If the generator ever narrows to the default-active set
+              # (the charly binary's own command model, or the enabled-boxes list), this page disappears
+              # and this step fails. It also asserts the rendered CUE schema, which is the only place a
+              # reader can learn an out-of-process verb's parameter grammar.
+              check: a RUNTIME (out-of-process) plugin's page renders both its placement and its CUE parameter schema — the assertion that fails if the generator ever documents only what is compiled in
+              id: docs-site-runtime-plugin-page
+              exit_status: 0
+              stdout:
+                - contains: out-of-process
+                - contains: Parameter schema
+              context:
+                - build
+              command: cat /srv/docs/dist/reference/plugin/plugin-cdp/index.html
+
+            - check: the provider cross-index resolves every reserved word to its owning plugin
+              id: docs-site-provider-index
+              exit_status: 0
+              stdout:
+                - contains: Provider index
+              context:
+                - build
+              command: cat /srv/docs/dist/reference/providers/index.html
