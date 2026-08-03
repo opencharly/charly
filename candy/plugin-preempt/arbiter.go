@@ -83,7 +83,13 @@ func invokeArbiter(ctx context.Context, exec *sdk.Executor, in spec.ArbiterInvok
 		active, err := a.AcquireExclusive(in.Claimant, in.Tokens, in.ClaimAddr, in.Transient)
 		return spec.ArbiterInvokeReply{Active: active, Error: errStr(err)}
 	case spec.ArbiterActionAcquireShared:
-		active, err := a.AcquireShared(in.Claimant, in.Tokens, in.ClaimAddr, in.Transient)
+		// K-wave W3a A2: union the implied-GPU-consumer token (gpu_imply.go) onto the explicit
+		// tokens BEFORE calling AcquireShared — arbiter policy (including the early-return when
+		// implied∪explicit is empty, inside AcquireShared itself) lives entirely here now, not in
+		// the in-core proxy (charly/preempt.go always dispatches acquire-shared, even with zero
+		// explicit tokens, so this is the ONLY place that decides whether a claim actually forms).
+		implied := impliedSharedToken(ctx, exec, in.IsGroup, in.IsPodMember, in.SecurityDevices, hostRawResources(ctx, exec))
+		active, err := a.AcquireShared(in.Claimant, unionImpliedToken(in.Tokens, implied), in.ClaimAddr, in.Transient)
 		return spec.ArbiterInvokeReply{Active: active, Error: errStr(err)}
 	case spec.ArbiterActionRelease:
 		return spec.ArbiterInvokeReply{Error: errStr(a.ReleaseClaimant(in.Claimant, in.Success))}
@@ -125,6 +131,18 @@ func hostResources(ctx context.Context, exec *sdk.Executor) map[string]string {
 		return nil
 	}
 	return deploykit.GpuVendorTokens(rp.Resources)
+}
+
+// hostRawResources is hostResources's un-projected twin (K-wave W3a A2): the implied-GPU-consumer
+// check (gpu_imply.go's impliedSharedToken, via invokeArbiter's AcquireShared case) needs the
+// full token -> *spec.ResolvedResource map, not hostResources' vendor-string-only projection.
+func hostRawResources(ctx context.Context, exec *sdk.Executor) map[string]*spec.ResolvedResource {
+	rp, err := resolvedProject(ctx, exec)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "preempt: resolved-project (raw resources): %v\n", err)
+		return nil
+	}
+	return rp.Resources
 }
 
 // resolvedProject fetches + decodes the generic resolved-project envelope over the reverse
