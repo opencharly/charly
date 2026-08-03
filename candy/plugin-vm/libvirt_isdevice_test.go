@@ -1,4 +1,8 @@
-package main
+package vm
+
+// Relocated from charly/libvirt_test.go (#55 decoupling cone, Batch C):
+// TestIsDeviceElement asserts vmshared.IsDeviceElement directly — zero charly
+// coupling.
 
 import (
 	"testing"

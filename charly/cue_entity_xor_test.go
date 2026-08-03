@@ -7,7 +7,9 @@ package main
 // dropped disjunctions did.
 //
 //   #Box     base⊻from          → BoxConfig.HasBaseFromConflict / validateBoxBaseFrom (config.go + validate.go)
-//   #Android box⊻adb (exactly1) → loaderkit.ValidateAndroidDevices (validate_capabilities.go)
+//   #Android box⊻adb (exactly1) → loaderkit.ValidateAndroidDevices — relocated to
+//                                  candy/plugin-loader/cue_entity_xor_test.go (#55
+//                                  decoupling cone, Batch C; TestAndroidDeviceXOR)
 //   #Check   bed-mode/target    → validateCheckBeds (unified.go) — proven by the
 //                                  existing TestValidateCheckBeds_* suite
 //                                  (TargetEnum rejects k8s = the arm's bed-legal
@@ -16,20 +18,10 @@ package main
 //                                  No duplicate test here (R3).
 
 import (
-	"encoding/json"
-	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/loaderkit"
-	"github.com/opencharly/sdk/vmshared"
 	"github.com/opencharly/spec/spec"
 )
-
-// androidTestUF wraps a raw android template map into the PluginKinds shape
-// spec.UnifiedFile.Android() now reads (K1 unit-1 follow-up — no dedicated field).
-func androidTestUF(m map[string]json.RawMessage) *spec.UnifiedFile {
-	return &spec.UnifiedFile{PluginKinds: map[string]map[string]json.RawMessage{"android": m}}
-}
 
 // TestBoxBaseFromXOR_RejectsConflict proves a box authoring BOTH base: and from:
 // is rejected (the former `#Box & ({from?: _|_} | {base?: _|_})` disjunction),
@@ -66,42 +58,7 @@ func TestBoxBaseFromXOR_RejectsConflict(t *testing.T) {
 	}
 }
 
-// TestAndroidDeviceXOR proves a kind:android device is rejected unless it sets
-// EXACTLY ONE of box: / adb: (the former `#Android & ({box:_}|{adb:_})`
-// disjunction — never both, never neither).
-func TestAndroidDeviceXOR(t *testing.T) {
-	cases := []struct {
-		name   string
-		spec   AndroidSpec
-		reject bool
-	}{
-		{"box+adb (both) rejected", AndroidSpec{Box: "android-emulator", Adb: &vmshared.AndroidAdbEndpoint{Host: "127.0.0.1:5037"}}, true},
-		{"neither rejected", AndroidSpec{Device: "pixel_9a"}, true},
-		{"box only ok", AndroidSpec{Box: "android-emulator"}, false},
-		{"adb only ok", AndroidSpec{Adb: &vmshared.AndroidAdbEndpoint{Host: "127.0.0.1:5037"}}, false},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			s := tc.spec
-			uf := androidTestUF(rawTemplateMap(map[string]*AndroidSpec{"dev": &s}))
-			err := loaderkit.ValidateAndroidDevices(uf, resolveAndroidViaPlugin)
-			if tc.reject {
-				if err == nil {
-					t.Errorf("validateAndroidDevices accepted an invalid device (should reject)")
-				}
-			} else if err != nil {
-				t.Errorf("validateAndroidDevices rejected a valid device: %v", err)
-			}
-		})
-	}
-
-	// Friendly-message spot-checks (both directions name their failure).
-	both := androidTestUF(rawTemplateMap(map[string]*AndroidSpec{"d": {Box: "e", Adb: &vmshared.AndroidAdbEndpoint{Host: "h:1"}}}))
-	if err := loaderkit.ValidateAndroidDevices(both, resolveAndroidViaPlugin); err == nil || !strings.Contains(err.Error(), "both box: and adb:") {
-		t.Errorf("both-source error message: %v", err)
-	}
-	none := androidTestUF(rawTemplateMap(map[string]*AndroidSpec{"d": {}}))
-	if err := loaderkit.ValidateAndroidDevices(none, resolveAndroidViaPlugin); err == nil || !strings.Contains(err.Error(), "neither box: nor adb:") {
-		t.Errorf("neither-source error message: %v", err)
-	}
-}
+// TestAndroidDeviceXOR relocated to
+// candy/plugin-loader/cue_entity_xor_test.go (#55 decoupling cone, Batch C) —
+// it asserted loaderkit.ValidateAndroidDevices directly, zero charly coupling
+// beyond a stub resolve callback.

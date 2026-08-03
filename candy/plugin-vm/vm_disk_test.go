@@ -1,4 +1,8 @@
-package main
+package vm
+
+// Relocated from charly/vm_disk_test.go (#55 decoupling cone, Batch C):
+// TestVmDiskDir_PerVM asserts vmshared.VmDiskDir directly — zero charly
+// coupling.
 
 import (
 	"path/filepath"

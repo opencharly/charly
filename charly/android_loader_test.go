@@ -5,9 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/opencharly/sdk/loaderkit"
-	"github.com/opencharly/spec/spec"
 )
 
 // TestLoadUnified_AndroidNodeForm verifies a unified node-form `android` entity
@@ -53,39 +50,6 @@ func rawTemplateMap[T any](m map[string]*T) map[string]json.RawMessage {
 // TestMergeRawTemplateMap relocated to sdk/loaderkit/merge_test.go alongside
 // mergeRawTemplateMap (K1-proper — the merge half of the loader moved to loaderkit).
 
-// TestValidateCheckBeds_Android covers the kind:check bed validation for a
-// top-level target: android bed.
-func TestValidateCheckBeds_Android(t *testing.T) {
-	// android bed without an android: ref → error.
-	uf := &spec.UnifiedFile{
-		Bundle: map[string]spec.BundleNode{
-			"bed": {Target: "android", Disposable: new(true)},
-		},
-	}
-	if err := loaderkit.ValidateCheckBeds(uf, loaderThreaded()); err == nil {
-		t.Error("target:android bed without android: should fail validation")
-	}
-
-	// android bed referencing an undefined device → error.
-	uf2 := &spec.UnifiedFile{
-		Bundle: map[string]spec.BundleNode{
-			"bed": {Target: "android", From: "ghost", Disposable: new(true)},
-		},
-	}
-	if err := loaderkit.ValidateCheckBeds(uf2, loaderThreaded()); err == nil {
-		t.Error("target:android bed referencing an undefined device should fail")
-	}
-
-	// android bed referencing a defined device → ok.
-	uf3 := &spec.UnifiedFile{
-		PluginKinds: map[string]map[string]json.RawMessage{
-			"android": rawTemplateMap(map[string]*AndroidSpec{"dev": {Box: "android-emulator"}}),
-		},
-		Bundle: map[string]spec.BundleNode{
-			"bed": {Target: "android", From: "dev", Disposable: new(true)},
-		},
-	}
-	if err := loaderkit.ValidateCheckBeds(uf3, loaderThreaded()); err != nil {
-		t.Errorf("valid target:android bed should pass, got: %v", err)
-	}
-}
+// TestValidateCheckBeds_Android relocated to
+// candy/plugin-loader/android_loader_test.go (#55 decoupling cone, Batch C) —
+// it asserted loaderkit.ValidateCheckBeds directly, zero charly coupling.

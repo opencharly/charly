@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/buildkit"
-	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -68,22 +67,6 @@ func TestTaskKind_Valid(t *testing.T) {
 
 // --- Parity: ensure HasInstallFiles picks up HasTasks ---
 
-// TestCandy_HasInstallFiles_IncludesTasks proves the RunOps host-completion pass
-// (loaderkit.CompleteCandyRunOps, charly/layers.go) folds a candy's `run:` steps into RunOps and
-// OR-completes HasInstallFiles/HasContent with it — the associative-OR completion
-// scanFromParsed's own doc comment defers to the host (RunOps needs opInContext, which a
-// single candy's scan can't reach). Every ScanCandy/ScanAllCandy/ProjectCandies entry point
-// calls loaderkit.CompleteCandyRunOps before the final FinalizeCandyRefs+wrap, so this exercises that
-// SAME completion step directly on a (Model, View) pair, mirroring what those call sites do.
-func TestCandy_HasInstallFiles_IncludesTasks(t *testing.T) {
-	m := spec.CandyModel{Plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}}
-	v := spec.CandyView{}
-	loaderkit.CompleteCandyRunOps(&m, &v)
-	l := testCandy("x", m, v)
-	if !l.HasTasks() {
-		t.Fatal("HasTasks() should be true after loaderkit.CompleteCandyRunOps folds the run: step into RunOps")
-	}
-	if !l.HasInstallFiles() {
-		t.Error("HasInstallFiles() should be true when HasTasks is true")
-	}
-}
+// TestCandy_HasInstallFiles_IncludesTasks relocated to
+// candy/plugin-loader/tasks_test.go (#55 decoupling cone, Batch C) — it
+// asserted loaderkit.CompleteCandyRunOps directly, zero charly coupling.

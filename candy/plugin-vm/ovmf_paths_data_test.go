@@ -1,4 +1,9 @@
-package main
+package vm
+
+// Relocated from charly/ovmf_paths_data_test.go (#55 decoupling cone, Batch
+// C): both tests assert vmshared.OvmfCandidatesForDistro /
+// vmshared.ResolveOvmfPaths / vmshared.DetectHostDistro directly — zero
+// charly coupling.
 
 import (
 	"os"
