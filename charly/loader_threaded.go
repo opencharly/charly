@@ -228,29 +228,25 @@ func hostMaterializeSeams() spec.MaterializeSeams {
 // decodeEntityViaRegistry implements spec.MaterializeSeams.DecodeEntity: resolves pn's
 // discriminator against the provider registry and, if found, dispatches via the SAME runPluginKind
 // the former in-core normalizeNodeInto called directly (provider_kind_invoke.go — the TRUE
-// clause-M mechanism, unchanged). Reconstructs the genericNode that dispatch reads from pn (mirrors
-// the former materializeParsedNode/parsedNodeToGeneric pairing). found=false (no error) means no
-// provider resolves pn.Disc; the registered Materializer plugin applies its own not-found policy
-// from there.
+// clause-M mechanism, unchanged). Threads pn straight into the dispatch (K1 unit 3b) — the former
+// genericNode reconstruction is gone from this path entirely; runPluginKind's own tree-assembly
+// calls (buildBundleNode/assembleEntityBody/…) now route through the ProjectLoader seam on pn
+// directly, and genericNode survives ONLY where foldCandyKind needs it for the bootstrap-critical
+// candyIsImage/buildCandy routing. found=false (no error) means no provider resolves pn.Disc; the
+// registered Materializer plugin applies its own not-found policy from there.
 func decodeEntityViaRegistry(pn spec.ParsedNode, acc *spec.MaterializedProject) (bool, error) {
 	prov, ok := providerRegistry.ResolveKind(pn.Disc)
 	if !ok {
 		return false, nil
 	}
-	gn, err := parsedNodeToGeneric(pn)
-	if err != nil {
-		return true, err
-	}
-	return true, runPluginKind(prov, gn, acc)
+	return true, runPluginKind(prov, pn, acc)
 }
 
 // buildBundleEntityViaRegistry implements spec.MaterializeSeams.BuildBundleEntity: the fallback for
 // a recognized-but-not-yet-connected external deploy substrate word, mirroring the former in-core
-// normalizeNodeInto's recognizedDeploySubstrate branch (buildBundleNodeInto, node_bundle.go).
+// normalizeNodeInto's recognizedDeploySubstrate branch — now the relocated
+// sdk/loaderkit.BuildBundleNodeInto (K1 unit 3b), reached through the ProjectLoader seam with pn
+// threaded straight through (no genericNode reconstruction).
 func buildBundleEntityViaRegistry(pn spec.ParsedNode, acc *spec.MaterializedProject) error {
-	gn, err := parsedNodeToGeneric(pn)
-	if err != nil {
-		return err
-	}
-	return buildBundleNodeInto(gn, acc)
+	return requireProjectLoader().BuildBundleNodeInto(pn, loaderThreaded(), acc)
 }

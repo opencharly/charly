@@ -23,12 +23,13 @@ import (
 // TestRejectLegacyTopLevelFormatAndDistroKeys (zero kit dep).
 //
 // deriveCandy here is a PLUGIN-BUNDLE-LOCAL port of charly's helper: charly's version decodes
-// through decodeEntityViaCUE (the loader's CUE-validating decode, package-main-internal); this
-// out-of-module package instead uses plain yaml.Unmarshal + normalizePackageShorthand (the same
-// narrow package-shorthand canonicalization loadRealCandy uses) — sufficient for every fixture
-// body these 6 tests author (plain package lists + map-form repo blocks, no other CUE-only
-// shorthand). charly's OWN deriveCandy stays untouched (Batch C's parser-routing tests, which
-// remain in charly, still need it).
+// through requireProjectLoader().DecodeEntityViaCUE (the loader's CUE-validating decode,
+// sdk/loaderkit-backed since K1 unit 1); this file instead uses plain yaml.Unmarshal +
+// normalizePackageShorthand (the same narrow package-shorthand canonicalization loadRealCandy
+// uses) — sufficient for every fixture body these 6 tests author (plain package lists + map-form
+// repo blocks, no other CUE-only shorthand), with no host-seam dependency. charly's OWN
+// deriveCandy stays untouched (Batch C's parser-routing tests, which remain in charly, still need
+// it).
 func deriveCandy(t *testing.T, body string) spec.CandyReader {
 	t.Helper()
 	var doc yaml.Node

@@ -17,8 +17,6 @@ import (
 	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/cuecontext"
 	"cuelang.org/go/cue/errors"
-	cueyaml "cuelang.org/go/encoding/yaml"
-	"gopkg.in/yaml.v3"
 
 	sdkschema "github.com/opencharly/spec/schema"
 	"github.com/opencharly/spec/schemaconcat"
@@ -74,188 +72,59 @@ func cueKindDef(kind string) (cue.Value, bool) {
 	return sharedCueSchema.LookupPath(cue.ParsePath(dp)), true
 }
 
-// validateEntityClosedCUE unifies a single entity with #<Kind> and validates it
-// WITHOUT requiring concreteness — it catches closedness violations (unknown
-// keys) and type/enum/regex conflicts, but not missing-required fields. This is
-// the LOAD-time check (restores the deleted unmarshalers' typo-detection), AND
-// (since c9befd83) the sole remaining `charly box validate` entity-schema gate:
-// its former sibling validateEntityCUE (concrete-required) was a
-// dead-code-radical-removal-batch deletion — every kind this project's schemas
-// currently model has no meaningfully-required field concreteness would catch
-// beyond what closedness already does (verified against #Box/#Builder: every
-// field is optional or carries a default), and the modern load-time plugin-kind
-// gate (RDD-verified live: `plugin kind:<X>: plugin_input fails #<X>Input`) is
-// the actual production entity-schema enforcement path today, superseding the
-// legacy per-kind Go-side validateVocabularyCollections/validateEntityCUE pair
-// (also deleted) for every kind beyond box.
+// coreCueSchema packages the process-wide compiled CUE schema handle every relocated
+// CUE-validate seam call passes through (K1 unit 2) — built fresh from the still-core D-data
+// (cueSchemaCtx / sharedCueSchema / cueKindDef, all unchanged above) so call sites never
+// reconstruct the struct by hand.
+func coreCueSchema() spec.CueSchema {
+	return spec.CueSchema{Ctx: cueSchemaCtx, Root: sharedCueSchema, KindDef: cueKindDef}
+}
+
+// validateEntityClosedCUE is now sdk/loaderkit.ValidateEntityClosedCUE (K1 unit 2); this file keeps
+// a same-named/same-signature core wrapper (R3, mirrors cueDocFromYAML/validateNodeDocCUE/
+// applyCueDefaults below) since validate.go and several corpus/tighten tests call it by that name.
+//
+// validateEntityClosedCUE unifies a single entity with #<Kind> and validates it WITHOUT requiring
+// concreteness — it catches closedness violations (unknown keys) and type/enum/regex conflicts,
+// but not missing-required fields. This is the LOAD-time check (restores the deleted unmarshalers'
+// typo-detection), AND (since c9befd83) the sole remaining `charly box validate` entity-schema
+// gate: its former sibling validateEntityCUE (concrete-required) was a dead-code-radical-removal-
+// batch deletion — every kind this project's schemas currently model has no meaningfully-required
+// field concreteness would catch beyond what closedness already does (verified against
+// #Box/#Builder: every field is optional or carries a default), and the modern load-time
+// plugin-kind gate (RDD-verified live: `plugin kind:<X>: plugin_input fails #<X>Input`) is the
+// actual production entity-schema enforcement path today, superseding the legacy per-kind Go-side
+// validateVocabularyCollections/validateEntityCUE pair (also deleted) for every kind beyond box.
 func validateEntityClosedCUE(kind, label string, entity cue.Value) error {
-	def, ok := cueKindDef(kind)
-	if !ok {
-		return fmt.Errorf("%s: no CUE schema registered for kind %q", label, kind)
-	}
-	if err := entity.Unify(def).Validate(); err != nil {
-		return fmt.Errorf("%s: %s", label, errors.Details(err, nil))
-	}
-	return nil
+	return requireProjectLoader().ValidateEntityClosedCUE(coreCueSchema(), kind, label, entity)
 }
 
-// assembleAndValidateEntitySteps folds an entity node's step children into a
-// plan: sequence and types EACH step against the closed #Step (which embeds the
-// closed #Op). This is the ONLY validation that sees plan-STEP Op fields: node-form
-// steps are sibling nodes, so the #NodeDoc whole-document gate accepts them as `_`,
-// and the post-decode struct has already dropped unknown keys. So an unknown Op
-// field or a bad enum on a step is a hard error here. We validate the STEPS, not the
-// whole entity against its #Kind: a deploy entity (a `vm:`/`pod:` block carrying
-// disposable/lifecycle/from/install_opts) mixes deploy-envelope fields the workload
-// #Kind does not model — those are gated by #NodeDoc's deploy arm, not here.
-// plugin_input: stays open (a plugin step's params are validated by the
-// plugin's own spliced schema, not base #Op).
-func assembleAndValidateEntitySteps(gn *genericNode, label string) error {
-	body, err := assembleEntityBody(gn)
-	if err != nil {
-		return fmt.Errorf("%s: assemble: %w", label, err)
-	}
-	b, err := yaml.Marshal(body)
-	if err != nil {
-		return fmt.Errorf("%s: marshal: %w", label, err)
-	}
-	v, err := cueDocFromYAML(label, b)
-	if err != nil {
-		return err
-	}
-	plan := v.LookupPath(cue.ParsePath("plan"))
-	if !plan.Exists() {
-		return nil // no steps to type
-	}
-	stepDef := sharedCueSchema.LookupPath(cue.ParsePath("#Step"))
-	if stepDef.Err() != nil {
-		return fmt.Errorf("%s: #Step schema not found: %w", label, stepDef.Err())
-	}
-	iter, lerr := plan.List()
-	if lerr != nil {
-		return nil // plan not a sequence — structure is gated by #NodeDoc
-	}
-	for i := 0; iter.Next(); i++ {
-		if verr := iter.Value().Unify(stepDef).Validate(); verr != nil {
-			return fmt.Errorf("%s: plan step %d: %s", label, i, errors.Details(verr, nil))
-		}
-	}
-	return nil
-}
+// assembleAndValidateEntitySteps/validateEntityNodeRec are now sdk/loaderkit's own internal
+// assembleAndValidateEntitySteps/ValidateEntityNodeRec (K1 unit 3c, completing the K1 unit 2
+// deferral) — pure recursion + CUE validate, zero registry coupling, so nothing outside loaderkit
+// calls them and no core wrapper is needed.
 
-// validateCandyManifestCUE validates a candy manifest. A legacy kind-keyed
-// manifest validates the WHOLE document against #NodeDoc (the structural gate),
-// then walks the parsed + DESUGARED node tree: each candy node's assembled body
-// validates against #CandyValue concretely and every entity's plan steps type
-// against the closed #Step (validateNodeFormSteps → validateEntityNodeRec) —
-// the desugared tree is the validation subject, never the raw sugar bytes.
+// validateCandyManifestCUE is now sdk/loaderkit.ValidateCandyManifestCUE (K1 unit 3c); this file
+// keeps a same-named/same-signature core wrapper (R3) since validate.go calls it by this name. The
+// host supplies the registry-derived Threaded snapshot + the resolved DocParser (loaderkit never
+// queries the registry itself).
 func validateCandyManifestCUE(path string, data []byte) error {
-	doc, err := cueDocFromYAML(path, data)
-	if err != nil {
-		return err
-	}
-	def := sharedCueSchema.LookupPath(cue.ParsePath("#NodeDoc"))
-	if def.Err() != nil {
-		return fmt.Errorf("%s: #NodeDoc schema not found: %w", path, def.Err())
-	}
-	if verr := doc.Unify(def).Validate(cue.Concrete(true)); verr != nil {
-		return fmt.Errorf("%s: %s", path, errors.Details(verr, nil))
-	}
-	// #NodeDoc gates the node-form STRUCTURE but accepts each entity's body as
-	// `_`; validateNodeFormSteps parses (and thereby DESUGARS) the tree, types
-	// every entity's plan steps against the closed #Step/#Op, and concretely
-	// validates each candy node's body against #CandyValue.
-	return validateNodeFormSteps(path, data)
+	return requireProjectLoader().ValidateCandyManifestCUE(path, data, loaderThreaded(), requireLoaderParser(), coreCueSchema())
 }
 
-// validateNodeFormSteps parses a node-form document and validates EVERY entity's
-// (and nested sub-entity's) assembled body against its closed per-kind def — the
-// step-typo gate for candies, boxes, pods, deploys, and check beds alike. Shared by
-// validateCandyManifestCUE and validateProjectCUESchemas (R3).
+// validateNodeFormSteps is now sdk/loaderkit.ValidateNodeFormSteps (K1 unit 3c); this file keeps a
+// same-named/same-signature core wrapper (R3) since validate.go calls it by this name.
 func validateNodeFormSteps(path string, data []byte) error {
-	var ydoc yaml.Node
-	if err := yaml.Unmarshal(data, &ydoc); err != nil {
-		return fmt.Errorf("%s: yaml: %w", path, err)
-	}
-	// The ONE node-form parse is the registered config front-end (P6, sdk/loaderkit); the
-	// genericNode validateEntityNodeRec consumes is reconstructed from each ParsedNode.
-	_, pp, err := requireLoaderParser().ParseDoc(&ydoc, loaderThreaded())
-	if err != nil {
-		return fmt.Errorf("%s: parse: %w", path, err)
-	}
-	for i := range pp.Nodes {
-		gn, gerr := parsedNodeToGeneric(pp.Nodes[i])
-		if gerr != nil {
-			return fmt.Errorf("%s: %w", path, gerr)
-		}
-		if verr := validateEntityNodeRec(gn, path); verr != nil {
-			return verr
-		}
-	}
-	return nil
+	return requireProjectLoader().ValidateNodeFormSteps(path, data, loaderThreaded(), requireLoaderParser(), coreCueSchema())
 }
 
-// validateEntityNodeRec assemble-validates one entity node (when its kind is
-// CUE-registered) and recurses into its sub-entity children (bundle members,
-// nested deploys), which carry their own steps. A candy node's DESUGARED body is
-// additionally validated concretely against #CandyValue (version+description
-// required, unknown inline fields rejected) — the box-validate counterpart of
-// the load-time host-side validateKindValueCUE (which is closedness-only).
-func validateEntityNodeRec(gn *genericNode, path string) error {
-	if err := assembleAndValidateEntitySteps(gn, fmt.Sprintf("%s: %s", path, gn.name)); err != nil {
-		return err
-	}
-	if gn.disc == "candy" {
-		body, err := assembleEntityBody(gn)
-		if err != nil {
-			return fmt.Errorf("%s: %s: assemble: %w", path, gn.name, err)
-		}
-		// The concrete gate covers LAYER manifests only (the pre-cutover
-		// validateCandyManifestCUE scope): an IMAGE entity (base:/from:) mixes
-		// build fields that stay non-concrete until merge and is gated by the
-		// #NodeDoc structural pass + decode validation instead.
-		if m := spec.MappingRoot(body); m != nil {
-			for i := 0; i+1 < len(m.Content); i += 2 {
-				if k := m.Content[i].Value; k == "base" || k == "from" {
-					return nil
-				}
-			}
-		}
-		b, err := yaml.Marshal(body)
-		if err != nil {
-			return fmt.Errorf("%s: %s: marshal: %w", path, gn.name, err)
-		}
-		cv, err := cueDocFromYAML(fmt.Sprintf("%s: %s", path, gn.name), b)
-		if err != nil {
-			return err
-		}
-		cdef := sharedCueSchema.LookupPath(cue.ParsePath("#CandyValue"))
-		if cdef.Err() != nil {
-			return fmt.Errorf("%s: #CandyValue schema not found: %w", path, cdef.Err())
-		}
-		if verr := cv.Unify(cdef).Validate(cue.Concrete(true)); verr != nil {
-			return fmt.Errorf("%s: candy %q: %s", path, gn.name, errors.Details(verr, nil))
-		}
-	}
-	for _, ch := range gn.children {
-		if ch.discClass == "entity" {
-			if err := validateEntityNodeRec(ch, path); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-// cueDocFromYAML ingests one YAML document into a cue.Value (the whole doc).
+// cueDocFromYAML ingests one YAML document into a cue.Value (the whole doc) via the relocated
+// CUE-validate seam (sdk/loaderkit.CueDocFromYAML, K1 unit 2) — kept as a same-named/same-signature
+// core wrapper (R3): provider_kind_invoke.go (the TRUE clause-M kind dispatch) calls it directly,
+// and validate.go (K3 box-validate engine, deferred to W2 per the spike) calls it too. Its former
+// sibling callers assembleAndValidateEntitySteps/validateEntityNodeRec fully relocated to
+// loaderkit as unexported internals (K1 unit 3c) — they call sdk/loaderkit's own CueDocFromYAML
+// directly and no longer route through this core wrapper.
 func cueDocFromYAML(path string, data []byte) (cue.Value, error) {
-	af, err := cueyaml.Extract(path, data)
-	if err != nil {
-		return cue.Value{}, fmt.Errorf("%s: yaml ingest: %w", path, err)
-	}
-	v := cueSchemaCtx.BuildFile(af)
-	if v.Err() != nil {
-		return cue.Value{}, fmt.Errorf("%s: build: %w", path, v.Err())
-	}
-	return v, nil
+	return requireProjectLoader().CueDocFromYAML(coreCueSchema(), path, data)
 }

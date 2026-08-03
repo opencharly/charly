@@ -916,7 +916,7 @@ check-builder-vm:
 # compiled-in structural plugin candy/plugin-group (kind:group, Structural:true).
 # A REAL `group:` node here therefore exercises the full path: the loader recognizes
 # `group` via the compiled-in provider, runPluginKind PRE-DECODES the authored member
-# (buildResourceMemberChildren — the core recursion) + threads it to plugin-group's
+# (sdk/loaderkit.BuildResourceMemberChildren, reached through the ProjectLoader seam) + threads it to plugin-group's
 # OpLoad via op.Env (F5 authored-member input-threading), and plugin-group attaches it
 # to a targetless spec.Deploy the host folds into uf.Bundle — byte-equivalent to the
 # former builtin groupKind. The reconstructed member (check-group-member, a kind:local

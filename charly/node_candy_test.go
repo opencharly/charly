@@ -18,7 +18,7 @@ func decodeCandyKindFirst(t *testing.T, body string) spec.CandyYAML {
 		t.Fatalf("parsing kind-first candy: %v", err)
 	}
 	var c spec.CandyYAML
-	if err := decodeEntityViaCUE(&doc, reflect.TypeOf(spec.CandyYAML{}), &c, "kind-first"); err != nil {
+	if err := requireProjectLoader().DecodeEntityViaCUE(&doc, reflect.TypeOf(spec.CandyYAML{}), &c, "kind-first"); err != nil {
 		t.Fatalf("CUE-decoding kind-first candy: %v", err)
 	}
 	return c
