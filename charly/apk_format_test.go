@@ -7,9 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/loaderkit"
-	"github.com/opencharly/sdk/vmshared"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -17,50 +14,15 @@ import (
 // ORCHESTRATION in the F1 android-substrate externalization; it now lives in
 // candy/plugin-adb (deploy.go), which drives the device install loop out-of-process.
 
-// TestCompileApkStep verifies the candy `apk:` package format compiles into a
-// single ApkInstallStep carrying every entry, and that an empty apk: list
-// compiles to nothing.
-func TestCompileApkStep(t *testing.T) {
-	none := testCandy("no-apk", spec.CandyModel{}, spec.CandyView{})
-	if step := deploykit.CompileApkStep(none); step != nil {
-		t.Errorf("candy with no apk: should compile to nil step, got %T", step)
-	}
-
-	l := testCandy("test-apps", spec.CandyModel{
-		SourceDir: "/layers/test-apps",
-		Apk: []vmshared.ApkPackageSpec{
-			{Package: "org.fdroid.fdroid", Source: "apk-pure", Arch: "x86_64"},
-			{Apk: "tests/data/x.apk"},
-		},
-	}, spec.CandyView{})
-	step := deploykit.CompileApkStep(l)
-	if step == nil {
-		t.Fatal("compileApkStep returned nil for a candy with apk: entries")
-	}
-	apk, ok := step.(*spec.ApkInstallStep)
-	if !ok {
-		t.Fatalf("compileApkStep returned %T, want *ApkInstallStep", step)
-	}
-	if apk.Kind() != spec.StepKindApkInstall {
-		t.Errorf("Kind() = %q, want %q", apk.Kind(), spec.StepKindApkInstall)
-	}
-	if len(apk.Packages) != 2 {
-		t.Errorf("Packages len = %d, want 2", len(apk.Packages))
-	}
-	if apk.CandyName != "test-apps" || apk.CandyDir != "/layers/test-apps" {
-		t.Errorf("CandyName/CandyDir = %q/%q", apk.CandyName, apk.CandyDir)
-	}
-	if apk.Reverse() != nil {
-		t.Errorf("ApkInstallStep.Reverse() should be nil (android teardown ops are dynamic, recorded from the deploy:android plugin reply)")
-	}
-}
+// TestCompileApkStep moved to sdk/deploykit/apk_format_test.go (#55 K3 Cone 4) — it exercises
+// deploykit.CompileApkStep directly against literal spec fixtures, no charly loader needed.
 
 // TestOCITargetSkipsApkInstall proves apk installs are SKIPPED at image-build (there is no device
 // at build time): ociEmitStep routes ApkInstallStep through spliceClassStepEmit, which sees the
 // step's Emits=false contract + returns "" — so the dispatch emits nothing.
 func TestOCITargetSkipsApkInstall(t *testing.T) {
 	step := &spec.ApkInstallStep{
-		Packages:  []vmshared.ApkPackageSpec{{Package: "org.fdroid.fdroid"}},
+		Packages:  []spec.ApkPackageSpec{{Package: "org.fdroid.fdroid"}},
 		CandyName: "test-apps",
 	}
 	frag, err := ociEmitStep(step, &spec.InstallPlan{}, nil, buildEngineContext{})
@@ -72,20 +34,9 @@ func TestOCITargetSkipsApkInstall(t *testing.T) {
 	}
 }
 
-// TestPopulateCandyApk verifies the candy manifest `apk:` field flows through the
-// scan pipeline onto the resulting spec.CandyReader.
-func TestPopulateCandyApk(t *testing.T) {
-	ly := &spec.CandyYAML{
-		Apk: []vmshared.ApkPackageSpec{
-			{Package: "org.fdroid.fdroid", Source: "apk-pure", Arch: "x86_64"},
-		},
-	}
-	m, v, _ := loaderkit.ScanInlineCandy("test-apps", "", ly)
-	l := testCandy("test-apps", m, v)
-	if len(l.Apk()) != 1 || l.Apk()[0].Package != "org.fdroid.fdroid" {
-		t.Errorf("Apk() = %+v", l.Apk())
-	}
-}
+// TestPopulateCandyApk moved to sdk/loaderkit/scan_candy_test.go (#55 K3 Cone 4) — it
+// exercises loaderkit.ScanInlineCandy directly against a literal spec.CandyYAML fixture,
+// no charly loader needed.
 
 // TestResolveApkPath moved to sdk/kit/apk_path_test.go (FINAL/K5 unit 6a) — the
 // resolveApkPath implementation relocated to kit.ResolveApkPath, shared by this file's

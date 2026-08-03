@@ -3,8 +3,6 @@ package main
 import (
 	"testing"
 
-	"github.com/opencharly/sdk/loaderkit"
-	"github.com/opencharly/sdk/vmshared"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -31,14 +29,14 @@ func TestBundleNode_EphemeralImpliesDisposable(t *testing.T) {
 		{
 			name: "ephemeral block-form implies disposable",
 			node: spec.BundleNode{
-				Ephemeral: &vmshared.EphemeralLifetime{TTL: "30m"},
+				Ephemeral: &spec.EphemeralLifetime{TTL: "30m"},
 			},
 			want: true,
 		},
 		{
 			name: "ephemeral with all defaults still implies disposable",
 			node: spec.BundleNode{
-				Ephemeral: &vmshared.EphemeralLifetime{},
+				Ephemeral: &spec.EphemeralLifetime{},
 			},
 			want: true,
 		},
@@ -71,8 +69,8 @@ func TestBundleNode_IsEphemeral(t *testing.T) {
 		want bool
 	}{
 		{name: "no block", node: spec.BundleNode{}, want: false},
-		{name: "block with ttl", node: spec.BundleNode{Ephemeral: &vmshared.EphemeralLifetime{TTL: "1h"}}, want: true},
-		{name: "block with empty fields", node: spec.BundleNode{Ephemeral: &vmshared.EphemeralLifetime{}}, want: true},
+		{name: "block with ttl", node: spec.BundleNode{Ephemeral: &spec.EphemeralLifetime{TTL: "1h"}}, want: true},
+		{name: "block with empty fields", node: spec.BundleNode{Ephemeral: &spec.EphemeralLifetime{}}, want: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -87,14 +85,14 @@ func TestBundleNode_IsEphemeral(t *testing.T) {
 func TestEphemeralLifetime_EffectiveTTL(t *testing.T) {
 	tests := []struct {
 		name string
-		eph  *vmshared.EphemeralLifetime
+		eph  *spec.EphemeralLifetime
 		want string
 	}{
 		{name: "nil → 0", eph: nil, want: "0s"},
-		{name: "empty → default 1h", eph: &vmshared.EphemeralLifetime{}, want: "1h0m0s"},
-		{name: "30m parses", eph: &vmshared.EphemeralLifetime{TTL: "30m"}, want: "30m0s"},
-		{name: "invalid → default", eph: &vmshared.EphemeralLifetime{TTL: "not-a-duration"}, want: "1h0m0s"},
-		{name: "negative → default", eph: &vmshared.EphemeralLifetime{TTL: "-5m"}, want: "1h0m0s"},
+		{name: "empty → default 1h", eph: &spec.EphemeralLifetime{}, want: "1h0m0s"},
+		{name: "30m parses", eph: &spec.EphemeralLifetime{TTL: "30m"}, want: "30m0s"},
+		{name: "invalid → default", eph: &spec.EphemeralLifetime{TTL: "not-a-duration"}, want: "1h0m0s"},
+		{name: "negative → default", eph: &spec.EphemeralLifetime{TTL: "-5m"}, want: "1h0m0s"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -109,14 +107,14 @@ func TestEphemeralLifetime_EffectiveTTL(t *testing.T) {
 // TestEphemeralLifetime_EffectiveNamingPattern covers the default fall-through.
 func TestEphemeralLifetime_EffectiveNamingPattern(t *testing.T) {
 	defaultPat := "{{.Source}}-eph-{{.UUID6}}"
-	if got := (*vmshared.EphemeralLifetime)(nil).EffectiveNamingPattern(); got != defaultPat {
+	if got := (*spec.EphemeralLifetime)(nil).EffectiveNamingPattern(); got != defaultPat {
 		t.Errorf("nil.EffectiveNamingPattern() = %q, want %q", got, defaultPat)
 	}
-	if got := (&vmshared.EphemeralLifetime{}).EffectiveNamingPattern(); got != defaultPat {
+	if got := (&spec.EphemeralLifetime{}).EffectiveNamingPattern(); got != defaultPat {
 		t.Errorf("empty.EffectiveNamingPattern() = %q, want %q", got, defaultPat)
 	}
 	custom := "test-{{.UUID6}}"
-	if got := (&vmshared.EphemeralLifetime{NamingPattern: custom}).EffectiveNamingPattern(); got != custom {
+	if got := (&spec.EphemeralLifetime{NamingPattern: custom}).EffectiveNamingPattern(); got != custom {
 		t.Errorf("custom.EffectiveNamingPattern() = %q, want %q", got, custom)
 	}
 }
@@ -126,29 +124,7 @@ func TestEphemeralLifetime_EffectiveNamingPattern(t *testing.T) {
 // RenderNamingPattern/NewEphemeralID move) — see that file for the
 // byte-diff-gated 1:1 relocation.
 
-// TestValidateVmNamingGuard verifies the -eph- infix is reserved.
-func TestValidateVmNamingGuard(t *testing.T) {
-	tests := []struct {
-		name        string
-		shouldError bool
-	}{
-		{name: "arch", shouldError: false},
-		{name: "arch-test", shouldError: false},
-		{name: "fedora-coder", shouldError: false},
-		{name: "arch-eph-abc", shouldError: true},
-		{name: "test-eph-deadbeef", shouldError: true},
-		{name: "-eph-", shouldError: true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// ValidateVmNamingGuard moved to sdk/loaderkit (K1-LOADER RELOCATION), accumulating
-			// into spec.Diagnostics (RULING 2) rather than the core spec.ValidationError.
-			errs := &spec.Diagnostics{}
-			loaderkit.ValidateVmNamingGuard(tt.name, errs)
-			has := len(errs.Items) > 0
-			if has != tt.shouldError {
-				t.Errorf("ValidateVmNamingGuard(%q) errors=%v, want %v", tt.name, has, tt.shouldError)
-			}
-		})
-	}
-}
+// TestValidateVmNamingGuard (the -eph- infix reservation check) moved to
+// sdk/loaderkit/validate_ephemeral_test.go (#55 K3 Cone 4) — ValidateVmNamingGuard
+// is a pure loaderkit function needing no charly loader machinery; the test now
+// lives in the SAME package as the function under test.

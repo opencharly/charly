@@ -6,7 +6,6 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -120,7 +119,7 @@ func TestScanRemoteCandies(t *testing.T) {
 	}
 
 	pyml := layers["github.com/opencharly/ml-layers/candy/python-ml"]
-	if !deploykit.NewSpecCandyModel(pyml.Model, pyml.View).HasFile("pixi.toml") {
+	if !testCandy(pyml.View.Name, pyml.Model, pyml.View).HasFile("pixi.toml") {
 		t.Error("python-ml should have pixi.toml")
 	}
 	// A remote candy's plain-name sibling dep is qualified at scan time to the
@@ -231,8 +230,8 @@ func TestCollectRemoteRefsOptsExtraCandyRefs(t *testing.T) {
 	if got.Version != "v2026.174.0425" {
 		t.Errorf("plugin-spice download version = %q, want %q", got.Version, "v2026.174.0425")
 	}
-	if !slices.Contains(got.Refs, deploykit.BareRef(pluginRef)) {
-		t.Errorf("plugin-spice download refs = %v, want to contain %q", got.Refs, deploykit.BareRef(pluginRef))
+	if !slices.Contains(got.Refs, spec.BareCandyRef(pluginRef)) {
+		t.Errorf("plugin-spice download refs = %v, want to contain %q", got.Refs, spec.BareCandyRef(pluginRef))
 	}
 
 	// A LOCAL ExtraCandyRef is a no-op (already covered by ScanCandy): collecting it
