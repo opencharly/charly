@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"maps"
@@ -390,6 +391,10 @@ func loadCompileParityGolden(t *testing.T, dir string) map[string]spec.InstallPl
 	if err != nil {
 		t.Fatalf("read golden fixture %s: %v (regenerate with `go run ./tools/golden-compile`)", path, err)
 	}
+	// The generator normalizes repo-root-absolute paths (candy_dir/ctx_path) to a ${REPO_ROOT}
+	// token so the golden is worktree-independent; substitute THIS tree's resolved root back in
+	// (the paired replace in tools/golden-compile's main).
+	data = bytes.ReplaceAll(data, []byte("${REPO_ROOT}"), []byte(dir))
 	var golden map[string]spec.InstallPlanView
 	if err := json.Unmarshal(data, &golden); err != nil {
 		t.Fatalf("decode golden fixture %s: %v", path, err)

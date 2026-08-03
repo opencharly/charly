@@ -33,6 +33,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"flag"
@@ -85,6 +86,11 @@ func main() {
 	if err != nil {
 		fatal("marshal golden: %v", err)
 	}
+	// The compiled plans carry repo-root-absolute paths (candy_dir/ctx_path). Baked literally
+	// they would pin the golden to the WORKTREE that generated it and fail everywhere else, so
+	// normalize them to a ${REPO_ROOT} token; the parity test substitutes its own resolved root
+	// on load (the paired replace in loadCompileParityGolden).
+	out = bytes.ReplaceAll(out, []byte(repoRoot), []byte("${REPO_ROOT}"))
 	out = append(out, '\n')
 
 	outPath := filepath.Join(repoRoot, goldenOutputRelPath)
