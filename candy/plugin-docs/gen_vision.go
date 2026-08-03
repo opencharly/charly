@@ -47,10 +47,10 @@ func generateVision(root, out string) error {
 // visionLinkRewrites maps the repo-relative targets in VISION.md onto destinations that resolve
 // for a website reader. Keyed on the exact markdown link targets used in the source.
 var visionLinkRewrites = map[string]string{
-	"](README.md)":              "](https://github.com/opencharly/charly#readme)",
-	"](CLAUDE.md)":              "](https://github.com/opencharly/charly/blob/main/CLAUDE.md)",
-	"](plugins/README.md)":      "](/recipes/)",
-	"](CHANGELOG/README.md)":    "](https://github.com/opencharly/charly/tree/main/CHANGELOG)",
-	"[README.md](README.md)":    "[README.md](https://github.com/opencharly/charly#readme)",
-	"](VISION.md)":              "](/vision/)",
+	"](README.md)":           "](https://github.com/opencharly/charly#readme)",
+	"](CLAUDE.md)":           "](https://github.com/opencharly/charly/blob/main/CLAUDE.md)",
+	"](plugins/README.md)":   "](/recipes/)",
+	"](CHANGELOG/README.md)": "](https://github.com/opencharly/charly/tree/main/CHANGELOG)",
+	"[README.md](README.md)": "[README.md](https://github.com/opencharly/charly#readme)",
+	"](VISION.md)":           "](/vision/)",
 }

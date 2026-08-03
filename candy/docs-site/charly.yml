@@ -30,17 +30,56 @@ docs-site:
             - nodejs
         var:
             DOCS_REPO: https://github.com/opencharly/docs.git
-            DOCS_REF: main
+            # An IMMUTABLE COMMIT, never a branch name. This is a cache-correctness requirement,
+            # not a preference: `var:` values are emitted as ENV above the steps, so the clone
+            # layer's cache key moves only when this string moves. With `main` here the key was
+            # CONSTANT, so once the clone layer was cached the bed kept rebuilding whatever docs
+            # `main` pointed at when that layer was first built — and went on reporting PASS while
+            # proving stale content. It must equal the `docs` submodule gitlink; `task docs:pin`
+            # checks that, and the bed asserts it from inside the built image.
+            DOCS_REF: 326e071b6e4980ca419083545f75e996f3655289
         distro:
             fedora:
                 package:
                     - git
         plan:
-            - run: clone the published documentation site source
+            - run: clone the published documentation site source at the pinned commit
               command: |
                 rm -rf /srv/docs
-                git clone --depth 1 --branch "${DOCS_REF}" "${DOCS_REPO}" /srv/docs
+                git init -q /srv/docs
+                git -C /srv/docs remote add origin "${DOCS_REPO}"
+                git -C /srv/docs fetch -q --depth 1 origin "${DOCS_REF}"
+                git -C /srv/docs checkout -q FETCH_HEAD
+                # Record what was ACTUALLY fetched, in the same layer as the fetch, so a stale
+                # cached layer carries a stale sha. Written as a plain file rather than read back
+                # with git at check time: the check runs as a different uid than this root step and
+                # git refuses a repo it sees as foreign ("detected dubious ownership"), failing the
+                # probe for a reason unrelated to the content.
+                git -C /srv/docs rev-parse HEAD > /srv/docs/.charly-pinned-commit
               run_as: root
+
+            - # Proves the layer that produced this image actually fetched the pinned commit.
+              #
+              # The sha is a LITERAL here, duplicating DOCS_REF above, because charly's check-step
+              # substitution does not resolve a candy `var:` — it SKIPS the step with "unresolved
+              # variables: DOCS_REF" instead, which would turn this guard into a non-event while
+              # the bed still reported PASS. That is the same failure this check exists to catch,
+              # so it must not depend on substitution. `task docs:pin` asserts BOTH occurrences
+              # against the docs gitlink, so the duplication cannot drift unnoticed.
+              #
+              # This check is the reason the cache defect cannot recur silently: the first version
+              # of this bed cloned with a constant `--branch main`, so podman's layer key never
+              # moved when docs main advanced, and the bed reported PASS for four runs while
+              # building docs@7e82b67. A stale layer now FAILS here instead.
+              check: the cloned site is the pinned commit, not a stale cached layer
+              id: docs-site-pinned-commit
+              exit_status: 0
+              stdout:
+                - contains: 326e071b6e4980ca419083545f75e996f3655289
+              context:
+                - build
+                - runtime
+              command: cat /srv/docs/.charly-pinned-commit
 
             - run: install the site's node dependencies from the committed lockfile
               command: |

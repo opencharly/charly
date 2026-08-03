@@ -19,8 +19,8 @@ type marketplace struct {
 }
 
 type marketplacePlugin struct {
-	Name        string `json:"name"`        // e.g. "charly-internals"
-	Source      string `json:"source"`      // e.g. "./internals"
+	Name        string `json:"name"`   // e.g. "charly-internals"
+	Source      string `json:"source"` // e.g. "./internals"
 	Description string `json:"description"`
 	Category    string `json:"category"` // commands | kind | development | images
 }
