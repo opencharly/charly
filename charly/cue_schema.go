@@ -17,7 +17,6 @@ import (
 	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/cuecontext"
 	"cuelang.org/go/cue/errors"
-	cueyaml "cuelang.org/go/encoding/yaml"
 	"gopkg.in/yaml.v3"
 
 	sdkschema "github.com/opencharly/spec/schema"
@@ -74,29 +73,31 @@ func cueKindDef(kind string) (cue.Value, bool) {
 	return sharedCueSchema.LookupPath(cue.ParsePath(dp)), true
 }
 
-// validateEntityClosedCUE unifies a single entity with #<Kind> and validates it
-// WITHOUT requiring concreteness — it catches closedness violations (unknown
-// keys) and type/enum/regex conflicts, but not missing-required fields. This is
-// the LOAD-time check (restores the deleted unmarshalers' typo-detection), AND
-// (since c9befd83) the sole remaining `charly box validate` entity-schema gate:
-// its former sibling validateEntityCUE (concrete-required) was a
-// dead-code-radical-removal-batch deletion — every kind this project's schemas
-// currently model has no meaningfully-required field concreteness would catch
-// beyond what closedness already does (verified against #Box/#Builder: every
-// field is optional or carries a default), and the modern load-time plugin-kind
-// gate (RDD-verified live: `plugin kind:<X>: plugin_input fails #<X>Input`) is
-// the actual production entity-schema enforcement path today, superseding the
-// legacy per-kind Go-side validateVocabularyCollections/validateEntityCUE pair
-// (also deleted) for every kind beyond box.
+// coreCueSchema packages the process-wide compiled CUE schema handle every relocated
+// CUE-validate seam call passes through (K1 unit 2) — built fresh from the still-core D-data
+// (cueSchemaCtx / sharedCueSchema / cueKindDef, all unchanged above) so call sites never
+// reconstruct the struct by hand.
+func coreCueSchema() spec.CueSchema {
+	return spec.CueSchema{Ctx: cueSchemaCtx, Root: sharedCueSchema, KindDef: cueKindDef}
+}
+
+// validateEntityClosedCUE is now sdk/loaderkit.ValidateEntityClosedCUE (K1 unit 2); this file keeps
+// a same-named/same-signature core wrapper (R3, mirrors cueDocFromYAML/validateNodeDocCUE/
+// applyCueDefaults below) since validate.go and several corpus/tighten tests call it by that name.
+//
+// validateEntityClosedCUE unifies a single entity with #<Kind> and validates it WITHOUT requiring
+// concreteness — it catches closedness violations (unknown keys) and type/enum/regex conflicts,
+// but not missing-required fields. This is the LOAD-time check (restores the deleted unmarshalers'
+// typo-detection), AND (since c9befd83) the sole remaining `charly box validate` entity-schema
+// gate: its former sibling validateEntityCUE (concrete-required) was a dead-code-radical-removal-
+// batch deletion — every kind this project's schemas currently model has no meaningfully-required
+// field concreteness would catch beyond what closedness already does (verified against
+// #Box/#Builder: every field is optional or carries a default), and the modern load-time
+// plugin-kind gate (RDD-verified live: `plugin kind:<X>: plugin_input fails #<X>Input`) is the
+// actual production entity-schema enforcement path today, superseding the legacy per-kind Go-side
+// validateVocabularyCollections/validateEntityCUE pair (also deleted) for every kind beyond box.
 func validateEntityClosedCUE(kind, label string, entity cue.Value) error {
-	def, ok := cueKindDef(kind)
-	if !ok {
-		return fmt.Errorf("%s: no CUE schema registered for kind %q", label, kind)
-	}
-	if err := entity.Unify(def).Validate(); err != nil {
-		return fmt.Errorf("%s: %s", label, errors.Details(err, nil))
-	}
-	return nil
+	return requireProjectLoader().ValidateEntityClosedCUE(coreCueSchema(), kind, label, entity)
 }
 
 // assembleAndValidateEntitySteps folds an entity node's step children into a
@@ -247,15 +248,11 @@ func validateEntityNodeRec(gn *genericNode, path string) error {
 	return nil
 }
 
-// cueDocFromYAML ingests one YAML document into a cue.Value (the whole doc).
+// cueDocFromYAML ingests one YAML document into a cue.Value (the whole doc) via the relocated
+// CUE-validate seam (sdk/loaderkit.CueDocFromYAML, K1 unit 2) — kept as a same-named/same-signature
+// core wrapper (R3) since the still-core validate chain above (assembleAndValidateEntitySteps,
+// validateCandyManifestCUE, validateEntityNodeRec) calls it internally, pending their own Unit 3
+// relocation (they need genericNode/assembleEntityBody, which move then).
 func cueDocFromYAML(path string, data []byte) (cue.Value, error) {
-	af, err := cueyaml.Extract(path, data)
-	if err != nil {
-		return cue.Value{}, fmt.Errorf("%s: yaml ingest: %w", path, err)
-	}
-	v := cueSchemaCtx.BuildFile(af)
-	if v.Err() != nil {
-		return cue.Value{}, fmt.Errorf("%s: build: %w", path, v.Err())
-	}
-	return v, nil
+	return requireProjectLoader().CueDocFromYAML(coreCueSchema(), path, data)
 }

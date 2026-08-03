@@ -30,6 +30,7 @@ import (
 	"fmt"
 	"reflect"
 
+	"cuelang.org/go/cue"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/loaderkit"
 	pb "github.com/opencharly/spec/proto"
@@ -129,6 +130,33 @@ func (*provider) LoadUnified(dir string, exec spec.LoaderExecutor) (*spec.Unifie
 // of the relocated shorthand-normalize + CUE-ingest + Decode mechanism in sdk/loaderkit (K1 unit 1).
 func (*provider) DecodeEntityViaCUE(node *yaml.Node, t reflect.Type, out any, label string) error {
 	return loaderkit.DecodeEntityViaCUE(node, t, out, label)
+}
+
+// ValidateEntityClosedCUE implements spec.ProjectLoader — the typed closed-schema entity check the
+// host calls (compiled-in, no wire envelope): delegates to the ONE copy of the relocated
+// CUE-validate mechanism in sdk/loaderkit (K1 unit 2).
+func (*provider) ValidateEntityClosedCUE(cs spec.CueSchema, kind, label string, entity cue.Value) error {
+	return loaderkit.ValidateEntityClosedCUE(cs, kind, label, entity)
+}
+
+// CueDocFromYAML implements spec.ProjectLoader — the typed YAML→cue.Value ingest the host calls
+// (compiled-in, no wire envelope): delegates to the ONE copy in sdk/loaderkit (K1 unit 2).
+func (*provider) CueDocFromYAML(cs spec.CueSchema, path string, data []byte) (cue.Value, error) {
+	return loaderkit.CueDocFromYAML(cs, path, data)
+}
+
+// ValidateNodeDocCUE implements spec.ProjectLoader — the typed load-time #NodeDoc structural gate
+// the host calls (compiled-in, no wire envelope): delegates to the ONE copy in sdk/loaderkit (K1
+// unit 2).
+func (*provider) ValidateNodeDocCUE(cs spec.CueSchema, label string, data []byte) error {
+	return loaderkit.ValidateNodeDocCUE(cs, label, data)
+}
+
+// ApplyCueDefaults implements spec.ProjectLoader — the typed post-merge schema-defaults fill the
+// host calls (compiled-in, no wire envelope): delegates to the ONE copy in sdk/loaderkit (K1 unit
+// 2).
+func (*provider) ApplyCueDefaults(cs spec.CueSchema, kind string, out any) error {
+	return loaderkit.ApplyCueDefaults(cs, kind, out)
 }
 
 // ResolveMergedDeployTree implements spec.ProjectLoader — the merged project+overlay deploy-node
