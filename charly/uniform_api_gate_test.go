@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk"
+	"github.com/opencharly/spec/capability"
 	"github.com/opencharly/spec/ops"
 	pb "github.com/opencharly/spec/proto"
 	"github.com/opencharly/spec/spec"
@@ -14,7 +14,7 @@ import (
 
 // TestNoSinglePluginAPISurface is the F11 uniform-API gate — the architectural capstone of the
 // externalization (the "generic over ad-hoc" invariant, R3). It asserts that NO provider WORD
-// appears in the plugin↔kernel API SURFACE: not as an sdk.Op* selector VALUE, not as a
+// appears in the plugin↔kernel API SURFACE: not as an ops.Op* selector VALUE, not as a
 // ProvidedCapability / StepContract field NAME, not as a reverse-channel RPC METHOD name, and not
 // as a hostBuilders registry KEY. Every such surface is a generic verb-of-action / class
 // discriminator usable by ANY plugin of its class; the ONLY per-plugin data channel is the opaque
@@ -55,8 +55,8 @@ func TestNoSinglePluginAPISurface(t *testing.T) {
 		name  string
 		names []string
 	}{
-		{"sdk.Op* selector values", allOpSelectorValues()},
-		{"sdk.ProvidedCapability field names", structFieldNames(reflect.TypeOf(sdk.ProvidedCapability{}))},
+		{"ops.Op* selector values", allOpSelectorValues()},
+		{"capability.ProvidedCapability field names", structFieldNames(reflect.TypeOf(capability.ProvidedCapability{}))},
 		{"spec.StepContract field names", structFieldNames(reflect.TypeOf(spec.StepContract{}))},
 		{"ExecutorService RPC method names", serviceMethodNames(pb.ExecutorService_ServiceDesc)},
 		{"CheckContextService RPC method names", serviceMethodNames(pb.CheckContextService_ServiceDesc)},
@@ -129,7 +129,7 @@ var genericConceptCollisions = map[string]bool{"venue": true}
 // registry keep it current automatically.
 //
 // Command words (status/start/stop/shell/logs) are excluded: they are generic English verbs that
-// COINCIDE with sdk.Op* lifecycle selector VALUES (OpStatus="status", …), and a command word
+// COINCIDE with ops.Op* lifecycle selector VALUES (OpStatus="status", …), and a command word
 // leaking into the invocation API is not a real failure mode (a command has only OpRun).
 func buildProviderWordUniverse() map[string]bool {
 	u := map[string]bool{}
@@ -155,7 +155,7 @@ func buildProviderWordUniverse() map[string]bool {
 	return u
 }
 
-// allOpSelectorValues is the full sdk.Op* selector set (the generic verb-of-action vocabulary). A
+// allOpSelectorValues is the full ops.Op* selector set (the generic verb-of-action vocabulary). A
 // new Op MUST be added here so the gate scans it.
 func allOpSelectorValues() []string {
 	return []string{

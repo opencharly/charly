@@ -9,8 +9,6 @@ import (
 	"testing"
 
 	"github.com/opencharly/spec/spec"
-
-	"github.com/opencharly/sdk"
 )
 
 // TestAppiumExternalPluginLoads is the RDD load proof for the appium → external-plugin
@@ -139,13 +137,13 @@ func TestAppiumOpCrossesWireWithMatchers(t *testing.T) {
 	if len(got.Stdout) != 1 || got.Stdout[0].Op != "contains" {
 		t.Fatalf("stdout MatcherList did not survive the wire: %+v", got.Stdout)
 	}
-	// The round-tripped matcher must still FUNCTION through the SAME sdk.MatchAll the
+	// The round-tripped matcher must still FUNCTION through the SAME spec.MatchAll the
 	// plugin's provider.go calls — proving the plugin can self-evaluate the authored
 	// matcher against the verb's captured output.
-	if err := sdk.MatchAll(`{"value":{"ready":true}}`, got.Stdout); err != nil {
+	if err := spec.MatchAll(`{"value":{"ready":true}}`, got.Stdout); err != nil {
 		t.Fatalf("round-tripped matcher does not match a ready status body: %v", err)
 	}
-	if err := sdk.MatchAll(`{"value":{"ready":false}}`, got.Stdout); err == nil {
+	if err := spec.MatchAll(`{"value":{"ready":false}}`, got.Stdout); err == nil {
 		t.Fatal("round-tripped matcher should NOT match a not-ready body")
 	}
 }

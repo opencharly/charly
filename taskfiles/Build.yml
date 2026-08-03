@@ -33,9 +33,13 @@ tasks:
       # bin/charly newer than the image-baked candy/charly/bin/charly copy
       # (split-brain freshness): promotion happens only after every check
       # passes, and the promote + copy are adjacent with no exit between them.
+      # charly#178: every charly binary build — production, test, and Taskfile —
+      # passes -buildvcs=false; the VCS stamp has zero consumers, and workspace-mode
+      # Go's VCS-status walk breaks in a linked worktree outside the main repo path
+      # (e.g. /tmp/...) — see plugin_loader.go's pluginBuildVCSFlagForContext.
       - |
         CALVER=$(bash pkg/arch/calver.sh)
-        cd charly && go build -ldflags "-X main.BuildCalVer=${CALVER}" -o ../bin/.charly.next .
+        cd charly && go build -buildvcs=false -ldflags "-X main.BuildCalVer=${CALVER}" -o ../bin/.charly.next .
       # Workspace-mode Go may extend the tracked go.work.sum when a compiled
       # plugin adds a module-graph requirement. Surface that generated metadata
       # immediately instead of letting a nominally successful build leave an
