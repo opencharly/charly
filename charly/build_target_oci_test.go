@@ -3,13 +3,64 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/spec/spec"
 )
+
+// testOCITarget is a thin, byte-faithful local port of sdk/deploykit.OCITarget (oci_target.go)
+// — the kind-blind Containerfile walker's OWN logic is pure string assembly over spec-native
+// types (spec.InstallPlan/InstallStep/spec.ResolveHome), with zero engine coupling of its own;
+// its correctness is ALREADY separately covered by sdk/deploykit/oci_target_test.go (e.g.
+// TestOCITarget_EmitElidesVenueSkipAndEmptyFragments). This file's OWN tests exercise the REAL
+// charly-side dispatch (ociEmitStep → dispatchOCIStep → candy/plugin-installstep) through the
+// SAME EmitStepOp seam shape the real deploykit.OCITarget wires in production — only the walker
+// harness driving that dispatch is ported locally, never the dispatch itself.
+type testOCITarget struct {
+	Home       string
+	Distros    []string
+	EmitStepOp func(step spec.InstallStep, plan *spec.InstallPlan, distros []string) (string, error)
+	buf        strings.Builder
+}
+
+func (t *testOCITarget) Emit(plans []*spec.InstallPlan, _ spec.EmitOpts) error {
+	for _, plan := range plans {
+		if plan == nil {
+			continue
+		}
+		if t.Home != "" {
+			spec.ResolveHome(plan, t.Home)
+		}
+		fmt.Fprintf(&t.buf, "# Layer: %s\n", plan.Candy)
+		for _, step := range plan.Steps {
+			if step == nil || step.Venue() == spec.VenueSkip {
+				continue
+			}
+			var frag string
+			var err error
+			if t.EmitStepOp != nil {
+				frag, err = t.EmitStepOp(step, plan, t.Distros)
+			}
+			if err != nil {
+				return fmt.Errorf("testOCITarget.Emit(%s): %w", plan.Candy, err)
+			}
+			if frag == "" {
+				continue
+			}
+			t.buf.WriteString(frag)
+			if !strings.HasSuffix(frag, "\n") {
+				t.buf.WriteString("\n")
+			}
+		}
+		t.buf.WriteString("\n")
+	}
+	return nil
+}
+
+func (t *testOCITarget) String() string { return t.buf.String() }
 
 // Tests for the pod-overlay step-emit dispatch (charly/oci_step_emit.go's ociEmitStep — the
 // Go-object-typed test entry point after the P11c overlay-walker relocation to sdk/deploykit; the
@@ -112,8 +163,8 @@ func stubRenderGen(t *testing.T, dir string, box *spec.BuildResolvedBox) {
 	t.Cleanup(func() { renderGenCache.Delete(dir) })
 }
 
-func ociTestTarget(build buildEngineContext) *deploykit.OCITarget {
-	return &deploykit.OCITarget{
+func ociTestTarget(build buildEngineContext) *testOCITarget {
+	return &testOCITarget{
 		EmitStepOp: func(step spec.InstallStep, plan *spec.InstallPlan, d []string) (string, error) {
 			return ociEmitStep(step, plan, d, build)
 		},
@@ -397,8 +448,8 @@ func TestOCITargetEmitRepoChange(t *testing.T) {
 // add_candy-on-pod-overlay "candy not found" build failure.
 func TestGeneratorCandyByNameRemoteQualifiedKey(t *testing.T) {
 	gen := &Generator{Candies: map[string]spec.CandyReader{
-		"github.com/org/repo/candy/marker": deploykit.NewSpecCandyModel(spec.CandyModel{Name: "marker"}, spec.CandyView{Name: "marker"}),
-		"local-layer":                      deploykit.NewSpecCandyModel(spec.CandyModel{Name: "local-layer"}, spec.CandyView{Name: "local-layer"}),
+		"github.com/org/repo/candy/marker": testCandy("marker", spec.CandyModel{}, spec.CandyView{}),
+		"local-layer":                      testCandy("local-layer", spec.CandyModel{}, spec.CandyView{}),
 	}}
 
 	// Exact (local) key — bare == .Name — still resolves directly.

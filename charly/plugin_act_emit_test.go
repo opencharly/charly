@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -22,22 +21,50 @@ import (
 // longer exists, since every deploy target is out-of-process; RunHostStep reaches this
 // identical resolveProvisionScript seam live in production) — kept test-local since the
 // tests below still want to exercise the SAME structured-verb-first, act-plugin-fallback
-// resolution renderOpCommand did, not just resolveProvisionScript in isolation.
+// resolution renderOpCommand did, not just resolveProvisionScript in isolation. This
+// function is SHARED with heredoc_balance_test.go (the write: heredoc case) — grep-confirmed
+// the only two op shapes exercised package-wide are op.Write and a state-provision op.Plugin;
+// sdk/kit.RenderOpCommand's OTHER cases (op.Command/Mkdir/Link/Setcap/Download/"plugin:command")
+// are NOT ported here and would need porting from sdk/kit/render.go if a future fixture needs
+// them — this is a deliberate PARTIAL local port, not a claim that it covers RenderOpCommand's
+// full switch.
 func testRenderOpCommand(s *spec.OpStep) (string, error) {
 	if s.Op == nil {
 		return "", fmt.Errorf("testRenderOpCommand: nil op")
 	}
-	if s.Op.Copy != "" {
+	op := s.Op
+	switch {
+	case op.Copy != "":
 		return "", fmt.Errorf("copy: task must be staged via PutFile, not rendered")
+	case op.Write != "":
+		// Mirrors sdk/kit.RenderOpCommand's op.Write case exactly (render.go) — the ONE
+		// non-plugin verb shape a test in this package exercises (heredoc_balance_test.go's
+		// TestRenderTaskCommand_WriteHeredocBalanced).
+		mode := op.Mode
+		if mode == "" {
+			mode = "0644"
+		}
+		return fmt.Sprintf("install -m%s /dev/stdin %s <<'CHARLY_WRITE'\n%s\nCHARLY_WRITE",
+			mode, testShDoubleQuote(op.Write), op.Content), nil
+	case op.Plugin != "" && op.Plugin != "command":
+		// A state-provision act-plugin verb — resolveProvisionScript is the REAL production
+		// seam (package main), exercising the actual registered ProvisionActor.
+		script, ok := resolveProvisionScript(op, s.Distros)
+		if !ok {
+			return "", fmt.Errorf("run: plugin verb %q is not act-capable (no ProvisionActor)", op.Plugin)
+		}
+		return script, nil
 	}
-	if cmd, handled := kit.RenderOpCommand(s.Op, s.CtxPath, s.CandyVars); handled {
-		return cmd, nil
-	}
-	script, ok := resolveProvisionScript(s.Op, s.Distros)
-	if !ok {
-		return "", fmt.Errorf("run: plugin verb %q is not act-capable (no ProvisionActor)", s.Op.Plugin)
-	}
-	return script, nil
+	return "", fmt.Errorf("testRenderOpCommand: unsupported op shape %+v (only write: and a state-provision plugin: verb are ported here — see sdk/kit/render.go for the full RenderOpCommand switch)", op)
+}
+
+// testShDoubleQuote mirrors sdk/kit.ShDoubleQuote (render.go) exactly — a small, pure,
+// stdlib-only string escape with zero engine coupling.
+func testShDoubleQuote(v string) string {
+	v = strings.ReplaceAll(v, `\`, `\\`)
+	v = strings.ReplaceAll(v, "`", "\\`")
+	v = strings.ReplaceAll(v, `"`, `\"`)
+	return `"` + v + `"`
 }
 
 // unixGroupActStep is the canonical exercise op: a `run:` step authoring the extracted

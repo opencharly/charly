@@ -10,12 +10,15 @@ import (
 
 // deploy_save_test.go — relocated (in part) from charly/deploy_save_test.go (#55 decoupling,
 // Batch A): these 2 tests are pure in-memory *deploykit.BundleConfig.Lookup/LookupKey
-// fixtures, zero charly dep. The remaining tests in the original file
-// (TestSaveDeployState_*/TestSaveBundleConfig_*/TestBundleNode_DisposableFalseRoundTrip/
-// TestRemoveVmDeployEntry_SelectiveAndIdempotent) all route through testLoadBundleConfig/
-// testSaveDeployConfig (which call charly's own LoadUnified()) — the AMBIGUOUS bed-persist /
-// deploy-state integration cluster the orchestrator ruled STAYS in charly as loader
-// integration coverage (ruling 1); they are NOT moved here.
+// fixtures, zero charly dep. The original file's remaining SaveDeployState-based tests were
+// LATER converted to drive charly's real production seam instead of calling deploykit directly
+// (#55 final-tail seam-drive spike, team-lead directive 2026-08-03) and stayed in charly; its
+// SaveBundleConfig-based tests (TestSaveBundleConfig_AtomicWriteLeavesNoTempLeftover /
+// _RefusesToClobberUnloadableConfig / TestBundleNode_DisposableFalseRoundTrip) and
+// TestCharlyUpdatePreservesPerHostDeployFields / TestVmDestroyRemovesPureAutoEntry (from
+// charly/deploy_preserve_test.go) split-by-assertion into this package's own
+// deploy_state_writer_test.go (#55 final-tail split-by-assertion round, same directive) — the
+// "stays in charly, ruling 1" framing predated the gate that forced that split question.
 
 // TestDeployConfigLookup_NilSafe pins the post-2026-05-16 cleanup of
 // the call sites that previously wrote

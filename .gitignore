@@ -16,6 +16,7 @@ candy/plugin-*/plugin-*
 # Built standalone tools/<name> binaries (`go build ./tools/<name>` with no -o produces a
 # binary named after the dir) — never committed, same pattern as the plugin binaries above.
 tools/golden-compile/golden-compile
+tools/golden-cloudinit/golden-cloudinit
 
 # Test binary, built with `go test -c`
 *.test
