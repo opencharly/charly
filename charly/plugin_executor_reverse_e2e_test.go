@@ -2,16 +2,75 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/spec/spec"
 )
+
+// testLedgerPaths / testComputeDeployID / testReadDeployRecord / testReadCandyRecord are thin
+// local ports of sdk/kit's ledger-path shape + install_ledger.go's tiny stdlib-only readers
+// (json.Unmarshal off a deterministic path — no engine behavior, plain file I/O) + sdk/deploykit's
+// ComputeDeployID (a pure sha256 hash, stdlib only) — this test's ASSERTION TAIL reads back what
+// the real reverse-channel deploy plugin wrote to a temp ledger dir; the ledger record TYPES
+// (spec.DeployRecord/spec.CandyRecord) are already spec-native.
+type testLedgerPaths struct {
+	Root    string
+	Deploys string
+	Candies string
+}
+
+func testComputeDeployID(box string, layers, addCandies []string) string {
+	h := sha256.New()
+	h.Write([]byte(box))
+	h.Write([]byte{0})
+	for _, l := range layers {
+		h.Write([]byte(l))
+		h.Write([]byte{0})
+	}
+	h.Write([]byte{1})
+	for _, l := range addCandies {
+		h.Write([]byte(l))
+		h.Write([]byte{0})
+	}
+	return hex.EncodeToString(h.Sum(nil))[:16]
+}
+
+func testReadDeployRecord(paths *testLedgerPaths, id string) (*spec.DeployRecord, error) {
+	data, err := os.ReadFile(filepath.Join(paths.Deploys, id+".json"))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var rec spec.DeployRecord
+	if err := json.Unmarshal(data, &rec); err != nil {
+		return nil, err
+	}
+	return &rec, nil
+}
+
+func testReadCandyRecord(paths *testLedgerPaths, layer string) (*spec.CandyRecord, error) {
+	data, err := os.ReadFile(filepath.Join(paths.Candies, layer+".json"))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var rec spec.CandyRecord
+	if err := json.Unmarshal(data, &rec); err != nil {
+		return nil, err
+	}
+	return &rec, nil
+}
 
 // TestExternalDeployPlugin_ReverseChannelEndToEnd proves the FULL external deploy
 // LIFECYCLE END-TO-END on real code over the E3b reverse channel: the reference
@@ -83,14 +142,13 @@ func TestExternalDeployPlugin_ReverseChannelEndToEnd(t *testing.T) {
 	// 3. A real lifecycle target: a unique deploy name (so the /tmp scratch dir is private to
 	//    this run) and a TEMP ledger (never the operator's, threaded via pluginDeployTarget.ledgerRoot
 	//    → req.LedgerRoot — S3b's wire-safe equivalent of the pre-move settable `paths` field; only
-	//    the Root string is injected, the full *kit.LedgerPaths stays test-side for read-back).
+	//    the Root string is injected, the full testLedgerPaths stays test-side for read-back).
 	name := fmt.Sprintf("e3deploy-%d", time.Now().UnixNano())
 	root := t.TempDir()
-	paths := &kit.LedgerPaths{
-		Root:     root,
-		Deploys:  filepath.Join(root, "deploys"),
-		Candies:  filepath.Join(root, "layers"),
-		LockFile: filepath.Join(root, ".lock"),
+	paths := &testLedgerPaths{
+		Root:    root,
+		Deploys: filepath.Join(root, "deploys"),
+		Candies: filepath.Join(root, "layers"),
 	}
 	tgt.name = name
 	tgt.ledgerRoot = paths.Root
@@ -106,15 +164,15 @@ func TestExternalDeployPlugin_ReverseChannelEndToEnd(t *testing.T) {
 	}
 	mustExist(t, applied, "Add did not write the applied marker over the reverse channel")
 	mustExist(t, probe, "Add did not write the probe marker over the reverse channel")
-	deployID := deploykit.ComputeDeployID(name, nil, nil)
-	rec, err := kit.ReadDeployRecord(paths, deployID)
+	deployID := testComputeDeployID(name, nil, nil)
+	rec, err := testReadDeployRecord(paths, deployID)
 	if err != nil || rec == nil {
 		t.Fatalf("Add did not write the deploy record: rec=%v err=%v", rec, err)
 	}
 	if rec.Target != "exampledeploy" {
 		t.Fatalf("deploy record target = %q, want %q (must NOT be \"host\" — would collide with the local deploy target.Del's scan)", rec.Target, "exampledeploy")
 	}
-	crec, err := kit.ReadCandyRecord(paths, "plugin-example-deploy")
+	crec, err := testReadCandyRecord(paths, "plugin-example-deploy")
 	if err != nil || crec == nil {
 		t.Fatalf("Add did not write the candy record: crec=%v err=%v", crec, err)
 	}
@@ -132,7 +190,7 @@ func TestExternalDeployPlugin_ReverseChannelEndToEnd(t *testing.T) {
 		t.Fatalf("Update: %v", err)
 	}
 	mustExist(t, probe, "Update lost the probe marker")
-	crec2, err := kit.ReadCandyRecord(paths, "plugin-example-deploy")
+	crec2, err := testReadCandyRecord(paths, "plugin-example-deploy")
 	if err != nil || crec2 == nil || len(crec2.ReverseOps) != 1 {
 		t.Fatalf("Update must keep exactly ONE reverse op (idempotent), got %+v err=%v", crec2, err)
 	}
@@ -143,10 +201,10 @@ func TestExternalDeployPlugin_ReverseChannelEndToEnd(t *testing.T) {
 	}
 	mustNotExist(t, probe, "Del did not remove the probe marker (reverse op not replayed)")
 	mustNotExist(t, applied, "Del did not remove the applied marker (reverse op not replayed)")
-	if rec, _ := kit.ReadDeployRecord(paths, deployID); rec != nil {
+	if rec, _ := testReadDeployRecord(paths, deployID); rec != nil {
 		t.Fatal("Del did not delete the deploy record")
 	}
-	if crec, _ := kit.ReadCandyRecord(paths, "plugin-example-deploy"); crec != nil {
+	if crec, _ := testReadCandyRecord(paths, "plugin-example-deploy"); crec != nil {
 		t.Fatal("Del did not delete the candy record")
 	}
 }

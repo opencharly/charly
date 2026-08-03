@@ -1,15 +1,45 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/opencharly/spec/spec"
-
-	"github.com/opencharly/sdk/kit"
 )
+
+// testValidatePlanSteps is a thin local port of sdk/kit.ValidatePlanSteps (planvalidate.go) —
+// small, pure, and already directly unit-tested in sdk/kit/planvalidate_test.go
+// (TestValidatePlanSteps_Diagnostics, per this file's own note above). This file's OWN test
+// asserts that the REAL in-core loader's produced plan model passes a clean validator run — the
+// validator's own correctness is not what's under test here.
+func testValidatePlanSteps(desc string, plan []spec.Step, eid string) []string {
+	var errs []string
+	if strings.TrimSpace(desc) == "" {
+		errs = append(errs, fmt.Sprintf("%s: description is empty", eid))
+	}
+	for i := range plan {
+		step := plan[i]
+		kw, err := step.StepKind()
+		if err != nil {
+			errs = append(errs, fmt.Sprintf("%s: step %d: %v", eid, i, err))
+			continue
+		}
+		switch kw {
+		case spec.StepKeyword("run"), spec.StepKeyword("check"):
+			if _, verbErr := step.Kind(); verbErr != nil {
+				errs = append(errs, fmt.Sprintf("%s: step %d (%s): %v", eid, i, kw, verbErr))
+			}
+		case spec.StepKeyword("agent-run"), spec.StepKeyword("agent-check"):
+			if _, verbErr := step.Kind(); verbErr == nil {
+				errs = append(errs, fmt.Sprintf("%s: step %d (%s): agent steps must not carry an Op verb", eid, i, kw))
+			}
+		}
+	}
+	return errs
+}
 
 // writeFeatureFixtureProject writes a minimal unified project (charly.yml + one discovered
 // candy) into a temp dir and returns the dir. The candy carries a non-empty description plus a
@@ -92,7 +122,7 @@ func TestEnumerateFeatures_RunsValidatePlanSteps(t *testing.T) {
 	}
 	for _, e := range ents {
 		if e.Name == "feat-fixture" {
-			if errs := kit.ValidatePlanSteps(e.Description, e.Plan, e.Kind+":"+e.Name); len(errs) != 0 {
+			if errs := testValidatePlanSteps(e.Description, e.Plan, e.Kind+":"+e.Name); len(errs) != 0 {
 				t.Fatalf("clean candy has validation errors: %v", errs)
 			}
 		}

@@ -6,8 +6,28 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/spec/spec"
 )
+
+// testProjectBundleConfig is a thin local port of sdk/deploykit.ProjectBundleConfig — an
+// ASSERTION-TAIL projection over spec.UnifiedFile's already-loaded fields (Bundle/Provides/
+// PluginKinds["sidecar"]), not a re-derivation of the loader itself. What this test asserts is
+// the SELECTION (does the sidecar survive into the bundle-config projection), which this ~10
+// line reader re-expresses directly over spec types with zero sdk import.
+func testProjectBundleConfig(uf *spec.UnifiedFile) *spec.BundleConfig {
+	if uf == nil {
+		return nil
+	}
+	sidecars := uf.PluginKinds["sidecar"]
+	if len(uf.Bundle) == 0 && uf.Provides == nil && len(sidecars) == 0 {
+		return nil
+	}
+	return &spec.BundleConfig{
+		Provides: uf.Provides,
+		Bundle:   uf.Bundle,
+		Sidecar:  sidecars,
+	}
+}
 
 // sidecarBodyImage peeks the `image` field of an opaque sidecar body — the kernel
 // stores sidecar defs untyped (the sidecar de-type, Cutover D), so tests decode.
@@ -63,7 +83,7 @@ mysidecar:
 	if cfg == nil || sidecarBodyImage(t, cfg.Sidecar["mysidecar"]) != "example.com/mysidecar:1" {
 		t.Fatalf("ProjectConfig().Sidecar projection lost the sidecar; got %#v", cfg)
 	}
-	bc := deploykit.ProjectBundleConfig(uf)
+	bc := testProjectBundleConfig(uf)
 	if bc == nil || sidecarBodyImage(t, bc.Sidecar["mysidecar"]) != "example.com/mysidecar:1" {
 		t.Fatalf("ProjectBundleConfig().Sidecar projection lost the sidecar; got %#v", bc)
 	}

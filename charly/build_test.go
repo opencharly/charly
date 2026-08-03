@@ -1,11 +1,68 @@
 package main
 
 import (
+	"fmt"
+	"regexp"
+	"sort"
 	"strings"
 	"testing"
+	"text/template"
 
-	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/spec/spec"
 )
+
+// testPacstrapMicroarchRe / testRenderPacstrapExtraConf / testRenderRuntimePacmanConf are thin
+// local ports of sdk/buildkit's pure, stdlib-only pacstrap renderers (build_helpers.go) — their
+// own correctness is ALREADY directly covered by sdk/buildkit/build_helpers_test.go
+// (TestRenderRuntimePacmanConf: nil/blank/verbatim/template/malformed-template cases). This
+// file's OWN test is a white-box check of charly's OWN production box/cachyos distro config
+// (LoadBuildConfigForBox), not of the renderers in isolation — mirroring the dedup already
+// applied to this file's sibling TestHostPlatform/TestRenderPacstrapExtraConf removals.
+var testPacstrapMicroarchRe = regexp.MustCompile(`x86_64_v[0-9]+`)
+
+func testRenderPacstrapExtraConf(p *spec.Pacstrap) string {
+	if p == nil || len(p.ExtraRepos) == 0 {
+		return ""
+	}
+	seen := map[string]bool{}
+	var microarch []string
+	for _, r := range p.ExtraRepos {
+		for _, m := range testPacstrapMicroarchRe.FindAllString(r.Server, -1) {
+			if !seen[m] {
+				seen[m] = true
+				microarch = append(microarch, m)
+			}
+		}
+	}
+	sort.Strings(microarch)
+
+	var b strings.Builder
+	if len(microarch) > 0 {
+		fmt.Fprintf(&b, "[options]\nArchitecture = x86_64 %s\n", strings.Join(microarch, " "))
+	}
+	for _, r := range p.ExtraRepos {
+		fmt.Fprintf(&b, "[%s]\nServer = %s\n", r.Name, r.Server)
+		if r.SigLevel != "" {
+			fmt.Fprintf(&b, "SigLevel = %s\n", r.SigLevel)
+		}
+	}
+	return b.String()
+}
+
+func testRenderRuntimePacmanConf(p *spec.Pacstrap) (string, error) {
+	if p == nil || strings.TrimSpace(p.RuntimePacmanConf) == "" {
+		return "", nil
+	}
+	tmpl, err := template.New("runtime_pacman_conf").Parse(p.RuntimePacmanConf)
+	if err != nil {
+		return "", fmt.Errorf("parsing runtime_pacman_conf template: %w", err)
+	}
+	var b strings.Builder
+	if err := tmpl.Execute(&b, p); err != nil {
+		return "", fmt.Errorf("rendering runtime_pacman_conf: %w", err)
+	}
+	return b.String(), nil
+}
 
 // TestFilterImages / TestFilterImagesUnknown / TestFilterImagesIncludesBuilder /
 // TestFilterImagesIncludesBootstrapBuilder relocated to candy/plugin-bundle (#55 decoupling,
@@ -44,7 +101,7 @@ func TestCachyosRuntimePacmanConf(t *testing.T) {
 		t.Errorf("runtime_pacman_conf must derive its repo list from extra_repo via {{ range .ExtraRepos }} (single source), got:\n%s", cachyos.Pacstrap.RuntimePacmanConf)
 	}
 	// Render it the way the bootstrap paths do.
-	rc, err := buildkit.RenderRuntimePacmanConf(cachyos.Pacstrap)
+	rc, err := testRenderRuntimePacmanConf(cachyos.Pacstrap)
 	if err != nil {
 		t.Fatalf("renderRuntimePacmanConf: %v", err)
 	}
@@ -62,7 +119,7 @@ func TestCachyosRuntimePacmanConf(t *testing.T) {
 	if strings.Contains(rc, "cachyos-extra") {
 		t.Errorf("runtime_pacman_conf must NOT include cachyos-extra:\n%s", rc)
 	}
-	if strings.Contains(buildkit.RenderPacstrapExtraConf(cachyos.Pacstrap), "cachyos-extra") {
+	if strings.Contains(testRenderPacstrapExtraConf(cachyos.Pacstrap), "cachyos-extra") {
 		t.Errorf("install (extra_repo) config must NOT include cachyos-extra either — single source of truth")
 	}
 }

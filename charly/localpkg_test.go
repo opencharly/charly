@@ -6,8 +6,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/vmshared"
 	"github.com/opencharly/spec/spec"
 	"gopkg.in/yaml.v3"
 )
@@ -28,11 +26,11 @@ import (
 // helpers with charly) — the copy here STAYS because charly's own build_target_oci_test.go
 // (outside this batch) also depends on it directly.
 
-// testPacLocalPkgDef returns a vmshared.LocalPkgDef mirroring build.yml's `pac.local_pkg`
+// testPacLocalPkgDef returns a spec.LocalPkg mirroring build.yml's `pac.local_pkg`
 // block — the config that drives the localpkg mechanism. Tests use it so they
 // exercise the SAME config-driven path the loader produces, without parsing YAML.
-func testPacLocalPkgDef() *vmshared.LocalPkgDef {
-	return &vmshared.LocalPkgDef{
+func testPacLocalPkgDef() *spec.LocalPkg {
+	return &spec.LocalPkg{
 		PkgGlob:         "*.pkg.tar.zst",
 		SourceSentinel:  "PKGBUILD",
 		BuildTemplate:   "cd {{.SrcDir}} && PKGDEST={{.PkgDest}} makepkg -sf --noconfirm",
@@ -77,7 +75,7 @@ func TestLocalPkgMapRejectsScalar(t *testing.T) {
 		if err := yaml.Unmarshal([]byte(body), &doc); err != nil {
 			t.Fatalf("parse: %v", err)
 		}
-		root := kit.MappingRoot(&doc)
+		root := spec.MappingRoot(&doc)
 		if root == nil {
 			t.Fatalf("test candy body is not a mapping")
 		}

@@ -1,15 +1,15 @@
 package main
 
 import (
+	"os"
 	"testing"
 
-	"github.com/opencharly/sdk/vmshared"
 	"github.com/opencharly/spec/spec"
 )
 
-// testPubKey is the SSH test pubkey for the cloud-init egress render test
-// (TestRenderCloudInit_OutputValidatesAgainstSchema). Formerly shared from
-// cloud_init_render_test.go, which relocated to sdk/vmshared/.
+// testPubKey mirrors tools/golden-cloudinit/main.go's OWN fixture constant of the same name
+// (kept in lockstep by inspection — both are tiny, stable literals) — documented here only, no
+// longer used to drive a live render (see TestRenderCloudInit_OutputValidatesAgainstSchema).
 const testPubKey = "ssh-ed25519 AAAATESTKEY user@host"
 
 // Egress-validation coverage. The teeth tests (the *BadFails cases) are the ones
@@ -162,14 +162,29 @@ func TestValidateTextEgress_RenderedText(t *testing.T) {
 	}
 }
 
-// TestRenderCloudInit_OutputValidatesAgainstSchema proves the renderer's real
-// output satisfies the egress gate end to end (vmshared.RenderCloudInit returns the gate's
-// error directly, so a non-nil err here would mean charly emits cloud-init that
-// its own vendored schema rejects).
+// TestRenderCloudInit_OutputValidatesAgainstSchema proves the real cloud-init renderer's real
+// output satisfies charly's real egress gate end to end — driven from a GOLDEN fixture
+// (tools/golden-cloudinit, mirroring tools/golden-compile's precedent) rather than a live
+// sdk/vmshared.RenderCloudInit call, so this file needs no sdk import. The golden fixture was
+// captured by actually running RenderCloudInit with the SAME VmSpec/CloudInitRuntimeParams this
+// test used to construct live (see tools/golden-cloudinit/main.go), with vmshared's OWN
+// permissive ValidateEgress stub (sdk/vmshared/egress_seam_test.go's exact wiring) — so the
+// checked-in bytes are exactly what the real renderer produces; THIS test is what proves those
+// real bytes pass charly's REAL ValidateEgress, the assertion that actually matters here (a
+// non-nil err would mean charly emits cloud-init that its own vendored schema rejects).
 func TestRenderCloudInit_OutputValidatesAgainstSchema(t *testing.T) {
-	spec := &vmshared.VmSpec{Source: vmshared.VmSource{Kind: "cloud_image", Distro: "arch", BaseUser: "arch"}}
-	rt := vmshared.CloudInitRuntimeParams{SSHPublicKey: testPubKey, InjectKeyViaCloudInit: true, InstanceID: "iid-xyz", Hostname: "egress-vm"}
-	if _, _, _, err := vmshared.RenderCloudInit(spec, rt); err != nil {
-		t.Fatalf("rendered cloud-init must pass its own egress gate, got: %v", err)
+	userData, err := os.ReadFile("testdata/cloudinit_egress_golden_userdata.yaml")
+	if err != nil {
+		t.Fatalf("reading golden user-data fixture: %v", err)
+	}
+	if err := ValidateEgress("cloud_config", "golden cloud-init user-data", userData); err != nil {
+		t.Fatalf("golden cloud-init user-data must pass the real egress gate, got: %v", err)
+	}
+	metaData, err := os.ReadFile("testdata/cloudinit_egress_golden_metadata.yaml")
+	if err != nil {
+		t.Fatalf("reading golden meta-data fixture: %v", err)
+	}
+	if err := ValidateEgress("cloud_init_meta", "golden cloud-init meta-data", metaData); err != nil {
+		t.Fatalf("golden cloud-init meta-data must pass the real egress gate, got: %v", err)
 	}
 }
