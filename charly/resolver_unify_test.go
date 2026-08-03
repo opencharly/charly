@@ -46,33 +46,9 @@ widget:
 	return root, uf.ProjectConfig()
 }
 
-// TestResolveImage_QualifiedDelegates is the central-chokepoint guard:
-// ResolveBox must resolve a namespace-qualified name by delegating into the
-// owning namespace Config. Pre-fix, `c.Box["sub.widget"]` missed and this
-// returned "image \"sub.widget\" not found".
-func TestResolveImage_QualifiedDelegates(t *testing.T) {
-	root, cfg := fixtureNamespacedProject(t)
-
-	ri, err := resolveBoxTest(cfg, "sub.widget", "test", root, spec.ResolveOpts{})
-	if err != nil {
-		t.Fatalf("ResolveBox(\"sub.widget\") must resolve via namespace delegation: %v", err)
-	}
-	if ri.Name != "widget" {
-		t.Errorf("resolved name = %q, want %q (leaf, resolved in the namespace context)", ri.Name, "widget")
-	}
-	if ri.Base != "quay.io/fedora/fedora:43" {
-		t.Errorf("resolved base = %q, want the namespace image's base", ri.Base)
-	}
-
-	// Bare names still resolve in root, unchanged.
-	if _, err := resolveBoxTest(cfg, "app", "test", root, spec.ResolveOpts{}); err != nil {
-		t.Errorf("bare ResolveBox(\"app\") regressed: %v", err)
-	}
-	// A genuinely-missing namespace still errors clearly.
-	if _, err := resolveBoxTest(cfg, "nope.widget", "test", root, spec.ResolveOpts{}); err == nil {
-		t.Error("ResolveBox(\"nope.widget\") should error: no such namespace")
-	}
-}
+// TestResolveImage_QualifiedDelegates moved to candy/plugin-build/box_resolve_test.go (#55
+// decoupling cone, Batch B, per orchestrator ruling): it asserts ResolveBox OUTPUT end to end
+// (namespace-delegation resolution + name/base fields) — resolver-capability coverage.
 
 // TestFindImageByLeaf covers the discovery dual used by ensure-image's
 // build-fallback: a bare basename (extracted from a full registry ref) must be
@@ -92,32 +68,9 @@ func TestFindImageByLeaf(t *testing.T) {
 	}
 }
 
-// TestResolveAllImage_RequestedQualifiedTarget guards the build-target path:
-// an explicitly-requested qualified box that is NOT a base/builder of any
-// root box must still land in the resolved set (so filterBox / the build
-// graph accept `charly box build sub.widget` and the ensure-image build-fallback
-// for a namespaced builder). Pre-fix it was absent.
-func TestResolveAllImage_RequestedQualifiedTarget(t *testing.T) {
-	root, cfg := fixtureNamespacedProject(t)
-
-	// Without RequestedBoxes, sub.widget is not reachable, so not pulled.
-	base, err := resolveAllBoxTest(cfg, root, spec.ResolveOpts{})
-	if err != nil {
-		t.Fatalf("ResolveAllBox: %v", err)
-	}
-	if _, present := base["sub.widget"]; present {
-		t.Fatal("sub.widget should NOT be in the resolved set without an explicit request (it is not a base of any root image)")
-	}
-
-	// With it requested, it is pulled under its fully-qualified key.
-	withReq, err := resolveAllBoxTest(cfg, root, spec.ResolveOpts{RequestedBoxes: []string{"sub.widget"}})
-	if err != nil {
-		t.Fatalf("resolveAllBoxTest(RequestedImages): %v", err)
-	}
-	if _, present := withReq["sub.widget"]; !present {
-		t.Errorf("requested qualified target sub.widget absent from resolved set (keys: %v)", keysOf(withReq))
-	}
-}
+// TestResolveAllImage_RequestedQualifiedTarget moved to candy/plugin-build/box_resolve_test.go
+// (#55 decoupling cone, Batch B, per orchestrator ruling): it asserts ResolveAllBox OUTPUT end to
+// end (explicit-request pull-in of a namespace-qualified target) — resolver-capability coverage.
 
 // TestWalkBaseChain_RootInternalOnly guards the shared collector iterator's
 // semantics: it follows ROOT-internal bases (so the 5 collectors keep walking

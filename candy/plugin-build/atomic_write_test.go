@@ -1,4 +1,4 @@
-package main
+package build
 
 import (
 	"os"
@@ -7,6 +7,9 @@ import (
 
 	"github.com/opencharly/sdk/kit"
 )
+
+// Relocated from charly/build_stage_atomic_test.go (#55 decoupling cone, Batch B) — both tests
+// assert kit.AtomicWriteFile / kit.InstallDirAtomic directly with zero charly coupling.
 
 func TestAtomicWriteFile_WriteOverwriteMode(t *testing.T) {
 	dir := t.TempDir()

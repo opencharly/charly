@@ -2,15 +2,22 @@ package main
 
 import (
 	"reflect"
+	"strings"
 	"testing"
-
-	"github.com/opencharly/sdk/buildkit"
 )
 
 // buildkit.NormalizeBoxArgs's own sentinel-collapse behavior is covered by
 // sdk/buildkit/build_helpers_test.go (TestNormalizeBoxArgs) now that the logic lives there
 // (the BUILD-cone cutover); this file keeps only the charly-side composition with
-// boxResolveOpts below.
+// boxResolveOpts below. normalizeBoxArgsFixture is a trivial LOCAL fixture reproducing that
+// same sentinel-collapse (not a re-test of NormalizeBoxArgs itself) so this file needs no
+// sdk/buildkit import for what is, here, pure test input construction.
+func normalizeBoxArgsFixture(boxes []string) []string {
+	if len(boxes) == 1 && strings.EqualFold(boxes[0], "all") {
+		return nil
+	}
+	return boxes
+}
 
 // TestBoxResolveOpts asserts the single box-selection rule both build and
 // generate consume: empty → no scoping (all enabled); named → RequestedBoxes
@@ -78,16 +85,16 @@ func TestBoxResolveOpts(t *testing.T) {
 func TestBuildResolveOptsParity(t *testing.T) {
 	for _, sel := range [][]string{nil, {"fedora"}, {"fedora", "arch"}} {
 		for _, incl := range []bool{false, true} {
-			a := boxResolveOpts(buildkit.NormalizeBoxArgs(sel), incl)
-			b := boxResolveOpts(buildkit.NormalizeBoxArgs(sel), incl)
+			a := boxResolveOpts(normalizeBoxArgsFixture(sel), incl)
+			b := boxResolveOpts(normalizeBoxArgsFixture(sel), incl)
 			if !reflect.DeepEqual(a, b) {
 				t.Errorf("parity mismatch for sel=%v incl=%v: %+v vs %+v", sel, incl, a, b)
 			}
 		}
 	}
 	// `all` and the bare form must resolve identically.
-	allOpts := boxResolveOpts(buildkit.NormalizeBoxArgs([]string{"all"}), false)
-	bareOpts := boxResolveOpts(buildkit.NormalizeBoxArgs(nil), false)
+	allOpts := boxResolveOpts(normalizeBoxArgsFixture([]string{"all"}), false)
+	bareOpts := boxResolveOpts(normalizeBoxArgsFixture(nil), false)
 	if !reflect.DeepEqual(allOpts, bareOpts) {
 		t.Errorf("`generate all` opts %+v != bare `generate` opts %+v", allOpts, bareOpts)
 	}

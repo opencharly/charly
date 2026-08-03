@@ -4,53 +4,19 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/buildkit"
-	"github.com/opencharly/sdk/vmshared"
 	"github.com/opencharly/spec/spec"
 )
 
-// TestSharedCacheMount_StableID locks in the format that makes BuildKit
-// caches survive layer-hash churn — the entire reason CacheMount exists.
-func TestSharedCacheMount_StableID(t *testing.T) {
-	got := buildkit.SharedCacheMount("/var/cache/libdnf5", "").String()
-	want := "--mount=type=cache,id=charly-var-cache-libdnf5,dst=/var/cache/libdnf5,sharing=locked"
-	if got != want {
-		t.Errorf("SharedCacheMount default sharing\n  got:  %s\n  want: %s", got, want)
-	}
-
-	got = buildkit.SharedCacheMount("/var/cache/pacman/pkg", "shared").String()
-	want = "--mount=type=cache,id=charly-var-cache-pacman-pkg,dst=/var/cache/pacman/pkg,sharing=shared"
-	if got != want {
-		t.Errorf("SharedCacheMount nested path\n  got:  %s\n  want: %s", got, want)
-	}
-}
-
-// TestOwnedCacheMount_UIDInID confirms uid is part of the id namespace so
-// different-uid builds don't collide on file ownership inside the cache volume.
-func TestOwnedCacheMount_UIDInID(t *testing.T) {
-	got := buildkit.OwnedCacheMount("/tmp/pixi-cache", 1000, 1000).String()
-	want := "--mount=type=cache,id=charly-tmp-pixi-cache-uid1000,dst=/tmp/pixi-cache,uid=1000,gid=1000"
-	if got != want {
-		t.Errorf("OwnedCacheMount\n  got:  %s\n  want: %s", got, want)
-	}
-
-	// Same dst, different uid → different id (the whole point).
-	a := buildkit.OwnedCacheMount("/tmp/npm-cache", 1000, 1000).String()
-	b := buildkit.OwnedCacheMount("/tmp/npm-cache", 2000, 2000).String()
-	if a == b {
-		t.Errorf("uid must differentiate the cache id; both produced:\n  %s", a)
-	}
-	if !strings.Contains(a, "uid1000") || !strings.Contains(b, "uid2000") {
-		t.Errorf("expected uid suffix in id; got\n  a=%s\n  b=%s", a, b)
-	}
-}
+// TestSharedCacheMount_StableID / TestOwnedCacheMount_UIDInID / TestCacheMountID_StableAcrossInvocations
+// (buildkit.SharedCacheMount / OwnedCacheMount direct assertions) moved to
+// candy/plugin-build/cache_mount_test.go (#55 decoupling cone, Batch B).
 
 // TestRenderCacheMountsAuto_Mixed locks in the per-entry owned/shared split:
 // one builder (the AUR stage) declares the root pacman cache (shared/locked)
 // alongside user-writable build caches (makepkg SRCDEST, yay clones — owned),
 // and each renders in its correct form from a single list.
 func TestRenderCacheMountsAuto_Mixed(t *testing.T) {
-	mounts := []vmshared.CacheMountDef{
+	mounts := []spec.CacheMount{
 		{Dst: "/var/cache/pacman/pkg", Sharing: "locked"}, // root system cache
 		{Dst: "/tmp/aur-srcdest", Owned: true},            // user build cache
 		{Dst: "/tmp/aur-xdg-cache", Owned: true},          // user build cache
@@ -81,25 +47,12 @@ func TestRenderCacheMounts_Empty(t *testing.T) {
 // TestRenderCacheMounts_TrailingSeparator covers the cacheMountsOwned shape
 // where we need the separator after the last entry (template chains into RUN body).
 func TestRenderCacheMounts_TrailingSeparator(t *testing.T) {
-	mounts := []vmshared.CacheMountDef{{Dst: "/tmp/pixi-cache"}}
+	mounts := []spec.CacheMount{{Dst: "/tmp/pixi-cache"}}
 	got := spec.RenderCacheMounts(mounts, 1000, 1000, " \\\n    ", true)
 	if !strings.HasSuffix(got, " \\\n    ") {
 		t.Errorf("trailing separator missing; got: %q", got)
 	}
 	if !strings.Contains(got, "id=charly-tmp-pixi-cache-uid1000") {
 		t.Errorf("expected stable id; got: %q", got)
-	}
-}
-
-// TestCacheMountID_StableAcrossInvocations is the core regression guard:
-// the same dst MUST produce the same id every time, otherwise cache is
-// keyed by something volatile and breaks the entire purpose of the fix.
-func TestCacheMountID_StableAcrossInvocations(t *testing.T) {
-	for i := range 10 {
-		a := buildkit.SharedCacheMount("/var/cache/libdnf5", "locked").String()
-		b := buildkit.SharedCacheMount("/var/cache/libdnf5", "locked").String()
-		if a != b {
-			t.Fatalf("non-deterministic id at iteration %d:\n  a=%s\n  b=%s", i, a, b)
-		}
 	}
 }
