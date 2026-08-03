@@ -120,9 +120,11 @@ func validateNodeFormSteps(path string, data []byte) error {
 
 // cueDocFromYAML ingests one YAML document into a cue.Value (the whole doc) via the relocated
 // CUE-validate seam (sdk/loaderkit.CueDocFromYAML, K1 unit 2) — kept as a same-named/same-signature
-// core wrapper (R3) since the still-core validate chain above (assembleAndValidateEntitySteps,
-// validateCandyManifestCUE, validateEntityNodeRec) calls it internally, pending their own Unit 3
-// relocation (they need genericNode/assembleEntityBody, which move then).
+// core wrapper (R3): provider_kind_invoke.go (the TRUE clause-M kind dispatch) calls it directly,
+// and validate.go (K3 box-validate engine, deferred to W2 per the spike) calls it too. Its former
+// sibling callers assembleAndValidateEntitySteps/validateEntityNodeRec fully relocated to
+// loaderkit as unexported internals (K1 unit 3c) — they call sdk/loaderkit's own CueDocFromYAML
+// directly and no longer route through this core wrapper.
 func cueDocFromYAML(path string, data []byte) (cue.Value, error) {
 	return requireProjectLoader().CueDocFromYAML(coreCueSchema(), path, data)
 }

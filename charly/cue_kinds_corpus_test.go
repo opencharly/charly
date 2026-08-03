@@ -20,7 +20,7 @@ import (
 
 // hasMappingKey reports whether the yaml mapping node m has an entry named key —
 // the same "base"/"from" image-vs-layer discriminator check production's
-// validateEntityNodeRec (cue_schema.go) runs, inlined here (test-only, single use).
+// ValidateEntityNodeRec (sdk/loaderkit/node_validate.go) runs, inlined here (test-only, single use).
 func hasMappingKey(m *yaml.Node, key string) bool {
 	if m == nil || m.Kind != yaml.MappingNode {
 		return false
