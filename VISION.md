@@ -61,4 +61,4 @@ Every candy, every box, every probe serves one end: **to build a better candybox
 
 ---
 
-*The factory floor is documented in [README.md](README.md); the house rules in [CLAUDE.md](CLAUDE.md); every candy and box has a recipe card in [plugins/README.md](plugins/README.md). Dated history lives — and only lives — in each repo's [CHANGELOG/](CHANGELOG/README.md), one file per CalVer version.*
+*The factory floor is documented in [README.md](README.md); the house rules in [CLAUDE.md](CLAUDE.md); every candy and box has a recipe card in [plugins/README.md](plugins/README.md) — all of it published, and generated rather than retyped, at [opencharly.ai](https://opencharly.ai). Dated history lives — and only lives — in each repo's [CHANGELOG/](CHANGELOG/README.md), one file per CalVer version.*

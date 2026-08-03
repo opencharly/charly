@@ -1,0 +1,173 @@
+docs-site:
+    candy:
+        version: 2026.215.1207
+        description: |-
+            The Astro + Starlight toolchain for the opencharly.ai documentation site, plus a
+            production build of the published site itself, built inside the box.
+
+            This candy is what makes the docs site provable rather than merely deployable: it
+            clones the opencharly/docs repository, runs a clean `npm ci` against its committed
+            lockfile, and builds the production site into /srv/docs/dist. A build failure — a bad
+            frontmatter scalar, a Starlight config a version bump invalidated, a page whose
+            markdown will not parse — fails the IMAGE BUILD, which builds from the same input
+            Cloudflare Pages does, so the box catches it before a deploy can.
+
+            WHY IT CLONES rather than copying the docs/ submodule out of the working tree: a
+            candy's copy: source may not traverse above its own directory (`..` is rejected at
+            validate time), and there is no schema field for pointing a candy at a sibling
+            directory. Cloning the published repository is the schema-legal path, and it happens
+            to test the more useful thing — the exact source Cloudflare builds. It fetches an
+            IMMUTABLE COMMIT (`DOCS_REF` below), never a branch: that is what keeps the clone
+            layer's cache key moving with the pin. The consequence is an ordering dependency —
+            docs content must be merged, and `DOCS_REF` re-pinned to that merge, before this box
+            (and the check-docs bed above it) prove the new content.
+
+            The checks below assert the site's SHAPE, not merely its existence: a generated CLI
+            page, a candy page carrying its published acceptance plan, a recipe card from the
+            skill corpus with its cross-references rewritten into site links, and — the
+            load-bearing one — the page of a plugin that is NOT compiled into the charly binary,
+            rendering both its runtime placement and its CUE parameter schema. That last check is
+            what fails if the generator ever narrows to documenting only the default-active set.
+        require:
+            - nodejs
+        var:
+            DOCS_REPO: https://github.com/opencharly/docs.git
+            # An IMMUTABLE COMMIT, never a branch name. This is a cache-correctness requirement,
+            # not a preference: `var:` values are emitted as ENV above the steps, so the clone
+            # layer's cache key moves only when this string moves. With `main` here the key was
+            # CONSTANT, so once the clone layer was cached the bed kept rebuilding whatever docs
+            # `main` pointed at when that layer was first built — and went on reporting PASS while
+            # proving stale content. It must equal the `docs` submodule gitlink; `task docs:pin`
+            # checks that, and the bed asserts it from inside the built image.
+            DOCS_REF: 9b4697f2f83ec564294e3c974d4b748084d717ba
+        distro:
+            fedora:
+                package:
+                    - git
+        plan:
+            - run: clone the published documentation site source at the pinned commit
+              command: |
+                rm -rf /srv/docs
+                git init -q /srv/docs
+                git -C /srv/docs remote add origin "${DOCS_REPO}"
+                git -C /srv/docs fetch -q --depth 1 origin "${DOCS_REF}"
+                git -C /srv/docs checkout -q FETCH_HEAD
+                # Record what was ACTUALLY fetched, in the same layer as the fetch, so a stale
+                # cached layer carries a stale sha. Written as a plain file rather than read back
+                # with git at check time: the check runs as a different uid than this root step and
+                # git refuses a repo it sees as foreign ("detected dubious ownership"), failing the
+                # probe for a reason unrelated to the content.
+                git -C /srv/docs rev-parse HEAD > /srv/docs/.charly-pinned-commit
+              run_as: root
+
+            - # Proves the layer that produced this image actually fetched the pinned commit.
+              #
+              # The sha is a LITERAL here, duplicating DOCS_REF above, because charly's check-step
+              # substitution does not resolve a candy `var:` — it SKIPS the step with "unresolved
+              # variables: DOCS_REF" instead, which would turn this guard into a non-event while
+              # the bed still reported PASS. That is the same failure this check exists to catch,
+              # so it must not depend on substitution. `task docs:pin` asserts BOTH occurrences
+              # against the docs gitlink, so the duplication cannot drift unnoticed.
+              #
+              # This check is the reason the cache defect cannot recur silently: the first version
+              # of this bed cloned with a constant `--branch main`, so podman's layer key never
+              # moved when docs main advanced, and every run reported PASS while building
+              # docs@7e82b67. A stale layer now FAILS here instead.
+              check: the cloned site is the pinned commit, not a stale cached layer
+              id: docs-site-pinned-commit
+              exit_status: 0
+              stdout:
+                - contains: 9b4697f2f83ec564294e3c974d4b748084d717ba
+              context:
+                - build
+                - runtime
+              command: cat /srv/docs/.charly-pinned-commit
+
+            - run: install the site's node dependencies from the committed lockfile
+              command: |
+                cd /srv/docs
+                npm ci --no-audit --no-fund
+              run_as: root
+              cache:
+                - /root/.npm
+
+            - run: build the production site
+              command: |
+                cd /srv/docs
+                npm run build
+              run_as: root
+
+            - check: node is installed and reports a parseable major version
+              id: docs-site-node-present
+              exit_status: 0
+              stdout:
+                - matches: "v[0-9]+\\."
+              context:
+                - build
+                - runtime
+              command: node --version
+
+            - check: the production build produced the site entry point
+              id: docs-site-index-built
+              file:
+                file: /srv/docs/dist/index.html
+                exists: true
+              context:
+                - build
+                - runtime
+
+            - check: the built site carries a GENERATED CLI reference page (proves the cli tree was emitted and rendered)
+              id: docs-site-cli-page
+              exit_status: 0
+              stdout:
+                - contains: charly docs
+              context:
+                - build
+                - runtime
+              command: cat /srv/docs/dist/reference/cli/docs/index.html
+
+            - check: a generated candy page publishes its plan as a runnable acceptance spec (the ADE surface a reader can see without cloning anything)
+              id: docs-site-candy-acceptance-plan
+              exit_status: 0
+              stdout:
+                - contains: Acceptance plan
+              context:
+                - build
+                - runtime
+              command: cat /srv/docs/dist/reference/candy/ripgrep/index.html
+
+            - check: a recipe card from the skill corpus rendered, with its harness cross-references rewritten into working site links
+              id: docs-site-recipe-card
+              exit_status: 0
+              stdout:
+                - contains: /recipes/internals/
+              context:
+                - build
+                - runtime
+              command: cat /srv/docs/dist/recipes/check/check/index.html
+
+            - # THE load-bearing check. plugin-cdp is NOT in charly/charly.yml compiled_plugins — it
+              # loads out-of-process over gRPC. If the generator ever narrows to the default-active set
+              # (the charly binary's own command model, or the enabled-boxes list), this page disappears
+              # and this step fails. It also asserts the rendered CUE schema, which is the only place a
+              # reader can learn an out-of-process verb's parameter grammar.
+              check: a RUNTIME (out-of-process) plugin's page renders both its placement and its CUE parameter schema — the assertion that fails if the generator ever documents only what is compiled in
+              id: docs-site-runtime-plugin-page
+              exit_status: 0
+              stdout:
+                - contains: out-of-process
+                - contains: Parameter schema
+              context:
+                - build
+                - runtime
+              command: cat /srv/docs/dist/reference/plugin/plugin-cdp/index.html
+
+            - check: the provider cross-index resolves every reserved word to its owning plugin
+              id: docs-site-provider-index
+              exit_status: 0
+              stdout:
+                - contains: Provider index
+              context:
+                - build
+                - runtime
+              command: cat /srv/docs/dist/reference/providers/index.html

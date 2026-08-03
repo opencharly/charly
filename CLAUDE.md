@@ -24,6 +24,7 @@ Consult this table before the first tool call of every task; when several rows m
 | `charly box reconcile` / cross-repo `@github` pin alignment / candy-version-mismatch cleanup | `/charly-build:reconcile` |
 | Secret management / `charly secrets` / Secret Service / GPG `.secrets` | `/charly-build:secrets` |
 | `charly clean` / build-artifact retention / `keep_images` / `keep_check_runs` / image-tag pruning / `.check` run cleanup | `/charly-core:clean` |
+| `charly docs` / the opencharly.ai site / the `docs/` submodule / `task docs:sync`/`docs:drift` / Starlight/Astro / `candy/plugin-docs` (runtime plugin) or `candy/docs-site` | `/charly-build:docs` + `/charly-tools:docs-site` |
 | **— Deploy & run —** | |
 | `charly update` / `charly vm *` / VM entities in `vm.yml` or `vm:` | `/charly-vm:vm` + `/charly-internals:vm-deploy-target` |
 | `charly bundle add/del` / pod or container deploys | `/charly-core:deploy` |
@@ -170,4 +171,5 @@ The named skills own the full technical rules; this index never expands into a s
 - **Features & command reference** → `README.md`.
 - **Usage & architecture** → skills (`plugins/README.md` is the index) — the single source of truth for *how*.
 - **Thesis & direction** → `VISION.md`.
+- **Public site** → [opencharly.ai](https://opencharly.ai), built from the `docs/` submodule: a small hand-authored narrative plus a reference/recipe catalog GENERATED from the sources above by `charly docs generate`. Never hand-edit a generated page; fix the source and run `task docs:sync`.
 - **History** → each repo's `CHANGELOG/` (one file per CalVer release, `<YYYY.DDD.HHMM>.md`, shared with the release tag) — the sanctioned historical context named by R5's grep self-test; everything else states current behavior in present tense.

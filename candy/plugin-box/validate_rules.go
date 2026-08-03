@@ -94,10 +94,10 @@ func validateCandyContents(vc *vctx, e *vErr) {
 			}
 		}
 
-		// SourceDir (directory:-redirected or the candy dir) must exist. The envelope carries only
-		// SourceDir (no Path), so the redirect-only guard is subsumed: a non-redirected candy's
-		// SourceDir is its scanned dir (always present), so a missing non-empty SourceDir is the
-		// redirect-to-missing case the core rule caught. Message is byte-identical (SourceDir twice).
+		// SourceDir must exist. A candy's SourceDir is the directory it was scanned from — there is
+		// no field that redirects it elsewhere (`directory:` was removed and is now a hard load
+		// error, charly/layers.go). The envelope carries only SourceDir (no Path), so a non-empty
+		// SourceDir that does not exist on disk is the case this rule catches.
 		if m.SourceDir != "" && !dirExists(m.SourceDir) {
 			e.Add("candy %q: directory %q does not exist (resolved to %q)", name, m.SourceDir, m.SourceDir)
 		}

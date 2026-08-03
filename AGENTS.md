@@ -37,6 +37,7 @@ match, load ALL their skills before doing anything.
 | `charly box reconcile` / cross-repo `@github` pin alignment / candy-version-mismatch cleanup | `/charly-build:reconcile` |
 | Secret management / `charly secrets` / Secret Service / GPG `.secrets` | `/charly-build:secrets` |
 | `charly clean` / build-artifact retention / `keep_images` / `keep_check_runs` / image-tag pruning / `.check` run cleanup | `/charly-core:clean` |
+| `charly docs` / the opencharly.ai site / the `docs/` submodule / `task docs:sync`/`docs:drift` / Starlight/Astro / `candy/plugin-docs` (runtime plugin) or `candy/docs-site` | `/charly-build:docs` + `/charly-tools:docs-site` |
 | **— Deploy & run —** | |
 | `charly update` / `charly vm *` / VM entities in `vm.yml` or `vm:` | `/charly-vm:vm` + `/charly-internals:vm-deploy-target` |
 | `charly bundle add/del` / pod or container deploys | `/charly-core:deploy` |
@@ -338,4 +339,8 @@ second copy of them.
   ownership.
 - `plugins/README.md`: complete skill index.
 - `README.md` and current subsystem docs: present behavior and user guidance.
+- [opencharly.ai](https://opencharly.ai) (the `docs/` submodule): the public site — a small
+  hand-authored narrative plus a reference/recipe catalog GENERATED from the sources above by
+  `charly docs generate`. Never hand-edit a generated page; fix the source and run
+  `task docs:sync`.
 - `CHANGELOG/`: historical events, retired names, and migration narrative.
