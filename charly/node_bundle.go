@@ -110,40 +110,23 @@ func buildResourceMemberChildren(gn *genericNode) (map[string]*spec.BundleNode, 
 	return out, nil
 }
 
-// isResourceDisc reports whether a discriminator names a deploy-substrate kind
-// (the markers of a bundle member / bundle-shaped node) — the CUE-derived
-// resourceKindSet (#ResourceKind), OR a recognized external DEPLOY substrate word
-// (a registered/pre-scanned out-of-process deploy provider, e.g. `exampledeploy`),
-// so a deploy whose edge is an external target is built as a bundle node.
+// isResourceDisc/bundleTargetForDisc/setBundleCrossRef are now sdk/loaderkit.IsResourceDisc/
+// BundleTargetForDisc/SetBundleCrossRef (K1 unit 3a) — pure functions of the registry-derived
+// spec.Threaded snapshot. This file keeps same-named/same-signature core wrapper functions (R3)
+// since node_bundle.go/provider_kind_invoke.go call them by these names.
+
+// isResourceDisc reports whether a discriminator names a deploy-substrate kind (the markers of a
+// bundle member / bundle-shaped node).
 func isResourceDisc(d string) bool {
-	return resourceKindSet[d] || recognizedDeploySubstrate(d)
+	return requireProjectLoader().IsResourceDisc(d, loaderThreaded())
 }
 
-// bundleTargetForDisc maps a node discriminator to the BundleNode Target — DATA-driven via
-// deployTraitsFor (P9's plugin-declared #DeployTraits, the D-clause fact every substrate word
-// resolves against), never a kind-word switch (the boundary law's self-test): a word with no
-// declared deploy traits is TARGETLESS (`group` — the only such word today; a plugin-declared
-// external deploy substrate DOES carry traits, the Venue="none" external-in-place default).
+// bundleTargetForDisc maps a node discriminator to the BundleNode Target.
 func bundleTargetForDisc(d string) string {
-	if deployTraitsFor(d) == nil {
-		return "" // targetless (e.g. group — no own workload target)
-	}
-	return d // pod | vm | k8s | local | android | an external deploy substrate word
+	return requireProjectLoader().BundleTargetForDisc(d, loaderThreaded())
 }
 
-// setBundleCrossRef sets the deploy's cross-ref from a scalar discriminator value
-// (EDGE-INHERIT cutover B): DATA-driven via deployTraitsFor's ImageBacked trait (declared true
-// for pod alone, per the canonical #DeployTraits table) rather than a kind-word switch — an
-// image-backed substrate's scalar is the IMAGE it runs; every other substrate's scalar is the
-// same-kind template it inherits (`from:`). A targetless word (traits == nil) sets neither.
+// setBundleCrossRef sets the deploy's cross-ref from a scalar discriminator value.
 func setBundleCrossRef(dn *spec.BundleNode, disc, ref string) {
-	traits := deployTraitsFor(disc)
-	if traits == nil {
-		return
-	}
-	if traits.ImageBacked {
-		dn.Image = ref
-	} else {
-		dn.From = ref
-	}
+	requireProjectLoader().SetBundleCrossRef(dn, disc, ref, loaderThreaded())
 }

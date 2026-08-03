@@ -159,6 +159,30 @@ func (*provider) ApplyCueDefaults(cs spec.CueSchema, kind string, out any) error
 	return loaderkit.ApplyCueDefaults(cs, kind, out)
 }
 
+// IsResourceDisc / BundleTargetForDisc / SetBundleCrossRef / IsStandaloneResourceKind /
+// FoldStandaloneTemplateReply implement spec.ProjectLoader — the typed bundle/resource-member
+// kind-decode SUPPORT helpers the host calls (compiled-in, no wire envelope): delegate to the ONE
+// copy in sdk/loaderkit (K1 unit 3a).
+func (*provider) IsResourceDisc(d string, t spec.Threaded) bool {
+	return loaderkit.IsResourceDisc(d, t)
+}
+
+func (*provider) BundleTargetForDisc(d string, t spec.Threaded) string {
+	return loaderkit.BundleTargetForDisc(d, t)
+}
+
+func (*provider) SetBundleCrossRef(dn *spec.BundleNode, disc, ref string, t spec.Threaded) {
+	loaderkit.SetBundleCrossRef(dn, disc, ref, t)
+}
+
+func (*provider) IsStandaloneResourceKind(disc string, t spec.Threaded) bool {
+	return loaderkit.IsStandaloneResourceKind(disc, t)
+}
+
+func (*provider) FoldStandaloneTemplateReply(disc, name string, replyJSON json.RawMessage, acc *spec.MaterializedProject) error {
+	return loaderkit.FoldStandaloneTemplateReply(disc, name, replyJSON, acc)
+}
+
 // ResolveMergedDeployTree implements spec.ProjectLoader — the merged project+overlay deploy-node
 // tree read the host's check seams need (compiled-in, no wire envelope): it drives the ONE copy
 // of the loaderkit project+per-host-overlay projection+merge (loaderkit.ResolveMergedTreeViaExecutor)
