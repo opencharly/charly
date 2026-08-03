@@ -200,7 +200,7 @@ func resolvePodStartDirect(ctx context.Context, ex *sdk.Executor, box, instance 
 	startAccepted := deploykit.AcceptedEnvSet(meta.EnvAccept, meta.EnvRequire)
 	var startGlobalEnv []string
 	if dc != nil {
-		startGlobalEnv = dc.GlobalEnvForImage(spec.DeployKey(box, instance), startCtrName, startAccepted)
+		startGlobalEnv = deploykit.GlobalEnvForImage(dc, spec.DeployKey(box, instance), startCtrName, startAccepted)
 	}
 	envVars, err := kit.ResolveEnvVars(startGlobalEnv, deployEnv, "", workspaceBindHost(bindMounts), opts.EnvFile, opts.Env)
 	if err != nil {

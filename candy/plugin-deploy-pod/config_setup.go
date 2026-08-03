@@ -195,7 +195,7 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 		overlay := dc.Bundle[key]
 		containerPorts := kit.ContainerPortsFromMappings(meta.Port)
 		if len(containerPorts) > 0 || len(overlay.Port) > 0 {
-			resolved, rErr := kit.ResolveDeployPorts(containerPorts, overlay.Port, overlay.ResolvedPort, dc.OccupiedHostPorts(key))
+			resolved, rErr := kit.ResolveDeployPorts(containerPorts, overlay.Port, overlay.ResolvedPort, deploykit.OccupiedHostPorts(dc, key))
 			if rErr != nil {
 				return fmt.Errorf("resolving deploy ports: %w", rErr)
 			}
@@ -287,7 +287,7 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 	acceptedEnv := deploykit.AcceptedEnvSet(meta.EnvAccept, meta.EnvRequire)
 	var globalEnv []string
 	if dc != nil {
-		globalEnv = dc.GlobalEnvForImage(spec.DeployKey(c.Box, c.Instance), ctrName, acceptedEnv)
+		globalEnv = deploykit.GlobalEnvForImage(dc, spec.DeployKey(c.Box, c.Instance), ctrName, acceptedEnv)
 	}
 	envVars, envErr := kit.ResolveEnvVars(globalEnv, meta.Env, "", workspaceBindHost(bindMounts), c.EnvFile, c.Env)
 	if envErr != nil {
@@ -295,7 +295,7 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 	}
 	var deployedNames []string
 	if dc != nil {
-		deployedNames = dc.DeployedContainerNames()
+		deployedNames = deploykit.DeployedContainerNames(dc)
 	}
 	envVars = kit.EnrichNoProxy(envVars, deployedNames)
 

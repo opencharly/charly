@@ -3,8 +3,8 @@ package main
 import (
 	"testing"
 
-	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/vmshared"
+	"github.com/opencharly/spec/spec"
 )
 
 // testPubKey is the SSH test pubkey for the cloud-init egress render test
@@ -106,28 +106,28 @@ func TestValidateEgressValue_Kustomization(t *testing.T) {
 }
 
 func TestValidateEgressValue_DeployRecord(t *testing.T) {
-	good := &kit.DeployRecord{
-		SchemaVersion: kit.LedgerSchemaVersion, DeployID: "abc123", Image: "ghcr.io/x/y:tag",
+	good := &spec.DeployRecord{
+		SchemaVersion: spec.LedgerSchemaVersion, DeployID: "abc123", Image: "ghcr.io/x/y:tag",
 		Target: "host", Candy: []string{"ripgrep"}, DeployedAt: "2026-06-15T00:00:00Z",
 	}
 	if err := ValidateEgressValue("deploy_record", "good deploy rec", good); err != nil {
 		t.Fatalf("valid deploy record should pass, got: %v", err)
 	}
-	bad := &kit.DeployRecord{Image: "x", Target: "host", DeployedAt: "t"} // empty DeployID
+	bad := &spec.DeployRecord{Image: "x", Target: "host", DeployedAt: "t"} // empty DeployID
 	if err := ValidateEgressValue("deploy_record", "bad deploy rec", bad); err == nil {
 		t.Fatal("deploy record with empty deploy_id must be REJECTED, got nil")
 	}
 }
 
 func TestValidateEgressValue_CandyRecord(t *testing.T) {
-	good := &kit.CandyRecord{
-		SchemaVersion: kit.LedgerSchemaVersion, Candy: "ripgrep",
+	good := &spec.CandyRecord{
+		SchemaVersion: spec.LedgerSchemaVersion, Candy: "ripgrep",
 		DeployedBy: []string{"abc123"}, DeployedAt: "2026-06-15T00:00:00Z",
 	}
 	if err := ValidateEgressValue("candy_record", "good candy rec", good); err != nil {
 		t.Fatalf("valid candy record should pass, got: %v", err)
 	}
-	bad := &kit.CandyRecord{DeployedAt: "t"} // empty Candy
+	bad := &spec.CandyRecord{DeployedAt: "t"} // empty Candy
 	if err := ValidateEgressValue("candy_record", "bad candy rec", bad); err == nil {
 		t.Fatal("candy record with empty candy must be REJECTED, got nil")
 	}
