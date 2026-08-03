@@ -63,6 +63,7 @@ docs-site:
                 - matches: "v[0-9]+\\."
               context:
                 - build
+                - runtime
               command: node --version
 
             - check: the production build produced the site entry point
@@ -72,6 +73,7 @@ docs-site:
                 exists: true
               context:
                 - build
+                - runtime
 
             - check: the built site carries a GENERATED CLI reference page (proves the cli tree was emitted and rendered)
               id: docs-site-cli-page
@@ -80,6 +82,7 @@ docs-site:
                 - contains: charly docs
               context:
                 - build
+                - runtime
               command: cat /srv/docs/dist/reference/cli/docs/index.html
 
             - check: a generated candy page publishes its plan as a runnable acceptance spec (the ADE surface a reader can see without cloning anything)
@@ -89,6 +92,7 @@ docs-site:
                 - contains: Acceptance plan
               context:
                 - build
+                - runtime
               command: cat /srv/docs/dist/reference/candy/ripgrep/index.html
 
             - check: a recipe card from the skill corpus rendered, with its harness cross-references rewritten into working site links
@@ -98,6 +102,7 @@ docs-site:
                 - contains: /recipes/internals/
               context:
                 - build
+                - runtime
               command: cat /srv/docs/dist/recipes/check/check/index.html
 
             - # THE load-bearing check. plugin-cdp is NOT in charly/charly.yml compiled_plugins — it
@@ -113,6 +118,7 @@ docs-site:
                 - contains: Parameter schema
               context:
                 - build
+                - runtime
               command: cat /srv/docs/dist/reference/plugin/plugin-cdp/index.html
 
             - check: the provider cross-index resolves every reserved word to its owning plugin
@@ -122,4 +128,5 @@ docs-site:
                 - contains: Provider index
               context:
                 - build
+                - runtime
               command: cat /srv/docs/dist/reference/providers/index.html

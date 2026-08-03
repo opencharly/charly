@@ -83,9 +83,16 @@ nodejs:
               file:
                 file: /usr/local/bin/pnpm
                 exists: true
-            - check: pnpm runs and reports its version
+            - # pnpm hard-requires a homedir and dies with "Could not find the homedir" when $HOME
+              # is unset — unlike node and npm, which do not care. A live-container exec provides
+              # no HOME, so this check passed at image build and failed under `charly check live`
+              # on every box composing this candy. Derive it from passwd when unset, which is the
+              # same getent-based discovery the layer skill prescribes for `command:` steps
+              # (RUN shells do not export $USER or $HOME reliably either).
+              check: pnpm runs and reports its version
               exit_status: 0
-              command: pnpm --version
+              command: |
+                HOME="${HOME:-$(getent passwd "$(id -u)" | cut -d: -f6)}" pnpm --version
             - check: package=nodejs
               id: nodejs-package
               package:
