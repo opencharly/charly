@@ -92,12 +92,15 @@ k3s-server:
               register: kubeconfig
               mode: "0600"
               # k3s.service reaches systemd "active" when the binary execs, but
-              # /etc/rancher/k3s/k3s.yaml lands ~3-15s later when the API
-              # server finishes starting. The 120s deadline is generous —
-              # cold-boot k3s on a slow host occasionally takes 30-60s before
-              # the kubeconfig appears. File existence is the synchronization
-              # primitive (R4); polling cadence is 1s in retrieveOne.
-              wait_second: 120
+              # /etc/rancher/k3s/k3s.yaml lands seconds-to-minutes later when the API
+              # server finishes starting. 300s: a concurrent bed roster (multiple VMs
+              # booting + image builds sharing the host) stretches guest cold-boot —
+              # measured live: boot→unit-start alone took 115s of a 120s budget, the
+              # kubeconfig landed ~7s after unit-start, missing the old deadline by
+              # seconds while k3s itself was perfectly healthy. File existence is the
+              # synchronization primitive (R4); polling cadence is 1s in retrieveOne —
+              # a larger cap costs nothing when the file lands early.
+              wait_second: 300
               rewrite:
                 # K3S_KUBECONFIG_SERVER wins when set (covers port-forwarded
                 # setups where the host-side port differs from the guest-side
