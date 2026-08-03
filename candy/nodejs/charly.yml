@@ -91,8 +91,13 @@ nodejs:
               # (RUN shells do not export $USER or $HOME reliably either).
               check: pnpm runs and reports its version
               exit_status: 0
+              # No `${...}` anywhere: a check step's command goes through charly's variable
+              # substitution, which reads `${HOME:-default}` as a variable named
+              # `HOME:-default`, fails to resolve it, and SKIPS the step — trading a red check
+              # for a silently absent one. `$( )` is not substituted, so derive the homedir
+              # with it and hand the result to env(1).
               command: |
-                HOME="${HOME:-$(getent passwd "$(id -u)" | cut -d: -f6)}" pnpm --version
+                env HOME="$(getent passwd "$(id -u)" | cut -d: -f6)" pnpm --version
             - check: package=nodejs
               id: nodejs-package
               package:
