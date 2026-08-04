@@ -43,27 +43,27 @@ type BundleAddCmd struct {
 	Ref  string `arg:"" optional:"" help:"Box or candy reference (local name, ./path.yml, or github.com/org/repo[/box/<n>|/candy/<n>][@ref])"`
 
 	// Candy overlays (repeatable).
-	AddCandy []string `long:"add-candy" help:"Extra candy to apply on top of the base image (repeatable)"`
+	AddCandy []string `name:"add-candy" help:"Extra candy to apply on top of the base image (repeatable)"`
 
 	// Plan-level flags.
-	Tag      string `long:"tag" help:"Image CalVer tag (empty = newest local CalVer resolved via the ai.opencharly.version OCI label)"`
-	DryRun   bool   `long:"dry-run" help:"Print the plan without executing"`
-	NodeOnly bool   `long:"node-only" help:"Dispatch only the named node; do not descend into nested children (children of a pod can't deploy until the pod is started)"`
-	Format   string `long:"format" default:"table" enum:"table,json" help:"Output format for --dry-run"`
-	Pull     bool   `long:"pull" help:"Force re-fetch of remote refs / image pull"`
-	Verify   bool   `long:"verify" help:"Re-run candy tests: on the host after install"`
+	Tag      string `name:"tag" help:"Image CalVer tag (empty = newest local CalVer resolved via the ai.opencharly.version OCI label)"`
+	DryRun   bool   `name:"dry-run" help:"Print the plan without executing"`
+	NodeOnly bool   `name:"node-only" help:"Dispatch only the named node; do not descend into nested children (children of a pod can't deploy until the pod is started)"`
+	Format   string `name:"format" default:"table" enum:"table,json" help:"Output format for --dry-run"`
+	Pull     bool   `name:"pull" help:"Force re-fetch of remote refs / image pull"`
+	Verify   bool   `name:"verify" help:"Re-run candy tests: on the host after install"`
 
 	// Host-only gates.
-	WithServices     bool   `long:"with-services" help:"Install systemd services (host target only)"`
-	AllowRepoChanges bool   `long:"allow-repo-changes" help:"Allow repo config mutations (host target only)"`
-	AllowRootTasks   bool   `long:"allow-root-tasks" help:"Allow arbitrary root cmd: tasks (host target only)"`
-	SkipIncompatible bool   `long:"skip-incompatible" help:"Skip candies without host-matching format (host target only)"`
-	BuilderImage     string `long:"builder-image" help:"Override the compile builder image"`
-	AssumeYes        bool   `long:"yes" short:"y" help:"Assume yes; implies all allow-* gates plus skip sudo preflight"`
+	WithServices     bool   `name:"with-services" help:"Install systemd services (host target only)"`
+	AllowRepoChanges bool   `name:"allow-repo-changes" help:"Allow repo config mutations (host target only)"`
+	AllowRootTasks   bool   `name:"allow-root-tasks" help:"Allow arbitrary root cmd: tasks (host target only)"`
+	SkipIncompatible bool   `name:"skip-incompatible" help:"Skip candies without host-matching format (host target only)"`
+	BuilderImage     string `name:"builder-image" help:"Override the compile builder image"`
+	AssumeYes        bool   `name:"assume-yes" short:"y" help:"Assume yes; implies all allow-* gates plus skip sudo preflight"`
 
 	// Disposable + lifecycle classification (see /charly-internals:disposable).
-	Disposable bool   `long:"disposable" help:"Mark this deploy disposable (authorizes autonomous charly update; writes disposable: true into charly.yml)"`
-	Lifecycle  string `long:"lifecycle" help:"Informational tier tag (scratch|dev|test|qa|staging|prod|custom). NO effect on disposability — use --disposable for that."`
+	Disposable bool   `name:"disposable" help:"Mark this deploy disposable (authorizes autonomous charly update; writes disposable: true into charly.yml)"`
+	Lifecycle  string `name:"lifecycle" help:"Informational tier tag (scratch|dev|test|qa|staging|prod|custom). NO effect on disposability — use --disposable for that."`
 
 	// dir / externalSubstrates are INTERNAL (unexported — Kong ignores them), populated once at the
 	// top of Run() from the deploy-plugins-connect preamble (dir = the host os.Getwd) and the
@@ -77,17 +77,17 @@ type BundleAddCmd struct {
 
 // BundleDelCmd is the `charly bundle del <name>` grammar; Run() (walk.go) drives the
 // deploy-del-resolve / deploy-members-down / deploy-node-del-dispatch seams. The AssumeYes field
-// renders as `--assume-yes` (Kong derives the long name from the FIELD; the `long:"yes"` tag is
-// a no-op in the separate-tag form) with `-y` as the short form — the exact contract
-// spec.BundleDelArgv relies on.
+// renders as `--assume-yes`, now stated by an explicit `name:` tag rather than left to Kong's
+// derivation from the field, with `-y` as the short form — the exact contract spec.BundleDelArgv
+// relies on.
 type BundleDelCmd struct {
 	Name string `arg:"" help:"Deploy name (literal 'host' or a container deploy name)"`
 
-	AssumeYes       bool `long:"yes" short:"y" help:"Skip confirmation prompts"`
-	KeepRepoChanges bool `long:"keep-repo-changes" help:"Don't revert repo config even at zero refcount"`
-	KeepServices    bool `long:"keep-services" help:"Don't disable systemd units (just stop tracking)"`
-	KeepImage       bool `long:"keep-image" help:"Don't remove the synthesized overlay image (container target only)"`
-	DryRun          bool `long:"dry-run" help:"Print the teardown plan without executing"`
+	AssumeYes       bool `name:"assume-yes" short:"y" help:"Skip confirmation prompts"`
+	KeepRepoChanges bool `name:"keep-repo-changes" help:"Don't revert repo config even at zero refcount"`
+	KeepServices    bool `name:"keep-services" help:"Don't disable systemd units (just stop tracking)"`
+	KeepImage       bool `name:"keep-image" help:"Don't remove the synthesized overlay image (container target only)"`
+	DryRun          bool `name:"dry-run" help:"Print the teardown plan without executing"`
 }
 
 // BundleFromBoxCmd is the `charly bundle from-box <ref> [name]` grammar. The pod path (default)
@@ -98,11 +98,11 @@ type BundleDelCmd struct {
 type BundleFromBoxCmd struct {
 	Ref       string   `arg:"" help:"Full image ref (local or registry), e.g. ghcr.io/opencharly/selkies-kde-nvidia:latest"`
 	Name      string   `arg:"" optional:"" help:"Deploy name (default: the image-ref basename without tag)"`
-	Instance  string   `short:"i" long:"instance" help:"Instance name"`
-	Env       []string `short:"e" long:"env" sep:"none" help:"Set container env var (KEY=VALUE)"`
+	Instance  string   `short:"i" name:"instance" help:"Instance name"`
+	Env       []string `short:"e" name:"env" sep:"none" help:"Set container env var (KEY=VALUE)"`
 	Port      []string `short:"p" help:"Remap host port (newHost:containerPort)"`
-	Cluster   string   `long:"cluster" help:"Target a K8s cluster profile instead of a local pod (emits Kustomize via the K8s from-box path)"`
-	Namespace string   `long:"namespace" help:"K8s namespace override (--cluster only)"`
+	Cluster   string   `name:"cluster" help:"Target a K8s cluster profile instead of a local pod (emits Kustomize via the K8s from-box path)"`
+	Namespace string   `name:"namespace" help:"K8s namespace override (--cluster only)"`
 }
 
 func (c *BundleFromBoxCmd) Run() error {
@@ -139,7 +139,7 @@ func (c *BundleFromBoxCmd) Run() error {
 // deploykit.LoadBundleConfig/DeployKey are already sdk-portable, no seam needed).
 type BundleShowCmd struct {
 	Box      string `arg:"" optional:"" help:"Show overrides for a specific box"`
-	Instance string `short:"i" long:"instance" help:"Instance name"`
+	Instance string `short:"i" name:"instance" help:"Instance name"`
 }
 
 func (c *BundleShowCmd) Run() error {
@@ -163,7 +163,7 @@ func (c *BundleExportCmd) Run() error {
 type BundleImportCmd struct {
 	Files   []string `arg:"" help:"Deploy YAML files to import (merged left-to-right)"`
 	Replace bool     `help:"Replace entire charly.yml instead of merging with existing"`
-	Box     string   `long:"box" help:"Import only this box's config"`
+	Box     string   `name:"box" help:"Import only this box's config"`
 }
 
 func (c *BundleImportCmd) Run() error {
@@ -174,7 +174,7 @@ func (c *BundleImportCmd) Run() error {
 // step writes plugin-side too — deploykit.SaveBundleConfig, #55 K4 config-write seam-collapse).
 type BundleResetCmd struct {
 	Box      string `arg:"" optional:"" help:"Box to reset (omit to clear all)"`
-	Instance string `short:"i" long:"instance" help:"Instance name"`
+	Instance string `short:"i" name:"instance" help:"Instance name"`
 }
 
 func (c *BundleResetCmd) Run() error {

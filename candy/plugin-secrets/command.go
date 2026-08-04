@@ -132,7 +132,7 @@ type SecretsSetCmd struct {
 	Service  string `arg:"" help:"Service name (e.g., charly/vnc)"`
 	Key      string `arg:"" help:"Entry key (e.g., my-box)"`
 	Value    string `arg:"" optional:"" help:"Value to set (omit to prompt securely)"`
-	Generate bool   `long:"generate" help:"Generate random value and print to stdout"`
+	Generate bool   `name:"generate" help:"Generate random value and print to stdout"`
 }
 
 func (c *SecretsSetCmd) Run() error {
@@ -191,7 +191,7 @@ func (c *SecretsDeleteCmd) Run() error {
 // distinct from `charly settings migrate-secrets`, which MOVES config plaintext
 // into the keyring and then strips the plaintext copies.
 type SecretsImportCmd struct {
-	DryRun bool `long:"dry-run" help:"Show what would be imported without making changes"`
+	DryRun bool `name:"dry-run" help:"Show what would be imported without making changes"`
 }
 
 func (c *SecretsImportCmd) Run() error {
@@ -268,7 +268,7 @@ func (c *SecretsImportCmd) Run() error {
 // SecretsExportCmd exports all known charly credentials, resolving each value
 // through the active store (with config-file fallback).
 type SecretsExportCmd struct {
-	Format string `long:"format" default:"yaml" enum:"yaml,json" help:"Output format (yaml, json)"`
+	Format string `name:"format" default:"yaml" enum:"yaml,json" help:"Output format (yaml, json)"`
 }
 
 func (c *SecretsExportCmd) Run() error {

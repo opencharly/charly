@@ -29,9 +29,9 @@ type CLI struct {
 	// Commands marked LocalOnly (settings, version, ssh tunnel) are
 	// not re-execed — they always run on the local machine. See
 	// charly/host_exec.go for the exec dispatch.
-	Host             string   `long:"host" env:"CHARLY_HOST" help:"Remote host (alias or user@host[:port]) to run this command on via SSH"`
-	HostIdentityFile string   `long:"host-identity-file" env:"CHARLY_HOST_IDENTITY_FILE" help:"SSH identity file for --host" type:"path"`
-	HostOption       []string `long:"host-option" env:"CHARLY_HOST_OPTION" help:"OpenSSH option for --host (repeatable, KEY=VALUE)"`
+	Host             string   `name:"host" env:"CHARLY_HOST" help:"Remote host (alias or user@host[:port]) to run this command on via SSH"`
+	HostIdentityFile string   `name:"host-identity-file" env:"CHARLY_HOST_IDENTITY_FILE" help:"SSH identity file for --host" type:"path"`
+	HostOption       []string `name:"host-option" env:"CHARLY_HOST_OPTION" help:"OpenSSH option for --host (repeatable, KEY=VALUE)"`
 
 	// Dir is the project directory that every build-mode command resolves
 	// charly.yml / candy/ relative to. Default is the process
@@ -40,7 +40,7 @@ type CLI struct {
 	// a mounted project root. Build-mode commands call os.Getwd()
 	// unconditionally; when this flag is set, main() chdirs before Kong's
 	// ctx.Run() so every existing call site picks up the change.
-	Dir string `short:"C" long:"dir" env:"CHARLY_PROJECT_DIR" help:"Project directory containing charly.yml (default: cwd)" type:"path"`
+	Dir string `short:"C" name:"dir" env:"CHARLY_PROJECT_DIR" help:"Project directory containing charly.yml (default: cwd)" type:"path"`
 
 	// Repo points charly at a remote git repo as the project source instead
 	// of cwd / --dir. Spec is OWNER/REPO[@REF] (auto-prefixed with
@@ -49,7 +49,7 @@ type CLI struct {
 	// (~/.cache/charly/repos/...) and falls through into the existing --dir
 	// chdir block, so every os.Getwd() site Just Works. Mutually exclusive
 	// with --dir.
-	Repo string `long:"repo" env:"CHARLY_PROJECT_REPO" placeholder:"OWNER/REPO[@REF]" help:"Read charly.yml from a remote git repo (e.g. opencharly/charly). Use 'default' for opencharly/charly."`
+	Repo string `name:"repo" env:"CHARLY_PROJECT_REPO" placeholder:"OWNER/REPO[@REF]" help:"Read charly.yml from a remote git repo (e.g. opencharly/charly). Use 'default' for opencharly/charly."`
 
 	Box         BoxCmd                 `cmd:"" name:"box" help:"Build, generate, inspect, and pull container boxes (reads charly.yml)"`
 	Plugin      PluginInternalCmd      `cmd:"" name:"__plugin" hidden:"" help:"internal: plugin server/relay plumbing"`

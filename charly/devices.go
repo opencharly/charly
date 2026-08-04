@@ -19,12 +19,12 @@ import (
 // impls + the VFIOReport/VFIOGpu/VFIOPCIDevice/DetectedDevices types) now live in
 // candy/plugin-gpu; core reaches them through the resolve+Invoke shims + type aliases
 // in gpu_shim.go.
-
-// AutoDetectFlags provides --no-autodetect CLI flag via Kong.
-// Embed in command structs that support device auto-detection.
-type AutoDetectFlags struct {
-	NoAutoDetect bool `long:"no-autodetect" help:"Disable automatic device detection"`
-}
+//
+// The `--no-auto-detect` Kong flag struct is NOT here either: core embedded it
+// nowhere, so the copy that lived here was deleted as dead code. The one live
+// declaration is candy/plugin-vm's AutoDetectFlags (embedded by VmCreateCmd); the
+// pod commands (`charly config` / `start` / `shell`) declare the field inline in
+// candy/plugin-pod/pod_cmd.go.
 
 // devicePatterns lists device paths to auto-detect on the host, read from the
 // device_patterns directive in the embedded charly.yml (Phase 4: data moved out of Go).

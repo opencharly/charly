@@ -17,32 +17,32 @@ type VmImportCmd struct {
 
 	// TargetName overrides the vm.yml entry key. Default: domain name
 	// with any "charly-" prefix stripped.
-	TargetName string `long:"target-name" help:"Override the kind:vm entry name in vm.yml"`
+	TargetName string `name:"target-name" help:"Override the kind:vm entry name in vm.yml"`
 
 	// All adopts every libvirt domain not already in vm.yml.
-	All bool `long:"all" help:"Adopt every unmanaged libvirt domain"`
+	All bool `name:"all" help:"Adopt every unmanaged libvirt domain"`
 
 	// List shows libvirt domains absent from vm.yml without writing
 	// anything. Diagnostic mode.
-	List bool `long:"list" help:"Show libvirt domains absent from vm.yml; do not write"`
+	List bool `name:"list" help:"Show libvirt domains absent from vm.yml; do not write"`
 
 	// ShowDrift, used with --list, marks entries whose libvirt XML
 	// has diverged from the on-disk vm.yml entry.
-	ShowDrift bool `long:"show-drift" help:"With --list: mark entries whose libvirt XML diverges from vm.yml"`
+	ShowDrift bool `name:"show-drift" help:"With --list: mark entries whose libvirt XML diverges from vm.yml"`
 
 	// Update re-reads libvirt XML for an existing entry and overwrites
 	// only source-derived fields, preserving operator-authored
 	// sub-mappings (snapshots, cloud_init, ssh, libvirt). Compatible
 	// with --diff (preview without writing).
-	Update bool `long:"update" help:"Re-read libvirt XML and update an existing kind:vm entry in place"`
+	Update bool `name:"update" help:"Re-read libvirt XML and update an existing kind:vm entry in place"`
 
 	// Diff prints the field-level differences between libvirt XML and
 	// the on-disk vm.yml entry, without writing.
-	Diff bool `long:"diff" help:"Print drift between libvirt XML and vm.yml without writing"`
+	Diff bool `name:"diff" help:"Print drift between libvirt XML and vm.yml without writing"`
 
 	// ReplaceLibvirt, used with --update, drops the operator-authored
 	// libvirt: block (defaults preserve it).
-	ReplaceLibvirt bool `long:"replace-libvirt" help:"With --update: also overwrite the operator-authored libvirt: block"`
+	ReplaceLibvirt bool `name:"replace-libvirt" help:"With --update: also overwrite the operator-authored libvirt: block"`
 }
 
 // Run executes `charly vm import`.

@@ -222,7 +222,7 @@ type AliasAddCmd struct {
 	Name    string `arg:"" help:"Alias name (command on host)"`
 	Box     string `arg:"" help:"Box name from charly.yml"`
 	Command string `arg:"" optional:"" help:"Command inside container (default: alias name)"`
-	Dest    string `long:"dest" default:"" help:"Directory for wrapper scripts (default: ~/.local/bin)"`
+	Dest    string `name:"dest" default:"" help:"Directory for wrapper scripts (default: ~/.local/bin)"`
 }
 
 func (c *AliasAddCmd) Run(hc *hostClient) error {
@@ -261,7 +261,7 @@ func (c *AliasAddCmd) Run(hc *hostClient) error {
 // AliasRemoveCmd removes a single alias
 type AliasRemoveCmd struct {
 	Name string `arg:"" help:"Alias name to remove"`
-	Dest string `long:"dest" default:"" help:"Directory for wrapper scripts (default: ~/.local/bin)"`
+	Dest string `name:"dest" default:"" help:"Directory for wrapper scripts (default: ~/.local/bin)"`
 }
 
 func (c *AliasRemoveCmd) Run() error {
@@ -280,7 +280,7 @@ func (c *AliasRemoveCmd) Run() error {
 
 // AliasListCmd lists all installed aliases
 type AliasListCmd struct {
-	Dest string `long:"dest" default:"" help:"Directory for wrapper scripts (default: ~/.local/bin)"`
+	Dest string `name:"dest" default:"" help:"Directory for wrapper scripts (default: ~/.local/bin)"`
 }
 
 func (c *AliasListCmd) Run() error {
@@ -303,7 +303,7 @@ func (c *AliasListCmd) Run() error {
 // AliasInstallCmd installs all default aliases for an image
 type AliasInstallCmd struct {
 	Box  string `arg:"" help:"Box name from charly.yml"`
-	Dest string `long:"dest" default:"" help:"Directory for wrapper scripts (default: ~/.local/bin)"`
+	Dest string `name:"dest" default:"" help:"Directory for wrapper scripts (default: ~/.local/bin)"`
 }
 
 func (c *AliasInstallCmd) Run(hc *hostClient) error {
@@ -348,7 +348,7 @@ func (c *AliasInstallCmd) Run(hc *hostClient) error {
 // AliasUninstallCmd removes all aliases for an image
 type AliasUninstallCmd struct {
 	Box  string `arg:"" help:"Box name from charly.yml"`
-	Dest string `long:"dest" default:"" help:"Directory for wrapper scripts (default: ~/.local/bin)"`
+	Dest string `name:"dest" default:"" help:"Directory for wrapper scripts (default: ~/.local/bin)"`
 }
 
 func (c *AliasUninstallCmd) Run() error {

@@ -100,7 +100,7 @@ func TestNewGrammar_Parse(t *testing.T) {
 	if cmd := mustParse("project", "somedir").Command(); cmd != "project <dir>" {
 		t.Errorf("new project: command = %q, want %q", cmd, "project <dir>")
 	}
-	if cmd := mustParse("box", "my-box", "--base", "quay.io/fedora/fedora:43", "--candies", "a,b").Command(); cmd != "box <name>" {
+	if cmd := mustParse("box", "my-box", "--base", "quay.io/fedora/fedora:43", "--candy", "a,b").Command(); cmd != "box <name>" {
 		t.Errorf("new box: command = %q, want %q", cmd, "box <name>")
 	}
 }

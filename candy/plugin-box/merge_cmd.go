@@ -22,11 +22,11 @@ import (
 // [--dry-run]` CLI surface — unchanged from the former core MergeCmd.
 type mergeGrammar struct {
 	Box        string `arg:"" optional:"" help:"Box name from charly.yml"`
-	All        bool   `long:"all" help:"Merge all images with merge.auto enabled"`
-	MaxMB      int    `long:"max-mb" help:"Maximum size of a merged layer (MB)"`
-	MaxTotalMB int    `long:"max-total-mb" help:"Maximum total image size for merge (MB, 0=no limit)"`
-	Tag        string `long:"tag" help:"Image CalVer tag (empty = newest local CalVer resolved via the ai.opencharly.version OCI label)"`
-	DryRun     bool   `long:"dry-run" help:"Print merge plan without modifying the image"`
+	All        bool   `name:"all" help:"Merge all images with merge.auto enabled"`
+	MaxMB      int    `name:"max-mb" help:"Maximum size of a merged layer (MB)"`
+	MaxTotalMB int    `name:"max-total-mb" help:"Maximum total image size for merge (MB, 0=no limit)"`
+	Tag        string `name:"tag" help:"Image CalVer tag (empty = newest local CalVer resolved via the ai.opencharly.version OCI label)"`
+	DryRun     bool   `name:"dry-run" help:"Print merge plan without modifying the image"`
 }
 
 // mergeDefaultMaxMB / mergeDefaultMaxTotalMB are the CLI-resolution defaults (CLI flag → box

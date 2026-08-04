@@ -40,15 +40,15 @@ type TmuxCompatCmd struct {
 
 type tmuxCompatTarget struct {
 	Box      string `arg:"" help:"Deployment or host::deployment target"`
-	Session  string `short:"s" long:"session" required:"" help:"Compatibility session name"`
-	Instance string `short:"i" long:"instance" help:"Deployment instance"`
+	Session  string `short:"s" name:"session" required:"" help:"Compatibility session name"`
+	Instance string `short:"i" name:"instance" help:"Deployment instance"`
 }
 
 type TmuxCompatRunCmd struct {
 	Box      string `arg:"" help:"Deployment or host::deployment target"`
 	Command  string `arg:"" help:"Shell command to run"`
-	Session  string `short:"s" long:"session" required:"" help:"Compatibility session name"`
-	Instance string `short:"i" long:"instance" help:"Deployment instance"`
+	Session  string `short:"s" name:"session" required:"" help:"Compatibility session name"`
+	Instance string `short:"i" name:"instance" help:"Deployment instance"`
 }
 
 func (c *TmuxCompatRunCmd) Run() error {
@@ -105,7 +105,7 @@ func (c *TmuxCompatAttachCmd) Run() error {
 
 type TmuxCompatCaptureCmd struct {
 	tmuxCompatTarget
-	Lines int `short:"n" long:"lines" default:"0" help:"When positive, return the durable ordered transcript"`
+	Lines int `short:"n" name:"lines" default:"0" help:"When positive, return the durable ordered transcript"`
 }
 
 func (c *TmuxCompatCaptureCmd) Run() error {
@@ -127,7 +127,7 @@ type TmuxCompatCommandCmd struct {
 	// command progress as channel events (status/snapshot/settled), so there
 	// is no notify side-channel left to drive. The flag must stay — removing
 	// it would break existing invocations at kong parse time.
-	Notify bool `long:"notify" negatable:"" default:"true" help:"Accepted for compatibility; no effect (completion arrives as channel events)"`
+	Notify bool `name:"notify" negatable:"" default:"true" help:"Accepted for compatibility; no effect (completion arrives as channel events)"`
 }
 
 func (c *TmuxCompatCommandCmd) Run() error {
@@ -141,8 +141,8 @@ func (c *TmuxCompatCommandCmd) Run() error {
 type TmuxCompatSendCmd struct {
 	tmuxCompatTarget
 	Keys    []string `arg:"" help:"Literal fragments or canonical key names"`
-	Literal bool     `short:"l" long:"literal" help:"Send arguments as literal text"`
-	Enter   bool     `long:"enter" help:"Append the canonical Enter key"`
+	Literal bool     `short:"l" name:"literal" help:"Send arguments as literal text"`
+	Enter   bool     `name:"enter" help:"Append the canonical Enter key"`
 }
 
 func (c *TmuxCompatSendCmd) Run() error {
@@ -188,7 +188,7 @@ func (c *TmuxCompatKillCmd) Run() error {
 
 type TmuxCompatListCmd struct {
 	Box      string `arg:"" help:"Deployment or host::deployment target"`
-	Instance string `short:"i" long:"instance" help:"Deployment instance"`
+	Instance string `short:"i" name:"instance" help:"Deployment instance"`
 }
 
 func (c *TmuxCompatListCmd) Run() error {

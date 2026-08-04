@@ -19,15 +19,15 @@ type VmCloneCmd struct {
 	// From is the source VM, optionally with @snapshot. Forms:
 	//   --from arch              → clone from arch's current state (auto-snapshot)
 	//   --from arch@baseline     → clone from arch's "baseline" snapshot
-	From string `long:"from" required:"" help:"Source VM, optionally @snapshot (e.g. arch@baseline)"`
+	From string `name:"from" required:"" help:"Source VM, optionally @snapshot (e.g. arch@baseline)"`
 
 	// CloudInitClean injects cloud-init clean --machine-id into the
 	// clone's user-data. Default true for ad-hoc clones (so two clones
 	// don't collide on machine-id).
-	CloudInitClean bool `long:"cloud-init-clean" default:"true" help:"Regenerate machine-id and SSH host keys on first boot"`
+	CloudInitClean bool `name:"cloud-init-clean" default:"true" help:"Regenerate machine-id and SSH host keys on first boot"`
 
 	// Build, when true, also runs `charly vm build` after writing vm.yml.
-	Build bool `long:"build" default:"true" help:"After writing vm.yml, run charly vm build to materialize the clone disk"`
+	Build bool `name:"build" default:"true" help:"After writing vm.yml, run charly vm build to materialize the clone disk"`
 }
 
 // Run executes `charly vm clone`.
