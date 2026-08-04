@@ -2,9 +2,9 @@ package box
 
 // validate_graph.go — the B-GRAPH resolution-graph rules + the CAPABILITIES rules (task #60, Unit C).
 // The graph rules RE-RUN the deploykit resolution functions (ResolveBoxOrder / GlobalCandyOrder /
-// ResolveCandyOrder / CollectAllBoxCandies) over the envelope adapters (vc.bk buildkit.ResolvedBox +
+// ResolveCandyOrder) over the envelope adapters (vc.bk buildkit.ResolvedBox +
 // vc.dk deploykit.CandyModel) — the SAME functions charly box build/generate use — to catch cycles +
-// missing-builder/engine/data/port-relay/init invariants. Namespace re-resolution is NOT redone here
+// missing-builder/engine/data/port-relay invariants. Namespace re-resolution is NOT redone here
 // (the projector already resolved namespaces host-side; an unresolvable namespaced base is a host
 // diagnostic), so this is DAG-cycle detection over the already-resolved box set, per the Unit-C scoping
 // NOTE. The capabilities rules read the per-candy preserve_user off the envelope (ruling a).
@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"sort"
 	"strings"
 
@@ -344,171 +343,21 @@ func validateDataCandies(vc *vctx, e *vErr) {
 	}
 }
 
-// validateInitDependencies checks that a box using an init system carries the init's required
-// dependency candy in its resolved chain (or base chain). The per-init detection + the preserve_user
-// capability gate are recomputed from the envelope (env.Init vocabulary + per-candy service/candy_file
-// + the per-candy preserve_user aggregate).
-func validateInitDependencies(vc *vctx, e *vErr) {
-	if vc.env == nil || len(vc.env.Init) == 0 {
-		return
-	}
-	initCfg := vc.env.Init
-	for imgName := range vc.boxes {
-		box := vc.boxes[imgName]
-		resolved, err := deploykit.ResolveCandyOrder(box.Candy, vc.dk, nil)
-		if err != nil {
-			continue
-		}
-		// The only capability the embedded init vocabulary gates on is preserve_user (the one cap the
-		// envelope carries). initDefRequirementsMet reads this provided set.
-		preserveUser := boxPreserveUser(vc, resolved)
-		provided := map[string]bool{}
-		if preserveUser {
-			provided["preserve_user"] = true
-		}
-		isBootcFlavored := preserveUser
-
-		for initName, def := range initCfg {
-			if def == nil || def.DependsCandy == "" {
-				continue
-			}
-			if !initDefRequirementsMet(def, provided) {
-				continue
-			}
-			if checkInitSystemRequirements(vc, def, isBootcFlavored, resolved) {
-				continue
-			}
-			needsInit := collectInitSystemNeeds(vc, initName, def, resolved)
-			if len(needsInit) == 0 {
-				continue
-			}
-			hasDepCandy := false
-			for _, candyName := range resolved {
-				if m, ok := vc.models[candyName]; ok && m.Name == def.DependsCandy {
-					hasDepCandy = true
-					break
-				}
-			}
-			if !hasDepCandy {
-				// Base-chain check over the resolved box set (no namespace enrichment — a namespaced
-				// base outside vc.bk is skipped, consistent with the DAG-cycle-only scope).
-				allCandies := deploykit.CollectAllBoxCandies(imgName, vc.bk, vc.dk)
-				if slices.Contains(allCandies, def.DependsCandy) {
-					hasDepCandy = true
-				}
-			}
-			if !hasDepCandy && !checkDualInitFallback(vc, initName, resolved, initCfg) {
-				e.Add("box %q has candies requiring %s (%s) but missing the %q candy in its dependency chain; add %q to the box's candies or a base image",
-					imgName, initName, strings.Join(needsInit, ", "), def.DependsCandy, def.DependsCandy)
-			}
-		}
-	}
-}
+// The init `depends_candy:` presence check that used to live here is GONE: a box can no longer be
+// missing its init's dependency candy, because deploykit.InjectInitDependsCandy now ADDS the active
+// init's candy to the box's AUTHORED composition (cfg) ahead of box resolution, at all three
+// composition chokepoints (the build path, this envelope's own fresh-box projection, and the
+// namespaced set) — so by the time any rule here reads box.Candy, the candy is already there.
+// The check was also unable to catch the case that actually broke deploys: it waived
+// itself (via a dual-init fallback) for exactly the mixed `use_packaged:`/`exec:` service shape the
+// layer skill recommends everywhere, so a box composing only e.g. sshd validated and built clean and
+// then failed at `[start]` with no supervisord installed.
 
 // boxPreserveUser is the per-box preserve_user aggregate: an OR of each named candy's
 // CandyView.Capabilities.PreserveUser (order-independent), replacing AggregateCandyCapabilities.
 func boxPreserveUser(vc *vctx, order []string) bool {
 	for _, n := range order {
 		if v, ok := vc.views[deploykit.BareRef(n)]; ok && v.Capabilities != nil && v.Capabilities.PreserveUser {
-			return true
-		}
-	}
-	return false
-}
-
-// initDefRequirementsMet reports whether the init def's RequiresCapability are all in provided.
-func initDefRequirementsMet(def *spec.ResolvedInit, provided map[string]bool) bool {
-	if def == nil || len(def.RequiresCapability) == 0 {
-		return true
-	}
-	for _, req := range def.RequiresCapability {
-		if !provided[req] {
-			return false
-		}
-	}
-	return true
-}
-
-// checkInitSystemRequirements skips the supervisord depends_candy check on a bootc-flavored composition
-// when systemd is also triggered by a resolved candy.
-func checkInitSystemRequirements(vc *vctx, def *spec.ResolvedInit, isBootcFlavored bool, resolved []string) bool {
-	if len(def.RequiresCapability) == 0 && isBootcFlavored {
-		systemdDef := vc.env.Init["systemd"]
-		for _, candyName := range resolved {
-			if m, ok := vc.models[candyName]; ok && candyHasInit(m, systemdDef) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// collectInitSystemNeeds lists the resolved candies that require the given init system (directly, or
-// via a port_relay when the init def carries a relay template).
-func collectInitSystemNeeds(vc *vctx, initName string, def *spec.ResolvedInit, resolved []string) []string {
-	var needsInit []string
-	for _, candyName := range resolved {
-		m, ok := vc.models[candyName]
-		if !ok {
-			continue
-		}
-		if candyHasInit(m, def) {
-			needsInit = append(needsInit, candyName+" ("+initName+")")
-		}
-		if deploykit.InitHasRelayTemplate(def) && len(m.PortRelayPorts) > 0 {
-			needsInit = append(needsInit, candyName+" (port_relay)")
-		}
-	}
-	return needsInit
-}
-
-// checkDualInitFallback reports whether ALL candies triggering initName also support an alternative
-// init system (dual-init candies), in which case a missing depends_candy is not an error.
-func checkDualInitFallback(vc *vctx, initName string, resolved []string, initCfg map[string]*spec.ResolvedInit) bool {
-	allDualInit := true
-	for _, candyName := range resolved {
-		m, ok := vc.models[candyName]
-		if !ok || !candyHasInit(m, initCfg[initName]) {
-			continue
-		}
-		hasAlternativeInit := false
-		for altName, altDef := range initCfg {
-			if altName != initName && candyHasInit(m, altDef) {
-				hasAlternativeInit = true
-				break
-			}
-		}
-		if !hasAlternativeInit {
-			allDualInit = false
-			break
-		}
-	}
-	return allDualInit
-}
-
-// candyHasInit recomputes PopulateCandyInitSystem's per-init detection from the envelope: the init def
-// participates in service-schema detection and the candy has a matching service entry (packaged unit
-// when SupportsPackaged, custom exec when ServiceTemplate!=""), OR the candy has a file matching one of
-// the init def's candy_files (live glob against SourceDir).
-func candyHasInit(m spec.CandyModel, def *spec.ResolvedInit) bool {
-	if def == nil {
-		return false
-	}
-	if slices.Contains(def.CandyFields, "service") {
-		for i := range m.Service {
-			entry := &m.Service[i]
-			if entry.IsPackaged() {
-				if def.ServiceSchema != nil && def.ServiceSchema.SupportsPackaged {
-					return true
-				}
-			} else if def.ServiceSchema != nil && def.ServiceSchema.ServiceTemplate != "" {
-				return true
-			}
-		}
-	}
-	for _, pattern := range def.CandyFiles {
-		matches, _ := filepath.Glob(filepath.Join(m.SourceDir, pattern))
-		if len(matches) > 0 {
 			return true
 		}
 	}
