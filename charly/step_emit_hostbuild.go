@@ -30,50 +30,21 @@ import (
 // compiler-emitted plugin-served kinds, the authored external step, and the ExternalPlugin verb
 // step) into candy/plugin-installstep's "oci-dispatch" word, so stepEmitOCIEmitStep is now a thin
 // forwarder (decode the wire views + the cached overlay buildEngineContext, hand both to
-// dispatchOCIStep). The seam stays GENERIC (dispatches by word against the stepEmitters registry,
-// no per-word case here), even though only one word remains registered today — a future
-// out-of-process caller needing an in-core-only render reaches the SAME seam.
+// dispatchOCIStep). K5 seam-death (W4): the former by-word `stepEmitters` micro-registry
+// (registerStepEmitter/stepEmitterFor) is GONE — a word-keyed indirection over exactly ONE
+// registered entry added nothing (R3: reuse an existing generic seam or delete the duplicate,
+// rarely invent one). hostBuildStepEmit now matches "oci-emit-step" directly; a future second
+// word, if one is ever needed, is a new `case` here, not a re-introduced registry.
 
-// stepEmitter renders one external step kind's build-context Containerfile fragment IN-CORE from
-// the opaque request + the host build-engine context. Registered per step word.
-type stepEmitter func(req spec.StepEmitRequest, build buildEngineContext) (string, error)
-
-// stepEmitters maps a step WORD → its in-core fragment renderer. Populated at package-var init
-// (before any init(), like hostBuilders / the substrate registries), so lookup is race-free.
-var stepEmitters = map[string]stepEmitter{}
-
-// registerStepEmitter records one step kind's in-core fragment renderer. Panics on
-// a duplicate (a startup invariant, like registerHostBuilder).
-func registerStepEmitter(word string, fn stepEmitter) {
-	if word == "" || fn == nil {
-		panic("registerStepEmitter: empty word or nil emitter")
-	}
-	if _, dup := stepEmitters[word]; dup {
-		panic(fmt.Sprintf("registerStepEmitter: duplicate step emitter for %q", word))
-	}
-	stepEmitters[word] = fn
-}
-
-// stepEmitterFor returns the registered in-core emitter for a step word, if any.
-func stepEmitterFor(word string) (stepEmitter, bool) {
-	fn, ok := stepEmitters[word]
-	return fn, ok
-}
-
-// hostBuildStepEmit is the "step-emit" host-builder (F10 HostBuild seam): decode the
-// StepEmitRequest, dispatch by Word to the registered in-core emitter, and return the rendered
-// fragment as an EmitReply JSON. An unregistered word is a LOUD error (a step word whose in-core
-// renderer was never registered — never a silent empty bake, R4). The buildEngineContext
-// carries the host engine the emitter renders against.
+// hostBuildStepEmit is the "step-emit" host-builder (F10 HostBuild seam): dispatch the
+// StepEmitRequest by Word to the one in-core renderer this seam still serves, and return the
+// rendered fragment as an EmitReply JSON. Any OTHER word is a LOUD error (never a silent empty
+// bake, R4). The buildEngineContext carries the host engine the emitter renders against.
 func hostBuildStepEmit(_ context.Context, req spec.StepEmitRequest, build buildEngineContext) (spec.EmitReply, error) {
-	if req.Word == "" {
-		return spec.EmitReply{}, fmt.Errorf("step-emit host-build: request carries no step word")
-	}
-	fn, ok := stepEmitterFor(req.Word)
-	if !ok {
+	if req.Word != "oci-emit-step" {
 		return spec.EmitReply{}, fmt.Errorf("step-emit host-build: no in-core emitter registered for step %q", req.Word)
 	}
-	frag, err := fn(req, build)
+	frag, err := stepEmitOCIEmitStep(req, build)
 	if err != nil {
 		return spec.EmitReply{}, fmt.Errorf("step-emit host-build %q: %w", req.Word, err)
 	}
@@ -121,8 +92,3 @@ func stepEmitOCIEmitStep(req spec.StepEmitRequest, build buildEngineContext) (st
 	}
 	return dispatchOCIStep(p.StepView, p.PlanView, req.Distros, build)
 }
-
-// Register the oci-emit-step emitter at package-var init — the overlay pod-overlay build's
-// per-step render seam (P11c). The candy (candy/plugin-deploy-pod) wires deploykit.OCITarget's
-// EmitStepOp to HostBuild("step-emit", {Word:"oci-emit-step", …}).
-var _ = func() bool { registerStepEmitter("oci-emit-step", stepEmitOCIEmitStep); return true }()

@@ -185,47 +185,36 @@ func TestExternalStepKind_EndToEnd(t *testing.T) {
 	}
 }
 
-// TestStepEmitHostBuilder proves the F-STEP-EMIT "step-emit" HostBuild seam — the generic
-// host-builder a HOST-COUPLED step kind's ops.OpEmit calls back to for a fragment the host build ENGINE
-// renders in-core (the seam C1.2 registered the system-packages per-word emitter into). The test
-// registers a fixture emitter under a test-only word to exercise the generic by-word dispatch in
-// isolation, drives hostBuildStepEmit by word, and asserts an unregistered word + the registry-level
-// "step-emit" host-builder registration.
+// TestStepEmitHostBuilder proves the F-STEP-EMIT "step-emit" HostBuild seam (K5 seam-death, W4:
+// the former by-word `stepEmitters` micro-registry — a word-keyed indirection over exactly ONE
+// registered entry — is gone; hostBuildStepEmit now matches "oci-emit-step" directly). Drives
+// hostBuildStepEmit by word through the registered wire-level hostBuilder (exercising the
+// typedHostBuilder JSON-decode/marshal adapter too) and asserts: the ONE known word ("oci-emit-step")
+// reaches stepEmitOCIEmitStep -> dispatchOCIStep -> the compiled-in "oci-dispatch" class:step
+// provider (candy/plugin-installstep) — proven by the DISTINCT downstream error dispatchOCIStep's
+// peer raises when reconstructing an intentionally-empty step view ("unknown step kind"), a
+// different failure than the loud "no in-core emitter registered" any OTHER word still gets.
 func TestStepEmitHostBuilder(t *testing.T) {
-	// The "step-emit" host-builder is registered on the F10 hostBuilders seam at init. Drive it
-	// through the registered wire-level hostBuilder so the test exercises the typedHostBuilder
-	// adapter (JSON decode → typed fn → marshal) alongside the by-word dispatch.
+	// The "step-emit" host-builder is registered on the F10 hostBuilders seam at init.
 	stepEmit, ok := hostBuilderFor("step-emit")
 	if !ok {
 		t.Fatal("hostBuilderFor(\"step-emit\") = false, want the step-emit host-builder registered")
 	}
 
-	const word = "test-stepemit-fixture"
-	// Register a fixture in-core emitter under a test-only word (the real registry also holds the
-	// C1.2 system-packages emitter; this fixture exercises the generic by-word dispatch in isolation).
-	stepEmitters[word] = func(req spec.StepEmitRequest, _ buildEngineContext) (string, error) {
-		return "RUN echo host-coupled-" + string(req.Payload) + " > /etc/step-emit-fixture\n", nil
-	}
-	t.Cleanup(func() { delete(stepEmitters, word) })
-
-	// Dispatch by word through the host-builder: the fragment comes back in an EmitReply.
-	reqJSON, err := marshalJSON(spec.StepEmitRequest{Word: word, Payload: []byte(`{"marker":"m"}`), Distros: []string{"fedora"}})
+	// "oci-emit-step" is the one word this seam still serves: it must reach stepEmitOCIEmitStep ->
+	// dispatchOCIStep -> the "oci-dispatch" provider, proven by the downstream reconstruct-step
+	// error (an intentionally-empty StepView has no Kind), never the "no in-core emitter
+	// registered" word-mismatch error.
+	reqJSON, err := marshalJSON(spec.StepEmitRequest{Word: "oci-emit-step", Payload: []byte(`{}`)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	resJSON, err := stepEmit(context.Background(), reqJSON, buildEngineContext{})
-	if err != nil {
-		t.Fatalf("step-emit host-build: %v", err)
-	}
-	var reply spec.EmitReply
-	if err := json.Unmarshal(resJSON, &reply); err != nil {
-		t.Fatalf("decode EmitReply: %v", err)
-	}
-	if !strings.Contains(reply.Fragment, "/etc/step-emit-fixture") {
-		t.Fatalf("fragment = %q, want the fixture emitter's rendered RUN", reply.Fragment)
+	_, err = stepEmit(context.Background(), reqJSON, buildEngineContext{})
+	if err == nil || !strings.Contains(err.Error(), "oci-dispatch") {
+		t.Fatalf("step-emit host-build(oci-emit-step) = %v, want an oci-dispatch reconstruct-step error (proves the word dispatched, not a word mismatch)", err)
 	}
 
-	// An UNREGISTERED step word is a LOUD error (never a silent empty bake, R4).
+	// Any OTHER step word is a LOUD error (never a silent empty bake, R4).
 	bad, err := marshalJSON(spec.StepEmitRequest{Word: "no-such-step-emitter"})
 	if err != nil {
 		t.Fatal(err)
