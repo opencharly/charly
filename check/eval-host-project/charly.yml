@@ -19,7 +19,7 @@
 # Kept in lockstep with the superproject check-local closure (candy/check-local-layer,
 # candy/examplestep-deploy-consumer, candy/plugin-example-step, candy/plugin-deploy-local).
 # NOT discovered by the superproject — `check/` is not on its `discover:` path.
-version: 2026.204.1223
+version: 2026.216.0700
 discover:
     - path: candy
       recursive: true
@@ -74,4 +74,34 @@ check-local:
                 - runtime
               command:
                 command: "test -f /tmp/charly-examplestep/examplestep-deploy/probe && echo EXAMPLESTEP-DEPLOY-PROBE-PRESENT"
+                in_container: false
+            # #55 W3 B4 coverage — proves the render-service DISPATCH path a target:local
+            # deploy-compile actually exercises (deploy-compile -> CompileServiceSteps ->
+            # renderServiceViaSeam -> renderSeamCaller.renderService -> direct
+            # InvokeProvider(kind:init) + InvokeProvider(verb:egress)), not just the
+            # RENDERER unit-tested in isolation (candy/plugin-init's own
+            # render_service_unit_test.go) or the mocked wiring test
+            # (sdk/deploykit/plan_compile_test.go). check-local-layer's custom
+            # check-local-marker-daemon service: entry writes this marker on start.
+            - check: the check-local-layer custom systemd service wrote its marker on the guest — proves the rendered unit was installed, enabled, and started at deploy
+              id: check-local-service-marker
+              stdout:
+                - contains: check-local-service v1
+              context:
+                - runtime
+              command:
+                command: "cat /etc/check-local-service-marker"
+                in_container: false
+            - check: the check-local-layer custom systemd service reports active — proves the rendered unit itself, not just its ExecStart side effect
+              id: check-local-service-active
+              stdout:
+                - contains: check-local-service-active-present
+              context:
+                - runtime
+              command:
+                command: |
+                  UNIT=$(systemctl list-units --all --plain --no-legend 2>/dev/null | awk '{print $1}' | grep -i check-local-marker-daemon | head -1)
+                  if [ -n "$UNIT" ] && systemctl is-active --quiet "$UNIT"; then
+                    echo check-local-service-active-present
+                  fi
                 in_container: false
