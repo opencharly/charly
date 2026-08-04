@@ -195,6 +195,13 @@ two flagged K1-loader files.
 - **`credential_plugin.go` (238→~215 LOC): PARTIALLY dissolved.** `credentialHealth()`/`credentialHealther`/`.health()`/the `Health` field are DELETED (dead once hostprobe's caller is gone — `candy/plugin-doctor` now peer-`InvokeProvider`s verb:credential's `health` method itself, hostfacts.go). The rest (Get/Set/Delete/List/Name/resolve/awaitUnlock) STAYS — its one remaining caller, `check_endpoint_resolve.go`, is itself "STAY pending the B7 spike — not settled" per this same manifest (W3b, fenced).
 - **Dead schema found + deleted**: `spec/schema/seam.cue`'s `#DevicePatternsRequest`/`#DevicePatternsReply` — a fully-generated, fully-documented CUE type describing a PLANNED `"device-patterns"` HostBuild seam with ZERO actual Go implementation or callers anywhere in the tree (core or candy/). Orphaned scaffolding, not a live seam — R1/R5 finding, removed alongside the hostprobe types.
 - **`main_freshness.go` (281 LOC) + `main_freshness_test.go`: DELETED.** Failed all four kernel escapes by the letter (not E; not one of the 3 M's — touches none of loading/prescan/broker; not B — freshness isn't required for any plugin to load; not D). Moved to `candy/plugin-doctor`'s new `verb:freshness-guard` capability (`freshness.go`), invoked via a NEW `phase.PhasePreflight` lifecycle phase (`spec/phase`) mirroring `bootstrap_phase.go`'s `runBootstrapPhase`/`providersInPhase` shape exactly (team-lead ruling: phase-keyed enumeration, not a fixed-provider resolve). `preflight_phase.go`'s `runPreflightPhase`/`runPreflightPhaseWith` (below) is the new M-clause reverse-channel face; `main.go` now calls it once, unconditionally, before any command dispatch. Verified end-to-end live (not just unit tests): a stale-binary refusal fires with the byte-identical original message on a touched-newer-than-60s `charly/main.go`, safe verbs and the `CHARLY_SKIP_FRESHNESS_CHECK` bypass both still work.
+
+  <!-- W5 gate-3 fix (TestKernelManifestBidirectional): this row was previously a bare
+  table line with no header of its own, orphaned mid-bullet-list — unparseable by any
+  table-scoped reader. Same receipt, now a valid standalone one-row table. -->
+
+| File | LOC | Clause | Evidence |
+|---|---:|---|---|
 | `preflight_phase.go` | ~56 | M — wire-broker reverse-channel leg, the preflight-phase mechanism face | Defines `runPreflightPhase`/`runPreflightPhaseWith`, the phase-ascending enumerate-and-Invoke pre-pass for `phase.PhasePreflight` providers — the exact `providersInPhase`/`Invoke` shape `bootstrap_phase.go`'s already-M `runBootstrapPhase` uses, one phase earlier. Called ONCE from `main.go`, unconditionally, before Kong dispatches to any command. |
 - **`host_build_check_bed.go` (407 LOC) + `check_bed_run.go` (~110 LOC) + `bundle_members.go`
   (~180 LOC, its transitional-duplicate copy): FULLY DELETED (#55 W3 B2-full).** The file's own
@@ -212,6 +219,12 @@ two flagged K1-loader files.
   from). See `candy/plugin-check/bed_session.go` for the new home — documented there as a
   **compiled-in-REQUIRED placement class**, the same documented exception a bootstrap plugin
   carries, not an incidental fact about today's placement.
+
+  <!-- W5 gate-3 fix (TestKernelManifestBidirectional): same fix as preflight_phase.go above —
+  this row was an orphaned bare table line with no header of its own. -->
+
+| File | LOC | Clause | Evidence |
+|---|---:|---|---|
 | `host_build_check_bed_gpu_prereq.go` | 27 | M — wire-broker leg, THE ONE seam surviving check-bed's dissolution | GPU host-DETECTION (`gpu_allocate.go`'s `bedGPUPrereqMissing`/`DetectVFIO`) is the project's explicitly operator-dropped exception (no hardware to verify a relocation against) — `gpu_shim.go`'s own header fences it from every K-wave cutover including this one, pending unit B6. This seam threads the claimant's resource tokens out and the verdict back so the fenced core logic runs completely unchanged; `candy/plugin-check/bed_session.go`'s `bedGpuPrereqCheck` is its sole caller. |
 
 ## Clause key
