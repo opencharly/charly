@@ -3,23 +3,31 @@ package main
 // TestKernelManifestBidirectional is a W5-terminus CI tells-test (task #16): the
 // kernel/plugin boundary law's receipt ledger, KERNEL_MANIFEST.md, must stay
 // BIDIRECTIONALLY accurate — every charly/*.go production file has a documented row
-// (clause ∈ {E, M, B, D, K1-IOU, MIXED-*, EXCEPTION-GPU} — see "Clause key" at the
-// bottom of KERNEL_MANIFEST.md), and every row's named file genuinely exists (a row
-// citing a since-deleted file is stale documentation, not a receipt).
+// (clause ∈ {E, M, B, D, K1-IOU, MIXED-*, EXCEPTION-GPU, R-RESIDUE (exit: ...)} — see
+// "Clause key" at the bottom of KERNEL_MANIFEST.md), and every row's named file
+// genuinely exists (a row citing a since-deleted file is stale documentation, not a
+// receipt).
 //
 // KERNEL_MANIFEST.md is presently a DRAFT (its own header says so): assembled
 // incrementally, wave by wave, as each unit's teammate independently re-verified a
-// STAY/MOVE verdict with their own defines-vs-calls grep. At W5-authoring time it
-// documents 39 of charly/'s 133 production files — the other 94 are backlog, not a
-// gate regression. Per the brief ("Missing rows: report the list... before inventing
-// rows — I'll route row-authoring"), this gate does NOT invent receipts for the
-// backlog: kernelManifestPendingFiles below is that exact backlog, reported to the
-// program lead alongside this gate landing. MAINTENANCE RULE — same shrink-only shape
-// as reverseChannelHostBuilderWhitelist (gate 2): whoever authors a new manifest row
-// removes that file from kernelManifestPendingFiles in the SAME commit (the gate fails
-// otherwise, forcing the trim); a file may be added to the pending list only alongside
-// a genuinely NEW production file with no row yet (a reviewable diff), never as a
-// silent way to keep an old backlog entry around after it's been documented.
+// STAY/MOVE verdict with their own defines-vs-calls grep. At first authoring it
+// documented only 39 of charly/'s 133 production files; the program lead
+// pre-authorized drafting the remaining 94-file census directly from
+// /tmp/audit-prod-report.md (per-file E/M/B/D/R verdicts) + /tmp/w3-adjudication.md
+// (binding corrections where the two conflict — adjudication wins) + a corroborating
+// defines-vs-calls spot-grep for anything neither source settles. A file the audit
+// classifies R (residue — its behaviour genuinely belongs in a plugin) but that is
+// STILL PRESENT because the wave/IOU that dissolves it hasn't landed gets an
+// R-RESIDUE(exit: <wave/unit/IOU>) row — documented residue, never pretend-kernel.
+// kernelManifestPendingFiles below is now the CONTESTED-only remainder (a source
+// conflict this teammate could not resolve unilaterally, routed to the program lead
+// for a ruling) — see .w5-report.md in this worktree for the full per-file resolution
+// trail. MAINTENANCE RULE — same shrink-only shape as reverseChannelHostBuilderWhitelist
+// (gate 2): whoever authors a new manifest row removes that file from
+// kernelManifestPendingFiles in the SAME commit (the gate fails otherwise, forcing the
+// trim); a file may be added to the pending list only alongside a genuinely NEW
+// production file with no row yet (a reviewable diff), never as a silent way to keep
+// an old backlog entry around after it's been documented.
 //
 // A brand-new prod file appearing with NEITHER a manifest row NOR a pending-list entry
 // is treated as a program-level FINDING (reported to the orchestrator), same as gate 2.
@@ -34,105 +42,17 @@ import (
 	"testing"
 )
 
-// kernelManifestPendingFiles is today's (2026-08-04, W5-gates authoring) backlog of
-// charly/*.go production files with no KERNEL_MANIFEST.md row yet. 94 files — routed
-// to the program lead for row-authoring assignment; NOT invented here.
-var kernelManifestPendingFiles = map[string]bool{
-	"agent_target_cmd.go":                    true,
-	"bootstrap_phase.go":                     true,
-	"build_overlay.go":                       true,
-	"bundle_add_cmd.go":                      true,
-	"bundle_from_box_cmd.go":                 true,
-	"check_cmd.go":                           true,
-	"checkspec.go":                           true,
-	"commands.go":                            true,
-	"config.go":                              true,
-	"credential_plugin.go":                   true,
-	"cue_defaults.go":                        true,
-	"cue_kind_android_reg.go":                true,
-	"cue_kind_box.go":                        true,
-	"cue_kind_candy.go":                      true,
-	"cue_kind_check.go":                      true,
-	"cue_kind_deploy.go":                     true,
-	"cue_kind_k8s.go":                        true,
-	"cue_kind_local.go":                      true,
-	"cue_kind_pod.go":                        true,
-	"cue_kind_vm.go":                         true,
-	"cue_node.go":                            true,
-	"cue_schema.go":                          true,
-	"deploy_target_dispatch.go":              true,
-	"deploy_target_unified.go":               true,
-	"deploy_tree.go":                         true,
-	"devices.go":                             true,
-	"embed_defaults.go":                      true,
-	"gpu_allocate.go":                        true,
-	"gpu_shim.go":                            true,
-	"host_build_arbiter_bracket.go":          true,
-	"host_build_check_run.go":                true,
-	"host_build_cli.go":                      true,
-	"host_build_config_resolve.go":           true,
-	"host_build_deploy_del_resolve.go":       true,
-	"host_build_deploy_from_box.go":          true,
-	"host_build_deploy_node_del_dispatch.go": true,
-	"host_build_deploy_plugins_connect.go":   true,
-	"host_build_feature.go":                  true,
-	"host_build_pod_config.go":               true,
-	"host_build_pod_config_seams.go":         true,
-	"host_build_pod_lifecycle_dispatch.go":   true,
-	"host_build_render_service.go":           true,
-	"host_build_resolve_target_add.go":       true,
-	"host_build_retention_defaults.go":       true,
-	"loader_threaded.go":                     true,
-	"main.go":                                true,
-	"main_repo.go":                           true,
-	"materialize.go":                         true,
-	"node_build.go":                          true,
-	"node_candy.go":                          true,
-	"node_desugar.go":                        true,
-	"node_normalize.go":                      true,
-	"node_parse.go":                          true,
-	"node_parsed.go":                         true,
-	"plugin_checkcontext_reverse.go":         true,
-	"plugin_cmd.go":                          true,
-	"plugin_command_prescan.go":              true,
-	"plugin_dispatch_reverse.go":             true,
-	"plugin_executor_reverse.go":             true,
-	"plugin_grpc.go":                         true,
-	"plugin_inproc.go":                       true,
-	"plugin_inproc_reverse.go":               true,
-	"plugin_loader.go":                       true,
-	"plugin_prescan.go":                      true,
-	"plugin_provider_common.go":              true,
-	"plugin_transport.go":                    true,
-	"plugins_generated.go":                   true,
-	"pod_lifecycle_dispatch.go":              true,
-	"pod_lifecycle_verb.go":                  true,
-	"preempt.go":                             true,
-	"provider.go":                            true,
-	"provider_checkenv.go":                   true,
-	"provider_command.go":                    true,
-	"provider_command_external.go":           true,
-	"provider_deploy.go":                     true,
-	"provider_invoke.go":                     true,
-	"provider_kind.go":                       true,
-	"provider_kind_invoke.go":                true,
-	"provider_registry.go":                   true,
-	"provider_step.go":                       true,
-	"provider_verb.go":                       true,
-	"readiness_config.go":                    true,
-	"refs.go":                                true,
-	"refs_threaded.go":                       true,
-	"registry_bootstrap.go":                  true,
-	"reserved_registry.go":                   true,
-	"service_render.go":                      true,
-	"sidecar.go":                             true,
-	"substrate_template_resolve.go":          true,
-	"unified.go":                             true,
-	"unified_targets.go":                     true,
-	"update_deploy_dispatch.go":              true,
-	"version.go":                             true,
-	"vm_lifecycle_preresolve.go":             true,
-}
+// kernelManifestPendingFiles is now EMPTY: the W5-gates teammate drafted the full
+// 94-file backlog census directly into KERNEL_MANIFEST.md's new "## W5 census — the
+// remaining 94 files (task #16)" section (program lead pre-authorization, msg
+// 2026-08-04) using /tmp/audit-prod-report.md + /tmp/w3-adjudication.md + corroborating
+// defines-vs-calls spot-grep per the resolution order the program lead specified. No
+// file needed CONTESTED escalation — every audit-vs-adjudication disagreement resolved
+// cleanly via the stated priority order (adjudication wins). Kept as an empty map
+// (rather than deleted) so a future genuinely-new undocumented file has a place to land
+// pending its own row — the shrink-only MAINTENANCE RULE above still applies to any
+// future entry.
+var kernelManifestPendingFiles = map[string]bool{}
 
 // manifestFileRow is one parsed KERNEL_MANIFEST.md file-listing table row.
 type manifestFileRow struct {
@@ -247,11 +167,24 @@ var manifestClauseKeys = map[string]bool{
 
 // clauseIsRecognized reports whether clause (the raw table-cell text) starts with a
 // recognized clause code per manifestClauseKeys, or the literal "K1-IOU", "MIXED",
-// or "EXCEPTION-GPU" forms.
+// "EXCEPTION-GPU", or "R-RESIDUE" forms. R-RESIDUE is the W5-census addition (task
+// #16): a file the boundary law's own per-file test still classifies R (residue —
+// its behaviour genuinely belongs in a plugin) but that is STILL PRESENT in charly/
+// today because the wave/IOU that dissolves it hasn't landed yet. Per the program
+// lead's ruling: "R-classified files still in tree are EXPECTED (K1-IOU/fenced/
+// consumer-gated residue) — their rows say R-RESIDUE (exit: <wave/IOU>), which the
+// gate accepts as a clause; the end-state manifest distinguishes documented-residue
+// from kernel, it doesn't pretend residue is kernel." Every R-RESIDUE row MUST carry
+// an "(exit: ...)" naming the wave/unit/IOU that dissolves it — enforced separately
+// below (a bare "R-RESIDUE" with no exit clause fails validation), so residue is
+// never a place to silently stop looking.
 func clauseIsRecognized(clause string) bool {
 	clause = strings.TrimSpace(clause)
 	if strings.HasPrefix(clause, "K1-IOU") || strings.HasPrefix(clause, "MIXED") || strings.HasPrefix(clause, "EXCEPTION-GPU") {
 		return true
+	}
+	if strings.HasPrefix(clause, "R-RESIDUE") {
+		return strings.Contains(clause, "(exit:")
 	}
 	// Take the leading token up to the first space, "(", or ":" — then split any
 	// "/"-joined compound ("M/B") and require every part be a recognized code.
@@ -418,6 +351,17 @@ func TestKernelManifestBidirectional_TeethProof(t *testing.T) {
 		t.Fatalf("teeth proof FAILED: %q must NOT be recognized as a valid clause", byFile["delta.go"].Clause)
 	}
 	t.Logf("teeth proof OK: clause validator accepts M/MIXED, rejects a bogus clause")
+
+	// R-RESIDUE requires a named "(exit: ...)" — a bare R-RESIDUE with no exit is
+	// exactly the "residue as a place to stop looking" failure mode this form exists
+	// to prevent.
+	if !clauseIsRecognized("R-RESIDUE (exit: W3 unit A9)") {
+		t.Fatalf("teeth proof FAILED: an R-RESIDUE clause WITH a named exit must be recognized")
+	}
+	if clauseIsRecognized("R-RESIDUE") {
+		t.Fatalf("teeth proof FAILED: a bare R-RESIDUE clause with NO named exit must NOT be recognized")
+	}
+	t.Logf("teeth proof OK: R-RESIDUE requires a named exit clause")
 
 	// Bidirectional diff logic: a new-undocumented file (no row, no pending entry)
 	// and a stale-pending entry (pending, but now documented) both fire.
