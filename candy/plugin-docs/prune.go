@@ -32,9 +32,8 @@ import (
 // A generation that fails midway therefore leaves visible holes rather than a tree that looks
 // complete — which is the honest outcome, since a failed run has not proved anything.
 //
-// The header is the whole safety boundary. Hand-authored pages (`index.mdx`, `start/`, `concepts/`,
-// `guides/`) do not carry it and are never touched; a file is read and matched, never inferred
-// from its path.
+// The header is the whole safety boundary. Hand-authored pages (`start/`, `concepts/`, `guides/`)
+// do not carry it and are never touched; a file is read and matched, never inferred from its path.
 func pruneGeneratedPages(outRoot string) (int, error) {
 	header := []byte(generatedHeader)
 	var stale []string

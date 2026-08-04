@@ -80,7 +80,9 @@ resolution ever collapses the two onto one engine.
 On a host with Podman and systemd, a `pod:` deploy is realised as **user-level systemd quadlets**.
 `charly config` generates one `charly-<name>.service` per deploy, carrying its ports, volumes,
 devices and security settings, and systemd starts it at boot. A deploy with encrypted volumes
-starts at boot too, then suspends until its encryption key is available.
+starts at boot too and then suspends until its key is available — unless there is no keyring
+backend to unlock, in which case there is nothing to wait for and it needs an explicit
+`charly start`.
 
 Where Podman and systemd are not both present, the same deploy runs directly against the engine
 instead. You do not choose between the two: the deploy is described once, and `charly` resolves
@@ -174,7 +176,11 @@ charly --repo opencharly/distro-fedora check run check-tutorial-shell  # → bui
 ### Change the mold, keep the recipe
 
 That is the claim, so here is the evidence rather than the assertion. Both stanzas below are real
-entries in `box/fedora/charly.yml`, abridged only by cutting their prose descriptions.
+entries in `box/fedora/charly.yml`, cut down to the lines that carry the point — the
+`description:` prose in both, and `check-fedora-vm`'s `lifecycle:`, `plan:` and `install_opts:`.
+That last one matters if you copy this: the real VM entry sets `allow_repo_changes`,
+`allow_root_tasks` and `skip_incompatible`, and a guest install needs those permissions. Read the
+entry, not this excerpt, before adapting it.
 
 ```yaml
 check-tutorial-shell:                # a CONTAINER

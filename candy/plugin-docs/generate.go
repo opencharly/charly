@@ -9,13 +9,15 @@ import (
 
 // generate renders every generated page for the opencharly.ai site.
 //
-// The generator owns exactly three trees — `vision.md`, `reference/`, and `recipes/` — and
-// rewrites them wholesale each run. The hand-authored narrative (the home page, the getting
-// started pages, the concept pages, the plugin-authoring guide) is never read or written here:
-// those are the pages a website needs and a repo does not have, and they are maintained by hand.
+// The generator owns the home page (`index.md`, projected from README.md), `vision.md`,
+// `grievances.md`, `reference/` and `recipes/`, and rewrites them wholesale each run. What remains
+// hand-authored is the teaching narrative the repository has no equivalent of: the getting-started
+// pages, the concepts curriculum, and the guides.
 //
-// Everything else the site shows already exists in this repo, so it is GENERATED rather than
-// transcribed. A copy drifts; a projection cannot.
+// Everything the site shows that already exists in this repo is GENERATED rather than transcribed.
+// A copy drifts; a projection cannot. The home page moved into this list precisely because it was
+// the counter-example — two thirds of it was README prose maintained twice, across a submodule
+// boundary, under a footnote claiming nothing on the site was a hand-maintained copy.
 func generate(root, out string) error {
 	if _, err := os.Stat(filepath.Join(root, unifiedFileName)); err != nil {
 		return fmt.Errorf("--root %s does not look like an charly project (no %s): %w", root, unifiedFileName, err)
@@ -109,6 +111,11 @@ func generate(root, out string) error {
 		return err
 	}
 	if err := generateGrievances(root, out); err != nil {
+		return err
+	}
+	// The home page is a projection of README.md — see gen_landing.go for why it stopped being
+	// hand-authored. It must be emitted BEFORE the link gates, which check it like any other page.
+	if err := generateLanding(root, out); err != nil {
 		return err
 	}
 
