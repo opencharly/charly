@@ -4,51 +4,97 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/opencharly/spec/checkhost"
-	"github.com/opencharly/spec/container"
+	specexec "github.com/opencharly/spec/exec"
+	"github.com/opencharly/spec/ops"
 	"github.com/opencharly/spec/spec"
 )
 
-// check_endpoint_resolve.go — the generic host-endpoint reverse-legs (H part 2). Class-generic
-// venue→dialable-endpoint resolutions serve BOTH the in-process hostCheckContext and the
-// out-of-process CheckContextService, REPLACING the per-verb host preresolvers (cdp/vnc/spice
-// each declared their port / graphics kind and wrapped this SAME host machinery). The plugin
-// decides WHAT to resolve (its port / graphics kind); the host holds the venue / podman /
-// go-libvirt / tunnel machinery the out-of-process plugin cannot reach. The legs are methods on
-// the host verb resolver (which reads the kit.Runner engine state through accessors and owns the
-// per-Invoke endpoint cleanups).
+// check_endpoint_resolve.go — the generic host-endpoint reverse-legs (H part 2), SHRUNK to the
+// fixed reverse-RPC SERVICE surface (#55 W3 B7): the ACTUAL resolution work (venue-classify +
+// checkhost.EndpointForVenue / container image-label read) relocated to candy/plugin-check
+// (resolve_endpoint.go), compiled-in-REQUIRED placement class — see that file's header for the
+// full placement rationale. The one genuine constraint that used to make this file's resolution
+// bodies core-only (a live ssh -L forward's cleanup closure) turned out not to actually depend on
+// core placement at all: a live closure cannot cross ANY Invoke wire, compiled-in or not (the wire
+// is JSON bytes only — charly/provider.go's Operation.Params/Result), so the plugin now tracks its
+// OWN pending-cleanup state and closes it on a separate drain signal, rather than the closure ever
+// needing to cross back to core.
+//
+// What remains here:
+//   - resolveVerbEndpointFor/resolveImageLabelFor — now thin wire forwards to verb:check-resolve's
+//     OpResolveEndpoint/OpResolveImageLabel, mirroring resolveCheckVenueReply's (already-existing)
+//     resolve+invoke shape.
+//   - the CheckContext interface methods (ResolveEndpoint/ResolveGraphicsEndpoint/
+//     ResolveImageLabel) — the fixed reverse-RPC service surface every out-of-process
+//     live-container verb (cdp/wl/vnc/dbus/mcp) dials back into; genuinely core-only, since
+//     hostVerbResolver.RunVerb wraps providerRegistry.ResolveVerb, a core-private M-mechanism no
+//     out-of-process dispatch can bypass.
+//   - runEndpointCleanups — now drains hostVerbResolver's OWN list (still populated by
+//     check_graphics_endpoint.go's resolveVerbGraphics, UNCHANGED permanent STAY — a genuinely
+//     different live-handle constraint, x/crypto/ssh containment, see that file's header) AND
+//     signals candy/plugin-check to drain ITS OWN pending list (OpDrainEndpointCleanups) —
+//     the SAME per-Invoke ordering guarantee (open during resolve, drained after the verb's
+//     Invoke returns) the former single-list design carried, now split across two owners that
+//     both fire from this ONE call site.
 
-// resolveVerbEndpoint resolves the current check target's venue (container / VM / ssh /
-// local) and returns a host-reachable "host:port" for an in-venue TCP port, registering
-// any opened ssh -L forward (VM/ssh venue) for post-Invoke teardown. Empty addr + nil err
-// = no live venue (box-mode / no-box) — the verb's own no-endpoint skip then fires.
-func (h *hostVerbResolver) resolveVerbEndpoint(port int) (string, error) {
-	addr, cleanup, err := resolveVerbEndpointFor(h.cc.Box(), h.cc.Instance(), h.cc.Mode(), port)
-	if cleanup != nil {
-		h.endpointCleanups = append(h.endpointCleanups, cleanup)
+// resolveVerbEndpointFor resolves a check target's venue-relative TCP port into a host-reachable
+// "host:port" via verb:check-resolve's OpResolveEndpoint leg (#55 W3 B7 — the resolution WORK
+// moved to candy/plugin-check/resolve_endpoint.go; this is a thin wire forward). Any opened
+// forward is tracked plugin-side, closed on the LATER drainVerbEndpointCleanups call this same
+// Invoke's runEndpointCleanups makes — never returned here.
+func resolveVerbEndpointFor(box, instance string, mode spec.CheckRunMode, port int) (addr string, err error) {
+	prov, ok := providerRegistry.resolve(ClassVerb, "check-resolve")
+	if !ok {
+		return "", fmt.Errorf("check-resolve: plugin-check (verb:check-resolve) not registered — charly built without the plugin-check candy")
 	}
-	return addr, err
+	ctx := specexec.ContextWithExecutor(context.Background(), specexec.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}}))
+	reply, err := invokeTyped[spec.CheckEndpointResolveRequest, spec.CheckEndpointResolveReply](
+		ctx, prov, "check-resolve", ops.OpResolveEndpoint,
+		spec.CheckEndpointResolveRequest{Box: box, Instance: instance, Mode: runModeName(mode), Port: port})
+	if err != nil {
+		return "", err
+	}
+	return reply.Addr, nil
 }
 
-// resolveVerbEndpointFor is resolveVerbEndpoint's box/instance/mode-parameterized core (K1-unblock
-// W3 Unit B, R3 extraction): the SAME resolution, usable by any caller that has box/instance/mode
-// scalars but no live *kit.Runner — specifically charly/plugin_dispatch_reverse.go's InvokeProvider
-// detached CheckContext for a CheckVerbProvider target dispatched from a plugin. Returns the
-// opened endpoint's cleanup func (nil when none was opened) for the caller's OWN cleanup-list
-// bookkeeping — hostVerbResolver's list, or the detached context's own.
-func resolveVerbEndpointFor(box, instance string, mode spec.CheckRunMode, port int) (addr string, cleanup func(), err error) {
-	if box == "" || mode == spec.CheckModeBox {
-		return "", nil, nil
+// resolveImageLabelFor reads one raw OCI label off a check target's live image via
+// verb:check-resolve's OpResolveImageLabel leg (#55 W3 B7 — thin wire forward, the resolution
+// WORK moved to candy/plugin-check/resolve_endpoint.go).
+func resolveImageLabelFor(box, instance string, mode spec.CheckRunMode, label string) (string, error) {
+	prov, ok := providerRegistry.resolve(ClassVerb, "check-resolve")
+	if !ok {
+		return "", fmt.Errorf("check-resolve: plugin-check (verb:check-resolve) not registered — charly built without the plugin-check candy")
 	}
-	reply, err := resolveCheckVenueReply(box, instance)
+	ctx := specexec.ContextWithExecutor(context.Background(), specexec.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}}))
+	reply, err := invokeTyped[spec.CheckImageLabelResolveRequest, spec.CheckImageLabelResolveReply](
+		ctx, prov, "check-resolve", ops.OpResolveImageLabel,
+		spec.CheckImageLabelResolveRequest{Box: box, Instance: instance, Mode: runModeName(mode), Label: label})
 	if err != nil {
-		return "", nil, err
+		return "", err
 	}
-	ep, err := checkhost.EndpointForVenue(reply.Descriptor, port)
-	if err != nil {
-		return "", nil, err
+	return reply.Value, nil
+}
+
+// drainVerbEndpointCleanups signals candy/plugin-check to close every forward its
+// OpResolveEndpoint leg opened since the last drain (#55 W3 B7) — the plugin-side twin of the
+// FORMER whole-list core-side drain, now scoped to only the endpoint leg's own tracked forwards
+// (check_graphics_endpoint.go's own entries stay in hostVerbResolver.endpointCleanups, drained
+// separately by runEndpointCleanups in the SAME call).
+func drainVerbEndpointCleanups() {
+	prov, ok := providerRegistry.resolve(ClassVerb, "check-resolve")
+	if !ok {
+		return
 	}
-	return ep.Addr, ep.Close, nil
+	ctx := specexec.ContextWithExecutor(context.Background(), specexec.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}}))
+	_, _ = invokeTyped[spec.CheckDrainEndpointCleanupsRequest, struct{}](
+		ctx, prov, "check-resolve", ops.OpDrainEndpointCleanups, spec.CheckDrainEndpointCleanupsRequest{})
+}
+
+// resolveVerbEndpoint resolves the current check target's venue (container / VM / ssh /
+// local) and returns a host-reachable "host:port" for an in-venue TCP port. Empty addr + nil err
+// = no live venue (box-mode / no-box) — the verb's own no-endpoint skip then fires.
+func (h *hostVerbResolver) resolveVerbEndpoint(port int) (string, error) {
+	return resolveVerbEndpointFor(h.cc.Box(), h.cc.Instance(), h.cc.Mode(), port)
 }
 
 // graphicsEndpoint is the host-resolved dialable VM graphics endpoint (the in-proc twin of
@@ -59,9 +105,10 @@ type graphicsEndpoint struct {
 	SkipMessage            string
 }
 
-// runEndpointCleanups closes every forward opened during the verb's Invoke (LIFO) and
-// resets the list. Called by invokeVerbProvider after the Invoke returns — the forward must
-// outlive the plugin's dial, so it is released only once the Invoke completes.
+// runEndpointCleanups closes every forward opened during the verb's Invoke: hostVerbResolver's
+// OWN list (LIFO — check_graphics_endpoint.go's resolveVerbGraphics entries, unchanged) AND
+// candy/plugin-check's tracked endpoint-leg forwards (via the drain signal, #55 W3 B7). Called by
+// invokeVerbProvider after the Invoke returns — the forward must outlive the plugin's dial.
 func (h *hostVerbResolver) runEndpointCleanups() {
 	for i := len(h.endpointCleanups) - 1; i >= 0; i-- {
 		if h.endpointCleanups[i] != nil {
@@ -69,6 +116,7 @@ func (h *hostVerbResolver) runEndpointCleanups() {
 		}
 	}
 	h.endpointCleanups = nil
+	drainVerbEndpointCleanups()
 }
 
 // ResolveEndpoint is the in-process CheckContext leg — a compiled-in kit verb reaches the
@@ -92,43 +140,6 @@ func (c hostCheckContext) ResolveGraphicsEndpoint(_ context.Context, kind string
 // Empty value (no live deployment, or the label absent) is a valid result.
 func (h *hostVerbResolver) resolveImageLabel(label string) (string, error) {
 	return resolveImageLabelFor(h.cc.Box(), h.cc.Instance(), h.cc.Mode(), label)
-}
-
-// resolveImageLabelFor is resolveImageLabel's box/instance/mode-parameterized core (K1-unblock W3
-// Unit B, R3 extraction) — see resolveVerbEndpointFor's doc comment for the shared rationale.
-//
-// deploykit shed (#55 coneB-box-resolve): the former deploykit.ResolveContainer(box, instance)
-// is now consumed via the EXISTING verb:check-resolve seam (resolveCheckVenueReply →
-// candy/plugin-check venue.go), which already runs ResolveContainer plugin-side and projects
-// (engine, containerName) byte-identically into reply.Descriptor for a container venue — the SAME
-// seam the sibling resolveVerbEndpointFor uses. No kit import is added (IMPORT-PURITY): the engine
-// override the former ResolveBoxEngineForDeploy read from the per-host deploy config is resolved
-// plugin-side now and crosses the wire as reply.Descriptor.Engine.
-func resolveImageLabelFor(box, instance string, mode spec.CheckRunMode, label string) (string, error) {
-	if box == "" || mode == spec.CheckModeBox {
-		return "", nil
-	}
-	reply, err := resolveCheckVenueReply(box, instance)
-	if err != nil {
-		return "", err
-	}
-	// ResolveContainer resolved ONLY a plain running container; resolveCheckVenue additionally
-	// classifies VM/local/nested venues. Guard to the plain (non-nested) container venue so the
-	// label read succeeds ONLY where the former path did — a non-container or dotted-nested name
-	// has no podman-inspectable image label here (the former deploykit.ResolveContainer errored
-	// on those; a not-running plain container's error still propagates verbatim via the reply).
-	if reply.Descriptor.Kind != "container" || reply.Nested {
-		return "", fmt.Errorf("container for %s is not running", box)
-	}
-	imageRef, err := container.ContainerImageRef(reply.Descriptor.Engine, reply.Descriptor.ContainerName)
-	if err != nil {
-		return "", err
-	}
-	labels, err := container.InspectImageLabels(reply.Descriptor.Engine, imageRef)
-	if err != nil {
-		return "", err
-	}
-	return labels[label], nil
 }
 
 // ResolveImageLabel is the in-process CheckContext leg for a baked OCI label.

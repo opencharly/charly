@@ -13,13 +13,22 @@ import (
 	"github.com/opencharly/spec/sshx"
 )
 
-// check_graphics_endpoint.go — the VM-graphics host-endpoint reverse-leg (resolveVerbGraphics), the
-// IDENTICAL SIBLING of the floor check_endpoint_resolve.go's resolveVerbEndpoint: both are
-// hostVerbResolver methods served over the CheckContext reverse channel (resolveGfx / resolveEp) that
-// register their live forward's teardown on the host check Runner (h.endpointCleanups). The SSH tunnel
-// is RUNNER-LIFECYCLE-BOUND — the RFB/spice client connects THROUGH it for the whole check — so a plugin
-// Invoke could never hold it (it would close before the client connects). It is genuine HOST FABRIC (FLOOR),
-// not a plugin capability.
+// check_graphics_endpoint.go — the VM-graphics host-endpoint reverse-leg (resolveVerbGraphics), a
+// hostVerbResolver method served over the CheckContext reverse channel (resolveGfx) that registers
+// its live forward's teardown on the host check Runner (h.endpointCleanups). Formerly framed as the
+// "IDENTICAL SIBLING" of check_endpoint_resolve.go's resolveVerbEndpoint (both were hostVerbResolver
+// methods doing their own venue-resolve + endpoint-open + h.endpointCleanups append in-core) — that
+// symmetry is GONE (#55 W3 B7): resolveVerbEndpoint's resolution WORK relocated to
+// candy/plugin-check/resolve_endpoint.go (compiled-in-REQUIRED placement class), since its
+// downstream calls (checkhost.EndpointForVenue, the venue-classify leg) had zero core-private
+// dependency of their own — this file's DOES: it imports spec/sshx (golang.org/x/crypto/ssh)
+// DIRECTLY (see below), a dependency B7 explicitly did NOT need to relocate and did not touch. The
+// SSH tunnel here is RUNNER-LIFECYCLE-BOUND — the RFB/spice client connects THROUGH it for the whole
+// check — so a plugin Invoke could never hold it (it would close before the client connects). It is
+// genuine HOST FABRIC (FLOOR), not a plugin capability — B7's OWN relocation confirmed this
+// distinction is real: resolveVerbEndpoint's tunnel-cleanup constraint turned out to be a non-issue
+// (a live closure never needed to cross the wire either way), but THIS file's x/crypto/ssh
+// containment constraint is a genuinely different, still-blocking reason to stay.
 //
 // It imports spec/sshx (golang.org/x/crypto/ssh) DIRECTLY, and that is CORRECT dependency CONTAINMENT, not
 // a violation: relocating the tunnel to any plugin-shared kit (e.g. kit) spreads x/crypto/ssh to every
