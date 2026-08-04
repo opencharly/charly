@@ -61,6 +61,24 @@ A **check bed** — a deploy marked `disposable: true` — runs all four in one 
 run <bed>` builds the image, checks it, deploys it, waits for steady state, checks it live, then
 destroys and rebuilds from scratch and checks it again, then tears everything down.
 
+### Where a running candybox actually lives
+
+**Podman and Docker are both first-class**, for building and for running, and the two are chosen
+independently: `charly` auto-detects what is installed and either can be pinned per host
+(`CHARLY_BUILD_ENGINE`, `CHARLY_RUN_ENGINE`, or the runtime config). Building with podman and
+running under docker is a supported combination, not an accident.
+
+On a host with podman and systemd, a `pod:` deploy is realised as **user-level systemd quadlets** —
+`charly config` generates them, each deploy getting its own `charly-<name>.service` carrying its
+ports, volumes, devices and security settings, so `systemctl --user` manages it like any other user
+service and starts it at login. (The exception is a deploy with encrypted volumes and no keyring
+backend: that one omits `WantedBy=default.target` and waits for an explicit `charly start`, because
+nothing should try to mount an encrypted volume before there is a key to mount it with.)
+
+Where podman and systemd are not both present, the same deploy runs directly against the engine
+instead. You do not choose between the two: the deploy is described once, and `charly` resolves
+which mode the host supports.
+
 ---
 
 ## A real box, end to end
@@ -162,32 +180,37 @@ with nothing shared between them. Full detail, including the `$HOME`-local porta
 
 ## Agents drive the same surface
 
-Charly's MCP surface exposes the CLI over Streamable HTTP or stdio, and container-provided servers
-auto-discover through `mcp_provide:`. `mcp` is itself an out-of-process command plugin, discovered
-from a project's `candy/plugin-mcp` rather than compiled into the binary — so point charly at a
-project that supplies it:
+**Charly is not built for one agent harness.** There is no agent-only API and no automation-only
+verb: the CLI *is* the surface, so anything that can run a command can drive every stage above. On
+top of that, `charly` serves its whole command tree over **MCP** (Streamable HTTP or stdio), which
+any MCP-speaking client can consume without knowing anything charly-specific. Container-provided
+servers auto-discover through `mcp_provide:`.
+
+`mcp` is itself an out-of-process command plugin, discovered from a project's `candy/plugin-mcp`
+rather than compiled into the binary — so point charly at a project that supplies it:
 
 ```bash
 charly --repo opencharly/charly mcp serve
 ```
 
-[opencharly/plugins](https://github.com/opencharly/plugins) is one skill tree for Claude Code,
-Codex, and Kimi, teaching each harness how to compose, build, deploy, check, and manage boxes.
-Every candy, box, command, and contributor subsystem has an owning skill. It installs in three
-modes — `developer` (every plugin), `user` (use and author with charly, without contributor
-internals), and `container <family>` (one generated container family) — and writes only
-target-repository files, never `~/.claude`, `~/.codex`, `~/.kimi-code`, or any other user
-configuration. It does not depend on MCP.
+The project's rules are written the same way. [AGENTS.md](AGENTS.md) is the complete,
+**harness-neutral** rulebook and is sufficient on its own; `CLAUDE.md` is one adapter of it, not a
+separate source of truth. Supporting a new harness means adding an adapter, never porting the
+project.
+
+[opencharly/plugins](https://github.com/opencharly/plugins) is one skill tree, in which every candy,
+box, command and contributor subsystem has an owning skill, plus reusable plugin agents (executors
+that drive the `charly check` beds and return verbatim proof, and enforcers that gate claims) and
+dynamic workflows. It installs into whichever harnesses have an adapter today — currently Claude
+Code, Codex and Kimi — in three modes: `developer` (every plugin), `user` (use and author with
+charly, without contributor internals), and `container <family>` (one generated container family).
+It writes only target-repository files, never any user configuration, and does not depend on MCP.
+See [plugins/README.md](plugins/README.md) for the full index.
 
 Setup instructions live in that repository's own README. They currently require a checkout, which
 is a gap rather than a design: there is no way to install the skill tree with only the `charly`
 binary, including for the `user` mode aimed at people who are explicitly not developing charly.
 Tracked as [#210](https://github.com/opencharly/charly/issues/210).
-
-Beyond skills, the project ships reusable plugin agents (executors that drive the `charly check`
-beds and return verbatim proof, plus enforcers that gate claims) and dynamic workflows. Whether you
-drive `charly` from the keyboard or hand it to an agent, verification uses the same surface. See
-[plugins/README.md](plugins/README.md) for the full index.
 
 ---
 
