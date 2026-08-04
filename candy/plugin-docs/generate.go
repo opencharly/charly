@@ -118,6 +118,11 @@ func generate(root, out string) error {
 	if err := verifySiteLinks(out); err != nil {
 		return err
 	}
+	// The sidebar lives outside the content tree, so the walk above cannot reach it. See
+	// links_sidebar.go for the measured hole this closes.
+	if err := verifySidebarLinks(out); err != nil {
+		return err
+	}
 
 	// Report the prune count alongside the emit counts. A run that clears more pages than it
 	// writes back is the signal that a generator stopped emitting something, and it is worth
