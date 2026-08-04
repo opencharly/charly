@@ -42,7 +42,7 @@ tutorial-shell:
             - '@github.com/opencharly/charly/candy/sshd:v2026.201.0706'
 ```
 
-There are 286 candies in this repository. Any box may compose any subset of them, in any
+Any box may compose any subset of this repository's candies, in any
 combination, without either candy knowing the other exists.
 
 **Why that is more than tidiness.** Because a candy is a unit, it can carry its own acceptance
