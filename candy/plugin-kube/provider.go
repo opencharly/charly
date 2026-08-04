@@ -91,7 +91,7 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 		if err != nil {
 			return sdk.ResultJSON("fail", "kube: k3s-post-provision: reach host reverse channel: "+err.Error())
 		}
-		msg, err := k3sPostProvision(ctx, exec, k3sPostProvisionParams{ArtifactKey: in.ArtifactKey, DeployName: in.DeployName})
+		msg, err := k3sPostProvision(ctx, exec, k3sPostProvisionParams{ArtifactKey: in.ArtifactKey, DeployName: in.DeployName, VmEntity: in.VmEntity})
 		if err != nil {
 			return sdk.ResultJSON("fail", "kube: k3s-post-provision: "+err.Error())
 		}

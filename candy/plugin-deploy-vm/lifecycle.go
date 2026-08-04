@@ -72,10 +72,15 @@ func invokeLifecycle(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 	case sdk.OpPostApply:
 		return vmPostApply(ctx, exec, p, host)
 	case sdk.OpArtifactKey:
-		// Artifacts (+ the k3s ClusterProfile) key by the shared ENTITY, not the per-deploy domain:
-		// one k3s cluster per VM is reached by several beds, so its profile lands under the shared
-		// vm:<entity> name the `cluster:` refs use. This is DELIBERATELY the entity, not domainIdentity.
-		return marshalReply(map[string]string{"key": "vm:" + vmEntity(p)})
+		// Artifacts (+ the k3s ClusterProfile) key by the per-deploy DOMAIN identity (task #18 fix),
+		// not the shared entity: several beds may reach one kind:vm ENTITY (e.g. two beds both
+		// `from: k3s-vm`), and a shared key let a concurrent second bed's artifact retrieve /
+		// kubeconfig-context merge clobber the first — mirrors #33's own disk/ssh per-domain
+		// precedent (domainIdentity, the SAME identity the libvirt domain / disk overlay / ssh
+		// alias are keyed by). "entity" ships the SHARED kind:vm entity name separately —
+		// candy/plugin-kube's k3s_post.go still needs it (a DIFFERENT identity space) to resolve
+		// the entity's DECLARED network.port_forwards template.
+		return marshalReply(map[string]string{"key": "vm:" + domainIdentity(p), "entity": vmEntity(p)})
 	case sdk.OpTeardownExecutor:
 		return marshalReply(spec.VenueDescriptor{Kind: "ssh", Host: kit.VmSshAlias(domainIdentity(p)), ConnectTimeout: 10})
 	case sdk.OpPostTeardown:

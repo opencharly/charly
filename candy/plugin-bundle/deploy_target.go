@@ -365,15 +365,21 @@ func handleDeployApply(ctx context.Context, exec *sdk.Executor, req spec.DeployT
 
 	// ArtifactKey (mirrors the former core-resident deploy target's Add post-apply key lookup —
 	// independent of PrepareVenue's live venue, runs on a plain ShellExecutor{} like the pre-move
-	// code).
+	// code). "entity" (task #18 fix) ships the shared kind:vm entity name SEPARATELY from the
+	// now-per-deploy-domain-scoped "key" — candy/plugin-kube's k3s_post.go needs the entity name
+	// (a different identity space) to resolve the entity's DECLARED network.port_forwards
+	// template, and can no longer parse it back out of the domain-scoped key.
+	var vmEntity string
 	if req.HasLifecycle {
 		akJSON, err := lifecycleInvoke(ctx, exec, req.Word, sdk.OpArtifactKey, req.Name, "", req.Node, nil, nil, req.HostEnvJSON)
 		if err == nil && len(akJSON) > 0 {
 			var out struct {
-				Key string `json:"key"`
+				Key    string `json:"key"`
+				Entity string `json:"entity"`
 			}
 			if json.Unmarshal(akJSON, &out) == nil {
 				reply.ArtifactKey = out.Key
+				vmEntity = out.Entity
 			}
 		}
 	}
@@ -398,7 +404,7 @@ func handleDeployApply(ctx context.Context, exec *sdk.Executor, req spec.DeployT
 		// BEFORE dispatch) with the merged node's own env: (deploykit.BuildArtifactEnv), matching
 		// the former core Add() exactly.
 		artifactEnv := deploykit.BuildArtifactEnv(secretEnv, req.Node)
-		if err := retrieveArtifactsAndDispatchRegisters(ctx, exec, localExec, req.Dir, plans, artifactKey, req.Name, artifactEnv, registerHints); err != nil {
+		if err := retrieveArtifactsAndDispatchRegisters(ctx, exec, localExec, req.Dir, plans, artifactKey, req.Name, vmEntity, artifactEnv, registerHints); err != nil {
 			return reply, fmt.Errorf("deploy-dispatch %s: %w", req.Op, err)
 		}
 		// --verify (#55 W3 B3, relocated from charly/unified_targets.go's Add): a lifecycle
@@ -434,7 +440,7 @@ func handleDeployApply(ctx context.Context, exec *sdk.Executor, req spec.DeployT
 		// pure DescribeProvider query — no connect attempt, no side effect): Update has no
 		// candyList to consult artifactRegisterHandlers against, so calling k3sPostProvision
 		// unconditionally would hard-error for every OTHER deploy kind (pod/local/no-k3s).
-		if err := k3sPostProvision(ctx, exec, artifactKey, req.Name); err != nil {
+		if err := k3sPostProvision(ctx, exec, artifactKey, req.Name, vmEntity); err != nil {
 			return reply, fmt.Errorf("deploy-dispatch %s: re-establishing k3s port-forwards: %w", req.Op, err)
 		}
 	}
