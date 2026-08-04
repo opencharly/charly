@@ -1,6 +1,7 @@
-package main
+package doctor
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"os"
@@ -8,13 +9,61 @@ import (
 	"strings"
 	"time"
 
+	pb "github.com/opencharly/spec/proto"
 	"github.com/opencharly/spec/spec"
 )
 
-// CheckBinaryFreshness verifies the running charly binary isn't stale relative
-// to the source tree it's invoked from. Aborts the process with a clear,
-// actionable error message if the source tree at (or above) cwd contains
-// .go files newer than the running binary.
+// freshness.go — K5 seam-death of charly/main_freshness.go, verb:freshness-guard's
+// ops.OpPreflight handler. The former "must stay core" reasoning was never a genuine boundary
+// constraint — this compiled-in plugin runs in the SAME process as the host, so it can read
+// os.Args/os.Getwd/os.Executable/the filesystem exactly as core could. The only two facts a
+// compiled-in plugin genuinely cannot compute itself are threaded in as params: the parsed verb
+// path (main.go has ctx.Command(); this plugin doesn't run Kong) and the binary's stamped CalVer
+// version (CharlyVersion() lives in package main, which no other package may import — a
+// structural Go limitation, not difficulty).
+//
+// Both original checks (CheckBinaryFreshness — the 2026-05-09 cuda-cudnn incident guardrail —
+// and CheckBinaryStamped — the disposable-bed-runner unstamped-binary guardrail) are folded into
+// ONE Invoke: a HARD gate, not a data transform like OpBootstrap, so the reply just carries
+// Refuse+Message; the caller (charly/preflight_phase.go) prints Message to stderr and exits 1.
+
+// freshnessGuardInput is the ops.OpPreflight params this capability expects.
+type freshnessGuardInput struct {
+	VerbPath string `json:"verb_path"`
+	Version  string `json:"version"`
+}
+
+// freshnessGuardReply is the ops.OpPreflight reply: Refuse=true means the caller must print
+// Message to stderr and exit 1.
+type freshnessGuardReply struct {
+	Refuse  bool   `json:"refuse,omitempty"`
+	Message string `json:"message,omitempty"`
+}
+
+// invokeFreshnessGuard runs both freshness checks in-process and returns the combined verdict.
+func invokeFreshnessGuard(req *pb.InvokeRequest) (*pb.InvokeReply, error) {
+	var in freshnessGuardInput
+	if len(req.GetParamsJson()) > 0 {
+		if err := json.Unmarshal(req.GetParamsJson(), &in); err != nil {
+			return nil, fmt.Errorf("plugin-doctor: decode freshness-guard params: %w", err)
+		}
+	}
+	reply := freshnessGuardReply{}
+	if msg, refuse := staleBinaryMessage(in.VerbPath); refuse {
+		reply = freshnessGuardReply{Refuse: true, Message: msg}
+	} else if msg, refuse := unstampedBinaryMessage(in.VerbPath, in.Version); refuse {
+		reply = freshnessGuardReply{Refuse: true, Message: msg}
+	}
+	out, err := json.Marshal(reply)
+	if err != nil {
+		return nil, fmt.Errorf("plugin-doctor: marshal freshness-guard reply: %w", err)
+	}
+	return &pb.InvokeReply{ResultJson: out}, nil
+}
+
+// staleBinaryMessage verifies the running charly binary isn't stale relative to the source tree
+// it's invoked from. Returns the actionable error message + refuse=true if the source tree at (or
+// above) cwd contains .go files newer than the running binary.
 //
 // Why this exists — the 2026-05-09 cuda-cudnn incident:
 //
@@ -44,7 +93,7 @@ import (
 //  2. Stat the running binary via os.Executable().
 //  3. Walk every .go file under <sourceRoot>/charly/, find the newest mtime.
 //  4. If newest source mtime > binary mtime + 60s slack, the binary is
-//     stale. Emit a detailed error and exit 1.
+//     stale.
 //
 // The 60-second slack absorbs same-clock-second builds (binary written,
 // then a .go file touched within the same second by an editor save) and
@@ -62,57 +111,58 @@ import (
 // this for CI runs where the binary is intentionally pinned to a
 // specific build, for testing pre-built images, or as an emergency
 // override. NOT recommended for routine development.
-func CheckBinaryFreshness(verbPath string) {
+func staleBinaryMessage(verbPath string) (message string, refuse bool) {
 	if os.Getenv("CHARLY_SKIP_FRESHNESS_CHECK") != "" {
-		return
+		return "", false
 	}
 	if isFreshnessSafeVerb(verbPath) {
-		return
+		return "", false
 	}
 
 	binPath, err := os.Executable()
 	if err != nil {
-		return
+		return "", false
 	}
 	binStat, err := os.Stat(binPath)
 	if err != nil {
-		return
+		return "", false
 	}
 
 	cwd, err := os.Getwd()
 	if err != nil {
-		return
+		return "", false
 	}
 	sourceRoot := findCharlySourceRoot(cwd)
 	if sourceRoot == "" {
-		return
+		return "", false
 	}
 
 	newestPath, newestModTime := newestGoFile(filepath.Join(sourceRoot, "charly"))
 	if newestPath == "" {
-		return
+		return "", false
 	}
 
 	// 60-second slack: same-second builds + FS mtime rounding.
 	if newestModTime.Before(binStat.ModTime().Add(60 * time.Second)) {
-		return
+		return "", false
 	}
 
 	rel, _ := filepath.Rel(sourceRoot, newestPath)
-	fmt.Fprintf(os.Stderr, "charly: error: stale binary detected — refusing to run %q\n\n", verbPath)
-	fmt.Fprintf(os.Stderr, "  running:        %s\n", binPath)
-	fmt.Fprintf(os.Stderr, "  binary mtime:   %s\n", binStat.ModTime().Format(time.RFC3339))
-	fmt.Fprintf(os.Stderr, "  newer source:   %s\n", rel)
-	fmt.Fprintf(os.Stderr, "  source mtime:   %s\n", newestModTime.Format(time.RFC3339))
-	fmt.Fprintf(os.Stderr, "  source root:    %s\n\n", sourceRoot)
-	fmt.Fprintf(os.Stderr, "The source tree has been edited since this binary was built.\n")
-	fmt.Fprintf(os.Stderr, "Running heavy operations against a stale binary leads to silent\n")
-	fmt.Fprintf(os.Stderr, "miscompilation — e.g. the 2026-05-09 cuda-cudnn incident burned\n")
-	fmt.Fprintf(os.Stderr, "90 minutes re-downloading 462 MiB because /usr/bin/charly predated\n")
-	fmt.Fprintf(os.Stderr, "the cache-mount fix at commit 230c5d4.\n\n")
-	fmt.Fprintf(os.Stderr, "Fix:    cd %s && task build:binary   (then use ./bin/charly)\n", sourceRoot)
-	fmt.Fprintf(os.Stderr, "Bypass: export CHARLY_SKIP_FRESHNESS_CHECK=1   (NOT recommended)\n")
-	os.Exit(1)
+	var b strings.Builder
+	fmt.Fprintf(&b, "charly: error: stale binary detected — refusing to run %q\n\n", verbPath)
+	fmt.Fprintf(&b, "  running:        %s\n", binPath)
+	fmt.Fprintf(&b, "  binary mtime:   %s\n", binStat.ModTime().Format(time.RFC3339))
+	fmt.Fprintf(&b, "  newer source:   %s\n", rel)
+	fmt.Fprintf(&b, "  source mtime:   %s\n", newestModTime.Format(time.RFC3339))
+	fmt.Fprintf(&b, "  source root:    %s\n\n", sourceRoot)
+	fmt.Fprintf(&b, "The source tree has been edited since this binary was built.\n")
+	fmt.Fprintf(&b, "Running heavy operations against a stale binary leads to silent\n")
+	fmt.Fprintf(&b, "miscompilation — e.g. the 2026-05-09 cuda-cudnn incident burned\n")
+	fmt.Fprintf(&b, "90 minutes re-downloading 462 MiB because /usr/bin/charly predated\n")
+	fmt.Fprintf(&b, "the cache-mount fix at commit 230c5d4.\n\n")
+	fmt.Fprintf(&b, "Fix:    cd %s && task build:binary   (then use ./bin/charly)\n", sourceRoot)
+	fmt.Fprintf(&b, "Bypass: export CHARLY_SKIP_FRESHNESS_CHECK=1   (NOT recommended)\n")
+	return b.String(), true
 }
 
 // isFreshnessSafeVerb returns true for read-only diagnostic verbs that
@@ -146,22 +196,23 @@ func isFreshnessSafeVerb(verbPath string) bool {
 	return false
 }
 
-// CheckBinaryStamped refuses to run the disposable-bed RUNNER (`charly check run <bed>`) when the
-// executing binary reports an UNSTAMPED version ("unknown"), pointing at `task build:binary`. It is
-// the version-identity analog of CheckBinaryFreshness: a plain `go build -o bin/charly ./charly`
-// leaves BuildCalVer empty → CharlyVersion()=="unknown", and the bed runner then fails MINUTES later
-// inside an eval-VM plan step (image tags, plugin-cache keys, and bed stamp assertions all key off the
-// version) — or passes vacuously. This makes the precondition mechanical instead of a behavioral
-// "remember to task build:binary" rule the gate defect twice slipped past (R4: a precondition, never a
-// retry). Scope is ONLY `charly check run`: ctx.Command() collapses the whole check family to "check"
-// (the subcommand is a passthrough arg), so "run" is read from os.Args; check box/live and every other
-// verb are unaffected. The CHARLY_SKIP_FRESHNESS_CHECK bypass disables this too (CI / pinned builds).
-func CheckBinaryStamped(verbPath string) {
-	if !shouldRefuseUnstamped(verbPath) {
-		return
+// unstampedBinaryMessage refuses to run the disposable-bed RUNNER (`charly check run <bed>`) when
+// the executing binary reports an UNSTAMPED version ("unknown"), pointing at `task build:binary`.
+// It is the version-identity analog of staleBinaryMessage: a plain `go build -o bin/charly
+// ./charly` leaves BuildCalVer empty → version=="unknown", and the bed runner then fails MINUTES
+// later inside an eval-VM plan step (image tags, plugin-cache keys, and bed stamp assertions all
+// key off the version) — or passes vacuously. This makes the precondition mechanical instead of a
+// behavioral "remember to task build:binary" rule the gate defect twice slipped past (R4: a
+// precondition, never a retry). Scope is ONLY `charly check run`: ctx.Command() collapses the
+// whole check family to "check" (the subcommand is a passthrough arg), so "run" is read from
+// os.Args — the SAME process, so this plugin reads it exactly like main() would. The
+// CHARLY_SKIP_FRESHNESS_CHECK bypass disables this too (CI / pinned builds).
+func unstampedBinaryMessage(verbPath, version string) (message string, refuse bool) {
+	if !shouldRefuseUnstamped(verbPath, version) {
+		return "", false
 	}
 	binPath, _ := os.Executable()
-	fmt.Fprintf(os.Stderr, `charly: error: refusing to run "check run" with an UNSTAMPED binary (version "unknown")
+	msg := fmt.Sprintf(`charly: error: refusing to run "check run" with an UNSTAMPED binary (version "unknown")
 
   running:  %s
 
@@ -173,14 +224,15 @@ twice-recurred gate defect.
 Fix:    task build:binary                        # stamps the CalVer identity
 Bypass: export CHARLY_SKIP_FRESHNESS_CHECK=1      (NOT recommended)
 `, binPath)
-	os.Exit(1)
+	return msg, true
 }
 
 // checkSubcommandIsRun reports whether the check family's subcommand is "run" — the token
 // immediately after the "check" command word in os.Args. This is a raw argv scan independent of
 // how Kong ends up rendering the parsed command path (a flat passthrough for a capability with no
 // declared subcommand catalog, or a real nested `cmd:""` child under F-CLI-NEST), so it stays
-// correct either way.
+// correct either way. os.Args is a process-global — this plugin reads it exactly like main()
+// would, since it runs in the SAME process (compiled-in).
 func checkSubcommandIsRun() bool {
 	for i, a := range os.Args {
 		if a == "check" {
@@ -190,15 +242,20 @@ func checkSubcommandIsRun() bool {
 	return false
 }
 
-// shouldRefuseUnstamped is CheckBinaryStamped's pure decision: refuse iff the verb is `check run`
-// (the bed runner) AND the binary is unstamped, and the CHARLY_SKIP_FRESHNESS_CHECK bypass is unset.
-// verbPath is normalized via commandPathKey and compared by its FIRST token: `check` declares a
-// subcommand catalog (F-CLI-NEST), so Kong renders "check run <args>"/"check box <args>"/etc — one
-// token deeper than the bare "check" an exact compare would expect — never just "check <args>" (a
-// command with no declared subcommands still renders that flat form; either shape's first token is
-// what identifies the command family, so comparing that alone is what the isolated os.Args unit
-// test could not catch on its own).
-func shouldRefuseUnstamped(verbPath string) bool {
+// commandPathKey strips the trailing " <args>" placeholder Kong renders for a command's deepest
+// pass-through Args leaf, yielding the command PATH Kong actually parsed (mirrors charly/
+// provider_command_external.go's commandPathKey — a 2-line pure function, not worth a cross-module
+// import for).
+func commandPathKey(kongCommand string) string {
+	return strings.TrimSuffix(kongCommand, " <args>")
+}
+
+// shouldRefuseUnstamped is unstampedBinaryMessage's pure decision: refuse iff the verb is `check
+// run` (the bed runner) AND the binary is unstamped, and the CHARLY_SKIP_FRESHNESS_CHECK bypass is
+// unset. verbPath is normalized via commandPathKey and compared by its FIRST token: `check`
+// declares a subcommand catalog (F-CLI-NEST), so Kong renders "check run <args>"/"check box
+// <args>"/etc — one token deeper than the bare "check" an exact compare would expect.
+func shouldRefuseUnstamped(verbPath, version string) bool {
 	if os.Getenv("CHARLY_SKIP_FRESHNESS_CHECK") != "" {
 		return false
 	}
@@ -206,7 +263,7 @@ func shouldRefuseUnstamped(verbPath string) bool {
 	if (key != "check" && !strings.HasPrefix(key, "check ")) || !checkSubcommandIsRun() {
 		return false
 	}
-	return CharlyVersion() == "unknown"
+	return version == "unknown"
 }
 
 // findCharlySourceRoot walks up from start looking for a directory that

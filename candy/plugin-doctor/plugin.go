@@ -34,12 +34,21 @@ import (
 // NewProvider returns the doctor provider.
 func NewProvider() pb.ProviderServer { return &provider{} }
 
-// NewMeta advertises command:doctor — the COMPILED-IN registry path resolves it (registerCompiledPlugin
-// → providerRegistry.resolve(ClassCommand,"doctor") → dispatchInProcCommand → Invoke(OpRun) with the
-// threaded in-proc reverse channel) — plus the self-contained doc schema, via sdk.NewMeta.
+// NewMeta advertises TWO capabilities, both served by the SAME provider.Invoke (dispatched by
+// req.GetReserved()):
+//   - command:doctor — the COMPILED-IN registry path resolves it (registerCompiledPlugin →
+//     providerRegistry.resolve(ClassCommand,"doctor") → dispatchInProcCommand → Invoke(OpRun) with
+//     the threaded in-proc reverse channel), plus the self-contained doc schema.
+//   - verb:freshness-guard, Phase=="preflight" — K5 seam-death of charly/main_freshness.go: the
+//     kernel's runPreflightPhase (charly/preflight_phase.go) enumerates every Phase=="preflight"
+//     provider and Invokes it with ops.OpPreflight right after Kong parses the command line,
+//     BEFORE dispatching to any command. See freshness.go for the ported check logic.
 func NewMeta() pb.PluginMetaServer {
 	return sdk.NewMeta("2026.181.0001",
-		[]sdk.ProvidedCapability{{Class: "command", Word: "doctor"}},
+		[]sdk.ProvidedCapability{
+			{Class: "command", Word: "doctor"},
+			{Class: "verb", Word: "freshness-guard", Phase: sdk.PhasePreflight},
+		},
 		nil)
 }
 

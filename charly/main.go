@@ -249,18 +249,13 @@ func main() {
 		}
 	}
 
-	// Stale-binary guardrail: if cwd is inside an opencharly source tree
-	// AND the source tree has .go files newer than this binary, abort
-	// with a clear error pointing at `task build:binary`. See
-	// CheckBinaryFreshness for the full rationale (CLAUDE.md R9 +
-	// the 2026-05-09 cuda-cudnn cache-mount incident).
-	CheckBinaryFreshness(ctx.Command())
-
-	// Refuse the disposable-bed RUNNER (`charly check run`) on an UNSTAMPED binary
-	// (version "unknown") — the version-identity analog of the freshness guard above.
-	// See CheckBinaryStamped (#74: the twice-recurred gate defect where a plain
-	// `go build` binary fails a bed run minutes in, or passes vacuously).
-	CheckBinaryStamped(ctx.Command())
+	// Preflight-phase pre-pass (K5 seam-death): every PhasePreflight provider gets a chance to
+	// hard-refuse this invocation BEFORE any command dispatch — candy/plugin-doctor's
+	// verb:freshness-guard is the sole provider today, folding the former CheckBinaryFreshness
+	// (CLAUDE.md R9 + the 2026-05-09 cuda-cudnn cache-mount incident) and CheckBinaryStamped
+	// (#74: the twice-recurred unstamped-binary gate defect) checks into one Invoke. See
+	// preflight_phase.go + candy/plugin-doctor/freshness.go for the full rationale.
+	runPreflightPhase(ctx.Command())
 
 	// Cleanup hygiene: install a global signal handler so that registered
 	// temp-file paths are removed on SIGTERM/SIGINT/SIGHUP, and sweep any
