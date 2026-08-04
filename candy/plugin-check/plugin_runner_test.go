@@ -2,6 +2,7 @@ package check
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/opencharly/sdk/kit"
@@ -52,5 +53,57 @@ func TestNewPluginCheckRunner_VerbResolverTracksLiveExec(t *testing.T) {
 	// VenueDescriptor unset.
 	if d := kit.DescriptorFromExecutor(pvr.kr.Exec().(spec.DeployExecutor)); d.Kind != "ssh" {
 		t.Errorf("DescriptorFromExecutor(pvr.kr.Exec()) = %+v, want Kind=%q", d, "ssh")
+	}
+}
+
+// TestPluginSnapshotCheckEnv_ReflectsSwapVenue is the regression test for the #55 W3
+// check-cross-pod-cdp bed RCA: a GROUP bed's runner starts with Box=<group-root-name> (a pure
+// group has no container of its own) and SwapVenue retargets Box to the OWNING MEMBER for every
+// step (a group root can carry no direct plan steps). The former pluginVerbResolver.env was a
+// STATIC field frozen at construction time — the wire envelope RunVerb sends to
+// charly/plugin_dispatch_reverse.go's InvokeProvider handler (which decodes it to construct the
+// detached CheckContext serving cc.ResolveEndpoint et al.) kept reporting the group's own bare
+// name even after SwapVenue moved the runner to a real member — "container
+// charly-check-cross-pod-cdp is not running" for a bed whose actual cdp subject is the chrome
+// member. This proves pluginSnapshotCheckEnv(pvr.kr) — the value RunVerb now marshals on every
+// call — tracks a mid-plan SwapVenue rather than the frozen construction-time snapshot, sibling to
+// TestNewPluginCheckRunner_VerbResolverTracksLiveExec's identical proof for the Exec() half of the
+// same staleness class.
+func TestPluginSnapshotCheckEnv_ReflectsSwapVenue(t *testing.T) {
+	const groupRoot = "check-cross-pod-cdp"
+	chromeExec := &kit.SSHExecutor{Host: "charly-" + groupRoot + "-chrome-regression", ConnectTimeout: 10}
+	resolver := kit.VenueResolver(func(venue string) (kit.Executor, map[string]string, bool, error) {
+		if venue == "chrome" {
+			return chromeExec, nil, true, nil
+		}
+		return nil, nil, false, fmt.Errorf("unexpected venue %q", venue)
+	})
+
+	runner := newPluginCheckRunner(nil, context.Background(), spec.CheckEnv{
+		Mode: "live",
+		Box:  groupRoot,
+	}, kit.RunnerConfig{
+		Mode:           kit.ModeLive,
+		Box:            groupRoot,
+		TargetResolver: resolver,
+	})
+	pvr, ok := runner.Verbs().(*pluginVerbResolver)
+	if !ok {
+		t.Fatalf("runner.Verbs() = %T, want *pluginVerbResolver", runner.Verbs())
+	}
+
+	if before := pluginSnapshotCheckEnv(pvr.kr); before.Box != groupRoot {
+		t.Fatalf("pre-swap pluginSnapshotCheckEnv(pvr.kr).Box = %q, want the group root %q", before.Box, groupRoot)
+	}
+
+	restore, failReason := runner.SwapVenue(&spec.Op{Venue: "chrome"})
+	if failReason != "" {
+		t.Fatalf("SwapVenue(chrome) failed: %s", failReason)
+	}
+	defer restore()
+
+	after := pluginSnapshotCheckEnv(pvr.kr)
+	if after.Box != "chrome" {
+		t.Errorf("post-swap pluginSnapshotCheckEnv(pvr.kr).Box = %q, want the swapped member %q — RunVerb's wire envelope must track SwapVenue, not the group root frozen at construction", after.Box, "chrome")
 	}
 }

@@ -54,11 +54,59 @@ const classVerb = "verb"
 // its own executor-threaded incoming Invoke. A STATIC field set once at construction (the former
 // design) went stale the instant SwapVenue retargeted the runner for a cross-deployment or
 // GROUP-member step — RCA'd live via a nil cc.Exec() crash on a VM target's `command:` step.
+//
+// #55 W3 (check-cross-pod-cdp bed RCA): that earlier fix derived the EXECUTOR fresh from r.kr on
+// every RunVerb call but left `env` a STATIC field, marshalled UNCHANGED into every dispatch's
+// wire envelope — the exact same staleness class, just for the Box/Instance/Mode/etc. sibling
+// fields instead of Exec. A GROUP bed's runner starts with Box=<group-root-name> (a pure group
+// has no container of its own; flattenBundleVenues hard-errors a direct plan step there), and
+// EVERY step immediately SwapVenue-retargets Box to its OWNING MEMBER — but the frozen `env` kept
+// reporting the group's own bare name. charly/plugin_dispatch_reverse.go's InvokeProvider host
+// handler decodes THIS envelope to construct the detached CheckContext serving the verb's
+// reverse-leg calls (cc.ResolveEndpoint/ResolveGraphicsEndpoint/ResolveImageLabel), so an
+// out-of-process live-container verb (cdp/vnc/dbus/mcp/spice) always resolved the group's own
+// (container-less) name instead of the swapped member — "container
+// charly-check-cross-pod-cdp is not running" for a bed whose actual cdp subject is the chrome
+// member. RunVerb now builds env FRESH from r.kr on every call (pluginSnapshotCheckEnv, mirroring
+// charly/provider_checkenv.go's snapshotCheckEnv field-for-field) instead of reusing the
+// construction-time snapshot; the constructor-supplied `env` survives only as the defensive
+// fallback for the (never-hit-in-practice) r.kr == nil case, matching the Exec-derivation block's
+// own existing nil-guard style.
 type pluginVerbResolver struct {
 	ex  *sdk.Executor
 	ctx context.Context
 	env spec.CheckEnv
 	kr  *kit.Runner
+}
+
+// pluginSnapshotCheckEnv builds a spec.CheckEnv from kr's CURRENT live state — the plugin-side
+// mirror of charly/provider_checkenv.go's snapshotCheckEnv (that function's own doc comment
+// explains each field's derivation; kept in exact field-for-field lockstep here, R3).
+func pluginSnapshotCheckEnv(kr *kit.Runner) spec.CheckEnv {
+	ce := spec.CheckEnv{
+		Box:           kr.VmTargetName(),
+		Instance:      kr.Instance(),
+		Distros:       kr.Distros(),
+		Mode:          runModeString(kr.Mode()),
+		DialTimeoutNs: int64(kr.DialTimeout()),
+	}
+	if kr.Mode() != kit.ModeBox && kr.Box() != "" && kr.Box() != "." {
+		ce.ContainerName = spec.ContainerNameInstance(spec.ResolveBoxName(kr.Box()), kr.Instance())
+	}
+	if de, ok := kr.Exec().(spec.DeployExecutor); ok {
+		ce.Venue = de.Venue()
+		ce.VenueKind = de.Kind()
+	}
+	return ce
+}
+
+// runModeString converts kr.Mode() to the wire mode string — the reverse of verify_checks.go's
+// verifyChecksMode.
+func runModeString(m kit.RunMode) string {
+	if m == kit.ModeBox {
+		return "box"
+	}
+	return "live"
 }
 
 var _ kit.VerbResolver = (*pluginVerbResolver)(nil)
@@ -75,7 +123,11 @@ func (r *pluginVerbResolver) RunVerb(ctx context.Context, op *spec.Op) (spec.Che
 	if err != nil {
 		return spec.CheckResult{Status: spec.StatusFail, Message: "verb " + word + ": marshal op: " + err.Error()}, true
 	}
-	envJSON, err := json.Marshal(r.env)
+	env := r.env
+	if r.kr != nil {
+		env = pluginSnapshotCheckEnv(r.kr)
+	}
+	envJSON, err := json.Marshal(env)
 	if err != nil {
 		return spec.CheckResult{Status: spec.StatusFail, Message: "verb " + word + ": marshal env: " + err.Error()}, true
 	}
