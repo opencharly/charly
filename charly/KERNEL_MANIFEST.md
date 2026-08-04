@@ -51,8 +51,9 @@ is checked against, per the program's "measured beats estimated" running correct
 - `runUnifiedTargetChecks`'s `OnlyIDs` pre-filter loop moved to `candy/plugin-check`'s
   `verifyChecksRunOps` (new `spec.VerifyChecksRequest.OnlyIDs` field, opt-in additive — a
   zero-value request is byte-identical to every pre-existing `dispatchVerifyChecks` caller,
-  verified against `check_cmd.go`'s `runLocalDeployScopePlan`, the only other caller, which never
-  sets it). R1 fix in the same commit: the function's own doc comment ("Shared by Pod/Vm/the local
+  verified against `check_cmd.go`'s `runLocalDeployScopePlan` — at the time the only other caller,
+  which never set it; that function relocated to candy/plugin-bundle's verify_local.go at #55 W3
+  B3). R1 fix in the same commit: the function's own doc comment ("Shared by Pod/Vm/the local
   deploy target.Test — the three were byte-identical") was stale — verified via grep, its real
   fan-in is exactly one call site (`pluginDeployTarget.Test`) post-S3b.
 - `ledgerRoot` struct field + its `dispatch()`-time `req.LedgerRoot` threading deleted — zero

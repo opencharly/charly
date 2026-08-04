@@ -12,12 +12,13 @@ package check
 //
 // K1-unblock wave arm 1: vmHostdevCount + the checkLive* family (pod/vm/local/group) + their
 // dispatcher landed plugin-side too — see live_gather.go (pluginVmHostdevCount,
-// pluginCheckLivePod/VM/Local/Group, pluginCheckRunLive). STILL core-only (used by the
-// "check-load-plugins" seam and the external `target: local` deploy's own --verify path — neither
-// is part of any check-run Mode this package dispatches): resolveCheckRunnerContext,
-// checkLocalDeployScope, runLocalDeployScopePlan (charly/check_cmd.go). deployNodePluginContext
-// relocated to charly/plugin_loader.go (#55 W3 B3, beside its M-mechanism consumer
-// loadDeployPlugins) — still core-only, different file.
+// pluginCheckLivePod/VM/Local/Group, pluginCheckRunLive). STILL core-only (feeds the
+// "check-load-plugins" seam, not part of any check-run Mode this package dispatches):
+// resolveCheckRunnerContext (charly/check_cmd.go). deployNodePluginContext relocated to
+// charly/plugin_loader.go (#55 W3 B3, beside its M-mechanism consumer loadDeployPlugins) — still
+// core-only, different file. checkLocalDeployScope/runLocalDeployScopePlan (the external
+// `target: local` deploy's own --verify path) relocated to candy/plugin-bundle (#55 W3 B3,
+// verify_local.go) — no longer core at all.
 
 import (
 	"strings"

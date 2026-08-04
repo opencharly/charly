@@ -287,20 +287,10 @@ func (t *pluginDeployTarget) Add(ctx context.Context, dctx *DeployContext, plans
 	if opts.DryRun {
 		return nil
 	}
-
-	if opts.Verify {
-		if t.hasLifecycle {
-			fmt.Fprintf(os.Stderr, "external deploy %q: --verify deferred to `charly check live` (the %s substrate verifies its live venue post-deploy, with the venue's runtime identity)\n", t.name, t.word)
-		} else {
-			fails, verr := checkLocalDeployScope(dir, t.node, t.name, "", "", nil, t.venueExecutor(), "text")
-			if verr != nil {
-				return fmt.Errorf("external deploy %q: --verify: %w", t.name, verr)
-			}
-			if fails > 0 {
-				return fmt.Errorf("external deploy %q: --verify: %d deploy-scope check(s) failed", t.name, fails)
-			}
-		}
-	}
+	// --verify runs PLUGIN-SIDE now, INSIDE the dispatch call above (#55 W3 B3, candy/plugin-bundle's
+	// handleDeployApply/verifyLocalDeployScope) — reusing the SAME venue that dispatch already
+	// resolved, in the SAME RPC round-trip, rather than re-materializing t.venueExecutor() here
+	// after the fact. A dispatch error already returned above if verify failed.
 	return nil
 }
 

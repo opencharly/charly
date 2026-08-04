@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -35,9 +36,15 @@ import (
 //     ctx-opts marshals with zero core-only dependency of their own, so there is no reason to move
 //     them; the core-side dispatch caller reads them and threads the result as this file's
 //     OptsJSON request field.
-//   - --verify (checkLocalDeployScope, charly/unified_targets.go's Add, AFTER this whole dispatch
-//     call returns) — a deep check-engine concern with no candy-secrets/artifact dependency of
-//     its own; out of the Cone A shape 3 cutover's scope (see that file's own comment).
+//
+// --verify (verifyLocalDeployScope, verify_local.go) MOVED here too (#55 W3 B3): the "out of the
+// Cone A shape 3 cutover's scope" framing this comment used to carry was a deferral, not a genuine
+// boundary finding — opts.Verify/req.HasLifecycle were ALREADY on this dispatch's own wire
+// (spec.LifecycleOptsFromEmit), so handleDeployApply below runs the check-verify pass itself now,
+// reaching command:check via the SAME direct InvokeProvider pattern this file already uses for the
+// `deploy` class. No new seam was needed at all: this package's OWN node_resolve.go already
+// carried lookupLocalTemplate, a fully plugin-native resolver — reusing it made the former core
+// findLocalSpec/resolveLocalRefFor/namespace.go fully dead (all three deleted).
 //
 // What DID move (the substrate-generic core): PrepareVenue, the views+venue marshal +
 // InvokeProvider dispatch to the ACTUAL substrate provider (S1), recordDeploy (the ledger write —
@@ -211,9 +218,9 @@ func resolveRootExecutor(req spec.DeployTargetDispatchRequest) (deploykit.Deploy
 // credential-store touch, live artifact fetch) stay behind thin HostBuild seams, but the
 // ORCHESTRATION — inject BEFORE dispatch, retrieve+dispatch-registers AFTER — runs plugin-side,
 // wrapping PrepareVenue (for a lifecycle substrate), the views+venue marshal, the actual substrate
-// dispatch, recordDeploy, recordVenueLedger. --verify (checkLocalDeployScope) STAYS core-side
-// (charly/unified_targets.go's Add, after this whole dispatch call returns) — it is a deep
-// check-engine concern with no candy-secrets/artifact dependency, out of this cutover's scope.
+// dispatch, recordDeploy, recordVenueLedger. --verify (verifyLocalDeployScope, verify_local.go)
+// runs HERE too now (#55 W3 B3), AFTER the artifact retrieval/register dispatch below — mirroring
+// the former core Add()'s exact ordering (verify ran after the whole dispatch returned).
 func handleDeployApply(ctx context.Context, exec *sdk.Executor, req spec.DeployTargetDispatchRequest, isUpdate bool) (spec.DeployTargetDispatchReply, error) {
 	var reply spec.DeployTargetDispatchReply
 	// Decode directly into the wire-safe spec.LifecycleOpts (R10 bed fix, S3b) — NEVER
@@ -393,6 +400,27 @@ func handleDeployApply(ctx context.Context, exec *sdk.Executor, req spec.DeployT
 		artifactEnv := deploykit.BuildArtifactEnv(secretEnv, req.Node)
 		if err := retrieveArtifactsAndDispatchRegisters(ctx, exec, localExec, req.Dir, plans, artifactKey, req.Name, artifactEnv, registerHints); err != nil {
 			return reply, fmt.Errorf("deploy-dispatch %s: %w", req.Op, err)
+		}
+		// --verify (#55 W3 B3, relocated from charly/unified_targets.go's Add): a lifecycle
+		// substrate defers verification to `charly check live` (its venue's runtime identity isn't
+		// settled until then); a non-lifecycle (in-place) substrate's deploy-scope check pass runs
+		// HERE, now, over the SAME venue this dispatch already resolved.
+		if opts.Verify {
+			if req.HasLifecycle {
+				fmt.Fprintf(os.Stderr, "external deploy %q: --verify deferred to `charly check live` (the %s substrate verifies its live venue post-deploy, with the venue's runtime identity)\n", req.Name, req.Word)
+			} else {
+				var from string
+				if req.Node != nil {
+					from = req.Node.From
+				}
+				fails, verr := verifyLocalDeployScope(ctx, exec, req.Dir, req.Name, from, req.Node, venueDesc)
+				if verr != nil {
+					return reply, fmt.Errorf("deploy-dispatch %s: --verify: %w", req.Op, verr)
+				}
+				if fails > 0 {
+					return reply, fmt.Errorf("deploy-dispatch %s: --verify: %d deploy-scope check(s) failed", req.Op, fails)
+				}
+			}
 		}
 	} else if kubeAlreadyConnected(ctx, exec) {
 		// R1 fix (K1-alpha regression, ported verbatim from the former core Update()): Add()

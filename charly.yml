@@ -951,8 +951,8 @@ check-group:
                 from: check-group-app
                 # The marker check is authored HERE, on the deploy node's OWN plan. A composed
                 # candy's `plan:` is NEVER surfaced to a deploy-scope check runner for a non-image
-                # deploy (checkLocalDeployScope sources only the template's plan, the node's plan,
-                # and the folded entry). The check that lived only in check-group-layer therefore
+                # deploy (the --verify plan-assembly sources only the template's plan, the node's
+                # plan, and the folded entry). The check that lived only in check-group-layer therefore
                 # never executed and this bed passed asserting nothing. hoistVenueSubtree lifts the
                 # step to the group root with venue `check-group-vm.check-group-member` — the guest.
                 plan:

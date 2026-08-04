@@ -5,11 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strings"
 
 	specexec "github.com/opencharly/spec/exec"
 	"github.com/opencharly/spec/ops"
-	"github.com/opencharly/spec/report"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -110,67 +108,20 @@ func resolveCheckRunnerContext(box, dir string, cfg *spec.Config) checkRunnerCon
 // header on loadDeployPlugins for the FLOOR-M clause. resolveCheckRunnerContext (below) still calls
 // deployNodePluginContext directly — same package, different file, zero behavior change.
 
-// checkLocalDeployScope collects a local deployment's deploy-scope checks —
-// kind:local template `check:` (base) merged with the deploy entry `check:`
-// (extends/overrides) and the per-host charly.yml overlay — and runs them on
-// `exec`. Used by `charly bundle add <local> --verify` (the local deploy target);
-// `charly check live <local>` now runs plugin-side (candy/plugin-check/live_gather.go's
-// pluginCheckLiveLocal), sourcing the SAME plan shape off the resolved-project envelope. Host-
-// context vars only (no HOST_PORT:<N> / CONTAINER_IP). Returns the failure count.
-func checkLocalDeployScope(dir string, node *spec.BundleNode, image, instance, _ string, _ []string, exec spec.DeployExecutor, format string) (int, error) { //nolint:unparam // error return kept for symmetry with sibling deploy-scope checks
-	results, hadPlan, err := runLocalDeployScopePlan(dir, node, image, instance, exec)
-	if err != nil {
-		return 0, err
-	}
-	if !hadPlan {
-		fmt.Fprintln(os.Stderr, "No plan steps to run.")
-		return 0, nil
-	}
-	return report.ReportStepResultsCount(os.Stdout, results, format), nil
-}
-
-// runLocalDeployScopePlan collects a local deployment's deploy-scope plan — the kind:local
-// template `check:` (base) + the deploy node `check:` — and runs it on exec, returning the
-// per-step results. hadPlan is false when there were no plan steps (the caller prints its own
-// "no plan" line). CLI-free core shared by checkLocalDeployScope (the external local deploy
-// --verify path, reporting to os.Stdout) — the check-live CLI counterpart now runs plugin-side
-// (pluginRunLocalDeployScopePlan, candy/plugin-check/live_gather.go). Host-context vars only
-// (no HOST_PORT:<N> / CONTAINER_IP). Folds the ${HOST} CloseHosts teardown (design §6): the
-// ssh -L forwards a VM-peer subject opens are torn down after the plan run.
-//
-// The per-host charly.yml OVERLAY merge (the deploy-entry `check:` extends/overrides) moved
-// PLUGIN-SIDE (#55 CHECK-ENGINE cone Option A — candy/plugin-check/verify_checks.go's
-// verifyChecksRunPlan reads the per-host deploy config via sdk/deploykit itself, so the core
-// `target: local` --verify path imports zero deploykit). What STAYS core is the kind:local
-// template + deploy-node plan ASSEMBLY (findLocalSpec + node.Plan) — the base plan threaded to
-// the plugin, which appends the overlay entry's plan before driving RunPlan.
-func runLocalDeployScopePlan(dir string, node *spec.BundleNode, image, instance string, exec spec.DeployExecutor) (results []spec.StepResult, hadPlan bool, err error) {
-	var plan []spec.Step
-	if node != nil && strings.TrimSpace(node.From) != "" {
-		if spec, _ := findLocalSpec(dir, strings.TrimSpace(node.From)); spec != nil {
-			plan = append(plan, spec.Plan...)
-		}
-	}
-	if node != nil {
-		plan = append(plan, node.Plan...)
-	}
-	if len(plan) == 0 {
-		return nil, false, nil
-	}
-	// The RunPlan-DRIVE + the per-host overlay merge run PLUGIN-SIDE (command:check OpVerifyChecks,
-	// #55 CHECK-ENGINE cone Unit 2): the plugin rebuilds the host-context env (USER/HOME via the
-	// venue's ResolveHome), the ${HOST:<member>} host-vars, and the cross-deployment TargetResolver
-	// from {dir, box, instance} — none of which cross the wire (plugin-check already does this for
-	// check-live) — and appends the per-host overlay entry's plan before driving RunPlan. What STAYS
-	// core is exactly this base-plan ASSEMBLY (kind:local template via findLocalSpec + deploy node).
-	results, err = dispatchVerifyChecks(context.Background(), exec, spec.VerifyChecksRequest{
-		Plan: plan, Mode: "live", Box: image, Instance: instance, VerifyOnly: true, Dir: dir,
-	})
-	if err != nil {
-		return nil, true, err
-	}
-	return results, true, nil
-}
+// checkLocalDeployScope/runLocalDeployScopePlan relocated to candy/plugin-bundle (#55 W3 B3,
+// verify_local.go's verifyLocalDeployScope/localDeployScopePlan): the "target: local --verify"
+// path they served (charly/unified_targets.go's Add) already dispatches to candy/plugin-bundle on
+// EVERY call with opts.Verify/req.HasLifecycle already on the wire (spec.LifecycleOptsFromEmit),
+// so the check-verify pass now runs INSIDE that same dispatch, over the SAME venue, in the SAME
+// RPC round-trip — reaching command:check via a direct InvokeProvider(command,"check") call
+// instead of core's former in-proc reverse-channel plumbing (redundant with the sanctioned wire
+// shape — command:check's own verifyChecksForHost re-materializes its executor purely from the
+// request body's Venue field, confirmed by reading candy/plugin-check/verify_checks.go). No new
+// seam was needed for the template-plan lookup either: candy/plugin-bundle's OWN node_resolve.go
+// already carried lookupLocalTemplate, a fully plugin-native resolver (the resolved-project
+// envelope + a direct InvokeProvider(kind,"local") call, no LoadUnified) — reusing it (R3) is what
+// finally makes the former core findLocalSpec/resolveLocalRefFor/namespace.go fully dead; all
+// three are DELETED.
 
 // dispatchVerifyChecks drives a deploy-scope check pass PLUGIN-SIDE via command:check's
 // OpVerifyChecks (#55 CHECK-ENGINE cone Unit 2). The host holds a live venue executor but no longer
