@@ -762,7 +762,7 @@ func updateAllDeployedQuadlets(ctx context.Context, ex *sdk.Executor, rt *kit.Re
 		}
 		envVars = appendAutoDetectedEnv(envVars, detected)
 
-		provisioned, _, provResolutions, isKeyring, perr := resolvePodProvisionSecrets(ctx, ex, &meta, boxName, instance, rt.RunEngine, true, nil)
+		provisioned, _, provResolutions, perr := resolvePodProvisionSecrets(ctx, ex, &meta, boxName, instance, rt.RunEngine, true, nil)
 		if perr != nil {
 			fmt.Fprintf(os.Stderr, "Warning: provisioning secrets for %s: %v\n", key, perr)
 			continue
@@ -806,7 +806,7 @@ func updateAllDeployedQuadlets(ctx context.Context, ex *sdk.Executor, rt *kit.Re
 			Tunnel: tunnelCfg, UID: meta.UID, GID: meta.GID, Env: envVars, EnvFile: quadletEnvFile,
 			Security: security, Network: resolvedNetwork, Status: meta.Status, Info: meta.Info,
 			Entrypoint: resolveEntrypointFromMeta(&meta), Secrets: provisioned, CharlyBin: charlyBin,
-			EncryptedMounts: deploykit.HasEncryptedBindMounts(bindMounts), KeyringBackend: isKeyring,
+			EncryptedMounts: deploykit.HasEncryptedBindMounts(bindMounts),
 			PodName: podName, Sidecar: resolvedSidecars,
 		}
 		if quadletEnvFile != "" {

@@ -325,7 +325,7 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 	}
 
 	autoGen := c.Password == "auto"
-	provisioned, provFallback, provResolutions, isKeyring, perr := resolvePodProvisionSecrets(ctx, ex, &meta, c.Box, c.Instance, rt.RunEngine, autoGen, c.RefreshSecret)
+	provisioned, provFallback, provResolutions, perr := resolvePodProvisionSecrets(ctx, ex, &meta, c.Box, c.Instance, rt.RunEngine, autoGen, c.RefreshSecret)
 	if perr != nil {
 		return perr
 	}
@@ -381,7 +381,7 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 		UID: uid, GID: gid, Env: envVars, EnvFile: quadletEnvFile, Instance: c.Instance,
 		Security: security, Network: resolvedNetwork, Status: meta.Status, Info: meta.Info,
 		Entrypoint: resolveEntrypointFromMeta(&meta), Secrets: provisioned, CharlyBin: charlyBin,
-		EncryptedMounts: deploykit.HasEncryptedBindMounts(bindMounts), KeyringBackend: isKeyring,
+		EncryptedMounts: deploykit.HasEncryptedBindMounts(bindMounts),
 		PodName: podName, Sidecar: resolvedSidecars,
 	}
 

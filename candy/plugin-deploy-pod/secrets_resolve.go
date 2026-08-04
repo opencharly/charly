@@ -2,11 +2,9 @@ package deploypod
 
 import (
 	"context"
-	"os"
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -20,9 +18,9 @@ import (
 // CollectCandySecretAccepts / resolveHookSecretEnv shims are RETIRED.
 
 // resolvePodProvisionSecrets collects candy-owned + credential-backed secrets, provisions them as
-// podman secrets, and reports the resolutions + isKeyring flag — the plugin-side port of the former
+// podman secrets, and reports the resolutions — the plugin-side port of the former
 // hostBuildPodConfigProvisionSecrets seam.
-func resolvePodProvisionSecrets(ctx context.Context, ex *sdk.Executor, meta *spec.BoxMetadata, box, instance, runEngine string, autoGen bool, refreshSecret []string) (provisioned []deploykit.CollectedSecret, fallbackEnv []string, resolutions []secretResolution, isKeyring bool, err error) {
+func resolvePodProvisionSecrets(ctx context.Context, ex *sdk.Executor, meta *spec.BoxMetadata, box, instance, runEngine string, autoGen bool, refreshSecret []string) (provisioned []deploykit.CollectedSecret, fallbackEnv []string, resolutions []secretResolution, err error) {
 	cred := deploykit.CredentialAccessViaExecutor(ctx, ex)
 	candyOwned := deploykit.CollectSecretsFromLabels(box, meta.Secret)
 	credBacked, dkResolutions := deploykit.CollectCandySecretAccepts(box, instance, meta, credServiceVNC, cred)
@@ -30,28 +28,13 @@ func resolvePodProvisionSecrets(ctx context.Context, ex *sdk.Executor, meta *spe
 	collected, _ = deploykit.ApplySecretRefresh(collected, refreshSecret)
 	provisioned, fallbackEnv, err = deploykit.ProvisionPodmanSecrets(runEngine, box, instance, collected, autoGen, credServiceVNC, cred)
 	if err != nil {
-		return nil, nil, nil, false, err
+		return nil, nil, nil, err
 	}
 	resolutions = make([]secretResolution, len(dkResolutions))
 	for i, r := range dkResolutions {
 		resolutions[i] = secretResolution{Name: r.Name, Source: r.Source, Resolved: r.Resolved, Required: r.Required}
 	}
-	return provisioned, fallbackEnv, resolutions, secretBackendIsKeyring(), nil
-}
-
-// secretBackendIsKeyring reports whether the secret backend is keyring-class (the isKeyring flag the
-// quadlet KeyringBackend needs) — the plugin-side port of charly/credential_plugin.go's
-// resolveSecretBackend, via kit.LoadRuntimeConfig (sdk/kit host-config, plugin-importable).
-func secretBackendIsKeyring() bool {
-	backend := os.Getenv("CHARLY_SECRET_BACKEND")
-	if backend == "" {
-		if cfg, cerr := kit.LoadRuntimeConfig(); cerr == nil && cfg.SecretBackend != "" {
-			backend = cfg.SecretBackend
-		} else {
-			backend = "auto"
-		}
-	}
-	return backend == "keyring" || backend == "auto" || backend == ""
+	return provisioned, fallbackEnv, resolutions, nil
 }
 
 // resolvePodHookSecretEnv resolves the post_enable hook's secret env — the plugin-side port of the
