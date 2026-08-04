@@ -181,8 +181,10 @@ func TestCommandCompileIn_CmdInProc(t *testing.T) {
 // CHARLY_PREEMPT_LEASE-gated arbiter release (remove) — via the CONSOLIDATED
 // host_build_pod_lifecycle_dispatch.go (replacing the former per-verb podStartCmd/podStopCmd/
 // podLogsCmd/podShellCmd/podUpdateCmd/podServiceCmd/podRemoveCmd core reconstructions for all
-// seven verbs) — over HostBuild("pod-start")/HostBuild("pod-stop")/HostBuild("pod-logs")/
-// HostBuild("pod-remove")/HostBuild("pod-shell")/HostBuild("pod-service")/HostBuild("pod-update").
+// seven verbs) — over the ONE op-discriminated HostBuild("pod-lifecycle") kind (#55 W3 A10b
+// unified the former eight dedicated per-verb kinds — HostBuild("pod-start")/("pod-stop")/
+// ("pod-logs")/("pod-remove")/("pod-shell")/("pod-service")/("pod-update")/("pod-cmd") — into
+// this one, discriminated by req.Op).
 // Setup/Remove instead FORWARD onward to the deploy:pod plugin's sdk.OpConfigSetup/
 // OpConfigRemove (the P13-KERNEL direction-flip) over HostBuild("pod-config-setup")/
 // HostBuild("pod-config-remove"). command:config's other four leaves — Status/Mount/Unmount/

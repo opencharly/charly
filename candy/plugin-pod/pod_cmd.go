@@ -18,8 +18,10 @@ import (
 // <word> …` Kong tree moved OUT of charly core into this plugin candy. Cutover B unit 2
 // (pod-lifecycle-CLI-dispatch): start/stop/logs/shell/update now perform their OWN validation
 // (CanonicalizeDeployArg/RejectImageRefAsDeployName/remote-ref rejection — all pure sdk/deploykit +
-// sdk/spec calls) HERE, in the plugin, then forward via hostPodSeam to a HostBuild seam whose host
-// body is JUST the irreducible ResolveTarget + live-executor dispatch a plugin cannot hold
+// sdk/spec calls) HERE, in the plugin, then forward via hostPodLifecycle (host_seams.go — #55 W3
+// A10b's ONE op-discriminated "pod-lifecycle" wire request, replacing the former 8 dedicated
+// per-verb hostPodSeam calls) to a HostBuild seam whose host body is JUST the irreducible
+// ResolveTarget + live-executor dispatch a plugin cannot hold
 // (charly/host_build_pod_lifecycle_dispatch.go) — the "bodies move, shells follow" cutover. A leaf
 // with NO registry coupling (restart) calls sdk/deploykit directly — no seam needed. service is
 // FULLY ported too (buildServiceArgv, service_resolve.go, resolves + validates + renders the argv
@@ -33,8 +35,9 @@ import (
 // cleanup's registry-resugar (the NEW pod-config-clean-deploy-entry, a narrow host-owns-
 // load+lock+mutate+save seam — the plugin-side whole-config deploy-state writes don't fit, see
 // remove_orchestration.go's header for the demonstrated mismatch). The arbiter-release bracket
-// (CHARLY_PREEMPT_LEASE-gated host-process state) stays under the EXISTING "pod-remove" HostBuild
-// kind, deferred here as the LAST step — same shape as pod start/stop's own bracket.
+// (CHARLY_PREEMPT_LEASE-gated host-process state) stays under the "pod-lifecycle" HostBuild
+// op="remove" (#55 W3 A10b unified the former dedicated "pod-remove" kind into this one), deferred
+// here as the LAST step — same shape as pod start/stop's own bracket.
 //
 // RDD caught a real latent placement bug mid-port (see remove_orchestration.go's header): two
 // deploykit calls that "looked" portable (resolveSidecarNames' LoadBundleConfig,
@@ -66,23 +69,20 @@ func (c *StartCmd) Run() error {
 	if err := deploykit.RejectImageRefAsDeployName(c.Box); err != nil {
 		return err
 	}
-	return hostPodSeam("pod-start", spec.PodStartRequest{
-		Box:          c.Box,
+	return hostPodLifecycle("start", c.Box, c.Instance, lifecycleNode(c.Box, c.Instance), spec.PodStartPayload{
 		Tag:          c.Tag,
 		Build:        c.Build,
 		Env:          c.Env,
 		EnvFile:      c.EnvFile,
-		Instance:     c.Instance,
 		Port:         c.Port,
 		VolumeFlag:   c.VolumeFlag,
 		Bind:         c.Bind,
 		NoAutoDetect: c.NoAutoDetect,
-		Node:         lifecycleNode(c.Box, c.Instance),
 	})
 }
 
 // lifecycleNode resolves the per-host deploy overlay entry to thread as DATA into the pod-lifecycle
-// HostBuild requests (spec.PodStartRequest.Node et al.) — #55 K4 seam-completion: the host's
+// HostBuild requests (spec.PodLifecycleRequest.Node, #55 W3 A10b) — #55 K4 seam-completion: the host's
 // dispatchLifecycleTarget operates on this *spec.Deploy instead of re-reading the per-host config
 // itself (the config READ is a plugin loading capability, not a host M; #55 coneC Unit C2 moved
 // the resolver from deploykit.ResolveLifecycleDeployNodeViaSeam — the deleted
@@ -110,11 +110,8 @@ func (c *StopCmd) Run() error {
 	if spec.IsRemoteImageRef(ref) {
 		boxName = spec.ParseRemoteRef(ref).Name
 	}
-	return hostPodSeam("pod-stop", spec.PodStopRequest{
-		Box:      boxName,
-		Instance: c.Instance,
-		Unmount:  c.Unmount,
-		Node:     lifecycleNode(boxName, c.Instance),
+	return hostPodLifecycle("stop", boxName, c.Instance, lifecycleNode(boxName, c.Instance), spec.PodStopPayload{
+		Unmount: c.Unmount,
 	})
 }
 
@@ -139,7 +136,8 @@ func (c *RestartCmd) Run() error {
 }
 
 // LogsCmd shows service container logs — the `charly logs` grammar. Registry-bound
-// (dispatchLifecycleTarget/LifecycleTarget — core Mechanisms) — forwards via HostBuild("pod-logs").
+// (dispatchLifecycleTarget/LifecycleTarget — core Mechanisms) — forwards via HostBuild("pod-lifecycle")
+// op="logs" (#55 W3 A10b unified the former dedicated "pod-logs" kind into this one).
 type LogsCmd struct {
 	Box      string `arg:"" help:"Box name or remote ref"`
 	Follow   bool   `short:"f" long:"follow" help:"Follow log output"`
@@ -149,12 +147,9 @@ type LogsCmd struct {
 
 func (c *LogsCmd) Run() error {
 	c.Box, c.Instance = deploykit.CanonicalizeDeployArg(c.Box, c.Instance)
-	return hostPodSeam("pod-logs", spec.PodLogsRequest{
-		Box:      c.Box,
-		Follow:   c.Follow,
-		Instance: c.Instance,
-		Sidecar:  c.Sidecar,
-		Node:     lifecycleNode(c.Box, c.Instance),
+	return hostPodLifecycle("logs", c.Box, c.Instance, lifecycleNode(c.Box, c.Instance), spec.PodLogsPayload{
+		Follow:  c.Follow,
+		Sidecar: c.Sidecar,
 	})
 }
 
@@ -167,9 +162,10 @@ func (c *LogsCmd) Run() error {
 // seam, and the deploy-entry cleanup via the NEW pod-config-clean-deploy-entry seam — see
 // remove_orchestration.go's header for why it needs its own host-owns-load+lock+mutate+save seam
 // rather than the plugin-side whole-config deploy-state write). The
-// arbiter-release bracket stays host-side under the EXISTING "pod-remove" HostBuild kind — same
-// shape as pod start/stop's own bracket — deferred here as the LAST step so it always runs,
-// mirroring the former core `defer releaseResourceClaim(...)` semantics exactly.
+// arbiter-release bracket stays host-side under the "pod-lifecycle" HostBuild op="remove" (#55 W3
+// A10b unified the former dedicated "pod-remove" kind into this one) — same shape as pod
+// start/stop's own bracket — deferred here as the LAST step so it always runs, mirroring the
+// former core `defer releaseResourceClaim(...)` semantics exactly.
 type RemoveCmd struct {
 	Box        string   `arg:"" help:"Box name or remote ref"`
 	Instance   string   `short:"i" long:"instance" help:"Instance name for running multiple containers of the same box"`
@@ -182,7 +178,7 @@ func (c *RemoveCmd) Run() error {
 	c.Box, c.Instance = deploykit.CanonicalizeDeployArg(c.Box, c.Instance)
 	boxName := kit.ResolveBoxName(c.Box)
 	defer func() {
-		_ = hostPodSeam("pod-remove", spec.PodRemoveRequest{Box: boxName, Instance: c.Instance})
+		_ = hostPodLifecycle("remove", boxName, c.Instance, nil, spec.PodRemovePayload{})
 	}()
 
 	if tc := resolveContainerTunnel(c.Box, c.Instance); tc != nil {
@@ -194,7 +190,8 @@ func (c *RemoveCmd) Run() error {
 }
 
 // ShellCmd starts a bash shell in a container image — the `charly shell` grammar. Registry-bound
-// (dispatchLifecycleTarget/LifecycleTarget — core Mechanisms) — forwards via HostBuild("pod-shell").
+// (dispatchLifecycleTarget/LifecycleTarget — core Mechanisms) — forwards via HostBuild("pod-lifecycle")
+// op="shell" (#55 W3 A10b unified the former dedicated "pod-shell" kind into this one).
 type ShellCmd struct {
 	Box          string   `arg:"" help:"Box name or remote ref (github.com/org/repo/box[@version])"`
 	Tag          string   `long:"tag" help:"Image CalVer tag (empty = newest local CalVer resolved via the ai.opencharly.version OCI label)"`
@@ -216,27 +213,25 @@ func (c *ShellCmd) Run() error {
 		return fmt.Errorf("remote refs are not accepted here; run 'charly box pull %s' first, then 'charly shell <image-name>'", c.Box)
 	}
 	c.Box, c.Instance = deploykit.CanonicalizeDeployArg(c.Box, c.Instance)
-	return hostPodSeam("pod-shell", spec.PodShellRequest{
-		Box:          c.Box,
+	return hostPodLifecycle("shell", c.Box, c.Instance, lifecycleNode(c.Box, c.Instance), spec.PodShellPayload{
 		Tag:          c.Tag,
 		Command:      c.Command,
 		Build:        c.Build,
 		TTY:          c.TTY,
 		Env:          c.Env,
 		EnvFile:      c.EnvFile,
-		Instance:     c.Instance,
 		VolumeFlag:   c.VolumeFlag,
 		Bind:         c.Bind,
 		NoAutoDetect: c.NoAutoDetect,
-		Node:         lifecycleNode(c.Box, c.Instance),
 	})
 }
 
 // ServiceCmd manages services inside a running container — the `charly service` grammar. Cutover
 // B unit 2 completion: each leaf now resolves + validates + renders the FULL argv itself
-// (buildServiceArgv, service_resolve.go — all portable) and forwards it via ONE
-// HostBuild("pod-service") seam whose host body does ONLY dispatchLifecycleTarget +
-// LifecycleTarget.Shell (the irreducible registry-bound step).
+// (buildServiceArgv, service_resolve.go — all portable) and forwards it via ONE HostBuild
+// ("pod-lifecycle") op="service" seam (#55 W3 A10b unified the former dedicated "pod-service"
+// kind into this one) whose host body does ONLY dispatchLifecycleTarget + LifecycleTarget.Shell
+// (the irreducible registry-bound step).
 type ServiceCmd struct {
 	Restart ServiceRestartCmd `cmd:"" help:"Restart an in-container service"`
 	Start   ServiceStartCmd   `cmd:"" help:"Start an in-container service"`
@@ -255,7 +250,7 @@ func (c *ServiceStatusCmd) Run() error {
 	if err != nil {
 		return err
 	}
-	return hostPodSeam("pod-service", spec.PodServiceRequest{Box: c.Box, Instance: c.Instance, Argv: argv, Node: lifecycleNode(c.Box, c.Instance)})
+	return hostPodLifecycle("service", c.Box, c.Instance, lifecycleNode(c.Box, c.Instance), spec.PodServicePayload{Argv: argv})
 }
 
 // ServiceStartCmd starts a service
@@ -270,7 +265,7 @@ func (c *ServiceStartCmd) Run() error {
 	if err != nil {
 		return err
 	}
-	return hostPodSeam("pod-service", spec.PodServiceRequest{Box: c.Box, Instance: c.Instance, Argv: argv, Node: lifecycleNode(c.Box, c.Instance)})
+	return hostPodLifecycle("service", c.Box, c.Instance, lifecycleNode(c.Box, c.Instance), spec.PodServicePayload{Argv: argv})
 }
 
 // ServiceStopCmd stops a service
@@ -285,7 +280,7 @@ func (c *ServiceStopCmd) Run() error {
 	if err != nil {
 		return err
 	}
-	return hostPodSeam("pod-service", spec.PodServiceRequest{Box: c.Box, Instance: c.Instance, Argv: argv, Node: lifecycleNode(c.Box, c.Instance)})
+	return hostPodLifecycle("service", c.Box, c.Instance, lifecycleNode(c.Box, c.Instance), spec.PodServicePayload{Argv: argv})
 }
 
 // ServiceRestartCmd restarts a service
@@ -300,7 +295,7 @@ func (c *ServiceRestartCmd) Run() error {
 	if err != nil {
 		return err
 	}
-	return hostPodSeam("pod-service", spec.PodServiceRequest{Box: c.Box, Instance: c.Instance, Argv: argv, Node: lifecycleNode(c.Box, c.Instance)})
+	return hostPodLifecycle("service", c.Box, c.Instance, lifecycleNode(c.Box, c.Instance), spec.PodServicePayload{Argv: argv})
 }
 
 // VolumeCmd groups the named-volume verbs — the `charly volume` grammar. NOT registry-bound (pure
@@ -530,7 +525,8 @@ func (c *ConfigRemoveCmd) Run() error {
 // (user-overlay state untouched), and restarts the service to pick up the new image — the
 // `charly update` grammar. Resolves the deploy tree PLUGIN-SIDE (loaderkit.ResolveMergedTreeViaExecutor,
 // #55 Cone A Unit 3b) and threads it in; the host's remaining loadDeployPlugins/ResolveTarget are
-// core Mechanisms — forwards via HostBuild("pod-update").
+// core Mechanisms — forwards via HostBuild("pod-lifecycle") op="update" (#55 W3 A10b unified the
+// former dedicated "pod-update" kind into this one).
 type UpdateCmd struct {
 	Box       string `arg:"" help:"Deploy name (resolved via charly.yml) OR box name. For deploys, the target's update strategy is auto-selected (pod=systemctl restart with new image; vm=in-guest candy re-apply; local=idempotent re-apply)."`
 	Tag       string `long:"tag" help:"Image CalVer tag (empty = newest local CalVer resolved via the ai.opencharly.version OCI label)"`
@@ -553,11 +549,9 @@ func (c *UpdateCmd) Run() error {
 	if err != nil {
 		return err
 	}
-	return hostPodSeam("pod-update", spec.PodUpdateRequest{
-		Box:       c.Box,
+	return hostPodLifecycle("update", c.Box, c.Instance, nil, spec.PodUpdatePayload{
 		Tag:       c.Tag,
 		Build:     c.Build,
-		Instance:  c.Instance,
 		Seed:      c.Seed,
 		ForceSeed: c.ForceSeed,
 		DataFrom:  c.DataFrom,
@@ -566,8 +560,8 @@ func (c *UpdateCmd) Run() error {
 }
 
 // resolveDeployTreeJSON resolves the merged project+operator deploy tree PLUGIN-SIDE
-// (loaderkit.ResolveMergedTreeViaExecutor) and marshals it for threading into the "pod-update" host
-// seam as DATA, so the host dispatchByDeployTarget stops re-loading the tree via the core
+// (loaderkit.ResolveMergedTreeViaExecutor) and marshals it for threading into the "pod-lifecycle"
+// op="update" payload as DATA, so the host dispatchByDeployTarget stops re-loading the tree via the core
 // a host merged-tree read (#55 Cone A Unit 3b). The "deploy-plugins-connect" preamble connects the
 // deployment's out-of-tree plugin candies (the host's ResolveTarget needs them) and returns the
 // project dir the loader loads from — the SAME preamble command:bundle's resolveTreeViaLoader runs.

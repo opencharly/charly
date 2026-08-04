@@ -11,11 +11,11 @@ import (
 
 // provider.go — the Invoke(OpRun) surface for the compiled-in command:cmd placement. The host's
 // command dispatch (dispatchInProcCommand) invokes this in-process with the pass-through args + the
-// threaded in-proc reverse channel; the kong-parsed CmdCmd handler drives the "pod-cmd" host-builder
-// (via the stashed executor) and sends the notification itself.
+// threaded in-proc reverse channel; the kong-parsed CmdCmd handler drives the "pod-lifecycle"
+// op="cmd" host-builder (via the stashed executor) and sends the notification itself.
 
 // cmdCtx / cmdExec carry the Invoke(OpRun) reverse-channel handle to the CmdCmd handler's
-// HostBuild("pod-cmd") call.
+// HostBuild("pod-lifecycle") op="cmd" call.
 var (
 	cmdCtx  context.Context
 	cmdExec *sdk.Executor

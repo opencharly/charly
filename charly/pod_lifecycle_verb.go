@@ -1,19 +1,22 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
 
 	"github.com/opencharly/spec/spec"
 )
 
-// pod_lifecycle_verb.go — the `charly start` / `charly stop` VERBS routed through the unified
-// ResolveTarget → LifecycleTarget path (the K4 deep-body move): a pod deploy reaches the plugin's
-// OpStart/OpStop body (via the F6 dispatch + arbiter bracket, pod_lifecycle_dispatch.go); the former
-// inline runDirect/runQuadlet/StopCmd bodies are DELETED. This mirrors `charly update`'s
-// dispatchByDeployTarget (update_deploy_dispatch.go) — one verb, one substrate-agnostic dispatch, no
-// per-kind code.
+// pod_lifecycle_verb.go — dispatchLifecycleTarget, the shared core (M) Mechanism behind every pod
+// lifecycle VERB (`charly start`/`stop`/`shell`/`logs`/`cmd`/`service`, the K4 deep-body move): a
+// pod deploy reaches the plugin's OpStart/OpStop/… body (via the F6 dispatch + arbiter bracket,
+// pod_lifecycle_dispatch.go); the former inline runDirect/runQuadlet/StopCmd bodies are DELETED.
+// This mirrors `charly update`'s dispatchByDeployTarget (update_deploy_dispatch.go) — one verb, one
+// substrate-agnostic dispatch, no per-kind code. #55 W3 A10 folded the former thin
+// startViaLifecycle/stopViaLifecycle wrappers (each had exactly ONE caller) directly into
+// host_build_pod_lifecycle_dispatch.go's shared dispatchAndRunLifecycle helper — this file now
+// keeps only the mechanism dispatchLifecycleTarget itself, which every one of the six lifecycle-
+// target-shaped HostBuild handlers (start/stop/shell/logs/service/cmd) calls through that helper.
 //
 // #55 K4 seam-completion: the per-host deploy NODE arrives as DATA (spec.Deploy). The command:pod /
 // command:cmd plugin ALREADY resolves it plugin-side (loaderkit.ResolveLifecycleDeployNodeViaExecutor,
@@ -54,23 +57,4 @@ func dispatchLifecycleTarget(verb string, node *spec.BundleNode, deployName stri
 		return nil, fmt.Errorf("charly %s %s: %q target has no live runtime", verb, deployName, node.Target)
 	}
 	return lt, nil
-}
-
-// startViaLifecycle drives `charly start` through LifecycleTarget.Start; the direct-mode CLI extras
-// ride the ctx (podStartOpts) into the pod start-plan hook.
-func startViaLifecycle(node *spec.BundleNode, deployName string, opts podStartOpts) error {
-	lt, err := dispatchLifecycleTarget("start", node, deployName)
-	if err != nil {
-		return err
-	}
-	return lt.Start(withPodStartOpts(context.Background(), opts))
-}
-
-// stopViaLifecycle drives `charly stop` through LifecycleTarget.Stop; --unmount rides the ctx.
-func stopViaLifecycle(node *spec.BundleNode, deployName string, unmount bool) error {
-	lt, err := dispatchLifecycleTarget("stop", node, deployName)
-	if err != nil {
-		return err
-	}
-	return lt.Stop(withPodStopUnmount(context.Background(), unmount))
 }

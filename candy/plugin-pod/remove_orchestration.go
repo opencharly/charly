@@ -65,7 +65,8 @@ import (
 //
 // The arbiter-release bracket (releaseResourceClaim, gated on the host-process
 // CHARLY_PREEMPT_LEASE env var a placement-agnostic plugin cannot own) stays entirely host-side,
-// under the EXISTING "pod-remove" HostBuild kind — same shape as pod start/stop's own arbiter
+// under the "pod-lifecycle" HostBuild op="remove" (#55 W3 A10b unified the former dedicated
+// "pod-remove" kind into this one) — same shape as pod start/stop's own arbiter
 // bracket (charly/arbiter_bracket.go, S3b — was substrate_lifecycle_grpc.go before the
 // deploy-dispatch cluster moved). RemoveCmd.Run() (pod_cmd.go) defers a call to it as the
 // LAST step, mirroring the former `defer releaseResourceClaim(...)` at the top of podRemoveCmd.Run()

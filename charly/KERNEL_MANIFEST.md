@@ -90,8 +90,10 @@ that resolver is registry+loader-coupled the same way [as `dispatchLifecycleTarg
 correction never propagated back into `update_deploy_dispatch.go`'s own comment, leaving a stale
 claim sitting alongside three OTHER already-correct sibling confirmations
 (`charly/commands.go`'s header, `charly/pod_lifecycle_verb.go`'s header, `spec/schema/seam.cue`'s
-`#PodUpdateRequest` comment) plus a LIVE check-plan assertion (`charly.yml`'s check-fedora-pod bed:
-"dispatchByDeployTarget... UNCHANGED by this cutover").
+`#PodUpdateRequest` comment — since renamed to `#PodUpdatePayload` by #55 W3 A10b's wire
+unification, its confirmation carried forward unchanged in spirit) plus a LIVE check-plan
+assertion (`charly.yml`'s check-fedora-pod bed: "dispatchByDeployTarget... UNCHANGED by this
+cutover").
 
 | Symbol | LOC | Clause | Evidence |
 |---|---:|---|---|

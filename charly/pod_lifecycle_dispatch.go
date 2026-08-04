@@ -7,12 +7,27 @@ import (
 	"github.com/opencharly/spec/spec"
 )
 
-// podStartOptsCtxKey threads the direct-mode `charly start` CLI extras (--env/--port/--volume/
-// --bind/auto-detect) from the verb dispatch through LifecycleTarget.Start(ctx) — which carries no
-// opts — into the pod start-plan hook, preserving parity for the runDirect path. Absent ⇒ zero opts
-// (the quadlet path — the deployed/bed case — ignores them anyway).
-// podStartOpts carries the direct-mode `charly start` CLI extras (they apply only to the runDirect
-// path; the quadlet path — the deployed/bed case — bakes config into the unit).
+// ctxBox[T] is the generic ctx-value plumbing every pod-lifecycle CLI-extras type threads from the
+// host_build_pod_lifecycle_dispatch.go handler, through a LifecycleTarget call that carries no opts
+// of its own (Start/Stop/Attach), into the pod plan hooks below (#55 W3 A10, R3): ONE generic
+// with/from pair replaces what used to be four hand-rolled ctxKey+With+From triplets. Each opts type
+// below instantiates its own ctxBox[T] — a distinct Go type per T, so the context key stays
+// collision-free by construction, exactly as the former per-type empty-struct keys were.
+type ctxBox[T any] struct{}
+
+func (ctxBox[T]) with(ctx context.Context, v T) context.Context {
+	return context.WithValue(ctx, ctxBox[T]{}, v)
+}
+
+func (ctxBox[T]) from(ctx context.Context) T {
+	v, _ := ctx.Value(ctxBox[T]{}).(T)
+	return v
+}
+
+// podStartOpts carries the direct-mode `charly start` CLI extras (--env/--port/--volume/--bind/
+// auto-detect; they apply only to the runDirect path — the quadlet path bakes config into the unit)
+// from the verb dispatch through LifecycleTarget.Start(ctx) into the pod start-plan hook. Absent ⇒
+// zero opts.
 type podStartOpts struct {
 	Env          []string
 	EnvFile      string
@@ -22,30 +37,25 @@ type podStartOpts struct {
 	NoAutoDetect bool
 }
 
-type podStartOptsCtxKey struct{}
-
 func withPodStartOpts(ctx context.Context, o podStartOpts) context.Context {
-	return context.WithValue(ctx, podStartOptsCtxKey{}, o)
+	return ctxBox[podStartOpts]{}.with(ctx, o)
 }
 
 func podStartOptsFromCtx(ctx context.Context) podStartOpts {
-	if o, ok := ctx.Value(podStartOptsCtxKey{}).(podStartOpts); ok {
-		return o
-	}
-	return podStartOpts{}
+	return ctxBox[podStartOpts]{}.from(ctx)
 }
 
-// podStopUnmountCtxKey threads `charly stop --unmount` (enc FUSE teardown) through
-// LifecycleTarget.Stop(ctx) into the pod stop-plan hook.
-type podStopUnmountCtxKey struct{}
+// podStopUnmount threads `charly stop --unmount` (enc FUSE teardown) through LifecycleTarget.Stop(ctx)
+// into the pod stop-plan hook. A distinct named bool (not a raw bool) so its ctxBox[T] key can never
+// collide with an unrelated bool-typed ctx value added to this package later.
+type podStopUnmount bool
 
 func withPodStopUnmount(ctx context.Context, unmount bool) context.Context {
-	return context.WithValue(ctx, podStopUnmountCtxKey{}, unmount)
+	return ctxBox[podStopUnmount]{}.with(ctx, podStopUnmount(unmount))
 }
 
 func podStopUnmountFromCtx(ctx context.Context) bool {
-	u, _ := ctx.Value(podStopUnmountCtxKey{}).(bool)
-	return u
+	return bool(ctxBox[podStopUnmount]{}.from(ctx))
 }
 
 // podShellOpts carries `charly shell`'s per-invocation CLI extras (the flags that shape the resolved
@@ -67,17 +77,12 @@ type podShellOpts struct {
 	WrapPTY      bool
 }
 
-type podShellOptsCtxKey struct{}
-
 func withPodShellOpts(ctx context.Context, o podShellOpts) context.Context {
-	return context.WithValue(ctx, podShellOptsCtxKey{}, o)
+	return ctxBox[podShellOpts]{}.with(ctx, o)
 }
 
 func podShellOptsFromCtx(ctx context.Context) podShellOpts {
-	if o, ok := ctx.Value(podShellOptsCtxKey{}).(podShellOpts); ok {
-		return o
-	}
-	return podShellOpts{}
+	return ctxBox[podShellOpts]{}.from(ctx)
 }
 
 // podCmdOpts carries `charly cmd`'s per-invocation extra (--sidecar) through Attach(ctx) into the pod
@@ -86,17 +91,12 @@ type podCmdOpts struct {
 	Sidecar string
 }
 
-type podCmdOptsCtxKey struct{}
-
 func withPodCmdOpts(ctx context.Context, o podCmdOpts) context.Context {
-	return context.WithValue(ctx, podCmdOptsCtxKey{}, o)
+	return ctxBox[podCmdOpts]{}.with(ctx, o)
 }
 
 func podCmdOptsFromCtx(ctx context.Context) podCmdOpts {
-	if o, ok := ctx.Value(podCmdOptsCtxKey{}).(podCmdOpts); ok {
-		return o
-	}
-	return podCmdOpts{}
+	return ctxBox[podCmdOpts]{}.from(ctx)
 }
 
 // pod_lifecycle_dispatch.go — the F6 HOST-side plan-hook table for the pod deep-body lifecycle

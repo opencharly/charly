@@ -69,9 +69,11 @@ type CLI struct {
 	// resolveBuildEngine already set up (LoadUnified, the scan-local host leg, resolveDistroLeg).)
 
 	// (The former hidden `__cmd` deploy-lifecycle reentry behind `charly cmd` is DELETED — cmd.go's
-	// dissolution: candy/plugin-cmd now drives the "pod-cmd" host-builder (cmd's slot in the floored
-	// pod-lifecycle-dispatch family, joining pod-shell) directly over the in-proc reverse channel, so
-	// the interactive Attach needs no hidden CLI reentry — mirroring __box-build's earlier removal.)
+	// dissolution: candy/plugin-cmd now drives the "pod-lifecycle" host-builder's op="cmd" (cmd's
+	// slot in the floored pod-lifecycle-dispatch family, joining op="shell" — #55 W3 A10b unified
+	// the former dedicated "pod-cmd" kind into this single op-discriminated one) directly over the
+	// in-proc reverse channel, so the interactive Attach needs no hidden CLI reentry — mirroring
+	// __box-build's earlier removal.)
 
 	// (P8b: the former hidden __box-build reentry is DELETED. candy/plugin-box's dispatchBuild now
 	// runs the `charly box build` body itself — NormalizeBoxArgs → remote-ref pivot
