@@ -240,11 +240,18 @@ k3s-server:
             #
             # The client entrypoint is addressed absolutely, so nothing rests on the
             # venue's PATH: /usr/local/bin/kubectl is the argv[0] symlink onto the k3s
-            # multi-call binary that the required k3s candy installs and asserts. Going
-            # through it rather than `k3s kubectl` also keeps the steps clean — the
-            # server CLI reads the root-only /etc/rancher/k3s/config.yaml and warns on
-            # every invocation when the venue's check user is not root. Every wait is
-            # kubectl's own condition-wait rather than a sleep.
+            # multi-call binary that the required k3s candy installs and asserts. Every
+            # wait is kubectl's own condition-wait rather than a sleep.
+            #
+            # That symlink does NOT suppress the "open /etc/rancher/k3s/config.yaml:
+            # permission denied" warning — it is the same multi-call binary, so it reads
+            # the root-only server config on every invocation whatever argv[0] says, and
+            # a non-root check user gets the warning either way. It is HARMLESS (the
+            # steps below pass with it on stderr), and charly prints stderr only for a
+            # FAILING step, which is exactly why it looks like a cause when it is not:
+            # a roster run whose addon rollouts timed out showed this warning in the
+            # failure text and sent an RCA after a config-permission bug that does not
+            # exist. Read the exit status, not the warning.
             - check: the cluster reports at least one Ready node
               id: k3s-server-node-ready
               command: |
