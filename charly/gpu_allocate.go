@@ -26,11 +26,23 @@ import (
 // required vendor is present, or the resource vocabulary is unreadable — never
 // skip on a detection gap, only on a definite absence).
 func bedGPUPrereqMissing(node spec.BundleNode) (token, vendor string, missing bool) {
+	// Token list FIRST — this restores the documented laziness ("only when a GPU-selector token is
+	// actually present"), which the resource-first ordering had quietly inverted: a bed claiming no
+	// host resource at all paid a whole project resolve to learn it needed nothing.
+	//
+	// The ordering also matters for honesty, not just cost. An empty resource map returns "no
+	// missing prereq" whether the bed genuinely claims nothing OR the resolve failed, so putting
+	// the resolve first made those two cases indistinguishable — which is exactly how the dead
+	// executor-less resolve below stayed invisible: every GPU bed reported "prereq satisfied" and
+	// went on to the build this fail-fast exists to skip.
+	tokens := append(dedupeNonEmpty(node.RequiredExclusive()), dedupeNonEmpty(node.RequiredShared())...)
+	if len(tokens) == 0 {
+		return "", "", false
+	}
 	resources := gatherResources()
 	if len(resources) == 0 {
 		return "", "", false
 	}
-	tokens := append(dedupeNonEmpty(node.RequiredExclusive()), dedupeNonEmpty(node.RequiredShared())...)
 	return gpuPrereqMissing(tokens, resources, DetectVFIO)
 }
 

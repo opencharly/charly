@@ -14,6 +14,7 @@ import (
 	"embed"
 	"errors"
 	"os/exec"
+	"time"
 
 	"github.com/opencharly/charly/candy/plugin-command/params"
 	"github.com/opencharly/sdk"
@@ -80,6 +81,7 @@ func (verb) RunVerb(ctx context.Context, cc kit.CheckContext, op *spec.Op) kit.R
 	var stdout, stderr string
 	var exitCode int
 	var err error
+	started := time.Now()
 	if inContainer {
 		stdout, stderr, exitCode, err = cc.Exec().RunCapture(ctx, wrapContainerCommand(in.Command))
 	} else {
@@ -89,8 +91,26 @@ func (verb) RunVerb(ctx context.Context, cc kit.CheckContext, op *spec.Op) kit.R
 		c := exec.CommandContext(ctx, "sh", "-c", in.Command)
 		stdout, stderr, exitCode, err = captureCmd(c)
 	}
+	elapsed := time.Since(started)
 	if err != nil {
 		return kit.Failf("execution error: %v", err)
+	}
+	// A probe the never-hang ceiling killed reports exit=-1 (killed by signal, not an exit status)
+	// and/or an expired ctx. Falling through to the ordinary exit-code comparison rendered that as
+	// a bare "exit=-1, want 0" — a message that says nothing about WHY, and reads like the command
+	// returned a weird status rather than never having finished. Under the 32-bed roster that was
+	// the difference between "this probe timed out at the ceiling" and an RCA spent hunting a
+	// nonexistent exit code.
+	//
+	// It stays a FAIL rather than a skip or an infra signal, deliberately. A verb's result carries
+	// only pass/fail/skip (kit.Result is spec.CheckVerbResult — the engine-internal
+	// DeadlineExceeded flag is json:"-" and never crosses an out-of-process verb's wire), and a
+	// killed probe DID NOT demonstrate the property it asserts. Reporting it as a skip would be a
+	// fake pass of exactly the class the check skill bans for an unreachable dependency; the honest
+	// report is a failure that names its own mechanism.
+	if killedByCeiling(ctx, exitCode) {
+		return kit.Failf("probe killed by never-hang ceiling after %s (no exit status — the process was signalled, not returned); command: %s",
+			elapsed.Round(time.Millisecond), trimPreview(in.Command))
 	}
 
 	// expect_non_zero asserts the command FAILED (any non-zero code) and IGNORES
@@ -116,6 +136,16 @@ func (verb) RunVerb(ctx context.Context, cc kit.CheckContext, op *spec.Op) kit.R
 		return kit.Failf("stderr: %v (got: %s)", err, trimPreview(stderr))
 	}
 	return kit.Passf("exit=%d", exitCode)
+}
+
+// killedByCeiling reports whether a completed exec was cut short by the never-hang ceiling rather
+// than returning a status of its own: either the step ctx expired, or the process died by signal
+// (exec reports -1 for "no exit status", which is what SIGKILL from CommandContext produces).
+// Checked together because the two do not always coincide — an in-container RunCapture can surface
+// the signal death without the local ctx having expired yet, and a ctx cancelled by an outer
+// deadline can land before the child's status is observed.
+func killedByCeiling(ctx context.Context, exitCode int) bool {
+	return ctx.Err() != nil || exitCode == -1
 }
 
 // wrapContainerCommand is the shared kit helper (FU-11 — formerly duplicated in core + plugins).

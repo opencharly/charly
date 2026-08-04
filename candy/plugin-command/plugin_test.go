@@ -131,3 +131,56 @@ func TestCommandVerb_StdoutMatchers(t *testing.T) {
 		}
 	})
 }
+
+// TestCommandVerb_CeilingKillIsReportedAsSuch is the ctx-kill path. A probe the never-hang ceiling
+// killed comes back with no exit status (-1: signalled, not returned). Before this fix it fell
+// through to the ordinary exit comparison and reported a bare "exit=-1, want 0" — a message that
+// names neither the timeout nor how long the probe ran, which is what an RCA needs.
+func TestCommandVerb_CeilingKillIsReportedAsSuch(t *testing.T) {
+	cc := &fakeCC{mode: kit.ModeLive, exec: &fakeExec{exit: -1}}
+	res := verb{}.RunVerb(context.Background(), cc, &spec.Op{PluginInput: map[string]any{"command": "sleep 600"}})
+
+	if res.Status != kit.StatusFail {
+		t.Fatalf("status = %v, want fail — a probe that never finished did not demonstrate its property, so it is neither a pass nor a skip", res.Status)
+	}
+	if strings.Contains(res.Message, "exit=-1, want") {
+		t.Errorf("message = %q — still the opaque exit-code report this fix replaces", res.Message)
+	}
+	for _, want := range []string{"never-hang ceiling", "signalled"} {
+		if !strings.Contains(res.Message, want) {
+			t.Errorf("message = %q, want it to name %q so the cause is readable without guessing", res.Message, want)
+		}
+	}
+}
+
+// TestCommandVerb_ExpiredContextIsReportedAsCeilingKill covers the other half of the same
+// condition: the step ctx expired even though the child reported an ordinary status. The two are
+// checked together because they do not always coincide.
+func TestCommandVerb_ExpiredContextIsReportedAsCeilingKill(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	cc := &fakeCC{mode: kit.ModeLive, exec: &fakeExec{exit: 0}}
+	res := verb{}.RunVerb(ctx, cc, &spec.Op{PluginInput: map[string]any{"command": "true"}})
+
+	if res.Status != kit.StatusFail {
+		t.Fatalf("status = %v, want fail for a probe whose context expired", res.Status)
+	}
+	if !strings.Contains(res.Message, "never-hang ceiling") {
+		t.Errorf("message = %q, want the ceiling explanation", res.Message)
+	}
+}
+
+// TestCommandVerb_NormalExitIsUnaffected guards the non-regression: an ordinary non-zero exit must
+// still report its code, not be misread as a ceiling kill.
+func TestCommandVerb_NormalExitIsUnaffected(t *testing.T) {
+	res := runCommandVerb(3, map[string]any{"command": "false"}, nil)
+	if res.Status != kit.StatusFail {
+		t.Fatalf("status = %v, want fail", res.Status)
+	}
+	if strings.Contains(res.Message, "never-hang ceiling") {
+		t.Errorf("message = %q — an ordinary non-zero exit must not be reported as a timeout", res.Message)
+	}
+	if !strings.Contains(res.Message, "exit=3") {
+		t.Errorf("message = %q, want the actual exit code", res.Message)
+	}
+}

@@ -67,19 +67,41 @@ func (t *LocalTransport) Connect(ctx context.Context) (*PluginUnit, io.Closer, e
 	if exe, err := os.Executable(); err == nil {
 		cmd.Env = append(cmd.Env, "CHARLY_BIN="+exe)
 	}
-	client := plugin.NewClient(&plugin.ClientConfig{
+	client := plugin.NewClient(localPluginClientConfig(cmd))
+	unit, err := connectAndDescribe(ctx, client)
+	if err != nil {
+		return nil, nil, err
+	}
+	return unit, &clientCloser{client}, nil
+}
+
+// localPluginClientConfig builds the go-plugin client config for an out-of-process provider spawn.
+// Split out of Connect so the StartTimeout bound below is directly assertable without spawning a
+// real child.
+func localPluginClientConfig(cmd *exec.Cmd) *plugin.ClientConfig {
+	return &plugin.ClientConfig{
 		HandshakeConfig:  transport.Handshake,
 		Plugins:          transport.PluginMap(nil, nil),
 		Cmd:              cmd,
 		AllowedProtocols: []plugin.Protocol{plugin.ProtocolGRPC},
 		AutoMTLS:         true,
 		Logger:           pluginClientLogger(os.Stderr),
-	})
-	unit, err := connectAndDescribe(ctx, client)
-	if err != nil {
-		return nil, nil, err
+		// Bound the exec→handshake window with the project's RESOLVED readiness per-attempt
+		// bound instead of go-plugin's unconfigurable 60s default (client.go:398). The window
+		// covers only spawning the already-built binary and completing its handshake — the build
+		// runs before Connect — but under heavy parallel load that is exactly where a healthy
+		// child starves: on the 32-bed roster the host went into an OOM storm and children were
+		// SIGKILLed mid-handshake, surfacing as "plugin did not connect" on beds whose plugins
+		// were themselves fine.
+		//
+		// per_attempt is the readiness field whose documented meaning is "how long may ONE
+		// attempt at an operation take" (per_attempt_heavy is for a whole multi-probe pass, not a
+		// single spawn), so this reuses the project's own configured answer rather than adding a
+		// second source of truth: an operator running a heavier roster raises
+		// defaults.readiness.per_attempt (or CHARLY_READINESS_PER_ATTEMPT) and every wait in the
+		// system, this one included, moves together.
+		StartTimeout: loadedReadiness().PerAttempt,
 	}
-	return unit, &clientCloser{client}, nil
 }
 
 func pluginClientLogger(output io.Writer) hclog.Logger {

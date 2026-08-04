@@ -257,6 +257,28 @@ func buildPluginBinary(ctx context.Context, srcDir, name string) (string, error)
 	}
 	buildEnv := pluginBuildEnv(os.Environ(), srcDir)
 	buildVCS := pluginBuildVCSFlag(srcDir, buildEnv)
+	// CONTENT-STAMPED REUSE. The cache path above is keyed by the source PATH (#76), which cannot
+	// answer "is this binary still current"; the stamp answers that by digesting the candy's source
+	// tree plus every module it reaches through a local `replace` (transitively: sdk, and sdk's
+	// spec) together with the toolchain and build-relevant env. A match means a rebuild would
+	// produce the same bytes, so it is skipped — the fix for the relink storm the roster measured
+	// (36 relinks of ~30MB binaries in one window; 96GB / 6,791 files in the plugin cache).
+	//
+	// This does NOT weaken the #76 staleness rule it was written to protect: that rule forbids
+	// keying freshness on the PATH, because a submodule bump leaves the path unchanged. A content
+	// stamp changes on any bump — and on any uncommitted edit inside those trees, which a VCS-state
+	// stamp would miss. The check runs INSIDE the per-binary lock, so a concurrent builder of the
+	// same source cannot observe a half-published binary/stamp pair.
+	//
+	// A stamping error is never fatal: stamp stays empty, pluginBinaryIsFresh answers false, and
+	// the build proceeds exactly as it did before — correct, just not reused.
+	stamp, stampErr := pluginBuildStamp(srcDir, target, buildVCS, buildEnv)
+	if stampErr != nil {
+		stamp = ""
+	}
+	if pluginBinaryIsFresh(bin, stamp) {
+		return bin, nil
+	}
 	cmd := exec.CommandContext(ctx, "go", "build", buildVCS, "-o", binTmp, target)
 	cmd.Dir = srcDir
 	// Multiple source builds may run concurrently; their read-only Git status
@@ -271,6 +293,10 @@ func buildPluginBinary(ctx context.Context, srcDir, name string) (string, error)
 		_ = os.Remove(binTmp)
 		return "", fmt.Errorf("plugin %q: publish build (rename %s -> %s): %w", name, binTmp, bin, err)
 	}
+	// Stamp AFTER the binary is published, so a crash between the two leaves a binary with no (or
+	// an older) stamp — which reads as stale and rebuilds. The reverse order could claim a binary
+	// that was never published.
+	writePluginStamp(bin, stamp)
 	return bin, nil
 }
 

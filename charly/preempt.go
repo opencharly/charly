@@ -277,16 +277,27 @@ func releaseResourceClaim(claimant string) {
 // gatherResources loads the token -> ResourceDef map (the gpu selector that drives the mode
 // flip) via the SAME generic InvokeProvider("build","project") envelope every other
 // resolved-project consumer uses (K-wave W3a A2 rewire) — replacing the former LoadUnified(".")
-// K1-coupled read, retiring that dependency NOW rather than waiting for #12 (this function's own
-// former "genuinely K1-blocked" status no longer holds). candy/plugin-build is COMPILED IN
-// (charly/charly.yml compiled_plugins:), so this is the plain resolve+typed-reply shape —
-// hostInvokeOr (provider_invoke.go), the SAME core→verb registry bridge arbiterInvoke uses for
-// verb:arbiter — never a connect-on-demand (that machinery is for an EXTERNAL plugin; an R1
-// self-correction of this function's first cut, which wrongly treated plugin-build as external).
+// K1-coupled read.
+//
+// It MUST thread an in-proc reverse-channel executor. The plugin's resolve
+// (candy/plugin-build's resolveProjectEnvelope) loads the project through
+// loaderkit.LoadUnifiedViaExecutor, so with a bare context.Background() it has no executor to
+// reach the host's loader legs and returns an error — which the best-effort contract below then
+// swallows into an empty map. The earlier "plain resolve+typed-reply shape, hostInvokeOr is
+// enough because plugin-build is compiled in" reading was wrong on exactly that point: being
+// compiled in removes the need to CONNECT the plugin, not the plugin's need for a reverse
+// channel. The result was a permanently dead resolve — every caller saw "no resources declared".
+// The specexec.ContextWithExecutor(in-proc executor) ctx below is the same one
+// check_venue_resolve.go's resolveCheckVenueReply threads for the same reason; it rides the
+// SHARED hostInvokeOr (provider_invoke.go), which now takes the caller's ctx, so there is still
+// exactly ONE warn-and-degrade implementation rather than a second copy here (R3).
+//
 // Zero value (nil Resources) on any resolve/invoke/decode failure — this function's existing "nil
-// when none/unreadable" contract, unchanged.
+// when none/unreadable" contract, unchanged, with the one-warning-per-failure best-effort
+// reporting provider_invoke.go prescribes for a probe path that must never fail a deploy.
 func gatherResources() map[string]*spec.ResolvedResource {
-	rp := hostInvokeOr[spec.ResolvedProjectRequest, spec.ResolvedProject](ClassBuild, "project", ops.OpResolve, spec.ResolvedProjectRequest{}, "gather-resources")
+	ctx := specexec.ContextWithExecutor(context.Background(), specexec.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}}))
+	rp := hostInvokeOr[spec.ResolvedProjectRequest, spec.ResolvedProject](ctx, ClassBuild, "project", ops.OpResolve, spec.ResolvedProjectRequest{}, "gather-resources")
 	return rp.Resources
 }
 

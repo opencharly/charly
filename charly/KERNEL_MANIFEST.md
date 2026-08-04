@@ -265,6 +265,7 @@ stated adjudication-overrides-audit priority order).
 | `plugin_dispatch_reverse.go` | 329 | M | defines `registerHostBuilder`/`hostBuilders` — THE HostBuild registry + dispatch + `InvokeProvider` wire-broker mechanism every `host_build_*.go` file registers into (see gate 2, reverse_channel_three_legs_test.go). (audit-prod-report.md) |
 | `plugin_executor_reverse.go` | 377 | M | `executorReverseServer` — the reverse channel wire-broker leg (E3b). (audit-prod-report.md) |
 | `plugin_grpc.go` | 452 | M | `grpcProvider` — the out-of-process plugin transport. (audit-prod-report.md) |
+| `plugin_build_stamp.go` | 258 | M | content stamp for plugin-binary build reuse — the freshness half of THE loading mechanism (`plugin_loader.go`'s `buildPluginBinary`, whose source-path cache key deliberately cannot answer "is this binary current"). Kind-agnostic: digests a candy's source tree plus its local `replace` modules, never a kind word. |
 | `plugin_inproc.go` | 143 | M | `inprocProvider` — the in-proc Provider placement (loading mechanism). (audit-prod-report.md) |
 | `plugin_inproc_reverse.go` | 73 | M | in-proc reverse-channel bridge (wire broker). (audit-prod-report.md) |
 | `plugin_loader.go` | 994 | M | plugin build/connect/schema-gate — THE loading mechanism (the largest M file; genuinely serves six provider classes across builtin/external/compiled-in placements per the audit's own per-class LOC-totals analysis). (audit-prod-report.md) |
