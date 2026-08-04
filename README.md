@@ -30,7 +30,7 @@ mechanism, and where each claim stops being true — is in **[GRIEVANCES.md](GRI
 
 | Grievance | charly's answer |
 |---|---|
-| **Config is per-artifact, so nothing composes.** A Containerfile describes one image; sharing means a base-image chain, or copy-paste. | Config is per **candy** — one concern, one directory, its own checks. A **box** composes any subset of 286 of them. Composition is a set, not a chain. |
+| **Config is per-artifact, so nothing composes.** A Containerfile describes one image; sharing means a base-image chain, or copy-paste. | Config is per **candy** — one concern, one directory, its own checks. A **box** composes any subset of them. Composition is a set, not a chain. |
 | **The same software is described once per distro.** Package names drift, init systems differ, so you keep two Containerfiles or take on a whole config-management layer. | A candy declares packages once. `package: [ripgrep]` already works on Fedora, Arch, Debian and Ubuntu; a `distro:` map overrides only what genuinely differs. |
 | **Containers and VMs are separate worlds.** Containerfile, Packer, cloud-init, Ansible — four languages, four execution models, and drift you cannot see. | `pod:`, `vm:`, `local:`, `k8s:` and `android:` compile to one shared InstallPlan IR. Changing the substrate keyword is the whole change. |
 | **Isolation is opt-in, shallow, and stops one level down.** Rootless has friction so things run privileged; nesting means `--privileged` or a mounted docker socket. | Every box is built to run **rootless and nested** — rootless podman inside a rootless container at uid 1000, rootless libvirt as ordinary services. That is what makes **candyboxing** work: a VM inside a container, or the reverse. |
@@ -197,7 +197,7 @@ code the way a hand-maintained copy in this file would.
 [opencharly/plugins](https://github.com/opencharly/plugins) is one skill tree for Claude Code,
 Codex, and Kimi, teaching each harness how to compose, build, deploy, check, and manage boxes.
 Every candy, box, command, and contributor subsystem has an owning skill. It installs in three
-modes — `developer` (all 25 plugins), `user` (use and author with charly, without contributor
+modes — `developer` (every plugin), `user` (use and author with charly, without contributor
 internals), and `container <family>` (one generated container family) — and writes only
 target-repository files, never `~/.claude`, `~/.codex`, `~/.kimi-code`, or any other user
 configuration. It does not depend on MCP.
