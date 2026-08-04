@@ -58,6 +58,7 @@ type reverseChannelKindClause struct {
 // it does not grow.
 var reverseChannelHostBuilderWhitelist = []reverseChannelKindClause{
 	// --- Rows with a direct KERNEL_MANIFEST.md citation ---
+	{"pod-lifecycle", "host_build_pod_lifecycle_dispatch.go", "M — the ONE op-discriminated pod-lifecycle dispatch (A10 consolidation of the former 8 per-verb kinds; KERNEL_MANIFEST.md A10 row)"},
 	{"check-load-plugins", "host_build_check_load_plugins.go", "M — plugin-loading mechanism (KERNEL_MANIFEST.md B5: hostBuildCheckLoadPlugins, confirmed production caller candy/plugin-check/command.go:211)"},
 	{"render-seam", "host_build_render_seam.go", "M — registry + live-loader-scan mechanism (KERNEL_MANIFEST.md W2: dispatches RenderSeamInlineBuilder/RenderSeamEnsureBuilders via providerRegistry.ResolveBuilder)"},
 	{"construct-step", "host_build_construct_step.go", "M — THE kind/verb dispatch mechanism (KERNEL_MANIFEST.md W2: providerRegistry.ResolveVerb/resolve(ClassStep,...))"},
@@ -95,16 +96,7 @@ var reverseChannelHostBuilderWhitelist = []reverseChannelKindClause{
 	{"deploy-from-box", "host_build_deploy_from_box.go", "UNDOCUMENTED (pending KERNEL_MANIFEST.md row)"},
 	{"deploy-del-resolve", "host_build_deploy_del_resolve.go", "UNDOCUMENTED (pending KERNEL_MANIFEST.md row)"},
 	{"config-resolve", "host_build_config_resolve.go", "UNDOCUMENTED (pending KERNEL_MANIFEST.md row)"},
-	{"render-service", "host_build_render_service.go", "UNDOCUMENTED (pending KERNEL_MANIFEST.md row)"},
 	{"resolve-target-add", "host_build_resolve_target_add.go", "UNDOCUMENTED (pending KERNEL_MANIFEST.md row)"},
-	{"pod-start", "host_build_pod_lifecycle_dispatch.go", "UNDOCUMENTED (pending KERNEL_MANIFEST.md row)"},
-	{"pod-stop", "host_build_pod_lifecycle_dispatch.go", "UNDOCUMENTED (pending KERNEL_MANIFEST.md row)"},
-	{"pod-shell", "host_build_pod_lifecycle_dispatch.go", "UNDOCUMENTED (pending KERNEL_MANIFEST.md row)"},
-	{"pod-cmd", "host_build_pod_lifecycle_dispatch.go", "UNDOCUMENTED (pending KERNEL_MANIFEST.md row)"},
-	{"pod-logs", "host_build_pod_lifecycle_dispatch.go", "UNDOCUMENTED (pending KERNEL_MANIFEST.md row)"},
-	{"pod-update", "host_build_pod_lifecycle_dispatch.go", "UNDOCUMENTED (pending KERNEL_MANIFEST.md row)"},
-	{"pod-service", "host_build_pod_lifecycle_dispatch.go", "UNDOCUMENTED (pending KERNEL_MANIFEST.md row)"},
-	{"pod-remove", "host_build_pod_lifecycle_dispatch.go", "UNDOCUMENTED (pending KERNEL_MANIFEST.md row)"},
 	{"plugin-binary", "plugin_dispatch_reverse.go", "M — leg 3 of the north-star's three legs (plugin-binary build + CLI reentry); see file header hostBuildPluginBinary"},
 	{"check-run", "host_build_check_run.go", "UNDOCUMENTED (pending KERNEL_MANIFEST.md row)"},
 }
