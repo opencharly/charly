@@ -1,10 +1,8 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 
 	"github.com/opencharly/spec/spec"
@@ -105,26 +103,6 @@ func validateProjectCUESchemas(cfg *spec.Config, dir string, opts spec.ResolveOp
 	}
 }
 
-// validateBoxBaseFrom surfaces the box entity-level base⊻from mutual-exclusion
-// as a collected validation error. The #Box CUE schema formerly expressed this
-// via a trailing `& ({from?: _|_} | {base?: _|_})` disjunction; that was dropped
-// (gengotypes collapses an entity-level disjunction to an empty struct — see
-// schema/box.cue) and the rule moved to Go. resolveBase already aborts on the
-// conflict, but validateBoxDAG SKIPS unresolvable boxes (continue-on-error), so
-// without this explicit pass a base+from box would slip past `charly box
-// validate`. Both seams call the ONE predicate BoxConfig.HasBaseFromConflict (R3).
-// Neither field set stays valid (a scratch box) — only BOTH is a conflict.
-func validateBoxBaseFrom(cfg *spec.Config, opts spec.ResolveOpts, errs *spec.ValidationError) {
-	for name, img := range cfg.EachBox {
-		if !img.IsEnabled() && !opts.ShouldIncludeDisabled(name) {
-			continue
-		}
-		if img.HasBaseFromConflict() {
-			errs.Add("box %q: from: and base: are mutually exclusive (set one; omit both for a scratch box)", name)
-		}
-	}
-}
-
 // isNodeFormFile reports whether any document in a YAML file is unified
 // node-form (spec.ClassifyDoc → spec.DocShapeNode). Used to skip the legacy
 // root-shape collection validator on node-form manifests (whose entities are
@@ -162,160 +140,19 @@ func boxEntityWireYAML(name string, box spec.BoxConfig) ([]byte, error) {
 	return yaml.Marshal(map[string]any{"box": m})
 }
 
-// validateBuildAndDistro validates build: and distro: entries.
-// build: entries are checked against the embedded distro format definitions (charly/charly.yml).
-// distro: is free-form (any string, including distro:version).
-func validateBuildAndDistro(cfg *spec.Config, distroCfg *spec.DistroConfig, errs *spec.ValidationError) {
-	validateBuild := func(context string, build BuildFormats) {
-		for _, b := range build {
-			if !distroCfg.ValidFormat(b) {
-				errs.Add("%s: build entry %q is not valid (known formats: %s)", context, b, strings.Join(distroCfg.AllFormatNames(), ", "))
-			}
-		}
-		// Check for duplicates
-		seen := make(map[string]bool)
-		for _, b := range build {
-			if seen[b] {
-				errs.Add("%s: duplicate build entry %q", context, b)
-			}
-			seen[b] = true
-		}
-	}
+// validateBuildAndDistro / validateBoxBaseFrom / validateMergeConfig / validateBuildTunables /
+// validateBuilderRefs relocated to candy/plugin-box/validate_config_rules.go (K3-W2, task #13):
+// pure over *spec.Config/BoxConfig/DistroConfig/BuilderConfig, no CUE, no registry — the plugin
+// self-loads the raw config itself via the hoisted sdk/loaderkit.LoadUnifiedViaExecutor witness,
+// no host round-trip needed. What genuinely remains host-only in THIS file (validateCandyCUESchemas
+// / validateProjectCUESchemas below) needs the host's spliced cross-plugin CUE schema — a live,
+// non-marshalable cue.Value graph.
 
-	// Validate defaults
-	validateBuild("defaults", cfg.Defaults.Build)
-
-	// Validate per-image
-	for name, img := range cfg.EachBox {
-		if !img.IsEnabled() {
-			continue
-		}
-		validateBuild(fmt.Sprintf("box %q", name), img.Build)
-		// box check_level enum is enforced by #Box; the build-format set is
-		// dynamic (the embedded vocabulary, not a static CUE enum) so it stays validated here.
-	}
-}
-
-// validatePort validates port declarations in candies and images
-
-// validateRoutes validates route file declarations in candies
-
-// validateMergeConfig validates merge configuration
-func validateMergeConfig(cfg *spec.Config, errs *spec.ValidationError) {
-	// box-entity merge.max_mb >= 0 is enforced by #BoxMerge; the `defaults:`
-	// block is NOT validated against #Box, so its check stays here.
-	if m := cfg.Defaults.Merge; m != nil && m.MaxMB < 0 {
-		errs.Add("defaults: merge max_mb must be > 0, got %d", m.MaxMB)
-	}
-}
-
-// validBuildCacheModes is the allow-list for defaults.cache / image.cache.
-// Empty string means "auto" (resolved at build time by the build drive's cache-arg logic).
-var validBuildCacheModes = map[string]bool{
-	"": true, "image": true, "registry": true, "gha": true, "none": true,
-}
-
-// validateBuildTunables validates the build-speed knobs on defaults: and any
-// image entry: jobs >= 1, podman_jobs >= 0, podman_jobs_cap >= 1, cache in
-// the allow-list, and no empty context_ignore entries. These are project-wide
-// defaults; values are validated wherever they appear so a typo surfaces at
-// `charly box validate` rather than silently mis-driving a build.
-func validateBuildTunables(cfg *spec.Config, errs *spec.ValidationError) {
-	check := func(name string, ic spec.BoxConfig) {
-		if ic.Jobs != nil && *ic.Jobs < 1 {
-			errs.Add("%s: jobs must be >= 1, got %d", name, *ic.Jobs)
-		}
-		if ic.PodmanJobs != nil && *ic.PodmanJobs < 0 {
-			errs.Add("%s: podman_jobs must be >= 0, got %d", name, *ic.PodmanJobs)
-		}
-		if ic.PodmanJobsCap != nil && *ic.PodmanJobsCap < 1 {
-			errs.Add("%s: podman_jobs_cap must be >= 1, got %d", name, *ic.PodmanJobsCap)
-		}
-		if !validBuildCacheModes[ic.Cache] {
-			errs.Add("%s: cache must be one of image|registry|gha|none, got %q", name, ic.Cache)
-		}
-		for i, p := range ic.ContextIgnore {
-			if strings.TrimSpace(p) == "" {
-				errs.Add("%s: context_ignore[%d] must not be empty", name, i)
-			}
-		}
-		if ic.KeepImages != nil && *ic.KeepImages < 0 {
-			errs.Add("%s: keep_images must be >= 0 (0 = disabled), got %d", name, *ic.KeepImages)
-		}
-		if ic.KeepCheckRuns != nil && *ic.KeepCheckRuns < 0 {
-			errs.Add("%s: keep_check_runs must be >= 0 (0 = disabled), got %d", name, *ic.KeepCheckRuns)
-		}
-	}
-
-	check("defaults", cfg.Defaults)
-	for name, img := range cfg.EachBox {
-		if !img.IsEnabled() {
-			continue
-		}
-		check(fmt.Sprintf("box %q", name), img)
-	}
-}
-
-// validateBuilderRefs is the HOST-NATURAL half of the former validateBuilders (task #60): the authored
-// builder-REFERENCE checks that read RAW authored config a projection cannot carry — cfg.Defaults.Builder,
-// each box's builds:/builder: refs against the DYNAMIC builder vocab (builderCfg), and the
-// namespace-aware resolveBoxRef existence/capability checks. The candy-needs-builder DETECTION half
-// (over the resolved builder map + ResolveCandyOrder) moved to the validate plugin (envelope-portable);
-// this reference-validation half stays host (like validateBuildAndDistro) and rides reply.Diagnostics.
-// Kind-blind: builder/build TYPE words are checked against the runtime builder vocab, no kind switch.
-func validateBuilderRefs(cfg *spec.Config, builderCfg *spec.BuilderConfig, errs *spec.ValidationError) {
-	// Validate defaults.builder entries.
-	for typ, builder := range cfg.Defaults.Builder {
-		if !builderCfg.ValidBuilderType(typ) {
-			errs.Add("defaults.builder: build type %q is not valid (known builders: %s)", typ, strings.Join(builderCfg.BuilderNames(), ", "))
-		}
-		if builder != "" {
-			// Namespace-aware: a defaults builder ref may be qualified (e.g. `charly.fedora-builder`).
-			builderImg, _, exists := cfg.ResolveBoxRef(builder)
-			if !exists {
-				errs.Add("defaults.builder.%s: box %q not found", typ, builder)
-			} else if !builderImg.IsEnabled() {
-				errs.Add("defaults.builder.%s: box %q is disabled", typ, builder)
-			}
-		}
-	}
-	// Validate each enabled image's builds:/builder: authored refs.
-	for boxName, img := range cfg.EachBox {
-		if !img.IsEnabled() {
-			continue
-		}
-		for _, b := range img.Produce {
-			if !builderCfg.ValidBuilderType(b) {
-				errs.Add("box %q: builds entry %q is not valid (known builders: %s)", boxName, b, strings.Join(builderCfg.BuilderNames(), ", "))
-			}
-		}
-		for typ, builder := range img.Builder {
-			if !builderCfg.ValidBuilderType(typ) {
-				errs.Add("box %q: builder.%s is not a valid build type (known builders: %s)", boxName, typ, strings.Join(builderCfg.BuilderNames(), ", "))
-			}
-			if builder == boxName {
-				errs.Add("box %q: builder.%s cannot reference self", boxName, typ)
-				continue
-			}
-			if builder != "" {
-				builderImg, _, exists := cfg.ResolveBoxRef(builder)
-				if !exists {
-					errs.Add("box %q: builder.%s references %q which is not found", boxName, typ, builder)
-					continue
-				}
-				if !builderImg.IsEnabled() {
-					errs.Add("box %q: builder.%s references %q which is disabled", boxName, typ, builder)
-					continue
-				}
-				if len(builderImg.Produce) > 0 && !slices.Contains(builderImg.Produce, typ) {
-					errs.Add("box %q: builder.%s references %q which does not declare builds: [%s]", boxName, typ, builder, typ)
-				}
-			}
-		}
-	}
-}
-
-// validateRemoteCandies checks remote candy consistency
+// validateRemoteCandies checks remote candy consistency. STAYS host (unlike its former siblings
+// above): it calls CollectRemoteRefs (refs.go), which needs spec.RefsCollectSeams
+// (Downloader/MigrateCache/ResolveLocal — registry-coupled host callbacks with no existing
+// executor-backed bridge, unlike LoadSeams) — an IOU, not this unit's scope (see
+// charly/KERNEL_MANIFEST.md).
 func validateRemoteCandies(cfg *spec.Config, layers map[string]spec.CandyReader, errs *spec.ValidationError) {
 	// Check version conflicts (same repo referenced with different versions)
 	_, err := CollectRemoteRefs(cfg, layers)

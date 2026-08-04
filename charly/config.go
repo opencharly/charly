@@ -34,10 +34,10 @@ func noCharlyYmlErr(dir string) error {
 	return fmt.Errorf("no charly.yml found in %s (run `charly box new project .` to scaffold one): %w", dir, ErrNoCharlyYml)
 }
 
-// BuildFormats handles YAML unmarshal of the build: field.
-// Package formats tied to the defined builders, installed in list order.
-// Single string "rpm" becomes ["rpm"]. List ["pac", "aur"] stays as-is.
-type BuildFormats []string
+// BuildFormats (a []string alias for the build: field) is DELETED (K3-W2, task #13): its sole
+// consumer, validateBuildAndDistro, relocated to candy/plugin-box/validate_config_rules.go using
+// plain []string (spec.BoxConfig.Build's actual wire type — BuildFormats was never referenced by
+// the wire type itself, only by this file's now-moved validator).
 
 // LoadConfig reads charly.yml and returns the spec.Config (defaults + images)
 // projection. Mode purity preserved: this reads the PROJECT charly.yml only and

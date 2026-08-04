@@ -73,6 +73,25 @@ appear in this STAY table.
 | `generate.go` | 287 | MIXED: K1-IOU / B (embed) / M (registry) | `newCandyScanGenerator`/`ScanAllCandyWithConfigOpts` call `LoadConfig`/`LoadUnified` — K1-IOU. `baselineContextIgnore` reads charly's own `//go:embed charly/charly.yml` — B (same embed-boundary reason as `host_build_buildengine.go`'s context-ignore leg). `resolveInlineBuilderSeam`/`invokeOpEmitFragmentOpt` Invoke the provider registry — M. `createRemoteCandyCopies`/`candyByName`/`candyStageDirName` are host-fs helpers consumed by the K1-IOU functions above, in the same file. |
 | `format_config.go` | 58 | K1-IOU | `LoadBuildConfigForBox`/`LoadDefaultBuildConfig` call `LoadUnified` (core-only, K1) — dies only when `LoadUnified`/`config.go`'s own K1 resolution happens. |
 
+## K-wave W2 unit 3 — the validate.go/validate_project_host.go move, task #13
+
+Per orchestrator ruling 3(a)-(c): the ~250 LOC of pure raw-config validate rules
+(`validateBuildAndDistro`/`validateBoxBaseFrom`/`validateMergeConfig`/`validateBuildTunables`/
+`validateBuilderRefs`) MOVED to `candy/plugin-box/validate_config_rules.go`, which self-loads the
+raw `*spec.Config`/`*spec.DistroConfig`/`*spec.BuilderConfig` via the hoisted
+`sdk/loaderkit.LoadUnifiedViaExecutor` witness (unit 2, same task). `validate.go` shrank
+511→181 LOC (including the `boxEntityWireYAML`/`isNodeFormFile` CUE-support helpers that stay);
+`validate_project_host.go` shrank 334→325 LOC (its `loadedProject` load path is UNCHANGED — the
+CUE checks still need a fully-scanned project; only `runHostNaturalValidateChecks`'s function-call
+list shrank from 8 calls to 3, dropping the `builderCfg` field it no longer needs).
+
+| File (slimmed remainder) | LOC | Clause | Evidence |
+|---|---:|---|---|
+| `validate.go` | 181 | M — CUE-splice mechanism | `validateCandyCUESchemas`/`validateProjectCUESchemas` call `cueDocFromYAML`/`validateEntityClosedCUE`/`validateNodeFormSteps` (cue_schema.go/cue_node.go), which read `coreCueSchema()` — the HOST's SPLICED cross-plugin CUE schema (every connected plugin's own schema fragment unified at registry/schema-gate time into ONE `cue.Value` graph). A live, non-marshalable object — genuinely process-local, not portable to any plugin without first building a schema-splice-carrying seam (rejected as a NEW seam family per ruling 3(c); the existing `ProjectLoader` seam legs (`requireProjectLoader().ValidateEntityClosedCUE`/etc., U2/U3c) already carry the SAME functions for core's OWN in-process callers — `provider_kind_invoke.go`'s kind-dispatch — reusing an established pattern, not adding one, but that pattern's callers are all in-process; an out-of-process reach would still need a new wire leg). |
+| `validate_project_host.go` | 325 | M (CUE, same as above) + K1-loader-refs-IOU (`validateRemoteCandies`) | `hostBuildValidateProjectChecks`'s `loadProjectForResolve` load path stays (feeds the CUE pair with a fully-scanned project + registers the build vocabulary `validateCandyCUESchemas` needs). `validateRemoteCandies` calls `CollectRemoteRefs` (refs.go), which needs `spec.RefsCollectSeams` (`Downloader`/`MigrateCache`/`ResolveLocal` — registry-coupled host callbacks) with NO existing executor-backed bridge (unlike `LoadSeams`, which the K1-loader wave already bridged) — an IOU for a future wave that builds that bridge, not this unit's scope (north-star heuristic 3: "the move WAITS for the enabler"). |
+
+**Cascade check (per ruling 3(c), "verify each with the per-submodule grep")**: `validateEntityClosedCUE`/`validateNodeFormSteps`/`validateCandyManifestCUE` (cue_schema.go, K1 files) each still have their ONE production caller inside `validate.go` (`cueDocFromYAML`/`validateEntityClosedCUE` at `validateProjectCUESchemas`; `validateCandyManifestCUE` at `validateCandyCUESchemas`; `validateNodeFormSteps` at `validateProjectCUESchemas`'s root-file loop) — since the CUE pair STAYED (ruling 3(c), no new seam), these K1 files' cascade-deletion did NOT fire this unit; `cueDocFromYAML` additionally still serves `provider_kind_invoke.go` (the M kind-dispatch) regardless. No K1 file changed as a result of this unit.
+
 ## Clause key
 
 - **M** — wire-broker Mechanism (one of the 3 sanctioned reverse-channel legs: venue-executor
