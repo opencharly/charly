@@ -76,7 +76,8 @@ type BundleAddCmd struct {
 // BundleAddCmd's Run() (the plugin-side deploy-tree WALK) lives in walk.go (K4-C walk port).
 
 // BundleDelCmd is the `charly bundle del <name>` grammar; Run() (walk.go) drives the
-// deploy-del-resolve / deploy-members-down / deploy-node-del-dispatch seams. The AssumeYes field
+// deploy-del-resolve / deploy-node-del-dispatch seams plus a direct deploykit.TearDownMembers
+// call (#55 W3 A4 — the former deploy-members-down HostBuild seam is deleted). The AssumeYes field
 // renders as `--assume-yes` (Kong derives the long name from the FIELD; the `long:"yes"` tag is
 // a no-op in the separate-tag form) with `-y` as the short form — the exact contract
 // spec.BundleDelArgv relies on.

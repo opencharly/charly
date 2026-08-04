@@ -1,6 +1,7 @@
 package main
 
-// bundle_members.go — sibling `peer:` member deployments: the ONE shared lifecycle.
+// bundle_members.go — TRANSITIONAL (#55 W3 A4, dies in the immediately-following B2-full unit):
+// sibling `peer:` member deployments.
 //
 // A BundleNode's `peer:` map declares companion deployments brought up
 // ALONGSIDE it on the shared `charly` network (NOT nested inside it). The canonical
@@ -11,14 +12,19 @@ package main
 //
 // The LOAD-half — foldMembers / sortedMemberKeys / sortedDeployKeys plus the venue-flatten pass —
 // relocated to sdk/loaderkit (bundle_load.go) per the lead's U1 SPLIT ruling (K1-LOADER
-// RELOCATION): they are registry-free pure maps/tree operations the plugin-callable
-// loaderkit.LoadUnified wires as seams directly. See loaderkit.FoldMembers / spec.SortedMemberKeys
-// / spec.SortedDeployKeys. The DEPLOY-half below (bringUpMembers / tearDownMembers) STAYS
-// host-resident: it shells out via proc.RunCharlySubcommand + reads the live registry
-// (nodeTraits), so it is NOT registry-free. bringUpMembers / tearDownMembers are the single shared
-// helpers invoked by BOTH the kind:check bed runner (check_bed_run.go) and the operator deploy path
-// (bundle_add_cmd.go) — `peer:` works identically for check and deploy from one codebase. This file
-// moves with those consumers through their respective seams, never alone.
+// RELOCATION). The DEPLOY-half below (bringUpMembers / tearDownMembers) has ALSO now relocated —
+// canonically, to sdk/deploykit.BringUpMembers/TearDownMembers (#55 W3 A4's R3 3-way audit
+// found the venue-classification predicate, not the whole engine, was the real duplication risk;
+// resolved by promoting spec.IsVmVenue/IsContainerVenue, mirroring spec.HostRooted). The operator
+// deploy path (candy/plugin-bundle/walk.go) already calls the sdk/deploykit copy directly — the
+// former "deploy-members-up"/"deploy-members-down" HostBuild seam is DELETED.
+//
+// This file's copy is a TEMPORARY DUPLICATE kept for exactly ONE reason: host_build_check_bed.go's
+// members-up/members-down ops still call these as a same-package function (core cannot import
+// sdk/deploykit — import-purity). B2-full (the very next unit, landing in the same working
+// session) deletes this file entirely once candy/plugin-check calls sdk/deploykit directly
+// instead, alongside its flock/lease/env dissolution. DO NOT add new callers to this copy or
+// extend it — it is scheduled to die, not to become a second permanent home.
 
 import (
 	"errors"
@@ -61,9 +67,10 @@ func withMemberTag(args []string, imageTag string) []string {
 // deriveChildExecutorForPath, most bodies here shell out via proc.RunCharlySubcommand (a
 // `charly <verb>` re-entrant CLI call, itself running IN this same host process — not the
 // HostBuild("cli") reverse-channel reentry an out-of-process plugin would need). This function's
-// BODY is UNCHANGED and stays host-side (providerRegistry + ledger + subprocess-dependent); the
-// plugin's walk (candy/plugin-bundle/walk.go) reaches it via the narrow "deploy-members-up" seam
-// (host_build_deploy_members.go) once, at the end of a successful `charly bundle add` tree walk.
+// BODY is UNCHANGED. The operator path (candy/plugin-bundle/walk.go) now calls
+// sdk/deploykit.BringUpMembers directly (#55 W3 A4 — the former "deploy-members-up" seam is
+// deleted); ONLY host_build_check_bed.go's members-up op still reaches THIS copy, as a
+// same-package call (see the file header — this copy dies with B2-full).
 func bringUpMembers(node *spec.BundleNode, imageTag string) error {
 	if node == nil || len(node.Members) == 0 {
 		return nil
@@ -130,8 +137,10 @@ func bringUpMembers(node *spec.BundleNode, imageTag string) error {
 // bringUpMembers. It attempts every member and returns their joined errors so callers can finish
 // the full cleanup while still failing the owning operation.
 //
-// K4-C WALK PORT (landed): same as bringUpMembers above — stays host-side unchanged, reached
-// via the narrow "deploy-members-down" seam from `charly bundle del`'s plugin-side walk.
+// K4-C WALK PORT (landed): same as bringUpMembers above — this copy's BODY is unchanged, but the
+// operator path now calls sdk/deploykit.TearDownMembers directly (#55 W3 A4 — the former
+// "deploy-members-down" seam is deleted); ONLY host_build_check_bed.go's members-down op still
+// reaches THIS copy (dies with B2-full).
 func tearDownMembers(node *spec.BundleNode) error {
 	if node == nil || len(node.Members) == 0 {
 		return nil

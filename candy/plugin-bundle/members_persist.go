@@ -3,11 +3,12 @@ package bundle
 // members_persist.go — the operator-path MEMBER deploy-override PERSIST, plugin-side (#55 coneC-dsh β1).
 // The former host-side per-member persist (charly/bundle_members.go's bringUpMembers →
 // persistBedDeployOverrides) shed from charly core; the plugin-bundle walk now persists each sibling
-// member PLUGIN-SIDE BEFORE calling the host "deploy-members-up" seam (which runs bringUpMembers
-// without the persist), so the member's declared port/volume/env overrides + resource-arbitration
-// role are seeded by the time the member's own `charly config`/`charly start` runs. Reuses this
-// package's existing deployMarshalNode + loadBundleConfig (the loader-threaded Primaries leg + the
-// cycle-free loaderkit overlay read — the SAME pattern saveDeployConfig uses). Mirrors
+// member PLUGIN-SIDE BEFORE calling deploykit.BringUpMembers directly (#55 W3 A4 — the former
+// "deploy-members-up" HostBuild seam is deleted; BringUpMembers itself does not persist), so the
+// member's declared port/volume/env overrides + resource-arbitration role are seeded by the time
+// the member's own `charly config`/`charly start` runs. Reuses this package's existing
+// deployMarshalNode + loadBundleConfig (the loader-threaded Primaries leg + the cycle-free
+// loaderkit overlay read — the SAME pattern saveDeployConfig uses). Mirrors
 // candy/plugin-check/bed_persist.go's bed member persist (R3).
 
 import (
