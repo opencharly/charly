@@ -78,6 +78,6 @@ func deployTraitDescent(word string) *spec.DescentDescriptor {
 // Called by the walker when it knows the full dotted path.
 //
 // The host-side merged-tree read (project charly.yml + per-host overlay) that
-// formerly lived here moved to check_cmd.go's resolveMergedDeployTree (#55 LOADER
-// cone) so this file — pure kind-blind trait/descent loader reads (clause M/D) —
-// no longer imports sdk/deploykit.
+// formerly lived here moved to plugin_loader.go's resolveMergedDeployTree (#55 LOADER
+// cone; relocated again within charly/ at #55 W3 B3) so this file — pure kind-blind
+// trait/descent loader reads (clause M/D) — no longer imports sdk/deploykit.

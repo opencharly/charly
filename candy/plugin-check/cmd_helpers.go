@@ -15,8 +15,9 @@ package check
 // pluginCheckLivePod/VM/Local/Group, pluginCheckRunLive). STILL core-only (used by the
 // "check-load-plugins" seam and the external `target: local` deploy's own --verify path — neither
 // is part of any check-run Mode this package dispatches): resolveCheckRunnerContext,
-// deployNodePluginContext, checkLocalDeployScope,
-// runLocalDeployScopePlan (charly/check_cmd.go).
+// checkLocalDeployScope, runLocalDeployScopePlan (charly/check_cmd.go). deployNodePluginContext
+// relocated to charly/plugin_loader.go (#55 W3 B3, beside its M-mechanism consumer
+// loadDeployPlugins) — still core-only, different file.
 
 import (
 	"strings"
