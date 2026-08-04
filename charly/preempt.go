@@ -21,8 +21,10 @@ import (
 //   1. The in-core PROXY (arbiterProxy + Lease + the acquire*/release* shims) — re-verified at
 //      Cutover B unit 6b (the previous consumer list here — check_bed_run.go/start.go/vm.go/
 //      commands.go/vm_gpu_cmd.go — was STALE; none of those files call these shims anymore).
-//      The REAL, current callers are host_build_check_bed.go's bed arbiter lease
-//      (acquireResourceForClaimant), and — permanently, per the B-1 unit-2 IOU #4 ruling —
+//      The check-bed session's own arbiter lease dissolved entirely (#55 W3 B2-full):
+//      candy/plugin-check/bed_session.go now calls verb:arbiter DIRECTLY via InvokeProvider (the
+//      SAME vm_arbiter_shim.go precedent noted below), never through this in-core proxy. The
+//      REAL, current callers are — permanently, per the B-1 unit-2 IOU #4 ruling —
 //      host_build_arbiter_bracket.go's (the F10 HostBuild seam candy/plugin-bundle's
 //      arbiter-bracket-acquire/-release dispatch calls, FLOOR-SLIM-proper Unit-8; was
 //      arbiter_bracket.go core-resident before that move) + host_build_pod_lifecycle_dispatch.go's
@@ -36,11 +38,13 @@ import (
 //   2. gatherResources — REWIRED off LoadUnified(".") onto the SAME generic
 //      InvokeProvider("build","project") envelope every other resolved-project consumer uses
 //      (K-wave W3a A2), retiring its K1/LoadUnified coupling now rather than waiting for #12. Its
-//      sole remaining caller is gpu_allocate.go's bedGPUPrereqMissing (DEFERRED to B2 — rides its
-//      own sole caller host_build_check_bed.go's K1-gated data-projection half); gpu_imply.go's
-//      former call moved to candy/plugin-preempt (K-wave W3a A2) and no longer needs this
-//      function. The arbiter itself doesn't reach it either: candy/plugin-preempt reads resources
-//      off its OWN InvokeProvider("build","project") envelope (rp.Resources) directly.
+//      sole remaining caller is gpu_allocate.go's bedGPUPrereqMissing, reached now via the narrow
+//      host_build_check_bed_gpu_prereq.go seam (#55 W3 B2-full — GPU host-DETECTION is the
+//      project's operator-dropped exception, the ONE piece of check-bed's former session that
+//      stayed core); gpu_imply.go's former call moved to candy/plugin-preempt (K-wave W3a A2) and
+//      no longer needs this function. The arbiter itself doesn't reach it either:
+//      candy/plugin-preempt reads resources off its OWN InvokeProvider("build","project")
+//      envelope (rp.Resources) directly.
 //
 //   K1-unblock wave 1 retired the former bespoke arbiter reverse-RPC channel entirely (the
 //   "2 genuinely K1-blocked seams" it carried — gather/resources): candy/plugin-preempt now
@@ -190,7 +194,7 @@ func acquireDispatch(action, claimant string, tokens []string, node spec.BundleN
 		ClaimAddr:       spec.HolderAddrFor(claimant, node),
 		Transient:       transient,
 		IsGroup:         node.IsGroup(),
-		IsPodMember:     isPodMember(&node),
+		IsPodMember:     spec.IsContainerVenue(&node),
 		SecurityDevices: secDevices,
 	})
 	if err != nil {
@@ -244,8 +248,9 @@ func releaseResourceClaim(claimant string) {
 //
 // gatherResources is the ONE function in this family that stays here: it has ONE remaining
 // core-internal caller (gpu_allocate.go's bedGPUPrereqMissing — the pre-build check-bed
-// fail-fast; DEFERRED per the K-wave W3a A2 hybrid ruling, since its own sole caller
-// host_build_check_bed.go is itself K1-gated data-projection territory, B2). gpu_imply.go's
+// fail-fast, reached now via the narrow host_build_check_bed_gpu_prereq.go seam that survived
+// check-bed's full dissolution, #55 W3 B2-full — GPU host-DETECTION is the project's explicitly
+// operator-dropped exception, fenced from this cutover; see that file's header). gpu_imply.go's
 // former caller moved to candy/plugin-preempt (K-wave W3a A2) and no longer uses this function.
 //
 // gatherResources loads the token -> ResourceDef map (the gpu selector that drives the mode

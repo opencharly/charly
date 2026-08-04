@@ -102,29 +102,9 @@ func pluginCheckRunPreflight(ex *sdk.Executor, ctx context.Context, req spec.Che
 	return reply, nil
 }
 
-// bedHostBuild drives one op of the transitional "check-bed" host-session seam (P12 Wave-2): it
-// marshals the CheckBedRequest, HostBuild("check-bed")s it over the reverse channel, and decodes
-// the CheckBedReply. The AI-harness R10 bed driver (the leaf harness code) calls setup → members-up
-// / members-down → teardown through this bridge; the host holds the bed's lock / lease / env
-// lifecycle across the driver's many bedCli calls. Readiness waits no longer round-trip here (#55
-// W3 B2 — the driver calls spec/exec directly with data already in hand). ex/ctx are passed
-// explicitly (the harness owns its executor + context, unlike the single-shot cmdExec the CheckCmd
-// leaves use).
-func bedHostBuild(ex *sdk.Executor, ctx context.Context, req spec.CheckBedRequest) (spec.CheckBedReply, error) {
-	reqJSON, err := json.Marshal(req)
-	if err != nil {
-		return spec.CheckBedReply{}, err
-	}
-	out, err := ex.HostBuild(ctx, "check-bed", reqJSON)
-	if err != nil {
-		return spec.CheckBedReply{}, err
-	}
-	var reply spec.CheckBedReply
-	if err := json.Unmarshal(out, &reply); err != nil {
-		return spec.CheckBedReply{}, fmt.Errorf("check-bed: decode reply: %w", err)
-	}
-	return reply, nil
-}
+// bedHostBuild DIED (#55 W3 B2-full): the "check-bed" HostBuild seam it bridged to is gone. The
+// AI-harness R10 bed driver (bed_run.go's runCheckBed) now calls bedSetup/bedTeardown
+// (bed_session.go) directly — plain in-process function calls, no wire round-trip.
 
 // bedCli runs one `charly <argv>` subcommand host-side via the generic "cli" HostBuild seam
 // (hostBuildCli forks os.Args[0] in the host process, inheriting the check-bed session's env). The

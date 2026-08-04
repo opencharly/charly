@@ -4,16 +4,16 @@ import (
 	"github.com/opencharly/spec/spec"
 )
 
-// gpu_allocate.go — the core-side GPU-resource PREREQ + host-probe helpers that
-// survive the P10 VM-CLI move. The create-time auto-allocation pipeline
-// (autoAllocateExclusiveGPUs + vfioGpuToHostdevs + the instance-override
-// persistence) moved into candy/plugin-vm with the `charly vm create` handler;
-// what stays are the pure resource-vocabulary predicates the bed runner
-// (check_bed_run.go — bedGPUPrereqMissing) and the host-probe seam
-// (host_build_hostprobe.go — vfioPciAvailable) still call. requiredGPUResource
-// (the former preempt validator's helper) was deleted as dead code (A1, K-wave
-// W3): its cited caller (validate_preempt.go) was already deleted in 54657305,
-// and candy/plugin-vm/gpu_allocate.go carries the live copy the arbiter uses.
+// gpu_allocate.go — the core-side GPU-resource PREREQ helpers that survive the P10 VM-CLI move.
+// The create-time auto-allocation pipeline (autoAllocateExclusiveGPUs + vfioGpuToHostdevs + the
+// instance-override persistence) moved into candy/plugin-vm with the `charly vm create` handler;
+// what stays is bedGPUPrereqMissing/gpuPrereqMissing, the pure resource-vocabulary predicate
+// reached now via the narrow host_build_check_bed_gpu_prereq.go seam (#55 W3 B2-full — the ONE
+// piece of check-bed's former full session that survived, GPU host-DETECTION being the project's
+// explicitly operator-dropped exception, fenced from every K-wave cutover per gpu_shim.go's own
+// header). requiredGPUResource (the former preempt validator's helper) was deleted as dead code
+// (A1, K-wave W3): its cited caller (validate_preempt.go) was already deleted in 54657305, and
+// candy/plugin-vm/gpu_allocate.go carries the live copy the arbiter uses.
 
 // bedGPUPrereqMissing reports whether a bed claims a host GPU resource — via
 // requires_exclusive OR requires_shared — whose vendor has NO matching card on

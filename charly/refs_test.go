@@ -6,6 +6,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/opencharly/spec/proc"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -477,7 +478,7 @@ func TestCollectRemoteRefsDifferentCandiesSameRepo(t *testing.T) {
 // never migrates the dev's live tree.
 func TestEnsureRepoDownloaded_Override(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv(RepoOverrideEnv, "github.com/foo/bar="+dir)
+	t.Setenv(proc.RepoOverrideEnv, "github.com/foo/bar="+dir)
 	got, err := EnsureRepoDownloaded("github.com/foo/bar", "v9999.1.1")
 	if err != nil {
 		t.Fatalf("override should resolve offline, got err: %v", err)

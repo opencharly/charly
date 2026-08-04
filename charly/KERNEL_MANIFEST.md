@@ -157,6 +157,23 @@ two flagged K1-loader files.
 - **Dead schema found + deleted**: `spec/schema/seam.cue`'s `#DevicePatternsRequest`/`#DevicePatternsReply` — a fully-generated, fully-documented CUE type describing a PLANNED `"device-patterns"` HostBuild seam with ZERO actual Go implementation or callers anywhere in the tree (core or candy/). Orphaned scaffolding, not a live seam — R1/R5 finding, removed alongside the hostprobe types.
 - **`main_freshness.go` (281 LOC) + `main_freshness_test.go`: DELETED.** Failed all four kernel escapes by the letter (not E; not one of the 3 M's — touches none of loading/prescan/broker; not B — freshness isn't required for any plugin to load; not D). Moved to `candy/plugin-doctor`'s new `verb:freshness-guard` capability (`freshness.go`), invoked via a NEW `phase.PhasePreflight` lifecycle phase (`spec/phase`) mirroring `bootstrap_phase.go`'s `runBootstrapPhase`/`providersInPhase` shape exactly (team-lead ruling: phase-keyed enumeration, not a fixed-provider resolve). `preflight_phase.go`'s `runPreflightPhase`/`runPreflightPhaseWith` (below) is the new M-clause reverse-channel face; `main.go` now calls it once, unconditionally, before any command dispatch. Verified end-to-end live (not just unit tests): a stale-binary refusal fires with the byte-identical original message on a touched-newer-than-60s `charly/main.go`, safe verbs and the `CHARLY_SKIP_FRESHNESS_CHECK` bypass both still work.
 | `preflight_phase.go` | ~56 | M — wire-broker reverse-channel leg, the preflight-phase mechanism face | Defines `runPreflightPhase`/`runPreflightPhaseWith`, the phase-ascending enumerate-and-Invoke pre-pass for `phase.PhasePreflight` providers — the exact `providersInPhase`/`Invoke` shape `bootstrap_phase.go`'s already-M `runBootstrapPhase` uses, one phase earlier. Called ONCE from `main.go`, unconditionally, before Kong dispatches to any command. |
+- **`host_build_check_bed.go` (407 LOC) + `check_bed_run.go` (~110 LOC) + `bundle_members.go`
+  (~180 LOC, its transitional-duplicate copy): FULLY DELETED (#55 W3 B2-full).** The file's own
+  "STAYS PERMANENTLY — same live-OS-handle family as `host_build_arbiter_bracket.go`" framing was
+  refuted (the boundary law's own named trap: a stays-core header is a claim, not a verdict) —
+  contradicted by three already-written docs (`spec/schema/seam.cue`'s own `#CheckBedRequest`
+  comment: "DIES at K5"; `spec/exec/venue_wait.go`'s header, which already relocated the readiness
+  gates citing this exact principle; decisively, `sdk/deploykit/bed_session.go`'s own header:
+  "the lock/lease/persist family... STAYS here (K5)" — the declared destination was never
+  permanent core residence). Every piece dissolved without a host round-trip: the flock
+  (`spec/lock`, plugin-importable), the preempt lease (direct `InvokeProvider(verb,"arbiter")`,
+  the `vm_arbiter_shim.go` precedent — bypassing this manifest's own `arbiterProxy` STAY entirely
+  for this ONE caller), the repo-override/deploy-config env vars (`os.Setenv` in the compiled-in
+  plugin's own process, landing in the SAME process `hostBuildCli`'s cli-reentry children fork
+  from). See `candy/plugin-check/bed_session.go` for the new home — documented there as a
+  **compiled-in-REQUIRED placement class**, the same documented exception a bootstrap plugin
+  carries, not an incidental fact about today's placement.
+| `host_build_check_bed_gpu_prereq.go` | 27 | M — wire-broker leg, THE ONE seam surviving check-bed's dissolution | GPU host-DETECTION (`gpu_allocate.go`'s `bedGPUPrereqMissing`/`DetectVFIO`) is the project's explicitly operator-dropped exception (no hardware to verify a relocation against) — `gpu_shim.go`'s own header fences it from every K-wave cutover including this one, pending unit B6. This seam threads the claimant's resource tokens out and the verdict back so the fenced core logic runs completely unchanged; `candy/plugin-check/bed_session.go`'s `bedGpuPrereqCheck` is its sole caller. |
 
 ## Clause key
 

@@ -59,35 +59,20 @@ func bedConfigReader(ctx context.Context, ex *sdk.Executor) func() (*deploykit.B
 	return func() (*deploykit.BundleConfig, error) { return loaderkit.LoadHostBundleConfigViaExecutor(ctx, ex) }
 }
 
-// externalInPlaceFromDescent derives a member's externalInPlace classification from its stamped
-// Descent — the plugin-reachable equivalent of the host's bedExternalInPlace(target) (which queries
-// the live provider registry via isExternalDeploySubstrate). For a LOADED node the registry verdict
-// is already stamped into Descent.Venue: the in-place external substrates (android → "parent",
-// exampledeploy → "none") are exactly the non-container, non-ssh, non-shell venues; pod/vm/k8s/local
-// are NOT in-place (pod persists, vm persists, k8s persists, local is skipped by spec.HostRooted
-// inside PersistBedDeployOverrides). A nil Descent (never for a loaded node) falls back to false
-// (persist — the safe default matching a pod member). deploykit.PersistBedDeployOverrides internally
-// also skips spec.HostRooted nodes, so the local case is covered regardless.
-func externalInPlaceFromDescent(node *spec.Deploy) bool {
-	if node == nil || node.Descent == nil {
-		return false
-	}
-	v := node.Descent.Venue
-	return v == "parent" || v == "none"
-}
-
 // persistBedDeployOverridesPluginSide seeds the per-host charly.yml with the bed ROOT's + each
 // MEMBER's project-declared deploy-shaped overrides (port / volume / env / security / network + the
 // resource-arbitration role) PLUGIN-SIDE, replacing the former host-side persistBedDeployOverrides
 // wrapper. The bed-root BundleNode (with nested peer Members) arrives as d.NodeJSON; the root
 // persist is guarded by !d.IsVM (matching the former host guard — a VM bed runs no `charly config`)
-// and passes d.IsExternal as externalInPlace (host-computed via the live registry). Each member is
-// persisted from the root's nested peer map, with externalInPlace derived from the member's stamped
-// Descent (externalInPlaceFromDescent). deploykit.PersistBedDeployOverrides internally self-skips a
-// group root (IsGroup), a local/host-rooted node, and an in-place external node — so calling it
-// unconditionally for the root + members is safe + matches the former host behavior. Best-effort
-// (stderr warnings, no error return) — matching the former host wrapper (a persist failure does not
-// abort the bed run; the bed's own `charly config` re-saves the overlay).
+// and passes d.IsExternal as externalInPlace (bed_session.go's bedSetup computes it via
+// spec.ExternalInPlaceVenue, #55 W3 B2-full — no more host registry round-trip). Each member is
+// persisted from the root's nested peer map, with externalInPlace derived the SAME way
+// (spec.ExternalInPlaceVenue, R3 — one shared predicate, no third copy). deploykit.
+// PersistBedDeployOverrides internally self-skips a group root (IsGroup), a local/host-rooted
+// node, and an in-place external node — so calling it unconditionally for the root + members is
+// safe + matches the former host behavior. Best-effort (stderr warnings, no error return) —
+// matching the former host wrapper (a persist failure does not abort the bed run; the bed's own
+// `charly config` re-saves the overlay).
 func persistBedDeployOverridePluginSide(ctx context.Context, ex *sdk.Executor, name string, d spec.CheckBedReply) {
 	if len(d.NodeJSON) == 0 {
 		return // no bed-root threaded (e.g. a degraded host) — nothing to persist
@@ -104,15 +89,15 @@ func persistBedDeployOverridePluginSide(ctx context.Context, ex *sdk.Executor, n
 	if !d.IsVM {
 		deploykit.PersistBedDeployOverrides(name, deploykit.BundleNode(root), d.IsExternal, marshalNode, reader)
 	}
-	// Member persist — each peer member from the root's nested map, BEFORE the host members-up op
+	// Member persist — each peer member from the root's nested map, BEFORE members-up
 	// runs the member's `charly config`/`charly start`. A member's externalInPlace is derivable from
-	// its stamped Descent (the host registry verdict is stamped at load). Mirrors the former
-	// bringUpMembers per-member persist.
+	// its stamped Descent (spec.ExternalInPlaceVenue). Mirrors the former bringUpMembers per-member
+	// persist.
 	for _, memberKey := range spec.SortedMemberKeys(root.Members) {
 		member := root.Members[memberKey]
 		if member == nil {
 			continue
 		}
-		deploykit.PersistBedDeployOverrides(memberKey, *member, externalInPlaceFromDescent(member), marshalNode, reader)
+		deploykit.PersistBedDeployOverrides(memberKey, *member, spec.ExternalInPlaceVenue(member), marshalNode, reader)
 	}
 }

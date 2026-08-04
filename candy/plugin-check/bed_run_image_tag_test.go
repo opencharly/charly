@@ -1,13 +1,13 @@
-package main
+package check
 
 import (
 	"testing"
 )
 
-// #75 — bed-scoped fixture image tags. These unit tests pin the two pure/host-side
-// mechanisms of the fix; the k8s-preresolver node.Version honoring + the plugin's
-// per-step --tag threading are integration-proven by the concurrent check-sidecar-pod
-// + check-k8s-deploy bed run (the R10 gate).
+// #75 — bed-scoped fixture image tags (relocated from charly/bed_run_image_tag_test.go, #55 W3
+// B2-full). This unit test pins the pure formula; the k8s-preresolver node.Version honoring + the
+// plugin's per-step --tag threading are integration-proven by the concurrent check-sidecar-pod +
+// check-k8s-deploy bed run (the R10 gate).
 
 // TestBedRunImageTag proves the per-RUN bed-scoped tag is <bed>-<calver> and that
 // distinct beds/runs yield distinct tags (the collision-free-by-construction
@@ -36,7 +36,3 @@ func TestBedRunImageTag(t *testing.T) {
 		t.Fatalf("distinct beds produced the SAME bed-scoped tag %q — the #75 collision is not prevented", a)
 	}
 }
-
-// resolveNodeOverlays moved to candy/plugin-bundle/node_resolve.go (W4
-// pure-helpers relocation); TestResolveNodeOverlays_PropagatesExplicitTagToNodeVersion
-// moved with it — see candy/plugin-bundle/node_resolve_test.go.

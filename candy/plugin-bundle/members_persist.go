@@ -16,22 +16,6 @@ import (
 	"github.com/opencharly/spec/spec"
 )
 
-// externalInPlaceFromDescent derives a member's externalInPlace classification from its stamped
-// Descent — the plugin-reachable equivalent of the host's bedExternalInPlace(target) (which queries
-// the live provider registry via isExternalDeploySubstrate). For a LOADED node the registry verdict
-// is already stamped into Descent.Venue: the in-place external substrates (android → "parent",
-// exampledeploy → "none") are exactly the non-container, non-ssh, non-shell venues; pod/vm/k8s/local
-// are NOT in-place (pod/vm/k8s persist, local is skipped by spec.HostRooted inside
-// PersistBedDeployOverrides). A nil Descent (never for a loaded node) falls back to false (persist —
-// the safe default matching a pod member).
-func externalInPlaceFromDescent(node *spec.Deploy) bool {
-	if node == nil || node.Descent == nil {
-		return false
-	}
-	v := node.Descent.Venue
-	return v == "parent" || v == "none"
-}
-
 // persistMemberDeployOverrides seeds the per-host charly.yml with each sibling MEMBER's
 // project-declared deploy-shaped overrides (port / volume / env / security / network + the
 // resource-arbitration role) PLUGIN-SIDE, BEFORE the host "deploy-members-up" seam runs
@@ -50,6 +34,6 @@ func persistMemberDeployOverrides(root *spec.BundleNode) {
 		if member == nil {
 			continue
 		}
-		deploykit.PersistBedDeployOverrides(memberKey, *member, externalInPlaceFromDescent(member), marshalNode, loadBundleConfig)
+		deploykit.PersistBedDeployOverrides(memberKey, *member, spec.ExternalInPlaceVenue(member), marshalNode, loadBundleConfig)
 	}
 }

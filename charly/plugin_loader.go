@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	specexec "github.com/opencharly/spec/exec"
+	"github.com/opencharly/spec/proc"
 	"github.com/opencharly/spec/spec"
 
 	"cuelang.org/go/cue"
@@ -750,7 +751,7 @@ func deployNodePluginContext(dir, name string) (addCandy []string, refWords []st
 	if !ok {
 		return nil, nil
 	}
-	inSubmodule := selfSuperprojectOverridePair(dir) != ""
+	inSubmodule := proc.SelfSuperprojectOverridePair(dir) != ""
 	// Collect the node's plugin words AND recurse into its nested children: a deploy whose
 	// OWN substrate OR whose nested children's substrates are externalized must load each
 	// serving plugin. Two cases this covers, GENERALLY (never substrate-special-cased):
