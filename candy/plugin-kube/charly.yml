@@ -1,6 +1,6 @@
 plugin-kube:
     candy:
-        version: 2026.174.1200
+        version: 2026.216.1851
         description: |-
             OUT-OF-TREE charly plugin owning ALL Kubernetes cluster interaction: the
             `kube` cluster-probe check VERB, the `deploy:k8s` SUBSTRATE (the
@@ -48,11 +48,23 @@ plugin-kube:
             primary:
                 kube: method
         plan:
+            # No cluster selector, matching every sibling plugin candy's self-test
+            # (plugin-adb `adb: devices`, plugin-cdp / plugin-vnc / plugin-spice
+            # `status`): the step proves THIS plugin's verb dispatches through the
+            # registry and reaches whatever cluster the deployment composing it already
+            # points at — the ambient kubeconfig current-context, which is selection
+            # rule 4 of the verb's own documented precedence and the same thing plain
+            # `kubectl` does. It deliberately does NOT carry `cluster: "${DEPLOY_NAME}"`:
+            # for a VM live check that variable resolves to the sanitized kind:vm ENTITY
+            # name, which every bed deploying that entity SHARES, so it can only name
+            # another deployment's context or none at all (see the k3s-server candy for
+            # the full reasoning). A bed that needs a specific cluster names its OWN
+            # kind:k8s profile by literal; this plugin's live cluster acceptance is
+            # carried by its two R10 consumer beds.
             - check: the cluster reports at least one Ready node (the out-of-process plugin verb dispatches through the registry and probes the live cluster)
               id: kube-nodes-ready
               kube:
                 method: nodes
-                cluster: "${DEPLOY_NAME}"
               stdout:
                 - contains: Ready
               context:

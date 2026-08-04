@@ -19,8 +19,8 @@ import (
 
 // writeNamespaceImportFixture builds a minimal 2-repo-style namespace import: the root imports
 // "fedora.yml" under the "fedora" alias, which declares one resolvable box (jupyter) and one
-// kind:k8s cluster profile (prod-cluster) — mirroring the real vm-k3s-vm shape in this repo's own
-// charly.yml (`k8s: {box: "", kubeconfig_context: ...}`).
+// kind:k8s cluster profile (prod-cluster) — mirroring the real check-k3s-vm-ctx shape in this
+// repo's own charly.yml (`k8s: {box: "", kubeconfig_context: ...}`).
 func writeNamespaceImportFixture(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
