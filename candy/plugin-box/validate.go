@@ -241,7 +241,6 @@ func runAllValidations(vc *vctx, e *vErr) {
 	validateEngineConfig(vc, e)
 	validatePortRelay(vc, e)
 	validateDataCandies(vc, e)
-	validateInitDependencies(vc, e)
 
 	// Op-level plan validation (validate_check.go).
 	validateOps(vc, e)

@@ -114,6 +114,14 @@ func resolveBuildEngine(ctx context.Context, ex *sdk.Executor, req spec.BuildReq
 		tag = buildkit.ComputeCalVer()
 	}
 	ropts := boxBuildkitOpts(boxes, req.IncludeDisabled, distroCfg, builderCfg)
+	// The init `depends_candy:` injection: a box composing service candies gets the ACTIVE init
+	// system's own candy (container → supervisord; machine venue → systemd, which declares none)
+	// added to its composition. MUST run here — after the candy scan (it resolves the init over the
+	// scanned set) and BEFORE ResolveAllBox — because it writes the AUTHORED composition on cfg, the
+	// one source the resolved boxes and every cfg-walking chain collector both derive from. Writing
+	// it here is what carries the injected candy into the intermediate trie, the render candy order,
+	// the emitted Containerfile, the baked labels AND the collected ai.opencharly.description plan.
+	deploykit.InjectInitDependsCandy(cfg, layers, initCfg)
 	resolved, err := buildkit.ResolveAllBox(cfg, tag, dir, ropts)
 	if err != nil {
 		return spec.BuildResolveReply{Error: errString(err)}, nil
