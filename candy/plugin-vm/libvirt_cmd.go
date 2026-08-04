@@ -54,7 +54,7 @@ type LibvirtCmd struct {
 // ---------------- list ----------------
 
 type LibvirtListCmd struct {
-	Format string `long:"format" default:"text" help:"Output format: text, json"`
+	Format string `name:"format" default:"text" help:"Output format: text, json"`
 	libvirtURIFlag
 }
 
@@ -103,7 +103,7 @@ func (c *LibvirtListCmd) Run() error {
 
 type LibvirtInfoCmd struct {
 	Vm     string `arg:"" help:"VM name (vm.yml entity)"`
-	Format string `long:"format" default:"text" help:"Output format: text, json"`
+	Format string `name:"format" default:"text" help:"Output format: text, json"`
 	libvirtURIFlag
 }
 
@@ -198,7 +198,7 @@ func (c *LibvirtInfoCmd) Run() error {
 type LibvirtScreenshotCmd struct {
 	Vm     string `arg:"" help:"VM name"`
 	File   string `arg:"" optional:"" default:"screenshot.png" help:"Output file path (use '-' for stdout)"`
-	Screen int    `long:"screen" default:"0" help:"Display index for multi-head VMs"`
+	Screen int    `name:"screen" default:"0" help:"Display index for multi-head VMs"`
 	libvirtURIFlag
 }
 
@@ -242,7 +242,7 @@ func (c *LibvirtScreenshotCmd) Run() error {
 type LibvirtSendKeyCmd struct {
 	Vm   string   `arg:"" help:"VM name"`
 	Keys []string `arg:"" help:"Key names (space-separated, e.g. 'ctrl alt F2')"`
-	Hold int      `long:"hold" default:"50" help:"Hold duration in ms"`
+	Hold int      `name:"hold" default:"50" help:"Hold duration in ms"`
 	libvirtURIFlag
 }
 
@@ -272,8 +272,8 @@ func (c *LibvirtSendKeyCmd) Run() error {
 type LibvirtPasswdCmd struct {
 	Vm       string `arg:"" help:"VM name"`
 	Password string `arg:"" optional:"" help:"Password (empty = prompt or stdin)"`
-	Type     string `long:"type" default:"spice" help:"Graphics type: spice or vnc"`
-	Persist  bool   `long:"persistent" help:"Also persist to inactive config (default: live only)"`
+	Type     string `name:"type" default:"spice" help:"Graphics type: spice or vnc"`
+	Persist  bool   `name:"persistent" help:"Also persist to inactive config (default: live only)"`
 	libvirtURIFlag
 }
 
@@ -411,7 +411,7 @@ func (c *LibvirtQmpCmd) Run() error {
 
 type LibvirtDomainXMLCmd struct {
 	Vm     string `arg:"" help:"VM name"`
-	Config bool   `long:"config" help:"Get inactive (on-disk) config instead of live"`
+	Config bool   `name:"config" help:"Get inactive (on-disk) config instead of live"`
 	libvirtURIFlag
 }
 
@@ -437,7 +437,7 @@ func (c *LibvirtDomainXMLCmd) Run() error {
 
 type LibvirtConsoleCmd struct {
 	Vm       string        `arg:"" help:"VM name"`
-	Duration time.Duration `long:"duration" default:"5s" help:"Stream for this duration, then exit"`
+	Duration time.Duration `name:"duration" default:"5s" help:"Stream for this duration, then exit"`
 	libvirtURIFlag
 }
 
@@ -458,7 +458,7 @@ func (c *LibvirtConsoleCmd) Run() error {
 
 type LibvirtEventsCmd struct {
 	Vm       string        `arg:"" optional:"" help:"VM name (empty = all domains)"`
-	Duration time.Duration `long:"duration" default:"10s" help:"Watch for this long"`
+	Duration time.Duration `name:"duration" default:"10s" help:"Watch for this long"`
 	libvirtURIFlag
 }
 
@@ -526,7 +526,7 @@ type LibvirtGuestGroup struct {
 
 type LibvirtGuestPingCmd struct {
 	Vm      string        `arg:"" help:"VM name"`
-	Timeout time.Duration `long:"timeout" default:"5s" help:"Max wait"`
+	Timeout time.Duration `name:"timeout" default:"5s" help:"Max wait"`
 	libvirtURIFlag
 }
 
@@ -721,8 +721,8 @@ func (c *LibvirtGuestVcpusCmd) Run() error {
 type LibvirtGuestExecCmd struct {
 	Vm      string        `arg:"" help:"VM name"`
 	Argv    []string      `arg:"" help:"Command and arguments (e.g. 'uname -a')"`
-	Capture bool          `long:"capture" default:"true" help:"Capture stdout/stderr"`
-	Wait    time.Duration `long:"wait" default:"60s" help:"Max wait for command to complete"`
+	Capture bool          `name:"capture" default:"true" help:"Capture stdout/stderr"`
+	Wait    time.Duration `name:"wait" default:"60s" help:"Max wait for command to complete"`
 	libvirtURIFlag
 }
 
@@ -872,7 +872,7 @@ func (c *LibvirtGuestFsfreezeThawCmd) Run() error {
 
 type LibvirtGuestFstrimCmd struct {
 	Vm      string `arg:"" help:"VM name"`
-	Minimum int    `long:"minimum" default:"0" help:"Minimum extent size in bytes"`
+	Minimum int    `name:"minimum" default:"0" help:"Minimum extent size in bytes"`
 	libvirtURIFlag
 }
 
@@ -925,8 +925,8 @@ func (c *LibvirtSnapshotListCmd) Run() error {
 type LibvirtSnapshotCreateCmd struct {
 	Vm       string `arg:"" help:"VM name"`
 	Name     string `arg:"" help:"Snapshot name"`
-	Desc     string `long:"desc" help:"Description"`
-	DiskOnly bool   `long:"disk-only" help:"Disk-only snapshot (skip memory)"`
+	Desc     string `name:"desc" help:"Description"`
+	DiskOnly bool   `name:"disk-only" help:"Disk-only snapshot (skip memory)"`
 	libvirtURIFlag
 }
 

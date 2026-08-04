@@ -102,8 +102,8 @@ func parseLeaf(name string, target any, args []string) (done bool, err error) {
 // generateGrammar is the `charly box generate [boxes…] [--tag] [--include-disabled]` CLI surface.
 type generateGrammar struct {
 	Boxes           []string `arg:"" optional:"" help:"Boxes to generate (default: all enabled). The sentinel 'all' is equivalent to passing no argument."`
-	Tag             string   `long:"tag" help:"Override tag (default: CalVer)"`
-	IncludeDisabled bool     `long:"include-disabled" help:"Generate boxes with enabled: false in charly.yml (does not modify the file). Scoped to the named boxes when any are given."`
+	Tag             string   `name:"tag" help:"Override tag (default: CalVer)"`
+	IncludeDisabled bool     `name:"include-disabled" help:"Generate boxes with enabled: false in charly.yml (does not modify the file). Scoped to the named boxes when any are given."`
 }
 
 // dispatchGenerate renders the .build/ Containerfile tree by INVOKING the peer COMPILED-IN
@@ -151,7 +151,7 @@ func dispatchGenerate(hc *hostClient, args []string) error {
 // itself lives in validate.go (it reads the resolved-project envelope + re-runs the deploykit graph
 // checks); dispatchValidate is defined there.
 type validateGrammar struct {
-	IncludeDisabled bool `long:"include-disabled" help:"Include boxes with enabled: false in validation (does not modify charly.yml)"`
+	IncludeDisabled bool `name:"include-disabled" help:"Include boxes with enabled: false in validation (does not modify charly.yml)"`
 }
 
 // --- box pkg ---
@@ -159,8 +159,8 @@ type validateGrammar struct {
 // pkgGrammar is the `charly box pkg [formats…] [--candy] [--out]` CLI surface.
 type pkgGrammar struct {
 	Format []string `arg:"" optional:"" help:"Package formats to build (pac/rpm/deb). Default: every format the candy declares a localpkg source for."`
-	Candy  string   `long:"candy" default:"charly" help:"Candy whose localpkg sources to build."`
-	Out    string   `long:"out" default:"dist" help:"Output directory for the built package files."`
+	Candy  string   `name:"candy" default:"charly" help:"Candy whose localpkg sources to build."`
+	Out    string   `name:"out" default:"dist" help:"Output directory for the built package files."`
 }
 
 // dispatchPkg runs the `charly box pkg` body IN-PLUGIN (K3 build-tail move, coneB-pkgcmd — the
@@ -205,8 +205,8 @@ func dispatchPkg(hc *hostClient, args []string) error {
 // same help text, so `charly box pull --help` renders unchanged.
 type pullGrammar struct {
 	Box      string `arg:"" help:"Box name (short, resolved via charly.yml), fully-qualified ref, or @github.com/org/repo/box[:version]"`
-	Tag      string `long:"tag" help:"Image CalVer tag when resolving a short name (empty = resolve from charly.yml metadata or error with explicit guidance)"`
-	Platform string `long:"platform" help:"Target platform (default: host)"`
+	Tag      string `name:"tag" help:"Image CalVer tag when resolving a short name (empty = resolve from charly.yml metadata or error with explicit guidance)"`
+	Platform string `name:"platform" help:"Target platform (default: host)"`
 }
 
 // dispatchPull ensures an image is present in local storage by INVOKING the peer COMPILED-IN
@@ -270,15 +270,15 @@ func dispatchPull(hc *hostClient, args []string) error {
 // threads the resolved values into the spec.BuildRequest it invokes build:box with.
 type buildGrammar struct {
 	Boxes           []string `arg:"" optional:"" help:"Boxes to build (default: all enabled; the sentinel 'all' is equivalent). Supports remote refs (github.com/org/repo/box[@version])"`
-	Push            bool     `long:"push" help:"Push to registry after building"`
-	Tag             string   `long:"tag" help:"Override tag (default: CalVer)"`
-	Platform        string   `long:"platform" help:"Target platform (default: host platform)"`
-	Cache           string   `long:"cache" help:"Build cache type: registry, image, gha, none (default: auto)" env:"CHARLY_BUILD_CACHE"`
-	NoCache         bool     `long:"no-cache" help:"Disable build cache entirely"`
-	Jobs            int      `long:"jobs" help:"Max concurrent image builds per DAG level (0=auto: defaults.jobs, else 4)" env:"CHARLY_BUILD_JOBS"`
-	PodmanJobs      int      `long:"podman-jobs" help:"Stages per podman build (0=auto: min(NCPU, defaults.podman_jobs_cap))" env:"CHARLY_PODMAN_JOBS"`
-	IncludeDisabled bool     `long:"include-disabled" help:"Build boxes with enabled: false in charly.yml (does not modify the file). Use for one-off operational rebuilds without flipping authored config."`
-	DevLocalPkg     bool     `long:"dev-local-pkg" help:"Build localpkg candies (the charly toolchain) from LOCAL in-development source instead of downloading the published release. Set automatically for disposable check-bed image builds so a bed tests in-development code; never on a production box build."`
+	Push            bool     `name:"push" help:"Push to registry after building"`
+	Tag             string   `name:"tag" help:"Override tag (default: CalVer)"`
+	Platform        string   `name:"platform" help:"Target platform (default: host platform)"`
+	Cache           string   `name:"cache" help:"Build cache type: registry, image, gha, none (default: auto)" env:"CHARLY_BUILD_CACHE"`
+	NoCache         bool     `name:"no-cache" help:"Disable build cache entirely"`
+	Jobs            int      `name:"jobs" help:"Max concurrent image builds per DAG level (0=auto: defaults.jobs, else 4)" env:"CHARLY_BUILD_JOBS"`
+	PodmanJobs      int      `name:"podman-jobs" help:"Stages per podman build (0=auto: min(NCPU, defaults.podman_jobs_cap))" env:"CHARLY_PODMAN_JOBS"`
+	IncludeDisabled bool     `name:"include-disabled" help:"Build boxes with enabled: false in charly.yml (does not modify the file). Use for one-off operational rebuilds without flipping authored config."`
+	DevLocalPkg     bool     `name:"dev-local-pkg" help:"Build localpkg candies (the charly toolchain) from LOCAL in-development source instead of downloading the published release. Set automatically for disposable check-bed image builds so a bed tests in-development code; never on a production box build."`
 }
 
 // dispatchBuild runs the `charly box build` body IN-PLUGIN (P8b — the former hidden core
@@ -622,7 +622,7 @@ func (c *newProjectGrammar) Run() error {
 
 type newBoxGrammar struct {
 	Name    string   `arg:"" help:"Name for the new box entry"`
-	Base    string   `long:"base" required:"" help:"Base image (URL like quay.io/... or another box name)"`
+	Base    string   `name:"base" required:"" help:"Base image (URL like quay.io/... or another box name)"`
 	Candies []string `name:"candy" sep:"," help:"Comma-separated list of candy names to include"`
 }
 

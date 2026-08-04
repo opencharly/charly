@@ -121,11 +121,11 @@ func TestBundleDelArgv_KongAccepts(t *testing.T) {
 	// historically-wrong --yes/--force absent) to keep the spec.BundleDelArgv regression guard.
 	type delGrammarStub struct {
 		Name            string `arg:""`
-		AssumeYes       bool   `long:"yes" short:"y"`
-		KeepRepoChanges bool   `long:"keep-repo-changes"`
-		KeepServices    bool   `long:"keep-services"`
-		KeepImage       bool   `long:"keep-image"`
-		DryRun          bool   `long:"dry-run"`
+		AssumeYes       bool   `name:"assume-yes" short:"y"`
+		KeepRepoChanges bool   `name:"keep-repo-changes"`
+		KeepServices    bool   `name:"keep-services"`
+		KeepImage       bool   `name:"keep-image"`
+		DryRun          bool   `name:"dry-run"`
 	}
 	type bundleGrammar struct {
 		Bundle struct {

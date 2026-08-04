@@ -3,6 +3,7 @@ package secrets
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -38,7 +39,7 @@ type SecretsGpgCmd struct {
 // --- show ---
 
 type SecretsGpgShowCmd struct {
-	File string `short:"f" long:"file" default:".secrets" help:"Path to encrypted file"`
+	File string `short:"f" name:"file" default:".secrets" help:"Path to encrypted file"`
 }
 
 func (c *SecretsGpgShowCmd) Run() error {
@@ -56,7 +57,7 @@ func (c *SecretsGpgShowCmd) Run() error {
 // --- env ---
 
 type SecretsGpgEnvCmd struct {
-	File string `short:"f" long:"file" default:".secrets" help:"Path to encrypted file"`
+	File string `short:"f" name:"file" default:".secrets" help:"Path to encrypted file"`
 }
 
 func (c *SecretsGpgEnvCmd) Run() error {
@@ -95,7 +96,7 @@ func (c *SecretsGpgEnvCmd) Run() error {
 // --- edit ---
 
 type SecretsGpgEditCmd struct {
-	File string `short:"f" long:"file" default:".secrets" help:"Path to encrypted file"`
+	File string `short:"f" name:"file" default:".secrets" help:"Path to encrypted file"`
 }
 
 func (c *SecretsGpgEditCmd) Run() error {
@@ -162,9 +163,9 @@ func (c *SecretsGpgEditCmd) Run() error {
 // --- encrypt ---
 
 type SecretsGpgEncryptCmd struct {
-	Input     string   `short:"i" long:"input" default:".env" help:"Input plaintext file"`
-	Output    string   `short:"o" long:"output" default:".secrets" help:"Output encrypted file"`
-	Recipient []string `short:"r" long:"recipient" help:"GPG recipient key ID (repeatable)"`
+	Input     string   `short:"i" name:"input" default:".env" help:"Input plaintext file"`
+	Output    string   `short:"o" name:"output" default:".secrets" help:"Output encrypted file"`
+	Recipient []string `short:"r" name:"recipient" help:"GPG recipient key ID (repeatable)"`
 }
 
 func (c *SecretsGpgEncryptCmd) Run() error {
@@ -180,8 +181,8 @@ func (c *SecretsGpgEncryptCmd) Run() error {
 // --- decrypt ---
 
 type SecretsGpgDecryptCmd struct {
-	Input  string `short:"i" long:"input" default:".secrets" help:"Input encrypted file"`
-	Output string `short:"o" long:"output" help:"Output file (default: stdout)"`
+	Input  string `short:"i" name:"input" default:".secrets" help:"Input encrypted file"`
+	Output string `short:"o" name:"output" help:"Output file (default: stdout)"`
 }
 
 func (c *SecretsGpgDecryptCmd) Run() error {
@@ -204,8 +205,8 @@ func (c *SecretsGpgDecryptCmd) Run() error {
 type SecretsGpgSetCmd struct {
 	Key       string   `arg:"" help:"Environment variable name"`
 	Value     string   `arg:"" help:"Value to set"`
-	File      string   `short:"f" long:"file" default:".secrets" help:"Path to encrypted file"`
-	Recipient []string `short:"r" long:"recipient" help:"GPG recipient (required if creating new file)"`
+	File      string   `short:"f" name:"file" default:".secrets" help:"Path to encrypted file"`
+	Recipient []string `short:"r" name:"recipient" help:"GPG recipient (required if creating new file)"`
 }
 
 func (c *SecretsGpgSetCmd) Run() error {
@@ -221,7 +222,7 @@ func (c *SecretsGpgSetCmd) Run() error {
 
 type SecretsGpgUnsetCmd struct {
 	Key  string `arg:"" help:"Environment variable name to remove"`
-	File string `short:"f" long:"file" default:".secrets" help:"Path to encrypted file"`
+	File string `short:"f" name:"file" default:".secrets" help:"Path to encrypted file"`
 }
 
 func (c *SecretsGpgUnsetCmd) Run() error {
@@ -237,7 +238,7 @@ func (c *SecretsGpgUnsetCmd) Run() error {
 
 type SecretsGpgAddRecipientCmd struct {
 	KeyID string `arg:"" help:"GPG key ID of the new recipient"`
-	File  string `short:"f" long:"file" default:".secrets" help:"Path to encrypted file"`
+	File  string `short:"f" name:"file" default:".secrets" help:"Path to encrypted file"`
 }
 
 func (c *SecretsGpgAddRecipientCmd) Run() error {
@@ -269,7 +270,7 @@ func (c *SecretsGpgAddRecipientCmd) Run() error {
 // --- recipients ---
 
 type SecretsGpgRecipientsCmd struct {
-	File string `short:"f" long:"file" default:".secrets" help:"Path to encrypted file"`
+	File string `short:"f" name:"file" default:".secrets" help:"Path to encrypted file"`
 }
 
 func (c *SecretsGpgRecipientsCmd) Run() error {
@@ -691,7 +692,11 @@ func ssGpgSearch(attrs map[string]string) ([]ssGpgEntry, error) {
 
 const (
 	ssSchemaPassphrase = "org.gnupg.Passphrase"
-	ssSchemaKey        = "org.gnupg.Key"
+	// errSecretServiceUnavailable is shared by both callers that probe the bus. Phrased to lead
+	// with a lowercase word so it composes into a wrapped error the Go way, while keeping
+	// "Secret Service" as the freedesktop proper noun it is.
+	errSecretServiceUnavailable = "no Secret Service on D-Bus (is KeePassXC running and unlocked?)"
+	ssSchemaKey                 = "org.gnupg.Key"
 )
 
 // gpgAgentConfContent returns the desired gpg-agent.conf content.
@@ -901,9 +906,9 @@ func diagnoseGPGDecryptionFailure(path, gpgStderr string) {
 
 type SecretsGpgImportKeyCmd struct {
 	Path         string `arg:"" optional:"" help:"Path to key file or directory containing .asc/.gpg files"`
-	FromKeystore bool   `long:"from-keystore" help:"Import from KeePassXC Secret Service"`
-	KeyID        string `long:"key-id" help:"Specific key ID to import from keystore"`
-	Passphrase   string `long:"passphrase" help:"GPG passphrase for secret key import (uses loopback pinentry)"`
+	FromKeystore bool   `name:"from-keystore" help:"Import from KeePassXC Secret Service"`
+	KeyID        string `name:"key-id" help:"Specific key ID to import from keystore"`
+	Passphrase   string `name:"passphrase" help:"GPG passphrase for secret key import (uses loopback pinentry)"`
 }
 
 func (c *SecretsGpgImportKeyCmd) Run() error {
@@ -996,7 +1001,7 @@ func (c *SecretsGpgImportKeyCmd) importFile(path string) error {
 
 func (c *SecretsGpgImportKeyCmd) importFromKeystore() error {
 	if !checkSecretServiceAvailable() {
-		return fmt.Errorf("Secret Service not available on D-Bus (is KeePassXC running and unlocked?)")
+		return errors.New(errSecretServiceUnavailable)
 	}
 
 	// Iterate ALL healthy unlocked collections and gather every entry with
@@ -1086,9 +1091,9 @@ func (c *SecretsGpgImportKeyCmd) importFromKeystore() error {
 
 type SecretsGpgExportKeyCmd struct {
 	Path       string `arg:"" optional:"" help:"Output directory (writes public.asc, secret.asc, ownertrust.txt)"`
-	ToKeystore bool   `long:"to-keystore" help:"Store key in KeePassXC Secret Service"`
-	KeyID      string `long:"key-id" help:"GPG key ID to export (auto-selects if only one)"`
-	Passphrase string `long:"passphrase" help:"Also store passphrase in Secret Service"`
+	ToKeystore bool   `name:"to-keystore" help:"Store key in KeePassXC Secret Service"`
+	KeyID      string `name:"key-id" help:"GPG key ID to export (auto-selects if only one)"`
+	Passphrase string `name:"passphrase" help:"Also store passphrase in Secret Service"`
 }
 
 func (c *SecretsGpgExportKeyCmd) Run() error {
@@ -1166,7 +1171,7 @@ func (c *SecretsGpgExportKeyCmd) exportToDirectory(keyID string) error {
 
 func (c *SecretsGpgExportKeyCmd) exportToKeystore(keyID string) error {
 	if !checkSecretServiceAvailable() {
-		return fmt.Errorf("Secret Service not available on D-Bus (is KeePassXC running and unlocked?)")
+		return errors.New(errSecretServiceUnavailable)
 	}
 
 	// Get key info for label
@@ -1223,12 +1228,12 @@ func (c *SecretsGpgExportKeyCmd) exportToKeystore(keyID string) error {
 // ── setup command ───────────────────────────────────────────────────
 
 type SecretsGpgSetupCmd struct {
-	Import           string `long:"import" help:"Path to key file/directory to import before setup"`
-	FromKeystore     bool   `long:"from-keystore" help:"Import key from KeePassXC Secret Service"`
-	Passphrase       string `long:"passphrase" help:"GPG passphrase value (visible in shell history — prefer --prompt-passphrase)"`
-	PromptPassphrase bool   `long:"prompt-passphrase" short:"p" help:"Prompt for passphrase securely (hidden input)"`
-	KeyID            string `long:"key-id" help:"Use specific existing key"`
-	SkipSS           bool   `long:"skip-secret-service" help:"Skip Secret Service passphrase storage"`
+	Import           string `name:"import" help:"Path to key file/directory to import before setup"`
+	FromKeystore     bool   `name:"from-keystore" help:"Import key from KeePassXC Secret Service"`
+	Passphrase       string `name:"passphrase" help:"GPG passphrase value (visible in shell history — prefer --prompt-passphrase)"`
+	PromptPassphrase bool   `name:"prompt-passphrase" short:"p" help:"Prompt for passphrase securely (hidden input)"`
+	KeyID            string `name:"key-id" help:"Use specific existing key"`
+	SkipSS           bool   `name:"skip-secret-service" help:"Skip Secret Service passphrase storage"`
 }
 
 func (c *SecretsGpgSetupCmd) Run() error {
@@ -1642,7 +1647,7 @@ func presetPassphrasesFromSS(keyID string) {
 // ── doctor command ──────────────────────────────────────────────────
 
 type SecretsGpgDoctorCmd struct {
-	File string `short:"f" long:"file" default:".secrets" help:"Encrypted file to check"`
+	File string `short:"f" name:"file" default:".secrets" help:"Encrypted file to check"`
 }
 
 //nolint:gocyclo // diagnostic checker: 10 independent peer health checks in a cohesive ok()/warn() narrative; extraction fragments the diagnostic flow

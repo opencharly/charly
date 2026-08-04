@@ -58,7 +58,7 @@ func credentialConfigKey(service, key string) string {
 // keyring, which the plugin now owns). Unlike `charly secrets import` (which COPIES into
 // the active store), this MOVES into the keyring and then strips the plaintext copies.
 type ConfigMigrateSecretsCmd struct {
-	DryRun bool `long:"dry-run" help:"Show what would be migrated without making changes"`
+	DryRun bool `name:"dry-run" help:"Show what would be migrated without making changes"`
 }
 
 func (c *ConfigMigrateSecretsCmd) Run() error {

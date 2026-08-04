@@ -72,9 +72,9 @@ func sortedKeys[V any](m map[string]V) []string {
 // CLI surface (formerly the core InspectCmd).
 type inspectGrammar struct {
 	Box             string `arg:"" help:"Box name"`
-	Format          string `long:"format" help:"Output a single field instead of full JSON"`
-	Instance        string `short:"i" long:"instance" help:"Instance name"`
-	IncludeDisabled bool   `long:"include-disabled" help:"Operate on boxes with enabled: false (does not modify charly.yml)"`
+	Format          string `name:"format" help:"Output a single field instead of full JSON"`
+	Instance        string `short:"i" name:"instance" help:"Instance name"`
+	IncludeDisabled bool   `name:"include-disabled" help:"Operate on boxes with enabled: false (does not modify charly.yml)"`
 }
 
 // dispatchInspect prints a box's resolved configuration from the resolved-project envelope. The

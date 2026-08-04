@@ -23,7 +23,7 @@ type VmGpuCmd struct {
 // GPU-less host (the check-step assertion the R10 bed makes).
 type VmGpuPlanCmd struct {
 	Mode   string `arg:"" optional:"" default:"vfio" help:"Mode to preview: vfio (passthrough) | nvidia (CDI pods). Default vfio."`
-	Vendor string `long:"vendor" default:"0x10de" help:"PCI vendor of the GPU to preview (default 0x10de = NVIDIA); a synthetic example card is used when absent."`
+	Vendor string `name:"vendor" default:"0x10de" help:"PCI vendor of the GPU to preview (default 0x10de = NVIDIA); a synthetic example card is used when absent."`
 }
 
 func (c *VmGpuPlanCmd) Run() error {
@@ -60,7 +60,7 @@ func (c *VmGpuPlanCmd) Run() error {
 // never just the display function (see candy/plugin-gpu/switch.go).
 type VmGpuModeCmd struct {
 	Mode   string `arg:"" optional:"" help:"Target mode: vfio (passthrough) | nvidia (CDI pods). Omit to SHOW the current mode."`
-	Vendor string `long:"vendor" default:"0x10de" help:"PCI vendor of the GPU to switch (default 0x10de = NVIDIA)."`
+	Vendor string `name:"vendor" default:"0x10de" help:"PCI vendor of the GPU to switch (default 0x10de = NVIDIA)."`
 }
 
 func (c *VmGpuModeCmd) Run() error {
@@ -102,7 +102,7 @@ func (c *VmGpuModeCmd) Run() error {
 // D-state). On a healthy/unbound card it rebinds the whole IOMMU group to
 // vfio-pci and clears any stale poison marker.
 type VmGpuRecoverCmd struct {
-	Vendor string `long:"vendor" default:"0x10de" help:"PCI vendor of the GPU to recover (default 0x10de = NVIDIA)."`
+	Vendor string `name:"vendor" default:"0x10de" help:"PCI vendor of the GPU to recover (default 0x10de = NVIDIA)."`
 }
 
 func (c *VmGpuRecoverCmd) Run() error {

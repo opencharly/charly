@@ -114,8 +114,8 @@ func dispatchRmCandy(args []string) error {
 // writeGrammar is the `charly box write <path> [--content X | --from-stdin]` CLI surface.
 type writeGrammar struct {
 	Path    string `arg:"" help:"Path under the project root (relative; .. is rejected)"`
-	Content string `long:"content" help:"File content (mutually exclusive with --from-stdin)"`
-	FromIn  bool   `long:"from-stdin" help:"Read file content from stdin"`
+	Content string `name:"content" help:"File content (mutually exclusive with --from-stdin)"`
+	FromIn  bool   `name:"from-stdin" help:"Read file content from stdin"`
 }
 
 func dispatchWrite(args []string) error {

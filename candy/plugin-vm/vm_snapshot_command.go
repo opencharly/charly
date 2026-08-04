@@ -22,9 +22,9 @@ type VmSnapshotCmd struct {
 type VmSnapshotCreateCmd struct {
 	Vm          string `arg:"" help:"VM name (kind:vm entity)"`
 	Name        string `arg:"" help:"Snapshot name"`
-	Mode        string `long:"mode" enum:"external,internal" default:"external" help:"Snapshot mode: external (clone-friendly, separate file) or internal (disk-efficient, embedded)"`
-	Description string `long:"description" help:"Human-facing description of the snapshot"`
-	Quiesce     bool   `long:"quiesce" help:"Flush guest state via guest-agent fsfreeze before snapshotting (falls back to libvirt's plain freeze)"`
+	Mode        string `name:"mode" enum:"external,internal" default:"external" help:"Snapshot mode: external (clone-friendly, separate file) or internal (disk-efficient, embedded)"`
+	Description string `name:"description" help:"Human-facing description of the snapshot"`
+	Quiesce     bool   `name:"quiesce" help:"Flush guest state via guest-agent fsfreeze before snapshotting (falls back to libvirt's plain freeze)"`
 }
 
 // Run executes `charly vm snapshot create`.
@@ -49,7 +49,7 @@ func (c *VmSnapshotCreateCmd) Run() error {
 // VmSnapshotListCmd implements `charly vm snapshot list <vm>`.
 type VmSnapshotListCmd struct {
 	Vm   string `arg:"" help:"VM name"`
-	JSON bool   `long:"json" help:"Emit JSON instead of a table"`
+	JSON bool   `name:"json" help:"Emit JSON instead of a table"`
 }
 
 func (c *VmSnapshotListCmd) Run() error {
@@ -80,7 +80,7 @@ func (c *VmSnapshotListCmd) Run() error {
 type VmSnapshotDeleteCmd struct {
 	Vm    string `arg:"" help:"VM name"`
 	Name  string `arg:"" help:"Snapshot name"`
-	Force bool   `long:"force" help:"Delete even when refcount > 0 (only safe after destroying consumers)"`
+	Force bool   `name:"force" help:"Delete even when refcount > 0 (only safe after destroying consumers)"`
 }
 
 func (c *VmSnapshotDeleteCmd) Run() error {

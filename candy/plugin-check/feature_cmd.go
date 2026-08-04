@@ -29,13 +29,13 @@ type CheckFeatureCmd struct {
 // evidence. Mirrors the former in-core CheckFeatureRunCmd flags + help.
 type CheckFeatureRunCmd struct {
 	Box      string `arg:"" help:"Deployment name (a box-backed pod deployment)"`
-	Instance string `short:"i" long:"instance" help:"Instance name"`
-	Format   string `long:"format" default:"text" help:"Output format: text, json, tap, junit"`
-	Tag      string `long:"tag" help:"Only run steps matching this tag expression"`
-	Agent    string `long:"agent" help:"kind:agent entry to use as the prose-step grader (default: the sole configured agent)"`
-	Timeout  string `long:"timeout" help:"Per-grader-call wall-clock cap (Go duration; default 5m or the ai entry's timeout)"`
-	NoAgent  bool   `long:"no-agent" help:"Deterministic-only: do not agent-grade prose-only steps (they report as unbound/skip)"`
-	Strict   bool   `long:"strict" help:"Treat unbound steps as failures (only meaningful with --no-agent)"`
+	Instance string `short:"i" name:"instance" help:"Instance name"`
+	Format   string `name:"format" default:"text" help:"Output format: text, json, tap, junit"`
+	Tag      string `name:"tag" help:"Only run steps matching this tag expression"`
+	Agent    string `name:"agent" help:"kind:agent entry to use as the prose-step grader (default: the sole configured agent)"`
+	Timeout  string `name:"timeout" help:"Per-grader-call wall-clock cap (Go duration; default 5m or the ai entry's timeout)"`
+	NoAgent  bool   `name:"no-agent" help:"Deterministic-only: do not agent-grade prose-only steps (they report as unbound/skip)"`
+	Strict   bool   `name:"strict" help:"Treat unbound steps as failures (only meaningful with --no-agent)"`
 }
 
 func (c *CheckFeatureRunCmd) Run() error {

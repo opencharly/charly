@@ -19,8 +19,8 @@ type docsCLI struct {
 // rewrites them wholesale, so a deleted source entity disappears from the site instead of
 // lingering as an orphan page.
 type generateCmd struct {
-	Out  string `long:"out" required:"" help:"Docs content root to write into (e.g. docs/src/content/docs)"`
-	Root string `long:"root" help:"Repo root holding charly.yml, candy/, box/ and plugins/ (default: cwd)"`
+	Out  string `name:"out" required:"" help:"Docs content root to write into (e.g. docs/src/content/docs)"`
+	Root string `name:"root" help:"Repo root holding charly.yml, candy/, box/ and plugins/ (default: cwd)"`
 }
 
 // dispatchDocsCLI is the single entry point both placements use (CliMain out-of-process,

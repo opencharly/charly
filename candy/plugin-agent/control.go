@@ -33,7 +33,7 @@ const (
 )
 
 type AgentCmd struct {
-	StateDir   string             `long:"state-dir" env:"CHARLY_AGENT_STATE_DIR" type:"path" help:"Durable state directory"`
+	StateDir   string             `name:"state-dir" env:"CHARLY_AGENT_STATE_DIR" type:"path" help:"Durable state directory"`
 	Runtime    AgentRuntimeCmd    `cmd:"" help:"Inspect available runtime capabilities"`
 	Session    AgentSessionCmd    `cmd:"" help:"Create and inspect durable sessions"`
 	Run        AgentRunCmd        `cmd:"" help:"Start runs and inspect event logs"`
@@ -68,7 +68,7 @@ type AgentRuntimeCmd struct {
 type AgentRuntimeListCmd struct{}
 type AgentRuntimeStatusCmd struct {
 	Provider string `arg:""`
-	Class    string `long:"class" default:"agent-runtime" enum:"agent-runtime,terminal"`
+	Class    string `name:"class" default:"agent-runtime" enum:"agent-runtime,terminal"`
 }
 
 func (*AgentRuntimeListCmd) Run() error {
@@ -111,9 +111,9 @@ type AgentSessionCmd struct {
 }
 type AgentSessionCreateCmd struct {
 	Runtime    string `arg:"" help:"Runtime provider word (for example pi or tmux)"`
-	Target     string `long:"target" default:"{}" help:"Deployment, host::deployment, CUE #TargetSpec JSON, or @file"`
-	StorageRef string `long:"storage-ref" help:"Runtime-native durable session reference"`
-	Profile    string `long:"profile" help:"Terminal profile name, JSON, or @file for terminal-backed runtimes"`
+	Target     string `name:"target" default:"{}" help:"Deployment, host::deployment, CUE #TargetSpec JSON, or @file"`
+	StorageRef string `name:"storage-ref" help:"Runtime-native durable session reference"`
+	Profile    string `name:"profile" help:"Terminal profile name, JSON, or @file for terminal-backed runtimes"`
 }
 
 func (c *AgentSessionCreateCmd) Run() error {
@@ -205,8 +205,8 @@ type AgentRunCmd struct {
 type AgentRunStartCmd struct {
 	Session        string `arg:""`
 	Prompt         string `arg:"" optional:""`
-	IdempotencyKey string `long:"idempotency-key"`
-	Resume         bool   `long:"resume"`
+	IdempotencyKey string `name:"idempotency-key"`
+	Resume         bool   `name:"resume"`
 }
 
 func (c *AgentRunStartCmd) Run() error {
@@ -302,7 +302,7 @@ func (c *AgentRunEventsCmd) Run() error {
 type AgentFollowupCmd struct {
 	Session        string `arg:""`
 	Prompt         string `arg:""`
-	IdempotencyKey string `long:"idempotency-key"`
+	IdempotencyKey string `name:"idempotency-key"`
 }
 
 func (c *AgentFollowupCmd) Run() error {
@@ -312,7 +312,7 @@ func (c *AgentFollowupCmd) Run() error {
 type AgentSteerCmd struct {
 	Session        string `arg:""`
 	Guidance       string `arg:""`
-	IdempotencyKey string `long:"idempotency-key"`
+	IdempotencyKey string `name:"idempotency-key"`
 }
 
 func (c *AgentSteerCmd) Run() error {
@@ -324,7 +324,7 @@ type AgentDelegateCmd struct {
 	From           string `arg:"" help:"Delegating member name"`
 	To             string `arg:"" help:"Receiving member name"`
 	Prompt         string `arg:"" help:"Delegated task"`
-	IdempotencyKey string `long:"idempotency-key"`
+	IdempotencyKey string `name:"idempotency-key"`
 }
 
 type AgentTeamCmd struct {
@@ -368,12 +368,12 @@ type AgentFederationRunCmd struct {
 	Node           string   `arg:"" help:"SSH host or configured Charly host alias"`
 	Runtime        string   `arg:""`
 	Prompt         string   `arg:""`
-	Target         string   `long:"target" default:"{}"`
-	Profile        string   `long:"profile" help:"Terminal profile name, JSON, or @file for terminal-backed runtimes"`
-	Owner          string   `long:"owner" default:"local"`
-	IdempotencyKey string   `long:"idempotency-key"`
-	IdentityFile   string   `long:"identity-file" help:"SSH identity file for the responsible Charly node" type:"path"`
-	SSHOption      []string `long:"ssh-option" help:"OpenSSH option for the responsible Charly node (repeatable, KEY=VALUE)"`
+	Target         string   `name:"target" default:"{}"`
+	Profile        string   `name:"profile" help:"Terminal profile name, JSON, or @file for terminal-backed runtimes"`
+	Owner          string   `name:"owner" default:"local"`
+	IdempotencyKey string   `name:"idempotency-key"`
+	IdentityFile   string   `name:"identity-file" help:"SSH identity file for the responsible Charly node" type:"path"`
+	SSHOption      []string `name:"ssh-option" help:"OpenSSH option for the responsible Charly node (repeatable, KEY=VALUE)"`
 }
 
 func (c *AgentFederationRunCmd) Run() error {
@@ -747,7 +747,7 @@ func finalizeAgentRun(store *agentkit.Store, session spec.AgentSession, run spec
 
 type AgentDispatchCmd struct {
 	Team   string `arg:"" help:"#AgentTeam JSON or @file"`
-	Prompt string `long:"prompt"`
+	Prompt string `name:"prompt"`
 }
 
 func (c *AgentDispatchCmd) Run() error {
@@ -802,9 +802,9 @@ type AgentTerminalCmd struct {
 }
 type AgentTerminalRunCmd struct {
 	Profile  string `arg:"" help:"#TerminalProfile JSON or @file"`
-	Target   string `long:"target" default:"{}"`
-	Provider string `long:"provider" default:"tmux"`
-	RunID    string `long:"run-id" help:"Stable UUIDv7 used for detach/reattach"`
+	Target   string `name:"target" default:"{}"`
+	Provider string `name:"provider" default:"tmux"`
+	RunID    string `name:"run-id" help:"Stable UUIDv7 used for detach/reattach"`
 }
 
 type AgentTerminalLaunchCmd AgentTerminalRunCmd
@@ -819,52 +819,52 @@ func (c *AgentTerminalLaunchCmd) Run() error {
 
 type AgentTerminalAttachCmd struct {
 	Profile  string `arg:""`
-	Target   string `long:"target" default:"{}"`
-	Provider string `long:"provider" default:"tmux"`
-	RunID    string `long:"run-id" required:"" help:"UUIDv7 of the detached terminal run"`
+	Target   string `name:"target" default:"{}"`
+	Provider string `name:"provider" default:"tmux"`
+	RunID    string `name:"run-id" required:"" help:"UUIDv7 of the detached terminal run"`
 }
 
 type AgentTerminalSnapshotCmd struct {
 	Profile  string `arg:""`
-	Target   string `long:"target" default:"{}"`
-	Provider string `long:"provider" default:"tmux"`
-	RunID    string `long:"run-id" required:""`
+	Target   string `name:"target" default:"{}"`
+	Provider string `name:"provider" default:"tmux"`
+	RunID    string `name:"run-id" required:""`
 }
 type AgentTerminalInputCmd struct {
 	Profile  string `arg:""`
 	Text     string `arg:""`
-	Paste    bool   `long:"paste" help:"Send as a bracket-safe paste rather than literal keystrokes"`
-	Target   string `long:"target" default:"{}"`
-	Provider string `long:"provider" default:"tmux"`
-	RunID    string `long:"run-id" required:""`
+	Paste    bool   `name:"paste" help:"Send as a bracket-safe paste rather than literal keystrokes"`
+	Target   string `name:"target" default:"{}"`
+	Provider string `name:"provider" default:"tmux"`
+	RunID    string `name:"run-id" required:""`
 }
 type AgentTerminalKeyCmd struct {
 	Profile  string `arg:""`
 	Key      string `arg:""`
-	Target   string `long:"target" default:"{}"`
-	Provider string `long:"provider" default:"tmux"`
-	RunID    string `long:"run-id" required:""`
+	Target   string `name:"target" default:"{}"`
+	Provider string `name:"provider" default:"tmux"`
+	RunID    string `name:"run-id" required:""`
 }
 type AgentTerminalResizeCmd struct {
 	Profile  string `arg:""`
 	Cols     int64  `arg:""`
 	Rows     int64  `arg:""`
-	Target   string `long:"target" default:"{}"`
-	Provider string `long:"provider" default:"tmux"`
-	RunID    string `long:"run-id" required:""`
+	Target   string `name:"target" default:"{}"`
+	Provider string `name:"provider" default:"tmux"`
+	RunID    string `name:"run-id" required:""`
 }
 type AgentTerminalSignalCmd struct {
 	Profile  string `arg:""`
 	Signal   string `arg:""`
-	Target   string `long:"target" default:"{}"`
-	Provider string `long:"provider" default:"tmux"`
-	RunID    string `long:"run-id" required:""`
+	Target   string `name:"target" default:"{}"`
+	Provider string `name:"provider" default:"tmux"`
+	RunID    string `name:"run-id" required:""`
 }
 type AgentTerminalCloseCmd struct {
 	Profile  string `arg:""`
-	Target   string `long:"target" default:"{}"`
-	Provider string `long:"provider" default:"tmux"`
-	RunID    string `long:"run-id" required:""`
+	Target   string `name:"target" default:"{}"`
+	Provider string `name:"provider" default:"tmux"`
+	RunID    string `name:"run-id" required:""`
 }
 type AgentTerminalTranscriptCmd struct {
 	RunID string `arg:"" name:"run" help:"Terminal run UUIDv7"`
@@ -1562,7 +1562,7 @@ type AgentIncidentCmd struct {
 }
 type AgentIncidentCreateCmd struct {
 	Summary string `arg:""`
-	RunID   string `long:"run"`
+	RunID   string `name:"run-id"`
 }
 
 func (c *AgentIncidentCreateCmd) Run() error {
@@ -1672,8 +1672,8 @@ func (c *AgentRCAStartCmd) Run() error {
 
 type AgentRCACompleteCmd struct {
 	RCA       string   `arg:""`
-	RootCause string   `long:"root-cause" required:""`
-	Finding   []string `long:"finding"`
+	RootCause string   `name:"root-cause" required:""`
+	Finding   []string `name:"finding"`
 }
 
 func (c *AgentRCACompleteCmd) Run() error {
@@ -1715,10 +1715,10 @@ type AgentRecoverCmd struct {
 }
 type AgentRecoverPlanCmd struct {
 	Incident       string `arg:""`
-	RCA            string `long:"rca"`
-	Action         string `long:"action" required:"" enum:"reattach,resume,restart,rebuild-target,change-runtime,reassign,abort,operator"`
-	EmergencyAbort bool   `long:"emergency-abort"`
-	Params         string `long:"params" default:"{}" help:"Recovery params JSON or @file"`
+	RCA            string `name:"rca"`
+	Action         string `name:"action" required:"" enum:"reattach,resume,restart,rebuild-target,change-runtime,reassign,abort,operator"`
+	EmergencyAbort bool   `name:"emergency-abort"`
+	Params         string `name:"params" default:"{}" help:"Recovery params JSON or @file"`
 }
 type AgentRecoverApplyCmd struct {
 	Decision string `arg:"" help:"#RecoveryDecision JSON or @file"`
@@ -1729,10 +1729,10 @@ type AgentRecoverShowCmd struct {
 }
 type AgentRecoverDecideCmd struct {
 	Incident       string `arg:""`
-	RCA            string `long:"rca"`
-	Action         string `long:"action" required:"" enum:"reattach,resume,restart,rebuild-target,change-runtime,reassign,abort,operator"`
-	EmergencyAbort bool   `long:"emergency-abort"`
-	Params         string `long:"params" default:"{}" help:"CUE #RecoveryParams JSON or @file"`
+	RCA            string `name:"rca"`
+	Action         string `name:"action" required:"" enum:"reattach,resume,restart,rebuild-target,change-runtime,reassign,abort,operator"`
+	EmergencyAbort bool   `name:"emergency-abort"`
+	Params         string `name:"params" default:"{}" help:"CUE #RecoveryParams JSON or @file"`
 }
 
 func (c *AgentRecoverDecideCmd) Run() error {

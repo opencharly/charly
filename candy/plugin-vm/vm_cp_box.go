@@ -20,8 +20,8 @@ import (
 type VmCpBoxCmd struct {
 	VM       string `arg:"" help:"kind:vm entity name (uses its managed charly-<name> ssh alias)"`
 	Image    string `arg:"" help:"image ref (short name or full ref) present in host podman storage"`
-	As       string `long:"as" help:"after load, tag the image in the guest under this stable ref (e.g. localhost/charly-selkies-kde:latest)"`
-	Rootless bool   `long:"rootless" help:"load into the guest USER's rootless podman storage instead of root's — so a rootless --user quadlet (e.g. a nested-pod-in-VM deploy) can run it"`
+	As       string `name:"as" help:"after load, tag the image in the guest under this stable ref (e.g. localhost/charly-selkies-kde:latest)"`
+	Rootless bool   `name:"rootless" help:"load into the guest USER's rootless podman storage instead of root's — so a rootless --user quadlet (e.g. a nested-pod-in-VM deploy) can run it"`
 }
 
 func (c *VmCpBoxCmd) Run() error {

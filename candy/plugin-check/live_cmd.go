@@ -20,10 +20,10 @@ import (
 // flags + help so the externalized CLI is behaviour-neutral.
 type CheckLiveCmd struct {
 	Box      string   `arg:"" help:"Box name"`
-	Instance string   `short:"i" long:"instance" help:"Instance name"`
-	Format   string   `long:"format" default:"text" help:"Output format: text, json, tap"`
-	Filter   []string `long:"filter" help:"Only run checks with these verbs (repeatable)"`
-	Section  string   `long:"section" help:"Only run this section: candy, box, or deploy"`
+	Instance string   `short:"i" name:"instance" help:"Instance name"`
+	Format   string   `name:"format" default:"text" help:"Output format: text, json, tap"`
+	Filter   []string `name:"filter" help:"Only run checks with these verbs (repeatable)"`
+	Section  string   `name:"section" help:"Only run this section: candy, box, or deploy"`
 }
 
 func (c *CheckLiveCmd) Run() error {

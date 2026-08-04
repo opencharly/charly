@@ -32,9 +32,9 @@ import (
 // Behaviour + flags + output are byte-equivalent to the former in-core BoxFeatureRunCmd.
 type CheckFeatureBoxCmd struct {
 	Image  string `arg:"" help:"Image reference (full ref or short name resolved against local container storage)"`
-	Format string `long:"format" default:"text" help:"Output format: text, json, tap, junit"`
-	Tag    string `long:"tag" help:"Only run steps matching this tag expression (e.g. 'smoke and not slow')"`
-	Strict bool   `long:"strict" help:"Treat prose-only (unbound) steps as failures instead of skips"`
+	Format string `name:"format" default:"text" help:"Output format: text, json, tap, junit"`
+	Tag    string `name:"tag" help:"Only run steps matching this tag expression (e.g. 'smoke and not slow')"`
+	Strict bool   `name:"strict" help:"Treat prose-only (unbound) steps as failures instead of skips"`
 }
 
 func (c *CheckFeatureBoxCmd) Run() error {
