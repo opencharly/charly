@@ -517,12 +517,25 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 		// path) would still show 100% green (a live-bed-validator finding on charly#186's
 		// check-pod-overlay — "a gate that cannot fail on the change proves nothing", R10). For a
 		// NESTED bed, the fresh rebuild additionally discards the substrate's children, so those
-		// must be explicitly re-applied first (a VM's own update recreates the domain — the qcow2
-		// disk + nested pod's persistent in-guest quadlet auto-starts on the fresh boot, so only a
-		// wait is needed; non-VM nested children must be redeployed).
+		// must be explicitly re-applied first. A VM's own update recreates the domain: a nested
+		// target:pod child's persistent in-guest quadlet (installed by plugin-deploy-vm's PostApply)
+		// auto-starts on the fresh boot, so it needs only a wait — but a nested target:local child
+		// (deployed via a ONE-TIME InstallPlan walk over SSH, no persistent service) does NOT survive
+		// the disk recreate and must be explicitly redeployed, exactly like the initial-deploy path
+		// already does for it (d.LocalChildKeys, above). This loop was missing here entirely until the
+		// K-wave terminus RCA (#20): check-live-rebuild's own gate used to be masked for VM beds by a
+		// classification bug (the deleted bedExternalInPlace treated any externalized, non-container
+		// substrate as "in-place" — including VM — so this whole block never ran for a VM bed and the
+		// gap went unverified); #55 W3 B2-full's ExternalInPlaceVenue fix corrected that classification
+		// as a side effect, which finally exercised this path and surfaced the missing redeploy.
 		if d.RunRuntime && !isInPlace {
 			if d.IsVM {
 				waitReady()
+				for _, childKey := range d.LocalChildKeys {
+					if err := step("redeploy-"+childKey, "bundle", "add", name+"."+childKey); err != nil {
+						return fail("re-deploy nested local child %s.%s (fresh rebuild): %w", name, childKey, err)
+					}
+				}
 			} else {
 				waitReady()
 				for _, childKey := range d.ChildKeys {
