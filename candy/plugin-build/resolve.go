@@ -63,7 +63,12 @@ func resolveBuildEngine(ctx context.Context, ex *sdk.Executor, req spec.BuildReq
 	}
 	boxes := buildkit.NormalizeBoxArgs(req.Boxes)
 
-	rr := spec.ResolvedProjectRequest{Dir: dir, IncludeDisabled: req.IncludeDisabled, ExtraCandyRefs: req.ExtraCandyRefs}
+	// RequestedBoxes threads the explicit generate/build targets to the host's
+	// buildengine-collect-remote-refs leg too (task #17 fix) — so an on-demand
+	// namespace-qualified target unreachable from any root-owned image's base/builder chain
+	// still gets its own remote candy refs collected, matching what buildkit.ResolveAllBox
+	// already does with the identical field for the RESOLVE half (step 6 below).
+	rr := spec.ResolvedProjectRequest{Dir: dir, IncludeDisabled: req.IncludeDisabled, ExtraCandyRefs: req.ExtraCandyRefs, RequestedBoxes: boxes}
 
 	// --- 1. LOAD the project plugin-side (K1 reverse legs) ---
 	uf, ok, err := loaderkit.LoadUnifiedViaExecutor(ctx, ex, dir)
