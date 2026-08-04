@@ -46,12 +46,18 @@ type KubeInput struct {
 
 	JSON bool `yaml:"json,omitempty" json:"json,omitempty"`
 
-	// artifact_key / deploy_name — the k3s-post-provision payload (S3, FINAL/K5 unit 6):
-	// artifact_key is the ENTITY-scoped identity (the shared per-VM cluster cache dir +
-	// kubeconfig context); deploy_name is the real per-deploy (domain) identity the
-	// guest-forward port-forward lookup keys off. See this plugin's own k3s_post.go
-	// (deployVMForwards) — the former charly/k8s_plugin.go core seam is deleted.
+	// artifact_key / deploy_name / vm_entity — the k3s-post-provision payload (S3, FINAL/K5 unit
+	// 6; re-split by task #18): artifact_key is now the per-deploy DOMAIN-scoped identity (the
+	// artifact cache dir + kubeconfig context — collision-free per bed, since several beds may
+	// share one kind:vm entity); deploy_name is the real per-deploy identity the guest-forward
+	// port-forward LEDGER lookup keys off (the same value domain-scopes artifact_key); vm_entity
+	// is the SHARED kind:vm entity name (e.g. several beds' common `from: k3s-vm`), a DIFFERENT
+	// identity space needed only to resolve the entity's DECLARED network.port_forwards
+	// template. See this plugin's own k3s_post.go (deployVMForwards) — the former
+	// charly/k8s_plugin.go core seam is deleted.
 	ArtifactKey string `yaml:"artifact_key,omitempty" json:"artifact_key,omitempty"`
 
 	DeployName string `yaml:"deploy_name,omitempty" json:"deploy_name,omitempty"`
+
+	VmEntity string `yaml:"vm_entity,omitempty" json:"vm_entity,omitempty"`
 }

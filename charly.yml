@@ -247,10 +247,16 @@ charly-vm:
             timezone: UTC
             package:
                 - sudo
+# vm-k3s-vm — the kind:k8s cluster template for check-k8s-deploy-workload's `target: k8s`
+# deploy (its sole consumer). kubeconfig_context is a STATIC field (no ${DEPLOY_NAME}
+# substitution applies to a `from:` entity cross-ref, unlike a check step's `cluster:`), so it is
+# pinned to the LITERAL per-domain context check-k8s-deploy-cluster's own kubeconfig merge
+# produces (task #18 fix: kubeconfig contexts are now per-deploy-domain-scoped, not shared by
+# entity — see candy/plugin-deploy-vm/lifecycle.go's OpArtifactKey + candy/plugin-kube/k3s_post.go).
 vm-k3s-vm:
     k8s:
         box: ""
-        kubeconfig_context: vm-k3s-vm
+        kubeconfig_context: check-k8s-deploy-cluster
 claude:
     agent:
         description: Anthropic Claude Code CLI — autonomous coding agent.
@@ -343,7 +349,7 @@ check-k3s-vm:
         disposable: true
         lifecycle: dev
         description: >-
-            Sole deterministic proof of the external-vm-deploy->k8s end-to-end path and the full 13-method k8s probe surface against a real k3s control plane, and the R10 for ssh.port_auto. A disposable libvirt Arch cloud VM (an auto-allocated host->guest 6443 forward, charly installed post-boot via the vm substrate (EnsureCharlyInGuest)) overlays k3s-server over SSH, then runs guest command/process/port/file probes plus the full k8s suite (nodes/wait-nodes/pods/wait-ready/addons/ingressclass/storageclass/raw/service) against cluster vm-k3s-vm, an agent-check matching probe, and a host-side charly status --json (status-shows-vm).
+            Sole deterministic proof of the external-vm-deploy->k8s end-to-end path and the full 13-method k8s probe surface against a real k3s control plane, and the R10 for ssh.port_auto. A disposable libvirt Arch cloud VM (an auto-allocated host->guest 6443 forward, charly installed post-boot via the vm substrate (EnsureCharlyInGuest)) overlays k3s-server over SSH, then runs guest command/process/port/file probes plus the full k8s suite (nodes/wait-nodes/pods/wait-ready/addons/ingressclass/storageclass/raw/service) against its own per-deploy-domain-scoped cluster context (cluster: "${DEPLOY_NAME}" — task #18: each bed sharing the k3s-vm entity gets a collision-free kubeconfig context named after itself), an agent-check matching probe, and a host-side charly status --json (status-shows-vm).
         add_candy:
             - k3s-server
         env:
@@ -391,13 +397,13 @@ check-k3s-vm:
               id: kv-k8s-nodes
               kube:
                 method: nodes
-                cluster: "vm-k3s-vm"
+                cluster: "${DEPLOY_NAME}"
               context: [runtime]
             - check: k8s=wait-nodes
               id: kv-k8s-wait-nodes
               kube:
                 method: "wait-nodes"
-                cluster: "vm-k3s-vm"
+                cluster: "${DEPLOY_NAME}"
                 kube_count: 1
               timeout: "300s"
               context: [runtime]
@@ -405,14 +411,14 @@ check-k3s-vm:
               id: kv-k8s-pods
               kube:
                 method: pods
-                cluster: "vm-k3s-vm"
+                cluster: "${DEPLOY_NAME}"
                 namespace: kube-system
               context: [runtime]
             - check: k8s=wait-ready
               id: kv-k8s-wait-ready
               kube:
                 method: "wait-ready"
-                cluster: "vm-k3s-vm"
+                cluster: "${DEPLOY_NAME}"
                 kube_kind: Deployment
                 namespace: kube-system
                 name: coredns
@@ -422,27 +428,27 @@ check-k3s-vm:
               id: kv-k8s-addons
               kube:
                 method: addons
-                cluster: "vm-k3s-vm"
+                cluster: "${DEPLOY_NAME}"
               context: [runtime]
             - check: k8s=ingressclass
               id: kv-k8s-ingressclass-traefik
               kube:
                 method: ingressclass
-                cluster: "vm-k3s-vm"
+                cluster: "${DEPLOY_NAME}"
               stdout: {contains: "traefik"}
               context: [runtime]
             - check: k8s=storageclass
               id: kv-k8s-storageclass-localpath
               kube:
                 method: storageclass
-                cluster: "vm-k3s-vm"
+                cluster: "${DEPLOY_NAME}"
               stdout: {contains: "local-path"}
               context: [runtime]
             - check: k8s=raw — the raw escape hatch lists an arbitrary resource (namespaces)
               id: kv-k8s-raw
               kube:
                 method: raw
-                cluster: "vm-k3s-vm"
+                cluster: "${DEPLOY_NAME}"
                 kube_resource: namespaces
               context: [runtime]
               stdout:
@@ -451,7 +457,7 @@ check-k3s-vm:
               id: kv-k8s-service-kubernetes
               kube:
                 method: service
-                cluster: "vm-k3s-vm"
+                cluster: "${DEPLOY_NAME}"
                 namespace: default
                 name: kubernetes
               context: [runtime]
@@ -511,13 +517,17 @@ check-k8s-deploy-app:
 # proven sibling-member shape — cf. box/fedora check-cross-pod-cdp) with two members
 # brought up name-sorted: check-k8s-deploy-cluster (a libvirt k3s VM reusing the
 # SAME k3s-vm entity + k3s-server candy check-k3s-vm proves) comes up FIRST and
-# merges its kubeconfig to context vm-k3s-vm; check-k8s-deploy-workload (a
+# merges its kubeconfig to context check-k8s-deploy-cluster (its own per-deploy
+# domain identity, task #18 — collision-free from check-k3s-vm's OWN context even
+# though both beds share the k3s-vm entity); check-k8s-deploy-workload (a
 # `target: k8s` deploy of check-k8s-deploy-app) comes up SECOND — at bring-up the
 # plugin's own preresolve.go (F6, FINAL/K5 unit 6a) reads the box Capabilities +
 # the vm-k3s-vm cluster template (self-loading the project PLUGIN-SIDE now, K-wave
-# W3a A3-phase-2 — no HostBuild round trip left in this leg) and GENERATES an
+# W3a A3-phase-2 — no HostBuild round trip left in this leg; its
+# kubeconfig_context is pinned to check-k8s-deploy-cluster, its sibling member's
+# per-domain context) and GENERATES an
 # egress-validated Kustomize tree, then the
-# out-of-process plugin applies it with `kubectl --context vm-k3s-vm apply -k`. The
+# out-of-process plugin applies it with `kubectl --context check-k8s-deploy-cluster apply -k`. The
 # kube: checks under the cluster member (host-side probes; run after BOTH members are
 # up) assert the workload Deployment OBJECT landed — the externalized apply ran
 # end-to-end. (The workload POD is not asserted Ready: the locally-built box image is
@@ -529,10 +539,11 @@ check-k8s-deploy:
         disposable: true
         lifecycle: dev
         description: >-
-            R10 for the EXTERNALIZED deploy:k8s substrate (F1) — `target: k8s` resolves out-of-process to candy/plugin-kube's deploy:k8s provider over the E3b reverse channel, not a compiled-in DeployTarget. A group bed with two name-sorted sibling members: check-k8s-deploy-cluster (a disposable libvirt k3s VM, the shared k3s-vm + k3s-server stack, an auto-allocated host->guest 6443 forward) brings up a control plane and merges kubeconfig to context vm-k3s-vm; check-k8s-deploy-workload (a target:k8s deploy of check-k8s-deploy-app) is brought up second — its host preresolver generates an egress-validated Kustomize tree and its out-of-process plugin runs `kubectl --context vm-k3s-vm apply -k`. The kube: checks (wait-nodes + raw deployments GET + pods) prove the Deployment object landed on the cluster — the externalized substrate applied the workload end-to-end. The pod is not asserted Ready (the local box image is absent from the VM's containerd; image-into-cluster delivery is orthogonal to the substrate).
+            R10 for the EXTERNALIZED deploy:k8s substrate (F1) — `target: k8s` resolves out-of-process to candy/plugin-kube's deploy:k8s provider over the E3b reverse channel, not a compiled-in DeployTarget. A group bed with two name-sorted sibling members: check-k8s-deploy-cluster (a disposable libvirt k3s VM, the shared k3s-vm + k3s-server stack, an auto-allocated host->guest 6443 forward) brings up a control plane and merges kubeconfig to context check-k8s-deploy-cluster (its own per-deploy domain identity, task #18 — collision-free from check-k3s-vm's own context despite sharing the k3s-vm entity); check-k8s-deploy-workload (a target:k8s deploy of check-k8s-deploy-app) is brought up second — its host preresolver generates an egress-validated Kustomize tree and its out-of-process plugin runs `kubectl --context check-k8s-deploy-cluster apply -k`. The kube: checks (wait-nodes + raw deployments GET + pods) prove the Deployment object landed on the cluster — the externalized substrate applied the workload end-to-end. The pod is not asserted Ready (the local box image is absent from the VM's containerd; image-into-cluster delivery is orthogonal to the substrate).
     # MEMBER 1 (name-sorts first) — the k3s control plane. bringUpMembers does vm
     # create + bundle add (k3s-server over SSH); K3sPostProvision merges the
-    # kubeconfig to context vm-k3s-vm. The kube: assertion checks live HERE (this
+    # kubeconfig to context check-k8s-deploy-cluster (this member's own per-deploy
+    # domain identity, task #18). The kube: assertion checks live HERE (this
     # member has a real SSH venue; the kube: verb dispatches host-side regardless,
     # and group check-live runs them only after BOTH members are up).
     check-k8s-deploy-cluster:
@@ -555,7 +566,7 @@ check-k8s-deploy:
                   id: kd-wait-nodes
                   kube:
                     method: wait-nodes
-                    cluster: "vm-k3s-vm"
+                    cluster: "${DEPLOY_NAME}"
                     kube_count: 1
                   timeout: "300s"
                   stdout: {contains: "Ready"}
@@ -564,7 +575,7 @@ check-k8s-deploy:
                   id: kd-deployment-landed
                   kube:
                     method: raw
-                    cluster: "vm-k3s-vm"
+                    cluster: "${DEPLOY_NAME}"
                     kube_resource: deployments
                     kube_group: apps
                     kube_version: v1
@@ -576,14 +587,15 @@ check-k8s-deploy:
                   id: kd-pod-scheduled
                   kube:
                     method: pods
-                    cluster: "vm-k3s-vm"
+                    cluster: "${DEPLOY_NAME}"
                     namespace: default
                   stdout: {contains: "check-k8s-deploy-workload"}
                   context: [runtime]
     # MEMBER 2 (name-sorts second) — the target:k8s workload. check-k8s-deploy-app is built
     # locally by the group bed's member-build arm (box build check-k8s-deploy-app), so the host
     # preresolver's ExtractMetadata reads its OCI labels. `from: vm-k3s-vm` selects
-    # the kind:k8s cluster template (kubeconfig_context: vm-k3s-vm). Deploy-only (no
+    # the kind:k8s cluster template (kubeconfig_context: check-k8s-deploy-cluster, task #18 —
+    # pinned to the sibling member's own per-domain context). Deploy-only (no
     # own checks — it is an instrument; the cluster member's kube: checks assert it).
     check-k8s-deploy-workload:
         k8s:

@@ -110,7 +110,7 @@ func TestDeployVMForwards_ReadsPersistedAllocationViaConfigResolveSeam(t *testin
 	}
 	exec := sdk.NewInProcExecutor(fake)
 
-	resolved, err := deployVMForwards(context.Background(), exec, "vm:k3s-vm", "rca-deploy4")
+	resolved, err := deployVMForwards(context.Background(), exec, "k3s-vm", "rca-deploy4")
 	if err != nil {
 		t.Fatalf("deployVMForwards: %v", err)
 	}
@@ -131,8 +131,27 @@ func TestDeployVMForwards_NoPersistedAllocation_StillErrorsLoudly(t *testing.T) 
 	}
 	exec := sdk.NewInProcExecutor(fake)
 
-	_, err := deployVMForwards(context.Background(), exec, "vm:k3s-vm", "rca-deploy4")
+	_, err := deployVMForwards(context.Background(), exec, "k3s-vm", "rca-deploy4")
 	if err == nil {
 		t.Fatalf("deployVMForwards: want an error when no allocation is persisted, got nil")
+	}
+}
+
+// TestDeployVMForwards_EmptyVmEntity_NoOp is the regression test for task #18 (the k3s
+// shared-entity clobber fix): now that ArtifactKey is domain-scoped and no longer parseable as
+// "vm:<entity>", deployVMForwards takes the shared kind:vm entity name as an EXPLICIT parameter
+// (VmEntity, threaded separately over the wire) instead of stripping a "vm:" prefix off the
+// artifact key. A pod/local k3s-server deploy (or any caller that never resolved an entity) ships
+// an empty vmEntity — this must short-circuit to a clean no-op (nil, nil), never dial the host
+// reverse channel (the fake client here panics on any HostBuild call, proving no call was made).
+func TestDeployVMForwards_EmptyVmEntity_NoOp(t *testing.T) {
+	exec := sdk.NewInProcExecutor(&fakeExecutorServiceClient{})
+
+	resolved, err := deployVMForwards(context.Background(), exec, "", "check-local")
+	if err != nil {
+		t.Fatalf("deployVMForwards: want nil error for an empty vmEntity, got %v", err)
+	}
+	if resolved != nil {
+		t.Fatalf("deployVMForwards: want a nil result for an empty vmEntity, got %v", resolved)
 	}
 }
