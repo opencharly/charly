@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"sync"
 
-	specexec "github.com/opencharly/spec/exec"
 	"github.com/opencharly/spec/hostenv"
 	"github.com/opencharly/spec/lock"
 	"github.com/opencharly/spec/spec"
@@ -31,10 +30,13 @@ import (
 // by-a-mutex pattern this codebase uses throughout for exactly this kind of live-handle
 // bookkeeping: `setup` inserts + acquires, `teardown`
 // removes + releases, and the compiled-in plugin's HostBuild calls all land in the SAME host
-// process so the live handles persist between ops. The `members-up`/`members-down`/`wait-ready`
-// ops are the mid-sequence host-coupled helpers that run AFTER the substrate deploys (so cannot
-// fold into setup) and call saveDeployState + libvirt + SSHExecutor/podman polls that have NO
-// `charly` verb (so cannot be cli-reentry).
+// process so the live handles persist between ops. The `members-up`/`members-down` ops are the
+// mid-sequence host-coupled helpers that run AFTER the substrate deploys (so cannot fold into
+// setup) and call saveDeployState + libvirt + SSHExecutor/podman polls that have NO `charly` verb
+// (so cannot be cli-reentry). The former `wait-ready` op DIED (#55 W3 B2): it read only
+// nodeTraits(&s.node).Venue + s.bedDomain, BOTH already returned in the setup reply as
+// (implicitly) IsVM + BedDomain, so the plugin now calls spec/exec.WaitForVmSshReady /
+// WaitForContainerReady directly with data it already has — no session lookup was ever needed.
 //
 // The op bodies call the SHARED core helpers runCheckBed uses (bedGPUPrereqMissing,
 // kit.AcquireFileLock, bedVmDomains/acquireVmDomainLock, selfSuperprojectOverridePair/
@@ -42,11 +44,12 @@ import (
 // persistBedDeployOverrides, bringUpMembers/tearDownMembers, bedCheckLevel/bedCheckLiveRefs/…)
 // — those helpers STAY core (shared with runCheckBed + bundle_add_cmd; K-wave relocation
 // inventory, never aliased). The venue-readiness GATES moved to spec/exec
-// (specexec.WaitForVmSshReady/WaitForContainerReady, #55 K4) — pure process pollers, not
-// bed-session state.
+// (WaitForVmSshReady/WaitForContainerReady, #55 K4) — pure process pollers, not
+// bed-session state; the plugin now calls them directly (see the wait-ready note above).
 //
 // TRANSITIONAL host seam — dies at K5: post-loaderkit the plugin holds its own flock via
-// sdk/kit (filelock/install_ledger/deployconfig, the delivered K4-B state family), computes the
+// spec/lock (filelock/install_ledger/deployconfig, the delivered any-process-safe state family —
+// migrated off the former sdk/kit per #55 step1-fabric), computes the
 // repo-override itself, and calls the arbiter over InvokeProvider.
 const checkBedBuilderKind = "check-bed"
 
@@ -130,19 +133,6 @@ func hostBuildCheckBed(_ context.Context, req spec.CheckBedRequest, _ buildEngin
 			return spec.CheckBedReply{}, fmt.Errorf("check-bed members-down: no live session for bed %q", req.Bed)
 		}
 		return spec.CheckBedReply{}, tearDownMembers(&s.node)
-	case "wait-ready":
-		s := lookupBedSession(req.Bed)
-		if s == nil {
-			return spec.CheckBedReply{}, fmt.Errorf("check-bed wait-ready: no live session for bed %q", req.Bed)
-		}
-		if nodeTraits(&s.node).Venue == "ssh" { // vm (ssh venue)
-			// Wait on the per-deploy DOMAIN IDENTITY (charly-<bedDomain> is the live domain +
-			// managed ssh alias, post-P33), NOT the shared kind:vm entity (node.From).
-			specexec.WaitForVmSshReady(s.bedDomain)
-		} else {
-			specexec.WaitForContainerReady(req.Bed)
-		}
-		return spec.CheckBedReply{}, nil
 	case "teardown":
 		return bedSessionTeardown(req)
 	default:

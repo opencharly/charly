@@ -12,11 +12,12 @@ package check
 //
 // The lock / lease / repo-override-env / deploy-config-isolation / GPU-prereq
 // lifecycle is CORE STATE a separate module cannot hold — the "check-bed" session
-// seam (setup/members-up/members-down/wait-ready/teardown) owns it and returns the
+// seam (setup/members-up/members-down/teardown) owns it and returns the
 // node-derived BedDescriptor the kind-blind plugin drives the sequence from. Every
 // `charly` subcommand rides HostBuild("cli"); the plugin owns the sequence LOGIC,
 // the per-step .log + summary.yml writes and the exit-code
-// classification.
+// classification. Readiness waits (waitReady, below) call spec/exec directly — no
+// session op — using d.IsVM/d.BedDomain already in hand from the setup reply (#55 W3 B2).
 //
 // #33: the current post-rebase sequence passes `--domain <bedDomain>` on `charly vm
 // create/destroy/start` while `charly vm build` stays ENTITY-scoped (VMTemplate).
@@ -33,6 +34,7 @@ import (
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/vmshared"
+	specexec "github.com/opencharly/spec/exec"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -177,10 +179,18 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 		_, _ = bedCli(ex, ctx, true, argv...)
 	}
 
-	// waitReady drives the "wait-ready" session op (the host reads the node kind to
-	// pick waitForVmSshReady vs waitForContainerReady). Best-effort.
+	// waitReady picks WaitForVmSshReady vs WaitForContainerReady directly — no host round-trip
+	// needed (#55 W3 B2): d.IsVM + d.BedDomain are already in hand from the setup reply, and
+	// spec/exec's readiness gates are pure process-driving pollers with no session/registry
+	// coupling (spec/exec/venue_wait.go's own header). Best-effort, matching the former op.
 	waitReady := func() {
-		_, _ = bedHostBuild(ex, ctx, spec.CheckBedRequest{Op: "wait-ready", Bed: name})
+		if d.IsVM {
+			// Wait on the per-deploy DOMAIN IDENTITY (charly-<BedDomain> is the live domain +
+			// managed ssh alias, post-P33), NOT the shared kind:vm entity (d.VMTemplate).
+			specexec.WaitForVmSshReady(d.BedDomain)
+		} else {
+			specexec.WaitForContainerReady(name)
+		}
 	}
 
 	// phase records an IN-PROCESS phase (member bring-up / teardown — ops that do not

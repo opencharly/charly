@@ -105,9 +105,11 @@ func pluginCheckRunPreflight(ex *sdk.Executor, ctx context.Context, req spec.Che
 // bedHostBuild drives one op of the transitional "check-bed" host-session seam (P12 Wave-2): it
 // marshals the CheckBedRequest, HostBuild("check-bed")s it over the reverse channel, and decodes
 // the CheckBedReply. The AI-harness R10 bed driver (the leaf harness code) calls setup → members-up
-// / wait-ready / members-down → teardown through this bridge; the host holds the bed's lock / lease
-// / env lifecycle across the driver's many bedCli calls. ex/ctx are passed explicitly (the harness
-// owns its executor + context, unlike the single-shot cmdExec the CheckCmd leaves use).
+// / members-down → teardown through this bridge; the host holds the bed's lock / lease / env
+// lifecycle across the driver's many bedCli calls. Readiness waits no longer round-trip here (#55
+// W3 B2 — the driver calls spec/exec directly with data already in hand). ex/ctx are passed
+// explicitly (the harness owns its executor + context, unlike the single-shot cmdExec the CheckCmd
+// leaves use).
 func bedHostBuild(ex *sdk.Executor, ctx context.Context, req spec.CheckBedRequest) (spec.CheckBedReply, error) {
 	reqJSON, err := json.Marshal(req)
 	if err != nil {
