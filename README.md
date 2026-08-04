@@ -194,19 +194,18 @@ code the way a hand-maintained copy in this file would.
 
 ## Works with Claude Code, Codex, and Kimi
 
-The bundled [plugins/](plugins/) directory provides one skill tree for Claude Code, Codex, and
-Kimi, teaching each harness how to compose, build, deploy, check, and manage boxes. Every candy,
-box, command, and contributor subsystem has an owning skill.
+[opencharly/plugins](https://github.com/opencharly/plugins) is one skill tree for Claude Code,
+Codex, and Kimi, teaching each harness how to compose, build, deploy, check, and manage boxes.
+Every candy, box, command, and contributor subsystem has an owning skill. It installs in three
+modes — `developer` (all 25 plugins), `user` (use and author with charly, without contributor
+internals), and `container <family>` (one generated container family) — and writes only
+target-repository files, never `~/.claude`, `~/.codex`, `~/.kimi-code`, or any other user
+configuration. It does not depend on MCP.
 
-```bash
-./plugins/setup claude                   # full developer mode (default)
-./plugins/setup codex developer
-./plugins/setup kimi developer
-./plugins/setup codex user               # use and author with Charly
-```
-
-Setup writes project files only — it never changes `~/.claude`, `~/.codex`, `~/.kimi-code`, or any
-other user configuration, and it does not depend on MCP.
+Setup instructions live in that repository's own README. They currently require a checkout, which
+is a gap rather than a design: there is no way to install the skill tree with only the `charly`
+binary, including for the `user` mode aimed at people who are explicitly not developing charly.
+Tracked as [#210](https://github.com/opencharly/charly/issues/210).
 
 Beyond skills, the project ships reusable plugin agents (executors that drive the `charly check`
 beds and return verbatim proof, plus enforcers that gate claims) and dynamic workflows. Whether
