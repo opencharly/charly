@@ -179,35 +179,13 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 		return fmt.Errorf("persisting resource caps: %w", err)
 	}
 
-	// Guard dc.Bundle (not only dc): coneC-dsh's loadDeploy → loaderkit.LoadHostBundleConfigViaExecutor
-	// returns a NON-NIL &deploykit.BundleConfig{} with a nil Bundle on an absent per-host overlay
-	// (the bed's XDG-isolated empty temp dir; the operator's ~/.config/charly before the first deploy
-	// add) — matching deploykit.LoadBundleConfig's absent/empty contract so reap-orphans and other
-	// range-without-nil-guard callers keep working. The former LoadDeployConfigForRead returned nil
-	// for absent, so the pre-coneC-dsh `if dc != nil` guard skipped this block entirely (graceful
-	// degradation: no overlay → no prior resolved ports → image-label defaults, meta.Port below).
-	// The non-nil-&BundleConfig{} return keeps that contract for the rangers but makes `if dc != nil`
-	// always true, so the guard must also check dc.Bundle: an absent overlay (nil Bundle) skips port
-	// resolution — exactly the graceful degradation the loadDeploy comment names. Writing to a nil
-	// Bundle here was the coneC-dsh regression (assignment-to-nil-map panic, config_setup.go:193).
-	if dc != nil && dc.Bundle != nil {
-		key := spec.DeployKey(c.Box, c.Instance)
-		overlay := dc.Bundle[key]
-		containerPorts := kit.ContainerPortsFromMappings(meta.Port)
-		if len(containerPorts) > 0 || len(overlay.Port) > 0 {
-			resolved, rErr := kit.ResolveDeployPorts(containerPorts, overlay.Port, overlay.ResolvedPort, deploykit.OccupiedHostPorts(dc, key))
-			if rErr != nil {
-				return fmt.Errorf("resolving deploy ports: %w", rErr)
-			}
-			if !kit.SameStringSlice(overlay.ResolvedPort, resolved) {
-				overlay.ResolvedPort = resolved
-				dc.Bundle[key] = overlay
-				if err := saveBundle(ctx, ex, dc); err != nil {
-					return fmt.Errorf("saving resolved_port: %w", err)
-				}
-				fmt.Fprintf(os.Stderr, "Resolved ports for %s: %s\n", key, strings.Join(resolved, ", "))
-			}
-		}
+	// resolveDeployPorts (config_setup_helpers.go) self-heals a nil dc/dc.Bundle instead of
+	// skipping resolution — task #19's fix. See its doc comment for the full mechanism: the former
+	// `if dc != nil && dc.Bundle != nil` guard here skipped port resolution entirely on a fresh
+	// disposable bed's first-ever config (no per-host overlay yet), which deterministically
+	// collided every check-pod-derived bed on the shared literal container port 18794.
+	if err := resolveDeployPorts(ctx, ex, &dc, spec.DeployKey(c.Box, c.Instance), &meta); err != nil {
+		return err
 	}
 
 	deploykit.MergeDeployOntoMetadata(&meta, dc, c.Box, c.Instance)

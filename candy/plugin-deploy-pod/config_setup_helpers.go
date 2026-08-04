@@ -316,6 +316,51 @@ func persistResourceCaps(ctx context.Context, ex *sdk.Executor, dc **deploykit.B
 	return saveBundle(ctx, ex, *dc)
 }
 
+// resolveDeployPorts self-heals a nil/absent overlay (dc / dc.Bundle) exactly like
+// persistResourceCaps above, then resolves and persists this deploy's ports via
+// kit.ResolveDeployPorts. Extracted from runConfig (config_setup.go) for direct unit testing —
+// task #19's regression: the pre-fix code guarded this block on `dc != nil && dc.Bundle != nil`
+// and SKIPPED port resolution entirely whenever no per-host overlay existed yet, which is exactly
+// the state of a fresh disposable check bed's XDG-isolated environment on its first-ever `charly
+// config`. With resolution skipped, meta.Port kept the image label's bare container ports, which
+// quadlet rendering (LocalizePort -> spec.ParsePortMapping's bare-number case) then treats as a
+// literal host==container 1:1 publish — so every deploy sharing a container port (all nine
+// check-pod-derived beds share container port 18794) collided on the identical literal host port
+// on their first config, contradicting the documented contract
+// (plugins/core/skills/deploy/SKILL.md "Auto port mapping": port resolution runs
+// unconditionally at `charly config`, auto-allocating a free host port per inherited container
+// port unless pinned). Self-healing dc/dc.Bundle here — instead of skipping — makes port
+// resolution (and, as a side effect, every other per-deploy overlay merge downstream in
+// MergeDeployOntoMetadata, which shares the same dc.Bundle-nil guard) run correctly on a bed's
+// very first config, matching every subsequent config/update.
+func resolveDeployPorts(ctx context.Context, ex *sdk.Executor, dc **deploykit.BundleConfig, key string, meta *spec.BoxMetadata) error {
+	if *dc == nil {
+		*dc = &deploykit.BundleConfig{Bundle: make(map[string]spec.BundleNode)}
+	}
+	if (*dc).Bundle == nil {
+		(*dc).Bundle = make(map[string]spec.BundleNode)
+	}
+	overlay := (*dc).Bundle[key]
+	containerPorts := kit.ContainerPortsFromMappings(meta.Port)
+	if len(containerPorts) == 0 && len(overlay.Port) == 0 {
+		return nil
+	}
+	resolved, rErr := kit.ResolveDeployPorts(containerPorts, overlay.Port, overlay.ResolvedPort, deploykit.OccupiedHostPorts(*dc, key))
+	if rErr != nil {
+		return fmt.Errorf("resolving deploy ports: %w", rErr)
+	}
+	if kit.SameStringSlice(overlay.ResolvedPort, resolved) {
+		return nil
+	}
+	overlay.ResolvedPort = resolved
+	(*dc).Bundle[key] = overlay
+	if err := saveBundle(ctx, ex, *dc); err != nil {
+		return fmt.Errorf("saving resolved_port: %w", err)
+	}
+	fmt.Fprintf(os.Stderr, "Resolved ports for %s: %s\n", key, strings.Join(resolved, ", "))
+	return nil
+}
+
 // loadProjectVolume resolves the deploy's PROJECT-declared `volume:` override — the entity as
 // authored in the PROJECT's own charly.yml (e.g. a disposable check bed's `volume: [{name:
 // enc-data, type: encrypted}]`) — which the per-host overlay `loadDeploy` reads (LoadBundleConfig,
