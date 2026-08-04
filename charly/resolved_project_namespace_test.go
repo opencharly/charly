@@ -1,18 +1,21 @@
 package main
 
 import (
-	"context"
-	"encoding/json"
 	"testing"
-
-	"github.com/opencharly/spec/spec"
 )
 
 // resolved_project_namespace_test.go — K1-unblock wave 2: proves the namespace-qualified
 // flattening added to spec.UnifiedFile.ProjectTemplates (and the namespaced-box resolve the deleted
-// resolved_project_host.go's namespaced-box fill used to drive), and the resulting functional fix to
-// the "deploy-entity-resolve" kind:k8s lookup (host_build_deploy_entity_resolve.go), which
-// previously supported ONLY root-scoped `k8s:` entity names.
+// resolved_project_host.go's namespaced-box fill used to drive) — the SAME LoadUnified walk/
+// materialize algorithm every kind:<word> template lookup relies on, whether reached in-proc
+// (this test, and the deleted "deploy-entity-resolve" HostBuild seam that used to wrap it) or
+// PLUGIN-SIDE over the reverse channel (sdk/loaderkit.LoadUnifiedViaExecutor, K-wave W3a
+// A3-phase-2's Resolve{K8s,Vm,Android}EntityViaExecutor — LoadUnifiedViaExecutor's own doc
+// comment: "Returns the fully-merged, validated project the SAME way the compiled-in host loader
+// does"). The former "deploy-entity-resolve" seam + its
+// TestHostBuildDeployEntityResolve_K8sNamespaceQualified functional-proof test are BOTH deleted
+// (the seam has zero callers left); this test's own coverage of the underlying
+// ProjectTemplates()/namespace-qualification claim is unaffected — it never depended on the seam.
 
 // writeNamespaceImportFixture builds a minimal 2-repo-style namespace import: the root imports
 // "fedora.yml" under the "fedora" alias, which declares one resolvable box (jupyter) and one
@@ -74,31 +77,14 @@ func TestProjectTemplates_NamespaceQualified(t *testing.T) {
 // executor (the same pattern candy/plugin-deploy-vm/lifecycle_test.go already uses) instead of
 // reproducing charly-core-only loader internals a plugin cannot import.
 
-// TestHostBuildDeployEntityResolve_K8sNamespaceQualified is the end-to-end functional proof
-// through the actual "deploy-entity-resolve" HostBuild seam (W0 made it genuinely kind-blind — no
-// findK8sSpec helper survives): a `kind: "k8s"` lookup resolves a namespace-qualified
-// `fedora.prod-cluster` profile via uf.ProjectTemplates().ByKind("k8s"), and correctly reports NOT
-// FOUND for the unqualified bare name (it is namespace-scoped, not root-scoped).
-func TestHostBuildDeployEntityResolve_K8sNamespaceQualified(t *testing.T) {
-	root := writeNamespaceImportFixture(t)
-
-	reply, err := hostBuildDeployEntityResolve(context.Background(), spec.DeployEntityResolveRequest{
-		Kind: "k8s", Name: "fedora.prod-cluster", Dir: root,
-	}, buildEngineContext{})
-	if err != nil {
-		t.Fatalf("hostBuildDeployEntityResolve(k8s, fedora.prod-cluster): %v", err)
-	}
-	var got spec.ResolvedK8s
-	if err := json.Unmarshal(reply.EntityJSON, &got); err != nil {
-		t.Fatalf("decode EntityJSON: %v", err)
-	}
-	if got.KubeconfigContext != "fedora-prod-ctx" {
-		t.Errorf("KubeconfigContext = %q, want fedora-prod-ctx", got.KubeconfigContext)
-	}
-
-	if _, err := hostBuildDeployEntityResolve(context.Background(), spec.DeployEntityResolveRequest{
-		Kind: "k8s", Name: "prod-cluster", Dir: root,
-	}, buildEngineContext{}); err == nil {
-		t.Error("hostBuildDeployEntityResolve(k8s, prod-cluster) = nil error, want not-found (it is namespace-scoped, not root)")
-	}
-}
+// TestHostBuildDeployEntityResolve_K8sNamespaceQualified DELETED (K-wave W3a A3-phase-2): its
+// subject, hostBuildDeployEntityResolve (the "deploy-entity-resolve" HostBuild seam), is deleted —
+// every kind:<word> caller self-loads the project now via sdk/loaderkit.LoadUnifiedViaExecutor,
+// which drives the SAME LoadUnified walk/materialize algorithm TestProjectTemplates_NamespaceQualified
+// above already proves namespace-qualifies correctly (LoadUnifiedViaExecutor's own doc comment:
+// "Returns the fully-merged, validated project the SAME way the compiled-in host loader does" —
+// the algorithm is placement-invariant; only the seam WIRING differs between in-proc and
+// HostBuild-dispatched). The plugin-side seam-dispatch wiring itself is proven live by this
+// unit's disposable-bed roster (check-k8s-deploy et al), not a narrow unit test — the established
+// pattern every other sdk/loaderkit self-load consumer in this tree already follows (no existing
+// unit test exercises LoadUnifiedViaExecutor's own HostBuild round trip directly either).

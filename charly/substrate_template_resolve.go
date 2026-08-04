@@ -7,7 +7,9 @@ package main
 // projection (spec.ResolvedLocal / spec.ResolvedAndroid) — never spec.Local / spec.Android.
 // (W0: the former ResolvedLocal/ResolvedAndroid/ResolvedK8s in-package aliases are deleted — every
 // caller reads spec.* directly; resolveK8sViaPlugin died with its only caller, findK8sSpec,
-// relocated into host_build_deploy_entity_resolve.go's kind-blind resolveEntityTemplate.)
+// relocated into the former host_build_deploy_entity_resolve.go's kind-blind resolveEntityTemplate
+// — itself deleted now, K-wave W3a A3-phase-2: every kind:<word> caller self-loads the project
+// plugin-side via sdk/loaderkit's Resolve{K8s,Vm,Android}EntityViaExecutor instead.)
 
 import (
 	"context"

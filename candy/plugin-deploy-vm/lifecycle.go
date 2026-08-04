@@ -13,6 +13,7 @@ import (
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/vmshared"
 	pb "github.com/opencharly/spec/proto"
 	"github.com/opencharly/spec/spec"
@@ -204,28 +205,13 @@ func vmEntityForPrepare(node *spec.BundleNode, name string) (string, error) {
 	return "", fmt.Errorf("vm deploy %q: no `vm:` cross-ref and key is not a legacy vm:<name> form", name)
 }
 
-// entityResolve Invokes the "deploy-entity-resolve" HostBuild seam and decodes the reply — the
-// SAME generic seam candy/plugin-kube/preresolve.go's k8sEntityResolve already proves live (R3, no
-// per-substrate reinvention).
-func entityResolve(ctx context.Context, exec *sdk.Executor, req spec.DeployEntityResolveRequest) (spec.DeployEntityResolveReply, error) {
-	var out spec.DeployEntityResolveReply
-	reqJSON, err := json.Marshal(req)
-	if err != nil {
-		return out, err
-	}
-	resJSON, err := exec.HostBuild(ctx, "deploy-entity-resolve", reqJSON)
-	if err != nil {
-		return out, err
-	}
-	return out, json.Unmarshal(resJSON, &out)
-}
-
 // resolvePriorVmState reads a domain's persisted VmDeployState (instance-id, ssh_port, disk path)
 // via the "config-resolve" HostBuild seam (bed-robustness batch item 5 — the DeployStateHost
 // out-of-process-read audit). Pulled out of vmPrepareVenue as its own function purely for
-// testability: unlike the rest of vmPrepareVenue (which needs a live "deploy-entity-resolve"
-// round trip + guest readiness waits — its coverage is the check-sidecar-pod / check-charly-vm
-// disposable-bed runtime gate), this ONE seam call is unit-testable with a minimal fake
+// testability: unlike the rest of vmPrepareVenue (which self-loads the project via
+// loaderkit.ResolveVmEntityViaExecutor + waits for guest readiness — its coverage is the
+// check-sidecar-pod / check-charly-vm disposable-bed runtime gate), this ONE seam call is
+// unit-testable with a minimal fake
 // *sdk.Executor, and the regression it guards is severe: candy/plugin-deploy-vm runs
 // out-of-process, so a direct deploykit.LoadDeployConfigForRead call here (the pre-fix shape)
 // NEVER touches the executor at all and ALWAYS silently returns an empty state — every domain
@@ -330,11 +316,11 @@ func isEphemeralPanicError(err error) bool {
 // readiness waits, charly delivery) over generic seams, and returns the guest SSH venue descriptor +
 // the VmDeployState patch the host persists. RESOLVES its own LifecyclePrepareInput (FINAL/K5 unit
 // 6a, M4b): the deleted lifecyclePrepareHook host indirection is gone — the plugin ALREADY owns
-// OpPrepareVenue (it is the Lifecycle:true substrate), so it self-serves the LoadUnified-coupled
-// vmSpec via the generic "deploy-entity-resolve" seam (exactly like candy/plugin-kube/preresolve.go
-// already does for k8s/deploy entities) and resolves sshPort/stateDir/SSHUser/PriorState directly —
-// all pure sdk/deploykit + sdk/kit + sdk/vmshared, no LoadUnified coupling (the plugin is
-// CO-LOCATED on the host, not remote). The ephemeral-registration Add-time side effect (systemd
+// OpPrepareVenue (it is the Lifecycle:true substrate), so it self-loads the project + resolves the
+// vmSpec itself via loaderkit.ResolveVmEntityViaExecutor (K-wave W3a A3-phase-2, unblocked by W1's
+// LoadUnifiedViaExecutor — the former "deploy-entity-resolve" HostBuild seam round-trip is deleted)
+// and resolves sshPort/stateDir/SSHUser/PriorState directly — all pure sdk/deploykit + sdk/kit +
+// sdk/vmshared + sdk/loaderkit, no core-only coupling. The ephemeral-registration Add-time side effect (systemd
 // transient timer + panic-vs-warning classification, RCA #5) is dispatched to command:bundle's
 // OpEphemeralRegister DIRECTLY via dispatchVmEphemeralRegister (the mirror of the teardown twin) —
 // no core hop; the registration BODY + its host reverse-channel access live in plugin-bundle.
@@ -358,17 +344,14 @@ func vmPrepareVenue(ctx context.Context, exec *sdk.Executor, p lifecycleParams, 
 		return nil, fmt.Errorf("plugin-deploy-vm prepare-venue: %w", err)
 	}
 
-	entityReply, err := entityResolve(ctx, exec, spec.DeployEntityResolveRequest{Kind: "vm", Name: entity, Dir: p.Dir})
+	vmPtr, err := loaderkit.ResolveVmEntityViaExecutor(ctx, exec, p.Dir, entity)
 	if err != nil {
 		return nil, fmt.Errorf("plugin-deploy-vm prepare-venue: resolve vm entity %q: %w", entity, err)
 	}
-	var vm spec.ResolvedVm
-	if len(entityReply.EntityJSON) == 0 {
+	if vmPtr == nil {
 		return nil, fmt.Errorf("plugin-deploy-vm prepare-venue: kind:vm entity %q resolved to an empty value", entity)
 	}
-	if err := json.Unmarshal(entityReply.EntityJSON, &vm); err != nil {
-		return nil, fmt.Errorf("plugin-deploy-vm prepare-venue: decode resolved vm entity %q: %w", entity, err)
-	}
+	vm := *vmPtr
 
 	// Prior runtime state (instance-id, ssh_port, disk path) for idempotent reuse decisions — read
 	// via the "config-resolve" HostBuild seam (bed-robustness batch item 5 — the placement-dependent

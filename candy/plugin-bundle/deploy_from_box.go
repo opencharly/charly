@@ -9,6 +9,7 @@ import (
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -17,10 +18,10 @@ import (
 // registry-coupled calls it made are now the established plugin↔host idioms every OTHER shape in
 // this cutover uses:
 //
-//   - the former charly-core direct LoadUnified-coupled k8s-spec lookup → the ALREADY-EXISTING
-//     generic "deploy-entity-resolve" HostBuild seam, kind="k8s" (host_build_deploy_entity_resolve.go),
-//     which already marshals the FULL *spec.ResolvedK8s into EntityJSON for candy/plugin-kube's own
-//     cluster-context resolution — no new seam needed, this one already serves exactly this lookup.
+//   - the former charly-core direct LoadUnified-coupled k8s-spec lookup → PLUGIN-SIDE self-load
+//     (loaderkit.ResolveK8sEntityViaExecutor, K-wave W3a A3-phase-2) — the former
+//     "deploy-entity-resolve" HostBuild seam this used to round-trip through is DELETED, unblocked
+//     by W1's LoadUnifiedViaExecutor letting a plugin load the project itself.
 //   - providerRegistry.ResolveDeploy("k8s") + InvokeWithExecutor(...) (the core-registry dance) →
 //     exec.InvokeProvider(ctx, "deploy", "k8s", sdk.OpEmit, reqJSON, nil, opts) — the exact
 //     peer-dispatch idiom deploy_target.go's lifecycleInvoke/preresolveSubstrate already use.
@@ -42,7 +43,7 @@ type DeployFromBoxOpts struct {
 	Namespace      string // optional override of the cluster's default namespace
 	DeployOverlay  *spec.Deploy
 	OutputDir      string // defaults to <cwd>/.opencharly/k8s
-	ProjectDir     string // for the "deploy-entity-resolve" cluster lookup
+	ProjectDir     string // for the self-loaded kind:k8s cluster lookup (resolveK8sSpec)
 }
 
 // DeployFromBox performs the source-less deploy. Returns the absolute path
@@ -66,7 +67,7 @@ func DeployFromBox(ctx context.Context, exec *sdk.Executor, opts DeployFromBoxOp
 		return "", fmt.Errorf("reading capabilities from %q: %w", opts.ImageRef, err)
 	}
 
-	// 2. Look up the kind:k8s cluster template via the generic "deploy-entity-resolve" seam.
+	// 2. Look up the kind:k8s cluster template — self-loaded PLUGIN-SIDE (resolveK8sSpec).
 	projectDir := opts.ProjectDir
 	if projectDir == "" {
 		projectDir = "."
@@ -121,35 +122,21 @@ func DeployFromBox(ctx context.Context, exec *sdk.Executor, opts DeployFromBoxOp
 	})
 }
 
-// resolveK8sSpec resolves a kind:k8s cluster template by name via the generic
-// "deploy-entity-resolve" HostBuild seam (kind="k8s") — the plugin-side twin of the former core
-// direct-LoadUnified k8s-spec lookup. A resolve miss (no charly.yml, no declared cluster, a decode
-// failure) degrades to nil, matching the former function's own swallow-to-nil contract (downstream
-// Kustomize emission handles a nil cluster).
+// resolveK8sSpec resolves a kind:k8s cluster template by name — PLUGIN-SIDE, self-loading the
+// project (K-wave W3a A3-phase-2: loaderkit.ResolveK8sEntityViaExecutor, unblocked by W1's
+// LoadUnifiedViaExecutor). Replaces the former "deploy-entity-resolve" HostBuild seam round-trip.
+// A resolve miss (no charly.yml, no declared cluster, a decode failure) degrades to nil, matching
+// the former function's own swallow-to-nil contract (downstream Kustomize emission handles a nil
+// cluster).
 func resolveK8sSpec(ctx context.Context, exec *sdk.Executor, dir, name string) *spec.ResolvedK8s {
 	if exec == nil || dir == "" || name == "" {
 		return nil
 	}
-	reqJSON, err := json.Marshal(spec.DeployEntityResolveRequest{Kind: "k8s", Name: name, Dir: dir})
+	spc, err := loaderkit.ResolveK8sEntityViaExecutor(ctx, exec, dir, name)
 	if err != nil {
 		return nil
 	}
-	resJSON, err := exec.HostBuild(ctx, "deploy-entity-resolve", reqJSON)
-	if err != nil {
-		return nil
-	}
-	var reply spec.DeployEntityResolveReply
-	if len(resJSON) == 0 {
-		return nil
-	}
-	if err := json.Unmarshal(resJSON, &reply); err != nil || len(reply.EntityJSON) == 0 {
-		return nil
-	}
-	var spc spec.ResolvedK8s
-	if err := json.Unmarshal(reply.EntityJSON, &spc); err != nil {
-		return nil
-	}
-	return &spc
+	return spc
 }
 
 // K8sGenerateOpts carries the inputs a Kustomize emit needs.

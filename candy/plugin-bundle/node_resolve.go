@@ -29,8 +29,8 @@ import (
 // plugin↔plugin sdk.Executor.InvokeProvider(class:"kind", word:"local",
 // OpResolve, …) leg candy/plugin-check/agent.go already uses for its own
 // kind resolve. Net effect: zero new seam, and one fewer host round-trip
-// class (deploy-entity-resolve's "local" arm is now dead — see
-// host_build_deploy_entity_resolve.go).
+// class (the former "deploy-entity-resolve" HostBuild seam's "local" arm was already dead
+// before this; the whole seam is deleted now, K-wave W3a A3-phase-2).
 
 // emitOpts mirrors charly/bundle_add_cmd.go's deployAddCmd.emitOpts() — the
 // CLI-flags-to-EmitOpts mapping — MINUS ParentExec/Path/ParentNode, which a

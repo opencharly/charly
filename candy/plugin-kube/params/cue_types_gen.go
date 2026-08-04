@@ -17,9 +17,9 @@ type KubeInput struct {
 
 	Label string `yaml:"label,omitempty" json:"label,omitempty"`
 
-	// cluster — a kind:k8s cluster template name; the HOST preresolves it to a
-	// concrete kube_context (the "deploy-entity-resolve" HostBuild seam needs the
-	// project loader) and leaves the authored key in place, so the input def admits both.
+	// cluster — a kind:k8s cluster template name; this PLUGIN self-resolves it to a
+	// concrete kube_context (self-loading the project, K-wave W3a A3-phase-2) and
+	// leaves the authored key in place, so the input def admits both.
 	Cluster string `yaml:"cluster,omitempty" json:"cluster,omitempty"`
 
 	// manifest — the multi-doc YAML path (apply/delete).
@@ -49,7 +49,8 @@ type KubeInput struct {
 	// artifact_key / deploy_name — the k3s-post-provision payload (S3, FINAL/K5 unit 6):
 	// artifact_key is the ENTITY-scoped identity (the shared per-VM cluster cache dir +
 	// kubeconfig context); deploy_name is the real per-deploy (domain) identity the
-	// guest-forward port-forward lookup keys off. See charly/k8s_plugin.go.
+	// guest-forward port-forward lookup keys off. See this plugin's own k3s_post.go
+	// (deployVMForwards) — the former charly/k8s_plugin.go core seam is deleted.
 	ArtifactKey string `yaml:"artifact_key,omitempty" json:"artifact_key,omitempty"`
 
 	DeployName string `yaml:"deploy_name,omitempty" json:"deploy_name,omitempty"`

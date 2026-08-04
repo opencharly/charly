@@ -514,9 +514,9 @@ check-k8s-deploy-app:
 # merges its kubeconfig to context vm-k3s-vm; check-k8s-deploy-workload (a
 # `target: k8s` deploy of check-k8s-deploy-app) comes up SECOND — at bring-up the
 # plugin's own preresolve.go (F6, FINAL/K5 unit 6a) reads the box Capabilities +
-# the vm-k3s-vm cluster template (via the host's "deploy-entity-resolve" +
-# "k8s-generate-kustomize" HostBuild seams) and GENERATES an egress-validated
-# Kustomize tree, then the
+# the vm-k3s-vm cluster template (self-loading the project PLUGIN-SIDE now, K-wave
+# W3a A3-phase-2 — no HostBuild round trip left in this leg) and GENERATES an
+# egress-validated Kustomize tree, then the
 # out-of-process plugin applies it with `kubectl --context vm-k3s-vm apply -k`. The
 # kube: checks under the cluster member (host-side probes; run after BOTH members are
 # up) assert the workload Deployment OBJECT landed — the externalized apply ran

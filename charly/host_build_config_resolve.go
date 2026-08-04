@@ -15,13 +15,14 @@ import (
 // command plugin (candy/plugin-vm's command:vm leg) owns its CLI handlers but cannot LoadUnified —
 // the config loader + runtime-settings store + backend probe are core Mechanisms (P2), and a plugin
 // imports only the sdk. So the host resolves the project config for one entity ONCE and ships it
-// back over the reverse channel, exactly as the "deploy-entity-resolve" seam ships a resolved
-// kind:vm entity to candy/plugin-deploy-vm's own OpPrepareVenue (FINAL/K5 unit 6a, M4b — the
-// deploy-time vmLifecyclePrepare host seam this comment used to reference is deleted; the plugin
-// self-serves via that seam instead). The action noun is CLASS-GENERIC
-// ("config-resolve"), never a substrate word (the F11 uniform-API gate forbids a provider word on
-// the host-builder surface) — the first consumer is command:vm, and the pod (P11) + bundle (P13)
-// command families reuse the SAME seam, extending the reply with their own resolved fields.
+// back over the reverse channel (the deploy-time vmLifecyclePrepare host seam this comment used to
+// reference is deleted; candy/plugin-deploy-vm's own OpPrepareVenue self-serves its kind:vm entity
+// PLUGIN-SIDE now, via sdk/loaderkit.ResolveVmEntityViaExecutor — K-wave W3a A3-phase-2, the same
+// self-load pattern this file's OWN vm.backend consult below also uses). The action noun is
+// CLASS-GENERIC ("config-resolve"), never a substrate word (the F11 uniform-API gate forbids a
+// provider word on the host-builder surface) — the first consumer is command:vm, and the pod (P11)
+// + bundle (P13) command families reuse the SAME seam, extending the reply with their own resolved
+// fields.
 //
 // It returns RESOLVED CONFIG DATA only (the LoadUnified/ResolveRuntime outputs the plugin cannot
 // compute host-side); the plugin owns every downstream ACTION (the create pipeline, the
@@ -29,8 +30,8 @@ import (
 // vmConfiguredBackend) moved plugin-side (F6 vm-lifecycle move, coneB-vmlifecycle,
 // candy/plugin-vm/vm_backend_resolve.go): it turned out to be a pure host-env probe with zero
 // core-registry coupling, and its one LoadUnified-coupled dependency (the entity's `backend:` pin)
-// already had a generic plugin-reachable seam ("deploy-entity-resolve") every other F6 consumer
-// uses — so the reply no longer carries Backend.
+// self-loads the project directly now (sdk/loaderkit.ResolveVmEntityViaExecutor, K-wave W3a
+// A3-phase-2) — so the reply no longer carries Backend.
 const configResolveBuilderKind = "config-resolve"
 
 func hostBuildConfigResolve(_ context.Context, req spec.ConfigResolveRequest, _ buildEngineContext) (spec.ConfigResolveReply, error) {

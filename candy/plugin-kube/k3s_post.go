@@ -11,6 +11,7 @@ import (
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/vmshared"
 	"github.com/opencharly/spec/spec"
 )
@@ -125,10 +126,10 @@ func rewriteK3sServerToForward(ctx context.Context, exec *sdk.Executor, retrieve
 //     "vm:"+VmDomainIdentity(deployName) is the EXACT key the orchestrator
 //     persisted under.
 //
-// Both LoadUnified-coupled lookups (resolving the deploy tree node, then the
-// kind:vm entity) route through the generic "deploy-entity-resolve" HostBuild seam
-// (F10) — the SAME seam charly/host_build_deploy_entity_resolve.go serves for the
-// preresolve leg (preresolve.go's k8sEntityResolve). The persisted VmState
+// Both lookups (resolving the deploy tree node, then the kind:vm entity) self-load the project
+// PLUGIN-SIDE now (K-wave W3a A3-phase-2: loaderkit.ResolveMergedTreeViaExecutor /
+// ResolveVmEntityViaExecutor) — the former "deploy-entity-resolve" HostBuild seam this
+// round-tripped through is DELETED, unblocked by W1's LoadUnifiedViaExecutor. The persisted VmState
 // port-forward LEDGER read routes through the SIBLING "config-resolve" HostBuild
 // seam (candy/plugin-vm's own hostConfigResolve calls the identical seam for its
 // OWN VmState reuse) — NEVER a direct deploykit.LoadDeployConfigForRead call: that
@@ -146,40 +147,42 @@ func rewriteK3sServerToForward(ctx context.Context, exec *sdk.Executor, retrieve
 // a live isolated CHARLY_DEPLOY_CONFIG repro, RDD) landed correctly and stayed
 // stable on disk throughout the run — the read, not the write, was broken.
 func deployVMForwards(ctx context.Context, exec *sdk.Executor, entityRef, deployName string) ([]string, error) {
+	// Resolve the project dir via the "deploy-plugins-connect" seam (os.Getwd() host-side, the
+	// SAME dir the host loader used) — this runs POST-deploy (no dispatch-threaded dir), needed
+	// below for the kind:vm entity self-load regardless of which vmEntity branch is taken. A
+	// failure degrades to "" (best-effort, matches this function's own no-forward-on-miss
+	// contract; the vm:-prefix-cut fast path never had a dir before this either).
+	dir, _ := hostProjectDir(ctx, exec, deployName)
+
 	vmEntity := ""
 	if e, cut := strings.CutPrefix(entityRef, "vm:"); cut {
 		vmEntity = e
 	} else {
-		// Resolve the merged deploy tree PLUGIN-SIDE and thread it into the seam as DATA — the #55
-		// Cone A Unit 3b tree-threading that replaced the host's former core merged-tree read.
-		// This runs POST-deploy (no dispatch-threaded dir), so it resolves the project dir via the
-		// "deploy-plugins-connect" seam (os.Getwd() host-side, the SAME dir the host loader used).
-		dir, derr := hostProjectDir(ctx, exec, deployName)
-		if derr != nil {
-			return nil, nil //nolint:nilerr // best-effort: see below
+		if dir == "" {
+			return nil, nil
 		}
-		treeJSON, terr := resolveDeployTreeJSON(ctx, exec, dir)
+		// Resolve the merged deploy tree PLUGIN-SIDE (K-wave W3a A3-phase-2: the former
+		// "deploy-entity-resolve" TreeJSON round-trip was dead weight — the tree is already a
+		// live Go value here, so this is a direct map lookup, not a host seam call).
+		tree, terr := resolveDeployTreeForForwards(ctx, exec, dir)
 		if terr != nil {
 			return nil, nil //nolint:nilerr // best-effort: see below
 		}
-		var reply spec.DeployEntityResolveReply
-		if err := k8sEntityResolve(ctx, exec, spec.DeployEntityResolveRequest{Kind: "bundle", Name: entityRef, Dir: dir, TreeJSON: treeJSON}, &reply); err != nil || reply.Node == nil {
-			return nil, nil //nolint:nilerr // best-effort: a resolve miss means "no forward", not a hard failure
-		} else {
-			vmEntity = reply.Node.From
+		if n, ok := tree[entityRef]; ok {
+			vmEntity = n.From
 		}
 	}
 	if vmEntity == "" {
 		return nil, nil
 	}
-	var vmReply spec.DeployEntityResolveReply
-	if err := k8sEntityResolve(ctx, exec, spec.DeployEntityResolveRequest{Kind: "vm", Name: vmEntity}, &vmReply); err != nil || len(vmReply.EntityJSON) == 0 {
+	// K-wave W3a A3-phase-2: self-load the kind:vm entity plugin-side instead of the deleted
+	// "deploy-entity-resolve" host seam — unblocked now that LoadUnifiedViaExecutor (W1) lets a
+	// plugin load the project itself.
+	vmPtr, verr := resolveVmEntityForForwards(ctx, exec, dir, vmEntity)
+	if verr != nil || vmPtr == nil {
 		return nil, nil //nolint:nilerr // best-effort: see above
 	}
-	var vm spec.ResolvedVm
-	if err := json.Unmarshal(vmReply.EntityJSON, &vm); err != nil {
-		return nil, fmt.Errorf("deploy-entity-resolve: decode vm %q: %w", vmEntity, err)
-	}
+	vm := *vmPtr
 	if vm.Network == nil {
 		return nil, nil
 	}
@@ -197,6 +200,18 @@ func deployVMForwards(ctx context.Context, exec *sdk.Executor, entityRef, deploy
 	}
 	return resolved, nil
 }
+
+// resolveDeployTreeForForwards / resolveVmEntityForForwards are package vars (test seam) wrapping
+// deployVMForwards' two plugin-side self-load calls. A single HostBuild-kind stub cannot
+// canned-reply a multi-leg loader path (loaderkit.LoadUnifiedViaExecutor dispatches
+// loader-threaded/-bootstrap/-walk/-materialize, then InvokeProvider(kind,"local") —
+// sdk/loaderkit/load_via_executor.go), mirroring candy/plugin-deploy-pod's
+// loadProjectVolume/saveBundle stub pattern (R3) — k3s_post_forwards_test.go stubs these directly
+// instead of faking the full loader chain.
+var (
+	resolveDeployTreeForForwards = loaderkit.ResolveMergedTreeViaExecutor
+	resolveVmEntityForForwards   = loaderkit.ResolveVmEntityViaExecutor
+)
 
 // hostConfigResolveVmState fetches the persisted VmDeployState for the given "vm:<domainID>"
 // ledger key via the "config-resolve" HostBuild seam (the SAME seam candy/plugin-vm's own

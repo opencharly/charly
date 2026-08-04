@@ -18,14 +18,14 @@
 // kube_kind/kube_context/kubeconfig/kube_count/kube_resource/kube_group/
 // kube_version/json/artifact_key/deploy_name) lives HERE. Only the genuinely SHARED
 // step modifiers (timeout, the exit_status/stdout/stderr matchers, context, …) stay
-// on core #Op, read off the step Op by the provider. The host preresolver still
-// rewrites a `cluster:` profile to a concrete `kube_context` — now into the input map
-// (charly/k8s_config.go) — and charly/k8s_plugin.go synthesizes the internal
-// {method: k3s-post-provision, artifact_key, deploy_name} input (S3, FINAL/K5 unit 6 —
-// the k3s post-provision finalization — kubeconfig retrieval, guest-forward rewrite,
-// and the kubeconfig merge — moved wholesale into this plugin from charly/k3s_post.go;
-// the VM-forward resolution reaches the host ONLY via the generic
-// "deploy-entity-resolve" HostBuild seam, over an InvokeWithExecutor-carried broker).
+// on core #Op, read off the step Op by the provider. This plugin's own provider.go
+// self-resolves a `cluster:` profile to a concrete `kube_context` — into the input
+// map — and plugin.go synthesizes the internal {method: k3s-post-provision,
+// artifact_key, deploy_name} input (S3, FINAL/K5 unit 6 — the k3s post-provision
+// finalization — kubeconfig retrieval, guest-forward rewrite, and the kubeconfig
+// merge — moved wholesale into this plugin from charly/k3s_post.go; the VM-forward
+// resolution self-loads the project PLUGIN-SIDE now too, K-wave W3a A3-phase-2 — no
+// HostBuild round trip left in either leg).
 //
 // SELF-CONTAINED: it references NO base def, so it compiles standalone (the SDK's
 // serve-side check + gengotypes) AND splices onto the base (base ++ plugin is a
@@ -46,9 +46,9 @@
 	name?:      string
 	namespace?: string
 	label?:     string
-	// cluster — a kind:k8s cluster template name; the HOST preresolves it to a
-	// concrete kube_context (the "deploy-entity-resolve" HostBuild seam needs the
-	// project loader) and leaves the authored key in place, so the input def admits both.
+	// cluster — a kind:k8s cluster template name; this PLUGIN self-resolves it to a
+	// concrete kube_context (self-loading the project, K-wave W3a A3-phase-2) and
+	// leaves the authored key in place, so the input def admits both.
 	cluster?: string
 	// manifest — the multi-doc YAML path (apply/delete).
 	manifest?: string
@@ -68,7 +68,8 @@
 	// artifact_key / deploy_name — the k3s-post-provision payload (S3, FINAL/K5 unit 6):
 	// artifact_key is the ENTITY-scoped identity (the shared per-VM cluster cache dir +
 	// kubeconfig context); deploy_name is the real per-deploy (domain) identity the
-	// guest-forward port-forward lookup keys off. See charly/k8s_plugin.go.
+	// guest-forward port-forward lookup keys off. See this plugin's own k3s_post.go
+	// (deployVMForwards) — the former charly/k8s_plugin.go core seam is deleted.
 	artifact_key?: string @go(ArtifactKey)
 	deploy_name?:  string @go(DeployName)
 }
