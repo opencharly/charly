@@ -137,7 +137,7 @@ func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ build
 	tag := req.Version
 
 	// The overlay candy set (add_candy: refs) — threaded into the buildEngineContext below so the
-	// class:step OpEmit's BuildEnv.ExtraCandyRefs widens candy/plugin-installstep's OWN independent
+	// class:step ops.OpEmit's BuildEnv.ExtraCandyRefs widens candy/plugin-installstep's OWN independent
 	// envelope re-fetch the SAME way (dispatchOCIStep, charly/oci_step_emit.go) — this is the ONLY
 	// consumer of ExtraCandyRefs on this path now; the remote-candy STAGING itself already ran as
 	// part of the candy's OWN InvokeProvider("build","generate",...) resolve (runHostFSPrep's

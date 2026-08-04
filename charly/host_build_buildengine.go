@@ -73,7 +73,7 @@ func hostBuildScanRemote(_ context.Context, req spec.BuildEngineScanRemoteReques
 
 // hostBuildConnectPlugins connects the project's build-time (out-of-tree) plugin candies into the host
 // registry so the plugin's subsequent InvokeProvider/render dispatch reaches them (registry M). Best-
-// effort: a plugin the build actually USES fails loudly later at OpEmit/OpResolve.
+// effort: a plugin the build actually USES fails loudly later at ops.OpEmit/ops.OpResolve.
 func hostBuildConnectPlugins(_ context.Context, req spec.ResolvedProjectRequest, _ buildEngineContext) (map[string]string, error) {
 	dir := reqDirOrCwd(req.Dir)
 	cfg, err := LoadConfig(dir)

@@ -12,7 +12,7 @@ import (
 // It USED to also be the BUILD-context counterpart of "overlay"/"image"/"containerfiles" for
 // FOUR host-coupled external step kinds (system-packages/builder/local-pkg-install/op, C1.2-C1.5):
 // their serving class:step plugin (candy/plugin-installstep) called back
-// Executor.HostBuild("step-emit", StepEmitRequest{word,payload,distros}) during OpEmit, and this
+// Executor.HostBuild("step-emit", StepEmitRequest{word,payload,distros}) during ops.OpEmit, and this
 // seam dispatched by WORD to an in-core renderer that needed the host build ENGINE (DistroDef
 // format templates, the Generator's task/builder rendering) — machinery that could not cross the
 // process boundary at the time. That is GONE (K5-Unit-6b): the plugin now fetches the
@@ -22,7 +22,7 @@ import (
 // source candy/plugin-build + candy/plugin-deploy-pod use), and renders all four words DIRECTLY —
 // no per-render host round-trip, no in-core renderer for them at all. The per-invocation scalars
 // those four words need (which box, dev-bed vs production, the inline-content staging dir) ride
-// the SAME OpEmit Invoke's spec.BuildEnv (op.Env) — see charly/oci_step_emit.go's dispatchOCIStep.
+// the SAME ops.OpEmit Invoke's spec.BuildEnv (op.Env) — see charly/oci_step_emit.go's dispatchOCIStep.
 //
 // What REMAINS on this seam is "oci-emit-step" (stepEmitOCIEmitStep, below) — the pod-overlay
 // candy's (candy/plugin-deploy-pod) OUT-OF-PROCESS per-step render request. K5-A item 2 relocated
@@ -98,7 +98,7 @@ var _ = func() bool {
 // own peer (candy/plugin-installstep) does the reconstruction.
 //
 // The buildEngineContext: an IN-PROC caller cannot occur for this word (only the OUT-OF-PROCESS
-// pod-overlay candy calls "oci-emit-step" — a compiled-in class:step plugin's OpEmit never asks
+// pod-overlay candy calls "oci-emit-step" — a compiled-in class:step plugin's ops.OpEmit never asks
 // for its OWN fragment through this seam), so `build` always arrives empty here and this handler
 // looks up the cached overlay buildEngineContext by Dir (loadOverlayBuildContext, populated by
 // hostBuildOverlay's prep). The FOUR former host-coupled per-word sub-dispatches

@@ -117,7 +117,7 @@ func TestBuilderStepScopeByBuilder(t *testing.T) {
 
 // TestBuilderStepReverse proves BuilderStep.Reverse() is a PURE getter of PreResolvedReverse
 // (the externalization invariant): the per-builder reverse-op DERIVATION moved out-of-process to
-// kit.BuilderReverse (the build pre-pass invokes it via OpReverse and stashes the result here), so
+// kit.BuilderReverse (the build pre-pass invokes it via ops.OpReverse and stashes the result here), so
 // Reverse() must NOT recompute — it echoes the stashed ops with no registry/RPC. The derivation
 // itself is covered by plugin/kit/builder_test.go.
 func TestBuilderStepReverse(t *testing.T) {

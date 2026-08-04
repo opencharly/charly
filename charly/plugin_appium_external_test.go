@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"github.com/opencharly/spec/ops"
 	"os"
 	"path/filepath"
 	"strings"
@@ -91,7 +92,7 @@ func TestAppiumExternalPluginLoads(t *testing.T) {
 		t.Fatal(err)
 	}
 	out, err := prov.Invoke(ctx, &Operation{
-		Reserved: "appium", Op: OpRun,
+		Reserved: "appium", Op: ops.OpRun,
 		Params: params, Env: []byte(`{"box":"check-android-emulator-pod","mode":"box"}`),
 	})
 	if err != nil {

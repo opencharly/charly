@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"github.com/opencharly/spec/ops"
 	"strings"
 	"testing"
 
@@ -11,7 +12,7 @@ import (
 
 // stubActKitVerb is a spec.CheckVerbProvider that ALSO implements checkstep.ProvisionActor — a
 // state-provision verb (the file/user/mount/… family). Wrapped in a kitVerbActAdapter, its
-// build-context OpEmit must return the RenderProvisionScript act shell with ActScript=true
+// build-context ops.OpEmit must return the RenderProvisionScript act shell with ActScript=true
 // (the render then RUN-wraps it via EmitCmd — the former IsScript=true path).
 type stubActKitVerb struct{}
 
@@ -24,11 +25,11 @@ func (stubActKitVerb) RenderProvisionScript(op *spec.Op, distros []string) (stri
 }
 
 // TestKitVerbActAdapter_OpEmitActScript is the check-coverage gate for the P8b seam-death:
-// a state-provision verb serves OpEmit UNIFORMLY and self-declares its act shell via
+// a state-provision verb serves ops.OpEmit UNIFORMLY and self-declares its act shell via
 // EmitReply.ActScript=true (the fragment is the raw RenderProvisionScript output, NOT a
 // verbatim Containerfile fragment) — so the render dispatches it through the SAME
-// Invoke(OpEmit) as any other verb, with no package-main concrete-type assert. This test
-// FAILS without the kitVerbActAdapter.Invoke(OpEmit) path.
+// Invoke(ops.OpEmit) as any other verb, with no package-main concrete-type assert. This test
+// FAILS without the kitVerbActAdapter.Invoke(ops.OpEmit) path.
 func TestKitVerbActAdapter_OpEmitActScript(t *testing.T) {
 	kv := stubActKitVerb{}
 	adapter := kitVerbActAdapter{kitVerbAdapter: kitVerbAdapter{kv: kv}, pa: kv}
@@ -41,16 +42,16 @@ func TestKitVerbActAdapter_OpEmitActScript(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal build env: %v", err)
 	}
-	res, err := adapter.Invoke(context.Background(), &Operation{Reserved: "stubact", Op: OpEmit, Params: params, Env: env})
+	res, err := adapter.Invoke(context.Background(), &Operation{Reserved: "stubact", Op: ops.OpEmit, Params: params, Env: env})
 	if err != nil {
-		t.Fatalf("kitVerbActAdapter.Invoke(OpEmit): %v", err)
+		t.Fatalf("kitVerbActAdapter.Invoke(ops.OpEmit): %v", err)
 	}
 	var reply spec.EmitReply
 	if err := json.Unmarshal(res.JSON, &reply); err != nil {
 		t.Fatalf("decode EmitReply: %v", err)
 	}
 	if !reply.ActScript {
-		t.Fatalf("a state-provision verb's OpEmit must set ActScript=true (got false)")
+		t.Fatalf("a state-provision verb's ops.OpEmit must set ActScript=true (got false)")
 	}
 	if !strings.Contains(reply.Fragment, "/opt/stubact-provisioned") {
 		t.Fatalf("Fragment = %q, want the RenderProvisionScript act shell", reply.Fragment)
@@ -59,7 +60,7 @@ func TestKitVerbActAdapter_OpEmitActScript(t *testing.T) {
 
 // stubBuildEmitterVerb is the BUILTIN placement of a build-emit verb: an in-proc
 // provider that BOTH marks the capability (BuildEmits) AND renders the fragment
-// (Invoke OpEmit). opActsInBuildDeploy must accept it in a build context.
+// (Invoke ops.OpEmit). opActsInBuildDeploy must accept it in a build context.
 type stubBuildEmitterVerb struct{}
 
 func (stubBuildEmitterVerb) Reserved() string     { return "stubbuildemit" }

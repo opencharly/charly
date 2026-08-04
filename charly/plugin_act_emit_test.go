@@ -13,7 +13,7 @@ import (
 // install emit — the gap that opened once unix_group left #Op. Both install-emit paths
 // (the reverse-channel RunHostStep for the local/vm/pod deploy targets — every deploy
 // target is out-of-process now, driven through kit.WalkPlans — and the OCI pod-overlay Op
-// build-emit via the step:op OpEmit → step-emit seam → emitTasks `case "plugin"`) reach
+// build-emit via the step:op ops.OpEmit → step-emit seam → emitTasks `case "plugin"`) reach
 // the provider's RenderProvisionScript via the shared resolveProvisionScript seam (R3).
 //
 // testRenderOpCommand replicates the former renderOpCommand wrapper's exact behavior
@@ -172,7 +172,7 @@ func TestRenderOpCommand_PluginAct_KernelParam(t *testing.T) {
 // The OCI pod-overlay OpStep build-emit (C1.5) routes the RAW plugin act op through the FULL
 // step-emit chain: OpStep → deploykit.OCITarget.Emit → ociEmitStep → dispatchOCIStep →
 // candy/plugin-installstep's "oci-dispatch" → pluginEmitStepWords[Op]="op" →
-// InvokeProvider("step","op") → candy/plugin-installstep OpEmit → the plugin's OWN
+// InvokeProvider("step","op") → candy/plugin-installstep ops.OpEmit → the plugin's OWN
 // "resolved-project"-built deploykit.Generator → dg.EmitTasks `case "plugin"`. This proves the
 // pod-overlay build and the box build still share the ONE `case "plugin"` seam (no pre-conversion)
 // even after the OpStep build-emit's HOST-COUPLED render moved off the step-emit host-builder.

@@ -10,7 +10,7 @@ import (
 // increment B, compile-seam ctx-threading): the ONE genuinely host-only piece of the
 // former deploykit.CompileServiceSteps — rendering a systemd CUSTOM service entry's
 // unit text via charly/service_render.go:RenderService, which itself wraps TWO
-// registry consults a plugin cannot do (candy/plugin-init's OpResolve + the M16
+// registry consults a plugin cannot do (candy/plugin-init's ops.OpResolve + the M16
 // egress gate). RenderService's own body is UNCHANGED; only its caller moved
 // (deploykit.CompileServiceSteps now reaches it over this seam instead of a direct
 // in-process call).

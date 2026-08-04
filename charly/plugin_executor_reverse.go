@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/opencharly/spec/ops"
 	"os"
 	"strings"
 
@@ -147,9 +148,9 @@ func (s *executorReverseServer) RunHostStep(ctx context.Context, req *pb.HostSte
 	switch st := step.(type) {
 	case *spec.BuilderStep:
 		// The Builder / LocalPkgInstall / SystemPackages deploy-leg BODIES run plugin-side now
-		// (candy/plugin-installstep's OpExecute, #55 coneD finale) so this file stops importing
+		// (candy/plugin-installstep's ops.OpExecute, #55 coneD finale) so this file stops importing
 		// sdk/deploykit. The wire-broker dispatch STAYS core-M (this switch); the body is served
-		// over the SAME InvokeProvider(ClassStep, <word>, OpExecute) seam the ExternalPluginStep
+		// over the SAME InvokeProvider(ClassStep, <word>, ops.OpExecute) seam the ExternalPluginStep
 		// + ExternalStep arms below use (R3 — one shared dispatch). The image resolve/ensure
 		// seams are INJECTED closures (deploykit.RunVenueBuilderStep imports no *Config) closing
 		// over s.build.Cfg/s.build.ProjectDir — the one genuine core dependency (coneK1b's #8
@@ -209,7 +210,7 @@ func (s *executorReverseServer) RunHostStep(ctx context.Context, req *pb.HostSte
 	case *spec.ExternalPluginStep:
 		// A verb served by ANOTHER out-of-process plugin — the host stands up a SECOND
 		// reverse channel on THAT plugin's broker (a nested reverse channel, delegating to
-		// the SAME venue executor s.exec) and Invokes its OpExecute, via the SAME
+		// the SAME venue executor s.exec) and Invokes its ops.OpExecute, via the SAME
 		// PLUGIN↔PLUGIN InvokeProvider leg (S4, R3) every other peer-invoke uses. The nested
 		// plugin's teardown ReverseOps ride the reply.
 		params, perr := marshalJSON(st.Op.PluginInput)
@@ -240,7 +241,7 @@ func (s *executorReverseServer) RunHostStep(ctx context.Context, req *pb.HostSte
 		reverseOps = st.Reverse()
 	case *spec.ExternalStep:
 		// An EXTERNAL (plugin-contributed) step kind (F3): "external:<word>". The host
-		// dispatches it to its serving class:step plugin's OpExecute over a nested reverse
+		// dispatches it to its serving class:step plugin's ops.OpExecute over a nested reverse
 		// channel (delegating to the SAME venue executor s.exec) — the generalization of the
 		// ExternalPlugin arm above via the SAME shared invokeExternalStep dispatch (S4, R3),
 		// but the provider is resolved by ClassStep and the params are the opaque Payload
@@ -264,11 +265,11 @@ func (s *executorReverseServer) RunHostStep(ctx context.Context, req *pb.HostSte
 	return &pb.HostStepReply{ReverseOpsJson: revJSON}, nil
 }
 
-// invokeExternalStep is the shared OpExecute dispatch RunHostStep's ExternalPluginStep and
+// invokeExternalStep is the shared ops.OpExecute dispatch RunHostStep's ExternalPluginStep and
 // ExternalStep arms both use (S4, R3): it is the RunHostStep-local counterpart of the generic
 // PLUGIN↔PLUGIN InvokeProvider leg (plugin_dispatch_reverse.go) — literally calls it, since
 // RunHostStep already runs as a method on the SAME executorReverseServer InvokeProvider is
-// served from, so no wire hop is needed. params carries the opaque OpExecute payload (a
+// served from, so no wire hop is needed. params carries the opaque ops.OpExecute payload (a
 // verb-step's marshalled plugin_input, or an external step kind's Payload verbatim); the venue
 // descriptor is always the zero spec.DeployVenue here (RunHostStep never threads a plan — the
 // verb/step's own params already carry whatever scratch-location identity it needs). Decodes
@@ -282,7 +283,7 @@ func (s *executorReverseServer) invokeExternalStep(ctx context.Context, class Pr
 	res, err := s.InvokeProvider(ctx, &pb.InvokeProviderRequest{
 		Class:      string(class),
 		Reserved:   word,
-		Op:         OpExecute,
+		Op:         ops.OpExecute,
 		ParamsJson: params,
 		EnvJson:    env,
 	})

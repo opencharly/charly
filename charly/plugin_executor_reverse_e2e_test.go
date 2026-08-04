@@ -81,7 +81,7 @@ func testReadCandyRecord(paths *testLedgerPaths, layer string) (*spec.CandyRecor
 // which in turn reaches the substrate provider via its own sdk.Executor.InvokeProvider),
 // and driven through Add → Test → Update → Del:
 //
-//   - Add Invokes the provider (OpExecute) with the host's ExecutorService on the
+//   - Add Invokes the provider (ops.OpExecute) with the host's ExecutorService on the
 //     broker; the plugin dials back through the SDK (ExecutorFromInvoke) and writes
 //     TWO markers on the host venue, then RETURNS a DeployReply whose plugin-script
 //     reverse op + record candy/plugin-bundle persists in the (temp) install ledger;

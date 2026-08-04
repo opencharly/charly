@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"github.com/opencharly/spec/ops"
 	"os"
 	"path/filepath"
 	"strings"
@@ -70,7 +71,7 @@ func TestPluginDispatch_InvokeProviderAndHostBuild(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Drive A WITH a reverse channel (ShellExecutor) so the broker serves the F10 RPCs.
-	res, err := gpA.InvokeWithExecutor(ctx, &Operation{Reserved: "exampledispatch", Op: OpRun, Params: params}, exec.ShellExecutor{}, buildEngineContext{}, false, nil)
+	res, err := gpA.InvokeWithExecutor(ctx, &Operation{Reserved: "exampledispatch", Op: ops.OpRun, Params: params}, exec.ShellExecutor{}, buildEngineContext{}, false, nil)
 	if err != nil {
 		t.Fatalf("InvokeWithExecutor A: %v", err)
 	}

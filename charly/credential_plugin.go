@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/opencharly/spec/ops"
 	"os"
 	"sync"
 )
@@ -87,7 +88,7 @@ func (pluginCredentialStore) callCtx(ctx context.Context, in credentialInput) (c
 			"credential plugin (verb:credential) did not connect — install candy/plugin-secrets " +
 				"alongside charly (/usr/lib/charly/plugins) or run from a project composing it")
 	}
-	return invokeTyped[credentialInput, credentialReply](ctx, prov, "credential", OpRun, in)
+	return invokeTyped[credentialInput, credentialReply](ctx, prov, "credential", ops.OpRun, in)
 }
 
 func (s pluginCredentialStore) Get(service, key string) (string, error) {

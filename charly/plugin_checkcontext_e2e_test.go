@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"github.com/opencharly/spec/ops"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -79,7 +80,7 @@ func TestKitVerbOutOfProcess_HTTPDoEndToEnd(t *testing.T) {
 			t.Fatalf("marshal op: %v", mErr)
 		}
 		out, iErr := gp.InvokeWithExecutor(ctx,
-			&Operation{Reserved: "http", Op: OpRun, Params: params, Env: envJSON},
+			&Operation{Reserved: "http", Op: ops.OpRun, Params: params, Env: envJSON},
 			exec.ShellExecutor{}, buildEngineContext{}, false, cc)
 		if iErr != nil {
 			t.Fatalf("InvokeWithExecutor: %v", iErr)

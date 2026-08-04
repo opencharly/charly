@@ -27,7 +27,7 @@ import (
 // SaveDeployState scenarios); delRemoveEntries feeds the OpPostTeardown reply's RemoveEntries
 // (the thing under test in the RemoveVmDeployEntry scenarios) — mutated in place between the two
 // dispatch calls, a pointer receiver so the SAME registered provider instance sees the update
-// (the registry cannot re-register the same (class, word) key twice). OpExecute/OpPostApply/
+// (the registry cannot re-register the same (class, word) key twice). ops.OpExecute/OpPostApply/
 // OpTeardownExecutor are no-ops — the substrate's actual apply/teardown effect is irrelevant to
 // what these tests assert.
 type seamLifecycleProvider struct {

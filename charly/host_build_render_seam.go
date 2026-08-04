@@ -33,9 +33,9 @@ import (
 // NewRenderGeneratorFromProject wires it without a host round-trip). EmitPluginOp is GONE too
 // (P8b): its "only charly core can type-assert a BUILTIN provider's ProvisionActor concrete type"
 // claim FAILED the boundary law — a package-main prov.(ProvisionActor) branch is a concrete-type
-// leak, not a permanent seam. A state-provision verb now serves OpEmit UNIFORMLY and self-declares
+// leak, not a permanent seam. A state-provision verb now serves ops.OpEmit UNIFORMLY and self-declares
 // its act shell via EmitReply.ActScript, so candy/plugin-build dispatches every verb through
-// InvokeProvider(OpEmit) directly (render_generator_from_project.go), no host callback. The 2
+// InvokeProvider(ops.OpEmit) directly (render_generator_from_project.go), no host callback. The 2
 // remaining cases have a genuine host-only dependency: EnsureBuilders/InlineBuilder need the live
 // loader's scan+connect machinery (rides K1, #40) AND the provider registry (a permanent kernel
 // M-mechanism — see CLAUDE.md "The kernel/plugin boundary law").

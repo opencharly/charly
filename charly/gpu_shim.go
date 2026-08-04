@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/spec/ops"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -37,7 +38,7 @@ import (
 // stderr note rather than crashing a hot deploy path — matching the original
 // best-effort, never-fail detection semantics.
 func gpuProbeReply(in spec.GpuProbeInput) spec.GpuProbeReply {
-	return hostInvokeOr[spec.GpuProbeInput, spec.GpuProbeReply](ClassVerb, "gpu", OpRun, in, "gpu probe "+in.Action)
+	return hostInvokeOr[spec.GpuProbeInput, spec.GpuProbeReply](ClassVerb, "gpu", ops.OpRun, in, "gpu probe "+in.Action)
 }
 
 // DetectVFIO probes the host for IOMMU readiness and passthrough-capable GPUs.

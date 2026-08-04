@@ -54,7 +54,7 @@ const (
 	// a huge blast radius, so it STAYS core — only a wire envelope crosses). See candy/plugin-build.
 	ClassBuild ProviderClass = "build"
 	// ClassLoader serves the unified-config PARSE (the single word "loader"): a compiled-in
-	// plugin whose OpLoad parses the project (file read → import resolution → the #NodeDoc CUE
+	// plugin whose ops.OpLoad parses the project (file read → import resolution → the #NodeDoc CUE
 	// gate → reserved-word node decomposition → discover walk) into a generic, sdk-expressible
 	// ParsedProject the host MATERIALIZES into the typed *spec.UnifiedFile. Registered at init()
 	// before the first LoadUnified call — no bootstrap cycle (the registry seed reads the
@@ -132,27 +132,31 @@ type PluginUnit struct {
 	Schema    PluginSchema
 }
 
-// Operation selectors (op.Op). Each class uses the subset it needs. Aliased to the SDK
-// constants (sdk/ops.go) — the SINGLE SOURCE shared with compiled-in / out-of-tree plugin
-// candies, so a kind candy's Invoke can compare req.GetOp() against the same value (R3).
+// Operation selectors (op.Op) are read directly off github.com/opencharly/spec/ops
+// (ops.OpLoad/ops.OpExecute/ops.OpBuild/ops.OpCollectContext/ops.OpReverse/ops.OpConfigWrite) —
+// the SINGLE SOURCE shared with compiled-in / out-of-tree plugin candies, so a kind candy's
+// Invoke can compare req.GetOp() against the same value (R3). K5 seam-death (W0-registered IOU,
+// PARTIALLY closed here): this file used to re-export EVERY constant as a package-level
+// `const OpRun = ops.OpRun` alias — the exact `var y = spec.Y` shape ZERO-ALIASES forbids, just
+// spelled with `const` instead of `var` (which is why TestNoAliasForms_ZeroPackageLevelReexports
+// never caught it — the AST gate only matched var-form re-exports; extended below to also catch
+// this const-form + any top-level re-export of spec/ops or spec/schema). Every non-fenced call
+// site in charly/ was repointed to `ops.Op*` directly (this same commit); OpConfigWrite had zero
+// real callers anywhere in charly/ even before the repoint (deploy:pod's own `sdk.OpConfigWrite`
+// copy is what its actual consumer, candy/plugin-deploy-pod, uses) and is not reintroduced.
+//
+// The four below (OpRun/OpValidate/OpEmit/OpResolve) stay as a REGISTERED IOU: their only
+// remaining bare-form consumers are hard-fenced files this cutover cannot touch
+// (service_render.go, substrate_template_resolve.go, preempt.go, check_kit_adapter.go — active
+// in another teammate's tranche). Repointing them mechanically the same way would leave the
+// build broken for anyone without that fence's authorization; deleting this remainder without
+// repointing those 4 files first would leave the tree non-compiling. Whoever next lands a
+// commit touching any of those 4 files closes this out.
 const (
 	OpRun      = ops.OpRun
-	OpLoad     = ops.OpLoad
 	OpValidate = ops.OpValidate
 	OpEmit     = ops.OpEmit
-	OpExecute  = ops.OpExecute
 	OpResolve  = ops.OpResolve
-	OpBuild    = ops.OpBuild
-
-	// Deploy-time builder-IR legs of an externalized detection-builder (cargo/npm/pixi/aur);
-	// invoked host-side in the build PRE-PASS, never inside the pure BuildDeployPlan compile.
-	OpCollectContext = ops.OpCollectContext
-	OpReverse        = ops.OpReverse
-
-	// OpConfigWrite — the POD config-WRITE Op (P11): `charly config` (host) Invokes the deploy:pod
-	// plugin to render + write the quadlet/.pod/sidecar/tunnel files (Ruling C — the plugin owns the
-	// config-WRITE; resolve + host side-effects stay in the host command).
-	OpConfigWrite = ops.OpConfigWrite
 )
 
 // marshalParams / unmarshalResult are the small helpers the in-proc adapters and

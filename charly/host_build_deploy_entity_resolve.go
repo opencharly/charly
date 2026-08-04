@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/opencharly/spec/ops"
 	"os"
 
 	"github.com/opencharly/spec/spec"
@@ -49,7 +50,7 @@ func hostBuildDeployEntityResolve(_ context.Context, req spec.DeployEntityResolv
 
 	// kind:<word> template lookup (k8s/android/vm/local/pod) — genuinely kind-blind: the raw
 	// template body is a DATA-indexed map lookup (ProjectTemplates.ByKind), and the owning
-	// substrate plugin's existing OpResolve leg is reached by req.Kind as a registry key, never a Go
+	// substrate plugin's existing ops.OpResolve leg is reached by req.Kind as a registry key, never a Go
 	// switch/map on the kind word.
 	uf, ok, err := LoadUnified(dir)
 	if err != nil {
@@ -73,11 +74,11 @@ func hostBuildDeployEntityResolve(_ context.Context, req spec.DeployEntityResolv
 }
 
 // resolveEntityTemplate projects one opaque kind:<word> template body into its Resolved* envelope
-// JSON, via the owning substrate plugin's existing OpResolve leg. `kind` flows through as DATA —
-// both the registry lookup (providerRegistry.ResolveKind) and the discriminated OpResolve request
+// JSON, via the owning substrate plugin's existing ops.OpResolve leg. `kind` flows through as DATA —
+// both the registry lookup (providerRegistry.ResolveKind) and the discriminated ops.OpResolve request
 // shape ({"<kind>":{"<kind>":body}}, identical across every substrate word — see
 // spec.SubstrateTemplateResolveRequest) are keyed by the string value, never branched on in Go.
-// Every substrate word's OpResolve reply shares the same JSON shape too ({"resolved": …} — see
+// Every substrate word's ops.OpResolve reply shares the same JSON shape too ({"resolved": …} — see
 // spec.K8sResolveReply/VmResolveReply/AndroidResolveReply/LocalResolveReply/PodResolveReply), so
 // the "resolved" field is extracted generically, without decoding into any concrete kind type
 // (TestNoConcreteKindInKernel).
@@ -90,7 +91,7 @@ func resolveEntityTemplate(kind string, body json.RawMessage) (json.RawMessage, 
 	if err != nil {
 		return nil, fmt.Errorf("deploy-entity-resolve: encode kind:%s template: %w", kind, err)
 	}
-	out, err := invokeTyped[json.RawMessage, json.RawMessage](context.Background(), prov, kind, OpResolve, reqJSON)
+	out, err := invokeTyped[json.RawMessage, json.RawMessage](context.Background(), prov, kind, ops.OpResolve, reqJSON)
 	if err != nil {
 		return nil, fmt.Errorf("deploy-entity-resolve: resolve kind:%s: %w", kind, err)
 	}

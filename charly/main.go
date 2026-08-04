@@ -280,7 +280,7 @@ func main() {
 	defer reapPlugins()
 
 	// A dynamic command plugin's command has no Run() method, so dispatch it manually:
-	// dispatchCommand routes by placement — a COMPILED-IN command candy in-proc via Invoke(OpRun),
+	// dispatchCommand routes by placement — a COMPILED-IN command candy in-proc via Invoke(ops.OpRun),
 	// an OUT-OF-PROCESS one by syscall.Exec (F8) — with the pass-through args; everything else runs
 	// through Kong's normal ctx.Run(). resolveCommandDispatch (not a bare table lookup) because a
 	// capability that declares a subcommand catalog (F-CLI-NEST) renders ONE extra Kong path token

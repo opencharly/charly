@@ -130,7 +130,7 @@ var genericConceptCollisions = map[string]bool{"venue": true}
 //
 // Command words (status/start/stop/shell/logs) are excluded: they are generic English verbs that
 // COINCIDE with ops.Op* lifecycle selector VALUES (OpStatus="status", …), and a command word
-// leaking into the invocation API is not a real failure mode (a command has only OpRun).
+// leaking into the invocation API is not a real failure mode (a command has only ops.OpRun).
 func buildProviderWordUniverse() map[string]bool {
 	u := map[string]bool{}
 	add := func(words []string) {
