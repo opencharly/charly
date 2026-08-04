@@ -42,8 +42,8 @@ func hostBuildConstructStep(_ context.Context, req spec.ConstructStepRequest, _ 
 			return constructStepReplyFor(step), nil
 		}
 		// An EXTERNAL (out-of-process) plugin verb has no in-proc ProvisionActor shell — it
-		// EXECUTES its deploy-context effect at deploy over the reverse channel (OpExecute)
-		// and bakes its build-context fragment via OpEmit. Route it to ExternalPluginStep.
+		// EXECUTES its deploy-context effect at deploy over the reverse channel (ops.OpExecute)
+		// and bakes its build-context fragment via ops.OpEmit. Route it to ExternalPluginStep.
 		if _, ok := prov.(executorInvoker); ok {
 			return constructStepReplyFor(&spec.ExternalPluginStep{
 				Op:           op,

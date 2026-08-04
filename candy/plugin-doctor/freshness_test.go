@@ -1,4 +1,4 @@
-package main
+package doctor
 
 import (
 	"os"
@@ -6,6 +6,9 @@ import (
 	"testing"
 	"time"
 )
+
+// freshness_test.go — ported verbatim from charly/main_freshness_test.go (K5 seam-death:
+// freshness.go's checks moved into this plugin's verb:freshness-guard capability).
 
 // TestIsFreshnessSafeVerb locks in which verb paths are read-only
 // diagnostics that bypass the freshness check. Adding a new safe verb

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	specexec "github.com/opencharly/spec/exec"
+	"github.com/opencharly/spec/ops"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -99,7 +100,7 @@ func arbiterInvoke(in spec.ArbiterInvokeInput) (spec.ArbiterInvokeReply, error) 
 	}
 	ctx := specexec.ContextWithExecutor(context.Background(),
 		specexec.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}}))
-	reply, err := invokeTyped[spec.ArbiterInvokeInput, spec.ArbiterInvokeReply](ctx, prov, "arbiter", OpRun, in)
+	reply, err := invokeTyped[spec.ArbiterInvokeInput, spec.ArbiterInvokeReply](ctx, prov, "arbiter", ops.OpRun, in)
 	if err != nil {
 		return spec.ArbiterInvokeReply{}, fmt.Errorf("arbiter %s: %w", in.Action, err)
 	}
@@ -259,7 +260,7 @@ func releaseResourceClaim(claimant string) {
 // Zero value (nil Resources) on any resolve/invoke/decode failure — this function's existing "nil
 // when none/unreadable" contract, unchanged.
 func gatherResources() map[string]*spec.ResolvedResource {
-	rp := hostInvokeOr[spec.ResolvedProjectRequest, spec.ResolvedProject](ClassBuild, "project", OpResolve, spec.ResolvedProjectRequest{}, "gather-resources")
+	rp := hostInvokeOr[spec.ResolvedProjectRequest, spec.ResolvedProject](ClassBuild, "project", ops.OpResolve, spec.ResolvedProjectRequest{}, "gather-resources")
 	return rp.Resources
 }
 

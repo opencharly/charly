@@ -187,20 +187,25 @@ func TestZeroAliases_NoAliasFilesInCharlyCore(t *testing.T) {
 		len(found), strings.Join(found, "\n"))
 }
 
-// aliasFormTargetImportPath is the ONE import this gate polices: github.com/opencharly/spec/spec,
-// the shared wire-TYPE vocabulary (Config/CalVer/RunMode/CredentialHealth/CheckEnv/…) — the
-// surface the 8 pre-W0 inline forms (config.go/checkrun.go/credential_plugin.go/version.go/
-// provider_checkenv.go/substrate_template_resolve.go) and gpu_shim.go's filename-evading forms
-// all re-exported. It deliberately does NOT extend to spec's sibling packages
-// (github.com/opencharly/spec/ops, .../schema, .../proto): those carry the Op*
-// TRANSPORT-PROTOCOL vocabulary and the embedded CUE schema FS — the plugin-API WIRE CONTRACT
-// prior art already blesses as a distinct, narrower surface from the domain-type vocabulary this
-// gate targets (provider.go's OpRun/OpLoad/… aliases: 260 call sites; cue_schema.go's schemaFS: 4
-// — both PRE-EXISTING, untouched by W0, and NOT re-scoped here to dodge them: fixing them is a
-// separate, sizeable IOU reported to the orchestrator, not silently absorbed into this gate's
-// definition). Narrowing by RESOLVED IMPORT PATH (not by the qualifier's local name) so a
-// differently-aliased import can't dodge the gate either.
-const aliasFormTargetImportPath = "github.com/opencharly/spec/spec"
+// aliasFormTargetImportPaths are the imports this gate polices: github.com/opencharly/spec/spec
+// (the shared wire-TYPE vocabulary — Config/CalVer/RunMode/CredentialHealth/CheckEnv/…, the
+// surface the 8 pre-W0 inline forms and gpu_shim.go's filename-evading forms all re-exported),
+// plus github.com/opencharly/spec/ops (the Op* TRANSPORT-PROTOCOL vocabulary) and
+// github.com/opencharly/spec/schema (the embedded CUE schema FS) — K5 W4 closes the W0-registered
+// IOU that carved those two out: `const OpRun = ops.OpRun` (provider.go, 258 call sites) and
+// `var schemaFS = sdkschema.FS` (cue_schema.go, 2 call sites) are the EXACT same re-export shape
+// TestNoAliasForms_ZeroPackageLevelReexports already catches for spec/spec, just spelled with
+// `const`/pointed at a sibling spec/* package — there was never a genuine wire-contract reason to
+// exempt them (both are plain intra-module renames, unlike the sdk Handshake/proto family, which
+// IS the real plugin-API wire contract and stays untouched by this gate). Both are now FULLY
+// repointed (0 remaining call sites, including the 4 files that needed a narrow, reviewed
+// team-lead fence exception to touch — see provider.go's comment). Narrowing by RESOLVED IMPORT
+// PATH (not the qualifier's local name) so a differently-aliased import can't dodge the gate.
+var aliasFormTargetImportPaths = []string{
+	"github.com/opencharly/spec/spec",
+	"github.com/opencharly/spec/ops",
+	"github.com/opencharly/spec/schema",
+}
 
 // TestNoAliasForms_ZeroPackageLevelReexports is the FORM-based half of the ZERO-ALIASES gate
 // (W0): TestZeroAliases_NoAliasFilesInCharlyCore only catches a re-export FILE named
@@ -215,6 +220,77 @@ const aliasFormTargetImportPath = "github.com/opencharly/spec/spec"
 // Test-file-local aliases (substrate_spec_aliases_test.go) stay allowed — they exist ONLY to let
 // TestNoConcreteKindInKernel assert PRODUCTION code holds no concrete-kind type; a test fixture
 // binding is not a re-export residue.
+// aliasFormTargetQualifiers resolves astF's imports to the set of local qualifier names bound to
+// any of aliasFormTargetImportPaths, so the gate follows a renamed import (`import myspec
+// "github.com/opencharly/spec/spec"`) and ignores an unrelated package merely named "spec" by
+// coincidence.
+func aliasFormTargetQualifiers(astF *ast.File) map[string]bool {
+	qualifiers := map[string]bool{}
+	for _, imp := range astF.Imports {
+		path := strings.Trim(imp.Path.Value, `"`)
+		targeted := false
+		for _, target := range aliasFormTargetImportPaths {
+			if path == target {
+				targeted = true
+				break
+			}
+		}
+		if !targeted {
+			continue
+		}
+		name := path[strings.LastIndex(path, "/")+1:]
+		if imp.Name != nil {
+			name = imp.Name.Name
+		}
+		qualifiers[name] = true
+	}
+	return qualifiers
+}
+
+// aliasFormViolationsInSpec inspects one type/var/const ValueSpec/TypeSpec for the re-export
+// alias shape (`type X = q.Y` / `var x = q.Y` / `const x = q.Y` where q is a target-package
+// qualifier). Returns the formatted violation string, or "" if spec isn't a violation.
+func aliasFormViolationInSpec(f string, fset *token.FileSet, tok token.Token, spec ast.Spec, qualifiers map[string]bool) string {
+	switch s := spec.(type) {
+	case *ast.TypeSpec:
+		// `type X = spec.Y` (an ALIAS decl — s.Assign is set) whose RHS is a bare selector into
+		// the target package. `type X spec.Y` (a DEFINITION, s.Assign unset — a genuinely new
+		// named type, not a re-export) is NOT flagged.
+		if !s.Assign.IsValid() {
+			return ""
+		}
+		sel, ok := s.Type.(*ast.SelectorExpr)
+		if !ok {
+			return ""
+		}
+		x, ok := sel.X.(*ast.Ident)
+		if !ok || !qualifiers[x.Name] {
+			return ""
+		}
+		pos := fset.Position(s.Pos())
+		return fmt.Sprintf("%s:%d: type %s = %s.%s", f, pos.Line, s.Name.Name, x.Name, sel.Sel.Name)
+	case *ast.ValueSpec:
+		if len(s.Names) != 1 || len(s.Values) != 1 {
+			return "" // multi-name/multi-value specs are never a bare re-export shape
+		}
+		sel, ok := s.Values[0].(*ast.SelectorExpr)
+		if !ok {
+			return "" // a call, composite literal, or closure — a legitimate binding
+		}
+		x, ok := sel.X.(*ast.Ident)
+		if !ok || !qualifiers[x.Name] {
+			return ""
+		}
+		pos := fset.Position(s.Pos())
+		kw := "var"
+		if tok == token.CONST {
+			kw = "const"
+		}
+		return fmt.Sprintf("%s:%d: %s %s = %s.%s", f, pos.Line, kw, s.Names[0].Name, x.Name, sel.Sel.Name)
+	}
+	return ""
+}
+
 func TestNoAliasForms_ZeroPackageLevelReexports(t *testing.T) {
 	files, err := filepath.Glob("*.go")
 	if err != nil {
@@ -231,23 +307,9 @@ func TestNoAliasForms_ZeroPackageLevelReexports(t *testing.T) {
 			t.Fatalf("parse %s: %v", f, err)
 		}
 
-		// Resolve each import's local qualifier name -> import path, so the gate follows a
-		// renamed import (`import myspec "github.com/opencharly/spec/spec"`) and ignores an
-		// unrelated package merely named "spec" by coincidence.
-		qualifiers := map[string]bool{}
-		for _, imp := range astF.Imports {
-			path := strings.Trim(imp.Path.Value, `"`)
-			if path != aliasFormTargetImportPath {
-				continue
-			}
-			name := path[strings.LastIndex(path, "/")+1:]
-			if imp.Name != nil {
-				name = imp.Name.Name
-			}
-			qualifiers[name] = true
-		}
+		qualifiers := aliasFormTargetQualifiers(astF)
 		if len(qualifiers) == 0 {
-			continue // file doesn't import the target package at all
+			continue // file doesn't import any target package at all
 		}
 
 		for _, decl := range astF.Decls {
@@ -256,39 +318,8 @@ func TestNoAliasForms_ZeroPackageLevelReexports(t *testing.T) {
 				continue
 			}
 			for _, spec := range gd.Specs {
-				switch s := spec.(type) {
-				case *ast.TypeSpec:
-					// `type X = spec.Y` (an ALIAS decl — s.Assign is set) whose RHS is a bare
-					// selector into the target package. `type X spec.Y` (a DEFINITION,
-					// s.Assign unset — a genuinely new named type, not a re-export) is NOT
-					// flagged.
-					if !s.Assign.IsValid() {
-						continue
-					}
-					sel, ok := s.Type.(*ast.SelectorExpr)
-					if !ok {
-						continue
-					}
-					if x, ok := sel.X.(*ast.Ident); ok && qualifiers[x.Name] {
-						pos := fset.Position(s.Pos())
-						violations = append(violations, fmt.Sprintf("%s:%d: type %s = %s.%s", f, pos.Line, s.Name.Name, x.Name, sel.Sel.Name))
-					}
-				case *ast.ValueSpec:
-					if len(s.Names) != 1 || len(s.Values) != 1 {
-						continue // multi-name/multi-value specs are never a bare re-export shape
-					}
-					sel, ok := s.Values[0].(*ast.SelectorExpr)
-					if !ok {
-						continue // a call, composite literal, or closure — a legitimate binding
-					}
-					if x, ok := sel.X.(*ast.Ident); ok && qualifiers[x.Name] {
-						pos := fset.Position(s.Pos())
-						kw := "var"
-						if gd.Tok == token.CONST {
-							kw = "const"
-						}
-						violations = append(violations, fmt.Sprintf("%s:%d: %s %s = %s.%s", f, pos.Line, kw, s.Names[0].Name, x.Name, sel.Sel.Name))
-					}
+				if v := aliasFormViolationInSpec(f, fset, gd.Tok, spec, qualifiers); v != "" {
+					violations = append(violations, v)
 				}
 			}
 		}
@@ -296,6 +327,6 @@ func TestNoAliasForms_ZeroPackageLevelReexports(t *testing.T) {
 	if len(violations) > 0 {
 		sort.Strings(violations)
 		t.Errorf("ZERO-ALIASES form gate: %d inline re-export alias form(s) of %s in charly/ core — a bare `type X = spec.Y` / `var x = spec.Y` / `const x = spec.Y` top-level declaration means the call site is mislocated; repoint every caller to spec.Y directly and delete the alias, never re-export it:\n%s",
-			len(violations), aliasFormTargetImportPath, strings.Join(violations, "\n"))
+			len(violations), strings.Join(aliasFormTargetImportPaths, ", "), strings.Join(violations, "\n"))
 	}
 }

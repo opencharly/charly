@@ -34,7 +34,7 @@ import (
 // and renders the act shell — the SINGLE Op→act-shell seam shared by the runtime act
 // path (runProvisionAct) AND every install-emit path: deploykit.Generator.EmitTasks'
 // `case "plugin"` (the box build via WriteCandySteps→EmitTasks, and the pod overlay via
-// candy/plugin-installstep's step:op OpEmit rendering directly against its OWN
+// candy/plugin-installstep's step:op ops.OpEmit rendering directly against its OWN
 // "resolved-project"-built deploykit.Generator's EmitTasks) AND the reverse-channel
 // RunHostStep handler (plugin_executor_reverse.go) that every out-of-process deploy
 // plugin's kit.WalkPlans drives an act-`plugin:` OpStep through — the local/vm/pod

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/opencharly/spec/ops"
 
 	"github.com/opencharly/spec/spec"
 )
@@ -117,7 +118,7 @@ func (h *hostVerbResolver) runPluginVerb(ctx context.Context, c *spec.Op) spec.C
 	return res
 }
 
-// invokeVerbProvider marshals the Op + the check env, Invokes the provider's OpRun, and
+// invokeVerbProvider marshals the Op + the check env, Invokes the provider's ops.OpRun, and
 // decodes the pluginCheckResult into a CheckResult. It is the transport-invisible verb
 // dispatch shared by the `plugin:` verb (runPluginVerb, after plugin_input validation)
 // AND the external-charly-verb path (a live verb word — cdp/kube/… — whose provider is
@@ -175,7 +176,7 @@ func (h *hostVerbResolver) invokeVerbProvider(ctx context.Context, prov Provider
 	// against the running container. A port-based external verb (cdp/vnc/mcp/spice/kube)
 	// never dials the broker; a builtin verb never reaches here (a CheckVerbProvider
 	// dispatches in-proc via RunVerb in runPluginVerb).
-	op := &Operation{Reserved: word, Op: OpRun, Params: params, Env: env}
+	op := &Operation{Reserved: word, Op: ops.OpRun, Params: params, Env: env}
 	var out *Result
 	de := h.cc.Exec()
 	if ei, ok := prov.(executorInvoker); ok && de != nil {

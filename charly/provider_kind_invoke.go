@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/opencharly/spec/ops"
 	"strings"
 
 	"cuelang.org/go/cue"
@@ -13,7 +14,7 @@ import (
 )
 
 // runPluginKind decodes an EXTERNAL kind node out-of-process via its Provider's
-// Invoke envelope (Op: OpLoad) — the kind-class analogue of runPluginVerb
+// Invoke envelope (Op: ops.OpLoad) — the kind-class analogue of runPluginVerb
 // (provider_checkenv.go). A BUILT-IN kind uses the typed DecodeNode fast path (no
 // JSON, provider_kind.go); an external plugin kind, which the core has no Go type
 // for, validates the NAMELESS authored body against its SERVED .cue and returns its
@@ -71,7 +72,7 @@ func runPluginKind(prov Provider, pn spec.ParsedNode, acc *spec.MaterializedProj
 	if err := validateAuthoredPluginInput(ClassKind, pn.Disc, paramsJSON); err != nil {
 		return fmt.Errorf("node %q: %w", pn.Name, err)
 	}
-	// F7/C8: a kind declaring Validates serves a DEEP OpValidate check BEYOND the static CUE
+	// F7/C8: a kind declaring Validates serves a DEEP ops.OpValidate check BEYOND the static CUE
 	// input-def gate above — the host dispatches it and surfaces error-severity Diagnostics as a
 	// load failure. A kind that does not declare it pays nothing (no extra round-trip). Shared
 	// with foldSubstrateKind (R3) — the SAME kind-blind dispatch, driven purely by the
@@ -82,7 +83,7 @@ func runPluginKind(prov Provider, pn spec.ParsedNode, acc *spec.MaterializedProj
 	// F5 authored-member input-threading: a STRUCTURAL kind's authored RESOURCE-MEMBER
 	// children are pre-decoded via the SAME loaderkit.BuildResourceMemberChildren recursion the
 	// builtin path uses (one member-decode source of truth, R3) and threaded to the plugin's
-	// OpLoad via op.Env, so the plugin reconstructs the authored member tree into its spec.Deploy
+	// ops.OpLoad via op.Env, so the plugin reconstructs the authored member tree into its spec.Deploy
 	// reply. They CANNOT ride op.Params: it is unified against the plugin's CLOSED #<Kind>Input
 	// def, which the member subtree would violate. A FLAT kind (F4) is not structural — no member
 	// env, opaque body only.
@@ -101,11 +102,11 @@ func runPluginKind(prov Provider, pn spec.ParsedNode, acc *spec.MaterializedProj
 			return fmt.Errorf("node %q: marshal member env: %w", pn.Name, err)
 		}
 	}
-	out, err := prov.Invoke(context.Background(), &Operation{Reserved: pn.Disc, Op: OpLoad, Params: paramsJSON, Env: envJSON})
+	out, err := prov.Invoke(context.Background(), &Operation{Reserved: pn.Disc, Op: ops.OpLoad, Params: paramsJSON, Env: envJSON})
 	if err != nil {
 		return fmt.Errorf("node %q: plugin kind %q: %w", pn.Name, pn.Disc, err)
 	}
-	// F5: a STRUCTURAL kind's OpLoad returns a spec.Deploy (BundleNode) member tree the host
+	// F5: a STRUCTURAL kind's ops.OpLoad returns a spec.Deploy (BundleNode) member tree the host
 	// folds into acc.Bundle — the SAME map a builtin structural kind's DecodeNode populates
 	// (BuildBundleNodeInto), so the entity participates in deploy/check exactly like a builtin
 	// pod/group/candy. A FLAT kind (F4) lands its opaque body in acc.PluginKinds, unchanged.
@@ -140,7 +141,7 @@ func runPluginKind(prov Provider, pn spec.ParsedNode, acc *spec.MaterializedProj
 	return nil
 }
 
-// dispatchKindOpValidate runs a kind's declared F7/C8 deep OpValidate check (Validates=true) and
+// dispatchKindOpValidate runs a kind's declared F7/C8 deep ops.OpValidate check (Validates=true) and
 // returns an error if the plugin reports any error-severity spec.Diagnostics item; a kind that
 // does NOT declare Validates pays nothing (no extra round-trip, no error). Kind-blind by
 // construction — entirely driven by the capability's own declared Validates flag (never a
@@ -152,7 +153,7 @@ func dispatchKindOpValidate(prov Provider, pn spec.ParsedNode, paramsJSON json.R
 	if !ok || !vc.IsValidatingKind() {
 		return nil
 	}
-	vres, verr := prov.Invoke(context.Background(), &Operation{Reserved: pn.Disc, Op: OpValidate, Params: paramsJSON})
+	vres, verr := prov.Invoke(context.Background(), &Operation{Reserved: pn.Disc, Op: ops.OpValidate, Params: paramsJSON})
 	if verr != nil {
 		return fmt.Errorf("node %q: plugin kind %q validate: %w", pn.Name, pn.Disc, verr)
 	}
@@ -189,7 +190,7 @@ func dispatchKindOpValidate(prov Provider, pn spec.ParsedNode, paramsJSON json.R
 // directly, K1 unit 3b — no genericNode reconstruction needed here); (3) pre-decodes the
 // CANONICAL node via the SAME relocated loaderkit.BuildBundleNode (deploy) /
 // DecodeStandaloneTemplateJSON (template) — the SINGLE decode source of truth (R3); (4)
-// threads it to the plugin's OpLoad via op.Env (spec.StructuralKindLoadEnv.Standalone); (5)
+// threads it to the plugin's ops.OpLoad via op.Env (spec.StructuralKindLoadEnv.Standalone); (5)
 // folds the plugin's ECHO into acc.Bundle (deploy) or the typed template map acc.Pod/acc.VM/…
 // (template — the C2-substrate TEMPLATE fold arm extending F5's deploy-only fold). RDD proved
 // the canonical value round-trips through JSON byte-faithfully, so this is byte-equivalent to
@@ -198,7 +199,7 @@ func foldSubstrateKind(prov Provider, pn spec.ParsedNode, acc *spec.Materialized
 	if err := validateKindValueCUE(pn); err != nil {
 		return fmt.Errorf("node %q: %w", pn.Name, err)
 	}
-	// F7/C8: dispatch the substrate's declared deep OpValidate check (today ONLY the "vm"
+	// F7/C8: dispatch the substrate's declared deep ops.OpValidate check (today ONLY the "vm"
 	// capability declares Validates:true, for the PCI-hostdev-concreteness check
 	// validateKindValueCUE's closedness-only gate cannot express — see that function's
 	// comment). Kind-blind: driven purely by the resolved provider's own Validates flag, so
@@ -234,7 +235,7 @@ func foldSubstrateKind(prov Provider, pn spec.ParsedNode, acc *spec.Materialized
 	if err != nil {
 		return fmt.Errorf("node %q: marshal substrate env: %w", pn.Name, err)
 	}
-	out, err := prov.Invoke(context.Background(), &Operation{Reserved: pn.Disc, Op: OpLoad, Env: envJSON})
+	out, err := prov.Invoke(context.Background(), &Operation{Reserved: pn.Disc, Op: ops.OpLoad, Env: envJSON})
 	if err != nil {
 		return fmt.Errorf("node %q: substrate kind %q: %w", pn.Name, pn.Disc, err)
 	}
@@ -259,7 +260,7 @@ func foldSubstrateKind(prov Provider, pn spec.ParsedNode, acc *spec.Materialized
 // discovered-candy pre-check in unified.go calls them DIRECTLY, so this is the SAME decode source,
 // R3; the "bootstrap cycle" that blocked an EXTERNAL candy plugin does NOT exist for the
 // COMPILED-IN plugin-candy, registered at init before any LoadUnified); (3) threads the canonical
-// spec.Box (image) / spec.Candy (layer) to the plugin's OpLoad via op.Env; (4) folds the plugin's
+// spec.Box (image) / spec.Candy (layer) to the plugin's ops.OpLoad via op.Env; (4) folds the plugin's
 // ECHO into acc.Box / acc.Candy. RDD proved a canonical spec.Box / spec.Candy round-trips through
 // JSON byte-faithfully, so this is byte-equivalent to the former in-proc candyKind decode.
 // gn is reconstructed LOCALLY from pn (parsedNodeToGeneric) solely to reach candyIsImage/
@@ -294,7 +295,7 @@ func foldCandyKind(prov Provider, pn spec.ParsedNode, acc *spec.MaterializedProj
 	if err != nil {
 		return fmt.Errorf("node %q: marshal candy env: %w", pn.Name, err)
 	}
-	out, err := prov.Invoke(context.Background(), &Operation{Reserved: pn.Disc, Op: OpLoad, Env: envJSON})
+	out, err := prov.Invoke(context.Background(), &Operation{Reserved: pn.Disc, Op: ops.OpLoad, Env: envJSON})
 	if err != nil {
 		return fmt.Errorf("node %q: candy kind: %w", pn.Name, err)
 	}
@@ -379,7 +380,7 @@ func validateKindValueCUE(pn spec.ParsedNode) error {
 	// that placement: per the kernel/plugin boundary law, ANY kernel branch/switch encoding
 	// concrete-kind semantic knowledge (which fields a `type: pci` hostdev needs) is BY
 	// DEFINITION an R-item that leaked into core, never a kept exception, regardless of how
-	// narrowly it's scoped. The CORRECT placement is the F7/C8 deep OpValidate capability
+	// narrowly it's scoped. The CORRECT placement is the F7/C8 deep ops.OpValidate capability
 	// (`ProvidedCapability.Validates`) exactly the "checks CUE cannot express" case it
 	// exists for — see candy/plugin-substrate's "vm" capability (validate_vm.go), dispatched
 	// kind-blindly from foldSubstrateKind via dispatchKindOpValidate. This gate therefore
@@ -391,7 +392,7 @@ func validateKindValueCUE(pn spec.ParsedNode) error {
 	return nil
 }
 
-// formatKindDiagnostics renders the error-severity items of an OpValidate reply into one
+// formatKindDiagnostics renders the error-severity items of an ops.OpValidate reply into one
 // semicolon-joined string (path-prefixed when a path is set) for the load error message.
 func formatKindDiagnostics(d spec.Diagnostics) string {
 	msgs := make([]string, 0, len(d.Items))

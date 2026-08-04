@@ -1,0 +1,29 @@
+# device_patterns — host device glob patterns probed for auto-detection. NVIDIA GPUs are
+# handled separately via CDI/--gpus; AMD GPUs need /dev/kfd for ROCm compute access.
+device_patterns:
+    - "/dev/dri/renderD*"
+    - /dev/kfd
+    - /dev/kvm
+    - /dev/vhost-net
+    - /dev/vhost-vsock
+    - /dev/fuse
+    - /dev/net/tun
+    - /dev/hwrng
+# gpu_vendors — PCI vendor ID -> name for the render nodes that count as a real,
+# encode-capable GPU (vs the paravirtual virtio-gpu 0x1af4). Key membership picks the
+# DRINODE/DRI_NODE render node on a multi-GPU/passthrough host; the name value is documentary.
+gpu_vendors:
+    "0x10de": NVIDIA
+    "0x1002": AMD
+    "0x8086": Intel
+# pci_class_labels — PCI class code (high 16 bits) -> human label for VFIO passthrough device
+# reporting. An unknown class falls back to the raw class string (logic in pciClassLabel, not
+# data).
+pci_class_labels:
+    "0x0300": VGA controller
+    "0x0302": 3D controller
+    "0x0380": Display controller
+    "0x0403": Audio device
+    "0x0604": PCI bridge
+    "0x0c03": USB controller
+    "0x0c0330": USB controller

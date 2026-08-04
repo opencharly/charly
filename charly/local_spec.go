@@ -1,6 +1,8 @@
 package main
 
-import "github.com/opencharly/spec/spec"
+import (
+	"github.com/opencharly/spec/spec"
+)
 
 // findLocalSpec looks up a LocalSpec by name from the unified loader.
 // Returns (nil, nil) when the project loads but has no `local:` entry by that
@@ -14,7 +16,7 @@ import "github.com/opencharly/spec/spec"
 // — moved to candy/plugin-bundle's lookupLocalTemplate (node_resolve.go), which
 // reads the SAME data off the "resolved-project" envelope's Templates.Local RawBody
 // map (already namespace-qualified by spec.UnifiedFile.ProjectTemplates) and
-// projects it via the kind:local provider's own OpResolve leg — no LoadUnified, no
+// projects it via the kind:local provider's own ops.OpResolve leg — no LoadUnified, no
 // new seam. findLocalSpec itself is UNCHANGED and stays core: its one remaining
 // caller, check_cmd.go's runLocalDeployScopePlan (the CLI-free check-live gather
 // engine), is registry/LoadUnified-coupled by its own nature and out of this

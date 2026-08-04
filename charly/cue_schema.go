@@ -23,10 +23,6 @@ import (
 	"github.com/opencharly/spec/spec"
 )
 
-// schemaFS is the CUE schema source, exported by the SDK module (the contract
-// repo) — files sit at the FS root, so consumers concatenate with dir ".".
-var schemaFS = sdkschema.FS
-
 // cueSchemaCtx is the process-wide CUE context (schemas compile once, reuse).
 var cueSchemaCtx = cuecontext.New()
 
@@ -34,9 +30,13 @@ var cueSchemaCtx = cuecontext.New()
 // clauses → one shared scope, so kind defs reference the shared #Step/#Context).
 // The concatenation is the SINGLE contract shared with the dev-time generator
 // (schemaconcat.ConcatSchema — R3), so the compiled schema can never drift from the
-// generated Go types.
+// generated Go types. sdkschema.FS is the CUE schema source exported by the SDK
+// module (the contract repo) — files sit at the FS root, so this concatenates with
+// dir "." directly (K5 seam-death: the former `schemaFS = sdkschema.FS` re-export
+// var — the same const-vs-var alias shape the Op* repoint closed — is gone; both
+// call sites read sdkschema.FS directly).
 var sharedCueSchema = func() cue.Value {
-	body, _, err := schemaconcat.ConcatSchema(schemaFS, ".", nil)
+	body, _, err := schemaconcat.ConcatSchema(sdkschema.FS, ".", nil)
 	if err != nil {
 		panic(fmt.Sprintf("read embedded schema: %v", err))
 	}

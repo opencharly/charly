@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/opencharly/spec/ops"
 	"os"
 	"os/exec"
 	"strings"
@@ -128,7 +129,7 @@ func autoMigrateCacheProjectOnly(path string) error {
 	if err != nil {
 		return err
 	}
-	_, err = prov.Invoke(context.Background(), &Operation{Reserved: "migrate", Op: OpRun, Params: params})
+	_, err = prov.Invoke(context.Background(), &Operation{Reserved: "migrate", Op: ops.OpRun, Params: params})
 	return err
 }
 

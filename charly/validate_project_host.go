@@ -19,7 +19,7 @@ import (
 // sdk/deploykit.
 //
 // #55 step3 unit 3-I relocated reason 1 below (the error-TOLERANT resolved-project projection)
-// onto build:project's OpValidate leg (candy/plugin-build/resolve_project_tolerant.go) — proven
+// onto build:project's ops.OpValidate leg (candy/plugin-build/resolve_project_tolerant.go) — proven
 // portable by 3b's SAME-shaped fail-fast relocation. What STAYS host is reason 2, which a plugin
 // structurally still cannot do:
 //
@@ -32,7 +32,7 @@ import (
 //
 // This now rides back over the SLIMMED `validate-project-checks` HostBuild seam (renamed from
 // `validate-project`, #46) as a spec.ValidateProjectReply{Project (D-data fields ONLY),
-// Diagnostics}. candy/plugin-box's runValidateEngine calls BOTH build:project(OpValidate) (its own
+// Diagnostics}. candy/plugin-box's runValidateEngine calls BOTH build:project(ops.OpValidate) (its own
 // tolerant envelope + resolve-diagnostics) AND this leg (host-natural diagnostics + D-data),
 // merges them onto one envelope, then runs its own pure-rule + graph findings for the verdict.
 
@@ -181,7 +181,7 @@ func runHostNaturalValidateChecks(lp *loadedProject, dir string, opts spec.Resol
 
 // hostBuildValidateProjectChecks is the "validate-project-checks" host-builder (#55 step3 unit
 // 3-I) — the SLIMMED remainder of the former "validate-project" seam (#46) after the TOLERANT
-// resolved-project projection relocated onto build:project's OpValidate leg
+// resolved-project projection relocated onto build:project's ops.OpValidate leg
 // (candy/plugin-build/resolve_project_tolerant.go, which reuses 3b's proven-portable loaderkit
 // primitives instead of this host's LoadConfig/ScanAllCandyWithConfigOpts). This leg's OWN
 // tolerant load (loadProjectForResolve, kept — also still used by build_overlay.go's fail-fast
@@ -190,7 +190,7 @@ func runHostNaturalValidateChecks(lp *loadedProject, dir string, opts spec.Resol
 // longer projects an envelope itself (projectResolvedProject/buildResolvedProjectTolerant,
 // DELETED). Returns a spec.ValidateProjectReply whose Project carries ONLY
 // ProviderCapabilities/ActCapableVerbs; candy/plugin-box's runValidateEngine calls THIS leg
-// alongside build:project(OpValidate) and merges both replies' Diagnostics + this reply's D-data
+// alongside build:project(ops.OpValidate) and merges both replies' Diagnostics + this reply's D-data
 // onto the plugin's own tolerant envelope before running its pure/graph rules.
 func hostBuildValidateProjectChecks(_ context.Context, req spec.ValidateProjectRequest, _ buildEngineContext) (spec.ValidateProjectReply, error) {
 	dir := req.Dir
@@ -203,7 +203,7 @@ func hostBuildValidateProjectChecks(_ context.Context, req spec.ValidateProjectR
 	}
 	opts := spec.ResolveOpts{IncludeDisabled: req.IncludeDisabled}
 	// loadDiags is DISCARDED (not returned): a LoadConfig/scan/LoadUnified failure here is the SAME
-	// underlying disk-file failure candy/plugin-build's build:project(OpValidate) leg's OWN tolerant
+	// underlying disk-file failure candy/plugin-build's build:project(ops.OpValidate) leg's OWN tolerant
 	// load already reports in envReply.Diagnostics (both legs load the identical charly.yml) —
 	// surfacing it from BOTH legs would duplicate the finding verbatim in the merged verdict (caught
 	// live: a base⊻from CUE-disjunction load failure printed twice before this fix). Only
@@ -277,8 +277,8 @@ var _ = func() bool {
 
 // validateProjectForBuild is the pre-build validation GATE (task #60, (C-refined)): the validate ENGINE
 // lives in candy/plugin-box, so `charly box build`/`generate` no longer calls Validate() directly —
-// it dispatches to the compiled-in validate capability BY WORD with a structured OpValidate op (the
-// SAME registry-dispatch shape the build path already uses for OpEmit/OpResolve) over an in-proc
+// it dispatches to the compiled-in validate capability BY WORD with a structured ops.OpValidate op (the
+// SAME registry-dispatch shape the build path already uses for ops.OpEmit/ops.OpResolve) over an in-proc
 // reverse channel, and consumes the returned spec.Diagnostics as a HARD gate (the error text mirrors the
 // former spec.ValidationError.Error() for parity). Kind-blind M (registry-by-word). #55 step3 3-II
 // deleted this function's last production caller, the former host-side NewGenerator — the real

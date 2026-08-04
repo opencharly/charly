@@ -1,8 +1,6 @@
 package main
 
 import (
-	"os"
-
 	"github.com/opencharly/spec/spec"
 )
 
@@ -59,14 +57,4 @@ func gpuPrereqMissing(tokens []string, resources map[string]*spec.ResolvedResour
 		}
 	}
 	return "", "", false
-}
-
-// vfioPciAvailable reports whether the vfio-pci driver is present on the host.
-func vfioPciAvailable() bool {
-	for _, p := range []string{"/sys/bus/pci/drivers/vfio-pci", "/sys/module/vfio_pci"} {
-		if _, err := os.Stat(p); err == nil {
-			return true
-		}
-	}
-	return false
 }

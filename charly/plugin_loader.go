@@ -17,6 +17,7 @@ import (
 	"cuelang.org/go/cue"
 
 	"github.com/opencharly/spec/lock"
+	sdkschema "github.com/opencharly/spec/schema"
 	"github.com/opencharly/spec/schemaconcat"
 )
 
@@ -27,7 +28,7 @@ import (
 // embedded schema; for an external, the gRPC schema_cue) — NEVER read from a candy
 // schema/ dir. Same concatenation contract as the runtime sharedCueSchema (R3).
 func compileBasePlusServed(servedCUE string) (cue.Value, error) {
-	baseBody, _, err := schemaconcat.ConcatSchema(schemaFS, ".", nil)
+	baseBody, _, err := schemaconcat.ConcatSchema(sdkschema.FS, ".", nil)
 	if err != nil {
 		return cue.Value{}, fmt.Errorf("base schema: %w", err)
 	}
@@ -595,8 +596,8 @@ func loadPluginUnit(ctx context.Context, name string, source string, srcDir stri
 //     Op.Plugin words in its FLATTENED bed plan — see deployNodePluginContext).
 //
 // The EXTERNALIZED detection-builders (cargo/npm/pixi/aur) are NOT collected here: their
-// build-time multi-stage OpResolve leg (C10) is connected on-demand by deploykit EmitBuilderStages
-// (ensureBuildersConnected), and the deploy-time OpCollectContext/OpReverse legs are connected
+// build-time multi-stage ops.OpResolve leg (C10) is connected on-demand by deploykit EmitBuilderStages
+// (ensureBuildersConnected), and the deploy-time ops.OpCollectContext/ops.OpReverse legs are connected
 // PRECISELY + on-demand by the build pre-pass (builder_preresolve.go's ensureBuildersConnected,
 // scoped to the deploy's actually-detected + distro-gated builders) — NOT surfaced across an
 // entire box scan, which over-built unrelated builder plugins (e.g. aur on a fedora deploy).

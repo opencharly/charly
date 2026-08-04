@@ -107,7 +107,7 @@ func TestCompileRunStep_ServicePluginLowersToServicePackagedWithReversals(t *tes
 // step compiles to a ServicePackagedStep (via the TypedStepProvider) AND emits the enable
 // directive into the OCI Containerfile — proving the full box-build path the extraction
 // preserves end-to-end (compileActOp → ServicePackagedStep → candy/plugin-installstep
-// service-packaged OpEmit, the C1.1-externalized build-emit).
+// service-packaged ops.OpEmit, the C1.1-externalized build-emit).
 func TestServicePluginActEmitsIntoBoxBuild(t *testing.T) {
 	layer := testCandy("x", spec.CandyModel{Plan: []spec.Step{{Run: "enable sshd", Op: spec.Op{
 		Plugin:      "service",
@@ -131,7 +131,7 @@ func TestServicePluginActEmitsIntoBoxBuild(t *testing.T) {
 // `step:file` (candy/plugin-installstep's build-emit-only class:step, C1.1). A `run: plugin: file`
 // op (e.g. check-local-layer's marker drop) MUST lower to a generic OpStep — the verb act, whose
 // deploy renders via resolveProvisionScript — NEVER to an externalStep (kind `external:file`), which
-// the deploy walk would route to an OpExecute the build-emit-only step plugin cannot serve. Proves
+// the deploy walk would route to an ops.OpExecute the build-emit-only step plugin cannot serve. Proves
 // verb-first precedence in compileActOp.
 func TestCompileActOp_VerbWordWinsOverCollidingStepWord(t *testing.T) {
 	layer := testCandy("check-local-layer", spec.CandyModel{Plan: []spec.Step{{Run: "drop the marker", Op: spec.Op{
@@ -145,7 +145,7 @@ func TestCompileActOp_VerbWordWinsOverCollidingStepWord(t *testing.T) {
 	}
 	if es, isExternal := steps[0].(*spec.ExternalStep); isExternal {
 		t.Fatalf("run: plugin: file lowered to an externalStep (kind %q) — verb-first precedence regressed; "+
-			"the deploy walk would route it to OpExecute, which the build-emit-only step plugin cannot serve", es.Kind())
+			"the deploy walk would route it to ops.OpExecute, which the build-emit-only step plugin cannot serve", es.Kind())
 	}
 	op, ok := steps[0].(*spec.OpStep)
 	if !ok {

@@ -186,7 +186,7 @@ func canonicalRef(ref, baseDir string) (key, path string, err error) {
 // resolve callback (resolveAndroidViaPlugin), the same relocation shape
 // ValidateCheckBeds / ValidateEphemeral took. The host wires it through the
 // LoaderExecutor.ValidateAndroidDevices leg (load_executor_host.go); a plugin-side
-// loader self-serves the SAME validator over InvokeProvider(kind, OpResolve).
+// loader self-serves the SAME validator over InvokeProvider(kind, ops.OpResolve).
 
 // -----------------------------------------------------------------------------
 // Discovery scanner (Part D).
@@ -231,7 +231,7 @@ func ApplyDiscover(uf *spec.UnifiedFile, rootDir string) error {
 // their registry-coupled resolve callback as a PARAMETER, so the loop itself was pure).
 //
 // What STAYS here as free functions (Go forbids methods on a foreign-package type): every
-// accessor that resolves an opaque PluginKinds body via a plugin's OpResolve leg (Distros/
+// accessor that resolves an opaque PluginKinds body via a plugin's ops.OpResolve leg (Distros/
 // Builders/resolveInits below, and the Project*Config wrappers built on them), or that reaches
 // the registered CandyScanner seam (ProjectCandies/projectCandiesScanned) — these need
 // charly-core's OWN registry/seam access, which a separate sdk package cannot hold.
@@ -240,7 +240,7 @@ func ApplyDiscover(uf *spec.UnifiedFile, rootDir string) error {
 // The `distro` kind is a plugin kind (candy/plugin-distro) — a `distro:` node (incl. the
 // binary-embedded vocabulary) lands in uf.PluginKinds["distro"][<name>] as an OPAQUE
 // canonical body. After the distro de-type (Cutover M) this accessor RESOLVES each body
-// via candy/plugin-distro's OpResolve leg (resolveDistroViaPlugin) into a *DistroDef
+// via candy/plugin-distro's ops.OpResolve leg (resolveDistroViaPlugin) into a *DistroDef
 // (= *spec.ResolvedDistro) — the build-engine value envelope the generator/format code
 // consumes; the kernel never types spec.Distro. Recomputed per call; nil when no distros
 // are configured; a bad entry is skipped rather than poisoning the whole vocabulary.
@@ -257,7 +257,7 @@ func Builders(uf *spec.UnifiedFile) map[string]*spec.BuilderDef {
 
 // resolveInits projects the name-keyed init-system vocabulary from
 // uf.PluginKinds["init"] (opaque bodies) into *spec.ResolvedInit value envelopes via
-// candy/plugin-init's OpResolve config leg (the init de-type, Cutover F) — the
+// candy/plugin-init's ops.OpResolve config leg (the init de-type, Cutover F) — the
 // kernel never types the bodies.
 func resolveInits(uf *spec.UnifiedFile) map[string]*spec.ResolvedInit {
 	return spec.ResolvePluginKindViaPlugin(uf, "init", resolveInitConfigViaPlugin)
@@ -267,7 +267,7 @@ func resolveInits(uf *spec.UnifiedFile) map[string]*spec.ResolvedInit {
 // moved to loaderkit (K3 Unit 1 — the ONE home charly core and candy/plugin-build both call, R3).
 // charly callers invoke loaderkit.Project*Config(uf, <registry callback>) directly; the raw
 // per-kind accessors (Distros/Builders/resolveInits) STAY here (they bind charly's in-proc registry
-// OpResolve callbacks and are the map-shaped accessors the tests read).
+// ops.OpResolve callbacks and are the map-shaped accessors the tests read).
 
 // ProjectCandies scans or synthesizes a candy per entry in uf.Candy, into its FINAL
 // spec.CandyReader form (W9: the type-Candy move). Thin wrapper over projectCandiesScanned +

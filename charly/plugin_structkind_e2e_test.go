@@ -37,7 +37,7 @@ const authoredMemberTree = `    web:
 // STRUCTURAL external kind (candy/plugin-example-structkind, NOT compiled in) is recognized +
 // connected by the prescan; the host PRE-DECODES the node's AUTHORED resource-member children (via
 // the core buildBundleNode recursion — the single member-decode source of truth) and threads them
-// to the plugin's OpLoad via op.Env; the plugin ATTACHES them to its spec.Deploy reply — so the host
+// to the plugin's ops.OpLoad via op.Env; the plugin ATTACHES them to its spec.Deploy reply — so the host
 // folds a COMPLETE Bundle (with the AUTHORED members) into uf.Bundle. The proof is BYTE-EQUIVALENCE
 // to the builtin `group:` path: the SAME authored member tree under `examplestructkind:` and under
 // `group:` must produce an IDENTICAL uf.Bundle entry (same peer/nested members, same hoisted
