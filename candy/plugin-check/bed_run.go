@@ -158,12 +158,66 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 		bedTeardown(ctx, ex, sess, res.OK)
 	}()
 
+	// bestEffort runs a `charly` subcommand host-side, discarding the result (the
+	// pre-run cleanups that clear a lingering target from an interrupted run).
+	bestEffort := func(argv ...string) {
+		_, _ = bedCli(ex, ctx, true, argv...)
+	}
+
+	// Pre-run cleanup: clear any lingering target + sibling members left over from a previous
+	// interrupted run, BEFORE anything seeds or reads this run's own overlay state. Hoisted out of
+	// the Step-3 build/add/config/start switch below into its own block (#21 RCA — the K-wave
+	// terminus RCA's preempt-live-pod defect): `remove --purge`/`bundle del` fan out to
+	// deploykit.CleanDeployEntry per member, which DELETES the per-host overlay entry outright: with
+	// this cleanup running AFTER persistBedDeployOverridePluginSide (as it did before this fix), it
+	// silently destroyed the arbitration fields (Preemptible/RequiresExclusive/RequiresShared) the
+	// persist call had just seeded — fields with no downstream re-writer (unlike ports/env/tunnel/
+	// security, which `charly config` itself re-seeds on every run), so the loss was invisible for
+	// every OTHER overlay field and every non-arbiter bed. VM beds never called CleanDeployEntry (their
+	// cleanup is `vm destroy`, a different substrate teardown), so they were never exposed. Each arm's
+	// cleanup body below is the SAME code the Step-3 switch used to run inline in each of its cases,
+	// moved verbatim (R3 — no duplication, nothing left behind in Step 3).
+	switch {
+	case d.IsVM:
+		bestEffort("vm", "destroy", d.VMTemplate, "--domain", d.BedDomain, "--if-exists")
+	case d.IsGroup:
+		bestEffort("remove", name, "--purge")
+		_ = deploykit.TearDownMembers(&bedNode)
+	default:
+		if d.IsExternal {
+			bestEffort("bundle", "del", name)
+		} else {
+			bestEffort("remove", name, "--purge")
+		}
+		_ = deploykit.TearDownMembers(&bedNode)
+	}
+
 	// Seed the per-host overlay with the bed ROOT's + each MEMBER's project-declared deploy-shaped
 	// overrides PLUGIN-SIDE (#55 coneC-dsh β1 — the former host-side persistBedDeployOverrides wrapper
 	// shed from charly core). The host seam threads the bed-root BundleNode (with nested peer Members)
 	// as d.NodeJSON; persistBedDeployOverridePluginSide calls deploykit.PersistBedDeployOverrides with
-	// plugin-side marshalNode + reader, BEFORE the build/config/start/members-up steps read the overlay.
+	// plugin-side marshalNode + reader. MUST run AFTER the pre-run cleanup above and BEFORE anything
+	// else reads the overlay (build/config/start): the pre-run cleanup deletes overlay entries via
+	// `remove --purge`/CleanDeployEntry, and this persist's arbitration-role fields (Preemptible/
+	// RequiresExclusive/RequiresShared) have no downstream re-writer — running it before cleanup let
+	// cleanup silently destroy what it had just seeded (#21, first site). This call covers the
+	// default (non-group) arm's own `charly config`/`charly start` steps below; the peer-members path
+	// (BringUpMembers, both call sites) re-asserts the SAME invariant itself — see bringUpMembersFresh.
 	persistBedDeployOverridePluginSide(ctx, ex, name, d)
+
+	// bringUpMembersFresh persists this run's arbitration-role overlay fields IMMEDIATELY before every
+	// deploykit.BringUpMembers call, rather than relying on whatever persist happened earlier in the
+	// function. #21's SAME defect recurred at a SECOND site: the fresh-rebuild cycle's
+	// rebuild-members-down (deploykit.TearDownMembers) purges each member via `remove --purge` →
+	// CleanDeployEntry — identical to the pre-run cleanup's purge — deleting the overlay entries
+	// re-bring-up-members then needs, with no re-persist in between. Folding persist+bring-up into one
+	// call, used at BOTH BringUpMembers sites (Step 4's initial bring-up-members AND Step 5's
+	// re-bring-up-members), makes the ordering structurally impossible to violate at either site,
+	// instead of chasing each purge site with its own ad hoc re-persist call (R3 — one shared shape).
+	bringUpMembersFresh := func() error {
+		persistBedDeployOverridePluginSide(ctx, ex, name, d)
+		return deploykit.BringUpMembers(&bedNode, d.ImageTag)
+	}
 
 	// Acceptance-depth gating comes from the descriptor (the box's check_level rung,
 	// resolved host-side): RunBuild → build-context acceptance (check box); RunRuntime
@@ -175,12 +229,6 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 			args = append(args, "--no-agent")
 		}
 		return args
-	}
-
-	// bestEffort runs a `charly` subcommand host-side, discarding the result (the
-	// pre-run cleanups that clear a lingering target from an interrupted run).
-	bestEffort := func(argv ...string) {
-		_, _ = bedCli(ex, ctx, true, argv...)
 	}
 
 	// waitReady picks WaitForVmSshReady vs WaitForContainerReady directly — no host round-trip
@@ -360,8 +408,8 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 		// This bed's libvirt domain is named after the DEPLOY (BedDomain), not the
 		// shared kind:vm entity (VMTemplate) — #33/P33. `vm build` builds the shared
 		// base off the ENTITY; every `charly vm …` that touches THIS domain passes
-		// --domain <BedDomain>.
-		bestEffort("vm", "destroy", d.VMTemplate, "--domain", d.BedDomain, "--if-exists")
+		// --domain <BedDomain>. The pre-run `vm destroy --if-exists` now runs in the
+		// hoisted pre-run-cleanup block above, before persist.
 		if err := step("vm-build", "vm", "build", d.VMTemplate); err != nil {
 			return fail("vm build %s: %w", d.VMTemplate, err)
 		}
@@ -382,12 +430,11 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 			}
 		}
 	case d.IsGroup:
-		// Group bed: no root container — the members (subject + driver) ARE the deployment. Clear
-		// any lingering bed + stale members from a prior run; bringUpMembers (the members-up op in
-		// the runtime block below) then deploys each member (config+start per pod member, bundle add
-		// per local member). There is no root deploy-add/config/start.
-		bestEffort("remove", name, "--purge")
-		_ = deploykit.TearDownMembers(&bedNode)
+		// Group bed: no root container — the members (subject + driver) ARE the deployment.
+		// bringUpMembers (the members-up op in the runtime block below) deploys each member
+		// (config+start per pod member, bundle add per local member). There is no root
+		// deploy-add/config/start. The pre-run `remove --purge` + TearDownMembers now run in the
+		// hoisted pre-run-cleanup block above, before persist.
 		deployed = true // members will be brought up — keep state on a later failure
 	default:
 		// Pod beds → image ref; kind:local beds → local template ref; an EXTERNAL
@@ -402,14 +449,8 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 			addArgs = append(addArgs, d.Image)
 		}
 		addArgs = append(addArgs, "--node-only")
-		// Best-effort tear-down of any lingering bed from a previous interrupted run.
-		if d.IsExternal {
-			bestEffort("bundle", "del", name)
-		} else {
-			bestEffort("remove", name, "--purge")
-		}
-		// Clear any sibling members left over from a previous interrupted run.
-		_ = deploykit.TearDownMembers(&bedNode)
+		// The pre-run tear-down of any lingering bed + sibling members from a previous interrupted
+		// run now happens in the hoisted pre-run-cleanup block above, before persist.
 		addArgs = withRunTag(addArgs, d.ImageTag)
 		if err := step("deploy-add", addArgs...); err != nil {
 			return fail("bundle add %s: %w", name, err)
@@ -456,9 +497,7 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 	// Step 4: deploy/runtime acceptance — gated out at check_level: none|build.
 	// Members are instruments for the runtime probes, so bring-up is gated with them.
 	if d.RunRuntime {
-		if err := phase("bring-up-members", func() error {
-			return deploykit.BringUpMembers(&bedNode, d.ImageTag)
-		}); err != nil {
+		if err := phase("bring-up-members", bringUpMembersFresh); err != nil {
 			return fail("bring up peers for %s: %w", name, err)
 		}
 		if err := checkLiveTree("check-live"); err != nil {
@@ -494,9 +533,7 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 			return fail("tear down members for fresh rebuild of %s: %w", name, err)
 		}
 		if d.RunRuntime {
-			if err := phase("re-bring-up-members", func() error {
-				return deploykit.BringUpMembers(&bedNode, d.ImageTag)
-			}); err != nil {
+			if err := phase("re-bring-up-members", bringUpMembersFresh); err != nil {
 				return fail("re-bring up members for %s: %w", name, err)
 			}
 			if err := checkLiveTree("check-live-rebuild"); err != nil {
