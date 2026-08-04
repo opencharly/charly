@@ -11,10 +11,10 @@ import (
 
 // provider.go — the Invoke(OpRun) surface for the COMPILED-IN command:doctor placement. The host's
 // command dispatch (provider_command_external.go dispatchInProcCommand) invokes this in-process with
-// the pass-through args + the threaded in-proc reverse channel, so runDoctorCLI can HostBuild the
-// "hostprobe" host seam (the GPU/VFIO/device detection primitives + credentialHealth + the core
-// install-hint/device tables) that stays in core. (The out-of-process placement fork/execs the binary →
-// CliMain, which has no reverse channel and errors — doctor is compiled-in.)
+// the pass-through args + the threaded in-proc reverse channel, so runDoctorCLI's peer
+// sdk.Executor.InvokeProvider calls (hostfacts.go — verb:gpu, verb:credential) can reach the host's
+// registry. (The out-of-process placement fork/execs the binary → CliMain, which passes a nil
+// executor — those two peer calls degrade to zero values rather than erroring; see hostfacts.go.)
 
 type provider struct{ pb.UnimplementedProviderServer }
 

@@ -1,8 +1,11 @@
-package main
+package doctor
 
 import (
 	"testing"
 )
+
+// distro_test.go — ported from charly/distro_test.go (K5 seam-death: distro detection moved
+// into this plugin, hostfacts.go's parseOsRelease).
 
 func TestParseOsReleaseArch(t *testing.T) {
 	content := `NAME="Arch Linux"

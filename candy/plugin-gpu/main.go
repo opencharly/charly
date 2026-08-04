@@ -1,9 +1,8 @@
-// Package gpu — the OpRun Invoke entrypoint. charly's in-core Detect* / EnsureCDI /
-// MemlockLimitBytes / VfioGroupAccessible / detectAMDGFXVersion shims (gpu_shim.go)
-// resolve verb:gpu and Invoke OpRun with a spec.GpuProbeInput whose Action selects the
-// host probe; this provider runs the matching sysfs/exec detection and returns a
-// spec.GpuProbeReply. The three static data tables ride in on the input (they stay in
-// charly's embedded charly.yml — see detect.go for the carve-out rationale).
+// Package gpu — the OpRun Invoke entrypoint. Callers (charly-core's gpu_shim.go,
+// candy/plugin-doctor's peer InvokeProvider) resolve verb:gpu and Invoke OpRun with a
+// spec.GpuProbeInput whose Action selects the host probe; this provider runs the matching
+// sysfs/exec detection and returns a spec.GpuProbeReply. The three static data tables are
+// this plugin's own embed (data.go) — see detect.go for the carve-out rationale.
 package gpu
 
 import (
@@ -67,10 +66,10 @@ func (p *provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeR
 	case "detect-amd-gpu":
 		reply.Bool = defaultDetectAMDGPU()
 	case "detect-vfio":
-		rep := defaultDetectVFIO(in.PCIClassLabels)
+		rep := defaultDetectVFIO()
 		reply.Vfio = &rep
 	case "detect-host-devices":
-		dd := defaultDetectHostDevices(in.DevicePatterns, in.GpuVendors)
+		dd := defaultDetectHostDevices()
 		reply.HostDevices = &dd
 	case "ensure-cdi":
 		ensureCDI()

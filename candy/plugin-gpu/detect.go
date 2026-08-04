@@ -11,10 +11,12 @@
 // many times, and MemlockLimitBytes must read charly's OWN process RLIMIT_MEMLOCK — both
 // require in-process placement.
 //
-// The three static data tables (device_patterns / gpu_vendors / pci_class_labels) are NOT
-// baked here: they live in charly's embedded charly.yml (a must-stay core consumer,
-// `charly doctor`, reads device_patterns) and are threaded in via spec.GpuProbeInput, so
-// there is ONE data source (R3).
+// The three static data tables (device_patterns / gpu_vendors / pci_class_labels) are this
+// plugin's OWN embed (data.go/data.yml, K5 seam-death): the former "stays core, `charly
+// doctor` reads device_patterns" header claim did not survive — plugin-gpu is the only
+// actual detection consumer, so it is the one data source (R3), not charly-core. Any caller
+// (core's gpu_shim.go, candy/plugin-doctor's peer InvokeProvider) gets the SAME tables
+// without threading them through spec.GpuProbeInput.
 package gpu
 
 import (
@@ -123,10 +125,9 @@ func parseKFDGFXVersion(path string) string {
 
 // ---------------- Host device auto-detection ----------------
 
-// defaultDetectHostDevices probes the host for available devices. The patterns +
-// gpuVendors tables are threaded in from charly's embedded charly.yml (the shim reads
-// them core-side and passes them in the probe input).
-func defaultDetectHostDevices(patterns []string, gpuVendors map[string]string) spec.DetectedDevices {
+// defaultDetectHostDevices probes the host for available devices, using this plugin's own
+// embedded device_patterns/gpu_vendors tables (data.go).
+func defaultDetectHostDevices() spec.DetectedDevices {
 	result := spec.DetectedDevices{
 		GPU:    defaultDetectGPU(),
 		AMDGPU: defaultDetectAMDGPU(),
@@ -134,13 +135,13 @@ func defaultDetectHostDevices(patterns []string, gpuVendors map[string]string) s
 	if result.AMDGPU {
 		result.AMDGFXVersion = detectAMDGFXVersion()
 	}
-	for _, pattern := range patterns {
+	for _, pattern := range gpuData.DevicePatterns {
 		matches, _ := filepath.Glob(pattern)
 		result.Devices = append(result.Devices, matches...)
 	}
 	// Pick the render node for DRINODE/DRI_NODE auto-injection, preferring a real GPU
 	// over the paravirtual virtio-gpu (see pickRenderNode).
-	result.RenderNode = pickRenderNode(result.Devices, gpuVendors)
+	result.RenderNode = pickRenderNode(result.Devices, gpuData.GpuVendors)
 	return result
 }
 
@@ -200,10 +201,10 @@ func ensureCDI() {
 
 // ---------------- VFIO / GPU passthrough host detection ----------------
 
-// defaultDetectVFIO probes the host for IOMMU readiness and passthrough-capable GPUs.
-// The pci_class_labels table is threaded in from charly's embedded charly.yml.
-func defaultDetectVFIO(classLabels map[string]string) spec.VFIOReport {
-	return scanVFIO("/sys", "/proc/cmdline", classLabels)
+// defaultDetectVFIO probes the host for IOMMU readiness and passthrough-capable GPUs,
+// using this plugin's own embedded pci_class_labels table (data.go).
+func defaultDetectVFIO() spec.VFIOReport {
+	return scanVFIO("/sys", "/proc/cmdline", gpuData.PciClassLabels)
 }
 
 // scanVFIO is the pure detector: it reads only from sysRoot + cmdlinePath, so tests

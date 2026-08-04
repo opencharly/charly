@@ -295,7 +295,7 @@ func gpuWedgeDetected() bool {
 // a claim stays portable across GPU and no-GPU hosts). Card ABSENT → skip with a note, NO
 // error. Returns wedged so the arbiter can poison over the wire.
 func gpuSwitchModeTolerant(vendor, mode string) (wedged bool, err error) {
-	gpu, found := spec.SelectGPUByVendor(vfioDetect(nil), vendor)
+	gpu, found := spec.SelectGPUByVendor(vfioDetect(), vendor)
 	if !found {
 		fmt.Fprintf(os.Stderr, "preempt: no GPU matching vendor %s on this host; skipping %s-mode flip (claim stays portable)\n", spec.NormalizePCIVendor(vendor), mode)
 		return false, nil

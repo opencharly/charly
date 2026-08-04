@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/spec/spec"
 )
 
 func TestCheckBinaryFound(t *testing.T) {
@@ -180,25 +179,24 @@ func TestDoctorOutputJSON(t *testing.T) {
 	}
 }
 
-// TestRunHardwareChecks proves the hardware report is rendered from the hostprobe seam's raw facts:
-// GPU/AMDGPU reflect the reply, and each device carries its seam-supplied description; a present device
+// TestRunHardwareChecks proves the hardware report is rendered from the gathered raw facts:
+// GPU/AMDGPU reflect the facts, and each device carries its description; a present device
 // contributes its --device container flag.
 func TestRunHardwareChecks(t *testing.T) {
-	reply := spec.HostProbeReply{
-		GPU:    false,
-		AMDGPU: false,
-		Devices: []spec.HostProbeDevice{
+	hr := hostReport{
+		GPU: gpuFacts{GPU: false, AMDGPU: false},
+		Devices: []DeviceInfo{
 			{Pattern: "/dev/kvm", Path: "/dev/kvm", Present: true, Description: "KVM virtualization"},
 			{Pattern: "/dev/dri/renderD*", Path: "/dev/dri/renderD*", Present: false, Description: "GPU render node"},
 		},
 	}
-	hw := runHardwareChecks(reply)
+	hw := runHardwareChecks(hr)
 
 	if hw.GPU {
-		t.Error("expected GPU=false from the reply")
+		t.Error("expected GPU=false from the facts")
 	}
 	if hw.AMDGPU {
-		t.Error("expected AMDGPU=false from the reply")
+		t.Error("expected AMDGPU=false from the facts")
 	}
 	if len(hw.Devices) != 2 {
 		t.Fatalf("expected 2 device entries, got %d", len(hw.Devices))
