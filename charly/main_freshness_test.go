@@ -208,3 +208,31 @@ func mustChtime(t *testing.T, path string, mtime time.Time) {
 		t.Fatalf("chtimes %s: %v", path, err)
 	}
 }
+
+// TestIsUnderRepoCache pins the discriminator that keeps the staleness guard off
+// a --repo cache. The cache is a FETCHED tree whose files git just wrote, so its
+// mtime always beats the binary; without this the guard fired on every
+// `charly --repo … <heavy verb>` and told a packaged user to rebuild from the
+// cache — advice they cannot act on. A real checkout must still be guarded, so
+// the negative case is the load-bearing half.
+func TestIsUnderRepoCache(t *testing.T) {
+	cache := t.TempDir()
+	t.Setenv("CHARLY_REPO_CACHE", cache)
+
+	for _, tc := range []struct {
+		name string
+		dir  string
+		want bool
+	}{
+		{"the cache root itself", cache, true},
+		{"a project inside the cache", filepath.Join(cache, "github.com", "opencharly", "charly@main"), true},
+		{"an ordinary checkout", t.TempDir(), false},
+		{"a sibling that merely shares a prefix", cache + "-not-the-cache", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isUnderRepoCache(tc.dir); got != tc.want {
+				t.Fatalf("isUnderRepoCache(%q) = %v, want %v", tc.dir, got, tc.want)
+			}
+		})
+	}
+}
