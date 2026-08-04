@@ -226,7 +226,7 @@ rather than an exotic configuration you are on your own with.
 ## What this adds up to
 
 Each grievance is separately survivable. Together they produce the thing this project is actually
-reacting to: an environment nobody can reproduce, described in four languages, that only one person
+reacting to: an environment nobody can reproduce, described in a different language per substrate, that only one person
 can rebuild, and that nobody dares hand to an automated agent because the isolation is not trusted.
 
 The four answers compose into one property — **a described environment that is disposable**. You

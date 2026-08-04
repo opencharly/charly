@@ -128,15 +128,18 @@ workstation. [How that is wired →](https://opencharly.ai/concepts/02-one-recip
 | apply the same candies to a host, VM, cluster, or phone | `charly bundle add` + a substrate kind |
 | prove a config actually works, end to end | a disposable check bed, `charly check run` |
 
-One `charly.yml`, one box, one per-host overlay, and one check bed drive all four. The binary that
-ties them together is also an MCP server, so an agent reaches every verb over the same RPC.
+One `charly.yml`, one box, one per-host overlay, and one check bed drive all four. The same CLI is
+reachable over MCP, so an agent drives every verb through the same surface you do — see below.
 
 ## Install
 
 **Install `charly` as a native package.** That is how you use it, and everything else here — and
 every page on [opencharly.ai](https://opencharly.ai) — assumes a machine with `charly` installed
 and no charly checkout anywhere. Build the package once from a source tree, then install it with
-your own package manager (requires Go 1.26+ and [go-task](https://taskfile.dev)):
+your own package manager. Building the package needs Go 1.26+ and
+[go-task](https://taskfile.dev); `pkg:fedora` and `pkg:debian` build distro-natively in a
+container, so they also need **podman**, while `pkg:arch` runs `makepkg` directly and therefore
+needs an **Arch-family host**:
 
 ```bash
 task build:pkg:arch   && sudo pacman -U dist/*.pkg.tar.zst    # Arch / CachyOS / Manjaro
@@ -212,8 +215,14 @@ beds and return verbatim proof, plus enforcers that gate claims) and dynamic wor
 you drive `charly` from the keyboard or hand it to an agent, verification uses the same surface.
 See [plugins/README.md](plugins/README.md) for the full index.
 
-Charly's MCP surface is available independently: `charly mcp serve` exposes the CLI over Streamable
-HTTP or stdio, and container-provided servers auto-discover through `mcp_provide:`.
+Charly's MCP surface exposes the CLI over Streamable HTTP or stdio, and container-provided servers
+auto-discover through `mcp_provide:`. `mcp` is itself an out-of-process command plugin, discovered
+from a project's `candy/plugin-mcp` rather than compiled into the binary — so point charly at a
+project that supplies it. `--repo` does that without a checkout:
+
+```bash
+charly --repo opencharly/charly mcp serve
+```
 
 ## License
 
