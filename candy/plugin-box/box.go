@@ -615,7 +615,7 @@ func (c *newProjectGrammar) Run() error {
 	fmt.Fprintln(os.Stderr, "  # Add a candy, populate it, wire it into a box, then build:")
 	fmt.Fprintln(os.Stderr, "  charly -C "+c.Dir+" box new candy my-candy")
 	fmt.Fprintln(os.Stderr, "  charly -C "+c.Dir+" candy add-rpm my-candy curl jq")
-	fmt.Fprintln(os.Stderr, "  charly -C "+c.Dir+" box new box my-box --base quay.io/fedora/fedora:43 --candies my-candy")
+	fmt.Fprintln(os.Stderr, "  charly -C "+c.Dir+" box new box my-box --base quay.io/fedora/fedora:43 --candy my-candy")
 	fmt.Fprintln(os.Stderr, "  charly -C "+c.Dir+" box build my-box")
 	return nil
 }
