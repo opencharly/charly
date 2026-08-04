@@ -20,33 +20,40 @@ and verb: **[opencharly.ai](https://opencharly.ai)**.
 
 ### The words
 
-Six terms, used precisely throughout. `box` and `candybox` are distinct, and are the pair most
-often used interchangeably. Full glossary:
+Seven terms, used precisely throughout. Full glossary:
 [the words](https://opencharly.ai/concepts/00-vocabulary/).
 
-| Term | What it is | What it is *not* |
-|---|---|---|
-| **candy** | one entry in a `charly.yml` — the **only** entity kind there is | not "a layer", not "a package" |
-| **box** | a candy carrying `base:`/`from:` → a buildable **container image** | not the running thing |
-| **candybox** | a box in its **running, isolated form** — container, VM, or check bed. **The security boundary.** | not the image, not the config |
-| **check bed** | a deploy marked `disposable: true` — a candybox that exists to be destroyed | not a test file |
-| **plan** | the ordered acceptance spec a candy carries, baked into the image as an OCI label | not a build script |
-| **substrate** | where a deploy lands: `pod:` `vm:` `k8s:` `local:` `android:` | |
+| Term | What it is |
+|---|---|
+| **candy** | one entry in a `charly.yml`. The **only** entity kind there is — everything below is a candy, or a thing a candy produces |
+| **box** | a candy carrying `base:`/`from:`, so it builds into a **container image** |
+| **candybox** | a box in its **running, isolated form** — container, VM, or check bed |
+| **deploy** | a named placement of a box on a substrate, written as `pod:` `vm:` `k8s:` `local:` `android:` |
+| **bundle** | the set of deploys charly manages on this machine. `charly bundle add` puts a deploy in it |
+| **plan** | the ordered acceptance spec a candy carries, baked into its image as an OCI label |
+| **check bed** | a deploy marked `disposable: true`, which is what authorises charly to destroy and rebuild it unattended |
+
+Two of those are worth separating deliberately, because conflating them is how the security story
+gets misread. **A box is an artifact; a candybox is a process.** Nothing about the image's contents
+makes it safe — a box is deliberately generous, full shell and package manager included. The
+isolation is a property of the *running* container or VM, which is also why it is safe to hand an
+agent everything inside one, and why `disposable: true` is a statement about a running thing rather
+than about a file.
 
 ### One keyword, three roles
 
 There is one entity keyword, `candy:`, and one filename, `charly.yml`. What you put inside the
 keyword decides what the entity is:
 
-| What it declares | What it is | How it is used |
+| What it declares | The role it plays | How it is used |
 |---|---|---|
-| `package:` / `plan:` / `service:` | a **layer** — one concern | spliced into any box's `candy:` list |
+| `package:` / `plan:` / `service:` | a **layer** — one concern | listed in any box's `candy:` list |
 | …plus `base:` or `from:` | a **box** — a buildable image | `charly box build <name>` |
 | …plus a `plugin:` block | a **plugin** — a new verb, kind or command for `charly` itself | loaded on demand, or compiled in |
 
-Every capability beyond the core is that third row. Verbs, deploy kinds, probes, builders and
-whole command trees are all plugin candies, which is why the core stays small while the catalog
-grows, and why there is no second vocabulary to learn.
+"Layer" and "box" are *roles*, not separate entity kinds — the same `candy:` keyword, distinguished
+only by what is inside it. Every capability beyond the core is that third row: verbs, deploy kinds,
+probes, builders and whole command trees are all plugin candies.
 
 ### The four stages
 
@@ -57,85 +64,29 @@ grows, and why there is no second vocabulary to learn.
 | **Deploy** | a substrate keyword — `pod:` `vm:` `k8s:` `local:` `android:` | `charly bundle add`, `charly start` |
 | **Evaluate** | a `plan:` on each candy | `charly check box`, `charly check live`, `charly check run` |
 
-A **check bed** — a deploy marked `disposable: true` — runs all four in one command. `charly check
-run <bed>` builds the image, checks it, deploys it, waits for steady state, checks it live, then
-destroys and rebuilds from scratch and checks it again, then tears everything down.
+A **check bed** chains build, deploy and evaluate into one command — every stage above except
+**Run**, which is the interactive one. `charly check run <bed>` builds the image, checks it,
+deploys it, waits for steady state, checks it live, then destroys and rebuilds it from scratch and
+checks it again, then tears everything down.
 
 ### Where a running candybox actually lives
 
 **Podman and Docker are both first-class**, for building and for running, and the two are chosen
 independently: `charly` auto-detects what is installed and either can be pinned per host
-(`CHARLY_BUILD_ENGINE`, `CHARLY_RUN_ENGINE`, or the runtime config). Building with podman and
-running under docker is a supported combination, not an accident.
+(`CHARLY_BUILD_ENGINE`, `CHARLY_RUN_ENGINE`, or the runtime config). The mixed pair — build with
+Podman, run under Docker — is covered by a test case in `charly/runtime_config_test.go`, so it is a
+combination the project asserts rather than one that merely happens to work.
 
-On a host with podman and systemd, a `pod:` deploy is realised as **user-level systemd quadlets** —
+On a host with Podman and systemd, a `pod:` deploy is realised as **user-level systemd quadlets** —
 `charly config` generates them, each deploy getting its own `charly-<name>.service` carrying its
 ports, volumes, devices and security settings, so `systemctl --user` manages it like any other user
 service and starts it at login. (The exception is a deploy with encrypted volumes and no keyring
 backend: that one omits `WantedBy=default.target` and waits for an explicit `charly start`, because
 nothing should try to mount an encrypted volume before there is a key to mount it with.)
 
-Where podman and systemd are not both present, the same deploy runs directly against the engine
+Where Podman and systemd are not both present, the same deploy runs directly against the engine
 instead. You do not choose between the two: the deploy is described once, and `charly` resolves
 which mode the host supports.
-
----
-
-## A real box, end to end
-
-This is `box/fedora/box/tutorial-shell/charly.yml`, re-proven on every acceptance run by the
-`check-tutorial-shell` bed:
-
-```yaml
-tutorial-shell:
-    candy:
-        description: |-
-            The teaching box behind opencharly.ai's quickstart — a minimal, real dev shell
-            ...
-        base: fedora
-        candy:
-            - '@github.com/opencharly/charly/candy/ripgrep:v2026.201.0706'
-            - '@github.com/opencharly/charly/candy/sshd:v2026.201.0706'
-        plan:
-            - check: composing the service candy next to the init candy wired sshd into the assembled supervisord config — a program block neither candy produces on its own
-              id: tutorial-shell-service-wired-into-init
-              file:
-                file: /etc/supervisord.conf
-                contains:
-                    - contains: "[program:sshd]"
-```
-
-`base:` points at another box defined next door; it can equally be a registry ref. `ripgrep` is a
-**tool** layer (packages and probes, no service); `sshd` is a **service** layer.
-
-Note what is *not* listed: an init system. `sshd` declares a service, so charly resolves the init
-this target needs and installs it — supervisord for a container, nothing extra for a systemd
-machine, because systemd is already there. You declare the service; the init follows.
-
-The `plan:` does *not* check that `rg` and `sshd` are present — each candy's own plan proves that,
-and those plans run against this same image. It checks what **composition** produced: that `sshd`
-became a supervisord program. A check belongs on the behaviour's provider, and belongs on the
-composing box only when the claim is about the composition itself.
-
-```bash
-charly --repo opencharly/distro-fedora box validate                    # the schema gate — nothing runs until it passes
-charly --repo opencharly/distro-fedora box build tutorial-shell        # → multi-stage Containerfile → image
-charly --repo opencharly/distro-fedora shell tutorial-shell            # → you are inside the candybox
-charly --repo opencharly/distro-fedora check run check-tutorial-shell  # → build, deploy, probe, fresh rebuild, tear down
-```
-
-**Then change the mold and keep the recipe.** The same candy list applies to a VM guest over SSH, a
-Kubernetes cluster, or a host — swap the substrate in the deploy, not the recipe.
-
-The host substrate (`local:`) is the one to try *inside a candybox first*: it installs packages and
-units onto whatever machine it targets, so point it at a disposable VM guest rather than your
-workstation. [How that is wired →](https://opencharly.ai/concepts/02-one-recipe-many-molds/)
-
-**The other end of the scale.** The box above has two candies. The **kitchen-sink dev boxes** —
-`fedora-coder` and its `arch`, `debian` and `ubuntu` siblings — carry around thirty each: four AI
-coding CLIs (`claude-code`, `codex`, `gemini`, `forgecode`), every language runtime, DevOps
-tooling, nested rootless containers and rootless libvirt VMs, all at uid 1000 with no
-`--privileged`. Same format, same commands. A fully stocked kitchen really does ship with the sink.
 
 ---
 
@@ -178,13 +129,94 @@ with nothing shared between them. Full detail, including the `$HOME`-local porta
 
 ---
 
+## A real box, end to end
+
+This is `box/fedora/box/tutorial-shell/charly.yml`, re-proven on every acceptance run by the
+`check-tutorial-shell` bed:
+
+```yaml
+tutorial-shell:
+    candy:
+        description: |-
+            The teaching box behind opencharly.ai's quickstart — a minimal, real dev shell
+            ...
+        base: fedora
+        candy:
+            - '@github.com/opencharly/charly/candy/ripgrep:v2026.201.0706'
+            - '@github.com/opencharly/charly/candy/sshd:v2026.201.0706'
+        plan:
+            - check: composing the service candy next to the init candy wired sshd into the assembled supervisord config — a program block neither candy produces on its own
+              id: tutorial-shell-service-wired-into-init
+              file:
+                file: /etc/supervisord.conf
+                contains:
+                    - contains: "[program:sshd]"
+```
+
+`base:` points at another box defined next door; it can equally be a registry ref. `ripgrep` is a
+**tool** layer (packages and probes, no service); `sshd` is a **service** layer.
+
+Note what is *not* listed: an init system. `sshd` declares a service, so charly resolves whichever
+init the *destination* needs and installs it — supervisord when this box is built as a container
+image, nothing extra when the same candies land on a systemd machine, because systemd is already
+there. You declare the service; the init follows from where it ends up.
+
+The `plan:` does *not* check that `rg` and `sshd` are present — each candy's own plan proves that,
+and those plans run against this same image. It checks what **composition** produced: that `sshd`
+became a supervisord program. A check belongs on the behaviour's provider, and belongs on the
+composing box only when the claim is about the composition itself.
+
+```bash
+charly --repo opencharly/distro-fedora box validate                    # the schema gate — nothing runs until it passes
+charly --repo opencharly/distro-fedora box build tutorial-shell        # → multi-stage Containerfile → image
+charly --repo opencharly/distro-fedora shell tutorial-shell            # → you are inside the candybox
+charly --repo opencharly/distro-fedora check run check-tutorial-shell  # → build, deploy, probe, fresh rebuild, tear down
+```
+
+### Change the mold, keep the recipe
+
+That is the claim, so here is the evidence rather than the assertion. Both stanzas below are real
+entries in `box/fedora/charly.yml`, abridged only by cutting their prose descriptions.
+
+```yaml
+check-tutorial-shell:                # a CONTAINER
+    pod:
+        image: tutorial-shell
+        disposable: true
+
+check-fedora-vm:                     # a VM GUEST — same candy-reference form
+    vm:
+        from: fedora-vm
+        disposable: true
+        add_candy:
+            - '@github.com/opencharly/charly/candy/charly:v2026.201.0706'
+```
+
+The substrate is the keyword — `pod:` versus `vm:` — and the candies are named the same way on
+both sides. The VM stanza reaches its guest over SSH and installs packages there; the pod stanza
+builds an image. Neither the candy list nor its `@github…` pin format changes. `k8s:`, `local:` and
+`android:` take the same shape.
+
+**`local:` deserves one warning**, because it is the substrate that touches a real machine:
+it installs packages and systemd units onto whatever host it targets. Point it at a disposable VM
+guest before you point it at your workstation.
+[How that is wired →](https://opencharly.ai/concepts/02-one-recipe-many-molds/)
+
+**The other end of the scale.** The box above has two candies. The **kitchen-sink dev boxes** —
+`fedora-coder` and its `arch`, `debian` and `ubuntu` siblings — carry around thirty each: four AI
+coding CLIs (`claude-code`, `codex`, `gemini`, `forgecode`), every language runtime, DevOps
+tooling, nested rootless containers and rootless libvirt VMs, all at uid 1000 with no
+`--privileged`. Same format, same commands. A fully stocked kitchen really does ship with the sink.
+
+---
+
 ## Agents drive the same surface
 
 **Charly is not built for one agent harness.** There is no agent-only API and no automation-only
 verb: the CLI *is* the surface, so anything that can run a command can drive every stage above. On
-top of that, `charly` serves its whole command tree over **MCP** (Streamable HTTP or stdio), which
-any MCP-speaking client can consume without knowing anything charly-specific. Container-provided
-servers auto-discover through `mcp_provide:`.
+top of that, `charly` serves its whole command tree over **MCP** (Streamable HTTP or stdio), so an
+MCP client sees charly's verbs as ordinary tools. Container-provided servers auto-discover through
+`mcp_provide:`.
 
 `mcp` is itself an out-of-process command plugin, discovered from a project's `candy/plugin-mcp`
 rather than compiled into the binary — so point charly at a project that supplies it:
