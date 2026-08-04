@@ -246,6 +246,68 @@ func TestCollectRemoteRefsOptsExtraCandyRefs(t *testing.T) {
 	}
 }
 
+// TestCollectRemoteRefsOptsRequestedBoxes is the regression guard for task #17 (root-scope `box
+// generate fedora.check-pod` failing "unknown candy github.com/opencharly/charly/candy/
+// check-base-layer"): a namespace-qualified on-demand target (`fedora.check-pod`, mirroring the
+// real box/fedora namespace whose boxes are ALL remote @github back-refs into this very repo) that
+// is NOT reachable as a base/builder of any ROOT-owned image must still have its own remote candy
+// refs collected when it is passed as opts.RequestedBoxes — otherwise the fetch step silently skips
+// it and the later candy-order resolve fails "unknown candy" for a ref that was never fetched.
+func TestCollectRemoteRefsOptsRequestedBoxes(t *testing.T) {
+	fedoraCfg := &spec.Config{
+		Box: boxMapOf(map[string]spec.BoxConfig{
+			"check-pod": {
+				Base: "quay.io/fedora/fedora-minimal:43",
+				Candy: []string{
+					"@github.com/opencharly/charly/candy/check-base-layer:v2026.201.0706",
+				},
+			},
+		}),
+	}
+	// The root project has its OWN image (unrelated to fedora.check-pod — no base/builder edge
+	// reaches the fedora namespace at all), plus the fedora namespace import.
+	cfg := &spec.Config{
+		Box:        boxMapOf(map[string]spec.BoxConfig{"myapp": {Candy: []string{"pixi"}}}),
+		Namespaces: map[string]*spec.Config{"fedora": fedoraCfg},
+	}
+	layers := map[string]spec.CandyReader{"pixi": testCandy("pixi", spec.CandyModel{}, spec.CandyView{})}
+
+	t.Run("unreachable namespaced target is NOT collected without RequestedBoxes", func(t *testing.T) {
+		downloads, err := CollectRemoteRefsOpts(cfg, layers, spec.ResolveOpts{})
+		if err != nil {
+			t.Fatalf("CollectRemoteRefsOpts() error = %v", err)
+		}
+		for _, dl := range downloads {
+			if dl.RepoPath == "github.com/opencharly/charly" {
+				t.Fatalf("fedora.check-pod's remote candy ref was collected WITHOUT opts.RequestedBoxes (pre-fix behavior expected here); downloads=%+v", downloads)
+			}
+		}
+	})
+
+	t.Run("explicitly requested namespaced target IS collected", func(t *testing.T) {
+		downloads, err := CollectRemoteRefsOpts(cfg, layers, spec.ResolveOpts{RequestedBoxes: []string{"fedora.check-pod"}})
+		if err != nil {
+			t.Fatalf("CollectRemoteRefsOpts() error = %v", err)
+		}
+		var got *spec.RemoteDownload
+		for i := range downloads {
+			if downloads[i].RepoPath == "github.com/opencharly/charly" {
+				got = &downloads[i]
+			}
+		}
+		if got == nil {
+			t.Fatalf("fedora.check-pod's remote candy ref was NOT collected even with opts.RequestedBoxes; downloads=%+v", downloads)
+		}
+		if got.Version != "v2026.201.0706" {
+			t.Errorf("check-base-layer download version = %q, want %q", got.Version, "v2026.201.0706")
+		}
+		wantRef := "github.com/opencharly/charly/candy/check-base-layer"
+		if !slices.Contains(got.Refs, wantRef) {
+			t.Errorf("check-base-layer download refs = %v, want to contain %q", got.Refs, wantRef)
+		}
+	})
+}
+
 func TestCollectRemoteRefsLocalTemplate(t *testing.T) {
 	// kind:local template candy: lists must feed the same remote-ref collection
 	// path as image candy: lists (regression guard for the 2026-05 CachyOS
