@@ -147,7 +147,7 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 	if err != nil {
 		return err
 	}
-	if err := hostBuild(ctx, ex, podConfigEnsureImageKind, spec.PodConfigEnsureImageRequest{ImageRef: imageRef, BuildEngine: rt.BuildEngine}, nil); err != nil {
+	if err := ensureImagePresent(ctx, ex, imageRef, rt.BuildEngine); err != nil {
 		return err
 	}
 	// ExtractMetadata PLUGIN-SIDE (#55 coneC-dsh — the pod-config-ensure-image host seam shrinks to
@@ -274,12 +274,12 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 
 	if c.SshKey != "" {
 		cName := kit.ContainerNameInstance(c.Box, c.Instance)
-		var sshRep spec.PodConfigSSHKeyReply
-		if err := hostBuild(ctx, ex, podConfigSSHKeyKind, spec.PodConfigSSHKeyRequest{Flag: c.SshKey, ContainerName: cName}, &sshRep); err != nil {
+		pubkey, err := resolveSSHPubKey(c.SshKey, cName)
+		if err != nil {
 			return err
 		}
-		if sshRep.Pubkey != "" {
-			c.Env = append(c.Env, "SSH_AUTHORIZED_KEYS="+sshRep.Pubkey)
+		if pubkey != "" {
+			c.Env = append(c.Env, "SSH_AUTHORIZED_KEYS="+pubkey)
 		}
 	}
 

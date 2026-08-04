@@ -594,7 +594,7 @@ func provisionData(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntim
 				dataRef = resolved
 			}
 		}
-		if err := hostBuild(ctx, ex, podConfigEnsureImageKind, spec.PodConfigEnsureImageRequest{ImageRef: dataRef, BuildEngine: rt.BuildEngine}, nil); err != nil {
+		if err := ensureImagePresent(ctx, ex, dataRef, rt.BuildEngine); err != nil {
 			return fmt.Errorf("extracting metadata from data image %s: %w", dataRef, err)
 		}
 		dm, err := deploykit.ExtractMetadata("podman", dataRef)
@@ -696,7 +696,7 @@ func updateAllDeployedQuadlets(ctx context.Context, ex *sdk.Executor, rt *kit.Re
 				imageRef = ref
 			}
 		}
-		if err := hostBuild(ctx, ex, podConfigEnsureImageKind, spec.PodConfigEnsureImageRequest{ImageRef: imageRef, BuildEngine: rt.BuildEngine}, nil); err != nil {
+		if err := ensureImagePresent(ctx, ex, imageRef, rt.BuildEngine); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: could not read metadata for %s, skipping quadlet update\n", key)
 			continue
 		}
