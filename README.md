@@ -2,46 +2,28 @@
 
 **The fully stocked gourmet kitchen for you and your agents.**
 
-`charly` builds container images from a composable list of **candies**. That part will feel
-familiar. The part that usually does not: *the same list* also installs onto a VM guest, a
-Kubernetes cluster, your own workstation, or an Android device — and every piece of it carries a
-runnable acceptance test, so you can prove a deployment works instead of assuming it.
+`charly` is a CLI that builds container images from a declarative list of **candies**, and applies
+that same list to a VM guest, a Kubernetes cluster, a host, or an Android device. Each substrate
+compiles to one shared install plan, so changing where a deploy lands is a keyword change, not a
+rewrite.
+
+Every candy carries an acceptance plan. It is baked into the built image as an
+`ai.opencharly.description` OCI label, so the image can be tested later without this repository.
+A disposable **check bed** runs the full sequence in one command: build the image, check it,
+deploy, reach steady state, check it live, then destroy and rebuild from scratch and check it
+again, then tear everything down.
+
+One file per entity, named `charly.yml`. One entity keyword, `candy:`. Everything else — every
+verb, kind, probe, builder and command — is a plugin candy.
 
 > **New here?** Start at **[opencharly.ai](https://opencharly.ai)** — a quickstart, a twelve-part
 > concepts tour, and a generated reference for every candy, box, plugin and verb.
 > [VISION.md](VISION.md) is the one-page thesis.
 
-## If you already run containers and VMs
-
-| You already use | For | charly's equivalent |
-|---|---|---|
-| a Containerfile | building an image | a `candy:` list on a `base:` |
-| docker-compose | several containers together | `kind: pod` — deployed as systemd quadlets |
-| Packer / cloud-init | building a VM guest | `kind: vm` — *the same candy list* |
-| Ansible / a setup script | configuring a host | `kind: local` — *the same candy list* |
-| — nothing you have — | proving the deploy actually works | a disposable **check bed** |
-
-That last row is the point. It is the line most toolchains leave empty.
-
-## What it is reacting to
-
-Four things about ordinary practice, and what charly does instead. The full argument — status quo,
-mechanism, and where each claim stops being true — is in **[GRIEVANCES.md](GRIEVANCES.md)**.
-
-| Grievance | charly's answer |
-|---|---|
-| **Config is per-artifact, so nothing composes.** A Containerfile describes one image; sharing means a base-image chain, or copy-paste. | Config is per **candy** — one concern, one directory, its own checks. A **box** composes any subset of them. Composition is a set, not a chain. |
-| **The same software is described once per distro.** Package names drift, init systems differ, so you keep two Containerfiles or take on a whole config-management layer. | A candy declares packages once. `package: [ripgrep]` already works on Fedora, Arch, Debian and Ubuntu; a `distro:` map overrides only what genuinely differs. |
-| **Containers and VMs are separate worlds.** Containerfile, Packer, cloud-init, Ansible — separate languages, separate execution models, and drift you cannot see. | `pod:`, `vm:`, `local:`, `k8s:` and `android:` compile to one shared InstallPlan IR. Changing the substrate keyword is the whole change. |
-| **Isolation is opt-in, shallow, and stops one level down.** Rootless has friction so things run privileged; nesting means `--privileged` or a mounted docker socket. | Every box is built to run **rootless and nested** — rootless podman inside a rootless container at uid 1000, rootless libvirt as ordinary services. That is what makes **candyboxing** work: a VM inside a container, or the reverse. |
-
-The fourth is load-bearing for the other three. Because the boundary is real and it nests, you can
-hand an agent the entire toolset inside something disposable, instead of trying to whitelist which
-commands it may run.
-
 ## The words
 
-A small private vocabulary, and one pair people conflate. Full glossary:
+Six terms, used precisely throughout. `box` and `candybox` are distinct and are the pair most
+often used interchangeably. Full glossary:
 [the words](https://opencharly.ai/concepts/00-vocabulary/).
 
 | Term | What it is | What it is *not* |
@@ -91,18 +73,17 @@ tutorial-shell:
                     - contains: "[program:sshd]"
 ```
 
-`base:` points at another box defined next door — it can equally be a registry ref. The two candies
-are the two kinds you will meet: `ripgrep` is a **tool** layer (packages and probes, no service),
-`sshd` a **service** layer.
+`base:` points at another box defined next door; it can equally be a registry ref. `ripgrep` is a
+**tool** layer (packages and probes, no service); `sshd` is a **service** layer.
 
 Note what is *not* listed: an init. `sshd` declares a service, so charly resolves the init this
 target needs and installs it — supervisord for a container, nothing extra for a systemd machine,
 because systemd is already there. You declare the service; the init follows.
 
-The `plan:` is worth reading closely. It does *not* check that `rg` and `sshd` are present — each
-candy's own plan proves that, and those plans run against this same image. It checks the one thing
-**composition** produced: that `sshd` became a supervisord program. A check belongs on the
-behaviour's provider; it belongs on the composing box only when the claim is about the composition.
+The `plan:` does *not* check that `rg` and `sshd` are present — each candy's own plan proves that,
+and those plans run against this same image. It checks what **composition** produced: that `sshd`
+became a supervisord program. A check belongs on the behaviour's provider; it belongs on the
+composing box only when the claim is about the composition itself.
 
 ```bash
 charly --repo opencharly/distro-fedora box validate                    # the schema gate — nothing runs until it passes
@@ -119,7 +100,13 @@ The host substrate (`local:`) is the one to try *inside a candybox first*: it in
 units onto whatever machine it targets, so point it at a disposable VM guest rather than your
 workstation. [How that is wired →](https://opencharly.ai/concepts/02-one-recipe-many-molds/)
 
-## The lifecycle
+## What it is reacting to
+
+Four properties of ordinary container/VM practice that charly is built to answer — each with the
+status quo stated fairly, the mechanism that answers it, and where the claim stops being true:
+**[GRIEVANCES.md](GRIEVANCES.md)**.
+
+## Build → run → deploy → evaluate
 
 | Reach for `charly` when you want to… | …and you get |
 |---|---|
