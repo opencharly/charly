@@ -176,6 +176,27 @@ func acquireSharedForClaimant(claimant string, node spec.BundleNode, transient b
 	return acquireDispatch(spec.ArbiterActionAcquireShared, claimant, dedupeNonEmpty(node.RequiredShared()), node, transient)
 }
 
+// isPodMember reports whether node is a CONTAINER-venue (pod) deployment, restoring the
+// registry-fallback semantics the former core-resident isPodMember/nodeTraits provided (deleted
+// #55 W3 B2-full, repointed to the bare spec.IsContainerVenue call below — a regression this
+// restores: found during the #21 terminus RCA). spec.IsContainerVenue is a pure spec-level
+// predicate with no registry coupling by design (spec/ cannot import the provider registry), so it
+// strictly requires node.Descent to already be stamped and returns false otherwise — correct for a
+// FULLY LOADED node, but node.Descent is nil for a SYNTHETIC node built outside the loader (the
+// same "loaded vs synthetic" distinction the deleted nodeTraits' own doc comment named). Falls back
+// to the registry-resolved trait for the node's effective target (empty target defaults to "pod",
+// matching the deleted effectiveTarget) exactly like the deleted implementation did.
+func isPodMember(node *spec.BundleNode) bool {
+	if node != nil && node.Descent != nil {
+		return node.Descent.Venue == "container"
+	}
+	target := "pod"
+	if node != nil && node.Target != "" {
+		target = node.Target
+	}
+	return spec.DescentFromTraits(deployTraitsFor(target)).Venue == "container"
+}
+
 // acquireDispatch is the shared acquire leg (R3): it Invokes verb:arbiter with the pre-computed
 // tokens + claim address, and on an active lease marks envPreemptLeaseHeld so nested
 // subprocesses skip re-acquiring. It also projects the claimant node's GPU-relevant traits
@@ -194,7 +215,7 @@ func acquireDispatch(action, claimant string, tokens []string, node spec.BundleN
 		ClaimAddr:       spec.HolderAddrFor(claimant, node),
 		Transient:       transient,
 		IsGroup:         node.IsGroup(),
-		IsPodMember:     spec.IsContainerVenue(&node),
+		IsPodMember:     isPodMember(&node),
 		SecurityDevices: secDevices,
 	})
 	if err != nil {
