@@ -755,16 +755,16 @@ func handleDeployDel(ctx context.Context, exec *sdk.Executor, req spec.DeployTar
 		// Remove the post-teardown reply's deploy-entry keys from charly.yml PLUGIN-SIDE via
 		// deploykit.RemoveVmDeployEntry directly (#55 coneC-dsh β2 config-PERSIST shed — the former
 		// "config-persist" HostBuild seam is deleted; the plugin reuses its OWN deployMarshalNode +
-		// loadBundleConfig + bundleAcquireDeployConfigLock, the SAME three primitives the deleted
-		// host-builder injected, R3 — the deploy-state WRITE pattern this package already uses for
-		// SaveDeployState at line 431).
+		// loadBundleConfig, and the lock is deploykit.MutateBundleConfig's — the SAME locked
+		// read-modify-write cycle every overlay writer shares, R3 — the deploy-state WRITE pattern
+		// this package already uses for SaveDeployState).
 		if len(ptJSON) > 0 {
 			var ptReply spec.PostTeardownReply
 			if err := json.Unmarshal(ptJSON, &ptReply); err != nil {
 				return reply, fmt.Errorf("deploy-dispatch del: decode post-teardown reply: %w", err)
 			}
 			for _, key := range ptReply.RemoveEntries {
-				if err := deploykit.RemoveVmDeployEntry(key, bundleAcquireDeployConfigLock, saveDeployConfig, loadBundleConfig); err != nil {
+				if err := deploykit.RemoveVmDeployEntry(key, saveDeployConfig, loadBundleConfig); err != nil {
 					fmt.Printf("warning: deploy-dispatch del: removing charly.yml entry %q: %v\n", key, err)
 				}
 			}

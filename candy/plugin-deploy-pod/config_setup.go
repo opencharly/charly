@@ -130,6 +130,36 @@ var saveBundle = func(ctx context.Context, ex *sdk.Executor, dc *deploykit.Bundl
 	return deploykit.SaveBundleConfig(dc, deployMarshalNode(ctx, ex), deployConfigReader(ctx, ex))
 }
 
+// mutateBundle is the ONLY way this package writes the per-host overlay. It runs one locked
+// read-modify-write cycle (deploykit.MutateBundleConfig): the lock is taken first, the overlay is
+// re-read INSIDE it, and the caller's mutation runs against THAT fresh copy — so the write is a
+// merge-on-latest, never a write-back of the snapshot `charly config` loaded at the top of
+// runConfig.
+//
+// This is what closes the lost-update race the 32-bed concurrent roster exposed. `charly config`
+// loads the overlay once and then spends MINUTES resolving ports, prompting for encryption
+// passphrases and provisioning volume data before its writes land; the pre-fix path saved that
+// stale snapshot back with no lock at all, so a concurrent deploy's `resolved_image` (two beds
+// deployed their BASE image), a released exclusive arbiter claim (resurrected by the stale write)
+// and whole failed-bed entries were silently discarded. Holding the lock across the orchestration
+// instead would serialize every concurrent bed — a different regression — which is why the
+// mutation is expressed as a FUNCTION OVER FRESH STATE and the lock spans only its execution.
+//
+// Anything the mutation's outcome depends on must therefore be computed INSIDE the closure. Port
+// allocation is the case that bites: kit.ResolveDeployPorts picks a free host port against the
+// OTHER entries' occupied ports, so computing it outside the lock against a stale overlay hands
+// two concurrent deploys the same host port even though the file write itself is serialized.
+//
+// It returns the fresh config the mutation ran against so a caller can adopt it as its in-memory
+// view instead of continuing on its own stale snapshot. Like saveBundle it is a package var so a
+// unit test can stub the whole cycle (saveBundleStub, config_setup_volume_test.go) rather than
+// driving a real filesystem write plus four loader HostBuild seams.
+var mutateBundle = func(ctx context.Context, ex *sdk.Executor, caller string, mutate deploykit.BundleConfigMutator) (*deploykit.BundleConfig, error) {
+	read := func() (*deploykit.BundleConfig, error) { return loadDeploy(ctx, ex, caller) }
+	save := func(dc *deploykit.BundleConfig) error { return saveBundle(ctx, ex, dc) }
+	return deploykit.MutateBundleConfig(read, save, mutate)
+}
+
 //nolint:gocyclo // ported 1:1 from charly-core BoxConfigSetupCmd.runConfig — see the file header; splitting further would fragment the seam-call sequencing across files for no clarity gain
 func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c *spec.PodConfigSetupRequest) error {
 	var detectRep spec.PodConfigDetectDevicesReply
@@ -236,18 +266,15 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 	// SAME loadDeploy→modify→saveBundle path the secrets/sidecar persist uses (R3); the locked
 	// whole-file write + marshal resugar run plugin-side via deploykit.SaveBundleConfig (the former
 	// pod-config-save-bundle host seam + the host save-callback are deleted, #55 coneC-dsh).
-	dc, err = loadDeploy(ctx, ex, "charly config reload-before-inject")
+	dc, err = mutateBundle(ctx, ex, "charly config inject-provides", func(d *deploykit.BundleConfig) (bool, error) {
+		provChanged := len(meta.EnvProvide) > 0 && injectEnvProvidesInto(d, c.Box, c.Instance, meta.EnvProvide, portMap)
+		if len(meta.MCPProvide) > 0 && injectMCPProvidesInto(d, c.Box, c.Instance, meta.MCPProvide, portMap) {
+			provChanged = true
+		}
+		return provChanged, nil
+	})
 	if err != nil {
 		return err
-	}
-	provChanged := len(meta.EnvProvide) > 0 && injectEnvProvidesInto(dc, c.Box, c.Instance, meta.EnvProvide, portMap)
-	if len(meta.MCPProvide) > 0 && injectMCPProvidesInto(dc, c.Box, c.Instance, meta.MCPProvide, portMap) {
-		provChanged = true
-	}
-	if provChanged {
-		if err := saveBundle(ctx, ex, dc); err != nil {
-			return err
-		}
 	}
 
 	if c.SshKey != "" {

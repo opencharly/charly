@@ -289,31 +289,32 @@ func persistResourceCaps(ctx context.Context, ex *sdk.Executor, dc **deploykit.B
 	if c.MemoryMax == "" && c.MemoryHigh == "" && c.MemorySwapMax == "" && c.Cpus == "" {
 		return nil
 	}
-	if *dc == nil {
-		*dc = &deploykit.BundleConfig{Bundle: make(map[string]spec.BundleNode)}
-	}
-	if (*dc).Bundle == nil {
-		(*dc).Bundle = make(map[string]spec.BundleNode)
-	}
 	key := spec.DeployKey(c.Box, c.Instance)
-	entry := (*dc).Bundle[key]
-	if entry.Security == nil {
-		entry.Security = &spec.SecurityConfig{}
+	fresh, err := mutateBundle(ctx, ex, "charly config resource-caps", func(d *deploykit.BundleConfig) (bool, error) {
+		entry := d.Bundle[key]
+		if entry.Security == nil {
+			entry.Security = &spec.SecurityConfig{}
+		}
+		if c.MemoryMax != "" {
+			entry.Security.MemoryMax = c.MemoryMax
+		}
+		if c.MemoryHigh != "" {
+			entry.Security.MemoryHigh = c.MemoryHigh
+		}
+		if c.MemorySwapMax != "" {
+			entry.Security.MemorySwapMax = c.MemorySwapMax
+		}
+		if c.Cpus != "" {
+			entry.Security.Cpus = c.Cpus
+		}
+		d.Bundle[key] = entry
+		return true, nil
+	})
+	if err != nil {
+		return err
 	}
-	if c.MemoryMax != "" {
-		entry.Security.MemoryMax = c.MemoryMax
-	}
-	if c.MemoryHigh != "" {
-		entry.Security.MemoryHigh = c.MemoryHigh
-	}
-	if c.MemorySwapMax != "" {
-		entry.Security.MemorySwapMax = c.MemorySwapMax
-	}
-	if c.Cpus != "" {
-		entry.Security.Cpus = c.Cpus
-	}
-	(*dc).Bundle[key] = entry
-	return saveBundle(ctx, ex, *dc)
+	*dc = fresh
+	return nil
 }
 
 // resolveDeployPorts self-heals a nil/absent overlay (dc / dc.Bundle) exactly like
@@ -334,30 +335,36 @@ func persistResourceCaps(ctx context.Context, ex *sdk.Executor, dc **deploykit.B
 // MergeDeployOntoMetadata, which shares the same dc.Bundle-nil guard) run correctly on a bed's
 // very first config, matching every subsequent config/update.
 func resolveDeployPorts(ctx context.Context, ex *sdk.Executor, dc **deploykit.BundleConfig, key string, meta *spec.BoxMetadata) error {
-	if *dc == nil {
-		*dc = &deploykit.BundleConfig{Bundle: make(map[string]spec.BundleNode)}
-	}
-	if (*dc).Bundle == nil {
-		(*dc).Bundle = make(map[string]spec.BundleNode)
-	}
-	overlay := (*dc).Bundle[key]
 	containerPorts := kit.ContainerPortsFromMappings(meta.Port)
-	if len(containerPorts) == 0 && len(overlay.Port) == 0 {
-		return nil
+	var resolved []string
+	// The ALLOCATION runs inside the locked cycle, against a freshly-read overlay — not just the
+	// write. kit.ResolveDeployPorts picks free host ports against OccupiedHostPorts(dc, key), so
+	// resolving against the caller's minutes-old snapshot would hand two concurrently-configuring
+	// beds the same host port even though the file write itself is serialized.
+	fresh, err := mutateBundle(ctx, ex, "charly config resolve-ports", func(d *deploykit.BundleConfig) (bool, error) {
+		overlay := d.Bundle[key]
+		if len(containerPorts) == 0 && len(overlay.Port) == 0 {
+			return false, nil
+		}
+		picked, rErr := kit.ResolveDeployPorts(containerPorts, overlay.Port, overlay.ResolvedPort, deploykit.OccupiedHostPorts(d, key))
+		if rErr != nil {
+			return false, fmt.Errorf("resolving deploy ports: %w", rErr)
+		}
+		if kit.SameStringSlice(overlay.ResolvedPort, picked) {
+			return false, nil
+		}
+		overlay.ResolvedPort = picked
+		d.Bundle[key] = overlay
+		resolved = picked
+		return true, nil
+	})
+	if err != nil {
+		return err
 	}
-	resolved, rErr := kit.ResolveDeployPorts(containerPorts, overlay.Port, overlay.ResolvedPort, deploykit.OccupiedHostPorts(*dc, key))
-	if rErr != nil {
-		return fmt.Errorf("resolving deploy ports: %w", rErr)
+	*dc = fresh
+	if len(resolved) > 0 {
+		fmt.Fprintf(os.Stderr, "Resolved ports for %s: %s\n", key, strings.Join(resolved, ", "))
 	}
-	if kit.SameStringSlice(overlay.ResolvedPort, resolved) {
-		return nil
-	}
-	overlay.ResolvedPort = resolved
-	(*dc).Bundle[key] = overlay
-	if err := saveBundle(ctx, ex, *dc); err != nil {
-		return fmt.Errorf("saving resolved_port: %w", err)
-	}
-	fmt.Fprintf(os.Stderr, "Resolved ports for %s: %s\n", key, strings.Join(resolved, ", "))
 	return nil
 }
 
@@ -398,18 +405,19 @@ var loadProjectVolume = func(ctx context.Context, ex *sdk.Executor, box, instanc
 // resolveDeployVolumes never repeats it (see that function's doc for why this bit must be
 // distinct from "the overlay entry exists").
 func persistDeployVolumes(ctx context.Context, ex *sdk.Executor, dc **deploykit.BundleConfig, c *spec.PodConfigSetupRequest, volumes []spec.DeployVolume) error {
-	if *dc == nil {
-		*dc = &deploykit.BundleConfig{Bundle: make(map[string]spec.BundleNode)}
-	}
-	if (*dc).Bundle == nil {
-		(*dc).Bundle = make(map[string]spec.BundleNode)
-	}
 	key := spec.DeployKey(c.Box, c.Instance)
-	entry := (*dc).Bundle[key]
-	entry.Volume = volumes
-	entry.VolumeProjectChecked = true
-	(*dc).Bundle[key] = entry
-	return saveBundle(ctx, ex, *dc)
+	fresh, err := mutateBundle(ctx, ex, "charly config persist-volumes", func(d *deploykit.BundleConfig) (bool, error) {
+		entry := d.Bundle[key]
+		entry.Volume = volumes
+		entry.VolumeProjectChecked = true
+		d.Bundle[key] = entry
+		return true, nil
+	})
+	if err != nil {
+		return err
+	}
+	*dc = fresh
+	return nil
 }
 
 // resolveDeployVolumes computes the deployVolumes list Setup applies for this run, in priority
@@ -677,21 +685,23 @@ func provisionData(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntim
 	if seeded == 0 {
 		return nil
 	}
-	if dc == nil {
-		dc = &deploykit.BundleConfig{Bundle: make(map[string]spec.BundleNode)}
-	}
 	key := spec.DeployKey(c.Box, c.Instance)
-	imgDeploy := dc.Bundle[key]
-	for i := range imgDeploy.Volume {
-		for _, entry := range dataMeta.DataEntries {
-			if imgDeploy.Volume[i].Name == entry.Volume {
-				imgDeploy.Volume[i].DataSeeded = true
-				imgDeploy.Volume[i].DataSource = dataRef
+	// Data provisioning is the LONGEST gap in the whole config run — it copies volume payloads out
+	// of the image — so its seeded-state write must land on a re-read overlay, never on the dc this
+	// function was handed before the copy started.
+	if _, err := mutateBundle(ctx, ex, "charly config data-seeded", func(d *deploykit.BundleConfig) (bool, error) {
+		imgDeploy := d.Bundle[key]
+		for i := range imgDeploy.Volume {
+			for _, entry := range dataMeta.DataEntries {
+				if imgDeploy.Volume[i].Name == entry.Volume {
+					imgDeploy.Volume[i].DataSeeded = true
+					imgDeploy.Volume[i].DataSource = dataRef
+				}
 			}
 		}
-	}
-	dc.Bundle[key] = imgDeploy
-	if err := saveBundle(ctx, ex, dc); err != nil {
+		d.Bundle[key] = imgDeploy
+		return true, nil
+	}); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: could not save data seeded state to charly.yml: %v\n", err)
 		return nil
 	}

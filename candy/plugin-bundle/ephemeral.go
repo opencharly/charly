@@ -382,10 +382,18 @@ func ensureEphemeralBundleConfig(dc *deploykit.BundleConfig) *deploykit.BundleCo
 }
 
 func persistEphemeralRuntime(authored *spec.Deploy, deployName string, h *ephemeralHandle) error {
-	dc, err := loadBundleConfig()
-	if err != nil {
-		return err
-	}
+	return mutateDeployConfig(func(dc *deploykit.BundleConfig) (bool, error) {
+		persistEphemeralInto(dc, authored, deployName, h)
+		return true, nil
+	})
+}
+
+// persistEphemeralInto writes the ephemeral lifecycle block onto a FRESH overlay read under the
+// deploy-config lock — the shape mutateDeployConfig requires. Registering against fresh state is
+// load-bearing here: the ephemeral registrar runs concurrently with `charly vm create`'s own state
+// writes for the SAME key (the RCA #7 ordering contract SaveVmDeployState documents), so a
+// snapshot write-back would drop whichever of the two loaded first.
+func persistEphemeralInto(dc *deploykit.BundleConfig, authored *spec.Deploy, deployName string, h *ephemeralHandle) {
 	dc = ensureEphemeralBundleConfig(dc)
 	key := ephemeralOverlayKey(deployName)
 	node, ok := dc.Bundle[key]
@@ -411,7 +419,6 @@ func persistEphemeralRuntime(authored *spec.Deploy, deployName string, h *epheme
 		DeployAddress: deployName,
 	}
 	dc.Bundle[key] = node
-	return saveDeployConfig(dc)
 }
 
 // clearEphemeralRuntime removes the lifecycle metadata at teardown. Checked against the
@@ -420,21 +427,19 @@ func persistEphemeralRuntime(authored *spec.Deploy, deployName string, h *epheme
 // `return nil`s on `!ok` rather than fabricating a blank node, so it can never write an
 // under-specified entry.
 func clearEphemeralRuntime(deployName string) error {
-	dc, err := loadBundleConfig()
-	if err != nil || dc == nil {
-		return err
-	}
-	key := ephemeralOverlayKey(deployName)
-	node, ok := dc.Bundle[key]
-	if !ok {
-		return nil
-	}
-	if node.VmState == nil || node.VmState.Ephemeral == nil {
-		return nil
-	}
-	node.VmState.Ephemeral = nil
-	dc.Bundle[key] = node
-	return saveDeployConfig(dc)
+	return mutateDeployConfig(func(dc *deploykit.BundleConfig) (bool, error) {
+		key := ephemeralOverlayKey(deployName)
+		node, ok := dc.Bundle[key]
+		if !ok {
+			return false, nil
+		}
+		if node.VmState == nil || node.VmState.Ephemeral == nil {
+			return false, nil
+		}
+		node.VmState.Ephemeral = nil
+		dc.Bundle[key] = node
+		return true, nil
+	})
 }
 
 // bumpParentChildRefcount adjusts the parent ephemeral's child counter by delta (+1 on nested
@@ -443,25 +448,27 @@ func clearEphemeralRuntime(deployName string) error {
 // node.VmState.Ephemeral != nil — it never fabricates a new entry, so it cannot write an
 // under-specified one either.
 func bumpParentChildRefcount(parentID string, delta int) error {
-	dc, err := loadBundleConfig()
-	if err != nil || dc == nil {
-		return err
-	}
-	for name, node := range dc.Bundle {
-		if node.VmState == nil || node.VmState.Ephemeral == nil {
-			continue
+	// The read-modify-write must be ONE locked cycle: a refcount is the classic lost-update
+	// victim — two concurrent nested register/teardown writers each reading the same prior count
+	// and writing back their own increment leaves the parent with one child's worth of refcount
+	// and a premature teardown.
+	return mutateDeployConfig(func(dc *deploykit.BundleConfig) (bool, error) {
+		for name, node := range dc.Bundle {
+			if node.VmState == nil || node.VmState.Ephemeral == nil {
+				continue
+			}
+			if node.VmState.Ephemeral.ID != parentID {
+				continue
+			}
+			node.VmState.Ephemeral.ChildRefcount += delta
+			if node.VmState.Ephemeral.ChildRefcount < 0 {
+				node.VmState.Ephemeral.ChildRefcount = 0
+			}
+			dc.Bundle[name] = node
+			return true, nil
 		}
-		if node.VmState.Ephemeral.ID != parentID {
-			continue
-		}
-		node.VmState.Ephemeral.ChildRefcount += delta
-		if node.VmState.Ephemeral.ChildRefcount < 0 {
-			node.VmState.Ephemeral.ChildRefcount = 0
-		}
-		dc.Bundle[name] = node
-		return saveDeployConfig(dc)
-	}
-	return nil
+		return false, nil
+	})
 }
 
 // lookupEphemeralByID scans charly.yml for the ephemeral with the given ID. Used for nested TTL
