@@ -74,15 +74,13 @@ checks it again, then tears everything down.
 **Podman and Docker are both first-class**, for building and for running, and the two are chosen
 independently: `charly` auto-detects what is installed and either can be pinned per host
 (`CHARLY_BUILD_ENGINE`, `CHARLY_RUN_ENGINE`, or the runtime config). The mixed pair — build with
-Podman, run under Docker — is covered by a test case in `charly/runtime_config_test.go`, so it is a
-combination the project asserts rather than one that merely happens to work.
+Podman, run under Docker — is asserted by `TestResolveRuntime_MixedEngines`, which fails if
+resolution ever collapses the two onto one engine.
 
-On a host with Podman and systemd, a `pod:` deploy is realised as **user-level systemd quadlets** —
-`charly config` generates them, each deploy getting its own `charly-<name>.service` carrying its
-ports, volumes, devices and security settings, so `systemctl --user` manages it like any other user
-service and starts it at login. (The exception is a deploy with encrypted volumes and no keyring
-backend: that one omits `WantedBy=default.target` and waits for an explicit `charly start`, because
-nothing should try to mount an encrypted volume before there is a key to mount it with.)
+On a host with Podman and systemd, a `pod:` deploy is realised as **user-level systemd quadlets**.
+`charly config` generates one `charly-<name>.service` per deploy, carrying its ports, volumes,
+devices and security settings, and systemd starts it at boot. A deploy with encrypted volumes
+starts at boot too, then suspends until its encryption key is available.
 
 Where Podman and systemd are not both present, the same deploy runs directly against the engine
 instead. You do not choose between the two: the deploy is described once, and `charly` resolves
