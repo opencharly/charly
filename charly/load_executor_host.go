@@ -28,8 +28,13 @@ type hostLoaderExecutor struct{}
 // between seam construction and the post-walk validators.
 func (hostLoaderExecutor) LoaderThreaded() spec.Threaded { return loaderThreaded() }
 
-// RunBootstrapPhase invokes every registered bootstrap-phase plugin on the raw root bytes.
-func (hostLoaderExecutor) RunBootstrapPhase(data []byte) []byte { return runBootstrapPhase(data) }
+// RunBootstrapPhase invokes every registered bootstrap-phase plugin on the raw root bytes. The
+// direct in-process call has no failure mode of its own (runBootstrapPhase already tolerates every
+// per-provider error internally) — the error return exists to match the LoaderExecutor interface's
+// out-of-process sibling (executorLoaderExecutor), which DOES have a real IPC failure mode.
+func (hostLoaderExecutor) RunBootstrapPhase(data []byte) ([]byte, error) {
+	return runBootstrapPhase(data), nil
+}
 
 // WalkProject runs the kind-blind import/discover/namespace walk (the registered spec.ProjectWalker,
 // reached via the host's spec.WalkSeams) → the generic spec.LoadedProject envelope.
