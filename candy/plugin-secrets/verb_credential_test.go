@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/charly/candy/plugin-secrets/params"
+	"github.com/opencharly/sdk/kit"
 )
 
 // withConfigBackend points the plugin at an isolated config-file backend in a temp dir,
@@ -15,8 +16,28 @@ func withConfigBackend(t *testing.T) {
 	dir := t.TempDir()
 	RuntimeConfigPath = func() (string, error) { return filepath.Join(dir, "config.yml"), nil }
 	t.Cleanup(func() { RuntimeConfigPath = defaultRuntimeConfigPath; resetDefaultStore() })
-	t.Setenv("CHARLY_SECRET_BACKEND", "config")
+	// Reach the config-file store the way a headless host reaches it — the PRODUCTION path.
+	// `secret_backend: config` used to pin it directly; that backend was removed, so the store
+	// is now selected by an `auto` probe that finds no session bus. This is better isolation
+	// than the pin was: it is the arrangement a keyring-less host actually has.
+	t.Setenv("CHARLY_SECRET_BACKEND", kit.SecretBackendAuto)
+	t.Setenv("DBUS_SESSION_BUS_ADDRESS", "unix:path=/nonexistent-charly-test-bus")
 	resetDefaultStore()
+}
+
+// withClassifierState pins the store-chain inputs DIRECTLY — the active store and the probe
+// error — bypassing backend selection entirely. resolveStoreChain is a classifier over exactly
+// those two inputs, and both of its arms stay meaningful regardless of which selections the
+// settings vocabulary can currently produce; driving it through an env var only ever tested the
+// selector at the same time. Consuming the sync.Once is what makes DefaultCredentialStore()
+// return the pinned value instead of re-probing.
+func withClassifierState(t *testing.T, store CredentialStore, probeErr error) {
+	t.Helper()
+	resetDefaultStore()
+	t.Cleanup(resetDefaultStore)
+	defaultStoreOnce.Do(func() {})
+	defaultStoreVal = store
+	defaultStoreProbeErr = probeErr
 }
 
 // TestDispatchCredential_RoundTrip exercises the verb:credential operation dispatch the
@@ -66,7 +87,7 @@ func TestProbeCredentialHealth_NoBus(t *testing.T) {
 	if h == nil {
 		t.Fatal("health probe returned nil")
 	}
-	if h.ConfiguredBackend != "config" {
-		t.Errorf("ConfiguredBackend = %q, want config", h.ConfiguredBackend)
+	if h.ConfiguredBackend != kit.SecretBackendAuto {
+		t.Errorf("ConfiguredBackend = %q, want %q", h.ConfiguredBackend, kit.SecretBackendAuto)
 	}
 }

@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 func TestResolveCredentialEnvOverride(t *testing.T) {
@@ -19,16 +21,15 @@ func TestResolveCredentialDefault(t *testing.T) {
 	// Ensure no env var set
 	_ = os.Unsetenv("TEST_CRED_NONE")
 
-	// Use config backend (no keyring in tests) with empty config
+	// An empty config store with a clean probe: the credential is genuinely not stored, which
+	// is the "default" classification. Pinned directly rather than through a backend setting —
+	// see withClassifierState.
 	dir := t.TempDir()
 	RuntimeConfigPath = func() (string, error) {
 		return filepath.Join(dir, "config.yml"), nil
 	}
 	defer func() { RuntimeConfigPath = defaultRuntimeConfigPath }()
-	resetDefaultStore()
-	defer resetDefaultStore()
-
-	t.Setenv("CHARLY_SECRET_BACKEND", "config")
+	withClassifierState(t, &ConfigFileStore{}, nil)
 
 	val, source := ResolveCredential("TEST_CRED_NONE", "charly/test", "nonexistent", "default-val")
 	if val != "default-val" || source != "default" {
@@ -122,22 +123,36 @@ func TestResolveSecretBackendEnv(t *testing.T) {
 	}
 }
 
-func TestResolveSecretBackendConfig(t *testing.T) {
+// TestResolveSecretBackendRemovedConfigCoercesToAuto is the migration gate for a host that was
+// already carrying `secret_backend: config` when the backend was removed. Rejecting the value in
+// the settings SETTER stops new pins but cannot touch a config file written before the removal —
+// this is the half that does, and it is what lets sdk/deploykit's mount resolver rely on every
+// resolved backend being one that waits.
+func TestResolveSecretBackendRemovedConfigCoercesToAuto(t *testing.T) {
 	dir := t.TempDir()
 	RuntimeConfigPath = func() (string, error) {
 		return filepath.Join(dir, "config.yml"), nil
 	}
 	defer func() { RuntimeConfigPath = defaultRuntimeConfigPath }()
 
-	// Write config with secret_backend
+	// A config file written before the removal, carrying the removed backend.
 	cfg := &RuntimeConfig{SecretBackend: "config"}
 	if err := SaveRuntimeConfig(cfg); err != nil {
 		t.Fatalf("SaveRuntimeConfig: %v", err)
 	}
 
 	_ = os.Unsetenv("CHARLY_SECRET_BACKEND")
-	if got := resolveSecretBackend(); got != "config" {
-		t.Errorf("resolveSecretBackend() = %q, want %q", got, "config")
+	if got := resolveSecretBackend(); got != kit.SecretBackendAuto {
+		t.Errorf("resolveSecretBackend() = %q, want %q", got, kit.SecretBackendAuto)
+	}
+}
+
+// TestResolveSecretBackendRemovedConfigFromEnvCoercesToAuto covers the other way the removed
+// value still arrives: the environment override, which no validator sees at all.
+func TestResolveSecretBackendRemovedConfigFromEnvCoercesToAuto(t *testing.T) {
+	t.Setenv("CHARLY_SECRET_BACKEND", "config")
+	if got := resolveSecretBackend(); got != kit.SecretBackendAuto {
+		t.Errorf("resolveSecretBackend() = %q, want %q", got, kit.SecretBackendAuto)
 	}
 }
 

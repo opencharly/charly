@@ -93,7 +93,6 @@ func (c *ConfigMigrateSecretsCmd) Run() error {
 		fmt.Fprintln(os.Stderr, "Options:")
 		fmt.Fprintln(os.Stderr, "  1. Start a keyring service (e.g., gnome-keyring-daemon --start)")
 		fmt.Fprintln(os.Stderr, "  2. Install a Secret Service provider (gnome-keyring, kwalletd, keepassxc)")
-		fmt.Fprintln(os.Stderr, "  3. Keep using config file: charly settings set secret_backend config")
 		return fmt.Errorf("keyring not available")
 	}
 
