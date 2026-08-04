@@ -623,7 +623,7 @@ func (c *newProjectGrammar) Run() error {
 type newBoxGrammar struct {
 	Name    string   `arg:"" help:"Name for the new box entry"`
 	Base    string   `long:"base" required:"" help:"Base image (URL like quay.io/... or another box name)"`
-	Candies []string `long:"candy" sep:"," help:"Comma-separated list of candy names to include"`
+	Candies []string `name:"candy" sep:"," help:"Comma-separated list of candy names to include"`
 }
 
 func (c *newBoxGrammar) Run() error {
