@@ -79,6 +79,28 @@ is checked against, per the program's "measured beats estimated" running correct
   `os.UserHomeDir()`-anchored) — the SAME isolation guarantee through an existing default-resolution
   path, no wire field needed.
 
+## `update_deploy_dispatch.go` — CONFIRMED STAY (K-wave W3a unit A5)
+
+A5's brief named this file as a candidate relocation, citing its OWN header's "straightforward-
+but-large RELOCATION work" framing (dated 2026-07-23, K1-UNBLOCK wave-4 spike). That framing
+predates a LATER cutover (Cutover B, `host_build_pod_lifecycle_dispatch.go`) whose own header
+already ruled this file "keeps its existing podUpdateCmd/dispatchByDeployTarget body UNCHANGED —
+that resolver is registry+loader-coupled the same way [as `dispatchLifecycleTarget`]" — but that
+correction never propagated back into `update_deploy_dispatch.go`'s own comment, leaving a stale
+claim sitting alongside three OTHER already-correct sibling confirmations
+(`charly/commands.go`'s header, `charly/pod_lifecycle_verb.go`'s header, `spec/schema/seam.cue`'s
+`#PodUpdateRequest` comment) plus a LIVE check-plan assertion (`charly.yml`'s check-fedora-pod bed:
+"dispatchByDeployTarget... UNCHANGED by this cutover").
+
+| Symbol | LOC | Clause | Evidence |
+|---|---:|---|---|
+| `dispatchByDeployTarget` | ~68 | M — deploy-dispatch orchestration, calls TWO irreducible core-private mechanisms | Calls `loadDeployPlugins` (`plugin_loader.go` — THE plugin-loading mechanism, mutates the core-private provider registry by connecting new out-of-process plugins) and `ResolveTarget` (`unified_targets.go` — reads `providerRegistry.ResolveDeploy` + type-asserts to the core-private `*grpcProvider`, already independently named STAY by the A9 orchestrator adjudication above). Neither has a plugin-visible equivalent — the EXACT same "one step that cannot cross the plugin boundary" pattern `pod_lifecycle_verb.go`'s `dispatchLifecycleTarget` already established for start/stop/shell/logs/service/cmd. |
+| `resolveUpdateDeployNode` / `noteUpdateDisposability` | ~35 | M — tightly sequenced with the STAY body | Both are pure spec-native logic (no core-private coupling of their own) but feed directly into the SAME `dispatchByDeployTarget` call sequence — moving them plugin-side would be a wire-shape change (thread the resolved node instead of the whole tree) for ~35 LOC of savings, the same "LOC-neutral churn, not a real reduction" verdict the A9 ruling gave `unified_targets.go`'s per-verb methods. |
+
+**Verdict**: confirm-and-close, no code moved (matching B5's tranche-1 precedent for the
+check-harness STAY set) — fixed the ONE stale header in `update_deploy_dispatch.go` itself to
+match what four other independent sources already correctly said.
+
 ## Non-blocking finding: `checkspec.go`'s misleading name
 
 The brief asked to rename `checkspec.go` → `op_vocabulary.go` (or similar) "if trivial." It is
