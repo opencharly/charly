@@ -72,18 +72,42 @@ func TestProjectDirPreParse_Precedence(t *testing.T) {
 	}
 }
 
-// A --repo spec that cannot resolve must not take the local grammar down with it. main() resolves
-// the same spec moments later and reports the error properly; the prescan returning "" here would
-// be strictly worse than falling back, because the user would see "unknown verb" instead of
-// "cannot resolve --repo".
-func TestProjectDirPreParse_UnresolvableRepoDoesNotPanic(t *testing.T) {
+// A --repo spec that cannot resolve must FALL BACK TO CWD, not take the local grammar down with
+// it. main() resolves the same spec moments later and reports "cannot resolve --repo" properly;
+// the prescan returning "" is strictly worse, because the user sees "unknown verb" instead.
+//
+// This test previously asserted nothing — it called projectDirPreParse() and discarded the value,
+// on the reasoning that a warm cache might make an unresolvable spec resolve. That reasoning was
+// wrong (the spec below cannot resolve on any host, warm cache or not) and it let a real defect
+// ship: the implementation returned "" here, so from inside a real project
+// `charly --repo <bad> mcp …` died on `unexpected argument mcp, did you mean "cp"?` — the exact
+// unknown-verb dead end this cutover removes. An unasserted test is not coverage.
+func TestProjectDirPreParse_UnresolvableRepoFallsBackToCwd(t *testing.T) {
 	t.Setenv("CHARLY_PROJECT_DIR", "")
 	t.Setenv("CHARLY_PROJECT_REPO", "")
 	saved := os.Args
 	t.Cleanup(func() { os.Args = saved })
-	os.Args = []string{"charly", "--repo", "definitely/not-a-real-repo-" + filepath.Base(t.TempDir()), "mcp"}
 
-	// The contract under test is "returns, does not panic". The value is deliberately unasserted:
-	// resolution may fail offline (-> "") or, on a host with a warm cache, succeed.
-	_ = projectDirPreParse()
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd: %v", err)
+	}
+
+	// An owner/repo that cannot exist: the name embeds a fresh temp-dir basename, so no cache
+	// on any host can contain it and resolution must genuinely fail.
+	unresolvable := "definitely/not-a-real-repo-" + filepath.Base(t.TempDir())
+
+	os.Args = []string{"charly", "--repo", unresolvable, "mcp"}
+	if got := projectDirPreParse(); got != wd {
+		t.Errorf("an unresolvable --repo must fall back to cwd so the LOCAL grammar survives; "+
+			"got %q, want %q (a %q return makes a project-provided verb report 'unknown verb' "+
+			"instead of 'cannot resolve --repo')", got, wd, "")
+	}
+
+	// Same contract via the env var, which takes the sibling branch.
+	os.Args = []string{"charly", "mcp"}
+	t.Setenv("CHARLY_PROJECT_REPO", unresolvable)
+	if got := projectDirPreParse(); got != wd {
+		t.Errorf("an unresolvable CHARLY_PROJECT_REPO must fall back to cwd; got %q, want %q", got, wd)
+	}
 }
