@@ -140,18 +140,24 @@ func TestExternalDeployPlugin_ReverseChannelEndToEnd(t *testing.T) {
 	}
 
 	// 3. A real lifecycle target: a unique deploy name (so the /tmp scratch dir is private to
-	//    this run) and a TEMP ledger (never the operator's, threaded via pluginDeployTarget.ledgerRoot
-	//    → req.LedgerRoot — S3b's wire-safe equivalent of the pre-move settable `paths` field; only
-	//    the Root string is injected, the full testLedgerPaths stays test-side for read-back).
+	//    this run) and a TEMP ledger (never the operator's). K-wave W3a A9 deleted
+	//    pluginDeployTarget's ledgerRoot field + its dispatch()-time req.LedgerRoot threading (it
+	//    had zero production callers — test-only scaffolding). candy/plugin-bundle's
+	//    ledgerPathsFor falls back to kit.DefaultLedgerPaths() — os.UserHomeDir()-anchored — for
+	//    ANY req.LedgerRoot=="" call, exactly what Add/Update/Del's own internal dispatch()
+	//    requests always carry (no method threads a ledger override), so redirecting HOME for the
+	//    test's duration achieves the SAME temp-ledger isolation through the plugin's EXISTING
+	//    default-resolution path, with no wire field needed.
 	name := fmt.Sprintf("e3deploy-%d", time.Now().UnixNano())
-	root := t.TempDir()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	root := filepath.Join(home, ".config", "opencharly", "installed")
 	paths := &testLedgerPaths{
 		Root:    root,
 		Deploys: filepath.Join(root, "deploys"),
 		Candies: filepath.Join(root, "layers"),
 	}
 	tgt.name = name
-	tgt.ledgerRoot = paths.Root
 
 	dir := filepath.Join("/tmp", "charly-exampledeploy", name)
 	applied := filepath.Join(dir, "applied")

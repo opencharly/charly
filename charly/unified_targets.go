@@ -37,26 +37,14 @@ import (
 	"github.com/opencharly/spec/spec"
 )
 
-// runUnifiedTargetChecks runs a deploy-scope check list via a live-mode Runner
-// over exec, filtering to opts.OnlyIDs when set and reporting per-check failures
-// to stderr. kind ("pod"/"vm"/"host", from the adapter's Kind()) labels both the
-// no-executor and the summary errors; nodeName is the deploy identifier. Shared
-// by Pod/Vm/the local deploy target.Test — the three were byte-identical bar the
-// kind/name labels (R3).
+// runUnifiedTargetChecks runs a deploy-scope check list via a live-mode Runner over exec,
+// reporting per-check failures to stderr. kind ("pod"/"vm"/"host", from the adapter's Kind())
+// labels both the no-executor and the summary errors; nodeName is the deploy identifier. Its ONE
+// real caller today is pluginDeployTarget.Test (R1 fix, K-wave W3a A9: the former "Shared by
+// Pod/Vm/the local deploy target.Test" doc claim was stale — those separate types don't exist
+// post-S3b). The opts.OnlyIDs filter moved plugin-side (K-wave W3a A9 — spec.VerifyChecksRequest's
+// only_ids field, applied by candy/plugin-check's verifyChecksRunOps before it runs the ops).
 func runUnifiedTargetChecks(ctx context.Context, exec spec.DeployExecutor, kind, nodeName string, checks []spec.Op, opts TestOpts) error {
-	onlyIDs := make(map[string]bool, len(opts.OnlyIDs))
-	for _, id := range opts.OnlyIDs {
-		onlyIDs[id] = true
-	}
-	filtered := checks
-	if len(onlyIDs) > 0 {
-		filtered = filtered[:0]
-		for _, c := range checks {
-			if onlyIDs[c.ID] {
-				filtered = append(filtered, c)
-			}
-		}
-	}
 	if exec == nil {
 		return fmt.Errorf("%s %q: no executor configured", kind, nodeName)
 	}
@@ -64,7 +52,7 @@ func runUnifiedTargetChecks(ctx context.Context, exec spec.DeployExecutor, kind,
 	// Unit 2 — the former in-proc newCheckRunner + kit.Runner.Run construction moved off core). The
 	// reply is the sanctioned []kit.StepResult wire (the plugin wraps each raw-Op verdict as a
 	// StepResult), so a failure is read off r.Result.
-	results, err := dispatchVerifyChecks(ctx, exec, spec.VerifyChecksRequest{Ops: filtered, Mode: "live"})
+	results, err := dispatchVerifyChecks(ctx, exec, spec.VerifyChecksRequest{Ops: checks, Mode: "live", OnlyIDs: opts.OnlyIDs})
 	if err != nil {
 		return fmt.Errorf("%s %q: %w", kind, nodeName, err)
 	}
@@ -135,14 +123,6 @@ type pluginDeployTarget struct {
 	// reverse leg needs when the plugin walks a plan carrying a host-engine step kind. Populated
 	// by Add from the DeployContext.
 	build buildEngineContext
-
-	// ledgerRoot OPTIONALLY overrides the ledger root — a TEST redirecting to a temp dir instead of the
-	// operator's real ~/.config/opencharly/installed/, threaded to the plugin as req.LedgerRoot (a live
-	// *kit.LedgerPaths cannot cross the wire, so only the Root string is injected — #55 coneD
-	// import-purity: the field dropped its *kit.LedgerPaths type, so this file no longer imports
-	// sdk/kit; tests keep kit.LedgerPaths for their OWN ledger I/O and inject only .Root here). ""
-	// (the default) — the plugin uses kit.DefaultLedgerPaths().
-	ledgerRoot string
 }
 
 func (t *pluginDeployTarget) Name() string                  { return t.name }
@@ -195,9 +175,6 @@ func (t *pluginDeployTarget) dispatch(ctx context.Context, req spec.DeployTarget
 	req.HostEnvJSON = hostEnvJSON()
 	if len(t.venueJSON) > 0 && len(req.VenueJSON) == 0 {
 		req.VenueJSON = t.venueJSON
-	}
-	if t.ledgerRoot != "" && req.LedgerRoot == "" {
-		req.LedgerRoot = t.ledgerRoot
 	}
 	reply, err := dispatchDeployTarget(ctx, req, t.exec, t.build, t.hasLifecycle)
 	if err != nil {

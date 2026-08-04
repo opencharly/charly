@@ -21,6 +21,47 @@ heuristic: "a file's header claim is a CLAIM — verify with defines-vs-calls").
 | `checkrun_charly_verbs.go` | 33 | M — reverse-leg glue | `resolveCheckApk` called from `provider_checkenv.go:135` (feeds host-scanned `CandyDirs` to the out-of-process adb/appium verbs' committed-APK anchoring). |
 | `host_build_check_load_plugins.go` | 46 | M — plugin-loading mechanism | `hostBuildCheckLoadPlugins` (the `"check-load-plugins"` HostBuild seam) called from `candy/plugin-check/command.go:211` — confirmed production caller, not just the in-file header's say-so. |
 
+## `unified_targets.go` — the `pluginDeployTarget` adapter (K-wave W3a unit A9)
+
+A9's spike classified all 627 LOC of `unified_targets.go` at the function level (sent to the
+orchestrator before any edit, per the north-star's spike discipline). Two candidate thin/move
+targets were confirmed and executed (see below); the third candidate — the ~300 LOC of per-verb
+lifecycle methods (`Add`/`Update`/`Del`/`Rebuild`/`Logs`/`Shell`/`Attach`/`Start`/`Stop`) — was
+RULED STAY: extracting their inline wire-struct constructions into named `spec.XxxOptsFromYyy()`
+conversion helpers would be LOC-neutral churn (the conversion has to live somewhere), not a real
+reduction — these method bodies already ARE the plan's own "CLI→dispatch glue" end state. Recorded
+here as the receipt this slice's variance (measured ~60 LOC vs the plan's ~150-250 LOC estimate)
+is checked against, per the program's "measured beats estimated" running correction log.
+
+| Symbol | LOC | Clause | Evidence |
+|---|---:|---|---|
+| `pluginDeployTarget` struct + `Name`/`Kind`/`Executor` | ~55 | M — adapter data | Holds ONLY plain data (name/word/hasLifecycle/hasPreresolve/node) + the live venue executor per S3b; constructible from data alone, never a stored core-private registry object. |
+| `hostEnvJSON` | ~19 | B — same-process fact, threaded as DATA | `os.Executable()` resolves correctly to the charly binary ONLY when called in-core (R10 bed-found bug #5); computed once per dispatch call, threaded on the wire — does not anchor a seam, IS the seam's one irreducible fact. |
+| `distroCfgJSON` | ~12 | M — wire helper for the adapter's own field | Marshals `t.build.DistroCfg`, tightly coupled to the struct's own `build buildEngineContext` field; no independent existence. |
+| `dispatch` | ~24 (post-A9; was ~26, `ledgerRoot` guard deleted) | M — the dispatch mechanism itself | Every lifecycle method funnels through this ONE per-method wire call (build common fields, Invoke, track the returned venue) — the textbook adapter mechanism the boundary law's clause-M describes. |
+| `applyParentExecOverride` | ~41 | M — live-executor-boundary handling | A live Go interface value (`opts.ParentExec`) cannot cross the wire; this function is the ONE place that both mutates `t.exec` AND flattens the SAME executor into `venue_json`, an invariant unit-tested directly (R10 bed-found bug, the nested-child-venue regression). |
+| `venueExecutor` | ~17 | M — venue rematerialization (leg 1) | Re-materializes the CURRENT venue from `t.venueJSON` via `specexec.VenueFromDescriptor` — textbook three-legs leg 1, explicitly named STAY by the orchestrator adjudication. |
+| `bracketedLifecycle` | ~17 | D — registry-bound trait read | Reads the declared `#DeployTraits.bracketed_lifecycle` via `deployTraitsFor(t.word)`, a core-private `providerRegistry`-backed resolver — cannot move without moving the registry itself. |
+| `ResolveTarget` | ~40 | M — legs 1+2 (venue rematerialization + resolve) | Resolves `providerRegistry.ResolveDeploy`, constructs the live executor via `specexec.RootExecutorForDeployNode`, explicitly named STAY by the orchestrator adjudication. |
+| `unresolvedDeployTargetError` | ~15 | M — co-located `ResolveTarget` error helper | Distinguishes "unknown target" from "known but unconnected" — reads `externalizedDeploySubstrates`/`externalDeploySubstratePlugins`, both registry-adjacent core data. |
+| `Add`/`Update`/`Del`/`Rebuild`/`Status`/`Start`/`Stop`/`Logs`/`Shell`/`Attach` | ~300 | M — per-verb CLI→dispatch glue (RULED STAY, not extracted) | Each: build a wire-safe opts struct (one already via the named `spec.LifecycleOptsFromEmit`; the rest inline literals of comparable size), call `t.dispatch`, project the reply. This IS the adapter's per-verb shape the plan's own end state keeps — extracting the inline literals into named spec-side conversion functions moves LOC without reducing it. |
+| `ErrNotSupportedOnExternal` + compile-time assertions | ~10 | E/M — trivial | Stays with the type it documents/asserts. |
+
+**Executed thinning (K-wave W3a A9, ~60 LOC out):**
+- `runUnifiedTargetChecks`'s `OnlyIDs` pre-filter loop moved to `candy/plugin-check`'s
+  `verifyChecksRunOps` (new `spec.VerifyChecksRequest.OnlyIDs` field, opt-in additive — a
+  zero-value request is byte-identical to every pre-existing `dispatchVerifyChecks` caller,
+  verified against `check_cmd.go`'s `runLocalDeployScopePlan`, the only other caller, which never
+  sets it). R1 fix in the same commit: the function's own doc comment ("Shared by Pod/Vm/the local
+  deploy target.Test — the three were byte-identical") was stale — verified via grep, its real
+  fan-in is exactly one call site (`pluginDeployTarget.Test`) post-S3b.
+- `ledgerRoot` struct field + its `dispatch()`-time `req.LedgerRoot` threading deleted — zero
+  production callers (verified via grep), its only use was one E2E test injecting a temp ledger
+  path. Rewired to redirect `$HOME` for the test's duration instead, landing on
+  `candy/plugin-bundle`'s existing `ledgerPathsFor` → `kit.DefaultLedgerPaths()` fallback (already
+  `os.UserHomeDir()`-anchored) — the SAME isolation guarantee through an existing default-resolution
+  path, no wire field needed.
+
 ## Non-blocking finding: `checkspec.go`'s misleading name
 
 The brief asked to rename `checkspec.go` → `op_vocabulary.go` (or similar) "if trivial." It is

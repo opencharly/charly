@@ -69,11 +69,33 @@ func verifyChecksForHost(ctx context.Context, req *pb.InvokeRequest) (*pb.Invoke
 	return &pb.InvokeReply{ResultJson: out}, nil
 }
 
+// filterOpsByID subsets ops to the listed IDs, preserving ops' order — the pure logic behind
+// in.OnlyIDs (K-wave W3a A9: the former core-side pre-filter loop in
+// charly/unified_targets.go's runUnifiedTargetChecks, moved here since candy/plugin-check is
+// where the ops are about to run). Empty/nil onlyIDs is a no-op (returns ops unchanged).
+func filterOpsByID(ops []spec.Op, onlyIDs []string) []spec.Op {
+	if len(onlyIDs) == 0 {
+		return ops
+	}
+	only := make(map[string]bool, len(onlyIDs))
+	for _, id := range onlyIDs {
+		only[id] = true
+	}
+	filtered := make([]spec.Op, 0, len(ops))
+	for _, op := range ops {
+		if only[op.ID] {
+			filtered = append(filtered, op)
+		}
+	}
+	return filtered
+}
+
 // verifyChecksRunOps drives the deploy-lifecycle Test path (raw Op checks, no plan gating) — the
 // plugin-side port of the former core runUnifiedTargetChecks kit.Runner.Run drive. Each CheckResult
 // is wrapped in a StepResult so the reply has one uniform shape; the host reads .Result.Status /
 // .Result.Op.ID.
 func verifyChecksRunOps(ex *sdk.Executor, ctx context.Context, venueExec spec.DeployExecutor, in spec.VerifyChecksRequest) []kit.StepResult {
+	ops := filterOpsByID(in.Ops, in.OnlyIDs)
 	runner := newPluginCheckRunner(ex, ctx, spec.CheckEnv{
 		Mode:      in.Mode,
 		VenueKind: venueExec.Kind(),
@@ -81,7 +103,7 @@ func verifyChecksRunOps(ex *sdk.Executor, ctx context.Context, venueExec spec.De
 		Exec: venueExec,
 		Mode: verifyChecksMode(in.Mode),
 	})
-	crs := runner.Run(ctx, in.Ops)
+	crs := runner.Run(ctx, ops)
 	out := make([]kit.StepResult, 0, len(crs))
 	for i := range crs {
 		// crs[i] is the engine kit.CheckResult (with the DeadlineExceeded flag the retry loop
