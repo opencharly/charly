@@ -24,9 +24,12 @@ import (
 // ValidateEgress, and RewriteHeaderCopy were PURE providerRegistry.resolve+Invoke dispatch (or
 // pure data + host-fs I/O over the CandyModel envelope) — proven to need no host callback at
 // all (RDD-spiked live), so candy/plugin-build now calls them directly and their cases here are
-// GONE (their host functions stay: RenderService/egressValidate/validateTextEgress still serve
-// OTHER core callers — host_build_render_service.go, install_ledger.go, etc. —
-// only the RENDER-SEAM's dispatch of them is dead). LocalPkg is ALSO GONE (W3): its render-seam
+// GONE. RenderService/renderServiceViaPlugin/validateTextEgress are THEMSELVES deleted now too
+// (#55 W3 B4 — the deploy-time render-service HostBuild seam they served is gone; the render
+// logic moved to sdk/deploykit's renderSeamCaller.renderService, direct InvokeProvider, no host
+// round-trip at all). egressValidate/ValidateEgress/ValidateEgressValue survive — they still
+// serve the install-ledger record-write gate (spec.ValidateRecord) — but never through this
+// render-seam. LocalPkg is ALSO GONE (W3): its render-seam
 // claim of a genuine host dependency was STALE — CompileLocalPkgStep operates on CandyModel +
 // ResolvedBox, both ALREADY present in the plugin's own dg.Candies/dg.Boxes (populated from the
 // envelope), so RenderLocalPkgImageInstall now runs directly in candy/plugin-build (deploykit's

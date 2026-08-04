@@ -145,14 +145,19 @@ func TestValidateEgress_TraefikRoutes(t *testing.T) {
 	}
 }
 
+// TestValidateTextEgress_RenderedText drives egressValidate("rendered_text", ..., "text", ...)
+// directly — the former validateTextEgress wrapper died with RenderService (#55 W3 B4, its sole
+// production caller); this is now the ONLY place this "text" mode is exercised from charly core
+// (sdk/deploykit's renderSeamCaller.validateEgress reaches the SAME "rendered_text" CUE schema
+// kind for the render-service seam's new home, via its own InvokeProvider call).
 func TestValidateTextEgress_RenderedText(t *testing.T) {
 	good := "FROM fedora:43\nRUN dnf install -y git\nUSER 1000\n"
-	if err := validateTextEgress("good containerfile", good); err != nil {
+	if err := egressValidate("rendered_text", "good containerfile", "text", good); err != nil {
 		t.Fatalf("clean rendered text should pass, got: %v", err)
 	}
 	// teeth: a Go text/template nil-field marker means a render failure.
 	bad := "[Service]\nExecStart=<no value>\nRestart=always\n"
-	if err := validateTextEgress("broken unit", bad); err == nil {
+	if err := egressValidate("rendered_text", "broken unit", "text", bad); err == nil {
 		t.Fatal("rendered text containing the template-failure marker <no value> must be REJECTED, got nil")
 	}
 }
