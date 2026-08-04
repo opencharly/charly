@@ -168,6 +168,30 @@ skills and are mandatory when dispatched.
 - **R4 — No workarounds.** No sleeps, blind retries, suppressions, fallback
   branches, manual infrastructure commands, magic fixtures, or serialization
   that hides a race. Use `charly` or fix the missing capability.
+- **R4a — Fix the product first; documentation never routes around a defect.**
+  When a documented behaviour and the code disagree, establish which holds the
+  INTENT, then fix the code BEFORE touching the prose. Editing docs to match a
+  bug is forbidden; so is editing them to avoid one. A `git clone`, a `cd`, a
+  `-C` standing in for a flag that should work, an "except on…" caveat, or a
+  "known limitation" note in place of a fix all describe the defect instead of
+  removing it — and make it permanent by making it look intended. Every command a
+  reader is told to run MUST work with nothing but the `charly` binary
+  installed — no clone, no `cd`, no pre-existing project, no unnamed companion
+  tool. That is the product's purpose, not a documentation nicety: install one
+  binary, and everything the docs show works. Write every page for a reader who
+  installed `charly` as a native package with NO charly checkout anywhere on the
+  machine: no `task` target, no `./bin/charly`, no repo-relative path, no verb
+  supplied by a candy that exists only in this repository. `--repo
+  <owner>/<repo>` reads a published project without a clone; `charly box new
+  project <dir>` starts a local one. The one exception is the INSTALL page,
+  where the reader obtains charly — it leads with the native package and scopes
+  the checkout to working ON charly. A repository-maintenance command is named
+  as maintenance this project performs, never as a step the reader runs. Anywhere else, needing more than the binary is a
+  PRODUCT DEFECT — the missing capability is the bug, and the fix belongs in
+  `charly`. If the fix is genuinely
+  out of scope, file it with its root cause and let the page say nothing rather
+  than something false: silence is recoverable, a documented workaround is
+  taught.
 - **R5 — Delete legacy completely.** Hard cutovers remove old names, paths,
   shims, adapters, aliases, TODOs, and stale current documentation. Run a
   claim-keyed repository-wide grep self-test. History belongs in changelogs.
