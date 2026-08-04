@@ -15,17 +15,20 @@ package check
 // ExecutorForInvoke) is used only for the plugin's OWN legs — the pluginVerbResolver's InvokeProvider
 // verb dispatch and the local-verify path's resolvedProject/TargetResolver HostBuild.
 //
-// TWO drive shapes, one per caller (see spec.VerifyChecksRequest):
-//   - Ops  → the deploy-lifecycle Test path (charly core's unified_targets.go runUnifiedTargetChecks):
-//     raw deploy-scope checks via kit.Runner.Run (no plan gating), each verdict wrapped as a StepResult.
-//   - Plan → the `target: local` --verify path — candy/plugin-bundle's verify_local.go
-//     (verifyLocalDeployScope/localDeployScopePlan, #55 W3 B3, relocated from the former core
-//     check_cmd.go's runLocalDeployScopePlan) ASSEMBLES the plan (kind:local template, resolved
-//     PLUGIN-SIDE via node_resolve.go's lookupLocalTemplate — no LoadUnified needed — + the deploy
-//     node's own plan) and this handler DRIVES it via kit.RunPlan, rebuilding the runtime env +
-//     ${HOST:} host-vars + the cross-deployment TargetResolver from {dir, box, instance} exactly as
-//     the check-live gather does (live_gather.go's pluginRunLocalDeployScopePlan) — a PEER plugin
-//     calling THIS plugin now, not core.
+// ONE drive shape (see spec.VerifyChecksRequest): plan → the `target: local` --verify path —
+// candy/plugin-bundle's verify_local.go (verifyLocalDeployScope/localDeployScopePlan, #55 W3 B3,
+// relocated from the former core check_cmd.go's runLocalDeployScopePlan) ASSEMBLES the plan
+// (kind:local template, resolved PLUGIN-SIDE via node_resolve.go's lookupLocalTemplate — no
+// LoadUnified needed — + the deploy node's own plan) and this handler DRIVES it via kit.RunPlan,
+// rebuilding the runtime env + ${HOST:} host-vars + the cross-deployment TargetResolver from
+// {dir, box, instance} exactly as the check-live gather does (live_gather.go's
+// pluginRunLocalDeployScopePlan) — a PEER plugin calling THIS plugin now, not core.
+//
+// The FORMER second drive shape (ops → the deploy-lifecycle Test path, raw deploy-scope checks via
+// kit.Runner.Run, no plan gating) is GONE (#55 W3 B3 remainder): its own sole production caller,
+// charly core's pluginDeployTarget.Test/runUnifiedTargetChecks, had ZERO real callers anywhere in
+// the tree (`charly check live` never reached it — see charly/unified_targets.go's Test-deletion
+// comment). verifyChecksRunOps/filterOpsByID (and their own OnlyIDs pre-filter field) died with it.
 
 import (
 	"context"
@@ -58,63 +61,13 @@ func verifyChecksForHost(ctx context.Context, req *pb.InvokeRequest) (*pb.Invoke
 		return nil, fmt.Errorf("plugin-check: verify-checks re-materialize venue: %w", err)
 	}
 
-	var results []kit.StepResult
-	if len(in.Plan) > 0 {
-		results = verifyChecksRunPlan(ex, ctx, venueExec, in)
-	} else {
-		results = verifyChecksRunOps(ex, ctx, venueExec, in)
-	}
+	results := verifyChecksRunPlan(ex, ctx, venueExec, in)
 
 	out, err := json.Marshal(results)
 	if err != nil {
 		return nil, fmt.Errorf("plugin-check: marshal verify-checks reply: %w", err)
 	}
 	return &pb.InvokeReply{ResultJson: out}, nil
-}
-
-// filterOpsByID subsets ops to the listed IDs, preserving ops' order — the pure logic behind
-// in.OnlyIDs (K-wave W3a A9: the former core-side pre-filter loop in
-// charly/unified_targets.go's runUnifiedTargetChecks, moved here since candy/plugin-check is
-// where the ops are about to run). Empty/nil onlyIDs is a no-op (returns ops unchanged).
-func filterOpsByID(ops []spec.Op, onlyIDs []string) []spec.Op {
-	if len(onlyIDs) == 0 {
-		return ops
-	}
-	only := make(map[string]bool, len(onlyIDs))
-	for _, id := range onlyIDs {
-		only[id] = true
-	}
-	filtered := make([]spec.Op, 0, len(ops))
-	for _, op := range ops {
-		if only[op.ID] {
-			filtered = append(filtered, op)
-		}
-	}
-	return filtered
-}
-
-// verifyChecksRunOps drives the deploy-lifecycle Test path (raw Op checks, no plan gating) — the
-// plugin-side port of the former core runUnifiedTargetChecks kit.Runner.Run drive. Each CheckResult
-// is wrapped in a StepResult so the reply has one uniform shape; the host reads .Result.Status /
-// .Result.Op.ID.
-func verifyChecksRunOps(ex *sdk.Executor, ctx context.Context, venueExec spec.DeployExecutor, in spec.VerifyChecksRequest) []kit.StepResult {
-	ops := filterOpsByID(in.Ops, in.OnlyIDs)
-	runner := newPluginCheckRunner(ex, ctx, spec.CheckEnv{
-		Mode:      in.Mode,
-		VenueKind: venueExec.Kind(),
-	}, kit.RunnerConfig{
-		Exec: venueExec,
-		Mode: verifyChecksMode(in.Mode),
-	})
-	crs := runner.Run(ctx, ops)
-	out := make([]kit.StepResult, 0, len(crs))
-	for i := range crs {
-		// crs[i] is the engine kit.CheckResult (with the DeadlineExceeded flag the retry loop
-		// reads); the StepResult wire field carries the embedded spec.CheckResult only
-		// (DeadlineExceeded is engine-internal, json:"-"), so extract it here.
-		out = append(out, kit.StepResult{Result: crs[i].CheckResult})
-	}
-	return out
 }
 
 // verifyChecksRunPlan drives the `target: local` --verify path — the plugin-side port of the former

@@ -40,7 +40,6 @@ is checked against, per the program's "measured beats estimated" running correct
 | `distroCfgJSON` | ~12 | M — wire helper for the adapter's own field | Marshals `t.build.DistroCfg`, tightly coupled to the struct's own `build buildEngineContext` field; no independent existence. |
 | `dispatch` | ~24 (post-A9; was ~26, `ledgerRoot` guard deleted) | M — the dispatch mechanism itself | Every lifecycle method funnels through this ONE per-method wire call (build common fields, Invoke, track the returned venue) — the textbook adapter mechanism the boundary law's clause-M describes. |
 | `applyParentExecOverride` | ~41 | M — live-executor-boundary handling | A live Go interface value (`opts.ParentExec`) cannot cross the wire; this function is the ONE place that both mutates `t.exec` AND flattens the SAME executor into `venue_json`, an invariant unit-tested directly (R10 bed-found bug, the nested-child-venue regression). |
-| `venueExecutor` | ~17 | M — venue rematerialization (leg 1) | Re-materializes the CURRENT venue from `t.venueJSON` via `specexec.VenueFromDescriptor` — textbook three-legs leg 1, explicitly named STAY by the orchestrator adjudication. |
 | `bracketedLifecycle` | ~17 | D — registry-bound trait read | Reads the declared `#DeployTraits.bracketed_lifecycle` via `deployTraitsFor(t.word)`, a core-private `providerRegistry`-backed resolver — cannot move without moving the registry itself. |
 | `ResolveTarget` | ~40 | M — legs 1+2 (venue rematerialization + resolve) | Resolves `providerRegistry.ResolveDeploy`, constructs the live executor via `specexec.RootExecutorForDeployNode`, explicitly named STAY by the orchestrator adjudication. |
 | `unresolvedDeployTargetError` | ~15 | M — co-located `ResolveTarget` error helper | Distinguishes "unknown target" from "known but unconnected" — reads `externalizedDeploySubstrates`/`externalDeploySubstratePlugins`, both registry-adjacent core data. |
@@ -56,6 +55,23 @@ is checked against, per the program's "measured beats estimated" running correct
   B3). R1 fix in the same commit: the function's own doc comment ("Shared by Pod/Vm/the local
   deploy target.Test — the three were byte-identical") was stale — verified via grep, its real
   fan-in is exactly one call site (`pluginDeployTarget.Test`) post-S3b.
+  **SUPERSEDED (#55 W3 B3 remainder)**: `Test`'s own precheck (team-lead's ruling: grep its real
+  production callers before deciding) found ZERO — `charly check live` never reached it, its ONE
+  caller anywhere was a unit test. Triple-deleted per the ruling's zero-callers branch:
+  `Test`/`TestOpts`/`runUnifiedTargetChecks` (charly), `verifyChecksRunOps`/`filterOpsByID` +
+  the `ops`/`only_ids` wire fields (candy/plugin-check + `spec.VerifyChecksRequest`), and the dead
+  `"test"` op in `#DeployTargetDispatchRequest`'s enum. A FOURTH casualty surfaced by the same
+  precheck: `dispatchVerifyChecks` itself (check_cmd.go) turned out to have zero production
+  callers too — the "target: local --verify" path (this unit's other landed change,
+  `candy/plugin-bundle/verify_local.go`) bypasses it via a direct `sdk.Executor.InvokeProvider`
+  call, never the core-side wrapper — so it relocated to `checkrun_helpers_test.go` as test-only
+  infrastructure rather than staying in production. A FIFTH: `venueExecutor`
+  (`unified_targets.go`), the A9 adjudication's STAY-ruled leg-1 rematerializer, had exactly TWO
+  callers — `Test` and the pre-relocation core-side `--verify` — both gone by the end of this same
+  unit; deleted (row removed above). The box-mode context-skip regression coverage
+  (`TestLiveVerb_SkipsUnderBoxMode`) moved onto the surviving Plan wire shape with zero coverage
+  loss (RunOne, `sdk/kit/planrun.go`, is the shared per-step primitive both the deleted
+  `kit.Runner.Run(ops)` and the surviving `kit.RunPlan(plan)` dispatched through).
 - `ledgerRoot` struct field + its `dispatch()`-time `req.LedgerRoot` threading deleted — zero
   production callers (verified via grep), its only use was one E2E test injecting a temp ledger
   path. Rewired to redirect `$HOME` for the test's duration instead, landing on

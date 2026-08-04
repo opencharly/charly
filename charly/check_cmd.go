@@ -2,12 +2,9 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 
-	specexec "github.com/opencharly/spec/exec"
-	"github.com/opencharly/spec/ops"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -17,9 +14,12 @@ import (
 // short-circuit; "feature-box" was traced and never had a live caller through this seam — see
 // feature_run_gather.go's header; "feature-box" is now the plugin-side pluginCheckRunFeatureBox,
 // reached from candy/plugin-box's command:feature over InvokeProvider — cone-C #31). What remains
-// here is used by the new "check-load-plugins" seam (host_build_check_load_plugins.go) and by the
-// external `target: local` deploy's own --verify path (unified_targets.go) — neither is part of the
-// "live"/"feature-live" check-run modes reached via the check-run seam, so they stay core.
+// is resolveCheckRunnerContext/candyDirsFromScan — the SOLE remaining production content, feeding
+// the new "check-load-plugins" seam (host_build_check_load_plugins.go). It STAYS core because it
+// calls loadProjectPlugins directly, the same core-private registry-mutating mechanism
+// loadDeployPlugins drives (#55 W3 B3 — moving it would have the plugin calling into itself). The
+// external `target: local` deploy's own --verify path RELOCATED to candy/plugin-bundle's
+// verify_local.go (#55 W3 B3 remainder) — it no longer lives here.
 
 // The `charly check` exit-code contract (2 = checks failed, 3 = prereq skip) lives in
 // the sdk (exitcode.CheckFailExitCode / exitcode.CheckSkippedExitCode); the plugin/main signal it
@@ -123,41 +123,13 @@ func resolveCheckRunnerContext(box, dir string, cfg *spec.Config) checkRunnerCon
 // finally makes the former core findLocalSpec/resolveLocalRefFor/namespace.go fully dead; all
 // three are DELETED.
 
-// dispatchVerifyChecks drives a deploy-scope check pass PLUGIN-SIDE via command:check's
-// OpVerifyChecks (#55 CHECK-ENGINE cone Unit 2). The host holds a live venue executor but no longer
-// builds the in-proc kit.Runner — that construction (the former checkrun.go newCheckRunner +
-// planrun_adapter.go venueResolver) moved into candy/plugin-check, shedding both files' sdk/kit
-// imports. A live executor cannot cross the wire, so it is flattened to a spec.VenueDescriptor
-// (specexec.DescriptorFromExecutor) the plugin re-materializes via kit.VenueFromDescriptor — the SAME
-// mechanism candy/plugin-bundle's resolveRootExecutor uses. An in-proc reverse channel is threaded
-// (the deploy_target_dispatch.go / check_venue_resolve.go idiom) so the plugin's own verb-dispatch
-// (InvokeProvider) + local-verify resolvedProject (HostBuild) legs reach the host. The reply is the
-// sanctioned []spec.StepResult wire (byte-identical to the former sdk/kit []StepResult — the
-// DeadlineExceeded engine flag is json:"-", so spec.StepResult and kit.StepResult share one wire).
-func dispatchVerifyChecks(ctx context.Context, exec spec.DeployExecutor, req spec.VerifyChecksRequest) ([]spec.StepResult, error) {
-	prov, ok := providerRegistry.resolve(ClassCommand, "check")
-	if !ok {
-		return nil, fmt.Errorf("verify-checks: command:check provider not loaded (candy/plugin-check must be compiled in via compiled_plugins:)")
-	}
-	req.Venue = specexec.DescriptorFromExecutor(exec)
-	reqJSON, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("verify-checks: marshal request: %w", err)
-	}
-	invokeCtx := specexec.ContextWithExecutor(ctx,
-		specexec.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{exec: exec}}))
-	res, err := prov.Invoke(invokeCtx, &Operation{Reserved: "check", Op: ops.OpVerifyChecks, Params: reqJSON})
-	if err != nil {
-		return nil, fmt.Errorf("verify-checks: command:check plugin: %w", err)
-	}
-	var out []spec.StepResult
-	if res != nil && len(res.JSON) > 0 {
-		if uerr := json.Unmarshal(res.JSON, &out); uerr != nil {
-			return nil, fmt.Errorf("verify-checks: decode reply: %w", uerr)
-		}
-	}
-	return out, nil
-}
+// dispatchVerifyChecks (the core-side function that drove command:check's OpVerifyChecks in-proc)
+// is GONE (#55 W3 B3 remainder): its production callers are all dead now — verify_local.go
+// (candy/plugin-bundle) reaches command:check via a direct sdk.Executor.InvokeProvider call
+// instead (a peer plugin, not core), and runUnifiedTargetChecks/Test (unified_targets.go,
+// deploy_target_unified.go) had zero real callers of their own. The function's exact body
+// relocated to checkrun_helpers_test.go — its only remaining role is exercising the production
+// command:check seam + core's opInContext wiring from a handful of unit tests.
 
 // containerImageRef + containerImage (the live-container image-ref
 // inspectors) live in commands.go — ONE inspect implementation shared by

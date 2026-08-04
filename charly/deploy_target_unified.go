@@ -89,11 +89,6 @@ type UnifiedDeployTarget interface {
 	// ad-hoc computation from the candy manifest.
 	Del(ctx context.Context, opts DelOpts) error
 
-	// Test runs the given deploy-scope checks against the live
-	// target. Equivalent to `charly check live <name>`. Returns nil only if
-	// every non-skipped check passes.
-	Test(ctx context.Context, checks []spec.Op, opts TestOpts) error
-
 	// Update re-applies the plan diff between the currently-recorded
 	// candy set and the plan set derived from fresh charly.yml.
 	// Equivalent to `charly bundle update <name>` (new command; today's
@@ -166,20 +161,6 @@ type DelOpts struct {
 	// RemoveVolumes deletes bind-mount / named-volume data. Off by
 	// default to avoid accidental data loss.
 	RemoveVolumes bool
-}
-
-// TestOpts parameterizes `charly check live` against a live deployment.
-type TestOpts struct {
-	// OnlyIDs restricts the run to the listed check IDs. Empty =
-	// run every check defined on the deployment.
-	OnlyIDs []string
-
-	// FormatJSON emits machine-readable output instead of the human
-	// summary table.
-	FormatJSON bool
-
-	// StopOnFail aborts on the first failing check.
-	StopOnFail bool
 }
 
 // UpdateOpts parameterizes `charly bundle update`.
