@@ -84,6 +84,55 @@ Registering it here as a NON-BLOCKING finding for a future thematic batch (renam
 sweep), per R2's discriminator: B5's own claim (the 10-file STAY confirm-and-close) is true and
 proven without this rename.
 
+## K-wave W2 (K3 build residue) — spike reclassifications, task #13
+
+The audit's K3 bucket (2,924 LOC / 19 files, theme-bucketed by filename/directory, not
+per-file defines-vs-calls) substantially overstated genuinely-movable residue: most of the
+listed files are ALREADY correct M/B/D placements from prior relocation waves (#55
+coneB2/coneB-render/coneB-buildtail/K1-loader-cone), or are blocked on K1's own remaining
+work (LoadConfig/LoadUnified/config.go — W1 explicitly left these core; a K1-IOU file cannot
+move independently in K3). Every row below is a RE-VERIFIED defines-vs-calls trace (headers
+read for orientation, never trusted). One file (`build_overlay.go`) had a genuinely refuted
+header claim and MOVED — see the W2 commits (spec `9b5ae78`, super `6044e3fa`); it does not
+appear in this STAY table.
+
+| File | LOC | Clause | Evidence |
+|---|---:|---|---|
+| `host_build_buildengine.go` | 260 | MIXED: M (registry-connect) / B (bootstrap-scan + embed) / K1-IOU (remainder) | `hostBuildConnectPlugins` calls `loadProjectPlugins`, registering project build-time plugins into `providerRegistry` — M, the plugin-loading mechanism itself. `hostBuildScanLocal`/`hostBuildEnsureRepo`/`hostBuildScanRemote` wrap the bootstrap-delicate local candy scan + `EnsureRepoDownloaded` (refs.go, the K1-floor git clone/cache) — B. `hostBuildContextIgnoreBaseline` returns `baselineContextIgnore`, parsed from charly's OWN `//go:embed charly/charly.yml` (generate.go) — B, a separate Go module/binary structurally cannot embed another module's file. `hostBuildCollectRemoteRefs`/`hostBuildNamespaced`/`hostBuildPrep` call `LoadConfig`/`CollectRemoteRefsOpts`/`ScanAllCandyWithConfigOpts` (all core-only per W1's config.go verdict) — K1-IOU, not independently K3-movable. |
+| `host_build_render_seam.go` | 149 | M — registry + live-loader-scan mechanism | `hostBuildRenderSeam` dispatches exactly 2 remaining methods (`RenderSeamInlineBuilder`→`resolveInlineBuilderSeam`, `RenderSeamEnsureBuilders`→`ensureBuildersConnected`), both calling `providerRegistry.ResolveBuilder` — the registry mechanism. File's own header confirms every OTHER former case (RenderService, ValidateEgress, LocalPkg, EmitPluginOp) already relocated plugin-side in prior waves (#67/K1/P8b) — this is the correctly-shrunk M residue, not unmoved bulk. |
+| `host_build_construct_step.go` | 94 | M — THE kind/verb dispatch mechanism | `hostBuildConstructStep` resolves against `providerRegistry.ResolveVerb`/`providerRegistry.resolve(ClassStep,...)` — audit's own text names this "the TRUE kind dispatch... explicitly named by the skill as staying." |
+| `builder_preresolve.go` | 88 | M — registry-connect mechanism | `ensureBuildersConnected` calls `loadProjectPlugins` + `providerRegistry.ResolveBuilder`/`ResolveBuilder` — core-private project-loading + registry-connect. Header confirms the ONLY other half (per-(candy,builder) OpCollectContext/OpReverse RPCs) already moved to `candy/plugin-bundle`'s own `preresolveBuilderContexts`. |
+| `tasks.go` | 86 | M — registry-coupled, self-documented | `resolveInlineBuilderSeam` calls `ensureBuildersConnected` + `providerRegistry.ResolveBuilder` + `resolveBuilderStage` (a registry `Invoke`). File's own header: "the builder-emit cluster... is registry-coupled and stays core" — verified accurate by trace. |
+| `host_build_box_ref_resolve.go` | 67 | M — host-internal reverse-channel caller | `resolveImageRefForEnsure`'s SOLE production caller is `plugin_executor_reverse.go:161`'s injected `ResolveImage` closure inside the reverse channel's `BuilderStep` host-step dispatch (leg 1 — live venue re-materialization during install-plan apply) — a host-internal, not cross-process, call site. |
+| `builder_venue.go` | 66 | B — irreducible DATA envelope | `buildEngineContext` carries `*spec.Config`/`*Generator`/`*buildkit.ResolvedBox` (core-only types no sdk plugin can hold), threaded across a dozen already-floor `host_build_*.go` seams — the generic per-invoke descriptor those seams' own floor justification depends on. |
+| `host_build_remote_image_resolve.go` | 58 | B (K1 floor) | `hostBuildRemoteImageResolve` calls `EnsureRepoDownloaded` (refs.go, the K1-floor git clone/cache) only — the box-RESOLVE half already moved plugin-side (`candy/plugin-build`'s `ensureRemoteRef`). Same K1-floor mechanism as `host_build_box_fetch_resolve.go`. |
+| `dispatch_build_ensure.go` | 57 | M — pure registry dispatch | `dispatchBuildEnsure` calls `providerRegistry.resolve(ClassBuild,"ensure")` + `prov.Invoke(...)` — zero business logic beyond the registry dispatch wrapper. |
+| `provider_builder_external.go` | 57 | D — static word→plugin map | `externalBuilderPlugins` is a static D-data map; `externalBuilderPluginRef` is a pure D-lookup consumed by `builder_preresolve.go`'s registry-connect (M) — the D-data twin of `provider_deploy.go`'s `externalDeploySubstratePlugins`. |
+| `host_build_box_fetch_resolve.go` | 56 | B (K1 floor) | `hostBuildBoxFetchResolve` wraps `ResolveProjectRepo`→`EnsureRepoDownloaded` (refs.go — CHARLY_REPO_OVERRIDE + registered refs-backend download + auto-migration) — none of which an sdk-only plugin can run itself; refs.go is its own not-yet-K3 floor file. |
+| `resource_resolve.go` + `distro_resolve.go` | 33 + 24 | M — kind-dispatch callback wrappers | `resolveResourceViaPlugin`/`resolveDistroViaPlugin` call `hostInvoke(ClassKind,...)` — the SAME `InvokeProvider`/registry kind-dispatch mechanism (leg 2) as `sdk/loaderkit`'s own `resolveDistroLeg`/`resolveResourceLeg` closures on the plugin side. Tiny core-internal callbacks `format_config.go`'s `LoadBuildConfigForBox` passes to `spec.ProjectDistroConfig`/`ResolvePluginKindViaPlugin`. |
+| `layers.go` | 511 | K1-IOU | `ScanCandy`/`parseCandyYAML`/`scanLocalCandies` call `LoadUnified`/`ApplyDiscover`/`buildCandy` (unified.go/materialize.go — core-only per W1's own "config.go/LoadUnified STAYS" verdict, 12 live core call sites). Blocked on K1's own further resolution, not independently K3-movable. Audit-correction: the audit's row justification ("Candy struct... the skill's motivating-incident precedent") is stale against the CURRENT file — no `type Candy struct` exists anywhere in `charly/` today (W9 already moved it to `spec.CandyModel`/`spec.CandyView` before the audit ran); `plugins/internals/skills/plugin/references/boundary-law.md`'s own mention of this incident is accurate as written (explicit past-tense "an auditor counted... then self-corrected" — a historical illustration, not a current-state claim; fixed a DIFFERENT, unrelated stale-example line in the same file, see the W2 doc-sweep commit). |
+| `generate.go` | 287 | MIXED: K1-IOU / B (embed) / M (registry) | `newCandyScanGenerator`/`ScanAllCandyWithConfigOpts` call `LoadConfig`/`LoadUnified` — K1-IOU. `baselineContextIgnore` reads charly's own `//go:embed charly/charly.yml` — B (same embed-boundary reason as `host_build_buildengine.go`'s context-ignore leg). `resolveInlineBuilderSeam`/`invokeOpEmitFragmentOpt` Invoke the provider registry — M. `createRemoteCandyCopies`/`candyByName`/`candyStageDirName` are host-fs helpers consumed by the K1-IOU functions above, in the same file. |
+| `format_config.go` | 58 | K1-IOU | `LoadBuildConfigForBox`/`LoadDefaultBuildConfig` call `LoadUnified` (core-only, K1) — dies only when `LoadUnified`/`config.go`'s own K1 resolution happens. |
+
+## K-wave W2 unit 3 — the validate.go/validate_project_host.go move, task #13
+
+Per orchestrator ruling 3(a)-(c): the ~250 LOC of pure raw-config validate rules
+(`validateBuildAndDistro`/`validateBoxBaseFrom`/`validateMergeConfig`/`validateBuildTunables`/
+`validateBuilderRefs`) MOVED to `candy/plugin-box/validate_config_rules.go`, which self-loads the
+raw `*spec.Config`/`*spec.DistroConfig`/`*spec.BuilderConfig` via the hoisted
+`sdk/loaderkit.LoadUnifiedViaExecutor` witness (unit 2, same task). `validate.go` shrank
+511→181 LOC (including the `boxEntityWireYAML`/`isNodeFormFile` CUE-support helpers that stay);
+`validate_project_host.go` shrank 334→325 LOC (its `loadedProject` load path is UNCHANGED — the
+CUE checks still need a fully-scanned project; only `runHostNaturalValidateChecks`'s function-call
+list shrank from 8 calls to 3, dropping the `builderCfg` field it no longer needs).
+
+| File (slimmed remainder) | LOC | Clause | Evidence |
+|---|---:|---|---|
+| `validate.go` | 181 | M — CUE-splice mechanism | `validateCandyCUESchemas`/`validateProjectCUESchemas` call `cueDocFromYAML`/`validateEntityClosedCUE`/`validateNodeFormSteps` (cue_schema.go/cue_node.go), which read `coreCueSchema()` — the HOST's SPLICED cross-plugin CUE schema (every connected plugin's own schema fragment unified at registry/schema-gate time into ONE `cue.Value` graph). A live, non-marshalable object — genuinely process-local, not portable to any plugin without first building a schema-splice-carrying seam (rejected as a NEW seam family per ruling 3(c); the existing `ProjectLoader` seam legs (`requireProjectLoader().ValidateEntityClosedCUE`/etc., U2/U3c) already carry the SAME functions for core's OWN in-process callers — `provider_kind_invoke.go`'s kind-dispatch — reusing an established pattern, not adding one, but that pattern's callers are all in-process; an out-of-process reach would still need a new wire leg). |
+| `validate_project_host.go` | 325 | M (CUE, same as above) + K1-loader-refs-IOU (`validateRemoteCandies`) | `hostBuildValidateProjectChecks`'s `loadProjectForResolve` load path stays (feeds the CUE pair with a fully-scanned project + registers the build vocabulary `validateCandyCUESchemas` needs). `validateRemoteCandies` calls `CollectRemoteRefs` (refs.go), which needs `spec.RefsCollectSeams` (`Downloader`/`MigrateCache`/`ResolveLocal` — registry-coupled host callbacks) with NO existing executor-backed bridge (unlike `LoadSeams`, which the K1-loader wave already bridged) — an IOU for a future wave that builds that bridge, not this unit's scope (north-star heuristic 3: "the move WAITS for the enabler"). |
+
+**Cascade check (per ruling 3(c), "verify each with the per-submodule grep")**: `validateEntityClosedCUE`/`validateNodeFormSteps`/`validateCandyManifestCUE` (cue_schema.go, K1 files) each still have their ONE production caller inside `validate.go` (`cueDocFromYAML`/`validateEntityClosedCUE` at `validateProjectCUESchemas`; `validateCandyManifestCUE` at `validateCandyCUESchemas`; `validateNodeFormSteps` at `validateProjectCUESchemas`'s root-file loop) — since the CUE pair STAYED (ruling 3(c), no new seam), these K1 files' cascade-deletion did NOT fire this unit; `cueDocFromYAML` additionally still serves `provider_kind_invoke.go` (the M kind-dispatch) regardless. No K1 file changed as a result of this unit.
+
 ## Clause key
 
 - **M** — wire-broker Mechanism (one of the 3 sanctioned reverse-channel legs: venue-executor
@@ -92,3 +141,7 @@ proven without this rename.
 - **E** — generic kind-blind vocabulary/envelope helper.
 - **B** — irreducible same-process/live-handle Boundary fact (cannot marshal across the wire).
 - **D** — Data-only registry/trait projection.
+- **K1-IOU** — blocked on the K1 loader wave's OWN remaining core files (`LoadConfig`/
+  `LoadUnified`/`config.go`/`unified.go`) resolving further; not independently movable by a
+  later wave without churning call sites to fake portability (forbidden — north-star heuristic
+  3). Re-audit once K1 lands its own remainder.

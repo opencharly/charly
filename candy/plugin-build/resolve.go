@@ -21,7 +21,8 @@ import (
 // small `buildengine-*` host-leg family, reaching the host ONLY for what a sdk-only candy
 // structurally cannot do:
 //
-//   - the config LOAD               → loaderkit.LoadUnified(dir, LoadSeamsFromExecutor(ex))  [K1, landed]
+//   - the config LOAD               → loaderkit.LoadUnifiedViaExecutor(ctx, ex, dir)  [K1, landed;
+//                                     K3-W2 hoisted the per-candy LoaderExecutor copy into loaderkit]
 //   - the local candy SCAN          → HostBuild("buildengine-scan-local")  (bootstrap-delicate
 //                                     parseCandyYAML→buildCandy; the B bootstrap root STAYS core)
 //   - the remote candy FETCH fixpt  → loaderkit.ScanCandyFromLocal(seams) over three thin legs
@@ -65,8 +66,7 @@ func resolveBuildEngine(ctx context.Context, ex *sdk.Executor, req spec.BuildReq
 	rr := spec.ResolvedProjectRequest{Dir: dir, IncludeDisabled: req.IncludeDisabled, ExtraCandyRefs: req.ExtraCandyRefs}
 
 	// --- 1. LOAD the project plugin-side (K1 reverse legs) ---
-	exec := &buildLoaderExecutor{ctx: ctx, ex: ex}
-	uf, ok, err := loaderkit.LoadUnified(dir, loaderkit.LoadSeamsFromExecutor(exec))
+	uf, ok, err := loaderkit.LoadUnifiedViaExecutor(ctx, ex, dir)
 	if err != nil {
 		return spec.BuildResolveReply{Error: errString(err)}, nil
 	}

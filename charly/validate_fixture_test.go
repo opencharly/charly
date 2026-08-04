@@ -15,8 +15,10 @@ import (
 // plugin rule) via validateProjectForBuild — the compiled-in command:validate dispatch (RDD-proven the
 // dispatch works in-process). Each converted test writes a fixture + asserts the SAME diagnostic the
 // synthetic unit pinned; the scenario-mapping table (scratchpad/k3d-scenario-mapping.md) is the
-// no-net-loss audit. HOST-NATURAL rules that STAY in charly/ core (validateBuildAndDistro,
-// validateBuilderRefs, …) are exercised by a DIRECT call to the kept host function, not a fixture.
+// no-net-loss audit. The former trailing HOST-NATURAL rule block (validateBuildAndDistro/
+// validateBuilderRefs direct-call tests) relocated to
+// candy/plugin-box/validate_config_rules_test.go alongside its subjects (K3-W2, task #13) — those
+// rules are no longer host-natural at all, the plugin self-loads its own raw config now.
 //
 // Assertion note: the new path may word a diagnostic slightly differently than the former synthetic
 // unit (e.g. the copr/repo section label is now `distro.<name>.copr`, not `rpm.copr`, and the ADE +
@@ -1410,87 +1412,4 @@ func TestValidateOps_RejectsRuntimeOnlyActInBuild(t *testing.T) {
       - check: x
         command: "true"
         context: [build]`), "cannot act")
-}
-
-// ---------------------------------------------------------------------------
-// HOST-NATURAL rules — these STAY in charly/ core; the converted test calls the KEPT host function
-// DIRECTLY (a projection cannot carry the raw authored config they read). testDistroConfig() /
-// testBuilderCfg() load the testdata build vocabulary (fedora+arch+debian+ubuntu distros, pixi
-// builder) — the same LoadBuildConfigForBox path Validate() used to feed these rules.
-// ---------------------------------------------------------------------------
-
-// TestValidateBuildAndDistro_InvalidPkg ← TestValidateInvalidPkg. A build format not in the vocabulary.
-func TestValidateBuildAndDistro_InvalidPkg(t *testing.T) {
-	cfg := &spec.Config{Defaults: spec.BoxConfig{Build: BuildFormats{"invalid"}}, Box: boxMapOf(map[string]spec.BoxConfig{})}
-	errs := &spec.ValidationError{}
-	validateBuildAndDistro(cfg, testDistroConfig(), errs)
-	if !errs.HasErrors() || !strings.Contains(errs.Error(), "is not valid") {
-		t.Errorf("want 'is not valid', got: %v", errs.Errors)
-	}
-}
-
-// TestValidateBuildAndDistro_InvalidPkgValue ← TestValidateInvalidPkgValue.
-func TestValidateBuildAndDistro_InvalidPkgValue(t *testing.T) {
-	cfg := &spec.Config{Defaults: spec.BoxConfig{Build: BuildFormats{"zypper"}}, Box: boxMapOf(map[string]spec.BoxConfig{})}
-	errs := &spec.ValidationError{}
-	validateBuildAndDistro(cfg, testDistroConfig(), errs)
-	if !errs.HasErrors() || !strings.Contains(errs.Error(), "is not valid") {
-		t.Errorf("want 'is not valid', got: %v", errs.Errors)
-	}
-}
-
-// TestValidateBuildAndDistro_PacValid ← TestValidatePacPkgValue. `pac` is a valid vocabulary format.
-func TestValidateBuildAndDistro_PacValid(t *testing.T) {
-	cfg := &spec.Config{Defaults: spec.BoxConfig{Build: BuildFormats{"pac"}}, Box: boxMapOf(map[string]spec.BoxConfig{})}
-	errs := &spec.ValidationError{}
-	validateBuildAndDistro(cfg, testDistroConfig(), errs)
-	if errs.HasErrors() {
-		t.Errorf("pac should be valid, got: %v", errs.Errors)
-	}
-}
-
-// TestValidateBuilderRefs_SelfBuilder ← TestValidateSelfBuilder. A per-image builder referencing self.
-func TestValidateBuilderRefs_SelfBuilder(t *testing.T) {
-	cfg := &spec.Config{
-		Defaults: spec.BoxConfig{Build: BuildFormats{"rpm"}},
-		Box: boxMapOf(map[string]spec.BoxConfig{
-			"myimg": {Candy: []string{"pixi"}, Builder: spec.BuilderMap{"pixi": "myimg"}},
-		}),
-	}
-	errs := &spec.ValidationError{}
-	validateBuilderRefs(cfg, testBuilderCfg(), errs)
-	if !errs.HasErrors() || !strings.Contains(errs.Error(), "cannot reference self") {
-		t.Errorf("want 'cannot reference self', got: %v", errs.Errors)
-	}
-}
-
-// TestValidateBuilderRefs_InheritedSelfNotError ← TestValidateBuilderInheritedSelfNotError. A builder
-// image inheriting defaults.builder that points to itself is NOT an error.
-func TestValidateBuilderRefs_InheritedSelfNotError(t *testing.T) {
-	cfg := &spec.Config{
-		Defaults: spec.BoxConfig{Build: BuildFormats{"rpm"}, Builder: spec.BuilderMap{"pixi": "builder", "npm": "builder"}},
-		Box: boxMapOf(map[string]spec.BoxConfig{
-			"builder": {Candy: []string{"pixi"}},
-		}),
-	}
-	errs := &spec.ValidationError{}
-	validateBuilderRefs(cfg, testBuilderCfg(), errs)
-	if errs.HasErrors() {
-		t.Errorf("inherited self-builder should not error, got: %v", errs.Errors)
-	}
-}
-
-// TestValidateBuilderRefs_PerImageNotFound ← TestValidatePerImageBuilderNotFound.
-func TestValidateBuilderRefs_PerImageNotFound(t *testing.T) {
-	cfg := &spec.Config{
-		Defaults: spec.BoxConfig{Build: BuildFormats{"rpm"}},
-		Box: boxMapOf(map[string]spec.BoxConfig{
-			"app": {Candy: []string{"pixi"}, Builder: spec.BuilderMap{"pixi": "nonexistent"}},
-		}),
-	}
-	errs := &spec.ValidationError{}
-	validateBuilderRefs(cfg, testBuilderCfg(), errs)
-	if !errs.HasErrors() || !strings.Contains(errs.Error(), "is not found") {
-		t.Errorf("want 'is not found', got: %v", errs.Errors)
-	}
 }

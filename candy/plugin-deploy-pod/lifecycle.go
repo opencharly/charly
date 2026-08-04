@@ -308,14 +308,32 @@ func podPrepareVenue(ctx context.Context, exec *sdk.Executor, p lifecycleParams)
 		baseName = p.Name
 	}
 
+	// Base-image metadata (User/Security/Registry) — read PLUGIN-SIDE (K3-W2): the host prep only
+	// resolves+returns reply.BaseImage (the ref); this candy already imports deploykit, so it reads
+	// the ai.opencharly.* labels itself via the SAME spec/container mechanism the host used to run
+	// (deploykit.ExtractMetadata re-exports container.ExtractMetadata) — no host round-trip. Both the
+	// no-overlay tag-only path and the overlay build path below need these (renderOverlaySecurityLabel/
+	// tagDeployAlias), so extract once here.
+	var baseUser string
+	var baseSecurity *spec.Security
+	var baseRegistry string
+	if reply.BaseImage != "" {
+		if baseMeta, merr := deploykit.ExtractMetadata("podman", reply.BaseImage); merr == nil && baseMeta != nil {
+			baseUser = baseMeta.User
+			sec := baseMeta.Security
+			baseSecurity = &sec
+			baseRegistry = baseMeta.Registry
+		}
+	}
+
 	// No overlay (no add_candy plans) → the base image is deploy-ready. Tag the deploy-name alias
 	// so `charly config/start <deploy-name>` resolves the base image when deploy-name != image-name
 	// (mirrors the former in-core pod-overlay Emit no-overlay branch). The host prep prepped the base
-	// ref + metadata; the candy tags the alias via the served executor.
+	// ref; the candy tags the alias via the served executor.
 	resolvedImage := reply.BaseImage
 	if len(reply.Plans) == 0 {
 		if !opts.DryRun && reply.DeployName != "" && reply.BaseImage != "" {
-			if err := tagDeployAlias(ctx, exec, reply, reply.BaseImage, opts); err != nil {
+			if err := tagDeployAlias(ctx, exec, reply, reply.BaseImage, opts, baseRegistry); err != nil {
 				return nil, err
 			}
 		}
@@ -357,7 +375,7 @@ func podPrepareVenue(ctx context.Context, exec *sdk.Executor, p lifecycleParams)
 		}
 
 		// Overlay path: render the overlay Containerfile in the candy + podman build + tag.
-		overlayRef, berr := buildOverlay(ctx, exec, reply, resolveReply.ResolvedProject, plans, p.Dir, baseName, opts)
+		overlayRef, berr := buildOverlay(ctx, exec, reply, resolveReply.ResolvedProject, plans, p.Dir, baseName, opts, baseUser, baseSecurity, baseRegistry)
 		if berr != nil {
 			return nil, berr
 		}

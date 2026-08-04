@@ -47,7 +47,9 @@ type BoxCmd struct {
 // former BoxPkgCmd.Run body ITSELF, reusing the resolveBuildEngine seams (LoadUnified, the
 // scan-local host leg, resolveDistroLeg), dispatched via candy/plugin-box's dispatchPkg over
 // InvokeProvider(build:pkg); pkg_cmd.go + the hidden __box-pkg reentry are DELETED. See
-// charly/labels.go + candy/plugin-box/{merge_cmd,reconcile,box}.go's dispatchPull/dispatchBuild.
+// sdk/deploykit/write_labels.go + candy/plugin-box/{merge_cmd,reconcile,box}.go's dispatchPull/dispatchBuild.
+// (charly/labels.go, this comment's former citation, no longer exists — the OCI-label surface
+// relocated to sdk/deploykit + spec/container; see /charly-internals:capabilities.)
 //
 // The host-coupled remainder that DID stay core is the genuine floor a sdk-only candy cannot run:
 // the git clone/cache (EnsureRepoDownloaded → clone/cache, K1), reached by the candy over the thin

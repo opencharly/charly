@@ -138,8 +138,7 @@ func ensureRemoteRef(ctx context.Context, ex *sdk.Executor, image, stripped stri
 // path used). The tag is "" — the caller (ensureRemoteRef) passes an empty tag to the seam, so the
 // former host ImageRef was likewise tag-less.
 func resolveRemoteImageRef(ctx context.Context, ex *sdk.Executor, dir, boxName string) string {
-	exec := &buildLoaderExecutor{ctx: ctx, ex: ex}
-	uf, ok, err := loaderkit.LoadUnified(dir, loaderkit.LoadSeamsFromExecutor(exec))
+	uf, ok, err := loaderkit.LoadUnifiedViaExecutor(ctx, ex, dir)
 	if err != nil || !ok || uf == nil {
 		return ""
 	}
@@ -223,8 +222,7 @@ func ensureProjectRef(ctx context.Context, ex *sdk.Executor, image, dir string) 
 // buildable short-name match" error exactly as the former host path did when LoadConfig erroring
 // left cfg nil.
 func loadProjectCfgForEnsure(ctx context.Context, ex *sdk.Executor, dir string) *spec.Config {
-	exec := &buildLoaderExecutor{ctx: ctx, ex: ex}
-	uf, ok, err := loaderkit.LoadUnified(dir, loaderkit.LoadSeamsFromExecutor(exec))
+	uf, ok, err := loaderkit.LoadUnifiedViaExecutor(ctx, ex, dir)
 	if err != nil || !ok || uf == nil {
 		return nil
 	}
