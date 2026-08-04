@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	specexec "github.com/opencharly/spec/exec"
+	"github.com/opencharly/spec/ops"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -99,7 +100,7 @@ func arbiterInvoke(in spec.ArbiterInvokeInput) (spec.ArbiterInvokeReply, error) 
 	}
 	ctx := specexec.ContextWithExecutor(context.Background(),
 		specexec.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}}))
-	reply, err := invokeTyped[spec.ArbiterInvokeInput, spec.ArbiterInvokeReply](ctx, prov, "arbiter", OpRun, in)
+	reply, err := invokeTyped[spec.ArbiterInvokeInput, spec.ArbiterInvokeReply](ctx, prov, "arbiter", ops.OpRun, in)
 	if err != nil {
 		return spec.ArbiterInvokeReply{}, fmt.Errorf("arbiter %s: %w", in.Action, err)
 	}
@@ -265,7 +266,7 @@ func gatherResources() map[string]*spec.ResolvedResource {
 	if !ok {
 		return nil
 	}
-	rp, err := invokeTyped[spec.ResolvedProjectRequest, spec.ResolvedProject](context.Background(), prov, "project", OpResolve, spec.ResolvedProjectRequest{})
+	rp, err := invokeTyped[spec.ResolvedProjectRequest, spec.ResolvedProject](context.Background(), prov, "project", ops.OpResolve, spec.ResolvedProjectRequest{})
 	if err != nil {
 		return nil
 	}

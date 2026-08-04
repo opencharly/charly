@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"strings"
-
-	"github.com/opencharly/spec/ops"
 )
 
 // Provider is the ONE extension abstraction. Every reserved word — every kind,
@@ -133,31 +131,21 @@ type PluginUnit struct {
 }
 
 // Operation selectors (op.Op) are read directly off github.com/opencharly/spec/ops
-// (ops.OpLoad/ops.OpExecute/ops.OpBuild/ops.OpCollectContext/ops.OpReverse/ops.OpConfigWrite) —
-// the SINGLE SOURCE shared with compiled-in / out-of-tree plugin candies, so a kind candy's
-// Invoke can compare req.GetOp() against the same value (R3). K5 seam-death (W0-registered IOU,
-// PARTIALLY closed here): this file used to re-export EVERY constant as a package-level
-// `const OpRun = ops.OpRun` alias — the exact `var y = spec.Y` shape ZERO-ALIASES forbids, just
-// spelled with `const` instead of `var` (which is why TestNoAliasForms_ZeroPackageLevelReexports
-// never caught it — the AST gate only matched var-form re-exports; extended below to also catch
-// this const-form + any top-level re-export of spec/ops or spec/schema). Every non-fenced call
-// site in charly/ was repointed to `ops.Op*` directly (this same commit); OpConfigWrite had zero
-// real callers anywhere in charly/ even before the repoint (deploy:pod's own `sdk.OpConfigWrite`
-// copy is what its actual consumer, candy/plugin-deploy-pod, uses) and is not reintroduced.
-//
-// The four below (OpRun/OpValidate/OpEmit/OpResolve) stay as a REGISTERED IOU: their only
-// remaining bare-form consumers are hard-fenced files this cutover cannot touch
-// (service_render.go, substrate_template_resolve.go, preempt.go, check_kit_adapter.go — active
-// in another teammate's tranche). Repointing them mechanically the same way would leave the
-// build broken for anyone without that fence's authorization; deleting this remainder without
-// repointing those 4 files first would leave the tree non-compiling. Whoever next lands a
-// commit touching any of those 4 files closes this out.
-const (
-	OpRun      = ops.OpRun
-	OpValidate = ops.OpValidate
-	OpEmit     = ops.OpEmit
-	OpResolve  = ops.OpResolve
-)
+// (ops.OpRun/ops.OpLoad/ops.OpValidate/ops.OpEmit/ops.OpExecute/ops.OpResolve/ops.OpBuild/
+// ops.OpCollectContext/ops.OpReverse) — the SINGLE SOURCE shared with compiled-in / out-of-tree
+// plugin candies, so a kind candy's Invoke can compare req.GetOp() against the same value (R3).
+// K5 seam-death (W0-registered IOU, now FULLY closed): this file used to re-export EVERY
+// constant as a package-level `const OpRun = ops.OpRun` alias — the exact `var y = spec.Y` shape
+// ZERO-ALIASES forbids, just spelled with `const` instead of `var` (which is why
+// TestNoAliasForms_ZeroPackageLevelReexports never caught it — the AST gate only matched
+// var-form re-exports; extended to also catch this const-form + any top-level re-export of
+// spec/ops or spec/schema). ALL 258 call sites in charly/ are repointed to `ops.Op*` directly,
+// including the 4 that needed a narrow, team-lead-granted fence exception (service_render.go,
+// substrate_template_resolve.go, preempt.go, check_kit_adapter.go — the token substitution +
+// import line ONLY, zero other edits in those files, per the exception's exact scope).
+// OpConfigWrite had zero real callers anywhere in charly/ even before the repoint (deploy:pod's
+// own `sdk.OpConfigWrite` copy is what its actual consumer, candy/plugin-deploy-pod, uses) and
+// is not reintroduced.
 
 // marshalParams / unmarshalResult are the small helpers the in-proc adapters and
 // the gRPC stubs share so the envelope is built one way (R3).

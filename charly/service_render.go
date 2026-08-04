@@ -3,13 +3,13 @@ package main
 // service_render.go — the HOST side of service materialization after the init
 // de-type (Cutover F, leg 1). The init-system KNOWLEDGE — how a service_template /
 // drop-in renders into a systemd unit or supervisord fragment, plus the restart/
-// stdout policy mappings — lives in candy/plugin-init's OpResolve. The host builds
+// stdout policy mappings — lives in candy/plugin-init's ops.OpResolve. The host builds
 // the entry-derived, home-expanded ServiceRenderContext (pure ServiceEntry
 // projection, no init knowledge) and calls the plugin, then egress-validates.
 //
 // Also carries the egress-validation dispatch (merged from the deleted charly/egress.go,
 // coneB-buildtail dissolution): the validation logic + CUE schemas live in the compiled-in
-// candy/plugin-egress; these functions resolve verb:egress and Invoke its OpValidate. The
+// candy/plugin-egress; these functions resolve verb:egress and Invoke its ops.OpValidate. The
 // egress gate proves the config artifacts charly WRITES (cloud-init, k8s manifests, traefik
 // routes, ledger JSON, the Containerfile, systemd/supervisord units, libvirt domain XML)
 // BEFORE the bytes hit disk. host→plugin dispatch (plain resolve+Invoke, NOT the F10
@@ -33,6 +33,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/opencharly/spec/ops"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -41,7 +42,7 @@ import (
 // seam, which charly fills here at init).
 func init() { spec.ValidateRecord = ValidateEgressValue }
 
-// egressValidate resolves the egress plugin and runs one OpValidate. mode ∈
+// egressValidate resolves the egress plugin and runs one ops.OpValidate. mode ∈
 // {bytes, text, xml}: "bytes" for serialized YAML/JSON (covers ValidateEgress + the
 // marshalled ValidateEgressValue), "text" for a rendered non-data string, "xml" for the
 // koala-decoded (best-effort) libvirt domain XML.
@@ -50,7 +51,7 @@ func egressValidate(kind, label, mode, data string) error {
 	if !ok {
 		return fmt.Errorf("%s: egress plugin (verb:egress) not registered — charly built without candy/plugin-egress", label)
 	}
-	reply, err := invokeTyped[map[string]string, egressReply](context.Background(), prov, "egress", OpValidate,
+	reply, err := invokeTyped[map[string]string, egressReply](context.Background(), prov, "egress", ops.OpValidate,
 		map[string]string{"kind": kind, "label": label, "mode": mode, "data": data})
 	if err != nil {
 		return fmt.Errorf("%s: egress: %w", label, err)
@@ -61,7 +62,7 @@ func egressValidate(kind, label, mode, data string) error {
 	return nil
 }
 
-// egressReply is verb:egress's OpValidate reply — a single error string ("" = valid).
+// egressReply is verb:egress's ops.OpValidate reply — a single error string ("" = valid).
 type egressReply struct {
 	Error string `json:"error"`
 }
@@ -121,7 +122,7 @@ func RenderService(entry *spec.ServiceEntry, def *spec.ResolvedInit, ctx spec.Se
 	return rendered, nil
 }
 
-// renderServiceViaPlugin invokes candy/plugin-init's OpResolve service-render leg.
+// renderServiceViaPlugin invokes candy/plugin-init's ops.OpResolve service-render leg.
 func renderServiceViaPlugin(in spec.ServiceRenderInput) (*spec.RenderedService, error) {
 	out, err := invokeInitResolve(spec.InitResolveRequest{Render: &in})
 	if err != nil {
@@ -139,7 +140,7 @@ func renderServiceViaPlugin(in spec.ServiceRenderInput) (*spec.RenderedService, 
 	return reply.Rendered, nil
 }
 
-// resolveInitConfigViaPlugin invokes candy/plugin-init's OpResolve config leg,
+// resolveInitConfigViaPlugin invokes candy/plugin-init's ops.OpResolve config leg,
 // projecting one opaque init body into a *spec.ResolvedInit (legs 2–4 value envelope).
 func resolveInitConfigViaPlugin(body json.RawMessage) (*spec.ResolvedInit, error) {
 	out, err := invokeInitResolve(spec.InitResolveRequest{Config: &spec.InitResolveInput{Init: body}})
@@ -155,12 +156,12 @@ func resolveInitConfigViaPlugin(body json.RawMessage) (*spec.ResolvedInit, error
 	return reply.Resolved, nil
 }
 
-// invokeInitResolve dispatches an OpResolve request to the compiled-in init kind
+// invokeInitResolve dispatches an ops.OpResolve request to the compiled-in init kind
 // provider (both legs share it).
 func invokeInitResolve(req spec.InitResolveRequest) ([]byte, error) {
 	prov, ok := providerRegistry.ResolveKind("init")
 	if !ok {
 		return nil, fmt.Errorf("init resolve: kind provider not registered")
 	}
-	return invokeTyped[spec.InitResolveRequest, json.RawMessage](context.Background(), prov, "init", OpResolve, req)
+	return invokeTyped[spec.InitResolveRequest, json.RawMessage](context.Background(), prov, "init", ops.OpResolve, req)
 }

@@ -192,37 +192,19 @@ func TestZeroAliases_NoAliasFilesInCharlyCore(t *testing.T) {
 // surface the 8 pre-W0 inline forms and gpu_shim.go's filename-evading forms all re-exported),
 // plus github.com/opencharly/spec/ops (the Op* TRANSPORT-PROTOCOL vocabulary) and
 // github.com/opencharly/spec/schema (the embedded CUE schema FS) — K5 W4 closes the W0-registered
-// IOU that carved those two out: `const OpRun = ops.OpRun` (provider.go, ~258 call sites) and
+// IOU that carved those two out: `const OpRun = ops.OpRun` (provider.go, 258 call sites) and
 // `var schemaFS = sdkschema.FS` (cue_schema.go, 2 call sites) are the EXACT same re-export shape
 // TestNoAliasForms_ZeroPackageLevelReexports already catches for spec/spec, just spelled with
 // `const`/pointed at a sibling spec/* package — there was never a genuine wire-contract reason to
 // exempt them (both are plain intra-module renames, unlike the sdk Handshake/proto family, which
-// IS the real plugin-API wire contract and stays untouched by this gate). schemaFS is fully
-// repointed (0 remaining call sites). The Op* repoint is NOT fully closed: OpRun/OpValidate/
-// OpEmit/OpResolve remain aliased in provider.go because their only bare-form consumers are 4
-// hard-fenced files in another teammate's active tranche (service_render.go,
-// substrate_template_resolve.go, preempt.go, check_kit_adapter.go) this cutover cannot touch —
-// see provider.go's own comment. aliasFormKnownIOUs below is the ONE narrow, auditable exemption
-// for exactly those 4 declarations; every other charly/*.go re-export of spec/spec, spec/ops, or
-// spec/schema fails the gate. Narrowing by RESOLVED IMPORT PATH (not the qualifier's local name)
-// so a differently-aliased import can't dodge the gate either.
+// IS the real plugin-API wire contract and stays untouched by this gate). Both are now FULLY
+// repointed (0 remaining call sites, including the 4 files that needed a narrow, reviewed
+// team-lead fence exception to touch — see provider.go's comment). Narrowing by RESOLVED IMPORT
+// PATH (not the qualifier's local name) so a differently-aliased import can't dodge the gate.
 var aliasFormTargetImportPaths = []string{
 	"github.com/opencharly/spec/spec",
 	"github.com/opencharly/spec/ops",
 	"github.com/opencharly/spec/schema",
-}
-
-// aliasFormKnownIOUs is the ONE reviewed, narrow exemption this gate honors: a "file.go:Name"
-// key for a top-level re-export the gate would otherwise flag, kept ONLY because its remaining
-// bare-form consumers are hard-fenced files another teammate is actively working in (see
-// provider.go's comment for the full rationale). Every entry here is a REGISTERED IOU, not a
-// permanent exception — whoever next lands a commit touching any of those 4 fenced files deletes
-// both the provider.go const and its matching entry here in the SAME commit.
-var aliasFormKnownIOUs = map[string]bool{
-	"provider.go:OpRun":      true,
-	"provider.go:OpValidate": true,
-	"provider.go:OpEmit":     true,
-	"provider.go:OpResolve":  true,
 }
 
 // TestNoAliasForms_ZeroPackageLevelReexports is the FORM-based half of the ZERO-ALIASES gate
@@ -267,8 +249,7 @@ func aliasFormTargetQualifiers(astF *ast.File) map[string]bool {
 
 // aliasFormViolationsInSpec inspects one type/var/const ValueSpec/TypeSpec for the re-export
 // alias shape (`type X = q.Y` / `var x = q.Y` / `const x = q.Y` where q is a target-package
-// qualifier), skipping any (file, name) pair registered in aliasFormKnownIOUs. Returns the
-// formatted violation string, or "" if spec isn't a violation.
+// qualifier). Returns the formatted violation string, or "" if spec isn't a violation.
 func aliasFormViolationInSpec(f string, fset *token.FileSet, tok token.Token, spec ast.Spec, qualifiers map[string]bool) string {
 	switch s := spec.(type) {
 	case *ast.TypeSpec:
@@ -283,7 +264,7 @@ func aliasFormViolationInSpec(f string, fset *token.FileSet, tok token.Token, sp
 			return ""
 		}
 		x, ok := sel.X.(*ast.Ident)
-		if !ok || !qualifiers[x.Name] || aliasFormKnownIOUs[f+":"+s.Name.Name] {
+		if !ok || !qualifiers[x.Name] {
 			return ""
 		}
 		pos := fset.Position(s.Pos())
@@ -297,7 +278,7 @@ func aliasFormViolationInSpec(f string, fset *token.FileSet, tok token.Token, sp
 			return "" // a call, composite literal, or closure — a legitimate binding
 		}
 		x, ok := sel.X.(*ast.Ident)
-		if !ok || !qualifiers[x.Name] || aliasFormKnownIOUs[f+":"+s.Names[0].Name] {
+		if !ok || !qualifiers[x.Name] {
 			return ""
 		}
 		pos := fset.Position(s.Pos())
@@ -345,7 +326,7 @@ func TestNoAliasForms_ZeroPackageLevelReexports(t *testing.T) {
 	}
 	if len(violations) > 0 {
 		sort.Strings(violations)
-		t.Errorf("ZERO-ALIASES form gate: %d inline re-export alias form(s) of %s in charly/ core — a bare `type X = spec.Y` / `var x = spec.Y` / `const x = spec.Y` top-level declaration means the call site is mislocated; repoint every caller to spec.Y directly and delete the alias, never re-export it (add a NARROW, reviewed entry to aliasFormKnownIOUs only for a genuine registered cross-wave IOU, never as a routine escape hatch):\n%s",
+		t.Errorf("ZERO-ALIASES form gate: %d inline re-export alias form(s) of %s in charly/ core — a bare `type X = spec.Y` / `var x = spec.Y` / `const x = spec.Y` top-level declaration means the call site is mislocated; repoint every caller to spec.Y directly and delete the alias, never re-export it:\n%s",
 			len(violations), strings.Join(aliasFormTargetImportPaths, ", "), strings.Join(violations, "\n"))
 	}
 }
