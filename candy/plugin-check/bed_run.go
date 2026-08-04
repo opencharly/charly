@@ -91,6 +91,19 @@ func withRunTag(args []string, tag string) []string {
 	return append(args, "--tag", tag)
 }
 
+// bedAdd builds a `charly bundle add` argv for a BED deploy. Every deploy a bed makes goes through
+// it, so the bed-only flags are declared once instead of at six call sites (R3).
+//
+// --dev-local-pkg is the deploy-side twin of the flag every bed image build already passes. Without
+// it, a localpkg candy whose package source cannot be found takes the deploy path's benign skip and
+// the bed installs nothing — which is how check-fedora-vm stopped building its rpm against an
+// uninitialized pkg/fedora submodule and failed later at a live `rpm -q` that explained none of it.
+// A bed exists to prove the in-development package builds and installs, so on a bed that condition
+// must be loud.
+func bedAdd(args ...string) []string {
+	return append([]string{"bundle", "add"}, append(args, "--dev-local-pkg")...)
+}
+
 // configStartArgs builds the `charly config`/`charly start` argv for a pod bed's config+start
 // steps. An add_candy: overlay bed's FRESH artifact to verify is the overlay `deploy-add` just
 // built + persisted (resolved via the persisted resolved_image (BundleNode.ResolvedImage),
@@ -418,14 +431,14 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 		}
 		deployed = true // VM domain exists — keep it on any later failure
 		waitReady()
-		if err := step("deploy-add", "bundle", "add", name, d.VMTemplate); err != nil {
+		if err := step("deploy-add", bedAdd(name, d.VMTemplate)...); err != nil {
 			return fail("bundle add %s: %w", name, err)
 		}
 		// Deploy the VM's nested HOST-ROOTED (kind:local) children only (d.LocalChildKeys, the
 		// host-resolved deployNestedLocalChildren subset). A VM's nested CONTAINER children are
 		// deployed IN-GUEST by plugin-deploy-vm's PostApply, so a host-side re-deploy would be wrong.
 		for _, childKey := range d.LocalChildKeys {
-			if err := step("deploy-"+childKey, "bundle", "add", name+"."+childKey); err != nil {
+			if err := step("deploy-"+childKey, bedAdd(name+"."+childKey)...); err != nil {
 				return fail("deploy nested local child %s.%s: %w", name, childKey, err)
 			}
 		}
@@ -439,16 +452,18 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 	default:
 		// Pod beds → image ref; kind:local beds → local template ref; an EXTERNAL
 		// deploy substrate composes its candies via add_candy: and carries no ref.
-		addArgs := []string{"bundle", "add", name}
+		positional := []string{name}
 		switch {
 		case d.IsExternal:
 			// no ref — add_candy: is the workload
 		case d.IsLocal:
-			addArgs = append(addArgs, d.LocalRef)
+			positional = append(positional, d.LocalRef)
 		default:
-			addArgs = append(addArgs, d.Image)
+			positional = append(positional, d.Image)
 		}
-		addArgs = append(addArgs, "--node-only")
+		// Positionals first, then flags: bedAdd appends its own, so the ref must already be in
+		// place before it is called.
+		addArgs := append(bedAdd(positional...), "--node-only")
 		// The pre-run tear-down of any lingering bed + sibling members from a previous interrupted
 		// run now happens in the hoisted pre-run-cleanup block above, before persist.
 		addArgs = withRunTag(addArgs, d.ImageTag)
@@ -469,7 +484,7 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 			waitReady()
 			// Deploy any nested children onto the started substrate, pre-order.
 			for _, childKey := range d.ChildKeys {
-				if err := step("deploy-"+childKey, "bundle", "add", name+"."+childKey); err != nil {
+				if err := step("deploy-"+childKey, bedAdd(name+"."+childKey)...); err != nil {
 					return fail("deploy nested child %s.%s: %w", name, childKey, err)
 				}
 			}
@@ -569,14 +584,14 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 			if d.IsVM {
 				waitReady()
 				for _, childKey := range d.LocalChildKeys {
-					if err := step("redeploy-"+childKey, "bundle", "add", name+"."+childKey); err != nil {
+					if err := step("redeploy-"+childKey, bedAdd(name+"."+childKey)...); err != nil {
 						return fail("re-deploy nested local child %s.%s (fresh rebuild): %w", name, childKey, err)
 					}
 				}
 			} else {
 				waitReady()
 				for _, childKey := range d.ChildKeys {
-					if err := step("redeploy-"+childKey, "bundle", "add", name+"."+childKey); err != nil {
+					if err := step("redeploy-"+childKey, bedAdd(name+"."+childKey)...); err != nil {
 						return fail("re-deploy nested child %s.%s (fresh rebuild): %w", name, childKey, err)
 					}
 				}

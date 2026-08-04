@@ -51,6 +51,7 @@ func (c *BundleAddCmd) emitOpts() deploykit.EmitOpts {
 		Verify:               c.Verify,
 		Pull:                 c.Pull,
 		BuilderImageOverride: c.BuilderImage,
+		DevLocalPkg:          c.DevLocalPkg,
 	}
 }
 

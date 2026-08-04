@@ -247,6 +247,7 @@ func (c *BundleAddCmd) dispatchOne(path string, node *spec.BundleNode, ancestorP
 		SkipIncompatible: opts.SkipIncompatible,
 		AssumeYes:        c.AssumeYes,
 		BuilderImage:     opts.BuilderImageOverride,
+		DevLocalPkg:      opts.DevLocalPkg,
 	}, nil)
 }
 

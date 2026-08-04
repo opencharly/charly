@@ -150,14 +150,13 @@ func readPPMToken(r *bufio.Reader) (string, error) {
 // writes, and returns the resulting image.Image. Fallback for the
 // go-libvirt DomainScreenshot RPC-stream issue described above.
 func captureDomainScreenshotViaVirsh(domName string) (image.Image, error) {
-	tmp, err := os.CreateTemp("", "charly-libvirt-screenshot-*.png")
+	tmp, releaseTmp, err := CreateTempHeld("", "charly-libvirt-screenshot-*.png")
 	if err != nil {
 		return nil, fmt.Errorf("creating tempfile: %w", err)
 	}
 	tmpPath := tmp.Name()
 	_ = tmp.Close()
-	RegisterTempCleanup(tmpPath)
-	defer func() { _ = os.Remove(tmpPath); UnregisterTempCleanup(tmpPath) }()
+	defer func() { releaseTmp(); _ = os.Remove(tmpPath); UnregisterTempCleanup(tmpPath) }()
 	defer os.Remove(filepath.Join(filepath.Dir(tmpPath), "charly-libvirt-screenshot-temp.ppm")) //nolint:errcheck
 
 	cmd := exec.Command("virsh", "-c", "qemu:///session", "screenshot", domName, tmpPath)

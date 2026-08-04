@@ -59,6 +59,7 @@ type BundleAddCmd struct {
 	AllowRootTasks   bool   `long:"allow-root-tasks" help:"Allow arbitrary root cmd: tasks (host target only)"`
 	SkipIncompatible bool   `long:"skip-incompatible" help:"Skip candies without host-matching format (host target only)"`
 	BuilderImage     string `long:"builder-image" help:"Override the compile builder image"`
+	DevLocalPkg      bool   `long:"dev-local-pkg" help:"Treat this as a disposable check-bed deploy: a localpkg candy whose package source cannot be found is a HARD FAILURE instead of a skip, so a bed can never silently install nothing. The deploy-side twin of 'charly box build --dev-local-pkg'; set automatically by the check-bed runner, never on an operator deploy."`
 	AssumeYes        bool   `long:"yes" short:"y" help:"Assume yes; implies all allow-* gates plus skip sudo preflight"`
 
 	// Disposable + lifecycle classification (see /charly-internals:disposable).
