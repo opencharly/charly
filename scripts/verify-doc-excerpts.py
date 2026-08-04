@@ -41,7 +41,12 @@ EXCERPT_SOURCES = {
     "ripgrep": "candy/ripgrep/charly.yml",
     "tutorial-shell": "box/fedora/box/tutorial-shell/charly.yml",
     "check-tutorial-shell": "box/fedora/charly.yml",
-    "check-docs-local": "charly.yml",
+    # check-group: the real nested local:-inside-a-disposable-VM bed the quickstart and
+    # concepts/02 quote. It replaced `check-docs-local`, which those pages presented as this
+    # repository's own configuration while it existed only on an unlanded branch — the
+    # fabrication this checker exists to catch. Its entry is removed with it; a source map
+    # naming a bed that is not in charly.yml is the same lie one level down.
+    "check-group": "charly.yml",
     "plugin-example": "candy/plugin-example/charly.yml",
 }
 
