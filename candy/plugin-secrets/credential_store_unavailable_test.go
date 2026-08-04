@@ -17,13 +17,18 @@ func TestResolveCredential_Default_vs_Unavailable(t *testing.T) {
 	}
 	defer func() { RuntimeConfigPath = defaultRuntimeConfigPath }()
 
-	// Case 1: explicit config backend, clean probe path, nothing stored.
-	// Source should be "default".
-	t.Run("clean config backend returns default", func(t *testing.T) {
-		resetDefaultStore()
-		defer resetDefaultStore()
-		t.Setenv("CHARLY_SECRET_BACKEND", "config")
-		defaultStoreProbeErr = nil
+	// These drive resolveStoreChain through withClassifierState — the active store and the probe
+	// error set directly — instead of through CHARLY_SECRET_BACKEND. The env pin used to be
+	// `config`, a backend that no longer exists; more importantly it conflated two things, since
+	// what these cases actually vary is the CLASSIFIER's two inputs, not which backend a setting
+	// selects. Setting them directly is what lets case 1 hold a combination the current selector
+	// no longer produces on its own (see the CHANGELOG note on headless fast-fail).
+
+	// Case 1: the config store is active and the probe was clean — nothing failed, the
+	// credential simply is not stored. Source should be "default", which callers treat as
+	// terminal: no amount of retrying conjures a credential that was never stored.
+	t.Run("clean config store returns default", func(t *testing.T) {
+		withClassifierState(t, &ConfigFileStore{}, nil)
 
 		val, source := ResolveCredential("TEST_UNSET", "charly/enc", "nonexistent", "fallback")
 		if source != "default" {
@@ -34,22 +39,11 @@ func TestResolveCredential_Default_vs_Unavailable(t *testing.T) {
 		}
 	})
 
-	// Case 2: auto backend, probe failed (simulated via defaultStoreProbeErr),
-	// storage is the ConfigFileStore fallback with nothing stored.
-	// Source should be "unavailable".
+	// Case 2: the config store is active because the keyring probe FAILED, and nothing is
+	// stored. Source should be "unavailable", which callers treat as retryable — the keyring
+	// may come up shortly after boot.
 	t.Run("probe-failed fallback returns unavailable", func(t *testing.T) {
-		resetDefaultStore()
-		defer func() {
-			defaultStoreProbeErr = nil
-			resetDefaultStore()
-		}()
-		t.Setenv("CHARLY_SECRET_BACKEND", "config")
-
-		// Force DefaultCredentialStore() to materialize as ConfigFileStore
-		// (triggers sync.Once).
-		_ = DefaultCredentialStore()
-		// Simulate a probe failure captured during auto-dispatch.
-		defaultStoreProbeErr = errSimulatedProbeFail
+		withClassifierState(t, &ConfigFileStore{}, errSimulatedProbeFail)
 
 		val, source := ResolveCredential("TEST_UNSET", "charly/enc", "nonexistent", "fallback")
 		if source != "unavailable" {
@@ -63,12 +57,6 @@ func TestResolveCredential_Default_vs_Unavailable(t *testing.T) {
 	// Case 3: probe failed but the credential IS in the config fallback.
 	// Source should be "config", not "unavailable" — the fallback served the value.
 	t.Run("probe-failed but config has value returns config", func(t *testing.T) {
-		resetDefaultStore()
-		defer func() {
-			defaultStoreProbeErr = nil
-			resetDefaultStore()
-		}()
-
 		// Prime config.yml with a VNC password (CredServiceVNC is the only
 		// config-storable service in the current code — good enough for this
 		// verification).
@@ -79,9 +67,7 @@ func TestResolveCredential_Default_vs_Unavailable(t *testing.T) {
 			t.Fatalf("seeding config: %v", err)
 		}
 
-		t.Setenv("CHARLY_SECRET_BACKEND", "config")
-		_ = DefaultCredentialStore()
-		defaultStoreProbeErr = errSimulatedProbeFail
+		withClassifierState(t, &ConfigFileStore{}, errSimulatedProbeFail)
 
 		val, source := ResolveCredential("TEST_UNSET", CredServiceVNC, "testimg", "fallback")
 		if source != "config" {

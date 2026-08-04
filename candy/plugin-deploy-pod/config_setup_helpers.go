@@ -800,14 +800,16 @@ func updateAllDeployedQuadlets(ctx context.Context, ex *sdk.Executor, rt *kit.Re
 			}
 		}
 
+		encryptedMounts := deploykit.HasEncryptedBindMounts(bindMounts)
 		qcfg := deploykit.QuadletConfig{
 			BoxName: boxName, Instance: instance, ImageRef: imageRef, Home: meta.Home, Ports: meta.Port,
 			Volumes: volumes, BindMounts: bindMounts, GPU: detected.GPU, BindAddress: rt.BindAddress,
 			Tunnel: tunnelCfg, UID: meta.UID, GID: meta.GID, Env: envVars, EnvFile: quadletEnvFile,
 			Security: security, Network: resolvedNetwork, Status: meta.Status, Info: meta.Info,
 			Entrypoint: resolveEntrypointFromMeta(&meta), Secrets: provisioned, CharlyBin: charlyBin,
-			EncryptedMounts: deploykit.HasEncryptedBindMounts(bindMounts),
-			PodName: podName, Sidecar: resolvedSidecars,
+			EncryptedMounts:  encryptedMounts,
+			UnattendedUnlock: resolveEncUnattendedUnlock(ctx, ex, boxName, encryptedMounts),
+			PodName:          podName, Sidecar: resolvedSidecars,
 		}
 		if quadletEnvFile != "" {
 			qcfg.Env = append([]string{}, globalEnv...)

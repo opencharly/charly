@@ -6,9 +6,11 @@ import (
 	"errors"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/spec/proto"
 	"github.com/opencharly/spec/spec"
 	"google.golang.org/grpc"
@@ -146,9 +148,20 @@ func TestPluginEncMount_NoShortCircuit_WhenOneUnmounted(t *testing.T) {
 		invokeProviderErr: errors.New("verb:credential unreachable (test double)"),
 	})
 
-	t.Setenv("CHARLY_SECRET_BACKEND", "config")
+	t.Setenv("CHARLY_SECRET_BACKEND", kit.SecretBackendAuto)
 	t.Setenv("INVOCATION_ID", "test")
 	t.Setenv("GOCRYPTFS_PASSWORD", "")
+
+	// An unreachable credential plugin classifies as source="unavailable", which is RETRYABLE:
+	// the resolver polls to EncMountDeadline before failing. This test used to pin
+	// `secret_backend: config`, whose removed fail-fast branch returned immediately — leaving
+	// the deadline unshrunk would make it burn the full two minutes (measured: 120.09s).
+	// Shrink the real knobs rather than skipping the wait, so the retry path is still exercised.
+	origDeadline, origPeriod := deploykit.EncMountDeadline, deploykit.EncMountPollPeriod
+	deploykit.EncMountDeadline, deploykit.EncMountPollPeriod = 100*time.Millisecond, 10*time.Millisecond
+	defer func() {
+		deploykit.EncMountDeadline, deploykit.EncMountPollPeriod = origDeadline, origPeriod
+	}()
 
 	err := pluginEncMount("testimg", "", "")
 	if err == nil {

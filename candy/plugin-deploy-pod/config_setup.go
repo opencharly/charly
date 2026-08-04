@@ -375,14 +375,16 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 		podName = kit.PodNameInstance(c.Box, c.Instance)
 	}
 
+	encryptedMounts := deploykit.HasEncryptedBindMounts(bindMounts)
 	qcfg := deploykit.QuadletConfig{
 		BoxName: c.Box, ImageRef: imageRef, Home: meta.Home, Ports: ports, Volumes: volumes,
 		BindMounts: bindMounts, GPU: detected.GPU, BindAddress: rt.BindAddress, Tunnel: tunnelCfg,
 		UID: uid, GID: gid, Env: envVars, EnvFile: quadletEnvFile, Instance: c.Instance,
 		Security: security, Network: resolvedNetwork, Status: meta.Status, Info: meta.Info,
 		Entrypoint: resolveEntrypointFromMeta(&meta), Secrets: provisioned, CharlyBin: charlyBin,
-		EncryptedMounts: deploykit.HasEncryptedBindMounts(bindMounts),
-		PodName: podName, Sidecar: resolvedSidecars,
+		EncryptedMounts:  encryptedMounts,
+		UnattendedUnlock: resolveEncUnattendedUnlock(ctx, ex, c.Box, encryptedMounts),
+		PodName:          podName, Sidecar: resolvedSidecars,
 	}
 
 	if quadletEnvFile != "" {
