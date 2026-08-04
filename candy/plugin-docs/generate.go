@@ -24,6 +24,13 @@ func generate(root, out string) error {
 		return fmt.Errorf("create --out: %w", err)
 	}
 
+	// Clear the previous run's output before emitting this one, so a page the generator no longer
+	// produces cannot survive as a stale file that every gate above reads as a pass. See prune.go.
+	pruned, err := pruneGeneratedPages(out)
+	if err != nil {
+		return err
+	}
+
 	roots, err := repoRoots(root)
 	if err != nil {
 		return err
@@ -101,6 +108,9 @@ func generate(root, out string) error {
 	if err := generateVision(root, out); err != nil {
 		return err
 	}
+	if err := generateGrievances(root, out); err != nil {
+		return err
+	}
 
 	// The whole-site link gate runs LAST, over generated and hand-authored pages alike — the
 	// harness cross-reference gate above only ever covered `/charly-<plugin>:<skill>` references
@@ -109,7 +119,10 @@ func generate(root, out string) error {
 		return err
 	}
 
-	fmt.Printf("charly docs: %d recipe pages, %d plugin pages (%d provider words), %d cli pages, %d candy pages, %d box pages\n",
-		skillPages, pluginPages, providerWords, cliPages, candyPages, boxPages)
+	// Report the prune count alongside the emit counts. A run that clears more pages than it
+	// writes back is the signal that a generator stopped emitting something, and it is worth
+	// seeing rather than inferring from a directory listing.
+	fmt.Printf("charly docs: %d recipe pages, %d plugin pages (%d provider words), %d cli pages, %d candy pages, %d box pages (%d stale pages cleared)\n",
+		skillPages, pluginPages, providerWords, cliPages, candyPages, boxPages, pruned)
 	return nil
 }
