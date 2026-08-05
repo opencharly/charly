@@ -190,12 +190,14 @@ and the inner one runs inside the outer one's venue:
 check-group:
     group:
         disposable: true
-        check-group-vm:
-            vm:
-                from: eval-vm          # a disposable VM guest
-            check-group-member:
-                local:                 # ← nested: this lands INSIDE the guest,
-                    from: check-group-app   #   not on your workstation
+        lifecycle: dev
+        ...
+    check-group-vm:
+        vm:
+            from: eval-vm
+        check-group-member:
+            local:
+                from: check-group-app
 ```
 
 That is a real entry in this repository's `charly.yml`, abridged. The inner `local:` carries no
@@ -325,12 +327,14 @@ That last one matters if you copy this: the real VM entry sets `allow_repo_chang
 entry, not this excerpt, before adapting it.
 
 ```yaml
-check-tutorial-shell:                # a CONTAINER
+# a CONTAINER
+check-tutorial-shell:
     pod:
         image: tutorial-shell
         disposable: true
 
-check-fedora-vm:                     # a VM GUEST — same candy-reference form
+# a VM GUEST — same candy-reference form
+check-fedora-vm:
     vm:
         from: fedora-vm
         disposable: true
