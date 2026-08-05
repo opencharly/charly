@@ -19,7 +19,8 @@ import (
 // moved to candy/plugin-gpu's OWN embed (data.go/data.yml) — plugin-gpu is the actual detection
 // consumer, so it is the one data source (R3), not core; core no longer threads them through
 // spec.GpuProbeInput (see gpu_shim.go). deviceDescriptions moved to candy/plugin-doctor's own
-// embed alongside the rest of the K5 "hostprobe" HostBuild-kind dissolution.
+// embed: that plugin gathers its host facts itself (candy/plugin-doctor/hostfacts.go, peer
+// InvokeProvider to verb:gpu/verb:credential), so no core seam threads them any more.
 // appendEnvUnique was dead code (zero real callers) — candy/plugin-deploy-pod already carries
 // its own independent copy (config_setup_helpers.go).
 

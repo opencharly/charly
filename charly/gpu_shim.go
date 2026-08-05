@@ -12,10 +12,9 @@ import (
 // rebind) has NO in-core shim — every consumer (`charly vm gpu`, the arbiter) dispatches
 // verb:gpu directly.
 //
-// K5 seam-death (in progress): the "hostprobe" HostBuild kind (formerly charly/
-// host_build_hostprobe.go, the `charly doctor` consumer) is GONE — candy/plugin-doctor now
-// reaches verb:gpu peer-to-peer over InvokeProvider itself, the SAME pattern the arbiter/
-// `charly vm gpu` already use. What's LEFT here is genuinely core-coupled: DetectVFIO
+// `charly doctor` is no longer a consumer of anything here: candy/plugin-doctor gathers its
+// own host facts (hostfacts.go), reaching verb:gpu peer-to-peer over InvokeProvider — the SAME
+// pattern the arbiter/`charly vm gpu` use. What's LEFT here is genuinely core-coupled: DetectVFIO
 // (gpu_allocate.go's bedGPUPrereqMissing) and DetectHostDevices/EnsureCDI
 // (host_build_pod_config_seams.go's detect-devices/ensure-image legs) — both fenced,
 // active-wave files this cutover cannot touch. Per the W3 adjudication (unit B6), those two

@@ -123,8 +123,9 @@ type CLI struct {
 	// EXTERNAL or COMPILED-IN command CANDIES served by candy/plugin-* , dispatched via syscall.Exec
 	// (out-of-process) or an in-proc command:<word> Invoke (compiled-in); see collectExternalCommandPlugins.
 	// migrate/clean/settings/candy/doctor/feature/preempt/vm/alias OWN their engine/command in
-	// candy/plugin-<name> (NONE uses a hidden core command): clean/settings/doctor/feature reach a shared
-	// core subsystem over a generic HostBuild seam (retention/settings/hostprobe/feature), preempt reaches
+	// candy/plugin-<name> (NONE uses a hidden core command): clean/settings/feature reach a shared
+	// core subsystem over a generic HostBuild seam (retention/settings/feature), doctor needs no seam
+	// at all (it gathers its host facts itself in hostfacts.go, peer verb:gpu/verb:credential), preempt reaches
 	// its peer verb:arbiter over InvokeProvider, vm reaches config/ledger/egress over generic seams +
 	// libvirt/gpu/arbiter over verb dispatch, alias reaches image labels via HostBuild("cli") reentry,
 	// candy needs no seam (pure yaml via kit), migrate owns its engine. All compiled-in, so command:<word>
