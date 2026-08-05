@@ -388,14 +388,35 @@ func podPrepareVenue(ctx context.Context, exec *sdk.Executor, p lifecycleParams)
 			"Overlay image ready: " + resolvedImage,
 			"To start the container, run: charly start " + reply.DeployName,
 		}
-		// Persist the concrete overlay ref ONLY when an overlay was actually built (add_candy
-		// present, so resolvedImage differs from the base) — the host writes SaveDeployStateInput.
-		if resolvedImage != "" && resolvedImage != reply.BaseImage {
-			state, _ := json.Marshal(map[string]any{"ResolvedImage": resolvedImage})
-			r.State = state
-		}
+		r.State = prepareVenueState(resolvedImage, reply.BaseImage)
 	}
 	return marshalReply(r)
+}
+
+// prepareVenueState encodes the deploy-state delta a PrepareVenue reply carries back for the host
+// to persist: the concrete add_candy overlay ref, and ONLY when an overlay was actually built
+// (resolvedImage differs from the base). Returns nil otherwise, so a no-overlay deploy writes
+// nothing.
+//
+// It marshals the TYPED spec.SaveDeployStateInput. That is the whole point of the helper, and it
+// is not stylistic: the host decodes this blob into that struct, whose wire key is the
+// CUE-generated `resolved_image`. The previous hand-built `map[string]any{"ResolvedImage": …}`
+// therefore decoded to an EMPTY input — encoding/json's case-insensitive field match does not
+// bridge the underscore — so `applyDeployState` saw nothing to write and returned false, and the
+// overlay ref was NEVER persisted. Nothing failed loudly: the reply's Notes still printed "Overlay
+// image ready", the write path still took its lock (leaving a charly.yml.lock next to a charly.yml
+// that was never created), and the next `charly config` then resolved the deploy to the BASE image
+// and rendered a quadlet running it — every add_candy overlay pod deploy silently ran the wrong
+// image. Marshal the wire struct, never a key map.
+func prepareVenueState(resolvedImage, baseImage string) json.RawMessage {
+	if resolvedImage == "" || resolvedImage == baseImage {
+		return nil
+	}
+	state, err := json.Marshal(spec.SaveDeployStateInput{ResolvedImage: resolvedImage})
+	if err != nil {
+		return nil
+	}
+	return state
 }
 
 // podStatus parses `charly status --json` for this deploy's row (the SAME best-effort scan the

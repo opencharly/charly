@@ -232,15 +232,10 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 
 	volumes, bindMounts := deploykit.ResolveVolumeBacking(c.Box, c.Instance, meta.Volume, deployVolumes, meta.Home, rt.EncryptedStoragePath, rt.VolumesPath)
 
-	usingResolvedOverlay := false
-	if ov, _, rerr := resolveDeployRef(ctx, ex, &spec.PodConfigSetupRequest{Box: c.Box, Instance: c.Instance}); rerr == nil {
-		usingResolvedOverlay = ov != "" && ov == imageRef
-	}
-	if meta.Registry != "" && !kit.LooksLikeFullRef(imageRef) && c.ExplicitRef == "" && !usingResolvedOverlay {
-		if _, ref, e := resolveDeployRefLocal(ctx, ex, deployBoxName, "", c.Tag, ""); e == nil {
-			imageRef = ref
-		}
-	}
+	// resolvedOverlayImage reads the dc already in hand (R3: the SAME gate resolveDeployRefLocal
+	// consults), so the overlay comparison costs no second resolve.
+	imageRef = qualifyImageRef(imageRef, meta.Registry, c.ExplicitRef,
+		resolvedOverlayImage(dc, c.Box, c.Instance), deployBoxName, c.Tag)
 
 	var tunnelCfg *spec.TunnelConfig
 	if meta.Tunnel != nil {
