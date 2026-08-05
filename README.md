@@ -221,8 +221,10 @@ resolution ever collapses the two onto one engine.
 
 On a host with Podman and systemd, a `pod:` deploy is realised as **user-level systemd quadlets**.
 `charly config` generates one `charly-<name>.service` per deploy, carrying its ports, volumes,
-devices and security settings, and systemd starts it at boot. A deploy with encrypted volumes
-starts at boot too and then suspends until its key is available.
+devices and security settings, and systemd starts it at boot. A deploy whose volumes are encrypted
+with a keyring backend (Secret Service) starts at boot too and then suspends until the key is
+available; one whose passphrase sits in a plaintext config file does not autostart — it waits for
+an explicit `charly start`.
 
 Where Podman and systemd are not both present, the same deploy runs directly against the engine
 instead. You do not choose between the two: the deploy is described once, and `charly` resolves
