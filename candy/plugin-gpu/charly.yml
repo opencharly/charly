@@ -12,13 +12,15 @@ plugin-gpu:
 
             Carved out of charly core behind thin in-core resolve+Invoke shims (originally DetectGPU /
             DetectAMDGPU / DetectVFIO / DetectHostDevices / EnsureCDI / MemlockLimitBytes /
-            VfioGroupAccessible + detectAMDGFXVersion, in charly/gpu_shim.go). K5 seam-death shrank
-            that set to just DetectVFIO / DetectHostDevices / EnsureCDI — the two remaining core
-            callers (gpu_allocate.go, host_build_pod_config_seams.go) are hard-fenced elsewhere in
-            the active migration and not yet relocated; every OTHER former core caller (`charly
-            doctor`, the arbiter, `charly vm gpu`) now peer-InvokeProviders verb:gpu directly. The
-            detection RESULT types (VFIOReport/VFIOGpu/VFIOPCIDevice/DetectedDevices) live in
-            package spec, read directly by every consumer (no core alias).
+            VfioGroupAccessible + detectAMDGFXVersion, in charly/gpu_shim.go). K5 seam-death +
+            K-wave 2 cone R3 shrank that set to just DetectVFIO — the operator-dropped
+            GPU-host-DETECTION exception leg (gpu_allocate.go's bedGPUPrereqMissing, reached via
+            the check-bed-gpu-prereq seam); DetectHostDevices/EnsureCDI relocated to
+            candy/plugin-deploy-pod (detect_devices.go) as peer InvokeProvider verb:gpu dispatches.
+            Every OTHER former core caller (`charly doctor`, the arbiter, `charly vm gpu`, the pod
+            config/start/shell paths) peer-InvokeProviders verb:gpu directly. The detection RESULT
+            types (VFIOReport/VFIOGpu/VFIOPCIDevice/DetectedDevices) live in package spec, read
+            directly by every consumer (no core alias).
 
             Compiled-in (an in-proc inprocProvider): the deploy/config hot paths call the shims
             many times, and MemlockLimitBytes must read charly's OWN process RLIMIT_MEMLOCK — both
@@ -31,10 +33,10 @@ plugin-gpu:
             switchGPUDriverMode / gpuSwitchModeTolerant / groupInMode / currentGPUMode /
             gpuDisplayDriver / gpuWedgeDetected / ensureCDIRoot + the switch-plan DRY-RUN, served
             over verb:gpu's OpRun DRIVER-SWITCH actions (spec.GpuSwitchInput/GpuSwitchReply) beside
-            the C11 detection actions. Core reaches them through the gpu_shim.go driver-switch shims
-            (used by `charly vm gpu` + the arbiter's switchMode/ensureCDI seams — the arbiter, now in
-            candy/plugin-preempt, routes its switchMode call here via the host, an F10-style
-            plugin->plugin edge). Auto-allocation (gpu_allocate.go) STAYS core: it is a host-side
+            the C11 detection actions. Every DRIVER-SWITCH consumer dispatches verb:gpu directly —
+            `charly vm gpu` (candy/plugin-vm's vm_gpu_shim.go), the arbiter (candy/plugin-preempt's
+            holder_dispatch.go), and plugin-gpu's own switch legs — there is no in-core
+            driver-switch shim left. Auto-allocation (gpu_allocate.go) STAYS core: it is a host-side
             VmSpec/LibvirtDomain orchestrator (like GenerateK8sKustomize) consuming the DetectVFIO
             shim — no dep to shed.
 

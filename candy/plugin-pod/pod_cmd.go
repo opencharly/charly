@@ -31,14 +31,13 @@ import (
 // remove is FULLY ported too (option (b), full parity with the other 6 verbs): its WHOLE
 // orchestration — tunnel-stop (remove_tunnel.go, verb:tunnel over InvokeProvider) AND the
 // quadlet/container-teardown/hook/cleanup body (remove_orchestration.go's runPodRemove) — runs
-// HERE now. Two axes still reach the host, each over its own EXISTING narrow seam (no new
-// mechanism, R3): the credential-backed hook env (pod-config-hook-secret-env) and the deploy-entry
-// cleanup's registry-resugar (the NEW pod-config-clean-deploy-entry, a narrow host-owns-
-// load+lock+mutate+save seam — the plugin-side whole-config deploy-state writes don't fit, see
-// remove_orchestration.go's header for the demonstrated mismatch). The arbiter-release bracket
-// (CHARLY_PREEMPT_LEASE-gated host-process state) stays under the "pod-lifecycle" HostBuild
-// op="remove" (#55 W3 A10b unified the former dedicated "pod-remove" kind into this one), deferred
-// here as the LAST step — same shape as pod start/stop's own bracket.
+// HERE now. The two former host-coupled axes are BOTH retired: the credential-backed hook env is
+// resolved plugin-side (deploykit.ResolveHookSecretEnv + verb:credential, the retired
+// pod-config-hook-secret-env seam) and the deploy-entry cleanup runs plugin-side
+// (deploykit.CleanDeployEntry via loader-threaded Primaries, the deleted pod-config-clean-deploy-entry
+// seam). The arbiter-release bracket (CHARLY_PREEMPT_LEASE-gated host-process state) stays under
+// the "pod-lifecycle" HostBuild op="remove" (#55 W3 A10b unified the former dedicated "pod-remove"
+// kind into this one), deferred here as the LAST step — same shape as pod start/stop's own bracket.
 //
 // RDD caught a real latent placement bug mid-port (see remove_orchestration.go's header): two
 // deploykit calls that "looked" portable (resolveSidecarNames' LoadBundleConfig,
@@ -476,7 +475,26 @@ func (c *ConfigSetupCmd) Run() error {
 	if err != nil {
 		return fmt.Errorf("config setup: %w", err)
 	}
-	return dispatchPodConfigOp(sdk.OpConfigSetup, reqJSON)
+	resJSON, err := dispatchPodConfigOp(sdk.OpConfigSetup, reqJSON)
+	if err != nil {
+		return err
+	}
+	// The deploy:pod plugin is out-of-process, so ITS stdout (where the former in-plugin
+	// --list-sidecars print lived) is go-plugin-discarded — the list now returns in the reply
+	// and is printed HERE, in the charly CLI's own stdio (the P13-KERNEL pre-existing
+	// invisible-output bug fixed with the list-sidecars leg relocation, K-wave 2 cone R3).
+	var rep spec.PodConfigSetupReply
+	if len(resJSON) > 0 {
+		_ = json.Unmarshal(resJSON, &rep)
+	}
+	if len(rep.SidecarList.Names) > 0 {
+		names := append([]string{}, rep.SidecarList.Names...)
+		sort.Strings(names)
+		for _, name := range names {
+			fmt.Printf("%-20s %s\n", name, rep.SidecarList.Descriptions[name])
+		}
+	}
+	return nil
 }
 
 // ConfigStatusCmd shows status of all services
@@ -532,7 +550,10 @@ func (c *ConfigRemoveCmd) Run() error {
 	if err != nil {
 		return fmt.Errorf("config remove: %w", err)
 	}
-	return dispatchPodConfigOp(sdk.OpConfigRemove, reqJSON)
+	if _, err := dispatchPodConfigOp(sdk.OpConfigRemove, reqJSON); err != nil {
+		return err
+	}
+	return nil
 }
 
 // UpdateCmd updates an image (pulls/builds the latest), preserves the existing deploy config

@@ -86,9 +86,9 @@ type podUpdateCmd struct {
 // (remove_orchestration.go's runPodRemove, RemoveCmd.Run() in pod_cmd.go), confirmed portable
 // (pure os/exec + sdk/kit + sdk/deploykit, zero core-registry coupling — each of these functions
 // had EXACTLY ONE caller, this type). The two genuinely host-coupled axes (the credential-backed
-// hook env; the deploy-entry cleanup's registry-resugar) reach the host over their own narrow
-// seams (pod-config-hook-secret-env, the NEW pod-config-clean-deploy-entry —
-// host_build_pod_config_seams.go). The arbiter-release bracket alone remains under
+// hook env; the deploy-entry cleanup's registry-resugar) were ALSO retired (pod-config-hook-secret-env
+// + pod-config-clean-deploy-entry, both deleted with the remove port; host_build_pod_config_seams.go
+// itself was deleted in K-wave 2 cone R3). The arbiter-release bracket alone remains under
 // hostBuildPodLifecycle's op="remove" case ("pod-lifecycle", host_build_pod_lifecycle_dispatch.go
 // — #55 W3 A10b unified the former dedicated "pod-remove" kind into this single
 // op-discriminated one).

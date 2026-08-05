@@ -11,14 +11,15 @@ import (
 )
 
 // sidecar_resolve.go — the pod-config sidecar resolve+adapt+secret-provision, relocated from
-// charly/host_build_pod_config_seams.go's hostBuildPodConfigResolveSidecars (seam-death, this cone).
-// The former fat "pod-config-resolve-sidecars" HostBuild seam is RETIRED: the plugin fetches the
-// embedded sidecar library via the THIN list-sidecars seam (its BodiesJSON — the only host-resident
-// piece, since embeddedSidecarBodies' data lives only in the charly binary), InvokeProviders
-// kind:sidecar directly (RDD-proven live — plugin-build/bundle/check already InvokeProvider kind:*),
-// adapts the reply, and provisions sidecar secrets ITSELF via deploykit.ProvisionPodmanSecrets +
-// the SHARED deploykit.CredentialAccessViaExecutor (the SAME credential drive enc_tunnel_resolve.go /
-// lifecycle.go use — no core round-trip).
+// charly/host_build_pod_config_seams.go's hostBuildPodConfigResolveSidecars (seam-death).
+// The former fat "pod-config-resolve-sidecars" HostBuild seam is RETIRED; the THIN
+// "pod-config-list-sidecars" seam + charly/sidecar.go's embeddedSidecarBodies are ALSO DELETED
+// (K-wave 2 cone R3): the embedded sidecar library is THIS plugin's own go:embed
+// (sidecar_embedded.go), so the resolve has no host-resident input left. The plugin
+// InvokeProviders kind:sidecar directly (RDD-proven live — plugin-build/bundle/check already
+// InvokeProvider kind:*), adapts the reply, and provisions sidecar secrets ITSELF via
+// deploykit.ProvisionPodmanSecrets + the SHARED deploykit.CredentialAccessViaExecutor (the SAME
+// credential drive enc_tunnel_resolve.go / lifecycle.go use — no core round-trip).
 
 // credServiceVNC mirrors charly/credential_plugin.go's CredServiceVNC (the VNC credential service
 // name deploykit.ProvisionPodmanSecrets keys the auto-generated VNC password under). A plain stable
@@ -35,23 +36,20 @@ type sidecarResolveResult struct {
 }
 
 // resolvePodSidecars resolves a deploy's sidecars end-to-end plugin-side. deploySidecars is the
-// deploy's own `sidecar:` override map; projectTemplates is sidecarTemplatesOf(dc). Returns
-// (empty result, nil) when the deploy declares no sidecars.
+// deploy's own `sidecar:` override map; projectTemplates is the project-root sidecar templates
+// (deploykit.SidecarTemplatesOf(dc)). Returns (empty result, nil) when the deploy declares no
+// sidecars.
 func resolvePodSidecars(ctx context.Context, ex *sdk.Executor, deploySidecars, projectTemplates map[string]json.RawMessage, cliEnv []string, box, instance, runEngine string, autoGen bool, refreshSecret []string) (sidecarResolveResult, error) {
 	if len(deploySidecars) == 0 {
 		return sidecarResolveResult{AppEnv: cliEnv}, nil
 	}
-	// The embedded sidecar-template library (go:embed, charly-binary-resident) via the thin
-	// list-sidecars seam — the one genuinely host-only input to the resolve.
-	var listRep spec.PodConfigListSidecarsReply
-	if err := hostBuild(ctx, ex, podConfigListSidecarsKind, spec.PodConfigLoadDeployRequest{}, &listRep); err != nil {
+	// The embedded sidecar-template library is THIS plugin's own go:embed now (the
+	// "pod-config-list-sidecars" seam + charly/sidecar.go's embeddedSidecarBodies are DELETED,
+	// K-wave 2 cone R3) — the tailscale default lives here, byte-identical to the former
+	// charly-binary-resident bodies.
+	embedded, err := embeddedSidecarLibrary()
+	if err != nil {
 		return sidecarResolveResult{}, fmt.Errorf("reading embedded sidecar library: %w", err)
-	}
-	var embedded map[string]json.RawMessage
-	if len(listRep.BodiesJSON) > 0 {
-		if err := json.Unmarshal(listRep.BodiesJSON, &embedded); err != nil {
-			return sidecarResolveResult{}, fmt.Errorf("decoding embedded sidecar bodies: %w", err)
-		}
 	}
 
 	// Resolve via kind:sidecar's OpResolve (the single point sidecar defs are resolved — the host

@@ -193,9 +193,10 @@ func hostBuildPodLifecycle(_ context.Context, req spec.PodLifecycleRequest, _ bu
 	case "remove":
 		// remove is FULLY reduced (Cutover B unit 2 remove-verb completion, option (b)):
 		// candy/plugin-pod's RemoveCmd.Run() owns the ENTIRE orchestration itself
-		// (remove_orchestration.go + remove_tunnel.go), reaching the host only for the two
-		// genuinely host-coupled axes via their own narrow seams (pod-config-hook-secret-env,
-		// pod-config-clean-deploy-entry). All that remains under op="remove" is the
+		// (remove_orchestration.go + remove_tunnel.go); the former host-coupled axes
+		// (pod-config-hook-secret-env, pod-config-clean-deploy-entry) are BOTH retired — the
+		// credential env resolves plugin-side and the deploy-entry cleanup runs plugin-side via
+		// deploykit.CleanDeployEntry. All that remains under op="remove" is the
 		// arbiter-release bracket — CHARLY_PREEMPT_LEASE-gated host-process state a
 		// placement-agnostic plugin cannot own, the exact same reason pod start/stop's own
 		// arbiter bracket (arbiter_bracket.go, S3b — was substrate_lifecycle_grpc.go before the

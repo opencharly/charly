@@ -115,26 +115,21 @@ func TestEmbeddedDefaults_SameLoaderPath(t *testing.T) {
 	if resolveResources(def)["nvidia-gpu"] == nil {
 		t.Error("embedded resource nvidia-gpu missing from unified parse")
 	}
-	// Sidecar-template view — sidecar is a plugin kind (candy/plugin-sidecar); the
-	// embedded tailscale template is an OPAQUE body in def.PluginKinds["sidecar"]
-	// from the SAME parse, the SAME spec.UnifiedFile.
-	body, ok := def.PluginKinds["sidecar"]["tailscale"]
-	if !ok {
-		t.Fatal("embedded sidecar tailscale missing from unified parse")
-	}
-	if img := sidecarBodyImage(t, body); img != "ghcr.io/tailscale/tailscale:latest" {
-		t.Errorf("tailscale sidecar image = %q, want ghcr.io/tailscale/tailscale:latest", img)
-	}
+	// Sidecar-template view — the embedded tailscale template is NO LONGER part of the
+	// charly-binary defaults: it MOVED into candy/plugin-deploy-pod's own go:embed
+	// (sidecar_embedded.go), K-wave 2 cone R3, since the embedded sidecar library's only
+	// consumers (the deleted list-sidecars seam + embeddedSidecarBodies) were plugin-side.
+	// A project's own `sidecar:` nodes still land in def.PluginKinds["sidecar"] via the
+	// normal kind resolution.
 }
 
 // TestEmbeddedDefaults_SidecarProjectWins proves a project may declare a root
-// `sidecar:` template that OVERRIDES the embedded one (project-wins), routed
-// through LoadUnified. This is the load-bearing behavior the sidecar→plugin
-// extraction relies on: sidecar is a plugin kind now, so the project's `tailscale`
-// lands in uf.PluginKinds["sidecar"]["tailscale"] and the embedded one (merged in by
-// applyEmbeddedDefaults via the generic root-wins mergePluginKindsMap — Cutover A's
-// name-keyed override) fills only absent names — so the project's value WINS, ONE
-// entry, not two appended.
+// `sidecar:` template that lands in uf.PluginKinds["sidecar"] routed through
+// LoadUnified. This is the load-bearing behavior the sidecar→plugin extraction relies
+// on: sidecar is a plugin kind now, so the project's `tailscale` lands in
+// uf.PluginKinds["sidecar"]["tailscale"] as an opaque body — ONE entry (the embedded
+// tailscale default is no longer merged here: it moved into candy/plugin-deploy-pod's
+// own go:embed, K-wave 2 cone R3, so a project's own sidecar is the sole source).
 func TestEmbeddedDefaults_SidecarProjectWins(t *testing.T) {
 	dir := t.TempDir()
 	writeFixture(t, dir, "charly.yml", `version: `+LatestSchemaVersion().String()+`

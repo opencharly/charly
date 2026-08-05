@@ -24,7 +24,7 @@ import (
 // LoadDeployConfigForRead, which resolve the per-host overlay path INDEPENDENTLY via
 // kit.DefaultDeployConfigPath (kit.DeployConfigEnv if set, else os.UserConfigDir()
 // joined with "charly/charly.yml") — never any package-main var a single test might
-// locally override (e.g. the charly-side DeployConfigPath var, which
+// locally override (e.g. the charly-side DeployConfigPath var, which the deleted
 // host_build_pod_config_seams_test.go overrode without ALSO setting the env var, and
 // still leaked). A test that never thinks about isolation at all previously fell
 // through to the operator's REAL ~/.config/charly/charly.yml — confirmed on this

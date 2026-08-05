@@ -65,9 +65,9 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 	if req.GetOp() == sdk.OpConfigWrite {
 		return podConfigWrite(req)
 	}
-	// P13-KERNEL direction-flip: the config-BODY Ops. hostBuildPodConfigSetup/Remove
-	// (charly/host_build_pod_config.go) now forward onward here instead of running the
-	// orchestration in-core.
+	// P13-KERNEL direction-flip: the config-BODY Ops. candy/plugin-pod's config leaves dispatch
+	// these peer-to-peer via InvokeProvider (the "pod-config-setup"/"pod-config-remove" host-build
+	// forwarders are DELETED, K-wave 2 cone R3); this plugin runs the orchestration.
 	if req.GetOp() == sdk.OpConfigSetup {
 		return invokeConfigSetup(ctx, req)
 	}

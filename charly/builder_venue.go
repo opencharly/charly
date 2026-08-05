@@ -12,7 +12,7 @@ package main
 //
 // buildEngineContext ITSELF stays core: it carries *Config/*Generator/*buildkit.ResolvedBox
 // (core-only types) and is threaded across a dozen already-floor host_build_*.go seams
-// (unified_targets.go, build_overlay.go, host_build_pod_config.go, provider_checkenv.go,
+// (unified_targets.go, build_overlay.go, provider_checkenv.go,
 // plugin_executor_reverse.go) — a generic per-invoke DATA envelope no
 // sdk plugin can hold itself (it names core project-loader types), same class as those seams'
 // own floor justification.

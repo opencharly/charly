@@ -46,15 +46,16 @@ var cmdHostEnvJSON json.RawMessage
 // venue (the S1 seam — the same `spec.VenueDescriptor{Kind: "shell"}` the deleted core seam
 // passed as `specexec.ShellExecutor{}`); deploy:pod's Invoke handler reads the threaded executor
 // for its HostBuild callbacks.
-func dispatchPodConfigOp(op string, reqJSON []byte) error {
+func dispatchPodConfigOp(op string, reqJSON []byte) ([]byte, error) {
 	if cmdExec == nil {
-		return fmt.Errorf("pod config: no host reverse channel (command not compiled-in?)")
+		return nil, fmt.Errorf("pod config: no host reverse channel (command not compiled-in?)")
 	}
 	opts := sdk.InvokeProviderOpts{VenueDescriptor: &spec.VenueDescriptor{Kind: "shell"}}
-	if _, err := cmdExec.InvokeProvider(cmdCtx, "deploy", "pod", op, reqJSON, nil, opts); err != nil {
-		return fmt.Errorf("deploy:pod config: %w", err)
+	resJSON, err := cmdExec.InvokeProvider(cmdCtx, "deploy", "pod", op, reqJSON, nil, opts)
+	if err != nil {
+		return nil, fmt.Errorf("deploy:pod config: %w", err)
 	}
-	return nil
+	return resJSON, nil
 }
 
 // setCommandContext stashes the reverse-channel executor for the duration of one `charly <word> …`

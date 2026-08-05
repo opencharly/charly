@@ -11,7 +11,9 @@ import (
 // reached now via the narrow host_build_check_bed_gpu_prereq.go seam (#55 W3 B2-full — the ONE
 // piece of check-bed's former full session that survived, GPU host-DETECTION being the project's
 // explicitly operator-dropped exception, fenced from every K-wave cutover per gpu_shim.go's own
-// header). requiredGPUResource (the former preempt validator's helper) was deleted as dead code
+// header — which K-wave 2 cone R3 thinned to exactly this DetectVFIO leg, relocating the
+// detect-host-devices/ensure-cdi shims to candy/plugin-deploy-pod). requiredGPUResource (the
+// former preempt validator's helper) was deleted as dead code
 // (A1, K-wave W3): its cited caller (validate_preempt.go) was already deleted in 54657305, and
 // candy/plugin-vm/gpu_allocate.go carries the live copy the arbiter uses.
 
