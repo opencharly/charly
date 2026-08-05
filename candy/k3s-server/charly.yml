@@ -122,46 +122,163 @@ k3s-server:
               after: [network-online.target]
               scope: system
               enable: true
+              # Two guards bracketing k3s's own start. Both are systemd-only, which is
+              # exactly the coverage needed: every deploy of this candy is a `vm:` deploy,
+              # and the pod path already obtains cpuset via the cgroupns: host setting
+              # above. Each runs on EVERY start, restarts included — which is what makes
+              # the post-start heal able to break a crash loop it did not start in.
+              #
+              # PRE — remove the trigger (the cgroup cpuset-delegation race).
+              exec_start_pre:
+                  - /usr/local/bin/k3s-cpuset-ensure.sh
+              # POST — heal the permanent wedge that trigger leaves behind. The leading
+              # "-" is systemd's ignore-failure marker: a guard must never be able to take
+              # down the service it exists to protect.
+              exec_start_post:
+                  - -/usr/local/bin/k3s-crd-heal.sh %n
         plan:
-            - run: |
-                command=set -euo pipefail
-                mkdir -p /etc/rancher/k3s
-                # When running under supervisord (container pod), emit extra
-                # config to make k3s tolerant of a rootless user namespace:
-                #  - snapshotter: fuse-overlayfs — kernel overlayfs can't nest
-                #    on podman's overlayfs (see "failed to mount overlay").
-                #  - kubelet-arg feature-gates KubeletInUserNamespace=true —
-                #    kubelet tries to open /dev/kmsg to watch OOM events;
-                #    userns uid=0 → host uid=1000 can't access it; this gate
-                #    makes kubelet skip that check.
-                #  - kube-proxy-arg feature-gates KubeletInUserNamespace=true —
-                #    kube-proxy honours the same feature gate for its own
-                #    userns-aware paths.
-                # VM and host deploys run with full kernel access and skip all
-                # of these.
-                if [ -f /etc/supervisord.conf ]; then
-                  cat >/etc/rancher/k3s/config.yaml <<YAML
-                write-kubeconfig-mode: "0644"
-                token: "${K3S_CLUSTER_TOKEN}"
-                tls-san:
-                  - "${K3S_SERVER_HOSTNAME:-$(uname -n)}"
-                disable: []
-                snapshotter: fuse-overlayfs
-                kubelet-arg:
-                  - "feature-gates=KubeletInUserNamespace=true"
-                kube-proxy-arg:
-                  - "feature-gates=KubeletInUserNamespace=true"
-                YAML
-                else
-                  cat >/etc/rancher/k3s/config.yaml <<YAML
-                write-kubeconfig-mode: "0644"
-                token: "${K3S_CLUSTER_TOKEN}"
-                tls-san:
-                  - "${K3S_SERVER_HOSTNAME:-$(uname -n)}"
-                disable: []
-                YAML
+            - run: install the cgroup cpuset pre-start guard the k3s service execs
+              write: /usr/local/bin/k3s-cpuset-ensure.sh
+              mode: "0755"
+              run_as: root
+              content: |
+                #!/bin/sh
+                # Assert that the cgroup-v2 cpuset controller is delegated at the ROOT cgroup
+                # before k3s starts.
+                #
+                # Why the root cgroup specifically: k3s runs kubelet with
+                # --cgroup-driver=systemd and no --cgroup-root, which defaults to "/", so
+                # kubelet creates the TOP-LEVEL kubepods.slice and validates that its PARENT —
+                # the root cgroup — delegates every controller it needs. systemd populates a
+                # cgroup's subtree_control lazily, so on a cold first boot k3s can start before
+                # cpuset has been delegated there and kubelet dies with:
+                #   failed to initialize top level QOS containers: error validating root
+                #   container [kubepods] : cgroup ["kubepods"] has some missing controllers: cpuset
+                # Measured on a wedged bed VM: that crash struck exactly once, 15s into the
+                # first-ever start, and its fallout permanently bricked the cluster (see
+                # k3s-crd-heal.sh). Verified there that the root cgroup is the deciding one:
+                # its subtree_control carried cpuset while system.slice's held only "memory pids".
+                #
+                # This is a state ASSERTION, not a wait: read, enable if absent, verify. There
+                # is nothing to poll for — the controller is available the moment the kernel
+                # lists it, and writing it is idempotent.
+                set -eu
+
+                control=/sys/fs/cgroup/cgroup.subtree_control
+                available=/sys/fs/cgroup/cgroup.controllers
+
+                if [ ! -e "$control" ]; then
+                  echo "k3s-cpuset-ensure: no cgroup-v2 unified tree at $control; nothing to assert"
+                  exit 0
                 fi
-                chmod 0600 /etc/rancher/k3s/config.yaml
+                if grep -qw cpuset "$control"; then
+                  echo "k3s-cpuset-ensure: cpuset already delegated at the root cgroup"
+                  exit 0
+                fi
+                if ! grep -qw cpuset "$available"; then
+                  echo "k3s-cpuset-ensure: kernel exposes no cpuset controller; leaving it to k3s"
+                  exit 0
+                fi
+                if [ ! -w "$control" ]; then
+                  echo "k3s-cpuset-ensure: $control is not writable; cannot assert cpuset delegation" >&2
+                  exit 1
+                fi
+                echo "+cpuset" > "$control"
+                if ! grep -qw cpuset "$control"; then
+                  echo "k3s-cpuset-ensure: wrote +cpuset but the root cgroup still does not delegate it" >&2
+                  exit 1
+                fi
+                echo "k3s-cpuset-ensure: enabled cpuset delegation at the root cgroup"
+
+            - run: install the CRD-establishment wedge healer the k3s service execs after start
+              write: /usr/local/bin/k3s-crd-heal.sh
+              mode: "0755"
+              run_as: root
+              content: |
+                #!/bin/sh
+                # Heal the k3s CRD-establishment wedge — a DIAGNOSED remediation for one exact
+                # signature, never a blind retry.
+                #
+                # The wedge: if k3s dies in the ~1s window between creating its embedded CRDs and
+                # their establishment, the apiserver's EstablishingController never re-queues them
+                # after the restart (an upstream defect). The CRD is then frozen at
+                # NamesAccepted=True / Established=False FOREVER, and every subsequent k3s start
+                # dies after its fixed 60s wait with:
+                #   failed to start controllers: failed to create new server context: failed to
+                #   register CRDs: failed waiting on CRD 'helmchartconfigs.helm.cattle.io':
+                #   timed out waiting for the condition
+                # The result is a permanent ~68s crash loop that keeps `process=k3s-server` and
+                # `port=6443` GREEN while the cluster never bootstraps — kube-system stays empty.
+                # Measured on a real wedged bed VM: 49 restarts, node Ready, zero kube-system pods.
+                #
+                # The remedy, proven on that same VM: delete the stuck CRD. k3s recreates AND
+                # establishes it from its embedded manifests on the next start, and the cluster
+                # bootstrapped fully (traefik + svclb + local-path + coredns all Ready) with the
+                # restart count then holding steady.
+                #
+                # Why ExecStartPost and not ExecStartPre: the fix needs the apiserver, and between
+                # restarts there is no apiserver at all — the previous process has already exited.
+                # Only a post-start hook runs while k3s is up.
+                #
+                # Cost on a healthy start is zero: the journal gate below fails immediately and the
+                # script exits before ever contacting the apiserver.
+                set -u
+
+                unit=${1:-}
+                KUBECTL=/usr/local/bin/kubectl
+                KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+                export KUBECONFIG
+
+                # 1. A first-ever start has no datastore and therefore nothing stale to heal.
+                [ -d /var/lib/rancher/k3s/server/db ] || exit 0
+                [ -x "$KUBECTL" ] || exit 0
+
+                # 2. FAST GATE — diagnose from the journal, which needs no apiserver and costs
+                #    milliseconds. Only k3s's own fatal CRD-wait message opens the gate.
+                [ -n "$unit" ] || exit 0
+                journalctl -u "$unit" --no-pager -n 500 2>/dev/null |
+                  grep -q "failed waiting on CRD" || exit 0
+                echo "k3s-crd-heal: $unit has failed on a CRD wait; checking for a stuck CRD"
+
+                # 3. Bounded readiness probe for the apiserver. The deadline stays well inside
+                #    systemd's default 90s TimeoutStartSec so this hook can never be the reason a
+                #    start times out; on expiry we simply give up and let k3s carry on.
+                deadline=$(( $(date +%s) + 45 ))
+                until "$KUBECTL" get --raw /readyz >/dev/null 2>&1; do
+                  if [ "$(date +%s)" -ge "$deadline" ]; then
+                    echo "k3s-crd-heal: apiserver did not become ready within 45s; skipping" >&2
+                    exit 0
+                  fi
+                  sleep 2
+                done
+
+                # 4. CONFIRM against live CRD state, then delete. This confirmation is what makes
+                #    the hook safe AND idempotent: the journal gate matches for the rest of the
+                #    boot even after a successful heal, but a healed CRD reads Established=True,
+                #    so a re-run finds nothing and deletes nothing.
+                #
+                #    Only CRDs k3s itself owns and recreates from embedded manifests are eligible.
+                #    A user CRD is never touched — deleting one would destroy its custom resources.
+                # The column spec is QUOTED: it contains [?(...)], which the shell would otherwise
+                # try to glob (a bracket expression) — harmless only until a matching filename
+                # exists in the working directory.
+                "$KUBECTL" get crd \
+                  -o 'custom-columns=NAME:.metadata.name,EST:.status.conditions[?(@.type=="Established")].status' \
+                  --no-headers 2>/dev/null |
+                while read -r name est; do
+                  case "$name" in
+                    *.k3s.cattle.io|*.helm.cattle.io) ;;
+                    *) continue ;;
+                  esac
+                  if [ "$est" = "True" ]; then
+                    continue
+                  fi
+                  echo "k3s-crd-heal: deleting stuck CRD $name (Established=$est); k3s will recreate and establish it"
+                  "$KUBECTL" delete crd "$name" --wait=false || true
+                done
+                exit 0
+
+            - run: render the k3s server config, adding rootless-userns tolerances under supervisord
               run_as: root
               # K3S_CLUSTER_TOKEN comes from ResolveLayerSecrets via
               # InjectSecretsIntoPlans (deploy_add_cmd.go) — do NOT declare it

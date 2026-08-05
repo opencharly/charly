@@ -737,6 +737,12 @@ check-sidecar-pod:
                 in_container: false
             - check: after remove→start the pod is running again — the round-trip's final assertion, proving the FULL consolidated pod-lifecycle-dispatch family (start/stop/shell/logs/update/remove/service) composes end-to-end, not just each verb in isolation.
               id: sidecar-pod-roundtrip-final
+              # Killed at the 120s per-attempt ceiling under the full 28-bed roster (~30-40
+              # containers resident; `charly status` fans out per-container), while green solo.
+              # 300s covers the measured worst case (2m0s kill point) with honest headroom. The
+              # underlying status fan-out COST is a separate concern, tracked as task #26 — this
+              # budget buys the bed correctness, it does not excuse the cost.
+              timeout: 300s
               exit_status: 0
               stdout:
                 - contains: '"kind": "pod"'
@@ -812,6 +818,12 @@ check-pod-overlay:
         plan:
             - check: command=charly status --json
               id: pod-overlay-running
+              # Killed at the 120s per-attempt ceiling under the full 28-bed roster (~30-40
+              # containers resident; `charly status` fans out per-container), while green solo.
+              # 300s covers the measured worst case (2m0s kill point) with honest headroom. The
+              # underlying status fan-out COST is a separate concern, tracked as task #26 — this
+              # budget buys the bed correctness, it does not excuse the cost.
+              timeout: 300s
               stdout:
                 - contains: '"kind": "pod"'
                 - contains: check-pod-overlay
@@ -2338,6 +2350,13 @@ check-commands-local:
                 in_container: false
             - check: charly status exits 0 (table render) AND charly status --json exits 0 emitting a JSON array — proving the externalized status command (candy/plugin-status, command:status, P14a) OWNS the render + the PURE nested overlay and reaches the collectors over the "status-substrate" HostBuild seam; FAILS if the externalization broke (unknown-command / seam failure → non-zero exit, or non-array output). P14b EXTENSION — the bed also composes candy/plugin-authoring and exercises the `charly box` AUTHORING verbs (set/add-candy/rm-candy/write/cat, nested under the box grammar group). One step scaffolds a project + box then drives box add-candy/rm-candy (yaml.Node candy-list edits via kit.MappingChild/kit.SaveYAMLNodeFile) + box set (kit.SetByDotPath) + box write/cat (the resolveProjectFile file escape hatch) end-to-end host-side, proving the authoring command plugin OWNS the charly.yml mutation surface with ZERO core reentry (fetch/refresh, which reenter core over HostBuild("cli") + hit the network, stay covered by the Go tests + the golden-parity spike).
               id: status-runs
+              # Killed at the 120s per-attempt ceiling under the full 28-bed roster (~30-40
+              # containers resident; `charly status` fans out per-container), while green solo.
+              # This step runs `charly status` TWICE, so it pays that fan-out twice over. 300s
+              # covers the measured worst case (2m0s kill point) with honest headroom. The
+              # underlying status fan-out COST is a separate concern, tracked as task #26 — this
+              # budget buys the bed correctness, it does not excuse the cost.
+              timeout: 300s
               exit_status: 0
               stdout:
                 - contains: '['

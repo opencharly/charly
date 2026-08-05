@@ -1152,7 +1152,13 @@ systemd:
 
                 [Service]
                 Type=simple
+                {{- range .ExecStartPre}}
+                ExecStartPre={{.}}
+                {{- end}}
                 ExecStart={{.Exec}}
+                {{- range .ExecStartPost}}
+                ExecStartPost={{.}}
+                {{- end}}
                 {{- if .Restart}}
                 {{- if eq .Restart "always"}}
                 Restart=always
