@@ -588,13 +588,15 @@ func loadImageFromDaemon(ref string, engine string) (v1.Image, func(), bool, err
 
 // saveAndLoad saves an image ref to a temp tarball and loads it as v1.Image.
 func saveAndLoad(binary, ref string) (v1.Image, func(), error) {
-	tmpFile, err := os.CreateTemp("", "charly-merge-*.tar")
+	// Held for the tarball's whole useful life, not just the save: the mtime advances while
+	// `podman save` writes, but the later read-back (tarball.ImageFromPath, opening and closing
+	// per access) leaves a multi-GB file looking untouched and unheld.
+	tmpFile, releaseTmp, err := proc.CreateTempHeld("", "charly-merge-*.tar")
 	if err != nil {
 		return nil, nil, fmt.Errorf("creating temp file: %w", err)
 	}
-	proc.RegisterTempCleanup(tmpFile.Name())
 
-	cleanup := func() { _ = os.Remove(tmpFile.Name()); proc.UnregisterTempCleanup(tmpFile.Name()) }
+	cleanup := func() { releaseTmp(); _ = os.Remove(tmpFile.Name()); proc.UnregisterTempCleanup(tmpFile.Name()) }
 
 	cmd := exec.Command(binary, "save", ref)
 	cmd.Stdout = tmpFile
@@ -624,14 +626,16 @@ func saveAndLoad(binary, ref string) (v1.Image, func(), error) {
 // duplicate-Name entries — the keep-on-fail diagnostic surfaces the
 // exact tar so the operator can re-extract and find the collision.
 func saveImageToDaemon(img v1.Image, ref string, engine string) error {
-	tmpFile, err := os.CreateTemp("", "charly-merge-*.tar")
+	// Held while the tarball is written and loaded: a multi-GB `podman load` reads it long after
+	// the write finishes, leaving mtime and descriptors both quiet.
+	tmpFile, releaseTmp, err := proc.CreateTempHeld("", "charly-merge-*.tar")
 	if err != nil {
 		return fmt.Errorf("creating temp file: %w", err)
 	}
-	proc.RegisterTempCleanup(tmpFile.Name())
 	keepOnFail := os.Getenv("CHARLY_MERGE_KEEP_TMP") == "1"
 	loaded := false
 	defer func() {
+		releaseTmp()
 		if loaded || !keepOnFail {
 			_ = os.Remove(tmpFile.Name())
 			proc.UnregisterTempCleanup(tmpFile.Name())

@@ -55,8 +55,12 @@ func TestCandyKind_BothShapesByteEquivalent(t *testing.T) {
             - redis
 `
 	imgGn := candyNodeFromYAML(t, imgDoc)
+	imgPn, err := genericToParsedNode(imgGn)
+	if err != nil {
+		t.Fatalf("genericToParsedNode: %v", err)
+	}
 	var accImg spec.MaterializedProject
-	if err := foldCandyKind(prov, imgGn, &accImg); err != nil {
+	if err := foldCandyKind(prov, imgPn, &accImg); err != nil {
 		t.Fatalf("foldCandyKind (image): %v", err)
 	}
 	bc, ok := spec.BoxConfigFrom(accImg.Box, "my-image")
@@ -89,8 +93,12 @@ func TestCandyKind_BothShapesByteEquivalent(t *testing.T) {
               command: "true"
 `
 	layerGn := candyNodeFromYAML(t, layerDoc)
+	layerPn, err := genericToParsedNode(layerGn)
+	if err != nil {
+		t.Fatalf("genericToParsedNode: %v", err)
+	}
 	var accLayer spec.MaterializedProject
-	if err := foldCandyKind(prov, layerGn, &accLayer); err != nil {
+	if err := foldCandyKind(prov, layerPn, &accLayer); err != nil {
 		t.Fatalf("foldCandyKind (layer): %v", err)
 	}
 	ic, ok := spec.DecodeInlineCandy(accLayer.Candy["my-layer"])

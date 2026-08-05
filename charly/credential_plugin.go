@@ -4,10 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/opencharly/spec/ops"
 	"os"
 	"sync"
-
-	"github.com/opencharly/spec/spec"
 )
 
 // credential_plugin.go is the CORE adapter for the externalized credential subsystem.
@@ -47,15 +46,12 @@ type credentialResolver interface {
 	resolve(service, key string) (value, source string)
 }
 
-// credentialHealther is the doctor seam: a store that can report keyring / secret-storage
-// health implements it (candy/plugin-doctor renders its checks from CredentialHealth,
-// fetched host-side via the hostprobe host-build seam).
-type credentialHealther interface {
-	health() (*CredentialHealth, error)
-}
-
-// credentialInput / credentialReply / CredentialHealth are the verb:credential wire forms,
-// byte-compatible with candy/plugin-secrets (verb_credential.go).
+// credentialInput / credentialReply are the verb:credential wire forms, byte-compatible with
+// candy/plugin-secrets (verb_credential.go). The `health` method + its spec.CredentialHealth
+// payload are GONE from this adapter (K5 seam-death): candy/plugin-doctor, the one former
+// consumer of credentialHealth()/health(), now peer-InvokeProviders verb:credential's `health`
+// method itself (hostfacts.go), with its own local wire-shape copy — the SAME
+// process-boundary-copy convention this file's siblings already use.
 type credentialInput struct {
 	Method  string `json:"method"`
 	Service string `json:"service,omitempty"`
@@ -64,17 +60,12 @@ type credentialInput struct {
 }
 
 type credentialReply struct {
-	Value  string            `json:"value,omitempty"`
-	Source string            `json:"source,omitempty"`
-	Keys   []string          `json:"keys,omitempty"`
-	Name   string            `json:"name,omitempty"`
-	Error  string            `json:"error,omitempty"`
-	Health *CredentialHealth `json:"health,omitempty"`
+	Value  string   `json:"value,omitempty"`
+	Source string   `json:"source,omitempty"`
+	Keys   []string `json:"keys,omitempty"`
+	Name   string   `json:"name,omitempty"`
+	Error  string   `json:"error,omitempty"`
 }
-
-// CredentialHealth is the keyring/secret-storage diagnostic verb:credential `health` returns; the
-// externalized candy/plugin-doctor renders it. Now homed in sdk/spec (core + plugin-doctor consumers, R3).
-type CredentialHealth = spec.CredentialHealth
 
 // pluginCredentialStore dispatches every credential operation to verb:credential.
 type pluginCredentialStore struct{}
@@ -97,7 +88,7 @@ func (pluginCredentialStore) callCtx(ctx context.Context, in credentialInput) (c
 			"credential plugin (verb:credential) did not connect — install candy/plugin-secrets " +
 				"alongside charly (/usr/lib/charly/plugins) or run from a project composing it")
 	}
-	return invokeTyped[credentialInput, credentialReply](ctx, prov, "credential", OpRun, in)
+	return invokeTyped[credentialInput, credentialReply](ctx, prov, "credential", ops.OpRun, in)
 }
 
 func (s pluginCredentialStore) Get(service, key string) (string, error) {
@@ -178,14 +169,6 @@ func (s pluginCredentialStore) awaitUnlock(ctx context.Context, service, key str
 	return r.Value, r.Source, nil
 }
 
-func (s pluginCredentialStore) health() (*CredentialHealth, error) {
-	r, err := s.call(credentialInput{Method: "health"})
-	if err != nil {
-		return nil, err
-	}
-	return r.Health, nil
-}
-
 var (
 	defaultStoreMu  sync.Mutex
 	defaultStoreVal CredentialStore
@@ -227,14 +210,4 @@ func ResolveCredential(envVar, service, key, defaultVal string) (value, source s
 		return v, store.Name()
 	}
 	return defaultVal, "default"
-}
-
-// credentialHealth runs the doctor keyring/secret-storage probe via verb:credential
-// `health` (the plugin owns the Secret Service now).
-func credentialHealth() (*CredentialHealth, error) {
-	store := DefaultCredentialStore()
-	if h, ok := store.(credentialHealther); ok {
-		return h.health()
-	}
-	return nil, fmt.Errorf("active credential store does not support a health probe")
 }

@@ -276,7 +276,7 @@ func TestOCITargetEmitSystemPackagesPrefersNewPhases(t *testing.T) {
 // TestOCITargetEmitBuilderInlineViaPlugin drives the FULL real chain for an INLINE (cargo)
 // builder: BuilderStep → deploykit.OCITarget.Emit → ociEmitStep → dispatchOCIStep →
 // candy/plugin-installstep's "oci-dispatch" → pluginEmitStepWords[Builder]="builder" →
-// InvokeProvider("step","builder") → the compiled-in candy/plugin-installstep OpEmit
+// InvokeProvider("step","builder") → the compiled-in candy/plugin-installstep ops.OpEmit
 // → the plugin's OWN "resolved-project"-built deploykit.Generator (stubResolvedProject feeds the
 // synthetic project structure) → inline render. An EXTERNALIZED inline builder (cargo) renders its
 // InlineFragment via kit.BuilderResolve (the bDef needs only Inline:true), so this asserts kit's
@@ -309,7 +309,7 @@ func TestOCITargetEmitBuilderInlineViaPlugin(t *testing.T) {
 
 // TestOCITargetEmitBuilderMultiStageViaPlugin drives the FULL real chain for a MULTI-STAGE
 // (pixi/npm/aur) builder. Same dispatch path as the inline test (through the compiled-in plugin's
-// OpEmit rendering directly against its resolved-project-built Generator), proving the plugin's
+// ops.OpEmit rendering directly against its resolved-project-built Generator), proving the plugin's
 // emitBuilder reaches dg.BuildStageContext with the box/candy the stubbed envelope carries. An
 // EXTERNALIZED multi-stage builder (pixi) renders its stage via kit.BuilderResolve (the bDef needs
 // only the "pixi" key present, the box's own Builder map resolves the builder ref), so this asserts
@@ -344,7 +344,7 @@ func TestOCITargetEmitBuilderMultiStageViaPlugin(t *testing.T) {
 // TestOCITargetEmitLocalPkgInstallViaPlugin drives the FULL real chain for a PRODUCTION localpkg
 // install: LocalPkgInstallStep → deploykit.OCITarget.Emit → ociEmitStep → dispatchOCIStep →
 // candy/plugin-installstep's "oci-dispatch" → pluginEmitStepWords[LocalPkgInstall]="local-pkg-install"
-// → InvokeProvider("step","local-pkg-install") → the compiled-in candy/plugin-installstep OpEmit →
+// → InvokeProvider("step","local-pkg-install") → the compiled-in candy/plugin-installstep ops.OpEmit →
 // deploykit.RenderLocalPkgImageInstall, called
 // DIRECTLY (a pure function of the step + the BuildEnv scalars — no resolved-project envelope
 // needed at all for this word). It asserts the release-download RUN the former in-proc
@@ -376,7 +376,7 @@ func TestOCITargetEmitLocalPkgInstallViaPlugin(t *testing.T) {
 // build-emit, which drives Generator.EmitTasks: OpStep → deploykit.OCITarget.Emit → ociEmitStep →
 // dispatchOCIStep → candy/plugin-installstep's "oci-dispatch" → pluginEmitStepWords[Op]="op" →
 // InvokeProvider("step","op") → the compiled-in
-// candy/plugin-installstep OpEmit → the plugin's OWN "resolved-project"-built deploykit.Generator
+// candy/plugin-installstep ops.OpEmit → the plugin's OWN "resolved-project"-built deploykit.Generator
 // (stubResolvedProject feeds the synthetic box+candy) → dg.EmitTasks → the per-verb emitters. It
 // asserts both a RUN (mkdir) and a COPY (from the layer scratch stage). ImageBuildDir/
 // ContextRelPrefix (the inline-content staging anchor) ride the BuildEnv scalars from the

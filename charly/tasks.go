@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/opencharly/spec/ops"
 	"strings"
 
 	"github.com/opencharly/spec/spec"
@@ -19,7 +20,7 @@ import (
 // registry ResolveBuilder + resolveBuilderStage) is registry-coupled and stays core.
 
 // resolveInlineBuilderSeam is the core impl wired onto deploykit's
-// ResolveInlineBuilder seam: connect + OpResolve an externalized INLINE builder,
+// ResolveInlineBuilder seam: connect + ops.OpResolve an externalized INLINE builder,
 // returning its C10 InlineFragment (or a per-failure error, byte-preserved). The
 // builder-emit cluster (ensureBuildersConnected + registry ResolveBuilder +
 // resolveBuilderStage) is registry-coupled and stays core.
@@ -38,21 +39,21 @@ func (g *Generator) resolveInlineBuilderSeam(candyName, bName string, bDef *spec
 		return "", fmt.Errorf("candy %q: inline builder %q resolve: %w", candyName, bName, err)
 	}
 	if strings.TrimSpace(reply.InlineFragment) == "" {
-		return "", fmt.Errorf("candy %q: inline builder %q returned an empty OpResolve inline fragment", candyName, bName)
+		return "", fmt.Errorf("candy %q: inline builder %q returned an empty ops.OpResolve inline fragment", candyName, bName)
 	}
 	return reply.InlineFragment, nil
 }
 
-// invokeOpEmitFragmentOpt is the OpEmit → EmitReply → Fragment path for the build-context
+// invokeOpEmitFragmentOpt is the ops.OpEmit → EmitReply → Fragment path for the build-context
 // external-STEP emit (ociEmitStep, F-STEP-EMIT — the pod-overlay deploykit.OCITarget's
-// compiler-emitted-step build-emit). It Invokes the provider's OpEmit with the already-marshalled
+// compiler-emitted-step build-emit). It Invokes the provider's ops.OpEmit with the already-marshalled
 // params (a step's opaque Payload) and the caller-supplied spec.BuildEnv descriptor, decodes the
 // EmitReply, and returns the Containerfile fragment. (The build-context VERB emit — the
 // former host-side toDeploykit()/invokeVerbBuildEmit EmitPluginOp bridge — was production-dead
 // and DELETED in #55 cone-render Unit A: the live plugin-verb build-emit runs plugin-side in
-// candy/plugin-build via InvokeProvider(OpEmit).) ctx MAY carry an in-proc reverse channel
+// candy/plugin-build via InvokeProvider(ops.OpEmit).) ctx MAY carry an in-proc reverse channel
 // (sdk.ContextWithExecutor) so a HOST-COUPLED step plugin can call back HostBuild during its
-// OpEmit; a PURE step plugin ignores it and returns the fragment directly.
+// ops.OpEmit; a PURE step plugin ignores it and returns the fragment directly.
 // allowEmpty controls the empty-fragment guard: false fails LOUDLY on an empty
 // fragment — a runtime-/deploy-only capability wrongly asked to build-emit; true permits an empty
 // fragment, used by deploykit.OCITarget for a COMPILER-EMITTED typed step whose render is legitimately empty
@@ -69,18 +70,18 @@ func invokeOpEmitFragmentOpt(ctx context.Context, prov Provider, word string, pa
 	if err != nil {
 		return "", fmt.Errorf("marshal build env: %w", err)
 	}
-	res, err := prov.Invoke(ctx, &Operation{Reserved: word, Op: OpEmit, Params: params, Env: env})
+	res, err := prov.Invoke(ctx, &Operation{Reserved: word, Op: ops.OpEmit, Params: params, Env: env})
 	if err != nil {
 		return "", err
 	}
 	var reply spec.EmitReply
 	if res != nil && len(res.JSON) > 0 {
 		if err := json.Unmarshal(res.JSON, &reply); err != nil {
-			return "", fmt.Errorf("decode OpEmit reply: %w", err)
+			return "", fmt.Errorf("decode ops.OpEmit reply: %w", err)
 		}
 	}
 	if !allowEmpty && strings.TrimSpace(reply.Fragment) == "" {
-		return "", fmt.Errorf("plugin %q returned an empty OpEmit fragment — it has no build-context act (a runtime-only verb in a build run: step, or a deploy-only step declaring emits without an OpEmit fragment? use context: [runtime] / set emits=false)", word)
+		return "", fmt.Errorf("plugin %q returned an empty ops.OpEmit fragment — it has no build-context act (a runtime-only verb in a build run: step, or a deploy-only step declaring emits without an ops.OpEmit fragment? use context: [runtime] / set emits=false)", word)
 	}
 	return reply.Fragment, nil
 }

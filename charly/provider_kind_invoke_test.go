@@ -12,7 +12,7 @@ import (
 // e3KindTestProv is a fake EXTERNAL kind provider (a Provider that is NOT a
 // KindProvider — it has no typed DecodeNode, only the Invoke envelope), used to
 // prove the E3 kind-class out-of-proc path without standing up a real gRPC plugin.
-// Its Invoke(OpLoad) echoes the validated value as the entity.
+// Its Invoke(ops.OpLoad) echoes the validated value as the entity.
 type e3KindTestProv struct{}
 
 func (e3KindTestProv) Reserved() string     { return "e3kind" }

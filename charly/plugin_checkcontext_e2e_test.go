@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"github.com/opencharly/spec/ops"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -67,7 +68,7 @@ func TestKitVerbOutOfProcess_HTTPDoEndToEnd(t *testing.T) {
 	// The host serves BOTH reverse services on the broker: ExecutorService (the venue) +
 	// CheckContextService (HTTPDo) — the SAME wiring invokeVerbProvider uses for a live check.
 	cc := &checkContextReverseServer{httpBase: &http.Client{Timeout: 10 * time.Second}}
-	envJSON, err := marshalJSON(&CheckEnv{Mode: "live", VenueKind: "host"})
+	envJSON, err := marshalJSON(&spec.CheckEnv{Mode: "live", VenueKind: "host"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +80,7 @@ func TestKitVerbOutOfProcess_HTTPDoEndToEnd(t *testing.T) {
 			t.Fatalf("marshal op: %v", mErr)
 		}
 		out, iErr := gp.InvokeWithExecutor(ctx,
-			&Operation{Reserved: "http", Op: OpRun, Params: params, Env: envJSON},
+			&Operation{Reserved: "http", Op: ops.OpRun, Params: params, Env: envJSON},
 			exec.ShellExecutor{}, buildEngineContext{}, false, cc)
 		if iErr != nil {
 			t.Fatalf("InvokeWithExecutor: %v", iErr)

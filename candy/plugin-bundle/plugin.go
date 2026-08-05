@@ -9,12 +9,13 @@
 //     charly's OWN process and inherit charly's real stdio/TTY natively. `add`/`del` (walk.go, the
 //     K4-C WALK PORT) drive the WHOLE deploy-tree walk plugin-side: the config loader
 //     (the merged-tree read/resolveDelNode, LoadUnified-coupled) and the registry-backed executor-chain
-//     derivation (deriveChildExecutorForPath) stay host-side behind six narrow seams —
-//     deploy-plugins-connect / resolve-target-add / deploy-members-up / deploy-members-down /
-//     deploy-del-resolve / deploy-node-del-dispatch — while the tree traversal AND the per-node
-//     compile (compilePlansForRequest, IN-PROC after K4-C shape-2 — no OpCompile round-trip) run
-//     plugin-side; ResolveTarget → the deploy target's Add/Del is the host tail of the
-//     resolve-target-add / deploy-node-del-dispatch seams. `from-box`
+//     derivation (deriveChildExecutorForPath) stay host-side behind four narrow seams —
+//     deploy-plugins-connect / resolve-target-add / deploy-del-resolve / deploy-node-del-dispatch —
+//     while the tree traversal AND the per-node compile (compilePlansForRequest, IN-PROC after
+//     K4-C shape-2 — no OpCompile round-trip) run plugin-side; ResolveTarget → the deploy target's
+//     Add/Del is the host tail of the resolve-target-add / deploy-node-del-dispatch seams. Sibling
+//     `peer:` member bring-up/tear-down calls sdk/deploykit.BringUpMembers/TearDownMembers
+//     directly (#55 W3 A4 — the former deploy-members-up/-down seams are deleted). `from-box`
 //     still forwards to HostBuild("deploy-from-box"); the config-management leaves (show/export/
 //     import/reset/status) run plugin-side — reads via loaderkit.LoadHostBundleConfigViaExecutor, writes via
 //     deploykit.SaveBundleConfig directly (#55 K4 config-write seam-collapse). `path`

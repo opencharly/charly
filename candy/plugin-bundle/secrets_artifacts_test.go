@@ -13,7 +13,7 @@ import (
 // except to nil) — used to assert artifactRegisterHandlers wires "kubeconfig" to
 // k3sPostProvision specifically, not merely to some handler. Relocated from the deleted
 // charly/deploy_add_shared_test.go (Cone A shape 3).
-func funcPointer(fn func(context.Context, *sdk.Executor, string, string) error) uintptr {
+func funcPointer(fn func(context.Context, *sdk.Executor, string, string, string) error) uintptr {
 	return reflect.ValueOf(fn).Pointer()
 }
 
@@ -47,14 +47,14 @@ func TestDispatchRegisterHints_DispatchesByDeclarationNotName(t *testing.T) {
 	})
 
 	var calls []string
-	artifactRegisterHandlers["kubeconfig"] = func(_ context.Context, _ *sdk.Executor, artifactKey, deployName string) error { //nolint:unparam // error return required to match the map's func-type; this mock never fails
-		calls = append(calls, artifactKey+"/"+deployName)
+	artifactRegisterHandlers["kubeconfig"] = func(_ context.Context, _ *sdk.Executor, artifactKey, deployName, vmEntity string) error { //nolint:unparam // error return required to match the map's func-type; this mock never fails
+		calls = append(calls, artifactKey+"/"+deployName+"/"+vmEntity)
 		return nil
 	}
 
 	t.Run("no register hints present never dispatches", func(t *testing.T) {
 		calls = nil
-		if err := dispatchRegisterHints(context.Background(), nil, "myentity", "mydeploy", nil); err != nil {
+		if err := dispatchRegisterHints(context.Background(), nil, "myentity", "mydeploy", "myvm", nil); err != nil {
 			t.Fatalf("dispatchRegisterHints: %v", err)
 		}
 		if len(calls) != 0 {
@@ -64,17 +64,17 @@ func TestDispatchRegisterHints_DispatchesByDeclarationNotName(t *testing.T) {
 
 	t.Run("a \"kubeconfig\" hint dispatches regardless of the candy's own name", func(t *testing.T) {
 		calls = nil
-		if err := dispatchRegisterHints(context.Background(), nil, "myentity", "mydeploy", []string{"kubeconfig"}); err != nil {
+		if err := dispatchRegisterHints(context.Background(), nil, "myentity", "mydeploy", "myvm", []string{"kubeconfig"}); err != nil {
 			t.Fatalf("dispatchRegisterHints: %v", err)
 		}
-		if len(calls) != 1 || calls[0] != "myentity/mydeploy" {
-			t.Fatalf("expected exactly one dispatch keyed \"myentity/mydeploy\", got %v", calls)
+		if len(calls) != 1 || calls[0] != "myentity/mydeploy/myvm" {
+			t.Fatalf("expected exactly one dispatch keyed \"myentity/mydeploy/myvm\", got %v", calls)
 		}
 	})
 
 	t.Run("an unregistered hint is silently skipped", func(t *testing.T) {
 		calls = nil
-		if err := dispatchRegisterHints(context.Background(), nil, "myentity", "mydeploy", []string{"some-other-hint"}); err != nil {
+		if err := dispatchRegisterHints(context.Background(), nil, "myentity", "mydeploy", "myvm", []string{"some-other-hint"}); err != nil {
 			t.Fatalf("dispatchRegisterHints: %v", err)
 		}
 		if len(calls) != 0 {

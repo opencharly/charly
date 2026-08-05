@@ -15,14 +15,20 @@ package check
 // ExecutorForInvoke) is used only for the plugin's OWN legs — the pluginVerbResolver's InvokeProvider
 // verb dispatch and the local-verify path's resolvedProject/TargetResolver HostBuild.
 //
-// TWO drive shapes, one per host caller (see spec.VerifyChecksRequest):
-//   - Ops  → the deploy-lifecycle Test path (unified_targets.go runUnifiedTargetChecks): raw
-//     deploy-scope checks via kit.Runner.Run (no plan gating), each verdict wrapped as a StepResult.
-//   - Plan → the `target: local` --verify path (check_cmd.go runLocalDeployScopePlan): the host
-//     ASSEMBLES the plan (kind:local template + node + per-host overlay — the deploy/K4 named-exit
-//     assembly STAYS core) and this handler DRIVES it via kit.RunPlan, rebuilding the runtime env +
-//     ${HOST:} host-vars + the cross-deployment TargetResolver from {dir, box, instance} exactly as
-//     the check-live gather does (live_gather.go's pluginRunLocalDeployScopePlan).
+// ONE drive shape (see spec.VerifyChecksRequest): plan → the `target: local` --verify path —
+// candy/plugin-bundle's verify_local.go (verifyLocalDeployScope/localDeployScopePlan, #55 W3 B3,
+// relocated from the former core check_cmd.go's runLocalDeployScopePlan) ASSEMBLES the plan
+// (kind:local template, resolved PLUGIN-SIDE via node_resolve.go's lookupLocalTemplate — no
+// LoadUnified needed — + the deploy node's own plan) and this handler DRIVES it via kit.RunPlan,
+// rebuilding the runtime env + ${HOST:} host-vars + the cross-deployment TargetResolver from
+// {dir, box, instance} exactly as the check-live gather does (live_gather.go's
+// pluginRunLocalDeployScopePlan) — a PEER plugin calling THIS plugin now, not core.
+//
+// The FORMER second drive shape (ops → the deploy-lifecycle Test path, raw deploy-scope checks via
+// kit.Runner.Run, no plan gating) is GONE (#55 W3 B3 remainder): its own sole production caller,
+// charly core's pluginDeployTarget.Test/runUnifiedTargetChecks, had ZERO real callers anywhere in
+// the tree (`charly check live` never reached it — see charly/unified_targets.go's Test-deletion
+// comment). verifyChecksRunOps/filterOpsByID (and their own OnlyIDs pre-filter field) died with it.
 
 import (
 	"context"
@@ -55,41 +61,13 @@ func verifyChecksForHost(ctx context.Context, req *pb.InvokeRequest) (*pb.Invoke
 		return nil, fmt.Errorf("plugin-check: verify-checks re-materialize venue: %w", err)
 	}
 
-	var results []kit.StepResult
-	if len(in.Plan) > 0 {
-		results = verifyChecksRunPlan(ex, ctx, venueExec, in)
-	} else {
-		results = verifyChecksRunOps(ex, ctx, venueExec, in)
-	}
+	results := verifyChecksRunPlan(ex, ctx, venueExec, in)
 
 	out, err := json.Marshal(results)
 	if err != nil {
 		return nil, fmt.Errorf("plugin-check: marshal verify-checks reply: %w", err)
 	}
 	return &pb.InvokeReply{ResultJson: out}, nil
-}
-
-// verifyChecksRunOps drives the deploy-lifecycle Test path (raw Op checks, no plan gating) — the
-// plugin-side port of the former core runUnifiedTargetChecks kit.Runner.Run drive. Each CheckResult
-// is wrapped in a StepResult so the reply has one uniform shape; the host reads .Result.Status /
-// .Result.Op.ID.
-func verifyChecksRunOps(ex *sdk.Executor, ctx context.Context, venueExec spec.DeployExecutor, in spec.VerifyChecksRequest) []kit.StepResult {
-	runner := newPluginCheckRunner(ex, ctx, spec.CheckEnv{
-		Mode:      in.Mode,
-		VenueKind: venueExec.Kind(),
-	}, kit.RunnerConfig{
-		Exec: venueExec,
-		Mode: verifyChecksMode(in.Mode),
-	})
-	crs := runner.Run(ctx, in.Ops)
-	out := make([]kit.StepResult, 0, len(crs))
-	for i := range crs {
-		// crs[i] is the engine kit.CheckResult (with the DeadlineExceeded flag the retry loop
-		// reads); the StepResult wire field carries the embedded spec.CheckResult only
-		// (DeadlineExceeded is engine-internal, json:"-"), so extract it here.
-		out = append(out, kit.StepResult{Result: crs[i].CheckResult})
-	}
-	return out
 }
 
 // verifyChecksRunPlan drives the `target: local` --verify path — the plugin-side port of the former
@@ -99,9 +77,10 @@ func verifyChecksRunOps(ex *sdk.Executor, ctx context.Context, venueExec spec.De
 //
 // The per-host charly.yml OVERLAY merge (the deploy-entry `check:` extends/overrides) lives HERE
 // now (#55 CHECK-ENGINE cone Option A — relocated from the former core runLocalDeployScopePlan so
-// the core `target: local` --verify path imports zero deploykit). The host threads the base plan
-// (kind:local template + deploy node, assembled core-side in check_cmd.go's runLocalDeployScopePlan);
-// this handler appends the per-host overlay entry's plan — keyed by DeployKey(box, instance) with
+// the `target: local` --verify path imports zero deploykit). The caller threads the base plan
+// (kind:local template + deploy node, assembled PLUGIN-side now in candy/plugin-bundle's
+// verify_local.go, #55 W3 B3); this handler appends the per-host overlay entry's plan — keyed by
+// DeployKey(box, instance) with
 // the bare-image fallback, the SAME precedence the core read used — before driving RunPlan, so the
 // final plan run by the plugin is byte-identical to the former core-assembled one (base + overlay).
 func verifyChecksRunPlan(ex *sdk.Executor, ctx context.Context, venueExec spec.DeployExecutor, in spec.VerifyChecksRequest) []kit.StepResult {

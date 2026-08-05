@@ -65,7 +65,8 @@ import (
 //
 // The arbiter-release bracket (releaseResourceClaim, gated on the host-process
 // CHARLY_PREEMPT_LEASE env var a placement-agnostic plugin cannot own) stays entirely host-side,
-// under the EXISTING "pod-remove" HostBuild kind — same shape as pod start/stop's own arbiter
+// under the "pod-lifecycle" HostBuild op="remove" (#55 W3 A10b unified the former dedicated
+// "pod-remove" kind into this one) — same shape as pod start/stop's own arbiter
 // bracket (charly/arbiter_bracket.go, S3b — was substrate_lifecycle_grpc.go before the
 // deploy-dispatch cluster moved). RemoveCmd.Run() (pod_cmd.go) defers a call to it as the
 // LAST step, mirroring the former `defer releaseResourceClaim(...)` at the top of podRemoveCmd.Run()
@@ -133,6 +134,43 @@ var dropOverlayImagesByRef = kit.RemoveImagesByReference
 // podman volumes, its encrypted (gocryptfs) volumes, AND the synthesized <name>-overlay images an
 // add_candy: overlay build produced (relocated from charly/commands.go — zero core-registry
 // coupling).
+// sidecarContainerNames maps a pod's sidecar keys to the container names their quadlets produce.
+// Pure, so the naming convention stays testable without touching a container engine.
+func sidecarContainerNames(podBase string, sidecarNames []string) []string {
+	out := make([]string, 0, len(sidecarNames))
+	for _, sc := range sidecarNames {
+		out = append(out, podBase+"-"+sc)
+	}
+	return out
+}
+
+// containerExists reports whether the engine still knows a container by that name. A package var
+// so the removal ordering can be tested without a live engine.
+var containerExists = func(engine, name string) bool {
+	return exec.Command(engine, "container", "exists", name).Run() == nil
+}
+
+// removeContainer force-removes one container. Package var for the same reason as above.
+var removeContainer = func(engine, name string) error {
+	return exec.Command(engine, "rm", "-f", name).Run()
+}
+
+// ensureContainersRemoved reaps any container that outlived its systemd unit. See the call site
+// for why an unreaped container becomes a permanent orphan once its quadlet file is deleted.
+func ensureContainersRemoved(engine string, names []string) {
+	for _, name := range names {
+		if name == "" || !containerExists(engine, name) {
+			continue
+		}
+		fmt.Fprintf(os.Stderr, "Container %s outlived its unit; removing it directly\n", name)
+		if err := removeContainer(engine, name); err != nil {
+			// Warn rather than fail: teardown must continue so the remaining artifacts still get
+			// cleaned up, but the operator needs to know a container was left behind.
+			fmt.Fprintf(os.Stderr, "Warning: removing leftover container %s: %v\n", name, err)
+		}
+	}
+}
+
 func purgeDeployArtifacts(engine, boxName, instance string) {
 	removeVolumes(engine, boxName, instance)
 	deploykit.RemoveEncryptedVolumes(boxName, instance)
@@ -262,8 +300,36 @@ func runPodRemove(box, instance string, purge, keepDeploy bool, cliEnv []string)
 
 	if rt.RunMode == "quadlet" {
 		svc := kit.ServiceNameInstance(boxName, instance)
+		// Sidecar names are needed BEFORE any file is deleted: their services have to be stopped
+		// while their units still exist, and their containers reaped before the quadlets go away.
+		sidecarNames := resolveSidecarNames(boxName, instance)
+		podBase := kit.PodNameInstance(boxName, instance)
+
+		// Stop the sidecars first, then the main service. A sidecar's unit is generated from its
+		// .container file, so stopping it after that file is deleted (and the daemon reloaded) is
+		// no longer possible — its container would simply be left running.
+		for _, sc := range sidecarNames {
+			_ = exec.Command("systemctl", "--user", "stop", podBase+"-"+sc+".service").Run()
+		}
 		stop := exec.Command("systemctl", "--user", "stop", svc)
 		_ = stop.Run()
+
+		// Confirm the containers are actually GONE before the quadlet files are deleted.
+		//
+		// The systemctl stop above is best-effort by design, but its outcome is load-bearing: it
+		// is the ONLY thing that reaps the container in quadlet mode (unlike the direct-mode
+		// branch below, which explicitly stops and removes). If it does not — a unit stuck in
+		// failed/activating, an ExecStop that hits its stop timeout, a unit systemd no longer
+		// knows about — the container survives; and once the quadlet file is deleted and the
+		// daemon reloaded, the unit ceases to exist and NOTHING will ever tear that container
+		// down again. It is then orphaned permanently, holding its netns and, with it, its
+		// aardvark-dns registration — which is how a stale DNS entry outlives the deploy that
+		// created it and breaks container-name resolution host-wide.
+		//
+		// Verify-then-remove, so a container systemd already reaped costs one cheap existence
+		// check and nothing else.
+		names := append([]string{containerName}, sidecarContainerNames(podBase, sidecarNames)...)
+		ensureContainersRemoved(engine, names)
 
 		qdir, err := kit.QuadletDir()
 		if err != nil {
@@ -284,8 +350,6 @@ func runPodRemove(box, instance string, purge, keepDeploy bool, cliEnv []string)
 
 		// Remove sidecar .container files (exact-name match, no prefix glob). Sources sidecar
 		// names from charly.yml — see resolveSidecarNames for why charly.yml is authoritative.
-		sidecarNames := resolveSidecarNames(boxName, instance)
-		podBase := kit.PodNameInstance(boxName, instance)
 		for _, sc := range sidecarNames {
 			scPath := filepath.Join(qdir, podBase+"-"+sc+".container")
 			if err := os.Remove(scPath); err == nil {

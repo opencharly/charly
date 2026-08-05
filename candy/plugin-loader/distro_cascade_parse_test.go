@@ -17,11 +17,11 @@ import (
 // charly dep.
 //
 // deriveCandy here is a plugin-loader-local port of charly's helper: charly's version decodes
-// through decodeEntityViaCUE (the loader's CUE-validating decode, package-main-internal); this
-// out-of-module package instead uses plain yaml.Unmarshal + normalizePackageShorthand (the same
-// narrow #PackageItem bare-scalar-to-{name} canonicalization CUE performs at real load time) —
-// sufficient for every fixture body these 4 tests author (plain package lists, no other
-// CUE-only shorthand).
+// through requireProjectLoader().DecodeEntityViaCUE (the loader's CUE-validating decode,
+// sdk/loaderkit-backed since K1 unit 1); this file instead uses plain yaml.Unmarshal +
+// normalizePackageShorthand (the same narrow #PackageItem bare-scalar-to-{name} canonicalization
+// CUE performs at real load time) — sufficient for every fixture body these 4 tests author (plain
+// package lists, no other CUE-only shorthand), with no host-seam dependency.
 
 func deriveCandy(t *testing.T, body string) spec.CandyReader {
 	t.Helper()

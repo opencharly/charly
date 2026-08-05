@@ -27,7 +27,7 @@ import (
 type BuildFile struct {
 	Distro  map[string]*spec.ResolvedDistro `yaml:"distro" json:"distro"`
 	Builder map[string]*spec.BuilderDef     `yaml:"builder" json:"builder"`
-	Init    map[string]*ResolvedInit        `yaml:"init" json:"init"`
+	Init    map[string]*spec.ResolvedInit   `yaml:"init" json:"init"`
 }
 
 // LoadBuildConfigForBox loads distro, builder, and init configs for the
@@ -45,7 +45,7 @@ func LoadBuildConfigForBox(dir string) (*spec.DistroConfig, *spec.BuilderConfig,
 		return nil, nil, nil, noCharlyYmlErr(dir)
 	}
 	// The build-vocab projections live in loaderkit (K3 Unit 1 — the ONE home charly core and
-	// candy/plugin-build both call, R3). charly supplies its in-proc registry OpResolve callbacks
+	// candy/plugin-build both call, R3). charly supplies its in-proc registry ops.OpResolve callbacks
 	// for the opaque distro/init bodies; the builder bodies decode purely (no callback).
 	return spec.ProjectDistroConfig(uf, resolveDistroViaPlugin),
 		spec.ProjectBuilderConfig(uf),

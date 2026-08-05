@@ -136,7 +136,10 @@ func TestResolveLocalImageRef_ShortNameNoMatch(t *testing.T) {
 // drive the PRODUCTION seam (command:check's OpVerifyChecks, dispatchCheckOpsMode →
 // dispatchVerifyChecks) — this test asserts CHARLY's OWN dispatch (the context-vs-mode skip
 // gate, opInContext), not a kit-only semantic, so it stays in charly (#55
-// decoupling cone, Batch D).
+// decoupling cone, Batch D). dispatchVerifyChecks itself relocated to test-only code
+// (checkrun_helpers_test.go, #55 W3 B3 remainder) once its production callers died, and now
+// drives a single-step Plan instead of a raw Ops list (the surviving wire shape) — RunOne is the
+// shared per-step primitive either way, so this assertion is unaffected.
 func TestLiveVerb_SkipsUnderBoxMode(t *testing.T) {
 	// A live verb's runtime-context legality rides the AUTHORED `context:` since
 	// the live-verb externalization (the generic `plugin` verb itself is

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"github.com/opencharly/spec/ops"
 	"os"
 	"path/filepath"
 	"testing"
@@ -70,7 +71,7 @@ func TestExternalPluginEndToEnd(t *testing.T) {
 
 	// 4. Invoke across the process boundary; the marker must survive the round-trip.
 	out, err := prov.Invoke(ctx, &Operation{
-		Reserved: "externalprobe", Op: OpRun,
+		Reserved: "externalprobe", Op: ops.OpRun,
 		Params: []byte(`{"plugin_input":{"marker":"external-plugin-ok"}}`), Env: []byte(`{}`),
 	})
 	if err != nil {

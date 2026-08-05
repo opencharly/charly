@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/opencharly/spec/proc"
 )
 
 // TestCandySourceDirs_OverrideAnchorsRemoteApk is the integration guard for the
@@ -34,7 +36,7 @@ func TestCandySourceDirs_OverrideAnchorsRemoteApk(t *testing.T) {
 		t.Skipf("committed APK fixture absent (%v)", apkFixture)
 	}
 
-	t.Setenv(RepoOverrideEnv, "github.com/opencharly/charly="+repoRoot)
+	t.Setenv(proc.RepoOverrideEnv, "github.com/opencharly/charly="+repoRoot)
 
 	uf, ok, err := LoadUnified(boxCachyos)
 	if err != nil || !ok || uf == nil {

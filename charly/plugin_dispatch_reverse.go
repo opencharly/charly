@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/opencharly/spec/ops"
 	"net/http"
 	"time"
 
@@ -16,7 +17,7 @@ import (
 // (InvokeProvider) + HOST-BUILD (HostBuild). Both are served on the SAME broker InvokeWithExecutor
 // stands up for the calling plugin's Invoke, so any plugin running with a reverse channel
 // (deploy/step/check/build) can reach them — the generalization of the RunHostStep ExternalPlugin
-// arm (one fixed OpExecute step) to "invoke ANY provider/op" + "request a host build".
+// arm (one fixed ops.OpExecute step) to "invoke ANY provider/op" + "request a host build".
 //
 // MIGRATION INVENTORY: this file's `kit` import (specexec.VenueFromDescriptor, the S1
 // venue-scoped-executor-session re-materialization below) is UNTIL-FLOOR-SLIM-proper — it
@@ -28,7 +29,7 @@ import (
 // behalf (F10) — the host is the dispatch BROKER (plugin→host→plugin), since it owns the registry.
 // An OUT-OF-PROCESS target is Invoked WITH a venue executor + build context threaded onto a
 // fresh nested broker (executorInvoker.InvokeWithExecutor — the SAME nested-broker shape
-// RunHostStep's external-step dispatch drives too, generalized from a single fixed OpExecute call
+// RunHostStep's external-step dispatch drives too, generalized from a single fixed ops.OpExecute call
 // to any class/op); an IN-PROC target (compiled-in/builtin) is Invoked directly. The
 // target is resolved from the registry, falling back to a LAZY CONNECT (S2) on a miss — the
 // target plugin need not have been referenced by anything ELSE already loaded; an unresolvable
@@ -109,17 +110,17 @@ func (s *executorReverseServer) InvokeProvider(ctx context.Context, req *pb.Invo
 	)
 	switch class {
 	case ClassVerb:
-		if cv, isCV := prov.(CheckVerbProvider); isCV && op.Op == OpRun {
+		if cv, isCV := prov.(CheckVerbProvider); isCV && op.Op == ops.OpRun {
 			// K1-unblock W3 Unit B (operator ruling "path (a)"): a CheckVerbProvider target (a
-			// compiled-in/builtin check verb) dispatched for its CHECK PROBE (OpRun, the runtime
+			// compiled-in/builtin check verb) dispatched for its CHECK PROBE (ops.OpRun, the runtime
 			// check selector — candy/plugin-check/verb_resolver.go) runs via RunVerb with a live
 			// host CheckContext, never the generic Invoke — builtinVerbBase.Invoke is a deliberate
 			// always-error stub (provider_verb.go), matching hostVerbResolver.RunVerb's own
 			// normal-flow branch exactly (dispatch on the CAPABILITY CLASS + the generic op
-			// selector, never a verb word — F11-clean). The OpRun gate is load-bearing (P8b): a
+			// selector, never a verb word — F11-clean). The ops.OpRun gate is load-bearing (P8b): a
 			// state-provision verb (file/user/unix-group/…) is ALSO a CheckVerbProvider but its
-			// build-emit rides OpEmit, which must fall through to the generic Invoke (its
-			// kitVerbActAdapter.Invoke(OpEmit) → the act shell), not RunVerb (which would deref a
+			// build-emit rides ops.OpEmit, which must fall through to the generic Invoke (its
+			// kitVerbActAdapter.Invoke(ops.OpEmit) → the act shell), not RunVerb (which would deref a
 			// check-less minimal runner). charly's CheckVerbProvider.RunVerb is hard-typed to *hostVerbResolver
 			// (not an interface), so the remote caller's context is built by constructing a
 			// MINIMAL *kit.Runner from the request's env snapshot (decoded into the SAME
@@ -139,9 +140,9 @@ func (s *executorReverseServer) InvokeProvider(ctx context.Context, req *pb.Invo
 					return nil, fmt.Errorf("InvokeProvider %s:%s: decode op: %w", class, word, derr)
 				}
 			}
-			mode := RunModeLive
+			mode := spec.CheckModeLive
 			if env.Mode == "box" {
-				mode = RunModeBox
+				mode = spec.CheckModeBox
 			}
 			dialTimeout := time.Duration(env.DialTimeoutNs)
 			if dialTimeout <= 0 {
@@ -263,7 +264,7 @@ type hostBuilder func(ctx context.Context, specJSON []byte, build buildEngineCon
 var hostBuilders = map[string]hostBuilder{}
 
 // registerHostBuilder records one host-builder kind (F10). Panics on a duplicate (a startup
-// invariant, like registerStepEmitter).
+// invariant, like registerCompiledPlugin).
 func registerHostBuilder(kind string, fn hostBuilder) {
 	if kind == "" || fn == nil {
 		panic("registerHostBuilder: empty kind or nil builder")

@@ -108,13 +108,16 @@ func encExtpassArgs(imageID string) ([]string, func()) {
 		"  systemd-ask-password --id=" + imageID + " --timeout=0 --echo=masked 'Passphrase for " + imageID + ":'\n" +
 		"fi\n"
 
-	f, err := os.CreateTemp("", "charly-extpass-*.sh")
+	// Held until the caller releases: this script is written, CLOSED, and then handed to
+	// gocryptfs, which may sit at a `--timeout=0` passphrase prompt indefinitely. With no open
+	// descriptor and a frozen mtime it is exactly the shape the sweep deletes out from under a
+	// waiting operator.
+	f, releaseExtpass, err := proc.CreateTempHeld("", "charly-extpass-*.sh")
 	if err != nil {
 		// Fall back to inline systemd-ask-password (won't work headlessly)
 		ep := "systemd-ask-password --id=" + imageID + " --timeout=0 --echo=masked Passphrase"
 		return []string{"-extpass", ep}, func() {}
 	}
-	proc.RegisterTempCleanup(f.Name())
 	if _, werr := f.WriteString(script); werr != nil {
 		fmt.Fprintf(os.Stderr, "encExtpassArgs: write extpass script: %v\n", werr)
 	}
@@ -122,7 +125,13 @@ func encExtpassArgs(imageID string) ([]string, func()) {
 		fmt.Fprintf(os.Stderr, "encExtpassArgs: chmod extpass script: %v\n", cerr)
 	}
 	_ = f.Close()
-	return []string{"-extpass", f.Name()}, func() { _ = os.Remove(f.Name()); proc.UnregisterTempCleanup(f.Name()) }
+	// The hold outlives f.Close() by design — gocryptfs reads this path long after we close our
+	// own descriptor — so it is dropped in the caller's cleanup, not here.
+	return []string{"-extpass", f.Name()}, func() {
+		releaseExtpass()
+		_ = os.Remove(f.Name())
+		proc.UnregisterTempCleanup(f.Name())
+	}
 }
 
 // runGocryptfsScope runs `systemd-run --scope --user --unit=<scope> -- gocryptfs
@@ -247,11 +256,10 @@ func passwdVolumes(in spec.EncExecInput) error {
 			continue
 		}
 		// Create temp extpass script that supplies the old password.
-		oldScript, err := os.CreateTemp("", "charly-oldpass-*.sh")
+		oldScript, releaseOldpass, err := proc.CreateTempHeld("", "charly-oldpass-*.sh")
 		if err != nil {
 			return fmt.Errorf("creating temp script for %s: %w", m.Name, err)
 		}
-		proc.RegisterTempCleanup(oldScript.Name())
 		if _, werr := oldScript.WriteString("#!/bin/bash\nprintf '%s' '" + strings.ReplaceAll(in.OldPass, "'", "'\\''") + "'\n"); werr != nil {
 			return fmt.Errorf("writing temp script for %s: %w", m.Name, werr)
 		}
@@ -266,6 +274,7 @@ func passwdVolumes(in spec.EncExecInput) error {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		runErr := cmd.Run()
+		releaseOldpass()
 		_ = os.Remove(oldScript.Name())
 		proc.UnregisterTempCleanup(oldScript.Name())
 		if runErr != nil {

@@ -3,25 +3,30 @@ package main
 import (
 	"reflect"
 	"testing"
+
+	"github.com/opencharly/spec/spec"
 )
 
 // TestAMDGFXVersionParsing (parseKFDGFXVersion) + TestGpuUsableViaCDI (gpuUsableViaCDI)
 // moved to candy/plugin-gpu/detect_test.go alongside those detection primitives
 // (cutover C11). The tests here exercise the KEPT-core surface: the DetectHostDevices
-// shim var (swapped with a fake) and the DetectedDevices struct. (appendAutoDetectedEnv
-// and appendGroupsForAMDGPU, and the tests solely exercising them, were a
-// dead-code-radical-removal-batch deletion — zero real callers anywhere; appendEnvUnique
-// remains live via a different real caller.) TestDetectedDevicesInSecurityArgs/
-// TestPrivilegedSkipsDevices/TestDetectedDevicesInQuadlet/TestAMDGPUGroupsInQuadlet
-// relocated to candy/plugin-bundle (#55 decoupling, Batch A) — they asserted
-// deploykit.SecurityArgs/GenerateQuadlet directly with zero charly coupling.
+// shim var (swapped with a fake) and the DetectedDevices struct — a fenced-consumer IOU
+// (host_build_pod_config_seams.go), not yet dissolved (K5 seam-death, in progress).
+// (appendAutoDetectedEnv and appendGroupsForAMDGPU, and the tests solely exercising
+// them, were a dead-code-radical-removal-batch deletion — zero real callers anywhere;
+// appendEnvUnique + TestAppendEnvUnique were the SAME class of dead code, found and
+// deleted in the K5 sweep — candy/plugin-deploy-pod already carries its own independent
+// copy.) TestDetectedDevicesInSecurityArgs/TestPrivilegedSkipsDevices/
+// TestDetectedDevicesInQuadlet/TestAMDGPUGroupsInQuadlet relocated to candy/plugin-bundle
+// (#55 decoupling, Batch A) — they asserted deploykit.SecurityArgs/GenerateQuadlet
+// directly with zero charly coupling.
 
 func TestDetectHostDevicesWithGPU(t *testing.T) {
 	orig := DetectHostDevices
 	defer func() { DetectHostDevices = orig }()
 
-	DetectHostDevices = func() DetectedDevices {
-		return DetectedDevices{
+	DetectHostDevices = func() spec.DetectedDevices {
+		return spec.DetectedDevices{
 			GPU:     true,
 			Devices: []string{"/dev/kvm", "/dev/dri/renderD128"},
 		}
@@ -41,8 +46,8 @@ func TestDetectHostDevicesNoGPU(t *testing.T) {
 	orig := DetectHostDevices
 	defer func() { DetectHostDevices = orig }()
 
-	DetectHostDevices = func() DetectedDevices {
-		return DetectedDevices{
+	DetectHostDevices = func() spec.DetectedDevices {
+		return spec.DetectedDevices{
 			GPU:     false,
 			Devices: []string{"/dev/fuse"},
 		}
@@ -67,8 +72,8 @@ func TestDetectHostDevicesWithAMDGPU(t *testing.T) {
 	orig := DetectHostDevices
 	defer func() { DetectHostDevices = orig }()
 
-	DetectHostDevices = func() DetectedDevices {
-		return DetectedDevices{
+	DetectHostDevices = func() spec.DetectedDevices {
+		return spec.DetectedDevices{
 			AMDGPU:        true,
 			AMDGFXVersion: "10.3.0",
 			Devices:       []string{"/dev/kfd", "/dev/dri/renderD128"},
@@ -91,8 +96,8 @@ func TestDetectHostDevicesWithBothGPUs(t *testing.T) {
 	orig := DetectHostDevices
 	defer func() { DetectHostDevices = orig }()
 
-	DetectHostDevices = func() DetectedDevices {
-		return DetectedDevices{
+	DetectHostDevices = func() spec.DetectedDevices {
+		return spec.DetectedDevices{
 			GPU:           true,
 			AMDGPU:        true,
 			AMDGFXVersion: "11.0.0",
@@ -115,8 +120,8 @@ func TestRenderNodeDetection(t *testing.T) {
 
 	// The real defaultDetectHostDevices picks the first renderD* from Devices.
 	// Here we verify the struct carries the field correctly through the pipeline.
-	DetectHostDevices = func() DetectedDevices {
-		return DetectedDevices{
+	DetectHostDevices = func() spec.DetectedDevices {
+		return spec.DetectedDevices{
 			AMDGPU:     true,
 			RenderNode: "/dev/dri/renderD128",
 			Devices:    []string{"/dev/kfd", "/dev/dri/renderD128", "/dev/dri/renderD129"},
@@ -133,8 +138,8 @@ func TestRenderNodeNoDevices(t *testing.T) {
 	orig := DetectHostDevices
 	defer func() { DetectHostDevices = orig }()
 
-	DetectHostDevices = func() DetectedDevices {
-		return DetectedDevices{
+	DetectHostDevices = func() spec.DetectedDevices {
+		return spec.DetectedDevices{
 			Devices: []string{"/dev/kfd", "/dev/kvm"},
 		}
 	}
@@ -142,23 +147,5 @@ func TestRenderNodeNoDevices(t *testing.T) {
 	detected := DetectHostDevices()
 	if detected.RenderNode != "" {
 		t.Errorf("RenderNode = %q, want empty", detected.RenderNode)
-	}
-}
-
-func TestAppendEnvUnique(t *testing.T) {
-	// New key is appended
-	env := []string{"FOO=bar"}
-	env = appendEnvUnique(env, "HSA_OVERRIDE_GFX_VERSION=10.3.0")
-	if len(env) != 2 {
-		t.Fatalf("expected 2 env vars, got %d", len(env))
-	}
-
-	// Existing key is not overridden
-	env = appendEnvUnique(env, "HSA_OVERRIDE_GFX_VERSION=11.0.0")
-	if len(env) != 2 {
-		t.Fatalf("expected 2 env vars after dedup, got %d", len(env))
-	}
-	if env[1] != "HSA_OVERRIDE_GFX_VERSION=10.3.0" {
-		t.Errorf("expected original value preserved, got %q", env[1])
 	}
 }

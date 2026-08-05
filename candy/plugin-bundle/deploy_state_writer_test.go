@@ -191,10 +191,10 @@ func TestCharlyUpdatePreservesPerHostDeployFields(t *testing.T) {
 		return deploykit.SaveBundleConfig(d, bedTestMarshalNode, bedTestLoadBundleConfig)
 	}
 	// `charly update <vm>` == destroy (RemoveVmDeployEntry) THEN create (SaveVmDeployState).
-	if err := deploykit.RemoveVmDeployEntry("vm:cachyos-gpu", bundleAcquireDeployConfigLock, save, bedTestLoadBundleConfig); err != nil {
+	if err := deploykit.RemoveVmDeployEntry("vm:cachyos-gpu", save, bedTestLoadBundleConfig); err != nil {
 		t.Fatalf("RemoveVmDeployEntry (destroy leg): %v", err)
 	}
-	if err := deploykit.SaveVmDeployState("vm:cachyos-gpu", "cachyos-gpu", &spec.VmDeployState{InstanceID: "rebuilt-uuid", SshPort: 2222}, bundleAcquireDeployConfigLock, save, bedTestLoadBundleConfig); err != nil {
+	if err := deploykit.SaveVmDeployState("vm:cachyos-gpu", "cachyos-gpu", &spec.VmDeployState{InstanceID: "rebuilt-uuid", SshPort: 2222}, save, bedTestLoadBundleConfig); err != nil {
 		t.Fatalf("SaveVmDeployState (create leg): %v", err)
 	}
 
@@ -242,7 +242,7 @@ func TestVmDestroyRemovesPureAutoEntry(t *testing.T) {
 	save := func(d *deploykit.BundleConfig) error {
 		return deploykit.SaveBundleConfig(d, bedTestMarshalNode, bedTestLoadBundleConfig)
 	}
-	if err := deploykit.RemoveVmDeployEntry("vm:check-cachyos-gpu-vm", bundleAcquireDeployConfigLock, save, bedTestLoadBundleConfig); err != nil {
+	if err := deploykit.RemoveVmDeployEntry("vm:check-cachyos-gpu-vm", save, bedTestLoadBundleConfig); err != nil {
 		t.Fatalf("RemoveVmDeployEntry: %v", err)
 	}
 	dc2, err := bedTestLoadBundleConfig()

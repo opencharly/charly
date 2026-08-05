@@ -47,9 +47,13 @@ func TestBuildBundleNode_Structure(t *testing.T) {
 	if len(nodes) != 1 {
 		t.Fatalf("want 1 top node, got %d", len(nodes))
 	}
-	dn, err := buildBundleNode(nodes[0])
+	pn, err := genericToParsedNode(nodes[0])
 	if err != nil {
-		t.Fatalf("buildBundleNode: %v", err)
+		t.Fatalf("genericToParsedNode: %v", err)
+	}
+	dn, err := requireProjectLoader().BuildBundleNode(pn, loaderThreaded())
+	if err != nil {
+		t.Fatalf("BuildBundleNode: %v", err)
 	}
 	if dn.Target != "" {
 		t.Errorf("bundle group Target = %q, want empty (group)", dn.Target)

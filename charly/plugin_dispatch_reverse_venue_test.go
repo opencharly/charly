@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/opencharly/spec/ops"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -102,7 +103,7 @@ func marshalVenueDescriptor(t *testing.T, d *spec.VenueDescriptor) []byte {
 // S1 fixture in this file dispatches to).
 func venueInvokeReq(peerCmd string, vd []byte) *pb.InvokeProviderRequest {
 	params, _ := marshalJSON(peerInputForTest{PeerCmd: peerCmd})
-	return &pb.InvokeProviderRequest{Class: "verb", Reserved: "exampledispatchpeer", Op: OpRun, ParamsJson: params, VenueDescriptorJson: vd}
+	return &pb.InvokeProviderRequest{Class: "verb", Reserved: "exampledispatchpeer", Op: ops.OpRun, ParamsJson: params, VenueDescriptorJson: vd}
 }
 
 // peerInputForTest mirrors candy/plugin-example-dispatch's own peerInput{PeerCmd} shape (the raw,
@@ -216,7 +217,7 @@ func TestInvokeProvider_VenueDescriptor_OutOfProcessCaller_SSHOverridesOwnShellE
 	}
 	// Drive A WITH its OWN reverse channel (exec.ShellExecutor{} — a real, host-local venue,
 	// DIFFERENT from the SSH descriptor A asks the host to materialize for the peer).
-	res, err := gpA.InvokeWithExecutor(context.Background(), &Operation{Reserved: "exampledispatch", Op: OpRun, Params: params}, exec.ShellExecutor{}, buildEngineContext{}, false, nil)
+	res, err := gpA.InvokeWithExecutor(context.Background(), &Operation{Reserved: "exampledispatch", Op: ops.OpRun, Params: params}, exec.ShellExecutor{}, buildEngineContext{}, false, nil)
 	if err != nil {
 		t.Fatalf("InvokeWithExecutor (OOP caller, ssh descriptor for peer): %v", err)
 	}
@@ -338,7 +339,7 @@ func TestInvokeProvider_LazyConnectFallback(t *testing.T) {
 		t.Fatal("test invariant violated: exampledispatchpeer is already registered — the fallback path would not be exercised")
 	}
 	srv := &executorReverseServer{}
-	res, err := srv.InvokeProvider(context.Background(), &pb.InvokeProviderRequest{Class: "verb", Reserved: "exampledispatchpeer", Op: OpRun})
+	res, err := srv.InvokeProvider(context.Background(), &pb.InvokeProviderRequest{Class: "verb", Reserved: "exampledispatchpeer", Op: ops.OpRun})
 	if err != nil {
 		t.Fatalf("InvokeProvider (lazy-connect fallback): %v", err)
 	}
@@ -385,7 +386,7 @@ func TestInvokeProvider_LazyConnectFallback_DuringNestedKindConnectPass_NoDeadlo
 	}
 	done := make(chan callResult, 1)
 	go func() {
-		res, err := srv.InvokeProvider(context.Background(), &pb.InvokeProviderRequest{Class: "verb", Reserved: "exampledispatchpeer", Op: OpRun})
+		res, err := srv.InvokeProvider(context.Background(), &pb.InvokeProviderRequest{Class: "verb", Reserved: "exampledispatchpeer", Op: ops.OpRun})
 		done <- callResult{res: res, err: err}
 	}()
 

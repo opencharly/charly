@@ -69,9 +69,11 @@ type CLI struct {
 	// resolveBuildEngine already set up (LoadUnified, the scan-local host leg, resolveDistroLeg).)
 
 	// (The former hidden `__cmd` deploy-lifecycle reentry behind `charly cmd` is DELETED — cmd.go's
-	// dissolution: candy/plugin-cmd now drives the "pod-cmd" host-builder (cmd's slot in the floored
-	// pod-lifecycle-dispatch family, joining pod-shell) directly over the in-proc reverse channel, so
-	// the interactive Attach needs no hidden CLI reentry — mirroring __box-build's earlier removal.)
+	// dissolution: candy/plugin-cmd now drives the "pod-lifecycle" host-builder's op="cmd" (cmd's
+	// slot in the floored pod-lifecycle-dispatch family, joining op="shell" — #55 W3 A10b unified
+	// the former dedicated "pod-cmd" kind into this single op-discriminated one) directly over the
+	// in-proc reverse channel, so the interactive Attach needs no hidden CLI reentry — mirroring
+	// __box-build's earlier removal.)
 
 	// (P8b: the former hidden __box-build reentry is DELETED. candy/plugin-box's dispatchBuild now
 	// runs the `charly box build` body itself — NormalizeBoxArgs → remote-ref pivot
@@ -121,8 +123,9 @@ type CLI struct {
 	// EXTERNAL or COMPILED-IN command CANDIES served by candy/plugin-* , dispatched via syscall.Exec
 	// (out-of-process) or an in-proc command:<word> Invoke (compiled-in); see collectExternalCommandPlugins.
 	// migrate/clean/settings/candy/doctor/feature/preempt/vm/alias OWN their engine/command in
-	// candy/plugin-<name> (NONE uses a hidden core command): clean/settings/doctor/feature reach a shared
-	// core subsystem over a generic HostBuild seam (retention/settings/hostprobe/feature), preempt reaches
+	// candy/plugin-<name> (NONE uses a hidden core command): clean/settings/feature reach a shared
+	// core subsystem over a generic HostBuild seam (retention/settings/feature), doctor needs no seam
+	// at all (it gathers its host facts itself in hostfacts.go, peer verb:gpu/verb:credential), preempt reaches
 	// its peer verb:arbiter over InvokeProvider, vm reaches config/ledger/egress over generic seams +
 	// libvirt/gpu/arbiter over verb dispatch, alias reaches image labels via HostBuild("cli") reentry,
 	// candy needs no seam (pure yaml via kit), migrate owns its engine. All compiled-in, so command:<word>
@@ -249,18 +252,13 @@ func main() {
 		}
 	}
 
-	// Stale-binary guardrail: if cwd is inside an opencharly source tree
-	// AND the source tree has .go files newer than this binary, abort
-	// with a clear error pointing at `task build:binary`. See
-	// CheckBinaryFreshness for the full rationale (CLAUDE.md R9 +
-	// the 2026-05-09 cuda-cudnn cache-mount incident).
-	CheckBinaryFreshness(ctx.Command())
-
-	// Refuse the disposable-bed RUNNER (`charly check run`) on an UNSTAMPED binary
-	// (version "unknown") — the version-identity analog of the freshness guard above.
-	// See CheckBinaryStamped (#74: the twice-recurred gate defect where a plain
-	// `go build` binary fails a bed run minutes in, or passes vacuously).
-	CheckBinaryStamped(ctx.Command())
+	// Preflight-phase pre-pass (K5 seam-death): every PhasePreflight provider gets a chance to
+	// hard-refuse this invocation BEFORE any command dispatch — candy/plugin-doctor's
+	// verb:freshness-guard is the sole provider today, folding the former CheckBinaryFreshness
+	// (CLAUDE.md R9 + the 2026-05-09 cuda-cudnn cache-mount incident) and CheckBinaryStamped
+	// (#74: the twice-recurred unstamped-binary gate defect) checks into one Invoke. See
+	// preflight_phase.go + candy/plugin-doctor/freshness.go for the full rationale.
+	runPreflightPhase(ctx.Command())
 
 	// Cleanup hygiene: install a global signal handler so that registered
 	// temp-file paths are removed on SIGTERM/SIGINT/SIGHUP, and sweep any
@@ -280,7 +278,7 @@ func main() {
 	defer reapPlugins()
 
 	// A dynamic command plugin's command has no Run() method, so dispatch it manually:
-	// dispatchCommand routes by placement — a COMPILED-IN command candy in-proc via Invoke(OpRun),
+	// dispatchCommand routes by placement — a COMPILED-IN command candy in-proc via Invoke(ops.OpRun),
 	// an OUT-OF-PROCESS one by syscall.Exec (F8) — with the pass-through args; everything else runs
 	// through Kong's normal ctx.Run(). resolveCommandDispatch (not a bare table lookup) because a
 	// capability that declares a subcommand catalog (F-CLI-NEST) renders ONE extra Kong path token

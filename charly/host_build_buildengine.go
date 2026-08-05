@@ -36,7 +36,12 @@ func hostBuildScanLocal(_ context.Context, req spec.ResolvedProjectRequest, _ bu
 
 // hostBuildCollectRemoteRefs runs the reachability-scoped remote-ref walk (the ScanSeams.CollectRemoteRefs
 // leg). It reloads cfg + the local scan host-side (deterministic — identical to the plugin's), so the
-// wrapped-view walk sees the SAME withLocalRawRefs augmentation the in-core scan used.
+// wrapped-view walk sees the SAME withLocalRawRefs augmentation the in-core scan used. opts is built
+// via boxResolveOpts (the SINGLE source of the box-selection rule, R3) so req.RequestedBoxes reaches
+// CollectRemoteRefsOpts' own RequestedBoxes handling (task #17 fix) exactly the way it already
+// reaches buildkit.ResolveAllBox's — an on-demand namespace-qualified target
+// (`charly box generate fedora.check-pod`) is otherwise never visited by the reachability walk, and
+// its own remote candy refs are silently never fetched.
 func hostBuildCollectRemoteRefs(_ context.Context, req spec.ResolvedProjectRequest, _ buildEngineContext) ([]spec.RemoteDownload, error) {
 	dir := reqDirOrCwd(req.Dir)
 	cfg, err := LoadConfig(dir)
@@ -47,7 +52,8 @@ func hostBuildCollectRemoteRefs(_ context.Context, req spec.ResolvedProjectReque
 	if err != nil {
 		return nil, err
 	}
-	opts := spec.ResolveOpts{IncludeDisabled: req.IncludeDisabled, ExtraCandyRefs: req.ExtraCandyRefs}
+	opts := boxResolveOpts(req.RequestedBoxes, req.IncludeDisabled)
+	opts.ExtraCandyRefs = req.ExtraCandyRefs
 	return CollectRemoteRefsOpts(cfg, requireProjectLoader().FinalizeScannedCandies(localScanned, nil), withLocalRawRefs(opts, localScanned))
 }
 
@@ -73,14 +79,18 @@ func hostBuildScanRemote(_ context.Context, req spec.BuildEngineScanRemoteReques
 
 // hostBuildConnectPlugins connects the project's build-time (out-of-tree) plugin candies into the host
 // registry so the plugin's subsequent InvokeProvider/render dispatch reaches them (registry M). Best-
-// effort: a plugin the build actually USES fails loudly later at OpEmit/OpResolve.
+// effort: a plugin the build actually USES fails loudly later at ops.OpEmit/ops.OpResolve. opts is
+// built via boxResolveOpts (R3, the SAME helper hostBuildCollectRemoteRefs uses) so req.RequestedBoxes
+// reaches this scan's own CollectRemoteRefsOpts call too (task #17 fix) — an on-demand
+// namespace-qualified build/generate target otherwise never gets its own build-time plugin candies
+// discovered/connected here either, the sibling of the "unknown candy" gap this task closes.
 func hostBuildConnectPlugins(_ context.Context, req spec.ResolvedProjectRequest, _ buildEngineContext) (map[string]string, error) {
 	dir := reqDirOrCwd(req.Dir)
 	cfg, err := LoadConfig(dir)
 	if err != nil {
 		return nil, err
 	}
-	opts := boxResolveOpts(nil, req.IncludeDisabled)
+	opts := boxResolveOpts(req.RequestedBoxes, req.IncludeDisabled)
 	opts.ExtraCandyRefs = req.ExtraCandyRefs
 	if _, _, initCfg, derr := LoadDefaultBuildConfig(dir); derr == nil {
 		opts.InitCfg = initCfg

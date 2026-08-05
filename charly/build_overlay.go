@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -31,11 +30,10 @@ import (
 // InjectSecretsIntoPlans + the enc.go coreCredentialAccess adapter + layer_secrets.go are DELETED
 // in the coneB-br2 cutover (the deploykit import this file carried for them is gone).
 //
-// What GENUINELY remains host-only here: the base-image metadata a live podman executor must read
-// (BaseUser/BaseSecurity/BaseRegistry, via ExtractMetadata + the OCI registry label — a sdk-only
-// candy cannot exec podman inspect itself), and re-attaching the LIVE plans + parent venue that
-// ride the ctx (overlayBuildInputs, set by the host's own PrepareVenue dispatch, never serialized)
-// — plus a minimal buildEngineContext for the "oci-emit-step" step-emitter
+// What GENUINELY remains host-only here: re-attaching the LIVE plans + parent venue that
+// ride the ctx (overlayBuildInputs, set by the host's own PrepareVenue dispatch, never serialized —
+// a live spec.DeployExecutor cannot cross the wire, one of the three reverse-channel legs) — plus a
+// minimal buildEngineContext for the "oci-emit-step" step-emitter
 // (charly/step_emit_hostbuild.go's stepEmitOCIEmitStep → dispatchOCIStep), which reads ONLY
 // build.Box.Name (env.Image) and build.Generator.DevLocalPkg/ExtraCandyRefs (env.DevLocalPkg/
 // ExtraCandyRefs — the latter widens candy/plugin-installstep's OWN independent envelope re-fetch
@@ -137,7 +135,7 @@ func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ build
 	tag := req.Version
 
 	// The overlay candy set (add_candy: refs) — threaded into the buildEngineContext below so the
-	// class:step OpEmit's BuildEnv.ExtraCandyRefs widens candy/plugin-installstep's OWN independent
+	// class:step ops.OpEmit's BuildEnv.ExtraCandyRefs widens candy/plugin-installstep's OWN independent
 	// envelope re-fetch the SAME way (dispatchOCIStep, charly/oci_step_emit.go) — this is the ONLY
 	// consumer of ExtraCandyRefs on this path now; the remote-candy STAGING itself already ran as
 	// part of the candy's OWN InvokeProvider("build","generate",...) resolve (runHostFSPrep's
@@ -161,18 +159,13 @@ func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ build
 		deployName = specexec.NestedContainerName(deployName)
 	}
 
-	// Base-image metadata (ExtractMetadata + the registry label) — the candy emits the post-overlay
-	// USER restore + the security LABEL from these (it cannot run podman inspect itself). The
-	// overlay build always uses podman (the build runs in the parent venue via the served executor,
-	// but metadata extraction is host-side).
-	var baseUser string
-	var baseSecurity *spec.Security
-	baseRegistry := readImageRegistry("podman", baseRef)
-	if baseMeta, merr := container.ExtractMetadata("podman", baseRef); merr == nil && baseMeta != nil {
-		baseUser = baseMeta.User
-		sec := baseMeta.Security
-		baseSecurity = &sec
-	}
+	// Base-image metadata (User/Security/Registry) is NO LONGER read here (K3-W2): a sdk-only
+	// candy can call container.ExtractMetadata itself (re-exported as deploykit.ExtractMetadata /
+	// kit.ExtractMetadata) — this file's former "a sdk-only candy cannot exec podman inspect
+	// itself" claim was refuted (spec/container is already the shared fabric every plugin
+	// imports). candy/plugin-deploy-pod's podPrepareVenue now extracts it plugin-side from
+	// reply.BaseImage below. readImageRegistry (the standalone registry-label read) is deleted —
+	// ExtractMetadata's single inspect call already returns the Registry field.
 
 	// Serialize the live plans as InstallPlanViews — the candy decodes them via
 	// spec.PlanFromView + walks the overlay candies' steps. The live InstallPlan carries
@@ -212,9 +205,6 @@ func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ build
 		BaseImage:     baseRef,
 		DeployName:    deployName,
 		Plans:         plansView,
-		BaseUser:      baseUser,
-		BaseSecurity:  baseSecurity,
-		BaseRegistry:  baseRegistry,
 		CalVer:        ComputeCalVer(),
 		ParentVolumes: parentVolumes,
 	}, nil
@@ -282,14 +272,7 @@ func collectOverlayCandies(plans []*spec.InstallPlan) []string {
 	return out
 }
 
-// readImageRegistry reads the ai.opencharly.registry OCI label from an image — the registry prefix
-// the deploy-name alias tag carries so deployment-name-keyed commands (`charly config/start`)
-// resolve the image when deploy-name != image-name. Used by the overlay prep (hostBuildOverlay) to
-// carry BaseRegistry in the envelope (the candy cannot run podman inspect itself).
-func readImageRegistry(engine, imageRef string) string {
-	out, err := exec.Command(engine, "inspect", "--format", "{{index .Config.Labels \"ai.opencharly.registry\"}}", imageRef).CombinedOutput()
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(out))
-}
+// readImageRegistry (the standalone `podman inspect --format` registry-label read) is DELETED
+// (K3-W2): candy/plugin-deploy-pod's podPrepareVenue now reads the registry label plugin-side as
+// part of the SAME ExtractMetadata call it makes for User/Security — no second host round-trip,
+// no separate inspect invocation.

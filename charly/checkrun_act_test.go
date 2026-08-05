@@ -79,7 +79,7 @@ func TestRunProvisionActDispatch(t *testing.T) {
 	// file is a ProvisionActor → renders `mkdir … && touch …`, execs, passes. The verb is
 	// now the generic plugin: file (Kind()=plugin → Op.Plugin=file resolves the provider).
 	fe := &fakeExecutor{responses: []fakeResponse{{matchPrefix: "mkdir", exit: 0}}}
-	r := hostVerbResolverFor(fe, RunModeLive)
+	r := hostVerbResolverFor(fe, spec.CheckModeLive)
 	res, ok := r.runProvisionAct(ctx, &spec.Op{Plugin: "file", PluginInput: map[string]any{"file": "/tmp/x"}}, "file")
 	if !ok {
 		t.Fatalf("runProvisionAct(file) ok=false, want true (file is a ProvisionActor)")
@@ -104,7 +104,7 @@ func TestRunProvisionActDispatch(t *testing.T) {
 
 	// Non-zero exit → fail.
 	feFail := &fakeExecutor{responses: []fakeResponse{{matchPrefix: "mkdir", exit: 1, stderr: "boom"}}}
-	rFail := hostVerbResolverFor(feFail, RunModeLive)
+	rFail := hostVerbResolverFor(feFail, spec.CheckModeLive)
 	res2, ok := rFail.runProvisionAct(ctx, &spec.Op{Plugin: "file", PluginInput: map[string]any{"file": "/tmp/y"}}, "file")
 	if !ok || res2.Status != spec.StatusFail {
 		t.Fatalf("runProvisionAct(file, exit 1) = (status=%v, ok=%v), want (spec.StatusFail, true)", res2.Status, ok)

@@ -58,14 +58,21 @@ func hostInvoke[In, Out any](class ProviderClass, word, op string, in In) (Out, 
 // invoke / decode failure logs ONE stderr warning prefixed with warnLabel and returns
 // the zero Out — for hot probe paths that must never fail (the gpu-detection
 // semantics: degrade to "no devices", never crash the deploy).
-func hostInvokeOr[In, Out any](class ProviderClass, word, op string, in In, warnLabel string) Out {
+//
+// ctx is the caller's: a probe whose plugin resolves nothing host-side passes
+// context.Background(), while one whose plugin reaches back through the reverse channel (the
+// resolved-project legs, say) passes a specexec.ContextWithExecutor ctx. Threading it is what
+// keeps this ONE warn-and-degrade implementation usable by both, instead of a second copy at the
+// call site that needs an executor — a distinction the previous hard-wired Background() silently
+// took away from callers, turning gatherResources' resolve into a permanent no-op.
+func hostInvokeOr[In, Out any](ctx context.Context, class ProviderClass, word, op string, in In, warnLabel string) Out {
 	var zero Out
 	prov, ok := providerRegistry.resolve(class, word)
 	if !ok {
 		fmt.Fprintf(os.Stderr, "warning: %s: plugin (%s:%s) not registered\n", warnLabel, class, word)
 		return zero
 	}
-	out, err := invokeTyped[In, Out](context.Background(), prov, word, op, in)
+	out, err := invokeTyped[In, Out](ctx, prov, word, op, in)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: %s: %v\n", warnLabel, err)
 		return zero

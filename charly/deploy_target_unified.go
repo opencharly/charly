@@ -9,16 +9,11 @@ package main
 // LifecycleTarget for the live-runtime targets.
 //
 // Every `charly bundle add` / `charly bundle del` / `charly update` dispatches through
-// ResolveTarget (unified_targets.go) → an UnifiedDeployTarget adapter. ALL FIVE substrates
-// (local/vm/pod/k8s/android) are EXTERNAL — each resolves to the generic pluginDeployTarget
-// (S3b), a thin data-only proxy dispatching to candy/plugin-bundle's Invoke(OpDeployDispatch),
-// which reaches the substrate's own out-of-process provider via sdk.Executor.InvokeProvider. The
-// pod-overlay render + the VM disk build that once lived in core are now invoked HOST-SIDE from
-// each substrate's lifecycle body (pod/vm, now living in candy/plugin-bundle's deploy_target.go)
-// or preresolver (android/k8s) — the pod-overlay render moved to candy/plugin-deploy-pod (P11c),
-// reached via HostBuild("overlay") prep + HostBuild("step-emit","oci-emit-step") per-step
-// dispatch. There is no per-kind dispatch switch in the cmd files — the kind lives behind the
-// adapter method.
+// ResolveTarget (unified_targets.go) → an UnifiedDeployTarget adapter — see unified_targets.go's
+// own header for the full substrate-dispatch narrative (all five substrates external via
+// pluginDeployTarget/S3b, the pod-overlay render reached via HostBuild("overlay")/
+// ("step-emit","oci-emit-step")). There is no per-kind dispatch switch in the cmd files — the
+// kind lives behind the adapter method.
 
 import (
 	"context"
@@ -50,7 +45,7 @@ type DeployContext struct {
 	// Cfg / DistroCfg / BuilderCfg are the configs loaded once by the
 	// resolve-target-add host seam (loadConfigForDeploy). Reused by each Add
 	// so the construction matches what the plugin compiled plans against.
-	Cfg        *Config
+	Cfg        *spec.Config
 	DistroCfg  *spec.DistroConfig
 	BuilderCfg *spec.BuilderConfig
 }
@@ -93,11 +88,6 @@ type UnifiedDeployTarget interface {
 	// <name>`. Only recorded ReverseOps are replayed — never an
 	// ad-hoc computation from the candy manifest.
 	Del(ctx context.Context, opts DelOpts) error
-
-	// Test runs the given deploy-scope checks against the live
-	// target. Equivalent to `charly check live <name>`. Returns nil only if
-	// every non-skipped check passes.
-	Test(ctx context.Context, checks []spec.Op, opts TestOpts) error
 
 	// Update re-applies the plan diff between the currently-recorded
 	// candy set and the plan set derived from fresh charly.yml.
@@ -171,20 +161,6 @@ type DelOpts struct {
 	// RemoveVolumes deletes bind-mount / named-volume data. Off by
 	// default to avoid accidental data loss.
 	RemoveVolumes bool
-}
-
-// TestOpts parameterizes `charly check live` against a live deployment.
-type TestOpts struct {
-	// OnlyIDs restricts the run to the listed check IDs. Empty =
-	// run every check defined on the deployment.
-	OnlyIDs []string
-
-	// FormatJSON emits machine-readable output instead of the human
-	// summary table.
-	FormatJSON bool
-
-	// StopOnFail aborts on the first failing check.
-	StopOnFail bool
 }
 
 // UpdateOpts parameterizes `charly bundle update`.

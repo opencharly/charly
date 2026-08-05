@@ -16,6 +16,7 @@ import (
 //     reaps a leftover even after SIGKILL); cliMain arms the in-process signal handler.
 var (
 	shellQuote            = spec.ShellQuote
+	CreateTempHeld        = proc.CreateTempHeld
 	RegisterTempCleanup   = proc.RegisterTempCleanup
 	UnregisterTempCleanup = proc.UnregisterTempCleanup
 )

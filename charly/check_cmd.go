@@ -2,14 +2,9 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
-	"strings"
 
-	specexec "github.com/opencharly/spec/exec"
-	"github.com/opencharly/spec/ops"
-	"github.com/opencharly/spec/report"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -19,9 +14,12 @@ import (
 // short-circuit; "feature-box" was traced and never had a live caller through this seam — see
 // feature_run_gather.go's header; "feature-box" is now the plugin-side pluginCheckRunFeatureBox,
 // reached from candy/plugin-box's command:feature over InvokeProvider — cone-C #31). What remains
-// here is used by the new "check-load-plugins" seam (host_build_check_load_plugins.go) and by the
-// external `target: local` deploy's own --verify path (unified_targets.go) — neither is part of the
-// "live"/"feature-live" check-run modes reached via the check-run seam, so they stay core.
+// is resolveCheckRunnerContext/candyDirsFromScan — the SOLE remaining production content, feeding
+// the new "check-load-plugins" seam (host_build_check_load_plugins.go). It STAYS core because it
+// calls loadProjectPlugins directly, the same core-private registry-mutating mechanism
+// loadDeployPlugins drives (#55 W3 B3 — moving it would have the plugin calling into itself). The
+// external `target: local` deploy's own --verify path RELOCATED to candy/plugin-bundle's
+// verify_local.go (#55 W3 B3 remainder) — it no longer lives here.
 
 // The `charly check` exit-code contract (2 = checks failed, 3 = prereq skip) lives in
 // the sdk (exitcode.CheckFailExitCode / exitcode.CheckSkippedExitCode); the plugin/main signal it
@@ -62,7 +60,7 @@ type checkRunnerContext struct {
 // populated CandyDirs, so a committed-APK check passed under check live yet failed to anchor
 // ("0 candies scanned") under feature run. Any RunModeLive runner that executes a baked plan
 // MUST fold its result into the RunnerConfig (CandyDirs + CandyScanErr).
-func resolveCheckRunnerContext(box, dir string, cfg *Config) checkRunnerContext {
+func resolveCheckRunnerContext(box, dir string, cfg *spec.Config) checkRunnerContext {
 	// Scan the RESOLVED candy set ONCE (local + @github-fetched): it carries each
 	// candy's SourceDir (committed-APK anchoring) AND its `plugin:` block, so one
 	// scan feeds BOTH consumers (R3). A box that vendors all its candies via @github
@@ -103,261 +101,35 @@ func resolveCheckRunnerContext(box, dir string, cfg *Config) checkRunnerContext 
 	return checkRunnerContext{CandyDirs: candyDirsFromScan(candyMap)}
 }
 
-// resolveMergedDeployTree returns the top-level Bundle (deploy-node) map — the merged project
-// charly.yml + per-host operator overlay, ready for dotted-path traversal — the host-side
-// merged-tree read the two remaining check host seams need (deployNodePluginContext below +
-// check_venue_resolve.go's checkVenueExecFromReply). It replaces the DELETED deploy_tree.go
-// host merged-tree read (#55 LOADER cone): instead of a host-resident sdk/deploykit projection+merge
-// (the incomplete seam a floor-M read must not carry), it drives the LOADER CAPABILITY — the
-// spec.ProjectLoader.ResolveMergedDeployTree seam (#55 coneA Q2(1)), which runs the
-// loaderkit.ResolveMergedTreeViaExecutor project+overlay merge INSIDE the loader plugin over the
-// in-proc host reverse channel (the SAME executorReverseServer path command:validate /
-// command:bundle drive, threaded on ctx via specexec.ContextWithExecutor) — so the deploykit
-// projection/overlay/merge lives INSIDE loaderkit, off charly core, and this read routes through
-// the loader broker exactly like every Cone A Unit 3 dispatch reader. The in-proc executor reaches
-// only the compiled-in loader-* host legs (it never runs the
-// deploy-plugins-connect seam), so a PRE-CONNECT caller (deployNodePluginContext feeding
-// loadDeployPlugins BEFORE any out-of-process plugin connects) never recurses.
-//
-// check_cmd.go imports NO loaderkit (#55 coneA Q2(1) shed): the per-host operator-overlay merge
-// (loaderkit.LoadHostBundleConfigViaExecutor + MergeDeployConfigs) that spec.ProjectLoader.LoadUnified
-// does NOT expose (LoadUnified returns the PROJECT-only tree, loadmodel.go Bundle has no overlay
-// field, so repointing to LoadUnified would DROP operator overrides — verified not byte-equivalent)
-// is now reached through the ResolveMergedDeployTree seam method, not a direct loaderkit call.
-// NOT the boundary-law "host-boundary-object" trap: the merge IS a loader mechanism the plugin
-// drives; the shed landed once the seam exposed it.
-func resolveMergedDeployTree(dir string) (map[string]spec.BundleNode, error) {
-	ctx := specexec.ContextWithExecutor(context.Background(), specexec.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}}))
-	return requireProjectLoader().ResolveMergedDeployTree(ctx, dir)
-}
+// resolveMergedDeployTree, deployNodePluginContext, and resolveDeployNodeByPath relocated to
+// plugin_loader.go (#55 W3 B3, beside loadDeployPlugins): deployNodePluginContext is plugin-LOADER
+// infrastructure — its real significance is as loadDeployPlugins' (plugin_loader.go) direct input,
+// not a check-only concern despite the filename it used to share a file with. See plugin_loader.go's
+// header on loadDeployPlugins for the FLOOR-M clause. resolveCheckRunnerContext (below) still calls
+// deployNodePluginContext directly — same package, different file, zero behavior change.
 
-// deployNodePluginContext resolves the deploy/bed node named `name` in the project at
-// `dir` ONCE (the SAME project-bundle loader the deploy walker uses) and returns the
-// two plugin-loading inputs the check runner (resolveCheckRunnerContext) and the deploy
-// path (loadDeployPlugins) both need (R3 — one helper, both paths):
-//
-//   - addCandy: the deploy's `add_candy:` refs. The project candy scan
-//     (ScanAllCandyWithConfig) collects only IMAGE-closure candies (CollectRemoteRefs
-//     walks base/builder/require edges); add_candy candies are NOT in that set, so both
-//     callers feed these to ScanAllCandyWithConfigOpts' ExtraCandyRefs to fetch them.
-//   - refWords: the plugin WORDS the node references DIRECTLY — its substrate kind (an
-//     external deploy-substrate plugin word, e.g. `exampledeploy`) + every inline
-//     Op.Plugin in its FLATTENED plan. flattenBundleVenues hoists member/nested steps
-//     into the root node.Plan, so this ONE walk covers the whole bed including members
-//     (e.g. a `spice:` check verb authored inline). These scope loadProjectPlugins to
-//     the plugins the deploy actually dispatches — caught here because they appear in
-//     NEITHER a candy plan NOR a box plan (over-load safe, never under-load).
-//
-// Best-effort: (nil, nil) on any load failure or unknown name (the caller still
-// collects candy + box references; a genuinely missing reference fails loudly at
-// dispatch, never silently mis-deploys).
-func deployNodePluginContext(dir, name string) (addCandy []string, refWords []string) {
-	tree, err := resolveMergedDeployTree(dir)
-	if err != nil || tree == nil {
-		return nil, nil
-	}
-	// Resolve the named node, walking a DOTTED path into nested children (the bed runner
-	// deploys a nested child via `charly bundle add <root>.<child>` — its name is dotted and
-	// is NOT a top-level tree key). Without dotted resolution a nested-child deploy surfaces
-	// NO plugin words and its substrate word never loads its provider (ResolveTarget →
-	// "unknown target"). The single source for "given a (possibly dotted) deploy name, which
-	// node?".
-	node, ok := resolveDeployNodeByPath(tree, name)
-	if !ok {
-		return nil, nil
-	}
-	inSubmodule := selfSuperprojectOverridePair(dir) != ""
-	// Collect the node's plugin words AND recurse into its nested children: a deploy whose
-	// OWN substrate OR whose nested children's substrates are externalized must load each
-	// serving plugin. Two cases this covers, GENERALLY (never substrate-special-cased):
-	//   - a dotted child deploy (check-arch-vm.arch-host) — node IS the nested child, so its
-	//     OWN target (e.g. `local`) is surfaced + its plugin auto-injected;
-	//   - a single-process tree deploy (a pod root walked in one process, its nested children
-	//     of a DIFFERENT substrate) — the recursion surfaces every child's substrate word.
-	var visit func(n *spec.BundleNode)
-	visit = func(n *spec.BundleNode) {
-		if n == nil {
-			return
-		}
-		addCandy = append(addCandy, n.AddCandy...)
-		if n.Target != "" {
-			refWords = append(refWords, n.Target)
-			// An EXTERNALIZED deploy substrate (vm/local/android/k8s) is served by an
-			// out-of-process plugin candy. A main-repo project discovers that candy from
-			// candy/ directly (its `discover:` scans candy/*), but a box/<distro> SUBMODULE
-			// scans only its own + imported candies — so the parent's
-			// candy/plugin-deploy-<substrate> is absent from the submodule's scan and the
-			// substrate word would never resolve to its provider. Auto-inject the canonical
-			// ref via ExtraCandyRefs, but ONLY in a submodule context — the main repo already
-			// has it locally, and injecting a remote ref there over the local candy is both
-			// redundant and (for an as-yet-unpublished plugin) a fetch failure. In a submodule
-			// bed CHARLY_REPO_OVERRIDE redirects the ref to the local superproject under
-			// development. The SAME host-side-plugin pattern as vmPluginCandyRef (verb:libvirt),
-			// generalized to every external substrate (R3).
-			if inSubmodule {
-				if ref, ok := externalDeploySubstratePluginRef(n.Target); ok {
-					addCandy = append(addCandy, ref)
-				}
-			}
-		}
-		for i := range n.Plan {
-			op := &n.Plan[i].Op
-			if w := op.Plugin; w != "" {
-				refWords = append(refWords, w)
-			}
-			// Also surface each step's VERB discriminator. A closed-#Op EXTERNAL check verb
-			// (libvirt/spice/kube/adb/appium) is NOT a `plugin:` word, so without this the
-			// loader never build-connects the out-of-process plugin candy serving it — e.g. a
-			// bed's `libvirt: list` step would SKIP with "unknown verb". Over-load safe: a
-			// compiled-in verb's candy is already registered, and a non-plugin verb has none.
-			if v, err := op.Kind(); err == nil && v != "" {
-				refWords = append(refWords, v)
-			}
-		}
-		for _, ck := range spec.SortedNestedKeys(n.Children) {
-			visit(n.Children[ck])
-		}
-	}
-	visit(node)
-	// NOTE: the externalized DETECTION-builder plugins (cargo/npm/pixi/aur) are NOT injected here.
-	// A builder is triggered by the DEPLOY's resolved image closure (a pixi.toml / aur: section), not
-	// by the deploy NODE this walk sees — and surfacing all four across a whole-box scan over-built
-	// unrelated builder plugins (aur on a fedora deploy). The build PRE-PASS (builder_preresolve.go)
-	// instead detects EXACTLY the builders the deploy triggers (distro-gated) and connects only those
-	// on-demand, by their canonical ref (ensureBuildersConnected), where it has the resolved closure.
-	return addCandy, refWords
-}
+// checkLocalDeployScope/runLocalDeployScopePlan relocated to candy/plugin-bundle (#55 W3 B3,
+// verify_local.go's verifyLocalDeployScope/localDeployScopePlan): the "target: local --verify"
+// path they served (charly/unified_targets.go's Add) already dispatches to candy/plugin-bundle on
+// EVERY call with opts.Verify/req.HasLifecycle already on the wire (spec.LifecycleOptsFromEmit),
+// so the check-verify pass now runs INSIDE that same dispatch, over the SAME venue, in the SAME
+// RPC round-trip — reaching command:check via a direct InvokeProvider(command,"check") call
+// instead of core's former in-proc reverse-channel plumbing (redundant with the sanctioned wire
+// shape — command:check's own verifyChecksForHost re-materializes its executor purely from the
+// request body's Venue field, confirmed by reading candy/plugin-check/verify_checks.go). No new
+// seam was needed for the template-plan lookup either: candy/plugin-bundle's OWN node_resolve.go
+// already carried lookupLocalTemplate, a fully plugin-native resolver (the resolved-project
+// envelope + a direct InvokeProvider(kind,"local") call, no LoadUnified) — reusing it (R3) is what
+// finally makes the former core findLocalSpec/resolveLocalRefFor/namespace.go fully dead; all
+// three are DELETED.
 
-// resolveDeployNodeByPath resolves a (possibly DOTTED) deploy name to its BundleNode,
-// descending node.Children for each dotted segment (the SAME nested-tree shape
-// ResolveDeployChain walks). A bare name is the top-level entry; a dotted name
-// (root.child[.grandchild…]) is the nested child the bed runner deploys via `charly bundle
-// add <root>.<child>`. A leading "vm:" is stripped first via spec.SplitVmAddress (RCA #8/#9,
-// FINAL/K5 unit 6a, live-probe-caught) — the SAME legacy-vm CLI-addressing convention
-// resolveDelNode / spec.VmNameFromDeployName already honor elsewhere (`charly bundle del vm:<name>`
-// / `vm:<parent.child>`): without stripping it, `tree["vm:"+parts[0]]` never matches (the tree
-// is keyed by the plain name), so a "vm:"-prefixed dotted address silently resolved to
-// nothing here — deployNodePluginContext (this function's one caller) then collected ZERO
-// referenced plugin words for the deploy, and its substrate provider was never connected by
-// loadDeployPlugins. resolveDelNode's OWN "vm:"-prefix shortcut masked the miss (it returns a
-// synthetic Target-only placeholder without touching the tree at all), so the del RESOLVED
-// fine while the CONNECT silently failed — the gap surfaced only later, when dispatch needed
-// the never-connected provider. Returns false when any segment is absent.
-func resolveDeployNodeByPath(tree map[string]spec.BundleNode, name string) (*spec.BundleNode, bool) {
-	name, _ = spec.SplitVmAddress(name)
-	parts := strings.Split(name, ".")
-	root, ok := tree[parts[0]]
-	if !ok {
-		return nil, false
-	}
-	cur := &root
-	for _, seg := range parts[1:] {
-		child, ok := cur.Children[seg]
-		if !ok || child == nil {
-			return nil, false
-		}
-		cur = child
-	}
-	return cur, true
-}
-
-// checkLocalDeployScope collects a local deployment's deploy-scope checks —
-// kind:local template `check:` (base) merged with the deploy entry `check:`
-// (extends/overrides) and the per-host charly.yml overlay — and runs them on
-// `exec`. Used by `charly bundle add <local> --verify` (the local deploy target);
-// `charly check live <local>` now runs plugin-side (candy/plugin-check/live_gather.go's
-// pluginCheckLiveLocal), sourcing the SAME plan shape off the resolved-project envelope. Host-
-// context vars only (no HOST_PORT:<N> / CONTAINER_IP). Returns the failure count.
-func checkLocalDeployScope(dir string, node *spec.BundleNode, image, instance, _ string, _ []string, exec spec.DeployExecutor, format string) (int, error) { //nolint:unparam // error return kept for symmetry with sibling deploy-scope checks
-	results, hadPlan, err := runLocalDeployScopePlan(dir, node, image, instance, exec)
-	if err != nil {
-		return 0, err
-	}
-	if !hadPlan {
-		fmt.Fprintln(os.Stderr, "No plan steps to run.")
-		return 0, nil
-	}
-	return report.ReportStepResultsCount(os.Stdout, results, format), nil
-}
-
-// runLocalDeployScopePlan collects a local deployment's deploy-scope plan — the kind:local
-// template `check:` (base) + the deploy node `check:` — and runs it on exec, returning the
-// per-step results. hadPlan is false when there were no plan steps (the caller prints its own
-// "no plan" line). CLI-free core shared by checkLocalDeployScope (the external local deploy
-// --verify path, reporting to os.Stdout) — the check-live CLI counterpart now runs plugin-side
-// (pluginRunLocalDeployScopePlan, candy/plugin-check/live_gather.go). Host-context vars only
-// (no HOST_PORT:<N> / CONTAINER_IP). Folds the ${HOST} CloseHosts teardown (design §6): the
-// ssh -L forwards a VM-peer subject opens are torn down after the plan run.
-//
-// The per-host charly.yml OVERLAY merge (the deploy-entry `check:` extends/overrides) moved
-// PLUGIN-SIDE (#55 CHECK-ENGINE cone Option A — candy/plugin-check/verify_checks.go's
-// verifyChecksRunPlan reads the per-host deploy config via sdk/deploykit itself, so the core
-// `target: local` --verify path imports zero deploykit). What STAYS core is the kind:local
-// template + deploy-node plan ASSEMBLY (findLocalSpec + node.Plan) — the base plan threaded to
-// the plugin, which appends the overlay entry's plan before driving RunPlan.
-func runLocalDeployScopePlan(dir string, node *spec.BundleNode, image, instance string, exec spec.DeployExecutor) (results []spec.StepResult, hadPlan bool, err error) {
-	var plan []spec.Step
-	if node != nil && strings.TrimSpace(node.From) != "" {
-		if spec, _ := findLocalSpec(dir, strings.TrimSpace(node.From)); spec != nil {
-			plan = append(plan, spec.Plan...)
-		}
-	}
-	if node != nil {
-		plan = append(plan, node.Plan...)
-	}
-	if len(plan) == 0 {
-		return nil, false, nil
-	}
-	// The RunPlan-DRIVE + the per-host overlay merge run PLUGIN-SIDE (command:check OpVerifyChecks,
-	// #55 CHECK-ENGINE cone Unit 2): the plugin rebuilds the host-context env (USER/HOME via the
-	// venue's ResolveHome), the ${HOST:<member>} host-vars, and the cross-deployment TargetResolver
-	// from {dir, box, instance} — none of which cross the wire (plugin-check already does this for
-	// check-live) — and appends the per-host overlay entry's plan before driving RunPlan. What STAYS
-	// core is exactly this base-plan ASSEMBLY (kind:local template via findLocalSpec + deploy node).
-	results, err = dispatchVerifyChecks(context.Background(), exec, spec.VerifyChecksRequest{
-		Plan: plan, Mode: "live", Box: image, Instance: instance, VerifyOnly: true, Dir: dir,
-	})
-	if err != nil {
-		return nil, true, err
-	}
-	return results, true, nil
-}
-
-// dispatchVerifyChecks drives a deploy-scope check pass PLUGIN-SIDE via command:check's
-// OpVerifyChecks (#55 CHECK-ENGINE cone Unit 2). The host holds a live venue executor but no longer
-// builds the in-proc kit.Runner — that construction (the former checkrun.go newCheckRunner +
-// planrun_adapter.go venueResolver) moved into candy/plugin-check, shedding both files' sdk/kit
-// imports. A live executor cannot cross the wire, so it is flattened to a spec.VenueDescriptor
-// (specexec.DescriptorFromExecutor) the plugin re-materializes via kit.VenueFromDescriptor — the SAME
-// mechanism candy/plugin-bundle's resolveRootExecutor uses. An in-proc reverse channel is threaded
-// (the deploy_target_dispatch.go / check_venue_resolve.go idiom) so the plugin's own verb-dispatch
-// (InvokeProvider) + local-verify resolvedProject (HostBuild) legs reach the host. The reply is the
-// sanctioned []spec.StepResult wire (byte-identical to the former sdk/kit []StepResult — the
-// DeadlineExceeded engine flag is json:"-", so spec.StepResult and kit.StepResult share one wire).
-func dispatchVerifyChecks(ctx context.Context, exec spec.DeployExecutor, req spec.VerifyChecksRequest) ([]spec.StepResult, error) {
-	prov, ok := providerRegistry.resolve(ClassCommand, "check")
-	if !ok {
-		return nil, fmt.Errorf("verify-checks: command:check provider not loaded (candy/plugin-check must be compiled in via compiled_plugins:)")
-	}
-	req.Venue = specexec.DescriptorFromExecutor(exec)
-	reqJSON, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("verify-checks: marshal request: %w", err)
-	}
-	invokeCtx := specexec.ContextWithExecutor(ctx,
-		specexec.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{exec: exec}}))
-	res, err := prov.Invoke(invokeCtx, &Operation{Reserved: "check", Op: ops.OpVerifyChecks, Params: reqJSON})
-	if err != nil {
-		return nil, fmt.Errorf("verify-checks: command:check plugin: %w", err)
-	}
-	var out []spec.StepResult
-	if res != nil && len(res.JSON) > 0 {
-		if uerr := json.Unmarshal(res.JSON, &out); uerr != nil {
-			return nil, fmt.Errorf("verify-checks: decode reply: %w", uerr)
-		}
-	}
-	return out, nil
-}
+// dispatchVerifyChecks (the core-side function that drove command:check's OpVerifyChecks in-proc)
+// is GONE (#55 W3 B3 remainder): its production callers are all dead now — verify_local.go
+// (candy/plugin-bundle) reaches command:check via a direct sdk.Executor.InvokeProvider call
+// instead (a peer plugin, not core), and runUnifiedTargetChecks/Test (unified_targets.go,
+// deploy_target_unified.go) had zero real callers of their own. The function's exact body
+// relocated to checkrun_helpers_test.go — its only remaining role is exercising the production
+// command:check seam + core's opInContext wiring from a handful of unit tests.
 
 // containerImageRef + containerImage (the live-container image-ref
 // inspectors) live in commands.go — ONE inspect implementation shared by

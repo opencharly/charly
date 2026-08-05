@@ -32,7 +32,7 @@ import (
 // step). The ENGINE itself is never carried across the process boundary — only this
 // descriptor is.
 type buildEngineContext struct {
-	Cfg        *Config
+	Cfg        *spec.Config
 	ProjectDir string
 	// DistroCfg is the resolved distro: vocabulary the SystemPackagesStep host render
 	// (deploykit.RenderHostPackageCommand) needs to look up the format's phase.install.host
@@ -44,21 +44,21 @@ type buildEngineContext struct {
 	// HOST-COUPLED system-packages/builder/local-pkg-install/op step-emitters — C1.2-C1.5 — were
 	// relocated onto candy/plugin-installstep's OWN "resolved-project"-built deploykit.Generator,
 	// K5-Unit-6b): dispatchOCIStep (charly/oci_step_emit.go) reads Generator/Box to populate
-	// the class:step OpEmit's spec.BuildEnv scalars (Image=Box.Name, DevLocalPkg=Generator.DevLocalPkg)
+	// the class:step ops.OpEmit's spec.BuildEnv scalars (Image=Box.Name, DevLocalPkg=Generator.DevLocalPkg)
 	// so the plugin can render without a per-render host round-trip. They are zero for every
 	// deploy-leg buildEngineContext — the Builder DEPLOY leg is runVenueBuilderStep and the
 	// LocalPkgInstall DEPLOY leg is deploykit.ExecLocalPkgInstall (separate host-engine paths
 	// driven via RunHostStep), which read none of them.
 	Generator *Generator
 	Box       *spec.ResolvedBox
-	// ImageBuildDir is the per-image (pod-overlay) build dir — rides the class:step OpEmit's
+	// ImageBuildDir is the per-image (pod-overlay) build dir — rides the class:step ops.OpEmit's
 	// BuildEnv.ImageBuildDir so candy/plugin-installstep's emitLocalPkgInstall can stage a
 	// dev-mode locally-built package the SAME way deploykit's renderLocalPkgImageDevInstall did. It
 	// is buildEngineContext.ImageBuildDir, NOT Generator.BuildDir (the overlay build dir differs
 	// from the project .build root). Zero for every deploy-leg context.
 	ImageBuildDir string
 	// ContextRelPrefix is the build-context-relative prefix for staged inline content — rides the
-	// class:step OpEmit's BuildEnv.ContextRelPrefix so candy/plugin-installstep's emitOp can pass it
+	// class:step ops.OpEmit's BuildEnv.ContextRelPrefix so candy/plugin-installstep's emitOp can pass it
 	// to dg.EmitTasks, staging a write: op's content-addressed COPY source under the correct
 	// .build/<image>/_inline path. It is buildEngineContext.ContextRelPrefix. Zero for every
 	// deploy-leg context.

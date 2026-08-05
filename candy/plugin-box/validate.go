@@ -6,12 +6,15 @@ package box
 // (InvokeProvider("build","project",sdk.OpValidate) → spec.ValidateProjectReply, #55 step3 unit 3-I —
 // relocated from the former HostBuild("validate-project")) and runs EVERY pure per-kind/op rule + the
 // deploykit resolution-graph checks over that envelope — reading spec.CandyModel / spec.CandyView /
-// spec.ResolvedBoxView INSTEAD of the runtime *Candy/*Config graph. The host keeps ONLY what a plugin
-// structurally cannot do (the CUE-conformance / build-tunable / merge / base⊻from / remote-candy checks
-// + the registry D-data — emitted as a SECOND reply.Diagnostics/Project by the now-slimmed
-// HostBuild("validate-project-checks"), charly/validate_project_host.go's hostBuildValidateProjectChecks);
-// the plugin MERGES both host diagnostics sets + the D-data fields with its own findings for the final
-// verdict + exit code.
+// spec.ResolvedBoxView INSTEAD of the runtime *Candy/*Config graph. The build-tunable / merge /
+// base⊻from / builder-ref rules (validate_config_rules.go) ALSO run here now (K3-W2, task #13): the
+// plugin self-loads the raw *spec.Config itself via the hoisted loaderkit witness, no host round-trip
+// needed. The host keeps ONLY what a plugin structurally cannot do (the CUE-conformance checks,
+// needing the host's spliced cross-plugin CUE schema, + the remote-candy check, needing the
+// not-yet-executor-bridged RefsCollectSeams, + the registry D-data) — emitted as a SECOND
+// reply.Diagnostics/Project by the now-slimmed HostBuild("validate-project-checks"),
+// charly/validate_project_host.go's hostBuildValidateProjectChecks); the plugin MERGES both host
+// diagnostics sets + the D-data fields + its own raw-config findings for the final verdict + exit code.
 //
 // It imports ONLY the sdk module (sdk, sdk/spec, sdk/kit, sdk/deploykit, sdk/buildkit, sdk/vmshared) —
 // never charly core. Pure helpers the core validator kept (findSimilarName / levenshtein /
@@ -101,6 +104,11 @@ func runValidateEngine(ctx context.Context, exec *sdk.Executor, dir string, incl
 	vc := newVctx(project)
 	e := &vErr{}
 	runAllValidations(vc, e)
+	// The pure raw-config rules (K3-W2): self-load dir's raw *spec.Config via the hoisted
+	// loaderkit witness and run validateBuildAndDistro/validateBoxBaseFrom/validateMergeConfig/
+	// validateBuildTunables/validateBuilderRefs — no longer host-natural, see
+	// validate_config_rules.go's header.
+	runRawConfigChecks(ctx, exec, dir, e)
 	merged := envReply.Diagnostics
 	merged.Items = append(merged.Items, checksReply.Diagnostics.Items...)
 	for _, m := range e.msgs {

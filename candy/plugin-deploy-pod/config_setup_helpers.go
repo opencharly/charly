@@ -289,31 +289,83 @@ func persistResourceCaps(ctx context.Context, ex *sdk.Executor, dc **deploykit.B
 	if c.MemoryMax == "" && c.MemoryHigh == "" && c.MemorySwapMax == "" && c.Cpus == "" {
 		return nil
 	}
-	if *dc == nil {
-		*dc = &deploykit.BundleConfig{Bundle: make(map[string]spec.BundleNode)}
-	}
-	if (*dc).Bundle == nil {
-		(*dc).Bundle = make(map[string]spec.BundleNode)
-	}
 	key := spec.DeployKey(c.Box, c.Instance)
-	entry := (*dc).Bundle[key]
-	if entry.Security == nil {
-		entry.Security = &spec.SecurityConfig{}
+	fresh, err := mutateBundle(ctx, ex, "charly config resource-caps", func(d *deploykit.BundleConfig) (bool, error) {
+		entry := d.Bundle[key]
+		if entry.Security == nil {
+			entry.Security = &spec.SecurityConfig{}
+		}
+		if c.MemoryMax != "" {
+			entry.Security.MemoryMax = c.MemoryMax
+		}
+		if c.MemoryHigh != "" {
+			entry.Security.MemoryHigh = c.MemoryHigh
+		}
+		if c.MemorySwapMax != "" {
+			entry.Security.MemorySwapMax = c.MemorySwapMax
+		}
+		if c.Cpus != "" {
+			entry.Security.Cpus = c.Cpus
+		}
+		d.Bundle[key] = entry
+		return true, nil
+	})
+	if err != nil {
+		return err
 	}
-	if c.MemoryMax != "" {
-		entry.Security.MemoryMax = c.MemoryMax
+	*dc = fresh
+	return nil
+}
+
+// resolveDeployPorts self-heals a nil/absent overlay (dc / dc.Bundle) exactly like
+// persistResourceCaps above, then resolves and persists this deploy's ports via
+// kit.ResolveDeployPorts. Extracted from runConfig (config_setup.go) for direct unit testing —
+// task #19's regression: the pre-fix code guarded this block on `dc != nil && dc.Bundle != nil`
+// and SKIPPED port resolution entirely whenever no per-host overlay existed yet, which is exactly
+// the state of a fresh disposable check bed's XDG-isolated environment on its first-ever `charly
+// config`. With resolution skipped, meta.Port kept the image label's bare container ports, which
+// quadlet rendering (LocalizePort -> spec.ParsePortMapping's bare-number case) then treats as a
+// literal host==container 1:1 publish — so every deploy sharing a container port (all nine
+// check-pod-derived beds share container port 18794) collided on the identical literal host port
+// on their first config, contradicting the documented contract
+// (plugins/core/skills/deploy/SKILL.md "Auto port mapping": port resolution runs
+// unconditionally at `charly config`, auto-allocating a free host port per inherited container
+// port unless pinned). Self-healing dc/dc.Bundle here — instead of skipping — makes port
+// resolution (and, as a side effect, every other per-deploy overlay merge downstream in
+// MergeDeployOntoMetadata, which shares the same dc.Bundle-nil guard) run correctly on a bed's
+// very first config, matching every subsequent config/update.
+func resolveDeployPorts(ctx context.Context, ex *sdk.Executor, dc **deploykit.BundleConfig, key string, meta *spec.BoxMetadata) error {
+	containerPorts := kit.ContainerPortsFromMappings(meta.Port)
+	var resolved []string
+	// The ALLOCATION runs inside the locked cycle, against a freshly-read overlay — not just the
+	// write. kit.ResolveDeployPorts picks free host ports against OccupiedHostPorts(dc, key), so
+	// resolving against the caller's minutes-old snapshot would hand two concurrently-configuring
+	// beds the same host port even though the file write itself is serialized.
+	fresh, err := mutateBundle(ctx, ex, "charly config resolve-ports", func(d *deploykit.BundleConfig) (bool, error) {
+		overlay := d.Bundle[key]
+		if len(containerPorts) == 0 && len(overlay.Port) == 0 {
+			return false, nil
+		}
+		picked, rErr := kit.ResolveDeployPorts(containerPorts, overlay.Port, overlay.ResolvedPort, deploykit.OccupiedHostPorts(d, key))
+		if rErr != nil {
+			return false, fmt.Errorf("resolving deploy ports: %w", rErr)
+		}
+		if kit.SameStringSlice(overlay.ResolvedPort, picked) {
+			return false, nil
+		}
+		overlay.ResolvedPort = picked
+		d.Bundle[key] = overlay
+		resolved = picked
+		return true, nil
+	})
+	if err != nil {
+		return err
 	}
-	if c.MemoryHigh != "" {
-		entry.Security.MemoryHigh = c.MemoryHigh
+	*dc = fresh
+	if len(resolved) > 0 {
+		fmt.Fprintf(os.Stderr, "Resolved ports for %s: %s\n", key, strings.Join(resolved, ", "))
 	}
-	if c.MemorySwapMax != "" {
-		entry.Security.MemorySwapMax = c.MemorySwapMax
-	}
-	if c.Cpus != "" {
-		entry.Security.Cpus = c.Cpus
-	}
-	(*dc).Bundle[key] = entry
-	return saveBundle(ctx, ex, *dc)
+	return nil
 }
 
 // loadProjectVolume resolves the deploy's PROJECT-declared `volume:` override — the entity as
@@ -353,18 +405,19 @@ var loadProjectVolume = func(ctx context.Context, ex *sdk.Executor, box, instanc
 // resolveDeployVolumes never repeats it (see that function's doc for why this bit must be
 // distinct from "the overlay entry exists").
 func persistDeployVolumes(ctx context.Context, ex *sdk.Executor, dc **deploykit.BundleConfig, c *spec.PodConfigSetupRequest, volumes []spec.DeployVolume) error {
-	if *dc == nil {
-		*dc = &deploykit.BundleConfig{Bundle: make(map[string]spec.BundleNode)}
-	}
-	if (*dc).Bundle == nil {
-		(*dc).Bundle = make(map[string]spec.BundleNode)
-	}
 	key := spec.DeployKey(c.Box, c.Instance)
-	entry := (*dc).Bundle[key]
-	entry.Volume = volumes
-	entry.VolumeProjectChecked = true
-	(*dc).Bundle[key] = entry
-	return saveBundle(ctx, ex, *dc)
+	fresh, err := mutateBundle(ctx, ex, "charly config persist-volumes", func(d *deploykit.BundleConfig) (bool, error) {
+		entry := d.Bundle[key]
+		entry.Volume = volumes
+		entry.VolumeProjectChecked = true
+		d.Bundle[key] = entry
+		return true, nil
+	})
+	if err != nil {
+		return err
+	}
+	*dc = fresh
+	return nil
 }
 
 // resolveDeployVolumes computes the deployVolumes list Setup applies for this run, in priority
@@ -594,7 +647,7 @@ func provisionData(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntim
 				dataRef = resolved
 			}
 		}
-		if err := hostBuild(ctx, ex, podConfigEnsureImageKind, spec.PodConfigEnsureImageRequest{ImageRef: dataRef, BuildEngine: rt.BuildEngine}, nil); err != nil {
+		if err := ensureImagePresent(ctx, ex, dataRef, rt.BuildEngine); err != nil {
 			return fmt.Errorf("extracting metadata from data image %s: %w", dataRef, err)
 		}
 		dm, err := deploykit.ExtractMetadata("podman", dataRef)
@@ -632,21 +685,23 @@ func provisionData(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntim
 	if seeded == 0 {
 		return nil
 	}
-	if dc == nil {
-		dc = &deploykit.BundleConfig{Bundle: make(map[string]spec.BundleNode)}
-	}
 	key := spec.DeployKey(c.Box, c.Instance)
-	imgDeploy := dc.Bundle[key]
-	for i := range imgDeploy.Volume {
-		for _, entry := range dataMeta.DataEntries {
-			if imgDeploy.Volume[i].Name == entry.Volume {
-				imgDeploy.Volume[i].DataSeeded = true
-				imgDeploy.Volume[i].DataSource = dataRef
+	// Data provisioning is the LONGEST gap in the whole config run — it copies volume payloads out
+	// of the image — so its seeded-state write must land on a re-read overlay, never on the dc this
+	// function was handed before the copy started.
+	if _, err := mutateBundle(ctx, ex, "charly config data-seeded", func(d *deploykit.BundleConfig) (bool, error) {
+		imgDeploy := d.Bundle[key]
+		for i := range imgDeploy.Volume {
+			for _, entry := range dataMeta.DataEntries {
+				if imgDeploy.Volume[i].Name == entry.Volume {
+					imgDeploy.Volume[i].DataSeeded = true
+					imgDeploy.Volume[i].DataSource = dataRef
+				}
 			}
 		}
-	}
-	dc.Bundle[key] = imgDeploy
-	if err := saveBundle(ctx, ex, dc); err != nil {
+		d.Bundle[key] = imgDeploy
+		return true, nil
+	}); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: could not save data seeded state to charly.yml: %v\n", err)
 		return nil
 	}
@@ -696,7 +751,7 @@ func updateAllDeployedQuadlets(ctx context.Context, ex *sdk.Executor, rt *kit.Re
 				imageRef = ref
 			}
 		}
-		if err := hostBuild(ctx, ex, podConfigEnsureImageKind, spec.PodConfigEnsureImageRequest{ImageRef: imageRef, BuildEngine: rt.BuildEngine}, nil); err != nil {
+		if err := ensureImagePresent(ctx, ex, imageRef, rt.BuildEngine); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: could not read metadata for %s, skipping quadlet update\n", key)
 			continue
 		}

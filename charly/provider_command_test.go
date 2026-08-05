@@ -49,7 +49,7 @@ func TestCommandSeam_PluginCommandInjected(t *testing.T) {
 // TestCommandCompileIn_ExampleCommandInProc proves F8's command compile-in bridge: the
 // candy/plugin-example-command command candy, listed in compiled_plugins, registers IN-PROC as a
 // ClassCommand inprocProvider (NOT a *grpcProvider, NOT a static builtin CommandProvider), so
-// dispatchCommand routes `charly examplecommand` to it via Invoke(OpRun) — the in-proc placement
+// dispatchCommand routes `charly examplecommand` to it via Invoke(ops.OpRun) — the in-proc placement
 // of a command candy, the LAST of the six classes to gain compiled-in placement. (End-to-end CLI
 // dispatch is exercised by the live `charly examplecommand` proof + the check-pod bed.)
 func TestCommandCompileIn_ExampleCommandInProc(t *testing.T) {
@@ -64,14 +64,14 @@ func TestCommandCompileIn_ExampleCommandInProc(t *testing.T) {
 		t.Fatalf("examplecommand provider is %T, want *inprocProvider (compiled-in command, dispatched in-proc)", prov)
 	}
 	if _, isCmdProv := prov.(CommandProvider); isCmdProv {
-		t.Fatal("examplecommand should NOT be a static CommandProvider — a compiled-in command candy uses the dynamic in-proc command bridge (dispatchCommand → Invoke(OpRun))")
+		t.Fatal("examplecommand should NOT be a static CommandProvider — a compiled-in command candy uses the dynamic in-proc command bridge (dispatchCommand → Invoke(ops.OpRun))")
 	}
 }
 
 // TestCommandCompileIn_AliasInProc proves the P14 alias extraction: `charly alias …`, formerly a
 // dedicated builtin CommandProvider, is now the compiled-in command candy candy/plugin-alias —
 // registered IN-PROC as a ClassCommand inprocProvider (NOT a *grpcProvider, NOT a static builtin
-// CommandProvider), so dispatchCommand routes `charly alias` to it via Invoke(OpRun) and its
+// CommandProvider), so dispatchCommand routes `charly alias` to it via Invoke(ops.OpRun) and its
 // `add`/`install` handlers reach the host over the HostBuild("cli") reverse channel. (End-to-end
 // CLI dispatch is exercised by the live check-commands-local bed + the plugin's Go tests.)
 func TestCommandCompileIn_AliasInProc(t *testing.T) {
@@ -86,7 +86,7 @@ func TestCommandCompileIn_AliasInProc(t *testing.T) {
 		t.Fatalf("alias provider is %T, want *inprocProvider (compiled-in command, dispatched in-proc)", prov)
 	}
 	if _, isCmdProv := prov.(CommandProvider); isCmdProv {
-		t.Fatal("alias should NOT be a static CommandProvider — a compiled-in command candy uses the dynamic in-proc command bridge (dispatchCommand → Invoke(OpRun))")
+		t.Fatal("alias should NOT be a static CommandProvider — a compiled-in command candy uses the dynamic in-proc command bridge (dispatchCommand → Invoke(ops.OpRun))")
 	}
 }
 
@@ -94,7 +94,7 @@ func TestCommandCompileIn_AliasInProc(t *testing.T) {
 // …`, formerly a dedicated builtin CommandProvider (the plugin_command_status.go registration,
 // deleted), is now the compiled-in command candy candy/plugin-status — registered IN-PROC as a
 // ClassCommand inprocProvider (NOT a *grpcProvider, NOT a static builtin CommandProvider), so
-// dispatchCommand routes `charly status` to it via Invoke(OpRun) and its render/overlay logic
+// dispatchCommand routes `charly status` to it via Invoke(ops.OpRun) and its render/overlay logic
 // reaches the compiled-in verb:status-fanout by InvokeProvider'ing it directly over the reverse channel.
 // (End-to-end CLI dispatch is exercised by the live R10 bed + the candy's own
 // overlay_golden_test.go byte-parity golden.)
@@ -110,7 +110,7 @@ func TestCommandCompileIn_StatusInProc(t *testing.T) {
 		t.Fatalf("status provider is %T, want *inprocProvider (compiled-in command, dispatched in-proc)", prov)
 	}
 	if _, isCmdProv := prov.(CommandProvider); isCmdProv {
-		t.Fatal("status should NOT be a static CommandProvider — a compiled-in command candy uses the dynamic in-proc command bridge (dispatchCommand → Invoke(OpRun))")
+		t.Fatal("status should NOT be a static CommandProvider — a compiled-in command candy uses the dynamic in-proc command bridge (dispatchCommand → Invoke(ops.OpRun))")
 	}
 }
 
@@ -118,7 +118,7 @@ func TestCommandCompileIn_StatusInProc(t *testing.T) {
 // tunnel spice/vnc`, formerly a dedicated builtin CommandProvider (the plugin_command_ssh.go
 // registration, deleted), is now the compiled-in command candy candy/plugin-ssh — registered
 // IN-PROC as a ClassCommand inprocProvider (NOT a *grpcProvider, NOT a static builtin
-// CommandProvider), so dispatchCommand routes `charly ssh` to it via Invoke(OpRun) and its tunnel
+// CommandProvider), so dispatchCommand routes `charly ssh` to it via Invoke(ops.OpRun) and its tunnel
 // handler reaches verb:libvirt by InvokeProvider'ing it directly over the reverse channel. (The
 // live SSH-forwarded SPICE/VNC tunnel needs a remote-libvirt VM + interactive SIGINT, exercised
 // manually / by the vm roster.)
@@ -134,7 +134,7 @@ func TestCommandCompileIn_SshInProc(t *testing.T) {
 		t.Fatalf("ssh provider is %T, want *inprocProvider (compiled-in command, dispatched in-proc)", prov)
 	}
 	if _, isCmdProv := prov.(CommandProvider); isCmdProv {
-		t.Fatal("ssh should NOT be a static CommandProvider — a compiled-in command candy uses the dynamic in-proc command bridge (dispatchCommand → Invoke(OpRun))")
+		t.Fatal("ssh should NOT be a static CommandProvider — a compiled-in command candy uses the dynamic in-proc command bridge (dispatchCommand → Invoke(ops.OpRun))")
 	}
 }
 
@@ -142,7 +142,7 @@ func TestCommandCompileIn_SshInProc(t *testing.T) {
 // formerly a dedicated builtin CommandProvider (the plugin_command_cmd.go registration, deleted), is
 // now the compiled-in command candy candy/plugin-cmd — registered IN-PROC as a ClassCommand
 // inprocProvider (NOT a *grpcProvider, NOT a static builtin CommandProvider), so dispatchCommand
-// routes `charly cmd` to it via Invoke(OpRun). The plugin owns the CLI grammar + the completion
+// routes `charly cmd` to it via Invoke(ops.OpRun). The plugin owns the CLI grammar + the completion
 // notification and drives the deploy-lifecycle-coupled interactive exec via the hidden `charly __cmd`
 // core reentry over HostBuild("cli"); the __cmd handler (cmd.go) stays core as deploy-lifecycle
 // RESIDUE. `cmd` was the LAST static-builtin deploy-lifecycle command — start/stop/restart/logs/
@@ -160,7 +160,7 @@ func TestCommandCompileIn_CmdInProc(t *testing.T) {
 		t.Fatalf("cmd provider is %T, want *inprocProvider (compiled-in command, dispatched in-proc)", prov)
 	}
 	if _, isCmdProv := prov.(CommandProvider); isCmdProv {
-		t.Fatal("cmd should NOT be a static CommandProvider — a compiled-in command candy uses the dynamic in-proc command bridge (dispatchCommand → Invoke(OpRun))")
+		t.Fatal("cmd should NOT be a static CommandProvider — a compiled-in command candy uses the dynamic in-proc command bridge (dispatchCommand → Invoke(ops.OpRun))")
 	}
 }
 
@@ -172,7 +172,7 @@ func TestCommandCompileIn_CmdInProc(t *testing.T) {
 // plugin_command_cp.go / plugin_command_config.go / plugin_command_update.go, deleted), are
 // now the compiled-in command candy candy/plugin-pod — registered IN-PROC as ClassCommand
 // inprocProviders (NOT *grpcProvider, NOT a static builtin CommandProvider), so
-// dispatchCommand routes each to it via Invoke(OpRun): restart/volume/cp call sdk/kit +
+// dispatchCommand routes each to it via Invoke(ops.OpRun): restart/volume/cp call sdk/kit +
 // sdk/deploykit directly (no host seam — pure logic, no core-only type or registry need).
 // Cutover B unit 2 (pod-lifecycle-CLI-dispatch): start/stop/logs/shell/update/service/remove now
 // ALL own their orchestration in-plugin, reaching the host only for the irreducible
@@ -181,8 +181,10 @@ func TestCommandCompileIn_CmdInProc(t *testing.T) {
 // CHARLY_PREEMPT_LEASE-gated arbiter release (remove) — via the CONSOLIDATED
 // host_build_pod_lifecycle_dispatch.go (replacing the former per-verb podStartCmd/podStopCmd/
 // podLogsCmd/podShellCmd/podUpdateCmd/podServiceCmd/podRemoveCmd core reconstructions for all
-// seven verbs) — over HostBuild("pod-start")/HostBuild("pod-stop")/HostBuild("pod-logs")/
-// HostBuild("pod-remove")/HostBuild("pod-shell")/HostBuild("pod-service")/HostBuild("pod-update").
+// seven verbs) — over the ONE op-discriminated HostBuild("pod-lifecycle") kind (#55 W3 A10b
+// unified the former eight dedicated per-verb kinds — HostBuild("pod-start")/("pod-stop")/
+// ("pod-logs")/("pod-remove")/("pod-shell")/("pod-service")/("pod-update")/("pod-cmd") — into
+// this one, discriminated by req.Op).
 // Setup/Remove instead FORWARD onward to the deploy:pod plugin's sdk.OpConfigSetup/
 // OpConfigRemove (the P13-KERNEL direction-flip) over HostBuild("pod-config-setup")/
 // HostBuild("pod-config-remove"). command:config's other four leaves — Status/Mount/Unmount/
@@ -203,7 +205,7 @@ func TestCommandCompileIn_PodInProc(t *testing.T) {
 			t.Fatalf("%s provider is %T, want *inprocProvider (compiled-in command, dispatched in-proc)", word, prov)
 		}
 		if _, isCmdProv := prov.(CommandProvider); isCmdProv {
-			t.Fatalf("%s should NOT be a static CommandProvider — a compiled-in command candy uses the dynamic in-proc command bridge (dispatchCommand → Invoke(OpRun))", word)
+			t.Fatalf("%s should NOT be a static CommandProvider — a compiled-in command candy uses the dynamic in-proc command bridge (dispatchCommand → Invoke(ops.OpRun))", word)
 		}
 	}
 }
@@ -214,7 +216,7 @@ func TestCommandCompileIn_PodInProc(t *testing.T) {
 // candy/plugin-substrate (command:reap-orphans, alongside its existing kind:pod/vm/k8s/
 // local/android + OpStatusCollect capabilities) — registered IN-PROC as a ClassCommand
 // inprocProvider (NOT a *grpcProvider, NOT a static builtin CommandProvider), so
-// dispatchCommand routes `charly reap-orphans` to it via Invoke(OpRun) and its liveness
+// dispatchCommand routes `charly reap-orphans` to it via Invoke(ops.OpRun) and its liveness
 // probes reach the verb:libvirt peer provider over InvokeProvider (F10) instead of the
 // deleted core-private invokeVmPlugin. (End-to-end CLI dispatch is exercised by the live
 // R10 bed.)
@@ -230,7 +232,7 @@ func TestCommandCompileIn_ReapOrphansInProc(t *testing.T) {
 		t.Fatalf("reap-orphans provider is %T, want *inprocProvider (compiled-in command, dispatched in-proc)", prov)
 	}
 	if _, isCmdProv := prov.(CommandProvider); isCmdProv {
-		t.Fatal("reap-orphans should NOT be a static CommandProvider — a compiled-in command candy uses the dynamic in-proc command bridge (dispatchCommand → Invoke(OpRun))")
+		t.Fatal("reap-orphans should NOT be a static CommandProvider — a compiled-in command candy uses the dynamic in-proc command bridge (dispatchCommand → Invoke(ops.OpRun))")
 	}
 }
 

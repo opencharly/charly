@@ -18,11 +18,13 @@ import (
 // preresolve.go — the `deploy:android` PRERESOLVE leg (F6, FINAL/K5 unit 6a): relocated from
 // charly/android_deploy_preresolve.go + android_deploy_cmd.go. Resolves the live device endpoint +
 // the apk install specs and returns a spec.AndroidDeployVenue — the SAME payload the host used to
-// build directly, now assembled plugin-side. The two genuinely LoadUnified/credential-store-coupled
-// touches (resolving the deploy-tree node when it's nil, and resolving the kind:android entity +
-// its google-play credentials) reach the host via the GENERIC "deploy-entity-resolve" HostBuild
-// seam (host_build_deploy_entity_resolve.go) — everything else (engine-inspect, ${HOST_PORT:N}
-// resolution, the committed-APK path walk) is pure/portable and runs here directly.
+// build directly, now assembled plugin-side. The deploy-tree node lookup (when node is nil) and
+// the kind:android entity resolve both run PLUGIN-SIDE now (K-wave W3a A3-phase-2:
+// loaderkit.ResolveMergedTreeViaExecutor + loaderkit.ResolveAndroidEntityViaExecutor) — the former
+// "deploy-entity-resolve" HostBuild seam this file round-tripped through is DELETED, unblocked by
+// W1's LoadUnifiedViaExecutor letting a plugin load the project itself. Google-play credentials
+// resolve separately, peer-to-peer via verb:credential. Everything else (engine-inspect,
+// ${HOST_PORT:N} resolution, the committed-APK path walk) is pure/portable and runs here directly.
 
 // androidBootDeadline / androidInstallDeadline / androidInstallInterval — unchanged from the
 // pre-move host constants; shipped to the deploy walk as AndroidDeployVenue.BootTimeout /
@@ -57,36 +59,36 @@ func invokeAndroidPreresolve(ctx context.Context, req *pb.InvokeRequest) (*pb.In
 
 	node := p.Node
 	if node == nil {
-		// Resolve the merged deploy tree PLUGIN-SIDE and thread it into the seam as DATA — the #55
-		// Cone A Unit 3b tree-threading that replaced the host's former core merged-tree read.
-		// The enclosing OpDeployDispatch already connected the deployment's plugins
-		// (command:bundle's resolveTreeViaLoader), so this reuses that connect (no re-dial mid-Invoke).
-		treeJSON, terr := resolveDeployTreeJSON(ctx, exec, p.Dir)
+		// Resolve the merged deploy tree PLUGIN-SIDE (K-wave W3a A3-phase-2: the former
+		// "deploy-entity-resolve" TreeJSON round-trip was dead weight — the tree is already a live
+		// Go value here, so this is a direct map lookup, not a host seam call). The enclosing
+		// OpDeployDispatch already connected the deployment's plugins (command:bundle's
+		// resolveTreeViaLoader), so this reuses that connect (no re-dial mid-Invoke).
+		tree, terr := loaderkit.ResolveMergedTreeViaExecutor(ctx, exec, p.Dir)
 		if terr != nil {
 			return nil, fmt.Errorf("deploy:android preresolve: resolve deploy tree: %w", terr)
 		}
-		var reply spec.DeployEntityResolveReply
-		if err := hostEntityResolve(ctx, exec, spec.DeployEntityResolveRequest{Kind: "deploy", Name: p.Name, Dir: p.Dir, TreeJSON: treeJSON}, &reply); err != nil {
-			return nil, fmt.Errorf("deploy:android preresolve: resolve deploy %q: %w", p.Name, err)
+		n, ok := tree[p.Name]
+		if !ok {
+			return nil, fmt.Errorf("deploy:android preresolve: resolve deploy %q: no deploy entry %q", p.Name, p.Name)
 		}
-		node = reply.Node
+		node = &n
 	}
 	if node == nil || node.From == "" {
 		return nil, fmt.Errorf("deploy %q: target=android requires `android:` (kind:android device reference)", p.Name)
 	}
 
-	var entReply spec.DeployEntityResolveReply
-	if err := hostEntityResolve(ctx, exec, spec.DeployEntityResolveRequest{Kind: "android", Name: node.From, Dir: p.Dir}, &entReply); err != nil {
+	// K-wave W3a A3-phase-2: self-load the kind:android entity plugin-side (loaderkit.
+	// ResolveAndroidEntityViaExecutor) instead of the deleted "deploy-entity-resolve" host seam —
+	// unblocked now that LoadUnifiedViaExecutor (W1) lets a plugin load the project itself.
+	spcPtr, err := loaderkit.ResolveAndroidEntityViaExecutor(ctx, exec, p.Dir, node.From)
+	if err != nil {
 		return nil, fmt.Errorf("deploy %q: resolving kind:android device %q: %w", p.Name, node.From, err)
 	}
-	var res spec.AndroidEntityResolution
-	if err := json.Unmarshal(entReply.EntityJSON, &res); err != nil {
-		return nil, fmt.Errorf("deploy %q: decode android entity resolution: %w", p.Name, err)
+	if spcPtr == nil {
+		return nil, fmt.Errorf("deploy %q: kind:android entity %q resolved to an empty value", p.Name, node.From)
 	}
-	var spc spec.ResolvedAndroid
-	if err := json.Unmarshal(res.SpecJSON, &spc); err != nil {
-		return nil, fmt.Errorf("deploy %q: decode kind:android spec: %w", p.Name, err)
-	}
+	spc := *spcPtr
 
 	// The google-play credentials are resolved HERE, peer-to-peer via verb:credential
 	// (InvokeProvider) — no longer threaded through the "deploy-entity-resolve" seam.
@@ -119,34 +121,6 @@ func invokeAndroidPreresolve(ctx context.Context, req *pb.InvokeRequest) (*pb.In
 		return nil, fmt.Errorf("deploy %q: marshal android venue: %w", p.Name, err)
 	}
 	return &pb.InvokeReply{ResultJson: out}, nil
-}
-
-// resolveDeployTreeJSON resolves the merged project+operator deploy tree PLUGIN-SIDE
-// (loaderkit.ResolveMergedTreeViaExecutor) and marshals it for threading into the
-// "deploy-entity-resolve" seam as DATA (#55 Cone A Unit 3b), so the host stops re-loading the tree
-// via a core host merged-tree read. Called only in the node==nil fallback, where the enclosing
-// OpDeployDispatch has already connected the deployment's plugins — so no re-connect is needed and
-// dir is the dispatch-threaded project dir. A tree-absent project marshals to a null tree, which the
-// host handler reports as a not-found for the deploy name.
-func resolveDeployTreeJSON(ctx context.Context, exec *sdk.Executor, dir string) ([]byte, error) {
-	tree, err := loaderkit.ResolveMergedTreeViaExecutor(ctx, exec, dir)
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(tree)
-}
-
-// hostEntityResolve Invokes the "deploy-entity-resolve" HostBuild seam and decodes the reply.
-func hostEntityResolve(ctx context.Context, exec *sdk.Executor, req spec.DeployEntityResolveRequest, out *spec.DeployEntityResolveReply) error {
-	reqJSON, err := json.Marshal(req)
-	if err != nil {
-		return err
-	}
-	resJSON, err := exec.HostBuild(ctx, "deploy-entity-resolve", reqJSON)
-	if err != nil {
-		return err
-	}
-	return json.Unmarshal(resJSON, out)
 }
 
 // androidDevice is a resolved install target — enough to address a specific Android device (an

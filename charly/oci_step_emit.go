@@ -20,7 +20,7 @@ import (
 // (candy/plugin-deploy-pod, via deploykit.OCITarget.EmitStepOp → HostBuild("step-emit",
 // "oci-emit-step")) still needs: resolve the compiled-in "oci-dispatch" provider, thread the SAME
 // in-proc reverse channel + host-side buildEngineContext the former host-only dispatch used to
-// thread (so a HOST-COUPLED peer's own OpEmit can still call back HostBuild — the
+// thread (so a HOST-COUPLED peer's own ops.OpEmit can still call back HostBuild — the
 // "resolved-project" envelope seam, K5-Unit-6b), and Invoke.
 //
 // dispatchOCIStep is the single source of truth (R3): charly/step_emit_hostbuild.go's
@@ -29,8 +29,8 @@ import (
 
 // dispatchOCIStep forwards ONE pod-overlay step's rendering to candy/plugin-installstep's
 // "oci-dispatch" word: marshal the step/plan WIRE VIEWS + the caller's Distros/build-context
-// scalars as the OpEmit payload/env, Invoke, and return the rendered fragment verbatim. `build`
-// carries the host-side buildEngineContext whose scalars ride the class:step OpEmit's BuildEnv
+// scalars as the ops.OpEmit payload/env, Invoke, and return the rendered fragment verbatim. `build`
+// carries the host-side buildEngineContext whose scalars ride the class:step ops.OpEmit's BuildEnv
 // (Image/DevLocalPkg/ImageBuildDir/ContextRelPrefix) — see candy/plugin-installstep's package doc
 // for which words are HOST-COUPLED vs PURE.
 func dispatchOCIStep(stepView spec.InstallStepView, planView spec.InstallPlanView, distros []string, build buildEngineContext) (string, error) {

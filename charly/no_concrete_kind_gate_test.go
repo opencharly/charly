@@ -15,7 +15,7 @@ import (
 // (Cutover N): the kernel (charly/*.go production code) must NOT consume a concrete-kind
 // spec.<Kind> Go type. Every vocab kind (sidecar/agent/init/resource/distro) and every
 // substrate value (local/android/pod/k8s/vm) resolves to a Resolved* envelope via its
-// plugin's OpResolve (Cutovers D–M); the kernel reads the envelope, never the concrete
+// plugin's ops.OpResolve (Cutovers D–M); the kernel reads the envelope, never the concrete
 // kind. A re-introduced typed consumption (a spec.<Kind> field-read, a typed uf map, a
 // typed pre-decode) trips this gate — the teeth arm that makes the law self-enforcing.
 //

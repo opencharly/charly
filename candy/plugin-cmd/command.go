@@ -4,9 +4,10 @@ package cmd
 // deploy-lifecycle-coupled command split. `charly cmd <box> <command>` runs a single command in a
 // running container with an optional completion notification. The interactive exec itself is
 // deploy-lifecycle machinery (dispatchLifecycleTarget + LifecycleTarget.Attach) a plugin cannot
-// perform, so the plugin drives the "pod-cmd" host-builder — cmd's slot in the FLOORED
-// pod-lifecycle-dispatch family (host_build_pod_lifecycle_dispatch.go), joining its interactive
-// sibling `charly shell` (pod-shell). The exec runs over the SAME host-held exec.RunInteractive leg
+// perform, so the plugin drives the "pod-lifecycle" host-builder's op="cmd" — cmd's slot in the
+// FLOORED pod-lifecycle-dispatch family (host_build_pod_lifecycle_dispatch.go, #55 W3 A10b unified
+// the former dedicated "pod-cmd" kind into this one), joining its interactive sibling `charly
+// shell` (op="shell"). The exec runs over the SAME host-held exec.RunInteractive leg
 // (stdio never crosses the wire; the `-i` interactive stream reaches the operator's real terminal),
 // so the former hidden `charly __cmd` core reentry is DISSOLVED. The plugin owns the CLI grammar +
 // --notify (a host desktop-bus op) directly.
@@ -56,7 +57,7 @@ func (c *CmdCmd) Run() error {
 	// loaderkit.ResolveLifecycleDeployNodeViaExecutor (plugin-side, over the reverse channel).
 	cmdNode, _ := loaderkit.ResolveLifecycleDeployNodeViaExecutor(cmdCtx, cmdExec, c.Box, c.Instance)
 	start := time.Now()
-	runErr := hostPodCmd(spec.PodCmdRequest{Box: c.Box, Command: c.Command, Instance: c.Instance, Sidecar: c.Sidecar, Node: cmdNode})
+	runErr := hostPodCmd(c.Box, c.Instance, cmdNode, spec.PodCmdPayload{Command: c.Command, Sidecar: c.Sidecar})
 	elapsed := time.Since(start).Truncate(time.Millisecond)
 
 	if c.Notify {
@@ -72,27 +73,35 @@ func (c *CmdCmd) Run() error {
 	return runErr
 }
 
-// hostPodCmd drives the "pod-cmd" host-builder — the deploy-lifecycle Attach a plugin cannot perform
-// (dispatchLifecycleTarget + LifecycleTarget.Attach). cmd joins its interactive sibling `charly shell`
-// (pod-shell) in the pod-lifecycle-dispatch family: the exec runs over the SAME host-held
-// exec.RunInteractive leg (stdio never crosses the wire; the `-i` interactive stream reaches the
-// operator's real terminal). The container command's non-zero exit rides the reply's ExitCode FIELD
-// (the HostBuild ERROR return stringifies the typed *sdk.ExitCodeError, losing the code), which this
-// reconstructs into an *sdk.ExitCodeError so the operator sees the command's own code — exactly as
-// the former __cmd/CliReply.ExitCode path did.
-func hostPodCmd(req spec.PodCmdRequest) error {
+// hostPodCmd drives the "pod-lifecycle" host-builder's op="cmd" — the deploy-lifecycle Attach a
+// plugin cannot perform (dispatchLifecycleTarget + LifecycleTarget.Attach). cmd joins its
+// interactive sibling `charly shell` (op="shell") in the pod-lifecycle-dispatch family: the exec
+// runs over the SAME host-held exec.RunInteractive leg (stdio never crosses the wire; the `-i`
+// interactive stream reaches the operator's real terminal). The container command's non-zero exit
+// rides the reply's ExitCode FIELD (the HostBuild ERROR return stringifies the typed
+// *sdk.ExitCodeError, losing the code), which this reconstructs into an *sdk.ExitCodeError so the
+// operator sees the command's own code — exactly as the former __cmd/CliReply.ExitCode path did.
+// #55 W3 A10b: marshals payload into the shared spec.PodLifecycleRequest.Payload — the ONE wire
+// request every pod-lifecycle op now sends (candy/plugin-pod's host_seams.go carries the
+// identically-shaped hostPodLifecycle helper; this package needs its own copy since it is a
+// separate module — R3 within-module, not cross-module).
+func hostPodCmd(box, instance string, node *spec.Deploy, payload spec.PodCmdPayload) error {
 	if cmdExec == nil {
 		return fmt.Errorf("cmd: no host reverse channel (command not compiled-in?)")
 	}
-	reqJSON, err := json.Marshal(req)
+	payloadJSON, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
-	out, err := cmdExec.HostBuild(cmdCtx, "pod-cmd", reqJSON)
+	reqJSON, err := json.Marshal(spec.PodLifecycleRequest{Op: "cmd", Box: box, Instance: instance, Node: node, Payload: payloadJSON})
 	if err != nil {
 		return err
 	}
-	var reply spec.PodCmdReply
+	out, err := cmdExec.HostBuild(cmdCtx, "pod-lifecycle", reqJSON)
+	if err != nil {
+		return err
+	}
+	var reply spec.PodLifecycleReply
 	if uerr := json.Unmarshal(out, &reply); uerr != nil {
 		return uerr
 	}

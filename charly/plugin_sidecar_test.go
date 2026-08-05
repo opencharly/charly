@@ -56,7 +56,7 @@ mysidecar:
     description: a project-declared sidecar
     image: example.com/mysidecar:1
 `
-	if err := os.WriteFile(filepath.Join(dir, UnifiedFileName), []byte(doc), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, spec.UnifiedFileName), []byte(doc), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	uf, _, err := LoadUnified(dir)

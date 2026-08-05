@@ -88,6 +88,7 @@ func runResolveTargetAdd(req spec.DeployResolveTargetAddRequest) error {
 		Verify:               req.Verify,
 		Pull:                 req.Pull,
 		BuilderImageOverride: req.BuilderImage,
+		DevLocalPkg:          req.DevLocalPkg,
 		ParentExec:           parentExec,
 		Path:                 req.Path,
 	}

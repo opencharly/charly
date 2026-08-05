@@ -16,7 +16,7 @@ import (
 // that lives in candy/plugin-check (venue.go), NOT an in-core classifier — the boundary-law self-test
 // forbids a floor file switching on a deploy kind. This host leg holds ZERO classification: it
 // resolves the compiled-in plugin, threads an in-proc reverse channel so plugin-check's own
-// resolvedProject → InvokeProvider("build","project") leg can reach the host, invokes OpResolve, and
+// resolvedProject → InvokeProvider("build","project") leg can reach the host, invokes ops.OpResolve, and
 // returns the wire-safe spec.CheckVenueResolveReply. Each caller then builds its live endpoint /
 // executor from the returned GENERIC spec.VenueDescriptor via the kind-blind kit re-materialization
 // (deploykit endpoint resolution / specexec.VenueFromDescriptor) — the same descriptor→executor mechanism

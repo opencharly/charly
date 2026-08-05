@@ -37,57 +37,6 @@ import (
 	"github.com/opencharly/spec/spec"
 )
 
-// runUnifiedTargetChecks runs a deploy-scope check list via a live-mode Runner
-// over exec, filtering to opts.OnlyIDs when set and reporting per-check failures
-// to stderr. kind ("pod"/"vm"/"host", from the adapter's Kind()) labels both the
-// no-executor and the summary errors; nodeName is the deploy identifier. Shared
-// by Pod/Vm/the local deploy target.Test — the three were byte-identical bar the
-// kind/name labels (R3).
-func runUnifiedTargetChecks(ctx context.Context, exec spec.DeployExecutor, kind, nodeName string, checks []spec.Op, opts TestOpts) error {
-	onlyIDs := make(map[string]bool, len(opts.OnlyIDs))
-	for _, id := range opts.OnlyIDs {
-		onlyIDs[id] = true
-	}
-	filtered := checks
-	if len(onlyIDs) > 0 {
-		filtered = filtered[:0]
-		for _, c := range checks {
-			if onlyIDs[c.ID] {
-				filtered = append(filtered, c)
-			}
-		}
-	}
-	if exec == nil {
-		return fmt.Errorf("%s %q: no executor configured", kind, nodeName)
-	}
-	// The check DRIVE runs PLUGIN-SIDE via command:check OpVerifyChecks (#55 CHECK-ENGINE cone
-	// Unit 2 — the former in-proc newCheckRunner + kit.Runner.Run construction moved off core). The
-	// reply is the sanctioned []kit.StepResult wire (the plugin wraps each raw-Op verdict as a
-	// StepResult), so a failure is read off r.Result.
-	results, err := dispatchVerifyChecks(ctx, exec, spec.VerifyChecksRequest{Ops: filtered, Mode: "live"})
-	if err != nil {
-		return fmt.Errorf("%s %q: %w", kind, nodeName, err)
-	}
-	failed := 0
-	for _, r := range results {
-		if r.Result.Status == spec.StatusFail {
-			failed++
-			id := ""
-			if r.Result.Op != nil {
-				id = r.Result.Op.ID
-			}
-			fmt.Fprintf(os.Stderr, "FAIL %s: %s\n", id, r.Result.Message)
-			if opts.StopOnFail {
-				return fmt.Errorf("test stopped at first failure: %s", id)
-			}
-		}
-	}
-	if failed > 0 {
-		return fmt.Errorf("%d %s check(s) failed", failed, kind)
-	}
-	return nil
-}
-
 // ---------------------------------------------------------------------------
 // pluginDeployTarget — the thin, data-only UnifiedDeployTarget/LifecycleTarget proxy (S3b).
 // ---------------------------------------------------------------------------
@@ -135,14 +84,6 @@ type pluginDeployTarget struct {
 	// reverse leg needs when the plugin walks a plan carrying a host-engine step kind. Populated
 	// by Add from the DeployContext.
 	build buildEngineContext
-
-	// ledgerRoot OPTIONALLY overrides the ledger root — a TEST redirecting to a temp dir instead of the
-	// operator's real ~/.config/opencharly/installed/, threaded to the plugin as req.LedgerRoot (a live
-	// *kit.LedgerPaths cannot cross the wire, so only the Root string is injected — #55 coneD
-	// import-purity: the field dropped its *kit.LedgerPaths type, so this file no longer imports
-	// sdk/kit; tests keep kit.LedgerPaths for their OWN ledger I/O and inject only .Root here). ""
-	// (the default) — the plugin uses kit.DefaultLedgerPaths().
-	ledgerRoot string
 }
 
 func (t *pluginDeployTarget) Name() string                  { return t.name }
@@ -195,9 +136,6 @@ func (t *pluginDeployTarget) dispatch(ctx context.Context, req spec.DeployTarget
 	req.HostEnvJSON = hostEnvJSON()
 	if len(t.venueJSON) > 0 && len(req.VenueJSON) == 0 {
 		req.VenueJSON = t.venueJSON
-	}
-	if t.ledgerRoot != "" && req.LedgerRoot == "" {
-		req.LedgerRoot = t.ledgerRoot
 	}
 	reply, err := dispatchDeployTarget(ctx, req, t.exec, t.build, t.hasLifecycle)
 	if err != nil {
@@ -310,39 +248,13 @@ func (t *pluginDeployTarget) Add(ctx context.Context, dctx *DeployContext, plans
 	if opts.DryRun {
 		return nil
 	}
-
-	if opts.Verify {
-		if t.hasLifecycle {
-			fmt.Fprintf(os.Stderr, "external deploy %q: --verify deferred to `charly check live` (the %s substrate verifies its live venue post-deploy, with the venue's runtime identity)\n", t.name, t.word)
-		} else {
-			fails, verr := checkLocalDeployScope(dir, t.node, t.name, "", "", nil, t.venueExecutor(), "text")
-			if verr != nil {
-				return fmt.Errorf("external deploy %q: --verify: %w", t.name, verr)
-			}
-			if fails > 0 {
-				return fmt.Errorf("external deploy %q: --verify: %d deploy-scope check(s) failed", t.name, fails)
-			}
-		}
-	}
+	// --verify runs PLUGIN-SIDE now, INSIDE the dispatch call above (#55 W3 B3, candy/plugin-bundle's
+	// handleDeployApply/verifyLocalDeployScope) — reusing the SAME venue that dispatch already
+	// resolved, in the SAME RPC round-trip, rather than re-materializing a core-side executor here
+	// after the fact (the former venueExecutor() helper this comment used to name is deleted, #55
+	// W3 B3 remainder — Test() was its only other caller). A dispatch error already returned above
+	// if verify failed.
 	return nil
-}
-
-// venueExecutor re-materializes the CURRENT venue (post-Add, whatever the plugin reported back)
-// for core-side steps that need a live executor (Test, --verify). Falls back to
-// t.exec (the initial placeholder) if no venue has been reported yet (e.g. a dry-run Add).
-func (t *pluginDeployTarget) venueExecutor() spec.DeployExecutor {
-	if len(t.venueJSON) == 0 {
-		return t.exec
-	}
-	var d spec.VenueDescriptor
-	if err := json.Unmarshal(t.venueJSON, &d); err != nil {
-		return t.exec
-	}
-	exec, err := specexec.VenueFromDescriptor(d)
-	if err != nil || exec == nil {
-		return t.exec
-	}
-	return exec
 }
 
 func (t *pluginDeployTarget) Update(ctx context.Context, plans []*spec.InstallPlan, opts UpdateOpts) error {
@@ -380,12 +292,14 @@ func (t *pluginDeployTarget) Update(ctx context.Context, plans []*spec.InstallPl
 	return nil
 }
 
-// Test runs the deploy-scope checks against the host venue. The plugin is NOT involved — the
-// checks are in-proc CheckVerbProviders run against the CURRENT venue, the SAME
-// runUnifiedTargetChecks path the host/pod/vm targets use (R3).
-func (t *pluginDeployTarget) Test(ctx context.Context, checks []spec.Op, opts TestOpts) error {
-	return runUnifiedTargetChecks(ctx, t.venueExecutor(), t.Kind(), t.name, checks, opts)
-}
+// Test (UnifiedDeployTarget's former deploy-scope check-live method) is DELETED (#55 W3 B3
+// remainder): it had ZERO real callers anywhere in the tree — `charly check live` reaches
+// candy/plugin-check directly (live_gather.go's pluginCheckRunLive), never through this adapter —
+// its ONE caller was a unit test (plugin_executor_reverse_e2e_test.go), which now covers the
+// probe-marker check a different way. runUnifiedTargetChecks/TestOpts die with it; dispatchVerifyChecks
+// (the mechanism they called) has zero production callers left too and relocates to
+// checkrun_helpers_test.go as test-only infrastructure — see that file's header for why the
+// box-mode-skip regression coverage it fed is unaffected (same underlying RunOne primitive).
 
 func (t *pluginDeployTarget) Del(ctx context.Context, opts DelOpts) error {
 	// The vm ephemeral-lifecycle teardown (systemd timers + libvirt snapshot refcounts) that used

@@ -5,7 +5,7 @@ go 1.26.0
 require (
 	github.com/alecthomas/kong v1.15.0
 	github.com/opencharly/sdk v0.0.0
-	github.com/opencharly/spec v0.2026215.1748
+	github.com/opencharly/spec v0.2026217.301
 	gopkg.in/yaml.v3 v3.0.1
 )
 

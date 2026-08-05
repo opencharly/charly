@@ -212,7 +212,7 @@ func nestedSubcommandType(subcommands []climodel.CLISubcommand) reflect.Type {
 
 // dispatchCommand routes a parsed dynamic command to its provider by PLACEMENT (F8): a
 // COMPILED-IN command candy (registered in-proc as an inprocProvider — NOT a *grpcProvider and
-// NOT a static builtin CommandProvider) dispatches IN-PROC via Invoke(OpRun), so the candy's
+// NOT a static builtin CommandProvider) dispatches IN-PROC via Invoke(ops.OpRun), so the candy's
 // handler runs inside charly's own process with native stdio/TTY; an OUT-OF-PROCESS command
 // dispatches by syscall.Exec'ing its plugin binary (dispatchExternalCommand). This is the command
 // half of placement-invisibility: the SAME command candy works compiled-in or out-of-process,
@@ -230,15 +230,15 @@ func dispatchCommand(d externalCommandDispatch, sub string) error {
 }
 
 // dispatchInProcCommand forwards a compiled-in command's parsed pass-through args to its in-proc
-// provider via Invoke(OpRun) — the candy's OpRun handler runs in charly's process (it owns
+// provider via Invoke(ops.OpRun) — the candy's ops.OpRun handler runs in charly's process (it owns
 // os.Stdout/Stderr/TTY natively), mirroring the OUT-OF-PROCESS plugin's pass-through `{"args":[…]}`
-// envelope (the OpRun contract), so a command candy behaves identically in either placement.
+// envelope (the ops.OpRun contract), so a command candy behaves identically in either placement.
 func dispatchInProcCommand(prov Provider, d externalCommandDispatch, sub string) error {
 	params, err := marshalJSON(map[string]any{"args": externalCommandArgs(d, sub)})
 	if err != nil {
 		return fmt.Errorf("command %q: marshal args: %w", d.word, err)
 	}
-	// Thread the in-proc reverse channel so a compiled-in command's Invoke(OpRun) can call back
+	// Thread the in-proc reverse channel so a compiled-in command's Invoke(ops.OpRun) can call back
 	// HostBuild / InvokeProvider (the command-class analogue of how a compiled-in build/vm-build
 	// drive gets its own in-proc reverse channel — candy/plugin-box's dispatchBuild,
 	// candy/plugin-vm's resolveVmBuild). Generic: every compiled-in command benefits, so a

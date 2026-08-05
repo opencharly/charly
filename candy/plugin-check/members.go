@@ -7,9 +7,9 @@ package check
 // Two of the original's helpers (resolveDeployBoxName/resolveImageRefForEnsure) re-resolved a
 // deploy's image ref via a fresh LoadUnified + ResolveBox call; here they read the SAME data off
 // the already-fetched resolved-project envelope (rp.Deploy[key].Image, rp.Boxes[bareRef]) —
-// exactly the pattern k8s_config.go's findK8sSpec (K1-unblock wave 2) already established: the
-// envelope already carries what a fresh core-side resolve would recompute, so no new mechanism,
-// no second HostBuild round-trip.
+// exactly the pattern the (since-relocated) namespace-qualified k8s-spec lookup (K1-unblock wave 2)
+// already established: the envelope already carries what a fresh core-side resolve would
+// recompute, so no new mechanism, no second HostBuild round-trip.
 
 import (
 	"context"

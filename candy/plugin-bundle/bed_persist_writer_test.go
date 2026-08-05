@@ -7,12 +7,14 @@ package bundle
 // SaveBundleConfig / ClassifyTarget's OWN field-preservation/skip-logic contract — genuine
 // deploykit-mechanism behavior, not charly-loader-specific parsing (the prior "stays in charly
 // per Ambiguous-item-1" ruling predates the gate that forced this split question). The
-// charly-side externalInPlace argument (bedExternalInPlace(target), which queries the live
-// provider registry) collapses to a LITERAL bool here — false for "pod" (a container-venue
-// external substrate — NOT in-place, so it persists), true for "local" (a shell-venue external
-// substrate — in-place, so PersistBedDeployOverrides self-skips it) — the exact values production
-// resolves for these targets; this test suite is not re-testing bedExternalInPlace's OWN registry
-// logic (that stays charly-side, covered by its own F11/registry tests).
+// externalInPlace argument (spec.ExternalInPlaceVenue, #55 W3 B2-full — the former core-private
+// bedExternalInPlace(target)'s registry query was refuted as an incomplete-seam trap; every node
+// reaching PersistBedDeployOverrides is already Descent-stamped) collapses to a LITERAL bool
+// here — false for "pod" (a container-venue external substrate — NOT in-place, so it persists),
+// true for "local" (a shell-venue external substrate — in-place, so PersistBedDeployOverrides
+// self-skips it) — the exact values production resolves for these targets; this test suite is
+// not re-testing spec.ExternalInPlaceVenue's OWN Descent-read logic (that's covered by its own
+// spec-package tests).
 //
 // The full write→read cycle these tests exercise in isolation runs LIVE in production on every
 // check-pod / check-cross-pod-cdp bed run (candy/plugin-check's persistBedDeployOverridePluginSide,

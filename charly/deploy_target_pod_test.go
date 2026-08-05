@@ -50,7 +50,7 @@ func TestPodOverlayInlineCopyResolvesUnderContext(t *testing.T) {
 	})
 	// The overlay buildEngineContext threads ImageBuildDir == ContextRelPrefix == the overlay
 	// build dir (the invariant hostBuildOverlay's prep sets, riding the BuildEnv scalars onto the
-	// class:step OpEmit).
+	// class:step ops.OpEmit).
 	build := buildEngineContext{Box: &spec.ResolvedBox{Name: "base"}, ImageBuildDir: relBuildDir, ContextRelPrefix: relBuildDir}
 	tgt := ociTestTarget(build)
 

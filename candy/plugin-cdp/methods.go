@@ -1,6 +1,7 @@
 package cdp
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -95,7 +96,7 @@ var requiredModifiers = map[string][]string{
 // (the in-tree CLI Run() returning an error → exit 1); provider.go maps it through the
 // exit_status / stderr matchers. The HTTP methods (status/open/list/close) hit the /json
 // surface directly; every other method opens a per-tab CDP WebSocket.
-func dispatch(ep *cdpEndpoint, op *spec.Op, in *params.CdpInput) (string, error) {
+func dispatch(ctx context.Context, ep *cdpEndpoint, op *spec.Op, in *params.CdpInput) (string, error) {
 	method := in.Method
 	if err := sdk.RequireModifiers(method, op, requiredModifiers); err != nil {
 		return "", err
@@ -113,7 +114,7 @@ func dispatch(ep *cdpEndpoint, op *spec.Op, in *params.CdpInput) (string, error)
 	}
 
 	// WebSocket methods: connect the tab.
-	client, err := connectTab(ep.URL, in.Tab)
+	client, err := connectTab(ctx, ep.URL, in.Tab)
 	if err != nil {
 		return "", err
 	}
@@ -182,7 +183,7 @@ func runStatus(ep *cdpEndpoint) (string, error) {
 	if err != nil {
 		return fmt.Sprintf("CDP:       unreachable (%s)\n", addr), nil
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	return fmt.Sprintf("CDP:       ok (%s)\n", addr), nil
 }
 
@@ -198,7 +199,7 @@ func runOpen(ep *cdpEndpoint, target string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("opening URL in Chrome: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	var tab devToolsTab
 	if err := json.NewDecoder(resp.Body).Decode(&tab); err != nil {
 		return "", fmt.Errorf("parsing response: %w", err)
@@ -213,7 +214,7 @@ func runList(ep *cdpEndpoint) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to connect to Chrome DevTools: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	var tabs []devToolsTab
 	if err := json.NewDecoder(resp.Body).Decode(&tabs); err != nil {
 		return "", fmt.Errorf("failed to parse DevTools response: %w", err)
@@ -235,7 +236,7 @@ func runClose(ep *cdpEndpoint, tabID string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to close tab: %w", err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("failed to close tab %s (HTTP %d)", tabID, resp.StatusCode)
 	}
@@ -521,13 +522,13 @@ func runType(client *CDPClient, selector, text string) (string, error) {
 // Shared helpers
 // ---------------------------------------------------------------------------
 
-// connectTab resolves the WebSocket URL for a tab and opens a CDPClient.
-func connectTab(devtoolsURL, tabID string) (*CDPClient, error) {
+// connectTab resolves the WebSocket URL for a tab and opens a CDPClient bound to the step ctx.
+func connectTab(ctx context.Context, devtoolsURL, tabID string) (*CDPClient, error) {
 	wsURL, err := resolveTabWS(devtoolsURL, tabID)
 	if err != nil {
 		return nil, err
 	}
-	return NewCDPClient(wsURL)
+	return NewCDPClient(ctx, wsURL)
 }
 
 // resolveTabWS fetches /json and returns the WebSocket debugger URL for the tab. A
@@ -539,7 +540,7 @@ func resolveTabWS(devtoolsURL, tabID string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("fetching tab list: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var tabs []devToolsTab
 	if err := json.NewDecoder(resp.Body).Decode(&tabs); err != nil {

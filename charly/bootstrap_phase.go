@@ -14,7 +14,7 @@ import (
 // config and MAY rewrite the raw root bytes (the kernel never needs a validated config to run a
 // bootstrap transform). Today only the no-op candy/plugin-example-bootstrap registers in this phase
 // (it demonstrates the hook). The migration engine is NOT a bootstrap plugin: it lives in
-// candy/plugin-migrate as command:migrate over OpRun, invoked explicitly by `charly migrate` +
+// candy/plugin-migrate as command:migrate over ops.OpRun, invoked explicitly by `charly migrate` +
 // the remote-cache auto-migration (refs.go), and the load gate
 // keeps the `Run: charly migrate` reject for a stale config — the chain is whole-project file-based
 // + host-coupled (it needs host-prelifted inputs from a completed LoadUnified) and so cannot run on

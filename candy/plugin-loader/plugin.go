@@ -28,7 +28,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 
+	"cuelang.org/go/cue"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/loaderkit"
 	pb "github.com/opencharly/spec/proto"
@@ -123,6 +125,116 @@ func (*provider) LoadUnified(dir string, exec spec.LoaderExecutor) (*spec.Unifie
 	return loaderkit.LoadUnified(dir, loaderkit.LoadSeamsFromExecutor(exec))
 }
 
+// DecodeEntityViaCUE implements spec.ProjectLoader — the typed per-entity CUE decode the host calls
+// for every kind/candy/node-form decode (compiled-in, no wire envelope): delegates to the ONE copy
+// of the relocated shorthand-normalize + CUE-ingest + Decode mechanism in sdk/loaderkit (K1 unit 1).
+func (*provider) DecodeEntityViaCUE(node *yaml.Node, t reflect.Type, out any, label string) error {
+	return loaderkit.DecodeEntityViaCUE(node, t, out, label)
+}
+
+// ValidateEntityClosedCUE implements spec.ProjectLoader — the typed closed-schema entity check the
+// host calls (compiled-in, no wire envelope): delegates to the ONE copy of the relocated
+// CUE-validate mechanism in sdk/loaderkit (K1 unit 2).
+func (*provider) ValidateEntityClosedCUE(cs spec.CueSchema, kind, label string, entity cue.Value) error {
+	return loaderkit.ValidateEntityClosedCUE(cs, kind, label, entity)
+}
+
+// CueDocFromYAML implements spec.ProjectLoader — the typed YAML→cue.Value ingest the host calls
+// (compiled-in, no wire envelope): delegates to the ONE copy in sdk/loaderkit (K1 unit 2).
+func (*provider) CueDocFromYAML(cs spec.CueSchema, path string, data []byte) (cue.Value, error) {
+	return loaderkit.CueDocFromYAML(cs, path, data)
+}
+
+// ValidateNodeDocCUE implements spec.ProjectLoader — the typed load-time #NodeDoc structural gate
+// the host calls (compiled-in, no wire envelope): delegates to the ONE copy in sdk/loaderkit (K1
+// unit 2).
+func (*provider) ValidateNodeDocCUE(cs spec.CueSchema, label string, data []byte) error {
+	return loaderkit.ValidateNodeDocCUE(cs, label, data)
+}
+
+// ApplyCueDefaults implements spec.ProjectLoader — the typed post-merge schema-defaults fill the
+// host calls (compiled-in, no wire envelope): delegates to the ONE copy in sdk/loaderkit (K1 unit
+// 2).
+func (*provider) ApplyCueDefaults(cs spec.CueSchema, kind string, out any) error {
+	return loaderkit.ApplyCueDefaults(cs, kind, out)
+}
+
+// IsResourceDisc / BundleTargetForDisc / SetBundleCrossRef / IsStandaloneResourceKind /
+// FoldStandaloneTemplateReply implement spec.ProjectLoader — the typed bundle/resource-member
+// kind-decode SUPPORT helpers the host calls (compiled-in, no wire envelope): delegate to the ONE
+// copy in sdk/loaderkit (K1 unit 3a).
+func (*provider) IsResourceDisc(d string, t spec.Threaded) bool {
+	return loaderkit.IsResourceDisc(d, t)
+}
+
+func (*provider) BundleTargetForDisc(d string, t spec.Threaded) string {
+	return loaderkit.BundleTargetForDisc(d, t)
+}
+
+func (*provider) SetBundleCrossRef(dn *spec.BundleNode, disc, ref string, t spec.Threaded) {
+	loaderkit.SetBundleCrossRef(dn, disc, ref, t)
+}
+
+func (*provider) IsStandaloneResourceKind(disc string, t spec.Threaded) bool {
+	return loaderkit.IsStandaloneResourceKind(disc, t)
+}
+
+func (*provider) FoldStandaloneTemplateReply(disc, name string, replyJSON json.RawMessage, acc *spec.MaterializedProject) error {
+	return loaderkit.FoldStandaloneTemplateReply(disc, name, replyJSON, acc)
+}
+
+// AssembleEntityBody / DecodeNodeValue / EntityBodyJSON / BuildBundleNode /
+// BuildResourceMemberChildren / BuildBundleNodeInto / IsDeployShape / DecodeStandaloneTemplateJSON /
+// ResourceChildren implement spec.ProjectLoader — the typed entity-body assembly +
+// bundle/resource-member tree-builder mechanism the host calls (compiled-in, no wire envelope):
+// delegate to the ONE copy in sdk/loaderkit (K1 unit 3b).
+func (*provider) AssembleEntityBody(pn spec.ParsedNode) (*yaml.Node, error) {
+	return loaderkit.AssembleEntityBody(pn)
+}
+
+func (*provider) DecodeNodeValue(pn spec.ParsedNode, out any) error {
+	return loaderkit.DecodeNodeValue(pn, out)
+}
+
+func (*provider) EntityBodyJSON(pn spec.ParsedNode) (json.RawMessage, error) {
+	return loaderkit.EntityBodyJSON(pn)
+}
+
+func (*provider) BuildBundleNode(pn spec.ParsedNode, t spec.Threaded) (*spec.BundleNode, error) {
+	return loaderkit.BuildBundleNode(pn, t)
+}
+
+func (*provider) BuildResourceMemberChildren(pn spec.ParsedNode, t spec.Threaded) (map[string]*spec.BundleNode, error) {
+	return loaderkit.BuildResourceMemberChildren(pn, t)
+}
+
+func (*provider) BuildBundleNodeInto(pn spec.ParsedNode, t spec.Threaded, acc *spec.MaterializedProject) error {
+	return loaderkit.BuildBundleNodeInto(pn, t, acc)
+}
+
+func (*provider) IsDeployShape(pn spec.ParsedNode) bool {
+	return loaderkit.IsDeployShape(pn)
+}
+
+func (*provider) DecodeStandaloneTemplateJSON(pn spec.ParsedNode, t spec.Threaded) (json.RawMessage, error) {
+	return loaderkit.DecodeStandaloneTemplateJSON(pn, t)
+}
+
+func (*provider) ResourceChildren(pn spec.ParsedNode) []spec.ParsedNode {
+	return loaderkit.ResourceChildren(pn)
+}
+
+// ValidateCandyManifestCUE / ValidateNodeFormSteps implement spec.ProjectLoader — the typed
+// box-validate entity-tree walk the host calls (compiled-in, no wire envelope): delegate to the
+// ONE copy in sdk/loaderkit (K1 unit 3c).
+func (*provider) ValidateCandyManifestCUE(path string, data []byte, t spec.Threaded, parser spec.DocParser, cs spec.CueSchema) error {
+	return loaderkit.ValidateCandyManifestCUE(path, data, t, parser, cs)
+}
+
+func (*provider) ValidateNodeFormSteps(path string, data []byte, t spec.Threaded, parser spec.DocParser, cs spec.CueSchema) error {
+	return loaderkit.ValidateNodeFormSteps(path, data, t, parser, cs)
+}
+
 // ResolveMergedDeployTree implements spec.ProjectLoader — the merged project+overlay deploy-node
 // tree read the host's check seams need (compiled-in, no wire envelope): it drives the ONE copy
 // of the loaderkit project+per-host-overlay projection+merge (loaderkit.ResolveMergedTreeViaExecutor)
@@ -174,6 +286,17 @@ func (*provider) RunDiscover(rootDir string, specs []spec.ScanSpec, seams spec.W
 
 func (*provider) FinalizeScannedCandies(scanned map[string]spec.ScannedCandy, initCfg *spec.InitConfig) map[string]spec.CandyReader {
 	return loaderkit.FinalizeScannedCandies(scanned, initCfg)
+}
+
+// EnsureRepoDownloaded / CollectRemoteRefsOpts implement spec.ProjectLoader — the typed remote-repo
+// fetch orchestration + candy-ref collection mechanism the host calls (compiled-in, no wire
+// envelope): delegate to the ONE copy in sdk/loaderkit (K1 unit 4).
+func (*provider) EnsureRepoDownloaded(repoPath, version string, seams spec.RefsCollectSeams) (string, error) {
+	return loaderkit.EnsureRepoDownloaded(repoPath, version, seams)
+}
+
+func (*provider) CollectRemoteRefsOpts(cfg *spec.Config, layers map[string]spec.CandyReader, opts spec.ResolveOpts, seams spec.RefsCollectSeams) ([]spec.RemoteDownload, error) {
+	return loaderkit.CollectRemoteRefsOpts(cfg, layers, opts, seams)
 }
 
 // Invoke serves the out-of-process placement. The compiled-in placement uses the typed ParseDoc

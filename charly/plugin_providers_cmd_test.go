@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"github.com/opencharly/spec/spec"
 	"os"
 	"path/filepath"
 	"strings"
@@ -33,7 +34,7 @@ func TestPluginProvidersCmd(t *testing.T) {
         plugin_input:
             command: "true"
 `
-	if err := os.WriteFile(filepath.Join(dir, UnifiedFileName), []byte(manifest), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, spec.UnifiedFileName), []byte(manifest), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

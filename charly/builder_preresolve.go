@@ -8,7 +8,7 @@ import (
 )
 
 // builder_preresolve.go — the host-side CONNECT half of the builder deploy-time pre-pass
-// (FLOOR-SLIM-proper Unit-8). The actual per-(candy,builder) OpCollectContext/OpReverse RPCs — the
+// (FLOOR-SLIM-proper Unit-8). The actual per-(candy,builder) ops.OpCollectContext/ops.OpReverse RPCs — the
 // half that populates HostContext.BuilderContext — moved to candy/plugin-bundle's OWN
 // preresolveBuilderContexts (compile.go's compileDeployPlans calls it, via exec.InvokeProvider,
 // spike-proven live), since command:bundle already holds a live *sdk.Executor for its own
@@ -41,7 +41,7 @@ import (
 // their canonical ref (a box/<distro> submodule deploy that triggers a builder but vendors the
 // plugin nowhere; under CHARLY_REPO_OVERRIDE the ref resolves to the local superproject). A builder
 // whose plugin still will not connect is a LOUD error (R4).
-func ensureBuildersConnected(ctx context.Context, cfg *Config, dir string, words []string) error {
+func ensureBuildersConnected(ctx context.Context, cfg *spec.Config, dir string, words []string) error {
 	refs := map[string]struct{}{}
 	var extraRefs []string
 	for _, w := range words {

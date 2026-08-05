@@ -4,21 +4,25 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/opencharly/spec/spec"
 )
 
-// devices.go — the KEPT core GPU/device surface after cutover C11 externalized the
-// host-DETECTION LOGIC into candy/plugin-gpu. What remains here:
-//   - the embedded detection DATA tables (device_patterns / gpu_vendors /
-//     pci_class_labels) — kept in core because `charly doctor`'s device report reads
-//     devicePatterns, so one source stays here and the Detect* shims (gpu_shim.go)
-//     thread the tables into the plugin via GpuProbeInput (R3 — no duplicate copy);
-//   - the pure, host-INDEPENDENT env/group helper the deploy paths call
-//     (appendEnvUnique) and LogDetectedDevices.
-// The sysfs/exec detection PRIMITIVES (DetectGPU / DetectAMDGPU / DetectVFIO /
-// DetectHostDevices / EnsureCDI / MemlockLimitBytes / VfioGroupAccessible + their
-// impls + the VFIOReport/VFIOGpu/VFIOPCIDevice/DetectedDevices types) now live in
-// candy/plugin-gpu; core reaches them through the resolve+Invoke shims + type aliases
-// in gpu_shim.go.
+// devices.go — the KEPT core GPU/device surface. What remains here is the ONE thing genuinely
+// tied to the fenced host_build_pod_config_seams.go / gpu_allocate.go consumers (K5 seam-death,
+// in progress — the B6 unit that relocates those two files' GPU legs to peer InvokeProvider
+// dispatch is what finally dissolves gpu_shim.go/devices.go entirely; not yet landed):
+// LogDetectedDevices, the pure host-independent formatting helper host_build_pod_config_seams.go
+// calls after its DetectHostDevices() shim call.
+//
+// The embedded device_patterns/gpu_vendors/pci_class_labels data tables that used to live here
+// moved to candy/plugin-gpu's OWN embed (data.go/data.yml) — plugin-gpu is the actual detection
+// consumer, so it is the one data source (R3), not core; core no longer threads them through
+// spec.GpuProbeInput (see gpu_shim.go). deviceDescriptions moved to candy/plugin-doctor's own
+// embed: that plugin gathers its host facts itself (candy/plugin-doctor/hostfacts.go, peer
+// InvokeProvider to verb:gpu/verb:credential), so no core seam threads them any more.
+// appendEnvUnique was dead code (zero real callers) — candy/plugin-deploy-pod already carries
+// its own independent copy (config_setup_helpers.go).
 //
 // The `--no-auto-detect` Kong flag struct is NOT here either: core embedded it
 // nowhere, so the copy that lived here was deleted as dead code. The one live
@@ -26,63 +30,8 @@ import (
 // pod commands (`charly config` / `start` / `shell`) declare the field inline in
 // candy/plugin-pod/pod_cmd.go.
 
-// devicePatterns lists device paths to auto-detect on the host, read from the
-// device_patterns directive in the embedded charly.yml (Phase 4: data moved out of Go).
-// Threaded into candy/plugin-gpu's host-devices detection via the DetectHostDevices
-// shim (gpu_shim.go), and read directly by `charly doctor`'s device report (doctor.go).
-// NVIDIA GPUs are handled separately via CDI/--gpus; AMD GPUs need /dev/kfd for ROCm
-// compute access.
-var devicePatterns = parseEmbeddedDevicePatterns()
-
-func parseEmbeddedDevicePatterns() []string {
-	var doc struct {
-		DevicePatterns []string `yaml:"device_patterns"`
-	}
-	unmarshalEmbeddedDefaults(&doc)
-	if len(doc.DevicePatterns) == 0 {
-		panic("devices: embedded charly.yml has no device_patterns: directive")
-	}
-	return doc.DevicePatterns
-}
-
-// gpuRenderVendors is the set of PCI vendor IDs whose render node counts as a real,
-// encode-capable GPU (vs the paravirtual virtio-gpu), read from the gpu_vendors directive
-// in the embedded charly.yml (Phase 4: data moved out of Go). The map value is the vendor
-// name (documentary); only key membership drives the plugin's render-node pick. Threaded
-// into candy/plugin-gpu via the DetectHostDevices shim (gpu_shim.go).
-var gpuRenderVendors = parseEmbeddedGPUVendors()
-
-func parseEmbeddedGPUVendors() map[string]string {
-	var doc struct {
-		GpuVendors map[string]string `yaml:"gpu_vendors"`
-	}
-	unmarshalEmbeddedDefaults(&doc)
-	if len(doc.GpuVendors) == 0 {
-		panic("devices: embedded charly.yml has no gpu_vendors: directive")
-	}
-	return doc.GpuVendors
-}
-
-// pciClassLabels maps a PCI class code (high 16 bits) to a human label for VFIO
-// passthrough device reporting, read from the pci_class_labels directive in the embedded
-// charly.yml (Phase 4: data moved out of Go). An unknown class falls back to the raw class
-// string (logic in the plugin). Threaded into candy/plugin-gpu via the DetectVFIO shim
-// (gpu_shim.go).
-var pciClassLabels = parseEmbeddedPCIClassLabels()
-
-func parseEmbeddedPCIClassLabels() map[string]string {
-	var doc struct {
-		PciClassLabels map[string]string `yaml:"pci_class_labels"`
-	}
-	unmarshalEmbeddedDefaults(&doc)
-	if len(doc.PciClassLabels) == 0 {
-		panic("devices: embedded charly.yml has no pci_class_labels: directive")
-	}
-	return doc.PciClassLabels
-}
-
 // LogDetectedDevices prints detected devices to stderr.
-func LogDetectedDevices(detected DetectedDevices) {
+func LogDetectedDevices(detected spec.DetectedDevices) {
 	var parts []string
 	if detected.GPU {
 		parts = append(parts, "NVIDIA GPU (CDI)")
@@ -104,16 +53,4 @@ func LogDetectedDevices(detected DetectedDevices) {
 	if len(parts) > 0 {
 		fmt.Fprintf(os.Stderr, "Auto-detected devices: %s\n", strings.Join(parts, ", "))
 	}
-}
-
-// appendEnvUnique appends an env var (KEY=VALUE) to a slice only if the key
-// is not already present. This ensures user-supplied env vars take priority.
-func appendEnvUnique(envVars []string, kv string) []string {
-	key := strings.SplitN(kv, "=", 2)[0] + "="
-	for _, e := range envVars {
-		if strings.HasPrefix(e, key) {
-			return envVars // key already set, don't override
-		}
-	}
-	return append(envVars, kv)
 }

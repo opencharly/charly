@@ -11,34 +11,31 @@ plugin-doctor:
             (binary probes via exec.LookPath / exec.Command, file reads via os.Stat / os.ReadFile).
             No plugin-specific report LOGIC is left in core.
 
-            The ONE thing the plugin cannot compute itself is the genuine host-HARDWARE subsystem +
-            core-owned data: the GPU/VFIO/device detection primitives (DetectGPU / DetectAMDGPU /
-            detectAMDGFXVersion / GPURunArgs / DetectVFIO / MemlockLimitBytes / VfioGroupAccessible /
-            vfioPciAvailable / the devicePatterns glob), the credential-store health (credentialHealth
-            → verb:credential, which lazy-connects host-side), and the core install-hint / distro-family
-            / device-description tables. Those STAY core (charly/host_build_hostprobe.go) because they
-            are the genuine host-hardware subsystem the plugin cannot hold + are MULTI-CALLER (the
-            GPU/VFIO shims serve vm/deploy too) — so duplicating them into the plugin would violate R3.
-            The plugin reaches them via the generic "hostprobe" HostBuild seam (spec.HostProbeRequest →
-            spec.HostProbeReply), which runs the detection primitives host-side ONCE and returns RAW
-            FACTS ONLY — zero formatting or verdict logic crosses into core. "hostprobe" is a
-            class-generic action noun, not a provider word (F11). This is the same "plugin owns the
-            report + a generic seam for the genuine host-coupled facts" doctrine the clean + settings
-            command plugins established.
+            The GPU/VFIO/device detection primitives (DetectGPU / DetectAMDGPU / detectAMDGFXVersion /
+            GPURunArgs / DetectVFIO / MemlockLimitBytes / VfioGroupAccessible / vfioPciAvailable / the
+            device_patterns glob) and the credential-store health probe are NOT a core dependency (K5
+            seam-death): this plugin reaches candy/plugin-gpu's verb:gpu and candy/plugin-secrets'
+            verb:credential PEER-TO-PEER over its own sdk.Executor.InvokeProvider — the exact pattern
+            the arbiter and candy/plugin-vm already use for the same GPU primitives — and the
+            install-hint / distro-family / device-description / device-pattern tables are this plugin's
+            OWN embed (data.go/data.yml), not core-owned data threaded across a seam. There is no
+            remaining core HostBuild dependency at all: no hidden core-command forward, and no seam for
+            "the genuine host-coupled facts" — the plugin runs everything itself, including the two
+            peer-plugin dispatches.
 
             doctor is COMPILED-IN (listed in charly/charly.yml compiled_plugins) BECAUSE its
             Invoke(OpRun) needs the in-proc reverse channel — threaded by dispatchInProcCommand
-            ("Seam A") — to call HostBuild("hostprobe"). The out-of-process CliMain path has no reverse
-            channel, so it errors: doctor cannot run out-of-process, it needs the hostprobe host seam.
-            There is NO hidden core-command forward — the plugin does the report directly, calling back
-            only for the raw host-hardware facts; no core symbol crosses the boundary, no ad-hoc podman.
+            ("Seam A") — for its sdk.Executor.InvokeProvider calls. The out-of-process CliMain path
+            passes a nil executor, so those two peer calls degrade to zero values rather than erroring
+            (the report still renders, minus the two peer-plugin-backed sections); the canonical
+            placement stays compiled-in regardless.
 
             command:doctor dispatches through the COMPILED-IN registry path (registerCompiledPlugin →
             resolve(ClassCommand,"doctor") → dispatchInProcCommand → Invoke(OpRun) with the threaded
             in-proc reverse channel), so NewMeta advertises command:doctor while the served CUE schema
             carries no plugin_input (the args are plain CLI tokens). The R10 witness is the disposable
             check-doctor-local bed: `charly doctor` exits 0 and prints the host-dependency report,
-            proving the externalized command + the in-proc HostBuild hostprobe dispatch end-to-end.
+            proving the externalized command + its peer verb:gpu/verb:credential dispatches end-to-end.
         plugin:
             source: github.com/opencharly/charly/candy/plugin-doctor
             providers:
@@ -47,10 +44,10 @@ plugin-doctor:
             - # ADE build-context check: a deterministic check that does NOT depend on a live deployment —
               # it mirrors candy/plugin-clean's clean-module-present: a trivial build-context
               # `plugin: command` (the built-in command CHECK verb) running `true`, the mandatory ≥1
-              # deterministic check every candy ships. The full `charly doctor` end-to-end — the compiled-in
-              # in-proc HostBuild("hostprobe") dispatch: `charly doctor` → exit 0 with the host-dependency
-              # report — is exercised by the live R10 bed (check-doctor-local).
-              check: the doctor command plugin ships a buildable Go module (go.mod + the provider package) compiled into charly; the full `charly doctor` end-to-end (the in-proc HostBuild hostprobe dispatch) is exercised by the live R10 (check-doctor-local)
+              # deterministic check every candy ships. The full `charly doctor` end-to-end — the peer
+              # verb:gpu / verb:credential InvokeProvider dispatches: `charly doctor` → exit 0 with the
+              # host-dependency report — is exercised by the live R10 bed (check-doctor-local).
+              check: the doctor command plugin ships a buildable Go module (go.mod + the provider package) compiled into charly; the full `charly doctor` end-to-end (the peer verb:gpu/verb:credential InvokeProvider dispatches) is exercised by the live R10 (check-doctor-local)
               id: doctor-module-present
               context:
                 - build

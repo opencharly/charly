@@ -42,7 +42,7 @@ func opActsInBuildDeploy(c *spec.Op) bool {
 		return true
 	}
 	// A class:STEP plugin word (F3's external step KIND) lowers to an externalStep that ACTS at DEPLOY
-	// (hostBuildConstructStep resolve(ClassStep) → externalStep → OpExecute). Recognized via a connected ClassStep
+	// (hostBuildConstructStep resolve(ClassStep) → externalStep → ops.OpExecute). Recognized via a connected ClassStep
 	// provider OR a post-scan declaration (standalone `charly box validate`, where the step plugin is not
 	// connected) — the step analogue of the verb handling below.
 	if _, ok := providerRegistry.ResolveStep(c.Plugin); ok {
@@ -56,14 +56,14 @@ func opActsInBuildDeploy(c *spec.Op) bool {
 		// Not connected — the standalone `charly box validate` path, where external plugins are not
 		// built+connected. Trust a verb the parse-time prescan saw a plugin candy declare
 		// (registerDeclaredExternalVerb): it is build-emit-capable until the BUILD (which DOES connect it
-		// via the connect seam) proves otherwise at candy/plugin-build's plugin-verb OpEmit empty-fragment guard. A BUILTIN
+		// via the connect seam) proves otherwise at candy/plugin-build's plugin-verb ops.OpEmit empty-fragment guard. A BUILTIN
 		// verb always resolves above, so this branch is reached only for a genuinely external,
 		// not-yet-connected verb — never for a runtime-only builtin (which is correctly rejected).
 		return isDeclaredExternalVerb(c.Plugin)
 	}
 	// A ProvisionActor renders an install shell; a TypedStepProvider (service) lowers into a typed
 	// install step; a BuildEmitter (an in-proc build-emit verb) renders a Containerfile fragment via
-	// Invoke(OpEmit). Each is a real build/deploy act path — the same capability whether the plugin is
+	// Invoke(ops.OpEmit). Each is a real build/deploy act path — the same capability whether the plugin is
 	// builtin or external (placement-agnostic).
 	if _, isActor := prov.(ProvisionActor); isActor {
 		return true
@@ -74,9 +74,9 @@ func opActsInBuildDeploy(c *spec.Op) bool {
 	if _, isEmitter := prov.(BuildEmitter); isEmitter {
 		return true
 	}
-	// A CONNECTED external (out-of-process) verb is build-emit-capable via Invoke(OpEmit); the host
+	// A CONNECTED external (out-of-process) verb is build-emit-capable via Invoke(ops.OpEmit); the host
 	// cannot type-assert capability across the process boundary, so it is trusted here and gated at build
-	// by candy/plugin-build's plugin-verb OpEmit empty-fragment guard.
+	// by candy/plugin-build's plugin-verb ops.OpEmit empty-fragment guard.
 	_, isExternal := prov.(*grpcProvider)
 	return isExternal
 }

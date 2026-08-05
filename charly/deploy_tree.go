@@ -17,8 +17,7 @@ import (
 )
 
 // deployTraitsFor resolves a substrate word's DECLARED #DeployTraits (P9) from the provider
-// registry — the SINGLE plugin-declared source spec.StampDescent stamps onto node.Descent, and
-// the on-the-fly resolver nodeTraits falls back to for a synthetic (un-stamped) node. The
+// registry — the SINGLE plugin-declared source spec.StampDescent stamps onto node.Descent. The
 // substrate kinds are compiled-in (registered at init), so this resolves EVERYWHERE, including
 // project-less commands, with no prescan/schema bump. Returns nil for a word that is not a
 // substrate kind (a targetless group, an empty target) → the external-in-place default.
@@ -43,31 +42,12 @@ func deployTraitsFor(word string) *spec.DeployTraits {
 	return nil
 }
 
-// effectiveTarget returns the node's substrate word for trait resolution — node.Target with an
-// empty target defaulted to "pod" (the loader's empty→pod default, classifyTarget). Used by
-// nodeTraits to resolve traits for a synthetic node whose descent was never stamped.
-func effectiveTarget(node *spec.BundleNode) string {
-	if node == nil || node.Target == "" {
-		return "pod"
-	}
-	return node.Target
-}
-
-// nodeTraits returns the node's stamped deploy-descent descriptor — the SINGLE thing every
-// consult site reads to branch on substrate behaviour (venue / machine_venue / exclusive_venue /
-// image_context / leaf_only), instead of switching on the substrate kind word (the boundary law).
-// A loaded node carries a stamped node.Descent; a synthetic node (built outside the loader, e.g.
-// classifyTarget) has none, so its traits are resolved on the fly from the registry. Never nil.
-func nodeTraits(node *spec.BundleNode) *spec.DescentDescriptor {
-	if node != nil && node.Descent != nil {
-		return node.Descent
-	}
-	return spec.DescentFromTraits(deployTraitsFor(effectiveTarget(node)))
-}
-
-// deployTraitDescent is the WORD-level analogue of nodeTraits (P9): it resolves a substrate
-// word's DECLARED traits from the registry and returns the derived descent descriptor, for the
-// few consult sites that hold only a substrate word (not a node). Never nil.
+// deployTraitDescent resolves a substrate word's DECLARED traits from the registry and returns
+// the derived descent descriptor (P9), for the consult sites that hold only a substrate word (not
+// a node — every node-holding consult site reads node.Descent directly, already stamped by the
+// loader; nodeTraits, the former on-the-fly per-node resolver, DIED with its last core caller,
+// #55 W3 B2-full — a plugin-side node is always Descent-stamped, per candy/plugin-check/
+// venue.go's own registry-free twin). Never nil.
 func deployTraitDescent(word string) *spec.DescentDescriptor {
 	return spec.DescentFromTraits(deployTraitsFor(word))
 }
@@ -78,6 +58,6 @@ func deployTraitDescent(word string) *spec.DescentDescriptor {
 // Called by the walker when it knows the full dotted path.
 //
 // The host-side merged-tree read (project charly.yml + per-host overlay) that
-// formerly lived here moved to check_cmd.go's resolveMergedDeployTree (#55 LOADER
-// cone) so this file — pure kind-blind trait/descent loader reads (clause M/D) —
-// no longer imports sdk/deploykit.
+// formerly lived here moved to plugin_loader.go's resolveMergedDeployTree (#55 LOADER
+// cone; relocated again within charly/ at #55 W3 B3) so this file — pure kind-blind
+// trait/descent loader reads (clause M/D) — no longer imports sdk/deploykit.

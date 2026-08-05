@@ -186,7 +186,8 @@ func (c *VmCreateCmd) Run() error {
 	// coneB-vmlifecycle — resolveVmBackendPlugin/vmConfiguredBackendPlugin,
 	// vm_backend_resolve.go): it starts the libvirt user session before probing the socket, so
 	// no separate startLibvirtUserSession is needed here. The entity's `backend:` pin is honored
-	// via vmConfiguredBackendPlugin's own "deploy-entity-resolve" call before the probe.
+	// via vmConfiguredBackendPlugin's own plugin-side self-load (loaderkit.ResolveVmEntityViaExecutor)
+	// before the probe.
 	reply, err := hostConfigResolve(c.Box)
 	if err != nil {
 		return err

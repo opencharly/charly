@@ -11,8 +11,13 @@ import (
 // canonicalize_test.go — relocated (in part) from charly/canonicalize_test.go (#55
 // decoupling, Batch A): TestCanonicalizeDeployArg + the 2 TestMergeDeployOntoMetadata_ tests
 // assert deploykit.CanonicalizeDeployArg/MergeDeployOntoMetadata directly, zero charly dep.
-// TestResolveLocalImageRef_PrefersBaseOverAlias (a local matchesShortName mirror closure, zero
-// kit dep) stays in charly.
+// The base-over-alias resolution preference this header used to point at ("a local
+// matchesShortName mirror closure ... stays in charly") is no longer covered here or in charly:
+// that closure was a sort TIEBREAK, and it has been promoted to a candidate FILTER inside
+// container.ResolveLocalImageRef itself. Its witness is
+// TestResolveLocalImageRef_NeverReturnsSiblingDeployAlias (spec/container/local_image_coneb_test.go),
+// which asserts the stronger property — an untagged resolve of a box never returns ANOTHER
+// deployment's alias, not merely that the base wins an exact CalVer tie.
 
 // TestCanonicalizeDeployArg exercises the Pattern A "<base>/<instance>"
 // splitting that every command entry point applies. Regression guard

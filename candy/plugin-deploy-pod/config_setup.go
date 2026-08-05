@@ -130,6 +130,36 @@ var saveBundle = func(ctx context.Context, ex *sdk.Executor, dc *deploykit.Bundl
 	return deploykit.SaveBundleConfig(dc, deployMarshalNode(ctx, ex), deployConfigReader(ctx, ex))
 }
 
+// mutateBundle is the ONLY way this package writes the per-host overlay. It runs one locked
+// read-modify-write cycle (deploykit.MutateBundleConfig): the lock is taken first, the overlay is
+// re-read INSIDE it, and the caller's mutation runs against THAT fresh copy — so the write is a
+// merge-on-latest, never a write-back of the snapshot `charly config` loaded at the top of
+// runConfig.
+//
+// This is what closes the lost-update race the 32-bed concurrent roster exposed. `charly config`
+// loads the overlay once and then spends MINUTES resolving ports, prompting for encryption
+// passphrases and provisioning volume data before its writes land; the pre-fix path saved that
+// stale snapshot back with no lock at all, so a concurrent deploy's `resolved_image` (two beds
+// deployed their BASE image), a released exclusive arbiter claim (resurrected by the stale write)
+// and whole failed-bed entries were silently discarded. Holding the lock across the orchestration
+// instead would serialize every concurrent bed — a different regression — which is why the
+// mutation is expressed as a FUNCTION OVER FRESH STATE and the lock spans only its execution.
+//
+// Anything the mutation's outcome depends on must therefore be computed INSIDE the closure. Port
+// allocation is the case that bites: kit.ResolveDeployPorts picks a free host port against the
+// OTHER entries' occupied ports, so computing it outside the lock against a stale overlay hands
+// two concurrent deploys the same host port even though the file write itself is serialized.
+//
+// It returns the fresh config the mutation ran against so a caller can adopt it as its in-memory
+// view instead of continuing on its own stale snapshot. Like saveBundle it is a package var so a
+// unit test can stub the whole cycle (saveBundleStub, config_setup_volume_test.go) rather than
+// driving a real filesystem write plus four loader HostBuild seams.
+var mutateBundle = func(ctx context.Context, ex *sdk.Executor, caller string, mutate deploykit.BundleConfigMutator) (*deploykit.BundleConfig, error) {
+	read := func() (*deploykit.BundleConfig, error) { return loadDeploy(ctx, ex, caller) }
+	save := func(dc *deploykit.BundleConfig) error { return saveBundle(ctx, ex, dc) }
+	return deploykit.MutateBundleConfig(read, save, mutate)
+}
+
 //nolint:gocyclo // ported 1:1 from charly-core BoxConfigSetupCmd.runConfig — see the file header; splitting further would fragment the seam-call sequencing across files for no clarity gain
 func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c *spec.PodConfigSetupRequest) error {
 	var detectRep spec.PodConfigDetectDevicesReply
@@ -147,7 +177,7 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 	if err != nil {
 		return err
 	}
-	if err := hostBuild(ctx, ex, podConfigEnsureImageKind, spec.PodConfigEnsureImageRequest{ImageRef: imageRef, BuildEngine: rt.BuildEngine}, nil); err != nil {
+	if err := ensureImagePresent(ctx, ex, imageRef, rt.BuildEngine); err != nil {
 		return err
 	}
 	// ExtractMetadata PLUGIN-SIDE (#55 coneC-dsh — the pod-config-ensure-image host seam shrinks to
@@ -179,35 +209,13 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 		return fmt.Errorf("persisting resource caps: %w", err)
 	}
 
-	// Guard dc.Bundle (not only dc): coneC-dsh's loadDeploy → loaderkit.LoadHostBundleConfigViaExecutor
-	// returns a NON-NIL &deploykit.BundleConfig{} with a nil Bundle on an absent per-host overlay
-	// (the bed's XDG-isolated empty temp dir; the operator's ~/.config/charly before the first deploy
-	// add) — matching deploykit.LoadBundleConfig's absent/empty contract so reap-orphans and other
-	// range-without-nil-guard callers keep working. The former LoadDeployConfigForRead returned nil
-	// for absent, so the pre-coneC-dsh `if dc != nil` guard skipped this block entirely (graceful
-	// degradation: no overlay → no prior resolved ports → image-label defaults, meta.Port below).
-	// The non-nil-&BundleConfig{} return keeps that contract for the rangers but makes `if dc != nil`
-	// always true, so the guard must also check dc.Bundle: an absent overlay (nil Bundle) skips port
-	// resolution — exactly the graceful degradation the loadDeploy comment names. Writing to a nil
-	// Bundle here was the coneC-dsh regression (assignment-to-nil-map panic, config_setup.go:193).
-	if dc != nil && dc.Bundle != nil {
-		key := spec.DeployKey(c.Box, c.Instance)
-		overlay := dc.Bundle[key]
-		containerPorts := kit.ContainerPortsFromMappings(meta.Port)
-		if len(containerPorts) > 0 || len(overlay.Port) > 0 {
-			resolved, rErr := kit.ResolveDeployPorts(containerPorts, overlay.Port, overlay.ResolvedPort, deploykit.OccupiedHostPorts(dc, key))
-			if rErr != nil {
-				return fmt.Errorf("resolving deploy ports: %w", rErr)
-			}
-			if !kit.SameStringSlice(overlay.ResolvedPort, resolved) {
-				overlay.ResolvedPort = resolved
-				dc.Bundle[key] = overlay
-				if err := saveBundle(ctx, ex, dc); err != nil {
-					return fmt.Errorf("saving resolved_port: %w", err)
-				}
-				fmt.Fprintf(os.Stderr, "Resolved ports for %s: %s\n", key, strings.Join(resolved, ", "))
-			}
-		}
+	// resolveDeployPorts (config_setup_helpers.go) self-heals a nil dc/dc.Bundle instead of
+	// skipping resolution — task #19's fix. See its doc comment for the full mechanism: the former
+	// `if dc != nil && dc.Bundle != nil` guard here skipped port resolution entirely on a fresh
+	// disposable bed's first-ever config (no per-host overlay yet), which deterministically
+	// collided every check-pod-derived bed on the shared literal container port 18794.
+	if err := resolveDeployPorts(ctx, ex, &dc, spec.DeployKey(c.Box, c.Instance), &meta); err != nil {
+		return err
 	}
 
 	deploykit.MergeDeployOntoMetadata(&meta, dc, c.Box, c.Instance)
@@ -224,15 +232,10 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 
 	volumes, bindMounts := deploykit.ResolveVolumeBacking(c.Box, c.Instance, meta.Volume, deployVolumes, meta.Home, rt.EncryptedStoragePath, rt.VolumesPath)
 
-	usingResolvedOverlay := false
-	if ov, _, rerr := resolveDeployRef(ctx, ex, &spec.PodConfigSetupRequest{Box: c.Box, Instance: c.Instance}); rerr == nil {
-		usingResolvedOverlay = ov != "" && ov == imageRef
-	}
-	if meta.Registry != "" && !kit.LooksLikeFullRef(imageRef) && c.ExplicitRef == "" && !usingResolvedOverlay {
-		if _, ref, e := resolveDeployRefLocal(ctx, ex, deployBoxName, "", c.Tag, ""); e == nil {
-			imageRef = ref
-		}
-	}
+	// resolvedOverlayImage reads the dc already in hand (R3: the SAME gate resolveDeployRefLocal
+	// consults), so the overlay comparison costs no second resolve.
+	imageRef = qualifyImageRef(imageRef, meta.Registry, c.ExplicitRef,
+		resolvedOverlayImage(dc, c.Box, c.Instance), deployBoxName, c.Tag)
 
 	var tunnelCfg *spec.TunnelConfig
 	if meta.Tunnel != nil {
@@ -258,28 +261,25 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 	// SAME loadDeploy→modify→saveBundle path the secrets/sidecar persist uses (R3); the locked
 	// whole-file write + marshal resugar run plugin-side via deploykit.SaveBundleConfig (the former
 	// pod-config-save-bundle host seam + the host save-callback are deleted, #55 coneC-dsh).
-	dc, err = loadDeploy(ctx, ex, "charly config reload-before-inject")
+	dc, err = mutateBundle(ctx, ex, "charly config inject-provides", func(d *deploykit.BundleConfig) (bool, error) {
+		provChanged := len(meta.EnvProvide) > 0 && injectEnvProvidesInto(d, c.Box, c.Instance, meta.EnvProvide, portMap)
+		if len(meta.MCPProvide) > 0 && injectMCPProvidesInto(d, c.Box, c.Instance, meta.MCPProvide, portMap) {
+			provChanged = true
+		}
+		return provChanged, nil
+	})
 	if err != nil {
 		return err
-	}
-	provChanged := len(meta.EnvProvide) > 0 && injectEnvProvidesInto(dc, c.Box, c.Instance, meta.EnvProvide, portMap)
-	if len(meta.MCPProvide) > 0 && injectMCPProvidesInto(dc, c.Box, c.Instance, meta.MCPProvide, portMap) {
-		provChanged = true
-	}
-	if provChanged {
-		if err := saveBundle(ctx, ex, dc); err != nil {
-			return err
-		}
 	}
 
 	if c.SshKey != "" {
 		cName := kit.ContainerNameInstance(c.Box, c.Instance)
-		var sshRep spec.PodConfigSSHKeyReply
-		if err := hostBuild(ctx, ex, podConfigSSHKeyKind, spec.PodConfigSSHKeyRequest{Flag: c.SshKey, ContainerName: cName}, &sshRep); err != nil {
+		pubkey, err := resolveSSHPubKey(c.SshKey, cName)
+		if err != nil {
 			return err
 		}
-		if sshRep.Pubkey != "" {
-			c.Env = append(c.Env, "SSH_AUTHORIZED_KEYS="+sshRep.Pubkey)
+		if pubkey != "" {
+			c.Env = append(c.Env, "SSH_AUTHORIZED_KEYS="+pubkey)
 		}
 	}
 

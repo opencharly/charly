@@ -17,18 +17,20 @@ import (
 )
 
 // command.go — the externalized `charly doctor` command. The plugin OWNS the ENTIRE host-dependency
-// report: the check list, the group orchestration, the pass/warn/fail verdicts, the human + JSON
-// formatting, the exit code, AND the pure host ops it runs itself (binary probes via exec.LookPath /
-// exec.Command, file reads via os.Stat / os.ReadFile). Core keeps ONLY the genuine host-hardware
-// subsystem the plugin cannot hold — the GPU/VFIO/device detection primitives, credentialHealth, and
-// the core install-hint / device-description tables — reached ONCE via the generic "hostprobe" HostBuild
-// seam, which returns RAW FACTS ONLY (no formatting or verdict logic in core). No hidden core-command
-// forward.
+// report end to end: the check list, the group orchestration, the pass/warn/fail verdicts, the human
+// + JSON formatting, the exit code, the pure host ops it runs itself (binary probes via
+// exec.LookPath / exec.Command, file reads via os.Stat / os.ReadFile), AND — since the K5 seam-death
+// of the former "hostprobe" HostBuild kind (hostfacts.go) — the GPU/VFIO/device detection (peer
+// InvokeProvider to candy/plugin-gpu's verb:gpu), credential-store health (peer InvokeProvider to
+// candy/plugin-secrets' verb:credential), and the distro/install-hint/device data tables (this
+// plugin's own embed, data.go/data.yml). There is no hidden core-command forward and no remaining
+// core HostBuild seam at all.
 //
 // doctor is COMPILED-IN (charly.yml compiled_plugins): its Invoke(OpRun) runs in charly's process and
-// gets the in-proc reverse channel (provider_command_external.go dispatchInProcCommand threads it), so
-// HostBuild("hostprobe") reaches the host engine. The out-of-process CliMain path has NO reverse
-// channel, so it errors — doctor cannot run out-of-process (it needs the hostprobe host seam).
+// gets the in-proc reverse channel (provider_command_external.go dispatchInProcCommand threads it),
+// which is what its sdk.Executor.InvokeProvider calls need. The out-of-process CliMain path passes a
+// nil executor, so those two peer calls degrade to zero values (see hostfacts.go) rather than
+// erroring — the report still renders, minus the two peer-plugin-backed sections.
 
 // execLookPath wraps os/exec.LookPath; a package var so tests swap it (mirrors core's exec_LookPath).
 var execLookPath = osexec.LookPath
@@ -142,8 +144,12 @@ type DoctorOutput struct {
 	} `json:"summary"`
 }
 
-// runDoctorCLI parses the doctor flags, fetches the raw host facts ONCE over the hostprobe seam, then
-// runs the ENTIRE report (checks, verdicts, formatting, exit code) against those facts.
+// runDoctorCLI parses the doctor flags, gathers the raw host facts ONCE (hostfacts.go), then
+// runs the ENTIRE report (checks, verdicts, formatting, exit code) against those facts. exec is
+// nil on the out-of-process CliMain path — every host-fact leg degrades gracefully rather than
+// erroring outright (the GPU/credential peer calls no-op to zero values, distro/device
+// detection is plain host I/O either way), so the report still renders, just without the two
+// peer-plugin-backed sections.
 func runDoctorCLI(ctx context.Context, exec *sdk.Executor, args []string) error {
 	fs := flag.NewFlagSet("doctor", flag.ContinueOnError)
 	jsonOut := fs.Bool("json", false, "Output as JSON")
@@ -151,53 +157,18 @@ func runDoctorCLI(ctx context.Context, exec *sdk.Executor, args []string) error 
 		return err
 	}
 
-	reply, err := hostProbe(ctx, exec)
-	if err != nil {
-		return err
-	}
-	distro := Distro{
-		ID:      reply.Distro.ID,
-		Name:    reply.Distro.Name,
-		Manager: reply.Distro.Manager,
-		hints:   reply.InstallHints,
-		family:  reply.DistroFamilyMap,
-	}
-	groups := runDoctorChecks(distro, reply)
-	hardware := runHardwareChecks(reply)
+	hr := gatherHostReport(ctx, exec, "")
+	groups := runDoctorChecks(hr.Distro, hr)
+	hardware := runHardwareChecks(hr)
 
 	if *jsonOut {
-		return printJSON(distro, groups, hardware)
+		return printJSON(hr.Distro, groups, hardware)
 	}
-	return printHuman(distro, groups, hardware)
-}
-
-// hostProbe asks the host to run the GPU/VFIO/device/credential detection primitives via the generic
-// "hostprobe" HostBuild kind, returning RAW facts. exec is nil on the out-of-process CliMain path (no
-// reverse channel) → a clear error.
-func hostProbe(ctx context.Context, exec *sdk.Executor) (spec.HostProbeReply, error) {
-	if exec == nil {
-		return spec.HostProbeReply{}, fmt.Errorf("charly doctor requires compiled-in placement (the hostprobe host seam is unavailable out-of-process)")
-	}
-	reqJSON, err := json.Marshal(spec.HostProbeRequest{})
-	if err != nil {
-		return spec.HostProbeReply{}, err
-	}
-	resJSON, err := exec.HostBuild(ctx, "hostprobe", reqJSON)
-	if err != nil {
-		return spec.HostProbeReply{}, err
-	}
-	var reply spec.HostProbeReply
-	if uerr := json.Unmarshal(resJSON, &reply); uerr != nil {
-		return spec.HostProbeReply{}, uerr
-	}
-	if reply.Error != "" {
-		return spec.HostProbeReply{}, fmt.Errorf("%s", reply.Error)
-	}
-	return reply, nil
+	return printHuman(hr.Distro, groups, hardware)
 }
 
 // runDoctorChecks runs all dependency checks and returns grouped results.
-func runDoctorChecks(distro Distro, reply spec.HostProbeReply) []CheckGroup {
+func runDoctorChecks(distro Distro, hr hostReport) []CheckGroup {
 	groups := []CheckGroup{
 		{
 			Name:     "Container Engine (required -- at least one)",
@@ -229,7 +200,7 @@ func runDoctorChecks(distro Distro, reply spec.HostProbeReply) []CheckGroup {
 		{
 			Name:     "VFIO / GPU passthrough",
 			Required: false,
-			Checks:   vfioChecks(reply),
+			Checks:   vfioChecks(hr.GPU),
 		},
 		{
 			Name:     "Encrypted Storage",
@@ -244,7 +215,7 @@ func runDoctorChecks(distro Distro, reply spec.HostProbeReply) []CheckGroup {
 		{
 			Name:     "Secret Storage",
 			Required: false,
-			Checks:   secretStorageChecks(reply),
+			Checks:   secretStorageChecks(hr),
 		},
 		{
 			Name:     "Tunnels",
@@ -313,12 +284,12 @@ func vmChecks(distro Distro) []DoctorCheckResult {
 	return checks
 }
 
-// vfioChecks reports host readiness for VFIO GPU passthrough, rendered from the hostprobe seam's raw
-// VFIO facts (the same DetectVFIO probe `charly vm gpu` consumes).
-func vfioChecks(reply spec.HostProbeReply) []DoctorCheckResult {
+// vfioChecks reports host readiness for VFIO GPU passthrough, rendered from the peer verb:gpu
+// call's raw VFIO facts (the same DetectVFIO probe `charly vm gpu` consumes).
+func vfioChecks(gpu gpuFacts) []DoctorCheckResult {
 	var rep spec.VFIOReport
-	if reply.Vfio != nil {
-		rep = *reply.Vfio
+	if gpu.Vfio != nil {
+		rep = *gpu.Vfio
 	}
 	var checks []DoctorCheckResult
 
@@ -337,7 +308,7 @@ func vfioChecks(reply spec.HostProbeReply) []DoctorCheckResult {
 		})
 	}
 
-	if reply.VfioPciAvailable {
+	if gpu.VfioPciAvailable {
 		checks = append(checks, DoctorCheckResult{Name: "vfio-pci driver", Status: CheckOK})
 	} else {
 		checks = append(checks, DoctorCheckResult{
@@ -349,7 +320,7 @@ func vfioChecks(reply spec.HostProbeReply) []DoctorCheckResult {
 	}
 
 	// memlock — VFIO pins all guest RAM; a rootless session needs a high limit.
-	hard := reply.MemlockHard
+	hard := gpu.MemlockHard
 	if memlockUnlimited(hard) {
 		checks = append(checks, DoctorCheckResult{Name: "memlock limit", Status: CheckOK, Detail: "unlimited"})
 	} else if hard >= 16<<30 {
@@ -376,7 +347,7 @@ func vfioChecks(reply spec.HostProbeReply) []DoctorCheckResult {
 			// the wire map from map[int]bool to map[string]bool — the SAME
 			// decimal-string keys encoding/json already produced for the
 			// former int-keyed map, so the wire bytes are unchanged).
-			if reply.GroupAccessible[strconv.Itoa(g.IOMMUGroup)] {
+			if gpu.GroupAccessible[strconv.Itoa(g.IOMMUGroup)] {
 				access = ", /dev/vfio rw"
 			} else {
 				access = fmt.Sprintf(", /dev/vfio/%d NOT accessible (charly udev install)", g.IOMMUGroup)
@@ -601,30 +572,25 @@ func getBinaryVersion(name string) string {
 	return line
 }
 
-// runHardwareChecks renders the HardwareInfo report from the hostprobe seam's raw GPU/device facts,
+// runHardwareChecks renders the HardwareInfo report from the gathered raw GPU/device facts,
 // computing the container-flag set (the derived verdict) plugin-side.
-func runHardwareChecks(reply spec.HostProbeReply) HardwareInfo {
+func runHardwareChecks(hr hostReport) HardwareInfo {
 	hw := HardwareInfo{}
 
-	hw.GPU = reply.GPU
+	hw.GPU = hr.GPU.GPU
 	if hw.GPU {
-		hw.GPUFlags = reply.GPUFlags
+		hw.GPUFlags = hr.GPU.GPUFlags
 		hw.ContainerFlags = append(hw.ContainerFlags, hw.GPUFlags...)
 	}
 
-	hw.AMDGPU = reply.AMDGPU
+	hw.AMDGPU = hr.GPU.AMDGPU
 	if hw.AMDGPU {
-		hw.AMDGFXVersion = reply.AMDGFXVersion
+		hw.AMDGFXVersion = hr.GPU.AMDGFXVersion
 		hw.ContainerFlags = append(hw.ContainerFlags, "--group-add", "keep-groups")
 	}
 
-	for _, d := range reply.Devices {
-		hw.Devices = append(hw.Devices, DeviceInfo{
-			Pattern:     d.Pattern,
-			Path:        d.Path,
-			Description: d.Description,
-			Present:     d.Present,
-		})
+	hw.Devices = hr.Devices
+	for _, d := range hr.Devices {
 		if d.Present {
 			hw.ContainerFlags = append(hw.ContainerFlags, "--device", d.Path)
 		}
@@ -867,15 +833,15 @@ func checkFuseAllowOther() DoctorCheckResult {
 // hostprobe seam's credential-health reply (the keyring + Secret Service probing lives in
 // candy/plugin-secrets, reached host-side via verb:credential). The config-file PERMISSIONS check is a
 // pure host op the plugin runs itself (os.Stat) against the seam-reported config path.
-func secretStorageChecks(reply spec.HostProbeReply) []DoctorCheckResult {
+func secretStorageChecks(hr hostReport) []DoctorCheckResult {
 	var checks []DoctorCheckResult
 
-	h := reply.Credential
+	h := hr.Credential
 	if h == nil {
 		return append(checks, DoctorCheckResult{
 			Name:        "Secret backend",
 			Status:      CheckWarning,
-			Detail:      fmt.Sprintf("credential plugin unavailable: %s", reply.CredentialErr),
+			Detail:      fmt.Sprintf("credential plugin unavailable: %s", hr.CredentialErr),
 			InstallHint: "Install candy/plugin-secrets alongside charly (/usr/lib/charly/plugins), or run from a project composing it",
 		})
 	}
@@ -903,9 +869,9 @@ func secretStorageChecks(reply spec.HostProbeReply) []DoctorCheckResult {
 		})
 	}
 
-	// Check 2: Config file permissions (config path from the seam).
-	if reply.ConfigPath != "" {
-		if info, statErr := os.Stat(reply.ConfigPath); statErr == nil {
+	// Check 2: Config file permissions (config path from hostConfigPath).
+	if hr.ConfigPath != "" {
+		if info, statErr := os.Stat(hr.ConfigPath); statErr == nil {
 			perm := info.Mode().Perm()
 			if perm&0077 == 0 {
 				checks = append(checks, DoctorCheckResult{Name: "Config permissions", Status: CheckOK, Version: fmt.Sprintf("%04o", perm)})
@@ -914,7 +880,7 @@ func secretStorageChecks(reply spec.HostProbeReply) []DoctorCheckResult {
 					Name:        "Config permissions",
 					Status:      CheckWarning,
 					Detail:      fmt.Sprintf("%04o (world-readable)", perm),
-					InstallHint: fmt.Sprintf("Run: chmod 600 %s", reply.ConfigPath),
+					InstallHint: fmt.Sprintf("Run: chmod 600 %s", hr.ConfigPath),
 				})
 			}
 		}

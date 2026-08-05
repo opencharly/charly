@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/opencharly/spec/ops"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,7 +16,7 @@ import (
 // Generator holds state for generating build artifacts
 type Generator struct {
 	Dir     string
-	Config  *Config
+	Config  *spec.Config
 	Candies map[string]spec.CandyReader
 	// InitConfig is the project init: vocabulary. Init-system resolution
 	// (ActiveInit/ResolveInitSystem) runs over Candies + candyOrder and lives
@@ -138,11 +139,11 @@ func parseEmbeddedContextIgnoreBaseline() []string {
 	return doc.ContextIgnoreBaseline
 }
 
-// resolveBuilderStage is the SHARED OpResolve Invoke+decode for the builder BUILDER leg (R3 —
-// ONE OpResolve path serving BOTH the `external_builder:`-selected out-of-tree builders and the
+// resolveBuilderStage is the SHARED ops.OpResolve Invoke+decode for the builder BUILDER leg (R3 —
+// ONE ops.OpResolve path serving BOTH the `external_builder:`-selected out-of-tree builders and the
 // four DETECTION-builders). It marshals the render context (spec.BuilderResolveInput) as op.Params
 // and a spec.BuildEnv descriptor as op.Env (so a plugin can tailor per distro/image), Invokes the
-// provider's OpResolve, and returns the decoded reply UNVALIDATED — the caller enforces the
+// provider's ops.OpResolve, and returns the decoded reply UNVALIDATED — the caller enforces the
 // emptiness rule appropriate to its path (external_builder + detection multi-stage require a
 // non-empty Stage; the inline cargo path requires a non-empty InlineFragment).
 func resolveBuilderStage(prov Provider, word string, in spec.BuilderResolveInput, img *spec.ResolvedBox) (spec.BuilderResolveReply, error) {
@@ -155,13 +156,13 @@ func resolveBuilderStage(prov Provider, word string, in spec.BuilderResolveInput
 	if err != nil {
 		return zero, fmt.Errorf("marshal build env: %w", err)
 	}
-	res, err := prov.Invoke(context.Background(), &Operation{Reserved: word, Op: OpResolve, Params: params, Env: env})
+	res, err := prov.Invoke(context.Background(), &Operation{Reserved: word, Op: ops.OpResolve, Params: params, Env: env})
 	if err != nil {
 		return zero, err
 	}
 	var reply spec.BuilderResolveReply
 	if err := json.Unmarshal(res.JSON, &reply); err != nil {
-		return zero, fmt.Errorf("decode OpResolve reply: %w", err)
+		return zero, fmt.Errorf("decode ops.OpResolve reply: %w", err)
 	}
 	return reply, nil
 }
