@@ -62,10 +62,12 @@ type loadedProject struct {
 	empty     bool
 }
 
-// loadProjectForResolve is the ONE load path both hostBuildNamespaced's fail-fast namespaced-box
-// resolve (host_build_buildengine.go, diags==nil) and
-// hostBuildValidateProjectChecks (diags!=nil, TOLERANT — feeding the host-natural checks below,
-// #55 step3 unit 3-I) drive (R3). When diags is nil it is FAIL-FAST: any
+// loadProjectForResolve is the load path hostBuildValidateProjectChecks drives (diags!=nil,
+// TOLERANT — feeding the host-natural checks below, #55 step3 unit 3-I). It is now that leg's SOLE
+// caller: the FAIL-FAST twin (the `buildengine-namespaced` leg's namespaced-box resolve) went away
+// with that leg in K-wave 2 cone R1 A2 unit 3b, so the diags==nil branch below has no production
+// caller left and dies with this function in the validate unit that follows. When diags is nil it is
+// FAIL-FAST: any
 // LoadConfig/Scan/LoadUnified/ApplyDiscover error aborts with that error. When diags is non-nil it is
 // ERROR-TOLERANT: each such error becomes a spec.Diagnostic and the load continues best-effort (no
 // config → empty; a scan failure → zero candies; a unified-load failure → no deploy/template fill), so
@@ -183,8 +185,10 @@ func runHostNaturalValidateChecks(lp *loadedProject, dir string, opts spec.Resol
 // resolved-project projection relocated onto build:project's ops.OpValidate leg
 // (candy/plugin-build/resolve_project_tolerant.go, which reuses 3b's proven-portable loaderkit
 // primitives instead of this host's LoadConfig/ScanAllCandyWithConfigOpts). This leg's OWN
-// tolerant load (loadProjectForResolve, kept — also still used by build_overlay.go's fail-fast
-// call) exists ONLY to feed the host-natural checks + the registry D-data below with the RAW
+// tolerant load (loadProjectForResolve — of which this is now the SOLE caller; the "also used by
+// build_overlay.go's fail-fast call" this line used to claim was already stale, and the last real
+// fail-fast caller, the deleted `buildengine-namespaced` leg, is gone as of A2 unit 3b)
+// exists ONLY to feed the host-natural checks + the registry D-data below with the RAW
 // *Config/*spec.DistroConfig/*BuilderConfig a projected envelope does not carry — it no
 // longer projects an envelope itself (projectResolvedProject/buildResolvedProjectTolerant,
 // DELETED). Returns a spec.ValidateProjectReply whose Project carries ONLY

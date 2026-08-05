@@ -21,28 +21,35 @@ import (
 // is capability coverage of THIS plugin, not charly's loader). Unlike the charly-side reproduction
 // (which faked distroCfg/builderCfg/vocab lookups through charly-core-only functions no plugin can
 // import — resolveVocabOpts/hostBuildNamespaced/EnsureRepoDownloaded/loadProjectForResolve — these
-// tests call projectResolvedProjectLeg DIRECTLY with literal fixture inputs, and stub the ONE real
-// host dependency (the "buildengine-namespaced" HostBuild leg) via the SAME fakeExecutorServiceClient
-// pattern candy/plugin-deploy-vm/lifecycle_test.go already uses.
+// tests call projectResolvedProjectLeg DIRECTLY with literal fixture inputs over the SAME
+// fakeExecutorServiceClient pattern candy/plugin-deploy-vm/lifecycle_test.go already uses.
 //
 // charly/resolved_project_namespace_test.go's OTHER two tests (TestProjectTemplates_NamespaceQualified,
 // TestHostBuildDeployEntityResolve_K8sNamespaceQualified) test charly-core's OWN LoadUnified /
 // "deploy-entity-resolve" HostBuild seam directly and stayed in charly untouched — they have zero
 // sdk import and cannot move (that seam doesn't exist in this plugin).
 
-// fakeNamespaceExecutorServiceClient answers ONLY the "buildengine-namespaced" HostBuild leg
-// projectResolvedProjectLeg's FillNamespacedBoxes seam ALWAYS calls (unconditionally, even for a
-// namespace-less project) with a canned spec.NamespaceScanReply. Every other RPC panics if called —
-// none of these fixtures declare a `kind: resource` entity, so ResolveResources' lazy
-// resolveResourceLeg closure is never invoked (spec.ResolvePluginKindViaPlugin short-circuits on an
-// empty PluginKinds["resource"] map before ever calling it).
+// fakeNamespaceExecutorServiceClient answers the ONE generic HostBuild leg the namespace walk still
+// touches — `loader-threaded`, the kind-recognition snapshot every manifest parse binds (an empty
+// snapshot suffices: neither fixture declares a directory-based candy, so parseDoc is never called)
+// — and PANICS on any other kind.
+//
+// The panic is the U3b assertion, not defensive noise: before K-wave 2 cone R1 A2 unit 3b this same
+// seam round-tripped to charly's `buildengine-namespaced` leg for a host-side recursion of the
+// import-namespace tree. That leg is deleted and the whole walk (scan, reachability, fetch fix-point,
+// fold) now runs plugin-side, so re-introducing ANY namespace host round-trip fails this test loudly
+// instead of passing on a canned reply. No other RPC is reachable either — neither fixture declares a
+// `kind: resource` entity, so ResolveResources' lazy resolveResourceLeg closure is never invoked
+// (spec.ResolvePluginKindViaPlugin short-circuits on an empty PluginKinds["resource"] map first).
 type fakeNamespaceExecutorServiceClient struct {
 	pb.ExecutorServiceClient
-	reply spec.NamespaceScanReply
 }
 
 func (f *fakeNamespaceExecutorServiceClient) HostBuild(ctx context.Context, in *pb.HostBuildRequest, opts ...grpc.CallOption) (*pb.HostBuildReply, error) {
-	replyJSON, err := json.Marshal(f.reply)
+	if in.GetKind() != "loader-threaded" {
+		panic("unexpected HostBuild leg in the plugin-side namespace walk: " + in.GetKind())
+	}
+	replyJSON, err := json.Marshal(spec.Threaded{})
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +64,7 @@ func (f *fakeNamespaceExecutorServiceClient) HostBuild(ctx context.Context, in *
 // this test's job is the SHARED projection logic itself, fed literal fixture inputs.
 func TestResolvedProject_Projection(t *testing.T) {
 	ex := sdk.NewInProcExecutor(&fakeNamespaceExecutorServiceClient{})
-	uf := &spec.UnifiedFile{} // no namespaces — the FillNamespacedBoxes seam's fold is a no-op
+	uf := &spec.UnifiedFile{} // no namespaces — the FillNamespacedBoxes seam's walk is a no-op
 	layers := map[string]spec.CandyReader{
 		"rp-fixture": candyReaderFixture("rp-fixture",
 			spec.CandyModel{
@@ -109,8 +116,9 @@ func TestResolvedProject_Projection(t *testing.T) {
 // TestFillNamespacedBoxes_QualifiedView proves the resolved-project envelope's rp.Boxes carries a
 // namespace-qualified spec.ResolvedBoxView ("fedora.jupyter") for a box reachable only through an
 // import namespace, in addition to (additive, never replacing) the root-scoped boxes. Drives the
-// namespace fold (foldNamespaceScanEntries, plugin-side production code) via a fake HostBuild reply
-// carrying the "fedora" entry — the plugin-side equivalent of the deleted host namespaced-box fill.
+// namespace walk (fillNamespacedBoxes, plugin-side production code) off the ROOT uf's own
+// Namespaces map — the plugin-side successor to BOTH the deleted host namespaced-box fill and the
+// deleted `buildengine-namespaced` leg it later became.
 func TestFillNamespacedBoxes_QualifiedView(t *testing.T) {
 	subUF := &spec.UnifiedFile{
 		Box: boxMapOfFixture(map[string]spec.BoxConfig{
@@ -118,11 +126,7 @@ func TestFillNamespacedBoxes_QualifiedView(t *testing.T) {
 		}),
 	}
 	rootUF := &spec.UnifiedFile{Namespaces: map[string]*spec.UnifiedFile{"fedora": subUF}}
-
-	reply := spec.NamespaceScanReply{Entries: []spec.NamespaceScanEntry{
-		{Child: "fedora"}, // no candies/downloads needed — jupyter declares none
-	}}
-	ex := sdk.NewInProcExecutor(&fakeNamespaceExecutorServiceClient{reply: reply})
+	ex := sdk.NewInProcExecutor(&fakeNamespaceExecutorServiceClient{})
 
 	distroCfg := &spec.DistroConfig{}
 	builderCfg := &spec.BuilderConfig{}

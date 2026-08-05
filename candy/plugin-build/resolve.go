@@ -114,10 +114,9 @@ func resolveBuildEngine(ctx context.Context, ex *sdk.Executor, req spec.BuildReq
 
 	// --- 6. RESOLVE boxes (pure sdk) ---
 	// Stamp the build tag ONCE plugin-side when the host leaves it empty (bare `charly box generate`,
-	// the builder-bootstrap re-dispatch), then thread it to the prep + namespaced legs so the host's
-	// hostBuildNamespaced (host_build_buildengine.go — the deleted NewGenerator's namespaced-box leg
-	// used to need this too) uses the SAME tag (ComputeCalVer is clock-derived — computing it twice
-	// would diverge).
+	// the builder-bootstrap re-dispatch), then thread it through the whole resolve — including the
+	// namespace walk (resolve_legs.go's fillNamespacedBoxes) — so every box view is stamped with the
+	// SAME tag (ComputeCalVer is clock-derived; computing it twice would diverge).
 	tag := req.Tag
 	if tag == "" {
 		tag = buildkit.ComputeCalVer()

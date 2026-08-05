@@ -28,8 +28,8 @@ import (
 // envelope — and DELIBERATELY OMITS render-prep (dg.RenderPrepAll), unlike resolveBuildEngine's
 // (this package's build:box/build:generate resolve) full pipeline. The current host projector
 // never render-prepped ROOT boxes either (only namespaced ones — formerly via the deleted
-// host namespaced-box fill's own tempGen.toDeploykit().RenderPrepBox, now via the plugin-side fold's
-// deploykit.FillNamespaceBoxViews over the buildengine-namespaced scan reply — an existing,
+// host namespaced-box fill's own tempGen.toDeploykit().RenderPrepBox, now via the plugin-side
+// namespace walk's deploykit.FillNamespaceBoxViews (resolve_legs.go) — an existing,
 // UNTOUCHED asymmetry tracked separately as task #69). Changing that asymmetry here would smuggle
 // a behavior change into a pure boundary move — forbidden by the parity requirement.
 func resolveProjectEnvelope(ctx context.Context, ex *sdk.Executor, req spec.ResolvedProjectRequest) (spec.ResolvedProject, error) {

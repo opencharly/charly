@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/buildkit"
@@ -209,11 +208,10 @@ func scanRemoteLeg(parseDoc func(string) (*spec.Candy, error)) func(cacheDir, re
 }
 
 // namespaceScanSeams builds the loaderkit.ScanSeams for a namespaced candy-scan fix-point over the
-// host-pre-computed per-namespace inputs: CollectRemoteRefs returns the host's namespace-scoped
-// downloads verbatim (the ONE cfg-coupled step, already done host-side by CollectRemoteRefsOpts over
-// the namespace's own cfg); EnsureRepo/ScanRemote reuse the cfg-agnostic shared legs for the
-// transitive fetch. The plugin never re-loads the namespace cfg or re-walks its reachability — the
-// host did that once and emitted the flat NamespaceScanReply.
+// per-namespace downloads the caller already walked: CollectRemoteRefs returns that namespace-scoped
+// set verbatim (the reachability walk runs ONCE per namespace in fillNamespacedBoxes, over the
+// namespace's own cfg); EnsureRepo/ScanRemote reuse the cfg-agnostic shared legs for the transitive
+// fetch. Nothing here crosses to the host.
 func namespaceScanSeams(ctx context.Context, ex *sdk.Executor, downloads []spec.RemoteDownload, distroCfg *spec.DistroConfig) loaderkit.ScanSeams {
 	return loaderkit.ScanSeams{
 		CollectRemoteRefs: func(_ map[string]spec.ScannedCandy) ([]loaderkit.RemoteDownload, error) {
@@ -222,26 +220,6 @@ func namespaceScanSeams(ctx context.Context, ex *sdk.Executor, downloads []spec.
 		EnsureRepo: ensureRepoLeg(ctx, ex),
 		ScanRemote: scanRemoteLeg(parseCandyManifestLeg(ctx, ex, distroCfg)),
 	}
-}
-
-// resolveNamespaceUFByPath descends the root uf.Namespaces tree by the dotted child path ("fedora"
-// / "ns1.ns2") to the namespace's *spec.UnifiedFile, recovering the namespace's own *spec.Config
-// (via ProjectConfig()) for FillNamespaceBoxViews plugin-side. sub is deliberately NOT carried in
-// the wire reply — spec.Config is hand-written with a recursive Namespaces map (not cleanly
-// serializable); the plugin derives it from the root uf the seam already holds + the entry's child.
-func resolveNamespaceUFByPath(rootUF *spec.UnifiedFile, child string) *spec.UnifiedFile {
-	if child == "" {
-		return rootUF
-	}
-	uf := rootUF
-	for _, part := range strings.Split(child, ".") {
-		next := uf.Namespaces[part]
-		if next == nil {
-			return nil
-		}
-		uf = next
-	}
-	return uf
 }
 
 // --- validate + prep legs ---
@@ -317,12 +295,10 @@ func inspectUserLeg(ctx context.Context, ex *sdk.Executor, ref string, uid int) 
 
 // projectResolvedProjectLeg calls the SHARED loaderkit.ProjectResolvedProject assembler (U2) with
 // PLUGIN-supplied ResolveProjectSeams: ResolveBox is pure buildkit; ResolveResources rides
-// InvokeProvider(kind:resource); FillNamespacedBoxes fetches the host's FLAT NamespaceScanReply
-// (buildengine-namespaced — the host recurses the import-namespace tree ONCE, emitting per-namespace
-// pre-fix-point scanned candies + the namespace-scoped initial remote downloads) and folds each
-// entry plugin-side (loaderkit.ScanCandyFromLocal + deploykit.RawCandyPair +
-// deploykit.FillNamespaceBoxViews — the deploykit calls relocated out of the deleted
-// charly/resolved_project_host.go namespaced-box fill); ComputeIntermediates/
+// InvokeProvider(kind:resource); FillNamespacedBoxes recurses the import-namespace tree ENTIRELY
+// plugin-side (fillNamespacedBoxes — scan, reachability walk, fetch fix-point and fold in ONE pass;
+// the former `buildengine-namespaced` host leg and its NamespaceScanReply wire hop are DELETED);
+// ComputeIntermediates/
 // ShouldIncludeDisabled/ExternalizedBuilders are pure. preResolvedBoxes carries the render-prep
 // caches so the envelope preserves them.
 // diags, when non-nil, makes the resolve TOLERANT (loaderkit.ProjectResolvedProject skips a box
@@ -335,15 +311,8 @@ func projectResolvedProjectLeg(ctx context.Context, ex *sdk.Executor, cfg *spec.
 		ResolveBox: func(c *spec.Config, name, cv, d string) (*buildkit.ResolvedBox, error) {
 			return buildkit.ResolveBox(c, name, cv, d, buildkit.ResolveOpts{IncludeDisabled: includeDisabled, DistroCfg: distroCfg, BuilderCfg: builderCfg})
 		},
-		FillNamespacedBoxes: func(rootUF *spec.UnifiedFile, ic *buildkit.InitConfig, prefix, cv, d string, rp *spec.ResolvedProject, _ map[*spec.UnifiedFile]bool) {
-			if prefix != "" {
-				return // the host leg does the full namespace recursion; only the root call dispatches
-			}
-			var reply spec.NamespaceScanReply
-			if err := hostBuildJSON(ctx, ex, "buildengine-namespaced", spec.BuildResolveRequest{Dir: d, Tag: cv, IncludeDisabled: includeDisabled}, &reply); err != nil {
-				return // best-effort/additive, matching the host fill's tolerance
-			}
-			foldNamespaceScanEntries(ctx, ex, rootUF, ic, cv, d, includeDisabled, distroCfg, builderCfg, reply, rp)
+		FillNamespacedBoxes: func(rootUF *spec.UnifiedFile, ic *buildkit.InitConfig, prefix, cv, d string, rp *spec.ResolvedProject, visited map[*spec.UnifiedFile]bool) {
+			fillNamespacedBoxes(ctx, ex, rootUF, ic, prefix, cv, d, includeDisabled, distroCfg, builderCfg, rp, visited)
 		},
 		ResolveResources: func(u *spec.UnifiedFile) map[string]*spec.ResolvedResource {
 			return spec.ResolvePluginKindViaPlugin(u, "resource", resolveResourceLeg(ctx, ex))
@@ -365,47 +334,94 @@ func projectResolvedProjectLeg(ctx context.Context, ex *sdk.Executor, cfg *spec.
 	return loaderkit.ProjectResolvedProject(cfg, layers, uf, distroCfg, builderCfg, initCfg, dir, version, calver, seams, diags, preResolvedBoxes)
 }
 
-// foldNamespaceScanEntries is the plugin-side fold over the host's NamespaceScanReply: for each
-// namespace, descend the root uf.Namespaces tree by the entry's child path to recover the
-// namespace's *spec.Config, run the candy-scan fetch fix-point (loaderkit.ScanCandyFromLocal over
-// the host-pre-computed scanned + downloads + the cfg-agnostic EnsureRepo/ScanRemote host legs),
-// then deploykit.RawCandyPair (fold the namespace's candies additively into rp.Candies/CandyModels,
-// never overwriting) + deploykit.FillNamespaceBoxViews (fold the namespace-qualified box views into
-// rp.Boxes). The deploykit calls are the deleted host namespaced-box fill's deploykit calls,
-// relocated plugin-side (candy/plugin-build is the legit deploykit owner; no new importer). cv/d
-// come from the seam closure's resolve context; vopts is rebuilt plugin-side from the resolve
-// context's distroCfg/builderCfg/ic — byte-identical to the deleted host's resolveVocabOpts(dir,
-// opts) result (spec.BoxResolveOpts leaves DistroCfg/BuilderCfg nil, so resolveVocabOpts fills them
-// from the SAME build vocab the plugin's distroCfg/builderCfg carry).
-func foldNamespaceScanEntries(ctx context.Context, ex *sdk.Executor, rootUF *spec.UnifiedFile, ic *buildkit.InitConfig, cv, d string, includeDisabled bool, distroCfg *buildkit.DistroConfig, builderCfg *buildkit.BuilderConfig, reply spec.NamespaceScanReply, rp *spec.ResolvedProject) {
+// fillNamespacedBoxes recurses uf.Namespaces and folds each import namespace's boxes (qualified) +
+// its OWN candy set into rp — ENTIRELY plugin-side (K-wave 2 cone R1, A2 unit 3b). It replaces the
+// former two-part shape (charly's `buildengine-namespaced` leg recursing the tree host-side to emit
+// a flat spec.NamespaceScanReply, plus a plugin-side fold over that reply), which was the SAME
+// recursion walked twice across a process boundary. The host leg survived only because its two
+// per-namespace steps were once core-only; both are plugin-side now — the local candy scan is
+// loaderkit.ProjectCandiesScanned (unit 3a) and the reachability walk is
+// loaderkit.CollectRemoteRefsOpts over the shared executor-backed refs legs (unit 1) — so core was
+// CALLING relocated mechanisms on the plugin's behalf over inputs the plugin already held. By the
+// defines-vs-calls test that is an R-item, and the wire hop plus its #NamespaceScanReply envelope
+// died with it.
+//
+// Behaviour is preserved verbatim from the deleted pair:
+//   - the nsDir FALLBACK — a namespace's candy `from:` paths are relative to the NAMESPACE's own
+//     root (subUF.RootDir), falling back to the OUTER project dir when a namespace carries none;
+//   - the VISITED cycle-guard, keyed on the *spec.UnifiedFile pointer (the loader mounts a
+//     back-imported ancestor as the SAME in-progress node, so a mutual import terminates here);
+//   - DFS PRE-ORDER (fold a namespace, then descend into it), matching the flat reply's append order;
+//   - the reachability walk runs UNCONDITIONALLY, never `if len(scanned) > 0`: CollectRemoteRefsOpts
+//     walks sub.Box to collect the BOXES' candy @-refs, so a namespace that vendors no candies of its
+//     own but whose boxes pin remote ones (every distro submodule) still has refs to fetch. Guarding
+//     it dropped those refs and produced "candy not found" on every namespaced box (R1 RCA, first-bad
+//     b367e5d5);
+//   - opts is spec.BoxResolveOpts(nil, includeDisabled) — nil RequestedBoxes, so a namespace walk is
+//     never narrowed by the ROOT request's box selection — and vopts carries the resolve context's
+//     own distroCfg/builderCfg/ic;
+//   - every step is best-effort/additive: a namespace whose scan, walk, or fix-point fails
+//     contributes nothing and never aborts the resolve, and recursion into its children continues.
+func fillNamespacedBoxes(ctx context.Context, ex *sdk.Executor, uf *spec.UnifiedFile, ic *buildkit.InitConfig, prefix, cv, d string, includeDisabled bool, distroCfg *buildkit.DistroConfig, builderCfg *buildkit.BuilderConfig, rp *spec.ResolvedProject, visited map[*spec.UnifiedFile]bool) {
+	if uf == nil {
+		return
+	}
+	if visited == nil {
+		visited = map[*spec.UnifiedFile]bool{}
+	}
+	if visited[uf] {
+		return
+	}
+	visited[uf] = true
+	opts := spec.BoxResolveOpts(nil, includeDisabled)
 	vopts := spec.ResolveOpts{IncludeDisabled: includeDisabled, DistroCfg: distroCfg, BuilderCfg: builderCfg, InitCfg: ic}
-	for _, entry := range reply.Entries {
-		subUF := resolveNamespaceUFByPath(rootUF, entry.Child)
+	for ns, subUF := range uf.Namespaces {
 		if subUF == nil {
 			continue
 		}
+		child := ns
+		if prefix != "" {
+			child = prefix + "." + ns
+		}
 		sub := subUF.ProjectConfig()
-		nsLayers, err := loaderkit.ScanCandyFromLocal(entry.Scanned, ic, namespaceScanSeams(ctx, ex, entry.Downloads, distroCfg))
-		if err != nil {
-			continue // best-effort/additive, matching the deleted host fill's tolerance
+		nsDir := subUF.RootDir
+		if nsDir == "" {
+			nsDir = d
 		}
-		for name, c := range nsLayers {
-			if c == nil {
-				continue
-			}
-			m, v, ok := deploykit.RawCandyPair(c)
-			if !ok {
-				continue
-			}
-			if rp.Candies == nil {
-				rp.Candies = map[string]spec.CandyView{}
-				rp.CandyModels = map[string]spec.CandyModel{}
-			}
-			if _, exists := rp.CandyModels[name]; !exists {
-				rp.Candies[name] = v
-				rp.CandyModels[name] = m
-			}
+		// The namespace's OWN local candies — both its `discover:`-found dirs and its inline candy:
+		// nodes — read straight off the already-loaded subUF (no re-load, no directory mismatch).
+		var scanned map[string]spec.ScannedCandy
+		if localScanned, err := loaderkit.ProjectCandiesScanned(subUF, nsDir, parseCandyManifestLeg(ctx, ex, distroCfg)); err == nil {
+			scanned = localScanned
 		}
-		deploykit.FillNamespaceBoxViews(sub, nsLayers, ic, entry.Child, cv, d, vopts, rp)
+		// FinalizeScannedCandies / spec.WithLocalRawRefs are nil/empty-safe, so an empty `scanned`
+		// degrades to a boxes-only walk — exactly what a candy-less namespace needs.
+		downloads, _ := loaderkit.CollectRemoteRefsOpts(
+			sub,
+			loaderkit.FinalizeScannedCandies(scanned, nil),
+			spec.WithLocalRawRefs(opts, scanned),
+			loaderkit.RefsSeamsFromExecutor(ctx, ex),
+		)
+		if nsLayers, err := loaderkit.ScanCandyFromLocal(scanned, ic, namespaceScanSeams(ctx, ex, downloads, distroCfg)); err == nil {
+			for name, c := range nsLayers {
+				if c == nil {
+					continue
+				}
+				m, v, ok := deploykit.RawCandyPair(c)
+				if !ok {
+					continue
+				}
+				if rp.Candies == nil {
+					rp.Candies = map[string]spec.CandyView{}
+					rp.CandyModels = map[string]spec.CandyModel{}
+				}
+				if _, exists := rp.CandyModels[name]; !exists {
+					rp.Candies[name] = v
+					rp.CandyModels[name] = m
+				}
+			}
+			deploykit.FillNamespaceBoxViews(sub, nsLayers, ic, child, cv, d, vopts, rp)
+		}
+		fillNamespacedBoxes(ctx, ex, subUF, ic, child, cv, d, includeDisabled, distroCfg, builderCfg, rp, visited)
 	}
 }
