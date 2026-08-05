@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/spec/ops"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -71,4 +72,24 @@ func gpuPrereqMissing(tokens []string, resources map[string]*spec.ResolvedResour
 		}
 	}
 	return "", "", false
+}
+
+// gatherResources loads the token -> ResourceDef map (the gpu selector that drives the mode
+// flip) via the SAME generic InvokeProvider("build","project") envelope every other
+// resolved-project consumer uses (K-wave W3a A2 rewire) — folded here from the deleted
+// preempt.go (K-wave 2 cone CONTESTED), whose sole remaining caller this is. It MUST thread an
+// in-proc reverse-channel executor: the plugin's resolve (candy/plugin-build's
+// resolveProjectEnvelope) loads the project through loaderkit.LoadUnifiedViaExecutor, so with a
+// bare context.Background() it has no executor to reach the host's loader legs and returns an
+// error — which the best-effort contract below then swallows into an empty map. The
+// specexec.ContextWithExecutor(in-proc executor) ctx rides the SHARED hostInvokeOr
+// (provider_invoke.go), so there is still exactly ONE warn-and-degrade implementation (R3).
+//
+// Zero value (nil Resources) on any resolve/invoke/decode failure — this function's "nil when
+// none/unreadable" contract, unchanged, with the one-warning-per-failure best-effort reporting
+// provider_invoke.go prescribes for a probe path that must never fail a deploy.
+func gatherResources() map[string]*spec.ResolvedResource {
+	ctx := hostInProcCtx()
+	rp := hostInvokeOr[spec.ResolvedProjectRequest, spec.ResolvedProject](ctx, ClassBuild, "project", ops.OpResolve, spec.ResolvedProjectRequest{}, "gather-resources")
+	return rp.Resources
 }

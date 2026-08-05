@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 
 	"github.com/opencharly/spec/exitcode"
+	"github.com/opencharly/spec/ops"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -61,6 +63,74 @@ import (
 // hypothetical: candy/plugin-deploy-pod is NOT in charly.yml's compiled_plugins: today — it already
 // ships out-of-process by default, and `charly shell`/`cmd`/`logs -f` already work against it in
 // production on exactly this mechanism.
+
+// --- the arbiter-release bracket (folded from the deleted preempt.go, K-wave 2 cone
+// CONTESTED) ----------------------------------------------------------------------
+//
+// The op="remove" arbiter-release bracket is the ONE remaining core-side arbiter interaction:
+// candy/plugin-pod's RemoveCmd.Run() defers this HostBuild op="remove" as its LAST step,
+// reproducing the former core `defer releaseResourceClaim(...)`'s "always runs, after everything
+// else" semantics. The release MUST stay host-side: CHARLY_PREEMPT_LEASE is host-process env
+// state a placement-agnostic plugin cannot own (candy/plugin-pod ships out-of-process by
+// default, so its own process env cannot see the outer orchestrator's lease guard). Every OTHER
+// former arbiter consumer is peer-dispatch now — candy/plugin-check's bed_session, candy/plugin-vm's
+// vm_arbiter_shim, and candy/plugin-bundle's handleLifecycleSimple all Invoke verb:arbiter
+// directly (the compiled-in placement class bed_session.go documents) — so this release chain is
+// the surviving in-core proxy, exercising the generic core→verb registry bridge.
+
+// envPreemptLeaseHeld is set by the OUTERMOST claim-bringing `charly` invocation (a check-bed
+// run, or a standalone `charly vm create`/`charly start`) so the nested `charly` subprocesses it
+// spawns do NOT independently acquire/release the lease — the owner manages it.
+const envPreemptLeaseHeld = "CHARLY_PREEMPT_LEASE"
+
+// arbiterProxy is the in-core handle newResourceArbiter() returns to releaseResourceClaim. Its
+// methods dispatch to the compiled-in candy/plugin-preempt (verb:arbiter) over an in-proc
+// reverse channel.
+type arbiterProxy struct{}
+
+func newResourceArbiter() *arbiterProxy { return &arbiterProxy{} }
+
+// arbiterInvoke resolves verb:arbiter and Invokes it with an action-tagged input, threading the
+// IN-PROC reverse channel onto the ctx so the plugin's Invoke reaches its host seams over
+// InvokeProvider/HostBuild (always-served generic seams — plugin_executor_reverse.go). Infra
+// failures are returned as a Go error; a per-action OP failure rides reply.Error. This is the
+// generic core→verb registry bridge (core is not a plugin, so it cannot call InvokeProvider).
+func arbiterInvoke(in spec.ArbiterInvokeInput) (spec.ArbiterInvokeReply, error) {
+	prov, ok := providerRegistry.resolve(ClassVerb, "arbiter")
+	if !ok {
+		return spec.ArbiterInvokeReply{}, fmt.Errorf("resource arbiter (verb:arbiter) not registered — charly built without candy/plugin-preempt")
+	}
+	ctx := hostInProcCtx()
+	reply, err := invokeTyped[spec.ArbiterInvokeInput, spec.ArbiterInvokeReply](ctx, prov, "arbiter", ops.OpRun, in)
+	if err != nil {
+		return spec.ArbiterInvokeReply{}, fmt.Errorf("arbiter %s: %w", in.Action, err)
+	}
+	return reply, nil
+}
+
+// ReleaseClaimant restores the holders a claimant's lease stopped + removes the lease.
+func (a *arbiterProxy) ReleaseClaimant(claimant string, success bool) error {
+	r, err := arbiterInvoke(spec.ArbiterInvokeInput{Action: spec.ArbiterActionRelease, Claimant: claimant, Success: success})
+	if err != nil {
+		return err
+	}
+	if r.Error != "" {
+		return errors.New(r.Error)
+	}
+	return nil
+}
+
+// releaseResourceClaim releases a persistent claimant's lease on teardown — kind-agnostic,
+// best-effort, a no-op when the claimant holds no lease, skipped when an outer orchestrator
+// owns the lease.
+func releaseResourceClaim(claimant string) {
+	if os.Getenv(envPreemptLeaseHeld) != "" {
+		return
+	}
+	if err := newResourceArbiter().ReleaseClaimant(claimant, true); err != nil {
+		fmt.Fprintf(os.Stderr, "preempt: %v\n", err)
+	}
+}
 
 // dispatchAndRunLifecycle resolves node/box/instance's LifecycleTarget for op (the shared
 // dispatchLifecycleTarget core-M step) and, on success, runs the caller's op-specific body against
@@ -197,13 +267,16 @@ func hostBuildPodLifecycle(_ context.Context, req spec.PodLifecycleRequest, _ bu
 		// (pod-config-hook-secret-env, pod-config-clean-deploy-entry) are BOTH retired — the
 		// credential env resolves plugin-side and the deploy-entry cleanup runs plugin-side via
 		// deploykit.CleanDeployEntry. All that remains under op="remove" is the
-		// arbiter-release bracket — CHARLY_PREEMPT_LEASE-gated host-process state a
-		// placement-agnostic plugin cannot own, the exact same reason pod start/stop's own
-		// arbiter bracket (arbiter_bracket.go, S3b — was substrate_lifecycle_grpc.go before the
-		// deploy-dispatch cluster moved) stays core. The plugin defers this call as its LAST
-		// step, reproducing the former core `defer releaseResourceClaim(...)`'s "always runs,
-		// after everything else" semantics. It does NOT touch a LifecycleTarget, so it stays
-		// outside dispatchAndRunLifecycle (see file header).
+		// arbiter-release bracket (releaseResourceClaim, folded here from the deleted
+		// preempt.go) — CHARLY_PREEMPT_LEASE-gated host-process state a placement-agnostic
+		// plugin cannot own (candy/plugin-pod ships out-of-process, so its own env cannot see
+		// the outer orchestrator's guard). This is now the ONLY core-side arbiter bracket: the
+		// deploy-dispatch Start/Stop bracket went peer-dispatch at K-wave 2 cone R2 bank E
+		// (candy/plugin-bundle's handleLifecycleSimple Invokes verb:arbiter directly; the
+		// "arbiter-bracket-*" HostBuild seam is DELETED). The plugin defers this call as its
+		// LAST step, reproducing the former core `defer releaseResourceClaim(...)`'s "always
+		// runs, after everything else" semantics. It does NOT touch a LifecycleTarget, so it
+		// stays outside dispatchAndRunLifecycle (see file header).
 		releaseResourceClaim(spec.DeployKey(req.Box, req.Instance))
 		return spec.PodLifecycleReply{}, nil
 
