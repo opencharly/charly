@@ -39,7 +39,7 @@ docs-site:
             # `main` pointed at when that layer was first built — and went on reporting PASS while
             # proving stale content. It must equal the `docs` submodule gitlink; `task docs:pin`
             # checks that, and the bed asserts it from inside the built image.
-            DOCS_REF: 59abb6390f658ba3e817d6fc0613eccdc3cc5144
+            DOCS_REF: eaba714fa19d4094745324e0f3a2c970c1f97b50
         distro:
             fedora:
                 package:
@@ -77,7 +77,7 @@ docs-site:
               id: docs-site-pinned-commit
               exit_status: 0
               stdout:
-                - contains: 59abb6390f658ba3e817d6fc0613eccdc3cc5144
+                - contains: eaba714fa19d4094745324e0f3a2c970c1f97b50
               context:
                 - build
                 - runtime
