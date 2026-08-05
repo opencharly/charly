@@ -1,20 +1,28 @@
 package main
 
-// node_desugar.go — the parse-time PLUGIN-VERB SUGAR desugar. An authored plan
-// step carries one intent keyword (run/check/agent-run/agent-check/include) plus
-// at most ONE verb-position key: a builtin install verb (an authored #Op field)
-// or the generic plugin sugar `<word>: <input>`. The desugar rewrites the sugar
-// key into the INTERNAL plugin/plugin_input pair — a map value verbatim, a
-// scalar/list value via the plugin's declared PRIMARY input field — so every
-// downstream consumer (the raw-value CUE gates, decodeNodeValue, buildBundleNode,
-// the label baker) sees only the internal form. Deterministic without the
-// provider registry: after removing the intent keyword and every authored #Op
-// field (spec.AuthoringVerbs), EXACTLY ONE key may remain — that key IS the
-// plugin word; word-exists validation stays at dispatch/`charly box validate`,
-// same timing as before the cutover.
+// node_desugar.go — the plugin-verb PRIMARY-input registry. NOT the desugar itself.
 //
-// Authoring plugin:/plugin_input: directly in a step is a HARD load error — the
-// envelope became internal-only in the schema-compaction cutover.
+// The desugar MECHANISM (rewriting an authored step's `<word>: <input>` sugar into the internal
+// plugin/plugin_input pair) relocated to sdk/loaderkit with the rest of the parse —
+// loaderkit/parse.go's desugarEntityPlan/desugarStep — and it reads the primaries it needs as DATA
+// off the spec.Threaded snapshot, never from a registry. What is left here, and what this file is,
+// is the host-side TABLE that snapshot is built from.
+//
+// It stays kernel on two clauses, not one: the table is kind-recognition DATA consulted by word
+// (clause D — loaderThreaded() projects it into spec.Threaded.Primaries before every parse), and
+// registerPluginPrimary MUTATES it from the provider registry at capability-registration time
+// (clause M — plugin loading). Neither half can move without moving the registry.
+//
+// The scalar sugar it serves: `file: /usr/bin/xterm` desugars to plugin_input: {file: …} via the
+// word's declared PRIMARY field; a map value passes through verbatim. Authoring
+// plugin:/plugin_input: directly in a step is a HARD load error — the envelope became
+// internal-only in the schema-compaction cutover.
+//
+// A byte-identical COPY of this file lived at sdk/kit/plugin_primary.go, whose header claimed
+// charly's two registration call sites called kit.RegisterPluginPrimary directly. They never did —
+// charly core cannot import sdk/kit (import purity), so the K4 relocation was authored but never
+// wired, leaving two SEPARATE mutable maps of the same registry. The sdk copy had zero consumers
+// anywhere and is DELETED (K-wave 2 cone R1 unit C); this is the one live copy.
 
 import (
 	"fmt"
