@@ -7,7 +7,8 @@ import (
 	"strings"
 )
 
-// generateGrievances publishes GRIEVANCES.md verbatim, for the same reason generateVision
+// generateGrievances publishes GRIEVANCES.md with its H1 dropped and its repo-relative links
+// rewritten — the same treatment generateVision applies, and for the same reason it
 // publishes VISION.md: it is canonical narrative that already exists, and a second "web-friendly"
 // retelling would drift away from the original and quietly start lying.
 //
