@@ -42,7 +42,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/loaderkit"
@@ -109,24 +108,6 @@ func (s *bedSession) release(ctx context.Context, ex *sdk.Executor, ok bool) {
 	}
 }
 
-// dedupeNonEmpty trims + dedups a token list. Mirrors charly/preempt.go's identically-behaved
-// helper (not an alias — a plugin cannot import charly/preempt.go, package main; both sides
-// independently implement the SAME trivial string-slice operation, R1-accepted duplication for a
-// ~10-line pure utility with no shared home either side can reach).
-func dedupeNonEmpty(in []string) []string {
-	seen := map[string]bool{}
-	var out []string
-	for _, s := range in {
-		s = strings.TrimSpace(s)
-		if s == "" || seen[s] {
-			continue
-		}
-		seen[s] = true
-		out = append(out, s)
-	}
-	return out
-}
-
 // arbiterInvoke resolves verb:arbiter and Invokes it with an action-tagged input — the SAME
 // direct-InvokeProvider(verb,"arbiter") pattern candy/plugin-vm/vm_arbiter_shim.go already proves
 // bypasses core's former arbiterProxy entirely.
@@ -168,10 +149,10 @@ func arbiterAcquire(ctx context.Context, ex *sdk.Executor, claimant string, node
 		return false, nil
 	}
 	action := spec.ArbiterActionAcquireShared
-	tokens := dedupeNonEmpty(node.RequiredShared())
+	tokens := spec.DedupeNonEmpty(node.RequiredShared())
 	if len(node.RequiredExclusive()) > 0 {
 		action = spec.ArbiterActionAcquireExclusive
-		tokens = dedupeNonEmpty(node.RequiredExclusive())
+		tokens = spec.DedupeNonEmpty(node.RequiredExclusive())
 	}
 	var secDevices []string
 	if node.Security != nil {

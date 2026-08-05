@@ -35,7 +35,7 @@ func bedGPUPrereqMissing(node spec.BundleNode) (token, vendor string, missing bo
 	// the resolve first made those two cases indistinguishable — which is exactly how the dead
 	// executor-less resolve below stayed invisible: every GPU bed reported "prereq satisfied" and
 	// went on to the build this fail-fast exists to skip.
-	tokens := append(dedupeNonEmpty(node.RequiredExclusive()), dedupeNonEmpty(node.RequiredShared())...)
+	tokens := append(spec.DedupeNonEmpty(node.RequiredExclusive()), spec.DedupeNonEmpty(node.RequiredShared())...)
 	if len(tokens) == 0 {
 		return "", "", false
 	}

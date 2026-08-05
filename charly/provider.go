@@ -140,9 +140,10 @@ type PluginUnit struct {
 // TestNoAliasForms_ZeroPackageLevelReexports never caught it — the AST gate only matched
 // var-form re-exports; extended to also catch this const-form + any top-level re-export of
 // spec/ops or spec/schema). ALL 258 call sites in charly/ are repointed to `ops.Op*` directly,
-// including the 4 that needed a narrow, team-lead-granted fence exception (service_render.go,
-// substrate_template_resolve.go, preempt.go, check_kit_adapter.go — the token substitution +
-// import line ONLY, zero other edits in those files, per the exception's exact scope).
+// including the 3 that needed a narrow, team-lead-granted fence exception (substrate_template_resolve.go,
+// preempt.go, check_kit_adapter.go — the token substitution +
+// import line ONLY, zero other edits in those files, per the exception's exact scope;
+// service_render.go, the fourth, was deleted in K-wave 2 cone R2).
 // OpConfigWrite had zero real callers anywhere in charly/ even before the repoint (deploy:pod's
 // own `sdk.OpConfigWrite` copy is what its actual consumer, candy/plugin-deploy-pod, uses) and
 // is not reintroduced.

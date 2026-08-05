@@ -81,7 +81,7 @@ func acquireExclusiveForClaimant(claimant string, node BundleNode, transient boo
 	r, err := arbiterInvoke(spec.ArbiterInvokeInput{
 		Action:    spec.ArbiterActionAcquireExclusive,
 		Claimant:  claimant,
-		Tokens:    dedupeNonEmpty(node.RequiredExclusive()),
+		Tokens:    spec.DedupeNonEmpty(node.RequiredExclusive()),
 		ClaimAddr: holderAddrFor(claimant, node),
 		Transient: transient,
 	})

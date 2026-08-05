@@ -198,7 +198,7 @@ func resolvedDeployTree(ctx context.Context, exec *sdk.Executor, context string)
 // persists a crash-safe lease. Returns active=true when a lease is held. tokens/claimAddr are
 // pre-computed host-side by the in-core shim.
 func (a *ResourceArbiter) AcquireExclusive(claimant string, tokens []string, claimAddr spec.HolderAddr, transient bool) (bool, error) {
-	tokens = dedupeNonEmpty(tokens)
+	tokens = spec.DedupeNonEmpty(tokens)
 	if len(tokens) == 0 {
 		return false, nil
 	}
@@ -291,7 +291,7 @@ func (a *ResourceArbiter) AcquireExclusive(claimant string, tokens []string, cla
 // gpu-backed resource to nvidia (+ regenerate CDI) and preempts any running preemptible holder;
 // subsequent claims just refcount. Refused only when an EXCLUSIVE claim already holds the token.
 func (a *ResourceArbiter) AcquireShared(claimant string, tokens []string, claimAddr spec.HolderAddr, transient bool) (bool, error) {
-	tokens = dedupeNonEmpty(tokens)
+	tokens = spec.DedupeNonEmpty(tokens)
 	if len(tokens) == 0 {
 		return false, nil
 	}

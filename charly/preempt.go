@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/opencharly/spec/ops"
 	"github.com/opencharly/spec/spec"
@@ -156,7 +155,7 @@ func acquireExclusiveForClaimant(claimant string, node spec.BundleNode, transien
 	if os.Getenv(envPreemptLeaseHeld) != "" {
 		return &Lease{}, nil
 	}
-	return acquireDispatch(spec.ArbiterActionAcquireExclusive, claimant, dedupeNonEmpty(node.RequiredExclusive()), node, transient)
+	return acquireDispatch(spec.ArbiterActionAcquireExclusive, claimant, spec.DedupeNonEmpty(node.RequiredExclusive()), node, transient)
 }
 
 // acquireSharedForClaimant acquires (or reuses) a SHARED refcounted lease for a pod/bed that
@@ -170,7 +169,7 @@ func acquireSharedForClaimant(claimant string, node spec.BundleNode, transient b
 	if os.Getenv(envPreemptLeaseHeld) != "" {
 		return &Lease{}, nil
 	}
-	return acquireDispatch(spec.ArbiterActionAcquireShared, claimant, dedupeNonEmpty(node.RequiredShared()), node, transient)
+	return acquireDispatch(spec.ArbiterActionAcquireShared, claimant, spec.DedupeNonEmpty(node.RequiredShared()), node, transient)
 }
 
 // isPodMember reports whether node is a CONTAINER-venue (pod) deployment, restoring the
@@ -296,21 +295,4 @@ func gatherResources() map[string]*spec.ResolvedResource {
 	ctx := hostInProcCtx()
 	rp := hostInvokeOr[spec.ResolvedProjectRequest, spec.ResolvedProject](ctx, ClassBuild, "project", ops.OpResolve, spec.ResolvedProjectRequest{}, "gather-resources")
 	return rp.Resources
-}
-
-// --- small host-side set helpers -----------------------------------------------------------
-
-// dedupeNonEmpty trims + dedups a token list (the acquire shim computes the claimant's tokens).
-func dedupeNonEmpty(in []string) []string {
-	seen := map[string]bool{}
-	var out []string
-	for _, s := range in {
-		s = strings.TrimSpace(s)
-		if s == "" || seen[s] {
-			continue
-		}
-		seen[s] = true
-		out = append(out, s)
-	}
-	return out
 }

@@ -3,7 +3,7 @@
 These `.cue` files are upstream schemas converted to CUE **once, at dev time**, and
 committed so charly stays a hermetic single binary — nothing is fetched from a CUE
 registry or the network at build/runtime. They are embedded by
-`//go:embed schema/vendor/*.cue` in `charly/egress.go` and compiled as their own
+`//go:embed schema/vendor/*.cue` in `candy/plugin-egress` and compiled as their own
 `cue.Value` (each carries a `package` clause + CUE-stdlib imports, so they cannot
 join the concatenated `sharedCueSchema`). See `/charly-internals:egress`.
 
