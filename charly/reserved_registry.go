@@ -8,7 +8,7 @@ package main
 // CUE-declared reserved word has exactly one Go handler and vice versa — so a
 // kind/verb can never be added to the schema without a handler, nor a handler
 // kept after its word is dropped. The init() panics (fail-fast at process start,
-// mirroring registerCueKind / mustCalVer); the same checks run as
+// mirroring mustCalVer); the same checks run as
 // TestReservedWordRegistry_* (which also proves the gate FAILS when a handler is
 // missing).
 //
@@ -57,7 +57,7 @@ var (
 
 // docDirectiveSet (the reserved DOCUMENT directives, #NodeDoc) moved to
 // sdk/loaderkit.ValidateNodeDocCUE's own copy (K1 unit 2) — its last core reader
-// (cue_node.go's validateNodeDocCUE body) relocated with it. loaderkit builds its own set from the
+// (the former core validateNodeDocCUE body) relocated with it. loaderkit builds its own set from the
 // SAME spec.DocDirectives CUE-derived vocabulary slice (R3: one shared source, not a shared
 // variable, since core and loaderkit are separate modules).
 

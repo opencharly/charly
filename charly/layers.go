@@ -269,7 +269,7 @@ func parseCandyYAML(path string) (*spec.CandyYAML, error) {
 		}
 		// Load is decode-only (fast, runs on every invocation). Full closed-schema
 		// CUE validation (unknown-key rejection + value constraints like the CalVer
-		// regex/enums) runs at `charly box validate` (validateCandyManifestCUE) on
+		// regex/enums) runs at `charly box validate` (the loader seam's ValidateCandyManifestCUE) on
 		// the AUTHORED form — not at load, where it would reject minimal in-tree
 		// fixtures and slow the hot path. See cue-loader-switch-design.
 		var ly spec.CandyYAML

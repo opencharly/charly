@@ -56,7 +56,7 @@ func commandParentOf(p Provider) string {
 
 // register indexes one provider. It is the single mutation path (R3): it rejects
 // an unknown class and a duplicate (class, word) — fail-fast, like
-// registerCueKind's duplicate panic.
+// the loader's own kind→def table duplicate check (sdk/loaderkit/cue_schema.go).
 func (r *Registry) register(p Provider, origin string) error {
 	class, word := p.Class(), p.Reserved()
 	if !providerClasses[class] {

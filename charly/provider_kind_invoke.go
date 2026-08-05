@@ -351,7 +351,7 @@ func validateKindValueCUE(pn spec.ParsedNode) error {
 	if !ok {
 		return nil
 	}
-	def := sharedCueSchema.LookupPath(cue.ParsePath(defPath))
+	def := sharedCueSchema().LookupPath(cue.ParsePath(defPath))
 	if def.Err() != nil {
 		return fmt.Errorf("kind value def %s not found: %w", defPath, def.Err())
 	}
@@ -359,7 +359,7 @@ func validateKindValueCUE(pn spec.ParsedNode) error {
 	if err != nil {
 		return fmt.Errorf("%s value: marshal: %w", gn.disc, err)
 	}
-	entity, err := cueDocFromYAML("node "+gn.name, b)
+	entity, err := requireProjectLoader().CueDocFromYAML("node "+gn.name, b)
 	if err != nil {
 		return err
 	}

@@ -57,7 +57,7 @@ func hostBuildConfigResolve(_ context.Context, req spec.ConfigResolveRequest, _ 
 	// the reply carries only the runtime settings + the backend probe, matching the former in-core
 	// handler's `if uf, ok := LoadUnified(dir); ok` branch. VM + Resources are hand-written runtime
 	// types with no CUE def, so they travel as opaque JSON envelopes (VmJSON/ResourcesJSON) the plugin
-	// decodes; they are resolved into locals here so applyCueDefaults runs on the typed value first.
+	// decodes; they are resolved into locals here so ApplyCueDefaults runs on the typed value first.
 	var vm *spec.ResolvedVm
 	var resources map[string]*spec.ResolvedResource
 	if uf, ok, ufErr := LoadUnified(dir); ufErr == nil && ok && uf != nil {
@@ -83,22 +83,22 @@ func hostBuildConfigResolve(_ context.Context, req spec.ConfigResolveRequest, _ 
 	// Materialize #Vm's required-with-default fields (firmware/network-mode/cpu-mode) on the resolved
 	// spec so the plugin's create pipeline receives a fully-defaulted spec.ResolvedVm (it has no #Vm schema).
 	// This supplies the defaults the vm create pipeline (now in candy/plugin-vm) formerly applied
-	// in-handler via applyCueDefaults. Order-independent vs
+	// in-handler via the loader seam's ApplyCueDefaults. Order-independent vs
 	// the plugin's instance-override / GPU-alloc merge: those touch ONLY libvirt: overlays, never a
-	// defaulted field, and applyCueDefaults fills only unset fields (user values preserved by unify).
+	// defaulted field, and ApplyCueDefaults fills only unset fields (user values preserved by unify).
 	//
 	// R1 fix (found while verifying an unrelated K5-A cutover — every `charly vm create`/`vm build`
 	// was hard-failing): resolveVmViaPlugin's *spec.ResolvedVm carries the substrate-template opaque echo
 	// (ResolvedVm.Raw, the SAME "raw:" passthrough spec.ResolvedK8s/spec.ResolvedLocal also carry) — but #vm's
 	// CUE schema is CLOSED over the AUTHORED shape and declares no `raw:` field, so re-marshaling the
 	// whole struct here for the unify-with-defaults round-trip failed unify with "raw: field not
-	// allowed" on EVERY vm entity. applyCueDefaults' contract is schema-declared-field defaulting
+	// allowed" on EVERY vm entity. ApplyCueDefaults' contract is schema-declared-field defaulting
 	// only, so the opaque echo is cleared for the round-trip and restored on the vm value the plugin
 	// actually receives (Raw is unrelated to firmware/network-mode/cpu-mode defaulting).
 	if vm != nil {
 		savedRaw := vm.Raw
 		vm.Raw = nil
-		err := applyCueDefaults("vm", vm)
+		err := requireProjectLoader().ApplyCueDefaults("vm", vm)
 		vm.Raw = savedRaw
 		if err != nil {
 			return spec.ConfigResolveReply{}, fmt.Errorf("applying vm defaults for %q: %w", req.Entity, err)

@@ -115,7 +115,7 @@ func hostWalkSeams() spec.WalkSeams {
 		},
 		Threaded:   loaderThreaded,
 		ResolveRef: canonicalRef,
-		GateDoc:    validateNodeDocCUE,
+		GateDoc:    requireProjectLoader().ValidateNodeDocCUE,
 	}
 }
 

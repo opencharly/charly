@@ -34,7 +34,7 @@ func compileBasePlusServed(servedCUE string) (cue.Value, error) {
 	if err != nil {
 		return cue.Value{}, fmt.Errorf("base schema: %w", err)
 	}
-	v := cueSchemaCtx.CompileString(baseBody + "\n" + servedCUE)
+	v := cueSchemaCtx().CompileString(baseBody + "\n" + servedCUE)
 	return v, v.Err()
 }
 
@@ -118,7 +118,7 @@ func validateAuthoredPluginInput(class ProviderClass, word string, inputJSON []b
 	if d.Err() != nil {
 		return fmt.Errorf("plugin %s:%s: schema missing %s: %w", class, word, def, d.Err())
 	}
-	in := cueSchemaCtx.CompileBytes(inputJSON)
+	in := cueSchemaCtx().CompileBytes(inputJSON)
 	if in.Err() != nil {
 		return fmt.Errorf("plugin %s:%s: input: %w", class, word, in.Err())
 	}

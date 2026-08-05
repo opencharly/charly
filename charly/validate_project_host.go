@@ -165,7 +165,7 @@ func addLoadDiag(diags *spec.Diagnostics, err error) {
 //
 // Both are KIND-BLIND with ONE tracked exception the orchestrator reviews at tree-final: the
 // hardcoded collection-kind WORD LIST inside validateProjectCUESchemas (a legacy root-shape arm; task
-// #60 CONDITION 1 — restructure to cueKindDefs D-data or delete the dead legacy path per the ruling).
+// #60 CONDITION 1 — restructure to the loader's kind→def D-data or delete the dead legacy path).
 func runHostNaturalValidateChecks(lp *loadedProject, dir string, opts spec.ResolveOpts, diags *spec.Diagnostics) {
 	if lp == nil || lp.cfg == nil {
 		return

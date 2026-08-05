@@ -20,7 +20,7 @@ func TestEmbeddedDefaults_SchemaConformance(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read embedded defaults: %v", err)
 	}
-	if err := validateNodeDocCUE("charly.yml", data); err != nil {
+	if err := requireProjectLoader().ValidateNodeDocCUE("charly.yml", data); err != nil {
 		t.Errorf("embedded defaults fail #NodeDoc validation:\n%v", err)
 	}
 }
@@ -241,19 +241,19 @@ amd-gpu:
 // (validateProjectCUESchemas) was already intentionally cut in c9befd83 (the
 // legacy root-shape collection format it validated is now HARD-REJECTED before
 // reaching validation), and this test now exercises the same closed-schema
-// rejection via validateEntityClosedCUE directly, the still-live sibling.
+// rejection via the loader seam's ValidateEntityClosedCUE directly, the still-live sibling.
 func TestProjectVocabOverride_IsSchemaValidated(t *testing.T) {
 	proj := []byte(`version: ` + LatestSchemaVersion().String() + `
 builder:
   badbuilder:
     bogus_field: true
 `)
-	doc, err := cueDocFromYAML("proj.yml", proj)
+	doc, err := requireProjectLoader().CueDocFromYAML("proj.yml", proj)
 	if err != nil {
 		t.Fatalf("ingest: %v", err)
 	}
 	entity := doc.LookupPath(cue.ParsePath("builder.badbuilder"))
-	if verr := validateEntityClosedCUE("builder", "proj.yml:builder.badbuilder", entity); verr == nil {
+	if verr := requireProjectLoader().ValidateEntityClosedCUE("builder", "proj.yml:builder.badbuilder", entity); verr == nil {
 		t.Error("expected closed #Builder to reject unknown key bogus_field in a project builder override")
 	}
 }

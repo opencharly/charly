@@ -15,7 +15,7 @@ import (
 // (#55 Phase B) — charly core reaches it as spec.ValidationError.
 
 // validateCandyCUESchemas validates each loaded candy's on-disk manifest against
-// the candy CUE schema (via validateCandyManifestCUE — #Candy for a legacy
+// the candy CUE schema (via the loader seam's ValidateCandyManifestCUE — #Candy for a legacy
 // kind-keyed manifest, #NodeDoc for a node-form manifest). This is the sole
 // candy-schema validator; the former hand-written Go candy validators are
 // deleted. Inline/synthesized candies with no manifest file on disk are skipped.
@@ -29,7 +29,7 @@ func validateCandyCUESchemas(layers map[string]spec.CandyReader, errs *spec.Vali
 		if err != nil {
 			continue // remote/inline candy without a local manifest — skip
 		}
-		if verr := validateCandyManifestCUE(f, data); verr != nil {
+		if verr := requireProjectLoader().ValidateCandyManifestCUE(f, data, loaderThreaded(), requireLoaderParser()); verr != nil {
 			errs.Add("candy %q: CUE schema: %v", name, verr)
 		}
 	}
@@ -57,7 +57,7 @@ func validateProjectCUESchemas(cfg *spec.Config, dir string, opts spec.ResolveOp
 			errs.Add("box %q: CUE wire-encode: %v", name, err)
 			continue
 		}
-		doc, derr := cueDocFromYAML("box:"+name, entityYAML)
+		doc, derr := requireProjectLoader().CueDocFromYAML("box:"+name, entityYAML)
 		if derr != nil {
 			errs.Add("box %q: CUE ingest: %v", name, derr)
 			continue
@@ -69,7 +69,7 @@ func validateProjectCUESchemas(cfg *spec.Config, dir string, opts spec.ResolveOp
 		// re-wiring's purpose is to catch SET-value declarative violations
 		// (version/jobs/check_level/…), which Unify().Validate() catches; the
 		// only required #Box field, name, is always injected above.
-		if verr := validateEntityClosedCUE("box", "box:"+name, doc.LookupPath(cue.ParsePath("box"))); verr != nil {
+		if verr := requireProjectLoader().ValidateEntityClosedCUE("box", "box:"+name, doc.LookupPath(cue.ParsePath("box"))); verr != nil {
 			errs.Add("%v", verr)
 		}
 	}
@@ -83,7 +83,7 @@ func validateProjectCUESchemas(cfg *spec.Config, dir string, opts spec.ResolveOp
 	// FULLY deleted in the dead-code-radical-removal batch — RDD-verified live that the modern per-kind
 	// LOAD-time plugin gate (`plugin kind:<X>: plugin_input fails #<X>Input`) is the actual production
 	// entity-schema enforcement for every non-box collection kind today. What LOAD leaves lenient is each
-	// entity's ASSEMBLED plan STEPS, so the node-form step-typo gate (validateNodeFormSteps against the
+	// entity's ASSEMBLED plan STEPS, so the node-form step-typo gate (ValidateNodeFormSteps against the
 	// closed #Step/#Op) stays here.
 	rootFiles := []string{filepath.Join(dir, spec.UnifiedFileName)}
 	if boxRoots, _ := filepath.Glob(filepath.Join(dir, "box", "*", spec.UnifiedFileName)); len(boxRoots) > 0 {
@@ -97,7 +97,7 @@ func validateProjectCUESchemas(cfg *spec.Config, dir string, opts spec.ResolveOp
 		if !isNodeFormFile(data) {
 			continue // a legacy root-shape file is load-rejected (charly migrate) — nothing to validate here
 		}
-		if verr := validateNodeFormSteps(f, data); verr != nil {
+		if verr := requireProjectLoader().ValidateNodeFormSteps(f, data, loaderThreaded(), requireLoaderParser()); verr != nil {
 			errs.Add("%v", verr)
 		}
 	}

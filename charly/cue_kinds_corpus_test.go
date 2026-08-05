@@ -124,12 +124,12 @@ func TestCueBox_Corpus(t *testing.T) {
 				t.Errorf("%s: marshal %q: %v", f, gn.name, merr)
 				continue
 			}
-			candy, cerr := cueDocFromYAML(f, b)
+			candy, cerr := requireProjectLoader().CueDocFromYAML(f, b)
 			if cerr != nil {
 				t.Errorf("%s: ingest %q: %v", f, gn.name, cerr)
 				continue
 			}
-			if verr := validateEntityClosedCUE("box", f, candy); verr != nil {
+			if verr := requireProjectLoader().ValidateEntityClosedCUE("box", f, candy); verr != nil {
 				t.Errorf("FAIL %s", verr)
 				continue
 			}
@@ -160,7 +160,7 @@ func TestCueKinds_Corpus(t *testing.T) {
 	// at load — node-form is the only authoring surface). Each
 	// entity node is validated through #NodeDoc's per-entity pattern constraint
 	// (`{[!~dir]: #Node}`) via FillPath — the SAME non-concrete, closedness-only
-	// gate validateNodeDocCUE (the loader's validate-before-execute) uses, so the
+	// gate the loader seam's ValidateNodeDocCUE (validate-before-execute) uses, so the
 	// per-kind #<Kind> def types each kind-value while the vm `source` disjunction
 	// stays lazy (no spurious concrete "incomplete value" artifact).
 	// C2-candy: every authoring kind is externalized — #Node is an OPEN struct with NO arms, so

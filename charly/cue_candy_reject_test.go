@@ -19,7 +19,7 @@ func TestCandyCUESchema_Rejects(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := validateCandyManifestCUE("test.yml", []byte(tc.yaml)); err == nil {
+			if err := requireProjectLoader().ValidateCandyManifestCUE("test.yml", []byte(tc.yaml), loaderThreaded(), requireLoaderParser()); err == nil {
 				t.Errorf("expected CUE to REJECT %q, but it passed", tc.name)
 			}
 		})

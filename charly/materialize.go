@@ -118,7 +118,7 @@ func materializeDocStream(data []byte, srcLabel string, uf *spec.UnifiedFile) er
 		if err != nil {
 			return fmt.Errorf("%s: re-marshal node-form doc: %w", label, err)
 		}
-		if err := validateNodeDocCUE(label, raw); err != nil {
+		if err := requireProjectLoader().ValidateNodeDocCUE(label, raw); err != nil {
 			return err
 		}
 		directives, pp, err := parser.ParseDoc(&node, loaderThreaded())

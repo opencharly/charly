@@ -135,28 +135,34 @@ func (*provider) DecodeEntityViaCUE(node *yaml.Node, t reflect.Type, out any, la
 // ValidateEntityClosedCUE implements spec.ProjectLoader — the typed closed-schema entity check the
 // host calls (compiled-in, no wire envelope): delegates to the ONE copy of the relocated
 // CUE-validate mechanism in sdk/loaderkit (K1 unit 2).
-func (*provider) ValidateEntityClosedCUE(cs spec.CueSchema, kind, label string, entity cue.Value) error {
-	return loaderkit.ValidateEntityClosedCUE(cs, kind, label, entity)
+func (*provider) ValidateEntityClosedCUE(kind, label string, entity cue.Value) error {
+	return loaderkit.ValidateEntityClosedCUE(kind, label, entity)
+}
+
+// ValidateEntityCUE implements spec.ProjectLoader — the CONCRETE entity check (closedness plus
+// missing-required / unresolved disjunctions), delegating to the ONE copy in sdk/loaderkit.
+func (*provider) ValidateEntityCUE(kind, label string, entity cue.Value) error {
+	return loaderkit.ValidateEntityCUE(kind, label, entity)
 }
 
 // CueDocFromYAML implements spec.ProjectLoader — the typed YAML→cue.Value ingest the host calls
 // (compiled-in, no wire envelope): delegates to the ONE copy in sdk/loaderkit (K1 unit 2).
-func (*provider) CueDocFromYAML(cs spec.CueSchema, path string, data []byte) (cue.Value, error) {
-	return loaderkit.CueDocFromYAML(cs, path, data)
+func (*provider) CueDocFromYAML(path string, data []byte) (cue.Value, error) {
+	return loaderkit.CueDocFromYAML(path, data)
 }
 
 // ValidateNodeDocCUE implements spec.ProjectLoader — the typed load-time #NodeDoc structural gate
 // the host calls (compiled-in, no wire envelope): delegates to the ONE copy in sdk/loaderkit (K1
 // unit 2).
-func (*provider) ValidateNodeDocCUE(cs spec.CueSchema, label string, data []byte) error {
-	return loaderkit.ValidateNodeDocCUE(cs, label, data)
+func (*provider) ValidateNodeDocCUE(label string, data []byte) error {
+	return loaderkit.ValidateNodeDocCUE(label, data)
 }
 
 // ApplyCueDefaults implements spec.ProjectLoader — the typed post-merge schema-defaults fill the
 // host calls (compiled-in, no wire envelope): delegates to the ONE copy in sdk/loaderkit (K1 unit
 // 2).
-func (*provider) ApplyCueDefaults(cs spec.CueSchema, kind string, out any) error {
-	return loaderkit.ApplyCueDefaults(cs, kind, out)
+func (*provider) ApplyCueDefaults(kind string, out any) error {
+	return loaderkit.ApplyCueDefaults(kind, out)
 }
 
 // IsResourceDisc / BundleTargetForDisc / SetBundleCrossRef / IsStandaloneResourceKind /
@@ -227,12 +233,12 @@ func (*provider) ResourceChildren(pn spec.ParsedNode) []spec.ParsedNode {
 // ValidateCandyManifestCUE / ValidateNodeFormSteps implement spec.ProjectLoader — the typed
 // box-validate entity-tree walk the host calls (compiled-in, no wire envelope): delegate to the
 // ONE copy in sdk/loaderkit (K1 unit 3c).
-func (*provider) ValidateCandyManifestCUE(path string, data []byte, t spec.Threaded, parser spec.DocParser, cs spec.CueSchema) error {
-	return loaderkit.ValidateCandyManifestCUE(path, data, t, parser, cs)
+func (*provider) ValidateCandyManifestCUE(path string, data []byte, t spec.Threaded, parser spec.DocParser) error {
+	return loaderkit.ValidateCandyManifestCUE(path, data, t, parser)
 }
 
-func (*provider) ValidateNodeFormSteps(path string, data []byte, t spec.Threaded, parser spec.DocParser, cs spec.CueSchema) error {
-	return loaderkit.ValidateNodeFormSteps(path, data, t, parser, cs)
+func (*provider) ValidateNodeFormSteps(path string, data []byte, t spec.Threaded, parser spec.DocParser) error {
+	return loaderkit.ValidateNodeFormSteps(path, data, t, parser)
 }
 
 // ResolveMergedDeployTree implements spec.ProjectLoader — the merged project+overlay deploy-node
