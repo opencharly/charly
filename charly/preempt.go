@@ -21,17 +21,17 @@ import (
 //      The check-bed session's own arbiter lease dissolved entirely (#55 W3 B2-full):
 //      candy/plugin-check/bed_session.go now calls verb:arbiter DIRECTLY via InvokeProvider (the
 //      SAME vm_arbiter_shim.go precedent noted below), never through this in-core proxy. The
-//      REAL, current callers are — permanently, per the B-1 unit-2 IOU #4 ruling —
-//      host_build_arbiter_bracket.go's (the F10 HostBuild seam candy/plugin-bundle's
-//      arbiter-bracket-acquire/-release dispatch calls, FLOOR-SLIM-proper Unit-8; was
-//      arbiter_bracket.go core-resident before that move) + host_build_pod_lifecycle_dispatch.go's
-//      arbiter-release brackets, which stay core-side BY DESIGN (gated on host-process
-//      CHARLY_PREEMPT_LEASE env state a placement-agnostic plugin cannot own). Because those two
-//      release call sites are permanent, the FULL proxy (not just a thin slice) stays core: each
-//      proxy method resolves verb:arbiter and Invokes it with an action-tagged
-//      spec.ArbiterInvokeInput (the generic core→verb registry bridge — core is not a plugin, so
-//      it cannot call InvokeProvider; the externalized command:preempt CLI reaches the arbiter
-//      over InvokeProvider instead).
+//      deploy-dispatch Start/Stop bracket ALSO went peer-dispatch at K-wave 2 cone R2 bank E —
+//      candy/plugin-bundle's handleLifecycleSimple now Invokes verb:arbiter directly (the
+//      "arbiter-bracket-acquire"/"arbiter-bracket-release" HostBuild seam is DELETED), and the
+//      CHARLY_PREEMPT_LEASE outer-orchestrator guard lives in the arbiter itself
+//      (candy/plugin-preempt's invokeArbiter) — a compiled-in plugin shares charly's process env,
+//      so the former "placement-agnostic plugin cannot own [the lease env]" framing was stale. The
+//      remaining core-side caller is host_build_pod_lifecycle_dispatch.go's arbiter-release
+//      bracket (releaseResourceClaim). The proxy's methods resolve verb:arbiter and Invoke it with
+//      an action-tagged spec.ArbiterInvokeInput (the generic core→verb registry bridge — core is
+//      not a plugin, so it cannot call InvokeProvider; the externalized command:preempt CLI
+//      reaches the arbiter over InvokeProvider instead).
 //   2. gatherResources — REWIRED off LoadUnified(".") onto the SAME generic
 //      InvokeProvider("build","project") envelope every other resolved-project consumer uses
 //      (K-wave W3a A2), retiring its K1/LoadUnified coupling now rather than waiting for #12. Its
@@ -77,11 +77,12 @@ const envPreemptLeaseHeld = "CHARLY_PREEMPT_LEASE"
 
 // --- the in-core arbiter PROXY (dispatches to the compiled-in verb:arbiter plugin) ----------
 
-// arbiterProxy is the in-core handle newResourceArbiter() returns to its current 3 callers
-// (host_build_check_bed.go, host_build_arbiter_bracket.go, host_build_pod_lifecycle_dispatch.go —
-// re-verified at Cutover B unit 6b). Its methods dispatch to the compiled-in
-// candy/plugin-preempt (verb:arbiter) over an in-proc reverse channel — the arbiter runs there
-// and calls back for its host seams.
+// arbiterProxy is the in-core handle newResourceArbiter() returns to its current caller
+// (host_build_pod_lifecycle_dispatch.go's arbiter-release bracket — re-verified at Cutover B unit
+// 6b; host_build_check_bed.go is DELETED and the deploy-dispatch Start/Stop bracket went
+// peer-dispatch at K-wave 2 cone R2 bank E, the "arbiter-bracket-*" HostBuild seam is DELETED).
+// Its methods dispatch to the compiled-in candy/plugin-preempt (verb:arbiter) over an in-proc
+// reverse channel — the arbiter runs there and calls back for its host seams.
 type arbiterProxy struct{}
 
 func newResourceArbiter() *arbiterProxy { return &arbiterProxy{} }

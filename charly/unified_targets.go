@@ -355,9 +355,10 @@ func (t *pluginDeployTarget) bracketedLifecycle() bool {
 
 // Start dispatches OpStart. When the substrate's DECLARED trait says its lifecycle is bracketed
 // (today only pod) the request carries HasPlan=true, so command:bundle's handleLifecycleSimple
-// brackets its OWN dispatch with the Q1 resource-arbiter claim (the arbiter-bracket-acquire/
-// -release HostBuild seams, host_build_arbiter_bracket.go) — FLOOR-SLIM-proper Unit-8's K4-exit:
-// core no longer brackets the dispatch call itself (the former arbiter_bracket.go). The opts
+// brackets its OWN dispatch with the Q1 resource-arbiter claim by InvokeProvider("verb","arbiter")
+// (the "arbiter-bracket-*" HostBuild seam is DELETED, K-wave 2 cone R2 bank E) — FLOOR-SLIM-proper
+// Unit-8's K4-exit: core no longer brackets the dispatch call itself (the former arbiter_bracket.go).
+// The opts
 // marshal itself is inherently CLI-invocation-context-bound (podStartOptsFromCtx reads a ctx value
 // only `charly start`'s Kong Run() sets — an out-of-process plugin has no access to it), so the
 // registered lifecycleStartPlanHooks[t.word] closure (pod_lifecycle_dispatch.go) still supplies

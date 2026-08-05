@@ -3,6 +3,7 @@ package bundle
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -853,28 +854,87 @@ func runLifecycleBracket(op string, hasPlan bool, node *spec.Deploy, acquire fun
 	return err
 }
 
-// arbiterBracketAcquire routes a Start dispatch's arbiter claim through the "arbiter-bracket-acquire"
-// HostBuild seam — see host_build_arbiter_bracket.go (core) for why the actual claim/env mutation
-// stays host-side.
+// arbiterBracketAcquire acquires the shared/exclusive resource-arbiter claim for a Start dispatch
+// by InvokeProvider("verb","arbiter",OpRun) — the SAME peer-dispatch the check-bed session's
+// arbiterAcquire (candy/plugin-check/bed_session.go) + command:preempt already use, replacing the
+// deleted "arbiter-bracket-acquire" HostBuild seam (K-wave 2 cone R2 bank E). The CHARLY_PREEMPT_LEASE
+// outer-orchestrator guard lives in the arbiter now (candy/plugin-preempt's invokeArbiter), so a
+// guarded skip returns Active=false and this function just does not set the env.
 func arbiterBracketAcquire(ctx context.Context, exec *sdk.Executor, name string, node spec.Deploy) error {
-	reqJSON, err := json.Marshal(spec.ArbiterBracketAcquireRequest{Name: name, Node: node})
+	action := spec.ArbiterActionAcquireShared
+	tokens := spec.DedupeNonEmpty(node.RequiredShared())
+	if len(node.RequiredExclusive()) > 0 {
+		action = spec.ArbiterActionAcquireExclusive
+		tokens = spec.DedupeNonEmpty(node.RequiredExclusive())
+	}
+	var secDevices []string
+	if node.Security != nil {
+		secDevices = node.Security.Devices
+	}
+	params, err := json.Marshal(spec.ArbiterInvokeInput{
+		Action:          action,
+		Claimant:        name,
+		Tokens:          tokens,
+		ClaimAddr:       spec.HolderAddrFor(name, node),
+		Transient:       false,
+		IsGroup:         node.IsGroup(),
+		IsPodMember:     spec.IsContainerVenue(&node),
+		SecurityDevices: secDevices,
+	})
 	if err != nil {
 		return err
 	}
-	_, err = exec.HostBuild(ctx, "arbiter-bracket-acquire", reqJSON)
-	return err
+	out, err := exec.InvokeProvider(ctx, "verb", "arbiter", sdk.OpRun, params, nil, sdk.InvokeProviderOpts{})
+	if err != nil {
+		return err
+	}
+	var reply spec.ArbiterInvokeReply
+	if len(out) > 0 {
+		if err := json.Unmarshal(out, &reply); err != nil {
+			return err
+		}
+	}
+	if reply.Error != "" {
+		return errors.New(reply.Error)
+	}
+	if reply.Active {
+		_ = os.Setenv(envPreemptLeaseHeld, name)
+	}
+	return nil
 }
 
-// arbiterBracketRelease routes a Start/Stop dispatch's arbiter release through the
-// "arbiter-bracket-release" HostBuild seam.
+// arbiterBracketRelease releases a Start/Stop dispatch's arbiter claim via
+// InvokeProvider("verb","arbiter",OpRun) — the release action of the same peer dispatch. The
+// nested-subprocess release guard (an outer orchestrator owns the lease — the outer will release)
+// mirrors the deleted hostBuildArbiterBracketRelease → releaseResourceClaim behavior.
 func arbiterBracketRelease(ctx context.Context, exec *sdk.Executor, name string) error {
-	reqJSON, err := json.Marshal(spec.ArbiterBracketReleaseRequest{Name: name})
+	if os.Getenv(envPreemptLeaseHeld) != "" {
+		return nil
+	}
+	params, err := json.Marshal(spec.ArbiterInvokeInput{Action: spec.ArbiterActionRelease, Claimant: name})
 	if err != nil {
 		return err
 	}
-	_, err = exec.HostBuild(ctx, "arbiter-bracket-release", reqJSON)
-	return err
+	out, err := exec.InvokeProvider(ctx, "verb", "arbiter", sdk.OpRun, params, nil, sdk.InvokeProviderOpts{})
+	if err != nil {
+		return err
+	}
+	var reply spec.ArbiterInvokeReply
+	if len(out) > 0 {
+		if err := json.Unmarshal(out, &reply); err != nil {
+			return err
+		}
+	}
+	if reply.Error != "" {
+		return errors.New(reply.Error)
+	}
+	return nil
 }
+
+// envPreemptLeaseHeld mirrors the charly/preempt.go const of the same name: the process-env marker
+// an outermost claim-bringing invocation sets on a successful acquire so nested `charly`
+// subprocesses skip re-acquiring (compiled-in plugin-bundle shares charly's process env).
+const envPreemptLeaseHeld = "CHARLY_PREEMPT_LEASE"
 
 // --- Status --------------------------------------------------------------------------------
 
