@@ -147,6 +147,42 @@ func TestGenerateWiresLeafGenerators(t *testing.T) {
 	}
 }
 
+// TestGeneratePreservesHeaderlessFilesUnderGeneratedTrees is the test that failed the validator's
+// resetTree-vs-prune finding. resetTree removed whole trees BY PATH before regenerating — an
+// unread os.RemoveAll that would have deleted a hand-authored page living under a generated
+// directory. prune-first makes it redundant: every emitted page carries the generated header, so
+// pruning by header already clears the orphans, and a file without the header is preserved
+// precisely because the boundary is content, not location. This test plants a headerless file
+// under reference/candy/ and asserts generate() leaves it alone.
+func TestGeneratePreservesHeaderlessFilesUnderGeneratedTrees(t *testing.T) {
+	root := superprojectRoot(t)
+	base := t.TempDir()
+	out := filepath.Join(base, "src", "content", "docs")
+	if err := os.MkdirAll(out, 0o755); err != nil {
+		t.Fatalf("create content root: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(base, "astro.config.mjs"),
+		[]byte(astroConfig("      { label: 'The Vision', link: '/vision/' },")), 0o644); err != nil {
+		t.Fatalf("write astro config: %v", err)
+	}
+	seedHandAuthoredPages(t, root, out)
+
+	kept := filepath.Join(out, "reference", "candy", "keep-me.md")
+	if err := os.MkdirAll(filepath.Dir(kept), 0o755); err != nil {
+		t.Fatalf("mkdir reference/candy: %v", err)
+	}
+	if err := os.WriteFile(kept, []byte("Hand-authored under a generated tree.\n"), 0o644); err != nil {
+		t.Fatalf("write keep-me.md: %v", err)
+	}
+
+	if err := generate(root, out); err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	if _, err := os.Stat(kept); err != nil {
+		t.Fatalf("generate() removed a headerless file under reference/candy by path: %v", err)
+	}
+}
+
 // TestGenerateWiresSidebarGate proves generate() runs the sidebar gate. The gate is the only one
 // that reads the Astro config, so a sidebar entry pointing at a page the run never emits fails
 // through verifySidebarLinks and nothing else — which is what makes this a wiring test for that
