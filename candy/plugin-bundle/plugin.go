@@ -8,9 +8,10 @@
 //     (runBundleCommand → kong-parse the BundleCmd tree — command.go), so the handlers run in
 //     charly's OWN process and inherit charly's real stdio/TTY natively. `add`/`del` (walk.go, the
 //     K4-C WALK PORT) drive the WHOLE deploy-tree walk plugin-side: the config loader
-//     (the merged-tree read/resolveDelNode, LoadUnified-coupled) and the registry-backed executor-chain
-//     derivation (deriveChildExecutorForPath) stay host-side behind four narrow seams —
-//     deploy-plugins-connect / resolve-target-add / deploy-del-resolve / deploy-node-del-dispatch —
+//     (the merged-tree read, LoadUnified-coupled) + the del RESOLUTION (del_resolve.go, K-wave 2
+//     cone R2 bank C) run plugin-side; the registry-backed executor-chain
+//     derivation (deriveChildExecutorForPath) stays host-side behind three narrow seams —
+//     deploy-plugins-connect / resolve-target-add / deploy-node-del-dispatch —
 //     while the tree traversal AND the per-node compile (compilePlansForRequest, IN-PROC after
 //     K4-C shape-2 — no OpCompile round-trip) run plugin-side; ResolveTarget → the deploy target's
 //     Add/Del is the host tail of the resolve-target-add / deploy-node-del-dispatch seams. Sibling

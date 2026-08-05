@@ -86,7 +86,6 @@ var reverseChannelHostBuilderWhitelist = []reverseChannelKindClause{
 	{"pod-config-list-sidecars", "host_build_pod_config_seams.go", "UNDOCUMENTED (pending KERNEL_MANIFEST.md row)"},
 	{"arbiter-bracket-acquire", "host_build_arbiter_bracket.go", "UNDOCUMENTED (pending KERNEL_MANIFEST.md row)"},
 	{"arbiter-bracket-release", "host_build_arbiter_bracket.go", "UNDOCUMENTED (pending KERNEL_MANIFEST.md row)"},
-	{"deploy-del-resolve", "host_build_deploy_del_resolve.go", "UNDOCUMENTED (pending KERNEL_MANIFEST.md row)"},
 	{"config-resolve", "host_build_config_resolve.go", "UNDOCUMENTED (pending KERNEL_MANIFEST.md row)"},
 	{"resolve-target-add", "host_build_resolve_target_add.go", "UNDOCUMENTED (pending KERNEL_MANIFEST.md row)"},
 	{"plugin-binary", "plugin_dispatch_reverse.go", "M — leg 3 of the north-star's three legs (plugin-binary build + CLI reentry); see file header hostBuildPluginBinary"},

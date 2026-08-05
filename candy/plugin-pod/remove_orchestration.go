@@ -144,11 +144,12 @@ func sidecarContainerNames(podBase string, sidecarNames []string) []string {
 	return out
 }
 
-// containerExists reports whether the engine still knows a container by that name. A package var
-// so the removal ordering can be tested without a live engine.
-var containerExists = func(engine, name string) bool {
-	return exec.Command(engine, "container", "exists", name).Run() == nil
-}
+// containerExists reports whether the engine still knows a container by that name. R3
+// consolidation (K-wave 2 cone R2 bank C): delegates to the shared kit.ContainerExists; the var
+// stays so the removal ordering can still be tested without a live engine. `engine` here is the
+// resolved binary path (kit.EngineBinary output — "podman"/"docker"), idempotent through
+// kit.ContainerExists's own EngineBinary resolve.
+var containerExists = kit.ContainerExists
 
 // removeContainer force-removes one container. Package var for the same reason as above.
 var removeContainer = func(engine, name string) error {

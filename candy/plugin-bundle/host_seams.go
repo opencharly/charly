@@ -12,12 +12,13 @@ import (
 // of charly core (P13). `add`/`del` now drive their WHOLE deploy-tree walk plugin-side (walk.go,
 // the K4-C walk port) — LoadUnified-coupled config resolution (the merged-tree read/resolveDelNode) and
 // registry-coupled executor-chain derivation (deriveChildExecutorForPath) are core Mechanisms a
-// plugin cannot import (separate module), so the walk reaches them via four narrow host-build
+// plugin cannot import (separate module), so the walk reaches them via three narrow host-build
 // seams: deploy-plugins-connect, resolve-target-add (the per-node ResolveTarget+Add terminal step —
 // the plugin COMPILES the InstallPlans IN-PROC (K4-C shape-2) and ships them already-compiled, so
-// the host half does only ResolveTarget+Add, no compile), deploy-del-resolve, and
-// deploy-node-del-dispatch (the per-node ResolveTarget+Del terminal step). The former
-// deploy-members-up/-down seams DIED (#55 W3 A4) — the walk calls sdk/deploykit.BringUpMembers/
+// the host half does only ResolveTarget+Add, no compile), and
+// deploy-node-del-dispatch (the per-node ResolveTarget+Del terminal step; the del RESOLUTION runs
+// plugin-side, del_resolve.go — the deploy-del-resolve seam is DELETED, K-wave 2 cone R2 bank C).
+// The former deploy-members-up/-down seams DIED (#55 W3 A4) — the walk calls sdk/deploykit.BringUpMembers/
 // TearDownMembers directly now. `from-box` is fully plugin-side since K-wave 2 cone R2 (the
 // "deploy-from-box" HostBuild seam is DELETED — runFromBoxPod reaches deploy:pod's OpConfigSetup
 // by direct InvokeProvider). The config-management ops (show/export/import/reset/status) run

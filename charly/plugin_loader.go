@@ -898,8 +898,9 @@ func resolveDeployNodeByPath(tree map[string]spec.BundleNode, name string) (*spe
 // mutates providerRegistry — a clause-M kernel mechanism (plugin loading) that cannot live in a
 // plugin. Relocated here (from the deleted charly/deploy_add_shared.go) to sit beside its callees
 // collectReferencedPluginWords/loadProjectPlugins (R3) — already the body of two thin HostBuild
-// seams (deploy-plugins-connect, deploy-del-resolve) and called directly by two more core files
-// (pod_lifecycle_verb.go, update_deploy_dispatch.go).
+// seams (deploy-plugins-connect — the former deploy-del-resolve seam died with the del
+// resolution moving to candy/plugin-bundle, K-wave 2 cone R2 bank C) and called directly by two
+// more core files (pod_lifecycle_verb.go, update_deploy_dispatch.go).
 func loadDeployPlugins(dir, deployName string, extraAddCandy []string) error {
 	cfg, cerr := LoadConfig(dir)
 	if cerr != nil {

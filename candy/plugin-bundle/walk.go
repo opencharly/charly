@@ -16,10 +16,10 @@ import (
 // plugin-side (P13-KERNEL walk port). `add`'s tree resolution now runs loaderkit.LoadUnified
 // PLUGIN-SIDE (K1-LOADER RELOCATION witness, load_executor.go: resolveTreeViaLoader over the
 // reverse-channel LoaderExecutor) — the host keeps only the deploy-plugins-connect preamble
-// (loadDeployPlugins + project dir). resolveDelNode (LoadUnified-coupled) and
-// deriveChildExecutorForPath (registry-coupled — deployTraitDescent needs the providerRegistry)
-// stay host-side behind the deploy-del-resolve / resolve-target-add /
-// deploy-node-del-dispatch seams. deploy-members-up/deploy-members-down DIED (#55 W3 A4): the
+// (loadDeployPlugins + project dir). The del RESOLUTION is plugin-side (del_resolve.go, K-wave 2
+// cone R2 bank C — the deploy-del-resolve seam is DELETED); deriveChildExecutorForPath
+// (registry-coupled — deployTraitDescent needs the providerRegistry) stays host-side behind the
+// resolve-target-add / deploy-node-del-dispatch seams. deploy-members-up/deploy-members-down DIED (#55 W3 A4): the
 // plugin calls deploykit.BringUpMembers/TearDownMembers directly now — spec/proc + spec/hostenv +
 // spec/exec fabric, no host-private state, no registry coupling (the R3 3-way audit's finding —
 // see sdk/deploykit/bundle_members.go's header). The plugin COMPILES the
@@ -267,20 +267,16 @@ func (c *BundleDelCmd) Run() error {
 	}
 	defer lock.Release() //nolint:errcheck
 
-	// Resolve the merged deploy tree PLUGIN-SIDE (also connects the deployment's plugins) and
-	// thread it into the seam as DATA — the #55 Cone A Unit 3a tree-threading that replaced the
-	// host resolveDelNode's former core merged-tree read. A tree-absent project yields a nil
-	// tree, which resolveDelNode handles via its non-tree fallbacks (vm-prefix / pod-artifact).
+	// Resolve the merged deploy tree + the target node PLUGIN-SIDE (resolveTreeViaLoader also
+	// connects the deployment's plugins; resolveDelNode is the del_resolve.go port of the deleted
+	// host seam). A tree-absent project yields a nil tree, which resolveDelNode handles via its
+	// non-tree fallbacks (vm-prefix / pod-artifact).
 	tree, _, _, err := resolveTreeViaLoader(c.Name, nil)
 	if err != nil {
 		return err
 	}
-	treeJSON, err := json.Marshal(tree)
+	node, _, err := resolveDelNode(c.Name, tree)
 	if err != nil {
-		return err
-	}
-	var dr spec.DeployDelResolveReply
-	if err := hostDeploySeamJSON("deploy-del-resolve", spec.DeployDelResolveRequest{Name: c.Name, TreeJSON: treeJSON}, &dr); err != nil {
 		return err
 	}
 
@@ -289,12 +285,15 @@ func (c *BundleDelCmd) Run() error {
 	// a dry-run.
 	var memberErr error
 	if !c.DryRun {
-		memberErr = deploykit.TearDownMembers(dr.Node)
+		memberErr = deploykit.TearDownMembers(node)
 	}
 
+	// "vm:" is a CLI ADDRESSING hint, never an identity — strip it (spec.SplitVmAddress) so the
+	// host dispatch's ResolveTarget sees the clean deploy identity (the seam no longer strips).
+	name, _ := spec.SplitVmAddress(c.Name)
 	targetErr := hostDeploySeamJSON("deploy-node-del-dispatch", spec.DeployNodeDelDispatchRequest{
-		Name:            c.Name,
-		Node:            dr.Node,
+		Name:            name,
+		Node:            node,
 		AssumeYes:       c.AssumeYes,
 		KeepRepoChanges: c.KeepRepoChanges,
 		KeepServices:    c.KeepServices,

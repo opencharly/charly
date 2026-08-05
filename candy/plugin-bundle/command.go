@@ -28,7 +28,8 @@ import (
 // OpDeployDispatch (S3b — the ONE generic envelope every former UnifiedDeployTarget/LifecycleTarget
 // method dispatches through, see deploy_target.go). The plugin drives the WHOLE tree walk itself
 // (walk.go) and calls the deploy-plugins-connect / resolve-target-add / deploy-members-* /
-// deploy-del-resolve / deploy-node-del-dispatch seams directly.
+// deploy-node-del-dispatch seams directly (the del RESOLUTION runs plugin-side, del_resolve.go —
+// the deploy-del-resolve seam is DELETED, K-wave 2 cone R2 bank C).
 func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 	switch req.GetOp() {
 	case sdk.OpRun:
