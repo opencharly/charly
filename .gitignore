@@ -17,6 +17,7 @@ candy/plugin-*/plugin-*
 # binary named after the dir) — never committed, same pattern as the plugin binaries above.
 tools/golden-compile/golden-compile
 tools/golden-cloudinit/golden-cloudinit
+tools/ledger-validate/ledger-validate
 
 # Test binary, built with `go test -c`
 *.test
