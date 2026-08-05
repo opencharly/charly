@@ -77,7 +77,6 @@ var reverseChannelHostBuilderWhitelist = []reverseChannelKindClause{
 	{"overlay", "build_overlay.go", "UNDOCUMENTED (pending KERNEL_MANIFEST.md row)"},
 	{"deploy-plugins-connect", "host_build_deploy_plugins_connect.go", "UNDOCUMENTED (pending KERNEL_MANIFEST.md row)"},
 	{"deploy-node-del-dispatch", "host_build_deploy_node_del_dispatch.go", "UNDOCUMENTED (pending KERNEL_MANIFEST.md row)"},
-	{"feature", "host_build_feature.go", "UNDOCUMENTED (pending KERNEL_MANIFEST.md row)"},
 	{"cli", "host_build_cli.go", "UNDOCUMENTED (pending KERNEL_MANIFEST.md row)"},
 	{"resolve-target-add", "host_build_resolve_target_add.go", "M — the per-node ResolveTarget+Add terminal (KERNEL_MANIFEST.md bank D row)"},
 	{"plugin-binary", "plugin_dispatch_reverse.go", "M — leg 3 of the north-star's three legs (plugin-binary build + CLI reentry); see file header hostBuildPluginBinary"},

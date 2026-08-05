@@ -11,8 +11,9 @@ import (
 
 // provider.go — the Invoke(OpRun) surface for the COMPILED-IN command:feature placement. The host's
 // command dispatch (dispatchInProcCommand) invokes this in-process with the pass-through args + the
-// threaded in-proc reverse channel, so runFeatureCLI can HostBuild the "feature" enumeration seam whose
-// loader stays in core. (The out-of-process placement fork/execs the binary → CliMain, which has no
+// threaded in-proc reverse channel, so runFeatureCLI can drive the PLUGIN-SIDE project load
+// (enumerateFeatures over loaderkit — K-wave 2 cone R6, the "feature" HostBuild seam is DELETED).
+// (The out-of-process placement fork/execs the binary → CliMain, which has no
 // reverse channel and errors — feature is compiled-in.)
 
 type provider struct{ pb.UnimplementedProviderServer }
