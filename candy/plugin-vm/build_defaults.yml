@@ -141,9 +141,10 @@ device_descriptions:
     /dev/net/tun: TUN/TAP network device
     /dev/hwrng: hardware random number generator
 # device_patterns — host device glob patterns probed for auto-detection
-# (DetectHostDevices in devices.go) AND `charly doctor`'s hardware section (doctor.go),
-# formerly the Go var devicePatterns. NVIDIA GPUs are handled separately via CDI/--gpus;
-# AMD GPUs need /dev/kfd for ROCm compute access.
+# (the peer verb:gpu detect-host-devices dispatch candy/plugin-deploy-pod uses — the former
+# DetectHostDevices shim + charly/devices.go are DELETED, K-wave 2 cone R3) AND `charly
+# doctor`'s hardware section (doctor.go), formerly the Go var devicePatterns. NVIDIA GPUs
+# are handled separately via CDI/--gpus; AMD GPUs need /dev/kfd for ROCm compute access.
 device_patterns:
     - "/dev/dri/renderD*"
     - /dev/kfd
