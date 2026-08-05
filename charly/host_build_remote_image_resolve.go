@@ -42,7 +42,7 @@ func hostBuildRemoteImageResolve(_ context.Context, req spec.RemoteImageResolveR
 		version = tag
 		fmt.Fprintf(os.Stderr, "Resolved @%s -> %s\n", parsed.RepoPath, version)
 	}
-	cachePath, err := EnsureRepoDownloaded(parsed.RepoPath, version)
+	cachePath, err := requireProjectLoader().EnsureRepoDownloaded(hostInProcCtx(), parsed.RepoPath, version)
 	if err != nil {
 		return spec.RemoteImageResolveReply{Error: fmt.Errorf("downloading %s:%s: %w", parsed.RepoPath, version, err).Error()}, nil
 	}

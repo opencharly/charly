@@ -487,9 +487,11 @@ func scanCandyFromLocal(localScanned map[string]spec.ScannedCandy, cfg *spec.Con
 func scanSeamsFor(cfg *spec.Config, opts spec.ResolveOpts) spec.ScanSeams {
 	return spec.ScanSeams{
 		CollectRemoteRefs: func(localScanned map[string]spec.ScannedCandy) ([]spec.RemoteDownload, error) {
-			return CollectRemoteRefsOpts(cfg, requireProjectLoader().FinalizeScannedCandies(localScanned, nil), withLocalRawRefs(opts, localScanned))
+			return requireProjectLoader().CollectRemoteRefsOpts(hostInProcCtx(), cfg, requireProjectLoader().FinalizeScannedCandies(localScanned, nil), withLocalRawRefs(opts, localScanned))
 		},
-		EnsureRepo: EnsureRepoDownloaded,
+		EnsureRepo: func(repoPath, version string) (string, error) {
+			return requireProjectLoader().EnsureRepoDownloaded(hostInProcCtx(), repoPath, version)
+		},
 		ScanRemote: func(cacheDir, repoPath string, wantRefs map[string]bool) (map[string]spec.ScannedCandy, error) {
 			return requireCandyScanner().ScanRemoteCandy(cacheDir, repoPath, wantRefs, parseCandyYAML)
 		},

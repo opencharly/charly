@@ -122,7 +122,7 @@ func canonicalRef(ref, baseDir string) (key, path string, err error) {
 			}
 			version = branch
 		}
-		cachePath, e := EnsureRepoDownloaded(parsed.RepoPath, version)
+		cachePath, e := requireProjectLoader().EnsureRepoDownloaded(hostInProcCtx(), parsed.RepoPath, version)
 		if e != nil {
 			return "", "", fmt.Errorf("downloading remote ref %q: %w", ref, e)
 		}

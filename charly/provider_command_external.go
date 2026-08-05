@@ -11,7 +11,6 @@ import (
 	"github.com/alecthomas/kong"
 
 	"github.com/opencharly/spec/climodel"
-	specexec "github.com/opencharly/spec/exec"
 	"github.com/opencharly/spec/ops"
 	"github.com/opencharly/spec/spec"
 	"github.com/opencharly/spec/transport"
@@ -245,8 +244,7 @@ func dispatchInProcCommand(prov Provider, d externalCommandDispatch, sub string)
 	// command plugin can OWN its logic and reach the shared host machinery (e.g. clean's "retention"
 	// HostBuild) instead of forwarding the whole command to a hidden `__<cmd>` core handler. The
 	// executor carries no venue — a command's HostBuild legs reconstruct their engine host-side.
-	ctx := specexec.ContextWithExecutor(context.Background(),
-		specexec.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}}))
+	ctx := hostInProcCtx()
 	if _, err := prov.Invoke(ctx, &Operation{Reserved: d.word, Op: ops.OpRun, Params: params}); err != nil {
 		return fmt.Errorf("command %q: %w", d.word, err)
 	}

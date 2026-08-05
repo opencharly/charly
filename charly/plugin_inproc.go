@@ -121,12 +121,13 @@ func registerCompiledPlugin(srv pb.ProviderServer, meta pb.PluginMetaServer) {
 	if cs, ok := srv.(spec.CandyScanner); ok {
 		activeCandyScanner = cs
 	}
-	// A compiled-in refs plugin (P7) exposes the typed remote-repo DOWNLOAD via spec.RefsDownloader —
-	// wire it as the active fetch backend so EnsureRepoDownloaded dispatches every cache-miss download
-	// through it (no wire envelope). See candy/plugin-refs.
-	if rd, ok := srv.(spec.RefsDownloader); ok {
-		activeRefsDownloader = rd
-	}
+	// The refs backend is NO LONGER wired here (K-wave 2 cone R1). charly core used to resolve a
+	// compiled-in refs plugin to a typed spec.RefsDownloader and thread it into every fetch, because
+	// core sat in the middle of the fetch orchestration. That orchestration now lives in
+	// candy/plugin-loader, which reaches the backend the way any plugin reaches a peer —
+	// InvokeProvider(class:"refs", word:"refs", OpResolve), served by candy/plugin-refs's Invoke
+	// alongside its unchanged typed Download. Swapping the refs plugin still swaps the backend; core
+	// simply is not a party to it any more.
 	// The SAME compiled-in loader plugin (#46 unit 1, K1) ALSO exposes the typed per-node kind-decode
 	// DISPATCH POLICY via spec.Materializer — wire it as the active materializer so
 	// materializeNodeInto/materializeDiscoveredNode dispatch through it (no wire envelope), instead of

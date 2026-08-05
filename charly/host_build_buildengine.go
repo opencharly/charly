@@ -53,13 +53,13 @@ func hostBuildCollectRemoteRefs(_ context.Context, req spec.ResolvedProjectReque
 	}
 	opts := boxResolveOpts(req.RequestedBoxes, req.IncludeDisabled)
 	opts.ExtraCandyRefs = req.ExtraCandyRefs
-	return CollectRemoteRefsOpts(cfg, requireProjectLoader().FinalizeScannedCandies(localScanned, nil), withLocalRawRefs(opts, localScanned))
+	return requireProjectLoader().CollectRemoteRefsOpts(hostInProcCtx(), cfg, requireProjectLoader().FinalizeScannedCandies(localScanned, nil), withLocalRawRefs(opts, localScanned))
 }
 
 // hostBuildEnsureRepo resolves a (repo, version) to a local cache dir (the ScanSeams.EnsureRepo leg),
 // fetching + auto-migrating on a cache miss.
 func hostBuildEnsureRepo(_ context.Context, req map[string]string, _ buildEngineContext) (map[string]string, error) {
-	dir, err := EnsureRepoDownloaded(req["repo"], req["version"])
+	dir, err := requireProjectLoader().EnsureRepoDownloaded(hostInProcCtx(), req["repo"], req["version"])
 	if err != nil {
 		return nil, err
 	}
@@ -174,7 +174,7 @@ func collectNamespaceScanEntries(uf *spec.UnifiedFile, prefix, dir string, opts 
 		// EnsureRepo/ScanRemote still round-trip to the cfg-agnostic host legs for the transitive
 		// fetch. FinalizeScannedCandies / withLocalRawRefs are nil/empty-safe (range over nil is a
 		// no-op), so an empty `scanned` degrades to a boxes-only walk — exactly origin/main's shape.
-		downloads, _ := CollectRemoteRefsOpts(sub, requireProjectLoader().FinalizeScannedCandies(scanned, nil), withLocalRawRefs(opts, scanned))
+		downloads, _ := requireProjectLoader().CollectRemoteRefsOpts(hostInProcCtx(), sub, requireProjectLoader().FinalizeScannedCandies(scanned, nil), withLocalRawRefs(opts, scanned))
 		reply.Entries = append(reply.Entries, spec.NamespaceScanEntry{
 			Child:     child,
 			Scanned:   scanned,

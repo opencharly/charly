@@ -180,7 +180,7 @@ func TestCollectRemoteRefs(t *testing.T) {
 		}}),
 	}
 
-	downloads, err := CollectRemoteRefs(cfg, layers)
+	downloads, err := requireProjectLoader().CollectRemoteRefsOpts(hostInProcCtx(), cfg, layers, spec.ResolveOpts{})
 	if err != nil {
 		t.Fatalf("CollectRemoteRefs() error = %v", err)
 	}
@@ -215,7 +215,7 @@ func TestCollectRemoteRefsOptsExtraCandyRefs(t *testing.T) {
 
 	pluginRef := "@github.com/opencharly/charly/candy/plugin-spice:v2026.174.0425"
 	opts := spec.ResolveOpts{ExtraCandyRefs: []string{pluginRef}}
-	downloads, err := CollectRemoteRefsOpts(cfg, layers, opts)
+	downloads, err := requireProjectLoader().CollectRemoteRefsOpts(hostInProcCtx(), cfg, layers, opts)
 	if err != nil {
 		t.Fatalf("CollectRemoteRefsOpts() error = %v", err)
 	}
@@ -237,7 +237,7 @@ func TestCollectRemoteRefsOptsExtraCandyRefs(t *testing.T) {
 
 	// A LOCAL ExtraCandyRef is a no-op (already covered by ScanCandy): collecting it
 	// adds no remote download.
-	localOnly, err := CollectRemoteRefsOpts(cfg, layers, spec.ResolveOpts{ExtraCandyRefs: []string{"plugin-spice"}})
+	localOnly, err := requireProjectLoader().CollectRemoteRefsOpts(hostInProcCtx(), cfg, layers, spec.ResolveOpts{ExtraCandyRefs: []string{"plugin-spice"}})
 	if err != nil {
 		t.Fatalf("CollectRemoteRefsOpts(local extra) error = %v", err)
 	}
@@ -273,7 +273,7 @@ func TestCollectRemoteRefsOptsRequestedBoxes(t *testing.T) {
 	layers := map[string]spec.CandyReader{"pixi": testCandy("pixi", spec.CandyModel{}, spec.CandyView{})}
 
 	t.Run("unreachable namespaced target is NOT collected without RequestedBoxes", func(t *testing.T) {
-		downloads, err := CollectRemoteRefsOpts(cfg, layers, spec.ResolveOpts{})
+		downloads, err := requireProjectLoader().CollectRemoteRefsOpts(hostInProcCtx(), cfg, layers, spec.ResolveOpts{})
 		if err != nil {
 			t.Fatalf("CollectRemoteRefsOpts() error = %v", err)
 		}
@@ -285,7 +285,7 @@ func TestCollectRemoteRefsOptsRequestedBoxes(t *testing.T) {
 	})
 
 	t.Run("explicitly requested namespaced target IS collected", func(t *testing.T) {
-		downloads, err := CollectRemoteRefsOpts(cfg, layers, spec.ResolveOpts{RequestedBoxes: []string{"fedora.check-pod"}})
+		downloads, err := requireProjectLoader().CollectRemoteRefsOpts(hostInProcCtx(), cfg, layers, spec.ResolveOpts{RequestedBoxes: []string{"fedora.check-pod"}})
 		if err != nil {
 			t.Fatalf("CollectRemoteRefsOpts() error = %v", err)
 		}
@@ -332,7 +332,7 @@ func TestCollectRemoteRefsLocalTemplate(t *testing.T) {
 	}
 	layers := map[string]spec.CandyReader{}
 
-	downloads, err := CollectRemoteRefs(cfg, layers)
+	downloads, err := requireProjectLoader().CollectRemoteRefsOpts(hostInProcCtx(), cfg, layers, spec.ResolveOpts{})
 	if err != nil {
 		t.Fatalf("CollectRemoteRefs() error = %v", err)
 	}
@@ -371,7 +371,7 @@ func TestCollectRemoteRefsOptsIncludeDisabled(t *testing.T) {
 	layers := map[string]spec.CandyReader{}
 
 	// Default opts (enabled-only) → the disabled image is skipped, no downloads.
-	if dls, err := CollectRemoteRefs(cfg, layers); err != nil {
+	if dls, err := requireProjectLoader().CollectRemoteRefsOpts(hostInProcCtx(), cfg, layers, spec.ResolveOpts{}); err != nil {
 		t.Fatalf("CollectRemoteRefs() error = %v", err)
 	} else if len(dls) != 0 {
 		t.Fatalf("default opts: len(downloads) = %d, want 0 (disabled image skipped)", len(dls))
@@ -379,7 +379,7 @@ func TestCollectRemoteRefsOptsIncludeDisabled(t *testing.T) {
 
 	// Scoped --include-disabled debian-builder → the ref IS collected.
 	opts := spec.ResolveOpts{IncludeDisabled: true, IncludeDisabledNames: map[string]bool{"debian-builder": true}}
-	dls, err := CollectRemoteRefsOpts(cfg, layers, opts)
+	dls, err := requireProjectLoader().CollectRemoteRefsOpts(hostInProcCtx(), cfg, layers, opts)
 	if err != nil {
 		t.Fatalf("CollectRemoteRefsOpts() error = %v", err)
 	}
@@ -396,7 +396,7 @@ func TestCollectRemoteRefsOptsIncludeDisabled(t *testing.T) {
 		Enabled: new(false),
 		Candy:   []string{"@github.com/myorg/other/layers/x:v3.0.0"},
 	})
-	dls2, err := CollectRemoteRefsOpts(cfg, layers, opts)
+	dls2, err := requireProjectLoader().CollectRemoteRefsOpts(hostInProcCtx(), cfg, layers, opts)
 	if err != nil {
 		t.Fatalf("CollectRemoteRefsOpts() error = %v", err)
 	}
@@ -440,7 +440,7 @@ func TestCollectRemoteRefsDefaultsBuilderTransitiveCandies(t *testing.T) {
 	}
 	layers := map[string]spec.CandyReader{}
 
-	downloads, err := CollectRemoteRefs(cfg, layers)
+	downloads, err := requireProjectLoader().CollectRemoteRefsOpts(hostInProcCtx(), cfg, layers, spec.ResolveOpts{})
 	if err != nil {
 		t.Fatalf("CollectRemoteRefs() error = %v", err)
 	}
@@ -484,7 +484,7 @@ func TestCollectRemoteRefsSameCandyBothTagsCollected(t *testing.T) {
 		}}),
 	}
 
-	downloads, err := CollectRemoteRefs(cfg, layers)
+	downloads, err := requireProjectLoader().CollectRemoteRefsOpts(hostInProcCtx(), cfg, layers, spec.ResolveOpts{})
 	if err != nil {
 		t.Fatalf("CollectRemoteRefs() unexpected error: %v", err)
 	}
@@ -515,7 +515,7 @@ func TestCollectRemoteRefsDifferentCandiesSameRepo(t *testing.T) {
 	}
 	layers := map[string]spec.CandyReader{}
 
-	downloads, err := CollectRemoteRefs(cfg, layers)
+	downloads, err := requireProjectLoader().CollectRemoteRefsOpts(hostInProcCtx(), cfg, layers, spec.ResolveOpts{})
 	if err != nil {
 		t.Fatalf("CollectRemoteRefs() unexpected error: %v", err)
 	}
@@ -541,7 +541,7 @@ func TestCollectRemoteRefsDifferentCandiesSameRepo(t *testing.T) {
 func TestEnsureRepoDownloaded_Override(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv(proc.RepoOverrideEnv, "github.com/foo/bar="+dir)
-	got, err := EnsureRepoDownloaded("github.com/foo/bar", "v9999.1.1")
+	got, err := requireProjectLoader().EnsureRepoDownloaded(hostInProcCtx(), "github.com/foo/bar", "v9999.1.1")
 	if err != nil {
 		t.Fatalf("override should resolve offline, got err: %v", err)
 	}

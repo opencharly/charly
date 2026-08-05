@@ -296,12 +296,22 @@ func (*provider) FinalizeScannedCandies(scanned map[string]spec.ScannedCandy, in
 
 // EnsureRepoDownloaded / CollectRemoteRefsOpts implement spec.ProjectLoader — the typed remote-repo
 // fetch orchestration + candy-ref collection mechanism the host calls (compiled-in, no wire
-// envelope): delegate to the ONE copy in sdk/loaderkit (K1 unit 4).
-func (*provider) EnsureRepoDownloaded(repoPath, version string, seams spec.RefsCollectSeams) (string, error) {
+// envelope): delegate to the ONE copy in sdk/loaderkit (K1 unit 4). Since K-wave 2 cone R1 the
+// host-coupled legs are built HERE (refs_seams.go) off the ctx-threaded executor rather than handed
+// in by charly core — see that file for why core assembling them was an R-item, not a mechanism.
+func (*provider) EnsureRepoDownloaded(ctx context.Context, repoPath, version string) (string, error) {
+	seams, err := refsSeams(ctx)
+	if err != nil {
+		return "", err
+	}
 	return loaderkit.EnsureRepoDownloaded(repoPath, version, seams)
 }
 
-func (*provider) CollectRemoteRefsOpts(cfg *spec.Config, layers map[string]spec.CandyReader, opts spec.ResolveOpts, seams spec.RefsCollectSeams) ([]spec.RemoteDownload, error) {
+func (*provider) CollectRemoteRefsOpts(ctx context.Context, cfg *spec.Config, layers map[string]spec.CandyReader, opts spec.ResolveOpts) ([]spec.RemoteDownload, error) {
+	seams, err := refsSeams(ctx)
+	if err != nil {
+		return nil, err
+	}
 	return loaderkit.CollectRemoteRefsOpts(cfg, layers, opts, seams)
 }
 

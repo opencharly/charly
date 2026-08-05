@@ -155,7 +155,7 @@ func boxEntityWireYAML(name string, box spec.BoxConfig) ([]byte, error) {
 // charly/KERNEL_MANIFEST.md).
 func validateRemoteCandies(cfg *spec.Config, layers map[string]spec.CandyReader, errs *spec.ValidationError) {
 	// Check version conflicts (same repo referenced with different versions)
-	_, err := CollectRemoteRefs(cfg, layers)
+	_, err := requireProjectLoader().CollectRemoteRefsOpts(hostInProcCtx(), cfg, layers, spec.ResolveOpts{})
 	if err != nil {
 		errs.Add("%v", err)
 	}

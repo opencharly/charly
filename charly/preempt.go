@@ -1,13 +1,11 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
 	"strings"
 
-	specexec "github.com/opencharly/spec/exec"
 	"github.com/opencharly/spec/ops"
 	"github.com/opencharly/spec/spec"
 )
@@ -102,8 +100,7 @@ func arbiterInvoke(in spec.ArbiterInvokeInput) (spec.ArbiterInvokeReply, error) 
 	if !ok {
 		return spec.ArbiterInvokeReply{}, fmt.Errorf("resource arbiter (verb:arbiter) not registered — charly built without candy/plugin-preempt")
 	}
-	ctx := specexec.ContextWithExecutor(context.Background(),
-		specexec.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}}))
+	ctx := hostInProcCtx()
 	reply, err := invokeTyped[spec.ArbiterInvokeInput, spec.ArbiterInvokeReply](ctx, prov, "arbiter", ops.OpRun, in)
 	if err != nil {
 		return spec.ArbiterInvokeReply{}, fmt.Errorf("arbiter %s: %w", in.Action, err)
@@ -296,7 +293,7 @@ func releaseResourceClaim(claimant string) {
 // when none/unreadable" contract, unchanged, with the one-warning-per-failure best-effort
 // reporting provider_invoke.go prescribes for a probe path that must never fail a deploy.
 func gatherResources() map[string]*spec.ResolvedResource {
-	ctx := specexec.ContextWithExecutor(context.Background(), specexec.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}}))
+	ctx := hostInProcCtx()
 	rp := hostInvokeOr[spec.ResolvedProjectRequest, spec.ResolvedProject](ctx, ClassBuild, "project", ops.OpResolve, spec.ResolvedProjectRequest{}, "gather-resources")
 	return rp.Resources
 }

@@ -32,5 +32,5 @@ func ResolveProjectRepo(repoSpec string) (string, error) {
 		}
 		version = branch
 	}
-	return EnsureRepoDownloaded(repoPath, version)
+	return requireProjectLoader().EnsureRepoDownloaded(hostInProcCtx(), repoPath, version)
 }

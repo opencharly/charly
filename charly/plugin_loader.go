@@ -12,7 +12,6 @@ import (
 	"sync"
 	"testing"
 
-	specexec "github.com/opencharly/spec/exec"
 	"github.com/opencharly/spec/proc"
 	"github.com/opencharly/spec/spec"
 
@@ -740,7 +739,7 @@ func pluginProvidesReferencedWord(providers []string, refs map[string]struct{}) 
 // concern despite the former file's name. check_cmd.go's resolveCheckRunnerContext still calls
 // deployNodePluginContext directly (same package, different file).
 func resolveMergedDeployTree(dir string) (map[string]spec.BundleNode, error) {
-	ctx := specexec.ContextWithExecutor(context.Background(), specexec.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}}))
+	ctx := hostInProcCtx()
 	return requireProjectLoader().ResolveMergedDeployTree(ctx, dir)
 }
 

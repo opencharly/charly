@@ -8,7 +8,6 @@ import (
 	"os"
 	"strings"
 
-	specexec "github.com/opencharly/spec/exec"
 	"github.com/opencharly/spec/ops"
 	"github.com/opencharly/spec/spec"
 )
@@ -296,8 +295,7 @@ func validateProjectForBuild(dir string, opts spec.ResolveOpts) error {
 	if err != nil {
 		return err
 	}
-	ctx := specexec.ContextWithExecutor(context.Background(),
-		specexec.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}}))
+	ctx := hostInProcCtx()
 	res, err := prov.Invoke(ctx, &Operation{Reserved: "validate", Op: ops.OpValidate, Params: reqJSON})
 	if err != nil {
 		return err
