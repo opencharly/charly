@@ -2120,17 +2120,16 @@ check-migrate-local:
 #   - `charly feature list candy` → exits 0 and lists every candy + its plan summary. feature is
 #     COMPILED-IN (charly.yml compiled_plugins): its Invoke(OpRun) is dispatched in-proc
 #     (registerCompiledPlugin → dispatchInProcCommand, "Seam A"), which threads the in-proc reverse
-#     channel so the plugin reaches the genuine core subsystem it can't hold — the unified loader
-#     (LoadConfig / ScanCandy), the Step plan model, and validatePlanSteps — over the generic
-#     "feature" HostBuild seam (charly/host_build_feature.go: enumerateFeatures). The plugin owns
-#     the list/pending/validate grammar + output; the seam returns plain enumerated plan DATA. The
+#     channel so the plugin drives the whole project load PLUGIN-SIDE over the loader reverse legs
+#     (loaderkit: LoadUnifiedViaExecutor + ProjectCandiesScanned + FinalizeScannedCandies — the
+#     former "feature" HostBuild seam charly/host_build_feature.go is DELETED, K-wave 2 cone R6).
+#     The plugin owns the list/pending/validate grammar + output AND the enumeration. The
 #     output is asserted to contain the `plugin-feature` candy itself (always present in this
-#     project), proving the compiled-in command + the "feature" HostBuild seam (loader + plan model)
-#     end-to-end.
-# `pending`/`validate` ride the SAME "feature" HostBuild seam; the seam's loader + validation is
-# covered by charly/host_build_feature_test.go
-# (TestEnumerateFeatures_InvokesInCoreLoader / TestEnumerateFeatures_RunsValidatePlanSteps /
-# TestValidatePlanSteps_Diagnostics).
+#     project), proving the compiled-in command + the plugin-side loader enumeration (loader + plan
+#     model) end-to-end.
+# `pending`/`validate` ride the SAME plugin-side enumeration; the flatten is covered by the
+# plugin's Go coverage (candy/plugin-feature/command_test.go TestFlattenFeatures_*) and the shared
+# validator by sdk/kit/planvalidate_test.go (TestValidatePlanSteps_Diagnostics).
 # =================================================================
 check-feature-app:
     local:
@@ -2147,9 +2146,9 @@ check-feature-local:
         disposable: true
         lifecycle: dev
         description: >-
-            Sole proof of the externalized `charly feature` COMMAND (candy/plugin-feature, command:feature). A disposable kind:local deploy on host: local runs `charly feature list candy` host-side: feature is COMPILED-IN, so its Invoke(OpRun) is dispatched in-proc ("Seam A", dispatchInProcCommand), which threads the in-proc reverse channel; the plugin owns the list output and reaches the in-core unified loader + plan model (LoadConfig / ScanCandy) over the generic "feature" HostBuild seam. The command exits 0 and lists the project's candies — including the `plugin-feature` candy itself — proving the compiled-in command + the "feature" HostBuild seam end-to-end.
+            Sole proof of the externalized `charly feature` COMMAND (candy/plugin-feature, command:feature). A disposable kind:local deploy on host: local runs `charly feature list candy` host-side: feature is COMPILED-IN, so its Invoke(OpRun) is dispatched in-proc ("Seam A", dispatchInProcCommand), which threads the in-proc reverse channel; the plugin loads the project PLUGIN-SIDE over the loader reverse legs (loaderkit — the former "feature" HostBuild seam is DELETED, K-wave 2 cone R6) and owns the list output. The command exits 0 and lists the project's candies — including the `plugin-feature` candy itself — proving the compiled-in command + the plugin-side loader enumeration end-to-end.
         plan:
-            - check: command=charly feature list candy exits 0 and lists the plugin-feature candy (proving the compiled-in command reached the in-core loader via the "feature" HostBuild seam)
+            - check: command=charly feature list candy exits 0 and lists the plugin-feature candy (proving the compiled-in command's plugin-side loader enumeration end-to-end)
               id: feature-list-runs
               exit_status: 0
               stdout:
