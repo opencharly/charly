@@ -1,6 +1,7 @@
 package cdp
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"sync"
@@ -35,29 +36,65 @@ func (e *cdpError) Error() string {
 	return fmt.Sprintf("CDP error %d: %s", e.Code, e.Message)
 }
 
+// cdpCallTimeoutDefault bounds a CDP call when the step carries no deadline of its own — the
+// never-hang backstop for an ad-hoc invocation, not a policy about how long a page may take.
+//
+// cdpCallTimeoutFloor keeps a call from being cut to nothing when the step's budget is nearly
+// spent: a 0ms wait would report "timed out" for a call that was never given a chance, which reads
+// as a browser fault rather than an exhausted step.
+const (
+	cdpCallTimeoutDefault = 30 * time.Second
+	cdpCallTimeoutFloor   = 5 * time.Second
+)
+
 // CDPClient is a lightweight Chrome DevTools Protocol WebSocket client.
 type CDPClient struct {
 	ws      *websocket.Conn
+	ctx     context.Context
 	nextID  atomic.Int64
 	mu      sync.Mutex
 	pending map[int]chan cdpMessage
 	done    chan struct{}
 }
 
-// NewCDPClient connects to a CDP WebSocket endpoint and starts reading messages.
-func NewCDPClient(wsURL string) (*CDPClient, error) {
+// NewCDPClient connects to a CDP WebSocket endpoint and starts reading messages. ctx is the STEP's
+// context; every call this client makes is bounded by the budget remaining on it (see callTimeout).
+func NewCDPClient(ctx context.Context, wsURL string) (*CDPClient, error) {
 	ws, err := websocket.Dial(wsURL, "", "http://localhost")
 	if err != nil {
 		return nil, fmt.Errorf("connecting to CDP WebSocket %s: %w", wsURL, err)
 	}
 
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	c := &CDPClient{
 		ws:      ws,
+		ctx:     ctx,
 		pending: make(map[int]chan cdpMessage),
 		done:    make(chan struct{}),
 	}
 	go c.readLoop()
 	return c, nil
+}
+
+// callTimeout derives one call's bound from the STEP's remaining budget rather than a fixed
+// constant. The fixed 30s it replaces made a step's own `eventually:` retry budget vacuous in
+// exactly the case retries exist for: a wedged call cycle measured at 37.8s was guillotined at 30s
+// every time, so a step given 90s to converge never got a single complete attempt.
+//
+// No deadline on the step → the default backstop. A deadline shorter than the floor → the floor, so
+// a nearly-exhausted step still makes one honest attempt (the step ctx itself, selected on
+// alongside this timer, remains the outer authority and will end the call regardless).
+func (c *CDPClient) callTimeout() time.Duration {
+	dl, ok := c.ctx.Deadline()
+	if !ok {
+		return cdpCallTimeoutDefault
+	}
+	if remaining := time.Until(dl); remaining > cdpCallTimeoutFloor {
+		return remaining
+	}
+	return cdpCallTimeoutFloor
 }
 
 // readLoop reads messages from the WebSocket and dispatches responses to pending callers.
@@ -89,7 +126,8 @@ func (c *CDPClient) readLoop() {
 	}
 }
 
-// Call sends a CDP method call and waits for the response (up to 30s timeout).
+// Call sends a CDP method call and waits for the response, bounded by the step's remaining budget
+// (callTimeout) and by the step context itself.
 func (c *CDPClient) Call(method string, params any) (json.RawMessage, error) {
 	id := int(c.nextID.Add(1))
 
@@ -116,6 +154,12 @@ func (c *CDPClient) Call(method string, params any) (json.RawMessage, error) {
 		return nil, fmt.Errorf("sending CDP message: %w", err)
 	}
 
+	timeout := c.callTimeout()
+	abandon := func() {
+		c.mu.Lock()
+		delete(c.pending, id)
+		c.mu.Unlock()
+	}
 	select {
 	case resp, ok := <-ch:
 		if !ok {
@@ -125,11 +169,12 @@ func (c *CDPClient) Call(method string, params any) (json.RawMessage, error) {
 			return nil, resp.Error
 		}
 		return resp.Result, nil
-	case <-time.After(30 * time.Second):
-		c.mu.Lock()
-		delete(c.pending, id)
-		c.mu.Unlock()
-		return nil, fmt.Errorf("CDP call %s timed out after 30s", method)
+	case <-c.ctx.Done():
+		abandon()
+		return nil, fmt.Errorf("CDP call %s abandoned: step context ended (%v)", method, c.ctx.Err())
+	case <-time.After(timeout):
+		abandon()
+		return nil, fmt.Errorf("CDP call %s timed out after %s", method, timeout.Round(time.Millisecond))
 	}
 }
 

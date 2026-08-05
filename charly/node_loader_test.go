@@ -41,7 +41,7 @@ shop:
     pod:
       image: coder
 `
-	if err := os.WriteFile(filepath.Join(dir, UnifiedFileName), []byte(doc), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, spec.UnifiedFileName), []byte(doc), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	uf, _, err := LoadUnified(dir)
@@ -105,7 +105,7 @@ func TestLoadUnified_RejectsLegacyShapes(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
 			doc := "version: \"" + latestSchemaVersion.String() + "\"\n" + tc.body
-			if err := os.WriteFile(filepath.Join(dir, UnifiedFileName), []byte(doc), 0o644); err != nil {
+			if err := os.WriteFile(filepath.Join(dir, spec.UnifiedFileName), []byte(doc), 0o644); err != nil {
 				t.Fatal(err)
 			}
 			_, _, err := LoadUnified(dir)

@@ -81,6 +81,7 @@ var (
 	openOutputPath        = vmshared.OpenOutputPath
 	ParseLibvirtURI       = vmshared.ParseLibvirtURI
 	pollUntil             = vmshared.PollUntil
+	CreateTempHeld        = proc.CreateTempHeld
 	RegisterTempCleanup   = proc.RegisterTempCleanup
 	RenderQemuArgv        = vmshared.RenderQemuArgv
 	resolveCPUDefaults    = vmshared.ResolveCPUDefaults

@@ -1,0 +1,376 @@
+package doctor
+
+import (
+	"encoding/json"
+	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	pb "github.com/opencharly/spec/proto"
+	"github.com/opencharly/spec/refs"
+	"github.com/opencharly/spec/spec"
+)
+
+// freshness.go — K5 seam-death of charly/main_freshness.go, verb:freshness-guard's
+// ops.OpPreflight handler. The former "must stay core" reasoning was never a genuine boundary
+// constraint — this compiled-in plugin runs in the SAME process as the host, so it can read
+// os.Args/os.Getwd/os.Executable/the filesystem exactly as core could. The only two facts a
+// compiled-in plugin genuinely cannot compute itself are threaded in as params: the parsed verb
+// path (main.go has ctx.Command(); this plugin doesn't run Kong) and the binary's stamped CalVer
+// version (CharlyVersion() lives in package main, which no other package may import — a
+// structural Go limitation, not difficulty).
+//
+// Both original checks (CheckBinaryFreshness — the 2026-05-09 cuda-cudnn incident guardrail —
+// and CheckBinaryStamped — the disposable-bed-runner unstamped-binary guardrail) are folded into
+// ONE Invoke: a HARD gate, not a data transform like OpBootstrap, so the reply just carries
+// Refuse+Message; the caller (charly/preflight_phase.go) prints Message to stderr and exits 1.
+
+// freshnessGuardInput is the ops.OpPreflight params this capability expects.
+type freshnessGuardInput struct {
+	VerbPath string `json:"verb_path"`
+	Version  string `json:"version"`
+}
+
+// freshnessGuardReply is the ops.OpPreflight reply: Refuse=true means the caller must print
+// Message to stderr and exit 1.
+type freshnessGuardReply struct {
+	Refuse  bool   `json:"refuse,omitempty"`
+	Message string `json:"message,omitempty"`
+}
+
+// invokeFreshnessGuard runs both freshness checks in-process and returns the combined verdict.
+func invokeFreshnessGuard(req *pb.InvokeRequest) (*pb.InvokeReply, error) {
+	var in freshnessGuardInput
+	if len(req.GetParamsJson()) > 0 {
+		if err := json.Unmarshal(req.GetParamsJson(), &in); err != nil {
+			return nil, fmt.Errorf("plugin-doctor: decode freshness-guard params: %w", err)
+		}
+	}
+	reply := freshnessGuardReply{}
+	if msg, refuse := staleBinaryMessage(in.VerbPath); refuse {
+		reply = freshnessGuardReply{Refuse: true, Message: msg}
+	} else if msg, refuse := unstampedBinaryMessage(in.VerbPath, in.Version); refuse {
+		reply = freshnessGuardReply{Refuse: true, Message: msg}
+	}
+	out, err := json.Marshal(reply)
+	if err != nil {
+		return nil, fmt.Errorf("plugin-doctor: marshal freshness-guard reply: %w", err)
+	}
+	return &pb.InvokeReply{ResultJson: out}, nil
+}
+
+// staleBinaryMessage verifies the running charly binary isn't stale relative to the source tree
+// it's invoked from. Returns the actionable error message + refuse=true if the source tree at (or
+// above) cwd contains .go files newer than the running binary.
+//
+// Why this exists — the 2026-05-09 cuda-cudnn incident:
+//
+//	A user ran `charly box build versa` against the system /usr/bin/charly
+//	binary that was 2 days old. The source tree at the same project root
+//	had a freshly-committed cache-mount fix (commit 230c5d4) emitting
+//	`--mount=type=cache,id=charly-var-cache-libdnf5,...`. The stale binary
+//	emitted the old form WITHOUT `id=`, which broke buildah's cross-build
+//	cache reuse, forcing a full re-download of cuda-cudnn (462 MiB) over
+//	a 50 KiB/s mirror — 90 minutes burned. The bug was undetectable from
+//	the build log alone; only `which charly` + `stat /usr/bin/charly` versus
+//	`stat ./charly/charly` revealed the mismatch.
+//
+//	Per CLAUDE.md R9 ("After pushing code, explicitly rebuild on the
+//	target and verify charly version. If the version is old, the fix under
+//	test isn't really under test."), this guardrail makes the check
+//	automatic at every invocation rather than relying on developer
+//	discipline.
+//
+// Detection logic:
+//  1. Walk up from cwd until we find a directory containing BOTH
+//     charly/main.go AND charly.yml — this identifies an opencharly source
+//     tree unambiguously (other projects might have a charly.yml, but
+//     only opencharly has charly/main.go). If no source tree found, no
+//     enforcement (the binary is being run against a non-opencharly
+//     project; nothing to compare against).
+//  2. Stat the running binary via os.Executable().
+//  3. Walk every .go file under <sourceRoot>/charly/, find the newest mtime.
+//  4. If newest source mtime > binary mtime + 60s slack, the binary is
+//     stale.
+//
+// The 60-second slack absorbs same-clock-second builds (binary written,
+// then a .go file touched within the same second by an editor save) and
+// filesystem mtime rounding (some filesystems only resolve to the
+// nearest second).
+//
+// Verb gating: info-only verbs (version, help, status, inspect, list)
+// skip the check — these are read-only diagnostics that work correctly
+// under any binary version, and being able to run `charly version` to
+// confirm the mismatch is essential when debugging the freshness error
+// itself. Heavyweight verbs (image build, image generate, deploy,
+// rebuild, check, ...) enforce the check.
+//
+// Bypass: CHARLY_SKIP_FRESHNESS_CHECK=1 disables the check entirely. Use
+// this for CI runs where the binary is intentionally pinned to a
+// specific build, for testing pre-built images, or as an emergency
+// override. NOT recommended for routine development.
+func staleBinaryMessage(verbPath string) (message string, refuse bool) {
+	if os.Getenv("CHARLY_SKIP_FRESHNESS_CHECK") != "" {
+		return "", false
+	}
+	if isFreshnessSafeVerb(verbPath) {
+		return "", false
+	}
+
+	binPath, err := os.Executable()
+	if err != nil {
+		return "", false
+	}
+	binStat, err := os.Stat(binPath)
+	if err != nil {
+		return "", false
+	}
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", false
+	}
+	sourceRoot := findCharlySourceRoot(cwd)
+	if sourceRoot == "" {
+		return "", false
+	}
+	// A --repo CACHE is a fetched tree, never an edited one, so the staleness
+	// premise ("you changed source this binary predates") cannot hold there. The
+	// cache matches findCharlySourceRoot exactly (it has charly/main.go +
+	// charly.yml) and git just wrote every file, so its mtime ALWAYS beats the
+	// binary — the check fired on every `charly --repo … <heavy verb>` and told a
+	// packaged user to `cd <cache> && task build:binary`, advice that is both
+	// impossible to act on and pointless (rebuilding from the cache is not how
+	// they got their charly). That made --repo unusable for exactly the person it
+	// exists for: someone with the binary and no checkout.
+	if isUnderRepoCache(sourceRoot) {
+		return
+	}
+
+	newestPath, newestModTime := newestGoFile(filepath.Join(sourceRoot, "charly"))
+	if newestPath == "" {
+		return "", false
+	}
+
+	// 60-second slack: same-second builds + FS mtime rounding.
+	if newestModTime.Before(binStat.ModTime().Add(60 * time.Second)) {
+		return "", false
+	}
+
+	rel, _ := filepath.Rel(sourceRoot, newestPath)
+	var b strings.Builder
+	fmt.Fprintf(&b, "charly: error: stale binary detected — refusing to run %q\n\n", verbPath)
+	fmt.Fprintf(&b, "  running:        %s\n", binPath)
+	fmt.Fprintf(&b, "  binary mtime:   %s\n", binStat.ModTime().Format(time.RFC3339))
+	fmt.Fprintf(&b, "  newer source:   %s\n", rel)
+	fmt.Fprintf(&b, "  source mtime:   %s\n", newestModTime.Format(time.RFC3339))
+	fmt.Fprintf(&b, "  source root:    %s\n\n", sourceRoot)
+	fmt.Fprintf(&b, "The source tree has been edited since this binary was built.\n")
+	fmt.Fprintf(&b, "Running heavy operations against a stale binary leads to silent\n")
+	fmt.Fprintf(&b, "miscompilation — e.g. the 2026-05-09 cuda-cudnn incident burned\n")
+	fmt.Fprintf(&b, "90 minutes re-downloading 462 MiB because /usr/bin/charly predated\n")
+	fmt.Fprintf(&b, "the cache-mount fix at commit 230c5d4.\n\n")
+	fmt.Fprintf(&b, "Fix:    cd %s && task build:binary   (then use ./bin/charly)\n", sourceRoot)
+	fmt.Fprintf(&b, "Bypass: export CHARLY_SKIP_FRESHNESS_CHECK=1   (NOT recommended)\n")
+	return b.String(), true
+}
+
+// isFreshnessSafeVerb returns true for read-only diagnostic verbs that
+// produce correct output under any binary version. The principle: if a
+// verb only reads state and emits text, it's safe; if it writes files,
+// builds artifacts, or deploys, it must run on the current source.
+func isFreshnessSafeVerb(verbPath string) bool {
+	// Kong's ctx.Command() returns space-joined paths like "box build",
+	// "secrets gpg env", "version". Match by exact name OR by prefix
+	// (so "box inspect ..." matches "box inspect").
+	safePrefixes := []string{
+		"version",
+		"help",
+		"status",        // reads container state
+		"box inspect",   // reads the project config + emits JSON
+		"box list",      // reads the project config + emits text
+		"box validate",  // reads the project config + emits warnings (no writes)
+		"bundle show",   // reads charly.yml
+		"bundle status", // reads deploy state
+		"bundle path",   // prints a path
+		"secrets list",  // reads credential store
+		"secrets get",
+		"secrets path",
+		"settings show",
+	}
+	for _, p := range safePrefixes {
+		if verbPath == p || strings.HasPrefix(verbPath, p+" ") {
+			return true
+		}
+	}
+	return false
+}
+
+// unstampedBinaryMessage refuses to run the disposable-bed RUNNER (`charly check run <bed>`) when
+// the executing binary reports an UNSTAMPED version ("unknown"), pointing at `task build:binary`.
+// It is the version-identity analog of staleBinaryMessage: a plain `go build -o bin/charly
+// ./charly` leaves BuildCalVer empty → version=="unknown", and the bed runner then fails MINUTES
+// later inside an eval-VM plan step (image tags, plugin-cache keys, and bed stamp assertions all
+// key off the version) — or passes vacuously. This makes the precondition mechanical instead of a
+// behavioral "remember to task build:binary" rule the gate defect twice slipped past (R4: a
+// precondition, never a retry). Scope is ONLY `charly check run`: ctx.Command() collapses the
+// whole check family to "check" (the subcommand is a passthrough arg), so "run" is read from
+// os.Args — the SAME process, so this plugin reads it exactly like main() would. The
+// CHARLY_SKIP_FRESHNESS_CHECK bypass disables this too (CI / pinned builds).
+func unstampedBinaryMessage(verbPath, version string) (message string, refuse bool) {
+	if !shouldRefuseUnstamped(verbPath, version) {
+		return "", false
+	}
+	binPath, _ := os.Executable()
+	msg := fmt.Sprintf(`charly: error: refusing to run "check run" with an UNSTAMPED binary (version "unknown")
+
+  running:  %s
+
+A plain `+"`go build`"+` produces an unstamped binary. `+"`charly check run`"+` bakes the version into
+image tags, plugin-cache keys, and bed stamp assertions, so a bed run against an
+unstamped binary fails minutes later inside a plan step (or passes vacuously) — the
+twice-recurred gate defect.
+
+Fix:    task build:binary                        # stamps the CalVer identity
+Bypass: export CHARLY_SKIP_FRESHNESS_CHECK=1      (NOT recommended)
+`, binPath)
+	return msg, true
+}
+
+// checkSubcommandIsRun reports whether the check family's subcommand is "run" — the token
+// immediately after the "check" command word in os.Args. This is a raw argv scan independent of
+// how Kong ends up rendering the parsed command path (a flat passthrough for a capability with no
+// declared subcommand catalog, or a real nested `cmd:""` child under F-CLI-NEST), so it stays
+// correct either way. os.Args is a process-global — this plugin reads it exactly like main()
+// would, since it runs in the SAME process (compiled-in).
+func checkSubcommandIsRun() bool {
+	for i, a := range os.Args {
+		if a == "check" {
+			return i+1 < len(os.Args) && os.Args[i+1] == "run"
+		}
+	}
+	return false
+}
+
+// commandPathKey strips the trailing " <args>" placeholder Kong renders for a command's deepest
+// pass-through Args leaf, yielding the command PATH Kong actually parsed (mirrors charly/
+// provider_command_external.go's commandPathKey — a 2-line pure function, not worth a cross-module
+// import for).
+func commandPathKey(kongCommand string) string {
+	return strings.TrimSuffix(kongCommand, " <args>")
+}
+
+// shouldRefuseUnstamped is unstampedBinaryMessage's pure decision: refuse iff the verb is `check
+// run` (the bed runner) AND the binary is unstamped, and the CHARLY_SKIP_FRESHNESS_CHECK bypass is
+// unset. verbPath is normalized via commandPathKey and compared by its FIRST token: `check`
+// declares a subcommand catalog (F-CLI-NEST), so Kong renders "check run <args>"/"check box
+// <args>"/etc — one token deeper than the bare "check" an exact compare would expect.
+func shouldRefuseUnstamped(verbPath, version string) bool {
+	if os.Getenv("CHARLY_SKIP_FRESHNESS_CHECK") != "" {
+		return false
+	}
+	key := commandPathKey(verbPath)
+	if (key != "check" && !strings.HasPrefix(key, "check ")) || !checkSubcommandIsRun() {
+		return false
+	}
+	return version == "unknown"
+}
+
+// findCharlySourceRoot walks up from start looking for a directory that
+// contains BOTH charly/main.go AND charly.yml. Returns the path to that
+// directory, or empty string if no such ancestor exists within 12 levels.
+//
+// The dual-marker requirement (charly/main.go + charly.yml) is what makes
+// this unambiguous: many projects have a charly.yml; only opencharly has
+// charly/main.go alongside it.
+func findCharlySourceRoot(start string) string {
+	cur := start
+	for range 12 {
+		if statExists(filepath.Join(cur, "charly", "main.go")) &&
+			statExists(filepath.Join(cur, spec.UnifiedFileName)) {
+			return cur
+		}
+		parent := filepath.Dir(cur)
+		if parent == cur {
+			return ""
+		}
+		cur = parent
+	}
+	return ""
+}
+
+// statExists is a tiny helper that returns true iff os.Stat succeeds.
+func statExists(p string) bool {
+	_, err := os.Stat(p)
+	return err == nil
+}
+
+// isUnderRepoCache reports whether dir lies inside the remote-repo cache
+// (~/.cache/charly/repos, or CHARLY_REPO_CACHE). Phrased as a property of the
+// TREE rather than of how the project dir was chosen, so it holds however cwd
+// got there — an explicit --repo, CHARLY_PROJECT_REPO, or a user who simply cd'd
+// into a cache — instead of only on the paths that remembered to pass a flag.
+func isUnderRepoCache(dir string) bool {
+	cacheDir, err := refs.RepoCacheDir()
+	if err != nil {
+		return false
+	}
+	cacheAbs, err := filepath.Abs(cacheDir)
+	if err != nil {
+		return false
+	}
+	dirAbs, err := filepath.Abs(dir)
+	if err != nil {
+		return false
+	}
+	rel, err := filepath.Rel(cacheAbs, dirAbs)
+	if err != nil {
+		return false
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// newestGoFile walks dir recursively (skipping vendor / node_modules /
+// .git) and returns the path + mtime of the .go file with the latest
+// mtime. Returns "", zero-time if no .go files found or dir doesn't
+// exist.
+func newestGoFile(dir string) (string, time.Time) {
+	var newestPath string
+	var newestModTime time.Time
+
+	_ = filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			base := d.Name()
+			if base == "vendor" || base == "node_modules" || base == ".git" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(p, ".go") {
+			return nil
+		}
+		// _test.go files never enter the built binary (go build excludes
+		// them), so an edited test cannot make the installed charly stale —
+		// counting them produced false-positive staleness during test-only
+		// work.
+		if strings.HasSuffix(p, "_test.go") {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return nil
+		}
+		if info.ModTime().After(newestModTime) {
+			newestModTime = info.ModTime()
+			newestPath = p
+		}
+		return nil
+	})
+	return newestPath, newestModTime
+}

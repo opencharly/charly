@@ -80,10 +80,10 @@ type TypedStepProvider interface {
 }
 
 // BuildEmitter is the build-context act half of a verb provider that renders its
-// install timeline as a verbatim Containerfile FRAGMENT via Invoke(OpEmit) — neither
+// install timeline as a verbatim Containerfile FRAGMENT via Invoke(ops.OpEmit) — neither
 // a RenderProvisionScript shell string (ProvisionActor) nor a typed InstallStep
 // (TypedStepProvider). The build render (candy/plugin-build's deploykit.EmitTasks) resolves a
-// `plugin:` verb's provider and renders the fragment via InvokeProvider(OpEmit) UNIFORMLY (P8b — a state-provision
+// `plugin:` verb's provider and renders the fragment via InvokeProvider(ops.OpEmit) UNIFORMLY (P8b — a state-provision
 // verb self-declares its act shell via EmitReply.ActScript, so there is no package-main
 // concrete-type branch), placement-agnostic: in-proc for a builtin implementing this
 // interface, over go-plugin gRPC for an external grpcProvider. A builtin verb implementing BuildEmitter therefore
@@ -93,7 +93,7 @@ type TypedStepProvider interface {
 type BuildEmitter interface {
 	Provider
 	// BuildEmits marks the capability — it always returns true; the fragment itself is
-	// produced by Invoke(OpEmit), not here. (A marker method, like LowersTo names a kind.)
+	// produced by Invoke(ops.OpEmit), not here. (A marker method, like LowersTo names a kind.)
 	BuildEmits() bool
 }
 

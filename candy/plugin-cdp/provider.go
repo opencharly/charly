@@ -83,7 +83,7 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 	}
 	ep := &cdpEndpoint{URL: "http://" + addr}
 
-	out, runErr := dispatch(ep, &op, &in)
+	out, runErr := dispatch(ctx, ep, &op, &in)
 
 	// The shared exit/stdout/stderr + screenshot-artifact verdict pipeline (R3). screenshot is
 	// cdp's one artifact-producing method.

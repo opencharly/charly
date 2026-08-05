@@ -33,7 +33,7 @@ func (f *fakeExternalVerb) Invoke(_ context.Context, op *Operation) (*Result, er
 // (Plugin + PluginInput) reaches the provider verbatim, so the plugin decodes its
 // own input def from PluginInput.
 func TestInvokeVerbProvider_ExternalCharlyVerb(t *testing.T) {
-	r := hostVerbResolverFor(nil, RunModeBox)
+	r := hostVerbResolverFor(nil, spec.CheckModeBox)
 	fake := &fakeExternalVerb{reply: `{"status":"pass","message":"saw-op"}`}
 
 	op := &spec.Op{Plugin: "kube", PluginInput: map[string]any{"method": "apply", "namespace": "demo"}}

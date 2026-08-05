@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"github.com/opencharly/spec/ops"
 	"net"
 	"strings"
 	"testing"
@@ -96,7 +97,7 @@ func TestPluginGRPCRoundTrip(t *testing.T) {
 	}
 
 	out, err := provs[0].Invoke(context.Background(), &Operation{
-		Reserved: "testprobe", Op: OpRun, Params: []byte(`{"plugin":"testprobe"}`), Env: []byte(`{}`),
+		Reserved: "testprobe", Op: ops.OpRun, Params: []byte(`{"plugin":"testprobe"}`), Env: []byte(`{}`),
 	})
 	if err != nil {
 		t.Fatalf("invoke: %v", err)

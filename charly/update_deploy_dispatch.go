@@ -8,20 +8,33 @@ package main
 // former UpdateCmd — now command:update in candy/plugin-pod) so the
 // user-facing surface is just one verb.
 //
-// TRACKED P13-KERNEL EXIT (DEPLOY-wave audit, 2026-07-20; R1-corrected 2026-07-23 —
-// K1-UNBLOCK wave-4 spike): the host tree read / loadDeployPlugins / ResolveTarget were
-// framed here as blocked on a NOT-YET-BUILT "venue-scoped-executor-session seam" —
-// that framing is now STALE. The seam already exists and is live: InvokeProvider's
-// caller-supplied VenueDescriptorJson self-description (plugin_dispatch_reverse.go)
-// already lets an out-of-process cold-start caller materialize a fresh executor with
-// NO incoming executor of its own, and a COMPILED-IN candy/plugin-bundle (dual-
-// placement, same host process) can construct one directly via the already-portable
-// specexec.RootExecutorForDeployNode (deploykit re-exports it for plugin callers) — no IPC round-trip for the
-// common local-target case. This file's dispatch kernel moving is therefore
-// straightforward-but-large RELOCATION work (resolved-project envelope for the
-// deploy tree + the two portable executor-construction primitives above +
-// InvokeProvider for cross-plugin calls), not mechanism invention — see the
-// K1-UNBLOCK program's wave-4 spike findings for the full trace.
+// CONFIRMED STAY (#55 W3 A5, superseding this file's own prior "straightforward-but-large
+// RELOCATION work" framing — that framing predates the later Cutover B ruling below and never
+// got corrected here; the file's own header is a CLAIM, not a verdict, until re-verified). The
+// K1-UNBLOCK-era venue-executor-session blocker it described IS resolved (InvokeProvider's
+// VenueDescriptorJson self-description + specexec.RootExecutorForDeployNode are both live,
+// portable primitives) — but dispatchByDeployTarget's orchestration body itself does NOT move,
+// because it CALLS two irreducible core-private M-mechanisms directly, not a generic dispatch a
+// plugin could reach:
+//   - loadDeployPlugins (plugin_loader.go) IS the plugin-loading mechanism — it mutates the
+//     core-private provider registry by connecting NEW out-of-process plugins. A plugin cannot
+//     load another plugin into the host's own registry; that registry is core-private by
+//     definition (the K1 loader keystone).
+//   - ResolveTarget (unified_targets.go) reads providerRegistry.ResolveDeploy(node.Target) and
+//     type-asserts the result to the core-private *grpcProvider — already explicitly named STAY
+//     by the orchestrator adjudication (KERNEL_MANIFEST.md's unified_targets.go table).
+//
+// This is the EXACT same "one step that cannot cross the plugin boundary" pattern
+// pod_lifecycle_verb.go's dispatchLifecycleTarget already established for start/stop/shell/logs/
+// service/cmd — host_build_pod_lifecycle_dispatch.go's Cutover B header already ruled this file
+// "keeps its existing podUpdateCmd/dispatchByDeployTarget body UNCHANGED... registry+loader-coupled
+// the same way", charly/commands.go's header independently confirms it, and charly.yml's own
+// check-fedora-pod bed plan asserts it live ("dispatchByDeployTarget... UNCHANGED by this
+// cutover"). Four independent sibling sources already agreed; only THIS file's own header hadn't
+// caught up. resolveUpdateDeployNode/noteUpdateDisposability are pure spec-native helpers (no
+// core-private coupling) but are too small and too tightly sequenced with the STAY body to be
+// worth a wire-shape change for (LOC-neutral churn, the same "not a real reduction" verdict the
+// A9 ruling gave unified_targets.go's per-verb methods).
 //
 // Critical semantic: NONE of the dispatchers below regenerate the
 // user-overlay deploy entry (no `charly bundle add` / `charly config` calls

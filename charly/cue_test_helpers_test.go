@@ -23,7 +23,7 @@ func decodeViaCUEForTest(t *testing.T, body string, out any) error {
 	if node.Kind == yaml.DocumentNode && len(node.Content) > 0 {
 		node = node.Content[0]
 	}
-	return decodeEntityViaCUE(node, reflect.TypeOf(out).Elem(), out, "test")
+	return requireProjectLoader().DecodeEntityViaCUE(node, reflect.TypeOf(out).Elem(), out, "test")
 }
 
 // candyBodyGuardErr runs the parseCandyYAML load-time guards (legacy-key +

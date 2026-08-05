@@ -19,7 +19,10 @@ import (
 // (loadDeployPlugins + project dir). resolveDelNode (LoadUnified-coupled) and
 // deriveChildExecutorForPath (registry-coupled — deployTraitDescent needs the providerRegistry)
 // stay host-side behind the deploy-del-resolve / resolve-target-add /
-// deploy-node-del-dispatch / deploy-members-up / deploy-members-down seams. The plugin COMPILES the
+// deploy-node-del-dispatch seams. deploy-members-up/deploy-members-down DIED (#55 W3 A4): the
+// plugin calls deploykit.BringUpMembers/TearDownMembers directly now — spec/proc + spec/hostenv +
+// spec/exec fabric, no host-private state, no registry coupling (the R3 3-way audit's finding —
+// see sdk/deploykit/bundle_members.go's header). The plugin COMPILES the
 // InstallPlans IN-PROC (K4-C shape-2, dispatch.go) and the per-node terminal ResolveTarget+Add
 // reconstructs its OWN parentExec executor chain HOST-side (resolve-target-add) from the ancestor
 // path/node lists this walk sends — a live DeployExecutor never
@@ -110,12 +113,12 @@ func (c *BundleAddCmd) Run() error {
 	if c.DryRun {
 		return nil
 	}
-	// Persist each sibling member's deploy-shaped overrides PLUGIN-SIDE BEFORE the host
-	// "deploy-members-up" seam runs bringUpMembers (which no longer persists itself — #55 coneC-dsh
-	// β1), so the member's declared port/volume/env + arbiter role are seeded by the time its own
-	// `charly config`/`charly start` runs. Best-effort, mirroring the former bringUpMembers persist.
+	// Persist each sibling member's deploy-shaped overrides PLUGIN-SIDE BEFORE
+	// deploykit.BringUpMembers runs (it no longer persists itself — #55 coneC-dsh β1), so the
+	// member's declared port/volume/env + arbiter role are seeded by the time its own `charly
+	// config`/`charly start` runs. Best-effort, mirroring the former bringUpMembers persist.
 	persistMemberDeployOverrides(rootNode)
-	return hostDeploySeamJSON("deploy-members-up", spec.DeployMembersRequest{Node: rootNode}, nil)
+	return deploykit.BringUpMembers(rootNode, "")
 }
 
 // walk performs a pre-order traversal of node's Children, dispatching each position via dispatchOne
@@ -244,6 +247,7 @@ func (c *BundleAddCmd) dispatchOne(path string, node *spec.BundleNode, ancestorP
 		SkipIncompatible: opts.SkipIncompatible,
 		AssumeYes:        c.AssumeYes,
 		BuilderImage:     opts.BuilderImageOverride,
+		DevLocalPkg:      opts.DevLocalPkg,
 	}, nil)
 }
 
@@ -281,11 +285,11 @@ func (c *BundleDelCmd) Run() error {
 	}
 
 	// Tear down any sibling members (companion deployments) FIRST — the reverse of
-	// bringUpMembers (root up → members up; members down → root down). Best-effort. Skipped on
+	// BringUpMembers (root up → members up; members down → root down). Best-effort. Skipped on
 	// a dry-run.
 	var memberErr error
 	if !c.DryRun {
-		memberErr = hostDeploySeamJSON("deploy-members-down", spec.DeployMembersRequest{Node: dr.Node}, nil)
+		memberErr = deploykit.TearDownMembers(dr.Node)
 	}
 
 	targetErr := hostDeploySeamJSON("deploy-node-del-dispatch", spec.DeployNodeDelDispatchRequest{

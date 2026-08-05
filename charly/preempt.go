@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	specexec "github.com/opencharly/spec/exec"
+	"github.com/opencharly/spec/ops"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -20,8 +21,10 @@ import (
 //   1. The in-core PROXY (arbiterProxy + Lease + the acquire*/release* shims) — re-verified at
 //      Cutover B unit 6b (the previous consumer list here — check_bed_run.go/start.go/vm.go/
 //      commands.go/vm_gpu_cmd.go — was STALE; none of those files call these shims anymore).
-//      The REAL, current callers are host_build_check_bed.go's bed arbiter lease
-//      (acquireResourceForClaimant), and — permanently, per the B-1 unit-2 IOU #4 ruling —
+//      The check-bed session's own arbiter lease dissolved entirely (#55 W3 B2-full):
+//      candy/plugin-check/bed_session.go now calls verb:arbiter DIRECTLY via InvokeProvider (the
+//      SAME vm_arbiter_shim.go precedent noted below), never through this in-core proxy. The
+//      REAL, current callers are — permanently, per the B-1 unit-2 IOU #4 ruling —
 //      host_build_arbiter_bracket.go's (the F10 HostBuild seam candy/plugin-bundle's
 //      arbiter-bracket-acquire/-release dispatch calls, FLOOR-SLIM-proper Unit-8; was
 //      arbiter_bracket.go core-resident before that move) + host_build_pod_lifecycle_dispatch.go's
@@ -32,11 +35,16 @@ import (
 //      spec.ArbiterInvokeInput (the generic core→verb registry bridge — core is not a plugin, so
 //      it cannot call InvokeProvider; the externalized command:preempt CLI reaches the arbiter
 //      over InvokeProvider instead).
-//   2. gatherResources — the ONE arbiter host dependency that remains genuinely K1-blocked
-//      (LoadUnified-coupled), and ONLY because it has core-internal callers OUTSIDE the arbiter
-//      (gpu_allocate.go/gpu_imply.go — the operator-deferred GPU auto-allocation exception, not
-//      K-wave inventory). The arbiter itself no longer reaches it: candy/plugin-preempt reads
-//      resources off the generic InvokeProvider("build","project") envelope (rp.Resources) instead.
+//   2. gatherResources — REWIRED off LoadUnified(".") onto the SAME generic
+//      InvokeProvider("build","project") envelope every other resolved-project consumer uses
+//      (K-wave W3a A2), retiring its K1/LoadUnified coupling now rather than waiting for #12. Its
+//      sole remaining caller is gpu_allocate.go's bedGPUPrereqMissing, reached now via the narrow
+//      host_build_check_bed_gpu_prereq.go seam (#55 W3 B2-full — GPU host-DETECTION is the
+//      project's operator-dropped exception, the ONE piece of check-bed's former session that
+//      stayed core); gpu_imply.go's former call moved to candy/plugin-preempt (K-wave W3a A2) and
+//      no longer needs this function. The arbiter itself doesn't reach it either:
+//      candy/plugin-preempt reads resources off its OWN InvokeProvider("build","project")
+//      envelope (rp.Resources) directly.
 //
 //   K1-unblock wave 1 retired the former bespoke arbiter reverse-RPC channel entirely (the
 //   "2 genuinely K1-blocked seams" it carried — gather/resources): candy/plugin-preempt now
@@ -61,7 +69,8 @@ import (
 //
 // Crash-safety, the lease ledger, poison markers, liveness (owner PID/start), and the
 // stop/flip/save sequencing all live in the plugin now; the host only supplies the ONE remaining
-// LoadUnified-coupled config read (gatherResources, for its non-arbiter GPU-allocation callers).
+// resolved-project-backed config read (gatherResources, for its non-arbiter GPU-allocation
+// caller) — no longer LoadUnified-coupled (K-wave W3a A2).
 
 // envPreemptLeaseHeld is set by the OUTERMOST claim-bringing `charly` invocation (a check-bed
 // run, or a standalone `charly vm create`/`charly start`) so the nested `charly` subprocesses it
@@ -95,7 +104,7 @@ func arbiterInvoke(in spec.ArbiterInvokeInput) (spec.ArbiterInvokeReply, error) 
 	}
 	ctx := specexec.ContextWithExecutor(context.Background(),
 		specexec.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}}))
-	reply, err := invokeTyped[spec.ArbiterInvokeInput, spec.ArbiterInvokeReply](ctx, prov, "arbiter", OpRun, in)
+	reply, err := invokeTyped[spec.ArbiterInvokeInput, spec.ArbiterInvokeReply](ctx, prov, "arbiter", ops.OpRun, in)
 	if err != nil {
 		return spec.ArbiterInvokeReply{}, fmt.Errorf("arbiter %s: %w", in.Action, err)
 	}
@@ -154,27 +163,60 @@ func acquireExclusiveForClaimant(claimant string, node spec.BundleNode, transien
 }
 
 // acquireSharedForClaimant acquires (or reuses) a SHARED refcounted lease for a pod/bed that
-// declares requires_shared. Mirrors acquireExclusiveForClaimant.
+// declares requires_shared — OR that implicitly consumes the nvidia GPU with no explicit claim
+// (K-wave W3a A2): it ALWAYS dispatches to the arbiter (even with zero explicit shared tokens,
+// unless an outer orchestrator already owns the lease) so the compiled-in candy/plugin-preempt
+// can union its own implied-GPU-consumer token onto tokens (gpu_imply.go, now plugin-side) before
+// applying its own early-return-on-empty acquire policy — arbiter policy belongs in the arbiter.
+// Cheap: plugin-preempt is compiled-in, so this is an in-proc call, never a real RPC round trip.
 func acquireSharedForClaimant(claimant string, node spec.BundleNode, transient bool) (*Lease, error) {
-	if len(node.RequiredShared()) == 0 {
-		return &Lease{}, nil
-	}
 	if os.Getenv(envPreemptLeaseHeld) != "" {
 		return &Lease{}, nil
 	}
 	return acquireDispatch(spec.ArbiterActionAcquireShared, claimant, dedupeNonEmpty(node.RequiredShared()), node, transient)
 }
 
+// isPodMember reports whether node is a CONTAINER-venue (pod) deployment, restoring the
+// registry-fallback semantics the former core-resident isPodMember/nodeTraits provided (deleted
+// #55 W3 B2-full, repointed to the bare spec.IsContainerVenue call below — a regression this
+// restores: found during the #21 terminus RCA). spec.IsContainerVenue is a pure spec-level
+// predicate with no registry coupling by design (spec/ cannot import the provider registry), so it
+// strictly requires node.Descent to already be stamped and returns false otherwise — correct for a
+// FULLY LOADED node, but node.Descent is nil for a SYNTHETIC node built outside the loader (the
+// same "loaded vs synthetic" distinction the deleted nodeTraits' own doc comment named). Falls back
+// to the registry-resolved trait for the node's effective target (empty target defaults to "pod",
+// matching the deleted effectiveTarget) exactly like the deleted implementation did.
+func isPodMember(node *spec.BundleNode) bool {
+	if node != nil && node.Descent != nil {
+		return node.Descent.Venue == "container"
+	}
+	target := "pod"
+	if node != nil && node.Target != "" {
+		target = node.Target
+	}
+	return spec.DescentFromTraits(deployTraitsFor(target)).Venue == "container"
+}
+
 // acquireDispatch is the shared acquire leg (R3): it Invokes verb:arbiter with the pre-computed
 // tokens + claim address, and on an active lease marks envPreemptLeaseHeld so nested
-// subprocesses skip re-acquiring.
+// subprocesses skip re-acquiring. It also projects the claimant node's GPU-relevant traits
+// (IsGroup/IsPodMember/SecurityDevices) onto every action — cheap, ignored by every action except
+// acquire-shared's implied-GPU-consumer check (K-wave W3a A2) — rather than branching per-action,
+// since core already has the node in hand and the wire fields are optional/omitempty.
 func acquireDispatch(action, claimant string, tokens []string, node spec.BundleNode, transient bool) (*Lease, error) {
+	var secDevices []string
+	if node.Security != nil {
+		secDevices = node.Security.Devices
+	}
 	r, err := arbiterInvoke(spec.ArbiterInvokeInput{
-		Action:    action,
-		Claimant:  claimant,
-		Tokens:    tokens,
-		ClaimAddr: spec.HolderAddrFor(claimant, node),
-		Transient: transient,
+		Action:          action,
+		Claimant:        claimant,
+		Tokens:          tokens,
+		ClaimAddr:       spec.HolderAddrFor(claimant, node),
+		Transient:       transient,
+		IsGroup:         node.IsGroup(),
+		IsPodMember:     isPodMember(&node),
+		SecurityDevices: secDevices,
 	})
 	if err != nil {
 		return nil, err
@@ -189,20 +231,18 @@ func acquireDispatch(action, claimant string, tokens []string, node spec.BundleN
 }
 
 // acquireResourceForClaimant acquires the appropriate lease for a claimant: EXCLUSIVE when it
-// declares requires_exclusive, SHARED when it declares requires_shared, a no-op when it claims
-// nothing. The single entry point for the start + check-bed paths (R3). A node that USES the
-// nvidia GPU but declared NO explicit claim is auto-promoted to a SHARED claimant of the gpu
-// token here (withImpliedGPUShared) — so EVERY GPU-consuming deployment becomes a tracked,
-// preemptable shared claimant with no per-deploy config.
+// declares requires_exclusive, otherwise SHARED (a no-op inside the arbiter when the claimant
+// declares no requires_shared AND implies no GPU consumption). The single entry point for the
+// start + check-bed paths (R3). A node that USES the nvidia GPU but declared NO explicit claim is
+// auto-promoted to a SHARED claimant of the gpu token by the arbiter itself (K-wave W3a A2 — the
+// former in-core withImpliedGPUShared moved to candy/plugin-preempt's gpu_imply.go) — so EVERY
+// GPU-consuming deployment becomes a tracked, preemptable shared claimant with no per-deploy
+// config.
 func acquireResourceForClaimant(claimant string, node spec.BundleNode, transient bool) (*Lease, error) {
-	node = withImpliedGPUShared(node)
 	if len(node.RequiredExclusive()) > 0 {
 		return acquireExclusiveForClaimant(claimant, node, transient)
 	}
-	if len(node.RequiredShared()) > 0 {
-		return acquireSharedForClaimant(claimant, node, transient)
-	}
-	return &Lease{}, nil
+	return acquireSharedForClaimant(claimant, node, transient)
 }
 
 // releaseResourceClaim releases a persistent claimant's lease on teardown (charly vm
@@ -227,17 +267,38 @@ func releaseResourceClaim(claimant string) {
 // the SAME functions host_build_config_resolve.go's VM-claimant lookup now shares, R3). The
 // former bespoke arbiter reverse-RPC channel itself is deleted (sdk/protocol/schema/plugin.cue).
 //
-// gatherResources is the ONE function in this family that stays here: it has core-internal
-// callers OUTSIDE the arbiter (gpu_allocate.go, gpu_imply.go — the operator-deferred GPU
-// auto-allocation exception, not K-wave inventory; see charly/devices.go), so it cannot move.
-
+// gatherResources is the ONE function in this family that stays here: it has ONE remaining
+// core-internal caller (gpu_allocate.go's bedGPUPrereqMissing — the pre-build check-bed
+// fail-fast, reached now via the narrow host_build_check_bed_gpu_prereq.go seam that survived
+// check-bed's full dissolution, #55 W3 B2-full — GPU host-DETECTION is the project's explicitly
+// operator-dropped exception, fenced from this cutover; see that file's header). gpu_imply.go's
+// former caller moved to candy/plugin-preempt (K-wave W3a A2) and no longer uses this function.
+//
 // gatherResources loads the token -> ResourceDef map (the gpu selector that drives the mode
-// flip) from the project charly.yml. nil when none / unreadable.
-func gatherResources() map[string]*ResolvedResource {
-	if uf, ok, err := LoadUnified("."); err == nil && ok && uf != nil {
-		return resolveResources(uf)
-	}
-	return nil
+// flip) via the SAME generic InvokeProvider("build","project") envelope every other
+// resolved-project consumer uses (K-wave W3a A2 rewire) — replacing the former LoadUnified(".")
+// K1-coupled read.
+//
+// It MUST thread an in-proc reverse-channel executor. The plugin's resolve
+// (candy/plugin-build's resolveProjectEnvelope) loads the project through
+// loaderkit.LoadUnifiedViaExecutor, so with a bare context.Background() it has no executor to
+// reach the host's loader legs and returns an error — which the best-effort contract below then
+// swallows into an empty map. The earlier "plain resolve+typed-reply shape, hostInvokeOr is
+// enough because plugin-build is compiled in" reading was wrong on exactly that point: being
+// compiled in removes the need to CONNECT the plugin, not the plugin's need for a reverse
+// channel. The result was a permanently dead resolve — every caller saw "no resources declared".
+// The specexec.ContextWithExecutor(in-proc executor) ctx below is the same one
+// check_venue_resolve.go's resolveCheckVenueReply threads for the same reason; it rides the
+// SHARED hostInvokeOr (provider_invoke.go), which now takes the caller's ctx, so there is still
+// exactly ONE warn-and-degrade implementation rather than a second copy here (R3).
+//
+// Zero value (nil Resources) on any resolve/invoke/decode failure — this function's existing "nil
+// when none/unreadable" contract, unchanged, with the one-warning-per-failure best-effort
+// reporting provider_invoke.go prescribes for a probe path that must never fail a deploy.
+func gatherResources() map[string]*spec.ResolvedResource {
+	ctx := specexec.ContextWithExecutor(context.Background(), specexec.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}}))
+	rp := hostInvokeOr[spec.ResolvedProjectRequest, spec.ResolvedProject](ctx, ClassBuild, "project", ops.OpResolve, spec.ResolvedProjectRequest{}, "gather-resources")
+	return rp.Resources
 }
 
 // --- small host-side set helpers -----------------------------------------------------------

@@ -59,22 +59,18 @@ func ComputeCalVerAt(t time.Time) string {
 	return spec.ComputeCalVerAt(t)
 }
 
-// CalVer is the parsed YYYY.DDD.HHMM calendar version. The parsed type + its parser live in spec
-// (spec.ParsedCalVer, #55 value extraction) so BOTH core (the loader version gate) and the candy
-// (the migration chain) reference the ONE copy; these zero-churn aliases keep every core call site
-// unchanged. (The struct is named ParsedCalVer in spec because spec already binds `CalVer = string`,
-// the CUE wire scalar.)
-type CalVer = spec.ParsedCalVer
-
-// ParseCalVer is the strict canonical "YYYY.DDD.HHMM" parser (see spec.ParseCalVer):
-// a non-canonical value parses as ok=false, which the schema gate and migration
-// runner treat as "older than every real CalVer".
-var ParseCalVer = spec.ParseCalVer
+// spec.ParsedCalVer is the parsed YYYY.DDD.HHMM calendar version. The parsed type + its parser
+// live in spec (#55 value extraction) so BOTH core (the loader version gate) and the candy (the
+// migration chain) reference the ONE copy. (The struct is named ParsedCalVer in spec because spec
+// already binds `CalVer = string`, the CUE wire scalar.) W0 deleted the former in-core
+// CalVer/ParseCalVer aliases — every consumer reads spec.ParsedCalVer/spec.ParseCalVer directly;
+// spec.ParseCalVer is the strict canonical "YYYY.DDD.HHMM" parser: a non-canonical value parses as
+// ok=false, which the schema gate and migration runner treat as "older than every real CalVer".
 
 // LatestSchemaVersion is the HEAD schema CalVer — the curated constant every
 // versioned file is stamped to and the value the load-time gate requires. The
 // authoritative value lives in spec (shared with the candy's migration registry,
 // whose calver-schema step stamps to it); this is the in-core shim.
-func LatestSchemaVersion() CalVer {
+func LatestSchemaVersion() spec.ParsedCalVer {
 	return spec.LatestSchemaCalVer()
 }

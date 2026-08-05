@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/opencharly/spec/ops"
 
 	specexec "github.com/opencharly/spec/exec"
 	"github.com/opencharly/spec/spec"
@@ -40,7 +41,7 @@ func dispatchBuildEnsure(ctx context.Context, image, dir, buildEngine, runEngine
 	}
 	ictx := specexec.ContextWithExecutor(ctx,
 		specexec.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}}))
-	res, err := prov.Invoke(ictx, &Operation{Reserved: "ensure", Op: OpBuild, Params: params})
+	res, err := prov.Invoke(ictx, &Operation{Reserved: "ensure", Op: ops.OpBuild, Params: params})
 	if err != nil {
 		return err
 	}

@@ -73,10 +73,10 @@ my-example-kind:
 }
 
 // TestExternalKind_OpValidateRejectsInvalidBody proves F7/C8: a class:kind plugin declaring
-// Validates=true serves a deep OpValidate check the host dispatches at load, and error-severity
+// Validates=true serves a deep ops.OpValidate check the host dispatches at load, and error-severity
 // Diagnostics FAIL the load — beyond the static CUE input-def gate (which #ExamplekindInput's open
 // `marker?: string` would pass). The sentinel marker "INVALID" trips plugin-example-kind's
-// OpValidate. Builds the real plugin OOP, so -short-gated; reuses testkit.CopyCandyFixReplace.
+// ops.OpValidate. Builds the real plugin OOP, so -short-gated; reuses testkit.CopyCandyFixReplace.
 func TestExternalKind_OpValidateRejectsInvalidBody(t *testing.T) {
 	t.Cleanup(snapshotProviderState())
 	if testing.Short() {
@@ -112,10 +112,10 @@ bad-kind:
 	}
 	_, _, err = LoadUnified(dir)
 	if err == nil {
-		t.Fatal("LoadUnified must FAIL when the kind's OpValidate rejects the body (Diagnostics error)")
+		t.Fatal("LoadUnified must FAIL when the kind's ops.OpValidate rejects the body (Diagnostics error)")
 	}
 	if !strings.Contains(err.Error(), "validation failed") || !strings.Contains(err.Error(), "INVALID") {
-		t.Fatalf("error %q must name the OpValidate failure + the rejected marker", err)
+		t.Fatalf("error %q must name the ops.OpValidate failure + the rejected marker", err)
 	}
 }
 

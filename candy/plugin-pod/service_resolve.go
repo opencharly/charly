@@ -20,7 +20,9 @@ import (
 // ExtractMetadata are all kit/deploykit calls a plugin already has. Only the FINAL
 // dispatchLifecycleTarget + LifecycleTarget.Shell step is a core Mechanism (the plugin loader +
 // provider registry) — that's the ONE thing host_build_pod_lifecycle_dispatch.go's
-// hostBuildPodService still does, receiving the fully-built argv over #PodServiceRequest.
+// hostBuildPodLifecycle op="service" case still does (#55 W3 A10b unified the former dedicated
+// "pod-service" kind + #PodServiceRequest into the single "pod-lifecycle" kind + #PodServicePayload),
+// receiving the fully-built argv over that payload.
 
 // wellKnownInitDefs is the legacy fallback for pre-init_def-label images — images built before
 // the ai.opencharly.init_def label existed, whose labels cannot be re-baked. Current images carry

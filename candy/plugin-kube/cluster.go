@@ -24,11 +24,11 @@ import (
 
 // clusterConn carries the resolved cluster-selection inputs the plugin builds a
 // rest.Config from. Unlike the in-tree k8sClusterFlags it has NO --cluster field:
-// the HOST pre-resolves a `cluster: <profile>` to a concrete kubeconfig context
-// (findK8sSpec → KubeconfigContext, which needs the project loader an
-// out-of-process plugin cannot reach) and writes it into the plugin input's
-// kube_context BEFORE marshaling the Op, so the plugin only ever sees a
-// kubeconfig path + context.
+// provider.go's Invoke resolves a `cluster: <profile>` to a concrete kubeconfig context
+// ITSELF now (K-wave W3a A3-phase-2: loaderkit.ResolveK8sEntityViaExecutor,
+// kind:k8s → ResolvedK8s.KubeconfigContext — self-loading the project, unblocked by W1's
+// LoadUnifiedViaExecutor) and fills it into kube_context BEFORE dispatch() builds this struct,
+// so clusterConn itself only ever sees a kubeconfig path + context.
 type clusterConn struct {
 	kubeconfig string // input kubeconfig — host path (empty → $KUBECONFIG then ~/.kube/config)
 	context    string // input kube_context — kubeconfig context (empty → current-context)

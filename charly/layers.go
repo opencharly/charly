@@ -105,18 +105,16 @@ func RegisterBuildVocabulary(dc *spec.DistroConfig) {
 // this loads charly.yml via LoadUnified, applies discover:, and projects
 // the candies map. Legacy `candy/` directory scan remains as a fallback when
 // charly.yml is absent (e.g., transitional test fixtures).
-// DefaultCandyDir is the single source of truth for the on-disk directory that
+// spec.DefaultCandyDir is the single source of truth for the on-disk directory that
 // holds candy definitions. The discover: block overrides it per project
 // for discovery; write/resolve paths fall back to this default. Renaming the
-// candy directory project-wide is a one-line change here.
+// candy directory project-wide is a one-line change in spec.
 // The value lives in spec (the types-only fabric module shared with out-of-tree
-// plugin candies); these are the in-core aliases.
-const DefaultCandyDir = spec.DefaultCandyDir
-
-// DefaultBoxDir is the on-disk directory that holds box definitions,
-// discovered per-box as <DefaultBoxDir>/<name>/<UnifiedFileName>. Symmetric with
-// DefaultCandyDir; the discover: block overrides it per project.
-const DefaultBoxDir = spec.DefaultBoxDir
+// plugin candies). (W0 deleted the former in-core DefaultCandyDir/DefaultBoxDir
+// aliases — every consumer reads spec.DefaultCandyDir directly; DefaultBoxDir itself
+// had zero live callers, pure residue — spec.DefaultBoxDir is still the symmetric
+// on-disk box-definitions directory, discovered per-box as
+// <spec.DefaultBoxDir>/<name>/<spec.UnifiedFileName>.)
 
 // The per-directory discovery manifest filename is the ONE filename the code
 // knows — UnifiedFileName ("charly.yml", defined in unified.go). There is no
@@ -163,7 +161,7 @@ func scanLocalCandies(dir string) (map[string]spec.ScannedCandy, error) {
 // (no remote-sibling qualification needed — mirrors the W9 spike's local-candy case); completion
 // + finalize + wrap happen ONLY at the choke point (loaderkit.FinalizeScannedCandies), never here.
 func legacyScanCandiesDirScanned(dir string) (map[string]spec.ScannedCandy, error) {
-	candiesDir := filepath.Join(dir, DefaultCandyDir)
+	candiesDir := filepath.Join(dir, spec.DefaultCandyDir)
 	entries, err := os.ReadDir(candiesDir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -177,7 +175,7 @@ func legacyScanCandiesDirScanned(dir string) (map[string]spec.ScannedCandy, erro
 			continue
 		}
 		name := entry.Name()
-		m, v, refs, err := requireCandyScanner().ScanCandyManifest(filepath.Join(candiesDir, name), name, UnifiedFileName, parseCandyYAML)
+		m, v, refs, err := requireCandyScanner().ScanCandyManifest(filepath.Join(candiesDir, name), name, spec.UnifiedFileName, parseCandyYAML)
 		if err != nil {
 			return nil, fmt.Errorf("scanning candy %s: %w", name, err)
 		}
@@ -275,7 +273,7 @@ func parseCandyYAML(path string) (*spec.CandyYAML, error) {
 		// the AUTHORED form — not at load, where it would reject minimal in-tree
 		// fixtures and slow the hot path. See cue-loader-switch-design.
 		var ly spec.CandyYAML
-		if err := decodeEntityViaCUE(body, reflect.TypeOf(spec.CandyYAML{}), &ly, path); err != nil {
+		if err := requireProjectLoader().DecodeEntityViaCUE(body, reflect.TypeOf(spec.CandyYAML{}), &ly, path); err != nil {
 			return nil, err
 		}
 		return &ly, nil
@@ -435,7 +433,7 @@ func withLocalRawRefs(opts spec.ResolveOpts, localScanned map[string]spec.Scanne
 // ScanAllCandyWithConfig is the default-opts wrapper (enabled images only)
 // around ScanAllCandyWithConfigOpts. Most call sites (deploy-mode, runtime,
 // inspect) want enabled-only scanning and keep this two-arg form.
-func ScanAllCandyWithConfig(dir string, cfg *Config) (map[string]spec.CandyReader, error) {
+func ScanAllCandyWithConfig(dir string, cfg *spec.Config) (map[string]spec.CandyReader, error) {
 	return ScanAllCandyWithConfigOpts(dir, cfg, spec.ResolveOpts{})
 }
 
@@ -457,7 +455,7 @@ func ScanAllCandyWithConfig(dir string, cfg *Config) (map[string]spec.CandyReade
 // IncludedCandy edges, unaffected by initCfg) — loaderkit.FinalizeScannedCandies never mutates
 // its input map (each candidate is completed off a range-loop COPY), so calling it
 // twice (once throwaway, once final) is safe and cheap.
-func ScanAllCandyWithConfigOpts(dir string, cfg *Config, opts spec.ResolveOpts) (map[string]spec.CandyReader, error) {
+func ScanAllCandyWithConfigOpts(dir string, cfg *spec.Config, opts spec.ResolveOpts) (map[string]spec.CandyReader, error) {
 	// 1. Scan local candies (unwrapped — see doc comment above).
 	localScanned, err := scanLocalCandies(dir)
 	if err != nil {
@@ -475,7 +473,7 @@ func ScanAllCandyWithConfigOpts(dir string, cfg *Config, opts spec.ResolveOpts) 
 // now runs plugin-side — candy/plugin-build's foldNamespaceScanEntries calls loaderkit.
 // ScanCandyFromLocal directly over the host's per-namespace NamespaceScanReply inputs.
 // Behavior-identical to the pre-move function (same steps 2-5).
-func scanCandyFromLocal(localScanned map[string]spec.ScannedCandy, cfg *Config, opts spec.ResolveOpts) (map[string]spec.CandyReader, error) {
+func scanCandyFromLocal(localScanned map[string]spec.ScannedCandy, cfg *spec.Config, opts spec.ResolveOpts) (map[string]spec.CandyReader, error) {
 	return requireProjectLoader().ScanCandyFromLocal(localScanned, opts.InitCfg, scanSeamsFor(cfg, opts))
 }
 
@@ -486,7 +484,7 @@ func scanCandyFromLocal(localScanned map[string]spec.ScannedCandy, cfg *Config, 
 // wrapped-view walk can't discover a local candy's pinned remote dep alone); EnsureRepo /
 // ScanRemote wrap the host git-cache (+ auto-migrate) and the registry-coupled per-candy manifest
 // scan (parseCandyYAML). candy/plugin-build supplies InvokeProvider-backed closures instead in U6.
-func scanSeamsFor(cfg *Config, opts spec.ResolveOpts) spec.ScanSeams {
+func scanSeamsFor(cfg *spec.Config, opts spec.ResolveOpts) spec.ScanSeams {
 	return spec.ScanSeams{
 		CollectRemoteRefs: func(localScanned map[string]spec.ScannedCandy) ([]spec.RemoteDownload, error) {
 			return CollectRemoteRefsOpts(cfg, requireProjectLoader().FinalizeScannedCandies(localScanned, nil), withLocalRawRefs(opts, localScanned))

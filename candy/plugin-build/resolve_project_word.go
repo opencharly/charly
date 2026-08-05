@@ -53,8 +53,7 @@ func resolveProjectEnvelope(ctx context.Context, ex *sdk.Executor, req spec.Reso
 		defer restore()
 	}
 
-	loadExec := &buildLoaderExecutor{ctx: ctx, ex: ex}
-	uf, ok, err := loaderkit.LoadUnified(dir, loaderkit.LoadSeamsFromExecutor(loadExec))
+	uf, ok, err := loaderkit.LoadUnifiedViaExecutor(ctx, ex, dir)
 	if err != nil {
 		return spec.ResolvedProject{}, err
 	}
@@ -96,8 +95,8 @@ func resolveProjectEnvelope(ctx context.Context, ex *sdk.Executor, req spec.Reso
 
 	// Primaries: the SAME registry-derived D-fact snapshot the deleted host projector filled via
 	// loaderThreaded().Primaries — reached here through the ALREADY-EXISTING "loader-threaded"
-	// HostBuild leg buildLoaderExecutor.LoaderThreaded() calls (no new seam).
-	rp.Primaries = loadExec.LoaderThreaded().Primaries
+	// HostBuild leg via loaderkit.LoaderThreadedViaExecutor (no new seam).
+	rp.Primaries = loaderkit.LoaderThreadedViaExecutor(ctx, ex).Primaries
 
 	return *rp, nil
 }

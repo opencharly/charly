@@ -6,6 +6,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/opencharly/spec/proc"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -153,7 +154,7 @@ func TestScanAllCandiesNoRemote(t *testing.T) {
 }
 
 func TestCollectRemoteRefs(t *testing.T) {
-	cfg := &Config{
+	cfg := &spec.Config{
 		Box: boxMapOf(map[string]spec.BoxConfig{
 			"myapp": {
 				Candy: []string{
@@ -209,7 +210,7 @@ func TestCollectRemoteRefs(t *testing.T) {
 func TestCollectRemoteRefsOptsExtraCandyRefs(t *testing.T) {
 	// An image config that references NOTHING remote — proves the add_candy ref is
 	// collected via ExtraCandyRefs, not via any image-closure edge.
-	cfg := &Config{Box: boxMapOf(map[string]spec.BoxConfig{"arch": {Candy: []string{"pixi"}}})}
+	cfg := &spec.Config{Box: boxMapOf(map[string]spec.BoxConfig{"arch": {Candy: []string{"pixi"}}})}
 	layers := map[string]spec.CandyReader{"pixi": testCandy("pixi", spec.CandyModel{}, spec.CandyView{})}
 
 	pluginRef := "@github.com/opencharly/charly/candy/plugin-spice:v2026.174.0425"
@@ -245,12 +246,74 @@ func TestCollectRemoteRefsOptsExtraCandyRefs(t *testing.T) {
 	}
 }
 
+// TestCollectRemoteRefsOptsRequestedBoxes is the regression guard for task #17 (root-scope `box
+// generate fedora.check-pod` failing "unknown candy github.com/opencharly/charly/candy/
+// check-base-layer"): a namespace-qualified on-demand target (`fedora.check-pod`, mirroring the
+// real box/fedora namespace whose boxes are ALL remote @github back-refs into this very repo) that
+// is NOT reachable as a base/builder of any ROOT-owned image must still have its own remote candy
+// refs collected when it is passed as opts.RequestedBoxes — otherwise the fetch step silently skips
+// it and the later candy-order resolve fails "unknown candy" for a ref that was never fetched.
+func TestCollectRemoteRefsOptsRequestedBoxes(t *testing.T) {
+	fedoraCfg := &spec.Config{
+		Box: boxMapOf(map[string]spec.BoxConfig{
+			"check-pod": {
+				Base: "quay.io/fedora/fedora-minimal:43",
+				Candy: []string{
+					"@github.com/opencharly/charly/candy/check-base-layer:v2026.201.0706",
+				},
+			},
+		}),
+	}
+	// The root project has its OWN image (unrelated to fedora.check-pod — no base/builder edge
+	// reaches the fedora namespace at all), plus the fedora namespace import.
+	cfg := &spec.Config{
+		Box:        boxMapOf(map[string]spec.BoxConfig{"myapp": {Candy: []string{"pixi"}}}),
+		Namespaces: map[string]*spec.Config{"fedora": fedoraCfg},
+	}
+	layers := map[string]spec.CandyReader{"pixi": testCandy("pixi", spec.CandyModel{}, spec.CandyView{})}
+
+	t.Run("unreachable namespaced target is NOT collected without RequestedBoxes", func(t *testing.T) {
+		downloads, err := CollectRemoteRefsOpts(cfg, layers, spec.ResolveOpts{})
+		if err != nil {
+			t.Fatalf("CollectRemoteRefsOpts() error = %v", err)
+		}
+		for _, dl := range downloads {
+			if dl.RepoPath == "github.com/opencharly/charly" {
+				t.Fatalf("fedora.check-pod's remote candy ref was collected WITHOUT opts.RequestedBoxes (pre-fix behavior expected here); downloads=%+v", downloads)
+			}
+		}
+	})
+
+	t.Run("explicitly requested namespaced target IS collected", func(t *testing.T) {
+		downloads, err := CollectRemoteRefsOpts(cfg, layers, spec.ResolveOpts{RequestedBoxes: []string{"fedora.check-pod"}})
+		if err != nil {
+			t.Fatalf("CollectRemoteRefsOpts() error = %v", err)
+		}
+		var got *spec.RemoteDownload
+		for i := range downloads {
+			if downloads[i].RepoPath == "github.com/opencharly/charly" {
+				got = &downloads[i]
+			}
+		}
+		if got == nil {
+			t.Fatalf("fedora.check-pod's remote candy ref was NOT collected even with opts.RequestedBoxes; downloads=%+v", downloads)
+		}
+		if got.Version != "v2026.201.0706" {
+			t.Errorf("check-base-layer download version = %q, want %q", got.Version, "v2026.201.0706")
+		}
+		wantRef := "github.com/opencharly/charly/candy/check-base-layer"
+		if !slices.Contains(got.Refs, wantRef) {
+			t.Errorf("check-base-layer download refs = %v, want to contain %q", got.Refs, wantRef)
+		}
+	})
+}
+
 func TestCollectRemoteRefsLocalTemplate(t *testing.T) {
 	// kind:local template candy: lists must feed the same remote-ref collection
 	// path as image candy: lists (regression guard for the 2026-05 CachyOS
 	// migration, where the charly-cachyos kind:local template composes 30 remote
 	// @-ref candies — previously invisible to CollectRemoteRefs).
-	cfg := &Config{
+	cfg := &spec.Config{
 		Box: boxMapOf(map[string]spec.BoxConfig{
 			"myapp": {
 				Candy: []string{
@@ -295,7 +358,7 @@ func TestCollectRemoteRefsOptsIncludeDisabled(t *testing.T) {
 	// 2026-05 deb-family split: no enabled debian image references `pixi`, so a
 	// disabled `debian-builder --include-disabled` would otherwise hit
 	// "unknown layer .../pixi" in computing global candy order.
-	cfg := &Config{
+	cfg := &spec.Config{
 		Box: boxMapOf(map[string]spec.BoxConfig{
 			"debian-builder": {
 				Enabled: new(false),
@@ -354,7 +417,7 @@ func TestCollectRemoteRefsDefaultsBuilderTransitiveCandies(t *testing.T) {
 	// a DISTINCT repo, so it appears in downloads ONLY if the defaults-supplied
 	// builder edge was actually followed (it was absent before the fix, because
 	// the raw per-image img.Builder these images carry is empty).
-	cfg := &Config{
+	cfg := &spec.Config{
 		Defaults: spec.BoxConfig{Builder: spec.BuilderMap{"pixi": "charly.fedora-builder"}},
 		Box: boxMapOf(map[string]spec.BoxConfig{
 			"bazzite": {
@@ -363,7 +426,7 @@ func TestCollectRemoteRefsDefaultsBuilderTransitiveCandies(t *testing.T) {
 				// NO per-image Builder: — supplied by defaults.builder above.
 			},
 		}),
-		Namespaces: map[string]*Config{
+		Namespaces: map[string]*spec.Config{
 			"charly": {
 				Box: boxMapOf(map[string]spec.BoxConfig{
 					"fedora-builder": {
@@ -406,7 +469,7 @@ func TestCollectRemoteRefsSameCandyBothTagsCollected(t *testing.T) {
 	// loaderkit.PickCandyVersion — see candy/plugin-loader's TestPickCandyVersion
 	// (#55 decoupling, Batch A). Collection's job is just to fetch every distinct
 	// (repo, git-tag).
-	cfg := &Config{
+	cfg := &spec.Config{
 		Box: boxMapOf(map[string]spec.BoxConfig{
 			"myapp": {
 				Candy: []string{
@@ -440,7 +503,7 @@ func TestCollectRemoteRefsSameCandyBothTagsCollected(t *testing.T) {
 
 func TestCollectRemoteRefsDifferentCandiesSameRepo(t *testing.T) {
 	// Different candies from same repo at different versions should be OK
-	cfg := &Config{
+	cfg := &spec.Config{
 		Box: boxMapOf(map[string]spec.BoxConfig{
 			"myapp": {
 				Candy: []string{
@@ -468,82 +531,16 @@ func TestCollectRemoteRefsDifferentCandiesSameRepo(t *testing.T) {
 // production path (candy/plugin-deploy-pod/overlay.go reaches it directly), and
 // the sdk-side test now covers it against that Generator directly.
 
-// TestRepoOverrideDir covers the CHARLY_REPO_OVERRIDE parser: exact + short-form
-// match, miss, multi-pair, and the loud-failure cases (malformed, missing dir,
-// non-directory). The RDD local-override is the supported "verify before push".
-func TestRepoOverrideDir(t *testing.T) {
-	dir := t.TempDir()
-	file := filepath.Join(dir, "afile")
-	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	t.Run("unset", func(t *testing.T) {
-		t.Setenv(RepoOverrideEnv, "")
-		if d, ok, err := repoOverrideDir("github.com/opencharly/charly"); ok || d != "" || err != nil {
-			t.Fatalf("want empty/false/nil, got %q %v %v", d, ok, err)
-		}
-	})
-
-	t.Run("exact match", func(t *testing.T) {
-		t.Setenv(RepoOverrideEnv, "github.com/opencharly/charly="+dir)
-		d, ok, err := repoOverrideDir("github.com/opencharly/charly")
-		if err != nil || !ok || d != dir {
-			t.Fatalf("want %q/true/nil, got %q %v %v", dir, d, ok, err)
-		}
-	})
-
-	t.Run("short form auto-prefixes github.com", func(t *testing.T) {
-		t.Setenv(RepoOverrideEnv, "opencharly/charly="+dir)
-		d, ok, err := repoOverrideDir("github.com/opencharly/charly")
-		if err != nil || !ok || d != dir {
-			t.Fatalf("want %q/true/nil, got %q %v %v", dir, d, ok, err)
-		}
-	})
-
-	t.Run("non-matching repo falls through", func(t *testing.T) {
-		t.Setenv(RepoOverrideEnv, "github.com/other/repo="+dir)
-		if d, ok, err := repoOverrideDir("github.com/opencharly/charly"); ok || d != "" || err != nil {
-			t.Fatalf("want empty/false/nil, got %q %v %v", d, ok, err)
-		}
-	})
-
-	t.Run("second pair matches", func(t *testing.T) {
-		t.Setenv(RepoOverrideEnv, "github.com/a/b=/nope, opencharly/charly="+dir)
-		d, ok, err := repoOverrideDir("github.com/opencharly/charly")
-		if err != nil || !ok || d != dir {
-			t.Fatalf("want %q/true/nil, got %q %v %v", dir, d, ok, err)
-		}
-	})
-
-	t.Run("malformed entry errors", func(t *testing.T) {
-		t.Setenv(RepoOverrideEnv, "no-equals-sign")
-		if _, _, err := repoOverrideDir("github.com/opencharly/charly"); err == nil {
-			t.Fatal("want error for malformed entry, got nil")
-		}
-	})
-
-	t.Run("missing dir errors", func(t *testing.T) {
-		t.Setenv(RepoOverrideEnv, "opencharly/charly=/does/not/exist/anywhere")
-		if _, _, err := repoOverrideDir("github.com/opencharly/charly"); err == nil {
-			t.Fatal("want error for missing dir, got nil")
-		}
-	})
-
-	t.Run("non-directory errors", func(t *testing.T) {
-		t.Setenv(RepoOverrideEnv, "opencharly/charly="+file)
-		if _, _, err := repoOverrideDir("github.com/opencharly/charly"); err == nil {
-			t.Fatal("want error for non-directory target, got nil")
-		}
-	})
-}
+// TestRepoOverrideDir (the CHARLY_REPO_OVERRIDE parser: exact + short-form match, miss,
+// multi-pair, and the loud-failure cases) moved to sdk/loaderkit/refs_collect_test.go (K1 unit 4)
+// — repoOverrideDir itself relocated there.
 
 // TestEnsureRepoDownloaded_Override proves the override short-circuits the cache
 // + remote fetch entirely (offline: no network, ignores the :vTAG version) and
 // never migrates the dev's live tree.
 func TestEnsureRepoDownloaded_Override(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv(RepoOverrideEnv, "github.com/foo/bar="+dir)
+	t.Setenv(proc.RepoOverrideEnv, "github.com/foo/bar="+dir)
 	got, err := EnsureRepoDownloaded("github.com/foo/bar", "v9999.1.1")
 	if err != nil {
 		t.Fatalf("override should resolve offline, got err: %v", err)

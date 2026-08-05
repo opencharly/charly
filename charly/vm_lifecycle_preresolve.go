@@ -5,9 +5,9 @@ package main
 // attach-resolver (a live-session script the plugin cannot derive itself). Everything else that
 // used to live here is GONE:
 //   - The PrepareVenue DATA-seam (lifecyclePrepareHook) — candy/plugin-deploy-vm owns its OWN
-//     OpPrepareVenue resolution end to end, self-serving any LoadUnified-coupled data via the
-//     generic "deploy-entity-resolve" HostBuild seam (candy/plugin-deploy-vm/lifecycle.go's
-//     vmPrepareVenue).
+//     OpPrepareVenue resolution end to end, self-loading the project directly now (K-wave W3a
+//     A3-phase-2: sdk/loaderkit.ResolveVmEntityViaExecutor, candy/plugin-deploy-vm/lifecycle.go's
+//     vmPrepareVenue) — no HostBuild seam remains for this leg.
 //   - vmLifecyclePostTeardown + the lifecyclePostTeardownHook registry (F6 vm-lifecycle move):
 //     the "un-importable by the plugin" framing this file's header used to carry was STALE — the
 //     actual ephemeral-teardown WORK (systemd transient timers, libvirt snapshot refcounts) was

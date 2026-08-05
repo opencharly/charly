@@ -19,21 +19,22 @@ import (
 // class:verb target directly via InvokeProvider, bypassing the (now-deleted) ClassStep
 // "ExternalPlugin" registration entirely.
 
-// pluginEmitStepWords is the host-side alias for spec.PluginEmitStepWords (K5-A item 2): the
-// map RELOCATED to sdk/deploykit so the plugin-side "oci-dispatch" word (candy/plugin-installstep)
-// can consult the SAME kind→word vocabulary the host's checkStepProviderBijection uses — R3, one
-// source of truth for the 12 compiler-emitted kinds' build-emit word mapping. See
-// spec.PluginEmitStepWords for the full doc (categories, host-coupled vs pure).
-var pluginEmitStepWords = spec.PluginEmitStepWords
+// spec.PluginEmitStepWords (K5-A item 2) is the map RELOCATED to sdk/deploykit so the
+// plugin-side "oci-dispatch" word (candy/plugin-installstep) can consult the SAME kind→word
+// vocabulary the host's checkStepProviderBijection uses — R3, one source of truth for the 12
+// compiler-emitted kinds' build-emit word mapping. See spec.PluginEmitStepWords for the full doc
+// (categories, host-coupled vs pure). (W0 deleted the former in-core pluginEmitStepWords alias —
+// every consumer reads spec.PluginEmitStepWords directly.)
 
 // checkStepProviderBijection asserts every InstallStep kind is SERVED. The 12 kinds in
-// pluginEmitStepWords must resolve to a compiled-in class:step plugin declaring a StepContract
-// (its build-emit); the ONE remaining kind (ExternalPlugin) needs NO registry entry at all — its
-// build-emit is an unconditional Go-level type-switch arm in candy/plugin-installstep's
-// "oci-dispatch" word, verified by compilation (spec.AllStepKinds is a closed, compile-time
-// enumeration) rather than a runtime registry lookup. Run in the same init() that registers, after
-// registration (the compiled-in plugins register first — plugins_generated.go's init precedes
-// registry_bootstrap.go's alphabetically, the SAME ordering checkVerbProviderBijection relies on).
+// spec.PluginEmitStepWords must resolve to a compiled-in class:step plugin declaring a
+// StepContract (its build-emit); the ONE remaining kind (ExternalPlugin) needs NO registry entry
+// at all — its build-emit is an unconditional Go-level type-switch arm in
+// candy/plugin-installstep's "oci-dispatch" word, verified by compilation (spec.AllStepKinds is a
+// closed, compile-time enumeration) rather than a runtime registry lookup. Run in the same init()
+// that registers, after registration (the compiled-in plugins register first —
+// plugins_generated.go's init precedes registry_bootstrap.go's alphabetically, the SAME ordering
+// checkVerbProviderBijection relies on).
 func checkStepProviderBijection() error {
 	var missing []string
 	for _, k := range spec.AllStepKinds {
@@ -42,9 +43,9 @@ func checkStepProviderBijection() error {
 			// no ClassStep registry entry exists (or is needed) for this kind anymore.
 			continue
 		}
-		word, isPlugin := pluginEmitStepWords[k]
+		word, isPlugin := spec.PluginEmitStepWords[k]
 		if !isPlugin {
-			missing = append(missing, fmt.Sprintf("%s (not in pluginEmitStepWords and not StepKindExternalPlugin — an uncategorized kind)", k))
+			missing = append(missing, fmt.Sprintf("%s (not in spec.PluginEmitStepWords and not StepKindExternalPlugin — an uncategorized kind)", k))
 			continue
 		}
 		p, ok := providerRegistry.resolve(ClassStep, word)

@@ -1,0 +1,66 @@
+# install_hints — binary name -> (distro ID -> package name) for host dependency install
+# suggestions. An "AUR: <cmd>" value carries its own install line.
+install_hints:
+    docker: {arch: docker, fedora: docker-ce, debian: docker-ce}
+    podman: {arch: podman, fedora: podman, debian: podman}
+    git: {arch: git, fedora: git, debian: git}
+    skopeo: {arch: skopeo, fedora: skopeo, debian: skopeo}
+    gocryptfs: {arch: gocryptfs, fedora: gocryptfs, debian: gocryptfs}
+    fusermount3: {arch: fuse3, fedora: fuse3, debian: fuse3}
+    systemd-ask-password: {arch: systemd, fedora: systemd, debian: systemd}
+    qemu-system-x86_64: {arch: qemu-full, fedora: qemu-kvm, debian: qemu-system-x86}
+    qemu-system-aarch64: {arch: qemu-full, fedora: qemu-kvm, debian: qemu-system-arm}
+    qemu-img: {arch: qemu-img, fedora: qemu-img, debian: qemu-utils}
+    virtiofsd: {arch: virtiofsd, fedora: virtiofsd, debian: virtiofsd}
+    virsh: {arch: libvirt, fedora: libvirt-client, debian: libvirt-clients}
+    ssh: {arch: openssh, fedora: openssh-clients, debian: openssh-client}
+    script: {arch: util-linux, fedora: util-linux, debian: bsdutils}
+    systemctl: {arch: systemd, fedora: systemd, debian: systemd}
+    tailscale: {arch: tailscale, fedora: tailscale, debian: tailscale}
+    cloudflared: {arch: "AUR: yay -S cloudflared-bin", fedora: cloudflared, debian: cloudflared}
+    nvidia-smi: {arch: nvidia-utils, fedora: nvidia-driver, debian: nvidia-utils}
+    gvproxy: {arch: "AUR: yay -S gvisor-tap-vsock", fedora: gvisor-tap-vsock, debian: golang-github-containers-gvisor-tap-vsock}
+# device_descriptions — host device path -> human description for the hardware section.
+device_descriptions:
+    "/dev/dri/renderD*": GPU render node
+    /dev/kfd: AMD Kernel Fusion Driver (ROCm compute)
+    /dev/kvm: KVM virtualization
+    /dev/vhost-net: vhost network acceleration
+    /dev/vhost-vsock: VM socket communication
+    /dev/fuse: FUSE filesystem
+    /dev/net/tun: TUN/TAP network device
+    /dev/hwrng: hardware random number generator
+# device_patterns — host device glob patterns probed for the hardware section. NVIDIA GPUs are
+# handled separately via CDI/--gpus; AMD GPUs need /dev/kfd for ROCm compute access.
+device_patterns:
+    - "/dev/dri/renderD*"
+    - /dev/kfd
+    - /dev/kvm
+    - /dev/vhost-net
+    - /dev/vhost-vsock
+    - /dev/fuse
+    - /dev/net/tun
+    - /dev/hwrng
+# distro_package_managers — host distro ID -> install command prefix. An unlisted distro yields
+# an empty manager (no install hint).
+distro_package_managers:
+    arch: pacman -S
+    fedora: sudo dnf install
+    rhel: sudo dnf install
+    centos: sudo dnf install
+    rocky: sudo dnf install
+    almalinux: sudo dnf install
+    debian: sudo apt-get install
+    ubuntu: sudo apt-get install
+    pop: sudo apt-get install
+    linuxmint: sudo apt-get install
+    opensuse-tumbleweed: sudo zypper install
+    opensuse-leap: sudo zypper install
+# distro_family_map — host distro ID -> base family for install-hint package-name lookup. An
+# unlisted distro maps to itself.
+distro_family_map:
+    ubuntu: debian
+    pop: debian
+    linuxmint: debian
+    rhel: fedora
+    centos: fedora

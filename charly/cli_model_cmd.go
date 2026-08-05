@@ -41,7 +41,7 @@ func (CliModelCmd) Run() error {
 // ONCE in clireflect.BuildCLIModel (R3) so every command plugin and the host emit the same CUE-generated
 // contract. EXTERNAL and COMPILED-IN command CANDIES with NO declared subcommand catalog (mcp /
 // secrets / udev / vm / alias — dynamic opaque pass-through Args holders) are NOT reflected here —
-// they dispatch via syscall.Exec or an in-proc Invoke(OpRun), carrying no per-subcommand shape the
+// they dispatch via syscall.Exec or an in-proc Invoke(ops.OpRun), carrying no per-subcommand shape the
 // host could describe. A command-class capability that DOES declare a catalog (F-CLI-NEST — e.g.
 // candy/plugin-check's "check" word, candy/plugin-box's "list" word) gets its REAL nested holder
 // included here too, so `charly __cli-model` (and therefore MCP tool generation) sees one leaf

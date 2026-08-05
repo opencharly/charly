@@ -2,42 +2,54 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 
 	"github.com/opencharly/spec/exitcode"
 	"github.com/opencharly/spec/spec"
 )
 
-// host_build_pod_lifecycle_dispatch.go — the CONSOLIDATED "pod-{start,stop,shell,cmd,logs,update,
-// service,remove}" F10 host-builder family (Cutover B unit 2, the pod-lifecycle-CLI-dispatch
-// family), replacing the former host_build_pod_{start,stop,shell,logs,update,service,remove}.go
-// (7 files — plus host_build_pod_disposable.go, which is a DIFFERENT concern, the AI check-harness
-// disposability read, and correctly stays its own file).
+// host_build_pod_lifecycle_dispatch.go — the CONSOLIDATED "pod-lifecycle" F10 host-builder (Cutover
+// B unit 2, the pod-lifecycle-CLI-dispatch family; #55 W3 A10 folded start/stop's former
+// pod_lifecycle_verb.go wrappers in here (A10a), then #55 W3 A10b unified the former 8-per-verb
+// "pod-{start,stop,shell,cmd,logs,update,service,remove}" HostBuild kinds into this ONE
+// op-discriminated handler behind ONE registered kind, converging the seam on the codebase's own
+// established idiom (#ArbiterInvokeInput's flat action-multiplexed shape; charly/provider.go's own
+// Operation.Params json.RawMessage envelope) — spec.PodLifecycleRequest carries op+box+instance+
+// node (the shared envelope) plus an opaque payload the switch below re-decodes into the matching
+// #PodXPayload once op is known, exactly like every OTHER Invoke op on the wire already works.
 //
-// start/stop/shell/logs/update/service are FULLY ported: each handler wraps EXACTLY the ONE step
-// that cannot cross the plugin boundary — dispatchLifecycleTarget (pod_lifecycle_verb.go):
-// ResolveTarget + the plugin loader + the live-executor composition, a core (M) Mechanism per the
-// kernel/plugin boundary law. Every OTHER piece of the former podStartCmd/podStopCmd/podShellCmd/
-// podLogsCmd/podServiceCmd orchestration (remote-ref validation, CanonicalizeDeployArg,
-// resolveServiceInit/validateServiceName/argv-rendering) MOVED to candy/plugin-pod's pod_cmd.go +
-// service_resolve.go — the plugin now performs those checks itself before calling these seams,
-// mirroring the P13-KERNEL deploy-node-dispatch precedent at single-node granularity (no
-// ancestor-descriptor list is needed: dispatchLifecycleTarget resolves exactly ONE deploy-config
-// entry, never a tree). `update` keeps its existing podUpdateCmd/dispatchByDeployTarget body
-// (update_deploy_dispatch.go) UNCHANGED — that resolver is registry+loader-coupled the same way,
-// just via the project tree instead of the per-host deploy config.
+// SIX of the eight ops — start/stop/shell/logs/service/cmd — share ONE literal shape: resolve the
+// deploy's LifecycleTarget via dispatchLifecycleTarget (pod_lifecycle_verb.go: ResolveTarget + the
+// plugin loader + the live-executor composition, a core (M) Mechanism per the kernel/plugin
+// boundary law — the ONE step that cannot cross the plugin boundary), then run exactly one
+// LifecycleTarget method against it. dispatchAndRunLifecycle is that shared core — every case below
+// is just the per-op payload-decode → closure translation, not a second copy of the
+// resolve+error-check skeleton. Every OTHER piece of the former podStartCmd/podStopCmd/
+// podShellCmd/podLogsCmd/podServiceCmd orchestration (remote-ref validation,
+// CanonicalizeDeployArg, resolveServiceInit/validateServiceName/argv-rendering) MOVED to
+// candy/plugin-pod's pod_cmd.go + service_resolve.go — the plugin now performs those checks
+// itself before calling this seam, mirroring the P13-KERNEL deploy-node-dispatch precedent at
+// single-node granularity (no ancestor-descriptor list is needed: dispatchLifecycleTarget resolves
+// exactly ONE deploy-config entry, never a tree).
 //
-// remove is now FULLY ported too (Cutover B unit 2 completion, option (b)): candy/plugin-pod's
-// RemoveCmd.Run() owns the WHOLE orchestration itself (remove_orchestration.go + remove_tunnel.go),
-// reaching the host only for its two genuinely host-coupled axes via their own narrow seams
-// (pod-config-hook-secret-env, pod-config-clean-deploy-entry) — see hostBuildPodRemove's own doc
-// comment for why the arbiter-release bracket alone stays under this kind.
+// update and remove do NOT share the LifecycleTarget shape and are NOT forced into it: update
+// keeps its existing podUpdateCmd/dispatchByDeployTarget body (update_deploy_dispatch.go)
+// UNCHANGED — that resolver is registry+loader-coupled the same way, just via the project tree
+// instead of the per-host deploy config, never touching a LifecycleTarget at all. remove is FULLY
+// ported to candy/plugin-pod's RemoveCmd.Run() (remove_orchestration.go + remove_tunnel.go); all
+// that remains under op="remove" is the arbiter-release bracket, host-process
+// CHARLY_PREEMPT_LEASE state a placement-agnostic plugin cannot own. Forcing these two through
+// dispatchAndRunLifecycle would trade a real shape mismatch for false uniformity (R3 only applies
+// to code that is ACTUALLY duplicated) — they stay their own switch cases, calling their own
+// existing bodies directly.
 //
 // Interactive/streaming safety (RDD claim, closed both at design level and on a live disposable
 // bed — check-sidecar-pod, 12/12 steps PASS including the fresh `charly update` gate): this
 // property is PLACEMENT-INVARIANT, not contingent on candy/plugin-pod's compiled-in-vs-out-of-
-// process placement (that per-BUILD choice is never an authoring assumption). Every handler below
-// is HostBuild-seam code, which by construction ALWAYS executes in the charly host process
+// process placement (that per-BUILD choice is never an authoring assumption). This handler is
+// HostBuild-seam code, which by construction ALWAYS executes in the charly host process
 // regardless of the CALLING plugin's placement — so isTerminal()/tty detection computed HERE sees
 // the operator's REAL terminal unconditionally. The actual interactive/streaming subprocess spawn
 // (`podman exec -it`/`podman logs -f`, wired to real os.Stdin/os.Stdout) is itself architecturally
@@ -50,115 +62,156 @@ import (
 // ships out-of-process by default, and `charly shell`/`cmd`/`logs -f` already work against it in
 // production on exactly this mechanism.
 
-func hostBuildPodStart(_ context.Context, req spec.PodStartRequest, _ buildEngineContext) (spec.PodStartReply, error) {
-	return spec.PodStartReply{}, startViaLifecycle(req.Node, spec.DeployKey(req.Box, req.Instance), podStartOpts{
-		Env: req.Env, EnvFile: req.EnvFile, Port: req.Port, VolumeFlag: req.VolumeFlag,
-		Bind: req.Bind, NoAutoDetect: req.NoAutoDetect,
-	})
-}
-
-func hostBuildPodStop(_ context.Context, req spec.PodStopRequest, _ buildEngineContext) (spec.PodStopReply, error) {
-	return spec.PodStopReply{}, stopViaLifecycle(req.Node, spec.DeployKey(req.Box, req.Instance), req.Unmount)
-}
-
-func hostBuildPodShell(_ context.Context, req spec.PodShellRequest, _ buildEngineContext) (spec.PodShellReply, error) {
-	lt, err := dispatchLifecycleTarget("shell", req.Node, spec.DeployKey(req.Box, req.Instance))
+// dispatchAndRunLifecycle resolves node/box/instance's LifecycleTarget for op (the shared
+// dispatchLifecycleTarget core-M step) and, on success, runs the caller's op-specific body against
+// it — the shared core every start/stop/shell/logs/service/cmd case below delegates to.
+func dispatchAndRunLifecycle(op string, node *spec.BundleNode, box, instance string, run func(LifecycleTarget) error) error {
+	lt, err := dispatchLifecycleTarget(op, node, spec.DeployKey(box, instance))
 	if err != nil {
-		return spec.PodShellReply{}, err
+		return err
 	}
-	opts := podShellOpts{
-		Tag: req.Tag, EnvFile: req.EnvFile, Env: req.Env, VolumeFlag: req.VolumeFlag,
-		Bind: req.Bind, NoAutoDetect: req.NoAutoDetect,
-		// HOST-resolved NOW against the REAL terminal — see the file header invariant.
-		Interactive: req.TTY || isTerminal(),
-		WrapPTY:     req.TTY && !isTerminal(),
-	}
-	var cmd []string
-	if req.Command != "" {
-		cmd = []string{req.Command}
-	}
-	return spec.PodShellReply{}, lt.Attach(withPodShellOpts(context.Background(), opts), cmd, true)
+	return run(lt)
 }
 
-func hostBuildPodLogs(_ context.Context, req spec.PodLogsRequest, _ buildEngineContext) (spec.PodLogsReply, error) {
-	lt, err := dispatchLifecycleTarget("logs", req.Node, spec.DeployKey(req.Box, req.Instance))
-	if err != nil {
-		return spec.PodLogsReply{}, err
+// decodeLifecyclePayload decodes req.Payload into T (one of the #PodXPayload types), wrapping any
+// error with the op name — the shared decode step every switch case below performs once payload's
+// shape is known from req.Op (R3: one error-message format, not seven copies).
+func decodeLifecyclePayload[T any](op string, payload []byte) (T, error) {
+	var v T
+	if err := json.Unmarshal(payload, &v); err != nil {
+		return v, fmt.Errorf("pod-lifecycle %s: decode payload: %w", op, err)
 	}
-	return spec.PodLogsReply{}, lt.Logs(context.Background(), LogsOpts{Follow: req.Follow, Sidecar: req.Sidecar})
+	return v, nil
 }
 
-func hostBuildPodUpdate(_ context.Context, req spec.PodUpdateRequest, _ buildEngineContext) (spec.PodUpdateReply, error) {
-	cmd := podUpdateCmd{
-		Box: req.Box, Tag: req.Tag, Build: req.Build, Instance: req.Instance,
-		Seed: req.Seed, ForceSeed: req.ForceSeed, DataFrom: req.DataFrom,
-		TreeJSON: req.TreeJSON,
-	}
-	return spec.PodUpdateReply{}, cmd.dispatchByDeployTarget()
-}
+// hostBuildPodLifecycle is the ONE op-discriminated handler behind the "pod-lifecycle" HostBuild
+// kind (#55 W3 A10b). It decodes req.Payload into the #PodXPayload matching req.Op only once op is
+// known — mirrors typedHostBuilder's own outer decode-then-run shape one level down, exactly like
+// the plugin wire protocol's Operation.Params json.RawMessage.
+func hostBuildPodLifecycle(_ context.Context, req spec.PodLifecycleRequest, _ buildEngineContext) (spec.PodLifecycleReply, error) {
+	switch req.Op {
+	case "start":
+		p, perr := decodeLifecyclePayload[spec.PodStartPayload](req.Op, req.Payload)
+		if perr != nil {
+			return spec.PodLifecycleReply{}, perr
+		}
+		opts := podStartOpts{
+			Env: p.Env, EnvFile: p.EnvFile, Port: p.Port, VolumeFlag: p.VolumeFlag,
+			Bind: p.Bind, NoAutoDetect: p.NoAutoDetect,
+		}
+		err := dispatchAndRunLifecycle("start", req.Node, req.Box, req.Instance, func(lt LifecycleTarget) error {
+			return lt.Start(withPodStartOpts(context.Background(), opts))
+		})
+		return spec.PodLifecycleReply{}, err
 
-// hostBuildPodService is now FULLY ported (Cutover B unit 2 completion): candy/plugin-pod's
-// buildServiceArgv resolves + validates + renders the FULL argv itself (all portable — see
-// service_resolve.go), so this handler does ONLY the irreducible dispatchLifecycleTarget +
-// LifecycleTarget.Shell step, exactly like start/stop/logs/update above.
-func hostBuildPodService(_ context.Context, req spec.PodServiceRequest, _ buildEngineContext) (spec.PodServiceReply, error) {
-	lt, err := dispatchLifecycleTarget("service", req.Node, spec.DeployKey(req.Box, req.Instance))
-	if err != nil {
-		return spec.PodServiceReply{}, err
-	}
-	return spec.PodServiceReply{}, lt.Shell(context.Background(), req.Argv)
-}
+	case "stop":
+		p, perr := decodeLifecyclePayload[spec.PodStopPayload](req.Op, req.Payload)
+		if perr != nil {
+			return spec.PodLifecycleReply{}, perr
+		}
+		err := dispatchAndRunLifecycle("stop", req.Node, req.Box, req.Instance, func(lt LifecycleTarget) error {
+			return lt.Stop(withPodStopUnmount(context.Background(), p.Unmount))
+		})
+		return spec.PodLifecycleReply{}, err
 
-// hostBuildPodRemove is now FULLY reduced (Cutover B unit 2 remove-verb completion, option (b)):
-// candy/plugin-pod's RemoveCmd.Run() owns the ENTIRE orchestration itself (remove_orchestration.go
-// + remove_tunnel.go), reaching the host only for the two genuinely host-coupled axes via their own
-// narrow seams (pod-config-hook-secret-env, pod-config-clean-deploy-entry). All that remains under
-// THIS "pod-remove" kind is the arbiter-release bracket — CHARLY_PREEMPT_LEASE-gated host-process
-// state a placement-agnostic plugin cannot own, the exact same reason pod start/stop's own arbiter
-// bracket (arbiter_bracket.go, S3b — was substrate_lifecycle_grpc.go before the deploy-dispatch
-// cluster moved) stays core. The plugin defers this call as its LAST step,
-// reproducing the former core `defer releaseResourceClaim(...)`'s "always runs, after everything
-// else" semantics.
-func hostBuildPodRemove(_ context.Context, req spec.PodRemoveRequest, _ buildEngineContext) (spec.PodRemoveReply, error) {
-	releaseResourceClaim(spec.DeployKey(req.Box, req.Instance))
-	return spec.PodRemoveReply{}, nil
-}
+	case "shell":
+		p, perr := decodeLifecyclePayload[spec.PodShellPayload](req.Op, req.Payload)
+		if perr != nil {
+			return spec.PodLifecycleReply{}, perr
+		}
+		opts := podShellOpts{
+			Tag: p.Tag, EnvFile: p.EnvFile, Env: p.Env, VolumeFlag: p.VolumeFlag,
+			Bind: p.Bind, NoAutoDetect: p.NoAutoDetect,
+			// HOST-resolved NOW against the REAL terminal — see the file header invariant.
+			Interactive: p.TTY || isTerminal(),
+			WrapPTY:     p.TTY && !isTerminal(),
+		}
+		var cmd []string
+		if p.Command != "" {
+			cmd = []string{p.Command}
+		}
+		err := dispatchAndRunLifecycle("shell", req.Node, req.Box, req.Instance, func(lt LifecycleTarget) error {
+			return lt.Attach(withPodShellOpts(context.Background(), opts), cmd, true)
+		})
+		return spec.PodLifecycleReply{}, err
 
-// hostBuildPodCmd serves `charly cmd <box> <command>` — the single-command interactive exec.
-// candy/plugin-cmd owns the CLI grammar + the completion notification and drives THIS seam (the
-// former hidden `charly __cmd` core reentry, dissolved), so cmd joins its interactive sibling
-// hostBuildPodShell in the pod-lifecycle-dispatch family: the SAME irreducible
-// dispatchLifecycleTarget + LifecycleTarget.Attach step (a core M-mechanism a plugin cannot perform),
-// running over the host-held exec.RunInteractive leg (stdio never crosses the wire; the `-i` stream
-// reaches the operator's real terminal — the file-header interactive-safety invariant). tty=false is
-// the single-command form (vs hostBuildPodShell's tty=true interactive shell); Sidecar routes the
-// exec into the named sidecar container.
-func hostBuildPodCmd(_ context.Context, req spec.PodCmdRequest, _ buildEngineContext) (spec.PodCmdReply, error) {
-	lt, err := dispatchLifecycleTarget("cmd", req.Node, spec.DeployKey(req.Box, req.Instance))
-	if err != nil {
-		return spec.PodCmdReply{}, err
+	case "logs":
+		p, perr := decodeLifecyclePayload[spec.PodLogsPayload](req.Op, req.Payload)
+		if perr != nil {
+			return spec.PodLifecycleReply{}, perr
+		}
+		err := dispatchAndRunLifecycle("logs", req.Node, req.Box, req.Instance, func(lt LifecycleTarget) error {
+			return lt.Logs(context.Background(), LogsOpts{Follow: p.Follow, Sidecar: p.Sidecar})
+		})
+		return spec.PodLifecycleReply{}, err
+
+	case "service":
+		// service is now FULLY ported (Cutover B unit 2 completion): candy/plugin-pod's
+		// buildServiceArgv resolves + validates + renders the FULL argv itself (all portable —
+		// see service_resolve.go), so this case does ONLY the irreducible dispatchLifecycleTarget
+		// + LifecycleTarget.Shell step, exactly like start/stop/logs/cmd above.
+		p, perr := decodeLifecyclePayload[spec.PodServicePayload](req.Op, req.Payload)
+		if perr != nil {
+			return spec.PodLifecycleReply{}, perr
+		}
+		err := dispatchAndRunLifecycle("service", req.Node, req.Box, req.Instance, func(lt LifecycleTarget) error {
+			return lt.Shell(context.Background(), p.Argv)
+		})
+		return spec.PodLifecycleReply{}, err
+
+	case "cmd":
+		// The container command's non-zero exit rides the REPLY's ExitCode field, NOT the HostBuild
+		// error return (which stringifies the typed *exitcode.ExitCodeError, losing the code) — the
+		// reply is reconstructed from it so the operator sees the command's own code, exactly as the
+		// former __cmd/CliReply.ExitCode path did. A genuine (non-exit-code) failure still propagates
+		// as the error.
+		p, perr := decodeLifecyclePayload[spec.PodCmdPayload](req.Op, req.Payload)
+		if perr != nil {
+			return spec.PodLifecycleReply{}, perr
+		}
+		err := dispatchAndRunLifecycle("cmd", req.Node, req.Box, req.Instance, func(lt LifecycleTarget) error {
+			return lt.Attach(withPodCmdOpts(context.Background(), podCmdOpts{Sidecar: p.Sidecar}), []string{p.Command}, false)
+		})
+		var ece *exitcode.ExitCodeError
+		if errors.As(err, &ece) {
+			return spec.PodLifecycleReply{ExitCode: ece.Code}, nil
+		}
+		return spec.PodLifecycleReply{}, err
+
+	case "update":
+		p, perr := decodeLifecyclePayload[spec.PodUpdatePayload](req.Op, req.Payload)
+		if perr != nil {
+			return spec.PodLifecycleReply{}, perr
+		}
+		cmd := podUpdateCmd{
+			Box: req.Box, Tag: p.Tag, Build: p.Build, Instance: req.Instance,
+			Seed: p.Seed, ForceSeed: p.ForceSeed, DataFrom: p.DataFrom,
+			TreeJSON: p.TreeJSON,
+		}
+		return spec.PodLifecycleReply{}, cmd.dispatchByDeployTarget()
+
+	case "remove":
+		// remove is FULLY reduced (Cutover B unit 2 remove-verb completion, option (b)):
+		// candy/plugin-pod's RemoveCmd.Run() owns the ENTIRE orchestration itself
+		// (remove_orchestration.go + remove_tunnel.go), reaching the host only for the two
+		// genuinely host-coupled axes via their own narrow seams (pod-config-hook-secret-env,
+		// pod-config-clean-deploy-entry). All that remains under op="remove" is the
+		// arbiter-release bracket — CHARLY_PREEMPT_LEASE-gated host-process state a
+		// placement-agnostic plugin cannot own, the exact same reason pod start/stop's own
+		// arbiter bracket (arbiter_bracket.go, S3b — was substrate_lifecycle_grpc.go before the
+		// deploy-dispatch cluster moved) stays core. The plugin defers this call as its LAST
+		// step, reproducing the former core `defer releaseResourceClaim(...)`'s "always runs,
+		// after everything else" semantics. It does NOT touch a LifecycleTarget, so it stays
+		// outside dispatchAndRunLifecycle (see file header).
+		releaseResourceClaim(spec.DeployKey(req.Box, req.Instance))
+		return spec.PodLifecycleReply{}, nil
+
+	default:
+		return spec.PodLifecycleReply{}, fmt.Errorf("pod-lifecycle: unknown op %q", req.Op)
 	}
-	// The container command's non-zero exit rides the REPLY's ExitCode field, NOT the HostBuild error
-	// return (which stringifies the typed *exitcode.ExitCodeError, losing the code) — the plugin
-	// reconstructs the typed error from it so the operator sees the command's own code, exactly as the
-	// former __cmd/CliReply.ExitCode path did. A genuine (non-exit-code) failure still propagates as
-	// the error.
-	aerr := lt.Attach(withPodCmdOpts(context.Background(), podCmdOpts{Sidecar: req.Sidecar}), []string{req.Command}, false)
-	var ece *exitcode.ExitCodeError
-	if errors.As(aerr, &ece) {
-		return spec.PodCmdReply{ExitCode: ece.Code}, nil
-	}
-	return spec.PodCmdReply{}, aerr
 }
 
 var _ = func() bool {
-	registerHostBuilder("pod-start", typedHostBuilder("pod-start", hostBuildPodStart))
-	registerHostBuilder("pod-stop", typedHostBuilder("pod-stop", hostBuildPodStop))
-	registerHostBuilder("pod-shell", typedHostBuilder("pod-shell", hostBuildPodShell))
-	registerHostBuilder("pod-cmd", typedHostBuilder("pod-cmd", hostBuildPodCmd))
-	registerHostBuilder("pod-logs", typedHostBuilder("pod-logs", hostBuildPodLogs))
-	registerHostBuilder("pod-update", typedHostBuilder("pod-update", hostBuildPodUpdate))
-	registerHostBuilder("pod-service", typedHostBuilder("pod-service", hostBuildPodService))
-	registerHostBuilder("pod-remove", typedHostBuilder("pod-remove", hostBuildPodRemove))
+	registerHostBuilder("pod-lifecycle", typedHostBuilder("pod-lifecycle", hostBuildPodLifecycle))
 	return true
 }()

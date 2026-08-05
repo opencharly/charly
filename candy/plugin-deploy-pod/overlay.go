@@ -58,8 +58,10 @@ const engineBin = "podman"
 // once — to compute the ExtraCandyRefs the resolve call needs — and passes them here rather than
 // this function re-decoding the same InstallPlanViews a second time, R3). dir is the project dir
 // (the build-context root); baseName is the base box name (req.Image / DeployName — the key into
-// rp.Boxes); opts carries DryRun + the alias-tag gates.
-func buildOverlay(ctx context.Context, exec *sdk.Executor, reply spec.OverlayBuildReply, rp *spec.ResolvedProject, plans []*spec.InstallPlan, dir, baseName string, opts spec.LifecycleOpts) (string, error) {
+// rp.Boxes); opts carries DryRun + the alias-tag gates. baseUser/baseSecurity/baseRegistry are the
+// base image's OCI-label metadata (K3-W2: read PLUGIN-SIDE by the caller via deploykit.ExtractMetadata
+// — no longer part of the OverlayBuildReply wire type).
+func buildOverlay(ctx context.Context, exec *sdk.Executor, reply spec.OverlayBuildReply, rp *spec.ResolvedProject, plans []*spec.InstallPlan, dir, baseName string, opts spec.LifecycleOpts, baseUser string, baseSecurity *spec.Security, baseRegistry string) (string, error) {
 	// Construct the deploykit.Generator from the resolved-project envelope — the SAME shared
 	// construction source candy/plugin-build uses (R3/DRY). The host-coupled seams (RenderService
 	// for service fragments, the 9 render-seam methods) call back to the host over the in-proc
@@ -195,14 +197,14 @@ func buildOverlay(ctx context.Context, exec *sdk.Executor, reply spec.OverlayBui
 	}
 	// Merge overlay-candy security into the base image's LabelSecurity + re-emit so `charly config`
 	// (quadlet generator) picks up intrinsic requirements declared by add_candy.
-	if label := renderOverlaySecurityLabel(dg, reply, overlayCandies); label != "" {
+	if label := renderOverlaySecurityLabel(dg, reply, overlayCandies, baseSecurity); label != "" {
 		cf.WriteString(label)
 	}
 	// Restore the base image's USER directive. The overlay set USER root above so package installs
 	// work; without restoration, USER=root leaks into the resulting image + breaks every downstream
 	// invariant that depends on the base running as a non-root user.
-	if reply.BaseUser != "" && reply.BaseUser != "root" {
-		fmt.Fprintf(&cf, "\nUSER %s\n", reply.BaseUser)
+	if baseUser != "" && baseUser != "root" {
+		fmt.Fprintf(&cf, "\nUSER %s\n", baseUser)
 	}
 
 	cfPath := filepath.Join(overlayDir, "Containerfile")
@@ -247,7 +249,7 @@ func buildOverlay(ctx context.Context, exec *sdk.Executor, reply spec.OverlayBui
 
 	// Tag the overlay under <registry>/<deploy-name>:<calver> so deployment-name-keyed commands
 	// (`charly config`, `charly start`) resolve it when deploy-name != image-name.
-	if err := tagDeployAlias(ctx, exec, reply, overlayRef, opts); err != nil {
+	if err := tagDeployAlias(ctx, exec, reply, overlayRef, opts, baseRegistry); err != nil {
 		return "", err
 	}
 	return overlayRef, nil
@@ -316,25 +318,25 @@ func renderOverlayServices(dg *deploykit.Generator, box *buildkit.ResolvedBox, o
 	return stage.String(), run.String(), nil
 }
 
-// renderOverlaySecurityLabel merges the base image's baked LabelSecurity (reply.BaseSecurity) with
-// each overlay candy's own `security:` block + returns a Containerfile LABEL directive that
-// overwrites the base's label — or "" if no merge is needed. #55 step3 3-II: per-candy security is
-// no longer host-computed (reply.OverlayCandySecurity is GONE) — spec.CandyModel.Security() is a
-// wire-carried field on the SAME render-prepped envelope dg.Candies already comes from, so the
-// candy computes it itself via candyByName(dg.Candies, name).Security() (Q1, RDD-confirmed: no
-// host-only dependency here). The EX-`PodDeployTarget.renderOverlaySecurityLabel` body otherwise
-// byte-faithful: same merge semantics (Privileged OR, CgroupNS last-writer, CapAdd/Devices/
-// SecurityOpt/GroupAdd/Mounts appendUnique dedup), same json.Marshal, same LABEL directive
-// (spec.ShellQuote == the core shellSingleQuote, byte-identical). Picked up at deploy time by
-// `charly config` via ExtractMetadata.
-func renderOverlaySecurityLabel(dg *deploykit.Generator, reply spec.OverlayBuildReply, overlayCandies []string) string {
+// renderOverlaySecurityLabel merges the base image's baked LabelSecurity (baseSecurity, read
+// plugin-side by the caller via deploykit.ExtractMetadata — K3-W2) with each overlay candy's own
+// `security:` block + returns a Containerfile LABEL directive that overwrites the base's label — or
+// "" if no merge is needed. #55 step3 3-II: per-candy security is no longer host-computed
+// (reply.OverlayCandySecurity is GONE) — spec.CandyModel.Security() is a wire-carried field on the
+// SAME render-prepped envelope dg.Candies already comes from, so the candy computes it itself via
+// candyByName(dg.Candies, name).Security() (Q1, RDD-confirmed: no host-only dependency here). The
+// EX-`PodDeployTarget.renderOverlaySecurityLabel` body otherwise byte-faithful: same merge semantics
+// (Privileged OR, CgroupNS last-writer, CapAdd/Devices/SecurityOpt/GroupAdd/Mounts appendUnique
+// dedup), same json.Marshal, same LABEL directive (spec.ShellQuote == the core shellSingleQuote,
+// byte-identical). Picked up at deploy time by `charly config` via ExtractMetadata.
+func renderOverlaySecurityLabel(dg *deploykit.Generator, reply spec.OverlayBuildReply, overlayCandies []string, baseSecurity *spec.Security) string {
 	if reply.BaseImage == "" {
 		return ""
 	}
 	// Start from the base image's existing security (a COPY — Security is a value type).
 	var sec spec.Security
-	if reply.BaseSecurity != nil {
-		sec = *reply.BaseSecurity
+	if baseSecurity != nil {
+		sec = *baseSecurity
 	}
 	added := false
 	for _, candyName := range overlayCandies {
@@ -372,13 +374,14 @@ func renderOverlaySecurityLabel(dg *deploykit.Generator, reply spec.OverlayBuild
 // tagDeployAlias tags imageRef under <registry>/<deploy-name>:<calver> so deployment-name-keyed
 // commands (`charly config setup`, `charly start`) resolve the image correctly when deploy-name
 // differs from image-name. The EX-`PodDeployTarget.tagDeployAlias` body, byte-faithful, adapted to
-// read the registry (reply.BaseRegistry — the host prep read it via readImageRegistry) + the
-// CalVer (reply.CalVer — the host prep computed it; ComputeCalVer is host-only) from the envelope
-// instead of running podman inspect / ComputeCalVer itself. CalVer-only — no `:latest` alias.
-func tagDeployAlias(ctx context.Context, exec *sdk.Executor, reply spec.OverlayBuildReply, imageRef string, opts spec.LifecycleOpts) error {
+// read the registry (baseRegistry — K3-W2: read plugin-side by the caller via
+// deploykit.ExtractMetadata, no longer part of the envelope) + the CalVer (reply.CalVer — the host
+// prep computed it; ComputeCalVer is host-only) from the envelope instead of running podman
+// inspect / ComputeCalVer itself. CalVer-only — no `:latest` alias.
+func tagDeployAlias(ctx context.Context, exec *sdk.Executor, reply spec.OverlayBuildReply, imageRef string, opts spec.LifecycleOpts, baseRegistry string) error {
 	aliasRef := reply.DeployName + ":" + reply.CalVer
-	if reply.BaseRegistry != "" {
-		aliasRef = reply.BaseRegistry + "/" + reply.DeployName + ":" + reply.CalVer
+	if baseRegistry != "" {
+		aliasRef = baseRegistry + "/" + reply.DeployName + ":" + reply.CalVer
 	}
 	if aliasRef == imageRef {
 		return nil

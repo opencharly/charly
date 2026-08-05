@@ -59,21 +59,18 @@ func saveDeployConfig(dc *deploykit.BundleConfig) error {
 	return deploykit.SaveBundleConfig(dc, deployMarshalNode(), loadBundleConfig)
 }
 
-// bundleAcquireDeployConfigLock serializes the read-modify-write of the per-host deploy overlay
-// (~/.config/charly/charly.yml) for a plugin-side deploy-state write. Blocking (a config write is
-// brief). The SAME lock charly/filelock.go's acquireDeployConfigLock holds (the spec/lock primitive
-// via kit.AcquireFileLock, R3) — added for the #55 coneC-dsh β2 config-PERSIST shed (the deleted
-// "config-persist" host-builder supplied this lock host-side; the post-teardown entry removal in
-// deploy_target.go now calls deploykit.RemoveVmDeployEntry directly with this plugin-side lock).
-// A future batch may consolidate the charly + plugin-bundle + plugin-vm copies into one shared
-// kit/spec helper (flagged in charly/filelock.go); for now each supplies its own, per the coneC-dsh
-// β2 scope.
-func bundleAcquireDeployConfigLock() (func() error, error) {
-	path, err := kit.DefaultDeployConfigPath()
-	if err != nil {
-		return nil, fmt.Errorf("deploy-config lock path: %w", err)
-	}
-	return kit.AcquireFileLock(path+".lock", true)
+// mutateDeployConfig runs one locked read-modify-write cycle over the per-host deploy overlay,
+// supplying this plugin's reader + persist callback to the SHARED deploykit.MutateBundleConfig
+// cycle. Every write in this plugin goes through it: the mutation runs against a config re-read
+// INSIDE the lock, so a concurrent `charly config` / `charly vm create` / bed runner write is
+// merged onto rather than clobbered.
+//
+// It replaces this package's former private lock helper — one of three identical per-candy copies,
+// and the one that guarded only the vm-entry removal while `charly bundle import`, `charly bundle
+// reset` and the three ephemeral writers below took no lock at all.
+func mutateDeployConfig(mutate deploykit.BundleConfigMutator) error {
+	_, err := deploykit.MutateBundleConfig(loadBundleConfig, saveDeployConfig, mutate)
+	return err
 }
 
 func marshalConfigToStdout(dc *deploykit.BundleConfig) error {
@@ -167,39 +164,32 @@ func runBundleImport(files []string, replace bool, box string) error {
 		inputs = append(inputs, dc)
 	}
 
-	var base *deploykit.BundleConfig
-	if !replace {
-		existing, err := loadBundleConfig()
-		if err != nil {
-			return err
+	// The merge runs INSIDE the locked cycle against a freshly-read overlay (dc), so an import
+	// racing a concurrent `charly config` merges onto that writer's entries instead of discarding
+	// them. `--replace` still means wholesale replacement: it merges the input files onto an EMPTY
+	// base rather than onto dc.
+	if err := mutateDeployConfig(func(dc *deploykit.BundleConfig) (bool, error) {
+		base := dc
+		if replace {
+			base = &deploykit.BundleConfig{Bundle: make(map[string]spec.BundleNode)}
 		}
-		base = existing
-	}
-	if base == nil {
-		base = &deploykit.BundleConfig{Bundle: make(map[string]spec.BundleNode)}
-	}
-
-	merged := deploykit.MergeDeployConfigs(append([]*deploykit.BundleConfig{base}, inputs...)...)
-
-	if box != "" {
-		entry, ok := merged.Bundle[box]
-		if !ok {
-			return fmt.Errorf("box %q not found in input files", box)
-		}
-		if !replace {
-			existing, _ := loadBundleConfig()
-			if existing != nil {
-				existing.Bundle[box] = entry
-				merged = existing
-			} else {
-				merged = &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{box: entry}}
+		merged := deploykit.MergeDeployConfigs(append([]*deploykit.BundleConfig{base}, inputs...)...)
+		if box != "" {
+			entry, ok := merged.Bundle[box]
+			if !ok {
+				return false, fmt.Errorf("box %q not found in input files", box)
 			}
-		} else {
-			merged = &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{box: entry}}
+			if replace {
+				merged = &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{box: entry}}
+			} else {
+				// Single-box import: only that entry changes; every other fresh entry stays.
+				dc.Bundle[box] = entry
+				merged = dc
+			}
 		}
-	}
-
-	if err := saveDeployConfig(merged); err != nil {
+		*dc = *merged
+		return true, nil
+	}); err != nil {
 		return err
 	}
 
@@ -226,34 +216,35 @@ func runBundleReset(box, instance string) error {
 		return nil
 	}
 
-	dc, err := loadBundleConfig()
-	if err != nil {
-		return err
-	}
-	if dc == nil {
-		fmt.Printf("No overrides for box %q\n", box)
-		return nil
-	}
-
 	key := spec.DeployKey(box, instance)
-	if _, ok := dc.Bundle[key]; !ok {
-		fmt.Printf("No overrides for box %q\n", key)
-		return nil
-	}
-
-	deploykit.RemoveBoxDeploy(dc, key)
-
-	if len(dc.Bundle) == 0 {
-		path, _ := kit.DefaultDeployConfigPath()
-		_ = os.Remove(path)
-		fmt.Printf("Removed overrides for %q (charly.yml now empty, removed)\n", key)
-		return nil
-	}
-
-	if err := saveDeployConfig(dc); err != nil {
+	found, emptied := false, false
+	// Locked cycle: the entry is looked up and removed in the SAME hold as the write, so a reset
+	// racing a concurrent overlay writer can neither miss a just-written entry nor resurrect one.
+	// The emptied branch removes the file outright, so it reports changed=false — nothing to save.
+	if err := mutateDeployConfig(func(dc *deploykit.BundleConfig) (bool, error) {
+		if _, ok := dc.Bundle[key]; !ok {
+			return false, nil
+		}
+		found = true
+		deploykit.RemoveBoxDeploy(dc, key)
+		if len(dc.Bundle) == 0 {
+			path, _ := kit.DefaultDeployConfigPath()
+			_ = os.Remove(path)
+			emptied = true
+			return false, nil
+		}
+		return true, nil
+	}); err != nil {
 		return err
 	}
-	fmt.Printf("Removed overrides for %q\n", key)
+	switch {
+	case !found:
+		fmt.Printf("No overrides for box %q\n", key)
+	case emptied:
+		fmt.Printf("Removed overrides for %q (charly.yml now empty, removed)\n", key)
+	default:
+		fmt.Printf("Removed overrides for %q\n", key)
+	}
 	return nil
 }
 

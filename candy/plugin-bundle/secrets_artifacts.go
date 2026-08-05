@@ -67,7 +67,7 @@ func injectCandySecrets(ctx context.Context, exec *sdk.Executor, dir string, pla
 // dryRun is handled entirely by that earlier early-return, so this function is never itself
 // called under dry-run (matching the former retrieveArtifactsAndK3s's own DryRun early-return,
 // one level up).
-func retrieveArtifactsAndDispatchRegisters(ctx context.Context, exec *sdk.Executor, venueExec deploykit.DeployExecutor, dir string, plans []*deploykit.InstallPlan, artifactKey, deployName string, artifactEnv map[string]string, registerHints []string) error {
+func retrieveArtifactsAndDispatchRegisters(ctx context.Context, exec *sdk.Executor, venueExec deploykit.DeployExecutor, dir string, plans []*deploykit.InstallPlan, artifactKey, deployName, vmEntity string, artifactEnv map[string]string, registerHints []string) error {
 	candyList, err := candiesForPlans(dir, plans)
 	if err != nil {
 		return fmt.Errorf("loading candies for artifact retrieval: %w", err)
@@ -93,7 +93,7 @@ func retrieveArtifactsAndDispatchRegisters(ctx context.Context, exec *sdk.Execut
 	if err := deploykit.RetrieveCandyArtifacts(ctx, venueExec, candyList, kit.SanitizeDeployName(artifactKey), artifactEnv, spec.EmitOpts{}, readiness); err != nil {
 		return fmt.Errorf("retrieving candy artifacts: %w", err)
 	}
-	return dispatchRegisterHints(ctx, exec, artifactKey, deployName, registerHints)
+	return dispatchRegisterHints(ctx, exec, artifactKey, deployName, vmEntity, registerHints)
 }
 
 // dispatchRegisterHints dispatches whichever register hint handlers apply — data-driven,
@@ -101,13 +101,13 @@ func retrieveArtifactsAndDispatchRegisters(ctx context.Context, exec *sdk.Execut
 // "kubeconfig" has a handler (k3sPostProvision). Split out from
 // retrieveArtifactsAndDispatchRegisters as its OWN function purely for testability (the seam call
 // needs a live *sdk.Executor broker; this pure word-keyed loop does not).
-func dispatchRegisterHints(ctx context.Context, exec *sdk.Executor, artifactKey, deployName string, registerHints []string) error {
+func dispatchRegisterHints(ctx context.Context, exec *sdk.Executor, artifactKey, deployName, vmEntity string, registerHints []string) error {
 	for _, register := range registerHints {
 		handler, ok := artifactRegisterHandlers[register]
 		if !ok {
 			continue
 		}
-		if err := handler(ctx, exec, artifactKey, deployName); err != nil {
+		if err := handler(ctx, exec, artifactKey, deployName, vmEntity); err != nil {
 			return err
 		}
 	}
@@ -120,7 +120,7 @@ func dispatchRegisterHints(ctx context.Context, exec *sdk.Executor, artifactKey,
 // (R3): a candy declares the hint on its OWN artifact entry (k3s-server's kubeconfig artifact
 // declares `register: kubeconfig`) — adding a new registration kind means adding ONE map entry
 // here, never a hardcoded candy-name special case.
-var artifactRegisterHandlers = map[string]func(ctx context.Context, exec *sdk.Executor, artifactKey, deployName string) error{
+var artifactRegisterHandlers = map[string]func(ctx context.Context, exec *sdk.Executor, artifactKey, deployName, vmEntity string) error{
 	"kubeconfig": k3sPostProvision,
 }
 
@@ -133,10 +133,10 @@ var artifactRegisterHandlers = map[string]func(ctx context.Context, exec *sdk.Ex
 // runs entirely on the operator host's own filesystem (~/.cache/charly + ~/.kube/config), never
 // inside the deploy's own venue (a podman container / VM guest), so it must NOT inherit whatever
 // live venue this Invoke's own broker happens to carry.
-func k3sPostProvision(ctx context.Context, exec *sdk.Executor, artifactKey, deployName string) error {
+func k3sPostProvision(ctx context.Context, exec *sdk.Executor, artifactKey, deployName, vmEntity string) error {
 	shellDesc := kit.DescriptorFromExecutor(kit.ShellExecutor{})
 	params, err := json.Marshal(spec.Op{Plugin: "kube", PluginInput: map[string]any{
-		"method": "k3s-post-provision", "artifact_key": artifactKey, "deploy_name": deployName,
+		"method": "k3s-post-provision", "artifact_key": artifactKey, "deploy_name": deployName, "vm_entity": vmEntity,
 	}})
 	if err != nil {
 		return fmt.Errorf("k3s post-provision %q: marshal op: %w", artifactKey, err)

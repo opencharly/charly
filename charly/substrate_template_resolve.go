@@ -3,44 +3,25 @@ package main
 // substrate_template_resolve.go — the HOST side of the local + android substrate
 // TEMPLATES after the substrate-template de-type (Cutover I). The kernel stores
 // local:/android: template bodies opaquely (uf.Local / uf.Android are
-// map[string]json.RawMessage) and consumes candy/plugin-substrate's OpResolve
-// projection (ResolvedLocal / ResolvedAndroid) — never spec.Local / spec.Android.
+// map[string]json.RawMessage) and consumes candy/plugin-substrate's ops.OpResolve
+// projection (spec.ResolvedLocal / spec.ResolvedAndroid) — never spec.Local / spec.Android.
+// (W0: the former ResolvedLocal/ResolvedAndroid/ResolvedK8s in-package aliases are deleted — every
+// caller reads spec.* directly; resolveK8sViaPlugin died with its only caller, findK8sSpec,
+// relocated into the former host_build_deploy_entity_resolve.go's kind-blind resolveEntityTemplate
+// — itself deleted now, K-wave W3a A3-phase-2: every kind:<word> caller self-loads the project
+// plugin-side via sdk/loaderkit's Resolve{K8s,Vm,Android}EntityViaExecutor instead.)
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
 
+	"github.com/opencharly/spec/ops"
 	"github.com/opencharly/spec/spec"
 )
 
-// ResolvedLocal / ResolvedAndroid / ResolvedK8s are the substrate-template value envelopes.
-type (
-	ResolvedLocal   = spec.ResolvedLocal
-	ResolvedAndroid = spec.ResolvedAndroid
-	ResolvedK8s     = spec.ResolvedK8s
-)
-
-// resolveK8sViaPlugin projects one opaque k8s cluster template body into a *ResolvedK8s
-// via candy/plugin-substrate's OpResolve leg (the k8s substrate-value de-type, Cutover K).
-func resolveK8sViaPlugin(body json.RawMessage) (*ResolvedK8s, error) {
-	out, err := invokeSubstrateTemplateResolve(spec.SubstrateTemplateResolveRequest{
-		K8s: &spec.K8sResolveInput{K8s: body},
-	})
-	if err != nil {
-		return nil, err
-	}
-	var reply spec.K8sResolveReply
-	if len(out) > 0 {
-		if err := json.Unmarshal(out, &reply); err != nil {
-			return nil, fmt.Errorf("k8s resolve: decode reply: %w", err)
-		}
-	}
-	return reply.Resolved, nil
-}
-
 // resolveVmViaPlugin projects one opaque vm template body into a *spec.ResolvedVm
-// via candy/plugin-substrate's OpResolve leg (the vm
+// via candy/plugin-substrate's ops.OpResolve leg (the vm
 // substrate-value de-type, Cutover L). Returns nil for an empty/absent body.
 func resolveVmViaPlugin(body json.RawMessage) (*spec.ResolvedVm, error) {
 	if len(body) == 0 {
@@ -61,9 +42,9 @@ func resolveVmViaPlugin(body json.RawMessage) (*spec.ResolvedVm, error) {
 	return reply.Resolved, nil
 }
 
-// resolveLocalViaPlugin projects one opaque local template body into a *ResolvedLocal
-// via candy/plugin-substrate's OpResolve leg.
-func resolveLocalViaPlugin(body json.RawMessage) (*ResolvedLocal, error) {
+// resolveLocalViaPlugin projects one opaque local template body into a *spec.ResolvedLocal
+// via candy/plugin-substrate's ops.OpResolve leg.
+func resolveLocalViaPlugin(body json.RawMessage) (*spec.ResolvedLocal, error) {
 	out, err := invokeSubstrateTemplateResolve(spec.SubstrateTemplateResolveRequest{
 		Local: &spec.LocalResolveInput{Local: body},
 	})
@@ -80,8 +61,8 @@ func resolveLocalViaPlugin(body json.RawMessage) (*ResolvedLocal, error) {
 }
 
 // resolveAndroidViaPlugin projects one opaque android template body into a
-// *ResolvedAndroid.
-func resolveAndroidViaPlugin(body json.RawMessage) (*ResolvedAndroid, error) {
+// *spec.ResolvedAndroid.
+func resolveAndroidViaPlugin(body json.RawMessage) (*spec.ResolvedAndroid, error) {
 	out, err := invokeSubstrateTemplateResolve(spec.SubstrateTemplateResolveRequest{
 		Android: &spec.AndroidResolveInput{Android: body},
 	})
@@ -103,7 +84,7 @@ func invokeSubstrateTemplateResolve(req spec.SubstrateTemplateResolveRequest) ([
 	if !ok {
 		return nil, fmt.Errorf("substrate template resolve: kind provider not registered")
 	}
-	return invokeTyped[spec.SubstrateTemplateResolveRequest, json.RawMessage](context.Background(), prov, "local", OpResolve, req)
+	return invokeTyped[spec.SubstrateTemplateResolveRequest, json.RawMessage](context.Background(), prov, "local", ops.OpResolve, req)
 }
 
 // resolveAndroidViaPlugin is the android RESOLVE callback the host threads into

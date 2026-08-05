@@ -53,7 +53,7 @@ var (
 	// build-emit-capable WITHOUT building+connecting the plugin (standalone `charly box
 	// validate`). Additive, best-effort, no-false-negatives: an over-broad recognition is
 	// harmless — a verb that turns out non-build-emit-capable fails loudly at build via
-	// candy/plugin-build's plugin-verb OpEmit (InvokeProvider) empty-fragment guard. Shares declaredDeployMu (the one lock).
+	// candy/plugin-build's plugin-verb ops.OpEmit (InvokeProvider) empty-fragment guard. Shares declaredDeployMu (the one lock).
 	declaredExternalVerb = map[string]bool{}
 	// declaredExternalStep holds the external (out-of-tree) STEP words a project's candy plugin
 	// declarations name — learned POST-SCAN alongside the verbs (registerExternalVerbsFromCandies),
@@ -83,7 +83,7 @@ var (
 )
 
 // recognizedStructuralKind reports whether `word` resolves to a CONNECTED provider that decodes a
-// STRUCTURAL entity (F5) — a plugin kind whose OpLoad reply is a spec.Deploy member tree the host
+// STRUCTURAL entity (F5) — a plugin kind whose ops.OpLoad reply is a spec.Deploy member tree the host
 // folds into uf.Bundle. Precisely EXCLUDES FLAT plugin kinds and the tier-1 kinds (distro/builder/
 // init/target/agent/module/sidecar/package-group), which are registered providers but NOT structural.
 func recognizedStructuralKind(word string) bool {
@@ -417,7 +417,7 @@ func prescanDeclaredPluginWords(rootData []byte, baseDir string) {
 		}
 		manifest := disc.Manifest
 		if manifest == "" {
-			manifest = UnifiedFileName
+			manifest = spec.UnifiedFileName
 		}
 		root := disc.Path
 		if !filepath.IsAbs(root) {

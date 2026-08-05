@@ -19,8 +19,9 @@ import (
 // S3b — the core-side deploy_preresolve.go:wireDeployPreresolver registry it used to route
 // through is dissolved) resolves the device endpoint +
 // collects the apk install specs (committed-APK paths rewritten to ABSOLUTE host
-// paths, reaching the host's "deploy-entity-resolve" HostBuild seam for the entity +
-// Google-creds lookup) and ships them in DeployVenue.Substrate; this provider drives
+// paths; the deploy-tree node + kind:android entity self-load PLUGIN-SIDE, K-wave
+// W3a A3-phase-2, and Google-creds resolve peer-to-peer via verb:credential —
+// credential_shim.go) and ships them in DeployVenue.Substrate; this provider drives
 // the device:
 //
 //   - gate on sys.boot_completed (a real synchronization condition, not a sleep);

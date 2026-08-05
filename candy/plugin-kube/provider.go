@@ -8,6 +8,7 @@ import (
 	"github.com/opencharly/charly/candy/plugin-kube/params"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/loaderkit"
 	pb "github.com/opencharly/spec/proto"
 	"github.com/opencharly/spec/spec"
 )
@@ -82,14 +83,15 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 	// wholesale from charly/k3s_post.go): retrieve-path check, guest-forward kubeconfig
 	// rewrite, and the kubeconfig merge. Dispatched WITH a reverse-channel broker (the
 	// caller — candy/plugin-bundle's k3sPostProvision — uses exec.InvokeProvider, mirroring the
-	// deploy:k8s preresolve leg) because the guest-forward rewrite needs the "deploy-entity-resolve"
-	// HostBuild seam for its LoadUnified-coupled VM lookup.
+	// deploy:k8s preresolve leg) because the guest-forward rewrite self-loads the project
+	// (loaderkit.ResolveMergedTreeViaExecutor / ResolveVmEntityViaExecutor, K-wave W3a A3-phase-2)
+	// and needs the reverse channel for that.
 	if method == "k3s-post-provision" {
 		exec, err := sdk.ExecutorForInvoke(ctx, req.GetExecutorBrokerId())
 		if err != nil {
 			return sdk.ResultJSON("fail", "kube: k3s-post-provision: reach host reverse channel: "+err.Error())
 		}
-		msg, err := k3sPostProvision(ctx, exec, k3sPostProvisionParams{ArtifactKey: in.ArtifactKey, DeployName: in.DeployName})
+		msg, err := k3sPostProvision(ctx, exec, k3sPostProvisionParams{ArtifactKey: in.ArtifactKey, DeployName: in.DeployName, VmEntity: in.VmEntity})
 		if err != nil {
 			return sdk.ResultJSON("fail", "kube: k3s-post-provision: "+err.Error())
 		}
@@ -102,21 +104,23 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 		return sdk.ResultJSON("skip", fmt.Sprintf("kube: %s requires a running cluster (skip under charly check box)", method))
 	}
 
-	// Resolve the `cluster: <profile>` convenience to a concrete kubeconfig context via the
-	// GENERIC "deploy-entity-resolve" HostBuild seam (kind:k8s → ResolvedK8s.KubeconfigContext) —
-	// the SAME seam k3s_post + preresolve already use (R3). The host reads the project's kind:k8s
-	// spec this out-of-process plugin cannot reach. A miss / empty context is a valid result — the
-	// plugin falls back to the kubeconfig current-context (byte-equivalent to the former host-side
-	// findK8sSpec leg, which swallowed every resolve miss to "").
+	// Resolve the `cluster: <profile>` convenience to a concrete kubeconfig context —
+	// PLUGIN-SIDE self-load now (K-wave W3a A3-phase-2: loaderkit.ResolveK8sEntityViaExecutor,
+	// unblocked by W1's LoadUnifiedViaExecutor; the former "deploy-entity-resolve" HostBuild seam
+	// this round-tripped through is deleted). This call carries no deploy name of its own (a
+	// `kube:` check verb runs independent of any specific deploy), so it resolves the project dir
+	// via hostProjectDir's os.Getwd()-on-the-host leg ("deploy-plugins-connect", Path="" — the
+	// returned Dir is unconditional, only the plugin-connect side effect needs a real deploy name,
+	// which this call doesn't need). A miss / empty context is a valid result — the plugin falls
+	// back to the kubeconfig current-context (byte-equivalent to the former host-side
+	// direct-LoadUnified lookup, which swallowed every resolve miss to "").
 	if in.Cluster != "" && in.KubeContext == "" {
 		exec, err := sdk.ExecutorForInvoke(ctx, req.GetExecutorBrokerId())
 		if err != nil {
 			return sdk.ResultJSON("fail", fmt.Sprintf("kube: %s: %v", method, err))
 		}
-		var reply spec.DeployEntityResolveReply
-		if rerr := k8sEntityResolve(ctx, exec, spec.DeployEntityResolveRequest{Kind: "k8s", Name: in.Cluster}, &reply); rerr == nil && len(reply.EntityJSON) > 0 {
-			var view resolvedK8sView
-			if uerr := json.Unmarshal(reply.EntityJSON, &view); uerr == nil {
+		if dir, derr := hostProjectDir(ctx, exec, ""); derr == nil {
+			if view, verr := loaderkit.ResolveK8sEntityViaExecutor(ctx, exec, dir, in.Cluster); verr == nil && view != nil {
 				in.KubeContext = view.KubeconfigContext
 			}
 		}

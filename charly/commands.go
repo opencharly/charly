@@ -45,9 +45,11 @@ var containerExists = func(engine, name string) bool {
 
 // podUpdateCmd is the host-side dispatch struct for `charly update` (now command:update in
 // candy/plugin-pod). Cutover B unit 2: the plugin now performs the remote-ref/CanonicalizeDeployArg
-// validation itself (candy/plugin-pod's UpdateCmd.Run()) before reaching HostBuild("pod-update")
-// (host_build_pod_lifecycle_dispatch.go), which constructs this struct directly and calls
-// dispatchByDeployTarget() — no more Run()-VERBATIM reconstruction. command:update resolves the
+// validation itself (candy/plugin-pod's UpdateCmd.Run()) before reaching HostBuild("pod-lifecycle")
+// op="update" (host_build_pod_lifecycle_dispatch.go's hostBuildPodLifecycle, #55 W3 A10b unified
+// the former dedicated "pod-update" kind into the single op-discriminated "pod-lifecycle" one),
+// which constructs this struct directly and calls dispatchByDeployTarget() — no more
+// Run()-VERBATIM reconstruction. command:update resolves the
 // deploy tree PLUGIN-SIDE and threads it in (#55 Cone A Unit 3b); dispatchByDeployTarget's remaining
 // loadDeployPlugins/ResolveTarget (update_deploy_dispatch.go) are core Mechanisms (the provider
 // registry) a plugin cannot import or hold.
@@ -72,8 +74,9 @@ type podUpdateCmd struct {
 	ForceSeed bool
 	DataFrom  string
 	// TreeJSON is the merged deploy tree command:update (plugin-pod) resolved PLUGIN-SIDE and
-	// threaded into the "pod-update" seam (#55 Cone A Unit 3b), so dispatchByDeployTarget consumes
-	// it instead of a core host-side merged-tree read. Marshalled map[string]spec.BundleNode.
+	// threaded into the "pod-lifecycle" op="update" payload (#55 Cone A Unit 3b), so
+	// dispatchByDeployTarget consumes it instead of a core host-side merged-tree read. Marshalled
+	// map[string]spec.BundleNode.
 	TreeJSON []byte
 }
 
@@ -86,7 +89,9 @@ type podUpdateCmd struct {
 // hook env; the deploy-entry cleanup's registry-resugar) reach the host over their own narrow
 // seams (pod-config-hook-secret-env, the NEW pod-config-clean-deploy-entry —
 // host_build_pod_config_seams.go). The arbiter-release bracket alone remains under
-// hostBuildPodRemove ("pod-remove", host_build_pod_lifecycle_dispatch.go).
+// hostBuildPodLifecycle's op="remove" case ("pod-lifecycle", host_build_pod_lifecycle_dispatch.go
+// — #55 W3 A10b unified the former dedicated "pod-remove" kind into this single
+// op-discriminated one).
 
 // containerImageRef/containerImage DELETED (Cutover B unit 2, R1 divergence caught mid-flight):
 // both were duplicates of the ALREADY-EXISTING sdk/kit.ContainerImageRef/kit.ContainerImage

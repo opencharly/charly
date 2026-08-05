@@ -308,14 +308,32 @@ func podPrepareVenue(ctx context.Context, exec *sdk.Executor, p lifecycleParams)
 		baseName = p.Name
 	}
 
+	// Base-image metadata (User/Security/Registry) — read PLUGIN-SIDE (K3-W2): the host prep only
+	// resolves+returns reply.BaseImage (the ref); this candy already imports deploykit, so it reads
+	// the ai.opencharly.* labels itself via the SAME spec/container mechanism the host used to run
+	// (deploykit.ExtractMetadata re-exports container.ExtractMetadata) — no host round-trip. Both the
+	// no-overlay tag-only path and the overlay build path below need these (renderOverlaySecurityLabel/
+	// tagDeployAlias), so extract once here.
+	var baseUser string
+	var baseSecurity *spec.Security
+	var baseRegistry string
+	if reply.BaseImage != "" {
+		if baseMeta, merr := deploykit.ExtractMetadata("podman", reply.BaseImage); merr == nil && baseMeta != nil {
+			baseUser = baseMeta.User
+			sec := baseMeta.Security
+			baseSecurity = &sec
+			baseRegistry = baseMeta.Registry
+		}
+	}
+
 	// No overlay (no add_candy plans) → the base image is deploy-ready. Tag the deploy-name alias
 	// so `charly config/start <deploy-name>` resolves the base image when deploy-name != image-name
 	// (mirrors the former in-core pod-overlay Emit no-overlay branch). The host prep prepped the base
-	// ref + metadata; the candy tags the alias via the served executor.
+	// ref; the candy tags the alias via the served executor.
 	resolvedImage := reply.BaseImage
 	if len(reply.Plans) == 0 {
 		if !opts.DryRun && reply.DeployName != "" && reply.BaseImage != "" {
-			if err := tagDeployAlias(ctx, exec, reply, reply.BaseImage, opts); err != nil {
+			if err := tagDeployAlias(ctx, exec, reply, reply.BaseImage, opts, baseRegistry); err != nil {
 				return nil, err
 			}
 		}
@@ -357,7 +375,7 @@ func podPrepareVenue(ctx context.Context, exec *sdk.Executor, p lifecycleParams)
 		}
 
 		// Overlay path: render the overlay Containerfile in the candy + podman build + tag.
-		overlayRef, berr := buildOverlay(ctx, exec, reply, resolveReply.ResolvedProject, plans, p.Dir, baseName, opts)
+		overlayRef, berr := buildOverlay(ctx, exec, reply, resolveReply.ResolvedProject, plans, p.Dir, baseName, opts, baseUser, baseSecurity, baseRegistry)
 		if berr != nil {
 			return nil, berr
 		}
@@ -370,14 +388,35 @@ func podPrepareVenue(ctx context.Context, exec *sdk.Executor, p lifecycleParams)
 			"Overlay image ready: " + resolvedImage,
 			"To start the container, run: charly start " + reply.DeployName,
 		}
-		// Persist the concrete overlay ref ONLY when an overlay was actually built (add_candy
-		// present, so resolvedImage differs from the base) — the host writes SaveDeployStateInput.
-		if resolvedImage != "" && resolvedImage != reply.BaseImage {
-			state, _ := json.Marshal(map[string]any{"ResolvedImage": resolvedImage})
-			r.State = state
-		}
+		r.State = prepareVenueState(resolvedImage, reply.BaseImage)
 	}
 	return marshalReply(r)
+}
+
+// prepareVenueState encodes the deploy-state delta a PrepareVenue reply carries back for the host
+// to persist: the concrete add_candy overlay ref, and ONLY when an overlay was actually built
+// (resolvedImage differs from the base). Returns nil otherwise, so a no-overlay deploy writes
+// nothing.
+//
+// It marshals the TYPED spec.SaveDeployStateInput. That is the whole point of the helper, and it
+// is not stylistic: the host decodes this blob into that struct, whose wire key is the
+// CUE-generated `resolved_image`. The previous hand-built `map[string]any{"ResolvedImage": …}`
+// therefore decoded to an EMPTY input — encoding/json's case-insensitive field match does not
+// bridge the underscore — so `applyDeployState` saw nothing to write and returned false, and the
+// overlay ref was NEVER persisted. Nothing failed loudly: the reply's Notes still printed "Overlay
+// image ready", the write path still took its lock (leaving a charly.yml.lock next to a charly.yml
+// that was never created), and the next `charly config` then resolved the deploy to the BASE image
+// and rendered a quadlet running it — every add_candy overlay pod deploy silently ran the wrong
+// image. Marshal the wire struct, never a key map.
+func prepareVenueState(resolvedImage, baseImage string) json.RawMessage {
+	if resolvedImage == "" || resolvedImage == baseImage {
+		return nil
+	}
+	state, err := json.Marshal(spec.SaveDeployStateInput{ResolvedImage: resolvedImage})
+	if err != nil {
+		return nil
+	}
+	return state
 }
 
 // podStatus parses `charly status --json` for this deploy's row (the SAME best-effort scan the

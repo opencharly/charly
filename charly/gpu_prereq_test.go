@@ -11,8 +11,8 @@ import (
 // on this host is reported missing (→ a clean SKIP), while a present vendor, a
 // non-GPU token, or no token is not.
 func TestGPUPrereqMissing(t *testing.T) {
-	resources := map[string]*ResolvedResource{
-		"nvidia-gpu": {Gpu: &ResolvedGpuSelector{Vendor: "0x10de"}},
+	resources := map[string]*spec.ResolvedResource{
+		"nvidia-gpu": {Gpu: &spec.ResolvedGpuSelector{Vendor: "0x10de"}},
 		"test-lock":  {}, // a non-GPU arbitration token
 	}
 	// VFIOGpu is flattened (SDD conversion) — spread via the shared

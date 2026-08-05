@@ -8,9 +8,10 @@ import (
 )
 
 // config.go — FLOOR-SLIM Unit 5: the Config TYPE + its box-resolution METHODS moved to
-// sdk/spec (spec/config.go) and sdk/buildkit (buildkit/config_resolve.go); `Config = spec.Config`
-// is now a spec type alias, so package main can never add another
-// method to it. What STAYS here is the genuinely LoadUnified-coupled surface: LoadConfig /
+// sdk/spec (spec/config.go) and sdk/buildkit (buildkit/config_resolve.go); spec.Config
+// is a spec type, so package main can never add another method to it (W0 deleted the
+// former in-core `Config = spec.Config` alias too — every consumer reads spec.Config
+// directly). What STAYS here is the genuinely LoadUnified-coupled surface: LoadConfig /
 // LoadConfigRaw (the load entry points) and the ResolveBox/ResolveAllBox THIN WRAPPERS that fill
 // the ONE fallback (loading the project's distro:/builder: vocabulary when the caller didn't
 // supply it) before delegating to buildkit's free functions — the "~35 STAY: LoadConfig/
@@ -33,27 +34,23 @@ func noCharlyYmlErr(dir string) error {
 	return fmt.Errorf("no charly.yml found in %s (run `charly box new project .` to scaffold one): %w", dir, ErrNoCharlyYml)
 }
 
-// Config is the charly.yml configuration projection. Relocated to sdk/spec (FLOOR-SLIM Unit 5);
-// this is a type alias, not a new declaration — package main defines NO methods on it anymore.
-type Config = spec.Config
+// BuildFormats (a []string alias for the build: field) is DELETED (K3-W2, task #13): its sole
+// consumer, validateBuildAndDistro, relocated to candy/plugin-box/validate_config_rules.go using
+// plain []string (spec.BoxConfig.Build's actual wire type — BuildFormats was never referenced by
+// the wire type itself, only by this file's now-moved validator).
 
-// BuildFormats handles YAML unmarshal of the build: field.
-// Package formats tied to the defined builders, installed in list order.
-// Single string "rpm" becomes ["rpm"]. List ["pac", "aur"] stays as-is.
-type BuildFormats []string
-
-// LoadConfig reads charly.yml and returns the Config (defaults + images)
+// LoadConfig reads charly.yml and returns the spec.Config (defaults + images)
 // projection. Mode purity preserved: this reads the PROJECT charly.yml only and
 // never merges the per-host charly.yml overlay. Deploy-mode commands must call
 // LoadBundleConfig + MergeDeployOntoMetadata explicitly.
-func LoadConfig(dir string) (*Config, error) {
+func LoadConfig(dir string) (*spec.Config, error) {
 	return LoadConfigRaw(dir)
 }
 
 // LoadConfigRaw is an alias retained for call sites that previously
 // distinguished raw-vs-merged loads. Both forms now read charly.yml via
 // LoadUnified and return the Images projection.
-func LoadConfigRaw(dir string) (*Config, error) {
+func LoadConfigRaw(dir string) (*spec.Config, error) {
 	uf, present, err := LoadUnified(dir)
 	if err != nil {
 		return nil, fmt.Errorf("loading charly.yml: %w", err)

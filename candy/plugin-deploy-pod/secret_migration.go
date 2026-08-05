@@ -123,6 +123,7 @@ func migratePlaintextEnvSecret(ctx context.Context, ex *sdk.Executor, dc *deploy
 
 	cred := deploykit.CredentialAccessViaExecutor(ctx, ex)
 	migrated := 0
+	var migratedNames []string
 	for _, p := range toMigrate {
 		dep := depByName[p.depName]
 		service, credKey := secretKeyForDep(dep)
@@ -134,6 +135,7 @@ func migratePlaintextEnvSecret(ctx context.Context, ex *sdk.Executor, dc *deploy
 		}
 		fmt.Fprintf(os.Stderr, "Migrated plaintext %s from charly.yml to credential store (%s/%s)\n", p.depName, service, credKey)
 		migrated++
+		migratedNames = append(migratedNames, p.depName)
 	}
 
 	if migrated == 0 {
@@ -143,7 +145,29 @@ func migratePlaintextEnvSecret(ctx context.Context, ex *sdk.Executor, dc *deploy
 
 	entry.Env = staying
 	dc.Bundle[key] = entry
-	if err := saveBundle(ctx, ex, dc); err != nil {
+	// Persist through the locked read-modify-write cycle, and express the cleaning as "delete
+	// exactly the keys that reached the credential store" rather than "write back the Env map I
+	// computed". Overwriting wholesale would discard any env var a concurrent `charly config` for
+	// this same deploy added between this function's read and its write — the lost-update class
+	// this whole path was carrying.
+	if _, err := mutateBundle(ctx, ex, "charly config migrate-plaintext-secret", func(d *deploykit.BundleConfig) (bool, error) {
+		fresh, ok := d.Bundle[key]
+		if !ok || len(fresh.Env) == 0 {
+			return false, nil
+		}
+		changed := false
+		for _, name := range migratedNames {
+			if _, present := fresh.Env[name]; present {
+				delete(fresh.Env, name)
+				changed = true
+			}
+		}
+		if !changed {
+			return false, nil
+		}
+		d.Bundle[key] = fresh
+		return true, nil
+	}); err != nil {
 		return migrated, fmt.Errorf("persisting cleaned charly.yml after migration: %w (backup at %s)", err, backupPath)
 	}
 	fmt.Fprintf(os.Stderr, "Backed up previous charly.yml to %s (rollback: mv %s %s)\n", backupPath, backupPath, deployConfigPathOrEmpty())

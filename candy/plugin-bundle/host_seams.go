@@ -12,12 +12,13 @@ import (
 // of charly core (P13). `add`/`del` now drive their WHOLE deploy-tree walk plugin-side (walk.go,
 // the K4-C walk port) — LoadUnified-coupled config resolution (the merged-tree read/resolveDelNode) and
 // registry-coupled executor-chain derivation (deriveChildExecutorForPath) are core Mechanisms a
-// plugin cannot import (separate module), so the walk reaches them via six narrow host-build
+// plugin cannot import (separate module), so the walk reaches them via four narrow host-build
 // seams: deploy-plugins-connect, resolve-target-add (the per-node ResolveTarget+Add terminal step —
 // the plugin COMPILES the InstallPlans IN-PROC (K4-C shape-2) and ships them already-compiled, so
-// the host half does only ResolveTarget+Add, no compile), deploy-members-up/-down,
-// deploy-del-resolve, and deploy-node-del-dispatch (the per-node ResolveTarget+Del terminal step).
-// `from-box` still forwards its WHOLE command to
+// the host half does only ResolveTarget+Add, no compile), deploy-del-resolve, and
+// deploy-node-del-dispatch (the per-node ResolveTarget+Del terminal step). The former
+// deploy-members-up/-down seams DIED (#55 W3 A4) — the walk calls sdk/deploykit.BringUpMembers/
+// TearDownMembers directly now. `from-box` still forwards its WHOLE command to
 // HostBuild("deploy-from-box"). The config-management ops (show/export/import/reset/status) run
 // plugin-side — reads via loaderkit.LoadHostBundleConfigViaExecutor, writes via deploykit.SaveBundleConfig
 // directly (#55 K4 config-write seam-collapse; the host "deploy-config-save" leg is deleted).

@@ -231,11 +231,11 @@ func GenerateHarnessNonces(plan []spec.Step) (map[string]string, error) {
 // Implemented via a JSON round-trip (json.Marshal → regex replace on the JSON bytes
 // → json.Unmarshal): every shorthand wire type carried by a Step's inline Op
 // (spec.Matcher / spec.MatcherList / spec.PortScope / spec.EphemeralLifetime) ships
-// SYMMETRIC MarshalJSON + UnmarshalJSON — the shorthand-aware read path the core
-// loader's CUE re-decode (decodeEntityViaCUE, package-main and not plugin-importable)
-// exists to provide — so a self-contained JSON round-trip round-trips the plan
-// faithfully with no loader coupling. Re-stamps Op.Origin after round-trip (it is
-// json:"-" so it would otherwise drop).
+// SYMMETRIC MarshalJSON + UnmarshalJSON — the shorthand-aware read path the loader's CUE
+// re-decode (sdk/loaderkit.DecodeEntityViaCUE, reached host-side through
+// requireProjectLoader().DecodeEntityViaCUE) exists to provide — so a self-contained JSON
+// round-trip round-trips the plan faithfully with no loader coupling. Re-stamps Op.Origin after
+// round-trip (it is json:"-" so it would otherwise drop).
 func SubstituteStepNonces(plan []spec.Step, nonces map[string]string) ([]spec.Step, error) {
 	if len(nonces) == 0 {
 		return plan, nil

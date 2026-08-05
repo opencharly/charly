@@ -52,7 +52,7 @@ func testRunReverseOpPluginScript(t *testing.T, ops []spec.ReverseOp) {
 // TestExternalPluginStep_Derivations proves the IR derivations of the new step kind
 // (no plugin process needed): Kind/Venue are fixed; Scope follows the resolved user
 // (the OpStep rule); Gate is None (operator-authorized); Reverse() is static-nil
-// because the teardown ops are recorded DYNAMICALLY from the OpExecute reply.
+// because the teardown ops are recorded DYNAMICALLY from the ops.OpExecute reply.
 func TestExternalPluginStep_Derivations(t *testing.T) {
 	t.Cleanup(snapshotProviderState())
 	rootStep := &spec.ExternalPluginStep{Op: &spec.Op{Plugin: "examplestep"}, ResolvedUser: "root"}
@@ -66,7 +66,7 @@ func TestExternalPluginStep_Derivations(t *testing.T) {
 		t.Fatalf("RequiresGate = %v, want GateNone", rootStep.RequiresGate())
 	}
 	if rootStep.Reverse() != nil {
-		t.Fatalf("Reverse = %v, want nil (teardown ops are recorded from the OpExecute reply)", rootStep.Reverse())
+		t.Fatalf("Reverse = %v, want nil (teardown ops are recorded from the ops.OpExecute reply)", rootStep.Reverse())
 	}
 	if rootStep.Scope() != spec.ScopeSystem {
 		t.Fatalf("Scope(root) = %v, want ScopeSystem", rootStep.Scope())
@@ -93,7 +93,7 @@ func TestExternalPluginStep_Derivations(t *testing.T) {
 //     an external grpcProvider satisfies executorInvoker);
 //   - RunHostStep's ExternalPluginStep arm (S4: dispatches via invokeExternalStep →
 //     the SAME PLUGIN↔PLUGIN InvokeProvider leg every peer-invoke uses) Invokes the
-//     plugin's OpExecute WITH the host's ExecutorService on the broker; the plugin
+//     plugin's ops.OpExecute WITH the host's ExecutorService on the broker; the plugin
 //     dials back through the SDK (ExecutorFromInvoke) and writes the marker on the
 //     host venue, then RETURNS a DeployReply whose plugin-script reverse op rides the
 //     RunHostStep reply;
@@ -191,8 +191,8 @@ func TestExternalPluginStep_ReverseChannelEndToEnd(t *testing.T) {
 	if rep.GetError() != "" {
 		t.Fatalf("RunHostStep reply error: %s", rep.GetError())
 	}
-	mustExist(t, applied, "OpExecute did not write the applied marker over the reverse channel")
-	mustExist(t, probe, "OpExecute did not write the probe marker over the reverse channel")
+	mustExist(t, applied, "ops.OpExecute did not write the applied marker over the reverse channel")
+	mustExist(t, probe, "ops.OpExecute did not write the probe marker over the reverse channel")
 	var reverseOps []spec.ReverseOp
 	if err := json.Unmarshal(rep.GetReverseOpsJson(), &reverseOps); err != nil {
 		t.Fatalf("decode reverse ops: %v", err)

@@ -18,8 +18,9 @@
 // through is dissolved) resolves the cluster template + image Capabilities and GENERATES the
 // egress-validated Kustomize tree ITSELF (materialize.go, K5-A item 6 — verb:k8sgen/verb:egress
 // reached peer-to-peer via InvokeProvider, disk I/O done here directly; no host round trip),
-// reaching the host ONLY for the "deploy-entity-resolve" HostBuild seam (the LoadUnified-coupled
-// cluster/node lookup this plugin cannot do itself).
+// self-loading the project for the cluster/node lookup itself now too (K-wave W3a A3-phase-2:
+// loaderkit.ResolveMergedTreeViaExecutor / ResolveK8sEntityViaExecutor) — no host round trip
+// anywhere in this leg anymore.
 // The goadb-analog of candy/plugin-adb: the FULL client-go/clientcmd/dynamic
 // dependency + the single kubectl-apply path live HERE (R3).
 //

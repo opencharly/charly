@@ -31,11 +31,12 @@ import (
 // left charly's core go.mod). It keeps its `kube:` discriminator + modifiers on core #Op
 // (authoring unchanged) but is NOT a CheckVerbProvider, so it dispatches via
 // invokeVerbProvider (the else-branch in runOne) once the loader registers its grpcProvider
-// — never through this in-proc set. The plugin resolves any --cluster profile to a
-// concrete kubeconfig context via the GENERIC "deploy-entity-resolve" HostBuild seam
-// (kind:k8s → ResolvedK8s.KubeconfigContext); the same plugin's clientcmd-backed k3s
-// post-provision finalization (kubeconfig rewrite + merge) routes through it via
-// deploy_add_shared.go's invokeKubePluginWithBroker.
+// — never through this in-proc set. The plugin self-resolves any --cluster profile to a
+// concrete kubeconfig context itself now (K-wave W3a A3-phase-2, self-loading the project via
+// sdk/loaderkit.ResolveK8sEntityViaExecutor); the same plugin's clientcmd-backed k3s
+// post-provision finalization (kubeconfig rewrite + merge) is reached PEER-TO-PEER now too —
+// candy/plugin-bundle's k3sPostProvision (secrets_artifacts.go) InvokeProviders verb:kube
+// directly, replacing the former core registry-dance seam this comment used to name.
 
 // adb is NOT a built-in verb — it is an EXTERNAL-CHARLY-VERB served out-of-process by
 // candy/plugin-adb (the second dep-shed: the goadb ADB-wire dependency left charly's

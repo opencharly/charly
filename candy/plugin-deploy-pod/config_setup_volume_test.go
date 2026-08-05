@@ -7,7 +7,6 @@ import (
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/spec/proto"
 	"github.com/opencharly/spec/spec"
 	"google.golang.org/grpc"
@@ -61,29 +60,48 @@ func (s *projectVolumeStub) install(t *testing.T) {
 	t.Cleanup(func() { loadProjectVolume = orig })
 }
 
-// saveBundleStub replaces the saveBundle package var for a test — the persist leg of
-// resolveDeployVolumes. The #55 coneC-dsh seam-collapse moved the per-host overlay write
-// PLUGIN-SIDE (deploykit.SaveBundleConfig over the loader-threaded Primaries leg + the cycle-free
-// loaderkit overlay read), so a unit test must NOT drive the real saveBundle (it would write the
-// operator's real ~/.config/charly/charly.yml + invoke 4 loader HostBuild seams). `called` records
-// whether the persist fired + `lastDC` captures the dc handed to it, so a test asserts the fallback
-// hit was actually PERSISTED, not just held in memory — the regression the old pod-config-save-bundle
-// HostBuild-seam assertion guarded, now asserted at the package-var boundary the seam-collapse
-// moved the write to. Mirrors projectVolumeStub (R3).
+// saveBundleStub replaces the package's overlay-write vars for a test. The #55 coneC-dsh
+// seam-collapse moved the per-host overlay write PLUGIN-SIDE (deploykit.SaveBundleConfig over the
+// loader-threaded Primaries leg + the cycle-free loaderkit overlay read), so a unit test must NOT
+// drive the real write (it would touch the operator's real ~/.config/charly/charly.yml + invoke 4
+// loader HostBuild seams). `called` records whether the persist fired + `lastDC` captures the dc it
+// ran against, so a test asserts a fallback hit was actually PERSISTED, not just held in memory —
+// the regression the old pod-config-save-bundle HostBuild-seam assertion guarded, now asserted at
+// the package-var boundary the seam-collapse moved the write to. Mirrors projectVolumeStub (R3).
+//
+// `disk` is the fake on-disk overlay the locked read-modify-write cycle reads and writes. Modelling
+// it as real state — rather than echoing back whatever dc the caller happened to hold — is what
+// makes these tests exercise the post-fix contract: every mutation runs against the CURRENT
+// overlay, so two successive calls accumulate exactly as two concurrent charly processes now do.
 type saveBundleStub struct {
 	called bool
 	lastDC *deploykit.BundleConfig
+	disk   *deploykit.BundleConfig
 }
 
 func (s *saveBundleStub) install(t *testing.T) {
 	t.Helper()
-	orig := saveBundle
+	origSave, origMutate := saveBundle, mutateBundle
 	saveBundle = func(_ context.Context, _ *sdk.Executor, dc *deploykit.BundleConfig) error {
 		s.called = true
 		s.lastDC = dc
 		return nil
 	}
-	t.Cleanup(func() { saveBundle = orig })
+	mutateBundle = func(_ context.Context, _ *sdk.Executor, _ string, mutate deploykit.BundleConfigMutator) (*deploykit.BundleConfig, error) {
+		if s.disk == nil {
+			s.disk = &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{}}
+		}
+		changed, err := mutate(s.disk)
+		if err != nil {
+			return s.disk, err
+		}
+		if changed {
+			s.called = true
+			s.lastDC = s.disk
+		}
+		return s.disk, nil
+	}
+	t.Cleanup(func() { saveBundle, mutateBundle = origSave, origMutate })
 }
 
 // TestResolveDeployVolumes_ProjectDeclaredFallback is the regression test: with NO CLI flag, NO
@@ -231,6 +249,10 @@ func TestResolveDeployVolumes_PortedDeployProjectVolumeAppliedOnFirstConfig(t *t
 		// zero value (never set), Volume is empty.
 		key: {ResolvedPort: []string{"8080:8080"}},
 	}}
+	// That write is now a locked read-modify-write against the OVERLAY, so the fake on-disk
+	// overlay must carry it too — otherwise the volume persist merges onto an empty file and the
+	// "leave the pre-existing resolved port untouched" assertion tests nothing.
+	saveStub.disk = dc
 
 	got, err := resolveDeployVolumes(context.Background(), ex, c, &dc)
 	if err != nil {
@@ -367,23 +389,13 @@ func TestConfigFlow_PortResolutionThenResolveDeployVolumes_ProjectVolumeStillApp
 	key := spec.DeployKey(c.Box, c.Instance)
 	var dc *deploykit.BundleConfig
 
-	// --- Stage 1: replicate config_setup.go's port-resolution block (runConfig, the lines
-	// immediately preceding the resolveDeployVolumes call) VERBATIM, against a brand-new
-	// (nil) dc — the exact state a deploy's FIRST-EVER `charly config` starts from. ---
-	containerPorts := kit.ContainerPortsFromMappings([]string{"8080:8080"})
-	if dc == nil {
-		dc = &deploykit.BundleConfig{Bundle: make(map[string]spec.BundleNode)}
-	}
-	overlay := dc.Bundle[key]
-	if len(containerPorts) > 0 || len(overlay.Port) > 0 {
-		resolved, rErr := kit.ResolveDeployPorts(containerPorts, overlay.Port, overlay.ResolvedPort, deploykit.OccupiedHostPorts(dc, key))
-		if rErr != nil {
-			t.Fatalf("kit.ResolveDeployPorts() error = %v", rErr)
-		}
-		if !kit.SameStringSlice(overlay.ResolvedPort, resolved) {
-			overlay.ResolvedPort = resolved
-			dc.Bundle[key] = overlay
-		}
+	// --- Stage 1: run config_setup.go's port-resolution block (runConfig, the lines immediately
+	// preceding the resolveDeployVolumes call) through its ACTUAL function, against a brand-new
+	// (nil) dc — the exact state a deploy's FIRST-EVER `charly config` starts from. Driving the
+	// real resolveDeployPorts rather than an inline replica keeps this integration test honest now
+	// that the write is a locked read-modify-write against the overlay. ---
+	if err := resolveDeployPorts(context.Background(), ex, &dc, key, &spec.BoxMetadata{Port: []string{"8080:8080"}}); err != nil {
+		t.Fatalf("resolveDeployPorts() error = %v", err)
 	}
 	// Confirm stage 1 alone already reproduces the hazard's precondition: the overlay key now
 	// exists, with an empty Volume and VolumeProjectChecked unset.

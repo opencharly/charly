@@ -59,6 +59,7 @@ type BundleAddCmd struct {
 	AllowRootTasks   bool   `name:"allow-root-tasks" help:"Allow arbitrary root cmd: tasks (host target only)"`
 	SkipIncompatible bool   `name:"skip-incompatible" help:"Skip candies without host-matching format (host target only)"`
 	BuilderImage     string `name:"builder-image" help:"Override the compile builder image"`
+	DevLocalPkg      bool   `name:"dev-local-pkg" help:"Treat this as a disposable check-bed deploy: a localpkg candy whose package source cannot be found is a HARD FAILURE instead of a skip, so a bed can never silently install nothing. The deploy-side twin of 'charly box build --dev-local-pkg'; set automatically by the check-bed runner, never on an operator deploy."`
 	AssumeYes        bool   `name:"assume-yes" short:"y" help:"Assume yes; implies all allow-* gates plus skip sudo preflight"`
 
 	// Disposable + lifecycle classification (see /charly-internals:disposable).
@@ -76,8 +77,9 @@ type BundleAddCmd struct {
 // BundleAddCmd's Run() (the plugin-side deploy-tree WALK) lives in walk.go (K4-C walk port).
 
 // BundleDelCmd is the `charly bundle del <name>` grammar; Run() (walk.go) drives the
-// deploy-del-resolve / deploy-members-down / deploy-node-del-dispatch seams. The AssumeYes field
-// renders as `--assume-yes`, now stated by an explicit `name:` tag rather than left to Kong's
+// deploy-del-resolve / deploy-node-del-dispatch seams plus a direct deploykit.TearDownMembers
+// call (#55 W3 A4 — the former deploy-members-down HostBuild seam is deleted). The AssumeYes field
+// renders as `--assume-yes`, stated by an explicit `name:` tag rather than left to Kong's
 // derivation from the field, with `-y` as the short form — the exact contract spec.BundleDelArgv
 // relies on.
 type BundleDelCmd struct {

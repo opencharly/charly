@@ -105,13 +105,15 @@ func (c *SecretsGpgEditCmd) Run() error {
 	}
 
 	// Decrypt to temp file
-	tmp, err := os.CreateTemp("", "charly-secrets-*.env")
+	// Held for the decrypted file's lifetime. This one carries PLAINTEXT SECRETS, so a sweep
+	// racing it is worse than a failed build: the consumer would read a truncated or absent
+	// secret file with no indication why.
+	tmp, releaseTmp, err := CreateTempHeld("", "charly-secrets-*.env")
 	if err != nil {
 		return fmt.Errorf("creating temp file: %w", err)
 	}
 	tmpPath := tmp.Name()
-	RegisterTempCleanup(tmpPath)
-	defer func() { secureDelete(tmpPath); UnregisterTempCleanup(tmpPath) }()
+	defer func() { releaseTmp(); secureDelete(tmpPath); UnregisterTempCleanup(tmpPath) }()
 
 	plaintext, decErr := gpgDecryptToBytes(c.File)
 	if decErr != nil {

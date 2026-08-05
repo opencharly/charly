@@ -194,7 +194,7 @@ func isolateProviderRegistry(t *testing.T) {
 // TestBuildDeployPlan_BuilderPurity_NoPluginRPC proves it never dials a plugin itself) computed
 // from data that is ITSELF deterministic and reproducible offline: the fedora/rpm distro
 // vocabulary is a documented PURE field-copy of the checked-in charly/charly.yml (candy/
-// plugin-distro's OpResolve, see its resolve.go), and the pixi builder's deploy-time context/
+// plugin-distro's ops.OpResolve, see its resolve.go), and the pixi builder's deploy-time context/
 // reverse ops are thin dispatches to the PUBLIC, pure sdk/kit.BuilderCollectContext/BuilderReverse
 // (candy/plugin-builder-pixi/plugin.go). tools/golden-compile (its own standalone module, mirroring
 // the tools/gomod-canonical precedent) computes this OLD-side ground truth offline and writes it to

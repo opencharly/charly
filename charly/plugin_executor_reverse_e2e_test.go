@@ -79,15 +79,19 @@ func testReadCandyRecord(paths *testLedgerPaths, layer string) (*spec.CandyRecor
 // carries the GRPCBroker), routed through ResolveTarget → pluginDeployTarget (S3b —
 // the thin data-only proxy dispatching to candy/plugin-bundle's Invoke(OpDeployDispatch),
 // which in turn reaches the substrate provider via its own sdk.Executor.InvokeProvider),
-// and driven through Add → Test → Update → Del:
+// and driven through Add → Update → Del:
 //
-//   - Add Invokes the provider (OpExecute) with the host's ExecutorService on the
+//   - Add Invokes the provider (ops.OpExecute) with the host's ExecutorService on the
 //     broker; the plugin dials back through the SDK (ExecutorFromInvoke) and writes
 //     TWO markers on the host venue, then RETURNS a DeployReply whose plugin-script
 //     reverse op + record candy/plugin-bundle persists in the (temp) install ledger;
-//   - Test runs a host-side `file` check against the probe marker (no plugin call);
 //   - Update re-Invokes idempotently (markers stay, reverse op not duplicated);
 //   - Del replays the RECORDED plugin-script reverse op (markers gone, records deleted).
+//
+// A Test step (a host-side `file` check against the probe marker, no plugin call) used to sit
+// between Add and Update — UnifiedDeployTarget.Test is DELETED (#55 W3 B3 remainder, zero real
+// callers anywhere in the tree); it never exercised the reverse channel this test proves anyway
+// (its own former comment said so — "no plugin call"), so removing it costs this test nothing.
 //
 // Builds + execs a real binary, so it is gated behind -short exactly like
 // TestExternalPluginEndToEnd.
@@ -140,18 +144,24 @@ func TestExternalDeployPlugin_ReverseChannelEndToEnd(t *testing.T) {
 	}
 
 	// 3. A real lifecycle target: a unique deploy name (so the /tmp scratch dir is private to
-	//    this run) and a TEMP ledger (never the operator's, threaded via pluginDeployTarget.ledgerRoot
-	//    → req.LedgerRoot — S3b's wire-safe equivalent of the pre-move settable `paths` field; only
-	//    the Root string is injected, the full testLedgerPaths stays test-side for read-back).
+	//    this run) and a TEMP ledger (never the operator's). K-wave W3a A9 deleted
+	//    pluginDeployTarget's ledgerRoot field + its dispatch()-time req.LedgerRoot threading (it
+	//    had zero production callers — test-only scaffolding). candy/plugin-bundle's
+	//    ledgerPathsFor falls back to kit.DefaultLedgerPaths() — os.UserHomeDir()-anchored — for
+	//    ANY req.LedgerRoot=="" call, exactly what Add/Update/Del's own internal dispatch()
+	//    requests always carry (no method threads a ledger override), so redirecting HOME for the
+	//    test's duration achieves the SAME temp-ledger isolation through the plugin's EXISTING
+	//    default-resolution path, with no wire field needed.
 	name := fmt.Sprintf("e3deploy-%d", time.Now().UnixNano())
-	root := t.TempDir()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	root := filepath.Join(home, ".config", "opencharly", "installed")
 	paths := &testLedgerPaths{
 		Root:    root,
 		Deploys: filepath.Join(root, "deploys"),
 		Candies: filepath.Join(root, "layers"),
 	}
 	tgt.name = name
-	tgt.ledgerRoot = paths.Root
 
 	dir := filepath.Join("/tmp", "charly-exampledeploy", name)
 	applied := filepath.Join(dir, "applied")
@@ -178,11 +188,6 @@ func TestExternalDeployPlugin_ReverseChannelEndToEnd(t *testing.T) {
 	}
 	if len(crec.ReverseOps) != 1 || crec.ReverseOps[0].Kind != spec.ReverseOpPluginScript {
 		t.Fatalf("candy record reverse ops = %+v, want exactly one plugin-script op", crec.ReverseOps)
-	}
-
-	// --- Test: host-side file check on the probe marker passes (no plugin call). ---
-	if err := tgt.Test(ctx, []spec.Op{{ID: "probe", Plugin: "file", PluginInput: map[string]any{"file": probe, "exists": true}}}, TestOpts{}); err != nil {
-		t.Fatalf("Test (probe marker present): %v", err)
 	}
 
 	// --- Update: idempotent re-apply — markers stay, reverse op NOT duplicated. ---

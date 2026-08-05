@@ -86,6 +86,42 @@ func deployKeyToBoxLocal(ctx context.Context, ex *sdk.Executor, dc *deploykit.Bu
 	return ""
 }
 
+// qualifyImageRef applies the registry-qualification rule to the ref resolveDeployRef produced,
+// returning the ref `charly config` renders the quadlet from. It is a PURE function of the values
+// runConfig already holds — deliberately, so the rule below is unit-testable without an executor
+// (the pre-fix form computed both its operands from executor-backed calls, which is a large part
+// of why it shipped broken).
+//
+// The rule: registry-QUALIFY a short ref, UNLESS
+//   - the operator supplied an explicit ref via the deploy entry's `image:` field (Pattern B —
+//     arbitrary deploy-key + version-pin, /charly-core:deploy "Two supported deploy patterns"):
+//     imageRef is already fully-qualified and pinning to that exact tag is the whole point; or
+//   - imageRef IS this deploy's persisted add_candy overlay: the overlay is a LOCAL-only
+//     `<deploy-name>-overlay:<hash>` tag (no registry segment, so LooksLikeFullRef cannot protect
+//     it), and prefixing the registry would throw the overlay away and deploy the BASE image.
+//
+// Two invariants this rule MUST keep, BOTH of which the pre-fix form violated:
+//
+//  1. It compares REFS to REFS. The pre-fix form bound resolveDeployRef's FIRST return — the box
+//     NAME — and compared it to a ref, so the overlay test was always false and the persisted
+//     overlay was always discarded.
+//
+//  2. It QUALIFIES the ref it already has; it never RE-RESOLVES through the deploy-key API. The
+//     pre-fix form re-resolved via resolveDeployRefLocal(deployBoxName, …), and a box NAME is not
+//     a deploy KEY: that lookup reads whichever SIBLING deployment happens to be named after the
+//     shared base box, then (tag empty) resolves the base box's label family, where every sibling
+//     deployment's alias tag competes.
+//
+// Together those made every add_candy overlay pod deploy run some other deployment's image —
+// operator deploys as much as check beds.
+func qualifyImageRef(imageRef, registry, explicitRef, resolvedOverlay, boxName, tag string) string {
+	usingResolvedOverlay := imageRef != "" && imageRef == resolvedOverlay
+	if registry == "" || explicitRef != "" || usingResolvedOverlay || kit.LooksLikeFullRef(imageRef) {
+		return imageRef
+	}
+	return kit.ResolveShellImageRef(registry, boxName, tag)
+}
+
 // resolvedOverlayImage mirrors the former host resolved_image lookup: the concrete add_candy-overlay
 // image ref persisted per-host (BundleNode.ResolvedImage), DeployKey-then-bare-key.
 func resolvedOverlayImage(dc *deploykit.BundleConfig, box, instance string) string {

@@ -5,7 +5,7 @@ import (
 )
 
 // sidecar.go — the residual HOST side of the `sidecar` kind: ONLY the go:embed sidecar-template
-// library read. ALL sidecar business logic lives in candy/plugin-sidecar's OpResolve leg; the
+// library read. ALL sidecar business logic lives in candy/plugin-sidecar's ops.OpResolve leg; the
 // resolve DISPATCH + adapter + secret-provisioning moved to candy/plugin-deploy-pod
 // (sidecar_resolve.go's resolvePodSidecars, which InvokeProviders kind:sidecar itself — this cone's
 // seam-death, retiring the former resolveSidecarsViaPlugin + resolvedSidecarFromSpec + the fat

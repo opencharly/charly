@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"github.com/opencharly/spec/ops"
 
 	"github.com/opencharly/spec/spec"
 )
@@ -56,7 +57,7 @@ func invokeVmPluginEnv(env spec.VmPluginEnv) (json.RawMessage, bool) {
 	if err != nil {
 		return nil, false
 	}
-	out, err := prov.Invoke(context.Background(), &Operation{Reserved: "libvirt", Op: OpRun, Env: envJSON})
+	out, err := prov.Invoke(context.Background(), &Operation{Reserved: "libvirt", Op: ops.OpRun, Env: envJSON})
 	if err != nil || out == nil {
 		return nil, false
 	}

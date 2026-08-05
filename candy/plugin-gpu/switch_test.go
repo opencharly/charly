@@ -225,7 +225,7 @@ func TestGpuSwitchModeTolerant_AbsentCardIsNoError(t *testing.T) {
 	origDetect, origRun := vfioDetect, runGPUSwitchScript
 	defer func() { vfioDetect, runGPUSwitchScript = origDetect, origRun }()
 
-	vfioDetect = func(map[string]string) spec.VFIOReport { return spec.VFIOReport{} } // no GPUs
+	vfioDetect = func() spec.VFIOReport { return spec.VFIOReport{} } // no GPUs
 	called := false
 	runGPUSwitchScript = func(string) ([]byte, error) { called = true; return nil, nil }
 

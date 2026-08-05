@@ -4,7 +4,9 @@ package main
 // generic spec.ParsedProject) moved to sdk/loaderkit (P6), served by the loader plugin candy;
 // core reconstructs this genericNode from a ParsedNode via parsedNodeToGeneric (node_parsed.go)
 // for the materialize half (normalizeNodeInto) + the genericNode consumers (candyIsImage,
-// validateEntityNodeRec, buildCandy). Only the TYPE stays here.
+// buildCandy). validateEntityNodeRec fully relocated to sdk/loaderkit (K1 unit 3c) and now
+// operates on spec.ParsedNode directly — it is no longer a genericNode consumer. Only the TYPE
+// stays here.
 
 import (
 	"gopkg.in/yaml.v3"

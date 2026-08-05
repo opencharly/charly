@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/spec/spec"
 )
 
 // host_seams.go — the command:{start,stop,logs,shell,service,config,remove,cp,volume} plugin's
@@ -50,6 +51,21 @@ func hostPodSeam(kind string, reqAny any) error {
 	}
 	_, err = cmdExec.HostBuild(cmdCtx, kind, reqJSON)
 	return err
+}
+
+// hostPodLifecycle marshals payload (one of the #PodXPayload types) into
+// spec.PodLifecycleRequest.Payload and forwards it via hostPodSeam("pod-lifecycle", …) — the ONE
+// wire request every pod-lifecycle op (start/stop/shell/logs/service/cmd/update/remove) now
+// shares (#55 W3 A10b unified the former 8 dedicated per-verb request types + HostBuild kinds into
+// this single op-discriminated one, converging on the codebase's own established wire idiom —
+// #ArbiterInvokeInput, charly/provider.go's own Operation.Params). node is nil for update (which
+// threads a whole merged tree instead, in its own payload) and remove (which needs none).
+func hostPodLifecycle(op, box, instance string, node *spec.Deploy, payload any) error {
+	b, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	return hostPodSeam("pod-lifecycle", spec.PodLifecycleRequest{Op: op, Box: box, Instance: instance, Node: node, Payload: b})
 }
 
 // hostPodSeamReply is hostPodSeam's reply-capturing sibling (R3: mirrors

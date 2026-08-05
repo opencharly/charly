@@ -30,6 +30,14 @@ const (
 	podConfigRemoveBuilderKind = "pod-config-remove"
 )
 
+// deployPodPluginCandyRef is the canonical plugin-deploy-pod candy ref (analogous to
+// vmPluginCandyRef in vm_plugin_client.go): in a check bed CHARLY_REPO_OVERRIDE redirects it to
+// the local superproject under development; outside a bed it fetches the published candy. Sole
+// caller: invokePodConfigOp below (relocated from the deleted config_write_host.go, A1).
+func deployPodPluginCandyRef() string {
+	return "@" + spec.DefaultProjectRepo + "/candy/plugin-deploy-pod"
+}
+
 // invokePodConfigOp connects deploy:pod on-demand (using deployPodPluginCandyRef's
 // connectPluginByWordRef pattern) and dispatches op WITH a host-local venue executor (pod's own
 // venue is a no-op — see plugin-deploy-pod's Invoke doc — so the plugin's HostBuild callbacks are

@@ -1,6 +1,6 @@
 k3s-server:
     candy:
-        version: 2026.155.1203
+        version: 2026.216.1851
         description: |
             A single-node k3s control plane that boots with ServiceLB, Traefik, and local-path-provisioner enabled by default.
             Renders /etc/rancher/k3s/config.yaml (admin-only, disabling no
@@ -122,46 +122,163 @@ k3s-server:
               after: [network-online.target]
               scope: system
               enable: true
+              # Two guards bracketing k3s's own start. Both are systemd-only, which is
+              # exactly the coverage needed: every deploy of this candy is a `vm:` deploy,
+              # and the pod path already obtains cpuset via the cgroupns: host setting
+              # above. Each runs on EVERY start, restarts included — which is what makes
+              # the post-start heal able to break a crash loop it did not start in.
+              #
+              # PRE — remove the trigger (the cgroup cpuset-delegation race).
+              exec_start_pre:
+                  - /usr/local/bin/k3s-cpuset-ensure.sh
+              # POST — heal the permanent wedge that trigger leaves behind. The leading
+              # "-" is systemd's ignore-failure marker: a guard must never be able to take
+              # down the service it exists to protect.
+              exec_start_post:
+                  - -/usr/local/bin/k3s-crd-heal.sh %n
         plan:
-            - run: |
-                command=set -euo pipefail
-                mkdir -p /etc/rancher/k3s
-                # When running under supervisord (container pod), emit extra
-                # config to make k3s tolerant of a rootless user namespace:
-                #  - snapshotter: fuse-overlayfs — kernel overlayfs can't nest
-                #    on podman's overlayfs (see "failed to mount overlay").
-                #  - kubelet-arg feature-gates KubeletInUserNamespace=true —
-                #    kubelet tries to open /dev/kmsg to watch OOM events;
-                #    userns uid=0 → host uid=1000 can't access it; this gate
-                #    makes kubelet skip that check.
-                #  - kube-proxy-arg feature-gates KubeletInUserNamespace=true —
-                #    kube-proxy honours the same feature gate for its own
-                #    userns-aware paths.
-                # VM and host deploys run with full kernel access and skip all
-                # of these.
-                if [ -f /etc/supervisord.conf ]; then
-                  cat >/etc/rancher/k3s/config.yaml <<YAML
-                write-kubeconfig-mode: "0644"
-                token: "${K3S_CLUSTER_TOKEN}"
-                tls-san:
-                  - "${K3S_SERVER_HOSTNAME:-$(uname -n)}"
-                disable: []
-                snapshotter: fuse-overlayfs
-                kubelet-arg:
-                  - "feature-gates=KubeletInUserNamespace=true"
-                kube-proxy-arg:
-                  - "feature-gates=KubeletInUserNamespace=true"
-                YAML
-                else
-                  cat >/etc/rancher/k3s/config.yaml <<YAML
-                write-kubeconfig-mode: "0644"
-                token: "${K3S_CLUSTER_TOKEN}"
-                tls-san:
-                  - "${K3S_SERVER_HOSTNAME:-$(uname -n)}"
-                disable: []
-                YAML
+            - run: install the cgroup cpuset pre-start guard the k3s service execs
+              write: /usr/local/bin/k3s-cpuset-ensure.sh
+              mode: "0755"
+              run_as: root
+              content: |
+                #!/bin/sh
+                # Assert that the cgroup-v2 cpuset controller is delegated at the ROOT cgroup
+                # before k3s starts.
+                #
+                # Why the root cgroup specifically: k3s runs kubelet with
+                # --cgroup-driver=systemd and no --cgroup-root, which defaults to "/", so
+                # kubelet creates the TOP-LEVEL kubepods.slice and validates that its PARENT —
+                # the root cgroup — delegates every controller it needs. systemd populates a
+                # cgroup's subtree_control lazily, so on a cold first boot k3s can start before
+                # cpuset has been delegated there and kubelet dies with:
+                #   failed to initialize top level QOS containers: error validating root
+                #   container [kubepods] : cgroup ["kubepods"] has some missing controllers: cpuset
+                # Measured on a wedged bed VM: that crash struck exactly once, 15s into the
+                # first-ever start, and its fallout permanently bricked the cluster (see
+                # k3s-crd-heal.sh). Verified there that the root cgroup is the deciding one:
+                # its subtree_control carried cpuset while system.slice's held only "memory pids".
+                #
+                # This is a state ASSERTION, not a wait: read, enable if absent, verify. There
+                # is nothing to poll for — the controller is available the moment the kernel
+                # lists it, and writing it is idempotent.
+                set -eu
+
+                control=/sys/fs/cgroup/cgroup.subtree_control
+                available=/sys/fs/cgroup/cgroup.controllers
+
+                if [ ! -e "$control" ]; then
+                  echo "k3s-cpuset-ensure: no cgroup-v2 unified tree at $control; nothing to assert"
+                  exit 0
                 fi
-                chmod 0600 /etc/rancher/k3s/config.yaml
+                if grep -qw cpuset "$control"; then
+                  echo "k3s-cpuset-ensure: cpuset already delegated at the root cgroup"
+                  exit 0
+                fi
+                if ! grep -qw cpuset "$available"; then
+                  echo "k3s-cpuset-ensure: kernel exposes no cpuset controller; leaving it to k3s"
+                  exit 0
+                fi
+                if [ ! -w "$control" ]; then
+                  echo "k3s-cpuset-ensure: $control is not writable; cannot assert cpuset delegation" >&2
+                  exit 1
+                fi
+                echo "+cpuset" > "$control"
+                if ! grep -qw cpuset "$control"; then
+                  echo "k3s-cpuset-ensure: wrote +cpuset but the root cgroup still does not delegate it" >&2
+                  exit 1
+                fi
+                echo "k3s-cpuset-ensure: enabled cpuset delegation at the root cgroup"
+
+            - run: install the CRD-establishment wedge healer the k3s service execs after start
+              write: /usr/local/bin/k3s-crd-heal.sh
+              mode: "0755"
+              run_as: root
+              content: |
+                #!/bin/sh
+                # Heal the k3s CRD-establishment wedge — a DIAGNOSED remediation for one exact
+                # signature, never a blind retry.
+                #
+                # The wedge: if k3s dies in the ~1s window between creating its embedded CRDs and
+                # their establishment, the apiserver's EstablishingController never re-queues them
+                # after the restart (an upstream defect). The CRD is then frozen at
+                # NamesAccepted=True / Established=False FOREVER, and every subsequent k3s start
+                # dies after its fixed 60s wait with:
+                #   failed to start controllers: failed to create new server context: failed to
+                #   register CRDs: failed waiting on CRD 'helmchartconfigs.helm.cattle.io':
+                #   timed out waiting for the condition
+                # The result is a permanent ~68s crash loop that keeps `process=k3s-server` and
+                # `port=6443` GREEN while the cluster never bootstraps — kube-system stays empty.
+                # Measured on a real wedged bed VM: 49 restarts, node Ready, zero kube-system pods.
+                #
+                # The remedy, proven on that same VM: delete the stuck CRD. k3s recreates AND
+                # establishes it from its embedded manifests on the next start, and the cluster
+                # bootstrapped fully (traefik + svclb + local-path + coredns all Ready) with the
+                # restart count then holding steady.
+                #
+                # Why ExecStartPost and not ExecStartPre: the fix needs the apiserver, and between
+                # restarts there is no apiserver at all — the previous process has already exited.
+                # Only a post-start hook runs while k3s is up.
+                #
+                # Cost on a healthy start is zero: the journal gate below fails immediately and the
+                # script exits before ever contacting the apiserver.
+                set -u
+
+                unit=${1:-}
+                KUBECTL=/usr/local/bin/kubectl
+                KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+                export KUBECONFIG
+
+                # 1. A first-ever start has no datastore and therefore nothing stale to heal.
+                [ -d /var/lib/rancher/k3s/server/db ] || exit 0
+                [ -x "$KUBECTL" ] || exit 0
+
+                # 2. FAST GATE — diagnose from the journal, which needs no apiserver and costs
+                #    milliseconds. Only k3s's own fatal CRD-wait message opens the gate.
+                [ -n "$unit" ] || exit 0
+                journalctl -u "$unit" --no-pager -n 500 2>/dev/null |
+                  grep -q "failed waiting on CRD" || exit 0
+                echo "k3s-crd-heal: $unit has failed on a CRD wait; checking for a stuck CRD"
+
+                # 3. Bounded readiness probe for the apiserver. The deadline stays well inside
+                #    systemd's default 90s TimeoutStartSec so this hook can never be the reason a
+                #    start times out; on expiry we simply give up and let k3s carry on.
+                deadline=$(( $(date +%s) + 45 ))
+                until "$KUBECTL" get --raw /readyz >/dev/null 2>&1; do
+                  if [ "$(date +%s)" -ge "$deadline" ]; then
+                    echo "k3s-crd-heal: apiserver did not become ready within 45s; skipping" >&2
+                    exit 0
+                  fi
+                  sleep 2
+                done
+
+                # 4. CONFIRM against live CRD state, then delete. This confirmation is what makes
+                #    the hook safe AND idempotent: the journal gate matches for the rest of the
+                #    boot even after a successful heal, but a healed CRD reads Established=True,
+                #    so a re-run finds nothing and deletes nothing.
+                #
+                #    Only CRDs k3s itself owns and recreates from embedded manifests are eligible.
+                #    A user CRD is never touched — deleting one would destroy its custom resources.
+                # The column spec is QUOTED: it contains [?(...)], which the shell would otherwise
+                # try to glob (a bracket expression) — harmless only until a matching filename
+                # exists in the working directory.
+                "$KUBECTL" get crd \
+                  -o 'custom-columns=NAME:.metadata.name,EST:.status.conditions[?(@.type=="Established")].status' \
+                  --no-headers 2>/dev/null |
+                while read -r name est; do
+                  case "$name" in
+                    *.k3s.cattle.io|*.helm.cattle.io) ;;
+                    *) continue ;;
+                  esac
+                  if [ "$est" = "True" ]; then
+                    continue
+                  fi
+                  echo "k3s-crd-heal: deleting stuck CRD $name (Established=$est); k3s will recreate and establish it"
+                  "$KUBECTL" delete crd "$name" --wait=false || true
+                done
+                exit 0
+
+            - run: render the k3s server config, adding rootless-userns tolerances under supervisord
               run_as: root
               # K3S_CLUSTER_TOKEN comes from ResolveLayerSecrets via
               # InjectSecretsIntoPlans (deploy_add_cmd.go) — do NOT declare it
@@ -216,38 +333,92 @@ k3s-server:
               file:
                 file: /usr/local/bin/k3s
                 exists: true
+            # The four cluster-level assertions below probe the control plane FROM THE
+            # VENUE this candy was installed on, driving k3s's own embedded kubectl
+            # against the server's local kubeconfig — never through a host-side `kube:`
+            # cluster profile.
+            #
+            # A generic candy cannot name a profile. `cluster:` resolves a kind:k8s
+            # ENTITY, and the only variable a candy could reach for, ${DEPLOY_NAME},
+            # resolves for a VM live check to the sanitized kind:vm ENTITY name
+            # (candy/plugin-check/live_gather.go, pluginCheckLiveVM) — an entity every
+            # bed deploying it SHARES, so it names no bed's own kubeconfig context and
+            # resolves to none at all once each bed owns a per-deploy context. Threading
+            # the profile through a deploy-set env var fails worse: an unresolved check
+            # var is a SKIP, not a failure (sdk/kit/planrun.go), and the VM check-var env
+            # is a fixed map that carries no arbitrary deploy env — so the step would go
+            # silently vacuous exactly where it matters.
+            #
+            # Probing in-venue removes the dependency instead of renaming it: no host
+            # kubeconfig merge, no port-forward, and no kind:k8s entity, so the same
+            # acceptance holds on a vm, a target:local host, or a pod. The host-side view
+            # — kubeconfig retrieved, rewritten, merged, reachable over the forward — is
+            # the DEPLOY's property, and each bed asserts it with its own profile.
+            #
+            # The client entrypoint is addressed absolutely, so nothing rests on the
+            # venue's PATH: /usr/local/bin/kubectl is the argv[0] symlink onto the k3s
+            # multi-call binary that the required k3s candy installs and asserts. Every
+            # wait is kubectl's own condition-wait rather than a sleep.
+            #
+            # That symlink does NOT suppress the "open /etc/rancher/k3s/config.yaml:
+            # permission denied" warning — it is the same multi-call binary, so it reads
+            # the root-only server config on every invocation whatever argv[0] says, and
+            # a non-root check user gets the warning either way. It is HARMLESS (the
+            # steps below pass with it on stderr), and charly prints stderr only for a
+            # FAILING step, which is exactly why it looks like a cause when it is not:
+            # a roster run whose addon rollouts timed out showed this warning in the
+            # failure text and sent an RCA after a config-permission bug that does not
+            # exist. Read the exit status, not the warning.
             - check: the cluster reports at least one Ready node
-              kube:
-                method: wait-nodes
-                cluster: "${DEPLOY_NAME}"
-                kube_count: 1
-              timeout: 180s
+              id: k3s-server-node-ready
+              command: |
+                set -euo pipefail
+                export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+                /usr/local/bin/kubectl wait --for=condition=Ready node --all --timeout=180s
+              timeout: 240s
               stdout:
-                contains: "Ready"
+                contains: "condition met"
               context:
                 - runtime
             - check: Traefik, ServiceLB, and local-path addons are all Ready
-              kube:
-                method: addons
-                cluster: "${DEPLOY_NAME}"
-              timeout: 240s
+              id: k3s-server-addons-ready
+              command: |
+                set -euo pipefail
+                export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+                /usr/local/bin/kubectl -n kube-system rollout status deployment/traefik --timeout=240s
+                /usr/local/bin/kubectl -n kube-system rollout status deployment/local-path-provisioner --timeout=240s
+                # ServiceLB's DaemonSet carries a generated suffix, so match it by prefix
+                # exactly as the kube: addons method does for svclb-traefik.
+                svclb=$(/usr/local/bin/kubectl -n kube-system get daemonset -o name | grep -m1 '^daemonset\.apps/svclb-traefik')
+                /usr/local/bin/kubectl -n kube-system rollout status "$svclb" --timeout=240s
+              timeout: 300s
               exit_status: 0
               context:
                 - runtime
             - check: Traefik is registered as the cluster's default ingress class
-              kube:
-                method: ingressclass
-                cluster: "${DEPLOY_NAME}"
+              id: k3s-server-ingressclass-traefik
+              command: |
+                set -euo pipefail
+                export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+                /usr/local/bin/kubectl get ingressclass traefik -o yaml |
+                  grep -q 'ingressclass.kubernetes.io/is-default-class: "true"'
+                echo "ingressclass traefik default=true"
+              timeout: 60s
               stdout:
-                contains: "traefik"
+                contains: "ingressclass traefik default=true"
               context:
                 - runtime
             - check: local-path is registered as the cluster's default storage class
-              kube:
-                method: storageclass
-                cluster: "${DEPLOY_NAME}"
+              id: k3s-server-storageclass-localpath
+              command: |
+                set -euo pipefail
+                export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+                /usr/local/bin/kubectl get storageclass local-path -o yaml |
+                  grep -q 'storageclass.kubernetes.io/is-default-class: "true"'
+                echo "storageclass local-path default=true"
+              timeout: 60s
               stdout:
-                contains: "local-path"
+                contains: "storageclass local-path default=true"
               context:
                 - runtime
             - check: file=/etc/rancher/k3s/config.yaml

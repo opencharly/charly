@@ -6,13 +6,21 @@ import (
 
 // resolved_project_namespace_test.go — K1-unblock wave 2: proves the namespace-qualified
 // flattening added to spec.UnifiedFile.ProjectTemplates (and the namespaced-box resolve the deleted
-// resolved_project_host.go's namespaced-box fill used to drive), and the resulting functional fix to
-// findK8sSpec (k8s_config.go), which previously supported ONLY root-scoped `k8s:` entity names.
+// resolved_project_host.go's namespaced-box fill used to drive) — the SAME LoadUnified walk/
+// materialize algorithm every kind:<word> template lookup relies on, whether reached in-proc
+// (this test, and the deleted "deploy-entity-resolve" HostBuild seam that used to wrap it) or
+// PLUGIN-SIDE over the reverse channel (sdk/loaderkit.LoadUnifiedViaExecutor, K-wave W3a
+// A3-phase-2's Resolve{K8s,Vm,Android}EntityViaExecutor — LoadUnifiedViaExecutor's own doc
+// comment: "Returns the fully-merged, validated project the SAME way the compiled-in host loader
+// does"). The former "deploy-entity-resolve" seam + its
+// TestHostBuildDeployEntityResolve_K8sNamespaceQualified functional-proof test are BOTH deleted
+// (the seam has zero callers left); this test's own coverage of the underlying
+// ProjectTemplates()/namespace-qualification claim is unaffected — it never depended on the seam.
 
 // writeNamespaceImportFixture builds a minimal 2-repo-style namespace import: the root imports
 // "fedora.yml" under the "fedora" alias, which declares one resolvable box (jupyter) and one
-// kind:k8s cluster profile (prod-cluster) — mirroring the real vm-k3s-vm shape in this repo's own
-// charly.yml (`k8s: {box: "", kubeconfig_context: ...}`).
+// kind:k8s cluster profile (prod-cluster) — mirroring the real check-k3s-vm-ctx shape in this
+// repo's own charly.yml (`k8s: {box: "", kubeconfig_context: ...}`).
 func writeNamespaceImportFixture(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
@@ -69,22 +77,14 @@ func TestProjectTemplates_NamespaceQualified(t *testing.T) {
 // executor (the same pattern candy/plugin-deploy-vm/lifecycle_test.go already uses) instead of
 // reproducing charly-core-only loader internals a plugin cannot import.
 
-// TestFindK8sSpec_NamespaceQualified is the end-to-end functional proof: findK8sSpec — previously
-// a bare uf.K8s[name] lookup with NO namespace support at all — now resolves a namespace-qualified
-// `--cluster fedora.prod-cluster` profile via the namespace-flattened projectTemplates map, and
-// correctly reports NOT FOUND for the unqualified bare name (it is namespaced, not root-scoped).
-func TestFindK8sSpec_NamespaceQualified(t *testing.T) {
-	root := writeNamespaceImportFixture(t)
-
-	got := findK8sSpec(root, "fedora.prod-cluster")
-	if got == nil {
-		t.Fatal("findK8sSpec(fedora.prod-cluster) = nil, want a resolved K8sSpec")
-	}
-	if got.KubeconfigContext != "fedora-prod-ctx" {
-		t.Errorf("KubeconfigContext = %q, want fedora-prod-ctx", got.KubeconfigContext)
-	}
-
-	if got := findK8sSpec(root, "prod-cluster"); got != nil {
-		t.Errorf("findK8sSpec(prod-cluster) = %+v, want nil (it is namespace-scoped, not root)", got)
-	}
-}
+// TestHostBuildDeployEntityResolve_K8sNamespaceQualified DELETED (K-wave W3a A3-phase-2): its
+// subject, hostBuildDeployEntityResolve (the "deploy-entity-resolve" HostBuild seam), is deleted —
+// every kind:<word> caller self-loads the project now via sdk/loaderkit.LoadUnifiedViaExecutor,
+// which drives the SAME LoadUnified walk/materialize algorithm TestProjectTemplates_NamespaceQualified
+// above already proves namespace-qualifies correctly (LoadUnifiedViaExecutor's own doc comment:
+// "Returns the fully-merged, validated project the SAME way the compiled-in host loader does" —
+// the algorithm is placement-invariant; only the seam WIRING differs between in-proc and
+// HostBuild-dispatched). The plugin-side seam-dispatch wiring itself is proven live by this
+// unit's disposable-bed roster (check-k8s-deploy et al), not a narrow unit test — the established
+// pattern every other sdk/loaderkit self-load consumer in this tree already follows (no existing
+// unit test exercises LoadUnifiedViaExecutor's own HostBuild round trip directly either).
