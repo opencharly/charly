@@ -14,7 +14,7 @@ import (
 // short-circuit; "feature-box" was traced and never had a live caller through this seam — see
 // feature_run_gather.go's header; "feature-box" is now the plugin-side pluginCheckRunFeatureBox,
 // reached from candy/plugin-box's command:feature over InvokeProvider — cone-C #31). What remains
-// is resolveCheckRunnerContext/candyDirsFromScan — the SOLE remaining production content, feeding
+// is resolveCheckRunnerContext — the SOLE remaining production content, feeding
 // the new "check-load-plugins" seam (host_build_check_load_plugins.go). It STAYS core because it
 // calls loadProjectPlugins directly, the same core-private registry-mutating mechanism
 // loadDeployPlugins drives (#55 W3 B3 — moving it would have the plugin calling into itself). The
@@ -25,34 +25,6 @@ import (
 // the sdk (exitcode.CheckFailExitCode / exitcode.CheckSkippedExitCode); the plugin/main signal it
 // across the module boundary via *exitcode.ExitCodeError. The `charly check` CLI + its
 // exit-code plumbing live in command:check (candy/plugin-check).
-
-// candyDirsFromScan extracts the candy-name → SourceDir map from a scanned candy
-// set. Keyed by the candy MAP KEY — the check's Origin form: a bare name for a
-// local candy ("sshd"), the bare @github ref for a fetched one
-// ("github.com/owner/repo/candy/<name>"). CollectDescriptions stamps
-// Origin = "candy:" + this same key, so resolveCheckApk's CandyDirs[origin]
-// lookup matches in BOTH cases. The SAME scanned map drives the plugin loader
-// (R3 — one scan, both consumers).
-func candyDirsFromScan(candyMap map[string]spec.CandyReader) map[string]string {
-	if len(candyMap) == 0 {
-		return nil
-	}
-	out := make(map[string]string, len(candyMap))
-	for key, lyr := range candyMap {
-		if lyr != nil && lyr.GetSourceDir() != "" {
-			out[key] = lyr.GetSourceDir()
-		}
-	}
-	return out
-}
-
-// checkRunnerContext carries the committed-APK anchoring (CandyDirs / CandyScanErr) a live
-// baked-plan runner folds into its RunnerConfig. resolveCheckRunnerContext computes it (and
-// performs the plugin-load side effect); the caller wires the fields into kit.RunnerConfig.
-type checkRunnerContext struct {
-	CandyDirs    map[string]string
-	CandyScanErr error
-}
 
 // resolveCheckRunnerContext computes the committed-APK anchoring + loads the OUT-OF-TREE plugin
 // candies a live baked-plan runner needs, so `charly check live` and `charly check feature run`
