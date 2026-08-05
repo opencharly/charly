@@ -30,11 +30,12 @@ import (
 //   - the pre-build VALIDATE gate    → InvokeProvider(command:validate)  (plugin↔plugin)
 //   - the `resource:` kind resolve   → InvokeProvider(kind:resource)  (plugin↔plugin, via loaderkit)
 //   - the distro/init vocab resolve  → InvokeProvider(kind:distro|init)  (plugin↔plugin, via loaderkit)
-//   - the host-fs PREP + user probe  → HostBuild("buildengine-prep")  (cleanStaleBuildDirs /
-//                                     writeContextIgnore / createRemoteCandyCopies / resolveUserContext /
-//                                     ensureCharlyBinaryFresh + the render-seam-floor renderGenCache;
-//                                     populated by the CHEAP newCandyScanGenerator now — #55 step3
-//                                     3-II deleted the expensive NewGenerator this floor used to run)
+//   - the host-fs PREP + user probe  → runHostFSPrep, PLUGIN-SIDE (cleanStaleBuildDirs /
+//                                     writeContextIgnore / createRemoteCandyCopies /
+//                                     resolveUserContext / ensureCharlyBinaryFresh). The companion
+//                                     HostBuild("buildengine-prep") leg is DELETED (K-wave 2 cone
+//                                     R1) — it only seeded a render-seam Generator cache that no
+//                                     longer has any reader.
 //
 // Everything else — buildkit.ResolveAllBox / deploykit.ComputeIntermediates / GlobalCandyOrder /
 // ComputeEffectiveVersions / RenderPrepAll / ResolveBoxOrder / ResolveBoxLevels / the drive-model
@@ -144,22 +145,17 @@ func resolveBuildEngine(ctx context.Context, ex *sdk.Executor, req spec.BuildReq
 		return spec.BuildResolveReply{Error: errString(err)}, nil
 	}
 
-	// --- 7. host-fs PREP (plugin-side, pure — K3 host-prep move) + render-seam-cache prep (host leg) ---
+	// --- 7. host-fs PREP (plugin-side, pure — K3 host-prep move) ---
 	// The FS prep (cleanStaleBuildDirs / writeContextIgnore / createRemoteCandyCopies /
 	// ensureCharlyBinaryFresh) runs HERE, directly over the already-computed cfg/layers/resolved — no
-	// host round-trip (proven pure by RCA: none of it needs host-only privilege). renderSeamPrepLeg
-	// populates the render-seam-floor's CHEAP candy-scan-only Generator cache (host_build_render_seam.go
-	// / host_build_bake_plugins.go's 3 remaining consumers, none of which touch box-resolve data).
+	// host round-trip (proven pure by RCA: none of it needs host-only privilege).
 	// resolveUserContext is reproduced plugin-side below (step 9).
+	//
+	// The companion renderSeamPrepLeg / HostBuild("buildengine-prep") call is GONE (K-wave 2 cone
+	// R1): it existed only to push the resolved boxes into the host's render-seam Generator cache,
+	// and with every render seam now peer-dispatched (no host callback at all) that cache has no
+	// readers. Dropping it also drops a whole redundant host-side local candy scan per build.
 	if err := runHostFSPrep(ctx, ex, dir, filepath.Join(dir, ".build"), cfg, layers, resolved, boxes, generateOnly); err != nil {
-		return spec.BuildResolveReply{Error: errString(err)}, nil
-	}
-	// Push the already-resolved boxes (buildkit.ResolveAllBox above + ComputeIntermediates) to the
-	// host's buildengine-prep leg so the render-seam-floor Generator cache stores wire-clean
-	// *spec.ResolvedBox WITHOUT the host re-resolving via deploykit.ResolveAllSpecBoxes — the
-	// plugin already resolved them (the SAME primitive). #55 coneB2 Class B. Superset of the old
-	// host ResolveAllBox-only set (intermediates included); Name/Tags identical, calver-independent.
-	if err := renderSeamPrepLeg(ctx, ex, spec.ResolvedProjectRequest{Dir: dir, IncludeDisabled: req.IncludeDisabled, Boxes: deploykit.SpecBoxes(resolved)}); err != nil {
 		return spec.BuildResolveReply{Error: errString(err)}, nil
 	}
 

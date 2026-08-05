@@ -223,11 +223,11 @@ var _ = func() bool {
 // file's header); read by the "oci-emit-step" step-emitter when an OUT-OF-PROCESS caller
 // (candy/plugin-deploy-pod) invokes HostBuild("step-emit", {Word:"oci-emit-step", …}) — the live
 // buildEngineContext cannot cross the wire, so the candy passes only the Dir key + the host looks
-// up the cached context. One entry per dir per process — mirrors renderGenCache (the box-build's
-// per-dir Generator cache for its render-seam). The render-seam host-builder (hostBuildRenderSeam)
-// reads the overlay core *Generator from renderGenCache[dir] (the overlay prep stores it there
-// too, so the render-seam handlers — RenderService for GenerateInitFragments — work for the
-// overlay unchanged); this cache holds the buildEngineContext the step-emit emitter needs
+// up the cached context. One entry per dir per process. (It used to mirror renderGenCache, the
+// box-build's per-dir Generator cache for its render-seam; both that cache and the render-seam
+// host-builder are DELETED in K-wave 2 cone R1 — every render seam peer-dispatches now, so no host
+// callback reads a Generator any more. What survives here is only the pod-overlay's own context
+// cache, keyed the same way); this cache holds the buildEngineContext the step-emit emitter needs
 // (Box/ImageBuildDir/ContextRelPrefix alongside the Generator — dispatchOCIStep reads only
 // build.Box.Name + build.Generator.DevLocalPkg/ExtraCandyRefs, never DistroCfg).
 var overlayBuildContextCache sync.Map

@@ -312,7 +312,8 @@ func projectCandiesScanned(uf *spec.UnifiedFile, rootDir string) (map[string]spe
 			// Candies discovered via `include:` of a remote charly.yml
 			// live OUTSIDE the workspace's project tree (typically in
 			// the github cache under ~/.cache/charly/repos/). Mark them as
-			// Remote so the generator's createRemoteCandyCopies stages
+			// Remote so the build's host-fs prep (candy/plugin-build's
+			// createRemoteCandyCopies) stages
 			// them into .build/_candy/ and the emitted Containerfile
 			// COPY paths resolve correctly. THIRD instance of the
 			// construct-then-mutate-Remote pattern (W9 mutation-site inventory) —

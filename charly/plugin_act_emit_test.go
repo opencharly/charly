@@ -186,10 +186,10 @@ func TestEmitOp_PluginAct_UnixGroup_OCI(t *testing.T) {
 		CandyModels: map[string]spec.CandyModel{"lyr": {Name: "lyr"}},
 		Candies:     map[string]spec.CandyView{"lyr": {}},
 	})
-	// The op is a `run: plugin: unix_group` act — its render reaches EmitPluginOp, the ONE
-	// render-seam that stays host-coupled (a Go-level ProvisionActor type-assertion), so it needs
-	// renderGenCache seeded too (a SEPARATE cache from the resolved-project stub above).
-	stubRenderGen(t, cwd, box)
+	// The op is a `run: plugin: unix_group` act. Its render used to also need the render-seam's
+	// own per-dir Generator cache seeded; that seam (and the cache) are gone — EmitPluginOp went
+	// plugin-side in P8b and the last two methods in K-wave 2 cone R1 — so the resolved-project
+	// stub above is now the whole fixture.
 	tgt := ociTestTarget(buildEngineContext{Box: &box.ResolvedBox, ImageBuildDir: cwd, ContextRelPrefix: ".build/test-img"})
 	op := rawUnixGroupOp()
 	plan := &spec.InstallPlan{Candy: "lyr", Steps: []spec.InstallStep{&spec.OpStep{Op: &op, CandyName: "lyr"}}}

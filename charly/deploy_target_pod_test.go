@@ -15,7 +15,7 @@ import (
 // stays core (charly/oci_step_emit.go) as a thin forwarder — the dispatch DECISION itself relocated
 // to candy/plugin-installstep's "oci-dispatch" word (K5-A item 2). These tests exercise the host-side
 // dispatch entry point (ociEmitStep) + the host-side
-// staging (Generator.createRemoteCandyCopies, called by hostBuildOverlay's prep) the candy's
+// staging (candy/plugin-build's createRemoteCandyCopies, run by the build's host-fs prep) the candy's
 // render depends on. The candy's full buildOverlay (Containerfile assembly + podman build) is
 // covered by the candy's own tests + the orchestrator's `charly check run check-pod` bed (the R8
 // parity gate).
@@ -67,54 +67,10 @@ func TestPodOverlayInlineCopyResolvesUnderContext(t *testing.T) {
 	}
 }
 
-// TestCreateRemoteCandyCopies_StagesRemoteCandySource guards Generator.createRemoteCandyCopies
-// itself: for a REMOTE candy, it must stage the remote candy's source tree under
-// .build/_candy/<name>.<version>/ so the candy's `FROM scratch AS <name>` +
-// `COPY <candyCopySource>/ /` resolves. Without it the real overlay build fails at
-// `COPY .build/_candy/<name>.<version>/: no such file or directory`. #55 step3 3-II: hostBuildOverlay
-// no longer calls this itself — remote-candy staging now runs plugin-side as part of
-// candy/plugin-build's resolveBuildEngine (runHostFSPrep, K3 host-prep move), before the overlay
-// seam is ever reached. This test exercises the method directly (still a real, reachable core
-// function — retention semantics unrelated to hostBuildOverlay's own prep body).
-func TestCreateRemoteCandyCopies_StagesRemoteCandySource(t *testing.T) {
-	ctxRoot := t.TempDir() // the build-context root (the project dir)
-	old, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Chdir(ctxRoot); err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = os.Chdir(old) }()
-
-	// Simulate a fetched REMOTE add_candy candy cache dir carrying a copy: source file.
-	remoteSrc := filepath.Join(ctxRoot, "remote-cache", "marker")
-	if err := os.MkdirAll(remoteSrc, 0755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(remoteSrc, "copied.dat"), []byte("POD-ADDCANDY-COPIED-OK\n"), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	const ver = "2026.181.1430"
-	candy := testCandy("marker", spec.CandyModel{Version: ver, SourceDir: remoteSrc}, spec.CandyView{
-		Remote: true, RepoPath: "github.com/x/y", SubPathPrefix: "candy/",
-	})
-	gen := &Generator{
-		Dir:      ctxRoot,
-		BuildDir: filepath.Join(ctxRoot, ".build"), // == g.Dir + "/.build" (the Generator constructors' shared default)
-		Candies:  map[string]spec.CandyReader{spec.CandyMapKey(candy): candy},
-	}
-
-	if err := gen.createRemoteCandyCopies(); err != nil {
-		t.Fatalf("createRemoteCandyCopies: %v", err)
-	}
-
-	staged := filepath.Join(ctxRoot, ".build", "_candy", "marker."+ver, "copied.dat")
-	if _, err := os.Stat(staged); err != nil {
-		t.Fatalf("remote overlay candy source not staged at %s (the per-candy scratch stage's COPY would fail): %v", staged, err)
-	}
-}
+// TestCreateRemoteCandyCopies_StagesRemoteCandySource MOVED to candy/plugin-build
+// (remote_candy_copies_test.go, K-wave 2 cone R1) with the function it guards: charly's
+// Generator.createRemoteCandyCopies had been production-dead since the K3 host-prep move, and the
+// live twin in candy/plugin-build/host_prep.go carried no test of its own until the move.
 
 // inlineCopySrc extracts the COPY source token (the _inline/... path) from a
 // rendered Containerfile fragment containing a single inline write COPY.

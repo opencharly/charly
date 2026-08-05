@@ -16,10 +16,41 @@ package main
 // bundle_from_box_cmd.go, plugin_executor_reverse.go) — a generic per-invoke DATA envelope no
 // sdk plugin can hold itself (it names core project-loader types), same class as those seams'
 // own floor justification.
+//
+// Generator (below) COLOCATED here from the deleted charly/generate.go in K-wave 2 cone R1. That
+// file's whole reason to exist was the host-side build/render state: the candy-scan Generator the
+// render-seam floor cached, the builder OpResolve Invoke, the remote-candy staging, the bare-name
+// candy lookup. Every one of those is now plugin-side (the render reaches the host for nothing, and
+// the FS-prep pair moved to candy/plugin-build/host_prep.go), leaving exactly the two SCALARS the
+// pod-overlay step-emit reads off this envelope. A separate file for a two-field struct whose only
+// consumer is buildEngineContext would be dumping, not structure — so it lives with its owner.
 
 import (
 	"github.com/opencharly/spec/spec"
 )
+
+// Generator is the pod-overlay BUILD-emit scalar carrier hung on buildEngineContext.Generator. It is
+// the RESIDUE of the former host-side build Generator: dispatchOCIStep (oci_step_emit.go) reads the
+// two fields below to populate a class:step ops.OpEmit's spec.BuildEnv, and hostBuildOverlay
+// (build_overlay.go) constructs it with just ExtraCandyRefs set. Nothing else survives — the host
+// holds no candy map, box map, build dir, or Containerfile cache any more; candy/plugin-build owns
+// the whole resolve+render over its own envelope-hydrated deploykit.Generator.
+type Generator struct {
+	// ExtraCandyRefs is the ORIGINAL spec.ResolveOpts.ExtraCandyRefs of the overlay build (a pod
+	// deploy's add_candy: refs, possibly REMOTE/qualified — e.g. "@github.com/…:vTAG"). It must stay
+	// the ORIGINAL qualified refs: a bare candy NAME re-passed as an ExtraCandyRefs entry is a silent
+	// no-op for a remote candy (the scan's addRef gates on IsRemoteCandyRef), so the plugin's own
+	// independent resolved-project re-fetch would never widen and the remote add_candy candy would be
+	// absent from its envelope. RCA'd K1-alpha regression: an overlay build's OpStep emit failing
+	// "task emit: candy %q not found" — see oci_step_emit.go's dispatchOCIStep.
+	ExtraCandyRefs []string
+
+	// DevLocalPkg, when true, makes localpkg candies (the charly toolchain) build from LOCAL
+	// in-development source instead of downloading the published release. Set ONLY for disposable
+	// check-bed image builds (the check-bed runner passes `--dev-local-pkg`), so a bed always tests
+	// the in-development charly; a production box build leaves it false.
+	DevLocalPkg bool
+}
 
 // buildEngineContext is the host-ENGINE context the reverse channel carries so the
 // host-served RunHostStep leg can run the in-core machinery a HOST-ENGINE step kind needs:

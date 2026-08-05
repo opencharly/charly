@@ -63,9 +63,9 @@ const engineBin = "podman"
 // — no longer part of the OverlayBuildReply wire type).
 func buildOverlay(ctx context.Context, exec *sdk.Executor, reply spec.OverlayBuildReply, rp *spec.ResolvedProject, plans []*spec.InstallPlan, dir, baseName string, opts spec.LifecycleOpts, baseUser string, baseSecurity *spec.Security, baseRegistry string) (string, error) {
 	// Construct the deploykit.Generator from the resolved-project envelope — the SAME shared
-	// construction source candy/plugin-build uses (R3/DRY). The host-coupled seams (RenderService
-	// for service fragments, the 9 render-seam methods) call back to the host over the in-proc
-	// reverse channel (placement-invisible).
+	// construction source candy/plugin-build uses (R3/DRY). Its seams (RenderService for service
+	// fragments, the builder resolves, egress) are InvokeProvider PEER-DISPATCH — since K-wave 2
+	// cone R1 none of them makes a HostBuild callback (placement-invisible either way).
 	dg, err := deploykit.NewRenderGeneratorFromProject(ctx, exec, rp, dir, false)
 	if err != nil {
 		return "", fmt.Errorf("overlay render: %w", err)
@@ -170,8 +170,8 @@ func buildOverlay(ctx context.Context, exec *sdk.Executor, reply spec.OverlayBui
 	}
 	// Service scratch stage (from the overlay candies' service: blocks) — a scratch stage holding
 	// the rendered init fragments + a RUN-append line inside the main stage. Uses the cached
-	// Generator's init-fragment pipeline (GenerateInitFragments → RenderService over the host
-	// render-seam), the SAME path as the full image build.
+	// Generator's init-fragment pipeline (GenerateInitFragments → RenderService, peer-dispatched to
+	// candy/plugin-init), the SAME path as the full image build.
 	var svcStage, svcAppend string
 	if box != nil {
 		var svcErr error
@@ -261,8 +261,8 @@ func buildOverlay(ctx context.Context, exec *sdk.Executor, reply spec.OverlayBui
 // /etc/supervisord.conf. The EX-`PodDeployTarget.renderOverlayServices` body, byte-faithful,
 // adapted to read the OVERLAY-RESOLVED init (box.InitSystem/box.InitDef — the host prep resolved it
 // via InitConfig.ResolveInitSystem, core-only, + carried it in the envelope) instead of calling
-// ResolveInitSystem itself. Uses dg.GenerateInitFragments (sdk) for the fragment render (it calls
-// back the host RenderService render-seam) + candyByName(dg.Candies, n).HasInit(initName) for the
+// ResolveInitSystem itself. Uses dg.GenerateInitFragments (sdk) for the fragment render (which
+// peer-dispatches RenderService to candy/plugin-init) + candyByName(dg.Candies, n).HasInit(initName) for the
 // per-candy init gate. Returns (scratchStageBlock, runAppendBlock, error).
 func renderOverlayServices(dg *deploykit.Generator, box *buildkit.ResolvedBox, overlayCandies []string, deployName string) (string, string, error) {
 	if dg == nil || box == nil {
@@ -445,7 +445,7 @@ func overlayTagFor(base string, layers []string) string {
 }
 
 // candyByName is the bare-name candy lookup over the deploykit.Generator.Candies map — the EX-core
-// `Generator.candyByName` (charly/generate.go) replicated byte-faithfully. The Candies map is keyed
+// `Generator.candyByName` (charly/generate.go, since deleted) replicated byte-faithfully. The Candies map is keyed
 // by CandyMapKey (the full scanned-set key for a remote candy, the bare name for a local), so a
 // bare-name lookup MISSES for a remote add_candy candy + falls back to matching GetName()==bare.
 // Every call site that holds a bare candy name + needs the CandyModel goes through here, so a

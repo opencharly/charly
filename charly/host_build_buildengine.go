@@ -12,13 +12,12 @@ import (
 // RESOLVE (candy/plugin-build/resolve.go, K3 U6) reaches the host for. Each wraps exactly one
 // genuinely host-coupled step a sdk-only candy cannot do: the bootstrap-delicate local candy scan
 // (parseCandyYAML→buildCandy, the B bootstrap root), the git clone/cache + remote manifest scan, the
-// build-time plugin CONNECT (registry M), the namespaced-box pre-computation (embeds a nested
-// scan+render-prep), and the host-fs PREP + the render-seam-floor CHEAP Generator cache-populate
-// (hostBuildPrep → newCandyScanGenerator — RULED: stays host; the EXPENSIVE full-resolve
-// NewGenerator this comment once named is DELETED in #55 step3 3-II, its last production caller —
-// the pod-overlay build_overlay.go seam — relocated onto resolveBuildEngine instead). These legs
-// REPLACE the former fat host build-prep seam (hostBuildBuildResolve, DELETED) — the resolve
-// ORCHESTRATION + drive-model now run plugin-side.
+// build-time plugin CONNECT (registry M), and the namespaced-box pre-computation (embeds a nested
+// scan+render-prep). These legs REPLACE the former fat host build-prep seam (hostBuildBuildResolve,
+// DELETED) — the resolve ORCHESTRATION + drive-model run plugin-side. K-wave 2 cone R1 dropped the
+// LAST prep leg (hostBuildPrep/"buildengine-prep"): the host-fs half had already moved to
+// candy/plugin-build, leaving it populating a render-seam Generator cache that no longer has any
+// reader, since every render seam now peer-dispatches instead of calling back.
 //
 // Class-generic action-noun kinds (never provider words — the F11 uniform-API gate), mirroring
 // host_build_loader_floor.go's loader-* legs one level up the stack.
@@ -185,27 +184,13 @@ func collectNamespaceScanEntries(uf *spec.UnifiedFile, prefix, dir string, opts 
 	}
 }
 
-// hostBuildPrep populates the render-seam-floor renderGenCache with a CHEAP candy-scan-only
-// Generator (newCandyScanGenerator) for the render-seam floor's 2 remaining reverse-channel
-// consumers (resolveInlineBuilderSeam/ensureBuildersConnected) + emitBakedPlugins. The host-fs PREP
-// (cleanStaleBuildDirs/writeContextIgnore/createRemoteCandyCopies) and ensureCharlyBinaryFresh moved
-// to candy/plugin-build (K3 host-prep move, coneB-render): they are pure filesystem/exec operations
-// over data (cfg/layers/resolved) the plugin ALREADY computed in its own resolve — no host-only
-// dependency, and running them host-side via a SECOND full NewGenerator (re-scan + re-resolve +
-// re-render-prep) was 100% wasted work (RCA'd by call-graph: the render that ships uses render.go's
-// OWN Generator; the host copy's RenderPrepAll output was never read by anything). See generate.go's
-// newCandyScanGenerator doc.
-func hostBuildPrep(_ context.Context, req spec.ResolvedProjectRequest, _ buildEngineContext) (map[string]string, error) {
-	dir := reqDirOrCwd(req.Dir)
-	gen, err := newCandyScanGenerator(dir, req.IncludeDisabled, req.ExtraCandyRefs, req.Boxes)
-	if err != nil {
-		return nil, err
-	}
-	// Cache the live Generator for the render-seam host-builder (#67) — the render's host-coupled
-	// seams reach the core funcs through THIS gen. One gen per dir per process.
-	renderGenCache.Store(dir, gen)
-	return map[string]string{}, nil
-}
+// The "buildengine-prep" leg is DELETED (K-wave 2 cone R1). Its host-fs half
+// (cleanStaleBuildDirs/writeContextIgnore/createRemoteCandyCopies/ensureCharlyBinaryFresh) had
+// already moved to candy/plugin-build/host_prep.go (K3), leaving it doing exactly ONE thing:
+// building a candy-scan-only Generator to populate the render-seam floor's renderGenCache. With the
+// render-seam host-builder itself gone (no render method needs a host callback any more), that cache
+// had no readers, so the leg was pure waste — a full local candy scan per build for a value nothing
+// consumed. The plugin-side call in candy/plugin-build/resolve_legs.go went with it.
 
 // hostBuildContextIgnoreBaseline returns the bootstrap-embedded context_ignore_baseline patterns (a
 // D-category static fact baked into the charly binary's embedded charly.yml) — the ONE piece of
@@ -214,6 +199,23 @@ func hostBuildPrep(_ context.Context, req spec.ResolvedProjectRequest, _ buildEn
 // needs (cfg.Defaults.ContextIgnore, the write targets) is already plugin-side.
 func hostBuildContextIgnoreBaseline(_ context.Context, _ struct{}, _ buildEngineContext) ([]string, error) {
 	return baselineContextIgnore, nil
+}
+
+// baselineContextIgnore is the parsed directive the leg above serves. It lives HERE, with its only
+// reader, since K-wave 2 cone R1 folded it out of the deleted charly/generate.go. Parsed once at
+// package-var init; a malformed or empty embed PANICS — this is a build-time invariant of the
+// binary's own embedded charly.yml, never a runtime input a project can influence.
+var baselineContextIgnore = parseEmbeddedContextIgnoreBaseline()
+
+func parseEmbeddedContextIgnoreBaseline() []string {
+	var doc struct {
+		ContextIgnoreBaseline []string `yaml:"context_ignore_baseline"`
+	}
+	unmarshalEmbeddedDefaults(&doc)
+	if len(doc.ContextIgnoreBaseline) == 0 {
+		panic("host build: embedded charly.yml has no context_ignore_baseline: directive")
+	}
+	return doc.ContextIgnoreBaseline
 }
 
 // reqDirOrCwd resolves an empty request dir to the process cwd (the same fallback every build-engine
@@ -264,7 +266,6 @@ var _ = func() bool {
 	registerHostBuilder("buildengine-scan-remote", typedHostBuilder("buildengine-scan-remote", hostBuildScanRemote))
 	registerHostBuilder("buildengine-connect-plugins", typedHostBuilder("buildengine-connect-plugins", hostBuildConnectPlugins))
 	registerHostBuilder("buildengine-namespaced", typedHostBuilder("buildengine-namespaced", hostBuildNamespaced))
-	registerHostBuilder("buildengine-prep", typedHostBuilder("buildengine-prep", hostBuildPrep))
 	registerHostBuilder("buildengine-context-ignore-baseline", typedHostBuilder("buildengine-context-ignore-baseline", hostBuildContextIgnoreBaseline))
 	return true
 }()

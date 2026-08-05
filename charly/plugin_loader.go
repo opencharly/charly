@@ -624,10 +624,12 @@ func loadPluginUnit(ctx context.Context, name string, source string, srcDir stri
 //     Op.Plugin words in its FLATTENED bed plan — see deployNodePluginContext).
 //
 // The EXTERNALIZED detection-builders (cargo/npm/pixi/aur) are NOT collected here: their
-// build-time multi-stage ops.OpResolve leg (C10) is connected on-demand by deploykit EmitBuilderStages
-// (ensureBuildersConnected), and the deploy-time ops.OpCollectContext/ops.OpReverse legs are connected
-// PRECISELY + on-demand by the build pre-pass (builder_preresolve.go's ensureBuildersConnected,
-// scoped to the deploy's actually-detected + distro-gated builders) — NOT surfaced across an
+// build-time multi-stage ops.OpResolve leg (C10) AND their deploy-time ops.OpCollectContext/
+// ops.OpReverse legs are connected PRECISELY + on-demand at the moment of first Invoke, via
+// InvokeProvider's own connectPluginByWordRef fallback carrying the builder's canonical ref
+// (ops.InvokeProviderOpts.ExtraRef; K-wave 2 cone R1 deleted the separate host-side
+// ensureBuildersConnected pre-pass, which was a second copy of that same fallback). Either way the
+// connect is scoped to the builders actually detected + distro-gated — NOT surfaced across an
 // entire box scan, which over-built unrelated builder plugins (e.g. aur on a fedora deploy).
 //
 // Word-keyed + class-AGNOSTIC by design: a plugin candy loads iff ANY of its provided
@@ -833,9 +835,10 @@ func deployNodePluginContext(dir, name string) (addCandy []string, refWords []st
 	// NOTE: the externalized DETECTION-builder plugins (cargo/npm/pixi/aur) are NOT injected here.
 	// A builder is triggered by the DEPLOY's resolved image closure (a pixi.toml / aur: section), not
 	// by the deploy NODE this walk sees — and surfacing all four across a whole-box scan over-built
-	// unrelated builder plugins (aur on a fedora deploy). The build PRE-PASS (builder_preresolve.go)
-	// instead detects EXACTLY the builders the deploy triggers (distro-gated) and connects only those
-	// on-demand, by their canonical ref (ensureBuildersConnected), where it has the resolved closure.
+	// unrelated builder plugins (aur on a fedora deploy). The deploy-time pre-pass
+	// (candy/plugin-bundle's preresolveBuilderContexts) instead detects EXACTLY the builders the
+	// deploy triggers (distro-gated) and connects only those on-demand, by their canonical ref
+	// (ops.InvokeProviderOpts.ExtraRef → connectPluginByWordRef), where it has the resolved closure.
 	return addCandy, refWords
 }
 

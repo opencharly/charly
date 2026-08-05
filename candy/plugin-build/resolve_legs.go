@@ -243,15 +243,10 @@ func validateProjectLeg(ctx context.Context, ex *sdk.Executor, rr spec.ResolvedP
 	}
 }
 
-// renderSeamPrepLeg populates the render-seam-floor's CHEAP candy-scan-only Generator cache
-// (host_build_render_seam.go's 2 remaining reverse-channel consumers + host_build_bake_plugins.go's
-// emitBakedPlugins — none of which touch box-resolve data). The host-fs PREP itself
-// (cleanStaleBuildDirs/writeContextIgnore/createRemoteCandyCopies/ensureCharlyBinaryFresh) runs
-// plugin-side now (runHostFSPrep, host_prep.go, K3 host-prep move) — this leg is data-scan-only.
-// Reply is error-only.
-func renderSeamPrepLeg(ctx context.Context, ex *sdk.Executor, rr spec.ResolvedProjectRequest) error {
-	return hostVoidLeg(ctx, ex, "buildengine-prep", rr)
-}
+// renderSeamPrepLeg (HostBuild("buildengine-prep")) is DELETED in K-wave 2 cone R1. It pushed the
+// plugin-resolved boxes into the host's render-seam Generator cache; that cache existed only for the
+// inline-builder / ensure-builders render seams, both of which now peer-dispatch via InvokeProvider,
+// so nothing read it. The host leg went with it (charly/host_build_buildengine.go).
 
 // inspectUserLeg probes an external base image for a uid account via InvokeProvider(verb:oci)
 // (oci_op=inspect-user) — the plugin-side resolveUserContext external-base branch.

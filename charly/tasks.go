@@ -12,37 +12,14 @@ import (
 
 // The var-substitution + user-spec render helpers, the inline-content stager, and the
 // per-verb Containerfile-line emitters live in sdk/deploykit (tasks_emit.go), reached by the
-// candy/plugin layers and by charly's own tests (e.g. deploykit.ResolveUserSpec). charly CORE
-// no longer imports deploykit: this file's inline-builder seam builds its spec.BuilderResolveInput
-// via spec.BuilderResolveInputFrom — relocated to spec/spec (buildwire_render.go, #55 coneK3tasks),
-// the cone-render precedent (a render primitive in spec/spec so the host shares ONE source with
-// the plugins and needs no kit import). The builder-emit cluster (ensureBuildersConnected +
-// registry ResolveBuilder + resolveBuilderStage) is registry-coupled and stays core.
-
-// resolveInlineBuilderSeam is the core impl wired onto deploykit's
-// ResolveInlineBuilder seam: connect + ops.OpResolve an externalized INLINE builder,
-// returning its C10 InlineFragment (or a per-failure error, byte-preserved). The
-// builder-emit cluster (ensureBuildersConnected + registry ResolveBuilder +
-// resolveBuilderStage) is registry-coupled and stays core.
-func (g *Generator) resolveInlineBuilderSeam(candyName, bName string, bDef *spec.BuilderDef, ctx *spec.BuildStageContext, img *spec.ResolvedBox) (string, error) {
-	layer := g.Candies[candyName]
-	if err := ensureBuildersConnected(context.Background(), g.Config, g.Dir, []string{bName}); err != nil {
-		return "", fmt.Errorf("candy %q: connect inline builder %q: %w", candyName, bName, err)
-	}
-	prov, ok := providerRegistry.ResolveBuilder(bName)
-	if !ok {
-		return "", fmt.Errorf("candy %q: inline builder %q is externalized but its plugin is not connected", candyName, bName)
-	}
-	in := spec.BuilderResolveInputFrom(layer.GetName(), bName, bDef, ctx)
-	reply, err := resolveBuilderStage(prov, bName, in, img)
-	if err != nil {
-		return "", fmt.Errorf("candy %q: inline builder %q resolve: %w", candyName, bName, err)
-	}
-	if strings.TrimSpace(reply.InlineFragment) == "" {
-		return "", fmt.Errorf("candy %q: inline builder %q returned an empty ops.OpResolve inline fragment", candyName, bName)
-	}
-	return reply.InlineFragment, nil
-}
+// candy/plugin layers and by charly's own tests (e.g. deploykit.ResolveUserSpec).
+//
+// The inline-builder seam (resolveInlineBuilderSeam) that used to open this file is DELETED in
+// K-wave 2 cone R1: it was the last claimed host-only render seam, and the claim did not survive
+// inspection — its body was the SAME OpResolve dispatch the detection and external builder legs had
+// already been running plugin-side, plus a connect step that duplicated the host's own generic
+// connectPluginByWordRef (now reached from the plugin as ops.InvokeProviderOpts.ExtraRef). It lives
+// in sdk/deploykit's NewRenderGeneratorFromProject now, beside its two siblings.
 
 // invokeOpEmitFragmentOpt is the ops.OpEmit → EmitReply → Fragment path for the build-context
 // external-STEP emit (ociEmitStep, F-STEP-EMIT — the pod-overlay deploykit.OCITarget's

@@ -60,7 +60,6 @@ var reverseChannelHostBuilderWhitelist = []reverseChannelKindClause{
 	// --- Rows with a direct KERNEL_MANIFEST.md citation ---
 	{"pod-lifecycle", "host_build_pod_lifecycle_dispatch.go", "M — the ONE op-discriminated pod-lifecycle dispatch (A10 consolidation of the former 8 per-verb kinds; KERNEL_MANIFEST.md A10 row)"},
 	{"check-load-plugins", "host_build_check_load_plugins.go", "M — plugin-loading mechanism (KERNEL_MANIFEST.md B5: hostBuildCheckLoadPlugins, confirmed production caller candy/plugin-check/command.go:211)"},
-	{"render-seam", "host_build_render_seam.go", "M — registry + live-loader-scan mechanism (KERNEL_MANIFEST.md W2: dispatches RenderSeamInlineBuilder/RenderSeamEnsureBuilders via providerRegistry.ResolveBuilder)"},
 	{"construct-step", "host_build_construct_step.go", "M — THE kind/verb dispatch mechanism (KERNEL_MANIFEST.md W2: providerRegistry.ResolveVerb/resolve(ClassStep,...))"},
 	{"box-fetch-resolve", "host_build_box_fetch_resolve.go", "B (K1 floor) (KERNEL_MANIFEST.md W2: wraps ResolveProjectRepo->EnsureRepoDownloaded, refs.go)"},
 	{"remote-image-resolve", "host_build_remote_image_resolve.go", "B (K1 floor) (KERNEL_MANIFEST.md W2: EnsureRepoDownloaded only, box-RESOLVE half already plugin-side)"},
@@ -77,7 +76,6 @@ var reverseChannelHostBuilderWhitelist = []reverseChannelKindClause{
 	{"buildengine-scan-remote", "host_build_buildengine.go", "B — bootstrap-delicate remote candy scan (KERNEL_MANIFEST.md W2: hostBuildScanRemote wraps EnsureRepoDownloaded)"},
 	{"buildengine-connect-plugins", "host_build_buildengine.go", "M — plugin-loading mechanism (KERNEL_MANIFEST.md W2: hostBuildConnectPlugins calls loadProjectPlugins, registers into providerRegistry)"},
 	{"buildengine-namespaced", "host_build_buildengine.go", "K1-IOU (KERNEL_MANIFEST.md W2: hostBuildNamespaced calls LoadConfig/ScanAllCandyWithConfigOpts, core-only per W1)"},
-	{"buildengine-prep", "host_build_buildengine.go", "K1-IOU (KERNEL_MANIFEST.md W2: hostBuildPrep calls LoadConfig/LoadUnified, core-only per W1)"},
 	{"buildengine-context-ignore-baseline", "host_build_buildengine.go", "B — same-module embed boundary (KERNEL_MANIFEST.md W2: hostBuildContextIgnoreBaseline returns baselineContextIgnore, charly's own //go:embed)"},
 
 	// --- Rows NOT yet in KERNEL_MANIFEST.md — undocumented, tracked by gate 3 ---

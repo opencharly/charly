@@ -148,20 +148,9 @@ func chdirTemp(t *testing.T) string {
 	return dir
 }
 
-// stubRenderGen seeds the render-seam host-builder's OWN per-dir Generator cache
-// (renderGenCache, host_build_render_seam.go) with a synthetic *Generator carrying box, keyed on
-// dir. This is a SEPARATE cache from candy/plugin-installstep's own genCache/stubResolvedProject:
-// it backs the "render-seam" HostBuild kind (EmitPluginOp, inline-builder, ensure-builders) —
-// still genuinely host-coupled (a Go-level ProvisionActor type-assertion only charly core can
-// perform) — which a `run: plugin:` verb Op reaches via dg.EmitTasks' `case "plugin"` even when
-// the OUTER op-step render (system-packages/builder/local-pkg-install/op) no longer round-trips
-// through step-emit. Restored via t.Cleanup.
-func stubRenderGen(t *testing.T, dir string, box *spec.BuildResolvedBox) {
-	t.Helper()
-	gen := &Generator{Dir: dir, Boxes: map[string]*spec.ResolvedBox{box.Name: &box.ResolvedBox}}
-	renderGenCache.Store(dir, gen)
-	t.Cleanup(func() { renderGenCache.Delete(dir) })
-}
+// stubRenderGen is GONE (K-wave 2 cone R1): it seeded the render-seam host-builder's per-dir
+// Generator cache, and both that builder and the cache are deleted — no render seam calls back to
+// the host any more.
 
 func ociTestTarget(build buildEngineContext) *testOCITarget {
 	return &testOCITarget{
@@ -439,34 +428,7 @@ func TestOCITargetEmitRepoChange(t *testing.T) {
 	}
 }
 
-// TestGeneratorCandyByNameRemoteQualifiedKey guards the add_candy-on-pod overlay
-// build: a REMOTE add_candy candy (fetched via spec.ResolveOpts.ExtraCandyRefs) is keyed
-// in Generator.Candies under its fully-qualified ref, while the compiled plan step's
-// CandyName is the candy's bare intrinsic name. candyByName (the step-emit Op/Builder
-// path's candy resolver) must resolve the bare name to the qualified-key candy, or the
-// OpStep build-emit fails with `task emit: candy "<name>" not found`. Regression for the
-// add_candy-on-pod-overlay "candy not found" build failure.
-func TestGeneratorCandyByNameRemoteQualifiedKey(t *testing.T) {
-	gen := &Generator{Candies: map[string]spec.CandyReader{
-		"github.com/org/repo/candy/marker": testCandy("marker", spec.CandyModel{}, spec.CandyView{}),
-		"local-layer":                      testCandy("local-layer", spec.CandyModel{}, spec.CandyView{}),
-	}}
-
-	// Exact (local) key — bare == .Name — still resolves directly.
-	if c := gen.candyByName("local-layer"); c == nil || c.GetName() != "local-layer" {
-		t.Fatalf("local-layer: got %v, want .Name=local-layer", c)
-	}
-	// Bare name resolves the qualified-key remote candy (the regression this fix closes).
-	if c := gen.candyByName("marker"); c == nil || c.GetName() != "marker" {
-		t.Fatalf("marker bare-name lookup returned %v; qualified-key .Name fallback is broken", c)
-	}
-	// An unknown name is still nil (no accidental match).
-	if c := gen.candyByName("nonexistent"); c != nil {
-		t.Fatalf("nonexistent: want nil, got %v", c)
-	}
-	// A nil Generator is safe (returns nil).
-	var nilGen *Generator
-	if c := nilGen.candyByName("marker"); c != nil {
-		t.Fatalf("nil Generator candyByName: want nil, got %v", c)
-	}
-}
+// TestGeneratorCandyByNameRemoteQualifiedKey MOVED to candy/plugin-deploy-pod
+// (candy_by_name_test.go, K-wave 2 cone R1) with the function it guards: charly's
+// Generator.candyByName had been production-dead since the overlay render relocated, and the live
+// twin in candy/plugin-deploy-pod/overlay.go carried no test of its own until the move.

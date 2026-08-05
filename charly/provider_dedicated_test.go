@@ -10,8 +10,9 @@ import (
 // are EXTERNAL out-of-process plugin candies with NO compiled-in BuilderProvider — the builder
 // analogue of TestReservedWordRegistry_DeployBijection. At process start (before any plugin
 // connects at load time) the registry resolves NONE of them, and each is recorded in the
-// externalizedBuilders set with a serving plugin candy in externalBuilderPlugins. A regression
-// that re-introduced an in-proc builtin builder would resolve here and fail.
+// spec.ExternalizedBuilders set with a serving plugin candy ref (spec.ExternalBuilderPluginRef —
+// what feeds ops.InvokeProviderOpts.ExtraRef for the on-demand connect). A regression that
+// re-introduced an in-proc builtin builder would resolve here and fail.
 func TestExternalizedBuilders_NoInProcProvider(t *testing.T) {
 	t.Cleanup(snapshotProviderState())
 	byKey := builtinInstanceMap()
@@ -19,9 +20,6 @@ func TestExternalizedBuilders_NoInProcProvider(t *testing.T) {
 	for _, word := range []string{"cargo", "npm", "pixi", "aur"} {
 		if !spec.ExternalizedBuilders[word] {
 			t.Fatalf("builder %q must be in externalizedBuilders (single source of truth)", word)
-		}
-		if _, ok := externalBuilderPlugins[word]; !ok {
-			t.Fatalf("builder %q must name its serving plugin candy in externalBuilderPlugins", word)
 		}
 		if _, ok := providerRegistry.resolve(ClassBuilder, word); ok {
 			t.Fatalf("builder %q resolves to an in-proc provider at process start — it must be external (connected only at plugin-load time)", word)
@@ -34,8 +32,8 @@ func TestExternalizedBuilders_NoInProcProvider(t *testing.T) {
 				t.Fatalf("builder %q is in the providers: manifest — an externalized builder has no compiled-in provider", word)
 			}
 		}
-		if ref, ok := externalBuilderPluginRef(word); !ok || ref == "" {
-			t.Fatalf("builder %q must produce a canonical plugin ref for submodule auto-inject", word)
+		if ref, ok := spec.ExternalBuilderPluginRef(word); !ok || ref == "" {
+			t.Fatalf("builder %q must produce a canonical plugin ref for the on-demand ExtraRef connect", word)
 		}
 	}
 }
