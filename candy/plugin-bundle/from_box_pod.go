@@ -58,7 +58,14 @@ func runFromBoxPod(c *BundleFromBoxCmd) error {
 	if err != nil {
 		return fmt.Errorf("from-box config %q: %w", name, err)
 	}
-	if _, err := cmdExec.InvokeProvider(cmdCtx, "deploy", "pod", sdk.OpConfigSetup, reqJSON, nil, sdk.InvokeProviderOpts{}); err != nil {
+	// A COMPILED-IN command's reverse channel carries no venue executor by default (broker_id=0),
+	// so the invoked deploy:pod OpConfigSetup — which runs host commands on the shell venue — must
+	// be handed one explicitly via the S1 VenueDescriptor{Kind:"shell"} (the same opts the deleted
+	// pod-config seam's forwarder passed; without it OpConfigSetup fails "no host executor attached".
+	// This is the K-wave 2 cone R3 bank-3 fix for the bank-B dispatch, mirroring
+	// candy/plugin-pod/host_seams.go's ConfigSetupCmd/ConfigRemoveCmd).
+	opts := sdk.InvokeProviderOpts{VenueDescriptor: &spec.VenueDescriptor{Kind: "shell"}}
+	if _, err := cmdExec.InvokeProvider(cmdCtx, "deploy", "pod", sdk.OpConfigSetup, reqJSON, nil, opts); err != nil {
 		return fmt.Errorf("from-box config %q: %w", name, err)
 	}
 
