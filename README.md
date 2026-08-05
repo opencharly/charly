@@ -41,28 +41,32 @@ isolation is a property of the *running* container or VM, which is also why it i
 agent everything inside one, and why `disposable: true` is a statement about a running thing rather
 than about a file.
 
-### One keyword, and what you add to it
+### One keyword, two shapes
 
-Here is the idea that causes the most confusion, so it is worth being exact.
+Here is the idea that causes the most confusion, so it is worth being exact — and exactness here
+means saying what the schema actually enforces, not what would be tidy.
 
-There is one entity keyword, `candy:`, and one filename, `charly.yml`. You never declare *what
-kind* of thing you are writing. You add fields, and **each field adds a capability**:
+There is one entity keyword, `candy:`, and one filename, `charly.yml`. But a candy resolves to
+**one of two shapes**, and `base:`/`from:` is the switch:
 
-| Add this | And the candy can also… |
-|---|---|
-| `package:` / `plan:` / `service:` | install one concern, and prove it — it can be listed in any box's `candy:` list |
-| `base:` or `from:` | be **built into a container image** of its own |
-| a `plugin:` block | **extend `charly` itself** with a new verb, kind or command |
+| The candy carries | It is | And it may also carry |
+|---|---|---|
+| neither `base:` nor `from:` | a **layer** — one installable concern | `package:` `service:` `plan:`, and a `plugin:` block |
+| `base:` or `from:` | a **box** — a buildable container image | a `candy:` list of layers, `plan:` |
 
-**These are cumulative, not a choice between three types.** "Layer", "box" and "plugin" are
-convenient names for what a candy can *do*, not categories it belongs to. Every one of the 86
-plugin candies in this repository is also a layer: it installs packages and ships its own `plan:`,
-*and* it registers a verb. Nothing about adding `plugin:` stops it being composable.
+**The two shapes are mutually exclusive, and the schema enforces it.** `spec/schema/node.cue`
+defines `#CandyValue: (*#Candy | #Image)` — a closed two-arm disjunction. Add `base:` to a candy
+that declares `package:` and `charly box validate` rejects it: *`base: field not allowed` /
+`package: field not allowed`*. A box does not install packages directly; it composes layers that
+do.
 
-So the honest mental model is not *"a candy is one of three things"* — it is *"a candy is a list of
-capabilities, and the words describe which ones it has."* A candy with nothing but `package:` is
-usefully called a layer. Add `base:` and people will call it a box, because now you can build it.
-It did not change type; it gained a field.
+**The one thing that genuinely is additive is `plugin:`.** A layer may also register providers, and
+in this repository 86 candies do — every one of them carrying a `plan:`, so each is a real layer
+*and* an extension of `charly` at the same time. That is the additive case, and it lives entirely
+inside the layer shape.
+
+So the accurate model is: **a candy is a layer or a box, never both — and a layer can additionally
+be a plugin.**
 
 ### And the vocabulary itself is open
 
@@ -73,7 +77,7 @@ built-in support for containers, VMs and Kubernetes that also happens to accept 
 is *kind-blind*: it knows how to load plugins, route a word to whichever one claims it, and carry
 generic data between them. It does not know what `pod:` means.
 
-Today's catalog registers **129 words across 81 plugin candies**:
+Today's catalog registers **137 words across 86 plugin candies**:
 
 | Class | How many | Examples |
 |---|---|---|
@@ -83,6 +87,7 @@ Today's catalog registers **129 words across 81 plugin candies**:
 | **command** — `charly` subcommands | 46 | `bundle` `check` `candy` `clean` |
 | **step** — install operations | 13 | `file` `service-custom` `reboot` |
 | **builder** — multi-stage build patterns | 5 | `pixi` `npm` `cargo` `aur` |
+| the build/load internals | 8 | `build:box` `loader:loader` `refs:refs` `terminal:tmux` |
 
 Read the second row again: **`candy:` itself is a plugin-provided kind**, registered by
 `candy/plugin-candy-kind`. The keyword this entire page is about is not privileged — it is a word
@@ -110,8 +115,8 @@ between them, and carry *generic envelopes* — data whose shape the core never 
 `pod` case in a switch statement anywhere in it. A test (`charly/import_purity_test.go`) fails the
 build if core code reaches for anything richer.
 
-**3. A plugin is reached the same way wherever it lives.** Of the 81 plugin candies, **53 are
-compiled into the binary and 28 run as separate processes** over gRPC. Both implement one
+**3. A plugin is reached the same way wherever it lives.** Of the 86 plugin candies, **58 are
+compiled into the binary** and the rest run as separate processes over gRPC. Both implement one
 `Provider` contract, so placement is an operational choice — startup cost against isolation — not
 an API difference. `deploy:pod`, `deploy:vm` and `deploy:local` are all out-of-process: the
 substrates people think of as "built in" are not even in the binary.

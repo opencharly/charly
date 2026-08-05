@@ -131,10 +131,18 @@ func generate(root, out string) error {
 		return err
 	}
 
-	// Report the prune count alongside the emit counts. A run that clears more pages than it
-	// writes back is the signal that a generator stopped emitting something, and it is worth
-	// seeing rather than inferring from a directory listing.
-	fmt.Printf("charly docs: %d recipe pages, %d plugin pages (%d provider words), %d cli pages, %d candy pages, %d box pages (%d stale pages cleared)\n",
+	// Report the prune count alongside the emit counts, and say plainly what it counts: every
+	// page carrying the generated header, cleared before this run rewrote the ones it still
+	// emits. Almost all of them come straight back, so they are not "stale" — on a healthy run
+	// the number is simply the previous run's output.
+	//
+	// It is deliberately NOT presented as a cleared-vs-written comparison. The counts printed
+	// here cover five page families; four further generated pages (reference/providers.md plus
+	// the grievances, landing and vision pages) are not among them, so cleared always exceeds
+	// the printed sum by four even when nothing is wrong. A generator that stops emitting
+	// something is caught by `task docs:drift` — prune-first means the page simply does not come
+	// back, and git reports it as a deletion.
+	fmt.Printf("charly docs: %d recipe pages, %d plugin pages (%d provider words), %d cli pages, %d candy pages, %d box pages (%d generated pages cleared before regeneration)\n",
 		skillPages, pluginPages, providerWords, cliPages, candyPages, boxPages, pruned)
 	return nil
 }
