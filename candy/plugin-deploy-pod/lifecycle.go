@@ -25,7 +25,8 @@ import (
 
 // lifecycleParams are the common params the host proxy ships for a pod lifecycle Op (image/version
 // are passed explicitly so the plugin need not decode the whole BundleNode). Opts is polymorphic
-// (LifecycleOpts for PrepareVenue, LogsOpts for Logs, RebuildOpts for Rebuild) — decoded per-op.
+// (LifecycleOpts for PrepareVenue, DeployTargetLogsOpts for Logs, DeployTargetRebuildOpts for
+// Rebuild) — decoded per-op.
 type lifecycleParams struct {
 	Name      string          `json:"name"`
 	Dir       string          `json:"dir"`

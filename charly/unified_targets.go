@@ -2,9 +2,10 @@ package main
 
 // unified_targets.go — The unified deploy-target abstraction.
 //
-// UnifiedDeployTarget/LifecycleTarget via pluginDeployTarget (S3b — the thin, DATA-ONLY proxy left
-// behind once the deploy dispatch orchestration moved to candy/plugin-bundle over the ONE generic
-// ops.OpDeployDispatch envelope, see candy/plugin-bundle/deploy_target.go and
+// UnifiedDeployTarget/LifecycleTarget — the kind-agnostic interface contracts, now living in
+// spec/spec/deploy_target_unified.go — via pluginDeployTarget (S3b — the thin, DATA-ONLY proxy
+// left behind once the deploy dispatch orchestration moved to candy/plugin-bundle over the ONE
+// generic ops.OpDeployDispatch envelope, see candy/plugin-bundle/deploy_target.go and
 // CHANGELOG/2026.203.0212.md for the full migration narrative), and the ResolveTarget dispatcher.
 // ALL FIVE substrates
 // (local/vm/pod/k8s/android) are EXTERNAL — each resolves to pluginDeployTarget, which holds ONLY
@@ -71,14 +72,6 @@ type pluginDeployTarget struct {
 	// deployAddCmd.NodeOnly, matching the pre-S3b type-assertion pattern — see
 	// bundle_add_cmd.go).
 	nodeOnly bool
-
-	// KeepRepoChanges / KeepServices / KeepImage are the `charly bundle del --keep-…` teardown
-	// gates, set by the del-command dispatcher (host_build_deploy_node_del_dispatch.go) via the
-	// SAME type-assertion pattern the pre-S3b former core-resident deploy target used (Del's
-	// signature is the fixed UnifiedDeployTarget interface contract, with no room for extra params).
-	KeepRepoChanges bool
-	KeepServices    bool
-	KeepImage       bool
 
 	// build is the host-ENGINE context (project Config + dir + DistroCfg) the RunHostStep
 	// reverse leg needs when the plugin walks a plan carrying a host-engine step kind. Populated
@@ -189,7 +182,7 @@ func (t *pluginDeployTarget) applyParentExecOverride(opts spec.EmitOpts) json.Ra
 	return pj
 }
 
-func (t *pluginDeployTarget) Add(ctx context.Context, dctx *DeployContext, plans []*spec.InstallPlan, opts spec.EmitOpts) error {
+func (t *pluginDeployTarget) Add(ctx context.Context, dctx *spec.DeployContext, plans []*spec.InstallPlan, opts spec.EmitOpts) error {
 	if dctx != nil {
 		t.node = dctx.Node
 		t.build = buildEngineContext{Cfg: dctx.Cfg, ProjectDir: dctx.Dir, DistroCfg: dctx.DistroCfg}
@@ -257,7 +250,7 @@ func (t *pluginDeployTarget) Add(ctx context.Context, dctx *DeployContext, plans
 	return nil
 }
 
-func (t *pluginDeployTarget) Update(ctx context.Context, plans []*spec.InstallPlan, opts UpdateOpts) error {
+func (t *pluginDeployTarget) Update(ctx context.Context, plans []*spec.InstallPlan, opts spec.UpdateOpts) error {
 	views := make([]spec.InstallPlanView, 0, len(plans))
 	for _, p := range plans {
 		if p != nil {
@@ -301,16 +294,13 @@ func (t *pluginDeployTarget) Update(ctx context.Context, plans []*spec.InstallPl
 // checkrun_helpers_test.go as test-only infrastructure — see that file's header for why the
 // box-mode-skip regression coverage it fed is unaffected (same underlying RunOne primitive).
 
-func (t *pluginDeployTarget) Del(ctx context.Context, opts DelOpts) error {
+func (t *pluginDeployTarget) Del(ctx context.Context, opts spec.DeployTargetDelOpts) error {
 	// The vm ephemeral-lifecycle teardown (systemd timers + libvirt snapshot refcounts) that used
 	// to run here as a pre-dispatch host hook now runs INSIDE candy/plugin-deploy-vm's own
 	// OpPostTeardown handler (vmPostTeardown, F6 vm-lifecycle move, coneB-vmlifecycle) — it turned
 	// out to need only sdk-portable seams (config-resolve + InvokeProvider), so the hook registry
 	// (lifecyclePostTeardownHook, vm's sole registrant) is deleted rather than kept empty.
-	optsJSON, err := json.Marshal(spec.DeployTargetDelOpts{
-		DryRun: opts.DryRun, AssumeYes: opts.AssumeYes, KeepLedger: opts.KeepLedger, RemoveVolumes: opts.RemoveVolumes,
-		KeepRepoChanges: t.KeepRepoChanges, KeepServices: t.KeepServices, KeepImage: t.KeepImage,
-	})
+	optsJSON, err := json.Marshal(opts)
 	if err != nil {
 		return err
 	}
@@ -318,8 +308,8 @@ func (t *pluginDeployTarget) Del(ctx context.Context, opts DelOpts) error {
 	return err
 }
 
-func (t *pluginDeployTarget) Rebuild(ctx context.Context, opts RebuildOpts) error {
-	optsJSON, err := json.Marshal(spec.DeployTargetRebuildOpts{RebuildImage: opts.RebuildImage, AssumeYes: opts.AssumeYes, DryRun: opts.DryRun})
+func (t *pluginDeployTarget) Rebuild(ctx context.Context, opts spec.DeployTargetRebuildOpts) error {
+	optsJSON, err := json.Marshal(opts)
 	if err != nil {
 		return err
 	}
@@ -327,12 +317,12 @@ func (t *pluginDeployTarget) Rebuild(ctx context.Context, opts RebuildOpts) erro
 	return err
 }
 
-func (t *pluginDeployTarget) Status(ctx context.Context) (StatusInfo, error) {
+func (t *pluginDeployTarget) Status(ctx context.Context) (spec.DeployTargetStatus, error) {
 	reply, err := t.dispatch(ctx, spec.DeployTargetDispatchRequest{Op: "status"})
 	if err != nil {
-		return StatusInfo{}, err
+		return spec.DeployTargetStatus{}, err
 	}
-	return StatusInfo{State: reply.Status.State, Healthy: reply.Status.Healthy, Details: reply.Status.Details}, nil
+	return reply.Status, nil
 }
 
 // bracketedLifecycle reads the DECLARED #DeployTraits.bracketed_lifecycle off the dispatch-merged
@@ -409,11 +399,11 @@ func (t *pluginDeployTarget) Stop(ctx context.Context) error {
 	return err
 }
 
-func (t *pluginDeployTarget) Logs(ctx context.Context, opts LogsOpts) error {
+func (t *pluginDeployTarget) Logs(ctx context.Context, opts spec.DeployTargetLogsOpts) error {
 	if !t.hasLifecycle {
 		return fmt.Errorf("external deploy %q: %w", t.name, ErrNotSupportedOnExternal)
 	}
-	optsJSON, err := json.Marshal(spec.DeployTargetLogsOpts{Follow: opts.Follow, Tail: int64(opts.Tail), Sidecar: opts.Sidecar})
+	optsJSON, err := json.Marshal(opts)
 	if err != nil {
 		return err
 	}
@@ -488,7 +478,7 @@ var ErrNotSupportedOnExternal = fmt.Errorf("lifecycle operation not supported on
 //   - "X: unknown target Y" — Y is not a canonical substrate word (a typo)
 //   - "X: target Y is a known substrate but its deploy provider is not connected" — Y is valid but
 //     its out-of-process plugin is not compiled-in / failed to load (unresolvedDeployTargetError)
-func ResolveTarget(node *spec.BundleNode, name string) (UnifiedDeployTarget, error) {
+func ResolveTarget(node *spec.BundleNode, name string) (spec.UnifiedDeployTarget, error) {
 	if node == nil {
 		return nil, fmt.Errorf("no deployment %q; run `charly bundle list`", name)
 	}
@@ -537,6 +527,6 @@ func unresolvedDeployTargetError(name, target string) error {
 // compile-time assertion: the plugin-dispatch adapter satisfies the interfaces it claims. If any
 // method signature drifts, `go build` fails here.
 var (
-	_ UnifiedDeployTarget = (*pluginDeployTarget)(nil)
-	_ LifecycleTarget     = (*pluginDeployTarget)(nil)
+	_ spec.UnifiedDeployTarget = (*pluginDeployTarget)(nil)
+	_ spec.LifecycleTarget     = (*pluginDeployTarget)(nil)
 )

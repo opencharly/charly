@@ -43,7 +43,7 @@ func runResolveTargetAdd(req spec.DeployResolveTargetAddRequest) error {
 	if tt, ok := utgt.(*pluginDeployTarget); ok {
 		tt.nodeOnly = req.NodeOnly
 	}
-	return utgt.Add(context.Background(), &DeployContext{Node: req.Node, Name: req.DeployName, Dir: req.Dir, Cfg: cfg, DistroCfg: distroCfg, BuilderCfg: builderCfg}, plans, opts)
+	return utgt.Add(context.Background(), &spec.DeployContext{Node: req.Node, Name: req.DeployName, Dir: req.Dir, Cfg: cfg, DistroCfg: distroCfg, BuilderCfg: builderCfg}, plans, opts)
 }
 
 var _ = func() bool {

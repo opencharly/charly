@@ -43,4 +43,4 @@ func vmAttachResolver(_ context.Context, _, _ string, cmd []string, _ bool) (jso
 	return marshalJSON(&spec.PodLiveStdioPlan{Script: strings.Join(cmd, " ")})
 }
 
-var _ = func() bool { registerLifecycleLivePlanHooks("vm", vmAttachResolver, nil); return true }()
+var _ = func() bool { registerLifecycleLivePlanHooks("vm", vmAttachResolver); return true }()

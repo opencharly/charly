@@ -126,8 +126,8 @@ func resolveCheckRunnerContext(box, dir string, cfg *spec.Config) checkRunnerCon
 // dispatchVerifyChecks (the core-side function that drove command:check's OpVerifyChecks in-proc)
 // is GONE (#55 W3 B3 remainder): its production callers are all dead now — verify_local.go
 // (candy/plugin-bundle) reaches command:check via a direct sdk.Executor.InvokeProvider call
-// instead (a peer plugin, not core), and runUnifiedTargetChecks/Test (unified_targets.go,
-// deploy_target_unified.go) had zero real callers of their own. The function's exact body
+// instead (a peer plugin, not core), and runUnifiedTargetChecks/Test (unified_targets.go) had
+// zero real callers of their own. The function's exact body
 // relocated to checkrun_helpers_test.go — its only remaining role is exercising the production
 // command:check seam + core's opInContext wiring from a handful of unit tests.
 

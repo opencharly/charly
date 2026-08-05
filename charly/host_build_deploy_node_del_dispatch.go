@@ -18,12 +18,11 @@ func hostBuildDeployNodeDelDispatch(_ context.Context, req spec.DeployNodeDelDis
 	if err != nil {
 		return spec.DeployNodeDelDispatchReply{}, fmt.Errorf("deploy-node-del-dispatch: resolve target: %w", err)
 	}
-	if tt, ok := utgt.(*pluginDeployTarget); ok {
-		tt.KeepRepoChanges = req.KeepRepoChanges
-		tt.KeepServices = req.KeepServices
-		tt.KeepImage = req.KeepImage
+	opts := spec.DeployTargetDelOpts{
+		DryRun: req.DryRun, AssumeYes: req.AssumeYes,
+		KeepRepoChanges: req.KeepRepoChanges, KeepServices: req.KeepServices, KeepImage: req.KeepImage,
 	}
-	if err := utgt.Del(context.Background(), DelOpts{DryRun: req.DryRun, AssumeYes: req.AssumeYes}); err != nil {
+	if err := utgt.Del(context.Background(), opts); err != nil {
 		return spec.DeployNodeDelDispatchReply{}, err
 	}
 	return spec.DeployNodeDelDispatchReply{}, nil

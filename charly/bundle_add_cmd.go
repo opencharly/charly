@@ -11,8 +11,7 @@ package main
 //     deployTraitDescent needs the providerRegistry). Reached by the resolve-target-add seam's
 //     reconstructParentExec + bundle_members.go + unified_targets.go.
 //   - loadConfigForDeploy — BUILD-SHARED (LoadConfig → LoadUnified + the host-fs distro probes),
-//     reached by the resolve-target-add seam + deploy_target_unified.go AND by build_overlay.go's
-//     hostBuildOverlay.
+//     reached by the resolve-target-add seam AND by build_overlay.go's hostBuildOverlay.
 
 import (
 	"fmt"

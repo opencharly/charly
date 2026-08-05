@@ -191,7 +191,7 @@ func TestExternalDeployPlugin_ReverseChannelEndToEnd(t *testing.T) {
 	}
 
 	// --- Update: idempotent re-apply — markers stay, reverse op NOT duplicated. ---
-	if err := tgt.Update(ctx, nil, UpdateOpts{}); err != nil {
+	if err := tgt.Update(ctx, nil, spec.UpdateOpts{}); err != nil {
 		t.Fatalf("Update: %v", err)
 	}
 	mustExist(t, probe, "Update lost the probe marker")
@@ -201,7 +201,7 @@ func TestExternalDeployPlugin_ReverseChannelEndToEnd(t *testing.T) {
 	}
 
 	// --- Del: replays the recorded plugin-script reverse op — markers gone, records deleted. ---
-	if err := tgt.Del(ctx, DelOpts{}); err != nil {
+	if err := tgt.Del(ctx, spec.DeployTargetDelOpts{}); err != nil {
 		t.Fatalf("Del: %v", err)
 	}
 	mustNotExist(t, probe, "Del did not remove the probe marker (reverse op not replayed)")

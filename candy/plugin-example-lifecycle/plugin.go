@@ -61,7 +61,7 @@ func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 		out, _ := json.Marshal(map[string]string{"key": ""})
 		return &pb.InvokeReply{ResultJson: out}, nil
 	case sdk.OpStatus:
-		// A minimal healthy status (the host decodes StatusInfo).
+		// A minimal healthy status (the host decodes spec.DeployTargetStatus).
 		out, _ := json.Marshal(map[string]any{"state": "active (running)", "running": true})
 		return &pb.InvokeReply{ResultJson: out}, nil
 	case sdk.OpStart, sdk.OpStop, sdk.OpPostApply, sdk.OpPostTeardown, sdk.OpLogs, sdk.OpShell, sdk.OpRebuild:

@@ -65,7 +65,7 @@ import (
 // dispatchAndRunLifecycle resolves node/box/instance's LifecycleTarget for op (the shared
 // dispatchLifecycleTarget core-M step) and, on success, runs the caller's op-specific body against
 // it — the shared core every start/stop/shell/logs/service/cmd case below delegates to.
-func dispatchAndRunLifecycle(op string, node *spec.BundleNode, box, instance string, run func(LifecycleTarget) error) error {
+func dispatchAndRunLifecycle(op string, node *spec.BundleNode, box, instance string, run func(spec.LifecycleTarget) error) error {
 	lt, err := dispatchLifecycleTarget(op, node, spec.DeployKey(box, instance))
 	if err != nil {
 		return err
@@ -99,7 +99,7 @@ func hostBuildPodLifecycle(_ context.Context, req spec.PodLifecycleRequest, _ bu
 			Env: p.Env, EnvFile: p.EnvFile, Port: p.Port, VolumeFlag: p.VolumeFlag,
 			Bind: p.Bind, NoAutoDetect: p.NoAutoDetect,
 		}
-		err := dispatchAndRunLifecycle("start", req.Node, req.Box, req.Instance, func(lt LifecycleTarget) error {
+		err := dispatchAndRunLifecycle("start", req.Node, req.Box, req.Instance, func(lt spec.LifecycleTarget) error {
 			return lt.Start(withPodStartOpts(context.Background(), opts))
 		})
 		return spec.PodLifecycleReply{}, err
@@ -109,7 +109,7 @@ func hostBuildPodLifecycle(_ context.Context, req spec.PodLifecycleRequest, _ bu
 		if perr != nil {
 			return spec.PodLifecycleReply{}, perr
 		}
-		err := dispatchAndRunLifecycle("stop", req.Node, req.Box, req.Instance, func(lt LifecycleTarget) error {
+		err := dispatchAndRunLifecycle("stop", req.Node, req.Box, req.Instance, func(lt spec.LifecycleTarget) error {
 			return lt.Stop(withPodStopUnmount(context.Background(), p.Unmount))
 		})
 		return spec.PodLifecycleReply{}, err
@@ -130,7 +130,7 @@ func hostBuildPodLifecycle(_ context.Context, req spec.PodLifecycleRequest, _ bu
 		if p.Command != "" {
 			cmd = []string{p.Command}
 		}
-		err := dispatchAndRunLifecycle("shell", req.Node, req.Box, req.Instance, func(lt LifecycleTarget) error {
+		err := dispatchAndRunLifecycle("shell", req.Node, req.Box, req.Instance, func(lt spec.LifecycleTarget) error {
 			return lt.Attach(withPodShellOpts(context.Background(), opts), cmd, true)
 		})
 		return spec.PodLifecycleReply{}, err
@@ -140,8 +140,8 @@ func hostBuildPodLifecycle(_ context.Context, req spec.PodLifecycleRequest, _ bu
 		if perr != nil {
 			return spec.PodLifecycleReply{}, perr
 		}
-		err := dispatchAndRunLifecycle("logs", req.Node, req.Box, req.Instance, func(lt LifecycleTarget) error {
-			return lt.Logs(context.Background(), LogsOpts{Follow: p.Follow, Sidecar: p.Sidecar})
+		err := dispatchAndRunLifecycle("logs", req.Node, req.Box, req.Instance, func(lt spec.LifecycleTarget) error {
+			return lt.Logs(context.Background(), spec.DeployTargetLogsOpts{Follow: p.Follow, Sidecar: p.Sidecar})
 		})
 		return spec.PodLifecycleReply{}, err
 
@@ -154,7 +154,7 @@ func hostBuildPodLifecycle(_ context.Context, req spec.PodLifecycleRequest, _ bu
 		if perr != nil {
 			return spec.PodLifecycleReply{}, perr
 		}
-		err := dispatchAndRunLifecycle("service", req.Node, req.Box, req.Instance, func(lt LifecycleTarget) error {
+		err := dispatchAndRunLifecycle("service", req.Node, req.Box, req.Instance, func(lt spec.LifecycleTarget) error {
 			return lt.Shell(context.Background(), p.Argv)
 		})
 		return spec.PodLifecycleReply{}, err
@@ -169,7 +169,7 @@ func hostBuildPodLifecycle(_ context.Context, req spec.PodLifecycleRequest, _ bu
 		if perr != nil {
 			return spec.PodLifecycleReply{}, perr
 		}
-		err := dispatchAndRunLifecycle("cmd", req.Node, req.Box, req.Instance, func(lt LifecycleTarget) error {
+		err := dispatchAndRunLifecycle("cmd", req.Node, req.Box, req.Instance, func(lt spec.LifecycleTarget) error {
 			return lt.Attach(withPodCmdOpts(context.Background(), podCmdOpts{Sidecar: p.Sidecar}), []string{p.Command}, false)
 		})
 		var ece *exitcode.ExitCodeError

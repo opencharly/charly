@@ -28,7 +28,7 @@ import (
 
 // lifecycleParams are the params the host proxy ships for a vm lifecycle Op. node is the canonical
 // BundleNode JSON; prepare is the resolved spec.LifecyclePrepareInput (PrepareVenue only); opts is
-// polymorphic (LifecycleOpts/LogsOpts/RebuildOpts), decoded per-op.
+// polymorphic (LifecycleOpts/DeployTargetLogsOpts/DeployTargetRebuildOpts), decoded per-op.
 type lifecycleParams struct {
 	Name      string          `json:"name"`
 	Dir       string          `json:"dir"`

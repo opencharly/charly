@@ -141,13 +141,13 @@ func (c *podUpdateCmd) dispatchByDeployTarget() error {
 	if err != nil {
 		return err
 	}
-	lt, ok := target.(LifecycleTarget)
+	lt, ok := target.(spec.LifecycleTarget)
 	if !ok {
 		return fmt.Errorf("charly update %s: %q target has no live runtime to rebuild "+
 			"(k8s is applied out-of-band via `kubectl apply -k` on the rendered Kustomize overlay)",
 			deployName, node.Target)
 	}
-	return lt.Rebuild(context.Background(), RebuildOpts{RebuildImage: c.Build})
+	return lt.Rebuild(context.Background(), spec.DeployTargetRebuildOpts{RebuildImage: c.Build})
 }
 
 // noteUpdateDisposability prints a one-line transparency note when an EXPLICIT
