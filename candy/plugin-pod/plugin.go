@@ -81,13 +81,18 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 	setCommandContext(ctx, exec)
 	word := req.GetReserved()
 	var in struct {
-		Args []string `json:"args"`
+		Args        []string        `json:"args"`
+		HostEnvJSON json.RawMessage `json:"host_env_json"`
 	}
 	if len(req.GetParamsJson()) > 0 {
 		if uerr := json.Unmarshal(req.GetParamsJson(), &in); uerr != nil {
 			return nil, fmt.Errorf("pod %s: decode args: %w", word, uerr)
 		}
 	}
+	// Stash the host-side spec.HostEnv threaded as DATA on the OpRun dispatch (core computes it —
+	// os.Executable() is only correct in-core, R10 bed-found bug #5). The config setup/remove leaves
+	// read it to populate PodConfigSetupRequest.HostEnvJSON when dispatching deploy:pod peer-to-peer.
+	cmdHostEnvJSON = in.HostEnvJSON
 	if rerr := dispatchPodCommand(word, in.Args); rerr != nil {
 		return nil, rerr
 	}

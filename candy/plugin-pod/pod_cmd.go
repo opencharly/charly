@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/loaderkit"
@@ -440,7 +441,7 @@ type ConfigSetupCmd struct {
 }
 
 func (c *ConfigSetupCmd) Run() error {
-	return hostPodSeam("pod-config-setup", spec.PodConfigSetupRequest{
+	reqJSON, err := json.Marshal(spec.PodConfigSetupRequest{
 		Box:           c.Box,
 		Tag:           c.Tag,
 		Build:         c.Build,
@@ -467,7 +468,15 @@ func (c *ConfigSetupCmd) Run() error {
 		Sidecar:       c.Sidecar,
 		ListSidecars:  c.ListSidecars,
 		NoAutoDetect:  c.NoAutoDetect,
+		// HostEnvJSON is threaded as DATA on the OpRun dispatch (compiled-in ⇒ this plugin's own
+		// os.Executable() would be correct, but the host computes it once for every command) —
+		// deploy:pod's encrypted-mount ExecStartPre CharlyBin line reads it.
+		HostEnvJSON: cmdHostEnvJSON,
 	})
+	if err != nil {
+		return fmt.Errorf("config setup: %w", err)
+	}
+	return dispatchPodConfigOp(sdk.OpConfigSetup, reqJSON)
 }
 
 // ConfigStatusCmd shows status of all services
@@ -519,7 +528,11 @@ type ConfigRemoveCmd struct {
 }
 
 func (c *ConfigRemoveCmd) Run() error {
-	return hostPodSeam("pod-config-remove", spec.PodConfigRemoveRequest{Box: c.Box, Instance: c.Instance})
+	reqJSON, err := json.Marshal(spec.PodConfigRemoveRequest{Box: c.Box, Instance: c.Instance})
+	if err != nil {
+		return fmt.Errorf("config remove: %w", err)
+	}
+	return dispatchPodConfigOp(sdk.OpConfigRemove, reqJSON)
 }
 
 // UpdateCmd updates an image (pulls/builds the latest), preserves the existing deploy config

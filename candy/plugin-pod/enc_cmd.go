@@ -32,9 +32,11 @@ import (
 // process-boundary wire shapes are not worth a cross-module import for a 3-field struct) — this
 // is a third, not a new, instance of that established pattern.
 //
-// Setup/Remove (ConfigSetupCmd/ConfigRemoveCmd, pod_cmd.go) stay on hostPodSeam — their
-// orchestration is a different family (quadlet/secrets/sidecars, P13-KERNEL, host_build_pod_
-// config_seams.go), not credential/enc.
+// Setup/Remove (ConfigSetupCmd/ConfigRemoveCmd, pod_cmd.go) dispatch deploy:pod's OpConfigSetup/
+// OpConfigRemove peer-to-peer via InvokeProvider (the "pod-config-setup"/"pod-config-remove"
+// host-build seams are DELETED, K-wave 2 cone R3) — their orchestration is a different family
+// (quadlet/secrets/sidecars, P13-KERNEL, candy/plugin-deploy-pod/config_setup.go), not
+// credential/enc. (The former "stay on hostPodSeam" wording is DELETED with those seams.)
 
 // credentialInput is the verb:credential request wire form — byte-compatible with
 // charly/credential_plugin.go's credentialInput and candy/plugin-secrets/params.CredentialInput
