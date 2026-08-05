@@ -49,15 +49,15 @@ import (
 // StartCmd launches a container with supervisord in the background — the `charly start` grammar.
 type StartCmd struct {
 	Box          string   `arg:"" help:"Box name or remote ref (github.com/org/repo/box[@version])"`
-	Tag          string   `long:"tag" help:"Image CalVer tag (empty = newest local CalVer resolved via the ai.opencharly.version OCI label)"`
-	Build        bool     `long:"build" help:"Force local build instead of pulling from registry"`
-	Env          []string `short:"e" long:"env" sep:"none" help:"Set container env var (direct mode only)"`
-	EnvFile      string   `long:"env-file" help:"Load env vars from file (direct mode only)"`
-	Instance     string   `short:"i" long:"instance" help:"Instance name for running multiple containers of the same box"`
+	Tag          string   `name:"tag" help:"Image CalVer tag (empty = newest local CalVer resolved via the ai.opencharly.version OCI label)"`
+	Build        bool     `name:"build" help:"Force local build instead of pulling from registry"`
+	Env          []string `short:"e" name:"env" sep:"none" help:"Set container env var (direct mode only)"`
+	EnvFile      string   `name:"env-file" help:"Load env vars from file (direct mode only)"`
+	Instance     string   `short:"i" name:"instance" help:"Instance name for running multiple containers of the same box"`
 	Port         []string `short:"p" help:"Remap host port (direct mode only)"`
-	VolumeFlag   []string `long:"volume" short:"v" help:"Configure volume backing (name:type[:path])"`
-	Bind         []string `long:"bind" help:"Bind volume to host path (name or name=path)"`
-	NoAutoDetect bool     `long:"no-autodetect" help:"Disable automatic device detection"`
+	VolumeFlag   []string `name:"volume" short:"v" help:"Configure volume backing (name:type[:path])"`
+	Bind         []string `name:"bind" help:"Bind volume to host path (name or name=path)"`
+	NoAutoDetect bool     `name:"no-auto-detect" help:"Disable automatic device detection"`
 }
 
 func (c *StartCmd) Run() error {
@@ -98,8 +98,8 @@ func lifecycleNode(box, instance string) *spec.Deploy {
 // StopCmd stops a running container started by StartCmd — the `charly stop` grammar.
 type StopCmd struct {
 	Box      string `arg:"" help:"Box name or remote ref"`
-	Instance string `short:"i" long:"instance" help:"Instance name for running multiple containers of the same box"`
-	Unmount  bool   `long:"unmount" help:"After stopping, also tear down encrypted FUSE mounts and gocryptfs scope units (charly-enc-<box>-<volume>.scope) for this box"`
+	Instance string `short:"i" name:"instance" help:"Instance name for running multiple containers of the same box"`
+	Unmount  bool   `name:"unmount" help:"After stopping, also tear down encrypted FUSE mounts and gocryptfs scope units (charly-enc-<box>-<volume>.scope) for this box"`
 }
 
 func (c *StopCmd) Run() error {
@@ -123,7 +123,7 @@ func (c *StopCmd) Run() error {
 // — calls deploykit.RestartPodService directly, zero HostBuild round-trip.
 type RestartCmd struct {
 	Box      string `arg:"" help:"Box name or remote ref"`
-	Instance string `short:"i" long:"instance" help:"Instance name for running multiple containers of the same box"`
+	Instance string `short:"i" name:"instance" help:"Instance name for running multiple containers of the same box"`
 }
 
 func (c *RestartCmd) Run() error {
@@ -140,9 +140,9 @@ func (c *RestartCmd) Run() error {
 // op="logs" (#55 W3 A10b unified the former dedicated "pod-logs" kind into this one).
 type LogsCmd struct {
 	Box      string `arg:"" help:"Box name or remote ref"`
-	Follow   bool   `short:"f" long:"follow" help:"Follow log output"`
-	Instance string `short:"i" long:"instance" help:"Instance name for running multiple containers of the same box"`
-	Sidecar  string `long:"sidecar" help:"Show the named SIDECAR container's logs instead of the app container's"`
+	Follow   bool   `short:"f" name:"follow" help:"Follow log output"`
+	Instance string `short:"i" name:"instance" help:"Instance name for running multiple containers of the same box"`
+	Sidecar  string `name:"sidecar" help:"Show the named SIDECAR container's logs instead of the app container's"`
 }
 
 func (c *LogsCmd) Run() error {
@@ -168,10 +168,10 @@ func (c *LogsCmd) Run() error {
 // former core `defer releaseResourceClaim(...)` semantics exactly.
 type RemoveCmd struct {
 	Box        string   `arg:"" help:"Box name or remote ref"`
-	Instance   string   `short:"i" long:"instance" help:"Instance name for running multiple containers of the same box"`
-	Purge      bool     `long:"purge" help:"Also remove named volumes"`
+	Instance   string   `short:"i" name:"instance" help:"Instance name for running multiple containers of the same box"`
+	Purge      bool     `name:"purge" help:"Also remove named volumes"`
 	KeepDeploy bool     `name:"keep-deploy" help:"Keep charly.yml entry for this box"`
-	Env        []string `short:"e" long:"env" sep:"none" help:"Set env var for hooks (KEY=VALUE)"`
+	Env        []string `short:"e" name:"env" sep:"none" help:"Set env var for hooks (KEY=VALUE)"`
 }
 
 func (c *RemoveCmd) Run() error {
@@ -194,16 +194,16 @@ func (c *RemoveCmd) Run() error {
 // op="shell" (#55 W3 A10b unified the former dedicated "pod-shell" kind into this one).
 type ShellCmd struct {
 	Box          string   `arg:"" help:"Box name or remote ref (github.com/org/repo/box[@version])"`
-	Tag          string   `long:"tag" help:"Image CalVer tag (empty = newest local CalVer resolved via the ai.opencharly.version OCI label)"`
+	Tag          string   `name:"tag" help:"Image CalVer tag (empty = newest local CalVer resolved via the ai.opencharly.version OCI label)"`
 	Command      string   `short:"c" help:"Command to execute instead of interactive shell"`
-	Build        bool     `long:"build" help:"Force local build instead of pulling from registry"`
-	TTY          bool     `long:"tty" help:"Force TTY allocation (for automation tools that lack a real terminal)"`
-	Env          []string `short:"e" long:"env" sep:"none" help:"Set container env var (KEY=VALUE)"`
-	EnvFile      string   `long:"env-file" help:"Load env vars from file"`
-	Instance     string   `short:"i" long:"instance" help:"Instance name for running multiple containers of the same box"`
-	VolumeFlag   []string `long:"volume" short:"v" help:"Configure volume backing (name:type[:path])"`
-	Bind         []string `long:"bind" help:"Bind volume to host path (name or name=path)"`
-	NoAutoDetect bool     `long:"no-autodetect" help:"Disable automatic device detection"`
+	Build        bool     `name:"build" help:"Force local build instead of pulling from registry"`
+	TTY          bool     `name:"tty" help:"Force TTY allocation (for automation tools that lack a real terminal)"`
+	Env          []string `short:"e" name:"env" sep:"none" help:"Set container env var (KEY=VALUE)"`
+	EnvFile      string   `name:"env-file" help:"Load env vars from file"`
+	Instance     string   `short:"i" name:"instance" help:"Instance name for running multiple containers of the same box"`
+	VolumeFlag   []string `name:"volume" short:"v" help:"Configure volume backing (name:type[:path])"`
+	Bind         []string `name:"bind" help:"Bind volume to host path (name or name=path)"`
+	NoAutoDetect bool     `name:"no-auto-detect" help:"Disable automatic device detection"`
 }
 
 func (c *ShellCmd) Run() error {
@@ -242,7 +242,7 @@ type ServiceCmd struct {
 // ServiceStatusCmd shows status of all services
 type ServiceStatusCmd struct {
 	Box      string `arg:"" help:"Box name"`
-	Instance string `short:"i" long:"instance" help:"Instance name"`
+	Instance string `short:"i" name:"instance" help:"Instance name"`
 }
 
 func (c *ServiceStatusCmd) Run() error {
@@ -257,7 +257,7 @@ func (c *ServiceStatusCmd) Run() error {
 type ServiceStartCmd struct {
 	Box      string `arg:"" help:"Box name"`
 	Service  string `arg:"" help:"Service name"`
-	Instance string `short:"i" long:"instance" help:"Instance name"`
+	Instance string `short:"i" name:"instance" help:"Instance name"`
 }
 
 func (c *ServiceStartCmd) Run() error {
@@ -272,7 +272,7 @@ func (c *ServiceStartCmd) Run() error {
 type ServiceStopCmd struct {
 	Box      string `arg:"" help:"Box name"`
 	Service  string `arg:"" help:"Service name"`
-	Instance string `short:"i" long:"instance" help:"Instance name"`
+	Instance string `short:"i" name:"instance" help:"Instance name"`
 }
 
 func (c *ServiceStopCmd) Run() error {
@@ -287,7 +287,7 @@ func (c *ServiceStopCmd) Run() error {
 type ServiceRestartCmd struct {
 	Box      string `arg:"" help:"Box name"`
 	Service  string `arg:"" help:"Service name"`
-	Instance string `short:"i" long:"instance" help:"Instance name"`
+	Instance string `short:"i" name:"instance" help:"Instance name"`
 }
 
 func (c *ServiceRestartCmd) Run() error {
@@ -310,7 +310,7 @@ type VolumeCmd struct {
 // the charly-native replacement for ad-hoc `podman volume ls/inspect`.
 type VolumeListCmd struct {
 	Box      string `arg:"" help:"Box / deploy name"`
-	Instance string `short:"i" long:"instance" help:"Instance name"`
+	Instance string `short:"i" name:"instance" help:"Instance name"`
 }
 
 func (c *VolumeListCmd) Run() error {
@@ -355,7 +355,7 @@ func (c *VolumeListCmd) Run() error {
 type VolumeResetCmd struct {
 	Box      string `arg:"" help:"Box / deploy name"`
 	Name     string `arg:"" help:"Volume name — bare (e.g. tailscale-state) or the full charly-<box>-<name> form"`
-	Instance string `short:"i" long:"instance" help:"Instance name"`
+	Instance string `short:"i" name:"instance" help:"Instance name"`
 }
 
 func (c *VolumeResetCmd) Run() error {
@@ -388,8 +388,8 @@ type CpCmd struct {
 	Box      string `arg:"" help:"Box / deploy name"`
 	Src      string `arg:"" help:"Source path — prefix with ':' for the container side"`
 	Dst      string `arg:"" help:"Destination path — prefix with ':' for the container side"`
-	Instance string `short:"i" long:"instance" help:"Instance name"`
-	Sidecar  string `long:"sidecar" help:"Target the named SIDECAR container instead of the app container"`
+	Instance string `short:"i" name:"instance" help:"Instance name"`
+	Sidecar  string `name:"sidecar" help:"Target the named SIDECAR container instead of the app container"`
 }
 
 // ConfigCmd groups box configuration subcommands — the `charly config` grammar. Default
@@ -411,31 +411,31 @@ type ConfigCmd struct {
 // encrypted volumes — the `charly config [setup]` grammar (mirrors core's BoxConfigSetupCmd 1:1).
 type ConfigSetupCmd struct {
 	Box           string   `arg:"" optional:"" help:"Box name or remote ref (github.com/org/repo/box[@version])"`
-	Tag           string   `long:"tag" help:"Image CalVer tag (empty = newest local CalVer resolved via the ai.opencharly.version OCI label)"`
-	Build         bool     `long:"build" help:"Force local build instead of pulling from registry"`
-	Env           []string `short:"e" long:"env" sep:"none" help:"Set container env var (KEY=VALUE), merged with existing vars"`
-	Clean         bool     `short:"c" long:"clean" help:"Replace all env vars instead of merging (clean slate)"`
-	EnvFile       string   `long:"env-file" help:"Load env vars from file"`
-	Instance      string   `short:"i" long:"instance" help:"Instance name for running multiple containers of the same box"`
+	Tag           string   `name:"tag" help:"Image CalVer tag (empty = newest local CalVer resolved via the ai.opencharly.version OCI label)"`
+	Build         bool     `name:"build" help:"Force local build instead of pulling from registry"`
+	Env           []string `short:"e" name:"env" sep:"none" help:"Set container env var (KEY=VALUE), merged with existing vars"`
+	Clean         bool     `short:"c" name:"clean" help:"Replace all env vars instead of merging (clean slate)"`
+	EnvFile       string   `name:"env-file" help:"Load env vars from file"`
+	Instance      string   `short:"i" name:"instance" help:"Instance name for running multiple containers of the same box"`
 	Port          []string `short:"p" help:"Remap host port (newHost:containerPort, e.g., 5901:5900)"`
-	KeepMounted   bool     `long:"keep-mounted" help:"Keep encrypted volumes mounted after setup"`
-	Password      string   `long:"password" default:"auto" enum:"auto,manual" help:"auto: generate secrets (default), manual: prompt for each"`
+	KeepMounted   bool     `name:"keep-mounted" help:"Keep encrypted volumes mounted after setup"`
+	Password      string   `name:"password" default:"auto" enum:"auto,manual" help:"auto: generate secrets (default), manual: prompt for each"`
 	RefreshSecret []string `name:"refresh-secret" help:"Force re-provisioning of the named podman secret(s) from their source on this run ('all' = every secret of this image, sidecars included): the charly-<image>-<name> secret is removed and recreated. A candy-owned auto-generated secret gets a NEW value — re-initialize services that stored the old one"`
-	VolumeFlag    []string `long:"volume" short:"v" help:"Configure volume backing (name:type[:path]). Type: volume|bind|encrypted"`
-	Bind          []string `long:"bind" help:"Shorthand: configure volume as bind mount (name or name=path)"`
-	Encrypt       []string `long:"encrypt" help:"Shorthand: configure volume as encrypted (gocryptfs)"`
-	MemoryMax     string   `long:"memory-max" help:"Cgroup memory.max hard OOM limit (e.g. 6g, 500m). Persists to charly.yml."`
-	MemoryHigh    string   `long:"memory-high" help:"Cgroup memory.high soft limit — reclaim pressure before OOM. Persists to charly.yml."`
-	MemorySwapMax string   `long:"memory-swap-max" help:"Cgroup memory.swap.max ceiling. Persists to charly.yml."`
-	Cpus          string   `long:"cpus" help:"CPU quota in cores (e.g. 2.5 for 2.5 cores). Persists to charly.yml."`
-	Seed          bool     `long:"seed" default:"true" negatable:"" help:"Seed bind-backed volumes with data from image (default: true)"`
-	ForceSeed     bool     `long:"force-seed" help:"Re-seed even if target directory is not empty"`
-	DataFrom      string   `long:"data-from" help:"Seed data from this data image instead of the target image"`
-	UpdateAll     bool     `long:"update-all" help:"Regenerate quadlets for all other deployed boxes to pick up env_provides changes"`
-	SshKey        string   `long:"ssh-key" help:"SSH public key: 'auto' (default ~/.ssh key), path to .pub file, 'generate', or 'none'"`
-	Sidecar       []string `long:"sidecar" help:"Attach sidecar (from built-in templates, e.g. 'tailscale')"`
-	ListSidecars  bool     `long:"list-sidecars" help:"List available sidecar templates and exit"`
-	NoAutoDetect  bool     `long:"no-autodetect" help:"Disable automatic device detection"`
+	VolumeFlag    []string `name:"volume" short:"v" help:"Configure volume backing (name:type[:path]). Type: volume|bind|encrypted"`
+	Bind          []string `name:"bind" help:"Shorthand: configure volume as bind mount (name or name=path)"`
+	Encrypt       []string `name:"encrypt" help:"Shorthand: configure volume as encrypted (gocryptfs)"`
+	MemoryMax     string   `name:"memory-max" help:"Cgroup memory.max hard OOM limit (e.g. 6g, 500m). Persists to charly.yml."`
+	MemoryHigh    string   `name:"memory-high" help:"Cgroup memory.high soft limit — reclaim pressure before OOM. Persists to charly.yml."`
+	MemorySwapMax string   `name:"memory-swap-max" help:"Cgroup memory.swap.max ceiling. Persists to charly.yml."`
+	Cpus          string   `name:"cpus" help:"CPU quota in cores (e.g. 2.5 for 2.5 cores). Persists to charly.yml."`
+	Seed          bool     `name:"seed" default:"true" negatable:"" help:"Seed bind-backed volumes with data from image (default: true)"`
+	ForceSeed     bool     `name:"force-seed" help:"Re-seed even if target directory is not empty"`
+	DataFrom      string   `name:"data-from" help:"Seed data from this data image instead of the target image"`
+	UpdateAll     bool     `name:"update-all" help:"Regenerate quadlets for all other deployed boxes to pick up env_provides changes"`
+	SshKey        string   `name:"ssh-key" help:"SSH public key: 'auto' (default ~/.ssh key), path to .pub file, 'generate', or 'none'"`
+	Sidecar       []string `name:"sidecar" help:"Attach sidecar (from built-in templates, e.g. 'tailscale')"`
+	ListSidecars  bool     `name:"list-sidecars" help:"List available sidecar templates and exit"`
+	NoAutoDetect  bool     `name:"no-auto-detect" help:"Disable automatic device detection"`
 }
 
 func (c *ConfigSetupCmd) Run() error {
@@ -472,7 +472,7 @@ func (c *ConfigSetupCmd) Run() error {
 // ConfigStatusCmd shows status of all services
 type ConfigStatusCmd struct {
 	Box      string `arg:"" help:"Box name"`
-	Instance string `short:"i" long:"instance" help:"Instance name"`
+	Instance string `short:"i" name:"instance" help:"Instance name"`
 }
 
 func (c *ConfigStatusCmd) Run() error {
@@ -482,8 +482,8 @@ func (c *ConfigStatusCmd) Run() error {
 // ConfigMountCmd mounts encrypted volumes.
 type ConfigMountCmd struct {
 	Box      string `arg:"" help:"Box name"`
-	Volume   string `long:"volume" help:"Only mount this volume (by name)"`
-	Instance string `short:"i" long:"instance" help:"Instance name"`
+	Volume   string `name:"volume" help:"Only mount this volume (by name)"`
+	Instance string `short:"i" name:"instance" help:"Instance name"`
 }
 
 func (c *ConfigMountCmd) Run() error {
@@ -493,8 +493,8 @@ func (c *ConfigMountCmd) Run() error {
 // ConfigUnmountCmd unmounts encrypted volumes.
 type ConfigUnmountCmd struct {
 	Box      string `arg:"" help:"Box name"`
-	Volume   string `long:"volume" help:"Only unmount this volume (by name)"`
-	Instance string `short:"i" long:"instance" help:"Instance name"`
+	Volume   string `name:"volume" help:"Only unmount this volume (by name)"`
+	Instance string `short:"i" name:"instance" help:"Instance name"`
 }
 
 func (c *ConfigUnmountCmd) Run() error {
@@ -504,7 +504,7 @@ func (c *ConfigUnmountCmd) Run() error {
 // ConfigPasswdCmd changes the gocryptfs password.
 type ConfigPasswdCmd struct {
 	Box      string `arg:"" help:"Box name"`
-	Instance string `short:"i" long:"instance" help:"Instance name"`
+	Instance string `short:"i" name:"instance" help:"Instance name"`
 }
 
 func (c *ConfigPasswdCmd) Run() error {
@@ -514,7 +514,7 @@ func (c *ConfigPasswdCmd) Run() error {
 // ConfigRemoveCmd removes a quadlet service (replaces charly disable).
 type ConfigRemoveCmd struct {
 	Box      string `arg:"" help:"Box name or remote ref"`
-	Instance string `short:"i" long:"instance" help:"Instance name"`
+	Instance string `short:"i" name:"instance" help:"Instance name"`
 }
 
 func (c *ConfigRemoveCmd) Run() error {
@@ -529,12 +529,12 @@ func (c *ConfigRemoveCmd) Run() error {
 // former dedicated "pod-update" kind into this one).
 type UpdateCmd struct {
 	Box       string `arg:"" help:"Deploy name (resolved via charly.yml) OR box name. For deploys, the target's update strategy is auto-selected (pod=systemctl restart with new image; vm=in-guest candy re-apply; local=idempotent re-apply)."`
-	Tag       string `long:"tag" help:"Image CalVer tag (empty = newest local CalVer resolved via the ai.opencharly.version OCI label)"`
-	Build     bool   `long:"build" help:"Force local build instead of pulling from registry"`
-	Instance  string `short:"i" long:"instance" help:"Instance name for running multiple containers of the same box"`
-	Seed      bool   `long:"seed" default:"true" negatable:"" help:"Sync data from new image into bind-backed volumes (default: true)"`
-	ForceSeed bool   `long:"force-seed" help:"Overwrite existing data in volumes (default: only add new files)"`
-	DataFrom  string `long:"data-from" help:"Sync data from this data image instead"`
+	Tag       string `name:"tag" help:"Image CalVer tag (empty = newest local CalVer resolved via the ai.opencharly.version OCI label)"`
+	Build     bool   `name:"build" help:"Force local build instead of pulling from registry"`
+	Instance  string `short:"i" name:"instance" help:"Instance name for running multiple containers of the same box"`
+	Seed      bool   `name:"seed" default:"true" negatable:"" help:"Sync data from new image into bind-backed volumes (default: true)"`
+	ForceSeed bool   `name:"force-seed" help:"Overwrite existing data in volumes (default: only add new files)"`
+	DataFrom  string `name:"data-from" help:"Sync data from this data image instead"`
 }
 
 func (c *UpdateCmd) Run() error {

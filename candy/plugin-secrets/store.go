@@ -49,11 +49,11 @@ func DefaultCredentialStore() CredentialStore {
 			if err := store.Probe(); err != nil {
 				if GetKeyringState() == KeyringLocked {
 					fmt.Fprintf(os.Stderr, "WARNING: System keyring is locked. Credentials are unavailable until unlocked.\n")
-					fmt.Fprintf(os.Stderr, "  Unlock your keyring, or switch backend: charly config set secret_backend config\n")
+					fmt.Fprintf(os.Stderr, "  Unlock your keyring, or switch backend: charly settings set secret_backend config\n")
 					defaultStoreVal = store
 				} else {
 					fmt.Fprintf(os.Stderr, "ERROR: secret_backend is 'keyring' but system keyring is not available: %v\n", err)
-					fmt.Fprintf(os.Stderr, "Falling back to config file. Fix the keyring or run: charly config set secret_backend config\n")
+					fmt.Fprintf(os.Stderr, "Falling back to config file. Fix the keyring or run: charly settings set secret_backend config\n")
 					defaultStoreVal = &ConfigFileStore{}
 					defaultStoreProbeErr = err
 				}
@@ -72,7 +72,7 @@ func DefaultCredentialStore() CredentialStore {
 			}
 			if GetKeyringState() == KeyringLocked {
 				fmt.Fprintf(os.Stderr, "WARNING: System keyring is locked. Using config file for credentials.\n")
-				fmt.Fprintf(os.Stderr, "  Unlock your keyring, or run: charly config set secret_backend config\n")
+				fmt.Fprintf(os.Stderr, "  Unlock your keyring, or run: charly settings set secret_backend config\n")
 			}
 			defaultStoreVal = &ConfigFileStore{}
 		}
@@ -90,15 +90,22 @@ func PrintStoreInfo() {
 			// Warning already printed by DefaultCredentialStore()
 		case "keyring":
 			fmt.Fprintf(os.Stderr, "Using system keyring for credential storage.\n")
-			fmt.Fprintf(os.Stderr, "To force a specific backend: charly config set secret_backend keyring|config\n")
+			fmt.Fprintf(os.Stderr, "To force a specific backend: charly settings set secret_backend keyring|config\n")
 		case "config":
 			if resolveSecretBackend() == "config" {
 				return
 			}
+			// Only the CAUSE is reported here. Where the credential lands, the file mode, how
+			// to store it encrypted instead and how to move what is already stored are all
+			// carried by the cleartext warning that follows every write on this path
+			// (warnCleartextStorage) — saying them twice, three lines apart, is how a warning
+			// becomes wallpaper. Both callers of PrintStoreInfo store immediately afterwards,
+			// so that warning always follows; nothing is lost by not repeating it.
+			//
+			// The deleted line told the operator to SUPPRESS this notice by pinning the
+			// plaintext store — a documented path to precisely the outcome the warning exists
+			// to flag, printed three lines above it.
 			fmt.Fprintf(os.Stderr, "System keyring not available (no D-Bus session bus).\n")
-			fmt.Fprintf(os.Stderr, "Credentials will be stored in ~/.config/charly/config.yml (permissions: 0600).\n")
-			fmt.Fprintf(os.Stderr, "To suppress this message: charly config set secret_backend config\n")
-			fmt.Fprintf(os.Stderr, "For Secret Service storage, run a keyring provider (gnome-keyring, kwalletd, KeePassXC with FdoSecrets).\n")
 		}
 	})
 }

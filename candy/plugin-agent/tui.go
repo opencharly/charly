@@ -10,7 +10,7 @@ import (
 // client calls typed `charly agent` leaves and owns no SSH, tmux, container,
 // runtime, persistence, or orchestration behavior.
 type TuiCmd struct {
-	Binary string `long:"binary" env:"CHARLY_TUI_BIN" default:"charly-agent-tui" help:"Pi-TUI client executable"`
+	Binary string `name:"binary" env:"CHARLY_TUI_BIN" default:"charly-agent-tui" help:"Pi-TUI client executable"`
 }
 
 func (c *TuiCmd) Run() error {

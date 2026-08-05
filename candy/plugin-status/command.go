@@ -28,10 +28,10 @@ import (
 // StatusCmd is the `charly status` Kong grammar — moved verbatim from charly/status.go.
 type StatusCmd struct {
 	Box      string `arg:"" optional:"" help:"Box name (omit to list all charly containers)"`
-	Instance string `short:"i" long:"instance" help:"Instance name"`
-	All      bool   `short:"a" long:"all" help:"Include enabled-but-not-running services"`
-	Nested   bool   `long:"nested" help:"Probe nested children + live k8s workloads (multi-hop, slower)"`
-	JSON     bool   `long:"json" help:"Output as JSON"`
+	Instance string `short:"i" name:"instance" help:"Instance name"`
+	All      bool   `short:"a" name:"all" help:"Include enabled-but-not-running services"`
+	Nested   bool   `name:"nested" help:"Probe nested children + live k8s workloads (multi-hop, slower)"`
+	JSON     bool   `name:"json" help:"Output as JSON"`
 }
 
 // runStatusCLI parses the pass-through args into StatusCmd (kong, mirroring plugin-settings' CLI

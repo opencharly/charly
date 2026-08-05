@@ -685,7 +685,7 @@ func printHuman(distro Distro, groups []CheckGroup, hw HardwareInfo) error {
 	} else {
 		fmt.Println("  No devices will be passed to containers")
 	}
-	fmt.Println("  Disable with: --no-autodetect")
+	fmt.Println("  Disable with: --no-auto-detect")
 	fmt.Println()
 
 	fmt.Printf("Summary: %d found, %d missing, %d warnings, %d devices detected\n",

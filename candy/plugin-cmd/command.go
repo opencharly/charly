@@ -27,9 +27,9 @@ import (
 type CmdCmd struct {
 	Box      string `arg:"" help:"Box name"`
 	Command  string `arg:"" help:"Command to execute"`
-	Instance string `short:"i" long:"instance" help:"Instance name"`
-	Notify   bool   `long:"notify" negatable:"" default:"true" help:"Send desktop notification on completion (--no-notify to disable)"`
-	Sidecar  string `long:"sidecar" help:"Run in the named SIDECAR container (charly-<box>[-<instance>]-<sidecar>) instead of the app container"`
+	Instance string `short:"i" name:"instance" help:"Instance name"`
+	Notify   bool   `name:"notify" negatable:"" default:"true" help:"Send desktop notification on completion (--no-notify to disable)"`
+	Sidecar  string `name:"sidecar" help:"Run in the named SIDECAR container (charly-<box>[-<instance>]-<sidecar>) instead of the app container"`
 }
 
 func (c *CmdCmd) Run() error {

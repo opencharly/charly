@@ -23,12 +23,12 @@ import (
 // InvokeProvider to verb:gpu/verb:credential), so no core seam threads them any more.
 // appendEnvUnique was dead code (zero real callers) — candy/plugin-deploy-pod already carries
 // its own independent copy (config_setup_helpers.go).
-
-// AutoDetectFlags provides --no-autodetect CLI flag via Kong.
-// Embed in command structs that support device auto-detection.
-type AutoDetectFlags struct {
-	NoAutoDetect bool `long:"no-autodetect" help:"Disable automatic device detection"`
-}
+//
+// The `--no-auto-detect` Kong flag struct is NOT here either: core embedded it
+// nowhere, so the copy that lived here was deleted as dead code. The one live
+// declaration is candy/plugin-vm's AutoDetectFlags (embedded by VmCreateCmd); the
+// pod commands (`charly config` / `start` / `shell`) declare the field inline in
+// candy/plugin-pod/pod_cmd.go.
 
 // LogDetectedDevices prints detected devices to stderr.
 func LogDetectedDevices(detected spec.DetectedDevices) {

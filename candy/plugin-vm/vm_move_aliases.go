@@ -64,9 +64,11 @@ var (
 	parseTaskMode               = kit.ParseTaskMode
 )
 
-// AutoDetectFlags is the plugin-local copy of core's --no-autodetect Kong flag struct. Core keeps its
-// own (shell/start/config_image commands embed it too), so it is NOT moved; this trivial one-field
-// CLI-flags struct is below the bar for cross-module export (R3 — the vm_phaseA_shims trivia line).
+// AutoDetectFlags carries the `--no-auto-detect` Kong flag for VmCreateCmd, the only struct that
+// embeds it. Core no longer declares a twin: the pod commands (`charly config` / `start` / `shell`)
+// moved to candy/plugin-pod and declare the field inline, which left charly/devices.go's copy
+// embedded by nothing — it was deleted as dead code. This trivial one-field CLI-flags struct is
+// below the bar for cross-module export (R3 — the vm_phaseA_shims trivia line).
 type AutoDetectFlags struct {
-	NoAutoDetect bool `long:"no-autodetect" help:"Disable automatic device detection"`
+	NoAutoDetect bool `name:"no-auto-detect" help:"Disable automatic device detection"`
 }

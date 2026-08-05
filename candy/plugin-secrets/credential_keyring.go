@@ -128,7 +128,7 @@ func (k *KeyringStore) Probe() error {
 		return nil
 	case <-time.After(keyringTimeout):
 		setKeyringState(KeyringLocked)
-		return fmt.Errorf("keyring probe timed out — unlock your keyring or run: charly config set secret_backend config")
+		return fmt.Errorf("keyring probe timed out — unlock your keyring or run: charly settings set secret_backend config")
 	}
 }
 
@@ -290,7 +290,7 @@ type KeyringLockedError struct {
 }
 
 func (e *KeyringLockedError) Error() string {
-	return fmt.Sprintf("keyring is locked (cannot %s %s/%s) — unlock your keyring or run: charly config set secret_backend config", e.op, e.service, e.key)
+	return fmt.Sprintf("keyring is locked (cannot %s %s/%s) — unlock your keyring or run: charly settings set secret_backend config", e.op, e.service, e.key)
 }
 
 // IsKeyringLocked returns true if the error is a KeyringLockedError.

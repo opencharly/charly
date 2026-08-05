@@ -20,10 +20,10 @@ import (
 
 // MigrateCmd is the `charly migrate` flag set.
 type MigrateCmd struct {
-	DryRun      bool   `long:"dry-run" help:"Print every change the chain would make without touching the filesystem"`
-	ProjectOnly bool   `long:"project-only" help:"Migrate only the project dir, skipping the per-host deploy overlay (the remote-cache auto-migration path)"`
-	Quiet       bool   `long:"quiet" help:"Suppress progress output (the auto-migration path)"`
-	Dir         string `long:"dir" help:"Project directory holding charly.yml (default: the current working directory)"`
+	DryRun      bool   `name:"dry-run" help:"Print every change the chain would make without touching the filesystem"`
+	ProjectOnly bool   `name:"project-only" help:"Migrate only the project dir, skipping the per-host deploy overlay (the remote-cache auto-migration path)"`
+	Quiet       bool   `name:"quiet" help:"Suppress progress output (the auto-migration path)"`
+	Dir         string `name:"dir" help:"Project directory holding charly.yml (default: the current working directory)"`
 }
 
 // runMigrateCLI parses args, builds the MigrateContext, and runs the engine. Returns the

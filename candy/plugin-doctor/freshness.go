@@ -10,6 +10,7 @@ import (
 	"time"
 
 	pb "github.com/opencharly/spec/proto"
+	"github.com/opencharly/spec/refs"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -135,6 +136,18 @@ func staleBinaryMessage(verbPath string) (message string, refuse bool) {
 	sourceRoot := findCharlySourceRoot(cwd)
 	if sourceRoot == "" {
 		return "", false
+	}
+	// A --repo CACHE is a fetched tree, never an edited one, so the staleness
+	// premise ("you changed source this binary predates") cannot hold there. The
+	// cache matches findCharlySourceRoot exactly (it has charly/main.go +
+	// charly.yml) and git just wrote every file, so its mtime ALWAYS beats the
+	// binary — the check fired on every `charly --repo … <heavy verb>` and told a
+	// packaged user to `cd <cache> && task build:binary`, advice that is both
+	// impossible to act on and pointless (rebuilding from the cache is not how
+	// they got their charly). That made --repo unusable for exactly the person it
+	// exists for: someone with the binary and no checkout.
+	if isUnderRepoCache(sourceRoot) {
+		return
 	}
 
 	newestPath, newestModTime := newestGoFile(filepath.Join(sourceRoot, "charly"))
@@ -293,6 +306,31 @@ func findCharlySourceRoot(start string) string {
 func statExists(p string) bool {
 	_, err := os.Stat(p)
 	return err == nil
+}
+
+// isUnderRepoCache reports whether dir lies inside the remote-repo cache
+// (~/.cache/charly/repos, or CHARLY_REPO_CACHE). Phrased as a property of the
+// TREE rather than of how the project dir was chosen, so it holds however cwd
+// got there — an explicit --repo, CHARLY_PROJECT_REPO, or a user who simply cd'd
+// into a cache — instead of only on the paths that remembered to pass a flag.
+func isUnderRepoCache(dir string) bool {
+	cacheDir, err := refs.RepoCacheDir()
+	if err != nil {
+		return false
+	}
+	cacheAbs, err := filepath.Abs(cacheDir)
+	if err != nil {
+		return false
+	}
+	dirAbs, err := filepath.Abs(dir)
+	if err != nil {
+		return false
+	}
+	rel, err := filepath.Rel(cacheAbs, dirAbs)
+	if err != nil {
+		return false
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 // newestGoFile walks dir recursively (skipping vendor / node_modules /

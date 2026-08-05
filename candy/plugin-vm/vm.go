@@ -171,11 +171,11 @@ func lingerEnabled(username string) bool {
 // VmCreateCmd creates a VM from a QCOW2 disk image.
 type VmCreateCmd struct {
 	Box             string `arg:"" help:"Box name"`
-	Ram             string `long:"ram" help:"Override RAM size (e.g. 4G, 8192M)"`
-	Cpus            int    `long:"cpus" help:"Override CPU count"`
-	Instance        string `short:"i" long:"instance" help:"Instance name"`
-	Domain          string `long:"domain" help:"Per-deploy domain identity: name the libvirt domain charly-<domain> (+ its per-domain disk overlay/state/ssh alias) after the DEPLOY, not the kind:vm entity. Set by the deploy path so sibling beds sharing one entity get distinct domains; absent for a direct create (domain = entity)."`
-	SshKey          string `long:"ssh-key" default:"auto" help:"SSH public key: path to .pub file, 'auto' (default ~/.ssh key), 'generate', or 'none'"`
+	Ram             string `name:"ram" help:"Override RAM size (e.g. 4G, 8192M)"`
+	Cpus            int    `name:"cpus" help:"Override CPU count"`
+	Instance        string `short:"i" name:"instance" help:"Instance name"`
+	Domain          string `name:"domain" help:"Per-deploy domain identity: name the libvirt domain charly-<domain> (+ its per-domain disk overlay/state/ssh alias) after the DEPLOY, not the kind:vm entity. Set by the deploy path so sibling beds sharing one entity get distinct domains; absent for a direct create (domain = entity)."`
+	SshKey          string `name:"ssh-key" default:"auto" help:"SSH public key: path to .pub file, 'auto' (default ~/.ssh key), 'generate', or 'none'"`
 	AutoDetectFlags `embed:""`
 }
 
@@ -247,8 +247,8 @@ func parseRAMtoMB(ram string) int {
 
 type VmStartCmd struct {
 	Box      string `arg:"" help:"Box name"`
-	Instance string `short:"i" long:"instance" help:"Instance name"`
-	Domain   string `long:"domain" help:"Per-deploy domain identity (start charly-<domain>, keyed by the DEPLOY not the entity); absent for a direct start (domain = entity)."`
+	Instance string `short:"i" name:"instance" help:"Instance name"`
+	Domain   string `name:"domain" help:"Per-deploy domain identity (start charly-<domain>, keyed by the DEPLOY not the entity); absent for a direct start (domain = entity)."`
 }
 
 func (c *VmStartCmd) Run() error {
@@ -312,9 +312,9 @@ func startVM(box, instance, domain string) error {
 
 type VmStopCmd struct {
 	Box      string `arg:"" help:"Box name"`
-	Instance string `short:"i" long:"instance" help:"Instance name"`
-	Domain   string `long:"domain" help:"Per-deploy domain identity (stop charly-<domain>, keyed by the DEPLOY not the entity); absent for a direct stop (domain = entity)."`
-	Force    bool   `long:"force" help:"Force stop (destroy) instead of graceful shutdown"`
+	Instance string `short:"i" name:"instance" help:"Instance name"`
+	Domain   string `name:"domain" help:"Per-deploy domain identity (stop charly-<domain>, keyed by the DEPLOY not the entity); absent for a direct stop (domain = entity)."`
+	Force    bool   `name:"force" help:"Force stop (destroy) instead of graceful shutdown"`
 }
 
 func (c *VmStopCmd) Run() error {
@@ -357,11 +357,11 @@ func stopVM(box, instance, domain string, force bool) error {
 
 type VmDestroyCmd struct {
 	Box        string `arg:"" help:"Box name"`
-	Instance   string `short:"i" long:"instance" help:"Instance name"`
-	Domain     string `long:"domain" help:"Per-deploy domain identity (destroy charly-<domain>, keyed by the DEPLOY not the entity); absent for a direct destroy (domain = entity)."`
-	Disk       bool   `long:"disk" help:"Also delete the QCOW2 disk image"`
-	KeepDeploy bool   `long:"keep-deploy" help:"Keep the charly.yml vm:<name> entry (default: remove it, like 'charly remove' for pods)"`
-	IfExists   bool   `long:"if-exists" help:"Succeed silently when the domain is already absent, while still cleaning managed metadata"`
+	Instance   string `short:"i" name:"instance" help:"Instance name"`
+	Domain     string `name:"domain" help:"Per-deploy domain identity (destroy charly-<domain>, keyed by the DEPLOY not the entity); absent for a direct destroy (domain = entity)."`
+	Disk       bool   `name:"disk" help:"Also delete the QCOW2 disk image"`
+	KeepDeploy bool   `name:"keep-deploy" help:"Keep the charly.yml vm:<name> entry (default: remove it, like 'charly remove' for pods)"`
+	IfExists   bool   `name:"if-exists" help:"Succeed silently when the domain is already absent, while still cleaning managed metadata"`
 }
 
 // vmHolder probes which backend ACTUALLY holds the VM domain named `name`, authoritatively — the
@@ -591,8 +591,8 @@ func missingDestroyError(name string, ifExists bool) error {
 // --- VmListCmd ---
 
 type VmListCmd struct {
-	All          bool `short:"a" long:"all" help:"Show all VMs including stopped"`
-	CleanOrphans bool `long:"clean-orphans" help:"Detect and undefine orphan libvirt domains (defined but no qcow2 backing or state dir)"`
+	All          bool `short:"a" name:"all" help:"Show all VMs including stopped"`
+	CleanOrphans bool `name:"clean-orphans" help:"Detect and undefine orphan libvirt domains (defined but no qcow2 backing or state dir)"`
 }
 
 func (c *VmListCmd) Run() error {
@@ -750,8 +750,8 @@ func (c *VmListCmd) runCleanOrphans() error {
 
 type VmConsoleCmd struct {
 	Box      string `arg:"" help:"Box name"`
-	Instance string `short:"i" long:"instance" help:"Instance name"`
-	Domain   string `long:"domain" help:"Per-deploy domain identity (console charly-<domain>, keyed by the DEPLOY not the entity); absent for a direct console (domain = entity)."`
+	Instance string `short:"i" name:"instance" help:"Instance name"`
+	Domain   string `name:"domain" help:"Per-deploy domain identity (console charly-<domain>, keyed by the DEPLOY not the entity); absent for a direct console (domain = entity)."`
 }
 
 func (c *VmConsoleCmd) Run() error {
@@ -822,9 +822,9 @@ func connectUnixConsole(socketPath string) error {
 
 type VmSshCmd struct {
 	Box      string   `arg:"" help:"Box name"`
-	Instance string   `short:"i" long:"instance" help:"Instance name"`
-	Port     int      `short:"p" long:"port" help:"Override the host SSH port (default: resolved from the managed ssh_config alias)"`
-	User     string   `short:"l" long:"user" help:"Override the SSH username (default: resolved from the managed ssh_config alias)"`
+	Instance string   `short:"i" name:"instance" help:"Instance name"`
+	Port     int      `short:"p" name:"port" help:"Override the host SSH port (default: resolved from the managed ssh_config alias)"`
+	User     string   `short:"l" name:"user" help:"Override the SSH username (default: resolved from the managed ssh_config alias)"`
 	Args     []string `arg:"" optional:"" help:"Additional SSH arguments or command"`
 }
 

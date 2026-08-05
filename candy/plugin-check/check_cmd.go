@@ -80,7 +80,7 @@ type CheckCmd struct {
 // plugin owns the CLI parse, the "Image:" header, and the formatting.
 type CheckBoxCmd struct {
 	Image  string `arg:"" help:"Image reference (full ref or short name resolved against local container storage)"`
-	Format string `long:"format" default:"text" help:"Output format: text, json, tap, yaml"`
+	Format string `name:"format" default:"text" help:"Output format: text, json, tap, yaml"`
 }
 
 func (c *CheckBoxCmd) Run() error {
