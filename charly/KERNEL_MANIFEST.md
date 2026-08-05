@@ -311,7 +311,6 @@ stated adjudication-overrides-audit priority order).
 | `commands.go` | 96 | R-RESIDUE (exit: not yet re-triaged post-W4 — isTerminal is a trivial host util, candidate for a future K5-adjacent sweep) | `isTerminal` host util — a tiny (96 LOC) CLI-root helper; the audit's K5 bucket, not yet individually re-triaged since W4's K5 sweep landed. (audit-prod-report.md) |
 | `gpu_shim.go` | 28 | EXCEPTION-GPU — the operator-dropped GPU-hardware-DETECTION exception boundary (thinned 80→28, K-wave 2 cone R3) | `gpuProbeReply` + `DetectVFIO` only: the ONE remaining core caller is `gpu_allocate.go`'s `bedGPUPrereqMissing` (reached via `host_build_check_bed_gpu_prereq.go`, documented M above) — the same operator-dropped exception family as the `gpu_allocate.go` row. The `DetectHostDevices`/`EnsureCDI` shims + `LogDetectedDevices` relocated to candy/plugin-deploy-pod (detect_devices.go) as peer `InvokeProvider(verb:gpu)` dispatches; the 3 embedded data tables + `deviceDescriptions` moved to candy/plugin-gpu / candy/plugin-doctor in the earlier partial dissolution. |
 | `host_build_feature.go` | 77 | R-RESIDUE (exit: not yet re-triaged post-W4) | feature HostBuild handler (ADE `charly feature` command) — the audit's K5 bucket, not yet individually re-triaged since W4's K5 sweep landed. (audit-prod-report.md) |
-| `host_build_retention_defaults.go` | 40 | R-RESIDUE (exit: not yet re-triaged post-W4) | retention defaults HostBuild handler — the audit's K5 bucket, not yet individually re-triaged since W4's K5 sweep landed. (audit-prod-report.md) |
 
 ## Clause key
 

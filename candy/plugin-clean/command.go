@@ -2,7 +2,6 @@ package clean
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -10,6 +9,7 @@ import (
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -19,17 +19,17 @@ import (
 // store-wide dangling-image purge, also called by `charly box build` / `charly check run` /
 // `charly box list tags` via verb:retention, the peer-adapter pattern verb:credential/verb:gpu/
 // verb:tunnel already use). The engine runs LOCALLY here — no wire hop for the plugin's own CLI.
-// The ONE thing this plugin genuinely cannot compute is the project's defaults.keep_images /
-// keep_check_runs (needs the core LoadConfig loader, K-wave migration inventory), fetched via the
-// small "retention-defaults" HostBuild seam. The pkg/arch makepkg sweep is a single-caller pure
-// file op done locally too. No hidden core-command forward.
+// The project's defaults.keep_images / keep_check_runs resolve PLUGIN-SIDE via the shared
+// sdk/loaderkit.ResolveRetentionDefaultsViaExecutor (K-wave 2 cone R6 — the "retention-defaults"
+// HostBuild seam is DELETED: the loader is plugin-reachable). The pkg/arch makepkg sweep is a
+// single-caller pure file op done locally too. No hidden core-command forward.
 //
 // clean is COMPILED-IN (charly.yml compiled_plugins): its Invoke(OpRun) runs in charly's process
 // and gets the in-proc reverse channel (provider_command_external.go dispatchInProcCommand
-// threads it), so HostBuild("retention-defaults") reaches the one host-coupled piece it still
-// needs. The out-of-process cliMain path has NO reverse channel, so --invalidate/images/check/deep
-// (which need the resolved keep-defaults) error there; runCleanCLI's own engine calls otherwise
-// work standalone (list/invalidate need no defaults).
+// threads it), so the loader resolve reaches the host loader legs. The out-of-process cliMain path
+// has NO reverse channel, so --invalidate/images/check/deep (which need the resolved keep-defaults)
+// error there; runCleanCLI's own engine calls otherwise work standalone (list/invalidate need no
+// defaults).
 
 // runCleanCLI parses the clean flags and drives the categories: --invalidate (targeted image-tag
 // invalidation), images (+ build-candy staging), check runs, the store-wide --deep purge, and the
@@ -70,7 +70,7 @@ func runCleanCLI(ctx context.Context, exec *sdk.Executor, args []string) error {
 	doImages, doCheck, doDeep, doMakepkg := cleanCategories(*images, *check, *deep)
 
 	if doImages || doCheck || doDeep {
-		keepImages, keepCheck, derr := fetchRetentionDefaults(ctx, exec, dir)
+		keepImages, keepCheck, derr := resolveRetentionDefaults(ctx, exec, dir)
 		if derr != nil {
 			return derr
 		}
@@ -143,31 +143,18 @@ func cleanCategories(images, check, deep bool) (doImages, doCheck, doDeep, doMak
 	return doImages, doCheck, doDeep, doMakepkg
 }
 
-// fetchRetentionDefaults asks the host to resolve defaults.keep_images/keep_check_runs via the
-// small "retention-defaults" HostBuild seam — the ONE thing the retention engine (retention.go)
-// genuinely cannot compute itself (it needs the core LoadConfig loader). exec is nil on the
-// out-of-process cliMain path (no reverse channel) → a clear error naming the compiled-in
-// requirement for the categories that need a resolved default.
-func fetchRetentionDefaults(ctx context.Context, exec *sdk.Executor, dir string) (keepImages, keepCheck int, err error) {
+// resolveRetentionDefaults resolves defaults.keep_images/keep_check_runs PLUGIN-SIDE via the
+// shared sdk/loaderkit.ResolveRetentionDefaultsViaExecutor (K-wave 2 cone R6 — the former
+// "retention-defaults" HostBuild seam is DELETED; the loader is plugin-reachable over the reverse
+// channel, so the retention engine's keep-defaults input no longer needs a host round-trip). exec
+// is nil on the out-of-process cliMain path (no reverse channel) → a clear error naming the
+// compiled-in requirement for the categories that need a resolved default.
+func resolveRetentionDefaults(ctx context.Context, exec *sdk.Executor, dir string) (keepImages, keepCheck int, err error) {
 	if exec == nil {
-		return 0, 0, fmt.Errorf("charly clean --images/--check/--deep requires compiled-in placement (the retention-defaults host seam is unavailable out-of-process)")
+		return 0, 0, fmt.Errorf("charly clean --images/--check/--deep requires compiled-in placement (the loader reverse channel is unavailable out-of-process)")
 	}
-	reqJSON, err := json.Marshal(spec.RetentionRequest{Dir: dir})
-	if err != nil {
-		return 0, 0, err
-	}
-	resJSON, err := exec.HostBuild(ctx, "retention-defaults", reqJSON)
-	if err != nil {
-		return 0, 0, err
-	}
-	var reply spec.RetentionReply
-	if uerr := json.Unmarshal(resJSON, &reply); uerr != nil {
-		return 0, 0, uerr
-	}
-	if reply.Error != "" {
-		return 0, 0, fmt.Errorf("%s", reply.Error)
-	}
-	return reply.KeepImages, reply.KeepCheckRuns, nil
+	keepImages, keepCheck = loaderkit.ResolveRetentionDefaultsViaExecutor(ctx, exec, dir)
+	return keepImages, keepCheck, nil
 }
 
 // cleanMakepkgArtifacts removes the one-time makepkg build leftovers under pkg/arch (src/, pkg/,

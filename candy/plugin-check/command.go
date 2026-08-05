@@ -15,10 +15,12 @@ import (
 // command.go — the command:check dispatch + the host-seam bridges. The plugin OWNS the `charly check`
 // CLI grammar (the CheckCmd kong tree) + the output formatting; the composite host-serving Mechanisms
 // it cannot perform (venue construction + OCI-label plan extraction + registry verb dispatch) stay in
-// core, reached over the remaining HostBuild seams (cli / retention-defaults / check-load-plugins /
+// core, reached over the remaining HostBuild seams (cli / check-load-plugins /
 // check-bed-gpu-prereq) + InvokeProvider peer dispatch — the former generic "check-run" HostBuild
 // seam is DELETED (K-wave 2 cone R4: every mode now dispatches to this plugin's OWN bodies, see
-// hostCheckRunCtx below). command:check is COMPILED-IN and dispatches exactly ONE `charly check …`
+// hostCheckRunCtx below), and the post-run prune's retention-defaults resolve moved plugin-side
+// (K-wave 2 cone R6, loaderkit.ResolveRetentionDefaultsViaExecutor). command:check is COMPILED-IN
+// and dispatches exactly ONE `charly check …`
 // invocation per process, so the reverse-channel executor is stashed in a package var at
 // Invoke(OpRun) entry (setCommandContext) — race-free single-command-per-process, mirroring
 // candy/plugin-vm.
@@ -177,27 +179,15 @@ func bedCliReq(ex *sdk.Executor, ctx context.Context, req spec.CliRequest) (spec
 // hostRetention runs the SHARED check-run prune engine, now owned by candy/plugin-clean
 // (K1-alpha core-minimization relocation — retention.go, reached via verb:retention). The
 // harness dispatcher defers a {Check:true, Dir} call so `.check/<name>/` is trimmed to
-// keep_check_runs after a run. This plugin (like plugin-clean's own CLI) cannot LoadConfig
-// itself, so it FIRST fetches the resolved defaults.keep_check_runs via the small
-// "retention-defaults" HostBuild seam (the ONE thing the retention engine genuinely cannot
-// compute), then reaches candy/plugin-clean's verb:retention over the PLUGIN↔PLUGIN
-// InvokeProvider peer-dispatch leg (F10) with the resolved count filled in. The plugin prints
-// the "Pruned N (keep_check_runs=K)" line from reply.CheckPaths/KeepCheckRuns.
+// keep_check_runs after a run. This plugin (like plugin-clean's own CLI) resolves the
+// defaults.keep_check_runs PLUGIN-SIDE via the shared
+// sdk/loaderkit.ResolveRetentionDefaultsViaExecutor (K-wave 2 cone R6 — the former
+// "retention-defaults" HostBuild seam is DELETED), then reaches candy/plugin-clean's
+// verb:retention over the PLUGIN↔PLUGIN InvokeProvider peer-dispatch leg (F10) with the
+// resolved count filled in. The plugin prints the "Pruned N (keep_check_runs=K)" line from
+// reply.CheckPaths/KeepCheckRuns.
 func hostRetention(ex *sdk.Executor, ctx context.Context, req spec.RetentionRequest) (spec.RetentionReply, error) {
-	defReqJSON, err := json.Marshal(spec.RetentionRequest{Dir: req.Dir})
-	if err != nil {
-		return spec.RetentionReply{}, err
-	}
-	defOut, err := ex.HostBuild(ctx, "retention-defaults", defReqJSON)
-	if err != nil {
-		return spec.RetentionReply{}, err
-	}
-	var defaults spec.RetentionReply
-	if err := json.Unmarshal(defOut, &defaults); err != nil {
-		return spec.RetentionReply{}, fmt.Errorf("retention-defaults: decode reply: %w", err)
-	}
-	req.KeepImages = defaults.KeepImages
-	req.KeepCheckRuns = defaults.KeepCheckRuns
+	req.KeepImages, req.KeepCheckRuns = loaderkit.ResolveRetentionDefaultsViaExecutor(ctx, ex, req.Dir)
 
 	reqJSON, err := json.Marshal(req)
 	if err != nil {

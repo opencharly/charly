@@ -43,8 +43,9 @@
 //     HostBuild("remote-image-resolve") seam clones/caches the source) when needed, computes the
 //     CalVer tag, holds the build-activity flock (reconstructed from kit primitives), INVOKES the peer
 //     compiled-in build:box word (candy/plugin-build's podman DRIVE) over InvokeProvider, and runs the
-//     post-build retention prune (verb:retention, keep_images off HostBuild("retention-defaults");
-//     skipped for --push). The host-coupled remainder a sdk-only candy cannot do — the remote-ref
+//     post-build retention prune (verb:retention, keep_images resolved plugin-side via
+//     loaderkit.ResolveRetentionDefaultsViaExecutor — K-wave 2 cone R6; skipped for --push). The
+//     host-coupled remainder a sdk-only candy cannot do — the remote-ref
 //     clone/cache (EnsureRepoDownloaded, K1), the build-engine RESOLVE legs, the bootstrap
 //     builder pre-pass — stays behind thin HostBuild seams the candy invokes.
 //

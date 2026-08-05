@@ -2,10 +2,11 @@
 // build-artifact retention/prune surface — AND (K1-alpha core-minimization) the SHARED retention
 // ENGINE itself (retention.go: image-tag / build-candy / check-run pruning + the --deep store-wide
 // dangling-image purge + the charly-labeled image-tag inventory). The plugin owns the flag
-// grammar, the category orchestration, the output, AND the engine; the ONE thing it genuinely
-// cannot compute is the project's defaults.keep_images/keep_check_runs (needs the core LoadConfig
-// loader), reached via the small "retention-defaults" HostBuild seam — the doctrine the vm + pod
-// deploy plugins established (own the work, call back only for the one core-coupled piece).
+// grammar, the category orchestration, the output, AND the engine. The project's
+// defaults.keep_images/keep_check_runs resolve PLUGIN-SIDE via the shared
+// sdk/loaderkit.ResolveRetentionDefaultsViaExecutor (K-wave 2 cone R6 — the former
+// "retention-defaults" HostBuild seam is DELETED: the loader is plugin-reachable over the reverse
+// channel).
 //
 // Two capabilities: command:clean (the CLI) and verb:retention (the engine, invoked by peer
 // plugins — candy/plugin-box's `box list tags`/post-build prune (listImageTags/pruneAfterBuild,
@@ -14,7 +15,7 @@
 // retention_plugin.go, the former core-side listCharlyImageTags caller, is DELETED). clean is
 // COMPILED-IN (charly.yml compiled_plugins): command:clean's Invoke(OpRun)
 // (provider.go) runs in charly's process and gets the in-proc reverse channel that
-// dispatchInProcCommand threads (Seam A), so HostBuild("retention-defaults") reaches the host. The
+// dispatchInProcCommand threads (Seam A), so the loader resolve reaches the host loader legs. The
 // out-of-process placement fork/execs the binary → CliMain, which has NO reverse channel, so the
 // categories needing a resolved keep-default (images/check/deep) error there; list/invalidate need
 // no default and work standalone. NewProvider()/NewMeta()/CliMain are the standard dual-mode
@@ -48,10 +49,10 @@ func NewMeta() pb.PluginMetaServer {
 }
 
 // CliMain is the out-of-process CLI entrypoint (only reached when clean is NOT compiled in). The
-// categories that need a resolved keep-default (images/check/deep) reach fetchRetentionDefaults'
-// HostBuild call, which is unavailable out-of-process and errors clearly there; list/invalidate
-// need no default and run standalone. The canonical placement is compiled-in (Invoke →
-// provider.go), where the reverse channel is threaded.
+// categories that need a resolved keep-default (images/check/deep) reach resolveRetentionDefaults'
+// loader resolve, which is unavailable out-of-process (no reverse channel) and errors clearly
+// there; list/invalidate need no default and run standalone. The canonical placement is
+// compiled-in (Invoke → provider.go), where the reverse channel is threaded.
 func CliMain(args []string) int {
 	if err := runCleanCLI(context.Background(), nil, args); err != nil {
 		fmt.Fprintln(os.Stderr, err)
