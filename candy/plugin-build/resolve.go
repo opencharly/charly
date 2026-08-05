@@ -23,8 +23,9 @@ import (
 //
 //   - the config LOAD               → loaderkit.LoadUnifiedViaExecutor(ctx, ex, dir)  [K1, landed;
 //                                     K3-W2 hoisted the per-candy LoaderExecutor copy into loaderkit]
-//   - the local candy SCAN          → HostBuild("buildengine-scan-local")  (bootstrap-delicate
-//                                     parseCandyYAML→buildCandy; the B bootstrap root STAYS core)
+//   - the local candy SCAN          → loaderkit.ProjectCandiesScanned, PLUGIN-SIDE (K-wave 2 cone
+//                                     R1 A2 unit 3 — the caller already holds the loaded uf, and
+//                                     the manifest parse relocated in unit 2)
 //   - the remote candy FETCH fixpt  → loaderkit.ScanCandyFromLocal(seams): the collect-refs + repo
 //                                     fetch legs run PLUGIN-SIDE (K-wave 2 cone R1 A2); only the
 //                                     per-candy remote manifest scan still round-trips
@@ -90,7 +91,7 @@ func resolveBuildEngine(ctx context.Context, ex *sdk.Executor, req spec.BuildReq
 	initCfg := loaderkit.ProjectInitConfig(uf, resolveInitLeg(ctx, ex))
 
 	// --- 3. SCAN candies: local (host leg) + remote fetch fixpoint (loaderkit + seam legs) ---
-	localScanned, err := scanLocalLeg(ctx, ex, rr)
+	localScanned, err := scanLocalLeg(ctx, ex, uf, dir, distroCfg)
 	if err != nil {
 		return spec.BuildResolveReply{Error: errString(err)}, nil
 	}

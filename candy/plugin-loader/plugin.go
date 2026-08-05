@@ -86,6 +86,13 @@ func (*provider) ParseCandyManifest(path string, t spec.Threaded, vocab spec.Can
 	return loaderkit.ParseCandyManifest(path, t, vocab)
 }
 
+// ProjectCandiesScanned implements spec.CandyScanner — the project's own candy scan off an
+// already-loaded *spec.UnifiedFile, delegating to the ONE copy in sdk/loaderkit (K-wave 2 cone R1,
+// A2 unit 3, relocated from charly/unified.go).
+func (*provider) ProjectCandiesScanned(uf *spec.UnifiedFile, rootDir string, parseDoc func(path string) (*spec.Candy, error)) (map[string]spec.ScannedCandy, error) {
+	return loaderkit.ProjectCandiesScanned(uf, rootDir, parseDoc)
+}
+
 // ScanCandyManifest implements spec.CandyScanner — the typed CANDY-SCAN the host calls once per
 // candy directory (compiled-in, no wire envelope): fs-probes + manifest parse + the derived-logic
 // construction (bake_plugin→require, package-section derivation, port normalization), delegating

@@ -72,7 +72,7 @@ func resolveProjectEnvelope(ctx context.Context, ex *sdk.Executor, req spec.Reso
 	// own scan (which hardcodes ExtraCandyRefs: nil, since build/generate never widens the scan),
 	// the deleted host projector DID thread ExtraCandyRefs through ScanAllCandyWithConfigOpts, so
 	// this must too (candy/plugin-installstep + plugin-bundle both rely on it for add_candy: refs).
-	localScanned, err := scanLocalLeg(ctx, ex, req)
+	localScanned, err := scanLocalLeg(ctx, ex, uf, dir, distroCfg)
 	if err != nil {
 		return spec.ResolvedProject{}, err
 	}

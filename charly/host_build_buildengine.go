@@ -22,16 +22,14 @@ import (
 // Class-generic action-noun kinds (never provider words — the F11 uniform-API gate), mirroring
 // host_build_loader_floor.go's loader-* legs one level up the stack.
 
-// hostBuildScanLocal runs the local candy scan host-side (RegisterBuildVocabulary is applied first so
-// parseCandyYAML classifies distro/format keys) and returns the UNFINALIZED ScannedCandy map. The
-// plugin runs the finalize + remote-fetch fixpoint (loaderkit.ScanCandyFromLocal).
-func hostBuildScanLocal(_ context.Context, req spec.ResolvedProjectRequest, _ buildEngineContext) (map[string]spec.ScannedCandy, error) {
-	dir := reqDirOrCwd(req.Dir)
-	if distroCfg, _, _, err := LoadDefaultBuildConfig(dir); err == nil && distroCfg != nil {
-		RegisterBuildVocabulary(distroCfg)
-	}
-	return scanLocalCandies(dir)
-}
+// The "buildengine-scan-local" leg is DELETED too (K-wave 2 cone R1, A2 unit 3). It ran
+// scanLocalCandies host-side — LoadUnified + ApplyDiscover + projectCandiesScanned — for a caller
+// that already HELD a loaded project: candy/plugin-build gets its *spec.UnifiedFile from
+// loaderkit.LoadUnifiedViaExecutor, whose walk runs `discover:` at each project boundary exactly as
+// the host pair did. The only piece the plugin still lacked was the scan BODY, which relocated to
+// loaderkit.ProjectCandiesScanned alongside the manifest parse unit 2 moved. So the leg was core
+// re-deriving an input its caller already had, in order to call a mechanism that no longer lives
+// here — an R-item on both counts.
 
 // The "buildengine-collect-remote-refs" and "buildengine-ensure-repo" legs are DELETED (K-wave 2
 // cone R1, A2). Both only CALLED a relocated mechanism on the plugin's behalf, which the
@@ -215,7 +213,6 @@ func reqDirOrCwd(dir string) string {
 
 // Register the buildengine-* legs at package-var init (before any init()).
 var _ = func() bool {
-	registerHostBuilder("buildengine-scan-local", typedHostBuilder("buildengine-scan-local", hostBuildScanLocal))
 	registerHostBuilder("buildengine-connect-plugins", typedHostBuilder("buildengine-connect-plugins", hostBuildConnectPlugins))
 	registerHostBuilder("buildengine-namespaced", typedHostBuilder("buildengine-namespaced", hostBuildNamespaced))
 	registerHostBuilder("buildengine-context-ignore-baseline", typedHostBuilder("buildengine-context-ignore-baseline", hostBuildContextIgnoreBaseline))

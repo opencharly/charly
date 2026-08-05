@@ -71,7 +71,7 @@ func resolveProjectEnvelopeTolerant(ctx context.Context, ex *sdk.Executor, req s
 
 	resReq := spec.ResolvedProjectRequest{Dir: dir, IncludeDisabled: req.IncludeDisabled}
 	layers := map[string]spec.CandyReader{}
-	localScanned, err := scanLocalLeg(ctx, ex, resReq)
+	localScanned, err := scanLocalLeg(ctx, ex, uf, dir, distroCfg)
 	if err != nil {
 		addDiag(err)
 	} else {

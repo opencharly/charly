@@ -23,7 +23,7 @@ import (
 //
 // Reuses the EXACT K1-loader seam infrastructure resolveBuildEngine (resolve.go) established: LOAD
 // via loaderkit.LoadUnifiedViaExecutor, local candy SCAN via the
-// buildengine-scan-local host leg + loaderkit.ScanCandyFromLocal, and distro VOCABULARY via
+// plugin-side scan-local + loaderkit.ScanCandyFromLocal, and distro VOCABULARY via
 // resolveDistroLeg's InvokeProvider(kind:distro) closure — no host registry callback dragged into
 // the plugin. deploykit.BuildLocalPkgOnHost / ResolveLocalPkgDir / CleanupBuiltPackageFiles are
 // already pure sdk (W3) and run here directly, same as the former core Run did.
@@ -64,7 +64,7 @@ func runBoxPkg(ctx context.Context, ex *sdk.Executor, req spec.BuildPkgRequest) 
 
 	// --- SCAN candies: local (host leg) + remote fetch fixpoint (mirrors resolveBuildEngine step 3) ---
 	rr := spec.ResolvedProjectRequest{Dir: dir}
-	localScanned, err := scanLocalLeg(ctx, ex, rr)
+	localScanned, err := scanLocalLeg(ctx, ex, uf, dir, distroCfg)
 	if err != nil {
 		return nil, err
 	}

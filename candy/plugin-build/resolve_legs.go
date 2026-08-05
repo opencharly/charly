@@ -106,14 +106,22 @@ func resolveResourceLeg(ctx context.Context, ex *sdk.Executor) func(json.RawMess
 
 // --- scan legs ---
 
-// scanLocalLeg runs the bootstrap-delicate local candy scan (parseCandyYAML→buildCandy) host-side and
-// returns the unfinalized ScannedCandy map (the plugin runs the finalize + remote fetch fixpoint).
-func scanLocalLeg(ctx context.Context, ex *sdk.Executor, rr spec.ResolvedProjectRequest) (map[string]spec.ScannedCandy, error) {
-	var out map[string]spec.ScannedCandy
-	if err := hostBuildJSON(ctx, ex, "buildengine-scan-local", rr, &out); err != nil {
-		return nil, err
-	}
-	return out, nil
+// scanLocalLeg scans the project's OWN candies into their unfinalized ScannedCandy form (the plugin
+// runs the finalize + remote fetch fixpoint over the result). It runs PLUGIN-SIDE over
+// loaderkit.ProjectCandiesScanned since K-wave 2 cone R1 (A2 unit 3); the `buildengine-scan-local`
+// host leg is DELETED.
+//
+// The leg existed because the scan's manifest parse appeared to need charly's clause-B buildCandy
+// factory — disproven by the unit-2 corpus spike — and because only the host held a loaded project.
+// Neither holds now: the caller already has `uf` from loaderkit.LoadUnifiedViaExecutor, whose walk
+// runs `discover:` at each project boundary exactly as the host's own LoadUnified + ApplyDiscover
+// pair did, so uf.Candy carries the discovered candies before this is called.
+//
+// The host leg's project-less fallback (legacyScanCandiesDirScanned, for a dir with no charly.yml)
+// has no plugin-side analogue and needs none: every caller returns the empty-project envelope before
+// reaching here when LoadUnifiedViaExecutor reports no project.
+func scanLocalLeg(ctx context.Context, ex *sdk.Executor, uf *spec.UnifiedFile, dir string, distroCfg *spec.DistroConfig) (map[string]spec.ScannedCandy, error) {
+	return loaderkit.ProjectCandiesScanned(uf, dir, parseCandyManifestLeg(ctx, ex, distroCfg))
 }
 
 // scanSeamsLeg wires the ScanSeams legs the plugin's loaderkit.ScanCandyFromLocal fetch fixpoint

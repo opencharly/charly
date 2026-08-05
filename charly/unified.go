@@ -277,53 +277,5 @@ func ProjectCandies(uf *spec.UnifiedFile, rootDir string) (map[string]spec.Candy
 // take their DECLARING FILE's directory as SourceDir — rootDir here, or the namespace sub-file's
 // dir when one declares them (host_build_buildengine.go); see ScanInlineCandy's own contract.
 func projectCandiesScanned(uf *spec.UnifiedFile, rootDir string) (map[string]spec.ScannedCandy, error) {
-	out := map[string]spec.ScannedCandy{}
-	for name, raw := range uf.Candy {
-		il, ok := spec.DecodeInlineCandy(raw)
-		if !ok {
-			continue
-		}
-		if il.From != "" {
-			// Directory-based candy — reuse existing scanner.
-			p := il.From
-			if !filepath.IsAbs(p) {
-				p = filepath.Join(rootDir, p)
-			}
-			manifest := il.Manifest
-			if manifest == "" {
-				manifest = spec.UnifiedFileName
-			}
-			m, v, refs, err := requireCandyScanner().ScanCandyManifest(p, name, manifest, parseCandyYAML)
-			if err != nil {
-				return nil, fmt.Errorf("candy %q from %q: %w", name, il.From, err)
-			}
-			// Candies discovered via `include:` of a remote charly.yml
-			// live OUTSIDE the workspace's project tree (typically in
-			// the github cache under ~/.cache/charly/repos/). Mark them as
-			// Remote so the build's host-fs prep (candy/plugin-build's
-			// createRemoteCandyCopies) stages
-			// them into .build/_candy/ and the emitted Containerfile
-			// COPY paths resolve correctly. THIRD instance of the
-			// construct-then-mutate-Remote pattern (W9 mutation-site inventory) —
-			// distinct from loaderkit.ScanRemoteCandy's explicit-fetch case and
-			// loaderkit.QualifyRemoteSiblingDeps's sibling-dep qualification: this
-			// one fires on a plain `from:`-directory candy whose resolved path
-			// happens to fall outside the project root.
-			if absRoot, err := filepath.Abs(rootDir); err == nil {
-				if absCandy, err := filepath.Abs(p); err == nil {
-					if rel, err := filepath.Rel(absRoot, absCandy); err == nil && strings.HasPrefix(rel, "..") {
-						v.Remote = true
-					}
-				}
-			}
-			out[name] = spec.ScannedCandy{Model: m, View: v, Refs: refs}
-			continue
-		}
-		// Inline candy — synthesize. Always LOCAL (declared directly in this
-		// charly.yml), so no remote-sibling qualification is needed — mirrors the
-		// W9 spike's local-candy case.
-		m, v, refs := requireCandyScanner().ScanInlineCandy(name, rootDir, &il.CandyYAML)
-		out[name] = spec.ScannedCandy{Model: m, View: v, Refs: refs}
-	}
-	return out, nil
+	return requireCandyScanner().ProjectCandiesScanned(uf, rootDir, parseCandyYAML)
 }
