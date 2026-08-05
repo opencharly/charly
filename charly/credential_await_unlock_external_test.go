@@ -87,19 +87,16 @@ func TestCredentialAwaitUnlock_ExternalEndToEnd(t *testing.T) {
 	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	cfgYAML := "vnc_passwords:\n  charly/enc/" + boxName + ": " + secret + "\n"
+	cfgYAML := "secret_backend: config\nvnc_passwords:\n  charly/enc/" + boxName + ": " + secret + "\n"
 	if err := os.WriteFile(filepath.Join(cfgDir, "config.yml"), []byte(cfgYAML), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
 	// 4. Point the host AND the inherited-env plugin subprocess at the staged plugin + config,
-	//    and make the keyring genuinely unreachable so the `auto` probe falls back to the config
-	//    file. `secret_backend: config` used to pin that directly; the backend was removed, so
-	//    the test now arranges the condition a keyring-less host actually has — an unreachable
-	//    session bus — which is also what the plugin subprocess inherits. t.Setenv restores.
+	//    and force the config backend (no Secret Service in the test env). t.Setenv restores.
 	t.Setenv("CHARLY_PLUGIN_DIR", pluginDir)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Dir(cfgDir))
-	t.Setenv("DBUS_SESSION_BUS_ADDRESS", "unix:path=/nonexistent-charly-await-unlock-test-bus")
+	t.Setenv("CHARLY_SECRET_BACKEND", "config")
 
 	// Snapshot/restore the process-global baked map and tear down the spawned subprocess.
 	prev := make(map[string]string, len(bakedPluginBinaries))

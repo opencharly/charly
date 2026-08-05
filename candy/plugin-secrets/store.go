@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"os"
 	"sync"
-
-	"github.com/opencharly/sdk/kit"
 )
 
 // store.go is the credential-store backend SELECTION + the store-chain resolution, ported out
@@ -44,24 +42,27 @@ func resetDefaultCredentialStore() {
 // keyring once when backend is "auto". Ported verbatim from the core's DefaultCredentialStore.
 func DefaultCredentialStore() CredentialStore {
 	defaultStoreOnce.Do(func() {
-		switch resolveSecretBackend() {
-		case kit.SecretBackendKeyring:
+		backend := resolveSecretBackend()
+		switch backend {
+		case "keyring":
 			store := &KeyringStore{}
 			if err := store.Probe(); err != nil {
 				if GetKeyringState() == KeyringLocked {
 					fmt.Fprintf(os.Stderr, "WARNING: System keyring is locked. Credentials are unavailable until unlocked.\n")
-					fmt.Fprintf(os.Stderr, "  Unlock your keyring to make them available.\n")
+					fmt.Fprintf(os.Stderr, "  Unlock your keyring, or switch backend: charly config set secret_backend config\n")
 					defaultStoreVal = store
 				} else {
 					fmt.Fprintf(os.Stderr, "ERROR: secret_backend is 'keyring' but system keyring is not available: %v\n", err)
-					fmt.Fprintf(os.Stderr, "Falling back to config file. Fix the keyring, or run: charly settings set secret_backend %s\n", kit.SecretBackendAuto)
+					fmt.Fprintf(os.Stderr, "Falling back to config file. Fix the keyring or run: charly config set secret_backend config\n")
 					defaultStoreVal = &ConfigFileStore{}
 					defaultStoreProbeErr = err
 				}
 				return
 			}
 			defaultStoreVal = store
-		default: // kit.SecretBackendAuto — the only other value NormalizeSecretBackend returns
+		case "config":
+			defaultStoreVal = &ConfigFileStore{}
+		default: // "auto" or ""
 			store := &KeyringStore{}
 			if err := store.Probe(); err == nil {
 				defaultStoreVal = store
@@ -71,7 +72,7 @@ func DefaultCredentialStore() CredentialStore {
 			}
 			if GetKeyringState() == KeyringLocked {
 				fmt.Fprintf(os.Stderr, "WARNING: System keyring is locked. Using config file for credentials.\n")
-				fmt.Fprintf(os.Stderr, "  Unlock your keyring to use it instead.\n")
+				fmt.Fprintf(os.Stderr, "  Unlock your keyring, or run: charly config set secret_backend config\n")
 			}
 			defaultStoreVal = &ConfigFileStore{}
 		}
@@ -89,10 +90,14 @@ func PrintStoreInfo() {
 			// Warning already printed by DefaultCredentialStore()
 		case "keyring":
 			fmt.Fprintf(os.Stderr, "Using system keyring for credential storage.\n")
-			fmt.Fprintf(os.Stderr, "To require it (and fail rather than fall back): charly settings set secret_backend %s\n", kit.SecretBackendKeyring)
+			fmt.Fprintf(os.Stderr, "To force a specific backend: charly config set secret_backend keyring|config\n")
 		case "config":
+			if resolveSecretBackend() == "config" {
+				return
+			}
 			fmt.Fprintf(os.Stderr, "System keyring not available (no D-Bus session bus).\n")
 			fmt.Fprintf(os.Stderr, "Credentials will be stored in ~/.config/charly/config.yml (permissions: 0600).\n")
+			fmt.Fprintf(os.Stderr, "To suppress this message: charly config set secret_backend config\n")
 			fmt.Fprintf(os.Stderr, "For Secret Service storage, run a keyring provider (gnome-keyring, kwalletd, KeePassXC with FdoSecrets).\n")
 		}
 	})
@@ -129,17 +134,16 @@ func resolveStoreChain(service, key string) (value, source string) {
 
 // resolveSecretBackend reads the secret_backend setting from env or config (the plugin's copy of
 // the core config reader — used for the store selection above and the doctor health report).
-//
-// Every return goes through kit.NormalizeSecretBackend, so a removed backend cannot re-enter
-// through a config file written before its removal or through CHARLY_SECRET_BACKEND. The
-// settings validator rejects it at the setter; this is the other half.
 func resolveSecretBackend() string {
 	if v := os.Getenv("CHARLY_SECRET_BACKEND"); v != "" {
-		return kit.NormalizeSecretBackend(v)
+		return v
 	}
 	cfg, err := LoadRuntimeConfig()
 	if err != nil {
-		return kit.SecretBackendAuto
+		return "auto"
 	}
-	return kit.NormalizeSecretBackend(cfg.SecretBackend)
+	if cfg.SecretBackend != "" {
+		return cfg.SecretBackend
+	}
+	return "auto"
 }

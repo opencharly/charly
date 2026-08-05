@@ -890,14 +890,16 @@ func secretStorageChecks(reply spec.HostProbeReply) []DoctorCheckResult {
 			Status:      CheckWarning,
 			Version:     "system keyring (LOCKED)",
 			Detail:      "keyring is locked — credentials unavailable until unlocked",
-			InstallHint: "Unlock your keyring to make stored credentials available",
+			InstallHint: "Unlock your keyring, or run: charly settings set secret_backend config",
 		})
+	case h.ConfiguredBackend == "config":
+		checks = append(checks, DoctorCheckResult{Name: "Secret backend", Status: CheckOK, Version: "config file (explicit)"})
 	default:
 		checks = append(checks, DoctorCheckResult{
 			Name:        "Secret backend",
 			Status:      CheckWarning,
 			Detail:      "config file (no keyring available)",
-			InstallHint: "Install gnome-keyring or keepassxc for secure credential storage",
+			InstallHint: "Install gnome-keyring or keepassxc for secure credential storage, or run: charly settings set secret_backend config",
 		})
 	}
 

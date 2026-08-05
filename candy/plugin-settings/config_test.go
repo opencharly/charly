@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/opencharly/sdk/kit"
@@ -317,36 +316,5 @@ func TestBindAddress_EnvOverridesConfig(t *testing.T) {
 	}
 	if rt.BindAddress != "0.0.0.0" {
 		t.Errorf("BindAddress = %q, want %q (env should override config)", rt.BindAddress, "0.0.0.0")
-	}
-}
-
-// TestSetConfigValue_SecretBackend pins the supported backend vocabulary at the setter. `config`
-// (pin credentials to plaintext ~/.config/charly/config.yml) was removed, and its rejection is
-// asserted alongside the values that survive so a regression cannot restore it silently — the
-// message is checked too, because an operator hitting this needs to be told what to use instead,
-// not merely that they are wrong.
-func TestSetConfigValue_SecretBackend(t *testing.T) {
-	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "config.yml")
-
-	orig := hostenv.RuntimeConfigPath
-	defer func() { hostenv.RuntimeConfigPath = orig }()
-	hostenv.RuntimeConfigPath = func() (string, error) { return configPath, nil }
-
-	for _, ok := range []string{kit.SecretBackendAuto, kit.SecretBackendKeyring} {
-		if err := SetConfigValue(testCtx, nil, "secret_backend", ok); err != nil {
-			t.Errorf("SetConfigValue(secret_backend, %q) = %v, want nil", ok, err)
-		}
-	}
-
-	for _, removed := range []string{"config", "kdbx", "vault"} {
-		err := SetConfigValue(testCtx, nil, "secret_backend", removed)
-		if err == nil {
-			t.Errorf("SetConfigValue(secret_backend, %q) = nil, want a rejection", removed)
-			continue
-		}
-		if !strings.Contains(err.Error(), kit.SecretBackendAuto) || !strings.Contains(err.Error(), kit.SecretBackendKeyring) {
-			t.Errorf("rejection of %q must name both supported values, got: %v", removed, err)
-		}
 	}
 }

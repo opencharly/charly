@@ -259,13 +259,10 @@ func SetConfigValue(ctx context.Context, exec *sdk.Executor, key, value string) 
 		// Any non-empty path is valid
 	case "secret_backend":
 		if value == "kdbx" {
-			return fmt.Errorf("secret_backend \"kdbx\" was removed; the direct KeePass .kdbx backend is gone. Use \"auto\" or \"keyring\" (KeePassXC still works via Secret Service / the keyring backend)")
+			return fmt.Errorf("secret_backend \"kdbx\" was removed; the direct KeePass .kdbx backend is gone. Use \"auto\", \"keyring\", or \"config\" (KeePassXC still works via Secret Service / the keyring backend)")
 		}
-		if value == "config" {
-			return fmt.Errorf("secret_backend \"config\" was removed; charly no longer pins credentials to plaintext ~/.config/charly/config.yml. Use \"auto\" (system keyring, falling back to the config file when no keyring is present) or \"keyring\" (keyring only)")
-		}
-		if value != kit.SecretBackendAuto && value != kit.SecretBackendKeyring {
-			return fmt.Errorf("secret_backend must be %q or %q, got %q", kit.SecretBackendAuto, kit.SecretBackendKeyring, value)
+		if value != "auto" && value != "keyring" && value != "config" {
+			return fmt.Errorf("secret_backend must be \"auto\", \"keyring\", or \"config\", got %q", value)
 		}
 	case "forward_gpg_agent":
 		if value != "true" && value != "false" {

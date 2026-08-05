@@ -160,21 +160,20 @@ func pluginResetCredentialStore() {
 	_, _ = pluginCredentialCall(credentialInput{Method: "reset"})
 }
 
-// pluginResolveSecretBackend resolves the secret_backend setting for the enc-mount diagnostics —
-// pure env + sdk/kit config read, zero host coupling.
-//
-// It normalizes through the SAME kit helper candy/plugin-secrets' resolveSecretBackend uses, so
-// the backend this reports and the backend that selects the store cannot diverge, and a removed
-// value cannot arrive here from a pre-removal config file or CHARLY_SECRET_BACKEND.
+// pluginResolveSecretBackend mirrors charly/credential_plugin.go's resolveSecretBackend — pure
+// env + sdk/kit config read, zero host coupling, portable verbatim.
 func pluginResolveSecretBackend() string {
 	if v := os.Getenv("CHARLY_SECRET_BACKEND"); v != "" {
-		return kit.NormalizeSecretBackend(v)
+		return v
 	}
 	cfg, err := kit.LoadRuntimeConfig()
 	if err != nil {
-		return kit.SecretBackendAuto
+		return "auto"
 	}
-	return kit.NormalizeSecretBackend(cfg.SecretBackend)
+	if cfg.SecretBackend != "" {
+		return cfg.SecretBackend
+	}
+	return "auto"
 }
 
 // pluginEncExec dispatches verb:enc's OpExecute over the stashed reverse-channel executor. Every

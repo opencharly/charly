@@ -27,7 +27,7 @@ type credentialReply struct {
 // Secret Service, so it does the probe). Byte-compatible with the core credentialHealth.
 type credentialHealth struct {
 	BackendName       string   `json:"backend_name"`       // active store Name(): "keyring" | "keyring (locked)" | "config"
-	ConfiguredBackend string   `json:"configured_backend"` // resolveSecretBackend(): "auto" | "keyring"
+	ConfiguredBackend string   `json:"configured_backend"` // resolveSecretBackend(): "auto" | "keyring" | "config"
 	KeyringAvailable  bool     `json:"keyring_available"`
 	KeyringLocked     bool     `json:"keyring_locked"`
 	PlaintextCount    int      `json:"plaintext_count"`
