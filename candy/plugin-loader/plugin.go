@@ -51,13 +51,16 @@ func NewMeta() pb.PluginMetaServer {
 	}, nil)
 }
 
-type provider struct{ pb.UnimplementedProviderServer }
-
-// ParseDoc implements spec.DocParser — the typed per-document parse the host calls for every
-// config document (compiled-in, no wire envelope). The default charly node-form parse, delegating
-// to the ONE copy in sdk/loaderkit.
-func (*provider) ParseDoc(doc *yaml.Node, t spec.Threaded) (map[string]*yaml.Node, spec.ParsedProject, error) {
-	return loaderkit.ParseDoc(doc, t)
+// provider embeds loaderkit.DocParser, so ParseDoc — the typed per-document parse the host calls
+// for every config document (compiled-in, no wire envelope) — is the PROMOTED method of the ONE
+// shared adapter in sdk/loaderkit (doc_parser.go). The hand-written forward that used to live here
+// was the ONLY binding between spec.DocParser and loaderkit.ParseDoc, which left a second consumer
+// (candy/plugin-box's CUE-conformance validate rules, folded in by K-wave 2 cone R1) no way to
+// reach the default parse without duplicating the adapter in its own module; exporting it beside
+// its mechanism keeps exactly one copy (R3).
+type provider struct {
+	pb.UnimplementedProviderServer
+	loaderkit.DocParser
 }
 
 // WalkProject implements spec.ProjectWalker — the typed whole-project WALK the host calls once

@@ -2,326 +2,89 @@ package main
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"os"
-	"strings"
 
-	"github.com/opencharly/spec/ops"
 	"github.com/opencharly/spec/spec"
 )
 
-// validate_project_host.go — the HOST side of the `charly box validate` engine relocation (task #60,
-// Unit B). The validate ENGINE moves to the compiled-in candy/plugin-box, which runs the pure
-// per-kind/op rules over the resolved-project envelope + re-runs the resolution-graph checks via
-// sdk/deploykit.
+// validate_project_host.go — the REGISTRY-D half of `charly box validate`, and the only half left
+// in the kernel.
 //
-// #55 step3 unit 3-I relocated reason 1 below (the error-TOLERANT resolved-project projection)
-// onto build:project's ops.OpValidate leg (candy/plugin-build/resolve_project_tolerant.go) — proven
-// portable by 3b's SAME-shaped fail-fast relocation. What STAYS host is reason 2, which a plugin
-// structurally still cannot do:
+// The validate ENGINE lives in the compiled-in candy/plugin-box, which fetches the error-tolerant
+// resolved-project envelope from candy/plugin-build's `build:project` word (ops.OpValidate) and runs
+// every rule over it. Until K-wave 2 cone R1 unit B this file ALSO served a fat
+// `validate-project-checks` HostBuild seam that RE-LOADED the project host-side (LoadConfig +
+// ScanAllCandyWithConfigOpts + LoadUnified + ApplyDiscover) purely so the host could run three
+// validators — the CUE-schema conformance pair and the remote-candy check — over data the plugin
+// already held. That was the boundary law's named RE-DERIVATION pattern: the host re-deriving
+// project data the plugin owns.
 //
-//   2. the host-natural checks that need the RAW authored config a projection does not carry: the
-//      CUE-schema conformance trio (manifest bytes + the cue library) + the build-tunable / merge
-//      rules (defaults + per-box tunables dropped from the envelope) + the box base⊻from XOR (raw
-//      pre-resolve base/from, which the tolerant-skipped envelope cannot carry) + the
-//      registry-derived D-data (ProviderCapabilities/ActCapableVerbs — providerRegistry is a
-//      genuine kernel M-mechanism per the boundary law).
+// The justification for it ("those validators need the HOST's spliced cross-plugin CUE schema, a
+// live non-marshalable cue.Value graph") was REFUTED — every CUE entry point they call is a FREE
+// FUNCTION in sdk/loaderkit, which has owned its own compiled schema since cone R1 ruling 1, and
+// the ProjectLoader methods the host called were bare forwards to exactly those functions. So all
+// three validators folded into candy/plugin-box (validate_schema_rules.go), which already imports
+// loaderkit, and charly/validate.go is DELETED.
 //
-// This now rides back over the SLIMMED `validate-project-checks` HostBuild seam (renamed from
-// `validate-project`, #46) as a spec.ValidateProjectReply{Project (D-data fields ONLY),
-// Diagnostics}. candy/plugin-box's runValidateEngine calls BOTH build:project(ops.OpValidate) (its own
-// tolerant envelope + resolve-diagnostics) AND this leg (host-natural diagnostics + D-data),
-// merges them onto one envelope, then runs its own pure-rule + graph findings for the verdict.
+// What genuinely cannot follow them is the provider REGISTRY — a kernel M-mechanism. So this file
+// keeps one seam whose entire job is to answer registry questions: the plugin enumerates the words
+// from its OWN envelope and sends them; the host reports which are act-capable, plus the full
+// compiled-in capability set. No load, no scan, no host-side diagnostics, no project data crossing
+// the wire in either direction.
 
-// validateProjectChecksBuilderKind is the F11 hostBuilders key — a generic action noun, never a
-// provider word. Renamed from "validate-project" (#55 step3 unit 3-I) now that this leg serves
-// ONLY the host-natural-checks half; the tolerant envelope projection moved to build:project.
-const validateProjectChecksBuilderKind = "validate-project-checks"
+// validateWordSetsBuilderKind is the F11 hostBuilders key — a generic action noun, never a provider
+// word. It replaces "validate-project-checks" (itself renamed from "validate-project"), whose
+// remaining non-registry work moved into the plugin.
+const validateWordSetsBuilderKind = "validate-word-sets"
 
-// diagSeverityError is the spec.Diagnostic severity for a hard validation error (empty defaults to
-// error per the wire contract, but the plugin's HasErrors() classifies non-"warning" as error, so we
-// stamp it explicitly). Shared by loadProjectForResolve's tolerant load-error branch and
-// runHostNaturalValidateChecks.
-const diagSeverityError = "error"
-
-// loadedProject bundles the raw loaded pieces the two project builders (fail-fast + tolerant) share:
-// the config, the scanned candies, the discovered unified file, the build vocabulary, and the schema
-// version. empty marks a project-less directory (ErrNoCharlyYml → the empty-project contract).
-// builderCfg is NOT carried (K3-W2, task #13): its sole reader, validateBuilderRefs, relocated to
-// candy/plugin-box, which self-loads its OWN *spec.BuilderConfig via spec.ProjectBuilderConfig(uf) —
-// no host round-trip.
-type loadedProject struct {
-	cfg       *spec.Config
-	layers    map[string]spec.CandyReader
-	uf        *spec.UnifiedFile // nil when absent or its load/discover errored
-	distroCfg *spec.DistroConfig
-	initCfg   *spec.InitConfig
-	version   string
-	empty     bool
-}
-
-// loadProjectForResolve is the load path hostBuildValidateProjectChecks drives (diags!=nil,
-// TOLERANT — feeding the host-natural checks below, #55 step3 unit 3-I). It is now that leg's SOLE
-// caller: the FAIL-FAST twin (the `buildengine-namespaced` leg's namespaced-box resolve) went away
-// with that leg in K-wave 2 cone R1 A2 unit 3b, so the diags==nil branch below has no production
-// caller left and dies with this function in the validate unit that follows. When diags is nil it is
-// FAIL-FAST: any
-// LoadConfig/Scan/LoadUnified/ApplyDiscover error aborts with that error. When diags is non-nil it is
-// ERROR-TOLERANT: each such error becomes a spec.Diagnostic and the load continues best-effort (no
-// config → empty; a scan failure → zero candies; a unified-load failure → no deploy/template fill), so
-// the host-natural checks still run on a broken project. The build vocabulary is registered (so
-// ResolveBox resolves distro/builder) exactly as before.
-func loadProjectForResolve(dir string, opts spec.ResolveOpts, diags *spec.Diagnostics) (*loadedProject, error) {
-	lp := &loadedProject{layers: map[string]spec.CandyReader{}}
-
-	cfg, err := LoadConfig(dir)
-	if errors.Is(err, ErrNoCharlyYml) {
-		// A project-less directory resolves to an EMPTY project, not an error — the same contract
-		// `charly box list boxes` has always honoured (the charly-mcp box.list.boxes tool runs in
-		// CHARLY_PROJECT_DIR before any charly.yml exists, so it must exit 0 empty).
-		lp.empty = true
-		return lp, nil
-	}
-	if err != nil {
-		if diags == nil {
-			return nil, err
-		}
-		addLoadDiag(diags, err)
-		lp.empty = true // no config to project or check
-		return lp, nil
-	}
-	lp.cfg = cfg
-
-	// The build vocabulary is BOTH registered (so ResolveBox resolves distro/builder) AND projected
-	// into the envelope's distro/init members (the validate consumer; builderCfg is not carried, see
-	// loadedProject's own doc comment).
-	lp.distroCfg, _, lp.initCfg, _ = LoadDefaultBuildConfig(dir)
-	if lp.distroCfg != nil {
-		RegisterBuildVocabulary(lp.distroCfg)
-	}
-
-	// InitCfg threads the init-system host-completion pass into the scan pipeline —
-	// mirrors the SAME opts.InitCfg = defaultInitCfg pattern the deleted NewGenerator
-	// used (#55 step3 3-II; the real build/generate drive threads it plugin-side now,
-	// candy/plugin-build/resolve.go). A
-	// spec.CandyReader is read-only once wrapped, so InitSystems must be populated
-	// before ScanAllCandyWithConfigOpts wraps each candy. Required since #67: this
-	// scan's output (lp.layers) feeds rp.Candies/rp.CandyModels — the wire envelope
-	// plugin-build's Generator consumes for its own per-candy HasInit() lookups
-	// during Containerfile emission (EmitInitFragmentStages).
-	opts.InitCfg = lp.initCfg
-
-	layers, err := ScanAllCandyWithConfigOpts(dir, cfg, opts)
-	if err != nil {
-		if diags == nil {
-			return nil, err
-		}
-		addLoadDiag(diags, err)
-	} else {
-		lp.layers = layers
-	}
-
-	uf, present, uerr := LoadUnified(dir)
-	if uerr != nil {
-		if diags == nil {
-			return nil, uerr
-		}
-		addLoadDiag(diags, uerr)
-	} else if present {
-		if derr := ApplyDiscover(uf, dir); derr != nil {
-			if diags == nil {
-				return nil, derr
-			}
-			addLoadDiag(diags, derr)
-		} else {
-			lp.uf = uf
-			lp.version = uf.Version
-		}
-	}
-	return lp, nil
-}
-
-// addLoadDiag appends a load/resolve failure as an error-severity spec.Diagnostic. The Message is the
-// raw error string (no extra wrapping) so a validate verdict on a project that fails to load surfaces
-// the SAME text the former fail-fast `charly box validate` printed (behavior parity).
-func addLoadDiag(diags *spec.Diagnostics, err error) {
-	diags.Items = append(diags.Items, spec.Diagnostic{Severity: diagSeverityError, Message: err.Error()})
-}
-
-// runHostNaturalValidateChecks runs the validation rules that a plugin structurally CANNOT over the
-// loaded project, appending each finding as an error-severity spec.Diagnostic. SLIMMED (K3-W2, task
-// #13): validateBuildAndDistro / validateBoxBaseFrom / validateMergeConfig / validateBuildTunables /
-// validateBuilderRefs relocated to candy/plugin-box (pure over raw config, no host coupling at all —
-// the plugin self-loads via the hoisted loaderkit witness). What genuinely remains:
-//   - the CUE-schema conformance pair (validateCandyCUESchemas / validateProjectCUESchemas — needs
-//     the on-disk manifest bytes + the HOST's spliced cross-plugin cue.Value schema, a live
-//     non-marshalable object; the modern per-kind LOAD-time plugin gate now covers what the former
-//     validateVocabularyCollections did for non-box kinds — dead-code-radical-removal-batch deletion,
-//     c9befd83 already cut its production call site);
-//   - validateRemoteCandies (the CollectRemoteRefs version-conflict resolver reads raw (repo,version)
-//     ref data via spec.RefsCollectSeams — registry-coupled host callbacks with no existing
-//     executor-backed bridge yet; an IOU, see charly/KERNEL_MANIFEST.md).
+// hostBuildValidateWordSets answers the two REGISTRY-derived D-data word sets candy/plugin-box's
+// validate rules consume as membership sets, over the inventory the plugin supplies:
 //
-// Both are KIND-BLIND with ONE tracked exception the orchestrator reviews at tree-final: the
-// hardcoded collection-kind WORD LIST inside validateProjectCUESchemas (a legacy root-shape arm; task
-// #60 CONDITION 1 — restructure to the loader's kind→def D-data or delete the dead legacy path).
-func runHostNaturalValidateChecks(lp *loadedProject, dir string, opts spec.ResolveOpts, diags *spec.Diagnostics) {
-	if lp == nil || lp.cfg == nil {
-		return
-	}
-	errs := &spec.ValidationError{}
-	validateCandyCUESchemas(lp.layers, errs)
-	validateProjectCUESchemas(lp.cfg, dir, opts, errs)
-	validateRemoteCandies(lp.cfg, lp.layers, errs)
-	for _, e := range errs.Errors {
-		diags.Items = append(diags.Items, spec.Diagnostic{Severity: diagSeverityError, Message: e})
-	}
-}
-
-// hostBuildValidateProjectChecks is the "validate-project-checks" host-builder (#55 step3 unit
-// 3-I) — the SLIMMED remainder of the former "validate-project" seam (#46) after the TOLERANT
-// resolved-project projection relocated onto build:project's ops.OpValidate leg
-// (candy/plugin-build/resolve_project_tolerant.go, which reuses 3b's proven-portable loaderkit
-// primitives instead of this host's LoadConfig/ScanAllCandyWithConfigOpts). This leg's OWN
-// tolerant load (loadProjectForResolve — of which this is now the SOLE caller; the "also used by
-// build_overlay.go's fail-fast call" this line used to claim was already stale, and the last real
-// fail-fast caller, the deleted `buildengine-namespaced` leg, is gone as of A2 unit 3b)
-// exists ONLY to feed the host-natural checks + the registry D-data below with the RAW
-// *Config/*spec.DistroConfig/*BuilderConfig a projected envelope does not carry — it no
-// longer projects an envelope itself (projectResolvedProject/buildResolvedProjectTolerant,
-// DELETED). Returns a spec.ValidateProjectReply whose Project carries ONLY
-// ProviderCapabilities/ActCapableVerbs; candy/plugin-box's runValidateEngine calls THIS leg
-// alongside build:project(ops.OpValidate) and merges both replies' Diagnostics + this reply's D-data
-// onto the plugin's own tolerant envelope before running its pure/graph rules.
-func hostBuildValidateProjectChecks(_ context.Context, req spec.ValidateProjectRequest, _ buildEngineContext) (spec.ValidateProjectReply, error) {
-	dir := req.Dir
-	if dir == "" {
-		d, err := os.Getwd()
-		if err != nil {
-			return spec.ValidateProjectReply{}, err
+//   - ProviderCapabilities — every compiled-in provider as "<class>:<word>". validatePluginCandy
+//     checks each `source: builtin` candy's declared providers against it.
+//   - ActCapableVerbs — the subset of req.PluginWords whose act form has a build/deploy install
+//     path, computed by running the SAME opActsInBuildDeploy the core validator used (so builtin
+//     ProvisionActor / TypedStep / BuildEmitter rejection is preserved byte-for-byte).
+//
+// req.ExternalProviders carries the `plugin.providers:` capability strings of the project's
+// out-of-tree plugin candies, which the host REGISTERS first: a declared-but-not-yet-connected
+// external verb/step is act-capable by declaration alone (opActsInBuildDeploy's
+// isDeclaredExternalVerb / isDeclaredExternalStep branches), and standalone `charly box validate`
+// never connects them. This is the registration the deleted registerExternalVerbsFromCandies used
+// to do by re-scanning the project — the plugin reads the same three fields off its own envelope
+// (CandyView.IsPlugin / PluginSource / PluginProviders) and sends them instead.
+func hostBuildValidateWordSets(_ context.Context, req spec.ValidateWordSetsRequest, _ buildEngineContext) (spec.ValidateWordSetsReply, error) {
+	for _, capability := range req.ExternalProviders {
+		class, word, ok := splitCapability(capability)
+		if !ok {
+			continue
 		}
-		dir = d
+		switch class {
+		case ClassVerb:
+			registerDeclaredExternalVerb(word)
+		case ClassStep:
+			registerDeclaredExternalStep(word)
+		}
 	}
-	opts := spec.ResolveOpts{IncludeDisabled: req.IncludeDisabled}
-	// loadDiags is DISCARDED (not returned): a LoadConfig/scan/LoadUnified failure here is the SAME
-	// underlying disk-file failure candy/plugin-build's build:project(ops.OpValidate) leg's OWN tolerant
-	// load already reports in envReply.Diagnostics (both legs load the identical charly.yml) —
-	// surfacing it from BOTH legs would duplicate the finding verbatim in the merged verdict (caught
-	// live: a base⊻from CUE-disjunction load failure printed twice before this fix). Only
-	// runHostNaturalValidateChecks's OWN rule findings (checksDiags) are genuinely NEW information
-	// the plugin's envelope resolve cannot produce.
-	loadDiags := &spec.Diagnostics{}
-	lp, _ := loadProjectForResolve(dir, opts, loadDiags) // tolerant: the error return is always nil
-	checksDiags := &spec.Diagnostics{}
-	runHostNaturalValidateChecks(lp, dir, opts, checksDiags)
-	rp := &spec.ResolvedProject{}
-	fillValidateWordSets(rp, lp)
-	return spec.ValidateProjectReply{Project: rp, Diagnostics: *checksDiags}, nil
-}
 
-// fillValidateWordSets projects the two REGISTRY-derived D-data word sets the validate plugin consumes
-// so it never dials the host registry (task #60 ruling): ProviderCapabilities (every compiled-in
-// provider as "<class>:<word>" — validatePluginCandy checks a `source: builtin` candy's declared
-// providers against it) and ActCapableVerbs (the plugin WORDS whose act form has a build/deploy install
-// path — validateCheck's act-form rule). ActCapableVerbs is computed by running the SAME host
-// opActsInBuildDeploy the core validator used over every distinct plugin word in the project's plan Ops,
-// so builtin ProvisionActor/TypedStep/BuildEmitter rejection is PRESERVED byte-for-byte.
-func fillValidateWordSets(rp *spec.ResolvedProject, lp *loadedProject) {
-	if rp == nil || lp == nil {
-		return
-	}
-	// Register the external verbs the scanned candies declare (Validate() did this too) so an
-	// unconnected external verb resolves as act-capable / a valid provider before we enumerate.
-	registerExternalVerbsFromCandies(lp.layers)
-
+	var reply spec.ValidateWordSetsReply
 	for _, p := range providerRegistry.allProviders() {
-		rp.ProviderCapabilities = append(rp.ProviderCapabilities, string(p.Class())+":"+p.Reserved())
+		reply.ProviderCapabilities = append(reply.ProviderCapabilities, string(p.Class())+":"+p.Reserved())
 	}
 
 	seen := map[string]bool{}
-	addWord := func(w string) {
-		if w == "" || seen[w] {
-			return
+	for _, word := range req.PluginWords {
+		if word == "" || seen[word] {
+			continue
 		}
-		seen[w] = true
-		if opActsInBuildDeploy(&spec.Op{Plugin: w}) {
-			rp.ActCapableVerbs = append(rp.ActCapableVerbs, w)
-		}
-	}
-	scanPlan := func(plan []spec.Step) {
-		for i := range plan {
-			op := &plan[i].Op
-			if len(op.VerbsSet()) == 0 {
-				continue
-			}
-			if verb, err := op.Kind(); err == nil && verb == "plugin" {
-				addWord(op.Plugin)
-			}
+		seen[word] = true
+		if opActsInBuildDeploy(&spec.Op{Plugin: word}) {
+			reply.ActCapableVerbs = append(reply.ActCapableVerbs, word)
 		}
 	}
-	for _, layer := range lp.layers {
-		if layer != nil {
-			scanPlan(layer.PlanSteps())
-		}
-	}
-	if lp.cfg != nil {
-		for _, img := range lp.cfg.EachBox {
-			scanPlan(img.Plan)
-		}
-	}
+	return reply, nil
 }
 
 var _ = func() bool {
-	registerHostBuilder(validateProjectChecksBuilderKind, typedHostBuilder(validateProjectChecksBuilderKind, hostBuildValidateProjectChecks))
+	registerHostBuilder(validateWordSetsBuilderKind, typedHostBuilder(validateWordSetsBuilderKind, hostBuildValidateWordSets))
 	return true
 }()
-
-// validateProjectForBuild is the pre-build validation GATE (task #60, (C-refined)): the validate ENGINE
-// lives in candy/plugin-box, so `charly box build`/`generate` no longer calls Validate() directly —
-// it dispatches to the compiled-in validate capability BY WORD with a structured ops.OpValidate op (the
-// SAME registry-dispatch shape the build path already uses for ops.OpEmit/ops.OpResolve) over an in-proc
-// reverse channel, and consumes the returned spec.Diagnostics as a HARD gate (the error text mirrors the
-// former spec.ValidationError.Error() for parity). Kind-blind M (registry-by-word). #55 step3 3-II
-// deleted this function's last production caller, the former host-side NewGenerator — the real
-// build/generate drive's own pre-build validate now runs plugin-side (candy/plugin-build/resolve.go
-// step 5, validateProjectLeg, a genuine plugin↔plugin InvokeProvider — the K3 named exit this comment
-// used to describe as future work is DONE). This function survives as test-only coverage (see its
-// callers in validate_fixture_test.go / plugin_installstep_envelope_parity_test.go's
-// testFullResolveGenerator) reproducing the SAME validate dispatch for fixture-driven unit tests.
-func validateProjectForBuild(dir string, opts spec.ResolveOpts) error {
-	prov, ok := providerRegistry.resolve(ClassCommand, "validate")
-	if !ok {
-		return fmt.Errorf("pre-build validation: the validate capability (command:validate) is not compiled in")
-	}
-	reqJSON, err := json.Marshal(spec.ValidateProjectRequest{Dir: dir, IncludeDisabled: opts.IncludeDisabled})
-	if err != nil {
-		return err
-	}
-	ctx := hostInProcCtx()
-	res, err := prov.Invoke(ctx, &Operation{Reserved: "validate", Op: ops.OpValidate, Params: reqJSON})
-	if err != nil {
-		return err
-	}
-	var diags spec.Diagnostics
-	if res != nil && len(res.JSON) > 0 {
-		if uerr := json.Unmarshal(res.JSON, &diags); uerr != nil {
-			return fmt.Errorf("pre-build validation: decode diagnostics: %w", uerr)
-		}
-	}
-	msgs := make([]string, 0, len(diags.Items))
-	for _, it := range diags.Items {
-		if it.Severity == "warning" {
-			continue
-		}
-		msgs = append(msgs, it.Message)
-	}
-	if len(msgs) == 0 {
-		return nil
-	}
-	if len(msgs) == 1 {
-		return fmt.Errorf("validation error: %s", msgs[0])
-	}
-	return fmt.Errorf("%d validation errors:\n\n  %s", len(msgs), strings.Join(msgs, "\n  "))
-}

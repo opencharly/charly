@@ -369,34 +369,14 @@ func declaredExternalCommandWords() []string {
 	return words
 }
 
-// registerExternalVerbsFromCandies registers the external (out-of-tree) VERB and STEP words every
-// scanned plugin candy declares, so a `run:` plugin verb/step validates as build/deploy-act-capable
-// in standalone `charly box validate` (where the provider is not connected): a verb is build-emit-
-// capable, a class:step lowers to an externalStep at deploy (F3). It runs over the SCANNED candy map — which includes @github-composed plugin
-// candies fetched DURING the scan — so it recognizes a verb whether the plugin candy is
-// locally vendored OR pulled via @github (the gap the parse-time prescan, which sees only
-// locally-discovered dirs, cannot close). Builtins are skipped: they register their verbs
-// at init(), so ResolveVerb already classifies them (this map is the not-connected path).
-func registerExternalVerbsFromCandies(candies map[string]spec.CandyReader) {
-	for _, candy := range candies {
-		if candy == nil || !candy.IsPluginCandy() {
-			continue
-		}
-		if src := candy.GetPluginSource(); src == "" || src == "builtin" {
-			continue
-		}
-		for _, capability := range candy.GetPluginProviders() {
-			if class, word, ok := splitCapability(capability); ok {
-				switch class {
-				case ClassVerb:
-					registerDeclaredExternalVerb(word)
-				case ClassStep:
-					registerDeclaredExternalStep(word)
-				}
-			}
-		}
-	}
-}
+// The former registerExternalVerbsFromCandies lived here: it re-walked the host's SCANNED candy map
+// to register the external VERB/STEP words each plugin candy declares, so a not-yet-connected
+// `run:` plugin verb/step still validated as build/deploy-act-capable in standalone
+// `charly box validate`. Its ONLY caller was the validate host seam, which no longer scans anything
+// — candy/plugin-box reads the same three fields off its OWN envelope (CandyView.IsPlugin /
+// PluginSource / PluginProviders) and sends the capability strings to
+// hostBuildValidateWordSets (validate_project_host.go), which does the registration (K-wave 2 cone
+// R1 unit B). The registration itself stays kernel: it mutates the provider registry.
 
 // prescanDeclaredPluginWords reads the project root's `discover:` directive from
 // rootData (leniently — ignoring everything else), walks each discovered manifest

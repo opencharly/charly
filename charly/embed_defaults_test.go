@@ -238,10 +238,11 @@ amd-gpu:
 // (RDD-verified live: a scratch project with this exact fixture fails to load).
 // validateVocabularyCollections (the former direct-call subject here) was a
 // dead-code-radical-removal-batch deletion — its own production caller
-// (validateProjectCUESchemas) was already intentionally cut in c9befd83 (the
-// legacy root-shape collection format it validated is now HARD-REJECTED before
-// reaching validation), and this test now exercises the same closed-schema
-// rejection via the loader seam's ValidateEntityClosedCUE directly, the still-live sibling.
+// (validateProjectCUESchemas, which itself now lives in candy/plugin-box) had
+// already cut it in c9befd83 (the legacy root-shape collection format it
+// validated is now HARD-REJECTED before reaching validation), and this test now
+// exercises the same closed-schema rejection via the loader seam's
+// ValidateEntityClosedCUE directly, the still-live sibling.
 func TestProjectVocabOverride_IsSchemaValidated(t *testing.T) {
 	proj := []byte(`version: ` + LatestSchemaVersion().String() + `
 builder:

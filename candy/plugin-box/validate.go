@@ -7,14 +7,14 @@ package box
 // relocated from the former HostBuild("validate-project")) and runs EVERY pure per-kind/op rule + the
 // deploykit resolution-graph checks over that envelope — reading spec.CandyModel / spec.CandyView /
 // spec.ResolvedBoxView INSTEAD of the runtime *Candy/*Config graph. The build-tunable / merge /
-// base⊻from / builder-ref rules (validate_config_rules.go) ALSO run here now (K3-W2, task #13): the
-// plugin self-loads the raw *spec.Config itself via the hoisted loaderkit witness, no host round-trip
-// needed. The host keeps ONLY what a plugin structurally cannot do (the CUE-conformance checks,
-// needing the host's spliced cross-plugin CUE schema, + the remote-candy check, needing the
-// not-yet-executor-bridged RefsCollectSeams, + the registry D-data) — emitted as a SECOND
-// reply.Diagnostics/Project by the now-slimmed HostBuild("validate-project-checks"),
-// charly/validate_project_host.go's hostBuildValidateProjectChecks); the plugin MERGES both host
-// diagnostics sets + the D-data fields + its own raw-config findings for the final verdict + exit code.
+// base⊻from / builder-ref rules (validate_config_rules.go) ALSO run here now (K3-W2, task #13), and
+// so do the CUE-schema conformance pair + the remote-candy check (validate_schema_rules.go, K-wave 2
+// cone R1 unit B) — the plugin self-loads the raw *spec.Config itself via the hoisted loaderkit
+// witness, no host round-trip needed, and reaches every CUE entry point as a loaderkit free
+// function. So charly/validate.go is DELETED and the fat HostBuild("validate-project-checks") seam
+// with it: the ONLY thing the host still answers is the REGISTRY question (which words are
+// act-capable + the compiled-in capability set), over the plugin's own envelope-derived inventory —
+// HostBuild("validate-word-sets"), charly/validate_project_host.go's hostBuildValidateWordSets.
 //
 // It imports ONLY the sdk module (sdk, sdk/spec, sdk/kit, sdk/deploykit, sdk/buildkit, sdk/vmshared) —
 // never charly core. Pure helpers the core validator kept (findSimilarName / levenshtein /
@@ -57,13 +57,17 @@ func dispatchValidate(hc *hostClient, args []string) error {
 }
 
 // runValidateEngine fetches the error-TOLERANT resolved-project envelope via build:project's
-// OpValidate leg AND the host-natural checks + D-data via the slimmed "validate-project-checks"
-// HostBuild leg (#55 step3 unit 3-I split), merges both diagnostics sets + the D-data fields onto
-// one envelope, runs every ported rule over it, and returns the MERGED spec.Diagnostics — the
-// host-natural + resolve diagnostics UNION the plugin's per-kind/op findings. Shared by the
-// `charly box validate` CLI verdict (dispatchValidate → emitVerdict) AND the pre-build gate
-// structured op (Invoke(OpValidate), consumed by core generate.go). ctx/exec are the reverse
-// channel to the host (in-proc when compiled-in).
+// OpValidate leg, asks the host for the two REGISTRY-derived D-data word sets over the inventory it
+// derives from that envelope, self-loads the raw config ONCE, runs every rule — the pure
+// per-kind/op rules, the resolution-graph rules, the raw-config rules and (since K-wave 2 cone R1
+// unit B) the CUE-conformance + remote-candy rules — and returns the MERGED spec.Diagnostics.
+// Shared by the `charly box validate` CLI verdict (dispatchValidate → emitVerdict) AND the pre-build
+// gate structured op (Invoke(OpValidate), consumed by candy/plugin-build's validateProjectLeg).
+// ctx/exec are the reverse channel to the host (in-proc when compiled-in).
+//
+// The former "validate-project-checks" HostBuild leg is GONE: it made the host re-load and re-scan
+// the whole project just to run three validators over data this plugin already held — the boundary
+// law's re-derivation R-pattern. Only the registry question crosses now.
 func runValidateEngine(ctx context.Context, exec *sdk.Executor, dir string, includeDisabled bool) (spec.Diagnostics, error) {
 	reqJSON, err := json.Marshal(spec.ValidateProjectRequest{Dir: dir, IncludeDisabled: includeDisabled})
 	if err != nil {
@@ -81,47 +85,116 @@ func runValidateEngine(ctx context.Context, exec *sdk.Executor, dir string, incl
 		}
 	}
 
-	checksJSON, err := exec.HostBuild(ctx, validateProjectChecksBuilderKind, reqJSON)
-	if err != nil {
-		return spec.Diagnostics{}, fmt.Errorf("box validate: host-natural checks: %w", err)
-	}
-	var checksReply spec.ValidateProjectReply
-	if len(checksJSON) > 0 {
-		if uerr := json.Unmarshal(checksJSON, &checksReply); uerr != nil {
-			return spec.Diagnostics{}, fmt.Errorf("box validate: decode host-natural-checks reply: %w", uerr)
-		}
-	}
-
 	project := envReply.Project
 	if project == nil {
 		project = &spec.ResolvedProject{}
 	}
-	if checksReply.Project != nil {
-		project.ProviderCapabilities = checksReply.Project.ProviderCapabilities
-		project.ActCapableVerbs = checksReply.Project.ActCapableVerbs
+	wordSets, err := fetchValidateWordSets(ctx, exec, project)
+	if err != nil {
+		return spec.Diagnostics{}, err
 	}
+	project.ProviderCapabilities = wordSets.ProviderCapabilities
+	project.ActCapableVerbs = wordSets.ActCapableVerbs
 
 	vc := newVctx(project)
 	e := &vErr{}
 	runAllValidations(vc, e)
-	// The pure raw-config rules (K3-W2): self-load dir's raw *spec.Config via the hoisted
-	// loaderkit witness and run validateBuildAndDistro/validateBoxBaseFrom/validateMergeConfig/
-	// validateBuildTunables/validateBuilderRefs — no longer host-natural, see
-	// validate_config_rules.go's header.
-	runRawConfigChecks(ctx, exec, dir, e)
+
+	// ONE raw-config load feeds BOTH the pure raw-config rules and the CUE/remote-candy rules.
+	opts := spec.ResolveOpts{IncludeDisabled: includeDisabled}
+	cfg, distroCfg, builderCfg, _ := loadRawProjectConfig(ctx, exec, dir)
+	schema := &vErr{}
+	runSchemaAndRemoteChecks(ctx, exec, vc, cfg, dir, opts, schema)
+	runRawConfigChecks(cfg, distroCfg, builderCfg, e)
+
+	// Order is load-bearing for output parity: the resolve diagnostics, then the CUE/remote-candy
+	// findings (which the host used to contribute in exactly this slot), then the plugin's own
+	// per-kind/op + graph + raw-config findings.
 	merged := envReply.Diagnostics
-	merged.Items = append(merged.Items, checksReply.Diagnostics.Items...)
+	for _, m := range schema.msgs {
+		merged.Items = append(merged.Items, spec.Diagnostic{Severity: "error", Message: m})
+	}
 	for _, m := range e.msgs {
 		merged.Items = append(merged.Items, spec.Diagnostic{Severity: "error", Message: m})
 	}
 	return merged, nil
 }
 
-// validateProjectChecksBuilderKind is the F11 host-builder kind the host serves the host-natural
-// checks + registry D-data under (charly/validate_project_host.go's hostBuildValidateProjectChecks
-// — renamed from "validate-project" in #55 step3 unit 3-I, now that the tolerant envelope
-// projection moved to build:project's OpValidate leg). A generic action noun, never a provider word.
-const validateProjectChecksBuilderKind = "validate-project-checks"
+// validateWordSetsBuilderKind is the F11 host-builder kind the host answers the registry-D word
+// sets under (charly/validate_project_host.go's hostBuildValidateWordSets). A generic action noun,
+// never a provider word.
+const validateWordSetsBuilderKind = "validate-word-sets"
+
+// fetchValidateWordSets asks the host the ONE question this plugin cannot answer for itself,
+// because the provider registry is a kernel M-mechanism: which of the project's `plugin:` words are
+// build/deploy act-capable, and what the full compiled-in capability set is.
+//
+// Both halves of the request are derived from the plugin's OWN envelope:
+//
+//   - PluginWords — every distinct `plugin:` verb word in a candy model's plan or a box plan. The
+//     host filters, it never enumerates.
+//   - ExternalProviders — the declared `plugin.providers:` capability strings of every candy whose
+//     `plugin.source:` is a real out-of-tree ref (a builtin registers its providers at init, so the
+//     registry already classifies it). The host registers those declarations before answering, so a
+//     not-yet-connected external verb/step is still recognized as act-capable — the same
+//     recognition core's deleted registerExternalVerbsFromCandies used to get by re-scanning.
+func fetchValidateWordSets(ctx context.Context, exec *sdk.Executor, project *spec.ResolvedProject) (spec.ValidateWordSetsReply, error) {
+	reqJSON, err := json.Marshal(buildValidateWordSetsRequest(project))
+	if err != nil {
+		return spec.ValidateWordSetsReply{}, err
+	}
+	replyJSON, err := exec.HostBuild(ctx, validateWordSetsBuilderKind, reqJSON)
+	if err != nil {
+		return spec.ValidateWordSetsReply{}, fmt.Errorf("box validate: registry word sets: %w", err)
+	}
+	var reply spec.ValidateWordSetsReply
+	if len(replyJSON) > 0 {
+		if uerr := json.Unmarshal(replyJSON, &reply); uerr != nil {
+			return spec.ValidateWordSetsReply{}, fmt.Errorf("box validate: decode registry word sets: %w", uerr)
+		}
+	}
+	return reply, nil
+}
+
+// buildValidateWordSetsRequest derives the seam's request from the resolved-project envelope: the
+// DISTINCT `plugin:` verb words of every candy-model plan and box plan, plus the declared
+// capability strings of every candy whose plugin block names a real out-of-tree source. Split out
+// of fetchValidateWordSets so the derivation — the part that replaced core's project re-scan — is
+// unit-testable without a reverse channel.
+func buildValidateWordSetsRequest(project *spec.ResolvedProject) spec.ValidateWordSetsRequest {
+	req := spec.ValidateWordSetsRequest{}
+	if project == nil {
+		return req
+	}
+	seen := map[string]bool{}
+	addPlan := func(plan []spec.Step) {
+		for i := range plan {
+			op := &plan[i].Op
+			if len(op.VerbsSet()) == 0 {
+				continue
+			}
+			verb, err := op.Kind()
+			if err != nil || verb != "plugin" || op.Plugin == "" || seen[op.Plugin] {
+				continue
+			}
+			seen[op.Plugin] = true
+			req.PluginWords = append(req.PluginWords, op.Plugin)
+		}
+	}
+	for _, m := range project.CandyModels {
+		addPlan(m.Plan)
+	}
+	for _, plan := range project.BoxPlans {
+		addPlan(plan)
+	}
+	for _, v := range project.Candies {
+		if !v.IsPlugin || v.PluginSource == "" || v.PluginSource == "builtin" {
+			continue
+		}
+		req.ExternalProviders = append(req.ExternalProviders, v.PluginProviders...)
+	}
+	return req
+}
 
 // vErr accumulates the plugin's own validation findings (the host's ride in reply.Diagnostics).
 type vErr struct{ msgs []string }
@@ -219,10 +292,11 @@ func viewToBuildkit(v spec.ResolvedBoxView) *buildkit.ResolvedBox {
 	}
 }
 
-// runAllValidations runs every ported rule over the envelope, in the same order the former core
-// Validate() ran them (the host-natural rules — build/distro, CUE-conformance, base⊻from, merge,
-// tunables, remote-candy — already ran host-side and ride in reply.Diagnostics, so they are omitted
-// here). Each rule accumulates into e.
+// runAllValidations runs every ENVELOPE-driven rule, in the same order the former core Validate()
+// ran them. The rules that need the RAW config rather than the envelope — build/distro, base⊻from,
+// merge, tunables, builder-refs (validate_config_rules.go) and CUE-conformance + remote-candy
+// (validate_schema_rules.go) — are driven separately by runValidateEngine off its single raw-config
+// load. Each rule accumulates into e.
 func runAllValidations(vc *vctx, e *vErr) {
 	// A-pure candy + box rules (validate_rules.go).
 	validateCandyReferences(vc, e)

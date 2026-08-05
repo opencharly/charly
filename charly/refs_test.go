@@ -164,11 +164,13 @@ func TestCollectRemoteRefs(t *testing.T) {
 			},
 		}),
 	}
-	// MARKER (W9 follow-up batch #59, see CHANGELOG "validate.go:371's remote-Require
-	// accessor"): "my-layer"'s Require fixture below carries the FULL "@repo:vTag" pinned
+	// MARKER (W9 follow-up batch #59, see CHANGELOG for the original "remote-Require accessor"
+	// entry): "my-layer"'s Require fixture below carries the FULL "@repo:vTag" pinned
 	// string in a CandyView.Require wire-form field — a real scan+finalize (FinalizeCandyRefs)
 	// never produces this; it always bare-strings Require/IncludedCandy before a CandyReader
-	// is wrapped. This test therefore does NOT exercise validateRemoteCandies's real
+	// is wrapped. (That same bare-stringing is what makes a scan-derived and an envelope-derived
+	// candy set byte-equivalent inputs to candy/plugin-box's validateRemoteCandies.) This test
+	// therefore does NOT exercise that rule's real
 	// production input and is a false positive for the regression that gap describes
 	// (verified LATENT/unreachable in this repo today, not a reason to leave this
 	// misrepresenting green). Batch #59 reworks this fixture to go through a real

@@ -12,7 +12,7 @@ import (
 // validate_fixture_test.go — the (c') converted-test infrastructure (task #60): the validate ENGINE
 // moved to candy/plugin-box, so its former in-memory `Validate(cfg, layers, dir, opts)` unit tests are
 // re-expressed as tiny ON-DISK fixture projects driven through the REAL pipeline (load → project →
-// plugin rule) via validateProjectForBuild — the compiled-in command:validate dispatch (RDD-proven the
+// plugin rule) via dispatchValidateForTest (validate_dispatch_test.go) — the compiled-in command:validate dispatch (RDD-proven the
 // dispatch works in-process). Each converted test writes a fixture + asserts the SAME diagnostic the
 // synthetic unit pinned; the scenario-mapping table (scratchpad/k3d-scenario-mapping.md) is the
 // no-net-loss audit. The former trailing HOST-NATURAL rule block (validateBuildAndDistro/
@@ -90,7 +90,7 @@ func fx(t *testing.T, mycandyBody string) string {
 // substring in want.
 func mustValidateErr(t *testing.T, dir string, want ...string) {
 	t.Helper()
-	err := validateProjectForBuild(dir, spec.ResolveOpts{})
+	err := dispatchValidateForTest(dir, spec.ResolveOpts{})
 	if err == nil {
 		t.Fatalf("expected validation error, got nil")
 	}
@@ -104,7 +104,7 @@ func mustValidateErr(t *testing.T, dir string, want ...string) {
 // mustValidateOK runs the real validate gate over dir and fails if it reports any error.
 func mustValidateOK(t *testing.T, dir string) {
 	t.Helper()
-	if err := validateProjectForBuild(dir, spec.ResolveOpts{}); err != nil {
+	if err := dispatchValidateForTest(dir, spec.ResolveOpts{}); err != nil {
 		t.Fatalf("expected no validation error, got: %v", err)
 	}
 }
@@ -512,7 +512,7 @@ fedora-img:
           package: [google-chrome]
     plan: [{check: x, command: "true", context: [build]}]`,
 	})
-	if err := validateProjectForBuild(dir, spec.ResolveOpts{}); err != nil && strings.Contains(err.Error(), "no builder.aur configured") {
+	if err := dispatchValidateForTest(dir, spec.ResolveOpts{}); err != nil && strings.Contains(err.Error(), "no builder.aur configured") {
 		t.Fatalf("Fedora image (build=[rpm]) must not require builder.aur; got: %v", err)
 	}
 }
@@ -544,7 +544,7 @@ arch-pac-only:
           package: [yay-bin]
     plan: [{check: x, command: "true", context: [build]}]`,
 	})
-	if err := validateProjectForBuild(dir, spec.ResolveOpts{}); err != nil && strings.Contains(err.Error(), "no builder.aur configured") {
+	if err := dispatchValidateForTest(dir, spec.ResolveOpts{}); err != nil && strings.Contains(err.Error(), "no builder.aur configured") {
 		t.Fatalf("Arch image build=[pac] (no aur) must not require builder.aur; got: %v", err)
 	}
 }
@@ -720,7 +720,7 @@ bad-disabled:
 	})
 	mustValidateOK(t, dir)
 	// The problem is real — it surfaces under --include-disabled (proves the skip, not a false pass).
-	if err := validateProjectForBuild(dir, spec.ResolveOpts{IncludeDisabled: true}); err == nil ||
+	if err := dispatchValidateForTest(dir, spec.ResolveOpts{IncludeDisabled: true}); err == nil ||
 		!strings.Contains(err.Error(), `candy "nonexistent-layer" not found`) {
 		t.Fatalf("--include-disabled should surface the disabled box's missing candy; got: %v", err)
 	}
@@ -1392,7 +1392,7 @@ func TestValidateOps_LowercaseCheckVarInClusterField(t *testing.T) {
       - check: kube addons
         kube: {method: addons, cluster: "${DEPLOY_NAME}"}
         context: [deploy]`)
-	if err := validateProjectForBuild(ok, spec.ResolveOpts{}); err != nil && strings.Contains(err.Error(), "UPPERCASE") {
+	if err := dispatchValidateForTest(ok, spec.ResolveOpts{}); err != nil && strings.Contains(err.Error(), "UPPERCASE") {
 		t.Fatalf("uppercase check var should pass: %v", err)
 	}
 }
@@ -1412,4 +1412,25 @@ func TestValidateOps_RejectsRuntimeOnlyActInBuild(t *testing.T) {
       - check: x
         command: "true"
         context: [build]`), "cannot act")
+}
+
+// TestValidateCandyCUESchema_ClosednessThroughRealPipeline is the end-to-end gate for the
+// CUE-schema-conformance rule after K-wave 2 cone R1 unit B relocated it out of the host
+// (charly/validate.go, deleted) into candy/plugin-box's validate_schema_rules.go. The rule's other
+// tests (cue_candy_reject_test.go) call the loader seam DIRECTLY, so they stay green whether or not
+// anything still WIRES the rule into `charly box validate` — which is exactly the regression a
+// relocation risks. This one drives the real pipeline: a candy manifest with a typo'd top-level key
+// must still surface the `candy "…": CUE schema: … field not allowed` diagnostic in the verdict.
+func TestValidateCandyCUESchema_ClosednessThroughRealPipeline(t *testing.T) {
+	mustValidateErr(t, fx(t, `mycandy:
+  candy:
+    version: 2026.194.1200
+    description: |-
+      c.
+    bogus_typo_field: true
+    package: [curl]
+    plan:
+      - check: curl present
+        command: "command -v curl"
+        context: [build]`), `candy "mycandy": CUE schema:`, "bogus_typo_field: field not allowed")
 }

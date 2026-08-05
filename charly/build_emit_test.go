@@ -3,10 +3,11 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"github.com/opencharly/spec/ops"
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/opencharly/spec/ops"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -98,31 +99,43 @@ func TestOpActsInBuildDeploy_PlacementAgnosticBuildEmit(t *testing.T) {
 	}
 }
 
-// TestRegisterExternalVerbsFromCandies gates the post-scan external-verb recognition that
-// lets a build-context plugin verb served by a @github-COMPOSED candy validate (the parse-
-// time prescan sees only locally-discovered dirs; the scanned candy map sees the fetched
-// @github candy too). An EXTERNAL plugin candy's verb is registered; a BUILTIN one is NOT
-// (builtins resolve through the registry, not this not-connected map).
-func TestRegisterExternalVerbsFromCandies(t *testing.T) {
-	candies := map[string]spec.CandyReader{
-		"ext-plugin": testCandy("ext-plugin", spec.CandyModel{}, spec.CandyView{
-			IsPlugin:        true,
-			PluginSource:    "github.com/opencharly/charly/candy/ext-plugin",
-			PluginProviders: []string{"verb:extverbfromcandy"},
-		}),
-		"builtin-plugin": testCandy("builtin-plugin", spec.CandyModel{}, spec.CandyView{
-			IsPlugin:        true,
-			PluginSource:    "builtin",
-			PluginProviders: []string{"verb:builtinverbfromcandy"},
-		}),
-		"ordinary": testCandy("ordinary", spec.CandyModel{}, spec.CandyView{}), // no plugin block
+// TestValidateWordSets_DeclaredExternalRecognition gates the HOST half of the external-word
+// recognition that lets a build-context plugin verb/step served by an out-of-tree (incl.
+// @github-composed) candy validate while its provider is NOT connected — the recognition core's
+// deleted registerExternalVerbsFromCandies used to obtain by re-scanning the whole project. It now
+// arrives as DATA on the "validate-word-sets" seam: candy/plugin-box reads IsPlugin / PluginSource /
+// PluginProviders off its OWN envelope and sends the capability strings; the host registers them by
+// class and answers act-capability. The CANDY-FILTERING half (a `source: builtin` candy's providers
+// are never sent, because a builtin registers at init and resolves through the registry) is gated
+// plugin-side by TestFetchValidateWordSets_ExternalProvidersOnly in candy/plugin-box.
+func TestValidateWordSets_DeclaredExternalRecognition(t *testing.T) {
+	reply, err := hostBuildValidateWordSets(context.Background(), spec.ValidateWordSetsRequest{
+		ExternalProviders: []string{"verb:extverbfromcandy", "step:extstepfromcandy", "malformed-no-colon"},
+		PluginWords:       []string{"extverbfromcandy", "extstepfromcandy", "totally-unknown-verb-xyz", ""},
+	}, buildEngineContext{})
+	if err != nil {
+		t.Fatalf("validate-word-sets seam failed: %v", err)
 	}
-	registerExternalVerbsFromCandies(candies)
 	if !isDeclaredExternalVerb("extverbfromcandy") {
-		t.Fatalf("an external (incl. @github) plugin candy's verb must be registered for build-context validation")
+		t.Fatalf("an out-of-tree plugin candy's declared verb must be registered for build-context validation")
 	}
-	if isDeclaredExternalVerb("builtinverbfromcandy") {
-		t.Fatalf("a builtin plugin's verb must NOT enter the declared-external map (it resolves via the registry)")
+	if !isDeclaredExternalStep("extstepfromcandy") {
+		t.Fatalf("an out-of-tree plugin candy's declared class:step word must be registered too")
+	}
+	if !slices.Contains(reply.ActCapableVerbs, "extverbfromcandy") {
+		t.Fatalf("a declared external verb must come back act-capable; got %v", reply.ActCapableVerbs)
+	}
+	if !slices.Contains(reply.ActCapableVerbs, "extstepfromcandy") {
+		t.Fatalf("a declared external step must come back act-capable; got %v", reply.ActCapableVerbs)
+	}
+	if slices.Contains(reply.ActCapableVerbs, "totally-unknown-verb-xyz") {
+		t.Fatalf("an unknown, undeclared word must NOT come back act-capable; got %v", reply.ActCapableVerbs)
+	}
+	if slices.Contains(reply.ActCapableVerbs, "") {
+		t.Fatalf("the empty word must never enter the reply; got %v", reply.ActCapableVerbs)
+	}
+	if len(reply.ProviderCapabilities) == 0 {
+		t.Fatalf("ProviderCapabilities must enumerate the compiled-in providers (the validatePluginCandy target set)")
 	}
 }
 

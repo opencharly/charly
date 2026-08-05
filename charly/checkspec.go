@@ -32,7 +32,8 @@ import (
 
 // opActsInBuildDeploy reports whether the PLUGIN op c's act form has a real build/deploy install path.
 // The former non-plugin (install-verb) arm was removed with the validate ENGINE (task #60): the ONLY
-// caller left is the validate host-fill (fillValidateWordSets), which always asks about a `plugin:` op —
+// caller left is the validate word-sets seam (hostBuildValidateWordSets), whose word inventory the
+// validate plugin lifts exclusively off `plugin:` ops —
 // install-verb act-capability now lives in the plugin's own installVerbSet, never here. `plugin: command`
 // is act-capable via the dedicated emitCmd install path (NOT a ProvisionActor); every other plugin verb
 // acts when its registered provider is a ProvisionActor / TypedStepProvider / BuildEmitter, or

@@ -225,7 +225,9 @@ func namespaceScanSeams(ctx context.Context, ex *sdk.Executor, downloads []spec.
 // --- validate + prep legs ---
 
 // validateProjectLeg runs the pre-build validation GATE via InvokeProvider(command:validate) — the
-// plugin↔plugin form of the former host validateProjectForBuild (its comment named exit "K3").
+// plugin↔plugin form of the former host-side gate (whose comment named exit "K3"). Core carries no
+// production copy of this dispatch any more; the only remaining one is the fixture-test harness in
+// charly/validate_dispatch_test.go, which mirrors this function deliberately.
 func validateProjectLeg(ctx context.Context, ex *sdk.Executor, rr spec.ResolvedProjectRequest) error {
 	params, err := json.Marshal(spec.ValidateProjectRequest{Dir: rr.Dir, IncludeDisabled: rr.IncludeDisabled})
 	if err != nil {
