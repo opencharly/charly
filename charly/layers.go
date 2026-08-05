@@ -404,31 +404,10 @@ func looksLikeDistroOrFormatKey(key string) bool {
 	return true
 }
 
-// withLocalRawRefs returns opts with every local candy's RAW (pre-finalize) require:/candy:
-// refs appended to ExtraCandyRefs. CollectRemoteRefsOpts's own "candy manifest require:/candy:"
-// walk reads CandyView.Require/.IncludedCandy — the FINALIZED bare-string wire form
-// (FinalizeCandyRefs strips a "@repo:vTAG" pin down to the bare graph-topology name; correct
-// for its OWN consumers, ExpandCandy/ResolveCandyOrder, which are version-agnostic). Feeding
-// that walk a wrapped view therefore leaves it structurally UNABLE to discover a local candy's
-// pinned remote dep at all (a bare name never looks remote to IsRemoteCandyRef) — the confirmed
-// root cause of a "depends: unknown candy" crash a live box/cachyos generate surfaced (a local
-// candy's require: pins a remote plugin candy). So the raw pre-finalize refs (still carrying the
-// full pin, from spec.ScannedCandy.Refs) are harvested here and fed in as ExtraCandyRefs — the
-// SAME mechanism a deploy's add_candy: already uses to reach a ref no base/builder/require edge
-// would otherwise surface. A local (non-remote) ref is a harmless no-op (IsRemoteCandyRef gates it).
-func withLocalRawRefs(opts spec.ResolveOpts, localScanned map[string]spec.ScannedCandy) spec.ResolveOpts {
-	extraRefs := append([]string(nil), opts.ExtraCandyRefs...)
-	for _, sc := range localScanned {
-		for _, dep := range sc.Refs.Require {
-			extraRefs = append(extraRefs, dep.Raw)
-		}
-		for _, dep := range sc.Refs.IncludedCandy {
-			extraRefs = append(extraRefs, dep.Raw)
-		}
-	}
-	opts.ExtraCandyRefs = extraRefs
-	return opts
-}
+// withLocalRawRefs moved to spec.WithLocalRawRefs (spec/resolve_opts.go, K-wave 2 cone R1 A2):
+// candy/plugin-build's own CollectRemoteRefsOpts call needs the identical augmentation, so the
+// rule lives in the shared fabric module both sides import instead of being duplicated across the
+// boundary. See its doc comment there for the pinned-remote-dep rationale.
 
 // ScanAllCandyWithConfig is the default-opts wrapper (enabled images only)
 // around ScanAllCandyWithConfigOpts. Most call sites (deploy-mode, runtime,
@@ -480,14 +459,14 @@ func scanCandyFromLocal(localScanned map[string]spec.ScannedCandy, cfg *spec.Con
 // scanSeamsFor builds the host closures the loaderkit scan mechanism reaches through the seam: cfg+opts
 // are captured here so they never cross into loaderkit (the opts-agnostic seam pattern, mirroring the U2
 // ResolveProjectSeams closures). CollectRemoteRefs threads the throwaway nil-initCfg finalize +
-// withLocalRawRefs the reachability walk needs (see withLocalRawRefs' doc comment for why the
+// spec.WithLocalRawRefs the reachability walk needs (see its doc comment for why the
 // wrapped-view walk can't discover a local candy's pinned remote dep alone); EnsureRepo /
 // ScanRemote wrap the host git-cache (+ auto-migrate) and the registry-coupled per-candy manifest
 // scan (parseCandyYAML). candy/plugin-build supplies InvokeProvider-backed closures instead in U6.
 func scanSeamsFor(cfg *spec.Config, opts spec.ResolveOpts) spec.ScanSeams {
 	return spec.ScanSeams{
 		CollectRemoteRefs: func(localScanned map[string]spec.ScannedCandy) ([]spec.RemoteDownload, error) {
-			return requireProjectLoader().CollectRemoteRefsOpts(hostInProcCtx(), cfg, requireProjectLoader().FinalizeScannedCandies(localScanned, nil), withLocalRawRefs(opts, localScanned))
+			return requireProjectLoader().CollectRemoteRefsOpts(hostInProcCtx(), cfg, requireProjectLoader().FinalizeScannedCandies(localScanned, nil), spec.WithLocalRawRefs(opts, localScanned))
 		},
 		EnsureRepo: func(repoPath, version string) (string, error) {
 			return requireProjectLoader().EnsureRepoDownloaded(hostInProcCtx(), repoPath, version)

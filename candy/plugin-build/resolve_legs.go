@@ -116,42 +116,61 @@ func scanLocalLeg(ctx context.Context, ex *sdk.Executor, rr spec.ResolvedProject
 	return out, nil
 }
 
-// scanSeamsLeg wires the three host-coupled ScanSeams legs (the reachability-scoped remote-ref walk,
-// the git clone/cache, the per-candy remote manifest scan) the plugin's loaderkit.ScanCandyFromLocal
-// fetch fixpoint reaches for. localScanned reloads host-side (deterministic; identical to the plugin's).
-// EnsureRepo/ScanRemote are the cfg-agnostic shared host legs (hostEnsureRepoLeg/hostScanRemoteLeg),
-// reused by namespaceScanSeams (R3 — ONE copy of each).
-func scanSeamsLeg(ctx context.Context, ex *sdk.Executor, rr spec.ResolvedProjectRequest) loaderkit.ScanSeams {
+// scanSeamsLeg wires the ScanSeams legs the plugin's loaderkit.ScanCandyFromLocal fetch fixpoint
+// reaches for. Since K-wave 2 cone R1 (A2) only ONE of the three still crosses to the host:
+//
+//   - CollectRemoteRefs runs PLUGIN-SIDE over loaderkit.CollectRemoteRefsOpts with the resolve's own
+//     cfg + the fixpoint's own localScanned + the shared executor-backed refs legs. The former
+//     `buildengine-collect-remote-refs` host leg re-derived BOTH inputs host-side (LoadConfig +
+//     scanLocalCandies) purely so core could hand them back to the same mechanism — core was calling
+//     a mechanism, not defining one, so by the defines-vs-calls test it was an R-item. The plugin
+//     already holds cfg (uf.ProjectConfig, resolve.go step 1) and receives localScanned as the
+//     seam's own parameter, so nothing needs re-deriving: this is byte-identical to the host leg's
+//     body (same FinalizeScannedCandies(…, nil) throwaway wrap, same WithLocalRawRefs augmentation,
+//     same BoxResolveOpts-scoped opts carrying RequestedBoxes/ExtraCandyRefs — task #17's fix).
+//   - EnsureRepo likewise runs plugin-side over loaderkit.EnsureRepoDownloaded (hostEnsureRepoLeg
+//     and its `buildengine-ensure-repo` host leg are both deleted).
+//   - ScanRemote alone still round-trips (hostScanRemoteLeg): its per-candy manifest parse threads
+//     the registered DocParser + the registry-derived Threaded snapshot, so it stays host-side.
+func scanSeamsLeg(ctx context.Context, ex *sdk.Executor, rr spec.ResolvedProjectRequest, cfg *spec.Config) loaderkit.ScanSeams {
 	return loaderkit.ScanSeams{
-		CollectRemoteRefs: func(_ map[string]spec.ScannedCandy) ([]loaderkit.RemoteDownload, error) {
-			var out []loaderkit.RemoteDownload
-			if err := hostBuildJSON(ctx, ex, "buildengine-collect-remote-refs", rr, &out); err != nil {
-				return nil, err
-			}
-			return out, nil
+		CollectRemoteRefs: func(localScanned map[string]spec.ScannedCandy) ([]loaderkit.RemoteDownload, error) {
+			opts := spec.BoxResolveOpts(rr.RequestedBoxes, rr.IncludeDisabled)
+			opts.ExtraCandyRefs = rr.ExtraCandyRefs
+			return loaderkit.CollectRemoteRefsOpts(
+				cfg,
+				loaderkit.FinalizeScannedCandies(localScanned, nil),
+				spec.WithLocalRawRefs(opts, localScanned),
+				loaderkit.RefsSeamsFromExecutor(ctx, ex),
+			)
 		},
-		EnsureRepo: hostEnsureRepoLeg(ctx, ex),
+		EnsureRepo: ensureRepoLeg(ctx, ex),
 		ScanRemote: hostScanRemoteLeg(ctx, ex),
 	}
 }
 
-// hostEnsureRepoLeg / hostScanRemoteLeg are the cfg-agnostic ScanSeams closures shared by the ROOT
-// scan (scanSeamsLeg) and the NAMESPACED scan (namespaceScanSeams): EnsureRepo downloads+caches a
-// repo (buildengine-ensure-repo — git cache, cfg-independent); ScanRemote scans the cached repo for
-// the wanted bare refs (buildengine-scan-remote — parseCandyYAML registry scan, cfg-independent).
-// Only CollectRemoteRefs differs between the two scans (root: reachability walk via
-// buildengine-collect-remote-refs; namespaced: the host-pre-computed namespace-scoped set).
-func hostEnsureRepoLeg(ctx context.Context, ex *sdk.Executor) func(repoPath, version string) (string, error) {
+// ensureRepoLeg resolves a (repo, version) to a local cache dir, fetching + auto-migrating on a
+// cache miss — PLUGIN-SIDE over the shared loaderkit mechanism + the executor-backed refs legs. It
+// is cfg-agnostic, so both the ROOT scan (scanSeamsLeg) and the NAMESPACED scan (namespaceScanSeams)
+// share this one copy (R3).
+//
+// The seams are built INSIDE the closure, once PER CALL — never hoisted to construction time. The
+// deleted `buildengine-ensure-repo` host leg read CHARLY_REPO_OVERRIDE (RefsCollectSeams.
+// OverrideEnvValue, an os.Getenv) at the moment of each fetch, and resolveProjectEnvelope's
+// LocalSuperproject branch sets that env var around the resolve with a deferred restore. Caching
+// the seams would freeze the override at whatever the env held when the scan seams were assembled,
+// silently changing which tree a fetch resolves against; per-call construction is byte-identical to
+// the leg it replaces.
+func ensureRepoLeg(ctx context.Context, ex *sdk.Executor) func(repoPath, version string) (string, error) {
 	return func(repoPath, version string) (string, error) {
-		var out struct {
-			Dir string `json:"dir"`
-		}
-		if err := hostBuildJSON(ctx, ex, "buildengine-ensure-repo", map[string]string{"repo": repoPath, "version": version}, &out); err != nil {
-			return "", err
-		}
-		return out.Dir, nil
+		return loaderkit.EnsureRepoDownloaded(repoPath, version, loaderkit.RefsSeamsFromExecutor(ctx, ex))
 	}
 }
+
+// hostScanRemoteLeg scans the cached repo for the wanted bare refs (buildengine-scan-remote). It is
+// the ONE ScanSeams leg still crossing to the host — the per-candy manifest parse is
+// registry-coupled (registered DocParser + Threaded snapshot). cfg-agnostic, so the root and
+// namespaced scans share it (R3).
 
 func hostScanRemoteLeg(ctx context.Context, ex *sdk.Executor) func(cacheDir, repoPath string, wantRefs map[string]bool) (map[string]spec.ScannedCandy, error) {
 	return func(cacheDir, repoPath string, wantRefs map[string]bool) (map[string]spec.ScannedCandy, error) {
@@ -170,7 +189,7 @@ func hostScanRemoteLeg(ctx context.Context, ex *sdk.Executor) func(cacheDir, rep
 // namespaceScanSeams builds the loaderkit.ScanSeams for a namespaced candy-scan fix-point over the
 // host-pre-computed per-namespace inputs: CollectRemoteRefs returns the host's namespace-scoped
 // downloads verbatim (the ONE cfg-coupled step, already done host-side by CollectRemoteRefsOpts over
-// the namespace's own cfg); EnsureRepo/ScanRemote reuse the cfg-agnostic shared host legs for the
+// the namespace's own cfg); EnsureRepo/ScanRemote reuse the cfg-agnostic shared legs for the
 // transitive fetch. The plugin never re-loads the namespace cfg or re-walks its reachability — the
 // host did that once and emitted the flat NamespaceScanReply.
 func namespaceScanSeams(ctx context.Context, ex *sdk.Executor, downloads []spec.RemoteDownload) loaderkit.ScanSeams {
@@ -178,7 +197,7 @@ func namespaceScanSeams(ctx context.Context, ex *sdk.Executor, downloads []spec.
 		CollectRemoteRefs: func(_ map[string]spec.ScannedCandy) ([]loaderkit.RemoteDownload, error) {
 			return downloads, nil
 		},
-		EnsureRepo: hostEnsureRepoLeg(ctx, ex),
+		EnsureRepo: ensureRepoLeg(ctx, ex),
 		ScanRemote: hostScanRemoteLeg(ctx, ex),
 	}
 }
@@ -334,7 +353,7 @@ func projectResolvedProjectLeg(ctx context.Context, ex *sdk.Executor, cfg *spec.
 // relocated plugin-side (candy/plugin-build is the legit deploykit owner; no new importer). cv/d
 // come from the seam closure's resolve context; vopts is rebuilt plugin-side from the resolve
 // context's distroCfg/builderCfg/ic — byte-identical to the deleted host's resolveVocabOpts(dir,
-// opts) result (boxResolveOpts leaves DistroCfg/BuilderCfg nil, so resolveVocabOpts fills them
+// opts) result (spec.BoxResolveOpts leaves DistroCfg/BuilderCfg nil, so resolveVocabOpts fills them
 // from the SAME build vocab the plugin's distroCfg/builderCfg carry).
 func foldNamespaceScanEntries(ctx context.Context, ex *sdk.Executor, rootUF *spec.UnifiedFile, ic *buildkit.InitConfig, cv, d string, includeDisabled bool, distroCfg *buildkit.DistroConfig, builderCfg *buildkit.BuilderConfig, reply spec.NamespaceScanReply, rp *spec.ResolvedProject) {
 	vopts := spec.ResolveOpts{IncludeDisabled: includeDisabled, DistroCfg: distroCfg, BuilderCfg: builderCfg, InitCfg: ic}

@@ -45,7 +45,7 @@ func resolveProjectEnvelope(ctx context.Context, ex *sdk.Executor, req spec.Reso
 	// LocalSuperproject mirrors the deleted charly/resolved_project_host.go's
 	// applySelfSuperprojectOverride(dir) call — reproduced here PURELY (os/exec + loaderkit, zero
 	// host-only coupling), since a compiled-in plugin shares the host's OS process/environment, so
-	// os.Setenv here is visible to the SAME "buildengine-ensure-repo" host leg's
+	// os.Setenv here is visible to the SAME per-call ensureRepoLeg
 	// EnsureRepoDownloaded call that reads CHARLY_REPO_OVERRIDE. Used today by
 	// candy/plugin-check/checkproject.go.
 	if req.LocalSuperproject {
@@ -76,7 +76,7 @@ func resolveProjectEnvelope(ctx context.Context, ex *sdk.Executor, req spec.Reso
 	if err != nil {
 		return spec.ResolvedProject{}, err
 	}
-	layers, err := loaderkit.ScanCandyFromLocal(localScanned, initCfg, scanSeamsLeg(ctx, ex, req))
+	layers, err := loaderkit.ScanCandyFromLocal(localScanned, initCfg, scanSeamsLeg(ctx, ex, req, cfg))
 	if err != nil {
 		return spec.ResolvedProject{}, err
 	}

@@ -75,7 +75,7 @@ func resolveProjectEnvelopeTolerant(ctx context.Context, ex *sdk.Executor, req s
 	if err != nil {
 		addDiag(err)
 	} else {
-		scanned, serr := loaderkit.ScanCandyFromLocal(localScanned, initCfg, scanSeamsLeg(ctx, ex, resReq))
+		scanned, serr := loaderkit.ScanCandyFromLocal(localScanned, initCfg, scanSeamsLeg(ctx, ex, resReq, cfg))
 		if serr != nil {
 			addDiag(serr)
 		} else {

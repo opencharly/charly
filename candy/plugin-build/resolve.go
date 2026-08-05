@@ -25,7 +25,9 @@ import (
 //                                     K3-W2 hoisted the per-candy LoaderExecutor copy into loaderkit]
 //   - the local candy SCAN          → HostBuild("buildengine-scan-local")  (bootstrap-delicate
 //                                     parseCandyYAML→buildCandy; the B bootstrap root STAYS core)
-//   - the remote candy FETCH fixpt  → loaderkit.ScanCandyFromLocal(seams) over three thin legs
+//   - the remote candy FETCH fixpt  → loaderkit.ScanCandyFromLocal(seams): the collect-refs + repo
+//                                     fetch legs run PLUGIN-SIDE (K-wave 2 cone R1 A2); only the
+//                                     per-candy remote manifest scan still round-trips
 //   - the build-time plugin CONNECT → HostBuild("buildengine-connect-plugins")  (registry M)
 //   - the pre-build VALIDATE gate    → InvokeProvider(command:validate)  (plugin↔plugin)
 //   - the `resource:` kind resolve   → InvokeProvider(kind:resource)  (plugin↔plugin, via loaderkit)
@@ -65,7 +67,7 @@ func resolveBuildEngine(ctx context.Context, ex *sdk.Executor, req spec.BuildReq
 	boxes := buildkit.NormalizeBoxArgs(req.Boxes)
 
 	// RequestedBoxes threads the explicit generate/build targets to the host's
-	// buildengine-collect-remote-refs leg too (task #17 fix) — so an on-demand
+	// plugin-side CollectRemoteRefs leg too (task #17 fix) — so an on-demand
 	// namespace-qualified target unreachable from any root-owned image's base/builder chain
 	// still gets its own remote candy refs collected, matching what buildkit.ResolveAllBox
 	// already does with the identical field for the RESOLVE half (step 6 below).
@@ -92,7 +94,7 @@ func resolveBuildEngine(ctx context.Context, ex *sdk.Executor, req spec.BuildReq
 	if err != nil {
 		return spec.BuildResolveReply{Error: errString(err)}, nil
 	}
-	layers, err := loaderkit.ScanCandyFromLocal(localScanned, initCfg, scanSeamsLeg(ctx, ex, rr))
+	layers, err := loaderkit.ScanCandyFromLocal(localScanned, initCfg, scanSeamsLeg(ctx, ex, rr, cfg))
 	if err != nil {
 		return spec.BuildResolveReply{Error: errString(err)}, nil
 	}
@@ -310,7 +312,7 @@ func resolveIntPtrDrive(v *int) int {
 	return 0
 }
 
-// boxBuildkitOpts mirrors charly's boxResolveOpts projected onto buildkit.ResolveOpts (the pure
+// boxBuildkitOpts mirrors spec.BoxResolveOpts projected onto buildkit.ResolveOpts (the pure
 // resolver's opts), threading the already-projected DistroCfg/BuilderCfg so ResolveAllBox never
 // reloads the vocabulary.
 func boxBuildkitOpts(boxes []string, includeDisabled bool, distroCfg *spec.DistroConfig, builderCfg *spec.BuilderConfig) buildkit.ResolveOpts {
