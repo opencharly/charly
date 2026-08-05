@@ -78,6 +78,14 @@ func (*provider) WalkProject(rootDir string, rootData []byte, rootIdentity strin
 	return loaderkit.Walk(rootDir, rootData, rootIdentity, seams)
 }
 
+// ParseCandyManifest implements spec.CandyScanner — the candy-MANIFEST parse, delegating to the ONE
+// copy in sdk/loaderkit (K-wave 2 cone R1, A2 unit 2, relocated from charly/layers.go's
+// parseCandyYAML). charly core reaches it here because charly/ may not import sdk/loaderkit; the
+// plugin-side scan drivers (candy/plugin-build) call loaderkit.ParseCandyManifest directly.
+func (*provider) ParseCandyManifest(path string, t spec.Threaded, vocab spec.CandyVocab) (*spec.Candy, error) {
+	return loaderkit.ParseCandyManifest(path, t, vocab)
+}
+
 // ScanCandyManifest implements spec.CandyScanner — the typed CANDY-SCAN the host calls once per
 // candy directory (compiled-in, no wire envelope): fs-probes + manifest parse + the derived-logic
 // construction (bake_plugin→require, package-section derivation, port normalization), delegating

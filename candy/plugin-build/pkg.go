@@ -68,7 +68,7 @@ func runBoxPkg(ctx context.Context, ex *sdk.Executor, req spec.BuildPkgRequest) 
 	if err != nil {
 		return nil, err
 	}
-	layers, err := loaderkit.ScanCandyFromLocal(localScanned, nil, scanSeamsLeg(ctx, ex, rr, uf.ProjectConfig()))
+	layers, err := loaderkit.ScanCandyFromLocal(localScanned, nil, scanSeamsLeg(ctx, ex, rr, uf.ProjectConfig(), distroCfg))
 	if err != nil {
 		return nil, err
 	}

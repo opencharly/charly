@@ -71,7 +71,6 @@ var reverseChannelHostBuilderWhitelist = []reverseChannelKindClause{
 	{"check-bed-gpu-prereq", "host_build_check_bed_gpu_prereq.go", "M — wire-broker leg, THE ONE seam surviving check-bed's dissolution (KERNEL_MANIFEST.md K5: operator-dropped GPU-hardware exception, gpu_allocate.go DetectVFIO)"},
 	{"step-emit", "step_emit_hostbuild.go", "M — STAY+CONSOLIDATE (KERNEL_MANIFEST.md W4: thin forwarder to the compiled-in \"oci-dispatch\" class:step provider, the host-side half candy/plugin-deploy-pod still needs)"},
 	{"buildengine-scan-local", "host_build_buildengine.go", "B — bootstrap-delicate local candy scan (KERNEL_MANIFEST.md W2: MIXED M/B/K1-IOU row, hostBuildScanLocal wraps EnsureRepoDownloaded)"},
-	{"buildengine-scan-remote", "host_build_buildengine.go", "B — bootstrap-delicate remote candy scan (KERNEL_MANIFEST.md W2: hostBuildScanRemote wraps EnsureRepoDownloaded)"},
 	{"buildengine-connect-plugins", "host_build_buildengine.go", "M — plugin-loading mechanism (KERNEL_MANIFEST.md W2: hostBuildConnectPlugins calls loadProjectPlugins, registers into providerRegistry)"},
 	{"buildengine-namespaced", "host_build_buildengine.go", "K1-IOU (KERNEL_MANIFEST.md W2: hostBuildNamespaced calls LoadConfig/ScanAllCandyWithConfigOpts, core-only per W1)"},
 	{"buildengine-context-ignore-baseline", "host_build_buildengine.go", "B — same-module embed boundary (KERNEL_MANIFEST.md W2: hostBuildContextIgnoreBaseline returns baselineContextIgnore, charly's own //go:embed)"},

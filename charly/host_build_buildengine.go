@@ -44,15 +44,15 @@ func hostBuildScanLocal(_ context.Context, req spec.ResolvedProjectRequest, _ bu
 // augmentation both moved to the shared fabric module (spec.BoxResolveOpts / spec.WithLocalRawRefs)
 // rather than being duplicated across the boundary.
 
-// hostBuildScanRemote scans the wanted bare refs out of a downloaded repo cache (the ScanSeams.ScanRemote
-// leg), driving parseCandyYAML through the shared CandyScanner.
-func hostBuildScanRemote(_ context.Context, req spec.BuildEngineScanRemoteRequest, _ buildEngineContext) (map[string]spec.ScannedCandy, error) {
-	wantRefs := make(map[string]bool, len(req.Refs))
-	for _, r := range req.Refs {
-		wantRefs[r] = true
-	}
-	return requireCandyScanner().ScanRemoteCandy(req.CacheDir, req.RepoPath, wantRefs, parseCandyYAML)
-}
+// The "buildengine-scan-remote" leg is DELETED too (K-wave 2 cone R1, A2 unit 2). It was the LAST
+// ScanSeams leg still crossing to the host: its per-candy manifest parse (parseCandyYAML) appeared
+// to need the clause-B buildCandy factory. An RDD spike over the whole 324-manifest corpus proved
+// that dependency was a pn->genericNode->pn IDENTITY round trip (321 node-form manifests plus all 3
+// error paths, byte-identical), so the parse mechanism relocated to sdk/loaderkit
+// (loaderkit.ParseCandyManifest) and candy/plugin-build now parses manifests itself, fetching the
+// only two host-side inputs it needs over the EXISTING "loader-threaded" leg + its own resolved
+// distroCfg. buildCandy/candyIsImage stay core for their GENUINE clause-B consumers (the
+// discovered-candy pre-check, foldCandyKind).
 
 // hostBuildConnectPlugins connects the project's build-time (out-of-tree) plugin candies into the host
 // registry so the plugin's subsequent InvokeProvider/render dispatch reaches them (registry M). Best-
@@ -216,7 +216,6 @@ func reqDirOrCwd(dir string) string {
 // Register the buildengine-* legs at package-var init (before any init()).
 var _ = func() bool {
 	registerHostBuilder("buildengine-scan-local", typedHostBuilder("buildengine-scan-local", hostBuildScanLocal))
-	registerHostBuilder("buildengine-scan-remote", typedHostBuilder("buildengine-scan-remote", hostBuildScanRemote))
 	registerHostBuilder("buildengine-connect-plugins", typedHostBuilder("buildengine-connect-plugins", hostBuildConnectPlugins))
 	registerHostBuilder("buildengine-namespaced", typedHostBuilder("buildengine-namespaced", hostBuildNamespaced))
 	registerHostBuilder("buildengine-context-ignore-baseline", typedHostBuilder("buildengine-context-ignore-baseline", hostBuildContextIgnoreBaseline))

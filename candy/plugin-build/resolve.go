@@ -94,7 +94,7 @@ func resolveBuildEngine(ctx context.Context, ex *sdk.Executor, req spec.BuildReq
 	if err != nil {
 		return spec.BuildResolveReply{Error: errString(err)}, nil
 	}
-	layers, err := loaderkit.ScanCandyFromLocal(localScanned, initCfg, scanSeamsLeg(ctx, ex, rr, cfg))
+	layers, err := loaderkit.ScanCandyFromLocal(localScanned, initCfg, scanSeamsLeg(ctx, ex, rr, cfg, distroCfg))
 	if err != nil {
 		return spec.BuildResolveReply{Error: errString(err)}, nil
 	}

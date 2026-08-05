@@ -130,9 +130,13 @@ func scanLocalLeg(ctx context.Context, ex *sdk.Executor, rr spec.ResolvedProject
 //     same BoxResolveOpts-scoped opts carrying RequestedBoxes/ExtraCandyRefs — task #17's fix).
 //   - EnsureRepo likewise runs plugin-side over loaderkit.EnsureRepoDownloaded (hostEnsureRepoLeg
 //     and its `buildengine-ensure-repo` host leg are both deleted).
-//   - ScanRemote alone still round-trips (hostScanRemoteLeg): its per-candy manifest parse threads
-//     the registered DocParser + the registry-derived Threaded snapshot, so it stays host-side.
-func scanSeamsLeg(ctx context.Context, ex *sdk.Executor, rr spec.ResolvedProjectRequest, cfg *spec.Config) loaderkit.ScanSeams {
+//   - ScanRemote runs plugin-side too (scanRemoteLeg over parseCandyManifestLeg). It was the LAST
+//     leg still crossing: its per-candy manifest parse appeared to need charly's clause-B buildCandy
+//     factory, which an RDD spike over the whole 324-manifest corpus disproved (the round trip
+//     through it was an identity). `buildengine-scan-remote` died with it.
+//
+// So NONE of the three ScanSeams legs is a host round-trip any more.
+func scanSeamsLeg(ctx context.Context, ex *sdk.Executor, rr spec.ResolvedProjectRequest, cfg *spec.Config, distroCfg *spec.DistroConfig) loaderkit.ScanSeams {
 	return loaderkit.ScanSeams{
 		CollectRemoteRefs: func(localScanned map[string]spec.ScannedCandy) ([]loaderkit.RemoteDownload, error) {
 			opts := spec.BoxResolveOpts(rr.RequestedBoxes, rr.IncludeDisabled)
@@ -145,7 +149,7 @@ func scanSeamsLeg(ctx context.Context, ex *sdk.Executor, rr spec.ResolvedProject
 			)
 		},
 		EnsureRepo: ensureRepoLeg(ctx, ex),
-		ScanRemote: hostScanRemoteLeg(ctx, ex),
+		ScanRemote: scanRemoteLeg(parseCandyManifestLeg(ctx, ex, distroCfg)),
 	}
 }
 
@@ -167,22 +171,32 @@ func ensureRepoLeg(ctx context.Context, ex *sdk.Executor) func(repoPath, version
 	}
 }
 
-// hostScanRemoteLeg scans the cached repo for the wanted bare refs (buildengine-scan-remote). It is
-// the ONE ScanSeams leg still crossing to the host — the per-candy manifest parse is
-// registry-coupled (registered DocParser + Threaded snapshot). cfg-agnostic, so the root and
-// namespaced scans share it (R3).
+// parseCandyManifestLeg builds the per-document candy-manifest parse the scan mechanisms take as
+// their `parseDoc` seam — PLUGIN-SIDE over loaderkit.ParseCandyManifest (K-wave 2 cone R1, A2 unit
+// 2). It used to be unreachable from a plugin, which is the only reason `buildengine-scan-remote`
+// existed: the parse appeared to need charly's clause-B buildCandy factory. An RDD spike over the
+// whole 324-manifest corpus proved that dependency was a pn->genericNode->pn identity round trip
+// (321 node-form manifests plus all 3 error paths, byte-identical), so the mechanism relocated and
+// the leg died with it.
+//
+// The two host-side values it needs are fetched ONCE per scan and captured: the registry-derived
+// kind-recognition snapshot over the EXISTING `loader-threaded` host leg, and the build vocabulary
+// derived from the resolve's own distroCfg — the same DistroConfig the deleted host leg re-derived
+// via LoadDefaultBuildConfig before calling RegisterBuildVocabulary.
+func parseCandyManifestLeg(ctx context.Context, ex *sdk.Executor, distroCfg *spec.DistroConfig) func(string) (*spec.Candy, error) {
+	threaded := loaderkit.LoaderThreadedViaExecutor(ctx, ex)
+	vocab := spec.NewCandyVocab(distroCfg)
+	return func(path string) (*spec.Candy, error) {
+		return loaderkit.ParseCandyManifest(path, threaded, vocab)
+	}
+}
 
-func hostScanRemoteLeg(ctx context.Context, ex *sdk.Executor) func(cacheDir, repoPath string, wantRefs map[string]bool) (map[string]spec.ScannedCandy, error) {
+// scanRemoteLeg scans the wanted bare refs out of a downloaded repo cache — PLUGIN-SIDE over
+// loaderkit.ScanRemoteCandy with the parse leg above. cfg-agnostic, so the root and namespaced scans
+// share this one copy (R3).
+func scanRemoteLeg(parseDoc func(string) (*spec.Candy, error)) func(cacheDir, repoPath string, wantRefs map[string]bool) (map[string]spec.ScannedCandy, error) {
 	return func(cacheDir, repoPath string, wantRefs map[string]bool) (map[string]spec.ScannedCandy, error) {
-		refs := make([]string, 0, len(wantRefs))
-		for r := range wantRefs {
-			refs = append(refs, r)
-		}
-		var out map[string]spec.ScannedCandy
-		if err := hostBuildJSON(ctx, ex, "buildengine-scan-remote", spec.BuildEngineScanRemoteRequest{CacheDir: cacheDir, RepoPath: repoPath, Refs: refs}, &out); err != nil {
-			return nil, err
-		}
-		return out, nil
+		return loaderkit.ScanRemoteCandy(cacheDir, repoPath, wantRefs, parseDoc)
 	}
 }
 
@@ -192,13 +206,13 @@ func hostScanRemoteLeg(ctx context.Context, ex *sdk.Executor) func(cacheDir, rep
 // the namespace's own cfg); EnsureRepo/ScanRemote reuse the cfg-agnostic shared legs for the
 // transitive fetch. The plugin never re-loads the namespace cfg or re-walks its reachability — the
 // host did that once and emitted the flat NamespaceScanReply.
-func namespaceScanSeams(ctx context.Context, ex *sdk.Executor, downloads []spec.RemoteDownload) loaderkit.ScanSeams {
+func namespaceScanSeams(ctx context.Context, ex *sdk.Executor, downloads []spec.RemoteDownload, distroCfg *spec.DistroConfig) loaderkit.ScanSeams {
 	return loaderkit.ScanSeams{
 		CollectRemoteRefs: func(_ map[string]spec.ScannedCandy) ([]loaderkit.RemoteDownload, error) {
 			return downloads, nil
 		},
 		EnsureRepo: ensureRepoLeg(ctx, ex),
-		ScanRemote: hostScanRemoteLeg(ctx, ex),
+		ScanRemote: scanRemoteLeg(parseCandyManifestLeg(ctx, ex, distroCfg)),
 	}
 }
 
@@ -363,7 +377,7 @@ func foldNamespaceScanEntries(ctx context.Context, ex *sdk.Executor, rootUF *spe
 			continue
 		}
 		sub := subUF.ProjectConfig()
-		nsLayers, err := loaderkit.ScanCandyFromLocal(entry.Scanned, ic, namespaceScanSeams(ctx, ex, entry.Downloads))
+		nsLayers, err := loaderkit.ScanCandyFromLocal(entry.Scanned, ic, namespaceScanSeams(ctx, ex, entry.Downloads, distroCfg))
 		if err != nil {
 			continue // best-effort/additive, matching the deleted host fill's tolerance
 		}

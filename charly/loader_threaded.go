@@ -84,6 +84,35 @@ func requireCandyScanner() spec.CandyScanner {
 	return activeCandyScanner
 }
 
+// candyVocab is the build VOCABULARY the candy-manifest shape guard consults — the distro/format
+// name sets DERIVED at load time from the embedded build vocabulary (plus any project override),
+// never a Go constant, so adding a distro or package format stays a vocabulary edit. It is the ONE
+// piece of host state parseCandyYAML supplies to the relocated parse mechanism; the mechanism itself
+// (and the sets' own membership rule) live in sdk/loaderkit + spec.CandyVocab since K-wave 2 cone R1
+// (A2 unit 2). The zero value fails the guard OPEN — no false positives — matching the pre-move
+// contract where an unregistered vocabulary cleared the caches.
+var candyVocab spec.CandyVocab
+
+// RegisterBuildVocabulary derives the distro/format vocabulary from a DistroConfig and caches it for
+// the duration of the process. Safe to call repeatedly; a nil config clears it.
+func RegisterBuildVocabulary(dc *spec.DistroConfig) { candyVocab = spec.NewCandyVocab(dc) }
+
+// parseCandyYAML is the candy-MANIFEST parse the two CandyScanner scan methods take as their
+// parseManifest seam. It is a bare forward into the seam THIS file declares: the mechanism relocated
+// to sdk/loaderkit in K-wave 2 cone R1 (A2 unit 2) so a plugin driving its own scan can parse
+// manifests itself, and charly/ may not import sdk/loaderkit (import purity), so core reaches it
+// through the registered scanner. All core supplies is the two host-side values the mechanism takes
+// as parameters — the registry-derived kind-recognition snapshot and the build vocabulary above.
+//
+// Clause B is NOT what keeps this here, and the distinction matters: an RDD spike over the whole
+// 324-manifest corpus proved the pre-move node-form branch's pn->genericNode->buildCandy->pn round
+// trip was an IDENTITY (321 node-form manifests plus all 3 error paths, byte-identical), so the
+// bootstrap-critical factory was never on this path. buildCandy/candyIsImage stay core for their
+// GENUINE clause-B consumers — the discovered-candy pre-check and foldCandyKind.
+func parseCandyYAML(path string) (*spec.CandyYAML, error) {
+	return requireCandyScanner().ParseCandyManifest(path, loaderThreaded(), candyVocab)
+}
+
 // hostWalkProject runs the kind-blind whole-project WALK via the registered loader plugin,
 // returning its generic parse envelope. rootData is the (bootstrap-transformed) root charly.yml
 // bytes; the seams are the REGISTRY-COUPLED host primitives the walk consults instead of the
