@@ -233,7 +233,13 @@ func dispatchCommand(d externalCommandDispatch, sub string) error {
 // os.Stdout/Stderr/TTY natively), mirroring the OUT-OF-PROCESS plugin's pass-through `{"args":[…]}`
 // envelope (the ops.OpRun contract), so a command candy behaves identically in either placement.
 func dispatchInProcCommand(prov Provider, d externalCommandDispatch, sub string) error {
-	params, err := marshalJSON(map[string]any{"args": externalCommandArgs(d, sub)})
+	// Thread the host spec.HostEnv as DATA on the OpRun envelope (the #200 "threads as DATA, does
+	// not anchor a seam" precedent — hostEnvJSON, KERNEL_MANIFEST.md:39): os.Executable() resolves
+	// correctly to the charly binary ONLY when called in-core (R10 bed-found bug #5), so every
+	// compiled-in command plugin receives it verbatim. Class-generic, no provider word (F11-safe):
+	// a command that needs it (command:bundle's from-box pod path, which forwards HostEnvJSON into
+	// deploy:pod's PodConfigSetupRequest) reads it; the rest ignore the extra key.
+	params, err := marshalJSON(map[string]any{"args": externalCommandArgs(d, sub), "host_env_json": hostEnvJSON()})
 	if err != nil {
 		return fmt.Errorf("command %q: marshal args: %w", d.word, err)
 	}

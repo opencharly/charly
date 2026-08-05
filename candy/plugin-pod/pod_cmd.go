@@ -395,7 +395,8 @@ type CpCmd struct {
 // ConfigCmd groups box configuration subcommands — the `charly config` grammar. Default
 // subcommand (no keyword): full setup (quadlet + secrets + enc). Every leaf's actual body is
 // deeply core-type-coupled (BundleConfig/ResolvedSidecar/enc*/deploykit.CleanDeployEntry, and
-// Setup is ALSO constructed directly, by its EXACT unchanged name, by bundle_from_box_cmd.go —
+// Setup is ALSO constructed directly, by its EXACT unchanged name, by from_box_pod.go (the
+// `charly bundle from-box` pod path, K-wave 2 cone R2 — formerly charly/bundle_from_box_cmd.go) —
 // P13-kernel, out of this wave's scope — so the core struct cannot rename/move), so each leaf
 // forwards via its own HostBuild("pod-config-<leaf>") seam.
 type ConfigCmd struct {

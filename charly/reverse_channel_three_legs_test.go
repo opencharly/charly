@@ -86,7 +86,6 @@ var reverseChannelHostBuilderWhitelist = []reverseChannelKindClause{
 	{"pod-config-list-sidecars", "host_build_pod_config_seams.go", "UNDOCUMENTED (pending KERNEL_MANIFEST.md row)"},
 	{"arbiter-bracket-acquire", "host_build_arbiter_bracket.go", "UNDOCUMENTED (pending KERNEL_MANIFEST.md row)"},
 	{"arbiter-bracket-release", "host_build_arbiter_bracket.go", "UNDOCUMENTED (pending KERNEL_MANIFEST.md row)"},
-	{"deploy-from-box", "host_build_deploy_from_box.go", "UNDOCUMENTED (pending KERNEL_MANIFEST.md row)"},
 	{"deploy-del-resolve", "host_build_deploy_del_resolve.go", "UNDOCUMENTED (pending KERNEL_MANIFEST.md row)"},
 	{"config-resolve", "host_build_config_resolve.go", "UNDOCUMENTED (pending KERNEL_MANIFEST.md row)"},
 	{"resolve-target-add", "host_build_resolve_target_add.go", "UNDOCUMENTED (pending KERNEL_MANIFEST.md row)"},

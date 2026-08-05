@@ -18,8 +18,9 @@ import (
 // the host half does only ResolveTarget+Add, no compile), deploy-del-resolve, and
 // deploy-node-del-dispatch (the per-node ResolveTarget+Del terminal step). The former
 // deploy-members-up/-down seams DIED (#55 W3 A4) — the walk calls sdk/deploykit.BringUpMembers/
-// TearDownMembers directly now. `from-box` still forwards its WHOLE command to
-// HostBuild("deploy-from-box"). The config-management ops (show/export/import/reset/status) run
+// TearDownMembers directly now. `from-box` is fully plugin-side since K-wave 2 cone R2 (the
+// "deploy-from-box" HostBuild seam is DELETED — runFromBoxPod reaches deploy:pod's OpConfigSetup
+// by direct InvokeProvider). The config-management ops (show/export/import/reset/status) run
 // plugin-side — reads via loaderkit.LoadHostBundleConfigViaExecutor, writes via deploykit.SaveBundleConfig
 // directly (#55 K4 config-write seam-collapse; the host "deploy-config-save" leg is deleted).
 // command:bundle is COMPILED-IN and dispatches
@@ -32,6 +33,13 @@ var (
 	cmdCtx  context.Context
 	cmdExec *sdk.Executor
 )
+
+// cmdHostEnvJSON carries the host-side spec.HostEnv (CharlyBin/Home/Version) threaded as DATA on
+// the OpRun dispatch (charly/provider_command_external.go's dispatchInProcCommand — core computes
+// it, since os.Executable() is only correct in-core, R10 bed-found bug #5). The from-box pod path
+// forwards it verbatim into PodConfigSetupRequest.HostEnvJSON (deploy:pod's encrypted-mount
+// ExecStartPre CharlyBin line) instead of computing its own.
+var cmdHostEnvJSON json.RawMessage
 
 // setCommandContext stashes the reverse-channel executor for the duration of one `charly bundle …`
 // dispatch. Called once at the top of command:bundle's Invoke(OpRun).

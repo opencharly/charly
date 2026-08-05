@@ -16,8 +16,10 @@
 //     Add/Del is the host tail of the resolve-target-add / deploy-node-del-dispatch seams. Sibling
 //     `peer:` member bring-up/tear-down calls sdk/deploykit.BringUpMembers/TearDownMembers
 //     directly (#55 W3 A4 — the former deploy-members-up/-down seams are deleted). `from-box`
-//     still forwards to HostBuild("deploy-from-box"); the config-management leaves (show/export/
-//     import/reset/status) run plugin-side — reads via loaderkit.LoadHostBundleConfigViaExecutor, writes via
+//     runs fully plugin-side since K-wave 2 cone R2 (runFromBoxPod reaches deploy:pod's
+//     OpConfigSetup by direct InvokeProvider; the "deploy-from-box" seam is deleted); the
+//     config-management leaves (show/export/import/reset/status) run plugin-side — reads via
+//     loaderkit.LoadHostBundleConfigViaExecutor, writes via
 //     deploykit.SaveBundleConfig directly (#55 K4 config-write seam-collapse). `path`
 //     resolves plugin-side via kit.DefaultDeployConfigPath (no seam).
 //
