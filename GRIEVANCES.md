@@ -4,7 +4,7 @@ Every tool here exists because something in ordinary DevOps practice is worse th
 This document names four of those things, states the status quo without strawmanning it, and shows
 what OpenCharly does instead — with the mechanism, not the marketing.
 
-`VISION.md` says where the project is going. This says what it is running away from.
+[The vision](VISION.md) says where the project is going. This says what it is running away from.
 
 ---
 
@@ -233,6 +233,6 @@ The four answers compose into one property — **a described environment that is
 can destroy it because you can rebuild it; you can rebuild it because the description is complete;
 the description is complete because it is composed of units that each carry their own proof.
 
-For the positive statement of where that leads, see [VISION.md](VISION.md). For how any of it
-works, see the skills index in [plugins/README.md](plugins/README.md) or the site at
+For the positive statement of where that leads, see [the vision](VISION.md). For how any of it
+works, see the [skills index](plugins/README.md) or the site at
 [opencharly.ai](https://opencharly.ai).

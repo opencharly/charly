@@ -43,17 +43,6 @@ func (p page) write(outRoot string) error {
 	return nil
 }
 
-// resetTree removes a generated tree wholesale before rewriting it, so an entity deleted at the
-// source disappears from the site instead of lingering as an orphan page. Only the trees this
-// generator owns are ever reset — the hand-authored narrative is never touched.
-func resetTree(outRoot, rel string) error {
-	dest := filepath.Join(outRoot, filepath.FromSlash(rel))
-	if err := os.RemoveAll(dest); err != nil {
-		return fmt.Errorf("reset %s: %w", rel, err)
-	}
-	return nil
-}
-
 // yamlString quotes a frontmatter scalar safely. Descriptions are authored prose and routinely
 // contain colons, quotes and backticks, every one of which breaks a bare YAML scalar.
 func yamlString(s string) string {

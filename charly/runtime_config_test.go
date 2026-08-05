@@ -123,6 +123,52 @@ func TestResolveRuntime_EnvOverridesConfig(t *testing.T) {
 	}
 }
 
+// TestResolveRuntime_MixedEngines pins the build and run engines to DIFFERENT engines and asserts
+// ResolveRuntime keeps them apart.
+//
+// The two are independent by construction — separate env vars, separate config fields, separate
+// auto-detect branches — and the documentation says so: opencharly.ai and the README both tell a
+// reader that building with Podman and running under Docker is a supported combination. Until this
+// test existed, nothing asserted it end to end. TestSaveAndLoadRuntimeConfig names the same pair,
+// but it round-trips the config FILE; it never calls ResolveRuntime, so it proves the pair can be
+// written down rather than that it survives resolution. A reviewer reading the docs claim and
+// grepping for its proof would have found that test and stopped one layer short.
+//
+// It fails if resolution ever collapses the two onto one engine — the single way the documented
+// claim could quietly stop being true.
+func TestResolveRuntime_MixedEngines(t *testing.T) {
+	tmpDir := t.TempDir()
+	orig := hostenv.RuntimeConfigPath
+	defer func() { hostenv.RuntimeConfigPath = orig }()
+	hostenv.RuntimeConfigPath = func() (string, error) {
+		return filepath.Join(tmpDir, "config.yml"), nil
+	}
+
+	_ = os.Setenv("CHARLY_BUILD_ENGINE", "podman")
+	defer os.Unsetenv("CHARLY_BUILD_ENGINE") //nolint:errcheck
+	_ = os.Setenv("CHARLY_RUN_ENGINE", "docker")
+	defer os.Unsetenv("CHARLY_RUN_ENGINE") //nolint:errcheck
+	_ = os.Unsetenv("CHARLY_RUN_MODE")
+	_ = os.Unsetenv("CHARLY_BIND_ADDRESS")
+
+	rt, err := hostenv.ResolveRuntime()
+	if err != nil {
+		t.Fatalf("ResolveRuntime() error: %v", err)
+	}
+	if rt.BuildEngine != "podman" {
+		t.Errorf("BuildEngine = %q, want %q", rt.BuildEngine, "podman")
+	}
+	if rt.RunEngine != "docker" {
+		t.Errorf("RunEngine = %q, want %q", rt.RunEngine, "docker")
+	}
+
+	// The mixed pair also decides the run mode: quadlet requires RunEngine==podman, so a
+	// docker RUN engine must resolve to direct however the build engine is set.
+	if rt.RunMode != "direct" {
+		t.Errorf("RunMode = %q, want %q (quadlet requires a podman run engine)", rt.RunMode, "direct")
+	}
+}
+
 func TestResolveRuntime_InvalidEngine(t *testing.T) {
 	orig := hostenv.RuntimeConfigPath
 	defer func() { hostenv.RuntimeConfigPath = orig }()

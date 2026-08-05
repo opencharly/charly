@@ -122,7 +122,7 @@ func collectRoutes(outRoot string) (map[string]bool, []contentPage, error) {
 			return err
 		}
 		route := "/" + filepath.ToSlash(strings.TrimSuffix(rel, ext))
-		// `foo/index.md` serves at `/foo/`; the root `index.mdx` serves at `/`.
+		// `foo/index.md` serves at `/foo/`; the root index page serves at `/`.
 		route = strings.TrimSuffix(route, "/index")
 		if route == "/index" || route == "" {
 			route = "/"

@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// pluginEntity is a candy carrying a `plugin:` block — one of the 85 plugin candies.
+// pluginEntity is a candy carrying a `plugin:` block — one of the 86 plugin candies.
 type pluginEntity struct {
 	entity
 	CompiledIn bool
@@ -96,9 +96,6 @@ func pluginSitePath(p pluginEntity) string {
 
 // generatePlugins emits one page per plugin candy plus the provider cross-index.
 func generatePlugins(outRoot string, plugins []pluginEntity) (int, error) {
-	if err := resetTree(outRoot, "reference/plugin"); err != nil {
-		return 0, err
-	}
 	count := 0
 	for _, p := range plugins {
 		var b strings.Builder

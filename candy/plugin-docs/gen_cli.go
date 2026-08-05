@@ -22,9 +22,6 @@ import (
 // nests. The narrative CLI guide — hand-written, where prose belongs — covers the spine and the
 // nesting; nothing about either is transcribed into generated output, so nothing here can drift.
 func generateCLI(outRoot string, plugins []pluginEntity) (int, error) {
-	if err := resetTree(outRoot, "reference/cli"); err != nil {
-		return 0, err
-	}
 
 	type cmd struct {
 		word   string
