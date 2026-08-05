@@ -322,7 +322,7 @@ func cancelTransientTimer(unit string) {
 // RCA #7 (FINAL/K5 unit 6a, live-probe-caught, updated from an earlier "ordering artifact, not
 // the common case" note that RCA #6's key unification proved WRONG): the vm ephemeral register
 // (candy/plugin-deploy-vm's dispatchVmEphemeralRegister) runs BEFORE `charly vm create`'s own state writes (the port_auto persist) EVERY TIME —
-// vm_lifecycle_preresolve.go's call order, not incidental — so the two writers landing on this
+// the vm ephemeral register's call order, not incidental — so the two writers landing on this
 // SAME canonical key (post-RCA-#6) is the COMMON case, and the interaction is LOAD-BEARING: a
 // naive wholesale `entry.VmState = state` in SaveVmDeployState would silently ERASE the
 // just-registered Ephemeral block on every ordinary Add. SaveVmDeployState's own Ephemeral-

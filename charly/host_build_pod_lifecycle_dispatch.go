@@ -37,15 +37,17 @@ import (
 // exactly ONE deploy-config entry, never a tree).
 //
 // update and remove do NOT share the LifecycleTarget shape and are NOT forced into it: update
-// keeps its existing podUpdateCmd/dispatchByDeployTarget body (update_deploy_dispatch.go)
-// UNCHANGED — that resolver is registry+loader-coupled the same way, just via the project tree
-// instead of the per-host deploy config, never touching a LifecycleTarget at all. remove is FULLY
-// ported to candy/plugin-pod's RemoveCmd.Run() (remove_orchestration.go + remove_tunnel.go); all
-// that remains under op="remove" is the arbiter-release bracket, host-process
-// CHARLY_PREEMPT_LEASE state a placement-agnostic plugin cannot own. Forcing these two through
-// dispatchAndRunLifecycle would trade a real shape mismatch for false uniformity (R3 only applies
-// to code that is ACTUALLY duplicated) — they stay their own switch cases, calling their own
-// existing bodies directly.
+// keeps the dispatchByDeployTarget leg pair (update_deploy_dispatch.go) — registry+loader-coupled
+// the same way, just via the deploy node instead of the per-host deploy config, never touching a
+// LifecycleTarget at all. K-wave 2 cone CONTESTED THINned that file 178 → 104: the deploy-node
+// resolution + disposability note moved to candy/plugin-pod (the plugin threads the resolved node
+// on #PodLifecycleRequest.node), leaving core exactly the irreducible loadDeployPlugins +
+// ResolveTarget body. remove is FULLY ported to candy/plugin-pod's RemoveCmd.Run()
+// (remove_orchestration.go + remove_tunnel.go); all that remains under op="remove" is the
+// arbiter-release bracket, host-process CHARLY_PREEMPT_LEASE state a placement-agnostic plugin
+// cannot own. Forcing these two through dispatchAndRunLifecycle would trade a real shape mismatch
+// for false uniformity (R3 only applies to code that is ACTUALLY duplicated) — they stay their own
+// switch cases, calling their own existing bodies directly.
 //
 // Interactive/streaming safety (RDD claim, closed both at design level and on a live disposable
 // bed — check-sidecar-pod, 12/12 steps PASS including the fresh `charly update` gate): this
@@ -256,7 +258,10 @@ func hostBuildPodLifecycle(_ context.Context, req spec.PodLifecycleRequest, _ bu
 		cmd := podUpdateCmd{
 			Box: req.Box, Tag: p.Tag, Build: p.Build, Instance: req.Instance,
 			Seed: p.Seed, ForceSeed: p.ForceSeed, DataFrom: p.DataFrom,
-			TreeJSON: p.TreeJSON,
+			// The node rides the shared #PodLifecycleRequest.node envelope (the plugin resolved
+			// it plugin-side from the merged tree — K-wave 2 cone CONTESTED); absent ⇒ the same
+			// "no charly.yml" error dispatchByDeployTarget reports.
+			Node: req.Node,
 		}
 		return spec.PodLifecycleReply{}, cmd.dispatchByDeployTarget()
 

@@ -428,27 +428,27 @@ func (t *pluginDeployTarget) Shell(ctx context.Context, cmd []string) error {
 	return nil
 }
 
-// Attach mirrors the pre-S3b former core-resident substrate lifecycle proxy's Attach exactly: a substrate registers an
-// attachPlanResolver (today only "pod", via pod_lifecycle_dispatch.go, and "vm", via
-// vm_lifecycle_preresolve.go's vmAttachResolver) — its ABSENCE is a hard error ("interactive
-// attach not supported"), never a silent fallback, since a hookless substrate has no way to
-// resolve the in-venue command. The resolved plan JSON (spec.PodAttachOpts for pod,
-// spec.PodLiveStdioPlan for vm) rides as OptsJSON; the plugin threads it under the substrate's
-// OWN expected "plan" key (handleDeployExec, candy/plugin-bundle/deploy_target.go).
+// Attach mirrors the pre-S3b former core-resident substrate lifecycle proxy's Attach exactly: a substrate
+// with a registered attachPlanResolver (today only "pod", via pod_lifecycle_dispatch.go) has the host
+// resolve its raw attach opts into OptsJSON; a HOOKLESS lifecycle substrate (vm) self-resolves its
+// in-venue command plugin-side from the raw cmd already threaded on the dispatch request (the former
+// vmAttachResolver in vm_lifecycle_preresolve.go was deleted — its body, strings.Join(cmd, " "), is
+// derivable from that wire cmd, K-wave 2 cone CONTESTED). The plugin threads the resolved plan under
+// the substrate's OWN expected "plan" key (handleDeployExec, candy/plugin-bundle/deploy_target.go).
 func (t *pluginDeployTarget) Attach(ctx context.Context, cmd []string, tty bool) error {
 	if !t.hasLifecycle {
 		return fmt.Errorf("external deploy %q: %w", t.name, ErrNotSupportedOnExternal)
 	}
-	planHook, ok := lifecycleAttachPlanHooks[t.word]
-	if !ok {
-		return fmt.Errorf("substrate %q: interactive attach not supported", t.word)
+	var optsJSON json.RawMessage
+	if planHook, ok := lifecycleAttachPlanHooks[t.word]; ok {
+		box, instance := spec.ParseDeployKey(t.name)
+		var err error
+		optsJSON, err = planHook(ctx, box, instance, cmd, tty)
+		if err != nil {
+			return err
+		}
 	}
-	box, instance := spec.ParseDeployKey(t.name)
-	planJSON, err := planHook(ctx, box, instance, cmd, tty)
-	if err != nil {
-		return err
-	}
-	reply, err := t.dispatch(ctx, spec.DeployTargetDispatchRequest{Op: "attach", Cmd: cmd, TTY: tty, OptsJSON: planJSON})
+	reply, err := t.dispatch(ctx, spec.DeployTargetDispatchRequest{Op: "attach", Cmd: cmd, TTY: tty, OptsJSON: optsJSON})
 	if err != nil {
 		return err
 	}

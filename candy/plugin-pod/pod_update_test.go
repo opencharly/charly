@@ -1,4 +1,4 @@
-package main
+package pod
 
 import (
 	"io"
@@ -9,12 +9,12 @@ import (
 	"github.com/opencharly/spec/spec"
 )
 
-// TestResolveUpdateDeployNode guards the 2026-05 fix for `charly update <base>
-// -i <instance>`: the deploy lookup must compose the full deploy key
-// (deployKey(image, instance)) so an instance-only `<base>/<instance>`
-// entry resolves. Before the fix the dispatcher looked up the bare base
-// name and failed with `no deploy named "<base>"`.
-func TestResolveUpdateDeployNode(t *testing.T) {
+// TestLookupDeployNode guards the 2026-05 fix for `charly update <base> -i <instance>`: the
+// deploy lookup must compose the full deploy key (deployKey(image, instance)) so an
+// instance-only `<base>/<instance>` entry resolves. Before the fix the dispatcher looked up the
+// bare base name and failed with `no deploy named "<base>"`. Relocated from
+// charly/update_deploy_dispatch_test.go (K-wave 2 cone CONTESTED) with the function it tests.
+func TestLookupDeployNode(t *testing.T) {
 	tree := map[string]spec.BundleNode{
 		"foo/bar": {Target: "pod", Image: "foo"},
 		"baz":     {Target: "pod", Image: "baz"},
@@ -30,7 +30,7 @@ func TestResolveUpdateDeployNode(t *testing.T) {
 	}
 
 	t.Run("instance key resolves", func(t *testing.T) {
-		node, err := resolveUpdateDeployNode(tree, "foo", "bar")
+		node, err := lookupDeployNode(tree, "foo", "bar")
 		if err != nil {
 			t.Fatalf("instance lookup failed: %v", err)
 		}
@@ -40,7 +40,7 @@ func TestResolveUpdateDeployNode(t *testing.T) {
 	})
 
 	t.Run("bare name resolves", func(t *testing.T) {
-		node, err := resolveUpdateDeployNode(tree, "baz", "")
+		node, err := lookupDeployNode(tree, "baz", "")
 		if err != nil {
 			t.Fatalf("bare lookup failed: %v", err)
 		}
@@ -50,7 +50,7 @@ func TestResolveUpdateDeployNode(t *testing.T) {
 	})
 
 	t.Run("dotted nested path still walks", func(t *testing.T) {
-		node, err := resolveUpdateDeployNode(tree, "stack.web", "")
+		node, err := lookupDeployNode(tree, "stack.web", "")
 		if err != nil {
 			t.Fatalf("nested lookup failed: %v", err)
 		}
@@ -63,14 +63,14 @@ func TestResolveUpdateDeployNode(t *testing.T) {
 		// This is the exact bug — `charly update foo -i bar` previously looked
 		// up bare "foo" and found nothing. The fix uses deployKey, so a
 		// bare-base lookup (instance "") correctly does NOT match foo/bar.
-		_, err := resolveUpdateDeployNode(tree, "foo", "")
+		_, err := lookupDeployNode(tree, "foo", "")
 		if err == nil {
 			t.Fatal("bare base 'foo' must not resolve when only foo/bar exists")
 		}
 	})
 
 	t.Run("missing instance error reports the full key", func(t *testing.T) {
-		_, err := resolveUpdateDeployNode(tree, "foo", "missing")
+		_, err := lookupDeployNode(tree, "foo", "missing")
 		if err == nil {
 			t.Fatal("expected error for missing instance key")
 		}
@@ -86,9 +86,12 @@ func TestResolveUpdateDeployNode(t *testing.T) {
 // NO note; non-disposable targets get a note naming the key + lifecycle. The
 // disposable flag now gates only the AI's autonomous destroy (CLAUDE.md R10) and
 // the check-runner's unattended fresh-rebuild — not this human-driven verb.
+// Relocated from charly/update_deploy_dispatch_test.go (K-wave 2 cone CONTESTED).
 func TestNoteUpdateDisposability(t *testing.T) {
-	tDisposable := new(true)
-	fDisposable := new(false)
+	tDisposable := new(bool)
+	*tDisposable = true
+	fDisposable := new(bool)
+	*fDisposable = false
 	cases := []struct {
 		name     string
 		node     *spec.BundleNode

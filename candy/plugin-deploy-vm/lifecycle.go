@@ -37,7 +37,6 @@ type lifecycleParams struct {
 	Prepare   json.RawMessage `json:"prepare"`
 	KeepImage bool            `json:"keep_image"`
 	Cmd       []string        `json:"cmd"`
-	Plan      json.RawMessage `json:"plan"` // host-resolved spec.PodLiveStdioPlan (F12 OpAttach)
 }
 
 // isLifecycleOp reports whether op is a substrate-lifecycle Op (vs. the OpExecute deploy walk).
@@ -106,16 +105,15 @@ func invokeLifecycle(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 }
 
 // vmAttach runs the F12 interactive session (`charly shell <vm-deploy>`) IN the guest: the host serves
-// the guest *SSHExecutor (via the vm VenueExecutor) and resolved the in-guest command into p.Plan
-// (#PodLiveStdioPlan — empty script ⇒ a bare login shell, `ssh -t <alias>`). The plugin runs it over
-// exec.RunInteractive, whose SSHExecutor leg wraps it in `ssh -t <alias> [script]` with the operator's
-// terminal inherited host-side. The exit round-trips as spec.PodExecReply.ExitCode → *sdk.ExitCodeError.
+// the guest *SSHExecutor (via the vm VenueExecutor) and threads the raw cmd over the wire; the plugin
+// derives the in-guest command itself (strings.Join(cmd, " ") — the F12 attach-resolver moved
+// plugin-side with the deletion of charly/vm_lifecycle_preresolve.go, K-wave 2 cone CONTESTED, since
+// the cmd was already on the wire at unified_targets' dispatch). Empty cmd ⇒ a bare login shell,
+// `ssh -t <alias>`. The plugin runs it over exec.RunInteractive, whose SSHExecutor leg wraps it in
+// `ssh -t <alias> [script]` with the operator's terminal inherited host-side. The exit round-trips
+// as spec.PodExecReply.ExitCode → *sdk.ExitCodeError.
 func vmAttach(ctx context.Context, exec *sdk.Executor, p lifecycleParams) (*pb.InvokeReply, error) {
-	var plan spec.PodLiveStdioPlan
-	if err := json.Unmarshal(p.Plan, &plan); err != nil {
-		return nil, fmt.Errorf("plugin-deploy-vm attach: decode plan: %w", err)
-	}
-	exit, err := exec.RunInteractive(ctx, plan.Script)
+	exit, err := exec.RunInteractive(ctx, strings.Join(p.Cmd, " "))
 	if err != nil {
 		return nil, fmt.Errorf("plugin-deploy-vm attach: %w", err)
 	}

@@ -257,7 +257,7 @@ func (c *VmStartCmd) Run() error {
 
 // startVM starts a previously-created VM by image+instance, dispatching by
 // backend (libvirt domain start / re-exec the stored qemu command). Shared
-// by VmStartCmd.Run and the resource arbiter (charly/preempt.go) so the holder-
+// by VmStartCmd.Run and the resource arbiter (candy/plugin-preempt) so the holder-
 // restart path runs the exact same lifecycle code as `charly vm start`.
 func startVM(box, instance, domain string) error {
 	reply, err := hostConfigResolve(box)

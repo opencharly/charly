@@ -577,43 +577,81 @@ func (c *UpdateCmd) Run() error {
 		return fmt.Errorf("remote refs are not accepted here; run 'charly box pull %s' first", c.Box)
 	}
 	c.Box, c.Instance = deploykit.CanonicalizeDeployArg(c.Box, c.Instance)
-	// Resolve the merged deploy tree PLUGIN-SIDE and thread it into the seam as DATA — the #55 Cone
-	// A Unit 3b tree-threading that replaced the host dispatchByDeployTarget's former core
-	// merged-tree read.
-	treeJSON, err := resolveDeployTreeJSON(c.Box)
+	// Resolve the deploy node PLUGIN-SIDE (merged tree → full deploy key) and thread the node
+	// into the seam as DATA — the K-wave 2 cone CONTESTED completion of the #55 Cone A Unit 3b
+	// tree-threading: the host's dispatchByDeployTarget needs the node, not the whole tree.
+	node, err := resolveUpdateDeployNode(c.Box, c.Instance)
 	if err != nil {
 		return err
 	}
-	return hostPodLifecycle("update", c.Box, c.Instance, nil, spec.PodUpdatePayload{
+	noteUpdateDisposability(node, c.Box, c.Instance)
+	return hostPodLifecycle("update", c.Box, c.Instance, node, spec.PodUpdatePayload{
 		Tag:       c.Tag,
 		Build:     c.Build,
 		Seed:      c.Seed,
 		ForceSeed: c.ForceSeed,
 		DataFrom:  c.DataFrom,
-		TreeJSON:  treeJSON,
 	})
 }
 
-// resolveDeployTreeJSON resolves the merged project+operator deploy tree PLUGIN-SIDE
-// (loaderkit.ResolveMergedTreeViaExecutor) and marshals it for threading into the "pod-lifecycle"
-// op="update" payload as DATA, so the host dispatchByDeployTarget stops re-loading the tree via the core
-// a host merged-tree read (#55 Cone A Unit 3b). The "deploy-plugins-connect" preamble connects the
-// deployment's out-of-tree plugin candies (the host's ResolveTarget needs them) and returns the
-// project dir the loader loads from — the SAME preamble command:bundle's resolveTreeViaLoader runs.
-// A tree-absent project marshals to a null tree, which the host handler reports as "no charly.yml".
-func resolveDeployTreeJSON(deployName string) ([]byte, error) {
+// resolveUpdateDeployNode resolves the deploy entry for an `charly update` invocation by the FULL
+// deploy key, resolving the merged project+operator deploy tree PLUGIN-SIDE
+// (loaderkit.ResolveMergedTreeViaExecutor) and looking the key up in it. deployKey applies the
+// -i instance, returning the bare (or dotted-nested) name unchanged when instance is empty — so
+// `charly update <base> -i <inst>` finds the instance-keyed `<base>/<inst>` entry, plain names
+// still resolve, and dotted nested paths (`a.b.c`) still walk. On miss the error reports the full
+// key. The "deploy-plugins-connect" preamble connects the deployment's out-of-tree plugin candies
+// (the host's ResolveTarget needs them) and returns the project dir the loader loads from — the
+// SAME preamble command:bundle's resolveTreeViaLoader runs. Relocated from
+// charly/update_deploy_dispatch.go (K-wave 2 cone CONTESTED).
+func resolveUpdateDeployNode(image, instance string) (*spec.Deploy, error) {
 	if cmdExec == nil {
 		return nil, fmt.Errorf("pod update: no host reverse channel (command not compiled-in?)")
 	}
 	var pre spec.DeployPluginsConnectReply
-	if err := hostPodSeamReply("deploy-plugins-connect", spec.DeployPluginsConnectRequest{Path: deployName}, &pre); err != nil {
+	if err := hostPodSeamReply("deploy-plugins-connect", spec.DeployPluginsConnectRequest{Path: image}, &pre); err != nil {
 		return nil, err
 	}
 	tree, err := loaderkit.ResolveMergedTreeViaExecutor(cmdCtx, cmdExec, pre.Dir)
 	if err != nil {
 		return nil, err
 	}
-	return json.Marshal(tree)
+	return lookupDeployNode(tree, image, instance)
+}
+
+// lookupDeployNode walks the merged deploy tree for the FULL deploy key — the pure
+// spec.ResolveNodePath step, split out for the unit test. deployKey applies the -i instance
+// (returning the bare or dotted-nested name unchanged when instance is empty), so an
+// instance-only `<base>/<inst>` entry resolves and a bare-base lookup correctly does NOT match it.
+func lookupDeployNode(tree map[string]spec.BundleNode, image, instance string) (*spec.Deploy, error) {
+	key := spec.DeployKey(image, instance)
+	node, _, err := spec.ResolveNodePath(tree, key)
+	if err != nil || node == nil {
+		return nil, fmt.Errorf("no deploy named %q in charly.yml. To refresh an image artifact only, use 'charly box pull %s'", key, image)
+	}
+	return node, nil
+}
+
+// noteUpdateDisposability prints a one-line transparency note when an EXPLICIT `charly update`
+// targets a deploy that is NOT marked `disposable: true` (and not ephemeral — see IsDisposable()
+// for the implication chain). It NEVER refuses: `charly update` is a human-driven verb that obeys
+// any explicit invocation on any target. The `disposable:` flag remains load-bearing as the
+// authorization for the AI's AUTONOMOUS destroy + rebuild (CLAUDE.md R10) and for the
+// check-runner's unattended fresh-rebuild (validateCheckBeds) — it just no longer gates this
+// command. The note lets an operator catch a mistyped name before the rebuild proceeds.
+// Relocated from charly/update_deploy_dispatch.go (K-wave 2 cone CONTESTED).
+func noteUpdateDisposability(node *spec.Deploy, image, instance string) {
+	if node == nil || node.IsDisposable() {
+		return
+	}
+	key := spec.DeployKey(image, instance)
+	lifecycle := node.Lifecycle
+	if lifecycle == "" {
+		lifecycle = "(unset)"
+	}
+	fmt.Fprintf(os.Stderr,
+		"Note: %q is not marked `disposable: true` (lifecycle: %s); rebuilding it anyway per your explicit `charly update`.\n",
+		key, lifecycle)
 }
 
 func (c *CpCmd) Run() error {

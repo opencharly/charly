@@ -18,10 +18,12 @@ plugin-preempt:
                 + its host handler are DELETED); the other 6
                 (running / stop[+wait] / start / switchMode / ensureCDI / gpuCDI) run over
                 Executor.InvokeProvider (FLOOR-SLIM-proper Unit-8, holder_dispatch.go — a prior
-                cutover). The in-core PROXY (charly/preempt.go newResourceArbiter +
-                acquire*/release* shims) is the generic core→verb registry bridge the core
-                LEASE-LIFECYCLE consumers (check-bed runner, start, vm, commands, vm_gpu_cmd) compile
-                through, invisible above the shim (R3).
+                cutover). The former in-core PROXY (charly/preempt.go newResourceArbiter +
+                acquire*/release* shims) is DELETED (K-wave 2 cone CONTESTED — zero production
+                callers after the check-bed/start/vm/cmd/arbiter-bracket consumers all went
+                peer-dispatch; the sole survivor is the op="remove" release chain in
+                charly/host_build_pod_lifecycle_dispatch.go, host-process CHARLY_PREEMPT_LEASE
+                state a placement-agnostic plugin cannot own).
 
               - command:preempt — the operator `charly preempt status`/`restore` CLI. It OWNS the CLI
                 grammar + the lease-table formatting and reaches its OWN peer capability verb:arbiter

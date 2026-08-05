@@ -721,7 +721,7 @@ check-sidecar-pod:
               command:
                 command: timeout 5 ${CHARLY_BIN} logs check-sidecar-pod -f; case $? in 0|124) true;; *) false;; esac
                 in_container: false
-            - run: charly update rebuilds/redeploys the artifact through dispatchByDeployTarget (update_deploy_dispatch.go, UNCHANGED by this cutover — reused as-is by the new consolidated seam's hostBuildPodUpdate) — proves the update path still works after the file consolidation.
+            - run: charly update rebuilds/redeploys the artifact through dispatchByDeployTarget (update_deploy_dispatch.go — the irreducible loadDeployPlugins+ResolveTarget leg pair since K-wave 2 cone CONTESTED; the deploy-node resolution moved plugin-side) — proves the update path still works after the consolidation.
               exit_status: 0
               context:
                 - runtime

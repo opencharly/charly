@@ -78,8 +78,9 @@ func newArbiter(ctx context.Context, exec *sdk.Executor) *ResourceArbiter {
 // (a check-bed run, a standalone `charly vm create`/`charly start`, or the deploy-dispatch
 // Start bracket) sets on a successful acquire, so nested `charly` subprocesses of the SAME outer
 // invocation skip re-acquiring / releasing. The guard lives HERE (K-wave 2 cone R2 bank E — moved
-// from the per-caller copies in charly/preempt.go's acquire*/release* shims + candy/plugin-check +
-// candy/plugin-vm): the arbiter is the ONE place every acquire/release dispatch passes through, so
+// from the per-caller copies in the deleted charly/preempt.go's acquire*/release* shims +
+// candy/plugin-check + candy/plugin-vm): the arbiter is the ONE place every acquire/release
+// dispatch passes through, so
 // the "an outer orchestrator owns the lease" skip is enforced once, for every caller.
 const envPreemptLeaseHeld = "CHARLY_PREEMPT_LEASE"
 
@@ -106,8 +107,9 @@ func invokeArbiter(ctx context.Context, exec *sdk.Executor, in spec.ArbiterInvok
 		// K-wave W3a A2: union the implied-GPU-consumer token (gpu_imply.go) onto the explicit
 		// tokens BEFORE calling AcquireShared — arbiter policy (including the early-return when
 		// implied∪explicit is empty, inside AcquireShared itself) lives entirely here now, not in
-		// the in-core proxy (charly/preempt.go always dispatches acquire-shared, even with zero
-		// explicit tokens, so this is the ONLY place that decides whether a claim actually forms).
+		// the deleted in-core proxy (charly/preempt.go ALWAYS dispatched acquire-shared, even with
+		// zero explicit tokens, so this is the ONLY place that decides whether a claim actually
+		// forms).
 		implied := impliedSharedToken(ctx, exec, in.IsGroup, in.IsPodMember, in.SecurityDevices, hostRawResources(ctx, exec))
 		active, err := a.AcquireShared(in.Claimant, unionImpliedToken(in.Tokens, implied), in.ClaimAddr, in.Transient)
 		return spec.ArbiterInvokeReply{Active: active, Error: errStr(err)}

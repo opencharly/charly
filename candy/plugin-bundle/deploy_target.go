@@ -931,9 +931,11 @@ func arbiterBracketRelease(ctx context.Context, exec *sdk.Executor, name string)
 	return nil
 }
 
-// envPreemptLeaseHeld mirrors the charly/preempt.go const of the same name: the process-env marker
-// an outermost claim-bringing invocation sets on a successful acquire so nested `charly`
-// subprocesses skip re-acquiring (compiled-in plugin-bundle shares charly's process env).
+// envPreemptLeaseHeld mirrors the identically-named const that lived in charly/preempt.go (the
+// surviving core copy is the op="remove" release chain in host_build_pod_lifecycle_dispatch.go):
+// the process-env marker an outermost claim-bringing invocation sets on a successful acquire so
+// nested `charly` subprocesses skip re-acquiring (compiled-in plugin-bundle shares charly's
+// process env).
 const envPreemptLeaseHeld = "CHARLY_PREEMPT_LEASE"
 
 // --- Status --------------------------------------------------------------------------------
@@ -985,9 +987,11 @@ func handleDeployStatus(ctx context.Context, exec *sdk.Executor, req spec.Deploy
 // exactly like the former core-resident substrate lifecycle proxy did: Shell ALWAYS dispatches on a host-local
 // venue (nil venueDesc — the substrate's own ARGV already encodes the remote-exec mechanics, e.g.
 // `podman exec <ctr> …` / `virsh …`, so running it via the live guest venue would double-remote
-// it); Attach dispatches WITH the live venue (podAttach/vm's attach resolver run the interactive
-// session ON that venue). OptsJSON (present only for Attach — Shell carries none) rides under
-// "plan", matching podAttach's own p.Plan decode.
+// it); Attach dispatches WITH the live venue (the interactive session runs ON that venue).
+// OptsJSON (present only for Attach — Shell carries none) rides under "plan", matching
+// podAttach's own p.Plan decode; the raw cmd rides under "cmd" for both Shell and Attach, so a
+// HOOKLESS lifecycle substrate (vm) self-resolves its in-venue command from it (K-wave 2 cone
+// CONTESTED).
 func handleDeployExec(ctx context.Context, exec *sdk.Executor, req spec.DeployTargetDispatchRequest, op string) (spec.DeployTargetDispatchReply, error) {
 	var reply spec.DeployTargetDispatchReply
 	var venueDesc *spec.VenueDescriptor
@@ -1001,7 +1005,12 @@ func handleDeployExec(ctx context.Context, exec *sdk.Executor, req spec.DeployTa
 	if len(req.OptsJSON) > 0 {
 		extra["plan"] = json.RawMessage(req.OptsJSON)
 	}
-	if op == sdk.OpShell {
+	// Shell AND Attach thread the raw cmd: Shell's substrate ARGV already encodes remote-exec
+	// mechanics; Attach's host-side attach-plan resolver (pod) marshals raw opts into "plan",
+	// while a HOOKLESS lifecycle substrate (vm) self-resolves its in-venue command from cmd
+	// (candy/plugin-deploy-vm's vmAttach derives the #PodLiveStdioPlan script from p.Cmd —
+	// the F12 attach-resolver moved plugin-side, K-wave 2 cone CONTESTED).
+	if op == sdk.OpShell || op == sdk.OpAttach {
 		extra["cmd"] = req.Cmd
 	}
 	resJSON, err := lifecycleInvoke(ctx, exec, req.Word, op, req.Name, "", req.Node, extra, venueDesc, req.HostEnvJSON)
