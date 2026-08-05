@@ -4,12 +4,10 @@ package check
 // resolution), relocated from charly/check_members.go. Same "library, not yet wired" status as
 // venue.go — see that file's header for the Unit A/Unit B staging note.
 //
-// Two of the original's helpers (resolveDeployBoxName/resolveImageRefForEnsure) re-resolved a
-// deploy's image ref via a fresh LoadUnified + ResolveBox call; here they read the SAME data off
-// the already-fetched resolved-project envelope (rp.Deploy[key].Image, rp.Boxes[bareRef]) —
-// exactly the pattern the (since-relocated) namespace-qualified k8s-spec lookup (K1-unblock wave 2)
-// already established: the envelope already carries what a fresh core-side resolve would
-// recompute, so no new mechanism, no second HostBuild round-trip.
+// Two of the original's helpers (resolveDeployBoxName/resolveImageRefForEnsure) re-derived a LIVE
+// deployment's image ref from the project (deploy key → box name → registry ref). They are DELETED:
+// a live deployment's image identity is the image its container is RUNNING, read off the container
+// by live_image.go's liveDeployMetadata — see that file for the defect the re-derivation caused.
 
 import (
 	"context"
@@ -93,20 +91,17 @@ func liveTargetResolver(ex *sdk.Executor, ctx context.Context, dir, instance str
 		if err != nil {
 			return nil, nil, err
 		}
-		res := liveDeployVarResolver(ex, ctx, dir, target, instance, venue)
+		res := liveDeployVarResolver(ex, ctx, target, instance, venue)
 		return res, venue.Exec, nil
 	}
 }
 
 // liveDeployVarResolver builds a runtime var resolver for a named pod deployment (container
 // venue). Best-effort: a non-container venue or an unreadable image label yields an empty
-// resolver.
-func liveDeployVarResolver(ex *sdk.Executor, ctx context.Context, dir, name, instance string, venue *CheckVenue) *kit.CheckVarResolver {
+// resolver. It takes no project dir: the deployment's image identity comes from the RUNNING
+// container, so nothing here reads the resolved-project envelope any more.
+func liveDeployVarResolver(ex *sdk.Executor, ctx context.Context, name, instance string, venue *CheckVenue) *kit.CheckVarResolver {
 	if venue == nil || !venue.IsContainer() {
-		return &kit.CheckVarResolver{}
-	}
-	rp, err := resolvedProject(ex, ctx, dir)
-	if err != nil || rp == nil {
 		return &kit.CheckVarResolver{}
 	}
 	var deployOverlay *spec.BundleNode
@@ -117,67 +112,14 @@ func liveDeployVarResolver(ex *sdk.Executor, ctx context.Context, dir, name, ins
 			deployOverlay = &entry
 		}
 	}
-	imageRef := resolveDeployBoxName(ctx, ex, rp, name, instance)
-	resolvedRef, err := resolveImageRefForEnsure(rp, imageRef)
-	if err != nil {
-		return &kit.CheckVarResolver{}
-	}
-	meta, err := deploykit.ExtractMetadata(venue.Engine, resolvedRef)
+	// The driver's runtime vars are read off the image the venue container is RUNNING
+	// (live_image.go) — the same single image identity the plan gather uses.
+	meta, err := liveDeployMetadata(venue.Engine, venue.Name)
 	if err != nil || meta == nil {
 		return &kit.CheckVarResolver{}
 	}
 	res, _ := kit.ResolveCheckVarsRuntime(meta, deployOverlay, venue.Engine, name, venue.Name, instance)
 	return stampCharlyBin(res)
-}
-
-// resolveDeployBoxName maps a deploy-key name to the box/image it deploys, off the
-// resolved-project envelope's merged deploy tree (rp.Deploy[key].Image already carries the
-// user-overlay-wins-over-project value a two-step LoadDeployConfigForRead + LoadUnified lookup
-// would recompute) — falling back to the key itself (the key==image convention). This is
-// plugin-check's own envelope-based resolver (the pod config/start path's equivalent lives
-// plugin-side in candy/plugin-deploy-pod's resolve_ref.go, #55 Cone A Unit 2).
-func resolveDeployBoxName(ctx context.Context, ex *sdk.Executor, rp *spec.ResolvedProject, key, instance string) string {
-	if key == "" {
-		return key
-	}
-	if dc, derr := loaderkit.LoadHostBundleConfigViaExecutor(ctx, ex); derr == nil && dc != nil {
-		if entry, ok := dc.Bundle[spec.DeployKey(key, instance)]; ok && entry.Image != "" {
-			return entry.Image
-		}
-		if entry, ok := dc.Bundle[key]; ok && entry.Image != "" {
-			return entry.Image
-		}
-	}
-	if rp != nil {
-		if node, ok := rp.Deploy[key]; ok && node != nil && node.Image != "" {
-			return node.Image
-		}
-	}
-	return key
-}
-
-// resolveImageRefForEnsure converts a user-authored image identifier into a fully-qualified
-// registry ref, off the envelope's already-resolved rp.Boxes[bareRef] view instead of a fresh
-// ResolveBox call (which needs core's *Config — unavailable here).
-func resolveImageRefForEnsure(rp *spec.ResolvedProject, image string) (string, error) {
-	if image == "" {
-		return "", fmt.Errorf("empty image")
-	}
-	stripped := kit.StripURLScheme(image)
-	if spec.IsRemoteImageRef(stripped) {
-		return image, nil
-	}
-	if kit.LooksLikeFullRef(image) {
-		return image, nil
-	}
-	if rp == nil {
-		return "", fmt.Errorf("short name %q requires a resolved project", image)
-	}
-	view, ok := rp.Boxes[image]
-	if !ok {
-		return "", fmt.Errorf("resolving %q: not found in the resolved project", image)
-	}
-	return kit.ResolveShellImageRef(view.Registry, view.Name, ""), nil
 }
 
 // stampCharlyBin records the active charly executable path into a runtime check-var resolver's
