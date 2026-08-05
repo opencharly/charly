@@ -26,7 +26,7 @@ Seven terms, used precisely throughout. Full glossary:
 
 | Term | What it is |
 |---|---|
-| **candy** | one entry in a `charly.yml`. The **only** entity kind there is — everything below is a candy, or a thing a candy produces |
+| **candy** | one entry in a `charly.yml` — the one kind you write for anything you **build**. Deploys are written with the substrate kinds below, and `candy:` is itself provided by a plugin rather than built in |
 | **box** | a candy carrying `base:`/`from:`, so it builds into a **container image** |
 | **candybox** | a box in its **running, isolated form** — container, VM, or check bed |
 | **deploy** | a named placement of a box on a substrate, written as `pod:` `vm:` `k8s:` `local:` `android:` |
@@ -77,19 +77,24 @@ built-in support for containers, VMs and Kubernetes that also happens to accept 
 is *kind-blind*: it knows how to load plugins, route a word to whichever one claims it, and carry
 generic data between them. It does not know what `pod:` means.
 
-Today's catalog registers **137 words across 86 plugin candies**:
+Today's catalog registers **123 words across 73 plugin candies**:
 
 | Class | How many | Examples |
 |---|---|---|
-| **deploy** substrates | 7 | `pod` `vm` `k8s` `local` `android` |
-| **kind** — the entity keywords themselves | 16 | `candy` `distro` `group` `builder` `agent` |
-| **verb** — probes a `plan:` can call | 42 | `file` `http` `cdp` `vnc` `adb` `kube` |
-| **command** — `charly` subcommands | 46 | `bundle` `check` `candy` `clean` |
-| **step** — install operations | 13 | `file` `service-custom` `reboot` |
-| **builder** — multi-stage build patterns | 5 | `pixi` `npm` `cargo` `aur` |
+| **deploy** substrates | 5 | `pod` `vm` `k8s` `local` `android` |
+| **kind** — the entity keywords themselves | 14 | `candy` `distro` `group` `builder` `agent` |
+| **verb** — probes a `plan:` can call | 35 | `file` `http` `cdp` `vnc` `adb` `kube` |
+| **command** — `charly` subcommands | 45 | `bundle` `check` `candy` `clean` |
+| **step** — install operations | 12 | `file` `service-custom` `reboot` |
+| **builder** — multi-stage build patterns | 4 | `pixi` `npm` `cargo` `aur` |
 | the build/load internals | 8 | `build:box` `loader:loader` `refs:refs` `terminal:tmux` |
 
-Read the second row again: **`candy:` itself is a plugin-provided kind**, registered by
+A further **14 words across 13 `plugin-example-*` candies** are test fixtures — they exist to
+exercise the plugin mechanisms themselves, and are excluded from the table. That exclusion is the
+difference between a deploy row reading 5 and reading 7: `exampledeploy` and `examplelifecycle`
+are not substrates you can put anything on.
+
+Read the **kind** row again: **`candy:` itself is a plugin-provided kind**, registered by
 `candy/plugin-candy-kind`. The keyword this entire page is about is not privileged — it is a word
 some candy claimed.
 
