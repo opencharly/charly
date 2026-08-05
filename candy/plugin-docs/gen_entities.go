@@ -14,12 +14,6 @@ func pluginSitePathFor(seg string) string { return "/reference/plugin/" + seg + 
 // `enabled: false` (an entity not built by default is still an entity someone can compose) and
 // including every candy vendored inside a box/<distro> submodule.
 func generateEntities(outRoot string, entities []entity, pluginNames map[string]bool) (candies, boxes int, err error) {
-	if err := resetTree(outRoot, "reference/candy"); err != nil {
-		return 0, 0, err
-	}
-	if err := resetTree(outRoot, "reference/box"); err != nil {
-		return 0, 0, err
-	}
 	for _, e := range entities {
 		if e.IsBox {
 			if err := writeBoxPage(outRoot, e); err != nil {

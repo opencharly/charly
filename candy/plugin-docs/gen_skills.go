@@ -216,9 +216,6 @@ func buildResolver(skills []skill, m *marketplace) linkResolver {
 
 // generateSkills emits every recipe card and its reference pages.
 func generateSkills(outRoot string, skills []skill, m *marketplace, lr linkResolver) (int, []danglingRef, error) {
-	if err := resetTree(outRoot, "recipes"); err != nil {
-		return 0, nil, err
-	}
 	dirToPlugin := map[string]marketplacePlugin{}
 	for _, p := range m.Plugins {
 		dirToPlugin[p.Dir()] = p

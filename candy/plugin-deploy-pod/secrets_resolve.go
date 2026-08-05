@@ -42,6 +42,26 @@ func resolvePodProvisionSecrets(ctx context.Context, ex *sdk.Executor, meta *spe
 // secretBackendIsKeyring reports whether the secret backend is keyring-class (the isKeyring flag the
 // quadlet KeyringBackend needs) — the plugin-side port of charly/credential_plugin.go's
 // resolveSecretBackend, via kit.LoadRuntimeConfig (sdk/kit host-config, plugin-importable).
+//
+// TRIPWIRE — this predicate LOOKS interchangeable with sdk/deploykit/enc_passphrase.go's
+// `usesWaitingBackend`, and it is not. Three people collapsed the two into one and rebuilt this
+// gate on the strength of it; the rebuild was reverted.
+//
+//	usesWaitingBackend  answers "will the mount resolver WAIT rather than fail fast?"  — retry semantics
+//	this function       answers "may systemd enable this unit at boot?"                — autostart policy
+//
+// They compute the same SET (keyring|auto|"") and so agree on those three values, which is what
+// makes the confusion so easy. They diverge on exactly one: `config`, where the passphrase may be
+// perfectly obtainable — so a capability-shaped gate would grant autostart — but there is nothing
+// to wait for, so the resolver correctly fails fast. This gate is right by near-miss, not by
+// identity.
+//
+// Do NOT "fix" that divergence into a source-based capability check. Doing so grants unattended
+// boot-time mounting to a deploy whose key sits in cleartext in ~/.config/charly/config.yml, which
+// is the configuration the operator asked to WARN about, not to automate further.
+//
+// The shared SET across the sdk/candy boundary is a genuine R3 duplicate and is filed as such —
+// dedupe the set if you like, but keep the two QUESTIONS distinct.
 func secretBackendIsKeyring() bool {
 	backend := os.Getenv("CHARLY_SECRET_BACKEND")
 	if backend == "" {
