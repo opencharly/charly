@@ -38,3 +38,15 @@ var _ = func() bool {
 	registerHostBuilder(retentionDefaultsBuilderKind, typedHostBuilder(retentionDefaultsBuilderKind, hostBuildRetentionDefaults))
 	return true
 }()
+
+// resolveIntPtr resolves a *int retention tunable, falling back to 0 when unset. COLOCATED here from
+// the deleted charly/config.go (K-wave 2 cone R1): this file is its only consumer, so a shared home
+// bought nothing. sdk/buildkit keeps its own 3-arg value/fallback/default form for the box resolve's
+// image->defaults->hardcoded chain; both retention callers here only ever pass a 0 fallback, so the
+// extra parameters were unparam findings on the wider shape.
+func resolveIntPtr(value *int) int {
+	if value != nil {
+		return *value
+	}
+	return 0
+}

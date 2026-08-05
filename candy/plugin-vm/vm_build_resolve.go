@@ -24,7 +24,7 @@ import (
 // SAME substrate-template-resolve leg charly/substrate_template_resolve.go's resolveVmViaPlugin
 // already dispatches to — command:vm reaches it itself instead of round-tripping through core); the
 // distro/builder build vocabulary goes through loaderkit.ProjectDistroConfig/ProjectBuilderConfig
-// (mirroring charly/format_config.go's LoadBuildConfigForBox) with a resolveDistroLeg-equivalent
+// (mirroring charly's LoadBuildConfigForBox, loader_threaded.go) with a resolveDistroLeg-equivalent
 // InvokeProvider(kind, distro, OpResolve) closure (R3 — the same small callback
 // candy/plugin-build/resolve_legs.go carries, duplicated per-module since separate Go modules cannot
 // share package-private helpers); the on-demand builder-image auto-build goes through
@@ -118,7 +118,7 @@ func resolveVmBuildEntity(ctx context.Context, ex *sdk.Executor, dir, boxName st
 }
 
 // loadVmBuildYmlSections loads the distro: + builder: blocks of the embedded build vocabulary
-// plugin-side (mirrors charly/format_config.go's LoadBuildConfigForBox, minus the Init projection
+// plugin-side (mirrors charly's LoadBuildConfigForBox, loader_threaded.go, minus the Init projection
 // vm-build never needs): LoadUnified + loaderkit.ProjectDistroConfig(resolveDistroLeg) +
 // loaderkit.ProjectBuilderConfig (pure, no callback).
 func loadVmBuildYmlSections(ctx context.Context, ex *sdk.Executor, dir string) (*spec.DistroConfig, *spec.BuilderConfig, error) {

@@ -83,20 +83,8 @@ import (
 // The retired NormalizeV4Aliases no-op + its two loaderkit-internal call sites were
 // deleted as dead code (#55 C3b-ii).
 
-// LoadUnified drives the whole-project load through the registered spec.ProjectLoader SEAM
-// (requireProjectLoader) — it NO LONGER calls loaderkit.LoadUnified directly (#55 import-purity
-// keystone, the terminal shape). The host passes its own hostLoaderExecutor{} (the typed
-// spec.LoaderExecutor reaching each registry-/host-coupled load step by calling the host function
-// DIRECTLY — zero marshal, a compiled-in TYPED placement pays no envelope tax); the COMPILED-IN
-// candy/plugin-loader implements spec.ProjectLoader and internally runs
-// loaderkit.LoadUnified(dir, loaderkit.LoadSeamsFromExecutor(exec)). The seam is registered at init
-// (before main), so the host resolves it before loading its own charly.yml — no bootstrap cycle.
-// charly core holds only the seam interface (spec) + the host executor legs; the kind-blind
-// orchestration (bootstrap phase, schema gates, walk, materialize, venue flatten, member fold,
-// descent stamp, the validation chain) lives in loaderkit (sdk), driven by the plugin.
-func LoadUnified(dir string) (*spec.UnifiedFile, bool, error) {
-	return requireProjectLoader().LoadUnified(dir, hostLoaderExecutor{})
-}
+// LoadUnified COLOCATED to loader_threaded.go (K-wave 2 cone R1) — it is a one-line forward into the
+// ProjectLoader seam that file declares, so it lives with its owner rather than in a file of its own.
 
 // validateDeploymentTree / validateDeployRequiresBox / validateDeploymentChildren /
 // validateDeploymentName moved to sdk/spec/deploy_tree_validate.go (FLOOR-SLIM

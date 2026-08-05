@@ -1,6 +1,8 @@
 package main
 
 import (
+	"errors"
+	"fmt"
 	"log"
 
 	"github.com/opencharly/spec/spec"
@@ -249,4 +251,86 @@ func decodeEntityViaRegistry(pn spec.ParsedNode, acc *spec.MaterializedProject) 
 // threaded straight through (no genericNode reconstruction).
 func buildBundleEntityViaRegistry(pn spec.ParsedNode, acc *spec.MaterializedProject) error {
 	return requireProjectLoader().BuildBundleNodeInto(pn, loaderThreaded(), acc)
+}
+
+// -----------------------------------------------------------------------------
+// The project LOAD-ENTRY forwards.
+//
+// K-wave 2 cone R1 COLOCATED these here from charly/config.go, charly/format_config.go and
+// charly/unified.go, all three deleted. Each was a file whose entire remaining content was a
+// one-or-two-line forward into the ProjectLoader seam declared above — the seam is the owner, so the
+// forwards live with it. They are deliberately NOT inlined into their ~40 call sites: that would
+// have GROWN the kernel to make three files disappear, which is the cosmetic-gaming pattern the
+// residue ledger forbids. What genuinely carried LOGIC left instead: ResolveProjectRepo (the --repo
+// clone-and-cache) and the candy-scan projection both moved into candy/plugin-loader.
+// -----------------------------------------------------------------------------
+
+// ErrNoCharlyYml is the sentinel wrapped by every "no charly.yml found in the project dir" load
+// error. Callers that treat an absent project as EMPTY rather than a hard failure (the
+// `charly box list …` read commands — an empty project has zero boxes, like `ls` in an empty dir)
+// match it with errors.Is.
+var ErrNoCharlyYml = errors.New("no charly.yml found in project directory")
+
+// noCharlyYmlErr is the ONE construction of the absent-project load error, wrapping ErrNoCharlyYml
+// for errors.Is.
+func noCharlyYmlErr(dir string) error {
+	return fmt.Errorf("no charly.yml found in %s (run `charly box new project .` to scaffold one): %w", dir, ErrNoCharlyYml)
+}
+
+// LoadUnified drives the whole-project load through the registered spec.ProjectLoader seam. The host
+// passes its own hostLoaderExecutor{} (the typed spec.LoaderExecutor reaching each registry-/
+// host-coupled load step by calling the host function DIRECTLY — zero marshal, a compiled-in TYPED
+// placement pays no envelope tax); the COMPILED-IN candy/plugin-loader implements spec.ProjectLoader
+// and internally runs loaderkit.LoadUnified. The seam is registered at init (before main), so the
+// host resolves it before loading its own charly.yml — no bootstrap cycle. charly core holds only
+// the seam interface + the host executor legs; the kind-blind orchestration (bootstrap phase, schema
+// gates, walk, materialize, venue flatten, member fold, descent stamp, the validation chain) lives
+// in loaderkit, driven by the plugin.
+func LoadUnified(dir string) (*spec.UnifiedFile, bool, error) {
+	return requireProjectLoader().LoadUnified(dir, hostLoaderExecutor{})
+}
+
+// LoadConfig reads charly.yml and returns the spec.Config (defaults + boxes) projection. Mode purity
+// preserved: this reads the PROJECT charly.yml only and never merges the per-host charly.yml overlay.
+// Deploy-mode commands must call LoadBundleConfig + MergeDeployOntoMetadata explicitly.
+func LoadConfig(dir string) (*spec.Config, error) {
+	uf, present, err := LoadUnified(dir)
+	if err != nil {
+		return nil, fmt.Errorf("loading charly.yml: %w", err)
+	}
+	if !present {
+		return nil, noCharlyYmlErr(dir)
+	}
+	return uf.ProjectConfig(), nil
+}
+
+// LoadBuildConfigForBox loads the distro, builder and init vocabularies for the project at dir, via
+// the same unified load. The init section is optional: a project without one yields a nil
+// *spec.InitConfig (no init system, no entrypoint beyond the base image default). The projections
+// themselves live in loaderkit (the ONE home charly core and candy/plugin-build both call, R3);
+// charly supplies its in-proc registry OpResolve callbacks for the opaque distro/init bodies, while
+// the builder bodies decode purely.
+func LoadBuildConfigForBox(dir string) (*spec.DistroConfig, *spec.BuilderConfig, *spec.InitConfig, error) {
+	uf, present, err := LoadUnified(dir)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("loading charly.yml: %w", err)
+	}
+	if !present {
+		return nil, nil, nil, noCharlyYmlErr(dir)
+	}
+	return spec.ProjectDistroConfig(uf, resolveDistroViaPlugin),
+		spec.ProjectBuilderConfig(uf),
+		spec.ProjectInitConfig(uf, resolveInitConfigViaPlugin), nil
+}
+
+// LoadDefaultBuildConfig is retained as the single-argument alias of the above.
+func LoadDefaultBuildConfig(dir string) (*spec.DistroConfig, *spec.BuilderConfig, *spec.InitConfig, error) {
+	return LoadBuildConfigForBox(dir)
+}
+
+// ResolveProjectRepo forwards the `--repo` clone-and-cache resolve to the seam. The LOGIC (spec
+// normalization, default-branch resolve, the fetch) relocated into candy/plugin-loader with the rest
+// of the fetch orchestration; charly/main_repo.go is deleted.
+func ResolveProjectRepo(repoSpec string) (string, error) {
+	return requireProjectLoader().ResolveProjectRepo(hostInProcCtx(), repoSpec)
 }

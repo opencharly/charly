@@ -38,7 +38,7 @@ import (
 // loadRawProjectConfig self-loads the raw *spec.Config + *spec.DistroConfig + *spec.BuilderConfig
 // for dir via the hoisted plugin-side loader witness — the same loaderkit.LoadUnifiedViaExecutor
 // candy/plugin-build/plugin-vm/plugin-bundle already call, plus the SAME
-// spec.ProjectDistroConfig/ProjectBuilderConfig projections charly/format_config.go's
+// spec.ProjectDistroConfig/ProjectBuilderConfig projections charly's LoadBuildConfigForBox
 // LoadBuildConfigForBox uses core-side. Returns (nil, nil, nil, nil) for a project-less directory
 // (mirrors the empty-project contract every other resolve path honours) — the caller's rules then
 // loop zero times, exactly like an absent host reply would.
