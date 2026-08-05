@@ -55,3 +55,16 @@ func (*provider) ResolveProjectRepo(ctx context.Context, repoSpec string) (strin
 	}
 	return loaderkit.EnsureRepoDownloaded(repoPath, version, seams)
 }
+
+// CanonicalRef implements spec.ProjectLoader: it resolves one `import:` ref into its dedup key and
+// on-disk path, delegating to the ONE copy of the mechanism in sdk/loaderkit (canonical_ref.go).
+// Relocated from charly/unified.go (K-wave 2 cone R1 unit 3), which is deleted: the body is
+// kind-blind ref vocabulary over the fetch this file already drives, and the host's
+// WalkSeams.ResolveRef wiring is now a one-line forward — the same route ResolveProjectRepo took.
+func (*provider) CanonicalRef(ctx context.Context, ref, baseDir string) (string, string, error) {
+	seams, err := refsSeams(ctx)
+	if err != nil {
+		return "", "", err
+	}
+	return loaderkit.CanonicalRef(ref, baseDir, seams)
+}

@@ -38,7 +38,7 @@ import (
 // <spec.DefaultBoxDir>/<name>/<spec.UnifiedFileName>.)
 
 // The per-directory discovery manifest filename is the ONE filename the code
-// knows — UnifiedFileName ("charly.yml", defined in unified.go). There is no
+// knows — spec.UnifiedFileName ("charly.yml"). There is no
 // separate manifest constant: a project's root file, every discovered box, and
 // every discovered candy all use the single charly.yml name. Each `discover[]`
 // spec may still override it via `manifest:` in charly.yml.

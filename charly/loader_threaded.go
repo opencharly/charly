@@ -131,8 +131,13 @@ func hostWalkProject(dir string, rootData []byte) (spec.LoadedProject, error) {
 
 // hostWalkSeams builds the spec.WalkSeams every registry-coupled walk-level entry point threads
 // through: the whole-project walk (hostWalkProject, above) AND the standalone discover-only walk
-// (ApplyDiscover, unified.go — the K1 keystone task #24 unit-3 discover seam) share this ONE
-// construction (R3) rather than each re-deriving it.
+// (ApplyDiscover, below) share this ONE construction (R3) rather than each re-deriving it.
+//
+// Only Boundary and Threaded are genuinely host-side (they touch the provider registry). The other
+// three are one-line forwards into seams this file declares: ResolveRef's import-ref resolution
+// mechanism relocated to sdk/loaderkit alongside the fetch it drives (K-wave 2 cone R1 unit 3 —
+// charly/unified.go's canonicalRef, deleted), reached here through the loader plugin exactly like
+// ResolveProjectRepo below.
 func hostWalkSeams() spec.WalkSeams {
 	return spec.WalkSeams{
 		Parser: requireLoaderParser(),
@@ -144,9 +149,11 @@ func hostWalkSeams() spec.WalkSeams {
 			connectDeclaredKindPlugins(bdir)
 			return nil
 		},
-		Threaded:   loaderThreaded,
-		ResolveRef: canonicalRef,
-		GateDoc:    requireProjectLoader().ValidateNodeDocCUE,
+		Threaded: loaderThreaded,
+		ResolveRef: func(ref, baseDir string) (string, string, error) {
+			return requireProjectLoader().CanonicalRef(hostInProcCtx(), ref, baseDir)
+		},
+		GateDoc: requireProjectLoader().ValidateNodeDocCUE,
 	}
 }
 
@@ -362,4 +369,31 @@ func LoadDefaultBuildConfig(dir string) (*spec.DistroConfig, *spec.BuilderConfig
 // of the fetch orchestration; charly/main_repo.go is deleted.
 func ResolveProjectRepo(repoSpec string) (string, error) {
 	return requireProjectLoader().ResolveProjectRepo(hostInProcCtx(), repoSpec)
+}
+
+// ApplyDiscover walks every flat scan spec on uf.Discover and registers each entity it finds. Each
+// spec scans its path for directories containing that spec's manifest; every discovered manifest is
+// routed by SHAPE, and an explicit map entry always wins over a discovered one. scanRoot resolution
+// is relative to rootDir (the dir containing charly.yml).
+//
+// The WALK+PARSE half (find directories, read + classify + gate + parse each manifest's documents)
+// is loaderkit.RunDiscover, reached through the seam this file declares — the SAME mechanism the
+// whole-project walk's own depth-0 discover pass drives internally, reused rather than duplicated.
+// Only the registry-coupled MATERIALIZE fold (foldDiscoveredManifests, materialize.go — shared with
+// the walk's discovered-manifest step via the FoldDiscoveredManifests seam, R3) is host-side.
+func ApplyDiscover(uf *spec.UnifiedFile, rootDir string) error {
+	dms, err := requireProjectLoader().RunDiscover(rootDir, uf.Discover, hostWalkSeams())
+	if err != nil {
+		return err
+	}
+	return foldDiscoveredManifests(dms, uf)
+}
+
+// projectCandiesScanned scans or synthesizes a candy per entry in uf.Candy, into its pre-completion,
+// pre-finalize spec.ScannedCandy form. Entries with `from:` go through the registered CandyScanner
+// seam so directory-based candies behave identically; inline entries synthesize from the embedded
+// CandyYAML and take their DECLARING FILE's directory as SourceDir — rootDir here, or the namespace
+// sub-file's dir when one declares them (see ScanInlineCandy's own contract).
+func projectCandiesScanned(uf *spec.UnifiedFile, rootDir string) (map[string]spec.ScannedCandy, error) {
+	return requireCandyScanner().ProjectCandiesScanned(uf, rootDir, parseCandyYAML)
 }

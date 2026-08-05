@@ -14,11 +14,11 @@ import (
 // exactly like the ProjectWalker / Materializer typed seams (spec/loader_seam.go).
 //
 // FLOOR (#118 P15): this is the HOST'S OWN loader-entry seam — the permanent typed LoaderExecutor the
-// floored config.go/unified.go LoadUnified drives loaderkit through so the HOST can load its own
+// floored LoadUnified entry (loader_threaded.go, since config.go/unified.go were deleted) drives loaderkit through so the HOST can load its own
 // charly.yml (a plugin host must read its own config to bootstrap; that never leaves core). It is the
 // host half of the loader-seam M-mechanism, the same class as the floored host_build_loader_floor.go
 // permanent legs. The loaderkit
-// import is the SAME shared P16b import-purity concern config.go/unified.go carry, tracked separately;
+// import is the SAME shared P16b import-purity concern that load entry carries, tracked separately;
 // it does not make this file transitional (the earlier "deleted at GREEN" framing predated the
 // config/unified floor decision that keeps the host's own loader entry permanent).
 type hostLoaderExecutor struct{}
