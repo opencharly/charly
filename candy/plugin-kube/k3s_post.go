@@ -2,7 +2,6 @@ package kube
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,7 +12,6 @@ import (
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/vmshared"
-	"github.com/opencharly/spec/spec"
 )
 
 // k3s_post.go — the k3s POST-PROVISION finalization (S3, FINAL/K5 unit 6, Cutover-B
@@ -31,7 +29,8 @@ import (
 //     declared forwards). The kind:vm entity spec self-loads PLUGIN-SIDE (K-wave
 //     W3a A3-phase-2: loaderkit.ResolveVmEntityViaExecutor, the former
 //     "deploy-entity-resolve" HostBuild seam is DELETED); the persisted VmState
-//     still reaches the host through the "config-resolve" HostBuild seam — see
+//     read is PLUGIN-SIDE too (hostConfigResolveVmState → loaderkit.ResolveVmStateViaExecutor,
+//     the config-resolve seam is DELETED, K-wave 2 cone R2 bank D) — see
 //     deployVMForwards' own doc comment for why that read specifically CANNOT go
 //     through a direct deploykit.LoadDeployConfigForRead call from this
 //     out-of-process plugin (an R10 bed regression this file once had).
@@ -195,25 +194,11 @@ func deployVMForwards(ctx context.Context, exec *sdk.Executor, vmEntity, deployN
 var resolveVmEntityForForwards = loaderkit.ResolveVmEntityViaExecutor
 
 // hostConfigResolveVmState fetches the persisted VmDeployState for the given "vm:<domainID>"
-// ledger key via the "config-resolve" HostBuild seam (the SAME seam candy/plugin-vm's own
-// hostConfigResolve uses for its OWN VmState reuse, R3 — one host-resident reader of the
-// per-host deploy overlay, never a direct deploykit.LoadDeployConfigForRead from an
-// out-of-process plugin, which cannot see the core-only deploykit.DeployStateHost wiring). The
-// heavier fields hostBuildConfigResolve also computes (backend probe, kind:vm entity resolution
-// keyed by req.Entity) are irrelevant here — domainID is never a real kind:vm entity name, so
-// that lookup harmlessly misses — only VmState is read.
-func hostConfigResolveVmState(ctx context.Context, exec *sdk.Executor, domainID string) (*spec.VmDeployState, error) {
-	reqJSON, err := json.Marshal(spec.ConfigResolveRequest{Entity: domainID})
-	if err != nil {
-		return nil, err
-	}
-	resJSON, err := exec.HostBuild(ctx, "config-resolve", reqJSON)
-	if err != nil {
-		return nil, err
-	}
-	var reply spec.ConfigResolveReply
-	if err := json.Unmarshal(resJSON, &reply); err != nil {
-		return nil, fmt.Errorf("config-resolve: decode reply: %w", err)
-	}
-	return reply.VmState, nil
-}
+// ledger key PLUGIN-SIDE via loaderkit.ResolveVmStateViaExecutor (K-wave 2 cone R2 bank D — the
+// "config-resolve" HostBuild seam is DELETED; the shared loaderkit reader is the ONE home
+// candy/plugin-vm's hostConfigResolve + candy/plugin-deploy-vm's resolvePriorVmState also use,
+// R3 — never a direct deploykit.LoadDeployConfigForRead from an out-of-process plugin, which
+// cannot see the core-only deploykit.DeployStateHost wiring). A package var (test seam, same
+// pattern as resolveVmEntityForForwards) so the forwards tests stub the read directly instead of
+// faking the multi-leg loader path.
+var hostConfigResolveVmState = loaderkit.ResolveVmStateViaExecutor

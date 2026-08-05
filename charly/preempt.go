@@ -260,7 +260,8 @@ func releaseResourceClaim(claimant string) {
 // generic InvokeProvider("build","project") envelope (rp.Deploy) instead of a bespoke "gather"
 // reverse RPC, and does its own holder-filtering + VM-claimant lookup in-plugin via the portable
 // sdk/deploykit helpers (FilterPreemptibleHolders/FindVMClaimant/HolderAddrFor/MergedDeployTree —
-// the SAME functions host_build_config_resolve.go's VM-claimant lookup now shares, R3). The
+// the SAME functions candy/plugin-vm's hostConfigResolve VM-claimant lookup shares, R3 — the
+// config-resolve host seam is DELETED, K-wave 2 cone R2 bank D). The
 // former bespoke arbiter reverse-RPC channel itself is deleted (sdk/protocol/schema/plugin.cue).
 //
 // gatherResources is the ONE function in this family that stays here: it has ONE remaining

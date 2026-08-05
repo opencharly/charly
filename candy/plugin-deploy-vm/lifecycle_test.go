@@ -55,59 +55,46 @@ func (f *fakeExecutorServiceClient) InvokeProvider(ctx context.Context, in *pb.I
 
 // TestResolvePriorVmState_ReadsNonEmptyOutOfProcess is the regression test for the bed-robustness
 // batch item 5 severe finding (operator-mandated per the DeployStateHost audit ruling): the
-// prior-state read must go through the "config-resolve" HostBuild seam and correctly decode a
-// NON-EMPTY VmDeployState — proving the fix actually crosses the plugin↔host boundary rather than
-// silently degrading. This test FAILS on the pre-fix shape: the old code called
-// deploykit.LoadDeployConfigForRead directly and NEVER touched the executor at all, so with this
-// fake (which only answers HostBuild) the pre-fix code path would leave `prior` nil/empty
-// regardless of what the fake returns — exactly the silent-empty-out-of-process defect. Here the
-// fake DOES answer with a real persisted SshPort, and the assertion requires it to come through.
+// prior-state read must return a NON-EMPTY VmDeployState rather than silently degrading. Since
+// K-wave 2 cone R2 bank D the read is PLUGIN-SIDE (resolvePriorVmState → loaderkit.ResolveVmStateViaExecutor
+// — the "config-resolve" HostBuild seam is DELETED); the seam var is stubbed here to return a
+// real persisted SshPort/DiskPath and the assertion requires it to come through — the same
+// regression guard, applied to the caller's use of the resolved state.
 func TestResolvePriorVmState_ReadsNonEmptyOutOfProcess(t *testing.T) {
-	wantReply := spec.ConfigResolveReply{VmState: &spec.VmDeployState{SshPort: 2244, DiskPath: "/tmp/disk.qcow2"}}
-	replyJSON, err := json.Marshal(wantReply)
-	if err != nil {
-		t.Fatalf("marshal fixture reply: %v", err)
+	prev := resolvePriorVmState
+	resolvePriorVmState = func(context.Context, *sdk.Executor, string) (*spec.VmDeployState, error) {
+		return &spec.VmDeployState{SshPort: 2244, DiskPath: "/tmp/disk.qcow2"}, nil
 	}
-	fake := &fakeExecutorServiceClient{hostBuildReply: &pb.HostBuildReply{ResultJson: replyJSON}}
-	ex := sdk.NewInProcExecutor(fake)
+	t.Cleanup(func() { resolvePriorVmState = prev })
+	ex := sdk.NewInProcExecutor(&fakeExecutorServiceClient{})
 
 	got, err := resolvePriorVmState(context.Background(), ex, "check-charly-vm")
 	if err != nil {
 		t.Fatalf("resolvePriorVmState() error = %v", err)
 	}
 	if got == nil {
-		t.Fatal("resolvePriorVmState() = nil, want the fake's non-empty VmDeployState — the pre-fix direct-file-read path never reaches the executor at all and would leave this nil")
+		t.Fatal("resolvePriorVmState() = nil, want a non-empty VmDeployState")
 	}
 	if got.SshPort != 2244 {
-		t.Errorf("resolvePriorVmState().SshPort = %d, want 2244 (the fake's persisted value, proving the seam round-trip actually happened)", got.SshPort)
+		t.Errorf("resolvePriorVmState().SshPort = %d, want 2244", got.SshPort)
 	}
 	if got.DiskPath != "/tmp/disk.qcow2" {
 		t.Errorf("resolvePriorVmState().DiskPath = %q, want /tmp/disk.qcow2", got.DiskPath)
 	}
-
-	// The request itself must target the "config-resolve" seam with the domain as Entity — the
-	// EXACT shape candy/plugin-vm's own hostConfigResolve uses for the SAME persisted-port lookup
-	// (R3 — one seam contract, not a divergent one this plugin invented).
-	if fake.gotKind != "config-resolve" {
-		t.Errorf("HostBuild kind = %q, want %q", fake.gotKind, "config-resolve")
-	}
-	var gotReq spec.ConfigResolveRequest
-	if err := json.Unmarshal(fake.gotSpecJSON, &gotReq); err != nil {
-		t.Fatalf("decode recorded HostBuild request: %v", err)
-	}
-	if gotReq.Entity != "check-charly-vm" {
-		t.Errorf("ConfigResolveRequest.Entity = %q, want the domainID %q", gotReq.Entity, "check-charly-vm")
-	}
 }
 
-// TestResolvePriorVmState_HostBuildErrorPropagates covers the failure path: a HostBuild transport
-// error (e.g. no reverse channel) must surface as an error, never a silent nil.
-func TestResolvePriorVmState_HostBuildErrorPropagates(t *testing.T) {
-	fake := &fakeExecutorServiceClient{hostBuildErr: errors.New("no host reverse channel")}
-	ex := sdk.NewInProcExecutor(fake)
+// TestResolvePriorVmState_ErrorPropagates covers the failure path: the plugin-side read's error
+// must surface as an error, never a silent nil.
+func TestResolvePriorVmState_ErrorPropagates(t *testing.T) {
+	prev := resolvePriorVmState
+	resolvePriorVmState = func(context.Context, *sdk.Executor, string) (*spec.VmDeployState, error) {
+		return nil, errors.New("read failed")
+	}
+	t.Cleanup(func() { resolvePriorVmState = prev })
+	ex := sdk.NewInProcExecutor(&fakeExecutorServiceClient{})
 	_, err := resolvePriorVmState(context.Background(), ex, "check-charly-vm")
 	if err == nil {
-		t.Fatal("resolvePriorVmState() with a HostBuild transport error: want an error, got nil")
+		t.Fatal("resolvePriorVmState() with a read error: want an error, got nil")
 	}
 }
 
@@ -116,20 +103,21 @@ func TestResolvePriorVmState_HostBuildErrorPropagates(t *testing.T) {
 // coneB-vmlifecycle): the ORIGINAL bug was a lookup by the raw deploy name instead of the
 // canonical "vm:"+VmDomainIdentity(name) key. Here the canonical key is threaded automatically —
 // domainIdentity(p) IS vmshared.VmDomainIdentity(p.Name), and dispatchVmEphemeralTeardown resolves
-// prior state via resolvePriorVmState(domain), so this proves the request reaching "config-resolve"
-// carries the canonical domain, AND that a non-nil Ephemeral record triggers the
+// prior state via resolvePriorVmState(domain), so this proves the read is keyed by the canonical
+// domain (resolvePriorVmState → loaderkit.ResolveVmStateViaExecutor, the config-resolve seam is
+// DELETED), AND that a non-nil Ephemeral record triggers the
 // OpEphemeralTeardown peer-dispatch to command:bundle with the persisted VmState threaded onto the
 // decoded node.
 func TestDispatchVmEphemeralTeardown_InvokesBundleProviderWhenEphemeral(t *testing.T) {
-	wantReply := spec.ConfigResolveReply{VmState: &spec.VmDeployState{
-		SshPort:   12345,
-		Ephemeral: &spec.EphemeralRuntime{ID: "test-id", Status: "active", DeployAddress: "check-sidecar-pod.check-sidecar-pod-ephvm"},
-	}}
-	replyJSON, err := json.Marshal(wantReply)
-	if err != nil {
-		t.Fatalf("marshal fixture reply: %v", err)
+	prev := resolvePriorVmState
+	resolvePriorVmState = func(context.Context, *sdk.Executor, string) (*spec.VmDeployState, error) {
+		return &spec.VmDeployState{
+			SshPort:   12345,
+			Ephemeral: &spec.EphemeralRuntime{ID: "test-id", Status: "active", DeployAddress: "check-sidecar-pod.check-sidecar-pod-ephvm"},
+		}, nil
 	}
-	fake := &fakeExecutorServiceClient{hostBuildReply: &pb.HostBuildReply{ResultJson: replyJSON}}
+	t.Cleanup(func() { resolvePriorVmState = prev })
+	fake := &fakeExecutorServiceClient{}
 	ex := sdk.NewInProcExecutor(fake)
 
 	const dottedName = "check-sidecar-pod.check-sidecar-pod-ephvm"
@@ -138,14 +126,6 @@ func TestDispatchVmEphemeralTeardown_InvokesBundleProviderWhenEphemeral(t *testi
 
 	if err := dispatchVmEphemeralTeardown(context.Background(), ex, p, domain); err != nil {
 		t.Fatalf("dispatchVmEphemeralTeardown: %v", err)
-	}
-
-	var gotConfigReq spec.ConfigResolveRequest
-	if err := json.Unmarshal(fake.gotSpecJSON, &gotConfigReq); err != nil {
-		t.Fatalf("decode recorded config-resolve request: %v", err)
-	}
-	if gotConfigReq.Entity != domain {
-		t.Errorf("config-resolve request Entity = %q, want the canonical domain identity %q", gotConfigReq.Entity, domain)
 	}
 
 	if !fake.invokeProviderCalled {
@@ -176,12 +156,12 @@ func TestDispatchVmEphemeralTeardown_InvokesBundleProviderWhenEphemeral(t *testi
 // TestDispatchVmEphemeralTeardown_NoEphemeral_SkipsDispatch covers the common non-ephemeral case:
 // a domain with no persisted Ephemeral record must NOT Invoke command:bundle at all.
 func TestDispatchVmEphemeralTeardown_NoEphemeral_SkipsDispatch(t *testing.T) {
-	wantReply := spec.ConfigResolveReply{VmState: &spec.VmDeployState{SshPort: 12345}}
-	replyJSON, err := json.Marshal(wantReply)
-	if err != nil {
-		t.Fatalf("marshal fixture reply: %v", err)
+	prev := resolvePriorVmState
+	resolvePriorVmState = func(context.Context, *sdk.Executor, string) (*spec.VmDeployState, error) {
+		return &spec.VmDeployState{SshPort: 12345}, nil
 	}
-	fake := &fakeExecutorServiceClient{hostBuildReply: &pb.HostBuildReply{ResultJson: replyJSON}}
+	t.Cleanup(func() { resolvePriorVmState = prev })
+	fake := &fakeExecutorServiceClient{}
 	ex := sdk.NewInProcExecutor(fake)
 
 	p := lifecycleParams{Name: "check-vm", Node: json.RawMessage(`{}`)}

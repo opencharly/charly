@@ -5,7 +5,7 @@
 // extracting the OCI-label plan, and dispatching the plan-walk's verbs through the provider
 // registry — stay in core and are reached via the generic "check-run" HostBuild seam
 // (charly/host_build_check_run.go, spec.CheckRunRequest → kit.CheckRunReply), the config loader +
-// deploy ledger via HostBuild("config-resolve") (check is read-only — no ledger writes), the agent CLI via
+// deploy ledger via the plugin-side loader readers (check is read-only — no ledger writes), the agent CLI via
 // InvokeProvider(kind:agent), and the `charly` reentry (the harness shells out to build/deploy/
 // check subcommands) via HostBuild("cli"). No plugin-specific command LOGIC is left in core.
 //

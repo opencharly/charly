@@ -14,8 +14,9 @@ import (
 
 // vm_backend_resolve.go — the VM backend detection capability (F6 vm-lifecycle move,
 // coneB-vmlifecycle): ported from charly/vm_backend_lifecycle.go's resolveVmBackend/
-// vmConfiguredBackend, which the "config-resolve" HostBuild seam (charly/host_build_config_resolve.go)
-// used to compute host-side and ship over the wire as ConfigResolveReply.Backend. Both pieces are
+// vmConfiguredBackend, which the config-resolve host seam (DELETED, K-wave 2 cone R2 bank D) used
+// to compute host-side; hostConfigResolve (vm_host_seams.go) now computes Backend HERE from
+// kit.ResolveRuntime's VmBackend + its own project self-load. Both pieces are
 // genuinely plugin-portable: resolveVmBackendPlugin is a pure host-env probe (systemctl/virsh/
 // socket-stat via vmshared, zero core-registry coupling) using vmshared.StartLibvirtUserSession (an
 // R3 hoist — this package used to carry its own duplicate copy, vm_phaseA_shims.go, byte-identical to
