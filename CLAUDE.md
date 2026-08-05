@@ -130,7 +130,7 @@ Before declaring completion, every applicable item is YES:
 
 ## Agents, Workflows & Teams
 
-Substantial or multi-cutover work runs in teammate mode by default: a persistent most-capable-model orchestrator (currently **Fable 5**) driving cost-scaled teammates and fresh `pr-validator`s (currently **Sonnet 5**), maximum parallelization the default. The orchestrator owns architectural integrity and independently verifies every teammate decision (bidirectionally — a delegate report is a claim, not proof); teammates own one cutover each; validators alone merge and tag.
+Substantial or multi-cutover work runs in teammate mode by default: a persistent most-capable-model orchestrator driving cost-scaled teammates and fresh `pr-validator`s, maximum parallelization the default. Every agent definition pins `model: inherit`, so the roster runs whatever model the operating session runs, under any harness — no model is named anywhere in the tooling. The orchestrator owns architectural integrity and independently verifies every teammate decision (bidirectionally — a delegate report is a claim, not proof); teammates own one cutover each; validators alone merge and tag.
 
 Every multi-teammate program is aligned by a binding **north-star document** — concrete end-state, ordered decision heuristics, observed anti-patterns, measured state — named in every spawn brief; on a task-vs-north-star conflict a teammate stops and asks, never resolves locally. This is load-bearing: a wrong brief misdirects every teammate it reaches.
 
