@@ -86,7 +86,6 @@ var reverseChannelHostBuilderWhitelist = []reverseChannelKindClause{
 	{"pod-config-list-sidecars", "host_build_pod_config_seams.go", "UNDOCUMENTED (pending KERNEL_MANIFEST.md row)"},
 	{"resolve-target-add", "host_build_resolve_target_add.go", "M — the per-node ResolveTarget+Add terminal (KERNEL_MANIFEST.md bank D row)"},
 	{"plugin-binary", "plugin_dispatch_reverse.go", "M — leg 3 of the north-star's three legs (plugin-binary build + CLI reentry); see file header hostBuildPluginBinary"},
-	{"check-run", "host_build_check_run.go", "UNDOCUMENTED (pending KERNEL_MANIFEST.md row)"},
 }
 
 // hostBuilderCallSite is one collected registerHostBuilder(...) call in the live tree.

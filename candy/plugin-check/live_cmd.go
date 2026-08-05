@@ -9,8 +9,8 @@ import (
 
 // live_cmd.go — the `charly check live` leaf. It gathers no config itself: the full-stack live
 // gathering (vm/pod/local/group classification, venue construction, OCI-label plan extraction,
-// runtime-var resolution) runs HOST-side behind the generic "check-run" seam (Mode:"live"); the
-// plugin sends the CLI inputs, prints the host-built kind-specific Header banner, and formats the
+// runtime-var resolution) runs PLUGIN-side (hostCheckRun's Mode:"live" → pluginCheckRunLive); the
+// plugin sends the CLI inputs, prints the kind-specific Header banner, and formats the
 // returned []StepResult. The one non-plan-run live path — a nested pod-in-VM leaf whose check the
 // host delegates to the guest over SSH (`charly check live <pod>` run INSIDE the guest) — comes
 // back as reply.Passthrough, whose stdout/stderr + exit code the plugin forwards verbatim.

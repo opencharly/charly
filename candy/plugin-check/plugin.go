@@ -3,8 +3,10 @@
 // plugin owns the CLI grammar, the plan gathering, and the output formatting; the composite
 // host-serving Mechanisms it cannot perform in a separate module — building the venue executor,
 // extracting the OCI-label plan, and dispatching the plan-walk's verbs through the provider
-// registry — stay in core and are reached via the generic "check-run" HostBuild seam
-// (charly/host_build_check_run.go, spec.CheckRunRequest → kit.CheckRunReply), the config loader +
+// registry — stay in core and are reached via the remaining HostBuild seams
+// (cli / retention-defaults / check-load-plugins / check-bed-gpu-prereq) + the plugin's own
+// loaderkit reads (the former generic "check-run" HostBuild seam is DELETED, K-wave 2 cone R4 —
+// every check-run mode now dispatches to this plugin's OWN bodies), the config loader +
 // deploy ledger via the plugin-side loader readers (check is read-only — no ledger writes), the agent CLI via
 // InvokeProvider(kind:agent), and the `charly` reentry (the harness shells out to build/deploy/
 // check subcommands) via HostBuild("cli"). No plugin-specific command LOGIC is left in core.

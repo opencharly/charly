@@ -1,7 +1,7 @@
 package check
 
 // score_live.go — K1-unblock wave, arm 3 (the "score" check-run mode): pluginCheckRunScore, the
-// plugin-resident port of charly/host_build_check_run.go's hostCheckRunScore +
+// plugin-resident port of the former core hostCheckRunScore +
 // charly/check_runner_live.go's RunCheckLive/scoreOnePodBucket/resolveScoringChain — the AI
 // harness's end-of-iteration scorer, walking the SUBSTITUTED scoring plan (nonce-carrying,
 // req.Plan) against the live deployments its check:/agent-check: steps target via each step's
@@ -34,7 +34,7 @@ import (
 
 // pluginCheckRunScore is the "score" mode: walk the substituted scoring plan (req.Plan) against
 // the live deployments its steps target, returning the per-step verdicts in reply.Score. The port
-// of charly/host_build_check_run.go's hostCheckRunScore.
+// of the former core hostCheckRunScore.
 func pluginCheckRunScore(ex *sdk.Executor, ctx context.Context, req spec.CheckRunRequest) (kit.CheckRunReply, error) {
 	results, err := pluginRunCheckLive(ex, ctx, req.Name, req.Plan)
 	if err != nil {

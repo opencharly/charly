@@ -1,7 +1,7 @@
 package check
 
 // feature_run_gather.go — K1-unblock wave, arm 2 (the "feature-live" check-run mode):
-// pluginCheckRunFeatureLive, the plugin-resident port of charly/host_build_check_run.go's
+// pluginCheckRunFeatureLive, the plugin-resident port of the former core
 // (deleted) hostFeatureLive, mirroring live_gather.go's pluginCheckLivePod's pod-venue
 // construction. Reached from candy/plugin-check's OWN `charly check feature run` CLI leaf
 // (feature_cmd.go) via command.go's Mode:"feature-live" short-circuit.
@@ -33,7 +33,7 @@ import (
 
 // pluginCheckRunFeatureLive is the "feature-live" mode: deploy-scope ADE acceptance against the
 // running deployment req.Name, wiring the host-side agent grader (agent.go's resolveAgentSpec)
-// unless req.NoAgent. The port of charly/host_build_check_run.go's hostFeatureLive, mirroring
+// unless req.NoAgent. The port of the former core hostFeatureLive, mirroring
 // live_gather.go's pluginCheckLivePod's pod-venue construction (this mode is always a pod/
 // container deployment — the core original never classified vm/local/group here either).
 func pluginCheckRunFeatureLive(ex *sdk.Executor, ctx context.Context, req spec.CheckRunRequest) (kit.CheckRunReply, error) {

@@ -190,10 +190,10 @@ func (c *CheckRunCmd) runIterateEntity(reply checkProjection, cwd string) error 
 		// Test-bed image preflight (host target): the deploy that prepared the host
 		// installs candies only; container images that plan steps spawn need pulling /
 		// building first. The image-set DISCOVERY (dedup + sort over the include-expanded
-		// plan) is pure and runs HERE (preflightImageCandidates, CHECK-cone move); only the
-		// one genuinely host-loader-coupled bit — the agent-provisioned filter (needs the
-		// loaded project tree) — rides the "preflight" check-run mode's Filter field
-		// alongside dispatchBuildEnsure (the R3-shared build-engine helper).
+		// plan) is pure and runs HERE (preflightImageCandidates, CHECK-cone move); the
+		// ENSURE itself runs plugin-side too (pluginCheckRunPreflight — loaderkit project
+		// load + spec.VenueIsAgentProvisioned filter + InvokeProvider("build","ensure"),
+		// K-wave 2 cone R4), so this leaf just forwards the candidate set.
 		if !c.DryRun {
 			if images := preflightImageCandidates(reply.Plan); len(images) > 0 {
 				if _, err := hostCheckRun(spec.CheckRunRequest{Mode: "preflight", Name: c.Name, Dir: cwd, Filter: images}); err != nil {
