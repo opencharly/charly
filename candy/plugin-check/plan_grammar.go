@@ -1,11 +1,12 @@
 package check
 
 // plan_grammar.go — K1-unblock W3 Unit B: the plugin-side kit.PlanGrammar, mirroring
-// charly/planrun_adapter.go's hostPlanGrammar + charly/checkspec.go's opEffectiveDo/opInContext/
-// opEffectiveContexts. Confirmed portable by reading the core originals in full: all three
-// functions are pure over spec.Op + the portable spec.VerbCatalog vocabulary table — zero
-// core-only dependency (no provider registry, no *Config, no LoadUnified). Ported, not aliased,
-// since charly/checkspec.go's versions are unexported.
+// charly/planrun_adapter.go's hostPlanGrammar + its opInContext/opEffectiveContexts (the
+// do-mode/context grammar relocated from checkspec.go, K-wave 2 cone R4; the former core
+// opEffectiveDo is gone — its logic lives in EffectiveDo below). Confirmed portable by reading
+// the core originals in full: all the grammar functions are pure over spec.Op + the portable
+// spec.VerbCatalog vocabulary table — zero core-only dependency (no provider registry, no
+// *Config, no LoadUnified). Ported, not aliased, since the core versions are unexported.
 
 import (
 	"fmt"
@@ -18,7 +19,7 @@ import (
 type pluginPlanGrammar struct{}
 
 // EffectiveDo resolves op's do-mode: the keyword-stamped intentDo wins, else the verb's
-// VerbCatalog default, else DoAssert. Ported unchanged from charly/checkspec.go's opEffectiveDo.
+// VerbCatalog default, else DoAssert. Ported unchanged from the former core opEffectiveDo.
 func (pluginPlanGrammar) EffectiveDo(op *spec.Op) spec.DoMode {
 	switch spec.DoMode(op.IntentDo) {
 	case spec.DoAct, spec.DoAssert, spec.DoInstruct:
@@ -36,7 +37,7 @@ func (pluginPlanGrammar) EffectiveDo(op *spec.Op) spec.DoMode {
 // InContext reports whether op is legal in the run's active context: runtime=true → the live
 // (runtime) context, runtime=false → the box (build) context. Ported unchanged from
 // charly/planrun_adapter.go's hostPlanGrammar.InContext (which itself delegates to
-// checkspec.go's opInContext/opEffectiveContexts).
+// planrun_adapter.go's opInContext/opEffectiveContexts).
 func (pluginPlanGrammar) InContext(op *spec.Op, runtime bool) bool {
 	wantCtx := spec.CtxBuild
 	if runtime {
@@ -52,7 +53,7 @@ func (pluginPlanGrammar) ContextsLabel(op *spec.Op) string {
 }
 
 // effectiveContexts returns op's resolved execution contexts: an explicit Context wins, else the
-// verb's VerbCatalog default, else nil. Ported unchanged from charly/checkspec.go's
+// verb's VerbCatalog default, else nil. Ported unchanged from charly/planrun_adapter.go's
 // opEffectiveContexts.
 func effectiveContexts(op *spec.Op) []spec.ExecContext {
 	if len(op.Context) > 0 {

@@ -183,9 +183,9 @@ func scanSeamsFor(cfg *spec.Config, opts spec.ResolveOpts) spec.ScanSeams {
 // loaderkit.PickCandyVersion — a kind-blind MECHANISM (boundary-law clause M)
 // with zero core coupling. scanCandyFromLocal above calls it directly.
 
-// Inject the VerbCatalog-coupled op-context classifier (checkspec.go's opInContext) into
+// Inject the VerbCatalog-coupled op-context classifier (planrun_adapter.go's opInContext) into
 // spec's swappable seam (spec holds no VerbCatalog — that vocabulary is core,
 // reserved_registry.go; the seam var moved to spec so the fabric libraries read it without
-// a deploykit import, #55 import-purity cone-render). Hosted here (not checkspec.go) so
-// checkspec.go needs no kit/deploykit import at all (K3, #39).
+// a deploykit import, #55 import-purity cone-render). Hosted here (not beside the grammar in
+// planrun_adapter.go) so this bootstrap init needs no slices/spec-grammar imports (K3, #39).
 func init() { spec.OpInContext = opInContext }
