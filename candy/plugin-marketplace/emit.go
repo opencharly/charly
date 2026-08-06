@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 // emit.go — the generated-artifact contract: a DO-NOT-EDIT header + the emit map (path → bytes,
@@ -22,17 +21,6 @@ const generatedHeaderBlock = generatedHeader + "\n\n"
 
 // emissions is the full generated artifact set, keyed by repo-root-relative path.
 type emissions map[string][]byte
-
-// put records a file, computing its final bytes from the header + body.
-func (em emissions) put(rel string, header string, body []byte) {
-	if header != "" {
-		body = append([]byte(header+"\n\n"), body...)
-	}
-	em[rel] = body
-}
-
-// putMarkdown records a markdown file with the generated header.
-func (em emissions) putMarkdown(rel string, body []byte) { em.put(rel, generatedHeader, body) }
 
 // writeAll writes every emitted artifact, creating parent directories.
 func (em emissions) writeAll(root string) error {
@@ -71,6 +59,3 @@ func fileKey(root, abs string) string {
 	}
 	return filepath.ToSlash(rel)
 }
-
-// hasAnyHeader is a helper for tests.
-func hasAnyHeader(s string) bool { return strings.Contains(s, generatedHeader) }

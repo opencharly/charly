@@ -46,11 +46,3 @@ func buildModel(ks *kindSet) ([]family, error) {
 	return families, nil
 }
 
-// familyNames returns the sorted family names (for profiles.json developer membership).
-func familyNames(families []family) []string {
-	out := make([]string, 0, len(families))
-	for _, f := range families {
-		out = append(out, f.Name)
-	}
-	return out
-}
