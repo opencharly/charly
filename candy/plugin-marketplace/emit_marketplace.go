@@ -10,8 +10,10 @@ import (
 // used). Both derive entirely from the marketplace entity — the single source.
 
 type marketplaceManifest struct {
-	Name     string           `json:"name"`
-	Owner    struct{ Name string } `json:"owner"`
+	Name  string `json:"name"`
+	Owner struct {
+		Name string `json:"name"`
+	} `json:"owner"`
 	Metadata struct {
 		Description string `json:"description"`
 		Version     string `json:"version"`
@@ -20,20 +22,22 @@ type marketplaceManifest struct {
 }
 
 type marketplacePluginEntry struct {
-	Name        string   `json:"name"`
-	Source      string   `json:"source"`
-	Description string   `json:"description"`
-	Author      struct{ Name string } `json:"author"`
-	Homepage    string   `json:"homepage"`
-	Repository  string   `json:"repository"`
-	License     string   `json:"license"`
-	Keywords    []string `json:"keywords,omitempty"`
-	Category    string   `json:"category"`
+	Name        string `json:"name"`
+	Source      string `json:"source"`
+	Description string `json:"description"`
+	Author      struct {
+		Name string `json:"name"`
+	} `json:"author"`
+	Homepage   string   `json:"homepage"`
+	Repository string   `json:"repository"`
+	License    string   `json:"license"`
+	Keywords   []string `json:"keywords,omitempty"`
+	Category   string   `json:"category"`
 }
 
 type profilesManifest struct {
-	Developer        []string `json:"developer"`
-	User             []string `json:"user"`
+	Developer         []string `json:"developer"`
+	User              []string `json:"user"`
 	ContainerFamilies []string `json:"container_families"`
 }
 
