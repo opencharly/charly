@@ -18,7 +18,7 @@ import (
 // compilerTestProjectDir chdirs to the project root (the repo root that owns candy/) and returns
 // a cleanup callback. Relocated here from the deleted charly/install_build_test.go (#55
 // decoupling, Batch A) — this test is its last remaining consumer (per the ambiguous-item ruling
-// 3: TestBundleCompileParity_PluginRoundTrip's "OLD" side and invokeOpCompile's "NEW" side both
+// 3: TestFleetCompileParity_PluginRoundTrip's "OLD" side and invokeOpCompile's "NEW" side both
 // need charly-internal registry/dispatch machinery unreachable from an out-of-module plugin
 // package, so this file STAYS in charly rather than moving).
 //
@@ -47,15 +47,15 @@ func compilerTestProjectDir(t *testing.T) (string, func()) { //nolint:unparam //
 	return "", func() {}
 }
 
-// invokeOpCompile drives command:bundle's KEPT OpCompile leg over an in-proc reverse channel — the
-// SAME shared compilePlansForRequest candy/plugin-bundle's walk.go dispatchOne calls IN-PROC (K4-C
-// shape-2). It replaces the deleted host deployAddCmd.compileViaPlugin (bundle_compile_seam.go) as
+// invokeOpCompile drives command:fleet's KEPT OpCompile leg over an in-proc reverse channel — the
+// SAME shared compilePlansForRequest candy/plugin-fleet's walk.go dispatchOne calls IN-PROC (K4-C
+// shape-2). It replaces the deleted host deployAddCmd.compileViaPlugin (fleet_compile_seam.go) as
 // this parity test's plugin-compile entry point, byte-for-byte the same Invoke(OpCompile) mechanism.
 func invokeOpCompile(t *testing.T, req spec.DeployCompileRequest) ([]*spec.InstallPlan, error) {
 	t.Helper()
-	prov, ok := providerRegistry.resolve(ClassCommand, "bundle")
+	prov, ok := providerRegistry.resolve(ClassCommand, "fleet")
 	if !ok {
-		t.Fatalf("invokeOpCompile: command:bundle provider not loaded (candy/plugin-bundle must be compiled in)")
+		t.Fatalf("invokeOpCompile: command:fleet provider not loaded (candy/plugin-fleet must be compiled in)")
 	}
 	reqJSON, err := json.Marshal(req)
 	if err != nil {
@@ -63,7 +63,7 @@ func invokeOpCompile(t *testing.T, req spec.DeployCompileRequest) ([]*spec.Insta
 	}
 	ctx := specexec.ContextWithExecutor(context.Background(),
 		specexec.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}}))
-	res, err := prov.Invoke(ctx, &Operation{Reserved: "bundle", Op: ops.OpCompile, Params: reqJSON})
+	res, err := prov.Invoke(ctx, &Operation{Reserved: "fleet", Op: ops.OpCompile, Params: reqJSON})
 	if err != nil {
 		return nil, err
 	}
@@ -179,18 +179,18 @@ func isolateProviderRegistry(t *testing.T) {
 	})
 }
 
-// bundle_compile_parity_test.go — the K4-B compile-parity golden. Proves the deploy COMPILE slice
-// moved out of charly/ core into candy/plugin-bundle (the command:bundle plugin's OpCompile leg)
+// fleet_compile_parity_test.go — the K4-B compile-parity golden. Proves the deploy COMPILE slice
+// moved out of charly/ core into candy/plugin-fleet (the command:fleet plugin's OpCompile leg)
 // is byte-faithful to the former in-proc host compile, OVER the FULL plugin seam: the host computes
 // the per-node selection (a hand-built ResolvedBoxView + the candy order + HostContext), Invokes
-// the bundle plugin's OpCompile, the plugin re-hydrates the resolved-project envelope via
+// the fleet plugin's OpCompile, the plugin re-hydrates the resolved-project envelope via
 // InvokeProvider("build","project") + loops deploykit.BuildDeployPlan + projects []InstallPlanView,
 // and the host re-materializes []*InstallPlan via spec.PlanFromView.
 //
 // THE GOLDEN (#55 K3 cone 1 redesign): the OLD side used to call deploykit.BuildDeployPlan
 // directly, in-process — an sdk mechanism-kit dependency the import-purity gate forbids in
 // charly/ (this file was its last holder; the value-type leg had already dropped its
-// buildkit import). BuildDeployPlan is a pure function (candy/plugin-bundle's own
+// buildkit import). BuildDeployPlan is a pure function (candy/plugin-fleet's own
 // TestBuildDeployPlan_BuilderPurity_NoPluginRPC proves it never dials a plugin itself) computed
 // from data that is ITSELF deterministic and reproducible offline: the fedora/rpm distro
 // vocabulary is a documented PURE field-copy of the checked-in charly/charly.yml (candy/
@@ -198,7 +198,7 @@ func isolateProviderRegistry(t *testing.T) {
 // reverse ops are thin dispatches to the PUBLIC, pure sdk/kit.BuilderCollectContext/BuilderReverse
 // (candy/plugin-builder-pixi/plugin.go). tools/golden-compile (its own standalone module, mirroring
 // the tools/gomod-canonical precedent) computes this OLD-side ground truth offline and writes it to
-// the checked-in charly/testdata/bundle_compile_parity_golden.json — this file now loads that golden
+// the checked-in charly/testdata/fleet_compile_parity_golden.json — this file now loads that golden
 // via plain encoding/json instead of computing it live, so it needs no sdk import at all. The NEW
 // side (invokeOpCompile) is UNCHANGED: it was always charly-internal registry/dispatch machinery,
 // never an sdk import.
@@ -221,7 +221,7 @@ func isolateProviderRegistry(t *testing.T) {
 // fixture would FAIL the rider). Non-vacuity is also guarded directly: ≥3 candies AND ≥2 step
 // classes (pkg/op/builder) must appear in the plans.
 
-func TestBundleCompileParity_PluginRoundTrip(t *testing.T) {
+func TestFleetCompileParity_PluginRoundTrip(t *testing.T) {
 	isolateProviderRegistry(t)
 	dir, cleanup := compilerTestProjectDir(t)
 	defer cleanup()
@@ -262,9 +262,9 @@ func TestBundleCompileParity_PluginRoundTrip(t *testing.T) {
 		}
 
 		// NEW: the SHARED in-proc compiler (compilePlansForRequest), reached via the KEPT OpCompile
-		// leg (invokeOpCompile) — the EXACT SAME function candy/plugin-bundle's walk.go dispatchOne
+		// leg (invokeOpCompile) — the EXACT SAME function candy/plugin-fleet's walk.go dispatchOne
 		// calls IN-PROC (K4-C shape-2). Empty HostContextJSON matches production reality post-Unit-8:
-		// the host no longer pre-populates BuilderContext at all — command:bundle's
+		// the host no longer pre-populates BuilderContext at all — command:fleet's
 		// compileDeployPlans always recomputes it itself over its own exec.InvokeProvider pre-pass,
 		// regardless of what (if anything) rides the wire.
 		emptyHostCtxJSON, err := json.Marshal(spec.HostContext{})
@@ -381,12 +381,12 @@ func mustMarshalJSON(t *testing.T, v any) []byte {
 }
 
 // loadCompileParityGolden reads the checked-in OLD-side ground truth
-// (charly/testdata/bundle_compile_parity_golden.json, keyed by candy name) that
+// (charly/testdata/fleet_compile_parity_golden.json, keyed by candy name) that
 // tools/golden-compile computes offline — see this file's top doc comment. dir is the repo root
 // compilerTestProjectDir resolved (the marker candy/ directory's parent).
 func loadCompileParityGolden(t *testing.T, dir string) map[string]spec.InstallPlanView {
 	t.Helper()
-	path := filepath.Join(dir, "charly", "testdata", "bundle_compile_parity_golden.json")
+	path := filepath.Join(dir, "charly", "testdata", "fleet_compile_parity_golden.json")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read golden fixture %s: %v (regenerate with `go run ./tools/golden-compile`)", path, err)

@@ -55,7 +55,7 @@ type HttpInput struct {
 	// no_follow_redirects — do not follow 3xx redirects (assert the first response).
 	NoFollowRedir bool `yaml:"no_follow_redirects,omitempty" json:"no_follow_redirects,omitempty"`
 
-	// ca_file — optional PEM CA bundle to trust for the request.
+	// ca_file — optional PEM CA fleet to trust for the request.
 	CAFile string `yaml:"ca_file,omitempty" json:"ca_file,omitempty"`
 }
 

@@ -47,7 +47,7 @@ func candyBodyGuardErr(body string) error {
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(tmp)
+	defer func() { _ = os.RemoveAll(tmp) }()
 	path := filepath.Join(tmp, spec.UnifiedFileName)
 	if werr := os.WriteFile(path, []byte("candy:\n"+indented.String()), 0o644); werr != nil {
 		return werr

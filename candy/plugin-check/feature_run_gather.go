@@ -55,11 +55,11 @@ func pluginCheckRunFeatureLive(ex *sdk.Executor, ctx context.Context, req spec.C
 	if meta == nil || meta.Description == nil || meta.Description.IsEmpty() {
 		return kit.CheckRunReply{NoSteps: true}, nil
 	}
-	var deployOverlay *spec.BundleNode
-	if dc, derr := loaderkit.LoadHostBundleConfigViaExecutor(ctx, ex); derr == nil && dc != nil {
-		if entry, ok := dc.Bundle[spec.DeployKey(req.Name, req.Instance)]; ok {
+	var deployOverlay *spec.FleetNode
+	if dc, derr := loaderkit.LoadHostFleetConfigViaExecutor(ctx, ex); derr == nil && dc != nil {
+		if entry, ok := dc.Fleet[spec.DeployKey(req.Name, req.Instance)]; ok {
 			deployOverlay = &entry
-		} else if entry, ok := dc.Bundle[req.Name]; ok {
+		} else if entry, ok := dc.Fleet[req.Name]; ok {
 			deployOverlay = &entry
 		}
 	}

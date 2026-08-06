@@ -14,7 +14,7 @@ import (
 // round-trip + persistence surface still work from core after preempt.go's dissolution. The
 // former acquire-side shims (acquireExclusiveForClaimant & co.) are GONE — their production
 // callers went peer-dispatch (candy/plugin-check's bed_session, candy/plugin-vm's
-// vm_arbiter_shim, candy/plugin-bundle's handleLifecycleSimple all Invoke verb:arbiter
+// vm_arbiter_shim, candy/plugin-fleet's handleLifecycleSimple all Invoke verb:arbiter
 // directly), so no core test drives them anymore; the live preemption path is proven by the
 // check-preempt-live-pod bed.
 //

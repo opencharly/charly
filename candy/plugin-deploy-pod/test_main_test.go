@@ -12,14 +12,14 @@ import (
 // "pod-config-*" seams collapsed plugin-side (#55 Cone A Unit 2 / coneC-dsh).
 //
 // Why the package needs it even though every current test stubs its writes: the write path
-// (saveBundle / mutateBundle → deploykit.SaveBundleConfig) resolves the overlay path
+// (saveFleet / mutateFleet → deploykit.SaveFleetConfig) resolves the overlay path
 // INDEPENDENTLY through kit.DefaultDeployConfigPath (kit.DeployConfigEnv if set, else
 // os.UserConfigDir() + "charly/charly.yml"). Nothing about that path consults a package var, so
 // per-test var stubs protect only the tests that remember to install them: a new test that drives
 // runConfig, resolveDeployPorts or persistResourceCaps without a stub writes the OPERATOR'S REAL
 // ~/.config/charly/charly.yml. This host carried exactly that residue — a `check-addcandy-pod`
 // entry whose resolved_image was the literal test constant `check-addcandy-pod-overlay:abc123`
-// (removed via `charly bundle reset`). The stubs are the per-test contract; this is the floor
+// (removed via `charly fleet reset`). The stubs are the per-test contract; this is the floor
 // underneath them, so "forgot to isolate" degrades to a temp dir instead of the operator's config.
 //
 // XDG_CONFIG_HOME, not kit.DeployConfigEnv, and for the reason charly's TestMain documents at

@@ -9,14 +9,14 @@ package check
 //
 // The host flattens the live executor to a spec.VenueDescriptor (a live executor cannot cross the
 // wire) and threads it in the request; this handler re-materializes it via kit.VenueFromDescriptor —
-// the SAME mechanism candy/plugin-bundle's resolveRootExecutor uses. Because command:check is
+// the SAME mechanism candy/plugin-fleet's resolveRootExecutor uses. Because command:check is
 // COMPILED-IN, this runs in charly's own process, so a re-materialized shell/ssh executor is
 // byte-identical to the one the host held. The reverse-channel *sdk.Executor (recovered via
 // ExecutorForInvoke) is used only for the plugin's OWN legs — the pluginVerbResolver's InvokeProvider
 // verb dispatch and the local-verify path's resolvedProject/TargetResolver HostBuild.
 //
 // ONE drive shape (see spec.VerifyChecksRequest): plan → the `target: local` --verify path —
-// candy/plugin-bundle's verify_local.go (verifyLocalDeployScope/localDeployScopePlan, #55 W3 B3,
+// candy/plugin-fleet's verify_local.go (verifyLocalDeployScope/localDeployScopePlan, #55 W3 B3,
 // relocated from the former core check_cmd.go's runLocalDeployScopePlan) ASSEMBLES the plan
 // (kind:local template, resolved PLUGIN-SIDE via node_resolve.go's lookupLocalTemplate — no
 // LoadUnified needed — + the deploy node's own plan) and this handler DRIVES it via kit.RunPlan,
@@ -78,7 +78,7 @@ func verifyChecksForHost(ctx context.Context, req *pb.InvokeRequest) (*pb.Invoke
 // The per-host charly.yml OVERLAY merge (the deploy-entry `check:` extends/overrides) lives HERE
 // now (#55 CHECK-ENGINE cone Option A — relocated from the former core runLocalDeployScopePlan so
 // the `target: local` --verify path imports zero deploykit). The caller threads the base plan
-// (kind:local template + deploy node, assembled PLUGIN-side now in candy/plugin-bundle's
+// (kind:local template + deploy node, assembled PLUGIN-side now in candy/plugin-fleet's
 // verify_local.go, #55 W3 B3); this handler appends the per-host overlay entry's plan — keyed by
 // DeployKey(box, instance) with
 // the bare-image fallback, the SAME precedence the core read used — before driving RunPlan, so the
@@ -93,10 +93,10 @@ func verifyChecksRunPlan(ex *sdk.Executor, ctx context.Context, venueExec spec.D
 	// runLocalDeployScopePlan — see the header). DeployKey(box, instance) with the bare-image
 	// fallback, the SAME precedence the core read used.
 	plan := in.Plan
-	if dc, derr := loaderkit.LoadHostBundleConfigViaExecutor(ctx, ex); derr == nil && dc != nil {
-		if entry, ok := dc.Bundle[spec.DeployKey(in.Box, in.Instance)]; ok {
+	if dc, derr := loaderkit.LoadHostFleetConfigViaExecutor(ctx, ex); derr == nil && dc != nil {
+		if entry, ok := dc.Fleet[spec.DeployKey(in.Box, in.Instance)]; ok {
 			plan = append(plan, entry.Plan...)
-		} else if entry, ok := dc.Bundle[in.Box]; ok {
+		} else if entry, ok := dc.Fleet[in.Box]; ok {
 			plan = append(plan, entry.Plan...)
 		}
 	}

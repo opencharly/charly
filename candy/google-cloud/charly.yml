@@ -4,7 +4,7 @@ google-cloud:
         description: |
             Google Cloud SDK ships the gcloud, gsutil and bq CLIs on PATH
             The candy downloads the official Google Cloud CLI x86_64 tarball,
-            unpacks it under /var/opt/google-cloud-sdk, runs the bundled
+            unpacks it under /var/opt/google-cloud-sdk, runs the fleetdverb
             install.sh, and symlinks gcloud, gsutil and bq into /usr/bin so
             every shell finds them. Each CLI answers its own version
             subcommand, which is what these scenarios assert.

@@ -6,11 +6,11 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// bundleNodeForm is the COMPACT node-form (the only authoring surface): each
+// fleetNodeForm is the COMPACT node-form (the only authoring surface): each
 // member's inline checks live in the member's own `plan:` list INSIDE the kind
 // value, and the deeply-nested pod-in-pod is a sub-ENTITY child. `image: coder`
 // is a scalar cross-ref and stays in the value.
-const bundleNodeForm = `
+const fleetNodeForm = `
 shop:
   group:
     disposable: true
@@ -31,13 +31,13 @@ shop:
             command: "test -f /done"
 `
 
-// TestBuildBundleNode_Structure proves the bundle builder turns the unified
-// node-form into the correct BundleNode tree: a disposable group with two
+// TestBuildFleetNode_Structure proves the fleet builder turns the unified
+// node-form into the correct FleetNode tree: a disposable group with two
 // alongside pod members (Peer), an inline cross-member check in a member's Plan,
 // and a deeply-nested pod-in-pod (Nested) with its own inline check.
-func TestBuildBundleNode_Structure(t *testing.T) {
+func TestBuildFleetNode_Structure(t *testing.T) {
 	var doc yaml.Node
-	if err := yaml.Unmarshal([]byte(bundleNodeForm), &doc); err != nil {
+	if err := yaml.Unmarshal([]byte(fleetNodeForm), &doc); err != nil {
 		t.Fatalf("parse: %v", err)
 	}
 	nodes, err := genericNodesFromDoc(&doc)
@@ -51,15 +51,15 @@ func TestBuildBundleNode_Structure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("genericToParsedNode: %v", err)
 	}
-	dn, err := requireProjectLoader().BuildBundleNode(pn, loaderThreaded())
+	dn, err := requireProjectLoader().BuildFleetNode(pn, loaderThreaded())
 	if err != nil {
-		t.Fatalf("BuildBundleNode: %v", err)
+		t.Fatalf("BuildFleetNode: %v", err)
 	}
 	if dn.Target != "" {
-		t.Errorf("bundle group Target = %q, want empty (group)", dn.Target)
+		t.Errorf("fleet group Target = %q, want empty (group)", dn.Target)
 	}
 	if dn.Disposable == nil || !*dn.Disposable {
-		t.Errorf("bundle disposable = %v, want true", dn.Disposable)
+		t.Errorf("fleet disposable = %v, want true", dn.Disposable)
 	}
 	if len(dn.Members) != 2 {
 		t.Fatalf("want 2 alongside members, got %d", len(dn.Members))

@@ -58,7 +58,7 @@ use ./candy/plugin-candy
 use ./candy/plugin-doctor
 use ./candy/plugin-feature
 use ./candy/plugin-vm
-use ./candy/plugin-bundle
+use ./candy/plugin-fleet
 use ./candy/plugin-pod
 use ./candy/plugin-alias
 use ./candy/plugin-box

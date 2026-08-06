@@ -24,7 +24,7 @@ import (
 // Status/Logs/Shell/Rebuild shell to the charly CLI; PostTeardown = `charly remove` + drop overlay.
 
 // lifecycleParams are the common params the host proxy ships for a pod lifecycle Op (image/version
-// are passed explicitly so the plugin need not decode the whole BundleNode). Opts is polymorphic
+// are passed explicitly so the plugin need not decode the whole FleetNode). Opts is polymorphic
 // (LifecycleOpts for PrepareVenue, DeployTargetLogsOpts for Logs, DeployTargetRebuildOpts for
 // Rebuild) — decoded per-op.
 type lifecycleParams struct {
@@ -518,7 +518,7 @@ func podRebuild(ctx context.Context, exec *sdk.Executor, p lifecycleParams) (*pb
 			return nil, err
 		}
 	}
-	if _, err := podCli(ctx, exec, false, false, "bundle", "add", p.Name); err != nil {
+	if _, err := podCli(ctx, exec, false, false, "fleet", "add", p.Name); err != nil {
 		return nil, err
 	}
 	_, _ = podCli(ctx, exec, false, true, "stop", p.Name) // best-effort (preserve config)

@@ -98,7 +98,7 @@ type podRuntimeImage struct {
 	engine     string
 	imageRef   string
 	meta       *spec.BoxMetadata
-	dc         *deploykit.BundleConfig
+	dc         *deploykit.FleetConfig
 	volumes    []deploykit.VolumeMount
 	bindMounts []deploykit.ResolvedBindMount
 }
@@ -226,7 +226,7 @@ func resolvePodStartDirect(ctx context.Context, ex *sdk.Executor, box, instance 
 		return nil, fmt.Errorf("port conflicts detected:%s", kit.FormatPortConflicts(conflicts, box))
 	}
 
-	var deployBox *spec.BundleNode
+	var deployBox *spec.FleetNode
 	if dc != nil {
 		if overlay, ok := dc.Lookup(box, instance); ok {
 			deployBox = &overlay

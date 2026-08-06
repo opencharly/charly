@@ -8,7 +8,7 @@ pod-addcandy-marker:
             deploy whose deploy-key differs from its image-name (the
             check-addcandy-pod bed). It writes /etc/pod-addcandy-marker carrying the
             distinctive token POD-ADDCANDY-MARKER-OK (the write: leg — inline COPY,
-            never references the per-candy scratch stage) AND copies the bundled
+            never references the per-candy scratch stage) AND copies the fleetdverb
             copied.dat to /etc/pod-addcandy-copied carrying POD-ADDCANDY-COPIED-OK
             (the copy: leg — `COPY --from=<candy>` against the per-candy
             `FROM scratch AS <candy>` context stage, so it exercises the REMOTE

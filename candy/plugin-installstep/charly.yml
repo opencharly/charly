@@ -14,7 +14,7 @@ plugin-installstep:
             whose build-context render needs box/candy/distro/builder STRUCTURE a bare step view
             cannot carry. Rather than calling back a host-side renderer, this plugin fetches the
             "resolved-project" envelope ONCE per project dir (InvokeProvider("build","project"), cached
-            — the SAME generic seam candy/plugin-box/plugin-bundle/plugin-check consume) and builds
+            — the SAME generic seam candy/plugin-box/plugin-fleet/plugin-check consume) and builds
             its OWN *deploykit.Generator from it via the SAME deploykit.NewRenderGeneratorFromProject
             helper candy/plugin-build (the box-build render) and candy/plugin-deploy-pod (the overlay
             render) use, then renders each fragment DIRECTLY (dg.EmitTasks / dg.BuildStageContext /

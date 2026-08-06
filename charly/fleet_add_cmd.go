@@ -1,15 +1,15 @@
 package main
 
-// bundle_add_cmd.go — the host-side M residue of `charly bundle add`/`del` after the K4-C SHAPE-2
-// cutover. The CLI grammar + tree walk + per-node compile live in the command:bundle plugin; the
-// DEL resolution moved to candy/plugin-bundle/del_resolve.go (K-wave 2 cone R2 bank C — the
+// fleet_add_cmd.go — the host-side M residue of `charly fleet add`/`del` after the K4-C SHAPE-2
+// cutover. The CLI grammar + tree walk + per-node compile live in the command:fleet plugin; the
+// DEL resolution moved to candy/plugin-fleet/del_resolve.go (K-wave 2 cone R2 bank C — the
 // deployDelCmd struct, resolveDelNode, podDeploymentArtifactExists, and the "deploy-del-resolve"
 // HostBuild seam are all DELETED). What stays here is floor-M host-only machinery a plugin (a
 // separate module) cannot own:
 //
 //   - deriveChildExecutorForPath — the ancestor executor HOP derivation (registry-coupled;
 //     deployTraitDescent needs the providerRegistry). Reached by the resolve-target-add seam's
-//     reconstructParentExec + bundle_members.go + unified_targets.go.
+//     reconstructParentExec + fleet_members.go + unified_targets.go.
 //   - loadConfigForDeploy — BUILD-SHARED (LoadConfig → LoadUnified + the host-fs distro probes),
 //     reached by the resolve-target-add seam AND by build_overlay.go's hostBuildOverlay.
 
@@ -25,7 +25,7 @@ import (
 // none-transport child. Registry-coupled (deployTraitDescent), so it stays host-side; the plugin's
 // walk only ever holds paths + nodes (a live DeployExecutor never crosses the wire), re-ran per
 // ancestor by the resolve-target-add seam's reconstructParentExec.
-func deriveChildExecutorForPath(path string, node *spec.BundleNode, parentExec spec.DeployExecutor) (spec.DeployExecutor, error) {
+func deriveChildExecutorForPath(path string, node *spec.FleetNode, parentExec spec.DeployExecutor) (spec.DeployExecutor, error) {
 	if node == nil || !node.HasChildren() {
 		return parentExec, nil
 	}

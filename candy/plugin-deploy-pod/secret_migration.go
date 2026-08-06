@@ -12,10 +12,10 @@ package deploypod
 //  2. scrubSecretCLIEnv — pre-scrub for `charly config -e NAME=VAL` flags: if NAME is a
 //     secret_accepts/secret_requires entry, the value is stored in the credential store and
 //     the NAME=VAL pair is removed from the CLI env slice — plaintext credentials never reach
-//     saveBundle / the quadlet writer. Plain env_accepts/env_requires entries are untouched.
+//     saveFleet / the quadlet writer. Plain env_accepts/env_requires entries are untouched.
 //
 // Both helpers are pure library code: they read/write via the verb:credential-backed
-// deploykit.CredentialAccessViaExecutor + the plugin-side saveBundle + kit.DefaultDeployConfigPath,
+// deploykit.CredentialAccessViaExecutor + the plugin-side saveFleet + kit.DefaultDeployConfigPath,
 // so they run identically compiled-in or out-of-process (the plugin-side reverse channel the
 // rest of candy/plugin-deploy-pod already uses). The former charly-core DefaultCredentialStore
 // host singleton + host deploy-state save-callback loader-seam are gone — no host round-trip.
@@ -63,15 +63,15 @@ func secretKeyForDep(dep spec.EnvDependency) (service, key string) {
 	return "charly/secret", dep.Name
 }
 
-// migratePlaintextEnvSecret scans dc.Bundle[deployKey(image, instance)].Env for any KEY=VAL
+// migratePlaintextEnvSecret scans dc.Fleet[deployKey(image, instance)].Env for any KEY=VAL
 // entries whose KEY is declared as secret_accepts/secret_requires on the given image metadata.
 // For each match it writes VAL into the credential store at the candy-declared (service, key),
 // removes KEY=VAL from the in-memory entry.Env, creates a charly.yml.bak.<unix> backup before
-// the first mutation (one per call), persists the cleaned dc via the plugin-side saveBundle, and
+// the first mutation (one per call), persists the cleaned dc via the plugin-side saveFleet, and
 // logs a per-entry notice to stderr. Returns (migrated, err). Idempotent: a second run on a
 // cleaned charly.yml is a no-op; a host that never had plaintext is a no-op.
-func migratePlaintextEnvSecret(ctx context.Context, ex *sdk.Executor, dc *deploykit.BundleConfig, meta *spec.BoxMetadata, image, instance string) (int, error) {
-	if dc == nil || dc.Bundle == nil {
+func migratePlaintextEnvSecret(ctx context.Context, ex *sdk.Executor, dc *deploykit.FleetConfig, meta *spec.BoxMetadata, image, instance string) (int, error) {
+	if dc == nil || dc.Fleet == nil {
 		return 0, nil
 	}
 	declared := secretDeclaredOnBox(meta)
@@ -80,7 +80,7 @@ func migratePlaintextEnvSecret(ctx context.Context, ex *sdk.Executor, dc *deploy
 	}
 
 	key := spec.DeployKey(image, instance)
-	entry, ok := dc.Bundle[key]
+	entry, ok := dc.Fleet[key]
 	if !ok || len(entry.Env) == 0 {
 		return 0, nil
 	}
@@ -144,14 +144,14 @@ func migratePlaintextEnvSecret(ctx context.Context, ex *sdk.Executor, dc *deploy
 	}
 
 	entry.Env = staying
-	dc.Bundle[key] = entry
+	dc.Fleet[key] = entry
 	// Persist through the locked read-modify-write cycle, and express the cleaning as "delete
 	// exactly the keys that reached the credential store" rather than "write back the Env map I
 	// computed". Overwriting wholesale would discard any env var a concurrent `charly config` for
 	// this same deploy added between this function's read and its write — the lost-update class
 	// this whole path was carrying.
-	if _, err := mutateBundle(ctx, ex, "charly config migrate-plaintext-secret", func(d *deploykit.BundleConfig) (bool, error) {
-		fresh, ok := d.Bundle[key]
+	if _, err := mutateFleet(ctx, ex, "charly config migrate-plaintext-secret", func(d *deploykit.FleetConfig) (bool, error) {
+		fresh, ok := d.Fleet[key]
 		if !ok || len(fresh.Env) == 0 {
 			return false, nil
 		}
@@ -165,7 +165,7 @@ func migratePlaintextEnvSecret(ctx context.Context, ex *sdk.Executor, dc *deploy
 		if !changed {
 			return false, nil
 		}
-		d.Bundle[key] = fresh
+		d.Fleet[key] = fresh
 		return true, nil
 	}); err != nil {
 		return migrated, fmt.Errorf("persisting cleaned charly.yml after migration: %w (backup at %s)", err, backupPath)
@@ -178,7 +178,7 @@ func migratePlaintextEnvSecret(ctx context.Context, ex *sdk.Executor, dc *deploy
 // secret_accepts/secret_requires entry on the target image, stores the value in the credential
 // store and strips the pair from the slice. Plain env_accepts/env_requires entries pass through
 // unchanged. After a successful scrub the caller's env list no longer carries the credential
-// value, so it cannot reach saveBundle, the quadlet writer, or any downstream.
+// value, so it cannot reach saveFleet, the quadlet writer, or any downstream.
 //
 // Returns (cleaned, imported). cleaned is the new -e list (never nil — empty slice when all
 // entries migrated); imported is the number of credentials moved into the store.

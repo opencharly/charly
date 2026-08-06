@@ -74,7 +74,7 @@ func buildOverlay(ctx context.Context, exec *sdk.Executor, reply spec.OverlayBui
 	// Resolve the overlay candies' secret_requires:/secret_accepts: env PLUGIN-SIDE + inject it
 	// into the plans' TaskSteps before oci.Emit walks them (#55 coneB-br2 — the α cluster
 	// relocated host-side from charly/enc.go + charly/layer_secrets.go + charly/build_overlay.go,
-	// which are DELETED in that cutover). This mirrors candy/plugin-bundle/secrets_artifacts.go's
+	// which are DELETED in that cutover). This mirrors candy/plugin-fleet/secrets_artifacts.go's
 	// injectCandySecrets exactly: the candy set is dg.Candies (the resolved-project envelope's
 	// candy models — deploykit.CandyModel is a spec.CandyReader alias, so it passes directly to
 	// SelectCandiesForPlans); the credential access is the shared
@@ -466,7 +466,7 @@ func candyByName(candies map[string]deploykit.CandyModel, bare string) deploykit
 // venue, by walking the parent deploy node's bind-mount volumes. The EX-core
 // `PodDeployTarget.translateHostPathToVenue` body, byte-faithful, adapted to take the bind-mount
 // volume list (reply.ParentVolumes — the host prep copied parentNode.Volume) instead of the
-// package-main *BundleNode. Returns (venuePath, true) when a containing bind-mount is found;
+// package-main *FleetNode. Returns (venuePath, true) when a containing bind-mount is found;
 // ("", false) otherwise. Used by the nested pod-in-pod overlay build: the nested podman runs in
 // the parent venue + needs build-context paths expressed in the venue's filesystem view.
 func translateHostPathToVenue(hostPath string, vols []spec.DeployVolume) (string, bool) {

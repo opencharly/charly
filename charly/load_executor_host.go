@@ -8,7 +8,7 @@ import (
 // loaderkit.LoaderExecutor. charly.LoadUnified no longer hand-builds a loaderkit.LoadSeams from its
 // host functions; instead it drives loaderkit.LoadUnified through loaderkit.LoadSeamsFromExecutor
 // over this hostLoaderExecutor — the SAME seam constructor a genuine out-of-module PLUGIN uses
-// (candy/plugin-bundle's execLoaderExecutor, the Unit D witness), but reaching each registry-/
+// (candy/plugin-fleet's execLoaderExecutor, the Unit D witness), but reaching each registry-/
 // host-coupled step by calling the host function DIRECTLY (zero marshal, U3). The typed
 // LoaderExecutor interface is what makes that free: a compiled-in placement pays no envelope tax,
 // exactly like the ProjectWalker / Materializer typed seams (spec/loader_seam.go).

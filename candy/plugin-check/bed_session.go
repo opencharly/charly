@@ -149,7 +149,7 @@ func arbiterInvoke(ctx context.Context, ex *sdk.Executor, in spec.ArbiterInvokeI
 // shape matches the former core acquireDispatch field-for-field (verified below:
 // Action/Claimant/Tokens/ClaimAddr/Transient/IsGroup/IsPodMember/SecurityDevices, the same 8
 // fields in the same shapes).
-func arbiterAcquire(ctx context.Context, ex *sdk.Executor, claimant string, node spec.BundleNode, transient bool) (active bool, err error) {
+func arbiterAcquire(ctx context.Context, ex *sdk.Executor, claimant string, node spec.FleetNode, transient bool) (active bool, err error) {
 	if os.Getenv(envPreemptLeaseHeld) != "" {
 		return false, nil
 	}
@@ -224,7 +224,7 @@ func bedGpuPrereqCheck(ctx context.Context, ex *sdk.Executor, tokens []string) (
 // (none → DefaultCheckLevel). VM/local beds carry no box image, so they always run at the default
 // rung. Ported from charly/check_bed_run.go — uf.ProjectConfig() is a plain spec.UnifiedFile
 // method, no core-only coupling.
-func bedCheckLevel(uf *spec.UnifiedFile, node spec.BundleNode) string {
+func bedCheckLevel(uf *spec.UnifiedFile, node spec.FleetNode) string {
 	if node.Image == "" {
 		return spec.DefaultCheckLevel
 	}
@@ -238,7 +238,7 @@ func bedCheckLevel(uf *spec.UnifiedFile, node spec.BundleNode) string {
 // bedMemberDescriptors projects a group bed's sibling members into the descriptor the plugin
 // drives its per-member image-build loop from. Ported from charly/host_build_check_bed.go, using
 // spec.IsVmVenue instead of the former core-private isVmMember (same Descent-stamped read).
-func bedMemberDescriptors(members map[string]*spec.BundleNode) []spec.CheckBedMember {
+func bedMemberDescriptors(members map[string]*spec.FleetNode) []spec.CheckBedMember {
 	keys := spec.SortedMemberKeys(members)
 	if len(keys) == 0 {
 		return nil
@@ -265,7 +265,7 @@ func bedRunImageTag(bed, calver string) string {
 // sortedNestedKeys order — the set a VM root deploys host-side. Ported from
 // charly/host_build_check_bed.go, using spec.HostRooted instead of the former core-private
 // nodeTraits(child).HostRooted read (same Descent-stamped predicate, already promoted #55 U4).
-func bedLocalChildKeys(children map[string]*spec.BundleNode) []string {
+func bedLocalChildKeys(children map[string]*spec.FleetNode) []string {
 	var out []string
 	for _, childKey := range spec.SortedNestedKeys(children) {
 		child := children[childKey]

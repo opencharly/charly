@@ -6,7 +6,7 @@
 # it with `makepkg` (deploykit.BuildLocalPkgOnHost) and installs it onto the venue with `pacman -U`
 # (deploykit.TransferAndInstallPkgs) — the EXISTING build machinery, exposed over the reverse channel.
 # It conflicts with nothing (owns only /opt/charly-f3-witness) and is removed cleanly by the
-# plugin's recorded `pacman -R` reverse op at `charly bundle del`.
+# plugin's recorded `pacman -R` reverse op at `charly fleet del`.
 pkgname=charly-f3-witness
 pkgver=1
 pkgrel=1

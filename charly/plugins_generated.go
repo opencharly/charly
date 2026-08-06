@@ -15,7 +15,6 @@ import (
 	cp_plugin_box "github.com/opencharly/charly/candy/plugin-box"
 	cp_plugin_build "github.com/opencharly/charly/candy/plugin-build"
 	cp_plugin_builder "github.com/opencharly/charly/candy/plugin-builder"
-	cp_plugin_bundle "github.com/opencharly/charly/candy/plugin-bundle"
 	cp_plugin_candy "github.com/opencharly/charly/candy/plugin-candy"
 	cp_plugin_candy_kind "github.com/opencharly/charly/candy/plugin-candy-kind"
 	cp_plugin_check "github.com/opencharly/charly/candy/plugin-check"
@@ -34,6 +33,7 @@ import (
 	cp_plugin_examplerunverb "github.com/opencharly/charly/candy/plugin-examplerunverb"
 	cp_plugin_feature "github.com/opencharly/charly/candy/plugin-feature"
 	cp_plugin_file "github.com/opencharly/charly/candy/plugin-file"
+	cp_plugin_fleet "github.com/opencharly/charly/candy/plugin-fleet"
 	cp_plugin_gpu "github.com/opencharly/charly/candy/plugin-gpu"
 	cp_plugin_group "github.com/opencharly/charly/candy/plugin-group"
 	cp_plugin_http "github.com/opencharly/charly/candy/plugin-http"
@@ -118,7 +118,7 @@ func init() {
 	registerCompiledPlugin(cp_plugin_doctor.NewProvider(), cp_plugin_doctor.NewMeta())
 	registerCompiledPlugin(cp_plugin_feature.NewProvider(), cp_plugin_feature.NewMeta())
 	registerCompiledPlugin(cp_plugin_vm.NewProvider(), cp_plugin_vm.NewMeta())
-	registerCompiledPlugin(cp_plugin_bundle.NewProvider(), cp_plugin_bundle.NewMeta())
+	registerCompiledPlugin(cp_plugin_fleet.NewProvider(), cp_plugin_fleet.NewMeta())
 	registerCompiledPlugin(cp_plugin_pod.NewProvider(), cp_plugin_pod.NewMeta())
 	registerCompiledPlugin(cp_plugin_alias.NewProvider(), cp_plugin_alias.NewMeta())
 	registerCompiledPlugin(cp_plugin_box.NewProvider(), cp_plugin_box.NewMeta())

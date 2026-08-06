@@ -22,12 +22,12 @@ import (
 // (plugin.go's own doc — same as its podman-storage access for image capabilities), so it does
 // the MkdirAll/WriteFile/ReadFile itself; egress validation is likewise reachable peer-to-peer via
 // exec.InvokeProvider(verb:egress, OpValidate) — the SAME resolve+Invoke shape
-// candy/plugin-bundle/egress.go's ValidateEgressValue ran against the core-private registry, just
+// candy/plugin-fleet/egress.go's ValidateEgressValue ran against the core-private registry, just
 // reached through the executor instead.
 //
 // Two callers reach materializeKustomize: deploy:k8s's own OpPreresolve (preresolve.go, which
 // already holds a live `exec` from its own Invoke) and, via the deploy:k8s OpEmit branch
-// (provider.go/invokeK8sMaterialize), the host's source-less `charly bundle from-box --target
+// (provider.go/invokeK8sMaterialize), the host's source-less `charly fleet from-box --target
 // k8s` path (charly/k8s_deploy_from_box.go), which threads a throwaway kit.ShellExecutor{} purely
 // to stand up the InvokeWithExecutor broker this plugin needs to reach k8sgen/egress — no venue
 // carries any real meaning for this deploy-config-generation-only entry point (R3 dedup: ONE
@@ -169,7 +169,7 @@ func materializeKustomize(ctx context.Context, exec *sdk.Executor, req spec.K8sG
 	}, nil
 }
 
-// validateEgressValue is the peer-to-peer analogue of candy/plugin-bundle/egress.go's
+// validateEgressValue is the peer-to-peer analogue of candy/plugin-fleet/egress.go's
 // ValidateEgressValue: it
 // marshals v to JSON and Invokes verb:egress's OpValidate through the executor (never the
 // core-private registry, which this plugin cannot reach directly) — same params shape

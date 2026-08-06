@@ -36,7 +36,7 @@ android-sdk:
             arch:
                 # Emulator runtime libs (Qt/GL/audio): the AUR packages provide the
                 # SDK TOOLS, these provide the shared libs the emulator dlopens.
-                # Qt 6.5+ (bundled in the emulator) needs xcb-util-cursor to load the
+                # Qt 6.5+ (fleetdverb in the emulator) needs xcb-util-cursor to load the
                 # xcb platform plugin even with -no-window, else the process exits
                 # before AVD boot. pacman --needed skips libs already in the base.
                 package:

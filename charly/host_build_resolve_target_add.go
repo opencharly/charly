@@ -8,7 +8,7 @@ import (
 )
 
 // host_build_resolve_target_add.go — the "resolve-target-add" F10 host-builder (K4-C SHAPE-2
-// keystone): the per-node TERMINAL step of `charly bundle add`. The plugin ships ALREADY-COMPILED
+// keystone): the per-node TERMINAL step of `charly fleet add`. The plugin ships ALREADY-COMPILED
 // plans; this host half does ONLY the floor-M residue a plugin cannot: reconstruct the ancestor
 // executor chain (spec.ReconstructParentExec over the registry-coupled deriveChildExecutorForPath),
 // loadConfigForDeploy (LoadUnified), and ResolveTarget + utgt.Add. Plan re-materialization +
@@ -34,7 +34,7 @@ func runResolveTargetAdd(req spec.DeployResolveTargetAddRequest) error {
 	}
 	opts := spec.EmitOptsFromResolveTargetAdd(req, parentExec)
 	if req.Node == nil {
-		req.Node = &spec.BundleNode{Target: req.Target} // ref-based deploy: synthesize from the plugin-classified target
+		req.Node = &spec.FleetNode{Target: req.Target} // ref-based deploy: synthesize from the plugin-classified target
 	}
 	utgt, err := ResolveTarget(req.Node, req.DeployName)
 	if err != nil {

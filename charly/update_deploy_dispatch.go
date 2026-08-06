@@ -36,7 +36,7 @@ import (
 // service/cmd.
 //
 // Critical semantic: NONE of the dispatchers below regenerate the user-overlay deploy entry (no
-// `charly bundle add` / `charly config` calls allowed in the pod path). The user's directive:
+// `charly fleet add` / `charly config` calls allowed in the pod path). The user's directive:
 // "Any config changes should be done via charly config only." This verb updates ARTIFACTS
 // (image bits, VM disk, local candies, quadlet/marker image refs); `charly config` updates
 // CONFIG. The two responsibilities are strictly separated.
@@ -70,7 +70,7 @@ func (c *podUpdateCmd) dispatchByDeployTarget() error {
 
 	// Connect the deployment's OUT-OF-TREE plugins before ResolveTarget, so an external deploy
 	// SUBSTRATE (the E3-deploy plugin-side deploy target) resolves its grpcProvider for the
-	// rebuild — the SAME loadDeployPlugins bundle add / bundle del use (R3).
+	// rebuild — the SAME loadDeployPlugins fleet add / fleet del use (R3).
 	if err := loadDeployPlugins(dir, deployName, nil); err != nil {
 		return err
 	}

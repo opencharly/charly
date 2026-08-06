@@ -36,7 +36,7 @@ func NewProvider() pb.ProviderServer { return &provider{} }
 // here from core #Op in the schema-compaction cutover); the deploy substrate keeps
 // its authoring contract on core #Android / the apk: format and carries an EMPTY
 // InputDef. Preresolve:true (F6, FINAL/K5 unit 6a) declares the wire-backed
-// OpPreresolve leg (preresolve.go) — candy/plugin-bundle's preresolveSubstrate
+// OpPreresolve leg (preresolve.go) — candy/plugin-fleet's preresolveSubstrate
 // (S3b — was the core-side deploy_preresolve.go:wireDeployPreresolver registry
 // before the deploy-dispatch cluster moved) dispatches directly to THIS plugin via
 // sdk.Executor.InvokeProvider, reaching what was the deleted charly/android_deploy_preresolve.go

@@ -4,11 +4,11 @@ package main
 // (provider_kind_invoke.go's runPluginKind/foldSubstrateKind) — the standalone-template shape
 // detection + fold, plus the generic ensureMap helper. This file is the CORE-RESIDENT half of the
 // node-form kind-decode split; its former per-node DISPATCH ORCHESTRATOR (normalizeNodeInto — the
-// not-found policy: route to the bundle builder / defer-during-connect-pass / warn-and-skip / hard
+// not-found policy: route to the fleet builder / defer-during-connect-pass / warn-and-skip / hard
 // error) MOVED to candy/plugin-loader as the spec.Materializer seam (K1 unit 1, #46) — see
 // charly/loader_threaded.go (hostMaterializeSeams/decodeEntityViaRegistry/
-// buildBundleEntityViaRegistry) + sdk/loaderkit/materialize.go. The entity-body assembly +
-// bundle/resource-member tree-builder mechanism (isDeployShape/decodeStandaloneTemplateJSON/
+// buildFleetEntityViaRegistry) + sdk/loaderkit/materialize.go. The entity-body assembly +
+// fleet/resource-member tree-builder mechanism (isDeployShape/decodeStandaloneTemplateJSON/
 // resourceChildren, formerly here) is now sdk/loaderkit (K1 unit 3b), reached directly through
 // requireProjectLoader() from provider_kind_invoke.go — no core wrapper survives them, since their
 // only callers threaded pn straight into the seam.
@@ -34,7 +34,7 @@ func isStandaloneResourceKind(disc string) bool {
 
 // foldStandaloneTemplateReply is now sdk/loaderkit.FoldStandaloneTemplateReply (K1 unit 3a) — the
 // C2-substrate TEMPLATE fold arm (the standalone counterpart of runPluginKind's deploy fold into
-// acc.Bundle). GENERIC by construction: no per-kind-word switch — every standalone-template kind
+// acc.Fleet). GENERIC by construction: no per-kind-word switch — every standalone-template kind
 // (vm/pod/k8s/local/android) folds into the SAME map[disc][name] shape PluginKinds already uses
 // for every other templated kind. This file keeps a same-named/same-signature core wrapper (R3)
 // since provider_kind_invoke.go calls it by this name.

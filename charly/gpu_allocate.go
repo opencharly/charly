@@ -28,7 +28,7 @@ import (
 // unsatisfiable GPU resource; false when the bed needs no GPU resource (or every
 // required vendor is present, or the resource vocabulary is unreadable — never
 // skip on a detection gap, only on a definite absence).
-func bedGPUPrereqMissing(node spec.BundleNode) (token, vendor string, missing bool) {
+func bedGPUPrereqMissing(node spec.FleetNode) (token, vendor string, missing bool) {
 	// Token list FIRST — this restores the documented laziness ("only when a GPU-selector token is
 	// actually present"), which the resource-first ordering had quietly inverted: a bed claiming no
 	// host resource at all paid a whole project resolve to learn it needed nothing.

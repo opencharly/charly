@@ -8,7 +8,7 @@ package main
 // words across charly/+sdk/deploykit; THIS gate catches the broader STRUCTURAL shape —
 // an actual `switch` statement or an if/else-if chain of >=3 arms — dispatching on ANY
 // of the full deploy-substrate vocabulary (pod/vm/k8s/local/android, plus the entity
-// words group/candy/deploy/bundle), scoped to charly/ core only (the kernel).
+// words group/candy/deploy/fleet), scoped to charly/ core only (the kernel).
 //
 // A single stray `if x == "candy"` (kind-recognition Data — the loader/materialize
 // files legitimately read pn.Disc == "candy" to route box-vs-layer parsing, per the
@@ -38,10 +38,10 @@ import (
 // kindSwitchVocabulary is the deploy-substrate + entity kind-word vocabulary this gate
 // polices, per the W5 brief: the 5 deploy substrates plus the 4 entity/verb words whose
 // accidental re-introduction as a dispatch key would also be a kernel/plugin boundary
-// violation (group/candy/deploy/bundle).
+// violation (group/candy/deploy/fleet).
 var kindSwitchVocabulary = map[string]bool{
 	"pod": true, "vm": true, "k8s": true, "local": true, "android": true,
-	"group": true, "candy": true, "deploy": true, "bundle": true,
+	"group": true, "candy": true, "deploy": true, "fleet": true,
 }
 
 // kindSwitchExemptions is the reviewed, justified exemption list. Expected EMPTY.

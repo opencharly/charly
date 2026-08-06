@@ -6,7 +6,7 @@ package box
 // *spec.Config / spec.BoxConfig / *spec.DistroConfig / *spec.BuilderConfig — no CUE, no registry,
 // no host-only dependency — so they move here VERBATIM, and this plugin now self-loads the raw
 // config itself via the hoisted sdk/loaderkit.LoadUnifiedViaExecutor witness (the SAME canonical
-// plugin-side loader candy/plugin-build/plugin-vm/plugin-bundle already share, K3-W2 unit 2) instead
+// plugin-side loader candy/plugin-build/plugin-vm/plugin-fleet already share, K3-W2 unit 2) instead
 // of receiving it from the host's (now-slimmed) "validate-project-checks" seam.
 //
 // The CUE-schema-conformance pair and the remote-candy check followed them in K-wave 2 cone R1
@@ -30,7 +30,7 @@ import (
 
 // loadRawProjectConfig self-loads the raw *spec.Config + *spec.DistroConfig + *spec.BuilderConfig
 // for dir via the hoisted plugin-side loader witness — the same loaderkit.LoadUnifiedViaExecutor
-// candy/plugin-build/plugin-vm/plugin-bundle already call, plus the SAME
+// candy/plugin-build/plugin-vm/plugin-fleet already call, plus the SAME
 // spec.ProjectDistroConfig/ProjectBuilderConfig projections charly's LoadBuildConfigForBox
 // LoadBuildConfigForBox uses core-side. Returns (nil, nil, nil, nil) for a project-less directory
 // (mirrors the empty-project contract every other resolve path honours) — the caller's rules then

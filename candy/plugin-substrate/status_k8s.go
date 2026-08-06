@@ -3,13 +3,13 @@ package substratekind
 // status_k8s.go — the K8S substrate's OpStatus (K5: relocated verbatim from
 // charly/status_collect_k8s.go). A `target: k8s` deploy does not run a
 // container on this host — it emits a Kustomize manifest tree that
-// `charly bundle sync` / `kubectl apply -k` applies to a remote cluster, so
+// `charly fleet sync` / `kubectl apply -k` applies to a remote cluster, so
 // this collector reports GENERATION state (tree-present | not-generated) and
 // the referenced cluster/context, never live pod health (that is a `kube:`
 // check, candy/plugin-kube). Every input this needs (the folded project
 // deploy tree, the kind:k8s template bodies) is fetched from the host via the
 // established InvokeProvider("build","project") seam (already proven in
-// production by candy/plugin-bundle's OpCompile) — resolving the referenced
+// production by candy/plugin-fleet's OpCompile) — resolving the referenced
 // k8s template itself needs no cross-plugin hop at all: this SAME provider
 // already implements the k8s substrate-template resolve (resolve.go), so it's
 // an in-package call, not an Invoke.
@@ -77,7 +77,7 @@ func collectK8sStatus(ctx context.Context, req spec.SubstrateStatusRequest) (spe
 }
 
 // fetchResolvedProject re-hydrates the resolved-project envelope over the
-// established InvokeProvider("build","project") seam (candy/plugin-bundle's
+// established InvokeProvider("build","project") seam (candy/plugin-fleet's
 // OpCompile proves this composition in production). Dir is left empty — a
 // compiled-in substrate plugin shares the host process's cwd, so the host-side
 // "resolved-project" handler's own os.Getwd() already resolves the right

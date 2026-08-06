@@ -958,7 +958,7 @@ func buildDefaultInterface(spec *VmSpec, rt VmRuntimeParams) libvirtxml.DomainIn
 					// Bind host-side forwards to loopback ONLY (security): a VM
 					// port must never be exposed on 0.0.0.0 / the LAN — the same
 					// 127.0.0.1 default podman uses for published pod ports. Host
-					// tooling (charly vm ssh, charly bundle add vm:, host-net peers) reaches
+					// tooling (charly vm ssh, charly fleet add vm:, host-net peers) reaches
 					// the VM via 127.0.0.1; nothing off-host can.
 					Address: vmForwardBindAddr,
 					Ranges:  ranges,

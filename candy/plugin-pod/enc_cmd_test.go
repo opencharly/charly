@@ -19,25 +19,25 @@ import (
 // (defect C) and the non-short-circuit path both still exercise pluginEncMount exactly as
 // encMount was exercised in core.
 //
-// R1 finding (surfaced porting this test) + its fix: deploykit.LoadBundleConfig() — which
+// R1 finding (surfaced porting this test) + its fix: deploykit.LoadFleetConfig() — which
 // deploykit.EncPlanFor/LoadEncryptedVolume called — silently degrades to "no entries" OUTSIDE
 // the charly-core process (see deploy_file.go's own comment on this exact historical failure
 // mode). pluginEncMount/Unmount/Status/Passwd now route through the cycle-free plugin-side
-// loaderkit.LoadHostBundleConfigViaExecutor helper (→ EncPlanForConfig/EncStatusFromConfig)
+// loaderkit.LoadHostFleetConfigViaExecutor helper (→ EncPlanForConfig/EncStatusFromConfig)
 // instead of the placement-dependent bare call — #55 coneC Unit C2 retired the former
-// deploykit.LoadBundleConfigViaSeam host-seam round-trip — the same fix
+// deploykit.LoadFleetConfigViaSeam host-seam round-trip — the same fix
 // candy/plugin-pod/remove_orchestration.go's resolveSidecarNames already applies for the
 // identical bug class.
 //
 // The new helper drives the FULL LoadUnified pipeline over the reverse channel (schema gate +
-// the LoadSeams), which a HostBuild-only test double cannot faithfully fake, so loadPodBundleConfig
-// is a package-var seam (enc_cmd.go) these tests swap for a canned *BundleConfig. The
+// the LoadSeams), which a HostBuild-only test double cannot faithfully fake, so loadPodFleetConfig
+// is a package-var seam (enc_cmd.go) these tests swap for a canned *FleetConfig. The
 // nil-executor guard (TestPluginEncMount_NilExecutorErrors) keeps the REAL helper to prove the
 // loud-error contract still holds when no reverse channel is stashed.
 
 // fakeExecutorServiceClient is a minimal pb.ExecutorServiceClient test double covering the ONE
-// RPC these tests still need once the bundle-config load is swapped: InvokeProvider (verb:credential).
-// HostBuild is no longer reached (loadPodBundleConfig is swapped); every other RPC panics if called.
+// RPC these tests still need once the fleet-config load is swapped: InvokeProvider (verb:credential).
+// HostBuild is no longer reached (loadPodFleetConfig is swapped); every other RPC panics if called.
 type fakeExecutorServiceClient struct {
 	pb.ExecutorServiceClient
 	invokeProviderReply *pb.InvokeReply
@@ -45,7 +45,7 @@ type fakeExecutorServiceClient struct {
 }
 
 func (f *fakeExecutorServiceClient) HostBuild(_ context.Context, _ *pb.HostBuildRequest, _ ...grpc.CallOption) (*pb.HostBuildReply, error) {
-	panic("HostBuild should not be reached: loadPodBundleConfig is swapped in these tests")
+	panic("HostBuild should not be reached: loadPodFleetConfig is swapped in these tests")
 }
 
 func (f *fakeExecutorServiceClient) InvokeProvider(_ context.Context, _ *pb.InvokeProviderRequest, _ ...grpc.CallOption) (*pb.InvokeReply, error) {
@@ -55,13 +55,13 @@ func (f *fakeExecutorServiceClient) InvokeProvider(_ context.Context, _ *pb.Invo
 	return f.invokeProviderReply, nil
 }
 
-// testBundleConfig builds the canned BundleConfig the swapped loadPodBundleConfig returns: one
-// "testimg" bundle entry + two encrypted volumes (mirrors the former YAML fixture's node-form
+// testFleetConfig builds the canned FleetConfig the swapped loadPodFleetConfig returns: one
+// "testimg" fleet entry + two encrypted volumes (mirrors the former YAML fixture's node-form
 // shape, constructed directly as Go structs — no on-disk charly.yml + no reverse channel needed).
-func testBundleConfig(t *testing.T, dir string) *deploykit.BundleConfig {
+func testFleetConfig(t *testing.T, dir string) *deploykit.FleetConfig {
 	t.Helper()
-	return &deploykit.BundleConfig{
-		Bundle: map[string]deploykit.BundleNode{
+	return &deploykit.FleetConfig{
+		Fleet: map[string]deploykit.FleetNode{
 			"testimg": {
 				Image: "testimg",
 				Volume: []spec.DeployVolume{
@@ -73,19 +73,19 @@ func testBundleConfig(t *testing.T, dir string) *deploykit.BundleConfig {
 	}
 }
 
-// swapLoadPodBundleConfig replaces the package-var loadPodBundleConfig with one returning the
+// swapLoadPodFleetConfig replaces the package-var loadPodFleetConfig with one returning the
 // canned dc, restoring the real helper on cleanup.
-func swapLoadPodBundleConfig(t *testing.T, dc *deploykit.BundleConfig) {
+func swapLoadPodFleetConfig(t *testing.T, dc *deploykit.FleetConfig) {
 	t.Helper()
-	orig := loadPodBundleConfig
-	t.Cleanup(func() { loadPodBundleConfig = orig })
-	loadPodBundleConfig = func() (*deploykit.BundleConfig, error) { return dc, nil }
+	orig := loadPodFleetConfig
+	t.Cleanup(func() { loadPodFleetConfig = orig })
+	loadPodFleetConfig = func() (*deploykit.FleetConfig, error) { return dc, nil }
 }
 
 // installFakeExecutor stashes cmdExec/cmdCtx (host_seams.go's package vars — normally set by
 // Invoke(OpRun) at the top of one `charly config …` dispatch) with a fake reverse channel, and
 // restores them on test cleanup. Kept for the InvokeProvider(verb:credential) reach the
-// non-short-circuit path needs; the bundle-config load is swapped separately.
+// non-short-circuit path needs; the fleet-config load is swapped separately.
 func installFakeExecutor(t *testing.T, fake *fakeExecutorServiceClient) {
 	t.Helper()
 	origExec, origCtx := cmdExec, cmdCtx
@@ -96,7 +96,7 @@ func installFakeExecutor(t *testing.T, fake *fakeExecutorServiceClient) {
 
 // TestPluginEncMount_ShortCircuit_AllMounted verifies defect C fix: when every requested volume
 // is already mounted, pluginEncMount returns nil without ever reaching InvokeProvider
-// (verb:credential) — only the swapped bundle-config load is exercised.
+// (verb:credential) — only the swapped fleet-config load is exercised.
 func TestPluginEncMount_ShortCircuit_AllMounted(t *testing.T) {
 	origMounted := deploykit.IsEncryptedMounted
 	defer func() { deploykit.IsEncryptedMounted = origMounted }()
@@ -109,7 +109,7 @@ func TestPluginEncMount_ShortCircuit_AllMounted(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	swapLoadPodBundleConfig(t, testBundleConfig(t, dir))
+	swapLoadPodFleetConfig(t, testFleetConfig(t, dir))
 	installFakeExecutor(t, &fakeExecutorServiceClient{
 		invokeProviderErr: errors.New("verb:credential unexpectedly invoked — the short-circuit should have skipped it"),
 	})
@@ -141,7 +141,7 @@ func TestPluginEncMount_NoShortCircuit_WhenOneUnmounted(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	swapLoadPodBundleConfig(t, testBundleConfig(t, dir))
+	swapLoadPodFleetConfig(t, testFleetConfig(t, dir))
 	installFakeExecutor(t, &fakeExecutorServiceClient{
 		invokeProviderErr: errors.New("verb:credential unreachable (test double)"),
 	})
@@ -156,14 +156,14 @@ func TestPluginEncMount_NoShortCircuit_WhenOneUnmounted(t *testing.T) {
 	}
 }
 
-// TestPluginEncStatus_RoutesThroughSeam proves pluginEncStatus reaches the bundle config via the
-// swapped loader (the package-var loadPodBundleConfig) rather than degrading silently — a nil
-// cmdExec would previously make EncPlanFor/EncStatus's bare LoadBundleConfig() silently report
+// TestPluginEncStatus_RoutesThroughSeam proves pluginEncStatus reaches the fleet config via the
+// swapped loader (the package-var loadPodFleetConfig) rather than degrading silently — a nil
+// cmdExec would previously make EncPlanFor/EncStatus's bare LoadFleetConfig() silently report
 // "no encrypted volumes" instead of erroring; this asserts the loader is actually consulted (no
 // error) and prints the loaded volumes rather than a false "not configured" outcome.
 func TestPluginEncStatus_RoutesThroughSeam(t *testing.T) {
 	dir := t.TempDir()
-	swapLoadPodBundleConfig(t, testBundleConfig(t, dir))
+	swapLoadPodFleetConfig(t, testFleetConfig(t, dir))
 	installFakeExecutor(t, &fakeExecutorServiceClient{})
 
 	if err := pluginEncStatus("testimg", ""); err != nil {
@@ -173,8 +173,8 @@ func TestPluginEncStatus_RoutesThroughSeam(t *testing.T) {
 
 // TestPluginEncMount_NilExecutorErrors covers the nil-executor guard on the REAL loader path — a
 // command not compiled-in (cmdExec never stashed) gets a clean error instead of a nil-pointer
-// panic reaching into deploykit. Uses the un-swapped real loadPodBundleConfig (which calls
-// loaderkit.LoadHostBundleConfigViaExecutor → LoadUnifiedViaExecutor → errors on a nil executor).
+// panic reaching into deploykit. Uses the un-swapped real loadPodFleetConfig (which calls
+// loaderkit.LoadHostFleetConfigViaExecutor → LoadUnifiedViaExecutor → errors on a nil executor).
 func TestPluginEncMount_NilExecutorErrors(t *testing.T) {
 	origExec, origCtx := cmdExec, cmdCtx
 	t.Cleanup(func() { cmdExec, cmdCtx = origExec, origCtx })

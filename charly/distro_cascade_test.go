@@ -10,7 +10,7 @@ import (
 // TestCascade_FormatFamilyLevel / TestCascade_UnionAndTopBase / TestCascade_MostSpecificRepoWins
 // / TestCascade_DeterministicRepoPerDistro / TestCascade_FedoraArchBareReach /
 // TestCascade_TopOnlyCandyInstallsEverywhere (+ their private debImg/pkgStep/fmtImg helpers)
-// relocated to candy/plugin-bundle (#55 decoupling, Batch A) — they asserted
+// relocated to candy/plugin-fleet (#55 decoupling, Batch A) — they asserted
 // deploykit.CompileSystemPackageSteps/CascadeTagChain directly, zero charly dep.
 
 // --- Parser routing --------------------------------------------------------
@@ -25,7 +25,7 @@ import (
 //
 // TestCascade_UnionAndTopBase / TestCascade_MostSpecificRepoWins /
 // TestCascade_DeterministicRepoPerDistro / TestCascade_FedoraArchBareReach /
-// TestCascade_TopOnlyCandyInstallsEverywhere relocated to candy/plugin-bundle (#55
+// TestCascade_TopOnlyCandyInstallsEverywhere relocated to candy/plugin-fleet (#55
 // decoupling, Batch A) — see the note at the top of this file.
 
 // --- distroTagChain -------------------------------------------------------

@@ -152,7 +152,7 @@ func (stubIdemVerb) Invoke(context.Context, *Operation) (*Result, error) {
 // process without the duplicate-registration warning: a same-source re-load is a no-op
 // (skip), while a different-source collision on the same word still errors (the bijection
 // backstop). Without the guard, a single process reaching multiple connect paths in one run
-// (e.g. `charly bundle add`'s loadDeployPlugins, then a pod-overlay build reaching
+// (e.g. `charly fleet add`'s loadDeployPlugins, then a pod-overlay build reaching
 // candy/plugin-build's resolveBuildEngine's own hostBuildConnectPlugins) warns on the second load.
 func TestPluginAlreadyConnected_Idempotent(t *testing.T) {
 	t.Cleanup(snapshotProviderState())

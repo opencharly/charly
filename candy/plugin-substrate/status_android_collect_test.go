@@ -118,7 +118,7 @@ func TestCollectAndroidDeployNodes_PerMachineWinsPerKey(t *testing.T) {
 		},
 	}
 	// Per-machine overlay flips "phone" to a pod target — the android node must disappear.
-	perMachine := &deploykit.BundleConfig{Bundle: map[string]deploykit.BundleNode{
+	perMachine := &deploykit.FleetConfig{Fleet: map[string]deploykit.FleetNode{
 		"phone": {Target: "pod", Image: "x"},
 	}}
 	nodes := collectAndroidDeployNodes(rp, perMachine)

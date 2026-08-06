@@ -214,29 +214,29 @@ func pluginEncExec(in spec.EncExecInput) error {
 	return nil
 }
 
-// loadPodBundleConfig fetches the per-host BundleConfig plugin-side via the cycle-free
-// loaderkit.LoadHostBundleConfigViaExecutor (#55 coneC Unit C2 — this retired the former
-// deploykit.LoadBundleConfigViaSeam host-handler round-trip;
+// loadPodFleetConfig fetches the per-host FleetConfig plugin-side via the cycle-free
+// loaderkit.LoadHostFleetConfigViaExecutor (#55 coneC Unit C2 — this retired the former
+// deploykit.LoadFleetConfigViaSeam host-handler round-trip;
 // loaderkit already imports deploykit so the helper lives there) rather than letting
-// EncPlanFor/EncStatus reach the placement-dependent bare deploykit.LoadBundleConfig()
+// EncPlanFor/EncStatus reach the placement-dependent bare deploykit.LoadFleetConfig()
 // themselves — the same fix candy/plugin-pod/remove_orchestration.go's resolveSidecarNames
 // already applies for the same latent-bug class (R3, no new seam invented). A future
 // out-of-process placement fails loudly (a real error) instead of silently degrading to
 // "no encrypted volumes" — exactly the historical bug this class of fix exists to prevent.
 //
 // It is a package-var (not a plain func) so the enc_cmd_test.go fakes can swap in a canned
-// *BundleConfig — the new helper drives the full LoadUnified pipeline over the reverse channel
+// *FleetConfig — the new helper drives the full LoadUnified pipeline over the reverse channel
 // (schema gate + the LoadSeams), which a HostBuild-only test double can't faithfully fake; the
 // nil-executor guard (TestPluginEncMount_NilExecutorErrors) keeps the REAL helper to prove the
 // loud-error contract holds when no reverse channel is stashed.
-var loadPodBundleConfig = func() (*deploykit.BundleConfig, error) {
-	return loaderkit.LoadHostBundleConfigViaExecutor(cmdCtx, cmdExec)
+var loadPodFleetConfig = func() (*deploykit.FleetConfig, error) {
+	return loaderkit.LoadHostFleetConfigViaExecutor(cmdCtx, cmdExec)
 }
 
 // pluginEncStatus prints encrypted-volume status — zero credential coupling (mirrors
 // charly/enc.go's encStatus 1:1), routed through the seam-aware EncStatusFromConfig.
 func pluginEncStatus(boxName, instance string) error {
-	dc, err := loadPodBundleConfig()
+	dc, err := loadPodFleetConfig()
 	if err != nil {
 		return err
 	}
@@ -247,7 +247,7 @@ func pluginEncStatus(boxName, instance string) error {
 // Fast path preserved BYTE-IDENTICAL: if every requested volume is already mounted, return nil
 // without querying the credential store at all (keyring-resilient restart).
 func pluginEncMount(boxName, instance, volume string) error {
-	dc, err := loadPodBundleConfig()
+	dc, err := loadPodFleetConfig()
 	if err != nil {
 		return err
 	}
@@ -283,7 +283,7 @@ func pluginEncMount(boxName, instance, volume string) error {
 
 // pluginEncUnmount unmounts encrypted volumes for an image (direct port of enc.go's encUnmount).
 func pluginEncUnmount(boxName, instance, volume string) error {
-	dc, err := loadPodBundleConfig()
+	dc, err := loadPodFleetConfig()
 	if err != nil {
 		return err
 	}
@@ -318,7 +318,7 @@ func pluginAskPassword(envVar, id, prompt string) (string, error) {
 // pluginEncPasswd changes the gocryptfs password for all encrypted volumes of an image (direct
 // port of enc.go's encPasswd, byte-identical mount-guard + triple-prompt behavior).
 func pluginEncPasswd(boxName, instance string) error {
-	dc, err := loadPodBundleConfig()
+	dc, err := loadPodFleetConfig()
 	if err != nil {
 		return err
 	}

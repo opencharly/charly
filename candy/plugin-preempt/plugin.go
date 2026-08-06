@@ -5,7 +5,7 @@
 //     charly core: acquire/release, stop+restore holders, the crash-safe lease ledger, GPU
 //     poisoning, the vfio<->nvidia mode arbitration). COMPILED-IN, dispatched peer-to-peer by
 //     every acquire/release caller (candy/plugin-check's bed_session, candy/plugin-vm's
-//     vm_arbiter_shim, candy/plugin-bundle's handleLifecycleSimple — the former in-core proxy
+//     vm_arbiter_shim, candy/plugin-fleet's handleLifecycleSimple — the former in-core proxy
 //     charly/preempt.go newResourceArbiter is DELETED, K-wave 2 cone CONTESTED); the
 //     arbiter reaches its host dependencies over TWO generic reverse legs (arbiter.go): the VM/
 //     pod lifecycle + GPU driver flip via sdk.Executor.InvokeProvider (FLOOR-SLIM-proper Unit-8,

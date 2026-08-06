@@ -66,7 +66,7 @@ func pluginRunCheckLive(ex *sdk.Executor, ctx context.Context, scoreName string,
 	verdictByID := make(map[string]string, len(entries))
 
 	dir, _ := os.Getwd()
-	var deployRoots map[string]spec.BundleNode
+	var deployRoots map[string]spec.FleetNode
 	// Best-effort, matching the core original's own merged-tree-read(cwd) tolerance (a missing/
 	// absent project never fails scoring — a plan whose steps address a bare venue by container
 	// name still scores via pluginResolveScoringChain's roots==nil fallback). A nil ex (unit
@@ -109,14 +109,14 @@ func pluginRunCheckLive(ex *sdk.Executor, ctx context.Context, scoreName string,
 // scoring executor chain, builds the bucket's runner, then runs each step — appending verdicts to
 // out and recording them in verdictByID. The port of charly/check_runner_live.go's
 // scoreOnePodBucket.
-func pluginScoreOneVenueBucket(ex *sdk.Executor, ctx context.Context, dir string, bucket []scoredStep, deployRoots map[string]spec.BundleNode, out *spec.CheckRunResults, verdictByID map[string]string) {
+func pluginScoreOneVenueBucket(ex *sdk.Executor, ctx context.Context, dir string, bucket []scoredStep, deployRoots map[string]spec.FleetNode, out *spec.CheckRunResults, verdictByID map[string]string) {
 	venue := bucket[0].step.Venue
 
 	var ephemeralCleanup func(bool)
 	if venue != "" && isEphemeralDeploy(deployRoots, venue) {
-		fmt.Fprintf(os.Stderr, "score live: ephemeral wrap — charly bundle add %s\n", venue)
+		fmt.Fprintf(os.Stderr, "score live: ephemeral wrap — charly fleet add %s\n", venue)
 		exe, _ := os.Executable()
-		addCmd := exec.Command(exe, "bundle", "add", venue)
+		addCmd := exec.Command(exe, "fleet", "add", venue)
 		addCmd.Stderr = os.Stderr
 		addCmd.Stdout = os.Stdout
 		if err := addCmd.Run(); err != nil {
@@ -128,7 +128,7 @@ func pluginScoreOneVenueBucket(ex *sdk.Executor, ctx context.Context, dir string
 				fmt.Fprintf(os.Stderr, "score live: keep_on_failure=true; leaving %s alive\n", venue)
 				return
 			}
-			delCmd := exec.Command(exe, "bundle", "del", venue, "--assume-yes")
+			delCmd := exec.Command(exe, "fleet", "del", venue, "--assume-yes")
 			delCmd.Stderr = os.Stderr
 			delCmd.Stdout = os.Stdout
 			_ = delCmd.Run()
@@ -267,7 +267,7 @@ func pluginScoreOneVenueBucket(ex *sdk.Executor, ctx context.Context, dir string
 // pluginResolveScoringChain returns the DeployExecutor chain that reaches `venue` — the port of
 // charly/check_runner_live.go's resolveScoringChain, off the envelope-derived deployRoots instead
 // of a fresh merged-tree-read(cwd) call.
-func pluginResolveScoringChain(roots map[string]spec.BundleNode, venue string) (deploykit.DeployExecutor, error) {
+func pluginResolveScoringChain(roots map[string]spec.FleetNode, venue string) (deploykit.DeployExecutor, error) {
 	if strings.Contains(venue, ".") && roots != nil {
 		_, chain, err := deploykit.ResolveDeployChain(roots, venue, kit.ShellExecutor{})
 		if err == nil {

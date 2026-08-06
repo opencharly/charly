@@ -10,7 +10,7 @@ import (
 // the check-k3s-vm RCA (both used to read "unknown target %q").
 //
 // The ref-based-del discriminator tests (TestPodDeploymentArtifactExists / TestResolveDelNode)
-// moved to candy/plugin-bundle/del_resolve_test.go with the del resolution (K-wave 2 cone R2 bank C).
+// moved to candy/plugin-fleet/del_resolve_test.go with the del resolution (K-wave 2 cone R2 bank C).
 func TestUnresolvedDeployTargetError(t *testing.T) {
 	// A known substrate word whose provider isn't connected → the not-connected text.
 	known := unresolvedDeployTargetError("my-vm", "vm").Error()

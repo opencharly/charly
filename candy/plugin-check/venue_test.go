@@ -19,16 +19,16 @@ func desc(v string) *spec.DescentDescriptor { return &spec.DescentDescriptor{Ven
 
 // newVenueTestTree covers every venue class the classifier must distinguish, off the stamped
 // Descent.Venue trait every loader-stamped node carries.
-func newVenueTestTree() map[string]spec.BundleNode {
-	return map[string]spec.BundleNode{
+func newVenueTestTree() map[string]spec.FleetNode {
+	return map[string]spec.FleetNode{
 		"cachyos-gpu": {Descent: desc("ssh")}, // vm entity (ssh venue): its own name IS the domain identity
-		"web-pod": {Descent: desc("container"), Children: map[string]*spec.BundleNode{
+		"web-pod": {Descent: desc("container"), Children: map[string]*spec.FleetNode{
 			// RCA #12: a vm CHILD (ssh) nested under a non-vm (container) parent — the leaf, not
 			// the root, is the vm. And a local (shell) leaf under the same pod root.
 			"web-pod-vm":    {Descent: desc("ssh")},
 			"web-pod-local": {Descent: desc("shell")},
 		}},
-		"k3s-vm": {Descent: desc("ssh"), Children: map[string]*spec.BundleNode{
+		"k3s-vm": {Descent: desc("ssh"), Children: map[string]*spec.FleetNode{
 			// Delegate-into-guest: the ROOT is the vm, the leaf is something nested INSIDE its
 			// guest — the leaf check falls through to the root fallback, not a second vm.
 			"inner-app": {Descent: desc("shell")},

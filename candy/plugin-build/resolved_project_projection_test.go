@@ -60,7 +60,7 @@ func (f *fakeNamespaceExecutorServiceClient) HostBuild(ctx context.Context, in *
 // loaderkit.ProjectResolvedProject) decodes candy/candy-model/vocab data faithfully — the wire
 // contract this plugin's `build:project` word and its ~8 consumers depend on. The full
 // load-a-real-project-from-disk round trip (LoadUnified → scan → vocab) is proven live by the R10
-// exploratory run against a real project (box inspect / status / check-project / bundle resolve);
+// exploratory run against a real project (box inspect / status / check-project / fleet resolve);
 // this test's job is the SHARED projection logic itself, fed literal fixture inputs.
 func TestResolvedProject_Projection(t *testing.T) {
 	ex := sdk.NewInProcExecutor(&fakeNamespaceExecutorServiceClient{})

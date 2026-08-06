@@ -9,7 +9,7 @@ package substratekind
 // target:vm entry's vm_state) is a SEPARATE concern (mirrors the pod
 // substrate's own split: this file returns LIVE rows only; status_flat.go's
 // flatCollector.enrichVmRow, K6, same package, applies the deploy-cone
-// enrichment afterward) — so this file carries NO BundleConfig/UnifiedFile
+// enrichment afterward) — so this file carries NO FleetConfig/UnifiedFile
 // dependency at all.
 
 import (

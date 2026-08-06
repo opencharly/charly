@@ -55,7 +55,7 @@ func (e *recordingExec) ResolveHome(context.Context, string) (string, error) {
 	return e.homeReturn, nil
 }
 
-// TestCompileShellHookStepDefersHome relocated to candy/plugin-bundle (#55 decoupling, Batch
+// TestCompileShellHookStepDefersHome relocated to candy/plugin-fleet (#55 decoupling, Batch
 // A) — it asserted deploykit.CompileShellHookStep directly, zero charly coupling.
 
 // D1: ResolveHome substitutes the token in every home-bearing field but leaves
@@ -101,8 +101,8 @@ func TestResolveHomeSubstitutesAcrossSteps(t *testing.T) {
 }
 
 // TestPrepareReverseState_SkipsVenueExecForApkOnlyPlan retired here (S3b): prepareReverseState
-// moved to candy/plugin-bundle/deploy_target.go alongside the deploy-dispatch logic it
-// belonged to (see CHANGELOG/2026.203.0212.md) — see candy/plugin-bundle/deploy_target_test.go for
+// moved to candy/plugin-fleet/deploy_target.go alongside the deploy-dispatch logic it
+// belonged to (see CHANGELOG/2026.203.0212.md) — see candy/plugin-fleet/deploy_target_test.go for
 // the ported test (same behavior, same guard).
 
 // The env.d-sourcing managed block (written to the DESTINATION user's home) and the

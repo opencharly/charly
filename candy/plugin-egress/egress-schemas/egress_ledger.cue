@@ -1,7 +1,7 @@
 // Egress schemas for the install-ledger records charly writes under
 // ~/.config/opencharly/installed/ (deploys/<id>.json + layers/<candy>.json). The
 // ledger drives teardown (ReverseOps), so a record missing its identity/time
-// fields would silently break `charly bundle del` / `charly update`. These
+// fields would silently break `charly fleet del` / `charly update`. These
 // validate the record ENVELOPE (required fields non-empty) before the JSON hits
 // disk — host (writeJSONAtomic) and guest (executor heredoc) writers alike.
 // steps/reverse_ops are charly-internal lists, left open. Package-less → these

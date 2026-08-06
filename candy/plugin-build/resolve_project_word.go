@@ -15,7 +15,7 @@ import (
 // resolve_project_word.go — the `build:project` word (#55 step3 unit 3b): the PLUGIN-SIDE
 // replacement for charly core's now-deleted resolved-project host seam
 // (charly/resolved_project_host.go's hostBuildResolvedProject/buildResolvedProjectFromDir). The
-// ~8 external consumers (candy/plugin-box, plugin-bundle ×2, plugin-check, plugin-preempt,
+// ~8 external consumers (candy/plugin-box, plugin-fleet ×2, plugin-check, plugin-preempt,
 // plugin-installstep, plugin-status, plugin-substrate) that used to reach that now-deleted host
 // seam directly now call
 // `exec.InvokeProvider(ctx, "build", "project", sdk.OpResolve, reqJSON, nil, ...)` instead — a
@@ -71,7 +71,7 @@ func resolveProjectEnvelope(ctx context.Context, ex *sdk.Executor, req spec.Reso
 	// SCAN: threads req VERBATIM (Dir/IncludeDisabled/ExtraCandyRefs) — unlike resolveBuildEngine's
 	// own scan (which hardcodes ExtraCandyRefs: nil, since build/generate never widens the scan),
 	// the deleted host projector DID thread ExtraCandyRefs through ScanAllCandyWithConfigOpts, so
-	// this must too (candy/plugin-installstep + plugin-bundle both rely on it for add_candy: refs).
+	// this must too (candy/plugin-installstep + plugin-fleet both rely on it for add_candy: refs).
 	localScanned, err := scanLocalLeg(ctx, ex, uf, dir, distroCfg)
 	if err != nil {
 		return spec.ResolvedProject{}, err

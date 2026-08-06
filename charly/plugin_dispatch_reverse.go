@@ -41,7 +41,7 @@ import (
 // none, e.g. a verb/kind Invoke with no deploy-context broker). A caller with no enclosing executor
 // of its own may instead supply a SELF-DESCRIBED venue via req.VenueDescriptorJson (a marshalled
 // spec.VenueDescriptor): the host re-materializes a FRESH DeployExecutor from it
-// (specexec.VenueFromDescriptor, the SAME re-materialization candy/plugin-bundle's own PrepareVenue
+// (specexec.VenueFromDescriptor, the SAME re-materialization candy/plugin-fleet's own PrepareVenue
 // dispatch already goes through) and threads THAT instead of s.exec. Absent — byte-identical prior
 // behavior.
 //

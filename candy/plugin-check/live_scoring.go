@@ -3,7 +3,7 @@ package check
 // live_scoring.go — originally K1-unblock W3 Unit A: the runner-INDEPENDENT half of the former
 // charly/check_runner_live.go's live-scoring machinery (topo-sort / same-venue bucketing /
 // dependency-cascade skip / ephemeral-deploy classification). Pure over spec.Step +
-// map[string]spec.BundleNode — no core-only dependency, confirmed by reading the original in
+// map[string]spec.FleetNode — no core-only dependency, confirmed by reading the original in
 // full: none of these touch newCheckRunner.
 //
 // RunCheckLive/scoreOnePodBucket/resolveScoringChain — the runner-DEPENDENT half this file's
@@ -140,7 +140,7 @@ func skippedStepScore(e scoredStep, pod, blockedBy string) spec.StepScore {
 
 // isEphemeralDeploy reports whether the named pod resolves to a charly.yml entry marked
 // ephemeral.
-func isEphemeralDeploy(roots map[string]spec.BundleNode, pod string) bool {
+func isEphemeralDeploy(roots map[string]spec.FleetNode, pod string) bool {
 	if pod == "" {
 		return false
 	}
@@ -155,11 +155,11 @@ func isEphemeralDeploy(roots map[string]spec.BundleNode, pod string) bool {
 
 // ephemeralKeepOnFailure returns the keep_on_failure flag from the named ephemeral deploy's
 // lifetime block.
-func ephemeralKeepOnFailure(roots map[string]spec.BundleNode, pod string) bool {
+func ephemeralKeepOnFailure(roots map[string]spec.FleetNode, pod string) bool {
 	if pod == "" {
 		return false
 	}
-	resolve := func(node *spec.BundleNode) bool {
+	resolve := func(node *spec.FleetNode) bool {
 		if node == nil || node.Ephemeral == nil {
 			return false
 		}

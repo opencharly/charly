@@ -11,25 +11,25 @@ import (
 // Batch C) — they asserted loaderkit.ValidateCheckBeds directly, zero charly
 // coupling.
 
-// TestBedCheckLiveRefs relocated to candy/plugin-bundle/bed_check_live_refs_test.go
+// TestBedCheckLiveRefs relocated to candy/plugin-fleet/bed_check_live_refs_test.go
 // (#55 decoupling cone, Batch C, per the binding file-ownership ruling on
 // Ambiguous item 1): it asserted spec.BedCheckLiveRefs directly — a genuine
 // deploykit-behavior assertion, not charly-loader integration coverage.
 
 // TestPersistBedDeployOverrides_SeedsPortBeforeConfig relocated to
-// candy/plugin-bundle/bed_persist_writer_test.go (#55 final-tail split-by-assertion round,
+// candy/plugin-fleet/bed_persist_writer_test.go (#55 final-tail split-by-assertion round,
 // team-lead directive 2026-08-03): it pins deploykit.PersistBedDeployOverrides' OWN
 // merge-not-clobber contract — genuine deploykit-mechanism behavior, not charly-loader-specific
 // parsing (the prior "stays in charly per Ambiguous-item-1" ruling predated the gate that forced
 // this split question).
 
-// TestCheckBeds_DerivesFromDisposableBundles asserts the R10 bed set is derived
-// from the `disposable: true` bundles in the Deploy map (the separate kind:check
-// block was removed — a bed IS a disposable bundle); a non-disposable deploy is
+// TestCheckBeds_DerivesFromDisposableFleets asserts the R10 bed set is derived
+// from the `disposable: true` fleetsverb in the Deploy map (the separate kind:check
+// block was removed — a bed IS a disposable fleet); a non-disposable deploy is
 // NOT a bed.
-func TestCheckBeds_DerivesFromDisposableBundles(t *testing.T) {
+func TestCheckBeds_DerivesFromDisposableFleets(t *testing.T) {
 	uf := &spec.UnifiedFile{
-		Bundle: map[string]spec.BundleNode{
+		Fleet: map[string]spec.FleetNode{
 			"sample-pod-bed":   {Target: "pod", Image: "sample-image", Disposable: new(true)},
 			"sample-vm-bed":    {Target: "vm", From: "sample-vm", Disposable: new(true)},
 			"sample-local-bed": {Target: "local", From: "sample-local", Disposable: new(true)},
@@ -38,7 +38,7 @@ func TestCheckBeds_DerivesFromDisposableBundles(t *testing.T) {
 	}
 	beds := uf.CheckBeds()
 	if got := len(beds); got != 3 {
-		t.Errorf("CheckBeds() = %d entries, want 3 (only disposable bundles)", got)
+		t.Errorf("CheckBeds() = %d entries, want 3 (only disposable fleetsverb)", got)
 	}
 	if _, ok := beds["plain-deploy"]; ok {
 		t.Error("a non-disposable deploy must NOT be enumerated as a bed")

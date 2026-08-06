@@ -16,7 +16,7 @@ import (
 // charly/gpu_imply.go. Its former disk-backed wrapper (withImpliedGPUShared, LoadUnified-coupled
 // via charly/preempt.go's gatherResources — gatherResources survives only for gpu_allocate.go's
 // bedGPUPrereqMissing, K-wave 2 cone CONTESTED) is GONE: every acquire-side caller
-// (candy/plugin-check's bed_session, candy/plugin-vm's vm_arbiter_shim, candy/plugin-bundle's
+// (candy/plugin-check's bed_session, candy/plugin-vm's vm_arbiter_shim, candy/plugin-fleet's
 // handleLifecycleSimple) now ALWAYS dispatches an acquire-shared action to this compiled-in
 // plugin (even with zero explicit shared tokens — cheap, in-proc, never a real RPC round trip),
 // projecting the claimant node's GPU-relevant traits onto spec.ArbiterInvokeInput
@@ -25,10 +25,10 @@ import (
 // BEFORE calling AcquireShared, so "arbiter policy" (early-return-on-empty) lives entirely in the
 // arbiter, not the deleted in-core proxy.
 //
-// IsGroup/IsPodMember are pre-derived CORE-SIDE (spec.BundleNode.IsGroup() + the former in-core
+// IsGroup/IsPodMember are pre-derived CORE-SIDE (spec.FleetNode.IsGroup() + the former in-core
 // isPodMember — the core-side copies are DELETED, K-wave 2 cone CONTESTED; the surviving
 // spec.IsContainerVenue predicate the wire projection uses stays); this file receives them as
-// plain booleans on the wire, never re-derives them from a BundleNode. detectGPU below reaches
+// plain booleans on the wire, never re-derives them from a FleetNode. detectGPU below reaches
 // the SAME candy/plugin-gpu detection primitive charly-core's own DetectGPU (gpu_shim.go) calls,
 // via the EXISTING plugin-to-plugin InvokeProvider(ClassVerb,"gpu",...) peer-dispatch pattern
 // pluginSwitchMode (holder_dispatch.go) already proves live in this exact package — no new seam.
@@ -52,7 +52,7 @@ func nvidiaTokenFromResources(resources map[string]*spec.ResolvedResource) strin
 // securityDevicesListNvidia reports whether a security.devices list explicitly references the
 // NVIDIA GPU (the CDI name or a /dev/nvidia* node). Port of the former
 // nodeSecurityListsNvidiaDevice, taking the raw device list directly (the wire projection) rather
-// than a spec.BundleNode.
+// than a spec.FleetNode.
 func securityDevicesListNvidia(devices []string) bool {
 	for _, d := range devices {
 		if strings.Contains(d, "nvidia.com/gpu") || strings.HasPrefix(d, "/dev/nvidia") {

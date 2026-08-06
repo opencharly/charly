@@ -149,7 +149,7 @@ airflow:
                 printf '{"admin": "%s"}\n' "${AIRFLOW_ADMIN_PASSWORD}" \
                   > "${HOME}/airflow/simple_auth_manager_passwords.json.generated"
                 chmod 0600 "${HOME}/airflow/simple_auth_manager_passwords.json.generated"
-                # NB: prior versions copied bundled DAGs from /opt/airflow-defaults/
+                # NB: prior versions copied fleetdverb DAGs from /opt/airflow-defaults/
                 # to ${HOME}/airflow/dags/ as a volume-shadow workaround. Then a
                 # short-lived dag-osm-monaco data layer seeded a static DAG into
                 # /workspace/dags/ at deploy time. Both are gone: notebooks

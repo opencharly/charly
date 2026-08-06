@@ -28,14 +28,14 @@ func TestIsFreshnessSafeVerb(t *testing.T) {
 		{"box inspect foo", true}, // sub-verbs match by prefix
 		{"box list boxes", true},
 		{"box validate", true},
-		{"bundle show foo", true},
+		{"fleet show foo", true},
 		{"secrets list", true},
 		{"settings show", true},
 
 		// Heavy verbs — must NOT be safe; freshness check applies.
 		{"box build foo", false},
 		{"box generate", false},
-		{"bundle add foo bar", false},
+		{"fleet add foo bar", false},
 		{"rebuild versa", false},
 		{"start", false},
 		{"update", false},

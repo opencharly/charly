@@ -27,7 +27,7 @@ import (
 // egress-gated Kustomize GENERATION itself is done ENTIRELY here too (materialize.go, K5-A item
 // 6 — verb:k8sgen/verb:egress reached peer-to-peer via InvokeProvider, disk I/O done directly by
 // this plugin) — no host round trip anywhere in this leg anymore. The from-box source-less path
-// (`charly bundle from-box --target k8s`, candy/plugin-bundle/deploy_from_box.go) reaches this
+// (`charly fleet from-box --target k8s`, candy/plugin-fleet/deploy_from_box.go) reaches this
 // SAME materializeKustomize via a dedicated OpEmit dispatch (provider.go), R3 dedup.
 
 // k8sPreresolveParams decodes the host's marshalDeployOpParams envelope (name/dir/node/plans —
@@ -56,7 +56,7 @@ func invokeK8sPreresolve(ctx context.Context, req *pb.InvokeRequest) (*pb.Invoke
 		// Resolve the merged deploy tree PLUGIN-SIDE (K-wave W3a A3-phase-2: the former
 		// "deploy-entity-resolve" TreeJSON round-trip was dead weight — the tree is already a live
 		// Go value here, so this is a direct map lookup, not a host seam call). The enclosing
-		// OpDeployDispatch already connected the deployment's plugins (command:bundle's
+		// OpDeployDispatch already connected the deployment's plugins (command:fleet's
 		// resolveTreeViaLoader), so this reuses that connect (no re-dial mid-Invoke).
 		tree, terr := loaderkit.ResolveMergedTreeViaExecutor(ctx, exec, p.Dir)
 		if terr != nil {
@@ -158,7 +158,7 @@ func invokeK8sPreresolve(ctx context.Context, req *pb.InvokeRequest) (*pb.Invoke
 }
 
 // hostProjectDir resolves the project directory via the "deploy-plugins-connect" host seam — the
-// SAME preamble command:bundle's resolveTreeViaLoader runs (it returns os.Getwd() host-side + connects
+// SAME preamble command:fleet's resolveTreeViaLoader runs (it returns os.Getwd() host-side + connects
 // the deployment's plugins). Used by a leg that has no dispatch-threaded p.Dir of its own (the
 // post-provision k3s hint handler, k3s_post.go's deployVMForwards) to feed the plugin-side
 // self-load helpers (loaderkit.ResolveMergedTreeViaExecutor / Resolve{K8s,Vm}EntityViaExecutor).

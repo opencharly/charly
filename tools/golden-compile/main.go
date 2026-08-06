@@ -1,11 +1,11 @@
 // Command golden-compile regenerates the golden fixture
-// charly/testdata/bundle_compile_parity_golden.json that
-// charly/bundle_compile_parity_test.go's TestBundleCompileParity_PluginRoundTrip compares its
+// charly/testdata/fleet_compile_parity_golden.json that
+// charly/fleet_compile_parity_test.go's TestFleetCompileParity_PluginRoundTrip compares its
 // live plugin-compiled output against.
 //
 // WHY THIS TOOL EXISTS (#55 K3 cone 1, the golden-fixture redesign): the parity test's OLD side
 // used to call deploykit.BuildDeployPlan directly, in-process, which meant charly/
-// bundle_compile_parity_test.go imported github.com/opencharly/sdk/deploykit — a violation of
+// fleet_compile_parity_test.go imported github.com/opencharly/sdk/deploykit — a violation of
 // charly-core's import-purity target (charly imports ONLY spec + the proto/plugin-api wire
 // contract, never an sdk mechanism kit). This tool computes that SAME OLD-side ground truth
 // OFFLINE, standalone (a separate module — mirrors the tools/gomod-canonical precedent: its own
@@ -13,7 +13,7 @@
 // charly-side test loads via plain encoding/json — no sdk import needed there anymore.
 //
 // DETERMINISM: BuildDeployPlan is a pure function of (candy, ResolvedBox, HostContext) — it never
-// dials a plugin itself (see candy/plugin-bundle/install_build_test.go's
+// dials a plugin itself (see candy/plugin-fleet/install_build_test.go's
 // TestBuildDeployPlan_BuilderPurity_NoPluginRPC). The two pieces of "external" data it needs are
 // themselves pure, deterministic library functions, not live plugin RPCs:
 //   - the fedora/rpm distro vocabulary: candy/plugin-distro's OpResolve is a documented PURE
@@ -53,7 +53,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-const goldenOutputRelPath = "charly/testdata/bundle_compile_parity_golden.json"
+const goldenOutputRelPath = "charly/testdata/fleet_compile_parity_golden.json"
 
 // fixtureCandidates mirrors the parity test's own candidate list (K4B RDD spike): a pure-package
 // candy (ripgrep), a package+task candy (dev-tools), and a pixi-builder candy (pre-commit) — the
@@ -110,7 +110,7 @@ func fatal(format string, args ...any) {
 
 // resolveRepoRoot walks up from dir looking for the marker `candy/` directory (the repo root owns
 // it; this tool's own directory tree does not) — the same disambiguator
-// charly/bundle_compile_parity_test.go's compilerTestProjectDir uses.
+// charly/fleet_compile_parity_test.go's compilerTestProjectDir uses.
 func resolveRepoRoot(dir string) (string, error) {
 	d := dir
 	for range 6 {
@@ -190,7 +190,7 @@ func collectBuilderContext(layer spec.CandyReader, img *buildkit.ResolvedBox, ne
 }
 
 // buildParityImage constructs the SAME hand-built fedora ResolvedBox
-// charly/bundle_compile_parity_test.go used to build in-process (a real builder config + fedora
+// charly/fleet_compile_parity_test.go used to build in-process (a real builder config + fedora
 // distro so the pixi builder step resolves) — but with its DistroDef read from the REAL checked-in
 // charly/charly.yml embedded vocabulary (via resolveDistro's pure field-copy replica below) rather
 // than a synthetic literal, so its cache-mount/format data is byte-identical to what the live
@@ -304,7 +304,7 @@ func loadEmbeddedBuildVocabulary(repoRoot string) (*spec.DistroConfig, *spec.Bui
 
 // loadRealCandy reads a real candy/<name>/charly.yml directly (pure loaderkit.ScanInlineCandy — no
 // project load, no registry, no CUE re-validation: the checked-in candy is already known-valid).
-// Ported from candy/plugin-bundle/bundle_test_helpers_test.go's loadRealCandy (itself ported from
+// Ported from candy/plugin-fleet/fleet_test_helpers_test.go's loadRealCandy (itself ported from
 // the deleted charly/install_build_test.go's loadCompilerFixtures) — the same standalone-package
 // fixture-loading pattern, reused here verbatim since this tool has the identical constraint (no
 // charly-core project loader available).
@@ -337,7 +337,7 @@ func loadRealCandy(repoRoot, name string) (spec.CandyReader, error) {
 }
 
 // normalizePackageShorthand / desugarCommandSugar / isRunStepWithCommandSugar /
-// desugarOneCommandStep are ported verbatim from candy/plugin-bundle/bundle_test_helpers_test.go
+// desugarOneCommandStep are ported verbatim from candy/plugin-fleet/fleet_test_helpers_test.go
 // (the same fixture-loading constraint: no CUE validation pipeline available standalone).
 
 func normalizePackageShorthand(n *yaml.Node) {
@@ -428,7 +428,7 @@ func desugarOneCommandStep(step *yaml.Node) {
 // binary links no charly core (which normally wires it at init), so it's wired here. Pure —
 // spec.VerbCatalog is static data + the op's own declared Context, no registry consult. Ported
 // verbatim from charly/planrun_adapter.go's opInContext/opEffectiveContexts (the same port
-// candy/plugin-bundle's own test binary carries — each standalone binary needs its own copy).
+// candy/plugin-fleet's own test binary carries — each standalone binary needs its own copy).
 func init() {
 	spec.OpInContext = opInContext
 }
@@ -463,7 +463,7 @@ func opInContext(c *spec.Op, ctx spec.ExecContext) bool {
 // command` sugar (dev-tools' cmd: task), whose ONLY host-reaching leg is the "construct-step"
 // HostBuild seam — answering an empty reply (no special typed step) falls the compiler back to its
 // pure buildGenericOpStep path, the correct answer here (no builtin TypedStepProvider is
-// reachable standalone anyway). Ported from candy/plugin-bundle/bundle_test_helpers_test.go's
+// reachable standalone anyway). Ported from candy/plugin-fleet/fleet_test_helpers_test.go's
 // nopSeamExecutorClient (same constraint, same fixed answer).
 type stubExecutorClient struct{ pb.ExecutorServiceClient }
 

@@ -16,7 +16,7 @@ examplebuild-localpkg:
             makepkg, then deploykit.TransferAndInstallPkgs → pacman -U onto the venue) and the
             package's marker lands at /opt/charly-f3-witness/marker. Compose it as
             add_candy on an external deploy substrate (check-exampledeploy); the plugin
-            records a `pacman -R` reverse op so `charly bundle del` removes the package
+            records a `pacman -R` reverse op so `charly fleet del` removes the package
             (zero residue). The runtime check below is the candy's ADE acceptance test —
             the same assertion the bed runs.
         localpkg:

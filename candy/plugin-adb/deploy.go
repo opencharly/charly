@@ -15,7 +15,7 @@ import (
 // Android device interaction — the goadb wire, the apkeep+adb install path — lives in
 // this ONE plugin (R3, no duplicate installer). THIS plugin's own android deploy
 // preresolver (preresolve.go, F6/FINAL-K5-unit-6a — dispatched directly by
-// candy/plugin-bundle's preresolveSubstrate via sdk.Executor.InvokeProvider(OpPreresolve),
+// candy/plugin-fleet's preresolveSubstrate via sdk.Executor.InvokeProvider(OpPreresolve),
 // S3b — the core-side deploy_preresolve.go:wireDeployPreresolver registry it used to route
 // through is dissolved) resolves the device endpoint +
 // collects the apk install specs (committed-APK paths rewritten to ABSOLUTE host
@@ -29,7 +29,7 @@ import (
 //     SUCCEEDING is the readiness condition) — reusing the SAME install/install-app
 //     method handlers the `adb:` verb dispatches (dispatch(), methods.go);
 //   - return the uninstall teardown ops the host records in the ledger and replays at
-//     `charly bundle del` (record-and-replay, the external deploy lifecycle).
+//     `charly fleet del` (record-and-replay, the external deploy lifecycle).
 //
 // The plugin runs as a HOST subprocess (LocalTransport), so it reads the committed-APK
 // host paths directly and reaches the adb endpoint (network / `engine exec`) directly —
@@ -140,7 +140,7 @@ func installWithRetry(deadline, interval time.Duration, op func() (string, error
 // androidUninstallReverseOp builds the best-effort teardown op for one installed
 // package: a host shell script that `pm uninstall`s it via the venue's adb (the baked
 // in-pod adb under `engine exec`, or host `adb -H -P` for a remote endpoint). `|| true`
-// keeps it idempotent — at `charly bundle del` the emulator pod may already be gone
+// keeps it idempotent — at `charly fleet del` the emulator pod may already be gone
 // (its lifecycle belongs to the pod deploy). System scope (uninstall mutates
 // device-global package state); the host records + replays it (record-and-replay).
 func androidUninstallReverseOp(env *adbEnv, pkg string) spec.ReverseOp {

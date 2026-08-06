@@ -7,14 +7,14 @@
 // core-referencing (#Vm/#Deploy/#LibvirtDomain/… with host-canonicalized shorthand like
 // tunnel:/port:), so it cannot be re-decoded from op.Params by a plugin nor validated by a
 // self-contained plugin schema. So the HOST pre-decodes the CANONICAL node via the core loader
-// (buildBundleNode for the deploy shape, decodeNodeValue for the template shape — the SINGLE
+// (buildFleetNode for the deploy shape, decodeNodeValue for the template shape — the SINGLE
 // decode source of truth, R3), validates its value host-side against the KEPT #<Kind>Value def,
 // and threads the result in op.Env (spec.StructuralKindLoadEnv.Standalone). This OpLoad simply
-// RETURNS it: a deploy echo (spec.Deploy) the host folds into uf.Bundle, or a template echo
+// RETURNS it: a deploy echo (spec.Deploy) the host folds into uf.Fleet, or a template echo
 // (the per-substrate typed value's JSON) the host folds into uf.Pod/uf.VM/… — the C2-substrate
 // TEMPLATE fold arm that extends F5's deploy-only fold. RDD proved a canonical spec.Deploy /
 // spec.Vm / spec.Pod / … round-trips through JSON byte-faithfully, so this thread-echo-fold is
-// BYTE-EQUIVALENT to the former in-proc standaloneKind decode (buildBundleNodeInto /
+// BYTE-EQUIVALENT to the former in-proc standaloneKind decode (buildFleetNodeInto /
 // buildStandaloneResource).
 //
 // PLACEMENT — COMPILED-IN (listed in the embedded charly/charly.yml compiled_plugins:), NOT
@@ -28,7 +28,7 @@
 // command_reap_orphans.go) — a substrate-liveness-probing command that fits naturally alongside
 // the OTHER substrate-liveness code here (status_pod.go/status_vm.go/status_k8s.go/…). Unlike the
 // kind capabilities, reap-orphans is COMPILED-IN ONLY (its os.Executable()-based re-entry to
-// `charly bundle del` assumes it runs inside the charly binary); out-of-process it degrades with a
+// `charly fleet del` assumes it runs inside the charly binary); out-of-process it degrades with a
 // clear error.
 package substratekind
 
@@ -110,7 +110,7 @@ type provider struct{ pb.UnimplementedProviderServer }
 
 // Invoke handles OpLoad for a substrate structural kind. The host has already pre-decoded the
 // CANONICAL node and threaded it in op.Env (spec.StructuralKindLoadEnv.Standalone). This ECHOES
-// it: for the deploy shape, marshal the pre-decoded spec.Deploy back (→ host folds uf.Bundle);
+// it: for the deploy shape, marshal the pre-decoded spec.Deploy back (→ host folds uf.Fleet);
 // for the template shape, return the pre-decoded typed template JSON verbatim (→ host folds the
 // typed map). The op.Params body is deliberately IGNORED — a substrate value cannot be soundly
 // re-decoded from the raw op.Params (host-canonicalized shorthand), which is why the host

@@ -2,13 +2,13 @@ marimo:
     candy:
         version: 2026.146.1203
         description: |
-            marimo reactive notebook + MCP server on port 2718 with GPU OSM analytics, Airflow deps, and the marimo-team skills bundle for AI agents
+            marimo reactive notebook + MCP server on port 2718 with GPU OSM analytics, Airflow deps, and the marimo-team skills set for AI agents
             Installs marimo (a reactive notebook server that also runs as an MCP
             server via `--mcp` on the same port 2718) plus its data stack into a
             pixi env at ${HOME}/.pixi/envs/default: GPU-accelerated OSM analytics
             deps (Polars-GPU/cuDF, geopandas, quackosm), Apache Airflow Python
             deps (the airflow layer ships no pixi env of its own), and the
-            marimo-team/learn curriculum. The marimo-team/skills bundle is
+            marimo-team/learn curriculum. The marimo-team/skills set is
             unpacked read-only at /opt/marimo-skills (MARIMO_SKILLS_DIR) for AI
             agents driving marimo over MCP, and a baked marimo.toml turns
             auto_instantiate on so cells run the moment the notebook URL opens.
@@ -31,7 +31,7 @@ marimo:
             NVIDIA_PYTHON_PROJECT: "~/.pixi"
             LD_LIBRARY_PATH: "/usr/lib64"
             # Stable, well-known path for any AI agent (driving marimo via MCP) to
-            # discover the marimo-team/skills bundle. Mirrors the Anthropic-style
+            # discover the marimo-team/skills set. Mirrors the Anthropic-style
             # SKILL.md discovery used by opencharly's own plugins/<plugin>/skills/.
             MARIMO_SKILLS_DIR: "/opt/marimo-skills"
         distro:
@@ -151,7 +151,7 @@ marimo:
               file:
                 file: ${HOME}/.pixi/envs/default/bin/airflow
                 exists: true
-            - check: the marimo-team/skills bundle is unpacked read-only under MARIMO_SKILLS_DIR
+            - check: the marimo-team/skills set is unpacked read-only under MARIMO_SKILLS_DIR
               file:
                 file: /opt/marimo-skills/skills
                 exists: true

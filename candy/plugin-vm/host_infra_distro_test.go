@@ -3,9 +3,9 @@ package vm
 // Relocated from charly/host_infra_test.go's "hostdistro.go" section (#55
 // decoupling cone, Batch C): the 4 distro-detection tests assert
 // vmshared.SplitOsReleaseLine / vmshared.HostDistro directly — zero charly
-// coupling. The ledger tests move to plugin-bundle (Batch A), the
+// coupling. The ledger tests move to plugin-fleet (Batch A), the
 // builder-run tests to plugin-build (Batch B), and the managed-block tests to
-// plugin-bundle (Batch A) — all separately, per the decoupling classification.
+// plugin-fleet (Batch A) — all separately, per the decoupling classification.
 
 import (
 	"testing"

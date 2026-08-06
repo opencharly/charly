@@ -24,7 +24,7 @@ import (
 // Spec-type aliases the moved handlers reference by their core (package main) short names. All are
 // canonical sdk/spec wire types (the same identity core used via its own alias surface).
 type (
-	BundleNode          = spec.Deploy
+	FleetNode          = spec.Deploy
 	ResolvedResource    = spec.ResolvedResource
 	ResolvedGpuSelector = spec.ResolvedGpuSelector
 	VFIOReport          = spec.VFIOReport
@@ -73,7 +73,7 @@ type resolvedConfig struct {
 // the former host seam applied), the resources via spec.ResolvePluginKindViaPlugin over
 // loaderkit.ResolveResourceViaExecutor, and the persisted VmState via
 // loaderkit.ResolveVmStateViaExecutor. The exclusive-resource Claimant is computed PLUGIN-SIDE
-// (#55 coneC-dsh β2 config-RESOLVE) from the loaded project bundle via deploykit.MergedDeployTree +
+// (#55 coneC-dsh β2 config-RESOLVE) from the loaded project fleet via deploykit.MergedDeployTree +
 // spec.FindVMClaimant; the effective VM backend is computed HERE (resolveVmBackendPlugin/
 // vmConfiguredBackendPlugin, F6 vm-lifecycle move, vm_backend_resolve.go).
 func hostConfigResolve(entity string) (resolvedConfig, error) {
@@ -124,9 +124,9 @@ func hostConfigResolve(entity string) (resolvedConfig, error) {
 		cfg.Resources = spec.ResolvePluginKindViaPlugin(uf, "resource", loaderkit.ResolveResourceViaExecutor(cmdCtx, cmdExec))
 		// Claimant computation moved plugin-side (#55 coneC-dsh β2 config-RESOLVE): merge the
 		// per-host overlay via deploykit.MergedDeployTree (placement-invariant reader =
-		// loaderkit.LoadHostBundleConfigViaExecutor) + spec.FindVMClaimant.
-		merged := deploykit.MergedDeployTree(uf.Bundle, "vm config-resolve", func() (*deploykit.BundleConfig, error) {
-			return loaderkit.LoadHostBundleConfigViaExecutor(cmdCtx, cmdExec)
+		// loaderkit.LoadHostFleetConfigViaExecutor) + spec.FindVMClaimant.
+		merged := deploykit.MergedDeployTree(uf.Fleet, "vm config-resolve", func() (*deploykit.FleetConfig, error) {
+			return loaderkit.LoadHostFleetConfigViaExecutor(cmdCtx, cmdExec)
 		})
 		if claimant, claimantNode, hasClaimant := spec.FindVMClaimant(merged, entity); hasClaimant {
 			cfg.Claimant = claimant

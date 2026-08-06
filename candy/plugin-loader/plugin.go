@@ -124,9 +124,9 @@ func (*provider) ScanRemoteCandy(repoDir, repoPath string, wantRefs map[string]b
 
 // MaterializeNode implements spec.Materializer — the typed per-node kind-decode DISPATCH policy
 // the host calls once per parsed entity node (compiled-in, no wire envelope): the NOT-FOUND
-// fallback (route to the bundle builder / defer-during-connect-pass / warn-and-skip / hard error)
+// fallback (route to the fleet builder / defer-during-connect-pass / warn-and-skip / hard error)
 // delegating to the ONE copy in sdk/loaderkit. The actual registry resolve + provider dispatch
-// stays host-side, reached through seams.DecodeEntity/BuildBundleEntity (boundary law clause M —
+// stays host-side, reached through seams.DecodeEntity/BuildFleetEntity (boundary law clause M —
 // this candy never touches the registry directly). K1 unit 1.
 func (*provider) MaterializeNode(pn spec.ParsedNode, t spec.Threaded, seams spec.MaterializeSeams, acc *spec.MaterializedProject) error {
 	return loaderkit.Materialize(pn, t, seams, acc)
@@ -183,20 +183,20 @@ func (*provider) ApplyCueDefaults(kind string, out any) error {
 	return loaderkit.ApplyCueDefaults(kind, out)
 }
 
-// IsResourceDisc / BundleTargetForDisc / SetBundleCrossRef / IsStandaloneResourceKind /
-// FoldStandaloneTemplateReply implement spec.ProjectLoader — the typed bundle/resource-member
+// IsResourceDisc / FleetTargetForDisc / SetFleetCrossRef / IsStandaloneResourceKind /
+// FoldStandaloneTemplateReply implement spec.ProjectLoader — the typed fleet/resource-member
 // kind-decode SUPPORT helpers the host calls (compiled-in, no wire envelope): delegate to the ONE
 // copy in sdk/loaderkit (K1 unit 3a).
 func (*provider) IsResourceDisc(d string, t spec.Threaded) bool {
 	return loaderkit.IsResourceDisc(d, t)
 }
 
-func (*provider) BundleTargetForDisc(d string, t spec.Threaded) string {
-	return loaderkit.BundleTargetForDisc(d, t)
+func (*provider) FleetTargetForDisc(d string, t spec.Threaded) string {
+	return loaderkit.FleetTargetForDisc(d, t)
 }
 
-func (*provider) SetBundleCrossRef(dn *spec.BundleNode, disc, ref string, t spec.Threaded) {
-	loaderkit.SetBundleCrossRef(dn, disc, ref, t)
+func (*provider) SetFleetCrossRef(dn *spec.FleetNode, disc, ref string, t spec.Threaded) {
+	loaderkit.SetFleetCrossRef(dn, disc, ref, t)
 }
 
 func (*provider) IsStandaloneResourceKind(disc string, t spec.Threaded) bool {
@@ -207,10 +207,10 @@ func (*provider) FoldStandaloneTemplateReply(disc, name string, replyJSON json.R
 	return loaderkit.FoldStandaloneTemplateReply(disc, name, replyJSON, acc)
 }
 
-// AssembleEntityBody / DecodeNodeValue / EntityBodyJSON / BuildBundleNode /
-// BuildResourceMemberChildren / BuildBundleNodeInto / IsDeployShape / DecodeStandaloneTemplateJSON /
+// AssembleEntityBody / DecodeNodeValue / EntityBodyJSON / BuildFleetNode /
+// BuildResourceMemberChildren / BuildFleetNodeInto / IsDeployShape / DecodeStandaloneTemplateJSON /
 // ResourceChildren implement spec.ProjectLoader — the typed entity-body assembly +
-// bundle/resource-member tree-builder mechanism the host calls (compiled-in, no wire envelope):
+// fleet/resource-member tree-builder mechanism the host calls (compiled-in, no wire envelope):
 // delegate to the ONE copy in sdk/loaderkit (K1 unit 3b).
 func (*provider) AssembleEntityBody(pn spec.ParsedNode) (*yaml.Node, error) {
 	return loaderkit.AssembleEntityBody(pn)
@@ -224,16 +224,16 @@ func (*provider) EntityBodyJSON(pn spec.ParsedNode) (json.RawMessage, error) {
 	return loaderkit.EntityBodyJSON(pn)
 }
 
-func (*provider) BuildBundleNode(pn spec.ParsedNode, t spec.Threaded) (*spec.BundleNode, error) {
-	return loaderkit.BuildBundleNode(pn, t)
+func (*provider) BuildFleetNode(pn spec.ParsedNode, t spec.Threaded) (*spec.FleetNode, error) {
+	return loaderkit.BuildFleetNode(pn, t)
 }
 
-func (*provider) BuildResourceMemberChildren(pn spec.ParsedNode, t spec.Threaded) (map[string]*spec.BundleNode, error) {
+func (*provider) BuildResourceMemberChildren(pn spec.ParsedNode, t spec.Threaded) (map[string]*spec.FleetNode, error) {
 	return loaderkit.BuildResourceMemberChildren(pn, t)
 }
 
-func (*provider) BuildBundleNodeInto(pn spec.ParsedNode, t spec.Threaded, acc *spec.MaterializedProject) error {
-	return loaderkit.BuildBundleNodeInto(pn, t, acc)
+func (*provider) BuildFleetNodeInto(pn spec.ParsedNode, t spec.Threaded, acc *spec.MaterializedProject) error {
+	return loaderkit.BuildFleetNodeInto(pn, t, acc)
 }
 
 func (*provider) IsDeployShape(pn spec.ParsedNode) bool {
@@ -266,7 +266,7 @@ func (*provider) ValidateNodeFormSteps(path string, data []byte, t spec.Threaded
 // sdk.ExecutorFromContext — the SAME in-proc reverse-channel path ExecutorForInvoke uses for
 // Invoke). So charly core reaches the merged-tree read ONLY through this spec-typed seam — it
 // never imports loaderkit for it (#55 coneA Q2(1), check_cmd.go sheds its loaderkit import).
-func (*provider) ResolveMergedDeployTree(ctx context.Context, dir string) (map[string]spec.BundleNode, error) {
+func (*provider) ResolveMergedDeployTree(ctx context.Context, dir string) (map[string]spec.FleetNode, error) {
 	ex, ok := sdk.ExecutorFromContext(ctx)
 	if !ok {
 		return nil, fmt.Errorf("resolve merged deploy tree: no host reverse channel on context (command not compiled-in?)")

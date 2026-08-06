@@ -91,7 +91,7 @@ func withRunTag(args []string, tag string) []string {
 	return append(args, "--tag", tag)
 }
 
-// bedAdd builds a `charly bundle add` argv for a BED deploy. Every deploy a bed makes goes through
+// bedAdd builds a `charly fleet add` argv for a BED deploy. Every deploy a bed makes goes through
 // it, so the bed-only flags are declared once instead of at six call sites (R3).
 //
 // --dev-local-pkg is the deploy-side twin of the flag every bed image build already passes. Without
@@ -101,13 +101,13 @@ func withRunTag(args []string, tag string) []string {
 // A bed exists to prove the in-development package builds and installs, so on a bed that condition
 // must be loud.
 func bedAdd(args ...string) []string {
-	return append([]string{"bundle", "add"}, append(args, "--dev-local-pkg")...)
+	return append([]string{"fleet", "add"}, append(args, "--dev-local-pkg")...)
 }
 
 // configStartArgs builds the `charly config`/`charly start` argv for a pod bed's config+start
 // steps. An add_candy: overlay bed's FRESH artifact to verify is the overlay `deploy-add` just
-// built + persisted (resolved via the persisted resolved_image (BundleNode.ResolvedImage),
-// correctly discriminated as a pod entry — the bundleDiscForEntity resolved_image fix) — NOT the base image's own --tag build
+// built + persisted (resolved via the persisted resolved_image (FleetNode.ResolvedImage),
+// correctly discriminated as a pod entry — the fleetDiscForEntity resolved_image fix) — NOT the base image's own --tag build
 // ref. Passing --tag here would force config/start to deploy <base-image>:<imageTag> (an
 // existing, but WRONG, un-overlaid reference), silently dropping every add_candy candy from the
 // running container. A non-overlay bed (hasAddCandy=false) keeps --tag unchanged (no regression):
@@ -158,10 +158,10 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 		return res, &CheckSkippedError{Msg: fmt.Sprintf("charly check run %s: skipped (%s)", name, res.SkipReason)}
 	}
 
-	// bedNode is the bed-root BundleNode decoded once from d.NodeJSON — the members-up/-down
+	// bedNode is the bed-root FleetNode decoded once from d.NodeJSON — the members-up/-down
 	// call sites below pass it directly to sdk/deploykit.BringUpMembers/TearDownMembers (#55 W3
 	// A4), no HostBuild seam and no core-side session lookup needed anymore.
-	var bedNode spec.BundleNode
+	var bedNode spec.FleetNode
 	_ = json.Unmarshal(d.NodeJSON, &bedNode)
 
 	// teardown runs on EVERY exit path after a successful setup — it releases the
@@ -180,7 +180,7 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 	// Pre-run cleanup: clear any lingering target + sibling members left over from a previous
 	// interrupted run, BEFORE anything seeds or reads this run's own overlay state. Hoisted out of
 	// the Step-3 build/add/config/start switch below into its own block (#21 RCA — the K-wave
-	// terminus RCA's preempt-live-pod defect): `remove --purge`/`bundle del` fan out to
+	// terminus RCA's preempt-live-pod defect): `remove --purge`/`fleet del` fan out to
 	// deploykit.CleanDeployEntry per member, which DELETES the per-host overlay entry outright: with
 	// this cleanup running AFTER persistBedDeployOverridePluginSide (as it did before this fix), it
 	// silently destroyed the arbitration fields (Preemptible/RequiresExclusive/RequiresShared) the
@@ -198,7 +198,7 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 		_ = deploykit.TearDownMembers(&bedNode)
 	default:
 		if d.IsExternal {
-			bestEffort("bundle", "del", name)
+			bestEffort("fleet", "del", name)
 		} else {
 			bestEffort("remove", name, "--purge")
 		}
@@ -207,7 +207,7 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 
 	// Seed the per-host overlay with the bed ROOT's + each MEMBER's project-declared deploy-shaped
 	// overrides PLUGIN-SIDE (#55 coneC-dsh β1 — the former host-side persistBedDeployOverrides wrapper
-	// shed from charly core). The host seam threads the bed-root BundleNode (with nested peer Members)
+	// shed from charly core). The host seam threads the bed-root FleetNode (with nested peer Members)
 	// as d.NodeJSON; persistBedDeployOverridePluginSide calls deploykit.PersistBedDeployOverrides with
 	// plugin-side marshalNode + reader. MUST run AFTER the pre-run cleanup above and BEFORE anything
 	// else reads the overlay (build/config/start): the pre-run cleanup deletes overlay entries via
@@ -337,7 +337,7 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 		case d.IsGroup:
 			// A targetless group has NO root container — members-down is the whole teardown.
 		case d.IsExternal:
-			targetErr = step("cleanup", "bundle", "del", name)
+			targetErr = step("cleanup", "fleet", "del", name)
 		default:
 			targetErr = step("cleanup", "remove", name, "--purge")
 		}
@@ -396,8 +396,8 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 	}
 
 	// isInPlace unifies local + in-place-external: they apply candies in place during
-	// `charly bundle add` (no container/VM lifecycle — no `charly config`/`charly
-	// start`, teardown via `charly bundle del`).
+	// `charly fleet add` (no container/VM lifecycle — no `charly config`/`charly
+	// start`, teardown via `charly fleet del`).
 	isInPlace := d.IsLocal || d.IsExternal
 
 	// Steps 1+2: image build + check box (pod beds only; VM substrate is a
@@ -432,7 +432,7 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 		deployed = true // VM domain exists — keep it on any later failure
 		waitReady()
 		if err := step("deploy-add", bedAdd(name, d.VMTemplate)...); err != nil {
-			return fail("bundle add %s: %w", name, err)
+			return fail("fleet add %s: %w", name, err)
 		}
 		// Deploy the VM's nested HOST-ROOTED (kind:local) children only (d.LocalChildKeys, the
 		// host-resolved deployNestedLocalChildren subset). A VM's nested CONTAINER children are
@@ -445,7 +445,7 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 	case d.IsGroup:
 		// Group bed: no root container — the members (subject + driver) ARE the deployment.
 		// bringUpMembers (the members-up op in the runtime block below) deploys each member
-		// (config+start per pod member, bundle add per local member). There is no root
+		// (config+start per pod member, fleet add per local member). There is no root
 		// deploy-add/config/start. The pre-run `remove --purge` + TearDownMembers now run in the
 		// hoisted pre-run-cleanup block above, before persist.
 		deployed = true // members will be brought up — keep state on a later failure
@@ -468,7 +468,7 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 		// run now happens in the hoisted pre-run-cleanup block above, before persist.
 		addArgs = withRunTag(addArgs, d.ImageTag)
 		if err := step("deploy-add", addArgs...); err != nil {
-			return fail("bundle add %s: %w", name, err)
+			return fail("fleet add %s: %w", name, err)
 		}
 		deployed = true // target registered — keep it on any later failure
 		// kind:local + external apply candies in place during deploy add; pod beds
@@ -641,7 +641,7 @@ func checkStepCommandSummary(argv []string) string {
 	words := []string{"charly", argv[0]}
 	if len(argv) > 1 {
 		switch argv[0] {
-		case "check", "box", "bundle", "vm":
+		case "check", "box", "fleet", "vm":
 			words = append(words, argv[1])
 		}
 	}
@@ -672,7 +672,7 @@ func printDebugRetentionNotice(w *os.File, name string, d spec.CheckBedReply) {
 			"  destroy: charly remove %s (members tear down with the group)\n", name, live, name)
 	case d.IsExternal:
 		fmt.Fprintf(w, "\n[charly check run] bed %q FAILED — external deploy apply left in place for debugging.\n"+
-			"  destroy: charly bundle del %s\n", name, name)
+			"  destroy: charly fleet del %s\n", name, name)
 	default: // pod
 		fmt.Fprintf(w, "\n[charly check run] bed %q FAILED — pod left running for debugging.\n"+
 			"  inspect: %s | podman exec charly-%s sh\n"+
@@ -703,7 +703,7 @@ func writeBedSummary(dir string, res *bedRunResult) {
 	}
 }
 
-// vmDomainIdentity normalizes a deploy/bundle name into its per-deploy VM DOMAIN
+// vmDomainIdentity normalizes a deploy/fleet name into its per-deploy VM DOMAIN
 // IDENTITY (the plugin-local alias for vmshared.VmDomainIdentity), used by the
 // iterate VM-sandbox dispatch (`charly vm ssh <identity>`).
 func vmDomainIdentity(deployName string) string {

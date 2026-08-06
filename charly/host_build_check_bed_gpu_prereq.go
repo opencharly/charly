@@ -17,11 +17,11 @@ import (
 // self-orchestrating GPU detection itself.
 const checkBedGpuPrereqBuilderKind = "check-bed-gpu-prereq"
 
-// hostBuildCheckBedGpuPrereq reconstructs a minimal spec.BundleNode carrying only the
+// hostBuildCheckBedGpuPrereq reconstructs a minimal spec.FleetNode carrying only the
 // already-deduped token set bedGPUPrereqMissing reads (via its RequiredExclusive/RequiredShared
 // accessors) — the fenced function itself is untouched.
 func hostBuildCheckBedGpuPrereq(_ context.Context, req spec.CheckBedGpuPrereqRequest, _ buildEngineContext) (spec.CheckBedGpuPrereqReply, error) {
-	node := spec.BundleNode{RequiresExclusive: req.Tokens}
+	node := spec.FleetNode{RequiresExclusive: req.Tokens}
 	token, vendor, missing := bedGPUPrereqMissing(node)
 	return spec.CheckBedGpuPrereqReply{Missing: missing, Token: token, Vendor: vendor}, nil
 }

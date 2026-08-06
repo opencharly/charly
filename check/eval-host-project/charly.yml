@@ -48,7 +48,7 @@ check-local:
             to an ExternalPluginStep and Invokes the plugin's OpExecute over the E3b
             ExecutorService reverse channel — the plugin writes /tmp/charly-examplestep/
             examplestep-deploy/{applied,probe} on the GUEST venue and returns a plugin-script
-            reverse op the host records; teardown (charly bundle del) replays it so the markers
+            reverse op the host records; teardown (charly fleet del) replays it so the markers
             are gone. Every side effect is confined to the disposable guest.
         add_candy:
             - plugin-example-step

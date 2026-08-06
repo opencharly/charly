@@ -27,7 +27,7 @@ import (
 // resolveContainerTunnel resolves the running container's tunnel config PLUGIN-SIDE (#55 coneC-dsh
 // — the pod-config-container-tunnel host seam is DELETED). Reads the container's baked image ref
 // (container.ContainerImage — spec/container, plugin-reachable), extracts its metadata, merges the
-// per-host overlay (loadPodBundleConfig — the cycle-free loaderkit read), and resolves the tunnel
+// per-host overlay (loadPodFleetConfig — the cycle-free loaderkit read), and resolves the tunnel
 // config. nil if none configured or on any resolution error — best-effort, matching the former
 // host leg's own best-effort framing.
 func resolveContainerTunnel(box, instance string) *spec.TunnelConfig {
@@ -40,7 +40,7 @@ func resolveContainerTunnel(box, instance string) *spec.TunnelConfig {
 	if err != nil || meta == nil {
 		return nil
 	}
-	dc, _ := loadPodBundleConfig()
+	dc, _ := loadPodFleetConfig()
 	deploykit.MergeDeployOntoMetadata(meta, dc, box, instance)
 	if meta.Tunnel == nil {
 		return nil

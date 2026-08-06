@@ -76,7 +76,7 @@ func (m capMeta) DeclaredStepContract() (spec.StepContract, bool) {
 }
 
 // IsStructuralKind implements spec.StructuralKindCarrier — a class:kind capability whose decode
-// returns a spec.Deploy member tree (-> uf.Bundle) rather than a flat body (F5).
+// returns a spec.Deploy member tree (-> uf.Fleet) rather than a flat body (F5).
 func (m capMeta) IsStructuralKind() bool { return m.structural }
 
 // IsValidatingKind implements spec.ValidatingKindCarrier — a class:kind capability serving a deep
@@ -127,7 +127,7 @@ func buildCapMeta(c *pb.ProvidedCapability) (capMeta, error) {
 		m.contract = &spec.StepContract{Scope: spec.ScopeFromName(sc.GetScope()), Venue: spec.Venue(sc.GetVenue()), Gate: spec.Gate(sc.GetGate()), Emits: sc.GetEmits()}
 	}
 	// A class:kind capability may declare it decodes a STRUCTURAL entity (F5): runPluginKind folds
-	// its spec.Deploy reply into uf.Bundle instead of landing a flat body opaquely.
+	// its spec.Deploy reply into uf.Fleet instead of landing a flat body opaquely.
 	if m.class == ClassKind && c.GetStructural() {
 		m.structural = true
 	}

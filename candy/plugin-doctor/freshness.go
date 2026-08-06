@@ -193,9 +193,9 @@ func isFreshnessSafeVerb(verbPath string) bool {
 		"box inspect",   // reads the project config + emits JSON
 		"box list",      // reads the project config + emits text
 		"box validate",  // reads the project config + emits warnings (no writes)
-		"bundle show",   // reads charly.yml
-		"bundle status", // reads deploy state
-		"bundle path",   // prints a path
+		"fleet show",   // reads charly.yml
+		"fleet status", // reads deploy state
+		"fleet path",   // prints a path
 		"secrets list",  // reads credential store
 		"secrets get",
 		"secrets path",

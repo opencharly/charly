@@ -16,7 +16,7 @@ uv:
               strip_components: 1
               to: /usr/local/bin
               run_as: root
-              # Explicit uninstall list so `charly bundle del` removes just the
+              # Explicit uninstall list so `charly fleet del` removes just the
               # binaries this archive drops in /usr/local/bin, not the whole
               # shared dir (which would wipe every system-local binary).
               uninstall:

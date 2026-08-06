@@ -17,7 +17,7 @@ package check
 // resolveCheckRunnerContext (charly/check_cmd.go). deployNodePluginContext relocated to
 // charly/plugin_loader.go (#55 W3 B3, beside its M-mechanism consumer loadDeployPlugins) — still
 // core-only, different file. checkLocalDeployScope/runLocalDeployScopePlan (the external
-// `target: local` deploy's own --verify path) relocated to candy/plugin-bundle (#55 W3 B3,
+// `target: local` deploy's own --verify path) relocated to candy/plugin-fleet (#55 W3 B3,
 // verify_local.go) — no longer core at all.
 
 import (
@@ -29,7 +29,7 @@ import (
 
 // resolveNestedNode walks a dotted path through roots[root].Children, returning the leaf node (or
 // nil if any segment is absent). Ported unchanged from charly/check_cmd.go.
-func resolveNestedNode(roots map[string]spec.BundleNode, path string) *spec.BundleNode {
+func resolveNestedNode(roots map[string]spec.FleetNode, path string) *spec.FleetNode {
 	parts := strings.Split(path, ".")
 	if len(parts) == 0 {
 		return nil

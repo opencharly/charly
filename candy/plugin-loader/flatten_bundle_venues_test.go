@@ -7,21 +7,21 @@ import (
 	"github.com/opencharly/spec/spec"
 )
 
-// flatten_bundle_venues_test.go — relocated from charly/node_bundle_venue_test.go (#55
+// flatten_fleet_venues_test.go — relocated from charly/node_fleet_venue_test.go (#55
 // decoupling, Batch A, cross-batch file-ownership matrix: Batch A executes this move on Batch
-// C's behalf). Both tests assert loaderkit.FlattenBundleVenues directly, zero charly dep.
+// C's behalf). Both tests assert loaderkit.FlattenFleetVenues directly, zero charly dep.
 // (charly's cmdOp desugared-Op fixture helper is inlined here as a literal — see the
 // "test -f /done" step below — rather than ported, since it is used exactly once.)
 
-// TestFlattenBundleVenues_StampsAndHoists verifies the loader venue pass:
+// TestFlattenFleetVenues_StampsAndHoists verifies the loader venue pass:
 // member steps get a bare venue, nested-child steps a dotted venue, and all are
-// hoisted into the root bundle's flat Plan (member/child Plans cleared).
-func TestFlattenBundleVenues_StampsAndHoists(t *testing.T) {
-	uf := &spec.UnifiedFile{Bundle: map[string]spec.BundleNode{
+// hoisted into the root fleet's flat Plan (member/child Plans cleared).
+func TestFlattenFleetVenues_StampsAndHoists(t *testing.T) {
+	uf := &spec.UnifiedFile{Fleet: map[string]spec.FleetNode{
 		// A pure-GROUP bed whose agent-provisioned member `os` carries a step.
 		"default": {
 			Target: "", // group
-			Members: map[string]*spec.BundleNode{
+			Members: map[string]*spec.FleetNode{
 				"os": {
 					Target:           "pod",
 					AgentProvisioned: true,
@@ -38,7 +38,7 @@ func TestFlattenBundleVenues_StampsAndHoists(t *testing.T) {
 			Plan: []spec.Step{
 				{Check: "web serves marker", Op: spec.Op{Plugin: "http", PluginInput: map[string]any{"http": "http://127.0.0.1:8080/"}}},
 			},
-			Children: map[string]*spec.BundleNode{
+			Children: map[string]*spec.FleetNode{
 				"migrate": {
 					Target:           "pod",
 					AgentProvisioned: true,
@@ -50,12 +50,12 @@ func TestFlattenBundleVenues_StampsAndHoists(t *testing.T) {
 		},
 	}}
 
-	if err := loaderkit.FlattenBundleVenues(uf); err != nil {
-		t.Fatalf("flattenBundleVenues: %v", err)
+	if err := loaderkit.FlattenFleetVenues(uf); err != nil {
+		t.Fatalf("flattenFleetVenues: %v", err)
 	}
 
 	// default: one step hoisted, venue == bare member name "os".
-	def := uf.Bundle["default"]
+	def := uf.Fleet["default"]
 	if len(def.Plan) != 1 {
 		t.Fatalf("default: want 1 hoisted step, got %d", len(def.Plan))
 	}
@@ -67,7 +67,7 @@ func TestFlattenBundleVenues_StampsAndHoists(t *testing.T) {
 	}
 
 	// cross: root step venue == "cross"; nested-child step venue == "cross.migrate".
-	cross := uf.Bundle["cross"]
+	cross := uf.Fleet["cross"]
 	if len(cross.Plan) != 2 {
 		t.Fatalf("cross: want 2 steps (root + hoisted child), got %d", len(cross.Plan))
 	}
@@ -83,11 +83,11 @@ func TestFlattenBundleVenues_StampsAndHoists(t *testing.T) {
 	}
 }
 
-// TestFlattenBundleVenues_GroupDirectStepRejected verifies a direct step under a
-// pure group bundle (no workload container) is a hard error — a group has no
+// TestFlattenFleetVenues_GroupDirectStepRejected verifies a direct step under a
+// pure group fleet (no workload container) is a hard error — a group has no
 // venue of its own.
-func TestFlattenBundleVenues_GroupDirectStepRejected(t *testing.T) {
-	uf := &spec.UnifiedFile{Bundle: map[string]spec.BundleNode{
+func TestFlattenFleetVenues_GroupDirectStepRejected(t *testing.T) {
+	uf := &spec.UnifiedFile{Fleet: map[string]spec.FleetNode{
 		"grp": {
 			Target: "", // group, but carries a direct step → illegal
 			Plan: []spec.Step{
@@ -95,7 +95,7 @@ func TestFlattenBundleVenues_GroupDirectStepRejected(t *testing.T) {
 			},
 		},
 	}}
-	if err := loaderkit.FlattenBundleVenues(uf); err == nil {
-		t.Fatalf("expected error for a direct step under a group bundle, got nil")
+	if err := loaderkit.FlattenFleetVenues(uf); err == nil {
+		t.Fatalf("expected error for a direct step under a group fleet, got nil")
 	}
 }

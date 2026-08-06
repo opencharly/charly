@@ -5,7 +5,7 @@ package check
 // the host merged-tree read, the core-private providerRegistry via nodeTraits' synthetic-node fallback) is
 // replaced by the resolved-project envelope (InvokeProvider("build","project")) already fetched by
 // resolvedProject (checkproject.go) — a loader-stamped node ALWAYS carries a non-nil .Descent (via
-// the host's stampBundleDescents pass), so the plugin-side nodeTraits below never needs the
+// the host's stampFleetDescents pass), so the plugin-side nodeTraits below never needs the
 // registry-backed synthetic-node fallback the core version carries for un-stamped nodes built
 // outside the loader (this package never builds one). Everything else — the poll/readiness/SSH
 // forwarding machinery, the container/VM/host classification, the dotted-path tree walk — was
@@ -63,7 +63,7 @@ func (v *CheckVenue) IsContainer() bool { return v != nil && v.Kind == "containe
 // resolveCheckVenue maps an `charly check` verb's <name> argument to an execution venue, off the
 // resolved-project envelope's Deploy tree (rp.Deploy) instead of a direct LoadUnified/
 // merged-tree-read call — the ONLY change from the core original, which read the SAME merged
-// bundle tree via the host loader in-process.
+// fleet tree via the host loader in-process.
 func resolveCheckVenue(ex *sdk.Executor, ctx context.Context, dir, name, instance string) (*CheckVenue, error) {
 	if name == "." {
 		return &CheckVenue{Exec: kit.ShellExecutor{}, Kind: "host", Descriptor: spec.VenueDescriptor{Kind: "shell"}}, nil
@@ -118,14 +118,14 @@ func resolveCheckVenue(ex *sdk.Executor, ctx context.Context, dir, name, instanc
 	}, nil
 }
 
-// derefDeployTree converts the envelope's map[string]*spec.BundleNode into the value-map shape
+// derefDeployTree converts the envelope's map[string]*spec.FleetNode into the value-map shape
 // the tree-walk helpers below (ported unchanged from charly/check_cmd.go + check_venue.go) share
 // with every other resolved-project consumer in this package.
-func derefDeployTree(m map[string]*spec.BundleNode) map[string]spec.BundleNode {
+func derefDeployTree(m map[string]*spec.FleetNode) map[string]spec.FleetNode {
 	if len(m) == 0 {
 		return nil
 	}
-	out := make(map[string]spec.BundleNode, len(m))
+	out := make(map[string]spec.FleetNode, len(m))
 	for k, v := range m {
 		if v != nil {
 			out[k] = *v
@@ -135,11 +135,11 @@ func derefDeployTree(m map[string]*spec.BundleNode) map[string]spec.BundleNode {
 }
 
 // nodeTraits returns the node's stamped deploy-descent descriptor. Every node reachable off the
-// resolved-project envelope is loader-stamped (stampBundleDescents runs host-side before the
+// resolved-project envelope is loader-stamped (stampFleetDescents runs host-side before the
 // envelope is filled), so — unlike the core original — this plugin-side version never needs the
-// registry-backed synthetic-node fallback: this package never constructs a BundleNode outside the
+// registry-backed synthetic-node fallback: this package never constructs a FleetNode outside the
 // envelope.
-func nodeTraits(node *spec.BundleNode) *spec.DescentDescriptor {
+func nodeTraits(node *spec.FleetNode) *spec.DescentDescriptor {
 	if node != nil && node.Descent != nil {
 		return node.Descent
 	}
@@ -148,20 +148,20 @@ func nodeTraits(node *spec.BundleNode) *spec.DescentDescriptor {
 
 // resolveLeafVenue walks a (possibly dotted) name to its LEAF node and reports the LEAF's own
 // venue trait.
-func resolveLeafVenue(tree map[string]spec.BundleNode, name string) (node spec.BundleNode, venue string, ok bool) {
+func resolveLeafVenue(tree map[string]spec.FleetNode, name string) (node spec.FleetNode, venue string, ok bool) {
 	if len(tree) == 0 || !strings.Contains(name, ".") {
-		return spec.BundleNode{}, "", false
+		return spec.FleetNode{}, "", false
 	}
 	n, found := resolveDeployNodeByPath(tree, name)
 	if !found || n == nil {
-		return spec.BundleNode{}, "", false
+		return spec.FleetNode{}, "", false
 	}
 	return *n, nodeTraits(n).Venue, true
 }
 
 // checkVmTarget reports whether `name` resolves to a VM venue and, if so, the per-deploy domain
 // identity to SSH into.
-func checkVmTarget(tree map[string]spec.BundleNode, name string) (domainID string, ok bool) {
+func checkVmTarget(tree map[string]spec.FleetNode, name string) (domainID string, ok bool) {
 	if idx := strings.Index(name, "."); idx > 0 {
 		if _, venue, ok := resolveLeafVenue(tree, name); ok && venue == "ssh" {
 			return vmshared.VmDomainIdentity(name), true
@@ -181,9 +181,9 @@ func checkVmTarget(tree map[string]spec.BundleNode, name string) (domainID strin
 // checkLocalTarget reports whether `name` (or its dotted LEAF, or its dotted root segment) is a
 // HOST-VENUE deployment, returning its node so the caller can build the host/ssh executor via
 // deploykit.RootExecutorForDeployNode.
-func checkLocalTarget(tree map[string]spec.BundleNode, name string) (spec.BundleNode, bool) {
+func checkLocalTarget(tree map[string]spec.FleetNode, name string) (spec.FleetNode, bool) {
 	if len(tree) == 0 {
-		return spec.BundleNode{}, false
+		return spec.FleetNode{}, false
 	}
 	if leaf, venue, ok := resolveLeafVenue(tree, name); ok {
 		if venue == "shell" || venue == "parent" || venue == "none" {
@@ -199,13 +199,13 @@ func checkLocalTarget(tree map[string]spec.BundleNode, name string) (spec.Bundle
 			return entry, true
 		}
 	}
-	return spec.BundleNode{}, false
+	return spec.FleetNode{}, false
 }
 
-// resolveDeployNodeByPath resolves a (possibly DOTTED) deploy name to its BundleNode, descending
+// resolveDeployNodeByPath resolves a (possibly DOTTED) deploy name to its FleetNode, descending
 // node.Children for each dotted segment. Ported unchanged from charly/check_cmd.go (pure, no
 // core-only dependency).
-func resolveDeployNodeByPath(tree map[string]spec.BundleNode, name string) (*spec.BundleNode, bool) {
+func resolveDeployNodeByPath(tree map[string]spec.FleetNode, name string) (*spec.FleetNode, bool) {
 	name, _ = vmshared.SplitVmAddress(name)
 	parts := strings.Split(name, ".")
 	root, ok := tree[parts[0]]

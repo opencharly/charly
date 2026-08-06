@@ -9,12 +9,12 @@
 // split: the pod deploy SUBSTRATE (deploy:pod) stays out-of-process in candy/plugin-deploy-pod,
 // untouched by this candy's placement.
 //
-// Each command word is INDEPENDENT (no shared parent — unlike `charly bundle …`'s single grouped
+// Each command word is INDEPENDENT (no shared parent — unlike `charly fleet …`'s single grouped
 // word): some (restart) are pure sdk/kit + sdk/deploykit logic with NO host coupling; others
 // (start/stop/logs/shell/…) need the provider REGISTRY (ResolveTarget, the plugin loader) — a
 // kernel M-mechanism a plugin cannot hold — and reach it over HostBuild seams that reconstruct the
 // original core orchestration struct and run its Run() logic VERBATIM (mirroring
-// candy/plugin-bundle's deploy-add/deploy-del host seams). See host_seams.go for the exact split.
+// candy/plugin-fleet's deploy-add/deploy-del host seams). See host_seams.go for the exact split.
 //
 // COMPILED-IN, it dispatches IN-PROC via Invoke(OpRun), so the handlers run in charly's OWN process
 // and inherit charly's real stdio/TTY natively (`charly shell` stays interactive).
@@ -59,7 +59,7 @@ func NewMeta() pb.PluginMetaServer {
 // CliMain is the OUT-OF-PROCESS command entry — unreachable in the canonical compiled-in placement.
 // The registry-bound handlers (start/stop/logs/shell/service/config/remove/cp/volume) reach the
 // host reverse channel, which is unavailable out-of-process, so this errors (like
-// candy/plugin-bundle's / candy/plugin-authoring's CliMain).
+// candy/plugin-fleet's / candy/plugin-authoring's CliMain).
 func CliMain(_ []string) int {
 	fmt.Println("charly: pod lifecycle commands require compiled-in placement (the host reverse channel is unavailable out-of-process)")
 	return 1

@@ -36,7 +36,7 @@ unsloth:
               stdout:
                 - contains: "0.19.1"
               command: ${HOME}/.pixi/envs/default/bin/python -m pip show vllm
-            - check: the candy exports UNSLOTH_SKIP_LLAMA_CPP_INSTALL=1 so the bundled llama.cpp build is skipped
+            - check: the candy exports UNSLOTH_SKIP_LLAMA_CPP_INSTALL=1 so the fleetdverb llama.cpp build is skipped
               stdout:
                 - equals: "1"
               command: printenv UNSLOTH_SKIP_LLAMA_CPP_INSTALL

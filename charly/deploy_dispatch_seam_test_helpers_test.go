@@ -2,9 +2,9 @@ package main
 
 // deploy_dispatch_seam_test_helpers_test.go — drives sdk/deploykit's per-host deploy-state
 // WRITERS (SaveDeployState, RemoveVmDeployEntry) through the REAL PRODUCTION seam
-// (dispatchDeployTarget → the compiled-in command:bundle plugin's Invoke(OpDeployDispatch) →
+// (dispatchDeployTarget → the compiled-in command:fleet plugin's Invoke(OpDeployDispatch) →
 // handleDeployApply/handleDeployDel → lifecycleInvoke → the plugin's own deployMarshalNode +
-// loadBundleConfig + deploykit writer) instead of calling the sdk writer directly — the
+// loadFleetConfig + deploykit writer) instead of calling the sdk writer directly — the
 // seam-drive conversion for the #55 final-tail bed-persist/deploy-state cluster (team-lead
 // directive, 2026-08-03). A throwaway fake ClassDeployTarget lifecycle provider, registered
 // per-test under a unique word, plays the substrate's PrepareVenue/Execute/PostApply (Add) or
@@ -105,18 +105,3 @@ func testDispatchLifecycleAdd(t *testing.T, p *seamLifecycleProvider, name strin
 	}
 }
 
-// testDispatchLifecycleDel sets p's OpPostTeardown reply RemoveEntries and drives it through the
-// REAL dispatchDeployTarget("del") — the production seam a lifecycle substrate's teardown goes
-// through (candy/plugin-bundle's handleDeployDel → deploykit.RemoveVmDeployEntry per key). A
-// prior testDispatchLifecycleAdd(t, p, name, ...) call against the SAME p (and hence the same
-// ledger-keyed deploy ID) is a REQUIRED precondition — Del reads the ledger record Add wrote,
-// keyed on name, and treats an unrecorded name as a silent idempotent no-op (production's own
-// contract), not a test-harness quirk.
-func testDispatchLifecycleDel(t *testing.T, p *seamLifecycleProvider, name string, removeEntries []string) {
-	t.Helper()
-	p.delRemoveEntries = removeEntries
-	req := spec.DeployTargetDispatchRequest{Op: "del", Name: name, Word: p.word, HasLifecycle: true}
-	if _, err := dispatchDeployTarget(context.Background(), req, nil, buildEngineContext{}, false); err != nil {
-		t.Fatalf("dispatchDeployTarget(del %q): %v", name, err)
-	}
-}

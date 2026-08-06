@@ -17,7 +17,7 @@ import (
 // format templates, the Generator's task/builder rendering) — machinery that could not cross the
 // process boundary at the time. That is GONE (K5-Unit-6b): the plugin now fetches the
 // "resolved-project" envelope ONCE per project dir (the SAME generic seam candy/plugin-box /
-// candy/plugin-bundle / candy/plugin-check already consume), builds its OWN *deploykit.Generator
+// candy/plugin-fleet / candy/plugin-check already consume), builds its OWN *deploykit.Generator
 // from it via the shared deploykit.NewRenderGeneratorFromProject helper (the SAME construction
 // source candy/plugin-build + candy/plugin-deploy-pod use), and renders all four words DIRECTLY —
 // no per-render host round-trip, no in-core renderer for them at all. The per-invocation scalars

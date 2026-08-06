@@ -13,7 +13,7 @@ import (
 // clientcmd merge lives entirely in this plugin, out of charly's core go.mod —
 // mergeKubeconfig is called directly by k3s_post.go's k3sPostProvision (S3, FINAL/K5
 // unit 6), the WHOLE k3s post-provision finalization this plugin now owns
-// end-to-end: candy/plugin-bundle's k3sPostProvision (secrets_artifacts.go, run after the
+// end-to-end: candy/plugin-fleet's k3sPostProvision (secrets_artifacts.go, run after the
 // deploy dispatch) dispatches ONE synthetic `kube: k3s-post-provision` Op via
 // exec.InvokeProvider("verb","kube") carrying the artifact key + deploy
 // name; this plugin retrieves the cached kubeconfig, rewrites its guest-forwarded

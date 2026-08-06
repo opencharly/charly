@@ -36,7 +36,7 @@ func TestPluginDeployTarget_ApplyParentExecOverride(t *testing.T) {
 
 		if len(venueJSON) == 0 {
 			t.Fatalf("applyParentExecOverride returned empty venue_json for a non-nil ParentExec — " +
-				"candy/plugin-bundle's resolveRootExecutor has nothing to re-materialize from and " +
+				"candy/plugin-fleet's resolveRootExecutor has nothing to re-materialize from and " +
 				"silently falls back to specexec.RootExecutorForDeployNode(req.Node), which for a " +
 				"nested child (no host: field of its own) resolves the OPERATOR'S HOST — exactly " +
 				"the regression this fix closes")
@@ -53,7 +53,7 @@ func TestPluginDeployTarget_ApplyParentExecOverride(t *testing.T) {
 		}
 
 		// Round-trip through the real inverse (exec.VenueFromDescriptor) to prove
-		// candy/plugin-bundle's resolveRootExecutor would ACTUALLY re-materialize the guest, not
+		// candy/plugin-fleet's resolveRootExecutor would ACTUALLY re-materialize the guest, not
 		// merely that the intermediate JSON looks right.
 		reExec, err := exec.VenueFromDescriptor(got)
 		if err != nil {

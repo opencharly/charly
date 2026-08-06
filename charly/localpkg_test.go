@@ -16,11 +16,11 @@ import (
 // the live *Candy concrete type, or a core-only entry point (ociEmitStep).
 
 // TestCompileLocalPkgStep / TestBuildDeployPlanLocalPkgOrdering relocated to
-// candy/plugin-bundle (#55 decoupling, Batch A) — they asserted
+// candy/plugin-fleet (#55 decoupling, Batch A) — they asserted
 // deploykit.CompileLocalPkgStep/BuildDeployPlan directly, zero charly dep. testPacDistroDef
 // (which wrapped testPacLocalPkgDef below into a *spec.ResolvedDistro) moved with them — it had
 // no other charly consumer. testPacLocalPkgDef got its OWN port there too (a
-// plugin-bundle-local copy, since this out-of-module package can't share unexported test
+// plugin-fleet-local copy, since this out-of-module package can't share unexported test
 // helpers with charly) — the copy here STAYS because charly's own build_target_oci_test.go
 // (outside this batch) also depends on it directly.
 
@@ -65,7 +65,7 @@ func TestOCITargetLocalPkgNilContractEmitsNothing(t *testing.T) {
 // per-format map shape) relocated to sdk/loaderkit/decode_entity_test.go (K1 unit 1) — it exercises
 // ONLY spec.CandyYAML + loaderkit.DecodeEntityViaCUE, zero charly-core dependency.
 
-// TestBuildDepPkgsOnHost_EmptyAndDryRun relocated to candy/plugin-bundle (#55 decoupling,
+// TestBuildDepPkgsOnHost_EmptyAndDryRun relocated to candy/plugin-fleet (#55 decoupling,
 // Batch A; fixture-reworked to a synthetic aur builder def, since every asserted case
 // short-circuits before reading the def's fields) — it asserted deploykit.BuildDepPkgsOnHost
 // directly.

@@ -9,11 +9,11 @@
 // the provider registry exactly like a built-in — the authored `kube: <method>` sugar
 // desugars to plugin/plugin_input; the method + kube-exclusive fields ride the input
 // map, validated against this plugin's own #KubeInput — and `target: k8s` resolves to
-// this plugin's deploy:k8s provider, reached via candy/plugin-bundle's generic
+// this plugin's deploy:k8s provider, reached via candy/plugin-fleet's generic
 // Invoke(OpDeployDispatch) → sdk.Executor.InvokeProvider (S3b — was the core-side
 // pluginDeployTarget-over-E3b path before the deploy-dispatch cluster moved) — THIS
 // plugin's own preresolve.go (F6, FINAL/K5 unit 6a; dispatched directly by
-// candy/plugin-bundle's preresolveSubstrate via InvokeProvider(OpPreresolve), S3b —
+// candy/plugin-fleet's preresolveSubstrate via InvokeProvider(OpPreresolve), S3b —
 // the core-side deploy_preresolve.go:wireDeployPreresolver registry it used to route
 // through is dissolved) resolves the cluster template + image Capabilities and GENERATES the
 // egress-validated Kustomize tree ITSELF (materialize.go, K5-A item 6 — verb:k8sgen/verb:egress

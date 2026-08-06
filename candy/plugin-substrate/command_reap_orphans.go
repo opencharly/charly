@@ -3,19 +3,19 @@ package substratekind
 // command_reap_orphans.go — the externalized `charly reap-orphans` command (K5: relocated from
 // charly/status_reap.go). Finds ephemeral deployments whose charly.yml ledger says "active" but
 // whose underlying engine resource (libvirt domain, podman container, k8s namespace) is gone, and
-// tears them down via `charly bundle del --assume-yes`.
+// tears them down via `charly fleet del --assume-yes`.
 //
 // Every dependency this needed turned out reachable without a new seam, mirroring the android
 // status collector's own precedent:
-//   - the per-host deploy overlay reads through loadBundleConfig (status_flat.go) — the
-//     cycle-free loaderkit.LoadHostBundleConfigViaExecutor read, NOT deploykit.LoadBundleConfig() directly (bed-
+//   - the per-host deploy overlay reads through loadFleetConfig (status_flat.go) — the
+//     cycle-free loaderkit.LoadHostFleetConfigViaExecutor read, NOT deploykit.LoadFleetConfig() directly (bed-
 //     robustness batch item 5: a direct call silently degrades to an empty config out-of-process,
 //     since deploykit.DeployStateHost is only ever registered by charly core's own init()).
 //   - the pod/k8s liveness probes are plain podman/kubectl exec calls — no core coupling at all.
 //   - the vm liveness probe used charly-core's invokeVmPlugin (a private registry accessor); the
 //     portable equivalent is Executor.InvokeProvider("verb", "libvirt", sdk.OpRun, ...) — the SAME
 //     verb:libvirt provider, reached the way ANY plugin reaches a peer (F10), not a core-only path.
-//   - the actual reap shells out `charly bundle del <name> --assume-yes` via os.Executable() +
+//   - the actual reap shells out `charly fleet del <name> --assume-yes` via os.Executable() +
 //     exec.Command — valid because this command is COMPILED-IN (os.Executable() resolves to the
 //     charly binary itself, exactly as it did when this code ran in core).
 //
@@ -56,15 +56,15 @@ func runReapOrphansCLI(ctx context.Context, exec *sdk.Executor, args []string) e
 
 // runReapOrphans finds and cleans up orphaned ephemeral deployments — entries whose charly.yml
 // ledger says "active" but whose underlying engine resource is gone. Pure orphan detection — no
-// race resolution: if a teardown is concurrently in progress, the second `charly bundle del
+// race resolution: if a teardown is concurrently in progress, the second `charly fleet del
 // --assume-yes` no-ops on the already-removed pieces.
 func runReapOrphans(ctx context.Context, exec *sdk.Executor) error {
-	// Routed through the loadBundleConfig seam helper (status_flat.go, bed-robustness batch
-	// item 5) instead of deploykit.LoadBundleConfig() directly — the exact "unvetted grep hit"
+	// Routed through the loadFleetConfig seam helper (status_flat.go, bed-robustness batch
+	// item 5) instead of deploykit.LoadFleetConfig() directly — the exact "unvetted grep hit"
 	// this audit closes: reap-orphans exists specifically to clean up orphaned EPHEMERAL
 	// deploys (item 1's own subject), so a silently-empty read here would make `charly
 	// reap-orphans` find nothing to reap on EVERY invocation, out-of-process.
-	dc, err := loadBundleConfig(ctx)
+	dc, err := loadFleetConfig(ctx)
 	if err != nil {
 		return fmt.Errorf("loading charly.yml: %w", err)
 	}
@@ -73,7 +73,7 @@ func runReapOrphans(ctx context.Context, exec *sdk.Executor) error {
 		return nil
 	}
 	var orphans []string
-	for name, node := range dc.Bundle {
+	for name, node := range dc.Fleet {
 		if node.VmState == nil || node.VmState.Ephemeral == nil {
 			continue
 		}
@@ -91,11 +91,11 @@ func runReapOrphans(ctx context.Context, exec *sdk.Executor) error {
 	for _, name := range orphans {
 		fmt.Printf("reaping orphan %q ...\n", name)
 		exe, _ := os.Executable()
-		delCmd := osexec.Command(exe, spec.BundleDelArgv(name)...)
+		delCmd := osexec.Command(exe, spec.FleetDelArgv(name)...)
 		delCmd.Stderr = os.Stderr
 		delCmd.Stdout = os.Stdout
 		if rerr := delCmd.Run(); rerr != nil {
-			fmt.Fprintf(os.Stderr, "warning: charly bundle del %q: %v\n", name, rerr)
+			fmt.Fprintf(os.Stderr, "warning: charly fleet del %q: %v\n", name, rerr)
 		}
 	}
 	return nil

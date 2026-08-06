@@ -8,7 +8,7 @@ import (
 
 // PluginInternalCmd is the hidden `__plugin` command group — the plugin
 // server/relay plumbing the registry spawns. Operators never type it; the normal
-// verbs (charly check, charly bundle add, …) drive it invisibly.
+// verbs (charly check, charly fleet add, …) drive it invisibly.
 type PluginInternalCmd struct {
 	Serve PluginServeCmd `cmd:"" help:"serve the in-process providers over go-plugin gRPC (internal)"`
 	List  PluginListCmd  `cmd:"" help:"list the registered providers and their capabilities"`

@@ -8,7 +8,7 @@ package substratekind
 // + wire round-trip. Every other dependency was already sdk-portable, just not yet relocated:
 // kit.ExtractMetadata/kit.ResolveBoxName (sdk/kit/box_metadata.go + remote_ref.go, K4 #64),
 // deploykit.QuadletDir/QuadletExistsInstance/ServiceNameInstance/ResolveBoxEngineForDeploy
-// (sdk/deploykit, K4 #64), kit.ParsePortMapping (already sdk), deploykit.LoadBundleConfig
+// (sdk/deploykit, K4 #64), kit.ParsePortMapping (already sdk), deploykit.LoadFleetConfig
 // (already used elsewhere in this package). ListProvisionedSecretNames is a pure
 // exec.Command("podman","secret","ls",...) with zero host-private state — ported directly, no sdk
 // dependency needed.
@@ -33,30 +33,30 @@ import (
 	"github.com/opencharly/spec/spec"
 )
 
-// loadBundleConfig reads the per-host deploy overlay (~/.config/charly/charly.yml) via the
-// cycle-free plugin-side helper loaderkit.LoadHostBundleConfigViaExecutor (#55 coneC Unit C2 —
-// this retired the former deploykit.LoadBundleConfigViaSeam host-handler round-trip;
+// loadFleetConfig reads the per-host deploy overlay (~/.config/charly/charly.yml) via the
+// cycle-free plugin-side helper loaderkit.LoadHostFleetConfigViaExecutor (#55 coneC Unit C2 —
+// this retired the former deploykit.LoadFleetConfigViaSeam host-handler round-trip;
 // loaderkit already imports deploykit so the
 // helper lives there and a plugin calls it directly, placement-invariant — the bare
-// deploykit.LoadBundleConfig silently no-ops outside charly-core's own init() since
+// deploykit.LoadFleetConfig silently no-ops outside charly-core's own init() since
 // deploykit.DeployStateHost is only ever registered there; candy/plugin-substrate is compiled-in
-// TODAY, so the sibling `deploykit.LoadBundleConfig()` direct calls this replaces were CORRECT
+// TODAY, so the sibling `deploykit.LoadFleetConfig()` direct calls this replaces were CORRECT
 // only by that per-BUILD placement accident — dual-placement is a per-BUILD choice, never an
-// authoring guarantee). R3 hoist (charly#176 round 1): the former LoadBundleConfigViaSeam itself
+// authoring guarantee). R3 hoist (charly#176 round 1): the former LoadFleetConfigViaSeam itself
 // hoisted four near-identical local copies (candy/plugin-status/nested_tree.go,
-// candy/plugin-bundle/ephemeral.go, candy/plugin-pod/remove_orchestration.go, this one); the C2
+// candy/plugin-fleet/ephemeral.go, candy/plugin-pod/remove_orchestration.go, this one); the C2
 // helper is now the ONE shared implementation all four call. This package still resolves its OWN
 // executor via ctx (sdk.ExecutorForInvoke) before delegating — the multi-call-per-process pattern
-// this VERB provider needs (unlike plugin-bundle's COMMAND-plugin package-var, which assumes
-// exactly one `charly bundle …` dispatch per process — unsafe to reuse here); HOW a caller
+// this VERB provider needs (unlike plugin-fleet's COMMAND-plugin package-var, which assumes
+// exactly one `charly fleet …` dispatch per process — unsafe to reuse here); HOW a caller
 // obtains its executor stays outside the shared helper's concern. Returns (nil, nil) on an
-// absent/empty overlay, matching deploykit.LoadBundleConfig's own contract.
-func loadBundleConfig(ctx context.Context) (*deploykit.BundleConfig, error) {
+// absent/empty overlay, matching deploykit.LoadFleetConfig's own contract.
+func loadFleetConfig(ctx context.Context) (*deploykit.FleetConfig, error) {
 	ex, err := sdk.ExecutorForInvoke(ctx, 0)
 	if err != nil {
-		return nil, fmt.Errorf("load bundle config: reach host reverse channel: %w", err)
+		return nil, fmt.Errorf("load fleet config: reach host reverse channel: %w", err)
 	}
-	return loaderkit.LoadHostBundleConfigViaExecutor(ctx, ex)
+	return loaderkit.LoadHostFleetConfigViaExecutor(ctx, ex)
 }
 
 // runStatusFanout is the sdk.OpStatusCollectAll entry point (plugin.go): req.Single selects the
@@ -89,14 +89,14 @@ func runStatusFanout(ctx context.Context, req spec.StatusSubstrateRequest) (spec
 type flatCollector struct {
 	rt      *kit.ResolvedRuntime
 	quadlet string
-	deploy  *deploykit.BundleConfig
+	deploy  *deploykit.FleetConfig
 }
 
 // flatCollectOpts is the read-only input one collection pass threads through: the deploy-cone
 // data enrichOne/enrichVmRow need, plus RunMode for the per-substrate collector requests.
 type flatCollectOpts struct {
 	IncludeAll bool                    // mirrors --all
-	Deploy     *deploykit.BundleConfig // ~/.config/charly/charly.yml (may be nil)
+	Deploy     *deploykit.FleetConfig // ~/.config/charly/charly.yml (may be nil)
 	RunMode    string                  // c.rt.RunMode
 }
 
@@ -105,7 +105,7 @@ type flatCollectOpts struct {
 // NewCollector exactly (a missing/invalid charly.yml is normal on a fresh host).
 func newFlatCollector(ctx context.Context, rt *kit.ResolvedRuntime) *flatCollector {
 	c := &flatCollector{rt: rt}
-	if dc, err := loadBundleConfig(ctx); err == nil {
+	if dc, err := loadFleetConfig(ctx); err == nil {
 		c.deploy = dc
 	}
 	if qdir, err := deploykit.QuadletDir(); err == nil {
@@ -289,10 +289,10 @@ func (c *flatCollector) enrichOne(cs *spec.DeploymentStatus, bin string) {
 // enrichment (the same "absence is normal" contract this doc comment already
 // states); the row still shows with Source:libvirt, just unenriched.
 func (c *flatCollector) enrichVmRow(cs *spec.DeploymentStatus, opts flatCollectOpts) {
-	if opts.Deploy == nil || opts.Deploy.Bundle == nil {
+	if opts.Deploy == nil || opts.Deploy.Fleet == nil {
 		return
 	}
-	node, ok, err := deploykit.FindVmDeployNode(opts.Deploy.Bundle, cs.Image, cs.Image)
+	node, ok, err := deploykit.FindVmDeployNode(opts.Deploy.Fleet, cs.Image, cs.Image)
 	if !ok || err != nil {
 		return
 	}
@@ -318,23 +318,23 @@ func (c *flatCollector) enrichVmRow(cs *spec.DeploymentStatus, opts flatCollectO
 // lookupDeploy resolves the charly.yml entry for one image+instance. Tries the canonical
 // deployKey() shape first, then a few legacy fallbacks for bed-rolled keys (joined container name
 // minus charly- prefix).
-func (c *flatCollector) lookupDeploy(box, instance, joinedContainerName string) (spec.BundleNode, bool) {
-	if c.deploy == nil || c.deploy.Bundle == nil {
-		return spec.BundleNode{}, false
+func (c *flatCollector) lookupDeploy(box, instance, joinedContainerName string) (spec.FleetNode, bool) {
+	if c.deploy == nil || c.deploy.Fleet == nil {
+		return spec.FleetNode{}, false
 	}
 	if box != "" {
-		if dn, ok := c.deploy.Bundle[spec.DeployKey(box, instance)]; ok {
+		if dn, ok := c.deploy.Fleet[spec.DeployKey(box, instance)]; ok {
 			return dn, true
 		}
-		if dn, ok := c.deploy.Bundle[box]; ok && instance == "" {
+		if dn, ok := c.deploy.Fleet[box]; ok && instance == "" {
 			return dn, true
 		}
 	}
 	stripped := strings.TrimPrefix(joinedContainerName, "charly-")
-	if dn, ok := c.deploy.Bundle[stripped]; ok {
+	if dn, ok := c.deploy.Fleet[stripped]; ok {
 		return dn, true
 	}
-	return spec.BundleNode{}, false
+	return spec.FleetNode{}, false
 }
 
 // resolveSystemdState consults systemctl + the quadlet dir to decide whether a non-podman-listed

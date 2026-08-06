@@ -76,7 +76,7 @@ import (
 // state a placement-agnostic plugin cannot own (candy/plugin-pod ships out-of-process by
 // default, so its own process env cannot see the outer orchestrator's lease guard). Every OTHER
 // former arbiter consumer is peer-dispatch now — candy/plugin-check's bed_session, candy/plugin-vm's
-// vm_arbiter_shim, and candy/plugin-bundle's handleLifecycleSimple all Invoke verb:arbiter
+// vm_arbiter_shim, and candy/plugin-fleet's handleLifecycleSimple all Invoke verb:arbiter
 // directly (the compiled-in placement class bed_session.go documents) — so this release chain is
 // the surviving in-core proxy, exercising the generic core→verb registry bridge.
 
@@ -137,7 +137,7 @@ func releaseResourceClaim(claimant string) {
 // dispatchAndRunLifecycle resolves node/box/instance's LifecycleTarget for op (the shared
 // dispatchLifecycleTarget core-M step) and, on success, runs the caller's op-specific body against
 // it — the shared core every start/stop/shell/logs/service/cmd case below delegates to.
-func dispatchAndRunLifecycle(op string, node *spec.BundleNode, box, instance string, run func(spec.LifecycleTarget) error) error {
+func dispatchAndRunLifecycle(op string, node *spec.FleetNode, box, instance string, run func(spec.LifecycleTarget) error) error {
 	lt, err := dispatchLifecycleTarget(op, node, spec.DeployKey(box, instance))
 	if err != nil {
 		return err
@@ -277,7 +277,7 @@ func hostBuildPodLifecycle(_ context.Context, req spec.PodLifecycleRequest, _ bu
 		// plugin cannot own (candy/plugin-pod ships out-of-process, so its own env cannot see
 		// the outer orchestrator's guard). This is now the ONLY core-side arbiter bracket: the
 		// deploy-dispatch Start/Stop bracket went peer-dispatch at K-wave 2 cone R2 bank E
-		// (candy/plugin-bundle's handleLifecycleSimple Invokes verb:arbiter directly; the
+		// (candy/plugin-fleet's handleLifecycleSimple Invokes verb:arbiter directly; the
 		// "arbiter-bracket-*" HostBuild seam is DELETED). The plugin defers this call as its
 		// LAST step, reproducing the former core `defer releaseResourceClaim(...)`'s "always
 		// runs, after everything else" semantics. It does NOT touch a LifecycleTarget, so it

@@ -240,7 +240,7 @@ func ensureHarnessSandboxRunning(sandbox, score string) error {
 	return fmt.Errorf(
 		"charly check run %s: harness sandbox %q is not running on this host — the iterate "+
 			"sandbox is an operator-provisioned per-host deploy. Provision it first:\n"+
-			"  charly bundle add %s <ref> --disposable\n"+
+			"  charly fleet add %s <ref> --disposable\n"+
 			"  charly start %s",
 		score, sandbox, sandbox, sandbox)
 }

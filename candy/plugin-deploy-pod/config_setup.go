@@ -111,13 +111,13 @@ func resolveDeployRef(ctx context.Context, ex *sdk.Executor, c *spec.PodConfigSe
 }
 
 // loadDeploy reads the per-host charly.yml overlay PLUGIN-SIDE via the cycle-free
-// loaderkit.LoadHostBundleConfigViaExecutor read (#55 coneC-dsh — the pod-config-load-deploy host
+// loaderkit.LoadHostFleetConfigViaExecutor read (#55 coneC-dsh — the pod-config-load-deploy host
 // seam is DELETED). caller is the warning-context tag (matching the former host leg's
 // LoadDeployConfigForRead(caller) swallow): a load error degrades to (nil, nil) + a stderr warning,
 // so a config setup that finds no overlay proceeds with image-label-driven behavior (the same
 // graceful degradation the host leg made).
-func loadDeploy(ctx context.Context, ex *sdk.Executor, caller string) (*deploykit.BundleConfig, error) {
-	dc, err := loaderkit.LoadHostBundleConfigViaExecutor(ctx, ex)
+func loadDeploy(ctx context.Context, ex *sdk.Executor, caller string) (*deploykit.FleetConfig, error) {
+	dc, err := loaderkit.LoadHostFleetConfigViaExecutor(ctx, ex)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: %s: charly.yml unavailable for read: %v\n", caller, err)
 		return nil, nil
@@ -125,23 +125,23 @@ func loadDeploy(ctx context.Context, ex *sdk.Executor, caller string) (*deployki
 	return dc, nil
 }
 
-// saveBundle persists dc PLUGIN-SIDE via deploykit.SaveBundleConfig directly (#55 coneC-dsh — the
-// pod-config-save-bundle host seam is DELETED). The marshal resugars via loader-threaded Primaries
+// saveFleet persists dc PLUGIN-SIDE via deploykit.SaveFleetConfig directly (#55 coneC-dsh — the
+// pod-config-save-fleet host seam is DELETED). The marshal resugars via loader-threaded Primaries
 // (deployMarshalNode) + the failsafe re-read uses the loader-backed reader (deployConfigReader), so
 // the write no longer depends on the charly-init DeployStateHost registration.
 //
 // It is a package var (not a plain func) so resolveDeployVolumes' precedence tests can stub the
-// persist leg directly (saveBundleStub, config_setup_volume_test.go) — the SAME testability pattern
-// loadProjectVolume already uses. The real path drives deploykit.SaveBundleConfig (a filesystem
+// persist leg directly (saveFleetStub, config_setup_volume_test.go) — the SAME testability pattern
+// loadProjectVolume already uses. The real path drives deploykit.SaveFleetConfig (a filesystem
 // write to ~/.config/charly/charly.yml) + 4 loader HostBuild seams (loader-threaded/-bootstrap/
 // -walk/-materialize) via deployConfigReader/deployMarshalNode, a multi-leg path a unit test must
 // not drive against the operator's real per-host overlay.
-var saveBundle = func(ctx context.Context, ex *sdk.Executor, dc *deploykit.BundleConfig) error {
-	return deploykit.SaveBundleConfig(dc, deployMarshalNode(ctx, ex), deployConfigReader(ctx, ex))
+var saveFleet = func(ctx context.Context, ex *sdk.Executor, dc *deploykit.FleetConfig) error {
+	return deploykit.SaveFleetConfig(dc, deployMarshalNode(ctx, ex), deployConfigReader(ctx, ex))
 }
 
-// mutateBundle is the ONLY way this package writes the per-host overlay. It runs one locked
-// read-modify-write cycle (deploykit.MutateBundleConfig): the lock is taken first, the overlay is
+// mutateFleet is the ONLY way this package writes the per-host overlay. It runs one locked
+// read-modify-write cycle (deploykit.MutateFleetConfig): the lock is taken first, the overlay is
 // re-read INSIDE it, and the caller's mutation runs against THAT fresh copy — so the write is a
 // merge-on-latest, never a write-back of the snapshot `charly config` loaded at the top of
 // runConfig.
@@ -161,13 +161,13 @@ var saveBundle = func(ctx context.Context, ex *sdk.Executor, dc *deploykit.Bundl
 // two concurrent deploys the same host port even though the file write itself is serialized.
 //
 // It returns the fresh config the mutation ran against so a caller can adopt it as its in-memory
-// view instead of continuing on its own stale snapshot. Like saveBundle it is a package var so a
-// unit test can stub the whole cycle (saveBundleStub, config_setup_volume_test.go) rather than
+// view instead of continuing on its own stale snapshot. Like saveFleet it is a package var so a
+// unit test can stub the whole cycle (saveFleetStub, config_setup_volume_test.go) rather than
 // driving a real filesystem write plus four loader HostBuild seams.
-var mutateBundle = func(ctx context.Context, ex *sdk.Executor, caller string, mutate deploykit.BundleConfigMutator) (*deploykit.BundleConfig, error) {
-	read := func() (*deploykit.BundleConfig, error) { return loadDeploy(ctx, ex, caller) }
-	save := func(dc *deploykit.BundleConfig) error { return saveBundle(ctx, ex, dc) }
-	return deploykit.MutateBundleConfig(read, save, mutate)
+var mutateFleet = func(ctx context.Context, ex *sdk.Executor, caller string, mutate deploykit.FleetConfigMutator) (*deploykit.FleetConfig, error) {
+	read := func() (*deploykit.FleetConfig, error) { return loadDeploy(ctx, ex, caller) }
+	save := func(dc *deploykit.FleetConfig) error { return saveFleet(ctx, ex, dc) }
+	return deploykit.MutateFleetConfig(read, save, mutate)
 }
 
 //nolint:gocyclo // ported 1:1 from charly-core BoxConfigSetupCmd.runConfig — see the file header; splitting further would fragment the seam-call sequencing across files for no clarity gain
@@ -205,7 +205,7 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 	// Migrate plaintext env secrets + scrub CLI env credentials PLUGIN-SIDE (#55 coneC Unit C4):
 	// the former HostBuild round-trip to charly's host_build_pod_config_seams.go host builders is
 	// deleted; the logic relocated to secret_migration.go in this package. migrate mutates dc
-	// in-place + persists via saveBundle; scrub mutates c.Env in-place. Both best-effort — matching
+	// in-place + persists via saveFleet; scrub mutates c.Env in-place. Both best-effort — matching
 	// the former `err == nil` swallow (a credential-store failure keeps the plaintext/CLI value).
 	_, _ = migratePlaintextEnvSecret(ctx, ex, dc, &meta, c.Box, c.Instance)
 	c.Env, _ = scrubSecretCLIEnv(ctx, ex, c.Env, &meta)
@@ -214,9 +214,9 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 		return fmt.Errorf("persisting resource caps: %w", err)
 	}
 
-	// resolveDeployPorts (config_setup_helpers.go) self-heals a nil dc/dc.Bundle instead of
+	// resolveDeployPorts (config_setup_helpers.go) self-heals a nil dc/dc.Fleet instead of
 	// skipping resolution — task #19's fix. See its doc comment for the full mechanism: the former
-	// `if dc != nil && dc.Bundle != nil` guard here skipped port resolution entirely on a fresh
+	// `if dc != nil && dc.Fleet != nil` guard here skipped port resolution entirely on a fresh
 	// disposable bed's first-ever config (no per-host overlay yet), which deterministically
 	// collided every check-pod-derived bed on the shared literal container port 18794.
 	if err := resolveDeployPorts(ctx, ex, &dc, spec.DeployKey(c.Box, c.Instance), &meta); err != nil {
@@ -263,10 +263,10 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 
 	// Env/MCP provides injection (P11 seam-death — see provides_inject.go). The plugin resolves the
 	// provides templates itself and mutates the loaded deploy config in place, persisting through the
-	// SAME loadDeploy→modify→saveBundle path the secrets/sidecar persist uses (R3); the locked
-	// whole-file write + marshal resugar run plugin-side via deploykit.SaveBundleConfig (the former
-	// pod-config-save-bundle host seam + the host save-callback are deleted, #55 coneC-dsh).
-	dc, err = mutateBundle(ctx, ex, "charly config inject-provides", func(d *deploykit.BundleConfig) (bool, error) {
+	// SAME loadDeploy→modify→saveFleet path the secrets/sidecar persist uses (R3); the locked
+	// whole-file write + marshal resugar run plugin-side via deploykit.SaveFleetConfig (the former
+	// pod-config-save-fleet host seam + the host save-callback are deleted, #55 coneC-dsh).
+	dc, err = mutateFleet(ctx, ex, "charly config inject-provides", func(d *deploykit.FleetConfig) (bool, error) {
 		provChanged := len(meta.EnvProvide) > 0 && injectEnvProvidesInto(d, c.Box, c.Instance, meta.EnvProvide, portMap)
 		if len(meta.MCPProvide) > 0 && injectMCPProvidesInto(d, c.Box, c.Instance, meta.MCPProvide, portMap) {
 			provChanged = true
@@ -347,7 +347,7 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 
 	deploySidecarsRaw := map[string]json.RawMessage{}
 	if dc != nil {
-		if overlay, ok := dc.Bundle[spec.DeployKey(c.Box, c.Instance)]; ok {
+		if overlay, ok := dc.Fleet[spec.DeployKey(c.Box, c.Instance)]; ok {
 			deploySidecarsRaw = overlay.Sidecar
 		}
 	}

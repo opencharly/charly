@@ -7,18 +7,18 @@ import (
 )
 
 // TestExternalDeployRecordVenueLedger_* retired here (S3b): recordVenueLedger moved to
-// candy/plugin-bundle/deploy_target.go alongside the deploy-dispatch logic it belonged to (see
-// CHANGELOG/2026.203.0212.md) — see candy/plugin-bundle/deploy_target_test.go for the ported
+// candy/plugin-fleet/deploy_target.go alongside the deploy-dispatch logic it belonged to (see
+// CHANGELOG/2026.203.0212.md) — see candy/plugin-fleet/deploy_target_test.go for the ported
 // tests (same behavior, same assertions).
 
 // TestResolveDeployNodeByPath proves the dotted-path resolution that lets the deploy-plugin
-// loader find a NESTED child deploy (the bed runner deploys arch-host via `charly bundle add
+// loader find a NESTED child deploy (the bed runner deploys arch-host via `charly fleet add
 // check-arch-vm.arch-host` — a dotted name that is NOT a top-level tree key). Without this,
 // deployNodePluginContext surfaced no plugin words for the nested child and its substrate
 // word never loaded its provider (the "unknown target local" regression).
 //
 // The "vm:"-prefixed cases are the FINAL/K5 unit 6a RCA #8 live-probe-caught regression: a
-// "vm:"-prefixed CLI address (the established convention for `charly bundle del vm:<name>` /
+// "vm:"-prefixed CLI address (the established convention for `charly fleet del vm:<name>` /
 // `vm:<parent.child>`) used to resolve to NOTHING here, since the dotted-path split ran on the
 // RAW name with the prefix still attached (`tree["vm:"+segment]` never matches — the tree is
 // keyed by the plain name). deployNodePluginContext (this function's one caller) then collected
@@ -27,12 +27,12 @@ import (
 // touches the tree) masked the miss until the LATER actual dispatch needed the never-connected
 // provider ("known substrate but its deploy provider is not connected").
 func TestResolveDeployNodeByPath(t *testing.T) {
-	tree := map[string]spec.BundleNode{
+	tree := map[string]spec.FleetNode{
 		"check-arch-vm": {
 			Target: "vm",
-			Children: map[string]*spec.BundleNode{
+			Children: map[string]*spec.FleetNode{
 				"arch-host": {Target: "local"},
-				"web":       {Target: "pod", Children: map[string]*spec.BundleNode{"db": {Target: "pod"}}},
+				"web":       {Target: "pod", Children: map[string]*spec.FleetNode{"db": {Target: "pod"}}},
 			},
 		},
 		"pod-bed": {Target: "pod"},

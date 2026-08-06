@@ -45,7 +45,7 @@ func TestEgressValidate(t *testing.T) {
 // bytes are exactly what the real renderer produces; THIS test is what proves those real bytes
 // pass the REAL egress schema (a non-empty verdict would mean charly emits cloud-init that its
 // own vendored schema rejects). Relocated here with the egress family (K-wave 2 cone R2): the
-// shim that used to front this gate moved to candy/plugin-bundle, whose test binary cannot reach
+// shim that used to front this gate moved to candy/plugin-fleet, whose test binary cannot reach
 // verb:egress — the schema is the load-bearing half, and it lives here.
 func TestGoldenCloudInit_OutputValidatesAgainstSchema(t *testing.T) {
 	p, err := newProvider()

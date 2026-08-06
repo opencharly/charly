@@ -53,7 +53,7 @@ func (c *CmdCmd) Run() error {
 	// itself (byte-identical to the retired core resolveLifecycleDeployNode; box/instance MUST match
 	// the request's Box/Instance — the host derives deployName = DeployKey from those).
 	// #55 coneC Unit C2: the resolver moved from deploykit.ResolveLifecycleDeployNodeViaSeam (the
-	// deleted host bundle-config loader-seam round-trip) to the cycle-free
+	// deleted host fleet-config loader-seam round-trip) to the cycle-free
 	// loaderkit.ResolveLifecycleDeployNodeViaExecutor (plugin-side, over the reverse channel).
 	cmdNode, _ := loaderkit.ResolveLifecycleDeployNodeViaExecutor(cmdCtx, cmdExec, c.Box, c.Instance)
 	start := time.Now()

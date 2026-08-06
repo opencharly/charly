@@ -22,7 +22,7 @@ func TestEnsureHarnessSandboxRunning_AbsentSurfacesRemediation(t *testing.T) {
 	msg := err.Error()
 	for _, want := range []string{
 		"harness sandbox \"check-sandbox\" is not running",
-		"charly bundle add check-sandbox <ref> --disposable",
+		"charly fleet add check-sandbox <ref> --disposable",
 		"charly start check-sandbox",
 		"scaffolding-selftest",
 	} {

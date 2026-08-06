@@ -65,7 +65,7 @@ func testRenderRuntimePacmanConf(p *spec.Pacstrap) (string, error) {
 }
 
 // TestFilterImages / TestFilterImagesUnknown / TestFilterImagesIncludesBuilder /
-// TestFilterImagesIncludesBootstrapBuilder relocated to candy/plugin-bundle (#55 decoupling,
+// TestFilterImagesIncludesBootstrapBuilder relocated to candy/plugin-fleet (#55 decoupling,
 // Batch A) — they asserted deploykit.FilterBox directly, zero charly coupling.
 
 // TestHostPlatform / TestRenderPacstrapExtraConf were removed as duplicates (K3

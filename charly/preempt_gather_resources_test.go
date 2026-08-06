@@ -79,7 +79,7 @@ func TestBedGPUPrereqMissing_UnsatisfiableTokenIsDetected(t *testing.T) {
 // claiming nothing must return before gatherResources runs, so a bed with no resource claim never
 // pays a whole project resolve to be told it needs nothing.
 func TestBedGPUPrereqMissing_NoTokensSkipsTheResolve(t *testing.T) {
-	token, vendor, missing := bedGPUPrereqMissing(spec.BundleNode{})
+	token, vendor, missing := bedGPUPrereqMissing(spec.FleetNode{})
 	if missing || token != "" || vendor != "" {
 		t.Fatalf("bedGPUPrereqMissing(empty node) = (%q, %q, %v), want a clean no-op", token, vendor, missing)
 	}

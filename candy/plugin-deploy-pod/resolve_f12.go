@@ -56,7 +56,7 @@ func resolvePodShellPlan(ctx context.Context, ex *sdk.Executor, box, instance st
 		return nil, err
 	}
 
-	var deployBox *spec.BundleNode
+	var deployBox *spec.FleetNode
 	if dc != nil {
 		if overlay, ok := dc.Lookup(box, instance); ok {
 			deployBox = &overlay
@@ -111,7 +111,7 @@ func resolvePodCmdPlan(ctx context.Context, ex *sdk.Executor, box, instance stri
 
 	var agentEnv []string
 	if rt, rtErr := kit.ResolveRuntime(); rtErr == nil {
-		var deployBox *spec.BundleNode
+		var deployBox *spec.FleetNode
 		if dc, lerr := loadDeploy(ctx, ex, "charly cmd"); lerr == nil && dc != nil {
 			if overlay, ok := dc.Lookup(box, instance); ok {
 				deployBox = &overlay
