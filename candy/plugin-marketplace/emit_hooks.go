@@ -176,7 +176,13 @@ func buildHookWiring(ks *kindSet) map[string][]any {
 	}
 	byKey := map[string]*group{}
 	var keys []string
-	for _, h := range ks.Hooks {
+	var hookNames []string
+	for name := range ks.Hooks {
+		hookNames = append(hookNames, name)
+	}
+	sort.Strings(hookNames) // deterministic order — ks.Hooks is a map, and map iteration is random
+	for _, name := range hookNames {
+		h := ks.Hooks[name]
 		if h.Trigger == "" {
 			continue // an AUX file (gitcmd.py, gate_test.py) — emitted, not wired
 		}
