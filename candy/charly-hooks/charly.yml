@@ -311,6 +311,10 @@ pre-push-gate:
             #   - targets `main` directly (main advances ONLY via an agent-validated PR
             #     merge). A bare `git push` with no refspec is left to the server-side
             #     branch protection, the authoritative block.
+            #   Local `git commit --amend` is NOT gated — amending a branch is a normal
+            #   authoring action, legal until the branch's first push. What IS gated is the
+            #   FORCE-PUSH a later amend would need to deliver, forbidden on every branch
+            #   (a pushed branch advances only by adding commits).
             # Shares git-command parsing with pre-commit-gate via gitcmd.py; obfuscation is
             # out of scope by construction (see gitcmd.py / /charly-internals:agents).
             #
