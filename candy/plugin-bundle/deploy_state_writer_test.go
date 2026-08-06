@@ -253,3 +253,182 @@ func TestVmDestroyRemovesPureAutoEntry(t *testing.T) {
 		t.Error("pure auto-created bed VM entry should be deleted on destroy (else entries accumulate)")
 	}
 }
+
+// TestSaveDeployState_PersistsImageAndTargetForNewEntry pins the post-2026-05-16
+// require-image plumbing: when the caller passes Image/Target on a brand-new entry, both
+// must land in deploy.yml alongside Disposable. Without this, the entry fails the
+// require-image validator on the next load and bricks every subsequent `charly`
+// invocation. Relocated from charly/deploy_save_test.go (the persistence-semantics half;
+// the dispatch wiring stays in charly).
+func TestSaveDeployState_PersistsImageAndTargetForNewEntry(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	if err := os.MkdirAll(filepath.Join(dir, "charly"), 0700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	initialYAML := `version: 2026.204.1223
+existing-deploy:
+    pod:
+        image: existing-image
+`
+	path := filepath.Join(dir, "charly", "charly.yml")
+	if err := os.WriteFile(path, []byte(initialYAML), 0600); err != nil {
+		t.Fatalf("write initial: %v", err)
+	}
+
+	deploykit.SaveDeployState("newimage", "", deploykit.SaveDeployStateInput{
+		SetDisposable: true,
+		Disposable:    true,
+		Box:           "newimage",
+		Target:        "pod",
+	}, bedTestMarshalNode, bedTestLoadBundleConfig)
+
+	dc, err := bedTestLoadBundleConfig()
+	if err != nil {
+		t.Fatalf("reload after save: %v", err)
+	}
+	if dc == nil {
+		t.Fatal("nil BundleConfig after reload")
+	}
+	if _, ok := dc.Bundle["existing-deploy"]; !ok {
+		t.Error("existing-deploy entry was lost (merge failure)")
+	}
+	newEntry, ok := dc.Bundle["newimage"]
+	if !ok {
+		t.Fatal("newimage entry not added")
+	}
+	if newEntry.Image != "newimage" {
+		t.Errorf("Image not persisted on new entry: got %q want %q", newEntry.Image, "newimage")
+	}
+	if newEntry.Target != "pod" {
+		t.Errorf("Target not persisted on new entry: got %q want %q", newEntry.Target, "pod")
+	}
+	if newEntry.Disposable == nil || !*newEntry.Disposable {
+		t.Error("Disposable not persisted on new entry")
+	}
+}
+
+// TestSaveDeployState_DoesNotClobberExistingImageTarget pins the "only set when entry
+// doesn't already declare" semantics: if a pre-existing entry already has box:/target:, a
+// SaveDeployState call with different Image/Target values MUST leave the existing values
+// alone (operator authority over agent re-derivation). Relocated from
+// charly/deploy_save_test.go (the persistence-semantics half; the dispatch wiring stays
+// in charly).
+func TestSaveDeployState_DoesNotClobberExistingImageTarget(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	if err := os.MkdirAll(filepath.Join(dir, "charly"), 0700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	initialYAML := `version: 2026.204.1223
+existing:
+    pod:
+        image: pinned-image-ref:1.2.3
+`
+	path := filepath.Join(dir, "charly", "charly.yml")
+	if err := os.WriteFile(path, []byte(initialYAML), 0600); err != nil {
+		t.Fatalf("write initial: %v", err)
+	}
+
+	deploykit.SaveDeployState("existing", "", deploykit.SaveDeployStateInput{
+		SetDisposable: true,
+		Disposable:    true,
+		Box:           "would-clobber",
+		Target:        "vm",
+	}, bedTestMarshalNode, bedTestLoadBundleConfig)
+
+	dc, err := bedTestLoadBundleConfig()
+	if err != nil {
+		t.Fatalf("reload after save: %v", err)
+	}
+	entry := dc.Bundle["existing"]
+	if entry.Image != "pinned-image-ref:1.2.3" {
+		t.Errorf("Image clobbered: got %q want %q", entry.Image, "pinned-image-ref:1.2.3")
+	}
+	if entry.Target != "pod" {
+		t.Errorf("Target clobbered: got %q want %q", entry.Target, "pod")
+	}
+	if entry.Disposable == nil || !*entry.Disposable {
+		t.Error("Disposable not applied (this field SHOULD update)")
+	}
+}
+
+// TestRemoveVmDeployEntry_SelectiveAndIdempotent pins the two load-bearing properties of
+// the deploy-lifecycle cleanup primitive that `charly vm destroy` and `charly bundle del
+// vm:<name>` rely on:
+//
+//  1. SELECTIVE removal — removing `vm:k3s-vm` strips ONLY that entry; sibling VM entries
+//     (incl. a running, preemptible operator workstation) and pod entries survive
+//     untouched. This is the operator-safety property: a disposable bed's teardown can
+//     never collateral-remove the workstation.
+//  2. IDEMPOTENCY — a second removal of the already-gone entry returns nil and leaves the
+//     file valid + siblings intact.
+//
+// Relocated from charly/deploy_save_test.go (the persistence-semantics half; the dispatch
+// wiring stays in charly).
+func TestRemoveVmDeployEntry_SelectiveAndIdempotent(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	if err := os.MkdirAll(filepath.Join(dir, "charly"), 0700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	// Seed: the disposable bed VM to remove, plus a running preemptible
+	// operator workstation and an unrelated pod deploy that must both survive.
+	initialYAML := `version: 2026.204.1223
+vm:k3s-vm:
+    vm:
+        from: k3s-vm
+        vm_state:
+            ssh_port: 38067
+            ssh_user: arch
+vm:cachyos-gpu:
+    vm:
+        from: cachyos-gpu
+        preemptible:
+            holds:
+                - nvidia-gpu
+web-app:
+    pod:
+        image: web-app
+`
+	path := filepath.Join(dir, "charly", "charly.yml")
+	if err := os.WriteFile(path, []byte(initialYAML), 0600); err != nil {
+		t.Fatalf("write initial: %v", err)
+	}
+
+	save := func(dc *deploykit.BundleConfig) error {
+		return deploykit.SaveBundleConfig(dc, bedTestMarshalNode, bedTestLoadBundleConfig)
+	}
+	// (1) Selective removal of the disposable bed VM.
+	if err := deploykit.RemoveVmDeployEntry("vm:k3s-vm", save, bedTestLoadBundleConfig); err != nil {
+		t.Fatalf("RemoveVmDeployEntry: %v", err)
+	}
+	dc, err := bedTestLoadBundleConfig()
+	if err != nil {
+		t.Fatalf("reload after removal: %v", err)
+	}
+	if _, ok := dc.Bundle["vm:k3s-vm"]; ok {
+		t.Error("vm:k3s-vm still present after RemoveVmDeployEntry — entry not removed")
+	}
+	if _, ok := dc.Bundle["vm:cachyos-gpu"]; !ok {
+		t.Error("vm:cachyos-gpu (operator workstation) was collateral-removed — selective-removal property violated")
+	}
+	if _, ok := dc.Bundle["web-app"]; !ok {
+		t.Error("web-app pod deploy was collateral-removed — selective-removal property violated")
+	}
+
+	// (2) Idempotency: removing the already-gone entry is a clean no-op.
+	if err := deploykit.RemoveVmDeployEntry("vm:k3s-vm", save, bedTestLoadBundleConfig); err != nil {
+		t.Fatalf("idempotent re-removal: %v", err)
+	}
+	dc2, err := bedTestLoadBundleConfig()
+	if err != nil {
+		t.Fatalf("reload after idempotent re-removal: %v", err)
+	}
+	if _, ok := dc2.Bundle["vm:cachyos-gpu"]; !ok {
+		t.Error("vm:cachyos-gpu disappeared after idempotent re-removal")
+	}
+	if _, ok := dc2.Bundle["web-app"]; !ok {
+		t.Error("web-app disappeared after idempotent re-removal")
+	}
+}

@@ -147,6 +147,19 @@ func (a kitVerbActStepAdapter) ConstructStep(op *spec.Op, ctx stepConstructCtx) 
 }
 
 // kitStepKindToCharly maps the checkstep.StepKindName to charly's internal StepKind enum.
+//
+// WHY THIS SWITCH STAYS CORE (K-wave 2 test migration, task #24): the per-kind
+// kitStepKindToCharly + materializeStep pair is NOT cleanly separable to the kit-shape
+// candies' (service/package) own registration. The materializer needs the host-computed
+// stepConstructCtx (RunAsUser / CandyName / PkgFormat / DistroTags — a core-defined type
+// a candy module cannot import), and the checkstep contract deliberately keeps the candy
+// decoupled from the IR types ("the candy never imports an IR type" — it returns a neutral
+// StepDescriptor; the host rebuilds the real spec.InstallStep). Moving the mapping would
+// require changing the checkstep.StepProvider interface (StepKind() returning spec.StepKind
+// instead of the deliberately-separate StepKindName, plus a MaterializeStep method taking
+// the 4 ctx scalars as parameters), rippling through spec/checkstep, sdk/kit, and both
+// candies. Documented, not forced — a future move needs exactly that plugin-side
+// materializer contract.
 func kitStepKindToCharly(k checkstep.StepKindName) spec.StepKind {
 	switch k {
 	case checkstep.StepKindServicePackaged:
@@ -162,6 +175,7 @@ func kitStepKindToCharly(k checkstep.StepKindName) spec.StepKind {
 // the candy name, the image package format + distro tags — the 4 scalars this function
 // actually reads, never a full layer/img handle). The load-bearing Reverse() lives on
 // the built step (package main), unchanged from the typed builtin verb's ConstructStep.
+// See kitStepKindToCharly for why this per-kind switch stays core (task #24).
 func materializeStep(desc checkstep.StepDescriptor, ctx stepConstructCtx) spec.InstallStep {
 	switch {
 	case desc.ServicePackaged != nil:

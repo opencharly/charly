@@ -55,3 +55,15 @@ func TestMountVerb(t *testing.T) {
 		t.Errorf("got %+v", res)
 	}
 }
+
+// TestMountVerb_RenderProvisionScript: the ACT role renders an idempotent
+// `findmnt || mount` with the source + filesystem. Relocated from
+// charly/plugin_mount_relocated_test.go's TestRelocatedMountVerb_DispatchesViaKit (the
+// act-role behavior half; the dispatch wiring stays in charly).
+func TestMountVerb_RenderProvisionScript(t *testing.T) {
+	script, ok := verb{}.RenderProvisionScript(
+		&spec.Op{PluginInput: map[string]any{"mount": "/data", "mount_source": "/dev/sdb1", "filesystem": "ext4"}}, nil)
+	if !ok || !strings.Contains(script, "mount") || !strings.Contains(script, "/dev/sdb1") {
+		t.Fatalf("act: want a findmnt||mount script, got ok=%v %q", ok, script)
+	}
+}
