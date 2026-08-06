@@ -11,10 +11,10 @@ plugin-cmd:
             session-bus call, driven directly on the deploykit.ContainerChain executor — a plugin
             drives gdbus itself, the boundary law's host-object-is-never-permanence rule). The ONE
             thing it cannot do is the interactive exec, which is deploy-lifecycle machinery
-            (dispatchLifecycleTarget → OpAttach): it drives the hidden `charly __cmd` core reentry
-            over the generic HostBuild("cli") seam with INHERITED stdio, so the `-i` interactive
-            stream reaches the operator. The __cmd handler stays core (deploy-lifecycle-coupled
-            RESIDUE, gated on that coupling relocating), NOT a plugin — so no charly-core symbol
+            (dispatchLifecycleTarget → OpAttach): it dispatches the op="cmd" pod-lifecycle
+            action over the reverse channel with INHERITED stdio, so the `-i` interactive
+            stream reaches the operator. The former hidden `charly __cmd` core reentry is
+            DELETED (K-wave 2) — the op="cmd" dispatch is plugin-side, so no charly-core symbol
             crosses the boundary; the plugin imports the sdk module alone.
 
             cmd is COMPILED-IN (listed in charly/charly.yml compiled_plugins) BECAUSE its

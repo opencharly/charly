@@ -185,13 +185,14 @@ func TestCommandCompileIn_CmdInProc(t *testing.T) {
 // unified the former eight dedicated per-verb kinds — HostBuild("pod-start")/("pod-stop")/
 // ("pod-logs")/("pod-remove")/("pod-shell")/("pod-service")/("pod-update")/("pod-cmd") — into
 // this one, discriminated by req.Op).
-// Setup/Remove instead FORWARD onward to the deploy:pod plugin's sdk.OpConfigSetup/
-// OpConfigRemove (the P13-KERNEL direction-flip) over HostBuild("pod-config-setup")/
-// HostBuild("pod-config-remove"). command:config's other four leaves — Status/Mount/Unmount/
-// Passwd — no longer route through core at all (wave γ): candy/plugin-pod's enc_cmd.go
-// dispatches verb:enc/verb:credential DIRECTLY via InvokeProvider, the same ALREADY-LIVE pattern
-// candy/plugin-deploy-pod/lifecycle.go proves for the start/stop path. (End-to-end CLI dispatch
-// is exercised live — see the DEPLOY wave report — and by the R10 bed roster.)
+// Setup/Remove dispatch deploy:pod's sdk.OpConfigSetup/OpConfigRemove (the P13-KERNEL
+// direction-flip) peer-to-peer via InvokeProvider (the "pod-config-setup"/"pod-config-remove"
+// host-build seams are DELETED, K-wave 2 cone R3 — the SAME pattern candy/plugin-bundle/
+// from_box_pod.go proves for the source-less from-box path). command:config's other four leaves —
+// Status/Mount/Unmount/Passwd — no longer route through core at all (wave γ): candy/plugin-pod's
+// enc_cmd.go dispatches verb:enc/verb:credential DIRECTLY via InvokeProvider, the same
+// ALREADY-LIVE pattern candy/plugin-deploy-pod/lifecycle.go proves for the start/stop path.
+// (End-to-end CLI dispatch is exercised live — see the DEPLOY wave report — and by the R10 bed roster.)
 func TestCommandCompileIn_PodInProc(t *testing.T) {
 	for _, word := range []string{"start", "stop", "restart", "logs", "remove", "shell", "service", "volume", "cp", "config", "update"} {
 		prov, ok := providerRegistry.resolve(ClassCommand, word)

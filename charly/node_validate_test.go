@@ -15,7 +15,7 @@ func TestValidateCandyManifestCUE_NodeForm(t *testing.T) {
       - check: the binary exists
         file: /usr/bin/redis-server
 `
-	if err := validateCandyManifestCUE("ok", []byte(ok)); err != nil {
+	if err := requireProjectLoader().ValidateCandyManifestCUE("ok", []byte(ok), loaderThreaded(), requireLoaderParser()); err != nil {
 		t.Fatalf("valid node-form candy rejected: %v", err)
 	}
 	// missing required description → concrete validation must fail.
@@ -24,7 +24,7 @@ func TestValidateCandyManifestCUE_NodeForm(t *testing.T) {
     version: "2026.150.0000"
     package: [redis]
 `
-	if err := validateCandyManifestCUE("bad", []byte(bad)); err == nil {
+	if err := requireProjectLoader().ValidateCandyManifestCUE("bad", []byte(bad), loaderThreaded(), requireLoaderParser()); err == nil {
 		t.Error("node-form candy missing required description should fail box-validate")
 	}
 }

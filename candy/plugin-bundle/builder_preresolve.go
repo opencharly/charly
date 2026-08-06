@@ -19,13 +19,29 @@ import (
 // live *sdk.Executor for its own OpCompile Invoke, it can run the SAME pre-pass itself via
 // exec.InvokeProvider(ClassBuilder, word, OpCollectContext/OpReverse, …) — F10's generic
 // plugin↔plugin dispatch, spike-proven live (a real out-of-process ClassBuilder plugin round-trips
-// correctly through this exact call shape). The host's OWN builder_preresolve.go keeps ONLY the
-// CONNECT step (ensureBuildersConnected — genuinely host-only: loadProjectPlugins/
-// ScanAllCandyWithConfigOpts are core-private project-loading mechanics) so the needed builder
-// plugin(s) are already registered in providerRegistry by the time this Invoke reaches the host's
-// resolve — exec.InvokeProvider's own lazy-connect fallback (S2) is a safety net, not the primary
-// connect path, for exactly the same reason the pre-move host code scoped its own connect
-// precisely rather than relying on a blanket "all four builder plugins" load.
+// correctly through this exact call shape).
+//
+// K-wave 2 cone R1: charly/builder_preresolve.go — the host's remaining CONNECT step
+// (ensureBuildersConnected) — is DELETED. Its "genuinely host-only" claim did not hold: its two-pass
+// ScanAllCandyWithConfigOpts + loadProjectPlugins body was a second copy of the host's own generic
+// connectPluginByWordRef, which exec.InvokeProvider ALREADY falls back to. So the lazy-connect
+// fallback is now the ONE connect path for every builder dispatch, build-time and deploy-time alike.
+// That also closes a latent gap on THIS path: the pre-pass below passed an EMPTY ExtraRef, so it only
+// ever reached Pass-1 (the deploy project's own candy closure) — a box/<distro> submodule deploy that
+// triggers a builder purely by DETECTION but vendors the plugin candy nowhere had no Pass-2 to fall
+// back to. Both Invokes now carry spec.ExternalBuilderPluginRef(word), the same canonical ref the
+// build-time resolve uses (R3: one connect rule, not one per dispatch site).
+
+// builderInvokeOpts carries the builder's canonical plugin-candy ref so the host's InvokeProvider
+// falls back to connectPluginByWordRef's Pass-2 fetch when the deploy project's own candy closure
+// vendors the plugin nowhere. Shared by both Invokes below (R3) and identical to what the build-time
+// resolve passes (sdk/deploykit renderSeamCaller.resolveBuilderStage).
+func builderInvokeOpts(word string) sdk.InvokeProviderOpts {
+	if ref, ok := spec.ExternalBuilderPluginRef(word); ok {
+		return sdk.InvokeProviderOpts{ExtraRef: ref}
+	}
+	return sdk.InvokeProviderOpts{}
+}
 
 // preresolveBuilderContexts detects which candies in order need an externalized builder
 // (deploykit.DetectExternalizedBuilders, gated by rp.ExternalizedBuilders — the SAME word set
@@ -91,7 +107,7 @@ func invokeBuilderCollect(ctx context.Context, exec *sdk.Executor, word string, 
 	if err != nil {
 		return nil, fmt.Errorf("marshal collect-context input: %w", err)
 	}
-	resJSON, err := exec.InvokeProvider(ctx, "builder", word, sdk.OpCollectContext, params, nil, sdk.InvokeProviderOpts{})
+	resJSON, err := exec.InvokeProvider(ctx, "builder", word, sdk.OpCollectContext, params, nil, builderInvokeOpts(word))
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +127,7 @@ func invokeBuilderReverse(ctx context.Context, exec *sdk.Executor, word, candy s
 	if err != nil {
 		return nil, fmt.Errorf("marshal reverse input: %w", err)
 	}
-	resJSON, err := exec.InvokeProvider(ctx, "builder", word, sdk.OpReverse, params, nil, sdk.InvokeProviderOpts{})
+	resJSON, err := exec.InvokeProvider(ctx, "builder", word, sdk.OpReverse, params, nil, builderInvokeOpts(word))
 	if err != nil {
 		return nil, err
 	}

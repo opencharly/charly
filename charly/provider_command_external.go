@@ -11,7 +11,6 @@ import (
 	"github.com/alecthomas/kong"
 
 	"github.com/opencharly/spec/climodel"
-	specexec "github.com/opencharly/spec/exec"
 	"github.com/opencharly/spec/ops"
 	"github.com/opencharly/spec/spec"
 	"github.com/opencharly/spec/transport"
@@ -197,14 +196,22 @@ func passthroughArgsType() reflect.Type {
 }
 
 // nestedSubcommandType builds the F-CLI-NEST inner struct: one named `cmd:""` field per declared
-// subcommand, each a pointer to its own pass-through Args leaf.
+// subcommand, each a pointer to its own pass-through Args leaf. A HIDDEN declared subcommand
+// (Hidden, e.g. the iterate harness's `charly check run-local` re-exec) is still rendered as a REAL
+// Kong `cmd:""` child — so it DISPATCHES — but tagged `hidden:""` so `--help` and the CLI model
+// (MCP tool surface) keep it invisible, byte-identical to the `hidden:""` tag on the plugin's own
+// grammar struct field (F-CLI-NEST hidden-but-reachable).
 func nestedSubcommandType(subcommands []climodel.CLISubcommand) reflect.Type {
 	fields := make([]reflect.StructField, 0, len(subcommands))
 	for _, sc := range subcommands {
+		tag := fmt.Sprintf(`cmd:"" name:%q help:%q`, sc.Name, sc.Help)
+		if sc.Hidden {
+			tag += ` hidden:""`
+		}
 		fields = append(fields, reflect.StructField{
 			Name: exportedCommandField(sc.Name),
 			Type: reflect.PointerTo(passthroughArgsType()),
-			Tag:  reflect.StructTag(fmt.Sprintf(`cmd:"" name:%q help:%q`, sc.Name, sc.Help)),
+			Tag:  reflect.StructTag(tag),
 		})
 	}
 	return reflect.StructOf(fields)
@@ -234,7 +241,13 @@ func dispatchCommand(d externalCommandDispatch, sub string) error {
 // os.Stdout/Stderr/TTY natively), mirroring the OUT-OF-PROCESS plugin's pass-through `{"args":[…]}`
 // envelope (the ops.OpRun contract), so a command candy behaves identically in either placement.
 func dispatchInProcCommand(prov Provider, d externalCommandDispatch, sub string) error {
-	params, err := marshalJSON(map[string]any{"args": externalCommandArgs(d, sub)})
+	// Thread the host spec.HostEnv as DATA on the OpRun envelope (the #200 "threads as DATA, does
+	// not anchor a seam" precedent — hostEnvJSON, KERNEL_MANIFEST.md:39): os.Executable() resolves
+	// correctly to the charly binary ONLY when called in-core (R10 bed-found bug #5), so every
+	// compiled-in command plugin receives it verbatim. Class-generic, no provider word (F11-safe):
+	// a command that needs it (command:bundle's from-box pod path, which forwards HostEnvJSON into
+	// deploy:pod's PodConfigSetupRequest) reads it; the rest ignore the extra key.
+	params, err := marshalJSON(map[string]any{"args": externalCommandArgs(d, sub), "host_env_json": hostEnvJSON()})
 	if err != nil {
 		return fmt.Errorf("command %q: marshal args: %w", d.word, err)
 	}
@@ -245,8 +258,7 @@ func dispatchInProcCommand(prov Provider, d externalCommandDispatch, sub string)
 	// command plugin can OWN its logic and reach the shared host machinery (e.g. clean's "retention"
 	// HostBuild) instead of forwarding the whole command to a hidden `__<cmd>` core handler. The
 	// executor carries no venue — a command's HostBuild legs reconstruct their engine host-side.
-	ctx := specexec.ContextWithExecutor(context.Background(),
-		specexec.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}}))
+	ctx := hostInProcCtx()
 	if _, err := prov.Invoke(ctx, &Operation{Reserved: d.word, Op: ops.OpRun, Params: params}); err != nil {
 		return fmt.Errorf("command %q: %w", d.word, err)
 	}

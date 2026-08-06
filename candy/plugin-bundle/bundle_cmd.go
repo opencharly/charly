@@ -10,9 +10,10 @@ import (
 
 // bundle_cmd.go — the command:bundle CLI GRAMMAR (P13). The `charly bundle …` Kong tree
 // moved OUT of charly core into this plugin candy; the deploy ORCHESTRATION stayed core
-// behind the resolve-target-add / deploy-del-resolve / deploy-from-box / deploy-config
-// host-build seams (mirroring how the box-build engine stayed core behind HostBuild("image")
-// in P8; the VM-disk engine moved plugin-side to candy/plugin-vm/vm_build_resolve.go — the
+// behind the resolve-target-add / deploy-config host-build seams (the deploy-del-resolve +
+// deploy-from-box seams are DELETED — the del resolution + from-box pod path are plugin-side,
+// K-wave 2 cone R2 banks B+C; mirroring how the box-build engine stayed core behind
+// HostBuild("image") in P8; the VM-disk engine moved plugin-side to candy/plugin-vm/vm_build_resolve.go — the
 // former HostBuild("vm-build") is DELETED). Every leaf here is THIN: it carries
 // the authored Kong flags and forwards them, as the matching sdk/spec wire request, to its
 // seam via hostDeploySeam — the host reconstructs the core orchestration struct and runs
@@ -93,10 +94,10 @@ type BundleDelCmd struct {
 }
 
 // BundleFromBoxCmd is the `charly bundle from-box <ref> [name]` grammar. The pod path (default)
-// forwards to the deploy-from-box host-build seam (a source-less deploy from an image's baked OCI
-// labels); the --cluster path (Cone A shape 3) is handled ENTIRELY plugin-side — see
-// deploy_from_box.go — reaching the k8s cluster lookup + the deploy:k8s substrate directly, no
-// HostBuild round-trip for the k8s branch.
+// runs ENTIRELY plugin-side (from_box_pod.go — a source-less deploy from an image's baked OCI
+// labels, reaching deploy:pod's OpConfigSetup directly, no HostBuild round-trip); the --cluster
+// path (Cone A shape 3) is handled plugin-side too — see deploy_from_box.go — reaching the k8s
+// cluster lookup + the deploy:k8s substrate directly.
 type BundleFromBoxCmd struct {
 	Ref       string   `arg:"" help:"Full image ref (local or registry), e.g. ghcr.io/opencharly/selkies-kde-nvidia:latest"`
 	Name      string   `arg:"" optional:"" help:"Deploy name (default: the image-ref basename without tag)"`
@@ -128,13 +129,7 @@ func (c *BundleFromBoxCmd) Run() error {
 		fmt.Fprintf(os.Stderr, "Generated Kustomize overlay for %q at %s\n  apply with: kubectl apply -k %s\n", name, out, out)
 		return nil
 	}
-	return hostDeploySeam("deploy-from-box", spec.DeployFromBoxRequest{
-		Ref:      c.Ref,
-		Name:     c.Name,
-		Instance: c.Instance,
-		Env:      c.Env,
-		Port:     c.Port,
-	})
+	return runFromBoxPod(c)
 }
 
 // BundleShowCmd is the `charly bundle show [box]` grammar (K4-C: runs entirely plugin-side —

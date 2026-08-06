@@ -35,9 +35,10 @@ import (
 // actions this relocation adds. req.KeepImages/req.KeepCheckRuns arrive PRE-RESOLVED (the
 // caller's defaults.keep_images/keep_check_runs, 0 = disabled) — this engine never reads
 // charly.yml itself, it only ever runs the podman/filesystem side of retention (R3: config
-// resolution stays with whoever can LoadConfig — core call sites resolve in-process, the
-// plugin's own CLI + plugin-check's post-run hook fetch it via the small
-// "retention-defaults" HostBuild seam, the ONE thing this engine genuinely cannot compute).
+// resolution stays with whoever can load the project — core call sites resolve in-process,
+// the plugin's own CLI + plugin-check's post-run hook + plugin-box's post-build prune resolve
+// it PLUGIN-SIDE via the shared sdk/loaderkit.ResolveRetentionDefaultsViaExecutor, K-wave 2
+// cone R6, the former "retention-defaults" HostBuild seam DELETED).
 func runRetention(req spec.RetentionRequest) spec.RetentionReply {
 	engineBin, err := resolveEngineBinary()
 	if err != nil {

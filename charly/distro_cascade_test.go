@@ -128,8 +128,8 @@ func TestRejectLegacyTopLevelFormatAndDistroKeys(t *testing.T) {
 		{"cachyos", true}, // now provided by the embedded default build vocabulary
 	}
 	for _, tc := range cases {
-		if got := looksLikeDistroOrFormatKey(tc.key); got != tc.want {
-			t.Errorf("looksLikeDistroOrFormatKey(%q) = %v, want %v", tc.key, got, tc.want)
+		if got := spec.NewCandyVocab(testDistroConfig()).LooksLikeDistroOrFormatKey(tc.key); got != tc.want {
+			t.Errorf("CandyVocab.LooksLikeDistroOrFormatKey(%q) = %v, want %v", tc.key, got, tc.want)
 		}
 	}
 }

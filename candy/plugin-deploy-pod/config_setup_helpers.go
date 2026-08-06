@@ -20,26 +20,19 @@ import (
 
 // config_setup_helpers.go — pure (no host/loader/registry coupling) helpers ported VERBATIM from
 // the former charly-core config_image.go, alongside the small "one seam bundles several pure
-// calls" plugin-local glue (sidecarTemplatesOf, secretDepNames, secretResolution).
-
-// sidecarTemplatesOf mirrors charly/sidecar.go's sidecarTemplatesOf — pure field access on an
-// already-loaded *deploykit.BundleConfig.
-func sidecarTemplatesOf(dc *deploykit.BundleConfig) map[string]json.RawMessage {
-	if dc == nil {
-		return nil
-	}
-	return dc.Sidecar
-}
+// calls" plugin-local glue (secretDepNames, secretResolution).
 
 // resolveHostCharlyBin decodes the HOST-resolved charly binary path from the caller's
-// host_env_json (spec.HostEnv, populated by hostBuildPodConfigSetup via core's own hostEnvJSON()
-// helper). NEVER call os.Executable() here instead: from inside this out-of-process plugin that
-// resolves to the PLUGIN's OWN binary path, not the charly CLI — the exact defect the R10
-// bed-found bug on #DeployTargetDispatchRequest.host_env_json already documents for the
-// lifecycle-Op family, which Setup's quadlet emission (deploykit.QuadletConfig.CharlyBin, the
-// encrypted-mount ExecStartPre line) shared until now. Falls back to os.Executable() only as a
-// last resort (an old core build that predates the host_env_json wiring) so a missing seam
-// degrades to the pre-fix behavior rather than an empty path.
+// host_env_json (spec.HostEnv, populated by the host's core hostEnvJSON() helper, threaded as
+// DATA on the OpRun dispatch envelope — candy/plugin-pod forwards it into the request; the former
+// hostBuildPodConfigSetup forwarder is DELETED, K-wave 2 cone R3). NEVER call os.Executable()
+// here instead: from inside this out-of-process plugin that resolves to the PLUGIN's OWN binary
+// path, not the charly CLI — the exact defect the R10 bed-found bug on
+// #DeployTargetDispatchRequest.host_env_json already documents for the lifecycle-Op family,
+// which Setup's quadlet emission (deploykit.QuadletConfig.CharlyBin, the encrypted-mount
+// ExecStartPre line) shared until now. Falls back to os.Executable() only as a last resort (an
+// old core build that predates the host_env_json wiring) so a missing seam degrades to the
+// pre-fix behavior rather than an empty path.
 func resolveHostCharlyBin(hostEnvJSON []byte) string {
 	if len(hostEnvJSON) > 0 {
 		var env spec.HostEnv
@@ -773,19 +766,11 @@ func updateAllDeployedQuadlets(ctx context.Context, ex *sdk.Executor, rt *kit.Re
 		envVars = kit.EnrichNoProxy(envVars, deploykit.DeployedContainerNames(dc))
 		resolvedNetwork, _ := kit.ResolveNetwork(meta.Network, rt.RunEngine)
 
-		var detectRep spec.PodConfigDetectDevicesReply
-		_ = hostBuild(ctx, ex, podConfigDetectDevicesKind, spec.PodConfigDetectDevicesRequest{}, &detectRep)
-		var detected spec.DetectedDevices
-		if len(detectRep.DetectedJSON) > 0 {
-			if err := json.Unmarshal(detectRep.DetectedJSON, &detected); err != nil {
-				// Matches this loop's established per-entry-failure convention (warn + continue to the
-				// next deploy — one broken entry must not abort the whole --update-all batch), rather
-				// than silently proceeding with an empty DetectedDevices (which would drop GPU device
-				// nodes from security.Devices for THIS entry only, without any signal that happened).
-				fmt.Fprintf(os.Stderr, "Warning: decoding detected devices for %s: %v\n", key, err)
-				continue
-			}
-		}
+		// Device detection runs plugin-side (detect_devices.go). The former seam call passed an
+		// empty request (NoAutoDetect=false, Engine="") and SWALLOWED the error — the
+		// never-failing detectDevices helper matches that (a probe miss degrades to zero devices
+		// + a stderr note, never aborts the batch).
+		detected := detectDevices(ctx, ex, false, "")
 
 		var deployVolumes []spec.DeployVolume
 		var deploySidecarsRaw map[string]json.RawMessage
@@ -844,7 +829,7 @@ func updateAllDeployedQuadlets(ctx context.Context, ex *sdk.Executor, rt *kit.Re
 		var resolvedSidecars []deploykit.ResolvedSidecar
 		podName := ""
 		if len(deploySidecarsRaw) > 0 {
-			scRes, err := resolvePodSidecars(ctx, ex, deploySidecarsRaw, sidecarTemplatesOf(dc), nil, boxName, instance, rt.RunEngine, true, nil)
+			scRes, err := resolvePodSidecars(ctx, ex, deploySidecarsRaw, deploykit.SidecarTemplatesOf(dc), nil, boxName, instance, rt.RunEngine, true, nil)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: resolving sidecars for %s: %v\n", key, err)
 				continue

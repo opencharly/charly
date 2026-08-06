@@ -13,10 +13,9 @@ import (
 // TestQuadletSecretDirectives/TestQuadletSecretEnvDirectives assert deploykit.GenerateQuadlet
 // directly, zero charly coupling; the Step-4 ResolveSecretValue tests need a
 // CredentialResolver-shaped callback — charly's own version is backed by its
-// package-main-internal CredentialStore adapter (credential_plugin.go), so this ports a
-// standalone in-memory fake (mirroring charly/credential_fake_test.go's fakeCredentialStore) +
-// a local closure replicating ResolveCredential's env-var-then-store precedence, rather than
-// reaching into charly core.
+// package-main-internal credential adapter (credential_plugin.go), so this ports a standalone
+// in-memory fake + a local closure replicating ResolveCredential's env-var-then-store
+// precedence, rather than reaching into charly core.
 
 func TestQuadletSecretDirectives(t *testing.T) {
 	cfg := deploykit.QuadletConfig{

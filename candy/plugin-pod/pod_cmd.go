@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/loaderkit"
@@ -30,14 +31,13 @@ import (
 // remove is FULLY ported too (option (b), full parity with the other 6 verbs): its WHOLE
 // orchestration — tunnel-stop (remove_tunnel.go, verb:tunnel over InvokeProvider) AND the
 // quadlet/container-teardown/hook/cleanup body (remove_orchestration.go's runPodRemove) — runs
-// HERE now. Two axes still reach the host, each over its own EXISTING narrow seam (no new
-// mechanism, R3): the credential-backed hook env (pod-config-hook-secret-env) and the deploy-entry
-// cleanup's registry-resugar (the NEW pod-config-clean-deploy-entry, a narrow host-owns-
-// load+lock+mutate+save seam — the plugin-side whole-config deploy-state writes don't fit, see
-// remove_orchestration.go's header for the demonstrated mismatch). The arbiter-release bracket
-// (CHARLY_PREEMPT_LEASE-gated host-process state) stays under the "pod-lifecycle" HostBuild
-// op="remove" (#55 W3 A10b unified the former dedicated "pod-remove" kind into this one), deferred
-// here as the LAST step — same shape as pod start/stop's own bracket.
+// HERE now. The two former host-coupled axes are BOTH retired: the credential-backed hook env is
+// resolved plugin-side (deploykit.ResolveHookSecretEnv + verb:credential, the retired
+// pod-config-hook-secret-env seam) and the deploy-entry cleanup runs plugin-side
+// (deploykit.CleanDeployEntry via loader-threaded Primaries, the deleted pod-config-clean-deploy-entry
+// seam). The arbiter-release bracket (CHARLY_PREEMPT_LEASE-gated host-process state) stays under
+// the "pod-lifecycle" HostBuild op="remove" (#55 W3 A10b unified the former dedicated "pod-remove"
+// kind into this one), deferred here as the LAST step — same shape as pod start/stop's own bracket.
 //
 // RDD caught a real latent placement bug mid-port (see remove_orchestration.go's header): two
 // deploykit calls that "looked" portable (resolveSidecarNames' LoadBundleConfig,
@@ -395,7 +395,8 @@ type CpCmd struct {
 // ConfigCmd groups box configuration subcommands — the `charly config` grammar. Default
 // subcommand (no keyword): full setup (quadlet + secrets + enc). Every leaf's actual body is
 // deeply core-type-coupled (BundleConfig/ResolvedSidecar/enc*/deploykit.CleanDeployEntry, and
-// Setup is ALSO constructed directly, by its EXACT unchanged name, by bundle_from_box_cmd.go —
+// Setup is ALSO constructed directly, by its EXACT unchanged name, by from_box_pod.go (the
+// `charly bundle from-box` pod path, K-wave 2 cone R2 — formerly charly/bundle_from_box_cmd.go) —
 // P13-kernel, out of this wave's scope — so the core struct cannot rename/move), so each leaf
 // forwards via its own HostBuild("pod-config-<leaf>") seam.
 type ConfigCmd struct {
@@ -439,7 +440,7 @@ type ConfigSetupCmd struct {
 }
 
 func (c *ConfigSetupCmd) Run() error {
-	return hostPodSeam("pod-config-setup", spec.PodConfigSetupRequest{
+	reqJSON, err := json.Marshal(spec.PodConfigSetupRequest{
 		Box:           c.Box,
 		Tag:           c.Tag,
 		Build:         c.Build,
@@ -466,7 +467,34 @@ func (c *ConfigSetupCmd) Run() error {
 		Sidecar:       c.Sidecar,
 		ListSidecars:  c.ListSidecars,
 		NoAutoDetect:  c.NoAutoDetect,
+		// HostEnvJSON is threaded as DATA on the OpRun dispatch (compiled-in ⇒ this plugin's own
+		// os.Executable() would be correct, but the host computes it once for every command) —
+		// deploy:pod's encrypted-mount ExecStartPre CharlyBin line reads it.
+		HostEnvJSON: cmdHostEnvJSON,
 	})
+	if err != nil {
+		return fmt.Errorf("config setup: %w", err)
+	}
+	resJSON, err := dispatchPodConfigOp(sdk.OpConfigSetup, reqJSON)
+	if err != nil {
+		return err
+	}
+	// The deploy:pod plugin is out-of-process, so ITS stdout (where the former in-plugin
+	// --list-sidecars print lived) is go-plugin-discarded — the list now returns in the reply
+	// and is printed HERE, in the charly CLI's own stdio (the P13-KERNEL pre-existing
+	// invisible-output bug fixed with the list-sidecars leg relocation, K-wave 2 cone R3).
+	var rep spec.PodConfigSetupReply
+	if len(resJSON) > 0 {
+		_ = json.Unmarshal(resJSON, &rep)
+	}
+	if len(rep.SidecarList.Names) > 0 {
+		names := append([]string{}, rep.SidecarList.Names...)
+		sort.Strings(names)
+		for _, name := range names {
+			fmt.Printf("%-20s %s\n", name, rep.SidecarList.Descriptions[name])
+		}
+	}
+	return nil
 }
 
 // ConfigStatusCmd shows status of all services
@@ -518,7 +546,14 @@ type ConfigRemoveCmd struct {
 }
 
 func (c *ConfigRemoveCmd) Run() error {
-	return hostPodSeam("pod-config-remove", spec.PodConfigRemoveRequest{Box: c.Box, Instance: c.Instance})
+	reqJSON, err := json.Marshal(spec.PodConfigRemoveRequest{Box: c.Box, Instance: c.Instance})
+	if err != nil {
+		return fmt.Errorf("config remove: %w", err)
+	}
+	if _, err := dispatchPodConfigOp(sdk.OpConfigRemove, reqJSON); err != nil {
+		return err
+	}
+	return nil
 }
 
 // UpdateCmd updates an image (pulls/builds the latest), preserves the existing deploy config
@@ -542,43 +577,81 @@ func (c *UpdateCmd) Run() error {
 		return fmt.Errorf("remote refs are not accepted here; run 'charly box pull %s' first", c.Box)
 	}
 	c.Box, c.Instance = deploykit.CanonicalizeDeployArg(c.Box, c.Instance)
-	// Resolve the merged deploy tree PLUGIN-SIDE and thread it into the seam as DATA — the #55 Cone
-	// A Unit 3b tree-threading that replaced the host dispatchByDeployTarget's former core
-	// merged-tree read.
-	treeJSON, err := resolveDeployTreeJSON(c.Box)
+	// Resolve the deploy node PLUGIN-SIDE (merged tree → full deploy key) and thread the node
+	// into the seam as DATA — the K-wave 2 cone CONTESTED completion of the #55 Cone A Unit 3b
+	// tree-threading: the host's dispatchByDeployTarget needs the node, not the whole tree.
+	node, err := resolveUpdateDeployNode(c.Box, c.Instance)
 	if err != nil {
 		return err
 	}
-	return hostPodLifecycle("update", c.Box, c.Instance, nil, spec.PodUpdatePayload{
+	noteUpdateDisposability(node, c.Box, c.Instance)
+	return hostPodLifecycle("update", c.Box, c.Instance, node, spec.PodUpdatePayload{
 		Tag:       c.Tag,
 		Build:     c.Build,
 		Seed:      c.Seed,
 		ForceSeed: c.ForceSeed,
 		DataFrom:  c.DataFrom,
-		TreeJSON:  treeJSON,
 	})
 }
 
-// resolveDeployTreeJSON resolves the merged project+operator deploy tree PLUGIN-SIDE
-// (loaderkit.ResolveMergedTreeViaExecutor) and marshals it for threading into the "pod-lifecycle"
-// op="update" payload as DATA, so the host dispatchByDeployTarget stops re-loading the tree via the core
-// a host merged-tree read (#55 Cone A Unit 3b). The "deploy-plugins-connect" preamble connects the
-// deployment's out-of-tree plugin candies (the host's ResolveTarget needs them) and returns the
-// project dir the loader loads from — the SAME preamble command:bundle's resolveTreeViaLoader runs.
-// A tree-absent project marshals to a null tree, which the host handler reports as "no charly.yml".
-func resolveDeployTreeJSON(deployName string) ([]byte, error) {
+// resolveUpdateDeployNode resolves the deploy entry for an `charly update` invocation by the FULL
+// deploy key, resolving the merged project+operator deploy tree PLUGIN-SIDE
+// (loaderkit.ResolveMergedTreeViaExecutor) and looking the key up in it. deployKey applies the
+// -i instance, returning the bare (or dotted-nested) name unchanged when instance is empty — so
+// `charly update <base> -i <inst>` finds the instance-keyed `<base>/<inst>` entry, plain names
+// still resolve, and dotted nested paths (`a.b.c`) still walk. On miss the error reports the full
+// key. The "deploy-plugins-connect" preamble connects the deployment's out-of-tree plugin candies
+// (the host's ResolveTarget needs them) and returns the project dir the loader loads from — the
+// SAME preamble command:bundle's resolveTreeViaLoader runs. Relocated from
+// charly/update_deploy_dispatch.go (K-wave 2 cone CONTESTED).
+func resolveUpdateDeployNode(image, instance string) (*spec.Deploy, error) {
 	if cmdExec == nil {
 		return nil, fmt.Errorf("pod update: no host reverse channel (command not compiled-in?)")
 	}
 	var pre spec.DeployPluginsConnectReply
-	if err := hostPodSeamReply("deploy-plugins-connect", spec.DeployPluginsConnectRequest{Path: deployName}, &pre); err != nil {
+	if err := hostPodSeamReply("deploy-plugins-connect", spec.DeployPluginsConnectRequest{Path: image}, &pre); err != nil {
 		return nil, err
 	}
 	tree, err := loaderkit.ResolveMergedTreeViaExecutor(cmdCtx, cmdExec, pre.Dir)
 	if err != nil {
 		return nil, err
 	}
-	return json.Marshal(tree)
+	return lookupDeployNode(tree, image, instance)
+}
+
+// lookupDeployNode walks the merged deploy tree for the FULL deploy key — the pure
+// spec.ResolveNodePath step, split out for the unit test. deployKey applies the -i instance
+// (returning the bare or dotted-nested name unchanged when instance is empty), so an
+// instance-only `<base>/<inst>` entry resolves and a bare-base lookup correctly does NOT match it.
+func lookupDeployNode(tree map[string]spec.BundleNode, image, instance string) (*spec.Deploy, error) {
+	key := spec.DeployKey(image, instance)
+	node, _, err := spec.ResolveNodePath(tree, key)
+	if err != nil || node == nil {
+		return nil, fmt.Errorf("no deploy named %q in charly.yml. To refresh an image artifact only, use 'charly box pull %s'", key, image)
+	}
+	return node, nil
+}
+
+// noteUpdateDisposability prints a one-line transparency note when an EXPLICIT `charly update`
+// targets a deploy that is NOT marked `disposable: true` (and not ephemeral — see IsDisposable()
+// for the implication chain). It NEVER refuses: `charly update` is a human-driven verb that obeys
+// any explicit invocation on any target. The `disposable:` flag remains load-bearing as the
+// authorization for the AI's AUTONOMOUS destroy + rebuild (CLAUDE.md R10) and for the
+// check-runner's unattended fresh-rebuild (validateCheckBeds) — it just no longer gates this
+// command. The note lets an operator catch a mistyped name before the rebuild proceeds.
+// Relocated from charly/update_deploy_dispatch.go (K-wave 2 cone CONTESTED).
+func noteUpdateDisposability(node *spec.Deploy, image, instance string) {
+	if node == nil || node.IsDisposable() {
+		return
+	}
+	key := spec.DeployKey(image, instance)
+	lifecycle := node.Lifecycle
+	if lifecycle == "" {
+		lifecycle = "(unset)"
+	}
+	fmt.Fprintf(os.Stderr,
+		"Note: %q is not marked `disposable: true` (lifecycle: %s); rebuilding it anyway per your explicit `charly update`.\n",
+		key, lifecycle)
 }
 
 func (c *CpCmd) Run() error {

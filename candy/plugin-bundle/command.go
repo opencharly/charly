@@ -13,8 +13,9 @@ import (
 
 // command.go is the command:bundle leg — the `charly bundle …` CLI, COMPILED-IN (F8). It dispatches
 // IN-PROC via Invoke(OpRun): the reverse-channel executor is stashed (setCommandContext) so the
-// moved BundleCmd handlers reach their host seams (deploy-add / deploy-del / deploy-from-box /
-// deploy-config), then the pass-through args are kong-parsed into the BundleCmd
+// moved BundleCmd handlers reach their host seams (deploy-add / deploy-del / deploy-config —
+// from-box is fully plugin-side since K-wave 2 cone R2), then the pass-through args are
+// kong-parsed into the BundleCmd
 // tree and run. Because in-proc dispatch runs in charly's OWN process, the handlers inherit charly's
 // real stdin/stdout/stderr/TTY natively — which keeps `charly bundle add`'s interactive prompts and
 // dry-run output working exactly as before. Mirrors candy/plugin-vm/command.go.
@@ -27,7 +28,8 @@ import (
 // OpDeployDispatch (S3b — the ONE generic envelope every former UnifiedDeployTarget/LifecycleTarget
 // method dispatches through, see deploy_target.go). The plugin drives the WHOLE tree walk itself
 // (walk.go) and calls the deploy-plugins-connect / resolve-target-add / deploy-members-* /
-// deploy-del-resolve / deploy-node-del-dispatch seams directly.
+// deploy-node-del-dispatch seams directly (the del RESOLUTION runs plugin-side, del_resolve.go —
+// the deploy-del-resolve seam is DELETED, K-wave 2 cone R2 bank C).
 func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 	switch req.GetOp() {
 	case sdk.OpRun:
@@ -118,13 +120,19 @@ func runBundleCommand(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRep
 	}
 	setCommandContext(ctx, exec)
 	var in struct {
-		Args []string `json:"args"`
+		Args        []string        `json:"args"`
+		HostEnvJSON json.RawMessage `json:"host_env_json"`
 	}
 	if len(req.GetParamsJson()) > 0 {
 		if err := json.Unmarshal(req.GetParamsJson(), &in); err != nil {
 			return nil, fmt.Errorf("bundle command: decode args: %w", err)
 		}
 	}
+	// Stash the host-side spec.HostEnv threaded as DATA on the OpRun dispatch (core computes it —
+	// os.Executable() is only correct in-core, R10 bed-found bug #5). The from-box pod path reads
+	// it to populate PodConfigSetupRequest.HostEnvJSON (deploy:pod's encrypted-mount ExecStartPre
+	// CharlyBin line).
+	cmdHostEnvJSON = in.HostEnvJSON
 	if rerr := dispatchBundleCLI(in.Args); rerr != nil {
 		return nil, rerr
 	}

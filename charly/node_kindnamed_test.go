@@ -4,6 +4,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/opencharly/spec/spec"
+	"gopkg.in/yaml.v3"
 )
 
 // TestNodeForm_KindNamedEntity is the regression test for an entity NAMED after a
@@ -17,9 +20,13 @@ import (
 //     discriminator) and reports kit.DocShapeNode — so the box named `k8s` is parsed
 //     as a node-form image (a candy: node with base:), not mis-decoded as a k8s-kind
 //     entity.
-//   - validateVocabularyCollections (the root-shape collection validator) would
-//     read top-level `k8s:` as the k8s collection and validate the `candy` child
-//     against #K8s; it skips node-form files (isNodeFormFile).
+//   - the document CLASSIFIER must independently report node-form for the same
+//     file, because every validate path that reads a root manifest gates on that
+//     classification: `charly box validate`'s step-typo pass (candy/plugin-box's
+//     validateProjectCUESchemas → isNodeFormFile) runs the closed #Step/#Op gate
+//     ONLY on a node-form file, and a file misread as root-shape is hard-rejected
+//     at load with a `charly migrate` hint. Misread, top-level `k8s:` looks like
+//     the k8s collection and its `candy` child gets validated against #K8s.
 //
 // Without either fix this test FAILS (load error / validation error).
 func TestNodeForm_KindNamedEntity(t *testing.T) {
@@ -52,10 +59,17 @@ discover:
 		t.Errorf("k8s box base = %q, want fedora (misdecoded as a k8s-kind entity?)", b.Base)
 	}
 
-	// The legacy root-shape collection validator must SKIP this node-form file
-	// (kit.ClassifyDoc → kit.DocShapeNode), or it validates the `box` child against #K8s.
+	// The classifier must report node-form for this file — the same spec.ClassifyDoc verdict
+	// candy/plugin-box's isNodeFormFile gates the step-typo pass on. Asserted directly (rather than
+	// through that plugin helper, which lives in a different module) so this stays a pure
+	// classifier regression test.
 	data, _ := os.ReadFile(filepath.Join(dir, "box", "k8s", "charly.yml"))
-	if !isNodeFormFile(data) {
-		t.Error("kind-named node-form file not recognized as node-form — the legacy collection validator would misvalidate it")
+	var node yaml.Node
+	if err := yaml.Unmarshal(data, &node); err != nil {
+		t.Fatalf("kind-named manifest did not parse as YAML: %v", err)
+	}
+	shape, cerr := spec.ClassifyDoc(&node)
+	if cerr != nil || shape != spec.DocShapeNode {
+		t.Errorf("kind-named file classified as %v (err %v), want DocShapeNode — a validate path would misvalidate it", shape, cerr)
 	}
 }

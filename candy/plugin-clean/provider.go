@@ -15,8 +15,9 @@ import (
 // retention ENGINE (retention.go) this plugin now OWNS (K1-alpha core-minimization relocation,
 // mirroring verb:credential/verb:gpu/verb:tunnel). The host's command dispatch
 // (provider_command_external.go dispatchInProcCommand) invokes command:clean in-process with the
-// pass-through args + the threaded in-proc reverse channel, so runCleanCLI can HostBuild the ONE
-// remaining host-coupled piece ("retention-defaults"). verb:retention is invoked directly by peer
+// pass-through args + the threaded in-proc reverse channel, so runCleanCLI resolves the keep-
+// defaults via the loader reverse channel (K-wave 2 cone R6 — the "retention-defaults" HostBuild
+// seam is DELETED). verb:retention is invoked directly by peer
 // plugins (candy/plugin-box's post-build prune + `box list tags`, candy/plugin-check's post-run
 // prune, all over InvokeProvider — NO core adapter remains, charly/retention_plugin.go is
 // DELETED, #118) with an ALREADY-RESOLVED spec.RetentionRequest — no reverse channel needed for

@@ -51,13 +51,16 @@ func NewMeta() pb.PluginMetaServer {
 	}, nil)
 }
 
-type provider struct{ pb.UnimplementedProviderServer }
-
-// ParseDoc implements spec.DocParser — the typed per-document parse the host calls for every
-// config document (compiled-in, no wire envelope). The default charly node-form parse, delegating
-// to the ONE copy in sdk/loaderkit.
-func (*provider) ParseDoc(doc *yaml.Node, t spec.Threaded) (map[string]*yaml.Node, spec.ParsedProject, error) {
-	return loaderkit.ParseDoc(doc, t)
+// provider embeds loaderkit.DocParser, so ParseDoc — the typed per-document parse the host calls
+// for every config document (compiled-in, no wire envelope) — is the PROMOTED method of the ONE
+// shared adapter in sdk/loaderkit (doc_parser.go). The hand-written forward that used to live here
+// was the ONLY binding between spec.DocParser and loaderkit.ParseDoc, which left a second consumer
+// (candy/plugin-box's CUE-conformance validate rules, folded in by K-wave 2 cone R1) no way to
+// reach the default parse without duplicating the adapter in its own module; exporting it beside
+// its mechanism keeps exactly one copy (R3).
+type provider struct {
+	pb.UnimplementedProviderServer
+	loaderkit.DocParser
 }
 
 // WalkProject implements spec.ProjectWalker — the typed whole-project WALK the host calls once
@@ -76,6 +79,21 @@ func (*provider) WalkProject(rootDir string, rootData []byte, rootIdentity strin
 		rootIdentity = loaderkit.RootRepoIdentity(rootDir)
 	}
 	return loaderkit.Walk(rootDir, rootData, rootIdentity, seams)
+}
+
+// ParseCandyManifest implements spec.CandyScanner — the candy-MANIFEST parse, delegating to the ONE
+// copy in sdk/loaderkit (K-wave 2 cone R1, A2 unit 2, relocated from charly/layers.go's
+// parseCandyYAML). charly core reaches it here because charly/ may not import sdk/loaderkit; the
+// plugin-side scan drivers (candy/plugin-build) call loaderkit.ParseCandyManifest directly.
+func (*provider) ParseCandyManifest(path string, t spec.Threaded, vocab spec.CandyVocab) (*spec.Candy, error) {
+	return loaderkit.ParseCandyManifest(path, t, vocab)
+}
+
+// ProjectCandiesScanned implements spec.CandyScanner — the project's own candy scan off an
+// already-loaded *spec.UnifiedFile, delegating to the ONE copy in sdk/loaderkit (K-wave 2 cone R1,
+// A2 unit 3, relocated from charly/unified.go).
+func (*provider) ProjectCandiesScanned(uf *spec.UnifiedFile, rootDir string, parseDoc func(path string) (*spec.Candy, error)) (map[string]spec.ScannedCandy, error) {
+	return loaderkit.ProjectCandiesScanned(uf, rootDir, parseDoc)
 }
 
 // ScanCandyManifest implements spec.CandyScanner — the typed CANDY-SCAN the host calls once per
@@ -135,28 +153,34 @@ func (*provider) DecodeEntityViaCUE(node *yaml.Node, t reflect.Type, out any, la
 // ValidateEntityClosedCUE implements spec.ProjectLoader — the typed closed-schema entity check the
 // host calls (compiled-in, no wire envelope): delegates to the ONE copy of the relocated
 // CUE-validate mechanism in sdk/loaderkit (K1 unit 2).
-func (*provider) ValidateEntityClosedCUE(cs spec.CueSchema, kind, label string, entity cue.Value) error {
-	return loaderkit.ValidateEntityClosedCUE(cs, kind, label, entity)
+func (*provider) ValidateEntityClosedCUE(kind, label string, entity cue.Value) error {
+	return loaderkit.ValidateEntityClosedCUE(kind, label, entity)
+}
+
+// ValidateEntityCUE implements spec.ProjectLoader — the CONCRETE entity check (closedness plus
+// missing-required / unresolved disjunctions), delegating to the ONE copy in sdk/loaderkit.
+func (*provider) ValidateEntityCUE(kind, label string, entity cue.Value) error {
+	return loaderkit.ValidateEntityCUE(kind, label, entity)
 }
 
 // CueDocFromYAML implements spec.ProjectLoader — the typed YAML→cue.Value ingest the host calls
 // (compiled-in, no wire envelope): delegates to the ONE copy in sdk/loaderkit (K1 unit 2).
-func (*provider) CueDocFromYAML(cs spec.CueSchema, path string, data []byte) (cue.Value, error) {
-	return loaderkit.CueDocFromYAML(cs, path, data)
+func (*provider) CueDocFromYAML(path string, data []byte) (cue.Value, error) {
+	return loaderkit.CueDocFromYAML(path, data)
 }
 
 // ValidateNodeDocCUE implements spec.ProjectLoader — the typed load-time #NodeDoc structural gate
 // the host calls (compiled-in, no wire envelope): delegates to the ONE copy in sdk/loaderkit (K1
 // unit 2).
-func (*provider) ValidateNodeDocCUE(cs spec.CueSchema, label string, data []byte) error {
-	return loaderkit.ValidateNodeDocCUE(cs, label, data)
+func (*provider) ValidateNodeDocCUE(label string, data []byte) error {
+	return loaderkit.ValidateNodeDocCUE(label, data)
 }
 
 // ApplyCueDefaults implements spec.ProjectLoader — the typed post-merge schema-defaults fill the
 // host calls (compiled-in, no wire envelope): delegates to the ONE copy in sdk/loaderkit (K1 unit
 // 2).
-func (*provider) ApplyCueDefaults(cs spec.CueSchema, kind string, out any) error {
-	return loaderkit.ApplyCueDefaults(cs, kind, out)
+func (*provider) ApplyCueDefaults(kind string, out any) error {
+	return loaderkit.ApplyCueDefaults(kind, out)
 }
 
 // IsResourceDisc / BundleTargetForDisc / SetBundleCrossRef / IsStandaloneResourceKind /
@@ -227,12 +251,12 @@ func (*provider) ResourceChildren(pn spec.ParsedNode) []spec.ParsedNode {
 // ValidateCandyManifestCUE / ValidateNodeFormSteps implement spec.ProjectLoader — the typed
 // box-validate entity-tree walk the host calls (compiled-in, no wire envelope): delegate to the
 // ONE copy in sdk/loaderkit (K1 unit 3c).
-func (*provider) ValidateCandyManifestCUE(path string, data []byte, t spec.Threaded, parser spec.DocParser, cs spec.CueSchema) error {
-	return loaderkit.ValidateCandyManifestCUE(path, data, t, parser, cs)
+func (*provider) ValidateCandyManifestCUE(path string, data []byte, t spec.Threaded, parser spec.DocParser) error {
+	return loaderkit.ValidateCandyManifestCUE(path, data, t, parser)
 }
 
-func (*provider) ValidateNodeFormSteps(path string, data []byte, t spec.Threaded, parser spec.DocParser, cs spec.CueSchema) error {
-	return loaderkit.ValidateNodeFormSteps(path, data, t, parser, cs)
+func (*provider) ValidateNodeFormSteps(path string, data []byte, t spec.Threaded, parser spec.DocParser) error {
+	return loaderkit.ValidateNodeFormSteps(path, data, t, parser)
 }
 
 // ResolveMergedDeployTree implements spec.ProjectLoader — the merged project+overlay deploy-node
@@ -290,12 +314,22 @@ func (*provider) FinalizeScannedCandies(scanned map[string]spec.ScannedCandy, in
 
 // EnsureRepoDownloaded / CollectRemoteRefsOpts implement spec.ProjectLoader — the typed remote-repo
 // fetch orchestration + candy-ref collection mechanism the host calls (compiled-in, no wire
-// envelope): delegate to the ONE copy in sdk/loaderkit (K1 unit 4).
-func (*provider) EnsureRepoDownloaded(repoPath, version string, seams spec.RefsCollectSeams) (string, error) {
+// envelope): delegate to the ONE copy in sdk/loaderkit (K1 unit 4). Since K-wave 2 cone R1 the
+// host-coupled legs are built HERE (refs_seams.go) off the ctx-threaded executor rather than handed
+// in by charly core — see that file for why core assembling them was an R-item, not a mechanism.
+func (*provider) EnsureRepoDownloaded(ctx context.Context, repoPath, version string) (string, error) {
+	seams, err := refsSeams(ctx)
+	if err != nil {
+		return "", err
+	}
 	return loaderkit.EnsureRepoDownloaded(repoPath, version, seams)
 }
 
-func (*provider) CollectRemoteRefsOpts(cfg *spec.Config, layers map[string]spec.CandyReader, opts spec.ResolveOpts, seams spec.RefsCollectSeams) ([]spec.RemoteDownload, error) {
+func (*provider) CollectRemoteRefsOpts(ctx context.Context, cfg *spec.Config, layers map[string]spec.CandyReader, opts spec.ResolveOpts) ([]spec.RemoteDownload, error) {
+	seams, err := refsSeams(ctx)
+	if err != nil {
+		return nil, err
+	}
 	return loaderkit.CollectRemoteRefsOpts(cfg, layers, opts, seams)
 }
 

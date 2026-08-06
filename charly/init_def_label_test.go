@@ -14,7 +14,7 @@ import (
 // file used to also carry — a pure sdk/deploykit + spec/container concern with
 // no charly dependency — moved to sdk/deploykit/init_def_label_test.go with a
 // literal *spec.CapabilityInitDef fixture in place of this vocab). Calls
-// spec.ProjectInitConfig directly (the canonical home, matching format_config.go's
+// spec.ProjectInitConfig directly (the canonical home, matching loader_threaded.go's
 // own production call) rather than the sdk/loaderkit re-export the original test
 // used — dropping the sdk/loaderkit import charly core doesn't otherwise need.
 func TestInitDefLabel_EmbeddedVocabNonSparse(t *testing.T) {

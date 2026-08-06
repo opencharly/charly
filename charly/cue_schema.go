@@ -1,18 +1,26 @@
 package main
 
-// CUE-validation Core. One compiled schema instance (every schema *.cue file
-// from the SDK's schema package unified — shared #Step lives once in
-// _common.cue, R3), a kind registry populated by each cue_kind_<name>.go via
-// init(), and a per-entity validator. Per-entity validation extracts an entity
-// (the `candy:` value of a legacy kind-keyed file, or each value of a
-// `pod:`/`k8s:`/… collection map) and unifies it with #<Kind>; a unified
-// node-form document is validated whole against #NodeDoc — the sole load gate.
-// The legacy shape-routing + hand-written validators are deleted; CUE is the
-// single schema source, and it travels WITH the spec module (github.com/opencharly/spec
-// owns schema + the generated spec types).
+// cue_schema.go — the KERNEL's own compiled CUE schema, kept for exactly two in-core mechanisms:
+// the plugin-schema SPLICE (plugin_loader.go unifies each plugin's served `schema_cue` onto this
+// base to gate its authored input) and the structural-kind VALUE gate (provider_kind_invoke.go's
+// validateKindValueCUE, which types a substrate/candy node's rich authored value against the kept
+// #<Kind>Value def before threading it to the plugin). Both are clause-M kernel mechanisms —
+// plugin loading and prescan-dispatch — so the schema they consume stays here with them.
+//
+// Everything ELSE this file used to hold left in K-wave 2, cone R1 (ruling 1): the kind→def table
+// (registerCueKind / cueKindDefs / cueKindDef, fed by nine per-kind cue_kind_<name>.go init()
+// files), the coreCueSchema() handle constructor, and the six same-named wrappers that threaded
+// that handle through the ProjectLoader seam. The loader owns its own compiled schema now
+// (sdk/loaderkit/cue_schema.go) and its CUE-validate entry points take no schema parameter, so
+// core neither builds a handle nor forwards one — the remaining call sites reach the loader
+// through requireProjectLoader() directly.
+//
+// The two copies never interoperate: a cue.Value is valid only within the cue.Context that built
+// it, and no call path mixes a value from one with a definition from the other.
 
 import (
 	"fmt"
+	"sync"
 
 	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/cuecontext"
@@ -20,111 +28,27 @@ import (
 
 	sdkschema "github.com/opencharly/spec/schema"
 	"github.com/opencharly/spec/schemaconcat"
-	"github.com/opencharly/spec/spec"
 )
 
-// cueSchemaCtx is the process-wide CUE context (schemas compile once, reuse).
-var cueSchemaCtx = cuecontext.New()
+// cueSchemaCtx is the kernel's CUE context — the one every splice/ingest/Unify call on
+// sharedCueSchema must use. LAZY: a compile costs ~11ms, and a command that touches neither the
+// plugin splice nor a structural-kind value (`charly version`) must not pay it.
+var cueSchemaCtx = sync.OnceValue(func() *cue.Context { return cuecontext.New() })
 
-// sharedCueSchema is every schema/*.cue file unified into one value (no package
-// clauses → one shared scope, so kind defs reference the shared #Step/#Context).
-// The concatenation is the SINGLE contract shared with the dev-time generator
-// (schemaconcat.ConcatSchema — R3), so the compiled schema can never drift from the
-// generated Go types. sdkschema.FS is the CUE schema source exported by the SDK
-// module (the contract repo) — files sit at the FS root, so this concatenates with
-// dir "." directly (K5 seam-death: the former `schemaFS = sdkschema.FS` re-export
-// var — the same const-vs-var alias shape the Op* repoint closed — is gone; both
-// call sites read sdkschema.FS directly).
-var sharedCueSchema = func() cue.Value {
+// sharedCueSchema is every schema/*.cue file unified into one value (the files carry no package
+// clause, so they share one scope and the per-kind defs reference the shared #Step/#Context). The
+// concatenation goes through the SINGLE contract shared with the dev-time generator
+// (schemaconcat.ConcatSchema — R3), so the compiled schema can never drift from the generated Go
+// types. sdkschema.FS is the CUE source exported by the spec module; its files sit at the FS root,
+// so this concatenates with dir "." directly.
+var sharedCueSchema = sync.OnceValue(func() cue.Value {
 	body, _, err := schemaconcat.ConcatSchema(sdkschema.FS, ".", nil)
 	if err != nil {
 		panic(fmt.Sprintf("read embedded schema: %v", err))
 	}
-	v := cueSchemaCtx.CompileString(body)
+	v := cueSchemaCtx().CompileString(body)
 	if v.Err() != nil {
 		panic(fmt.Sprintf("CUE schema failed to compile: %v", errors.Details(v.Err(), nil)))
 	}
 	return v
-}()
-
-// cueKindDefs maps a kind name to its entity definition path (e.g. "#Candy").
-var cueKindDefs = map[string]string{}
-
-// registerCueKind records that `kind` is validated by the CUE def at defPath.
-// Panics on a duplicate name or a def absent from the compiled schema —
-// fail-fast at process start (mirrors mustCalVer).
-func registerCueKind(kind, defPath string) {
-	if _, dup := cueKindDefs[kind]; dup {
-		panic(fmt.Sprintf("duplicate CUE kind registration: %q", kind))
-	}
-	if d := sharedCueSchema.LookupPath(cue.ParsePath(defPath)); d.Err() != nil {
-		panic(fmt.Sprintf("CUE kind %q: definition %s not found: %v", kind, defPath, d.Err()))
-	}
-	cueKindDefs[kind] = defPath
-}
-
-// cueKindDef returns the compiled entity definition for a kind.
-func cueKindDef(kind string) (cue.Value, bool) {
-	dp, ok := cueKindDefs[kind]
-	if !ok {
-		return cue.Value{}, false
-	}
-	return sharedCueSchema.LookupPath(cue.ParsePath(dp)), true
-}
-
-// coreCueSchema packages the process-wide compiled CUE schema handle every relocated
-// CUE-validate seam call passes through (K1 unit 2) — built fresh from the still-core D-data
-// (cueSchemaCtx / sharedCueSchema / cueKindDef, all unchanged above) so call sites never
-// reconstruct the struct by hand.
-func coreCueSchema() spec.CueSchema {
-	return spec.CueSchema{Ctx: cueSchemaCtx, Root: sharedCueSchema, KindDef: cueKindDef}
-}
-
-// validateEntityClosedCUE is now sdk/loaderkit.ValidateEntityClosedCUE (K1 unit 2); this file keeps
-// a same-named/same-signature core wrapper (R3, mirrors cueDocFromYAML/validateNodeDocCUE/
-// applyCueDefaults below) since validate.go and several corpus/tighten tests call it by that name.
-//
-// validateEntityClosedCUE unifies a single entity with #<Kind> and validates it WITHOUT requiring
-// concreteness — it catches closedness violations (unknown keys) and type/enum/regex conflicts,
-// but not missing-required fields. This is the LOAD-time check (restores the deleted unmarshalers'
-// typo-detection), AND (since c9befd83) the sole remaining `charly box validate` entity-schema
-// gate: its former sibling validateEntityCUE (concrete-required) was a dead-code-radical-removal-
-// batch deletion — every kind this project's schemas currently model has no meaningfully-required
-// field concreteness would catch beyond what closedness already does (verified against
-// #Box/#Builder: every field is optional or carries a default), and the modern load-time
-// plugin-kind gate (RDD-verified live: `plugin kind:<X>: plugin_input fails #<X>Input`) is the
-// actual production entity-schema enforcement path today, superseding the legacy per-kind Go-side
-// validateVocabularyCollections/validateEntityCUE pair (also deleted) for every kind beyond box.
-func validateEntityClosedCUE(kind, label string, entity cue.Value) error {
-	return requireProjectLoader().ValidateEntityClosedCUE(coreCueSchema(), kind, label, entity)
-}
-
-// assembleAndValidateEntitySteps/validateEntityNodeRec are now sdk/loaderkit's own internal
-// assembleAndValidateEntitySteps/ValidateEntityNodeRec (K1 unit 3c, completing the K1 unit 2
-// deferral) — pure recursion + CUE validate, zero registry coupling, so nothing outside loaderkit
-// calls them and no core wrapper is needed.
-
-// validateCandyManifestCUE is now sdk/loaderkit.ValidateCandyManifestCUE (K1 unit 3c); this file
-// keeps a same-named/same-signature core wrapper (R3) since validate.go calls it by this name. The
-// host supplies the registry-derived Threaded snapshot + the resolved DocParser (loaderkit never
-// queries the registry itself).
-func validateCandyManifestCUE(path string, data []byte) error {
-	return requireProjectLoader().ValidateCandyManifestCUE(path, data, loaderThreaded(), requireLoaderParser(), coreCueSchema())
-}
-
-// validateNodeFormSteps is now sdk/loaderkit.ValidateNodeFormSteps (K1 unit 3c); this file keeps a
-// same-named/same-signature core wrapper (R3) since validate.go calls it by this name.
-func validateNodeFormSteps(path string, data []byte) error {
-	return requireProjectLoader().ValidateNodeFormSteps(path, data, loaderThreaded(), requireLoaderParser(), coreCueSchema())
-}
-
-// cueDocFromYAML ingests one YAML document into a cue.Value (the whole doc) via the relocated
-// CUE-validate seam (sdk/loaderkit.CueDocFromYAML, K1 unit 2) — kept as a same-named/same-signature
-// core wrapper (R3): provider_kind_invoke.go (the TRUE clause-M kind dispatch) calls it directly,
-// and validate.go (K3 box-validate engine, deferred to W2 per the spike) calls it too. Its former
-// sibling callers assembleAndValidateEntitySteps/validateEntityNodeRec fully relocated to
-// loaderkit as unexported internals (K1 unit 3c) — they call sdk/loaderkit's own CueDocFromYAML
-// directly and no longer route through this core wrapper.
-func cueDocFromYAML(path string, data []byte) (cue.Value, error) {
-	return requireProjectLoader().CueDocFromYAML(coreCueSchema(), path, data)
-}
+})

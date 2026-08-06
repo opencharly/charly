@@ -22,8 +22,8 @@ import (
 // (plugin.go's own doc — same as its podman-storage access for image capabilities), so it does
 // the MkdirAll/WriteFile/ReadFile itself; egress validation is likewise reachable peer-to-peer via
 // exec.InvokeProvider(verb:egress, OpValidate) — the SAME resolve+Invoke shape
-// charly/egress.go's ValidateEgressValue ran against the core-private registry, just reached
-// through the executor instead.
+// candy/plugin-bundle/egress.go's ValidateEgressValue ran against the core-private registry, just
+// reached through the executor instead.
 //
 // Two callers reach materializeKustomize: deploy:k8s's own OpPreresolve (preresolve.go, which
 // already holds a live `exec` from its own Invoke) and, via the deploy:k8s OpEmit branch
@@ -169,7 +169,8 @@ func materializeKustomize(ctx context.Context, exec *sdk.Executor, req spec.K8sG
 	}, nil
 }
 
-// validateEgressValue is the peer-to-peer analogue of charly/egress.go's ValidateEgressValue: it
+// validateEgressValue is the peer-to-peer analogue of candy/plugin-bundle/egress.go's
+// ValidateEgressValue: it
 // marshals v to JSON and Invokes verb:egress's OpValidate through the executor (never the
 // core-private registry, which this plugin cannot reach directly) — same params shape
 // ({kind,label,mode,data}), same reply shape ({error}).

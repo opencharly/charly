@@ -2,36 +2,38 @@ package feature
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
 
 // command.go — the externalized `charly feature` command (list / pending / validate — inspect
 // plan-shaped descriptions). The plugin OWNS the subcommand grammar + the output formatting AND the
 // plan-to-summary transform (keyword/text/agent/check flattening + validatePlanSteps — kit.KeywordOf /
-// kit.ValidatePlanSteps / deploykit.DescriptionInfo are sdk-portable, K3); the genuine core subsystem
-// it can't hold — the unified LOADER (LoadConfig / ScanCandy — the kernel) — stays core and is reached
-// via the generic "feature" HostBuild seam, which enumerates every entity's RAW description + plan
-// into plain DATA (charly/host_build_feature.go, which needs no kit/deploykit import as a result). No
-// hidden `__feature-*` forward.
+// kit.ValidatePlanSteps / deploykit.DescriptionInfo are sdk-portable, K3). The project ENUMERATION
+// (formerly the "feature" HostBuild seam's body, charly/host_build_feature.go) is now PLUGIN-SIDE:
+// the loader is plugin-reachable (LoadUnifiedViaExecutor + ProjectCandiesScanned +
+// FinalizeScannedCandies, K-wave 2 cone R6 — the seam is DELETED), so the plugin drives the whole
+// project load itself over the reverse channel and flattens every entity's RAW description + plan
+// into plain spec.FeatureEntity data. No hidden `__feature-*` forward.
 //
 // (The Feature RUN verbs — `charly box feature run` / `charly check feature run` — stay children of
 // box/check in the core binary, NOT part of this plugin.)
 //
 // feature is COMPILED-IN (charly.yml compiled_plugins): its Invoke(OpRun) runs in charly's process and
-// gets the in-proc reverse channel (dispatchInProcCommand threads it), so HostBuild("feature") reaches
-// the host loader. The out-of-process CliMain path has no reverse channel, so it errors.
+// gets the in-proc reverse channel (dispatchInProcCommand threads it), so the loader resolve reaches
+// the host loader legs. The out-of-process CliMain path has no reverse channel, so it errors.
 
 const featureUsage = `usage: charly feature <list [kind] | pending [entity] | validate [entity]>`
 
-// runFeatureCLI dispatches the feature subcommand and formats the enumerated plan data the "feature"
-// HostBuild seam returns (the plugin owns list/pending/validate output; the loader stays core).
+// runFeatureCLI dispatches the feature subcommand and formats the enumerated plan data the plugin's
+// OWN enumeration returns (the plugin owns list/pending/validate output AND the load).
 func runFeatureCLI(ctx context.Context, exec *sdk.Executor, args []string) error {
 	if len(args) == 0 {
 		return fmt.Errorf("%s", featureUsage)
@@ -46,13 +48,17 @@ func runFeatureCLI(ctx context.Context, exec *sdk.Executor, args []string) error
 		fmt.Println(featureUsage)
 		return nil
 	case "list", "pending", "validate":
-		reply, err := hostFeature(ctx, exec, spec.FeatureRequest{Filter: filter})
+		dir, err := os.Getwd()
+		if err != nil {
+			return err
+		}
+		ents, err := enumerateFeatures(ctx, exec, dir, filter)
 		if err != nil {
 			return err
 		}
 		switch sub {
 		case "list":
-			for _, e := range reply.Entities {
+			for _, e := range ents {
 				steps := planSteps(e.Plan)
 				if e.Description == "" && len(steps) == 0 {
 					fmt.Printf("%s %s: (no description)\n", e.Kind, e.Name)
@@ -68,7 +74,7 @@ func runFeatureCLI(ctx context.Context, exec *sdk.Executor, args []string) error
 					e.Kind, e.Name, summary(e.Description), len(steps), plural(len(steps)), nChecks, plural(nChecks))
 			}
 		case "pending":
-			for _, e := range reply.Entities {
+			for _, e := range ents {
 				for _, s := range planSteps(e.Plan) {
 					if s.IsAgent {
 						fmt.Printf("%s:%s — step %d: %s %q (agent-graded)\n", e.Kind, e.Name, s.Index, s.Keyword, s.Text)
@@ -77,7 +83,7 @@ func runFeatureCLI(ctx context.Context, exec *sdk.Executor, args []string) error
 			}
 		case "validate":
 			var errs []string
-			for _, e := range reply.Entities {
+			for _, e := range ents {
 				if e.Description == "" && len(e.Plan) == 0 {
 					continue
 				}
@@ -97,6 +103,69 @@ func runFeatureCLI(ctx context.Context, exec *sdk.Executor, args []string) error
 	return nil
 }
 
+// enumerateFeatures loads the project PLUGIN-SIDE (LoadUnifiedViaExecutor over the reverse channel —
+// the former "feature" HostBuild seam's body, relocated K-wave 2 cone R6) and flattens every kind:
+// entity into plain spec.FeatureEntity RAW data (description + plan, untransformed). Content-less
+// candy layers are listed with empty data (the plugin renders them as "(no description)"); content-less
+// box images are omitted (matching the former engine). exec nil (out-of-process CliMain, no reverse
+// channel) → a clear error.
+func enumerateFeatures(ctx context.Context, exec *sdk.Executor, dir, filter string) ([]spec.FeatureEntity, error) {
+	if exec == nil {
+		return nil, fmt.Errorf("charly feature requires compiled-in placement (the loader reverse channel is unavailable out-of-process)")
+	}
+	uf, present, err := loaderkit.LoadUnifiedViaExecutor(ctx, exec, dir)
+	if err != nil {
+		return nil, fmt.Errorf("loading charly.yml: %w", err)
+	}
+	if !present || uf == nil {
+		return nil, fmt.Errorf("no charly.yml found in %s (run `charly box new project .` to scaffold one)", dir)
+	}
+	scanned, err := loaderkit.ProjectCandiesScanned(uf, dir, candyParseDoc(ctx, exec))
+	if err != nil {
+		return nil, err
+	}
+	return flattenFeatures(uf.ProjectConfig(), loaderkit.FinalizeScannedCandies(scanned, nil), filter), nil
+}
+
+// candyParseDoc is the per-candy-manifest parse seam the candy scan takes, bound to the registry
+// snapshot over the EXISTING "loader-threaded" host leg + the build vocabulary. The feature command
+// runs with the zero vocabulary (RegisterBuildVocabulary is only reached by the deploy path), so
+// spec.NewCandyVocab(nil) matches the former host path's bare-command behavior exactly.
+func candyParseDoc(ctx context.Context, exec *sdk.Executor) func(string) (*spec.CandyYAML, error) {
+	threaded := loaderkit.LoaderThreadedViaExecutor(ctx, exec)
+	return func(path string) (*spec.CandyYAML, error) {
+		return loaderkit.ParseCandyManifest(path, threaded, spec.NewCandyVocab(nil))
+	}
+}
+
+// flattenFeatures flattens the loaded project's candy readers + box config into raw
+// spec.FeatureEntity data, applying the filter (empty | a kind "candy"/"box" | an entity id
+// "candy:redis"). Split from enumerateFeatures so a unit test drives the flatten against synthetic
+// candy-reader + config data without an executor.
+func flattenFeatures(cfg *spec.Config, layers map[string]spec.CandyReader, filter string) []spec.FeatureEntity {
+	f := strings.ToLower(strings.TrimSpace(filter))
+	var ents []spec.FeatureEntity
+	add := func(kind, name, desc string, plan []spec.Step) {
+		eid := kind + ":" + name
+		if f != "" && f != eid && f != kind {
+			return
+		}
+		ents = append(ents, spec.FeatureEntity{Kind: kind, Name: name, Description: desc, Plan: plan})
+	}
+	for name, layer := range layers {
+		if layer != nil {
+			add("candy", name, layer.GetDescription(), layer.PlanSteps())
+		}
+	}
+	for _, name := range cfg.AllBoxNames() {
+		img, _ := cfg.BoxConfig(name)
+		if img.Description != "" || len(img.Plan) > 0 {
+			add("box", name, img.Description, img.Plan)
+		}
+	}
+	return ents
+}
+
 // plural returns the plural suffix for a count (matches the former in-core summarizeDesc).
 func plural(n int) string {
 	if n == 1 {
@@ -106,8 +175,8 @@ func plural(n int) string {
 }
 
 // stepSummary is one plan step flattened for list/pending output — the plugin's OWN transform of the
-// raw spec.Step the "feature" HostBuild seam ships (formerly computed host-side as spec.FeatureStep;
-// K3 moved the transform here since kit.KeywordOf/Step.KeywordText/Step.IsAgent are sdk-portable).
+// raw spec.Step the enumeration ships (formerly computed host-side as spec.FeatureStep; K3 moved the
+// transform here since kit.KeywordOf/Step.KeywordText/Step.IsAgent are sdk-portable).
 type stepSummary struct {
 	Index   int
 	Keyword string
@@ -139,28 +208,4 @@ func summary(desc string) string {
 		return s
 	}
 	return "(empty)"
-}
-
-// hostFeature enumerates the project's plans over the generic "feature" HostBuild kind. exec is nil on
-// the out-of-process cliMain path (no reverse channel) → a clear error.
-func hostFeature(ctx context.Context, exec *sdk.Executor, req spec.FeatureRequest) (spec.FeatureReply, error) {
-	if exec == nil {
-		return spec.FeatureReply{}, fmt.Errorf("charly feature requires compiled-in placement (the feature host seam is unavailable out-of-process)")
-	}
-	reqJSON, err := json.Marshal(req)
-	if err != nil {
-		return spec.FeatureReply{}, err
-	}
-	resJSON, err := exec.HostBuild(ctx, "feature", reqJSON)
-	if err != nil {
-		return spec.FeatureReply{}, err
-	}
-	var reply spec.FeatureReply
-	if uerr := json.Unmarshal(resJSON, &reply); uerr != nil {
-		return spec.FeatureReply{}, uerr
-	}
-	if reply.Error != "" {
-		return spec.FeatureReply{}, fmt.Errorf("%s", reply.Error)
-	}
-	return reply, nil
 }

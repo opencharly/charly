@@ -46,8 +46,9 @@ func sidecarBodyImage(t *testing.T, body json.RawMessage) string {
 // end-to-end through the REAL loader: a project `sidecar:` node lands in
 // uf.PluginKinds["sidecar"] as an OPAQUE body, and the Config.Sidecar /
 // BundleConfig.Sidecar projections carry the same opaque library — so every
-// downstream deploy/quadlet consumer is untouched. The binary-embedded `tailscale`
-// template rides in via applyEmbeddedDefaults.
+// downstream deploy/quadlet consumer is untouched. The embedded `tailscale` default
+// no longer rides in via applyEmbeddedDefaults (it moved to candy/plugin-deploy-pod's
+// own go:embed, K-wave 2 cone R3).
 func TestLoadUnified_SidecarPluginKind(t *testing.T) {
 	dir := t.TempDir()
 	doc := `version: "` + latestSchemaVersion.String() + `"
@@ -72,9 +73,11 @@ mysidecar:
 	if img := sidecarBodyImage(t, raw["mysidecar"]); img != "example.com/mysidecar:1" {
 		t.Errorf("mysidecar image = %q, want example.com/mysidecar:1", img)
 	}
-	// The binary-embedded `tailscale` template is merged in.
-	if _, ok := raw["tailscale"]; !ok {
-		t.Errorf("embedded tailscale template missing from PluginKinds[sidecar] (applyEmbeddedDefaults merge broken); keys %v", raw)
+	// The binary-embedded `tailscale` template is NO LONGER merged in — it moved into
+	// candy/plugin-deploy-pod's own go:embed (sidecar_embedded.go), K-wave 2 cone R3, so a
+	// project's PluginKinds["sidecar"] carries only the project's OWN sidecar declarations.
+	if _, ok := raw["tailscale"]; ok {
+		t.Errorf("embedded tailscale template should NOT be in PluginKinds[sidecar] anymore (moved to plugin-deploy-pod's go:embed); keys %v", raw)
 	}
 
 	// (2) The projections carry the same opaque library — the shape every deploy

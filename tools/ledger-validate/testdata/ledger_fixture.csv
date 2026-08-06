@@ -1,0 +1,5 @@
+file,baseline_loc,disposition,target_loc,cone
+pkg/gone.go,100,DELETE,0,C1
+pkg/thin.go,80,THIN,20,C1
+pkg/stay.go,50,STAY,,C2
+pkg/mixed.go,70,THIN-TBD,,C2

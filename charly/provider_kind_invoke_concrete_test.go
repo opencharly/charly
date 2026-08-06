@@ -6,7 +6,7 @@ import (
 
 // provider_kind_invoke_concrete_test.go is the INTEGRATION-level end-to-end proof that the vm
 // PCI-hostdev concreteness gap is closed — through the REAL production pipeline
-// (validateProjectForBuild → LoadUnified → foldSubstrateKind → dispatchKindOpValidate →
+// (dispatchValidateForTest → LoadUnified → foldSubstrateKind → dispatchKindOpValidate →
 // candy/plugin-substrate's compiled-in "vm" capability ops.OpValidate handler, validate_vm.go), not
 // a direct unit call into a host-side function. The check itself moved OUT of charly/ core (see
 // validateKindValueCUE's comment for the architecture-review history); its FOCUSED unit tests

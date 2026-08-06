@@ -9,19 +9,12 @@ package box
 // plugin-side loader candy/plugin-build/plugin-vm/plugin-bundle already share, K3-W2 unit 2) instead
 // of receiving it from the host's (now-slimmed) "validate-project-checks" seam.
 //
-// validateRemoteCandies did NOT move: it calls charly/refs.go's CollectRemoteRefs, which in turn
-// needs spec.RefsCollectSeams (Downloader/MigrateCache/ResolveLocal — registry-coupled host
-// callbacks with no existing executor-backed bridge, unlike LoadSeams). Moving it would require
-// building that bridge first — an IOU, not this unit's scope (north-star heuristic 3: "the move
-// WAITS for the enabler"). It stays host-side in charly/validate.go, documented in
-// charly/KERNEL_MANIFEST.md.
-//
-// The CUE-schema-conformance pair (validateCandyCUESchemas / validateProjectCUESchemas) also stay
-// host-side: they need the HOST's spliced cross-plugin CUE schema (cs.KindDef, built by splicing
-// every CONNECTED plugin's own schema fragment at registry/schema-gate time) — a live, non-
-// marshalable cue.Value graph, genuinely process-local. Per orchestrator ruling 3(c): NO new seam
-// family for this — they stay reached through the EXISTING "validate-project-checks" HostBuild seam
-// (charly/validate_project_host.go), now slimmed to exactly the CUE pair + validateRemoteCandies.
+// The CUE-schema-conformance pair and the remote-candy check followed them in K-wave 2 cone R1
+// unit B — see validate_schema_rules.go, which records why the two reasons this file's header used
+// to give for keeping them host-side ("they need the host's spliced cross-plugin CUE schema" and
+// "no executor-backed RefsCollectSeams bridge exists") were both already false when written. So the
+// whole `charly box validate` rule set runs plugin-side now, and the fat "validate-project-checks"
+// HostBuild seam is gone; the host answers only the registry question ("validate-word-sets").
 
 import (
 	"context"
@@ -38,7 +31,7 @@ import (
 // loadRawProjectConfig self-loads the raw *spec.Config + *spec.DistroConfig + *spec.BuilderConfig
 // for dir via the hoisted plugin-side loader witness — the same loaderkit.LoadUnifiedViaExecutor
 // candy/plugin-build/plugin-vm/plugin-bundle already call, plus the SAME
-// spec.ProjectDistroConfig/ProjectBuilderConfig projections charly/format_config.go's
+// spec.ProjectDistroConfig/ProjectBuilderConfig projections charly's LoadBuildConfigForBox
 // LoadBuildConfigForBox uses core-side. Returns (nil, nil, nil, nil) for a project-less directory
 // (mirrors the empty-project contract every other resolve path honours) — the caller's rules then
 // loop zero times, exactly like an absent host reply would.
@@ -82,15 +75,14 @@ func resolveDistroLegForValidate(ctx context.Context, ex *sdk.Executor) func(jso
 	}
 }
 
-// runRawConfigChecks self-loads dir's raw config + runs every moved pure rule, appending each
-// finding into e (the SAME vErr accumulator runAllValidations uses) — merged into the plugin's own
-// verdict alongside the host-natural (CUE + remote-candy) diagnostics and the resolved-envelope
-// rules. A project-less / load-failed dir contributes nothing (best-effort/additive, matching every
-// other resolve path's tolerance — a load failure is already surfaced by the OTHER two diagnostics
-// sources runValidateEngine merges).
-func runRawConfigChecks(ctx context.Context, ex *sdk.Executor, dir string, e *vErr) {
-	cfg, distroCfg, builderCfg, err := loadRawProjectConfig(ctx, ex, dir)
-	if err != nil || cfg == nil {
+// runRawConfigChecks runs every moved pure rule over the raw config the caller self-loaded
+// (loadRawProjectConfig, hoisted into runValidateEngine so ONE load feeds both these rules and the
+// CUE/remote-candy rules — R3), appending each finding into e (the SAME vErr accumulator
+// runAllValidations uses). A project-less / load-failed dir contributes nothing (best-effort and
+// additive, matching every other resolve path's tolerance — a load failure is already surfaced by
+// the resolved-envelope diagnostics runValidateEngine merges).
+func runRawConfigChecks(cfg *spec.Config, distroCfg *spec.DistroConfig, builderCfg *spec.BuilderConfig, e *vErr) {
+	if cfg == nil {
 		return
 	}
 	errs := &spec.ValidationError{}

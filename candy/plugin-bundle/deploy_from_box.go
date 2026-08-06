@@ -28,10 +28,11 @@ import (
 //
 // deploykit.CapabilitiesFromLabels is already 100% sdk-portable (package deploykit), unchanged.
 //
-// candy/plugin-bundle/bundle_cmd.go's BundleFromBoxCmd.Run() branches BEFORE forwarding to the
-// host: --cluster set → calls DeployFromBox here directly; --cluster empty → unchanged
-// hostDeploySeam("deploy-from-box", ...) for the pod path (charly/bundle_from_box_cmd.go, which
-// lost its now-dead Cluster/Namespace branch — R5).
+// candy/plugin-bundle/bundle_cmd.go's BundleFromBoxCmd.Run() branches between two fully
+// plugin-side paths: --cluster set → calls DeployFromBox here directly; --cluster empty →
+// runFromBoxPod (from_box_pod.go), which reaches deploy:pod's OpConfigSetup directly by
+// InvokeProvider — the former "deploy-from-box" HostBuild seam + charly/bundle_from_box_cmd.go are
+// DELETED (K-wave 2 cone R2 bank B).
 
 // DeployFromBoxOpts carries the source-less-deploy inputs.
 type DeployFromBoxOpts struct {

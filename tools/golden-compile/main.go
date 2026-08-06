@@ -427,7 +427,7 @@ func desugarOneCommandStep(step *yaml.Node) {
 // spec.OpInContext is a package-level DI hook deploykit.CompileOpSteps calls; this standalone
 // binary links no charly core (which normally wires it at init), so it's wired here. Pure —
 // spec.VerbCatalog is static data + the op's own declared Context, no registry consult. Ported
-// verbatim from charly/checkspec.go's opInContext/opEffectiveContexts (the same port
+// verbatim from charly/planrun_adapter.go's opInContext/opEffectiveContexts (the same port
 // candy/plugin-bundle's own test binary carries — each standalone binary needs its own copy).
 func init() {
 	spec.OpInContext = opInContext

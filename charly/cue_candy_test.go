@@ -27,7 +27,7 @@ func TestCandyCUESchema_Corpus(t *testing.T) {
 			continue
 		}
 		total++
-		if verr := validateCandyManifestCUE(p, data); verr != nil {
+		if verr := requireProjectLoader().ValidateCandyManifestCUE(p, data, loaderThreaded(), requireLoaderParser()); verr != nil {
 			fails = append(fails, verr.Error())
 		} else {
 			ok++

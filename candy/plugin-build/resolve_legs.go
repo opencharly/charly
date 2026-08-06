@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/buildkit"
@@ -106,107 +105,129 @@ func resolveResourceLeg(ctx context.Context, ex *sdk.Executor) func(json.RawMess
 
 // --- scan legs ---
 
-// scanLocalLeg runs the bootstrap-delicate local candy scan (parseCandyYAML→buildCandy) host-side and
-// returns the unfinalized ScannedCandy map (the plugin runs the finalize + remote fetch fixpoint).
-func scanLocalLeg(ctx context.Context, ex *sdk.Executor, rr spec.ResolvedProjectRequest) (map[string]spec.ScannedCandy, error) {
-	var out map[string]spec.ScannedCandy
-	if err := hostBuildJSON(ctx, ex, "buildengine-scan-local", rr, &out); err != nil {
-		return nil, err
-	}
-	return out, nil
+// scanLocalLeg scans the project's OWN candies into their unfinalized ScannedCandy form (the plugin
+// runs the finalize + remote fetch fixpoint over the result). It runs PLUGIN-SIDE over
+// loaderkit.ProjectCandiesScanned since K-wave 2 cone R1 (A2 unit 3); the `buildengine-scan-local`
+// host leg is DELETED.
+//
+// The leg existed because the scan's manifest parse appeared to need charly's clause-B buildCandy
+// factory — disproven by the unit-2 corpus spike — and because only the host held a loaded project.
+// Neither holds now: the caller already has `uf` from loaderkit.LoadUnifiedViaExecutor, whose walk
+// runs `discover:` at each project boundary exactly as the host's own LoadUnified + ApplyDiscover
+// pair did, so uf.Candy carries the discovered candies before this is called.
+//
+// The host leg's project-less fallback (legacyScanCandiesDirScanned, for a dir with no charly.yml)
+// has no plugin-side analogue and needs none: every caller returns the empty-project envelope before
+// reaching here when LoadUnifiedViaExecutor reports no project.
+func scanLocalLeg(ctx context.Context, ex *sdk.Executor, uf *spec.UnifiedFile, dir string, distroCfg *spec.DistroConfig) (map[string]spec.ScannedCandy, error) {
+	return loaderkit.ProjectCandiesScanned(uf, dir, parseCandyManifestLeg(ctx, ex, distroCfg))
 }
 
-// scanSeamsLeg wires the three host-coupled ScanSeams legs (the reachability-scoped remote-ref walk,
-// the git clone/cache, the per-candy remote manifest scan) the plugin's loaderkit.ScanCandyFromLocal
-// fetch fixpoint reaches for. localScanned reloads host-side (deterministic; identical to the plugin's).
-// EnsureRepo/ScanRemote are the cfg-agnostic shared host legs (hostEnsureRepoLeg/hostScanRemoteLeg),
-// reused by namespaceScanSeams (R3 — ONE copy of each).
-func scanSeamsLeg(ctx context.Context, ex *sdk.Executor, rr spec.ResolvedProjectRequest) loaderkit.ScanSeams {
+// scanSeamsLeg wires the ScanSeams legs the plugin's loaderkit.ScanCandyFromLocal fetch fixpoint
+// reaches for. Since K-wave 2 cone R1 (A2) only ONE of the three still crosses to the host:
+//
+//   - CollectRemoteRefs runs PLUGIN-SIDE over loaderkit.CollectRemoteRefsOpts with the resolve's own
+//     cfg + the fixpoint's own localScanned + the shared executor-backed refs legs. The former
+//     `buildengine-collect-remote-refs` host leg re-derived BOTH inputs host-side (LoadConfig +
+//     scanLocalCandies) purely so core could hand them back to the same mechanism — core was calling
+//     a mechanism, not defining one, so by the defines-vs-calls test it was an R-item. The plugin
+//     already holds cfg (uf.ProjectConfig, resolve.go step 1) and receives localScanned as the
+//     seam's own parameter, so nothing needs re-deriving: this is byte-identical to the host leg's
+//     body (same FinalizeScannedCandies(…, nil) throwaway wrap, same WithLocalRawRefs augmentation,
+//     same BoxResolveOpts-scoped opts carrying RequestedBoxes/ExtraCandyRefs — task #17's fix).
+//   - EnsureRepo likewise runs plugin-side over loaderkit.EnsureRepoDownloaded (hostEnsureRepoLeg
+//     and its `buildengine-ensure-repo` host leg are both deleted).
+//   - ScanRemote runs plugin-side too (scanRemoteLeg over parseCandyManifestLeg). It was the LAST
+//     leg still crossing: its per-candy manifest parse appeared to need charly's clause-B buildCandy
+//     factory, which an RDD spike over the whole 324-manifest corpus disproved (the round trip
+//     through it was an identity). `buildengine-scan-remote` died with it.
+//
+// So NONE of the three ScanSeams legs is a host round-trip any more.
+func scanSeamsLeg(ctx context.Context, ex *sdk.Executor, rr spec.ResolvedProjectRequest, cfg *spec.Config, distroCfg *spec.DistroConfig) loaderkit.ScanSeams {
 	return loaderkit.ScanSeams{
-		CollectRemoteRefs: func(_ map[string]spec.ScannedCandy) ([]loaderkit.RemoteDownload, error) {
-			var out []loaderkit.RemoteDownload
-			if err := hostBuildJSON(ctx, ex, "buildengine-collect-remote-refs", rr, &out); err != nil {
-				return nil, err
-			}
-			return out, nil
+		CollectRemoteRefs: func(localScanned map[string]spec.ScannedCandy) ([]loaderkit.RemoteDownload, error) {
+			opts := spec.BoxResolveOpts(rr.RequestedBoxes, rr.IncludeDisabled)
+			opts.ExtraCandyRefs = rr.ExtraCandyRefs
+			return loaderkit.CollectRemoteRefsOpts(
+				cfg,
+				loaderkit.FinalizeScannedCandies(localScanned, nil),
+				spec.WithLocalRawRefs(opts, localScanned),
+				loaderkit.RefsSeamsFromExecutor(ctx, ex),
+			)
 		},
-		EnsureRepo: hostEnsureRepoLeg(ctx, ex),
-		ScanRemote: hostScanRemoteLeg(ctx, ex),
+		EnsureRepo: ensureRepoLeg(ctx, ex),
+		ScanRemote: scanRemoteLeg(parseCandyManifestLeg(ctx, ex, distroCfg)),
 	}
 }
 
-// hostEnsureRepoLeg / hostScanRemoteLeg are the cfg-agnostic ScanSeams closures shared by the ROOT
-// scan (scanSeamsLeg) and the NAMESPACED scan (namespaceScanSeams): EnsureRepo downloads+caches a
-// repo (buildengine-ensure-repo — git cache, cfg-independent); ScanRemote scans the cached repo for
-// the wanted bare refs (buildengine-scan-remote — parseCandyYAML registry scan, cfg-independent).
-// Only CollectRemoteRefs differs between the two scans (root: reachability walk via
-// buildengine-collect-remote-refs; namespaced: the host-pre-computed namespace-scoped set).
-func hostEnsureRepoLeg(ctx context.Context, ex *sdk.Executor) func(repoPath, version string) (string, error) {
+// ensureRepoLeg resolves a (repo, version) to a local cache dir, fetching + auto-migrating on a
+// cache miss — PLUGIN-SIDE over the shared loaderkit mechanism + the executor-backed refs legs. It
+// is cfg-agnostic, so both the ROOT scan (scanSeamsLeg) and the NAMESPACED scan (namespaceScanSeams)
+// share this one copy (R3).
+//
+// The seams are built INSIDE the closure, once PER CALL — never hoisted to construction time. The
+// deleted `buildengine-ensure-repo` host leg read CHARLY_REPO_OVERRIDE (RefsCollectSeams.
+// OverrideEnvValue, an os.Getenv) at the moment of each fetch, and resolveProjectEnvelope's
+// LocalSuperproject branch sets that env var around the resolve with a deferred restore. Caching
+// the seams would freeze the override at whatever the env held when the scan seams were assembled,
+// silently changing which tree a fetch resolves against; per-call construction is byte-identical to
+// the leg it replaces.
+func ensureRepoLeg(ctx context.Context, ex *sdk.Executor) func(repoPath, version string) (string, error) {
 	return func(repoPath, version string) (string, error) {
-		var out struct {
-			Dir string `json:"dir"`
-		}
-		if err := hostBuildJSON(ctx, ex, "buildengine-ensure-repo", map[string]string{"repo": repoPath, "version": version}, &out); err != nil {
-			return "", err
-		}
-		return out.Dir, nil
+		return loaderkit.EnsureRepoDownloaded(repoPath, version, loaderkit.RefsSeamsFromExecutor(ctx, ex))
 	}
 }
 
-func hostScanRemoteLeg(ctx context.Context, ex *sdk.Executor) func(cacheDir, repoPath string, wantRefs map[string]bool) (map[string]spec.ScannedCandy, error) {
+// parseCandyManifestLeg builds the per-document candy-manifest parse the scan mechanisms take as
+// their `parseDoc` seam — PLUGIN-SIDE over loaderkit.ParseCandyManifest (K-wave 2 cone R1, A2 unit
+// 2). It used to be unreachable from a plugin, which is the only reason `buildengine-scan-remote`
+// existed: the parse appeared to need charly's clause-B buildCandy factory. An RDD spike over the
+// whole 324-manifest corpus proved that dependency was a pn->genericNode->pn identity round trip
+// (321 node-form manifests plus all 3 error paths, byte-identical), so the mechanism relocated and
+// the leg died with it.
+//
+// The two host-side values it needs are fetched ONCE per scan and captured: the registry-derived
+// kind-recognition snapshot over the EXISTING `loader-threaded` host leg, and the build vocabulary
+// derived from the resolve's own distroCfg — the same DistroConfig the deleted host leg re-derived
+// via LoadDefaultBuildConfig before calling RegisterBuildVocabulary.
+func parseCandyManifestLeg(ctx context.Context, ex *sdk.Executor, distroCfg *spec.DistroConfig) func(string) (*spec.Candy, error) {
+	threaded := loaderkit.LoaderThreadedViaExecutor(ctx, ex)
+	vocab := spec.NewCandyVocab(distroCfg)
+	return func(path string) (*spec.Candy, error) {
+		return loaderkit.ParseCandyManifest(path, threaded, vocab)
+	}
+}
+
+// scanRemoteLeg scans the wanted bare refs out of a downloaded repo cache — PLUGIN-SIDE over
+// loaderkit.ScanRemoteCandy with the parse leg above. cfg-agnostic, so the root and namespaced scans
+// share this one copy (R3).
+func scanRemoteLeg(parseDoc func(string) (*spec.Candy, error)) func(cacheDir, repoPath string, wantRefs map[string]bool) (map[string]spec.ScannedCandy, error) {
 	return func(cacheDir, repoPath string, wantRefs map[string]bool) (map[string]spec.ScannedCandy, error) {
-		refs := make([]string, 0, len(wantRefs))
-		for r := range wantRefs {
-			refs = append(refs, r)
-		}
-		var out map[string]spec.ScannedCandy
-		if err := hostBuildJSON(ctx, ex, "buildengine-scan-remote", spec.BuildEngineScanRemoteRequest{CacheDir: cacheDir, RepoPath: repoPath, Refs: refs}, &out); err != nil {
-			return nil, err
-		}
-		return out, nil
+		return loaderkit.ScanRemoteCandy(cacheDir, repoPath, wantRefs, parseDoc)
 	}
 }
 
 // namespaceScanSeams builds the loaderkit.ScanSeams for a namespaced candy-scan fix-point over the
-// host-pre-computed per-namespace inputs: CollectRemoteRefs returns the host's namespace-scoped
-// downloads verbatim (the ONE cfg-coupled step, already done host-side by CollectRemoteRefsOpts over
-// the namespace's own cfg); EnsureRepo/ScanRemote reuse the cfg-agnostic shared host legs for the
-// transitive fetch. The plugin never re-loads the namespace cfg or re-walks its reachability — the
-// host did that once and emitted the flat NamespaceScanReply.
-func namespaceScanSeams(ctx context.Context, ex *sdk.Executor, downloads []spec.RemoteDownload) loaderkit.ScanSeams {
+// per-namespace downloads the caller already walked: CollectRemoteRefs returns that namespace-scoped
+// set verbatim (the reachability walk runs ONCE per namespace in fillNamespacedBoxes, over the
+// namespace's own cfg); EnsureRepo/ScanRemote reuse the cfg-agnostic shared legs for the transitive
+// fetch. Nothing here crosses to the host.
+func namespaceScanSeams(ctx context.Context, ex *sdk.Executor, downloads []spec.RemoteDownload, distroCfg *spec.DistroConfig) loaderkit.ScanSeams {
 	return loaderkit.ScanSeams{
 		CollectRemoteRefs: func(_ map[string]spec.ScannedCandy) ([]loaderkit.RemoteDownload, error) {
 			return downloads, nil
 		},
-		EnsureRepo: hostEnsureRepoLeg(ctx, ex),
-		ScanRemote: hostScanRemoteLeg(ctx, ex),
+		EnsureRepo: ensureRepoLeg(ctx, ex),
+		ScanRemote: scanRemoteLeg(parseCandyManifestLeg(ctx, ex, distroCfg)),
 	}
-}
-
-// resolveNamespaceUFByPath descends the root uf.Namespaces tree by the dotted child path ("fedora"
-// / "ns1.ns2") to the namespace's *spec.UnifiedFile, recovering the namespace's own *spec.Config
-// (via ProjectConfig()) for FillNamespaceBoxViews plugin-side. sub is deliberately NOT carried in
-// the wire reply — spec.Config is hand-written with a recursive Namespaces map (not cleanly
-// serializable); the plugin derives it from the root uf the seam already holds + the entry's child.
-func resolveNamespaceUFByPath(rootUF *spec.UnifiedFile, child string) *spec.UnifiedFile {
-	if child == "" {
-		return rootUF
-	}
-	uf := rootUF
-	for _, part := range strings.Split(child, ".") {
-		next := uf.Namespaces[part]
-		if next == nil {
-			return nil
-		}
-		uf = next
-	}
-	return uf
 }
 
 // --- validate + prep legs ---
 
 // validateProjectLeg runs the pre-build validation GATE via InvokeProvider(command:validate) — the
-// plugin↔plugin form of the former host validateProjectForBuild (its comment named exit "K3").
+// plugin↔plugin form of the former host-side gate (whose comment named exit "K3"). Core carries no
+// production copy of this dispatch any more; the only remaining one is the fixture-test harness in
+// charly/validate_dispatch_test.go, which mirrors this function deliberately.
 func validateProjectLeg(ctx context.Context, ex *sdk.Executor, rr spec.ResolvedProjectRequest) error {
 	params, err := json.Marshal(spec.ValidateProjectRequest{Dir: rr.Dir, IncludeDisabled: rr.IncludeDisabled})
 	if err != nil {
@@ -243,15 +264,10 @@ func validateProjectLeg(ctx context.Context, ex *sdk.Executor, rr spec.ResolvedP
 	}
 }
 
-// renderSeamPrepLeg populates the render-seam-floor's CHEAP candy-scan-only Generator cache
-// (host_build_render_seam.go's 2 remaining reverse-channel consumers + host_build_bake_plugins.go's
-// emitBakedPlugins — none of which touch box-resolve data). The host-fs PREP itself
-// (cleanStaleBuildDirs/writeContextIgnore/createRemoteCandyCopies/ensureCharlyBinaryFresh) runs
-// plugin-side now (runHostFSPrep, host_prep.go, K3 host-prep move) — this leg is data-scan-only.
-// Reply is error-only.
-func renderSeamPrepLeg(ctx context.Context, ex *sdk.Executor, rr spec.ResolvedProjectRequest) error {
-	return hostVoidLeg(ctx, ex, "buildengine-prep", rr)
-}
+// renderSeamPrepLeg (HostBuild("buildengine-prep")) is DELETED in K-wave 2 cone R1. It pushed the
+// plugin-resolved boxes into the host's render-seam Generator cache; that cache existed only for the
+// inline-builder / ensure-builders render seams, both of which now peer-dispatch via InvokeProvider,
+// so nothing read it. The host leg went with it (charly/host_build_buildengine.go).
 
 // inspectUserLeg probes an external base image for a uid account via InvokeProvider(verb:oci)
 // (oci_op=inspect-user) — the plugin-side resolveUserContext external-base branch.
@@ -281,12 +297,10 @@ func inspectUserLeg(ctx context.Context, ex *sdk.Executor, ref string, uid int) 
 
 // projectResolvedProjectLeg calls the SHARED loaderkit.ProjectResolvedProject assembler (U2) with
 // PLUGIN-supplied ResolveProjectSeams: ResolveBox is pure buildkit; ResolveResources rides
-// InvokeProvider(kind:resource); FillNamespacedBoxes fetches the host's FLAT NamespaceScanReply
-// (buildengine-namespaced — the host recurses the import-namespace tree ONCE, emitting per-namespace
-// pre-fix-point scanned candies + the namespace-scoped initial remote downloads) and folds each
-// entry plugin-side (loaderkit.ScanCandyFromLocal + deploykit.RawCandyPair +
-// deploykit.FillNamespaceBoxViews — the deploykit calls relocated out of the deleted
-// charly/resolved_project_host.go namespaced-box fill); ComputeIntermediates/
+// InvokeProvider(kind:resource); FillNamespacedBoxes recurses the import-namespace tree ENTIRELY
+// plugin-side (fillNamespacedBoxes — scan, reachability walk, fetch fix-point and fold in ONE pass;
+// the former `buildengine-namespaced` host leg and its NamespaceScanReply wire hop are DELETED);
+// ComputeIntermediates/
 // ShouldIncludeDisabled/ExternalizedBuilders are pure. preResolvedBoxes carries the render-prep
 // caches so the envelope preserves them.
 // diags, when non-nil, makes the resolve TOLERANT (loaderkit.ProjectResolvedProject skips a box
@@ -299,15 +313,8 @@ func projectResolvedProjectLeg(ctx context.Context, ex *sdk.Executor, cfg *spec.
 		ResolveBox: func(c *spec.Config, name, cv, d string) (*buildkit.ResolvedBox, error) {
 			return buildkit.ResolveBox(c, name, cv, d, buildkit.ResolveOpts{IncludeDisabled: includeDisabled, DistroCfg: distroCfg, BuilderCfg: builderCfg})
 		},
-		FillNamespacedBoxes: func(rootUF *spec.UnifiedFile, ic *buildkit.InitConfig, prefix, cv, d string, rp *spec.ResolvedProject, _ map[*spec.UnifiedFile]bool) {
-			if prefix != "" {
-				return // the host leg does the full namespace recursion; only the root call dispatches
-			}
-			var reply spec.NamespaceScanReply
-			if err := hostBuildJSON(ctx, ex, "buildengine-namespaced", spec.BuildResolveRequest{Dir: d, Tag: cv, IncludeDisabled: includeDisabled}, &reply); err != nil {
-				return // best-effort/additive, matching the host fill's tolerance
-			}
-			foldNamespaceScanEntries(ctx, ex, rootUF, ic, cv, d, includeDisabled, distroCfg, builderCfg, reply, rp)
+		FillNamespacedBoxes: func(rootUF *spec.UnifiedFile, ic *buildkit.InitConfig, prefix, cv, d string, rp *spec.ResolvedProject, visited map[*spec.UnifiedFile]bool) {
+			fillNamespacedBoxes(ctx, ex, rootUF, ic, prefix, cv, d, includeDisabled, distroCfg, builderCfg, rp, visited)
 		},
 		ResolveResources: func(u *spec.UnifiedFile) map[string]*spec.ResolvedResource {
 			return spec.ResolvePluginKindViaPlugin(u, "resource", resolveResourceLeg(ctx, ex))
@@ -329,47 +336,94 @@ func projectResolvedProjectLeg(ctx context.Context, ex *sdk.Executor, cfg *spec.
 	return loaderkit.ProjectResolvedProject(cfg, layers, uf, distroCfg, builderCfg, initCfg, dir, version, calver, seams, diags, preResolvedBoxes)
 }
 
-// foldNamespaceScanEntries is the plugin-side fold over the host's NamespaceScanReply: for each
-// namespace, descend the root uf.Namespaces tree by the entry's child path to recover the
-// namespace's *spec.Config, run the candy-scan fetch fix-point (loaderkit.ScanCandyFromLocal over
-// the host-pre-computed scanned + downloads + the cfg-agnostic EnsureRepo/ScanRemote host legs),
-// then deploykit.RawCandyPair (fold the namespace's candies additively into rp.Candies/CandyModels,
-// never overwriting) + deploykit.FillNamespaceBoxViews (fold the namespace-qualified box views into
-// rp.Boxes). The deploykit calls are the deleted host namespaced-box fill's deploykit calls,
-// relocated plugin-side (candy/plugin-build is the legit deploykit owner; no new importer). cv/d
-// come from the seam closure's resolve context; vopts is rebuilt plugin-side from the resolve
-// context's distroCfg/builderCfg/ic — byte-identical to the deleted host's resolveVocabOpts(dir,
-// opts) result (boxResolveOpts leaves DistroCfg/BuilderCfg nil, so resolveVocabOpts fills them
-// from the SAME build vocab the plugin's distroCfg/builderCfg carry).
-func foldNamespaceScanEntries(ctx context.Context, ex *sdk.Executor, rootUF *spec.UnifiedFile, ic *buildkit.InitConfig, cv, d string, includeDisabled bool, distroCfg *buildkit.DistroConfig, builderCfg *buildkit.BuilderConfig, reply spec.NamespaceScanReply, rp *spec.ResolvedProject) {
+// fillNamespacedBoxes recurses uf.Namespaces and folds each import namespace's boxes (qualified) +
+// its OWN candy set into rp — ENTIRELY plugin-side (K-wave 2 cone R1, A2 unit 3b). It replaces the
+// former two-part shape (charly's `buildengine-namespaced` leg recursing the tree host-side to emit
+// a flat spec.NamespaceScanReply, plus a plugin-side fold over that reply), which was the SAME
+// recursion walked twice across a process boundary. The host leg survived only because its two
+// per-namespace steps were once core-only; both are plugin-side now — the local candy scan is
+// loaderkit.ProjectCandiesScanned (unit 3a) and the reachability walk is
+// loaderkit.CollectRemoteRefsOpts over the shared executor-backed refs legs (unit 1) — so core was
+// CALLING relocated mechanisms on the plugin's behalf over inputs the plugin already held. By the
+// defines-vs-calls test that is an R-item, and the wire hop plus its #NamespaceScanReply envelope
+// died with it.
+//
+// Behaviour is preserved verbatim from the deleted pair:
+//   - the nsDir FALLBACK — a namespace's candy `from:` paths are relative to the NAMESPACE's own
+//     root (subUF.RootDir), falling back to the OUTER project dir when a namespace carries none;
+//   - the VISITED cycle-guard, keyed on the *spec.UnifiedFile pointer (the loader mounts a
+//     back-imported ancestor as the SAME in-progress node, so a mutual import terminates here);
+//   - DFS PRE-ORDER (fold a namespace, then descend into it), matching the flat reply's append order;
+//   - the reachability walk runs UNCONDITIONALLY, never `if len(scanned) > 0`: CollectRemoteRefsOpts
+//     walks sub.Box to collect the BOXES' candy @-refs, so a namespace that vendors no candies of its
+//     own but whose boxes pin remote ones (every distro submodule) still has refs to fetch. Guarding
+//     it dropped those refs and produced "candy not found" on every namespaced box (R1 RCA, first-bad
+//     b367e5d5);
+//   - opts is spec.BoxResolveOpts(nil, includeDisabled) — nil RequestedBoxes, so a namespace walk is
+//     never narrowed by the ROOT request's box selection — and vopts carries the resolve context's
+//     own distroCfg/builderCfg/ic;
+//   - every step is best-effort/additive: a namespace whose scan, walk, or fix-point fails
+//     contributes nothing and never aborts the resolve, and recursion into its children continues.
+func fillNamespacedBoxes(ctx context.Context, ex *sdk.Executor, uf *spec.UnifiedFile, ic *buildkit.InitConfig, prefix, cv, d string, includeDisabled bool, distroCfg *buildkit.DistroConfig, builderCfg *buildkit.BuilderConfig, rp *spec.ResolvedProject, visited map[*spec.UnifiedFile]bool) {
+	if uf == nil {
+		return
+	}
+	if visited == nil {
+		visited = map[*spec.UnifiedFile]bool{}
+	}
+	if visited[uf] {
+		return
+	}
+	visited[uf] = true
+	opts := spec.BoxResolveOpts(nil, includeDisabled)
 	vopts := spec.ResolveOpts{IncludeDisabled: includeDisabled, DistroCfg: distroCfg, BuilderCfg: builderCfg, InitCfg: ic}
-	for _, entry := range reply.Entries {
-		subUF := resolveNamespaceUFByPath(rootUF, entry.Child)
+	for ns, subUF := range uf.Namespaces {
 		if subUF == nil {
 			continue
 		}
+		child := ns
+		if prefix != "" {
+			child = prefix + "." + ns
+		}
 		sub := subUF.ProjectConfig()
-		nsLayers, err := loaderkit.ScanCandyFromLocal(entry.Scanned, ic, namespaceScanSeams(ctx, ex, entry.Downloads))
-		if err != nil {
-			continue // best-effort/additive, matching the deleted host fill's tolerance
+		nsDir := subUF.RootDir
+		if nsDir == "" {
+			nsDir = d
 		}
-		for name, c := range nsLayers {
-			if c == nil {
-				continue
-			}
-			m, v, ok := deploykit.RawCandyPair(c)
-			if !ok {
-				continue
-			}
-			if rp.Candies == nil {
-				rp.Candies = map[string]spec.CandyView{}
-				rp.CandyModels = map[string]spec.CandyModel{}
-			}
-			if _, exists := rp.CandyModels[name]; !exists {
-				rp.Candies[name] = v
-				rp.CandyModels[name] = m
-			}
+		// The namespace's OWN local candies — both its `discover:`-found dirs and its inline candy:
+		// nodes — read straight off the already-loaded subUF (no re-load, no directory mismatch).
+		var scanned map[string]spec.ScannedCandy
+		if localScanned, err := loaderkit.ProjectCandiesScanned(subUF, nsDir, parseCandyManifestLeg(ctx, ex, distroCfg)); err == nil {
+			scanned = localScanned
 		}
-		deploykit.FillNamespaceBoxViews(sub, nsLayers, ic, entry.Child, cv, d, vopts, rp)
+		// FinalizeScannedCandies / spec.WithLocalRawRefs are nil/empty-safe, so an empty `scanned`
+		// degrades to a boxes-only walk — exactly what a candy-less namespace needs.
+		downloads, _ := loaderkit.CollectRemoteRefsOpts(
+			sub,
+			loaderkit.FinalizeScannedCandies(scanned, nil),
+			spec.WithLocalRawRefs(opts, scanned),
+			loaderkit.RefsSeamsFromExecutor(ctx, ex),
+		)
+		if nsLayers, err := loaderkit.ScanCandyFromLocal(scanned, ic, namespaceScanSeams(ctx, ex, downloads, distroCfg)); err == nil {
+			for name, c := range nsLayers {
+				if c == nil {
+					continue
+				}
+				m, v, ok := deploykit.RawCandyPair(c)
+				if !ok {
+					continue
+				}
+				if rp.Candies == nil {
+					rp.Candies = map[string]spec.CandyView{}
+					rp.CandyModels = map[string]spec.CandyModel{}
+				}
+				if _, exists := rp.CandyModels[name]; !exists {
+					rp.Candies[name] = v
+					rp.CandyModels[name] = m
+				}
+			}
+			deploykit.FillNamespaceBoxViews(sub, nsLayers, ic, child, cv, d, vopts, rp)
+		}
+		fillNamespacedBoxes(ctx, ex, subUF, ic, child, cv, d, includeDisabled, distroCfg, builderCfg, rp, visited)
 	}
 }

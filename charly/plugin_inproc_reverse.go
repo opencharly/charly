@@ -5,6 +5,7 @@ import (
 
 	"google.golang.org/grpc"
 
+	specexec "github.com/opencharly/spec/exec"
 	pb "github.com/opencharly/spec/proto"
 )
 
@@ -23,6 +24,19 @@ import (
 // which needs only HostBuild — the venue-op legs delegate faithfully but panic on a nil executor
 // (a build reverse server carries none; HostBuild uses only the host build-engine context).
 type inprocExecutorClient struct{ srv *executorReverseServer }
+
+// hostInProcCtx returns a context carrying a FRESH in-proc reverse channel — the ONE construction of
+// the compiled-in-plugin dispatch context (R3). Every host out-call to a compiled-in plugin that may
+// itself call back (HostBuild, InvokeProvider, RunHostStep) needs one. The literal it replaces was
+// copy-pasted at ten production sites across the check / preempt / validate / loader / command
+// dispatch, and K-wave 2 cone R1's relocation of the fetch orchestration into candy/plugin-loader
+// would have added several more. Each call builds its own server + executor exactly as those copies
+// did — the value is stateless, so sharing the CONSTRUCTOR changes nothing about lifetime or
+// isolation, it only stops the shape drifting per call site.
+func hostInProcCtx() context.Context {
+	return specexec.ContextWithExecutor(context.Background(),
+		specexec.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}}))
+}
 
 func (c *inprocExecutorClient) Venue(ctx context.Context, in *pb.Empty, _ ...grpc.CallOption) (*pb.VenueReply, error) {
 	return c.srv.Venue(ctx, in)

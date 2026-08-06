@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
 
@@ -33,7 +32,7 @@ func resolveCheckVenueReply(name, instance string) (spec.CheckVenueResolveReply,
 	if !ok {
 		return spec.CheckVenueResolveReply{}, fmt.Errorf("check-resolve: plugin-check (verb:check-resolve) not registered — charly built without the plugin-check candy")
 	}
-	ctx := specexec.ContextWithExecutor(context.Background(), specexec.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}}))
+	ctx := hostInProcCtx()
 	return invokeTyped[spec.CheckVenueResolveRequest, spec.CheckVenueResolveReply](
 		ctx, prov, "check-resolve", ops.OpResolve,
 		spec.CheckVenueResolveRequest{Name: name, Instance: instance})

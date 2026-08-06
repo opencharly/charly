@@ -7,7 +7,7 @@ import (
 )
 
 // decodeViaCUEForTest is the plugin-local test helper for the relocated VM-rendering tests. In
-// production the HOST applies CUE schema defaults (applyCueDefaults) before passing the fully
+// production the HOST applies CUE schema defaults (the loader seam's ApplyCueDefaults) before passing the fully
 // resolved VmSpec to the plugin's create op, so the plugin never decodes raw entity YAML at
 // runtime; its rendering tests therefore decode the (self-contained) test fixtures directly into
 // the target struct via yaml.v3 — there is no CUE engine in the plugin module.

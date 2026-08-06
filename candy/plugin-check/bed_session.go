@@ -42,7 +42,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/loaderkit"
@@ -54,9 +53,11 @@ import (
 
 // envPreemptLeaseHeld is set by the OUTERMOST claim-bringing `charly` invocation (a check-bed run,
 // or a standalone `charly vm create`/`charly start`) so the nested `charly` subprocesses it spawns
-// do NOT independently acquire/release the lease — the owner manages it. Mirrors
-// charly/preempt.go's identically-named, identically-valued const (both sides of the SAME
-// process-env contract; not an alias — a plugin cannot import charly/preempt.go, package main).
+// do NOT independently acquire/release the lease — the owner manages it. Mirrors the
+// identically-named, identically-valued const that lived in charly/preempt.go (deleted, K-wave 2
+// cone CONTESTED — the surviving core copy is the op="remove" release chain in
+// host_build_pod_lifecycle_dispatch.go; both sides of the SAME process-env contract; not an alias
+// — a plugin cannot import charly package main).
 const envPreemptLeaseHeld = "CHARLY_PREEMPT_LEASE"
 
 // bedSession holds the live host handles ONE bed run owns across its lifecycle — from bedSetup's
@@ -84,9 +85,10 @@ func (s *bedSession) release(ctx context.Context, ex *sdk.Executor, ok bool) {
 		return
 	}
 	if s.leaseClaimant != "" && s.leaseActive {
-		// Mirrors charly/preempt.go's Lease.Release/ReleaseFailed early-out on !active — a lease
-		// this session never actually claimed (because an outer orchestrator already held it, or
-		// the claimant declared no requires_exclusive/requires_shared) needs no release call.
+		// Mirrors the deleted charly/preempt.go's Lease.Release/ReleaseFailed early-out on
+		// !active — a lease this session never actually claimed (because an outer orchestrator
+		// already held it, or the claimant declared no requires_exclusive/requires_shared) needs
+		// no release call.
 		_ = arbiterRelease(ctx, ex, s.leaseClaimant, ok)
 		_ = os.Unsetenv(envPreemptLeaseHeld)
 	}
@@ -107,24 +109,6 @@ func (s *bedSession) release(ctx context.Context, ex *sdk.Executor, ok bool) {
 	if s.bedUnlock != nil {
 		_ = s.bedUnlock()
 	}
-}
-
-// dedupeNonEmpty trims + dedups a token list. Mirrors charly/preempt.go's identically-behaved
-// helper (not an alias — a plugin cannot import charly/preempt.go, package main; both sides
-// independently implement the SAME trivial string-slice operation, R1-accepted duplication for a
-// ~10-line pure utility with no shared home either side can reach).
-func dedupeNonEmpty(in []string) []string {
-	seen := map[string]bool{}
-	var out []string
-	for _, s := range in {
-		s = strings.TrimSpace(s)
-		if s == "" || seen[s] {
-			continue
-		}
-		seen[s] = true
-		out = append(out, s)
-	}
-	return out
 }
 
 // arbiterInvoke resolves verb:arbiter and Invokes it with an action-tagged input — the SAME
@@ -155,23 +139,25 @@ func arbiterInvoke(ctx context.Context, ex *sdk.Executor, in spec.ArbiterInvokeI
 // requires_exclusive, otherwise SHARED (a no-op inside the arbiter when the claimant declares no
 // requires_shared AND implies no GPU consumption — the arbiter auto-promotes an implied GPU
 // consumer, K-wave W3a A2). Skips entirely when an outer orchestrator already owns the lease
-// (envPreemptLeaseHeld) — mirrors charly/preempt.go's acquireResourceForClaimant/
-// acquireExclusiveForClaimant/acquireSharedForClaimant/acquireDispatch chain exactly, restore
-// guarantees included: the arbiter's crash-safety/lease-ledger/poison-marker/liveness state lives
-// ENTIRELY plugin-side in candy/plugin-preempt already (preempt.go's own header), keyed by
-// Claimant — so `charly preempt restore` reconciles identically regardless of which caller
-// acquired the lease, AS LONG AS the ArbiterInvokeInput shape matches core's acquireDispatch
-// field-for-field (verified below: Action/Claimant/Tokens/ClaimAddr/Transient/IsGroup/
-// IsPodMember/SecurityDevices, the same 8 fields in the same shapes).
+// (envPreemptLeaseHeld) — mirrors the deleted charly/preempt.go's acquireResourceForClaimant/
+// acquireExclusiveForClaimant/acquireSharedForClaimant/acquireDispatch chain exactly (that chain
+// was DEAD in core — zero production callers — and DELETED at K-wave 2 cone CONTESTED; its
+// per-caller copies are what survive), restore guarantees included: the arbiter's
+// crash-safety/lease-ledger/poison-marker/liveness state lives ENTIRELY plugin-side in
+// candy/plugin-preempt already, keyed by Claimant — so `charly preempt restore` reconciles
+// identically regardless of which caller acquired the lease, AS LONG AS the ArbiterInvokeInput
+// shape matches the former core acquireDispatch field-for-field (verified below:
+// Action/Claimant/Tokens/ClaimAddr/Transient/IsGroup/IsPodMember/SecurityDevices, the same 8
+// fields in the same shapes).
 func arbiterAcquire(ctx context.Context, ex *sdk.Executor, claimant string, node spec.BundleNode, transient bool) (active bool, err error) {
 	if os.Getenv(envPreemptLeaseHeld) != "" {
 		return false, nil
 	}
 	action := spec.ArbiterActionAcquireShared
-	tokens := dedupeNonEmpty(node.RequiredShared())
+	tokens := spec.DedupeNonEmpty(node.RequiredShared())
 	if len(node.RequiredExclusive()) > 0 {
 		action = spec.ArbiterActionAcquireExclusive
-		tokens = dedupeNonEmpty(node.RequiredExclusive())
+		tokens = spec.DedupeNonEmpty(node.RequiredExclusive())
 	}
 	var secDevices []string
 	if node.Security != nil {

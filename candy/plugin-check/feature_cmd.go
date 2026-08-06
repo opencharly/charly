@@ -10,9 +10,9 @@ import (
 // feature_cmd.go — the `charly check feature run` leaf (Agent Driven Evaluation, DEPLOY scope). It
 // runs a running deployment's OWN baked plan as acceptance tests: deterministic check: steps run
 // their probes and prose-only agent-check: steps bind to the agent grader (unless --no-agent). All
-// the gathering AND the agent-grader wiring run HOST-side behind the "check-run" seam
-// (Mode:"feature-live", which threads Tag/Agent/Timeout/Strict/NoAgent); the plugin sends the CLI
-// inputs, prints the host-built Header banner, and formats the returned []StepResult.
+// the gathering AND the agent-grader wiring run PLUGIN-side (hostCheckRun's Mode:"feature-live",
+// which threads Tag/Agent/Timeout/Strict/NoAgent); the plugin sends the CLI
+// inputs, prints the built Header banner, and formats the returned []StepResult.
 //
 // The build-scope `charly box feature run <image>` leaf stays under the `box` command tree in core
 // (it feeds the same host engine over a feature-box seam mode) — this file owns ONLY the

@@ -52,8 +52,8 @@ func (c *VmGpuPlanCmd) Run() error {
 
 // VmGpuModeCmd shows or sets the host GPU driver mode for a vendor-matched card.
 // This is the manual operator interface for the vfio<->nvidia switch (the
-// charly-CLI way, vs ad-hoc sysfs). The arbiter (charly/preempt.go) flips
-// automatically for requires_exclusive (vfio) / requires_shared (nvidia)
+// charly-CLI way, vs ad-hoc sysfs). The arbiter (candy/plugin-preempt, verb:arbiter)
+// flips automatically for requires_exclusive (vfio) / requires_shared (nvidia)
 // claims; this verb is the explicit override + inspector. It does NOT consult
 // the arbiter ledger — a manual flip while an exclusive lease is active is the
 // operator's call. The flip switches the WHOLE IOMMU group (display + audio),

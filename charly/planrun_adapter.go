@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/opencharly/spec/spec"
@@ -65,6 +66,32 @@ func (c *hostCheckCarrier) VmTargetName() string {
 		return c.vmName
 	}
 	return c.box
+}
+
+// opEffectiveContexts returns the op's resolved execution contexts: an explicit
+// Context wins, else the verb's VerbCatalog default, else nil. The do-mode/context
+// grammar the plan walk consults — relocated from checkspec.go (K-wave 2 cone R4) to
+// sit beside hostVerbResolver, the other half of this grammar seam (see below).
+func opEffectiveContexts(c *spec.Op) []spec.ExecContext {
+	if len(c.Context) > 0 {
+		out := make([]spec.ExecContext, 0, len(c.Context))
+		for _, s := range c.Context {
+			out = append(out, spec.ExecContext(s))
+		}
+		return out
+	}
+	if verb, err := c.Kind(); err == nil {
+		if vs, ok := spec.VerbCatalog[verb]; ok {
+			return vs.Contexts
+		}
+	}
+	return nil
+}
+
+// opInContext reports whether the op is legal in ctx per its effective contexts. Its
+// spec.OpInContext DI-hook registration lives in layers.go (which already imports spec).
+func opInContext(c *spec.Op, ctx spec.ExecContext) bool {
+	return slices.Contains(opEffectiveContexts(c), ctx)
 }
 
 // planrun_adapter.go — the host seams the check-engine plan walk (kit.RunOne/RunPlan) drives

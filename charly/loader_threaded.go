@@ -1,6 +1,8 @@
 package main
 
 import (
+	"errors"
+	"fmt"
 	"log"
 
 	"github.com/opencharly/spec/spec"
@@ -82,6 +84,35 @@ func requireCandyScanner() spec.CandyScanner {
 	return activeCandyScanner
 }
 
+// candyVocab is the build VOCABULARY the candy-manifest shape guard consults — the distro/format
+// name sets DERIVED at load time from the embedded build vocabulary (plus any project override),
+// never a Go constant, so adding a distro or package format stays a vocabulary edit. It is the ONE
+// piece of host state parseCandyYAML supplies to the relocated parse mechanism; the mechanism itself
+// (and the sets' own membership rule) live in sdk/loaderkit + spec.CandyVocab since K-wave 2 cone R1
+// (A2 unit 2). The zero value fails the guard OPEN — no false positives — matching the pre-move
+// contract where an unregistered vocabulary cleared the caches.
+var candyVocab spec.CandyVocab
+
+// RegisterBuildVocabulary derives the distro/format vocabulary from a DistroConfig and caches it for
+// the duration of the process. Safe to call repeatedly; a nil config clears it.
+func RegisterBuildVocabulary(dc *spec.DistroConfig) { candyVocab = spec.NewCandyVocab(dc) }
+
+// parseCandyYAML is the candy-MANIFEST parse the two CandyScanner scan methods take as their
+// parseManifest seam. It is a bare forward into the seam THIS file declares: the mechanism relocated
+// to sdk/loaderkit in K-wave 2 cone R1 (A2 unit 2) so a plugin driving its own scan can parse
+// manifests itself, and charly/ may not import sdk/loaderkit (import purity), so core reaches it
+// through the registered scanner. All core supplies is the two host-side values the mechanism takes
+// as parameters — the registry-derived kind-recognition snapshot and the build vocabulary above.
+//
+// Clause B is NOT what keeps this here, and the distinction matters: an RDD spike over the whole
+// 324-manifest corpus proved the pre-move node-form branch's pn->genericNode->buildCandy->pn round
+// trip was an IDENTITY (321 node-form manifests plus all 3 error paths, byte-identical), so the
+// bootstrap-critical factory was never on this path. buildCandy/candyIsImage stay core for their
+// GENUINE clause-B consumers — the discovered-candy pre-check and foldCandyKind.
+func parseCandyYAML(path string) (*spec.CandyYAML, error) {
+	return requireCandyScanner().ParseCandyManifest(path, loaderThreaded(), candyVocab)
+}
+
 // hostWalkProject runs the kind-blind whole-project WALK via the registered loader plugin,
 // returning its generic parse envelope. rootData is the (bootstrap-transformed) root charly.yml
 // bytes; the seams are the REGISTRY-COUPLED host primitives the walk consults instead of the
@@ -100,8 +131,13 @@ func hostWalkProject(dir string, rootData []byte) (spec.LoadedProject, error) {
 
 // hostWalkSeams builds the spec.WalkSeams every registry-coupled walk-level entry point threads
 // through: the whole-project walk (hostWalkProject, above) AND the standalone discover-only walk
-// (ApplyDiscover, unified.go — the K1 keystone task #24 unit-3 discover seam) share this ONE
-// construction (R3) rather than each re-deriving it.
+// (ApplyDiscover, below) share this ONE construction (R3) rather than each re-deriving it.
+//
+// Only Boundary and Threaded are genuinely host-side (they touch the provider registry). The other
+// three are one-line forwards into seams this file declares: ResolveRef's import-ref resolution
+// mechanism relocated to sdk/loaderkit alongside the fetch it drives (K-wave 2 cone R1 unit 3 —
+// charly/unified.go's canonicalRef, deleted), reached here through the loader plugin exactly like
+// ResolveProjectRepo below.
 func hostWalkSeams() spec.WalkSeams {
 	return spec.WalkSeams{
 		Parser: requireLoaderParser(),
@@ -113,9 +149,11 @@ func hostWalkSeams() spec.WalkSeams {
 			connectDeclaredKindPlugins(bdir)
 			return nil
 		},
-		Threaded:   loaderThreaded,
-		ResolveRef: canonicalRef,
-		GateDoc:    validateNodeDocCUE,
+		Threaded: loaderThreaded,
+		ResolveRef: func(ref, baseDir string) (string, string, error) {
+			return requireProjectLoader().CanonicalRef(hostInProcCtx(), ref, baseDir)
+		},
+		GateDoc: requireProjectLoader().ValidateNodeDocCUE,
 	}
 }
 
@@ -249,4 +287,113 @@ func decodeEntityViaRegistry(pn spec.ParsedNode, acc *spec.MaterializedProject) 
 // threaded straight through (no genericNode reconstruction).
 func buildBundleEntityViaRegistry(pn spec.ParsedNode, acc *spec.MaterializedProject) error {
 	return requireProjectLoader().BuildBundleNodeInto(pn, loaderThreaded(), acc)
+}
+
+// -----------------------------------------------------------------------------
+// The project LOAD-ENTRY forwards.
+//
+// K-wave 2 cone R1 COLOCATED these here from charly/config.go, charly/format_config.go and
+// charly/unified.go, all three deleted. Each was a file whose entire remaining content was a
+// one-or-two-line forward into the ProjectLoader seam declared above — the seam is the owner, so the
+// forwards live with it. They are deliberately NOT inlined into their ~40 call sites: that would
+// have GROWN the kernel to make three files disappear, which is the cosmetic-gaming pattern the
+// residue ledger forbids. What genuinely carried LOGIC left instead: ResolveProjectRepo (the --repo
+// clone-and-cache) and the candy-scan projection both moved into candy/plugin-loader.
+// -----------------------------------------------------------------------------
+
+// ErrNoCharlyYml is the sentinel wrapped by every "no charly.yml found in the project dir" load
+// error. Callers that treat an absent project as EMPTY rather than a hard failure (the
+// `charly box list …` read commands — an empty project has zero boxes, like `ls` in an empty dir)
+// match it with errors.Is.
+var ErrNoCharlyYml = errors.New("no charly.yml found in project directory")
+
+// noCharlyYmlErr is the ONE construction of the absent-project load error, wrapping ErrNoCharlyYml
+// for errors.Is.
+func noCharlyYmlErr(dir string) error {
+	return fmt.Errorf("no charly.yml found in %s (run `charly box new project .` to scaffold one): %w", dir, ErrNoCharlyYml)
+}
+
+// LoadUnified drives the whole-project load through the registered spec.ProjectLoader seam. The host
+// passes its own hostLoaderExecutor{} (the typed spec.LoaderExecutor reaching each registry-/
+// host-coupled load step by calling the host function DIRECTLY — zero marshal, a compiled-in TYPED
+// placement pays no envelope tax); the COMPILED-IN candy/plugin-loader implements spec.ProjectLoader
+// and internally runs loaderkit.LoadUnified. The seam is registered at init (before main), so the
+// host resolves it before loading its own charly.yml — no bootstrap cycle. charly core holds only
+// the seam interface + the host executor legs; the kind-blind orchestration (bootstrap phase, schema
+// gates, walk, materialize, venue flatten, member fold, descent stamp, the validation chain) lives
+// in loaderkit, driven by the plugin.
+func LoadUnified(dir string) (*spec.UnifiedFile, bool, error) {
+	return requireProjectLoader().LoadUnified(dir, hostLoaderExecutor{})
+}
+
+// LoadConfig reads charly.yml and returns the spec.Config (defaults + boxes) projection. Mode purity
+// preserved: this reads the PROJECT charly.yml only and never merges the per-host charly.yml overlay.
+// Deploy-mode commands must call LoadBundleConfig + MergeDeployOntoMetadata explicitly.
+func LoadConfig(dir string) (*spec.Config, error) {
+	uf, present, err := LoadUnified(dir)
+	if err != nil {
+		return nil, fmt.Errorf("loading charly.yml: %w", err)
+	}
+	if !present {
+		return nil, noCharlyYmlErr(dir)
+	}
+	return uf.ProjectConfig(), nil
+}
+
+// LoadBuildConfigForBox loads the distro, builder and init vocabularies for the project at dir, via
+// the same unified load. The init section is optional: a project without one yields a nil
+// *spec.InitConfig (no init system, no entrypoint beyond the base image default). The projections
+// themselves live in loaderkit (the ONE home charly core and candy/plugin-build both call, R3);
+// charly supplies its in-proc registry OpResolve callbacks for the opaque distro/init bodies, while
+// the builder bodies decode purely.
+func LoadBuildConfigForBox(dir string) (*spec.DistroConfig, *spec.BuilderConfig, *spec.InitConfig, error) {
+	uf, present, err := LoadUnified(dir)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("loading charly.yml: %w", err)
+	}
+	if !present {
+		return nil, nil, nil, noCharlyYmlErr(dir)
+	}
+	return spec.ProjectDistroConfig(uf, resolveDistroViaPlugin),
+		spec.ProjectBuilderConfig(uf),
+		spec.ProjectInitConfig(uf, resolveInitConfigViaPlugin), nil
+}
+
+// LoadDefaultBuildConfig is retained as the single-argument alias of the above.
+func LoadDefaultBuildConfig(dir string) (*spec.DistroConfig, *spec.BuilderConfig, *spec.InitConfig, error) {
+	return LoadBuildConfigForBox(dir)
+}
+
+// ResolveProjectRepo forwards the `--repo` clone-and-cache resolve to the seam. The LOGIC (spec
+// normalization, default-branch resolve, the fetch) relocated into candy/plugin-loader with the rest
+// of the fetch orchestration; charly/main_repo.go is deleted.
+func ResolveProjectRepo(repoSpec string) (string, error) {
+	return requireProjectLoader().ResolveProjectRepo(hostInProcCtx(), repoSpec)
+}
+
+// ApplyDiscover walks every flat scan spec on uf.Discover and registers each entity it finds. Each
+// spec scans its path for directories containing that spec's manifest; every discovered manifest is
+// routed by SHAPE, and an explicit map entry always wins over a discovered one. scanRoot resolution
+// is relative to rootDir (the dir containing charly.yml).
+//
+// The WALK+PARSE half (find directories, read + classify + gate + parse each manifest's documents)
+// is loaderkit.RunDiscover, reached through the seam this file declares — the SAME mechanism the
+// whole-project walk's own depth-0 discover pass drives internally, reused rather than duplicated.
+// Only the registry-coupled MATERIALIZE fold (foldDiscoveredManifests, materialize.go — shared with
+// the walk's discovered-manifest step via the FoldDiscoveredManifests seam, R3) is host-side.
+func ApplyDiscover(uf *spec.UnifiedFile, rootDir string) error {
+	dms, err := requireProjectLoader().RunDiscover(rootDir, uf.Discover, hostWalkSeams())
+	if err != nil {
+		return err
+	}
+	return foldDiscoveredManifests(dms, uf)
+}
+
+// projectCandiesScanned scans or synthesizes a candy per entry in uf.Candy, into its pre-completion,
+// pre-finalize spec.ScannedCandy form. Entries with `from:` go through the registered CandyScanner
+// seam so directory-based candies behave identically; inline entries synthesize from the embedded
+// CandyYAML and take their DECLARING FILE's directory as SourceDir — rootDir here, or the namespace
+// sub-file's dir when one declares them (see ScanInlineCandy's own contract).
+func projectCandiesScanned(uf *spec.UnifiedFile, rootDir string) (map[string]spec.ScannedCandy, error) {
+	return requireCandyScanner().ProjectCandiesScanned(uf, rootDir, parseCandyYAML)
 }

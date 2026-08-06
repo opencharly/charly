@@ -32,7 +32,7 @@ import (
 // external substrate plugins first, R3 with bundle add / update), returning a clear error for a
 // targetless substrate. The node is DATA the calling command plugin already resolved; the host does
 // ONLY the irreducible core-M dispatch.
-func dispatchLifecycleTarget(verb string, node *spec.BundleNode, deployName string) (LifecycleTarget, error) {
+func dispatchLifecycleTarget(verb string, node *spec.BundleNode, deployName string) (spec.LifecycleTarget, error) {
 	if node == nil {
 		return nil, fmt.Errorf("charly %s %s: no deploy node supplied by the command plugin", verb, deployName)
 	}
@@ -52,7 +52,7 @@ func dispatchLifecycleTarget(verb string, node *spec.BundleNode, deployName stri
 	if err != nil {
 		return nil, err
 	}
-	lt, ok := target.(LifecycleTarget)
+	lt, ok := target.(spec.LifecycleTarget)
 	if !ok {
 		return nil, fmt.Errorf("charly %s %s: %q target has no live runtime", verb, deployName, node.Target)
 	}

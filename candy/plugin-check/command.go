@@ -4,19 +4,26 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
 
 // command.go — the command:check dispatch + the host-seam bridges. The plugin OWNS the `charly check`
 // CLI grammar (the CheckCmd kong tree) + the output formatting; the composite host-serving Mechanisms
 // it cannot perform (venue construction + OCI-label plan extraction + registry verb dispatch) stay in
-// core behind the generic "check-run" HostBuild seam. command:check is COMPILED-IN and dispatches
-// exactly ONE `charly check …` invocation per process, so the reverse-channel executor is stashed in a
-// package var at Invoke(OpRun) entry (setCommandContext) — race-free single-command-per-process,
-// mirroring candy/plugin-vm.
+// core, reached over the remaining HostBuild seams (cli / check-load-plugins /
+// check-bed-gpu-prereq) + InvokeProvider peer dispatch — the former generic "check-run" HostBuild
+// seam is DELETED (K-wave 2 cone R4: every mode now dispatches to this plugin's OWN bodies, see
+// hostCheckRunCtx below), and the post-run prune's retention-defaults resolve moved plugin-side
+// (K-wave 2 cone R6, loaderkit.ResolveRetentionDefaultsViaExecutor). command:check is COMPILED-IN
+// and dispatches exactly ONE `charly check …`
+// invocation per process, so the reverse-channel executor is stashed in a package var at
+// Invoke(OpRun) entry (setCommandContext) — race-free single-command-per-process, mirroring
+// candy/plugin-vm.
 
 // cmdCtx / cmdExec carry the Invoke(OpRun) reverse-channel handle to the deep CLI call sites.
 var (
@@ -37,8 +44,8 @@ func dispatchCheckCLI(args []string) error {
 	return sdk.RunInProcCLI("check", &cli, args)
 }
 
-// hostCheckRun asks the host to build the venue + run a check plan via the generic "check-run"
-// HostBuild kind, returning the per-step results the CheckCmd handlers format, using the
+// hostCheckRun dispatches a check plan to this package's OWN per-mode bodies (hostCheckRunCtx),
+// returning the per-step results the CheckCmd handlers format, using the
 // package-level cmdCtx (valid for the whole `charly check ...` command dispatch). cmdExec is nil
 // on the out-of-process CliMain path (no reverse channel) → a clear error.
 func hostCheckRun(req spec.CheckRunRequest) (kit.CheckRunReply, error) {
@@ -50,18 +57,15 @@ func hostCheckRun(req spec.CheckRunRequest) (kit.CheckRunReply, error) {
 // whole command dispatch). Both entry points route through this SAME Mode switch (R3 — one
 // dispatch, not two).
 //
-// K1-unblock wave: dispatch is now COMPLETE. Mode:"box"/"live"/"feature-live"/"score" dispatch to
-// this plugin's OWN pluginCheckRunBox/Live/FeatureLive/Score bodies. Mode:"preflight" forwards to
-// the host's "check-run" HostBuild arm (charly/host_build_check_run.go's hostCheckRunPreflight) —
-// the ONE surviving host-anchored body, kept there because its agent-provisioned filter needs the
-// loaded project's full bundle tree (venueIsAgentProvisioned), with no sdk-portable equivalent (see
-// that file's header comment); its image-ensure leg is dispatchBuildEnsure, itself a call into the
-// compiled-in candy/plugin-build build:ensure word (core-min wave 3). The
-// "feature-box" mode is the BUILD-scope `charly box feature run` engine (pluginCheckRunFeatureBox,
-// feature_box_gather.go — relocated from core hostFeatureBox in cone-C #31): candy/plugin-box's
-// command:feature InvokeProvider's command:check's hidden `__feature-box` leaf, which routes here.
-// The former dual-mode fallback (a bare default forwarding EVERY uncased mode to the host) is
-// retired: every mode is now an explicit case or an explicit unknown-mode error.
+// K-wave 2 cone R4: dispatch is COMPLETE — the "check-run" HostBuild kind is DELETED. Every mode
+// dispatches to this plugin's OWN bodies: Mode:"box"/"live"/"feature-live"/"score" →
+// pluginCheckRunBox/Live/FeatureLive/Score; Mode:"preflight" → pluginCheckRunPreflight (the
+// relocated preflight body — loaderkit.LoadUnifiedViaExecutor + InvokeProvider("build","ensure"),
+// see its doc below). The "feature-box" mode is the BUILD-scope `charly box feature run` engine
+// (pluginCheckRunFeatureBox, feature_box_gather.go — relocated from core hostFeatureBox in
+// cone-C #31): candy/plugin-box's command:feature InvokeProvider's command:check's hidden
+// `__feature-box` leaf, which routes here. Every mode is an explicit case or an explicit
+// unknown-mode error.
 func hostCheckRunCtx(ctx context.Context, req spec.CheckRunRequest) (kit.CheckRunReply, error) {
 	if cmdExec == nil {
 		return kit.CheckRunReply{}, fmt.Errorf("charly check requires compiled-in placement (the check-run host seam is unavailable out-of-process)")
@@ -83,23 +87,55 @@ func hostCheckRunCtx(ctx context.Context, req spec.CheckRunRequest) (kit.CheckRu
 	return kit.CheckRunReply{}, fmt.Errorf("check-run: unknown mode %q", req.Mode)
 }
 
-// pluginCheckRunPreflight forwards the "preflight" mode to the host's "check-run" HostBuild seam —
-// see hostCheckRunCtx's header for why this ONE mode stays host-anchored (the agent-provisioned
-// filter's project-tree coupling).
+// pluginCheckRunPreflight performs the host-target image preflight plugin-side (K-wave 2 cone R4 —
+// the "check-run" HostBuild kind is DELETED; its last arm "preflight" relocated here). It loads the
+// project via loaderkit (LoadUnifiedViaExecutor — the same self-load bed_session.go uses), checks
+// the entity exists, filters agent-provisioned venues via the bundle-tree predicate
+// spec.VenueIsAgentProvisioned (the former host-anchoring rationale — the plugin CAN read the
+// bundle tree, so the filter is fully portable), and ensures every remaining candidate image is
+// present in local podman storage via the compiled-in candy/plugin-build build:ensure word
+// (InvokeProvider peer dispatch — the same leg core's dispatchBuildEnsure drives).
 func pluginCheckRunPreflight(ex *sdk.Executor, ctx context.Context, req spec.CheckRunRequest) (kit.CheckRunReply, error) {
-	reqJSON, err := json.Marshal(req)
+	dir := req.Dir
+	if dir == "" {
+		if cwd, err := os.Getwd(); err == nil {
+			dir = cwd
+		}
+	}
+	uf, ok, err := loaderkit.LoadUnifiedViaExecutor(ctx, ex, dir)
 	if err != nil {
 		return kit.CheckRunReply{}, err
 	}
-	out, err := ex.HostBuild(ctx, "check-run", reqJSON)
-	if err != nil {
-		return kit.CheckRunReply{}, err
+	if !ok || uf == nil {
+		return kit.CheckRunReply{}, fmt.Errorf("check-run preflight: no charly.yml in %s", dir)
 	}
-	var reply kit.CheckRunReply
-	if err := json.Unmarshal(out, &reply); err != nil {
-		return kit.CheckRunReply{}, fmt.Errorf("check-run: decode reply: %w", err)
+	if _, has := uf.Bundle[req.Name]; !has {
+		return kit.CheckRunReply{}, fmt.Errorf("check-run preflight: no entity %q in %s", req.Name, dir)
 	}
-	return reply, nil
+	fmt.Fprintf(os.Stderr, "preflight: ensuring %d image(s) present in podman storage\n", len(req.Filter))
+	for _, ref := range req.Filter {
+		if spec.VenueIsAgentProvisioned(uf, ref) {
+			continue
+		}
+		params, merr := json.Marshal(spec.BuildEnsureRequest{Image: ref, Dir: dir})
+		if merr != nil {
+			return kit.CheckRunReply{}, merr
+		}
+		out, ierr := ex.InvokeProvider(ctx, "build", "ensure", sdk.OpBuild, params, nil, sdk.InvokeProviderOpts{})
+		if ierr != nil {
+			return kit.CheckRunReply{}, fmt.Errorf("preflight: %w", ierr)
+		}
+		var reply spec.BuildEnsureReply
+		if len(out) > 0 {
+			if derr := json.Unmarshal(out, &reply); derr != nil {
+				return kit.CheckRunReply{}, fmt.Errorf("preflight: decode ensure reply: %w", derr)
+			}
+		}
+		if reply.Error != "" {
+			return kit.CheckRunReply{}, fmt.Errorf("%s", reply.Error)
+		}
+	}
+	return kit.CheckRunReply{}, nil
 }
 
 // bedHostBuild DIED (#55 W3 B2-full): the "check-bed" HostBuild seam it bridged to is gone. The
@@ -143,27 +179,15 @@ func bedCliReq(ex *sdk.Executor, ctx context.Context, req spec.CliRequest) (spec
 // hostRetention runs the SHARED check-run prune engine, now owned by candy/plugin-clean
 // (K1-alpha core-minimization relocation — retention.go, reached via verb:retention). The
 // harness dispatcher defers a {Check:true, Dir} call so `.check/<name>/` is trimmed to
-// keep_check_runs after a run. This plugin (like plugin-clean's own CLI) cannot LoadConfig
-// itself, so it FIRST fetches the resolved defaults.keep_check_runs via the small
-// "retention-defaults" HostBuild seam (the ONE thing the retention engine genuinely cannot
-// compute), then reaches candy/plugin-clean's verb:retention over the PLUGIN↔PLUGIN
-// InvokeProvider peer-dispatch leg (F10) with the resolved count filled in. The plugin prints
-// the "Pruned N (keep_check_runs=K)" line from reply.CheckPaths/KeepCheckRuns.
+// keep_check_runs after a run. This plugin (like plugin-clean's own CLI) resolves the
+// defaults.keep_check_runs PLUGIN-SIDE via the shared
+// sdk/loaderkit.ResolveRetentionDefaultsViaExecutor (K-wave 2 cone R6 — the former
+// "retention-defaults" HostBuild seam is DELETED), then reaches candy/plugin-clean's
+// verb:retention over the PLUGIN↔PLUGIN InvokeProvider peer-dispatch leg (F10) with the
+// resolved count filled in. The plugin prints the "Pruned N (keep_check_runs=K)" line from
+// reply.CheckPaths/KeepCheckRuns.
 func hostRetention(ex *sdk.Executor, ctx context.Context, req spec.RetentionRequest) (spec.RetentionReply, error) {
-	defReqJSON, err := json.Marshal(spec.RetentionRequest{Dir: req.Dir})
-	if err != nil {
-		return spec.RetentionReply{}, err
-	}
-	defOut, err := ex.HostBuild(ctx, "retention-defaults", defReqJSON)
-	if err != nil {
-		return spec.RetentionReply{}, err
-	}
-	var defaults spec.RetentionReply
-	if err := json.Unmarshal(defOut, &defaults); err != nil {
-		return spec.RetentionReply{}, fmt.Errorf("retention-defaults: decode reply: %w", err)
-	}
-	req.KeepImages = defaults.KeepImages
-	req.KeepCheckRuns = defaults.KeepCheckRuns
+	req.KeepImages, req.KeepCheckRuns = loaderkit.ResolveRetentionDefaultsViaExecutor(ctx, ex, req.Dir)
 
 	reqJSON, err := json.Marshal(req)
 	if err != nil {

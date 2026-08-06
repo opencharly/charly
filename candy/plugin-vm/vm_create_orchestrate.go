@@ -49,8 +49,8 @@ func (c *VmCreateCmd) runVmSpecCreate(vmName string, spec *VmSpec, backend strin
 	ovr.ApplyToVmSpec(spec)
 
 	// #Vm's required-with-default fields (firmware/network-mode/cpu-mode) were already materialized on
-	// spec host-side by the config-resolve seam (hostConfigResolve applies applyCueDefaults to reply.VM),
-	// so the former in-handler applyCueDefaults call is redundant. The instance override above only
+	// spec host-side by the config-resolve seam (hostConfigResolve applies ApplyCueDefaults to reply.VM),
+	// so the former in-handler ApplyCueDefaults call is redundant. The instance override above only
 	// touches libvirt: overlays (never a defaulted field), so the seam-applied defaults are unaffected.
 
 	// Per-domain state dir (id_ed25519, NVRAM, known_hosts, and — on the deploy path — the disk

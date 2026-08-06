@@ -73,9 +73,11 @@ func TestProjectTemplates_NamespaceQualified(t *testing.T) {
 // the namespaced-box resolve through testBuildResolvedProject, a test-side reproduction of DELETED
 // production code (charly/resolved_project_host.go's namespaced-box fill) whose production home is
 // now candy/plugin-build (resolveBuildEngine → projectResolvedProjectLeg). The moved test exercises
-// that PRODUCTION function directly, stubbing the "buildengine-namespaced" HostBuild leg via a fake
-// executor (the same pattern candy/plugin-deploy-vm/lifecycle_test.go already uses) instead of
-// reproducing charly-core-only loader internals a plugin cannot import.
+// that PRODUCTION function directly over a fake executor (the same pattern
+// candy/plugin-deploy-vm/lifecycle_test.go already uses) instead of reproducing charly-core-only
+// loader internals a plugin cannot import. Since K-wave 2 cone R1 A2 unit 3b it stubs NO namespace
+// host leg at all — the whole namespace walk runs plugin-side, and the fake now PANICS on any
+// HostBuild kind other than the generic `loader-threaded` snapshot.
 
 // TestHostBuildDeployEntityResolve_K8sNamespaceQualified DELETED (K-wave W3a A3-phase-2): its
 // subject, hostBuildDeployEntityResolve (the "deploy-entity-resolve" HostBuild seam), is deleted —

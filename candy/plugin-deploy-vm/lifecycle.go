@@ -28,7 +28,7 @@ import (
 
 // lifecycleParams are the params the host proxy ships for a vm lifecycle Op. node is the canonical
 // BundleNode JSON; prepare is the resolved spec.LifecyclePrepareInput (PrepareVenue only); opts is
-// polymorphic (LifecycleOpts/LogsOpts/RebuildOpts), decoded per-op.
+// polymorphic (LifecycleOpts/DeployTargetLogsOpts/DeployTargetRebuildOpts), decoded per-op.
 type lifecycleParams struct {
 	Name      string          `json:"name"`
 	Dir       string          `json:"dir"`
@@ -37,7 +37,6 @@ type lifecycleParams struct {
 	Prepare   json.RawMessage `json:"prepare"`
 	KeepImage bool            `json:"keep_image"`
 	Cmd       []string        `json:"cmd"`
-	Plan      json.RawMessage `json:"plan"` // host-resolved spec.PodLiveStdioPlan (F12 OpAttach)
 }
 
 // isLifecycleOp reports whether op is a substrate-lifecycle Op (vs. the OpExecute deploy walk).
@@ -106,16 +105,15 @@ func invokeLifecycle(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 }
 
 // vmAttach runs the F12 interactive session (`charly shell <vm-deploy>`) IN the guest: the host serves
-// the guest *SSHExecutor (via the vm VenueExecutor) and resolved the in-guest command into p.Plan
-// (#PodLiveStdioPlan — empty script ⇒ a bare login shell, `ssh -t <alias>`). The plugin runs it over
-// exec.RunInteractive, whose SSHExecutor leg wraps it in `ssh -t <alias> [script]` with the operator's
-// terminal inherited host-side. The exit round-trips as spec.PodExecReply.ExitCode → *sdk.ExitCodeError.
+// the guest *SSHExecutor (via the vm VenueExecutor) and threads the raw cmd over the wire; the plugin
+// derives the in-guest command itself (strings.Join(cmd, " ") — the F12 attach-resolver moved
+// plugin-side with the deletion of charly/vm_lifecycle_preresolve.go, K-wave 2 cone CONTESTED, since
+// the cmd was already on the wire at unified_targets' dispatch). Empty cmd ⇒ a bare login shell,
+// `ssh -t <alias>`. The plugin runs it over exec.RunInteractive, whose SSHExecutor leg wraps it in
+// `ssh -t <alias> [script]` with the operator's terminal inherited host-side. The exit round-trips
+// as spec.PodExecReply.ExitCode → *sdk.ExitCodeError.
 func vmAttach(ctx context.Context, exec *sdk.Executor, p lifecycleParams) (*pb.InvokeReply, error) {
-	var plan spec.PodLiveStdioPlan
-	if err := json.Unmarshal(p.Plan, &plan); err != nil {
-		return nil, fmt.Errorf("plugin-deploy-vm attach: decode plan: %w", err)
-	}
-	exit, err := exec.RunInteractive(ctx, plan.Script)
+	exit, err := exec.RunInteractive(ctx, strings.Join(p.Cmd, " "))
 	if err != nil {
 		return nil, fmt.Errorf("plugin-deploy-vm attach: %w", err)
 	}
@@ -211,31 +209,18 @@ func vmEntityForPrepare(node *spec.BundleNode, name string) (string, error) {
 }
 
 // resolvePriorVmState reads a domain's persisted VmDeployState (instance-id, ssh_port, disk path)
-// via the "config-resolve" HostBuild seam (bed-robustness batch item 5 — the DeployStateHost
-// out-of-process-read audit). Pulled out of vmPrepareVenue as its own function purely for
-// testability: unlike the rest of vmPrepareVenue (which self-loads the project via
-// loaderkit.ResolveVmEntityViaExecutor + waits for guest readiness — its coverage is the
-// check-sidecar-pod / check-charly-vm disposable-bed runtime gate), this ONE seam call is
-// unit-testable with a minimal fake
-// *sdk.Executor, and the regression it guards is severe: candy/plugin-deploy-vm runs
-// out-of-process, so a direct deploykit.LoadDeployConfigForRead call here (the pre-fix shape)
-// NEVER touches the executor at all and ALWAYS silently returns an empty state — every domain
-// looked "never created before," discarding+re-creating the per-domain disk overlay on EVERY
-// `charly bundle add vm:<name>`, even for an already-running VM.
-func resolvePriorVmState(ctx context.Context, exec *sdk.Executor, domainID string) (*spec.VmDeployState, error) {
-	reqJSON, err := json.Marshal(spec.ConfigResolveRequest{Entity: domainID})
-	if err != nil {
-		return nil, fmt.Errorf("marshal config-resolve request: %w", err)
-	}
-	resJSON, err := exec.HostBuild(ctx, "config-resolve", reqJSON)
-	if err != nil {
-		return nil, err
-	}
-	var configReply spec.ConfigResolveReply
-	if err := json.Unmarshal(resJSON, &configReply); err != nil {
-		return nil, fmt.Errorf("decode config-resolve reply: %w", err)
-	}
-	return configReply.VmState, nil
+// PLUGIN-SIDE via loaderkit.ResolveVmStateViaExecutor (K-wave 2 cone R2 bank D — the
+// "config-resolve" HostBuild seam is DELETED). A package var (test seam, same pattern as
+// resolveVmEntityForForwards in candy/plugin-kube) so the vmPrepareVenue + ephemeral-teardown
+// tests stub the read directly instead of faking the multi-leg loader path
+// (LoadUnifiedViaExecutor dispatches loader-threaded/-bootstrap/-walk/-materialize). The regression
+// it guards is severe: candy/plugin-deploy-vm runs out-of-process, so a direct
+// deploykit.LoadDeployConfigForRead call here (the pre-fix shape) NEVER touches the executor at
+// all and ALWAYS silently returns an empty state — every domain looked "never created before,"
+// discarding+re-creating the per-domain disk overlay on EVERY `charly bundle add vm:<name>`, even
+// for an already-running VM.
+var resolvePriorVmState = func(ctx context.Context, exec *sdk.Executor, domainID string) (*spec.VmDeployState, error) {
+	return loaderkit.ResolveVmStateViaExecutor(ctx, exec, domainID)
 }
 
 // dispatchVmEphemeralTeardown runs the vm ephemeral-lifecycle teardown (F6 vm-lifecycle move,
@@ -244,7 +229,8 @@ func resolvePriorVmState(ctx context.Context, exec *sdk.Executor, domainID strin
 // carry was stale — the actual teardown WORK (systemd transient timers, libvirt snapshot
 // refcounts) was already 100% plugin-side in candy/plugin-bundle's teardownEphemeral, reached over
 // OpEphemeralTeardown). The persisted VmState (including the runtime Ephemeral record) is read via
-// the SAME "config-resolve" seam vmPrepareVenue uses (resolvePriorVmState) rather than a direct
+// the SAME plugin-side read vmPrepareVenue uses (resolvePriorVmState →
+// loaderkit.ResolveVmStateViaExecutor, the config-resolve seam is DELETED) rather than a direct
 // deploykit.LoadDeployConfigForRead call — this plugin runs out-of-process, so a direct call would
 // silently see no DeployStateHost and always return nil (see resolvePriorVmState's own doc for the
 // exact regression that caused). A no-op when the domain was never marked ephemeral. Best-effort:
@@ -359,22 +345,18 @@ func vmPrepareVenue(ctx context.Context, exec *sdk.Executor, p lifecycleParams, 
 	vm := *vmPtr
 
 	// Prior runtime state (instance-id, ssh_port, disk path) for idempotent reuse decisions — read
-	// via the "config-resolve" HostBuild seam (bed-robustness batch item 5 — the placement-dependent
-	// silent-no-op class), NOT a direct deploykit.LoadDeployConfigForRead call. This plugin runs
-	// out-of-process (it is NOT in go.work's compiled_plugins list), so deploykit.DeployStateHost —
-	// the package var charly's core registers ONLY inside ITS OWN process at init — is NEVER
-	// registered in THIS process: a direct LoadDeployConfigForRead call here silently, ERRORLESSLY
-	// returns an EMPTY BundleConfig on every single invocation (LoadBundleConfig's
-	// `if DeployStateHost == nil { return nil, nil }` fast path), so `prior` was ALWAYS nil and
-	// `persistedPort` ALWAYS 0 — the domain was treated as "never created before" on EVERY
-	// prepare-venue call, including for an already-running VM, causing the reachability dial to
-	// probe the wrong (freshly-and-uselessly-allocated) port, ALWAYS miss, and ALWAYS re-trigger
-	// auto-boot's `vm create` — which discards and RE-CREATES the per-domain disk overlay on every
-	// call (`runVmSpecCreate`'s "Fresh overlay on every (re)create"), silently wiping guest state on
-	// every ordinary `charly bundle add vm:<name>`. The SAME "config-resolve" HostBuild seam
-	// candy/plugin-vm's hostConfigResolve already uses (keyed the identical way: Entity=domainID,
-	// consuming only .VmState) crosses back into the HOST process — which DOES have DeployStateHost
-	// registered — regardless of this plugin's own placement (in-proc or out-of-process alike).
+	// PLUGIN-SIDE via resolvePriorVmState → loaderkit.ResolveVmStateViaExecutor (bed-robustness
+	// batch item 5's placement-dependent silent-no-op class; the config-resolve HostBuild seam is
+	// DELETED, K-wave 2 cone R2 bank D), NOT a direct deploykit.LoadDeployConfigForRead call. This
+	// plugin runs out-of-process (it is NOT in go.work's compiled_plugins list), so
+	// deploykit.DeployStateHost — the package var charly's core registers ONLY inside ITS OWN
+	// process at init — is NEVER registered in THIS process: a direct LoadDeployConfigForRead call
+	// here silently, ERRORLESSLY returns an EMPTY BundleConfig on every single invocation
+	// (LoadBundleConfig's `if DeployStateHost == nil { return nil, nil }` fast path), so `prior`
+	// was ALWAYS nil and the domain was treated as "never created before" on EVERY prepare-venue
+	// call — discarding and RE-CREATING the per-domain disk overlay on every ordinary
+	// `charly bundle add vm:<name>`, silently wiping guest state. The loaderkit reader crosses
+	// back into the HOST loader regardless of this plugin's own placement.
 	prior, err := resolvePriorVmState(ctx, exec, domainID)
 	if err != nil {
 		return nil, fmt.Errorf("plugin-deploy-vm prepare-venue: resolve prior deploy state: %w", err)

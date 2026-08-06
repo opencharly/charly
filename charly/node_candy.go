@@ -44,7 +44,7 @@ func buildCandy(gn *genericNode) (name string, ic *spec.InlineCandy, err error) 
 	}
 	// Decode-ONLY at load (fast, runs on every invocation): the full closed-schema
 	// CUE validation (CalVer/enum/unknown-key checks) runs at `charly box validate`
-	// (validateCandyManifestCUE), not here — matching the legacy parseCandyYAML.
+	// (the loader seam's ValidateCandyManifestCUE), not here — matching the legacy parseCandyYAML.
 	var c spec.CandyYAML
 	if err := decodeNodeValue(gn, &c); err != nil {
 		return "", nil, err

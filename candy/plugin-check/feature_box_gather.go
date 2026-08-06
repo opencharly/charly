@@ -2,7 +2,7 @@ package check
 
 // feature_box_gather.go — the "feature-box" check-run mode: BUILD-scope Agent Driven Evaluation
 // acceptance against a DISPOSABLE container (the `charly box feature run <image>` engine, relocated
-// from charly/host_build_check_run.go's hostFeatureBox in cone-C #31). It mirrors run_box.go's
+// from the former core hostFeatureBox in cone-C #31). It mirrors run_box.go's
 // pluginCheckRunBox (same ResolveRuntime → ResolveLocalImageRef → ExtractMetadata →
 // CheckBoxContainerChain → newPluginCheckRunner build-scope shape) but runs the FEATURE plan: the
 // whole baked plan with SkipDeterministicRun (skip the build-time install run: steps) + the caller's

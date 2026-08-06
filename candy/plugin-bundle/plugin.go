@@ -8,16 +8,19 @@
 //     (runBundleCommand → kong-parse the BundleCmd tree — command.go), so the handlers run in
 //     charly's OWN process and inherit charly's real stdio/TTY natively. `add`/`del` (walk.go, the
 //     K4-C WALK PORT) drive the WHOLE deploy-tree walk plugin-side: the config loader
-//     (the merged-tree read/resolveDelNode, LoadUnified-coupled) and the registry-backed executor-chain
-//     derivation (deriveChildExecutorForPath) stay host-side behind four narrow seams —
-//     deploy-plugins-connect / resolve-target-add / deploy-del-resolve / deploy-node-del-dispatch —
+//     (the merged-tree read, LoadUnified-coupled) + the del RESOLUTION (del_resolve.go, K-wave 2
+//     cone R2 bank C) run plugin-side; the registry-backed executor-chain
+//     derivation (deriveChildExecutorForPath) stays host-side behind three narrow seams —
+//     deploy-plugins-connect / resolve-target-add / deploy-node-del-dispatch —
 //     while the tree traversal AND the per-node compile (compilePlansForRequest, IN-PROC after
 //     K4-C shape-2 — no OpCompile round-trip) run plugin-side; ResolveTarget → the deploy target's
 //     Add/Del is the host tail of the resolve-target-add / deploy-node-del-dispatch seams. Sibling
 //     `peer:` member bring-up/tear-down calls sdk/deploykit.BringUpMembers/TearDownMembers
 //     directly (#55 W3 A4 — the former deploy-members-up/-down seams are deleted). `from-box`
-//     still forwards to HostBuild("deploy-from-box"); the config-management leaves (show/export/
-//     import/reset/status) run plugin-side — reads via loaderkit.LoadHostBundleConfigViaExecutor, writes via
+//     runs fully plugin-side since K-wave 2 cone R2 (runFromBoxPod reaches deploy:pod's
+//     OpConfigSetup by direct InvokeProvider; the "deploy-from-box" seam is deleted); the
+//     config-management leaves (show/export/import/reset/status) run plugin-side — reads via
+//     loaderkit.LoadHostBundleConfigViaExecutor, writes via
 //     deploykit.SaveBundleConfig directly (#55 K4 config-write seam-collapse). `path`
 //     resolves plugin-side via kit.DefaultDeployConfigPath (no seam).
 //

@@ -28,8 +28,8 @@ import (
 // envelope — and DELIBERATELY OMITS render-prep (dg.RenderPrepAll), unlike resolveBuildEngine's
 // (this package's build:box/build:generate resolve) full pipeline. The current host projector
 // never render-prepped ROOT boxes either (only namespaced ones — formerly via the deleted
-// host namespaced-box fill's own tempGen.toDeploykit().RenderPrepBox, now via the plugin-side fold's
-// deploykit.FillNamespaceBoxViews over the buildengine-namespaced scan reply — an existing,
+// host namespaced-box fill's own tempGen.toDeploykit().RenderPrepBox, now via the plugin-side
+// namespace walk's deploykit.FillNamespaceBoxViews (resolve_legs.go) — an existing,
 // UNTOUCHED asymmetry tracked separately as task #69). Changing that asymmetry here would smuggle
 // a behavior change into a pure boundary move — forbidden by the parity requirement.
 func resolveProjectEnvelope(ctx context.Context, ex *sdk.Executor, req spec.ResolvedProjectRequest) (spec.ResolvedProject, error) {
@@ -45,7 +45,7 @@ func resolveProjectEnvelope(ctx context.Context, ex *sdk.Executor, req spec.Reso
 	// LocalSuperproject mirrors the deleted charly/resolved_project_host.go's
 	// applySelfSuperprojectOverride(dir) call — reproduced here PURELY (os/exec + loaderkit, zero
 	// host-only coupling), since a compiled-in plugin shares the host's OS process/environment, so
-	// os.Setenv here is visible to the SAME "buildengine-ensure-repo" host leg's
+	// os.Setenv here is visible to the SAME per-call ensureRepoLeg
 	// EnsureRepoDownloaded call that reads CHARLY_REPO_OVERRIDE. Used today by
 	// candy/plugin-check/checkproject.go.
 	if req.LocalSuperproject {
@@ -72,11 +72,11 @@ func resolveProjectEnvelope(ctx context.Context, ex *sdk.Executor, req spec.Reso
 	// own scan (which hardcodes ExtraCandyRefs: nil, since build/generate never widens the scan),
 	// the deleted host projector DID thread ExtraCandyRefs through ScanAllCandyWithConfigOpts, so
 	// this must too (candy/plugin-installstep + plugin-bundle both rely on it for add_candy: refs).
-	localScanned, err := scanLocalLeg(ctx, ex, req)
+	localScanned, err := scanLocalLeg(ctx, ex, uf, dir, distroCfg)
 	if err != nil {
 		return spec.ResolvedProject{}, err
 	}
-	layers, err := loaderkit.ScanCandyFromLocal(localScanned, initCfg, scanSeamsLeg(ctx, ex, req))
+	layers, err := loaderkit.ScanCandyFromLocal(localScanned, initCfg, scanSeamsLeg(ctx, ex, req, cfg, distroCfg))
 	if err != nil {
 		return spec.ResolvedProject{}, err
 	}

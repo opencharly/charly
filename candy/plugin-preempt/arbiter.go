@@ -74,9 +74,30 @@ func newArbiter(ctx context.Context, exec *sdk.Executor) *ResourceArbiter {
 
 // --- the verb:arbiter Invoke handler (action-multiplexed) ------------------------------------
 
+// envPreemptLeaseHeld is the process-env marker an OUTERMOST claim-bringing `charly` invocation
+// (a check-bed run, a standalone `charly vm create`/`charly start`, or the deploy-dispatch
+// Start bracket) sets on a successful acquire, so nested `charly` subprocesses of the SAME outer
+// invocation skip re-acquiring / releasing. The guard lives HERE (K-wave 2 cone R2 bank E — moved
+// from the per-caller copies in the deleted charly/preempt.go's acquire*/release* shims +
+// candy/plugin-check + candy/plugin-vm): the arbiter is the ONE place every acquire/release
+// dispatch passes through, so
+// the "an outer orchestrator owns the lease" skip is enforced once, for every caller.
+const envPreemptLeaseHeld = "CHARLY_PREEMPT_LEASE"
+
 // invokeArbiter runs one arbiter action (the in-core proxy's spec.ArbiterInvokeInput) against a
 // live arbiter wired to the host reverse channel, and returns the matching reply.
 func invokeArbiter(ctx context.Context, exec *sdk.Executor, in spec.ArbiterInvokeInput) spec.ArbiterInvokeReply {
+	// The outer-orchestrator ACQUIRE guard: when CHARLY_PREEMPT_LEASE is set, the lease is owned by
+	// an OUTER invocation of this same process tree — skip acquiring here (the outer owner manages
+	// the full lifecycle). A no-op reply, matching the former per-caller acquire guard's skip
+	// semantics exactly. RELEASE is deliberately NOT guarded here: the DIRECT proxy release
+	// (newResourceArbiter().ReleaseClaimant — `charly preempt restore`, the test witness) must
+	// always act; the nested-subprocess release guard lives in the callers (releaseResourceClaim in
+	// core, arbiterBracketRelease in plugin-bundle).
+	if os.Getenv(envPreemptLeaseHeld) != "" &&
+		(in.Action == spec.ArbiterActionAcquireExclusive || in.Action == spec.ArbiterActionAcquireShared) {
+		return spec.ArbiterInvokeReply{}
+	}
 	a := newArbiter(ctx, exec)
 	switch in.Action {
 	case spec.ArbiterActionAcquireExclusive:
@@ -86,8 +107,9 @@ func invokeArbiter(ctx context.Context, exec *sdk.Executor, in spec.ArbiterInvok
 		// K-wave W3a A2: union the implied-GPU-consumer token (gpu_imply.go) onto the explicit
 		// tokens BEFORE calling AcquireShared — arbiter policy (including the early-return when
 		// implied∪explicit is empty, inside AcquireShared itself) lives entirely here now, not in
-		// the in-core proxy (charly/preempt.go always dispatches acquire-shared, even with zero
-		// explicit tokens, so this is the ONLY place that decides whether a claim actually forms).
+		// the deleted in-core proxy (charly/preempt.go ALWAYS dispatched acquire-shared, even with
+		// zero explicit tokens, so this is the ONLY place that decides whether a claim actually
+		// forms).
 		implied := impliedSharedToken(ctx, exec, in.IsGroup, in.IsPodMember, in.SecurityDevices, hostRawResources(ctx, exec))
 		active, err := a.AcquireShared(in.Claimant, unionImpliedToken(in.Tokens, implied), in.ClaimAddr, in.Transient)
 		return spec.ArbiterInvokeReply{Active: active, Error: errStr(err)}
@@ -198,7 +220,7 @@ func resolvedDeployTree(ctx context.Context, exec *sdk.Executor, context string)
 // persists a crash-safe lease. Returns active=true when a lease is held. tokens/claimAddr are
 // pre-computed host-side by the in-core shim.
 func (a *ResourceArbiter) AcquireExclusive(claimant string, tokens []string, claimAddr spec.HolderAddr, transient bool) (bool, error) {
-	tokens = dedupeNonEmpty(tokens)
+	tokens = spec.DedupeNonEmpty(tokens)
 	if len(tokens) == 0 {
 		return false, nil
 	}
@@ -291,7 +313,7 @@ func (a *ResourceArbiter) AcquireExclusive(claimant string, tokens []string, cla
 // gpu-backed resource to nvidia (+ regenerate CDI) and preempts any running preemptible holder;
 // subsequent claims just refcount. Refused only when an EXCLUSIVE claim already holds the token.
 func (a *ResourceArbiter) AcquireShared(claimant string, tokens []string, claimAddr spec.HolderAddr, transient bool) (bool, error) {
-	tokens = dedupeNonEmpty(tokens)
+	tokens = spec.DedupeNonEmpty(tokens)
 	if len(tokens) == 0 {
 		return false, nil
 	}

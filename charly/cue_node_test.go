@@ -51,11 +51,11 @@ func normalizeAgentDoc(t *testing.T, doc string) error {
 // plugin-verb sugar word), while a clean builtin-verb step is accepted.
 func TestNodeFormSteps_RejectsStepTypo(t *testing.T) {
 	clean := "c:\n  candy:\n    version: \"2026.150.0000\"\n    description: x\n    plan:\n      - run: fetch the binary\n        download: \"http://example/x\"\n        extract: tar.gz\n"
-	if err := validateNodeFormSteps("t", []byte(clean)); err != nil {
+	if err := requireProjectLoader().ValidateNodeFormSteps("t", []byte(clean), loaderThreaded(), requireLoaderParser()); err != nil {
 		t.Fatalf("clean candy plan step rejected: %v", err)
 	}
 	bad := "c:\n  candy:\n    version: \"2026.150.0000\"\n    description: x\n    plan:\n      - run: fetch the binary\n        download: \"http://example/x\"\n        extract: tar.gz\n        zz_bad_op_field: 1\n"
-	if err := validateNodeFormSteps("t", []byte(bad)); err == nil {
+	if err := requireProjectLoader().ValidateNodeFormSteps("t", []byte(bad), loaderThreaded(), requireLoaderParser()); err == nil {
 		t.Fatal("a plan step with unknown key zz_bad_op_field was NOT rejected — the step-typo gate is broken")
 	}
 }
@@ -66,7 +66,7 @@ func TestNodeFormSteps_RejectsStepTypo(t *testing.T) {
 // childless-kind child, a two-discriminator node). Both are hard load errors before
 // any execution; together they are the "CUE-strict, no loosening" guarantee.
 func nodeFormRejected(doc string) bool {
-	if validateNodeDocCUE("t", []byte(doc)) != nil {
+	if requireProjectLoader().ValidateNodeDocCUE("t", []byte(doc)) != nil {
 		return true
 	}
 	var d yaml.Node
@@ -143,7 +143,7 @@ shop:
 // strictness violation is a hard error.
 func TestValidateNodeDocCUE(t *testing.T) {
 	resetDeclaredPrescanRegistries() // isolate the wrong-kind-child gate from a prior test's LoadUnified
-	if err := validateNodeDocCUE("valid", []byte(nodeDocValid)); err != nil {
+	if err := requireProjectLoader().ValidateNodeDocCUE("valid", []byte(nodeDocValid)); err != nil {
 		t.Fatalf("valid node-form document rejected: %v", err)
 	}
 

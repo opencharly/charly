@@ -20,14 +20,14 @@ import (
 // A LoadUnified/scan failure becomes a spec.Diagnostic (skip+continue) instead of aborting —
 // mirroring the DELETED host buildResolvedProjectTolerant/loadProjectForResolve's tolerant
 // branch — reusing the SAME loaderkit primitives resolveProjectEnvelope already proved portable
-// in 3b. What does NOT relocate here (RDD: neither proven nor attempted, per validate_project_host.go's
-// own explicit, unrefuted claim): the "host-natural" RAW-config checks (the CUE-schema conformance
-// trio, build/distro/merge/tunable/remote-candy validation — need the on-disk manifest bytes + the
-// CUE library) and the registry-derived D-data (ProviderCapabilities/ActCapableVerbs — need
-// providerRegistry.allProviders(), a genuine kernel M-mechanism per the boundary law). Those stay
-// behind a SEPARATE, now-much-smaller "validate-project-checks" HostBuild leg
-// (charly/validate_project_host.go) that candy/plugin-box's runValidateEngine calls IN ADDITION to
-// this Op, merging both diagnostics sets + the D-data fields before running its own pure/graph rules.
+// in 3b. What does NOT relocate here are the RULES themselves — they belong to the validate plugin,
+// not to this resolve: candy/plugin-box runs the raw-config, CUE-schema-conformance and
+// remote-candy checks over its OWN self-load (validate_config_rules.go / validate_schema_rules.go,
+// K-wave 2 cone R1 unit B), which is why the host's former "validate-project-checks" leg is DELETED.
+// The one thing neither plugin can produce is the registry-derived D-data
+// (ProviderCapabilities/ActCapableVerbs — needs providerRegistry.allProviders(), a genuine kernel
+// M-mechanism per the boundary law); runValidateEngine gets that from the host's small
+// "validate-word-sets" leg and folds it onto the envelope this Op returns.
 
 // diagSeverityError mirrors charly's former diagSeverityError (validate_project_host.go) — the
 // spec.Diagnostic severity for a hard tolerant-load failure.
@@ -71,11 +71,11 @@ func resolveProjectEnvelopeTolerant(ctx context.Context, ex *sdk.Executor, req s
 
 	resReq := spec.ResolvedProjectRequest{Dir: dir, IncludeDisabled: req.IncludeDisabled}
 	layers := map[string]spec.CandyReader{}
-	localScanned, err := scanLocalLeg(ctx, ex, resReq)
+	localScanned, err := scanLocalLeg(ctx, ex, uf, dir, distroCfg)
 	if err != nil {
 		addDiag(err)
 	} else {
-		scanned, serr := loaderkit.ScanCandyFromLocal(localScanned, initCfg, scanSeamsLeg(ctx, ex, resReq))
+		scanned, serr := loaderkit.ScanCandyFromLocal(localScanned, initCfg, scanSeamsLeg(ctx, ex, resReq, cfg, distroCfg))
 		if serr != nil {
 			addDiag(serr)
 		} else {

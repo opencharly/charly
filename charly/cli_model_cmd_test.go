@@ -62,8 +62,14 @@ func TestCLIModel_CoversCommands(t *testing.T) {
 // candy/plugin-box's "list" word, nested under "box") gets a real "<word>.<child>" leaf per entry —
 // restoring the MCP tool discoverability (e.g. box.list.boxes, the tool agents use to enumerate
 // boxes) that was silently lost when both commands externalized off a static core Kong struct.
-// run-local stays hidden (mirrors CheckCmd's own `hidden:""` tag), and a plain flat command with no
-// declared catalog (vm) stays excluded exactly as TestCommandProviders_ExtractedReachMCP asserts.
+// Hidden-but-reachable children (check.run-local / check.feature-box — CheckCmd's own `hidden:""`
+// tags, carried through KongSubcommands as Hidden) are DECLARED in the host's nested grammar — so
+// they DISPATCH (the iterate harness's `charly check run-local` re-exec parses) — but stay OUT of
+// this model: clireflect.BuildCLIModel's Kong walk omits hidden nodes (k.Model.Leaves(true)), so
+// the MCP tool surface remains blind to them. The dispatch half is asserted by
+// TestExternalCommandHolder_HiddenSubcommand; this test asserts the model half. A plain flat command
+// with no declared catalog (vm) stays excluded exactly as TestCommandProviders_ExtractedReachMCP
+// asserts.
 func TestBuildCLIModel_CheckAndBoxList(t *testing.T) {
 	paths := cliModelLeafPaths(t)
 	for _, want := range []string{
@@ -74,8 +80,10 @@ func TestBuildCLIModel_CheckAndBoxList(t *testing.T) {
 			t.Errorf("CLI model missing declared-subcommand leaf %q", want)
 		}
 	}
-	if paths["check.run-local"] {
-		t.Error("check.run-local unexpectedly present — CheckCmd tags it hidden:\"\", so KongSubcommands must skip it")
+	for _, hiddenCmd := range []string{"check.run-local", "check.feature-box"} {
+		if paths[hiddenCmd] {
+			t.Errorf("CLI model leaf %q unexpectedly present — hidden-but-reachable subcommands (CheckCmd's own `hidden:\"\"` tags) must stay out of the MCP/CLI-model surface", hiddenCmd)
+		}
 	}
 }
 

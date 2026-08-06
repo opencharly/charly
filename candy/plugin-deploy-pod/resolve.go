@@ -2,7 +2,6 @@ package deploypod
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/opencharly/sdk"
@@ -108,16 +107,10 @@ type podRuntimeImage struct {
 // resolvePodStartDirect (`charly start` direct-mode) and resolvePodShellPlan (`charly shell`)
 // compute: device detection + CDI, the deploy overlay, the image ref, and the volume backing.
 func resolvePodRuntimeImage(ctx context.Context, ex *sdk.Executor, box, instance, tag string, rt *kit.ResolvedRuntime, noAutoDetect bool, volumeFlag, bind []string) (*podRuntimeImage, error) {
-	var detRep spec.PodConfigDetectDevicesReply
-	if err := hostBuild(ctx, ex, podConfigDetectDevicesKind, spec.PodConfigDetectDevicesRequest{NoAutoDetect: noAutoDetect, Engine: rt.RunEngine}, &detRep); err != nil {
-		return nil, err
-	}
-	var detected spec.DetectedDevices
-	if len(detRep.DetectedJSON) > 0 {
-		if err := json.Unmarshal(detRep.DetectedJSON, &detected); err != nil {
-			return nil, err
-		}
-	}
+	// Device detection runs plugin-side (detect_devices.go — the relocated
+	// "pod-config-detect-devices" seam). The former seam passed Engine=rt.RunEngine, so the
+	// ensure-cdi leg fires for podman — preserved exactly.
+	detected := detectDevices(ctx, ex, noAutoDetect, rt.RunEngine)
 	engine := rt.RunEngine
 
 	dc, err := loadDeploy(ctx, ex, "charly pod runtime image")

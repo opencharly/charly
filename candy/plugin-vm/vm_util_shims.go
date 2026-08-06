@@ -1,37 +1,19 @@
 package vm
 
 import (
-	"strings"
-
 	"github.com/opencharly/sdk/vmshared"
 	"github.com/opencharly/spec/spec"
 )
 
 // vm_util_shims.go — small host-side helpers the moved VM CLI handlers (P10) reference by their
 // former core short names. These carry NO core coupling: currentUsername + the host-distro install
-// hint come from sdk/vmshared, dedupeNonEmpty is a pure set helper, and gatherResources reaches the
-// host config-resolve seam (the resolved resource vocabulary the loader owns).
+// hint come from sdk/vmshared, and gatherResources reaches the host config-resolve seam (the
+// resolved resource vocabulary the loader owns).
 
 // currentUsername returns $USER (or the "charly" fallback) — the spec contract
 // module owns the one implementation (spec.CurrentUsername, ssh_target.go);
 // aliased here so the moved handlers compile.
 var currentUsername = spec.CurrentUsername
-
-// dedupeNonEmpty trims + dedups a token list (GPU auto-allocation computes the claimant's tokens).
-// Copied verbatim from the former charly/preempt.go — a pure set helper, no core dependency.
-func dedupeNonEmpty(in []string) []string {
-	seen := map[string]bool{}
-	var out []string
-	for _, s := range in {
-		s = strings.TrimSpace(s)
-		if s == "" || seen[s] {
-			continue
-		}
-		seen[s] = true
-		out = append(out, s)
-	}
-	return out
-}
 
 // gatherResources returns the project's resolved resource vocabulary (token -> ResolvedResource,
 // carrying the GPU selector that drives auto-allocation). The loader is a core Mechanism the plugin

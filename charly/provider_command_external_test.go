@@ -175,6 +175,68 @@ func TestExternalCommandHolder_DeclaredSubcommands(t *testing.T) {
 	}
 }
 
+// TestExternalCommandHolder_HiddenSubcommand proves F-CLI-NEST hidden-but-reachable at the
+// host-grammar level: a DECLARED subcommand with Hidden:true (e.g. check's run-local — the
+// iterate harness's `charly check run-local <name> --run-id <id>` re-exec) is still a REAL Kong
+// `cmd:""` child, so it PARSES and resolves to its dispatch entry — but nestedSubcommandType tags
+// it `hidden:""`, so Kong marks the node Hidden and `--help` (and the CLI model, via
+// clireflect.KongLeafToCLILeaf's leaf.Hidden check) keep it invisible, byte-identical to the
+// `hidden:""` tag on the plugin's own grammar field.
+func TestExternalCommandHolder_HiddenSubcommand(t *testing.T) {
+	const word = "zzexechidden"
+	subs := []climodel.CLISubcommand{
+		{Name: "visible", Help: "shown in help"},
+		{Name: "run-local", Help: "hidden machinery", Hidden: true},
+	}
+	field := exportedCommandField(word)
+	holder := externalCommandHolder(word, field, subs)
+
+	var cli struct{ kong.Plugins }
+	cli.Plugins = kong.Plugins{holder}
+	parser, err := kong.New(&cli, kong.Name("charly"))
+	if err != nil {
+		t.Fatalf("kong.New with nested command holder for %q: %v", word, err)
+	}
+	// The hidden child DISPATCHES — the whole point of hidden-but-reachable.
+	kctx, err := parser.Parse([]string{word, "run-local", "mybed", "--run-id", "42"})
+	if err != nil {
+		t.Fatalf("kong.Parse of hidden subcommand: %v", err)
+	}
+	if got, want := kctx.Command(), word+" run-local <args>"; got != want {
+		t.Fatalf("kctx.Command() = %q, want %q", got, want)
+	}
+	table := map[string]externalCommandDispatch{
+		word: {word: word, holder: holder, field: field, subcommands: subs},
+	}
+	d, sub, ok := resolveCommandDispatch(kctx.Command(), table)
+	if !ok {
+		t.Fatalf("resolveCommandDispatch(%q) did not resolve", kctx.Command())
+	}
+	if sub != "run-local" {
+		t.Fatalf("resolveCommandDispatch sub = %q, want %q", sub, "run-local")
+	}
+	if got, want := externalCommandArgs(d, sub), []string{"run-local", "mybed", "--run-id", "42"}; !equalStrings(got, want) {
+		t.Fatalf("externalCommandArgs(d, %q) = %v, want %v", sub, got, want)
+	}
+	// Yet the generated `hidden:""` tag marks the node Hidden (kong build.go: tag.Hidden →
+	// node.Hidden), so `--help` and the CLI model keep it invisible; the visible sibling is not.
+	byName := map[string]*kong.Node{}
+	for _, child := range parser.Model.Children[0].Children {
+		byName[child.Name] = child
+	}
+	visible, ok := byName["visible"]
+	if !ok || visible.Hidden {
+		t.Fatalf("visible child missing or flagged hidden: %+v", byName)
+	}
+	hidden, ok := byName["run-local"]
+	if !ok {
+		t.Fatal("run-local child missing — hidden-but-reachable must still render a Kong cmd node")
+	}
+	if !hidden.Hidden {
+		t.Fatal("run-local child not flagged Hidden — nestedSubcommandType must emit `hidden:\"\"` for a Hidden declared subcommand")
+	}
+}
+
 func equalStrings(a, b []string) bool {
 	if len(a) != len(b) {
 		return false

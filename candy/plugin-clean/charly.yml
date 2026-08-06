@@ -46,22 +46,22 @@ plugin-clean:
             keep_check_runs themselves and pass the resolved ints in the request; plugin-check (a
             peer plugin, not core) reaches verb:retention via InvokeProvider.
 
-            The ONE thing this plugin genuinely cannot compute itself is those SAME
-            defaults.keep_images/keep_check_runs, for ITS OWN CLI (`charly clean`, no --keep flag)
-            — it needs the core LoadConfig loader (K-wave migration inventory, not yet
-            plugin-reachable). It fetches them via the small "retention-defaults" HostBuild seam
-            (charly/host_build_retention_defaults.go) — the ONE remaining call-back, mirroring the
-            vm + pod deploy plugins' "own the work, call back only for the one core-coupled piece"
-            doctrine. "retention"/"retention-defaults" are class-generic action nouns, not provider
-            words (F11).
+            The project's defaults.keep_images/keep_check_runs, for ITS OWN CLI (`charly clean`,
+            no --keep flag), resolve PLUGIN-SIDE via the shared
+            sdk/loaderkit.ResolveRetentionDefaultsViaExecutor (K-wave 2 cone R6 — the former
+            "retention-defaults" HostBuild seam charly/host_build_retention_defaults.go is
+            DELETED: the loader is plugin-reachable over the reverse channel, so every
+            verb:retention caller resolves the tunables itself; "retention" is a class-generic
+            action noun, not a provider word (F11).
 
             clean is COMPILED-IN (listed in charly/charly.yml compiled_plugins) because command:clean's
             Invoke(OpRun) needs the in-proc reverse channel — threaded by dispatchInProcCommand
-            ("Seam A") — to call HostBuild("retention-defaults"). The out-of-process CliMain path has
-            no reverse channel, so the categories needing a resolved keep-default (images/check/deep)
-            error there; list/invalidate need no default and run standalone even out-of-process. There
-            is NO hidden core-command forward — the plugin does the work directly, calling back only
-            for the project config default; no core symbol crosses the boundary, no ad-hoc podman.
+            ("Seam A") — to reach the host loader legs for the retention-defaults resolve. The
+            out-of-process CliMain path has no reverse channel, so the categories needing a resolved
+            keep-default (images/check/deep) error there; list/invalidate need no default and run
+            standalone even out-of-process. There is NO hidden core-command forward — the plugin
+            does the work directly, resolving the project config default itself; no core symbol
+            crosses the boundary, no ad-hoc podman.
 
             Two capabilities: command:clean dispatches through the COMPILED-IN registry path
             (registerCompiledPlugin → resolve(ClassCommand,"clean") → dispatchInProcCommand →
@@ -72,8 +72,8 @@ plugin-clean:
             an authored plan step; command:clean's args are plain CLI tokens). The R10 witness is
             the disposable check-commands-local bed: `charly clean --dry-run` AND `charly clean
             --deep --dry-run` both exit 0 and print their would-remove reports, proving the
-            externalized command + the local retention engine + the retention-defaults HostBuild
-            dispatch end-to-end for both the charly-labeled and the store-wide sweep.
+            externalized command + the local retention engine + the loader-resolved
+            retention-defaults end-to-end for both the charly-labeled and the store-wide sweep.
         plugin:
             source: github.com/opencharly/charly/candy/plugin-clean
             providers:
@@ -84,11 +84,11 @@ plugin-clean:
               # it mirrors candy/plugin-doctor's doctor-module-present: a trivial build-context
               # `plugin: command` (the built-in command CHECK verb) running `true`, the mandatory ≥1
               # deterministic check every candy ships. The full `charly clean` end-to-end, INCLUDING
-              # --deep — the local retention engine + the compiled-in in-proc
-              # HostBuild("retention-defaults") dispatch: `charly clean --dry-run` / `charly clean
+              # --deep — the local retention engine + the plugin-side loader-resolved
+              # retention-defaults: `charly clean --dry-run` / `charly clean
               # --deep --dry-run` → exit 0 with the would-remove report — is exercised by the live
               # R10 bed (check-commands-local).
-              check: the clean command plugin ships a buildable Go module (go.mod + the provider package) compiled into charly; the full `charly clean` end-to-end, INCLUDING --deep (the local retention engine + the in-proc HostBuild retention-defaults dispatch), is exercised by the live R10 (check-commands-local)
+              check: the clean command plugin ships a buildable Go module (go.mod + the provider package) compiled into charly; the full `charly clean` end-to-end, INCLUDING --deep (the local retention engine + the plugin-side loader-resolved retention-defaults), is exercised by the live R10 (check-commands-local)
               id: clean-module-present
               context:
                 - build

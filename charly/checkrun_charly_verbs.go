@@ -17,7 +17,7 @@ import "github.com/opencharly/spec/checkhost"
 // committed-APK path against the AUTHORING candy's source tree, so a check resolves its
 // fixture whether the candy is local OR fetched via @github. This wrapper's sole job is
 // supplying the two host-only inputs the pure resolver needs: h.cc.CandyDirs() (from
-// ScanAllCandyWithConfig + candyDirsFromScan, check_cmd.go) and h.cc.CandyScanErr().
+// ScanAllCandyWithConfig + candyDirsFromScan, checkrun.go) and h.cc.CandyScanErr().
 func (h *hostVerbResolver) resolveCheckApk(apk, origin string) (string, error) {
 	return checkhost.ResolveCommittedApk(apk, origin, h.cc.CandyDirs(), h.cc.CandyScanErr())
 }

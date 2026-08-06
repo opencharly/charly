@@ -1,7 +1,7 @@
 package check
 
 // score_live.go — K1-unblock wave, arm 3 (the "score" check-run mode): pluginCheckRunScore, the
-// plugin-resident port of charly/host_build_check_run.go's hostCheckRunScore +
+// plugin-resident port of the former core hostCheckRunScore +
 // charly/check_runner_live.go's RunCheckLive/scoreOnePodBucket/resolveScoringChain — the AI
 // harness's end-of-iteration scorer, walking the SUBSTITUTED scoring plan (nonce-carrying,
 // req.Plan) against the live deployments its check:/agent-check: steps target via each step's
@@ -34,7 +34,7 @@ import (
 
 // pluginCheckRunScore is the "score" mode: walk the substituted scoring plan (req.Plan) against
 // the live deployments its steps target, returning the per-step verdicts in reply.Score. The port
-// of charly/host_build_check_run.go's hostCheckRunScore.
+// of the former core hostCheckRunScore.
 func pluginCheckRunScore(ex *sdk.Executor, ctx context.Context, req spec.CheckRunRequest) (kit.CheckRunReply, error) {
 	results, err := pluginRunCheckLive(ex, ctx, req.Name, req.Plan)
 	if err != nil {
@@ -155,15 +155,25 @@ func pluginScoreOneVenueBucket(ex *sdk.Executor, ctx context.Context, dir string
 		roots := deployRoots
 		hostVars, cleanups := resolveHostVarsForSteps(ex, ctx, dir, bucketSteps(bucket), "")
 		hostCleanups = cleanups
+		// Stamp CHARLY_BIN into the runner env EXACTLY like the live paths
+		// (pluginRunLocalDeployScopePlan / pluginCheckLiveGroup's
+		// newPluginRuntimeCheckVarResolver + pluginResolverEnv): a scored host probe that shells
+		// to `${CHARLY_BIN} …` must resolve to the dispatching binary, never silently skip as an
+		// unresolved variable — the harness is the SAME engine as check live, and a divergent env
+		// is a skip-class regression (the check-preflight-local bed's scored probe caught it live).
+		resolver := newPluginRuntimeCheckVarResolver(map[string]string{"IMAGE": venue})
+		env, hasRuntime := pluginResolverEnv(resolver)
 		runner = newPluginCheckRunner(ex, ctx, spec.CheckEnv{
 			Mode:      "run",
 			Box:       venue,
 			VenueKind: chainExec.Kind(),
 		}, kit.RunnerConfig{
-			Exec:     chainExec,
-			Mode:     kit.ModeLive,
-			Box:      venue,
-			HostVars: hostVars,
+			Exec:       chainExec,
+			Mode:       kit.ModeLive,
+			Env:        env,
+			HasRuntime: hasRuntime,
+			Box:        venue,
+			HostVars:   hostVars,
 			TargetResolver: kit.VenueResolver(func(v string) (kit.Executor, map[string]string, bool, error) {
 				vex, err := pluginResolveScoringChain(roots, v)
 				if err != nil {

@@ -412,9 +412,9 @@ func TestEnabledField(t *testing.T) {
 // charly/render_seam_cache_test.go, K3 cone2 test closure, split by assertion: the RESOLVER-OUTPUT
 // half of the former TestNewCandyScanGeneratorPopulatesBoxes — whether ResolveAllBox/ResolveBox
 // produce consistent, non-empty Tags — belongs here as capability coverage of the resolve engine;
-// the CACHE-BEHAVIOR half — whether charly's newCandyScanGenerator stores a pushed box set
-// verbatim — stayed in charly with a literal fixture, since this plugin can't reach charly's
-// constructor). A literal *spec.Config fixture (mirroring box/fedora's real "fedora-builder"
+// the CACHE-BEHAVIOR half — whether charly's newCandyScanGenerator stored a pushed box set
+// verbatim — is GONE with that constructor and the render-seam Generator cache it fed, both
+// deleted in K-wave 2 cone R1). A literal *spec.Config fixture (mirroring box/fedora's real "fedora-builder"
 // image shape: a fedora-distro, rpm-format, builder-produced box) replaces the original test's
 // real box/fedora disk read — ResolvedBox.Tags is derived purely from the box's own
 // Distro/BuildFormats fields (config_resolve.go: `Tags = append([]string{"all"}, Distro...,

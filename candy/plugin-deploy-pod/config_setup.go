@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/opencharly/sdk"
@@ -37,16 +36,27 @@ func invokeConfigSetup(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 		return nil, fmt.Errorf("plugin-deploy-pod config-setup: decode request: %w", err)
 	}
 	if r.ListSidecars {
-		var rep spec.PodConfigListSidecarsReply
-		if err := hostBuild(ctx, ex, podConfigListSidecarsKind, spec.PodConfigLoadDeployRequest{}, &rep); err != nil {
+		// The "pod-config-list-sidecars" seam is DELETED (K-wave 2 cone R3) — the template
+		// library is THIS plugin's own go:embed (sidecar_embedded.go). The list is returned in
+		// the OpConfigSetup reply (candy/plugin-pod prints it host-side) rather than printed
+		// here: this plugin's stdout is go-plugin-discarded (SyncStdout nil → io.Discard), so
+		// an in-plugin print was silently invisible — the P13-KERNEL pre-existing bug fixed
+		// with this relocation.
+		embedded, err := embeddedSidecarLibrary()
+		if err != nil {
 			return nil, err
 		}
-		names := append([]string{}, rep.Names...)
-		sort.Strings(names)
-		for _, name := range names {
-			fmt.Printf("%-20s %s\n", name, rep.Descriptions[name])
+		names := make([]string, 0, len(embedded))
+		descriptions := make(map[string]string, len(embedded))
+		for name, body := range embedded {
+			names = append(names, name)
+			var meta struct {
+				Description string `json:"description"`
+			}
+			_ = json.Unmarshal(body, &meta)
+			descriptions[name] = meta.Description
 		}
-		return marshalReply(spec.PodConfigSetupReply{})
+		return marshalReply(spec.PodConfigSetupReply{SidecarList: spec.SidecarList{Names: names, Descriptions: descriptions}})
 	}
 	if err := runPodConfigSetup(ctx, ex, &r); err != nil {
 		return nil, err
@@ -162,16 +172,11 @@ var mutateBundle = func(ctx context.Context, ex *sdk.Executor, caller string, mu
 
 //nolint:gocyclo // ported 1:1 from charly-core BoxConfigSetupCmd.runConfig — see the file header; splitting further would fragment the seam-call sequencing across files for no clarity gain
 func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c *spec.PodConfigSetupRequest) error {
-	var detectRep spec.PodConfigDetectDevicesReply
-	if err := hostBuild(ctx, ex, podConfigDetectDevicesKind, spec.PodConfigDetectDevicesRequest{NoAutoDetect: c.NoAutoDetect}, &detectRep); err != nil {
-		return err
-	}
-	var detected spec.DetectedDevices
-	if len(detectRep.DetectedJSON) > 0 {
-		if err := json.Unmarshal(detectRep.DetectedJSON, &detected); err != nil {
-			return err
-		}
-	}
+	// Device detection runs plugin-side (detect_devices.go — the relocated
+	// "pod-config-detect-devices" seam, peer InvokeProvider verb:gpu). The former seam's call
+	// passed NO engine (only NoAutoDetect), so the ensure-cdi leg never fired at config time —
+	// preserved exactly.
+	detected := detectDevices(ctx, ex, c.NoAutoDetect, "")
 
 	deployBoxName, imageRef, err := resolveDeployRef(ctx, ex, c)
 	if err != nil {
@@ -357,7 +362,7 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 	var resolvedSidecars []deploykit.ResolvedSidecar
 	var deploySidecars map[string]json.RawMessage
 	if len(deploySidecarsRaw) > 0 {
-		scRes, err := resolvePodSidecars(ctx, ex, deploySidecarsRaw, sidecarTemplatesOf(dc), c.Env, c.Box, c.Instance, rt.RunEngine, autoGen, c.RefreshSecret)
+		scRes, err := resolvePodSidecars(ctx, ex, deploySidecarsRaw, deploykit.SidecarTemplatesOf(dc), c.Env, c.Box, c.Instance, rt.RunEngine, autoGen, c.RefreshSecret)
 		if err != nil {
 			return scErr(err)
 		}

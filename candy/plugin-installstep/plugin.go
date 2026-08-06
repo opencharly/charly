@@ -322,7 +322,8 @@ func getGenerator(ctx context.Context, exec *sdk.Executor, dir string, devLocalP
 }
 
 // candyByName resolves a candy by its INTRINSIC bare name against dg.Candies — the plugin-side
-// mirror of charly's own candyByName (charly/generate.go): a LOCAL candy is keyed bare == Name, so
+// mirror of the ex-core candyByName (charly/generate.go, deleted in K-wave 2 cone R1 once every
+// live caller had relocated to a plugin): a LOCAL candy is keyed bare == Name, so
 // the direct lookup hits; a REMOTE candy (e.g. a deploy's add_candy: pulled via ExtraCandyRefs) is
 // keyed under its fully-qualified ref, so the direct bare lookup MISSES and this falls back to
 // matching the candy's own Name.

@@ -15,9 +15,10 @@ import (
 // source candy/plugin-build and candy/plugin-deploy-pod both call), then runs dg.Generate(order)
 // to render Containerfiles. The render reads RESOLVED data (caches on ResolvedBox + CandyModel)
 // WITHOUT the live *Candy/*Config graph — the plugin-side resolve filled the caches (render-prep) +
-// projected the envelope. The host-coupled seams (the 9 render-seam methods + EmitBakedPlugins) are wired
-// inside the shared helper; they call back to the host over the in-proc reverse channel
-// (placement-invisible: compiled-in goes in-proc, out-of-process goes over gRPC).
+// projected the envelope. The Generator's seam fields are wired inside the shared helper; as of
+// K-wave 2 cone R1 every one of them is InvokeProvider PEER-DISPATCH or a direct in-package call —
+// the render makes NO HostBuild callback at all (the render-seam kind is deleted). Dispatch stays
+// placement-invisible: compiled-in goes in-proc, out-of-process goes over gRPC.
 
 // renderContainerfiles builds the deploykit.Generator from the envelope (via the shared helper)
 // + runs Generate, returning the rendered Containerfile content per box name. Called by

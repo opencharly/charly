@@ -3,6 +3,7 @@ package bundle
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -853,28 +854,89 @@ func runLifecycleBracket(op string, hasPlan bool, node *spec.Deploy, acquire fun
 	return err
 }
 
-// arbiterBracketAcquire routes a Start dispatch's arbiter claim through the "arbiter-bracket-acquire"
-// HostBuild seam — see host_build_arbiter_bracket.go (core) for why the actual claim/env mutation
-// stays host-side.
+// arbiterBracketAcquire acquires the shared/exclusive resource-arbiter claim for a Start dispatch
+// by InvokeProvider("verb","arbiter",OpRun) — the SAME peer-dispatch the check-bed session's
+// arbiterAcquire (candy/plugin-check/bed_session.go) + command:preempt already use, replacing the
+// deleted "arbiter-bracket-acquire" HostBuild seam (K-wave 2 cone R2 bank E). The CHARLY_PREEMPT_LEASE
+// outer-orchestrator guard lives in the arbiter now (candy/plugin-preempt's invokeArbiter), so a
+// guarded skip returns Active=false and this function just does not set the env.
 func arbiterBracketAcquire(ctx context.Context, exec *sdk.Executor, name string, node spec.Deploy) error {
-	reqJSON, err := json.Marshal(spec.ArbiterBracketAcquireRequest{Name: name, Node: node})
+	action := spec.ArbiterActionAcquireShared
+	tokens := spec.DedupeNonEmpty(node.RequiredShared())
+	if len(node.RequiredExclusive()) > 0 {
+		action = spec.ArbiterActionAcquireExclusive
+		tokens = spec.DedupeNonEmpty(node.RequiredExclusive())
+	}
+	var secDevices []string
+	if node.Security != nil {
+		secDevices = node.Security.Devices
+	}
+	params, err := json.Marshal(spec.ArbiterInvokeInput{
+		Action:          action,
+		Claimant:        name,
+		Tokens:          tokens,
+		ClaimAddr:       spec.HolderAddrFor(name, node),
+		Transient:       false,
+		IsGroup:         node.IsGroup(),
+		IsPodMember:     spec.IsContainerVenue(&node),
+		SecurityDevices: secDevices,
+	})
 	if err != nil {
 		return err
 	}
-	_, err = exec.HostBuild(ctx, "arbiter-bracket-acquire", reqJSON)
-	return err
+	out, err := exec.InvokeProvider(ctx, "verb", "arbiter", sdk.OpRun, params, nil, sdk.InvokeProviderOpts{})
+	if err != nil {
+		return err
+	}
+	var reply spec.ArbiterInvokeReply
+	if len(out) > 0 {
+		if err := json.Unmarshal(out, &reply); err != nil {
+			return err
+		}
+	}
+	if reply.Error != "" {
+		return errors.New(reply.Error)
+	}
+	if reply.Active {
+		_ = os.Setenv(envPreemptLeaseHeld, name)
+	}
+	return nil
 }
 
-// arbiterBracketRelease routes a Start/Stop dispatch's arbiter release through the
-// "arbiter-bracket-release" HostBuild seam.
+// arbiterBracketRelease releases a Start/Stop dispatch's arbiter claim via
+// InvokeProvider("verb","arbiter",OpRun) — the release action of the same peer dispatch. The
+// nested-subprocess release guard (an outer orchestrator owns the lease — the outer will release)
+// mirrors the deleted hostBuildArbiterBracketRelease → releaseResourceClaim behavior.
 func arbiterBracketRelease(ctx context.Context, exec *sdk.Executor, name string) error {
-	reqJSON, err := json.Marshal(spec.ArbiterBracketReleaseRequest{Name: name})
+	if os.Getenv(envPreemptLeaseHeld) != "" {
+		return nil
+	}
+	params, err := json.Marshal(spec.ArbiterInvokeInput{Action: spec.ArbiterActionRelease, Claimant: name})
 	if err != nil {
 		return err
 	}
-	_, err = exec.HostBuild(ctx, "arbiter-bracket-release", reqJSON)
-	return err
+	out, err := exec.InvokeProvider(ctx, "verb", "arbiter", sdk.OpRun, params, nil, sdk.InvokeProviderOpts{})
+	if err != nil {
+		return err
+	}
+	var reply spec.ArbiterInvokeReply
+	if len(out) > 0 {
+		if err := json.Unmarshal(out, &reply); err != nil {
+			return err
+		}
+	}
+	if reply.Error != "" {
+		return errors.New(reply.Error)
+	}
+	return nil
 }
+
+// envPreemptLeaseHeld mirrors the identically-named const that lived in charly/preempt.go (the
+// surviving core copy is the op="remove" release chain in host_build_pod_lifecycle_dispatch.go):
+// the process-env marker an outermost claim-bringing invocation sets on a successful acquire so
+// nested `charly` subprocesses skip re-acquiring (compiled-in plugin-bundle shares charly's
+// process env).
+const envPreemptLeaseHeld = "CHARLY_PREEMPT_LEASE"
 
 // --- Status --------------------------------------------------------------------------------
 
@@ -925,9 +987,11 @@ func handleDeployStatus(ctx context.Context, exec *sdk.Executor, req spec.Deploy
 // exactly like the former core-resident substrate lifecycle proxy did: Shell ALWAYS dispatches on a host-local
 // venue (nil venueDesc — the substrate's own ARGV already encodes the remote-exec mechanics, e.g.
 // `podman exec <ctr> …` / `virsh …`, so running it via the live guest venue would double-remote
-// it); Attach dispatches WITH the live venue (podAttach/vm's attach resolver run the interactive
-// session ON that venue). OptsJSON (present only for Attach — Shell carries none) rides under
-// "plan", matching podAttach's own p.Plan decode.
+// it); Attach dispatches WITH the live venue (the interactive session runs ON that venue).
+// OptsJSON (present only for Attach — Shell carries none) rides under "plan", matching
+// podAttach's own p.Plan decode; the raw cmd rides under "cmd" for both Shell and Attach, so a
+// HOOKLESS lifecycle substrate (vm) self-resolves its in-venue command from it (K-wave 2 cone
+// CONTESTED).
 func handleDeployExec(ctx context.Context, exec *sdk.Executor, req spec.DeployTargetDispatchRequest, op string) (spec.DeployTargetDispatchReply, error) {
 	var reply spec.DeployTargetDispatchReply
 	var venueDesc *spec.VenueDescriptor
@@ -941,7 +1005,12 @@ func handleDeployExec(ctx context.Context, exec *sdk.Executor, req spec.DeployTa
 	if len(req.OptsJSON) > 0 {
 		extra["plan"] = json.RawMessage(req.OptsJSON)
 	}
-	if op == sdk.OpShell {
+	// Shell AND Attach thread the raw cmd: Shell's substrate ARGV already encodes remote-exec
+	// mechanics; Attach's host-side attach-plan resolver (pod) marshals raw opts into "plan",
+	// while a HOOKLESS lifecycle substrate (vm) self-resolves its in-venue command from cmd
+	// (candy/plugin-deploy-vm's vmAttach derives the #PodLiveStdioPlan script from p.Cmd —
+	// the F12 attach-resolver moved plugin-side, K-wave 2 cone CONTESTED).
+	if op == sdk.OpShell || op == sdk.OpAttach {
 		extra["cmd"] = req.Cmd
 	}
 	resJSON, err := lifecycleInvoke(ctx, exec, req.Word, op, req.Name, "", req.Node, extra, venueDesc, req.HostEnvJSON)

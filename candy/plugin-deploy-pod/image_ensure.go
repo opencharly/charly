@@ -19,9 +19,9 @@ import (
 // / container.TransferImage are ALREADY portable (spec/container, used directly by candy/plugin-build
 // per that package's own doc comment) — no seam needed for those two tiers either. The
 // "pod-config-ensure-image" HostBuild seam + its core handler are DELETED; dispatchBuildEnsure
-// itself STAYS core (it has other core-internal callers: plugin_executor_reverse.go,
-// host_build_check_run.go — this leg's death removes ONE of dispatchBuildEnsure's several
-// callers, not the function).
+// itself STAYS core (it has other core-internal callers: plugin_executor_reverse.go — the former
+// check-run preflight caller is gone too, K-wave 2 cone R4: the check preflight now reaches
+// build:ensure over the SAME InvokeProvider peer dispatch this file uses).
 //
 // Byte-for-byte parity with the deleted host body: run engine is hardcoded "podman" (the pod
 // substrate always runs on podman, matching the deleted seam's hardcoded podmanRT.RunEngine), the

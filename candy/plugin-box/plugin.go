@@ -18,10 +18,12 @@
 //
 //   - command:validate — `charly box validate`: fetches the error-TOLERANT resolved-project envelope
 //     (InvokeProvider("build","project",sdk.OpValidate) → spec.ValidateProjectReply, #55 step3 unit
-//     3-I — relocated from the former HostBuild("validate-project")) and runs the whole per-kind/op
-//     rule ENGINE + the deploykit resolution-graph checks IN-PLUGIN over that envelope, MERGING the
-//     host's CUE-conformance/tunable/base⊻from diagnostics (now HostBuild("validate-project-checks"))
-//     for the verdict (validate.go / validate_rules.go / validate_graph.go / validate_check.go).
+//     3-I — relocated from the former HostBuild("validate-project")) and runs EVERY rule IN-PLUGIN
+//     over it: the per-kind/op rules, the deploykit resolution-graph checks, the raw-config rules,
+//     and the CUE-conformance + remote-candy rules (K-wave 2 cone R1 unit B). The only thing it
+//     still asks the host is the registry question, HostBuild("validate-word-sets") — see
+//     validate.go / validate_rules.go / validate_graph.go / validate_check.go /
+//     validate_config_rules.go / validate_schema_rules.go.
 //
 //   - command:pkg — `charly box pkg`: runs the localpkg build engine IN-PLUGIN (K3 build-tail
 //     move, coneB-pkgcmd fold) by INVOKING the peer compiled-in build:pkg word (candy/plugin-build)
@@ -41,8 +43,9 @@
 //     HostBuild("remote-image-resolve") seam clones/caches the source) when needed, computes the
 //     CalVer tag, holds the build-activity flock (reconstructed from kit primitives), INVOKES the peer
 //     compiled-in build:box word (candy/plugin-build's podman DRIVE) over InvokeProvider, and runs the
-//     post-build retention prune (verb:retention, keep_images off HostBuild("retention-defaults");
-//     skipped for --push). The host-coupled remainder a sdk-only candy cannot do — the remote-ref
+//     post-build retention prune (verb:retention, keep_images resolved plugin-side via
+//     loaderkit.ResolveRetentionDefaultsViaExecutor — K-wave 2 cone R6; skipped for --push). The
+//     host-coupled remainder a sdk-only candy cannot do — the remote-ref
 //     clone/cache (EnsureRepoDownloaded, K1), the build-engine RESOLVE legs, the bootstrap
 //     builder pre-pass — stays behind thin HostBuild seams the candy invokes.
 //

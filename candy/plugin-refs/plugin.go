@@ -18,9 +18,14 @@
 package refs
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
+
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/spec/proto"
+	"github.com/opencharly/spec/spec"
 )
 
 const calver = "2026.192.0000"
@@ -44,3 +49,35 @@ type provider struct {
 // The embedded kit.DefaultDownloader supplies Download — the default git fetch backend
 // (delegating to kit.DownloadRepo). An alternative refs plugin overrides Download for a
 // different backend (OCI/S3).
+
+// Invoke serves the WIRE face of that same backend: OpResolve turns a (repoPath, version) into a
+// populated local cache dir. It exists because the fetch ORCHESTRATION moved out of charly core into
+// candy/plugin-loader (K-wave 2 cone R1). While the host sat in the middle of every fetch it could
+// resolve this provider to a typed kit.RefsDownloader and call Download in-proc; a peer PLUGIN
+// cannot hold a typed handle to another plugin, so it reaches the backend the way every plugin
+// reaches every peer — InvokeProvider(class:"refs", word:"refs", OpResolve).
+//
+// Both faces run the SAME Download (R3: one backend, two callers), so a refs plugin that overrides
+// Download for an OCI/S3 backend serves both without knowing this method exists. The caller has
+// already resolved local overrides and checked the cache — a backend only ever sees a genuine miss.
+func (p *provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
+	if req.GetOp() != sdk.OpResolve {
+		return nil, fmt.Errorf("refs: unsupported op %q (only %q)", req.GetOp(), sdk.OpResolve)
+	}
+	var in spec.RefsDownloadInput
+	if err := json.Unmarshal(req.GetParamsJson(), &in); err != nil {
+		return nil, fmt.Errorf("refs: decode input: %w", err)
+	}
+	if in.RepoPath == "" || in.Version == "" {
+		return nil, fmt.Errorf("refs: download needs both repo_path and version (got %q@%q)", in.RepoPath, in.Version)
+	}
+	dir, err := p.Download(in.RepoPath, in.Version)
+	if err != nil {
+		return nil, err
+	}
+	out, err := json.Marshal(spec.RefsDownloadReply{Dir: dir})
+	if err != nil {
+		return nil, err
+	}
+	return &pb.InvokeReply{ResultJson: out}, nil
+}

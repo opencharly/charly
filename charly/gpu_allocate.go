@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/spec/ops"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -11,7 +12,9 @@ import (
 // reached now via the narrow host_build_check_bed_gpu_prereq.go seam (#55 W3 B2-full — the ONE
 // piece of check-bed's former full session that survived, GPU host-DETECTION being the project's
 // explicitly operator-dropped exception, fenced from every K-wave cutover per gpu_shim.go's own
-// header). requiredGPUResource (the former preempt validator's helper) was deleted as dead code
+// header — which K-wave 2 cone R3 thinned to exactly this DetectVFIO leg, relocating the
+// detect-host-devices/ensure-cdi shims to candy/plugin-deploy-pod). requiredGPUResource (the
+// former preempt validator's helper) was deleted as dead code
 // (A1, K-wave W3): its cited caller (validate_preempt.go) was already deleted in 54657305, and
 // candy/plugin-vm/gpu_allocate.go carries the live copy the arbiter uses.
 
@@ -35,7 +38,7 @@ func bedGPUPrereqMissing(node spec.BundleNode) (token, vendor string, missing bo
 	// the resolve first made those two cases indistinguishable — which is exactly how the dead
 	// executor-less resolve below stayed invisible: every GPU bed reported "prereq satisfied" and
 	// went on to the build this fail-fast exists to skip.
-	tokens := append(dedupeNonEmpty(node.RequiredExclusive()), dedupeNonEmpty(node.RequiredShared())...)
+	tokens := append(spec.DedupeNonEmpty(node.RequiredExclusive()), spec.DedupeNonEmpty(node.RequiredShared())...)
 	if len(tokens) == 0 {
 		return "", "", false
 	}
@@ -69,4 +72,24 @@ func gpuPrereqMissing(tokens []string, resources map[string]*spec.ResolvedResour
 		}
 	}
 	return "", "", false
+}
+
+// gatherResources loads the token -> ResourceDef map (the gpu selector that drives the mode
+// flip) via the SAME generic InvokeProvider("build","project") envelope every other
+// resolved-project consumer uses (K-wave W3a A2 rewire) — folded here from the deleted
+// preempt.go (K-wave 2 cone CONTESTED), whose sole remaining caller this is. It MUST thread an
+// in-proc reverse-channel executor: the plugin's resolve (candy/plugin-build's
+// resolveProjectEnvelope) loads the project through loaderkit.LoadUnifiedViaExecutor, so with a
+// bare context.Background() it has no executor to reach the host's loader legs and returns an
+// error — which the best-effort contract below then swallows into an empty map. The
+// specexec.ContextWithExecutor(in-proc executor) ctx rides the SHARED hostInvokeOr
+// (provider_invoke.go), so there is still exactly ONE warn-and-degrade implementation (R3).
+//
+// Zero value (nil Resources) on any resolve/invoke/decode failure — this function's "nil when
+// none/unreadable" contract, unchanged, with the one-warning-per-failure best-effort reporting
+// provider_invoke.go prescribes for a probe path that must never fail a deploy.
+func gatherResources() map[string]*spec.ResolvedResource {
+	ctx := hostInProcCtx()
+	rp := hostInvokeOr[spec.ResolvedProjectRequest, spec.ResolvedProject](ctx, ClassBuild, "project", ops.OpResolve, spec.ResolvedProjectRequest{}, "gather-resources")
+	return rp.Resources
 }

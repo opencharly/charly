@@ -16,11 +16,11 @@ import (
 
 func validateBoxEntityCUE(t *testing.T, yaml string) error {
 	t.Helper()
-	doc, err := cueDocFromYAML("test.yml", []byte(yaml))
+	doc, err := requireProjectLoader().CueDocFromYAML("test.yml", []byte(yaml))
 	if err != nil {
 		return err
 	}
-	return validateEntityClosedCUE("box", "test.yml", doc.LookupPath(cue.ParsePath("box")))
+	return requireProjectLoader().ValidateEntityClosedCUE("box", "test.yml", doc.LookupPath(cue.ParsePath("box")))
 }
 
 func TestBoxCUESchema_Readiness(t *testing.T) {

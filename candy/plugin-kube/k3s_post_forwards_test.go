@@ -12,34 +12,22 @@ import (
 )
 
 // fakeExecutorServiceClient is a minimal pb.ExecutorServiceClient test double: every method
-// panics EXCEPT HostBuild, which dispatches by req.Kind to the two canned replies this test
-// needs — "deploy-plugins-connect" (a canned project dir; deployVMForwards resolves it
-// unconditionally now, K-wave W3a A3-phase-2) and "config-resolve" (the persisted
-// VmDeployState). The vm-entity resolve itself is stubbed via the resolveVmEntityForForwards
-// package var (k3s_post.go) instead of faked through HostBuild — a single HostBuild-kind stub
-// cannot canned-reply the multi-leg loaderkit.LoadUnifiedViaExecutor chain the real
-// loaderkit.ResolveVmEntityViaExecutor now drives (mirrors candy/plugin-deploy-pod's
-// loadProjectVolume/saveBundle stub pattern, R3). This is enough to drive deployVMForwards
-// end-to-end without a real host reverse-channel broker.
+// panics EXCEPT HostBuild, which dispatches by req.Kind to the ONE canned reply this test needs —
+// "deploy-plugins-connect" (a canned project dir; deployVMForwards resolves it unconditionally
+// now, K-wave W3a A3-phase-2). The vm-entity resolve + the persisted VmState read are both stubbed
+// via package vars (resolveVmEntityForForwards, hostConfigResolveVmState — k3s_post.go) instead
+// of faked through HostBuild — a single HostBuild-kind stub cannot canned-reply the multi-leg
+// loaderkit.LoadUnifiedViaExecutor chain the real loaderkit helpers now drive (mirrors
+// candy/plugin-deploy-pod's loadProjectVolume/saveBundle stub pattern, R3). This is enough to
+// drive deployVMForwards end-to-end without a real host reverse-channel broker.
 type fakeExecutorServiceClient struct {
-	projectDir  string
-	configReply spec.ConfigResolveReply
-	configErr   error
+	projectDir string
 }
 
 func (f *fakeExecutorServiceClient) HostBuild(_ context.Context, in *pb.HostBuildRequest, _ ...grpc.CallOption) (*pb.HostBuildReply, error) {
 	switch in.GetKind() {
 	case "deploy-plugins-connect":
 		b, err := json.Marshal(spec.DeployPluginsConnectReply{Dir: f.projectDir})
-		if err != nil {
-			return nil, err
-		}
-		return &pb.HostBuildReply{ResultJson: b}, nil
-	case "config-resolve":
-		if f.configErr != nil {
-			return nil, f.configErr
-		}
-		b, err := json.Marshal(f.configReply)
 		if err != nil {
 			return nil, err
 		}
@@ -58,6 +46,17 @@ func stubVmEntityForForwards(t *testing.T, vm *spec.ResolvedVm) {
 		return vm, nil
 	}
 	t.Cleanup(func() { resolveVmEntityForForwards = orig })
+}
+
+// stubVmStateForForwards replaces hostConfigResolveVmState for the duration of a test — the
+// persisted VmDeployState read — with a canned reply, restored via t.Cleanup.
+func stubVmStateForForwards(t *testing.T, state *spec.VmDeployState) {
+	t.Helper()
+	orig := hostConfigResolveVmState
+	hostConfigResolveVmState = func(context.Context, *sdk.Executor, string) (*spec.VmDeployState, error) {
+		return state, nil
+	}
+	t.Cleanup(func() { hostConfigResolveVmState = orig })
 }
 
 func (f *fakeExecutorServiceClient) Venue(context.Context, *pb.Empty, ...grpc.CallOption) (*pb.VenueReply, error) {
@@ -101,14 +100,13 @@ func (f *fakeExecutorServiceClient) DescribeProvider(context.Context, *pb.Descri
 // a helper that ALWAYS returns an empty config when deploykit.DeployStateHost is nil, which it is
 // inside every out-of-process plugin (candy/plugin-kube is never compiled-in), regardless of
 // what is actually persisted on disk. This test proves the fix: deployVMForwards now resolves the
-// persisted VmDeployState via the "config-resolve" HostBuild seam (hostConfigResolveVmState),
-// which a real charly process serves host-side where DeployStateHost IS wired.
-func TestDeployVMForwards_ReadsPersistedAllocationViaConfigResolveSeam(t *testing.T) {
+// persisted VmDeployState via the plugin-side hostConfigResolveVmState →
+// loaderkit.ResolveVmStateViaExecutor read (the config-resolve seam is DELETED, K-wave 2 cone
+// R2 bank D), which drives the host loader regardless of placement.
+func TestDeployVMForwards_ReadsPersistedAllocationViaVmStateRead(t *testing.T) {
 	stubVmEntityForForwards(t, &spec.ResolvedVm{Network: &spec.VmNetwork{PortForwards: []string{"auto:6443"}}})
-	fake := &fakeExecutorServiceClient{
-		configReply: spec.ConfigResolveReply{VmState: &spec.VmDeployState{PortForwards: map[string]int{"6443": 34325}}},
-	}
-	exec := sdk.NewInProcExecutor(fake)
+	stubVmStateForForwards(t, &spec.VmDeployState{PortForwards: map[string]int{"6443": 34325}})
+	exec := sdk.NewInProcExecutor(&fakeExecutorServiceClient{})
 
 	resolved, err := deployVMForwards(context.Background(), exec, "k3s-vm", "rca-deploy4")
 	if err != nil {
@@ -121,15 +119,13 @@ func TestDeployVMForwards_ReadsPersistedAllocationViaConfigResolveSeam(t *testin
 }
 
 // TestDeployVMForwards_NoPersistedAllocation_StillErrorsLoudly proves the error path survives
-// the fix: when the config-resolve seam genuinely reports no VmState (e.g. `charly vm create`
+// the fix: when the VmState read genuinely reports no VmState (e.g. `charly vm create`
 // never ran), the loud "no persisted host-port allocation" error still fires — this is NOT a
 // case the fix should silently swallow, only the "the read was broken, not the write" case above.
 func TestDeployVMForwards_NoPersistedAllocation_StillErrorsLoudly(t *testing.T) {
 	stubVmEntityForForwards(t, &spec.ResolvedVm{Network: &spec.VmNetwork{PortForwards: []string{"auto:6443"}}})
-	fake := &fakeExecutorServiceClient{
-		configReply: spec.ConfigResolveReply{}, // no VmState at all
-	}
-	exec := sdk.NewInProcExecutor(fake)
+	stubVmStateForForwards(t, nil) // no VmState at all
+	exec := sdk.NewInProcExecutor(&fakeExecutorServiceClient{})
 
 	_, err := deployVMForwards(context.Background(), exec, "k3s-vm", "rca-deploy4")
 	if err == nil {

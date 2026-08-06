@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	specexec "github.com/opencharly/spec/exec"
 	"github.com/opencharly/spec/ops"
 	"github.com/opencharly/spec/spec"
 )
@@ -47,7 +46,7 @@ func resolveVerbEndpointFor(box, instance string, mode spec.CheckRunMode, port i
 	if !ok {
 		return "", fmt.Errorf("check-resolve: plugin-check (verb:check-resolve) not registered — charly built without the plugin-check candy")
 	}
-	ctx := specexec.ContextWithExecutor(context.Background(), specexec.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}}))
+	ctx := hostInProcCtx()
 	reply, err := invokeTyped[spec.CheckEndpointResolveRequest, spec.CheckEndpointResolveReply](
 		ctx, prov, "check-resolve", ops.OpResolveEndpoint,
 		spec.CheckEndpointResolveRequest{Box: box, Instance: instance, Mode: runModeName(mode), Port: port})
@@ -65,7 +64,7 @@ func resolveImageLabelFor(box, instance string, mode spec.CheckRunMode, label st
 	if !ok {
 		return "", fmt.Errorf("check-resolve: plugin-check (verb:check-resolve) not registered — charly built without the plugin-check candy")
 	}
-	ctx := specexec.ContextWithExecutor(context.Background(), specexec.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}}))
+	ctx := hostInProcCtx()
 	reply, err := invokeTyped[spec.CheckImageLabelResolveRequest, spec.CheckImageLabelResolveReply](
 		ctx, prov, "check-resolve", ops.OpResolveImageLabel,
 		spec.CheckImageLabelResolveRequest{Box: box, Instance: instance, Mode: runModeName(mode), Label: label})
@@ -85,7 +84,7 @@ func drainVerbEndpointCleanups() {
 	if !ok {
 		return
 	}
-	ctx := specexec.ContextWithExecutor(context.Background(), specexec.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}}))
+	ctx := hostInProcCtx()
 	_, _ = invokeTyped[spec.CheckDrainEndpointCleanupsRequest, struct{}](
 		ctx, prov, "check-resolve", ops.OpDrainEndpointCleanups, spec.CheckDrainEndpointCleanupsRequest{})
 }

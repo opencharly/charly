@@ -13,6 +13,7 @@ import (
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -20,7 +21,7 @@ import (
 // reverse channel — InvokeProvider (peer plugin dispatch, for generate → build:generate, and for
 // list's store-live tags → verb:retention, listImageTags), the InvokeProvider("build","project")
 // envelope fetch (inspect/list — sdk.OpResolve; validate — sdk.OpValidate, #55 step3 unit 3-I,
-// MERGED with the HostBuild("validate-project-checks") host-natural diagnostics) fetch (validate
+// with the registry word sets from HostBuild("validate-word-sets") folded onto it) fetch (validate
 // runs the rule ENGINE in-plugin over the reply). build runs its body in-plugin (dispatchBuild —
 // InvokeProvider(build:box) + thin HostBuild seams, P8b), no reentry; pkg likewise runs in-plugin
 // (dispatchPkg — InvokeProvider(build:pkg), K3 build-tail move); pull runs the ensure-image work
@@ -287,8 +288,9 @@ type buildGrammar struct {
 // HostBuild("remote-image-resolve") seam → compute the CalVer tag ONCE → hold the build-activity
 // flock → InvokeProvider(build:box) (the compiled-in candy/plugin-build podman DRIVE) → post-build
 // retention prune (skipped for --push). The host-coupled remainder a sdk-only candy cannot do — the
-// remote-ref clone/cache (EnsureRepoDownloaded, K1) and keep_images resolution — is reached
-// over thin HostBuild seams (remote-image-resolve, retention-defaults). Byte-equivalent to the
+// remote-ref clone/cache (EnsureRepoDownloaded, K1) — is reached over the thin HostBuild seam
+// (remote-image-resolve); keep_images resolves PLUGIN-SIDE via loaderkit.ResolveRetentionDefaultsViaExecutor
+// (K-wave 2 cone R6 — the former retention-defaults seam is DELETED). Byte-equivalent to the
 // former BuildCmd.Run.
 func dispatchBuild(hc *hostClient, args []string) error {
 	var g buildGrammar
@@ -431,20 +433,13 @@ func acquireBuildActivityLock(calver string) (func() error, error) {
 }
 
 // pruneAfterBuild runs the post-build retention prune via verb:retention (BuildPrune scope: tag
-// retention + stale .build/_candy staging dirs). Best-effort, warn-only. keep_images comes from the
-// "retention-defaults" HostBuild seam — a candy cannot LoadConfig itself, so it reaches the SAME
-// defaults resolution `charly clean` and candy/plugin-check's post-run prune hook use. Byte-equivalent
-// to the former core pruneAfterBuild (deleted from charly/retention_plugin.go in P8b).
+// retention + stale .build/_candy staging dirs). Best-effort, warn-only. keep_images resolves
+// PLUGIN-SIDE via the shared sdk/loaderkit.ResolveRetentionDefaultsViaExecutor (K-wave 2 cone R6 —
+// the former "retention-defaults" HostBuild seam is DELETED) — the SAME defaults resolution
+// `charly clean` and candy/plugin-check's post-run prune hook use. Byte-equivalent to the former
+// core pruneAfterBuild (deleted from charly/retention_plugin.go in P8b).
 func pruneAfterBuild(hc *hostClient, dir string) {
-	keep := 0
-	if defJSON, err := json.Marshal(spec.RetentionRequest{Dir: dir}); err == nil {
-		if defRes, derr := hc.exec.HostBuild(hc.ctx, "retention-defaults", defJSON); derr == nil {
-			var dr spec.RetentionReply
-			if json.Unmarshal(defRes, &dr) == nil {
-				keep = dr.KeepImages
-			}
-		}
-	}
+	keep, _ := loaderkit.ResolveRetentionDefaultsViaExecutor(hc.ctx, hc.exec, dir)
 	reqJSON, err := json.Marshal(spec.RetentionRequest{Dir: dir, BuildPrune: true, KeepImages: keep})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: image retention prune: %v\n", err)

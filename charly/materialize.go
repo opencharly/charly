@@ -118,7 +118,7 @@ func materializeDocStream(data []byte, srcLabel string, uf *spec.UnifiedFile) er
 		if err != nil {
 			return fmt.Errorf("%s: re-marshal node-form doc: %w", label, err)
 		}
-		if err := validateNodeDocCUE(label, raw); err != nil {
+		if err := requireProjectLoader().ValidateNodeDocCUE(label, raw); err != nil {
 			return err
 		}
 		directives, pp, err := parser.ParseDoc(&node, loaderThreaded())
@@ -140,6 +140,49 @@ func materializeDocStream(data []byte, srcLabel string, uf *spec.UnifiedFile) er
 		}
 		sub.Import = nil
 		spec.MergeUnified(uf, &sub, "")
+	}
+	return nil
+}
+
+// materializeNodeInto folds ONE parsed node into uf via the registered spec.Materializer plugin
+// (K1 unit 1, #46) — the not-found DISPATCH POLICY lives in candy/plugin-loader
+// (loaderkit.Materialize), reached through requireMaterializer(); the actual registry resolve +
+// provider dispatch stays host-side behind the DecodeEntity/BuildBundleEntity seam callbacks
+// (hostMaterializeSeams, loader_threaded.go) — clause M never leaves charly core.
+//
+// Pre-seeds the spec.MaterializedProject accumulator from uf's CURRENT maps (so repeated calls
+// across a document's node list ACCUMULATE rather than reset — maps are reference types, so this is
+// a cheap map-header copy, not a deep copy) and copies the result back after.
+//
+// Colocated here from node_parsed.go (K-wave 2 cone R1 unit C): this file owns every other
+// host-coupled materialize leg AND hostMaterializeProjectSeams, the seam these two are reached
+// through, so the accumulator plumbing belongs beside them rather than beside the genericNode
+// bridge it merely happened to share a file with.
+func materializeNodeInto(pn spec.ParsedNode, uf *spec.UnifiedFile) error {
+	acc := spec.MaterializedProject{
+		Box: uf.Box, Candy: uf.Candy, Bundle: uf.Bundle, PluginKinds: uf.PluginKinds,
+	}
+	if err := requireMaterializer().MaterializeNode(pn, loaderThreaded(), hostMaterializeSeams(), &acc); err != nil {
+		return err
+	}
+	uf.Box, uf.Candy, uf.Bundle, uf.PluginKinds = acc.Box, acc.Candy, acc.Bundle, acc.PluginKinds
+	return nil
+}
+
+// materializeProject folds a whole spec.ParsedProject (the loader plugin's WalkProject reply — one
+// document's decomposed nodes) into the typed spec.UnifiedFile, node by node. This is the exact
+// host-side entry the plugin dispatch drops into: the registered loader plugin's spec.ProjectWalker
+// (candy/plugin-loader, over sdk/loaderkit.Walk) builds the spec.LoadedProject/ParsedProject and
+// loaderkit.MaterializeLoadedProject calls this per document via the MaterializeProject host seam
+// (#48) this file wires.
+func materializeProject(pp *spec.ParsedProject, uf *spec.UnifiedFile) error {
+	if pp == nil {
+		return nil
+	}
+	for i := range pp.Nodes {
+		if err := materializeNodeInto(pp.Nodes[i], uf); err != nil {
+			return err
+		}
 	}
 	return nil
 }

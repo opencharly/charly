@@ -25,7 +25,7 @@ import (
 // because a COMPILED-IN plugin-bundle always shares that process. This package's OWN test binary
 // links no charly core, so the hook is left nil (a nil-func-call panic) unless wired here. The
 // implementation itself is pure (spec.VerbCatalog is static data + the op's own declared Context —
-// no registry consult), so it is ported verbatim from charly/checkspec.go's opInContext/
+// no registry consult), so it is ported verbatim from charly/planrun_adapter.go's opInContext/
 // opEffectiveContexts rather than stubbed.
 func init() {
 	spec.OpInContext = testOpInContext

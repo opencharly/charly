@@ -10,9 +10,9 @@ import (
 )
 
 // check_cmd.go — the `charly check` command tree, externalized into candy/plugin-check (P12). Each
-// leaf gathers its config + resolves its plan, then forwards a run to the host "check-run" seam and
-// formats the returned []StepResult. (SKELETON: the box leaf is wired; live/run/feature + the harness
-// subcommands are added as the full command tree + AI-harness relocate here.)
+// leaf gathers its config + resolves its plan, then forwards a run to hostCheckRun (this package's
+// OWN per-mode dispatch — box/live/feature-live/feature-box/score/preflight all run plugin-side,
+// K-wave 2 cone R4) and formats the returned []StepResult.
 
 // CheckFailExitCode is the process exit code `charly check` returns when a check RAN to completion but
 // one or more checks FAILED — distinct from 0 (all passed) and 1 (command/usage/infra error). Mirrors
@@ -45,8 +45,8 @@ type CheckSkippedError struct{ Msg string }
 func (e *CheckSkippedError) Error() string { return e.Msg }
 
 // CheckCmd is the unified `charly check` command tree. The box/live/feature leaves gather their
-// config + resolve their plan, then forward a run to the host "check-run" seam and format the
-// returned []StepResult. The Wave-2 additions (run / run-local / the AI-facing + management leaves)
+// config + resolve their plan, then forward a run to hostCheckRun (this package's own per-mode
+// dispatch) and format the returned []StepResult. The Wave-2 additions (run / run-local / the AI-facing + management leaves)
 // drive the R10 bed sequence + the AI-iteration harness over HostBuild("cli") + the "check-bed"
 // session seam; each leaf's IMPLEMENTATION lives in its own file (run_cmd.go / runlocal.go /
 // synccreds.go / ai_helpers.go / note_cmd.go / report_cmd.go / list_agent_cmd.go) so the leaf
@@ -76,8 +76,9 @@ type CheckCmd struct {
 }
 
 // CheckBoxCmd runs a pure-box check: a disposable container built from the image, build-scope steps
-// only. The engine (ExtractMetadata → venue → RunPlan) runs host-side via the "check-run" seam; the
-// plugin owns the CLI parse, the "Image:" header, and the formatting.
+// only. The engine (ExtractMetadata → venue → RunPlan) runs plugin-side via hostCheckRun's
+// Mode:"box" arm (pluginCheckRunBox); the plugin owns the CLI parse, the "Image:" header, and the
+// formatting.
 type CheckBoxCmd struct {
 	Image  string `arg:"" help:"Image reference (full ref or short name resolved against local container storage)"`
 	Format string `name:"format" default:"text" help:"Output format: text, json, tap, yaml"`

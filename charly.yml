@@ -721,7 +721,7 @@ check-sidecar-pod:
               command:
                 command: timeout 5 ${CHARLY_BIN} logs check-sidecar-pod -f; case $? in 0|124) true;; *) false;; esac
                 in_container: false
-            - run: charly update rebuilds/redeploys the artifact through dispatchByDeployTarget (update_deploy_dispatch.go, UNCHANGED by this cutover — reused as-is by the new consolidated seam's hostBuildPodUpdate) — proves the update path still works after the file consolidation.
+            - run: charly update rebuilds/redeploys the artifact through dispatchByDeployTarget (update_deploy_dispatch.go — the irreducible loadDeployPlugins+ResolveTarget leg pair since K-wave 2 cone CONTESTED; the deploy-node resolution moved plugin-side) — proves the update path still works after the consolidation.
               exit_status: 0
               context:
                 - runtime
@@ -2120,17 +2120,16 @@ check-migrate-local:
 #   - `charly feature list candy` → exits 0 and lists every candy + its plan summary. feature is
 #     COMPILED-IN (charly.yml compiled_plugins): its Invoke(OpRun) is dispatched in-proc
 #     (registerCompiledPlugin → dispatchInProcCommand, "Seam A"), which threads the in-proc reverse
-#     channel so the plugin reaches the genuine core subsystem it can't hold — the unified loader
-#     (LoadConfig / ScanCandy), the Step plan model, and validatePlanSteps — over the generic
-#     "feature" HostBuild seam (charly/host_build_feature.go: enumerateFeatures). The plugin owns
-#     the list/pending/validate grammar + output; the seam returns plain enumerated plan DATA. The
+#     channel so the plugin drives the whole project load PLUGIN-SIDE over the loader reverse legs
+#     (loaderkit: LoadUnifiedViaExecutor + ProjectCandiesScanned + FinalizeScannedCandies — the
+#     former "feature" HostBuild seam charly/host_build_feature.go is DELETED, K-wave 2 cone R6).
+#     The plugin owns the list/pending/validate grammar + output AND the enumeration. The
 #     output is asserted to contain the `plugin-feature` candy itself (always present in this
-#     project), proving the compiled-in command + the "feature" HostBuild seam (loader + plan model)
-#     end-to-end.
-# `pending`/`validate` ride the SAME "feature" HostBuild seam; the seam's loader + validation is
-# covered by charly/host_build_feature_test.go
-# (TestEnumerateFeatures_InvokesInCoreLoader / TestEnumerateFeatures_RunsValidatePlanSteps /
-# TestValidatePlanSteps_Diagnostics).
+#     project), proving the compiled-in command + the plugin-side loader enumeration (loader + plan
+#     model) end-to-end.
+# `pending`/`validate` ride the SAME plugin-side enumeration; the flatten is covered by the
+# plugin's Go coverage (candy/plugin-feature/command_test.go TestFlattenFeatures_*) and the shared
+# validator by sdk/kit/planvalidate_test.go (TestValidatePlanSteps_Diagnostics).
 # =================================================================
 check-feature-app:
     local:
@@ -2147,9 +2146,9 @@ check-feature-local:
         disposable: true
         lifecycle: dev
         description: >-
-            Sole proof of the externalized `charly feature` COMMAND (candy/plugin-feature, command:feature). A disposable kind:local deploy on host: local runs `charly feature list candy` host-side: feature is COMPILED-IN, so its Invoke(OpRun) is dispatched in-proc ("Seam A", dispatchInProcCommand), which threads the in-proc reverse channel; the plugin owns the list output and reaches the in-core unified loader + plan model (LoadConfig / ScanCandy) over the generic "feature" HostBuild seam. The command exits 0 and lists the project's candies — including the `plugin-feature` candy itself — proving the compiled-in command + the "feature" HostBuild seam end-to-end.
+            Sole proof of the externalized `charly feature` COMMAND (candy/plugin-feature, command:feature). A disposable kind:local deploy on host: local runs `charly feature list candy` host-side: feature is COMPILED-IN, so its Invoke(OpRun) is dispatched in-proc ("Seam A", dispatchInProcCommand), which threads the in-proc reverse channel; the plugin loads the project PLUGIN-SIDE over the loader reverse legs (loaderkit — the former "feature" HostBuild seam is DELETED, K-wave 2 cone R6) and owns the list output. The command exits 0 and lists the project's candies — including the `plugin-feature` candy itself — proving the compiled-in command + the plugin-side loader enumeration end-to-end.
         plan:
-            - check: command=charly feature list candy exits 0 and lists the plugin-feature candy (proving the compiled-in command reached the in-core loader via the "feature" HostBuild seam)
+            - check: command=charly feature list candy exits 0 and lists the plugin-feature candy (proving the compiled-in command's plugin-side loader enumeration end-to-end)
               id: feature-list-runs
               exit_status: 0
               stdout:
@@ -2282,7 +2281,7 @@ check-commands-local:
         disposable: true
         lifecycle: dev
         description: >-
-            Sole proof of cutover C15's three remaining externalized COMMANDs (candy/plugin-clean, plugin-settings, plugin-candy — command:clean / command:settings / command:candy), the sixth-through-eighth welded-command externalizations in the core-externalization program. A disposable kind:local deploy on host: local runs each command host-side with a safe read-only / dry-run / --help invocation. clean + settings + candy are all COMPILED-IN and OWN their commands (each Invoke(OpRun) dispatched in-proc): clean reaches a shared core engine over the "retention" HostBuild seam; settings OWNS its config subsystem directly (its "settings" HostBuild seam is RETIRED — the plugin does the config I/O itself, reaching only verb:credential over the reverse channel); candy owns its ENTIRE logic (the yaml.Node candy-manifest mutation) itself, sharing only the generic kit.SetByDotPath / kit.MappingChild utilities. None uses a hidden core command. Every command exits 0 — proving the externalized commands end-to-end. (`charly version` is excluded — it stays a core command; pkgver() stamps the package version via it.) P15 EXTENSION — the bed also composes candy/plugin-box and exercises the `charly box` command verbs (generate/validate/new/pkg, nested under the box grammar group): one step scaffolds a project + candy + box then drives box validate + box generate to a rendered Containerfile (proving command:new/validate/generate end-to-end, generate via InvokeProvider to the build-generate word), and one proves box pkg dispatches. P14a EXTENSION — the bed also composes candy/plugin-status and exercises the externalized `charly status` (command:status): one step asserts `charly status` + `charly status --json` (exit 0 + a JSON array), proving the status command OWNS the render + the PURE nested overlay and reaches the collectors over the "status-substrate" HostBuild seam. K5 EXTENSION — the bed also composes candy/plugin-substrate (already compiled-in for its 5 substrate kinds) and exercises the externalized `charly reap-orphans` (command:reap-orphans): a step asserts exit 0 and the clean-bed "no orphaned ephemerals" output, proving reap-orphans dispatches in-proc (dispatchCommand → Invoke(OpRun)) and its vm-liveness probe reaches the verb:libvirt peer provider over InvokeProvider (F10) rather than a deleted core-private accessor. --DEEP EXTENSION — the bed also exercises `charly clean --deep --dry-run` (the store-wide untagged/dangling-image purge category, closing the CLI-only-interface gap issue #173 identified: unlabeled multi-stage build intermediates accumulate invisibly to the charly-labeled default sweep): a step asserts exit 0 and a "deep:" line reporting a would-remove count + an UPPER-BOUND reclaimable-byte total (RDD-verified live: the naive per-image Size sum can heavily overstate actual freed disk when removed images share layers with the many that remain — pair --deep with --invalidate for the fullest reclaim), proving --deep reaches pruneDeepDanglingImages over the SAME "retention" HostBuild seam as the pre-existing charly-labeled sweep, still touching nothing under --dry-run.
+            Sole proof of cutover C15's three remaining externalized COMMANDs (candy/plugin-clean, plugin-settings, plugin-candy — command:clean / command:settings / command:candy), the sixth-through-eighth welded-command externalizations in the core-externalization program. A disposable kind:local deploy on host: local runs each command host-side with a safe read-only / dry-run / --help invocation. clean + settings + candy are all COMPILED-IN and OWN their commands (each Invoke(OpRun) dispatched in-proc): clean reaches a shared core engine over the "retention" HostBuild seam; settings OWNS its config subsystem directly (its "settings" HostBuild seam is RETIRED — the plugin does the config I/O itself, reaching only verb:credential over the reverse channel); candy owns its ENTIRE logic (the yaml.Node candy-manifest mutation) itself, sharing only the generic kit.SetByDotPath / kit.MappingChild utilities. None uses a hidden core command. Every command exits 0 — proving the externalized commands end-to-end. (`charly version` is excluded — it stays a core command; pkgver() stamps the package version via it.) P15 EXTENSION — the bed also composes candy/plugin-box and exercises the `charly box` command verbs (generate/validate/new/pkg, nested under the box grammar group): one step scaffolds a project + candy + box then drives box validate + box generate to a rendered Containerfile (proving command:new/validate/generate end-to-end, generate via InvokeProvider to the build-generate word), and one proves box pkg dispatches. P14a EXTENSION — the bed also composes candy/plugin-status and exercises the externalized `charly status` (command:status): one step asserts `charly status` + `charly status --json` (exit 0 + a JSON array), proving the status command OWNS the render + the PURE nested overlay and reaches the collectors via InvokeProvider(verb:status-fanout) directly (the "status-substrate" HostBuild seam is DELETED, K-wave 2). K5 EXTENSION — the bed also composes candy/plugin-substrate (already compiled-in for its 5 substrate kinds) and exercises the externalized `charly reap-orphans` (command:reap-orphans): a step asserts exit 0 and the clean-bed "no orphaned ephemerals" output, proving reap-orphans dispatches in-proc (dispatchCommand → Invoke(OpRun)) and its vm-liveness probe reaches the verb:libvirt peer provider over InvokeProvider (F10) rather than a deleted core-private accessor. --DEEP EXTENSION — the bed also exercises `charly clean --deep --dry-run` (the store-wide untagged/dangling-image purge category, closing the CLI-only-interface gap issue #173 identified: unlabeled multi-stage build intermediates accumulate invisibly to the charly-labeled default sweep): a step asserts exit 0 and a "deep:" line reporting a would-remove count + an UPPER-BOUND reclaimable-byte total (RDD-verified live: the naive per-image Size sum can heavily overstate actual freed disk when removed images share layers with the many that remain — pair --deep with --invalidate for the fullest reclaim), proving --deep reaches pruneDeepDanglingImages over the SAME "retention" HostBuild seam as the pre-existing charly-labeled sweep, still touching nothing under --dry-run.
         plan:
             - check: command=charly settings list exits 0 and lists the resolved runtime-config keys (proving the externalized settings command owns the get/set/list/reset/path grammar + owns its config subsystem directly, the "settings" HostBuild seam retired)
               id: settings-list-runs
@@ -2348,7 +2347,7 @@ check-commands-local:
               command:
                 command: "rm -rf /tmp/charly-p14b-authoringbed && ${CHARLY_BIN} box new project /tmp/charly-p14b-authoringbed && ${CHARLY_BIN} -C /tmp/charly-p14b-authoringbed box new candy my-candy && ${CHARLY_BIN} -C /tmp/charly-p14b-authoringbed box new box my-box --base quay.io/fedora/fedora:43 --candy my-candy && ${CHARLY_BIN} -C /tmp/charly-p14b-authoringbed box add-candy my-box curl && ${CHARLY_BIN} -C /tmp/charly-p14b-authoringbed box rm-candy my-box curl && ! grep -q '\\- curl' /tmp/charly-p14b-authoringbed/box/my-box/charly.yml && ${CHARLY_BIN} -C /tmp/charly-p14b-authoringbed box set defaults.registry p14b-registry && grep -q 'p14b-registry' /tmp/charly-p14b-authoringbed/charly.yml && ${CHARLY_BIN} -C /tmp/charly-p14b-authoringbed box write hello.txt --content hi-p14b && ${CHARLY_BIN} -C /tmp/charly-p14b-authoringbed box cat hello.txt"
                 in_container: false
-            - check: charly status exits 0 (table render) AND charly status --json exits 0 emitting a JSON array — proving the externalized status command (candy/plugin-status, command:status, P14a) OWNS the render + the PURE nested overlay and reaches the collectors over the "status-substrate" HostBuild seam; FAILS if the externalization broke (unknown-command / seam failure → non-zero exit, or non-array output). P14b EXTENSION — the bed also composes candy/plugin-authoring and exercises the `charly box` AUTHORING verbs (set/add-candy/rm-candy/write/cat, nested under the box grammar group). One step scaffolds a project + box then drives box add-candy/rm-candy (yaml.Node candy-list edits via kit.MappingChild/kit.SaveYAMLNodeFile) + box set (kit.SetByDotPath) + box write/cat (the resolveProjectFile file escape hatch) end-to-end host-side, proving the authoring command plugin OWNS the charly.yml mutation surface with ZERO core reentry (fetch/refresh, which reenter core over HostBuild("cli") + hit the network, stay covered by the Go tests + the golden-parity spike).
+            - check: charly status exits 0 (table render) AND charly status --json exits 0 emitting a JSON array — proving the externalized status command (candy/plugin-status, command:status, P14a) OWNS the render + the PURE nested overlay and reaches the collectors via InvokeProvider(verb:status-fanout) directly (the "status-substrate" HostBuild seam is DELETED, K-wave 2); FAILS if the externalization broke (unknown-command / seam failure → non-zero exit, or non-array output). P14b EXTENSION — the bed also composes candy/plugin-authoring and exercises the `charly box` AUTHORING verbs (set/add-candy/rm-candy/write/cat, nested under the box grammar group). One step scaffolds a project + box then drives box add-candy/rm-candy (yaml.Node candy-list edits via kit.MappingChild/kit.SaveYAMLNodeFile) + box set (kit.SetByDotPath) + box write/cat (the resolveProjectFile file escape hatch) end-to-end host-side, proving the authoring command plugin OWNS the charly.yml mutation surface with ZERO core reentry (fetch/refresh, which reenter core over HostBuild("cli") + hit the network, stay covered by the Go tests + the golden-parity spike).
               id: status-runs
               # Killed at the 120s per-attempt ceiling under the full 28-bed roster (~30-40
               # containers resident; `charly status` fans out per-container), while green solo.
@@ -2430,6 +2429,91 @@ check-gpu-local:
               command:
                 command: ${CHARLY_BIN} vm gpu list
                 in_container: false
+
+# =================================================================
+# check-preflight-local — R10 witness for the RELOCATED check-run image
+# PREFLIGHT (K-wave 2 cone R4: the "check-run" HostBuild kind's last arm
+# "preflight" moved to candy/plugin-check's pluginCheckRunPreflight).
+#
+# The preflight arm fires ONLY on the ITERATE path when the sandbox classifies
+# as TargetKindHost (candy/plugin-check/run_cmd.go, case targetKindHost). The
+# bed is a GROUP (targetless → its resource children fold as MEMBERS with
+# BARE-name venues), so the member named after the real project box
+# check-k8s-deploy-app makes preflightImageCandidates(reply.Plan) yield a
+# GENUINE image ref (NOT the bed's own name). pluginCheckRunPreflight then
+# loads the project via loaderkit, filters agent-provisioned venues (this
+# member is NOT agent_provisioned, so it is NOT skipped), and
+# InvokeProvider("build","ensure")-ensures the candidate into local podman
+# storage BEFORE the harness drives the AI. The member's check is a
+# deterministic HOST probe — the member is a kind:local deploy (host-rooted),
+# so the scoring chain is the host executor — asserting the ensured image is
+# in local storage. NO other roster bed exercises this arm (no "preflight:"
+# line in any bed log) and it has no end-to-end test (only the pure
+# preflightImageCandidates unit test); this bed closes that gap live.
+# =================================================================
+check-preflight-sandbox:
+    local:
+        from: check-feature-app
+        host: local
+        description: >-
+            Host-rooted sandbox marker for the check-preflight-local iterate bed. The ONLY
+            deploy shape that classifies an iterate sandbox as TargetKindHost is a host-rooted
+            venue (kind:local — venue shell, not leaf-only), so `charly check run
+            check-preflight-local` dispatches the host-target arm that fires
+            pluginCheckRunPreflight before the harness. Never brought up (a host-target run
+            drives the harness in-process on the host).
+check-preflight-local:
+    group:
+        disposable: true
+        lifecycle: dev
+        description: >-
+            R10 witness for the RELOCATED check-run image preflight (K-wave 2 cone R4) — the
+            pluginCheckRunPreflight body (candy/plugin-check/command.go) running live. A GROUP
+            iterate bed whose sandbox is a host-rooted kind:local deploy (TargetKindHost): the
+            host-target run arm collects preflightImageCandidates from the plan — the group's
+            targetless root folds its resource children as MEMBERS with BARE-name venues, so the
+            member named after the real box check-k8s-deploy-app yields that image ref as the
+            preflight candidate — and pluginCheckRunPreflight ensures it into local podman
+            storage via InvokeProvider("build","ensure") BEFORE the harness drives the AI. The
+            member's check is a deterministic host probe (the member is a kind:local deploy, so
+            its scoring chain is the host executor): `charly box list tags check-k8s-deploy-app`
+            proves the ensured image is present locally. The AI's one iteration merely confirms
+            the pre-ensured state; the preflight arm is the thing under test.
+        iterate:
+            sandbox: check-preflight-sandbox
+            agent: [claude]
+            plateau_iteration: 1
+            prompt: >-
+                == Where you are ==
+                You are on the host directly (no container sandbox). The image
+                `check-k8s-deploy-app` has ALREADY been ensured into local podman
+                storage by the bed's preflight step — nothing to build, pull, or
+                deploy.
+
+                == Bed purpose ==
+                This bed proves the relocated check-run image preflight. The only
+                scored check probes the host for the ensured image:
+                `charly box list tags check-k8s-deploy-app` (or `charly box list
+                tags` and confirm `check-k8s-deploy-app` appears).
+
+                == Your task ==
+                Run that probe and confirm the image is present. Do NOT modify
+                anything, do not build or deploy, do not create or delete files.
+                Report the probe output and done.
+    check-k8s-deploy-app:
+        local:
+            from: check-feature-app
+            host: local
+            plan:
+                - check: the preflight ensured the check-k8s-deploy-app image into local podman storage — the host probe lists it among the local tags (proving pluginCheckRunPreflight's InvokeProvider("build","ensure") leg ran live before the harness)
+                  id: preflight-image-ensured
+                  context:
+                    - runtime
+                  command:
+                    command: ${CHARLY_BIN} box list tags check-k8s-deploy-app
+                    in_container: false
+                  stdout:
+                    - contains: check-k8s-deploy-app
 
 # =============================================================================
 # docs-site-app + check-docs — the R10 bed for the opencharly.ai documentation site.

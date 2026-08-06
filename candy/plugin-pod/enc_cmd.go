@@ -32,9 +32,11 @@ import (
 // process-boundary wire shapes are not worth a cross-module import for a 3-field struct) — this
 // is a third, not a new, instance of that established pattern.
 //
-// Setup/Remove (ConfigSetupCmd/ConfigRemoveCmd, pod_cmd.go) stay on hostPodSeam — their
-// orchestration is a different family (quadlet/secrets/sidecars, P13-KERNEL, host_build_pod_
-// config_seams.go), not credential/enc.
+// Setup/Remove (ConfigSetupCmd/ConfigRemoveCmd, pod_cmd.go) dispatch deploy:pod's OpConfigSetup/
+// OpConfigRemove peer-to-peer via InvokeProvider (the "pod-config-setup"/"pod-config-remove"
+// host-build seams are DELETED, K-wave 2 cone R3) — their orchestration is a different family
+// (quadlet/secrets/sidecars, P13-KERNEL, candy/plugin-deploy-pod/config_setup.go), not
+// credential/enc. (The former "stay on hostPodSeam" wording is DELETED with those seams.)
 
 // credentialInput is the verb:credential request wire form — byte-compatible with
 // charly/credential_plugin.go's credentialInput and candy/plugin-secrets/params.CredentialInput
@@ -151,8 +153,9 @@ func pluginAwaitKeyringUnlock(ctx context.Context, boxName string, _ func() (str
 }
 
 // pluginResetCredentialStore re-probes the keyring between unlock attempts — the direct
-// plugin-side analogue of charly/enc.go's resetDefaultCredentialStore. Unlike the core version,
-// this dispatches unconditionally rather than short-circuiting on an "already connected" check
+// plugin-side analogue of the deleted core resetDefaultCredentialStore (charly/enc.go and
+// charly/credential_plugin.go, both gone; the pod enc path carries its own waiter). It
+// dispatches unconditionally rather than short-circuiting on an "already connected" check
 // (that optimization used the core-only provider registry; the RPC is cheap and this path only
 // runs during an active keyring-wait retry loop, never on the hot path — registered as a
 // low-priority simplification, not a correctness gap).
@@ -160,8 +163,9 @@ func pluginResetCredentialStore() {
 	_, _ = pluginCredentialCall(credentialInput{Method: "reset"})
 }
 
-// pluginResolveSecretBackend mirrors charly/credential_plugin.go's resolveSecretBackend — pure
-// env + sdk/kit config read, zero host coupling, portable verbatim.
+// pluginResolveSecretBackend mirrors the deleted core resolveSecretBackend
+// (charly/credential_plugin.go, K-wave 2 cone CONTESTED) — pure env + sdk/kit config read,
+// zero host coupling, portable verbatim.
 func pluginResolveSecretBackend() string {
 	if v := os.Getenv("CHARLY_SECRET_BACKEND"); v != "" {
 		return v

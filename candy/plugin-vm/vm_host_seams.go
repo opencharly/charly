@@ -2,11 +2,12 @@ package vm
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/spec/spec"
 )
@@ -43,14 +44,14 @@ func setCommandContext(ctx context.Context, ex *sdk.Executor) {
 	cmdExec = ex
 }
 
-// resolvedConfig is the plugin-facing decode of spec.ConfigResolveReply. The wire reply carries the
-// two hand-written runtime types with no CUE def (*ResolvedVm, map[string]*ResolvedResource) as opaque
-// JSON envelopes (VmJSON/ResourcesJSON) + the PROJECT deploy tree as BundleJSON; hostConfigResolve
-// unmarshals them back into their typed values here so the moved handlers reference reply.VM /
-// reply.Resources exactly as before. VmState (*VmDeployState) crosses the wire directly (the host
-// reads it spec-only via LoadUnified of the per-host overlay). Claimant/ClaimantNode are computed
-// PLUGIN-SIDE from BundleJSON (#55 coneC-dsh β2 config-RESOLVE: deploykit.MergedDeployTree +
-// spec.FindVMClaimant over the plugin's loader-backed reader) — they no longer cross the wire.
+// resolvedConfig is the plugin-facing result of hostConfigResolve. Since K-wave 2 cone R2 bank D
+// (the "config-resolve" HostBuild seam DELETED), hostConfigResolve computes every field
+// PLUGIN-SIDE — the kind:vm entity resolves to *spec.ResolvedVm directly (vmshared.VmSpec IS
+// spec.ResolvedVm, so the former VmJSON envelope decode was identity), the resources via
+// spec.ResolvePluginKindViaPlugin over loaderkit.ResolveResourceViaExecutor, the runtime settings
+// via kit.ResolveRuntime, and VmState via loaderkit.ResolveVmStateViaExecutor.
+// Claimant/ClaimantNode are computed PLUGIN-SIDE (deploykit.MergedDeployTree + spec.FindVMClaimant
+// over the plugin's loader-backed reader).
 type resolvedConfig struct {
 	VM           *VmSpec
 	Resources    map[string]*ResolvedResource
@@ -64,51 +65,67 @@ type resolvedConfig struct {
 	VmEntities   []string
 }
 
-// hostConfigResolve resolves the project config for an entity host-side (LoadUnified/ResolveRuntime/
-// #Vm defaults + the persisted VmState) — the READ seam. It decodes the opaque
-// VmJSON/ResourcesJSON/BundleJSON envelopes, computes the exclusive-resource Claimant PLUGIN-SIDE
-// (#55 coneC-dsh β2 config-RESOLVE: the host no longer calls deploykit; it ships the PROJECT bundle
-// as BundleJSON + the plugin merges the per-host overlay ITSELF via deploykit.MergedDeployTree +
-// spec.FindVMClaimant, placement-invariant over loaderkit.LoadHostBundleConfigViaExecutor), and
-// computes the effective VM backend ITSELF (resolveVmBackendPlugin/vmConfiguredBackendPlugin, F6
-// vm-lifecycle move, vm_backend_resolve.go) — the "config-resolve" wire reply carries no Backend.
+// hostConfigResolve resolves the project config for an entity PLUGIN-SIDE (K-wave 2 cone R2 bank D
+// — the "config-resolve" HostBuild seam is DELETED): the runtime settings come from
+// kit.ResolveRuntime (this plugin is compiled-in, sharing charly's process + runtime config), the
+// project loads via loaderkit.LoadUnifiedViaExecutor, the kind:vm entity resolves via
+// loaderkit.ResolveVmEntityViaExecutor + loaderkit.ApplyCueDefaults (the schema-declared defaults
+// the former host seam applied), the resources via spec.ResolvePluginKindViaPlugin over
+// loaderkit.ResolveResourceViaExecutor, and the persisted VmState via
+// loaderkit.ResolveVmStateViaExecutor. The exclusive-resource Claimant is computed PLUGIN-SIDE
+// (#55 coneC-dsh β2 config-RESOLVE) from the loaded project bundle via deploykit.MergedDeployTree +
+// spec.FindVMClaimant; the effective VM backend is computed HERE (resolveVmBackendPlugin/
+// vmConfiguredBackendPlugin, F6 vm-lifecycle move, vm_backend_resolve.go).
 func hostConfigResolve(entity string) (resolvedConfig, error) {
 	if cmdExec == nil {
 		return resolvedConfig{}, fmt.Errorf("config-resolve: no host reverse channel (command not compiled-in?)")
 	}
-	reqJSON, err := json.Marshal(spec.ConfigResolveRequest{Entity: entity})
+	rt, err := kit.ResolveRuntime()
 	if err != nil {
 		return resolvedConfig{}, err
 	}
-	out, err := cmdExec.HostBuild(cmdCtx, "config-resolve", reqJSON)
-	if err != nil {
-		return resolvedConfig{}, err
-	}
-	var wire spec.ConfigResolveReply
-	if err := json.Unmarshal(out, &wire); err != nil {
-		return resolvedConfig{}, fmt.Errorf("config-resolve: decode reply: %w", err)
-	}
-	backend, err := resolveVmBackendPlugin(vmConfiguredBackendPlugin(cmdCtx, cmdExec, entity, wire.VmBackend))
-	if err != nil {
-		return resolvedConfig{}, err
-	}
+	dir, _ := os.Getwd()
 	cfg := resolvedConfig{
-		Backend:     backend,
-		VmBackend:   wire.VmBackend,
-		BuildEngine: wire.BuildEngine,
-		RunEngine:   wire.RunEngine,
-		VmState:     wire.VmState,
-		VmEntities:  wire.VmEntities,
+		VmBackend:   rt.VmBackend,
+		BuildEngine: rt.BuildEngine,
+		RunEngine:   rt.RunEngine,
 	}
-	// Claimant computation moved plugin-side (#55 coneC-dsh β2 config-RESOLVE): unmarshal the PROJECT
-	// bundle the host ships as BundleJSON, merge the per-host overlay via deploykit.MergedDeployTree
-	// (placement-invariant reader = loaderkit.LoadHostBundleConfigViaExecutor), + spec.FindVMClaimant.
-	if len(wire.BundleJSON) > 0 {
-		var project map[string]spec.BundleNode
-		if err := json.Unmarshal(wire.BundleJSON, &project); err != nil {
-			return resolvedConfig{}, fmt.Errorf("config-resolve: decode bundle: %w", err)
+	uf, ok, err := loaderkit.LoadUnifiedViaExecutor(cmdCtx, cmdExec, dir)
+	if err != nil {
+		return resolvedConfig{}, fmt.Errorf("config-resolve: load project: %w", err)
+	}
+	if ok && uf != nil {
+		// The kind:vm entity names + the requested entity's resolved spec (vmshared.VmSpec IS
+		// spec.ResolvedVm, so no wire envelope decode — the former VmJSON round-trip was identity).
+		for name := range uf.VM() {
+			cfg.VmEntities = append(cfg.VmEntities, name)
 		}
-		merged := deploykit.MergedDeployTree(project, "vm config-resolve", func() (*deploykit.BundleConfig, error) {
+		if entity != "" {
+			if body, has := uf.VM()[entity]; has && len(body) > 0 {
+				vm, verr := loaderkit.ResolveVmEntityViaExecutor(cmdCtx, cmdExec, dir, entity)
+				if verr != nil {
+					return resolvedConfig{}, verr
+				}
+				// ApplyCueDefaults fills schema-declared defaults. Order-independent vs the
+				// plugin's instance-override / GPU-alloc merge (those touch ONLY libvirt overlays).
+				// The opaque substrate-template echo (Raw) is cleared for the closed-schema unify
+				// round-trip and restored on the value the plugin receives.
+				if vm != nil {
+					savedRaw := vm.Raw
+					vm.Raw = nil
+					if derr := loaderkit.ApplyCueDefaults("vm", vm); derr != nil {
+						return resolvedConfig{}, fmt.Errorf("applying vm defaults for %q: %w", entity, derr)
+					}
+					vm.Raw = savedRaw
+					cfg.VM = vm
+				}
+			}
+		}
+		cfg.Resources = spec.ResolvePluginKindViaPlugin(uf, "resource", loaderkit.ResolveResourceViaExecutor(cmdCtx, cmdExec))
+		// Claimant computation moved plugin-side (#55 coneC-dsh β2 config-RESOLVE): merge the
+		// per-host overlay via deploykit.MergedDeployTree (placement-invariant reader =
+		// loaderkit.LoadHostBundleConfigViaExecutor) + spec.FindVMClaimant.
+		merged := deploykit.MergedDeployTree(uf.Bundle, "vm config-resolve", func() (*deploykit.BundleConfig, error) {
 			return loaderkit.LoadHostBundleConfigViaExecutor(cmdCtx, cmdExec)
 		})
 		if claimant, claimantNode, hasClaimant := spec.FindVMClaimant(merged, entity); hasClaimant {
@@ -116,18 +133,14 @@ func hostConfigResolve(entity string) (resolvedConfig, error) {
 			cfg.ClaimantNode = &claimantNode
 		}
 	}
-	if len(wire.VmJSON) > 0 {
-		var vm VmSpec
-		if err := json.Unmarshal(wire.VmJSON, &vm); err != nil {
-			return resolvedConfig{}, fmt.Errorf("config-resolve: decode vm: %w", err)
-		}
-		cfg.VM = &vm
+	// The persisted deploy-ledger runtime state (READ half) — plugin-side (the former
+	// config-resolve VmState leg).
+	cfg.VmState, _ = loaderkit.ResolveVmStateViaExecutor(cmdCtx, cmdExec, entity)
+	backend, err := resolveVmBackendPlugin(vmConfiguredBackendPlugin(cmdCtx, cmdExec, entity, cfg.VmBackend))
+	if err != nil {
+		return resolvedConfig{}, err
 	}
-	if len(wire.ResourcesJSON) > 0 {
-		if err := json.Unmarshal(wire.ResourcesJSON, &cfg.Resources); err != nil {
-			return resolvedConfig{}, fmt.Errorf("config-resolve: decode resources: %w", err)
-		}
-	}
+	cfg.Backend = backend
 	return cfg, nil
 }
 

@@ -121,29 +121,22 @@ type podLifecyclePlanResolver func(ctx context.Context, box, instance string) (j
 // tty=false → the `charly cmd` resolver (`engine exec -i … sh -c`). cmd is the user's command argv.
 type attachPlanResolver func(ctx context.Context, box, instance string, cmd []string, tty bool) (json.RawMessage, error)
 
-// logsPlanResolver resolves the host-side #PodLiveStdioPlan for the F12 `charly logs [-f]` op (the
-// resolved `journalctl`/`<engine> logs` stream command). A substrate with no logs resolver (vm) keeps
-// the plain opts-threaded OpLogs path (pluginDeployTarget.Logs, S3b).
-type logsPlanResolver func(ctx context.Context, box, instance string, opts LogsOpts) (json.RawMessage, error)
-
 var (
 	lifecycleStartPlanHooks  = map[string]podLifecyclePlanResolver{}
 	lifecycleStopPlanHooks   = map[string]podLifecyclePlanResolver{}
 	lifecycleAttachPlanHooks = map[string]attachPlanResolver{}
-	lifecycleLogsPlanHooks   = map[string]logsPlanResolver{}
 )
 
-// registerLifecycleLivePlanHooks records the F12 attach/logs plan resolvers for a substrate word.
-// Called at package-var init (race-free, like registerLifecyclePlanHooks).
-func registerLifecycleLivePlanHooks(word string, attach attachPlanResolver, logs logsPlanResolver) {
+// registerLifecycleLivePlanHooks records the F12 attach plan resolver for a substrate word.
+// Called at package-var init (race-free, like registerLifecyclePlanHooks). The former logs
+// resolver slot is DELETED (K-wave 2 cone R5) — Logs() threads its opts unconditionally, which
+// is all candy/plugin-deploy-pod's resolvePodLogsPlan needs.
+func registerLifecycleLivePlanHooks(word string, attach attachPlanResolver) {
 	if word == "" {
 		return
 	}
 	if attach != nil {
 		lifecycleAttachPlanHooks[word] = attach
-	}
-	if logs != nil {
-		lifecycleLogsPlanHooks[word] = logs
 	}
 }
 
@@ -170,9 +163,10 @@ func registerLifecyclePlanHooks(word string, start, stop podLifecyclePlanResolve
 // lifecycleStartPlanHooks/lifecycleStopPlanHooks registration MECHANISM (this file) and the
 // arbiter-claim bracket it gates (arbiter_bracket.go, S3b — was substrate_lifecycle_grpc.go
 // before the deploy-dispatch cluster moved) are untouched, only the payload CONTENT changes.
-// Logs registers NO hook — Logs() already
-// threads its LogsOpts unconditionally (extra["opts"]), which is all candy/plugin-deploy-pod's
-// resolvePodLogsPlan needs (box/instance come from the deploy key on lifecycleParams.Name).
+// Logs registers NO hook (the former logs-resolver slot is DELETED, K-wave 2 cone R5) — Logs()
+// already threads its DeployTargetLogsOpts unconditionally (extra["opts"]), which is all
+// candy/plugin-deploy-pod's resolvePodLogsPlan needs (box/instance come from the deploy key on
+// lifecycleParams.Name).
 var _ = func() bool {
 	registerLifecyclePlanHooks("pod",
 		func(ctx context.Context, _, _ string) (json.RawMessage, error) {
@@ -198,8 +192,6 @@ var _ = func() bool {
 				},
 				CmdOpts: spec.PodCmdOpts{Sidecar: co.Sidecar},
 			})
-		},
-		nil, // Logs needs no hook — its LogsOpts already threads unconditionally
-	)
+		})
 	return true
 }()

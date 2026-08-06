@@ -24,7 +24,7 @@ import (
 // "resolved-project" envelope seam, K5-Unit-6b), and Invoke.
 //
 // dispatchOCIStep is the single source of truth (R3): charly/step_emit_hostbuild.go's
-// stepEmitOCIEmitStep (the production "oci-emit-step" render-seam handler) and ociEmitStep (below,
+// stepEmitOCIEmitStep (the production "step-emit"/"oci-emit-step" handler) and ociEmitStep (below,
 // a Go-object-typed compatibility wrapper existing unit tests drive directly) both funnel through it.
 
 // dispatchOCIStep forwards ONE pod-overlay step's rendering to candy/plugin-installstep's

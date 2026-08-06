@@ -11,8 +11,9 @@ import (
 // devices_test.go — relocated (in part) from charly/devices_test.go (#55 decoupling, Batch A):
 // these 4 tests assert deploykit.SecurityArgs/GenerateQuadlet directly, zero charly coupling.
 // The DetectHostDevices-swap tests + TestAppendEnvUnique + TestDetectedDevicesMergeIntoSecurity
-// stay in charly (they exercise charly's own DetectHostDevices var / DetectedDevices struct /
-// appendEnvUnique). containsLine/splitLines live once in this package's security_test.go (R3).
+// were DELETED with charly/devices_test.go + charly/devices.go (K-wave 2 cone R3 — the
+// detection moved into candy/plugin-deploy-pod's detectDevices, peer verb:gpu).
+// containsLine/splitLines live once in this package's security_test.go (R3).
 
 func TestDetectedDevicesInSecurityArgs(t *testing.T) {
 	sec := vmshared.SecurityConfig{

@@ -203,20 +203,6 @@ func dedupePreempted(in []spec.PreemptedHolder) []spec.PreemptedHolder {
 
 // --- small set helpers ------------------------------------------------------------------------
 
-func dedupeNonEmpty(in []string) []string {
-	seen := map[string]bool{}
-	var out []string
-	for _, s := range in {
-		s = strings.TrimSpace(s)
-		if s == "" || seen[s] {
-			continue
-		}
-		seen[s] = true
-		out = append(out, s)
-	}
-	return out
-}
-
 func intersect(a, b []string) []string {
 	set := map[string]bool{}
 	for _, s := range a {

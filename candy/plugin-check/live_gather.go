@@ -1,7 +1,7 @@
 package check
 
 // live_gather.go — K1-unblock wave, arm 1 (the "live" check-run mode): pluginCheckRunLive, the
-// plugin-resident port of charly/host_build_check_run.go's hostCheckRunLive (charly/check_cmd.go's
+// plugin-resident port of the former core hostCheckRunLive (which wrapped the former core
 // checkLiveGather + checkLivePod/VM/Local/Group). Mirrors the DELETE-AS-YOU-WIRE contract: this
 // file's wiring commit (command.go's hostCheckRun dispatching Mode:"live" here) deletes the core
 // originals in the SAME commit.

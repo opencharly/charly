@@ -12,7 +12,6 @@ import (
 	"sync"
 	"testing"
 
-	specexec "github.com/opencharly/spec/exec"
 	"github.com/opencharly/spec/proc"
 	"github.com/opencharly/spec/spec"
 
@@ -34,7 +33,7 @@ func compileBasePlusServed(servedCUE string) (cue.Value, error) {
 	if err != nil {
 		return cue.Value{}, fmt.Errorf("base schema: %w", err)
 	}
-	v := cueSchemaCtx.CompileString(baseBody + "\n" + servedCUE)
+	v := cueSchemaCtx().CompileString(baseBody + "\n" + servedCUE)
 	return v, v.Err()
 }
 
@@ -118,7 +117,7 @@ func validateAuthoredPluginInput(class ProviderClass, word string, inputJSON []b
 	if d.Err() != nil {
 		return fmt.Errorf("plugin %s:%s: schema missing %s: %w", class, word, def, d.Err())
 	}
-	in := cueSchemaCtx.CompileBytes(inputJSON)
+	in := cueSchemaCtx().CompileBytes(inputJSON)
 	if in.Err() != nil {
 		return fmt.Errorf("plugin %s:%s: input: %w", class, word, in.Err())
 	}
@@ -624,10 +623,12 @@ func loadPluginUnit(ctx context.Context, name string, source string, srcDir stri
 //     Op.Plugin words in its FLATTENED bed plan — see deployNodePluginContext).
 //
 // The EXTERNALIZED detection-builders (cargo/npm/pixi/aur) are NOT collected here: their
-// build-time multi-stage ops.OpResolve leg (C10) is connected on-demand by deploykit EmitBuilderStages
-// (ensureBuildersConnected), and the deploy-time ops.OpCollectContext/ops.OpReverse legs are connected
-// PRECISELY + on-demand by the build pre-pass (builder_preresolve.go's ensureBuildersConnected,
-// scoped to the deploy's actually-detected + distro-gated builders) — NOT surfaced across an
+// build-time multi-stage ops.OpResolve leg (C10) AND their deploy-time ops.OpCollectContext/
+// ops.OpReverse legs are connected PRECISELY + on-demand at the moment of first Invoke, via
+// InvokeProvider's own connectPluginByWordRef fallback carrying the builder's canonical ref
+// (ops.InvokeProviderOpts.ExtraRef; K-wave 2 cone R1 deleted the separate host-side
+// ensureBuildersConnected pre-pass, which was a second copy of that same fallback). Either way the
+// connect is scoped to the builders actually detected + distro-gated — NOT surfaced across an
 // entire box scan, which over-built unrelated builder plugins (e.g. aur on a fedora deploy).
 //
 // Word-keyed + class-AGNOSTIC by design: a plugin candy loads iff ANY of its provided
@@ -738,7 +739,7 @@ func pluginProvidesReferencedWord(providers []string, refs map[string]struct{}) 
 // concern despite the former file's name. check_cmd.go's resolveCheckRunnerContext still calls
 // deployNodePluginContext directly (same package, different file).
 func resolveMergedDeployTree(dir string) (map[string]spec.BundleNode, error) {
-	ctx := specexec.ContextWithExecutor(context.Background(), specexec.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}}))
+	ctx := hostInProcCtx()
 	return requireProjectLoader().ResolveMergedDeployTree(ctx, dir)
 }
 
@@ -833,9 +834,10 @@ func deployNodePluginContext(dir, name string) (addCandy []string, refWords []st
 	// NOTE: the externalized DETECTION-builder plugins (cargo/npm/pixi/aur) are NOT injected here.
 	// A builder is triggered by the DEPLOY's resolved image closure (a pixi.toml / aur: section), not
 	// by the deploy NODE this walk sees — and surfacing all four across a whole-box scan over-built
-	// unrelated builder plugins (aur on a fedora deploy). The build PRE-PASS (builder_preresolve.go)
-	// instead detects EXACTLY the builders the deploy triggers (distro-gated) and connects only those
-	// on-demand, by their canonical ref (ensureBuildersConnected), where it has the resolved closure.
+	// unrelated builder plugins (aur on a fedora deploy). The deploy-time pre-pass
+	// (candy/plugin-bundle's preresolveBuilderContexts) instead detects EXACTLY the builders the
+	// deploy triggers (distro-gated) and connects only those on-demand, by their canonical ref
+	// (ops.InvokeProviderOpts.ExtraRef → connectPluginByWordRef), where it has the resolved closure.
 	return addCandy, refWords
 }
 
@@ -896,8 +898,9 @@ func resolveDeployNodeByPath(tree map[string]spec.BundleNode, name string) (*spe
 // mutates providerRegistry — a clause-M kernel mechanism (plugin loading) that cannot live in a
 // plugin. Relocated here (from the deleted charly/deploy_add_shared.go) to sit beside its callees
 // collectReferencedPluginWords/loadProjectPlugins (R3) — already the body of two thin HostBuild
-// seams (deploy-plugins-connect, deploy-del-resolve) and called directly by two more core files
-// (pod_lifecycle_verb.go, update_deploy_dispatch.go).
+// seams (deploy-plugins-connect — the former deploy-del-resolve seam died with the del
+// resolution moving to candy/plugin-bundle, K-wave 2 cone R2 bank C) and called directly by two
+// more core files (pod_lifecycle_verb.go, update_deploy_dispatch.go).
 func loadDeployPlugins(dir, deployName string, extraAddCandy []string) error {
 	cfg, cerr := LoadConfig(dir)
 	if cerr != nil {

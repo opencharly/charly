@@ -29,6 +29,35 @@ var (
 	cmdExec *sdk.Executor
 )
 
+// cmdHostEnvJSON carries the host-side spec.HostEnv (CharlyBin/Home/Version) threaded as DATA on
+// the OpRun dispatch (charly/provider_command_external.go's dispatchInProcCommand — core computes
+// it, since os.Executable() is only correct in-core, R10 bed-found bug #5). The config setup/remove
+// leaves forward it verbatim into PodConfigSetupRequest.HostEnvJSON (deploy:pod's encrypted-mount
+// ExecStartPre CharlyBin line) when they dispatch deploy:pod peer-to-peer — the SAME data-threading
+// idiom candy/plugin-bundle's from_box_pod.go uses.
+var cmdHostEnvJSON json.RawMessage
+
+// dispatchPodConfigOp reaches deploy:pod's sdk.OpConfigSetup/OpConfigRemove peer-to-peer (the
+// "pod-config-setup"/"pod-config-remove" host-build seams are DELETED, K-wave 2 cone R3): the
+// config orchestration lives in candy/plugin-deploy-pod, so the CLI grammar forwards the wire
+// request DIRECTLY via InvokeProvider — the same peer-dispatch idiom candy/plugin-bundle's
+// from_box_pod.go uses for the source-less from-box path. A compiled-in COMMAND's own reverse
+// channel carries no venue executor, so the host must re-materialize one from a SELF-DESCRIBED
+// venue (the S1 seam — the same `spec.VenueDescriptor{Kind: "shell"}` the deleted core seam
+// passed as `specexec.ShellExecutor{}`); deploy:pod's Invoke handler reads the threaded executor
+// for its HostBuild callbacks.
+func dispatchPodConfigOp(op string, reqJSON []byte) ([]byte, error) {
+	if cmdExec == nil {
+		return nil, fmt.Errorf("pod config: no host reverse channel (command not compiled-in?)")
+	}
+	opts := sdk.InvokeProviderOpts{VenueDescriptor: &spec.VenueDescriptor{Kind: "shell"}}
+	resJSON, err := cmdExec.InvokeProvider(cmdCtx, "deploy", "pod", op, reqJSON, nil, opts)
+	if err != nil {
+		return nil, fmt.Errorf("deploy:pod config: %w", err)
+	}
+	return resJSON, nil
+}
+
 // setCommandContext stashes the reverse-channel executor for the duration of one `charly <word> …`
 // dispatch. Called once at the top of command:pod's Invoke(OpRun).
 func setCommandContext(ctx context.Context, ex *sdk.Executor) {

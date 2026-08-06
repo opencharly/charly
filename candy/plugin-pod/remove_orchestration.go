@@ -48,20 +48,17 @@ import (
 // RemoveImagesByReference), kit.ResolveRuntime, every kit naming/path helper, TunnelServiceFilename/
 // EncServiceFilename, ContainerImage, ExtractMetadata, and DeployKey.
 //
-// The credential axis (runPreRemoveHook's secret-backed hook env) now resolves PLUGIN-SIDE via
+// The credential axis (runPreRemoveHook's secret-backed hook env) resolves PLUGIN-SIDE via
 // deploykit.ResolveHookSecretEnv + this plugin's own pluginCredentialAccess (verb:credential) — the
-// former pod-config-hook-secret-env seam is retired (this cone's secrets seam-death). One axis
-// remains genuinely host-coupled by DESIGN (not this same DeployStateHost class) and reaches the
-// host over its own EXISTING narrow seam (R3 — no new seam invented):
-//   - the registry-resugar axis (the deploy-entry cleanup) needs a NEW narrow seam,
-//     pod-config-clean-deploy-entry, with a host-owns-load+lock+mutate+save shape —
-//     the plugin-side whole-config deploy-state write does NOT fit: it persists an already-loaded,
-//     whole, already-mutated BundleConfig (bundle import/reset's use case, no internal load, no lock, no
-//     entry-removal/provides-cleanup logic), whereas deploykit.CleanDeployEntry loads its OWN
-//     BundleConfig under a file lock, does the entry-removal + provides-cleanup + empty-file-delete
-//     decision internally, and returns nothing — a fundamentally different, narrower operation.
-//     Forking a twin here (rather than bending the wrong-shaped seam to fit) was cleared with
-//     team-lead after demonstrating this exact mismatch.
+// former pod-config-hook-secret-env seam is retired (this cone's secrets seam-death). The
+// registry-resugar axis (the deploy-entry cleanup) ALSO runs PLUGIN-SIDE now: the
+// pod-config-clean-deploy-entry host seam (a brief host-owns-load+lock+mutate+save stopgap — the
+// plugin-side whole-config deploy-state write does not fit: it persists an already-loaded, whole,
+// already-mutated BundleConfig, whereas deploykit.CleanDeployEntry loads its OWN BundleConfig under
+// a file lock, does the entry-removal + provides-cleanup + empty-file-delete decision internally,
+// and returns nothing) was DELETED in the #55 coneC-dsh follow-up once the loader-threaded
+// Primaries marshal (podMarshalNode) + the cycle-free loaderkit reader made the same write safe
+// plugin-side — see cleanDeployEntry below.
 //
 // The arbiter-release bracket (releaseResourceClaim, gated on the host-process
 // CHARLY_PREEMPT_LEASE env var a placement-agnostic plugin cannot own) stays entirely host-side,
@@ -144,11 +141,12 @@ func sidecarContainerNames(podBase string, sidecarNames []string) []string {
 	return out
 }
 
-// containerExists reports whether the engine still knows a container by that name. A package var
-// so the removal ordering can be tested without a live engine.
-var containerExists = func(engine, name string) bool {
-	return exec.Command(engine, "container", "exists", name).Run() == nil
-}
+// containerExists reports whether the engine still knows a container by that name. R3
+// consolidation (K-wave 2 cone R2 bank C): delegates to the shared kit.ContainerExists; the var
+// stays so the removal ordering can still be tested without a live engine. `engine` here is the
+// resolved binary path (kit.EngineBinary output — "podman"/"docker"), idempotent through
+// kit.ContainerExists's own EngineBinary resolve.
+var containerExists = kit.ContainerExists
 
 // removeContainer force-removes one container. Package var for the same reason as above.
 var removeContainer = func(engine, name string) error {
