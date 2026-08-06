@@ -2585,3 +2585,67 @@ check-docs:
               context:
                 - runtime
               command: cat /srv/docs/dist/index.html
+
+# =============================================================================
+# marketplace-app + check-marketplace — the R10 bed for the plugins->candies harness surface.
+#
+# The bed builds a minimal box composing the ripgrep candy, which OWNS a skill: entity (the
+# plugins->candies migration relocated it into candy/ripgrep/charly.yml). The load-bearing
+# assertion is R8: the composed image's ai.opencharly.skill OCI label carries the actual skill
+# definition (family/name/description/content) — readable via `charly box labels`, no external
+# fetch. The marketplace generator's fail-closed drift gate + ADE checks are covered by the
+# plugin's Go tests + `task skills:drift` on the host; this bed covers the artifact those produce.
+# =============================================================================
+marketplace-app:
+    candy:
+        version: 2026.218.1200
+        base: quay.io/fedora/fedora:43
+        description: |-
+            The marketplace-surface box: a minimal Fedora base composing the ripgrep candy,
+            whose skill: entity the marketplace generator baked into the ai.opencharly.skill
+            OCI label (R8) — an image is self-describing, no external fetch.
+        distro:
+            - fedora:43
+            - fedora
+        candy:
+            - ripgrep
+check-marketplace:
+    pod:
+        image: marketplace-app
+        disposable: true
+        lifecycle: dev
+        description: >-
+            R10 bed for the plugins->candies harness surface. Building the marketplace-app box
+            proves the composed ripgrep candy's skill: entity renders into the ai.opencharly.skill
+            OCI label (the R8 assertion reads it back host-side); deploying the pod to steady
+            state proves the box builds, starts, and stays up. The generator's fail-closed drift
+            gate + the ADE checks are covered by the plugin's Go tests and `task skills:drift`.
+        plan:
+            - check: the marketplace-app image carries the composed ripgrep skill in its ai.opencharly.skill label (R8 — skills are readable from the image, no fetch)
+              id: marketplace-skill-label
+              exit_status: 0
+              stdout:
+                - contains: ai.opencharly.skill
+                - contains: ripgrep
+              context:
+                - runtime
+              command:
+                command: ${CHARLY_BIN} box labels marketplace-app
+                in_container: false
+            - check: the marketplace-app pod reached steady state (the skill-owning box runs)
+              id: marketplace-pod-running
+              exit_status: 0
+              stdout:
+                - contains: '"kind": "pod"'
+                - contains: check-marketplace
+              context:
+                - runtime
+              command:
+                command: ${CHARLY_BIN} status --json
+                in_container: false
+            - check: the composed ripgrep binary is present in the running pod
+              id: marketplace-ripgrep-present
+              exit_status: 0
+              context:
+                - runtime
+              command: command -v rg

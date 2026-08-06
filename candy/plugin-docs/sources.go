@@ -7,11 +7,12 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/opencharly/sdk/candywalk"
 	"gopkg.in/yaml.v3"
 )
 
 // unifiedFileName is the one entity filename (the project rulebook's "one filename charly.yml").
-const unifiedFileName = "charly.yml"
+const unifiedFileName = candywalk.UnifiedFileName
 
 // entity is one DEFINED candy or box, read straight off disk.
 //
@@ -81,113 +82,62 @@ type repoRoot struct {
 }
 
 // repoRoots enumerates the superproject plus every box/<distro> submodule that is actually
-// checked out. A submodule with no charly.yml is an uninitialised gitlink — skipped rather than
-// failed, so the generator still runs in a partially-initialised clone (and the coverage
-// assertions in the check bed are what catch a genuinely missing family).
+// checked out (delegates the walk to the shared sdk/candywalk kit — R3, the ONE discovery
+// abstraction the docs + marketplace generators share).
 func repoRoots(root string) ([]repoRoot, error) {
-	roots := []repoRoot{{Namespace: "", Dir: root}}
-	boxDir := filepath.Join(root, "box")
-	ents, err := os.ReadDir(boxDir)
+	cr, err := candywalk.RepoRoots(root)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return roots, nil
-		}
-		return nil, fmt.Errorf("read box/: %w", err)
+		return nil, err
 	}
-	for _, de := range ents {
-		if !de.IsDir() {
-			continue
-		}
-		sub := filepath.Join(boxDir, de.Name())
-		if _, err := os.Stat(filepath.Join(sub, unifiedFileName)); err != nil {
-			continue // uninitialised submodule
-		}
-		roots = append(roots, repoRoot{Namespace: de.Name(), Dir: sub})
+	out := make([]repoRoot, 0, len(cr))
+	for _, r := range cr {
+		out = append(out, repoRoot{Namespace: r.Namespace, Dir: r.Dir})
 	}
-	sort.Slice(roots, func(i, j int) bool { return roots[i].Namespace < roots[j].Namespace })
-	return roots, nil
-}
-
-// collectEntities reads every candy and box definition across every repo root. Discovery is by
-// directory convention (candy/<name>/charly.yml, box/<name>/charly.yml) — the same two discovery
-// directories the loader uses — so the result is exactly what an author has written down.
-func collectEntities(roots []repoRoot) ([]entity, error) {
-	var out []entity
-	for _, r := range roots {
-		for _, kind := range []string{"candy", "box"} {
-			dir := filepath.Join(r.Dir, kind)
-			ents, err := os.ReadDir(dir)
-			if err != nil {
-				if os.IsNotExist(err) {
-					continue
-				}
-				return nil, fmt.Errorf("read %s: %w", dir, err)
-			}
-			for _, de := range ents {
-				if !de.IsDir() {
-					continue
-				}
-				path := filepath.Join(dir, de.Name(), unifiedFileName)
-				found, err := readEntityFile(path, r, filepath.Join(kind, de.Name()))
-				if err != nil {
-					return nil, err
-				}
-				out = append(out, found...)
-			}
-		}
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Slug() < out[j].Slug() })
 	return out, nil
 }
 
-// readEntityFile decodes one charly.yml. The file is a map of entity NAME to a single kind key;
-// this generator documents the `candy:` kind (the one entity kind — a node carrying base:/from:
-// is an image, otherwise a layer) and ignores deploy/vm/check nodes, which are orchestration
-// rather than catalog content.
-func readEntityFile(path string, r repoRoot, relDir string) ([]entity, error) {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("read %s: %w", path, err)
+// collectEntities reads every DEFINED candy and box across every repo root, via the shared
+// sdk/candywalk kit, and projects the `candy:` kind nodes onto this generator's entity/candyView/
+// boxView (routing base:/from: exactly as the loader does).
+func collectEntities(roots []repoRoot) ([]entity, error) {
+	cr := make([]candywalk.Root, 0, len(roots))
+	for _, r := range roots {
+		cr = append(cr, candywalk.Root{Namespace: r.Namespace, Dir: r.Dir})
 	}
-	var doc map[string]map[string]yaml.Node
-	if err := yaml.Unmarshal(raw, &doc); err != nil {
-		// A charly.yml that does not fit the name-first shape (a multi-doc bed, a template) is
-		// not catalog content — skip it rather than failing the whole generation.
-		return nil, nil //nolint:nilerr // intentionally tolerant: non-catalog shapes are skipped
+	ents, err := candywalk.CollectEntities(cr)
+	if err != nil {
+		return nil, err
 	}
 	var out []entity
-	for name, kinds := range doc {
-		node, ok := kinds["candy"]
-		if !ok {
-			continue
+	for _, e := range ents {
+		if e.Kind != "candy" {
+			continue // this generator documents the `candy:` kind only
 		}
 		// Route on base:/from: exactly as the loader does.
 		var router struct {
 			Base string `yaml:"base"`
 			From string `yaml:"from"`
 		}
-		if err := node.Decode(&router); err != nil {
+		if err := e.Value.Decode(&router); err != nil {
 			continue
 		}
-		e := entity{Name: name, Namespace: r.Namespace, Dir: relDir}
+		ent := entity{Name: e.Name, Namespace: e.Namespace, Dir: e.Dir}
 		if router.Base != "" || router.From != "" {
 			var b boxView
-			if err := node.Decode(&b); err != nil {
-				return nil, fmt.Errorf("decode box %q in %s: %w", name, path, err)
+			if err := e.Value.Decode(&b); err != nil {
+				return nil, fmt.Errorf("decode box %q in %s: %w", e.Name, e.Dir, err)
 			}
-			e.IsBox, e.Box = true, &b
+			ent.IsBox, ent.Box = true, &b
 		} else {
 			var c candyView
-			if err := node.Decode(&c); err != nil {
-				return nil, fmt.Errorf("decode candy %q in %s: %w", name, path, err)
+			if err := e.Value.Decode(&c); err != nil {
+				return nil, fmt.Errorf("decode candy %q in %s: %w", e.Name, e.Dir, err)
 			}
-			e.Candy = &c
+			ent.Candy = &c
 		}
-		out = append(out, e)
+		out = append(out, ent)
 	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Slug() < out[j].Slug() })
 	return out, nil
 }
 

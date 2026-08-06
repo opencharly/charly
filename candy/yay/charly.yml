@@ -31,3 +31,83 @@ yay:
               stdout:
                 - matches: "yay v[0-9]"
               command: /usr/local/bin/yay --version
+
+yay-skill:
+    skill:
+        name: yay
+        family: tools
+        owner: yay
+        description: |-
+            AUR helper for Arch Linux, enabling aur: package sections in charly.yml.
+            Use when working with the yay candy or Arch AUR builds.
+        content: |
+            # yay -- AUR helper for Arch Linux
+            
+            ## Candy Properties
+            
+            | Property | Value |
+            |----------|-------|
+            | Install files | `charly.yml` (`run:` step) |
+            | Depends | none |
+            
+            ## Packages
+            
+            PAC: `base-devel`, `git`
+            
+            ## Install Script
+            
+            The `run:` step downloads the latest `yay` binary from GitHub releases:
+            
+            ```yaml
+            # yay charly.yml — steps are an ordered list under plan:
+            yay:
+              candy:
+                version: 2026.144.1443
+                plan:
+                  - run: download the latest yay binary from GitHub releases
+                    command: |
+                      URL=$(curl -fsSL https://api.github.com/repos/Jguer/yay/releases/latest \
+                        | grep -o "https://github.com/Jguer/yay/releases/download/[^\"]*_${BUILD_ARCH}.tar.gz")
+                      curl -fsSL "$URL" | tar -xzf - -C /usr/local/bin --strip-components=1 --wildcards '*/yay'
+                    run_as: root
+            ```
+            
+            Architecture-aware: `${BUILD_ARCH}` expands to the correct binary for `x86_64` or `aarch64` at build time.
+            
+            ## What It Does
+            
+            Installs the `yay` AUR helper, which enables the `aur:` package format in `charly.yml`. Any candy with an `aur:` section requires a builder that has the `yay` candy (and `builds: [aur]` capability). The `base-devel` and `git` packages are prerequisites for building AUR packages.
+            
+            ## Usage
+            
+            ```yaml
+            # charly.yml — typically in a builder image (compose the candy inline)
+            my-builder:
+              candy:
+                base: arch
+                candy: [yay]
+            ```
+            
+            Not used directly in end-user boxes. Instead, it's part of the builder image that compiles AUR packages during multi-stage builds.
+            
+            ## Used In Boxes
+            
+            - `/charly-distros:arch-builder` — Arch build infrastructure image
+            
+            ## Related Candies
+            
+            - `/charly-coder:build-toolchain` — C/C++ build tools (also in arch-builder)
+            - `/charly-distros:arch-aur-test` — test candy that validates AUR builds
+            
+            ## When to Use This Skill
+            
+            Use when the user asks about:
+            - AUR package support in OpenCharly
+            - The `yay` candy or AUR helper installation
+            - How `aur:` packages in charly.yml get built
+            - The `arch-builder` box's AUR capability
+            
+            ## Related
+            
+            - `/charly-image:layer` — candy authoring reference (`charly.yml` schema, plan-step verbs, service declarations)
+            - `/charly-check:check` — declarative testing (`check:` block, `charly check box`, `charly check live`)

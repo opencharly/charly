@@ -1,0 +1,1181 @@
+charly-selkies:
+    candy:
+        version: 2026.218.1200
+        description: |-
+            Metadata concept candy owning the charly-selkies skills whose names have no namesake candy (selkies desktop images). Owns its family's `skill:` kind entities (sibling nodes in this file) — the
+            plugins→candies migration; candy/plugin-marketplace regenerates the plugins/ corpus
+            from them.
+        plan:
+            - run: this documentation-only candy ships no install content (it carries the family's skill/hook/marketplace entities); validate-satisfying no-op
+              command: "true"
+              context:
+                - build
+            - check: the selkies concept candy's skill entities are present and generated into plugins/selkies/skills
+              id: charly-selkies-present
+              context:
+                - build
+              command: "true"
+
+selkies-desktop-layer-skill:
+    skill:
+        name: selkies-desktop-layer
+        family: selkies
+        owner: charly-selkies
+        description: |-
+            Metalayer composing a full Selkies Wayland streaming desktop with Chrome, Waybar, desktop automation tools, and accessibility introspection.
+            Use when working with the selkies-desktop metalayer composition, labwc desktop, or browser-accessible remote desktops.
+        content: |-
+            # Candy: selkies-desktop
+            
+            Metalayer composing a full Selkies Wayland streaming desktop with Chrome, Waybar, desktop automation tools, accessibility introspection, and XWayland support.
+            
+            ## Composition
+            
+            The metalayer composes the full streaming-desktop set as an inline `candy:` list inside its `candy:` kind value (the shared `selkies-core` spine pulls Chrome, the `wl-*` tooling, fonts, a11y, terminal tools transitively):
+            
+            ```yaml
+            selkies-desktop:
+              candy:
+                candy:
+                  - pipewire                # Audio (PulseAudio compat)
+                  - chrome                  # Google Chrome with CDP on :9222, Chrome DevTools MCP on :9224
+                  - labwc                   # Wayland compositor (nested in pixelflux)
+                  - waybar-labwc            # Top status bar (Catppuccin Mocha, system monitors)
+                  - desktop-fonts           # JetBrains Mono + Nerd Fonts
+                  - swaync                  # SwayNotificationCenter (notification daemon)
+                  - pavucontrol             # PulseAudio volume control GUI
+                  - wl-tools                # Desktop automation (wtype, wlrctl, xdotool, wl-clipboard, wlr-randr)
+                  - wl-screenshot-pixelflux # Screenshots via selkies capture bridge
+                  - wl-overlay              # Fullscreen overlays via gtk4-layer-shell (for recordings)
+                  - wl-record-pixelflux    # Desktop video recording via selkies capture bridge
+                  - a11y-tools              # AT-SPI2 accessibility introspection (python3-pyatspi)
+                  - xterm                   # X11 terminal for XWayland testing
+                  - tmux                    # Terminal multiplexer (required by the record: check verb)
+                  - asciinema               # Terminal session recording
+                  - fastfetch               # System information display
+                  - selkies                 # Streaming server (pixelflux + pcmflux + nginx)
+            ```
+            
+            ## What You Get
+            
+            A browser-accessible desktop at `http://localhost:3000` with:
+            - **labwc** Wayland compositor with server-side decorations
+            - **Waybar** top panel with system monitors, clock, audio, and notification bell
+            - **Chrome** auto-started maximized with CDP on port 9222 and `--force-renderer-accessibility`
+            - **foot** terminal (from labwc or fuzzel)
+            - **thunar** file manager (from labwc)
+            - **SwayNotificationCenter** notification daemon with Catppuccin Mocha theme
+            - **pavucontrol** PulseAudio volume control (click audio module in Waybar)
+            - **JetBrains Mono + Nerd Fonts** for sharp monospace text and icons
+            - **xterm** X11 terminal (triggers XWayland on-demand when launched)
+            - **pixelflux** Wayland capture → H.264/JPEG streaming at 60fps
+            - **pcmflux** audio capture → Opus encoding at 320kbps
+            - **PipeWire** audio server with PulseAudio compatibility
+            - **NGINX** web frontend on port 3000
+            - **Full `wl:` verb automation:** ~40 methods all working — screenshots (pixelflux), input (wtype, wlrctl), window management (wlrctl toplevel), clipboard (wl-copy/paste), resolution (wlr-randr), accessibility (AT-SPI2), XWayland tools (xdotool, xprop)
+            - **`cdp: coords` + `wl: click`:** CSS selector → desktop X/Y → Wayland pointer click (no VNC needed)
+            - **`cdp: axtree`:** Chrome accessibility tree via the `cdp:` verb
+            - **Desktop video recording** via the `record:` check verb (`record_mode: desktop`, capture bridge → H.264 → ffmpeg MP4, with optional audio)
+            - **Fullscreen overlays** via the `wl:` verb's `overlay-show` / `overlay-hide` methods (title cards, lower-thirds, countdowns, highlights, fades — rendered by compositor with true alpha transparency, no post-production needed)
+            - **Configurable keyboard layout** via `XKB_DEFAULT_LAYOUT` — German (de), French (fr), Nordic (no), etc. AltGr characters (@, €, \\, ~) work via direct scancode injection. See `/charly-selkies:labwc`
+            
+            ## What Works / What Doesn't
+            
+            | Feature | Status | Notes |
+            |---------|--------|-------|
+            | Screenshots (pixelflux-screenshot) | WORKS | Via capture bridge at /tmp/charly-capture.sock |
+            | Screenshots (grim) | BROKEN | labwc nested in pixelflux can't deliver screencopy frames |
+            | wtype (keyboard) | WORKS | Wayland virtual keyboard |
+            | wlrctl pointer (mouse) | WORKS | Move, click, double-click |
+            | wlrctl toplevel (windows) | WORKS | List, focus, close, fullscreen, minimize. Matches by app_id only (v0.2.2) |
+            | wlr-randr (resolution) | WORKS | Query and set output resolution |
+            | wl-clipboard | WORKS | Get/set/clear clipboard |
+            | xdotool (X11 windows) | WORKS | Needs an X11 app running (xterm). XWayland starts on-demand |
+            | xprop (X11 properties) | WORKS | Search by `--class` first, then `--name` |
+            | AT-SPI2 (atspi) | WORKS | Uses `/usr/bin/python3` (system Python, not pixi) |
+            | ydotool (drag/scroll) | WORKS | Needs `/dev/uinput` access |
+            | CDP click --wl | WORKS | Selector → Wayland pointer (same coordinate space) |
+            | CDP axtree | WORKS | Chrome accessibility tree with filtering |
+            | wl-overlay (overlays) | WORKS | True alpha, ~15s screenshot latency in controller mode. Instant in recordings |
+            
+            ## Startup Order
+            
+            | Priority | Service | Creates |
+            |----------|---------|---------|
+            | 2 | dbus | D-Bus session bus |
+            | 5 | pipewire | Audio server |
+            | 8 | selkies | pixelflux `wayland-1` + WebSocket :8081 (process-wide `ScreenCapture` singleton) |
+            | 12 | labwc | Desktop on `wayland-0` (nested in wayland-1) |
+            | 14 | swaync | Notification daemon (on wayland-0) |
+            | 15 | waybar | Top panel (on wayland-0) |
+            | 18 | nginx | Web UI on :3000 |
+            
+            **Chrome ownership:** Chrome is launched + supervised by the `[program:chrome]` supervisord service in the shared `selkies-core` candy (`restart: always`), NOT by labwc's autostart — labwc's `autostart` no longer starts Chrome. The service is `autostart=true` and self-synchronizing (`chrome-wrapper` polls for the `wayland-0` client socket itself), so a single launcher serves both selkies flavors and there is no per-flavor `supervisorctl start` handoff to race. See `/charly-selkies:selkies-core` (Chrome supervision) and `/charly-selkies:chrome` (Chrome supervision) — the chrome candy supplies the cgroup memory caps.
+            
+            **Capture singleton:** the selkies process owns a single process-wide `ScreenCapture` instance. Screenshot requests (`/charly-selkies:wl-screenshot-pixelflux`) and recording requests (`/charly-selkies:wl-record-pixelflux`) both attach to the same capture bridge at `/tmp/charly-capture.sock` — there is never a second capture process. This is the state enforced by commit `6be85eb` after the `WaylandBackend` leak investigation; the per-frame cleanup fix in commit `7977b91` is the paired memory-management step. See `/charly-selkies:selkies` (Pixelflux Memory Management) for the leak diagnosis, rollout recipe, and diagnostic commands.
+            
+            ## Used In Boxes
+            
+            - `/charly-selkies:selkies-labwc`
+            - `/charly-selkies:selkies-labwc-nvidia`
+            
+            ## Known bootc caveat — labwc ↔ pixelflux start-order race
+            
+            On container images, `ENTRYPOINT=supervisord` with priority-based startup sequences the desktop tier cleanly. On bootc images, supervisord runs under a systemd user service, and a start-order race surfaces that's invisible in container mode:
+            
+            - `labwc-wrapper` blocks at startup waiting for `/tmp/wayland-1` (pixelflux's socket).
+            - `pixelflux` is started by `selkies` (another supervisord program) which — via its own ordering — comes up alongside labwc, not before it.
+            - With `startsecs=2`, supervisord marks labwc RUNNING before pixelflux is ready. labwc-wrapper times out, exits status 1, supervisord restarts it. Meanwhile selkies exits too (labwc isn't up). Both programs cycle every ~15 s.
+            
+            Stable services (`traefik`, `selkies-fileserver`, `chrome-devtools-mcp`, `cdp-proxy`, `sshd`, `tailscaled`, `swaync`, `waybar`, `dbus`, `pipewire`) keep running; the HTTPS selkies web endpoint on port 3000 and the MCP endpoint on 9224 both stay responsive throughout.
+            
+            Fix options for a follow-up pass (none implemented yet — this candy is shared between container and bootc modes):
+            
+            1. Raise labwc's `startsecs` so supervisord waits for pixelflux before declaring labwc RUNNING.
+            2. Add an explicit `priority:` ordering via supervisord's eventlistener hooks — a `PROCESS_STATE_RUNNING` listener on selkies that `supervisorctl start`s labwc only after pixelflux publishes its socket.
+            3. Have labwc-wrapper spawn pixelflux directly as a child (the container-mode start order without relying on supervisord for ordering).
+            
+            This race is a property of the candy's bootc mode (supervisord-under-systemd); no enabled box currently composes this candy in bootc mode, so the caveat is documented here from the candy's behavior rather than a live exemplar.
+            
+            ## Multi-Instance Proxy Deployment
+            
+            Deploy multiple instances with different HTTP proxies. Each instance gets a port offset:
+            
+            | Offset | Web (3000) | CDP (9222) | MCP (9224) | SSH (2222) |
+            |--------|-----------|-----------|-----------|-----------|
+            | 1 | 3001 | 9231 | 9241 | 2231 |
+            | 2 | 3002 | 9232 | 9242 | 2232 |
+            | N | 300N | 923N | 924N | 223N |
+            
+            **Tunnel must be in charly.yml** for each instance. `charly config setup -i <ip>` does NOT inherit tunnel from the base entry. After config, manually add `tunnel: {provider: tailscale, private: all}` to the instance's charly.yml entry, then re-run `charly config setup -i <ip>` to regenerate the quadlet with Tailscale serve commands. See `/charly-core:deploy` for details.
+            
+            **Chrome 147+ CDP:** The `/json/new` endpoint requires the PUT HTTP method (not GET). Use `curl -X PUT "http://localhost:<cdp-port>/json/new?<url>"` to create new tabs programmatically.
+            
+            See `/charly-selkies:selkies-labwc` for full multi-instance deployment examples.
+            
+            ## Related Skills
+            
+            - `/charly-selkies:selkies` — Streaming engine, Pixelflux Memory Management, ScreenCapture singleton, DRINODE auto-detection, keyboard layout support
+            - `/charly-selkies:labwc` — Nested Wayland compositor (its autostart no longer launches Chrome — selkies-core supervises it)
+            - `/charly-selkies:selkies-core` — owns the supervised `[program:chrome]` service shared by both selkies flavors
+            - `/charly-selkies:chrome` — Chrome browser with CDP proxy, HTTP proxy support, cgroup resource caps
+            - `/charly-infrastructure:supervisord` — supervisord process model (the selkies `[program:chrome]` uses `restart: always`)
+            - `/charly-selkies:wl-record-pixelflux` — Desktop video recording via the shared capture singleton
+            - `/charly-selkies:wl-screenshot-pixelflux` — Screenshots via the shared capture singleton
+            - `/charly-distros:arch-builder` — Builder image that compiles patched pixelflux from source on the cachyos base (`cuda-arch-builder` on the GPU build)
+            - `/charly-selkies:selkies-labwc` — CPU labwc box that bundles this metalayer (with `/charly-selkies:selkies-labwc-nvidia` for the GPU build)
+            - `/charly-check:wl` — Wayland automation (screenshots, input, windows)
+            - `/charly-check:cdp` — Chrome DevTools Protocol automation
+            - `/charly-check:record` — Desktop video recording via capture bridge
+            - `/charly-core:charly-update` — Per-instance update pattern used to roll out pixelflux/Chrome fixes
+            - `/charly-core:charly-config` — Multi-instance deployment, resource caps, tunnel, proxy env vars, NO_PROXY auto-enrichment
+            - `/charly-core:deploy` — Tunnel configuration (charly.yml-only, instance inheritance gap)
+            
+            ## Related
+            
+            - `/charly-image:layer` — candy authoring reference (`charly.yml` schema, `run:`/`check:` step verbs, service declarations)
+            - `/charly-check:check` — declarative testing (`check:` block, `charly check box`, `charly check live`)
+
+selkies-kde-skill:
+    skill:
+        name: selkies-kde
+        family: selkies
+        owner: charly-selkies
+        description: |-
+            The KDE Plasma flavor of the Selkies streaming desktop (cpu/default GPU build) —
+            a browser-accessible, headless-pod Wayland desktop running startplasma-wayland
+            nested in pixelflux. MUST be invoked before building, deploying, or
+            troubleshooting the selkies-kde box.
+        content: |-
+            # Box: selkies-kde
+            
+            The **full KDE Plasma flavor** of the selkies streaming desktop — a
+            browser-accessible Wayland desktop streamed via Selkies/pixelflux WebSocket at
+            `https://localhost:3000` (HTTPS, self-signed Traefik cert). It is the symmetric
+            sibling of the labwc flavor (`/charly-selkies:selkies-labwc`); both compose the shared
+            `/charly-selkies:selkies-core` spine and differ ONLY in the nested compositor (KDE
+            Plasma here via `/charly-selkies:kde-selkies`, labwc there). Always a **headless pod**
+            — de-SDDM `startplasma-wayland` nested in pixelflux, with no logind seat and no
+            SDDM (see `/charly-selkies:selkies-kde-desktop` for that load-bearing design). The
+            pixelflux encoder is auto-selected per GPU at runtime (VAAPI on an AMD/Intel
+            render node, software x264 otherwise; the `selkies-kde-nvidia` sibling adds NVENC).
+            
+            Owned by the `opencharly/distro-cachyos` submodule (`box/cachyos`).
+            
+            ## Definition
+            
+            ```yaml
+            selkies-kde:
+              base: cachyos              # plain CachyOS base (x86_64_v3 Arch derivative)
+              build: [pac, aur]          # aur: chrome (google-chrome) + wl-tools (wlrctl)
+              candy:
+                - agent-forwarding
+                - selkies-kde-desktop    # the KDE metalayer (selkies-core + kde-selkies → kde-shell)
+                - dbus
+                - charly
+              port: ["3000:3000", "9222:9222", "9224:9224", "2222:2222"]
+              platform: [linux/amd64]
+            ```
+            
+            ## Ports
+            
+            | Port | Service |
+            |------|---------|
+            | 3000 | Selkies web UI (Traefik HTTPS → static files + WebSocket proxy) |
+            | 9222 | Chrome DevTools Protocol (CDP) |
+            | 9224 | Chrome DevTools MCP (Streamable HTTP) |
+            | 2222 | sshd |
+            
+            ## Encoder (per-GPU, auto-selected at runtime)
+            
+            - **VAAPI (AMD/Intel):** hardware H264 via the render node (the `selkies` candy
+              ships `libva-mesa-driver`); `DRINODE` auto-detected by `charly config`.
+            - **CPU fallback:** x264 software encoding.
+            - **NVENC:** NOT on this box — use `/charly-selkies:selkies-kde-nvidia` (the CachyOS
+              GPU build with the real NVENC-compiled pixelflux).
+            
+            ## Quick Start
+            
+            ```bash
+            charly -C box/cachyos box build selkies-kde
+            charly config selkies-kde
+            charly start selkies-kde
+            # Access: https://localhost:3000 (accept the self-signed cert)
+            charly check live selkies-kde --filter wl    # run the candy's wl: screenshot step
+            ```
+            
+            ## Verification
+            
+            - `charly check box selkies-kde` — build-scope (binaries: `plasmashell`, `kwin_wayland`, chrome, selkies).
+            - `charly check run check-selkies-kde-pod` — the disposable R10 bed: compositor renders
+              (plasmashell + kwin_wayland present, `wayland-0` up), live :3000 stream
+              (traefik HTTPS + capture STATUS-socket `frames>0`), `kde-selkies-stable` ≥20s uptime.
+            
+            ## Related Skills
+            
+            - `/charly-selkies:selkies-kde-desktop` — the KDE metalayer + the de-SDDM headless-Plasma design (the load-bearing detail).
+            - `/charly-selkies:kde-selkies`, `/charly-selkies:kde-shell` — the KDE compositor primitive + the SDDM-free Plasma package leaf.
+            - `/charly-selkies:selkies-labwc` — the labwc sibling flavor (same streaming core; the canonical home of the shared SPA-interaction / CDP / wl-automation docs).
+            - `/charly-selkies:selkies-kde-nvidia` — the GPU build of this flavor (real NVENC).
+            - `/charly-selkies:selkies` — the pixelflux streaming transport.
+            - `/charly-distros:cachyos` — the CachyOS base + submodule.
+            
+            ## Related
+            
+            - `/charly-image:image` — image family umbrella (`candy:` image entries with `base:`/`from:`, build/validate/inspect/list).
+            - `/charly-build:build` — the embedded build vocabulary in `charly/charly.yml` (distros, builders, init-systems).
+
+selkies-kde-nvidia-skill:
+    skill:
+        name: selkies-kde-nvidia
+        family: selkies
+        owner: charly-selkies
+        description: |-
+            The NVIDIA-GPU build of the KDE Plasma Selkies streaming desktop — full Plasma
+            nested in pixelflux with REAL NVENC (cuda-arch-builder-compiled). MUST be invoked
+            before building, deploying, or troubleshooting the selkies-kde-nvidia box.
+        content: |-
+            # Box: selkies-kde-nvidia
+            
+            The **NVIDIA-GPU build of the KDE Plasma flavor** (`/charly-selkies:selkies-kde`) —
+            the same headless-pod KDE streaming desktop on the CachyOS GPU base
+            (`cachyos.nvidia`), with pixelflux's **real NVENC** encoder compiled in. It is the
+            KDE sibling of `/charly-selkies:selkies-labwc-nvidia` (labwc + NVENC); both use
+            `builder.pixi: arch.cuda-arch-builder` so the `selkies` candy's `build.sh` compiles
+            pixelflux's real `nvenc-sys` encoder (the stock `arch-builder` has no CUDA → an
+            NVENC stub).
+            
+            Owned by the `opencharly/distro-cachyos` submodule (`box/cachyos`).
+            
+            ## Definition
+            
+            ```yaml
+            selkies-kde-nvidia:
+              base: nvidia                            # the CachyOS GPU base (cachyos.nvidia)
+              build: [pac, aur]
+              builder: {pixi: arch.cuda-arch-builder}   # nvcc + ffnvcodec headers → real NVENC
+              candy:
+                - agent-forwarding
+                - selkies-kde-desktop
+                - dbus
+                - charly
+              port: ["3000:3000", "9222:9222", "9224:9224", "2222:2222"]
+              platform: [linux/amd64]
+            ```
+            
+            ## NVENC compile-proof (check-coverage)
+            
+            The box carries a build-scope `check:` check `pixelflux-nvenc-compiled` that
+            greps the built pixelflux `.so` for `NvEncodeAPICreateInstance` (the NVENC SDK
+            entry point the `nvenc-sys` crate binds). The stub build patches `nvenc-sys` out
+            of pixelflux's Cargo.toml, so the symbol is absent → the check FAILS on a
+            non-NVENC build. This is the regression-proof for the box's NVENC functionality
+            (identical to `/charly-selkies:selkies-labwc-nvidia`).
+            
+            ## Ports / Encoder
+            
+            Same ports as `/charly-selkies:selkies-kde` (3000/9222/9224/2222). Encoder: real NVENC
+            on the passed-through NVIDIA GPU (CDI `--device nvidia.com/gpu=all`); falls back to
+            x264 when the GPU is unavailable.
+            
+            ## Quick Start
+            
+            ```bash
+            charly -C box/cachyos box build selkies-kde-nvidia
+            charly check box selkies-kde-nvidia            # build-scope incl. pixelflux-nvenc-compiled
+            ```
+            
+            NVENC at runtime requires a passed-through NVIDIA GPU — proven on the
+            `check-selkies-kde-nvidia-vm` bed (a `requires_exclusive: [nvidia-gpu]` passthrough
+            VM that asserts real NVENC frame production; the preemption arbiter frees the GPU
+            from any running holder). See `/charly-internals:disposable` + `/charly-check:check`.
+            
+            ## Related Skills
+            
+            - `/charly-selkies:selkies-kde` — the cpu/default sibling (shared definition + the KDE flavor framing).
+            - `/charly-selkies:selkies-labwc-nvidia` — the labwc + NVENC sibling (same cuda-arch-builder + NVENC-compile proof).
+            - `/charly-selkies:selkies-kde-desktop` — the KDE metalayer + the de-SDDM headless-Plasma design.
+            - `/charly-distros:cachyos` — the CachyOS GPU base (`cachyos.nvidia`) + submodule.
+            - `/charly-distros:nvidia`, `/charly-distros:cuda` — the GPU runtime + CUDA toolkit candies.
+            
+            ## Related
+            
+            - `/charly-image:image` — image family umbrella (`candy:` image entries with `base:`/`from:`, build/validate/inspect/list).
+            - `/charly-build:build` — the embedded build vocabulary (distros, builders, init-systems).
+
+selkies-labwc-skill:
+    skill:
+        name: selkies-labwc
+        family: selkies
+        owner: charly-selkies
+        description: |-
+            The labwc flavor of the Selkies streaming desktop (cpu/default GPU build) — a
+            browser-accessible Wayland desktop streamed via pixelflux WebSocket on the CachyOS base.
+            MUST be invoked before building, deploying, or troubleshooting the selkies-labwc box.
+        content: |-
+            # Box: selkies-labwc
+            
+            The **labwc flavor** of the selkies streaming desktop — a browser-accessible Wayland desktop streamed via Selkies/pixelflux WebSocket at `https://localhost:3000` (HTTPS with self-signed Traefik certificate). It is the symmetric sibling of the KDE Plasma flavor (`/charly-selkies:selkies-kde-desktop`); both compose the shared `/charly-selkies:selkies-core` spine and differ only in the compositor candy (`labwc` here, `kde-selkies` there). Always runs as a headless pod; the pixelflux encoder is auto-selected per GPU at runtime (VAAPI / NVENC / x264).
+            
+            ## Definition
+            
+            ```yaml
+            selkies-labwc:
+              base: cachyos               # local cachyos base (same box/cachyos submodule)
+              build: [pac, aur]          # aur required: chrome (google-chrome) + wl-tools (wlrctl)
+              candy:
+                - agent-forwarding
+                - selkies-desktop
+                - dbus
+                - charly
+              ports:
+                - "3000:3000"
+                - "9222:9222"
+                - "9224:9224"
+              platforms:
+                - linux/amd64
+            ```
+            
+            Tunnel config is in `charly.yml`: `tunnel: {provider: tailscale, private: all}`. See `/charly-core:deploy`.
+            
+            ## Base
+            
+            `cachyos` — the Arch-derived, x86_64_v3-optimized base, a local sibling box in
+            the same `opencharly/distro-cachyos` submodule (`box/cachyos`) that owns this box.
+            Multimedia codecs (ffmpeg, x264, libva) come from Arch's `extra` repo; Chrome
+            installs from the AUR (`google-chrome`). The box declares `build: [pac, aur]`
+            so the AUR builder compiles `google-chrome` (chrome candy) and `wlrctl`
+            (wl-tools layer); inheriting plain `[pac]` would silently skip both. Because a
+            `builder:` map does NOT cross a namespace boundary, the box declares its OWN
+            `builder:` map (pixi/npm/cargo/aur → `arch.arch-builder`, the builder the
+            `opencharly/distro-arch` submodule provides through the `arch` import namespace) rather
+            than inheriting one from the cachyos base. The GPU sibling (`selkies-labwc-nvidia`, in the same submodule)
+            is the same `selkies-desktop` metalayer on the CachyOS GPU base (`cachyos.nvidia`),
+            with `builder.pixi: arch.cuda-arch-builder` so the selkies candy compiles
+            pixelflux's real NVENC encoder.
+            
+            ## Layers
+            
+            `agent-forwarding` (gnupg + direnv + ssh-client) + `selkies-desktop` metalayer (pipewire + chrome + labwc + waybar-labwc + desktop-fonts + swaync + pavucontrol + wl-tools + wl-screenshot-pixelflux + wl-overlay + wl-record-pixelflux + a11y-tools + xterm + tmux + asciinema + fastfetch + selkies) + `dbus` + `charly`
+            
+            ## Ports
+            
+            | Port | Service |
+            |------|---------|
+            | 3000 | Selkies web UI (Traefik HTTPS → static files + WebSocket proxy) |
+            | 9222 | Chrome DevTools Protocol (CDP, via cdp-proxy) |
+            | 9224 | Chrome DevTools MCP (Streamable HTTP, via chrome-devtools-mcp) |
+            
+            ## Access
+            
+            Open `https://localhost:3000` in a browser. Accept the self-signed certificate warning (Traefik auto-generates a cert with SANs for localhost, selkies.localhost, and charly-selkies-labwc). The Selkies dashboard shows the labwc desktop with Chrome and Waybar at the top.
+            
+            HTTPS is required for the WebCodecs API (`VideoDecoder`) used by the Selkies JS client. From other containers on the same network, use `https://charly-selkies-labwc:3000`.
+            
+            ## Quick Start
+            
+            ```bash
+            charly box build selkies-labwc
+            charly config selkies-labwc
+            charly start selkies-labwc
+            # Access: https://localhost:3000 (accept cert warning)
+            charly check live selkies-labwc --filter wl    # desktop screenshot via the wl: screenshot step
+            ```
+            
+            ## Keyboard Configuration
+            
+            Override the default US keyboard layout via environment variables:
+            
+            ```bash
+            charly config selkies-labwc -e XKB_DEFAULT_LAYOUT=de                              # German QWERTZ
+            charly config selkies-labwc -e XKB_DEFAULT_LAYOUT=fr -e XKB_DEFAULT_VARIANT=nodeadkeys  # French, no dead keys
+            ```
+            
+            | Variable | Default | Purpose |
+            |----------|---------|---------|
+            | `XKB_DEFAULT_LAYOUT` | `us` | Keyboard layout |
+            | `XKB_DEFAULT_VARIANT` | (empty) | Layout variant |
+            | `XKB_DEFAULT_MODEL` | `pc105` | Keyboard model |
+            | `XKB_DEFAULT_OPTIONS` | (empty) | XKB options |
+            
+            All level 0/1 characters (ö, ä, ü, ß, =, ?) and AltGr characters (@, €, \\, ~) work for any layout. See `/charly-selkies:labwc` for details and `/charly-selkies:selkies` for the input pipeline.
+            
+            ## Services
+            
+            | Service | Priority | Purpose |
+            |---------|----------|---------|
+            | `selkies` | 8 | Wayland capture + H.264/Opus streaming via pixelflux |
+            | `traefik` | 18 | HTTPS reverse proxy on port 3000 |
+            | `selkies-fileserver` | 19 | Static file server for web UI |
+            | `labwc` | 12 | Wayland compositor (nested in pixelflux) |
+            | `waybar` | 15 | Status bar |
+            | `swaync` | 14 | Notification daemon |
+            | `pipewire` | 5 | Audio server |
+            | `dbus` | 2 | D-Bus session bus |
+            | `cdp-proxy` | — | CDP reverse proxy (Host header + URL rewrite for Chrome 146+) |
+            
+            ## GPU Support
+            
+            - **Rendering:** NVIDIA GPU via CDI, AMD/Intel via Mesa. `DRINODE`/`DRI_NODE` auto-detected at runtime by `charly config` (from first `/dev/dri/renderD*`)
+            - **VAAPI encoding (AMD):** Hardware H264 encoding via VAAPI — requires correct DRINODE (auto-detected). Wrong DRINODE causes CPU fallback → swapchain buffer exhaustion → stream flickering
+            - **NVENC (NVIDIA):** Detected but currently fails with driver 590.48 (pixelflux compat issue). Falls back to CPU x264enc
+            - **CPU fallback:** x264enc-striped at 60fps (16 parallel stripes) — works but may cause flickering at high resolutions due to compositor buffer pressure
+            
+            ## Volumes
+            
+            - `chrome-data` → `~/.chrome-debug` (Chrome profile)
+            - `selkies-config` → `~/.config/selkies`
+            
+            ## Known Issues
+            
+            1. **NVENC encoding fails** with NVIDIA driver 590.48 — pixelflux detects GPU, CUDA inits, but encoder init fails. CPU encoding works fine.
+            2. **Chrome volume permissions** — first deploy may need `podman unshare chown 1000:1000 $(charly volume list selkies-labwc | awk '/chrome-data/{print $2}')` — provisioning-time ownership is a queued charly gap``
+            3. **Audio** — PulseAudio null sinks created by selkies-wrapper. Audio streaming works but may have slight latency over WebSocket.
+            
+            ## Screenshots and Recording
+            
+            The capture bridge provides the `wl:` verb's `screenshot` method and the declarative `record:`
+            check verb (served out-of-process by `candy/plugin-record`):
+            
+            ```bash
+            # Desktop screenshot via the wl: screenshot step (works with or without browser connected)
+            charly check live selkies-labwc --filter wl
+            
+            # Check bridge status
+            charly shell selkies-labwc -c "pixelflux-screenshot --status"
+            ```
+            
+            Desktop video recording (with audio via PulseAudio) is authored as `record:` plan steps
+            and run with `charly check live selkies-labwc --filter record`:
+            
+            ```yaml
+            labwc-rec-start:
+                check: a desktop recording with audio starts
+                record: start
+                context: [deploy]
+                record_name: demo
+                record_mode: desktop
+                record_audio: true
+            labwc-rec-stop:
+                check: the desktop recording is captured
+                record: stop
+                context: [deploy]
+                record_name: demo
+                artifact: demo.mp4
+            ```
+            
+            The bridge auto-heals: if no valid H.264 frames are available (e.g., after browser disconnect), it reconnects as controller to restart the pipeline.
+            
+            ## Client-Side Interaction (Browser-Based Remote Desktop)
+            
+            When accessing selkies-labwc from another container (e.g., `sway-browser-vnc`) or an external browser, the Selkies SPA provides full mouse and keyboard passthrough via WebSocket.
+            
+            ### SPA DOM Structure
+            
+            The SPA renders the remote desktop on a `<canvas id="videoCanvas">` with an invisible input overlay that captures all events:
+            
+            | Element | z-index | pointer-events | Purpose |
+            |---------|---------|---------------|---------|
+            | `div.status-display` | 5 | auto | Status bar (hidden by default) |
+            | `input#overlayInput` | 3 | auto | Transparent input overlay — captures all mouse + keyboard events |
+            | `canvas#videoCanvas` | 2 | **none** | H.264 video render surface (WebCodecs VideoDecoder → canvas) |
+            | `button#playButton` | 10 | auto | Play button (hidden after stream starts) |
+            
+            **Header controls** (fullscreen, gaming mode) slide in from the left edge (`left: -132px`). Move the mouse to the left edge to reveal them.
+            
+            ### Coordinate Scaling
+            
+            The SPA maps mouse events from the canvas viewport to the remote desktop with a scaling factor. When the canvas is 1908x950 and the remote desktop runs at a different resolution, there is an empirical **~0.824x / 0.836y** ratio between input coordinates and where the remote cursor lands.
+            
+            Use a `cdp: spa-click` step (the `cdp:` verb is served out-of-process by candy/plugin-cdp); the SPA methods apply the scale correction automatically:
+            
+            ```yaml
+            # Click at canvas position (990, 375) with scale correction
+            spa-click:
+                run: click at canvas coords
+                cdp: spa-click
+                context: [deploy]
+                tab: "1"
+                x: 990
+                y: 375
+            ```
+            
+            ### Keyboard Passthrough
+            
+            **Recommended:** Use the `cdp: spa-*` steps for keyboard interaction — they bypass the local compositor and Chrome shortcut handlers (see `/charly-check:check` for the precise SPA-method modifier shape):
+            
+            ```yaml
+            # Type text (no double-char issue, bypasses local shortcuts)
+            spa-type:
+                run: type text
+                cdp: spa-type
+                context: [deploy]
+                tab: "1"
+                text: hello world
+            # Send modifier combos that reach the REMOTE desktop:
+            spa-super-e:
+                run: super+e — open foot terminal in labwc (also ctrl+t / alt+f4)
+                cdp: spa-key-combo
+                context: [deploy]
+                tab: "1"
+                text: super+e
+            # Send special keys:
+            spa-return:
+                run: return (also escape)
+                cdp: spa-key
+                context: [deploy]
+                tab: "1"
+                text: return
+            ```
+            
+            **Alternative methods** (limited — local compositor/Chrome may intercept keys): a
+            `vnc: type` step (VNC keysym events) or a `wl: type` step
+            (wtype via Wayland) — both hit the same limitation (the Super key is intercepted by
+            the local compositor).
+            
+            The SPA's `onkeydown` handler on `#overlayInput` intercepts events with `stopImmediatePropagation()`, converts to keysyms, and sends via WebSocket to the remote labwc compositor.
+            
+            ### Known Limitations (Browser-Based RD)
+            
+            1. **Coordinate scaling requires `--scale` flag** — auto-detection not yet implemented. Determine the scale empirically by comparing cursor position with target.
+            2. **Clipboard permission dialog** — On first connection, Chrome prompts "charly-selkies-labwc:3000 wants to See text and images copied to the clipboard". Click Allow or dismiss via keyboard/CDP (`Browser.grantPermissions`).
+            3. **Closing the last tab exits Chrome** — If the client browser's last tab (the Selkies tab) is closed, Chrome exits. The client container may need a restart to recover Chrome.
+            
+            ### Session Resilience
+            
+            The remote labwc desktop and all its applications **survive client disconnection**. When the browser tab is closed or the client container restarts, the selkies capture bridge auto-switches from viewer mode to controller mode. On reconnect, the SPA resumes streaming the same desktop state — all windows, typed text, and application state are preserved.
+            
+            Chrome remembers the self-signed cert exception in the `chrome-data` volume, so no cert re-prompt on reconnect.
+            
+            ### Inter-Container Access
+            
+            From another container on the `charly` bridge network:
+            
+            ```bash
+            # URL: https://charly-selkies-labwc:3000
+            # TLS cert SAN includes DNS:charly-selkies-labwc
+            # Verify connectivity:
+            curl -kso /dev/null -w '%{http_code}' https://charly-selkies-labwc:3000/
+            # Expected: 200
+            
+            curl -kso /dev/null -w '%{http_code}' https://charly-selkies-labwc:3000/websockets
+            # Expected: 426 (WebSocket Upgrade Required — correct, not an error)
+            ```
+            
+            ### Streaming Health Checks
+            
+            ```bash
+            # From within the client browser tab (via CDP check):
+            # Check canvas dimensions (non-zero = stream active)
+            document.getElementById("videoCanvas").width   // e.g., 1908
+            document.getElementById("videoCanvas").height  // e.g., 950
+            
+            # Check secure context (required for WebCodecs)
+            window.isSecureContext                         // true
+            
+            # Check decoder availability
+            typeof VideoDecoder !== "undefined"            // true (H.264)
+            typeof AudioDecoder !== "undefined"            // true (Opus)
+            ```
+            
+            ## Deploy with Tailscale Exit Node
+            
+            Route all outbound internet traffic (Chrome browsing) through a Tailscale exit node while keeping the desktop accessible on the host's tailnet and the charly bridge.
+            
+            ### Prerequisites
+            
+            1. A Tailscale auth key for the sidecar's tailnet (can be a different tailnet from the host)
+            2. An exit node device advertising on that tailnet (approved in admin console)
+            
+            ### Setup
+            
+            ```bash
+            # Store auth key
+            charly secrets gpg set TS_AUTHKEY tskey-auth-xxxxxxxxxxxx
+            charly secrets gpg set TS_EXIT_NODE 100.80.254.4    # exit node's Tailscale IP
+            
+            # Deploy with sidecar
+            charly config selkies-labwc --sidecar tailscale \
+              -e TS_HOSTNAME=selkies-labwc \
+              -e "TS_EXTRA_ARGS=--exit-node=${TS_EXIT_NODE} --exit-node-allow-lan-access"
+            charly start selkies-labwc
+            
+            # First time: set exit node inside sidecar (persists in state volume)
+            charly cmd selkies-labwc --sidecar tailscale \
+              "tailscale set --exit-node=100.80.254.4 --exit-node-allow-lan-access"
+            ```
+            
+            ### Verify Dual Networking
+            
+            ```bash
+            # Exit node routing — shows exit node's public IP, not host's
+            charly cmd selkies-labwc "curl -s ifconfig.me"
+            
+            # Bridge connectivity — other charly containers reachable
+            charly cmd selkies-labwc "getent hosts charly-ollama"
+            
+            # Host tailnet — accessible via host's tailscale serve
+            curl -sk https://o.armadillo-quail.ts.net:3000/ | head -1
+            
+            # Sidecar status
+            charly cmd selkies-labwc --sidecar tailscale "tailscale status"
+            ```
+            
+            ### Architecture
+            
+            The pod has dual networking: `Network=charly` (bridge for container-to-container) + `tailscale0` (tun interface for exit node). `--exit-node-allow-lan-access` adds `throw 10.89.0.0/24` to exempt bridge traffic. The charly.yml `tunnel: tailscale` config generates `ExecStartPost=tailscale serve` to expose ports 3000+9222 on the host's tailnet independently.
+            
+            **Known issues:**
+            - `TS_DEBUG_FIREWALL_MODE=nftables` is required (iptables-legacy fails in rootless podman) — built into the sidecar template
+            - `ShmSize=1g` is required for Chrome — automatically propagated to the pod via `PodmanArgs=--shm-size`
+            - Exit node device must be **approved** on the sidecar's tailnet admin console
+            - First-time exit node: use `tailscale set --exit-node` inside sidecar (persists in state volume for restarts)
+            
+            See `/charly-automation:sidecar` for full sidecar documentation.
+            
+            ## Multi-Instance Proxy Deployment
+            
+            Deploy multiple instances with different HTTP proxies for IP-diverse browsing. Each instance gets unique host ports and its own MCP server (`chrome-devtools-<instance>`).
+            
+            ```bash
+            # Deploy 3 instances with different proxies (ports 3001-3003, CDP 9231-9233)
+            charly config selkies-labwc -i 45.39.130.21 \
+              -e HTTP_PROXY=http://45.39.130.21:6753 \
+              -e HTTPS_PROXY=http://45.39.130.21:6753 \
+              -e 'NO_PROXY=localhost,127.0.0.1' \
+              -p 3001:3000 -p 9231:9222
+            
+            # Propagate MCP to hermes, then start
+            charly config hermes --update-all
+            charly start selkies-labwc -i 45.39.130.21
+            
+            # Verify proxy IP — author a cdp: open step (url: https://httpbin.org/ip) and run:
+            charly check live selkies-labwc -i 45.39.130.21 --filter cdp
+            ```
+            
+            **Tailscale access (no sidecar needed):** The charly.yml `tunnel: tailscale` config generates `tailscale serve` commands for host-mapped ports. All instances are accessible via the host's Tailscale IP on their respective ports (`https://<host>:3001`, etc.). Use sidecars only when per-instance exit node routing is needed.
+            
+            **MCP auto-disambiguation:** Each instance provides `chrome-devtools-<instance>` MCP server. Consumers (hermes) receive all instances in `CHARLY_MCP_SERVERS` JSON after `--update-all`.
+            
+            See `/charly-core:charly-config` for `--update-all` propagation, `/charly-selkies:chrome` for `env_accept` (HTTP_PROXY/HTTPS_PROXY/NO_PROXY).
+            
+            ## Build Pipeline Note
+            
+            The selkies-labwc box compiles `pixelflux_wayland` from source in the pixi
+            builder stage (`arch-builder` on the cachyos base; `cuda-arch-builder` on the GPU
+            build, `cachyos.nvidia`). This is because pixelflux's upstream wheel does not include the
+            **dmabuf cache cleanup fix** (`renderer.cleanup_texture_cache()` per frame) that
+            prevents a Wayland compositor shmem leak under sustained heavy streaming. The patch is
+            applied at build time via inline source patching in `candy/selkies/build.sh`. See
+            `/charly-selkies:selkies` (Patched pixelflux build pipeline) for the full pipeline and the
+            diagnostic recipe that found the leak.
+            
+            ## Related Boxes
+            
+            - `/charly-selkies:selkies-labwc-nvidia` — the GPU sibling of this CPU box: the same `selkies-desktop` metalayer on the CachyOS GPU base (`cachyos.nvidia`, `build: [pac, aur]`) with `builder.pixi: arch.cuda-arch-builder` for real NVENC, in the `opencharly/distro-cachyos` submodule. See `/charly-distros:cachyos`.
+            - `/charly-openclaw:openclaw-desktop` — all-in-one CachyOS variant: this streaming desktop fused with the openclaw-full gateway + AI CLIs, a CPU ollama, and the full charly toolchain (build boxes, run nested pods, launch rootless libvirt VMs from inside the streaming desktop). Uses `/charly-distros:container-nesting`'s `unmask=/proc/*` posture — no `--privileged`, still uid 1000.
+            - `/charly-selkies:sway-browser-vnc` — VNC-based alternative using Sway compositor instead of Selkies/labwc streaming
+            
+            ## Verification
+            
+            ```bash
+            charly status selkies-labwc              # All services RUNNING
+            curl -k https://localhost:3000         # HTTPS 200, Selkies dashboard HTML
+            charly check live selkies-labwc --filter wl    # desktop screenshot via the wl: screenshot step (capture bridge)
+            charly check live selkies-labwc --filter cdp   # cdp: status — CDP available on port 9222
+            ```
+            
+            ## Test Coverage
+            
+            Latest `charly check live selkies-labwc` run: **91 passed, 0 failed, 0 skipped**
+            — the largest test suite in the project. Covers all 21 transitive
+            candies (selkies, chrome, sshd, chrome-devtools-mcp primary; labwc,
+            waybar-labwc, pipewire, swaync, pavucontrol, wl-tools, wl-*-pixelflux,
+            a11y-tools, xterm, desktop-fonts, asciinema, fastfetch, tmux
+            secondary).
+            
+            Deploy-scope: ports 3000 (HTTPS selkies), 9222 (Chrome CDP), 9224
+            (chrome-devtools-mcp), 2222 (sshd) all reachable via
+            `127.0.0.1:${HOST_PORT:N}`. `/json/version` returns 200 with
+            `webSocketDebuggerUrl`. All primary services RUNNING under supervisord
+            (labwc, selkies, traefik, chrome via event-listener handoff, sshd).
+            
+            Note: the sshd candy uses `sudo -n -l` rather than `file:` existence
+            for `/etc/sudoers.d/charly-user` because it's root-only (`/charly-check:check` Gotcha #10).
+            
+            ## Related Skills
+            
+            - `/charly-selkies:selkies-desktop-layer` (metalayer), `/charly-selkies:selkies`,
+              `/charly-selkies:chrome`, `/charly-selkies:labwc`, `/charly-coder:sshd`,
+              `/charly-selkies:chrome-devtools-mcp`, `/charly-selkies:pipewire`
+            - `/charly-check:check` — declarative testing framework + testing gotchas
+            - `/charly-check:cdp`, `/charly-check:wl` — desktop automation on this box
+            - `/charly-core:charly-config` — deploy setup (tunnel, port remapping, instances)
+            - `/charly-build:charly-mcp-cmd` — the box bundles `chrome-devtools-mcp` (transitively via the chrome metalayer), so 2 deploy-scope `mcp:` checks (`ping`, `list-tools`) run against its MCP server on port 9224. `charly check live selkies-labwc --filter mcp` runs them, enumerating the 29 chrome-devtools tools.
+            
+            ## Related
+            
+            - `/charly-image:image` — image family umbrella (`candy:` image entries — those carrying `base:`/`from:` — in `charly.yml`, build/validate/inspect/list)
+            - `/charly-build:build` — the embedded build vocabulary (distros, builders, init-systems)
+
+selkies-labwc-nvidia-skill:
+    skill:
+        name: selkies-labwc-nvidia
+        family: selkies
+        owner: charly-selkies
+        description: |-
+            GPU-accelerated Selkies streaming desktop (labwc flavor) on the CachyOS NVIDIA base, with real NVENC.
+            Use when working with the selkies-labwc-nvidia box.
+        content: |-
+            # selkies-labwc-nvidia
+            
+            The NVIDIA-GPU build of the **labwc flavor** (`/charly-selkies:selkies-labwc`) — the
+            same `selkies-desktop` metalayer on the CachyOS GPU base (`cachyos.nvidia`) with the
+            full CUDA toolkit, for NVENC-capable hosts. Always runs as a headless pod; the
+            pixelflux encoder is auto-selected per GPU at runtime (NVENC on NVIDIA, software
+            x264 otherwise). Lives in the `opencharly/distro-cachyos` submodule (`box/cachyos`); the
+            CPU sibling is `/charly-selkies:selkies-labwc` (now in this same `opencharly/distro-cachyos`
+            submodule), and the KDE-Plasma GPU sibling is `selkies-kde-nvidia`.
+            
+            ## Definition
+            
+            ```yaml
+            selkies-labwc-nvidia:
+              base: nvidia          # cachyos.nvidia — the CachyOS GPU base
+              build:
+                - pac
+                - aur
+              builder:
+                pixi: arch.cuda-arch-builder
+              candy:
+                - agent-forwarding
+                - selkies-desktop
+                - dbus
+                - charly
+              port:
+                - "3000:3000"
+                - "9222:9222"
+                - "9224:9224"
+                - "2222:2222"
+              platform:
+                - linux/amd64
+            ```
+            
+            ## Layers
+            
+            `agent-forwarding` (gnupg + direnv + ssh-client) + `selkies-desktop` metalayer (pipewire + chrome + labwc + waybar-labwc + desktop-fonts + swaync + pavucontrol + wl-tools + wl-screenshot-pixelflux + wl-overlay + wl-record-pixelflux + a11y-tools + xterm + tmux + asciinema + fastfetch + selkies) + `dbus` + `charly`
+            
+            ## Ports
+            
+            | Port | Service |
+            |------|---------|
+            | 3000 | Selkies web UI (Traefik HTTPS → static files + WebSocket proxy) |
+            | 9222 | Chrome DevTools Protocol (CDP, via socat relay) |
+            | 9224 | Chrome DevTools MCP (Streamable HTTP) |
+            | 2222 | SSH |
+            
+            ## Volumes
+            
+            - `chrome-data` → `~/.chrome-debug` (Chrome profile)
+            - `selkies-config` → `~/.config/selkies`
+            
+            ## Base
+            
+            `nvidia` resolves to `cachyos.nvidia` — the x86_64_v3-optimized CachyOS GPU base
+            (CachyOS + `nvidia` + `cuda` candies, CUDA toolkit + NVIDIA drivers). See
+            `/charly-distros:cachyos`, `/charly-distros:nvidia`, `/charly-distros:cuda`.
+            
+            ## REAL NVENC via the CUDA arch-builder
+            
+            `builder.pixi: arch.cuda-arch-builder` selects the CUDA-equipped pixi builder, whose
+            `nvcc` + ffnvcodec NVENC headers let the `selkies` candy's `build.sh` compile
+            pixelflux's real `nvenc-sys` encoder. The stock `arch-builder` has no CUDA, so it
+            builds the NVENC stub — that is why the GPU boxes override `builder.pixi` to the
+            CUDA builder (the `selkies-kde-nvidia` sibling does the same). The CPU siblings
+            (`selkies-labwc`, `selkies-kde`) use the stock builder and rely on software x264 /
+            VAAPI.
+            
+            ## Difference from selkies-labwc (CPU sibling)
+            
+            Same candies, but on a GPU base that includes the full CUDA toolkit, plus the
+            `builder.pixi: arch.cuda-arch-builder` override that builds the real NVENC encoder.
+            Use a GPU variant for hardware H.264 encoding (zero CPU overhead); the CPU sibling
+            `selkies-labwc` runs on the plain `cachyos` base with software x264 / VAAPI.
+            
+            ## AUR packages
+            
+            `build: [pac, aur]` — the `selkies-desktop` metalayer composes `chrome` (AUR
+            `google-chrome`) + `wl-tools` (AUR `wlrctl`), so the box opts into the AUR builder.
+            Without `aur` in `build:`, both AUR packages would be silently dropped.
+            
+            ## Recording
+            
+            Desktop video recording included via `wl-record-pixelflux` (part of the
+            `selkies-desktop` metalayer). On an NVIDIA GPU, pixelflux-record uses NVENC for H.264
+            encoding (zero CPU overhead).
+            
+            ## Key Candies
+            - `/charly-selkies:selkies-desktop-layer` — full Selkies labwc streaming desktop metalayer
+            - `/charly-distros:nvidia` — GPU runtime and CDI device auto-detection
+            - `/charly-distros:cuda` — CUDA toolkit and libraries (via the CachyOS GPU base)
+            - `/charly-infrastructure:dbus-layer` — session bus for desktop services
+            - `/charly-tools:charly` — in-container `charly` CLI toolchain (scripting, service management)
+            - `/charly-distros:agent-forwarding` — SSH/GPG/direnv agent forwarding
+            
+            ## Related Boxes
+            - `/charly-selkies:selkies-desktop-layer` — the labwc desktop metalayer this box is the GPU build of
+            - `selkies-labwc` (in this same `opencharly/distro-cachyos` submodule) — the CPU-encoding labwc sibling
+            - `selkies-kde-nvidia` — the KDE-Plasma GPU sibling (same `cachyos.nvidia` base + CUDA arch-builder)
+            - `/charly-openclaw:openclaw-desktop` — the CachyOS/CPU all-in-one: this streaming desktop stack + the openclaw-full gateway + AI CLIs + a CPU ollama + the full charly toolchain (charly + container-nesting + golang + gh). Use it if you want to build boxes / start nested pods / launch VMs from inside the browser-accessible desktop.
+            - `/charly-distros:cachyos` — the CachyOS base image family (owns this box's submodule)
+            
+            ## Related Commands
+            - `/charly-check:check` — parent router for the out-of-process live-container check verbs (`wl:`/`cdp:`/`vnc:`/`mcp:`/`dbus:`)
+            - `/charly-check:cdp` — drive Chrome inside the streaming desktop
+            - `/charly-check:wl` — interact with the labwc Wayland session
+            - `/charly-check:dbus` — the `dbus:` check verb (D-Bus notifications, served out-of-process by `candy/plugin-dbus`)
+            - `/charly-build:charly-mcp-cmd` — inherits chrome-devtools-mcp's 2 deploy-scope `mcp:` checks; use `charly check live selkies-labwc-nvidia --filter mcp` to verify the MCP server is alive and exposing the full tool catalog.
+            
+            ## Related
+            
+            - `/charly-image:image` — image family umbrella (`candy:` image entries — those carrying `base:`/`from:` — in `charly.yml`, build/validate/inspect/list)
+            - `/charly-build:build` — the embedded build vocabulary (distros, builders, init-systems)
+
+sway-browser-vnc-skill:
+    skill:
+        name: sway-browser-vnc
+        family: selkies
+        owner: charly-selkies
+        description: |-
+            Minimal Sway desktop with VNC remote access and Chrome browser.
+            Use when working with VNC desktop containers or testing the sway-desktop-vnc composition.
+        content: |-
+            # sway-browser-vnc
+            
+            Minimal Sway desktop with VNC (wayvnc on port 5900) and Chrome (CDP on port 9222).
+            
+            ## Box Properties
+            
+            | Property | Value |
+            |----------|-------|
+            | Base | fedora |
+            | Candies | agent-forwarding, sway-desktop-vnc, dbus, charly |
+            | Ports | 5900, 9222, 9224 |
+            
+            ## Quick Start
+            
+            ```bash
+            charly box build sway-browser-vnc
+            charly start sway-browser-vnc
+            charly status sway-browser-vnc          # Shows all probes: supervisord, cdp, dbus, charly, sway, vnc, wl
+            charly check live sway-browser-vnc --filter vnc   # run the candy's vnc: status / screenshot steps
+            charly check live sway-browser-vnc --filter wl    # desktop screenshot via the wl: screenshot step
+            ```
+            
+            ## D-Bus and Notification Support
+            
+            This box includes the `dbus` candy (D-Bus session bus) plus the `charly` candy, enabling:
+            - the `dbus:` check verb (`notify`/`list`/`call`/`introspect`) — D-Bus interaction served out-of-process by `candy/plugin-dbus`, driving the session bus with `gdbus`
+            - `charly cmd` — single command execution with desktop notification on completion
+            - `charly agent terminal` — typed persistent TTY sessions, input, snapshots, and transcripts
+            - `charly status` — supervisord, dbus, and charly probes
+            
+            ```yaml
+            # author dbus: steps in the plan, run with: charly check live sway-browser-vnc --filter dbus
+            notify-build-done:
+                check: a desktop notification is delivered
+                dbus: notify
+                context: [deploy]
+                text: Build Complete
+                description: Image built successfully
+            list-services:
+                check: the notifications service is on the session bus
+                dbus: list
+                context: [deploy]
+                stdout:
+                    contains: org.freedesktop.Notifications
+            ```
+            ```bash
+            charly cmd sway-browser-vnc "make test"    # Notifies on completion (gdbus, host-side)
+            ```
+            
+            The notification daemon (swaync) is included via the sway-desktop metalayer.
+            
+            ## Overlays
+            
+            Fullscreen overlays for recording (via wl-overlay, included in sway-desktop):
+            
+            ```yaml
+            # author overlay steps in the plan, run with: charly check live sway-browser-vnc --filter wl
+            show-title:
+                check: a fullscreen title card is shown
+                wl: overlay-show
+                context: [deploy]
+                type: text
+                text: INTRO
+                name: title
+            show-lower-third:
+                check: a lower-third is shown
+                wl: overlay-show
+                context: [deploy]
+                type: lower-third
+                text: Speaker
+                subtitle: Role
+                name: lt
+            show-countdown:
+                check: a 3-second countdown is shown
+                wl: overlay-show
+                context: [deploy]
+                type: countdown
+                seconds: 3
+                name: cd
+            show-highlight:
+                check: a highlight region is shown
+                wl: overlay-show
+                context: [deploy]
+                type: highlight
+                region: "430,290,510,50"
+                name: hl
+            show-fade:
+                check: a fade-to-black outro is shown
+                wl: overlay-show
+                context: [deploy]
+                type: fade
+                color: black
+                name: outro
+            hide-all:
+                check: all overlays are hidden
+                wl: overlay-hide
+                context: [deploy]
+                all: true
+            ```
+            
+            All overlay types render with true RGBA compositor transparency. See `/charly-check:wl-overlay` for the full recording workflow.
+            
+            ## Recording
+            
+            Desktop video recording via wf-recorder (included in sway-desktop) is authored as
+            `record:` plan steps (the declarative verb served out-of-process by `candy/plugin-record`)
+            and run with `charly check live sway-browser-vnc --filter record`:
+            
+            ```yaml
+            sway-rec-start:
+                check: a desktop recording starts
+                record: start
+                context: [deploy]
+                record_name: demo
+                record_mode: desktop
+            sway-rec-stop:
+                check: the desktop recording is captured
+                record: stop
+                context: [deploy]
+                record_name: demo
+                artifact: demo.mp4
+            ```
+            
+            ## Use as Selkies Remote Desktop Client
+            
+            sway-browser-vnc can act as a test client for selkies-desktop, simulating how a real user would connect via browser:
+            
+            ```bash
+            # Both containers must be running on the charly bridge network
+            charly start sway-browser-vnc
+            charly start selkies-desktop
+            
+            # Open selkies URL in sway-browser-vnc's Chrome via a cdp: open step
+            # (the cdp: verb is served out-of-process by candy/plugin-cdp):
+            #   cdp: open  url: https://charly-selkies-desktop:3000
+            # Run with: charly check live sway-browser-vnc --filter cdp
+            
+            # Interact with the remote desktop:
+            # Mouse: cdp: spa-click on the Selkies tab (with ~0.82x coordinate scaling)
+            # Keyboard: a vnc: type step (passthrough via SPA's overlayInput)
+            # Screenshots: a vnc: screenshot step (shows full client desktop with stream)
+            #              a cdp: screenshot step (shows only the stream content)
+            ```
+            
+            **Key limitations when using as a client:**
+            - Super key consumed by sway (can't trigger remote labwc keybinds like Super+e)
+            - Ctrl+T/W consumed by local Chrome (open/close tabs locally, not remotely)
+            - Clipboard permission dialog appears on first connection — dismiss with a `vnc: key` step (`key: Return`) or CDP `Browser.grantPermissions`
+            
+            See `/charly-selkies:selkies-labwc` for detailed SPA interaction documentation.
+            
+            ## Test Coverage
+            
+            Latest `charly check live sway-browser-vnc` run: **84 passed, 0 failed, 1 skipped**
+            (`chrome-devtools-mcp-port` references `${HOST_PORT:9224}` which isn't
+            mapped here — correct skip behavior).
+            
+            Covers all 19 transitive candies: wayvnc (VNC), sway (compositor),
+            chrome-sway, xdg-portal, waybar, swaync, pavucontrol, thunar,
+            xfce4-terminal, pipewire, wl-screenshot-grim, wl-overlay, wf-recorder,
+            desktop-fonts, fastfetch, asciinema, tmux, dbus, charly. Deploy-scope: VNC
+            port 5900 reachable, Chrome CDP on port 9250→9222 with `/json/version`
+            200. Box-scope: sway + wayvnc both RUNNING under supervisord.
+            
+            ## Related Skills
+            
+            - `/charly-selkies:sway-desktop-vnc`, `/charly-selkies:sway`, `/charly-selkies:wayvnc`,
+              `/charly-selkies:chrome-sway`, `/charly-selkies:xdg-portal`, `/charly-infrastructure:dbus-layer`,
+              `/charly-tools:charly`, `/charly-distros:agent-forwarding`
+            - `/charly-check:check` — declarative testing framework (parent router for the out-of-process live-container check verbs `wl:`/`cdp:`/`vnc:`/`mcp:`/`dbus:`)
+            - `/charly-check:vnc` — VNC automation on this box
+            - `/charly-check:cdp` — Chrome automation (CDP on host port 9250)
+            - `/charly-check:wl` — Wayland input/windows/clipboard (sway subgroup for compositor control)
+            - `/charly-check:dbus` — the `dbus:` check verb (notifications/list/call/introspect, served out-of-process by `candy/plugin-dbus`)
+            - `/charly-build:charly-mcp-cmd` — the box inherits 2 deploy-scope `mcp:` checks from the `chrome-devtools-mcp` candy (ping + list-tools asserting `navigate_page`/`take_screenshot`). `charly check live sway-browser-vnc --filter mcp` runs them; note the **port-publishing gotcha** — if your `charly.yml` has an explicit `port:` override that predates `chrome-devtools-mcp`, port 9224 may not be published. See `/charly-build:charly-mcp-cmd` for the fix.
+            
+            ## Related Boxes
+            
+            - `selkies-desktop` — browser-accessible remote desktop (can be accessed from sway-browser-vnc's Chrome)
+            
+            ## Related
+            
+            - `/charly-image:image` — image family umbrella (`candy:` image entries — those carrying `base:`/`from:` — in `charly.yml`, build/validate/inspect/list)
+            - `/charly-build:build` — the embedded build vocabulary (distros, builders, init-systems)
+
+wl-overlay-layer-skill:
+    skill:
+        name: wl-overlay-layer
+        family: selkies
+        owner: charly-selkies
+        description: |-
+            Wayland overlay windows via gtk4-layer-shell (for screen recordings).
+            Use when working with the wl-overlay candy, gtk4-layer-shell, or overlay dependencies.
+        content: |-
+            # wl-overlay -- Wayland overlay windows via gtk4-layer-shell
+            
+            ## Candy Properties
+            
+            | Property | Value |
+            |----------|-------|
+            | Dependencies | `dbus` |
+            | Install files | `task:`, `charly-overlay` |
+            
+            ## Packages
+            
+            - `gtk4` (RPM)
+            - `gtk4-layer-shell` (RPM) — includes `Gtk4LayerShell-1.0.typelib` for GObject Introspection
+            - `python3-gobject` (RPM)
+            
+            ## Technical Details
+            
+            ### Python Script: `charly-overlay`
+            
+            Installed to `~/.local/bin/charly-overlay` via `task:`. Dual-mode script (daemon + client) using GTK4 + gtk4-layer-shell for layer-shell protocol overlays.
+            
+            **Key implementation details:**
+            - **Shebang**: `#!/usr/bin/python3` (system Python 3.14, NOT pixi's Python — PyGObject is an RPM package)
+            - **Library preload**: `CDLL("libgtk4-layer-shell.so.0")` must load before GTK4 import (registers layer-shell protocol before Wayland display init). Uses versioned soname `.so.0` (unversioned `.so` is in `-devel` package only)
+            - **RGBA surfaces**: `window { background: none; }` CSS applied globally at daemon startup. Without this, GTK4 on Wayland creates opaque surfaces that don't support alpha transparency
+            - **Cairo backgrounds**: all overlay backgrounds drawn via `Gtk.DrawingArea` + Cairo `paint()`. GTK4 CSS `background-color` with `rgba()` does not composite correctly on layer-shell windows
+            - **Thread safety**: socket listener runs in a separate thread; all GTK operations dispatched via `GLib.idle_add()`
+            - **IPC**: Unix domain socket at `/tmp/charly-overlay.sock` with JSON-line protocol
+            
+            ### Layer-Shell Configuration
+            
+            - **Layer**: `OVERLAY` (above TOP where waybar/swaync live)
+            - **Keyboard mode**: `NONE` (overlays never capture input)
+            - **Exclusive zone**: `-1` (don't push other windows)
+            - **Namespace**: `charly-overlay-<name>` per overlay window
+            
+            ## Usage
+            
+            ```yaml
+            # charly.yml — typically included via desktop metalayers
+            # Already part of sway-desktop, selkies-desktop
+            my-desktop:
+              candy:
+                - wl-overlay
+            ```
+            
+            ```yaml
+            overlay-show:
+                check: a text overlay is shown on the desktop
+                wl: overlay-show
+                type: text
+                text: Hello
+                name: intro
+                context: [deploy]
+            
+            overlay-list:
+                check: the active overlays are listed
+                wl: overlay-list
+                context: [deploy]
+            
+            overlay-hide:
+                check: all overlays are hidden
+                wl: overlay-hide
+                all: true
+                context: [deploy]
+            ```
+            
+            ## Used In
+            
+            - `/charly-selkies:sway-desktop` — sway desktop composition
+            - `/charly-selkies:selkies-desktop-layer` — selkies streaming desktop composition
+            
+            ## Used In Boxes
+            
+            - `/charly-selkies:sway-browser-vnc` (via `sway-desktop` metalayer)
+            - `/charly-selkies:selkies-labwc` (via `selkies-desktop` metalayer)
+            - `/charly-selkies:selkies-labwc-nvidia` (via `selkies-desktop` metalayer)
+            
+            ## Related Candies
+            
+            - `/charly-infrastructure:dbus-layer` — D-Bus session bus (dependency, required by GTK4)
+            - `/charly-selkies:wl-tools` — Wayland automation tools (sibling in desktop stack)
+            - `/charly-selkies:a11y-tools` — also uses `python3-gobject` (RPM deduplication handles overlap)
+            - `/charly-infrastructure:tmux-layer` — tmux (required for overlay daemon hosting)
+            
+            ## Related Commands
+            
+            - `/charly-check:wl-overlay` — Overlay command usage, types, recording workflow
+            - `/charly-check:wl` — Compositor-agnostic desktop automation
+            - `/charly-check:record` — Recording commands (overlays compose with recording)
+            
+            ## Related
+            
+            - `/charly-image:layer` — candy authoring reference (`charly.yml` schema, task verbs, service declarations)
+            - `/charly-check:check` — declarative testing (`check:` block, `charly check box`, `charly check live`)

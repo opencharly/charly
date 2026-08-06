@@ -1,0 +1,117 @@
+charly-filebrowser:
+    candy:
+        version: 2026.218.1200
+        description: |-
+            Metadata concept candy owning the charly-filebrowser skills whose names have no namesake candy (filebrowser file-management image). Owns its family's `skill:` kind entities (sibling nodes in this file) — the
+            plugins→candies migration; candy/plugin-marketplace regenerates the plugins/ corpus
+            from them.
+        plan:
+            - run: this documentation-only candy ships no install content (it carries the family's skill/hook/marketplace entities); validate-satisfying no-op
+              command: "true"
+              context:
+                - build
+            - check: the filebrowser concept candy's skill entities are present and generated into plugins/filebrowser/skills
+              id: charly-filebrowser-present
+              context:
+                - build
+              command: "true"
+
+filebrowser-layer-skill:
+    skill:
+        name: filebrowser-layer
+        family: filebrowser
+        owner: charly-filebrowser
+        description: |-
+            FileBrowser Quantum web file manager on port 8080 with config-file-driven setup.
+            Use when working with FileBrowser, web file management, or file browsing in containers.
+        content: |-
+            # filebrowser -- Web file manager
+            
+            ## Candy Properties
+            
+            | Property | Value |
+            |----------|-------|
+            | Dependencies | `supervisord` |
+            | Ports | 8080 |
+            | Volumes | `data` -> `~/.filebrowser/data`, `files` -> `~/.filebrowser/files` |
+            | Service | `filebrowser` (supervisord) |
+            | Install files | `task:`, `config.yaml` |
+            
+            ## Environment Variables
+            
+            | Variable | Value |
+            |----------|-------|
+            | `FILEBROWSER_CONFIG` | `/etc/filebrowser/config.yaml` |
+            
+            ## Aliases
+            
+            | Name | Command |
+            |------|---------|
+            | `filebrowser` | `filebrowser` |
+            
+            ## Key Details
+            
+            FileBrowser Quantum (gtsteffaniak fork, v1.2.4-stable) is config-file driven -- it uses
+            `/etc/filebrowser/config.yaml`, NOT CLI flags like classic filebrowser. The `FILEBROWSER_CONFIG`
+            environment variable points to the config file.
+            
+            Default credentials: `admin` / `admin`. Change immediately after first login via the web UI.
+            
+            Database and cache stored in the `data` volume (`~/.filebrowser/data/database.db`).
+            User-accessible files served from the `files` volume (`~/.filebrowser/files`).
+            
+            The `files` volume is typically bind-mounted to a host directory at deploy time:
+            
+            ```bash
+            charly config filebrowser --bind files=~/Documents
+            charly config filebrowser --bind files=/mnt/nas/shared
+            ```
+            
+            ## Usage
+            
+            ```yaml
+            # charly.yml
+            filebrowser:
+              base: fedora
+              candy:
+                - agent-forwarding
+                - filebrowser
+                - dbus
+                - charly
+              ports:
+                - "8085:8080"
+            ```
+            
+            Tunnel config is in `charly.yml`: `tunnel: {provider: tailscale, private: all}`. See `/charly-core:deploy`.
+            
+            ## Used In Boxes
+            
+            - `/charly-filebrowser:filebrowser`
+            
+            ## Related Candies
+            
+            - `/charly-infrastructure:supervisord` -- process manager dependency
+            - `/charly-infrastructure:traefik` -- similar pattern (binary download + config file + supervisord)
+            - `/charly-infrastructure:dbus-layer` -- D-Bus session bus (co-deployed in filebrowser box)
+            - `/charly-tools:charly` -- charly CLI (co-deployed in filebrowser box)
+            
+            ## Related Commands
+            
+            - `/charly-core:charly-config` -- deployment configuration, `--bind files=<path>` for file volume
+            - `/charly-core:start` -- start the service
+            - `/charly-core:shell` -- interactive access to the container
+            
+            ## When to Use This Skill
+            
+            Use when the user asks about:
+            
+            - FileBrowser setup in containers
+            - Web file management or file browsing
+            - Port 8080 file browser service
+            - `FILEBROWSER_CONFIG` configuration
+            - FileBrowser Quantum (gtsteffaniak fork)
+            
+            ## Related
+            
+            - `/charly-image:layer` — candy authoring reference (`charly.yml` schema, task verbs, service declarations)
+            - `/charly-check:check` — declarative testing (`check:` block, `charly check box`, `charly check live`)

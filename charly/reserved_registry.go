@@ -40,9 +40,6 @@ func setFromSlice(words []string) map[string]bool {
 // from sdk/schema/*.cue. NEVER hand-edit a parallel copy; change the schema and
 // regenerate.
 var (
-	// kindWordSet — the authoring KIND vocabulary (#Node arms). Replaces the hand
-	// kindKeys/kindKeysSet (unified.go) + nodeEntityKinds (node_parse.go).
-	kindWordSet = setFromSlice(spec.KindWords)
 	// resourceKindSet — the DEPLOYABLE subset that nests sub-entity children
 	// (#ResourceKind). Replaces the hand nodeResourceKinds + node_normalize.go's
 	// inline resource-child switch.

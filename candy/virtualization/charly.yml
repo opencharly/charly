@@ -240,3 +240,300 @@ virtualization:
                     debian: libvirt-daemon-system
                     ubuntu: libvirt-daemon-system
                 installed: true
+
+virtualization-skill:
+    skill:
+        name: virtualization
+        family: infrastructure
+        owner: virtualization
+        description: |-
+            QEMU/KVM/libvirt stack — works identically under supervisord (containers/
+            pods, custom `exec:` form) AND under systemd (host installs / bootc / VMs,
+            use_packaged: socket form). The daemon set is DISTRO-DIVERGENT: Fedora/Arch
+            ship the modular virtqemud + virtnetworkd, Debian/Ubuntu ship only the
+            monolithic libvirtd — selected by a per-entry `service: distro:` filter.
+            Uses the mixed-entry `service:` schema (CLAUDE.md "Init-system
+            polymorphism") — same name appears twice, init system at deploy time picks
+            the matching form. Canonical worked example of the polymorphism pattern.
+        content: |
+            # virtualization — QEMU/KVM/libvirt for both supervisord and systemd init systems
+            
+            ## Canonical worked example: mixed-`service:` polymorphism
+            
+            This candy is the canonical demonstration that ONE candy can serve BOTH container/pod targets (supervisord init) AND host/bootc/VM targets (systemd init) without spawning a `<name>-host` sibling. The mechanism is the **mixed `service:` schema pattern** COMBINED with a **per-entry `distro:` filter**:
+            
+            - **Init-system polymorphism** — each daemon appears TWICE with the same `name:`: once with `use_packaged: <unit>.socket` (rendered only on systemd-init targets) and once with custom `exec:` (rendered only on supervisord-init targets). The init system at deploy time picks the matching form; the other is silently skipped.
+            - **Distro polymorphism (`distro:` filter)** — the libvirt daemon set is DISTRO-DIVERGENT. Fedora and Arch ship the SPLIT modular daemons (`virtqemud` + `virtnetworkd`, with `virtqemud.socket` / `virtnetworkd.socket` units). Debian and Ubuntu build libvirt WITHOUT the split — there is **no** `virtqemud`/`virtnetworkd` binary and **no** `*.socket` unit, only the MONOLITHIC `libvirtd` (`libvirtd.socket`), which serves both the qemu and network drivers (RDD-proven on debian:13, libvirt 11.3.0). Each entry carries a `distro:` list restricting it to the distros whose libvirt build actually ships that daemon. An entry with an empty/absent `distro:` renders on every distro (the default); a non-empty list renders only on the matching distros.
+            
+            ```yaml
+            service:
+              # ----- virtqemud + virtnetworkd (Fedora/Arch modular) -----
+              - name: virtqemud
+                use_packaged: virtqemud.socket
+                distro: [fedora, arch]            # systemd render (Fedora/Arch only)
+                enable: true
+                scope: system
+              - name: virtqemud
+                exec: "/usr/sbin/virtqemud --timeout 0"
+                distro: [fedora, arch]            # supervisord render (Fedora/Arch only)
+                restart: always
+                priority: 5
+                start_sec: 2
+                enable: true
+                scope: system
+              - name: virtnetworkd
+                use_packaged: virtnetworkd.socket
+                distro: [fedora, arch]
+                enable: true
+                scope: system
+              - name: virtnetworkd
+                exec: "/usr/sbin/virtnetworkd --timeout 0"
+                distro: [fedora, arch]
+                restart: always
+                priority: 6
+                start_sec: 2
+                enable: true
+                scope: system
+              # ----- libvirtd (Debian/Ubuntu monolithic) -----
+              - name: libvirtd
+                use_packaged: libvirtd.socket
+                distro: [debian, ubuntu]          # systemd render (Debian/Ubuntu only)
+                enable: true
+                scope: system
+              - name: libvirtd
+                exec: "/usr/sbin/libvirtd --timeout 0"
+                distro: [debian, ubuntu]          # supervisord render (Debian/Ubuntu only)
+                restart: always
+                priority: 5
+                start_sec: 2
+                enable: true
+                scope: system
+            ```
+            
+            The `distro:` filter is applied at render time against the target's distro tag chain — in the DEPLOY path (`compileServiceSteps`, VM/host/pod) and in the BUILD path (`generateInitFragments` for supervisord fragments + the bootc `system_enable` units). A Debian systemd VM therefore enables ONLY `libvirtd.socket`; a Fedora container's supervisord runs ONLY `virtqemud` + `virtnetworkd`.
+            
+            Why this matters: a `<name>-host` (or per-distro) sibling candy would duplicate package lists, check probes, and tasks, and drift between the siblings would be inevitable. The mixed-entry + `distro:`-filter pattern eliminates the sibling — ONE candy covers every (init-system × distro) cell; the schema does the polymorphism. See the project rulebook "Init-system polymorphism via mixed `service:` entries" (`AGENTS.md` / `CLAUDE.md`) for the rule and `/charly-image:layer` "Service Declaration" → "Anti-pattern: `<name>-host` / `<name>-pod` sibling candies" for what NOT to do.
+            
+            ## Overview
+            
+            Installs the QEMU/KVM/libvirt stack AND ships supervisord programs for the
+            distro's libvirt daemon(s) — `virtqemud` + `virtnetworkd` on Fedora/Arch, the
+            monolithic `libvirtd` on Debian/Ubuntu — running as the candy consumer's uid.
+            In session mode (`qemu:///session`), these daemons and their clients all
+            work at uid 1000 with only `/dev/kvm` device passthrough — no
+            `CAP_SYS_ADMIN`, no root escalation. Makes nested rootless VM creation
+            work end-to-end from a rootless outer container.
+            
+            ## Candy Properties
+            
+            | Property | Value |
+            |----------|-------|
+            | `require:` | `supervisord` |
+            | Services registered (Fedora/Arch) | `virtqemud` (priority 5), `virtnetworkd` (priority 6) |
+            | Services registered (Debian/Ubuntu) | `libvirtd` (priority 5) — monolithic; serves both drivers |
+            | Devices | `/dev/kvm` is required by consumers; declared at the box level or via `/charly-distros:container-nesting` |
+            
+            ## Packages (RPM)
+            
+            Baseline QEMU + libvirt client + guest tools:
+            
+            - `bindfs`, `genisoimage`, `guestfs-tools`, `libguestfs-tools`
+            - `libvirt-nss`, `passt`, `qemu-guest-agent`
+            - `qemu-img`, `qemu-kvm`
+            - `qemu-system-aarch64`, `qemu-system-arm`, `qemu-system-x86-core`
+            - `tigervnc`, `virt-manager`, `virt-viewer`
+            
+            Libvirt split-daemon set (explicitly listed so images can run the
+            session daemon even without `virt-manager`):
+            
+            - `libvirt-client` — `virsh` binary
+            - `libvirt-daemon` — `/usr/sbin/virtqemud`, `/usr/sbin/virtnetworkd`
+            - `libvirt-daemon-config-network`
+            - `libvirt-daemon-driver-qemu`
+            
+            ## Packages (Pacman)
+            
+            `qemu-full`, `qemu-img`, `virtiofsd`, `libvirt`.
+            
+            ## Supervisord services
+            
+            The candy's `service:` block registers the distro's daemon(s). On a **Fedora/Arch**
+            supervisord container (the `distro: [fedora, arch]` exec entries):
+            
+            ```ini
+            [program:virtqemud]
+            command=/usr/sbin/virtqemud --timeout 0
+            autostart=true
+            autorestart=true
+            priority=5
+            startsecs=2
+            stdout_logfile=/dev/fd/1
+            stdout_logfile_maxbytes=0
+            redirect_stderr=true
+            
+            [program:virtnetworkd]
+            command=/usr/sbin/virtnetworkd --timeout 0
+            autostart=true
+            autorestart=true
+            priority=6
+            startsecs=2
+            stdout_logfile=/dev/fd/1
+            stdout_logfile_maxbytes=0
+            redirect_stderr=true
+            ```
+            
+            On a **Debian/Ubuntu** supervisord container (the `distro: [debian, ubuntu]` exec
+            entry) the candy instead registers ONE monolithic program — verified in the
+            emitted `NN-virtualization.conf` fragment of a `debian-coder` build:
+            
+            ```ini
+            [program:libvirtd]
+            command=/usr/sbin/libvirtd --timeout 0
+            autostart=true
+            autorestart=true
+            priority=5
+            startsecs=2
+            stdout_logfile=/dev/fd/1
+            stdout_logfile_maxbytes=0
+            redirect_stderr=true
+            ```
+            
+            Two deliberate choices:
+            
+            - **`--timeout 0`** keeps the daemon(s) in the foreground (they would
+              otherwise self-exit on idle). Required for supervisord to manage
+              them. `libvirtd --timeout 0` behaves identically to the modular
+              daemons (RDD-verified on debian:13).
+            - **No `user=` directive.** The supervisord programs inherit the parent
+              supervisord's uid. On `charly-fedora`/`charly-arch`/`githubrunner`,
+              supervisord runs as uid 0 → daemons run as uid 0 →
+              `qemu:///session` targets root's session. On `openclaw-desktop`,
+              supervisord runs as uid 1000 → daemons run as uid 1000 →
+              `qemu:///session` targets user's session. Both work because the
+              session URI keys off `$XDG_RUNTIME_DIR` rather than a fixed socket
+              path.
+            
+            Priority 5/6 places the daemon(s) ahead of every desktop program
+            (labwc=12, selkies=18) so the session socket is available by the time
+            any later service or shell tries to connect.
+            
+            See `/charly-build:generate` for the supervisord `fragment_assembly` init model
+            that emits these program blocks into `.build/<image>/supervisor/NN-virtualization.conf`.
+            
+            ## Rootless libvirt — `qemu:///session`
+            
+            `candy/plugin-vm/vm_phaseA_shims.go` already hardcodes `qemu:///session` as the charly default (`const libvirtSessionURI`).
+            This candy makes that URI actually work inside a container at uid
+            1000:
+            
+            - No `CAP_SYS_ADMIN` required on the outer container.
+            - No `security_opt` relaxation beyond what `/charly-distros:container-nesting` contributes (and even that isn't needed for VMs alone).
+            - Only `/dev/kvm` must be passed through. On the host, it's typically
+              `crw-rw-rw-` (world-readable/writable), so any uid that can `open()` it
+              gets KVM acceleration.
+            - `virsh -c qemu:///session domcapabilities` reports
+              `<domain>kvm</domain>` once the daemons are running — verified
+              on `openclaw-desktop` at uid 1000.
+            
+            ## Tests baked into the candy
+            
+            **Build-scope (run by `charly check box <image>` without deploying):**
+            
+            - `virtqemud-package` / `virtnetworkd-package` — package-existence probes using `package:` + `package_map:` (see below).
+            - `virsh-binary` — `/usr/bin/virsh` exists.
+            - `qemu-system-x86-binary` — `/usr/bin/qemu-system-x86_64` exists.
+            - `qemu-img-binary` — `/usr/bin/qemu-img` exists.
+            
+            ### Why package-existence, not binary-path, for the virtqemud/virtnetworkd tests
+            
+            Debian/Ubuntu and Fedora/Arch bundle libvirt drivers differently. On Fedora/Arch the `libvirt-daemon-driver-qemu` / `libvirt-daemon-driver-network` subpackages ship `/usr/sbin/virtqemud` and `/usr/sbin/virtnetworkd` as standalone binaries. On Debian/Ubuntu those drivers are bundled inside `libvirt-daemon-system`, and the monolithic `libvirtd` binary replaces the per-driver split daemons — so a `file: /usr/sbin/virtqemud` probe hard-fails on deb even when the functionality is present.
+            
+            The fix probes package presence with distro-specific names:
+            
+            ```yaml
+            - id: virtqemud-package
+              package: libvirt-daemon-driver-qemu     # rpm name on Fedora
+              package_map:
+                arch: libvirt                    # Arch bundles into 'libvirt' metapackage
+                debian: libvirt-daemon-system         # deb bundles all drivers here
+                ubuntu: libvirt-daemon-system
+              installed: true
+            ```
+            
+            See `/charly-check:check` "`package:` + `package_map:` pattern" for the resolution order (tag > base name > fallback).
+            
+            **Deploy-scope (run against a live `charly start`ed container):**
+            
+            - `virtqemud-running` — supervisorctl reports RUNNING.
+            - `virtnetworkd-running` — supervisorctl reports RUNNING.
+            - `libvirt-session-list` — `virsh -c qemu:///session list --all` exits 0.
+            - `libvirt-kvm-acceleration` — `virsh -c qemu:///session domcapabilities | grep -c '<domain>kvm</domain>'` ≥ 1.
+            
+            ## Usage
+            
+            ```yaml
+            # charly.yml — rootless nested VM image
+            openclaw-desktop:
+              candy:
+                - ...
+                - charly                  # the full toolchain — pulls virtualization
+                - container-nesting   # donates /dev/fuse + /dev/net/tun devices (VMs only need /dev/kvm)
+            ```
+            
+            `/dev/kvm` is auto-detected at `charly shell`/`charly start`/`charly config` time by the
+            pod-config device detection (candy/plugin-deploy-pod's `detectDevices`, a peer
+            `verb:gpu` dispatch — the former `charly/devices.go` + `DetectHostDevices` shim are
+            DELETED, K-wave 2 cone R3; it scans `/dev/kvm`, `/dev/fuse`, `/dev/dri/renderD*`,
+            `/dev/net/tun`, `/dev/vhost-*`, `/dev/hwrng`) — no box-level
+            `security.devices:` entry needed for the typical deployment.
+            
+            ## Composition chain
+            
+            The `charly` candy (the full toolchain) composes `virtualization` (this candy) +
+            the charly binary + `gocryptfs` + `socat` + `podman-machine` + `gvisor-tap-vsock`.
+            So any box that pulls `charly` automatically gets the supervisord-managed
+            virtqemud/virtnetworkd programs.
+            
+            ## Cross-distro coverage
+            
+            Packages are declared under the candy's `distro:` map — `distro.fedora` (RPM), `distro.arch` (pacman), `distro.debian` / `distro.ubuntu` / `distro.ubuntu-24.04` (deb). Debian/Ubuntu install `libvirt-daemon-system`, `libvirt-clients`, `libvirt-daemon-driver-qemu`, `qemu-system-x86`, `qemu-utils`, `virtinst`. Crucially, **Debian/Ubuntu build libvirt WITHOUT the modular split** — there is NO `/usr/sbin/virtqemud`/`/usr/sbin/virtnetworkd` binary and NO `virtqemud.socket`/`virtnetworkd.socket` unit (RDD-proven on debian:13 / libvirt 11.3.0); only the monolithic `/usr/sbin/libvirtd` + `libvirtd.socket` exist, and `libvirtd` serves both the qemu and network drivers. That is exactly why the `service:` block scopes the `virtqemud`/`virtnetworkd` entries to `distro: [fedora, arch]` and ships a distinct `libvirtd` entry scoped to `distro: [debian, ubuntu]` (see the canonical example above). The `package_map:` on the `virtqemud`/`virtnetworkd` package-existence checks resolves the deb name to `libvirt-daemon-system`.
+            
+            Drops on deb: `gvisor-tap-vsock`, `podman-machine` (not packaged; VM-mode networking features degrade gracefully on debian-coder / ubuntu-coder).
+            
+            ## Used In Boxes
+            
+            - `/charly-openclaw:openclaw-desktop` — rootless VM host inside a streaming desktop
+            - `/charly-distros:charly-fedora` — root VM host (same daemons, uid 0)
+            - `/charly-coder:charly-arch` — Arch counterpart
+            - `/charly-coder:debian-coder`, `/charly-coder:ubuntu-coder` — deb-based consumers (via the `charly` candy)
+            - `/charly-distros:githubrunner` — VMs for CI workloads
+            
+            ## Related Candies
+            
+            - `/charly-tools:charly` — the full toolchain that pulls this candy into charly-toolchain boxes
+            - `/charly-distros:container-nesting` — pairs with this candy for boxes that need both nested containers AND nested VMs; also donates `/dev/kvm`-adjacent devices
+            - `/charly-infrastructure:socat` — part of the `charly` candy alongside virtualization; used for VM console/hostfwd relays
+            - `/charly-infrastructure:gocryptfs` — part of the `charly` candy; for encrypting VM disk storage
+            
+            ## Related Commands
+            
+            - `/charly-vm:vm` — VM lifecycle (build, create, start, stop, ssh, console, destroy); defaults to `qemu:///session` (`const libvirtSessionURI`, candy/plugin-vm/vm_phaseA_shims.go)
+            - `/charly-build:generate` — Containerfile generation; emits the supervisord `NN-virtualization.conf` fragment via `fragment_assembly` init model
+            - `/charly-image:layer` — candy authoring reference (tasks, vars, service blocks, tests syntax)
+            - `/charly-check:check` — declarative testing framework for the candy's `check:` block (file, service, command verbs)
+            
+            ## When to Use This Skill
+            
+            **MUST be invoked** when:
+            
+            - Adding VM support to any box (this candy donates the daemons + packages).
+            - Debugging `virsh -c qemu:///session` connection failures — the two
+              most common causes are supervisord not yet started the daemons (check
+              `supervisorctl status virtqemud`) or `/dev/kvm` not passed through
+              (check `ls -la /dev/kvm` inside the container).
+            - Running `charly vm` from inside a rootless container (the
+              supervisord-managed daemons here are what makes that work).
+            - Understanding why this candy is a service provider, not just a
+              package installer — it ships the supervisord programs + `require:
+              supervisord` + the deploy-scope tests on top of the QEMU/libvirt
+              packages.

@@ -1,0 +1,121 @@
+package marketplace
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+)
+
+// generate.go — the orchestrator. Both `charly marketplace generate` and `drift` build the SAME
+// emissions map (readKinds → buildModel → buildEmissions); generate prunes + writes it, drift
+// compares it byte-for-byte with the committed tree and fails closed on any difference.
+
+func generate(root string) error {
+	ks, err := readKinds(root)
+	if err != nil {
+		return err
+	}
+	families, err := buildModel(ks)
+	if err != nil {
+		return err
+	}
+	em, err := buildEmissions(root, ks, families)
+	if err != nil {
+		return err
+	}
+	if err := pruneGenerated(root, families, ks); err != nil {
+		return fmt.Errorf("prune generated: %w", err)
+	}
+	if err := em.writeAll(root); err != nil {
+		return fmt.Errorf("write generated: %w", err)
+	}
+	applyHookModes(root, ks)
+	// The setup launcher is a documented ./setup <harness> <profile> entry point (the README's
+	// contract) — it must be executable (the emissions map carries bytes only).
+	if err := os.Chmod(filepath.Join(root, "plugins", "setup"), 0o755); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("chmod plugins/setup: %w", err)
+	}
+	report(root, em, families)
+	return nil
+}
+
+// buildEmissions is the single emission pipeline both generate and drift run: every artifact,
+// keyed by repo-root-relative path.
+func buildEmissions(root string, ks *kindSet, families []family) (emissions, error) {
+	em := emissions{}
+	emitSkills(em, families)
+	emitPluginsJSON(em, families)
+	emitMarketplace(em, ks, families)
+	if err := emitHooks(em, ks, root); err != nil {
+		return nil, err
+	}
+	if err := emitDispatcher(em, root, families); err != nil {
+		return nil, err
+	}
+	emitSetup(em)
+	return em, nil
+}
+
+// drift runs the same pipeline in memory and compares with the on-disk generated artifacts.
+// Any difference is a hard failure (exit 1) with a diff summary — the CI gate, the docs:drift
+// model. It never writes.
+func drift(root string) error {
+	ks, err := readKinds(root)
+	if err != nil {
+		return err
+	}
+	families, err := buildModel(ks)
+	if err != nil {
+		return err
+	}
+	em, err := buildEmissions(root, ks, families)
+	if err != nil {
+		return err
+	}
+	var diffs []string
+	for rel := range em {
+		want := em[rel]
+		got, err := readOnDisk(root, rel)
+		if err != nil {
+			return err
+		}
+		if !bytesEqual(got, want) {
+			diffs = append(diffs, rel)
+		}
+	}
+	// Files that are currently generated (header/known-path) but absent from the emissions map
+	// are stale orphans — report them too (a removed source entity must disappear).
+	scanned, err := scanGenerated(root, families, ks)
+	if err != nil {
+		return err
+	}
+	for _, rel := range scanned {
+		if _, in := em[rel]; !in {
+			diffs = append(diffs, rel+" (stale)")
+		}
+	}
+	if len(diffs) == 0 {
+		fmt.Printf("marketplace drift: clean (%d artifact(s) match the committed tree)\n", len(em))
+		return nil
+	}
+	sort.Strings(diffs)
+	return fmt.Errorf("marketplace drift: %d generated artifact(s) are stale:\n  %s\nrun `charly marketplace generate`",
+		len(diffs), strings.Join(diffs, "\n  "))
+}
+
+// report prints a short summary of what was emitted.
+func report(root string, em emissions, families []family) {
+	fmt.Printf("marketplace generate: wrote %d artifact(s) across %d family(ies)\n", len(em), len(families))
+	var paths []string
+	for rel := range em {
+		paths = append(paths, rel)
+	}
+	sort.Strings(paths)
+	for _, rel := range paths {
+		if !strings.HasPrefix(rel, ".claude") && !strings.HasPrefix(rel, "CLAUDE.md") && !strings.HasPrefix(rel, "AGENTS.md") {
+			fmt.Printf("  %s\n", filepath.ToSlash(rel))
+		}
+	}
+}

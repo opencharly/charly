@@ -1,0 +1,36 @@
+plugin-marketplace:
+    candy:
+        version: 2026.218.1200
+        description: |-
+            RUNTIME (out-of-process) charly plugin serving `charly marketplace …` — the generator
+            that regenerates the ENTIRE `charly-plugins` marketplace + harness surface from candy
+            config, the plugins→candies migration's deliverable. It reads every candy's `skill:`
+            / `hook:` / `marketplace:` kind entities (the candywalk discovery), aggregates them
+            by marketplace family, and emits: plugins/<family>/skills/*/SKILL.md + references/*.md,
+            plugins/<family>/agents/*.md, per-family .claude-plugin/plugin.json + .codex-plugin/
+            plugin.json + .mcp.json, plugins/.claude-plugin/marketplace.json + plugins/profiles.json,
+            the .claude/settings.json plugin-owned keys, .claude/hooks/* (from hook entities),
+            the generated R0 dispatcher section in CLAUDE.md/AGENTS.md, and the plugins/setup
+            launcher. `charly marketplace drift` is the fail-closed no-op gate (the docs:drift
+            model); a stale mirror is a hard failure.
+
+            PLACEMENT — deliberately NOT listed in charly/charly.yml compiled_plugins. This is a
+            DEV-TIME generator, run on a contributor's machine to regenerate the harness surface
+            and nowhere else, so it has no business inside every shipped static charly binary. The
+            generator is self-contained — it reads files and writes files, never reaching the host
+            reverse channel — which is what makes the out-of-process placement free here (the same
+            property that lets `charly docs` and `charly migrate` run in either placement).
+
+            HAND-AUTHORED, NEVER TOUCHED: plugins/README.md, plugins/CHANGELOG/, plugins/CLAUDE.md,
+            plugins/LICENSE, plugins/scripts/squash_body.py, plugins/kimi-user-config.toml, and the
+            hand-owned keys of .claude/settings.json (permissions, env, teammateMode, …).
+        plugin:
+            source: github.com/opencharly/charly/candy/plugin-marketplace
+            providers:
+                - command:marketplace
+        plan:
+            - check: the marketplace command plugin ships a buildable Go module (go.mod + the provider package); the full generate → drift round trip is exercised by the live R10 bed (check-marketplace) and the plugin's own golden tests
+              id: marketplace-module-present
+              context:
+                - build
+              command: "true"

@@ -1,0 +1,116 @@
+charly-ollama:
+    candy:
+        version: 2026.218.1200
+        description: |-
+            Metadata concept candy owning the charly-ollama skills whose names have no namesake candy (ollama LLM-server image). Owns its family's `skill:` kind entities (sibling nodes in this file) — the
+            plugins→candies migration; candy/plugin-marketplace regenerates the plugins/ corpus
+            from them.
+        plan:
+            - run: this documentation-only candy ships no install content (it carries the family's skill/hook/marketplace entities); validate-satisfying no-op
+              command: "true"
+              context:
+                - build
+            - check: the ollama concept candy's skill entities are present and generated into plugins/ollama/skills
+              id: charly-ollama-present
+              context:
+                - build
+              command: "true"
+
+ollama-layer-skill:
+    skill:
+        name: ollama-layer
+        family: ollama
+        owner: charly-ollama
+        description: |-
+            Ollama LLM server on port 11434 with CUDA GPU support and model persistence.
+            Use when working with Ollama, LLM serving, or local AI model inference.
+        content: |-
+            # ollama -- Local LLM inference server
+            
+            ## Candy Properties
+            
+            | Property | Value |
+            |----------|-------|
+            | Dependencies | `cuda`, `supervisord` |
+            | Ports | 11434 |
+            | Volumes | `models` -> `~/.ollama` |
+            | Aliases | `ollama` -> `ollama` |
+            | Service | `ollama` (supervisord) |
+            | Install files | `task:` |
+            
+            ## Environment Variables
+            
+            | Variable | Value |
+            |----------|-------|
+            | `OLLAMA_HOST` | `0.0.0.0` |
+            | `OLLAMA_MODELS` | `~/.ollama/models` |
+            
+            ## Service Environment (injected into other containers)
+            
+            | Variable | Template Value | Resolved Example |
+            |----------|---------------|-----------------|
+            | `OLLAMA_HOST` | `http://{{.ContainerName}}:11434` | `http://charly-ollama:11434` |
+            
+            Pod-aware: same-container consumers receive `http://localhost:11434`, cross-container consumers receive `http://charly-ollama:11434`. When `charly config ollama` runs, `OLLAMA_HOST` is automatically injected into the global `charly.yml` env. Use `charly config ollama --update-all` to propagate to already-deployed services immediately.
+            
+            See `/charly-image:layer` for `env_provide` field docs and `/charly-core:charly-config` for `--update-all`.
+            
+            ## Usage
+            
+            ```yaml
+            # charly.yml
+            ollama:
+              candy:
+                - ollama
+            ```
+            
+            ```bash
+            charly alias install ollama    # install host 'ollama' command
+            ollama run llama3          # uses the alias
+            ```
+            
+            ## Used In Boxes
+            
+            - `/charly-ollama:ollama`
+            
+            ## Cross-Container Integration
+            
+            The `env_provide` mechanism makes `OLLAMA_HOST` available to all containers. The `hermes` candy auto-detects this variable and configures itself to use local Ollama as its LLM provider (highest priority in the auto-detection chain: `OLLAMA_HOST` > `OLLAMA_API_KEY` > `OPENROUTER_API_KEY`). See `/charly-hermes:hermes` for details on the auto-provider-configuration.
+            
+            ## Tests
+            
+            The candy ships its acceptance steps in its `plan:`,
+            baked into the `ai.opencharly.description` OCI label (see `/charly-check:check`
+            for the full schema). Each step is one inline Op — a probe is a `check:`
+            step — and its `context:` list gates where it runs:
+            
+            - **`context: [build]`** (run under `charly check box`):
+              - `ollama-binary` — `/usr/bin/ollama` exists
+            - **`context: [deploy]`** (run under `charly check live` against a live service;
+              uses `${HOST_PORT:11434}` / `${CONTAINER_IP}` so deploy-time port remapping
+              works unchanged):
+              - `ollama-tags-api` — `GET http://${CONTAINER_IP}:${HOST_PORT:11434}/api/tags` returns 200
+              - `ollama-version` — `ollama --version` stdout matches `^ollama version`
+            
+            ## Related Candies
+            
+            - `/charly-distros:cuda` -- CUDA toolkit dependency
+            - `/charly-infrastructure:supervisord` -- process manager dependency
+            - `/charly-openclaw:openclaw` -- AI gateway that can use Ollama as backend
+            - `/charly-hermes:hermes` -- AI agent that auto-detects `OLLAMA_HOST` for local Ollama provider
+            
+            ## Related Commands
+            
+            - `/charly-core:charly-config` — Deploy with quadlet (secrets, volumes, env_provide injection)
+            - `/charly-core:start` — Start the Ollama service
+            - `/charly-core:service` — Manage Ollama service inside container
+            
+            ## When to Use This Skill
+            
+            Use when the user asks about:
+            
+            - Ollama setup or model management
+            - LLM serving or inference
+            - Port 11434 configuration
+            - Ollama model storage volume
+            - The `ollama` host alias

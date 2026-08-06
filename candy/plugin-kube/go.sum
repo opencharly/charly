@@ -89,6 +89,10 @@ github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 h1:C3w9PqII01/Oq
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822/go.mod h1:+n7T8mK8HuQTcFwEeznm/DIxMOiR9yIdICNftLE1DvQ=
 github.com/oklog/run v1.1.0 h1:GEenZ1cK0+q0+wsJew9qUg/DyD8k3JzYsZAi5gYi2mA=
 github.com/oklog/run v1.1.0/go.mod h1:sVPdnTZT1zYwAJeCMu2Th4T21pA3FPOQRfWjQlk7DVU=
+github.com/opencharly/charly/candy/plugin-egress v0.0.0-20260806143330-d5823a147477 h1:vk/HmDY2waNOU7X+jMS4gcpXKcwQPjKC59EOuiNmt6E=
+github.com/opencharly/charly/candy/plugin-egress v0.0.0-20260806143330-d5823a147477/go.mod h1:kngqHaDdp0T1XRjn7eOKTaaaqO/3YhwJ1W/Y7MDTkF8=
+github.com/opencharly/charly/candy/plugin-init v0.0.0-20260806143330-d5823a147477 h1:Ja0ORGyMASnqX+vyCM4PDokJogZrQ6RTwBXoZJOT1JY=
+github.com/opencharly/charly/candy/plugin-init v0.0.0-20260806143330-d5823a147477/go.mod h1:9DYP1ZBg1A4HeyOvNj0jhGTLj2y6X3p4eg4xv44fM1g=
 github.com/opencontainers/go-digest v1.0.0 h1:apOUWs51W5PlhuyGyz9FCeeBIOUDA/6nW8Oi/yOhh5U=
 github.com/opencontainers/go-digest v1.0.0/go.mod h1:0JzlMkj0TRzQZfJkVvzbP0HBR3IKzErnv2BNG4W4MAM=
 github.com/opencontainers/image-spec v1.1.1 h1:y0fUlFfIZhPF1W537XOLg0/fcx6zcHCJwooC2xJA040=

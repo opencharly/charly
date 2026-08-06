@@ -30,3 +30,68 @@ libnotify:
                 - contains: notify-send
               command: notify-send --version 2>&1
             - agent-check: a notification sent with notify-send appears in the running notification daemon on the desktop
+
+libnotify-skill:
+    skill:
+        name: libnotify
+        family: selkies
+        owner: libnotify
+        description: |-
+            Desktop notification client library providing notify-send CLI.
+            Use when working with notify-send, libnotify, or shell-based notifications.
+        content: |-
+            # libnotify -- Desktop notification client
+            
+            ## Candy Properties
+            
+            | Property | Value |
+            |----------|-------|
+            | Dependencies | `dbus` |
+            
+            ## Packages
+            
+            - `libnotify` (RPM) -- provides `notify-send` CLI and `libnotify.so` shared library
+            
+            ## Usage
+            
+            ```yaml
+            # charly.yml
+            my-image:
+              candy:
+                - libnotify
+            ```
+            
+            ## Purpose
+            
+            Provides `notify-send` as a convenience CLI for sending desktop notifications from shell scripts and manual use. The `dbus: notify` check verb drives the session bus with `gdbus` instead and does NOT depend on this candy.
+            
+            ### When to use `notify-send` vs the `dbus: notify` verb
+            
+            | | `notify-send` | `dbus: notify` verb |
+            |---|--------------|-----------------|
+            | Requires | `libnotify` candy | `gdbus` (from `glib2`) in the venue |
+            | Implementation | Shell command, libnotify C library | `gdbus` over the executor reverse channel (out-of-process `candy/plugin-dbus`) |
+            | Use case | Shell scripts inside container | Check-plan desktop-notification steps (the `charly cmd` completion popup uses the same `gdbus` path host-side) |
+            
+            ## Related Candies
+            
+            - `/charly-infrastructure:dbus-layer` -- D-Bus session bus (required dependency)
+            - `/charly-selkies:swaync` -- notification daemon to display the notifications
+            - `/charly-check:dbus` -- alternative: the `dbus: notify` check verb (served out-of-process by `candy/plugin-dbus`)
+            
+            ## Used In Boxes
+            
+            Not used in any current box definition. Optional notification CLI -- prefer the `dbus: notify` check verb (driven via `gdbus`).
+            
+            ## When to Use This Skill
+            
+            Use when the user asks about:
+            
+            - `notify-send` inside containers
+            - Shell-based notification scripts
+            - The libnotify library or package
+            
+            ## Related
+            
+            - `/charly-image:layer` — candy authoring reference (`charly.yml` schema, task verbs, service declarations)
+            - `/charly-check:check` — declarative testing (`check:` block, `charly check box`, `charly check live`)
