@@ -129,6 +129,7 @@ func TestGenerateWiresLeafGenerators(t *testing.T) {
 	}{
 		{page: "index.md", caller: "generateLanding"},
 		{page: "grievances.md", caller: "generateGrievances"},
+		{page: "liberation.md", caller: "generateLiberation"},
 	} {
 		raw, err := os.ReadFile(filepath.Join(out, tc.page))
 		if err != nil {
