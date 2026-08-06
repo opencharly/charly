@@ -14,6 +14,7 @@ import (
 type fakeResponse struct {
 	matchPrefix string
 	stdout      string
+	stderr      string
 	exit        int
 }
 
@@ -24,7 +25,7 @@ type fakeExec struct{ responses []fakeResponse }
 func (f *fakeExec) RunCapture(_ context.Context, cmd string) (string, string, int, error) {
 	for _, r := range f.responses {
 		if strings.HasPrefix(cmd, r.matchPrefix) || strings.Contains(cmd, r.matchPrefix) {
-			return r.stdout, "", r.exit, nil
+			return r.stdout, r.stderr, r.exit, nil
 		}
 	}
 	return "", "no fake response for: " + cmd, 127, nil
@@ -85,4 +86,67 @@ func TestPackageVerb(t *testing.T) {
 			t.Errorf("expected pass, got %+v", res)
 		}
 	})
+}
+
+// TestPackageVerb_InfraFailureNotContentFalse proves the package verb distinguishes a
+// genuine "not installed" (the probe ran, printed ABSENT) from an EXEC/INFRA failure (the
+// podman exec died — store-write error exit 255, killed signal — so no INSTALLED/ABSENT
+// token was printed). The infra failure must surface as such, NEVER as the false content
+// verdict "installed=false, want true" (the check-{debian,jupyter-ml}-coder
+// store-contention mislabel). Relocated from charly/plugin_package_relocated_test.go's
+// TestPackageVerb_InfraFailureNotContentFalse (the check-role behavior half; the dispatch
+// wiring stays in charly).
+func TestPackageVerb_InfraFailureNotContentFalse(t *testing.T) {
+	run := func(fe *fakeExec, wantInstalled bool) kit.Result {
+		return verb{}.RunVerb(context.Background(), &fakeCC{exec: fe},
+			&spec.Op{PluginInput: map[string]any{"package": "bash", "installed": wantInstalled}})
+	}
+
+	// Genuine absent: probe printed ABSENT, exit 0. installed:false → pass.
+	if res := run(&fakeExec{responses: []fakeResponse{{matchPrefix: "if rpm", stdout: "ABSENT", exit: 0}}}, false); res.Status != kit.StatusPass {
+		t.Fatalf("absent-as-expected: want pass, got %v: %s", res.Status, res.Message)
+	}
+	// Genuine absent but wanted installed → a real content FAIL (installed=false).
+	if res := run(&fakeExec{responses: []fakeResponse{{matchPrefix: "if rpm", stdout: "ABSENT", exit: 0}}}, true); res.Status != kit.StatusFail || !strings.Contains(res.Message, "installed=false") {
+		t.Fatalf("absent-but-wanted: want a content fail 'installed=false', got %v: %s", res.Status, res.Message)
+	}
+	// INFRA failure: exec died (exit 255, store error, no token). Must NOT be
+	// reported as installed=false — surfaced as an exec/infra failure.
+	res := run(&fakeExec{responses: []fakeResponse{{matchPrefix: "if rpm", stdout: "", exit: 255, stderr: "saving container state: writing container"}}}, true)
+	if res.Status != kit.StatusFail {
+		t.Fatalf("infra failure: want fail, got %v", res.Status)
+	}
+	if strings.Contains(res.Message, "installed=false") {
+		t.Fatalf("infra failure MUST NOT be a false content verdict; got: %s", res.Message)
+	}
+	if !strings.Contains(res.Message, "exec/infra failure") {
+		t.Fatalf("infra failure must be labeled as such; got: %s", res.Message)
+	}
+}
+
+// TestPackageVerb_RenderProvisionScript: the ACT role renders the install shell under
+// whichever package manager the live target runs. Relocated from
+// charly/plugin_package_relocated_test.go's TestRelocatedPackageVerb_DispatchesViaKit (the
+// act-role behavior half; the dispatch wiring stays in charly).
+func TestPackageVerb_RenderProvisionScript(t *testing.T) {
+	script, ok := verb{}.RenderProvisionScript(&spec.Op{PluginInput: map[string]any{"package": "bash"}}, []string{"fedora"})
+	if !ok || !strings.Contains(script, "dnf install") || !strings.Contains(script, "pacman -S") {
+		t.Fatalf("act: want an install shell, got ok=%v %q", ok, script)
+	}
+}
+
+// TestPackageVerb_StepProvider: the TYPED-STEP role names the SystemPackages step kind and
+// decodes plugin_input (package + cross-distro package_map) into the StepDescriptor the
+// host materializer consumes. Relocated from charly/plugin_package_relocated_test.go's
+// TestRelocatedPackageVerb_DispatchesViaKit (the step-role behavior half; the dispatch
+// wiring + the materializer stay in charly).
+func TestPackageVerb_StepProvider(t *testing.T) {
+	got := verb{}.StepKind()
+	if got != kit.StepKindSystemPackages {
+		t.Fatalf("StepKind = %v, want StepKindSystemPackages", got)
+	}
+	desc := verb{}.ConstructStepDescriptor(&spec.Op{PluginInput: map[string]any{"package": "openssh", "package_map": map[string]any{"fedora": "openssh-server"}}})
+	if desc.SystemPackages == nil || desc.SystemPackages.Package != "openssh" || desc.SystemPackages.PackageMap["fedora"] != "openssh-server" {
+		t.Fatalf("StepDescriptor = %+v, want Package=openssh PackageMap[fedora]=openssh-server", desc)
+	}
 }

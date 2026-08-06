@@ -74,3 +74,30 @@ func TestServiceVerb(t *testing.T) {
 		}
 	})
 }
+
+// TestServiceVerb_RenderProvisionScript: the ACT role renders the enable + start shell
+// under whichever init the live target runs. Relocated from
+// charly/plugin_service_relocated_test.go's TestRelocatedServiceVerb_DispatchesViaKit (the
+// act-role behavior half; the dispatch wiring stays in charly).
+func TestServiceVerb_RenderProvisionScript(t *testing.T) {
+	script, ok := verb{}.RenderProvisionScript(&spec.Op{PluginInput: map[string]any{"service": "nginx"}}, nil)
+	if !ok || !strings.Contains(script, "systemctl enable") || !strings.Contains(script, "supervisorctl") {
+		t.Fatalf("act: want an enable shell, got ok=%v %q", ok, script)
+	}
+}
+
+// TestServiceVerb_StepProvider: the TYPED-STEP role names the ServicePackaged step kind
+// and decodes plugin_input into the StepDescriptor the host materializer consumes.
+// Relocated from charly/plugin_service_relocated_test.go's
+// TestRelocatedServiceVerb_DispatchesViaKit (the step-role behavior half; the dispatch
+// wiring + the materializer stay in charly).
+func TestServiceVerb_StepProvider(t *testing.T) {
+	got := verb{}.StepKind()
+	if got != kit.StepKindServicePackaged {
+		t.Fatalf("StepKind = %v, want StepKindServicePackaged", got)
+	}
+	desc := verb{}.ConstructStepDescriptor(&spec.Op{PluginInput: map[string]any{"service": "nginx"}})
+	if desc.ServicePackaged == nil || desc.ServicePackaged.Unit != "nginx" || !desc.ServicePackaged.Enable {
+		t.Fatalf("StepDescriptor = %+v, want Unit=nginx Enable=true", desc)
+	}
+}

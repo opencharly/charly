@@ -184,3 +184,30 @@ func TestCommandVerb_NormalExitIsUnaffected(t *testing.T) {
 		t.Errorf("message = %q, want the actual exit code", res.Message)
 	}
 }
+
+// TestCommandVerb_HostSideForeground: the host-side foreground path (from_host: true) runs
+// the command via os/exec on the host (NOT the container executor) and asserts the stdout
+// matcher. Relocated from charly/plugin_command_relocated_test.go's
+// TestRelocatedCommandVerb_DispatchesViaKit (the check-role behavior half; the dispatch
+// wiring stays in charly).
+func TestCommandVerb_HostSideForeground(t *testing.T) {
+	res := verb{}.RunVerb(context.Background(), &fakeCC{mode: kit.ModeLive},
+		&spec.Op{PluginInput: map[string]any{"command": "echo charly-cmd-ok", "from_host": true},
+			Stdout: spec.MatcherList{{Op: "contains", Value: "charly-cmd-ok"}}})
+	if res.Status != kit.StatusPass {
+		t.Fatalf("host-foreground: want pass, got %v: %s", res.Status, res.Message)
+	}
+}
+
+// TestCommandVerb_Background: the host-side background path (from_host: true +
+// background: true) starts the command fire-and-forget, registers the PID via
+// AddBackground, and reports a backgrounded pid. Relocated from
+// charly/plugin_command_relocated_test.go's TestRelocatedCommandVerb_DispatchesViaKit
+// (the check-role behavior half; the dispatch wiring stays in charly).
+func TestCommandVerb_Background(t *testing.T) {
+	res := verb{}.RunVerb(context.Background(), &fakeCC{mode: kit.ModeLive},
+		&spec.Op{PluginInput: map[string]any{"command": "sleep 0.2", "from_host": true, "background": true}})
+	if res.Status != kit.StatusPass || !strings.Contains(res.Message, "backgrounded") {
+		t.Fatalf("background: want pass + backgrounded, got %v: %s", res.Status, res.Message)
+	}
+}

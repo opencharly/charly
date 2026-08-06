@@ -52,3 +52,15 @@ func TestUnixGroupVerb(t *testing.T) {
 		t.Errorf("got %+v", res)
 	}
 }
+
+// TestUnixGroupVerb_RenderProvisionScript: the ACT role renders an idempotent
+// `getent group || groupadd` with the given gid. Relocated from
+// charly/plugin_unix_group_relocated_test.go's TestRelocatedUnixGroupVerb_DispatchesViaKit
+// (the act-role behavior half; the dispatch wiring stays in charly).
+func TestUnixGroupVerb_RenderProvisionScript(t *testing.T) {
+	script, ok := verb{}.RenderProvisionScript(
+		&spec.Op{PluginInput: map[string]any{"unix_group": "svc", "gid": 1500}}, nil)
+	if !ok || !strings.Contains(script, "groupadd") || !strings.Contains(script, "svc") {
+		t.Fatalf("act: want a groupadd script, got ok=%v %q", ok, script)
+	}
+}

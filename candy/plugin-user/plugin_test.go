@@ -61,3 +61,15 @@ func TestUserVerb_UIDMismatch(t *testing.T) {
 		t.Errorf("expected fail, got %+v", res)
 	}
 }
+
+// TestUserVerb_RenderProvisionScript: the ACT role renders an idempotent
+// `id || useradd` with the given uid/home/shell. Relocated from
+// charly/plugin_user_relocated_test.go's TestRelocatedUserVerb_DispatchesViaKit (the
+// act-role behavior half; the dispatch wiring stays in charly).
+func TestUserVerb_RenderProvisionScript(t *testing.T) {
+	script, ok := verb{}.RenderProvisionScript(
+		&spec.Op{PluginInput: map[string]any{"user": "svc", "uid": 1500, "home": "/home/svc", "shell": "/bin/sh"}}, nil)
+	if !ok || !strings.Contains(script, "useradd") || !strings.Contains(script, "svc") {
+		t.Fatalf("act: want a useradd script, got ok=%v %q", ok, script)
+	}
+}

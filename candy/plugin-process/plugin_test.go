@@ -67,4 +67,11 @@ func TestProcessVerb(t *testing.T) {
 			t.Errorf("got %+v", res)
 		}
 	})
+	t.Run("absent but wanted running", func(t *testing.T) {
+		cc := &fakeCC{exec: &fakeExec{responses: []fakeResponse{{matchPrefix: "pgrep -x 'absent'", exit: 1}}}}
+		res := verb{}.RunVerb(context.Background(), cc, &spec.Op{PluginInput: map[string]any{"process": "absent", "running": true}})
+		if res.Status != kit.StatusFail {
+			t.Errorf("got %+v", res)
+		}
+	})
 }
