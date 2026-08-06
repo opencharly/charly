@@ -23,6 +23,8 @@ build-skill:
         owner: charly-build
         description: |-
             MUST be invoked before any work involving: building container images, charly box build command, pushing to registries, merging layers, build caches, or Containerfile generation.
+        triggers:
+            - "`charly box build` / `charly box generate` / Containerfile"
         content: |
             # charly box build -- Building Container Images
 
@@ -1094,6 +1096,8 @@ docs-skill:
             MUST be invoked before any work involving the `charly docs` command, the docs/ submodule's
             generated trees, `task docs:sync` / `task docs:drift`, the candy/plugin-docs runtime plugin,
             or the cross-reference rewriting that turns `/charly-<plugin>:<skill>` into site links.
+        triggers:
+            - "`charly docs` / the opencharly.ai site / the `docs/` submodule / `task docs:sync`/`docs:drift` / Starlight/Astro / `candy/plugin-docs` (runtime plugin) or `candy/docs-site`"
         content: |
             # docs — generate the opencharly.ai site
 
@@ -1269,6 +1273,8 @@ generate-skill:
         description: |-
             Containerfile generation from charly.yml and layers.
             MUST be invoked before any work involving: charly box generate command, Containerfile generation, .build/ directory contents, the task-verb emission pipeline, or understanding generated output.
+        triggers:
+            - "`charly box build` / `charly box generate` / Containerfile"
         content: |
             # charly box generate -- Containerfile Generation
 
@@ -1853,6 +1859,8 @@ migrate-skill:
         owner: charly-build
         description: |-
             MUST be invoked before any work involving: the `charly migrate` command (the single idempotent migration that brings any opencharly config up to the latest schema CalVer), the CalVer schema-version stamp (`version: YYYY.DDD.HHMM`), the CUE-anchored HEAD/floor (`spec/schema/version.cue` → `#SchemaVersion`/`#SchemaFloor`), the declarative migration table (`candy/plugin-migrate/migrations.cue`, applied by the op-walker in `candy/plugin-migrate/engine.go`), the `LatestSchemaVersion()` load-time gate, or adding a new schema cutover as a migration-table entry.
+        triggers:
+            - "`charly migrate` / schema migration / legacy \u2192 latest CalVer / CalVer schema version"
         content: |
             # charly migrate — single-command schema migration
 
@@ -2315,6 +2323,8 @@ reconcile-skill:
             "referenced at multiple versions" warnings — `charly box reconcile` aligns every
             pin of a repo to one version (clearing the warnings). Invoked as
             `charly box reconcile`.
+        triggers:
+            - "`charly box reconcile` / cross-repo `@github` pin alignment / candy-version-mismatch cleanup"
         content: |
             # charly box reconcile — align cross-repo `@github` version pins
 
@@ -2408,6 +2418,8 @@ secrets-skill:
         owner: charly-build
         description: |-
             MUST be invoked before any work involving: charly secrets commands, Secret Service / config-file credential management, GPG-encrypted .secrets files, credential import/export, or secret administration.
+        triggers:
+            - "Secret management / `charly secrets` / Secret Service / GPG `.secrets`"
         content: |
             # Secrets - Secret Service & GPG Credential Management
 
@@ -3033,6 +3045,8 @@ validate-skill:
         owner: charly-build
         description: |-
             MUST be invoked before any work involving: charly box validate command, validation rules, common validation errors, or checking charly.yml and layer definitions.
+        triggers:
+            - "`charly box validate` / schema error"
         content: |
             # charly box validate -- Validation Commands
 

@@ -22,6 +22,8 @@ check-k8s-skill:
         owner: charly-kubernetes
         description: |-
             Kubernetes cluster-probe declarative check verb — the `kube:` check verb (nodes, pods, ingress, storage class, addon health, apply/delete, and arbitrary resource GETs) served out-of-process by the candy/plugin-kube plugin (vendored client-go; no external kubectl required).
+        triggers:
+            - "the `kube:` check verb / Kubernetes cluster probing from a candy/box plan (out-of-process plugin; nodes, pods, ingress, wait-ready, storageclass, addons, apply/delete, raw resource GETs)"
         content: |
             MUST be invoked before any work involving: the declarative `kube:` check
             verb, cluster-readiness probes from a candy/box plan, ingress / storage

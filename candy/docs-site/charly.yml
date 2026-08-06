@@ -194,6 +194,8 @@ docs-site-skill:
             check-docs R10 bed that builds and proves it.
             Use when working with the docs-site candy, the docs-site-app box, the check-docs bed, or when
             the documentation site fails to build.
+        triggers:
+            - "`charly docs` / the opencharly.ai site / the `docs/` submodule / `task docs:sync`/`docs:drift` / Starlight/Astro / `candy/plugin-docs` (runtime plugin) or `candy/docs-site`"
         content: |
             # docs-site — build the opencharly.ai site inside a box
             

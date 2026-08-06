@@ -393,6 +393,8 @@ cachyos-bootstrap-vm-skill:
             cachyos-pacstrap-builder + pacstrap, btrfs rootfs, uefi-insecure. Plus the
             disposable check-cachyos-vm deploy. Lives in the opencharly/distro-cachyos submodule.
             MUST be invoked before editing cachyos-vm or its check bed.
+        triggers:
+            - "CachyOS images / `cachyos*` / `charly-cachyos` workstation profile / `box/cachyos` submodule"
         content: |
             # cachyos (VM)
 
@@ -493,6 +495,8 @@ debian-debootstrap-vm-skill:
             debian-debootstrap-builder + debootstrap, ext4 rootfs, uefi-insecure. Plus the
             disposable check-debian-debootstrap-vm deploy. Lives in the opencharly/distro-debian submodule.
             MUST be invoked before editing debian-debootstrap or its check bed.
+        triggers:
+            - "Debian images / `debian*` / `box/debian` submodule"
         content: |
             # debian (VM)
 
@@ -567,6 +571,8 @@ ubuntu-debootstrap-vm-skill:
             ubuntu-debootstrap-builder + debootstrap, ext4 rootfs, uefi-insecure. Plus the
             disposable check-ubuntu-debootstrap-vm deploy. Lives in the opencharly/distro-ubuntu submodule.
             MUST be invoked before editing ubuntu-debootstrap or its check bed.
+        triggers:
+            - "Ubuntu images / `ubuntu*` / `box/ubuntu` submodule"
         content: |
             # ubuntu (VM)
 
@@ -641,6 +647,9 @@ vm-skill:
             MUST be invoked before any work involving: virtual machines, charly vm commands,
             kind:vm entities in charly.yml, cloud_image vs bootc source types,
             libvirt/QEMU backends, BIOS vs UEFI firmware, virtio-gpu video, or VM lifecycle.
+        triggers:
+            - "`charly update` / `charly vm *` / VM entities in `vm.yml` or `vm:`"
+            - "Managed `~/.config/charly/ssh_config` fragment / `charly vm create` writes Host stanza"
         content: |
             # VM — Virtual Machine Management
 

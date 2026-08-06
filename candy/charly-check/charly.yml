@@ -23,6 +23,8 @@ adb-skill:
         owner: charly-check
         description: |-
             MUST be invoked before any work involving: the `adb:` check verb (declarative, dispatched to the out-of-process plugin candy/plugin-adb), Android Debug Bridge interaction, APK install/uninstall, device shell command execution, system property reads, screencap, logcat tailing — anywhere the goal is to drive a running Android emulator from outside the container via the host-published ADB server port.
+        triggers:
+            - "the `adb:` check verb / Android Debug Bridge probing from a candy/box plan (out-of-process plugin; devices, shell, install, getprop, screencap, logcat, wait-for-device)"
         content: |
             # ADB — Android Debug Bridge
 
@@ -270,6 +272,8 @@ android-skill:
         owner: charly-check
         description: |-
             MUST be invoked before any work involving: the `kind: android` schema kind, a `target: android` deploy (the external `deploy:android` substrate), the `apk:` layer package format (installing Android apps declaratively), the android deploy preresolver, an in-pod emulator OR a remote/physical adb-endpoint device, or nested `pod → android` deployment. The first-class Android device + app surface that sits above the `adb:`/`appium:` check verbs.
+        triggers:
+            - "`kind: android` device / `target: android` deploy / `apk:` package format in candies / installing Android apps declaratively / remote-or-emulator adb endpoint / nested `pod \u2192 android`"
         content: |
             # kind: android + the `apk` package format
 
@@ -501,6 +505,8 @@ appium-skill:
         owner: charly-check
         description: |-
             MUST be invoked before any work involving: the `appium:` check verb (declarative, dispatched to the out-of-process plugin candy/plugin-appium), Android UI automation, WebDriver session management, APK install via Appium, element find/click/send-keys, mobile-specific WebDriver caps — anywhere the goal is to drive a running Appium 3.x server inside a container via W3C WebDriver from outside.
+        triggers:
+            - "the `appium:` check verb / Android UI automation (out-of-process plugin) / W3C WebDriver sessions, element introspection, the gesture/app/key/device sugar groups, the generic `execute`/`raw` escape hatch"
         content: |
             # Appium — W3C WebDriver client
 
@@ -1510,6 +1516,13 @@ check-skill:
             operation. Covers image/live/run, the plugin-provided live probe verbs,
             deterministic verb catalog, runtime variables, overlays, plan inclusion,
             cross-deployment probing, and the bounded AI-iteration harness.
+        triggers:
+            - "`charly check *` (ANY check verb, incl. `charly check box`) / `charly check run <bed>` (the disposable-deploy R10 bed) / authoring `disposable: true` check beds / `charly check live` / the probe verbs (cdp/wl/dbus/vnc/mcp/record/spice/libvirt) / `iterate:` AI-agent scoring / `plan:` step authoring / `charlycheck/*` branches"
+            - "Agent Driven Evaluation (ADE) / `charly box feature run` / `charly check feature run` / `charly feature list/pending/validate` / authoring a candy's `plan:` + `description:` string / the agent grader for `agent-check:` steps"
+            - "the `adb:` check verb / Android Debug Bridge probing from a candy/box plan (out-of-process plugin; devices, shell, install, getprop, screencap, logcat, wait-for-device)"
+            - "the `appium:` check verb / Android UI automation (out-of-process plugin) / W3C WebDriver sessions, element introspection, the gesture/app/key/device sugar groups, the generic `execute`/`raw` escape hatch"
+            - "Verify a cutover by running the R10 beds (drive `charly check run <bed>`)"
+            - "Evaluate/audit a deployment config (image or deploy, yours)"
         content: |
             # Check — unified declarative + AI-iteration evaluation
 

@@ -1381,6 +1381,8 @@ clean-skill:
             sweep one-time makepkg leftovers.
             MUST be invoked before any work involving: charly clean, build-artifact retention,
             keep_images / keep_check_runs, image-tag pruning, or .check run cleanup.
+        triggers:
+            - "`charly clean` / build-artifact retention / `keep_images` / `keep_check_runs` / image-tag pruning / `.check` run cleanup"
         content: |
             # charly clean -- Build-artifact retention + cleanup
 
@@ -1612,6 +1614,10 @@ deploy-skill:
         owner: charly-core
         description: |-
             MUST be invoked before any work involving: `charly bundle add`/`charly bundle del` commands, quadlet generation, volume backing, tunnels (Tailscale/Cloudflare), `add_candy:` overlay, or per-machine deploy overlays.
+        triggers:
+            - "`charly bundle add/del` / pod or container deploys"
+            - "`kind: android` device / `target: android` deploy / `apk:` package format in candies / installing Android apps declaratively / remote-or-emulator adb endpoint / nested `pod \u2192 android`"
+            - "Disposable-flag semantics / `disposable: true` authorization / preemptible-flag / `requires_exclusive:` / `charly preempt` / exclusive host-resource arbitration (GPU passthrough contention)"
         content: |
             # Deploy - Deployment Configuration
 

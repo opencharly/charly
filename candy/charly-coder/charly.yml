@@ -444,6 +444,8 @@ debian-coder-skill:
             (`user`) with passwordless sudo. 143/0 tests pass.
             Use when working with the debian-coder box — or when comparing
             cross-distro parity across the four coder-family boxes.
+        triggers:
+            - "Debian images / `debian*` / `box/debian` submodule"
         content: |-
             # debian-coder
             
@@ -638,6 +640,8 @@ fedora-coder-skill:
             Use when working with the fedora-coder box — specifically any task that
             involves SSH-ing into a single container and having every tool a polyglot
             engineer reaches for during a working day already installed.
+        triggers:
+            - "Fedora images / `fedora*` / `box/fedora` submodule (incl. the GPU base `nvidia` / `python-ml` + `sway-browser-vnc`)"
         content: |-
             # fedora-coder
             
@@ -990,6 +994,8 @@ ubuntu-coder-skill:
             vocabulary's base_user declaration. 142/0/1-skip tests pass.
             Use when working with the ubuntu-coder box — especially when the
             `${USER}` / `${HOME}` / sudoers differ from the other three coder boxes.
+        triggers:
+            - "Ubuntu images / `ubuntu*` / `box/ubuntu` submodule"
         content: |-
             # ubuntu-coder
             

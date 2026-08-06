@@ -431,6 +431,8 @@ charly-fedora-skill:
             list as charly-arch. Includes NVIDIA GPU runtime.
             MUST be invoked before building, deploying, configuring, or troubleshooting
             the charly-fedora box.
+        triggers:
+            - "Fedora images / `fedora*` / `box/fedora` submodule (incl. the GPU base `nvidia` / `python-ml` + `sway-browser-vnc`)"
         content: |
             # charly-fedora
             
@@ -620,6 +622,8 @@ debian-builder-skill:
             cargo crates that land in the final runtime image via COPY --from.
             MUST be invoked before building, deploying, configuring, or troubleshooting
             the debian-builder box.
+        triggers:
+            - "Debian images / `debian*` / `box/debian` submodule"
         content: |
             # debian-builder
             
@@ -722,6 +726,8 @@ debian-debootstrap-skill:
             worked example of the from: builder:debootstrap pattern. Lives in the
             opencharly/distro-debian submodule (box/debian).
             MUST be invoked before building or troubleshooting debian-debootstrap.
+        triggers:
+            - "Debian images / `debian*` / `box/debian` submodule"
         content: |
             # debian-debootstrap
             
@@ -827,6 +833,8 @@ fedora-builder-skill:
             Builder image with pixi, Node.js, and C/C++ build toolchain. Used as the
             default builder for multi-stage image builds.
             MUST be invoked before building, deploying, configuring, or troubleshooting the fedora-builder box.
+        triggers:
+            - "Fedora images / `fedora*` / `box/fedora` submodule (incl. the GPU base `nvidia` / `python-ml` + `sway-browser-vnc`)"
         content: |
             # fedora-builder
             
@@ -911,6 +919,8 @@ fedora-nonfree-skill:
             Fedora with RPM Fusion non-free repositories enabled. Base for boxes
             needing codec or proprietary package support like immich.
             MUST be invoked before building, deploying, configuring, or troubleshooting the fedora-nonfree box.
+        triggers:
+            - "Fedora images / `fedora*` / `box/fedora` submodule (incl. the GPU base `nvidia` / `python-ml` + `sway-browser-vnc`)"
         content: |
             # fedora-nonfree
             
@@ -982,6 +992,8 @@ fedora-test-skill:
             Test box with Traefik reverse proxy and testapi service.
             Currently disabled. Used for development testing.
             MUST be invoked before building or troubleshooting the fedora-test box.
+        triggers:
+            - "Fedora images / `fedora*` / `box/fedora` submodule (incl. the GPU base `nvidia` / `python-ml` + `sway-browser-vnc`)"
         content: |
             # fedora-test
             
@@ -1426,6 +1438,8 @@ ubuntu-builder-skill:
             ubuntu:24.04 base image via the embedded distro vocabulary's base_user declaration).
             MUST be invoked before building, deploying, configuring, or troubleshooting
             the ubuntu-builder box.
+        triggers:
+            - "Ubuntu images / `ubuntu*` / `box/ubuntu` submodule"
         content: |
             # ubuntu-builder
             
@@ -1541,6 +1555,8 @@ ubuntu-debootstrap-skill:
             ubuntu-debootstrap-builder). Retained for offline/air-gapped builds. Lives in
             the opencharly/distro-ubuntu submodule (box/ubuntu).
             MUST be invoked before building or troubleshooting ubuntu-debootstrap.
+        triggers:
+            - "Ubuntu images / `ubuntu*` / `box/ubuntu` submodule"
         content: |
             # ubuntu-debootstrap
             
@@ -1788,6 +1804,8 @@ cachyos-skill:
             derivative. Owned by the opencharly/distro-cachyos submodule (box/cachyos);
             consumed by main's versa box via the `cachyos` import namespace.
             MUST be invoked before building, deploying, or troubleshooting cachyos boxes.
+        triggers:
+            - "CachyOS images / `cachyos*` / `charly-cachyos` workstation profile / `box/cachyos` submodule"
         content: |
             # cachyos
             
@@ -1956,6 +1974,8 @@ debian-skill:
             consumed by no main-repo box.
             MUST be invoked before building, deploying, configuring, or troubleshooting
             any Debian-based box.
+        triggers:
+            - "Debian images / `debian*` / `box/debian` submodule"
         content: |
             # debian
             
@@ -2057,6 +2077,8 @@ fedora-skill:
         description: |-
             Base Fedora 43 image. Root of the box hierarchy for all RPM-based boxes.
             MUST be invoked before building, deploying, configuring, or troubleshooting the fedora box.
+        triggers:
+            - "Fedora images / `fedora*` / `box/fedora` submodule (incl. the GPU base `nvidia` / `python-ml` + `sway-browser-vnc`)"
         content: |
             # fedora
             
@@ -2158,6 +2180,8 @@ ubuntu-skill:
             and the embedded distro.ubuntu vocabulary declares base_user to adopt it verbatim.
             MUST be invoked before building, deploying, configuring, or troubleshooting
             any Ubuntu-based box.
+        triggers:
+            - "Ubuntu images / `ubuntu*` / `box/ubuntu` submodule"
         content: |
             # ubuntu
             

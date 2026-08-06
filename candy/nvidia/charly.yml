@@ -81,6 +81,8 @@ nvidia-skill:
             NVIDIA GPU base image with runtime support and CUDA toolkit on Fedora. Base for all
             GPU-accelerated boxes (python-ml, jupyter, ollama, comfyui).
             MUST be invoked before building, deploying, configuring, or troubleshooting the nvidia box.
+        triggers:
+            - "Fedora images / `fedora*` / `box/fedora` submodule (incl. the GPU base `nvidia` / `python-ml` + `sway-browser-vnc`)"
         content: |
             # nvidia
             

@@ -25,6 +25,8 @@ charly-cachyos-skill:
             deploy that installs the full dev stack (30 candies) onto a CachyOS host via
             ShellExecutor. Lives in the opencharly/distro-cachyos submodule.
             MUST be invoked before editing or applying the charly-cachyos workstation profile.
+        triggers:
+            - "CachyOS images / `cachyos*` / `charly-cachyos` workstation profile / `box/cachyos` submodule"
         content: |
             # charly-cachyos
 
@@ -109,6 +111,9 @@ local-deploy-skill:
         owner: charly-local
         description: |-
             MUST be invoked before any work involving: `target: local` deployments, the Ansible-style `host:` destination field (literal `local` for direct shell, anything else routes through ssh(1) reading `~/.ssh/config` + ssh-agent), the `local:` substrate kind and its `from:` template reference, the `user:` and `ssh_args:` Ansible-shaped overrides, the managed `~/.config/charly/ssh_config` fragment, the install ledger at `~/.config/opencharly/installed/`, ReverseOp teardown, or the `--with-services`/`--allow-repo-changes`/`--allow-root-tasks` gates.
+        triggers:
+            - "local-target deploy / `target: local` / `host: local` (default) / SSH-host deploys / `user:` / `ssh_arg:`"
+            - "Managed `~/.config/charly/ssh_config` fragment / `charly vm create` writes Host stanza"
         content: |
             # Local Deploy — Applying Candies Directly to a Linux Filesystem
 
@@ -317,6 +322,8 @@ local-spec-skill:
         owner: charly-local
         description: |-
             MUST be invoked before any work involving: authoring `kind: local` templates, `local.yml` files, inline `kind: local` template nodes in `charly.yml`, or the merge semantics between a `kind: local` template and the deploy that deploys it.
+        triggers:
+            - "Editing `local.yml` / authoring `kind: local` templates"
         content: |
             # kind: local — Authoring Reference
 

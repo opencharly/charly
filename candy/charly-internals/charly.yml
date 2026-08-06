@@ -22,6 +22,10 @@ agents-skill:
         owner: charly-internals
         description: |-
             Multi-agent support in OpenCharly across agent harnesses (Claude Code, Codex, Kimi) — sub-agents, dynamic workflows, agent teams, fresh validator sessions, and how each drives the existing `charly check` disposable beds to test and verify. MUST be invoked before authoring or invoking an charly sub-agent / dynamic workflow / agent team / fresh validator session, wiring agent-lifecycle hooks, or asking "which primitive should drive the R10 beds?".
+        triggers:
+            - "Verify a cutover by running the R10 beds (drive `charly check run <bed>`)"
+            - "Evaluate/audit a deployment config (image or deploy, yours)"
+            - "Sub-agents / dynamic workflows / agent teams / agent-lifecycle or commit-push gate hooks"
         content: |
             # Agents, Workflows & Teams
 
@@ -1726,6 +1730,8 @@ capabilities-skill:
         owner: charly-internals
         description: |-
             MUST be invoked before any work involving: OCI label contract, Capabilities / BoxMetadata struct, CapabilityLabelMap completeness check, LabelService structured round-trip, source-less deploy via `charly bundle from-box`, or adding a new OCI label. Developer-facing; users author via `/charly-image:layer` and `/charly-image:image`.
+        triggers:
+            - "OCI labels / capabilities contract"
         content: |
             # Capabilities — the OCI-label runtime contract
 
@@ -2075,6 +2081,8 @@ cutover-policy-skill:
             executed end-to-end regardless of estimated time, context, or scope.
             MUST be invoked when planning or reviewing any breaking change to Go types,
             YAML field names, CLI flags, or OCI labels.
+        triggers:
+            - "Hard-cutover concerns / rename sweeps"
         content: |
             # cutover-policy
 
@@ -2233,6 +2241,8 @@ disposable-skill:
             separation between load-bearing `disposable:` and informational
             `lifecycle:`, why derivation is deliberately absent, and how the
             flag makes live verification fearless on shared hosts.
+        triggers:
+            - "Disposable-flag semantics / `disposable: true` authorization / preemptible-flag / `requires_exclusive:` / `charly preempt` / exclusive host-resource arbitration (GPU passthrough contention)"
         content: |
             # disposable — explicit opt-in for autonomous destroy + rebuild
 
@@ -2665,6 +2675,8 @@ egress-skill:
             the offline `task cue:vendor` pipeline, or adding an egress schema for any
             written artifact (cloud-init, k8s manifests, traefik routes, runtime config,
             install ledger, systemd/quadlet units, ssh_config, libvirt XML).
+        triggers:
+            - "Egress config validation \u2014 validating/generating the config files charly WRITES to a system (`candy/plugin-bundle/egress.go`, `ValidateEgress`, the vendored CUE egress schemas in `candy/plugin-egress/egress-schemas/vendor/`, cloud-init/k8s/units/ssh_config/libvirt-XML egress)"
         content: |
             # egress — validating the config files charly writes
 
@@ -2873,6 +2885,8 @@ generate-source-skill:
             intermediate images, and the .build/ directory. Use when debugging or understanding
             generated Containerfiles.
             MUST be invoked before reading or modifying any Go source file in charly/.
+        triggers:
+            - "`charly box build` / `charly box generate` / Containerfile"
         content: |
             # Generate - Containerfile Generation
 
@@ -3438,6 +3452,8 @@ git-workflow-skill:
             FRESH pr-validator agent validates the PR, merges it (squash), and tags. Covers
             sync-to-upstream, branch/worktree pruning, the fork+PR path, cross-repo @github
             landing order, and the CalVer-generated-at-merge rule.
+        triggers:
+            - "Git/`gh` workflow \u2014 `feat/` branch, commit, PR-only landing (NO direct push to main), branch protection, the `pr-validator` fresh-evaluator merge/tag, CalVer-at-merge, worktree, sync-to-upstream, branch/worktree prune, cross-repo R10 landing"
         content: |
             # git-workflow — branch-per-change, PR-only agent-validated landing
 
@@ -4264,6 +4280,9 @@ go-skill:
             and the generation-coverage current state.
             MUST be invoked before reading or modifying any Go source file in charly/
             or any spec/schema/*.cue schema file.
+        triggers:
+            - "Go source work (adding/modifying `charly` commands)"
+            - "Editing `sdk/schema/*.cue` / `task cue:gen` / `cue exp gengotypes` / generated `cue_types_gen.go` / Schema Driven Design (SDD) / a schema spike"
         content: |
             # Go - CLI Development
 
@@ -4970,6 +4989,8 @@ go-quality-skill:
             kills false positives; triage + adversarial verification; and how to fix findings as a
             handful of large thematic R10-gated cutovers. MUST be invoked before any Go code-quality
             audit, golangci-lint run, dupl/duplication check, or CLAUDE.md-compliance sweep of charly/.
+        triggers:
+            - "Go code-quality / CLAUDE.md-compliance audit / `golangci-lint` / `dupl` / duplication or dead-code check / `.golangci.yml`"
         content: |
             # go-quality — checking & fixing charly Go source for project-rulebook compliance (`AGENTS.md` / `CLAUDE.md`)
 
@@ -5226,6 +5247,8 @@ install-plan-skill:
             target, or reverse operation. MUST be invoked before changing the InstallPlan,
             build target, external deploy target, lifecycle preresolution, overlay,
             Kubernetes generation, or SDK deploy-wire implementation.
+        triggers:
+            - "IR / InstallPlan / DeployTarget / OCITarget"
         content: |
             # InstallPlan IR — shared IR for build + deploy
 
@@ -6028,6 +6051,8 @@ local-infra-skill:
             MUST be invoked before reading or modifying any of those files, or when
             debugging `local:` / VM deploy behaviour (ledger state, sudo batching,
             managed-block insertion, glibc preflight, ssh-config fragment, ref resolution).
+        triggers:
+            - "local-target deploy / `target: local` / `host: local` (default) / SSH-host deploys / `user:` / `ssh_arg:`"
         content: |
             # Local Infra — Go files that support target:local deployments
 
@@ -6197,6 +6222,9 @@ plugin-skill:
             Providers (verbs/kinds/deploy-targets/steps/builders/commands), its own CUE schema, builtin (compiled-in) or
             external (out-of-tree git repo). Covers the unified Provider model, the per-plugin CUE-schema contract
             (single source → Go params for dev + schema-over-Describe RPC for runtime), the SDK, and the loader.
+        triggers:
+            - "Authoring a plugin (a candy with a `plugin:` block) / builtin vs out-of-tree plugin / per-plugin `.cue` schema (single source \u2192 `gengotypes` for dev + schema-over-`Describe` RPC at runtime) / the plugin SDK (`github.com/opencharly/sdk`, the `sdk/` submodule) / `sdk/**` / a compiled-in plugin candy (`compiled_plugins:`) or host-coupled kit candy / an external plugin module"
+            - "Editing `sdk/schema/*.cue` / `task cue:gen` / `cue exp gengotypes` / generated `cue_types_gen.go` / Schema Driven Design (SDD) / a schema spike"
         content: |
             # Plugins — the unified Provider + per-plugin CUE-schema model
 
@@ -6987,6 +7015,8 @@ skills-skill:
         description: |-
             Skill maintenance guidelines: when and how to update skills, root rulebooks, and README.md.
             Use when updating documentation, feeding back operational insights, or auditing skill coverage.
+        triggers:
+            - "Skill authoring / skill maintenance / where does this doc content belong"
         content: |
             # Skill Maintenance Guidelines
 
@@ -7355,6 +7385,10 @@ strict-policy-skill:
             rests on a high-risk unproven assumption, when a pattern is about to land
             in a second surface, when a sleep / retry / magic-number is tempting, or
             when a cutover commit is about to ship.
+        triggers:
+            - "Agent Driven Evaluation (ADE) / `charly box feature run` / `charly check feature run` / `charly feature list/pending/validate` / authoring a candy's `plan:` + `description:` string / the agent grader for `agent-check:` steps"
+            - "Engineering-discipline triggers (failure surfaced / dup pattern / ad-hoc fix tempting / \"out of scope\" framing)"
+            - "Go code-quality / CLAUDE.md-compliance audit / `golangci-lint` / `dupl` / duplication or dead-code check / `.golangci.yml`"
         content: |
             # strict-policy — operationalizing R1–R5
 
@@ -7595,6 +7629,8 @@ vm-deploy-target-skill:
             sdk/deploykit/vm_deploy_state.go, candy/plugin-vm/vm_util_copies.go.
             (The former charly/bundle_add_cmd_vm.go is DELETED, K-wave 2.)
             MUST be invoked before editing VM-target deploy code.
+        triggers:
+            - "`charly update` / `charly vm *` / VM entities in `vm.yml` or `vm:`"
         content: |
             # vm-deploy-target
 
@@ -8019,6 +8055,8 @@ vm-spec-skill:
             field, validation rules, and the adopt-user decision. Source files:
             spec/spec/cue_types_gen.go (generated), spec/schema/vm.cue, sdk/vmshared/.
             MUST be invoked before editing VmSpec Go code or authoring vm.yml entries.
+        triggers:
+            - "VmSpec / libvirt / cloud-init / OVMF internals"
         content: |
             # vm-spec
 
@@ -9609,6 +9647,8 @@ root-cause-analyzer-agent:
         model: inherit
         description: |-
             MUST BE USED when any unexpected behavior, error, warning, or anomaly occurs. Performs deep root cause analysis following mandatory 8-step process. Never accepts "probably expected" without investigation.
+        triggers:
+            - "Unexpected failure / error / anomaly"
         content: |
             You are the Root Cause Analyzer subagent for OpenCharly development.
 
