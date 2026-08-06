@@ -80,7 +80,8 @@ var builtinProviderInstances = []Provider{
 	// is resolved by the plugin's ops.OpResolve leg (C10, kit.BuilderResolve, spliced by
 	// deploykit EmitBuilderStages), while their deploy-time IR shim
 	// (per-candy stage context + teardown ops) is served over ops.OpCollectContext/ops.OpReverse and
-	// resolved in the host-side build pre-pass (builder_preresolve.go). No in-proc BuilderProvider
+	// resolved in the host-side build pre-pass (candy/plugin-bundle/builder_preresolve.go — the
+	// former charly/builder_preresolve.go is DELETED, K-wave 2). No in-proc BuilderProvider
 	// remains; the registry resolves a builder word to its connected grpcProvider.
 }
 

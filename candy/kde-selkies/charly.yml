@@ -13,7 +13,8 @@ kde-selkies:
             + pipewire (audio) — NO seat, NO SDDM, NO graphical.target. The
             kde-selkies-session service uses supervisord's %(ENV_HOME)s syntax
             (resolved for both supervisord pods and systemd-user targets by
-            service_render.go) and is started by a poll-for-wayland-1 service exactly
+            sdk/deploykit/compile_service_steps.go — the former charly/service_render.go
+            is DELETED, K-wave 2) and is started by a poll-for-wayland-1 service exactly
             like labwc — the wrapper's socket poll IS the ordering primitive, so it
             runs headless as a pod with no graphical-session.target. The encoder is
             left UNSET so pixelflux auto-detects per host: NVENC on the NVIDIA flavor
