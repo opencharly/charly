@@ -37,7 +37,7 @@ plugin-gpu:
             `charly vm gpu` (candy/plugin-vm's vm_gpu_shim.go), the arbiter (candy/plugin-preempt's
             holder_dispatch.go), and plugin-gpu's own switch legs — there is no in-core
             driver-switch shim left. Auto-allocation (gpu_allocate.go) STAYS core: it is a host-side
-            VmSpec/LibvirtDomain orchestrator (like GenerateK8sKustomize) consuming the DetectVFIO
+            VmSpec/LibvirtDomain orchestrator consuming the DetectVFIO
             shim — no dep to shed.
 
             The R10 witness: `charly vm gpu status`/`list`/`plan` exit 0 host-side on a GPU-less host
