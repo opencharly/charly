@@ -2,6 +2,7 @@ package marketplace
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -31,6 +32,11 @@ func generate(root string) error {
 		return fmt.Errorf("write generated: %w", err)
 	}
 	applyHookModes(root, ks)
+	// The setup launcher is a documented ./setup <harness> <profile> entry point (the README's
+	// contract) — it must be executable (the emissions map carries bytes only).
+	if err := os.Chmod(filepath.Join(root, "plugins", "setup"), 0o755); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("chmod plugins/setup: %w", err)
+	}
 	report(root, em, families)
 	return nil
 }
