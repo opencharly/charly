@@ -18,7 +18,8 @@ import (
 
 // holder_dispatch_test.go — unit coverage for the FLOOR-SLIM-proper Unit-8 MOVE: the 6 arbiter
 // host-seam impls (running/stop[+wait]/start/switchMode/ensureCDI/gpuCDI) that relocated from
-// charly/preempt.go + charly/arbiter_host.go (deleted, K1-unblock wave 1) + charly/gpu_shim.go
+// charly/preempt.go + charly/arbiter_host.go (both DELETED — arbiter_host at K1-unblock wave 1,
+// preempt at K-wave 2 cone CONTESTED) + charly/gpu_shim.go
 // into this plugin (holder_dispatch.go). Real coverage for the moved code — NOT a rerun of a
 // throwaway spike test — per the pod-venue (target="") paths, which need no live
 // exec.InvokeProvider round-trip to exercise (a departed pod holder never reaches the

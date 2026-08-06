@@ -322,7 +322,8 @@ func vmDirPlugin() (string, error) {
 }
 
 // podRunning reports whether a pod deployment is up (the quadlet service when one exists, else
-// the container's runtime state) — the plugin-side twin of charly/preempt.go's podIsRunning.
+// the container's runtime state) — the plugin-side twin of the deleted charly/preempt.go's
+// podIsRunning.
 func podRunning(base, instance string) bool {
 	if active, _ := kit.QuadletExistsInstance(base, instance); active {
 		svc := kit.ServiceNameInstance(base, instance)

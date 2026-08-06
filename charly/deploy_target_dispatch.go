@@ -14,7 +14,8 @@ import (
 // command:bundle's OpDeployDispatch (the ONE generic envelope every UnifiedDeployTarget/
 // LifecycleTarget method now dispatches through) WITH a live executor, mirroring
 // ephemeral_dispatch.go's dispatchEphemeralOp — the
-// SAME "compiled-in in-proc reverse channel" pattern arbiterInvoke (preempt.go) established:
+// SAME "compiled-in in-proc reverse channel" pattern arbiterInvoke (folded from the deleted
+// preempt.go into host_build_pod_lifecycle_dispatch.go) established:
 // thread the executor via specexec.ContextWithExecutor(ctx, specexec.NewInProcExecutor(&inprocExecutorClient
 // {srv: &executorReverseServer{...}})) before calling prov.Invoke — no broker needed, since
 // command:bundle is COMPILED-IN (an inprocProvider). The plugin's own OpDeployDispatch handler
