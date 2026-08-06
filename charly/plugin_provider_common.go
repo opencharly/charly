@@ -145,7 +145,7 @@ func buildCapMeta(c *pb.ProvidedCapability) (capMeta, error) {
 	// pass-through, and buildCLIModel synthesizes a "<word>.<name>" leaf per entry for MCP.
 	if m.class == ClassCommand {
 		for _, sc := range c.GetSubcommands() {
-			m.subcmds = append(m.subcmds, climodel.CLISubcommand{Name: sc.GetName(), Help: sc.GetHelp()})
+			m.subcmds = append(m.subcmds, climodel.CLISubcommand{Name: sc.GetName(), Help: sc.GetHelp(), Hidden: sc.GetHidden()})
 		}
 	}
 	// A SUBSTRATE class:kind capability may declare #DeployTraits (P9): kit.StampDescent stamps

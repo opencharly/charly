@@ -155,15 +155,25 @@ func pluginScoreOneVenueBucket(ex *sdk.Executor, ctx context.Context, dir string
 		roots := deployRoots
 		hostVars, cleanups := resolveHostVarsForSteps(ex, ctx, dir, bucketSteps(bucket), "")
 		hostCleanups = cleanups
+		// Stamp CHARLY_BIN into the runner env EXACTLY like the live paths
+		// (pluginRunLocalDeployScopePlan / pluginCheckLiveGroup's
+		// newPluginRuntimeCheckVarResolver + pluginResolverEnv): a scored host probe that shells
+		// to `${CHARLY_BIN} …` must resolve to the dispatching binary, never silently skip as an
+		// unresolved variable — the harness is the SAME engine as check live, and a divergent env
+		// is a skip-class regression (the check-preflight-local bed's scored probe caught it live).
+		resolver := newPluginRuntimeCheckVarResolver(map[string]string{"IMAGE": venue})
+		env, hasRuntime := pluginResolverEnv(resolver)
 		runner = newPluginCheckRunner(ex, ctx, spec.CheckEnv{
 			Mode:      "run",
 			Box:       venue,
 			VenueKind: chainExec.Kind(),
 		}, kit.RunnerConfig{
-			Exec:     chainExec,
-			Mode:     kit.ModeLive,
-			Box:      venue,
-			HostVars: hostVars,
+			Exec:       chainExec,
+			Mode:       kit.ModeLive,
+			Env:        env,
+			HasRuntime: hasRuntime,
+			Box:        venue,
+			HostVars:   hostVars,
 			TargetResolver: kit.VenueResolver(func(v string) (kit.Executor, map[string]string, bool, error) {
 				vex, err := pluginResolveScoringChain(roots, v)
 				if err != nil {

@@ -2430,6 +2430,91 @@ check-gpu-local:
                 command: ${CHARLY_BIN} vm gpu list
                 in_container: false
 
+# =================================================================
+# check-preflight-local — R10 witness for the RELOCATED check-run image
+# PREFLIGHT (K-wave 2 cone R4: the "check-run" HostBuild kind's last arm
+# "preflight" moved to candy/plugin-check's pluginCheckRunPreflight).
+#
+# The preflight arm fires ONLY on the ITERATE path when the sandbox classifies
+# as TargetKindHost (candy/plugin-check/run_cmd.go, case targetKindHost). The
+# bed is a GROUP (targetless → its resource children fold as MEMBERS with
+# BARE-name venues), so the member named after the real project box
+# check-k8s-deploy-app makes preflightImageCandidates(reply.Plan) yield a
+# GENUINE image ref (NOT the bed's own name). pluginCheckRunPreflight then
+# loads the project via loaderkit, filters agent-provisioned venues (this
+# member is NOT agent_provisioned, so it is NOT skipped), and
+# InvokeProvider("build","ensure")-ensures the candidate into local podman
+# storage BEFORE the harness drives the AI. The member's check is a
+# deterministic HOST probe — the member is a kind:local deploy (host-rooted),
+# so the scoring chain is the host executor — asserting the ensured image is
+# in local storage. NO other roster bed exercises this arm (no "preflight:"
+# line in any bed log) and it has no end-to-end test (only the pure
+# preflightImageCandidates unit test); this bed closes that gap live.
+# =================================================================
+check-preflight-sandbox:
+    local:
+        from: check-feature-app
+        host: local
+        description: >-
+            Host-rooted sandbox marker for the check-preflight-local iterate bed. The ONLY
+            deploy shape that classifies an iterate sandbox as TargetKindHost is a host-rooted
+            venue (kind:local — venue shell, not leaf-only), so `charly check run
+            check-preflight-local` dispatches the host-target arm that fires
+            pluginCheckRunPreflight before the harness. Never brought up (a host-target run
+            drives the harness in-process on the host).
+check-preflight-local:
+    group:
+        disposable: true
+        lifecycle: dev
+        description: >-
+            R10 witness for the RELOCATED check-run image preflight (K-wave 2 cone R4) — the
+            pluginCheckRunPreflight body (candy/plugin-check/command.go) running live. A GROUP
+            iterate bed whose sandbox is a host-rooted kind:local deploy (TargetKindHost): the
+            host-target run arm collects preflightImageCandidates from the plan — the group's
+            targetless root folds its resource children as MEMBERS with BARE-name venues, so the
+            member named after the real box check-k8s-deploy-app yields that image ref as the
+            preflight candidate — and pluginCheckRunPreflight ensures it into local podman
+            storage via InvokeProvider("build","ensure") BEFORE the harness drives the AI. The
+            member's check is a deterministic host probe (the member is a kind:local deploy, so
+            its scoring chain is the host executor): `charly box list tags check-k8s-deploy-app`
+            proves the ensured image is present locally. The AI's one iteration merely confirms
+            the pre-ensured state; the preflight arm is the thing under test.
+        iterate:
+            sandbox: check-preflight-sandbox
+            agent: [claude]
+            plateau_iteration: 1
+            prompt: >-
+                == Where you are ==
+                You are on the host directly (no container sandbox). The image
+                `check-k8s-deploy-app` has ALREADY been ensured into local podman
+                storage by the bed's preflight step — nothing to build, pull, or
+                deploy.
+
+                == Bed purpose ==
+                This bed proves the relocated check-run image preflight. The only
+                scored check probes the host for the ensured image:
+                `charly box list tags check-k8s-deploy-app` (or `charly box list
+                tags` and confirm `check-k8s-deploy-app` appears).
+
+                == Your task ==
+                Run that probe and confirm the image is present. Do NOT modify
+                anything, do not build or deploy, do not create or delete files.
+                Report the probe output and done.
+    check-k8s-deploy-app:
+        local:
+            from: check-feature-app
+            host: local
+            plan:
+                - check: the preflight ensured the check-k8s-deploy-app image into local podman storage — the host probe lists it among the local tags (proving pluginCheckRunPreflight's InvokeProvider("build","ensure") leg ran live before the harness)
+                  id: preflight-image-ensured
+                  context:
+                    - runtime
+                  command:
+                    command: ${CHARLY_BIN} box list tags check-k8s-deploy-app
+                    in_container: false
+                  stdout:
+                    - contains: check-k8s-deploy-app
+
 # =============================================================================
 # docs-site-app + check-docs — the R10 bed for the opencharly.ai documentation site.
 #

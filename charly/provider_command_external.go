@@ -196,14 +196,22 @@ func passthroughArgsType() reflect.Type {
 }
 
 // nestedSubcommandType builds the F-CLI-NEST inner struct: one named `cmd:""` field per declared
-// subcommand, each a pointer to its own pass-through Args leaf.
+// subcommand, each a pointer to its own pass-through Args leaf. A HIDDEN declared subcommand
+// (Hidden, e.g. the iterate harness's `charly check run-local` re-exec) is still rendered as a REAL
+// Kong `cmd:""` child — so it DISPATCHES — but tagged `hidden:""` so `--help` and the CLI model
+// (MCP tool surface) keep it invisible, byte-identical to the `hidden:""` tag on the plugin's own
+// grammar struct field (F-CLI-NEST hidden-but-reachable).
 func nestedSubcommandType(subcommands []climodel.CLISubcommand) reflect.Type {
 	fields := make([]reflect.StructField, 0, len(subcommands))
 	for _, sc := range subcommands {
+		tag := fmt.Sprintf(`cmd:"" name:%q help:%q`, sc.Name, sc.Help)
+		if sc.Hidden {
+			tag += ` hidden:""`
+		}
 		fields = append(fields, reflect.StructField{
 			Name: exportedCommandField(sc.Name),
 			Type: reflect.PointerTo(passthroughArgsType()),
-			Tag:  reflect.StructTag(fmt.Sprintf(`cmd:"" name:%q help:%q`, sc.Name, sc.Help)),
+			Tag:  reflect.StructTag(tag),
 		})
 	}
 	return reflect.StructOf(fields)
