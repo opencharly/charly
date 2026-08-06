@@ -105,6 +105,28 @@ func TestFileVerb(t *testing.T) {
 			t.Errorf("expected pass (bare-scalar contains = substring), got %+v", res)
 		}
 	})
+
+	t.Run("owner match", func(t *testing.T) {
+		cc := &fakeCC{exec: &fakeExec{responses: []fakeResponse{
+			{matchPrefix: "if [ -e", stdout: "exists=1|regular file|644|root|root\n"},
+		}}}
+		res := verb{}.RunVerb(context.Background(), cc, &spec.Op{PluginInput: map[string]any{"file": "/etc/hostname", "exists": true, "mode": "644", "owner": "root", "filetype": "file"}})
+		if res.Status != kit.StatusPass {
+			t.Errorf("expected pass (owner match), got %+v", res)
+		}
+	})
+}
+
+// TestFileVerb_RenderProvisionScript: the ACT role renders an idempotent RUNTIME
+// file-creation — mkdir + cat-heredoc (content-bearing) + chmod. Relocated from
+// charly/plugin_file_relocated_test.go's TestRelocatedFileVerb_DispatchesViaKit (the
+// act-role behavior half; the dispatch wiring stays in charly).
+func TestFileVerb_RenderProvisionScript(t *testing.T) {
+	script, ok := verb{}.RenderProvisionScript(
+		&spec.Op{PluginInput: map[string]any{"file": "/etc/motd", "mode": "644"}, Content: "hello"}, nil)
+	if !ok || !strings.Contains(script, "/etc/motd") || !strings.Contains(script, "chmod") {
+		t.Fatalf("act: want a file-creation script, got ok=%v %q", ok, script)
+	}
 }
 
 // TestDecodeContainsList covers the file verb's contains-default codec — relocated with

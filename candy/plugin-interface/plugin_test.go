@@ -61,3 +61,17 @@ func TestInterfaceVerb(t *testing.T) {
 		t.Errorf("got %+v", res)
 	}
 }
+
+// TestInterfaceVerb_Absent: an empty `ip -o addr show` probe (interface not present)
+// must FAIL. Relocated from charly/plugin_interface_relocated_test.go's
+// TestRelocatedInterfaceVerb_DispatchesViaKit (the check-role behavior half; the
+// dispatch wiring stays in charly).
+func TestInterfaceVerb_Absent(t *testing.T) {
+	cc := &fakeCC{exec: &fakeExec{responses: []fakeResponse{
+		{matchPrefix: "ip -o addr show", stdout: "", exit: 0},
+	}}}
+	res := verb{}.RunVerb(context.Background(), cc, &spec.Op{PluginInput: map[string]any{"interface": "nonexistent"}})
+	if res.Status != kit.StatusFail {
+		t.Errorf("expected fail for an absent interface, got %+v", res)
+	}
+}

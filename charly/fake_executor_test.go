@@ -8,8 +8,10 @@ import (
 )
 
 // checkrun_test.go — fakeExecutor / fakeResponse, the shared spec.DeployExecutor fixture for
-// the compiled-in-kit-candy REGISTRY-DISPATCH integration tests (plugin_relocated_kit_test.go's
-// assertRelocatedVerbDispatch + the plugin_*_relocated_test.go family + checkrun_act_test.go):
+// the compiled-in-kit-candy REGISTRY-DISPATCH integration tests (relocated_verb_wiring_test.go
+// + checkrun_act_test.go + external_verb_dispatch_test.go + plugin_test.go — the former
+// plugin_*_relocated_test.go family + plugin_relocated_kit_test.go's assertRelocatedVerbDispatch
+// are DELETED, K-wave 2 test migration, their behavior moved to the owning candies):
 // these prove providerRegistry.ResolveVerb resolves a compiled-in kit candy's CheckVerbProvider
 // and dispatches it via hostVerbResolverFor — charly's OWN registry wiring, not a verb's own
 // RunVerb logic (that coverage now lives beside each verb in its own candy/plugin-<verb> module,
