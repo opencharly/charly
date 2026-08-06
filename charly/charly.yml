@@ -63,6 +63,7 @@ compiled_plugins:
     - plugin-group
     - plugin-substrate
     - plugin-candy-kind
+    - plugin-harness-kind
     - plugin-build
     - plugin-installstep
     - plugin-tunnel

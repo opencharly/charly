@@ -34,3 +34,128 @@ wl-record-pixelflux:
                 file: ${HOME}/.local/bin/pixelflux-record
                 exists: true
                 mode: "0755"
+
+wl-record-pixelflux-skill:
+    skill:
+        name: wl-record-pixelflux
+        family: selkies
+        owner: wl-record-pixelflux
+        description: |-
+            Desktop video recorder via selkies WebSocket capture bridge for selkies-desktop.
+            Use when working with the wl-record-pixelflux candy.
+        content: |-
+            # wl-record-pixelflux -- Desktop video recording via selkies capture bridge
+            
+            ## Candy Properties
+            
+            | Property | Value |
+            |----------|-------|
+            | Install files | `charly.yml`, `task:`, `pixelflux-record` (Python script) |
+            | Depends | `selkies` (capture bridge + WebSocket stream), `ffmpeg` (MP4 muxing) |
+            
+            ## What It Does
+            
+            Provides `pixelflux-record` for recording desktop video on selkies-desktop. Connects to the capture bridge at `/tmp/charly-capture.sock` which relays the same H.264 frames that the browser sees via the selkies WebSocket stream. No direct ScreenCapture API access -- taps into the existing selkies streaming pipeline to avoid creating a second capture instance (the Rust backend only supports one active capture at a time).
+            
+            **Why not wf-recorder?** labwc running nested inside pixelflux can't deliver wlr-screencopy frames. The capture bridge bypasses this by tapping into the selkies WebSocket stream directly.
+            
+            ## How It Works
+            
+            1. Connects to Unix socket at `/tmp/charly-capture.sock` (started by `selkies-capture-server`)
+            2. Sends `STREAM\n` to request continuous H.264 frame data
+            3. Receives frames as `4-byte length + raw H.264 data` pairs
+            4. Pipes raw H.264 data to ffmpeg with `-use_wallclock_as_timestamps 1`
+            5. ffmpeg re-encodes to MP4 with correct wall-clock timing
+            6. SIGINT/SIGTERM triggers graceful shutdown: closes socket, waits for ffmpeg to finalize MP4
+            
+            ## Key Properties
+            
+            | Property | Value |
+            |----------|-------|
+            | Depends | `selkies` (capture bridge + stream), `ffmpeg` (muxing) |
+            | Install | `~/.local/bin/pixelflux-record` (Python script) |
+            | Capture | Via `/tmp/charly-capture.sock` (selkies WebSocket bridge) |
+            | Output | MP4 (H.264 video + optional AAC audio) |
+            | Audio | PulseAudio monitor source via ffmpeg |
+            
+            ## CLI Usage
+            
+            ```bash
+            # Direct usage
+            pixelflux-record output.mp4                  # 30fps, video only
+            pixelflux-record output.mp4 --fps 60         # 60fps
+            pixelflux-record output.mp4 --audio          # video + audio
+            pixelflux-record output.mp4 --fps 60 --audio # 60fps + audio
+            # Stop with Ctrl-C
+            ```
+            
+            ## Integration with the `record:` check verb
+            
+            Author `record:` plan steps (the declarative verb served out-of-process by
+            `candy/plugin-record` — no host `charly check` subcommand for it) and run them with
+            `charly check live selkies-desktop --filter record`. A `record: start` step with
+            `record_mode: desktop` + `record_audio: true` auto-detects pixelflux-record; desktop
+            interaction is driven with the `cdp:`/`wl:` verbs (which keep their host subcommands);
+            `record: stop` + `artifact:` copies the `.mp4` out:
+            
+            ```yaml
+            pixelflux-rec-start:
+                check: a desktop recording with audio starts
+                record: start
+                context: [deploy]
+                record_name: demo
+                record_mode: desktop
+                record_audio: true
+            pixelflux-rec-stop:
+                check: the desktop recording is captured
+                record: stop
+                context: [deploy]
+                record_name: demo
+                artifact: demo.mp4
+                artifact_not_uniform: true
+            ```
+            
+            ## Architecture
+            
+            ```
+            selkies process (single ScreenCapture singleton — process-wide)
+                ├── ScreenCapture (captures full composited desktop)
+                ├── WebSocket server :8081 (broadcasts H.264 frames)
+                └── Capture bridge thread (internal WebSocket client)
+                    └── Unix socket /tmp/charly-capture.sock
+                        └── pixelflux-record connects here (STREAM mode)
+                            └── pipes H.264 frames to ffmpeg
+            ```
+            
+            **Singleton note:** The `ScreenCapture` instance is process-wide and lives inside the selkies Python process. `pixelflux-record` never spawns its own capture; it only attaches to the existing STREAM socket. This is architecturally important because pixelflux's `WaylandBackend` construction is expensive (EGL context + dmabuf allocators + GPU texture pools) and was the subject of a memory leak fix in commits `6be85eb` (singleton enforcement) and `7977b91` (per-frame `cleanup_texture_cache()`). If you ever see two selkies-capture processes inside the container, that's a regression — see `/charly-selkies:selkies` (Pixelflux Memory Management) for the diagnostic recipe.
+            
+            ## Included In
+            
+            - `selkies-desktop` metalayer
+            
+            ## Used In Boxes
+            
+            - `/charly-selkies:selkies-labwc` (via `selkies-desktop` metalayer)
+            - `/charly-selkies:selkies-labwc-nvidia` (via `selkies-desktop` metalayer)
+            
+            ## Cross-References
+            
+            - `/charly-check:record` -- the `record:` check verb (`record_mode: desktop`) auto-detects pixelflux-record
+            - `/charly-core:charly-update` -- Per-instance update pattern used to roll out the per-frame `cleanup_texture_cache()` fix across live instances
+            - `/charly-selkies:wl-screenshot-pixelflux` -- Screenshot companion (same capture bridge, same singleton)
+            - `/charly-selkies:wf-recorder` -- Alternative for sway-desktop (wlr-screencopy)
+            - `/charly-selkies:selkies` -- Parent candy (provides capture bridge, WebSocket stream, and the ScreenCapture singleton — see Pixelflux Memory Management)
+            - `/charly-selkies:selkies-desktop-layer` -- Metalayer that composes this recorder into the full browser-accessible desktop
+            - `/charly-selkies:ffmpeg` -- Required dependency (MP4 muxing)
+            
+            ## When to Use This Skill
+            
+            Use when the user asks about:
+            - Desktop video recording on selkies-desktop
+            - The pixelflux recording pipeline
+            - The `wl-record-pixelflux` candy
+            
+            ## Related
+            
+            - `/charly-image:layer` — candy authoring reference (`charly.yml` schema, task verbs, service declarations)
+            - `/charly-check:check` — declarative testing (`check:` block, `charly check box`, `charly check live`)

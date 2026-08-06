@@ -36,6 +36,7 @@ import (
 	cp_plugin_file "github.com/opencharly/charly/candy/plugin-file"
 	cp_plugin_gpu "github.com/opencharly/charly/candy/plugin-gpu"
 	cp_plugin_group "github.com/opencharly/charly/candy/plugin-group"
+	cp_plugin_harness_kind "github.com/opencharly/charly/candy/plugin-harness-kind"
 	cp_plugin_http "github.com/opencharly/charly/candy/plugin-http"
 	cp_plugin_init "github.com/opencharly/charly/candy/plugin-init"
 	cp_plugin_installstep "github.com/opencharly/charly/candy/plugin-installstep"
@@ -103,6 +104,7 @@ func init() {
 	registerCompiledPlugin(cp_plugin_group.NewProvider(), cp_plugin_group.NewMeta())
 	registerCompiledPlugin(cp_plugin_substrate.NewProvider(), cp_plugin_substrate.NewMeta())
 	registerCompiledPlugin(cp_plugin_candy_kind.NewProvider(), cp_plugin_candy_kind.NewMeta())
+	registerCompiledPlugin(cp_plugin_harness_kind.NewProvider(), cp_plugin_harness_kind.NewMeta())
 	registerCompiledPlugin(cp_plugin_build.NewProvider(), cp_plugin_build.NewMeta())
 	registerCompiledPlugin(cp_plugin_installstep.NewProvider(), cp_plugin_installstep.NewMeta())
 	registerCompiledPlugin(cp_plugin_tunnel.NewProvider(), cp_plugin_tunnel.NewMeta())

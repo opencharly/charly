@@ -104,19 +104,3 @@ func testDispatchLifecycleAdd(t *testing.T, p *seamLifecycleProvider, name strin
 		t.Fatalf("dispatchDeployTarget(add %q): %v", name, err)
 	}
 }
-
-// testDispatchLifecycleDel sets p's OpPostTeardown reply RemoveEntries and drives it through the
-// REAL dispatchDeployTarget("del") — the production seam a lifecycle substrate's teardown goes
-// through (candy/plugin-bundle's handleDeployDel → deploykit.RemoveVmDeployEntry per key). A
-// prior testDispatchLifecycleAdd(t, p, name, ...) call against the SAME p (and hence the same
-// ledger-keyed deploy ID) is a REQUIRED precondition — Del reads the ledger record Add wrote,
-// keyed on name, and treats an unrecorded name as a silent idempotent no-op (production's own
-// contract), not a test-harness quirk.
-func testDispatchLifecycleDel(t *testing.T, p *seamLifecycleProvider, name string, removeEntries []string) {
-	t.Helper()
-	p.delRemoveEntries = removeEntries
-	req := spec.DeployTargetDispatchRequest{Op: "del", Name: name, Word: p.word, HasLifecycle: true}
-	if _, err := dispatchDeployTarget(context.Background(), req, nil, buildEngineContext{}, false); err != nil {
-		t.Fatalf("dispatchDeployTarget(del %q): %v", name, err)
-	}
-}

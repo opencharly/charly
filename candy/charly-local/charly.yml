@@ -1,0 +1,462 @@
+charly-local:
+    candy:
+        version: 2026.218.1200
+        description: |-
+            Concept candy owning the charly-local kind-authoring skills (local templates + ssh-host targets). Owns its family's `skill:` kind entities (sibling nodes in this file) — the
+            plugins→candies migration; candy/plugin-marketplace regenerates the plugins/ corpus
+            from them.
+        plan:
+            - run: this documentation-only candy ships no install content (it carries the family's skill/hook/marketplace entities); validate-satisfying no-op
+              command: "true"
+              context:
+                - build
+            - check: the local concept candy's skill entities are present and generated into plugins/local/skills
+              id: charly-local-present
+              context:
+                - build
+              command: "true"
+charly-cachyos-skill:
+    skill:
+        name: charly-cachyos
+        family: local
+        owner: charly-local
+        description: |-
+            Operator CachyOS workstation profile — a kind:local template plus a host:local
+            deploy that installs the full dev stack (30 candies) onto a CachyOS host via
+            ShellExecutor. Lives in the opencharly/distro-cachyos submodule.
+            MUST be invoked before editing or applying the charly-cachyos workstation profile.
+        content: |
+            # charly-cachyos
+
+            The operator's CachyOS developer-workstation profile: a `kind: local` template
+            (`charly-cachyos-app`) plus a `host: local` deploy (`charly-cachyos`, the
+            deploying entry) that applies a kitchen-sink dev stack directly to the
+            current machine via `ShellExecutor` — no SSH, no VM, no container.
+
+            It lives in the **`opencharly/distro-cachyos`** repo (git submodule at
+            **`box/cachyos`**), in that repo's single `charly.yml` — both the
+            `kind: local` template (`charly-cachyos-app`) and the `charly-cachyos` `local:` deploy
+            that deploys it. The repo also carries the `cachyos-gpu` deploy — the
+            **persistent** operator GPU-workstation VM (`vm: { from: cachyos-gpu-workstation-vm }`,
+            **not** `disposable`; see `/charly-vm:cachyos-bootstrap-vm`) — so `charly-cachyos` is no longer
+            the only non-disposable deploy there; every disposable test bed is a
+            `disposable: true` deploy. Apply it with:
+
+            ```bash
+            charly -C box/cachyos update charly-cachyos
+            # or, anywhere:
+            charly --repo opencharly/distro-cachyos update charly-cachyos
+            ```
+
+            ## What it installs
+
+            30 candies. Most are pulled from the main repo by **git reference**
+            (`@github.com/opencharly/charly/candy/<name>:<tag>`); the cachyos-exclusive
+            `ghostty`, `keepassxc-keyring`, and `wheel-nopasswd` are vendored locally in this
+            repo's `candy/` (resolved via its `discover:` block):
+
+            `wheel-nopasswd`, `yay`, `dev-tools`, `gh`, `pre-commit`, `tmux`, `direnv`,
+            `gnupg`, `keepassxc`, `keepassxc-keyring`, `tailscale`, `tailscale-up`,
+            `build-toolchain`, `golang`, `rust`, `nodejs`, `uv`, `claude-code`, `codex`,
+            `gemini`, `oracle`, `forgecode`, `devops-tools`, `docker-ce`, `kubernetes`,
+            `vscode`, `ghostty`, `chrome`, `nvidia`, `charly`.
+
+            ## Key fields
+
+            | Field | Value |
+            |---|---|
+            | `install_opts.builder_image` | `ghcr.io/opencharly/arch-builder:2026.122.2252` (OCI ref, not a candy) |
+            | `install_opts` | with_service, allow_repo_changes, allow_root_tasks all true |
+            | `env` | `EDITOR=nvim`, `PAGER=less` |
+            | `disposable` (deploy) | absent/false — this real workstation requires operator authorization; unattended `charly update charly-cachyos` is forbidden |
+
+            ## Deploy-scope check probes
+
+            - `passwordless-sudo-host` — `sudo -n true` (wheel-nopasswd candy must have run)
+            - `nvidia-ctk-present` — `command -v nvidia-ctk`
+            - `nvidia-cdi-spec` — `/etc/cdi/nvidia.yaml` exists
+
+            Both `nvidia-*` probes gate on an active host NVIDIA driver
+            (`[ -e /dev/nvidiactl ] || nvidia-smi`) and pass with an N/A note on a
+            card-less or VFIO-passthrough host, so the profile applies cleanly anywhere.
+
+            ## Composition-by-reference note
+
+            `charly-cachyos-app`'s remote candy refs are collected and materialized by the
+            same `CollectRemoteRefs` walk as box candy refs: the walk collects the candy
+            refs of the ROOT project's own `kind: local` templates (the cachyos repo is the
+            root here), so `charly box validate` / `charly update charly-cachyos` resolve the github-ref'd
+            candies. (Collection is reachability-scoped — a namespace's `kind:local`
+            templates, imported only as a dependency, are NOT collected by an importer; only
+            the root's own locals are. See `/charly-internals:go` "Remote-layer resolver".)
+
+            ## Cross-References
+
+            - `/charly-local:local-spec` — `kind: local` template authoring reference
+            - `/charly-local:local-deploy` — the `target: local` deployment surface
+            - `/charly-distros:cachyos` — the CachyOS base of the same family
+            - `/charly-core:deploy` — bundle entry semantics (globally-unique names within a document: the `charly-cachyos` bundle deploys the suffixed `charly-cachyos-app` `kind: local` template)
+
+            ## When to Use This Skill
+
+            **MUST be invoked** when editing or applying the charly-cachyos workstation profile,
+            or reasoning about the kind:local remote-candy-ref machinery. Invoke BEFORE
+            reading source code or launching Explore agents.
+local-deploy-skill:
+    skill:
+        name: local-deploy
+        family: local
+        owner: charly-local
+        description: |-
+            MUST be invoked before any work involving: `target: local` deployments, the Ansible-style `host:` destination field (literal `local` for direct shell, anything else routes through ssh(1) reading `~/.ssh/config` + ssh-agent), the `local:` substrate kind and its `from:` template reference, the `user:` and `ssh_args:` Ansible-shaped overrides, the managed `~/.config/charly/ssh_config` fragment, the install ledger at `~/.config/opencharly/installed/`, ReverseOp teardown, or the `--with-services`/`--allow-repo-changes`/`--allow-root-tasks` gates.
+        content: |
+            # Local Deploy — Applying Candies Directly to a Linux Filesystem
+
+            ## Overview
+
+            `target: local` deployments apply a box or candy's install recipe directly to a Linux filesystem instead of baking it into a container image. The destination is named by the deployment's `host:` field (Ansible-style):
+
+            - `host: local` (literal) or absent → `ShellExecutor` (run on this machine).
+            - Anything else → `SSHExecutor` (ssh(1) reads `~/.ssh/config` + ssh-agent for keys, host-key checking, options).
+
+            The same `InstallPlan` IR that drives container deploys (via the candy `plugin-deploy-pod`, incl. `add_candy:` overlay synthesis through `deploykit.OCITarget`) is consumed by the external `deploy:local` plugin (`candy/plugin-deploy-local`), which `pluginDeployTarget` (`charly/unified_targets.go`, S3b) hands the plan — via `candy/plugin-bundle`'s `Invoke(OpDeployDispatch)` reaching the substrate's own `InvokeProvider` — over the executor reverse channel; the plugin walks it via the shared out-of-process walk (`sdk/kit.WalkPlans`), translating each IR step into shell commands, `podman run <builder>` invocations for compile-needing work, and systemd unit writes. The step kinds the plugin cannot render itself (`BuilderStep`, `LocalPkgInstallStep`, `SystemPackagesStep`, act-verb `OpStep`, `ExternalPluginStep`) are driven on the HOST via the `RunHostStep` reverse-channel RPC. (`charly box build` itself emits Containerfiles via the separate `WriteCandySteps` → `EmitTasks` generator in `sdk/deploykit` (relocated from `charly/generate.go` in #67), not the IR — see `/charly-internals:install-plan`.)
+
+            The deploy applies host packages + configs ONLY. Container images required for `charly check run` / `charly check live` are ensured by the check preflight (see `/charly-check:check` "Image preflight"), not by the deploy. Deploys (any target) emit zero image-pull / image-build steps — that's the project rulebook "Deploy fetches NOTHING speculative" Key Rule (`AGENTS.md` / `CLAUDE.md`), codified at the type level. Migration of legacy `image:` blocks: `charly migrate` (idempotent).
+
+            Use cases:
+            - Installing a focused tool set (ripgrep + uv + direnv) on your workstation without a container.
+            - Iterating on a candy locally, then baking it into a box.
+            - Pushing a profile to a remote machine over SSH (CI runner, lab box, bastion) without ad-hoc shell scripting.
+
+            ## SSH config + agent are the configuration
+
+            charly contains **zero** custom SSH-key resolution. We do not read `~/.ssh/config`, we do not detect ssh-agent, we do not prompt for keys. `ssh(1)` does it all. Configure your destinations via `~/.ssh/config` `Host` stanzas, load keys into `ssh-agent`, and `charly` shells out to `ssh` with no `-i` / `-o StrictHostKeyChecking=` / `-o UserKnownHostsFile=` overrides.
+
+            For VM destinations, `charly vm create <name>` writes a managed Host stanza into `~/.config/charly/ssh_config` (one per VM, fenced with `# opencharly:begin` markers) and ensures your `~/.ssh/config` has `Include ~/.config/charly/ssh_config` (also managed). After that, `ssh charly-<vmname>` works from any terminal — and the local deploy path constructs `&SSHExecutor{Host: "charly-<vmname>"}` (via `rootExecutorForDeployNode`) with no User/Port/Key; ssh(1) resolves them from the config. The alias is `charly-<VmDomainIdentity(deploy)>` — keyed by the DEPLOY name (a direct `charly vm create <entity>` deploy name IS the entity; a `vm:` bed's alias is `charly-<bed>`), so sibling beds sharing one `kind:vm` entity get distinct aliases (P33).
+
+            ## Quick Reference
+
+            | Action | Command |
+            |---|---|
+            | Direct local | `charly bundle add my-laptop` (`host: local` is the default) |
+            | SSH to remote | `charly bundle add ci-3` with `host: user@ci-3.lan` in charly.yml |
+            | Reference a template | `from: dev-workstation` inside the `local:` node |
+            | Tear down | `charly bundle del <name>` |
+            | Tear down, keep repo changes | `charly bundle del <name> --keep-repo-changes` |
+
+            ## Three DIFFERENT remote surfaces — do not conflate them
+
+            charly exposes three distinct mechanisms. Picking the wrong one silently changes which
+            executor runs, and therefore what a check bed actually proves.
+
+            | Mechanism | What it is | Executor | Where the work happens |
+            |---|---|---|---|
+            | `local: {host: user@machine}` | a **deploy field** — apply candies TO a remote machine | `SSHExecutor` | that machine (driven from here) |
+            | a `local:` node **nested under** a `vm:`/`pod:` node | **tree position** — deploy INTO the enclosing venue; the child carries NO `host:` | `NestedExecutor` over the parent venue | inside the enclosing deployment |
+            | `charly --host <alias\|user@host[:port]> <verb>` | a **global CLI flag** — re-exec the whole COMMAND remotely | n/a (a fresh `charly` runs there) | on the remote machine |
+
+            **`charly --host` is a command-transport flag, not a deploy field** (`charly/host_exec.go`).
+            It shells out to `ssh <target> charly <argv>` and propagates the exit code; stdin/stdout/stderr
+            pipe straight through, so `~/.ssh/config`, agent forwarding, and ControlMaster all apply.
+
+            - Alias resolution: a value containing `@` or `.` is used verbatim; otherwise
+              `charly settings set hosts.<alias> <target>` is consulted, and failing that the raw string
+              is handed to `ssh(1)` (so a `Host` stanza — e.g. the `charly-<vmname>` alias that
+              `charly vm create` writes — just works).
+            - `settings`, `version`, and `ssh` are **LocalOnly**: they manage the local installation and
+              are never re-execed.
+            - `buildRemoteArgv` **strips `--host`, `--dir`/`-C`, and `--repo`** before shipping argv, so
+              the remote `charly` starts in the SSH cwd and must locate its project itself — via its own
+              cwd, or `CHARLY_PROJECT_DIR` / `CHARLY_PROJECT_REPO` in the remote environment. Note that
+              `ssh host cmd` is a NON-interactive shell: it sources neither `/etc/profile` nor `~/.bashrc`.
+              `/etc/environment` DOES reach it (pam_env, via `UsePAM`), so that is where such a variable
+              belongs on the guest.
+
+            **To run a `local:` check bed inside a VM, use NESTING** — it keeps the `local:` authoring
+            shape (same template, same candies, same `plan:`) and confines every write to the guest, and
+            the enclosing bed owns its lifecycle. Canonical example: `check-arch-vm` → `arch-host` in
+            `box/arch/charly.yml`. See `/charly-core:deploy` "Deploy-into nesting".
+
+            **But be precise about what moving a bed COSTS.** `ShellExecutor` runs only for a TOP-LEVEL
+            `local:` deploy with `host: local` (or absent). **All three remote surfaces above bypass it** —
+            nesting included: a nested child runs on `NestedExecutor` over the parent venue (for a `vm:`
+            parent, the guest `SSHExecutor`), and `RootExecutorForDeployNode` explicitly "does NOT handle
+            the nested-inside-a-parent case" (`sdk/deploykit/deploy_chain.go`). So relocating a
+            `host: local` bed — by nesting, by a `host:` retarget, or by `charly --host` — **deletes its
+            `ShellExecutor` + `HostDeployTarget` coverage**. `check-local` declares itself the *"sole proof
+            of the kind:local layer-application path via ShellExecutor + HostDeployTarget"*; that coverage
+            cannot be relocated, only replaced deliberately by another top-level `host: local` bed.
+
+            ## `host:` destination semantics
+
+            A host/remote deploy MUST be authored as the `host:` FIELD on a `local:` deploy — `local: {from: <template>, host: <user@machine>}`. The `host:` field is a SCALAR on the `local:` substrate node; there is NO standalone `host:` venue KIND, and authoring a `host:` node is a hard load error.
+
+            Reserved literal: `local`. Anything else (including `localhost`, `127.0.0.1`) goes through SSH.
+
+            **A top-level `local:` deploy with `host: local` (or `host:` absent) writes to the OPERATOR'S
+            machine** — including one marked `disposable: true`, which makes it a check bed a roster will
+            discover and run. Nest it under a disposable `vm:` bed when the writes must stay in a guest.
+
+            ```yaml
+            # Each deployment is a name-first deploy: the `local:` substrate kind at
+            # the edge, `from:` selects the template, and `host:` selects direct shell vs SSH.
+
+            # Direct local — host: omitted == "local". Deploy data (add_candy,
+            # install_opts, …) lives inline in the substrate node.
+            my-laptop:
+              local:
+                from: dev-workstation
+                add_candy: [sshkeys]
+
+            # Explicit local sentinel.
+            my-laptop-explicit:
+              local:
+                from: dev-workstation
+                host: local
+
+            # SSH to remote machine (ssh-config + agent supply credentials).
+            ci-runner-3:
+              local:
+                from: ci-runner
+                host: ubuntu@ci-runner-3.lan
+
+            # SSH with explicit port.
+            bastion:
+              local:
+                from: dev-workstation
+                host: admin@bastion.example.com:2222
+
+            # SSH to loopback for testing the SSH path.
+            ssh-self-test:
+              local:
+                from: dev-workstation
+                host: localhost
+            ```
+
+            ## `user:` and `ssh_args:` — Ansible-style overrides
+
+            Two pass-through fields mirror Ansible's per-host overrides:
+
+            ```yaml
+            # Explicit user override (Ansible's ansible_user). Used when host: has
+            # no "@" prefix. Cleaner than embedding the user in host: when the
+            # destination is an ssh-config alias. host: and user: are scalars, so
+            # they sit directly under the substrate kind.
+            workshop-laptop:
+              local:
+                from: dev-workstation
+                host: workshop-laptop.lan
+                user: alice
+
+            # ssh_args: passes options through to ssh(1) (Ansible's
+            # ansible_ssh_extra_args). Use sparingly — ssh-config Host stanzas are
+            # the right home for persistent options. ssh_args is a list, so it lives
+            # in its own child node.
+            via-bastion:
+              local:
+                from: dev-workstation
+                host: target.internal
+                user: ops
+              via-bastion-ssh_args:
+                ssh_args:
+                  - "-o"
+                  - "ProxyJump=ops@bastion.example.com"
+            ```
+
+            **Precedence rule** for `user:` vs the inline `host: <user>@<machine>` form: the inline user wins (more-specific beats more-general). When both are set with different values, the validator emits an error — pick one. When both are absent, ssh(1) reads the `User` directive from `~/.ssh/config` or falls back to `$USER`.
+
+            ## Setup: one-time `Include` line
+
+            The first `charly vm create` writes:
+            - A Host stanza into `~/.config/charly/ssh_config` (managed block, fenced).
+            - An `Include ~/.config/charly/ssh_config` line into your `~/.ssh/config` (also fenced).
+
+            If you prefer to manage your `~/.ssh/config` manually, add the Include line yourself before creating any VMs. `charly vm destroy` removes the matching stanza and, when the fragment is empty, removes the Include line too.
+
+            ## Passwordless sudo on remote SSH targets
+
+            Remote `target: local` deploys assume **passwordless sudo** on the destination. We do not bridge interactive sudo prompts through the SSH session. Either: (a) configure `NOPASSWD` for your user on the remote, or (b) restrict the deploy to layers that don't require root (omit `--with-services`, omit packages that need `sudo dnf`).
+
+            ## Gates (opt-in flags)
+
+            | Flag | Guards |
+            |---|---|
+            | `--with-services` | systemd unit writes; `systemctl enable --now` |
+            | `--allow-repo-changes` | `/etc/yum.repos.d/`, `/etc/apt/`, `/etc/pacman.conf` mutations |
+            | `--allow-root-tasks` | arbitrary `cmd: user: root` task bodies (opaque shell) |
+            | `--skip-incompatible` | skip candies without a destination-matching format section |
+            | `--builder-image <ref>` | override the compile builder image |
+            | `--yes` / `-y` | implies all three gates + skips sudo preflight |
+
+            ## Validation
+
+            `charly box validate` checks every `target: local` deployment:
+
+            - `from: <name>` (inside the `local:` node) references a `kind: local` template that exists.
+            - `host:` field, when non-`local`, parses via `ParseSSHTarget`.
+            - `user:` and `ssh_args:` only meaningful when `host:` is non-`local` (otherwise error).
+            - `user:` redundancy: when `host: <inline>@<machine>` and `user:` are both set with different values, error.
+
+            ## Cross-References
+
+            - `/charly-local:local-spec` — author-facing reference for `kind: local` templates.
+            - `/charly-internals:local-infra` — Go file map for the executor/ledger surface.
+            - `/charly-core:deploy` — parent command family.
+            - `/charly-image:layer` — `service:` schema rendered as systemd units on local-target deploys.
+            - `/charly-vm:vm` — managed ssh-config fragment writen on `charly vm create`.
+            - `/charly-check:check` — `--verify` re-runs candy `check:` against the deploy post-install.
+            - `/charly-internals:install-plan` — shared IR consumed by the external `deploy:local` plugin over the executor reverse channel.
+
+            ## When to Use This Skill
+
+            **MUST be invoked** when the task involves `target: local`, the Ansible-style `host:` field, the `user:`/`ssh_args:` overrides, the managed ssh-config fragment, the install ledger, or ReverseOp teardown. Invoke this skill BEFORE reading Go source or launching Explore agents.
+local-spec-skill:
+    skill:
+        name: local-spec
+        family: local
+        owner: charly-local
+        description: |-
+            MUST be invoked before any work involving: authoring `kind: local` templates, `local.yml` files, inline `kind: local` template nodes in `charly.yml`, or the merge semantics between a `kind: local` template and the deploy that deploys it.
+        content: |
+            # kind: local — Authoring Reference
+
+            ## Overview
+
+            `kind: local` declares a reusable candy-stack template that gets applied to a Linux filesystem (deployed by a `local:` deploy whose `from:` field selects this template). Unlike `kind: pod` / `kind: vm` / `kind: k8s` which wrap an image, a `kind: local` is defined entirely by its `layers` + `install_opts` + `env` — there's no OCI artifact backing it. The convention file is `local.yml`; templates may also be authored inline in `charly.yml` as top-level name-first nodes (`<name>: { local: {…} }`).
+
+            Legacy `kind: host` projects migrate via `charly migrate`.
+
+            ## Schema
+
+            ```yaml
+            # Name-first: the entity flattens to a top-level <name>: key whose `local:`
+            # block holds the FULL body — scalars, collections inline, and the plan as an
+            # ordered `plan:` list of steps.
+            dev-workstation:
+              local:
+                description: Standard developer workstation profile   # optional — plain string
+                candy:                       # required (use [] for a placeholder; see below)
+                  - ripgrep
+                  - direnv
+                  - uv
+                install_opts:                # optional — defaults merged 3-tier (CLI > deploy > template)
+                  with_service: false
+                  allow_repo_changes: true
+                env:                         # optional — a map
+                  EDITOR: vim
+                plan:
+                  - check: ripgrep is installed after deploy   # one intent keyword + inline Op
+                    command: rg --version
+                    context: [deploy]
+            ```
+
+            ## Inline form in charly.yml
+
+            ```yaml
+            version: 2026.144.1443
+
+            dev-workstation:
+              local:
+                description: Dev workstation
+                candy: [ripgrep, direnv]
+                install_opts: {with_service: false, allow_repo_changes: true}
+                env: {EDITOR: vim}
+
+            ci-runner:
+              local:
+                description: CI runner profile
+                candy: [ripgrep, pixi, cargo-toolchain]
+                install_opts: {with_service: true, allow_root_tasks: true}
+
+            charly-cachyos-app:
+              local:
+                description: CachyOS DX (placeholder)
+                # Empty placeholder — `candy: []` is a load-time WARNING (allowed
+                # for staged template name reservation); a missing `candy:` field
+                # is a hard error.
+                candy: []
+                install_opts: {}
+            ```
+
+            ## Field reference
+
+            | Field | Required | Description |
+            |---|---|---|
+            | `layers` | Yes | Ordered candy stack. `[]` permitted as a placeholder (warning, not error). |
+            | `install_opts` | No | Default install gates. Deployment overrides merge on top. |
+            | `env` | No | Shell-profile env vars as a `{KEY: value}` map. Deployment env wins on key collision. |
+            | `description` | No | Plain string — the profile's purpose; first line = the summary. |
+            | `plan` | No | An ordered list of steps inline in the kind value — each one intent keyword: `run:` (state-change) / `check:` (deterministic probe) / `agent-run:` / `agent-check:` / `include:` — carrying prose plus, for `run:`/`check:`, an inline Op (verb + matchers + `context:`), and an optional `id:`. Deploy-scope steps carry `context: [deploy]`. Merged with the deploy's plan. |
+
+            There is **no** `status:` or `info:` field; `description` is the human-facing summary string.
+
+            ## What the deploy does NOT do
+
+            A `kind: local` deploy emits **zero** container-image fetch / build
+            steps. The deploy applies host packages + configs only. There is no
+            `image:` field; declaring one in legacy YAML hard-errors at
+            `charly box validate` time with a pointer to `charly migrate`.
+
+            Test-bed image preflight is the **check entry point's** job, not the
+            deploy's. When `charly check run --on-host <name>` resolves to a host
+            target, the runner walks the bed's plan steps, collects every distinct
+            step `pod:` value plus the bed's target image, and ensures each
+            image is present in local podman storage (LocalImageExists →
+            `charly box pull` → fall back to `charly box build` for short names that
+            resolve via `cfg.Images`). Operators who never run `charly check run`
+            never pay the image-fetch cost. See `/charly-check:check` "Image
+            preflight" and `candy/plugin-check/preflight_images.go` (the check-run
+            preflight arm, K-wave 2 cone R4 — the former `charly/check_image_preflight.go`
+            is DELETED).
+
+            This invariant — "deploy fetches NOTHING speculative" — is codified
+            as a project-rulebook Key Rule (`AGENTS.md` / `CLAUDE.md`) and enforced at the type level: the
+            `LocalSpec` Go struct has no `Images` field, so the surface is
+            unreachable from any new code. Migration: `charly migrate`
+            (idempotent; rewrites legacy `image:` blocks under `local.<name>`
+            to a dated comment fence).
+
+            ## Merge semantics — `kind: local` template + a deploy
+
+            When a `local:` deploy carries `from: <template-name>`:
+
+            | Field | Template provides | Deployment overrides | CLI overrides | Effective value |
+            |---|---|---|---|---|
+            | `layers` | base list | — | — | `template.Layers` |
+            | `add_layers` | — | extra list | `--add-candy` | `deployment.AddCandies ++ CLI.AddCandy` |
+            | effective layer order | — | — | — | `template.Layers ++ deployment.AddCandies ++ CLI.AddCandy` |
+            | `install_opts.*` (bool) | default | wins over template | wins over both | CLI > deployment > template |
+            | `install_opts.builder_image` | default `""` | wins | wins over both | CLI > deployment > template |
+            | `env` | base list | extends + overrides on key | — | template.Env merged with deployment.Env (deployment-wins on collision) |
+            | `plan` | base plan | extends list | — | `template.Plan ++ deployment.Plan` |
+
+            The `InstallOptsConfig.ApplyTo` method is fill-empty — calling it on the deployment's opts first, then the template's, gives the priority chain automatically.
+
+            ## Empty `candy: []` is a placeholder
+
+            A template with `candy: []` is permitted as a stub for staged name reservation:
+
+            ```yaml
+            charly-cachyos-app:
+              local:
+                description: CachyOS DX (placeholder)
+                candy: []
+                install_opts: {}
+            ```
+
+            `charly box validate` emits a WARNING but does not error. A missing `candy:` field entirely IS an error — its presence is the signal that the author intended a template.
+
+            ## Cross-References
+
+            - `/charly-local:local-deploy` — the `target: local` deployment surface that consumes this template.
+            - `/charly-internals:local-infra` — Go file map (`candy/plugin-bundle/node_resolve.go`'s `lookupLocalTemplate`, the plugin-side template resolver).
+            - `/charly-image:layer` — candy authoring (the building blocks composed by templates).
+            - `/charly-build:migrate` — `charly migrate` migrates legacy `kind: host`/`host.yml` projects up to the node-form schema (every entity name-first inline in `charly.yml`). The `charly-cachyos` deploy applies the suffixed `charly-cachyos-app` `kind: local` template — within one document top-level names are globally unique, so the deploy keeps the user-facing name and the template it deploys is suffixed (see "Globally-unique names within one document" below).
+
+            ## Globally-unique names within one document
+
+            Every entity flattens to a top-level `<name>:` key, so within one document (the project-root `charly.yml`) top-level names must be **globally unique** — a deploy and the `kind: local` template it deploys cannot share a name (they would collide on one YAML key). The convention: keep the user-facing deploy name and **suffix the template it deploys**. The canonical example is `charly-cachyos` — the `charly-cachyos` deploy (`local: { from: charly-cachyos-app, host: local }`) deploys the `charly-cachyos-app` `kind: local` template; `charly update charly-cachyos` resolves to the deploy, which references the template via its `from: charly-cachyos-app` field. Cross-kind reuse of the SAME name across SEPARATE discovered files (a `candy/redis` + a `box/redis`) remains permitted. See the project rulebook "a single document's top-level node names are GLOBALLY UNIQUE".
+
+            ## When to Use This Skill
+
+            **MUST be invoked** when the task involves authoring or editing `kind: local` templates, `local.yml` files, inline `kind: local` template nodes in `charly.yml`, or the merge between a template and the deploy that deploys it. Invoke this skill BEFORE reading Go source or launching Explore agents.

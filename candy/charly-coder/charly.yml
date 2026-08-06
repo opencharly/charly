@@ -1,0 +1,1189 @@
+charly-coder:
+    candy:
+        version: 2026.218.1200
+        description: |-
+            Metadata concept candy owning the charly-coder skills whose names have no namesake candy (coder/dev images). Owns its family's `skill:` kind entities (sibling nodes in this file) — the
+            plugins→candies migration; candy/plugin-marketplace regenerates the plugins/ corpus
+            from them.
+        plan:
+            - run: this documentation-only candy ships no install content (it carries the family's skill/hook/marketplace entities); validate-satisfying no-op
+              command: "true"
+              context:
+                - build
+            - check: the coder concept candy's skill entities are present and generated into plugins/coder/skills
+              id: charly-coder-present
+              context:
+                - build
+              command: "true"
+
+arch-coder-skill:
+    skill:
+        name: arch-coder
+        family: coder
+        owner: charly-coder
+        description: |-
+            Kitchen-sink development box on Arch Linux: coding + AI-coding CLIs +
+            DevOps tooling in one container. Arch base, 30+ direct candies mirroring
+            fedora-coder's stack but with pac:-section packages (plus AUR for a few
+            unique cases). Runs as uid 1000 (`user`) with passwordless sudo.
+            Use when working with the arch-coder box — or when comparing
+            cross-distro parity across the four coder-family boxes (fedora,
+            debian, ubuntu, arch).
+        content: |-
+            # arch-coder
+            
+            > **Location:** the `arch-coder` box lives in the dedicated
+            > **`opencharly/distro-arch`** repo, mounted as a git submodule at **`box/arch`**.
+            > It composes the candies below by **git reference** to this repo
+            > (`@github.com/opencharly/charly/candy/<name>:<tag>`) rather than copying
+            > them; the `arch` base + `arch-builder` are bare-local in the same
+            > self-contained `opencharly/distro-arch` submodule (`import: []`), so the box
+            > writes `base: arch`, `builder: {…: arch-builder}`. Build / deploy from
+            > the submodule, e.g. `cd box/arch && charly box build arch-coder` (the build
+            > verb defaults to the submodule's `charly.yml`), or
+            > `charly --repo opencharly/distro-arch box build arch-coder`. The commands below assume
+            > you are inside `box/arch` (or pass `-C box/arch`).
+            
+            Arch Linux counterpart of `/charly-coder:fedora-coder`. Same daily-development surface (AI CLIs, language runtimes, DevOps stack), same rootless posture (uid 1000 + passwordless sudo), same shape of tests — only the package manager (`pac:` / `aur:`) and a handful of Arch-specific package names differ.
+            
+            ## Definition
+            
+            ```yaml
+            arch-coder:
+              base: arch                         # bare-local in the self-contained box/arch submodule
+              ports:
+                - "2222:2222"                 # sshd-wrapper
+                - "18765:18765"               # charly-mcp (Streamable HTTP)
+              candy:
+                # Baseline — identical to fedora-coder
+                - agent-forwarding
+                - sshd
+                - charly
+                - charly-mcp
+                - container-nesting
+                - dbus
+                - tmux
+            
+                # Language runtimes + managers
+                - language-runtimes           # Go + PHP + .NET 9 + python3-devel
+                - golang
+                - nodejs                      # Arch ships a current Node (v26)
+                - rust
+                - pixi
+                - uv
+            
+                # Build + developer tooling
+                - build-toolchain
+                - dev-tools
+                - pre-commit
+                - direnv
+                - gh
+                - typst
+                - asciinema
+            
+                # AI coding CLIs
+                - claude-code
+                - codex
+                - gemini
+                - forgecode
+                - oracle
+            
+                # DevOps / cloud / infra
+                - devops-tools
+                - kubernetes
+                - docker-ce
+                - github-actions
+                - google-cloud
+                - google-cloud-npm
+                - grafana-tools
+            ```
+            
+            No explicit `user:` / `uid:` / `gid:` — inherits the defaults. `user_policy:` defaults to `auto`; the `arch` base image declares no `base_user:` in its `distro:` vocabulary, so the policy falls through to create mode — the bootstrap emits an idempotent `useradd -m -u 1000 -g 1000 user`. See `/charly-image:image` "user_policy" and `/charly-build:build` "base_user".
+            
+            ## Resolved security posture
+            
+            | Field | Value | Source |
+            |---|---|---|
+            | `cap_add` | **(empty)** | — |
+            | `security_opt` | `[unmask=/proc/*]` | `/charly-distros:container-nesting` |
+            | `devices` | `[/dev/fuse, /dev/net/tun]` | `/charly-distros:container-nesting` |
+            | `privileged` | `false` | — |
+            | Network | bridge | defaults |
+            | UID / user | `1000 / user` | create mode |
+            | sudo | passwordless via `/etc/sudoers.d/charly-user` | `/charly-coder:sshd` |
+            
+            **No `--privileged`, no `cap_add: ALL`, no `seccomp=unconfined`.** The rootless posture is shared with the three sibling power-user boxes (`fedora-coder`, `charly-fedora`, `charly-arch`); `/charly-distros:container-nesting` proves a privileged posture is unnecessary.
+            
+            ## AUR via yay (Arch-specific builder chain)
+            
+            Unlike fedora-coder (which only uses `pixi`/`npm`/`cargo` builders), `arch-coder` can also pull from the AUR — because the `arch-builder` box ships `yay` and declares `builds: [pixi, npm, cargo, aur]`. Candies with `aur:` sections route through `arch-builder` as their `aur` builder. Currently no candy in the arch-coder stack uses AUR, but the capability exists for future additions (e.g. niche tools not in `[core]`/`[extra]`).
+            
+            See `/charly-distros:arch-builder` and `/charly-tools:yay`.
+            
+            ## Cross-distro siblings
+            
+            `arch-coder` is one of **four cross-distro coder boxes** that share the identical 80-line `check:` block and ~30 identical candies, diverging only in each candy's package-format section (`rpm:` / `pac:` / `deb:`):
+            
+            - `/charly-coder:fedora-coder` — RPM-based, Fedora 43 via `fedora-nonfree`, uid=1000 `user`.
+            - `/charly-coder:arch-coder` — this box; pacman + optional AUR, uid=1000 `user`.
+            - `/charly-coder:debian-coder` — deb-based, Debian 13 trixie, uid=1000 `user`.
+            - `/charly-coder:ubuntu-coder` — deb-based, Ubuntu 24.04 noble, uid=1000 `ubuntu` (adopted from base image — see `/charly-image:image` "user_policy" and `/charly-distros:ubuntu`).
+            
+            All four produce the same developer surface. Pick based on which distro family you (or your team / CI) are already standardized on.
+            
+            ## The candy stack
+            
+            Candies in roughly the same groups as fedora-coder, with these Arch-specific notes:
+            
+            - `nodejs` — Arch's `nodejs` package ships a current Node (v26); no LTS pinning.
+            - `language-runtimes` — Arch ships `dotnet-sdk` in `[extra]` (no Microsoft repo needed, unlike Debian/Ubuntu). Also drops `python3-ramalama` (not packaged on Arch — install via `uv tool install ramalama`).
+            - `dev-tools` — `/usr/bin/bat` ships directly from the `bat` package (no Debian-style batcat rename needed).
+            - `gh` — GitHub CLI from Arch's `extra` repo (no third-party apt repo needed).
+            - `container-nesting` — Arch equivalents for podman + buildah + skopeo + fuse-overlayfs + crun.
+            
+            The remaining 25+ candies are identical to fedora-coder at the *composition* level. Each candy's `pac:` section handles the Arch-specific package names.
+            
+            ## Quick start
+            
+            ```bash
+            charly box build arch-coder
+            charly shell arch-coder
+            # or as a service:
+            charly config arch-coder
+            charly start arch-coder
+            ssh -p 2222 user@localhost           # passwordless sudo
+            ```
+            
+            ## Verification recipe
+            
+            ```bash
+            charly box build arch-coder
+            charly check box ghcr.io/opencharly/arch-coder:latest
+            # disposable-container tests against the baked OCI label
+            
+            charly config arch-coder
+            charly start arch-coder
+            charly check box ghcr.io/opencharly/arch-coder:latest
+            # adds deploy-scope checks: sshd reachable, supervisord, dbus, charly-mcp,
+            # virtqemud, libvirt session list, KVM domcaps, MCP tool-call probes.
+            ```
+            
+            ## Ports
+            
+            | Port | Service | Bound by |
+            |---|---|---|
+            | 2222 | sshd-wrapper (SSH access as `user` with sudo) | `/charly-coder:sshd` |
+            | 18765 | charly-mcp (entire `charly` CLI as MCP tools, Streamable HTTP) | `/charly-coder:charly-mcp` |
+            
+            Conflicts with `/charly-coder:fedora-coder` / `/charly-coder:debian-coder` / `/charly-coder:ubuntu-coder` on both ports (all coder-family boxes use the same canonical ports). Use `-i <instance>` or `-p <remap>` to run alongside.
+            
+            ## Related boxes
+            
+            - `/charly-distros:arch` — base image (pacman bootstrap, `user_policy: auto` → create).
+            - `/charly-distros:arch-builder` — pixi/npm/cargo/aur multi-stage builder.
+            - `/charly-coder:fedora-coder` — canonical RPM-family sibling.
+            - `/charly-coder:debian-coder` — deb-family sibling on Debian 13.
+            - `/charly-coder:ubuntu-coder` — deb-family sibling on Ubuntu 24.04 (adopt mode).
+            - `/charly-coder:charly-arch` — slimmer Arch alternative with just the charly toolchain (no AI CLIs or DevOps tooling).
+            - `/charly-openclaw:openclaw-desktop` — adds a browser-streamed Wayland desktop (plus the openclaw gateway, AI CLIs, and a CPU ollama) with the same rootless charly toolchain.
+            
+            ## Related layers
+            
+            - `/charly-tools:yay` — AUR helper, required for any `aur:` section
+            - `/charly-tools:charly`, `/charly-coder:charly-mcp`, `/charly-distros:container-nesting` — shared rootless baseline
+            - `/charly-coder:sshd` — cross-distro sudoers via `getent passwd 1000`
+            - `/charly-coder:language-runtimes`, `/charly-coder:dev-tools`, `/charly-coder:gh`
+            - `/charly-coder:claude-code`, `/charly-coder:codex`, `/charly-coder:gemini`, `/charly-coder:forgecode`, `/charly-coder:oracle`
+            
+            ## Related commands
+            
+            - `/charly-core:shell`, `/charly-core:charly-config`, `/charly-core:start`, `/charly-core:stop`, `/charly-check:check`
+            - `/charly-image:image` — `user_policy:` field reference
+            - `/charly-build:build` — `base_user:` declaration (absent for arch)
+            - `/charly-image:layer` — authoring reference
+            
+            ## When to use this skill
+            
+            **MUST be invoked** when the task involves:
+            
+            - Building, deploying, or troubleshooting `arch-coder`.
+            - Comparing cross-distro parity across the four coder-family boxes.
+            - Adding `aur:` sections to candies composed into `arch-coder`.
+            - Understanding why Arch doesn't need Microsoft's apt repo (dotnet-sdk is in `[extra]`) or batcat symlinks (`bat` is packaged as `bat`).
+
+charly-arch-skill:
+    skill:
+        name: charly-arch
+        family: coder
+        owner: charly-coder
+        description: |-
+            Arch Linux box with the full charly toolchain. Rootless-first — runs as
+            uid=1000 with passwordless sudo (no root, no cap_add: ALL).
+            Composes /charly-coder:charly-mcp so the box is reachable as an MCP gateway
+            on port 18765. NVIDIA GPU runtime composed in.
+            MUST be invoked before building, deploying, configuring, or troubleshooting
+            the charly-arch box.
+        content: |-
+            # charly-arch
+            
+            > **Location:** `charly-arch` lives in the **`opencharly/distro-arch`** repo (git
+            > submodule at **`box/arch`**) and composes its candies by git reference to
+            > this repo. Build from the submodule: `cd box/arch && charly box build charly-arch`
+            > (or `charly --repo opencharly/distro-arch box build charly-arch`). The `arch` base +
+            > `arch-builder` are bare-local in the same self-contained `opencharly/distro-arch`
+            > submodule (`import: []`) — `base: arch`.
+            
+            Arch Linux container with the full charly toolchain. Uses the same shared
+            candy list as `/charly-distros:charly-fedora` — the tag system handles
+            Arch-specific packages and scripts via `pac:` sections. Composes
+            `charly-mcp` so the box is addressable as an MCP gateway — LLM agents
+            can drive build/test/deploy via Streamable HTTP on port 18765.
+            
+            ## Box Properties
+            
+            | Property | Value |
+            |----------|-------|
+            | Base | arch (quay.io/archlinux/archlinux, pinned in the `opencharly/distro-arch` submodule) |
+            | Tags | `[all, pac, arch]` |
+            | Candies | agent-forwarding, charly, **charly-mcp**, golang, gh, sshd, container-nesting, nvidia |
+            | Platforms | linux/amd64 |
+            | UID / user | **1000 / user** (rootless-first) |
+            | Network | default `charly` bridge |
+            | Ports | `2222:2222` (sshd), `18765:18765` (charly-mcp) |
+            | Security | candy-level only (from `/charly-distros:container-nesting`) |
+            | Registry | ghcr.io/opencharly |
+            
+            ### Rootless-first posture
+            
+            All four power-user boxes (`charly-arch`, `/charly-distros:charly-fedora`,
+            `/charly-coder:fedora-coder`, `/charly-distros:githubrunner`) run rootless because
+            the `/charly-distros:container-nesting` kernel-level RCA proves that
+            `unmask=/proc/*` + uid-delegation via subuid/subgid ranges is sufficient for
+            rootless nested containers + rootless libvirt VMs.
+            
+            The `/charly-coder:sshd` candy installs `/etc/sudoers.d/charly-user` with
+            passwordless sudo for `user`, so anything that truly needs root inside
+            the container is one `sudo` prefix away — but the default user for
+            every process (sshd session, `charly` commands, nested `podman run`) is
+            uid=1000.
+            
+            Resolved OCI security label:
+            
+            | Field | Value |
+            |---|---|
+            | `cap_add` | **(empty)** |
+            | `security_opt` | `[unmask=/proc/*]` (from `/charly-distros:container-nesting`) |
+            | `devices` | `[/dev/fuse, /dev/net/tun]` (from `/charly-distros:container-nesting`) |
+            | `privileged` | `false` |
+            
+            See `/charly-openclaw:openclaw-desktop` for the sibling rootless-first
+            box that proves this posture works under streaming-desktop +
+            nested-VM load, and `/charly-distros:container-nesting` for the kernel
+            `mount_too_revealing()` RCA.
+            
+            ### Network + port publishing
+            
+            `charly-arch` uses the project-default `charly` bridge — so `charly-mcp`'s MCP URL
+            rewriting (`candy/plugin-mcp/resolve.go`, the host-port mapping via the
+            `cc.ResolveEndpoint` reverse-leg) has published port
+            mappings to work with. (That leg also handles host-networked containers
+            via `HostConfig.NetworkMode` detection — `ContainerInspection.IsHostNetworked()` in
+            `sdk/kit/checkvars.go` — so the bridge isn't strictly required
+            — but it remains the portable default.) If host-port 2222 is already taken by
+            another running box (canonical conflict: `/charly-openclaw:openclaw-desktop`
+            or any `selkies-desktop-*` variant), remap at config time:
+            `charly config charly-arch -p 2223:2222`.
+            
+            ### MCP gateway (charly-mcp)
+            
+            The `/charly-coder:charly-mcp` candy deploys `charly mcp serve --listen :18765`
+            inside the container under supervisord, advertising ~192 MCP tools
+            (the full Kong CLI surface, including the project-scaffolding +
+            YAML-editing + file-write authoring verbs). Three deployment patterns
+            work — bind-mount your project, pin an `CHARLY_PROJECT_REPO`, or rely on the
+            auto-fallback to `opencharly/charly`:
+            
+            ```bash
+            # Pattern 1: bind your local checkout
+            charly config charly-arch --bind project=/home/you/opencharly
+            charly start charly-arch
+            charly check live charly-arch --filter mcp  # the baked mcp: call box.list.boxes step lists YOUR project's boxes
+            
+            # Pattern 3: no bind-mount (auto-fallback kicks in)
+            charly config charly-arch
+            charly start charly-arch
+            charly check live charly-arch --filter mcp  # box.list.boxes lists upstream opencharly/charly boxes
+            ```
+            
+            Volume NAME is `project` (stable bind-mount API); container PATH is
+            `/workspace`. See `/charly-coder:charly-mcp` for full deployment patterns,
+            `/charly-build:charly-mcp-cmd` Part 2 for the server architecture, and `/charly-core:charly-config`
+            "Bind-mounting a project checkout for charly mcp serve" for the
+            bind-mount handshake.
+            
+            ## What's Installed
+            
+            Full charly toolchain via shared candies:
+            
+            - **charly** — the full toolchain: charly binary + VM tools (qemu-full, virtiofsd, libvirt) + gocryptfs + socat
+            - **charly-mcp** — MCP server exposing the full charly CLI as tools on :18765 (supervisord-managed; bind `project=` for build-mode tools or rely on auto-fallback)
+            - **golang** — Go compiler (`go`)
+            - **gh** — GitHub CLI + `git` + `git-lfs` (single-responsibility; see `/charly-coder:gh`)
+            - **sshd** — SSH server/client (`openssh` on Arch — `package_map` handles the Fedora/Arch name split) + passwordless sudo for `user`
+            - **container-nesting** — podman, buildah, crun, fuse-overlayfs, skopeo, tailscale, libsecret + nested container config
+            - **nvidia** — nvidia-utils, nvidia-container-toolkit (CDI generation; benign pacman-hook NVML noise on GPU-less hosts — see `/charly-distros:nvidia`)
+            
+            ## Lifecycle
+            
+            ```bash
+            # Build
+            charly box build charly-arch
+            
+            # Interactive shell (as uid=1000)
+            charly shell charly-arch
+            
+            # Run a command
+            charly shell charly-arch -c "charly version"
+            charly shell charly-arch -c "sudo dnf --help"    # sudo works passwordless
+            
+            # Start as service
+            charly start charly-arch
+            charly status charly-arch
+            charly stop charly-arch
+            ```
+            
+            ## Nested Containers
+            
+            Rootless podman works inside charly-arch at any nesting depth. The
+            `/charly-distros:container-nesting` candy provides the config + env vars +
+            subuid/subgid delegation (1:999 + 1001:64535 per the podman/stable
+            recipe):
+            
+            ```bash
+            # Level 1: run containers inside charly-arch
+            charly shell charly-arch -c "podman run --rm quay.io/libpod/alpine:latest echo hello"
+            
+            # Level 2: run charly inside charly-arch inside charly-arch
+            charly shell charly-arch -c "charly shell charly-arch -c 'charly version'"
+            ```
+            
+            Use `quay.io/libpod/alpine:latest` instead of `docker.io/library/alpine`
+            to dodge Docker Hub rate limits — the baked
+            `container-nesting-alpine-run` test does.
+            
+            ## GPU Support
+            
+            The `/charly-distros:nvidia` candy provides NVIDIA GPU runtime:
+            
+            - `nvidia-utils` — `nvidia-smi` and driver userspace
+            - `nvidia-container-toolkit` — `nvidia-ctk` for CDI spec generation
+            
+            `charly` triggers CDI regeneration plugin-side (`pluginEnsureCDI` in
+            `candy/plugin-preempt/holder_dispatch.go`, via `spec.GpuSwitchActionEnsureCDI` — the
+            former in-core `EnsureCDI()` shim is DELETED, K-wave 2 cone R3) before launching GPU
+            containers. GPU access works at any nesting depth.
+            
+            ## Verification
+            
+            ```bash
+            charly shell charly-arch -c "id"                              # uid=1000(user)
+            charly shell charly-arch -c "sudo -n whoami"                  # root (passwordless)
+            charly shell charly-arch -c "charly version"
+            charly shell charly-arch -c "charly doctor"
+            charly shell charly-arch -c "podman info"
+            charly shell charly-arch -c "podman run --rm quay.io/libpod/alpine:latest echo OK"
+            charly shell charly-arch -c "which nvidia-ctk"
+            ```
+            
+            ## Unified with charly-fedora
+            
+            Both `charly-arch` and `/charly-distros:charly-fedora` use the exact same candy
+            list. The tag system (`build: [pac]` + `distro: [arch]` vs
+            `build: [rpm]` + `distro: ["fedora:43", fedora]`) selects the right
+            packages and scripts per distro.
+            
+            ## Key Candies
+            
+            - `/charly-tools:charly` — the full toolchain: charly binary plus VM/encryption tools
+            - `/charly-coder:charly-mcp` — MCP server gateway (port 18765; `/workspace` bind-mount or auto-fallback)
+            - `/charly-distros:container-nesting` — nested podman/buildah (pac: podman + crun + buildah; `docker` is RPM-only — Arch gets podman directly)
+            - `/charly-coder:sshd` — SSH server/client with `package_map` for cross-distro package names + the passwordless-sudo sudoers drop-in
+            - `/charly-coder:gh` — GitHub CLI + git + git-lfs (owns all git tooling)
+            - `/charly-distros:nvidia` — NVIDIA GPU runtime
+            
+            ## Related Boxes
+            
+            - `/charly-distros:arch` — parent base image
+            - `/charly-distros:charly-fedora` — Fedora counterpart, same candies, same rootless posture
+            - `/charly-coder:fedora-coder` — kitchen-sink dev sibling (32 candies vs 8; adds coding CLIs + DevOps)
+            - `/charly-openclaw:openclaw-desktop` — streaming-desktop counterpart (charly toolchain + browser-accessible Wayland); shares the rootless-first posture
+            - `/charly-distros:githubrunner` — self-hosted GitHub Actions runner; same uid=1000 posture
+            
+            ## Related Commands
+            
+            - `/charly-core:shell` — open an interactive shell in charly-arch (as uid=1000 with sudo)
+            - `/charly-core:service` — manage charly-arch as a service
+            - `/charly-vm:vm` — nested libvirt VMs via `qemu:///session` (rootless)
+            - `/charly-check:check` — three modes: `charly check box <ref>` (build-scope, disposable container), `charly check live <name>` (full-stack against running deployment), `charly check run <score>` (AI iteration loop)
+            - `/charly-build:charly-mcp-cmd` — MCP gateway + auto-fallback behavior
+            
+            ## Related
+            
+            - `/charly-image:image` — image family umbrella (`candy:` image entries — those carrying `base:`/`from:` — in `charly.yml`, build/validate/inspect/list)
+            - `/charly-build:build` — the embedded build vocabulary (distros, builders, init-systems)
+
+debian-coder-skill:
+    skill:
+        name: debian-coder
+        family: coder
+        owner: charly-coder
+        description: |-
+            Kitchen-sink development box on Debian 13 trixie: coding + AI-coding
+            CLIs + DevOps tooling in one container. Debian base, 30+ direct candies
+            mirroring fedora-coder's stack but with deb: sections. Runs as uid 1000
+            (`user`) with passwordless sudo. 143/0 tests pass.
+            Use when working with the debian-coder box — or when comparing
+            cross-distro parity across the four coder-family boxes.
+        content: |-
+            # debian-coder
+            
+            Debian 13 trixie counterpart of `/charly-coder:fedora-coder`. Same 80-line `check:` block, same ~30 candies, same rootless posture (uid 1000 + passwordless sudo). Key wrinkles are all Debian-specific packaging quirks handled inside individual candies: `bat → batcat` symlink, Microsoft's `dotnet-install.sh` cross-distro installer, and package-existence tests (vs binary-path tests) for `virtualization` because Debian bundles libvirt drivers differently.
+            
+            > **Location:** lives in the **`opencharly/distro-debian`** repo (git submodule at
+            > **`box/debian`**), in that repo's config (its `charly.yml` + per-kind
+            > sibling files). Its `debian` base is owned by the same submodule; its ~31
+            > candies are pulled by github reference from the main repo. Build/validate from
+            > the submodule:
+            > `charly -C box/debian box build debian-coder`, or
+            > `charly --repo opencharly/distro-debian box build debian-coder`. Deploy-mode verbs
+            > (`charly config`/`charly start`/`charly check box`) read the built image's OCI labels and
+            > work from anywhere once it's in local storage.
+            
+            ## Definition
+            
+            ```yaml
+            debian-coder:
+              base: debian
+              ports:
+                - "2222:2222"                 # sshd-wrapper
+                - "18765:18765"               # charly-mcp (Streamable HTTP)
+              candy:
+                # Baseline
+                - agent-forwarding
+                - sshd
+                - charly
+                - charly-mcp
+                - container-nesting
+                - dbus
+                - tmux
+            
+                # Language runtimes
+                - language-runtimes           # Go + PHP + .NET 9 (via Microsoft dotnet-install.sh)
+                - golang
+                - nodejs                      # nodejs — Debian's packaged Node
+                - rust
+                - pixi
+                - uv
+            
+                # Build + developer tooling
+                - build-toolchain
+                - dev-tools                   # ripgrep, bat→batcat symlink, fd-find, neovim, …
+                - pre-commit
+                - direnv
+                - gh
+                - typst
+                - asciinema
+            
+                # AI coding CLIs
+                - claude-code
+                - codex
+                - gemini
+                - forgecode
+                - oracle
+            
+                # DevOps / cloud / infra
+                - devops-tools
+                - kubernetes
+                - docker-ce
+                - github-actions
+                - google-cloud
+                - google-cloud-npm
+                - grafana-tools
+            ```
+            
+            ## User model — create mode
+            
+            The `debian:13` upstream base image ships **no** pre-existing uid-1000 account. The embedded `distro.debian` vocabulary declares no `base_user:`, so `user_policy: auto` (the default) falls through to create mode. The bootstrap section of `.build/debian/Containerfile` emits:
+            
+            ```
+            RUN if ! getent passwd 1000 >/dev/null 2>&1; then
+                  (getent group 1000 >/dev/null 2>&1 || groupadd -g 1000 user) &&
+                  useradd -m -u 1000 -g 1000 -s /bin/bash user;
+                fi
+            ```
+            
+            Resolved identity: `User=user, UID=1000, GID=1000, Home=/home/user`. Identical to fedora-coder / arch-coder. Contrast with `/charly-coder:ubuntu-coder` which runs adopt mode on `ubuntu:ubuntu`.
+            
+            See `/charly-image:image` "user_policy" and `/charly-build:build` "base_user" for the full decision table.
+            
+            ## Security posture
+            
+            | Field | Value | Source |
+            |---|---|---|
+            | `cap_add` | **(empty)** | — |
+            | `security_opt` | `[unmask=/proc/*]` | `/charly-distros:container-nesting` |
+            | `devices` | `[/dev/fuse, /dev/net/tun]` | `/charly-distros:container-nesting` |
+            | `privileged` | `false` | — |
+            | Network | bridge | defaults |
+            | UID / user | `1000 / user` | create mode |
+            | sudo | passwordless via `/etc/sudoers.d/charly-user` (discovered via `getent passwd 1000`) | `/charly-coder:sshd` |
+            
+            ## Debian-specific layer quirks
+            
+            - **bat → batcat symlink** (`/charly-coder:dev-tools`). Debian and Ubuntu rename `bat` → `batcat` to avoid a namespace collision with a legacy `bacula` utility. The dev-tools candy ships a distro-tolerant cmd task that creates `/usr/bin/bat -> /usr/bin/batcat` when only batcat is present; no-op on Fedora/Arch.
+            - **dotnet-sdk-9.0 via Microsoft's `dotnet-install.sh`** (`/charly-coder:language-runtimes`). Debian 13 main ships no .NET; Microsoft's trixie apt repo has dotnet-sdk-9.0, but using the official cross-distro `dotnet-install.sh` channel-pin to `9.0` gives version parity with Ubuntu (whose Microsoft noble repo only ships 10.0). Installs to `/usr/share/dotnet` + symlinks `/usr/bin/dotnet`.
+            - **libvirt tests use `package:` not `file:`** (`/charly-infrastructure:virtualization`). Debian bundles libvirt drivers differently from Fedora's split packaging, so `file: /usr/sbin/virtqemud` would false-fail. The candy probes via `package: libvirt-daemon-driver-qemu` + `package_map:` per-distro package name.
+            - **sudoers via `getent`** (`/charly-coder:sshd`). Instead of hardcoding `user ALL=…`, the candy runs `getent passwd 1000 | cut -d: -f1` at build time to discover the actual uid-1000 account. On debian-coder that returns `user`; on ubuntu-coder it returns `ubuntu`. One cross-distro implementation, no special cases.
+            
+            ## Test results
+            
+            `charly check box ghcr.io/opencharly/debian-coder:latest` — **143 passed · 0 failed · 0 skipped**.
+            
+            Against a live running container, the same command adds live-service extension tests (sshd on 2222, supervisord, dbus, charly-mcp, the libvirt `qemu:///session` daemon — `libvirtd` on Debian, not the Fedora/Arch modular `virtqemud`), mirroring fedora-coder's +18 deploy-scope additions.
+            
+            ## Verification recipe
+            
+            ```bash
+            # 1. Validate
+            charly -C box/debian box validate
+            
+            # 2. Build dependencies auto-resolve (debian → debian-builder → debian-coder)
+            charly -C box/debian box build debian-coder
+            
+            # 3. Disposable-container tests
+            charly check box ghcr.io/opencharly/debian-coder:latest
+            
+            # 4. Deploy + live tests
+            charly config debian-coder
+            charly start debian-coder
+            charly check box ghcr.io/opencharly/debian-coder:latest
+            
+            # 5. Clean up
+            charly stop debian-coder
+            ```
+            
+            ## Ports
+            
+            | Port | Service | Bound by |
+            |---|---|---|
+            | 2222 | sshd-wrapper (SSH access as `user` with sudo) | `/charly-coder:sshd` |
+            | 18765 | charly-mcp (entire `charly` CLI as MCP tools, Streamable HTTP) | `/charly-coder:charly-mcp` |
+            
+            Conflicts with the other three coder-family boxes on the same ports — use `-i <instance>` or `-p <remap>` to run alongside.
+            
+            ## Image size
+            
+            ~10.4 GB uncompressed. Comparable to fedora-coder (~14 GB); smaller due to tighter Debian package naming (no split `-devel` packages, sparser optional dependencies pulled by default).
+            
+            ## Cross-distro siblings
+            
+            All four coder-family boxes share the identical 80-line `check:` block + ~30 identical candies; they diverge only in per-candy package-format sections.
+            
+            - `/charly-coder:fedora-coder` — RPM (Fedora 43 via fedora-nonfree).
+            - `/charly-coder:arch-coder` — pacman + optional AUR.
+            - `/charly-coder:ubuntu-coder` — deb on Ubuntu 24.04; **adopt mode** (`user:ubuntu`).
+            - `/charly-coder:debian-coder` — this box; create mode (`user:user`).
+            
+            ## Related boxes
+            
+            - `/charly-distros:debian` — parent base.
+            - `/charly-distros:debian-builder` — multi-stage builder for pixi/npm/cargo.
+            
+            ## Related layers (Debian-specific content)
+            
+            - `/charly-coder:sshd` — cross-distro sudoers via `getent passwd 1000`.
+            - `/charly-coder:dev-tools` — bat → batcat symlink task.
+            - `/charly-coder:language-runtimes` — Microsoft `dotnet-install.sh` cross-distro pattern.
+            - `/charly-infrastructure:virtualization` — `package:` + `package_map:` pattern for libvirt.
+            - `/charly-coder:build-toolchain` — Debian `-dev` package equivalents of Fedora's `-devel`.
+            - `/charly-coder:gh`, `/charly-coder:docker-ce`, `/charly-coder:kubernetes-layer`, `/charly-distros:container-nesting` — each adds an upstream apt repo (with GPG key) for packages not in Debian main.
+            
+            ## Related commands
+            
+            - `/charly-core:shell`, `/charly-core:charly-config`, `/charly-core:start`, `/charly-core:stop`, `/charly-check:check`
+            - `/charly-image:image` — `user_policy:` field reference
+            - `/charly-build:build` — `base_user:` declaration (absent for Debian)
+            - `/charly-image:layer` — authoring reference (covers `exclude_distros:`, tag-section `repos:`, Microsoft dotnet-install pattern)
+            
+            ## When to use this skill
+            
+            **MUST be invoked** when the task involves:
+            
+            - Building, deploying, or troubleshooting `debian-coder`.
+            - Comparing cross-distro parity, especially between `debian-coder` and `ubuntu-coder` (the base images differ in their pre-existing user account).
+            - Understanding why Debian needs the `dotnet-install.sh` shell task (vs Fedora's native `dotnet-sdk` rpm).
+            - Adding new deb: sections to candies that are currently Fedora/Arch-only.
+
+fedora-coder-skill:
+    skill:
+        name: fedora-coder
+        family: coder
+        owner: charly-coder
+        description: |-
+            Kitchen-sink development box: coding + AI-coding CLIs + DevOps tooling
+            in one container. Fedora-nonfree base, 32 direct candies spanning language
+            runtimes, build tooling, five AI coding CLIs, and the full cloud/devops
+            stack. Runs as uid 1000 with passwordless sudo — rootless-first, matches
+            the /charly-openclaw:openclaw-desktop security posture.
+            Use when working with the fedora-coder box — specifically any task that
+            involves SSH-ing into a single container and having every tool a polyglot
+            engineer reaches for during a working day already installed.
+        content: |-
+            # fedora-coder
+            
+            The everyday-development counterpart to `/charly-distros:charly-fedora`: all the
+            coding + AI + DevOps tooling a developer needs in one box, no desktop,
+            no streaming. Distinct from `openclaw-desktop` (which adds the
+            browser-streamed Wayland desktop) — `fedora-coder` is headless and
+            meant to be accessed via `ssh -p 2222` or `charly shell`.
+            
+            > **Location:** lives in the **`opencharly/distro-fedora`** repo (git submodule at
+            > **`box/fedora`**), discovered as a `box/<name>/charly.yml` box. Its base
+            > stack (`fedora-nonfree` → `fedora`) is bare-local in the same self-contained
+            > submodule (`import: []`) — `base: fedora-nonfree`, which itself roots on the
+            > bare-local `fedora` base — and its 32 candies are pulled by github reference.
+            > Build/validate from
+            > the submodule: `charly -C box/fedora box build fedora-coder`, or
+            > `charly --repo opencharly/distro-fedora box build fedora-coder`. Deploy-mode verbs
+            > (`charly config`/`charly start`/`charly check box`) read the built image's OCI labels and
+            > work from anywhere once it's in local storage.
+            
+            ## Definition
+            
+            ```yaml
+            fedora-coder:
+              base: fedora-nonfree            # = fedora + rpmfusion (for x264/ffmpeg-devel)
+              ports:
+                - "2222:2222"                 # sshd-wrapper
+                - "18765:18765"               # charly-mcp (Streamable HTTP)
+              candy:
+                # Baseline (matches the charly-cachyos power-user pattern)
+                - agent-forwarding
+                - sshd
+                - charly                          # the full toolchain: charly binary + virtualization + gocryptfs + socat
+                - charly-mcp                      # MCP gateway for the entire charly CLI
+                - container-nesting           # rootless nested podman/buildah/skopeo
+                - dbus
+                - tmux
+            
+                # Language runtimes + managers
+                - language-runtimes           # Go + PHP + .NET 9 + nodejs-devel + python3-devel
+                - golang
+                - nodejs                       # generic nodejs candy (Node 22 on Fedora)
+                - rust
+                - pixi
+                - uv                          # direct-download binary (no pixi env)
+            
+                # Build + developer tooling
+                - build-toolchain
+                - dev-tools                   # ripgrep, bat, fd, neovim, htop, …
+                - pre-commit
+                - direnv
+                - gh                          # GitHub CLI + git + git-lfs (single-responsibility)
+                - typst
+                - asciinema
+            
+                # AI coding CLIs
+                - claude-code
+                - codex
+                - gemini
+                - forgecode                   # 5th CLI (astral-sh-style)
+                - oracle
+            
+                # DevOps / cloud / infra
+                - devops-tools                # AWS, Scaleway, kubectx/kubens, OpenTofu
+                - kubernetes                  # kubectl, helm, k3d
+                - docker-ce
+                - github-actions              # act, actionlint
+                - google-cloud
+                - google-cloud-npm            # firebase + Gemini npm bindings
+                - grafana-tools
+            ```
+            
+            Network: default `charly` bridge. The `port:` mapping is the right way to expose
+            sshd/charly-mcp, and bridge networking lets dev boxes coexist on one host via
+            normal `-p host:container` remapping (e.g. running `arch-coder` alongside
+            `fedora-coder` on the same machine).
+            
+            No `uid:` / `gid:` / `user:` / `security:` override — inherits
+            `1000/1000/user` from `defaults` and the candy-level security from
+            `/charly-distros:container-nesting`. Rootless-first by design (shares this
+            posture with `/charly-openclaw:openclaw-desktop`).
+            
+            ## Resolved security posture (OCI label)
+            
+            | Field | Value | Source |
+            |---|---|---|
+            | `cap_add` | **(empty)** | — |
+            | `security_opt` | `[unmask=/proc/*]` | `/charly-distros:container-nesting` |
+            | `devices` | `[/dev/fuse, /dev/net/tun]` | `/charly-distros:container-nesting` |
+            | `privileged` | `false` | — |
+            | Network | default `charly` bridge | charly.yml |
+            | UID / user | `1000 / user` | defaults |
+            | sudo | passwordless via `/etc/sudoers.d/charly-user` | `/charly-coder:sshd` |
+            
+            **No `--privileged`. No `cap_add: ALL`. No `seccomp=unconfined`. No
+            `label=disable`.** All four power-user boxes (`fedora-coder`, `charly-fedora`,
+            `charly-arch`, `githubrunner`) run the rootless posture proven sufficient by the
+            `container-nesting` kernel RCA — see `/charly-distros:container-nesting` for the
+            `mount_too_revealing()` + `unmask=/proc/*` derivation.
+            
+            ## Network posture
+            
+            Default `charly` bridge. Bridge networking plus normal `-p host:container`
+            remapping is the right pattern for dev boxes — it lets `fedora-coder` run
+            alongside `/charly-coder:arch-coder` on the same host (both want sshd on 2222 and
+            charly-mcp on 18765). To run two dev boxes side by side:
+            
+            ```bash
+            charly config arch-coder -p 2223:2222 -p 18766:18765     # alt-instance ports
+            charly config fedora-coder                               # canonical 2222/18765
+            ```
+            
+            Reaching host services from inside a bridge-networked container: use
+            the host's LAN IP or `host.containers.internal` (podman) rather than
+            `127.0.0.1`. For selkies-style sibling-container discovery, the charly.yml
+            `provides.env:` and `CHARLY_MCP_SERVERS` auto-injection give explicit hostnames.
+            
+            ## The 32-layer composition explained
+            
+            **Why `fedora-nonfree` (not plain `fedora`)** — `build-toolchain` pulls
+            `x264-devel` + `ffmpeg-devel`, both of which live in RPM Fusion. Every
+            box that uses `build-toolchain` either bases on `fedora-nonfree` or
+            includes `rpmfusion` explicitly.
+            
+            **Python story** — `python` (the pixi-python charly-layer) is NOT pulled in.
+            `supervisord`, `language-runtimes`, and `uv` all use system python3 from RPM,
+            not the conda-forge pixi env, so none of them declares `require: python`.
+            System Python is available via `language-runtimes` (`python3-devel` +
+            `python3-ramalama`). See the "Key Rules" note in the project rulebook (`AGENTS.md` / `CLAUDE.md`) ("don't declare
+            defensive deps").
+            
+            **`uv` is a direct-download binary** (no pixi involvement). Lives at
+            `/usr/local/bin/uv` and `/usr/local/bin/uvx`, extracted from the
+            upstream astral-sh/uv tarball via the `download:` verb's
+            `strip_components: 1` modifier. See `/charly-coder:uv` and `/charly-image:layer`.
+            
+            **`gh` owns all git tooling** — the `gh` candy installs `gh` + `git` +
+            `git-lfs` (with the noscripts + post-install trigger). `dev-tools`
+            intentionally does NOT install any of these. See `/charly-coder:gh`.
+            
+            **No GPU by default** — `nvidia` / `cuda` intentionally NOT composed. If
+            you need CUDA in your dev box, spin a sibling `fedora-coder-nvidia`
+            with `base: nvidia` + the same candy list.
+            
+            ## Verification recipe (build + test + deploy-test)
+            
+            ```bash
+            # 1. Validate config (from the opencharly/distro-fedora submodule)
+            charly -C box/fedora box validate
+            
+            # 2. Build (first time ≈ 15–30 min; cached rebuilds are fast thanks to
+            # LABEL-at-end ordering — test edits rebuild in seconds)
+            charly -C box/fedora box build fedora-coder
+            
+            # 3. Build-scope tests (disposable container)
+            charly check box ghcr.io/opencharly/fedora-coder:latest
+            # target: 149 passed · 0 failed · 0 skipped
+            
+            # 4. Deploy (no bind-mount needed; charly-mcp auto-falls back to opencharly/charly)
+            charly config fedora-coder
+            charly start fedora-coder
+            
+            # 5. Full-scope tests — prefers the running container automatically
+            # (see /charly-check:check "Live vs disposable executor selection")
+            charly check box ghcr.io/opencharly/fedora-coder:latest
+            # target: 167 passed · 0 failed · 0 skipped
+            
+            # 6. Clean up
+            charly stop fedora-coder
+            ```
+            
+            If you want `box.list.boxes` over the MCP surface to list YOUR
+            local checkout's boxes (rather than upstream opencharly/charly),
+            bind-mount the project:
+            
+            ```bash
+            charly config fedora-coder --bind project=/home/you/opencharly
+            charly start fedora-coder
+            ```
+            
+            The volume NAME is `project` (stable bind-mount API); the in-container
+            mount path is `/workspace`. See `/charly-coder:charly-mcp` for the three
+            deployment patterns (bind-mount / `CHARLY_PROJECT_REPO` / auto-fallback).
+            
+            ## Ports
+            
+            | Port | Service | Bound by |
+            |---|---|---|
+            | 2222 | sshd-wrapper (SSH access as user with sudo) | `/charly-coder:sshd` |
+            | 18765 | charly-mcp (entire `charly` CLI as MCP tools, Streamable HTTP) | `/charly-coder:charly-mcp` |
+            
+            Conflicts with `/charly-coder:charly-arch` (identical ports) and several
+            selkies-desktop variants on 2222. Use `-i <instance>` or `-p <remap>`
+            if running alongside.
+            
+            ## Test results
+            
+            - `charly check box fedora-coder` — **149 passed · 0 failed · 0 skipped**.
+            - `charly check box fedora-coder` against a live running
+              container — **167 passed · 0 failed · 0 skipped** (adds deploy-scope:
+              sshd reachable, supervisord responding, dbus+charly-mcp+virtqemud+
+              virtnetworkd services running, libvirt session list + KVM domcaps,
+              mcp ping/list-tools/call-version/call-list-images via the charly-mcp
+              auto-fallback).
+            
+            ## Image size
+            
+            ~14 GB uncompressed (kitchen-sink trade-off). Dominated by:
+            
+            - `virtualization` — QEMU + libvirt (~800 MB)
+            - `docker-ce` — Docker engine + containerd + buildx + compose (~500 MB)
+            - 5 AI coding CLIs — `forgecode` alone is ~370 MB (native binary); the
+              JS-only ones are smaller.
+            - `grafana-tools` — 7 binaries fetched from GitHub releases (~200 MB)
+            - `language-runtimes` — .NET 9 SDK is ~600 MB on its own.
+            
+            To slim: drop the candy groups you don't need (AI CLIs, kubernetes,
+            google-cloud-npm) by forking charly.yml. See `/charly-image:image` for authoring.
+            
+            ## Key Candies
+            
+            - `/charly-tools:charly` — the full toolchain: charly binary + virtualization + gocryptfs + socat (+ podman-machine, gvisor-tap-vsock for nested VMs)
+            - `/charly-coder:charly-mcp` — MCP gateway; auto-falls back to `opencharly/charly` when no bind-mount present
+            - `/charly-distros:container-nesting` — rootless nested podman recipe (authoritative RCA for `mount_too_revealing()` + `unmask=/proc/*`)
+            - `/charly-coder:sshd` — SSH daemon + passwordless sudo for the `user` account
+            - `/charly-coder:forgecode` — the 5th AI coding CLI
+            - `/charly-coder:language-runtimes` — Go + PHP + .NET + nodejs-devel + python3-devel (system-python stack, no pixi)
+            - `/charly-coder:uv` — direct-download binary at /usr/local/bin/uv
+            - `/charly-coder:gh` — GitHub CLI + git + git-lfs (single-responsibility)
+            
+            ## Cross-distro siblings
+            
+            `fedora-coder` is one of **four cross-distro coder boxes** that share the identical 80-line `check:` block + ~30 identical candies; they diverge only in each candy's package-format section (`rpm:` / `pac:` / `deb:`) and a handful of distro-specific quirks handled inside individual candies.
+            
+            | Box | Base | Package mgr | User model |
+            |---|---|---|---|
+            | `/charly-coder:fedora-coder` | `fedora-nonfree` (Fedora 43) | rpm | `user:user` (create) |
+            | `/charly-coder:arch-coder` | `arch` | pac + aur | `user:user` (create) |
+            | `/charly-coder:debian-coder` | `debian:13` | deb | `user:user` (create) |
+            | `/charly-coder:ubuntu-coder` | `ubuntu:24.04` | deb | `user:ubuntu` (**adopt** from base) |
+            
+            All four produce the same daily-dev surface (sshd on 2222, charly-mcp on 18765, 5 AI CLIs, full language runtimes, DevOps tooling). Pick based on distro-family alignment with your team/CI. See `/charly-image:image` "user_policy" for the adopt-vs-create reconciliation that gives ubuntu-coder its `ubuntu` username.
+            
+            ## Related Boxes
+            
+            - `/charly-openclaw:openclaw-desktop` — sibling rootless-first power-user box; same security posture + container-nesting, but adds the streaming desktop. Prefer when you want browser-accessible GUI + dev tools.
+            - `/charly-distros:charly-fedora` — minimal charly toolchain (no coding CLIs, no DevOps), also uid=1000 with sudo.
+            - `/charly-coder:charly-arch` — Arch Linux counterpart of charly-fedora.
+            - `/charly-distros:githubrunner` — self-hosted GitHub Actions runner; same uid=1000 posture.
+            - `/charly-hermes:hermes` — adds the Hermes AI agent daemon on top of the AI CLIs; prefer when you want an agent, not just CLI tools.
+            
+            ## Related Commands
+            
+            - `/charly-core:shell` — open an interactive shell inside the container (as user, with sudo)
+            - `/charly-core:charly-config` — deploy setup (--bind project=…, tunnel, --update-all)
+            - `/charly-core:start`, `/charly-core:stop` — lifecycle
+            - `/charly-check:check` — live-service tests (`charly check live <name>`) and build-scope tests (`charly check box <ref>`)
+            - `/charly-build:charly-mcp-cmd` — MCP gateway documentation; `--no-default-repo` to disable auto-fallback
+            - `/charly-vm:vm` — nested libvirt VMs (via virtqemud inside the container)
+            - `/charly-image:layer` — authoring reference (covers the new `strip_components:` modifier)
+            
+            ## When to Use This Skill
+            
+            **MUST be invoked** when the task involves:
+            
+            - Building, deploying, or troubleshooting the `fedora-coder` box.
+            - Picking the right power-user base image for a coding/dev workload (this
+              vs. `charly-fedora` vs. `charly-arch` vs. `openclaw-desktop`).
+            - Understanding the rootless-first architectural pattern shared by the
+              four power-user boxes (kernel RCA belongs in
+              `/charly-distros:container-nesting`; the composition that proves it works
+              without a GUI is here).
+            - The full MCP auto-fallback deployment pattern when the `/workspace`
+              bind-mount is intentionally left empty.
+            
+            ## Related
+            
+            - `/charly-build:build` — the embedded build vocabulary (distros, builders, init-systems)
+
+kubernetes-layer-skill:
+    skill:
+        name: kubernetes-layer
+        family: coder
+        owner: charly-coder
+        description: |-
+            Kubernetes client tools: kubectl and Helm package manager.
+            Use when working with Kubernetes, kubectl, or Helm charts.
+        content: |-
+            # kubernetes -- kubectl and Helm
+            
+            ## Candy Properties
+            
+            | Property | Value |
+            |----------|-------|
+            | Install files | `charly.yml`, `task:` |
+            
+            ## Packages
+            
+            RPM: `kubernetes-client`, `helm`
+            
+            ## Cross-distro coverage
+            
+            `rpm:` (Fedora), `pac:` (Arch — `kubectl` + `helm` from `extra`), `deb:` — adds two upstream apt repos: `https://pkgs.k8s.io/core:/stable:/v1.30/deb/` for `kubectl` and `https://baltocdn.com/helm/stable/debian/all` for `helm`. Both use signed-by GPG keys. The flat-repo `pkgs.k8s.io` URL ends in `/` — supported by the embedded build vocabulary's deb install template (the trailing-slash suite special case added during Phase 3).
+            
+            ## Usage
+            
+            ```yaml
+            # charly.yml
+            my-devops:
+              candy:
+                - kubernetes
+            ```
+            
+            ## Used In Boxes
+            
+            - (none currently enabled)
+            
+            ## Related Candies
+            - `/charly-coder:docker-ce` — common companion for local container builds
+            - `/charly-coder:devops-tools` — provides kubectx/kubens and cloud CLIs
+            - `/charly-coder:dev-tools` — typically paired in DevOps boxes
+            
+            ## Related Commands
+            - `/charly-build:build` — installs kubectl and helm RPMs during image build
+            - `/charly-core:shell` — run kubectl/helm interactively against external clusters
+            
+            ## When to Use This Skill
+            
+            Use when the user asks about:
+            
+            - Kubernetes tools in containers
+            - kubectl or Helm setup
+            - The `kubernetes` candy
+            
+            ## Related
+            
+            - `/charly-image:layer` — candy authoring reference (`charly.yml` schema, task verbs, service declarations)
+            - `/charly-check:check` — declarative testing (`check:` block, `charly check box`, `charly check live`)
+
+ubuntu-coder-skill:
+    skill:
+        name: ubuntu-coder
+        family: coder
+        owner: charly-coder
+        description: |-
+            Kitchen-sink development box on Ubuntu 24.04 noble: coding + AI-coding
+            CLIs + DevOps tooling in one container. Ubuntu base, 30+ direct candies
+            mirroring fedora-coder's stack. Runs as uid 1000 `ubuntu` — the upstream
+            ubuntu:24.04 account, adopted verbatim via the embedded build
+            vocabulary's base_user declaration. 142/0/1-skip tests pass.
+            Use when working with the ubuntu-coder box — especially when the
+            `${USER}` / `${HOME}` / sudoers differ from the other three coder boxes.
+        content: |-
+            # ubuntu-coder
+            
+            Ubuntu 24.04 noble counterpart of `/charly-coder:fedora-coder`. Same 80-line test block, same ~30 candies, same rootless posture — but **the resolved user is `ubuntu` (not `user`)** because the upstream `ubuntu:24.04` base image ships a pre-existing `ubuntu:ubuntu` account at uid 1000, and the embedded `distro.ubuntu` vocabulary declares `base_user:` to adopt it. Everything that touches the user account — `${HOME}`, npm prefix, pixi env, sudoers — derives from `resolved.User = "ubuntu"`.
+            
+            > **Location:** lives in the **`opencharly/distro-ubuntu`** repo (git submodule at
+            > **`box/ubuntu`**) — a SEPARATE repo from `opencharly/distro-debian`. Its ~31
+            > candies are pulled by github reference from the main repo. Build/validate from
+            > the submodule: `charly -C box/ubuntu box build ubuntu-coder`, or
+            > `charly --repo opencharly/distro-ubuntu box build ubuntu-coder`. Deploy-mode verbs
+            > read the built image's OCI labels and work from anywhere once it's local.
+            
+            ## Definition
+            
+            ```yaml
+            ubuntu-coder:
+              base: ubuntu
+              ports:
+                - "2222:2222"                 # sshd-wrapper
+                - "18765:18765"               # charly-mcp (Streamable HTTP)
+              candy:
+                # Same stack as debian-coder — see that skill for the full list
+                - agent-forwarding
+                - sshd
+                - charly
+                - charly-mcp
+                - container-nesting
+                - dbus
+                - tmux
+                - language-runtimes
+                - golang
+                - nodejs
+                - rust
+                - pixi
+                - uv
+                - build-toolchain
+                - dev-tools
+                - pre-commit
+                - direnv
+                - gh
+                - typst
+                - asciinema
+                - claude-code
+                - codex
+                - gemini
+                - forgecode
+                - oracle
+                - devops-tools
+                - kubernetes
+                - docker-ce
+                - github-actions
+                - google-cloud
+                - google-cloud-npm
+                - grafana-tools
+            ```
+            
+            ## User model — adopt mode
+            
+            The embedded build vocabulary (`charly/charly.yml`) declares `distro.ubuntu.base_user`:
+            
+            ```yaml
+            base_user:
+              name: ubuntu
+              uid: 1000
+              gid: 1000
+              home: /home/ubuntu
+            ```
+            
+            `ubuntu-coder` doesn't set an explicit `user:` field, so `user_policy: auto` (the default) adopts the base_user. The generator emits no `useradd` — the bootstrap section is a one-line comment:
+            
+            ```
+            # User ubuntu (uid=1000) adopted from base image (declared in the embedded distro.base_user) — no useradd needed
+            WORKDIR /home/ubuntu
+            USER 1000
+            ```
+            
+            Resolved identity: `User=ubuntu, UID=1000, GID=1000, Home=/home/ubuntu`. The image's OCI labels carry these values (`ai.opencharly.user="ubuntu"`, `ai.opencharly.home="/home/ubuntu"`) so deploy-mode quadlets and `charly shell` find them without re-reading `charly.yml`.
+            
+            **Why adopt over rename?** Ubuntu's cloud-init tooling, documentation, and `/etc/passwd` metadata all expect the user to be named `ubuntu`. Renaming fights the upstream contract. Adopting honors it. See `/charly-image:image` "user_policy" for the full rationale and the 3-value policy table.
+            
+            ## Live verification
+            
+            ```
+            $ charly shell ubuntu-coder -c 'id; /usr/bin/dotnet --version; sudo -l'
+            uid=1000(ubuntu) gid=1000(ubuntu) groups=1000(ubuntu),4(adm),20(dialout),24(cdrom),25(floppy),27(sudo),29(audio),30(dip),44(video),46(plugdev),105(libvirt)
+            9.0.313
+            User ubuntu may run the following commands on <host>:
+                (ALL : ALL) ALL
+            ```
+            
+            ## Security posture
+            
+            Identical to `/charly-coder:debian-coder` — the only diff is `User` field.
+            
+            | Field | Value | Source |
+            |---|---|---|
+            | `cap_add` | **(empty)** | — |
+            | `security_opt` | `[unmask=/proc/*]` | `/charly-distros:container-nesting` |
+            | `devices` | `[/dev/fuse, /dev/net/tun]` | `/charly-distros:container-nesting` |
+            | `privileged` | `false` | — |
+            | Network | bridge | defaults |
+            | UID / user | `1000 / ubuntu` | **adopt mode** |
+            | sudo | passwordless via `/etc/sudoers.d/charly-user` (discovered via `getent passwd 1000` → `ubuntu`) | `/charly-coder:sshd` |
+            
+            ## Ubuntu-specific layer quirks (differences vs debian-coder)
+            
+            - **fastfetch test is skipped** via `exclude_distros: [ubuntu:24.04]` (`/charly-coder:dev-tools`). Ubuntu 24.04 noble main does not ship `fastfetch` (Debian 13 trixie does, and so do Fedora/Arch). Skipping is cleaner than failing — see `/charly-check:check` for the `exclude_distros:` field of the declarative-test schema.
+            - **dotnet-sdk-9.0 source**: uses Microsoft's `dotnet-install.sh` (same as debian-coder). Note: Canonical's noble main/universe ships `dotnet-sdk-8.0` and `dotnet-sdk-10.0` but NOT 9.0; Microsoft's noble apt repo ships 10.0 only. `dotnet-install.sh --channel 9.0` is the only cross-distro-consistent path to .NET 9. See `/charly-coder:language-runtimes`.
+            - **Everything else** is identical to debian-coder. The sudoers `getent` discovery, bat→batcat symlink, virtualization package-existence tests — all are implemented once in the respective candies and work uniformly on both debian-coder and ubuntu-coder.
+            
+            ## Test results
+            
+            `charly check box ghcr.io/opencharly/ubuntu-coder:latest` — **142 passed · 0 failed · 1 skipped** (fastfetch, by design).
+            
+            ## Verification recipe
+            
+            ```bash
+            # 1. Validate
+            charly -C box/ubuntu box validate
+            
+            # 2. Build (auto-chains: ubuntu → ubuntu-builder → ubuntu-coder)
+            charly -C box/ubuntu box build ubuntu-coder
+            
+            # 3. Disposable-container tests
+            charly check box ghcr.io/opencharly/ubuntu-coder:latest
+            
+            # 4. Confirm adopt mode at runtime
+            charly shell ubuntu-coder -c "id"
+            # → uid=1000(ubuntu) gid=1000(ubuntu) ...
+            
+            # 5. Deploy + live tests
+            charly config ubuntu-coder
+            charly start ubuntu-coder
+            charly check box ghcr.io/opencharly/ubuntu-coder:latest
+            ```
+            
+            ## Gotcha: Dockerhub rate-limits during base pulls
+            
+            Rebuilding the `ubuntu` base image pulls from `docker.io/library/ubuntu:24.04`. Unauthenticated Dockerhub pulls are rate-limited (100/6h per IP). If the build fails with `toomanyrequests`, the cleanest workaround is to pull from a non-Dockerhub mirror and retag:
+            
+            ```bash
+            podman pull public.ecr.aws/docker/library/ubuntu:24.04
+            podman tag public.ecr.aws/docker/library/ubuntu:24.04 docker.io/library/ubuntu:24.04
+            charly box build ubuntu-coder
+            ```
+            
+            AWS ECR Public mirrors the Dockerhub library namespace without rate-limiting unauthenticated pulls.
+            
+            ## Ports
+            
+            | Port | Service | Bound by |
+            |---|---|---|
+            | 2222 | sshd-wrapper (SSH as `ubuntu` with sudo) | `/charly-coder:sshd` |
+            | 18765 | charly-mcp | `/charly-coder:charly-mcp` |
+            
+            Conflicts with the other three coder-family boxes on these ports.
+            
+            ## Image size
+            
+            ~10.2 GB uncompressed, nearly identical to `/charly-coder:debian-coder`.
+            
+            ## Cross-distro siblings
+            
+            - `/charly-coder:fedora-coder` — RPM-family, `user:user` create.
+            - `/charly-coder:arch-coder` — pacman-family + AUR, `user:user` create.
+            - `/charly-coder:debian-coder` — deb on Debian 13, `user:user` create.
+            - `/charly-coder:ubuntu-coder` — this box; deb on Ubuntu 24.04, `user:ubuntu` **adopt**.
+            
+            ## Related boxes
+            
+            - `/charly-distros:ubuntu` — parent base; declares `base_user:` in the embedded build vocabulary.
+            - `/charly-distros:ubuntu-builder` — multi-stage builder, also runs as `ubuntu:1000`.
+            
+            ## Related layers
+            
+            - `/charly-coder:sshd` — getent-based sudoers (works regardless of whether the uid-1000 account is `user` or `ubuntu`).
+            - `/charly-coder:dev-tools` — bat→batcat + fastfetch `exclude_distros`.
+            - `/charly-coder:language-runtimes` — Microsoft `dotnet-install.sh` for .NET 9.
+            - `/charly-infrastructure:virtualization` — `package:` + `package_map:` tests.
+            - `/charly-distros:container-nesting`, `/charly-tools:charly`, `/charly-coder:charly-mcp` — shared rootless baseline.
+            
+            ## Related commands
+            
+            - `/charly-image:image` — **`user_policy:` field** (the pivot for this box's behavior).
+            - `/charly-build:build` — **`base_user:` declaration** (where `ubuntu:1000` is declared).
+            - `/charly-check:check` — `exclude_distros:` field reference.
+            - `/charly-build:generate` — adopt-vs-create writeBootstrap emission.
+            - `/charly-core:shell`, `/charly-core:charly-config`, `/charly-core:start`, `/charly-core:stop`.
+            
+            ## When to use this skill
+            
+            **MUST be invoked** when:
+            
+            - Building, deploying, or troubleshooting `ubuntu-coder`.
+            - Debugging any behavior that depends on `${USER}` or `${HOME}` inside an Ubuntu container (they resolve to `ubuntu` / `/home/ubuntu`, not `user` / `/home/user`).
+            - Writing a candy whose content references the uid-1000 account by name — it must not hardcode `user`; use `getent passwd 1000` or `${USER}` substitution in task fields where the generator expands it.
+            - Understanding Dockerhub rate-limit workarounds during base-image rebuilds.

@@ -1,0 +1,1443 @@
+charly-vm:
+    candy:
+        version: 2026.218.1200
+        description: |-
+            Concept candy owning the charly-vm kind-authoring skills (vm schema + the bootc VM catalog). Owns its family's `skill:` kind entities (sibling nodes in this file) — the
+            plugins→candies migration; candy/plugin-marketplace regenerates the plugins/ corpus
+            from them.
+        plan:
+            - run: this documentation-only candy ships no install content (it carries the family's skill/hook/marketplace entities); validate-satisfying no-op
+              command: "true"
+              context:
+                - build
+            - check: the vm concept candy's skill entities are present and generated into plugins/vm/skills
+              id: charly-vm-present
+              context:
+                - build
+              command: "true"
+arch-cloud-vm-skill:
+    skill:
+        name: arch-cloud-vm
+        family: vm
+        owner: charly-vm
+        description: |-
+            First kind:vm entity with source.kind: cloud_image — fetches the Arch Linux cloud
+            qcow2 from pkgbuild.com, applies cloud-init, boots under libvirt/QEMU via BIOS
+            firmware + virtio-gpu. Documents the stale-BOOTX64.EFI RCA, the
+            simpledrm→qxldrmfb takeover race, the adopt-user pattern, and resource sizing.
+            MUST be invoked before editing arch in box/arch/charly.yml or authoring
+            another cloud_image VM from a template.
+        content: |
+            # arch
+
+            The `arch` VM entity and its `check-arch-vm` / `check-arch-pacstrap-vm` disposable test beds
+            (plus the nested `arch-host` member) live in the **`opencharly/distro-arch`** repo (git
+            submodule at **`box/arch`**), all in that repo's unified `charly.yml`.
+            The beds are `disposable: true` deploys (a check bed is just a deploy that carries
+            `disposable: true` — there is no separate bed kind), driven by `charly check run
+            <bed>`. Drive them from the submodule, e.g. `charly -C box/arch vm create arch`
+            and `charly -C box/arch check run check-arch-vm` (or `charly --repo opencharly/distro-arch …`). Any
+            candies applied via `add_candy:` are pulled from this repo by git ref.
+
+            Canonical `source.kind: cloud_image` VM in the repo. Boots an Arch Linux cloud image as a full VM with SSH + SPICE console access, cloud-init-provisioned SSH keys, virtio-gpu graphics, and the `charly` toolchain auto-installed inside the guest.
+
+            This skill is the **decision log** for every non-obvious choice in the entry — BIOS vs UEFI, virtio-gpu vs QXL, resource sizing vs package list pruning, adopt-user vs create-user. Every decision traces to a live-test RCA; the rationales belong here permanently so a future editor (you or your agents) doesn't reopen the same questions.
+
+            ## VM Configuration
+
+            | Setting | Value | Rationale |
+            |---|---|---|
+            | Source | `https://fastly.mirror.pkgbuild.com/images/latest/Arch-Linux-x86_64-cloudimg.qcow2` | Official Arch cloud image, CDN-fronted |
+            | Checksum type | `sha256` | Value empty → auto-resolve `<url>.SHA256` sidecar at fetch time |
+            | `base_user` | `arch` | Upstream account; adopt pattern below |
+            | Firmware | `bios` | Skip stale BOOTX64.EFI (Finding B) |
+            | Machine | `q35` | Modern PCIe chipset, works with both SeaBIOS and OVMF |
+            | Disk size | `40G` | Headroom for spice-vdagent (GTK3 + X11 ~1 GB installed) + layer overlays |
+            | RAM | `8G` | Avoid cloud-init stall during spice-vdagent install (Finding C) |
+            | CPUs | `4` | Parallel xz decompression + `pacman-key --populate` benefit from SMP |
+            | Network mode | `user` | QEMU user-mode with port forwards |
+            | SSH port | `2224` | Non-default to coexist with other dev VMs on 2222 |
+            | SSH key source | `generate` | Stable `~/.local/share/charly/vm/charly-arch/id_ed25519` across rebuilds |
+            | Video model | `virtio-gpu` | Modern default for Linux guests (Finding B, secondary) |
+            | SPICE listener | `type: socket` (UNIX, auto-path) | Enables zero-config remote GUI via `qemu+ssh://` (see "Connecting from a remote workstation" below). virt-manager and `remote-viewer` auto-forward UNIX sockets through libvirt RPC fd-passing; TCP-loopback listeners are never auto-tunneled. No TCP port bound. |
+
+            Disposability is **not** a field on the VM entity — the `check-arch-vm` bundle carries `disposable: true` (LOAD-BEARING), which authorizes the unattended destroy + rebuild + restart driven by `charly check run check-arch-vm` (and the equivalent `charly update check-arch-vm`, since the bundle is folded into the Bundle map). See `/charly-internals:disposable`.
+
+            ## Disposable verification target
+
+            This is the repo's canonical verification target. The `check-arch-vm` deploy carries `disposable: true`, which means `charly check run check-arch-vm` runs the full R10 sequence (build → create → check live → fresh rebuild → tear down) unattended — no user confirmation. The hook reminders in `.claude/hooks/` reference disposability specifically; this VM is what Claude is expected to verify against.
+
+            If you're implementing something that touches VM config, libvirt rendering, cloud-init, SPICE, or any VM-adjacent behavior, the expected verification loop is:
+
+            ```bash
+            charly update arch       # (destroy + build + create + start)
+            #  ... exploratory testing ...
+            # commit the source-level fix
+            charly update arch       # fresh-rebuild re-verification (R10)
+            # paste BOTH outputs into the conversation
+            ```
+
+            No other VM in this repo is disposable by default. To make another one rebuildable unattended, add `disposable: true` to the deploy that deploys it (the flag is always explicit; never derived).
+
+            ## Full VmSpec (from box/arch/charly.yml)
+
+            ```yaml
+            # Name-first: the entity key IS the VM name; `vm:` is the kind discriminator.
+            arch:
+              vm:
+                source:
+                  kind: cloud_image
+                  url: https://fastly.mirror.pkgbuild.com/images/latest/Arch-Linux-x86_64-cloudimg.qcow2
+                  checksum:
+                    type: sha256
+                  base_user: arch
+                backend: libvirt            # REQUIRED — the bed's libvirt-RPC + spice probes hit the session daemon
+                disk_size: 40G
+                ram: 8G
+                cpu: 4
+                machine: q35
+                firmware: bios
+                network:
+                  mode: user
+                ssh:
+                  port: 2224
+                  key_source: generate
+                cloud_init:
+                  timezone: UTC
+                  package:
+                    - sudo
+                    - spice-vdagent
+                    - qemu-guest-agent
+                    - base-devel
+                    - git
+                  runcmd:
+                    - pacman-key --init
+                    - pacman-key --populate archlinux
+                    - systemctl enable --now spice-vdagentd
+                    - systemctl enable --now qemu-guest-agent
+                  charly_install:
+                    strategy: auto
+
+            # Every non-scalar block becomes a CHILD NODE `<entity>-<key>`, never nested under `vm:`.
+            arch-libvirt:
+              libvirt:
+                devices:
+                  channels:
+                    - {type: spicevmc, name: com.redhat.spice.0}
+                  graphics:
+                    # Socket-only SPICE — virt-manager and `remote-viewer
+                    # --connect qemu+ssh://…` auto-forward the UNIX socket over
+                    # libvirt RPC, zero extra setup. libvirt auto-allocates the
+                    # socket path under $XDG_RUNTIME_DIR/libvirt/qemu/.
+                    - type: spice
+                      listen:
+                        - type: socket
+                  video:
+                    - {model: virtio, vram: 65536, heads: 1, accel3d: false}
+                  rng:
+                    - {model: virtio, backend: /dev/urandom}
+                  memballoon: {model: virtio}
+                snippets:
+                  - "<channel type='unix'><target type='virtio' name='org.qemu.guest_agent.0'/></channel>"
+            ```
+
+            ## Connecting from a remote workstation
+
+            The VM's SPICE configuration above is specifically chosen so virt-manager on
+            another machine Just Works against a libvirt session here.
+
+            ### virt-manager (zero charly involvement required)
+
+            ```
+            virt-manager --connect qemu+ssh://o.example.org/session
+            ```
+
+            Double-click `charly-arch`. The SPICE console opens. Under the
+            hood, virt-manager (and the `virt-viewer --connect qemu+ssh://…
+            --attach <vm>` path it uses internally) reads the domain XML, sees
+            `<listen type='socket' socket='/…/spice.sock'/>`, and auto-tunnels by
+            spawning:
+
+            ```
+            ssh <host> nc -U /<remote-socket-path>
+            ```
+
+            stdio-piping SPICE traffic through the SSH control channel. **No `ssh
+            -L`, no charly commands, no password, no TCP port bound on the remote
+            host.**
+
+            **Required host dep**: `nc` (openbsd-netcat on Arch, netcat-openbsd on
+            Debian/Ubuntu, nmap-ncat on Fedora) must be installed on the libvirt
+            host. charly's `setup.sh` and `pkg/arch/PKGBUILD` install it automatically.
+            Without `nc`, virt-manager hangs at "Connecting to graphical console
+            for guest" — no error, just silent failure. Diagnose with
+            `ssh <host> which nc` (should return a path).
+
+            ### Probing the remote VM's SPICE wire (the `spice:` verb + the `libvirt:` verb)
+
+            SPICE-wire probing is the declarative `spice:` check verb — there is no host
+            `charly check spice` command (the verb is served out-of-process by
+            `candy/plugin-spice`; see `/charly-check:spice`). When a `spice:` step targets
+            this remote VM, set `CHARLY_LIBVIRT_URI=qemu+ssh://o.example.org/session` (the
+            former `--uri` flag carried this same env): the host resolves the remote SPICE
+            endpoint, forwards the remote SPICE UNIX socket to a local socket, and hands
+            the plugin the dialable address — all transparent.
+
+            libvirt-RPC diagnostics (domain info, framebuffer screenshot, send-key, QMP,
+            snapshots) are the declarative `libvirt:` check verb — likewise served
+            out-of-process, by `candy/plugin-vm` (see `/charly-check:libvirt`). It honors
+            the SAME `CHARLY_LIBVIRT_URI`, so a `libvirt: info` / `libvirt: screenshot`
+            step (the latter writing its artifact locally via the `artifact:` modifier)
+            probes the remote VM transparently:
+
+            ```bash
+            CHARLY_LIBVIRT_URI=qemu+ssh://o.example.org/session \
+              charly check live arch --filter libvirt
+            ```
+
+            ### `charly --host o` (run charly on the remote machine)
+
+            For commands that don't need their output to land locally:
+
+            ```bash
+            charly settings set hosts.o o.example.org
+            charly --host o status
+            charly --host o vm list
+            charly --host o test libvirt info arch
+            charly --host o test libvirt screenshot arch - > /tmp/shot.png
+            ```
+
+            `charly` re-execs itself over SSH (via your system's `ssh`, so `~/.ssh/config`
+            and agent forwarding just work). `-` as a screenshot path writes PNG bytes
+            to stdout so the pipeline composes naturally.
+
+            ### `charly ssh tunnel` (for external clients like TigerVNC / bare remote-viewer)
+
+            ```bash
+            charly ssh tunnel spice arch --uri qemu+ssh://o.example.org/session
+            # prints: spice tunnel: spice+unix:///tmp/charly-tunnel-8e4c.sock
+            # Connect with: remote-viewer spice+unix:///tmp/charly-tunnel-8e4c.sock
+            ```
+
+            Add `--tcp` to force a 127.0.0.1:<random> TCP forward for clients that
+            don't understand `spice+unix://`.
+
+
+            ## Finding A — disk/FS resize works end-to-end
+
+            False alarm during live testing — verified at four layers:
+
+            | Layer | Observed |
+            |---|---|
+            | Host qcow2 overlay | `qemu-img info -U` → virtual size: 40 GiB |
+            | Guest kernel | `fdisk -l /dev/vda` → 40 GiB, 83886080 sectors |
+            | Guest partition | `/dev/vda3 … 39.7G Linux root (x86-64)` (grew from ~2G base) |
+            | Guest filesystem | `btrfs filesystem show` → size 39.70 GiB |
+
+            The cloud-utils-growpart + btrfs-online-resize pipeline that cloud-init runs at first boot works as designed. No workaround needed; the `charly vm build` qcow2 overlay resize at `disk_size:` suffices.
+
+            ## Finding B — SPICE console blank: BIOS firmware bypasses the race
+
+            **Symptom observed under UEFI:** kernel dmesg shows a deferred fbcon takeover sequence:
+
+            ```
+            [    0.555] [drm] Initialized simpledrm 1.0.0 for simple-framebuffer.0 on minor 0
+            [    0.560] fbcon: Deferring console take-over
+            [    2.412] qxl 0000:00:01.0: vgaarb: deactivate vga console
+            [    2.426] fbcon: qxldrmfb (fb0) is primary device
+            [    2.426] fbcon: Deferring console take-over
+            ```
+
+            Agetty renders the login prompt to simpledrm's framebuffer at t~0.5s; qxldrmfb takes over at t=2.4s with a fresh (black) framebuffer, losing the prompt. `fbcon=nodefer` would suppress the deferral — and the Arch cloud image's `/etc/default/grub` already declares it. But `/proc/cmdline` on a UEFI-booted instance does NOT contain `fbcon=nodefer`.
+
+            **RCA of the missing kernel arg:**
+            - `/boot/grub/grub.cfg` on vda3 **does** contain `fbcon=nodefer` (2 occurrences).
+            - The EFI System Partition (vda2) holds **only** `/EFI/BOOT/BOOTX64.EFI`, no `grub.cfg`.
+            - `BOOTX64.EFI` is a PE32+ GRUB binary built via `grub-mkstandalone` with an **embedded grub.cfg** at image-build time. That embedded config predates the `fbcon=nodefer` addition; the standalone EFI binary was never regenerated when `/etc/default/grub` + `/boot/grub/grub.cfg` were updated.
+            - UEFI boot path: firmware → `BOOTX64.EFI` (stale embedded config, no `fbcon=nodefer`) → kernel. `/boot/grub/grub.cfg` on vda3 is never consulted.
+
+            **Fix: switch firmware to `bios`.** The Arch cloud image's GPT partition table preserves this option:
+
+            ```
+            $ fdisk -l /dev/vda
+            Disklabel type: gpt
+            /dev/vda1    2048     4095     2048    1M BIOS boot        ← 1 MB BIOS boot partition
+            /dev/vda2    4096   618495   614400  300M EFI System
+            /dev/vda3  618496 41943006 41324511 19.7G Linux root
+            ```
+
+            vda1 is a 1 MB BIOS boot partition — only needed for GRUB's core image under BIOS boot. Its existence proves the image was built to support both BIOS and EFI boot paths. With `firmware: bios`:
+
+            - QEMU boots vda1 via SeaBIOS → vda's MBR/GPT-protective-MBR → GRUB reads `/boot/grub/grub.cfg` from vda3 directly. **No ESP involvement. No stale BOOTX64.EFI issue.**
+            - No EFI framebuffer → **no simpledrm instantiated at boot.** Eliminates the fbcon takeover race entirely: virtio-gpu (or QXL) is the first and only DRM driver, fbcon binds once cleanly, before agetty starts.
+            - `/proc/cmdline` carries the full `GRUB_CMDLINE_LINUX_DEFAULT` including `fbcon=nodefer` (bonus — but moot now that simpledrm isn't in the picture).
+
+            **Tradeoff accepted:** no UEFI Secure Boot. Irrelevant for a cloud-server workflow where the OS trust model is based on the qcow2's sha256 anyway.
+
+            **Secondary fix: virtio-gpu instead of QXL.** QXL is a legacy SPICE-specific video device (2010-era Red Hat stack, X11-oriented). virtio-gpu is the modern paravirtualized-GPU default for Linux guests under KVM/QEMU (kernel 4.16+, 2018). Native virtio_gpu DRM driver, Wayland-native, simpler config (no QXL ram_size + vram_size + vram64_size_mb + vgamem_mb quartet — just `vram:` and `heads:`). Still fully SPICE-compatible. See `/charly-internals:libvirt-renderer` for the video-model decision matrix.
+
+            **Do NOT attempt the guest-side fix** (regenerate BOOTX64.EFI, add `fbcon=nodefer` via `/etc/default/grub.d/`, sed on `/etc/default/grub`, `grub-install` at first boot, power-cycle reboot). The user explicitly rejected these during plan review: "match libvirt config to the deployed image, not the other way around". The maintainer-authored grub config on vda3 is the source of truth; BIOS boot reads it as-shipped.
+
+            ## Finding C — SSH flakes during spice-vdagent install: resource sizing, not package pruning
+
+            Bisect (live-measured):
+
+            | Config | RAM | SSH availability |
+            |---|---|---|
+            | no graphics, no spice-vdagent | 2 GiB | ~15 s |
+            | graphics devices only | 2 GiB | ~15 s |
+            | graphics + `packages: [spice-vdagent]` + `systemctl enable --now spice-vdagentd` | **2 GiB** | **never up in 180 s** |
+
+            Root cause: `pacman -S spice-vdagent` pulls in GTK3 + X11 (~200 MB download, ~1 GB installed). Cloud-init's `package:` module blocks on that + `pacman-key --populate archlinux` (CPU-heavy keyring build) simultaneously. At 2 GiB RAM + 2 cpus, the guest is starved — memory pressure triggers OOM-adjacent behavior, pacman's fsync cycles compete with sshd for IO, sshd either never finishes listening or accepts TCP but resets during kex.
+
+            **Fix: host has 61 GiB RAM / 16 cores / 184 GB free. Give the VM 8 GiB / 4 cpus / 40 GiB.** Comfortably holds pacman's keyring + spice-vdagent GTK3/X11 install + kernel caches without eviction pressure. With this sizing, SSH comes up in ≤ 20 s and spice-vdagent is active within 45 s — same as the minimal-config baseline.
+
+            **Do NOT prune spice-vdagent from `package:`** — it provides clipboard sync + resolution negotiation in the SPICE console, standard VDI features. Resource sizing is the correct fix.
+
+            **General heuristic**: check `free -h` / `nproc` / `df -h` before sizing a VM. Allocating <10% of host RAM and <25% of host cores is "frugal". Starving a VM to save host capacity the host isn't using is a bug, not thrift.
+
+            ## Finding D — SSH key idempotency across rebuilds
+
+            `charly vm build` + `charly vm create` called repeatedly should NOT regenerate the SSH keypair. Implementation idempotency lives in `GenerateSSHKeypair` (`spec/sshx/ssh_keypair.go`, checking for `<vmStateDir>/id_ed25519.pub` before creating — the former `charly/vm_backend_lifecycle.go` is DELETED, K-wave 2). See `/charly-internals:vm-deploy-target` for the state persistence flow (VmDeployState in `charly.yml`).
+
+            ## Adopt pattern in action
+
+            `source.base_user: arch` triggers the cloud-init renderer to emit:
+
+            ```yaml
+            # Rendered user-data (via /charly-internals:cloud-init-renderer composeUsers)
+            users:
+              - default                               # cloud-init keeps distro-default account untouched
+              - name: arch
+                ssh_authorized_keys:
+                  - ssh-ed25519 AAAA…                 # generated pubkey from ~/.local/share/charly/vm/charly-arch/id_ed25519.pub
+            ```
+
+            cloud-init appends the pubkey to `/home/arch/.ssh/authorized_keys` without calling `useradd`, rewriting sudoers, or changing the shell. `spec.ssh.user` defaults to `arch`, so `charly vm ssh arch` connects as `arch@127.0.0.1:2224`. Full parity with the container-side `base_user:` + `user_policy: adopt` pattern (`/charly-image:image` "user_policy").
+
+            ## Verification recipes
+
+            ### Rebuild + boot
+            ```bash
+            charly vm stop arch --force 2>/dev/null
+            charly vm destroy arch --if-exists
+            rm -f ~/.local/share/charly/vm/charly-arch/nvram.fd
+            rm -f output/qcow2/{disk.qcow2,seed.iso}
+            charly vm build arch
+            charly vm create arch --no-auto-detect
+            ```
+
+            ### BIOS firmware + virtio-gpu took effect
+            ```bash
+            charly check libvirt domain-xml arch \
+              | grep -E "<loader|<nvram|<firmware|<type arch|<model type"
+            ```
+            Pass: NO `<loader>` / `<nvram>` / `<firmware>` elements; `<model type='virtio'>` inside `<video>`.
+
+            ### No simpledrm race
+            ```bash
+            ssh -i ~/.local/share/charly/vm/charly-arch/id_ed25519 -p 2224 arch@127.0.0.1 \
+              'sudo dmesg | grep -iE "simpledrm|virtio_gpu|drm"' | head -10
+            ```
+            Pass: `virtio_gpu` as primary, NO `simpledrm` lines, NO `fbcon: Deferring console take-over`.
+
+            ### SSH up in ≤ 60 s
+            ```bash
+            START=$(date +%s)
+            for i in $(seq 1 20); do
+              ssh -i ~/.local/share/charly/vm/charly-arch/id_ed25519 -p 2224 -o ConnectTimeout=3 -o BatchMode=yes \
+                  arch@127.0.0.1 'echo UP' 2>&1 | grep -q UP && break
+              sleep 5
+            done
+            echo "SSH-UP-AT: $(( $(date +%s) - START )) s"
+            ```
+            Pass: ≤ 60 s (previous starved-config was "never up in 180 s").
+
+            ### Disk/FS at full 40 GiB
+            ```bash
+            qemu-img info -U output/qcow2/disk.qcow2 | grep "virtual size"
+            ssh ... arch@127.0.0.1 '
+              sudo fdisk -l /dev/vda | head -1
+              lsblk -n -o NAME,SIZE /dev/vda3
+              sudo btrfs filesystem show | grep size
+              df -h /
+            '
+            ```
+            All four layers report ~40 GiB.
+
+            ### spice-vdagent active
+            ```bash
+            ssh ... arch@127.0.0.1 'systemctl is-active spice-vdagentd; pacman -Q spice-vdagent'
+            ```
+            Pass: `active` + version printed.
+
+            ## Cross-References
+
+            - `/charly-vm:vms-catalog` — VmSpec authoring reference (schema, source.kind, adopt pattern)
+            - `/charly-vm:vm` — VM lifecycle commands + BIOS/UEFI decision matrix + video model choice (disposability lives on the `disposable: true` deploy)
+            - `/charly-build:migrate` — `charly migrate` legacy conversion
+            - `/charly-core:deploy` — `charly bundle add vm:arch <layer>` for in-guest layer application
+            - `/charly-internals:vm-spec` — Go types and validation rules
+            - `/charly-internals:libvirt-renderer` — `<backend type='passt'/>` for portForward, virtio-gpu video model
+            - `/charly-internals:cloud-init-renderer` — `composeUsers` adopt-merge, seed ISO, `charly_install.strategy: auto`
+            - `/charly-internals:ovmf` — why `firmware: bios` skips `<loader>`/`<nvram>` emission entirely
+            - `/charly-internals:vm-deploy-target` — SSH key idempotency, VmDeployState persistence
+            - `/charly-distros:cloud-init` — guest-side cloud-init layer (complementary to host-side emission)
+cachyos-bootstrap-vm-skill:
+    skill:
+        name: cachyos-bootstrap-vm
+        family: vm
+        owner: charly-vm
+        description: |-
+            CachyOS bootstrap VM (kind:vm cachyos-vm) — source.kind: bootstrap via
+            cachyos-pacstrap-builder + pacstrap, btrfs rootfs, uefi-insecure. Plus the
+            disposable check-cachyos-vm deploy. Lives in the opencharly/distro-cachyos submodule.
+            MUST be invoked before editing cachyos-vm or its check bed.
+        content: |
+            # cachyos (VM)
+
+            `source.kind: bootstrap` VM that builds a CachyOS rootfs from scratch via
+            `pacstrap` (using `/charly-distros:cachyos-pacstrap-builder`), then boots it under
+            libvirt/QEMU.
+
+            The `cachyos-vm` entity and its `check-cachyos-vm` disposable test bed live in
+            the **`opencharly/distro-cachyos`** repo (git submodule at **`box/cachyos`**),
+            all in that repo's unified `charly.yml`. The bed is a `disposable: true` deploy
+            (a check bed is just a deploy carrying `disposable: true` — there is no separate
+            bed kind), driven by `charly check run check-cachyos-vm`. Drive the VM lifecycle
+            from the submodule: `charly -C box/cachyos vm build cachyos-vm` +
+            `charly -C box/cachyos vm create cachyos-vm` (or `charly --repo opencharly/distro-cachyos …`).
+
+            ## VM Configuration (from box/cachyos/charly.yml)
+
+            | Setting | Value |
+            |---|---|
+            | Source | `kind: bootstrap`, `builder: pacstrap`, `builder_image: cachyos-pacstrap-builder` |
+            | Distro | cachyos |
+            | rootfs | btrfs |
+            | Disk / RAM / CPU | 25G / 4G / 2 |
+            | Machine / firmware | q35 / uefi-insecure |
+            | Network | user mode |
+            | SSH | user `cachy`, port 12226, key_source generate |
+
+            The `cachyos` distro config (base packages, keyring, mirrors, repos) comes from
+            the embedded `distro: cachyos` build vocabulary baked into the `charly` binary
+            (`charly/charly.yml`), merged in by the unified loader.
+
+            ## Check bed
+
+            `check-cachyos-vm` is a `disposable: true` deploy (`vm: {from: cachyos-vm,
+            disposable: true}`), so `charly -C box/cachyos check run check-cachyos-vm`
+            runs the full R10 sequence unattended (the equivalent `charly update
+            check-cachyos-vm` rebuild also works, since the deploy is folded into the
+            Bundle map).
+
+            `check-cachyos-gpu-vm` is the **full KDE GPU workstation** bed — it mirrors the
+            operator `cachyos-gpu` workstation's dual-desktop config and is the acceptance gate
+            for migrating it. A `cachyos-gpu-vm` guest (bootstrap VM, UEFI, `backend: libvirt`,
+            podman) receives a physical NVIDIA GPU via a VFIO `<hostdev>` and runs BOTH (a) a
+            bare-metal KDE Plasma SDDM seat as in-guest layers, AND (b) a nested
+            `selkies-kde-nvidia` streaming pod (real NVENC). It applies the `nvidia` toolkit +
+            the locally-vendored `nvidia-driver` kernel layer (whose `reboot: true` reboots the
+            guest mid-deploy so the open module loads on a clean boot and the boot-time
+            `nvidia-ctk cdi generate` writes `/etc/cdi/nvidia.yaml`), then the vm deploy plugin's
+            `OpPostApply` host-builds `selkies-kde-nvidia`, `charly vm cp-box
+            --rootless`s it into the guest user's podman as `localhost/charly-selkies-kde:latest`,
+            and runs the guest's own project-free `charly bundle from-box
+            localhost/charly-selkies-kde:latest selkies-kde` — a PERSISTENT in-guest `--user`
+            quadlet (GPU device auto-detected; `loginctl enable-linger` so it survives the
+            guest reboot the fresh-rebuild leg recreates). Deploy-scope checks run in-guest over
+            SSH: the quadlet is active + lingering, the stream answers on
+            `https://localhost:3000` (an in-guest `curl`, since the pod publishes `:3000` only
+            on the guest), and the nvidia encoder is queryable. The committed `cachyos-gpu-vm`
+            is **portable** — it carries NO hostdev block (a PCI address is host-specific);
+            generate one with `charly vm gpu list` and add it locally before a live GPU run. The
+            GPU-gated checks pass with an N/A note when no card is passed through, so the bed
+            runs anywhere. This is the R10 gate for the nested-pod-in-VM capability
+            (`/charly-internals:vm-deploy-target`). See `/charly-vm:vm` "GPU passthrough",
+            `/charly-distros:cuda`.
+
+            ## pacstrap path
+
+            `charly vm build cachyos-vm` builds a bootable disk end-to-end. The
+            `vm_bootstrap.go` path uses the same `renderPacstrapExtraConf` helper as the
+            image path, which emits the per-repo `SigLevel` (required for GPGME) and an
+            `[options] Architecture = x86_64 x86_64_v3` directive (so `linux-cachyos`
+            passes the architecture check).
+
+            pacstrap installs `linux-cachyos` (x86_64_v3), mkinitcpio generates the
+            initramfs (its `autodetect` hook warns in the chroot and falls back to
+            all-modules — non-fatal), and a bootable `disk.qcow2` (~3.5 GB) + cloud-init
+            `seed.iso` are written. The Docker-Hub `/charly-distros:cachyos` container base
+            remains the faster path when you don't need a VM disk.
+
+            ## Cross-References
+
+            - `/charly-distros:cachyos-pacstrap-builder` — the builder image this VM uses
+            - `/charly-distros:cachyos-pacstrap` — the container equivalent of this bootstrap path
+            - `/charly-vm:arch-cloud-vm` — the canonical cloud_image VM (BIOS/virtio-gpu/sizing rationale)
+            - `/charly-vm:vm` — VM lifecycle commands + BIOS/UEFI matrix
+            - `/charly-vm:vms-catalog` — VmSpec authoring reference
+
+            ## When to Use This Skill
+
+            **MUST be invoked** when editing `cachyos-vm` or its check bed, or authoring a
+            CachyOS VM. Invoke BEFORE reading source code or launching Explore agents.
+debian-debootstrap-vm-skill:
+    skill:
+        name: debian-debootstrap-vm
+        family: vm
+        owner: charly-vm
+        description: |-
+            Debian bootstrap VM (kind:vm debian-debootstrap) — source.kind: bootstrap via
+            debian-debootstrap-builder + debootstrap, ext4 rootfs, uefi-insecure. Plus the
+            disposable check-debian-debootstrap-vm deploy. Lives in the opencharly/distro-debian submodule.
+            MUST be invoked before editing debian-debootstrap or its check bed.
+        content: |
+            # debian (VM)
+
+            `source.kind: bootstrap` VM that builds a Debian rootfs from scratch via
+            `debootstrap` (using `/charly-distros:debian-debootstrap-builder`), then boots it
+            under libvirt/QEMU.
+
+            The `debian-debootstrap` VM entity and its `check-debian-debootstrap-vm` disposable
+            test bed live in the **`opencharly/distro-debian`** repo (git submodule at
+            **`box/debian`**), all in that repo's unified `charly.yml`. The bed is a
+            `disposable: true` deploy (a check bed is just a deploy carrying `disposable: true`
+            — there is no separate bed kind), driven by `charly check run
+            check-debian-debootstrap-vm`. Drive the VM lifecycle from the submodule:
+            `charly -C box/debian vm build debian-debootstrap` +
+            `charly -C box/debian vm create debian-debootstrap` (or
+            `charly --repo opencharly/distro-debian …`).
+
+            ## VM Configuration (from box/debian/charly.yml)
+
+            | Setting | Value |
+            |---|---|
+            | Source | `kind: bootstrap`, `builder: debootstrap`, `builder_image: debian-debootstrap-builder` |
+            | Distro | debian |
+            | rootfs | ext4 |
+            | Disk / RAM / CPU | 20G / 4G / 2 |
+            | Machine / firmware | q35 / uefi-insecure |
+            | Network | user mode |
+            | SSH | user `debian`, port 12227, key_source generate |
+
+            The `debian` distro config (debootstrap suite/mirror, base packages, bootloader
+            template) comes from the embedded `distro:` build vocabulary baked into the
+            charly binary, which the unified loader makes available to the submodule's
+            `charly.yml` automatically — no explicit import needed.
+
+            ## Check bed
+
+            `check-debian-debootstrap-vm` is a `disposable: true` deploy
+            (`vm: {from: debian-debootstrap, disposable: true}`), so
+            `charly -C box/debian check run check-debian-debootstrap-vm` runs the full R10 sequence
+            unattended (the equivalent `charly update check-debian-debootstrap-vm` rebuild also works,
+            since the bundle is folded into the Bundle map).
+
+            ## debootstrap path
+
+            `charly vm build debian-debootstrap` runs `debootstrap` inside the privileged
+            `debian-debootstrap-builder` to build the rootfs, then writes a bootable disk +
+            cloud-init seed ISO. The bootstrap path is privileged + network-heavy
+            (`debootstrap` downloads the base packages from the Debian mirror). The
+            Docker-Hub `/charly-distros:debian` container base remains the faster path when you
+            don't need a VM disk.
+
+            ## Cross-References
+
+            - `/charly-distros:debian-debootstrap-builder` — the builder image this VM uses
+            - `/charly-distros:debian-debootstrap` — the container equivalent of this bootstrap path
+            - `/charly-vm:ubuntu-debootstrap-vm` — the Ubuntu sibling bootstrap VM
+            - `/charly-vm:arch-cloud-vm` — the canonical cloud_image VM (BIOS/virtio-gpu/sizing rationale)
+            - `/charly-vm:vm` — VM lifecycle commands + BIOS/UEFI matrix
+            - `/charly-vm:vms-catalog` — VmSpec authoring reference
+
+            ## When to Use This Skill
+
+            **MUST be invoked** when editing `debian-debootstrap` or its check bed, or
+            authoring a Debian VM. Invoke BEFORE reading source code or launching Explore agents.
+ubuntu-debootstrap-vm-skill:
+    skill:
+        name: ubuntu-debootstrap-vm
+        family: vm
+        owner: charly-vm
+        description: |-
+            Ubuntu bootstrap VM (kind:vm ubuntu-debootstrap) — source.kind: bootstrap via
+            ubuntu-debootstrap-builder + debootstrap, ext4 rootfs, uefi-insecure. Plus the
+            disposable check-ubuntu-debootstrap-vm deploy. Lives in the opencharly/distro-ubuntu submodule.
+            MUST be invoked before editing ubuntu-debootstrap or its check bed.
+        content: |
+            # ubuntu (VM)
+
+            `source.kind: bootstrap` VM that builds an Ubuntu 24.04 rootfs from scratch via
+            `debootstrap` (using `/charly-distros:ubuntu-debootstrap-builder`), then boots it
+            under libvirt/QEMU.
+
+            The `ubuntu-debootstrap` VM entity and its `check-ubuntu-debootstrap-vm` disposable
+            test bed live in the **`opencharly/distro-ubuntu`** repo (git submodule at
+            **`box/ubuntu`**), all in that repo's unified `charly.yml`. The bed is a
+            `disposable: true` deploy (a check bed is just a deploy carrying `disposable: true`
+            — there is no separate bed kind), driven by `charly check run
+            check-ubuntu-debootstrap-vm`. Drive the VM lifecycle from the submodule:
+            `charly -C box/ubuntu vm build ubuntu-debootstrap` +
+            `charly -C box/ubuntu vm create ubuntu-debootstrap` (or
+            `charly --repo opencharly/distro-ubuntu …`).
+
+            ## VM Configuration (from box/ubuntu/charly.yml)
+
+            | Setting | Value |
+            |---|---|
+            | Source | `kind: bootstrap`, `builder: debootstrap`, `builder_image: ubuntu-debootstrap-builder` |
+            | Distro | ubuntu |
+            | rootfs | ext4 |
+            | Disk / RAM / CPU | 20G / 4G / 2 |
+            | Machine / firmware | q35 / uefi-insecure |
+            | Network | user mode |
+            | SSH | user `ubuntu`, port 12229, key_source generate |
+
+            The `ubuntu` distro config (`inherits: debian`; debootstrap suite `noble`,
+            mirror, base packages) comes from the embedded build vocabulary
+            (`charly/charly.yml`, baked into the charly binary), available to every repo
+            without an import. The embedded vocabulary carries BOTH distro configs, so
+            `inherits: debian` resolves without referencing `opencharly/distro-debian`.
+
+            ## Check bed
+
+            `check-ubuntu-debootstrap-vm` is a `disposable: true` deploy
+            (`vm: {from: ubuntu-debootstrap, disposable: true}`), so
+            `charly -C box/ubuntu check run check-ubuntu-debootstrap-vm` runs the full R10 sequence
+            unattended (the equivalent `charly update check-ubuntu-debootstrap-vm` rebuild also works,
+            since the bundle is folded into the Bundle map).
+
+            ## debootstrap path
+
+            `charly vm build ubuntu-debootstrap` runs `debootstrap` inside the privileged
+            `ubuntu-debootstrap-builder` to build the rootfs, then writes a bootable disk +
+            cloud-init seed ISO. The bootstrap path is privileged + network-heavy
+            (`debootstrap` downloads the base packages from the Ubuntu mirror). The
+            Docker-Hub `/charly-distros:ubuntu` container base remains the faster path when you
+            don't need a VM disk.
+
+            ## Cross-References
+
+            - `/charly-distros:ubuntu-debootstrap-builder` — the builder image this VM uses
+            - `/charly-distros:ubuntu-debootstrap` — the container equivalent of this bootstrap path
+            - `/charly-vm:debian-debootstrap-vm` — the Debian sibling bootstrap VM
+            - `/charly-vm:arch-cloud-vm` — the canonical cloud_image VM (BIOS/virtio-gpu/sizing rationale)
+            - `/charly-vm:vm` — VM lifecycle commands + BIOS/UEFI matrix
+            - `/charly-vm:vms-catalog` — VmSpec authoring reference
+
+            ## When to Use This Skill
+
+            **MUST be invoked** when editing `ubuntu-debootstrap` or its check bed, or
+            authoring an Ubuntu VM. Invoke BEFORE reading source code or launching Explore agents.
+vm-skill:
+    skill:
+        name: vm
+        family: vm
+        owner: charly-vm
+        description: |-
+            MUST be invoked before any work involving: virtual machines, charly vm commands,
+            kind:vm entities in charly.yml, cloud_image vs bootc source types,
+            libvirt/QEMU backends, BIOS vs UEFI firmware, virtio-gpu video, or VM lifecycle.
+        content: |
+            # VM — Virtual Machine Management
+
+            ## Disposability + deploy cross-ref
+
+            - **Disposability is a deployment property, never a VM-entity field.** A `kind: vm` entity carries no `disposable:` / `lifecycle:` field. Put `disposable: true` on the deploy that deploys it. The `vm:` entity only describes VM shape (disk, RAM, SSH, cloud-init, libvirt), never authorization.
+            - **VM cross-ref**: a `vm:` deploy names its VM entity via the `from:` field (`<bed>: {vm: {from: <entity-name>, disposable: true}}`).
+            - **`charly update <vm-entity-name>`** does NOT gate on `disposable:` — an explicit invocation rebuilds ANY target (destroy→create the domain, reuse the qcow2 disk unless `--build`, then re-apply the deploy's layers via the shared `bundle add` path). For a non-disposable, non-ephemeral target it prints a one-line transparency note (`noteUpdateDisposability`) and proceeds. The `disposable: true` flag stays load-bearing as the authorization for UNATTENDED autonomous destroy + rebuild (the project rulebook R10 (`AGENTS.md` / `CLAUDE.md`)) and the check-runner's unattended fresh rebuild, NOT as an `charly update` capability check. See `/charly-internals:disposable` and `/charly-core:charly-update`.
+
+            ## Overview
+
+            `charly vm` commands build disk images and manage virtual machines via libvirt (default) or direct QEMU. VMs are declared as **`kind: vm` entities in the unified `charly.yml`** — a first-class primitive alongside `candy:` image entries, each a name-first top-level node (`<name>: {vm: …}`). Two source types:
+
+            - **`source.kind: cloud_image`** — fetches a pre-built qcow2 from an external URL (Arch, Fedora, Ubuntu, Debian, CentOS Cloud images). Renders a NoCloud seed ISO with cloud-init. Canonical example: `/charly-vm:arch-cloud-vm`.
+            - **`source.kind: bootc`** — pairs (via its `box:` source field) with a `candy:` image entry that has `bootc: true`. Runs `bootc install to-disk` inside a privileged container.
+
+            VMs are not configured on `candy:` image entries — `vm:` / `libvirt:` on a `candy:` image are rejected at load time. `bootc: true` stays on a `candy:` image entry to mark it bootable. The legacy on-image `vm:`/`libvirt:` fields predate the schema floor and are no longer migratable — a config still carrying them must be re-authored as a name-first `kind: vm` node (see `/charly-build:migrate`). For the YAML authoring reference, see `/charly-vm:vms-catalog`; for the Go types, see `/charly-internals:vm-spec`.
+
+            ## Quick Reference
+
+            | Action | Command | Description |
+            |--------|---------|-------------|
+            | Build QCOW2 | `charly vm build <name>` | Build disk image (`<name>` = kind:vm entity key) |
+            | Build RAW | `charly vm build <name> --type raw` | Build RAW disk |
+            | Create VM | `charly vm create <name>` | Provision libvirt/QEMU VM from the built disk |
+            | Start VM | `charly vm start <name>` | Start a stopped VM |
+            | Stop VM | `charly vm stop <name>` | Graceful shutdown |
+            | Force stop | `charly vm stop <name> --force` | Force stop (destroy) |
+            | Destroy VM | `charly vm destroy <name>` | Remove VM definition |
+            | Destroy + disk | `charly vm destroy <name> --disk` | Remove VM and delete disk |
+            | List VMs | `charly vm list [-a]` | List running (or all) VMs |
+            | Console | `charly vm console <name>` | Attach to serial console |
+            | SSH | `charly vm ssh <name>` | SSH into VM |
+            | GPU passthrough readiness | `charly vm gpu status` | Host IOMMU + vfio-pci + per-GPU **per-function** group/driver/mode report (flags wedge/poison) |
+            | GPU passthrough block | `charly vm gpu list` | Emit a ready-to-paste `libvirt.devices.hostdevs:` block (whole IOMMU group, `managed: "yes"`) |
+            | GPU driver mode (switch) | `charly vm gpu mode [vfio\|nvidia]` | Flip the WHOLE IOMMU group (display→nvidia/vfio, audio→snd_hda_intel/vfio); omit the arg to SHOW the mode |
+            | GPU recover | `charly vm gpu recover` | Rebind an unbound/half-switched card to vfio-pci; reports **reboot-required** and does nothing on a true device_lock wedge |
+            | Load image into guest | `charly vm cp-box <vm> <ref> [--as <tag>]` | `podman save | scp | podman load` a host image into a running guest (idempotent) |
+
+            VM name convention: `charly-<name>[-<instance>]`. Default libvirt URI: `qemu:///session`.
+
+            ## GPU passthrough (VFIO)
+
+            **Preempting a GPU holder is standing-authorized.** When a GPU deploy of a VM
+            declares `requires_exclusive: [nvidia-gpu]`, the arbiter gracefully stops the operator's
+            running `preemptible` GPU-workstation VM to free the card and is GUARANTEED to restart it —
+            you do this autonomously, with no per-run confirmation (preemption is reversible by
+            design; see `/charly-internals:disposable` "Standing authorization").
+
+            To pass a physical GPU through to a VM and (e.g.) run a CUDA container inside it:
+
+            1. **Host readiness — and why host `nvidia-smi` is the WRONG check.** `charly vm gpu
+               status` confirms IOMMU is on (`intel_iommu=on` / `amd_iommu=on iommu=pt` on the
+               kernel cmdline) and shows each GPU's IOMMU group + current driver; `charly doctor`
+               reports the same under "VFIO / GPU passthrough". On a passthrough-READY host the
+               card is bound to the **`vfio-pci`** host driver (NOT `nvidia` / `nouveau` /
+               `amdgpu`) precisely so a guest can claim it — so host-side `nvidia-smi` /
+               `rocm-smi` / `nvidia-settings` **FAIL BY DESIGN**. That failure is the *ready*
+               state, NOT a "no GPU" state: never gauge GPU- or passthrough-bed availability from
+               host `nvidia-smi`. The authoritative host checks are `charly vm gpu status` /
+               `charly vm gpu list` (or `lspci -nnk` showing `Kernel driver in use: vfio-pci`);
+               the GPU comes alive INSIDE the guest, where the in-guest driver layer (step 3)
+               binds it and in-guest `nvidia-smi` works.
+            2. **The hostdev is AUTO-ALLOCATED.** When a deploy of a VM declares
+               `requires_exclusive: [<token>]` and that token maps to an embedded
+               `resource:` vocabulary entry with a `gpu:` selector (e.g. `resource: {nvidia-gpu: {gpu:
+               {vendor: "0x10de"}}}`), `charly vm create` auto-detects the matching GPU,
+               writes its whole-IOMMU-group `hostdevs:` block (each `managed: "yes"`) into
+               this host's per-domain `instance.yml`, and injects it — or **FAILS HARD** if
+               the required card is absent (`autoAllocateExclusiveGPUs`, gpu_allocate.go).
+               No manual step. The committed `kind: vm` entity stays portable (no PCI
+               address); set `firmware: uefi-insecure` + `backend: libvirt` on it (the qemu
+               backend does not render `<hostdev>`). An operator-authored `hostdevs:` block
+               (committed `charly.yml` OR `instance.yml`) ALWAYS wins — auto-allocation defers
+               to it (no double-inject, no re-detection; delete the block to re-detect).
+               `charly vm gpu list` still prints a ready-to-paste block for the manual
+               override path; `charly vm gpu status` reports host readiness. See
+               `/charly-internals:disposable` "resource-arbitration axis" + `/charly-build:build`
+               `resource:`.
+            3. **In-guest driver** — a passthrough guest needs the actual kernel module, not
+               just the userspace container toolkit. Apply a kernel-driver layer (it
+               blacklists the in-tree driver, regenerates the initramfs, and declares
+               `reboot: true` so `charly bundle add vm:<name>` reboots the guest and waits for it
+               to return). The `nvidia`-toolkit layer + `nvidia-ctk cdi generate` then makes
+               the GPU available to containers via CDI (`--device nvidia.com/gpu=all`).
+
+            Code-43 workarounds for consumer NVIDIA cards are first-class libvirt fields:
+            `libvirt.features.kvm.hidden: on` and `libvirt.features.hyperv.vendor_id`.
+            Optional per-hostdev `rom: {bar: off}` / `driver: {name: vfio}` are supported.
+            Worked end-to-end example: the CachyOS `check-cachyos-gpu-vm` bed (see
+            `/charly-vm:cachyos-bootstrap-vm`, `/charly-check:check`).
+
+            ## GPU driver-mode switch (vfio ↔ nvidia) — and the device_lock hazard
+
+            A single passthrough-capable NVIDIA card serves EITHER a VM (every IOMMU-group
+            function on `vfio-pci`) OR many shared CDI pods (display function on `nvidia`,
+            HDMI-audio on `snd_hda_intel`), one mode at a time. The arbiter flips it
+            automatically for `requires_exclusive` (→ vfio) / `requires_shared` (→ nvidia)
+            claims (see `/charly-internals:disposable`); `charly vm gpu mode [vfio|nvidia]`
+            is the manual operator override and `charly vm gpu status` the honest inspector
+            (per-function driver + IOMMU group + mode). **The switch is group-aware** — it
+            moves EVERY function of the IOMMU group together, because a VFIO group is
+            guest-usable only when ALL its members are vfio-bound
+            (`VFIO_GROUP_FLAGS_VIABLE`); flipping only the display function (the old
+            behavior) stranded the audio function and broke group viability. It uses
+            `driver_override` + `drivers_probe` to force the exact target driver regardless
+            of the boot-time `ids=` dynamic-id table.
+
+            ### The device_lock wedge (why the nvidia→vfio switch is careful)
+
+            Unbinding the `nvidia` driver via **sysfs `unbind` while any client still holds
+            the GPU** hangs the host, reboot-only. Source-confirmed (NVIDIA open driver
+            `kernel-open/nvidia/nv-pci.c`) + RDD-proven on this host:
+
+            - `nv_pci_remove` (the PCI `.remove`, fired by sysfs `unbind` / `rmmod`) calls
+              `nv_pci_remove_helper(block_if_gpu_in_use=TRUE)`, which — when
+              `nvl->usage_count != 0` (an open `/dev/nvidia*` fd, a live CUDA context, or
+              `nvidia_uvm`/`nvidia_modeset`/`nvidia_drm` attached) — BLOCKS FOREVER in
+              `while (usage_count != 0) os_delay(500)`. The Linux PCI core holds the
+              per-device **`device_lock`** (`dev->mutex`, an uninterruptible mutex) across
+              the *entire* `.remove`, so every later bind/reset/remove on that device
+              serializes behind it in unkillable `D` state.
+            - Recovery is **REBOOT-ONLY**: no userspace primitive releases a held
+              `device_lock` or aborts an in-kernel driver callback. A sysfs `reset`
+              (`pci_reset_function`) and `echo 1 > remove` re-take the same lock and also
+              `D`-state; `kill`/`timeout` cannot touch a `D`-state task; a raw `setpci`
+              secondary-bus-reset bypasses the lock but fixes neither the mutex nor
+              `usage_count` and risks an MCE.
+            - It is **NOT** power/runtime-PM related (a common wrong guess — do not invoke
+              `power/control` / `d3cold` to explain it): `usage_count` is a plain
+              open-reference count. And `nv_pci_shutdown` (host reboot/shutdown) passes
+              `block=FALSE` and early-returns, so a host reboot NEVER wedges on a busy GPU.
+
+            ### Why the switch is safe by construction
+
+            The switch NEVER sysfs-unbinds a busy nvidia. The nvidia→vfio path detaches via
+            **`modprobe -r`**, which is module-refcount-guarded — it returns `EBUSY`
+            *immediately* if any client holds the GPU (it never reaches the blocking
+            `.remove` loop), so module-unload IS the deterministic preflight gate. Before the
+            flip the arbiter first RECLAIMS charly's OWN running GPU-CDI pods that hold no
+            active lease (a leaked/stray disposable bed — detail: `/charly-internals:disposable`
+            "The mode flip"), so a residual `EBUSY` is a GENUINE EXTERNAL (non-charly) client;
+            against that remaining client the switch REFUSES rather than force-unbinding. The host-side
+            precondition is fully verifiable WITHOUT touching the device: `lsmod` (nvidia
+            refcount + dependents — the only proxy that reflects the in-kernel
+            `nvidia_dev_get` refs of uvm/modeset/drm), `lsof /dev/nvidia*`, and
+            `nvidia-smi --query-compute-apps`; NEVER open `/dev/nvidia*` to probe (that
+            increments `usage_count`). The whole switch runs under a bounded deadline; if a
+            GSP-teardown stall ever wedges it anyway, the arbiter **POISONS** the resource
+            (keyed to the current boot id) so no later claimant re-wedges the card —
+            `charly vm gpu status` flags it and acquires are refused with a reboot-required
+            error until the host reboots.
+
+            ### `charly vm gpu recover`
+
+            Recovers a card left **unbound / half-switched** (e.g. an interrupted flip) back
+            to the clean vfio-pci default — but ONLY when the card is NOT wedged. It first
+            runs a read-only probe for a true device_lock wedge (a `D`-state task in
+            `nv_pci_remove`); on a wedge it reports **reboot-required and attempts NOTHING**
+            (a bind on a wedged card would add a second permanent `D`-state). On a healthy
+            card it rebinds the whole group to vfio-pci and clears any stale poison marker.
+
+            Implementation + full RCA: `candy/plugin-gpu/switch.go` (the switch primitive, cutover
+            C9 — reached from core via the plugin's `verb:gpu` dispatch; the former
+            `charly/gpu_shim.go` driver-switch shims are DELETED, K-wave 2 cone R3 — the file now
+            holds only `gpuProbeReply` + `DetectVFIO`), the arbiter's
+            poisoning in `candy/plugin-preempt` (`arbiter_support.go`), `candy/plugin-vm/vm_gpu_cmd.go`
+            (status/recover/plan); the arbiter side is `/charly-internals:disposable`
+            "resource-arbitration axis".
+
+            ## Building Disk Images
+
+            ```bash
+            charly vm build arch          # cloud_image: fetch qcow2, resize, render seed ISO
+            charly vm build <bootc-vm> --type qcow2      # bootc: bootc install to-disk
+            charly vm build <name> --size 40G        # disk_size override (CLI wins over charly.yml)
+            charly vm build <name> --root-size 10G   # bootc only: cap root partition
+            charly vm build <name> --console         # enable console output for debugging
+            charly vm build <name> --transport containers-storage   # bootc: local podman storage
+            ```
+
+            Output: `output/<type>/disk.<type>`. For cloud_image, also `output/<type>/seed.iso`. ISO format is not supported — use qcow2 or raw.
+
+            The `--transport` flag (bootc only) controls how the container image is read: `registry` (pull from registry), `containers-storage` (local podman), `oci` (OCI dir), `oci-archive` (OCI tarball).
+
+            Source: `candy/plugin-vm/vm_build.go`, `candy/plugin-vm/vm_cloud_image.go` (the former `charly/vm_build.go`/`charly/vm_cloud_image.go` are DELETED, K-wave 2).
+
+            ## VM Lifecycle
+
+            ```bash
+            charly vm create arch                        # default resources from charly.yml
+            charly vm create <name> --ram 8G --cpus 4               # CLI overrides
+            charly vm create <name> --ssh-key auto                  # auto-detect SSH key (default)
+            charly vm create <name> --ssh-key generate              # generate new keypair
+            charly vm create <name> --ssh-key none                  # no key injection
+            charly vm create <name> --ssh-key ~/.ssh/id_ed25519.pub # specific key
+            charly vm create <name> -i prod                         # named instance
+            charly vm start <name>
+            charly vm stop <name>                                   # graceful
+            charly vm stop <name> --force                           # destroy
+            charly vm destroy <name>                                # remove VM definition
+            charly vm destroy <name> --disk                         # also delete disk image
+            charly vm list [-a]
+            charly vm console <name>                                # serial console
+            charly vm ssh <name>                                    # SSH with resolved user/port from charly.yml
+            charly vm ssh <name> -p 2224 -l arch                    # override user/port
+            charly vm ssh <name> -- ls /tmp                         # run command via SSH
+            ```
+
+            **`charly vm create` regenerates the cloud-init seed ISO** (cloud_image sources
+            only). Edits to the VM entity's `cloud_init:` block — runcmd entries, packages,
+            charly_install strategy, network-config — take effect on the next `charly vm create`
+            without requiring a full `charly vm build`. The qcow2 disk is left alone; only
+            the seed ISO is rewritten (via `RegenerateSeedISO` in `candy/plugin-vm/vm_cloud_image.go`).
+            Use `charly vm destroy --disk` + `charly vm build` when you need a truly fresh disk
+            (e.g. when a previous failed cloud-init left stale state in `/home/<user>/`).
+
+            **`autostart: true`** on the entity makes `charly vm create` set libvirt's domain
+            autostart flag AND wire the session-boot trigger (`loginctl enable-linger` + a
+            generated per-VM user unit `charly-autostart-<domain>.service` that `virsh start`s
+            the domain at boot), so the VM starts at host boot. Requires the libvirt backend.
+            **`disk_size: 1T`** (or larger) is cheap — the qcow2 is sparse, so the virtual
+            size is just a ceiling and physical bytes grow on demand. A host directory can be
+            shared into the guest via `libvirt.devices.filesystems` (virtiofs) and mounted by
+            the `/charly-distros:workspace-mount` layer. See `/charly-vm:vms-catalog`.
+
+            ## `kind: vm` entity reference
+
+            Canonical node-form shape, condensed from `/charly-vm:vms-catalog`. Each VM is a
+            name-first top-level node; every non-scalar block (here `libvirt:`) is a CHILD NODE
+            `<entity>-<key>`, never nested under `vm:`:
+
+            ```yaml
+            # cloud_image source
+            arch:
+              vm:
+                source:
+                  kind: cloud_image
+                  url: https://fastly.mirror.pkgbuild.com/images/latest/Arch-Linux-x86_64-cloudimg.qcow2
+                  checksum: {type: sha256}                      # value auto-resolves from <url>.SHA256 sidecar
+                  base_user: arch                               # adopt pattern (no useradd)
+                disk_size: 40G
+                ram: 8G
+                cpu: 4
+                machine: q35
+                firmware: bios                                  # BIOS preferred for cloud images — see decision matrix below
+                network: {mode: user}
+                ssh: {port: 2224, key_source: generate}
+                cloud_init:
+                  package: [sudo, spice-vdagent]
+                  charly_install: {strategy: auto}
+            arch-libvirt:                                       # CHILD NODE — libvirt block hoisted out of `vm:`
+              libvirt:
+                devices:
+                  video: [{model: virtio, vram: 65536, heads: 1, accel3d: false}]
+                  graphics: [{type: spice, autoport: "yes", listen: 127.0.0.1}]
+
+            # bootc source
+            my-bootc:
+              vm:
+                source:
+                  kind: bootc
+                  box: my-bootc                               # `box:` source field → a `candy:` image entry with bootc: true
+                disk_size: 80 GiB
+                ram: 16G
+                cpu: 6
+                ssh: {user: root, port: 2250}
+            ```
+
+            Every field in `VmSpec` applies to both source kinds (parity guarantee). See `/charly-internals:vm-spec` for the Go type reference and `/charly-vm:vms-catalog` for the full field-by-field authoring guide.
+
+            ## Backend matrix
+
+            Resolution order: **libvirt → qemu** (auto-detected). Override via `charly settings set vm.backend libvirt`.
+
+            | Backend | Requires | When to pick |
+            |---|---|---|
+            | `libvirt` (default) | libvirt session daemon socket | Almost always — full domain XML, portForward with passt, SPICE console, per-VM NVRAM |
+            | `qemu` | `qemu-system-*` binary | Direct QEMU; air-gapped hosts where libvirt isn't installed |
+
+            **Socket path probing for libvirt ≥ 8.0**: modular libvirt splits into `virtqemud` / `virtnetworkd` / ... — the socket is `virtqemud-sock`, not `libvirt-sock`. `libvirtSessionSocket()` probes `virtqemud-sock` first, falls back to `libvirt-sock` on older setups. Symptom of a misprobe: `ConnectToURI(QEMUSession)` returns `End of file while reading data: Input/output error` — means the daemon isn't accepting on the socket you reached.
+
+            ### Prereq: libvirt user-session daemon
+
+            `backend: libvirt` requires `virtqemud.service` (or older monolithic
+            `libvirtd.service`) running as a **user**-service — no sudo needed:
+
+            ```bash
+            systemctl --user enable --now virtqemud.service
+            ```
+
+            `resolveVmBackend()` itself best-effort spawns the session daemon
+            (`startLibvirtUserSession()`: `systemctl --user start virtqemud.service` →
+            `libvirtd.service` → a `virsh -c qemu:///session list` autospawn) **before**
+            probing for its socket, so EVERY vm verb (create / build / start / stop /
+            destroy / console) detects libvirt uniformly — not just `charly vm create`.
+            This matters because many hosts (Arch / CachyOS) ship **no persistent
+            `virtqemud.socket`**: the session socket exists only AFTER a client triggers
+            libvirt's on-demand autospawn, so a COLD socket probe (run before any spawn)
+            false-negatives a fully working libvirt and silently falls back to qemu — the
+            bug that made the per-verb detection nondeterministic. If the unit isn't
+            installed at all (libvirt missing entirely), `resolveVmBackend()` surfaces the
+            explicit error `"libvirt backend requires libvirt session daemon"` with the
+            remediation hint above.
+
+            **Do NOT gauge libvirt availability with `systemctl is-active
+            <virtqemud|libvirtd>.service`.** A socket-activated OR on-demand-autospawn
+            daemon reports the SERVICE `inactive` even while libvirt is fully usable (it
+            spawns per connection with `--timeout` and exits when idle, so the *service*
+            is idle between calls). The only valid signals are the **socket**
+            (`$XDG_RUNTIME_DIR/libvirt/virtqemud-sock`) or a real connection
+            (`virsh -c qemu:///session list`). The system/rootful path (`qemu:///system`,
+            `libvirtd.socket`) is a SEPARATE daemon charly does not use — charly is
+            rootless-first (`qemu:///session`), so a non-root user with only the system
+            daemon still needs the user-session path (which `resolveVmBackend()` autospawns).
+
+            For projects whose check beds use `charly check libvirt …` and `charly check
+            spice …` probes (e.g., the project's `arch:` VM template), pin the
+            backend explicitly via `backend: libvirt` on the kind:vm entity —
+            `backend: auto` would silently fall through to qemu when the daemon
+            is missing, breaking every libvirt-RPC probe with a confusing
+            "no such file or directory" error 5+ minutes into the check-live
+            timeout. `arch:` and `k3s-vm:` carry this pin (see `/charly-check:check`
+            on disposable VM beds).
+
+            Source: `candy/plugin-vm/vm_backend_resolve.go` (`resolveVmBackendPlugin`, over `vmshared.StartLibvirtUserSession` — the former `charly/vm_backend_lifecycle.go` is DELETED, K-wave 2),
+            `candy/plugin-vm/vm_libvirt.go`, `candy/plugin-vm/vm_qemu.go`.
+
+            ## BIOS vs UEFI decision matrix
+
+            The `firmware:` field controls the VM boot path. Choice matters more than most authors realize.
+
+            | Firmware | When to pick |
+            |---|---|
+            | `bios` (default) | Cloud images (Arch, Fedora Cloud, Ubuntu Cloud, Debian Cloud, CentOS Cloud) that ship a GPT BIOS boot partition. Avoids stale BOOTX64.EFI issues. No OVMF package dependency. No per-VM NVRAM. See `/charly-vm:arch-cloud-vm` Finding B for the RCA. |
+            | `uefi-insecure` | bootc Fedora images (ship signed BOOTX64.EFI built at image-build time). Guests needing GPT > 2 TiB disks. ARM hosts (aarch64). |
+            | `uefi-secure` | Guests needing Secure Boot (signed kernel + initramfs). Locks to Microsoft UEFI CA keys. |
+
+            See `/charly-internals:ovmf` for the per-distro OVMF_CODE/OVMF_VARS path table and the per-VM NVRAM mechanics. When `firmware: bios`, `ResolveOvmfForSpec` returns empty strings and the libvirt renderer skips `<loader>`/`<nvram>` entirely.
+
+            ## Video-model choice
+
+            `libvirt.devices.video[0].model` drives the VM's paravirtualized GPU.
+
+            | Model | Default for | Why |
+            |---|---|---|
+            | `virtio` (virtio-gpu) | **Linux guests — modern default** | Native `virtio_gpu` kernel DRM driver (4.16+), Wayland-native, simpler config, no X-server-specific driver needed |
+            | `qxl` | Legacy X11 SPICE use | 2010-era Red Hat SPICE stack; simpledrm→qxldrmfb takeover race under UEFI (see `/charly-vm:arch-cloud-vm` Finding B); more knobs (ram_size + vram_size + vram64_size_mb + vgamem_mb) |
+            | `cirrus` | BIOS fallback only | Low resolution, no acceleration |
+            | `none` | Headless VMs | No framebuffer at all |
+
+            SPICE is video-model-agnostic — it streams pixels from virtio-gpu as well as from QXL. See `/charly-internals:libvirt-renderer` "video-model choice" for the full decision rationale.
+
+            ## SSH Key Injection
+
+            SSH keys inject via two additive channels (both on by default for cloud_image VMs):
+
+            - **SMBIOS type 11 OEM strings** — systemd-ssh-generator (systemd ≥ v250) materializes the pubkey into `~<user>/.ssh/authorized_keys` during early boot. Works even without cloud-init.
+            - **cloud-init user-data** — `users:[...].ssh_authorized_keys` list in the rendered user-data on the NoCloud seed ISO.
+
+            The `--ssh-key` flag (and the entity's `vm.ssh.key_source`) controls the source of the pubkey:
+
+            | Value | Behavior |
+            |-------|----------|
+            | `auto` (default) | Uses first `~/.ssh/*.pub` found |
+            | `generate` | Creates new keypair in `~/.local/share/charly/vm/charly-<name>/id_ed25519`. Idempotent across rebuilds. |
+            | `none` | No key injection |
+            | `/path/to/key.pub` | Uses the specified public key |
+
+            See `/charly-internals:vm-spec` for the `VmSSH.KeyInjection` tri-state (`auto` | `enabled` | `disabled`) per channel, and `/charly-internals:cloud-init-renderer` for the `composeUsers` adopt-merge pattern that delivers the key into the guest.
+
+            ## User-Level Defaults
+
+            Set via `charly settings set`:
+
+            | Key | Env Var | Default |
+            |-----|---------|---------|
+            | `vm.backend` | `CHARLY_VM_BACKEND` | `auto` |
+
+            Per-VM overrides live on the VM entity in `charly.yml`. The user-level defaults exist only for fields that don't have a per-VM equivalent (backend is the main one). For anything else, declare it on the `<name>` VM entity (`<name>.vm.…`).
+
+            **`CHARLY_VM_STATE_DIR`** (env-only, no `charly settings` key — `vmshared.VmStateRoot()`) overrides the root directory for per-VM host state (`~/.local/share/charly/vm/<domain>/` by default — ssh keys, known_hosts, seed ISO, the per-domain disk overlay, `snapshots/`, `instance.yml`). Closes the "global, non-worktree-scoped VM state dir" footgun: a libvirt domain name derives purely from the deploy name, with no project/worktree component, so two concurrent `git worktree` checkouts of this repo running the SAME bed/deploy name (the common case — bed names like `check-charly-vm` are fixed identifiers shared across every worktree) collide on the same host state directory AND the same libvirt domain. Set it to a worktree-distinct absolute path (e.g. in a per-worktree wrapper script or `.envrc`) to isolate concurrent worktrees; must be absolute — a relative override is rejected rather than silently resolving against whatever cwd happens to be active. Unset (the default) is byte-identical to the pre-fix behavior.
+
+            ## Libvirt XML configuration
+
+            Primary surface is the structured `LibvirtDomain` in the VM's `<name>-libvirt` child node (`<name>-libvirt: {libvirt: {features, cpu, clock, devices, sysinfo, launch_security, …}}`). See `/charly-internals:libvirt-renderer` for the full schema.
+
+            Raw-XML escape hatch: the `<name>-libvirt` node's `libvirt.snippets:` (list of strings) — classified by element name. Device-scoped elements go into `<devices>`, domain-scoped before `</domain>`. Deduplicated by exact string match.
+
+            Layer-level raw snippets: a candy's `charly.yml` `libvirt.snippets:` is supported for layers that contribute device XML (e.g., `/charly-distros:qemu-guest-agent` contributes the virtio-serial channel). Box-level `libvirt: [...]` is not a valid field — VM XML lives on the VM entity's `<name>-libvirt` child node.
+
+            Source: `candy/plugin-vm/libvirt.go` (`InjectLibvirtXML` — the former `charly/libvirt.go` is DELETED, K-wave 2), `sdk/vmshared/libvirt_yaml.go`, `candy/plugin-vm/libvirt_yaml_bridge.go`.
+
+            ## Common Workflows
+
+            ### Build and run a cloud_image VM
+
+            ```bash
+            charly vm build arch              # fetches qcow2, resizes, renders seed ISO
+            charly vm create arch
+            ssh -p 2224 -i ~/.local/share/charly/vm/charly-arch/id_ed25519 arch@127.0.0.1
+            ```
+
+            ### Build and run a bootc VM
+
+            ```bash
+            charly box build <bootc-image>       # container image must exist first
+            charly vm build <bootc-vm>
+            charly vm create <bootc-vm>
+            charly vm start <bootc-vm>
+            charly vm ssh <bootc-vm>
+            ```
+
+            ### Apply layers inside a VM
+
+            ```bash
+            charly vm create arch
+            charly bundle add vm:arch ripgrep         # apply ripgrep layer over SSH
+            charly bundle add vm:arch fedora-coder --add-candy team-extras
+            charly bundle del vm:arch                 # reverse all applied layers
+            ```
+
+            See `/charly-core:deploy` "vm: target" for the `charly bundle add vm:<name>` surface and `/charly-internals:vm-deploy-target` for the executor model.
+
+            ### Debug VM boot issues
+
+            ```bash
+            charly vm build <name> --console     # enable console output during disk build
+            charly vm create <name>
+            charly vm start <name>
+            charly vm console <name>             # watch boot messages
+            ```
+
+            ### Multiple VM instances
+
+            ```bash
+            charly vm create <name> -i dev
+            charly vm create <name> -i staging
+            charly vm start <name> -i dev
+            charly vm ssh <name> -i dev
+            ```
+
+            ## Known live-tested caveats
+
+            Non-obvious issues that surface only when VMs actually boot. `/charly-vm:arch-cloud-vm` is the canonical cloud_image worked example; the bootc-specific caveats below apply to any `source.kind: bootc` VM.
+
+            ### Privileged container needs `-v /dev:/dev` (bootc)
+
+            `charly vm build` runs `bootc install to-disk --via-loopback` inside a privileged container. `--privileged` alone is not enough — the container's `/dev` is a tmpfs in its own mount namespace, so `losetup`'s `LOOP_CTL_GET_FREE` creates a `/dev/loopN` in the kernel but the node is invisible inside the container. `BuildBootcVM` (`candy/plugin-vm/vm_bootc_engine.go`, via `buildkit.RunPrivileged`) bind-mounts `/dev` so the container shares the host's `/dev` (the former `charly/vm_build.go` is DELETED, K-wave 2).
+
+            ### virtqemud socket probing (libvirt ≥ 8.0)
+
+            Modular libvirt daemons: the session socket moved from `libvirt-sock` to `virtqemud-sock`. Probe order in `libvirtSessionSocket()`: virtqemud-sock first, libvirt-sock fallback. `ConnectToURI(QEMUSession)` uses `qemu:///session`, not `qemu:///system`.
+
+            ### `<backend type='passt'/>` required for `<portForward>`
+
+            libvirt ≥ 9.x `<portForward>` on `<interface type='user'>` only activates with `<backend type='passt'/>`. Emitted automatically by `renderDefaultInterface`; if you author a custom interface, include the backend line. Symptom when missing: ssh on port 2224 accepts TCP but lands in the wrong guest port. See `/charly-internals:libvirt-renderer`.
+
+            ### Per-VM NVRAM required for UEFI
+
+            When `firmware: uefi-insecure` or `firmware: uefi-secure`, each VM gets its own NVRAM file under `~/.local/share/charly/vm/charly-<name>/nvram.fd`, copied from the OVMF_VARS template. Preserves UEFI variable state across reboots. See `/charly-internals:ovmf`.
+
+            ### Resource sizing over package pruning (cloud_image)
+
+            Cloud-init `packages: [spice-vdagent]` pulls GTK3 + X11 (~200 MB download, ~1 GB installed). Running at 2 GiB RAM stalls cloud-init. **Check host inventory (`free -h`, `nproc`) before sizing** — give the VM what it needs (8 GiB + 4 cpus for a desktop-class workload is reasonable on a 16-core / 61 GiB host). See `/charly-vm:arch-cloud-vm` Finding C for the live-test bisect.
+
+            ### Rootful ↔ rootless podman storage split (bootc)
+
+            Under `engine.rootful=sudo`, `charly vm build` invokes `sudo podman` which reads from `/var/lib/containers/storage`, not your rootless storage. After every `charly box build`, refresh:
+
+            ```bash
+            podman save ghcr.io/<registry>/<image>:latest -o /tmp/img.tar
+            sudo podman load -i /tmp/img.tar && rm -f /tmp/img.tar
+            ```
+
+            Symptom without refresh: `Trying to pull ... 403 Forbidden`.
+
+            ### `engine.rootful=machine` path (rootless containers)
+
+            When `charly vm build` runs from inside a rootless container (no host `sudo`), the engine auto-picks `engine.rootful=machine` — spawns a podman-machine VM with its own rootful storage (`podman --connection charly-root`). Cross-storage load pattern:
+
+            ```bash
+            podman save -o /tmp/bootc.tar ghcr.io/<registry>/<image>:latest
+            podman --connection charly-root load -i /tmp/bootc.tar
+            rm /tmp/bootc.tar
+            charly vm build <name> --transport containers-storage
+            ```
+
+            `--transport containers-storage` forces `bootc install` to pull from the machine's local store. Worked example: `/charly-openclaw:openclaw-desktop` "Two-level nested-virtualization proof".
+
+            ### `charly vm destroy` — the DEPLOY name keys the domain (`--domain`) and missing targets are strict
+
+            The libvirt domain is keyed by the **DEPLOY name** — `charly-<VmDomainIdentity(deploy)>` (strip a
+            leading `vm:`; flatten `/` and `.` to `-`), NOT the shared `kind:vm` ENTITY (P33). A `vm:` bed named
+            `check-charly-vm` whose node is `vm: {from: charly-vm}` runs the domain **`charly-check-charly-vm`**,
+            and a sibling bed on the same entity runs its OWN distinct `charly-<bed>` domain — collision-free by
+            construction. A DIRECT `charly vm create/destroy <entity>` (no `--domain`) keeps `charly-<entity>`
+            (the direct-create deploy name IS the entity). So the deploy path tears a domain down with
+            `charly vm destroy <entity> --domain <deploy>` (resolve the entity spec, target `charly-<deploy>`);
+            manual cleanup of a legacy pre-P33 orphan (named `charly-<entity>`) uses the bare
+            `charly vm destroy <entity>`.
+
+            **`charly vm destroy` on a name with no domain exits non-zero with `no such VM`.** This strict
+            operator default prevents a mistyped entity or missing `--domain` from looking successful while the
+            real domain remains running. Internal reconcilers whose contract expects absence use the explicit
+            `--if-exists` flag; that mode succeeds silently on a missing runtime domain and still removes managed
+            autostart, SSH, disk (when requested), and deploy metadata.
+
+            ```
+            $ charly vm destroy definitely-not-a-vm-xyz ; echo "exit=$?"
+            no such VM "charly-definitely-not-a-vm-xyz": no libvirt domain and no qemu state — nothing destroyed
+            exit=1
+            ```
+
+            ### `charly bundle add vm:<vm> <localpkg-candy>` exits 0 WITHOUT installing
+
+            A `localpkg:` candy (the `charly` candy: `pkg/arch` via makepkg + `pacman -U`) needs the
+            package built from local source, which only the check-bed runner does (it sets
+            `--dev-local-pkg` automatically — see `/charly-check:check`). A bare `charly bundle add
+            vm:<vm> charly` returns **rc=0** and prints:
+
+            ```
+            guest charly absent/outdated; host charly provided at /tmp/charly-<ver> for deploy use
+            ```
+
+            That line means the deploy **staged** the host binary into the guest for its own use — NOT
+            that `opencharly-git` was installed, and NOT that `charly` is on the guest's PATH. Do not read
+            rc=0 as "installed"; check `pacman -Q opencharly-git` in the guest. The bed that genuinely
+            proves the localpkg deploy path is `check-charly-vm`.
+
+            (This also means a nested `local:` child of a `vm:` bed needs **no** charly in the guest — the
+            vm deploy stages what it needs. See `/charly-core:deploy` "Deploy-into nesting".)
+
+            ### `charly vm stop` — authoritative backend probe + stop verification
+
+            `charly vm stop <name>` tears the domain down from whichever backend ACTUALLY holds it (probing libvirt authoritatively via the shared `vmHolder` — the same primitive `charly vm destroy` uses — regardless of the configured/default `vm.backend`) and VERIFIES the domain is no longer RUNNING before reporting success. The verify POLLS for the domain to leave `DomainRunning` (what `charly vm list -a` reports as "running") over the `StopGate` grace — the libvirt stop is an async ACPI poweroff, so the poll waits for the guest to power off rather than re-probing instantly (which would false-positive mid-shutdown). A guest that ignores ACPI / reboots-on-shutdown and is still RUNNING after the grace is a hard failure, never a silent "Stopped VM" — the error points at `charly vm stop --force` (a `destroyDomain` that forces the guest off, the same force backstop `charly vm destroy`'s `gracefulStopDomain` uses). A name with no libvirt domain and no qemu state — a genuinely-absent VM — errors "no such VM" (mirroring `charly vm destroy`), so a typo never false-succeeds. (The pre-#77 "trust the single resolved backend" arm took the qemu no-op path for a libvirt domain and falsely reported "Stopped VM" while the domain kept running; #77 closed it.)
+
+            ### Host kernel/module-dir mismatch
+
+            Rolling distros after a kernel upgrade: `/lib/modules/$(uname -r)` missing, `modprobe loop` fails, VM disk build hangs. **Resolution: reboot.** Check: `ls /lib/modules/$(uname -r) >/dev/null 2>&1 && echo ok || echo "reboot needed"`.
+
+            ### Disk exhaustion from `output/`
+
+            `bootc install to-disk` writes both a ~40 GiB sparse raw AND a qcow2. Failed `qemu-img convert` leaves both behind. Clean `output/raw/disk.raw` after successful qcow2 conversion; watch `df -h /` before fresh VM builds.
+
+            ### `qemu-guest-agent` inactive under QEMU user-net
+
+            Expected. The agent needs a `virtio-serial` channel that charly's QEMU backend doesn't expose under user-net. Switch to libvirt backend (`charly settings set vm.backend libvirt`) to activate it. See `/charly-distros:qemu-guest-agent`.
+
+            ## Cross-References
+
+            - `/charly-vm:vms-catalog` — **VM entity authoring reference** (VmSpec schema, source.kind, adopt pattern)
+            - `/charly-vm:arch-cloud-vm` — canonical cloud_image VM (BIOS / virtio-gpu / resource sizing / stale BOOTX64.EFI RCA)
+            - `/charly-internals:vm-spec` — Go type reference; validation rules; migration map
+            - `/charly-internals:libvirt-renderer` — RenderDomainXML + device emission + passt backend + virtio-gpu
+            - `/charly-internals:cloud-init-renderer` — RenderCloudInit + composeUsers + seed ISO + charly_install
+            - `/charly-internals:vm-deploy-target` — the external vm deploy + SSHExecutor + VmDeployState
+            - `/charly-internals:ovmf` — UEFI firmware path resolution; per-VM NVRAM; bios-skips-loader sentinel
+            - `/charly-internals:cutover-policy` — hard cutover policy
+            - `/charly-build:migrate` — `charly migrate` legacy conversion
+            - `/charly-core:deploy` — `charly bundle add vm:<name> <ref>` in-guest layer application
+            - `/charly-build:pull` — fetch container images into local storage (prereq for bootc VM builds)
+            - `/charly-build:build` — building container images before VM disk builds
+            - `/charly-image:layer` — `libvirt.snippets:` field in charly.yml
+            - `/charly-openclaw:openclaw-desktop` — two-level nested-virtualization proof
+            - `/charly-distros:cloud-init` — guest-side cloud-init package (complements host-side seed ISO rendering)
+            - `/charly-distros:qemu-guest-agent` — virtio-serial channel
+
+            ## When to Use This Skill
+
+            **MUST be invoked** when the task involves virtual machines, charly vm commands, kind:vm entities, cloud_image vs bootc source types, libvirt/QEMU backends, BIOS vs UEFI firmware choice, or VM lifecycle management. Invoke this skill BEFORE reading source code or launching Explore agents.
+
+            **Workflow position:** Standalone workflow. VM management is separate from container lifecycle, but `charly bundle add vm:<name>` bridges into the shared InstallPlan + DeployTarget machinery.
+
+            Live-deploy verification: see /charly-check:check (the 11 Testing Standards) and /charly-internals:disposable.
+vms-catalog-skill:
+    skill:
+        name: vms-catalog
+        family: vm
+        owner: charly-vm
+        description: |-
+            Authoring reference for kind:vm entities in vm.yml. Parallel to /charly-image:layer and /charly-image:image.
+            Covers the VmSpec schema, source.kind discriminator (cloud_image vs bootc),
+            base_user adopt pattern, and step-by-step recipes for both source kinds.
+            MUST be invoked before authoring or editing vm.yml entries.
+        content: |
+            # vms
+
+            `vm.yml` is the authoring surface for `kind: vm` entities — VM primitives that pair with either a remote cloud-image URL (`source.kind: cloud_image`) or an in-repo bootc container image (`source.kind: bootc`). Loaded through `charly.yml`'s `import:` (or inline under its root). Entries are resolved by `LoadUnified` into `VmSpec` Go types (generated in `spec/spec/`) and consumed by `charly vm build`, `charly vm create`, and `charly bundle add vm:<name>`.
+
+            The VM surface parallels the `candy:` image surface: one YAML entry per entity, kind-keyed, discovered through includes. The Go types that back it live in `/charly-internals:vm-spec`; the rendering paths in `/charly-internals:libvirt-renderer` and `/charly-internals:cloud-init-renderer`.
+
+            ## File layout
+
+            ```yaml
+            # vm.yml — name-first nodes (a per-kind split file loaded via charly.yml `import:`, or inline under its root)
+            <name>:
+              vm:
+                source:
+                  kind: cloud_image | bootc
+                  # cloud_image branch:
+                  url: https://…
+                  checksum: { type: sha256, value?: <hex> }
+                  base_user: arch                     # adopt this account (see Adopt pattern below)
+                  cache: ~/.cache/charly/vm-images/       # optional override
+                  # bootc branch:
+                  box: <candy: image entry name>           # `box:` source field → a `candy:` image carrying base:/from:
+                  transport: registry | containers-storage | oci | oci-archive
+                  rootfs: ext4 | xfs | btrfs
+                  root_size: 10G                      # optional cap; rest of disk stays unpartitioned
+                  kernel_args: "…"
+                # Hardware (both branches):
+                disk_size: 20G | "10 GiB" | 1T         # VIRTUAL size; qcow2 is lazily/sparsely allocated (grows on demand)
+                ram: 4G | "8192M"
+                cpu: 4                                 # yaml key is singular `cpu` (VmSpec.Cpus)
+                machine: q35 | virt | i440fx           # default: host-native
+                firmware: bios | uefi-insecure | uefi-secure  # default: bios
+                backend: auto | libvirt | qemu         # default: auto
+                autostart: true                        # start at host boot (libvirt only — see below)
+                # Network:
+                network:
+                  mode: user | bridge | nat
+                  bridge: br0                          # only when mode=bridge
+                  mac: "52:54:…"                       # optional pin; default stable-from-name
+                  port_forwards: ["8080:80", "auto:6443"] # "<host>:<guest>", additive to SSH forward; host may be `auto` → free host port auto-allocated at vm-create + persisted in vm_state (the sibling of ssh.port_auto; use it so concurrent beds sharing one entity never collide)
+                # SSH + key injection:
+                ssh:
+                  user: arch | root | …                # defaults: cloud_image→"charly", bootc→"root"
+                  port: 2222                           # host port → guest :22
+                  key_source: auto | generate | none | /abs/path.pub
+                  key_injection:
+                    smbios: auto | enabled | disabled
+                    cloud_init: auto | enabled | disabled
+                # Cloud-init (structured intent):
+                cloud_init:
+                  timezone: UTC
+                  packages: [sudo, spice-vdagent, …]
+                  runcmd: ["…", …]
+                  charly_install:
+                    strategy: auto | none
+                # Libvirt XML knobs (see /charly-internals:libvirt-renderer):
+                libvirt:
+                  devices:
+                    channels: [{type: unix, name: org.qemu.guest_agent.0}]   # qemu-guest-agent
+                    graphics: […]
+                    video: [{model: virtio, vram: 65536, heads: 1, accel3d: false}]
+                    rng: [{model: virtio, backend: /dev/urandom}]
+                    memballoon: {model: virtio}
+                    hostdevs: […]                                            # PCI passthrough (charly vm gpu list)
+                    filesystems:                                             # virtiofs/9p host↔guest shares
+                      - {driver: virtiofs, accessmode: passthrough, source: /home/me, target: workspace}
+                  # memory_backing is auto-paired (memfd + shared) for any virtiofs share
+            ```
+
+            ### autostart — start the VM at host boot
+
+            `autostart: true` sets libvirt's domain autostart flag. Because charly VMs run under
+            `qemu:///session` (no portable user-level `virtqemud.socket` to socket-activate at
+            boot), `charly vm create` also enables `loginctl enable-linger` (idempotent) and
+            writes + enables a per-VM user oneshot `charly-autostart-<domain>.service` that
+            `virsh -c qemu:///session start`s the domain at boot (`charly vm destroy` removes it).
+            **Requires `backend: libvirt`** — validation rejects `autostart: true` with
+            `backend: qemu`. Reapplied on every `charly vm create` / `charly update`. Pair with a
+            1 TB+ `disk_size` freely — the qcow2 is sparse, so a large virtual disk costs only
+            the bytes written.
+
+            ### filesystems — virtiofs host directory shares
+
+            `libvirt.devices.filesystems[]` exposes a host directory inside the guest:
+            `{driver: virtiofs, accessmode: passthrough, source: <host dir>, target: <tag>}`.
+            The shared-memory backing virtiofs requires (`memfd`/`shared`) is **auto-paired**
+            — you don't declare `memory_backing` yourself. The guest mounts the `target:` tag
+            with the `/charly-distros:workspace-mount` layer (a systemd `.mount` unit for the
+            `workspace` tag → `/workspace`) or any `mount -t virtiofs <tag> <dir>`.
+
+            ### graphics `listen:` field — three accepted shapes
+
+            `graphics[].listen` is how you control the `<listen>` children of a
+            `<graphics>` element. Three equivalent shapes, all unmarshal to the same
+            internal list:
+
+            ```yaml
+            # (1) Scalar address (shorthand for one TCP listener):
+            listen: 127.0.0.1
+
+            # (2) Single map (explicit type control — socket | address | network):
+            listen:
+              type: socket              # libvirt auto-allocates the UNIX socket path
+            # or:
+            listen:
+              type: address
+              address: 127.0.0.1
+
+            # (3) List of maps (multiple listeners on one <graphics>):
+            listen:
+              - type: socket
+              - type: address
+                address: 127.0.0.1
+            ```
+
+            **Prefer `type: socket` for charly-managed VMs.** virt-manager and
+            `remote-viewer --connect qemu+ssh://…` auto-forward UNIX sockets over
+            the libvirt RPC channel — GUI clients work out of the box against a
+            remote libvirt with zero `ssh -L` setup. TCP loopback listeners are
+            never auto-tunneled, by design. See `/charly-vm:arch-cloud-vm`
+            "Connecting from a remote workstation".
+
+            ## source.kind: cloud_image
+
+            Use when the VM is built from an **externally published qcow2** (Arch cloud image from pkgbuild.com, Fedora Cloud, Ubuntu Cloud, Debian Cloud, CentOS Cloud, etc.). The build pipeline fetches the URL, integrity-checks it via sha256 (sidecar auto-resolved when `checksum.value` is empty), creates a qcow2 overlay at `spec.disk_size`, renders a NoCloud seed ISO, and hands off to libvirt/QEMU.
+
+            Canonical example: `/charly-vm:arch-cloud-vm`. Only existing cloud_image VM in the repo — **read it before authoring another one**. It documents the non-obvious decisions learned the hard way:
+
+            - **BIOS firmware is usually the right default.** Distribution cloud images ship both a BIOS boot partition and an EFI System Partition, but the ESP's bootloader binary often has an **embedded grub.cfg that predates the maintainer's latest `/etc/default/grub`** (Arch's upstream issue with `fbcon=nodefer`). BIOS boot reads `/boot/grub/grub.cfg` directly from the root fs, which is always current.
+            - **virtio-gpu, not QXL.** See `/charly-internals:libvirt-renderer` "video model choice" — virtio-gpu is the modern default for Linux guests.
+            - **Generous resource sizing.** `pacman -S spice-vdagent` pulls in GTK3 + X11 (~200 MB download, ~1 GB installed); running at 2 GiB RAM stalls cloud-init. Size for the workload: 8 GiB / 4 cpus is reasonable for a workstation-class dev VM.
+
+            ### Authoring a new cloud_image VM
+
+            1. Find the upstream qcow2 URL + verify a sha256 sidecar exists (<url>.SHA256 / .sha256 / .sha256sum).
+            2. Identify the **pre-existing user account** in the upstream image (`arch`, `ubuntu`, `fedora`, `debian`, `cloud-user`, etc.). This becomes `source.base_user:` — triggers the adopt pattern described below.
+            3. Start from `/charly-vm:arch-cloud-vm` as a template. Change `url`, `base_user`, distro-specific cloud_init `package:` and `runcmd:`.
+            4. Pick firmware: default to `bios` unless the upstream image explicitly requires UEFI (e.g., secure boot lock-in).
+            5. Run `charly vm build <name>` — observe the fetched qcow2 sha256 + rendered seed ISO path.
+            6. Run `charly vm create <name>` + `charly vm ssh <name>` to verify cloud-init completed.
+
+            ## source.kind: bootc
+
+            Use when the VM is built from an **in-repo bootc container image** (a `candy:` image entry with `bootc: true`). `charly vm build` runs `bootc install to-disk --via-loopback` inside a privileged container to produce the qcow2/raw disk.
+
+            No bootc VM ships in the repo today; a bootc `vm:` node pairs a `candy:` image carrying `bootc: true` with the VM hardware spec. By convention a `-bootc` suffix marks the bootc VM entity (distinguished from an equivalent container-form deploy by the `vm:` kind key, not by the name).
+
+            ### Authoring a new bootc VM
+
+            1. Ensure the paired container image has `bootc: true` declared and builds cleanly.
+            2. Add a `vm:` node with `source.kind: bootc` + `source.box: <entry-name>` (the bootc source field is `box:`, not `image:`).
+            3. Size disk/ram/cpus for the workload (see the relevant per-pod or `/charly-distros:<name> / /charly-languages:<name> / /charly-infrastructure:<name> / /charly-tools:<name>` skill's VM Configuration section for the authoritative numbers).
+            4. Run `charly vm build <vm-name>`. See `/charly-vm:vm` known-caveats section for bootc-specific gotchas (rootful storage split, nested-container `--transport containers-storage`, loopback device mount namespace).
+
+            ## Adopt pattern: base_user (cloud_image only)
+
+            Mirrors the container-side `base_user:` + `user_policy: adopt` pattern documented in `/charly-image:image` "user_policy". The key insight: **don't recreate accounts cloud-init already shipped** — just append the SSH pubkey and move on.
+
+            When `source.base_user:` is set, the cloud-init renderer (`/charly-internals:cloud-init-renderer::composeUsers`) emits a merge-by-name entry:
+
+            ```yaml
+            # Rendered user-data
+            users:
+              - default
+              - name: <base_user>
+                ssh_authorized_keys:
+                  - ssh-ed25519 AAAA…
+            ```
+
+            cloud-init interprets `users: [default, {name: <base_user>}]` as "keep the distro's default account untouched, append SSH key to the named account". Result: no `useradd`, no sudoers rewrite, no shell change, no home-directory relocation — just the pubkey lands in `~<user>/.ssh/authorized_keys` on first boot.
+
+            `spec.ssh.user` defaults to `source.base_user`, so `charly vm ssh <name>` connects as the adopted account without extra declaration.
+
+            Leave `base_user:` empty **only** when the upstream has no default account — in which case author a full custom user entry in `cloud_init.users:` with sudo/groups/shell fields. Don't do this when adopting works; `useradd`-at-first-boot races with other cloud-init modules and is harder to reason about.
+
+            ## charly_install.strategy: auto (cloud_image)
+
+            `charly_install.strategy: auto` in `cloud_init:` wires `charly`'s in-guest installer (`/charly-internals:cloud-init-renderer` → emitted `runcmd:` entries) so the provisioned VM comes up with `charly` already installed. Lets `charly bundle add vm:<name>` apply host-deploy-style layer recipes inside the VM over SSH without a bootstrap round-trip. See `/charly-internals:cloud-init-renderer` for the emission + handshake.
+
+            `strategy: none` skips the step entirely — useful when the VM will be managed by something other than `charly` after provisioning.
+
+            ## Validation rules
+
+            Load-time errors raised by the closed `#Vm` CUE schema (`spec/schema/vm.cue`, see `/charly-internals:vm-spec`):
+
+            - `source.kind` must be one of `cloud_image`, `bootc`, `clone`, `imported`, `bootstrap`; each arm requires its own fields and forbids the others'.
+            - `cloud_image` requires `url:`; `bootc` requires the `box:` source field resolving to a `candy:` image entry (carrying `base:`/`from:`); `clone` requires `from_vm:`+`from_snapshot:`; `imported` requires `libvirt_name:`+`disk_path:`+`disk_format:`; `bootstrap` requires `builder:`+`distro:`.
+            - `firmware:` must be one of `bios`, `uefi-insecure`, `uefi-secure`; `uefi-secure` additionally requires an explicit `libvirt.features.smm: true`.
+            - `network.mode:` must be one of `user`, `bridge`, `nat`, `network`.
+            - `ssh.key_source:` must parse as `auto`, `generate`, `none`, or an absolute path; `ssh.port` and `ssh.port_auto` are mutually exclusive.
+            - `ssh.key_injection.smbios` / `.cloud_init` must be one of `auto`, `enabled`, `disabled`.
+            - the `libvirt:` subtree is modeled + closed by `#LibvirtDomain` in the same schema — unknown keys and bad enums fail fast.
+
+            ## Migration from legacy (box.bootc / box.vm / box.libvirt)
+
+            Projects predating this schema had three coupled fields on image entries (`candy:` nodes carrying `base:`/`from:`): `bootc: true`, `vm: {...}`, `libvirt: [...]`. All three were deleted in the hard cutover, and the step that harvested them into VM nodes lived in the migration chain that was **removed at the `2026.186.2323` migration-baseline reset**. So `charly migrate` no longer converts those legacy fields: a config still carrying them predates the supported schema floor (`2026.174.1100`) and is **unmigratable** — `charly migrate` refuses it (`predates the supported floor … re-author against the current schema`) and changes nothing on disk. Re-author such a VM by hand as a name-first `<name>: {vm: {…}}` node (the shape this skill documents).
+
+            For a config already within the migratable window (`[floor, HEAD)`), `charly migrate` is one idempotent command that brings it to the current schema. See `/charly-build:migrate` for the floor/HEAD gate and the full command reference, and `/charly-internals:cutover-policy` for why hard-cutover was the chosen policy.
+
+            ## Cross-References
+
+            - `/charly-vm:vm` — the `charly vm build/create/start/stop/ssh/console` command family
+            - `/charly-build:migrate` — `charly migrate` conversion from legacy
+            - `/charly-core:deploy` — `charly bundle add vm:<name>` for in-guest layer application
+            - `/charly-vm:arch-cloud-vm` — canonical cloud_image VM
+            - `/charly-internals:vm-spec` — Go type reference
+            - `/charly-internals:libvirt-renderer` — libvirt XML emission
+            - `/charly-internals:cloud-init-renderer` — NoCloud seed ISO + user-data emission
+            - `/charly-internals:ovmf` — UEFI firmware path resolution (when `firmware:` ≠ `bios`)
+            - `/charly-internals:vm-deploy-target` — the external vm deploy in the InstallPlan pipeline
+            - `/charly-internals:cutover-policy` — Hard Cutover by Default policy
+            - `/charly-distros:cloud-init` — guest-side cloud-init layer (pairs with host-side `cloud_init:` emission)
+            - `/charly-distros:qemu-guest-agent` — virtio-serial channel for host↔guest comms
+
+            Live-deploy verification: see /charly-check:check (the 11 Testing Standards) and /charly-internals:disposable.

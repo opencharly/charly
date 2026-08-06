@@ -1,0 +1,2300 @@
+charly-distros:
+    candy:
+        version: 2026.218.1200
+        description: |-
+            Metadata concept candy owning the charly-distros skills whose names have no namesake candy (base OS images + GPU runtime). Owns its family's `skill:` kind entities (sibling nodes in this file) — the
+            plugins→candies migration; candy/plugin-marketplace regenerates the plugins/ corpus
+            from them.
+        plan:
+            - run: this documentation-only candy ships no install content (it carries the family's skill/hook/marketplace entities); validate-satisfying no-op
+              command: "true"
+              context:
+                - build
+            - check: the distros concept candy's skill entities are present and generated into plugins/distros/skills
+              id: charly-distros-present
+              context:
+                - build
+              command: "true"
+
+arch-aur-test-skill:
+    skill:
+        name: arch-aur-test
+        family: distros
+        owner: charly-distros
+        description: |-
+            Test candy for AUR package installation on Arch Linux.
+            Use when working with the arch-aur-test candy.
+        content: |
+            # arch-aur-test -- Arch AUR package test
+            
+            ## Candy Properties
+            
+            | Property | Value |
+            |----------|-------|
+            | Install files | `charly.yml` (packages only) |
+            | Depends | none |
+            
+            ## Packages
+            
+            AUR: `yay-bin`
+            
+            ## What It Does
+            
+            Validates that the `aur:` package format works correctly on Arch Linux boxes. Installs the `yay-bin` package from the AUR. Requires a builder image with `builds: [aur]` capability (i.e., `arch-builder` which includes the `yay` candy).
+            
+            ## Usage
+            
+            ```yaml
+            # charly.yml
+            my-image:
+              candy:
+                base: arch
+                candy: [arch-aur-test]
+            ```
+            
+            Requires an Arch-based box with `build: [pac, aur]` so the builder can resolve AUR packages.
+            
+            ## Used In Boxes
+            
+            - `/charly-distros:arch-test` — Arch packaging test box
+            
+            ## Related Candies
+            
+            - `/charly-distros:arch-pac-test` — companion pacman package test
+            - `/charly-tools:yay` — AUR helper that enables `aur:` builds
+            
+            ## When to Use This Skill
+            
+            Use when the user asks about:
+            - Arch Linux AUR package testing
+            - The `aur:` package format in charly.yml
+            - The `arch-aur-test` candy
+            
+            ## Related
+            
+            - `/charly-image:layer` — candy authoring reference (`charly.yml` schema, plan steps, service declarations)
+            - `/charly-check:check` — declarative testing (`check:` block, `charly check box`, `charly check live`)
+
+arch-builder-skill:
+    skill:
+        name: arch-builder
+        family: distros
+        owner: charly-distros
+        description: |-
+            Arch Linux builder image with pixi, Node.js, build toolchain, and yay AUR helper.
+            Default builder for pixi, npm, cargo, and aur multi-stage builds on Arch.
+            MUST be invoked before building, deploying, configuring, or troubleshooting the arch-builder box.
+        content: |
+            # arch-builder
+            
+            Builder image for Arch Linux multi-stage builds. Counterpart to `/charly-distros:fedora-builder` — provides the same build capabilities (pixi, npm, cargo) plus AUR support via yay.
+            
+            ## Box Properties
+            
+            | Property | Value |
+            |----------|-------|
+            | Base | arch |
+            | Layers | pixi, nodejs, build-toolchain, yay |
+            | Builds | pixi, npm, cargo, aur |
+            | Platforms | linux/amd64 |
+            | Registry | ghcr.io/opencharly |
+            
+            ## Full Candy Stack
+            
+            1. **arch** — base Arch Linux image
+            2. **pixi** — pixi package manager (conda-forge Python environments)
+            3. **nodejs** — Node.js and npm
+            4. **build-toolchain** — gcc, cmake, autoconf, ninja, git, pkg-config
+            5. **yay** — AUR helper (base-devel, git, yay binary)
+            
+            ## Role in Build System
+            
+            When an Arch-based box has candies with `pixi.toml`, `package.json`, `Cargo.toml`, or `aur:` packages, the build system uses this image as the builder for multi-stage builds. Configured via the `arch` box's `builder:` field (a map of build-type → builder-image):
+            
+            ```yaml
+            # charly.yml
+            arch:
+              builder:
+                pixi: arch-builder
+                npm: arch-builder
+                cargo: arch-builder
+                aur: arch-builder
+            ```
+            
+            The builder definitions themselves (pixi/npm/cargo/aur) live in the embedded `builder:` vocabulary — the same word is used intentionally because both maps key on the same slot (the build-type name).
+            
+            ## Quick Start
+            
+            ```bash
+            charly box build arch-builder
+            charly shell arch-builder -c "pixi --version"
+            charly shell arch-builder -c "node --version"
+            charly shell arch-builder -c "yay --version"
+            ```
+            
+            ## Related
+            
+            - `/charly-distros:arch` — parent base image
+            - `/charly-distros:fedora-builder` — Fedora counterpart (same role, no AUR)
+            - `/charly-tools:yay` — AUR helper candy (unique to Arch)
+            - `/charly-languages:pixi` — pixi package manager candy
+            - `/charly-coder:nodejs` — Node.js candy
+            - `/charly-coder:build-toolchain` — C/C++ build tools candy
+            
+            ## Verification
+            
+            ```bash
+            charly shell arch-builder -c "pixi --version && node --version && yay --version && gcc --version"
+            ```
+            
+            ## When to Use This Skill
+            
+            **MUST be invoked** when the task involves the arch-builder box, Arch multi-stage builds, or AUR package building infrastructure. Invoke this skill BEFORE reading source code or launching Explore agents.
+            
+            ## Related
+            
+            - `/charly-image:image` — image family umbrella (`candy:` image entries — those carrying `base:`/`from:` — in `charly.yml`, build/validate/inspect/list)
+            - `/charly-build:build` — the embedded build vocabulary (distros, builders, init-systems)
+
+arch-pac-test-skill:
+    skill:
+        name: arch-pac-test
+        family: distros
+        owner: charly-distros
+        description: |-
+            Test candy for pacman package installation on Arch Linux.
+            Use when working with the arch-pac-test candy.
+        content: |
+            # arch-pac-test -- Arch pacman package test
+            
+            ## Candy Properties
+            
+            | Property | Value |
+            |----------|-------|
+            | Install files | `charly.yml` (packages only) |
+            | Depends | none |
+            
+            ## Packages
+            
+            PAC: `neovim`, `ripgrep`
+            
+            ## What It Does
+            
+            Validates that the `pac:` package format works correctly on Arch Linux boxes. Installs neovim and ripgrep via pacman. Used as a smoke test for the multi-distro build system's Arch support.
+            
+            ## Usage
+            
+            ```yaml
+            # charly.yml
+            my-image:
+              candy:
+                base: arch
+                candy: [arch-pac-test]
+            ```
+            
+            Requires an Arch-based box with `build: [pac]` (or `[pac, aur]`).
+            
+            ## Used In Boxes
+            
+            - `/charly-distros:arch-test` — Arch packaging test box
+            
+            ## Related Candies
+            
+            - `/charly-distros:arch-aur-test` — companion AUR package test
+            
+            ## When to Use This Skill
+            
+            Use when the user asks about:
+            - Arch Linux pacman package testing
+            - The `pac:` package format in charly.yml
+            - The `arch-pac-test` candy
+            
+            ## Author + Test References
+            
+            - `/charly-image:layer` — candy authoring reference (`charly.yml` schema, plan steps, service declarations)
+            - `/charly-check:check` — declarative testing framework for the `check:` block
+
+arch-test-skill:
+    skill:
+        name: arch-test
+        family: distros
+        owner: charly-distros
+        description: |-
+            Test box for Arch Linux pacman and AUR package installation.
+            MUST be invoked before building or troubleshooting the arch-test box.
+        content: |
+            # arch-test
+            
+            Test box that validates both `pac:` (pacman) and `aur:` (AUR) package formats on Arch Linux. Used to verify the multi-distro build system handles Arch packaging correctly.
+            
+            `arch-test` lives in the **`opencharly/distro-arch`** repo (git submodule at
+            **`box/arch`**). The test candies `arch-pac-test` / `arch-aur-test` are vendored
+            locally in this repo's `candy/` (resolved via its `discover:` block); the `arch`
+            base + `arch-builder` are bare-local in the same self-contained submodule
+            (`import: []`) — `base: arch`. Build from
+            the submodule: `cd box/arch && charly box build arch-test`.
+            
+            ## Box Properties
+            
+            | Property | Value |
+            |----------|-------|
+            | Base | arch |
+            | Build | pac, aur |
+            | Layers | agent-forwarding, arch-pac-test, arch-aur-test |
+            | Platforms | linux/amd64 |
+            | Registry | ghcr.io/opencharly |
+            
+            ## What It Tests
+            
+            - **`pac:` format** (via arch-pac-test) — installs `neovim` and `ripgrep` from official Arch repos
+            - **`aur:` format** (via arch-aur-test) — installs `yay-bin` from the AUR using arch-builder
+            
+            ## Quick Start
+            
+            ```bash
+            charly box build arch-test
+            charly shell arch-test
+            ```
+            
+            ## Verification
+            
+            ```bash
+            charly shell arch-test -c "nvim --version"     # pac: package installed
+            charly shell arch-test -c "rg --version"       # pac: package installed
+            charly shell arch-test -c "which yay"          # aur: package installed
+            ```
+            
+            ## Related
+            
+            - `/charly-distros:arch` — base image
+            - `/charly-distros:arch-builder` — builder image (provides yay for AUR builds)
+            - `/charly-distros:arch-pac-test` — pacman test candy
+            - `/charly-distros:arch-aur-test` — AUR test candy
+            
+            ## When to Use This Skill
+            
+            **MUST be invoked** when the task involves building or troubleshooting the arch-test box, or validating Arch Linux package format support.
+            
+            ## Related
+            
+            - `/charly-image:image` — image family umbrella (`candy:` image entries — those carrying `base:`/`from:` — in `charly.yml`, build/validate/inspect/list)
+            - `/charly-build:build` — the embedded build vocabulary (distros, builders, init-systems)
+
+cachyos-pacstrap-skill:
+    skill:
+        name: cachyos-pacstrap
+        family: distros
+        owner: charly-distros
+        description: |-
+            Bootstrap-from-scratch CachyOS rootfs via pacstrap inside a privileged builder.
+            Builds end-to-end as of charly 2026.141.1850 (shared pacstrap renderer emits
+            Architecture + SigLevel); retained for offline/air-gapped builds. Lives in the
+            opencharly/distro-cachyos submodule (box/cachyos).
+            MUST be invoked before building or troubleshooting cachyos-pacstrap.
+        content: |
+            # cachyos-pacstrap
+            
+            Bootstrap-from-scratch CachyOS root filesystem, built via `pacstrap` inside the
+            privileged `/charly-distros:cachyos-pacstrap-builder` container
+            (`from: builder:pacstrap`, `bootstrap_builder_image: cachyos-pacstrap-builder`).
+            
+            > **Lives in `opencharly/distro-cachyos`** (git submodule at `box/cachyos`). Build:
+            > `charly -C box/cachyos box build cachyos-pacstrap`.
+            
+            ## When to use it (and when not)
+            
+            The canonical CachyOS base (`/charly-distros:cachyos`) pulls the upstream-published
+            OCI image from Docker Hub — that is the recommended path and the one the CachyOS
+            project itself uses. This pacstrap variant exists for **offline / air-gapped**
+            builds and as a worked example of the `from: builder:pacstrap` +
+            `bootstrap_builder_image:` pattern.
+            
+            ## pacstrap x86_64_v3 + SigLevel (fixed)
+            
+            Earlier this path was unusable: the privileged pacstrap step rejected the
+            CachyOS `x86_64_v3` packages (`package architecture is not valid`) and, on the
+            VM path, tripped GPGME signature checks (`GPGME error: No data`). **Fixed as of
+            charly 2026.141.1850** by the shared `renderPacstrapExtraConf` helper
+            (`candy/plugin-vm/vm_bootstrap_engine.go:57`,
+            used by both `runPrivilegedBootstrap` and the VM bootstrap engine — the former
+            `charly/build.go`/`charly/vm_bootstrap.go` are DELETED, K-wave 2):
+            
+            1. it derives an `[options] Architecture = x86_64 x86_64_v3` directive from the
+               cachyos-v3 repos' microarch token, so pacman accepts `linux-cachyos` etc.;
+            2. it emits each repo's `SigLevel` — the VM bootstrap path previously open-coded
+               the loop and dropped `SigLevel`, so `SigLevel = Never` cachyos repos fell
+               back to signature-required and GPGME failed. Both paths now share one renderer
+               (R3), so they can't diverge again.
+            
+            Verified live: `charly -C box/cachyos box build cachyos-pacstrap` produces a
+            rootfs with `linux-cachyos` (`%ARCH% = x86_64_v3`) installed. (Requires an `charly`
+            with this fix — newer than the published release.) The Docker-Hub `/charly-distros:cachyos`
+            base is still the faster default (no privileged build).
+            
+            ## Box Properties
+            
+            | Property | Value |
+            |----------|-------|
+            | From | builder:pacstrap |
+            | bootstrap_builder_image | cachyos-pacstrap-builder |
+            | Distro | cachyos, arch |
+            | Build | pac |
+            | Home repo | opencharly/distro-cachyos (`box/cachyos`) |
+            
+            The `cachyos` distro config (pacstrap base packages, CachyOS keyring
+            `F3B607488DB35A47`, mirrorlist, `cachyos*` repos) lives in the embedded build
+            vocabulary (`charly/charly.yml`, baked into the `charly` binary) and is resolved
+            by name whenever a box declares `distro: cachyos`.
+            
+            ## Cross-References
+            
+            - `/charly-distros:cachyos` — the recommended Docker-Hub base
+            - `/charly-distros:cachyos-pacstrap-builder` — the privileged builder it uses
+            - `/charly-vm:cachyos-bootstrap-vm` — the VM built via the same pacstrap path
+            
+            ## When to Use This Skill
+            
+            **MUST be invoked** before building or debugging the CachyOS pacstrap rootfs.
+            Invoke BEFORE reading source code or launching Explore agents.
+
+cachyos-pacstrap-builder-skill:
+    skill:
+        name: cachyos-pacstrap-builder
+        family: distros
+        owner: charly-distros
+        description: |-
+            Privileged pacstrap builder image for bootstrapping a CachyOS rootfs from
+            scratch. base: arch.arch (via the `arch` import namespace) + the pacstrap-builder
+            candy. Lives in the opencharly/distro-cachyos submodule (box/cachyos).
+            MUST be invoked before building or troubleshooting cachyos-pacstrap / cachyos-vm.
+        content: |
+            # cachyos-pacstrap-builder
+            
+            Privileged builder image used to bootstrap a CachyOS root filesystem via
+            `pacstrap` inside a container. It is the `bootstrap_builder_image:` for
+            `/charly-distros:cachyos-pacstrap` and the `builder_image:` for the
+            `/charly-vm:cachyos-bootstrap-vm` VM.
+            
+            > **Lives in `opencharly/distro-cachyos`** (git submodule at `box/cachyos`). It is
+            > `base: arch.arch` — the `arch` base from the **`opencharly/distro-arch`** submodule,
+            > reached because the cachyos `charly.yml` imports that submodule under the `arch`
+            > namespace. Its single candy, `pacstrap-builder`, lives in the main repo
+            > (shared with `/charly-distros:arch-builder`'s pacstrap path) and is pulled by git
+            > reference.
+            
+            ## Box Properties
+            
+            | Property | Value |
+            |----------|-------|
+            | Base | `arch.arch` (from the `opencharly/distro-arch` submodule, via the `arch` import namespace) |
+            | Layer | pacstrap-builder (`@github.com/opencharly/charly/candy/pacstrap-builder:<tag>`) |
+            | Distro | arch |
+            | Build | pac |
+            | Home repo | opencharly/distro-cachyos (`box/cachyos`) |
+            
+            ## Quick Start
+            
+            ```bash
+            charly -C box/cachyos box build cachyos-pacstrap-builder
+            ```
+            
+            This is the R10 canary for the submodule's composition machinery: a successful
+            build proves the `arch` import namespace resolves the `arch` base from the
+            `opencharly/distro-arch` submodule, the git-ref'd `pacstrap-builder` candy
+            materializes, and the embedded build vocabulary (pacstrap builder definition +
+            cachyos distro config) is reachable.
+            
+            `charly check box cachyos-pacstrap-builder` runs the build-scope check: 4 probes pass
+            (`/usr/sbin/pacstrap`, `arch-install-scripts` installed, `/usr/sbin/grub-install`,
+            `/usr/sbin/parted`) — i.e. the pacstrap toolchain the builder must ship.
+            
+            ## Cross-References
+            
+            - `/charly-distros:cachyos` — the Docker-Hub CachyOS base (sibling, no pacstrap)
+            - `/charly-distros:cachyos-pacstrap` — the rootfs this builder bootstraps
+            - `/charly-vm:cachyos-bootstrap-vm` — the VM that uses this as `builder_image:`
+            - `/charly-distros:arch` / `/charly-distros:arch-builder` — the Arch base + builder it mirrors
+            
+            ## When to Use This Skill
+            
+            **MUST be invoked** when building or debugging the CachyOS pacstrap path.
+            Invoke BEFORE reading source code or launching Explore agents.
+
+charly-fedora-skill:
+    skill:
+        name: charly-fedora
+        family: distros
+        owner: charly-distros
+        description: |-
+            Fedora box with the full charly toolchain using shared candies. Rootless-first —
+            runs as uid=1000 with passwordless sudo (no root, no cap_add: ALL). Same candy
+            list as charly-arch. Includes NVIDIA GPU runtime.
+            MUST be invoked before building, deploying, configuring, or troubleshooting
+            the charly-fedora box.
+        content: |
+            # charly-fedora
+            
+            Fedora container with the full charly toolchain. Uses almost the same
+            candy list as `/charly-coder:charly-arch` — the tag system handles
+            Fedora-specific packages and scripts via `rpm:` sections. Supports
+            nested containers at any depth via `/charly-distros:container-nesting`.
+            
+            Lives in the **`opencharly/distro-fedora`** repo (git submodule at **`box/fedora`**).
+            Its `fedora` base is bare-local in the same self-contained submodule
+            (`import: []`) — `base: fedora`; its
+            candies (incl. the `nvidia` candy) are pulled by github reference. Build from the
+            submodule: `charly -C box/fedora box build charly-fedora`. Deploy-mode verbs work
+            from anywhere once the image is in local storage.
+            
+            ## Box Properties
+            
+            | Property | Value |
+            |----------|-------|
+            | Base | fedora (quay.io/fedora/fedora:43) |
+            | Tags | `[all, rpm, fedora, fedora:43]` |
+            | Layers | agent-forwarding, charly, golang, gh, sshd, container-nesting, nvidia |
+            | Platforms | linux/amd64 |
+            | UID / user | **1000 / user** (rootless-first) |
+            | Network | host |
+            | Security | layer-level only (from `/charly-distros:container-nesting`) |
+            | Registry | ghcr.io/opencharly |
+            
+            ### Rootless-first posture
+            
+            Runs as uid=1000 / `user` with no added capabilities. The
+            `/charly-distros:container-nesting` kernel RCA establishes that
+            `unmask=/proc/*` + subuid/subgid delegation is sufficient for rootless
+            nested containers + rootless libvirt VMs, so this box — like its
+            power-user siblings (`/charly-coder:charly-arch`, `/charly-coder:fedora-coder`,
+            `/charly-distros:githubrunner`) — needs no `cap_add: [ALL]` or
+            `label=disable` / `seccomp=unconfined`.
+            
+            The `/charly-coder:sshd` candy installs `/etc/sudoers.d/charly-user` with
+            passwordless sudo for `user`, so anything that genuinely needs root
+            is one `sudo` prefix away. Default user for every process is uid=1000.
+            
+            Resolved OCI security label:
+            
+            | Field | Value |
+            |---|---|
+            | `cap_add` | **(empty)** |
+            | `security_opt` | `[unmask=/proc/*]` (from `/charly-distros:container-nesting`) |
+            | `devices` | `[/dev/fuse, /dev/net/tun]` (from `/charly-distros:container-nesting`) |
+            | `privileged` | `false` |
+            
+            See `/charly-openclaw:openclaw-desktop` (streaming-desktop sibling) and
+            `/charly-coder:fedora-coder` (kitchen-sink dev sibling) for other boxes
+            sharing this posture, and `/charly-distros:container-nesting` for the
+            kernel `mount_too_revealing()` RCA.
+            
+            ### Why still `network: host`
+            
+            `charly-fedora` uses host networking (unlike `charly-arch`, which uses bridge)
+            so the box can reach host services and the host namespace directly.
+            charly-mcp's MCP URL rewriting (`candy/plugin-mcp/resolve.go`, the host-port
+            mapping via the `cc.ResolveEndpoint` reverse-leg) handles host-networked containers via
+            `HostConfig.NetworkMode=host` detection (see `sdk/kit/checkvars.go`'s
+            `ContainerInspection.IsHostNetworked()`), so host networking does not break
+            MCP URL rewriting. If you want charly-mcp on charly-fedora, compose it
+            into the candy list — it will work on either networking mode.
+            
+            ## What's Installed
+            
+            Full charly toolchain via shared candies:
+            
+            - **charly** — the full toolchain: charly binary + VM tools (qemu-kvm, qemu-img, libvirt tools) + gocryptfs + socat + gvisor-tap-vsock + podman-machine
+            - **golang** — Go compiler (`golang-bin`)
+            - **gh** — GitHub CLI + `git` + `git-lfs` (single-responsibility; see `/charly-coder:gh`)
+            - **sshd** — SSH server/client (`openssh-server`, `openssh-clients`) + passwordless sudo for `user`
+            - **container-nesting** — buildah, fuse-overlayfs, shadow-utils, skopeo, tailscale, libsecret + nested container config (Tailscale from `tailscale-stable` repo)
+            - **nvidia** — nvidia-container-toolkit, libva-nvidia-driver (from negativo17 repo; driver libs provided by CDI at runtime)
+            
+            ## Lifecycle
+            
+            ```bash
+            # Build (from the opencharly/distro-fedora submodule)
+            charly -C box/fedora box build charly-fedora
+            
+            # Interactive shell (as uid=1000)
+            charly shell charly-fedora
+            
+            # Run a command
+            charly shell charly-fedora -c "charly version"
+            charly shell charly-fedora -c "sudo -n whoami"    # root (passwordless)
+            
+            # Start as service
+            charly start charly-fedora
+            charly status charly-fedora
+            charly stop charly-fedora
+            ```
+            
+            ## Nested Containers
+            
+            Rootless podman works inside charly-fedora at any nesting depth. The
+            `/charly-distros:container-nesting` candy provides the config + env vars +
+            subuid/subgid delegation per the podman/stable recipe:
+            
+            ```bash
+            # Level 1: run containers inside charly-fedora
+            charly shell charly-fedora -c "podman run --rm quay.io/libpod/alpine:latest echo hello"
+            
+            # Level 2: run charly inside charly-fedora inside charly-fedora
+            charly shell charly-fedora -c "charly shell charly-fedora -c 'charly version'"
+            ```
+            
+            Use `quay.io/libpod/alpine:latest` instead of
+            `docker.io/library/alpine` to dodge Docker Hub rate limits.
+            
+            ## GPU Support
+            
+            The `/charly-distros:nvidia` candy provides NVIDIA GPU runtime:
+            
+            - `nvidia-container-toolkit` — CDI spec generation (driver userspace libs provided by CDI at runtime, matching host kernel module)
+            - `libva-nvidia-driver` — VA-API acceleration
+            
+            `charly` triggers CDI regeneration plugin-side (`pluginEnsureCDI` in
+            `candy/plugin-preempt/holder_dispatch.go`, via `spec.GpuSwitchActionEnsureCDI` — the
+            former in-core `EnsureCDI()` shim is DELETED, K-wave 2 cone R3) before launching GPU
+            containers. GPU access works at any nesting depth.
+            
+            ## Verification
+            
+            ```bash
+            charly shell charly-fedora -c "id"                  # uid=1000(user)
+            charly shell charly-fedora -c "sudo -n whoami"      # root
+            charly shell charly-fedora -c "charly version"
+            charly shell charly-fedora -c "charly doctor"
+            charly shell charly-fedora -c "podman info"
+            charly shell charly-fedora -c "podman run --rm quay.io/libpod/alpine:latest echo OK"
+            charly shell charly-fedora -c "which nvidia-ctk"
+            
+            # Verify OCI tags
+            charly box inspect charly-fedora --format tags
+            # ["all","rpm","fedora","fedora:43"]
+            ```
+            
+            ## Unified with charly-arch
+            
+            Both `charly-fedora` and `/charly-coder:charly-arch` use the exact same candy
+            list. The tag system (`build: [rpm]` + `distro: ["fedora:43", fedora]`
+            vs `build: [pac]` + `distro: [arch]`) selects the right packages
+            and scripts per distro.
+            
+            ## Key Candies
+            
+            - `/charly-tools:charly` — the full toolchain: charly binary plus VM/encryption tools
+            - `/charly-distros:container-nesting` — nested rootless podman/buildah (authoritative RCA for `mount_too_revealing()` + `unmask=/proc/*`)
+            - `/charly-coder:sshd` — SSH daemon + passwordless sudo for `user`
+            - `/charly-coder:gh` — GitHub CLI + git + git-lfs (owns all git tooling)
+            - `/charly-distros:nvidia` — NVIDIA GPU runtime
+            
+            ## Related Boxes
+            
+            - `/charly-distros:fedora` — parent base image
+            - `/charly-coder:charly-arch` — Arch counterpart, same layers, same rootless posture
+            - `/charly-coder:fedora-coder` — kitchen-sink dev sibling (32 candies, adds coding CLIs + DevOps)
+            - `/charly-openclaw:openclaw-desktop` — streaming-desktop counterpart (charly toolchain + browser-accessible Wayland); shares the rootless-first posture
+            - `/charly-distros:githubrunner` — self-hosted GitHub Actions runner; same uid=1000 posture
+            
+            ## Related Commands
+            
+            - `/charly-core:shell` — open an interactive shell in charly-fedora (as uid=1000 with sudo)
+            - `/charly-core:service` — manage charly-fedora as a service
+            - `/charly-vm:vm` — nested libvirt VMs via `qemu:///session` (rootless)
+            - `/charly-build:charly-mcp-cmd` — MCP gateway deployment patterns (if you add `charly-mcp` to the candies)
+            
+            ## Related
+            
+            - `/charly-image:image` — image family umbrella (`candy:` image entries — those carrying `base:`/`from:` — in `charly.yml`, build/validate/inspect/list)
+            - `/charly-build:build` — the embedded build vocabulary (distros, builders, init-systems)
+
+debian-builder-skill:
+    skill:
+        name: debian-builder
+        family: distros
+        owner: charly-distros
+        description: |-
+            Minimal Debian 13 builder image (pixi + Node.js + build-toolchain) used
+            as the multi-stage builder for every box based on Debian — currently
+            debian-coder. Produces the pre-compiled pixi envs, npm globals, and
+            cargo crates that land in the final runtime image via COPY --from.
+            MUST be invoked before building, deploying, configuring, or troubleshooting
+            the debian-builder box.
+        content: |
+            # debian-builder
+            
+            Debian 13 counterpart of `/charly-distros:fedora-builder`. Provides the pixi / npm / cargo build environments so downstream Debian boxes (currently `/charly-coder:debian-coder`) get pre-compiled artifacts from a dedicated builder stage without bloating the final image.
+            
+            Lives in the **`opencharly/distro-debian`** repo (git submodule at **`box/debian`**).
+            Build it from the submodule: `charly -C box/debian box build debian-builder`
+            (normally it builds implicitly as a dependency of `debian-coder`). Its
+            `pixi`/`nodejs`/`build-toolchain` layers are pulled by github reference from the
+            main repo.
+            
+            ## Box Properties
+            
+            | Property | Value |
+            |----------|-------|
+            | Base | `debian` (which = `debian:13` + our bootstrap) |
+            | Layers | `pixi`, `nodejs`, `build-toolchain` |
+            | Platforms | `linux/amd64` |
+            | Registry | `ghcr.io/opencharly` |
+            | User | `user` / uid 1000 (create mode — `debian:13` ships no pre-existing uid-1000 account) |
+            
+            ## Full candy stack
+            
+            1. `/charly-distros:debian` — Debian 13 + our `apt-get update && apt-get install -y --no-install-recommends curl ca-certificates gnupg` bootstrap + go-task binary + `user:user` uid 1000.
+            2. `/charly-languages:pixi` — pixi package manager + env paths.
+            3. `/charly-coder:nodejs` — Node.js + npm (generic `nodejs` — Debian's packaged Node).
+            4. `/charly-coder:build-toolchain` — gcc, g++, cmake, autoconf, ninja, pkg-config, and the full set of `-dev` libraries (Debian equivalents of Fedora's `-devel`). Used by cargo crates that link system libs (libva, x264, ffmpeg, wayland, xkbcommon, etc.).
+            
+            ## Role in the build system
+            
+            Declares `builds: [pixi, npm, cargo]` and is listed as `debian-coder`'s builder for all three types via:
+            
+            ```yaml
+            debian:
+              builder:
+                pixi: debian-builder
+                npm: debian-builder
+                cargo: debian-builder
+            ```
+            
+            During `charly box build debian-coder`, any candy that ships `pixi.toml` / `package.json` / `Cargo.toml` gets a multi-stage `FROM debian-builder AS <layer>-<builder>-build` section emitted by the generator, then `COPY --from=<stage> --chown=${UID}:${GID}` into the final image. See `/charly-internals:generate-source` for the template.
+            
+            No AUR equivalent (unlike `/charly-distros:arch-builder`) — AUR is an Arch-only concept.
+            
+            ## Cross-distro sibling builders
+            
+            - `/charly-distros:fedora-builder` — Fedora 43 equivalent (+ `rpmfusion` for x264/ffmpeg/libva headers).
+            - `/charly-distros:arch-builder` — Arch Linux equivalent + `yay` for AUR.
+            - `/charly-distros:ubuntu-builder` — Ubuntu 24.04 equivalent; differs from this box mainly in `user:ubuntu` vs `user:user` (adopt mode — see `/charly-distros:ubuntu`).
+            
+            ## Quick start
+            
+            ```bash
+            charly -C box/debian box build debian-builder
+            charly shell debian-builder
+            ```
+            
+            Typically not invoked directly — it's a build-time dependency of `/charly-coder:debian-coder`.
+            
+            ## Verification
+            
+            - `charly -C box/debian box list | grep debian-builder` — box present.
+            - `charly shell debian-builder -- pixi --version && node --version && gcc --version`.
+            
+            ## Related boxes
+            
+            - `/charly-distros:debian` — parent base, declares the bootstrap packages in the embedded `distro:` vocabulary.
+            - `/charly-coder:debian-coder` — the consumer that this builder exists to serve.
+            - `/charly-distros:fedora-builder` — RPM-family sibling.
+            - `/charly-distros:arch-builder` — pacman + AUR sibling.
+            - `/charly-distros:ubuntu-builder` — Ubuntu 24.04 sibling.
+            
+            ## Related candies
+            
+            - `/charly-languages:pixi`, `/charly-coder:nodejs`, `/charly-coder:build-toolchain`
+            
+            ## Related commands
+            
+            - `/charly-build:build` — multi-stage builders, `base_user:` declaration
+            - `/charly-image:image` — `produce:` + `builder:` fields
+            - `/charly-build:generate` — COPY-from stage emission
+            
+            ## When to use this skill
+            
+            **MUST be invoked** when:
+            
+            - Building or troubleshooting `debian-builder` itself.
+            - Debugging multi-stage `COPY --from` errors in a `debian-coder` build (the source stage is this image).
+            - Adding a new builder capability (e.g. a `dotnet` build type) to deb-family images.
+
+debian-debootstrap-skill:
+    skill:
+        name: debian-debootstrap
+        family: distros
+        owner: charly-distros
+        description: |-
+            Bootstrap-from-scratch Debian rootfs via debootstrap inside a privileged
+            builder (from: builder:debootstrap, bootstrap_builder_image:
+            debian-debootstrap-builder). Retained for offline/air-gapped builds and as a
+            worked example of the from: builder:debootstrap pattern. Lives in the
+            opencharly/distro-debian submodule (box/debian).
+            MUST be invoked before building or troubleshooting debian-debootstrap.
+        content: |
+            # debian-debootstrap
+            
+            Bootstrap-from-scratch Debian root filesystem, built via `debootstrap` inside
+            the privileged `/charly-distros:debian-debootstrap-builder` container
+            (`from: builder:debootstrap`, `bootstrap_builder_image: debian-debootstrap-builder`).
+            
+            > **Lives in `opencharly/distro-debian`** (git submodule at `box/debian`). Build:
+            > `charly -C box/debian box build debian-debootstrap`.
+            
+            ## When to use it (and when not)
+            
+            The canonical Debian base (`/charly-distros:debian`) pulls the upstream-published
+            `debian:13` OCI image from Docker Hub — that is the recommended, faster path
+            (no privileged build). This debootstrap variant exists for **offline /
+            air-gapped** builds and as a worked example of the `from: builder:debootstrap` +
+            `bootstrap_builder_image:` pattern (the deb-family counterpart of
+            `/charly-distros:arch` / `/charly-distros:cachyos-pacstrap`).
+            
+            ## Box Properties
+            
+            | Property | Value |
+            |----------|-------|
+            | From | builder:debootstrap |
+            | bootstrap_builder_image | debian-debootstrap-builder |
+            | Distro | debian:13, debian |
+            | Build | deb |
+            | Home repo | opencharly/distro-debian (`box/debian`) |
+            
+            The `debian` distro config (debootstrap suite `trixie`, mirror
+            `http://deb.debian.org/debian`, base packages, bootloader template) lives in the
+            embedded build vocabulary (`charly/charly.yml`, baked into the `charly` binary)
+            and is resolved by name from the submodule's `distro: debian` reference.
+            
+            ## Cross-References
+            
+            - `/charly-distros:debian` — the recommended Docker-Hub base
+            - `/charly-distros:debian-debootstrap-builder` — the privileged builder it uses
+            - `/charly-vm:debian-debootstrap-vm` — the VM built via the same debootstrap path
+            
+            ## When to Use This Skill
+            
+            **MUST be invoked** before building or debugging the Debian debootstrap rootfs.
+            Invoke BEFORE reading source code or launching Explore agents.
+
+debian-debootstrap-builder-skill:
+    skill:
+        name: debian-debootstrap-builder
+        family: distros
+        owner: charly-distros
+        description: |-
+            Privileged debootstrap builder image (base: debian:13) — ships the
+            debootstrap toolchain used to bootstrap a Debian rootfs from scratch for
+            debian-debootstrap and the debian-debootstrap VM. Lives in the
+            opencharly/distro-debian submodule (box/debian).
+            MUST be invoked before building or troubleshooting debian-debootstrap-builder.
+        content: |
+            # debian-debootstrap-builder
+            
+            Privileged builder image that ships the **debootstrap** toolchain (the
+            `debootstrap-builder` candy). It is the `from: builder:debootstrap` /
+            `bootstrap_builder_image:` target for `/charly-distros:debian-debootstrap` and the
+            `/charly-vm:debian-debootstrap-vm` bootstrap VM.
+            
+            > **Lives in `opencharly/distro-debian`** (git submodule at `box/debian`). Build:
+            > `charly -C box/debian box build debian-debootstrap-builder`.
+            
+            ## Box Properties
+            
+            | Property | Value |
+            |----------|-------|
+            | Base | `debian:13` |
+            | Distro | debian:13, debian |
+            | Build | deb |
+            | Layer | `debootstrap-builder` (pulled by github reference from the main repo) |
+            | Home repo | opencharly/distro-debian (`box/debian`) |
+            
+            The `debootstrap-builder` candy (debootstrap + arch-install-scripts equivalents,
+            grub, parted) **stays in the main repo** and is shared with
+            `/charly-distros:ubuntu-debootstrap-builder` — both pull it by github reference. The
+            `debian` distro config (debootstrap suite/mirror/base packages, bootloader
+            template) is part of the embedded `distro:` vocabulary, loaded automatically by
+            the unified loader.
+            
+            ## Cross-References
+            
+            - `/charly-distros:debian` — the Docker-Hub-equivalent base (`base: debian:13`)
+            - `/charly-distros:debian-debootstrap` — the bootstrap-from-scratch rootfs it builds
+            - `/charly-vm:debian-debootstrap-vm` — the VM built via the same debootstrap path
+            - `/charly-distros:ubuntu-debootstrap-builder` — the Ubuntu sibling (also `base: debian:13`)
+            
+            ## When to Use This Skill
+            
+            **MUST be invoked** before building or debugging the Debian debootstrap builder.
+            Invoke BEFORE reading source code or launching Explore agents.
+
+fedora-builder-skill:
+    skill:
+        name: fedora-builder
+        family: distros
+        owner: charly-distros
+        description: |-
+            Builder image with pixi, Node.js, and C/C++ build toolchain. Used as the
+            default builder for multi-stage image builds.
+            MUST be invoked before building, deploying, configuring, or troubleshooting the fedora-builder box.
+        content: |
+            # fedora-builder
+            
+            Builder image with package managers and compilation tools. Default builder for pixi, npm, and cargo multi-stage builds (declared via `builds: [pixi, npm, cargo]`).
+            
+            **Owned by the `opencharly/distro-fedora` submodule.** Lives bare-local in the
+            **`opencharly/distro-fedora`** submodule (mounted at `box/fedora`), alongside
+            `/charly-distros:fedora` + `/charly-distros:fedora-nonfree`; the submodule is
+            SELF-CONTAINED (`import: []`), so its images route builders to a bare-local
+            `fedora-builder`. Its `rpmfusion`/`pixi`/`nodejs`/`build-toolchain` candies are
+            pinned as github refs (`@github.com/opencharly/charly/candy/<name>:<tag>`) so
+            the same definition resolves in both main and the submodule. Build with
+            `charly box build fedora-builder` from the submodule.
+            
+            ## Box Properties
+            
+            | Property | Value |
+            |----------|-------|
+            | Base | fedora |
+            | Layers | rpmfusion, pixi, nodejs, build-toolchain |
+            | Platforms | linux/amd64 |
+            | Registry | ghcr.io/opencharly |
+            
+            ## Full Candy Stack
+            
+            1. `fedora` (quay.io/fedora/fedora:43)
+            2. `rpmfusion` — RPM Fusion free + nonfree repo configuration. Applied **first** so subsequent candies can `dnf install` packages from RPM Fusion (e.g. `x264-devel`, `ffmpeg-devel`, `libva-devel`)
+            3. `pixi` — pixi package manager + env paths
+            4. `nodejs` — Node.js + npm
+            5. `build-toolchain` — gcc, cmake, autoconf, ninja, git, pkg-config, **plus** the smithay/cargo build deps (`rust`, `cargo`, `clang-devel`, `nasm`, `wayland-devel`, `libva-devel`, `x264-devel`, `ffmpeg-devel`, `pixman-devel`, …) needed for builder-stage compilation of Wayland compositors like pixelflux. See `/charly-coder:build-toolchain` for the full grouped list.
+            
+            ## Why rpmfusion is first
+            
+            The build-toolchain candy's `dnf install` references packages that live in RPM Fusion free
+            (`libva-devel`, `x264-devel`, `ffmpeg-devel`). These are required to build pixelflux from
+            source (its `libva-sys`, `x264-sys`, and `ffmpeg-sys-next` cargo crates link against the
+            system libs). Without rpmfusion applied first, those `dnf install` calls would fail.
+            See `/charly-selkies:selkies` (Patched pixelflux build pipeline) for the consumer story.
+            
+            ## Role in Build System
+            
+            This image is referenced in `defaults.builders` as the builder for `pixi`, `npm`, and `cargo` multi-stage builds. It declares `builds: [pixi, npm, cargo]` to advertise its capabilities. The generator uses it as the `FROM` stage in multi-stage builds, providing build tools without bloating final images.
+            
+            ## Quick Start
+            
+            ```bash
+            charly box build fedora-builder
+            charly shell fedora-builder
+            ```
+            
+            ## Key Candies
+            
+            - `/charly-languages:pixi` — Python package management foundation
+            - `/charly-coder:nodejs` — Node.js runtime and npm
+            - `/charly-coder:build-toolchain` — C/C++ compilation tools
+            
+            ## Related Boxes
+            
+            - `/charly-distros:fedora` — parent base
+            
+            ## Verification
+            
+            After `charly box build`:
+            - `charly box list` — box appears in list
+            - `charly shell fedora-builder` — interactive shell works
+            
+            ## When to Use This Skill
+            
+            **MUST be invoked** when the task involves the fedora-builder box, multi-stage builds, or build cache configuration. Invoke this skill BEFORE reading source code or launching Explore agents.
+            
+            ## Related
+            
+            - `/charly-image:image` — image family umbrella (`candy:` image entries — those carrying `base:`/`from:` — in `charly.yml`, build/validate/inspect/list)
+            - `/charly-build:build` — the embedded build vocabulary (distros, builders, init-systems)
+
+fedora-nonfree-skill:
+    skill:
+        name: fedora-nonfree
+        family: distros
+        owner: charly-distros
+        description: |-
+            Fedora with RPM Fusion non-free repositories enabled. Base for boxes
+            needing codec or proprietary package support like immich.
+            MUST be invoked before building, deploying, configuring, or troubleshooting the fedora-nonfree box.
+        content: |
+            # fedora-nonfree
+            
+            Fedora base with RPM Fusion free and non-free repositories enabled.
+            
+            **Owned by the `opencharly/distro-fedora` submodule.** Lives bare-local in the
+            **`opencharly/distro-fedora`** submodule (mounted at `box/fedora`), alongside
+            `/charly-distros:fedora` + `/charly-distros:fedora-builder`; the submodule is
+            SELF-CONTAINED (`import: []`). Its consumers (`/charly-immich:immich`,
+            `/charly-distros:nvidia`) live in the same submodule and base on it as a
+            bare-local `fedora-nonfree`. Its `rpmfusion`
+            candy is pinned as a github ref so the same definition resolves in both main and
+            the submodule.
+            
+            ## Box Properties
+            
+            | Property | Value |
+            |----------|-------|
+            | Base | fedora |
+            | Layers | rpmfusion |
+            | Platforms | linux/amd64 |
+            | Registry | ghcr.io/opencharly |
+            
+            ## Full Candy Stack
+            
+            1. `fedora` (quay.io/fedora/fedora:43)
+            2. `rpmfusion` — RPM Fusion free + non-free repos
+            
+            ## Quick Start
+            
+            ```bash
+            charly box build fedora-nonfree
+            charly shell fedora-nonfree
+            ```
+            
+            ## Key Candies
+            
+            - `/charly-distros:rpmfusion` — RPM Fusion repository configuration
+            
+            ## Derived Boxes
+            
+            - `/charly-immich:immich` — photo management with codec support
+            
+            ## Related Boxes
+            
+            - `/charly-distros:fedora` — parent base (without non-free repos)
+            
+            ## Verification
+            
+            After `charly box build`:
+            - `charly box list` — box appears in list
+            - `charly shell fedora-nonfree` — interactive shell works
+            
+            ## When to Use This Skill
+            
+            **MUST be invoked** when the task involves the fedora-nonfree box, RPM Fusion support, or non-free codec packages. Invoke this skill BEFORE reading source code or launching Explore agents.
+            
+            ## Related
+            
+            - `/charly-image:image` — image family umbrella (`candy:` image entries — those carrying `base:`/`from:` — in `charly.yml`, build/validate/inspect/list)
+            - `/charly-build:build` — the embedded build vocabulary (distros, builders, init-systems)
+
+fedora-test-skill:
+    skill:
+        name: fedora-test
+        family: distros
+        owner: charly-distros
+        description: |-
+            Test box with Traefik reverse proxy and testapi service.
+            Currently disabled. Used for development testing.
+            MUST be invoked before building or troubleshooting the fedora-test box.
+        content: |
+            # fedora-test
+            
+            Development test box with Traefik reverse proxy and a FastAPI test service.
+            
+            Lives in the **`opencharly/distro-fedora`** repo (git submodule at **`box/fedora`**).
+            Its `fedora` base is bare-local in the same self-contained submodule
+            (`import: []`) — `base: fedora`; the
+            `agent-forwarding`/`traefik`/`testapi` candies are pulled by github reference.
+            Build from the submodule: `charly -C box/fedora box build fedora-test`.
+            
+            ## Box Properties
+            
+            | Property | Value |
+            |----------|-------|
+            | Base | fedora |
+            | Layers | agent-forwarding, traefik, testapi |
+            | Platforms | linux/amd64, linux/arm64 |
+            | Ports | 8000 (Traefik HTTP), 8080 (Traefik dashboard) |
+            | Status | enabled |
+            
+            ## Purpose
+            
+            Used for testing Traefik routing, service health checks, and the `testapi` candy. The testapi service runs on port 9090 and is routed via `testapi.localhost` through Traefik.
+            
+            ## Key Candies
+            
+            - `/charly-infrastructure:traefik` — Reverse proxy
+            - `/charly-infrastructure:testapi` — FastAPI test service
+            
+            ## Related Boxes
+            - `/charly-distros:fedora` — parent base image
+            - `/charly-distros:valkey-test` — sibling test box (disabled)
+            
+            ## Related Commands
+            - `/charly-build:build` — build the fedora-test box
+            - `/charly-build:validate` — validate the test candy composition
+            
+            ## When to Use This Skill
+            
+            **MUST be invoked** when the task involves the fedora-test box or Traefik routing validation.
+            
+            ## Related
+            
+            - `/charly-image:image` — image family umbrella (`candy:` image entries — those carrying `base:`/`from:` — in `charly.yml`, build/validate/inspect/list)
+
+githubrunner-skill:
+    skill:
+        name: githubrunner
+        family: distros
+        owner: charly-distros
+        description: |-
+            Self-hosted GitHub Actions runner on CachyOS, fully rootless — runs as
+            uid=1000 with zero added capabilities (no root, no privileged) via
+            container-nesting, with rootless nested podman/buildah/skopeo for CI.
+            Host networking retained for reachability. MUST be invoked before building,
+            deploying, configuring, or troubleshooting the githubrunner box.
+        content: |
+            # githubrunner
+            
+            Self-hosted GitHub Actions runner on **CachyOS**, fully rootless. Shares the
+            rootless nested-container posture with `/charly-openclaw:openclaw-desktop` (uid=1000,
+            no caps, `unmask=/proc/*` via `/charly-distros:container-nesting`).
+            
+            ## Box Properties
+            
+            | Property | Value |
+            |----------|-------|
+            | Base | cachyos (`cachyos.cachyos`) |
+            | Layers | agent-forwarding, github-runner, charly, dbus, container-nesting |
+            | Build | pac |
+            | Platforms | linux/amd64 |
+            | UID / user | **1000 / user** (rootless — NO uid/privileged override) |
+            | Network | host (reach the host-side ghcr pull-through mirror) |
+            | Security | container-nesting's posture: `cap_add:[]`, `security_opt:[unmask=/proc/*]`, devices `/dev/fuse` + `/dev/net/tun` |
+            | Registry | ghcr.io/opencharly |
+            
+            ## Full Candy Stack
+            
+            1. `cachyos` (`docker.io/cachyos/cachyos-v3`, via the `cachyos` import namespace)
+            2. `agent-forwarding` — GPG/SSH/direnv (composes gnupg + direnv + ssh-client)
+            3. `github-runner` — the Actions runner agent (under `${HOME}/actions-runner`),
+               cosign, go/git/jq, qemu-user-static (aarch64 cross-arch CI), the .NET runtime
+               deps, the credential-backed registration, the ghcr mirror config
+            4. `charly` — the charly binary + `virtualization` + `gocryptfs` + `socat`
+            5. `dbus` — session bus (for runner hooks)
+            6. `container-nesting` — rootless nested podman/buildah/skopeo + the subuid/subgid
+               layout + newuidmap/newgidmap file-caps + containers/storage/policy configs
+            
+            ## Rootless posture (genuinely uid 1000, no caps)
+            
+            The box carries **no uid/user/privileged override**, so it resolves to
+            `container-nesting`'s posture: uid=1000, `cap_add:[]`, `security_opt:[unmask=/proc/*]`,
+            devices `/dev/fuse` + `/dev/net/tun`. The runner process (`run.sh`), all CI jobs,
+            and rootless nested podman all run as `user` (uid 1000). See
+            `/charly-distros:container-nesting` for the `mount_too_revealing()` kernel RCA that
+            makes nested podman work without caps or `--privileged`.
+            
+            `/charly-coder:sshd` (passwordless `/etc/sudoers.d/charly-user`) is composable if a
+            workflow genuinely needs sudo; it is not composed by default.
+            
+            ## Nested container support
+            
+            `githubrunner` composes `/charly-distros:container-nesting` directly, so CI jobs get
+            first-class **rootless nested podman/buildah/skopeo** (uid 1000, `/dev/fuse` +
+            `unmask=/proc/*`, `crun` + `fuse-overlayfs`, `BUILDAH_ISOLATION=chroot`). The
+            rootless image cache lives under `${HOME}/.local/share/containers`. Cross-arch
+            container builds (aarch64) work via the repo `qemu-user-static` +
+            `qemu-user-static-binfmt` packages.
+            
+            ## CI: builds the org's release packages on itself
+            
+            The repo's `release-packages` workflow (`.github/workflows/release-packages.yml`)
+            runs on this runner via `runs-on: [self-hosted, opencharly]` — no GitHub-hosted
+            runner. Because the runner is an Arch (CachyOS) host carrying the FULL `charly`
+            PKGBUILD `depends=` set, all three package formats build here:
+            
+            - **pac** builds NATIVELY — `charly box pkg pac` → `makepkg -sf` as uid 1000 (makepkg
+              refuses root; the rootless runner's non-root uid is exactly right). Every
+              `depends=` is pre-installed, so makepkg resolves them without `sudo pacman` (the
+              runner has no passwordless sudo). No `archlinux:latest` container.
+            - **rpm + deb** build distro-natively in the runner's rootless nested podman
+              (`charly box pkg rpm deb`).
+            
+            `workflow_dispatch` runs the build jobs from a branch (the release-upload step is
+            tag-guarded), so the build is exercisable without minting a tag. The `github-runner`
+            candy completes the `charly` runtime on the runner — beyond the .NET/runner deps it adds
+            the `depends=` packages the charly/virtualization candies don't already provide
+            (`slirp4netns`, `libisoburn`, `cdrtools`, `swtpm`).
+            
+            ## Token mechanism (credential-backed; obtained via `gh`)
+            
+            `RUNNER_TOKEN` is a `secret_accept` (credential-store-backed — never written to
+            charly.yml or the quadlet); `RUNNER_ORG` is an `env_accept`. The registration
+            token is short-lived and only consumed once at `charly config` time (the registered
+            runner persists its own `.credentials` on the `state` volume), so it is obtained
+            fresh from `gh`. The `post_enable`/`pre_remove` hooks are guarded — they skip
+            when `RUNNER_TOKEN` is empty, so a token-less deploy (e.g. an check bed) brings the
+            image up without registering, and a stale token never errors a teardown.
+            
+            ```bash
+            # Obtain a fresh org registration token and register:
+            TOKEN=$(gh api -X POST /orgs/<org>/actions/runners/registration-token --jq .token)
+            charly config githubrunner -e RUNNER_ORG=<org> -e RUNNER_TOKEN="$TOKEN"   # token scrubbed → credential store
+            charly start githubrunner
+            ```
+            
+            Removal deregisters via the `pre_remove` hook, which needs a **remove**-token
+            (distinct from the registration token):
+            
+            ```bash
+            charly remove githubrunner -e RUNNER_TOKEN=$(gh api -X POST /orgs/<org>/actions/runners/remove-token --jq .token)
+            ```
+            
+            ## Lifecycle
+            
+            ```bash
+            charly box build githubrunner
+            charly config githubrunner -e RUNNER_ORG=<org> -e RUNNER_TOKEN="$TOKEN"
+            charly start githubrunner
+            charly stop githubrunner
+            charly remove githubrunner -e RUNNER_TOKEN=<remove-token>
+            ```
+            
+            ## Key Candies
+            
+            - `/charly-distros:github-runner` — runner agent, hooks, registration, ghcr mirror, .NET deps + the charly-host `depends=` completion (native pac builds in CI)
+            - `/charly-distros:container-nesting` — rootless nested podman/buildah/skopeo, subuid layout, caps
+            - `/charly-tools:charly` — the charly binary + virtualization + gocryptfs + socat
+            - `/charly-distros:agent-forwarding` — GPG/SSH/direnv for the `.secrets` workflow
+            
+            ## Related Boxes
+            
+            - `/charly-distros:cachyos` — the CachyOS base (parent, via the `cachyos` namespace)
+            - `/charly-openclaw:openclaw-desktop` — same rootless container-nesting posture (uid 1000, no caps)
+            - `/charly-distros:charly-fedora`, `/charly-coder:charly-arch` — the charly-toolchain siblings (root path, box-level full-hammer security)
+            
+            ## Related Commands
+            
+            - `/charly-core:charly-config` — deploy setup with RUNNER_ORG (env) / RUNNER_TOKEN (secret)
+            - `/charly-core:start`, `/charly-core:stop`, `/charly-core:remove` — lifecycle + pre-remove deregistration
+            - `/charly-core:charly-status`, `/charly-core:logs` — verify runner is idle + troubleshoot
+            - `/charly-build:secrets` — the credential store backing `RUNNER_TOKEN`
+            
+            ## Verification
+            
+            Build-scope (`charly check box githubrunner`) + deploy-scope (`charly check live`) checks
+            ship on the `github-runner` candy (functional: `config.sh --version` proves the
+            .NET deps resolved; rootless nested `podman run` proves the posture). The
+            disposable R10 bed is **`check-githubrunner-pod`** (`charly check run check-githubrunner-pod`)
+            — it proves the rootless composition WITHOUT GitHub registration (no token →
+            guarded hooks no-op).
+            
+            After `charly start` against a registered deploy:
+            
+            - `charly status githubrunner` — container running
+            - `charly shell githubrunner -c "id"` — uid=1000(user) (rootless)
+            - `charly shell githubrunner -c "podman run --rm quay.io/libpod/alpine:latest true"` — rootless nested podman works
+            - Runner appears as "Idle" in the org's Settings > Actions > Runners
+            
+            ## When to Use This Skill
+            
+            **MUST be invoked** when the task involves the githubrunner box,
+            self-hosted runners, or GitHub Actions CI/CD. Invoke this skill BEFORE
+            reading source code or launching Explore agents.
+            
+            ## Related
+            
+            - `/charly-image:image` — image family umbrella (`candy:` image entries — those carrying `base:`/`from:` — in `charly.yml`, build/validate/inspect/list)
+            - `/charly-build:build` — the embedded build vocabulary (distros, builders, init-systems)
+            - `/charly-check:check` — the `check:` checks + the `check-githubrunner-pod` R10 bed
+
+nvidia-layer-skill:
+    skill:
+        name: nvidia-layer
+        family: distros
+        owner: charly-distros
+        description: |-
+            NVIDIA GPU runtime support: driver libs, nvidia-container-toolkit (CDI), and VA-API.
+            Fedora (negativo17) and Arch Linux (pac). Base candy for all GPU-accelerated boxes.
+            Use when working with NVIDIA GPU support, CDI device injection, or the nvidia candy.
+        content: |
+            # nvidia -- NVIDIA GPU runtime
+            
+            NVIDIA runtime candy providing `nvidia-container-toolkit` for CDI device injection and VA-API hardware video acceleration. Driver userspace libraries (libcuda, libnvidia-ml, etc.) are NOT bundled — CDI provides host-matching driver libs at runtime, preventing version mismatches between container and host kernel module. Supports both Fedora and Arch Linux.
+            
+            ## Candy Properties
+            
+            | Property | Value |
+            |----------|-------|
+            | Install files | `charly.yml`, `task:` |
+            | Depends | none |
+            
+            ## Packages
+            
+            **RPM** (from negativo17 fedora-multimedia repo):
+            - `nvidia-container-toolkit` — `nvidia-ctk` CLI for CDI spec generation
+            - `libva-nvidia-driver` — VA-API hardware video acceleration
+            
+            **PAC** (Arch Linux):
+            - `nvidia-utils` — NVIDIA GL/Vulkan userspace, `nvidia-smi`
+            - `nvidia-container-toolkit` — `nvidia-ctk` CLI for CDI spec generation
+            
+            ## Environment Variables
+            
+            | Variable | Value |
+            |----------|-------|
+            | `LD_LIBRARY_PATH` | `/usr/lib64` (ensures CDI-injected host driver libs are found by the dynamic linker) |
+            
+            ## CDI Support
+            
+            The `nvidia-container-toolkit` provides `nvidia-ctk` which generates CDI (Container Device Interface) specs. `charly` triggers CDI regeneration plugin-side (`pluginEnsureCDI` in `candy/plugin-preempt/holder_dispatch.go`, via `spec.GpuSwitchActionEnsureCDI` — the former in-core `EnsureCDI()` shim is DELETED, K-wave 2 cone R3) before launching containers with GPU — if CDI specs don't exist at `/etc/cdi/nvidia.yaml`, it runs `nvidia-ctk cdi generate` to create them. This enables GPU access in nested containers where host CDI specs are not inherited.
+            
+            ### Build-time noise on GPU-less hosts (Arch)
+            
+            Arch's `nvidia-container-toolkit` ships a pacman post-install hook that
+            invokes `nvidia-ctk cdi generate`. On a host with no NVIDIA driver
+            loaded (e.g., an AMD-only build host), the hook fails NVML init:
+            
+            ```
+            ERROR: failed to generate CDI spec: failed to initialize NVML: Driver Not Loaded
+            error: command failed to execute correctly
+            ```
+            
+            This is **benign for the build** — pacman still exits 0 (hooks don't
+            affect the parent transaction's status), the candy finishes installing,
+            and the resulting image works at runtime on a GPU-bearing host (where
+            the CDI spec is generated via `pluginEnsureCDI` (`candy/plugin-preempt`) at container-launch time,
+            not build time). You can ignore the error message. RPM installs don't
+            trigger the hook, so Fedora-based boxes don't see this noise.
+            
+            If you ever build inside CI where even-benign hook errors matter,
+            either build arch-nvidia images on a GPU-bearing runner, or patch the
+            candy to carry a build-time `NVIDIA_VISIBLE_DEVICES=void` env var so
+            nvidia-ctk skips CDI gen.
+            
+            ## DRINODE Auto-Injection
+            
+            NVIDIA VAAPI acceleration requires the container to know which DRM render node to bind the EGL context against. On multi-GPU hosts there may be `/dev/dri/renderD128`, `/dev/dri/renderD129`, … and the correct one depends on which physical card backs the NVIDIA driver.
+            
+            `charly` does **not** bake a hardcoded `DRINODE=/dev/dri/renderD128` into this candy. Instead, it auto-detects the correct render node at container-launch time and injects it as an environment variable. The detection + injection is consolidated in a single function, `appendAutoDetectedEnv()` in `candy/plugin-deploy-pod/config_setup_helpers.go` (relocated wholesale from charly-core's `charly/devices.go` in the 2026-07-22 dead-code-radical-removal batch), which is called by `charly config`, `charly start`, and `charly shell` via that candy's own `config_setup.go` / `resolve.go` / `resolve_f12.go` resolvers — so the three commands always produce the same env set.
+            
+            Selkies is the primary consumer: pixelflux's Wayland compositor uses `DRINODE` to open the render node and set up the VAAPI H.264 encoder. Without the injection, selkies would fall back to software encode (`libx264`) and lose ~40% of its streaming bandwidth budget.
+            
+            GPU device injection is consolidated into the single `appendAutoDetectedEnv()` function rather than scattered across the `charly` source tree. If you see `DRINODE` referenced in candy scripts, you can assume it was auto-detected and injected by `charly`, not set by the user.
+            
+            See `/charly-core:charly-doctor` (Hardware Detection) for the detection probe and `/charly-distros:rocm` for the AMD-side counterpart using the same mechanism.
+            
+            ### Cross-GPU portability (nvidia-base boxes on AMD hosts)
+            
+            Boxes that declare `base: nvidia` (e.g., `/charly-selkies:selkies-labwc-nvidia`) still run cleanly on hosts with a different GPU vendor — the NVIDIA runtime libraries ride along as benign passengers. `charly config` auto-detects whatever the host actually exposes (e.g., `/dev/dri/renderD128` + `/dev/kfd` for an AMD RDNA3), injects those device nodes + `DRINODE`, and Mesa handles rendering. For example, `selkies-labwc-nvidia` (base: nvidia) runs on an AMD `gfx 11.0.0` host — all supervisord programs RUNNING, selkies streaming over Mesa, no CUDA calls attempted. The CUDA toolkit in the box simply goes unused.
+            
+            ## Install tasks
+            
+            Creates Vulkan ICD compatibility symlinks for nvidia-ctk CDI device injection.
+            
+            ## Used In Boxes
+            
+            - `/charly-distros:nvidia` — Fedora NVIDIA GPU base image (nvidia + cuda candies)
+            - `/charly-distros:cachyos` — `cachyos.nvidia`, the CachyOS GPU base (cachyos + agent-forwarding + nvidia + cuda); the nvidia/cuda candies being multi-distro (rpm + pac) is what lets this Arch/CachyOS GPU base reuse them unchanged
+            - `/charly-coder:charly-arch` — Arch Linux charly toolchain (shared candies + nvidia)
+            - `/charly-distros:charly-fedora` — Fedora charly toolchain (shared candies + nvidia)
+            
+            ## Related Candies
+            
+            - `/charly-distros:cuda` — CUDA development toolkit (depends on nvidia)
+            - `/charly-distros:rocm` — AMD GPU counterpart (ROCm runtime + OpenCL), uses the same `appendAutoDetectedEnv()` DRINODE injection
+            - `/charly-selkies:selkies` — Primary consumer of the DRINODE env for VAAPI H.264 encode
+            - `/charly-languages:python-ml`, `/charly-jupyter:llama-cpp`, `/charly-jupyter:jupyter-ml` — CUDA ML stacks that depend on this candy
+            
+            ## Related Commands
+            
+            - `/charly-core:charly-doctor` — Host NVIDIA detection (GPU probe, CDI spec status, driver version)
+            - `/charly-core:shell` — DRINODE auto-injection applies to interactive shells too
+            - `/charly-automation:udev` — Device permission management for `/dev/dri/*` and `/dev/nvidia*`
+            - `/charly-core:charly-config` — Runtime GPU device injection at deployment time (same `appendAutoDetectedEnv()` path)
+            - `/charly-core:start` — Runtime GPU device injection at service start time
+            
+            ## Related
+            
+            - `/charly-image:layer` — candy authoring reference (`charly.yml` schema, task verbs, service declarations)
+            - `/charly-check:check` — declarative testing (`check:` block, `charly check box`, `charly check live`)
+
+tutorial-shell-skill:
+    skill:
+        name: tutorial-shell
+        family: distros
+        owner: charly-distros
+        description: |-
+            The teaching box quoted end to end by opencharly.ai — a minimal, real dev shell
+            composing one tool candy and one service candy, with the container init injected.
+            MUST be invoked before editing the tutorial-shell box, the check-tutorial-shell bed,
+            or any documentation page that excerpts them.
+        content: |
+            # tutorial-shell
+            
+            The **documented example**. `tutorial-shell` exists so the quickstart and the concepts
+            curriculum on [opencharly.ai](https://opencharly.ai) can quote a box that is real, builds, and is
+            re-proven on every R10 roster run — instead of illustrating with YAML that nobody executes.
+            
+            Lives in the **`opencharly/distro-fedora`** repo (git submodule at **`box/fedora`**). Its
+            `fedora` base is bare-local in the same self-contained submodule (`import: []`), and both composed
+            candies are pulled by `@github` reference.
+            
+            ```bash
+            charly -C box/fedora box build tutorial-shell
+            charly -C box/fedora check run check-tutorial-shell
+            ```
+            
+            ## Box Properties
+            
+            | Property | Value |
+            |----------|-------|
+            | Base | fedora |
+            | Candies | ripgrep, sshd |
+            | Ports | 2222 (tcp, from the sshd candy) |
+            | Init | supervisord — **auto-injected**, not composed (see below) |
+            | Bed | `check-tutorial-shell` (`disposable: true`, pod) |
+            
+            ## Why these two candies
+            
+            Each one is there to teach exactly one thing, and the composed list is kept to two so it stays
+            readable when quoted in full on a documentation page:
+            
+            | Candy | Teaches |
+            |---|---|
+            | `/charly-tools:ripgrep` | a **tool** candy — packages plus deterministic probes, no service |
+            | `/charly-coder:sshd` | a **service** candy, and the canonical init-polymorphism example: ONE `service:` list carrying both a `use_packaged:` systemd form and a custom `exec:` supervisord form |
+            
+            **The init is deliberately absent from that list.** Because `sshd` declares a service, charly
+            resolves the init the target needs and injects it — `supervisord` for a container image, nothing
+            extra for a systemd machine venue, which already has an init. Composing the init by hand is
+            neither required nor correct: it would be target-blind. That is why the box teaches with two
+            candies rather than three.
+            
+            Together they cover the whole shape of a box without any of them being a fixture: a reader can
+            build this, shell into it, and use it.
+            
+            ## What the box's own plan asserts — and what it deliberately does not
+            
+            The box carries **one** `check:` step, `tutorial-shell-service-wired-into-init`: the assembled
+            `/etc/supervisord.conf` contains a `[program:sshd]` block.
+            
+            That is the only claim composition itself produces. The injected `supervisord`'s plan proves the
+            init is installed; `sshd`'s proves the daemon is installed; **neither proves sshd became a
+            supervisord program**. Drop `sshd` from the composed list and the check fails: with no `service:`
+            declared, nothing selects an init, so no supervisord candy is injected and no
+            `/etc/supervisord.conf` is assembled to hold a `[program:sshd]` block.
+            
+            **Co-residence is NOT checked here, on purpose.** Every composed candy's plan runs against *this*
+            image, so ripgrep's probes and sshd's probes both passing already proves both landed. A box-level
+            `command -v rg && command -v sshd` would duplicate them (R3), and it would pass for the wrong
+            reason — testing the candies rather than the composition. The same applies to the bed, which
+            carries no `plan:` of its own.
+            
+            This distinction is the reason the box exists in its current shape, and it is worth preserving: a
+            teaching example that restates a candy's own probe in the composing box teaches the opposite of
+            the rule the site's own "the spec is the test" page states.
+            
+            ## Editing rule — the site quotes this file verbatim
+            
+            Documentation pages **excerpt** `box/tutorial-shell/charly.yml`, they do not paraphrase it. Two
+            consequences:
+            
+            1. **Keep it readable.** Comments in the box are written for a first-time reader, not for a
+               maintainer. Resist adding candies: every addition costs a line on several published pages.
+            2. **A change here is a documentation change.** After editing the box, re-read the pages that
+               quote it (the quickstart and the concepts curriculum) and update the surrounding prose in the
+               same cutover — a quoted block that no longer matches its source is a doc-vs-reality divergence
+               (R1), not a cosmetic drift.
+            
+            ## Related Boxes
+            
+            - `/charly-distros:fedora` — the parent base image
+            - `/charly-distros:charly-fedora` — the next box up in size: the same shape plus the charly toolchain
+            - `/charly-coder:fedora-coder` — the kitchen-sink end of the same spectrum (~32 candies)
+            
+            ## Related Commands
+            
+            - `/charly-build:build` — build the box
+            - `/charly-check:check` — the bed model and `charly check run`
+            
+            ## When to Use This Skill
+            
+            **MUST be invoked** when editing the `tutorial-shell` box, the `check-tutorial-shell` bed, or any
+            opencharly.ai page that quotes them.
+            
+            ## Related
+            
+            - `/charly-image:image` — image family umbrella (`candy:` entries carrying `base:`/`from:`)
+            - `/charly-build:docs` — the generator that publishes this card and the box's reference page
+
+ubuntu-builder-skill:
+    skill:
+        name: ubuntu-builder
+        family: distros
+        owner: charly-distros
+        description: |-
+            Minimal Ubuntu 24.04 builder image (pixi + Node.js + build-toolchain)
+            used as the multi-stage builder for Ubuntu-based boxes — currently
+            ubuntu-coder. Runs as uid 1000 `ubuntu` (adopted from the upstream
+            ubuntu:24.04 base image via the embedded distro vocabulary's base_user declaration).
+            MUST be invoked before building, deploying, configuring, or troubleshooting
+            the ubuntu-builder box.
+        content: |
+            # ubuntu-builder
+            
+            Ubuntu 24.04 (noble) counterpart of `/charly-distros:fedora-builder` and `/charly-distros:debian-builder`. Same role — pixi/npm/cargo multi-stage builder — with one important difference: the builder runs as `ubuntu` (uid 1000) because the upstream `ubuntu:24.04` base image ships a pre-existing `ubuntu:ubuntu` account at uid 1000, and the embedded `distro.ubuntu.base_user` vocabulary adopts it.
+            
+            Lives in the **`opencharly/distro-ubuntu`** repo (git submodule at **`box/ubuntu`**).
+            Build it from the submodule: `charly -C box/ubuntu box build ubuntu-builder`
+            (normally builds implicitly as a dependency of `ubuntu-coder`). Its
+            `pixi`/`nodejs`/`build-toolchain` candies are pulled by github reference from the
+            main repo.
+            
+            ## Box Properties
+            
+            | Property | Value |
+            |----------|-------|
+            | Base | `ubuntu` (which = `ubuntu:24.04` + our bootstrap) |
+            | Layers | `pixi`, `nodejs`, `build-toolchain` |
+            | Platforms | `linux/amd64` |
+            | Registry | `ghcr.io/opencharly` |
+            | User | `ubuntu` / uid 1000 (**adopt mode** — see `/charly-image:image` "user_policy") |
+            | Home | `/home/ubuntu` |
+            
+            ## Full candy stack
+            
+            1. `/charly-distros:ubuntu` — Ubuntu 24.04 + bootstrap. Inherits Debian's `apt-get update && apt-get install -y --no-install-recommends curl ca-certificates gnupg` pattern because the embedded `distro.ubuntu` vocabulary declares `inherits: debian`. Ubuntu-specific: `base_user: { name: ubuntu, uid: 1000, gid: 1000, home: /home/ubuntu }` — no `useradd` step emitted.
+            2. `/charly-languages:pixi` — pixi package manager + env paths (`/home/ubuntu/.pixi`).
+            3. `/charly-coder:nodejs` — Node.js + npm (generic `nodejs`).
+            4. `/charly-coder:build-toolchain` — same Debian `-dev` packages as `/charly-distros:debian-builder`.
+            
+            ## Adopt-mode semantics
+            
+            When the generator emits the Containerfile for this image, the bootstrap section contains:
+            
+            ```
+            # User ubuntu (uid=1000) adopted from base image (declared in the embedded distro.base_user vocabulary) — no useradd needed
+            WORKDIR /home/ubuntu
+            USER 1000
+            ```
+            
+            No `useradd`, no `groupadd`, no `usermod -l` rename. The upstream `ubuntu:ubuntu` account is honored verbatim — HOME, npm prefix, pixi env, cargo home, sudoers all derive from `resolved.User = "ubuntu"`. See `/charly-image:image` "user_policy" and `/charly-internals:generate-source` "writeBootstrap".
+            
+            ## Role in the build system
+            
+            Declares `builds: [pixi, npm, cargo]` and is referenced from `ubuntu:` as:
+            
+            ```yaml
+            ubuntu:
+              builder:
+                pixi: ubuntu-builder
+                npm: ubuntu-builder
+                cargo: ubuntu-builder
+            ```
+            
+            During `charly box build ubuntu-coder`, cargo/npm/pixi-owning candies get their `FROM ubuntu-builder AS <layer>-<type>-build` stages from this image, then `COPY --from=<stage> --chown=1000:1000 /home/ubuntu /home/ubuntu` into the final ubuntu-coder. (The `--chown=1000:1000` numeric form works uniformly regardless of user name — see `/charly-coder:build-toolchain` for the builder-artifact COPY pattern.)
+            
+            ## Cross-distro sibling builders
+            
+            - `/charly-distros:fedora-builder` — RPM-family, `user:user` uid 1000 (create).
+            - `/charly-distros:debian-builder` — deb-family, Debian 13, `user:user` (create — Debian 13 ships no pre-existing uid-1000 user).
+            - `/charly-distros:arch-builder` — pacman-family, `user:user` + `yay` for AUR.
+            
+            The three builders have near-identical candy stacks (pixi + nodejs + build-toolchain). The only meaningful divergence is this box's adopt-mode `ubuntu:ubuntu` identity.
+            
+            ## Quick start
+            
+            ```bash
+            charly -C box/ubuntu box build ubuntu-builder
+            charly shell ubuntu-builder               # drops you into /home/ubuntu as uid 1000
+            id                                    # uid=1000(ubuntu) gid=1000(ubuntu)
+            ```
+            
+            Typically not invoked directly — it's a build-time dependency of `/charly-coder:ubuntu-coder`.
+            
+            ## Verification
+            
+            - `charly -C box/ubuntu box list | grep ubuntu-builder`
+            - `charly shell ubuntu-builder -- id` → `uid=1000(ubuntu) gid=1000(ubuntu)`
+            - `charly shell ubuntu-builder -- pixi --version && node --version && gcc --version`
+            
+            ## Related boxes
+            
+            - `/charly-distros:ubuntu` — parent base; declares `base_user:` in the embedded distro vocabulary.
+            - `/charly-coder:ubuntu-coder` — the consumer that this builder serves.
+            - `/charly-distros:debian-builder` — deb-family sibling without adopt mode.
+            - `/charly-distros:fedora-builder` — canonical RPM-family sibling.
+            
+            ## Related candies
+            
+            - `/charly-languages:pixi`, `/charly-coder:nodejs`, `/charly-coder:build-toolchain`
+            
+            ## Related commands
+            
+            - `/charly-build:build` — `base_user:` declaration format in the embedded `distro.*` vocabulary
+            - `/charly-image:image` — `user_policy:` field (auto / adopt / create) and the decision table
+            - `/charly-build:generate` — adopt-vs-create writeBootstrap emission modes
+            
+            ## When to use this skill
+            
+            **MUST be invoked** when:
+            
+            - Building or troubleshooting `ubuntu-builder` itself.
+            - Debugging multi-stage COPY-from errors or permission issues in a `ubuntu-coder` build (this is the source stage; uid 1000 = `ubuntu` by adoption).
+            - Understanding why `${HOME}` = `/home/ubuntu` (not `/home/user`) inside builder stages.
+
+ubuntu-debootstrap-skill:
+    skill:
+        name: ubuntu-debootstrap
+        family: distros
+        owner: charly-distros
+        description: |-
+            Bootstrap-from-scratch Ubuntu 24.04 rootfs via debootstrap inside a privileged
+            builder (from: builder:debootstrap, bootstrap_builder_image:
+            ubuntu-debootstrap-builder). Retained for offline/air-gapped builds. Lives in
+            the opencharly/distro-ubuntu submodule (box/ubuntu).
+            MUST be invoked before building or troubleshooting ubuntu-debootstrap.
+        content: |
+            # ubuntu-debootstrap
+            
+            Bootstrap-from-scratch Ubuntu 24.04 (noble) root filesystem, built via
+            `debootstrap` inside the privileged `/charly-distros:ubuntu-debootstrap-builder`
+            container (`from: builder:debootstrap`,
+            `bootstrap_builder_image: ubuntu-debootstrap-builder`).
+            
+            > **Lives in `opencharly/distro-ubuntu`** (git submodule at `box/ubuntu`). Build:
+            > `charly -C box/ubuntu box build ubuntu-debootstrap`.
+            
+            ## When to use it (and when not)
+            
+            The canonical Ubuntu base (`/charly-distros:ubuntu`) pulls the upstream-published
+            `ubuntu:24.04` OCI image from Docker Hub — that is the recommended, faster path.
+            This debootstrap variant exists for **offline / air-gapped** builds and as a
+            worked example of the `from: builder:debootstrap` pattern.
+            
+            ## Box Properties
+            
+            | Property | Value |
+            |----------|-------|
+            | From | builder:debootstrap |
+            | bootstrap_builder_image | ubuntu-debootstrap-builder |
+            | Distro | ubuntu:24.04, ubuntu, debian |
+            | Build | deb |
+            | Home repo | opencharly/distro-ubuntu (`box/ubuntu`) |
+            
+            The `ubuntu` distro config (`inherits: debian`; debootstrap suite `noble`,
+            mirror `http://archive.ubuntu.com/ubuntu`, components `main,universe`) lives in
+            the embedded build vocabulary (`charly/charly.yml`, baked into the `charly`
+            binary). The embedded vocabulary carries BOTH the `ubuntu` and `debian` distro
+            configs, so the `inherits: debian` resolution needs no reference to
+            `opencharly/distro-debian`.
+            
+            ## Cross-References
+            
+            - `/charly-distros:ubuntu` — the recommended Docker-Hub base
+            - `/charly-distros:ubuntu-debootstrap-builder` — the privileged builder it uses
+            - `/charly-vm:ubuntu-debootstrap-vm` — the VM built via the same debootstrap path
+            
+            ## When to Use This Skill
+            
+            **MUST be invoked** before building or debugging the Ubuntu debootstrap rootfs.
+            Invoke BEFORE reading source code or launching Explore agents.
+
+ubuntu-debootstrap-builder-skill:
+    skill:
+        name: ubuntu-debootstrap-builder
+        family: distros
+        owner: charly-distros
+        description: |-
+            Privileged debootstrap builder image (base: debian:13 — debootstrap is a
+            Debian tool that bootstraps Ubuntu suites too) — ships the debootstrap
+            toolchain for ubuntu-debootstrap and the ubuntu-debootstrap VM. Lives in the
+            opencharly/distro-ubuntu submodule (box/ubuntu).
+            MUST be invoked before building or troubleshooting ubuntu-debootstrap-builder.
+        content: |
+            # ubuntu-debootstrap-builder
+            
+            Privileged builder image that ships the **debootstrap** toolchain (the
+            `debootstrap-builder` candy). It is the `from: builder:debootstrap` /
+            `bootstrap_builder_image:` target for `/charly-distros:ubuntu-debootstrap` and the
+            `/charly-vm:ubuntu-debootstrap-vm` bootstrap VM.
+            
+            > **Lives in `opencharly/distro-ubuntu`** (git submodule at `box/ubuntu`). Build:
+            > `charly -C box/ubuntu box build ubuntu-debootstrap-builder`.
+            
+            ## Box Properties
+            
+            | Property | Value |
+            |----------|-------|
+            | Base | `debian:13` (debootstrap is a Debian tool — it bootstraps Ubuntu suites from a Debian builder) |
+            | Distro | debian:13, debian |
+            | Build | deb |
+            | Layer | `debootstrap-builder` (pulled by github reference from the main repo) |
+            | Home repo | opencharly/distro-ubuntu (`box/ubuntu`) |
+            
+            The `debootstrap-builder` candy **stays in the main repo** and is shared with
+            `/charly-distros:debian-debootstrap-builder` — both pull it by github reference. The
+            `ubuntu` distro config (`inherits: debian`; debootstrap suite `noble`, mirror
+            `http://archive.ubuntu.com/ubuntu`, base packages) lives in the main repo's
+            embedded `distro:` vocabulary (`charly/charly.yml`) and resolves automatically —
+            the submodule imports nothing (`import: []`).
+            
+            ## Cross-References
+            
+            - `/charly-distros:ubuntu` — the Docker-Hub base (`base: ubuntu:24.04`)
+            - `/charly-distros:ubuntu-debootstrap` — the bootstrap-from-scratch rootfs it builds
+            - `/charly-vm:ubuntu-debootstrap-vm` — the VM built via the same debootstrap path
+            - `/charly-distros:debian-debootstrap-builder` — the Debian sibling (same `base: debian:13`)
+            
+            ## When to Use This Skill
+            
+            **MUST be invoked** before building or debugging the Ubuntu debootstrap builder.
+            Invoke BEFORE reading source code or launching Explore agents.
+
+valkey-test-skill:
+    skill:
+        name: valkey-test
+        family: distros
+        owner: charly-distros
+        description: |-
+            Test box with Valkey (Redis-compatible) key-value store.
+            Currently disabled. Used for development testing.
+            MUST be invoked before building or troubleshooting the valkey-test box.
+        content: |
+            # valkey-test
+            
+            Development test box with Valkey in-memory data store.
+            
+            ## Box Properties
+            
+            | Property | Value |
+            |----------|-------|
+            | Base | fedora |
+            | Layers | agent-forwarding, supervisord, valkey |
+            | Platforms | linux/amd64, linux/arm64 |
+            | Ports | 6379 (Valkey) |
+            | Status | **disabled** (set `enabled: true` in charly.yml) |
+            
+            ## Purpose
+            
+            Used for testing the Valkey candy (Redis-compatible fork). Runs as a supervisord service on port 6379.
+            
+            ## Key Candies
+            
+            - `/charly-infrastructure:valkey` — Valkey data store
+            - `/charly-infrastructure:supervisord` — Process manager
+            
+            ## Related Boxes
+            - `/charly-distros:fedora` — parent base image
+            - `/charly-distros:fedora-test` — sibling test box
+            
+            ## Related Commands
+            - `/charly-build:build` — build the valkey-test box
+            - `/charly-core:service` — manage the supervised valkey service
+            
+            ## When to Use This Skill
+            
+            **MUST be invoked** when the task involves the valkey-test box or Valkey service testing.
+            
+            ## Related
+            
+            - `/charly-image:image` — image family umbrella (`candy:` image entries — those carrying `base:`/`from:` — in `charly.yml`, build/validate/inspect/list)
+
+arch-skill:
+    skill:
+        name: arch
+        family: distros
+        owner: arch
+        description: |-
+            Base Arch Linux image. Root of the box hierarchy for all pac-based boxes.
+            MUST be invoked before building, deploying, configuring, or troubleshooting the arch box.
+        content: |
+            # arch
+            
+            Root base image built from `quay.io/archlinux/archlinux`, pinned to a precise `base-*` date-serial tag in the arch base box (the `opencharly/distro-arch` submodule at `box/arch`; the quay mirror has the same content as `docker.io/library/archlinux` without Docker Hub's pull-rate limit). Foundation for all Arch Linux-based OpenCharly boxes.
+            
+            ## Box Properties
+            
+            | Property | Value |
+            |----------|-------|
+            | Base | quay.io/archlinux/archlinux (pinned `base-*` tag in the `opencharly/distro-arch` submodule) |
+            | Layers | (none) |
+            | Platforms | linux/amd64 |
+            | Distro | arch |
+            | Build | pac |
+            | Builders | pixi, npm, cargo, aur → arch-builder |
+            | Registry | ghcr.io/opencharly |
+            
+            ## Quick Start
+            
+            ```bash
+            charly box build arch
+            charly shell arch
+            ```
+            
+            ## Derived Boxes
+            
+            `arch` (this base), `/charly-distros:arch-builder`, and the consumer Arch
+            boxes all live in the **`opencharly/distro-arch`** repo (git submodule at
+            **`box/arch`**), discovered as `box/<name>/charly.yml` boxes. That submodule
+            is SELF-CONTAINED (`import: []`): its base/builder stack is bare-local and it
+            composes the main repo's shared candies by `@github` git reference. Its boxes
+            write `base: arch` and route builders to `arch-builder` (bare-local refs, no
+            namespace qualifier):
+            
+            - `/charly-distros:arch-builder` — adds pixi, nodejs, build-toolchain, yay (in `box/arch`)
+            - `/charly-coder:arch-coder` — kitchen-sink dev box (in `box/arch`)
+            - `/charly-coder:charly-arch` — full charly toolchain on Arch (in `box/arch`)
+            - `/charly-distros:arch-test` — pacman + AUR packaging test (in `box/arch`)
+            
+            ## Multi-Distro Support
+            
+            This is the Arch counterpart to `/charly-distros:fedora`. The tag system (`distro: [arch]`, `build: [pac]`) selects `pac:` package sections and `pac:` tasks in tasks:. Candies shared between Arch and Fedora boxes use distro-specific sections:
+            
+            ```yaml
+            # charly.yml — multi-distro package declarations
+            rpm:
+              packages: [neovim]     # Fedora
+            pac:
+              packages: [neovim]     # Arch
+            ```
+            
+            AUR packages are authored under `distro.arch.aur.package` and built via
+            `arch-builder` (`yay`); the consuming box must add `aur` to its `build:` list
+            (`build: [pac, aur]`) — the base declares only `build: [pac]`. The
+            `/charly-distros:cachyos` base shares this exact AUR path (it routes `aur` →
+            `arch-builder` too), so AUR support is identical on `arch` and `cachyos`. See
+            `/charly-image:layer` "AUR (`aur:`)" for the authoring reference.
+            
+            ## Verification
+            
+            After `charly box build`:
+            - `charly box list` — box appears in list
+            - `charly shell arch` — interactive shell works
+            - `charly shell arch -c "pacman --version"` — pacman available
+            
+            ## Related Boxes
+            - `/charly-distros:arch-builder` — adds pixi, nodejs, build-toolchain, yay
+            - `/charly-coder:charly-arch` — full charly toolchain on Arch
+            - `/charly-distros:arch-test` — pacman + AUR test image
+            - `/charly-distros:fedora` — RPM-based counterpart
+            
+            ## Related Commands
+            - `/charly-build:build` — build the arch base image
+            - `/charly-core:shell` — interactive shell in the base image
+            
+            ## When to Use This Skill
+            
+            **MUST be invoked** when the task involves the arch base image or understanding the Arch box chain. Invoke this skill BEFORE reading source code or launching Explore agents.
+            
+            ## Related
+            
+            - `/charly-image:image` — image family umbrella (`candy:` image entries — those carrying `base:`/`from:` — in `charly.yml`, build/validate/inspect/list)
+
+cachyos-skill:
+    skill:
+        name: cachyos
+        family: distros
+        owner: cachyos
+        description: |-
+            CachyOS base image (docker.io/cachyos/cachyos-v3) — x86_64_v3-optimized Arch
+            derivative. Owned by the opencharly/distro-cachyos submodule (box/cachyos);
+            consumed by main's versa box via the `cachyos` import namespace.
+            MUST be invoked before building, deploying, or troubleshooting cachyos boxes.
+        content: |
+            # cachyos
+            
+            CachyOS base image, pulled from the upstream-published OCI image
+            `docker.io/cachyos/cachyos-v3` (optimized for modern `x86_64_v3` CPUs), pinned
+            by digest in `box/cachyos/charly.yml` — Docker Hub publishes only a `:latest`
+            tag for `cachyos-v3`, so a digest is the most precise pin available.
+            CachyOS is an Arch derivative, so it shares the Arch toolchain, `pacman`, and the
+            `arch-builder` multi-stage builder.
+            
+            The CachyOS family lives in the **`opencharly/distro-cachyos`** repo (git submodule at
+            **`box/cachyos`**), with the `cachyos` base image **owned there** and its
+            boxes discovered as `box/<name>/charly.yml`. It composes the main repo's shared
+            candies by `@github` git reference and imports the **`opencharly/distro-arch`** submodule
+            under the `arch` namespace (`import: [{arch: …}]`) so it reaches `arch.arch` (the
+            `cachyos-pacstrap-builder` base) and `arch.arch-builder` (the cachyos base's
+            builder) — one-directional, since arch imports nothing back. Build it
+            from the submodule: `charly -C box/cachyos box build cachyos` (or
+            `charly --repo opencharly/distro-cachyos box build cachyos`).
+            
+            ## Box Properties
+            
+            | Property | Value |
+            |----------|-------|
+            | Base | docker.io/cachyos/cachyos-v3 (pinned by digest in charly.yml) |
+            | Layers | (none) |
+            | Platforms | linux/amd64 |
+            | Distro | cachyos, arch |
+            | Build | pac |
+            | Builders | pixi, npm, cargo, aur → arch-builder |
+            | Registry | ghcr.io/opencharly |
+            | Home repo | opencharly/distro-cachyos (`box/cachyos`) |
+            
+            ## main → cachyos coupling
+            
+            The `cachyos` base and its derived boxes — `versa`, the `openclaw-*` family,
+            `githubrunner`, `android-emulator`, `charly-selftest`, and the `selkies-*` GPU
+            desktops — all live in the **`opencharly/distro-cachyos`** submodule, discovered as
+            `box/<name>/charly.yml` boxes. The main repo imports that submodule under the
+            `cachyos` import namespace to reference the relocated boxes from its own
+            `check`/`vm`/`local`/`k8s`/`android` entities:
+            
+            ```yaml
+            # main charly.yml
+            import:
+              - cachyos: '@github.com/opencharly/distro-cachyos:<tag>'   # namespaced child import → cachyos.<entry>
+            ```
+            
+            This is a one-directional **main → cachyos** dependency. The submodule, in turn,
+            imports the **`opencharly/distro-arch`** submodule under the `arch` namespace (for
+            `arch.arch` and the `arch.arch-builder` builder) — also one-directional, since
+            arch imports nothing back. The whole import graph is therefore a DAG
+            (main → cachyos → arch, plus main → arch directly), with no mutual cycle. When a
+            repo is reached via two paths — arch, here, via main → arch and via
+            main → cachyos → arch — the loader resolves it to a single materialization **by
+            repo identity**, so main's namespace pins win and a stale transitive pin inside a
+            published submodule release never drags a divergent snapshot into the load (see
+            `/charly-internals:go` "import-namespace loader"). The image DAG
+            `versa → cachyos → docker.io/cachyos-v3` is itself acyclic. `versa` lives in the
+            same submodule as its `base: cachyos`, so it inherits the cachyos base's
+            `distro:`/`build:` values AND its `builder:` map (pixi/npm/cargo/aur →
+            `arch.arch-builder`) directly — there is no namespace boundary between them. The
+            namespace-relative builder map crosses the boundary once, where the cachyos base
+            itself names the qualified `arch.arch-builder` ref.
+            
+            ## AUR support — full parity with `arch`
+            
+            CachyOS has the **same AUR capability as the `arch` base**, because it is
+            Arch-derived and its `builder.aur` points at the shared `arch-builder` (which
+            ships `yay`). Anything that builds on arch builds on cachyos:
+            
+            - A box based on `cachyos` that needs AUR packages declares
+              `build: [pac, aur]` (exactly as an `arch`-based box would — the base itself
+              declares only `build: [pac]`, so the consumer opts in). The AUR builder stage
+              (`<layer>-aur-build` via `arch-builder`) then compiles the packages and
+              `pacman -U`-installs the `.pkg.tar.zst` artifacts. Worked example: the
+              `selkies-desktop` box (`base: cachyos.cachyos`, `build: [pac, aur]`) builds
+              `google-chrome` (chrome candy) + `wlrctl` (wl-tools candy) from the AUR.
+            - Candies author AUR packages under `distro.arch.aur.package` (see
+              `/charly-image:layer` "AUR"); the `arch` distro tag is what cachyos boxes match
+              (their `distro:` is `[cachyos, arch]`), so the same `distro.arch` sections used
+              by every Arch box apply unchanged.
+            - The `cachyos` base declares `produce: [pixi, npm, cargo, aur]` (identical to
+              `arch`), advertising the same builder-capability profile as every other base
+              distro.
+            
+            There is **no cachyos-specific AUR path** and no cachyos-only builder — AUR on
+            cachyos and AUR on arch are the same code path through `arch-builder`.
+            
+            ## Quick Start
+            
+            ```bash
+            charly -C box/cachyos box build cachyos
+            charly shell cachyos -c "pacman --version"
+            ```
+            
+            ## Derived / sibling entries (all in opencharly/distro-cachyos)
+            
+            - `/charly-distros:cachyos-pacstrap-builder` — privileged pacstrap builder (`base: arch.arch`)
+            - `/charly-distros:cachyos-pacstrap` — bootstrap-from-scratch rootfs (builds end-to-end)
+            - `/charly-vm:cachyos-bootstrap-vm` — bootstrap VM (`cachyos-vm`) + `check-cachyos-vm` check bed
+            - `/charly-local:charly-cachyos` — the operator CachyOS workstation profile
+            - `/charly-versa:versa` — CachyOS-rooted notebook/OSM image in this submodule (`base: cachyos`)
+            
+            ### CachyOS GPU box family
+            
+            The submodule also carries a CachyOS GPU box family — the Arch/CachyOS siblings
+            of the Fedora GPU boxes (which live in `box/fedora`). They build on the
+            `cachyos.nvidia` GPU base, which is `cachyos` + `agent-forwarding` + `nvidia` +
+            `cuda` (the `nvidia` and `cuda` candies are multi-distro — Fedora rpm + Arch pac —
+            so they compose unchanged on CachyOS):
+            
+            - `cachyos.nvidia` — the GPU base (cachyos + agent-forwarding + nvidia + cuda)
+            - `cachyos.python-ml` — ML Python environment
+            - `cachyos.jupyter-ml` — CUDA ML JupyterLab
+            - `cachyos.ollama` — Ollama LLM server
+            - `cachyos.comfyui` — ComfyUI image generation
+            - `cachyos.unsloth-studio` — Unsloth Studio fine-tuning UI
+            - `cachyos.immich-ml` — Immich with the CUDA ML backend
+            - `cachyos.selkies-labwc-nvidia` — GPU NVENC Selkies streaming desktop (labwc flavor)
+            - `cachyos.selkies-kde-nvidia` — GPU NVENC Selkies streaming desktop (full KDE Plasma flavor)
+            - `cachyos.selkies-kde` — full KDE Plasma Selkies flavor on the plain cachyos base (VAAPI on an AMD/Intel render node, software x264 otherwise; the `-nvidia` sibling adds NVENC). The labwc cpu/amd flavor (`selkies-labwc`) lives in this same `box/cachyos` submodule.
+            
+            ## Why Docker Hub instead of pacstrap
+            
+            The canonical base pulls the upstream OCI image (the path the CachyOS project
+            itself recommends — see https://github.com/CachyOS/docker). It's the faster
+            default (no privileged pacstrap, no kernel build). The pacstrap-from-scratch
+            variant (`/charly-distros:cachyos-pacstrap`) is retained for offline/air-gapped
+            builds and also builds end-to-end (the pacstrap renderer derives
+            `[options] Architecture` from the cachyos-v3 microarch repos and emits per-repo
+            `SigLevel`).
+            
+            ## Verification
+            
+            After `charly -C box/cachyos box build cachyos`:
+            - `charly box list` — box appears
+            - `charly shell cachyos -c "pacman --version"` — pacman available
+            - `charly box inspect versa --format base` (from main) → `cachyos.cachyos` (the `cachyos` import namespace resolves)
+            - `charly check box cachyos` — build-scope check: 3 probes pass (os-release `ID=cachyos`,
+              `pacman --version`, `pacman-conf --repo-list` contains `cachyos-v3`). These also
+              pass when `cachyos` is built from main via the `cachyos` import namespace, and are
+              inherited by `versa` through the base chain.
+            
+            ## When to Use This Skill
+            
+            **MUST be invoked** when the task involves the cachyos base image, the
+            opencharly/distro-cachyos submodule, or the main → cachyos import-namespace coupling.
+            Invoke this skill BEFORE reading source code or launching Explore agents.
+            
+            ## Related
+            
+            - `/charly-distros:arch` — the Arch base (`cachyos-pacstrap-builder` is `base: arch.arch`, via the `arch` import namespace)
+            - `/charly-image:image` — box family umbrella (composition, build/validate/inspect)
+            - `/charly-internals:cutover-policy` — the hard-cutover policy governing submodule splits
+
+debian-skill:
+    skill:
+        name: debian
+        family: distros
+        owner: debian
+        description: |-
+            Base Debian 13 trixie image. Root of the box hierarchy for Debian builds
+            that run as uid 1000 `user` (create mode — Debian 13 ships no pre-existing
+            uid-1000 account). Owned by the opencharly/distro-debian submodule (box/debian);
+            consumed by no main-repo box.
+            MUST be invoked before building, deploying, configuring, or troubleshooting
+            any Debian-based box.
+        content: |
+            # debian
+            
+            Base Debian 13 (trixie) image. Root of the Debian box hierarchy.
+            
+            The Debian family lives in the **`opencharly/distro-debian`** repo (git submodule at
+            **`box/debian`**). The `debian` base is **owned there** (in that repo's
+            `charly.yml`) and composes the main repo's candies by git reference; the
+            `debian` distro config, the `deb` format, and the `debootstrap` builder
+            template come from charly's embedded build vocabulary. Build it from the submodule:
+            `charly -C box/debian box build debian` (or `charly --repo opencharly/distro-debian box build debian`).
+            Ubuntu — the deb-family sibling — lives in its own **`opencharly/distro-ubuntu`** repo
+            (see `/charly-distros:ubuntu`). Nothing in main consumes any Debian box, so there
+            is **no main ↔ debian coupling**.
+            
+            ## Box Properties
+            
+            | Property | Value |
+            |----------|-------|
+            | Base | `debian:13` |
+            | Pkg | `deb` |
+            | Distro tags | `["debian:13", "debian"]` |
+            | Layers | (none — base image only) |
+            | Platforms | `linux/amd64` |
+            | User | `user` / uid 1000 (**create mode**) |
+            | Home | `/home/user` |
+            | Registry | `ghcr.io/opencharly` |
+            
+            ## User model — create, not adopt
+            
+            The embedded `distro.debian` vocabulary **does not** declare a `base_user:` block, because the upstream `debian:13` base image ships no pre-existing uid-1000 account. `user_policy: auto` (the default for any downstream image) falls through to create mode — the generator emits an idempotent `useradd -m -u 1000 -g 1000 user` during bootstrap.
+            
+            This is the intentional asymmetry vs `/charly-distros:ubuntu`, which DOES ship `ubuntu:ubuntu` at uid 1000 and declares `base_user:` to adopt that identity. See `/charly-image:image` "user_policy" and `/charly-build:build` "base_user" for the full decision table.
+            
+            If you build a downstream image on `debian:13-cloud` (or a similar variant that ships a pre-existing `debian` account), override this by adding a `base_user:` block in your project's `build.yml` override.
+            
+            ## Bootstrap
+            
+            ```dockerfile
+            FROM debian:13
+            RUN --mount=type=cache,dst=/var/cache/apt,sharing=locked
+                --mount=type=cache,dst=/var/lib/apt,sharing=locked
+                apt-get update && apt-get install -y --no-install-recommends curl ca-certificates gnupg && \
+                ... install go-task binary ...
+            RUN if ! getent passwd 1000 >/dev/null 2>&1; then
+                  (getent group 1000 >/dev/null 2>&1 || groupadd -g 1000 user) &&
+                  useradd -m -u 1000 -g 1000 -s /bin/bash user;
+                fi
+            WORKDIR /home/user
+            USER 1000
+            ```
+            
+            `gnupg` is in the bootstrap package set because downstream candies with `deb.repos[].key` (GitHub CLI, Docker, Kubernetes, Tailscale, Microsoft) call `gpg --dearmor` to convert ASCII-armored keys into `/etc/apt/keyrings/<name>.gpg`. Without `gnupg` the apt-repo stages fail with `gpg: not found`.
+            
+            ## Downstream / sibling entries (all in opencharly/distro-debian)
+            
+            - `/charly-distros:debian-builder` — pixi/npm/cargo multi-stage builder on this base.
+            - `/charly-coder:debian-coder` — kitchen-sink dev box on this base.
+            - `/charly-distros:debian-debootstrap-builder` — privileged debootstrap builder (`base: debian:13`).
+            - `/charly-distros:debian-debootstrap` — bootstrap-from-scratch rootfs (`from: builder:debootstrap`).
+            - `/charly-vm:debian-debootstrap-vm` — the `debian-debootstrap` bootstrap VM + `check-debian-debootstrap-vm` bed.
+            
+            ## Verification
+            
+            ```bash
+            charly -C box/debian box build debian
+            charly shell debian                       # drops into /home/user as uid 1000
+            id                                    # uid=1000(user) gid=1000(user)
+            charly -C box/debian box validate     # embedded build vocab + remote layer refs resolve
+            ```
+            
+            ## Related boxes
+            
+            - `/charly-distros:ubuntu` — deb-family sibling base in the separate `opencharly/distro-ubuntu` submodule; ships `base_user:` + adopts ubuntu:ubuntu.
+            - `/charly-distros:debian-builder` — multi-stage builder on top of this box.
+            - `/charly-coder:debian-coder` — kitchen-sink dev box on this base.
+            - `/charly-distros:fedora` — RPM-family counterpart.
+            - `/charly-distros:arch` — pacman-family counterpart (separate `opencharly/distro-arch` submodule).
+            
+            ## Related commands
+            
+            - `/charly-build:build` — `base_user:` declaration format + bootstrap packages.
+            - `/charly-image:image` — `user_policy:` reconciliation.
+            - `/charly-build:generate` — writeBootstrap emission.
+            
+            ## When to use this skill
+            
+            **MUST be invoked** when:
+            
+            - Building or troubleshooting the `debian` base image.
+            - Adding any deb-family box that inherits from `debian` (not `ubuntu`).
+            - Debugging uid-1000 user issues on a Debian-based box — the answer is almost always "create mode fires, user named `user`."
+
+fedora-skill:
+    skill:
+        name: fedora
+        family: distros
+        owner: fedora
+        description: |-
+            Base Fedora 43 image. Root of the box hierarchy for all RPM-based boxes.
+            MUST be invoked before building, deploying, configuring, or troubleshooting the fedora box.
+        content: |
+            # fedora
+            
+            Root base image built from `quay.io/fedora/fedora:43`. Foundation for all RPM-based OpenCharly boxes.
+            
+            **Owned by the `opencharly/distro-fedora` submodule.** The Fedora base stack —
+            `fedora`, `/charly-distros:fedora-builder`, `/charly-distros:fedora-nonfree` — lives
+            bare-local in the **`opencharly/distro-fedora`** submodule (mounted at `box/fedora`),
+            which is SELF-CONTAINED (`import: []`): the base stack is bare-local and the
+            submodule composes the main repo's shared candies by `@github` git reference. Its
+            boxes write `base: fedora` and route builders to `fedora-builder` (bare-local
+            refs, no namespace qualifier). The Fedora consumer showcase boxes
+            (`/charly-coder:fedora-coder`, `/charly-distros:charly-fedora`, `/charly-distros:fedora-test`)
+            and the Fedora-rooted pod families all live in the same submodule, discovered as
+            `box/<name>/charly.yml` boxes. The main repo imports this submodule under the
+            `fedora` namespace (one-directional — fedora imports nothing back) to reference
+            those relocated boxes. Build with `charly box build fedora` from the submodule
+            (or `charly -C box/fedora box build fedora`).
+            
+            ## Box Properties
+            
+            | Property | Value |
+            |----------|-------|
+            | Base | quay.io/fedora/fedora:43 |
+            | Layers | (none) |
+            | Platforms | linux/amd64 |
+            | Pkg | rpm |
+            | Registry | ghcr.io/opencharly |
+            
+            ## Quick Start
+            
+            ```bash
+            charly box build fedora
+            charly shell fedora
+            ```
+            
+            ## dnf download tuning (`distro.fedora.dnf`)
+            
+            The embedded `distro.fedora.dnf` vocabulary writes dnf download-speed knobs to
+            `/etc/dnf/dnf.conf` during the bootstrap, so they apply to the bootstrap install
+            AND every per-layer dnf install in this box and its descendants:
+            
+            ```yaml
+            # charly/charly.yml (embedded build vocabulary)
+            distro:
+              fedora:
+                dnf:
+                  max_parallel_downloads: 10   # concurrent package downloads
+                  fastestmirror: true          # sort mirrors by measured speed
+            ```
+            
+            These are **speed-only** — they never change which packages are selected
+            (`install_weak_deps` stays on the bootstrap `install_cmd`'s
+            `--setopt=install_weak_deps=False`). The block is a `DnfConfig` on `DistroDef`
+            and inherits across distro inheritance like the other sub-blocks. Source:
+            `sdk/deploykit/bootstrap.go:RenderDnfConfWrite` (the former `charly/generate.go` is DELETED, K-wave 2).
+            
+            ## Derived Boxes
+            
+            - `/charly-distros:fedora-nonfree` — adds RPM Fusion repos
+            - `/charly-distros:fedora-builder` — adds pixi, nodejs, build-toolchain
+            - `/charly-distros:nvidia` — adds CUDA toolkit
+            - `/charly-openclaw:openclaw` — adds OpenClaw gateway
+            - `/charly-distros:githubrunner` — adds GitHub Actions runner
+            
+            ## Verification
+            
+            After `charly box build`:
+            - `charly box list` — box appears in list
+            - `charly shell fedora` — interactive shell works
+            
+            ## Related Boxes
+            - `/charly-distros:fedora-nonfree` — adds RPM Fusion repos
+            - `/charly-distros:fedora-builder` — adds pixi, nodejs, build-toolchain
+            - `/charly-distros:charly-fedora` — full charly toolchain on Fedora
+            - `/charly-distros:arch` — pacman-based counterpart base
+            
+            ## Related Commands
+            - `/charly-build:build` — build the fedora base image
+            - `/charly-core:shell` — interactive shell in the base image
+            
+            ## When to Use This Skill
+            
+            **MUST be invoked** when the task involves the fedora base image or understanding the box chain. Invoke this skill BEFORE reading source code or launching Explore agents.
+            
+            ## Related
+            
+            - `/charly-image:image` — image family umbrella (`candy:` image entries — those carrying `base:`/`from:` — in `charly.yml`, build/validate/inspect/list)
+
+ubuntu-skill:
+    skill:
+        name: ubuntu
+        family: distros
+        owner: ubuntu
+        description: |-
+            Base Ubuntu 24.04 noble image. Root of the box hierarchy for Ubuntu-
+            based builds. Runs as uid 1000 `ubuntu` via ADOPT mode — the upstream
+            ubuntu:24.04 base image ships a pre-existing ubuntu:ubuntu account,
+            and the embedded distro.ubuntu vocabulary declares base_user to adopt it verbatim.
+            MUST be invoked before building, deploying, configuring, or troubleshooting
+            any Ubuntu-based box.
+        content: |
+            # ubuntu
+            
+            Base Ubuntu 24.04 (noble) image. Distinguished from `/charly-distros:debian` by **adopt mode**: the upstream `ubuntu:24.04` base image ships a pre-existing `ubuntu:ubuntu` account at uid 1000, and the embedded `distro.ubuntu` vocabulary declares `base_user:` so the `charly` generator honors that account rather than creating a new one.
+            
+            The Ubuntu family lives in its own **`opencharly/distro-ubuntu`** repo (git submodule
+            at **`box/ubuntu`**) — a SEPARATE repo from `opencharly/distro-debian` (Debian and
+            Ubuntu each have their own repo). The `ubuntu` base is **owned there** and
+            composes the main repo's candies by git reference plus the embedded build vocabulary. Because
+            `distro.ubuntu` is `inherits: debian`, the embedded build vocabulary (which
+            carries BOTH distro configs) resolves the inheritance — `opencharly/distro-ubuntu`
+            needs no reference to `opencharly/distro-debian`. Build from the submodule:
+            `charly -C box/ubuntu box build ubuntu` (or `charly --repo opencharly/distro-ubuntu box build ubuntu`).
+            Nothing in main consumes any Ubuntu box, so there is **no main ↔ ubuntu coupling**.
+            
+            ## Box Properties
+            
+            | Property | Value |
+            |----------|-------|
+            | Base | `ubuntu:24.04` |
+            | Pkg | `deb` |
+            | Distro tags | `["ubuntu:24.04", "ubuntu"]` (symmetric with a `target: vm` deploy's `distroTagChain`; NO `debian` fallback — every deb-family layer carries an explicit `ubuntu` section, and the cascade would otherwise UNION debian-only packages onto ubuntu) |
+            | Layers | (none — base image only) |
+            | Platforms | `linux/amd64` |
+            | User | `ubuntu` / uid 1000 (**adopt mode**) |
+            | Home | `/home/ubuntu` |
+            | Registry | `ghcr.io/opencharly` |
+            
+            ## User model — adopt from base image
+            
+            The embedded `distro.ubuntu` vocabulary inherits from `distro.debian` (same apt bootstrap template) and adds a `base_user:` block:
+            
+            ```yaml
+            distro:
+              ubuntu:
+                inherits: debian
+                base_user:
+                  name: ubuntu
+                  uid: 1000
+                  gid: 1000
+                  home: /home/ubuntu
+            ```
+            
+            Any downstream image with `user_policy: auto` (the default) that **did not** explicitly set its own `user:` field will adopt this — `resolved.User = "ubuntu"`, `resolved.Home = "/home/ubuntu"`, `resolved.UserAdopted = true`. The bootstrap emits **no** `useradd`; it emits a one-line comment documenting the adoption:
+            
+            ```
+            # User ubuntu (uid=1000) adopted from base image (declared in charly/charly.yml distro.base_user) — no useradd needed
+            WORKDIR /home/ubuntu
+            USER 1000
+            ```
+            
+            This architecture is **declarative** (what the base image ships) + **policy-driven** (how to reconcile with the image's configured user). Three policy values:
+            
+            | Policy | Behavior on this base |
+            |--------|----------------------|
+            | `auto` (default) | Adopt `ubuntu:ubuntu` — image inherits the upstream account. |
+            | `adopt` | Same as auto here; hard-errors on bases without `base_user:`. |
+            | `create` | Override — force-create a different uid-1000 account (fails if `useradd` collides). |
+            
+            See `/charly-image:image` "user_policy" and `/charly-build:build` "base_user" for the full table covering all four distros.
+            
+            ## Why adopt over rename?
+            
+            Adopt mode honors the existing `ubuntu` account rather than renaming it to `user` via `usermod -l`, because:
+            
+            1. Ubuntu's cloud-init tooling, docs, and `/etc/passwd` metadata assume the account is named `ubuntu`.
+            2. Renaming is an invisible base-image mutation — breaks in hard-to-debug ways.
+            3. The rename approach doesn't scale to Debian cloud images (or future distros) that ship their own pre-existing uid-1000 accounts with different names.
+            
+            Adopt mode respects the base image's contract and scales declaratively. See `/charly-coder:sshd` for the `getent passwd 1000` pattern that makes candy content (sudoers in particular) work uniformly across both create and adopt modes.
+            
+            ## Bootstrap
+            
+            ```dockerfile
+            FROM ubuntu:24.04
+            RUN --mount=type=cache,dst=/var/cache/apt,sharing=locked
+                --mount=type=cache,dst=/var/lib/apt,sharing=locked
+                apt-get update && apt-get install -y --no-install-recommends curl ca-certificates gnupg && \
+                ... install go-task binary ...
+            # User ubuntu (uid=1000) adopted from base image (declared in charly/charly.yml distro.base_user) — no useradd needed
+            WORKDIR /home/ubuntu
+            USER 1000
+            ```
+            
+            ## Dockerhub rate-limit caveat
+            
+            The upstream `ubuntu:24.04` pull from Dockerhub is unauthenticated-rate-limited (100 pulls / 6h / IP). If `charly box build ubuntu` fails with `toomanyrequests`, pull from AWS ECR Public and retag:
+            
+            ```bash
+            podman pull public.ecr.aws/docker/library/ubuntu:24.04
+            podman tag public.ecr.aws/docker/library/ubuntu:24.04 docker.io/library/ubuntu:24.04
+            charly box build ubuntu
+            ```
+            
+            ECR Public mirrors the Dockerhub library namespace without rate-limiting.
+            
+            ## Downstream / sibling entries (all in opencharly/distro-ubuntu)
+            
+            - `/charly-distros:ubuntu-builder` — pixi/npm/cargo multi-stage builder.
+            - `/charly-coder:ubuntu-coder` — kitchen-sink dev box.
+            - `/charly-distros:ubuntu-debootstrap-builder` — privileged debootstrap builder (`base: debian:13`).
+            - `/charly-distros:ubuntu-debootstrap` — bootstrap-from-scratch rootfs.
+            - `/charly-vm:ubuntu-debootstrap-vm` — the `ubuntu-debootstrap` bootstrap VM + `check-ubuntu-debootstrap-vm` bed.
+            
+            ## Verification
+            
+            ```bash
+            charly -C box/ubuntu box build ubuntu
+            charly shell ubuntu                       # drops into /home/ubuntu as uid 1000
+            id                                    # uid=1000(ubuntu) gid=1000(ubuntu)
+            charly -C box/ubuntu box validate     # the embedded build vocabulary resolves distro.ubuntu (inherits debian)
+            ```
+            
+            ## Related boxes
+            
+            - `/charly-distros:debian` — sibling deb-family base without adopt mode (Debian 13 ships no pre-existing uid-1000 user).
+            - `/charly-distros:ubuntu-builder` — multi-stage builder.
+            - `/charly-coder:ubuntu-coder` — kitchen-sink dev box.
+            - `/charly-distros:fedora` — RPM-family counterpart.
+            - `/charly-distros:arch` — pacman-family counterpart.
+            
+            ## Related commands
+            
+            - `/charly-build:build` — `base_user:` declaration format, which lives in the embedded `distro.ubuntu` vocabulary.
+            - `/charly-image:image` — `user_policy:` field + reconciliation.
+            - `/charly-build:generate` — adopt-vs-create writeBootstrap emission.
+            
+            ## Related candies (cross-distro patterns this base enables)
+            
+            - `/charly-coder:sshd` — `getent passwd 1000`-based sudoers works for both `user` (create) and `ubuntu` (adopt).
+            - `/charly-coder:language-runtimes` — Microsoft `dotnet-install.sh` (Ubuntu noble doesn't ship dotnet-sdk-9.0 in main; Microsoft's noble apt repo only has 10.0; the dotnet-install.sh `--channel 9.0` is the cross-distro solution).
+            
+            ## When to use this skill
+            
+            **MUST be invoked** when:
+            
+            - Building or troubleshooting the `ubuntu` base image.
+            - Adding any Ubuntu-based box (it will inherit the adopt-mode `ubuntu:ubuntu` identity by default).
+            - Debugging `${USER}` / `${HOME}` differences between Ubuntu and other deb-based boxes (ubuntu-coder → `ubuntu:/home/ubuntu`; debian-coder → `user:/home/user`).
+            - Understanding why ubuntu-coder's `/etc/sudoers.d/charly-user` says `ubuntu ALL=(ALL) NOPASSWD: ALL` rather than `user`.

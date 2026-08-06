@@ -1,0 +1,627 @@
+charly-jupyter:
+    candy:
+        version: 2026.218.1200
+        description: |-
+            Metadata concept candy owning the charly-jupyter skills whose names have no namesake candy (jupyter dev/data-science images). Owns its family's `skill:` kind entities (sibling nodes in this file) — the
+            plugins→candies migration; candy/plugin-marketplace regenerates the plugins/ corpus
+            from them.
+        plan:
+            - run: this documentation-only candy ships no install content (it carries the family's skill/hook/marketplace entities); validate-satisfying no-op
+              command: "true"
+              context:
+                - build
+            - check: the jupyter concept candy's skill entities are present and generated into plugins/jupyter/skills
+              id: charly-jupyter-present
+              context:
+                - build
+              command: "true"
+
+jupyter-layer-skill:
+    skill:
+        name: jupyter-layer
+        family: jupyter
+        owner: charly-jupyter
+        description: |-
+            Lightweight JupyterLab with real-time collaboration (jupyter-collaboration) on port 8888.
+            No GPU required. Use when working with collaborative notebooks, jupyter-collaboration,
+            or lightweight Jupyter environments without ML/CUDA dependencies.
+        content: |-
+            # jupyter -- Lightweight JupyterLab with real-time collaboration
+            
+            ## Candy Properties
+            
+            | Property | Value |
+            |----------|-------|
+            | Dependencies | `supervisord` |
+            | Sub-candies | `jupyter-mcp` |
+            | Ports | 8888 |
+            | Service | `jupyter` (supervisord) |
+            | Volume | `workspace` at `/workspace` |
+            | MCP provides | `jupyter` at `http://{{.ContainerName}}:8888/mcp` (streamable HTTP) |
+            | Install files | `charly.yml` (rpm: git), `pixi.toml` |
+            
+            ## Key Packages
+            
+            **conda-forge:** JupyterLab >= 4.4.0, ipywidgets, ipykernel, jupyterlab-git, jupyter-resource-usage, matplotlib, seaborn, pandas, numpy, scikit-learn, scipy, polars, pyarrow, duckdb, **spacy**, **spacy-model-en_core_web_sm**, black, pytest, graphviz, pyyaml, tqdm
+            
+            **PyPI:** jupyter-collaboration >= 4.1.0
+            
+            **RPM:** git
+            
+            ### NLP
+            
+            `spacy` (3.8.x) ships with the small English statistical model
+            (`en_core_web_sm`) preloaded so notebooks can do tokenization, NER,
+            dependency parsing, and POS tagging out-of-the-box without a
+            post-deploy `python -m spacy download` step. Sample:
+            
+            ```python
+            import spacy
+            nlp = spacy.load("en_core_web_sm")
+            doc = nlp("Apple is looking at buying a U.K. startup for $1 billion")
+            [(t.text, t.pos_) for t in doc]   # tokens + parts of speech
+            [(e.text, e.label_) for e in doc.ents]  # named entities
+            ```
+            
+            The `spacy-import` build-context `check:` step (a deterministic Op in
+            the `plan:`) verifies the package + model load
+            successfully on every image build — a future upstream rename or version
+            bump that breaks the model load fails the build loudly.
+            
+            ## Environment
+            
+            No custom environment variables on the candy itself. **Runtime PATH
+            contributions** for the pixi env (`~/.pixi/bin`,
+            `~/.pixi/envs/default/bin`) and cache dirs (`PIXI_CACHE_DIR`,
+            `RATTLER_CACHE_DIR`) come from the **pixi BUILDER** (declared in the
+            embedded `builder:` vocabulary (`charly/charly.yml`) under
+            `builder.pixi.runtime_env:` and
+            `path_contributions:`) — see `/charly-internals:generate-source` for the
+            `writeCandyEnv` flow. The pixi runtime env flows through the pixi
+            BUILDER (not the pixi LAYER) so boxes that consume pixi via
+            pixi.toml-triggered builds (jupyter, openwebui, immich-ml, …) get the
+            env contract automatically without needing pixi as a top-level candy
+            for sibling-grouped auto-intermediate inheritance.
+            
+            ## Collaboration
+            
+            Real-time collaborative editing via [jupyter-collaboration](https://github.com/jupyterlab/jupyter-collaboration) (Y-CRDT). Multiple users editing the same notebook see shared cursors and live changes. The backend uses `jupyter_server_ydoc` with `pycrdt-websocket` for CRDT synchronization. No external database required — document state is managed in-memory by default, with optional SQLite persistence.
+            
+            Collaboration is **enabled by default** when jupyter-collaboration is installed. The WebSocket endpoint at `/api/collaboration/room/` handles document sync.
+            
+            ## Token Authentication
+            
+            The service supports optional token-based authentication via the `JUPYTER_TOKEN_FILE` environment variable. If set and the file exists, its contents are used as the auth token. Otherwise, authentication is disabled (empty token, no password) for development convenience.
+            
+            ## Volume
+            
+            The `workspace` volume is mounted at `/workspace`. JupyterLab serves notebooks from this directory via `--notebook-dir=/workspace`.
+            
+            ## Usage
+            
+            ```yaml
+            # charly.yml
+            jupyter:
+              base: fedora
+              candy:
+                - agent-forwarding
+                - jupyter
+                - dbus
+                - charly
+              ports:
+                - "8888:8888"
+            ```
+            
+            ## Differences from jupyter-ml Layer
+            
+            | | jupyter | jupyter-ml |
+            |---|---|---|
+            | Base dependency | `supervisord` | `cuda`, `supervisord` |
+            | GPU | No | CUDA required |
+            | Platforms | amd64 + arm64 | amd64 only |
+            | Focus | Collaboration + data science | ML/AI training |
+            | Key packages | jupyter-collaboration, pandas, polars | PyTorch, vLLM, Unsloth, llama.cpp |
+            | Image size | ~3.4 GB | ~15+ GB |
+            
+            ## MCP Server Discovery
+            
+            The `jupyter` candy declares `mcp_provide` for cross-container and pod MCP discovery. The URL template `http://{{.ContainerName}}:8888/mcp` resolves to the actual container name at deploy time (e.g., `http://charly-jupyter:8888/mcp`), or to `http://localhost:8888/mcp` in combined boxes where both services run in the same container.
+            
+            - **Transport:** Streamable HTTP (`http`)
+            - **11 tools** available via the `jupyter-mcp` extension (see below)
+            - **Hermes auto-configures** via the `CHARLY_MCP_SERVERS` env var -- no manual MCP registration needed
+            - **Pod-aware:** resolves to `localhost` in combined boxes where hermes and jupyter share a container
+            
+            ## MCP Server Extension (`jupyter_mcp`)
+            
+            The candy includes a built-in MCP (Model Context Protocol) server at `/mcp` on port 8888. You can create, read, edit, and execute notebook cells programmatically — with changes syncing live to all connected JupyterLab clients via CRDT.
+            
+            ### Architecture
+            
+            ```
+            Tornado (Jupyter Server, :8888)
+              └── /mcp → TornadoASGIHandler → FastMCP ASGI App (Starlette, in-process)
+                                                  └── RTCAdapter → YNotebook (CRDT)
+            ```
+            
+            - **FastMCP v3.x** (standalone, by Prefect) with Streamable HTTP transport (MCP spec 2025-11-25)
+            - **Tornado-ASGI bridge** — custom handler translates Tornado requests to ASGI scope/receive/send (both share the same asyncio event loop)
+            - **Auto-attach + path canonicalization** — every `notebook_*`/`cell_*` call routes through `_resolve_notebook_doc(canonical_path)` which attaches to whichever room exists for the deterministic `room_id` (UI tab, another MCP session, this one) or creates one. Single room per notebook is an enforced invariant.
+            - **In-place `set_cell`** — cell mutations operate on the existing Y.Map's `source`/`metadata`/`outputs` IN PLACE, preserving the cell's `id` and its position in the underlying `Y.Array`.
+            - **Per-notebook asyncio locks** — serializes mutations on the same notebook to prevent index-based race conditions during concurrent access
+            - **Server-side idle-room sweeper** — periodically flushes and closes rooms with zero clients idle for `MCP_ROOM_IDLE_TIMEOUT_SEC` (default 600s)
+            - **Lazy YDocExtension resolution** — resolved on first tool call, not at extension load time (avoids load-order dependency)
+            
+            ### MCP Tools (11 total — `<noun>_<verb>` form)
+            
+            Clients do not manage CRDT rooms. The server auto-attaches every `notebook_*`/`cell_*` call to whichever room exists, or creates one. See `/charly-jupyter:jupyter-mcp` "Usage philosophy and caveats".
+            
+            **Notebook operations:**
+            | Tool | Parameters | Returns |
+            |------|-----------|---------|
+            | `notebook_list` | — | `[{"path": "...", "name": "..."}]` |
+            | `notebook_create` | `path` | `{"path": "...", "name": "..."}` (no room opened — auto-attach happens on first cell op) |
+            | `notebook_get` | `path` | Full notebook dict (live CRDT; auto-attaches) |
+            | `notebook_watch` | `path`, `timeout=30` | `{"changed": true, "cell_count": N}` or `{"changed": false}` (auto-attaches) |
+            | `notebook_list_users` | `path` | `[{"id": "...", "name": "..."}]` — awareness users on ONE notebook (read-only; returns `[]` if no room) |
+            
+            **Cell Operations (CRDT — changes sync live to all collaborators; auto-attach):**
+            | Tool | Parameters | Returns |
+            |------|-----------|---------|
+            | `cell_get` | `path`, `index` | Cell dict (source, cell_type, metadata, outputs) |
+            | `cell_update` | `path`, `index`, `source`, `cell_type?` | `"Cell N updated"` — preserves cell `id` (in-place Y.Map mutation) |
+            | `cell_insert` | `path`, `index`, `source`, `cell_type="code"` | `"Cell inserted at index N"` |
+            | `cell_delete` | `path`, `index` | `"Cell N deleted"` |
+            | `cell_execute` | `path`, `index` | `[{"type": "stream", "content": {...}}]` — also writes `outputs` + `execution_count` back via the in-place `set_cell` path |
+            
+            **Read-only diagnostic (no mutation, no auto-attach):**
+            | Tool | Parameters | Returns |
+            |------|-----------|---------|
+            | `room_list` | — | `[{"room_id": ..., "path": ..., "file_id": ..., "users": [...], "user_count": N, "has_kernel": bool}, ...]` — verify the single-room invariant: never two rows for the same path |
+            
+            ### Installation
+            
+            The MCP extension is installed by the `jupyter-mcp` sub-candy (composed via `candy: [jupyter-mcp]`):
+            1. `pip install "fastmcp>=3.2.0"` + opentelemetry runtime deps (not pixi -- cross-platform resolver conflicts with opentelemetry-api on aarch64)
+            2. `pip install --no-deps /ctx/jupyter_mcp` (extension package from sub-candy directory)
+            3. Extension enabled via `jupyter_server_config.d/jupyter_mcp.json`
+            
+            ### Source files
+            
+            ```
+            candy/jupyter-mcp/
+            ├── jupyter_mcp/
+            │   ├── pyproject.toml              # hatchling package, no deps (--no-deps install)
+            │   └── jupyter_mcp/
+            │       ├── __init__.py             # Extension entry point
+            │       ├── app.py                  # Registers /mcp handler + ASGI lifespan
+            │       ├── tornado_asgi.py         # Tornado↔ASGI bridge (SSE streaming, disconnect handling)
+            │       ├── mcp_server.py           # FastMCP tool definitions (11 tools)
+            │       └── rtc_adapter.py          # CRDT access via YNotebook + kernel execution
+            # (in charly.yml tasks:)  # Build-time: pip install fastmcp + extension + enable
+            └── charly.yml
+            ```
+            
+            ### Multi-client support
+            
+            Multiple MCP clients can edit the same notebook simultaneously:
+            - All sessions share the same CRDT document via the singleton RTCAdapter
+            - Per-notebook asyncio locks prevent index corruption during concurrent mutations
+            - `notebook_watch` uses a fan-out `NotebookWatcher` — each watcher gets an independent `asyncio.Event`, signaled when any CRDT change occurs
+            - The CRDT layer (pycrdt) handles merge conflicts automatically
+            
+            ## Implementation Notes
+            
+            - The supervisord service command calls `jupyter lab` directly, not via `pixi run`. Pixi multi-stage builds copy only `~/.pixi/envs/` to the final image — `pixi.toml` is not present at runtime.
+            - The `start-jupyter` pixi task in `pixi.toml` is for build-time verification only.
+            
+            ## Tests
+            
+            The candy ships its acceptance steps in its `plan:`,
+            baked into the `ai.opencharly.description` OCI label (see `/charly-check:check`
+            for the full schema). Each step is one inline Op — a probe is a `check:`
+            step — tagged with the `context:` axis that selects when it runs:
+            
+            - **`context: [build]`** (run under `charly check box`):
+              - `jupyter-lab-binary` — `${HOME}/.pixi/envs/default/bin/jupyter-lab`
+                exists (proves pixi env install succeeded)
+              - `spacy-import` — `python -c "import spacy;
+                spacy.load('en_core_web_sm')"` exits 0 (proves NLP packages + model
+                load successfully)
+            - **`context: [deploy]`** (run under `charly check live` against a live service):
+              - `workspace-dir` — `/workspace` exists (mount visible)
+              - `jupyter-service` — supervisord program `jupyter` is RUNNING
+              - `jupyter-port` — `${CONTAINER_IP}:${HOST_PORT:8888}` reachable
+              - `jupyter-api` — `GET .../api` returns 200 with `"version"` in body
+                (the `${HOST_PORT:8888}` substitution means the step works
+                unchanged when `charly.yml` remaps the host port)
+              - `mcp-jupyter-ping` — MCP server responds to `ping`
+              - `mcp-jupyter-list-tools` — assertion that all 11 documented MCP
+                tools are present in `tools/list`
+              - `mcp-jupyter-call-list-notebooks` — actually invokes
+                `notebook_list` and verifies the response shape
+            
+            ## Used In Boxes
+            
+            - `/charly-jupyter:jupyter`
+            
+            ## Related Candies
+            
+            - `/charly-jupyter:jupyter-ml` -- GPU-accelerated variant with full CUDA ML stack + same CRDT MCP server
+            - `/charly-jupyter:jupyter-mcp` -- MCP server implementation (sub-candy, 11 tools for programmatic notebook access using `<noun>_<verb>` naming; clients don't manage CRDT rooms — the server auto-attaches)
+            - `/charly-jupyter:notebook-templates` -- Starter notebooks (data candy, used alongside this candy in boxes)
+            - `/charly-hermes:hermes` -- MCP consumer (auto-discovers via `CHARLY_MCP_SERVERS` env var; uses `jupyter` server tools to read/edit/execute cells)
+            - `/charly-openwebui:openwebui` -- MCP consumer (sets `CODE_EXECUTION_ENGINE=jupyter` when this server is discovered, routing Open WebUI code-block execution into the Jupyter kernel)
+            - `/charly-infrastructure:supervisord` -- process manager dependency
+            - `/charly-languages:python` -- Python runtime (transitive via supervisord)
+            - `/charly-build:charly-mcp-cmd` -- end-to-end testing of the candy's MCP endpoint via the declarative `mcp:` check verb (`ping`/`list-tools`/`call`, run via `charly check live <image> --filter mcp`); the candy ships 3 deploy-context `mcp:` steps in its `plan:` against `list_notebooks`/`insert_cell`/`execute_cell`
+            
+            ## When to Use This Skill
+            
+            Use when the user asks about:
+            
+            - Real-time collaborative Jupyter notebooks
+            - jupyter-collaboration or Y-CRDT setup
+            - Lightweight Jupyter without GPU/ML dependencies
+            - Port 8888 service (check if GPU variant intended)
+            - The `jupyter` candy
+            - MCP server for notebook manipulation
+            - Programmatic notebook access for you
+            - `watch_notebook` or change notifications
+            - Multi-client concurrent editing
+            
+            ## Related
+            
+            - `/charly-image:layer` — candy authoring reference (`charly.yml` schema, task verbs, service declarations)
+
+jupyter-ml-layer-skill:
+    skill:
+        name: jupyter-ml-layer
+        family: jupyter
+        owner: charly-jupyter
+        description: |-
+            Full CUDA ML stack + JupyterLab with real-time collaboration and CRDT MCP server on port 8888.
+            Use when working with GPU-accelerated Jupyter notebooks, ML training with collaboration,
+            or the jupyter-ml candy.
+        content: |-
+            # jupyter-ml -- Full ML + JupyterLab with CRDT MCP
+            
+            ## Candy Properties
+            
+            | Property | Value |
+            |----------|-------|
+            | Dependencies | `cuda`, `supervisord` |
+            | Sub-candies | `llama-cpp`, `unsloth`, `jupyter-mcp` |
+            | Ports | 8888 |
+            | Service | `jupyter-ml` (supervisord) |
+            | Volume | `workspace` at `/workspace` |
+            | Install files | `charly.yml`, `pixi.toml`, `plan:` |
+            
+            ## Architecture: Environment-Owning Meta-Layer
+            
+            This is a **Tier 2 "environment owner"** candy that:
+            1. Owns the pixi.toml with ALL Python dependencies (Jupyter + ML + vLLM runtime deps)
+            2. Composes three Tier 1 sub-candies via `candy: [llama-cpp, unsloth, jupyter-mcp]`
+            3. MCP extension installed by the `jupyter-mcp` sub-candy (not directly in this candy's `plan:`)
+            
+            Build order: pixi environment → llama-cpp (binaries) → unsloth (vllm wheel + unsloth pip + patch) → jupyter-mcp (MCP extension)
+            
+            ## Key Packages
+            
+            **conda-forge:** JupyterLab >= 4.4.0, jupyter-resource-usage, jupyterlab-git, jupyterlab-lsp, jupyterlab-spellchecker, tensorboard, wandb, matplotlib, seaborn, pandas, numpy, scikit-learn, scipy, polars, pyarrow, dask, duckdb, altair, papermill, marimo, mkdocs, black, pytest
+            
+            **PyPI (ML Core):** PyTorch >= 2.10.0 (CUDA 13.0), xformers, transformers >= 5.0.0rc1, accelerate, einops, kornia, spandrel, torchsde
+            
+            **PyPI (vLLM Runtime):** blake3, flashinfer-python, numba, ray, xgrammar, and 25+ more runtime deps
+            
+            **PyPI (Fine-tuning):** peft, trl, bitsandbytes, deepspeed, liger-kernel
+            
+            **PyPI (LangChain):** langchain, langchain-core, langchain-openai, langchain-community, langchain-classic, langchain-anthropic, langchain-huggingface, langchain-ollama, chromadb, faiss-cpu
+            
+            **PyPI (Evaluation):** evidently (with llm extras), evaluate, sacrebleu, rouge-score, nltk, bertviz
+            
+            **PyPI (APIs):** openai, anthropic, gradio, ollama (client)
+            
+            **PyPI (Collaboration):** jupyter-collaboration >= 4.1.0
+            
+            **RPM (Fedora):** git, gcc, gcc-c++
+            
+            **PAC (Arch/CachyOS):** git, gcc (includes g++) — the candy is multi-distro
+            
+            ## Environment
+            
+            | Variable | Value | Purpose |
+            |----------|-------|---------|
+            | `NVIDIA_PYTHON_PROJECT` | `~/.pixi` | NVIDIA driver → pixi env mapping |
+            | `LD_LIBRARY_PATH` | `/usr/lib64:$HOME/llama.cpp` | CUDA libs + llama.cpp shared libs |
+            | `LLAMA_CPP_PATH` | `~/llama.cpp` | (from llama-cpp sub-candy) |
+            | `UNSLOTH_SKIP_LLAMA_CPP_INSTALL` | `1` | (from unsloth sub-candy) |
+            | `HF_HOME` | `~/.cache/huggingface` | (from unsloth sub-candy) |
+            
+            ## MCP Server Extension
+            
+            Same CRDT MCP server as `/charly-jupyter:jupyter` — 11 tools for programmatic notebook access (notebook_list/create/get/watch/list_users, cell_get/update/insert/delete/execute, room_list). Clients no longer manage CRDT rooms — every notebook_*/cell_* call auto-attaches. See `/charly-jupyter:jupyter-mcp` "Usage philosophy and caveats" for the design principles.
+            
+            Endpoint: `http://localhost:8888/mcp` (Streamable HTTP, MCP spec 2025-11-25)
+            
+            ## Comparison
+            
+            | | jupyter | jupyter-ml |
+            |---|---|---|
+            | Base dep | supervisord | cuda, supervisord |
+            | GPU | No | CUDA 13.0 |
+            | Platforms | amd64 + arm64 | amd64 only |
+            | MCP | CRDT (11 tools) | CRDT (11 tools) |
+            | ML stack | No | Full (PyTorch, vLLM 0.19, unsloth) |
+            | Volume | workspace | workspace |
+            
+            ## Used In Boxes
+            
+            - `/charly-jupyter:jupyter-ml`
+            - `/charly-jupyter:jupyter-ml-notebook`
+            
+            ## Related Candies
+            
+            - `/charly-jupyter:jupyter` — Lightweight variant (no CUDA, multi-arch)
+            - `/charly-jupyter:llama-cpp` — Sub-candy: llama.cpp binaries
+            - `/charly-jupyter:unsloth` — Sub-candy: vLLM wheel + fine-tuning + vLLM patch
+            - `/charly-jupyter:jupyter-mcp` — Sub-candy: CRDT MCP extension
+            - `/charly-jupyter:notebook-templates` — Starter notebooks (data candy, used alongside this candy in boxes)
+            - `/charly-hermes:hermes` — MCP consumer (auto-discovers via `CHARLY_MCP_SERVERS`; uses jupyter tools to read/edit/execute cells)
+            - `/charly-openwebui:openwebui` — MCP consumer (sets `CODE_EXECUTION_ENGINE=jupyter` when this server is discovered, routing Open WebUI code blocks to the Jupyter kernel)
+            
+            ## When to Use This Skill
+            
+            Use when the user asks about:
+            
+            - GPU-accelerated Jupyter with collaboration
+            - ML training notebooks with CRDT MCP
+            - The `jupyter-ml` candy
+            - Combining jupyter features with CUDA ML
+            
+            ## Related
+            
+            - `/charly-image:layer` — candy authoring reference (`charly.yml` schema, plan steps, service declarations)
+            - `/charly-check:check` — declarative testing (`check:` block, `charly check box`, `charly check live`)
+
+jupyter-ml-notebook-skill:
+    skill:
+        name: jupyter-ml-notebook
+        family: jupyter
+        owner: charly-jupyter
+        description: |-
+            Full CUDA ML JupyterLab box with finetuning, Ollama, and LLM course notebooks, CRDT MCP server, and real-time collaboration.
+            Base: nvidia. Port 8888. Combines jupyter-ml with 37 Unsloth fine-tuning notebooks, 6 Ollama integration notebooks, and 15 LLM course notebooks.
+            MUST be invoked before building, deploying, or troubleshooting the jupyter-ml-notebook box.
+        content: |-
+            # jupyter-ml-notebook -- GPU ML Jupyter with Fine-tuning Notebooks
+            
+            ## Box Definition
+            
+            ```yaml
+            jupyter-ml-notebook:
+              base: nvidia
+              candy:
+                - agent-forwarding
+                - jupyter-ml
+                - notebook-templates
+                - notebook-finetuning
+                - notebook-ollama
+                - notebook-llm-on-supercomputers
+                - notebook-openrouter
+                - dbus
+                - charly
+              ports:
+                - "8888:8888"
+              platforms:
+                - linux/amd64
+            ```
+            
+            ## What's Different from jupyter-ml
+            
+            This box is identical to `jupyter-ml` with two data candy additions:
+            - `notebook-finetuning` — seeds 37 Unsloth fine-tuning notebooks into `/workspace/finetuning/`
+            - `notebook-ollama` — seeds 6 Ollama integration notebooks into `/workspace/ollama/`
+            
+            The Ollama notebooks require a running `ollama` deployment. When deployed via `charly config ollama --update-all`, the `OLLAMA_HOST` env var is automatically injected via `env_provide` -- no manual configuration needed.
+            
+            ## Candy Composition
+            
+            - `jupyter-ml` — Tier 2 environment-owning meta-layer (PyTorch >= 2.10.0, vLLM 0.19, unsloth, LangChain, CRDT MCP via jupyter-mcp sub-candy)
+            - `notebook-templates` — Starter notebooks (data candy, seeds /workspace)
+            - `notebook-finetuning` — 37 Unsloth fine-tuning notebooks (data candy, seeds /workspace/finetuning/)
+            - `notebook-ollama` — 6 Ollama integration notebooks (data candy, seeds /workspace/ollama/)
+            - `notebook-llm-on-supercomputers` — 15 LLM course notebooks (data candy, seeds /workspace/llms_on_supercomputers/)
+            - `agent-forwarding` — SSH/GPG agent forwarding
+            - `dbus` — D-Bus session bus
+            - `charly` — OpenCharly CLI
+            
+            ## Ports
+            
+            | Port | Service |
+            |------|---------|
+            | 8888 | JupyterLab + MCP endpoint at `/mcp` |
+            
+            ## Volumes
+            
+            | Name | Path | Purpose |
+            |------|------|---------|
+            | workspace | /workspace | Persistent notebook storage |
+            | models | ~/.cache/huggingface | HuggingFace model cache (from unsloth sub-candy) |
+            
+            ## Data Candies
+            
+            | Candy | Target | Dest | Contents |
+            |-------|--------|------|----------|
+            | notebook-templates | workspace | *(root)* | getting-started.ipynb |
+            | notebook-finetuning | workspace | finetuning/ | 37 Unsloth notebooks (SFT, GRPO, DPO, RLOO, QLoRA) |
+            | notebook-ollama | workspace | ollama/ | 6 Ollama API notebooks (requests, OpenAI, ollama lib, GPU, HuggingFace, Anthropic) |
+            | notebook-llm-on-supercomputers | workspace | llms_on_supercomputers/ | 15 LLM course notebooks (prompt engineering, RAG, fine-tuning) + datasets |
+            
+            ## File Layout in JupyterLab
+            
+            ```
+            /workspace/
+              getting-started.ipynb                    (from notebook-templates)
+              finetuning/                               (from notebook-finetuning)
+                .env.example
+                notebooks.yaml
+                00_Unsloth_Setup.ipynb
+                01_FastInference_Llama.ipynb
+                01_FastInference_Qwen.ipynb
+                02_Vision_Training_Ministral.ipynb
+                03_SFT_Training_Qwen.ipynb
+                04_GRPO_Training_Qwen.ipynb
+                05_DPO_Training_Qwen.ipynb
+                06_Reward_Training_Qwen.ipynb
+                07_RLOO_Training_Qwen.ipynb
+                08_QLoRA_Alpha_Scaling_Ministral.ipynb
+                ... (37 notebooks total)
+              ollama/                                   (from notebook-ollama)
+                notebooks.yaml
+                00_Ollama_Requests.ipynb
+                01_Ollama_GPU.ipynb
+                02_Ollama_OpenAI.ipynb
+                03_Ollama_Library.ipynb
+                04_Ollama_HuggingFace.ipynb
+                05_Ollama_Anthropic.ipynb
+              llms_on_supercomputers/                   (from notebook-llm-on-supercomputers)
+                notebooks.yaml
+                datasets/
+                D0_00_Bazzite_Setup.ipynb
+                D1_01_Prompting_with_LangChain.ipynb
+                D1_02_Prompt_templates_and_parsing.ipynb
+                ... (15 notebooks total)
+            ```
+            
+            ## Service Environment Integration
+            
+            This box is a **consumer** of env_provide variables from infrastructure candies:
+            
+            | Variable | Injected by | Value |
+            |----------|------------|-------|
+            | `OLLAMA_HOST` | `/charly-ollama:ollama` | `http://charly-ollama:11434` |
+            
+            The notebooks read `OLLAMA_HOST` via `os.getenv("OLLAMA_HOST", "http://localhost:11434")`. When ollama is deployed via `charly config ollama --update-all`, the env_provide mechanism overrides the localhost default automatically.
+            
+            ## Quick Start
+            
+            ```bash
+            charly box build jupyter-ml-notebook
+            charly config jupyter-ml-notebook
+            charly start jupyter-ml-notebook
+            charly status jupyter-ml-notebook
+            charly logs jupyter-ml-notebook -f
+            # JupyterLab: http://localhost:8888
+            # MCP endpoint: http://localhost:8888/mcp
+            
+            # With bind-backed workspace (data seeded into local dir):
+            charly config jupyter-ml-notebook --bind workspace=/path/to/project
+            ```
+            
+            ## Notebook Workarounds
+            
+            The notebook-finetuning include compatibility fixes for current library versions:
+            - **flex_attention disabled** in Ministral/Pixtral notebooks (transformers 5.5 bug)
+            - **max_memory={0: "14GB"}** for Pixtral-12B notebooks (accelerate device_map estimation fix)
+            - **packing=True** in all SFTConfig cells (TRL 1.0 requirement)
+            - **max_prompt_length removed** from DPO notebooks (deprecated in TRL 1.0)
+            
+            ## Verify
+            
+            ```bash
+            charly shell jupyter-ml-notebook -c "pixi run verify-pytorch"
+            charly shell jupyter-ml-notebook -c "pixi run verify-unsloth"
+            charly shell jupyter-ml-notebook -c "pixi run verify-mcp"
+            charly shell jupyter-ml-notebook -c "ls /workspace/finetuning/"
+            charly shell jupyter-ml-notebook -c "ls /workspace/ollama/"
+            charly shell jupyter-ml-notebook -c "ls /workspace/llms_on_supercomputers/"
+            ```
+            
+            ## Related Boxes
+            
+            - `/charly-jupyter:jupyter-ml` — Same stack without finetuning notebooks
+            - `/charly-jupyter:jupyter` — Lightweight variant (no CUDA, multi-arch)
+            - `/charly-jupyter:unsloth-studio` — Unsloth Studio UI (different pixi env, same finetuning notebooks)
+            
+            **MCP testing:** same 3 deploy-scope `mcp:` checks as `jupyter-ml` are inherited here. See `/charly-build:charly-mcp-cmd` for the verb reference.
+            
+            ## When to Use This Skill
+            
+            MUST be invoked before building, deploying, configuring, or troubleshooting the jupyter-ml-notebook box.
+            
+            ## Related
+            
+            - `/charly-image:image` — image family umbrella (`candy:` image entries — those carrying `base:`/`from:` — in `charly.yml`, build/validate/inspect/list)
+            - `/charly-build:build` — the embedded build vocabulary (distros, builders, init-systems)
+
+unsloth-studio-layer-skill:
+    skill:
+        name: unsloth-studio-layer
+        family: jupyter
+        owner: charly-jupyter
+        description: |-
+            Unsloth Studio fine-tuning web UI on ports 8888/8000 with vLLM inference.
+            Tier 2 environment-owner meta-layer composing llama-cpp + unsloth, owns pixi.toml.
+            Use when working with Unsloth Studio, the fine-tuning web UI, or the unsloth-studio box.
+        content: |-
+            # unsloth-studio -- Fine-tuning Studio (Tier 2 meta-layer)
+            
+            ## Candy Properties
+            
+            | Property | Value |
+            |----------|-------|
+            | Dependencies | `cuda`, `supervisord` |
+            | Sub-candies | `llama-cpp`, `unsloth` |
+            | Ports | 8888 (Studio UI), 8000 (vLLM API) |
+            | Volumes | `workspace` -> `/workspace` |
+            | Service | `unsloth-studio` (supervisord) |
+            | Install files | `charly.yml`, `pixi.toml` |
+            
+            ## Architecture: Tier 2 Environment-Owner Meta-Layer
+            
+            This candy **owns the pixi.toml** for the fine-tuning environment and composes two Tier 1 candies via `candy: [llama-cpp, unsloth]`. Build order: pixi environment → llama-cpp (binaries) → unsloth (vLLM wheel + unsloth pip + patch) → supervisord config.
+            
+            ## Environment Variables
+            
+            | Variable | Value |
+            |----------|-------|
+            | `NVIDIA_PYTHON_PROJECT` | `~/.pixi` |
+            | `LD_LIBRARY_PATH` | `/usr/lib64:$HOME/llama.cpp` |
+            
+            Plus from sub-candies: `LLAMA_CPP_PATH`, `UNSLOTH_SKIP_LLAMA_CPP_INSTALL`, `HF_HOME`
+            
+            ## Packages (pixi.toml)
+            
+            Fine-tuning focused ML stack: PyTorch (CUDA 13.0), xformers, transformers, accelerate, vLLM runtime deps, HuggingFace (datasets, tokenizers, sentencepiece), fine-tuning (peft, trl, bitsandbytes, liger-kernel), GGUF tools
+            
+            ## Service
+            
+            Runs `pixi run start-studio` which executes `unsloth studio -H 0.0.0.0 -p 8888`. The Studio launches its own vLLM API server on port 8000 for inference and synthetic data generation.
+            
+            ## Used In Boxes
+            
+            - `/charly-jupyter:unsloth-studio`
+            
+            ## Related Candies
+            
+            - `/charly-jupyter:llama-cpp` — Sub-candy: llama.cpp binaries
+            - `/charly-jupyter:unsloth` — Sub-candy: vLLM + unsloth pip install + patch
+            - `/charly-infrastructure:supervisord` — Process manager dependency
+            - `/charly-jupyter:jupyter-ml` — Alternative: ML Jupyter with MCP (same Tier 1 sub-candies)
+            - `/charly-languages:python-ml` — Alternative: core ML without UI
+            
+            ## When to Use This Skill
+            
+            Use when the user asks about:
+            
+            - Unsloth Studio web UI setup
+            - The unsloth-studio service or container
+            - Port 8888 or 8000 in the context of fine-tuning
+            - The two-tier layer architecture for ML layers
+            - Fine-tuning pixi environment ownership
+            
+            ## Related
+            
+            - `/charly-image:layer` — candy authoring reference (`charly.yml` schema, plan steps, service declarations)
+            - `/charly-check:check` — declarative testing (`check:` block, `charly check box`, `charly check live`)

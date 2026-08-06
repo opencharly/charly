@@ -1,0 +1,959 @@
+charly-hooks:
+    candy:
+        version: 2026.218.1200
+        description: |-
+            Concept candy owning the HARNESS gate hooks — the .claude/hooks/* git-discipline
+            scripts + their .claude/settings.json wiring, declared as `hook:` kind entities
+            (the plugins→candies migration). candy/plugin-marketplace (command:marketplace)
+            emits the scripts to .claude/hooks/ + regenerates the settings.json hook entries
+            from these entities, so the harness gates are generated from candy config.
+        plan:
+            - run: this documentation-only candy ships no install content (it carries the family's skill/hook/marketplace entities); validate-satisfying no-op
+              command: "true"
+              context:
+                - build
+            - check: the harness gate hook entities carry the pre-commit/pre-push discipline content (byte-identical to the emitted .claude/hooks/* — proven by the marketplace plugin's generate test + the R10 bed)
+              id: charly-hooks-present
+              context:
+                - build
+              command: "true"
+
+
+pre-commit-gate:
+    hook:
+        name: pre-commit-gate.sh
+        trigger: PreToolUse
+        matcher: Bash
+        mode: "0755"
+        content: |
+            #!/usr/bin/env bash
+            # PreToolUse(Bash) discipline backstop for `git commit`.
+            #
+            # This hook enforces only immediate local mechanics:
+            #   - no `--no-verify` / `-n` bypass;
+            #   - no `core.hooksPath` override;
+            #   - commit commands must tokenize cleanly; and
+            #   - staged Go modules must be golangci-lint clean when the tool is available.
+            #
+            # Attribution identity/confidence, change class, CHANGELOG coverage,
+            # architecture, and all R0-R10 proof are judged once by the fresh pr-validator.
+            # They are deliberately absent here so two policy implementations cannot drift.
+            
+            INPUT=$(cat)
+            case "$INPUT" in
+              *git*commit*) ;;
+              *) exit 0 ;;
+            esac
+            
+            HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+            python3 -B - "$INPUT" "$HERE" <<'PY'
+            import json
+            import os
+            import re
+            import shutil
+            import subprocess
+            import sys
+            import tempfile
+            
+            sys.path.insert(0, sys.argv[2])
+            from gitcmd import dash_c_dir, git_invocations, hooks_path_override, mentions_subcommand
+            
+            
+            def block(message):
+                sys.stderr.write("pre-commit-gate BLOCKED: " + message + "\n")
+                sys.exit(2)
+            
+            
+            try:
+                command = json.loads(sys.argv[1]).get("tool_input", {}).get("command", "")
+            except Exception:
+                sys.exit(0)
+            
+            try:
+                invocations = git_invocations(command, "commit")
+            except ValueError:
+                if mentions_subcommand(command, "commit"):
+                    block("cannot parse this commit command; balance its quotes or use `git commit -F <file>`.")
+                sys.exit(0)
+            
+            
+            def has_no_verify(args):
+                """Inspect flags only; consume message values so their text is never a flag."""
+                i = 0
+                while i < len(args):
+                    token = args[i]
+                    if token in ("-m", "-F", "--message", "--file"):
+                        i += 2
+                        continue
+                    if token.startswith(("--message=", "--file=")):
+                        i += 1
+                        continue
+                    if token == "--no-verify":
+                        return True
+                    if token.startswith("-") and not token.startswith("--"):
+                        for flag in token[1:]:
+                            if flag in ("m", "F"):
+                                break
+                            if flag == "n":
+                                return True
+                    i += 1
+                return False
+            
+            
+            def git(args, cwd=None):
+                base = ["git"] + (["-C", cwd] if cwd else [])
+                try:
+                    result = subprocess.run(base + args, capture_output=True, text=True, timeout=10)
+                except Exception:
+                    return None
+                return result.stdout if result.returncode == 0 else None
+            
+            
+            def touched_go_modules(repo):
+                names = git(["diff", "--cached", "--name-only", "--diff-filter=ACMR", "--", "*.go"], repo)
+                if not names:
+                    return set()
+                base = os.path.abspath(repo or os.getcwd())
+                roots = set()
+                for name in names.splitlines():
+                    directory = os.path.dirname(os.path.join(base, name))
+                    while directory.startswith(base):
+                        if os.path.isfile(os.path.join(directory, "go.mod")):
+                            roots.add(directory)
+                            break
+                        parent = os.path.dirname(directory)
+                        if parent == directory:
+                            break
+                        directory = parent
+                return roots
+            
+            
+            def lint_staged_go(repo):
+                if shutil.which("golangci-lint") is None:
+                    return
+                for root in sorted(touched_go_modules(repo)):
+                    env = dict(os.environ)
+                    if os.sep + "candy" + os.sep in root + os.sep:
+                        env["GOWORK"] = "off"
+                    try:
+                        with tempfile.TemporaryDirectory(prefix="charly-gate-lint-") as cache:
+                            env["GOCACHE"] = os.path.join(cache, "go-build")
+                            env["GOLANGCI_LINT_CACHE"] = os.path.join(cache, "golangci-lint")
+                            result = subprocess.run(
+                                ["golangci-lint", "run"], cwd=root, env=env,
+                                capture_output=True, text=True, timeout=180,
+                            )
+                    except subprocess.TimeoutExpired:
+                        sys.stderr.write(
+                            "pre-commit-gate NOTE: golangci-lint timed out in %s; "
+                            "the pr-validator remains the gate.\n" % root
+                        )
+                        continue
+                    except Exception:
+                        continue
+                    if result.returncode != 0:
+                        detail = ((result.stdout or "") + (result.stderr or "")).strip()
+                        block("golangci-lint reports issues in %s:\n%s" % (root, detail[:4000]))
+            
+            
+            # --- ZERO-ALIASES gate (v2) ---------------------------------------------------
+            # A deterministic backstop for the project rulebook's "Core is a PLUGIN HOST" ZERO-ALIASES
+            # standing rule: no NEW charly/*_aliases.go file, and no declaration-form
+            # re-export of a mechanism-kit symbol (an alias is a mislocated call site; the
+            # fix is MOVING the consumer into its owning plugin, never re-exporting). Alias
+            # files have NO migration exception; the IMPORT-PURITY residual-call-site
+            # exception (a body moving OUT of core in the SAME PR, net core-LOC negative)
+            # covers a plain kit import/call, NEVER an alias FORM. The fresh pr-validator is
+            # the architecture authority; this gate is the fail-open mechanical backstop that
+            # catches the unambiguous #86 (new alias file) / #87 (grown alias file) class the
+            # validator alone missed. A plain residual `kit.Foo()` CALL or `".../kit"` IMPORT
+            # is ALLOWED here — only alias FORMS block.
+            _KITS = r'(?:kit|deploykit|buildkit|loaderkit|vmshared|enginekit|statekit)'
+            # explicit declaration-form alias in ANY staged charly/*.go: `type X = kit.Y` / `var x = kit.Y`
+            ALIAS_DECL_EXPLICIT = re.compile(r'^\+.*\b(?:type|var)\s+\w+\s*=\s*' + _KITS + r'\.\w')
+            # grouped-block alias, scoped to charly/*_aliases.go only (avoids false positives on legit
+            # in-function `x = kit.var` reads in non-alias files): an indented `    Name = kit.Y` line.
+            ALIAS_DECL_GROUPED = re.compile(r'^\+\s+\w+\s*=\s*' + _KITS + r'\.\w+\s*(?:$|//)')
+            ALIASES_FILE = re.compile(r'(?:^|/)charly/.*_aliases\.go')
+            
+            
+            def merge_parent_shas(repo):
+                """The 2nd+ parent commit-ish of an IN-PROGRESS merge, else [].
+            
+                A `git commit` that completes a merge (a conflict resolution, or an explicit
+                `--no-commit` merge) records MERGE_HEAD naming the incoming parent(s). The
+                staged diff (`git diff --cached`) compares ONLY against HEAD — the FIRST
+                parent — so every file/line the merge pulls in from an incoming parent looks
+                freshly 'added'. These SHAs let the gate tell a genuine addition (present in
+                NEITHER parent) from a survivor merged in from an incoming parent (present in
+                one). Empty on a normal commit, so the gate's non-merge behaviour is
+                byte-for-byte unchanged."""
+                out = git(["rev-parse", "MERGE_HEAD"], repo)
+                if not out:
+                    return []
+                return [s for s in (line.strip() for line in out.splitlines()) if s]
+            
+            
+            def blob_lines(repo, commitish, path):
+                """The set of raw lines of `path` at `commitish` (empty if the path is absent)."""
+                out = git(["show", "%s:%s" % (commitish, path)], repo)
+                if out is None:
+                    return set()
+                return set(out.splitlines())
+            
+            
+            def path_present(repo, shas, path):
+                """True if `path` exists at ANY of the given commit-ish (a merge survivor)."""
+                for sha in shas:
+                    if git(["cat-file", "-e", "%s:%s" % (sha, path)], repo) is not None:
+                        return True
+                return False
+            
+            
+            def alias_gate(repo):
+                base = os.path.abspath(repo or os.getcwd())
+                if not os.path.isdir(os.path.join(base, "charly")):
+                    return  # not a charly superproject (e.g. an sdk/plugins submodule leg) — fail open
+                # Merge-commit awareness: when the commit completes a merge, a file/line the
+                # merge pulled in from an incoming parent is NOT branch-introduced and must
+                # not be flagged (main's gofmt-realigned survivors trip the raw staged diff).
+                # Only a GENUINE addition — present in the merge result but in NEITHER parent
+                # (a new alias, or one invented during conflict resolution) — is caught.
+                # merge_shas is empty on a normal commit, so that path is unchanged.
+                merge_shas = merge_parent_shas(repo)
+                parent_lines = {}  # path -> union of the path's lines across all incoming parents
+            
+                def merged_in_line(path, content):
+                    if not merge_shas or path is None:
+                        return False
+                    if path not in parent_lines:
+                        lines = set()
+                        for sha in merge_shas:
+                            lines |= blob_lines(repo, sha, path)
+                        parent_lines[path] = lines
+                    return content in parent_lines[path]
+            
+                # 1. A NEW charly/*_aliases.go file (status A) — absolute, no exception,
+                #    UNLESS the merge carried it in from an incoming parent (already vetted
+                #    on that parent's own landing).
+                status = git(["diff", "--cached", "--name-status", "--no-renames", "--", "charly/*.go"], repo)
+                new_alias_files = []
+                if status:
+                    for line in status.splitlines():
+                        parts = line.split("\t")
+                        st = parts[0][:1] if parts else ""
+                        path = parts[-1] if len(parts) > 1 else (parts[0] if parts else "")
+                        if st == "A" and ALIASES_FILE.search(path):
+                            if merge_shas and path_present(repo, merge_shas, path):
+                                continue  # merged in from an incoming parent, not branch-added
+                            new_alias_files.append(path)
+                if new_alias_files:
+                    block("ZERO-ALIASES: a NEW charly/*_aliases.go file is staged (%s). Alias files have "
+                          "NO migration exception — an alias is a mislocated call site; move the consumer "
+                          "into its owning plugin instead of re-exporting. See the project rulebook 'The kernel/plugin "
+                          "boundary law' + the ZERO-ALIASES standing rule." % ", ".join(new_alias_files))
+                # 2. Declaration-form kit-alias lines in the staged charly/*.go diff — again
+                #    skipping any line the merge carried in from an incoming parent.
+                diff = git(["diff", "--cached", "-U0", "--no-renames", "--", "charly/*.go"], repo)
+                if not diff:
+                    return
+                cur_path = None
+                for line in diff.splitlines():
+                    m = re.match(r'^\+\+\+ b/(.+)$', line)
+                    if m:
+                        cur_path = m.group(1)
+                        continue
+                    if not line.startswith("+") or line.startswith("+++"):
+                        continue
+                    content = line[1:]  # the raw added line, sans the diff '+' marker
+                    if ALIAS_DECL_EXPLICIT.search(line):
+                        if merged_in_line(cur_path, content):
+                            continue  # survivor from an incoming merge parent, not a new alias
+                        block("ZERO-ALIASES: a declaration-form kit-alias line is staged in charly/ (%s). "
+                              "Move the consumer into its owning plugin; never re-export a mechanism-kit "
+                              "symbol (an alias is a mislocated call site). See the project rulebook." % line.strip()[:120])
+                    if cur_path and ALIASES_FILE.search(cur_path) and ALIAS_DECL_GROUPED.search(line):
+                        if merged_in_line(cur_path, content):
+                            continue  # survivor from an incoming merge parent, not a new alias
+                        block("ZERO-ALIASES: a grouped kit-alias line is staged in %s (%s). Alias files have "
+                              "no exception — move the consumer, do not grow the alias file. See the project rulebook."
+                              % (cur_path, line.strip()[:120]))
+            
+            
+            for global_args, commit_args in invocations:
+                if hooks_path_override(global_args):
+                    block("a `core.hooksPath` override bypasses project hooks.")
+                if has_no_verify(commit_args):
+                    block("`git commit --no-verify` (or `-n`) bypasses project hooks.")
+                repo = dash_c_dir(global_args)
+                if repo is not None and not os.path.isdir(repo):
+                    continue
+                lint_staged_go(repo)
+                alias_gate(repo)
+            
+            sys.exit(0)
+            PY
+
+pre-push-gate:
+    hook:
+        name: pre-push-gate.sh
+        trigger: PreToolUse
+        matcher: Bash
+        mode: "0755"
+        content: |
+            #!/usr/bin/env bash
+            # PreToolUse(Bash) gate for `git push` — a DISCIPLINE BACKSTOP, not a security
+            # boundary (GitHub branch protection is the authority). It blocks (exit 2) a
+            # push that:
+            #   - force-pushes (--force / --force-with-lease / -f) — forbidden on EVERY
+            #     branch in EVERY repo (main only fast-forwards, tags are add-only),
+            #   - bypasses hooks (--no-verify, or a core.hooksPath override), or
+            #   - targets `main` directly (main advances ONLY via an agent-validated PR
+            #     merge). A bare `git push` with no refspec is left to the server-side
+            #     branch protection, the authoritative block.
+            # Shares git-command parsing with pre-commit-gate via gitcmd.py; obfuscation is
+            # out of scope by construction (see gitcmd.py / /charly-internals:agents).
+            #
+            # Fast path: only a git-push-mentioning command reaches the analyzer.
+            
+            INPUT=$(cat)
+            case "$INPUT" in
+              *git*push*) ;;
+              *) exit 0 ;;
+            esac
+            
+            HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+            python3 -B - "$INPUT" "$HERE" <<'PY'
+            import json, re, sys
+            sys.path.insert(0, sys.argv[2])
+            from gitcmd import (git_invocations, hooks_path_override, is_force_refspec,
+                                mentions_subcommand, refspec_dst)
+            
+            try:
+                cmd = json.loads(sys.argv[1]).get("tool_input", {}).get("command", "")
+            except Exception:
+                sys.exit(0)
+            
+            
+            def block(msg):
+                sys.stderr.write("pre-push-gate BLOCKED: " + msg + "\n")
+                sys.exit(2)
+            
+            
+            FORCE = "force-push is forbidden on every branch in every repo (project rulebook: main only " \
+                    "fast-forwards, tags are add-only). Remove --force / --force-with-lease / -f, " \
+                    "and any leading `+` on a refspec (`+feat/x` forces feat/x)."
+            NOVERIFY = "`git push --no-verify` bypasses hooks — forbidden."
+            HOOKSPATH = "`git -c core.hooksPath=...` bypasses the project's git hooks — the config " \
+                        "spelling of --no-verify; forbidden (project rulebook: never bypass hooks)."
+            TOMAIN = "direct push to `main` is forbidden — `main` advances ONLY via an agent-validated " \
+                     "PR merge (project rulebook / git-workflow). Push a `feat/` branch and open a PR."
+            
+            try:
+                invocations = git_invocations(cmd, "push")
+            except ValueError:
+                # An UNBALANCED or UNQUOTED quote (shlex cannot tokenize it) — never treat as
+                # "no push". FAIL CLOSED: if a `git … push` is plausibly present, block; no
+                # fallback re-parse. (Returning "no command" here is how a gate stops gating.)
+                if mentions_subcommand(cmd, "push"):
+                    block("cannot parse this command — an unbalanced or unquoted quote — so the gate "
+                          "cannot verify the push. Balance the quotes and run the push as its own command.")
+                sys.exit(0)
+            
+            for globs, args in invocations:
+                if hooks_path_override(globs):
+                    block(HOOKSPATH)
+                for t in args:
+                    if t in ("--force", "--force-with-lease") or t.startswith("--force-with-lease=") \
+                            or re.match(r'^-[a-z]*f[a-z]*$', t):
+                        block(FORCE)
+                    if t == "--no-verify":
+                        block(NOVERIFY)
+                # The first non-flag arg is the remote; each later one is a refspec. A leading
+                # `+` on the refspec is a FORCE update (`git push origin +feat/x`) — forbidden
+                # on every branch, exactly like --force. Otherwise its destination is the part
+                # after the last ':'; `main` / `refs/heads/main` are forbidden destinations.
+                # Bounded to THIS invocation's segment, so `git push feat/x && git log main`
+                # never trips.
+                non_flags = [t for t in args if not t.startswith("-")]
+                for spec in non_flags[1:]:
+                    if is_force_refspec(spec):
+                        block(FORCE)
+                    if refspec_dst(spec) in ("main", "refs/heads/main"):
+                        block(TOMAIN)
+            
+            sys.exit(0)
+            PY
+
+gitcmd:
+    hook:
+        name: gitcmd.py
+        mode: "0644"
+        content: |
+            """Shared git-command inspection for the pre-commit and pre-push PreToolUse gates.
+            
+            These gates are DISCIPLINE BACKSTOPS, not security boundaries: every change is
+            re-validated by a fresh pr-validator agent and by GitHub branch protection. This
+            parses the common, honest command forms and does NOT try to defeat deliberate
+            obfuscation (splitting the command word, generating it at runtime) — an infinite
+            regress no static parser wins, and the server's job.
+            
+            `git_invocations` TOKENIZES with shlex (posix, punctuation_chars) so a quoted
+            argument containing a space is one token (the fail-open a bare regex has), splits
+            on shell separators so a compound `… && …` does not bleed one command's args into
+            another, and raises `ValueError` when the command cannot be tokenized — an
+            UNBALANCED or UNQUOTED quote (e.g. an apostrophe in a heredoc body, or an
+            unterminated `"`). A CLEAN heredoc tokenizes fine and is judged normally; it is
+            the stray quote, not the heredoc, that fails. The caller MUST fail closed on that
+            ValueError via `mentions_subcommand` — returning "no command" there is how a gate
+            silently stops gating.
+            """
+            import os
+            import re
+            import shlex
+            
+            # git GLOBAL options that consume the NEXT token as their value. A subcommand's
+            # own options (commit's `-c <commit>`) sit AFTER the subcommand, so a scan that
+            # stops at the first non-option token never mistakes them for globals.
+            _VALUE_OPTS = {"-C", "-c", "--git-dir", "--work-tree", "--namespace",
+                           "--config-env", "--exec-path", "--super-prefix"}
+            
+            # Shell keywords / command-modifier words a real `git` may hide behind.
+            _SKIP = {"if", "then", "elif", "else", "do", "while", "until", "!",
+                     "command", "exec", "nohup", "time", "nice", "ionice", "stdbuf",
+                     "setsid", "sudo", "doas", "env", "xargs", "builtin"}
+            _ENV_ASSIGN = re.compile(r"^\w+=")
+            
+            
+            def _tokenize(cmd):
+                """shlex tokens for `cmd`; `&&`/`||`/`;`/`|`/`&`/`(`/`)` are their own
+                punctuation tokens, `#` starts a comment. Raises ValueError if unparseable."""
+                lex = shlex.shlex(cmd, posix=True, punctuation_chars=True)
+                lex.whitespace_split = True
+                return list(lex)
+            
+            
+            def _is_sep(tok):
+                return tok != "" and all(ch in "&|;()<>" for ch in tok)
+            
+            
+            def git_invocations(cmd, subcommand):
+                """Every `git [global-opts] <subcommand> [args]` in `cmd`, as a list of
+                (global_opts, args) with args bounded at the next shell separator. Raises
+                ValueError if `cmd` cannot be tokenized — the caller fails closed."""
+                tokens = _tokenize(cmd)                        # ValueError propagates
+                segments, cur = [], []
+                for t in tokens:
+                    if _is_sep(t):
+                        segments.append(cur)
+                        cur = []
+                    else:
+                        cur.append(t)
+                segments.append(cur)
+            
+                out = []
+                for seg in segments:
+                    i = 0
+                    while i < len(seg) and (seg[i] in _SKIP or _ENV_ASSIGN.match(seg[i])):
+                        i += 1
+                    if i >= len(seg) or os.path.basename(seg[i]) != "git":
+                        continue
+                    i += 1
+                    globs = []
+                    while i < len(seg) and seg[i].startswith("-"):
+                        globs.append(seg[i])
+                        i += 1
+                        if globs[-1] in _VALUE_OPTS and i < len(seg) and not seg[i].startswith("-"):
+                            globs.append(seg[i])
+                            i += 1
+                    if i < len(seg) and seg[i] == subcommand:
+                        out.append((globs, seg[i + 1:]))       # bounded to THIS segment
+                return out
+            
+            
+            def mentions_subcommand(cmd, subcommand):
+                """Is a `git … <subcommand>` PLAUSIBLY present in a command shlex could not
+                tokenize? The fail-closed predicate BOTH gates consult after a ValueError —
+                security-relevant, so it has exactly ONE definition (R3)."""
+                pat = r'(?:^|[\s;&|(])git\b[^\n]*\b' + re.escape(subcommand) + r'\b'
+                return re.search(pat, cmd) is not None
+            
+            
+            def is_force_refspec(spec):
+                """A refspec forces when it leads with `+` (`git push origin +feat/x` is a
+                force update of feat/x — the `+` prefixes the whole refspec, not the dst)."""
+                return spec.startswith("+")
+            
+            
+            def refspec_dst(spec):
+                """The destination ref a refspec writes: the part after the last ':', with a
+                leading force marker stripped (a bare `+main` pushes to `main`)."""
+                return spec.split(":")[-1].lstrip("+")
+            
+            
+            def hooks_path_override(globs):
+                """True if the global options set core.hooksPath (the config spelling of
+                --no-verify)."""
+                return any("core.hookspath" in g.lower() for g in globs)
+            
+            
+            def dash_c_dir(globs):
+                """The directory named by a global `-C <dir>` / `-C<dir>`, else None."""
+                for k, g in enumerate(globs):
+                    if g == "-C" and k + 1 < len(globs):
+                        return globs[k + 1]
+                    if g.startswith("-C") and len(g) > 2:
+                        return g[2:]
+                return None
+
+gate-test:
+    hook:
+        name: gate_test.py
+        mode: "0644"
+        content: |
+            #!/usr/bin/env python3
+            """Behavioral tests for the narrow commit gate and push safety gate."""
+            
+            import json
+            import os
+            import shutil
+            import stat
+            import subprocess
+            import sys
+            import tempfile
+            
+            sys.dont_write_bytecode = True
+            HERE = os.path.dirname(os.path.abspath(__file__))
+            COMMIT_GATE = os.path.join(HERE, "pre-commit-gate.sh")
+            PUSH_GATE = os.path.join(HERE, "pre-push-gate.sh")
+            
+            failures = []
+            ran = 0
+            
+            
+            def gate(script, command, cwd=None):
+                result = subprocess.run(
+                    [script],
+                    input=json.dumps({"tool_input": {"command": command}}),
+                    capture_output=True,
+                    text=True,
+                    cwd=cwd,
+                )
+                return "BLOCK" if result.returncode == 2 else "ALLOW"
+            
+            
+            def expect(label, actual, expected):
+                global ran
+                ran += 1
+                passed = actual == expected
+                if not passed:
+                    failures.append(label)
+                print("[%s] want=%-5s got=%-5s %s" % (
+                    "PASS" if passed else "FAIL", expected, actual, label,
+                ))
+            
+            
+            def repo(go_module=False):
+                path = tempfile.mkdtemp(prefix="gate-test-")
+                for args in (("init", "-q"), ("config", "user.email", "t@t"),
+                             ("config", "user.name", "t")):
+                    subprocess.run(["git", "-C", path, *args], capture_output=True)
+                if go_module:
+                    with open(os.path.join(path, "go.mod"), "w") as stream:
+                        stream.write("module gatetest\n\ngo 1.24\n")
+                    with open(os.path.join(path, "main.go"), "w") as stream:
+                        stream.write("package main\n\nfunc main() {}\n")
+                else:
+                    with open(os.path.join(path, "README.md"), "w") as stream:
+                        stream.write("# fixture\n")
+                subprocess.run(["git", "-C", path, "add", "-A"], capture_output=True)
+                subprocess.run(["git", "-C", path, "commit", "-qm", "initial"], capture_output=True)
+                return path
+            
+            
+            clean = repo()
+            expect("commit hook: executable bit set",
+                   bool(os.stat(COMMIT_GATE).st_mode & stat.S_IXUSR), True)
+            expect("push hook: executable bit set",
+                   bool(os.stat(PUSH_GATE).st_mode & stat.S_IXUSR), True)
+            for label, command, expected in (
+                ("commit: --no-verify blocked", "git commit --no-verify -m x", "BLOCK"),
+                ("commit: -n blocked", "git commit -n -m x", "BLOCK"),
+                ("commit: bundled -an blocked", "git commit -an -m x", "BLOCK"),
+                ("commit: hooksPath override blocked", "git -c core.hooksPath=/x commit -m x", "BLOCK"),
+                ("commit: bypass text inside message allowed", "git commit -m 'do not use --no-verify'", "ALLOW"),
+                ("commit: attribution text is validator-owned", "git commit -m 'Assisted-by: arbitrary text'", "ALLOW"),
+                ("commit: no attribution is not locally blocked", "git commit -m human", "ALLOW"),
+                ("commit: clean heredoc allowed", "git commit -F - <<'EOF'\nbody\nEOF", "ALLOW"),
+                ("commit: unparseable command blocked", 'git commit -m "unterminated', "BLOCK"),
+                ("non-commit command allowed", "git add README.md", "ALLOW"),
+            ):
+                expect(label, gate(COMMIT_GATE, command, clean), expected)
+            shutil.rmtree(clean, ignore_errors=True)
+            
+            
+            if shutil.which("golangci-lint") is not None:
+                bad = repo(go_module=True)
+                with open(os.path.join(bad, "main.go"), "a") as stream:
+                    stream.write("\nfunc unused() {}\n")
+                subprocess.run(["git", "-C", bad, "add", "main.go"], capture_output=True)
+                expect("commit: lint failure blocked", gate(COMMIT_GATE, f"git -C {bad} commit -m x"), "BLOCK")
+                shutil.rmtree(bad, ignore_errors=True)
+            
+                good = repo(go_module=True)
+                with open(os.path.join(good, "main.go"), "w") as stream:
+                    stream.write("package main\n\nfunc main() { helper() }\nfunc helper() {}\n")
+                subprocess.run(["git", "-C", good, "add", "main.go"], capture_output=True)
+                expect("commit: lint-clean Go allowed", gate(COMMIT_GATE, f"git -C {good} commit -m x"), "ALLOW")
+                shutil.rmtree(good, ignore_errors=True)
+            
+            
+            # --- ZERO-ALIASES gate tests (charly superproject shape; no go.mod so the lint
+            # gate does not interfere — the alias gate is tested in isolation) ---
+            def charly_repo():
+                path = tempfile.mkdtemp(prefix="gate-test-charly-")
+                for args in (("init", "-q"), ("config", "user.email", "t@t"),
+                             ("config", "user.name", "t")):
+                    subprocess.run(["git", "-C", path, *args], capture_output=True)
+                os.mkdir(os.path.join(path, "charly"))
+                with open(os.path.join(path, "charly", "foo.go"), "w") as stream:
+                    stream.write("package main\n\nfunc main() {}\n")
+                with open(os.path.join(path, "charly", "existing_aliases.go"), "w") as stream:
+                    stream.write("package main\n\n// pre-existing alias file\n")
+                subprocess.run(["git", "-C", path, "add", "-A"], capture_output=True)
+                subprocess.run(["git", "-C", path, "commit", "-qm", "initial"], capture_output=True)
+                return path
+            
+            
+            # NEW charly/*_aliases.go file (status A) — the #86 class. File has NO alias line,
+            # so the block is purely the new-alias-file check.
+            c = charly_repo()
+            with open(os.path.join(c, "charly", "deploykit_new_aliases.go"), "w") as stream:
+                stream.write("package main\n\n// a new alias-named file, no alias line inside\n")
+            subprocess.run(["git", "-C", c, "add", "-A"], capture_output=True)
+            expect("commit: NEW charly/*_aliases.go file blocked (#86 class)",
+                   gate(COMMIT_GATE, f"git -C {c} commit -m x"), "BLOCK")
+            shutil.rmtree(c, ignore_errors=True)
+            
+            # Explicit `var x = deploykit.Y` declaration-form alias in charly/foo.go.
+            c = charly_repo()
+            with open(os.path.join(c, "charly", "foo.go"), "w") as stream:
+                stream.write("package main\n\nvar helper = deploykit.SomeFn\nfunc main() {}\n")
+            subprocess.run(["git", "-C", c, "add", "-A"], capture_output=True)
+            expect("commit: declaration-form var alias blocked",
+                   gate(COMMIT_GATE, f"git -C {c} commit -m x"), "BLOCK")
+            shutil.rmtree(c, ignore_errors=True)
+            
+            # Explicit `type X = kit.Y` declaration-form alias.
+            c = charly_repo()
+            with open(os.path.join(c, "charly", "foo.go"), "w") as stream:
+                stream.write("package main\n\ntype Box = kit.Thing\nfunc main() {}\n")
+            subprocess.run(["git", "-C", c, "add", "-A"], capture_output=True)
+            expect("commit: declaration-form type alias blocked",
+                   gate(COMMIT_GATE, f"git -C {c} commit -m x"), "BLOCK")
+            shutil.rmtree(c, ignore_errors=True)
+            
+            # Grown (status M) charly/*_aliases.go with a NEW grouped alias line — the #87 class.
+            c = charly_repo()
+            with open(os.path.join(c, "charly", "existing_aliases.go"), "w") as stream:
+                stream.write("package main\n\nvar (\n    NewAlias = vmshared.VmDomainIdentity\n)\n// pre-existing\n")
+            subprocess.run(["git", "-C", c, "add", "-A"], capture_output=True)
+            expect("commit: grouped alias in grown alias file blocked (#87 class)",
+                   gate(COMMIT_GATE, f"git -C {c} commit -m x"), "BLOCK")
+            shutil.rmtree(c, ignore_errors=True)
+            
+            # A plain kit CALL is ALLOWED — IMPORT-PURITY's residual-call-site exception; the
+            # hook gates only alias FORMS, never a plain call (validator judges IMPORT-PURITY).
+            c = charly_repo()
+            with open(os.path.join(c, "charly", "foo.go"), "w") as stream:
+                stream.write("package main\n\nfunc main() { _ = kit.Foo() }\n")
+            subprocess.run(["git", "-C", c, "add", "-A"], capture_output=True)
+            expect("commit: plain kit CALL allowed (not an alias form)",
+                   gate(COMMIT_GATE, f"git -C {c} commit -m x"), "ALLOW")
+            shutil.rmtree(c, ignore_errors=True)
+            
+            # A plain kit IMPORT is ALLOWED — IMPORT-PURITY is validator-judged, not hook-gated.
+            c = charly_repo()
+            with open(os.path.join(c, "charly", "foo.go"), "w") as stream:
+                stream.write("package main\n\nimport \"github.com/opencharly/sdk/deploykit\"\n\nfunc main() {}\n")
+            subprocess.run(["git", "-C", c, "add", "-A"], capture_output=True)
+            expect("commit: plain kit IMPORT allowed (IMPORT-PURITY is validator-judged)",
+                   gate(COMMIT_GATE, f"git -C {c} commit -m x"), "ALLOW")
+            shutil.rmtree(c, ignore_errors=True)
+            
+            # An alias line OUTSIDE charly/ (e.g. an sdk/plugins submodule leg with no charly/
+            # dir) is not gated — fail-open for non-charly repos.
+            noc = repo()
+            with open(os.path.join(noc, "fake_aliases.go"), "w") as stream:
+                stream.write("package main\n\nvar X = deploykit.Y\n")
+            subprocess.run(["git", "-C", noc, "add", "fake_aliases.go"], capture_output=True)
+            expect("commit: alias outside charly/ not gated (submodule leg fail-open)",
+                   gate(COMMIT_GATE, f"git -C {noc} commit -m x"), "ALLOW")
+            shutil.rmtree(noc, ignore_errors=True)
+            
+            # A clean charly/*.go change with no alias form is allowed.
+            c = charly_repo()
+            with open(os.path.join(c, "charly", "foo.go"), "w") as stream:
+                stream.write("package main\n\nfunc main() { println(\"hi\") }\n")
+            subprocess.run(["git", "-C", c, "add", "-A"], capture_output=True)
+            expect("commit: clean charly change allowed",
+                   gate(COMMIT_GATE, f"git -C {c} commit -m x"), "ALLOW")
+            shutil.rmtree(c, ignore_errors=True)
+            
+            
+            # --- ZERO-ALIASES merge-commit awareness --------------------------------------
+            # A behind-branch MERGE stages, relative to HEAD (the FIRST parent), everything
+            # the incoming branch brought in — including gofmt-REALIGNED (not new) alias
+            # survivors. Those must NOT trip the gate; only an alias present in NEITHER parent
+            # (a genuine new alias, incl. one invented while resolving a conflict) must block.
+            def git_q(path, *args):
+                return subprocess.run(["git", "-C", path, *args], capture_output=True, text=True)
+            
+            
+            def charly_merge_base():
+                """A charly superproject with a base commit on branch 'trunk' carrying a
+                tab-indented grouped alias line, plus a 'feat' branch forked from it."""
+                path = tempfile.mkdtemp(prefix="gate-test-merge-")
+                git_q(path, "init", "-q", "-b", "trunk")
+                git_q(path, "config", "user.email", "t@t")
+                git_q(path, "config", "user.name", "t")
+                os.mkdir(os.path.join(path, "charly"))
+                with open(os.path.join(path, "charly", "foo.go"), "w") as stream:
+                    stream.write("package main\n\nfunc main() {}\n")
+                with open(os.path.join(path, "charly", "existing_aliases.go"), "w") as stream:
+                    stream.write("package main\n\nvar (\n\tKeptAlias = vmshared.Foo\n)\n")
+                git_q(path, "add", "-A")
+                git_q(path, "commit", "-qm", "base")
+                git_q(path, "branch", "feat")
+                return path
+            
+            
+            # Case 1 (must ALLOW): trunk gofmt-REALIGNS the alias line (tab -> 4 spaces); feat
+            # makes an unrelated change; merging trunk stages the realigned line as '+', but it
+            # is present in the incoming parent -> a survivor, not a new alias.
+            m = charly_merge_base()
+            with open(os.path.join(m, "charly", "existing_aliases.go"), "w") as stream:
+                stream.write("package main\n\nvar (\n    KeptAlias = vmshared.Foo\n)\n")
+            git_q(m, "commit", "-qam", "trunk realign")
+            git_q(m, "checkout", "-q", "feat")
+            with open(os.path.join(m, "charly", "foo.go"), "w") as stream:
+                stream.write("package main\n\nfunc main() { println(\"feat\") }\n")
+            git_q(m, "commit", "-qam", "feat change")
+            git_q(m, "merge", "--no-commit", "--no-ff", "trunk")  # clean 3-way; pauses pre-commit
+            expect("commit: merge-in realigned alias survivor allowed",
+                   gate(COMMIT_GATE, f"git -C {m} commit -m x"), "ALLOW")
+            shutil.rmtree(m, ignore_errors=True)
+            
+            
+            # Case 2 (must BLOCK): during a merge, a GENUINELY new alias line (present in
+            # neither parent) is introduced -> still caught.
+            m = charly_merge_base()
+            with open(os.path.join(m, "charly", "foo.go"), "w") as stream:  # trunk: unrelated change
+                stream.write("package main\n\nfunc main() { println(\"trunk\") }\n")
+            git_q(m, "commit", "-qam", "trunk change")
+            git_q(m, "checkout", "-q", "feat")
+            with open(os.path.join(m, "charly", "bar.go"), "w") as stream:  # feat: unrelated new file
+                stream.write("package main\n")
+            git_q(m, "add", "-A")
+            git_q(m, "commit", "-qm", "feat change")
+            git_q(m, "merge", "--no-commit", "--no-ff", "trunk")  # clean 3-way; pauses pre-commit
+            with open(os.path.join(m, "charly", "existing_aliases.go"), "w") as stream:  # inject a new alias
+                stream.write("package main\n\nvar (\n\tKeptAlias = vmshared.Foo\n\tBrandNew = kit.Sym\n)\n")
+            git_q(m, "add", "charly/existing_aliases.go")
+            expect("commit: genuinely-new alias during a merge still blocked",
+                   gate(COMMIT_GATE, f"git -C {m} commit -m x"), "BLOCK")
+            shutil.rmtree(m, ignore_errors=True)
+            
+            
+            # Case 3 (must ALLOW): a NEW charly/*_aliases.go FILE the merge carried in from the
+            # incoming parent (already vetted on its own landing) is not re-flagged.
+            m = charly_merge_base()
+            with open(os.path.join(m, "charly", "trunk_new_aliases.go"), "w") as stream:  # trunk adds it
+                stream.write("package main\n\n// added on trunk\n")
+            git_q(m, "add", "-A")
+            git_q(m, "commit", "-qm", "trunk adds alias file")
+            git_q(m, "checkout", "-q", "feat")
+            with open(os.path.join(m, "charly", "bar.go"), "w") as stream:  # feat: unrelated new file
+                stream.write("package main\n")
+            git_q(m, "add", "-A")
+            git_q(m, "commit", "-qm", "feat change")
+            git_q(m, "merge", "--no-commit", "--no-ff", "trunk")  # clean 3-way; pauses pre-commit
+            expect("commit: merge-in new alias FILE survivor allowed",
+                   gate(COMMIT_GATE, f"git -C {m} commit -m x"), "ALLOW")
+            shutil.rmtree(m, ignore_errors=True)
+            
+            
+            for label, command, expected in (
+                ("push: --force blocked", "git push --force origin feat/x", "BLOCK"),
+                ("push: -f blocked", "git push -f origin feat/x", "BLOCK"),
+                ("push: force-with-lease blocked", "git push --force-with-lease origin feat/x", "BLOCK"),
+                ("push: forced refspec blocked", "git push origin +feat/x", "BLOCK"),
+                ("push: --no-verify blocked", "git push --no-verify origin feat/x", "BLOCK"),
+                ("push: hooksPath override blocked", "git -c core.hooksPath=/x push origin feat/x", "BLOCK"),
+                ("push: direct main blocked", "git push origin main", "BLOCK"),
+                ("push: explicit main destination blocked", "git push origin HEAD:refs/heads/main", "BLOCK"),
+                ("push: feature branch allowed", "git push origin feat/x", "ALLOW"),
+                ("push: main as source allowed", "git push origin main:feat/x", "ALLOW"),
+            ):
+                expect(label, gate(PUSH_GATE, command), expected)
+            
+            print("\n%d case(s), %d failure(s)" % (ran, len(failures)))
+            for failure in failures:
+                print("  FAILED:", failure)
+            sys.exit(1 if failures else 0)
+
+
+marketplace:
+    marketplace:
+        name: charly-plugins
+        version: 3.1.0
+        description: |-
+            Claude Code and Codex plugins for OpenCharly — runtime commands, schema authoring, contributor internals, and deployable image families.
+        families:
+            core:
+                category: commands
+                description: "Runtime/lifecycle CLI verbs — start, stop, restart, charly-status, logs, shell, ssh, deploy, charly-update, remove, charly-config, cmd, charly-version, charly-doctor."
+                keywords: [charly, lifecycle, containers, verbs]
+                profiles: [user]
+            build:
+                category: commands
+                description: "Build/authoring CLI verbs — build, generate, list, inspect, merge, new, pull, validate, secrets, settings, migrate, charly-mcp-cmd."
+                keywords: [charly, build, authoring, containerfile]
+                profiles: [user]
+            check:
+                category: commands
+                description: "Live-container evaluation and probe verbs — `charly check` orchestrator + per-protocol live probes (cdp, wl, wl-overlay, dbus, vnc, spice, libvirt, record)."
+                keywords: [charly, check, probe, automation, live]
+                profiles: [user]
+            automation:
+                category: commands
+                description: "Automation/customization knobs — tmux verb, host-side wrappers (alias, udev), topic flags (encryption, sidecars, openclaw deployment)."
+                keywords: [charly, tmux, alias, udev, encryption, sidecar]
+                profiles: [user]
+            image:
+                category: kind
+                description: "Schema authoring reference for `kind: box` and `kind: candy` — charly.yml composition, task verbs, validation."
+                keywords: [charly, image, layer, schema]
+                profiles: [user]
+            vm:
+                category: kind
+                description: "Schema authoring reference for `kind: vm` + bootc VM catalog — libvirt/QEMU backends, cloud_image vs bootc sources."
+                keywords: [charly, vm, libvirt, bootc]
+                profiles: [user]
+            kubernetes:
+                category: kind
+                description: "Schema authoring for `kind: k8s` — Kustomize manifests + cluster probes via `charly check k8s`."
+                keywords: [charly, kubernetes, k8s]
+                profiles: [user]
+            local:
+                category: kind
+                description: "Schema authoring for `kind: local` — local templates, ssh-host targets, managed ssh-config fragment."
+                keywords: [charly, local, ssh, ansible]
+                profiles: [user]
+            pod:
+                category: kind
+                description: "Schema authoring for `kind: pod` and `kind: deploy` — charly.yml shapes, nested deploys, sidecars."
+                keywords: [charly, pod, deploy]
+                profiles: [user]
+            internals:
+                category: development
+                description: "Development internals for charly contributors — Go source map, install-plan IR, capabilities/OCI labels, vm-spec, libvirt/cloud-init renderers, cutover-policy, strict-policy, disposable, ovmf, generate-source, skill maintenance, and the agents/workflows/teams guide. Ships five agents (root-cause-analyzer, layer-validator, testing-validator, check-bed-runner, deploy-verifier) and the github MCP server."
+                keywords: [charly, development, internals, go, ir, agents, workflows]
+                mcp_servers:
+                    - name: github
+                      type: stdio
+                      command: "github-mcp-server"
+                      args: ['stdio', '--tools', 'get_me,list_workflows,list_workflow_runs,get_workflow_run,get_job_logs,list_workflow_jobs,get_file_contents,list_commits,get_commit,list_branches,issue_read,issue_write,add_issue_comment,list_issues,search_issues,pull_request_read,list_pull_requests,search_pull_requests']
+            distros:
+                category: images
+                description: "Base OS images and hardware runtime — arch, fedora, debian, ubuntu, aurora, bazzite, GPU runtime (nvidia/cuda/rocm), bootc bootstrap, per-distro builders."
+                keywords: [charly, distro, fedora, arch, debian, ubuntu, nvidia, cuda, bootc]
+                profiles: [user]
+            languages:
+                category: images
+                description: "Programming language runtimes and package managers — python, python-ml, pixi (others like golang/rust/nodejs live in `charly-coder`)."
+                keywords: [charly, python, pixi]
+                profiles: [user]
+            infrastructure:
+                category: images
+                description: "Infrastructure services and system layers — postgresql, redis, valkey, vectorchord, k3s cluster, traefik, supervisord, tailscale, gocryptfs, virtualization, dbus-layer, tmux-layer."
+                keywords: [charly, postgresql, redis, k3s, traefik, tailscale, supervisord]
+                profiles: [user]
+            tools:
+                category: images
+                description: "CLI utilities and the charly binary deploy artifacts — ripgrep, himalaya, whisper, nano-pdf, summarize, ordercli, gogcli, sherpa-onnx, plus the `charly` binary deployment skill."
+                keywords: [charly, cli, tools, utilities]
+                profiles: [user]
+            jupyter:
+                category: images
+                description: "Self-contained skills + MCP wiring for the jupyter image family (jupyter, jupyter-ml, jupyter-ml-notebook, unsloth-studio). Ships the jupyter MCP server (port 8888)."
+                keywords: [charly, jupyter, notebooks, mcp, collaboration, ml]
+                profiles: [container]
+                mcp_servers:
+                    - name: jupyter
+                      type: http
+                      url: "http://localhost:8888/mcp"
+            coder:
+                category: images
+                description: "Self-contained skills + MCP wiring for charly coder/dev images (arch-coder, debian-coder, fedora-coder, ubuntu-coder, charly-arch). Ships the charly MCP server (port 18765). Bundles language runtimes (golang, rust, nodejs)."
+                keywords: [charly, coder, claude-code, codex, mcp]
+                profiles: [container]
+                mcp_servers:
+                    - name: charly
+                      type: http
+                      url: "http://localhost:18765/mcp"
+            selkies:
+                category: images
+                description: "Self-contained skills + MCP wiring for the selkies-desktop family (Wayland desktop in a container with VNC + Chrome). Ships the chrome-devtools MCP server (port 9224)."
+                keywords: [charly, selkies, wayland, desktop, vnc, chrome, mcp]
+                profiles: [container]
+                mcp_servers:
+                    - name: chrome-devtools
+                      type: http
+                      url: "http://localhost:9224/mcp"
+            openclaw:
+                category: images
+                description: "Self-contained skills for the openclaw image family (CachyOS base): the headless openclaw gateway and the maximal non-browser openclaw-full."
+                keywords: [charly, openclaw, ai, chrome, mcp]
+                profiles: [container]
+            versa:
+                category: images
+                description: "Self-contained skills + MCP wiring for the versa image — a marimo notebook environment (marimo + Airflow + OSM/GTFS analytics + martin vector tiles + five PMTiles generation pipelines: tippecanoe / gpq-tiles / DuckDB ST_AsMVT / DuckDB → freestiler / Shortbread-via-Tilemaker, plus PMTiles Viewer SPA on port 28001 + VersaTiles Frontend on port 28002 + versatiles serve as second tile server on port 28090). Ships marimo (port 22718) and airflow (port 29999) MCP servers."
+                keywords: [charly, marimo, airflow, notebook, geo, pmtiles, gpq-tiles, freestiler, shortbread, versatiles, versatiles-fonts, maplibre-versatiles-styler, tilemaker, mcp]
+                profiles: [container]
+                mcp_servers:
+                    - name: marimo
+                      type: http
+                      url: "http://localhost:22718/mcp/server"
+            ollama:
+                category: images
+                description: "Self-contained skills for running the ollama LLM-server image. Pair with charly-jupyter to expose Ollama models to Jupyter notebooks via the jupyter MCP."
+                keywords: [charly, ollama, llm]
+                profiles: [container]
+            openwebui:
+                category: images
+                description: "Self-contained skills for the openwebui chat-frontend image. Consumes the jupyter MCP server (enable charly-jupyter alongside) for in-chat code execution."
+                keywords: [charly, openwebui, chat, llm]
+                profiles: [container]
+            comfyui:
+                category: images
+                description: "Self-contained skills for running the comfyui image-generation/diffusion image."
+                keywords: [charly, comfyui, image-generation, diffusion]
+                profiles: [container]
+            immich:
+                category: images
+                description: "Self-contained skills for the immich photo-management image (immich + immich-ml variants)."
+                keywords: [charly, immich, photos]
+                profiles: [container]
+            hermes:
+                category: images
+                description: "Self-contained skills for the hermes agent image (hermes + hermes-playwright variants). Consumes the jupyter MCP server for notebook manipulation — enable charly-jupyter alongside."
+                keywords: [charly, hermes, agent, playwright]
+                profiles: [container]
+            filebrowser:
+                category: images
+                description: "Self-contained skills for the filebrowser image (web-based file management on top of an charly volume)."
+                keywords: [charly, filebrowser, files]
+                profiles: [container]
+        settings:
+            source_path: ./plugins
