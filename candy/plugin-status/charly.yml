@@ -18,26 +18,27 @@ plugin-status:
             That engine now lives in candy/plugin-substrate (status_flat.go's flatCollector,
             K6 — the former charly/status_collector.go, whole-file moved; the earlier "stays
             core, registry-boundary blocker" verdict on it was reopened and reversed) and is
-            reached via the generic "status-substrate" HostBuild seam
-            (charly/status_substrate_host.go, now a THIN forward to verb:status-fanout —
-            spec.StatusSubstrateRequest{Single,IncludeAll,Box,Instance} →
+            reached via InvokeProvider(verb:status-fanout) DIRECTLY over the in-proc reverse
+            channel (spec.StatusSubstrateRequest{Single,IncludeAll,Box,Instance} →
             spec.StatusSubstrateReply{Rows,Single}) — narrowed (K5) to drop Nested/Roots now
-            that the declared-tree resolution is plugin-side. "status-substrate" is a
-            class-generic action noun, not a provider word (F11). This is the same "plugin owns
-            the command + a generic seam for the core-coupled bits" doctrine
-            candy/plugin-settings established.
+            that the declared-tree resolution is plugin-side. The former "status-substrate"
+            HostBuild seam + charly/status_substrate_host.go are DELETED (K-wave 2): the wire
+            broker's in-proc InvokeProvider branch now threads the reverse channel onward to
+            the fan-out generically, so the fan-out's vm/k8s collectors reach the host for
+            themselves. This is the same "plugin owns the command + a generic seam for the
+            core-coupled bits" doctrine candy/plugin-settings established.
 
             status is COMPILED-IN (listed in charly/charly.yml compiled_plugins) BECAUSE its
             Invoke(OpRun) needs the in-proc reverse channel — threaded by dispatchInProcCommand
-            ("Seam A") — to call HostBuild("status-substrate"). The out-of-process CliMain path
+            ("Seam A") — to InvokeProvider(verb:status-fanout). The out-of-process CliMain path
             has no reverse channel, so it errors: status cannot run out-of-process, it needs the
-            status-substrate host seam. There is NO hidden core-command forward — the plugin does
-            the work directly, calling back only for the live-collection engine it can't run
-            itself; no core symbol crosses the boundary, no ad-hoc podman.
+            in-proc reverse channel for the fan-out. There is NO hidden core-command forward —
+            the plugin does the work directly, calling back only for the live-collection engine
+            it can't run itself; no core symbol crosses the boundary, no ad-hoc podman.
 
             The plugin ALSO serves sdk.OpStatusCollect — the programmatic status-collection API
-            (distinct from the lifecycle OpStatus a substrate plugin serves): HostBuild
-            ("status-substrate") → the PURE overlay → the overlaid []spec.DeploymentStatus as
+            (distinct from the lifecycle OpStatus a substrate plugin serves): InvokeProvider
+            (verb:status-fanout) → the PURE overlay → the overlaid []spec.DeploymentStatus as
             ResultJson (no render), reachable by any in-process peer via
             InvokeProvider(class:command, word:status, op:status-collect).
 
@@ -58,11 +59,11 @@ plugin-status:
               # it mirrors candy/plugin-settings' settings-module-present, a trivial build-context
               # `plugin: command` (the built-in command CHECK verb) running `true`, the mandatory ≥1
               # deterministic check every candy ships. The full `charly status` end-to-end — the
-              # compiled-in in-proc HostBuild("status-substrate") dispatch, the PURE overlay fold, and
+              # compiled-in in-proc InvokeProvider(verb:status-fanout) dispatch, the PURE overlay fold, and
               # the render output — is exercised by the live R10 bed (check-local / check-pod, whichever
               # composes the affected substrate) plus the candy's own overlay_golden_test.go byte-parity
               # golden.
-              check: the status command plugin ships a buildable Go module (go.mod + the provider package) compiled into charly; the full `charly status` end-to-end (the in-proc HostBuild status-substrate dispatch + the PURE nested overlay) is exercised by the live R10 bed plus the candy's overlay_golden_test.go
+              check: the status command plugin ships a buildable Go module (go.mod + the provider package) compiled into charly; the full `charly status` end-to-end (the in-proc InvokeProvider(verb:status-fanout) dispatch + the PURE nested overlay) is exercised by the live R10 bed plus the candy's overlay_golden_test.go
               id: status-module-present
               context:
                   - build
