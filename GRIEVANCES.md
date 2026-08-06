@@ -1,7 +1,7 @@
-# Four grievances
+# Five grievances
 
 Every tool here exists because something in ordinary DevOps practice is worse than it needs to be.
-This document names four of those things, states the status quo without strawmanning it, and shows
+This document names five of those things, states the status quo without strawmanning it, and shows
 what OpenCharly does instead — with the mechanism, not the marketing.
 
 [The vision](VISION.md) says where the project is going. This says what it is running away from.
@@ -223,15 +223,72 @@ rather than an exotic configuration you are on your own with.
 
 ---
 
+## 5. The tests never travel with the image
+
+### The status quo
+
+Unit tests run on a developer's machine, mocking away everything slow so they stay fast.
+Acceptance tests run in a CI pipeline, which builds its own copy of the artifact and tests that
+copy. Live testing happens somewhere else again — a staging host, a smoke script, an uptime probe —
+usually written by a different team with its own idea of "pass". Three systems, three artifacts,
+three definitions of done, and nothing forces them to agree.
+
+Each one is reasonable in isolation: fast feedback wants a small, fast suite; shipping wants a gate
+that blocks; operations wants proof the running thing works. The fracture is the problem. The build
+CI tested and the image that ships are produced by different code paths, so "it passed CI" is a
+claim about a build that is not the build you are running. And the checks themselves live in a YAML
+file in the repository — they are not part of the image. The artifact users pull from the registry
+is, at the moment they pull it, an unverified thing, and it cannot be re-verified by the person who
+pulled it, because the proof did not travel with it.
+
+### What OpenCharly does
+
+The acceptance spec is part of the artifact. Every candy carries a `description:` and a `plan:` of
+deterministic `check:` steps — the spec is the test — and `charly box build` bakes that plan into
+the `ai.opencharly.description` OCI label. A pulled image is self-testable without its source
+repository: the checks that shipped are the checks that run.
+
+The same baked plan runs at every level, the mode explicit in the verb:
+
+```bash
+charly check box <image>   # the artifact's own checks, inside an isolated disposable container
+charly check live <name>   # the same checks, against the running deployment, real ports and env
+charly check run <bed>     # the whole chain on a disposable bed: build → check box → deploy → check live → fresh rebuild → re-check → teardown
+```
+
+`charly check box` runs the build-context invariants inside the built image itself. `charly check
+live` runs the same steps inside the deployed container, resolving deploy-time variables (real
+ports, real volumes, real environment). `charly check run <bed>` is the R10 acceptance gate: a
+`disposable: true` deploy that builds, deploys, checks, tears down, and then re-verifies on a fresh
+`charly update` — so the gate is a fresh rebuild of the actual deployed artifact, never a
+hand-patched instance. Unit tests keep their place — a green `go test ./...` proves compilation —
+but they are not the acceptance; the acceptance is the artifact's own plan. The tests are not a
+parallel system to the image; they ride inside it, and CI is where the artifact's own checks are
+run.
+
+### The honest limits
+
+A check is only as good as the plan that declares it — write a thin plan and the image ships thin
+proof, because the spec is only as honest as its author. Build-context checks cannot see a running
+service, and deploy-context checks need a running deployment, so the two contexts genuinely differ
+and a real gate needs both. The fresh-rebuild R10 proof is defined on `disposable: true` targets;
+proving a production system you must not destroy is a smaller, different claim. What is gained is
+that the separation is collapsed by construction: one plan, baked into the artifact, run at every
+level, re-runnable by anyone who pulls the image.
+
+---
+
 ## What this adds up to
 
 Each grievance is separately survivable. Together they produce the thing this project is actually
-reacting to: an environment nobody can reproduce, described in a different language per substrate, that only one person
-can rebuild, and that nobody dares hand to an automated agent because the isolation is not trusted.
+reacting to: an environment nobody can reproduce, described in a different language per substrate,
+whose proof does not travel with the artifact, that only one person can rebuild, and that nobody
+dares hand to an automated agent because the isolation is not trusted.
 
-The four answers compose into one property — **a described environment that is disposable**. You
+The five answers compose into one property — **a described environment that is disposable**. You
 can destroy it because you can rebuild it; you can rebuild it because the description is complete;
-the description is complete because it is composed of units that each carry their own proof.
+the description is complete because it is composed of units that each carry their own proof — a
+proof that travels with the thing it describes.
 
 For the positive statement of where that leads, see [the vision](VISION.md). For how any of it
 works, see the [skills index](plugins/README.md) or the site at

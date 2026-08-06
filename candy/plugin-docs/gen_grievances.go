@@ -40,7 +40,7 @@ func generateGrievances(root, out string) error {
 	return page{
 		Path:        "grievances.md",
 		Title:       "What it is reacting to",
-		Description: "Four properties of ordinary container and VM practice that OpenCharly is built to answer — with the mechanism, and where each claim stops being true.",
+		Description: "Properties of ordinary container and VM practice that OpenCharly is built to answer — with the mechanism, and where each claim stops being true.",
 		Body:        body,
 	}.write(out)
 }
