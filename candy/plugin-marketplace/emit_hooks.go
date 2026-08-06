@@ -33,9 +33,11 @@ func applyHookModes(root string, ks *kindSet) {
 	for _, h := range ks.Hooks {
 		mode := os.FileMode(0o644)
 		switch h.Mode {
-		case "0755", "":
+		case "0755":
+			mode = 0o755 // an explicit executable declaration applies regardless of extension
+		case "":
 			if strings.HasSuffix(h.Name, ".sh") {
-				mode = 0o755
+				mode = 0o755 // the sensible default for gate scripts
 			}
 		case "0644":
 			mode = 0o644

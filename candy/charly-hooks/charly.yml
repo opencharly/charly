@@ -509,7 +509,7 @@ gitcmd:
 gate-test:
     hook:
         name: gate_test.py
-        mode: "0644"
+        mode: "0755"
         content: |
             #!/usr/bin/env python3
             """Behavioral tests for the narrow commit gate and push safety gate."""
