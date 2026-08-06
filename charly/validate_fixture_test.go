@@ -20,6 +20,20 @@ import (
 // candy/plugin-box/validate_config_rules_test.go alongside its subjects (K3-W2, task #13) — those
 // rules are no longer host-natural at all, the plugin self-loads its own raw config now.
 //
+// WHY THIS FILE STAYS CORE (K-wave 2 test migration, task #23): these are the SEAM-INTEGRATION tests
+// for the dispatch mechanism (dispatchValidateForTest → command:validate → candy/plugin-box), a core
+// mechanism. The behavior half (the validate RULES) lives in candy/plugin-box, whose
+// validate_{config_rules,pure,word_sets}_test.go cover the rules DIRECTLY as envelope-unit tests.
+// The fixture tests CANNOT follow them there as pipeline tests: runValidateEngine (candy/plugin-box/
+// validate.go) requires an *sdk.Executor — the host reverse channel (build:project OpValidate,
+// validate-word-sets HostBuild, loaderkit.LoadUnifiedViaExecutor, kind:distro OpResolve) — which
+// only exists in the compiled-in context. A standalone plugin-box test cannot construct the executor
+// (NewInProcExecutor needs a pb.ExecutorServiceClient mock answering the loader + resolver legs), and
+// re-expressing the fixtures as hand-built envelopes would test the envelope, not the real pipeline.
+// So the RULES' unit coverage lives plugin-side and this pipeline-level half stays core; a future
+// move needs a plugin-side executor harness (a mock pb.ExecutorServiceClient that answers the
+// build:project + word-sets + loader legs) — documented, not forced.
+//
 // Assertion note: the new path may word a diagnostic slightly differently than the former synthetic
 // unit (e.g. the copr/repo section label is now `distro.<name>.copr`, not `rpm.copr`, and the ADE +
 // version rules are surfaced by CUE-conformance / the tolerant projector). Every substring asserted
