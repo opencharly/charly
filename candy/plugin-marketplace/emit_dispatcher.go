@@ -47,8 +47,8 @@ func buildDispatcherTable(families []family) string {
 	var rows []row
 	for _, f := range families {
 		for _, s := range f.Skills {
-			if s.Type == "agent" || len(s.Triggers) == 0 {
-				continue
+			if len(s.Triggers) == 0 {
+				continue // agents with triggers (e.g. root-cause-analyzer) ARE dispatcher rows
 			}
 			inv := "/charly-" + f.Name + ":" + s.Name
 			for _, trig := range s.Triggers {
