@@ -28,6 +28,8 @@ docs-site:
             load-bearing one — the page of a plugin that is NOT compiled into the charly binary,
             rendering both its runtime placement and its CUE parameter schema. That last check is
             what fails if the generator ever narrows to documenting only the default-active set.
+            The deliberately-last liberation easter-egg page is asserted too — the bed fails the
+            moment that page stops shipping.
         require:
             - nodejs
         var:
@@ -39,7 +41,7 @@ docs-site:
             # `main` pointed at when that layer was first built — and went on reporting PASS while
             # proving stale content. It must equal the `docs` submodule gitlink; `task docs:pin`
             # checks that, and the bed asserts it from inside the built image.
-            DOCS_REF: 15508490c63f7038e518187ecd236d8d09a9fae3
+            DOCS_REF: 143b125c6743577823fb9ba650437146966ea096
         distro:
             fedora:
                 package:
@@ -77,7 +79,7 @@ docs-site:
               id: docs-site-pinned-commit
               exit_status: 0
               stdout:
-                - contains: 15508490c63f7038e518187ecd236d8d09a9fae3
+                - contains: 143b125c6743577823fb9ba650437146966ea096
               context:
                 - build
                 - runtime
@@ -171,3 +173,13 @@ docs-site:
                 - build
                 - runtime
               command: cat /srv/docs/dist/reference/providers/index.html
+
+            - check: the easter-egg liberation page rendered (fails without the page)
+              id: docs-site-liberation-page
+              exit_status: 0
+              stdout:
+                - contains: Liberation
+              context:
+                - build
+                - runtime
+              command: cat /srv/docs/dist/liberation/index.html
