@@ -23,7 +23,8 @@ plugin-docs:
             unresolvable one failing the build); one page per plugin candy carrying its
             providers, its placement COMPUTED from compiled_plugins membership, and its rendered
             CUE parameter schema; a provider cross-index mapping every reserved word to the
-            plugin that serves it; one page per defined candy and box; and VISION.md verbatim.
+            plugin that serves it; one page per defined candy and box; and VISION.md with its H1
+            dropped and links rewritten for the web.
 
             DEFINED, NOT DEFAULT-ACTIVE — the catalog walks each repo (the superproject plus
             every box/<distro> submodule) as its own project root and unions the results, rather

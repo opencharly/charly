@@ -46,12 +46,9 @@ func pluginCheckRunFeatureLive(ex *sdk.Executor, ctx context.Context, req spec.C
 	if err != nil {
 		return kit.CheckRunReply{}, err
 	}
-	imageRef := resolveDeployBoxName(ctx, ex, rp, req.Name, req.Instance)
-	resolvedRef, err := resolveImageRefForEnsure(rp, imageRef)
-	if err != nil {
-		return kit.CheckRunReply{}, fmt.Errorf("resolving deploy box %q: %w", imageRef, err)
-	}
-	meta, err := deploykit.ExtractMetadata(engine, resolvedRef)
+	// Deploy-scope ADE grades the plan baked into the image this container is RUNNING
+	// (live_image.go) — the same single image identity live_gather.go's plan gather uses.
+	meta, err := liveDeployMetadata(engine, containerName)
 	if err != nil {
 		return kit.CheckRunReply{}, err
 	}

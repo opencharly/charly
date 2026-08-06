@@ -7,7 +7,9 @@ import (
 	"strings"
 )
 
-// generateVision publishes VISION.md verbatim.
+// generateVision publishes VISION.md with its H1 dropped (Starlight renders the frontmatter
+// title as the page heading) and its repo-relative links rewritten for a web reader. It is NOT
+// verbatim, and said so here for a long time while the H1 drop sat twenty lines below.
 //
 // The vision is the one piece of narrative that already exists in canonical form, and it is
 // load-bearing for the site: the tenets are the reason the project looks the way it does. So it

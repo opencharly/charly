@@ -8,8 +8,8 @@ package check
 //
 // Every core-only dependency the original arm had is now either (a) already ported by Unit A
 // (venue.go's resolveCheckVenue/checkVmTarget/checkLocalTarget/nodeTraits/resolveLeafVenue,
-// members.go's resolveHostVarsForSteps/liveTargetResolver/resolveDeployBoxName/
-// resolveImageRefForEnsure/stampCharlyBin, cmd_helpers.go's resolveNestedNode/candyAddSteps/
+// members.go's resolveHostVarsForSteps/liveTargetResolver/stampCharlyBin, live_image.go's
+// liveDeployMetadata (the deployment's image identity), cmd_helpers.go's resolveNestedNode/candyAddSteps/
 // candyDirsFromEnvelope), (b) already sdk-portable (deploykit.*/kit.*/vmshared.* — confirmed by
 // grep before writing a line here), or (c) resolvable straight off the resolved-project envelope's
 // existing fields (rp.Templates.VM/.Local carry the SAME raw JSON body a fresh core decode would
@@ -116,14 +116,16 @@ func pluginCheckLivePod(ex *sdk.Executor, ctx context.Context, rp *spec.Resolved
 	}
 	overlayPlan := append(append([]spec.Step(nil), projectPlan...), localPlan...)
 
-	imageRef := resolveDeployBoxName(ctx, ex, rp, req.Name, req.Instance)
-	resolvedRef, err := resolveImageRefForEnsure(rp, imageRef)
-	if err != nil {
-		return kit.CheckRunReply{}, fmt.Errorf("resolving deploy box %q: %w", imageRef, err)
-	}
-	meta, err := deploykit.ExtractMetadata(engine, resolvedRef)
+	// The baked plan comes from the image this container is RUNNING (live_image.go) — never from a
+	// re-resolution of the box's short name, which elects some other local build of the same box.
+	meta, err := liveDeployMetadata(engine, containerName)
 	if err != nil {
 		return kit.CheckRunReply{}, err
+	}
+	if meta == nil {
+		// A running non-opencharly image bakes no plan; the deploy-scope overlay is still this
+		// deployment's own acceptance spec, so it runs against empty metadata.
+		meta = &spec.BoxMetadata{}
 	}
 	set := kit.MergeDeployDescriptions(meta.Description, overlayPlan, req.Name)
 	if set == nil || set.IsEmpty() {
