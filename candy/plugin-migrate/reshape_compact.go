@@ -383,7 +383,7 @@ func reshapeTransformStep(st *yaml.Node) error {
 	}
 
 	// verb fold: verb key + non-retained siblings → verb input map. Covers the
-	// 11 live verbs AND the probe verbs that absorbed formerly-shared #Op
+	// live verbs AND the probe verbs that absorbed formerly-shared #Op
 	// modifiers (http absorbed method/request_body).
 	for i := 0; i+1 < len(st.Content); i += 2 {
 		word := st.Content[i].Value

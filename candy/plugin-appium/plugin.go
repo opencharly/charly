@@ -1,6 +1,6 @@
 // Package appium is the charly plugin serving the `appium`
 // W3C-WebDriver check verb (an importable root package + its own go.mod). It exists to keep
-// github.com/tebeka/selenium (and its ~80 transitive packages) OUT of charly's core
+// github.com/tebeka/selenium (and its transitive packages) OUT of charly's core
 // go.mod: the host go-builds this binary and serves it OUT-OF-PROCESS over go-plugin
 // gRPC via the charly plugin SDK, so the `appium:` verb dispatches through the provider
 // registry exactly like a built-in — the authored `appium: <method>` sugar desugars to

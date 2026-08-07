@@ -28,7 +28,7 @@ package params
 // `plugin == "command"` branch in emitTasks/renderOpCommand/opActsInBuildDeploy.
 //
 // FIELD SPLIT: ONLY the command-EXCLUSIVE fields live here. The matchers
-// exit_status/stdout/stderr (shared with the 11 live-container verbs via matchAll) and
+// exit_status/stdout/stderr (shared with the live-container verbs via matchAll) and
 // the general modifiers timeout/method/request_body/env STAY in #Op and are read off
 // the step Op by the runner — they are NOT reproduced here and NOT carried in
 // plugin_input. `command` itself ALSO stays an #Op modifier (wl/libvirt verbs read it,
