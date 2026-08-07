@@ -22,3 +22,75 @@ xterm:
               package:
                 package: xterm
                 installed: true
+
+xterm-skill:
+    skill:
+        name: xterm
+        family: selkies
+        owner: xterm
+        description: |-
+            Lightweight X11 terminal emulator (xterm) that triggers on-demand XWayland on labwc/selkies-desktop, enabling X11 automation tools (xdotool, xprop, xwininfo) to find windows.
+            Use when working with xterm, on-demand XWayland startup, or X11-based window automation on a Wayland desktop.
+        content: |-
+            # xterm - X11 Terminal (XWayland)
+            
+            ## Overview
+            
+            Lightweight X11 terminal emulator. On labwc (selkies-desktop), launching xterm triggers XWayland to start on-demand, enabling X11-based automation tools (xdotool, xprop, xwininfo) to find windows.
+            
+            ## Candy Definition
+            
+            ```yaml
+            rpm:
+              packages:
+                - xterm
+            ```
+            
+            ## Key Properties
+            
+            | Property | Value |
+            |----------|-------|
+            | Depends | None |
+            | Packages | `xterm` |
+            | WM_CLASS | `xterm` / `XTerm` |
+            | XWayland | Triggers on-demand start on labwc |
+            
+            ## Usage
+            
+            Drive xterm through the `wl:` verb's methods (run with `charly check live <image> --filter wl`):
+            
+            - `wl: exec` — launch xterm (triggers XWayland)
+            - `wl: focus` — focus by app_id
+            - `wl: xprop` — query X11 properties
+            - `wl: geometry` — get window position/size
+            - `wl: close` — close window
+            
+            **Important:** The `wl: exec` verb sets `DISPLAY=:0` automatically for X11 apps.
+            
+            ## Why It's in selkies-desktop
+            
+            labwc has XWayland compiled in (`+xwayland`) but starts it on-demand only when an X11 client opens. Without an X11 app like xterm:
+            - XWayland never starts
+            - xdotool, xprop, xwininfo find no windows
+            - the `wl: scroll` method (xdotool click 4/5) and the `wl: drag` method (xdotool mousedown/mouseup) can't target X11 windows
+            
+            With xterm installed, users can launch it to enable full XWayland testing.
+            
+            ## Included In
+            
+            - `selkies-desktop` metalayer
+            
+            ## Used In Boxes
+            
+            - `/charly-selkies:selkies-labwc` (via `selkies-desktop` metalayer)
+            - `/charly-selkies:selkies-labwc-nvidia` (via `selkies-desktop` metalayer)
+            
+            ## Cross-References
+            
+            - `/charly-check:wl` — the `wl:` verb's exec / focus / close / xprop / geometry methods
+            - `/charly-selkies:selkies-desktop-layer` — Desktop metalayer that includes this candy
+            
+            ## Related
+            
+            - `/charly-image:layer` — candy authoring reference (`charly.yml` schema, task verbs, service declarations)
+            - `/charly-check:check` — declarative testing (`check:` block, `charly check box`, `charly check live`)

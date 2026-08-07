@@ -124,3 +124,155 @@ sshd:
               addr:
                 addr: 127.0.0.1:${HOST_PORT:2222}
                 reachable: true
+
+sshd-skill:
+    skill:
+        name: sshd
+        family: coder
+        owner: sshd
+        description: |-
+            OpenSSH server and client on port 22 for remote access.
+            Use when working with SSH access, remote login, or sshd configuration in containers/VMs.
+        content: |-
+            # sshd -- OpenSSH server
+            
+            ## Candy Properties
+            
+            | Property | Value |
+            |----------|-------|
+            | Ports | 22 |
+            | Install files | `charly.yml` |
+            
+            ## Packages
+            
+            - `openssh-server` (RPM / deb) — SSH daemon
+            - `openssh-clients` (RPM) / `openssh-client` (deb, singular) — SSH client tools (ssh, scp, sftp)
+            - `openssh` (pac) — Arch metapackage bundling both daemon and client
+            - `sudo` (rpm / pac / deb) — required for the NOPASSWD rule this candy writes
+            
+            ### Cross-distro coverage
+            
+            `rpm:` (Fedora), `pac:` (Arch), `deb:` (Debian/Ubuntu) — full parity across all four supported package-format families. The `openssh-server` / `openssh-clients` naming differs per distro; package-existence tests use `package_map:` to resolve (see below).
+            
+            **Cross-distro package-test pattern:** the sshd candy's
+            `openssh-server-package` check uses `package_map:` to resolve the right
+            name per distro — `openssh-server` on Fedora/Debian, `openssh` on Arch.
+            This is the canonical worked example for the `package_map` feature; see
+            `/charly-check:check` "Cross-distro package names (`package_map:`)" for the
+            mechanics and the priority ordering (`fedora:43` > `fedora` when both
+            match).
+            
+            ```yaml
+            # a plan step in the sshd candy's plan: list
+            plan:
+                - check: the openssh-server package is installed (name resolved per distro via package_map)
+                  id: openssh-server-package
+                  package:
+                      package: openssh-server
+                      package_map:
+                          arch: openssh
+                          fedora: openssh-server
+                          fedora:43: openssh-server
+                      installed: true
+            ```
+            
+            ### Cross-distro sudoers via `getent passwd 1000`
+            
+            The sudoers drop-in at `/etc/sudoers.d/charly-user` targets the **actual uid-1000 account**, whatever it happens to be named on the running base image. The candy no longer hardcodes a literal `user` — instead it discovers the account name at build time via `getent passwd 1000`:
+            
+            ```yaml
+            # a plan step in the sshd candy's plan: list
+            plan:
+                - run: write the NOPASSWD sudoers drop-in for the uid-1000 account
+                  command: |
+                      account=$(getent passwd 1000 | cut -d: -f1)
+                      if [ -z "$account" ]; then
+                        echo "sshd layer: no uid-1000 account found — refusing to write sudoers" >&2
+                        exit 1
+                      fi
+                      printf '%s ALL=(ALL) NOPASSWD: ALL\n' "$account" > /etc/sudoers.d/charly-user
+                      chmod 0440 /etc/sudoers.d/charly-user
+                  run_as: root
+            ```
+            
+            This works uniformly across both user-policy modes:
+            
+            | Box | Resolved account | Sudoers content |
+            |---|---|---|
+            | fedora-coder, arch-coder, debian-coder | `user` (create mode — `/charly-image:image` "user_policy") | `user ALL=(ALL) NOPASSWD: ALL` |
+            | ubuntu-coder | `ubuntu` (adopt mode — `/charly-distros:ubuntu` `base_user:`) | `ubuntu ALL=(ALL) NOPASSWD: ALL` |
+            
+            Why not `${USER}` substitution? The generator substitutes `${USER}` in plan-step fields (paths, URLs, etc.) but **not** inside `command:` command text — `command:` is passed verbatim to bash, and bash at RUN time doesn't have `$USER` exported. `getent` is the robust, fully-generic alternative. See `/charly-image:layer` "`${VAR}` substitution scope" and `/charly-image:image` "user_policy" for the full architectural context.
+            
+            ## Usage
+            
+            ```yaml
+            # charly.yml -- add the candy to any box that needs an in-container SSH server
+            # compose the candy as an inline list in the box body
+            my-image:
+                candy:
+                    base: fedora
+                    candy: [sshd]
+            ```
+            
+            ## Used In Boxes
+            
+            - Composed into coder/dev and headless-desktop boxes that need an in-container SSH server (e.g. `/charly-selkies:selkies-labwc`), and applied to VM guests at deploy time
+            
+            ## Testing Notes
+            
+            - `/etc/sudoers.d/charly-user` (the NOPASSWD rule written by this candy) is
+              `root:root 0750` — the non-root test user (uid 1000 in containers)
+              cannot traverse `/etc/sudoers.d/`. A `file: /etc/sudoers.d/charly-user; exists: true`
+              test reports "missing" even when the file is present. Use
+              `command: sudo -n -l; stdout: [{contains: NOPASSWD}]` to verify the
+              semantic instead. See `/charly-check:check` Authoring Gotcha #10.
+            - Host-side port reachability uses `127.0.0.1:${HOST_PORT:2222}`, not
+              `${CONTAINER_IP}:${HOST_PORT:2222}`. See `/charly-check:check` Gotcha #1.
+            
+            ### Dual-mode sudo check — the `runuser -u user --` wrapper
+            
+            `charly check box` runs with USER=1000 on container images but USER=0 on bootc images (bootc intentionally keeps USER=root because systemd manages user sessions via login). A naïve `sudo -n -l; contains: NOPASSWD` check fails on bootc — running as root prints root's Defaults block, which doesn't contain the literal string `NOPASSWD`. The candy's current test drops to `user` explicitly when running as root:
+            
+            ```yaml
+            # a plan step in the sshd candy's plan: list
+            plan:
+                - check: sudo -n -l lists the NOPASSWD rule (dropping to the uid-1000 user when run as root)
+                  id: sudoers-charly-user
+                  exit_status: 0
+                  stdout:
+                      - contains: "NOPASSWD"
+                  command: |
+                      if [ "$(id -u)" = "0" ]; then
+                        runuser -u user -- sudo -n -l
+                      else
+                        sudo -n -l
+                      fi
+            ```
+            
+            **Portability note:** use `runuser -u user -- <cmd>`, **not**
+            `runuser -l user -s /bin/bash -c '<cmd>'`. On Arch util-linux (2.42+),
+            the `-l … -c` form swallows the wrapped command's stdout — reproduced
+            cleanly: `runuser -l user -s /bin/bash -c 'sudo -n -l'` prints nothing
+            and exits 0, while `runuser -u user -- sudo -n -l` prints the full
+            NOPASSWD listing. The candy was fixed to `-u … --` after this was
+            caught during `charly-arch` bring-up. See `/charly-check:check` Authoring Gotcha #11.
+            
+            ## Related Skills
+            
+            - `/charly-distros:cloud-init` -- depends on sshd for VM provisioning
+            - `/charly-coder:ubuntu-coder` -- canonical adopt-mode example; sudoers correctly targets `ubuntu` via getent
+            - `/charly-coder:debian-coder` -- canonical create-mode deb-family example; sudoers targets `user`
+            - `/charly-distros:ubuntu` -- declares the `base_user:` block that makes ubuntu-coder run as `ubuntu`
+            - `/charly-check:check` -- declarative testing framework (gotchas #10 and #11, `package_map:`, `exclude_distro:`)
+            - `/charly-image:image` -- `user_policy:` field (create / adopt / auto) that drives which account this candy's sudoers targets
+            - `/charly-image:layer` -- candy authoring (`${VAR}` substitution scope, command: vs write:)
+            
+            ## When to Use This Skill
+            
+            Use when the user asks about:
+            
+            - SSH server setup in containers or VMs
+            - Port 22 configuration
+            - OpenSSH server/client packages
+            - Remote access to bootc images

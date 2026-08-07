@@ -1,0 +1,53 @@
+# Skills.yml — the harness/marketplace surface, generated from candy config.
+#
+# The `charly-plugins` marketplace (plugins/) + the harness wiring (.claude/ hooks + settings,
+# the R0 dispatcher) are generated from the candies' `skill:` / `hook:` / `marketplace:` kind
+# entities by `charly marketplace generate`, served by candy/plugin-marketplace — a RUNTIME
+# plugin, deliberately absent from charly/charly.yml's compiled_plugins (a dev-time generator,
+# the plugin-docs placement). `charly marketplace drift` is the fail-closed no-op gate; the
+# committed plugins/ tree + .claude/ files must be a no-op regeneration.
+version: '3'
+
+vars:
+  PLUGINS_DIR: '{{.ROOT_DIR}}/plugins'
+
+tasks:
+  sync:
+    desc: Regenerate the plugins/ marketplace + harness surface from candy config
+    cmds:
+      - task: :build:binary
+      - '{{.ROOT_DIR}}/bin/charly marketplace generate --root {{.ROOT_DIR}}'
+      - cmd: |
+          if ! git -C {{.ROOT_DIR}} diff --quiet || [ -n "$(git -C {{.ROOT_DIR}} status --porcelain -- .claude CLAUDE.md AGENTS.md charly.yml go.work charly/plugins_generated.go)" ]; then
+            echo
+            echo "skills: regeneration changed the harness surface — review and commit:"
+            git -C {{.ROOT_DIR}} status --short -- .claude CLAUDE.md AGENTS.md charly.yml go.work charly/plugins_generated.go | head -20
+          fi
+          if ! git -C {{.PLUGINS_DIR}} diff --quiet || [ -n "$(git -C {{.PLUGINS_DIR}} status --porcelain)" ]; then
+            echo
+            echo "skills: regeneration changed the plugins/ submodule — review and commit there:"
+            git -C {{.PLUGINS_DIR}} status --short | head -20
+          else
+            echo "skills: plugins/ already up to date (regeneration is a no-op)."
+          fi
+        silent: true
+
+  drift:
+    desc: Fail if the generated marketplace/harness surface is stale (regeneration must be a no-op)
+    cmds:
+      - cmd: |
+          {{.ROOT_DIR}}/bin/charly marketplace drift --root {{.ROOT_DIR}}
+        silent: true
+      - cmd: |
+          if [ -n "$(git -C {{.ROOT_DIR}} status --porcelain -- .claude CLAUDE.md AGENTS.md charly.yml go.work charly/plugins_generated.go)" ]; then
+            echo "skills: DRIFT — the committed harness surface does not match candy config." >&2
+            git -C {{.ROOT_DIR}} status --short -- .claude CLAUDE.md AGENTS.md charly.yml go.work charly/plugins_generated.go >&2
+            exit 1
+          fi
+          if [ -n "$(git -C {{.PLUGINS_DIR}} status --porcelain)" ]; then
+            echo "skills: DRIFT — the plugins/ submodule does not match candy config." >&2
+            git -C {{.PLUGINS_DIR}} status --short >&2
+            exit 1
+          fi
+          echo "skills: no drift."
+        silent: true

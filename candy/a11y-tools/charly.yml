@@ -40,3 +40,81 @@ a11y-tools:
                     arch: python-gobject
                     fedora: python3-gobject
                 installed: true
+
+a11y-tools-skill:
+    skill:
+        name: a11y-tools
+        family: selkies
+        owner: a11y-tools
+        description: |-
+            AT-SPI2 accessibility introspection — Python AT-SPI2 bindings to query the accessibility tree of GTK, Qt, and Chrome apps for element-based automation (find by name/role, not pixel coordinates), backing the `wl: atspi` verb (tree/find/click actions).
+            Use when working with accessibility-tree introspection, AT-SPI2, or element-based desktop automation.
+        content: |-
+            # a11y-tools - AT-SPI2 Accessibility Introspection
+            
+            ## Overview
+            
+            Provides Python AT-SPI2 bindings for querying the accessibility tree of GTK, Qt, and Chrome applications. Enables element-based automation — find buttons, menus, and text fields by name/role instead of pixel coordinates.
+            
+            Used by the `wl: atspi` verb.
+            
+            ## Candy Definition
+            
+            ```yaml
+            require:
+              - dbus
+            
+            rpm:
+              packages:
+                - python3-pyatspi
+                - python3-gobject
+            ```
+            
+            ## Key Properties
+            
+            | Property | Value |
+            |----------|-------|
+            | Depends | `dbus` (AT-SPI2 requires D-Bus session bus) |
+            | Packages | `python3-pyatspi`, `python3-gobject` |
+            | Python | Uses `/usr/bin/python3` (system Python 3.14, NOT pixi's Python 3.13) |
+            
+            ## Important: System Python Required
+            
+            The RPM packages install to system Python (`/usr/bin/python3`). Containers with pixi environments have pixi's python3 first in PATH, but pixi's python3 doesn't see system RPM packages. The `wl: atspi` verb explicitly uses `/usr/bin/python3` to ensure AT-SPI2 bindings are found.
+            
+            ## What You Can Query
+            
+            - **tree** — Full accessibility tree (app name, window title, widget name/role/position/actions)
+            - **find** — Search by name, role, or `name:role` pattern
+            - **click** — Find an element and invoke its click/press/activate action
+            
+            ## Chrome Accessibility
+            
+            Chrome needs `--force-renderer-accessibility` flag to expose DOM elements via AT-SPI2. The `labwc/autostart` in selkies-desktop includes this flag.
+            
+            ## Included In
+            
+            - `selkies-desktop` metalayer
+            
+            ## Used In Boxes
+            
+            - `/charly-selkies:selkies-labwc` (via `selkies-desktop` metalayer)
+            - `/charly-selkies:selkies-labwc-nvidia` (via `selkies-desktop` metalayer)
+            
+            ## Testing Notes
+            
+            - `python3-pyatspi` installs under the **system** `/usr/lib/python3.X/
+              site-packages/`, NOT pixi's Python 3.13 env (which dominates PATH).
+              Declarative tests must use the absolute path `/usr/bin/python3 -c
+              "import pyatspi"`; a bare `python3` invocation resolves to pixi's
+              python and fails with `ModuleNotFoundError: No module named 'pyatspi'`.
+              See `/charly-check:check` Authoring Gotchas #7 (no bash defaults) and #8
+              (system vs pixi Python).
+            
+            ## Related Skills
+            
+            - `/charly-check:wl` — the `wl: atspi` verb (tree/find/click)
+            - `/charly-infrastructure:dbus-layer` — Required dependency (D-Bus session bus)
+            - `/charly-selkies:selkies-desktop-layer` — Desktop metalayer that includes this candy
+            - `/charly-check:check` — declarative testing framework
+            - `/charly-image:layer` — candy authoring

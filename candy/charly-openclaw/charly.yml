@@ -1,0 +1,498 @@
+charly-openclaw:
+    candy:
+        version: 2026.218.1200
+        description: |-
+            Metadata concept candy owning the charly-openclaw skills whose names have no namesake candy (openclaw agent images). Owns its family's `skill:` kind entities (sibling nodes in this file) — the
+            plugins→candies migration; candy/plugin-marketplace regenerates the plugins/ corpus
+            from them.
+        plan:
+            - run: this documentation-only candy ships no install content (it carries the family's skill/hook/marketplace entities); validate-satisfying no-op
+              command: "true"
+              context:
+                - build
+            - check: the openclaw concept candy's skill entities are present and generated into plugins/openclaw/skills
+              id: charly-openclaw-present
+              context:
+                - build
+              command: "true"
+
+openclaw-desktop-skill:
+    skill:
+        name: openclaw-desktop
+        family: openclaw
+        owner: charly-openclaw
+        description: |-
+            Use when working with the openclaw-desktop box — the all-in-one CachyOS power box that fuses the selkies streaming desktop, the openclaw-full gateway + AI CLIs (claude-code/codex/gemini), a CPU ollama, and the full nested charly toolchain (build boxes / run nested rootless pods / launch rootless libvirt VMs from a terminal inside the browser-accessible desktop).
+        content: |-
+            # openclaw-desktop
+            
+            The all-in-one workstation box: a browser-accessible Wayland **streaming
+            desktop** that also runs the **OpenClaw gateway + its full tool/skill stack**,
+            a **CPU Ollama** inference server, and the **complete `charly` toolchain** — all as
+            uid 1000 `user` with no `--privileged` and no added capabilities. Open
+            `https://localhost:3000`, get a labwc desktop with Chrome, and from a terminal
+            inside it you can `charly box build`, run nested rootless pods, launch rootless
+            libvirt VMs, drive the OpenClaw gateway on :18789, and hit a local Ollama on
+            :11434.
+            
+            ## Definition
+            
+            ```yaml
+            openclaw-desktop:
+              base: cachyos.cachyos        # Arch-derived, pacman/AUR, x86_64_v3 (via the `cachyos` import namespace)
+              build: [pac, aur]            # required — selkies' chrome (AUR google-chrome) + wl-tools (AUR wlrctl)
+              candy:
+                - agent-forwarding
+                - selkies-desktop          # full streaming desktop stack
+                - openclaw-full            # gateway + 27 tools incl. claude-code/codex/gemini
+                - ollama                   # CPU ollama (GPU-agnostic layer)
+                - charly                       # the full toolchain: charly binary + virtualization + gocryptfs + socat
+                - container-nesting        # nested rootless podman/buildah/skopeo
+                - golang
+                - gh
+                - dbus
+                - charly
+              port:
+                - "3000:3000"              # Selkies web UI (Traefik HTTPS)
+                - "9222:9222"              # Chrome DevTools Protocol (cdp-proxy)
+                - "9224:9224"              # chrome-devtools-mcp (Streamable HTTP)
+                - "2222:2222"              # sshd-wrapper
+                - "18789:18789"            # OpenClaw gateway
+                - "11434:11434"            # Ollama API
+              platform: [linux/amd64]
+            ```
+            
+            No `uid:`/`gid:`/`user:`/`network:` override — inherits `1000/1000/user` and the
+            default `charly` bridge network. Rootless is the whole design.
+            
+            ## Base — CachyOS, CPU
+            
+            `base: cachyos.cachyos` (`/charly-distros:cachyos`, reached via the `cachyos` import
+            namespace) is the Arch-derived `x86_64_v3` base. The
+            box is **CPU-only** — there is no `nvidia`/`cuda` candy. Ollama auto-detects
+            the absence of a GPU and runs CPU inference; selkies streams via the CPU x264
+            encoder. `build: [pac, aur]` is mandatory (not inherited): selkies' `chrome`
+            candy compiles `google-chrome` from AUR and `wl-tools` builds `wlrctl`;
+            inheriting cachyos's bare `[pac]` would gate out the AUR builder and silently
+            drop the browser. The `aur → arch-builder` builder map comes from the cachyos
+            base.
+            
+            ## Resolved security posture (OCI label)
+            
+            | Field | Value |
+            |---|---|
+            | `cap_add` | **(empty)** |
+            | `security_opt` | `[unmask=/proc/*]` (from `/charly-distros:container-nesting`) |
+            | `devices` | `[/dev/fuse, /dev/net/tun]` (from `/charly-distros:container-nesting`) |
+            | `shm_size` | `1g` (from `/charly-selkies:chrome`) |
+            | `memory_max` | `6g` (from `/charly-selkies:chrome`) |
+            | `privileged` | `false` |
+            | Network | default charly bridge (NOT host) |
+            | UID / user | `1000 / user` |
+            
+            **No `--privileged`. No `cap_add: ALL`. No `seccomp=unconfined`. No
+            `label=disable`.** The only security relaxation is `unmask=/proc/*` — surgical,
+            documented in `/charly-distros:container-nesting` with the full kernel-level RCA.
+            
+            ## The four fused stacks
+            
+            | Stack | Candies | What it gives you |
+            |---|---|---|
+            | Streaming desktop | `selkies-desktop` (chrome, chrome-cdp, labwc, waybar, pipewire, swaync, pavucontrol, wl-tools, selkies, sshd, …) | labwc Wayland desktop streamed over HTTPS:3000; Chrome + CDP:9222 + chrome-devtools-mcp:9224; sshd:2222 |
+            | OpenClaw + tools | `openclaw-full` (openclaw gateway + claude-code, codex, gemini + 24 more tools) | AI gateway on :18789; `claude` CLI at `/usr/local/bin/claude`, `codex` / `gemini` CLIs at `${HOME}/.npm-global/bin/`; playwright now drives the desktop's real Chrome (synergy) |
+            | LLM inference | `ollama` | CPU Ollama API on :11434; `ollama` host alias; `models` volume at `~/.ollama` |
+            | Nested charly toolchain | `charly` + `container-nesting` + `golang` + `gh` | `charly box build`, nested rootless podman/buildah/skopeo, rootless libvirt VMs, gocryptfs encrypted volumes, socat relays |
+            
+            **Browser synergy:** `openclaw-full` ships `playwright` but deliberately omits a
+            system browser (it's normally headless). Fusing it with `selkies-desktop`'s
+            `chrome` + `chrome-cdp` stack gives playwright a real browser + CDP on :9222 —
+            a pure enhancement, no conflict.
+            
+            ## Ports
+            
+            | Port | Service |
+            |---|---|
+            | 3000 | Selkies web UI (Traefik HTTPS, self-signed) |
+            | 9222 | Chrome DevTools Protocol (via `cdp-proxy`) |
+            | 9224 | `chrome-devtools-mcp` (Streamable HTTP) |
+            | 2222 | `sshd-wrapper` (supervisord-managed) |
+            | 18789 | OpenClaw gateway + Control UI |
+            | 11434 | Ollama API |
+            
+            All six are distinct — no collisions. For multi-instance deployments alongside a
+            running selkies/openclaw instance holding these host ports, remap via
+            `charly config openclaw-desktop -p 3010:3000 -p 9232:9222 -p 9242:9224 -p 2232:2222 -p 18790:18789 -p 11444:11434`.
+            
+            ## Quick Start
+            
+            ```bash
+            charly box build openclaw-desktop
+            charly config openclaw-desktop
+            charly start openclaw-desktop
+            # Desktop:  https://localhost:3000 (accept the self-signed cert)
+            # Gateway:  http://localhost:18789
+            # Ollama:   curl http://localhost:11434/api/tags
+            charly shell openclaw-desktop -c "ollama pull llama3"
+            ```
+            
+            ## Nested rootless podman — how it works here
+            
+            See `/charly-distros:container-nesting` for the full kernel-level RCA. The short
+            version: podman's rootless outer container injects `linux.maskedPaths`; the
+            kernel's `mount_too_revealing()` then refuses any fresh `/proc` mount from the
+            inner container. `unmask=/proc/*` tells podman not to emit those masks on the
+            outer, so the inner `/proc` mount has nothing to mismatch with. Verified:
+            
+            ```bash
+            charly shell openclaw-desktop -c 'podman run --rm quay.io/libpod/alpine:latest /bin/true'
+            # zero extra caps, uid 1000
+            ```
+            
+            ## Nested rootless VMs — how it works here
+            
+            See `/charly-infrastructure:virtualization`. `virtqemud --timeout 0` +
+            `virtnetworkd --timeout 0` run as supervisord programs at uid 1000; libvirt
+            `qemu:///session` keys off `$XDG_RUNTIME_DIR` and needs no CAP_SYS_ADMIN — only
+            `/dev/kvm` passthrough.
+            
+            ```bash
+            charly shell openclaw-desktop -c 'virsh -c qemu:///session list --all'
+            ```
+            
+            ### Two-level nested-virtualization (end-to-end `charly vm` run-through)
+            
+            The full `charly vm build/create/ssh/stop/destroy` lifecycle completes inside the
+            rootless pod, two levels of KVM nesting deep:
+            
+            1. Host (rootless podman, uid 1000) runs `charly-openclaw-desktop`.
+            2. Inside it, `charly vm build <bootc-image> --transport containers-storage`
+               auto-falls back to `engine.rootful=machine` (no host `sudo` in reach), which
+               spawns a podman-machine VM (nested VM #1) via KVM passthrough and runs
+               `bootc install to-disk`.
+            3. `charly vm create <bootc-image> -i smoke --ssh-key generate` boots the produced
+               qcow2 as a QEMU user-net VM (nested VM #2).
+            4. `charly vm ssh <bootc-image> -i smoke -- uname -a` returns the guest kernel.
+            5. `charly vm destroy --disk` cleans up.
+            
+            No `--privileged`, no `cap_add`, no seccomp relaxations beyond the baked
+            `[unmask=/proc/*]`. Only `/dev/kvm` passthrough.
+            
+            ### Cross-storage loading for private bootc images
+            
+            The podman-machine in step 2 has its own rootful storage, separate from the
+            outer container's nested rootless store. Load a private bootc image via the host:
+            
+            ```bash
+            # on host
+            podman save -o /tmp/bootc.tar ghcr.io/<registry>/<image>:latest
+            charly cp openclaw-desktop /tmp/bootc.tar :/tmp/bootc.tar
+            # inside the pod
+            podman load -i /tmp/bootc.tar                              # nested rootless store
+            podman --connection charly-root load -i /tmp/bootc.tar         # podman-machine rootful store
+            charly vm build <image> --transport containers-storage
+            ```
+            
+            ### Docker Hub rate-limit note
+            
+            For nested test harnesses, prefer `quay.io/libpod/alpine:latest` (unmetered)
+            over `docker.io/library/alpine` — the baked `nested-podman-run` check already
+            uses this mirror.
+            
+            ## What works from inside the desktop
+            
+            Every `charly` verb family runs as uid 1000 inside the container sandbox:
+            `charly box build/generate/validate/merge/inspect/list/pull`,
+            `charly check box/live/wl/libvirt` (cdp/vnc/mcp/record/kube/adb/appium/spice/dbus are declarative out-of-process verbs),
+            `charly config/deploy/start/stop/update/remove/shell/cmd/service/status/logs`,
+            `charly vm list/create/start/stop/ssh/destroy` (rootless libvirt session),
+            `charly doctor/secrets/settings/alias`. The `charly` candy bakes only the binary — for
+            build-mode verbs that read `charly.yml`, mount or `charly cp` the project in.
+            
+            ## Volumes
+            
+            - `chrome-data` → `~/.chrome-debug` (Chrome profile, from the chrome candy)
+            - `selkies-config` → `~/.config/selkies`
+            - `models` → `~/.ollama` (Ollama model storage)
+            
+            ## Verification
+            
+            ```bash
+            charly status openclaw-desktop                       # all services RUNNING
+            curl -k https://localhost:3000                   # selkies HTTPS 200
+            curl -s http://localhost:18789                   # openclaw gateway
+            curl -s http://localhost:11434/api/tags          # ollama API
+            charly shell openclaw-desktop -c 'podman run --rm quay.io/libpod/alpine:latest /bin/true'
+            ```
+            
+            A desktop screenshot is captured by a `wl: screenshot` step, run with
+            `charly check live openclaw-desktop --filter wl`.
+            
+            The baked box-level `check:` carries the nested-rootless posture checks (subuid
+            two-ranges, `newuidmap` cap, `policy.json`, containers.conf `userns=host`,
+            `_CONTAINERS_USERNS_CONFIGURED` + `BUILDAH_ISOLATION` env), the deploy-scope
+            nested-toolchain checks (nested `podman run`, `virsh` session list, in-container
+            `charly version`/`charly doctor`), and the three fused services' liveness (gateway,
+            ollama API, chrome-devtools-mcp port). The R10 bed is
+            `check-openclaw-desktop-pod` (`charly check run check-openclaw-desktop-pod`).
+            
+            ## Key Candies
+            
+            - `/charly-selkies:selkies-desktop-layer` — the streaming desktop metalayer
+            - `/charly-openclaw:openclaw-full` — gateway + 27 tools (claude-code/codex/gemini)
+            - `/charly-ollama:ollama` — CPU/GPU-agnostic Ollama candy (GPU is box-level)
+            - `/charly-tools:charly` — the full toolchain: charly binary + virtualization + gocryptfs + socat
+            - `/charly-distros:container-nesting` — rootless nested podman recipe (RCA for `unmask=/proc/*`)
+            - `/charly-infrastructure:virtualization` — supervisord-managed virtqemud/virtnetworkd
+            - `/charly-distros:agent-forwarding` — GPG/SSH/direnv agent sockets
+            
+            ## Related Boxes
+            
+            - `/charly-openclaw:openclaw-full` — the headless gateway + tools WITHOUT the desktop / ollama / charly toolchain.
+            - `/charly-openclaw:openclaw` — minimal gateway only.
+            - `/charly-selkies:selkies-labwc` — the CPU streaming desktop WITHOUT openclaw / ollama / charly toolchain.
+            - `/charly-selkies:selkies-labwc-nvidia` — GPU streaming desktop (base nvidia), no openclaw/ollama/charly toolchain.
+            - `/charly-distros:charly-fedora` / `/charly-coder:charly-arch` — root-mode charly toolchain WITHOUT a streaming desktop.
+            
+            ## When to Use This Skill
+            
+            **MUST be invoked** when the task involves:
+            
+            - Building, deploying, or troubleshooting the `openclaw-desktop` box.
+            - Running `charly` verbs (image build, nested pods, rootless VMs) from inside a
+              streaming desktop.
+            - The OpenClaw gateway, AI CLIs, or a CPU Ollama running alongside a Wayland
+              streaming desktop in one box.
+            - The non-`--privileged` rootless-in-rootless nesting path on a CachyOS desktop.
+            
+            ## Related
+            
+            - `/charly-image:image` — image family umbrella (`candy:` image entries with `base:`/`from:`, build/validate/inspect/list)
+            - `/charly-check:check` — declarative testing + the `check-openclaw-desktop-pod` R10 bed
+            - `/charly-check:cdp`, `/charly-check:wl` — desktop automation on this box
+            - `/charly-core:charly-config` — deploy setup (tunnel, port remapping, multi-instance, encrypted volumes)
+
+openclaw-full-layer-skill:
+    skill:
+        name: openclaw-full-layer
+        family: openclaw
+        owner: charly-openclaw
+        description: |-
+            Maximal OpenClaw deployment (gateway + browser + all feasible tools/skills).
+            Use when working with the openclaw-full candy.
+        content: |-
+            # openclaw-full -- Maximal OpenClaw deployment
+            
+            ## Candy Properties
+            
+            | Property | Value |
+            |----------|-------|
+            | Install files | `charly.yml` (metalayer, layers only) |
+            | Depends | none (composes other candies) |
+            
+            ## Composed Candies
+            
+            This metalayer includes the following 25 candies:
+            
+            - `openclaw` -- AI gateway
+            - `chrome` -- Google Chrome browser
+            - `claude-code` -- Claude Code CLI
+            - `codex` -- OpenAI Codex CLI
+            - `gemini` -- Google Gemini CLI
+            - `clawhub` -- ClawHub skill registry CLI
+            - `mcporter` -- MCP server CLI
+            - `oracle` -- Prompt bundling CLI
+            - `xurl` -- X/Twitter API CLI
+            - `summarize` -- URL/transcript extractor
+            - `playwright` -- Browser automation
+            - `blogwatcher` -- Blog/RSS feed monitor
+            - `gifgrep` -- GIF search and download
+            - `wacli` -- WhatsApp CLI
+            - `goplaces` -- Google Places API CLI
+            - `songsee` -- Audio spectrogram
+            - `sag` -- ElevenLabs TTS CLI
+            - `camsnap` -- Camera snapshot CLI
+            - `gogcli` -- Google Workspace CLI
+            - `ordercli` -- Food delivery order CLI
+            - `himalaya` -- Email CLI
+            - `uv` -- Python package manager
+            - `nano-pdf` -- PDF editing CLI
+            - `gh` -- GitHub CLI
+            - `tmux` -- Terminal multiplexer
+            - `ffmpeg` -- FFmpeg multimedia
+            - `ripgrep` -- Fast text search
+            - `sqlite` -- SQLite database CLI
+            
+            ## Usage
+            
+            ```yaml
+            # box charly.yml — composition is an inline candy: list in the body
+            openclaw-full-box:
+                candy:
+                    base: fedora
+                    candy:
+                        - openclaw-full
+            ```
+            
+            ## Used In Boxes
+            
+            - `openclaw-full`
+            
+            ## Related Candies
+            - `/charly-openclaw:openclaw` — base gateway layer included in this metalayer
+            - `/charly-selkies:sway-desktop-vnc` — desktop candy paired in sway-browser boxes
+            
+            ## Related Commands
+            - `/charly-automation:openclaw-deploy` — gateway configuration, model auth, and channel setup
+            - `/charly-build:build` — builds the metalayer composition into a box
+            - `/charly-core:charly-config` — sets up secrets and quadlets for openclaw-full boxes
+            
+            ## When to Use This Skill
+            
+            Use when the user asks about:
+            - Full OpenClaw deployment with all tools
+            - The `openclaw-full` metalayer composition
+            - Which tools are included in the maximal OpenClaw box
+            - The `openclaw-full` candy
+            
+            ## Related
+            
+            - `/charly-image:layer` — candy authoring reference (`charly.yml` schema, plan steps, service declarations)
+            - `/charly-check:check` — declarative testing (`check:` block, `charly check box`, `charly check live`)
+
+openclaw-full-ml-layer-skill:
+    skill:
+        name: openclaw-full-ml-layer
+        family: openclaw
+        owner: charly-openclaw
+        description: |-
+            OpenClaw full + ML tools (whisper, sherpa-onnx-tts, CUDA).
+            Use when working with the openclaw-full-ml candy.
+        content: |-
+            # openclaw-full-ml -- OpenClaw full + ML tools
+            
+            ## Candy Properties
+            
+            | Property | Value |
+            |----------|-------|
+            | Install files | `charly.yml` (metalayer, layers only) |
+            | Depends | none (composes other candies) |
+            
+            ## Composed Candies
+            
+            This metalayer extends `openclaw-full` with ML capabilities:
+            
+            - `openclaw-full` -- all OpenClaw tools (25 candies)
+            - `whisper` -- OpenAI Whisper speech-to-text (requires CUDA)
+            - `sherpa-onnx` -- Offline text-to-speech
+            
+            ## Usage
+            
+            ```yaml
+            # box charly.yml — composition is an inline candy: list in the body
+            openclaw-full-ml-box:
+                candy:
+                    base: nvidia
+                    candy:
+                        - openclaw-full-ml
+            ```
+            
+            ## Used In Boxes
+            
+            
+            ## Related Candies
+            - `/charly-openclaw:openclaw-full` -- base composition with all OpenClaw tools
+            - `/charly-tools:whisper` -- speech-to-text component
+            - `/charly-tools:sherpa-onnx` -- offline TTS component
+            
+            ## Related Commands
+            - `/charly-automation:openclaw-deploy` -- gateway configuration and channel setup
+            - `/charly-build:build` -- build boxes composing this metalayer
+            
+            ## When to Use This Skill
+            
+            Use when the user asks about:
+            - OpenClaw with ML/AI capabilities
+            - Speech-to-text and text-to-speech in OpenClaw
+            - CUDA-accelerated OpenClaw deployment
+            - The `openclaw-full-ml` candy
+            
+            ## Related
+            
+            - `/charly-image:layer` — candy authoring reference (`charly.yml` schema, plan steps, service declarations)
+            - `/charly-check:check` — declarative testing (`check:` block, `charly check box`, `charly check live`)
+
+openclaw-layer-skill:
+    skill:
+        name: openclaw-layer
+        family: openclaw
+        owner: charly-openclaw
+        description: |-
+            OpenClaw AI gateway service on port 18789 via npm with persistent data.
+            Use when working with OpenClaw, AI gateway configuration, or model routing.
+        content: |-
+            # openclaw -- AI gateway service
+            
+            ## Candy Properties
+            
+            | Property | Value |
+            |----------|-------|
+            | Dependencies | `nodejs`, `socat`, `supervisord` |
+            | Ports | 18789 |
+            | Port relay | 18789 (eth0 -> loopback) |
+            | Volumes | `data` -> `~/.openclaw` |
+            | Aliases | `openclaw` -> `openclaw` |
+            | Service | `openclaw` (supervisord) |
+            | Install files | `package.json` |
+            
+            ## Environment Variables
+            
+            | Variable | Value |
+            |----------|-------|
+            | `NODE_ENV` | `production` |
+            
+            ## Usage
+            
+            ```yaml
+            # charly.yml
+            openclaw:
+              candy:
+                - openclaw
+            ```
+            
+            ```bash
+            charly alias install openclaw    # install host 'openclaw' command
+            openclaw config              # uses the alias
+            ```
+            
+            ## Used In Boxes
+            
+            - `/charly-openclaw:openclaw`
+            - `/charly-openclaw:openclaw-full`
+            
+            ## Port Relay
+            
+            The gateway binds to `127.0.0.1:18789` (loopback only). A socat relay forwards from the container's network interface to loopback. This avoids OpenClaw's `allowedOrigins` requirement for the Control UI — all connections appear as loopback to the gateway.
+            
+            Same pattern as the `chrome` candy (CDP on port 9222).
+            
+            ## Related Candies
+            
+            - `/charly-coder:nodejs` -- Node.js runtime dependency
+            - `/charly-infrastructure:socat` -- port relay dependency (eth0 -> loopback)
+            - `/charly-infrastructure:supervisord` -- process manager dependency
+            - `/charly-ollama:ollama` -- optional local LLM backend
+            
+            ## When to Use This Skill
+            
+            Use when the user asks about:
+            
+            - OpenClaw gateway setup or configuration
+            - AI model routing or gateway
+            - Port 18789 service
+            - The `openclaw` host alias
+            - OpenClaw data volume
+            
+            ## Related
+            
+            - `/charly-image:layer` — candy authoring reference (`charly.yml` schema, task verbs, service declarations)
+            - `/charly-check:check` — declarative testing (`check:` block, `charly check box`, `charly check live`)

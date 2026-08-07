@@ -18,6 +18,9 @@ includes:
   docs:
     taskfile: ./taskfiles/Docs.yml
     dir: "{{.ROOT_DIR}}"
+  skills:
+    taskfile: ./taskfiles/Skills.yml
+    dir: "{{.ROOT_DIR}}"
 
 tasks:
   default:
