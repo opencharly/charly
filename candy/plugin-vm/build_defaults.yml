@@ -10,7 +10,7 @@ version: 2026.174.1100
 # target (local/pod/vm/k8s/android) and every builder (aur/pixi/cargo/npm) is now
 # externalized this way, so those two lists are empty by design. EVERY KIND is likewise
 # dedicated-file-registered (Phase 2 complete): the tier-1 build-vocab/calamares kinds as
-# schema-carrying plugin units; the 6 deploy-shape kinds group/pod/vm/k8s/local/android and
+# schema-carrying plugin units; the deploy-shape kinds group/pod/vm/k8s/local/android and
 # candy (the box⊻layer factory arm) as in-proc dedicated-builtin KindProviders, so the kind
 # list is empty by design too.
 providers:

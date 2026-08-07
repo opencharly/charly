@@ -190,7 +190,7 @@ apache-airflow = "*"
 
 # === MCP framework for marimo's own server ===
 # fastmcp is the runtime backing `marimo edit --mcp` (marimo's MCP
-# server exposes 10 notebook-inspection tools). pixi's resolver
+# server exposes notebook-inspection tools). pixi's resolver
 # doesn't pick it up transitively from marimo, so it MUST be
 # explicit. NB: the upstream mcp-server-apache-airflow package
 # (which previously co-resided here) was removed in the 2026-05-12

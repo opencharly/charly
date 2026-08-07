@@ -122,7 +122,7 @@ arch-coder-skill:
             
             ## Cross-distro siblings
             
-            `arch-coder` is one of **four cross-distro coder boxes** that share the identical 80-line `check:` block and ~30 identical candies, diverging only in each candy's package-format section (`rpm:` / `pac:` / `deb:`):
+            `arch-coder` is one of the **cross-distro coder boxes** that share the identical `check:` block and a large set of identical candies, diverging only in each candy's package-format section (`rpm:` / `pac:` / `deb:`):
             
             - `/charly-coder:fedora-coder` — RPM-based, Fedora 43 via `fedora-nonfree`, uid=1000 `user`.
             - `/charly-coder:arch-coder` — this box; pacman + optional AUR, uid=1000 `user`.
@@ -589,7 +589,7 @@ debian-coder-skill:
             
             ## Cross-distro siblings
             
-            All four coder-family boxes share the identical 80-line `check:` block + ~30 identical candies; they diverge only in per-candy package-format sections.
+            The coder-family boxes share the identical `check:` block + a large set of identical candies; they diverge only in per-candy package-format sections.
             
             - `/charly-coder:fedora-coder` — RPM (Fedora 43 via fedora-nonfree).
             - `/charly-coder:arch-coder` — pacman + optional AUR.
@@ -633,8 +633,8 @@ fedora-coder-skill:
         owner: charly-coder
         description: |-
             Kitchen-sink development box: coding + AI-coding CLIs + DevOps tooling
-            in one container. Fedora-nonfree base, 32 direct candies spanning language
-            runtimes, build tooling, five AI coding CLIs, and the full cloud/devops
+            in one container. Fedora-nonfree base, direct candies spanning language
+            runtimes, build tooling, AI coding CLIs, and the full cloud/devops
             stack. Runs as uid 1000 with passwordless sudo — rootless-first, matches
             the /charly-openclaw:openclaw-desktop security posture.
             Use when working with the fedora-coder box — specifically any task that
@@ -874,7 +874,7 @@ fedora-coder-skill:
             
             ## Cross-distro siblings
             
-            `fedora-coder` is one of **four cross-distro coder boxes** that share the identical 80-line `check:` block + ~30 identical candies; they diverge only in each candy's package-format section (`rpm:` / `pac:` / `deb:`) and a handful of distro-specific quirks handled inside individual candies.
+            `fedora-coder` is one of the **cross-distro coder boxes** that share the identical `check:` block + a large set of identical candies; they diverge only in each candy's package-format section (`rpm:` / `pac:` / `deb:`) and a handful of distro-specific quirks handled inside individual candies.
             
             | Box | Base | Package mgr | User model |
             |---|---|---|---|

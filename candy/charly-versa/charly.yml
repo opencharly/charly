@@ -604,14 +604,14 @@ marimo-mcp-skill:
         family: versa
         owner: charly-versa
         description: |-
-            marimo's built-in MCP server (10 read-only inspection tools — get_active_notebooks, get_cell_outputs, get_notebook_errors, etc.) at port 2718 path /mcp/server.
+            marimo's built-in MCP server (read-only inspection tools — get_active_notebooks, get_cell_outputs, get_notebook_errors, etc.) at port 2718 path /mcp/server.
             Use when working with the marimo MCP tool catalog, programmatic notebook diagnostics, or the cells-don't-execute-via-MCP gap (marimo MCP is read-only; cells run via WebSocket from a browser OR `marimo export ipynb --include-outputs` for headless execution).
         content: |-
             # marimo-mcp — marimo's built-in MCP server (read-only inspection)
             
             marimo's notebook server has a built-in MCP endpoint enabled by the
             `--mcp` flag (see `/charly-versa:marimo-layer` service spec). It serves
-            10 inspection tools for diagnosing active notebook sessions —
+            inspection tools for diagnosing active notebook sessions —
             **read-only**: cells cannot be executed via this MCP. Execution
             requires a browser-attached WebSocket session OR
             `marimo export ipynb --include-outputs` for headless runs.
@@ -1358,7 +1358,7 @@ versa-skill:
             
             | probe id | what it checks |
             |---|---|
-            | `versa-notebook-export` | end-to-end `marimo export ipynb` — triggers all 6 self-authored DAGs and renders every cell server-side (the single highest-value probe; 600s timeout) |
+            | `versa-notebook-export` | end-to-end `marimo export ipynb` — triggers all the self-authored DAGs and renders every cell server-side (the single highest-value probe; 600s timeout) |
             | `versa-notebook-size` | rendered `.ipynb` is ≥100 KB (catches empty-cell renders) |
             | `versa-martin-monaco` | TileJSON for the canonical `monaco` source returns 200 + body contains `tilejson` + `vector_layers` |
             | `versa-martin-monaco-gpqtiles` | same for `monaco-gpqtiles` |

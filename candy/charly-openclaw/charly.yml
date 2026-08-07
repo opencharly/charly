@@ -99,7 +99,7 @@ openclaw-desktop-skill:
             | Stack | Candies | What it gives you |
             |---|---|---|
             | Streaming desktop | `selkies-desktop` (chrome, chrome-cdp, labwc, waybar, pipewire, swaync, pavucontrol, wl-tools, selkies, sshd, …) | labwc Wayland desktop streamed over HTTPS:3000; Chrome + CDP:9222 + chrome-devtools-mcp:9224; sshd:2222 |
-            | OpenClaw + tools | `openclaw-full` (openclaw gateway + claude-code, codex, gemini + 24 more tools) | AI gateway on :18789; `claude` CLI at `/usr/local/bin/claude`, `codex` / `gemini` CLIs at `${HOME}/.npm-global/bin/`; playwright now drives the desktop's real Chrome (synergy) |
+            | OpenClaw + tools | `openclaw-full` (openclaw gateway + claude-code, codex, gemini + more tools) | AI gateway on :18789; `claude` CLI at `/usr/local/bin/claude`, `codex` / `gemini` CLIs at `${HOME}/.npm-global/bin/`; playwright now drives the desktop's real Chrome (synergy) |
             | LLM inference | `ollama` | CPU Ollama API on :11434; `ollama` host alias; `models` volume at `~/.ollama` |
             | Nested charly toolchain | `charly` + `container-nesting` + `golang` + `gh` | `charly box build`, nested rootless podman/buildah/skopeo, rootless libvirt VMs, gocryptfs encrypted volumes, socat relays |
             
