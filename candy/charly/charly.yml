@@ -207,7 +207,7 @@ charly-skill:
             ## Related Candies
             
             - `/charly-infrastructure:virtualization`, `/charly-infrastructure:gocryptfs`, `/charly-infrastructure:socat` -- the candies the `charly` candy composes alongside the binary to form the full toolchain
-            - `/charly-coder:charly-mcp` -- candies: [charly, supervisord] meta-composition that deploys `charly mcp serve` (~192-tool MCP gateway) with a `/workspace` bind mount (volume NAME `project`) for build-mode tools + auto-fallback to opencharly/charly when nothing is bound
+            - `/charly-coder:charly-mcp` -- candies: [charly, supervisord] meta-composition that deploys `charly mcp serve` (the MCP gateway) with a `/workspace` bind mount (volume NAME `project`) for build-mode tools + auto-fallback to opencharly/charly when nothing is bound
             
             ## When to Use This Skill
             

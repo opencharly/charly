@@ -4,8 +4,8 @@ openclaw-full:
         description: |
             Maximal headless OpenClaw deployment — gateway plus all feasible CLI tools/skills, no system Chrome/CDP
             openclaw-full is a pure meta-composition candy: it installs nothing of
-            its own and instead composes 27 candies — the openclaw gateway, the
-            claude-code CLI, and 25 tool candies (codex, gemini, clawhub, mcporter,
+            its own and instead composes a large set of candies — the openclaw gateway, the
+            claude-code CLI, and the tool candies (codex, gemini, clawhub, mcporter,
             oracle, xurl, summarize, playwright, ripgrep, sqlite, tmux, ffmpeg, gh,
             uv, himalaya, …). The observable effect of the composition is that every
             composed tool's key artifact lands in ONE image: the openclaw / mcporter
@@ -125,10 +125,10 @@ openclaw-full-skill:
             ## Full Candy Stack
             
             1. `cachyos` (external base, Arch-derived — pacman/AUR)
-            2. `openclaw-full` metalayer (27 layers, no system browser):
+            2. `openclaw-full` metalayer (no system browser):
                - `openclaw` — AI gateway
                - `claude-code` — Claude Code CLI
-               - 25 tool candies (codex, gemini, clawhub, mcporter, oracle, xurl, summarize, playwright, blogwatcher, gifgrep, wacli, goplaces, songsee, sag, camsnap, gogcli, ordercli, himalaya, uv, nano-pdf, gh, tmux, ffmpeg, ripgrep, sqlite)
+               - the tool candies (codex, gemini, clawhub, mcporter, oracle, xurl, summarize, playwright, blogwatcher, gifgrep, wacli, goplaces, songsee, sag, camsnap, gogcli, ordercli, himalaya, uv, nano-pdf, gh, tmux, ffmpeg, ripgrep, sqlite)
             
             ## Ports
             

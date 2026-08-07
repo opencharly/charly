@@ -297,7 +297,7 @@ charly-arch-skill:
             ### MCP gateway (charly-mcp)
             
             The `/charly-coder:charly-mcp` candy deploys `charly mcp serve --listen :18765`
-            inside the container under supervisord, advertising ~192 MCP tools
+            inside the container under supervisord, advertising the MCP tools
             (the full Kong CLI surface, including the project-scaffolding +
             YAML-editing + file-write authoring verbs). Three deployment patterns
             work — bind-mount your project, pin an `CHARLY_PROJECT_REPO`, or rely on the
@@ -415,7 +415,7 @@ charly-arch-skill:
             
             - `/charly-distros:arch` — parent base image
             - `/charly-distros:charly-fedora` — Fedora counterpart, same candies, same rootless posture
-            - `/charly-coder:fedora-coder` — kitchen-sink dev sibling (32 candies vs 8; adds coding CLIs + DevOps)
+            - `/charly-coder:fedora-coder` — kitchen-sink dev sibling (adds coding CLIs + DevOps)
             - `/charly-openclaw:openclaw-desktop` — streaming-desktop counterpart (charly toolchain + browser-accessible Wayland); shares the rootless-first posture
             - `/charly-distros:githubrunner` — self-hosted GitHub Actions runner; same uid=1000 posture
             
@@ -424,7 +424,7 @@ charly-arch-skill:
             - `/charly-core:shell` — open an interactive shell in charly-arch (as uid=1000 with sudo)
             - `/charly-core:service` — manage charly-arch as a service
             - `/charly-vm:vm` — nested libvirt VMs via `qemu:///session` (rootless)
-            - `/charly-check:check` — three modes: `charly check box <ref>` (build-scope, disposable container), `charly check live <name>` (full-stack against running deployment), `charly check run <score>` (AI iteration loop)
+            - `/charly-check:check` — these modes: `charly check box <ref>` (build-scope, disposable container), `charly check live <name>` (full-stack against running deployment), `charly check run <score>` (AI iteration loop)
             - `/charly-build:charly-mcp-cmd` — MCP gateway + auto-fallback behavior
             
             ## Related
@@ -439,7 +439,7 @@ debian-coder-skill:
         owner: charly-coder
         description: |-
             Kitchen-sink development box on Debian 13 trixie: coding + AI-coding
-            CLIs + DevOps tooling in one container. Debian base, 30+ direct candies
+            CLIs + DevOps tooling in one container. Debian base, a large set of direct candies
             mirroring fedora-coder's stack but with deb: sections. Runs as uid 1000
             (`user`) with passwordless sudo. 143/0 tests pass.
             Use when working with the debian-coder box — or when comparing
@@ -449,11 +449,11 @@ debian-coder-skill:
         content: |-
             # debian-coder
             
-            Debian 13 trixie counterpart of `/charly-coder:fedora-coder`. Same 80-line `check:` block, same ~30 candies, same rootless posture (uid 1000 + passwordless sudo). Key wrinkles are all Debian-specific packaging quirks handled inside individual candies: `bat → batcat` symlink, Microsoft's `dotnet-install.sh` cross-distro installer, and package-existence tests (vs binary-path tests) for `virtualization` because Debian bundles libvirt drivers differently.
+            Debian 13 trixie counterpart of `/charly-coder:fedora-coder`. Same 80-line `check:` block, same large candy list, same rootless posture (uid 1000 + passwordless sudo). Key wrinkles are all Debian-specific packaging quirks handled inside individual candies: `bat → batcat` symlink, Microsoft's `dotnet-install.sh` cross-distro installer, and package-existence tests (vs binary-path tests) for `virtualization` because Debian bundles libvirt drivers differently.
             
             > **Location:** lives in the **`opencharly/distro-debian`** repo (git submodule at
             > **`box/debian`**), in that repo's config (its `charly.yml` + per-kind
-            > sibling files). Its `debian` base is owned by the same submodule; its ~31
+            > sibling files). Its `debian` base is owned by the same submodule; its
             > candies are pulled by github reference from the main repo. Build/validate from
             > the submodule:
             > `charly -C box/debian box build debian-coder`, or
@@ -655,7 +655,7 @@ fedora-coder-skill:
             > **`box/fedora`**), discovered as a `box/<name>/charly.yml` box. Its base
             > stack (`fedora-nonfree` → `fedora`) is bare-local in the same self-contained
             > submodule (`import: []`) — `base: fedora-nonfree`, which itself roots on the
-            > bare-local `fedora` base — and its 32 candies are pulled by github reference.
+            > bare-local `fedora` base — and its candies are pulled by github reference.
             > Build/validate from
             > the submodule: `charly -C box/fedora box build fedora-coder`, or
             > `charly --repo opencharly/distro-fedora box build fedora-coder`. Deploy-mode verbs
@@ -999,10 +999,10 @@ ubuntu-coder-skill:
         content: |-
             # ubuntu-coder
             
-            Ubuntu 24.04 noble counterpart of `/charly-coder:fedora-coder`. Same 80-line test block, same ~30 candies, same rootless posture — but **the resolved user is `ubuntu` (not `user`)** because the upstream `ubuntu:24.04` base image ships a pre-existing `ubuntu:ubuntu` account at uid 1000, and the embedded `distro.ubuntu` vocabulary declares `base_user:` to adopt it. Everything that touches the user account — `${HOME}`, npm prefix, pixi env, sudoers — derives from `resolved.User = "ubuntu"`.
+            Ubuntu 24.04 noble counterpart of `/charly-coder:fedora-coder`. Same 80-line test block, same large candy list, same rootless posture — but **the resolved user is `ubuntu` (not `user`)** because the upstream `ubuntu:24.04` base image ships a pre-existing `ubuntu:ubuntu` account at uid 1000, and the embedded `distro.ubuntu` vocabulary declares `base_user:` to adopt it. Everything that touches the user account — `${HOME}`, npm prefix, pixi env, sudoers — derives from `resolved.User = "ubuntu"`.
             
             > **Location:** lives in the **`opencharly/distro-ubuntu`** repo (git submodule at
-            > **`box/ubuntu`**) — a SEPARATE repo from `opencharly/distro-debian`. Its ~31
+            > **`box/ubuntu`**) — a SEPARATE repo from `opencharly/distro-debian`. Its
             > candies are pulled by github reference from the main repo. Build/validate from
             > the submodule: `charly -C box/ubuntu box build ubuntu-coder`, or
             > `charly --repo opencharly/distro-ubuntu box build ubuntu-coder`. Deploy-mode verbs

@@ -44,7 +44,7 @@ openclaw-desktop-skill:
               candy:
                 - agent-forwarding
                 - selkies-desktop          # full streaming desktop stack
-                - openclaw-full            # gateway + 27 tools incl. claude-code/codex/gemini
+                - openclaw-full            # gateway + the OpenClaw tools incl. claude-code/codex/gemini
                 - ollama                   # CPU ollama (GPU-agnostic layer)
                 - charly                       # the full toolchain: charly binary + virtualization + gocryptfs + socat
                 - container-nesting        # nested rootless podman/buildah/skopeo
@@ -238,7 +238,7 @@ openclaw-desktop-skill:
             ## Key Candies
             
             - `/charly-selkies:selkies-desktop-layer` — the streaming desktop metalayer
-            - `/charly-openclaw:openclaw-full` — gateway + 27 tools (claude-code/codex/gemini)
+            - `/charly-openclaw:openclaw-full` — gateway + the OpenClaw tools (claude-code/codex/gemini)
             - `/charly-ollama:ollama` — CPU/GPU-agnostic Ollama candy (GPU is box-level)
             - `/charly-tools:charly` — the full toolchain: charly binary + virtualization + gocryptfs + socat
             - `/charly-distros:container-nesting` — rootless nested podman recipe (RCA for `unmask=/proc/*`)
@@ -291,7 +291,7 @@ openclaw-full-layer-skill:
             
             ## Composed Candies
             
-            This metalayer includes the following 25 candies:
+            This metalayer includes the following candies:
             
             - `openclaw` -- AI gateway
             - `chrome` -- Google Chrome browser
@@ -381,7 +381,7 @@ openclaw-full-ml-layer-skill:
             
             This metalayer extends `openclaw-full` with ML capabilities:
             
-            - `openclaw-full` -- all OpenClaw tools (25 candies)
+            - `openclaw-full` -- all OpenClaw tools
             - `whisper` -- OpenAI Whisper speech-to-text (requires CUDA)
             - `sherpa-onnx` -- Offline text-to-speech
             

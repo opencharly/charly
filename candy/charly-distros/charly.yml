@@ -594,7 +594,7 @@ charly-fedora-skill:
             
             - `/charly-distros:fedora` — parent base image
             - `/charly-coder:charly-arch` — Arch counterpart, same layers, same rootless posture
-            - `/charly-coder:fedora-coder` — kitchen-sink dev sibling (32 candies, adds coding CLIs + DevOps)
+            - `/charly-coder:fedora-coder` — kitchen-sink dev sibling (adds coding CLIs + DevOps)
             - `/charly-openclaw:openclaw-desktop` — streaming-desktop counterpart (charly toolchain + browser-accessible Wayland); shares the rootless-first posture
             - `/charly-distros:githubrunner` — self-hosted GitHub Actions runner; same uid=1000 posture
             
@@ -1274,7 +1274,7 @@ nvidia-layer-skill:
             
             NVIDIA VAAPI acceleration requires the container to know which DRM render node to bind the EGL context against. On multi-GPU hosts there may be `/dev/dri/renderD128`, `/dev/dri/renderD129`, … and the correct one depends on which physical card backs the NVIDIA driver.
             
-            `charly` does **not** bake a hardcoded `DRINODE=/dev/dri/renderD128` into this candy. Instead, it auto-detects the correct render node at container-launch time and injects it as an environment variable. The detection + injection is consolidated in a single function, `appendAutoDetectedEnv()` in `candy/plugin-deploy-pod/config_setup_helpers.go` (relocated wholesale from charly-core's `charly/devices.go` in the 2026-07-22 dead-code-radical-removal batch), which is called by `charly config`, `charly start`, and `charly shell` via that candy's own `config_setup.go` / `resolve.go` / `resolve_f12.go` resolvers — so the three commands always produce the same env set.
+            `charly` does **not** bake a hardcoded `DRINODE=/dev/dri/renderD128` into this candy. Instead, it auto-detects the correct render node at container-launch time and injects it as an environment variable. The detection + injection is consolidated in a single function, `appendAutoDetectedEnv()` in `candy/plugin-deploy-pod/config_setup_helpers.go` (relocated wholesale from charly-core's `charly/devices.go` in the 2026-07-22 dead-code-radical-removal batch), which is called by `charly config`, `charly start`, and `charly shell` via that candy's own `config_setup.go` / `resolve.go` / `resolve_f12.go` resolvers — so the commands always produce the same env set.
             
             Selkies is the primary consumer: pixelflux's Wayland compositor uses `DRINODE` to open the render node and set up the VAAPI H.264 encoder. Without the injection, selkies would fall back to software encode (`libx264`) and lose ~40% of its streaming bandwidth budget.
             
@@ -1353,7 +1353,7 @@ tutorial-shell-skill:
             | Init | supervisord — **auto-injected**, not composed (see below) |
             | Bed | `check-tutorial-shell` (`disposable: true`, pod) |
             
-            ## Why these two candies
+            ## Why these candies
             
             Each one is there to teach exactly one thing, and the composed list is kept to two so it stays
             readable when quoted in full on a documentation page:
@@ -1409,7 +1409,7 @@ tutorial-shell-skill:
             
             - `/charly-distros:fedora` — the parent base image
             - `/charly-distros:charly-fedora` — the next box up in size: the same shape plus the charly toolchain
-            - `/charly-coder:fedora-coder` — the kitchen-sink end of the same spectrum (~32 candies)
+            - `/charly-coder:fedora-coder` — the kitchen-sink end of the same spectrum
             
             ## Related Commands
             

@@ -354,7 +354,7 @@ chrome-skill:
             - `/charly-check:vnc` — VNC automation (delivers the pointer for `cdp:`-located clicks; a `cdp: coords` step reports the desktop X/Y, then a `vnc: click` step delivers the click there)
             - `/charly-check:wl` — Wayland automation (delivers the pointer for `cdp:`-located clicks via wlrctl; a `cdp: coords` step reports the desktop X/Y, then a `wl: click` step delivers the click there)
             - `/charly-core:charly-config` — Proxy deployment, `normalizeNoProxy()` auto-conversion, `sep:"none"` env handling
-            - `/charly-build:charly-mcp-cmd` — the auto-included `chrome-devtools-mcp` sub-candy exposes 29 tools via Streamable HTTP on port 9224; run the declarative 2-check suite via `charly check live <image> --filter mcp`
+            - `/charly-build:charly-mcp-cmd` — the auto-included `chrome-devtools-mcp` sub-candy exposes the browser-automation tools via Streamable HTTP on port 9224; run the declarative 2-check suite via `charly check live <image> --filter mcp`
             
             ## When to Use This Skill
             

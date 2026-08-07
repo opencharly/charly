@@ -119,8 +119,6 @@ def workspace_member_roots(repo):
     return members
 
 
-
-
 def lint_staged_go(repo):
     if shutil.which("golangci-lint") is None:
         return

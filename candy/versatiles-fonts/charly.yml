@@ -2,9 +2,9 @@ versatiles-fonts:
     candy:
         version: 2026.144.1443
         description: |
-            Pre-rendered SDF glyph PBFs for the 10 VersaTiles font families, installed locally for MapLibre GL JS label rendering.
+            Pre-rendered SDF glyph PBFs for the VersaTiles font families, installed locally for MapLibre GL JS label rendering.
             Installs the versatiles-org/versatiles-fonts release bundle
-            (fonts.tar.gz — all 10 families: Fira Sans, Lato, Libre Baskerville,
+            (fonts.tar.gz — all the families: Fira Sans, Lato, Libre Baskerville,
             Merriweather Sans, Noto Sans, Nunito, Open Sans, PT Sans, Roboto,
             Source Sans 3) into /opt/versatiles-fonts as signed-distance-field
             PBFs laid out per MapLibre's {fontstack}/{range}.pbf glyph-URL

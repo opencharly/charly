@@ -276,7 +276,7 @@ debug-tools-layer-skill:
             `nano`, `htop`, `strace`, `ltrace`, `iotop`, `iftop`, `sysstat`,
             `tmux`, `rsync`, `wget`) covers all four distros.
             
-            ## Check coverage (16 probes — locks in headline binaries)
+            ## Check coverage (probes — locks in headline binaries)
             
             Spot-checks one binary per category. If a future package rename
             breaks one, the build fails loudly at image build time:
@@ -474,7 +474,7 @@ marimo-layer-skill:
             
             ## Pixi env — version-pin rationale
             
-            The pixi env is large (~270 packages). Headline pins worth
+            The pixi env is large. Headline pins worth
             understanding:
             
             ```toml
@@ -626,7 +626,7 @@ marimo-mcp-skill:
             Transport: Streamable HTTP. Registered in this plugin's `.mcp.json`
             as the `marimo` server.
             
-            ## Tool catalog (10 tools)
+            ## Tool catalog
             
             All tools are **read-only**. Each takes an `args` JSON object as
             the sole parameter (often `{}` or `{"session_id": "..."}`).
@@ -951,7 +951,7 @@ sway-browser-ecovoyage-skill:
             
             | Endpoint | Tailnet URL | What it is |
             |---|---|---|
-            | chrome-devtools-mcp | `https://ac.armadillo-quail.ts.net:9232/mcp` | Streamable HTTP MCP, 29 tools |
+            | chrome-devtools-mcp | `https://ac.armadillo-quail.ts.net:9232/mcp` | Streamable HTTP MCP |
             | Chrome DevTools raw | `https://ac.armadillo-quail.ts.net:9230` | CDP `/json/version` etc. |
             | VNC | `tcp://ac.armadillo-quail.ts.net:5901` | wayvnc, no auth |
             
@@ -1370,11 +1370,11 @@ versa-skill:
             | `versa-artifact-gtfs` | post-DAG `monaco.gtfs.zip` ≥500 KB |
             | `versa-artifact-shortbread` | post-DAG `monaco-shortbread.pmtiles` ≥100 KB |
             | `versa-graph-imports` | cugraph + cuml + torch_geometric + torch_scatter + graphistry import + GPU visible |
-            | `versa-graph-cugraph-pagerank` | `nx.pagerank(G, backend="cugraph")` on karate club; returns 34 rows |
+            | `versa-graph-cugraph-pagerank` | `nx.pagerank(G, backend="cugraph")` on karate club; returns the rows |
             | `versa-graph-notebook-export` | end-to-end `marimo export ipynb` of `gpu-libraries-demo.py` (600s timeout) |
             | `versa-graph-notebook-size` | rendered `.ipynb` is ≥10 KB (matches the ~18 KB observed live) |
             
-            End-to-end notebook test (executes all 13 cells via marimo's own
+            End-to-end notebook test (executes all the cells via marimo's own
             export):
             
             ```bash
