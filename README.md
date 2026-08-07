@@ -121,7 +121,7 @@ Today's catalog registers **123 words across 73 plugin candies**:
 | **deploy** substrates | 5 | `pod` `vm` `k8s` `local` `android` |
 | **kind** — the entity keywords themselves | 14 | `candy` `distro` `group` `builder` `agent` |
 | **verb** — probes a `plan:` can call | 35 | `file` `http` `cdp` `vnc` `adb` `kube` |
-| **command** — `charly` subcommands | 45 | `fleet` `check` `candy` `clean` |
+| **command** — `charly` subcommands | 46 | `fleet` `check` `candy` `clean` `marketplace` |
 | **step** — install operations | 12 | `file` `service-custom` `reboot` |
 | **builder** — multi-stage build patterns | 4 | `pixi` `npm` `cargo` `aur` |
 | the build/load internals | 8 | `build:box` `loader:loader` `refs:refs` `terminal:tmux` |
