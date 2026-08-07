@@ -22,7 +22,7 @@ import (
 // for the dispatch DECISION too (R3: one relocation target, not a second seam).
 //
 // The dispatch itself is byte-identical to the former host-only logic: an authored external step
-// ("external:<word>") or one of the 12 compiler-emitted kinds resolves through the class:step
+// ("external:<word>") or one of the compiler-emitted kinds resolves through the class:step
 // registry — but instead of a direct in-core providerRegistry.resolve + StepContractCarrier
 // consult, it goes through the generic reverse-channel DescribeProvider (cached capability
 // metadata, no live Invoke — the K5-A item 2 RPC this plugin was built to prove) + InvokeProvider

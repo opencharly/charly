@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// pluginEntity is a candy carrying a `plugin:` block — one of the 86 plugin candies.
+// pluginEntity is a candy carrying a `plugin:` block — one of the plugin candies.
 type pluginEntity struct {
 	entity
 	CompiledIn bool
@@ -176,15 +176,34 @@ func generateProviderIndex(outRoot string, plugins []pluginEntity) (int, error) 
 		return rows[i].word < rows[j].word
 	})
 
+	// The census is computed here, never transcribed: the three numbers are derived from the same
+	// plugins slice the page is built from, so a catalog change re-derives them on the next run.
+	// A hand-written count in prose elsewhere is what this page exists to replace.
+	compiled := 0
+	for _, p := range plugins {
+		if p.CompiledIn {
+			compiled++
+		}
+	}
+	classCount := map[string]int{}
+	for _, r := range rows {
+		classCount[r.class]++
+	}
+
 	var b strings.Builder
-	b.WriteString("Every reserved word charly can dispatch, and the plugin candy that serves it. " +
-		"A word's class tells you where it appears: a `verb` in a plan step, a `kind` as an entity's " +
-		"kind key, a `command` as a `charly <word>` subcommand, and so on.\n\n")
+	fmt.Fprintf(&b, "**%d words across %d plugin candies, %d compiled into the binary.** "+
+		"Every reserved word charly can dispatch, and the plugin candy that serves it. "+
+		"A word's class tells you where it appears: a `verb` in a plan step, a `kind` as an entity's "+
+		"kind key, a `command` as a `charly <word>` subcommand, and so on.\n\n", len(rows), len(plugins), compiled)
 	current := ""
 	for _, r := range rows {
 		if r.class != current {
 			current = r.class
-			fmt.Fprintf(&b, "\n## `%s`\n\n| Word | Served by |\n|---|---|\n", current)
+			wordLabel := "words"
+			if classCount[current] == 1 {
+				wordLabel = "word"
+			}
+			fmt.Fprintf(&b, "\n## `%s` — %d %s\n\n| Word | Served by |\n|---|---|\n", current, classCount[current], wordLabel)
 		}
 		fmt.Fprintf(&b, "| `%s` | [%s](%s) |\n", r.word, r.plugin, r.page)
 	}

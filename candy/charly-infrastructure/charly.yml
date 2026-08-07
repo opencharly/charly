@@ -220,7 +220,7 @@ keepassxc-keyring-skill:
             ## Why a separate candy (and not edits to `keepassxc` or `agent-forwarding`)
             
             - The `keepassxc` candy is consumed by container/desktop boxes where FdoSecrets and autostart make no sense.
-            - `agent-forwarding` is a clean metalayer (`gnupg + direnv + ssh-client`) used by 27 application boxes. Adding host-only behavior there would polute every container build that composes it.
+            - `agent-forwarding` is a clean metalayer (`gnupg + direnv + ssh-client`) used by application boxes. Adding host-only behavior there would polute every container build that composes it.
             - Keeping host-only secret-service wiring in its own candy means containers stay containers and hosts stay hosts.
             
             ## When to Use This Skill

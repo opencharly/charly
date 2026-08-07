@@ -886,7 +886,7 @@ charly-status-skill:
             - `candy/plugin-substrate/status_local.go` — the local install-ledger collector
               (`Source="ledger"`).
             - `candy/plugin-substrate/status_probes.go` — `Probe` / `HostProbe` /
-              `GuestProbe` interfaces and the 7 concrete probes (`SupervisordProbe`,
+              `GuestProbe` interfaces and the concrete probes (`SupervisordProbe`,
               `DbusProbe`, `CharlyProbe`, `WlProbe`, `SwayProbe` are guest; `CdpProbe`,
               `VncProbe` are host). `runGuestProbes` builds a single concatenated shell
               script with per-probe markers and splits the stdout chunks back out.
@@ -2747,7 +2747,7 @@ deploy-skill:
             ## Cross-References
 
             **Deploy surface:**
-            - `/charly-local:local-deploy` — Local-target execution model: the external `deploy:local` plugin, ledger, gates, 15 ReverseOp kinds, sudo batching
+            - `/charly-local:local-deploy` — Local-target execution model: the external `deploy:local` plugin, ledger, gates, ReverseOp kinds, sudo batching
             - `/charly-internals:install-plan` — The InstallPlan IR shared by the deploy targets: ALL FIVE substrates (local/vm/pod/k8s/android) are external out-of-process deploys via plugins over the executor reverse channel — local/vm consume the IR via `kit.WalkPlans` (vm's walk runs inside the guest); pod's plugin walks nothing — its candy `plugin-deploy-pod` lifecycle builds the overlay host-side: the core `overlay` host-builder runs the prep+resolve M-seam, the candy renders the overlay in its own code via `deploykit.OCITarget` + `deploykit.NewRenderGeneratorFromProject` (`add_candy:` synthesis, P11c); `charly box build` itself emits via the separate WriteCandySteps → EmitTasks generator in `sdk/deploykit` (relocated in #67), not the IR
             - `/charly-internals:local-infra` — Supporting Go files for local deploys: hostdistro, ledger, builder_run, shell_profile, reverse_ops, `sdk/deploykit/compile_service_steps.go` (service_render, relocated), `candy/plugin-fleet/deploy_ref.go` (deploy_ref, relocated)
 

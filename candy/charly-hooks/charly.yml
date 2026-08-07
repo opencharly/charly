@@ -128,12 +128,36 @@ pre-commit-gate:
                 return roots
             
             
+            def workspace_member_roots(repo):
+                """The absolute module roots go.work `use` directives list (empty when the
+                repo has no go.work, or when it cannot be read)."""
+                base = os.path.abspath(repo or os.getcwd())
+                gw = os.path.join(base, "go.work")
+                members = set()
+                if not os.path.isfile(gw):
+                    return members
+                try:
+                    with open(gw, encoding="utf-8") as f:
+                        for line in f:
+                            m = re.match(r"\s*use\s+(\S+)", line)
+                            if m:
+                                members.add(os.path.abspath(os.path.join(base, m.group(1))))
+                except OSError:
+                    return set()
+                return members
+
+
             def lint_staged_go(repo):
                 if shutil.which("golangci-lint") is None:
                     return
+                # go.work member modules keep the workspace GOWORK; standalone modules
+                # (out-of-process candy/, tools/* — their own go.mod, deliberately NOT in
+                # go.work) must lint with GOWORK=off or golangci-lint fails typechecking
+                # ("does not contain modules listed in go.work").
+                workspace_members = workspace_member_roots(repo)
                 for root in sorted(touched_go_modules(repo)):
                     env = dict(os.environ)
-                    if os.sep + "candy" + os.sep in root + os.sep:
+                    if os.path.abspath(root) not in workspace_members:
                         env["GOWORK"] = "off"
                     try:
                         with tempfile.TemporaryDirectory(prefix="charly-gate-lint-") as cache:

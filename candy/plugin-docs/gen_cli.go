@@ -16,7 +16,7 @@ import (
 // be a fragile shim, and a shim that silently rots as plugins change.
 //
 // The trade-off is honest: charly's command surface is plugin-served almost end to end (of the
-// 36 top-level words, only the core spine `box`, `version` and `reap-orphans` are not
+// top-level words, only the core spine `box`, `version` and `reap-orphans` are not
 // `command:` providers), and command PARENTHOOD is a Go method (CommandParent()) rather than a
 // manifest field, so these pages name the word and its owning plugin without asserting where it
 // nests. The narrative CLI guide — hand-written, where prose belongs — covers the spine and the

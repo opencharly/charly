@@ -72,7 +72,7 @@ selkies-desktop-layer-skill:
             - **pcmflux** audio capture → Opus encoding at 320kbps
             - **PipeWire** audio server with PulseAudio compatibility
             - **NGINX** web frontend on port 3000
-            - **Full `wl:` verb automation:** ~40 methods all working — screenshots (pixelflux), input (wtype, wlrctl), window management (wlrctl toplevel), clipboard (wl-copy/paste), resolution (wlr-randr), accessibility (AT-SPI2), XWayland tools (xdotool, xprop)
+            - **Full `wl:` verb automation:** the methods all working — screenshots (pixelflux), input (wtype, wlrctl), window management (wlrctl toplevel), clipboard (wl-copy/paste), resolution (wlr-randr), accessibility (AT-SPI2), XWayland tools (xdotool, xprop)
             - **`cdp: coords` + `wl: click`:** CSS selector → desktop X/Y → Wayland pointer click (no VNC needed)
             - **`cdp: axtree`:** Chrome accessibility tree via the `cdp:` verb
             - **Desktop video recording** via the `record:` check verb (`record_mode: desktop`, capture bridge → H.264 → ffmpeg MP4, with optional audio)
@@ -728,7 +728,7 @@ selkies-labwc-skill:
             ## Test Coverage
             
             Latest `charly check live selkies-labwc` run: **91 passed, 0 failed, 0 skipped**
-            — the largest test suite in the project. Covers all 21 transitive
+            — the largest test suite in the project. Covers all the transitive
             candies (selkies, chrome, sshd, chrome-devtools-mcp primary; labwc,
             waybar-labwc, pipewire, swaync, pavucontrol, wl-tools, wl-*-pixelflux,
             a11y-tools, xterm, desktop-fonts, asciinema, fastfetch, tmux
@@ -751,7 +751,7 @@ selkies-labwc-skill:
             - `/charly-check:check` — declarative testing framework + testing gotchas
             - `/charly-check:cdp`, `/charly-check:wl` — desktop automation on this box
             - `/charly-core:charly-config` — deploy setup (tunnel, port remapping, instances)
-            - `/charly-build:charly-mcp-cmd` — the box bundles `chrome-devtools-mcp` (transitively via the chrome metalayer), so 2 deploy-scope `mcp:` checks (`ping`, `list-tools`) run against its MCP server on port 9224. `charly check live selkies-labwc --filter mcp` runs them, enumerating the 29 chrome-devtools tools.
+            - `/charly-build:charly-mcp-cmd` — the box bundles `chrome-devtools-mcp` (transitively via the chrome metalayer), so 2 deploy-scope `mcp:` checks (`ping`, `list-tools`) run against its MCP server on port 9224. `charly check live selkies-labwc --filter mcp` runs them, enumerating the chrome-devtools tools.
             
             ## Related
             
@@ -1047,7 +1047,7 @@ sway-browser-vnc-skill:
             (`chrome-devtools-mcp-port` references `${HOST_PORT:9224}` which isn't
             mapped here — correct skip behavior).
             
-            Covers all 19 transitive candies: wayvnc (VNC), sway (compositor),
+            Covers all the transitive candies: wayvnc (VNC), sway (compositor),
             chrome-sway, xdg-portal, waybar, swaync, pavucontrol, thunar,
             xfce4-terminal, pipewire, wl-screenshot-grim, wl-overlay, wf-recorder,
             desktop-fonts, fastfetch, asciinema, tmux, dbus, charly. Deploy-scope: VNC

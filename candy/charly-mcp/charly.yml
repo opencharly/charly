@@ -181,7 +181,7 @@ charly-mcp-skill:
             
             Deploys `charly mcp serve --listen :18765` inside the container under
             supervisord. The server exposes the entire charly CLI (auto-generated from
-            Kong reflection, currently ~192 tools including the authoring
+            Kong reflection, currently exposing the tools including the authoring
             surface — project scaffolding, YAML editing, file-write verbs) as MCP
             over Streamable HTTP. Any box composing `charly-mcp` advertises itself
             via the `ai.opencharly.mcp_provide` OCI label, so consumers —

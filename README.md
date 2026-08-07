@@ -83,7 +83,7 @@ prose or in `charly --help`: box is what you build, fleet is the set of deploys 
 Here is the idea that causes the most confusion, so it is worth being exact — and exactness here
 means saying what the schema actually enforces, not what would be tidy.
 
-There is one entity keyword, `candy:`, and one filename, `charly.yml`. But a candy resolves to
+A candy is declared with one entity keyword, `candy:`, and one filename, `charly.yml`. But a candy resolves to
 **one of two shapes**, and `base:`/`from:` is the switch:
 
 | The candy carries | It is | And it may also carry |
@@ -98,7 +98,7 @@ that declares `package:` and `charly box validate` rejects it: *`base: field not
 do.
 
 **The one thing that genuinely is additive is `plugin:`.** A layer may also register providers, and
-in this repository 88 candies do — every one of them carrying a `plan:`, so each is a real layer
+in this repository many candies do — every one of them carrying a `plan:`, so each is a real layer
 *and* an extension of `charly` at the same time. That is the additive case, and it lives entirely
 inside the layer shape.
 
@@ -114,23 +114,24 @@ built-in support for containers, VMs and Kubernetes that also happens to accept 
 is *kind-blind*: it knows how to load plugins, route a word to whichever one claims it, and carry
 generic data between them. It does not know what `pod:` means.
 
-Today's catalog registers **124 words across 75 plugin candies**:
+The [provider index](https://opencharly.ai/reference/providers/) is the live census — every word
+and its owning plugin candy, regenerated on every docs build.
 
-| Class | How many | Examples |
-|---|---|---|
-| **deploy** substrates | 5 | `pod` `vm` `k8s` `local` `android` |
-| **kind** — the entity keywords themselves | 14 | `candy` `distro` `group` `builder` `agent` |
-| **verb** — probes a `plan:` can call | 35 | `file` `http` `cdp` `vnc` `adb` `kube` |
-| **command** — `charly` subcommands | 46 | `fleet` `check` `candy` `clean` `marketplace` |
-| **step** — install operations | 12 | `file` `service-custom` `reboot` |
-| **builder** — multi-stage build patterns | 4 | `pixi` `npm` `cargo` `aur` |
-| the build/load internals | 8 | `build:box` `loader:loader` `refs:refs` `terminal:tmux` |
+| Class | Examples |
+|---|---|
+| **deploy** substrates | `pod` `vm` `k8s` `local` `android` |
+| **kind** — the entity keywords themselves | `candy` `distro` `group` `builder` `agent` |
+| **verb** — probes a `plan:` can call | `file` `http` `cdp` `vnc` `adb` `kube` |
+| **command** — `charly` subcommands | `fleet` `check` `candy` `clean` `marketplace` |
+| **step** — install operations | `file` `service-custom` `reboot` |
+| **builder** — multi-stage build patterns | `pixi` `npm` `cargo` `aur` |
+| the build/load internals | `build:box` `loader:loader` `refs:refs` `terminal:tmux` |
 
-A further **14 words across 13 `plugin-example-*` candies** are test fixtures — they exist to
-exercise the plugin mechanisms themselves, and are excluded from the table. That exclusion is the
-difference between a deploy row reading 5 and reading 7: `exampledeploy` and `examplelifecycle`
-are not substrates you can put anything on. **75 real + 13 fixtures = the 88 plugin candies
-counted elsewhere on this page** — the two numbers are the same set, split rather than in tension.
+Further `plugin-example-*` candies are test fixtures — they exist to
+exercise the plugin mechanisms themselves, and are excluded from the table above, which lists
+only the real words. That exclusion is what keeps `exampledeploy` and `examplelifecycle` out of
+the deploy row: they are not substrates you can put anything on. The real plugin candies and the
+fixture candies together are the plugin candies counted in the provider index above.
 
 Read the **kind** row again: **`candy:` itself is a plugin-provided kind**, registered by
 `candy/plugin-candy-kind`. The keyword this entire page is about is not privileged — it is a word
@@ -158,8 +159,8 @@ between them, and carry *generic envelopes* — data whose shape the core never 
 `pod` case in a switch statement anywhere in it. A test (`charly/import_purity_test.go`) fails the
 build if core code reaches for anything richer.
 
-**3. A plugin is reached the same way wherever it lives.** Of the 88 plugin candies, **59 are
-compiled into the binary** and the rest run as separate processes over gRPC. Both implement one
+**3. A plugin is reached the same way wherever it lives.** Some plugin candies are
+compiled into the binary; the rest run as separate processes over gRPC. Both implement one
 `Provider` contract, so placement is an operational choice — startup cost against isolation — not
 an API difference. `deploy:pod`, `deploy:vm` and `deploy:local` are all out-of-process: the
 substrates people think of as "built in" are not even in the binary.
@@ -389,8 +390,8 @@ it installs packages and systemd units onto whatever host it targets. Point it a
 guest before you point it at your workstation.
 [How that is wired →](https://opencharly.ai/concepts/02-one-recipe-many-molds/)
 
-**The other end of the scale.** The box above has two candies. The **kitchen-sink dev boxes** —
-`fedora-coder` and its `arch`, `debian` and `ubuntu` siblings — carry around thirty each: four AI
+**The other end of the scale.** The box above has a small candy list. The **kitchen-sink dev boxes** —
+`fedora-coder` and its `arch`, `debian` and `ubuntu` siblings — carry a large set of candies each: the AI
 coding CLIs (`claude-code`, `codex`, `gemini`, `forgecode`), every language runtime, DevOps
 tooling, nested rootless containers and rootless libvirt VMs, all at uid 1000 with no
 `--privileged`. Same format, same commands. A fully stocked kitchen really does ship with the sink.
@@ -422,7 +423,7 @@ project.
 box, command and contributor subsystem has an owning skill, plus reusable plugin agents (executors
 that drive the `charly check` beds and return verbatim proof, and enforcers that gate claims) and
 dynamic workflows. It installs into whichever harnesses have an adapter today — currently Claude
-Code, Codex and Kimi — in three modes: `developer` (every plugin), `user` (use and author with
+Code, Codex and Kimi — in these modes: `developer` (every plugin), `user` (use and author with
 charly, without contributor internals), and `container <family>` (one generated container family).
 It writes only target-repository files, never any user configuration, and does not depend on MCP.
 See [plugins/README.md](plugins/README.md) for the full index.

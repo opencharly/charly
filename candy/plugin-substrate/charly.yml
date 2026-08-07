@@ -14,11 +14,11 @@ plugin-substrate:
             ECHOES it and the host folds the echo into uf.Fleet (deploy) or the typed template map
             (template — the C2-substrate TEMPLATE fold arm extending F5's deploy-only fold), byte-equivalent
             to the former in-proc standaloneKind decode. COMPILED-IN (in the embedded compiled_plugins:),
-            like the tier-1 kinds and group, because these 5 are core deploy primitives every box/submodule
+            like the tier-1 kinds and group, because these are core deploy primitives every box/submodule
             must always resolve; also serves out-of-process via cmd/serve. P14a added the COLLECTOR
             OpStatusCollect on the same kind-provider Invoke (dispatched by word pod/vm/k8s/local/android):
             the cleanly-movable status collectors — pod live (snapshot + live mounts + tool probes) + local
-            (install-ledger) + the 7 probes — relocated here from charly core, reached by the host's
+            (install-ledger) + the probes — relocated here from charly core, reached by the host's
             `charly status` fan-out; the deploy-cone-coupled enrichment + the vm/k8s/android collectors
             stay host-side until K5.
         plugin:

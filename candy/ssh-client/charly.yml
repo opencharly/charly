@@ -93,7 +93,7 @@ ssh-client-skill:
             
             ## Used In Boxes
             
-            Part of `agent-forwarding` composition candy, used in 27 application boxes.
+            Part of `agent-forwarding` composition candy, used in application boxes.
             
             ## Related Candies
             

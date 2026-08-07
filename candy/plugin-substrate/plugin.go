@@ -18,7 +18,7 @@
 // buildStandaloneResource).
 //
 // PLACEMENT — COMPILED-IN (listed in the embedded charly/charly.yml compiled_plugins:), NOT
-// external. The 5 substrate kinds are CORE deploy primitives that must ALWAYS resolve: every
+// external. The substrate kinds are CORE deploy primitives that must ALWAYS resolve: every
 // box/submodule authoring a pod:/vm:/k8s:/local:/android: node (the root check/vm/local/k8s
 // entities, box/fedora, box/cachyos, box/arch, box/debian, box/ubuntu) relies on them without
 // discovering this candy, exactly like the tier-1 kinds and group. (cmd/serve serves it

@@ -58,7 +58,7 @@ jupyter-mcp-skill:
         family: jupyter
         owner: jupyter-mcp
         description: |-
-            JupyterLab CRDT MCP server extension with 11 tools (notebook_*/cell_* + room_list + notebook_list_users) for programmatic notebook access.
+            JupyterLab CRDT MCP server extension exposing the notebook tools (notebook_*/cell_* + room_list + notebook_list_users) for programmatic notebook access.
             MUST be invoked when working with: the MCP server implementation, CRDT collaboration, the auto-attach single-room invariant, or the Tier 1 pip-only installation pattern for jupyter extensions.
         content: |-
             # jupyter-mcp -- JupyterLab CRDT MCP server extension
@@ -104,7 +104,7 @@ jupyter-mcp-skill:
             
             ## MCP Server
             
-            The extension registers a Streamable HTTP MCP server at `http://localhost:8888/mcp` (MCP spec 2025-11-25). It provides 11 tools, all named in `<noun>_<verb>` form.
+            The extension registers a Streamable HTTP MCP server at `http://localhost:8888/mcp` (MCP spec 2025-11-25). It provides the tools, all named in `<noun>_<verb>` form.
             
             | Category | Tools |
             |----------|-------|
@@ -149,7 +149,7 @@ jupyter-mcp-skill:
             ```
             Claude Code / MCP Client
                 ↓ Streamable HTTP (POST /mcp)
-            FastMCP Server (mcp_server.py)            — 11 tools, no room_* management
+            FastMCP Server (mcp_server.py)            — the tools, no room_* management
                 ↓
             JupyterLab RTC Adapter (rtc_adapter.py)   — auto-attach + canonicalization
                 ↓ CRDT operations (in-place Y.Map mutation)
@@ -169,14 +169,14 @@ jupyter-mcp-skill:
                 jupyter_mcp/
                   __init__.py
                   app.py             # Jupyter server extension entry point
-                  mcp_server.py      # FastMCP tool definitions (11 tools)
+                  mcp_server.py      # FastMCP tool definitions
                   rtc_adapter.py     # CRDT room management, kernel execution
                   tornado_asgi.py    # Tornado-to-ASGI bridge for FastMCP
             ```
             
             ## Integration with mcp_provide
             
-            The parent `jupyter` candy declares `mcp_provide` to make this MCP server discoverable to other services at deploy time. The hermes service auto-discovers this server via the `CHARLY_MCP_SERVERS` env var and registers all 11 tools as `mcp_jupyter_<tool_name>`.
+            The parent `jupyter` candy declares `mcp_provide` to make this MCP server discoverable to other services at deploy time. The hermes service auto-discovers this server via the `CHARLY_MCP_SERVERS` env var and registers the tools as `mcp_jupyter_<tool_name>`.
             
             ## MCP Name Decoupling (design principle)
             
@@ -206,9 +206,9 @@ jupyter-mcp-skill:
             - `/charly-jupyter:jupyter` — lightweight Tier 2 parent candy
             - `/charly-jupyter:jupyter-ml` — GPU ML Tier 2 parent candy
             - `/charly-image:layer` — candy authoring rules (Tier 1 pattern)
-            - `/charly-build:charly-mcp-cmd` — client-side verb for probing this server's tool catalog (ping, list-tools, call); use `charly check live jupyter --filter mcp` to see all 11 tools this candy registers
+            - `/charly-build:charly-mcp-cmd` — client-side verb for probing this server's tool catalog (ping, list-tools, call); use `charly check live jupyter --filter mcp` to see the tools this candy registers
             - `/charly-selkies:chrome-devtools-mcp` — sibling MCP-server-provider candy for Chrome DevTools (different domain, same `mcp_provide` pattern)
-            - `/charly-hermes:hermes` — downstream MCP consumer (auto-discovers `jupyter` via `CHARLY_MCP_SERVERS`; uses the 11 tools to read/edit/execute notebook cells programmatically)
+            - `/charly-hermes:hermes` — downstream MCP consumer (auto-discovers `jupyter` via `CHARLY_MCP_SERVERS`; uses the tools to read/edit/execute notebook cells programmatically)
             - `/charly-openwebui:openwebui` — downstream MCP consumer (sets `CODE_EXECUTION_ENGINE=jupyter` when this server is discovered, routing Open WebUI's in-chat code blocks to the Jupyter kernel)
             
             ## When to Use This Skill
@@ -217,7 +217,7 @@ jupyter-mcp-skill:
             
             - The jupyter-mcp candy or its MCP server implementation
             - How the CRDT collaboration works in JupyterLab
-            - The 11 MCP tools for notebook manipulation
+            - The MCP tools for notebook manipulation
             - The auto-attach single-room invariant
             - The path canonicalization rules
             - The idle-room sweeper / cleanup behavior

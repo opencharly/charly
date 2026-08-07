@@ -65,17 +65,17 @@ notebook-osm-skill:
             | Dependencies | none (file-only) |
             | Data | `data/notebooks/` → `workspace:notebooks/` (deploy-time bind/seed) |
             | Check | `notebook-osm-viz-present` — file exists in volume |
-            | Notebook | `/workspace/notebooks/osm-monaco-viz.py` (~20 cells) |
+            | Notebook | `/workspace/notebooks/osm-monaco-viz.py` |
             
-            ## Notebook architecture (21 cells, source order)
+            ## Notebook architecture (source order)
             
             | # | Purpose | Returns |
             |---|---|---|
             | 1 | imports | mo, os, time, textwrap, requests, Path, polars, folium |
             | 2 | **`_resolved_urls`** — diagnostic cell: renders a polars DataFrame of the seven URL env vars (purpose / env_var / value / side / is_default) and exports each as a typed value so downstream map cells consume them as parameters instead of re-reading `os.environ` per cell. The user's first window into "what URLs am I actually using" — verifies the auto-allocated port mappings and any cross-pod URL overrides without inspecting charly.yml. | `urls`, `martin`, `airflow_api_internal`, `airflow_public`, `airflow_dags_dir`, `versatiles_public`, `versatiles_style`, `versatiles_assets` |
             | 3 | markdown header (mo.md) | rendered intro + URL strategy table |
-            | 4 | self-author **all six** DAG files (osm + gtfs + gpqtiles + duckdb-mvt + duckdb-freestiler + shortbread) | `dag_files`, `dag_ids = [6 ids]`, `dags_dir` |
-            | 5 | trigger ALL SIX DAGs in parallel + poll until each succeeds | `dag_run_states = {6 ids → success}` |
+            | 4 | self-author **all the DAG files** (osm + gtfs + gpqtiles + duckdb-mvt + duckdb-freestiler + shortbread) | `dag_files`, `dag_ids`, `dags_dir` |
+            | 5 | trigger all the DAGs in parallel + poll until each succeeds | `dag_run_states` |
             | 6 | OSM GPU `geom_kb` histogram via cudf-polars-cu13 | `df_gpu`, `parquet_path` |
             | 7 | OSM tag-key histogram via pyarrow (workaround) | `df_tags` |
             | 8 | DuckDB Spatial geom-type counts (`INSTALL spatial`) | `df_duckdb_spatial` |
@@ -98,7 +98,7 @@ notebook-osm-skill:
             re-reads. The diagnostic cell is the single source of truth for all
             seven URL env vars (R3).
             
-            The five DAGs are independent (`notebook_osm_pipeline`,
+            The DAGs are independent (`notebook_osm_pipeline`,
             `notebook_gtfs_pipeline`, `notebook_osm_gpqtiles_pipeline`,
             `notebook_osm_duckdb_mvt_pipeline`,
             `notebook_osm_duckdb_freestiler_pipeline`) but triggered + polled

@@ -1496,7 +1496,7 @@ cdp-skill:
             - `/charly-core:charly-config` -- Instance deployment, proxy configuration, removal workflow
             - `/charly-image:layer` -- Chrome candy configuration (cdp-proxy service, port declarations)
             - `/charly-selkies:selkies-labwc` -- Full SPA DOM structure, coordinate mapping, session resilience
-            - `/charly-selkies:chrome-devtools-mcp` -- MCP-based browser automation (29 tools via Streamable HTTP)
+            - `/charly-selkies:chrome-devtools-mcp` -- MCP-based browser automation via Streamable HTTP
             - `/charly-selkies:chrome` -- Chrome candy with cdp-proxy, env_accept (HTTP_PROXY)
 
             ## When to Use This Skill
@@ -2168,7 +2168,7 @@ check-skill:
                   | Bed | Target | Ref | Surface |
                   |---|---|---|---|
                   | `check-sway-browser-vnc-pod` | pod | `image: sway-browser-vnc` | cdp/wl/vnc/dbus/mcp/record + pod-side file/service/port/process/http |
-                  | `check-k3s-vm` | vm | `from: k3s-vm` | kube (all 13 methods) + guest-side file/service/port/process, http via port-forward, the external vm deploy end-to-end |
+                  | `check-k3s-vm` | vm | `from: k3s-vm` | kube (all the methods) + guest-side file/service/port/process, http via port-forward, the external vm deploy end-to-end |
                   | `check-pod` | pod | `image: check-pod` | combined mechanism bed: `candy:` image build (a `candy:` carrying `base:`/`from:`) + `candy:` layer composition order + `kind: pod` runtime (nc :18794 + supervisord) + every DeployTarget rendering path |
                   | `check-local` | local | `from: check-local-app` | `kind: local` layer apply via ShellExecutor |
                   | `check-jupyter-pod` | pod | `image: jupyter` | jupyter-mcp regression coverage |
@@ -2442,7 +2442,7 @@ check-skill:
 
                   Unit tests are not a substitute for running the service — a green `go test ./...` proves compilation and loader behavior, not that a service actually starts.
 
-                  These are the 11 standards referenced in the project rulebook's AI attribution tier ("fully tested and validated"). Each is keyed to a project-rulebook R-rule. Apply them whenever a change could affect Containerfile generation, OCI labels, init systems, service startup, or deploy code.
+                  These are the standards referenced in the project rulebook's AI attribution tier ("fully tested and validated"). Each is keyed to a project-rulebook R-rule. Apply them whenever a change could affect Containerfile generation, OCI labels, init systems, service startup, or deploy code.
 
                   0. **Prove every high-risk assumption before you edit (RDD — Risk Driven Development)** — the proactive bookend to Standard 11's fresh-rebuild gate. Low-risk orientation ("what does layer X do") is a skill lookup (R0, zero risk); every high-risk assumption — including any a skill or the code merely *asserts*, and above all whether this layer composition at its latest available versions builds / deploys / runs together — is proven on a `disposable: true` bed first (`charly check` it). Never accept docs or code as ground truth for a high-risk decision; if the bed disagrees with a skill, the skill is stale — fix it. Standard 0 (validate forward, riskiest-first) and Standard 11 (re-verify on a fresh rebuild) are the two ends of the same loop.
 
@@ -2511,9 +2511,9 @@ check-skill:
 
                   If the container needs state that's only available in deploy (volumes, env, tunnel), author the step at `context: [deploy]`. If it needs something at build only (binary path, package presence), author at `context: [build]`. Both contexts must pass for the cutover to be real.
 
-                  **Confidence tier mapping:** The "fully tested and validated" confidence level in the project rulebook's AI-attribution table requires all 11 standards met — including Standard 11, the fresh-rebuild re-verification. Anything short of that ships at a lower confidence tier.
+                  **Confidence tier mapping:** The "fully tested and validated" confidence level in the project rulebook's AI-attribution table requires all the standards met — including the fresh-rebuild re-verification. Anything short of that ships at a lower confidence tier.
 
-                  ## Coverage snapshot (7 currently-tested images)
+                  ## Coverage snapshot
 
                   Reference numbers from the last end-to-end session:
 
@@ -2545,7 +2545,7 @@ check-skill:
                   | 1 | single-pod-system-state | ~10 min | trivial pod deploy |
                   | 2 | network-and-http | ~few min (cumulative scoring keeps phase 1 in scope) | nginx + curl in fedora:43 |
                   | 3 | cross-pod-nonce-traffic | ~few min | redis + redis-client; EVAL_NONCE_KEY/VALUE substituted per iter |
-                  | 4 | mcp-protocol-probe | ~14 min | jupyter image build (~6 min) + 32 check steps |
+                  | 4 | mcp-protocol-probe | ~14 min | jupyter image build (~6 min) + check steps |
                   | 5 | kubernetes-cluster | ~20-30 min | k3s/kwok cluster bring-up |
                   | 6 | desktop-display-and-input | ~50 min iter1, ~10 min iter2 | sway-browser-vnc image build (~14 min) + 13 cdp/wl/vnc checks; commonly takes 2 iters due to Chrome SIGBUS instability |
                   | 7 | vm-control-libvirt-spice | ~40-50 min | libvirt domain (cloud-init, qemu-guest-agent) + 9 checks |
@@ -2796,7 +2796,7 @@ check-skill:
                   on conventions (new tabs are usually ID 1) and inspect state via
                   follow-up `cdp: list` checks if needed.
 
-                  ### Method allowlist — `cdp` (15 methods + 6 SPA-nested)
+                  ### Method allowlist — `cdp` (the methods + the SPA-nested ones)
 
                   Queries: `status`, `list`, `url`, `text`, `html`, `eval`, `axtree`,
                   `coords`, `raw`, `wait`, `screenshot`.
@@ -2865,7 +2865,7 @@ check-skill:
                             contains: '"name":"1"'
                   ```
 
-                  ### Method allowlist — `dbus` (4 methods)
+                  ### Method allowlist — `dbus` (the methods)
 
                   Queries: `list`, `call`, `introspect`.
                   Actions: `notify`.
@@ -2889,7 +2889,7 @@ check-skill:
                             contains: body
                   ```
 
-                  ### Method allowlist — `vnc` (8 methods)
+                  ### Method allowlist — `vnc` (the methods)
 
                   Queries: `status`, `screenshot`, `rfb`.
                   Actions: `click`, `mouse`, `type`, `key`, `passwd`.
@@ -2910,7 +2910,7 @@ check-skill:
                             artifact_min_bytes: 5000
                   ```
 
-                  ### Method allowlist — `mcp` (7 methods)
+                  ### Method allowlist — `mcp` (the methods)
 
                   Queries: `ping`, `servers`, `list-tools`, `list-resources`, `list-prompts`,
                   `read`.
@@ -3955,7 +3955,7 @@ record-skill:
             out-of-process by its plugin (`candy/plugin-record`), parallel to the
             `mcp:`/`adb:`/`appium:` plugin verbs. Author a `record:` step in a candy/box plan and
             run it against a live deployment with `charly check live <image> --filter record`. It
-            supports two modes:
+            supports these modes:
 
             1. **Terminal recording** (asciinema) — Records terminal sessions as `.cast` files
             2. **Desktop video recording** — Records full-screen video as MP4 files via pixelflux (selkies-desktop) or wf-recorder (sway-desktop)
@@ -4338,7 +4338,7 @@ spice-skill:
 
             ## Architecture split (vs. the `libvirt:` verb)
 
-            The two verbs are single-protocol by design:
+            The verbs are single-protocol by design:
 
             - **`spice:`** — every byte flows through the SPICE wire. Use when the thing
               under test is "is SPICE itself healthy?".
