@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// pluginEntity is a candy carrying a `plugin:` block — one of the 86 plugin candies.
+// pluginEntity is a candy carrying a `plugin:` block — one of the plugin candies.
 type pluginEntity struct {
 	entity
 	CompiledIn bool
