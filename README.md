@@ -98,7 +98,7 @@ that declares `package:` and `charly box validate` rejects it: *`base: field not
 do.
 
 **The one thing that genuinely is additive is `plugin:`.** A layer may also register providers, and
-in this repository 86 candies do — every one of them carrying a `plan:`, so each is a real layer
+in this repository 88 candies do — every one of them carrying a `plan:`, so each is a real layer
 *and* an extension of `charly` at the same time. That is the additive case, and it lives entirely
 inside the layer shape.
 
@@ -114,7 +114,7 @@ built-in support for containers, VMs and Kubernetes that also happens to accept 
 is *kind-blind*: it knows how to load plugins, route a word to whichever one claims it, and carry
 generic data between them. It does not know what `pod:` means.
 
-Today's catalog registers **124 words across 73 plugin candies**:
+Today's catalog registers **124 words across 75 plugin candies**:
 
 | Class | How many | Examples |
 |---|---|---|
