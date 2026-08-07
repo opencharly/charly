@@ -4,8 +4,6 @@ go 1.26.0
 
 require (
 	github.com/alecthomas/kong v1.15.0 // indirect
-	github.com/opencharly/charly/candy/plugin-egress v0.0.0-20260806143330-d5823a147477 // indirect
-	github.com/opencharly/charly/candy/plugin-init v0.0.0-20260806143330-d5823a147477 // indirect
 	golang.org/x/term v0.41.0 // indirect
 )
 

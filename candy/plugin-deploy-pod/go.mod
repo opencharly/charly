@@ -4,11 +4,7 @@ go 1.26.0
 
 require github.com/opencharly/sdk v0.0.0
 
-require (
-	github.com/opencharly/charly/candy/plugin-egress v0.0.0-20260806143330-d5823a147477 // indirect
-	github.com/opencharly/charly/candy/plugin-init v0.0.0-20260806143330-d5823a147477 // indirect
-	golang.org/x/crypto v0.49.0 // indirect
-)
+require golang.org/x/crypto v0.49.0 // indirect
 
 require (
 	cuelang.org/go v0.16.1 // indirect

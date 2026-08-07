@@ -8,11 +8,6 @@ require (
 )
 
 require (
-	github.com/opencharly/charly/candy/plugin-egress v0.0.0-20260806143330-d5823a147477 // indirect
-	github.com/opencharly/charly/candy/plugin-init v0.0.0-20260806143330-d5823a147477 // indirect
-)
-
-require (
 	cuelang.org/go v0.16.1 // indirect
 	github.com/cockroachdb/apd/v3 v3.2.1 // indirect
 	github.com/emicklei/proto v1.14.3 // indirect

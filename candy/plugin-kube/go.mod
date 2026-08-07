@@ -7,11 +7,7 @@ require (
 	k8s.io/client-go v0.36.0
 )
 
-require (
-	github.com/alecthomas/kong v1.15.0 // indirect
-	github.com/opencharly/charly/candy/plugin-egress v0.0.0-20260806143330-d5823a147477 // indirect
-	github.com/opencharly/charly/candy/plugin-init v0.0.0-20260806143330-d5823a147477 // indirect
-)
+require github.com/alecthomas/kong v1.15.0 // indirect
 
 require (
 	cuelang.org/go v0.16.1 // indirect
