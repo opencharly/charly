@@ -883,7 +883,7 @@ fedora-coder-skill:
             | `/charly-coder:debian-coder` | `debian:13` | deb | `user:user` (create) |
             | `/charly-coder:ubuntu-coder` | `ubuntu:24.04` | deb | `user:ubuntu` (**adopt** from base) |
             
-            All four produce the same daily-dev surface (sshd on 2222, charly-mcp on 18765, 5 AI CLIs, full language runtimes, DevOps tooling). Pick based on distro-family alignment with your team/CI. See `/charly-image:image` "user_policy" for the adopt-vs-create reconciliation that gives ubuntu-coder its `ubuntu` username.
+            All four produce the same daily-dev surface (sshd on 2222, charly-mcp on 18765, AI CLIs, full language runtimes, DevOps tooling). Pick based on distro-family alignment with your team/CI. See `/charly-image:image` "user_policy" for the adopt-vs-create reconciliation that gives ubuntu-coder its `ubuntu` username.
             
             ## Related Boxes
             
