@@ -57,7 +57,7 @@ sherpa-onnx:
               file:
                 file: ${HOME}/.local/share/sherpa-onnx/runtime/lib/libsherpa-onnx-c-api.so
                 exists: true
-            - check: the fleetdverb ONNX Runtime shared library ships alongside it so the engine can link
+            - check: the bundled ONNX Runtime shared library ships alongside it so the engine can link
               file:
                 file: ${HOME}/.local/share/sherpa-onnx/runtime/lib/libonnxruntime.so
                 exists: true

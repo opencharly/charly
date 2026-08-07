@@ -29,7 +29,7 @@ github-runner:
                     - qemu-user-static-binfmt
                     - cosign # repo package (replaces binary download)
                     # .NET runtime deps for the actions-runner binary — the runner's
-                    # fleetdverb installdependencies.sh has no Arch branch, so its native
+                    # bundled installdependencies.sh has no Arch branch, so its native
                     # deps are declared explicitly here. (libz is NOT listed: CachyOS
                     # ships zlib-ng-compat, which Provides zlib/libz.so — an explicit
                     # `zlib` is an unresolvable conflict with it.)

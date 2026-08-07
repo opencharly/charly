@@ -82,7 +82,7 @@ openclaw-full:
               file:
                 file: /usr/local/bin/uv
                 exists: true
-            - agent-check: the running OpenClaw gateway exposes the fleetdverb CLI tools to agent requests without relying on a system browser
+            - agent-check: the running OpenClaw gateway exposes the bundled CLI tools to agent requests without relying on a system browser
             - check: package=ripgrep
               id: openclaw-full-ripgrep-package
               package:

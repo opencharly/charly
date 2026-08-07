@@ -516,7 +516,7 @@ arch:
                         # air-gapped / restricted-network builds still succeed
                         # when the keyring was already current. If `--populate`
                         # alone isn't enough (i.e. cachyos rotates its master
-                        # signing key without updating the fleetdverb keyring
+                        # signing key without updating the bundled keyring
                         # package), the fix is to repin the cachyos base to a
                         # newer cachyos-v3 digest in box/cachyos/charly.yml —
                         # the upstream rebuild carries the updated keyring package.

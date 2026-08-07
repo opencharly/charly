@@ -97,7 +97,7 @@ charly-cachyos-skill:
             - `/charly-local:local-spec` — `kind: local` template authoring reference
             - `/charly-local:local-deploy` — the `target: local` deployment surface
             - `/charly-distros:cachyos` — the CachyOS base of the same family
-            - `/charly-core:deploy` — bundle entry semantics (globally-unique names within a document: the `charly-cachyos` bundle deploys the suffixed `charly-cachyos-app` `kind: local` template)
+            - `/charly-core:deploy` — fleet entry semantics (globally-unique names within a document: the `charly-cachyos` fleet deploys the suffixed `charly-cachyos-app` `kind: local` template)
 
             ## When to Use This Skill
 
@@ -124,7 +124,7 @@ local-deploy-skill:
             - `host: local` (literal) or absent → `ShellExecutor` (run on this machine).
             - Anything else → `SSHExecutor` (ssh(1) reads `~/.ssh/config` + ssh-agent for keys, host-key checking, options).
 
-            The same `InstallPlan` IR that drives container deploys (via the candy `plugin-deploy-pod`, incl. `add_candy:` overlay synthesis through `deploykit.OCITarget`) is consumed by the external `deploy:local` plugin (`candy/plugin-deploy-local`), which `pluginDeployTarget` (`charly/unified_targets.go`, S3b) hands the plan — via `candy/plugin-bundle`'s `Invoke(OpDeployDispatch)` reaching the substrate's own `InvokeProvider` — over the executor reverse channel; the plugin walks it via the shared out-of-process walk (`sdk/kit.WalkPlans`), translating each IR step into shell commands, `podman run <builder>` invocations for compile-needing work, and systemd unit writes. The step kinds the plugin cannot render itself (`BuilderStep`, `LocalPkgInstallStep`, `SystemPackagesStep`, act-verb `OpStep`, `ExternalPluginStep`) are driven on the HOST via the `RunHostStep` reverse-channel RPC. (`charly box build` itself emits Containerfiles via the separate `WriteCandySteps` → `EmitTasks` generator in `sdk/deploykit` (relocated from `charly/generate.go` in #67), not the IR — see `/charly-internals:install-plan`.)
+            The same `InstallPlan` IR that drives container deploys (via the candy `plugin-deploy-pod`, incl. `add_candy:` overlay synthesis through `deploykit.OCITarget`) is consumed by the external `deploy:local` plugin (`candy/plugin-deploy-local`), which `pluginDeployTarget` (`charly/unified_targets.go`, S3b) hands the plan — via `candy/plugin-fleet`'s `Invoke(OpDeployDispatch)` reaching the substrate's own `InvokeProvider` — over the executor reverse channel; the plugin walks it via the shared out-of-process walk (`sdk/kit.WalkPlans`), translating each IR step into shell commands, `podman run <builder>` invocations for compile-needing work, and systemd unit writes. The step kinds the plugin cannot render itself (`BuilderStep`, `LocalPkgInstallStep`, `SystemPackagesStep`, act-verb `OpStep`, `ExternalPluginStep`) are driven on the HOST via the `RunHostStep` reverse-channel RPC. (`charly box build` itself emits Containerfiles via the separate `WriteCandySteps` → `EmitTasks` generator in `sdk/deploykit` (relocated from `charly/generate.go` in #67), not the IR — see `/charly-internals:install-plan`.)
 
             The deploy applies host packages + configs ONLY. Container images required for `charly check run` / `charly check live` are ensured by the check preflight (see `/charly-check:check` "Image preflight"), not by the deploy. Deploys (any target) emit zero image-pull / image-build steps — that's the project rulebook "Deploy fetches NOTHING speculative" Key Rule (`AGENTS.md` / `CLAUDE.md`), codified at the type level. Migration of legacy `image:` blocks: `charly migrate` (idempotent).
 
@@ -143,11 +143,11 @@ local-deploy-skill:
 
             | Action | Command |
             |---|---|
-            | Direct local | `charly bundle add my-laptop` (`host: local` is the default) |
-            | SSH to remote | `charly bundle add ci-3` with `host: user@ci-3.lan` in charly.yml |
+            | Direct local | `charly fleet add my-laptop` (`host: local` is the default) |
+            | SSH to remote | `charly fleet add ci-3` with `host: user@ci-3.lan` in charly.yml |
             | Reference a template | `from: dev-workstation` inside the `local:` node |
-            | Tear down | `charly bundle del <name>` |
-            | Tear down, keep repo changes | `charly bundle del <name> --keep-repo-changes` |
+            | Tear down | `charly fleet del <name>` |
+            | Tear down, keep repo changes | `charly fleet del <name> --keep-repo-changes` |
 
             ## Three DIFFERENT remote surfaces — do not conflate them
 
@@ -456,7 +456,7 @@ local-spec-skill:
             ## Cross-References
 
             - `/charly-local:local-deploy` — the `target: local` deployment surface that consumes this template.
-            - `/charly-internals:local-infra` — Go file map (`candy/plugin-bundle/node_resolve.go`'s `lookupLocalTemplate`, the plugin-side template resolver).
+            - `/charly-internals:local-infra` — Go file map (`candy/plugin-fleet/node_resolve.go`'s `lookupLocalTemplate`, the plugin-side template resolver).
             - `/charly-image:layer` — candy authoring (the building blocks composed by templates).
             - `/charly-build:migrate` — `charly migrate` migrates legacy `kind: host`/`host.yml` projects up to the node-form schema (every entity name-first inline in `charly.yml`). The `charly-cachyos` deploy applies the suffixed `charly-cachyos-app` `kind: local` template — within one document top-level names are globally unique, so the deploy keeps the user-facing name and the template it deploys is suffixed (see "Globally-unique names within one document" below).
 

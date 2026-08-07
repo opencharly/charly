@@ -526,7 +526,7 @@ k3s-server-skill:
             
             ```bash
             charly vm create k3s-srv
-            charly bundle add vm:k3s-srv
+            charly fleet add vm:k3s-srv
             # → kubeconfig auto-retrieved + ClusterProfile written
             kubectl --context k3s-srv get nodes
             # addon health is asserted by the candy's declarative `kube: addons` check step

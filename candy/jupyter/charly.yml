@@ -6,7 +6,7 @@ jupyter:
             Installs JupyterLab into the pixi default environment (the jupyter-lab
             binary), adds the spaCy en_core_web_sm NLP model and the
             jupyterlab-quarto extension, and serves notebooks on port 8888 from
-            the /workspace volume under supervisord. A fleetdverb MCP server (composed
+            the /workspace volume under supervisord. A bundled MCP server (composed
             from jupyter-mcp) exposes notebook_*/cell_* tools at /mcp so an agent
             can create and edit notebooks over the Model Context Protocol.
         require:

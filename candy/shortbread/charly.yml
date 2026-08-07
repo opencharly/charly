@@ -103,11 +103,11 @@ shortbread:
             - check: tilemaker resolves on PATH so the notebook DAG can invoke it (tilemaker ships no --version flag, so resolve by name)
               exit_status: 0
               command: command -v tilemaker
-            - check: the shortbread per-feature Lua classifier is fleetdverb for tilemaker --process
+            - check: the shortbread per-feature Lua classifier is bundled for tilemaker --process
               file:
                 file: /opt/shortbread-tilemaker/process.lua
                 exists: true
-            - check: the shortbread layer and zoom schema definition is fleetdverb for tilemaker --config
+            - check: the shortbread layer and zoom schema definition is bundled for tilemaker --config
               file:
                 file: /opt/shortbread-tilemaker/config.json
                 exists: true
@@ -119,7 +119,7 @@ shortbread:
               file:
                 file: /workspace/tiles/shortbread
                 exists: true
-            - agent-check: a tilemaker run converts an OSM PBF into a monaco-shortbread.pmtiles archive in that directory using the fleetdverb config.json and process.lua
+            - agent-check: a tilemaker run converts an OSM PBF into a monaco-shortbread.pmtiles archive in that directory using the bundled config.json and process.lua
             - check: package=lua
               id: shortbread-lua-runtime
               package:

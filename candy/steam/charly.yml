@@ -5,7 +5,7 @@ steam:
             Steam gaming client plus the gamescope nested compositor on a Sway/XWayland desktop
             Installs the Steam client and the gamescope micro-compositor from the
             Fedora + RPM Fusion nonfree repos, and pins
-            STEAM_RUNTIME_PREFER_HOST_LIBRARIES=0 so Steam uses its own fleetdverb
+            STEAM_RUNTIME_PREFER_HOST_LIBRARIES=0 so Steam uses its own bundled
             runtime instead of host libraries. The launcher binary, the gamescope
             binary, both RPM packages, and the runtime env pin are all directly
             verifiable inside the built image.
@@ -42,7 +42,7 @@ steam:
               package:
                 package: gamescope
                 installed: true
-            - check: STEAM_RUNTIME_PREFER_HOST_LIBRARIES is pinned to 0 so Steam uses its fleetdverb runtime
+            - check: STEAM_RUNTIME_PREFER_HOST_LIBRARIES is pinned to 0 so Steam uses its bundled runtime
               stdout: "0"
               command: printenv STEAM_RUNTIME_PREFER_HOST_LIBRARIES
 

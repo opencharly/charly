@@ -75,7 +75,7 @@ hermes-full:
               service:
                 service: hermes
                 running: true
-            - agent-check: an operator can open a shell in the deployed box and launch the hermes agent together with any fleetdverb AI CLI (claude/codex/gemini/forge) and developer tool from that one session
+            - agent-check: an operator can open a shell in the deployed box and launch the hermes agent together with any bundled AI CLI (claude/codex/gemini/forge) and developer tool from that one session
             - check: package=neovim
               id: hermes-full-neovim-package
               package:

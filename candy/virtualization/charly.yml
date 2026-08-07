@@ -41,7 +41,7 @@ virtualization:
                     - libvirt-daemon-config-network
                     # libvirt-daemon-driver-network is NOT listed: on Debian it is a
                     # Depends of libvirt-daemon-system (pulled transitively); on Ubuntu
-                    # noble it is not a separate package (fleetdverb in libvirt-daemon-system),
+                    # noble it is not a separate package (bundled in libvirt-daemon-system),
                     # so listing it fails apt with "Unable to locate package".
                     - libvirt-daemon-driver-qemu
                     - libvirt-daemon-system
@@ -89,7 +89,7 @@ virtualization:
                     - libvirt-daemon-config-network
                     # libvirt-daemon-driver-network is NOT listed: on Debian it is a
                     # Depends of libvirt-daemon-system (pulled transitively); on Ubuntu
-                    # noble it is not a separate package (fleetdverb in libvirt-daemon-system),
+                    # noble it is not a separate package (bundled in libvirt-daemon-system),
                     # so listing it fails apt with "Unable to locate package".
                     - libvirt-daemon-driver-qemu
                     - libvirt-daemon-system

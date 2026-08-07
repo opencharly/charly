@@ -6,7 +6,7 @@ hermes:
             The hermes candy installs the upstream Nous Research hermes-agent as a
             non-editable pip package into the pixi default environment, so the
             `hermes` CLI lands at ${HOME}/.pixi/envs/default/bin/hermes. It also
-            stages the full hermes-agent source tree under $HOME (for the fleetdverb
+            stages the full hermes-agent source tree under $HOME (for the bundled
             .env / config examples, skills, and the WhatsApp bridge) and copies an
             executable hermes-entrypoint wrapper onto the user PATH. At deploy time
             the entrypoint runs under supervisord, mounts the persistent /opt/data

@@ -19,7 +19,7 @@ oracle:
               exit_status: 0
               command: ${HOME}/.npm-global/bin/oracle --version
             - agent-check: the oracle CLI and its nodejs runtime are installed in the image
-            - agent-check: a user runs oracle with a fleetdverb prompt against its configured AI engines
+            - agent-check: a user runs oracle with a bundled prompt against its configured AI engines
             - agent-check: oracle dispatches the prompt to each configured engine and returns their answers
 
 oracle-skill:
