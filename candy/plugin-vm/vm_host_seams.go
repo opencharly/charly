@@ -24,7 +24,7 @@ import (
 // Spec-type aliases the moved handlers reference by their core (package main) short names. All are
 // canonical sdk/spec wire types (the same identity core used via its own alias surface).
 type (
-	FleetNode          = spec.Deploy
+	FleetNode           = spec.Deploy
 	ResolvedResource    = spec.ResolvedResource
 	ResolvedGpuSelector = spec.ResolvedGpuSelector
 	VFIOReport          = spec.VFIOReport

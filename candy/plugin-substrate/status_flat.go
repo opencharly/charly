@@ -95,9 +95,9 @@ type flatCollector struct {
 // flatCollectOpts is the read-only input one collection pass threads through: the deploy-cone
 // data enrichOne/enrichVmRow need, plus RunMode for the per-substrate collector requests.
 type flatCollectOpts struct {
-	IncludeAll bool                    // mirrors --all
+	IncludeAll bool                   // mirrors --all
 	Deploy     *deploykit.FleetConfig // ~/.config/charly/charly.yml (may be nil)
-	RunMode    string                  // c.rt.RunMode
+	RunMode    string                 // c.rt.RunMode
 }
 
 // newFlatCollector wires up the runtime + cached deploy + quadlet dir. charly.yml validation

@@ -53,21 +53,21 @@ func TestSidecarNamesFromFleetConfig(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		fleet   map[string]deploykit.FleetNode
+		fleet    map[string]deploykit.FleetNode
 		image    string
 		instance string
 		want     []string
 	}{
 		{
 			name:     "no entry — returns nil",
-			fleet:   map[string]deploykit.FleetNode{"other": {Image: "other"}},
+			fleet:    map[string]deploykit.FleetNode{"other": {Image: "other"}},
 			image:    "missing",
 			instance: "",
 			want:     nil,
 		},
 		{
 			name:     "entry without sidecars — returns nil",
-			fleet:   map[string]deploykit.FleetNode{"foo": {Image: "foo"}},
+			fleet:    map[string]deploykit.FleetNode{"foo": {Image: "foo"}},
 			image:    "foo",
 			instance: "",
 			want:     nil,

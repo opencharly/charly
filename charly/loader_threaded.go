@@ -257,7 +257,7 @@ func requireMaterializer() spec.Materializer {
 func hostMaterializeSeams() spec.MaterializeSeams {
 	return spec.MaterializeSeams{
 		DecodeEntity:             decodeEntityViaRegistry,
-		BuildFleetEntity:        buildFleetEntityViaRegistry,
+		BuildFleetEntity:         buildFleetEntityViaRegistry,
 		InKindConnectPass:        inKindConnectPass,
 		DeclaredKindConnectError: declaredKindConnectError,
 	}

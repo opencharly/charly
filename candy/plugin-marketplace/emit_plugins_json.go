@@ -26,11 +26,11 @@ type claudePluginJSON struct {
 	Author      struct {
 		Name string `json:"name"`
 	} `json:"author"`
-	Homepage    string   `json:"homepage,omitempty"`
-	Repository  string   `json:"repository"`
-	License     string   `json:"license,omitempty"`
-	Keywords    []string `json:"keywords,omitempty"`
-	MCPServers  string   `json:"mcpServers,omitempty"`
+	Homepage   string   `json:"homepage,omitempty"`
+	Repository string   `json:"repository"`
+	License    string   `json:"license,omitempty"`
+	Keywords   []string `json:"keywords,omitempty"`
+	MCPServers string   `json:"mcpServers,omitempty"`
 }
 
 // codexPluginJSON is the .codex-plugin/plugin.json shape (the expanded Codex schema).
@@ -41,10 +41,10 @@ type codexPluginJSON struct {
 	Author      struct {
 		Name string `json:"name"`
 	} `json:"author"`
-	Repository  string         `json:"repository"`
-	Skills      string         `json:"skills"`
-	Interface   codexInterface `json:"interface"`
-	MCPServers  string         `json:"mcpServers,omitempty"`
+	Repository string         `json:"repository"`
+	Skills     string         `json:"skills"`
+	Interface  codexInterface `json:"interface"`
+	MCPServers string         `json:"mcpServers,omitempty"`
 }
 
 type codexInterface struct {
@@ -77,13 +77,13 @@ func emitClaudePluginJSON(em emissions, f family) {
 		Name:        "charly-" + f.Name,
 		Description: f.Meta.Description,
 		Version:     familyVersion(f),
-		Author:      struct {
+		Author: struct {
 			Name string `json:"name"`
 		}{Name: pluginAuthor},
-		Homepage:    "https://github.com/opencharly/charly",
-		Repository:  pluginRepository,
-		License:     pluginLicense,
-		Keywords:    f.Meta.Keywords,
+		Homepage:   "https://github.com/opencharly/charly",
+		Repository: pluginRepository,
+		License:    pluginLicense,
+		Keywords:   f.Meta.Keywords,
 	}
 	if len(f.Meta.McpServers) > 0 {
 		doc.MCPServers = "./.mcp.json"
@@ -100,8 +100,8 @@ func emitCodexPluginJSON(em emissions, f family) {
 		Author: struct {
 			Name string `json:"name"`
 		}{Name: pluginAuthor},
-		Repository:  pluginRepository,
-		Skills:      "./skills/",
+		Repository: pluginRepository,
+		Skills:     "./skills/",
 		Interface: codexInterface{
 			DisplayName:      display,
 			ShortDescription: f.Meta.Description,

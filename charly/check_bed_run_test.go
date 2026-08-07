@@ -24,7 +24,7 @@ import (
 // this split question).
 
 // TestCheckBeds_DerivesFromDisposableFleets asserts the R10 bed set is derived
-// from the `disposable: true` fleetsverb in the Deploy map (the separate kind:check
+// from the `disposable: true` fleets in the Deploy map (the separate kind:check
 // block was removed — a bed IS a disposable fleet); a non-disposable deploy is
 // NOT a bed.
 func TestCheckBeds_DerivesFromDisposableFleets(t *testing.T) {
@@ -38,7 +38,7 @@ func TestCheckBeds_DerivesFromDisposableFleets(t *testing.T) {
 	}
 	beds := uf.CheckBeds()
 	if got := len(beds); got != 3 {
-		t.Errorf("CheckBeds() = %d entries, want 3 (only disposable fleetsverb)", got)
+		t.Errorf("CheckBeds() = %d entries, want 3 (only disposable fleets)", got)
 	}
 	if _, ok := beds["plain-deploy"]; ok {
 		t.Error("a non-disposable deploy must NOT be enumerated as a bed")

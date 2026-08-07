@@ -189,14 +189,14 @@ func isFreshnessSafeVerb(verbPath string) bool {
 	safePrefixes := []string{
 		"version",
 		"help",
-		"status",        // reads container state
-		"box inspect",   // reads the project config + emits JSON
-		"box list",      // reads the project config + emits text
-		"box validate",  // reads the project config + emits warnings (no writes)
+		"status",       // reads container state
+		"box inspect",  // reads the project config + emits JSON
+		"box list",     // reads the project config + emits text
+		"box validate", // reads the project config + emits warnings (no writes)
 		"fleet show",   // reads charly.yml
 		"fleet status", // reads deploy state
 		"fleet path",   // prints a path
-		"secrets list",  // reads credential store
+		"secrets list", // reads credential store
 		"secrets get",
 		"secrets path",
 		"settings show",

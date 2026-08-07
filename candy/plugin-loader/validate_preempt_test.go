@@ -119,7 +119,7 @@ func TestValidateResourceDefs_ExclusiveVenueTrait(t *testing.T) {
 	t.Run("vm (exclusive venue) qemu backend flagged", func(t *testing.T) {
 		uf := &spec.UnifiedFile{
 			PluginKinds: map[string]map[string]json.RawMessage{"resource": resources, "vm": vmEntities},
-			Fleet:      map[string]spec.FleetNode{"mydeploy": mkNode("vm")},
+			Fleet:       map[string]spec.FleetNode{"mydeploy": mkNode("vm")},
 		}
 		err := loaderkit.ValidatePreemptible(uf, stubResolveResource, stubResolveVm)
 		if err == nil || !strings.Contains(err.Error(), "backend: libvirt") {
@@ -130,7 +130,7 @@ func TestValidateResourceDefs_ExclusiveVenueTrait(t *testing.T) {
 	t.Run("pod (non-exclusive venue) never flagged", func(t *testing.T) {
 		uf := &spec.UnifiedFile{
 			PluginKinds: map[string]map[string]json.RawMessage{"resource": resources, "vm": vmEntities},
-			Fleet:      map[string]spec.FleetNode{"mydeploy": mkNode("pod")},
+			Fleet:       map[string]spec.FleetNode{"mydeploy": mkNode("pod")},
 		}
 		if err := loaderkit.ValidatePreemptible(uf, stubResolveResource, stubResolveVm); err != nil {
 			t.Fatalf("pod node must never trigger the exclusive-venue GPU check, got: %v", err)

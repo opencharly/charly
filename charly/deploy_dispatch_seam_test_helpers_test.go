@@ -104,4 +104,3 @@ func testDispatchLifecycleAdd(t *testing.T, p *seamLifecycleProvider, name strin
 		t.Fatalf("dispatchDeployTarget(add %q): %v", name, err)
 	}
 }
-

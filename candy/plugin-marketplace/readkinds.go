@@ -16,8 +16,8 @@ import (
 // kindSet is everything the generator reads: the skill/hook entities (keyed by node name) and
 // the single marketplace entity.
 type kindSet struct {
-	Skills map[string]spec.Skill // node name → skill (node names are document-unique; skills are deduped by body name in the model)
-	Hooks  map[string]spec.Hook  // node name → hook
+	Skills      map[string]spec.Skill // node name → skill (node names are document-unique; skills are deduped by body name in the model)
+	Hooks       map[string]spec.Hook  // node name → hook
 	Marketplace *spec.Marketplace
 }
 

@@ -20,34 +20,34 @@ func TestResolvedOverlayImage(t *testing.T) {
 	const overlayRef = "check-addcandy-pod-overlay:abc123"
 	cases := []struct {
 		name      string
-		fleet    map[string]deploykit.FleetNode
+		fleet     map[string]deploykit.FleetNode
 		box, inst string
 		want      string
 	}{
 		{
-			name:   "deploy-key entry wins",
+			name:  "deploy-key entry wins",
 			fleet: map[string]deploykit.FleetNode{spec.DeployKey("check-addcandy-pod", "work"): {ResolvedImage: overlayRef}},
-			box:    "check-addcandy-pod", inst: "work", want: overlayRef,
+			box:   "check-addcandy-pod", inst: "work", want: overlayRef,
 		},
 		{
-			name:   "bare key (no instance)",
+			name:  "bare key (no instance)",
 			fleet: map[string]deploykit.FleetNode{"check-addcandy-pod": {ResolvedImage: overlayRef}},
-			box:    "check-addcandy-pod", inst: "", want: overlayRef,
+			box:   "check-addcandy-pod", inst: "", want: overlayRef,
 		},
 		{
-			name:   "bare-key fallback when instance entry lacks resolved_image",
+			name:  "bare-key fallback when instance entry lacks resolved_image",
 			fleet: map[string]deploykit.FleetNode{"check-addcandy-pod": {ResolvedImage: overlayRef}},
-			box:    "check-addcandy-pod", inst: "work", want: overlayRef,
+			box:   "check-addcandy-pod", inst: "work", want: overlayRef,
 		},
 		{
-			name:   "no resolved_image → empty (base-name resolution used)",
+			name:  "no resolved_image → empty (base-name resolution used)",
 			fleet: map[string]deploykit.FleetNode{"check-addcandy-pod": {Image: "check-pod"}},
-			box:    "check-addcandy-pod", inst: "", want: "",
+			box:   "check-addcandy-pod", inst: "", want: "",
 		},
 		{
-			name:   "no entry → empty",
+			name:  "no entry → empty",
 			fleet: map[string]deploykit.FleetNode{},
-			box:    "check-addcandy-pod", inst: "", want: "",
+			box:   "check-addcandy-pod", inst: "", want: "",
 		},
 	}
 	for _, tc := range cases {
