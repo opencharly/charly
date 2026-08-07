@@ -456,7 +456,7 @@ kubernetes-skill:
 
             ## Related skills
 
-            - `/charly-core:deploy` — unified `charly fleet add`/`del` verb; K8s is one of three targets
+            - `/charly-core:deploy` — unified `charly fleet add`/`del` verb; K8s is one of the five deploy substrates
             - `/charly-internals:capabilities` — OCI label contract the K8s generator reads from
             - `/charly-internals:install-plan` — shared IR across build + deploy targets
             - `/charly-internals:egress` — the CUE egress gate that validates every generated manifest before write (`#K8sObject` / `#Kustomization`)
