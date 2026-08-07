@@ -53,11 +53,12 @@ func TestGenerateProviderIndexCensusComputed(t *testing.T) {
 	}
 
 	// Per-class headers carry the per-class word count, so the class breakdown is computed too.
+	// Singular classes read "1 word", not "1 words".
 	for _, want := range []string{
 		"## `verb` — 3 words",
-		"## `kind` — 1 words",
-		"## `command` — 1 words",
-		"## `step` — 1 words",
+		"## `kind` — 1 word",
+		"## `command` — 1 word",
+		"## `step` — 1 word",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("per-class header missing %q in:\n%s", want, got)

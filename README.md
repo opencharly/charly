@@ -127,11 +127,11 @@ and its owning plugin candy, regenerated on every docs build.
 | **builder** — multi-stage build patterns | `pixi` `npm` `cargo` `aur` |
 | the build/load internals | `build:box` `loader:loader` `refs:refs` `terminal:tmux` |
 
-A further set of `plugin-example-*` candies are test fixtures — they exist to
-exercise the plugin mechanisms themselves, and are excluded from the table. That exclusion is
-what keeps `exampledeploy` and `examplelifecycle` out of the deploy row: they are not substrates
-you can put anything on. The real plugin candies and the fixture candies together are the plugin
-candies counted in the provider index above.
+Further `plugin-example-*` candies are test fixtures — they exist to
+exercise the plugin mechanisms themselves, and are excluded from the table above, which lists
+only the real words. That exclusion is what keeps `exampledeploy` and `examplelifecycle` out of
+the deploy row: they are not substrates you can put anything on. The real plugin candies and the
+fixture candies together are the plugin candies counted in the provider index above.
 
 Read the **kind** row again: **`candy:` itself is a plugin-provided kind**, registered by
 `candy/plugin-candy-kind`. The keyword this entire page is about is not privileged — it is a word

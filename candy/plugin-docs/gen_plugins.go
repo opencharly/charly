@@ -199,7 +199,11 @@ func generateProviderIndex(outRoot string, plugins []pluginEntity) (int, error) 
 	for _, r := range rows {
 		if r.class != current {
 			current = r.class
-			fmt.Fprintf(&b, "\n## `%s` — %d words\n\n| Word | Served by |\n|---|---|\n", current, classCount[current])
+			wordLabel := "words"
+			if classCount[current] == 1 {
+				wordLabel = "word"
+			}
+			fmt.Fprintf(&b, "\n## `%s` — %d %s\n\n| Word | Served by |\n|---|---|\n", current, classCount[current], wordLabel)
 		}
 		fmt.Fprintf(&b, "| `%s` | [%s](%s) |\n", r.word, r.plugin, r.page)
 	}
