@@ -194,7 +194,7 @@ func (r *Registry) RegisterPluginProviders(ps []Provider, origin string, conn io
 		// F6 (S3b): a class:deploy provider's lifecycle/preresolve flags (gp.lifecycle/
 		// gp.preresolve, set from its Describe capability in buildUnit) need NO separate
 		// registration here anymore — pluginDeployTarget (unified_targets.go) reads them directly
-		// off the resolved *grpcProvider in ResolveTarget, and candy/plugin-bundle reaches the
+		// off the resolved *grpcProvider in ResolveTarget, and candy/plugin-fleet reaches the
 		// substrate's OpPrepareVenue/OpPreresolve itself via specexec.Executor.InvokeProvider. The
 		// former wire-backed per-substrate lifecycle/preresolve registries (this loop used to
 		// populate them here — see CHANGELOG/2026.203.0212.md) are deleted — nothing reads them

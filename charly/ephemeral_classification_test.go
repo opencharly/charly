@@ -6,48 +6,48 @@ import (
 	"github.com/opencharly/spec/spec"
 )
 
-// TestBundleNode_LifecycleAloneDoesNotAuthorize verifies the
+// TestFleetNode_LifecycleAloneDoesNotAuthorize verifies the
 // long-standing anti-derivation invariant: lifecycle: dev does NOT
 // imply disposable: true.
-func TestBundleNode_LifecycleAloneDoesNotAuthorize(t *testing.T) {
+func TestFleetNode_LifecycleAloneDoesNotAuthorize(t *testing.T) {
 	for _, tier := range []string{"scratch", "dev", "test", "qa", "staging", "prod"} {
-		node := spec.BundleNode{Lifecycle: tier}
+		node := spec.FleetNode{Lifecycle: tier}
 		if node.IsDisposable() {
 			t.Errorf("lifecycle=%q must NOT make a deploy disposable", tier)
 		}
 	}
 }
 
-// TestBundleNode_EphemeralImpliesDisposable verifies the load-
+// TestFleetNode_EphemeralImpliesDisposable verifies the load-
 // bearing exception: ephemeral: ... DOES imply disposable: true.
-func TestBundleNode_EphemeralImpliesDisposable(t *testing.T) {
+func TestFleetNode_EphemeralImpliesDisposable(t *testing.T) {
 	tests := []struct {
 		name string
-		node spec.BundleNode
+		node spec.FleetNode
 		want bool
 	}{
 		{
 			name: "ephemeral block-form implies disposable",
-			node: spec.BundleNode{
+			node: spec.FleetNode{
 				Ephemeral: &spec.EphemeralLifetime{TTL: "30m"},
 			},
 			want: true,
 		},
 		{
 			name: "ephemeral with all defaults still implies disposable",
-			node: spec.BundleNode{
+			node: spec.FleetNode{
 				Ephemeral: &spec.EphemeralLifetime{},
 			},
 			want: true,
 		},
 		{
 			name: "no ephemeral block, no disposable → not disposable",
-			node: spec.BundleNode{},
+			node: spec.FleetNode{},
 			want: false,
 		},
 		{
 			name: "explicit disposable + no ephemeral → disposable",
-			node: spec.BundleNode{Disposable: new(true)},
+			node: spec.FleetNode{Disposable: new(true)},
 			want: true,
 		},
 	}
@@ -60,17 +60,17 @@ func TestBundleNode_EphemeralImpliesDisposable(t *testing.T) {
 	}
 }
 
-// TestBundleNode_IsEphemeral verifies the IsEphemeral check tracks
+// TestFleetNode_IsEphemeral verifies the IsEphemeral check tracks
 // EphemeralLifetime presence.
-func TestBundleNode_IsEphemeral(t *testing.T) {
+func TestFleetNode_IsEphemeral(t *testing.T) {
 	tests := []struct {
 		name string
-		node spec.BundleNode
+		node spec.FleetNode
 		want bool
 	}{
-		{name: "no block", node: spec.BundleNode{}, want: false},
-		{name: "block with ttl", node: spec.BundleNode{Ephemeral: &spec.EphemeralLifetime{TTL: "1h"}}, want: true},
-		{name: "block with empty fields", node: spec.BundleNode{Ephemeral: &spec.EphemeralLifetime{}}, want: true},
+		{name: "no block", node: spec.FleetNode{}, want: false},
+		{name: "block with ttl", node: spec.FleetNode{Ephemeral: &spec.EphemeralLifetime{TTL: "1h"}}, want: true},
+		{name: "block with empty fields", node: spec.FleetNode{Ephemeral: &spec.EphemeralLifetime{}}, want: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

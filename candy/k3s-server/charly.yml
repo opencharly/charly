@@ -16,7 +16,7 @@ k3s-server:
             # performs (the heavy k8s.io/client-go + k8s.io/apimachinery stack lives there,
             # not in charly's core). Requiring it puts it in every k3s-server deploy's
             # scanned candy set, so loadProjectPlugins (in the bed runner AND in
-            # `charly bundle add`) builds + connects it before the deploy's kubeconfig
+            # `charly fleet add`) builds + connects it before the deploy's kubeconfig
             # merge and the bed's `kube:` checks dispatch. (box/<distro> adopts the
             # matching @github pin via reconcile later — the deliberate cross-repo lag;
             # the R10 bed loads the LOCAL candy via the superproject override.)
@@ -526,7 +526,7 @@ k3s-server-skill:
             
             ```bash
             charly vm create k3s-srv
-            charly bundle add vm:k3s-srv
+            charly fleet add vm:k3s-srv
             # → kubeconfig auto-retrieved + ClusterProfile written
             kubectl --context k3s-srv get nodes
             # addon health is asserted by the candy's declarative `kube: addons` check step

@@ -11,7 +11,7 @@ import (
 // nested_tree_test.go — ported from charly/status_nested_test.go (K5): the declared
 // nested-deployment tree pre-resolution moved plugin-side (nested_tree.go), so these tests moved
 // with it. Exercises the PURE buildStatusRootsTreeFrom/mergedNestedRootsFrom split directly with
-// in-memory deploykit.BundleNode fixtures — no executor stub, no host file I/O (R3, mirrors
+// in-memory deploykit.FleetNode fixtures — no executor stub, no host file I/O (R3, mirrors
 // candy/plugin-substrate's collectAndroidDeployNodes test pattern). The PURE fold
 // (claim -> inherit real data -> drop from top level; synthesize declared/nested; sorted order;
 // dedup) lives in overlay.go, operating on the []spec.StatusNestedNode this file builds — its
@@ -23,12 +23,12 @@ import (
 // target:pod parent check-android-emulator-pod with two target:android nested children device and
 // device-net (the check-android-emulator-pod shape), plus an unrelated flat pod deploy the
 // tree-builder must leave alone (no root emitted for a childless entry).
-func nestedRoots() map[string]deploykit.BundleNode {
-	return map[string]deploykit.BundleNode{
+func nestedRoots() map[string]deploykit.FleetNode {
+	return map[string]deploykit.FleetNode{
 		"check-android-emulator-pod": {
 			Target: "pod",
 			Image:  "android-emulator",
-			Children: map[string]*deploykit.BundleNode{
+			Children: map[string]*deploykit.FleetNode{
 				"device":     {Target: "android", From: "pixel9a-36", AddCandy: []string{"android-test-apps"}},
 				"device-net": {Target: "android", From: "pixel9a-endpoint", AddCandy: []string{"android-apidemos"}},
 			},
@@ -125,11 +125,11 @@ func TestBuildStatusRootsTreeFrom_DeclaredChildren(t *testing.T) {
 // priority order the former claimFlatRow tried them in.
 func TestBuildStatusRootsTreeFrom_MatchKeysOrderVmPod(t *testing.T) {
 	const parent = "stack-vm"
-	roots := map[string]deploykit.BundleNode{
+	roots := map[string]deploykit.FleetNode{
 		parent: {
 			Target: "vm",
 			From:   "stack-vm",
-			Children: map[string]*deploykit.BundleNode{
+			Children: map[string]*deploykit.FleetNode{
 				"web": {Target: "pod", Image: "nginx"},
 			},
 		},
@@ -197,8 +197,8 @@ func TestMergedNestedRootsFrom_PerMachineWinsPerKey(t *testing.T) {
 			"redis": {Target: "pod", Image: "redis"},
 		},
 	}
-	perMachine := &deploykit.BundleConfig{
-		Bundle: map[string]deploykit.BundleNode{
+	perMachine := &deploykit.FleetConfig{
+		Fleet: map[string]deploykit.FleetNode{
 			"redis": {Target: "vm", From: "redis-vm"},
 		},
 	}

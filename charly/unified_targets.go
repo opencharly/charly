@@ -4,15 +4,15 @@ package main
 //
 // UnifiedDeployTarget/LifecycleTarget — the kind-agnostic interface contracts, now living in
 // spec/spec/deploy_target_unified.go — via pluginDeployTarget (S3b — the thin, DATA-ONLY proxy
-// left behind once the deploy dispatch orchestration moved to candy/plugin-bundle over the ONE
-// generic ops.OpDeployDispatch envelope, see candy/plugin-bundle/deploy_target.go and
+// left behind once the deploy dispatch orchestration moved to candy/plugin-fleet over the ONE
+// generic ops.OpDeployDispatch envelope, see candy/plugin-fleet/deploy_target.go and
 // CHANGELOG/2026.203.0212.md for the full migration narrative), and the ResolveTarget dispatcher.
 // ALL FIVE substrates
 // (local/vm/pod/k8s/android) are EXTERNAL — each resolves to pluginDeployTarget, which holds ONLY
 // plain data (name/word/hasLifecycle/hasPreresolve/node) and a live venue executor, never a
 // core-private *grpcProvider (that type is constructed at plugin-CONNECT time — clause-M, cannot
 // move — so nothing holding one can live in a plugin). Every method dispatches to
-// candy/plugin-bundle's Invoke(OpDeployDispatch), discriminated by an `op` field, which in turn
+// candy/plugin-fleet's Invoke(OpDeployDispatch), discriminated by an `op` field, which in turn
 // reaches the ACTUAL substrate provider via its own specexec.Executor.InvokeProvider (S1).
 //
 // Two things stay core-resident by design, wrapping the dispatch rather than living inside it:
@@ -43,7 +43,7 @@ import (
 // ---------------------------------------------------------------------------
 
 // pluginDeployTarget implements UnifiedDeployTarget/LifecycleTarget by dispatching every method to
-// candy/plugin-bundle's Invoke(OpDeployDispatch) — it holds ONLY plain data (constructible from
+// candy/plugin-fleet's Invoke(OpDeployDispatch) — it holds ONLY plain data (constructible from
 // data alone, per call, never a stored core-private registry object) plus the live executor
 // dispatchDeployTarget threads onto the reverse server for the plugin's OWN substrate dispatch.
 type pluginDeployTarget struct {
@@ -52,9 +52,9 @@ type pluginDeployTarget struct {
 	hasLifecycle  bool
 	hasPreresolve bool
 
-	// node is the dispatch-merged BundleNode (set by ResolveTarget). nil for a ref-based deploy
+	// node is the dispatch-merged FleetNode (set by ResolveTarget). nil for a ref-based deploy
 	// with no charly.yml entry.
-	node *spec.BundleNode
+	node *spec.FleetNode
 
 	// exec is the INITIAL executor ResolveTarget computed from the node's host: field
 	// (specexec.RootExecutorForDeployNode) — the plugin may override it internally for a
@@ -68,9 +68,9 @@ type pluginDeployTarget struct {
 	// venue instead of re-running PrepareVenue.
 	venueJSON json.RawMessage
 
-	// nodeOnly mirrors `charly bundle add --node-only` (set by the dispatcher from
+	// nodeOnly mirrors `charly fleet add --node-only` (set by the dispatcher from
 	// deployAddCmd.NodeOnly, matching the pre-S3b type-assertion pattern — see
-	// bundle_add_cmd.go).
+	// fleet_add_cmd.go).
 	nodeOnly bool
 
 	// build is the host-ENGINE context (project Config + dir + DistroCfg) the RunHostStep
@@ -100,11 +100,11 @@ func (t *pluginDeployTarget) distroCfgJSON() json.RawMessage {
 // request — R10 bed-found bug #5 (S3b): the deleted substrate_lifecycle_grpc.go computed this
 // HOST-side via os.Executable(), which resolves correctly to the charly binary only when called
 // IN CORE — a plugin's os.Executable() would resolve to the PLUGIN binary for an out-of-process
-// placement (candy/plugin-bundle's own port of this helper marshalled a bare zero-value
+// placement (candy/plugin-fleet's own port of this helper marshalled a bare zero-value
 // spec.HostEnv{} instead, never actually calling it, which is why EnsureCharlyInGuest read an
 // EMPTY CharlyBin path: "open : no such file or directory"). Core is the one place that reliably
 // knows its OWN binary regardless of ANY plugin's placement, so it computes this ONCE per
-// dispatch call and threads it on the wire; candy/plugin-bundle forwards it verbatim to every
+// dispatch call and threads it on the wire; candy/plugin-fleet forwards it verbatim to every
 // lifecycle Op instead of computing its own (mirrors the pre-move helper's exact fallback chain).
 func hostEnvJSON() json.RawMessage {
 	home, _ := os.UserHomeDir()
@@ -150,14 +150,14 @@ func (t *pluginDeployTarget) dispatch(ctx context.Context, req spec.DeployTarget
 // branch only — a no-op when t.hasLifecycle or opts.ParentExec is nil).
 //
 // t.exec is mutated to the live parent executor: it becomes the executor threaded onto
-// candy/plugin-bundle's in-proc reverse channel (dispatchDeployTarget's `exec` param) for EVERY
+// candy/plugin-fleet's in-proc reverse channel (dispatchDeployTarget's `exec` param) for EVERY
 // reverse leg this dispatch call drives (RunSystem/RunUser/RunHostStep/…). Because a live Go
 // interface value cannot itself cross the []byte wire to the plugin's decoded
 // spec.DeployTargetDispatchRequest, the SAME executor is ALSO flattened into the returned
 // venue_json (specexec.DescriptorFromExecutor) — deriveChildExecutorForPath's "ssh" transport hop
-// (bundle_add_cmd.go) is always a plain *specexec.SSHExecutor for a single vm-guest hop, never a
+// (fleet_add_cmd.go) is always a plain *specexec.SSHExecutor for a single vm-guest hop, never a
 // composed *specexec.NestedExecutor, so it round-trips faithfully. The caller threads the result as
-// the dispatch request's VenueJSON, so resolveRootExecutor (candy/plugin-bundle/deploy_target.go)
+// the dispatch request's VenueJSON, so resolveRootExecutor (candy/plugin-fleet/deploy_target.go)
 // re-materializes the IDENTICAL guest venue instead of falling back to
 // specexec.RootExecutorForDeployNode(req.Node), which — for a nested child carrying no `host:`
 // field of its own — silently defaults to the operator's host ShellExecutor (the bug: every
@@ -204,7 +204,7 @@ func (t *pluginDeployTarget) Add(ctx context.Context, dctx *spec.DeployContext, 
 	}
 	// Project opts onto the wire-safe LifecycleOpts BEFORE marshaling — opts.ParentExec/
 	// ParentNode are live interface/pointer fields that cannot cross the []byte wire (R10 bed
-	// finding: marshaling the raw EmitOpts crashed candy/plugin-bundle's decode the moment a
+	// finding: marshaling the raw EmitOpts crashed candy/plugin-fleet's decode the moment a
 	// nested-child deploy's composed NestedExecutor made ParentExec non-nil). See
 	// spec.LifecycleOptsFromEmit's doc comment.
 	optsJSON, err := json.Marshal(spec.LifecycleOptsFromEmit(opts))
@@ -228,8 +228,8 @@ func (t *pluginDeployTarget) Add(ctx context.Context, dctx *spec.DeployContext, 
 	ctx = withOverlayBuildInputs(ctx, &overlayBuildInputs{plans: plans, parentExec: opts.ParentExec, parentNode: opts.ParentNode})
 
 	// Secret injection + artifact retrieval + the register-hint-driven k3s-post-provision
-	// dispatch now run PLUGIN-SIDE inside command:bundle's handleDeployApply (Cone A shape 3, see
-	// candy/plugin-bundle/secrets_artifacts.go), wrapped around this SAME dispatch call, in the
+	// dispatch now run PLUGIN-SIDE inside command:fleet's handleDeployApply (Cone A shape 3, see
+	// candy/plugin-fleet/secrets_artifacts.go), wrapped around this SAME dispatch call, in the
 	// SAME relative order (secrets injected before, artifacts+k3s dispatched after) — this Add no
 	// longer needs the reply's ArtifactKey for anything itself.
 	if _, err := t.dispatch(ctx, spec.DeployTargetDispatchRequest{
@@ -241,7 +241,7 @@ func (t *pluginDeployTarget) Add(ctx context.Context, dctx *spec.DeployContext, 
 	if opts.DryRun {
 		return nil
 	}
-	// --verify runs PLUGIN-SIDE now, INSIDE the dispatch call above (#55 W3 B3, candy/plugin-bundle's
+	// --verify runs PLUGIN-SIDE now, INSIDE the dispatch call above (#55 W3 B3, candy/plugin-fleet's
 	// handleDeployApply/verifyLocalDeployScope) — reusing the SAME venue that dispatch already
 	// resolved, in the SAME RPC round-trip, rather than re-materializing a core-side executor here
 	// after the fact (the former venueExecutor() helper this comment used to name is deleted, #55
@@ -275,8 +275,8 @@ func (t *pluginDeployTarget) Update(ctx context.Context, plans []*spec.InstallPl
 		return err
 	}
 	// The k3s-post-provision re-establishment on update (R1 fix, K1-alpha regression) now runs
-	// PLUGIN-SIDE inside command:bundle's handleDeployApply, gated on kube ALREADY being connected
-	// (candy/plugin-bundle/secrets_artifacts.go's kubeAlreadyConnected — a pure DescribeProvider
+	// PLUGIN-SIDE inside command:fleet's handleDeployApply, gated on kube ALREADY being connected
+	// (candy/plugin-fleet/secrets_artifacts.go's kubeAlreadyConnected — a pure DescribeProvider
 	// query, no connect attempt, no side effect) — see that file's header for the full rationale
 	// this comment used to carry.
 	if _, err := t.dispatch(ctx, spec.DeployTargetDispatchRequest{Op: "update", PlansJSON: plansJSON, OptsJSON: optsJSON, DistroCfgJSON: t.distroCfgJSON()}); err != nil {
@@ -344,7 +344,7 @@ func (t *pluginDeployTarget) bracketedLifecycle() bool {
 }
 
 // Start dispatches OpStart. When the substrate's DECLARED trait says its lifecycle is bracketed
-// (today only pod) the request carries HasPlan=true, so command:bundle's handleLifecycleSimple
+// (today only pod) the request carries HasPlan=true, so command:fleet's handleLifecycleSimple
 // brackets its OWN dispatch with the Q1 resource-arbiter claim by InvokeProvider("verb","arbiter")
 // (the "arbiter-bracket-*" HostBuild seam is DELETED, K-wave 2 cone R2 bank E) — FLOOR-SLIM-proper
 // Unit-8's K4-exit: core no longer brackets the dispatch call itself (the former arbiter_bracket.go).
@@ -434,7 +434,7 @@ func (t *pluginDeployTarget) Shell(ctx context.Context, cmd []string) error {
 // in-venue command plugin-side from the raw cmd already threaded on the dispatch request (the former
 // vmAttachResolver in vm_lifecycle_preresolve.go was deleted — its body, strings.Join(cmd, " "), is
 // derivable from that wire cmd, K-wave 2 cone CONTESTED). The plugin threads the resolved plan under
-// the substrate's OWN expected "plan" key (handleDeployExec, candy/plugin-bundle/deploy_target.go).
+// the substrate's OWN expected "plan" key (handleDeployExec, candy/plugin-fleet/deploy_target.go).
 func (t *pluginDeployTarget) Attach(ctx context.Context, cmd []string, tty bool) error {
 	if !t.hasLifecycle {
 		return fmt.Errorf("external deploy %q: %w", t.name, ErrNotSupportedOnExternal)
@@ -468,7 +468,7 @@ var ErrNotSupportedOnExternal = fmt.Errorf("lifecycle operation not supported on
 // ---------------------------------------------------------------------------
 
 // ResolveTarget returns the UnifiedDeployTarget for `name`, dispatching on the node's canonical
-// target. The node MUST be the dispatch-merged BundleNode (project+operator field-merged deploy
+// target. The node MUST be the dispatch-merged FleetNode (project+operator field-merged deploy
 // tree) — the adapter consumes node fields (Nested/Env/ephemeral/disposable) directly
 // and NEVER re-reads them from disk.
 //
@@ -478,9 +478,9 @@ var ErrNotSupportedOnExternal = fmt.Errorf("lifecycle operation not supported on
 //   - "X: unknown target Y" — Y is not a canonical substrate word (a typo)
 //   - "X: target Y is a known substrate but its deploy provider is not connected" — Y is valid but
 //     its out-of-process plugin is not compiled-in / failed to load (unresolvedDeployTargetError)
-func ResolveTarget(node *spec.BundleNode, name string) (spec.UnifiedDeployTarget, error) {
+func ResolveTarget(node *spec.FleetNode, name string) (spec.UnifiedDeployTarget, error) {
 	if node == nil {
-		return nil, fmt.Errorf("no deployment %q; run `charly bundle list`", name)
+		return nil, fmt.Errorf("no deployment %q; run `charly fleet show`", name)
 	}
 	if node.Target == "" {
 		return nil, fmt.Errorf("deployment %q missing required `target:` field "+
@@ -491,7 +491,7 @@ func ResolveTarget(node *spec.BundleNode, name string) (spec.UnifiedDeployTarget
 		return nil, unresolvedDeployTargetError(name, node.Target)
 	}
 	// An OUT-OF-PROCESS deploy provider (a grpcProvider, Invoke-only) drives the deploy lifecycle
-	// via candy/plugin-bundle's Invoke(OpDeployDispatch) — S3b. The executor is chosen by the
+	// via candy/plugin-fleet's Invoke(OpDeployDispatch) — S3b. The executor is chosen by the
 	// node's host: field via the SHARED selector rootExecutorForDeployNode (R3): ShellExecutor
 	// for host:local/absent, SSHExecutor for host:user@machine.
 	gp, ok := prov.(*grpcProvider)

@@ -27,8 +27,8 @@ func testSubstrateTraits(word string) *spec.DeployTraits {
 
 // stampTestDescents stamps Descent on every root + its nested Children/Members via
 // kit.StampDescent, the SAME generic mechanism the production loader uses.
-func stampTestDescents(roots map[string]spec.BundleNode) map[string]spec.BundleNode {
-	out := make(map[string]spec.BundleNode, len(roots))
+func stampTestDescents(roots map[string]spec.FleetNode) map[string]spec.FleetNode {
+	out := make(map[string]spec.FleetNode, len(roots))
 	for k, v := range roots {
 		n := v
 		kit.StampDescent(&n, testSubstrateTraits)
@@ -92,7 +92,7 @@ func TestPluginRunCheckLive_EmptyInputReturnsEarly(t *testing.T) {
 // TestResolveScoringChain_Local: a flat score/bed target that resolves to a `target: local` node
 // must run on the host venue, NOT a fabricated charly-<pod> container.
 func TestPluginResolveScoringChain_Local(t *testing.T) {
-	roots := stampTestDescents(map[string]spec.BundleNode{
+	roots := stampTestDescents(map[string]spec.FleetNode{
 		"localbed": {Target: "local"},
 		"podbed":   {Target: "pod"},
 	})
@@ -114,22 +114,22 @@ func TestPluginResolveScoringChain_Local(t *testing.T) {
 }
 
 // TestPluginResolveDottedAgentProvisionedVenue (Risk 5b) ports
-// charly/node_bundle_venue_test.go's TestResolveDottedAgentProvisionedVenue's
+// charly/node_fleet_venue_test.go's TestResolveDottedAgentProvisionedVenue's
 // resolveScoringChain half: pluginResolveScoringChain must reach a 3-level agent-provisioned
 // venue (vm → pod → pod) written into a scratch deploy-tree map — without a live connection
 // (the chain is built, not dialed). The ResolveDeployChain half of the original test stays in
-// charly/node_bundle_venue_test.go (that sdk-portable function never moved).
+// charly/node_fleet_venue_test.go (that sdk-portable function never moved).
 func TestPluginResolveDottedAgentProvisionedVenue(t *testing.T) {
-	roots := stampTestDescents(map[string]spec.BundleNode{
+	roots := stampTestDescents(map[string]spec.FleetNode{
 		"nested-check-vm": {
 			Target:           "vm",
 			From:             "nested-check-vm",
 			AgentProvisioned: true,
-			Children: map[string]*spec.BundleNode{
+			Children: map[string]*spec.FleetNode{
 				"inner-app-pod": {
 					Target:           "pod",
 					AgentProvisioned: true,
-					Children: map[string]*spec.BundleNode{
+					Children: map[string]*spec.FleetNode{
 						"nested-redis-pod": {
 							Target:           "pod",
 							AgentProvisioned: true,
@@ -151,12 +151,12 @@ func TestPluginResolveDottedAgentProvisionedVenue(t *testing.T) {
 }
 
 // TestPluginResolveBareAgentProvisionedVenue ports
-// charly/node_bundle_venue_test.go's TestResolveBareAgentProvisionedVenue: a bare
+// charly/node_fleet_venue_test.go's TestResolveBareAgentProvisionedVenue: a bare
 // agent-provisioned venue (the common iterate-bench case, e.g. `os`) resolves via
 // pluginResolveScoringChain's bare-name fallback to the `charly-<name>` container the agent
-// deploys — without any top-level bundle entry (agent-provisioned members are not folded).
+// deploys — without any top-level fleet entry (agent-provisioned members are not folded).
 func TestPluginResolveBareAgentProvisionedVenue(t *testing.T) {
-	roots := stampTestDescents(map[string]spec.BundleNode{}) // os is NOT a top-level entry (not folded)
+	roots := stampTestDescents(map[string]spec.FleetNode{}) // os is NOT a top-level entry (not folded)
 	sc, err := pluginResolveScoringChain(roots, "os")
 	if err != nil {
 		t.Fatalf("pluginResolveScoringChain(os): %v", err)

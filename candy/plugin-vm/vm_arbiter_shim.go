@@ -45,16 +45,16 @@ func arbiterInvoke(in spec.ArbiterInvokeInput) (spec.ArbiterInvokeReply, error) 
 
 // lookupVMClaimant resolves whether a deploy/check node claims this VM via requires_exclusive — a
 // config read routed through the config-resolve seam (the loader is a core Mechanism).
-func lookupVMClaimant(box string) (string, BundleNode, bool) {
+func lookupVMClaimant(box string) (string, FleetNode, bool) {
 	reply, err := hostConfigResolve(box)
 	if err != nil || reply.Claimant == "" || reply.ClaimantNode == nil {
-		return "", BundleNode{}, false
+		return "", FleetNode{}, false
 	}
 	return reply.Claimant, *reply.ClaimantNode, true
 }
 
 // holderAddrFor computes the preempt holder address for a vm claimant (the ssh/vm venue case).
-func holderAddrFor(name string, node BundleNode) spec.HolderAddr {
+func holderAddrFor(name string, node FleetNode) spec.HolderAddr {
 	base := strings.TrimPrefix(name, "vm:")
 	vm := node.From
 	if vm == "" {
@@ -71,7 +71,7 @@ type Lease struct {
 
 // acquireExclusiveForClaimant acquires the exclusive lease for a claimant that needs it (no-op when the
 // node declares no requires_exclusive — the non-GPU path every vm bed hits — or an outer lease is held).
-func acquireExclusiveForClaimant(claimant string, node BundleNode, transient bool) (*Lease, error) {
+func acquireExclusiveForClaimant(claimant string, node FleetNode, transient bool) (*Lease, error) {
 	if len(node.RequiredExclusive()) == 0 {
 		return &Lease{}, nil
 	}

@@ -16,7 +16,7 @@ import (
 // "pod-config-list-sidecars" seam + charly/sidecar.go's embeddedSidecarBodies are ALSO DELETED
 // (K-wave 2 cone R3): the embedded sidecar library is THIS plugin's own go:embed
 // (sidecar_embedded.go), so the resolve has no host-resident input left. The plugin
-// InvokeProviders kind:sidecar directly (RDD-proven live — plugin-build/bundle/check already
+// InvokeProviders kind:sidecar directly (RDD-proven live — plugin-build/fleet/check already
 // InvokeProvider kind:*), adapts the reply, and provisions sidecar secrets ITSELF via
 // deploykit.ProvisionPodmanSecrets + the SHARED deploykit.CredentialAccessViaExecutor (the SAME
 // credential drive enc_tunnel_resolve.go / lifecycle.go use — no core round-trip).

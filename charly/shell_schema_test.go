@@ -78,7 +78,7 @@ func TestShellConfig_RejectsUnknownShell(t *testing.T) {
 	t.Skip("unknown-shell rejection moves to CUE validation; pending schema canonical-tighten + load validation")
 }
 
-// TestResolveShellSpec_SelectionRule relocated to candy/plugin-bundle (#55 decoupling, Batch
+// TestResolveShellSpec_SelectionRule relocated to candy/plugin-fleet (#55 decoupling, Batch
 // A) — it asserted deploykit.ResolveShellSpec directly, zero charly dep.
 
 // TestShellSnippetStep_ReverseOps — UseDropin=true reverses via
@@ -156,5 +156,5 @@ func TestLabelShellSet_RoundTrip(t *testing.T) {
 }
 
 // TestExecutor_ResolveHome_Local / TestAppendShellPathLines_FishSyntax relocated to
-// candy/plugin-bundle (#55 decoupling, Batch A) — they asserted kit.ShellExecutor /
+// candy/plugin-fleet (#55 decoupling, Batch A) — they asserted kit.ShellExecutor /
 // deploykit.AppendShellPathLines directly, zero charly dep.

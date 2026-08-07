@@ -31,7 +31,7 @@ android-emulator-layer:
             # goadb-backed `target: android` deploy / `charly status` device ops (the
             # github.com/zach-klippenstein/goadb dep lives there, not in charly's core).
             # Requiring it puts it in this image's scanned candy set, so loadProjectPlugins
-            # (in the bed runner AND in `charly bundle add`) builds + connects it before the
+            # (in the bed runner AND in `charly fleet add`) builds + connects it before the
             # bed's `adb:` checks and the android deploy's install / wait-for-device ops
             # dispatch. (Same deliberate cross-repo lag as plugin-appium; the R10 bed loads
             # the LOCAL candy via the superproject override.)

@@ -15,7 +15,7 @@ import (
 // (externalizedDeploySubstrates) — ALL FIVE substrates externalize today; there is no
 // in-proc DeployTargetProvider concept left (the former interface + its ResolveTarget
 // type-assertion branch in unified_targets.go were confirmed dead — zero implementers,
-// `git grep 'func.*ResolveTarget(node \*spec.BundleNode'` matches only the package-level
+// `git grep 'func.*ResolveTarget(node \*spec.FleetNode'` matches only the package-level
 // dispatcher itself — and deleted).
 var deployTargetWords = func() []string {
 	out := make([]string, 0, len(spec.ResourceKinds))
@@ -35,14 +35,14 @@ var deployTargetWords = func() []string {
 // plugin-load time and ResolveTarget (unified_targets.go) routes target:<word> to
 // the generic pluginDeployTarget (S3b), a thin data-only proxy that dispatches
 // EVERY verb (Add/Del/Test/Update/Start/Stop/Status/Logs/Shell/Attach/Rebuild) to
-// candy/plugin-bundle's Invoke(OpDeployDispatch), which reaches the substrate's own
+// candy/plugin-fleet's Invoke(OpDeployDispatch), which reaches the substrate's own
 // out-of-process provider via sdk.Executor.InvokeProvider — never a direct E3b call
 // from core. Both checkDeployProviderBijection (in-proc XOR externalized) and
 // isExternalDeploySubstrate (a substrate kind is external iff listed here) consult
 // it — so the two gates can never disagree. GENERAL for all 5 — ALL FIVE substrates
 // now externalize; the ONLY substrate-specific piece is each one's registered
 // preresolver body (F6, FINAL/K5 unit 6a — candy/plugin-adb/preresolve.go /
-// candy/plugin-kube/preresolve.go, dispatched by candy/plugin-bundle's
+// candy/plugin-kube/preresolve.go, dispatched by candy/plugin-fleet's
 // preresolveSubstrate via InvokeProvider(OpPreresolve), S3b — the core-side
 // deploy_preresolve.go:wireDeployPreresolver registry it used to route through is
 // dissolved, since the caller is itself a plugin now) OR lifecycle hook
@@ -63,7 +63,7 @@ var deployTargetWords = func() []string {
 // InvokeProvider), no separate core-side lifecycle registry. The
 // arbiter-claim bracket around vm's own `charly vm start`/`stop` reentry is vm's
 // OWN concern (never double-bracketed by the Q1 resource-arbiter bracket in
-// candy/plugin-bundle's runLifecycleBracket, which is gated on the DECLARED
+// candy/plugin-fleet's runLifecycleBracket, which is gated on the DECLARED
 // bracketed_lifecycle trait — pod-only, see deployTraitsFor's doc comment); the
 // ssh-config / charly.yml-entry / ephemeral
 // teardown bookkeeping is the vm plugin's OWN deploy-ledger persist path
@@ -76,7 +76,7 @@ var deployTargetWords = func() []string {
 // (build_overlay.go) + the candy's own deploykit.OCITarget render, and owns the container
 // lifecycle (config/start/remove + the `charly update` rebuild gate) — reached the same generic
 // OpDeployDispatch path, with its Start/Stop/Attach further routing through pod_lifecycle_dispatch.go's
-// registered plan hooks (arbiter-bracketed by candy/plugin-bundle's runLifecycleBracket, gated on
+// registered plan hooks (arbiter-bracketed by candy/plugin-fleet's runLifecycleBracket, gated on
 // pod's declared bracketed_lifecycle trait, S3b). The prep+resolve stays core, the render is in
 // the candy.
 // Derived from deployTargetWords (itself CUE-derived from spec.ResourceKinds), not a hand-written

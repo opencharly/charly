@@ -25,7 +25,7 @@ import (
 // kind is now an externalized plugin candy routed through runPluginKind — group (candy/plugin-group,
 // C2-group), the 5 substrate kinds pod/vm/k8s/local/android (candy/plugin-substrate, C2-substrate),
 // and the LAST one, the candy box⊻layer factory (candy/plugin-candy-kind, C2-candy). All are
-// COMPILED-IN, host-decoding into the typed core maps (substrates → uf.Bundle/uf.Pod/uf.VM/…; candy
+// COMPILED-IN, host-decoding into the typed core maps (substrates → uf.Fleet/uf.Pod/uf.VM/…; candy
 // → uf.Box/uf.Candy via the bootstrap-critical candyIsImage + buildCandy that STAY core) and
 // validating their rich value host-side against the KEPT #<Kind>Value / #CandyValue def
 // (validateKindValueCUE). So spec.KindWords is now EMPTY and checkKindProviderBijection over it is a
@@ -80,7 +80,7 @@ var builtinProviderInstances = []Provider{
 	// is resolved by the plugin's ops.OpResolve leg (C10, kit.BuilderResolve, spliced by
 	// deploykit EmitBuilderStages), while their deploy-time IR shim
 	// (per-candy stage context + teardown ops) is served over ops.OpCollectContext/ops.OpReverse and
-	// resolved in the host-side build pre-pass (candy/plugin-bundle/builder_preresolve.go — the
+	// resolved in the host-side build pre-pass (candy/plugin-fleet/builder_preresolve.go — the
 	// former charly/builder_preresolve.go is DELETED, K-wave 2). No in-proc BuilderProvider
 	// remains; the registry resolves a builder word to its connected grpcProvider.
 }

@@ -11,7 +11,7 @@
 //     E3b reverse channel). The plugin dials back through the SDK (ExecutorFromInvoke)
 //     and writes a marker on the target VENUE, then RETURNS a DeployReply carrying a
 //     plugin-script reverse op the host RECORDS in the ledger and REPLAYS at
-//     `charly bundle del` — the deploy-time counterpart of the build-context bake.
+//     `charly fleet del` — the deploy-time counterpart of the build-context bake.
 //
 // Authored as a candy `run:` step (`plugin: examplestep`, a verb), it is the
 // verb-as-step analogue of the deploy-TARGET candy/plugin-example-deploy.

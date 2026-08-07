@@ -40,7 +40,7 @@ func deriveCandy(t *testing.T, body string) spec.CandyReader {
 }
 
 // normalizePackageShorthand rewrites every "package: [...]" sequence's bare-scalar entries into
-// {name: <scalar>} mapping nodes — see candy/plugin-bundle/bundle_test_helpers_test.go's twin
+// {name: <scalar>} mapping nodes — see candy/plugin-fleet/fleet_test_helpers_test.go's twin
 // (R3: same narrow fixture-loader canonicalization, needed independently in this package since
 // it cannot share unexported test helpers across the module boundary).
 func normalizePackageShorthand(n *yaml.Node) {

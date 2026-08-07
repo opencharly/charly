@@ -12,7 +12,7 @@ import (
 // bind-mount volumes, finds a bind-mount that contains the host path, and returns the equivalent
 // venue-side path so a nested podman build can reach the same files. The candy variant takes the
 // []spec.DeployVolume list (the host prep copies parentNode.Volume into the envelope as
-// ParentVolumes) instead of the package-main *BundleNode.
+// ParentVolumes) instead of the package-main *FleetNode.
 
 func TestTranslateHostPathToVenue(t *testing.T) {
 	vols := []spec.DeployVolume{

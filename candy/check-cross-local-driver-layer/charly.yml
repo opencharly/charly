@@ -7,7 +7,7 @@ check-cross-local-driver-layer:
             DRIVER member: a `command:` check placed under this member runs on
             the host against a SEPARATE pod SUBJECT (cross-kind — local driver,
             pod subject). USER-level only (a marker under $HOME, no root/sudo/gates)
-            so bringUpMembers applies it unattended via `charly bundle add`.
+            so bringUpMembers applies it unattended via `charly fleet add`.
         plan:
             - run: mkdir=${HOME}/.cache
               mkdir: "${HOME}/.cache"

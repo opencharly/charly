@@ -92,7 +92,7 @@ func nodeFormRejected(doc string) bool {
 
 // nodeDocValid is a realistic unified node-form document (child-node): a distro, a
 // candy whose package/env/composition and a plan step are each CHILD nodes, a box
-// whose composition is a child, and a bundle group with bundle members, an inline
+// whose composition is a child, and a fleet group with fleet members, an inline
 // cross-member check (${HOST:cache}) as a step child under a member, and a
 // deeply-nested deploy-into with its own check child.
 const nodeDocValid = `
@@ -119,19 +119,19 @@ coder:
   coder-candy:
     candy: [redis]
 shop:
-  bundle:
+  fleet:
     disposable: true
   web:
-    bundle:
+    fleet:
       box: coder
     web-reaches-cache:
       check: web reaches the cache
       command: "redis-cli -h ${HOST:cache} ping"
   cache:
-    bundle:
+    fleet:
       box: coder
     migrate:
-      bundle:
+      fleet:
         box: coder
       migrate-ran:
         check: migration ran

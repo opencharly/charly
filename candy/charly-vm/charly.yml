@@ -61,7 +61,7 @@ arch-cloud-vm-skill:
             | Video model | `virtio-gpu` | Modern default for Linux guests (Finding B, secondary) |
             | SPICE listener | `type: socket` (UNIX, auto-path) | Enables zero-config remote GUI via `qemu+ssh://` (see "Connecting from a remote workstation" below). virt-manager and `remote-viewer` auto-forward UNIX sockets through libvirt RPC fd-passing; TCP-loopback listeners are never auto-tunneled. No TCP port bound. |
 
-            Disposability is **not** a field on the VM entity — the `check-arch-vm` bundle carries `disposable: true` (LOAD-BEARING), which authorizes the unattended destroy + rebuild + restart driven by `charly check run check-arch-vm` (and the equivalent `charly update check-arch-vm`, since the bundle is folded into the Bundle map). See `/charly-internals:disposable`.
+            Disposability is **not** a field on the VM entity — the `check-arch-vm` fleet carries `disposable: true` (LOAD-BEARING), which authorizes the unattended destroy + rebuild + restart driven by `charly check run check-arch-vm` (and the equivalent `charly update check-arch-vm`, since the fleet is folded into the Fleet map). See `/charly-internals:disposable`.
 
             ## Disposable verification target
 
@@ -376,7 +376,7 @@ arch-cloud-vm-skill:
             - `/charly-vm:vms-catalog` — VmSpec authoring reference (schema, source.kind, adopt pattern)
             - `/charly-vm:vm` — VM lifecycle commands + BIOS/UEFI decision matrix + video model choice (disposability lives on the `disposable: true` deploy)
             - `/charly-build:migrate` — `charly migrate` legacy conversion
-            - `/charly-core:deploy` — `charly bundle add vm:arch <layer>` for in-guest layer application
+            - `/charly-core:deploy` — `charly fleet add vm:arch <layer>` for in-guest layer application
             - `/charly-internals:vm-spec` — Go types and validation rules
             - `/charly-internals:libvirt-renderer` — `<backend type='passt'/>` for portForward, virtio-gpu video model
             - `/charly-internals:cloud-init-renderer` — `composeUsers` adopt-merge, seed ISO, `charly_install.strategy: auto`
@@ -432,7 +432,7 @@ cachyos-bootstrap-vm-skill:
             disposable: true}`), so `charly -C box/cachyos check run check-cachyos-vm`
             runs the full R10 sequence unattended (the equivalent `charly update
             check-cachyos-vm` rebuild also works, since the deploy is folded into the
-            Bundle map).
+            Fleet map).
 
             `check-cachyos-gpu-vm` is the **full KDE GPU workstation** bed — it mirrors the
             operator `cachyos-gpu` workstation's dual-desktop config and is the acceptance gate
@@ -445,7 +445,7 @@ cachyos-bootstrap-vm-skill:
             `nvidia-ctk cdi generate` writes `/etc/cdi/nvidia.yaml`), then the vm deploy plugin's
             `OpPostApply` host-builds `selkies-kde-nvidia`, `charly vm cp-box
             --rootless`s it into the guest user's podman as `localhost/charly-selkies-kde:latest`,
-            and runs the guest's own project-free `charly bundle from-box
+            and runs the guest's own project-free `charly fleet from-box
             localhost/charly-selkies-kde:latest selkies-kde` — a PERSISTENT in-guest `--user`
             quadlet (GPU device auto-detected; `loginctl enable-linger` so it survives the
             guest reboot the fresh-rebuild leg recreates). Deploy-scope checks run in-guest over
@@ -537,7 +537,7 @@ debian-debootstrap-vm-skill:
             (`vm: {from: debian-debootstrap, disposable: true}`), so
             `charly -C box/debian check run check-debian-debootstrap-vm` runs the full R10 sequence
             unattended (the equivalent `charly update check-debian-debootstrap-vm` rebuild also works,
-            since the bundle is folded into the Bundle map).
+            since the fleet is folded into the Fleet map).
 
             ## debootstrap path
 
@@ -614,7 +614,7 @@ ubuntu-debootstrap-vm-skill:
             (`vm: {from: ubuntu-debootstrap, disposable: true}`), so
             `charly -C box/ubuntu check run check-ubuntu-debootstrap-vm` runs the full R10 sequence
             unattended (the equivalent `charly update check-ubuntu-debootstrap-vm` rebuild also works,
-            since the bundle is folded into the Bundle map).
+            since the fleet is folded into the Fleet map).
 
             ## debootstrap path
 
@@ -657,7 +657,7 @@ vm-skill:
 
             - **Disposability is a deployment property, never a VM-entity field.** A `kind: vm` entity carries no `disposable:` / `lifecycle:` field. Put `disposable: true` on the deploy that deploys it. The `vm:` entity only describes VM shape (disk, RAM, SSH, cloud-init, libvirt), never authorization.
             - **VM cross-ref**: a `vm:` deploy names its VM entity via the `from:` field (`<bed>: {vm: {from: <entity-name>, disposable: true}}`).
-            - **`charly update <vm-entity-name>`** does NOT gate on `disposable:` — an explicit invocation rebuilds ANY target (destroy→create the domain, reuse the qcow2 disk unless `--build`, then re-apply the deploy's layers via the shared `bundle add` path). For a non-disposable, non-ephemeral target it prints a one-line transparency note (`noteUpdateDisposability`) and proceeds. The `disposable: true` flag stays load-bearing as the authorization for UNATTENDED autonomous destroy + rebuild (the project rulebook R10 (`AGENTS.md` / `CLAUDE.md`)) and the check-runner's unattended fresh rebuild, NOT as an `charly update` capability check. See `/charly-internals:disposable` and `/charly-core:charly-update`.
+            - **`charly update <vm-entity-name>`** does NOT gate on `disposable:` — an explicit invocation rebuilds ANY target (destroy→create the domain, reuse the qcow2 disk unless `--build`, then re-apply the deploy's layers via the shared `fleet add` path). For a non-disposable, non-ephemeral target it prints a one-line transparency note (`noteUpdateDisposability`) and proceeds. The `disposable: true` flag stays load-bearing as the authorization for UNATTENDED autonomous destroy + rebuild (the project rulebook R10 (`AGENTS.md` / `CLAUDE.md`)) and the check-runner's unattended fresh rebuild, NOT as an `charly update` capability check. See `/charly-internals:disposable` and `/charly-core:charly-update`.
 
             ## Overview
 
@@ -732,7 +732,7 @@ vm-skill:
             3. **In-guest driver** — a passthrough guest needs the actual kernel module, not
                just the userspace container toolkit. Apply a kernel-driver layer (it
                blacklists the in-tree driver, regenerates the initramfs, and declares
-               `reboot: true` so `charly bundle add vm:<name>` reboots the guest and waits for it
+               `reboot: true` so `charly fleet add vm:<name>` reboots the guest and waits for it
                to return). The `nvidia`-toolkit layer + `nvidia-ctk cdi generate` then makes
                the GPU available to containers via CDI (`--device nvidia.com/gpu=all`).
 
@@ -1067,12 +1067,12 @@ vm-skill:
 
             ```bash
             charly vm create arch
-            charly bundle add vm:arch ripgrep         # apply ripgrep layer over SSH
-            charly bundle add vm:arch fedora-coder --add-candy team-extras
-            charly bundle del vm:arch                 # reverse all applied layers
+            charly fleet add vm:arch ripgrep         # apply ripgrep layer over SSH
+            charly fleet add vm:arch fedora-coder --add-candy team-extras
+            charly fleet del vm:arch                 # reverse all applied layers
             ```
 
-            See `/charly-core:deploy` "vm: target" for the `charly bundle add vm:<name>` surface and `/charly-internals:vm-deploy-target` for the executor model.
+            See `/charly-core:deploy` "vm: target" for the `charly fleet add vm:<name>` surface and `/charly-internals:vm-deploy-target` for the executor model.
 
             ### Debug VM boot issues
 
@@ -1164,11 +1164,11 @@ vm-skill:
             exit=1
             ```
 
-            ### `charly bundle add vm:<vm> <localpkg-candy>` exits 0 WITHOUT installing
+            ### `charly fleet add vm:<vm> <localpkg-candy>` exits 0 WITHOUT installing
 
             A `localpkg:` candy (the `charly` candy: `pkg/arch` via makepkg + `pacman -U`) needs the
             package built from local source, which only the check-bed runner does (it sets
-            `--dev-local-pkg` automatically — see `/charly-check:check`). A bare `charly bundle add
+            `--dev-local-pkg` automatically — see `/charly-check:check`). A bare `charly fleet add
             vm:<vm> charly` returns **rc=0** and prints:
 
             ```
@@ -1210,7 +1210,7 @@ vm-skill:
             - `/charly-internals:ovmf` — UEFI firmware path resolution; per-VM NVRAM; bios-skips-loader sentinel
             - `/charly-internals:cutover-policy` — hard cutover policy
             - `/charly-build:migrate` — `charly migrate` legacy conversion
-            - `/charly-core:deploy` — `charly bundle add vm:<name> <ref>` in-guest layer application
+            - `/charly-core:deploy` — `charly fleet add vm:<name> <ref>` in-guest layer application
             - `/charly-build:pull` — fetch container images into local storage (prereq for bootc VM builds)
             - `/charly-build:build` — building container images before VM disk builds
             - `/charly-image:layer` — `libvirt.snippets:` field in charly.yml
@@ -1222,7 +1222,7 @@ vm-skill:
 
             **MUST be invoked** when the task involves virtual machines, charly vm commands, kind:vm entities, cloud_image vs bootc source types, libvirt/QEMU backends, BIOS vs UEFI firmware choice, or VM lifecycle management. Invoke this skill BEFORE reading source code or launching Explore agents.
 
-            **Workflow position:** Standalone workflow. VM management is separate from container lifecycle, but `charly bundle add vm:<name>` bridges into the shared InstallPlan + DeployTarget machinery.
+            **Workflow position:** Standalone workflow. VM management is separate from container lifecycle, but `charly fleet add vm:<name>` bridges into the shared InstallPlan + DeployTarget machinery.
 
             Live-deploy verification: see /charly-check:check (the 11 Testing Standards) and /charly-internals:disposable.
 vms-catalog-skill:
@@ -1238,7 +1238,7 @@ vms-catalog-skill:
         content: |
             # vms
 
-            `vm.yml` is the authoring surface for `kind: vm` entities — VM primitives that pair with either a remote cloud-image URL (`source.kind: cloud_image`) or an in-repo bootc container image (`source.kind: bootc`). Loaded through `charly.yml`'s `import:` (or inline under its root). Entries are resolved by `LoadUnified` into `VmSpec` Go types (generated in `spec/spec/`) and consumed by `charly vm build`, `charly vm create`, and `charly bundle add vm:<name>`.
+            `vm.yml` is the authoring surface for `kind: vm` entities — VM primitives that pair with either a remote cloud-image URL (`source.kind: cloud_image`) or an in-repo bootc container image (`source.kind: bootc`). Loaded through `charly.yml`'s `import:` (or inline under its root). Entries are resolved by `LoadUnified` into `VmSpec` Go types (generated in `spec/spec/`) and consumed by `charly vm build`, `charly vm create`, and `charly fleet add vm:<name>`.
 
             The VM surface parallels the `candy:` image surface: one YAML entry per entity, kind-keyed, discovered through includes. The Go types that back it live in `/charly-internals:vm-spec`; the rendering paths in `/charly-internals:libvirt-renderer` and `/charly-internals:cloud-init-renderer`.
 
@@ -1412,7 +1412,7 @@ vms-catalog-skill:
 
             ## charly_install.strategy: auto (cloud_image)
 
-            `charly_install.strategy: auto` in `cloud_init:` wires `charly`'s in-guest installer (`/charly-internals:cloud-init-renderer` → emitted `runcmd:` entries) so the provisioned VM comes up with `charly` already installed. Lets `charly bundle add vm:<name>` apply host-deploy-style layer recipes inside the VM over SSH without a bootstrap round-trip. See `/charly-internals:cloud-init-renderer` for the emission + handshake.
+            `charly_install.strategy: auto` in `cloud_init:` wires `charly`'s in-guest installer (`/charly-internals:cloud-init-renderer` → emitted `runcmd:` entries) so the provisioned VM comes up with `charly` already installed. Lets `charly fleet add vm:<name>` apply host-deploy-style layer recipes inside the VM over SSH without a bootstrap round-trip. See `/charly-internals:cloud-init-renderer` for the emission + handshake.
 
             `strategy: none` skips the step entirely — useful when the VM will be managed by something other than `charly` after provisioning.
 
@@ -1438,7 +1438,7 @@ vms-catalog-skill:
 
             - `/charly-vm:vm` — the `charly vm build/create/start/stop/ssh/console` command family
             - `/charly-build:migrate` — `charly migrate` conversion from legacy
-            - `/charly-core:deploy` — `charly bundle add vm:<name>` for in-guest layer application
+            - `/charly-core:deploy` — `charly fleet add vm:<name>` for in-guest layer application
             - `/charly-vm:arch-cloud-vm` — canonical cloud_image VM
             - `/charly-internals:vm-spec` — Go type reference
             - `/charly-internals:libvirt-renderer` — libvirt XML emission

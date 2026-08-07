@@ -6,7 +6,7 @@ selkies:
             selkies installs a Python streaming server (the launch wrapper, the
             capture-bridge server, and a static web-UI fileserver), a Traefik
             reverse proxy with a self-signed cert for the WebCodecs secure context,
-            and the pre-built web UI bundle. pixelflux creates the nested wayland-1
+            and the pre-built web UI fleet. pixelflux creates the nested wayland-1
             compositor and streams H.264 to the browser; Traefik terminates TLS on
             :3000 and proxies the web UI plus the /websockets backend. Each step
             below asserts a real installed file or a live HTTPS endpoint, so every

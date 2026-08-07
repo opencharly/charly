@@ -48,7 +48,7 @@ func TestVMStatusFromDomainState(t *testing.T) {
 // domain to a BARE row (Kind/Source/Image/Status/Container) — no deploy
 // enrichment (a separate concern: status_flat.go's flatCollector.enrichVmRow,
 // K6, same package, tested in status_flat_test.go against synthetic
-// BundleConfig fixtures).
+// FleetConfig fixtures).
 func TestCollectVmStatus_Rows(t *testing.T) {
 	cases := []struct {
 		name    string

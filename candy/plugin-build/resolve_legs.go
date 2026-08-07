@@ -15,7 +15,7 @@ import (
 // resolve_legs.go — the plugin-side leg helpers the build-engine RESOLVE (resolve.go, U6) reaches the
 // host for. Each is a thin HostBuild / InvokeProvider wrapper over a charly `buildengine-*` host leg
 // (charly/host_build_buildengine.go) or a compiled-in peer plugin. The pattern mirrors the K1 loader
-// witness legs (candy/plugin-bundle) — only the genuinely host-coupled steps cross the wire.
+// witness legs (candy/plugin-fleet) — only the genuinely host-coupled steps cross the wire.
 
 // hostBuildJSON marshals req, dispatches HostBuild(kind), and decodes the reply into *Reply. A void
 // leg passes a nil *Reply (out ignored).

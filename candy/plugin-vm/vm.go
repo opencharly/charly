@@ -562,7 +562,7 @@ func (c *VmDestroyCmd) Run() error {
 	}
 
 	// Remove the charly.yml vm:<name> entry — the inverse of the deploykit.SaveVmDeployState
-	// that `charly bundle add vm:<name>` (and the ssh.port_auto vm-create persist)
+	// that `charly fleet add vm:<name>` (and the ssh.port_auto vm-create persist)
 	// wrote. Destroying the VM removes the deployment, so its config must not
 	// linger; this is what made disposable check-bed VM entries accumulate (the
 	// bed cleanup tears down via `charly vm destroy`). --keep-deploy preserves it for

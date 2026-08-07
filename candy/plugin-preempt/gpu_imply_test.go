@@ -10,7 +10,7 @@ import (
 
 // gpu_imply_test.go — ported from the former charly/gpu_imply_test.go (K-wave W3a A2). The pure
 // decision functions moved with their subject (gpu_imply.go); test fixtures switched from a full
-// spec.BundleNode to the wire-projected (isGroup, isPodMember, securityDevices) triple the
+// spec.FleetNode to the wire-projected (isGroup, isPodMember, securityDevices) triple the
 // acquire-side callers send (the former in-core acquireDispatch shims are DELETED, K-wave 2 cone
 // CONTESTED), mirroring the production shape exactly.
 

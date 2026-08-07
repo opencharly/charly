@@ -7,15 +7,15 @@ import (
 	"github.com/opencharly/spec/spec"
 )
 
-// deploy_node_test.go — tests for BundleNode tree walking and
+// deploy_node_test.go — tests for FleetNode tree walking and
 // dotted-path resolution. TestWalkPreOrder_RootThenChildren / TestWalkPostOrder_ChildrenThenRoot
 // / TestResolveNodePath_* / TestSortedChildKeys_Deterministic /
 // TestMergeDeployConfigsLocalCutoverFields / TestMergeDeployConfigsPreservesAllFields relocated
-// to candy/plugin-bundle (#55 decoupling, Batch A) — they asserted deploykit tree/merge
+// to candy/plugin-fleet (#55 decoupling, Batch A) — they asserted deploykit tree/merge
 // functions directly, zero charly dep.
 
 func TestValidateDeploymentTree_RejectsDotInName(t *testing.T) {
-	deploy := map[string]spec.BundleNode{
+	deploy := map[string]spec.FleetNode{
 		"bad.name": {Target: "host"},
 	}
 	err := spec.ValidateDeploymentTree(deploy)
@@ -28,11 +28,11 @@ func TestValidateDeploymentTree_RejectsDotInName(t *testing.T) {
 }
 
 func TestHasChildren(t *testing.T) {
-	empty := &spec.BundleNode{}
+	empty := &spec.FleetNode{}
 	if empty.HasChildren() {
 		t.Error("empty node should not report HasChildren")
 	}
-	withKids := &spec.BundleNode{Children: map[string]*spec.BundleNode{"k": {}}}
+	withKids := &spec.FleetNode{Children: map[string]*spec.FleetNode{"k": {}}}
 	if !withKids.HasChildren() {
 		t.Error("node with children should report HasChildren")
 	}

@@ -20,7 +20,7 @@ import (
 // (loaderkit.Materialize) are reached exclusively through the compiled-in loader plugin's typed
 // ProjectWalker / Materializer, resolved here. The ACTUAL registry resolve + provider dispatch a
 // materialize pass performs (clause M) never leaves this file — it is threaded to the plugin via
-// MaterializeSeams.DecodeEntity/BuildBundleEntity, exactly like WalkSeams' callbacks above.
+// MaterializeSeams.DecodeEntity/BuildFleetEntity, exactly like WalkSeams' callbacks above.
 
 // activeLoaderParser is the registered config-front-end PARSE — the spec.DocParser of the
 // compiled-in loader plugin (candy/plugin-loader), wired at registration (plugin_inproc.go). There
@@ -207,7 +207,7 @@ func loaderThreaded() spec.Threaded {
 		t.Primaries[w] = f
 	}
 	// K1-LOADER RELOCATION: snapshot each recognized kind/substrate word's DECLARED #DeployTraits
-	// (the SAME deployTraitsFor the loader's per-node descent stamp, loaderkit.StampBundleDescents, calls) so the
+	// (the SAME deployTraitsFor the loader's per-node descent stamp, loaderkit.StampFleetDescents, calls) so the
 	// venue-hop descent stamp reads DATA, never the registry. A word whose deployTraitsFor is nil
 	// (a non-substrate kind, e.g. group/distro) is left absent — the DATA closure returns nil for
 	// it, matching deployTraitsFor's nil-for-unrecognized-word semantics via DescentFromTraits(nil).
@@ -257,7 +257,7 @@ func requireMaterializer() spec.Materializer {
 func hostMaterializeSeams() spec.MaterializeSeams {
 	return spec.MaterializeSeams{
 		DecodeEntity:             decodeEntityViaRegistry,
-		BuildBundleEntity:        buildBundleEntityViaRegistry,
+		BuildFleetEntity:         buildFleetEntityViaRegistry,
 		InKindConnectPass:        inKindConnectPass,
 		DeclaredKindConnectError: declaredKindConnectError,
 	}
@@ -268,7 +268,7 @@ func hostMaterializeSeams() spec.MaterializeSeams {
 // the former in-core normalizeNodeInto called directly (provider_kind_invoke.go — the TRUE
 // clause-M mechanism, unchanged). Threads pn straight into the dispatch (K1 unit 3b) — the former
 // genericNode reconstruction is gone from this path entirely; runPluginKind's own tree-assembly
-// calls (buildBundleNode/assembleEntityBody/…) now route through the ProjectLoader seam on pn
+// calls (buildFleetNode/assembleEntityBody/…) now route through the ProjectLoader seam on pn
 // directly, and genericNode survives ONLY where foldCandyKind needs it for the bootstrap-critical
 // candyIsImage/buildCandy routing. found=false (no error) means no provider resolves pn.Disc; the
 // registered Materializer plugin applies its own not-found policy from there.
@@ -280,13 +280,13 @@ func decodeEntityViaRegistry(pn spec.ParsedNode, acc *spec.MaterializedProject) 
 	return true, runPluginKind(prov, pn, acc)
 }
 
-// buildBundleEntityViaRegistry implements spec.MaterializeSeams.BuildBundleEntity: the fallback for
+// buildFleetEntityViaRegistry implements spec.MaterializeSeams.BuildFleetEntity: the fallback for
 // a recognized-but-not-yet-connected external deploy substrate word, mirroring the former in-core
 // normalizeNodeInto's recognizedDeploySubstrate branch — now the relocated
-// sdk/loaderkit.BuildBundleNodeInto (K1 unit 3b), reached through the ProjectLoader seam with pn
+// sdk/loaderkit.BuildFleetNodeInto (K1 unit 3b), reached through the ProjectLoader seam with pn
 // threaded straight through (no genericNode reconstruction).
-func buildBundleEntityViaRegistry(pn spec.ParsedNode, acc *spec.MaterializedProject) error {
-	return requireProjectLoader().BuildBundleNodeInto(pn, loaderThreaded(), acc)
+func buildFleetEntityViaRegistry(pn spec.ParsedNode, acc *spec.MaterializedProject) error {
+	return requireProjectLoader().BuildFleetNodeInto(pn, loaderThreaded(), acc)
 }
 
 // -----------------------------------------------------------------------------
@@ -328,7 +328,7 @@ func LoadUnified(dir string) (*spec.UnifiedFile, bool, error) {
 
 // LoadConfig reads charly.yml and returns the spec.Config (defaults + boxes) projection. Mode purity
 // preserved: this reads the PROJECT charly.yml only and never merges the per-host charly.yml overlay.
-// Deploy-mode commands must call LoadBundleConfig + MergeDeployOntoMetadata explicitly.
+// Deploy-mode commands must call LoadFleetConfig + MergeDeployOntoMetadata explicitly.
 func LoadConfig(dir string) (*spec.Config, error) {
 	uf, present, err := LoadUnified(dir)
 	if err != nil {

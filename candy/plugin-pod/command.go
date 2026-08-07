@@ -8,7 +8,7 @@ import (
 
 // command.go — the pod command-word DISPATCH. Each of charly's pod-lifecycle CLI words
 // (start/stop/restart/config/shell/service/logs/remove/cp/volume) is an INDEPENDENT top-level
-// grammar (unlike `charly bundle …`'s single grouped command), so dispatchPodCommand switches on
+// grammar (unlike `charly fleet …`'s single grouped command), so dispatchPodCommand switches on
 // the reserved word and kong-parses the pass-through args directly into the matching Cmd struct
 // (mirroring candy/plugin-authoring's dispatchAuthoringCommand).
 

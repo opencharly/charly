@@ -5,7 +5,7 @@ import (
 )
 
 // TestCollectImageAliases / TestCollectImageAliasesImageOverridesCandy /
-// TestCollectImageAliasesDefaultCommand relocated to candy/plugin-bundle (#55 decoupling,
+// TestCollectImageAliasesDefaultCommand relocated to candy/plugin-fleet (#55 decoupling,
 // Batch A) — they asserted deploykit.CollectBoxAlias directly, zero charly dep.
 
 func TestCandyAliases(t *testing.T) {

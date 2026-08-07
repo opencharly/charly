@@ -7,11 +7,7 @@ require (
 	k8s.io/client-go v0.36.0
 )
 
-require (
-	github.com/alecthomas/kong v1.15.0 // indirect
-	github.com/opencharly/charly/candy/plugin-egress v0.0.0-20260806143330-d5823a147477 // indirect
-	github.com/opencharly/charly/candy/plugin-init v0.0.0-20260806143330-d5823a147477 // indirect
-)
+require github.com/alecthomas/kong v1.15.0 // indirect
 
 require (
 	cuelang.org/go v0.16.1 // indirect
@@ -35,7 +31,7 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/oklog/run v1.1.0 // indirect
 	github.com/opencharly/sdk v0.0.0
-	github.com/opencharly/spec v0.2026218.1950
+	github.com/opencharly/spec v0.2026219.1057
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/protocolbuffers/txtpbfmt v0.0.0-20260217160748-a481f6a22f94 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect

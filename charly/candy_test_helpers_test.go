@@ -26,7 +26,7 @@ import (
 // match the interface exactly) — so this file ports the adapter body directly, verbatim
 // field-for-field, over spec types only (no sdk import). One copy per module is the
 // established pattern (each plugin candy module already carries its own testCandy —
-// candy/plugin-loader, candy/plugin-bundle — R3 is satisfied per-module, not globally, since
+// candy/plugin-loader, candy/plugin-fleet — R3 is satisfied per-module, not globally, since
 // Go modules cannot share _test.go files).
 type testCandyReader struct {
 	m  spec.CandyModel
@@ -207,8 +207,8 @@ func (a *testCandyReader) Port() ([]string, error) {
 var _ spec.CandyReader = (*testCandyReader)(nil)
 
 // testConstructStepExecutor returns the SAME in-proc reverse-channel executor
-// the invokeOpCompile helper (bundle_compile_parity_test.go) threads onto the ctx it hands
-// command:bundle's OpCompile (K5-A item 1, compile-seam ctx-threading): a test
+// the invokeOpCompile helper (fleet_compile_parity_test.go) threads onto the ctx it hands
+// command:fleet's OpCompile (K5-A item 1, compile-seam ctx-threading): a test
 // exercising charly's own construct-step routing directly (in-process, package
 // main) needs a REAL executor reaching the provider registry for any `run: plugin:
 // <word>` op, exactly as the real compile path does — the "construct-step" HostBuild
@@ -309,5 +309,5 @@ func testResolveRunAsUser(runAs string) string {
 }
 
 // testCompileServiceSteps (the deploykit.CompileServiceSteps-driving twin of testCompileOpSteps
-// above) relocated to candy/plugin-bundle (#55 decoupling, Batch A) with its own copy — its
+// above) relocated to candy/plugin-fleet (#55 decoupling, Batch A) with its own copy — its
 // last charly-side consumer, service_distro_filter_test.go, moved there too.

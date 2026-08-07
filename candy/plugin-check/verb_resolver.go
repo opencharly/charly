@@ -59,7 +59,7 @@ const classVerb = "verb"
 // every RunVerb call but left `env` a STATIC field, marshalled UNCHANGED into every dispatch's
 // wire envelope — the exact same staleness class, just for the Box/Instance/Mode/etc. sibling
 // fields instead of Exec. A GROUP bed's runner starts with Box=<group-root-name> (a pure group
-// has no container of its own; flattenBundleVenues hard-errors a direct plan step there), and
+// has no container of its own; flattenFleetVenues hard-errors a direct plan step there), and
 // EVERY step immediately SwapVenue-retargets Box to its OWNING MEMBER — but the frozen `env` kept
 // reporting the group's own bare name. charly/plugin_dispatch_reverse.go's InvokeProvider host
 // handler decodes THIS envelope to construct the detached CheckContext serving the verb's

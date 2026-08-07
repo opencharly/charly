@@ -21,7 +21,7 @@ import (
 // "pod-config-container-tunnel" HostBuild seams are RETIRED here — every caller in resolve.go now
 // builds its own plan via deploykit.EncPlanForConfig/EncPlanForConfig's sibling functions (sdk#84ee126,
 // the wave γ DeployStateHost fix) given a dc it ALREADY holds (or loads once via loadDeploy, the
-// cycle-free loaderkit.LoadHostBundleConfigViaExecutor read — never the bare deploykit.LoadBundleConfig()/
+// cycle-free loaderkit.LoadHostFleetConfigViaExecutor read — never the bare deploykit.LoadFleetConfig()/
 // LoadDeployConfigForRead() a plugin cannot safely reach, per the DeployStateHost placement-
 // dependency class). The credential touch (enc-ensure's passphrase resolution) dispatches
 // verb:credential via the SHARED deploykit.CredentialAccessViaExecutor helper (R3 — the ONE
@@ -34,11 +34,11 @@ import (
 // one is already mounted (the keyring-resilient fast path — direct port of
 // charly/pod_lifecycle_resolve.go's resolvePodEncEnsure). dc is loaded ONCE by the caller (either
 // reused from an already-loaded podRuntimeImage.dc, or freshly loaded via loadDeploy, the
-// cycle-free loaderkit.LoadHostBundleConfigViaExecutor read) — never re-derived from a bare
-// deploykit.LoadBundleConfig() call, which silently degrades outside charly-core (the
+// cycle-free loaderkit.LoadHostFleetConfigViaExecutor read) — never re-derived from a bare
+// deploykit.LoadFleetConfig() call, which silently degrades outside charly-core (the
 // DeployStateHost placement-dependency class, sdk#84ee126's EncPlanForConfig exists precisely to
 // avoid it here).
-func resolvePodEncEnsurePlan(ctx context.Context, ex *sdk.Executor, dc *deploykit.BundleConfig, box, instance string, autoGenerate bool) (spec.RawBody, error) {
+func resolvePodEncEnsurePlan(ctx context.Context, ex *sdk.Executor, dc *deploykit.FleetConfig, box, instance string, autoGenerate bool) (spec.RawBody, error) {
 	plan, err := deploykit.EncPlanForConfig(dc, box, instance, "", box)
 	if err != nil || len(plan) == 0 {
 		return nil, nil // no encrypted mounts configured (load error swallowed, as before)
@@ -69,7 +69,7 @@ func resolvePodEncEnsurePlan(ctx context.Context, ex *sdk.Executor, dc *deployki
 // resolvePodEncUnmountPlan builds the spec.EncExecInput (unmount) the caller InvokeProviders
 // verb:enc with on `charly stop --unmount`, or nil when no encrypted volume is configured. Direct
 // port of charly/pod_lifecycle_resolve.go's resolvePodEncUnmount — no credential touch needed.
-func resolvePodEncUnmountPlan(dc *deploykit.BundleConfig, box, instance string) (spec.RawBody, error) {
+func resolvePodEncUnmountPlan(dc *deploykit.FleetConfig, box, instance string) (spec.RawBody, error) {
 	plan, err := deploykit.EncPlanForConfig(dc, box, instance, "", deploykit.DeployStorageDir(box, instance))
 	if err != nil || len(plan) == 0 {
 		return nil, nil
@@ -88,7 +88,7 @@ func resolvePodEncUnmountPlan(dc *deploykit.BundleConfig, box, instance string) 
 // directly elsewhere in this package). Direct port of charly/pod_lifecycle_resolve.go's
 // resolvePodTunnel; dc is the SAME already-loaded config resolvePodEncEnsurePlan/UnmountPlan use
 // (no redundant load).
-func resolvePodTunnelPlan(dc *deploykit.BundleConfig, box, instance string) *spec.TunnelConfig {
+func resolvePodTunnelPlan(dc *deploykit.FleetConfig, box, instance string) *spec.TunnelConfig {
 	ctrName := kit.ContainerNameInstance(box, instance)
 	imageRef := kit.ContainerImage("podman", ctrName)
 	if imageRef == "" {

@@ -90,9 +90,9 @@ func hostCheckRunCtx(ctx context.Context, req spec.CheckRunRequest) (kit.CheckRu
 // pluginCheckRunPreflight performs the host-target image preflight plugin-side (K-wave 2 cone R4 —
 // the "check-run" HostBuild kind is DELETED; its last arm "preflight" relocated here). It loads the
 // project via loaderkit (LoadUnifiedViaExecutor — the same self-load bed_session.go uses), checks
-// the entity exists, filters agent-provisioned venues via the bundle-tree predicate
+// the entity exists, filters agent-provisioned venues via the fleet-tree predicate
 // spec.VenueIsAgentProvisioned (the former host-anchoring rationale — the plugin CAN read the
-// bundle tree, so the filter is fully portable), and ensures every remaining candidate image is
+// fleet tree, so the filter is fully portable), and ensures every remaining candidate image is
 // present in local podman storage via the compiled-in candy/plugin-build build:ensure word
 // (InvokeProvider peer dispatch — the same leg core's dispatchBuildEnsure drives).
 func pluginCheckRunPreflight(ex *sdk.Executor, ctx context.Context, req spec.CheckRunRequest) (kit.CheckRunReply, error) {
@@ -109,7 +109,7 @@ func pluginCheckRunPreflight(ex *sdk.Executor, ctx context.Context, req spec.Che
 	if !ok || uf == nil {
 		return kit.CheckRunReply{}, fmt.Errorf("check-run preflight: no charly.yml in %s", dir)
 	}
-	if _, has := uf.Bundle[req.Name]; !has {
+	if _, has := uf.Fleet[req.Name]; !has {
 		return kit.CheckRunReply{}, fmt.Errorf("check-run preflight: no entity %q in %s", req.Name, dir)
 	}
 	fmt.Fprintf(os.Stderr, "preflight: ensuring %d image(s) present in podman storage\n", len(req.Filter))

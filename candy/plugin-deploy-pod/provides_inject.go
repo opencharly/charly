@@ -14,17 +14,17 @@ import (
 // config, relocated from charly-core's config_image.go (P11 seam-death — the
 // pod-config-inject-env-provides / pod-config-inject-mcp-provides HostBuild seams are DELETED). The
 // plugin resolves the provides templates ITSELF (deploykit.ResolveTemplate) and mutates the loaded
-// BundleConfig in place; runConfig persists via the EXISTING plugin-side saveBundle seam — the SAME
-// loadDeploy→modify→saveBundle pattern the secrets/sidecar persist already uses (R3). The locked
-// whole-file write + the marshal resugar run plugin-side via deploykit.SaveBundleConfig (the former
-// host pod-config-save-bundle seam + the host save-callback are deleted, #55 coneC-dsh) — so no
+// FleetConfig in place; runConfig persists via the EXISTING plugin-side saveFleet seam — the SAME
+// loadDeploy→modify→saveFleet pattern the secrets/sidecar persist already uses (R3). The locked
+// whole-file write + the marshal resugar run plugin-side via deploykit.SaveFleetConfig (the former
+// host pod-config-save-fleet seam + the host save-callback are deleted, #55 coneC-dsh) — so no
 // per-kind provides knowledge remains in core.
 
 // injectEnvProvidesInto resolves env_provides templates and stores them in dc.Provides.Env.
 // Returns true if any env vars were added or changed. portMap is a {containerPort -> hostPort}
 // lookup used by ResolveTemplate to substitute {{.HostPort N}} placeholders (nil degrades to the
 // literal container port — only safe for candies that don't use the placeholder).
-func injectEnvProvidesInto(dc *deploykit.BundleConfig, boxName, instance string, envProvides map[string]string, portMap map[int]int) bool {
+func injectEnvProvidesInto(dc *deploykit.FleetConfig, boxName, instance string, envProvides map[string]string, portMap map[int]int) bool {
 	if dc == nil || len(envProvides) == 0 {
 		return false
 	}
@@ -65,7 +65,7 @@ func injectEnvProvidesInto(dc *deploykit.BundleConfig, boxName, instance string,
 
 // injectMCPProvidesInto resolves mcp_provides templates and adds them to dc.Provides.MCP.
 // Returns true if any servers were added or changed.
-func injectMCPProvidesInto(dc *deploykit.BundleConfig, boxName, instance string, mcpProvides []spec.MCPServerYAML, portMap map[int]int) bool {
+func injectMCPProvidesInto(dc *deploykit.FleetConfig, boxName, instance string, mcpProvides []spec.MCPServerYAML, portMap map[int]int) bool {
 	if dc == nil || len(mcpProvides) == 0 {
 		return false
 	}

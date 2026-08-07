@@ -318,6 +318,6 @@ func TestGateEnabledMatrix(t *testing.T) {
 	}
 }
 
-// TestExtractStringSliceHandlesBothShapes relocated to candy/plugin-bundle (#55 decoupling,
+// TestExtractStringSliceHandlesBothShapes relocated to candy/plugin-fleet (#55 decoupling,
 // Batch A; consolidated with aur_replaces_test.go's TestExtractStringSlice_AurReplacesShape,
 // R3) — it asserted deploykit.ExtractStringSlice directly, zero charly dep.

@@ -104,11 +104,11 @@ func liveDeployVarResolver(ex *sdk.Executor, ctx context.Context, name, instance
 	if venue == nil || !venue.IsContainer() {
 		return &kit.CheckVarResolver{}
 	}
-	var deployOverlay *spec.BundleNode
-	if dc, derr := loaderkit.LoadHostBundleConfigViaExecutor(ctx, ex); derr == nil && dc != nil {
-		if entry, ok := dc.Bundle[spec.DeployKey(name, instance)]; ok {
+	var deployOverlay *spec.FleetNode
+	if dc, derr := loaderkit.LoadHostFleetConfigViaExecutor(ctx, ex); derr == nil && dc != nil {
+		if entry, ok := dc.Fleet[spec.DeployKey(name, instance)]; ok {
 			deployOverlay = &entry
-		} else if entry, ok := dc.Bundle[name]; ok {
+		} else if entry, ok := dc.Fleet[name]; ok {
 			deployOverlay = &entry
 		}
 	}

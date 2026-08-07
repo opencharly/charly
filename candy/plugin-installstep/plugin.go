@@ -16,7 +16,7 @@
 //     — a pure function of the step + a few build-context SCALARS; op: the candy's plan.Ops rendered
 //     through the SAME task-emission pipeline WriteCandySteps drives). Rather than calling back a
 //     host-side renderer, this plugin fetches the "resolved-project" envelope ONCE per project dir
-//     (InvokeProvider("build","project"), cached — the SAME generic seam candy/plugin-box/plugin-bundle/
+//     (InvokeProvider("build","project"), cached — the SAME generic seam candy/plugin-box/plugin-fleet/
 //     plugin-check already consume) and constructs its OWN *deploykit.Generator from it via the
 //     SHARED deploykit.NewRenderGeneratorFromProject helper — the identical construction source
 //     candy/plugin-build (the box-build render) and candy/plugin-deploy-pod (the overlay render) use
@@ -293,7 +293,7 @@ var genCache sync.Map // string (dir) -> *deploykit.Generator
 
 // getGenerator returns the cached *deploykit.Generator for dir, fetching + constructing it on a
 // cache miss: InvokeProvider("build","project") (the SAME generic envelope seam candy/plugin-box /
-// candy/plugin-bundle / candy/plugin-check already consume) → deploykit.NewRenderGeneratorFromProject
+// candy/plugin-fleet / candy/plugin-check already consume) → deploykit.NewRenderGeneratorFromProject
 // (the SAME shared construction source candy/plugin-build + candy/plugin-deploy-pod use, R3/DRY).
 func getGenerator(ctx context.Context, exec *sdk.Executor, dir string, devLocalPkg bool, extraCandyRefs []string) (*deploykit.Generator, error) {
 	if cached, ok := genCache.Load(dir); ok {

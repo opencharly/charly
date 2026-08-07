@@ -24,7 +24,7 @@ import (
 // vmConfiguredBackendPlugin's one dependency (the entity's `backend:` pin) self-loads the project
 // PLUGIN-SIDE now (K-wave W3a A3-phase-2: loaderkit.ResolveVmEntityViaExecutor, unblocked by W1's
 // LoadUnifiedViaExecutor) — the former generic, kind-blind "deploy-entity-resolve" HostBuild seam
-// every F6 consumer (kube/adb/bundle/deploy-vm) used to call directly is DELETED. hostConfigResolve
+// every F6 consumer (kube/adb/fleet/deploy-vm) used to call directly is DELETED. hostConfigResolve
 // (vm_host_seams.go) now computes cfg.Backend itself after decoding the wire reply, instead of
 // trusting a wire field — the "config-resolve" reply no longer carries Backend (CUE field removed,
 // sdk#<pending>).

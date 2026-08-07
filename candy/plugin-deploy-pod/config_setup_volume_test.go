@@ -20,8 +20,8 @@ import (
 //     projectVolumeStub.install — it self-resolves the merged project+operator tree over the
 //     reverse channel (deploy-plugins-connect + loaderkit.ResolveMergedTreeViaExecutor), a
 //     multi-leg loader path a single HostBuild-kind stub cannot canned-reply.
-//   - saveBundle (the persist leg) is a package var stubbed per-test via saveBundleStub.install —
-//     it writes the per-host overlay PLUGIN-SIDE via deploykit.SaveBundleConfig + the loader-threaded
+//   - saveFleet (the persist leg) is a package var stubbed per-test via saveFleetStub.install —
+//     it writes the per-host overlay PLUGIN-SIDE via deploykit.SaveFleetConfig + the loader-threaded
 //     Primaries leg + the cycle-free loaderkit overlay read, a filesystem write to
 //     ~/.config/charly/charly.yml + 4 loader HostBuild seams a unit test must not drive against the
 //     operator's real per-host overlay.
@@ -37,7 +37,7 @@ type fakeVolumeExecutorServiceClient struct {
 
 func (f *fakeVolumeExecutorServiceClient) HostBuild(_ context.Context, in *pb.HostBuildRequest, _ ...grpc.CallOption) (*pb.HostBuildReply, error) {
 	f.calls = append(f.calls, in.GetKind())
-	panic("fakeVolumeExecutorServiceClient: unexpected HostBuild kind " + in.GetKind() + " — loadProjectVolume + saveBundle are both stubbed; a resolveDeployVolumes leg reached HostBuild without a stub")
+	panic("fakeVolumeExecutorServiceClient: unexpected HostBuild kind " + in.GetKind() + " — loadProjectVolume + saveFleet are both stubbed; a resolveDeployVolumes leg reached HostBuild without a stub")
 }
 
 // projectVolumeStub replaces the loadProjectVolume package var for a test — the project-consult leg
@@ -60,36 +60,36 @@ func (s *projectVolumeStub) install(t *testing.T) {
 	t.Cleanup(func() { loadProjectVolume = orig })
 }
 
-// saveBundleStub replaces the package's overlay-write vars for a test. The #55 coneC-dsh
-// seam-collapse moved the per-host overlay write PLUGIN-SIDE (deploykit.SaveBundleConfig over the
+// saveFleetStub replaces the package's overlay-write vars for a test. The #55 coneC-dsh
+// seam-collapse moved the per-host overlay write PLUGIN-SIDE (deploykit.SaveFleetConfig over the
 // loader-threaded Primaries leg + the cycle-free loaderkit overlay read), so a unit test must NOT
 // drive the real write (it would touch the operator's real ~/.config/charly/charly.yml + invoke 4
 // loader HostBuild seams). `called` records whether the persist fired + `lastDC` captures the dc it
 // ran against, so a test asserts a fallback hit was actually PERSISTED, not just held in memory —
-// the regression the old pod-config-save-bundle HostBuild-seam assertion guarded, now asserted at
+// the regression the old pod-config-save-fleet HostBuild-seam assertion guarded, now asserted at
 // the package-var boundary the seam-collapse moved the write to. Mirrors projectVolumeStub (R3).
 //
 // `disk` is the fake on-disk overlay the locked read-modify-write cycle reads and writes. Modelling
 // it as real state — rather than echoing back whatever dc the caller happened to hold — is what
 // makes these tests exercise the post-fix contract: every mutation runs against the CURRENT
 // overlay, so two successive calls accumulate exactly as two concurrent charly processes now do.
-type saveBundleStub struct {
+type saveFleetStub struct {
 	called bool
-	lastDC *deploykit.BundleConfig
-	disk   *deploykit.BundleConfig
+	lastDC *deploykit.FleetConfig
+	disk   *deploykit.FleetConfig
 }
 
-func (s *saveBundleStub) install(t *testing.T) {
+func (s *saveFleetStub) install(t *testing.T) {
 	t.Helper()
-	origSave, origMutate := saveBundle, mutateBundle
-	saveBundle = func(_ context.Context, _ *sdk.Executor, dc *deploykit.BundleConfig) error {
+	origSave, origMutate := saveFleet, mutateFleet
+	saveFleet = func(_ context.Context, _ *sdk.Executor, dc *deploykit.FleetConfig) error {
 		s.called = true
 		s.lastDC = dc
 		return nil
 	}
-	mutateBundle = func(_ context.Context, _ *sdk.Executor, _ string, mutate deploykit.BundleConfigMutator) (*deploykit.BundleConfig, error) {
+	mutateFleet = func(_ context.Context, _ *sdk.Executor, _ string, mutate deploykit.FleetConfigMutator) (*deploykit.FleetConfig, error) {
 		if s.disk == nil {
-			s.disk = &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{}}
+			s.disk = &deploykit.FleetConfig{Fleet: map[string]spec.FleetNode{}}
 		}
 		changed, err := mutate(s.disk)
 		if err != nil {
@@ -101,13 +101,13 @@ func (s *saveBundleStub) install(t *testing.T) {
 		}
 		return s.disk, nil
 	}
-	t.Cleanup(func() { saveBundle, mutateBundle = origSave, origMutate })
+	t.Cleanup(func() { saveFleet, mutateFleet = origSave, origMutate })
 }
 
 // TestResolveDeployVolumes_ProjectDeclaredFallback is the regression test: with NO CLI flag, NO
 // CHARLY_VOLUMES_<BOX> env var, and NO existing per-host overlay entry, a project-declared
 // `volume:` override must (a) be resolved as this run's deployVolumes and (b) be PERSISTED into
-// the (previously-nil) overlay via saveBundle — exactly as a --volume flag would. This FAILS on
+// the (previously-nil) overlay via saveFleet — exactly as a --volume flag would. This FAILS on
 // the pre-fix shape: the old code never called anything past the overlay check, so with a
 // project-only fixture (no overlay, no CLI, no env) deployVolumes stayed empty and check-enc-pod's
 // encrypted bind mount was silently never established.
@@ -115,12 +115,12 @@ func TestResolveDeployVolumes_ProjectDeclaredFallback(t *testing.T) {
 	wantVolumes := []spec.DeployVolume{{Name: "enc-data", Type: "encrypted"}}
 	stub := &projectVolumeStub{vols: wantVolumes}
 	stub.install(t)
-	saveStub := &saveBundleStub{}
+	saveStub := &saveFleetStub{}
 	saveStub.install(t)
 	fake := &fakeVolumeExecutorServiceClient{}
 	ex := sdk.NewInProcExecutor(fake)
 	c := &spec.PodConfigSetupRequest{Box: "check-enc-pod"}
-	var dc *deploykit.BundleConfig
+	var dc *deploykit.FleetConfig
 
 	got, err := resolveDeployVolumes(context.Background(), ex, c, &dc)
 	if err != nil {
@@ -136,15 +136,15 @@ func TestResolveDeployVolumes_ProjectDeclaredFallback(t *testing.T) {
 	if dc == nil {
 		t.Fatal("resolveDeployVolumes() left dc nil — a project-declared hit must seed the overlay (persistDeployVolumes)")
 	}
-	entry, ok := dc.Bundle[spec.DeployKey("check-enc-pod", "")]
+	entry, ok := dc.Fleet[spec.DeployKey("check-enc-pod", "")]
 	if !ok || len(entry.Volume) != 1 || entry.Volume[0].Name != "enc-data" {
 		t.Fatalf("overlay entry.Volume = %+v, want the persisted project-declared volume", entry)
 	}
 	if !saveStub.called {
-		t.Errorf("resolveDeployVolumes() did not call saveBundle — the fallback hit must actually be persisted, not just held in memory")
+		t.Errorf("resolveDeployVolumes() did not call saveFleet — the fallback hit must actually be persisted, not just held in memory")
 	}
 	if saveStub.lastDC == nil {
-		t.Error("saveBundle was called with a nil dc")
+		t.Error("saveFleet was called with a nil dc")
 	}
 }
 
@@ -154,12 +154,12 @@ func TestResolveDeployVolumes_ProjectDeclaredFallback(t *testing.T) {
 func TestResolveDeployVolumes_OverlayWinsOverProject(t *testing.T) {
 	stub := &projectVolumeStub{}
 	stub.install(t)
-	saveStub := &saveBundleStub{}
+	saveStub := &saveFleetStub{}
 	saveStub.install(t)
 	fake := &fakeVolumeExecutorServiceClient{}
 	ex := sdk.NewInProcExecutor(fake)
 	c := &spec.PodConfigSetupRequest{Box: "check-enc-pod"}
-	dc := &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{
+	dc := &deploykit.FleetConfig{Fleet: map[string]spec.FleetNode{
 		spec.DeployKey("check-enc-pod", ""): {
 			Volume:               []spec.DeployVolume{{Name: "already-set", Type: "bind"}},
 			VolumeProjectChecked: true,
@@ -177,7 +177,7 @@ func TestResolveDeployVolumes_OverlayWinsOverProject(t *testing.T) {
 		t.Error("resolveDeployVolumes() consulted the project — the fallback must never fire once VolumeProjectChecked is set")
 	}
 	if saveStub.called {
-		t.Errorf("resolveDeployVolumes() called saveBundle — the overlay-wins path takes an early return, no persist")
+		t.Errorf("resolveDeployVolumes() called saveFleet — the overlay-wins path takes an early return, no persist")
 	}
 	if len(fake.calls) != 0 {
 		t.Errorf("resolveDeployVolumes() HostBuild calls = %v, want none", fake.calls)
@@ -194,12 +194,12 @@ func TestResolveDeployVolumes_OverlayWinsOverProject(t *testing.T) {
 func TestResolveDeployVolumes_AlreadyCheckedVolumeLessSkipsProjectLookup(t *testing.T) {
 	stub := &projectVolumeStub{}
 	stub.install(t)
-	saveStub := &saveBundleStub{}
+	saveStub := &saveFleetStub{}
 	saveStub.install(t)
 	fake := &fakeVolumeExecutorServiceClient{}
 	ex := sdk.NewInProcExecutor(fake)
 	c := &spec.PodConfigSetupRequest{Box: "preempt-vm-taker", Instance: ""}
-	dc := &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{
+	dc := &deploykit.FleetConfig{Fleet: map[string]spec.FleetNode{
 		// Already checked once (the project genuinely declares nothing for this key) AND
 		// carries an unrelated ResolvedPort from an earlier Setup stage — VolumeProjectChecked
 		// is the ONLY signal that must gate the fallback, not the port field's presence.
@@ -217,7 +217,7 @@ func TestResolveDeployVolumes_AlreadyCheckedVolumeLessSkipsProjectLookup(t *test
 		t.Error("resolveDeployVolumes() consulted the project — a deploy with VolumeProjectChecked=true must never re-consult it")
 	}
 	if saveStub.called {
-		t.Errorf("resolveDeployVolumes() called saveBundle — the already-checked path takes an early return, no persist")
+		t.Errorf("resolveDeployVolumes() called saveFleet — the already-checked path takes an early return, no persist")
 	}
 	if len(fake.calls) != 0 {
 		t.Errorf("resolveDeployVolumes() HostBuild calls = %v, want none", fake.calls)
@@ -226,7 +226,7 @@ func TestResolveDeployVolumes_AlreadyCheckedVolumeLessSkipsProjectLookup(t *test
 
 // TestResolveDeployVolumes_PortedDeployProjectVolumeAppliedOnFirstConfig is the round-3 BLOCKING
 // regression test (RCA'd 2026-07-24, team-lead): config_setup.go's port-resolution block runs
-// BEFORE resolveDeployVolumes and writes dc.Bundle[key] (ResolvedPort) the moment a deploy has
+// BEFORE resolveDeployVolumes and writes dc.Fleet[key] (ResolvedPort) the moment a deploy has
 // ANY container port — on the FIRST config of a PORTED deploy this creates an overlay entry with
 // VolumeProjectChecked still false (never explicitly set). The round-2 fix's `!ok` discriminator
 // treated that entry as "already configured" and skipped the project fallback, silently DROPPING
@@ -237,13 +237,13 @@ func TestResolveDeployVolumes_AlreadyCheckedVolumeLessSkipsProjectLookup(t *test
 func TestResolveDeployVolumes_PortedDeployProjectVolumeAppliedOnFirstConfig(t *testing.T) {
 	stub := &projectVolumeStub{vols: []spec.DeployVolume{{Name: "enc-data", Type: "encrypted"}}}
 	stub.install(t)
-	saveStub := &saveBundleStub{}
+	saveStub := &saveFleetStub{}
 	saveStub.install(t)
 	fake := &fakeVolumeExecutorServiceClient{}
 	ex := sdk.NewInProcExecutor(fake)
 	c := &spec.PodConfigSetupRequest{Box: "check-enc-pod"}
 	key := spec.DeployKey("check-enc-pod", "")
-	dc := &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{
+	dc := &deploykit.FleetConfig{Fleet: map[string]spec.FleetNode{
 		// Simulates the port-resolution block's write, which runs BEFORE resolveDeployVolumes
 		// in the real config_setup.go sequence: the key exists, VolumeProjectChecked is the
 		// zero value (never set), Volume is empty.
@@ -264,7 +264,7 @@ func TestResolveDeployVolumes_PortedDeployProjectVolumeAppliedOnFirstConfig(t *t
 	if !stub.called {
 		t.Error("resolveDeployVolumes() did not consult the project — a ported deploy's first config must still consult it")
 	}
-	entry, ok := dc.Bundle[key]
+	entry, ok := dc.Fleet[key]
 	if !ok {
 		t.Fatal("overlay entry vanished")
 	}
@@ -275,7 +275,7 @@ func TestResolveDeployVolumes_PortedDeployProjectVolumeAppliedOnFirstConfig(t *t
 		t.Errorf("entry.ResolvedPort = %v, want the pre-existing resolved port left untouched", entry.ResolvedPort)
 	}
 	if !saveStub.called {
-		t.Error("resolveDeployVolumes() did not call saveBundle — the project-declared volume must be persisted")
+		t.Error("resolveDeployVolumes() did not call saveFleet — the project-declared volume must be persisted")
 	}
 }
 
@@ -284,12 +284,12 @@ func TestResolveDeployVolumes_PortedDeployProjectVolumeAppliedOnFirstConfig(t *t
 func TestResolveDeployVolumes_CLIFlagWinsOverProject(t *testing.T) {
 	stub := &projectVolumeStub{}
 	stub.install(t)
-	saveStub := &saveBundleStub{}
+	saveStub := &saveFleetStub{}
 	saveStub.install(t)
 	fake := &fakeVolumeExecutorServiceClient{}
 	ex := sdk.NewInProcExecutor(fake)
 	c := &spec.PodConfigSetupRequest{Box: "check-enc-pod", VolumeFlag: []string{"data:bind:/tmp/x"}}
-	var dc *deploykit.BundleConfig
+	var dc *deploykit.FleetConfig
 
 	got, err := resolveDeployVolumes(context.Background(), ex, c, &dc)
 	if err != nil {
@@ -302,7 +302,7 @@ func TestResolveDeployVolumes_CLIFlagWinsOverProject(t *testing.T) {
 		t.Error("resolveDeployVolumes() consulted the project — a CLI flag must short-circuit before the project fallback")
 	}
 	if saveStub.called {
-		t.Errorf("resolveDeployVolumes() called saveBundle — the CLI-flag path takes an early return, no persist")
+		t.Errorf("resolveDeployVolumes() called saveFleet — the CLI-flag path takes an early return, no persist")
 	}
 	if len(fake.calls) != 0 {
 		t.Errorf("resolveDeployVolumes() HostBuild calls = %v, want none", fake.calls)
@@ -319,12 +319,12 @@ func TestResolveDeployVolumes_CLIFlagWinsOverProject(t *testing.T) {
 func TestResolveDeployVolumes_NoProjectDeclaration(t *testing.T) {
 	stub := &projectVolumeStub{}
 	stub.install(t)
-	saveStub := &saveBundleStub{}
+	saveStub := &saveFleetStub{}
 	saveStub.install(t)
 	fake := &fakeVolumeExecutorServiceClient{}
 	ex := sdk.NewInProcExecutor(fake)
 	c := &spec.PodConfigSetupRequest{Box: "no-volumes-here"}
-	var dc *deploykit.BundleConfig
+	var dc *deploykit.FleetConfig
 
 	got, err := resolveDeployVolumes(context.Background(), ex, c, &dc)
 	if err != nil {
@@ -336,7 +336,7 @@ func TestResolveDeployVolumes_NoProjectDeclaration(t *testing.T) {
 	if dc == nil {
 		t.Fatal("resolveDeployVolumes() left dc nil — the checked-marker must be persisted even when the project declares nothing")
 	}
-	entry, ok := dc.Bundle[spec.DeployKey("no-volumes-here", "")]
+	entry, ok := dc.Fleet[spec.DeployKey("no-volumes-here", "")]
 	if !ok || !entry.VolumeProjectChecked {
 		t.Fatalf("overlay entry = %+v (ok=%v), want VolumeProjectChecked=true persisted", entry, ok)
 	}
@@ -344,7 +344,7 @@ func TestResolveDeployVolumes_NoProjectDeclaration(t *testing.T) {
 		t.Errorf("entry.Volume = %+v, want empty", entry.Volume)
 	}
 	if !saveStub.called {
-		t.Error("resolveDeployVolumes() did not call saveBundle — the checked-marker was never persisted")
+		t.Error("resolveDeployVolumes() did not call saveFleet — the checked-marker was never persisted")
 	}
 }
 
@@ -353,18 +353,18 @@ func TestResolveDeployVolumes_NoProjectDeclaration(t *testing.T) {
 func TestResolveDeployVolumes_ProjectHostBuildErrorPropagates(t *testing.T) {
 	stub := &projectVolumeStub{err: errors.New("no host reverse channel")}
 	stub.install(t)
-	saveStub := &saveBundleStub{}
+	saveStub := &saveFleetStub{}
 	saveStub.install(t)
 	fake := &fakeVolumeExecutorServiceClient{}
 	ex := sdk.NewInProcExecutor(fake)
 	c := &spec.PodConfigSetupRequest{Box: "check-enc-pod"}
-	var dc *deploykit.BundleConfig
+	var dc *deploykit.FleetConfig
 
 	if _, err := resolveDeployVolumes(context.Background(), ex, c, &dc); err == nil {
 		t.Fatal("resolveDeployVolumes() with a project-resolution error: want an error, got nil")
 	}
 	if saveStub.called {
-		t.Error("resolveDeployVolumes() called saveBundle on a project-resolution error — the error must short-circuit before persist")
+		t.Error("resolveDeployVolumes() called saveFleet on a project-resolution error — the error must short-circuit before persist")
 	}
 }
 
@@ -381,13 +381,13 @@ func TestResolveDeployVolumes_ProjectHostBuildErrorPropagates(t *testing.T) {
 func TestConfigFlow_PortResolutionThenResolveDeployVolumes_ProjectVolumeStillApplied(t *testing.T) {
 	stub := &projectVolumeStub{vols: []spec.DeployVolume{{Name: "enc-data", Type: "encrypted"}}}
 	stub.install(t)
-	saveStub := &saveBundleStub{}
+	saveStub := &saveFleetStub{}
 	saveStub.install(t)
 	fake := &fakeVolumeExecutorServiceClient{}
 	ex := sdk.NewInProcExecutor(fake)
 	c := &spec.PodConfigSetupRequest{Box: "check-enc-pod"}
 	key := spec.DeployKey(c.Box, c.Instance)
-	var dc *deploykit.BundleConfig
+	var dc *deploykit.FleetConfig
 
 	// --- Stage 1: run config_setup.go's port-resolution block (runConfig, the lines immediately
 	// preceding the resolveDeployVolumes call) through its ACTUAL function, against a brand-new
@@ -399,7 +399,7 @@ func TestConfigFlow_PortResolutionThenResolveDeployVolumes_ProjectVolumeStillApp
 	}
 	// Confirm stage 1 alone already reproduces the hazard's precondition: the overlay key now
 	// exists, with an empty Volume and VolumeProjectChecked unset.
-	preVolumeEntry, ok := dc.Bundle[key]
+	preVolumeEntry, ok := dc.Fleet[key]
 	if !ok {
 		t.Fatal("port-resolution block did not create the overlay entry — test setup is wrong")
 	}
@@ -421,7 +421,7 @@ func TestConfigFlow_PortResolutionThenResolveDeployVolumes_ProjectVolumeStillApp
 	if !stub.called {
 		t.Error("resolveDeployVolumes() did not consult the project after the port block ran")
 	}
-	postEntry, ok := dc.Bundle[key]
+	postEntry, ok := dc.Fleet[key]
 	if !ok {
 		t.Fatal("overlay entry vanished after resolveDeployVolumes")
 	}
@@ -432,6 +432,6 @@ func TestConfigFlow_PortResolutionThenResolveDeployVolumes_ProjectVolumeStillApp
 		t.Errorf("entry.ResolvedPort = %v, want stage 1's resolved port (%v) preserved", postEntry.ResolvedPort, preVolumeEntry.ResolvedPort)
 	}
 	if !saveStub.called {
-		t.Error("resolveDeployVolumes() did not call saveBundle — the project-declared volume must be persisted after the port block ran")
+		t.Error("resolveDeployVolumes() did not call saveFleet — the project-declared volume must be persisted after the port block ran")
 	}
 }

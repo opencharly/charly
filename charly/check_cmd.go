@@ -18,7 +18,7 @@ import (
 // the new "check-load-plugins" seam (host_build_check_load_plugins.go). It STAYS core because it
 // calls loadProjectPlugins directly, the same core-private registry-mutating mechanism
 // loadDeployPlugins drives (#55 W3 B3 — moving it would have the plugin calling into itself). The
-// external `target: local` deploy's own --verify path RELOCATED to candy/plugin-bundle's
+// external `target: local` deploy's own --verify path RELOCATED to candy/plugin-fleet's
 // verify_local.go (#55 W3 B3 remainder) — it no longer lives here.
 
 // The `charly check` exit-code contract (2 = checks failed, 3 = prereq skip) lives in
@@ -80,16 +80,16 @@ func resolveCheckRunnerContext(box, dir string, cfg *spec.Config) checkRunnerCon
 // header on loadDeployPlugins for the FLOOR-M clause. resolveCheckRunnerContext (below) still calls
 // deployNodePluginContext directly — same package, different file, zero behavior change.
 
-// checkLocalDeployScope/runLocalDeployScopePlan relocated to candy/plugin-bundle (#55 W3 B3,
+// checkLocalDeployScope/runLocalDeployScopePlan relocated to candy/plugin-fleet (#55 W3 B3,
 // verify_local.go's verifyLocalDeployScope/localDeployScopePlan): the "target: local --verify"
-// path they served (charly/unified_targets.go's Add) already dispatches to candy/plugin-bundle on
+// path they served (charly/unified_targets.go's Add) already dispatches to candy/plugin-fleet on
 // EVERY call with opts.Verify/req.HasLifecycle already on the wire (spec.LifecycleOptsFromEmit),
 // so the check-verify pass now runs INSIDE that same dispatch, over the SAME venue, in the SAME
 // RPC round-trip — reaching command:check via a direct InvokeProvider(command,"check") call
 // instead of core's former in-proc reverse-channel plumbing (redundant with the sanctioned wire
 // shape — command:check's own verifyChecksForHost re-materializes its executor purely from the
 // request body's Venue field, confirmed by reading candy/plugin-check/verify_checks.go). No new
-// seam was needed for the template-plan lookup either: candy/plugin-bundle's OWN node_resolve.go
+// seam was needed for the template-plan lookup either: candy/plugin-fleet's OWN node_resolve.go
 // already carried lookupLocalTemplate, a fully plugin-native resolver (the resolved-project
 // envelope + a direct InvokeProvider(kind,"local") call, no LoadUnified) — reusing it (R3) is what
 // finally makes the former core findLocalSpec/resolveLocalRefFor/namespace.go fully dead; all
@@ -97,7 +97,7 @@ func resolveCheckRunnerContext(box, dir string, cfg *spec.Config) checkRunnerCon
 
 // dispatchVerifyChecks (the core-side function that drove command:check's OpVerifyChecks in-proc)
 // is GONE (#55 W3 B3 remainder): its production callers are all dead now — verify_local.go
-// (candy/plugin-bundle) reaches command:check via a direct sdk.Executor.InvokeProvider call
+// (candy/plugin-fleet) reaches command:check via a direct sdk.Executor.InvokeProvider call
 // instead (a peer plugin, not core), and runUnifiedTargetChecks/Test (unified_targets.go) had
 // zero real callers of their own. The function's exact body
 // relocated to checkrun_helpers_test.go — its only remaining role is exercising the production

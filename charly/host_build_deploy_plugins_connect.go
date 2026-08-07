@@ -8,9 +8,9 @@ import (
 )
 
 // host_build_deploy_plugins_connect.go — the "deploy-plugins-connect" F10 host-builder, the ONE
-// host-only PREAMBLE the K1-LOADER RELOCATION witness (Unit D) leaves in place. candy/plugin-bundle
+// host-only PREAMBLE the K1-LOADER RELOCATION witness (Unit D) leaves in place. candy/plugin-fleet
 // now DRIVES loaderkit.LoadUnified ITSELF (plugin-side, over the reverse-channel LoaderExecutor —
-// execLoaderExecutor + the "loader-*" host legs) to resolve the `charly bundle add` deploy tree, so
+// execLoaderExecutor + the "loader-*" host legs) to resolve the `charly fleet add` deploy tree, so
 // the host no longer runs a host-side merged-tree read for the walk. This seam only (a) connects the
 // deployment's out-of-tree plugin candies (loadDeployPlugins — registry-coupled, a core Mechanism)
 // BEFORE ResolveTarget can route to an external substrate, and (b) returns the project dir

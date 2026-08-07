@@ -3,7 +3,7 @@
 // It is the vm-substrate sibling of candy/plugin-deploy-local: charly host-builds it and
 // serves it OUT-OF-PROCESS over go-plugin gRPC (LocalTransport), then the generic
 // pluginDeployTarget (charly core, S3b — see CHANGELOG/2026.203.0212.md for the migration
-// this replaced) reaches it via candy/plugin-bundle's Invoke(OpDeployDispatch) →
+// this replaced) reaches it via candy/plugin-fleet's Invoke(OpDeployDispatch) →
 // sdk.Executor.InvokeProvider, which Invokes it (OpExecute) with the deployment's InstallPlan
 // VIEWS + a venue descriptor, and the host's executor served on the broker — for vm the GUEST
 // SSHExecutor THIS PLUGIN's OWN venue lifecycle (lifecycle.go's PrepareVenue) built after
@@ -26,7 +26,7 @@
 // executor's transport. {{.Home}} is resolved to the GUEST home host-side (the executor's
 // ResolveHome targets the guest), so this plugin ships no substrate payload. It returns a
 // DeployReply carrying the combined teardown ops the host records in the install ledger and
-// replays at `charly bundle del` (record-and-replay). The host's vm lifecycle hook owns the
+// replays at `charly fleet del` (record-and-replay). The host's vm lifecycle hook owns the
 // VM lifecycle (boot/destroy/console/ssh + the nested pod-in-guest orchestration); this
 // plugin owns ONLY the plan WALK.
 //

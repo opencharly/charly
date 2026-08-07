@@ -9,7 +9,7 @@ package substratekind
 //   - the PROJECT deploy tree via InvokeProvider("build","project") — the SAME
 //     seam status_k8s.go uses (proven live by the K5 lane-A landing).
 //   - the PER-MACHINE overlay (~/.config/charly/charly.yml) via
-//     deploykit.LoadBundleConfig() DIRECTLY — no host round-trip at all, so
+//     deploykit.LoadFleetConfig() DIRECTLY — no host round-trip at all, so
 //     "per-machine state" does NOT block this move (contra the original
 //     K5-gated framing on this file's charly-core predecessor).
 //   - its own android substrate-template resolve (resolve.go, in-package,
@@ -72,10 +72,10 @@ func collectAndroidStatus(ctx context.Context, req spec.SubstrateStatusRequest) 
 	}
 	// Best-effort: absence of a per-machine overlay is normal (mirrors
 	// newFlatCollector's own graceful handling of a missing/invalid charly.yml,
-	// status_flat.go, same package). Routed through the loadBundleConfig seam helper
+	// status_flat.go, same package). Routed through the loadFleetConfig seam helper
 	// (status_flat.go) — bed-robustness batch item 5 — instead of calling
-	// deploykit.LoadBundleConfig() directly (placement-dependent silent-no-op out of process).
-	perMachine, _ := loadBundleConfig(ctx)
+	// deploykit.LoadFleetConfig() directly (placement-dependent silent-no-op out of process).
+	perMachine, _ := loadFleetConfig(ctx)
 
 	nodes := collectAndroidDeployNodes(rp, perMachine)
 	if len(nodes) == 0 {
@@ -93,28 +93,28 @@ func collectAndroidStatus(ctx context.Context, req spec.SubstrateStatusRequest) 
 // per-machine overlay (local wins per key, mirroring the merged-tree read's
 // MergeDeployConfigs precedence), then pre-order walking every root so nested
 // devices are discovered with their full dotted path.
-func collectAndroidDeployNodes(rp *spec.ResolvedProject, perMachine *deploykit.BundleConfig) []androidDeployNode {
-	projectBundle := make(map[string]deploykit.BundleNode, len(rp.Deploy))
+func collectAndroidDeployNodes(rp *spec.ResolvedProject, perMachine *deploykit.FleetConfig) []androidDeployNode {
+	projectFleet := make(map[string]deploykit.FleetNode, len(rp.Deploy))
 	for name, node := range rp.Deploy {
 		if node != nil {
-			projectBundle[name] = deploykit.BundleNode(*node)
+			projectFleet[name] = deploykit.FleetNode(*node)
 		}
 	}
-	merged := deploykit.MergeDeployConfigs(&deploykit.BundleConfig{Bundle: projectBundle}, perMachine)
-	if merged == nil || merged.Bundle == nil {
+	merged := deploykit.MergeDeployConfigs(&deploykit.FleetConfig{Fleet: projectFleet}, perMachine)
+	if merged == nil || merged.Fleet == nil {
 		return nil
 	}
 
-	names := make([]string, 0, len(merged.Bundle))
-	for name := range merged.Bundle {
+	names := make([]string, 0, len(merged.Fleet))
+	for name := range merged.Fleet {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 
 	var out []androidDeployNode
 	for _, name := range names {
-		root := merged.Bundle[name]
-		_ = deploykit.BundleWalkPreOrder(&root, name, func(path string, node *deploykit.BundleNode) error {
+		root := merged.Fleet[name]
+		_ = deploykit.FleetWalkPreOrder(&root, name, func(path string, node *deploykit.FleetNode) error {
 			if node != nil && node.Target == "android" {
 				n := spec.Deploy(*node)
 				out = append(out, androidDeployNode{path: path, node: &n})
@@ -345,12 +345,12 @@ func resolveContainer(ctx context.Context, box string) (engine, name string, err
 
 // deployEngineForBox mirrors charly/engine.go's ResolveBoxEngineForDeploy — the per-machine
 // deploy config's own engine override wins, falling back to the global runtime engine. Routed
-// through the loadBundleConfig seam helper (status_flat.go, bed-robustness batch item 5) instead
+// through the loadFleetConfig seam helper (status_flat.go, bed-robustness batch item 5) instead
 // of deploykit.LoadDeployConfigForRead (which itself calls the placement-dependent
-// deploykit.LoadBundleConfig() under the hood — out-of-process this silently degrades to "no
+// deploykit.LoadFleetConfig() under the hood — out-of-process this silently degrades to "no
 // per-machine override" every time, never surfacing the genuine engine override).
 func deployEngineForBox(ctx context.Context, boxName, globalEngine string) string {
-	dc, err := loadBundleConfig(ctx)
+	dc, err := loadFleetConfig(ctx)
 	if err != nil || dc == nil {
 		return globalEngine
 	}

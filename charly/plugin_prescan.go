@@ -84,7 +84,7 @@ var (
 
 // recognizedStructuralKind reports whether `word` resolves to a CONNECTED provider that decodes a
 // STRUCTURAL entity (F5) — a plugin kind whose ops.OpLoad reply is a spec.Deploy member tree the host
-// folds into uf.Bundle. Precisely EXCLUDES FLAT plugin kinds and the tier-1 kinds (distro/builder/
+// folds into uf.Fleet. Precisely EXCLUDES FLAT plugin kinds and the tier-1 kinds (distro/builder/
 // init/target/agent/module/sidecar/package-group), which are registered providers but NOT structural.
 func recognizedStructuralKind(word string) bool {
 	prov, ok := providerRegistry.ResolveKind(word)
@@ -279,7 +279,7 @@ func recognizedDeploySubstrate(word string) bool {
 //     serves it. (A group's Target is "" and never matches.)
 //
 // A true result makes the bed runner treat the deploy like a kind:local deploy (no
-// image build, no config/start, bundle-del teardown). This classification is keyed on
+// image build, no config/start, fleet-del teardown). This classification is keyed on
 // the ROOT deploy node: the android R10 bed is a POD root with NESTED target:android
 // children — its pod root is NOT externalized (returns false → normal image-build +
 // charly start), while each nested android child resolves to the external plugin

@@ -18,7 +18,7 @@ import (
 // via package vars (resolveVmEntityForForwards, hostConfigResolveVmState — k3s_post.go) instead
 // of faked through HostBuild — a single HostBuild-kind stub cannot canned-reply the multi-leg
 // loaderkit.LoadUnifiedViaExecutor chain the real loaderkit helpers now drive (mirrors
-// candy/plugin-deploy-pod's loadProjectVolume/saveBundle stub pattern, R3). This is enough to
+// candy/plugin-deploy-pod's loadProjectVolume/saveFleet stub pattern, R3). This is enough to
 // drive deployVMForwards end-to-end without a real host reverse-channel broker.
 type fakeExecutorServiceClient struct {
 	projectDir string

@@ -13,7 +13,7 @@ import (
 // (the empty-project contract) and charly/resolved_project_host_test.go's
 // TestResolvedProject_SeamRoundTrip (the seam-consumer round trip lived host-side; the seam itself
 // is now this word). The full-project scan/vocab/box-resolve path is exercised live by the R10
-// exploratory run (box inspect / status / check-project / bundle resolve against a real project) —
+// exploratory run (box inspect / status / check-project / fleet resolve against a real project) —
 // unit-testing it here would require faking the entire `loader-*`/`buildengine-*`/`kind:*` HostBuild
 // leg family this word's LoadUnified/scan/vocab calls dial, which the R10 bed proves end-to-end
 // instead (cutover-policy: pick the gate that exercises the change).

@@ -2,7 +2,7 @@ package main
 
 // deploy_tree.go — the recursive tree walker for schema v2 deployments.
 //
-// Every deployment is a BundleNode that may carry `children:`.
+// Every deployment is a FleetNode that may carry `children:`.
 // This file owns the walk-and-dispatch logic that turns the tree into
 // a sequence of per-target Emit() calls with the correct ParentExec
 // threaded through.

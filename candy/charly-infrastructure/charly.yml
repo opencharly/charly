@@ -155,7 +155,7 @@ keepassxc-keyring-skill:
             
             1. `~/.config/keepassxc/keepassxc.ini` — writes `[FdoSecrets] Enabled=true` block (and three plugin-behavior toggles).
             2. `~/.config/autostart/keepassxc.desktop` — XDG autostart entry that launches KeePassXC on every session login.
-            3. `~/.config/autostart/<competitor>.desktop` — for each known competing Secret Service daemon (`gnome-keyring-secrets`, `gnome-keyring-ssh`, `gnome-keyring-pkcs11`, `org.kde.kwalletd[5,6]`, `kwalletd[5,6]`), writes an override with `Hidden=true` + `X-GNOME-Autostart-enabled=false`. Per the XDG spec, user-level overrides take precedence over `/etc/xdg/autostart/`, so the system package stays untouched and the change is fully reversible by `charly bundle del`.
+            3. `~/.config/autostart/<competitor>.desktop` — for each known competing Secret Service daemon (`gnome-keyring-secrets`, `gnome-keyring-ssh`, `gnome-keyring-pkcs11`, `org.kde.kwalletd[5,6]`, `kwalletd[5,6]`), writes an override with `Hidden=true` + `X-GNOME-Autostart-enabled=false`. Per the XDG spec, user-level overrides take precedence over `/etc/xdg/autostart/`, so the system package stays untouched and the change is fully reversible by `charly fleet del`.
             4. `systemctl --user disable --now <unit>` for the same competitors' systemd user units (`gnome-keyring-daemon.socket`, `gnome-keyring-daemon.service`, the kwallet service variants). Idempotent, silent if a unit doesn't exist.
             5. `~/.gnupg/gpg-agent.conf` — `pinentry-program /usr/bin/pinentry-qt` (the libsecret-linked pinentry that talks to KeePassXC for GPG passphrase storage).
             6. `~/.config/environment.d/ssh-agent.conf` — exports `SSH_AUTH_SOCK="${XDG_RUNTIME_DIR}/ssh-agent.socket"` for systemd-bootstrapped sessions.
@@ -197,7 +197,7 @@ keepassxc-keyring-skill:
             - `pinentry-qt-installed` — at least one of `pinentry-qt`, `pinentry-qt5`, `pinentry-qt6` resolvable on PATH.
             - `secret-tool-installed` — `secret-tool` resolvable on PATH.
             
-            Deploy-scope (run on the host post-`charly bundle add` against the running user's HOME):
+            Deploy-scope (run on the host post-`charly fleet add` against the running user's HOME):
             
             - `keepassxc-ini-fdosecrets` — `[FdoSecrets] Enabled=true` written.
             - `keepassxc-autostart` — autostart .desktop file readable.

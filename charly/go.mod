@@ -14,7 +14,6 @@ require (
 	github.com/opencharly/charly/candy/plugin-box v0.0.0-20260729064511-fdae3cc3d4dd
 	github.com/opencharly/charly/candy/plugin-build v0.0.0-20260729064511-fdae3cc3d4dd
 	github.com/opencharly/charly/candy/plugin-builder v0.0.0-20260729064511-fdae3cc3d4dd
-	github.com/opencharly/charly/candy/plugin-bundle v0.0.0-20260729064511-fdae3cc3d4dd
 	github.com/opencharly/charly/candy/plugin-candy v0.0.0-20260729064511-fdae3cc3d4dd
 	github.com/opencharly/charly/candy/plugin-candy-kind v0.0.0-20260729064511-fdae3cc3d4dd
 	github.com/opencharly/charly/candy/plugin-check v0.0.0-20260729064511-fdae3cc3d4dd
@@ -81,13 +80,12 @@ require (
 	github.com/clipperhouse/displaywidth v0.11.0 // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
 	github.com/containerd/stargz-snapshotter/estargz v0.18.1 // indirect
+	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/digitalocean/go-libvirt v0.0.0-20260217163227-273eaa321819 // indirect
 	github.com/docker/cli v29.0.3+incompatible // indirect
 	github.com/docker/distribution v2.8.3+incompatible // indirect
 	github.com/docker/docker-credential-helpers v0.9.3 // indirect
-	github.com/fsnotify/fsnotify v1.10.1 // indirect
 	github.com/google/go-containerregistry v0.20.7 // indirect
-	github.com/google/renameio/v2 v2.0.2 // indirect
 	github.com/kata-containers/govmm v0.0.0-20220119175834-88960a15dacd // indirect
 	github.com/klauspost/compress v1.18.1 // indirect
 	github.com/lucasb-eyer/go-colorful v1.4.0 // indirect
@@ -96,6 +94,7 @@ require (
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
+	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/vbatts/tar-split v0.12.2 // indirect
@@ -119,7 +118,7 @@ require (
 	github.com/mattn/go-isatty v0.0.17 // indirect
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	github.com/oklog/run v1.1.0 // indirect
-	github.com/opencharly/spec v0.2026217.301
+	github.com/opencharly/spec v0.2026219.1057
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/protocolbuffers/txtpbfmt v0.0.0-20260217160748-a481f6a22f94 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect

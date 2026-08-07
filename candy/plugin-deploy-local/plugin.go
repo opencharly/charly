@@ -18,7 +18,7 @@
 //     drives over RunHostStep, folding in the host-returned reverse ops.
 //
 // It returns a DeployReply carrying the combined teardown ops the host records in the
-// install ledger and replays at `charly bundle del` (record-and-replay). The deploy-class
+// install ledger and replays at `charly fleet del` (record-and-replay). The deploy-class
 // production sibling of candy/plugin-example-deploy (the F2/F3 witness).
 //
 // Dual-placement by construction: the SAME NewProvider()/NewMeta() compile INTO charly

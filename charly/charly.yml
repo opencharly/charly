@@ -79,7 +79,7 @@ compiled_plugins:
     - plugin-doctor
     - plugin-feature
     - plugin-vm
-    - plugin-bundle
+    - plugin-fleet
     - plugin-pod
     - plugin-alias
     - plugin-box

@@ -24,13 +24,13 @@ func TestPluginResolveVmTarget_LeafVmUnderNonVmParent(t *testing.T) {
 	// plugin's nodeTraits reads ONLY .Descent.Venue, never a Target-derived fallback (that
 	// synthetic-node fallback is core-only, for un-stamped nodes built outside the loader; this
 	// package never builds one). So a hand-built test tree must stamp .Descent itself, mirroring
-	// what the host's stampBundleDescents pass would produce for the given Target.
+	// what the host's stampFleetDescents pass would produce for the given Target.
 	sshDescent := &spec.DescentDescriptor{Venue: "ssh"}
-	tree := map[string]spec.BundleNode{
-		"web-pod": {Target: "pod", Descent: &spec.DescentDescriptor{Venue: "container"}, Children: map[string]*spec.BundleNode{
+	tree := map[string]spec.FleetNode{
+		"web-pod": {Target: "pod", Descent: &spec.DescentDescriptor{Venue: "container"}, Children: map[string]*spec.FleetNode{
 			"web-pod-vm": {Target: "vm", From: "eval-vm", Descent: sshDescent},
 		}},
-		"k3s-vm": {Target: "vm", From: "k3s-vm-entity", Descent: sshDescent, Children: map[string]*spec.BundleNode{
+		"k3s-vm": {Target: "vm", From: "k3s-vm-entity", Descent: sshDescent, Children: map[string]*spec.FleetNode{
 			"inner-app": {Target: "local", Descent: &spec.DescentDescriptor{Venue: "host"}},
 		}},
 	}

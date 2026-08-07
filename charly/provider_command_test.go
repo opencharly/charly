@@ -187,7 +187,7 @@ func TestCommandCompileIn_CmdInProc(t *testing.T) {
 // this one, discriminated by req.Op).
 // Setup/Remove dispatch deploy:pod's sdk.OpConfigSetup/OpConfigRemove (the P13-KERNEL
 // direction-flip) peer-to-peer via InvokeProvider (the "pod-config-setup"/"pod-config-remove"
-// host-build seams are DELETED, K-wave 2 cone R3 — the SAME pattern candy/plugin-bundle/
+// host-build seams are DELETED, K-wave 2 cone R3 — the SAME pattern candy/plugin-fleet/
 // from_box_pod.go proves for the source-less from-box path). command:config's other four leaves —
 // Status/Mount/Unmount/Passwd — no longer route through core at all (wave γ): candy/plugin-pod's
 // enc_cmd.go dispatches verb:enc/verb:credential DIRECTLY via InvokeProvider, the same

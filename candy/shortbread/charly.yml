@@ -2,10 +2,10 @@ shortbread:
     candy:
         version: 2026.144.1443
         description: |
-            Generate Shortbread-schema OSM vector tiles with a source-built Tilemaker plus the official shortbread config bundle.
+            Generate Shortbread-schema OSM vector tiles with a source-built Tilemaker plus the official shortbread config fleet.
             Builds systemed/tilemaker (C++/Lua) from source — there is no Arch/Fedora
             package and no release binary — and installs it at /usr/local/bin/tilemaker.
-            Clones the official shortbread-tiles/shortbread-tilemaker bundle (the
+            Clones the official shortbread-tiles/shortbread-tilemaker fleet (the
             process.lua per-feature classifier + the config.json layer/zoom schema)
             to /opt/shortbread-tilemaker with its .git history stripped. With both in
             place the notebook DAG can convert an OSM PBF into monaco-shortbread.pmtiles
@@ -111,7 +111,7 @@ shortbread:
               file:
                 file: /opt/shortbread-tilemaker/config.json
                 exists: true
-            - check: the cloned bundle has its .git history stripped to keep the image small
+            - check: the cloned fleet has its .git history stripped to keep the image small
               file:
                 file: /opt/shortbread-tilemaker/.git
                 exists: false

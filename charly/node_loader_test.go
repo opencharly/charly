@@ -12,7 +12,7 @@ import (
 
 // TestLoadUnified_NodeForm proves the loader parses a unified node-form charly.yml
 // end-to-end: kit.ClassifyDoc → kit.DocShapeNode → validate-before-execute (#NodeDoc) →
-// normalizeNodeInto → the projected spec.UnifiedFile maps. Candy + box + a bundle group
+// normalizeNodeInto → the projected spec.UnifiedFile maps. Candy + box + a fleet group
 // with two alongside pod members + an inline cross-member check.
 func TestLoadUnified_NodeForm(t *testing.T) {
 	dir := t.TempDir()
@@ -58,9 +58,9 @@ shop:
 	} else if coder.Base != "fedora" {
 		t.Errorf("box coder base = %q", coder.Base)
 	}
-	shop, ok := uf.Bundle["shop"]
+	shop, ok := uf.Fleet["shop"]
 	if !ok {
-		t.Fatalf("bundle shop not loaded; deploys=%v", deployKeys(uf.Bundle))
+		t.Fatalf("fleet shop not loaded; deploys=%v", deployKeys(uf.Fleet))
 	}
 	if len(shop.Members) != 2 || shop.Members["web"] == nil || shop.Members["cache"] == nil {
 		t.Fatalf("shop members wrong: %v", deployKeys2(shop.Members))
@@ -68,8 +68,8 @@ shop:
 	if shop.Members["web"].Image != "coder" {
 		t.Errorf("web member box=%q, want coder", shop.Members["web"].Image)
 	}
-	// Post-cutover: flattenBundleVenues HOISTS the member's step into the root
-	// bundle Plan, stamping venue from tree position, and CLEARS the member's own
+	// Post-cutover: flattenFleetVenues HOISTS the member's step into the root
+	// fleet Plan, stamping venue from tree position, and CLEARS the member's own
 	// Plan. So the web member's step now lives in shop.Plan with venue "web".
 	if len(shop.Members["web"].Plan) != 0 {
 		t.Errorf("web member Plan should be cleared after hoist, got %d", len(shop.Members["web"].Plan))
@@ -149,14 +149,14 @@ func boxMapOf(m map[string]spec.BoxConfig) spec.BoxMap {
 	}
 	return out
 }
-func deployKeys(m map[string]spec.BundleNode) []string {
+func deployKeys(m map[string]spec.FleetNode) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {
 		out = append(out, k)
 	}
 	return out
 }
-func deployKeys2(m map[string]*spec.BundleNode) []string {
+func deployKeys2(m map[string]*spec.FleetNode) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {
 		out = append(out, k)

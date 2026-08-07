@@ -77,14 +77,14 @@ func testReadCandyRecord(paths *testLedgerPaths, layer string) (*spec.CandyRecor
 // external DEPLOY plugin (candy/plugin-example-deploy, its own Go module) is
 // host-built and served OUT-OF-PROCESS over go-plugin gRPC (LocalTransport, which
 // carries the GRPCBroker), routed through ResolveTarget → pluginDeployTarget (S3b —
-// the thin data-only proxy dispatching to candy/plugin-bundle's Invoke(OpDeployDispatch),
+// the thin data-only proxy dispatching to candy/plugin-fleet's Invoke(OpDeployDispatch),
 // which in turn reaches the substrate provider via its own sdk.Executor.InvokeProvider),
 // and driven through Add → Update → Del:
 //
 //   - Add Invokes the provider (ops.OpExecute) with the host's ExecutorService on the
 //     broker; the plugin dials back through the SDK (ExecutorFromInvoke) and writes
 //     TWO markers on the host venue, then RETURNS a DeployReply whose plugin-script
-//     reverse op + record candy/plugin-bundle persists in the (temp) install ledger;
+//     reverse op + record candy/plugin-fleet persists in the (temp) install ledger;
 //   - Update re-Invokes idempotently (markers stay, reverse op not duplicated);
 //   - Del replays the RECORDED plugin-script reverse op (markers gone, records deleted).
 //
@@ -134,7 +134,7 @@ func TestExternalDeployPlugin_ReverseChannelEndToEnd(t *testing.T) {
 	if err := providerRegistry.RegisterPluginProviders(unit.Providers, "e3deploy-test", closer); err != nil {
 		t.Fatalf("RegisterPluginProviders: %v", err)
 	}
-	routed, err := ResolveTarget(&spec.BundleNode{Target: "exampledeploy"}, "e3deploy")
+	routed, err := ResolveTarget(&spec.FleetNode{Target: "exampledeploy"}, "e3deploy")
 	if err != nil {
 		t.Fatalf("ResolveTarget(external deploy): %v", err)
 	}
@@ -146,7 +146,7 @@ func TestExternalDeployPlugin_ReverseChannelEndToEnd(t *testing.T) {
 	// 3. A real lifecycle target: a unique deploy name (so the /tmp scratch dir is private to
 	//    this run) and a TEMP ledger (never the operator's). K-wave W3a A9 deleted
 	//    pluginDeployTarget's ledgerRoot field + its dispatch()-time req.LedgerRoot threading (it
-	//    had zero production callers — test-only scaffolding). candy/plugin-bundle's
+	//    had zero production callers — test-only scaffolding). candy/plugin-fleet's
 	//    ledgerPathsFor falls back to kit.DefaultLedgerPaths() — os.UserHomeDir()-anchored — for
 	//    ANY req.LedgerRoot=="" call, exactly what Add/Update/Del's own internal dispatch()
 	//    requests always carry (no method threads a ledger override), so redirecting HOME for the
@@ -168,7 +168,7 @@ func TestExternalDeployPlugin_ReverseChannelEndToEnd(t *testing.T) {
 	probe := filepath.Join(dir, "probe")
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 
-	// --- Add: reverse channel applies both markers; candy/plugin-bundle records the ledger. ---
+	// --- Add: reverse channel applies both markers; candy/plugin-fleet records the ledger. ---
 	if err := tgt.Add(ctx, nil, nil, spec.EmitOpts{}); err != nil {
 		t.Fatalf("Add: %v", err)
 	}

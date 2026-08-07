@@ -93,7 +93,7 @@ func invokeArbiter(ctx context.Context, exec *sdk.Executor, in spec.ArbiterInvok
 	// semantics exactly. RELEASE is deliberately NOT guarded here: the DIRECT proxy release
 	// (newResourceArbiter().ReleaseClaimant — `charly preempt restore`, the test witness) must
 	// always act; the nested-subprocess release guard lives in the callers (releaseResourceClaim in
-	// core, arbiterBracketRelease in plugin-bundle).
+	// core, arbiterBracketRelease in plugin-fleet).
 	if os.Getenv(envPreemptLeaseHeld) != "" &&
 		(in.Action == spec.ArbiterActionAcquireExclusive || in.Action == spec.ArbiterActionAcquireShared) {
 		return spec.ArbiterInvokeReply{}
@@ -187,29 +187,29 @@ func resolvedProject(ctx context.Context, exec *sdk.Executor) (*spec.ResolvedPro
 }
 
 // resolvedDeployTree is the arbiter's project deploy tree — the resolved-project envelope's
-// Deploy field (rp.Deploy, itself uf.Bundle projected verbatim) merged with the per-host
+// Deploy field (rp.Deploy, itself uf.Fleet projected verbatim) merged with the per-host
 // deploy-config overlay, exactly as the former core-only gatherDeployNodes merged them. Errors
 // degrade to an empty tree (never fail the caller) — mirroring the former LoadUnified(".")
 // graceful-degrade (project-less invocations, e.g. a bare `charly preempt status`, are legal).
 //
 // #55 coneC-dsh β2+δ seam-death: MergedDeployTree now takes a reader (placement-invariant —
-// loaderkit.LoadHostBundleConfigViaExecutor), so the compiled-in arbiter no longer relies on the
-// DeployStateHost host seam (deleted in δ); the per-host overlay loads the SAME way plugin-bundle's
+// loaderkit.LoadHostFleetConfigViaExecutor), so the compiled-in arbiter no longer relies on the
+// DeployStateHost host seam (deleted in δ); the per-host overlay loads the SAME way plugin-fleet's
 // writes do, works identically compiled-in or out-of-process.
-func resolvedDeployTree(ctx context.Context, exec *sdk.Executor, context string) map[string]spec.BundleNode {
+func resolvedDeployTree(ctx context.Context, exec *sdk.Executor, context string) map[string]spec.FleetNode {
 	rp, err := resolvedProject(ctx, exec)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "preempt: resolved-project (%s): %v\n", context, err)
 		rp = &spec.ResolvedProject{}
 	}
-	project := make(map[string]spec.BundleNode, len(rp.Deploy))
+	project := make(map[string]spec.FleetNode, len(rp.Deploy))
 	for name, node := range rp.Deploy {
 		if node != nil {
 			project[name] = *node
 		}
 	}
-	return deploykit.MergedDeployTree(project, context, func() (*deploykit.BundleConfig, error) {
-		return loaderkit.LoadHostBundleConfigViaExecutor(ctx, exec)
+	return deploykit.MergedDeployTree(project, context, func() (*deploykit.FleetConfig, error) {
+		return loaderkit.LoadHostFleetConfigViaExecutor(ctx, exec)
 	})
 }
 

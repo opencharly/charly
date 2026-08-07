@@ -11,21 +11,21 @@ import (
 )
 
 // deploy_target_dispatch.go — the core-side half of the S3b move: dispatchDeployTarget invokes
-// command:bundle's OpDeployDispatch (the ONE generic envelope every UnifiedDeployTarget/
+// command:fleet's OpDeployDispatch (the ONE generic envelope every UnifiedDeployTarget/
 // LifecycleTarget method now dispatches through) WITH a live executor, mirroring
 // ephemeral_dispatch.go's dispatchEphemeralOp — the
 // SAME "compiled-in in-proc reverse channel" pattern arbiterInvoke (folded from the deleted
 // preempt.go into host_build_pod_lifecycle_dispatch.go) established:
 // thread the executor via specexec.ContextWithExecutor(ctx, specexec.NewInProcExecutor(&inprocExecutorClient
 // {srv: &executorReverseServer{...}})) before calling prov.Invoke — no broker needed, since
-// command:bundle is COMPILED-IN (an inprocProvider). The plugin's own OpDeployDispatch handler
+// command:fleet is COMPILED-IN (an inprocProvider). The plugin's own OpDeployDispatch handler
 // recovers this SAME executor via specexec.ExecutorForInvoke(ctx, brokerID) (ctx-first) and threads it
 // onward to the ACTUAL substrate provider via its own specexec.Executor.InvokeProvider (S1) — core
 // never touches the substrate's *grpcProvider directly once this call returns.
 func dispatchDeployTarget(ctx context.Context, req spec.DeployTargetDispatchRequest, exec spec.DeployExecutor, build buildEngineContext, rebootable bool) (spec.DeployTargetDispatchReply, error) {
-	prov, ok := providerRegistry.resolve(ClassCommand, "bundle")
+	prov, ok := providerRegistry.resolve(ClassCommand, "fleet")
 	if !ok {
-		return spec.DeployTargetDispatchReply{}, fmt.Errorf("deploy-dispatch %s: command:bundle provider not loaded (candy/plugin-bundle must be compiled in via compiled_plugins:)", req.Op)
+		return spec.DeployTargetDispatchReply{}, fmt.Errorf("deploy-dispatch %s: command:fleet provider not loaded (candy/plugin-fleet must be compiled in via compiled_plugins:)", req.Op)
 	}
 	reqJSON, err := json.Marshal(req)
 	if err != nil {
@@ -33,9 +33,9 @@ func dispatchDeployTarget(ctx context.Context, req spec.DeployTargetDispatchRequ
 	}
 	invokeCtx := specexec.ContextWithExecutor(ctx,
 		specexec.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{exec: exec, build: build, rebootable: rebootable}}))
-	res, err := prov.Invoke(invokeCtx, &Operation{Reserved: "bundle", Op: ops.OpDeployDispatch, Params: reqJSON})
+	res, err := prov.Invoke(invokeCtx, &Operation{Reserved: "fleet", Op: ops.OpDeployDispatch, Params: reqJSON})
 	if err != nil {
-		return spec.DeployTargetDispatchReply{}, fmt.Errorf("deploy-dispatch %s: bundle plugin: %w", req.Op, err)
+		return spec.DeployTargetDispatchReply{}, fmt.Errorf("deploy-dispatch %s: fleet plugin: %w", req.Op, err)
 	}
 	var reply spec.DeployTargetDispatchReply
 	if res != nil && len(res.JSON) > 0 {

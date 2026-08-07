@@ -10,7 +10,7 @@ plugin-pod:
             logic (deploykit.RestartPodService) with zero host coupling. The registry-bound commands
             (start/stop/…) forward their authored flags, as sdk/spec wire requests, to a per-command
             HostBuild seam — the host reconstructs the original core orchestration struct and runs
-            its Run() logic VERBATIM (mirroring candy/plugin-bundle's deploy-add/deploy-del seams),
+            its Run() logic VERBATIM (mirroring candy/plugin-fleet's deploy-add/deploy-del seams),
             because the provider REGISTRY (ResolveTarget, the plugin loader) is a core Mechanism a
             plugin cannot import or hold. COMPILED-IN, it dispatches IN-PROC via Invoke(OpRun), so the
             handlers run in charly's own process and inherit real stdio/TTY natively. Placement of

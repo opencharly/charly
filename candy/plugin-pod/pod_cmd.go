@@ -40,15 +40,15 @@ import (
 // kind into this one), deferred here as the LAST step — same shape as pod start/stop's own bracket.
 //
 // RDD caught a real latent placement bug mid-port (see remove_orchestration.go's header): two
-// deploykit calls that "looked" portable (resolveSidecarNames' LoadBundleConfig,
+// deploykit calls that "looked" portable (resolveSidecarNames' LoadFleetConfig,
 // runPodRemove's ResolveBoxEngineForDeploy) transitively depend on deploykit.DeployStateHost,
 // which only charly-core's own init() populates — so both were rerouted through their own
-// EXISTING seams (the host bundle-config loader, now retired by the loaderkit helper, and
+// EXISTING seams (the host fleet-config loader, now retired by the loaderkit helper, and
 // pod-config-box-engine) instead of calling deploykit directly.
 
 // StartCmd launches a container with supervisord in the background — the `charly start` grammar.
 type StartCmd struct {
-	Box          string   `arg:"" help:"Box name or remote ref (github.com/org/repo/box[@version])"`
+	Box          string   `arg:"" help:"Box name or remote ref (github.com/org/repo/box[@version]) — the deploy of this box"`
 	Tag          string   `name:"tag" help:"Image CalVer tag (empty = newest local CalVer resolved via the ai.opencharly.version OCI label)"`
 	Build        bool     `name:"build" help:"Force local build instead of pulling from registry"`
 	Env          []string `short:"e" name:"env" sep:"none" help:"Set container env var (direct mode only)"`
@@ -86,7 +86,7 @@ func (c *StartCmd) Run() error {
 // dispatchLifecycleTarget operates on this *spec.Deploy instead of re-reading the per-host config
 // itself (the config READ is a plugin loading capability, not a host M; #55 coneC Unit C2 moved
 // the resolver from deploykit.ResolveLifecycleDeployNodeViaSeam — the deleted
-// host bundle-config loader-seam round-trip — to the cycle-free plugin-side
+// host fleet-config loader-seam round-trip — to the cycle-free plugin-side
 // loaderkit.ResolveLifecycleDeployNodeViaExecutor, byte-identical to the retired core
 // resolveLifecycleDeployNode). The box/instance MUST match the request's Box/Instance — the host
 // derives deployName = DeployKey(req.Box, req.Instance), which must key the SAME node.
@@ -97,7 +97,7 @@ func lifecycleNode(box, instance string) *spec.Deploy {
 
 // StopCmd stops a running container started by StartCmd — the `charly stop` grammar.
 type StopCmd struct {
-	Box      string `arg:"" help:"Box name or remote ref"`
+	Box      string `arg:"" help:"Box name or remote ref — the deploy of this box"`
 	Instance string `short:"i" name:"instance" help:"Instance name for running multiple containers of the same box"`
 	Unmount  bool   `name:"unmount" help:"After stopping, also tear down encrypted FUSE mounts and gocryptfs scope units (charly-enc-<box>-<volume>.scope) for this box"`
 }
@@ -122,7 +122,7 @@ func (c *StopCmd) Run() error {
 // sequence can produce when start fails. NOT registry-bound (no ResolveTarget/plugin-loader need)
 // — calls deploykit.RestartPodService directly, zero HostBuild round-trip.
 type RestartCmd struct {
-	Box      string `arg:"" help:"Box name or remote ref"`
+	Box      string `arg:"" help:"Box name or remote ref — the deploy of this box"`
 	Instance string `short:"i" name:"instance" help:"Instance name for running multiple containers of the same box"`
 }
 
@@ -139,7 +139,7 @@ func (c *RestartCmd) Run() error {
 // (dispatchLifecycleTarget/LifecycleTarget — core Mechanisms) — forwards via HostBuild("pod-lifecycle")
 // op="logs" (#55 W3 A10b unified the former dedicated "pod-logs" kind into this one).
 type LogsCmd struct {
-	Box      string `arg:"" help:"Box name or remote ref"`
+	Box      string `arg:"" help:"Box name or remote ref — the deploy of this box"`
 	Follow   bool   `short:"f" name:"follow" help:"Follow log output"`
 	Instance string `short:"i" name:"instance" help:"Instance name for running multiple containers of the same box"`
 	Sidecar  string `name:"sidecar" help:"Show the named SIDECAR container's logs instead of the app container's"`
@@ -167,7 +167,7 @@ func (c *LogsCmd) Run() error {
 // start/stop's own bracket — deferred here as the LAST step so it always runs, mirroring the
 // former core `defer releaseResourceClaim(...)` semantics exactly.
 type RemoveCmd struct {
-	Box        string   `arg:"" help:"Box name or remote ref"`
+	Box        string   `arg:"" help:"Box name or remote ref — the deploy of this box"`
 	Instance   string   `short:"i" name:"instance" help:"Instance name for running multiple containers of the same box"`
 	Purge      bool     `name:"purge" help:"Also remove named volumes"`
 	KeepDeploy bool     `name:"keep-deploy" help:"Keep charly.yml entry for this box"`
@@ -193,7 +193,7 @@ func (c *RemoveCmd) Run() error {
 // (dispatchLifecycleTarget/LifecycleTarget — core Mechanisms) — forwards via HostBuild("pod-lifecycle")
 // op="shell" (#55 W3 A10b unified the former dedicated "pod-shell" kind into this one).
 type ShellCmd struct {
-	Box          string   `arg:"" help:"Box name or remote ref (github.com/org/repo/box[@version])"`
+	Box          string   `arg:"" help:"Box name or remote ref (github.com/org/repo/box[@version]) — the deploy of this box"`
 	Tag          string   `name:"tag" help:"Image CalVer tag (empty = newest local CalVer resolved via the ai.opencharly.version OCI label)"`
 	Command      string   `short:"c" help:"Command to execute instead of interactive shell"`
 	Build        bool     `name:"build" help:"Force local build instead of pulling from registry"`
@@ -394,9 +394,9 @@ type CpCmd struct {
 
 // ConfigCmd groups box configuration subcommands — the `charly config` grammar. Default
 // subcommand (no keyword): full setup (quadlet + secrets + enc). Every leaf's actual body is
-// deeply core-type-coupled (BundleConfig/ResolvedSidecar/enc*/deploykit.CleanDeployEntry, and
+// deeply core-type-coupled (FleetConfig/ResolvedSidecar/enc*/deploykit.CleanDeployEntry, and
 // Setup is ALSO constructed directly, by its EXACT unchanged name, by from_box_pod.go (the
-// `charly bundle from-box` pod path, K-wave 2 cone R2 — formerly charly/bundle_from_box_cmd.go) —
+// `charly fleet from-box` pod path, K-wave 2 cone R2 — formerly charly/fleet_from_box_cmd.go) —
 // P13-kernel, out of this wave's scope — so the core struct cannot rename/move), so each leaf
 // forwards via its own HostBuild("pod-config-<leaf>") seam.
 type ConfigCmd struct {
@@ -411,7 +411,7 @@ type ConfigCmd struct {
 // ConfigSetupCmd configures a box: generates quadlet, provisions secrets, initializes and mounts
 // encrypted volumes — the `charly config [setup]` grammar (mirrors core's BoxConfigSetupCmd 1:1).
 type ConfigSetupCmd struct {
-	Box           string   `arg:"" optional:"" help:"Box name or remote ref (github.com/org/repo/box[@version])"`
+	Box           string   `arg:"" optional:"" help:"Box name or remote ref (github.com/org/repo/box[@version]) — the deploy of this box"`
 	Tag           string   `name:"tag" help:"Image CalVer tag (empty = newest local CalVer resolved via the ai.opencharly.version OCI label)"`
 	Build         bool     `name:"build" help:"Force local build instead of pulling from registry"`
 	Env           []string `short:"e" name:"env" sep:"none" help:"Set container env var (KEY=VALUE), merged with existing vars"`
@@ -541,7 +541,7 @@ func (c *ConfigPasswdCmd) Run() error {
 
 // ConfigRemoveCmd removes a quadlet service (replaces charly disable).
 type ConfigRemoveCmd struct {
-	Box      string `arg:"" help:"Box name or remote ref"`
+	Box      string `arg:"" help:"Box name or remote ref — the deploy of this box"`
 	Instance string `short:"i" name:"instance" help:"Instance name"`
 }
 
@@ -602,7 +602,7 @@ func (c *UpdateCmd) Run() error {
 // still resolve, and dotted nested paths (`a.b.c`) still walk. On miss the error reports the full
 // key. The "deploy-plugins-connect" preamble connects the deployment's out-of-tree plugin candies
 // (the host's ResolveTarget needs them) and returns the project dir the loader loads from — the
-// SAME preamble command:bundle's resolveTreeViaLoader runs. Relocated from
+// SAME preamble command:fleet's resolveTreeViaLoader runs. Relocated from
 // charly/update_deploy_dispatch.go (K-wave 2 cone CONTESTED).
 func resolveUpdateDeployNode(image, instance string) (*spec.Deploy, error) {
 	if cmdExec == nil {
@@ -623,7 +623,7 @@ func resolveUpdateDeployNode(image, instance string) (*spec.Deploy, error) {
 // spec.ResolveNodePath step, split out for the unit test. deployKey applies the -i instance
 // (returning the bare or dotted-nested name unchanged when instance is empty), so an
 // instance-only `<base>/<inst>` entry resolves and a bare-base lookup correctly does NOT match it.
-func lookupDeployNode(tree map[string]spec.BundleNode, image, instance string) (*spec.Deploy, error) {
+func lookupDeployNode(tree map[string]spec.FleetNode, image, instance string) (*spec.Deploy, error) {
 	key := spec.DeployKey(image, instance)
 	node, _, err := spec.ResolveNodePath(tree, key)
 	if err != nil || node == nil {

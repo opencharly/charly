@@ -25,7 +25,7 @@ import (
 // item 6): verb:k8sgen/verb:egress are reached peer-to-peer via InvokeProvider, and
 // this plugin — a same-host subprocess with direct disk access — does its own
 // MkdirAll/WriteFile. THIS plugin's own k8s deploy preresolver (preresolve.go,
-// F6/FINAL-K5-unit-6a — dispatched directly by candy/plugin-bundle's
+// F6/FINAL-K5-unit-6a — dispatched directly by candy/plugin-fleet's
 // preresolveSubstrate via sdk.Executor.InvokeProvider(OpPreresolve), S3b — the
 // core-side deploy_preresolve.go:wireDeployPreresolver registry it used to route
 // through is dissolved) GENERATES the egress-validated
@@ -35,7 +35,7 @@ import (
 //   - `kubectl apply -k <overlay>` against the operator's kubeconfig (merged by
 //     K3sPostProvision for a k3s cluster) — the apply IS the deploy;
 //   - return the teardown op the host records in the ledger and replays at
-//     `charly bundle del` (`kubectl delete -k` + remove the generated tree) —
+//     `charly fleet del` (`kubectl delete -k` + remove the generated tree) —
 //     record-and-replay, the external-deploy lifecycle.
 //
 // The plugin runs as a HOST subprocess (LocalTransport), so it reads the generated
@@ -48,7 +48,7 @@ const deployK8sVersion = "2026.174.1200"
 
 // k8sTeardownProbeTimeout bounds the reachability probe the teardown runs before it attempts
 // `kubectl delete`. Named + bounded rather than an untimed call: a wedged API server must not
-// hang a `charly bundle del`, and an unreachable one must not print a connection error on
+// hang a `charly fleet del`, and an unreachable one must not print a connection error on
 // every teardown of a vm-hosted cluster (whose API dies with the VM).
 const k8sTeardownProbeTimeout = "5s"
 
@@ -85,7 +85,7 @@ func invokeDeployK8s(req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 		return nil, fmt.Errorf("deploy:k8s: kubectl apply -k %s: %w\n%s", kv.OverlayPath, aerr, strings.TrimSpace(out))
 	}
 
-	// Teardown, recorded in the ledger and replayed at `charly bundle del`
+	// Teardown, recorded in the ledger and replayed at `charly fleet del`
 	// (record-and-replay). kubectl reads the operator's ~/.kube/config (no sudo) → ScopeUser.
 	//
 	// The cluster is routinely ALREADY GONE by teardown time: a vm-hosted k3s deploy destroys

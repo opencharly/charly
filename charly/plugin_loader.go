@@ -710,7 +710,7 @@ func pluginProvidesReferencedWord(providers []string, refs map[string]struct{}) 
 // plugin candies — adb/appium/kube/spice/example-* — most unused by any one build or
 // deploy). Errors are returned (not swallowed) so a bed asserting a plugin verb fails
 // loudly if its REFERENCED plugin won't load.
-// resolveMergedDeployTree returns the top-level Bundle (deploy-node) map — the merged project
+// resolveMergedDeployTree returns the top-level Fleet (deploy-node) map — the merged project
 // charly.yml + per-host operator overlay, ready for dotted-path traversal — the host-side
 // merged-tree read the two remaining check host seams need (deployNodePluginContext below +
 // check_venue_resolve.go's checkVenueExecFromReply). It replaces the DELETED deploy_tree.go
@@ -719,7 +719,7 @@ func pluginProvidesReferencedWord(providers []string, refs map[string]struct{}) 
 // spec.ProjectLoader.ResolveMergedDeployTree seam (#55 coneA Q2(1)), which runs the
 // loaderkit.ResolveMergedTreeViaExecutor project+overlay merge INSIDE the loader plugin over the
 // in-proc host reverse channel (the SAME executorReverseServer path command:validate /
-// command:bundle drive, threaded on ctx via specexec.ContextWithExecutor) — so the deploykit
+// command:fleet drive, threaded on ctx via specexec.ContextWithExecutor) — so the deploykit
 // projection/overlay/merge lives INSIDE loaderkit, off charly core, and this read routes through
 // the loader broker exactly like every Cone A Unit 3 dispatch reader. The in-proc executor reaches
 // only the compiled-in loader-* host legs (it never runs the
@@ -727,8 +727,8 @@ func pluginProvidesReferencedWord(providers []string, refs map[string]struct{}) 
 // loadDeployPlugins BEFORE any out-of-process plugin connects) never recurses.
 //
 // This file imports NO loaderkit (#55 coneA Q2(1) shed): the per-host operator-overlay merge
-// (loaderkit.LoadHostBundleConfigViaExecutor + MergeDeployConfigs) that spec.ProjectLoader.LoadUnified
-// does NOT expose (LoadUnified returns the PROJECT-only tree, loadmodel.go Bundle has no overlay
+// (loaderkit.LoadHostFleetConfigViaExecutor + MergeDeployConfigs) that spec.ProjectLoader.LoadUnified
+// does NOT expose (LoadUnified returns the PROJECT-only tree, loadmodel.go Fleet has no overlay
 // field, so repointing to LoadUnified would DROP operator overrides — verified not byte-equivalent)
 // is now reached through the ResolveMergedDeployTree seam method, not a direct loaderkit call.
 // NOT the boundary-law "host-boundary-object" trap: the merge IS a loader mechanism the plugin
@@ -738,13 +738,13 @@ func pluginProvidesReferencedWord(providers []string, refs map[string]struct{}) 
 // loadDeployPlugins' (below) direct input — plugin-LOADER infrastructure, not a check-only
 // concern despite the former file's name. check_cmd.go's resolveCheckRunnerContext still calls
 // deployNodePluginContext directly (same package, different file).
-func resolveMergedDeployTree(dir string) (map[string]spec.BundleNode, error) {
+func resolveMergedDeployTree(dir string) (map[string]spec.FleetNode, error) {
 	ctx := hostInProcCtx()
 	return requireProjectLoader().ResolveMergedDeployTree(ctx, dir)
 }
 
 // deployNodePluginContext resolves the deploy/bed node named `name` in the project at
-// `dir` ONCE (the SAME project-bundle loader the deploy walker uses) and returns the
+// `dir` ONCE (the SAME project-fleet loader the deploy walker uses) and returns the
 // two plugin-loading inputs the check runner (resolveCheckRunnerContext) and the deploy
 // path (loadDeployPlugins) both need (R3 — one helper, both paths):
 //
@@ -754,7 +754,7 @@ func resolveMergedDeployTree(dir string) (map[string]spec.BundleNode, error) {
 //     callers feed these to ScanAllCandyWithConfigOpts' ExtraCandyRefs to fetch them.
 //   - refWords: the plugin WORDS the node references DIRECTLY — its substrate kind (an
 //     external deploy-substrate plugin word, e.g. `exampledeploy`) + every inline
-//     Op.Plugin in its FLATTENED plan. flattenBundleVenues hoists member/nested steps
+//     Op.Plugin in its FLATTENED plan. flattenFleetVenues hoists member/nested steps
 //     into the root node.Plan, so this ONE walk covers the whole bed including members
 //     (e.g. a `spice:` check verb authored inline). These scope loadProjectPlugins to
 //     the plugins the deploy actually dispatches — caught here because they appear in
@@ -769,7 +769,7 @@ func deployNodePluginContext(dir, name string) (addCandy []string, refWords []st
 		return nil, nil
 	}
 	// Resolve the named node, walking a DOTTED path into nested children (the bed runner
-	// deploys a nested child via `charly bundle add <root>.<child>` — its name is dotted and
+	// deploys a nested child via `charly fleet add <root>.<child>` — its name is dotted and
 	// is NOT a top-level tree key). Without dotted resolution a nested-child deploy surfaces
 	// NO plugin words and its substrate word never loads its provider (ResolveTarget →
 	// "unknown target"). The single source for "given a (possibly dotted) deploy name, which
@@ -786,8 +786,8 @@ func deployNodePluginContext(dir, name string) (addCandy []string, refWords []st
 	//     OWN target (e.g. `local`) is surfaced + its plugin auto-injected;
 	//   - a single-process tree deploy (a pod root walked in one process, its nested children
 	//     of a DIFFERENT substrate) — the recursion surfaces every child's substrate word.
-	var visit func(n *spec.BundleNode)
-	visit = func(n *spec.BundleNode) {
+	var visit func(n *spec.FleetNode)
+	visit = func(n *spec.FleetNode) {
 		if n == nil {
 			return
 		}
@@ -835,19 +835,19 @@ func deployNodePluginContext(dir, name string) (addCandy []string, refWords []st
 	// A builder is triggered by the DEPLOY's resolved image closure (a pixi.toml / aur: section), not
 	// by the deploy NODE this walk sees — and surfacing all four across a whole-box scan over-built
 	// unrelated builder plugins (aur on a fedora deploy). The deploy-time pre-pass
-	// (candy/plugin-bundle's preresolveBuilderContexts) instead detects EXACTLY the builders the
+	// (candy/plugin-fleet's preresolveBuilderContexts) instead detects EXACTLY the builders the
 	// deploy triggers (distro-gated) and connects only those on-demand, by their canonical ref
 	// (ops.InvokeProviderOpts.ExtraRef → connectPluginByWordRef), where it has the resolved closure.
 	return addCandy, refWords
 }
 
-// resolveDeployNodeByPath resolves a (possibly DOTTED) deploy name to its BundleNode,
+// resolveDeployNodeByPath resolves a (possibly DOTTED) deploy name to its FleetNode,
 // descending node.Children for each dotted segment (the SAME nested-tree shape
 // ResolveDeployChain walks). A bare name is the top-level entry; a dotted name
-// (root.child[.grandchild…]) is the nested child the bed runner deploys via `charly bundle
+// (root.child[.grandchild…]) is the nested child the bed runner deploys via `charly fleet
 // add <root>.<child>`. A leading "vm:" is stripped first via spec.SplitVmAddress (RCA #8/#9,
 // FINAL/K5 unit 6a, live-probe-caught) — the SAME legacy-vm CLI-addressing convention
-// resolveDelNode / spec.VmNameFromDeployName already honor elsewhere (`charly bundle del vm:<name>`
+// resolveDelNode / spec.VmNameFromDeployName already honor elsewhere (`charly fleet del vm:<name>`
 // / `vm:<parent.child>`): without stripping it, `tree["vm:"+parts[0]]` never matches (the tree
 // is keyed by the plain name), so a "vm:"-prefixed dotted address silently resolved to
 // nothing here — deployNodePluginContext (this function's one caller) then collected ZERO
@@ -856,7 +856,7 @@ func deployNodePluginContext(dir, name string) (addCandy []string, refWords []st
 // synthetic Target-only placeholder without touching the tree at all), so the del RESOLVED
 // fine while the CONNECT silently failed — the gap surfaced only later, when dispatch needed
 // the never-connected provider. Returns false when any segment is absent.
-func resolveDeployNodeByPath(tree map[string]spec.BundleNode, name string) (*spec.BundleNode, bool) {
+func resolveDeployNodeByPath(tree map[string]spec.FleetNode, name string) (*spec.FleetNode, bool) {
 	name, _ = spec.SplitVmAddress(name)
 	parts := strings.Split(name, ".")
 	root, ok := tree[parts[0]]
@@ -888,7 +888,7 @@ func resolveDeployNodeByPath(tree map[string]spec.BundleNode, name string) (*spe
 // refs are ADDED to the scan via ExtraCandyRefs (so a REMOTE composed plugin not in
 // the local scan is fetched too, and its words are then collected from its plan). The
 // SAME scan + loadProjectPlugins the check runner uses (resolveCheckRunnerContext) and
-// the bundle-add path uses — so bundle add / bundle del / charly update all connect a
+// the fleet-add path uses — so fleet add / fleet del / charly update all connect a
 // deployment's plugins identically (R3). For an external deploy SUBSTRATE this is what
 // turns the pre-scanned placeholder word into a connected grpcProvider that
 // ResolveTarget can route to. Discovery and build/connect failures retain their original cause and
@@ -899,7 +899,7 @@ func resolveDeployNodeByPath(tree map[string]spec.BundleNode, name string) (*spe
 // plugin. Relocated here (from the deleted charly/deploy_add_shared.go) to sit beside its callees
 // collectReferencedPluginWords/loadProjectPlugins (R3) — already the body of two thin HostBuild
 // seams (deploy-plugins-connect — the former deploy-del-resolve seam died with the del
-// resolution moving to candy/plugin-bundle, K-wave 2 cone R2 bank C) and called directly by two
+// resolution moving to candy/plugin-fleet, K-wave 2 cone R2 bank C) and called directly by two
 // more core files (pod_lifecycle_verb.go, update_deploy_dispatch.go).
 func loadDeployPlugins(dir, deployName string, extraAddCandy []string) error {
 	cfg, cerr := LoadConfig(dir)
@@ -947,7 +947,7 @@ func loadProjectPlugins(ctx context.Context, candies map[string]spec.CandyReader
 		}
 		// Idempotent re-load: loadProjectPlugins runs on EVERY connect path (build,
 		// deploy, check), and a single process that builds AND deploys connects twice
-		// (e.g. `charly bundle add` → loadDeployPlugins, then candy/plugin-build's
+		// (e.g. `charly fleet add` → loadDeployPlugins, then candy/plugin-build's
 		// resolveBuildEngine reaching hostBuildConnectPlugins for its own build-time
 		// connect step — #55 step3 3-II deleted the former host-side NewGenerator that
 		// used to run this). Skip a plugin already connected FROM

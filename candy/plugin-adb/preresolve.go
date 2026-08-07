@@ -62,7 +62,7 @@ func invokeAndroidPreresolve(ctx context.Context, req *pb.InvokeRequest) (*pb.In
 		// Resolve the merged deploy tree PLUGIN-SIDE (K-wave W3a A3-phase-2: the former
 		// "deploy-entity-resolve" TreeJSON round-trip was dead weight — the tree is already a live
 		// Go value here, so this is a direct map lookup, not a host seam call). The enclosing
-		// OpDeployDispatch already connected the deployment's plugins (command:bundle's
+		// OpDeployDispatch already connected the deployment's plugins (command:fleet's
 		// resolveTreeViaLoader), so this reuses that connect (no re-dial mid-Invoke).
 		tree, terr := loaderkit.ResolveMergedTreeViaExecutor(ctx, exec, p.Dir)
 		if terr != nil {

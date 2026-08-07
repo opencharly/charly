@@ -45,4 +45,3 @@ func buildModel(ks *kindSet) ([]family, error) {
 	}
 	return families, nil
 }
-

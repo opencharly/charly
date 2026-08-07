@@ -1,11 +1,11 @@
 // Package groupkind is the importable form of charly's `group` STRUCTURAL KIND — a TARGETLESS deploy
 // group (resource members brought up ALONGSIDE on the shared network, no own workload; the former
-// targetless `bundle:`). A structural KIND provider dispatches via the pb Invoke(OpLoad) envelope:
+// targetless `fleet:`). A structural KIND provider dispatches via the pb Invoke(OpLoad) envelope:
 // decode the group's KIND-SPECIFIC scalar config (disposable/lifecycle/description/…) from op.Params
 // into a spec.Deploy, ATTACH the AUTHORED members the host pre-decoded + threaded via op.Env
 // (spec.StructuralKindLoadEnv — F5 authored-member input-threading), force Target="" (a group is
-// targetless), and return the COMPLETE spec.Deploy — which runPluginKind folds into uf.Bundle,
-// BYTE-EQUIVALENT to the former builtin groupKind (buildBundleNodeInto). Usable COMPILED-IN
+// targetless), and return the COMPLETE spec.Deploy — which runPluginKind folds into uf.Fleet,
+// BYTE-EQUIVALENT to the former builtin groupKind (buildFleetNodeInto). Usable COMPILED-IN
 // (NewProvider()/NewMeta() via plugins_generated.go) OR served OUT-OF-PROCESS by the cmd/serve shim.
 //
 // PLACEMENT — COMPILED-IN (listed in the embedded charly/charly.yml compiled_plugins:), NOT external.
@@ -38,7 +38,7 @@ func NewProvider() pb.ProviderServer { return &provider{} }
 
 // NewMeta ships the STRUCTURAL group kind capability (Class "kind", word "group", Structural:true —
 // the F5 flag that makes the host pre-decode + thread the authored members via op.Env and fold the
-// reply into uf.Bundle) + its self-contained #GroupInput schema (via sdk.NewMeta → BuildCapabilities).
+// reply into uf.Fleet) + its self-contained #GroupInput schema (via sdk.NewMeta → BuildCapabilities).
 func NewMeta() pb.PluginMetaServer {
 	return sdk.NewMeta(calver,
 		[]sdk.ProvidedCapability{{Class: "kind", Word: "group", InputDef: "#GroupInput", Structural: true}},
@@ -50,7 +50,7 @@ type provider struct{ pb.UnimplementedProviderServer }
 // Invoke handles OpLoad: decode the group's TARGETLESS scalar config from op.Params into a spec.Deploy
 // (the host validated it against #GroupInput first), attach the host-threaded AUTHORED members from
 // op.Env, force Target="" (a group has no own workload — its members are PEERS, exactly as the former
-// builtin groupKind via bundleTargetForDisc("group")=""), and return the complete spec.Deploy.
+// builtin groupKind via fleetTargetForDisc("group")=""), and return the complete spec.Deploy.
 func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 	if req.GetOp() != sdk.OpLoad {
 		return nil, fmt.Errorf("group kind: unsupported op %q (only %q)", req.GetOp(), sdk.OpLoad)
@@ -62,7 +62,7 @@ func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 		}
 	}
 	// F5 authored-member input-threading: attach the members the host pre-decoded via the SAME core
-	// buildBundleNode recursion the former builtin path used, and threaded here in op.Env.
+	// buildFleetNode recursion the former builtin path used, and threaded here in op.Env.
 	var env spec.StructuralKindLoadEnv
 	if len(req.GetEnvJson()) > 0 {
 		if err := json.Unmarshal(req.GetEnvJson(), &env); err != nil {

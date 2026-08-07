@@ -50,7 +50,7 @@ var reshapeDataKeys = setOfWords(
 var reshapeStepKeywords = setOfWords("run", "check", "agent-run", "agent-check", "include")
 
 var reshapeKindWords = setOfWords(
-	"pod", "vm", "k8s", "local", "android", "group", "bundle", "candy",
+	"pod", "vm", "k8s", "local", "android", "group", "fleet", "candy",
 	"distro", "builder", "init", "resource", "sidecar", "agent", "check",
 	// the retired Calamares kinds still classify so an old config reshapes
 	// cleanly before the loader reports the kind itself as removed

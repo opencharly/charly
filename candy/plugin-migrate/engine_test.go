@@ -306,8 +306,8 @@ func TestOpWalker_DeleteKey(t *testing.T) {
 // TestOpWalker_RemapScalarUnderKind: remap flips only the scalar inside the
 // under_kind-scoped subtree, leaving an identical key elsewhere untouched.
 func TestOpWalker_RemapScalarUnderKind(t *testing.T) {
-	m := migration{Name: "t", Ops: []migrationOp{{Op: "remap_scalar", Key: "target", From: "host", To: "local", UnderKind: "bundle"}}}
-	out, changed := applyTransform(t, m, "d1:\n  bundle:\n    target: host\nother:\n  target: host\n")
+	m := migration{Name: "t", Ops: []migrationOp{{Op: "remap_scalar", Key: "target", From: "host", To: "local", UnderKind: "fleet"}}}
+	out, changed := applyTransform(t, m, "d1:\n  fleet:\n    target: host\nother:\n  target: host\n")
 	if !changed {
 		t.Fatal("remap reported no change")
 	}

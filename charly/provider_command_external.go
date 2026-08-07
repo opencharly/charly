@@ -245,7 +245,7 @@ func dispatchInProcCommand(prov Provider, d externalCommandDispatch, sub string)
 	// not anchor a seam" precedent — hostEnvJSON, KERNEL_MANIFEST.md:39): os.Executable() resolves
 	// correctly to the charly binary ONLY when called in-core (R10 bed-found bug #5), so every
 	// compiled-in command plugin receives it verbatim. Class-generic, no provider word (F11-safe):
-	// a command that needs it (command:bundle's from-box pod path, which forwards HostEnvJSON into
+	// a command that needs it (command:fleet's from-box pod path, which forwards HostEnvJSON into
 	// deploy:pod's PodConfigSetupRequest) reads it; the rest ignore the extra key.
 	params, err := marshalJSON(map[string]any{"args": externalCommandArgs(d, sub), "host_env_json": hostEnvJSON()})
 	if err != nil {

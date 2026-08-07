@@ -15,7 +15,7 @@ import (
 // (web, cache), a NESTED pod-in-pod (cache→migrate), and a cross-member ${HOST:cache} check on web.
 // The ONLY difference between the two beds is the top-node KIND: `examplestructkind:` (an external
 // STRUCTURAL plugin kind) vs `group:` (the builtin structural kind). If the F5 authored-member
-// input-threading is correct, both fold to a byte-identical uf.Bundle entry.
+// input-threading is correct, both fold to a byte-identical uf.Fleet entry.
 const authoredMemberTree = `    web:
         pod:
             image: coder
@@ -36,11 +36,11 @@ const authoredMemberTree = `    web:
 // TestExternalStructKind_StructuralDecode proves F5 authored-member INPUT-threading END-TO-END: a
 // STRUCTURAL external kind (candy/plugin-example-structkind, NOT compiled in) is recognized +
 // connected by the prescan; the host PRE-DECODES the node's AUTHORED resource-member children (via
-// the core buildBundleNode recursion — the single member-decode source of truth) and threads them
+// the core buildFleetNode recursion — the single member-decode source of truth) and threads them
 // to the plugin's ops.OpLoad via op.Env; the plugin ATTACHES them to its spec.Deploy reply — so the host
-// folds a COMPLETE Bundle (with the AUTHORED members) into uf.Bundle. The proof is BYTE-EQUIVALENCE
+// folds a COMPLETE Fleet (with the AUTHORED members) into uf.Fleet. The proof is BYTE-EQUIVALENCE
 // to the builtin `group:` path: the SAME authored member tree under `examplestructkind:` and under
-// `group:` must produce an IDENTICAL uf.Bundle entry (same peer/nested members, same hoisted
+// `group:` must produce an IDENTICAL uf.Fleet entry (same peer/nested members, same hoisted
 // cross-member plan, same deploy-config). This is the HIGHEST-risk F5 assumption (a plugin
 // reconstructs the AUTHORED member tree, not a synthesized stand-in); it is the foundation for
 // externalizing the seven builtin structural kind decoders (group first). Builds the real plugin
@@ -107,17 +107,17 @@ check-structkind-e2e:
 		t.Fatalf("LoadUnified group baseline: %v", err)
 	}
 
-	// F5: a STRUCTURAL kind folds into uf.Bundle (NOT uf.PluginKinds).
-	dn, ok := pluginUF.Bundle["check-structkind-e2e"]
+	// F5: a STRUCTURAL kind folds into uf.Fleet (NOT uf.PluginKinds).
+	dn, ok := pluginUF.Fleet["check-structkind-e2e"]
 	if !ok {
-		t.Fatalf("structural plugin kind not folded into uf.Bundle; have bundle keys %v", bundleKeysFor(pluginUF))
+		t.Fatalf("structural plugin kind not folded into uf.Fleet; have fleet keys %v", fleetKeysFor(pluginUF))
 	}
 	if _, dup := pluginUF.PluginKinds["examplestructkind"]; dup {
-		t.Fatal("structural kind also landed in uf.PluginKinds — it must be uf.Bundle ONLY")
+		t.Fatal("structural kind also landed in uf.PluginKinds — it must be uf.Fleet ONLY")
 	}
-	base, ok := groupUF.Bundle["check-structkind-e2e"]
+	base, ok := groupUF.Fleet["check-structkind-e2e"]
 	if !ok {
-		t.Fatalf("group baseline not folded into uf.Bundle; have %v", bundleKeysFor(groupUF))
+		t.Fatalf("group baseline not folded into uf.Fleet; have %v", fleetKeysFor(groupUF))
 	}
 
 	// The AUTHORED members were reconstructed (not empty, not synthesized): two peers + a nested.
@@ -152,9 +152,9 @@ func mustJSON(t *testing.T, v any) string {
 	return string(b)
 }
 
-func bundleKeysFor(uf *spec.UnifiedFile) []string {
-	out := make([]string, 0, len(uf.Bundle))
-	for k := range uf.Bundle {
+func fleetKeysFor(uf *spec.UnifiedFile) []string {
+	out := make([]string, 0, len(uf.Fleet))
+	for k := range uf.Fleet {
 		out = append(out, k)
 	}
 	return out

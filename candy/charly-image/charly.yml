@@ -511,7 +511,7 @@ image-skill:
 
             ## OCI Labels
 
-            Every image `charly` builds carries a set of `ai.opencharly.*` OCI labels embedding the resolved image config so that `charly config` and `charly bundle` can work without the project source tree. The full list is assembled in `sdk/deploykit/write_labels.go` (emission) / read back via `ExtractMetadata` (`spec/container/box_metadata_coneb.go`) — label names in `spec/spec/label_consts.go`, the `spec.BoxMetadata` struct in `spec/schema/boxmetadata.cue` (see `/charly-internals:capabilities`):
+            Every image `charly` builds carries a set of `ai.opencharly.*` OCI labels embedding the resolved image config so that `charly config` and `charly fleet` can work without the project source tree. The full list is assembled in `sdk/deploykit/write_labels.go` (emission) / read back via `ExtractMetadata` (`spec/container/box_metadata_coneb.go`) — label names in `spec/spec/label_consts.go`, the `spec.BoxMetadata` struct in `spec/schema/boxmetadata.cue` (see `/charly-internals:capabilities`):
 
             | Label | Contents |
             |---|---|
@@ -539,7 +539,7 @@ image-skill:
             2. **`--update-all` safety.** Propagating config changes across deployed services must not accidentally rewrite tunnel settings from image labels and blow away per-instance overrides.
             3. **Instance inheritance gap.** Tunnel config is **not** auto-inherited from the base `charly config <image>` call to an `charly config <image> -i <instance>` call. This is a deliberate gap — see `/charly-selkies:selkies-labwc` (Multi-Instance Proxy Deployment) for the manual workaround and `/charly-core:deploy` (Instance Tunnel Inheritance) for the full lifecycle.
 
-            **Practical implication:** you can inspect an image's tunnel declaration with `charly box inspect <image>` and see nothing useful — that's correct. To see a tunnel's actual state, read `charly.yml` directly (`charly bundle show <image>`) or the generated quadlet (`charly status <image>`).
+            **Practical implication:** you can inspect an image's tunnel declaration with `charly box inspect <image>` and see nothing useful — that's correct. To see a tunnel's actual state, read `charly.yml` directly (`charly fleet show <image>`) or the generated quadlet (`charly status <image>`).
 
             ## Common Workflows
 
@@ -725,7 +725,7 @@ layer-skill:
 
             ## The compact node form (name-first, one kind key)
 
-            Every charly.yml is self-describing. A candy flattens to a top-level `<name>:` key (the entity NAME) with EXACTLY ONE kind key — `candy:` — whose value is the COMPLETE body: scalars, every collection (`package`, `env`, `service`, `volume`, …) inline, and the operational steps as an ordered UNNAMED list under `plan:`. A step that needs a stable name for reports/overlays carries an `id:` field. This name-first shape is globally addressable, so candy files stay bundle-mergeable — stack the top-level keys (or concatenate with `---` separators) to form a single file containing many candies. (The only other children an entity may carry are sub-ENTITY members, and only under a deployable kind — see `/charly-core:deploy`; a candy nests no members.)
+            Every charly.yml is self-describing. A candy flattens to a top-level `<name>:` key (the entity NAME) with EXACTLY ONE kind key — `candy:` — whose value is the COMPLETE body: scalars, every collection (`package`, `env`, `service`, `volume`, …) inline, and the operational steps as an ordered UNNAMED list under `plan:`. A step that needs a stable name for reports/overlays carries an `id:` field. This name-first shape is globally addressable, so candy files stay fleet-mergeable — stack the top-level keys (or concatenate with `---` separators) to form a single file containing many candies. (The only other children an entity may carry are sub-ENTITY members, and only under a deployable kind — see `/charly-core:deploy`; a candy nests no members.)
 
             ```yaml
             # candy/chrome/charly.yml
@@ -1860,7 +1860,7 @@ layer-skill:
             # opencharly:end <layer>
             ```
 
-            `charly bundle del` strips just the candy's fence pair from the rc file
+            `charly fleet del` strips just the candy's fence pair from the rc file
             (without touching unrelated content). Fish always uses a per-candy
             drop-in file (`conf.d/` is auto-sourced — no fence needed).
 
@@ -1913,7 +1913,7 @@ layer-skill:
 
             ## Cross-kind name reuse
 
-            A candy is a top-level **name-first** node, so within a single document the top-level node names are **globally unique**. Cross-FILE name reuse across SEPARATE discovered files IS still permitted: the same identifier (e.g. `charly-cachyos`) MAY exist as a layer at `candy/charly-cachyos/charly.yml` AND an image at `box/charly-cachyos/charly.yml` simultaneously — both are `candy:` nodes (the image carries `base:`/`from:`; there is no `box:` KIND), routed to distinct internal maps (`uf.Candy` vs `uf.Box`). Verbs disambiguate by command context. When `charly bundle add <name>` resolves a ref where both an image AND a layer with that name exist, the image wins (image-first precedence); use `--add-candy <name>` to explicitly select the layer for an overlay. See the project rulebook "cross-FILE cross-kind reuse is fine, but a single document's top-level node names are GLOBALLY UNIQUE" and `/charly-core:deploy`.
+            A candy is a top-level **name-first** node, so within a single document the top-level node names are **globally unique**. Cross-FILE name reuse across SEPARATE discovered files IS still permitted: the same identifier (e.g. `charly-cachyos`) MAY exist as a layer at `candy/charly-cachyos/charly.yml` AND an image at `box/charly-cachyos/charly.yml` simultaneously — both are `candy:` nodes (the image carries `base:`/`from:`; there is no `box:` KIND), routed to distinct internal maps (`uf.Candy` vs `uf.Box`). Verbs disambiguate by command context. When `charly fleet add <name>` resolves a ref where both an image AND a layer with that name exist, the image wins (image-first precedence); use `--add-candy <name>` to explicitly select the layer for an overlay. See the project rulebook "cross-FILE cross-kind reuse is fine, but a single document's top-level node names are GLOBALLY UNIQUE" and `/charly-core:deploy`.
 
             ---
 

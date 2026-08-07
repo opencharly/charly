@@ -29,7 +29,7 @@ import (
 // loader). Coverage lives in candy/plugin-check/checkproject_test.go.
 
 // §J.8 — a migrated task:→run: step lowers to an InstallStep AND reverses on
-// `charly bundle del` (the task:→plan: fold preserves the ledger/reversal).
+// `charly fleet del` (the task:→plan: fold preserves the ledger/reversal).
 func TestPlanUnify_RunStepLowersToInstallStepAndReverses(t *testing.T) {
 	// The migration turns a `task: { package: redis }` op into a run: step. `package` is
 	// now an extracted plugin verb (plugin: package + plugin_input), whose TypedStepProvider
@@ -48,6 +48,6 @@ func TestPlanUnify_RunStepLowersToInstallStepAndReverses(t *testing.T) {
 	}
 	rev := sp.Reverse()
 	if len(rev) != 1 || rev[0].Kind != spec.ReverseOpPackageRemove {
-		t.Fatalf("lowered install step does not reverse to package-remove (charly bundle del): %+v", rev)
+		t.Fatalf("lowered install step does not reverse to package-remove (charly fleet del): %+v", rev)
 	}
 }

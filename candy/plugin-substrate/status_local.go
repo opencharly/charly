@@ -7,7 +7,7 @@ package substratekind
 // authoritative state, there is no running container to inspect. This collector
 // reads the ledger (sdk/kit/install_ledger.go — DefaultLedgerPaths /
 // ReadDeployRecord / ReadCandyRecord) and reconstructs one row per deploy-id.
-// No deploy-cone (BundleConfig/UnifiedFile), no engine — cleanly movable.
+// No deploy-cone (FleetConfig/UnifiedFile), no engine — cleanly movable.
 
 import (
 	"context"

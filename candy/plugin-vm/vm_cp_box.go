@@ -13,7 +13,7 @@ import (
 // delivery path for images that are NOT on a registry — the case the
 // nested-pod-in-VM capability hits: plugin-deploy-vm's PostApply host-builds a nested
 // pod's image (e.g. `cachyos.selkies-kde-nvidia`), cp-boxes it in as
-// `localhost/charly-<child>:latest`, then the guest's own `charly bundle from-box`
+// `localhost/charly-<child>:latest`, then the guest's own `charly fleet from-box`
 // brings it up as a persistent quadlet — all offline, no registry.
 //
 // Idempotent: skips the transfer when the guest already has the image.
@@ -55,7 +55,7 @@ func hostImageExists(engine, ref string) bool {
 //     --device nvidia.com/gpu=all` consumer that needs /dev/nvidia* via root.
 //   - rootless == true  → the SSH user's ROOTLESS storage (`podman`, no sudo).
 //     This is what the nested-pod-in-VM deploy needs: plugin-deploy-vm's PostApply
-//     brings the pod up with the guest user's own `charly bundle from-box` (a
+//     brings the pod up with the guest user's own `charly fleet from-box` (a
 //     --user quadlet), which reads the USER's podman storage — so the image must
 //     land there, not in root's. Rootless GPU works via CDI (/dev/nvidia* are
 //     world-rw; the nvidia-driver candy's boot service writes a world-readable

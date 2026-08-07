@@ -28,7 +28,7 @@ import (
 //
 // acc is the K1-unit-1 spec.MaterializedProject accumulator (the entity-map subset
 // of *spec.UnifiedFile this dispatch ever touches — Box/Candy/VM/Pod/K8s/Local/Android/
-// Bundle/PluginKinds), threaded from the MaterializeSeams.DecodeEntity callback
+// Fleet/PluginKinds), threaded from the MaterializeSeams.DecodeEntity callback
 // (loader_threaded.go) rather than a full *spec.UnifiedFile — this dispatch never needed
 // Import/Discover/Namespaces/etc, so the retype carries no behavior change.
 //
@@ -40,7 +40,7 @@ import (
 func runPluginKind(prov Provider, pn spec.ParsedNode, acc *spec.MaterializedProject) error {
 	// C2-substrate: a substrate structural kind (pod/vm/k8s/local/android) is decoded
 	// HOST-SIDE (its rich core-referencing value cannot ride op.Params nor a self-contained
-	// plugin schema — see foldSubstrateKind) and folds into acc.Bundle (deploy) or the typed
+	// plugin schema — see foldSubstrateKind) and folds into acc.Fleet (deploy) or the typed
 	// template map (template). It does NOT use the op.Params + plugin-schema validation the
 	// group-style / flat kinds below take — its value is validated host-side against the KEPT
 	// #<Kind>Value def.
@@ -106,19 +106,19 @@ func runPluginKind(prov Provider, pn spec.ParsedNode, acc *spec.MaterializedProj
 	if err != nil {
 		return fmt.Errorf("node %q: plugin kind %q: %w", pn.Name, pn.Disc, err)
 	}
-	// F5: a STRUCTURAL kind's ops.OpLoad returns a spec.Deploy (BundleNode) member tree the host
-	// folds into acc.Bundle — the SAME map a builtin structural kind's DecodeNode populates
-	// (BuildBundleNodeInto), so the entity participates in deploy/check exactly like a builtin
+	// F5: a STRUCTURAL kind's ops.OpLoad returns a spec.Deploy (FleetNode) member tree the host
+	// folds into acc.Fleet — the SAME map a builtin structural kind's DecodeNode populates
+	// (BuildFleetNodeInto), so the entity participates in deploy/check exactly like a builtin
 	// pod/group/candy. A FLAT kind (F4) lands its opaque body in acc.PluginKinds, unchanged.
 	if structural {
-		var dn spec.BundleNode
+		var dn spec.FleetNode
 		if err := json.Unmarshal(out.JSON, &dn); err != nil {
 			return fmt.Errorf("node %q: structural kind %q reply decode: %w", pn.Name, pn.Disc, err)
 		}
-		if acc.Bundle == nil {
-			acc.Bundle = map[string]spec.BundleNode{}
+		if acc.Fleet == nil {
+			acc.Fleet = map[string]spec.FleetNode{}
 		}
-		acc.Bundle[pn.Name] = dn
+		acc.Fleet[pn.Name] = dn
 		return nil
 	}
 	// A FLAT (non-structural) kind's body is opaque (acc.PluginKinds) — it has NO member tree, and
@@ -188,13 +188,13 @@ func dispatchKindOpValidate(prov Provider, pn spec.ParsedNode, paramsJSON json.R
 // def (the closedness the removed #Node arm gave); (2) detects the shape via
 // sdk/loaderkit.IsDeployShape/ResourceChildren (reached through the ProjectLoader seam on pn
 // directly, K1 unit 3b — no genericNode reconstruction needed here); (3) pre-decodes the
-// CANONICAL node via the SAME relocated loaderkit.BuildBundleNode (deploy) /
+// CANONICAL node via the SAME relocated loaderkit.BuildFleetNode (deploy) /
 // DecodeStandaloneTemplateJSON (template) — the SINGLE decode source of truth (R3); (4)
 // threads it to the plugin's ops.OpLoad via op.Env (spec.StructuralKindLoadEnv.Standalone); (5)
-// folds the plugin's ECHO into acc.Bundle (deploy) or the typed template map acc.Pod/acc.VM/…
+// folds the plugin's ECHO into acc.Fleet (deploy) or the typed template map acc.Pod/acc.VM/…
 // (template — the C2-substrate TEMPLATE fold arm extending F5's deploy-only fold). RDD proved
 // the canonical value round-trips through JSON byte-faithfully, so this is byte-equivalent to
-// the former in-proc standaloneKind decode (buildBundleNodeInto / buildStandaloneResource).
+// the former in-proc standaloneKind decode (buildFleetNodeInto / buildStandaloneResource).
 func foldSubstrateKind(prov Provider, pn spec.ParsedNode, acc *spec.MaterializedProject) error {
 	if err := validateKindValueCUE(pn); err != nil {
 		return fmt.Errorf("node %q: %w", pn.Name, err)
@@ -219,7 +219,7 @@ func foldSubstrateKind(prov Provider, pn spec.ParsedNode, acc *spec.Materialized
 	deployShape := pl.IsDeployShape(pn) || len(pl.ResourceChildren(pn)) > 0
 	var env spec.StructuralKindLoadEnv
 	if deployShape {
-		bn, err := pl.BuildBundleNode(pn, t)
+		bn, err := pl.BuildFleetNode(pn, t)
 		if err != nil {
 			return fmt.Errorf("node %q: decode deploy: %w", pn.Name, err)
 		}
@@ -240,12 +240,12 @@ func foldSubstrateKind(prov Provider, pn spec.ParsedNode, acc *spec.Materialized
 		return fmt.Errorf("node %q: substrate kind %q: %w", pn.Name, pn.Disc, err)
 	}
 	if deployShape {
-		var dn spec.BundleNode
+		var dn spec.FleetNode
 		if err := json.Unmarshal(out.JSON, &dn); err != nil {
 			return fmt.Errorf("node %q: substrate deploy reply decode: %w", pn.Name, err)
 		}
-		ensureMap(&acc.Bundle)
-		acc.Bundle[pn.Name] = dn
+		ensureMap(&acc.Fleet)
+		acc.Fleet[pn.Name] = dn
 		return nil
 	}
 	return foldStandaloneTemplateReply(pn.Disc, pn.Name, out.JSON, acc)
@@ -370,7 +370,7 @@ func validateKindValueCUE(pn spec.ParsedNode) error {
 	// cue.Concrete(true)), so a required-but-unset field slips through silently (e.g. a vm
 	// PCI hostdev's slot/function). A blanket cue.Concrete(true) fix was attempted and
 	// REVERTED — it broke 9 real cases across vm/pod/local/k8s/candy (TestCueKinds_Corpus,
-	// TestBundleCompileParity_*, TestPreresolveActiveInitInto_*, TestCompileServiceSteps_*,
+	// TestFleetCompileParity_*, TestPreresolveActiveInitInto_*, TestCompileServiceSteps_*,
 	// TestBuildDeployPlan*, TestInvokeProvider_LazyConnectFallback*) because those
 	// transitively load the REAL repo-root charly.yml, which legitimately carries
 	// non-concrete/disjunctive constructs elsewhere in the document (candy's base⊻from

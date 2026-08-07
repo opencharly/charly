@@ -66,6 +66,6 @@ func pluginPrimaryFor(word string) (string, bool) {
 	return f, ok
 }
 
-// (resugarPlan — the save-side desugar inverse — moved to deploykit.MarshalBundleNode's own
+// (resugarPlan — the save-side desugar inverse — moved to deploykit.MarshalFleetNode's own
 // resugarPlan in the deploy_nodeform convergence: it reads the primaries D-fact as DATA, so it is
 // plugin-reachable. pluginPrimaryFor above stays here as the host LOAD-path schema-gate consult.)

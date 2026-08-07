@@ -6,7 +6,7 @@ import "testing"
 // directly. Env precedence is owned by this function (its doc comment: "The env precedence is
 // owned here"), but until now it was only exercised INDIRECTLY — via a deploykit.CredentialResolver
 // callback pass-through in a test that asserted deploykit.ResolveSecretValue's own merge logic, not
-// ResolveCredential's. That test has relocated to candy/plugin-bundle (#55 decoupling, Batch A)
+// ResolveCredential's. That test has relocated to candy/plugin-fleet (#55 decoupling, Batch A)
 // alongside the pure deploykit behavior it actually asserted, using its own local fake resolver —
 // leaving ResolveCredential's env-classification behavior genuinely untested in charly. This closes
 // that gap: an env var override must win over the (unreachable, in this fast unit test) plugin

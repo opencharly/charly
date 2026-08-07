@@ -98,7 +98,7 @@ func TestResolvePriorVmState_ErrorPropagates(t *testing.T) {
 	}
 }
 
-// TestDispatchVmEphemeralTeardown_InvokesBundleProviderWhenEphemeral is the regression test for
+// TestDispatchVmEphemeralTeardown_InvokesFleetProviderWhenEphemeral is the regression test for
 // the FINAL/K5 unit 6a RCA #9 live-probe-caught bug, ported to this plugin (F6 vm-lifecycle move,
 // coneB-vmlifecycle): the ORIGINAL bug was a lookup by the raw deploy name instead of the
 // canonical "vm:"+VmDomainIdentity(name) key. Here the canonical key is threaded automatically —
@@ -106,9 +106,9 @@ func TestResolvePriorVmState_ErrorPropagates(t *testing.T) {
 // prior state via resolvePriorVmState(domain), so this proves the read is keyed by the canonical
 // domain (resolvePriorVmState → loaderkit.ResolveVmStateViaExecutor, the config-resolve seam is
 // DELETED), AND that a non-nil Ephemeral record triggers the
-// OpEphemeralTeardown peer-dispatch to command:bundle with the persisted VmState threaded onto the
+// OpEphemeralTeardown peer-dispatch to command:fleet with the persisted VmState threaded onto the
 // decoded node.
-func TestDispatchVmEphemeralTeardown_InvokesBundleProviderWhenEphemeral(t *testing.T) {
+func TestDispatchVmEphemeralTeardown_InvokesFleetProviderWhenEphemeral(t *testing.T) {
 	prev := resolvePriorVmState
 	resolvePriorVmState = func(context.Context, *sdk.Executor, string) (*spec.VmDeployState, error) {
 		return &spec.VmDeployState{
@@ -129,10 +129,10 @@ func TestDispatchVmEphemeralTeardown_InvokesBundleProviderWhenEphemeral(t *testi
 	}
 
 	if !fake.invokeProviderCalled {
-		t.Fatal("dispatchVmEphemeralTeardown with a non-nil Ephemeral record must Invoke command:bundle's OpEphemeralTeardown — it did not call InvokeProvider at all")
+		t.Fatal("dispatchVmEphemeralTeardown with a non-nil Ephemeral record must Invoke command:fleet's OpEphemeralTeardown — it did not call InvokeProvider at all")
 	}
-	if fake.gotInvokeReq.GetClass() != "command" || fake.gotInvokeReq.GetReserved() != "bundle" || fake.gotInvokeReq.GetOp() != sdk.OpEphemeralTeardown {
-		t.Errorf("InvokeProvider(class=%q, word=%q, op=%q), want (command, bundle, %q)",
+	if fake.gotInvokeReq.GetClass() != "command" || fake.gotInvokeReq.GetReserved() != "fleet" || fake.gotInvokeReq.GetOp() != sdk.OpEphemeralTeardown {
+		t.Errorf("InvokeProvider(class=%q, word=%q, op=%q), want (command, fleet, %q)",
 			fake.gotInvokeReq.GetClass(), fake.gotInvokeReq.GetReserved(), fake.gotInvokeReq.GetOp(), sdk.OpEphemeralTeardown)
 	}
 	var gotTeardownReq spec.EphemeralTeardownRequest
@@ -154,7 +154,7 @@ func TestDispatchVmEphemeralTeardown_InvokesBundleProviderWhenEphemeral(t *testi
 }
 
 // TestDispatchVmEphemeralTeardown_NoEphemeral_SkipsDispatch covers the common non-ephemeral case:
-// a domain with no persisted Ephemeral record must NOT Invoke command:bundle at all.
+// a domain with no persisted Ephemeral record must NOT Invoke command:fleet at all.
 func TestDispatchVmEphemeralTeardown_NoEphemeral_SkipsDispatch(t *testing.T) {
 	prev := resolvePriorVmState
 	resolvePriorVmState = func(context.Context, *sdk.Executor, string) (*spec.VmDeployState, error) {
@@ -169,7 +169,7 @@ func TestDispatchVmEphemeralTeardown_NoEphemeral_SkipsDispatch(t *testing.T) {
 		t.Fatalf("dispatchVmEphemeralTeardown: %v", err)
 	}
 	if fake.invokeProviderCalled {
-		t.Error("dispatchVmEphemeralTeardown with no persisted Ephemeral record must not Invoke command:bundle")
+		t.Error("dispatchVmEphemeralTeardown with no persisted Ephemeral record must not Invoke command:fleet")
 	}
 }
 
@@ -181,14 +181,14 @@ func TestDispatchVmEphemeralTeardown_NoEphemeral_SkipsDispatch(t *testing.T) {
 func TestVmEntityForPrepare(t *testing.T) {
 	cases := []struct {
 		name    string
-		node    *spec.BundleNode
+		node    *spec.FleetNode
 		deploy  string
 		want    string
 		wantErr bool
 	}{
 		{
 			name:   "node.From wins over everything else",
-			node:   &spec.BundleNode{From: "cachyos-gpu"},
+			node:   &spec.FleetNode{From: "cachyos-gpu"},
 			deploy: "check-cachyos-gpu-vm",
 			want:   "cachyos-gpu",
 		},
@@ -212,7 +212,7 @@ func TestVmEntityForPrepare(t *testing.T) {
 		},
 		{
 			name:   "node present but From empty falls through to the deploy-name cases",
-			node:   &spec.BundleNode{Target: "vm"},
+			node:   &spec.FleetNode{Target: "vm"},
 			deploy: "vm:cachyos-gpu",
 			want:   "cachyos-gpu",
 		},
@@ -251,7 +251,7 @@ func TestVmEntityForPrepare(t *testing.T) {
 // TestVmPrepareVenue_MalformedNodeErrors is the break-it-proven regression test for the
 // bed-robustness batch item 4 discarded-decode-errors audit: vmPrepareVenue used to
 // `_ = json.Unmarshal(p.Node, &node)`, silently discarding a decode failure and proceeding with a
-// zero-value BundleNode — masking a real request-corruption bug behind a confusing downstream
+// zero-value FleetNode — masking a real request-corruption bug behind a confusing downstream
 // "no vm: cross-ref" error instead of a loud, attributable "decode node" one. The node decode is the
 // very FIRST statement in vmPrepareVenue (before any executor use), so this exercises the REAL
 // function directly with a nil executor and malformed JSON — no mock/broker needed.

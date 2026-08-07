@@ -14,7 +14,7 @@ import (
 // disk dir output/qcow2/<vm>/.
 //
 //nolint:gocyclo // flat sequential vm-create orchestration; extraction relocates, not clarifies
-func (c *VmCreateCmd) runVmSpecCreate(vmName string, spec *VmSpec, backend string, claimantNode *BundleNode, resources map[string]*ResolvedResource, vmState *VmDeployState) error {
+func (c *VmCreateCmd) runVmSpecCreate(vmName string, spec *VmSpec, backend string, claimantNode *FleetNode, resources map[string]*ResolvedResource, vmState *VmDeployState) error {
 	// entity = the kind:vm ENTITY (the disk/spec SOURCE — the shared read-only base every per-deploy
 	// overlay backs onto). domainID = the per-deploy DOMAIN IDENTITY: the DEPLOY name when the deploy
 	// path passes --domain (so sibling beds sharing one entity get distinct, collision-free domains),

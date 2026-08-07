@@ -56,8 +56,8 @@ func TestParsePortStrings(t *testing.T) {
 
 func TestFlatCollector_LookupDeploy_KeyShapes(t *testing.T) {
 	c := &flatCollector{
-		deploy: &deploykit.BundleConfig{
-			Bundle: map[string]spec.BundleNode{
+		deploy: &deploykit.FleetConfig{
+			Fleet: map[string]spec.FleetNode{
 				"selkies-desktop":      {Port: []string{"3000:3000"}},
 				"selkies-desktop/work": {Port: []string{"3001:3000"}, Tunnel: &spec.TunnelYAML{Provider: "tailscale", Private: spec.PortScope{All: true}}},
 				"weird-joined-name":    {Port: []string{"7777:7777"}},
@@ -89,7 +89,7 @@ func TestEnrichVmRow(t *testing.T) {
 	cases := []struct {
 		name      string
 		row       spec.DeploymentStatus
-		deploy    *deploykit.BundleConfig
+		deploy    *deploykit.FleetConfig
 		wantNet   string
 		wantPorts []spec.PortMapping
 	}{
@@ -100,8 +100,8 @@ func TestEnrichVmRow(t *testing.T) {
 		{
 			name: "enriched from target:vm deploy vm_state",
 			row:  spec.DeploymentStatus{Kind: spec.SubstrateVM, Image: "cachyos-gpu"},
-			deploy: &deploykit.BundleConfig{
-				Bundle: map[string]spec.BundleNode{
+			deploy: &deploykit.FleetConfig{
+				Fleet: map[string]spec.FleetNode{
 					"vm:cachyos-gpu": {
 						Target:  "vm",
 						From:    "cachyos-gpu",
@@ -114,8 +114,8 @@ func TestEnrichVmRow(t *testing.T) {
 		{
 			name: "bed whose deploy key differs from vm entity is matched",
 			row:  spec.DeploymentStatus{Kind: spec.SubstrateVM, Image: "k3s-vm"},
-			deploy: &deploykit.BundleConfig{
-				Bundle: map[string]spec.BundleNode{
+			deploy: &deploykit.FleetConfig{
+				Fleet: map[string]spec.FleetNode{
 					// deploy KEY (check-k3s-vm) != vm entity (k3s-vm).
 					"check-k3s-vm": {
 						Target:  "vm",
@@ -129,8 +129,8 @@ func TestEnrichVmRow(t *testing.T) {
 		{
 			name: "network filled from deploy entry with no vm_state",
 			row:  spec.DeploymentStatus{Kind: spec.SubstrateVM, Image: "arch"},
-			deploy: &deploykit.BundleConfig{
-				Bundle: map[string]spec.BundleNode{
+			deploy: &deploykit.FleetConfig{
+				Fleet: map[string]spec.FleetNode{
 					"arch": {Target: "vm", From: "arch", Network: "bridge0"},
 				},
 			},

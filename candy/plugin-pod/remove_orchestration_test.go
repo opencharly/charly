@@ -41,40 +41,40 @@ func TestPurgeDeployArtifacts_DropsOverlay(t *testing.T) {
 	}
 }
 
-// TestSidecarNamesFromBundleConfig covers the pure extraction logic resolveSidecarNames' seam call
+// TestSidecarNamesFromFleetConfig covers the pure extraction logic resolveSidecarNames' seam call
 // feeds into — enumerating EXACT sidecar names attached to a deploy so `charly remove`'s
 // quadlet-mode sidecar sweep never over-matches a same-image sibling instance. Split out of
 // resolveSidecarNames (Cutover B unit 2: that function now calls the loaderkit overlay read,
 // which needs a live reverse channel a plain unit test doesn't have — see remove_orchestration.go's
 // header) so this logic — the part charly/remove_sidecar_test.go actually exercised — stays
-// unit-testable directly against a constructed *deploykit.BundleConfig, no YAML/loader/seam needed.
-func TestSidecarNamesFromBundleConfig(t *testing.T) {
+// unit-testable directly against a constructed *deploykit.FleetConfig, no YAML/loader/seam needed.
+func TestSidecarNamesFromFleetConfig(t *testing.T) {
 	raw := func(s string) json.RawMessage { return json.RawMessage(s) }
 
 	tests := []struct {
 		name     string
-		bundle   map[string]deploykit.BundleNode
+		fleet    map[string]deploykit.FleetNode
 		image    string
 		instance string
 		want     []string
 	}{
 		{
 			name:     "no entry — returns nil",
-			bundle:   map[string]deploykit.BundleNode{"other": {Image: "other"}},
+			fleet:    map[string]deploykit.FleetNode{"other": {Image: "other"}},
 			image:    "missing",
 			instance: "",
 			want:     nil,
 		},
 		{
 			name:     "entry without sidecars — returns nil",
-			bundle:   map[string]deploykit.BundleNode{"foo": {Image: "foo"}},
+			fleet:    map[string]deploykit.FleetNode{"foo": {Image: "foo"}},
 			image:    "foo",
 			instance: "",
 			want:     nil,
 		},
 		{
 			name: "entry with one sidecar — single-name slice",
-			bundle: map[string]deploykit.BundleNode{
+			fleet: map[string]deploykit.FleetNode{
 				"foo": {Image: "foo", Sidecar: map[string]json.RawMessage{"tailscale": raw("{}")}},
 			},
 			image:    "foo",
@@ -83,7 +83,7 @@ func TestSidecarNamesFromBundleConfig(t *testing.T) {
 		},
 		{
 			name: "entry with multiple sidecars — sorted",
-			bundle: map[string]deploykit.BundleNode{
+			fleet: map[string]deploykit.FleetNode{
 				"foo": {Image: "foo", Sidecar: map[string]json.RawMessage{
 					"vault": raw("{}"), "tailscale": raw("{}"),
 				}},
@@ -94,7 +94,7 @@ func TestSidecarNamesFromBundleConfig(t *testing.T) {
 		},
 		{
 			name: "Pattern-A instance entry with sidecar",
-			bundle: map[string]deploykit.BundleNode{
+			fleet: map[string]deploykit.FleetNode{
 				"foo/inst1": {Image: "foo", Sidecar: map[string]json.RawMessage{"tailscale": raw("{}")}},
 			},
 			image:    "foo",
@@ -105,17 +105,17 @@ func TestSidecarNamesFromBundleConfig(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			dc := &deploykit.BundleConfig{Bundle: tc.bundle}
-			got := sidecarNamesFromBundleConfig(dc, tc.image, tc.instance)
+			dc := &deploykit.FleetConfig{Fleet: tc.fleet}
+			got := sidecarNamesFromFleetConfig(dc, tc.image, tc.instance)
 			if !reflect.DeepEqual(got, tc.want) {
-				t.Errorf("sidecarNamesFromBundleConfig(%q, %q) = %v; want %v", tc.image, tc.instance, got, tc.want)
+				t.Errorf("sidecarNamesFromFleetConfig(%q, %q) = %v; want %v", tc.image, tc.instance, got, tc.want)
 			}
 		})
 	}
 
-	t.Run("nil bundle config — returns nil", func(t *testing.T) {
-		if got := sidecarNamesFromBundleConfig(nil, "foo", ""); got != nil {
-			t.Errorf("sidecarNamesFromBundleConfig(nil, ...) = %v, want nil", got)
+	t.Run("nil fleet config — returns nil", func(t *testing.T) {
+		if got := sidecarNamesFromFleetConfig(nil, "foo", ""); got != nil {
+			t.Errorf("sidecarNamesFromFleetConfig(nil, ...) = %v, want nil", got)
 		}
 	})
 }

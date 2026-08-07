@@ -4,7 +4,7 @@ package loader
 // TestValidateCheckBeds_TargetEnum / _VmRefMustResolve / _LocalRefMustResolve
 // assert loaderkit.ValidateCheckBeds directly against spec.UnifiedFile fixtures
 // — zero charly coupling (using a plain testThreaded() value in place of
-// charly's registry-derived loaderThreaded()). TestCheckBeds_DerivesFromDisposableBundles
+// charly's registry-derived loaderThreaded()). TestCheckBeds_DerivesFromDisposableFleets
 // (a pure spec.UnifiedFile method) and the bed-persist / cross-deployment tests
 // (TestPersistBedDeployOverrides_SeedsPortBeforeConfig, TestBedCheckLiveRefs —
 // genuine charly-loader integration coverage) STAY in charly/check_bed_run_test.go.
@@ -22,7 +22,7 @@ import (
 // TestValidateCheckBeds_TargetEnum asserts an unsupported target is rejected.
 func TestValidateCheckBeds_TargetEnum(t *testing.T) {
 	uf := &spec.UnifiedFile{
-		Bundle: map[string]spec.BundleNode{
+		Fleet: map[string]spec.FleetNode{
 			"check-weird": {Target: "k8s", Disposable: new(true)},
 		},
 	}
@@ -36,7 +36,7 @@ func TestValidateCheckBeds_TargetEnum(t *testing.T) {
 // entity is undefined is rejected, and that a defined entity passes.
 func TestValidateCheckBeds_VmRefMustResolve(t *testing.T) {
 	missing := &spec.UnifiedFile{
-		Bundle: map[string]spec.BundleNode{
+		Fleet: map[string]spec.FleetNode{
 			"check-k3s-vm": {Target: "vm", From: "k3s-vm", Disposable: new(true)},
 		},
 	}
@@ -47,7 +47,7 @@ func TestValidateCheckBeds_VmRefMustResolve(t *testing.T) {
 		PluginKinds: map[string]map[string]json.RawMessage{
 			"vm": rawTemplateMap(map[string]*vmshared.VmSpec{"k3s-vm": {}}),
 		},
-		Bundle: map[string]spec.BundleNode{
+		Fleet: map[string]spec.FleetNode{
 			"check-k3s-vm": {Target: "vm", From: "k3s-vm", Disposable: new(true)},
 		},
 	}
@@ -60,7 +60,7 @@ func TestValidateCheckBeds_VmRefMustResolve(t *testing.T) {
 // local: template is undefined is rejected, and that a defined one passes.
 func TestValidateCheckBeds_LocalRefMustResolve(t *testing.T) {
 	missing := &spec.UnifiedFile{
-		Bundle: map[string]spec.BundleNode{
+		Fleet: map[string]spec.FleetNode{
 			"check-local": {Target: "local", From: "check-local", Disposable: new(true)},
 		},
 	}
@@ -71,7 +71,7 @@ func TestValidateCheckBeds_LocalRefMustResolve(t *testing.T) {
 		PluginKinds: map[string]map[string]json.RawMessage{
 			"local": rawTemplateMap(map[string]*spec.LocalSpec{"check-local": {}}),
 		},
-		Bundle: map[string]spec.BundleNode{
+		Fleet: map[string]spec.FleetNode{
 			"check-local": {Target: "local", From: "check-local", Disposable: new(true)},
 		},
 	}

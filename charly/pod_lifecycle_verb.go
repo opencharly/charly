@@ -20,7 +20,7 @@ import (
 //
 // #55 K4 seam-completion: the per-host deploy NODE arrives as DATA (spec.Deploy). The command:pod /
 // command:cmd plugin ALREADY resolves it plugin-side (loaderkit.ResolveLifecycleDeployNodeViaExecutor,
-// the cycle-free plugin-side overlay read — the dc.Bundle[key] lookup + the container/""→pod Target
+// the cycle-free plugin-side overlay read — the dc.Fleet[key] lookup + the container/""→pod Target
 // normalization + the {Target:pod} fallback for a bare image with no deploy entry) and threads it into
 // the pod-lifecycle HostBuild requests. So the host no longer re-reads the per-host config here (the
 // former resolveLifecycleDeployNode + its deploykit.LoadDeployConfigForRead are deleted): the config
@@ -29,10 +29,10 @@ import (
 // Mechanism per the kernel/plugin boundary law.
 
 // dispatchLifecycleTarget resolves the plugin-supplied deploy node → its LifecycleTarget (connecting
-// external substrate plugins first, R3 with bundle add / update), returning a clear error for a
+// external substrate plugins first, R3 with fleet add / update), returning a clear error for a
 // targetless substrate. The node is DATA the calling command plugin already resolved; the host does
 // ONLY the irreducible core-M dispatch.
-func dispatchLifecycleTarget(verb string, node *spec.BundleNode, deployName string) (spec.LifecycleTarget, error) {
+func dispatchLifecycleTarget(verb string, node *spec.FleetNode, deployName string) (spec.LifecycleTarget, error) {
 	if node == nil {
 		return nil, fmt.Errorf("charly %s %s: no deploy node supplied by the command plugin", verb, deployName)
 	}

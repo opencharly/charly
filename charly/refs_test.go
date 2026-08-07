@@ -10,14 +10,14 @@ import (
 	"github.com/opencharly/spec/spec"
 )
 
-// TestCandyRef relocated to candy/plugin-bundle (#55 decoupling, Batch A) — it asserted
+// TestCandyRef relocated to candy/plugin-fleet (#55 decoupling, Batch A) — it asserted
 // deploykit.CandyRef directly, zero charly dep.
 
 // TestPickCandyVersion relocated to candy/plugin-loader (#55 decoupling; Batch A executed this
 // move on Batch C's behalf per the cross-batch file-ownership matrix) — it asserted
 // loaderkit.PickCandyVersion directly, zero charly dep.
 
-// TestStripVersion / TestBareRef relocated to candy/plugin-bundle (#55 decoupling, Batch A) —
+// TestStripVersion / TestBareRef relocated to candy/plugin-fleet (#55 decoupling, Batch A) —
 // they asserted deploykit.StripVersion/BareRef directly, zero charly dep.
 
 func TestParseRemoteRef(t *testing.T) {
@@ -47,7 +47,7 @@ func TestParseRemoteRef(t *testing.T) {
 	}
 }
 
-// TestIsRemoteCandyRef relocated to candy/plugin-bundle (#55 decoupling, Batch A) — it
+// TestIsRemoteCandyRef relocated to candy/plugin-fleet (#55 decoupling, Batch A) — it
 // asserted deploykit.IsRemoteCandyRef directly, zero charly dep.
 
 func TestIsRemoteImageRef(t *testing.T) {

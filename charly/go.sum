@@ -51,8 +51,6 @@ github.com/emicklei/proto v1.14.3/go.mod h1:rn1FgRS/FANiZdD2djyH7TMA9jdRDcYQ9IEN
 github.com/fatih/color v1.13.0/go.mod h1:kLAiJbzzSOZDVNGyDpeOxJ47H46qBXwg5ILebYFFOfk=
 github.com/fatih/color v1.15.0 h1:kOqh6YHBtK8aywxGerMG2Eq3H6Qgoqeo13Bk2Mv/nBs=
 github.com/fatih/color v1.15.0/go.mod h1:0h5ZqXfHYED7Bhv2ZJamyIOUej9KtShiJESRwBDUSsw=
-github.com/fsnotify/fsnotify v1.10.1 h1:b0/UzAf9yR5rhf3RPm9gf3ehBPpf0oZKIjtpKrx59Ho=
-github.com/fsnotify/fsnotify v1.10.1/go.mod h1:TLheqan6HD6GBK6PrDWyDPBaEV8LspOxvPSjC+bVfgo=
 github.com/go-quicktest/qt v1.101.0 h1:O1K29Txy5P2OK0dGo59b7b0LR6wKfIhttaAhHUyn7eI=
 github.com/go-quicktest/qt v1.101.0/go.mod h1:14Bz/f7NwaXPtdYEgzsx46kqSxVwTbzVZsDC26tQJow=
 github.com/golang/protobuf v1.5.4 h1:i7eJL8qZTpSEXOPTxNKhASYpMn+8e5Q6AdndVa1dWek=
@@ -61,8 +59,6 @@ github.com/google/go-cmp v0.7.0 h1:wk8382ETsv4JYUZwIsn6YpYiWiBsYLSJiTsyBybVuN8=
 github.com/google/go-cmp v0.7.0/go.mod h1:pXiqmnSA92OHEEa9HXL2W4E7lf9JzCmGVUdgjX3N/iU=
 github.com/google/go-containerregistry v0.20.7 h1:24VGNpS0IwrOZ2ms2P1QE3Xa5X9p4phx0aUgzYzHW6I=
 github.com/google/go-containerregistry v0.20.7/go.mod h1:Lx5LCZQjLH1QBaMPeGwsME9biPeo1lPx6lbGj/UmzgM=
-github.com/google/renameio/v2 v2.0.2 h1:qKZs+tfn+arruZZhQ7TKC/ergJunuJicWS6gLDt/dGw=
-github.com/google/renameio/v2 v2.0.2/go.mod h1:OX+G6WHHpHq3NVj7cAOleLOwJfcQ1s3uUJQCrr78SWo=
 github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
 github.com/google/uuid v1.6.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
 github.com/hashicorp/go-hclog v1.6.3 h1:Qr2kF+eVWjTiYmU7Y31tYlP1h0q/X3Nl3tPGdaB11/k=
@@ -124,8 +120,6 @@ github.com/opencharly/charly/candy/plugin-build v0.0.0-20260729064511-fdae3cc3d4
 github.com/opencharly/charly/candy/plugin-build v0.0.0-20260729064511-fdae3cc3d4dd/go.mod h1:EGx5Kd/cW3b3FAF3CLnGDjHSqxSvGAM3d06rLIY8x3k=
 github.com/opencharly/charly/candy/plugin-builder v0.0.0-20260729064511-fdae3cc3d4dd h1:G5pvHj+F4zooSQDHdOXJ2MjfuqOtinVip1m3llp3OYI=
 github.com/opencharly/charly/candy/plugin-builder v0.0.0-20260729064511-fdae3cc3d4dd/go.mod h1:iqPBV6ofLqqQUcgLQe/QqAkAOjfEXMQLsQeWN/7yreI=
-github.com/opencharly/charly/candy/plugin-bundle v0.0.0-20260729064511-fdae3cc3d4dd h1:Z+49VDCfY+4c00vDhYTlE7A43kUeFnGRBbigkBBQjaM=
-github.com/opencharly/charly/candy/plugin-bundle v0.0.0-20260729064511-fdae3cc3d4dd/go.mod h1:mODdMVFu+u0Txo2ZFdFuSF3GFt+4hGikTHaedXjCpaw=
 github.com/opencharly/charly/candy/plugin-candy v0.0.0-20260729064511-fdae3cc3d4dd h1:0tcJ/2479IIlIDHVPMRIMfhx0li2oac+veF48t3W6WE=
 github.com/opencharly/charly/candy/plugin-candy v0.0.0-20260729064511-fdae3cc3d4dd/go.mod h1:F9A79eNFLyQNRhR8OUEFbbgR//ZSBq49yDBQNnGDMZQ=
 github.com/opencharly/charly/candy/plugin-candy-kind v0.0.0-20260729064511-fdae3cc3d4dd h1:o6ps8fXcjxva+oPkrDmeVOcqrbEMhzwO3EF/KQw+O+k=

@@ -46,7 +46,7 @@ match, load ALL their skills before doing anything.
 | Editing `sdk/schema/*.cue` / `task cue:gen` / `cue exp gengotypes` / generated `cue_types_gen.go` / Schema Driven Design (SDD) / a schema spike | `/charly-internals:plugin` |
 | Editing a box (`box/<name>/charly.yml` — boxes live in the `box/<distro>` submodules; main owns none), box composition | `/charly-image:image` |
 | Editing a candy (`candy/<name>/charly.yml`), candy authoring, candy tasks/services | `/charly-image:layer` |
-| Egress config validation — validating/generating the config files charly WRITES to a system (`candy/plugin-bundle/egress.go`, `ValidateEgress`, the vendored CUE egress schemas in `candy/plugin-egress/egress-schemas/vendor/`, cloud-init/k8s/units/ssh_config/libvirt-XML egress) | `/charly-internals:egress` |
+| Egress config validation — validating/generating the config files charly WRITES to a system (`candy/plugin-fleet/egress.go`, `ValidateEgress`, the vendored CUE egress schemas in `candy/plugin-egress/egress-schemas/vendor/`, cloud-init/k8s/units/ssh_config/libvirt-XML egress) | `/charly-internals:egress` |
 | Engineering-discipline triggers (failure surfaced / dup pattern / ad-hoc fix tempting / "out of scope" framing) | `/charly-internals:strict-policy` |
 | Evaluate/audit a deployment config (image or deploy, yours) | `/charly-check:check` |
 | Evaluate/audit a deployment config (image or deploy, yours) | `/charly-internals:agents` |
@@ -83,7 +83,7 @@ match, load ALL their skills before doing anything.
 | `charly box build` / `charly box generate` / Containerfile | `/charly-internals:generate-source` |
 | `charly box reconcile` / cross-repo `@github` pin alignment / candy-version-mismatch cleanup | `/charly-build:reconcile` |
 | `charly box validate` / schema error | `/charly-build:validate` |
-| `charly bundle add/del` / pod or container deploys | `/charly-core:deploy` |
+| `charly fleet add/del` / pod or container deploys | `/charly-core:deploy` |
 | `charly check *` (ANY check verb, incl. `charly check box`) / `charly check run <bed>` (the disposable-deploy R10 bed) / authoring `disposable: true` check beds / `charly check live` / the probe verbs (cdp/wl/dbus/vnc/mcp/record/spice/libvirt) / `iterate:` AI-agent scoring / `plan:` step authoring / `charlycheck/*` branches | `/charly-check:check` |
 | `charly clean` / build-artifact retention / `keep_images` / `keep_check_runs` / image-tag pruning / `.check` run cleanup | `/charly-core:clean` |
 | `charly docs` / the opencharly.ai site / the `docs/` submodule / `task docs:sync`/`docs:drift` / Starlight/Astro / `candy/plugin-docs` (runtime plugin) or `candy/docs-site` | `/charly-build:docs` |

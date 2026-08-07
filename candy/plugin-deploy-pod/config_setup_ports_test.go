@@ -11,9 +11,9 @@ import (
 )
 
 // TestResolveDeployPorts_NilOverlaySiblingsAutoAllocateDistinctPorts is the task-#19 regression
-// test: it FAILS on the pre-fix shape (the `if dc != nil && dc.Bundle != nil` guard in
+// test: it FAILS on the pre-fix shape (the `if dc != nil && dc.Fleet != nil` guard in
 // config_setup.go, before it was replaced by this test's target, resolveDeployPorts) and PASSES
-// once a nil dc/dc.Bundle self-heals into an empty overlay instead of skipping resolution.
+// once a nil dc/dc.Fleet self-heals into an empty overlay instead of skipping resolution.
 //
 // Reproduces the exact real-world collision (see /tmp/terminus-rca.md, task #19): a disposable
 // check bed's first-ever `charly config` runs in a fresh XDG-isolated environment with NO
@@ -26,29 +26,29 @@ import (
 // This test drives resolveDeployPorts twice against the SAME dc (starting nil, exactly like two
 // sibling beds' first configs against the same real ~/.config/charly/charly.yml) with two
 // DIFFERENT deploy keys sharing container port 18794 — mirroring check-tunnel-pod and
-// check-stepkind-emit-pod. It asserts: (1) a nil dc/dc.Bundle no longer skips resolution — each
+// check-stepkind-emit-pod. It asserts: (1) a nil dc/dc.Fleet no longer skips resolution — each
 // call must persist a genuine resolved H:C pin, never the bare unresolved container port; and
 // (2) OccupiedHostPorts correctly differentiates the two sibling keys once resolved into the
 // same overlay, so they land on DISTINCT host ports — never colliding.
 func TestResolveDeployPorts_NilOverlaySiblingsAutoAllocateDistinctPorts(t *testing.T) {
-	saveStub := &saveBundleStub{}
+	saveStub := &saveFleetStub{}
 	saveStub.install(t)
 	fake := &fakeVolumeExecutorServiceClient{}
 	ex := sdk.NewInProcExecutor(fake)
 	meta := &spec.BoxMetadata{Port: []string{"18794"}}
 
-	var dc *deploykit.BundleConfig // nil: no per-host overlay yet — a fresh bed's first config
+	var dc *deploykit.FleetConfig // nil: no per-host overlay yet — a fresh bed's first config
 
 	key1 := spec.DeployKey("check-tunnel-pod", "")
 	if err := resolveDeployPorts(context.Background(), ex, &dc, key1, meta); err != nil {
 		t.Fatalf("resolveDeployPorts() [first call, nil overlay] error = %v", err)
 	}
-	if dc == nil || dc.Bundle == nil {
-		t.Fatal("resolveDeployPorts() left dc/dc.Bundle nil after a nil-overlay first config — the task #19 bug: port resolution silently skipped")
+	if dc == nil || dc.Fleet == nil {
+		t.Fatal("resolveDeployPorts() left dc/dc.Fleet nil after a nil-overlay first config — the task #19 bug: port resolution silently skipped")
 	}
-	entry1, ok := dc.Bundle[key1]
+	entry1, ok := dc.Fleet[key1]
 	if !ok || len(entry1.ResolvedPort) != 1 {
-		t.Fatalf("dc.Bundle[%q] = %+v, want exactly one resolved port pin", key1, entry1)
+		t.Fatalf("dc.Fleet[%q] = %+v, want exactly one resolved port pin", key1, entry1)
 	}
 	pm1, ok := kit.ParsePortMapping(entry1.ResolvedPort[0])
 	if !ok || pm1.Container != 18794 {
@@ -59,9 +59,9 @@ func TestResolveDeployPorts_NilOverlaySiblingsAutoAllocateDistinctPorts(t *testi
 	if err := resolveDeployPorts(context.Background(), ex, &dc, key2, meta); err != nil {
 		t.Fatalf("resolveDeployPorts() [second call, sibling key, same dc] error = %v", err)
 	}
-	entry2, ok := dc.Bundle[key2]
+	entry2, ok := dc.Fleet[key2]
 	if !ok || len(entry2.ResolvedPort) != 1 {
-		t.Fatalf("dc.Bundle[%q] = %+v, want exactly one resolved port pin", key2, entry2)
+		t.Fatalf("dc.Fleet[%q] = %+v, want exactly one resolved port pin", key2, entry2)
 	}
 	pm2, ok := kit.ParsePortMapping(entry2.ResolvedPort[0])
 	if !ok || pm2.Container != 18794 {
@@ -72,50 +72,50 @@ func TestResolveDeployPorts_NilOverlaySiblingsAutoAllocateDistinctPorts(t *testi
 		t.Fatalf("both sibling deploys (sharing container port 18794) resolved to the SAME host port %d — the exact collision task #19 fixes", pm1.Host)
 	}
 	if !saveStub.called {
-		t.Error("resolveDeployPorts() did not persist via saveBundle")
+		t.Error("resolveDeployPorts() did not persist via saveFleet")
 	}
 }
 
 // TestResolveDeployPorts_NilDcPointerSelfHeals covers the more degenerate nil case: dc is a nil
-// *deploykit.BundleConfig (not merely a non-nil BundleConfig with a nil Bundle) — the shape
+// *deploykit.FleetConfig (not merely a non-nil FleetConfig with a nil Fleet) — the shape
 // loadDeploy returns when the plugin-side load itself fails (a load error, not merely "absent").
 // Mirrors persistResourceCaps' own *dc == nil branch (config_setup_helpers.go), which
 // resolveDeployPorts shares.
 func TestResolveDeployPorts_NilDcPointerSelfHeals(t *testing.T) {
-	saveStub := &saveBundleStub{}
+	saveStub := &saveFleetStub{}
 	saveStub.install(t)
 	fake := &fakeVolumeExecutorServiceClient{}
 	ex := sdk.NewInProcExecutor(fake)
 	meta := &spec.BoxMetadata{Port: []string{"18794"}}
 
-	var dc *deploykit.BundleConfig
+	var dc *deploykit.FleetConfig
 	key := spec.DeployKey("check-preempt-arbiter-pod", "")
 	if err := resolveDeployPorts(context.Background(), ex, &dc, key, meta); err != nil {
 		t.Fatalf("resolveDeployPorts() error = %v", err)
 	}
-	if dc == nil || dc.Bundle == nil {
-		t.Fatal("resolveDeployPorts() left dc nil — a nil dc pointer must self-heal into an empty BundleConfig, exactly like persistResourceCaps")
+	if dc == nil || dc.Fleet == nil {
+		t.Fatal("resolveDeployPorts() left dc nil — a nil dc pointer must self-heal into an empty FleetConfig, exactly like persistResourceCaps")
 	}
-	if _, ok := dc.Bundle[key]; !ok {
-		t.Fatalf("dc.Bundle[%q] missing after resolution", key)
+	if _, ok := dc.Fleet[key]; !ok {
+		t.Fatalf("dc.Fleet[%q] missing after resolution", key)
 	}
 }
 
 // TestResolveDeployPorts_NoPortsIsNoop asserts the fix does not regress the zero-port case: a box
-// with no container ports and no pin must resolve to nothing and never call saveBundle.
+// with no container ports and no pin must resolve to nothing and never call saveFleet.
 func TestResolveDeployPorts_NoPortsIsNoop(t *testing.T) {
-	saveStub := &saveBundleStub{}
+	saveStub := &saveFleetStub{}
 	saveStub.install(t)
 	fake := &fakeVolumeExecutorServiceClient{}
 	ex := sdk.NewInProcExecutor(fake)
 	meta := &spec.BoxMetadata{}
 
-	var dc *deploykit.BundleConfig
+	var dc *deploykit.FleetConfig
 	key := spec.DeployKey("check-addcandy-pod", "")
 	if err := resolveDeployPorts(context.Background(), ex, &dc, key, meta); err != nil {
 		t.Fatalf("resolveDeployPorts() error = %v", err)
 	}
 	if saveStub.called {
-		t.Error("resolveDeployPorts() called saveBundle for a portless deploy — want a no-op")
+		t.Error("resolveDeployPorts() called saveFleet for a portless deploy — want a no-op")
 	}
 }

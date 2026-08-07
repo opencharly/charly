@@ -27,7 +27,7 @@ import (
 // shape as the sanctioned in-core k8s/android preresolvers). NO vm lifecycle logic remains in core.
 
 // lifecycleParams are the params the host proxy ships for a vm lifecycle Op. node is the canonical
-// BundleNode JSON; prepare is the resolved spec.LifecyclePrepareInput (PrepareVenue only); opts is
+// FleetNode JSON; prepare is the resolved spec.LifecyclePrepareInput (PrepareVenue only); opts is
 // polymorphic (LifecycleOpts/DeployTargetLogsOpts/DeployTargetRebuildOpts), decoded per-op.
 type lifecycleParams struct {
 	Name      string          `json:"name"`
@@ -148,7 +148,7 @@ func domainIdentity(p lifecycleParams) string {
 // vmEntity resolves the kind:vm entity from the shipped node: node.From (the `vm:` cross-ref) wins,
 // else a legacy "vm:<name>" deploy-key prefix, else the deploy name.
 func vmEntity(p lifecycleParams) string {
-	var node spec.BundleNode
+	var node spec.FleetNode
 	_ = json.Unmarshal(p.Node, &node)
 	if node.From != "" {
 		return string(node.From)
@@ -188,7 +188,7 @@ func vmCli(ctx context.Context, exec *sdk.Executor, capture, bestEffort bool, ar
 // Ported verbatim from the deleted charly/vm_lifecycle_preresolve.go's vmEntityForAdd (FINAL/K5
 // unit 6a, M4b vm-preresolve-body move) — the plugin now owns PrepareVenue's own entity
 // resolution instead of receiving it host-precomputed via the deleted lifecyclePrepareHook.
-func vmEntityForPrepare(node *spec.BundleNode, name string) (string, error) {
+func vmEntityForPrepare(node *spec.FleetNode, name string) (string, error) {
 	if node != nil && node.From != "" {
 		return string(node.From), nil
 	}
@@ -217,7 +217,7 @@ func vmEntityForPrepare(node *spec.BundleNode, name string) (string, error) {
 // it guards is severe: candy/plugin-deploy-vm runs out-of-process, so a direct
 // deploykit.LoadDeployConfigForRead call here (the pre-fix shape) NEVER touches the executor at
 // all and ALWAYS silently returns an empty state — every domain looked "never created before,"
-// discarding+re-creating the per-domain disk overlay on EVERY `charly bundle add vm:<name>`, even
+// discarding+re-creating the per-domain disk overlay on EVERY `charly fleet add vm:<name>`, even
 // for an already-running VM.
 var resolvePriorVmState = func(ctx context.Context, exec *sdk.Executor, domainID string) (*spec.VmDeployState, error) {
 	return loaderkit.ResolveVmStateViaExecutor(ctx, exec, domainID)
@@ -227,7 +227,7 @@ var resolvePriorVmState = func(ctx context.Context, exec *sdk.Executor, domainID
 // coneB-vmlifecycle — formerly a host-side pre-dispatch hook, charly/vm_lifecycle_preresolve.go's
 // vmLifecyclePostTeardown; the "un-importable by the plugin" framing that file's header used to
 // carry was stale — the actual teardown WORK (systemd transient timers, libvirt snapshot
-// refcounts) was already 100% plugin-side in candy/plugin-bundle's teardownEphemeral, reached over
+// refcounts) was already 100% plugin-side in candy/plugin-fleet's teardownEphemeral, reached over
 // OpEphemeralTeardown). The persisted VmState (including the runtime Ephemeral record) is read via
 // the SAME plugin-side read vmPrepareVenue uses (resolvePriorVmState →
 // loaderkit.ResolveVmStateViaExecutor, the config-resolve seam is DELETED) rather than a direct
@@ -247,7 +247,7 @@ func dispatchVmEphemeralTeardown(ctx context.Context, exec *sdk.Executor, p life
 	if prior == nil || prior.Ephemeral == nil {
 		return nil
 	}
-	var node spec.BundleNode
+	var node spec.FleetNode
 	if err := json.Unmarshal(p.Node, &node); err != nil {
 		return fmt.Errorf("plugin-deploy-vm post-teardown: decode node: %w", err)
 	}
@@ -256,26 +256,26 @@ func dispatchVmEphemeralTeardown(ctx context.Context, exec *sdk.Executor, p life
 	if err != nil {
 		return fmt.Errorf("plugin-deploy-vm post-teardown: marshal ephemeral-teardown request: %w", err)
 	}
-	if _, err := exec.InvokeProvider(ctx, "command", "bundle", sdk.OpEphemeralTeardown, reqJSON, nil, sdk.InvokeProviderOpts{}); err != nil {
+	if _, err := exec.InvokeProvider(ctx, "command", "fleet", sdk.OpEphemeralTeardown, reqJSON, nil, sdk.InvokeProviderOpts{}); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: vm ephemeral-teardown: %v\n", err)
 	}
 	return nil
 }
 
 // dispatchVmEphemeralRegister runs the vm ephemeral-lifecycle Add-time registration by Invoking
-// command:bundle's OpEphemeralRegister DIRECTLY over the peer reverse channel — the exact mirror of
+// command:fleet's OpEphemeralRegister DIRECTLY over the peer reverse channel — the exact mirror of
 // dispatchVmEphemeralTeardown (its OpEphemeralTeardown twin). The registration BODY (systemd
-// transient timer + parent-detection) lives 100% plugin-side in candy/plugin-bundle's
+// transient timer + parent-detection) lives 100% plugin-side in candy/plugin-fleet's
 // registerEphemeral, which reaches the host over ITS OWN reverse channel — so no core dispatch hop
 // is needed (this replaces the retired charly/ephemeral_dispatch.go + charly/host_build_ephemeral_register.go
 // "ephemeral-register" HostBuild seam, which only wrapped this same InvokeProvider behind a host round-trip).
 // A no-op when the node was never marked ephemeral. RCA #5 error classification, ported verbatim from
 // the deleted host-side registerEphemeralIfMarked: an ordinary registration condition (e.g. systemd-run
-// missing) stays a soft, logged warning; a PANIC-CLASS error (sdk.EphemeralPanicMarker — plugin-bundle's
+// missing) stays a soft, logged warning; a PANIC-CLASS error (sdk.EphemeralPanicMarker — plugin-fleet's
 // recoverEphemeralOpPanic) is returned to FAIL the whole Add ("a panicking registration must fail the
 // add, not vanish"). Pod/k8s never reach it today (tracked to the bed-robustness batch; validate_ephemeral.go
 // makes the gap LOUD at load).
-func dispatchVmEphemeralRegister(ctx context.Context, exec *sdk.Executor, name string, node *spec.BundleNode) error {
+func dispatchVmEphemeralRegister(ctx context.Context, exec *sdk.Executor, name string, node *spec.FleetNode) error {
 	if node == nil || !node.IsEphemeral() {
 		return nil
 	}
@@ -283,7 +283,7 @@ func dispatchVmEphemeralRegister(ctx context.Context, exec *sdk.Executor, name s
 	if err != nil {
 		return fmt.Errorf("marshal ephemeral-register request: %w", err)
 	}
-	_, regErr := exec.InvokeProvider(ctx, "command", "bundle", sdk.OpEphemeralRegister, reqJSON, nil, sdk.InvokeProviderOpts{})
+	_, regErr := exec.InvokeProvider(ctx, "command", "fleet", sdk.OpEphemeralRegister, reqJSON, nil, sdk.InvokeProviderOpts{})
 	if regErr == nil {
 		return nil
 	}
@@ -295,7 +295,7 @@ func dispatchVmEphemeralRegister(ctx context.Context, exec *sdk.Executor, name s
 }
 
 // isEphemeralPanicError reports whether err was converted from a recovered panic (carries
-// sdk.EphemeralPanicMarker — candy/plugin-bundle's recoverEphemeralOpPanic) rather than an ordinary
+// sdk.EphemeralPanicMarker — candy/plugin-fleet's recoverEphemeralOpPanic) rather than an ordinary
 // registration condition. Ported verbatim from the deleted charly/host_build_ephemeral_register.go
 // (extracted as its own pure function purely for testability). A panic-class error is FATAL to the
 // Add; an ordinary condition is a soft warning (RCA #5).
@@ -312,11 +312,11 @@ func isEphemeralPanicError(err error) bool {
 // LoadUnifiedViaExecutor — the former "deploy-entity-resolve" HostBuild seam round-trip is deleted)
 // and resolves sshPort/stateDir/SSHUser/PriorState directly — all pure sdk/deploykit + sdk/kit +
 // sdk/vmshared + sdk/loaderkit, no core-only coupling. The ephemeral-registration Add-time side effect (systemd
-// transient timer + panic-vs-warning classification, RCA #5) is dispatched to command:bundle's
+// transient timer + panic-vs-warning classification, RCA #5) is dispatched to command:fleet's
 // OpEphemeralRegister DIRECTLY via dispatchVmEphemeralRegister (the mirror of the teardown twin) —
-// no core hop; the registration BODY + its host reverse-channel access live in plugin-bundle.
+// no core hop; the registration BODY + its host reverse-channel access live in plugin-fleet.
 func vmPrepareVenue(ctx context.Context, exec *sdk.Executor, p lifecycleParams, host spec.HostEnv) (*pb.InvokeReply, error) {
-	var node spec.BundleNode
+	var node spec.FleetNode
 	if err := json.Unmarshal(p.Node, &node); err != nil {
 		return nil, fmt.Errorf("plugin-deploy-vm prepare-venue: decode node: %w", err)
 	}
@@ -328,7 +328,7 @@ func vmPrepareVenue(ctx context.Context, exec *sdk.Executor, p lifecycleParams, 
 	domainID := domainIdentity(p)
 
 	// Ephemeral lifecycle registration — FIRST action, matching the deleted host-side
-	// vmLifecyclePrepare's own ordering. Invokes command:bundle's OpEphemeralRegister DIRECTLY (the
+	// vmLifecyclePrepare's own ordering. Invokes command:fleet's OpEphemeralRegister DIRECTLY (the
 	// mirror of dispatchVmEphemeralTeardown), consuming the MERGED node (never a charly.yml re-read).
 	// A panic-class error (RCA #5) fails the whole vm Add; an ordinary condition is a soft warning.
 	if err := dispatchVmEphemeralRegister(ctx, exec, p.Name, &node); err != nil {
@@ -351,11 +351,11 @@ func vmPrepareVenue(ctx context.Context, exec *sdk.Executor, p lifecycleParams, 
 	// plugin runs out-of-process (it is NOT in go.work's compiled_plugins list), so
 	// deploykit.DeployStateHost — the package var charly's core registers ONLY inside ITS OWN
 	// process at init — is NEVER registered in THIS process: a direct LoadDeployConfigForRead call
-	// here silently, ERRORLESSLY returns an EMPTY BundleConfig on every single invocation
-	// (LoadBundleConfig's `if DeployStateHost == nil { return nil, nil }` fast path), so `prior`
+	// here silently, ERRORLESSLY returns an EMPTY FleetConfig on every single invocation
+	// (LoadFleetConfig's `if DeployStateHost == nil { return nil, nil }` fast path), so `prior`
 	// was ALWAYS nil and the domain was treated as "never created before" on EVERY prepare-venue
 	// call — discarding and RE-CREATING the per-domain disk overlay on every ordinary
-	// `charly bundle add vm:<name>`, silently wiping guest state. The loaderkit reader crosses
+	// `charly fleet add vm:<name>`, silently wiping guest state. The loaderkit reader crosses
 	// back into the HOST loader regardless of this plugin's own placement.
 	prior, err := resolvePriorVmState(ctx, exec, domainID)
 	if err != nil {
@@ -526,7 +526,7 @@ func charlyInstallStrategy(vm *spec.ResolvedVm) string {
 // interleave: host `box build` + `vm cp-box` via the cli seam; guest `from-box` over the LIVE guest
 // executor). exec is the guest executor the proxy serves for PostApply.
 func vmPostApply(ctx context.Context, exec *sdk.Executor, p lifecycleParams, host spec.HostEnv) (*pb.InvokeReply, error) {
-	var node spec.BundleNode
+	var node spec.FleetNode
 	if err := json.Unmarshal(p.Node, &node); err != nil {
 		return nil, fmt.Errorf("plugin-deploy-vm post-apply: decode node: %w", err)
 	}
@@ -569,7 +569,7 @@ func vmPostApply(ctx context.Context, exec *sdk.Executor, p lifecycleParams, hos
 		script := fmt.Sprintf(
 			"sudo loginctl enable-linger \"$(id -un)\" >/dev/null 2>&1 || true\n"+
 				"export XDG_RUNTIME_DIR=\"/run/user/$(id -u)\"\n"+
-				"%s bundle from-box %s %s",
+				"%s fleet from-box %s %s",
 			charlyCmd, asRef, childKey)
 		if err := exec.RunUser(ctx, script, nil); err != nil {
 			return nil, fmt.Errorf("deploy nested pod %s in guest: %w", childKey, err)
@@ -613,7 +613,7 @@ func vmStatus(ctx context.Context, exec *sdk.Executor, domain string) (*pb.Invok
 }
 
 // vmRebuild destroys + (optionally) rebuilds + recreates + starts the VM, THEN re-applies the deploy's
-// candies (+ nested pods) via `charly bundle add <name>` — the path `charly update <vm-bed>` routes
+// candies (+ nested pods) via `charly fleet add <name>` — the path `charly update <vm-bed>` routes
 // through (the disposable bed's fresh-rebuild R10 gate). Each leg is a cli-seam `charly` subcommand.
 func vmRebuild(ctx context.Context, exec *sdk.Executor, p lifecycleParams) (*pb.InvokeReply, error) {
 	var ropts struct {
@@ -645,7 +645,7 @@ func vmRebuild(ctx context.Context, exec *sdk.Executor, p lifecycleParams) (*pb.
 	if _, err := vmCli(ctx, exec, false, false, "vm", "start", entity, "--domain", domain); err != nil {
 		return nil, err
 	}
-	if _, err := vmCli(ctx, exec, false, false, "bundle", "add", p.Name); err != nil {
+	if _, err := vmCli(ctx, exec, false, false, "fleet", "add", p.Name); err != nil {
 		return nil, err
 	}
 	return marshalReply(struct{}{})
@@ -666,7 +666,7 @@ func vmPostTeardown(ctx context.Context, exec *sdk.Executor, p lifecycleParams, 
 		return nil, err
 	}
 
-	// Destroy the libvirt/qemu DOMAIN — `bundle del`'s ONLY domain-teardown owner. The Del path
+	// Destroy the libvirt/qemu DOMAIN — `fleet del`'s ONLY domain-teardown owner. The Del path
 	// replays the in-guest ReverseOps and removes host config, but nothing else tore down the venue,
 	// so a non-ephemeral vm deploy leaked a running domain (#69b). Keyed by the per-deploy DOMAIN
 	// IDENTITY (--domain) so it removes ONLY this deploy's domain, never a sibling bed's; --keep-deploy

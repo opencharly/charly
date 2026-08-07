@@ -26,7 +26,7 @@ import (
 // candy/plugin-deploy-pod's buildOverlay ALSO resolves the overlay candies' secret_requires:/
 // secret_accepts: env PLUGIN-SIDE (deploykit.SelectCandiesForPlans + ResolveSecretForCandy over
 // deploykit.CredentialAccessViaExecutor + InjectSecretsIntoPlans, mirroring
-// candy/plugin-bundle/secrets_artifacts.go) — the former host-side resolveCandySecrets +
+// candy/plugin-fleet/secrets_artifacts.go) — the former host-side resolveCandySecrets +
 // InjectSecretsIntoPlans + the enc.go coreCredentialAccess adapter + layer_secrets.go are DELETED
 // in the coneB-br2 cutover (the deploykit import this file carried for them is gone).
 //
@@ -48,7 +48,7 @@ import (
 // detectHostContext() operator-host fallback that was the original cross-distro bug;
 // detectHostContext + resolveDistroDef were DELETED in #55 coneB-br2 Group 2 — their sole caller
 // resolveOverlayBaseDistroDef above was dropped, deadening them; the deploy compile uses the
-// plugin's own twin candy/plugin-bundle/dispatch.go detectHostContext).
+// plugin's own twin candy/plugin-fleet/dispatch.go detectHostContext).
 //
 // The candy (plugin-deploy-pod podPrepareVenue) calls this shrunk seam via HostBuild("overlay")
 // FIRST (to learn reply.Plans, needed to compute the overlay candy set), THEN makes its own
@@ -73,7 +73,7 @@ const overlayBuilderKind = "overlay"
 type overlayBuildInputs struct {
 	plans      []*spec.InstallPlan
 	parentExec spec.DeployExecutor
-	parentNode *spec.BundleNode
+	parentNode *spec.FleetNode
 }
 
 type overlayBuildInputsKey struct{}
@@ -116,7 +116,7 @@ func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ build
 	// translateHostPathToVenue maps host paths → venue paths for the nested podman build.
 	var plans []*spec.InstallPlan
 	var parentExec spec.DeployExecutor
-	var parentNode *spec.BundleNode
+	var parentNode *spec.FleetNode
 	if in := overlayBuildInputsFrom(ctx); in != nil {
 		plans = in.plans
 		parentExec = in.parentExec
