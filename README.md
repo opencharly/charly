@@ -83,7 +83,7 @@ prose or in `charly --help`: box is what you build, fleet is the set of deploys 
 Here is the idea that causes the most confusion, so it is worth being exact — and exactness here
 means saying what the schema actually enforces, not what would be tidy.
 
-There is one entity keyword, `candy:`, and one filename, `charly.yml`. But a candy resolves to
+A candy is declared with one entity keyword, `candy:`, and one filename, `charly.yml`. But a candy resolves to
 **one of two shapes**, and `base:`/`from:` is the switch:
 
 | The candy carries | It is | And it may also carry |
