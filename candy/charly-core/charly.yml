@@ -31,7 +31,7 @@ charly-config-skill:
 
             `charly config` configures an image for deployment. In `run_mode=quadlet` (the default on systemd-user hosts) it generates a systemd quadlet unit, provisions container secrets, initializes encrypted volumes, and seeds data from data candies into the image's volumes. In `run_mode=direct` (auto-selected on nested environments without systemd-user — check-sandbox pods, supervisord-only containers, sysvinit hosts) it skips quadlet+systemctl and runs the container via `podman run -d`, recording a marker file at `~/.config/charly/direct/<name>.json` so `charly start`/`charly remove` can find it. Direct mode does NOT support sidecars, encrypted volumes, or cloudflare tunnel companion services (those require systemd) — warnings are emitted and the operation proceeds without those features.
 
-            This is the **single entry point** for **container** deployment setup. `charly start` requires `charly config` to have been run first in quadlet mode.
+            This is the **single entry point** for **container** deployment setup. In quadlet mode, `charly start` requires `charly config` to have written the unit first. In direct mode, `charly config` launches the container immediately and records the marker used by later lifecycle commands.
 
             **Relationship to `charly fleet add`** — `charly config` remains the primary way to create/update a quadlet and provision secrets/volumes/sidecars for a container deploy. `charly fleet add <name> <ref>` (container target) wraps both `charly config` and `charly start` and additionally handles `--add-candy` overlay synthesis (an overlay Containerfile is built before the quadlet references the resulting overlay image). `charly fleet add host` bypasses `charly config` entirely — the host target has no quadlet; it writes systemd units directly (when `--with-services` is enabled) and records every action in the ledger at `~/.config/opencharly/installed/`. See `/charly-core:deploy` for the command family and `/charly-local:local-deploy` for host-target semantics.
 
@@ -41,7 +41,7 @@ charly-config-skill:
 
             | Action | Command | Description |
             |--------|---------|-------------|
-            | Full setup | `charly config <image>` | Quadlet + secrets + volumes + data seed |
+            | Full setup | `charly config <image>` | Configure secrets, volumes, and data; write a quadlet or launch direct mode |
             | Instance setup | `charly config <image> -i <instance>` | Deploy named instance with separate config |
             | With bind mount | `charly config <image> --bind workspace=~/project` | Bind workspace to host dir |
             | With encryption | `charly config <image> --encrypt data` | Encrypted volume via gocryptfs |
@@ -55,18 +55,18 @@ charly-config-skill:
             | Mount volumes | `charly config mount <image>` | Mount encrypted volumes |
             | Unmount volumes | `charly config unmount <image>` | Unmount encrypted volumes |
             | Change password | `charly config passwd <image>` | Change gocryptfs password |
-            | Remove config | `charly config remove <image>` | Remove quadlet and disable service |
+            | Remove config | `charly config remove <image>` | Disable quadlet services, or remove the direct container and marker; preserve deploy state |
 
             ## Subcommands
 
             | Subcommand | Description |
             |------------|-------------|
-            | `setup` (default) | Full setup: quadlet + secrets + encrypted volumes + data seed |
+            | `setup` (default) | Configure the deployment and dispatch through the selected quadlet or direct run mode |
             | `status` | Show encrypted volume mount status |
             | `mount` | Mount encrypted volumes |
             | `unmount` | Unmount encrypted volumes |
             | `passwd` | Change gocryptfs password |
-            | `remove` | Remove quadlet file and disable systemd service |
+            | `remove` | Disable quadlet services, or remove the direct container and marker; preserve the quadlet file and deploy entry |
 
             ## Setup Flags
 
@@ -81,7 +81,7 @@ charly-config-skill:
             | `--port` | `-p` | | Remap host port (newHost:containerPort) |
             | `--keep-mounted` | | | Keep encrypted volumes mounted after setup |
             | `--password` | | `auto` | `auto`: generate secrets, `manual`: prompt for each |
-            | `--volume` | `-v` | | Configure volume backing (name:type[:path]). Type: volume\|bind\|encrypted |
+            | `--volume` | `-v` | | Configure volume backing (`name:type[:path]`). Type: volume\|bind\|encrypted |
             | `--bind` | | | Shorthand: configure volume as bind mount (name or name=path) |
             | `--encrypt` | | | Shorthand: configure volume as encrypted (gocryptfs) |
             | `--seed` | | `true` | Seed image volumes (bind mounts AND named volumes) with data from the image's data candies |
@@ -98,21 +98,14 @@ charly-config-skill:
 
             ## How It Works
 
-            1. Requires `run_mode=quadlet` (errors if set to `direct`)
-            2. Resolves image reference (local or remote `github.com/...`)
-            3. Ensures image exists in run engine (transfers if needed)
-            4. Extracts metadata from OCI image labels
-            5. Generates quadlet `.container` file in `~/.config/containers/systemd/`
-            6. Provisions container secrets (from `ai.opencharly.secret` label)
-            7. Resolves volume backing (named, bind, or encrypted)
-            8. Initializes encrypted volumes (gocryptfs) if configured
-            9. Seeds data candies into the image's volumes (bind mounts AND podman named volumes)
-            10. Runs `systemctl --user daemon-reload`
-            11. Injects `env_provide` entries from image labels into charly.yml `provides.env:` (resolves `{{.ContainerName}}` templates)
-            12. Injects `mcp_provide` entries from image labels into charly.yml `provides.mcp:` (resolves templates, defaults transport to `http`)
-            13. Synthesizes `CHARLY_MCP_SERVERS` JSON env var for consumer containers (pod-aware: same-image entries resolve to `localhost`)
-            14. Warns about missing `mcp_require` servers (same pattern as `env_require` warnings)
-            15. If `--update-all`, regenerates quadlets for all other deployed images (preserving Instance, Tunnel, PodName, Sidecars, and instance-scoped volume names) and reloads systemd
+            1. Resolves the selected run mode and image reference (local or remote `github.com/...`).
+            2. Ensures the image exists in the run engine (transfers if needed) and extracts its OCI metadata.
+            3. Provisions the supported secrets, volume backing, and data seed for that run mode.
+            4. Dispatches through one explicit branch:
+               - **Quadlet:** generates the `.container` file in `~/.config/containers/systemd/`, supports the systemd-backed companion features, and runs `systemctl --user daemon-reload`.
+               - **Direct:** executes `podman run -d` and writes `~/.config/charly/direct/<name>.json`; sidecars, encrypted volumes, and cloudflare tunnel companions are omitted with warnings because they require systemd.
+            5. Injects `env_provide` and `mcp_provide` entries into charly.yml, synthesizes `CHARLY_MCP_SERVERS` for consumers, and warns about missing requirements.
+            6. In quadlet mode, `--update-all` regenerates the other deployed quadlets while preserving instance-specific state, then reloads systemd.
 
             ## Volume Backing
 
@@ -331,18 +324,15 @@ charly-config-skill:
             charly config my-app --bind workspace=/new/path
             ```
 
-            ### Full instance removal (important: 3-step cleanup)
+            ### Full instance removal
 
-            `charly config remove` disables the systemd service but does NOT clean the charly.yml entry. Running `--update-all` before cleaning charly.yml will re-create quadlets from stale entries. Full cleanup requires:
+            Use the top-level removal command for a complete teardown. It reads the deploy metadata first, removes the container and quadlet or direct marker, and then removes the instance's charly.yml entry:
 
             ```bash
-            charly config remove <image> -i <instance>     # 1. Stop & disable service
-            charly fleet reset <image> -i <instance>       # 2. Remove charly.yml entry
-            charly remove <image> -i <instance>         # 3. Remove container + quadlet (reloads systemd)
-            charly reap-orphans                         # 4. Clear ghost units (optional)
+            charly remove <image> -i <instance>
             ```
 
-            Only THEN run `charly config <image> --update-all` to propagate the clean state.
+            Do not run `charly fleet reset` first: deleting the deploy entry can erase the sidecar and engine metadata teardown needs. Use `--keep-deploy` only when you intentionally want `charly remove` to preserve the entry for later reconfiguration. `charly reap-orphans` is for disappeared ephemeral resources, not ordinary instance removal.
 
             ### Multi-instance proxy deployment
 
@@ -2377,9 +2367,9 @@ deploy-skill:
                 port: ["3002:3000"]
             ```
 
-            **Instance lifecycle:** All commands accept `-i`: `charly start/stop/status/logs/remove <image> -i <instance>`, `charly fleet show/reset <image> -i <instance>`. Removing an instance only cleans its charly.yml entry — the base and other instances are unaffected. Provides cleanup waits until the last entry for a base image is removed.
+            **Instance lifecycle:** All commands accept `-i`: `charly start/stop/status/logs/remove <image> -i <instance>`, `charly fleet show/reset <image> -i <instance>`. `charly remove <image> -i <instance>` removes that instance's runtime artifacts and charly.yml entry; the base and other instances are unaffected. Provides cleanup waits until the last entry for a base image is removed.
 
-            **Instance removal gotcha:** `charly config remove` disables the systemd service but does NOT remove the charly.yml entry. You MUST also run `charly fleet reset <image> -i <instance>` and delete the quadlet file. If you run `charly config --update-all` before cleaning charly.yml, stale quadlet files will be re-created. See `/charly-core:charly-config` for the full 3-step cleanup workflow.
+            **Instance removal:** Use `charly remove <image> -i <instance>` for the complete teardown. Do not run `charly fleet reset` first, because the deploy entry carries sidecar and engine metadata needed during removal. Pass `--keep-deploy` only when preserving the entry is intentional. See `/charly-core:charly-config` for the mode-specific distinction between `charly config remove` and full `charly remove`.
 
             **MCP name disambiguation:** When an instance provides MCP servers, the server name gets `-<instance>` appended (e.g., `chrome-devtools-work`). See `/charly-core:charly-config` for details.
 
@@ -2935,10 +2925,10 @@ remove-skill:
             - `/charly-build:pull` -- Prerequisite: fetch the image into local storage; handles remote refs (`@github.com/...`) and the `ErrImageNotLocal` recovery path
 
             - `/charly-core:stop` -- Stop without removing
-            - `/charly-core:charly-config` -- Configure/reconfigure services (see "Full instance removal" for 3-step cleanup)
+            - `/charly-core:charly-config` -- Configure/reconfigure services (see "Full instance removal" for the one-command teardown)
             - `/charly-core:deploy` -- Deploy.yml management, tunnel configuration
             - `/charly-core:service` -- Full service lifecycle
-            - `/charly-build:charly-mcp-cmd` -- after `charly config remove` cleans this instance's `mcp_provide` from the global `provides.mcp:` list, consumers' `CHARLY_MCP_SERVERS` no longer lists it; use `charly check live <consumer> --filter mcp` to confirm the cleanup propagated
+            - `/charly-build:charly-mcp-cmd` -- after `charly remove` cleans this instance's `mcp_provide` from the global `provides.mcp:` list, consumers' `CHARLY_MCP_SERVERS` no longer lists it; use `charly check live <consumer> --filter mcp` to confirm the cleanup propagated
 
 service-skill:
     skill:
