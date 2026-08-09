@@ -2968,7 +2968,7 @@ service-skill:
             | Start service | `charly start <image>` | Start as background service |
             | Stop service | `charly stop <image>` | Stop running service |
             | Configure deployment | `charly config <image>` | Generate .container file, daemon-reload |
-            | Remove deployment | `charly config remove <image>` | Remove deployment configuration |
+            | Remove deployment | `charly config remove <image>` | Disable quadlet service (quadlet file remains) |
             | Service status | `charly status [<image>]` | Structured status table (IMAGE, STATUS, PORTS, TUNNEL, DEVICES, TOOLS); IMAGE merges `image[/instance]` |
             | All services | `charly status --all` | Include stopped/enabled services in listing |
             | Detailed status | `charly status <image>` | Detailed key-value view with live tool probes |
@@ -3024,7 +3024,7 @@ service-skill:
             charly logs my-app -f                  # journalctl --user -u (follow)
             charly update my-app                   # Re-transfer image, restart
             charly stop my-app                     # systemctl --user stop
-            charly config remove my-app            # Remove deployment configuration
+            charly config remove my-app            # Disable quadlet service (quadlet file remains)
             charly remove my-app                   # Stop + remove .container + charly.yml entry
             charly remove my-app --purge           # Also remove named volumes
             charly remove my-app --keep-deploy     # Remove service but keep charly.yml for re-config
