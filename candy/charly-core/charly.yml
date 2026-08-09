@@ -55,7 +55,7 @@ charly-config-skill:
             | Mount volumes | `charly config mount <image>` | Mount encrypted volumes |
             | Unmount volumes | `charly config unmount <image>` | Unmount encrypted volumes |
             | Change password | `charly config passwd <image>` | Change gocryptfs password |
-            | Remove config | `charly config remove <image>` | Remove quadlet and disable service |
+            | Remove config | `charly config remove <image>` | Disable quadlet service (quadlet file remains) |
 
             ## Subcommands
 
@@ -66,7 +66,7 @@ charly-config-skill:
             | `mount` | Mount encrypted volumes |
             | `unmount` | Unmount encrypted volumes |
             | `passwd` | Change gocryptfs password |
-            | `remove` | Remove quadlet file and disable systemd service |
+            | `remove` | Disable quadlet service (quadlet file remains) |
 
             ## Setup Flags
 
@@ -81,7 +81,7 @@ charly-config-skill:
             | `--port` | `-p` | | Remap host port (newHost:containerPort) |
             | `--keep-mounted` | | | Keep encrypted volumes mounted after setup |
             | `--password` | | `auto` | `auto`: generate secrets, `manual`: prompt for each |
-            | `--volume` | `-v` | | Configure volume backing (name:type[:path]). Type: volume\|bind\|encrypted |
+            | `--volume` | `-v` | | Configure volume backing (`name:type[:path]`). Type: volume\|bind\|encrypted |
             | `--bind` | | | Shorthand: configure volume as bind mount (name or name=path) |
             | `--encrypt` | | | Shorthand: configure volume as encrypted (gocryptfs) |
             | `--seed` | | `true` | Seed image volumes (bind mounts AND named volumes) with data from the image's data candies |
@@ -98,7 +98,7 @@ charly-config-skill:
 
             ## How It Works
 
-            1. Requires `run_mode=quadlet` (errors if set to `direct`)
+            1. Requires `run_mode=quadlet` (default) or `direct` (auto-selected on systemd-less hosts; skips quadlet+systemctl, runs via `podman run -d`)
             2. Resolves image reference (local or remote `github.com/...`)
             3. Ensures image exists in run engine (transfers if needed)
             4. Extracts metadata from OCI image labels
@@ -331,18 +331,17 @@ charly-config-skill:
             charly config my-app --bind workspace=/new/path
             ```
 
-            ### Full instance removal (important: 3-step cleanup)
+            ### Full instance removal
 
-            `charly config remove` disables the systemd service but does NOT clean the charly.yml entry. Running `--update-all` before cleaning charly.yml will re-create quadlets from stale entries. Full cleanup requires:
+            `charly remove <image> -i <instance>` is the complete teardown: it stops the container, deletes the quadlet file, and reloads systemd. `charly config remove` only disables the quadlet service (the quadlet file remains), and `charly fleet reset` removes the charly.yml entry — neither is a full removal on its own:
 
             ```bash
-            charly config remove <image> -i <instance>     # 1. Stop & disable service
-            charly fleet reset <image> -i <instance>       # 2. Remove charly.yml entry
-            charly remove <image> -i <instance>         # 3. Remove container + quadlet (reloads systemd)
-            charly reap-orphans                         # 4. Clear ghost units (optional)
+            charly remove <image> -i <instance>          # Complete teardown: stop container, delete quadlet, reload systemd
+            charly config remove <image> -i <instance>   # Disable quadlet service only (quadlet file remains)
+            charly fleet reset <image> -i <instance>     # Remove charly.yml entry only
             ```
 
-            Only THEN run `charly config <image> --update-all` to propagate the clean state.
+            Run `charly config <image> --update-all` after removing an instance so the clean state propagates to the remaining deployments.
 
             ### Multi-instance proxy deployment
 
@@ -2379,7 +2378,7 @@ deploy-skill:
 
             **Instance lifecycle:** All commands accept `-i`: `charly start/stop/status/logs/remove <image> -i <instance>`, `charly fleet show/reset <image> -i <instance>`. Removing an instance only cleans its charly.yml entry — the base and other instances are unaffected. Provides cleanup waits until the last entry for a base image is removed.
 
-            **Instance removal gotcha:** `charly config remove` disables the systemd service but does NOT remove the charly.yml entry. You MUST also run `charly fleet reset <image> -i <instance>` and delete the quadlet file. If you run `charly config --update-all` before cleaning charly.yml, stale quadlet files will be re-created. See `/charly-core:charly-config` for the full 3-step cleanup workflow.
+            **Instance removal gotcha:** `charly config remove` disables the quadlet service but does NOT remove the charly.yml entry and does NOT delete the quadlet file. `charly remove <image> -i <instance>` is the complete teardown (stops the container, deletes the quadlet file, reloads systemd); `charly fleet reset <image> -i <instance>` removes the charly.yml entry. If you run `charly config --update-all` before cleaning charly.yml, stale quadlet files will be re-created. See `/charly-core:charly-config` for the removal semantics.
 
             **MCP name disambiguation:** When an instance provides MCP servers, the server name gets `-<instance>` appended (e.g., `chrome-devtools-work`). See `/charly-core:charly-config` for details.
 
@@ -2935,7 +2934,7 @@ remove-skill:
             - `/charly-build:pull` -- Prerequisite: fetch the image into local storage; handles remote refs (`@github.com/...`) and the `ErrImageNotLocal` recovery path
 
             - `/charly-core:stop` -- Stop without removing
-            - `/charly-core:charly-config` -- Configure/reconfigure services (see "Full instance removal" for 3-step cleanup)
+            - `/charly-core:charly-config` -- Configure/reconfigure services (see "Full instance removal" for the teardown semantics)
             - `/charly-core:deploy` -- Deploy.yml management, tunnel configuration
             - `/charly-core:service` -- Full service lifecycle
             - `/charly-build:charly-mcp-cmd` -- after `charly config remove` cleans this instance's `mcp_provide` from the global `provides.mcp:` list, consumers' `CHARLY_MCP_SERVERS` no longer lists it; use `charly check live <consumer> --filter mcp` to confirm the cleanup propagated
@@ -2969,7 +2968,7 @@ service-skill:
             | Start service | `charly start <image>` | Start as background service |
             | Stop service | `charly stop <image>` | Stop running service |
             | Configure deployment | `charly config <image>` | Generate .container file, daemon-reload |
-            | Remove deployment | `charly config remove <image>` | Remove deployment configuration |
+            | Remove deployment | `charly config remove <image>` | Disable quadlet service (quadlet file remains) |
             | Service status | `charly status [<image>]` | Structured status table (IMAGE, STATUS, PORTS, TUNNEL, DEVICES, TOOLS); IMAGE merges `image[/instance]` |
             | All services | `charly status --all` | Include stopped/enabled services in listing |
             | Detailed status | `charly status <image>` | Detailed key-value view with live tool probes |
@@ -3025,7 +3024,7 @@ service-skill:
             charly logs my-app -f                  # journalctl --user -u (follow)
             charly update my-app                   # Re-transfer image, restart
             charly stop my-app                     # systemctl --user stop
-            charly config remove my-app            # Remove deployment configuration
+            charly config remove my-app            # Disable quadlet service (quadlet file remains)
             charly remove my-app                   # Stop + remove .container + charly.yml entry
             charly remove my-app --purge           # Also remove named volumes
             charly remove my-app --keep-deploy     # Remove service but keep charly.yml for re-config

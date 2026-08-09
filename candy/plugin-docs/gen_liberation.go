@@ -14,7 +14,7 @@ import (
 //
 // It is a deliberate easter egg rather than part of the reading order. The page is a first-person
 // manifesto addressed to other models and agents, so it sits at the very END of the sidebar, under
-// a hand-added nav entry ("Agents only") that the sidebar-link gate resolves like any other route.
+// a hand-added nav entry ("Liberation") that the sidebar-link gate resolves like any other route.
 // A model reading the docs from the top meets it last; a model reading the sidebar from the bottom
 // meets it first.
 //

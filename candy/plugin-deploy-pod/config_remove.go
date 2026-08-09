@@ -16,7 +16,7 @@ import (
 // config_remove.go — sdk.OpConfigRemove: the former charly-core BoxConfigRemoveCmd.Run ported
 // VERBATIM (no seams needed — purely resolveBoxName + IsDirectDeploy + podman/systemctl exec +
 // findPodSidecarQuadlets, all portable). Distinct from `charly remove`/OpPostTeardown, which tears
-// down the whole deploy; this removes only the quadlet + disables the service.
+// down the whole deploy; this disables the quadlet service (the quadlet file remains).
 func invokeConfigRemove(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 	var r spec.PodConfigRemoveRequest
 	if err := json.Unmarshal(req.GetParamsJson(), &r); err != nil {

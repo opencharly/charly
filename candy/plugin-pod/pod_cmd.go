@@ -402,7 +402,7 @@ type CpCmd struct {
 type ConfigCmd struct {
 	Mount   ConfigMountCmd   `cmd:"mount" help:"Mount encrypted volumes"`
 	Passwd  ConfigPasswdCmd  `cmd:"passwd" help:"Change gocryptfs password"`
-	Remove  ConfigRemoveCmd  `cmd:"remove" help:"Remove quadlet and disable service"`
+	Remove  ConfigRemoveCmd  `cmd:"remove" help:"Disable quadlet service (quadlet file remains)"`
 	Setup   ConfigSetupCmd   `cmd:"" default:"withargs" help:"Setup quadlet, secrets, and encrypted volumes"`
 	Status  ConfigStatusCmd  `cmd:"status" help:"Show encrypted volume status"`
 	Unmount ConfigUnmountCmd `cmd:"unmount" help:"Unmount encrypted volumes"`

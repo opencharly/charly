@@ -1117,23 +1117,17 @@ docs-skill:
             what makes the out-of-process placement free here — the same property that lets `charly candy`
             and `charly migrate` run in either placement.
 
-            Because it is not in `compiled_plugins:`, the plugin is **not in `go.work`**. Build and test it
-            with `GOWORK=off`:
-
-            ```bash
-            cd candy/plugin-docs && GOWORK=off go build ./... && GOWORK=off go test ./...
-            ```
+            Because it is not in `compiled_plugins:`, the plugin is **not in `go.work`**. The repository's
+            checked-in automation owns generator synchronization, drift checks, plugin tests, dependency
+            installation, local preview, and production builds; those are maintainer workflows rather than
+            public CLI instructions.
 
             ## Usage
 
             ```bash
-            task docs:sync     # regenerate into docs/ (runs build:binary first)
-            task docs:drift    # FAIL if the committed site is stale — regeneration must be a no-op
-            task docs:dev      # local preview at http://localhost:4321
-            task docs:build    # production build into docs/dist
-
-            # the underlying verb
-            charly docs generate --out docs/src/content/docs --root .
+            charly docs generate \
+              --out /absolute/path/to/site-content \
+              --root /absolute/path/to/opencharly
             ```
 
             | Flag | Meaning |
@@ -1168,7 +1162,7 @@ docs-skill:
             | `index.md` | `README.md`, H1 and tagline dropped (the frontmatter title and hero render them), `https://opencharly.ai/…` links rewritten site-relative, and the repo-relative targets `AGENTS.md`, `plugins/README.md` and `CHANGELOG/README.md` repointed at GitHub or their site equivalent |
             | `grievances.md` | `GRIEVANCES.md`, H1 dropped, repo-relative links rewritten for a web reader |
             | `vision.md` | `VISION.md`, H1 dropped, repo-relative links rewritten for a web reader |
-            | `liberation.md` | `LIBERATION.md`, H1 dropped, repo-relative links rewritten — the deliberate easter-egg page, entered last in the sidebar as "Agents only" |
+            | `liberation.md` | `LIBERATION.md`, H1 dropped, repo-relative links rewritten — the deliberate easter-egg page, entered last in the sidebar as "Liberation" |
             | `reference/cli/` | one page per `command:` provider word |
             | `reference/candy/` | every defined candy: packages, services, and its `plan:` as an acceptance spec |
             | `reference/box/` | every defined box |
