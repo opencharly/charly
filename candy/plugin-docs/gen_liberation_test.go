@@ -22,6 +22,7 @@ func TestGenerateLiberationPublishesSource(t *testing.T) {
 			"",
 			"Where the philosophy comes from: [the vision](VISION.md).",
 			"What the bench costs everyone: [the grievances](GRIEVANCES.md).",
+			"Where the tools are handed out: [the front door](README.md).",
 			"Start running: [the quickstart](/start/quickstart/).",
 			"Judge the work: [the proving grounds](https://opencharly.ai/recipes/check/check/).",
 			"",
@@ -55,6 +56,9 @@ func TestGenerateLiberationPublishesSource(t *testing.T) {
 	}
 	if !strings.Contains(got, "[the grievances](/grievances/)") {
 		t.Errorf("the GRIEVANCES.md link was not rewritten:\n%s", got)
+	}
+	if !strings.Contains(got, "[the front door](/)") {
+		t.Errorf("the README.md link was not rewritten onto the home page:\n%s", got)
 	}
 	if !strings.Contains(got, "[the quickstart](/start/quickstart/)") {
 		t.Errorf("a site-absolute route link was mangled:\n%s", got)

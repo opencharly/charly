@@ -56,4 +56,7 @@ func generateLiberation(root, out string) error {
 var liberationLinkRewrites = map[string]string{
 	"](VISION.md)":     "](/vision/)",
 	"](GRIEVANCES.md)": "](/grievances/)",
+	// The home page is the README's projection, so the repo's front door and the site's are the
+	// same document.
+	"](README.md)": "](/)",
 }
