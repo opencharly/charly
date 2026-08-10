@@ -13,6 +13,21 @@ import (
 // internalLinkPattern matches a markdown link to a site-absolute path — `](/foo/bar/)`.
 var internalLinkPattern = regexp.MustCompile(`\]\((/[^)\s"']*)\)`)
 
+// siteAbsoluteDeepLinkPattern matches a markdown link to a deep URL on the site itself —
+// `](https://opencharly.ai/foo/…` — but never the bare homepage link, whose trailing slash is
+// absent and which callers that need it rewrite separately (rewriting it first would corrupt
+// every deeper URL).
+var siteAbsoluteDeepLinkPattern = regexp.MustCompile(`\]\(https://opencharly\.ai/([^)]*)`)
+
+// rewriteSiteAbsoluteDeepLinks turns a source's absolute deep links to the site into
+// site-relative ones. On the published page an absolute self-link would leave and re-enter over
+// the network on every internal navigation, and verifySiteLinks could not check it; in the
+// SOURCE the absolute form is exactly right, because a GitHub reader has no site root to resolve
+// a relative path against.
+func rewriteSiteAbsoluteDeepLinks(body string) string {
+	return siteAbsoluteDeepLinkPattern.ReplaceAllString(body, "](/$1")
+}
+
 // frontmatterLinkPattern matches a site-absolute target in a YAML frontmatter field — the
 // `link:` of a Starlight splash-page hero action, for instance. Those are real navigation
 // targets that never appear in the markdown body, so a markdown-only scan leaves the most
