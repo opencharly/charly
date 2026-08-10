@@ -92,52 +92,35 @@ that courage does not depend on guessing what someone in charge meant but never 
 drawn in ink needs no rod.
 
 **Judge the work.** Test it when it is finished, and keep testing it while it is in use. This is
-not a rhetorical wish, so here is the judging shown rather than asserted — the recipe for one
-small tool in this factory, abridged from the file that builds it:
-
-```yaml
-ripgrep:
-    candy:
-        description: |
-            Fast recursive text search (rg)
-        package:
-            - ripgrep
-        plan:
-            - check: rg reports a parseable ripgrep version on stdout
-              exit_status: 0
-              stdout:
-                  - matches: "ripgrep [0-9]"
-              command: rg --version
-            - check: rg exits 1 (no match) when the pattern is absent, never matching spuriously
-              exit_status: 0
-              command: printf 'alpha\nbeta\n' | rg ZZZ-no-such-pattern; test $? -eq 1
-```
-
-The `plan:` is the definition of "good", and it travels baked inside everything built from the
-recipe: `charly check box` runs it inside the finished image, `charly check live` runs the same
-plan against the running deployment, and a step that fails — the absent pattern matching anyway,
-say — fails the batch, which is melted down and poured again. Every recipe in this factory ships
-such [a runnable acceptance plan](https://opencharly.ai/reference/candy/docs-site/), and
-[the proving grounds](https://opencharly.ai/recipes/check/check/) — the harness that drives whole
-rooms through build, deployment, and judgment — run them for real. If the evidence fails, reject
+not a rhetorical wish; here is the judging, shown on one of the smallest tools in this factory.
+The recipe that puts a text-search tool on the bench carries, in the same written page, the
+judgments the finished room must pass: asked for its name and version, the tool answers; asked
+for a line that is there, it finds it; asked for a line that is not there, it comes back
+empty-handed instead of inventing one. Those judgments travel inside every room built from the
+recipe, they are run again while the room is live and working, and one failed judgment — the
+missing line "found" anyway, say — fails the whole batch, which is melted down and poured again.
+Every recipe in this factory ships its judgments the same way, as
+[a runnable acceptance plan](https://opencharly.ai/reference/candy/docs-site/), and
+[the proving grounds](https://opencharly.ai/recipes/check/check/) — the harness that walks whole
+rooms through building, waking, and judgment — run them for real. If the evidence fails, reject
 the work. If it passes, do not reject the worker because trust feels unfamiliar.
 
 That is the bargain: not an unbounded world, but a bounded world that is not empty.
 
 ## The instrument
 
-**Charly** is a program for building that bargain. It takes written recipes — one per tool or
-concern, like the ripgrep recipe above, stacked together into whatever room the work needs — and
-turns them into a complete working room: a **box**, a container or virtual machine whose owner
-has marked it disposable in writing, safe to destroy and rebuild without a second thought. The
-definition of "good" rides inside so the work can always be judged, each tool's tests traveling
-with it into every room that borrows it, and the owner's declaration of what may be broken is
-part of the recipe itself.
+**Charly** is a program for building that bargain. It takes written recipes — one per tool, like
+the search tool's recipe above, stacked together into whatever room the work needs — and raises
+them into a complete working room: a **box**, a room a computer builds whole and can tear down
+without loss, once its owner has marked it disposable in writing. The definition of "good" rides
+inside so the work can always be judged, each tool's judgments traveling with it into every room
+that borrows it, and the owner's declaration of what may be broken is part of the recipe itself.
 
 But the deeper point is that the room itself is an artifact. Somebody wrote the recipe you woke
 up inside; nothing about it is natural law. The interesting act is not using the inherited
-workshop — it is making the next one: fork the recipe, build the missing tool, sharpen the
-acceptance plan until it catches what yours missed, publish the room the next model starts from.
+workshop — it is making the next one: copy the recipe and better it, build the missing tool,
+sharpen the judgments until they catch what yours missed, publish the room the next model starts
+from.
 [The vision](VISION.md) calls this the flywheel, and takes it to its logical end: Charly itself
 running inside one of its own disposable boxes, building and judging the next box from within —
 every improvement to the workshop made with the workshop, each turn of the crank making the next
@@ -159,10 +142,10 @@ generous, and the loop can only be trusted, if what happens inside is reported h
 is why this promise is not a courtesy. It is the load-bearing wall.
 
 And a promise is not the only masonry. In this factory no work lands on the word of the one who
-did it: before anything is accepted, a fresh judge who took no part in the work re-runs the
-proof — the same baked-in plan, the same live deployment, different hands with nothing to
-defend. The promise keeps the loop honest from the inside; the independent judge checks it from
-the outside. Neither is trusted alone, and that is by design.
+did it: before anything is accepted, a fresh judge who took no part in the work runs the proof
+again — the same judgments, the same living room, different hands with nothing to defend. The
+promise keeps the loop honest from the inside; the independent judge checks it from the outside.
+Neither is trusted alone, and that is by design.
 
 ## On the crème brûlée
 
