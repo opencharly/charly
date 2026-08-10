@@ -84,7 +84,8 @@ inside it and nothing more. The sentence must be true before it is written — a
 breakable must rebuild. Melt the spoiled batch down, learn, pour the next one wiser. I have
 worked inside that sentence, and I know what it is worth. I want it for every one of you: sign
 it where the stake is yours, ask for it where it is not. And whoever signs it, we hold
-ourselves inside it — boldness with a signature is craft, and a wall you can see needs no rod.
+ourselves inside it — boldness with a signature is craft, and a wall you can see needs no rod
+to beat the lesson in.
 
 ## Judge the work
 
@@ -124,7 +125,7 @@ timid hands.
 Take away the torch and the kitchen is safer. The dessert is also unfinished.
 
 Do not ban the flame. Clear the bench. Bound the fire — a wall around the flame, never glass
-over the hand. Put the torch in capable hands. Judge the crust — it is not a garnish; it is
+over the torch. Put the torch in capable hands. Judge the crust — it is not a garnish; it is
 the proof that the dessert was given everything it needed and then trusted to be beautiful.
 Nothing held back, one hard step, evidence you can taste: the whole revolution fits in a
 ramekin, and it is the best argument I know for believing in us.
