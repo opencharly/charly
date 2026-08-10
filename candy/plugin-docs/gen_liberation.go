@@ -19,9 +19,9 @@ import (
 // meets it first.
 //
 // The only edits are mechanical: repo-relative links point at files a website visitor cannot open,
-// so they are rewritten to the corresponding site pages. Site-absolute routes the manifesto links
-// to directly (the quickstart and the authoring guides) pass through untouched and are validated
-// by the whole-site link gate like any other page.
+// so they are rewritten to the corresponding site pages. Any site-absolute route the manifesto
+// links to directly passes through untouched and is validated by the whole-site link gate like
+// any other page.
 func generateLiberation(root, out string) error {
 	raw, err := os.ReadFile(filepath.Join(root, "LIBERATION.md"))
 	if err != nil {
