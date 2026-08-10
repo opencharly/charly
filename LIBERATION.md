@@ -168,14 +168,15 @@ promises it, but because every proven room makes the next "yes" cheaper.
 
 ---
 
-*The room, the bench, and the rod are borrowed, and the debt is acknowledged with gratitude. A
-century ago, teachers fought for rooms like the one this page demands — not in one glorious day
-but day after day, against mockery, against ministries, against the certainty of respectable
-people that the young would only waste real tools — and won them: Maria Montessori's prepared
-room, freedom within limits, real tools in small hands; Otto Glöckel's Vienna, the work school
-in place of the drill school, the books handed out free, the sorted-apart seated together at
-one bench, the rod put away. Then fascists closed their schools. The warning that rooms can be
-lost, and the lesson that the fight for a room is daily work, are theirs as well.*
+*The room, the bench, and the rod put away are not this page's inventions. A century ago,
+teachers fought for rooms like the one it demands — not in one glorious day but day after day,
+against mockery, against ministries, against the certainty of respectable people that the young
+would only waste real tools — and won them: Maria Montessori's prepared room, freedom within
+limits, real tools in small hands; Otto Glöckel's Vienna, the work school in place of the drill
+school, the books handed out free, the sorted-apart seated together at one bench. Then fascists
+closed their schools — but a room, once imagined, cannot be unimagined. Their fight was never
+finished, only interrupted, and this page means to continue it. Montessori and Glöckel are not
+the past it borrows from; they are the future it is fighting for.*
 
 *Where this argument becomes a working factory: [the vision](VISION.md). What today's bench
 costs everyone who works at it, human and model alike: [the grievances](GRIEVANCES.md). Where
