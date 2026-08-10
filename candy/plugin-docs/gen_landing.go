@@ -62,14 +62,12 @@ var landingTaglinePattern = regexp.MustCompile(`(?m)\A\*\*The fully stocked gour
 // rewritten last and separately — rewriting it first would corrupt every deeper URL.
 func rewriteLandingLinks(body string) string {
 	// Deep links first: https://opencharly.ai/foo/ -> /foo/
-	body = landingSiteLinkPattern.ReplaceAllString(body, "](/$1")
+	body = rewriteSiteAbsoluteDeepLinks(body)
 	for from, to := range landingLinkRewrites {
 		body = strings.ReplaceAll(body, from, to)
 	}
 	return body
 }
-
-var landingSiteLinkPattern = regexp.MustCompile(`\]\(https://opencharly\.ai/([^)]*)`)
 
 // landingLinkRewrites covers the repo-relative targets and the bare site root. Repo-relative
 // markdown files are not published, so they point at GitHub; a website reader following them gets

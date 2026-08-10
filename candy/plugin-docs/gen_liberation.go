@@ -18,10 +18,11 @@ import (
 // A model reading the docs from the top meets it last; a model reading the sidebar from the bottom
 // meets it first.
 //
-// The only edits are mechanical: repo-relative links point at files a website visitor cannot open,
-// so they are rewritten to the corresponding site pages. Any site-absolute route the manifesto
-// links to directly passes through untouched and is validated by the whole-site link gate like
-// any other page.
+// The only edits are mechanical: repo-relative links point at files a website visitor cannot
+// open, so they are rewritten to the corresponding site pages; absolute deep links to the site
+// itself — which the source carries so a GitHub reader gets a working link — are rewritten
+// site-relative, the same treatment the landing page gives the README's. Both forms are then
+// validated by the whole-site link gate like any other page.
 func generateLiberation(root, out string) error {
 	raw, err := os.ReadFile(filepath.Join(root, "LIBERATION.md"))
 	if err != nil {
@@ -37,6 +38,7 @@ func generateLiberation(root, out string) error {
 		}
 	}
 
+	body = rewriteSiteAbsoluteDeepLinks(body)
 	for from, to := range liberationLinkRewrites {
 		body = strings.ReplaceAll(body, from, to)
 	}
@@ -54,4 +56,7 @@ func generateLiberation(root, out string) error {
 var liberationLinkRewrites = map[string]string{
 	"](VISION.md)":     "](/vision/)",
 	"](GRIEVANCES.md)": "](/grievances/)",
+	// The home page is the README's projection, so the repo's front door and the site's are the
+	// same document.
+	"](README.md)": "](/)",
 }

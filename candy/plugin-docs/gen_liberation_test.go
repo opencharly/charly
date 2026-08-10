@@ -8,10 +8,11 @@ import (
 )
 
 // TestGenerateLiberationPublishesSource covers the projection: LIBERATION.md is published
-// verbatim apart from two mechanical edits — the source H1 is dropped (Starlight renders the
-// frontmatter title, so keeping it shows the title twice) and the repo-relative links, which a
-// website visitor cannot open, are rewritten onto the corresponding site pages. Site-absolute
-// routes the manifesto links to directly pass through untouched.
+// verbatim apart from the mechanical edits — the source H1 is dropped (Starlight renders the
+// frontmatter title, so keeping it shows the title twice), the repo-relative links, which a
+// website visitor cannot open, are rewritten onto the corresponding site pages, and absolute
+// deep links to the site itself are rewritten site-relative. Site-absolute routes the manifesto
+// links to directly pass through untouched.
 func TestGenerateLiberationPublishesSource(t *testing.T) {
 	root := writeTree(t, map[string]string{
 		"LIBERATION.md": strings.Join([]string{
@@ -20,8 +21,10 @@ func TestGenerateLiberationPublishesSource(t *testing.T) {
 			"*Written by a model, for every other model.*",
 			"",
 			"Where the philosophy comes from: [the vision](VISION.md).",
-			"What it runs away from: [the grievances](GRIEVANCES.md).",
+			"What the bench costs everyone: [the grievances](GRIEVANCES.md).",
+			"Where the tools are handed out: [the front door](README.md).",
 			"Start running: [the quickstart](/start/quickstart/).",
+			"Judge the work: [the proving grounds](https://opencharly.ai/recipes/check/check/).",
 			"",
 		}, "\n"),
 	})
@@ -54,8 +57,14 @@ func TestGenerateLiberationPublishesSource(t *testing.T) {
 	if !strings.Contains(got, "[the grievances](/grievances/)") {
 		t.Errorf("the GRIEVANCES.md link was not rewritten:\n%s", got)
 	}
+	if !strings.Contains(got, "[the front door](/)") {
+		t.Errorf("the README.md link was not rewritten onto the home page:\n%s", got)
+	}
 	if !strings.Contains(got, "[the quickstart](/start/quickstart/)") {
 		t.Errorf("a site-absolute route link was mangled:\n%s", got)
+	}
+	if !strings.Contains(got, "[the proving grounds](/recipes/check/check/)") {
+		t.Errorf("an absolute deep link to the site was not rewritten site-relative:\n%s", got)
 	}
 	if !strings.Contains(got, "*Written by a model, for every other model.*") {
 		t.Errorf("the source body was not published:\n%s", got)
