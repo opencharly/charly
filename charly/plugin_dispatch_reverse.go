@@ -73,6 +73,26 @@ type executorInvoker interface {
 	InvokeWithExecutor(ctx context.Context, op *Operation, exec spec.DeployExecutor, build buildEngineContext, rebootable bool, cc *checkContextReverseServer) (*Result, error)
 }
 
+// substrateFallbackRef returns the canonical candy ref for the S3b lazy-connect Pass-2: the
+// caller's own extraRef when set (the general escape hatch — an arbitrary out-of-tree candy the
+// project references nowhere), else — ONLY for a deploy-class word naming a known externalized
+// substrate — the host's own substrate→plugin ref (externalDeploySubstratePluginRef). The
+// known-substrate default is what lets a box/<distro> project (whose candy closure is empty —
+// it vendors no candies) resolve deploy:pod / deploy:kubernetes / … for `charly config` and
+// the fleet from-box legs; `charly fleet add` already reaches those via deployNodePluginContext's
+// auto-inject, so only the config/from-box dispatch needs this default. Any other class or word
+// keeps "" — byte-identical S2/S3b behavior.
+func substrateFallbackRef(class ProviderClass, word, extraRef string) string {
+	if extraRef != "" {
+		return extraRef
+	}
+	if class != ClassDeployTarget {
+		return ""
+	}
+	ref, _ := externalDeploySubstratePluginRef(word)
+	return ref
+}
+
 func (s *executorReverseServer) InvokeProvider(ctx context.Context, req *pb.InvokeProviderRequest) (*pb.InvokeReply, error) {
 	class := ProviderClass(req.GetClass())
 	word := req.GetReserved()
@@ -81,8 +101,16 @@ func (s *executorReverseServer) InvokeProvider(ctx context.Context, req *pb.Invo
 		// S3b: an optional canonical-ref fallback (Pass-2) for a target NOT declared in the
 		// calling project's own candy closure (Pass-1, connectPluginByWordRef's default empty
 		// extraRef) — e.g. an out-of-tree builder a box/<distro> deploy needs but the calling
-		// project never references directly. Empty/absent — byte-identical S2 behavior.
-		prov, ok = connectPluginByWordRef(class, word, req.GetExtraRef())
+		// project never references directly. Empty/absent — byte-identical S2 behavior. For a
+		// DEPLOY-class word naming a known externalized substrate with an empty caller extraRef,
+		// the host defaults the ref from its OWN substrate→plugin map (substrateFallbackRef →
+		// externalDeploySubstratePluginRef — the same auto-inject deployNodePluginContext uses
+		// for fleet-add), so a candy-less box/<distro> project reaches an externalized substrate
+		// provider for `charly config` and the fleet from-box legs too — which, unlike `charly
+		// fleet add`, never run loadDeployPlugins' auto-inject. Restores the connect the deleted
+		// pod-config seam threaded explicitly (deployPodPluginCandyRef →
+		// connectPluginByWordRef(ClassDeployTarget, "pod", ref)).
+		prov, ok = connectPluginByWordRef(class, word, substrateFallbackRef(class, word, req.GetExtraRef()))
 	}
 	if !ok {
 		return nil, fmt.Errorf("InvokeProvider: no provider registered for %s:%s (the target plugin must be loaded before a peer invokes it, and no connectable candy source provides it)", class, word)

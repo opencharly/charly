@@ -260,7 +260,7 @@ check-k8s-skill:
               `k3s-post-provision` method. The retrieve-check, port-forward rewrite, and
               merge all run INSIDE `candy/plugin-kube` (see `k3s_post.go` above); the
               cluster-template lookup that used to need `charly/k8s_config.go`'s
-              `findK8sSpec` now self-loads plugin-side too (`sdk/loaderkit.ResolveKubernetesEntityViaExecutor`,
+              `findKubernetesSpec` now self-loads plugin-side too (`sdk/loaderkit.ResolveKubernetesEntityViaExecutor`,
               K-wave W3a A3-phase-2). No client-go import, and no `kube:`-specific host
               seam, remains in core.
 

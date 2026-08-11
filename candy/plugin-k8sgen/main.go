@@ -1,8 +1,9 @@
-// Package k8sgen — the OpEmit Invoke entrypoint. The host's in-core
-// GenerateK8sKustomize shim resolves verb:k8sgen and Invokes OpEmit with a
-// spec.KubernetesGenInput; this provider runs the pure generator (GenerateTree) and
-// returns a spec.KubernetesGenReply of RELATIVE-pathed manifest docs. The host owns the
-// disk I/O + the egress gate (see k8sgen.go for the carve-out rationale).
+// Package k8sgen — the OpEmit Invoke entrypoint. Reachable peer-to-peer via
+// verb:k8sgen/OpEmit: candy/plugin-kube's materializeKustomize InvokeProviders the
+// compiled-in provider with a spec.KubernetesGenInput; this provider runs the pure
+// generator (GenerateTree) and returns a spec.KubernetesGenReply of RELATIVE-pathed
+// manifest docs. The host owns the disk I/O + the egress gate (see k8sgen.go for the
+// carve-out rationale). (The former core k8s_generate.go shim is deleted, K5-A item 6.)
 package k8sgen
 
 import (
