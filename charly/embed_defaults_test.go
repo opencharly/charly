@@ -264,7 +264,7 @@ builder:
 // deploy.yml (per-machine host state) and charly.yml are deliberately NOT in the
 // forbidden set.
 func TestNoHardcodedYAMLFilenames(t *testing.T) {
-	forbidden := regexp.MustCompile(`"(box|candy|base|vm|pod|k8s|check|local|android|image|images|layer)\.yml"`)
+	forbidden := regexp.MustCompile(`"(box|candy|base|vm|pod|kubernetes|check|local|android|image|images|layer)\.yml"`)
 	entries, err := filepath.Glob("*.go")
 	if err != nil {
 		t.Fatal(err)

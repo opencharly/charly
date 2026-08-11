@@ -16,11 +16,11 @@ import (
 // mechanism fed this literal copy of the declared traits instead.
 func testSubstrateTraits(word string) *spec.DeployTraits {
 	traits := map[string]*spec.DeployTraits{
-		"pod":     {Venue: "container", ImageBacked: true, ImageContext: true},
-		"vm":      {Venue: "ssh", MachineVenue: true, ExclusiveVenue: true},
-		"local":   {Venue: "shell", MachineVenue: true},
-		"k8s":     {Venue: "shell", ImageContext: true, LeafOnly: true},
-		"android": {Venue: "parent"},
+		"pod":        {Venue: "container", ImageBacked: true, ImageContext: true},
+		"vm":         {Venue: "ssh", MachineVenue: true, ExclusiveVenue: true},
+		"local":      {Venue: "shell", MachineVenue: true},
+		"kubernetes": {Venue: "shell", ImageContext: true, LeafOnly: true},
+		"android":    {Venue: "parent"},
 	}
 	return traits[word]
 }

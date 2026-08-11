@@ -1,4 +1,4 @@
-version: 2026.204.1223
+version: 2026.223.1018
 # providers — the registry membership manifest (provider class -> the words it
 # contributes). Read at init (registry_bootstrap.go) to drive built-in provider
 # registration from THIS embedded default config instead of a hardcoded Go list. A
@@ -7,10 +7,10 @@ version: 2026.204.1223
 # its own dedicated plugin_<class>_<name>.go file (the externalizable
 # dedicated-provider pattern — e.g. deploy:local, builder:cargo, step:Reboot)
 # self-registers from that file and is intentionally NOT listed here. Every deploy
-# target (local/pod/vm/k8s/android) and every builder (aur/pixi/cargo/npm) is now
+# target (local/pod/vm/kubernetes/android) and every builder (aur/pixi/cargo/npm) is now
 # externalized this way, so those two lists are empty by design. EVERY KIND is likewise
 # dedicated-file-registered (Phase 2 complete): the tier-1 build-vocab/calamares kinds as
-# schema-carrying plugin units; the 6 deploy-shape kinds group/pod/vm/k8s/local/android and
+# schema-carrying plugin units; the 6 deploy-shape kinds group/pod/vm/kubernetes/local/android and
 # candy (the box⊻layer factory arm) as in-proc dedicated-builtin KindProviders, so the kind
 # list is empty by design too.
 providers:

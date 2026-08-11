@@ -43,7 +43,7 @@ func TestResolveVmEntity(t *testing.T) {
 // node carries no authored version (moved here from
 // charly/bed_run_image_tag_test.go, W4 pure-helpers relocation). This is the
 // vehicle by which the bed-scoped tag reaches the external-substrate
-// preresolvers (k8s) + the pod overlay build (both read node.Version). Would
+// preresolvers (kubernetes) + the pod overlay build (both read node.Version). Would
 // FAIL without the #75 `else if tag != "" { node.Version = tag }`
 // propagation in resolveNodeOverlays.
 func TestResolveNodeOverlays_PropagatesExplicitTagToNodeVersion(t *testing.T) {
@@ -54,7 +54,7 @@ func TestResolveNodeOverlays_PropagatesExplicitTagToNodeVersion(t *testing.T) {
 		t.Fatalf("resolveNodeOverlays: unexpected error: %v", err)
 	}
 	if node.Version != "check-k8s-deploy-2026.195.0600" {
-		t.Errorf("node.Version = %q, want the propagated --tag %q (k8s/overlay preresolvers read node.Version)", node.Version, "check-k8s-deploy-2026.195.0600")
+		t.Errorf("node.Version = %q, want the propagated --tag %q (kubernetes/overlay preresolvers read node.Version)", node.Version, "check-k8s-deploy-2026.195.0600")
 	}
 	if tag != "check-k8s-deploy-2026.195.0600" {
 		t.Errorf("resolved tag = %q, want %q", tag, "check-k8s-deploy-2026.195.0600")

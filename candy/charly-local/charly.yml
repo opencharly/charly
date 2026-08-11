@@ -329,7 +329,7 @@ local-spec-skill:
 
             ## Overview
 
-            `kind: local` declares a reusable candy-stack template that gets applied to a Linux filesystem (deployed by a `local:` deploy whose `from:` field selects this template). Unlike `kind: pod` / `kind: vm` / `kind: k8s` which wrap an image, a `kind: local` is defined entirely by its `layers` + `install_opts` + `env` — there's no OCI artifact backing it. The convention file is `local.yml`; templates may also be authored inline in `charly.yml` as top-level name-first nodes (`<name>: { local: {…} }`).
+            `kind: local` declares a reusable candy-stack template that gets applied to a Linux filesystem (deployed by a `local:` deploy whose `from:` field selects this template). Unlike `kind: pod` / `kind: vm` / `kind: kubernetes` which wrap an image, a `kind: local` is defined entirely by its `layers` + `install_opts` + `env` — there's no OCI artifact backing it. The convention file is `local.yml`; templates may also be authored inline in `charly.yml` as top-level name-first nodes (`<name>: { local: {…} }`).
 
             Legacy `kind: host` projects migrate via `charly migrate`.
 

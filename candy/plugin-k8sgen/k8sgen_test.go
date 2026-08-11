@@ -129,9 +129,9 @@ func TestCheckToProbe_HTTPPriority(t *testing.T) {
 // (Deployment spec.replicas, container image == ImageRef, podSecurityContext
 // runAsUser == UID). Proves the moved generator still produces correct manifests.
 func TestGenerateTree_Shape(t *testing.T) {
-	cluster := spec.K8s{}
+	cluster := spec.Kubernetes{}
 	cluster.Ingress.Enabled = true
-	in := spec.K8sGenInput{
+	in := spec.KubernetesGenInput{
 		DeploymentName: "web",
 		ImageRef:       "registry.example.com/web:v1",
 		Ports:          []string{"8080", "9090/udp"},
@@ -139,11 +139,11 @@ func TestGenerateTree_Shape(t *testing.T) {
 		GID:            1000,
 		Cluster:        cluster,
 		Deploy: spec.Deploy{
-			Replica:    3,
-			Env:        map[string]string{"FOO": "bar"},
-			Kubernetes: &spec.K8sDeploy{Workload: "Deployment"}, // force Deployment despite storage
-			Storage:    []spec.DeployStorage{{Name: "data", Size: "5Gi", Path: "/data"}},
-			Expose:     &spec.DeployExpose{Host: "web.example.com", Port: "8080"},
+			Replica: 3,
+			Env:     map[string]string{"FOO": "bar"},
+			Deploy:  &spec.KubernetesDeploy{Workload: "Deployment"}, // force Deployment despite storage
+			Storage: []spec.DeployStorage{{Name: "data", Size: "5Gi", Path: "/data"}},
+			Expose:  &spec.DeployExpose{Host: "web.example.com", Port: "8080"},
 		},
 	}
 

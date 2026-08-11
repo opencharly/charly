@@ -9,7 +9,7 @@ import (
 )
 
 // baseKustomizationDoc returns the emitted base/kustomization.yaml as a decoded map.
-func baseKustomizationDoc(t *testing.T, in spec.K8sGenInput) map[string]any {
+func baseKustomizationDoc(t *testing.T, in spec.KubernetesGenInput) map[string]any {
 	t.Helper()
 	reply, err := GenerateTree(in)
 	if err != nil {
@@ -45,7 +45,7 @@ func baseKustomizationDoc(t *testing.T, in spec.K8sGenInput) map[string]any {
 //
 // Reverting the generator to `commonLabels` fails this test.
 func TestBaseKustomization_UsesLabelsNotCommonLabels(t *testing.T) {
-	doc := baseKustomizationDoc(t, spec.K8sGenInput{
+	doc := baseKustomizationDoc(t, spec.KubernetesGenInput{
 		DeploymentName: "check-workload",
 		ImageRef:       "example.invalid/img:v1",
 	})

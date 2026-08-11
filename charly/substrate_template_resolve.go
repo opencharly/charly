@@ -5,11 +5,11 @@ package main
 // local:/android: template bodies opaquely (uf.Local / uf.Android are
 // map[string]json.RawMessage) and consumes candy/plugin-substrate's ops.OpResolve
 // projection (spec.ResolvedLocal / spec.ResolvedAndroid) — never spec.Local / spec.Android.
-// (W0: the former ResolvedLocal/ResolvedAndroid/ResolvedK8s in-package aliases are deleted — every
-// caller reads spec.* directly; resolveK8sViaPlugin died with its only caller, findK8sSpec,
+// (W0: the former ResolvedLocal/ResolvedAndroid/ResolvedKubernetes in-package aliases are deleted — every
+// caller reads spec.* directly; resolveKubernetesViaPlugin died with its only caller, findKubernetesSpec,
 // relocated into the former host_build_deploy_entity_resolve.go's kind-blind resolveEntityTemplate
 // — itself deleted now, K-wave W3a A3-phase-2: every kind:<word> caller self-loads the project
-// plugin-side via sdk/loaderkit's Resolve{K8s,Vm,Android}EntityViaExecutor instead.)
+// plugin-side via sdk/loaderkit's Resolve{Kubernetes,Vm,Android}EntityViaExecutor instead.)
 
 import (
 	"context"

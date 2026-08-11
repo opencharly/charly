@@ -188,7 +188,7 @@ func TestCollectAndroidOne_UndeclaredDevice(t *testing.T) {
 // failed whenever that bed was actually running on the host (got "running" instead of "absent") —
 // a genuine test-isolation defect, not a flake (R1). No reverse channel needed either —
 // resolved-project is passed directly rather than fetched via InvokeProvider("build","project") in this unit test; the
-// build:project fetch itself is proven by the k8s live-smoke-test precedent and re-exercised by the
+// build:project fetch itself is proven by the kubernetes live-smoke-test precedent and re-exercised by the
 // R10 bed roster.
 func TestCollectAndroidStatus_Rows(t *testing.T) {
 	rp := androidBedResolvedProject(t)

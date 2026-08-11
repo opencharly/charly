@@ -16,13 +16,13 @@ import (
 // command.go — the externalized `charly status` command. The plugin OWNS the Kong grammar
 // (moved from charly/status.go's StatusCmd) + the declared-nested-tree pre-resolution
 // (nested_tree.go, K5) + the PURE nested-overlay fold (overlay.go) + the render output
-// (render.go). Only the LIVE per-substrate collection (pod/vm/k8s/local/android) is the compiled-in
+// (render.go). Only the LIVE per-substrate collection (pod/vm/kubernetes/local/android) is the compiled-in
 // verb:status-fanout (candy/plugin-substrate), which the plugin InvokeProvider's DIRECTLY.
 //
 // status is COMPILED-IN (charly.yml compiled_plugins): its Invoke(OpRun) runs in charly's process
 // and gets the in-proc reverse channel (dispatchInProcCommand threads it), and the wire broker now
 // threads that channel onward to the in-proc fan-out, so InvokeProvider(verb:status-fanout) reaches
-// the collection engine and its vm/k8s legs call back the host. The out-of-process CliMain path has
+// the collection engine and its vm/kubernetes legs call back the host. The out-of-process CliMain path has
 // no reverse channel, so it errors.
 
 // StatusCmd is the `charly status` Kong grammar — moved verbatim from charly/status.go.
@@ -30,7 +30,7 @@ type StatusCmd struct {
 	Box      string `arg:"" optional:"" help:"Box name (omit to list all charly containers)"`
 	Instance string `short:"i" name:"instance" help:"Instance name"`
 	All      bool   `short:"a" name:"all" help:"Include enabled-but-not-running services"`
-	Nested   bool   `name:"nested" help:"Probe nested children + live k8s workloads (multi-hop, slower)"`
+	Nested   bool   `name:"nested" help:"Probe nested children + live kubernetes workloads (multi-hop, slower)"`
 	JSON     bool   `name:"json" help:"Output as JSON"`
 }
 
@@ -90,7 +90,7 @@ func runStatusCLI(ctx context.Context, exec *sdk.Executor, args []string) error 
 // verb:status-fanout (candy/plugin-substrate) DIRECTLY over the in-proc reverse channel — command:status
 // is compiled-in and dispatchInProcCommand threads it an executor, and the wire broker's in-proc
 // InvokeProvider branch now threads that reverse channel onward to the fan-out (plugin_dispatch_reverse.go),
-// so the fan-out's vm/k8s collectors reach the host (InvokeProvider("build","project") / InvokeProvider(vm→libvirt))
+// so the fan-out's vm/kubernetes collectors reach the host (InvokeProvider("build","project") / InvokeProvider(vm→libvirt))
 // for themselves. This retired a former host HostBuild forwarding seam that existed ONLY to patch the
 // broker's in-proc branch missing executor threading manually — an incomplete-seam smell now fixed
 // generically in the broker (the in-proc branch threads the reverse channel uniformly). exec is nil on the

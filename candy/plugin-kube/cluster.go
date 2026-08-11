@@ -18,15 +18,15 @@ import (
 )
 
 // cluster.go holds the cluster connection + the shared client-go helpers moved
-// out of charly's core (the former charly/k8s_cmd.go). This is where the heavy
+// out of charly.s core. This is where the heavy
 // k8s.io/client-go + k8s.io/apimachinery dependency lives — entirely out of
 // charly's core go.mod.
 
 // clusterConn carries the resolved cluster-selection inputs the plugin builds a
-// rest.Config from. Unlike the in-tree k8sClusterFlags it has NO --cluster field:
+// rest.Config from. Unlike the in-tree kubernetesClusterFlags it has NO --cluster field:
 // provider.go's Invoke resolves a `cluster: <profile>` to a concrete kubeconfig context
-// ITSELF now (K-wave W3a A3-phase-2: loaderkit.ResolveK8sEntityViaExecutor,
-// kind:k8s → ResolvedK8s.KubeconfigContext — self-loading the project, unblocked by W1's
+// ITSELF now (K-wave W3a A3-phase-2: loaderkit.ResolveKubernetesEntityViaExecutor,
+// kind:kubernetes → ResolvedKubernetes.KubeconfigContext — self-loading the project, unblocked by W1's
 // LoadUnifiedViaExecutor) and fills it into kube_context BEFORE dispatch() builds this struct,
 // so clusterConn itself only ever sees a kubeconfig path + context.
 type clusterConn struct {

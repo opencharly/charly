@@ -12,7 +12,7 @@ plugin-example-structkind:
             pre-decoded host-side (core buildFleetNode) and threaded via op.Env, and the plugin
             ATTACHES them to its reply — so the reconstructed uf.Fleet carries the AUTHORED members
             (peer/nested + cross-member checks), not a synthesized stand-in. NOT in compiled_plugins
-            (out-of-process only); the channel the group/pod/vm/k8s/local/android/candy
+            (out-of-process only); the channel the group/pod/vm/kubernetes/local/android/candy
             externalizations reuse.
         plugin:
             providers:

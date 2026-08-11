@@ -239,8 +239,8 @@ k3s-agent-skill:
             
             Deploy-scope (uses `/charly-kubernetes:check-k8s`). The cluster-probe verb is
             the declarative `kube:` check verb (served out-of-process by `candy/plugin-kube` —
-            there is no host `charly check kube` command); the `k8s` spelling is reserved for
-            the deploy KIND only:
+            there is no host `charly check kube` command); the deploy KIND is spelled
+            `kubernetes`:
             - `kube: wait-nodes name=${HOSTNAME}` — this node reaches Ready on the
               server.
             

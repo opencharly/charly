@@ -7,7 +7,7 @@ package main
 // P9) — that gate only catches a bare `.Target == "word"` BinaryExpr over 5 substrate
 // words across charly/+sdk/deploykit; THIS gate catches the broader STRUCTURAL shape —
 // an actual `switch` statement or an if/else-if chain of >=3 arms — dispatching on ANY
-// of the full deploy-substrate vocabulary (pod/vm/k8s/local/android, plus the entity
+// of the full deploy-substrate vocabulary (pod/vm/kubernetes/local/android, plus the entity
 // words group/candy/deploy/fleet), scoped to charly/ core only (the kernel).
 //
 // A single stray `if x == "candy"` (kind-recognition Data — the loader/materialize
@@ -40,7 +40,7 @@ import (
 // accidental re-introduction as a dispatch key would also be a kernel/plugin boundary
 // violation (group/candy/deploy/fleet).
 var kindSwitchVocabulary = map[string]bool{
-	"pod": true, "vm": true, "k8s": true, "local": true, "android": true,
+	"pod": true, "vm": true, "kubernetes": true, "local": true, "android": true,
 	"group": true, "candy": true, "deploy": true, "fleet": true,
 }
 

@@ -19,7 +19,7 @@ import (
 // substrate) now runs entirely plugin-side, using data already sitting in the
 // resolved-project envelope compileDeployPlans fetches — no LoadUnified, no registry,
 // no new HostBuild kind. The BOX-selection shape (compileBoxSelection, and add_candy
-// compiled against a pod/k8s BASE image's context) is UNCHANGED and still sends a
+// compiled against a pod/kubernetes BASE image's context) is UNCHANGED and still sends a
 // host-computed BoxView+Order; see #DeployCompileRequest's doc comment in
 // sdk/schema/seam.cue for the two-shape discrimination.
 //

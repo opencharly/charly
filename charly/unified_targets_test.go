@@ -10,7 +10,7 @@ import (
 
 // TestPluginDeployTarget_ApplyParentExecOverride is the regression test for the FIX ROUND bug
 // (R10 bed-found, S3b follow-up): every PLAIN vm-class deploy's NESTED non-lifecycle child (a
-// `local:`/`android:`/`k8s:` deploy under a vm/pod, tree position — e.g. check-substrate's
+// `local:`/`android:`/`kubernetes:` deploy under a vm/pod, tree position — e.g. check-substrate's
 // check-substrate-member, check-group's check-group-member, check-builder-vm's
 // check-builder-member) silently ran its plan/step walk on the OPERATOR'S HOST instead of the
 // parent venue, because pluginDeployTarget.Add never restored the pre-S3b former core-resident

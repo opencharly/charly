@@ -14,7 +14,7 @@ import (
 // TestNoConcreteKindInKernel is the structural capstone of the kernel/plugin boundary law
 // (Cutover N): the kernel (charly/*.go production code) must NOT consume a concrete-kind
 // spec.<Kind> Go type. Every vocab kind (sidecar/agent/init/resource/distro) and every
-// substrate value (local/android/pod/k8s/vm) resolves to a Resolved* envelope via its
+// substrate value (local/android/pod/kubernetes/vm) resolves to a Resolved* envelope via its
 // plugin's ops.OpResolve (Cutovers D–M); the kernel reads the envelope, never the concrete
 // kind. A re-introduced typed consumption (a spec.<Kind> field-read, a typed uf map, a
 // typed pre-decode) trips this gate — the teeth arm that makes the law self-enforcing.
@@ -29,7 +29,7 @@ import (
 // spec.LibvirtDomain, spec.Format, …) — those are E-envelope data, not the kind itself.
 func TestNoConcreteKindInKernel(t *testing.T) {
 	concreteKinds := map[string]bool{
-		"Vm": true, "Pod": true, "K8s": true, "Local": true, "Android": true,
+		"Vm": true, "Pod": true, "Kubernetes": true, "Local": true, "Android": true,
 		"Distro": true, "Sidecar": true, "Agent": true, "Resource": true,
 	}
 	files, err := filepath.Glob("*.go")

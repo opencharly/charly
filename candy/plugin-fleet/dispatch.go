@@ -24,7 +24,7 @@ import (
 // compileNodePlans compiles the InstallPlans for one tree position plugin-side, dispatching on the
 // classified target — the port of the former host deployAddCmd.compileNodePlans. Target-only deploys
 // (local + every EXTERNAL substrate) don't compile a primary image plan — everything comes from
-// add_candy. For pod/k8s targets the add_candy compiles against the BASE IMAGE's context rather than
+// add_candy. For pod/kubernetes targets the add_candy compiles against the BASE IMAGE's context rather than
 // the operator host's. Returns the plans, the base identity, and the candy set (both for the
 // deployID stamp). Ref classification resolves off the resolved-project envelope (rp.Boxes/
 // rp.Candies) via resolveDeployRef (deploy_ref.go).
@@ -57,7 +57,7 @@ func (c *FleetAddCmd) compileNodePlans(target, refStr, tag, path string, addCand
 
 	if target == "local" || c.externalSubstrates[target] {
 		// Target-only deploys (local + every EXTERNAL deploy substrate, incl. the now-externalized
-		// vm/android/k8s — all covered by c.externalSubstrates, the loader-threaded
+		// vm/android/kubernetes — all covered by c.externalSubstrates, the loader-threaded
 		// ExternalDeploySubstrates DATA snapshot, byte-exact to the host's isExternalDeploySubstrate)
 		// compile no primary image plan — the workload is entirely add_candy:. base is the deploy
 		// path identity.
@@ -73,11 +73,11 @@ func (c *FleetAddCmd) compileNodePlans(target, refStr, tag, path string, addCand
 		}
 	}
 
-	// pod/k8s add_candy overlays compile against the PRIMARY base image; primaryBoxName is set
+	// pod/kubernetes add_candy overlays compile against the PRIMARY base image; primaryBoxName is set
 	// exactly when the primary ref is a LOCAL box (a candy/remote primary ref leaves it "" and the
 	// overlay falls back to the standalone-candy compile — matching the OLD baseImg==nil path).
 	primaryBoxName := ""
-	if (target == "pod" || target == "k8s") && refStr != "" {
+	if (target == "pod" || target == "kubernetes") && refStr != "" {
 		if pref, perr := resolveDeployRef(classifyRP, refStr, dir); perr == nil && pref.Kind == RefKindBox && pref.Source != RefSourceRemote {
 			primaryBoxName = pref.Name
 		}
@@ -129,7 +129,7 @@ func (c *FleetAddCmd) compileRefSelection(ref *DeployRef, hostCtxJSON []byte, ta
 	}
 	var req spec.DeployCompileRequest
 	if ref.Kind == RefKindBox {
-		// BOX-REF shape (primary pod/k8s image): the plugin resolves the box view + candy order off
+		// BOX-REF shape (primary pod/kubernetes image): the plugin resolves the box view + candy order off
 		// the envelope (box_select.go).
 		req = spec.DeployCompileRequest{Dir: dir, BoxRef: ref.Name, HostContextJSON: hostCtxJSON, Tag: tag}
 	} else {
@@ -146,7 +146,7 @@ func (c *FleetAddCmd) compileRefSelection(ref *DeployRef, hostCtxJSON []byte, ta
 }
 
 // compileAddCandyOnBox is the ADD-CANDY-ON-BOX shape: the add_candy overlay compiled against the
-// primary pod/k8s base image, ALL resolved off the envelope (box_select.go
+// primary pod/kubernetes base image, ALL resolved off the envelope (box_select.go
 // resolveAddCandyOnBoxSelection). ExtraCandyRefs carries alRef.Raw so the plugin's OWN
 // resolved-project re-fetch discovers a REMOTE overlay ref.
 func (c *FleetAddCmd) compileAddCandyOnBox(alRef *DeployRef, baseBoxRef string, hostCtxJSON []byte, tag, dir string) ([]*spec.InstallPlan, error) {

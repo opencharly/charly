@@ -22,7 +22,7 @@ import (
 // RenderTable writes the multi-row aligned table.
 //
 // Columns: KIND  IMAGE  STATUS  PORTS  TUNNEL  DEVICES  TOOLS
-// KIND names the substrate (pod / vm / k8s / local / android). IMAGE merges
+// KIND names the substrate (pod / vm / kubernetes / local / android). IMAGE merges
 // image + instance ("image/instance") so a multi-instance deployment is
 // visually distinct. Nested children render as indented IMAGE-cell rows.
 func RenderTable(w io.Writer, ss []spec.DeploymentStatus) error {

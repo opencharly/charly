@@ -7,13 +7,13 @@ package substratekind
 //
 // Every input this needs turned out to be reachable WITHOUT a new seam:
 //   - the PROJECT deploy tree via InvokeProvider("build","project") — the SAME
-//     seam status_k8s.go uses (proven live by the K5 lane-A landing).
+//     seam status_kubernetes.go uses (proven live by the K5 lane-A landing).
 //   - the PER-MACHINE overlay (~/.config/charly/charly.yml) via
 //     deploykit.LoadFleetConfig() DIRECTLY — no host round-trip at all, so
 //     "per-machine state" does NOT block this move (contra the original
 //     K5-gated framing on this file's charly-core predecessor).
 //   - its own android substrate-template resolve (resolve.go, in-package,
-//     no cross-plugin hop — the SAME pattern k8s already uses).
+//     no cross-plugin hop — the SAME pattern kubernetes already uses).
 //   - the credential store (apkeep google-play creds) via
 //     InvokeProvider("verb","credential",...) — the SAME peer-plugin-dispatch
 //     pattern status_vm.go already uses for verb:libvirt.

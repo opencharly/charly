@@ -1,15 +1,15 @@
 // Package k8sgen is the Kustomize-GENERATOR plugin (C8/M13): the pure manifest
-// generation that turns (deployment node, kind:k8s cluster template, image
-// ports/uid/gid) into a Kustomize base/ + overlays/<inst>/ tree. It was carved out
-// of charly core (charly/k8s_generate.go) and is fronted by a thin in-core shim
-// (GenerateK8sKustomize) that extracts Ports/UID/GID from the image Capabilities,
-// Invokes this plugin's OpEmit, then does the disk I/O + the host-side egress gate
-// (ValidateEgressValue) before the bytes hit disk — mirroring the M16 egress
-// pattern. Compiled-in (the deploy/from-box paths call it; an in-proc inprocProvider
-// pays only a JSON envelope over generation that dominates).
+// generation that turns (deployment node, kind:kubernetes cluster template, image
+// ports/uid/gid) into a Kustomize base/ + overlays/<inst>/ tree. It is reached
+// peer-to-peer over verb:k8sgen/OpEmit from candy/plugin-kube's materializeKustomize
+// (K5-A item 6), which extracts Ports/UID/GID from the image Capabilities, Invokes
+// this plugin's OpEmit, then does the disk I/O + the egress gate (validateEgressValue)
+// before the bytes hit disk — mirroring the M16 egress pattern. Compiled-in (the
+// deploy/from-box paths call it; an in-proc inprocProvider pays only a JSON envelope
+// over generation that dominates).
 //
 // GenerateTree is PURE: no disk I/O, no egress — it collects manifest docs (as JSON)
-// at RELATIVE paths and returns them; the host shim owns RemoveAll/MkdirAll, the raw
+// at RELATIVE paths and returns them; the caller owns RemoveAll/MkdirAll, the raw
 // manifest copy, the egress validation, and the YAML writes.
 package k8sgen
 
@@ -52,14 +52,14 @@ import (
 // `kubectl apply -k` argument.
 //
 //nolint:gocyclo // Kustomize orchestrator: sequential phases with conditional file emissions; moderate complexity, extraction needs extensive output-path param passing
-func GenerateTree(in spec.K8sGenInput) (spec.K8sGenReply, error) {
-	var reply spec.K8sGenReply
+func GenerateTree(in spec.KubernetesGenInput) (spec.KubernetesGenReply, error) {
+	var reply spec.KubernetesGenReply
 	if in.DeploymentName == "" {
 		return reply, fmt.Errorf("deployment name is required")
 	}
 	// NOTE: the Cluster-required guard lives in the in-core shim
-	// (GenerateK8sKustomize), where Cluster is still a *K8sSpec pointer that CAN be
-	// nil-checked. The wire type here is a value (spec.K8s), so by the time
+	// (GenerateKubernetesKustomize), where Cluster is still a *KubernetesSpec pointer that CAN be
+	// nil-checked. The wire type here is a value (spec.Kubernetes), so by the time
 	// GenerateTree runs the cluster is always present.
 
 	overlayName := in.Instance
@@ -67,13 +67,13 @@ func GenerateTree(in spec.K8sGenInput) (spec.K8sGenReply, error) {
 		overlayName = "default"
 	}
 
-	var files []spec.K8sGenFile
+	var files []spec.KubernetesGenFile
 	addFile := func(rel string, doc any, kind string) error {
 		raw, err := json.Marshal(doc)
 		if err != nil {
 			return fmt.Errorf("marshaling %s: %w", rel, err)
 		}
-		files = append(files, spec.K8sGenFile{RelPath: rel, Doc: raw, EgressKind: kind})
+		files = append(files, spec.KubernetesGenFile{RelPath: rel, Doc: raw, EgressKind: kind})
 		return nil
 	}
 
@@ -117,8 +117,8 @@ func GenerateTree(in spec.K8sGenInput) (spec.K8sGenReply, error) {
 	// Raw manifests from deployment.kubernetes.raw are copied verbatim by the host
 	// shim (it owns disk I/O); GenerateTree only registers their kustomize resource
 	// paths so the base kustomization.yaml references them.
-	if in.Deploy.Kubernetes != nil {
-		for _, src := range in.Deploy.Kubernetes.Raw {
+	if in.Deploy.Deploy != nil {
+		for _, src := range in.Deploy.Deploy.Raw {
 			baseResources = append(baseResources, filepath.Join("raw", filepath.Base(src)))
 		}
 	}
@@ -158,9 +158,9 @@ func GenerateTree(in spec.K8sGenInput) (spec.K8sGenReply, error) {
 		overlayKustomization["namespace"] = ns
 	}
 	// Translate deployment.kubernetes.patches into the kustomize "patches" list.
-	if in.Deploy.Kubernetes != nil && len(in.Deploy.Kubernetes.Patches) > 0 {
+	if in.Deploy.Deploy != nil && len(in.Deploy.Deploy.Patches) > 0 {
 		var patches []map[string]any
-		for _, p := range in.Deploy.Kubernetes.Patches {
+		for _, p := range in.Deploy.Deploy.Patches {
 			entry := map[string]any{
 				"patch": p.Patch,
 			}
@@ -194,10 +194,10 @@ func GenerateTree(in spec.K8sGenInput) (spec.K8sGenReply, error) {
 // Workload kind selection — the heuristic from F.7.
 // -----------------------------------------------------------------------------
 
-func selectWorkloadKind(opts spec.K8sGenInput) string {
+func selectWorkloadKind(opts spec.KubernetesGenInput) string {
 	// Explicit override wins.
-	if k8s := opts.Deploy.Kubernetes; k8s != nil && k8s.Workload != "" {
-		return k8s.Workload
+	if deployKnobs := opts.Deploy.Deploy; deployKnobs != nil && deployKnobs.Workload != "" {
+		return deployKnobs.Workload
 	}
 	kind := opts.Deploy.Kind
 	if kind == "" {
@@ -225,7 +225,7 @@ func selectWorkloadKind(opts spec.K8sGenInput) string {
 // Workload (Deployment / StatefulSet / DaemonSet / Job / CronJob / Pod).
 // -----------------------------------------------------------------------------
 
-func generateWorkload(opts spec.K8sGenInput) (map[string]any, string) {
+func generateWorkload(opts spec.KubernetesGenInput) (map[string]any, string) {
 	kind := selectWorkloadKind(opts)
 	podSpec := generatePodSpec(opts)
 
@@ -297,18 +297,18 @@ func generateWorkload(opts spec.K8sGenInput) (map[string]any, string) {
 	}
 }
 
-func effectiveReplicas(opts spec.K8sGenInput) int {
+func effectiveReplicas(opts spec.KubernetesGenInput) int {
 	if opts.Deploy.Replica > 0 {
 		return opts.Deploy.Replica
 	}
 	return 1
 }
 
-func appSelector(opts spec.K8sGenInput) map[string]string {
+func appSelector(opts spec.KubernetesGenInput) map[string]string {
 	return map[string]string{"app": opts.DeploymentName}
 }
 
-func baseManifest(apiVersion, kind string, opts spec.K8sGenInput, spec any) map[string]any {
+func baseManifest(apiVersion, kind string, opts spec.KubernetesGenInput, spec any) map[string]any {
 	meta := map[string]any{
 		"name": opts.DeploymentName,
 	}
@@ -323,15 +323,15 @@ func baseManifest(apiVersion, kind string, opts spec.K8sGenInput, spec any) map[
 	}
 }
 
-func mergedLabels(opts spec.K8sGenInput) map[string]string {
+func mergedLabels(opts spec.KubernetesGenInput) map[string]string {
 	out := map[string]string{"app": opts.DeploymentName}
 	maps.Copy(out, opts.Cluster.Defaults.Labels)
 	return out
 }
 
-func deployNamespace(opts spec.K8sGenInput) string {
-	if k8s := opts.Deploy.Kubernetes; k8s != nil && k8s.Namespace != "" {
-		return k8s.Namespace
+func deployNamespace(opts spec.KubernetesGenInput) string {
+	if deployKnobs := opts.Deploy.Deploy; deployKnobs != nil && deployKnobs.Namespace != "" {
+		return deployKnobs.Namespace
 	}
 	if opts.Cluster.DefaultNamespace != "" {
 		return opts.Cluster.DefaultNamespace
@@ -343,7 +343,7 @@ func deployNamespace(opts spec.K8sGenInput) string {
 // Pod spec.
 // -----------------------------------------------------------------------------
 
-func generatePodSpec(opts spec.K8sGenInput) map[string]any {
+func generatePodSpec(opts spec.KubernetesGenInput) map[string]any {
 	container := map[string]any{
 		"name":  opts.DeploymentName,
 		"image": opts.ImageRef,
@@ -376,7 +376,7 @@ func generatePodSpec(opts spec.K8sGenInput) map[string]any {
 		container["volumeMounts"] = mounts
 	}
 
-	// Probes (target-agnostic → K8s probe translation)
+	// Probes (target-agnostic → Kubernetes probe translation)
 	if p := opts.Deploy.Probes; p != nil {
 		if lp := checkToProbe(p.Liveness); lp != nil {
 			container["livenessProbe"] = lp
@@ -444,7 +444,7 @@ func generatePodSpec(opts spec.K8sGenInput) map[string]any {
 	return podSpec
 }
 
-func podSecurityContext(opts spec.K8sGenInput) map[string]any {
+func podSecurityContext(opts spec.KubernetesGenInput) map[string]any {
 	out := map[string]any{}
 	if opts.UID > 0 {
 		out["runAsUser"] = opts.UID
@@ -489,7 +489,7 @@ func generateContainerPorts(ports []string) []map[string]any {
 	return out
 }
 
-func generateService(opts spec.K8sGenInput, _ string) map[string]any {
+func generateService(opts spec.KubernetesGenInput, _ string) map[string]any {
 	ports := generateContainerPorts(opts.Ports)
 	if len(ports) == 0 {
 		return nil
@@ -574,7 +574,7 @@ func generateResources(d spec.Deploy) map[string]any {
 // Storage / PVC / Volumes.
 // -----------------------------------------------------------------------------
 
-func storageClass(cluster spec.K8s, hint string) string {
+func storageClass(cluster spec.Kubernetes, hint string) string {
 	switch hint {
 	case "fast":
 		if cluster.Storage.ClassFast != "" {
@@ -592,7 +592,7 @@ func storageClass(cluster spec.K8s, hint string) string {
 	return cluster.Storage.ClassDefault
 }
 
-func accessMode(cluster spec.K8s, access string) string {
+func accessMode(cluster spec.Kubernetes, access string) string {
 	switch access {
 	case "many-readers":
 		return "ReadOnlyMany"
@@ -607,7 +607,7 @@ func accessMode(cluster spec.K8s, access string) string {
 	return "ReadWriteOnce"
 }
 
-func generatePVCs(opts spec.K8sGenInput) []map[string]any {
+func generatePVCs(opts spec.KubernetesGenInput) []map[string]any {
 	out := make([]map[string]any, 0, len(opts.Deploy.Storage))
 	for _, s := range opts.Deploy.Storage {
 		spc := map[string]any{
@@ -631,7 +631,7 @@ func generatePVCs(opts spec.K8sGenInput) []map[string]any {
 	return out
 }
 
-func generateVolumeClaimTemplates(opts spec.K8sGenInput) []map[string]any {
+func generateVolumeClaimTemplates(opts spec.KubernetesGenInput) []map[string]any {
 	out := make([]map[string]any, 0, len(opts.Deploy.Storage))
 	for _, s := range opts.Deploy.Storage {
 		spc := map[string]any{
@@ -670,7 +670,7 @@ func generateVolumeMounts(d spec.Deploy) []map[string]any {
 	return out
 }
 
-func generatePodVolumes(opts spec.K8sGenInput) []map[string]any {
+func generatePodVolumes(opts spec.KubernetesGenInput) []map[string]any {
 	kind := selectWorkloadKind(opts)
 	if kind == "StatefulSet" {
 		// StatefulSet uses volumeClaimTemplates — no need for pod-level volumes.
@@ -692,7 +692,7 @@ func generatePodVolumes(opts spec.K8sGenInput) []map[string]any {
 // Ingress.
 // -----------------------------------------------------------------------------
 
-func generateIngress(opts spec.K8sGenInput) map[string]any {
+func generateIngress(opts spec.KubernetesGenInput) map[string]any {
 	expose := opts.Deploy.Expose
 	if expose == nil || expose.Host == "" {
 		return nil
@@ -763,7 +763,7 @@ func generateIngress(opts spec.K8sGenInput) map[string]any {
 	}
 }
 
-func resolveIngressPort(opts spec.K8sGenInput, portNameOrNumber string) int {
+func resolveIngressPort(opts spec.KubernetesGenInput, portNameOrNumber string) int {
 	// If the deployment names a port by number, parse it.
 	if n, err := strconv.Atoi(portNameOrNumber); err == nil && n > 0 {
 		return n
@@ -782,10 +782,10 @@ func resolveIngressPort(opts spec.K8sGenInput, portNameOrNumber string) int {
 }
 
 // -----------------------------------------------------------------------------
-// Check → K8s Probe translation.
+// Check → Kubernetes Probe translation.
 // -----------------------------------------------------------------------------
 
-// checkToProbe turns a generic declarative Check into a K8s probe spec.
+// checkToProbe turns a generic declarative Check into a Kubernetes probe spec.
 // Translates the four most common check types into Kubernetes-native
 // probe shapes:
 //
@@ -838,7 +838,7 @@ func checkToProbe(c *spec.Op) map[string]any {
 		}
 		return map[string]any{"tcpSocket": probe}
 	case fileTarget != "":
-		// Probe semantics: file exists. K8s exec probes succeed iff
+		// Probe semantics: file exists. Kubernetes exec probes succeed iff
 		// exit 0; `test -e <path>` matches that contract.
 		return map[string]any{"exec": map[string]any{"command": []string{"test", "-e", fileTarget}}}
 	case cmdStr != "":
@@ -877,7 +877,7 @@ func parseHTTPForProbe(url string) (path string, port int, host string) {
 	} else {
 		host = hostPort
 	}
-	// k8s probes use the pod IP by default — leave host empty when the
+	// kubernetes probes use the pod IP by default — leave host empty when the
 	// caller used "localhost" or "127.0.0.1" since those mean "the pod"
 	// in container-probe semantics.
 	if host == "localhost" || host == "127.0.0.1" {

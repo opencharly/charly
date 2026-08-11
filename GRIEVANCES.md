@@ -139,7 +139,7 @@ systemd that is not worth fighting.
 
 ### What OpenCharly does
 
-The same candy list is consumed by every substrate. `pod:`, `vm:`, `local:`, `k8s:` and `android:`
+The same candy list is consumed by every substrate. `pod:`, `vm:`, `local:`, `kubernetes:` and `android:`
 all compile to one shared **InstallPlan IR** — a single intermediate representation that a target
 then executes in its own idiom.
 

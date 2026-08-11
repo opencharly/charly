@@ -9,28 +9,28 @@ import (
 )
 
 // TestMaterializeKustomize_Guards exercises the three pre-dispatch validation guards —
-// mirroring the host-side TestGenerateK8sKustomize_Guards (charly/k8s_generate_test.go) exactly,
+// mirroring the host-side TestGenerateKubernetesKustomize_Guards exactly,
 // since both now gate the SAME K5-A item-6 contract from either side of the process boundary. No
 // executor/broker is exercised — each guard returns before touching exec.InvokeProvider.
 func TestMaterializeKustomize_Guards(t *testing.T) {
 	cases := []struct {
 		name string
-		req  spec.K8sGenerateKustomizeRequest
+		req  spec.KubernetesGenerateKustomizeRequest
 		want string
 	}{
 		{
 			name: "missing deployment name",
-			req:  spec.K8sGenerateKustomizeRequest{CapsJSON: []byte("{}"), ClusterJSON: []byte("{}")},
+			req:  spec.KubernetesGenerateKustomizeRequest{CapsJSON: []byte("{}"), ClusterJSON: []byte("{}")},
 			want: "deployment name is required",
 		},
 		{
 			name: "missing capabilities",
-			req:  spec.K8sGenerateKustomizeRequest{Name: "app", ClusterJSON: []byte("{}")},
+			req:  spec.KubernetesGenerateKustomizeRequest{Name: "app", ClusterJSON: []byte("{}")},
 			want: "capabilities are required",
 		},
 		{
 			name: "missing cluster",
-			req:  spec.K8sGenerateKustomizeRequest{Name: "app", CapsJSON: []byte("{}")},
+			req:  spec.KubernetesGenerateKustomizeRequest{Name: "app", CapsJSON: []byte("{}")},
 			want: "cluster profile is required",
 		},
 	}
