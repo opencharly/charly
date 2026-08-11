@@ -17,7 +17,7 @@ type KubeInput struct {
 
 	Label string `yaml:"label,omitempty" json:"label,omitempty"`
 
-	// cluster — a kind:k8s cluster template name; this PLUGIN self-resolves it to a
+	// cluster — a kind:kubernetes cluster template name; this PLUGIN self-resolves it to a
 	// concrete kube_context (self-loading the project, K-wave W3a A3-phase-2) and
 	// leaves the authored key in place, so the input def admits both.
 	Cluster string `yaml:"cluster,omitempty" json:"cluster,omitempty"`

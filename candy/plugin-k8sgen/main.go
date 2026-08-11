@@ -22,7 +22,7 @@ func NewProvider() pb.ProviderServer { return &provider{} }
 
 // NewMeta advertises verb:k8sgen serving OpEmit (via sdk.NewMeta → BuildCapabilities). The verb is
 // invoked with the structured spec.KubernetesGenInput, not an authored plugin_input, so it declares no
-// #*Input — the shipped schema ships only the trivial #K8sgenInput so the host's plugin-schema gate
+// #*Input — the shipped schema ships only the trivial #KubernetesGenInput so the host's plugin-schema gate
 // has a non-empty, base-spliceable schema.
 func NewMeta() pb.PluginMetaServer {
 	return sdk.NewMeta(calver,

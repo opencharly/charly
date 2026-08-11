@@ -2,7 +2,7 @@ charly-kubernetes:
     candy:
         version: 2026.218.1200
         description: |-
-            Concept candy owning the charly-kubernetes kind-authoring skills (k8s schema + cluster probes). Owns its family's `skill:` kind entities (sibling nodes in this file) — the
+            Concept candy owning the charly-kubernetes kind-authoring skills (kubernetes schema + cluster probes). Owns its family's `skill:` kind entities (sibling nodes in this file) — the
             plugins→candies migration; candy/plugin-marketplace regenerates the plugins/ corpus
             from them.
         plan:
@@ -40,9 +40,8 @@ check-k8s-skill:
             in charly's core. This mirrors the `adb:` and `appium:` verbs (see
             charly/check_cmd.go).
 
-            The cluster-probe verb is spelled `kube`; the `k8s` spelling is reserved for
-            the deploy KIND only (`kind: k8s`, `--target k8s`, a `k8s:` entity or
-            cross-ref).
+            The cluster-probe verb is spelled `kube`; the deploy KIND is spelled
+            `kubernetes` (`kind: kubernetes`, a `kubernetes:` entity or cross-ref).
 
             ## Method surface
 
@@ -80,11 +79,11 @@ check-k8s-skill:
 
             1. `kubeconfig: <path>` — direct kubeconfig file pointer. Overrides
                everything.
-            2. `cluster: <name>` — a `kind: k8s` cluster template name. The host
-               resolves it via `findK8sSpec` (the project `charly.yml` / `k8s.yml`
-               loader) to the template's `kubeconfig_context:`, which selects the
-               context; the kubeconfig path defaults to `$KUBECONFIG` then
-               `~/.kube/config`.
+            2. `cluster: <name>` — a `kind: kubernetes` cluster template name. The
+               plugin resolves it via `ResolveKubernetesEntityViaExecutor` (the
+               project `charly.yml` loader) to the template's `kubeconfig_context:`,
+               which selects the context; the kubeconfig path defaults to `$KUBECONFIG`
+               then `~/.kube/config`.
             3. `kube_context: <name>` — override the kubeconfig context directly.
             4. None given → current-context of the default kubeconfig (matches
                `kubectl` with no flags).
@@ -120,7 +119,7 @@ check-k8s-skill:
             `check:` step.
 
             Example from the main repo's `charly.yml` — the `check-k3s-vm` bed's
-            cluster-readiness steps, each naming ITS OWN `kind: k8s` profile by literal:
+            cluster-readiness steps, each naming ITS OWN `kind: kubernetes` profile by literal:
 
             ```yaml
             check-k3s-vm:
@@ -129,11 +128,11 @@ check-k8s-skill:
                 disposable: true
                 plan:
                   # … guest-side command / process / port / file steps elided …
-                  - check: k8s=wait-nodes
-                    id: kv-k8s-wait-nodes
+                  - check: kubernetes=wait-nodes
+                    id: kv-kubernetes-wait-nodes
                     kube:
                       method: wait-nodes
-                      cluster: "check-k3s-vm-ctx"    # this bed's OWN kind:k8s profile
+                      cluster: "check-k3s-vm-ctx"    # this bed's OWN kind:kubernetes profile
                       kube_count: 1
                     timeout: 180s
                     stdout: {contains: "Ready"}
@@ -144,15 +143,15 @@ check-k8s-skill:
                   # are one-shot list verbs with no internal wait, and they exit 0 on an EMPTY
                   # list, so a `contains` matcher run before the addons settle FAILS rather than
                   # waits. Gate first, assert second.
-                  - check: k8s=addons
-                    id: kv-k8s-addons
+                  - check: kubernetes=addons
+                    id: kv-kubernetes-addons
                     kube:
                       method: addons
                       cluster: "check-k3s-vm-ctx"
                     timeout: 240s
                     context: [runtime]
-                  - check: k8s=ingressclass
-                    id: kv-k8s-ingressclass-traefik
+                  - check: kubernetes=ingressclass
+                    id: kv-kubernetes-ingressclass-traefik
                     kube:
                       method: ingressclass
                       cluster: "check-k3s-vm-ctx"
@@ -161,7 +160,7 @@ check-k8s-skill:
             ```
 
             **A `kube:` step belongs to whoever can NAME the cluster — which is the deploy, not
-            a generic candy.** The bed above names `check-k3s-vm-ctx`, a `kind: k8s` profile it
+            a generic candy.** The bed above names `check-k3s-vm-ctx`, a `kind: kubernetes` profile it
             alone owns, pinned to its own per-deploy kubeconfig context. Its sibling bed
             `check-k8s-deploy` names `check-k8s-deploy-cluster-ctx`, so the two never resolve
             through each other's context even though both deploy the SAME shared `kind: vm`
@@ -179,7 +178,7 @@ check-k8s-skill:
             step goes silently vacuous. A generic candy that must prove its own control plane
             came up probes it IN-VENUE instead — `candy/k3s-server/charly.yml` drives the k3s
             client entrypoint (`/usr/local/bin/kubectl`) against the server's local kubeconfig,
-            needing no host kubeconfig merge, no port-forward, and no `kind: k8s` entity.
+            needing no host kubeconfig merge, no port-forward, and no `kind: kubernetes` entity.
 
             (`${DEPLOY_NAME}` is UPPERCASE because the check-var expander only recognizes
             uppercase names; a lowercase `${deploy_name}` — the artifact-path token — is NOT a
@@ -261,7 +260,7 @@ check-k8s-skill:
               `k3s-post-provision` method. The retrieve-check, port-forward rewrite, and
               merge all run INSIDE `candy/plugin-kube` (see `k3s_post.go` above); the
               cluster-template lookup that used to need `charly/k8s_config.go`'s
-              `findK8sSpec` now self-loads plugin-side too (`sdk/loaderkit.ResolveK8sEntityViaExecutor`,
+              `findK8sSpec` now self-loads plugin-side too (`sdk/loaderkit.ResolveKubernetesEntityViaExecutor`,
               K-wave W3a A3-phase-2). No client-go import, and no `kube:`-specific host
               seam, remains in core.
 
@@ -274,8 +273,8 @@ check-k8s-skill:
             - `/charly-check:check` — the unified `charly check` surface (image / live /
               run), the plan-step vocabulary, and how the provider registry dispatches
               declarative verbs.
-            - `/charly-kubernetes:kubernetes` — deploying images to a K8s cluster
-              (`kind: k8s` cluster templates, Kustomize generation, `charly fleet`).
+            - `/charly-kubernetes:kubernetes` — deploying images to a Kubernetes cluster
+              (`kind: kubernetes` cluster templates, Kustomize generation, `charly fleet`).
             - `/charly-internals:plugin` — the Provider model and the out-of-process
               plugin dispatch the `kube:` verb rides on.
             - `/charly-infrastructure:k3s` — the k3s-server / k3s-agent candies whose
@@ -286,25 +285,25 @@ kubernetes-skill:
         family: kubernetes
         owner: charly-kubernetes
         description: |-
-            MUST be invoked before any work involving: `charly fleet add --target kubernetes`, `charly fleet from-box`, Kustomize manifest generation, cluster profiles, K8s deployments, `kubernetes:` block in deploy spec, or OCI-label capabilities.
+            MUST be invoked before any work involving: `charly fleet add`, `charly fleet from-box`, Kustomize manifest generation, cluster profiles, Kubernetes deployments, `deploy:` block in deploy spec, or OCI-label capabilities.
         content: |
-            # Kubernetes — Deploying OpenCharly Images to K8s Clusters
+            # Kubernetes — Deploying OpenCharly Images to Kubernetes Clusters
 
             ## Overview
 
-            OpenCharly can deploy built images to a Kubernetes cluster by emitting a Kustomize `base/` + `overlays/` tree. The deployment schema stays **target-agnostic** — the deploy node describes *what the workload needs* (kind, replica, resources, exposure, storage, probes); a per-cluster **`kind: k8s` cluster template** (the `k8s:` entity, which absorbed the former cluster-profile file) supplies the K8s-specific knobs (storage class, ingress class, cert issuer, secret backend).
+            OpenCharly can deploy built images to a Kubernetes cluster by emitting a Kustomize `base/` + `overlays/` tree. The deployment schema stays **target-agnostic** — the deploy node describes *what the workload needs* (kind, replica, resources, exposure, storage, probes); a per-cluster **`kind: kubernetes` cluster template** (the `kubernetes:` entity, which absorbed the former cluster-profile file) supplies the Kubernetes-specific knobs (storage class, ingress class, cert issuer, secret backend).
 
-            Every box runtime contract is baked into OCI labels at build time, so **a K8s deploy is possible without access to `charly.yml`** — the `charly fleet from-box` verb reads capabilities from the pushed image alone.
+            Every box runtime contract is baked into OCI labels at build time, so **a Kubernetes deploy is possible without access to `charly.yml`** — the `charly fleet from-box` verb reads capabilities from the pushed image alone.
 
             ## Quick reference
 
             | Action | Command | Description |
             |---|---|---|
-            | Add K8s deploy | `charly fleet add <name> <ref> --target kubernetes` | Read BoxConfig + the deploy node + the `kind: k8s` cluster template; emit `.opencharly/k8s/<name>/` Kustomize tree |
+            | Add Kubernetes deploy | `charly fleet add <name> <ref>` | Read BoxConfig + the deploy node + the `kind: kubernetes` cluster template; emit `.opencharly/k8s/<name>/` Kustomize tree |
             | Source-less deploy | `charly fleet from-box <registry/name:tag> [name] --cluster <name>` | Deploy from OCI labels only — no `charly.yml` needed (see Part F.10) |
             | Sync to cluster | `charly fleet sync <name>` | `kubectl apply -k .opencharly/k8s/<name>/overlays/default` |
             | Show generated manifests | `charly fleet show <name>` | `kubectl kustomize …` — see what would apply |
-            | Delete K8s deploy | `charly fleet del <name>` | Remove overlay dir; base stays if other instances reference it |
+            | Delete Kubernetes deploy | `charly fleet del <name>` | Remove overlay dir; base stays if other instances reference it |
 
             ## The three-layer model
 
@@ -312,23 +311,23 @@ kubernetes-skill:
             |---|---|---|
             | **Build** — what goes INTO the image | `box.build:` (or legacy `BoxConfig`) | no (consumed at build) |
             | **Capabilities** — box runtime contract | `box.capabilities:` (or layer rollups) | **yes** — every field under `ai.opencharly.*` |
-            | **Deployment** — how to run the image | a name-first deploy node (substrate kind at the edge — here `k8s:`) in `charly.yml` + `~/.config/charly/charly.yml` overlay | no |
+            | **Deployment** — how to run the image | a name-first deploy node (substrate kind at the edge — here `kubernetes:`) in `charly.yml` + `~/.config/charly/charly.yml` overlay | no |
 
             The completeness invariant: every exported field on `spec.BoxMetadata` (there is no more `Capabilities` alias — see `/charly-internals:capabilities`) has a `CapabilityLabelMap` entry. A compile-time test enforces this — a new capability field without a label mapping fails the build. See `sdk/deploykit/capabilities.go`.
 
             ## Deployment schema — target-agnostic fields
 
-            A K8s deployment is a name-first `k8s:` deploy: the `k8s:` value carries the
-            scalars + the cross-refs (`image:` = the box to deploy, `from:` = the `kind: k8s`
+            A Kubernetes deployment is a name-first `kubernetes:` deploy: the `kubernetes:` value carries the
+            scalars + the cross-refs (`image:` = the box to deploy, `from:` = the `kind: kubernetes`
             cluster template) AND every non-scalar field (resources / security / expose /
-            storage / probes / the `kubernetes:` deploy-knobs block) — all inline in the `k8s:`
+            storage / probes / the `deploy:` deploy-knobs block) — all inline in the `kubernetes:`
             value.
 
             ```yaml
             openclaw:
-              k8s:
+              kubernetes:
                 image: openclaw                 # the box to deploy (falls back to the deploy name)
-                from: production                # cross-ref → inherit the kind:k8s cluster template
+                from: production                # cross-ref → inherit the kind:kubernetes cluster template
                 kind: service                   # service | daemon | batch | scheduled | oneshot
                 replica: 3
                 restart: always                 # always | on-failure | never (honored on Pod/Job/CronJob)
@@ -347,7 +346,7 @@ kubernetes-skill:
                 probes:
                   liveness:  {http: {path: /healthz, port: 8080}}
                   readiness: {http: {path: /ready,   port: 8080}}
-                kubernetes:
+                deploy:
                   namespace: apps               # optional override of the cluster template default
                   patches: []                   # escape hatch: strategic / JSON6902 patches
                   raw: []                       # escape hatch: paths to raw manifests included verbatim
@@ -364,15 +363,15 @@ kubernetes-skill:
             kind: oneshot                       → Pod
             ```
 
-            Explicit override: `kubernetes.workload: Deployment` (rare — prefer `kind:`).
+            Explicit override: `deploy.workload: Deployment` (rare — prefer `kind:`).
 
-            ## Cluster template (`kind: k8s`)
+            ## Cluster template (`kind: kubernetes`)
 
-            One `kind: k8s` entity per cluster, declared name-first in `charly.yml` (or a discovered `k8s.yml`). The `k8s:` kind **absorbed the former `kind: cluster-profile` file** — `charly migrate` synthesizes a `kind: k8s` entry from any pre-existing `clusters/<name>.yaml`. It is the **only** place cluster-specific K8s knobs live; a deploy reaches it by name through its `from:` cross-ref. The `k8s:` value carries the scalars (`box:` cross-ref, `kubeconfig_context:`, `admission_policy:`, `default_namespace:`) AND every non-scalar policy block (storage / ingress / secret / image_default / pod_default / defaults) — all inline in the `k8s:` value.
+            One `kind: kubernetes` entity per cluster, declared name-first in `charly.yml`. The `kubernetes:` kind **absorbed the former `kind: cluster-profile` file** — `charly migrate` synthesizes a `kind: kubernetes` entry from any pre-existing `clusters/<name>.yaml`. It is the **only** place cluster-specific Kubernetes knobs live; a deploy reaches it by name through its `from:` cross-ref. The `kubernetes:` value carries the scalars (`box:` cross-ref, `kubeconfig_context:`, `admission_policy:`, `default_namespace:`) AND every non-scalar policy block (storage / ingress / secret / image_default / pod_default / defaults) — all inline in the `kubernetes:` value.
 
             ```yaml
-            production:                          # a kind: k8s cluster template (name-first)
-              k8s:
+            production:                          # a kind: kubernetes cluster template (name-first)
+              kubernetes:
                 box: ""                          # empty → a cluster-policy-only template (the workload box is named on the deploy)
                 kubeconfig_context: gke_prod_us-east1
                 admission_policy: restricted     # restricted | baseline | privileged
@@ -403,7 +402,7 @@ kubernetes-skill:
                   labels: {managed-by: opencharly}
             ```
 
-            New cluster = write a new `kind: k8s` template; zero deploy changes.
+            New cluster = write a new `kind: kubernetes` template; zero deploy changes.
 
             ## Generator output
 
@@ -414,11 +413,11 @@ kubernetes-skill:
             │   ├── deployment.yaml              # or statefulset.yaml / daemonset.yaml / job.yaml / cronjob.yaml / pod.yaml
             │   ├── service.yaml
             │   ├── pvc-<name>.yaml              # per storage entry (Deployment/DaemonSet); StatefulSet uses volumeClaimTemplates
-            │   ├── ingress.yaml                 # when expose.host set AND the k8s template's ingress.enabled
-            │   └── raw/                         # copied from kubernetes.raw:
+            │   ├── ingress.yaml                 # when expose.host set AND the kubernetes template's ingress.enabled
+            │   └── raw/                         # copied from deploy.raw:
             └── overlays/
                 └── <instance>/                  # "default" for bare name; "prod" for image/prod
-                    └── kustomization.yaml       # namespace override + patches from kubernetes.patches:
+                    └── kustomization.yaml       # namespace override + patches from deploy.patches:
             ```
 
             Apply: `kubectl apply -k .opencharly/k8s/<name>/overlays/<instance>` (or `charly fleet sync <name>`).
@@ -437,8 +436,8 @@ kubernetes-skill:
             ```bash
             # On a machine that doesn't have the source repo:
             charly fleet from-box quay.io/myorg/openclaw:v2 openclaw \
-                --target kubernetes --cluster production --namespace apps
-            # Reads: OCI labels (capabilities) + the `production` kind:k8s cluster template
+                --cluster production --namespace apps
+            # Reads: OCI labels (capabilities) + the `production` kind:kubernetes cluster template
             #        + ~/.config/charly/charly.yml (if present, for per-machine overrides)
             # Emits: .opencharly/k8s/openclaw/base/ + overlays/default/
             charly fleet sync openclaw                   # kubectl apply -k ...
@@ -446,17 +445,17 @@ kubernetes-skill:
 
             ## Relevant code
 
-            - `spec/spec/cue_types_gen.go` (generated) — `K8sDeploy` (`K8sDeployConfig`, the deploy's `kubernetes:` deploy-knobs block: namespace / workload override / patches / raw; the former `charly/k8s_config.go` is DELETED, K-wave 2)
-            - `spec/spec/cue_types_gen.go` (generated) — `K8sSpec` (the `kind: k8s` cluster template; absorbed the former `ClusterProfile` / `clusters/*.yaml`)
-            - `candy/plugin-kube/preresolve.go` — the PLUGIN-side `deploy:k8s` preresolver (F6/FINAL-K5-unit-6a, relocated from the DELETED `charly/k8s_deploy_preresolve.go`). `target: k8s` is an EXTERNAL deploy substrate (F1): it resolves out-of-process to candy/plugin-kube's `deploy:k8s` provider (beside its `kube:` verb), NOT a compiled-in DeployTarget. The preresolver resolves the image Capabilities + the `kind: k8s` cluster template by self-loading the project PLUGIN-SIDE (`sdk/loaderkit.ResolveK8sEntityViaExecutor`, K-wave W3a A3-phase-2 — no HostBuild round trip remains for this lookup), runs `materializeKustomize` (`materialize.go`) — which InvokeProviders the compiled-in `verb:k8sgen`/`OpEmit` for the manifest docs and `verb:egress`/`OpValidate` to validate each one, entirely peer-to-peer, no host round trip — and ships the egress-validated overlay path in `DeployVenue.Substrate`; the plugin runs `kubectl --context <ctx> apply -k`. The user-facing surface (schema, cluster templates, Kustomize output) is unchanged. See `/charly-internals:install-plan` + `/charly-internals:plugin`.
-            - `charly/k8s_generate.go` / `host_build_k8s_generate.go` are DELETED — the former "k8s-generate-kustomize" HostBuild seam they served is retired (K5-A item 6): the Kustomize GENERATION now runs entirely inside `candy/plugin-kube/materialize.go` (see above), and `candy/plugin-fleet/deploy_from_box.go`'s `charly fleet from-box --target k8s` path calls `materializeKustomize` the same way. The generator itself still lives in `candy/plugin-k8sgen/k8sgen.go`, reached over `verb:k8sgen` peer dispatch, not a core shim
-            - `candy/plugin-k8sgen/` — the compiled-in Kustomize GENERATOR candy (M13): `k8sgen.go` (the ported workload/service/pvc/ingress/kustomization builders + the workload-kind heuristic + `GenerateTree`), serving `verb:k8sgen`/`OpEmit` over `spec.K8sGenInput` → `spec.K8sGenReply` manifest docs; no client-go (split from the heavy external plugin-kube so it resolves in the project-less from-box path)
-            - `candy/plugin-fleet/deploy_from_box.go` — the plugin-side `charly fleet from-box` K8s path (`--cluster`), calling `materializeKustomize` the same way (`charly/fleet_from_box_cmd.go` is DELETED, K-wave 2 cone R2 — the pod path lives in `candy/plugin-fleet/from_box_pod.go`)
+            - `spec/spec/cue_types_gen.go` (generated) — `KubernetesDeploy` (`KubernetesDeployConfig`, the deploy's `deploy:` deploy-knobs block: namespace / workload override / patches / raw; the former `charly/k8s_config.go` is DELETED, K-wave 2)
+            - `spec/spec/cue_types_gen.go` (generated) — `KubernetesSpec` (the `kind: kubernetes` cluster template; absorbed the former `ClusterProfile` / `clusters/*.yaml`)
+            - `candy/plugin-kube/preresolve.go` — the PLUGIN-side `deploy:kubernetes` preresolver (F6/FINAL-K5-unit-6a, relocated from the DELETED `charly/k8s_deploy_preresolve.go`). `target: kubernetes` is an EXTERNAL deploy substrate (F1): it resolves out-of-process to candy/plugin-kube's `deploy:kubernetes` provider (beside its `kube:` verb), NOT a compiled-in DeployTarget. The preresolver resolves the image Capabilities + the `kind: kubernetes` cluster template by self-loading the project PLUGIN-SIDE (`sdk/loaderkit.ResolveKubernetesEntityViaExecutor`, K-wave W3a A3-phase-2 — no HostBuild round trip remains for this lookup), runs `materializeKustomize` (`materialize.go`) — which InvokeProviders the compiled-in `verb:k8sgen`/`OpEmit` for the manifest docs and `verb:egress`/`OpValidate` to validate each one, entirely peer-to-peer, no host round trip — and ships the egress-validated overlay path in `DeployVenue.Substrate`; the plugin runs `kubectl --context <ctx> apply -k`. The user-facing surface (schema, cluster templates, Kustomize output) is unchanged. See `/charly-internals:install-plan` + `/charly-internals:plugin`.
+            - `charly/k8s_generate.go` / `host_build_k8s_generate.go` are DELETED — the former "k8s-generate-kustomize" HostBuild seam they served is retired (K5-A item 6): the Kustomize GENERATION now runs entirely inside `candy/plugin-kube/materialize.go` (see above), and `candy/plugin-fleet/deploy_from_box.go`'s `charly fleet from-box` path calls `materializeKustomize` the same way. The generator itself still lives in `candy/plugin-k8sgen/k8sgen.go`, reached over `verb:k8sgen` peer dispatch, not a core shim
+            - `candy/plugin-k8sgen/` — the compiled-in Kustomize GENERATOR candy (M13): `k8sgen.go` (the ported workload/service/pvc/ingress/kustomization builders + the workload-kind heuristic + `GenerateTree`), serving `verb:k8sgen`/`OpEmit` over `spec.KubernetesGenInput` → `spec.KubernetesGenReply` manifest docs; no client-go (split from the heavy external plugin-kube so it resolves in the project-less from-box path)
+            - `candy/plugin-fleet/deploy_from_box.go` — the plugin-side `charly fleet from-box` Kubernetes path (`--cluster`), calling `materializeKustomize` the same way (`charly/fleet_from_box_cmd.go` is DELETED, K-wave 2 cone R2 — the pod path lives in `candy/plugin-fleet/from_box_pod.go`)
             - `sdk/deploykit/capabilities.go` — `CapabilityLabelMap` + completeness check, over `spec.BoxMetadata` (`charly/capabilities.go`, this row's former citation, no longer exists — see `/charly-internals:capabilities`)
 
             ## Related skills
 
-            - `/charly-core:deploy` — unified `charly fleet add`/`del` verb; K8s is one of the five deploy substrates
-            - `/charly-internals:capabilities` — OCI label contract the K8s generator reads from
+            - `/charly-core:deploy` — unified `charly fleet add`/`del` verb; Kubernetes is one of the five deploy substrates
+            - `/charly-internals:capabilities` — OCI label contract the Kubernetes generator reads from
             - `/charly-internals:install-plan` — shared IR across build + deploy targets
             - `/charly-internals:egress` — the CUE egress gate that validates every generated manifest before write (`#K8sObject` / `#Kustomization`)

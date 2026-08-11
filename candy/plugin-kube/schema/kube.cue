@@ -31,8 +31,8 @@
 // serve-side check + gengotypes) AND splices onto the base (base ++ plugin is a
 // def-name collision check, not a base-reference resolver).
 //
-// The plugin ALSO serves deploy:k8s (the `target: k8s` substrate) — that capability
-// keeps its authoring contract on core #Deploy / #K8s and carries NO plugin_input,
+// The plugin ALSO serves deploy:kubernetes (the `target: kubernetes` substrate) — that capability
+// keeps its authoring contract on core #Deploy / #Kubernetes and carries NO plugin_input,
 // so no input def for it lives here.
 
 // #KubeInput is the `kube` verb's plugin_input: the method name plus its
@@ -46,7 +46,7 @@
 	name?:      string
 	namespace?: string
 	label?:     string
-	// cluster — a kind:k8s cluster template name; this PLUGIN self-resolves it to a
+	// cluster — a kind:kubernetes cluster template name; this PLUGIN self-resolves it to a
 	// concrete kube_context (self-loading the project, K-wave W3a A3-phase-2) and
 	// leaves the authored key in place, so the input def admits both.
 	cluster?: string

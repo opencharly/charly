@@ -782,7 +782,7 @@ func resolveIngressPort(opts spec.KubernetesGenInput, portNameOrNumber string) i
 }
 
 // -----------------------------------------------------------------------------
-// Check → K8s Probe translation.
+// Check → Kubernetes Probe translation.
 // -----------------------------------------------------------------------------
 
 // checkToProbe turns a generic declarative Check into a Kubernetes probe spec.
@@ -838,7 +838,7 @@ func checkToProbe(c *spec.Op) map[string]any {
 		}
 		return map[string]any{"tcpSocket": probe}
 	case fileTarget != "":
-		// Probe semantics: file exists. K8s exec probes succeed iff
+		// Probe semantics: file exists. Kubernetes exec probes succeed iff
 		// exit 0; `test -e <path>` matches that contract.
 		return map[string]any{"exec": map[string]any{"command": []string{"test", "-e", fileTarget}}}
 	case cmdStr != "":

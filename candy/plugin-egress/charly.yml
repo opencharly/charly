@@ -3,7 +3,7 @@ plugin-egress:
         version: 2026.181.0001
         description: |-
             EGRESS VALIDATION plugin (M16) — gates the config artifacts charly WRITES to a
-            system (cloud-init user-data/meta/net, k8s manifests + kustomization, traefik
+            system (cloud-init user-data/meta/net, kubernetes manifests + kustomization, traefik
             routes, install-ledger records, the Containerfile + systemd/supervisord units,
             the libvirt domain XML) against a CUE schema BEFORE the bytes hit disk. The
             validation logic + the egress CUE schemas (incl. the vendored cloud-config) live

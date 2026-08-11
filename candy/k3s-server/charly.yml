@@ -338,7 +338,7 @@ k3s-server:
             # against the server's local kubeconfig — never through a host-side `kube:`
             # cluster profile.
             #
-            # A generic candy cannot name a profile. `cluster:` resolves a kind:k8s
+            # A generic candy cannot name a profile. `cluster:` resolves a kind:kubernetes
             # ENTITY, and the only variable a candy could reach for, ${DEPLOY_NAME},
             # resolves for a VM live check to the sanitized kind:vm ENTITY name
             # (candy/plugin-check/live_gather.go, pluginCheckLiveVM) — an entity every
@@ -350,7 +350,7 @@ k3s-server:
             # silently vacuous exactly where it matters.
             #
             # Probing in-venue removes the dependency instead of renaming it: no host
-            # kubeconfig merge, no port-forward, and no kind:k8s entity, so the same
+            # kubeconfig merge, no port-forward, and no kind:kubernetes entity, so the same
             # acceptance holds on a vm, a target:local host, or a pod. The host-side view
             # — kubeconfig retrieved, rewritten, merged, reachable over the forward — is
             # the DEPLOY's property, and each bed asserts it with its own profile.

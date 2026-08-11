@@ -365,7 +365,7 @@ check-k3s-vm:
         disposable: true
         lifecycle: dev
         description: >-
-            Sole deterministic proof of the external-vm-deploy->k8s end-to-end path and the full 13-method k8s probe surface against a real k3s control plane, and the R10 for ssh.port_auto. A disposable libvirt Arch cloud VM (an auto-allocated host->guest 6443 forward, charly installed post-boot via the vm substrate (EnsureCharlyInGuest)) overlays k3s-server over SSH, then runs guest command/process/port/file probes plus the full kubernetes suite (nodes/wait-nodes/pods/wait-ready/addons/ingressclass/storageclass/raw/service) against its own dedicated per-deploy-domain-scoped cluster context (cluster: "check-k3s-vm-ctx" — task #18: each bed sharing the k3s-vm entity gets its OWN kind:kubernetes profile pinned to its OWN collision-free kubeconfig context, since DEPLOY_NAME cannot distinguish sibling VM beds sharing one entity), an agent-check matching probe, and a host-side charly status --json (status-shows-vm).
+            Sole deterministic proof of the external-vm-deploy->kubernetes end-to-end path and the full 13-method kubernetes probe surface against a real k3s control plane, and the R10 for ssh.port_auto. A disposable libvirt Arch cloud VM (an auto-allocated host->guest 6443 forward, charly installed post-boot via the vm substrate (EnsureCharlyInGuest)) overlays k3s-server over SSH, then runs guest command/process/port/file probes plus the full kubernetes suite (nodes/wait-nodes/pods/wait-ready/addons/ingressclass/storageclass/raw/service) against its own dedicated per-deploy-domain-scoped cluster context (cluster: "check-k3s-vm-ctx" — task #18: each bed sharing the k3s-vm entity gets its OWN kind:kubernetes profile pinned to its OWN collision-free kubeconfig context, since DEPLOY_NAME cannot distinguish sibling VM beds sharing one entity), an agent-check matching probe, and a host-side charly status --json (status-shows-vm).
         add_candy:
             - k3s-server
         env:
@@ -2649,70 +2649,3 @@ check-marketplace:
               context:
                 - runtime
               command: command -v rg
-
-# =============================================================================
-# agentteams-core-app + check-agentteams-core-pod — the R10 bed for the AgentTeams
-# foundation candies (minio, matrix, element) on the cachyos base. Every service
-# runs as the image user (uid 1000) against the /data volume — the rootless charly
-# architecture, no root anywhere.
-# =============================================================================
-agentteams-core-app:
-    candy:
-        version: 2026.223.1041
-        base: cachyos.cachyos
-        description: |-
-            The AgentTeams foundation box: a cachyos base composing the agentteams-lib
-            script tree, agentteams-minio (MinIO S3 + mc-mirror), agentteams-matrix
-            (Tuwunel Matrix homeserver), and agentteams-element (Element Web via rootless
-            nginx). Every service runs as the image user (uid 1000) against the /data
-            volume — the rootless charly architecture, no root anywhere.
-        candy:
-            - agentteams-lib
-            - agentteams-minio
-            - agentteams-matrix
-            - agentteams-element
-check-agentteams-core-pod:
-    pod:
-        image: agentteams-core-app
-        disposable: true
-        lifecycle: dev
-        description: >-
-            R10 bed for the AgentTeams foundation candies. Deploying the box to steady state
-            proves the minio S3 API, the Tuwunel Matrix homeserver, and the Element Web client
-            all build, start, and stay up as uid 1000 against the /data volume.
-        plan:
-            - check: the agentteams-core-app pod reached steady state
-              id: agentteams-core-pod-running
-              exit_status: 0
-              stdout:
-                - contains: '"kind": "pod"'
-                - contains: check-agentteams-core-pod
-              context:
-                - runtime
-              command:
-                command: ${CHARLY_BIN} status --json
-                in_container: false
-            - check: the minio S3 API answers its health probe
-              id: agentteams-minio-health
-              timeout: 30s
-              context:
-                - runtime
-              http:
-                http: "http://127.0.0.1:${HOST_PORT:9000}/minio/health/live"
-                status: 200
-            - check: the Matrix homeserver answers the client versions endpoint
-              id: agentteams-matrix-versions
-              timeout: 30s
-              context:
-                - runtime
-              http:
-                http: "http://127.0.0.1:${HOST_PORT:6167}/_matrix/client/versions"
-                status: 200
-            - check: the Element Web client answers on its port
-              id: agentteams-element-http
-              timeout: 30s
-              context:
-                - runtime
-              http:
-                http: "http://127.0.0.1:${HOST_PORT:8088}/"
-                status: 200

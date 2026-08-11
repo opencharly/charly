@@ -281,7 +281,7 @@ k8s-layer:
                             "platform": "linux/amd64",
                         }
 
-                    # Default: a Status object with kind=Failure. Lets `k8s: raw`
+                    # Default: a Status object with kind=Failure. Lets `kube: raw`
                     # without a resource still surface a "kind" string — though the
                     # raw verb requires --resource so it's a long shot.
                     return 404, {

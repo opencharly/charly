@@ -279,16 +279,16 @@ android-skill:
 
             ## Overview
 
-            Android is a first-class deploy **substrate** in `charly`, modeled on `kind: k8s`.
+            Android is a first-class deploy **substrate** in `charly`, modeled on `kind: kubernetes`.
             Two cooperating concepts:
 
             - **`kind: android`** — a DEVICE (the substrate). Either an in-pod emulator
               (referenced by `image:`) or a remote/physical adb endpoint (`adb:
-              {host: <host:port>}`). The analogue of `kind: k8s` (the cluster).
+              {host: <host:port>}`). The analogue of `kind: kubernetes` (the cluster).
             - **`apk` package format** — Android apps declared in LAYERS (NOT a kind),
               parallel to `package:`/`aur:`. A `target: android` deploy applies its layers'
               `apk:` packages onto the device. The app is the deployable workload, the way a
-              `candy:` image (a `candy:` node carrying `base:`/`from:`) is the workload for a pod/k8s deploy.
+              `candy:` image (a `candy:` node carrying `base:`/`from:`) is the workload for a pod/kubernetes deploy.
 
             This sits ABOVE the device-interaction verbs: the `adb:` (`/charly-check:adb`)
             and `appium:` (`/charly-check:appium`) declarative check verbs drive a running
@@ -351,7 +351,7 @@ android-skill:
             Each entry is **`package:` (apkeep) XOR `apk:` (committed file)**. `source:`
             applies only to `package:`. The format compiles to an `ApkInstallStep` that
             ONLY `target: android` executes — at image build and on
-            local/vm/pod/k8s targets it is recorded-skipped (there is no Android device
+            local/vm/pod/kubernetes targets it is recorded-skipped (there is no Android device
             there; this is the same "wrong-venue skip" `aur:` uses off-Arch). A layer
             carrying only `apk:` is valid install content.
 
@@ -388,7 +388,7 @@ android-skill:
 
             ## Nested deployment (`pod → android`)
 
-            Mirrors `vm → k8s`. The emulator runs in a pod; the device deploys onto it; the
+            Mirrors `vm → kubernetes`. The emulator runs in a pod; the device deploys onto it; the
             apps deploy onto the device. `target: android` is a **passthrough** hop in the
             deploy chain (the device shares its host pod's adb venue / the endpoint addr —
             there is no shell venue to "enter"), so `charly check live pod.android` runs the
@@ -451,7 +451,7 @@ android-skill:
             `charly/android_deploy_cmd.go`, `charly/android_deploy_preresolve.go`, and the
             general per-substrate preresolver hook registry `charly/deploy_preresolve.go`)
             is DELETED. `candy/plugin-adb/preresolve.go` now owns it end-to-end (mirroring
-            `candy/plugin-kube/preresolve.go`'s `deploy:k8s` move): it resolves the device
+            `candy/plugin-kube/preresolve.go`'s `deploy:kubernetes` move): it resolves the device
             endpoint (engine inspect / `${HOST_PORT:N}` / google-play creds) and collects
             the apk install specs itself. **K-wave W3a A3-phase-2** finished the move: the
             deploy-tree node lookup and the `kind:android` entity lookup — the two
@@ -478,7 +478,7 @@ android-skill:
               loop with retry + uninstall reverse ops); `install.go` — the shared installer.
             - `deploykit.ApkInstallStep` (`sdk/deploykit/steps.go`); `sdk/deploykit/install_build.go` —
               `compileApkStep` (the plugin-side preresolver reads this step; no DeployTarget executes it).
-            - `sdk/loaderkit/load_unified.go` — loader wiring (mirrors every `k8s` site; the former `charly/unified.go` is DELETED, K-wave 2).
+            - `sdk/loaderkit/load_unified.go` — loader wiring (mirrors every `kubernetes` site; the former `charly/unified.go` is DELETED, K-wave 2).
             - `spec.Deploy` (the deploy node — the former `charly/deploy.go`'s `FleetNode` is DELETED, K-wave 2) with `target: android`; `charly/fleet_add_cmd.go` dispatch +
               `--node-only`; `sdk/deploykit/deploy_chain.go` / `charly/deploy_tree.go` passthrough.
 
@@ -489,7 +489,7 @@ android-skill:
             - `/charly-core:deploy` — `target: android` is one of the deploy targets.
             - `/charly-image:layer` — the `apk:` field is part of the layer schema.
             - `/charly-internals:install-plan` — the IR `ApkInstallStep` plugs into.
-            - `/charly-kubernetes:kubernetes` — the `kind: k8s` pattern `kind: android` mirrors.
+            - `/charly-kubernetes:kubernetes` — the `kind: kubernetes` pattern `kind: android` mirrors.
 
             ## When to Use This Skill
 
@@ -2203,7 +2203,7 @@ check-skill:
                   the entry, `charly check run <bed>` fails fast with exactly that
                   remediation. The supporting
                   `vm: k3s-vm` entity lives in the project `charly.yml` alongside its beds, with a
-                  SEPARATE `kind: k8s` profile per bed that deploys it (`check-k3s-vm-ctx`,
+                  SEPARATE `kind: kubernetes` profile per bed that deploys it (`check-k3s-vm-ctx`,
                   `check-k8s-deploy-cluster-ctx`) — each pinned to that bed's own per-deploy
                   kubeconfig context, so sibling beds sharing the one `vm:` entity never resolve
                   through each other's cluster. `disposable: true` is the sole authorization
@@ -2333,7 +2333,7 @@ check-skill:
                     running service would only add noise.
 
                   - **`charly check live <name>`** — evaluates a **running deployment**
-                    (pod / vm / host / k8s; auto-resolved by `<name>` against
+                    (pod / vm / host / kubernetes; auto-resolved by `<name>` against
                     charly.yml). Uses `ContainerExecutor` / `SSHExecutor` /
                     `NestedExecutor` (for dotted-path children) + `ResolveCheckVarsRuntime`
                     so deploy-context steps see real supervisord state, real
@@ -2386,8 +2386,8 @@ check-skill:
                   | **Documentation-only change class** — `*.md` (`AGENTS.md` / `CLAUDE.md`, `plugins/**/SKILL.md`, READMEs, CHANGELOG), comment-only code edits, or a submodule pointer bump to an all-documentation submodule commit; zero behavior change | markdown integrity, link checks | The non-runtime standards: adversarial consistency review, the R5 grep self-test, cross-reference validation, and command-safety gates | `documentation reviewed` | ANY bed run or image build — beds cannot fail on prose |
                   | **Hook / workflow scripts** — `.claude/hooks/*.sh`, `.claude/workflows/*.js` | `bash -n` / async-body parse | Execute the changed script live: run the hook directly (paste its output); a workflow whose control flow changed runs against ONE bed matching the change. Prompt-string-only workflow edits: parse + the non-runtime standards | `fully tested and validated` | The full bed fan-out |
                   | **Harness project configuration** — `AGENTS.md`, `.codex/**`, repo-native `.agents/**`, or an executable that provisions or validates those surfaces | Parse the changed configuration; run the project profile and static-validator checks; verify exact gitlink and linked-worktree provenance | Run the final-tree repository harness gate: execute each changed validator/provisioner directly, verify only the gitlinks dispatched by the change class at their recorded revisions, and run the committed developer-profile checks. A Git-provisioning change also proves its canonical-object reference and exact-gitlink behavior in a dedicated linked worktree. Record the exact approved commands and active managed sandbox available for this run. This proves repository-controlled behavior; never claim that it proves settings loaded by a newly launched harness process. The fresh validator independently decides whether the final-tree delta additionally requires a Charly R10 bed and runs it when required. | `fully tested and validated` | A forced restart/new session, alternate home/cache/workspace, or unrelated VM/container roster that cannot exercise repository configuration |
-                  | **`charly` Go code** | `go test ./...` + `go vet` + `task build:binary` (R9 freshness + `charly version` check against `./bin/charly`) | `charly check run <bed>` for EACH bed whose kind matches a touched code path: box/candy/pod/DeployTarget mechanism → `check-pod`; `target: local` → `check-local`; VM / k8s → `check-k3s-vm`; a feature surface → its feature bed. Cross-cutting loader / resolver / IR / unified-schema changes → fan every matching bed out concurrently, by owner: short beds via `/verify-beds` (one `charly check run <bed>` per agent), every long bed (`vm`/`android`, or last run ≥600s) as a persistent-session `run_in_background` task — in-spec for that class, not a scope override; a `/verify-beds` result with `gateComplete: false` is a partial roster, never a green gate | `fully tested and validated` | Beds whose substrate the change cannot reach |
-                  | **Candy / box / pod / vm / k8s / local / android config** | `charly box validate` | Build + run a bed that composes the changed entity (a candy edit → a bed whose image stacks that candy); when no bed composes it, the R7 sequence on a disposable deploy: build → `charly check box` → deploy → `charly check live` → fresh `charly update` | `fully tested and validated` | Beds that do not compose the changed entity |
+                  | **`charly` Go code** | `go test ./...` + `go vet` + `task build:binary` (R9 freshness + `charly version` check against `./bin/charly`) | `charly check run <bed>` for EACH bed whose kind matches a touched code path: box/candy/pod/DeployTarget mechanism → `check-pod`; `target: local` → `check-local`; VM / kubernetes → `check-k3s-vm`; a feature surface → its feature bed. Cross-cutting loader / resolver / IR / unified-schema changes → fan every matching bed out concurrently, by owner: short beds via `/verify-beds` (one `charly check run <bed>` per agent), every long bed (`vm`/`android`, or last run ≥600s) as a persistent-session `run_in_background` task — in-spec for that class, not a scope override; a `/verify-beds` result with `gateComplete: false` is a partial roster, never a green gate | `fully tested and validated` | Beds whose substrate the change cannot reach |
+                  | **Candy / box / pod / vm / kubernetes / local / android config** | `charly box validate` | Build + run a bed that composes the changed entity (a candy edit → a bed whose image stacks that candy); when no bed composes it, the R7 sequence on a disposable deploy: build → `charly check box` → deploy → `charly check live` → fresh `charly update` | `fully tested and validated` | Beds that do not compose the changed entity |
                   | **`iterate:` / ai check config** | `charly box validate` | The affected `iterate:` bed run as specified (see "Flag discipline") | `fully tested and validated` | Unrelated beds |
 
                   **Tier on a clean pass — the class fixes the gate; the gate fixes the tier.**
@@ -2595,7 +2595,7 @@ check-skill:
                   problems early rather than mid-run.
 
                   This is the **only** image-fetch surface in the system: deploys (any
-                  target — `local`, `pod`, `vm`, `k8s`) emit zero image-pull steps. A
+                  target — `local`, `pod`, `vm`, `kubernetes`) emit zero image-pull steps. A
                   `kind: local` template has no `image:` field; image preflight lives on this
                   verb. Operators with legacy YAML run `charly migrate`. See
                   `/charly-local:local-spec` "What the deploy does NOT do" and the project rulebook
@@ -2605,7 +2605,7 @@ check-skill:
                   (`preflight_images.go`'s `preflightImageCandidates` + `command.go`'s
                   `pluginCheckRunPreflight` — the "preflight" mode body, fully plugin-side since
                   K-wave 2 cone R4); the `command:check` plugin drives it for the host-target run
-                  (the former `case TargetKindHost:` arm). Pod / VM / k8s
+                  (the former `case TargetKindHost:` arm). Pod / VM / kubernetes
                   targets carry their own image inside their respective deploy schema
                   and never trigger the preflight.
 
@@ -3159,7 +3159,7 @@ check-skill:
                   | `vnc` | `method` (primary: status/screenshot/click/mouse/type/key/rfb/passwd) + method-specific fields (`x`, `y`, `text`, `key`, `artifact`) | Deploy-context only. Dispatches out-of-process via `candy/plugin-vnc` (no host subcommand); the host pre-resolves the RFB endpoint for pod AND vm targets. See `references/live-probe-verbs.md`. |
                   | `mcp` | `method` (primary: ping/servers/list-tools/list-resources/list-prompts/call/read) + method-specific fields (`tool`, `uri`, `input`, `mcp_name`) | Deploy-context only. Speaks `github.com/modelcontextprotocol/go-sdk` to any `mcp_provide` endpoint. See `references/live-probe-verbs.md` "Method allowlist — mcp". |
 
-                  > **A step verb (or Op modifier) must never be spelled like a reserved kind word.** Kinds (`candy`, `pod`, `vm`, `k8s`, `local`, `android`, `group`, …) live only at a config edge — the opening discriminator of a top-level node or a tree-child node — never as a key in the middle of a step. A new probe verb that would collide with a kind word must pick a non-colliding spelling (the `k8s`/`group` probe verbs were renamed to `kube`/`unix_group` for exactly this reason). This is machine-enforced by `spec/spec` `TestNoKindWordAsStepVerb` + `TestNoKindWordAsOpModifier` — adding a colliding verb fails the build.
+                  > **A step verb (or Op modifier) must never be spelled like a reserved kind word.** Kinds (`candy`, `pod`, `vm`, `kubernetes`, `local`, `android`, `group`, …) live only at a config edge — the opening discriminator of a top-level node or a tree-child node — never as a key in the middle of a step. A new probe verb that would collide with a kind word must pick a non-colliding spelling (the `k8s`/`group` probe verbs were renamed to `kube`/`unix_group` for exactly this reason). This is machine-enforced by `spec/spec` `TestNoKindWordAsStepVerb` + `TestNoKindWordAsOpModifier` — adding a colliding verb fails the build.
 
                   ### Shared modifiers
 

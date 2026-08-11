@@ -870,7 +870,7 @@ marketplace:
                 profiles: [user]
             kubernetes:
                 category: kind
-                description: "Schema authoring for `kind: k8s` — Kustomize manifests + cluster probes via `charly check k8s`."
+                description: "Schema authoring for `kind: kubernetes` — Kustomize manifests + cluster probes via the `kube:` check verb."
                 keywords: [charly, kubernetes, k8s]
                 profiles: [user]
             local:
