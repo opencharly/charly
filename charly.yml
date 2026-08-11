@@ -2652,25 +2652,28 @@ check-marketplace:
 
 # =============================================================================
 # agentteams-core-app + check-agentteams-core-pod — the R10 bed for the AgentTeams
-# foundation candies (minio, matrix, element) on the cachyos base. Every service
-# runs as the image user (uid 1000) against the /data volume — the rootless charly
-# architecture, no root anywhere.
+# foundation candies (minio, matrix, element, higress) on the cachyos base. Every
+# service runs as the image user (uid 1000) against the /data volume — the rootless
+# charly architecture, no root anywhere.
 # =============================================================================
 agentteams-core-app:
     candy:
-        version: 2026.223.1041
+        version: 2026.223.1500
         base: cachyos.cachyos
         description: |-
             The AgentTeams foundation box: a cachyos base composing agentteams-minio
-            (MinIO S3 + mc-mirror), agentteams-matrix (Tuwunel Matrix homeserver), and
-            agentteams-element (Element Web via rootless nginx). Every service runs as
-            the image user (uid 1000) against the /data volume — the rootless charly
-            architecture, no root anywhere. All service start scripts are charly-owned
-            (written by the candies), not upstream AgentTeams scripts.
+            (MinIO S3 + mc-mirror), agentteams-matrix (Tuwunel Matrix homeserver),
+            agentteams-element (Element Web via rootless nginx), and agentteams-higress
+            (the Higress AI gateway: apiserver, controller, pilot, envoy gateway,
+            console). Every service runs as the image user (uid 1000) against the /data
+            volume — the rootless charly architecture, no root anywhere. All service
+            start scripts are charly-owned (written by the candies), not upstream
+            AgentTeams scripts.
         candy:
             - agentteams-minio
             - agentteams-matrix
             - agentteams-element
+            - agentteams-higress
 check-agentteams-core-pod:
     pod:
         image: agentteams-core-app
@@ -2678,7 +2681,8 @@ check-agentteams-core-pod:
         lifecycle: dev
         description: >-
             R10 bed for the AgentTeams foundation candies. Deploying the box to steady state
-            proves the minio S3 API, the Tuwunel Matrix homeserver, and the Element Web client
+            proves the minio S3 API, the Tuwunel Matrix homeserver, the Element Web client,
+            and the Higress AI gateway (apiserver, controller, pilot, envoy gateway, console)
             all build, start, and stay up as uid 1000 against the /data volume.
         plan:
             - check: the agentteams-core-app pod reached steady state
@@ -2715,4 +2719,32 @@ check-agentteams-core-pod:
                 - runtime
               http:
                 http: "http://127.0.0.1:${HOST_PORT:8088}/"
+                status: 200
+            - check: the Higress apiserver answers on its internal port
+              id: agentteams-higress-apiserver
+              timeout: 60s
+              context:
+                - runtime
+              command: 'curl -sk https://127.0.0.1:18443/version | grep -q "gitVersion"'
+            - check: the Higress gateway is healthy (pilot-agent + envoy answer the status port)
+              id: agentteams-higress-gateway-health
+              timeout: 60s
+              context:
+                - runtime
+              command: 'curl -sf http://127.0.0.1:15021/healthz/ready'
+            - check: the Higress gateway serves the console on its ingress port (the 8080 listener only materializes when the proxy node LABELS match the Gateway selector)
+              id: agentteams-higress-gateway-http
+              timeout: 60s
+              context:
+                - runtime
+              http:
+                http: "http://127.0.0.1:${HOST_PORT:8080}/"
+                status: 200
+            - check: the Higress console answers on its port
+              id: agentteams-higress-console-http
+              timeout: 60s
+              context:
+                - runtime
+              http:
+                http: "http://127.0.0.1:${HOST_PORT:8001}/"
                 status: 200
