@@ -776,15 +776,12 @@ func validatePlanStepsPure(desc string, plan []spec.Step, eid string) []string {
 }
 
 // candyHasInstallFiles replicates the core Candy.HasInstallFiles predicate from the envelope (package
-// sections / manifests / tasks / apk / extract) — NOT the adapter's broad HasContent (which counts plan
-// steps every ADE candy has, so it would never flag a content-less candy). `extract:` counts: it is a
-// first-class install mechanism (spec/schema/candy.cue #CandyExtract, rendered by
-// sdk/deploykit/candy_stage.go) — a candy that pulls binaries out of another OCI image ships no
-// package/manifest/task files, and agentteams is the first consumer to rely on that.
+// sections / manifests / tasks / apk) — NOT the adapter's broad HasContent (which counts plan steps
+// every ADE candy has, so it would never flag a content-less candy).
 func candyHasInstallFiles(m spec.CandyModel, dk deploykit.CandyModel) bool {
 	return candyHasFormatPackages(m) || candyHasTagPackages(m) || len(m.TopPackages) > 0 ||
 		dk.PixiManifest() != "" || dk.GetHasPackageJson() || dk.GetHasCargoToml() ||
-		len(m.RunOps) > 0 || len(m.Apk) > 0 || dk.HasExtract()
+		len(m.RunOps) > 0 || len(m.Apk) > 0
 }
 
 // candyHasAnyPackages is the whole-candy package-presence union (tag ∪ top ∪ format sections).
