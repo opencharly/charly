@@ -14,40 +14,40 @@ import (
 	"github.com/opencharly/spec/spec"
 )
 
-// preresolve.go — the `deploy:k8s` PRERESOLVE leg (F6, FINAL/K5 unit 6a): relocated from
-// charly/k8s_deploy_preresolve.go. Resolves the kind:k8s cluster template + the image
+// preresolve.go — the `deploy:kubernetes` PRERESOLVE leg (F6, FINAL/K5 unit 6a): relocated from
+// the former core preresolver. Resolves the kind:kubernetes cluster template + the image
 // Capabilities, GENERATES the egress-validated Kustomize tree, and returns a
-// spec.K8sDeployVenue carrying the overlay path — the SAME payload the host used to build
+// spec.KubernetesDeployVenue carrying the overlay path — the SAME payload the host used to build
 // directly, now assembled here. The image-ref + capabilities resolution is pure sdk/kit +
 // sdk/deploykit (this plugin runs as a host subprocess with direct local podman storage
 // access, per plugin.go's own doc). The cluster/node lookup self-loads the project PLUGIN-SIDE
 // now (K-wave W3a A3-phase-2: loaderkit.ResolveMergedTreeViaExecutor /
-// ResolveK8sEntityViaExecutor, unblocked by W1's LoadUnifiedViaExecutor) — the former
+// ResolveKubernetesEntityViaExecutor, unblocked by W1's LoadUnifiedViaExecutor) — the former
 // "deploy-entity-resolve" HostBuild seam this round-tripped through is DELETED; the
 // egress-gated Kustomize GENERATION itself is done ENTIRELY here too (materialize.go, K5-A item
 // 6 — verb:k8sgen/verb:egress reached peer-to-peer via InvokeProvider, disk I/O done directly by
 // this plugin) — no host round trip anywhere in this leg anymore. The from-box source-less path
-// (`charly fleet from-box --target k8s`, candy/plugin-fleet/deploy_from_box.go) reaches this
+// (`charly fleet from-box --cluster <name>`, candy/plugin-fleet/deploy_from_box.go) reaches this
 // SAME materializeKustomize via a dedicated OpEmit dispatch (provider.go), R3 dedup.
 
-// k8sPreresolveParams decodes the host's marshalDeployOpParams envelope (name/dir/node/plans —
-// the SAME ad-hoc shape every OpPreresolve dispatch carries; k8s does not consume plans).
-type k8sPreresolveParams struct {
+// kubernetesPreresolveParams decodes the host's marshalDeployOpParams envelope (name/dir/node/plans —
+// the SAME ad-hoc shape every OpPreresolve dispatch carries; kubernetes does not consume plans).
+type kubernetesPreresolveParams struct {
 	Name string       `json:"name"`
 	Dir  string       `json:"dir"`
 	Node *spec.Deploy `json:"node"`
 }
 
-// invokeK8sPreresolve serves Invoke(OpPreresolve) for deploy:k8s.
-func invokeK8sPreresolve(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
+// invokeKubernetesPreresolve serves Invoke(OpPreresolve) for deploy:kubernetes.
+func invokeKubernetesPreresolve(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 	exec, err := sdk.ExecutorForInvoke(ctx, req.GetExecutorBrokerId())
 	if err != nil {
-		return nil, fmt.Errorf("deploy:k8s preresolve: reach host reverse channel: %w", err)
+		return nil, fmt.Errorf("deploy:kubernetes preresolve: reach host reverse channel: %w", err)
 	}
-	var p k8sPreresolveParams
+	var p kubernetesPreresolveParams
 	if len(req.GetParamsJson()) > 0 {
 		if err := json.Unmarshal(req.GetParamsJson(), &p); err != nil {
-			return nil, fmt.Errorf("deploy:k8s preresolve: decode params: %w", err)
+			return nil, fmt.Errorf("deploy:kubernetes preresolve: decode params: %w", err)
 		}
 	}
 
@@ -60,11 +60,11 @@ func invokeK8sPreresolve(ctx context.Context, req *pb.InvokeRequest) (*pb.Invoke
 		// resolveTreeViaLoader), so this reuses that connect (no re-dial mid-Invoke).
 		tree, terr := loaderkit.ResolveMergedTreeViaExecutor(ctx, exec, p.Dir)
 		if terr != nil {
-			return nil, fmt.Errorf("deploy:k8s preresolve: resolve deploy tree: %w", terr)
+			return nil, fmt.Errorf("deploy:kubernetes preresolve: resolve deploy tree: %w", terr)
 		}
 		n, ok := tree[p.Name]
 		if !ok {
-			return nil, fmt.Errorf("deploy:k8s preresolve: resolve deploy %q: no deploy entry %q", p.Name, p.Name)
+			return nil, fmt.Errorf("deploy:kubernetes preresolve: resolve deploy %q: no deploy entry %q", p.Name, p.Name)
 		}
 		node = &n
 	}
@@ -73,18 +73,18 @@ func invokeK8sPreresolve(ctx context.Context, req *pb.InvokeRequest) (*pb.Invoke
 		clusterName = node.From
 	}
 	if clusterName == "" {
-		return nil, fmt.Errorf("deploy %q: target=k8s requires `k8s:` (kind:k8s cluster reference) on the deployment entry", p.Name)
+		return nil, fmt.Errorf("deploy %q: target=kubernetes requires `kubernetes:` (kind:kubernetes cluster reference) on the deployment entry", p.Name)
 	}
 
-	// K-wave W3a A3-phase-2: self-load the kind:k8s entity plugin-side
-	// (loaderkit.ResolveK8sEntityViaExecutor) instead of the deleted "deploy-entity-resolve" host
+	// K-wave W3a A3-phase-2: self-load the kind:kubernetes entity plugin-side
+	// (loaderkit.ResolveKubernetesEntityViaExecutor) instead of the deleted "deploy-entity-resolve" host
 	// seam — unblocked now that LoadUnifiedViaExecutor (W1) lets a plugin load the project itself.
-	cluster, err := loaderkit.ResolveK8sEntityViaExecutor(ctx, exec, p.Dir, clusterName)
+	cluster, err := loaderkit.ResolveKubernetesEntityViaExecutor(ctx, exec, p.Dir, clusterName)
 	if err != nil {
 		return nil, fmt.Errorf("deploy %q: resolving cluster %q: %w", p.Name, clusterName, err)
 	}
 	if cluster == nil {
-		return nil, fmt.Errorf("deploy %q: kind:k8s cluster %q resolved to an empty value", p.Name, clusterName)
+		return nil, fmt.Errorf("deploy %q: kind:kubernetes cluster %q resolved to an empty value", p.Name, clusterName)
 	}
 	clusterJSON, err := json.Marshal(cluster)
 	if err != nil {
@@ -132,8 +132,8 @@ func invokeK8sPreresolve(ctx context.Context, req *pb.InvokeRequest) (*pb.Invoke
 	// Generate the egress-validated Kustomize tree DIRECTLY (K5-A item 6 — no host round trip:
 	// materializeKustomize Invokes verb:k8sgen + verb:egress peer-to-peer via this SAME `exec`
 	// and does its own disk I/O, since this plugin is a same-host subprocess with direct disk
-	// access; the former "k8s-generate-kustomize" HostBuild seam is retired).
-	genReply, err := materializeKustomize(ctx, exec, spec.K8sGenerateKustomizeRequest{
+	// access; the former HostBuild seam is retired).
+	genReply, err := materializeKustomize(ctx, exec, spec.KubernetesGenerateKustomizeRequest{
 		Name:        p.Name,
 		ImageRef:    imageRef,
 		Node:        node,
@@ -144,7 +144,7 @@ func invokeK8sPreresolve(ctx context.Context, req *pb.InvokeRequest) (*pb.Invoke
 		return nil, fmt.Errorf("deploy %q: generating kustomize: %w", p.Name, err)
 	}
 
-	venue := spec.K8sDeployVenue{
+	venue := spec.KubernetesDeployVenue{
 		OverlayPath: genReply.OverlayPath,
 		TreeRoot:    filepath.Clean(genReply.TreeRoot),
 		KubeContext: cluster.KubeconfigContext,
@@ -152,7 +152,7 @@ func invokeK8sPreresolve(ctx context.Context, req *pb.InvokeRequest) (*pb.Invoke
 	}
 	out, err := json.Marshal(venue)
 	if err != nil {
-		return nil, fmt.Errorf("deploy %q: marshal k8s venue: %w", p.Name, err)
+		return nil, fmt.Errorf("deploy %q: marshal kubernetes venue: %w", p.Name, err)
 	}
 	return &pb.InvokeReply{ResultJson: out}, nil
 }
@@ -161,7 +161,7 @@ func invokeK8sPreresolve(ctx context.Context, req *pb.InvokeRequest) (*pb.Invoke
 // SAME preamble command:fleet's resolveTreeViaLoader runs (it returns os.Getwd() host-side + connects
 // the deployment's plugins). Used by a leg that has no dispatch-threaded p.Dir of its own (the
 // post-provision k3s hint handler, k3s_post.go's deployVMForwards) to feed the plugin-side
-// self-load helpers (loaderkit.ResolveMergedTreeViaExecutor / Resolve{K8s,Vm}EntityViaExecutor).
+// self-load helpers (loaderkit.ResolveMergedTreeViaExecutor / Resolve{Kubernetes,Vm}EntityViaExecutor).
 func hostProjectDir(ctx context.Context, exec *sdk.Executor, deployName string) (string, error) {
 	reqJSON, err := json.Marshal(spec.DeployPluginsConnectRequest{Path: deployName})
 	if err != nil {

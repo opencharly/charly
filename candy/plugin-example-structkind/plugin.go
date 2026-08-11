@@ -16,7 +16,7 @@
 //
 // NOT in compiled_plugins (out-of-process only): the witness that a plugin the loader was not
 // built with can reconstruct an AUTHORED uf.Fleet member tree over the wire. The structural
-// companion of the flat kind plugin; this is the channel the group/pod/vm/k8s/local/android/candy
+// companion of the flat kind plugin; this is the channel the group/pod/vm/kubernetes/local/android/candy
 // externalizations reuse.
 package examplestructkind
 

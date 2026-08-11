@@ -1,5 +1,5 @@
 // Package substratekind is the importable form of charly's 5 SUBSTRATE structural KINDs —
-// pod / vm / k8s / local / android — relocated out of charly's module (C2-substrate; formerly
+// pod / vm / kubernetes / local / android — relocated out of charly's module (C2-substrate; formerly
 // the shared built-in standaloneKind in charly/plugin_substrate.go). ONE provider serves all
 // 5 words; Describe advertises each with Structural:true.
 //
@@ -19,14 +19,14 @@
 //
 // PLACEMENT — COMPILED-IN (listed in the embedded charly/charly.yml compiled_plugins:), NOT
 // external. The substrate kinds are CORE deploy primitives that must ALWAYS resolve: every
-// box/submodule authoring a pod:/vm:/k8s:/local:/android: node (the root check/vm/local/k8s
+// box/submodule authoring a pod:/vm:/kubernetes:/local:/android: node (the root check/vm/local/kubernetes
 // entities, box/fedora, box/cachyos, box/arch, box/debian, box/ubuntu) relies on them without
 // discovering this candy, exactly like the tier-1 kinds and group. (cmd/serve serves it
 // out-of-process too — one provider, two placements, zero authoring change.)
 //
 // This package ALSO serves command:reap-orphans (K5: relocated from charly/status_reap.go,
 // command_reap_orphans.go) — a substrate-liveness-probing command that fits naturally alongside
-// the OTHER substrate-liveness code here (status_pod.go/status_vm.go/status_k8s.go/…). Unlike the
+// the OTHER substrate-liveness code here (status_pod.go/status_vm.go/status_kubernetes.go/…). Unlike the
 // kind capabilities, reap-orphans is COMPILED-IN ONLY (its os.Executable()-based re-entry to
 // `charly fleet del` assumes it runs inside the charly binary); out-of-process it degrades with a
 // clear error.
@@ -45,15 +45,15 @@ import (
 
 const calver = "2026.196.0600"
 
-// substrateWords is the ONE list of words this provider serves — pod/vm/k8s/local/android.
-var substrateWords = []string{"pod", "vm", "k8s", "local", "android"}
+// substrateWords is the ONE list of words this provider serves — pod/vm/kubernetes/local/android.
+var substrateWords = []string{"pod", "vm", "kubernetes", "local", "android"}
 
 // substrateTraits is the per-word DECLARED #DeployTraits (P9) — the SINGLE source the kernel
 // consults for each substrate's deploy behaviour. kit.StampDescent stamps these onto every
 // node's spec.DescentDescriptor (resolved by the host's registry-backed deployTraitsFor), so
 // every consult site reads the behaviour off node.Descent BY TRAIT — never by switching on the
 // kind word. Canonical table (Appendix B): pod=container+image_backed+image_context;
-// vm=ssh+machine_venue+exclusive_venue; local=shell+machine_venue; k8s=shell+image_context+
+// vm=ssh+machine_venue+exclusive_venue; local=shell+machine_venue; kubernetes=shell+image_context+
 // leaf_only; android=parent; a zero-value word = external-in-place. pod additionally declares
 // bracketed_lifecycle (deploy-cone cutover 1, item 1): its Start/Stop accept direct-mode CLI
 // opts AND need the Q1 resource-arbiter claim bracketed — vm manages its own venue lifecycle +
@@ -62,7 +62,7 @@ var substrateTraits = map[string]*spec.DeployTraits{
 	"pod":     {Venue: "container", ImageBacked: true, ImageContext: true, BracketedLifecycle: true, BedTarget: true},
 	"vm":      {Venue: "ssh", MachineVenue: true, ExclusiveVenue: true, BedTarget: true, SupportsEphemeral: true, SupportsFromSnapshot: true},
 	"local":   {Venue: "shell", MachineVenue: true, BedTarget: true},
-	"k8s":     {Venue: "shell", ImageContext: true, LeafOnly: true},
+	"kubernetes": {Venue: "shell", ImageContext: true, LeafOnly: true},
 	"android": {Venue: "parent", BedTarget: true},
 }
 
@@ -90,7 +90,7 @@ func CliMain(args []string) int {
 // non-empty-schema load gate + document the seam. ONLY "vm" additionally declares
 // Validates:true (F7/C8) — its deep OpValidate check (validate_vm.go) closes the one proven
 // gap the host's closedness-only value gate cannot express (PCI-hostdev field concreteness);
-// pod/k8s/local/android declare no deep check and pay no extra OpValidate round-trip. Also
+// pod/kubernetes/local/android declare no deep check and pay no extra OpValidate round-trip. Also
 // advertises command:reap-orphans and verb:status-fanout (K6) — an INTERNAL-ONLY verb (never
 // authored in a check plan, never a CLI subcommand; reached solely by command:status
 // InvokeProvider'ing it directly over the in-proc reverse channel), mirroring the existing
@@ -172,7 +172,7 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 	case sdk.OpStatusCollect:
 		// P14a + K5: the substrate COLLECTOR OpStatus. The host's status
 		// fan-out reaches the cleanly-movable collectors (pod live + local,
-		// vm, k8s) here, by word (pod/vm/k8s/local/android). android alone
+		// vm, kubernetes) here, by word (pod/vm/kubernetes/local/android). android alone
 		// still defers (it merges PROJECT + PER-MACHINE deploy config).
 		res, err := statusCollect(ctx, req.GetReserved(), req.GetParamsJson())
 		if err != nil {
@@ -182,7 +182,7 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 	case sdk.OpStatusCollectAll:
 		// K6: the WHOLE status subsystem fan-out + deploy-cone enrichment (relocated from
 		// charly/status_collector.go). Needs the reverse-channel executor threaded onto ctx
-		// so the vm/k8s per-word collectors it calls (via statusCollect, in-package) can reach
+		// so the vm/kubernetes per-word collectors it calls (via statusCollect, in-package) can reach
 		// InvokeProvider("build","project") / InvokeProvider("verb","libvirt",...) for themselves —
 		// exactly the executor context the host's OLD in-core dispatch used to thread.
 		if req.GetReserved() != "status-fanout" {

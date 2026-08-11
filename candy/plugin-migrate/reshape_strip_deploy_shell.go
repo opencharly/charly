@@ -39,7 +39,7 @@ func stripDeployShellOverlay(doc *yaml.Node) bool {
 }
 
 // stripDeployShellOverlayRec walks the whole document tree (a deploy-scope `shell:`
-// overlay can appear on any substrate node — pod/vm/k8s/local/android — at any
+// overlay can appear on any substrate node — pod/vm/kubernetes/local/android — at any
 // nesting depth, e.g. a nested/peer member). For each mapping node found, it checks
 // whether THAT mapping directly carries a sequence-valued `shell:` key and removes
 // only that one, then unconditionally recurses into every child value (never a key,

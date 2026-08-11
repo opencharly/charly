@@ -2,7 +2,7 @@ plugin-substrate:
     candy:
         version: 2026.196.0600
         description: |-
-            The 5 SUBSTRATE structural deploy KINDS — pod / vm / k8s / local / android — relocated into
+            The 5 SUBSTRATE structural deploy KINDS — pod / vm / kubernetes / local / android — relocated into
             ONE candy (C2-substrate; formerly the shared built-in standaloneKind). Each substrate kind is
             BOTH a standalone TEMPLATE (a bare `vm:`/`pod:` block → the typed template map uf.Pod/uf.VM/…,
             the PRIMARY VM authoring form) AND a DEPLOY (from:/image: cross-ref or resource members →
@@ -16,21 +16,21 @@ plugin-substrate:
             to the former in-proc standaloneKind decode. COMPILED-IN (in the embedded compiled_plugins:),
             like the tier-1 kinds and group, because these are core deploy primitives every box/submodule
             must always resolve; also serves out-of-process via cmd/serve. P14a added the COLLECTOR
-            OpStatusCollect on the same kind-provider Invoke (dispatched by word pod/vm/k8s/local/android):
+            OpStatusCollect on the same kind-provider Invoke (dispatched by word pod/vm/kubernetes/local/android):
             the cleanly-movable status collectors — pod live (snapshot + live mounts + tool probes) + local
             (install-ledger) + the probes — relocated here from charly core, reached by the host's
-            `charly status` fan-out; the deploy-cone-coupled enrichment + the vm/k8s/android collectors
+            `charly status` fan-out; the deploy-cone-coupled enrichment + the vm/kubernetes/android collectors
             stay host-side until K5.
         plugin:
             source: github.com/opencharly/charly/candy/plugin-substrate
             providers:
                 - kind:pod
                 - kind:vm
-                - kind:k8s
+                - kind:kubernetes
                 - kind:local
                 - kind:android
         plan:
-            - check: the substrate structural kind plugin ships a buildable Go module the host compiles in (default) or serves out-of-process; its pod/vm/k8s/local/android structural decode (both the deploy fold to uf.Fleet and the standalone-template fold to uf.Pod/uf.VM/…) is exercised by every check bed / box composing a substrate node (check-substrate-* / box-fedora / box-cachyos / box-arch / box-debian). P14a's OpStatusCollect (pod live + local collectors + the probes) is exercised by the `charly status` parity beds (check-sidecar-pod status --json) + the relocated unit tests (collectPodLive golden, local ledger, probes).
+            - check: the substrate structural kind plugin ships a buildable Go module the host compiles in (default) or serves out-of-process; its pod/vm/kubernetes/local/android structural decode (both the deploy fold to uf.Fleet and the standalone-template fold to uf.Pod/uf.VM/…) is exercised by every check bed / box composing a substrate node (check-substrate-* / box-fedora / box-cachyos / box-arch / box-debian). P14a's OpStatusCollect (pod live + local collectors + the probes) is exercised by the `charly status` parity beds (check-sidecar-pod status --json) + the relocated unit tests (collectPodLive golden, local ledger, probes).
               id: substrate-kind-module-present
               context:
                 - build

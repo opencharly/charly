@@ -55,7 +55,7 @@ var deployTargetWords = func() []string {
 // needs.
 //
 // vm is served by candy/plugin-deploy-vm (kit.WalkPlans over the GUEST SSHExecutor).
-// Unlike local/android/k8s it owns a real venue LIFECYCLE, implemented ENTIRELY
+// Unlike local/android/kubernetes it owns a real venue LIFECYCLE, implemented ENTIRELY
 // in the plugin (candy/plugin-deploy-vm/lifecycle.go): boots the domain, builds
 // the guest SSHExecutor the reverse channel serves, runs the nested pod-in-guest
 // orchestration, and owns Start/Stop/Status/Logs/Shell/Rebuild — reached the SAME
@@ -104,8 +104,8 @@ var externalDeploySubstratePlugins = map[string]string{
 	"local":   "candy/plugin-deploy-local",
 	"vm":      "candy/plugin-deploy-vm",
 	"pod":     "candy/plugin-deploy-pod",
-	"android": "candy/plugin-adb",
-	"k8s":     "candy/plugin-kube",
+	"android":     "candy/plugin-adb",
+	"kubernetes": "candy/plugin-kube",
 }
 
 // externalDeploySubstratePluginRef returns the canonical @github ref to the candy serving an

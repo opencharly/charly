@@ -41,14 +41,14 @@ func resolveSubstrateTemplate(in spec.SubstrateTemplateResolveRequest) ([]byte, 
 			Raw:         in.Pod.Pod,
 		}}
 		return json.Marshal(reply)
-	case in.K8s != nil:
-		var k spec.K8s
-		if err := json.Unmarshal(in.K8s.K8s, &k); err != nil {
-			return nil, fmt.Errorf("k8s resolve: decode: %w", err)
+	case in.Kubernetes != nil:
+		var k spec.Kubernetes
+		if err := json.Unmarshal(in.Kubernetes.Kubernetes, &k); err != nil {
+			return nil, fmt.Errorf("kubernetes resolve: decode: %w", err)
 		}
-		reply := spec.K8sResolveReply{Resolved: &spec.ResolvedK8s{
+		reply := spec.KubernetesResolveReply{Resolved: &spec.ResolvedKubernetes{
 			KubeconfigContext: k.KubeconfigContext,
-			Raw:               in.K8s.K8s,
+			Raw:               in.Kubernetes.Kubernetes,
 		}}
 		return json.Marshal(reply)
 	case in.Android != nil:

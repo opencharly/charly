@@ -1,7 +1,7 @@
 // Package k8sgen — the OpEmit Invoke entrypoint. The host's in-core
 // GenerateK8sKustomize shim resolves verb:k8sgen and Invokes OpEmit with a
-// spec.K8sGenInput; this provider runs the pure generator (GenerateTree) and
-// returns a spec.K8sGenReply of RELATIVE-pathed manifest docs. The host owns the
+// spec.KubernetesGenInput; this provider runs the pure generator (GenerateTree) and
+// returns a spec.KubernetesGenReply of RELATIVE-pathed manifest docs. The host owns the
 // disk I/O + the egress gate (see k8sgen.go for the carve-out rationale).
 package k8sgen
 
@@ -21,7 +21,7 @@ const calver = "2026.181.0001"
 func NewProvider() pb.ProviderServer { return &provider{} }
 
 // NewMeta advertises verb:k8sgen serving OpEmit (via sdk.NewMeta → BuildCapabilities). The verb is
-// invoked with the structured spec.K8sGenInput, not an authored plugin_input, so it declares no
+// invoked with the structured spec.KubernetesGenInput, not an authored plugin_input, so it declares no
 // #*Input — the shipped schema ships only the trivial #K8sgenInput so the host's plugin-schema gate
 // has a non-empty, base-spliceable schema.
 func NewMeta() pb.PluginMetaServer {
@@ -34,18 +34,18 @@ type provider struct {
 	pb.UnimplementedProviderServer
 }
 
-// Invoke handles OpEmit: decode the spec.K8sGenInput, run the pure generator, and
-// return the spec.K8sGenReply (relative-pathed manifest docs) as JSON.
+// Invoke handles OpEmit: decode the spec.KubernetesGenInput, run the pure generator, and
+// return the spec.KubernetesGenReply (relative-pathed manifest docs) as JSON.
 func (p *provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 	if req.GetOp() != sdk.OpEmit {
 		return nil, fmt.Errorf("k8sgen: unsupported op %q (only %q)", req.GetOp(), sdk.OpEmit)
 	}
-	var in spec.K8sGenInput
+	var in spec.KubernetesGenInput
 	if err := json.Unmarshal(req.GetParamsJson(), &in); err != nil {
 		return nil, fmt.Errorf("k8sgen: decode input: %w", err)
 	}
 	// The k8s substrate-value de-type (Cutover K): the kernel ships the cluster body
-	// OPAQUELY in ClusterRaw; the plugin owns the spec.K8s decode.
+	// OPAQUELY in ClusterRaw; the plugin owns the spec.Kubernetes decode.
 	if len(in.ClusterRaw) > 0 {
 		if err := json.Unmarshal(in.ClusterRaw, &in.Cluster); err != nil {
 			return nil, fmt.Errorf("k8sgen: decode cluster: %w", err)

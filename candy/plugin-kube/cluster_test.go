@@ -8,7 +8,7 @@ import (
 )
 
 // TestRestConfigValidatesContext covers the stale-context robustification moved
-// out of charly core (the former charly/k8s_context_test.go): restConfig() must
+// out of charly core: restConfig() must
 // reject a non-existent context up front with a clear, actionable error (not a
 // cryptic dial/TLS failure at first API call), fall back to the kubeconfig
 // current-context when no context is given, and fail clearly when no context can

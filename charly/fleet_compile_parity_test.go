@@ -91,7 +91,7 @@ func invokeOpCompile(t *testing.T, req spec.DeployCompileRequest) ([]*spec.Insta
 
 // isolateProviderRegistry snapshots the global providerRegistry and restores it on cleanup, so the
 // external plugin connections + byKey entries THIS test creates (via LoadUnified(rootDir) →
-// connectDeclaredKindPlugins + the deploy-substrate connect for the root's k8s entities) do not leak
+// connectDeclaredKindPlugins + the deploy-substrate connect for the root's kubernetes entities) do not leak
 // to later tests.
 //
 // The leak's mechanism (R1 root cause): a later test (credential_await_unlock_external_test.go) calls
@@ -99,8 +99,8 @@ func invokeOpCompile(t *testing.T, req spec.DeployCompileRequest) ([]*spec.Insta
 // does NOT clear byKey. A kind/deploy provider THIS test registered therefore stays in byKey —
 // already CLOSED — and the next connectDeclaredKindPlugins SKIPS its re-connect (ResolveKind returns
 // true on the stale byKey entry), leaving later tests with a dead "grpc: the client connection is
-// closing" connection. The same retention makes ResolveDeploy("k8s") stay true, which flips
-// isExternalDeploySubstrate("k8s") true and silences validateCheckBeds's "unsupported target"
+// closing" connection. The same retention makes ResolveDeploy("kubernetes") stay true, which flips
+// isExternalDeploySubstrate("kubernetes") true and silences validateCheckBeds's "unsupported target"
 // rejection (TestValidateCheckBeds_TargetEnum). In the clean tree no test alphabetically before
 // check_bed_run_test.go calls LoadUnified(rootDir), so the leak is latent — this test ('b') is the
 // first to populate the registry from the root project, surfacing it.
@@ -112,9 +112,9 @@ func invokeOpCompile(t *testing.T, req spec.DeployCompileRequest) ([]*spec.Insta
 // exact mutation site). Compiled-in providers registered at init() are in the snapshot and stay.
 //
 // The SAME leak hits the additive prescan globals (declaredDeploySubstrate/declaredKind/…): the
-// root project's candy/ contains candy/plugin-kube (declaring deploy:k8s) + candy/plugin-example-kind
+// root project's candy/ contains candy/plugin-kube (declaring deploy:kubernetes) + candy/plugin-example-kind
 // (declaring kind:examplekind), so LoadUnified(rootDir)'s byte-gated prescan stamps
-// declaredDeploySubstrate["k8s"]=true, which flips isExternalDeploySubstrate("k8s") true and silences
+// declaredDeploySubstrate["kubernetes"]=true, which flips isExternalDeploySubstrate("kubernetes") true and silences
 // validateCheckBeds's "unsupported target" rejection (TestValidateCheckBeds_TargetEnum). They are
 // process-wide + additive by design, so the snapshot+restore removes the keys THIS test added.
 func isolateProviderRegistry(t *testing.T) {

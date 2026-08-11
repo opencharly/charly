@@ -794,7 +794,7 @@ func deployNodePluginContext(dir, name string) (addCandy []string, refWords []st
 		addCandy = append(addCandy, n.AddCandy...)
 		if n.Target != "" {
 			refWords = append(refWords, n.Target)
-			// An EXTERNALIZED deploy substrate (vm/local/android/k8s) is served by an
+			// An EXTERNALIZED deploy substrate (vm/local/android/kubernetes) is served by an
 			// out-of-process plugin candy. A main-repo project discovers that candy from
 			// candy/ directly (its `discover:` scans candy/*), but a box/<distro> SUBMODULE
 			// scans only its own + imported candies — so the parent's

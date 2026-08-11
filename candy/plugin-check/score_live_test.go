@@ -19,7 +19,7 @@ func testSubstrateTraits(word string) *spec.DeployTraits {
 		"pod":     {Venue: "container", ImageBacked: true, ImageContext: true},
 		"vm":      {Venue: "ssh", MachineVenue: true, ExclusiveVenue: true},
 		"local":   {Venue: "shell", MachineVenue: true},
-		"k8s":     {Venue: "shell", ImageContext: true, LeafOnly: true},
+		"kubernetes": {Venue: "shell", ImageContext: true, LeafOnly: true},
 		"android": {Venue: "parent"},
 	}
 	return traits[word]

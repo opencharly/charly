@@ -1,4 +1,4 @@
-version: 2026.204.1223
+version: 2026.223.1018
 # Canonical repo identity. After the 2026-06 box inversion main imports the three
 # active distro submodules (arch / cachyos / fedora) ONE-DIRECTIONALLY to reference
 # their relocated boxes; the submodules no longer import main as a namespace (they
@@ -8,7 +8,7 @@ repo: github.com/opencharly/charly
 import:
     # After the 2026-06 box inversion main owns NO boxes — it imports the three
     # active distro submodules ONE-DIRECTIONALLY to reference their relocated boxes
-    # in the inline check/vm/local/k8s/android orchestration below (e.g. the
+    # in the inline check/vm/local/kubernetes/android orchestration below (e.g. the
     # check-cross-* mechanism beds reference `fedora.web` / `fedora.chrome-headless`).
     # Each submodule owns its own base stack: arch + fedora are self-contained
     # (import: []) and cachyos imports the `arch` namespace; none imports main back
@@ -18,7 +18,7 @@ import:
     - cachyos: '@github.com/opencharly/distro-cachyos:v2026.204.1336'
     - fedora: '@github.com/opencharly/distro-fedora:v2026.216.0232'
 # Main owns NO boxes after the 2026-06 box inversion — only the shared candy
-# library + the inline check/vm/local/k8s orchestration. Discover candies only.
+# library + the inline check/vm/local/kubernetes orchestration. Discover candies only.
 discover:
     - path: candy
       recursive: true
@@ -247,7 +247,7 @@ charly-vm:
             timezone: UTC
             package:
                 - sudo
-# check-k3s-vm-ctx / check-k8s-deploy-cluster-ctx — per-BED kind:k8s cluster templates (task #18
+# check-k3s-vm-ctx / check-k8s-deploy-cluster-ctx — per-BED kind:kubernetes cluster templates (task #18
 # rework). check-k3s-vm and check-k8s-deploy-cluster both `from: k3s-vm` (the SAME shared kind:vm
 # entity), so their kubeconfig contexts are now per-deploy-DOMAIN-scoped, not shared by entity (see
 # candy/plugin-deploy-vm/lifecycle.go's OpArtifactKey + candy/plugin-kube/k3s_post.go) — each bed's
@@ -259,18 +259,18 @@ charly-vm:
 # pluginCheckLiveVM: `kit.SanitizeDeployName("vm:" + vmName)`, vmName being the kind:vm entity
 # "k3s-vm" — NOT the deploy/bed name), so BOTH sibling beds resolve DEPLOY_NAME to the identical
 # "vm-k3s-vm" — the cross-bed leak an earlier revision of this fix reintroduced (R10 catch: both
-# beds' checks resolved through whichever ONE shared k8s profile "vm-k3s-vm" happened to be
-# pinned to). Each bed instead names ITS OWN dedicated kind:k8s profile by LITERAL string —
+# beds' checks resolved through whichever ONE shared kubernetes profile "vm-k3s-vm" happened to be
+# pinned to). Each bed instead names ITS OWN dedicated kind:kubernetes profile by LITERAL string —
 # independent of the DEPLOY_NAME mechanism entirely, so no shared-entity leak is possible.
 check-k3s-vm-ctx:
-    k8s:
+    kubernetes:
         box: ""
         kubeconfig_context: vm-check-k3s-vm
-# check-k8s-deploy-workload's `target: k8s` deploy (`k8s: {from: check-k8s-deploy-cluster-ctx}`)
+# check-k8s-deploy-workload's `target: kubernetes` deploy (`kubernetes: {from: check-k8s-deploy-cluster-ctx}`)
 # ALSO consumes this profile — it deploys to the SAME cluster the check-k8s-deploy-cluster
 # sibling member stood up, so both intentionally share this one entity.
 check-k8s-deploy-cluster-ctx:
-    k8s:
+    kubernetes:
         box: ""
         kubeconfig_context: vm-check-k8s-deploy-cluster
 claude:
@@ -327,11 +327,11 @@ kimi:
 # `check-sandbox` (the score `pod:` target), kept disjoint from these beds.
 #
 # Bed-to-verb coverage map:
-#   check-k3s-vm               (vm)  — k8s (all 13 methods) + guest-side
+#   check-k3s-vm               (vm)  — kubernetes (all 13 methods) + guest-side
 #                                     file/service/port/process, http via
 #                                     port-forward, the external vm deploy end-to-end
-#   check-k8s-deploy           (vm)  — the EXTERNALIZED deploy:k8s substrate (F1):
-#                                     a k3s VM cluster + a target:k8s workload
+#   check-k8s-deploy           (vm)  — the EXTERNALIZED deploy:kubernetes substrate (F1):
+#                                     a k3s VM cluster + a target:kubernetes workload
 #                                     member (check-k8s-deploy-app) applied via the
 #                                     out-of-process plugin's kubectl apply -k
 #   check-pod                  (pod) — combined: kind:image build + kind:layer
@@ -355,7 +355,7 @@ kimi:
 # ~/.config/opencharly, /etc, /usr, or any operator-side directory.
 # =============================================================================
 # check-k3s-vm — disposable libvirt VM running k3s-server. Kubeconfig is
-# pulled back for host-side k8s: probes (all 13 methods) via the forwarded
+# pulled back for host-side kubernetes: probes (all 13 methods) via the forwarded
 # :6443. A VM (native kernel + cgroup tree) sidesteps the rootless-podman
 # cpuset-delegation blocker that makes a pod-hosted k3s impossible.
 # References the vm: entity `k3s-vm` (defined below).
@@ -365,7 +365,7 @@ check-k3s-vm:
         disposable: true
         lifecycle: dev
         description: >-
-            Sole deterministic proof of the external-vm-deploy->k8s end-to-end path and the full 13-method k8s probe surface against a real k3s control plane, and the R10 for ssh.port_auto. A disposable libvirt Arch cloud VM (an auto-allocated host->guest 6443 forward, charly installed post-boot via the vm substrate (EnsureCharlyInGuest)) overlays k3s-server over SSH, then runs guest command/process/port/file probes plus the full k8s suite (nodes/wait-nodes/pods/wait-ready/addons/ingressclass/storageclass/raw/service) against its own dedicated per-deploy-domain-scoped cluster context (cluster: "check-k3s-vm-ctx" — task #18: each bed sharing the k3s-vm entity gets its OWN kind:k8s profile pinned to its OWN collision-free kubeconfig context, since DEPLOY_NAME cannot distinguish sibling VM beds sharing one entity), an agent-check matching probe, and a host-side charly status --json (status-shows-vm).
+            Sole deterministic proof of the external-vm-deploy->k8s end-to-end path and the full 13-method k8s probe surface against a real k3s control plane, and the R10 for ssh.port_auto. A disposable libvirt Arch cloud VM (an auto-allocated host->guest 6443 forward, charly installed post-boot via the vm substrate (EnsureCharlyInGuest)) overlays k3s-server over SSH, then runs guest command/process/port/file probes plus the full kubernetes suite (nodes/wait-nodes/pods/wait-ready/addons/ingressclass/storageclass/raw/service) against its own dedicated per-deploy-domain-scoped cluster context (cluster: "check-k3s-vm-ctx" — task #18: each bed sharing the k3s-vm entity gets its OWN kind:kubernetes profile pinned to its OWN collision-free kubeconfig context, since DEPLOY_NAME cannot distinguish sibling VM beds sharing one entity), an agent-check matching probe, and a host-side charly status --json (status-shows-vm).
         add_candy:
             - k3s-server
         env:
@@ -409,29 +409,29 @@ check-k3s-vm:
               file:
                 file: /etc/rancher/k3s/k3s.yaml
                 exists: true
-            - check: k8s=nodes
-              id: kv-k8s-nodes
+            - check: kubernetes=nodes
+              id: kv-kubernetes-nodes
               kube:
                 method: nodes
                 cluster: "check-k3s-vm-ctx"
               context: [runtime]
-            - check: k8s=wait-nodes
-              id: kv-k8s-wait-nodes
+            - check: kubernetes=wait-nodes
+              id: kv-kubernetes-wait-nodes
               kube:
                 method: "wait-nodes"
                 cluster: "check-k3s-vm-ctx"
                 kube_count: 1
               timeout: "300s"
               context: [runtime]
-            - check: k8s=pods
-              id: kv-k8s-pods
+            - check: kubernetes=pods
+              id: kv-kubernetes-pods
               kube:
                 method: pods
                 cluster: "check-k3s-vm-ctx"
                 namespace: kube-system
               context: [runtime]
-            - check: k8s=wait-ready
-              id: kv-k8s-wait-ready
+            - check: kubernetes=wait-ready
+              id: kv-kubernetes-wait-ready
               kube:
                 method: "wait-ready"
                 cluster: "check-k3s-vm-ctx"
@@ -440,28 +440,28 @@ check-k3s-vm:
                 name: coredns
               timeout: "180s"
               context: [runtime]
-            - check: k8s=addons
-              id: kv-k8s-addons
+            - check: kubernetes=addons
+              id: kv-kubernetes-addons
               kube:
                 method: addons
                 cluster: "check-k3s-vm-ctx"
               context: [runtime]
-            - check: k8s=ingressclass
-              id: kv-k8s-ingressclass-traefik
+            - check: kubernetes=ingressclass
+              id: kv-kubernetes-ingressclass-traefik
               kube:
                 method: ingressclass
                 cluster: "check-k3s-vm-ctx"
               stdout: {contains: "traefik"}
               context: [runtime]
-            - check: k8s=storageclass
-              id: kv-k8s-storageclass-localpath
+            - check: kubernetes=storageclass
+              id: kv-kubernetes-storageclass-localpath
               kube:
                 method: storageclass
                 cluster: "check-k3s-vm-ctx"
               stdout: {contains: "local-path"}
               context: [runtime]
-            - check: k8s=raw — the raw escape hatch lists an arbitrary resource (namespaces)
-              id: kv-k8s-raw
+            - check: kubernetes=raw — the raw escape hatch lists an arbitrary resource (namespaces)
+              id: kv-kubernetes-raw
               kube:
                 method: raw
                 cluster: "check-k3s-vm-ctx"
@@ -469,8 +469,8 @@ check-k3s-vm:
               context: [runtime]
               stdout:
                 - contains: kube-system
-            - check: k8s=service
-              id: kv-k8s-service-kubernetes
+            - check: kubernetes=service
+              id: kv-kubernetes-service-kubernetes
               kube:
                 method: service
                 cluster: "check-k3s-vm-ctx"
@@ -497,12 +497,12 @@ check-k3s-vm:
               command:
                 command: ${CHARLY_BIN} status --json
                 in_container: false
-# check-k8s-deploy-app — the check-k8s-deploy bed's target:k8s WORKLOAD fixture.
+# check-k8s-deploy-app — the check-k8s-deploy bed's target:kubernetes WORKLOAD fixture.
 # A minimal Fedora base box composed from LOCAL pure-rpm candies (supervisord +
 # os-layer; no builder, no @github candy refs), so it builds from the root project —
 # where the distro namespace boxes (fedora.web, …) do NOT, because their candies are
 # @github refs the root resolver does not materialize. It is a disposable-bed FIXTURE
-# (the minimal charly image the deploy:k8s substrate deploys), analogous to the
+# (the minimal charly image the deploy:kubernetes substrate deploys), analogous to the
 # kind:local check-*-app templates — not a production box, so it does not breach the
 # "main owns no boxes" inversion (which concerns the shipped image catalog).
 check-k8s-deploy-app:
@@ -510,16 +510,16 @@ check-k8s-deploy-app:
         version: 2026.180.1000
         base: quay.io/fedora/fedora:43
         description: |-
-            Minimal Fedora base box — the check-k8s-deploy bed's target:k8s workload
+            Minimal Fedora base box — the check-k8s-deploy bed's target:kubernetes workload
             AND the check-sidecar-pod bed's pod workload. A small charly image whose
-            ai.opencharly labels the deploy:k8s preresolver reads to generate the
+            ai.opencharly labels the deploy:kubernetes preresolver reads to generate the
             Kustomize tree. Composes check-keepalive (→ supervisord + a `keepalive`
             sleep-infinity program) + os-layer (local pure-rpm / coreutils candies, no
             builder/@github) so it builds from the root project. The keepalive program
             makes supervisord non-degenerate — it supervises a real program, so
             `charly service status` reports it (the K4 service-move coverage on
             check-sidecar-pod). The deployed pod is not asserted Ready (the locally-built
-            image is absent from the disposable cluster's containerd); the k8s bed asserts
+            image is absent from the disposable cluster's containerd); the kubernetes bed asserts
             only that the Deployment OBJECT landed — exactly the externalized `kubectl apply -k`.
         distro:
             - fedora:43
@@ -528,17 +528,17 @@ check-k8s-deploy-app:
             - check-keepalive
             - os-layer
 # =============================================================================
-# check-k8s-deploy — disposable proof of the EXTERNALIZED deploy:k8s SUBSTRATE
-# (F1, candy/plugin-kube serving deploy:k8s beside verb:kube). A GROUP bed (the
+# check-k8s-deploy — disposable proof of the EXTERNALIZED deploy:kubernetes SUBSTRATE
+# (F1, candy/plugin-kube serving deploy:kubernetes beside verb:kube). A GROUP bed (the
 # proven sibling-member shape — cf. box/fedora check-cross-pod-cdp) with two members
 # brought up name-sorted: check-k8s-deploy-cluster (a libvirt k3s VM reusing the
 # SAME k3s-vm entity + k3s-server candy check-k3s-vm proves) comes up FIRST and
 # merges its kubeconfig to context vm-check-k8s-deploy-cluster (its own per-deploy
 # domain identity, task #18 — collision-free from check-k3s-vm's OWN context even
 # though both beds share the k3s-vm entity — see check-k3s-vm-ctx / this doc's
-# header comment for why the two beds each need their OWN dedicated kind:k8s
+# header comment for why the two beds each need their OWN dedicated kind:kubernetes
 # profile rather than a shared `cluster: "${DEPLOY_NAME}"`); check-k8s-deploy-workload (a
-# `target: k8s` deploy of check-k8s-deploy-app) comes up SECOND — at bring-up the
+# `target: kubernetes` deploy of check-k8s-deploy-app) comes up SECOND — at bring-up the
 # plugin's own preresolve.go (F6, FINAL/K5 unit 6a) reads the box Capabilities +
 # the check-k8s-deploy-cluster-ctx cluster template (self-loading the project PLUGIN-SIDE now,
 # K-wave W3a A3-phase-2 — no HostBuild round trip left in this leg; its
@@ -557,7 +557,7 @@ check-k8s-deploy:
         disposable: true
         lifecycle: dev
         description: >-
-            R10 for the EXTERNALIZED deploy:k8s substrate (F1) — `target: k8s` resolves out-of-process to candy/plugin-kube's deploy:k8s provider over the E3b reverse channel, not a compiled-in DeployTarget. A group bed with two name-sorted sibling members: check-k8s-deploy-cluster (a disposable libvirt k3s VM, the shared k3s-vm + k3s-server stack, an auto-allocated host->guest 6443 forward) brings up a control plane and merges kubeconfig to context vm-check-k8s-deploy-cluster (its own per-deploy domain identity, task #18 — collision-free from check-k3s-vm's own context despite sharing the k3s-vm entity); check-k8s-deploy-workload (a target:k8s deploy of check-k8s-deploy-app) is brought up second — its host preresolver generates an egress-validated Kustomize tree and its out-of-process plugin runs `kubectl --context vm-check-k8s-deploy-cluster apply -k`. The kube: checks (wait-nodes + raw deployments GET + pods) prove the Deployment object landed on the cluster — the externalized substrate applied the workload end-to-end. The pod is not asserted Ready (the local box image is absent from the VM's containerd; image-into-cluster delivery is orthogonal to the substrate).
+            R10 for the EXTERNALIZED deploy:kubernetes substrate (F1) — `target: kubernetes` resolves out-of-process to candy/plugin-kube's deploy:kubernetes provider over the E3b reverse channel, not a compiled-in DeployTarget. A group bed with two name-sorted sibling members: check-k8s-deploy-cluster (a disposable libvirt k3s VM, the shared k3s-vm + k3s-server stack, an auto-allocated host->guest 6443 forward) brings up a control plane and merges kubeconfig to context vm-check-k8s-deploy-cluster (its own per-deploy domain identity, task #18 — collision-free from check-k3s-vm's own context despite sharing the k3s-vm entity); check-k8s-deploy-workload (a target:kubernetes deploy of check-k8s-deploy-app) is brought up second — its host preresolver generates an egress-validated Kustomize tree and its out-of-process plugin runs `kubectl --context vm-check-k8s-deploy-cluster apply -k`. The kube: checks (wait-nodes + raw deployments GET + pods) prove the Deployment object landed on the cluster — the externalized substrate applied the workload end-to-end. The pod is not asserted Ready (the local box image is absent from the VM's containerd; image-into-cluster delivery is orthogonal to the substrate).
     # MEMBER 1 (name-sorts first) — the k3s control plane. bringUpMembers does vm
     # create + fleet add (k3s-server over SSH); K3sPostProvision merges the
     # kubeconfig to context vm-check-k8s-deploy-cluster (this member's own per-deploy
@@ -589,7 +589,7 @@ check-k8s-deploy:
                   timeout: "300s"
                   stdout: {contains: "Ready"}
                   context: [runtime]
-                - check: the externalized deploy:k8s substrate applied the workload Deployment object to the cluster
+                - check: the externalized deploy:kubernetes substrate applied the workload Deployment object to the cluster
                   id: kd-deployment-landed
                   kube:
                     method: raw
@@ -609,14 +609,14 @@ check-k8s-deploy:
                     namespace: default
                   stdout: {contains: "check-k8s-deploy-workload"}
                   context: [runtime]
-    # MEMBER 2 (name-sorts second) — the target:k8s workload. check-k8s-deploy-app is built
+    # MEMBER 2 (name-sorts second) — the target:kubernetes workload. check-k8s-deploy-app is built
     # locally by the group bed's member-build arm (box build check-k8s-deploy-app), so the host
     # preresolver's ExtractMetadata reads its OCI labels. `from: check-k8s-deploy-cluster-ctx`
-    # selects the kind:k8s cluster template (kubeconfig_context: vm-check-k8s-deploy-cluster,
+    # selects the kind:kubernetes cluster template (kubeconfig_context: vm-check-k8s-deploy-cluster,
     # task #18 — pinned to the sibling member's own per-domain context). Deploy-only (no
     # own checks — it is an instrument; the cluster member's kube: checks assert it).
     check-k8s-deploy-workload:
-        k8s:
+        kubernetes:
             image: check-k8s-deploy-app
             from: check-k8s-deploy-cluster-ctx
 # =============================================================================
@@ -752,7 +752,7 @@ check-sidecar-pod:
               command:
                 command: ${CHARLY_BIN} start check-sidecar-pod && ${CHARLY_BIN} status --json
                 in_container: false
-            - check: the NESTED ephemeral vm member (check-sidecar-pod-ephvm, tree position, sibling to the pod node above) registered its lifecycle through candy/plugin-fleet's OpEphemeralRegister (FINAL/K5 unit 6a, the ephemeral_lifecycle.go move) when `charly fleet add check-sidecar-pod` brought up the whole tree — the persisted EphemeralRuntime block in charly.yml AND the systemd TTL transient timer are the register-half proof. vm is the ONLY substrate whose Add path calls the ephemeral seam today (validate_ephemeral.go rejects pod/k8s ephemeral at load time, tracked to the bed-robustness batch). The TIMER conjunct runs FIRST so each conjunct's verdict is independently visible on failure (RCA #5). Asserted via the WHOLE-DUMP `fleet show` form (no positional box arg), NOT `fleet show <name>` — that single-arg lookup (deploykit.DeployKey, a bare pass-through) can never find a vm entry's per-host state, which every vm deploy persists under a "vm:"-prefixed, VmDomainIdentity-sanitized key (a PRE-EXISTING, universal gap unrelated to this cutover, registered to the bed-robustness batch — RCA in CHANGELOG). The grep anchors on the entry's OWN unique `deploy_address` marker (EphemeralRuntime.DeployAddress, FINAL/K5 unit 6a) — not any ephemeral marker anywhere in the dump — so this step is structurally unable to pass vacuously, and doubles as the DeployAddress field's own persistence proof. RCA #4 (unit 6a): the systemd-timer conjunct's grep pattern greps the STABLE PREFIX of the unit `registerTransientTimer` actually creates — `charly-fleet-del-<SanitizeUnitName(fullDottedDeployName)>-<unix-ts>` (sdk/deploykit's SanitizeUnitName, dots AND slashes to hyphens, applied to the FULL dotted deploy address, not the leaf name) — a bed-caught real bug in the assertion itself (registration was proven to fire correctly via a live leftover systemd timer; the pre-fix pattern used the leaf name alone and could never match). RCA #5 (unit 6a): the explicit del + clear-half round-trip this step pair USED TO prove is DROPPED here — `charly check live` is documented, intentional `VerifyOnly` (runs ONLY check:/agent-check: steps, NEVER run:/agent-run:), so a `run: fleet del ...` step between two check: steps NEVER EXECUTES during a check-live pass; that precondition was structurally unfireable regardless of keying/env. The persist/clear round-trip's CLEAR half is now proven by an orchestrator-driven LIVE PROBE instead (mutating round-trips are probe territory, idempotent state checks are check-live territory) — see CHANGELOG.
+            - check: the NESTED ephemeral vm member (check-sidecar-pod-ephvm, tree position, sibling to the pod node above) registered its lifecycle through candy/plugin-fleet's OpEphemeralRegister (FINAL/K5 unit 6a, the ephemeral_lifecycle.go move) when `charly fleet add check-sidecar-pod` brought up the whole tree — the persisted EphemeralRuntime block in charly.yml AND the systemd TTL transient timer are the register-half proof. vm is the ONLY substrate whose Add path calls the ephemeral seam today (validate_ephemeral.go rejects pod/kubernetes ephemeral at load time, tracked to the bed-robustness batch). The TIMER conjunct runs FIRST so each conjunct's verdict is independently visible on failure (RCA #5). Asserted via the WHOLE-DUMP `fleet show` form (no positional box arg), NOT `fleet show <name>` — that single-arg lookup (deploykit.DeployKey, a bare pass-through) can never find a vm entry's per-host state, which every vm deploy persists under a "vm:"-prefixed, VmDomainIdentity-sanitized key (a PRE-EXISTING, universal gap unrelated to this cutover, registered to the bed-robustness batch — RCA in CHANGELOG). The grep anchors on the entry's OWN unique `deploy_address` marker (EphemeralRuntime.DeployAddress, FINAL/K5 unit 6a) — not any ephemeral marker anywhere in the dump — so this step is structurally unable to pass vacuously, and doubles as the DeployAddress field's own persistence proof. RCA #4 (unit 6a): the systemd-timer conjunct's grep pattern greps the STABLE PREFIX of the unit `registerTransientTimer` actually creates — `charly-fleet-del-<SanitizeUnitName(fullDottedDeployName)>-<unix-ts>` (sdk/deploykit's SanitizeUnitName, dots AND slashes to hyphens, applied to the FULL dotted deploy address, not the leaf name) — a bed-caught real bug in the assertion itself (registration was proven to fire correctly via a live leftover systemd timer; the pre-fix pattern used the leaf name alone and could never match). RCA #5 (unit 6a): the explicit del + clear-half round-trip this step pair USED TO prove is DROPPED here — `charly check live` is documented, intentional `VerifyOnly` (runs ONLY check:/agent-check: steps, NEVER run:/agent-run:), so a `run: fleet del ...` step between two check: steps NEVER EXECUTES during a check-live pass; that precondition was structurally unfireable regardless of keying/env. The persist/clear round-trip's CLEAR half is now proven by an orchestrator-driven LIVE PROBE instead (mutating round-trips are probe territory, idempotent state checks are check-live territory) — see CHANGELOG.
               id: ephemeral-register-roundtrip
               stdout:
                 - contains: EPHEMERAL-REGISTERED-OK
@@ -1064,7 +1064,7 @@ check-structkind:
                           command: "test -f /etc/check-structkind-marker && echo STRUCTKIND-MEMBER-DEPLOY-OK"
 # =============================================================================
 # check-substrate — R10 witness for the EXTERNALIZED substrate structural kinds
-# (C2-substrate, candy/plugin-substrate), run INSIDE the disposable eval VM. pod/vm/k8s/
+# (C2-substrate, candy/plugin-substrate), run INSIDE the disposable eval VM. pod/vm/kubernetes/
 # local/android are served by the compiled-in structural plugin candy/plugin-substrate. This
 # bed exercises the LOCAL substrate decode in both shapes:
 #   - check-substrate-app is a BARE `local:` TEMPLATE (top-level, no deploy) → foldSubstrateKind
@@ -1294,7 +1294,7 @@ default:
                 initialized), the `charly` CLI binary, and every layer, image,
                 pod, VM, and Kubernetes cluster definition the project
                 already ships (`candy/`, `box/<name>/charly.yml`, plus the
-                pod/vm/k8s/check kinds inline in `charly.yml`). Your session has the project's plugin skills
+                pod/vm/kubernetes/check kinds inline in `charly.yml`). Your session has the project's plugin skills
                 loaded (`/charly-check:check`, `/charly-core:deploy`, `/charly-image:image`, `/charly-image:layer`,
                 `/charly-build:build`, plus per-pod plugins (`/charly-jupyter:*`, `/charly-coder:*`, etc.) and foundation plugins (`/charly-distros:*`, `/charly-infrastructure:*`, `/charly-tools:*`), …). All of these
                 are available to be used if you decide to do so — they may
@@ -1370,7 +1370,7 @@ default:
                 Re-run by harness independently (you cannot influence the verdict):
                   - Status / evaluation / listing verbs (cdp:status, cdp:eval,
                     wl:status, libvirt:info, libvirt:domain-xml, libvirt:guest/
-                    ping, libvirt:guest/exec, k8s:nodes/wait-ready/addons/raw,
+                    ping, libvirt:guest/exec, kubernetes:nodes/wait-ready/addons/raw,
                     mcp:ping/list-tools/call/read, dbus:list/call/notify).
                   - File / process / package / port / service / command /
                     matching / http / dns / addr / interface / mount / kernel-
@@ -1862,7 +1862,7 @@ scaffolding-selftest:
                 initialized), the `charly` CLI binary, and every layer, image,
                 pod, VM, and Kubernetes cluster definition the project
                 already ships (`candy/`, `box/<name>/charly.yml`, plus the
-                pod/vm/k8s/check kinds inline in `charly.yml`). Your session has the project's plugin skills
+                pod/vm/kubernetes/check kinds inline in `charly.yml`). Your session has the project's plugin skills
                 loaded (`/charly-check:check`, `/charly-core:deploy`, `/charly-image:image`, `/charly-image:layer`,
                 `/charly-build:build`, plus per-pod plugins (`/charly-jupyter:*`, `/charly-coder:*`, etc.) and foundation plugins (`/charly-distros:*`, `/charly-infrastructure:*`, `/charly-tools:*`), …). All of these
                 are available to be used if you decide to do so — they may
@@ -2265,7 +2265,7 @@ check-commands-app:
             the P15 `charly box …` build verbs (generate/validate/new/pkg), AND the P14b `charly box …`
             authoring verbs (set/add-candy/rm-candy/write/cat, nested under the box grammar group), AND
             (K5) `charly reap-orphans` (candy/plugin-substrate's command:reap-orphans, alongside its
-            existing kind:pod/vm/k8s/local/android substrate capabilities) host-side.
+            existing kind:pod/vm/kubernetes/local/android substrate capabilities) host-side.
         candy:
             - plugin-clean
             - plugin-settings
@@ -2649,3 +2649,70 @@ check-marketplace:
               context:
                 - runtime
               command: command -v rg
+
+# =============================================================================
+# agentteams-core-app + check-agentteams-core-pod — the R10 bed for the AgentTeams
+# foundation candies (minio, matrix, element) on the cachyos base. Every service
+# runs as the image user (uid 1000) against the /data volume — the rootless charly
+# architecture, no root anywhere.
+# =============================================================================
+agentteams-core-app:
+    candy:
+        version: 2026.223.1041
+        base: cachyos.cachyos
+        description: |-
+            The AgentTeams foundation box: a cachyos base composing the agentteams-lib
+            script tree, agentteams-minio (MinIO S3 + mc-mirror), agentteams-matrix
+            (Tuwunel Matrix homeserver), and agentteams-element (Element Web via rootless
+            nginx). Every service runs as the image user (uid 1000) against the /data
+            volume — the rootless charly architecture, no root anywhere.
+        candy:
+            - agentteams-lib
+            - agentteams-minio
+            - agentteams-matrix
+            - agentteams-element
+check-agentteams-core-pod:
+    pod:
+        image: agentteams-core-app
+        disposable: true
+        lifecycle: dev
+        description: >-
+            R10 bed for the AgentTeams foundation candies. Deploying the box to steady state
+            proves the minio S3 API, the Tuwunel Matrix homeserver, and the Element Web client
+            all build, start, and stay up as uid 1000 against the /data volume.
+        plan:
+            - check: the agentteams-core-app pod reached steady state
+              id: agentteams-core-pod-running
+              exit_status: 0
+              stdout:
+                - contains: '"kind": "pod"'
+                - contains: check-agentteams-core-pod
+              context:
+                - runtime
+              command:
+                command: ${CHARLY_BIN} status --json
+                in_container: false
+            - check: the minio S3 API answers its health probe
+              id: agentteams-minio-health
+              timeout: 30s
+              context:
+                - runtime
+              http:
+                http: "http://127.0.0.1:${HOST_PORT:9000}/minio/health/live"
+                status: 200
+            - check: the Matrix homeserver answers the client versions endpoint
+              id: agentteams-matrix-versions
+              timeout: 30s
+              context:
+                - runtime
+              http:
+                http: "http://127.0.0.1:${HOST_PORT:6167}/_matrix/client/versions"
+                status: 200
+            - check: the Element Web client answers on its port
+              id: agentteams-element-http
+              timeout: 30s
+              context:
+                - runtime
+              http:
+                http: "http://127.0.0.1:${HOST_PORT:8088}/"
+                status: 200

@@ -1,17 +1,17 @@
 package substratekind
 
-// status_k8s.go — the K8S substrate's OpStatus (K5: relocated verbatim from
-// charly/status_collect_k8s.go). A `target: k8s` deploy does not run a
+// status_kubernetes.go — the Kubernetes substrate's OpStatus (K5: relocated verbatim from
+// charly core). A `target: kubernetes` deploy does not run a
 // container on this host — it emits a Kustomize manifest tree that
 // `charly fleet sync` / `kubectl apply -k` applies to a remote cluster, so
 // this collector reports GENERATION state (tree-present | not-generated) and
 // the referenced cluster/context, never live pod health (that is a `kube:`
 // check, candy/plugin-kube). Every input this needs (the folded project
-// deploy tree, the kind:k8s template bodies) is fetched from the host via the
+// deploy tree, the kind:kubernetes template bodies) is fetched from the host via the
 // established InvokeProvider("build","project") seam (already proven in
 // production by candy/plugin-fleet's OpCompile) — resolving the referenced
-// k8s template itself needs no cross-plugin hop at all: this SAME provider
-// already implements the k8s substrate-template resolve (resolve.go), so it's
+// kubernetes template itself needs no cross-plugin hop at all: this SAME provider
+// already implements the kubernetes substrate-template resolve (resolve.go), so it's
 // an in-package call, not an Invoke.
 
 import (
@@ -27,28 +27,28 @@ import (
 	"github.com/opencharly/spec/spec"
 )
 
-// collectK8sStatus serves the k8s substrate's OpStatusCollect. It re-hydrates
+// collectKubernetesStatus serves the kubernetes substrate's OpStatusCollect. It re-hydrates
 // the resolved-project envelope over the reverse channel, enumerates every
-// declared target:k8s deploy node, and emits one row per entry.
-func collectK8sStatus(ctx context.Context, req spec.SubstrateStatusRequest) (spec.SubstrateStatusReply, error) {
+// declared target:kubernetes deploy node, and emits one row per entry.
+func collectKubernetesStatus(ctx context.Context, req spec.SubstrateStatusRequest) (spec.SubstrateStatusReply, error) {
 	rp, err := fetchResolvedProject(ctx)
 	if err != nil {
-		return spec.SubstrateStatusReply{}, fmt.Errorf("k8s status-collect: %w", err)
+		return spec.SubstrateStatusReply{}, fmt.Errorf("kubernetes status-collect: %w", err)
 	}
 
-	entries := k8sDeployEntries(rp.Deploy)
+	entries := kubernetesDeployEntries(rp.Deploy)
 	if len(entries) == 0 {
 		return spec.SubstrateStatusReply{}, nil
 	}
-	treeRoot, rootErr := k8sTreeRoot()
+	treeRoot, rootErr := kubernetesTreeRoot()
 
 	rows := make([]spec.DeploymentStatus, 0, len(entries))
 	for _, name := range entries {
 		node := rp.Deploy[name]
 		row := spec.DeploymentStatus{
-			Kind:      spec.SubstrateK8s,
+			Kind:      spec.SubstrateKubernetes,
 			Source:    "tree",
-			Image:     k8sImageRef(name, node),
+			Image:     kubernetesImageRef(name, node),
 			Container: name,
 			RunMode:   req.RunMode,
 		}
@@ -65,7 +65,7 @@ func collectK8sStatus(ctx context.Context, req spec.SubstrateStatusRequest) (spe
 			row.Status = "not-generated"
 		}
 
-		if ks := k8sSpecFor(rp.Templates, node); ks != nil && ks.KubeconfigContext != "" {
+		if ks := kubernetesSpecFor(rp.Templates, node); ks != nil && ks.KubeconfigContext != "" {
 			row.Network = ks.KubeconfigContext
 		} else if node != nil && node.From != "" {
 			row.Network = node.From
@@ -102,12 +102,12 @@ func fetchResolvedProject(ctx context.Context) (*spec.ResolvedProject, error) {
 	return &rp, nil
 }
 
-// k8sTreeRoot returns <cwd>/.opencharly/k8s — the same canonical root
-// defaultK8sOutputDir (charly/k8s_generate.go) emits Kustomize trees under.
-// A separate implementation, not a shared call: the kernel/plugin boundary
-// law forbids this plugin from importing charly core, so the two share only
-// the convention, not the code. The compiled-in plugin shares the host's cwd.
-func k8sTreeRoot() (string, error) {
+// kubernetesTreeRoot returns <cwd>/.opencharly/k8s — the canonical root the
+// Kustomize generator emits trees under. A separate implementation, not a
+// shared call: the kernel/plugin boundary law forbids this plugin from
+// importing charly core, so the two share only the convention, not the code.
+// The compiled-in plugin shares the host's cwd.
+func kubernetesTreeRoot() (string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return "", err
@@ -115,15 +115,15 @@ func k8sTreeRoot() (string, error) {
 	return filepath.Join(cwd, ".opencharly", "k8s"), nil
 }
 
-// k8sDeployEntries returns the names of every target:k8s deploy in the
+// kubernetesDeployEntries returns the names of every target:kubernetes deploy in the
 // resolved-project's folded Deploy map, in deterministic (sorted) order.
-func k8sDeployEntries(deploy map[string]*spec.Deploy) []string {
+func kubernetesDeployEntries(deploy map[string]*spec.Deploy) []string {
 	if len(deploy) == 0 {
 		return nil
 	}
 	var names []string
 	for name, node := range deploy {
-		if deploykit.ClassifyTarget(node) == "k8s" {
+		if deploykit.ClassifyTarget(node) == "kubernetes" {
 			names = append(names, name)
 		}
 	}
@@ -131,33 +131,33 @@ func k8sDeployEntries(deploy map[string]*spec.Deploy) []string {
 	return names
 }
 
-// k8sImageRef resolves the image a k8s deploy runs, mirroring the k8s deploy
+// kubernetesImageRef resolves the image a kubernetes deploy runs, mirroring the kubernetes deploy
 // preresolver: the node's explicit Box (carried on the wire as Image), falling
 // back to the deploy name.
-func k8sImageRef(name string, node *spec.Deploy) string {
+func kubernetesImageRef(name string, node *spec.Deploy) string {
 	if node != nil && node.Image != "" {
 		return node.Image
 	}
 	return name
 }
 
-// k8sSpecFor resolves the kind:k8s template referenced by node.From against
-// the resolved-project's k8s template bodies. Nil when unreferenced or
+// kubernetesSpecFor resolves the kind:kubernetes template referenced by node.From against
+// the resolved-project's kubernetes template bodies. Nil when unreferenced or
 // absent. Uses this SAME provider's own template-resolve leg (resolve.go) —
 // an in-package call, never a cross-plugin Invoke.
-func k8sSpecFor(templates *spec.ProjectTemplates, node *spec.Deploy) *spec.ResolvedK8s {
+func kubernetesSpecFor(templates *spec.ProjectTemplates, node *spec.Deploy) *spec.ResolvedKubernetes {
 	if templates == nil || node == nil || node.From == "" {
 		return nil
 	}
-	body, ok := templates.K8s[node.From]
+	body, ok := templates.Kubernetes[node.From]
 	if !ok {
 		return nil
 	}
-	out, err := resolveSubstrateTemplate(spec.SubstrateTemplateResolveRequest{K8s: &spec.K8sResolveInput{K8s: body}})
+	out, err := resolveSubstrateTemplate(spec.SubstrateTemplateResolveRequest{Kubernetes: &spec.KubernetesResolveInput{Kubernetes: body}})
 	if err != nil {
 		return nil
 	}
-	var reply spec.K8sResolveReply
+	var reply spec.KubernetesResolveReply
 	if err := json.Unmarshal(out, &reply); err != nil {
 		return nil
 	}

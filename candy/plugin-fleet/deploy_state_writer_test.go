@@ -75,7 +75,7 @@ func TestSaveFleetConfig_RefusesToClobberUnloadableConfig(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 	path := filepath.Join(dir, "charly", "charly.yml")
-	recoverable := []byte("version: 2026.204.1223\nweb:\n    pod:\n        image: web\n")
+	recoverable := []byte("version: 2026.223.1018\nweb:\n    pod:\n        image: web\n")
 	if err := os.WriteFile(path, recoverable, 0o600); err != nil {
 		t.Fatalf("write recoverable config: %v", err)
 	}
@@ -266,7 +266,7 @@ func TestSaveDeployState_PersistsImageAndTargetForNewEntry(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(dir, "charly"), 0700); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	initialYAML := `version: 2026.204.1223
+	initialYAML := `version: 2026.223.1018
 existing-deploy:
     pod:
         image: existing-image
@@ -320,7 +320,7 @@ func TestSaveDeployState_DoesNotClobberExistingImageTarget(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(dir, "charly"), 0700); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	initialYAML := `version: 2026.204.1223
+	initialYAML := `version: 2026.223.1018
 existing:
     pod:
         image: pinned-image-ref:1.2.3
@@ -374,7 +374,7 @@ func TestRemoveVmDeployEntry_SelectiveAndIdempotent(t *testing.T) {
 	}
 	// Seed: the disposable bed VM to remove, plus a running preemptible
 	// operator workstation and an unrelated pod deploy that must both survive.
-	initialYAML := `version: 2026.204.1223
+	initialYAML := `version: 2026.223.1018
 vm:k3s-vm:
     vm:
         from: k3s-vm

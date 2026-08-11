@@ -12,7 +12,7 @@ import (
 // egress.go — the egress-validation dispatch, relocated from the deleted charly/service_render.go
 // (K-wave 2 cone R2). The validation logic + CUE schemas live in the compiled-in candy/plugin-egress;
 // these functions resolve verb:egress and Invoke its ops.OpValidate. The egress gate proves the
-// config artifacts charly WRITES (cloud-init, k8s manifests, traefik routes, ledger JSON, the
+// config artifacts charly WRITES (cloud-init, kubernetes manifests, traefik routes, ledger JSON, the
 // Containerfile, systemd/supervisord units, libvirt domain XML) BEFORE the bytes hit disk.
 //
 // This package is the SOLE ledger writer for every substrate (deploy_target.go's recordDeploy/
@@ -75,7 +75,7 @@ func ValidateEgress(kind, label string, data []byte) error {
 
 // ValidateEgressValue validates an in-memory Go value (a manifest map[string]any, a record
 // struct) by marshalling it to JSON and validating as bytes — faithful for the data values
-// egress gates (k8s manifests, ledger records).
+// egress gates (kubernetes manifests, ledger records).
 func ValidateEgressValue(kind, label string, v any) error {
 	data, err := json.Marshal(v)
 	if err != nil {

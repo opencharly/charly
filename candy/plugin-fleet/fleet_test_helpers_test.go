@@ -356,7 +356,7 @@ var testSubstrateTraits = map[string]*spec.DeployTraits{
 	"pod":     {Venue: "container", ImageBacked: true, ImageContext: true, BracketedLifecycle: true, BedTarget: true},
 	"vm":      {Venue: "ssh", MachineVenue: true, ExclusiveVenue: true, BedTarget: true, SupportsEphemeral: true, SupportsFromSnapshot: true},
 	"local":   {Venue: "shell", MachineVenue: true, BedTarget: true},
-	"k8s":     {Venue: "shell", ImageContext: true, LeafOnly: true},
+	"kubernetes": {Venue: "shell", ImageContext: true, LeafOnly: true},
 	"android": {Venue: "parent", BedTarget: true},
 }
 

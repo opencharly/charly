@@ -272,10 +272,10 @@ func recognizedDeploySubstrate(word string) bool {
 //
 //   - A NON-kind word (e.g. exampledeploy, not in resourceKindSet) is external iff
 //     recognized — a connected provider OR a pre-scanned declaration.
-//   - A CUE-kind substrate word (pod/vm/k8s/local/android/group ∈ resourceKindSet) is
+//   - A CUE-kind substrate word (pod/vm/kubernetes/local/android/group ∈ resourceKindSet) is
 //     external iff it has been MIGRATED to an external plugin (externalizedDeploySubstrates,
 //     F1) AND a plugin declaring it is recognized. A still-builtin substrate kind
-//     (pod/vm/k8s/local/group today) is NOT external — its in-proc DeployTargetProvider
+//     (pod/vm/kubernetes/local/group today) is NOT external — its in-proc DeployTargetProvider
 //     serves it. (A group's Target is "" and never matches.)
 //
 // A true result makes the bed runner treat the deploy like a kind:local deploy (no

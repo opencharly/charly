@@ -35,7 +35,7 @@ func isStandaloneResourceKind(disc string) bool {
 // foldStandaloneTemplateReply is now sdk/loaderkit.FoldStandaloneTemplateReply (K1 unit 3a) — the
 // C2-substrate TEMPLATE fold arm (the standalone counterpart of runPluginKind's deploy fold into
 // acc.Fleet). GENERIC by construction: no per-kind-word switch — every standalone-template kind
-// (vm/pod/k8s/local/android) folds into the SAME map[disc][name] shape PluginKinds already uses
+// (vm/pod/kubernetes/local/android) folds into the SAME map[disc][name] shape PluginKinds already uses
 // for every other templated kind. This file keeps a same-named/same-signature core wrapper (R3)
 // since provider_kind_invoke.go calls it by this name.
 func foldStandaloneTemplateReply(disc, name string, replyJSON json.RawMessage, acc *spec.MaterializedProject) error {

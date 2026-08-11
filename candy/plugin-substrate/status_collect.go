@@ -2,7 +2,7 @@ package substratekind
 
 // status_collect.go — the substrate COLLECTOR OpStatus dispatch. flatCollector's status fan-out
 // (status_flat.go, K6 — the former charly/status_collector.go's collectFlat, moved WHOLE into
-// this package) reaches EVERY collector by a DIRECT in-package call (pod + local, P14a; vm + k8s +
+// this package) reaches EVERY collector by a DIRECT in-package call (pod + local, P14a; vm + kubernetes +
 // android, K5) — the SAME one-provider-serves-all-5-words shape the C2-substrate kind decode uses,
 // now with no registry/wire round-trip needed for the in-package leg either. All 5 words are
 // plugin-served — the in-proc SubstrateCollector registry this seam once deferred to no longer
@@ -18,7 +18,7 @@ import (
 )
 
 // statusCollect dispatches sdk.OpStatusCollect by the reserved substrate word.
-// req.GetReserved() is the word (pod/vm/k8s/local/android); req.GetParamsJson()
+// req.GetReserved() is the word (pod/vm/kubernetes/local/android); req.GetParamsJson()
 // is the spec.SubstrateStatusRequest. Returns spec.SubstrateStatusReply as
 // ResultJson.
 func statusCollect(ctx context.Context, word string, reqJSON []byte) (*statusResult, error) {
@@ -47,10 +47,10 @@ func statusCollect(ctx context.Context, word string, reqJSON []byte) (*statusRes
 			return nil, fmt.Errorf("substrate status-collect vm: %w", err)
 		}
 		return marshalStatusReply(reply)
-	case "k8s":
-		reply, err := collectK8sStatus(ctx, in)
+	case "kubernetes":
+		reply, err := collectKubernetesStatus(ctx, in)
 		if err != nil {
-			return nil, fmt.Errorf("substrate status-collect k8s: %w", err)
+			return nil, fmt.Errorf("substrate status-collect kubernetes: %w", err)
 		}
 		return marshalStatusReply(reply)
 	case "android":

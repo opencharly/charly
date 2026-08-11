@@ -102,7 +102,7 @@ func TestCollectVmStatus_DegradesOnListError(t *testing.T) {
 
 // assertDeploymentRowsEqual compares the substrate-relevant fields of two
 // DeploymentStatus slices (Kind, Source, Image, Status, Container). Shared
-// with status_k8s_test.go.
+// with status_kubernetes_test.go.
 func assertDeploymentRowsEqual(t *testing.T, got, want []spec.DeploymentStatus) {
 	t.Helper()
 	if len(got) != len(want) {

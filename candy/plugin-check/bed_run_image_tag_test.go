@@ -5,7 +5,7 @@ import (
 )
 
 // #75 — bed-scoped fixture image tags (relocated from charly/bed_run_image_tag_test.go, #55 W3
-// B2-full). This unit test pins the pure formula; the k8s-preresolver node.Version honoring + the
+// B2-full). This unit test pins the pure formula; the kubernetes-preresolver node.Version honoring + the
 // plugin's per-step --tag threading are integration-proven by the concurrent check-sidecar-pod +
 // check-k8s-deploy bed run (the R10 gate).
 

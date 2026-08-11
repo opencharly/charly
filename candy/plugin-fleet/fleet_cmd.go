@@ -27,7 +27,7 @@ type FleetCmd struct {
 	Add FleetAddCmd `cmd:"" help:"Apply a deploy: 'host' targets the local system; any other name targets a container"`
 	Del FleetDelCmd `cmd:"" help:"Tear down a deploy by name"`
 
-	FromImage FleetFromBoxCmd `cmd:"" name:"from-box" help:"Source-less deploy from a built image's baked OCI labels (no charly.yml project). Pod by default; --cluster targets K8s"`
+	FromImage FleetFromBoxCmd `cmd:"" name:"from-box" help:"Source-less deploy from a built image's baked OCI labels (no charly.yml project). Pod by default; --cluster targets Kubernetes"`
 
 	Export FleetExportCmd `cmd:"" help:"Export effective config as charly.yml"`
 	Import FleetImportCmd `cmd:"" help:"Import charly.yml file(s) into config"`
@@ -96,16 +96,16 @@ type FleetDelCmd struct {
 // FleetFromBoxCmd is the `charly fleet from-box <ref> [name]` grammar. The pod path (default)
 // runs ENTIRELY plugin-side (from_box_pod.go — a source-less deploy from an image's baked OCI
 // labels, reaching deploy:pod's OpConfigSetup directly, no HostBuild round-trip); the --cluster
-// path (Cone A shape 3) is handled plugin-side too — see deploy_from_box.go — reaching the k8s
-// cluster lookup + the deploy:k8s substrate directly.
+// path (Cone A shape 3) is handled plugin-side too — see deploy_from_box.go — reaching the kubernetes
+// cluster lookup + the deploy:kubernetes substrate directly.
 type FleetFromBoxCmd struct {
 	Ref       string   `arg:"" help:"Full image ref (local or registry), e.g. ghcr.io/opencharly/selkies-kde-nvidia:latest"`
 	Name      string   `arg:"" optional:"" help:"Deploy name (default: the image-ref basename without tag)"`
 	Instance  string   `short:"i" name:"instance" help:"Instance name"`
 	Env       []string `short:"e" name:"env" sep:"none" help:"Set container env var (KEY=VALUE)"`
 	Port      []string `short:"p" help:"Remap host port (newHost:containerPort)"`
-	Cluster   string   `name:"cluster" help:"Target a K8s cluster profile instead of a local pod (emits Kustomize via the K8s from-box path)"`
-	Namespace string   `name:"namespace" help:"K8s namespace override (--cluster only)"`
+	Cluster   string   `name:"cluster" help:"Target a Kubernetes cluster profile instead of a local pod (emits Kustomize via the Kubernetes from-box path)"`
+	Namespace string   `name:"namespace" help:"Kubernetes namespace override (--cluster only)"`
 }
 
 func (c *FleetFromBoxCmd) Run() error {

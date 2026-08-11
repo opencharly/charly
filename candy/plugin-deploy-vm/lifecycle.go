@@ -24,7 +24,7 @@ import (
 // GENERIC seams — sdk/kit for the ssh-config stanza + guest readiness waits + charly delivery,
 // HostBuild("cli") for `charly vm …`, and the reverse channel for guest ops. Core provides ONLY the
 // resolved DATA (spec.LifecyclePrepareInput, shipped by the host vm preresolver — the same DATA-seam
-// shape as the sanctioned in-core k8s/android preresolvers). NO vm lifecycle logic remains in core.
+// shape as the sanctioned in-core kubernetes/android preresolvers). NO vm lifecycle logic remains in core.
 
 // lifecycleParams are the params the host proxy ships for a vm lifecycle Op. node is the canonical
 // FleetNode JSON; prepare is the resolved spec.LifecyclePrepareInput (PrepareVenue only); opts is
@@ -273,7 +273,7 @@ func dispatchVmEphemeralTeardown(ctx context.Context, exec *sdk.Executor, p life
 // the deleted host-side registerEphemeralIfMarked: an ordinary registration condition (e.g. systemd-run
 // missing) stays a soft, logged warning; a PANIC-CLASS error (sdk.EphemeralPanicMarker — plugin-fleet's
 // recoverEphemeralOpPanic) is returned to FAIL the whole Add ("a panicking registration must fail the
-// add, not vanish"). Pod/k8s never reach it today (tracked to the bed-robustness batch; validate_ephemeral.go
+// add, not vanish"). Pod/kubernetes never reach it today (tracked to the bed-robustness batch; validate_ephemeral.go
 // makes the gap LOUD at load).
 func dispatchVmEphemeralRegister(ctx context.Context, exec *sdk.Executor, name string, node *spec.FleetNode) error {
 	if node == nil || !node.IsEphemeral() {
@@ -556,7 +556,7 @@ func vmPostApply(ctx context.Context, exec *sdk.Executor, p lifecycleParams, hos
 		switch child.Target {
 		case "", "pod", "container":
 		default:
-			continue // android / k8s / vm children are not in-guest pods
+			continue // android / kubernetes / vm children are not in-guest pods
 		}
 		asRef := "localhost/charly-" + childKey + ":latest"
 		fmt.Fprintf(os.Stderr, "Deploying nested pod %s.%s (%s) as a persistent in-guest quadlet...\n", domain, childKey, child.Image)

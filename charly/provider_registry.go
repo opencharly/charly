@@ -28,7 +28,7 @@ import (
 var providerRegistry = newRegistry()
 
 // Registry maps (class, reserved-word) → Provider. Keyed by both because a word
-// may exist in two classes (e.g. "k8s" is both a kind and a verb).
+// may exist in two classes (e.g. "kubernetes" is both a kind and a verb).
 type Registry struct {
 	mu      sync.RWMutex
 	byKey   map[string]Provider

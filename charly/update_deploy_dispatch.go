@@ -47,7 +47,7 @@ import (
 //   - the name didn't resolve to a deploy entry (resolveUpdateDeployNode, now plugin-side, has
 //     already reported "no deploy named %q" before dispatch; an absent node here is the same
 //     signal)
-//   - target is unknown / unsupported (k8s)
+//   - target is unknown / unsupported (kubernetes)
 //
 // No silent fallbacks. The user gets a clear error pointing at the right alternative or the
 // field they need to fix.
@@ -78,7 +78,7 @@ func (c *podUpdateCmd) dispatchByDeployTarget() error {
 	// UNIFIED dispatch — charly update for EVERY kind routes through the SAME ResolveTarget →
 	// LifecycleTarget.Rebuild path; there is no per-kind update code. Rebuild's contract is
 	// "redeploy the current artifact + restart" (and, with --build, rebuild the artifact first).
-	// k8s has no live runtime to rebuild (it is applied out-of-band via kubectl) so it
+	// kubernetes has no live runtime to rebuild (it is applied out-of-band via kubectl) so it
 	// deliberately falls out here with a clear error.
 	target, err := ResolveTarget(node, deployName)
 	if err != nil {
@@ -87,7 +87,7 @@ func (c *podUpdateCmd) dispatchByDeployTarget() error {
 	lt, ok := target.(spec.LifecycleTarget)
 	if !ok {
 		return fmt.Errorf("charly update %s: %q target has no live runtime to rebuild "+
-			"(k8s is applied out-of-band via `kubectl apply -k` on the rendered Kustomize overlay)",
+			"(kubernetes is applied out-of-band via `kubectl apply -k` on the rendered Kustomize overlay)",
 			deployName, node.Target)
 	}
 	return lt.Rebuild(context.Background(), spec.DeployTargetRebuildOpts{RebuildImage: c.Build})

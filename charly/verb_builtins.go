@@ -33,7 +33,7 @@ import (
 // invokeVerbProvider (the else-branch in runOne) once the loader registers its grpcProvider
 // — never through this in-proc set. The plugin self-resolves any --cluster profile to a
 // concrete kubeconfig context itself now (K-wave W3a A3-phase-2, self-loading the project via
-// sdk/loaderkit.ResolveK8sEntityViaExecutor); the same plugin's clientcmd-backed k3s
+// sdk/loaderkit.ResolveKubernetesEntityViaExecutor); the same plugin's clientcmd-backed k3s
 // post-provision finalization (kubeconfig rewrite + merge) is reached PEER-TO-PEER now too —
 // candy/plugin-fleet's k3sPostProvision (secrets_artifacts.go) InvokeProviders verb:kube
 // directly, replacing the former core registry-dance seam this comment used to name.

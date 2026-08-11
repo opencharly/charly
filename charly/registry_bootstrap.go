@@ -23,7 +23,7 @@ import (
 // provider (a deploy-target / step / builder — derived from cross-refs or candy-internal, never
 // user-authored, so no authored input to validate). NO KIND provider remains here: EVERY authoring
 // kind is now an externalized plugin candy routed through runPluginKind — group (candy/plugin-group,
-// C2-group), the 5 substrate kinds pod/vm/k8s/local/android (candy/plugin-substrate, C2-substrate),
+// C2-group), the 5 substrate kinds pod/vm/kubernetes/local/android (candy/plugin-substrate, C2-substrate),
 // and the LAST one, the candy box⊻layer factory (candy/plugin-candy-kind, C2-candy). All are
 // COMPILED-IN, host-decoding into the typed core maps (substrates → uf.Fleet/uf.Pod/uf.VM/…; candy
 // → uf.Box/uf.Candy via the bootstrap-critical candyIsImage + buildCandy that STAY core) and
@@ -52,7 +52,7 @@ var builtinProviderInstances = []Provider{
 	// kinds (ClassKind) — NONE remain here, and NONE are dedicated-builtin KindProviders anymore:
 	// EVERY authoring kind is an externalized plugin candy routed through runPluginKind. The tier-1
 	// kinds (agent/module/sidecar/package-group/distro/builder/init/resource/target) + group
-	// (candy/plugin-group, C2-group) + the 5 substrate kinds pod/vm/k8s/local/android
+	// (candy/plugin-group, C2-group) + the 5 substrate kinds pod/vm/kubernetes/local/android
 	// (candy/plugin-substrate, C2-substrate) + the LAST one, the candy box⊻layer factory
 	// (candy/plugin-candy-kind, C2-candy — candyIsImage + buildCandy → uf.Box/uf.Candy, the
 	// bootstrap-critical routing that STAYS core) are all COMPILED-IN plugins. So spec.KindWords is
@@ -61,7 +61,7 @@ var builtinProviderInstances = []Provider{
 	// the spec.Threaded.Kinds snapshot — not a #Node arm nor an in-proc KindProvider).
 	// deploy targets (ClassDeployTarget) — ALL self-register from their dedicated
 	// plugin_deploy_<name>.go files (the externalizable dedicated-provider pattern):
-	// local, pod, vm, k8s, android.
+	// local, pod, vm, kubernetes, android.
 	// steps (ClassStep) — there is NO in-proc StepProvider at all anymore (K5-A item 2 deleted the
 	// category entirely, including the former ExternalPlugin dedicated provider — zero live callers
 	// once its EmitOCI dispatch relocated). EVERY builtin step kind's BUILD-emit dispatch DECISION

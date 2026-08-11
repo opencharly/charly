@@ -41,4 +41,19 @@ migrations: [
 		touches_host: true
 		apply:        "stripDeployShellOverlay"
 	},
+	{
+		version: "2026.223.1018"
+		name:    "k8s-to-kubernetes"
+		// the deploy substrate kind `k8s:` → `kubernetes:` (full naming cleanup) and the
+		// inner deploy-knobs block `kubernetes:` → `deploy:` (the outer-node rename
+		// collides with the inner block, so the inner block becomes `deploy:`).
+		// op 1 renames every `k8s:` discriminator key (deploy nodes + cluster templates);
+		// op 2 renames the inner deploy-knobs block, scoped by under_kind: "kubernetes" so
+		// it only matches `kubernetes:` keys nested inside a `kubernetes:` entity, never
+		// the outer node. Order matters: op 2 needs the `kubernetes` kind to scope under.
+		ops: [
+			{op: "rename_key", from: "k8s", to: "kubernetes", scope: "any"},
+			{op: "rename_key", from: "kubernetes", to: "deploy", scope: "any", under_kind: "kubernetes"},
+		]
+	},
 ]

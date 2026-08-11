@@ -8,7 +8,7 @@ import (
 )
 
 // validate_vm.go — the "vm" capability's F7/C8 deep OpValidate check (ProvidedCapability.
-// Validates=true, set ONLY on the "vm" entry in NewMeta — pod/k8s/local/android declare no
+// Validates=true, set ONLY on the "vm" entry in NewMeta — pod/kubernetes/local/android declare no
 // deep check and pay no extra round-trip). This is where the vm PCI-hostdev concreteness fix
 // belongs, per the kernel/plugin boundary law: the host's closedness-only value gate
 // (charly/provider_kind_invoke.go's validateKindValueCUE) legitimately stays document-wide

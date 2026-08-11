@@ -144,14 +144,14 @@ func probeNestedChildLive(childPath string, roots map[string]deploykit.FleetNode
 }
 
 // nestedChildKind maps a nested node's target to the SubstrateKind used for the row's KIND cell.
-// deploykit.ClassifyTarget normalizes empty/legacy spellings, so pod/vm/k8s/local/android all
+// deploykit.ClassifyTarget normalizes empty/legacy spellings, so pod/vm/kubernetes/local/android all
 // resolve to their canonical kind.
 func nestedChildKind(child *deploykit.FleetNode) spec.SubstrateKind {
 	switch deploykit.ClassifyTarget(child) {
 	case "vm":
 		return spec.SubstrateVM
-	case "k8s":
-		return spec.SubstrateK8s
+	case "kubernetes":
+		return spec.SubstrateKubernetes
 	case "local", "host":
 		return spec.SubstrateLocal
 	case "android":
