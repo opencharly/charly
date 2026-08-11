@@ -238,6 +238,7 @@ image-skill:
             | `distro` | `[]` | Distro identity tags in priority order: `["fedora:43", fedora]`. For packages: first matching section wins (override). For plan steps: additive. Inherited from base image |
             | `build` | `["rpm"]` | Package formats tied to builder definitions: `[rpm]` or `[pac, aur]`. ALL formats installed in order. Valid: rpm, deb, pac, aur. Inherited from base image |
             | `candy` | `[]` | Candy composition list (image-specific, not inherited) |
+            | `extract` | `[]` | Pull files out of another OCI image at build time — each `{source, path, dest}` renders `FROM <source> AS <candy>-extract-<i>` + `COPY --from=<stage> --chown=<uid>:<gid> <path> <dest>` (`sdk/deploykit/candy_stage.go`). The charly-native way to reuse a binary or static tree from an upstream image without adopting its init, scripts, or root layout. Counts as an install file for Agent Driven Evaluation (ADE) validation (a candy that only extracts ships no package/manifest/task files). First consumer: the agentteams candies (minio/mc, tuwunel, element-web from the `higress/*` images) |
             | `user` | `"user"` | Username for non-root operations. See `user_policy:` — may be overridden at resolve time when adopt mode fires |
             | `uid` | `1000` | User ID (may be overridden by `base_user:` under adopt) |
             | `gid` | `1000` | Group ID (may be overridden by `base_user:` under adopt) |
@@ -816,7 +817,7 @@ layer-skill:
             | `copy:` | source relative to layer dir | `to:` | `run_as`, `mode`, `comment` | `COPY --from=<layer-stage> --chmod= [--chown=]` — no RUN |
             | `write:` | destination path | `content:` | `run_as`, `mode`, `comment` | Write inline content — staged + COPY, no shell heredoc |
             | `link:` | symlink path (where the link lives) | `target:` | `run_as`, `comment` | `ln -sf <target> <link>` (coalesces with adjacent) |
-            | `download:` | URL | — (`to:` unless `extract: sh`) | `run_as`, `extract`, `to`, `extract_include`, `strip_components`, `mode`, `env`, `comment` | `curl` + optional extract (`tar.gz`/`tar.xz`/`tar.zst`/`zip`/`none`/`sh`). `strip_components: N` emits `tar --strip-components=N` for tar.* — drops leading path segments so tarballs that nest under a top-level arch/version dir (Go, Rust, Node binary releases) land files directly at `to:`. See `/charly-coder:uv` for the canonical uv-x86_64-unknown-linux-gnu/uv → /usr/local/bin/uv example. |
+            | `download:` | URL | — (`to:` unless `extract: sh`) | `run_as`, `extract`, `to`, `extract_include`, `strip_components`, `mode`, `env`, `comment` | `curl` + optional extract (`tar.gz`/`tar.xz`/`tar.zst`/`zip`/`none`/`sh`). **The destination is created before extraction** — `mkdir -p <to>` for tar/zip, `mkdir -p $(dirname <to>)` for `extract: none` — so a candy may download straight into a directory that does not exist yet, exactly like `copy:` (which auto-creates parents). `strip_components: N` emits `tar --strip-components=N` for tar.* — drops leading path segments so tarballs that nest under a top-level arch/version dir (Go, Rust, Node binary releases) land files directly at `to:`. See `/charly-coder:uv` for the canonical uv-x86_64-unknown-linux-gnu/uv → /usr/local/bin/uv example. |
             | `setcap:` | file path | — | `run_as` (implicit root), `caps`, `comment` | File capabilities (`setcap -r` strip if `caps` empty) |
             | `build:` | `"all"` | — | `run_as` (default `${USER}`), `comment` | Run auto-detected builders (pixi/npm/cargo/aur) at this point (instead of end-of-candy) |
 
@@ -1467,6 +1468,29 @@ layer-skill:
             - **Systemd init (bootc + host deploys)** — `service_template` produces `[Unit]` / `[Service]` / `[Install]` blocks; the rendered file goes to `/etc/systemd/system/charly-<layer>-<name>.service` (or the user-scope path when `scope: user`). For `use_packaged:` entries, `dropin_template` + `dropin_path_template` produce an override file alongside the packaged unit.
 
             See `/charly-infrastructure:supervisord` for the supervisord ServiceSchemaDef template, `/charly-build:build` for the three-phase template model, and `/charly-local:local-deploy` for how the host target consumes `service:` entries.
+
+            ### Charly-owned start scripts (never upstream install scripts)
+
+            Supervisord renders `env:` literally (`environment=K="V"`) — there is NO shell expansion, so a value like `${A:-${B:-default}}` is passed verbatim and the fallback never resolves. When a service needs env fallback chains, runtime `mkdir` on a mounted volume (build-time mkdir is shadowed by the volume mount), or any setup beyond a static env map, the charly-native pattern is to **author a charly-owned start script in the candy via a `write:` step** and point `exec:` at it:
+
+            ```yaml
+            service:
+              - name: my-daemon
+                exec: /opt/my-candy/start-my-daemon.sh   # charly-owned, written below
+                priority: 50
+            plan:
+              - run: write the rootless my-daemon start script
+                write: /opt/my-candy/start-my-daemon.sh
+                mode: "0755"
+                content: |
+                  #!/bin/bash
+                  set -e
+                  export MY_VAR="${MY_VAR:-${FALLBACK_VAR:-default}}"
+                  mkdir -p /data/my-daemon          # runtime mkdir: /data is a mount, build-time mkdir is shadowed
+                  exec my-daemon
+            ```
+
+            The script is charly-owned — written by the candy, never downloaded from an upstream project's install tree. Upstream start scripts are the "half baked install scripts" anti-pattern: they assume root, write to `/etc` at runtime, and drag in a whole script library for what is usually a `mkdir` + env projection + `exec`. If the upstream script is trivial (env fallback + mkdir + exec), express it directly; if it has real logic (wait loops, mirroring), port that logic into the charly-owned script. First consumers: the agentteams candies (`start-minio.sh`, `start-mc-mirror.sh`, `start-tuwunel.sh`, `start-element-web.sh`).
 
             ### Worked examples in-tree
 

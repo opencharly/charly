@@ -556,7 +556,14 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 			}
 		}
 	} else if !opts.NoRebuild {
-		if err := step("update", "update", name); err != nil {
+		// The fresh-rebuild gate must verify the JUST-BUILT per-run image, not re-resolve
+		// the untagged logical box name: `charly update` without --tag resolves "newest
+		// local CalVer", and a bed-run tag (<bed>-<calver>) is NOT a plain CalVer, so the
+		// resolver's tag-CalVer tiebreak is empty and the lexical fallback can select an
+		// OLDER cached bed image (the check-live-rebuild stale-image defect). Pin the same
+		// per-run tag the build + deploy-add steps used — the exact principle the
+		// runTaggedImageRef comment above states for the check steps.
+		if err := step("update", withRunTag([]string{"update", name}, d.ImageTag)...); err != nil {
 			return fail("update %s: %w", name, err)
 		}
 		// EVERY runtime, non-in-place bed gets a genuine post-rebuild check-live pass — not just
