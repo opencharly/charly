@@ -542,8 +542,8 @@ k3s-server-skill:
             
             Deploy-scope (using the declarative `kube:` check verb — see `/charly-kubernetes:check-k8s`).
             The cluster-probe verb is the declarative `kube:` check verb (served out-of-process by
-            `candy/plugin-kube` — there is no host `charly check kube` command); the `k8s` spelling is
-            reserved for the deploy KIND only:
+            `candy/plugin-kube` — there is no host `charly check kube` command); the deploy KIND is
+            spelled `kubernetes`:
             - `kube: wait-nodes` — at least 1 node Ready.
             - `kube: ingressclass` — `traefik` present.
             - `kube: storageclass` — `local-path` present.

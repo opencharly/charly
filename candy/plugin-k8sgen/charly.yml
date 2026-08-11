@@ -3,7 +3,7 @@ plugin-k8sgen:
         version: 2026.181.0001
         description: |-
             KUSTOMIZE GENERATOR plugin (C8/M13) — the pure manifest generation that turns a
-            deployment node + a kind:k8s cluster template + the image's ports/uid/gid into a
+            deployment node + a kind:kubernetes cluster template + the image's ports/uid/gid into a
             Kustomize base/ + overlays/<inst>/ tree (Deployment/StatefulSet/DaemonSet/Job/
             CronJob/Pod, Service, PVCs, Ingress, kustomization wiring). Carved out of charly
             core (the former charly/k8s_generate.go is DELETED, K-wave 2); GenerateK8sKustomize
