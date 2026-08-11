@@ -139,11 +139,11 @@ func TestGenerateTree_Shape(t *testing.T) {
 		GID:            1000,
 		Cluster:        cluster,
 		Deploy: spec.Deploy{
-			Replica:    3,
-			Env:        map[string]string{"FOO": "bar"},
-			Deploy: &spec.KubernetesDeploy{Workload: "Deployment"}, // force Deployment despite storage
-			Storage:    []spec.DeployStorage{{Name: "data", Size: "5Gi", Path: "/data"}},
-			Expose:     &spec.DeployExpose{Host: "web.example.com", Port: "8080"},
+			Replica: 3,
+			Env:     map[string]string{"FOO": "bar"},
+			Deploy:  &spec.KubernetesDeploy{Workload: "Deployment"}, // force Deployment despite storage
+			Storage: []spec.DeployStorage{{Name: "data", Size: "5Gi", Path: "/data"}},
+			Expose:  &spec.DeployExpose{Host: "web.example.com", Port: "8080"},
 		},
 	}
 

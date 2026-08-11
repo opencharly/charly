@@ -101,10 +101,10 @@ var externalizedDeploySubstrates = setFromSlice(deployTargetWords)
 // itself CUE-derived from spec.ResourceKinds; only the VALUES (literal candy path strings) are
 // hand-written, and they have no generated source to drift from.
 var externalDeploySubstratePlugins = map[string]string{
-	"local":   "candy/plugin-deploy-local",
-	"vm":      "candy/plugin-deploy-vm",
-	"pod":     "candy/plugin-deploy-pod",
-	"android":     "candy/plugin-adb",
+	"local":      "candy/plugin-deploy-local",
+	"vm":         "candy/plugin-deploy-vm",
+	"pod":        "candy/plugin-deploy-pod",
+	"android":    "candy/plugin-adb",
 	"kubernetes": "candy/plugin-kube",
 }
 
