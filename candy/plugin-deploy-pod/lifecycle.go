@@ -495,8 +495,9 @@ func podLogs(ctx context.Context, exec *sdk.Executor, p lifecycleParams) (*pb.In
 // gate). Each leg is a `charly` subcommand via the cli host-builder.
 func podRebuild(ctx context.Context, exec *sdk.Executor, p lifecycleParams) (*pb.InvokeReply, error) {
 	var ropts struct {
-		DryRun       bool `json:"DryRun"`
-		RebuildImage bool `json:"RebuildImage"`
+		DryRun       bool   `json:"DryRun"`
+		RebuildImage bool   `json:"RebuildImage"`
+		Tag          string `json:"Tag"`
 	}
 	if len(p.Opts) > 0 {
 		if err := json.Unmarshal(p.Opts, &ropts); err != nil {
@@ -518,11 +519,31 @@ func podRebuild(ctx context.Context, exec *sdk.Executor, p lifecycleParams) (*pb
 			return nil, err
 		}
 	}
-	if _, err := podCli(ctx, exec, false, false, "fleet", "add", p.Name); err != nil {
+	// A pinned --tag (the `charly update <name> --tag <tag>` flag) must reach the
+	// re-deploy's `fleet add` AND the `config` leg, or the no-tag resolution re-selects
+	// "newest local CalVer" — which, for a bed-run image tagged <bed>-<calver> (not a
+	// plain CalVer), falls to the lexical tiebreak and can pick a STALE cached image.
+	// The check-run's fresh-rebuild gate pins the per-run tag so it verifies the
+	// JUST-BUILT image, not an older one.
+	//
+	// The `config` leg is where the quadlet's Image line is rendered. `fleet add` alone
+	// is not enough: for a no-overlay deploy (no add_candy plans) prepareVenueState
+	// returns nil (resolvedImage == baseImage), so the resolved ref is NOT persisted to
+	// the per-host overlay, and a tag-less `config` re-resolves the base name to the
+	// newest local CalVer — the same stale-image trap. Both legs must pin the same tag.
+	addArgs := []string{"fleet", "add", p.Name}
+	if ropts.Tag != "" {
+		addArgs = append(addArgs, "--tag", ropts.Tag)
+	}
+	if _, err := podCli(ctx, exec, false, false, addArgs...); err != nil {
 		return nil, err
 	}
 	_, _ = podCli(ctx, exec, false, true, "stop", p.Name) // best-effort (preserve config)
-	if _, err := podCli(ctx, exec, false, false, "config", p.Name); err != nil {
+	configArgs := []string{"config", p.Name}
+	if ropts.Tag != "" {
+		configArgs = append(configArgs, "--tag", ropts.Tag)
+	}
+	if _, err := podCli(ctx, exec, false, false, configArgs...); err != nil {
 		return nil, err
 	}
 	if _, err := podCli(ctx, exec, false, false, "start", p.Name); err != nil {

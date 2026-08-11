@@ -1,0 +1,167 @@
+agentteams-element:
+    candy:
+        version: 2026.223.1409
+        description: |-
+            The AgentTeams Element Web client — the static files extracted from the
+            higress/element-web:20260216 image, served by a rootless nginx on :8088.
+            The nginx config is authored rootless (writable pid + temp paths under
+            /tmp, no setuid), and the charly-owned start script regenerates config.json
+            from the deploy env before exec'ing nginx — the charly-native replacement
+            for the upstream script's runtime writes to /etc/nginx/conf.d.
+        extract:
+            - source: higress-registry.cn-hangzhou.cr.aliyuncs.com/higress/element-web:20260216
+              path: /app
+              dest: /opt/element-web
+        distro:
+            arch:
+                package:
+                    - nginx
+        env_accept:
+            - name: AGENTTEAMS_MATRIX_DOMAIN
+              description: "Matrix server name the browser connects to (default: matrix-local.agentteams.io:8080)"
+            - name: AGENTTEAMS_ELEMENT_HOMESERVER_URL
+              description: "Browser-facing homeserver base URL (default: http://<AGENTTEAMS_MATRIX_DOMAIN>)"
+            - name: AGENTTEAMS_ELEMENT_BRAND
+              description: "Element Web brand name (default: Element)"
+        port:
+            - 8088
+        service:
+            - name: element-web
+              exec: /opt/agentteams-element/start-element-web.sh
+              priority: 650
+        plan:
+            - run: write the rootless nginx main config
+              write: /etc/nginx/nginx.conf
+              mode: "0644"
+              content: |
+                  worker_processes 2;
+                  pid /tmp/nginx.pid;
+                  error_log /tmp/nginx-error.log;
+
+                  events {
+                      worker_connections 1024;
+                  }
+
+                  http {
+                      include /etc/nginx/mime.types;
+                      default_type application/octet-stream;
+                      sendfile on;
+                      client_body_temp_path /tmp/nginx/client_body;
+                      proxy_temp_path /tmp/nginx/proxy;
+                      fastcgi_temp_path /tmp/nginx/fastcgi;
+                      uwsgi_temp_path /tmp/nginx/uwsgi;
+                      scgi_temp_path /tmp/nginx/scgi;
+                      access_log /tmp/nginx-access.log;
+                      include /etc/nginx/conf.d/*.conf;
+                  }
+            - run: write the Element Web nginx server block
+              write: /etc/nginx/conf.d/element-web.conf
+              mode: "0644"
+              content: |
+                  server {
+                      listen 8088;
+                      root /opt/element-web;
+                      index index.html;
+
+                      # Inject the external browser-bypass script (CSP-safe: script-src 'self')
+                      sub_filter '</head>' '<script src="browser-bypass.js"></script></head>';
+                      sub_filter_once on;
+                      sub_filter_types text/html;
+
+                      location / {
+                          try_files $uri $uri/ /index.html;
+                      }
+
+                      location ~* ^/(config.*\.json|index\.html|i18n|version)$ {
+                          add_header Cache-Control "no-cache";
+                      }
+                  }
+            - run: write the Higress WASM plugin-server nginx block
+              write: /etc/nginx/conf.d/plugin-server.conf
+              mode: "0644"
+              content: |
+                  server {
+                      listen 8002;
+                      listen [::]:8002;
+                      server_name localhost;
+
+                      root /usr/share/nginx/html;
+                      server_tokens off;
+
+                      location = /healthz {
+                          return 200 'ok';
+                          add_header Content-Type text/plain;
+                      }
+
+                      error_page 500 502 503 504 /50x.html;
+                      location = /50x.html {
+                          root /usr/share/nginx/html;
+                      }
+                  }
+            - run: write the browser-bypass script Element Web injects
+              write: /opt/element-web/browser-bypass.js
+              mode: "0644"
+              content: |
+                  window.localStorage.setItem("mx_accepts_unsupported_browser","true");
+            - run: write the rootless element-web start script
+              write: /opt/agentteams-element/start-element-web.sh
+              mode: "0755"
+              content: |
+                  #!/bin/bash
+                  # start-element-web.sh — charly-owned rootless Element Web launcher.
+                  # Regenerates config.json from the deploy env, then execs nginx with
+                  # the rootless config (writable pid + temp paths under /tmp, no
+                  # setuid). Replaces the upstream script's runtime writes to
+                  # /etc/nginx/conf.d, which need root.
+                  set -e
+
+                  # The rootless nginx.conf references /tmp/nginx/* temp paths
+                  # (client_body/proxy/fastcgi/uwsgi/scgi) — create the dir before
+                  # nginx starts, or nginx emerg-exits on the missing parent.
+                  mkdir -p /tmp/nginx
+
+                  MATRIX_DOMAIN="${AGENTTEAMS_MATRIX_DOMAIN:-matrix-local.agentteams.io:8080}"
+                  ELEMENT_HOMESERVER_URL="${AGENTTEAMS_ELEMENT_HOMESERVER_URL:-http://${MATRIX_DOMAIN}}"
+                  ELEMENT_BRAND="${AGENTTEAMS_ELEMENT_BRAND:-Element}"
+
+                  cat > /opt/element-web/config.json <<EOF
+                  {
+                      "default_server_config": {
+                          "m.homeserver": {
+                              "base_url": "${ELEMENT_HOMESERVER_URL}"
+                          }
+                      },
+                      "brand": "${ELEMENT_BRAND}",
+                      "disable_guests": true,
+                      "disable_custom_urls": false
+                  }
+                  EOF
+
+                  exec nginx -c /etc/nginx/nginx.conf -g 'daemon off;'
+            - check: the Element Web static files are extracted
+              file:
+                file: /opt/element-web/index.html
+                exists: true
+            - check: the rootless nginx config is installed
+              file:
+                file: /etc/nginx/nginx.conf
+                exists: true
+            - check: the Element Web client answers on its port
+              timeout: 30s
+              context:
+                - runtime
+              http:
+                http: "http://127.0.0.1:${HOST_PORT:8088}/"
+                status: 200
+            - check: the element-web service is running
+              context:
+                - runtime
+              service:
+                service: element-web
+                running: true
+            - check: the element-web config.json is regenerated from the deploy env
+              context:
+                - runtime
+              file:
+                file: /opt/element-web/config.json
+                exists: true
