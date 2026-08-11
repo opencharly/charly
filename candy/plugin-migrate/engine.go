@@ -379,7 +379,17 @@ func applyOpToMapping(m *yaml.Node, op migrationOp) bool {
 	}
 	switch op.Op {
 	case "rename_key":
-		for i := 0; i+1 < len(m.Content); i += 2 {
+		// Under an under_kind scope where the renamed key IS the kind, the mapping's
+		// first key is the kind DISCRIMINATOR of the entity that established the
+		// scope (compact node form: first child key = kind). It must never be
+		// renamed — only same-named fields nested inside the entity (e.g. the
+		// deploy-knobs block) are. Skip it; a mapping whose first key is not the
+		// kind is a plain nested field map and searches from index 0 as usual.
+		start := 0
+		if op.UnderKind != "" && op.From == op.UnderKind && len(m.Content) >= 2 && m.Content[0].Value == op.From {
+			start = 2
+		}
+		for i := start; i+1 < len(m.Content); i += 2 {
 			if m.Content[i].Value == op.From {
 				m.Content[i].Value = op.To
 				return true

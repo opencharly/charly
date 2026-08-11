@@ -45,8 +45,8 @@ func TestMigrationTable_CompactNodeForm(t *testing.T) {
 // `libvirt:` field removal as a project-only (non-touches_host) apply: goHook
 // entry, strictly after compact-node-form.
 func TestMigrationTable_StripCandyLibvirtField(t *testing.T) {
-	if len(migrationTable) != 3 {
-		t.Fatalf("migration table should carry exactly 3 entries, got %d", len(migrationTable))
+	if len(migrationTable) != 4 {
+		t.Fatalf("migration table should carry exactly 4 entries, got %d", len(migrationTable))
 	}
 	m := migrationTable[1]
 	if m.Name != "strip-candy-libvirt-field" || m.Apply != "stripCandyLibvirtField" || m.TouchesHost {
@@ -74,6 +74,28 @@ func TestMigrationTable_StripDeployShellOverlay(t *testing.T) {
 	}
 	if !migrationTable[1].Version.Less(m.Version) {
 		t.Errorf("strip-deploy-shell-overlay version %s must be strictly after strip-candy-libvirt-field %s", m.Version, migrationTable[1].Version)
+	}
+}
+
+// TestMigrationTable_K8sToKubernetes: the table carries the deploy-substrate
+// kind rename as the 4th entry: op 1 renames every `k8s:` key to `kubernetes:`
+// (scope any), then op 2 renames the inner deploy-knobs `kubernetes:` block to
+// `deploy:` scoped under_kind "kubernetes" — in that exact order, strictly after
+// strip-deploy-shell-overlay.
+func TestMigrationTable_K8sToKubernetes(t *testing.T) {
+	m := migrationTable[3]
+	if m.Name != "k8s-to-kubernetes" || len(m.Ops) != 2 {
+		t.Fatalf("unexpected fourth table entry: %+v", m)
+	}
+	op1, op2 := m.Ops[0], m.Ops[1]
+	if op1.Op != "rename_key" || op1.From != "k8s" || op1.To != "kubernetes" || op1.Scope != "any" {
+		t.Errorf("op1 should rename k8s→kubernetes scope any: %+v", op1)
+	}
+	if op2.Op != "rename_key" || op2.From != "kubernetes" || op2.To != "deploy" || op2.UnderKind != "kubernetes" {
+		t.Errorf("op2 should rename kubernetes→deploy under_kind kubernetes: %+v", op2)
+	}
+	if !migrationTable[2].Version.Less(m.Version) {
+		t.Errorf("k8s-to-kubernetes version %s must be strictly after strip-deploy-shell-overlay %s", m.Version, migrationTable[2].Version)
 	}
 }
 
@@ -300,6 +322,37 @@ func TestOpWalker_DeleteKey(t *testing.T) {
 	out, changed := applyTransform(t, m, "gone: 1\nkept: 2\n")
 	if !changed || strings.Contains(out, "gone:") || !strings.Contains(out, "kept: 2") {
 		t.Errorf("delete failed: %q", out)
+	}
+}
+
+// TestOpWalker_RenameKeyUnderKind: rename_key scoped by under_kind where the
+// renamed key IS the kind renames the nested same-named field (the deploy-knobs
+// block) but never the kind DISCRIMINATOR of the entity establishing the scope.
+func TestOpWalker_RenameKeyUnderKind(t *testing.T) {
+	m := migration{Name: "t", Ops: []migrationOp{{Op: "rename_key", From: "kubernetes", To: "deploy", Scope: "any", UnderKind: "kubernetes"}}}
+	// A cluster template carries only the discriminator — nothing to rename.
+	// A deploy node carries the discriminator PLUS the inner deploy-knobs block.
+	in := "production:\n" +
+		"  kubernetes:\n" +
+		"    box: \"\"\n" +
+		"openclaw:\n" +
+		"  kubernetes:\n" +
+		"    image: openclaw\n" +
+		"    kubernetes:\n" +
+		"      namespace: apps\n"
+	out, changed := applyTransform(t, m, in)
+	if !changed {
+		t.Fatal("rename reported no change")
+	}
+	if strings.Count(out, "deploy:") != 1 {
+		t.Fatalf("want exactly the inner block renamed to deploy:, got:\n%s", out)
+	}
+	if strings.Count(out, "kubernetes:") != 2 {
+		t.Fatalf("want both kind discriminators preserved, got:\n%s", out)
+	}
+	// Idempotent: a second pass changes nothing.
+	if _, changed2 := applyTransform(t, m, out); changed2 {
+		t.Error("second pass changed an already-migrated doc")
 	}
 }
 
