@@ -11,16 +11,16 @@ import (
 	"github.com/opencharly/spec/spec"
 )
 
-// TestInvoke_DecodesClusterRaw covers the k8s substrate-value de-type (Cutover K):
+// TestInvoke_DecodesClusterRaw covers the kubernetes substrate-value de-type (Cutover K):
 // the kernel ships the cluster body OPAQUELY in ClusterRaw and the plugin must decode
 // it before generating. deployNamespace falls back to Cluster.DefaultNamespace, so
 // without the ClusterRaw decode the overlay carries no namespace and this fails.
 func TestInvoke_DecodesClusterRaw(t *testing.T) {
-	clusterBody, err := json.Marshal(spec.K8s{Box: "app", DefaultNamespace: "myns"})
+	clusterBody, err := json.Marshal(spec.Kubernetes{Box: "app", DefaultNamespace: "myns"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	params, err := json.Marshal(spec.K8sGenInput{
+	params, err := json.Marshal(spec.KubernetesGenInput{
 		DeploymentName: "app",
 		ImageRef:       "registry/app:1",
 		ClusterRaw:     clusterBody,

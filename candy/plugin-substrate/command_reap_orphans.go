@@ -2,7 +2,7 @@ package substratekind
 
 // command_reap_orphans.go — the externalized `charly reap-orphans` command (K5: relocated from
 // charly/status_reap.go). Finds ephemeral deployments whose charly.yml ledger says "active" but
-// whose underlying engine resource (libvirt domain, podman container, k8s namespace) is gone, and
+// whose underlying engine resource (libvirt domain, podman container, kubernetes namespace) is gone, and
 // tears them down via `charly fleet del --assume-yes`.
 //
 // Every dependency this needed turned out reachable without a new seam, mirroring the android
@@ -11,7 +11,7 @@ package substratekind
 //     cycle-free loaderkit.LoadHostFleetConfigViaExecutor read, NOT deploykit.LoadFleetConfig() directly (bed-
 //     robustness batch item 5: a direct call silently degrades to an empty config out-of-process,
 //     since deploykit.DeployStateHost is only ever registered by charly core's own init()).
-//   - the pod/k8s liveness probes are plain podman/kubectl exec calls — no core coupling at all.
+//   - the pod/kubernetes liveness probes are plain podman/kubectl exec calls — no core coupling at all.
 //   - the vm liveness probe used charly-core's invokeVmPlugin (a private registry accessor); the
 //     portable equivalent is Executor.InvokeProvider("verb", "libvirt", sdk.OpRun, ...) — the SAME
 //     verb:libvirt provider, reached the way ANY plugin reaches a peer (F10), not a core-only path.
@@ -132,7 +132,7 @@ func ephemeralUnderlyingResourceAlive(ctx context.Context, exec *sdk.Executor, n
 	case "pod", "container":
 		check := osexec.Command("podman", "container", "exists", "charly-"+name)
 		return check.Run() == nil
-	case "k8s", "kubernetes":
+	case "kubernetes":
 		ns := name
 		if node.VmState != nil && node.VmState.Ephemeral != nil && node.VmState.Ephemeral.InstanceName != "" {
 			ns = node.VmState.Ephemeral.InstanceName

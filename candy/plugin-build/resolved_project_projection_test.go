@@ -25,7 +25,7 @@ import (
 // fakeExecutorServiceClient pattern candy/plugin-deploy-vm/lifecycle_test.go already uses.
 //
 // charly/resolved_project_namespace_test.go's OTHER two tests (TestProjectTemplates_NamespaceQualified,
-// TestHostBuildDeployEntityResolve_K8sNamespaceQualified) test charly-core's OWN LoadUnified /
+// TestHostBuildDeployEntityResolve_KubernetesNamespaceQualified) test charly-core's OWN LoadUnified /
 // "deploy-entity-resolve" HostBuild seam directly and stayed in charly untouched — they have zero
 // sdk import and cannot move (that seam doesn't exist in this plugin).
 

@@ -25,7 +25,7 @@ import (
 )
 
 // methods.go is the kube method dispatcher: the 13-method probe surface moved
-// from charly/k8s_cmd.go, refactored from Kong Run() methods that PRINTED to
+// from charly core, refactored from Kong Run() methods that PRINTED to
 // stdout into functions that RETURN the captured output string (so provider.go
 // can feed it through the shared sdk matcher pipeline — a host-side
 // matcher step does not run for an out-of-process verb). The line-oriented output
@@ -33,7 +33,7 @@ import (
 // passes unchanged.
 
 // requiredModifiers mirrors the in-tree kubeMethods required-field specs (and the
-// Kong `required:""` tags on the K8s*Cmd structs). The host's validate-time +
+// Kong `required:""` tags on the Kubernetes*Cmd structs). The host's validate-time +
 // runtime required-modifier check keyed off the former in-proc live-verb seam, which an
 // external verb is not — so the check moves HERE, at dispatch, preserving the
 // "missing required modifier(s): X" failure. The names are plugin-INPUT keys

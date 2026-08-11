@@ -27,7 +27,7 @@ import (
 // paid only out-of-process. Transport-invisible above the registry.
 //
 // acc is the K1-unit-1 spec.MaterializedProject accumulator (the entity-map subset
-// of *spec.UnifiedFile this dispatch ever touches — Box/Candy/VM/Pod/K8s/Local/Android/
+// of *spec.UnifiedFile this dispatch ever touches — Box/Candy/VM/Pod/Kubernetes/Local/Android/
 // Fleet/PluginKinds), threaded from the MaterializeSeams.DecodeEntity callback
 // (loader_threaded.go) rather than a full *spec.UnifiedFile — this dispatch never needed
 // Import/Discover/Namespaces/etc, so the retype carries no behavior change.
@@ -38,7 +38,7 @@ import (
 // reconstruction anywhere in this function. genericNode survives ONLY where foldCandyKind needs it
 // for the bootstrap-critical candyIsImage/buildCandy routing (clause B, permanently core).
 func runPluginKind(prov Provider, pn spec.ParsedNode, acc *spec.MaterializedProject) error {
-	// C2-substrate: a substrate structural kind (pod/vm/k8s/local/android) is decoded
+	// C2-substrate: a substrate structural kind (pod/vm/kubernetes/local/android) is decoded
 	// HOST-SIDE (its rich core-referencing value cannot ride op.Params nor a self-contained
 	// plugin schema — see foldSubstrateKind) and folds into acc.Fleet (deploy) or the typed
 	// template map (template). It does NOT use the op.Params + plugin-schema validation the
@@ -179,7 +179,7 @@ func dispatchKindOpValidate(prov Provider, pn spec.ParsedNode, paramsJSON json.R
 // = *#Candy | #Image); keep the #<Kind>Value defs in lockstep with isStandaloneResourceKind
 // + the foldSubstrateKind/foldCandyKind branches.
 
-// foldSubstrateKind decodes a SUBSTRATE structural kind node (pod/vm/k8s/local/android)
+// foldSubstrateKind decodes a SUBSTRATE structural kind node (pod/vm/kubernetes/local/android)
 // HOST-SIDE and folds candy/plugin-substrate's echo into the right map (C2-substrate). The
 // value is rich + core-referencing (#Vm/#Deploy/#LibvirtDomain/… with host-canonicalized
 // shorthand like tunnel:/port:), so — unlike group's scalar #GroupInput value — it cannot be
@@ -203,7 +203,7 @@ func foldSubstrateKind(prov Provider, pn spec.ParsedNode, acc *spec.Materialized
 	// capability declares Validates:true, for the PCI-hostdev-concreteness check
 	// validateKindValueCUE's closedness-only gate cannot express — see that function's
 	// comment). Kind-blind: driven purely by the resolved provider's own Validates flag, so
-	// this call is a complete no-op for pod/k8s/local/android (and would be for vm too, if it
+	// this call is a complete no-op for pod/kubernetes/local/android (and would be for vm too, if it
 	// ever stopped declaring Validates). The RAW authored body is the natural input — the
 	// SAME body the flat op.Params path validates against — since the concreteness check
 	// only needs to see which fields were actually authored, not the canonicalized value.
@@ -369,7 +369,7 @@ func validateKindValueCUE(pn spec.ParsedNode) error {
 	// callers before that batch touched anything): this gate is CLOSEDNESS-only (no
 	// cue.Concrete(true)), so a required-but-unset field slips through silently (e.g. a vm
 	// PCI hostdev's slot/function). A blanket cue.Concrete(true) fix was attempted and
-	// REVERTED — it broke 9 real cases across vm/pod/local/k8s/candy (TestCueKinds_Corpus,
+	// REVERTED — it broke 9 real cases across vm/pod/local/kubernetes/candy (TestCueKinds_Corpus,
 	// TestFleetCompileParity_*, TestPreresolveActiveInitInto_*, TestCompileServiceSteps_*,
 	// TestBuildDeployPlan*, TestInvokeProvider_LazyConnectFallback*) because those
 	// transitively load the REAL repo-root charly.yml, which legitimately carries

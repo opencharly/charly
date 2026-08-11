@@ -17,7 +17,7 @@ import (
 //   - do: act    (run:)   → for a STATE-PROVISION verb (file/package/service/
 //                   user/group/kernel-param/mount) render the create/configure
 //                   command and run it via the executor. ACTION verbs
-//                   (command/http/dbus/cdp/wl/vnc/mcp/k8s/adb/appium/spice/
+//                   (command/http/dbus/cdp/wl/vnc/mcp/kubernetes/adb/appium/spice/
 //                   libvirt/record/kill) already perform their side-effect in
 //                   their own handler, so do:act there reuses that handler.
 //

@@ -176,7 +176,7 @@ func lifecycleInvoke(ctx context.Context, exec *sdk.Executor, word, op, name, di
 // shared kit.DescriptorFromExecutor. Promoted there (FIX ROUND, S3b follow-up) once a SECOND
 // caller needed this exact conversion: charly/unified_targets.go's pluginDeployTarget.Add now
 // converts a NESTED child's live ParentExec into venue_json before it crosses the wire (the
-// missing swap that made every plain-vm nested `local:`/`android:`/`k8s:` child apply on the
+// missing swap that made every plain-vm nested `local:`/`android:`/`kubernetes:` child apply on the
 // operator's host instead of the parent venue) — so the former single-caller "R3-narrow"
 // duplicate is no longer accurate; one function serves both directions' callers (R3).
 func venueDescriptorFromExecutor(exec deploykit.DeployExecutor) spec.VenueDescriptor {
@@ -185,7 +185,7 @@ func venueDescriptorFromExecutor(exec deploykit.DeployExecutor) spec.VenueDescri
 
 // resolveRootExecutor returns the LOCAL executor value this dispatch call should use for
 // non-substrate-provider work (prepareReverseState, recordVenueLedger) + the matching descriptor
-// to report back to core. A hookless substrate (local/k8s/android) computes it directly from the
+// to report back to core. A hookless substrate (local/kubernetes/android) computes it directly from the
 // node (deploykit.RootExecutorForDeployNode — already 100% sdk-portable, no duplication); a
 // lifecycle substrate (pod/vm) instead re-materializes whatever PrepareVenue (or a prior call's
 // reported venue_json) produced.
@@ -433,7 +433,7 @@ func handleDeployApply(ctx context.Context, exec *sdk.Executor, req spec.DeployT
 		// R1 fix (K1-alpha regression, ported verbatim from the former core Update()): Add()
 		// re-establishes a k3s-server deploy's kubeconfig server-port rewrite via
 		// k3sPostProvision (the register-hint dispatch above) — Update() never did, so a fresh
-		// `charly update` on a k8s-deploy's k3s-server member left the merged ~/.kube/config
+		// `charly update` on a kubernetes-deploy's k3s-server member left the merged ~/.kube/config
 		// context pointing at whatever host-forwarded port was current the LAST time Add ran.
 		// Re-running the SAME idempotent post-provision here keeps kubectl/`kube:` checks
 		// working across a rebuild without re-retrieving the artifact itself (its content is
@@ -467,7 +467,7 @@ func persistDeployState(name string, stateJSON json.RawMessage) error {
 	return nil
 }
 
-// preresolveSubstrate reaches an android/k8s substrate's own OpPreresolve (F1/F6) — the
+// preresolveSubstrate reaches an android/kubernetes substrate's own OpPreresolve (F1/F6) — the
 // substrate-specific host-resolved venue payload a hookless-but-preresolving substrate needs
 // (mirrors deploy_preresolve.go's wireDeployPreresolver, relocated here since the CALLER — the
 // generic apply body — is now plugin-side).
@@ -1044,7 +1044,7 @@ func handleDeployRebuild(ctx context.Context, exec *sdk.Executor, req spec.Deplo
 			map[string]any{"opts": json.RawMessage(req.OptsJSON)}, venueDesc, req.HostEnvJSON)
 		return reply, err
 	}
-	// A hookless substrate (local/android/k8s) has no charly-owned runtime to rebuild in place —
+	// A hookless substrate (local/android/kubernetes) has no charly-owned runtime to rebuild in place —
 	// the refresh path is an idempotent re-apply, driven by the SAME add path (mirrors the
 	// pre-move core's `runCharlySubcommand("fleet", "add", t.name)` shell-out, done here as an
 	// in-process re-dispatch instead of a subprocess).

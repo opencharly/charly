@@ -8,8 +8,8 @@ import "github.com/opencharly/spec/spec"
 // _test.go file is what lets TestNoConcreteKindInKernel assert the production kernel holds
 // no concrete-kind substrate type.
 type (
-	PodSpec     = spec.PodSpec
-	K8sSpec     = spec.K8sSpec
-	LocalSpec   = spec.LocalSpec
-	AndroidSpec = spec.AndroidSpec
+	PodSpec        = spec.PodSpec
+	KubernetesSpec = spec.KubernetesSpec
+	LocalSpec      = spec.LocalSpec
+	AndroidSpec    = spec.AndroidSpec
 )

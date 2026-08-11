@@ -10,7 +10,7 @@ import (
 // provider_invoke.go — the ONE host→plugin call codec (R3). Before this file, ~20
 // host-side shims each hand-rolled the same resolve→marshal→Invoke→decode skeleton
 // (egress, gpu, the substrate/resource/distro/sidecar/init/agent kind resolvers, and
-// the k8s/tunnel/enc/credential/arbiter verb adapters). They now share invokeTyped
+// the kubernetes/tunnel/enc/credential/arbiter verb adapters). They now share invokeTyped
 // (the codec) + hostInvoke / hostInvokeOr (resolve + codec). A site with a SPECIAL
 // resolve/connect (a connectPluginByWord lazy fallback, a ctx-threaded reverse
 // channel, a label-prefixed miss message) keeps that per-site and routes only the

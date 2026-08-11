@@ -39,7 +39,7 @@ func snapshotCheckEnv(cc *hostCheckCarrier, _ *spec.Op) *spec.CheckEnv {
 	// Box is the verb's TARGET name across the wire. For a VM deployment it must be the per-deploy
 	// DOMAIN IDENTITY (VmTargetName) — the out-of-process vm/spice/libvirt plugins prefix charly-
 	// onto it to address the live domain and cannot LoadUnified to compute it themselves (the
-	// go-libvirt shed dropped that in-core remap). A pod/k8s/android deployment leaves VmName empty,
+	// go-libvirt shed dropped that in-core remap). A pod/kubernetes/android deployment leaves VmName empty,
 	// so VmTargetName() == Box (unchanged).
 	ce := &spec.CheckEnv{Box: cc.VmTargetName(), Instance: cc.Instance(), Distros: cc.Distros(), Mode: runModeName(cc.Mode()), DialTimeoutNs: int64(cc.DialTimeout())}
 	// The container name is meaningful only for a live (non-box) run with a real box —

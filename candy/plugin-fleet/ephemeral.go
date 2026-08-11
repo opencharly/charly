@@ -15,15 +15,15 @@ import (
 // ephemeral.go — the FINAL/K5 unit-6a move of charly/ephemeral_lifecycle.go: cross-substrate
 // ephemeral-deploy lifecycle (systemd TTL transient timer, parent/child nesting, vm-snapshot
 // refcounts, charly.yml persistence). command:fleet is the substrate-neutral deploy-lifecycle
-// owner: this body is written substrate-agnostic (no vm/pod/k8s branch of its own), reached via
+// owner: this body is written substrate-agnostic (no vm/pod/kubernetes branch of its own), reached via
 // the SAME OpEphemeralRegister/OpEphemeralTeardown legs regardless of which substrate calls
 // them. **Only the VM substrate actually calls them TODAY** (candy/plugin-deploy-vm's
-// dispatchVmEphemeralRegister / dispatchVmEphemeralTeardown) — pod and k8s Add/Del never reach this code
+// dispatchVmEphemeralRegister / dispatchVmEphemeralTeardown) — pod and kubernetes Add/Del never reach this code
 // (verified by call-graph, not the deleted charly/ephemeral_lifecycle.go's own header, which
 // falsely claimed "all three target types... call into these functions" — an R1 false-comment
-// instance this move does NOT repeat). Wiring pod/k8s's Add/Del paths to call it too is tracked
+// instance this move does NOT repeat). Wiring pod/kubernetes's Add/Del paths to call it too is tracked
 // as its own bed-robustness-batch item (their dispatch lives in candy/plugin-deploy-pod /
-// candy/plugin-pod, outside this unit's scope); `ephemeral: true` on a pod/k8s deploy is
+// candy/plugin-pod, outside this unit's scope); `ephemeral: true` on a pod/kubernetes deploy is
 // rejected at load time in the meantime (charly/validate_ephemeral.go) rather than silently
 // no-op'd. Config persistence: reads route through the cycle-free loaderkit.LoadHostFleetConfigViaExecutor
 // read (loadFleetConfig below); writes run PLUGIN-SIDE via deploykit.SaveFleetConfig
@@ -305,7 +305,7 @@ func cancelTransientTimer(unit string) {
 }
 
 // persistEphemeralRuntime writes the ephemeralHandle into charly.yml's vm_state.ephemeral (or
-// pod_state / k8s_state for those targets).
+// pod_state / kubernetes_state for those targets).
 // ephemeralOverlayKey computes the dc.Fleet map key for an ephemeral entry — the SAME
 // dot-sanitized "vm:<domain-identity>" scheme deploykit.SaveVmDeployState (sdk/deploykit/
 // vm_deploy_state.go) already uses (via candy/plugin-vm/vm_create_orchestrate.go's hostConfigPersist +
@@ -328,7 +328,7 @@ func cancelTransientTimer(unit string) {
 // just-registered Ephemeral block on every ordinary Add. SaveVmDeployState's own Ephemeral-
 // preservation merge (sdk/deploykit/vm_deploy_state.go) is what makes that safe — see its doc comment.
 // Scoped to vm only (VmDomainIdentity is vm/libvirt-domain-specific naming) — correct today
-// since ephemeral is vm-only (validate_ephemeral.go); pod/k8s pick their OWN key scheme when
+// since ephemeral is vm-only (validate_ephemeral.go); pod/kubernetes pick their OWN key scheme when
 // the bed-robustness batch wires their Add/Del paths to this seam.
 func ephemeralOverlayKey(deployName string) string {
 	return "vm:" + vmshared.VmDomainIdentity(deployName)

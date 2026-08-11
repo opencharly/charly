@@ -101,10 +101,10 @@ func TestAndroidDeployVenue_WireRoundTrip(t *testing.T) {
 // TestResolveAndroidHostPortRef covers the parse paths of the nested-endpoint ${HOST_PORT:N}
 // resolver. NO android-emulator R10 bed exists in the current roster to exercise the LIVE
 // resolution (inspecting a running parent pod) — verified against the live `check-` bed
-// inventory, FINAL/K5 unit 6a. This move's live proof runs through the k8s/vm preresolve
+// inventory, FINAL/K5 unit 6a. This move's live proof runs through the kubernetes/vm preresolve
 // bodies' beds (check-k8s-deploy / check-charly-vm), which exercise the SAME
 // wireDeployPreresolver + plugin-side self-load mechanism (loaderkit.ResolveMergedTreeViaExecutor
-// / Resolve{K8s,Vm,Android}EntityViaExecutor, K-wave W3a A3-phase-2) this file also uses; the
+// / Resolve{Kubernetes,Vm,Android}EntityViaExecutor, K-wave W3a A3-phase-2) this file also uses; the
 // android-specific runtime path stays prereq-limited on this host until an android bed exists.
 func TestResolveAndroidHostPortRef(t *testing.T) {
 	// A literal host:port (no ${HOST_PORT}) passes through unchanged.

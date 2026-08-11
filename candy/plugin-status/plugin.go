@@ -2,7 +2,7 @@
 // runtime-status get/render surface (table / detail / JSON, --all, --nested). The plugin owns the
 // subcommand grammar (command.go), the declared-nested-tree pre-resolution (nested_tree.go, K5),
 // the PURE nested-overlay fold (overlay.go), and the render output (render.go); only the LIVE
-// per-substrate collection (the pod/vm/k8s/local/android collectors) is the compiled-in
+// per-substrate collection (the pod/vm/kubernetes/local/android collectors) is the compiled-in
 // verb:status-fanout (candy/plugin-substrate), which the plugin InvokeProvider's directly. There is
 // no hidden core-command forward — the plugin does the work, calling back for the ONE thing it
 // cannot do itself (live host/venue collection), the doctrine candy/plugin-settings established.

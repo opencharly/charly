@@ -51,7 +51,7 @@ func deriveChildExecutorForPath(path string, node *spec.FleetNode, parentExec sp
 	case "ssh":
 		return specexec.VmChildExecutor(parentExec, path)
 	case "reject":
-		return nil, fmt.Errorf("k8s targets cannot have children")
+		return nil, fmt.Errorf("kubernetes targets cannot have children")
 	}
 	return parentExec, nil
 }

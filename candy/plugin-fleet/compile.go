@@ -143,7 +143,7 @@ func compilePlansForRequest(ctx context.Context, exec *sdk.Executor, r spec.Depl
 	// Three selection SHAPES (K4 unit B): CandyRef set → the plugin resolves the standalone-candy
 	// order + synthetic box itself from the envelope (candy_select.go); BoxRef set → the plugin
 	// resolves the primary box view + candy order itself from the envelope (box_select.go);
-	// otherwise the BOX-VIEW shape (unchanged, add_candy-on-pod/k8s) trusts the host-provided
+	// otherwise the BOX-VIEW shape (unchanged, add_candy-on-pod/kubernetes) trusts the host-provided
 	// BoxView/Order.
 	var img *buildkit.ResolvedBox
 	var order []string

@@ -187,7 +187,7 @@ func equalSlices(a, b []string) bool {
 // TestMergeDeployConfigsPreservesAllFields locks in the 2026-05 regression
 // fix: pre-fix MergeDeployConfigs hand-rolled per-field copies and silently
 // dropped 19+ FleetNode fields (ResolvedPort, Description, Secret,
-// Sidecar, Shell, Kubernetes, ForwardGpgAgent, ForwardSshAgent, Kind,
+// Sidecar, Shell, Deploy, ForwardGpgAgent, ForwardSshAgent, Kind,
 // Replica, Restart, Schedule, Resources, Expose, Storage, Probes, Cpus,
 // Ram, DiskSize). Any future addition of a struct field would silently
 // regress in the same way. The post-fix reflect-based merger walks every
@@ -201,7 +201,7 @@ func TestMergeDeployConfigsPreservesAllFields(t *testing.T) {
 	desc := "testing"
 	sec := []vmshared.DeploySecretConfig{{Name: "test"}}
 	sd := map[string]json.RawMessage{"side": json.RawMessage(`{"image":"img"}`)}
-	k8s := &vmshared.K8sDeployConfig{Namespace: "test-ns"}
+	kubernetesDeploy := &vmshared.KubernetesDeployConfig{Namespace: "test-ns"}
 	res := &vmshared.DeployResources{}
 	exp := &vmshared.DeployExpose{Host: "example.com", TLS: true}
 	storage := []vmshared.DeployStorage{{Name: "s"}}
@@ -214,7 +214,7 @@ func TestMergeDeployConfigsPreservesAllFields(t *testing.T) {
 		ForwardGpgAgent: &tr,
 		ForwardSshAgent: &tr,
 		Sidecar:         sd,
-		Kubernetes:      k8s,
+		Deploy:          kubernetesDeploy,
 		Kind:            "service",
 		Replica:         3,
 		Restart:         "always",
@@ -241,7 +241,7 @@ func TestMergeDeployConfigsPreservesAllFields(t *testing.T) {
 		{"ForwardGpgAgent", got.ForwardGpgAgent == nil || !*got.ForwardGpgAgent},
 		{"ForwardSshAgent", got.ForwardSshAgent == nil || !*got.ForwardSshAgent},
 		{"Sidecar", len(got.Sidecar) != 1},
-		{"Kubernetes", got.Kubernetes == nil},
+		{"Deploy", got.Deploy == nil},
 		{"Kind", got.Kind != "service"},
 		{"Replica", got.Replica != 3},
 		{"Restart", got.Restart != "always"},

@@ -89,6 +89,11 @@ dist/
 # version-controlled source).
 .check/
 
+# Fleet/deploy output (`charly fleet add` emits `.opencharly/k8s/<name>/`
+# Kustomize trees + check-bed deploy state here). Per-run generated state —
+# never version-controlled, same class as `.check/`.
+.opencharly/
+
 # Syncthing conflict copies — created when the Syncthing-synced project tree
 # diverges on two machines (e.g. a file is edited while a stale copy replicates
 # in). Per-machine, ephemeral, resolved by hand — never version-controlled.

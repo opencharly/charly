@@ -13,18 +13,17 @@ import (
 	"github.com/opencharly/spec/spec"
 )
 
-// deploy_from_box.go — Cone A shape 3: the source-less K8s deploy path (`charly fleet from-box
-// --cluster <name>`), relocated WHOLESALE from the deleted charly/k8s_deploy_from_box.go. The two
-// registry-coupled calls it made are now the established plugin↔host idioms every OTHER shape in
-// this cutover uses:
+// deploy_from_box.go — Cone A shape 3: the source-less Kubernetes deploy path (`charly fleet
+// from-box --cluster <name>`), served entirely plugin-side. The two registry-coupled calls it
+// used to make are now the established plugin↔host idioms every OTHER shape in this cutover uses:
 //
-//   - the former charly-core direct LoadUnified-coupled k8s-spec lookup → PLUGIN-SIDE self-load
-//     (loaderkit.ResolveK8sEntityViaExecutor, K-wave W3a A3-phase-2) — the former
-//     "deploy-entity-resolve" HostBuild seam this used to round-trip through is DELETED, unblocked
-//     by W1's LoadUnifiedViaExecutor letting a plugin load the project itself.
-//   - providerRegistry.ResolveDeploy("k8s") + InvokeWithExecutor(...) (the core-registry dance) →
-//     exec.InvokeProvider(ctx, "deploy", "k8s", sdk.OpEmit, reqJSON, nil, opts) — the exact
-//     peer-dispatch idiom deploy_target.go's lifecycleInvoke/preresolveSubstrate already use.
+//   - the former charly-core direct LoadUnified-coupled kubernetes-spec lookup → PLUGIN-SIDE
+//     self-load (loaderkit.ResolveKubernetesEntityViaExecutor, K-wave W3a A3-phase-2) — the
+//     former "deploy-entity-resolve" HostBuild seam this used to round-trip through is DELETED,
+//     unblocked by W1's LoadUnifiedViaExecutor letting a plugin load the project itself.
+//   - the former core-registry dance → exec.InvokeProvider(ctx, "deploy", "kubernetes", sdk.OpEmit,
+//     reqJSON, nil, opts) — the exact peer-dispatch idiom deploy_target.go's
+//     lifecycleInvoke/preresolveSubstrate already use.
 //
 // deploykit.CapabilitiesFromLabels is already 100% sdk-portable (package deploykit), unchanged.
 //
@@ -44,7 +43,7 @@ type DeployFromBoxOpts struct {
 	Namespace      string // optional override of the cluster's default namespace
 	DeployOverlay  *spec.Deploy
 	OutputDir      string // defaults to <cwd>/.opencharly/k8s
-	ProjectDir     string // for the self-loaded kind:k8s cluster lookup (resolveK8sSpec)
+	ProjectDir     string // for the self-loaded kind:kubernetes cluster lookup (resolveKubernetesSpec)
 }
 
 // DeployFromBox performs the source-less deploy. Returns the absolute path
@@ -68,12 +67,12 @@ func DeployFromBox(ctx context.Context, exec *sdk.Executor, opts DeployFromBoxOp
 		return "", fmt.Errorf("reading capabilities from %q: %w", opts.ImageRef, err)
 	}
 
-	// 2. Look up the kind:k8s cluster template — self-loaded PLUGIN-SIDE (resolveK8sSpec).
+	// 2. Look up the kind:kubernetes cluster template — self-loaded PLUGIN-SIDE (resolveKubernetesSpec).
 	projectDir := opts.ProjectDir
 	if projectDir == "" {
 		projectDir = "."
 	}
-	cluster := resolveK8sSpec(ctx, exec, projectDir, opts.ClusterName)
+	cluster := resolveKubernetesSpec(ctx, exec, projectDir, opts.ClusterName)
 	// cluster may be nil — downstream Kustomize emission handles that
 	// (defaults fall back to kubectl current-context + "default" namespace).
 
@@ -85,34 +84,34 @@ func DeployFromBox(ctx context.Context, exec *sdk.Executor, opts DeployFromBoxOp
 
 	// 4. Build the deployment spec from the per-machine overlay if any.
 	dc := spec.Deploy{
-		Target: "k8s",
+		Target: "kubernetes",
 	}
 	if opts.DeployOverlay != nil {
 		dc = *opts.DeployOverlay
-		dc.Target = "k8s"
+		dc.Target = "kubernetes"
 	}
-	if dc.Kubernetes == nil {
-		dc.Kubernetes = &spec.K8sDeploy{}
+	if dc.Deploy == nil {
+		dc.Deploy = &spec.KubernetesDeploy{}
 	}
 	dc.From = opts.ClusterName
 	if opts.Namespace != "" {
-		dc.Kubernetes.Namespace = opts.Namespace
+		dc.Deploy.Namespace = opts.Namespace
 	}
 
-	// 5. Resolve output dir — defaultK8sOutputDir mirrors the deploy:k8s preresolver's own copy
+	// 5. Resolve output dir — defaultKubernetesOutputDir mirrors the deploy:kubernetes preresolver's own copy
 	// (R3): the sole caller (FleetFromBoxCmd.Run()) always passes ProjectDir as os.Getwd(), so
 	// this is behavior-preserving.
 	outDir := opts.OutputDir
 	if outDir == "" {
 		var err error
-		outDir, err = defaultK8sOutputDir()
+		outDir, err = defaultKubernetesOutputDir()
 		if err != nil {
-			return "", fmt.Errorf("resolving default k8s output dir: %w", err)
+			return "", fmt.Errorf("resolving default kubernetes output dir: %w", err)
 		}
 	}
 
 	// 6. Generate.
-	return GenerateK8sKustomize(ctx, exec, K8sGenerateOpts{
+	return GenerateKubernetesKustomize(ctx, exec, KubernetesGenerateOpts{
 		DeploymentName: deployName,
 		Instance:       opts.Instance,
 		ImageRef:       opts.ImageRef,
@@ -123,39 +122,39 @@ func DeployFromBox(ctx context.Context, exec *sdk.Executor, opts DeployFromBoxOp
 	})
 }
 
-// resolveK8sSpec resolves a kind:k8s cluster template by name — PLUGIN-SIDE, self-loading the
-// project (K-wave W3a A3-phase-2: loaderkit.ResolveK8sEntityViaExecutor, unblocked by W1's
+// resolveKubernetesSpec resolves a kind:kubernetes cluster template by name — PLUGIN-SIDE, self-loading the
+// project (K-wave W3a A3-phase-2: loaderkit.ResolveKubernetesEntityViaExecutor, unblocked by W1's
 // LoadUnifiedViaExecutor). Replaces the former "deploy-entity-resolve" HostBuild seam round-trip.
 // A resolve miss (no charly.yml, no declared cluster, a decode failure) degrades to nil, matching
 // the former function's own swallow-to-nil contract (downstream Kustomize emission handles a nil
 // cluster).
-func resolveK8sSpec(ctx context.Context, exec *sdk.Executor, dir, name string) *spec.ResolvedK8s {
+func resolveKubernetesSpec(ctx context.Context, exec *sdk.Executor, dir, name string) *spec.ResolvedKubernetes {
 	if exec == nil || dir == "" || name == "" {
 		return nil
 	}
-	spc, err := loaderkit.ResolveK8sEntityViaExecutor(ctx, exec, dir, name)
+	spc, err := loaderkit.ResolveKubernetesEntityViaExecutor(ctx, exec, dir, name)
 	if err != nil {
 		return nil
 	}
 	return spc
 }
 
-// K8sGenerateOpts carries the inputs a Kustomize emit needs.
-type K8sGenerateOpts struct {
+// KubernetesGenerateOpts carries the inputs a Kustomize emit needs.
+type KubernetesGenerateOpts struct {
 	DeploymentName string // the deployment's base name
 	Instance       string // "" for the bare overlay; non-empty for image/instance
 	ImageRef       string // fully qualified image ref (registry/name:tag)
 	Deploy         spec.Deploy
 	Capabilities   *spec.BoxMetadata
-	Cluster        *spec.ResolvedK8s
+	Cluster        *spec.ResolvedKubernetes
 	OutputDir      string // usually <projectDir>/.opencharly/k8s
 }
 
-// GenerateK8sKustomize dispatches to candy/plugin-kube's deploy:k8s OpEmit (materializeKustomize)
-// via exec.InvokeProvider — the plugin-side replacement for the former core
-// providerRegistry.ResolveDeploy("k8s") + InvokeWithExecutor registry dance. Returns the absolute
-// path to the overlay that `kubectl apply -k` should target.
-func GenerateK8sKustomize(ctx context.Context, exec *sdk.Executor, opts K8sGenerateOpts) (string, error) {
+// GenerateKubernetesKustomize dispatches to candy/plugin-kube's deploy:kubernetes OpEmit (materializeKustomize)
+// via exec.InvokeProvider — the plugin-side replacement for the former core-registry
+// ResolveDeploy + InvokeWithExecutor dance. Returns the absolute path to the overlay that
+// `kubectl apply -k` should target.
+func GenerateKubernetesKustomize(ctx context.Context, exec *sdk.Executor, opts KubernetesGenerateOpts) (string, error) {
 	if opts.DeploymentName == "" {
 		return "", fmt.Errorf("deployment name is required")
 	}
@@ -170,7 +169,7 @@ func GenerateK8sKustomize(ctx context.Context, exec *sdk.Executor, opts K8sGener
 	if err != nil {
 		return "", fmt.Errorf("marshal capabilities: %w", err)
 	}
-	req := spec.K8sGenerateKustomizeRequest{
+	req := spec.KubernetesGenerateKustomizeRequest{
 		Name:        opts.DeploymentName,
 		ImageRef:    opts.ImageRef,
 		Node:        &opts.Deploy,
@@ -180,27 +179,27 @@ func GenerateK8sKustomize(ctx context.Context, exec *sdk.Executor, opts K8sGener
 	}
 	reqJSON, err := json.Marshal(req)
 	if err != nil {
-		return "", fmt.Errorf("marshal k8s materialize request: %w", err)
+		return "", fmt.Errorf("marshal kubernetes materialize request: %w", err)
 	}
 
-	resJSON, err := exec.InvokeProvider(ctx, "deploy", "k8s", sdk.OpEmit, reqJSON, nil, sdk.InvokeProviderOpts{})
+	resJSON, err := exec.InvokeProvider(ctx, "deploy", "kubernetes", sdk.OpEmit, reqJSON, nil, sdk.InvokeProviderOpts{})
 	if err != nil {
-		return "", fmt.Errorf("k8s materialize invoke: %w", err)
+		return "", fmt.Errorf("kubernetes materialize invoke: %w", err)
 	}
-	var reply spec.K8sGenerateKustomizeReply
+	var reply spec.KubernetesGenerateKustomizeReply
 	if len(resJSON) > 0 {
 		if err := json.Unmarshal(resJSON, &reply); err != nil {
-			return "", fmt.Errorf("k8s materialize decode reply: %w", err)
+			return "", fmt.Errorf("kubernetes materialize decode reply: %w", err)
 		}
 	}
 	return reply.OverlayPath, nil
 }
 
-// defaultK8sOutputDir resolves the canonical output directory for emitted kustomize trees.
+// defaultKubernetesOutputDir resolves the canonical output directory for emitted kustomize trees.
 // candy/plugin-kube carries its OWN copy (materialize.go) for its own callers — this one is the
-// plugin-side twin of the former core defaultK8sOutputDir for THIS package's sole caller
+// plugin-side twin of the former core defaultKubernetesOutputDir for THIS package's sole caller
 // (DeployFromBox above).
-func defaultK8sOutputDir() (string, error) {
+func defaultKubernetesOutputDir() (string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return "", err

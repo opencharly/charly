@@ -17,7 +17,7 @@ import (
 // bank B). A SOURCE-LESS deploy driven entirely by an image's baked ai.opencharly.* OCI labels,
 // with NO charly.yml project: reach deploy:pod's OpConfigSetup (the project-free config-setup
 // ORCHESTRATION, P13-KERNEL direction-flip) DIRECTLY via exec.InvokeProvider — the exact
-// peer-dispatch idiom this package's deploy_from_box.go uses for the deploy:k8s OpEmit leg — then,
+// peer-dispatch idiom this package's deploy_from_box.go uses for the deploy:kubernetes OpEmit leg — then,
 // in quadlet mode, start the resulting systemd-user service.
 //
 // The former host-side seam computed spec.HostEnv in core (hostEnvJSON — os.Executable() is only
@@ -42,7 +42,7 @@ func runFromBoxPod(c *FleetFromBoxCmd) error {
 	// P13-KERNEL direction-flip) via ExplicitRef: it reads the image's labels, builds the
 	// QuadletConfig, writes + enables the quadlet, and daemon-reloads — all with no charly.yml.
 	// Reached peer-to-peer by InvokeProvider("deploy","pod",OpConfigSetup) — the same idiom
-	// deploy_from_box.go:185 uses for deploy:k8s's OpEmit — not through a host-build round-trip.
+	// deploy_from_box.go:185 uses for deploy:kubernetes's OpEmit — not through a host-build round-trip.
 	rt, err := kit.ResolveRuntime()
 	if err != nil {
 		return err

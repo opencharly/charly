@@ -410,3 +410,32 @@ func TestInvokeProvider_LazyConnectFallback_DuringNestedKindConnectPass_NoDeadlo
 		t.Fatal("inKindConnectPass flag was clobbered by the nested fallback connect (expected it to stay true — only this test's own defer should clear it)")
 	}
 }
+
+// TestSubstrateFallbackRef — the S3b substrate-default regression test for the K-wave-2
+// pod-config connect gap: a deploy-class word naming a known externalized substrate with an
+// EMPTY caller extraRef defaults to the substrate's canonical plugin ref, so a candy-less
+// box/<distro> project reaches deploy:pod for `charly config` (Pass-1 is empty there — no local
+// candy/ dir — and without the default Pass-2 never fired). The caller's own ref wins when set;
+// unknown words and non-deploy classes keep "" — byte-identical S2/S3b behavior.
+func TestSubstrateFallbackRef(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		class    ProviderClass
+		word     string
+		extraRef string
+		want     string
+	}{
+		{"pod substrate default", ClassDeployTarget, "pod", "", "@" + spec.DefaultProjectRepo + "/candy/plugin-deploy-pod"},
+		{"kubernetes substrate default", ClassDeployTarget, "kubernetes", "", "@" + spec.DefaultProjectRepo + "/candy/plugin-kube"},
+		{"vm substrate default", ClassDeployTarget, "vm", "", "@" + spec.DefaultProjectRepo + "/candy/plugin-deploy-vm"},
+		{"caller ref wins", ClassDeployTarget, "pod", "@example.org/candy/custom", "@example.org/candy/custom"},
+		{"unknown word no default", ClassDeployTarget, "builder-nope", "", ""},
+		{"non-deploy class no default", ClassVerb, "pod", "", ""},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := substrateFallbackRef(tt.class, tt.word, tt.extraRef); got != tt.want {
+				t.Fatalf("substrateFallbackRef(%s, %q, %q) = %q, want %q", tt.class, tt.word, tt.extraRef, got, tt.want)
+			}
+		})
+	}
+}

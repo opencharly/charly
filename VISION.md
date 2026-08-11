@@ -13,7 +13,7 @@ Every candy, every box, every probe serves one end: **to build a better candybox
 1. **Secure the room, not the candy.** Safety lives at the boundary of a candybox — rootless containers, isolated VMs, encrypted volumes — never in a shrunken toolset. A walled room you can hand over *completely* beats an empty sandbox you keep narrowing.
    → CLAUDE.md "Candyboxing".
 
-2. **One recipe, many boxes.** A single declarative recipe — candies stacked into a box — pours into every mold: an interactive shell, a managed pod, a host workstation, a k8s cluster, a bootable VM, an Android device. Write the recipe once; let `charly` set it in whatever shape the moment needs.
+2. **One recipe, many boxes.** A single declarative recipe — candies stacked into a box — pours into every mold: an interactive shell, a managed pod, a host workstation, a kubernetes cluster, a bootable VM, an Android device. Write the recipe once; let `charly` set it in whatever shape the moment needs.
    → README "Build → run → deploy → evaluate".
 
 3. **Every candy ships with its recipe card.** Every candy, box, and verb carries a dedicated skill, so nothing in the candy store is a mystery — neither you nor your agents ever have to guess what a piece does, how it's made, or how it should taste.
@@ -48,7 +48,7 @@ Every candy, every box, every probe serves one end: **to build a better candybox
 
 ## Where the factory is heading
 
-- **Widen what one recipe can become.** The same declaration already pours into containers, VMs, k8s, hosts, and Android — the long arc is *more molds under one wrapper*, never more wrappers to learn.
+- **Widen what one recipe can become.** The same declaration already pours into containers, VMs, kubernetes, hosts, and Android — the long arc is *more molds under one wrapper*, never more wrappers to learn.
 - **A gourmet kitchen: a tiny core, an all-you-can-eat buffet.** The core stays small on purpose — a kernel that loads, composes, gates, builds, and dispatches, and nothing else. Every capability the kitchen has — every verb, mold, probe, builder, and command — is a candy speaking one shared SDK, so the buffet grows without the core growing: a new capability is a new recipe, never a bigger core, and "it needs the core" means a new generic counter the recipe reaches over, never a new fixture bolted to the floor.
   → CLAUDE.md "Core is a PLUGIN HOST; EVERY capability is a plugin candy".
 - **Hand the whole line to the agents.** The full loop, run end-to-end *inside* the candybox — agents free to forge a fresh, better box whenever the job needs one — with you watching the floor rather than turning every crank.

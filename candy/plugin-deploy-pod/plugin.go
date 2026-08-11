@@ -20,7 +20,7 @@
 // images, owned by the host lifecycle hook's PostTeardown), keyed by the deploy name.
 //
 // The plugin exists to serve deploy:pod out-of-process (the uniform substrate model: pod
-// is external like local/vm/android/k8s) and to acknowledge the Invoke; the real work
+// is external like local/vm/android/kubernetes) and to acknowledge the Invoke; the real work
 // (overlay build + container lifecycle) is the host's, exactly as the vm lifecycle hook
 // owns the VM build+boot while plugin-deploy-vm owns only the plan walk.
 //

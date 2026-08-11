@@ -1,5 +1,5 @@
 // Package egress is the EGRESS VALIDATION plugin (M16): it gates the config artifacts
-// charly WRITES to a system (cloud-init, k8s manifests, traefik routes, ledger JSON,
+// charly WRITES to a system (cloud-init, kubernetes manifests, traefik routes, ledger JSON,
 // systemd/quadlet units, the Containerfile, libvirt domain XML) against a CUE schema
 // BEFORE the bytes hit disk — the egress counterpart to charly's ingress validation.
 // The validation logic + the CUE schemas (formerly charly/egress.go + sdk/schema/

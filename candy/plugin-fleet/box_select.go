@@ -8,7 +8,7 @@ import (
 	"github.com/opencharly/spec/spec"
 )
 
-// box_select.go — the K4 unit B box-half: the PRIMARY pod/k8s image selection
+// box_select.go — the K4 unit B box-half: the PRIMARY pod/kubernetes image selection
 // (the former host-side compileBoxSelection, since-deleted from charly/ core) now runs plugin-side,
 // mirroring candy_select.go's candy-half exactly. The BOX-VIEW shape
 // (compileCandyOnBoxSelection, add_candy on an ALREADY-RESOLVED base image) is UNCHANGED and out
@@ -17,7 +17,7 @@ import (
 // #DeployCompileRequest's doc comment, sdk/schema/seam.cue).
 
 // resolveBoxSelection computes the resolved *buildkit.ResolvedBox and topo-sorted candy order
-// for a primary pod/k8s image deploy (req.BoxRef) from the already-fetched envelope: rp.Boxes[box_ref]
+// for a primary pod/kubernetes image deploy (req.BoxRef) from the already-fetched envelope: rp.Boxes[box_ref]
 // is the SAME spec.ResolvedBoxView candy/plugin-build's `build:project` word (resolveProjectEnvelope,
 // #55 step3 unit 3b) already computed to build the envelope in the first place (no re-derivation —
 // R3), re-hydrated via deploykit.NewSpecResolvedBox
@@ -51,7 +51,7 @@ func resolveBoxSelection(rp *spec.ResolvedProject, req spec.DeployCompileRequest
 }
 
 // resolveAddCandyOnBoxSelection is the ADD-CANDY-ON-BOX shape (K4 box-half completion): the
-// add_candy overlay (req.CandyRef) compiled against the primary pod/k8s base image
+// add_candy overlay (req.CandyRef) compiled against the primary pod/kubernetes base image
 // (req.BaseBoxRef). The base image comes from rp.Boxes[base_box_ref] as the COMPILE CONTEXT (the
 // SAME ResolvedBoxView the BOX-REF shape reads via NewSpecResolvedBox, R3 — never re-derived), and
 // the overlay's OWN topo order is resolved from the envelope over {BareRef(candy_ref)} widened by

@@ -33,7 +33,7 @@ Consult this table before the first tool call of every task; when several rows m
 | Editing `sdk/schema/*.cue` / `task cue:gen` / `cue exp gengotypes` / generated `cue_types_gen.go` / Schema Driven Design (SDD) / a schema spike | `/charly-internals:plugin` |
 | Editing a box (`box/<name>/charly.yml` — boxes live in the `box/<distro>` submodules; main owns none), box composition | `/charly-image:image` |
 | Editing a candy (`candy/<name>/charly.yml`), candy authoring, candy tasks/services | `/charly-image:layer` |
-| Egress config validation — validating/generating the config files charly WRITES to a system (`candy/plugin-fleet/egress.go`, `ValidateEgress`, the vendored CUE egress schemas in `candy/plugin-egress/egress-schemas/vendor/`, cloud-init/k8s/units/ssh_config/libvirt-XML egress) | `/charly-internals:egress` |
+| Egress config validation — validating/generating the config files charly WRITES to a system (`candy/plugin-fleet/egress.go`, `ValidateEgress`, the vendored CUE egress schemas in `candy/plugin-egress/egress-schemas/vendor/`, cloud-init/k8s_object/units/ssh_config/libvirt-XML egress) | `/charly-internals:egress` |
 | Engineering-discipline triggers (failure surfaced / dup pattern / ad-hoc fix tempting / "out of scope" framing) | `/charly-internals:strict-policy` |
 | Evaluate/audit a deployment config (image or deploy, yours) | `/charly-check:check` |
 | Evaluate/audit a deployment config (image or deploy, yours) | `/charly-internals:agents` |
@@ -185,7 +185,7 @@ Confidence never excuses a policy failure: any rule violation forbids commit.
 - One entity kind `candy:` (`base:`/`from:` marks an image), one filename `charly.yml`, lowercase-hyphenated globally-unique top-level names, shape-based routing, Go-style `import:` namespaces; residual legacy `include:` is a hard load error pointing at `charly migrate`. *Detail:* `/charly-image:image`, `/charly-image:layer`.
 - Init-system polymorphism via mixed `service:` entries — never `<name>-host`/`<name>-pod` sibling candies.
 - Per-kind CalVer `version:` is authoritative identity; resolution is per-entity post-fetch (`charly box reconcile` aligns pins); `ai.opencharly.*` capabilities are an OCI-label contract with content-derived EffectiveVersion.
-- Deploy substrates `local:`/`vm:`/`k8s:`/`android:`/`pod:`/`group:` all consume the shared InstallPlan IR (no `host:` venue kind); deploy fetches nothing speculative; sibling members probe each other via `${HOST:<member>}`. *Detail:* `/charly-core:deploy`, `/charly-internals:install-plan`.
+- Deploy substrates `local:`/`vm:`/`kubernetes:`/`android:`/`pod:`/`group:` all consume the shared InstallPlan IR (no `host:` venue kind); deploy fetches nothing speculative; sibling members probe each other via `${HOST:<member>}`. *Detail:* `/charly-core:deploy`, `/charly-internals:install-plan`.
 
 The named skills own the full technical rules; this index never expands into a second copy of them.
 

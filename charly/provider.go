@@ -24,7 +24,7 @@ type Provider interface {
 	// "box","local","pixi"). It is the registry key within the provider's Class.
 	Reserved() string
 	// Class is which extension family the reserved word belongs to. A word may
-	// exist in two classes (e.g. "k8s" is both a kind and a verb), so the registry
+	// exist in two classes (e.g. "kubernetes" is both a kind and a verb), so the registry
 	// keys on (Class, Reserved), never Reserved alone.
 	Class() ProviderClass
 	// Invoke runs one operation. op.Op selects the operation for the class

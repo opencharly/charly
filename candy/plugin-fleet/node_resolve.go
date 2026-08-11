@@ -61,7 +61,7 @@ func (c *FleetAddCmd) emitOpts() deploykit.EmitOpts {
 // root this matches the pre-v2 behavior; on children the fields come from
 // the child node (not c.Name's top-level entry). Mutates node.Version in
 // place when an explicit --tag is given and the node had none, so
-// downstream host-side resolvers that read node.Version (the k8s
+// downstream host-side resolvers that read node.Version (the kubernetes
 // preresolver, the pod overlay build) pin the EXACT tag — node crosses the
 // wire in the request, so this mutation is visible host-side too. Returns
 // an error only when neither a <ref> nor a charly.yml entry resolves a ref.

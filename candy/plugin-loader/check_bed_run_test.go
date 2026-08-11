@@ -23,7 +23,7 @@ import (
 func TestValidateCheckBeds_TargetEnum(t *testing.T) {
 	uf := &spec.UnifiedFile{
 		Fleet: map[string]spec.FleetNode{
-			"check-weird": {Target: "k8s", Disposable: new(true)},
+			"check-weird": {Target: "kubernetes", Disposable: new(true)},
 		},
 	}
 	err := loaderkit.ValidateCheckBeds(uf, testThreaded())

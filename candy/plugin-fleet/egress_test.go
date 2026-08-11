@@ -126,7 +126,7 @@ func TestValidateEgressValue_GoodPasses(t *testing.T) {
 		"spec":     map[string]any{"replicas": 2},
 	}
 	if err := ValidateEgressValue("k8s_object", "good deployment", good); err != nil {
-		t.Fatalf("valid k8s object should pass, got: %v", err)
+		t.Fatalf("valid kubernetes object should pass, got: %v", err)
 	}
 }
 
@@ -134,7 +134,7 @@ func TestValidateEgressValue_BadFails(t *testing.T) {
 	testEgressExecutor(t, map[string]string{"k8s_object": "k8s_object: validation failed"})
 	bad := map[string]any{"apiVersion": "v1", "kind": "", "metadata": map[string]any{"name": "x"}}
 	if err := ValidateEgressValue("k8s_object", "bad deployment", bad); err == nil {
-		t.Fatal("malformed k8s object must be REJECTED, got nil")
+		t.Fatal("malformed kubernetes object must be REJECTED, got nil")
 	}
 }
 

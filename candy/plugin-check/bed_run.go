@@ -369,7 +369,7 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 	// GROUP beds have no root image — build EACH member's substrate BEFORE members-up (the host
 	// bringUpMembers assumes pre-built images). Per-member coordinates ride the descriptor's Members
 	// (the host-resolved {Key, IsVM, Image, From}). A VM member builds its disk (`vm build <from>`,
-	// ENTITY-scoped — bringUpMembers does the per-member `vm create --domain` + ssh-wait); a pod / k8s
+	// ENTITY-scoped — bringUpMembers does the per-member `vm create --domain` + ssh-wait); a pod / kubernetes
 	// member builds its box image (+ RunBuild-gated `check box`); a kind:local member carries no image
 	// (applies candies in place). Mirrors the core runCheckBed group loop. libvirt was already started
 	// by the check-bed setup op (vm/group beds), so no per-member start is needed here.

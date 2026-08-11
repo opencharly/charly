@@ -14,7 +14,7 @@ import (
 )
 
 // provider.go is the out-of-process provider for ALL of plugin-kube's capabilities.
-// Invoke branches on the request class: a "deploy" op drives the `deploy:k8s`
+// Invoke branches on the request class: a "deploy" op drives the `deploy:kubernetes`
 // SUBSTRATE (deploy.go — `kubectl apply -k` on the host-generated Kustomize tree);
 // every other op is the `kube:` check VERB. For the verb, charly's host dispatches a
 // `kube:` check step through the registry (ResolveVerb("kube") → this grpcProvider →
@@ -44,7 +44,7 @@ type kubeEnv struct {
 type provider struct{ pb.UnimplementedProviderServer }
 
 // Invoke runs one operation for the plugin's capabilities. The plugin serves BOTH
-// the `kube:` check verb AND the `deploy:k8s` SUBSTRATE (F1), distinguished by the
+// the `kube:` check verb AND the `deploy:kubernetes` SUBSTRATE (F1), distinguished by the
 // request's class: a "deploy" op runs `kubectl apply -k` against the host-generated
 // Kustomize tree (deploy.go); every other op is the `kube:` verb. It decodes the
 // full #Op + the env, handles the k3s-post-provision deploy seam first, skips in box
@@ -54,13 +54,13 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 	if req.GetClass() == "deploy" {
 		switch req.GetOp() {
 		case sdk.OpPreresolve:
-			return invokeK8sPreresolve(ctx, req)
+			return invokeKubernetesPreresolve(ctx, req)
 		case sdk.OpEmit:
 			// K5-A item 6: the from-box source-less path's entry point into the SAME
 			// generate+write+validate logic OpPreresolve below uses (materialize.go, R3).
-			return invokeK8sMaterialize(ctx, req)
+			return invokeKubernetesMaterialize(ctx, req)
 		}
-		return invokeDeployK8s(req)
+		return invokeDeployKubernetes(req)
 	}
 	var op spec.Op
 	if len(req.GetParamsJson()) > 0 {
@@ -83,7 +83,7 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 	// wholesale from charly/k3s_post.go): retrieve-path check, guest-forward kubeconfig
 	// rewrite, and the kubeconfig merge. Dispatched WITH a reverse-channel broker (the
 	// caller — candy/plugin-fleet's k3sPostProvision — uses exec.InvokeProvider, mirroring the
-	// deploy:k8s preresolve leg) because the guest-forward rewrite self-loads the project
+	// deploy:kubernetes preresolve leg) because the guest-forward rewrite self-loads the project
 	// (loaderkit.ResolveMergedTreeViaExecutor / ResolveVmEntityViaExecutor, K-wave W3a A3-phase-2)
 	// and needs the reverse channel for that.
 	if method == "k3s-post-provision" {
@@ -105,7 +105,7 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 	}
 
 	// Resolve the `cluster: <profile>` convenience to a concrete kubeconfig context —
-	// PLUGIN-SIDE self-load now (K-wave W3a A3-phase-2: loaderkit.ResolveK8sEntityViaExecutor,
+	// PLUGIN-SIDE self-load now (K-wave W3a A3-phase-2: loaderkit.ResolveKubernetesEntityViaExecutor,
 	// unblocked by W1's LoadUnifiedViaExecutor; the former "deploy-entity-resolve" HostBuild seam
 	// this round-tripped through is deleted). This call carries no deploy name of its own (a
 	// `kube:` check verb runs independent of any specific deploy), so it resolves the project dir
@@ -120,7 +120,7 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 			return sdk.ResultJSON("fail", fmt.Sprintf("kube: %s: %v", method, err))
 		}
 		if dir, derr := hostProjectDir(ctx, exec, ""); derr == nil {
-			if view, verr := loaderkit.ResolveK8sEntityViaExecutor(ctx, exec, dir, in.Cluster); verr == nil && view != nil {
+			if view, verr := loaderkit.ResolveKubernetesEntityViaExecutor(ctx, exec, dir, in.Cluster); verr == nil && view != nil {
 				in.KubeContext = view.KubeconfigContext
 			}
 		}
