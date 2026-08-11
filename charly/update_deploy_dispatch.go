@@ -90,5 +90,5 @@ func (c *podUpdateCmd) dispatchByDeployTarget() error {
 			"(kubernetes is applied out-of-band via `kubectl apply -k` on the rendered Kustomize overlay)",
 			deployName, node.Target)
 	}
-	return lt.Rebuild(context.Background(), spec.DeployTargetRebuildOpts{RebuildImage: c.Build})
+	return lt.Rebuild(context.Background(), spec.DeployTargetRebuildOpts{RebuildImage: c.Build, Tag: c.Tag})
 }
