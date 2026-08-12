@@ -47,7 +47,7 @@ type apiClient struct {
 func newAPIClient() *apiClient {
 	baseURL := os.Getenv("AGENTTEAMS_CONTROLLER_URL")
 	if baseURL == "" {
-		baseURL = "http://127.0.0.1:18090"
+		baseURL = "http://127.0.0.1:8090"
 	}
 	baseURL = strings.TrimRight(baseURL, "/")
 	return &apiClient{
@@ -317,7 +317,7 @@ type AgentTeamsConfigCmd struct{}
 func (c *AgentTeamsConfigCmd) Run() error {
 	baseURL := os.Getenv("AGENTTEAMS_CONTROLLER_URL")
 	if baseURL == "" {
-		baseURL = "http://127.0.0.1:18090"
+		baseURL = "http://127.0.0.1:8090"
 	}
 	tokenSource := "none"
 	switch {

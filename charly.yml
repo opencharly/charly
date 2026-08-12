@@ -2938,6 +2938,25 @@ check-agentteams-pod:
                 in_container: false
               stdout:
                 - contains: "bed-worker"
+            - # The compiled-in `charly agentteams config` command reports the controller
+              # endpoint WITHOUT any network — a deterministic live proof that the CLI's
+              # default fallback matches the box's actual host-mapped port. The controller
+              # serves :8090 in-container and the box host-maps it by default
+              # auto-allocation, so the default is http://127.0.0.1:8090 (the R4a fix that
+              # replaced the unreachable upstream 18090 published-port default). The env is
+              # cleared so a host-shell AGENTTEAMS_CONTROLLER_URL cannot mask the default.
+              check: the compiled-in `charly agentteams config` command reports the controller endpoint default 8090
+              id: agentteams-plugin-config-default
+              timeout: 60s
+              context:
+                - runtime
+              command:
+                command: |
+                    unset AGENTTEAMS_CONTROLLER_URL AGENTTEAMS_AUTH_TOKEN AGENTTEAMS_AUTH_TOKEN_FILE
+                    "${CHARLY_BIN}" agentteams config
+                in_container: false
+              stdout:
+                - contains: "Controller URL: http://127.0.0.1:8090"
 # agentteams-vm — the disposable VM substrate for the AgentTeams stack. The
 # check-agentteams-vm bed installs the agentteams top composition candy (all five
 # foundation candies) into this Arch cloud-image guest via add_candy, so the
