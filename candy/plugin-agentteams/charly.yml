@@ -1,0 +1,33 @@
+plugin-agentteams:
+    candy:
+        version: 2026.224.0600
+        description: |-
+            The `charly agentteams` management CLI for the AgentTeams controller
+            REST API — a COMPILED-IN command:agentteams plugin. `charly agentteams
+            status` reports controller health + manager/worker/team/human counts;
+            `worker list|get|create|update|apply|delete` manages Worker CRs (apply
+            incl. ZIP/package import); `team apply|list|get|delete` and `human
+            apply|list|get|delete` manage Teams and Humans; `apply -f <file>`
+            applies declarative YAML (create-or-update per kind); `config` shows
+            the resolved controller endpoint and token source. A plain net/http
+            REST client — no upstream agt binary, no SDK. Endpoint from
+            AGENTTEAMS_CONTROLLER_URL (default http://127.0.0.1:18090); token from
+            AGENTTEAMS_AUTH_TOKEN env or AGENTTEAMS_AUTH_TOKEN_FILE file (the
+            upstream runtime contract).
+        plugin:
+            providers:
+                - command:agentteams
+            source: builtin
+        plan:
+            - # ADE check: a deterministic build-context check that does NOT depend on the
+              # controller runtime the `charly agentteams` REST CLI needs. Mirrors
+              # plugin-fleet / plugin-example-command — a build-context `command` check
+              # running `true`. The full CLI end-to-end (`charly agentteams status` /
+              # `worker list` against the live controller) is exercised by the Go e2e
+              # (control_test.go) + the live R10 bed roster (the check-agentteams-pod
+              # host steps).
+              check: the command:agentteams plugin ships a buildable Go module the host compiles into charly and the agentteams command tree dispatches; the full `charly agentteams` REST CLI is exercised by the Go e2e + the live R10 bed roster
+              id: agentteams-module-present
+              context:
+                - build
+              command: "true"
