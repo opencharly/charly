@@ -2681,7 +2681,7 @@ agentteams:
             - agentteams
 agentteams-manager:
     candy:
-        version: 2026.223.1500
+        version: 2026.224.0600
         base: cachyos.cachyos
         tag: manager
         description: |-
