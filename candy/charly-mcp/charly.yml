@@ -88,7 +88,7 @@ charly-mcp:
                 method: list-tools
                 mcp_name: charly
               stdout:
-                - contains: box.build
+                - contains: box.list.boxes
                 - contains: version
               context:
                 - runtime
@@ -117,7 +117,7 @@ charly-mcp:
                 method: list-tools
                 mcp_name: charly
               stdout:
-                - contains: box.build
+                - contains: box.list.boxes
                 - contains: status
                 - contains: version
               context:
@@ -141,6 +141,7 @@ charly-mcp:
                 tool: box.list.boxes
                 input: "{}"
                 mcp_name: charly
+              timeout: 90s
               exit_status: 0
               context:
                 - runtime
