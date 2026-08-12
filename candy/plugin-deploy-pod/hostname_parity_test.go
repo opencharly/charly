@@ -20,16 +20,16 @@ func TestBuildStartArgs_HostnameParity(t *testing.T) {
 		"podman",
 		"ghcr.io/opencharly/demo:latest",
 		1000, 1000,
-		nil,                        // ports
-		"charly-demo",              // name
-		[]deploykit.VolumeMount{},  // volumes
+		nil,                             // ports
+		"charly-demo",                   // name
+		[]deploykit.VolumeMount{},       // volumes
 		[]deploykit.ResolvedBindMount{}, // bindMounts
-		false, "",                  // gpu, bindAddr
-		nil,                        // envVars
+		false, "",                       // gpu, bindAddr
+		nil, // envVars
 		spec.SecurityConfig{},
-		nil,        // entrypoint (direct mode appends the init command separately)
+		nil,          // entrypoint (direct mode appends the init command separately)
 		"/home/user", // workingDir
-		"charly",   // network
+		"charly",     // network
 	)
 	found := false
 	for i := 0; i < len(argv)-1; i++ {
