@@ -52,6 +52,29 @@ func TestDiscoverToken(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// REST client construction — the controller endpoint default.
+// ---------------------------------------------------------------------------
+
+func TestNewAPIClientDefaultEndpoint(t *testing.T) {
+	// The CLI defaults to the controller's container port 8090 as host-mapped
+	// by the charly agentteams box (host mappings auto-allocate, defaulting to
+	// the same number when free) — the endpoint the deployment actually
+	// publishes. The upstream 18090 published-port convention is NOT reproduced
+	// by this box, so a default pointing there would fail every reader.
+	t.Setenv("AGENTTEAMS_CONTROLLER_URL", "")
+	if c := newAPIClient(); c.baseURL != "http://127.0.0.1:8090" {
+		t.Fatalf("newAPIClient() default baseURL = %q, want http://127.0.0.1:8090", c.baseURL)
+	}
+
+	// An explicit AGENTTEAMS_CONTROLLER_URL always wins over the default, with
+	// a trailing slash trimmed.
+	t.Setenv("AGENTTEAMS_CONTROLLER_URL", "http://controller.example:18090/")
+	if c := newAPIClient(); c.baseURL != "http://controller.example:18090" {
+		t.Fatalf("newAPIClient() env baseURL = %q, want http://controller.example:18090", c.baseURL)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // YAML apply helpers.
 // ---------------------------------------------------------------------------
 
@@ -305,7 +328,7 @@ func TestRunInProcCLI_Help(t *testing.T) {
 func TestRunInProcCLI_Config(t *testing.T) {
 	// `config` reads only env vars — no network — so it is a safe leaf to
 	// dispatch in a unit test.
-	t.Setenv("AGENTTEAMS_CONTROLLER_URL", "http://127.0.0.1:18090")
+	t.Setenv("AGENTTEAMS_CONTROLLER_URL", "http://127.0.0.1:8090")
 	t.Setenv("AGENTTEAMS_AUTH_TOKEN", "tok")
 	var command AgentTeamsCmd
 	err := sdk.RunInProcCLI("agentteams", &command, []string{"config"},
