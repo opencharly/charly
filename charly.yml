@@ -2651,46 +2651,91 @@ check-marketplace:
               command: command -v rg
 
 # =============================================================================
-# agentteams-core-app + check-agentteams-core-pod — the R10 bed for the AgentTeams
-# foundation candies (minio, matrix, element, higress) on the cachyos base. Every
-# service runs as the image user (uid 1000) against the /data volume — the rootless
-# charly architecture, no root anywhere.
+# agentteams + agentteams-manager + check-agentteams-pod — the R10 bed for the
+# full AgentTeams stack (minio, matrix, element, higress, controller) on the
+# cachyos base. Every service runs as the image user (uid 1000) against the
+# /data volume — the rootless charly architecture, no root anywhere. The bed
+# binds the host rootless podman socket into the box so the controller can
+# spawn the manager container from the pre-built agentteams-manager image
+# (AGENTTEAMS_MANAGER_IMAGE) on the charly network.
 # =============================================================================
-agentteams-core-app:
+agentteams:
     candy:
         version: 2026.223.1500
         base: cachyos.cachyos
         description: |-
-            The AgentTeams foundation box: a cachyos base composing agentteams-minio
-            (MinIO S3 + mc-mirror), agentteams-matrix (Tuwunel Matrix homeserver),
-            agentteams-element (Element Web via rootless nginx), and agentteams-higress
-            (the Higress AI gateway: apiserver, controller, pilot, envoy gateway,
-            console). Every service runs as the image user (uid 1000) against the /data
-            volume — the rootless charly architecture, no root anywhere. All service
-            start scripts are charly-owned (written by the candies), not upstream
-            AgentTeams scripts.
+            The AgentTeams top box: a cachyos base composing the agentteams top
+            composition candy — agentteams-minio (MinIO S3 + mc-mirror),
+            agentteams-matrix (Tuwunel Matrix homeserver), agentteams-element
+            (Element Web via rootless nginx), agentteams-higress (the Higress AI
+            gateway: apiserver, controller, pilot, envoy gateway, console), and
+            agentteams-controller (the kine-backed kube-apiserver + Manager/
+            Worker/Team/Human reconciler serving the REST API on :8090). Every
+            service runs as the image user (uid 1000) against the /data volume —
+            the rootless charly architecture, no root anywhere. All service start
+            scripts are charly-owned (written by the candies), not upstream
+            AgentTeams scripts. Spawned Manager/Worker containers join the charly
+            network and reach the controller — and every in-container service —
+            by the controller container's DNS name.
         candy:
-            - agentteams-minio
-            - agentteams-matrix
-            - agentteams-element
-            - agentteams-higress
-check-agentteams-core-pod:
+            - agentteams
+agentteams-manager:
+    candy:
+        version: 2026.223.1500
+        base: cachyos.cachyos
+        tag: manager
+        description: |-
+            The AgentTeams manager image: a cachyos base composing the
+            agentteams-manager layer — the openclaw gateway runtime (built from
+            the pinned upstream source commit because the matrix channel
+            extension is not in the npm openclaw package) with the agt REST
+            client and mc. The controller spawns this image for the default
+            Manager CR through the host rootless podman socket; the manager
+            joins the charly network and reaches the controller's in-container
+            services by the controller container's DNS name. Rootless: the
+            service runs as the image user (uid 1000).
+        # The controller spawns the manager container DIRECTLY from this image's
+        # baked OCI config (its dockerCreatePayload sends no Cmd/Entrypoint), with
+        # no charly deploy in the loop to inject the init command — so the manager
+        # box bakes the supervisord init as its OCI entrypoint. The base image's
+        # inherited default command is cleared at emission (CMD []), so the
+        # entrypoint runs bare. /etc/supervisord.conf is assembled at build time.
+        entrypoint:
+            - supervisord
+            - -n
+            - -c
+            - /etc/supervisord.conf
+        candy:
+            - agentteams-manager
+check-agentteams-pod:
     pod:
-        image: agentteams-core-app
+        image: agentteams
         disposable: true
         lifecycle: dev
         description: >-
-            R10 bed for the AgentTeams foundation candies. Deploying the box to steady state
-            proves the minio S3 API, the Tuwunel Matrix homeserver, the Element Web client,
-            and the Higress AI gateway (apiserver, controller, pilot, envoy gateway, console)
-            all build, start, and stay up as uid 1000 against the /data volume.
+            R10 bed for the full AgentTeams stack. Deploying the box to steady state proves
+            the minio S3 API, the Tuwunel Matrix homeserver, the Element Web client, the
+            Higress AI gateway, and the controller (kube-apiserver + REST API) all build,
+            start, and stay up as uid 1000 against the /data volume — and that the controller
+            spawns the manager container from the pre-built agentteams-manager image through
+            the host rootless podman socket (AGENTTEAMS_MANAGER_IMAGE).
+        volume:
+            - name: podman-socket
+              type: bind
+              host: /run/user/1000/podman/podman.sock
+              path: /run/user/1000/podman/podman.sock
+        env:
+            AGENTTEAMS_MANAGER_IMAGE: ghcr.io/opencharly/agentteams-manager:manager
+        security:
+            security_opt:
+                - label=disable
         plan:
-            - check: the agentteams-core-app pod reached steady state
-              id: agentteams-core-pod-running
+            - check: the agentteams pod reached steady state
+              id: agentteams-pod-running
               exit_status: 0
               stdout:
                 - contains: '"kind": "pod"'
-                - contains: check-agentteams-core-pod
+                - contains: check-agentteams-pod
               context:
                 - runtime
               command:
@@ -2748,3 +2793,24 @@ check-agentteams-core-pod:
               http:
                 http: "http://127.0.0.1:${HOST_PORT:8001}/"
                 status: 200
+            - check: the controller spawns the default manager and it reaches Running phase (proves the manager image is in the host store under AGENTTEAMS_MANAGER_IMAGE and the controller can spawn it through the bound podman socket)
+              id: agentteams-manager-running
+              timeout: 300s
+              context:
+                - runtime
+              command: |
+                  # Shell vars are deliberately lowercase: the check runner expands
+                  # UPPERCASE-variable refs as runtime variables and SKIPs on an
+                  # unresolved one.
+                  token="$(cat /var/run/agentteams/cli-token 2>/dev/null)"
+                  test -n "${token}"
+                  for i in $(seq 1 90); do
+                      resp="$(curl -fsS -H "Authorization: Bearer ${token}" http://127.0.0.1:8090/api/v1/managers 2>/dev/null)" || { sleep 2; continue; }
+                      if echo "${resp}" | grep -q '"phase":"Running"'; then
+                          echo "${resp}"
+                          exit 0
+                      fi
+                      sleep 2
+                  done
+                  echo "manager never reached Running: ${resp}"
+                  exit 1
