@@ -32,3 +32,125 @@ agentteams:
                   test -x /usr/local/bin/tuwunel &&
                   test -f /opt/element-web/index.html &&
                   test -x /usr/local/bin/envoy
+agentteams-skill:
+    skill:
+        name: agentteams
+        family: agentteams
+        owner: agentteams
+        description: |-
+            The AgentTeams multi-agent stack box (CachyOS base): the decomposed
+            minio / matrix / element / higress / controller candies on both pod and
+            vm substrates. MUST be invoked before building, deploying, configuring,
+            or troubleshooting the agentteams box.
+        content: |-
+            # agentteams
+
+            The AgentTeams multi-agent stack as a charly box: a CachyOS base composing
+            five decomposed candies — `agentteams-minio` (MinIO S3 + mc-mirror),
+            `agentteams-matrix` (the Tuwunel Matrix homeserver), `agentteams-element`
+            (Element Web via a rootless nginx), `agentteams-higress` (the Higress AI
+            gateway: apiserver, controller, pilot, envoy gateway, console), and
+            `agentteams-controller` (the kine-backed kube-apiserver + the
+            Manager/Worker/Team/Human reconciler serving the REST API on :8090).
+
+            Every service runs as the image user (uid 1000) — the rootless charly
+            architecture, no root anywhere. Each candy owns its own home-relative
+            volume, so any candy installs alone or together with any other at freely
+            configurable locations. All service start scripts are charly-owned
+            (written by the candies), never upstream AgentTeams scripts.
+
+            ## Composition
+
+            | Entity | What it is |
+            |---|---|
+            | `agentteams` box | the deployable full-stack image (`base: cachyos.cachyos`) composing the `agentteams` top composition candy |
+            | `agentteams-manager` image | the controller's Manager runtime — openclaw gateway + `agt` + `mc`; spawned by the controller, not deployed directly |
+            | `agentteams-worker` image | the controller's Worker runtime — openclaw gateway + `agt` + `mc` + the shared AgentTeams protocol libs; spawned by the controller, not deployed directly |
+
+            ## Volumes
+
+            Home-relative, one per candy (freely configurable, installable in any combination):
+
+            | Candy | Volume path | Backs |
+            |---|---|---|
+            | `agentteams-minio` | `~/.agentteams/minio` | MinIO objects |
+            | `agentteams-matrix` | `~/.agentteams/matrix` | Tuwunel homeserver data |
+            | `agentteams-higress` | `~/.agentteams/higress` | Higress data |
+            | `agentteams-controller` | `~/.agentteams/controller` | kine SQLite, worker creds, admin token |
+
+            `agentteams-element` has no volume (static nginx).
+
+            ## Ports
+
+            | Port | Service |
+            |---|---|
+            | 9000 / 9001 | MinIO S3 / console |
+            | 6167 | Tuwunel Matrix homeserver |
+            | 8088 | Element Web |
+            | 8080 / 8001 | Higress gateway / console |
+            | 8090 | controller REST API |
+
+            Host mappings auto-allocate at deploy and resolve as `${HOST_PORT:<port>}`.
+
+            ## Deploy
+
+            ### Pod substrate
+
+            `charly box build agentteams` then `charly fleet add` / `charly start` — or
+            run the disposable bed end to end:
+
+            ```
+            charly check run check-agentteams-pod
+            ```
+
+            The bed binds the host rootless podman socket into the box, so the controller
+            spawns the manager and worker containers through the SAME store the images
+            were built into — no registry hop. Pre-build the spawn images first:
+
+            ```
+            charly box build agentteams-manager
+            charly box build agentteams-worker
+            ```
+
+            ### VM substrate
+
+            The `check-agentteams-vm` bed installs the top composition into an Arch
+            cloud-image guest via `add_candy`; services run as systemd units under
+            uid 1000 (init polymorphism — no supervisord in a VM):
+
+            ```
+            charly check run check-agentteams-vm
+            ```
+
+            The pre-built manager/worker images are delivered into the guest's rootless
+            store with `charly vm cp-box`:
+
+            ```
+            charly vm cp-box agentteams-vm ghcr.io/opencharly/agentteams-manager:manager --rootless --domain check-agentteams-vm
+            charly vm cp-box agentteams-vm ghcr.io/opencharly/agentteams-worker:worker --rootless --domain check-agentteams-vm
+            ```
+
+            ## Environment
+
+            Deploy-overridable env: `AGENTTEAMS_MANAGER_IMAGE`, `AGENTTEAMS_WORKER_IMAGE`,
+            `AGENTTEAMS_LLM_PROVIDER`, `AGENTTEAMS_OPENAI_BASE_URL`, `AGENTTEAMS_LLM_API_KEY`,
+            `AGENTTEAMS_DEFAULT_MODEL`, `AGENTTEAMS_EMBEDDING_MODEL`,
+            `AGENTTEAMS_ADMIN_USER` / `AGENTTEAMS_ADMIN_PASSWORD`, `AGENTTEAMS_LOCAL_ONLY`,
+            `AGENTTEAMS_MANAGER_RUNTIME`, `AGENTTEAMS_DEFAULT_WORKER_RUNTIME`,
+            `AGENTTEAMS_MATRIX_APPSERVICE_ENABLED`. Secrets (the minio root password, the
+            matrix registration token, the controller admin token) resolve from env or
+            self-provisioned files.
+
+            ## Verification
+
+            Each candy's ADE `plan:` ships deterministic checks (binary present, HTTP 200
+            liveness, service running). The box-level checks prove the
+            controller-spawns-manager → create-worker → room-exists sequence over the
+            REST API (`charly check run check-agentteams-pod` / `check-agentteams-vm`).
+
+            ## Cross-References
+
+            - `/charly-agentteams:agentteams-cli` — the compiled-in `charly agentteams` management CLI.
+            - `/charly-check:check` — the check-bed / ADE authoring surface.
+            - `/charly-vm:vm` — the VM substrate, `charly vm cp-box`.
+            - `/charly-internals:disposable` — the disposable-bed authorization model.

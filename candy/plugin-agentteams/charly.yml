@@ -31,3 +31,64 @@ plugin-agentteams:
               context:
                 - build
               command: "true"
+agentteams-cli-skill:
+    skill:
+        name: agentteams-cli
+        family: agentteams
+        owner: plugin-agentteams
+        description: |-
+            The compiled-in `charly agentteams` management CLI for the AgentTeams
+            controller REST API. MUST be invoked before managing workers, teams,
+            humans, or the controller of a running AgentTeams deployment.
+        content: |-
+            # agentteams-cli
+
+            The compiled-in `charly agentteams` management CLI for the AgentTeams
+            controller REST API — a `command:agentteams` plugin. A plain `net/http`
+            REST client: no upstream `agt` binary, no SDK.
+
+            ## Command tree
+
+            - `charly agentteams status` — controller health + manager/worker/team/human counts.
+            - `charly agentteams worker list|get|create|update|apply|delete` — Worker CR management (`apply` includes ZIP/package worker import).
+            - `charly agentteams team apply|list|get|delete` — Team management.
+            - `charly agentteams human apply|list|get|delete` — Human management.
+            - `charly agentteams apply -f <file>` — declarative YAML apply (create-or-update per kind).
+            - `charly agentteams config` — the resolved controller endpoint and token source.
+
+            ## Endpoint and token discovery
+
+            - Endpoint: `AGENTTEAMS_CONTROLLER_URL` (default `http://127.0.0.1:18090`).
+            - Token: `AGENTTEAMS_AUTH_TOKEN` env, else `AGENTTEAMS_AUTH_TOKEN_FILE` file
+              (the upstream runtime contract). The controller mints the admin SA token
+              to `/var/run/agentteams/cli-token` — on a pod substrate pull it out with
+              `charly cp <deploy> :/var/run/agentteams/cli-token <local>`.
+
+            ## Declarative apply
+
+            `charly agentteams apply -f <file>` walks the YAML docs and applies each
+            kind (create-or-update) through the REST API — mirroring `agt apply -f`.
+
+            ## Worker create
+
+            ```
+            charly agentteams worker create --name my-worker --model gpt-5-mini [--runtime openclaw] [--image <image>] [--skills a,b] [--expose 8080,3000] [--no-wait]
+            ```
+
+            `--no-wait` returns immediately after the controller accepts the request;
+            by default the CLI polls up to `--wait-timeout` (default 3m) for the Worker
+            to report Ready.
+
+            ## Example
+
+            ```
+            export AGENTTEAMS_CONTROLLER_URL=http://127.0.0.1:18090
+            export AGENTTEAMS_AUTH_TOKEN_FILE=/path/to/cli-token
+            charly agentteams status
+            charly agentteams worker list
+            ```
+
+            ## Cross-References
+
+            - `/charly-agentteams:agentteams` — the full AgentTeams box: composition, volumes, ports, both deploy substrates.
+            - `/charly-internals:plugin` — compiled-in command plugins, the provider model.

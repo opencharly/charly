@@ -983,5 +983,10 @@ marketplace:
                 description: "Self-contained skills for the filebrowser image (web-based file management on top of an charly volume)."
                 keywords: [charly, filebrowser, files]
                 profiles: [container]
+            agentteams:
+                category: images
+                description: "Self-contained skills for the AgentTeams multi-agent stack (CachyOS base): the decomposed agentteams box — minio, matrix/tuwunel, element, higress, controller — on pod and vm substrates, plus the compiled-in `charly agentteams` management CLI."
+                keywords: [charly, agentteams, multi-agent, matrix, higress, minio, controller, openclaw]
+                profiles: [container]
         settings:
             source_path: ./plugins

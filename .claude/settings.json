@@ -1,5 +1,6 @@
 {
   "enabledPlugins": {
+    "charly-agentteams@charly-plugins": true,
     "charly-automation@charly-plugins": true,
     "charly-build@charly-plugins": true,
     "charly-check@charly-plugins": true,
