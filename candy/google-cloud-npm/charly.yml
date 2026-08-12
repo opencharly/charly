@@ -38,8 +38,8 @@ google-cloud-npm-skill:
         family: coder
         owner: google-cloud-npm
         description: |-
-            Google Cloud npm packages: firebase-tools and Gemini CLI.
-            Use when working with Firebase, Gemini CLI, or GCP Node.js tooling.
+            Google Cloud npm packages: the Firebase CLI.
+            Use when working with Firebase or GCP Node.js tooling.
         content: |-
             # google-cloud-npm -- GCP npm packages
             
@@ -47,13 +47,12 @@ google-cloud-npm-skill:
             
             | Property | Value |
             |----------|-------|
-            | Dependencies | `google-cloud`, `nodejs` |
+            | Dependencies | `google-cloud`, `nodejs`, `gemini` |
             | Install files | `package.json` |
             
             ## Packages
             
             - `firebase-tools` (npm) -- Firebase CLI
-            - `@google/gemini-cli` (npm) -- Gemini CLI
             
             ## Usage
             
@@ -66,19 +65,21 @@ google-cloud-npm-skill:
             
             ## Used In Boxes
             
-            Not currently used in any enabled boxes. Depends on `google-cloud` + `nodejs`.
+            Not currently used in any enabled boxes. Depends on `google-cloud` + `nodejs`; the
+            Gemini CLI is provided by the `gemini` candy (which pins `@google/gemini-cli`), so a
+            composing box that also composes `gemini` keeps its pinned version.
             
             ## Related Candies
             
             - `/charly-coder:google-cloud` -- Google Cloud SDK dependency
             - `/charly-coder:nodejs` -- Node.js runtime dependency
+            - `/charly-coder:gemini` -- the Gemini CLI (pinned `@google/gemini-cli`)
             
             ## When to Use This Skill
             
             Use when the user asks about:
             
             - Firebase CLI tools or deployment
-            - Gemini CLI for Google AI
             - GCP npm packages
             
             ## Author + Test References
