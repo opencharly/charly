@@ -332,11 +332,15 @@ func listTargets(rp *spec.ResolvedProject) {
 }
 
 // listServices prints candies that trigger any init system — the InitCandy predicate
-// (HasAnyInit || PortRelayPorts>0), reconstructed from the candy view's has_init + port_relay fields.
+// (HasAnyInit || PortRelayPorts>0), reconstructed from the candy view's init_systems +
+// port_relay fields. The aggregate has_init bool is never populated by the resolution
+// pipeline (PopulateCandyInitSystem fills the per-init-system init_systems map; the
+// aggregate folds into HasContent, not HasInit), so the predicate reads init_systems —
+// non-empty means at least one init system (supervisord/systemd) triggers for this candy.
 func listServices(rp *spec.ResolvedProject) {
 	for _, name := range sortedKeys(rp.Candies) {
 		c := rp.Candies[name]
-		if c.HasInit || len(c.PortRelayPorts) > 0 {
+		if len(c.InitSystems) > 0 || len(c.PortRelayPorts) > 0 {
 			fmt.Println(name)
 		}
 	}

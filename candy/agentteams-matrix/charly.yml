@@ -15,7 +15,7 @@ agentteams-matrix:
               dest: /usr/local/bin/tuwunel
         env_accept:
             - name: AGENTTEAMS_MATRIX_DOMAIN
-              description: "Matrix server name (default: matrix-local.agentteams.io:8080). Pass via: charly config agentteams-core-app -e AGENTTEAMS_MATRIX_DOMAIN=<domain>"
+              description: "Matrix server name (default: matrix-local.agentteams.io:8080). Pass via: charly config agentteams -e AGENTTEAMS_MATRIX_DOMAIN=<domain>"
             - name: AGENTTEAMS_REGISTRATION_TOKEN
               description: "Matrix registration token the controller uses to create worker/human accounts"
         volume:

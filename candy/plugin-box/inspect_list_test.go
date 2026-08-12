@@ -253,3 +253,36 @@ func TestPrintImageTags_BoxFilterNarrows(t *testing.T) {
 		t.Errorf("printImageTags with boxFilter=arch missing arch's own entry: %q", out)
 	}
 }
+
+// TestListServices_InitSystemsPredicate locks the listServices fix: the aggregate has_init
+// bool is never populated by the resolution pipeline (PopulateCandyInitSystem fills the
+// per-init-system init_systems map; the aggregate folds into HasContent, not HasInit), so
+// the InitCandy predicate MUST read init_systems. A candy whose only trigger is the dead
+// has_init field must NOT be listed — that is the regression this test guards.
+func TestListServices_InitSystemsPredicate(t *testing.T) {
+	rp := &spec.ResolvedProject{
+		Candies: map[string]spec.CandyView{
+			"with-init": {
+				InitSystems: map[string]bool{"supervisord": true},
+			},
+			"with-relay": {
+				PortRelayPorts: []int{18789},
+			},
+			"with-dead-has-init": {
+				HasInit: true,
+			},
+			"plain": {},
+		},
+	}
+	out := captureStdout(t, func() { listServices(rp) })
+	for _, want := range []string{"with-init", "with-relay"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("listServices missing %q (init_systems/port_relay trigger):\n%s", want, out)
+		}
+	}
+	for _, notWant := range []string{"with-dead-has-init", "plain"} {
+		if strings.Contains(out, notWant) {
+			t.Errorf("listServices listed %q (no init_systems/port_relay trigger):\n%s", notWant, out)
+		}
+	}
+}

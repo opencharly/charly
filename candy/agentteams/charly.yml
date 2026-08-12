@@ -1,0 +1,31 @@
+agentteams:
+    candy:
+        version: 2026.223.1500
+        description: |-
+            The AgentTeams top composition: the controller plus the four foundation
+            services it embeds in one container — agentteams-minio (MinIO S3 +
+            mc-mirror), agentteams-matrix (Tuwunel Matrix homeserver),
+            agentteams-element (Element Web via rootless nginx), agentteams-higress
+            (the Higress AI gateway: apiserver, controller, pilot, envoy gateway,
+            console), and agentteams-controller (the kine-backed kube-apiserver +
+            Manager/Worker/Team/Human reconciler serving the REST API on :8090).
+            Every service runs as the image user (uid 1000) against the /data
+            volume — the rootless charly architecture, no root anywhere. All
+            service start scripts are charly-owned (written by the candies), not
+            upstream AgentTeams scripts. Spawned Manager/Worker containers join
+            the charly network and reach the controller — and every in-container
+            service — by the controller container's DNS name.
+        candy:
+            - agentteams-minio
+            - agentteams-matrix
+            - agentteams-element
+            - agentteams-higress
+            - agentteams-controller
+        plan:
+            - check: the full AgentTeams composition is present (controller, minio, matrix, element, higress)
+              command: |
+                  test -x /usr/local/bin/agentteams-controller &&
+                  test -x /usr/local/bin/minio &&
+                  test -x /usr/local/bin/tuwunel &&
+                  test -f /opt/element-web/index.html &&
+                  test -x /usr/local/bin/envoy
