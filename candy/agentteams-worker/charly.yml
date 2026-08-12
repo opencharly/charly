@@ -1,0 +1,334 @@
+agentteams-worker:
+    candy:
+        version: 2026.224.0600
+        description: |-
+            The AgentTeams Worker agent image — the openclaw gateway runtime the
+            controller spawns for every Worker CR. Composes the shared
+            agentteams-openclaw candy (openclaw built from the pinned upstream
+            source commit) and the shared agentteams-cli candy (agt REST client +
+            mc), then installs the shared AgentTeams protocol libs
+            (/opt/agentteams/scripts/lib/) from the pinned AgentTeams source. The
+            charly-owned start-worker.sh sources those libs, pulls the worker
+            config (openclaw.json, SOUL.md, AGENTS.md, skills) from MinIO, starts
+            the file-sync loops, re-logins to Matrix for a fresh E2EE device, and
+            execs the openclaw gateway. The controller passes
+            HOME=/root/agentteams-fs/agents/<name> (hardcoded upstream) and the
+            worker's config/state all lives in MinIO (stateless), so the image
+            chmods /root to 755 (traversable by uid 1000) and pre-creates
+            /root/agentteams-fs + /root/.openclaw uid-1000-writable at build
+            time; the per-worker agents/<name> workspace is created at runtime.
+            Rootless: the service runs as the image user (uid 1000).
+        require:
+            - agentteams-openclaw
+            - agentteams-cli
+        service:
+            - name: agentteams-worker
+              exec: /opt/agentteams-worker/start-worker.sh
+              priority: 800
+              working_directory: /
+        plan:
+            - run: install the shared AgentTeams protocol libs
+              command: |
+                  mkdir -p /opt/agentteams/scripts/lib
+                  cp -a /opt/agentteams-src/shared/lib/. /opt/agentteams/scripts/lib/
+                  rm -rf /opt/agentteams-src
+            - run: pre-create the rootless worker runtime directories
+              command: |
+                  # The controller passes HOME=/root/agentteams-fs/agents/<name>
+                  # (hardcoded upstream, written for a root container). The worker
+                  # runs as the image user (uid 1000), so /root (mode 750
+                  # root:root in the cachyos base) must be traversable — chmod 755
+                  # grants traverse+read to uid 1000 — and the runtime dirs
+                  # themselves are uid-1000-writable. The per-worker
+                  # agents/<name> workspace is created by the start script at
+                  # runtime.
+                  chmod 755 /root
+                  mkdir -p /root/agentteams-fs /root/.openclaw
+                  chown -R 1000:1000 /root/agentteams-fs /root/.openclaw
+            - run: write the rootless worker start script
+              write: /opt/agentteams-worker/start-worker.sh
+              mode: "0755"
+              content: |
+                  #!/bin/bash
+                  # start-worker.sh — charly-owned rootless AgentTeams worker
+                  # launcher. The controller spawns this container with the worker
+                  # env (gateway key, matrix token, room id, cluster defaults with
+                  # the embedded URL rewrite applied). This script sources the
+                  # shared AgentTeams protocol libs, pulls the worker config from
+                  # MinIO, starts the file-sync loops, re-logins to Matrix for a
+                  # fresh E2EE device, and execs the openclaw gateway.
+                  set -e
+
+                  source /opt/agentteams/scripts/lib/agentteams-env.sh
+                  source /opt/agentteams/scripts/lib/merge-openclaw-config.sh
+                  source /opt/agentteams/scripts/lib/worker-file-sync.sh
+
+                  WORKER_NAME="${AGENTTEAMS_WORKER_NAME:?AGENTTEAMS_WORKER_NAME is required}"
+                  FS_ENDPOINT="${AGENTTEAMS_FS_ENDPOINT:-}"
+                  FS_ACCESS_KEY="${AGENTTEAMS_FS_ACCESS_KEY:-}"
+                  FS_SECRET_KEY="${AGENTTEAMS_FS_SECRET_KEY:-}"
+
+                  log() { echo "[agentteams-worker $(date '+%Y-%m-%d %H:%M:%S')] $1"; }
+
+                  # --- Workspace (HOME is set by the controller to
+                  # /root/agentteams-fs/agents/<name>) ---
+                  AGENTTEAMS_ROOT="/root/agentteams-fs"
+                  WORKSPACE="${AGENTTEAMS_ROOT}/agents/${WORKER_NAME}"
+
+                  # --- Step 1: configure the mc alias for the centralized file
+                  # system (controller-issued storage credentials when present,
+                  # else the static worker credentials) ---
+                  if ensure_mc_credentials && agentteams_mc_host_configured; then
+                      log "Configuring mc alias via controller-issued storage credentials (${AGENTTEAMS_STORAGE_ALIAS})..."
+                  else
+                      if [ "${AGENTTEAMS_STORAGE_PROVIDER:-minio}" = "oss" ]; then
+                          log "ERROR: OSS storage requires controller-issued storage credentials, but $(agentteams_mc_host_var) is not configured"
+                          exit 1
+                      fi
+                      log "Configuring mc alias for static storage credentials (${AGENTTEAMS_STORAGE_ALIAS})..."
+                      mc alias set "${AGENTTEAMS_STORAGE_ALIAS}" "${FS_ENDPOINT:?AGENTTEAMS_FS_ENDPOINT is required}" \
+                          "${FS_ACCESS_KEY:?AGENTTEAMS_FS_ACCESS_KEY is required}" \
+                          "${FS_SECRET_KEY:?AGENTTEAMS_FS_SECRET_KEY is required}"
+                  fi
+
+                  # --- Step 2: pull the worker config and shared data from
+                  # centralized storage ---
+                  mkdir -p "${WORKSPACE}" "${AGENTTEAMS_ROOT}/shared"
+
+                  log "Pulling Worker config from centralized storage..."
+                  ensure_mc_credentials 2>/dev/null || true
+                  RETRY=0
+                  until mc mirror "${AGENTTEAMS_STORAGE_PREFIX}/agents/${WORKER_NAME}/" "${WORKSPACE}/" --overwrite \
+                      --exclude ".openclaw/matrix/**" --exclude ".openclaw/canvas/**" --exclude "credentials/**"; do
+                      RETRY=$((RETRY + 1))
+                      if [ "${RETRY}" -gt 6 ]; then
+                          log "ERROR: failed to pull Worker config from MinIO after retries"
+                          exit 1
+                      fi
+                      log "Waiting for Worker config prefix in MinIO (attempt ${RETRY}/6)..."
+                      sleep 5
+                  done
+                  mc mirror "${AGENTTEAMS_STORAGE_PREFIX}/shared/" "${AGENTTEAMS_ROOT}/shared/" --overwrite 2>/dev/null || true
+
+                  # Mark pull completion — the local→remote sync loop uses this
+                  # marker to avoid pushing back files that were just pulled.
+                  PULL_MARKER="${WORKSPACE}/.last-pull"
+                  touch "${PULL_MARKER}"
+
+                  # Verify the essential config files exist, retry if the
+                  # controller's config push is still in progress.
+                  RETRY=0
+                  while [ ! -f "${WORKSPACE}/openclaw.json" ] || [ ! -f "${WORKSPACE}/SOUL.md" ] \
+                        || [ ! -f "${WORKSPACE}/AGENTS.md" ]; do
+                      RETRY=$((RETRY + 1))
+                      if [ "${RETRY}" -gt 6 ]; then
+                          log "ERROR: openclaw.json, SOUL.md or AGENTS.md not found after retries. Manager may not have created this Worker's config yet."
+                          exit 1
+                      fi
+                      log "Waiting for config files to appear in MinIO (attempt ${RETRY}/6)..."
+                      sleep 5
+                      mc mirror "${AGENTTEAMS_STORAGE_PREFIX}/agents/${WORKER_NAME}/" "${WORKSPACE}/" --overwrite \
+                          --exclude ".openclaw/matrix/**" --exclude ".openclaw/canvas/**" --exclude "credentials/**" 2>/dev/null || true
+                      touch "${PULL_MARKER}"
+                  done
+
+                  # Symlink to the default OpenClaw config path so CLI commands
+                  # find the config.
+                  mkdir -p "${HOME}/.openclaw"
+                  ln -sf "${WORKSPACE}/openclaw.json" "${HOME}/.openclaw/openclaw.json"
+
+                  # Skills symlink: ~/.agents/skills -> ~/skills so `skills add -g`
+                  # installs into ~/skills/ (synced to MinIO, persists across
+                  # restarts). -n (--no-dereference) replaces an existing
+                  # symlink-to-directory instead of nesting inside it.
+                  mkdir -p "${HOME}/skills"
+                  mkdir -p "${HOME}/.agents"
+                  [ -L "${HOME}/skills/skills" ] && rm -f "${HOME}/skills/skills"
+                  ln -sfn "${HOME}/skills" "${HOME}/.agents/skills"
+
+                  # Restore skills from MinIO if skills-lock.json exists but the
+                  # skills dir is empty (non-fatal).
+                  if [ -f "${WORKSPACE}/skills-lock.json" ] && [ -z "$(ls -A ${WORKSPACE}/skills 2>/dev/null | grep -v file-sync)" ]; then
+                      log "Found skills-lock.json but skills directory is empty, restoring skills..."
+                      cd "${WORKSPACE}" && skills experimental_install -y 2>/dev/null || log "Warning: skills restore failed, will need to reinstall"
+                  fi
+
+                  # Ensure agentteams-sync is functional (MinIO does not preserve
+                  # Unix permission bits, so invoke via /bin/sh).
+                  printf '#!/bin/bash\nexec /bin/sh "%s/skills/file-sync/scripts/agentteams-sync.sh" "$@"\n' \
+                      "${WORKSPACE}" > /usr/local/bin/agentteams-sync
+                  chmod +x /usr/local/bin/agentteams-sync
+
+                  # Defensive symlink: /opt/agentteams/agent/skills -> actual skills
+                  mkdir -p /opt/agentteams/agent
+                  ln -sfn "${WORKSPACE}/skills" /opt/agentteams/agent/skills
+
+                  log "Worker config pulled successfully (HOME=${HOME})"
+
+                  # --- Step 3: start file sync ---
+                  # Local -> Remote: change-triggered push of Worker-managed
+                  # content (successful-push marker advances so the same files do
+                  # not trigger a full comparison every 5s).
+                  # Remote -> Local: 5-minute fallback pull of Manager-managed
+                  # files (openclaw.json local-first merge, mcporter, skills,
+                  # shared/).
+                  WORKER_SYNC_STATE_DIR="/tmp/agentteams-worker-sync"
+                  worker_sync_init "${WORKER_SYNC_STATE_DIR}" "${PULL_MARKER}"
+                  (
+                      while true; do
+                          if ! worker_sync_push_once \
+                              "${WORKSPACE}" \
+                              "${AGENTTEAMS_STORAGE_PREFIX}/agents/${WORKER_NAME}" \
+                              "${WORKER_SYNC_STATE_DIR}"; then
+                              log "WARNING: Local->Remote incremental sync failed; changes will be retried"
+                          fi
+                          sleep 5
+                      done
+                  ) &
+                  log "Local->Remote change-triggered sync started (PID: $!)"
+
+                  (
+                      while true; do
+                          sleep 300
+                          ensure_mc_credentials 2>/dev/null || true
+                          mc cp "${AGENTTEAMS_STORAGE_PREFIX}/agents/${WORKER_NAME}/openclaw.json" /tmp/openclaw-remote.json 2>/dev/null || true
+                          if ! merge_openclaw_config /tmp/openclaw-remote.json "${WORKSPACE}/openclaw.json"; then
+                              log "WARNING: failed to merge remote openclaw.json; keeping local config"
+                          fi
+                          rm -f /tmp/openclaw-remote.json
+                          mc cp "${AGENTTEAMS_STORAGE_PREFIX}/agents/${WORKER_NAME}/config/mcporter.json" "${WORKSPACE}/config/mcporter.json" 2>/dev/null || true
+                          mc mirror "${AGENTTEAMS_STORAGE_PREFIX}/agents/${WORKER_NAME}/skills/" "${WORKSPACE}/skills/" --overwrite 2>/dev/null || true
+                          find "${WORKSPACE}/skills" -name '*.sh' -exec chmod +x {} + 2>/dev/null || true
+                          mc mirror "${AGENTTEAMS_STORAGE_PREFIX}/shared/" "${AGENTTEAMS_ROOT}/shared/" --overwrite --newer-than "5m" 2>/dev/null || true
+                          # Refresh both watermarks so freshly-pulled
+                          # Manager-managed files are not classified as Worker
+                          # edits.
+                          touch "${PULL_MARKER}"
+                          worker_sync_mark_remote_pull "${WORKER_SYNC_STATE_DIR}"
+                      done
+                  ) &
+                  log "Remote->Local fallback sync started (Manager-managed files only, every 5m, PID: $!)"
+
+                  # --- Step 4: configure mcporter (MCP tool CLI) ---
+                  MCPORTER_DEFAULT="${WORKSPACE}/config/mcporter.json"
+                  MCPORTER_COMPAT="${WORKSPACE}/mcporter-servers.json"
+                  mkdir -p "${WORKSPACE}/config"
+                  if [ -f "${MCPORTER_DEFAULT}" ]; then
+                      log "mcporter configured: ${MCPORTER_DEFAULT}"
+                  elif [ -f "${MCPORTER_COMPAT}" ] && [ ! -L "${MCPORTER_COMPAT}" ]; then
+                      # Migrate legacy mcporter-servers.json to the new default path
+                      mv "${MCPORTER_COMPAT}" "${MCPORTER_DEFAULT}"
+                      log "mcporter config migrated to ${MCPORTER_DEFAULT}"
+                  else
+                      log "mcporter config not yet available (will be pulled via file-sync when MCP servers are configured)"
+                  fi
+                  # Backward-compatible symlink (always recreate to ensure correctness)
+                  ln -sfn "${MCPORTER_DEFAULT}" "${MCPORTER_COMPAT}"
+                  export MCPORTER_CONFIG="${MCPORTER_DEFAULT}"
+
+                  # --- Step 5: launch the OpenClaw Worker Agent ---
+                  log "Starting Worker Agent: ${WORKER_NAME}"
+                  export OPENCLAW_CONFIG_PATH="${WORKSPACE}/openclaw.json"
+                  cd "${WORKSPACE}"
+
+                  # Clean orphaned session write locks (e.g. from SIGKILL or crash
+                  # before exit handlers) — prevents "session file locked" when a
+                  # PID was reused.
+                  find "${HOME}/.openclaw/agents" -name "*.jsonl.lock" -delete 2>/dev/null || true
+
+                  # Clean Matrix crypto storage (SQLite WAL may be corrupted after
+                  # an unclean shutdown); crypto state is re-negotiated on startup.
+                  rm -rf "${HOME}/.openclaw/matrix" 2>/dev/null || true
+
+                  # Re-login to Matrix for a fresh access token + device ID.
+                  # Under E2EE, reusing the old access token (same device_id) with
+                  # a new identity key (crypto storage was just wiped) causes other
+                  # clients to reject key distribution. Re-login creates a new
+                  # device_id, matching the Manager's behavior.
+                  MATRIX_PASSWORD_FILE="${AGENTTEAMS_STORAGE_PREFIX}/agents/${WORKER_NAME}/credentials/matrix/password"
+                  MATRIX_PASSWORD=$(mc cat "${MATRIX_PASSWORD_FILE}" 2>/dev/null) || true
+                  if [ -n "${MATRIX_PASSWORD}" ]; then
+                      # Read the homeserver URL from openclaw.json (already pulled
+                      # from MinIO).
+                      MATRIX_SERVER=$(jq -r '.channels.matrix.homeserver // empty' "${WORKSPACE}/openclaw.json" 2>/dev/null)
+                      if [ -n "${MATRIX_SERVER}" ]; then
+                          log "Re-logging into Matrix to get fresh access token and device ID..."
+                          LOGIN_RESP=$(curl -sf -X POST "${MATRIX_SERVER}/_matrix/client/v3/login" \
+                              -H 'Content-Type: application/json' \
+                              -d '{
+                                  "type": "m.login.password",
+                                  "identifier": {"type": "m.id.user", "user": "'"${WORKER_NAME}"'"},
+                                  "password": "'"${MATRIX_PASSWORD}"'"
+                              }' 2>/dev/null) || true
+                          NEW_TOKEN=$(echo "${LOGIN_RESP}" | jq -r '.access_token // empty' 2>/dev/null)
+                          NEW_DEVICE=$(echo "${LOGIN_RESP}" | jq -r '.device_id // empty' 2>/dev/null)
+                          if [ -n "${NEW_TOKEN}" ] && [ "${NEW_TOKEN}" != "null" ]; then
+                              jq --arg token "${NEW_TOKEN}" '.channels.matrix.accessToken = $token' \
+                                  "${WORKSPACE}/openclaw.json" > /tmp/openclaw-relogin.json \
+                                  && mv /tmp/openclaw-relogin.json "${WORKSPACE}/openclaw.json"
+                              log "Matrix re-login successful (new device: ${NEW_DEVICE}, token prefix: ${NEW_TOKEN:0:10}...)"
+                          else
+                              log "WARNING: Matrix re-login failed, using existing access token (E2EE may not work with Element Web)"
+                          fi
+                      else
+                          log "WARNING: Missing homeserver URL in openclaw.json, skipping Matrix re-login"
+                      fi
+                      # Clear the password from memory
+                      MATRIX_PASSWORD=""
+                  else
+                      log "No Matrix password found in MinIO, skipping re-login (E2EE may not work after restart)"
+                  fi
+
+                  # Disable full-process respawn so the CLI uses its internal
+                  # restart loop. Without this, config reload spawns a detached
+                  # child and exits, killing the container.
+                  export OPENCLAW_NO_RESPAWN=1
+
+                  # Optional matrix-plugin trace logging — when
+                  # AGENTTEAMS_MATRIX_DEBUG=1 is set in the worker environment
+                  # (propagated by the controller), turn on OPENCLAW_MATRIX_DEBUG
+                  # so the matrix plugin emits structured INFO-level lifecycle
+                  # traces.
+                  if [ "${AGENTTEAMS_MATRIX_DEBUG:-}" = "1" ] && [ -z "${OPENCLAW_MATRIX_DEBUG:-}" ]; then
+                      export OPENCLAW_MATRIX_DEBUG=1
+                      log "AGENTTEAMS_MATRIX_DEBUG=1 detected; OPENCLAW_MATRIX_DEBUG=1 exported for matrix plugin tracing"
+                  fi
+
+                  # Background readiness reporter: wait for the local gateway to
+                  # be healthy, then report ready via the agt CLI (the controller
+                  # projected the SA token to /var/run/secrets/agentteams/token).
+                  if [ -n "${AGENTTEAMS_CONTROLLER_URL:-}" ]; then
+                  (
+                      TIMEOUT=120; ELAPSED=0
+                      while [ "${ELAPSED}" -lt "${TIMEOUT}" ]; do
+                          if openclaw gateway health --json 2>/dev/null | grep -q '"ok"' 2>/dev/null; then
+                              break
+                          fi
+                          sleep 5; ELAPSED=$((ELAPSED + 5))
+                      done
+                      if [ "${ELAPSED}" -ge "${TIMEOUT}" ]; then
+                          log "WARNING: readiness reporter timed out waiting for gateway after ${TIMEOUT}s"
+                          exit 1
+                      fi
+                      agt worker report-ready --name "${AGENTTEAMS_WORKER_CR_NAME:-${WORKER_NAME}}"
+                  ) &
+                  log "Background readiness reporter started (PID: $!)"
+                  fi
+
+                  # Disable openclaw's observe-recovery to prevent a stale baseline
+                  # from overwriting the user-customized openclaw.json on gateway
+                  # restart. .bak is preserved as backup.
+                  rm -f "${HOME}/.openclaw/logs/config-health.json" 2>/dev/null || true
+
+                  exec openclaw gateway run --verbose --force
+            - check: the shared AgentTeams protocol libs are installed
+              file:
+                file: /opt/agentteams/scripts/lib/worker-file-sync.sh
+                exists: true
+            - check: the worker start script is installed
+              file:
+                file: /opt/agentteams-worker/start-worker.sh
+                exists: true
+                filetype: file
+            - check: the worker runtime directories are uid-1000-writable and /root is traversable
+              command: '[ -d /root/agentteams-fs ] && [ "$(stat -c %u /root/agentteams-fs)" = "1000" ] && [ "$(stat -c %a /root)" = "755" ]'

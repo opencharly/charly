@@ -2681,7 +2681,7 @@ agentteams:
             - agentteams
 agentteams-manager:
     candy:
-        version: 2026.223.1500
+        version: 2026.224.0600
         base: cachyos.cachyos
         tag: manager
         description: |-
@@ -2707,6 +2707,34 @@ agentteams-manager:
             - /etc/supervisord.conf
         candy:
             - agentteams-manager
+agentteams-worker:
+    candy:
+        version: 2026.224.0600
+        base: cachyos.cachyos
+        tag: worker
+        description: |-
+            The AgentTeams worker image: a cachyos base composing the
+            agentteams-worker layer — the openclaw gateway runtime (built from
+            the pinned upstream source commit) with the agt REST client, mc, and
+            the shared AgentTeams protocol libs. The controller spawns this image
+            for Worker CRs through the host rootless podman socket; the worker
+            joins the charly network and reaches the controller's in-container
+            services by the controller container's DNS name. Rootless: the
+            service runs as the image user (uid 1000).
+        # The controller spawns the worker container DIRECTLY from this image's
+        # baked OCI config (its dockerCreatePayload sends no Cmd/Entrypoint), with
+        # no charly deploy in the loop to inject the init command — so the worker
+        # box bakes the supervisord init as its OCI entrypoint, exactly like the
+        # manager box. The base image's inherited default command is cleared at
+        # emission (CMD []), so the entrypoint runs bare. /etc/supervisord.conf is
+        # assembled at build time.
+        entrypoint:
+            - supervisord
+            - -n
+            - -c
+            - /etc/supervisord.conf
+        candy:
+            - agentteams-worker
 check-agentteams-pod:
     pod:
         image: agentteams
@@ -2718,7 +2746,9 @@ check-agentteams-pod:
             Higress AI gateway, and the controller (kube-apiserver + REST API) all build,
             start, and stay up as uid 1000 against the /data volume — and that the controller
             spawns the manager container from the pre-built agentteams-manager image through
-            the host rootless podman socket (AGENTTEAMS_MANAGER_IMAGE).
+            the host rootless podman socket (AGENTTEAMS_MANAGER_IMAGE), then creates a Worker
+            CR and spawns the worker container from the pre-built agentteams-worker image
+            (AGENTTEAMS_WORKER_IMAGE), which reaches Running and joins its Matrix room.
         volume:
             - name: podman-socket
               type: bind
@@ -2726,6 +2756,7 @@ check-agentteams-pod:
               path: /run/user/1000/podman/podman.sock
         env:
             AGENTTEAMS_MANAGER_IMAGE: ghcr.io/opencharly/agentteams-manager:manager
+            AGENTTEAMS_WORKER_IMAGE: ghcr.io/opencharly/agentteams-worker:worker
         security:
             security_opt:
                 - label=disable
@@ -2814,3 +2845,44 @@ check-agentteams-pod:
                   done
                   echo "manager never reached Running: ${resp}"
                   exit 1
+            - check: the controller creates a Worker CR, spawns the worker container from the pre-built agentteams-worker image, and the worker reaches Running with its Matrix room created (proves AGENTTEAMS_WORKER_IMAGE is in the host store and the controller can spawn the worker through the bound podman socket)
+              id: agentteams-worker-running
+              timeout: 300s
+              context:
+                - runtime
+              command: |
+                  # Shell vars are deliberately lowercase: the check runner expands
+                  # UPPERCASE-variable refs as runtime variables and SKIPs on an
+                  # unresolved one.
+                  token="$(cat /var/run/agentteams/cli-token 2>/dev/null)"
+                  test -n "${token}"
+                  worker="bed-worker"
+                  # Create the Worker CR (containerManaged defaults to true; the
+                  # runtime resolves to openclaw and the image to
+                  # AGENTTEAMS_WORKER_IMAGE). A 409 (already exists) is fine on a
+                  # fresh `charly update` re-run — the /data volume persists, so
+                  # the Worker CR from the prior run is still there and the poll
+                  # below reconciles it to Running.
+                  curl -fsS -X POST -H "Authorization: Bearer ${token}" \
+                      -H 'Content-Type: application/json' \
+                      -d "{\"name\": \"${worker}\"}" \
+                      http://127.0.0.1:8090/api/v1/workers >/dev/null 2>&1 || true
+                  # Poll until the worker reaches Running AND its Matrix room is
+                  # provisioned (roomID non-empty).
+                  for i in $(seq 1 90); do
+                      resp="$(curl -fsS -H "Authorization: Bearer ${token}" http://127.0.0.1:8090/api/v1/workers/${worker} 2>/dev/null)" || { sleep 2; continue; }
+                      if echo "${resp}" | grep -q '"phase":"Running"' && echo "${resp}" | grep -q '"roomID":"!'; then
+                          break
+                      fi
+                      sleep 2
+                  done
+                  echo "${resp}" | grep -q '"phase":"Running"' || { echo "worker never reached Running: ${resp}"; exit 1; }
+                  echo "${resp}" | grep -q '"roomID":"!' || { echo "worker room never provisioned: ${resp}"; exit 1; }
+                  # The room exists on the homeserver: resolve the worker room
+                  # alias via the public Matrix directory API (the alias is
+                  # #agentteams-worker-<name>:<matrix-domain>, the same shape the
+                  # controller's own matrix client resolves).
+                  alias_enc="%23agentteams-worker-${worker}%3Amatrix-local.agentteams.io%3A8080"
+                  room="$(curl -fsS "http://127.0.0.1:6167/_matrix/client/v3/directory/room/${alias_enc}" 2>/dev/null)" || { echo "room alias not resolvable"; exit 1; }
+                  echo "${room}" | grep -q '"room_id":"!' || { echo "room alias resolved to no room: ${room}"; exit 1; }
+                  echo "worker ${worker} Running, room provisioned, room alias resolvable"
