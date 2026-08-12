@@ -1080,6 +1080,7 @@ func buildStartArgs(engine, imageRef string, uid, gid int, ports []string, name 
 	args := []string{
 		binary, "run", "-d", "--rm",
 		"--name", name,
+		"--hostname", name,
 		"-w", workingDir,
 	}
 	if len(network) > 0 && network[0] != "" {

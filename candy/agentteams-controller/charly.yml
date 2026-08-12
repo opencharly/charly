@@ -1,0 +1,259 @@
+agentteams-controller:
+    candy:
+        version: 2026.223.1500
+        description: |-
+            The AgentTeams controller — a Go binary (with the `agt` REST client)
+            that embeds a kine-backed kube-apiserver and reconciles Manager/Worker/
+            Team/Human CRs, serving the REST API on :8090. Built from the pinned
+            AgentTeams v1.2.2 source tarball (CGO for the kine sqlite driver, gcc
+            required) plus the kube-apiserver v1.31.3 binary and the CRD + builtin
+            agent trees, and run as a rootless supervisord service. The controller
+            spawns Manager/Worker containers through the rootless podman socket
+            (AGENTTEAMS_PROXY_SOCKET) and mints the admin CLI token to
+            /var/run/agentteams/cli-token. Spawned agents join the charly network
+            (AGENTTEAMS_DOCKER_NETWORK=charly) and reach the controller — and, via
+            the embedded URL rewrite, every in-container service (matrix 6167,
+            minio 9000, higress 8080) — by the controller container's DNS name:
+            the start script derives AGENTTEAMS_CONTROLLER_URL from $(hostname)
+            (an explicit non-loopback override is honored). The start script is
+            charly-owned (written by this candy), not an upstream AgentTeams
+            script: it resolves the shared admin / MinIO / Matrix-registration
+            credentials (env wins, else the self-provisioned files on the /data
+            volume) before exec'ing the controller.
+        require:
+            - golang
+        distro:
+            arch:
+                package:
+                    - gcc
+        env_accept:
+            - name: AGENTTEAMS_ADMIN_USER
+              description: "AgentTeams admin user (default: admin). Pass via: charly config agentteams -e AGENTTEAMS_ADMIN_USER=<user>"
+            - name: AGENTTEAMS_ADMIN_PASSWORD
+              description: "AgentTeams admin password; self-provisioned on /data/agentteams/.admin-password when unset"
+            - name: AGENTTEAMS_MANAGER_IMAGE
+              description: "Container image ref the controller spawns the default Manager from (e.g. ghcr.io/opencharly/agentteams-manager:manager)"
+            - name: AGENTTEAMS_MANAGER_RUNTIME
+              description: "Manager agent runtime (default: openclaw)"
+            - name: AGENTTEAMS_LLM_PROVIDER
+              description: "LLM provider for the manager/worker agents (qwen | openai-compat)"
+            - name: AGENTTEAMS_LLM_API_KEY
+              description: "LLM API key"
+            - name: AGENTTEAMS_OPENAI_BASE_URL
+              description: "Custom OpenAI-compatible base URL when AGENTTEAMS_LLM_PROVIDER=openai-compat"
+            - name: AGENTTEAMS_DEFAULT_MODEL
+              description: "Default model for spawned agents"
+            - name: AGENTTEAMS_EMBEDDING_MODEL
+              description: "Embedding model for spawned agents"
+            - name: AGENTTEAMS_MATRIX_APPSERVICE_ENABLED
+              description: "0 (default) = legacy registration-token Matrix mode; 1 = Matrix application-service mode (requires an appservice token)"
+            - name: AGENTTEAMS_MINIO_USER
+              description: "MinIO root user (shared with the agentteams-minio candy; default: admin)"
+            - name: AGENTTEAMS_MINIO_PASSWORD
+              description: "MinIO root password (shared with the agentteams-minio candy; self-provisioned when unset)"
+            - name: AGENTTEAMS_REGISTRATION_TOKEN
+              description: "Matrix registration token (shared with the agentteams-matrix candy; self-provisioned when unset)"
+        volume:
+            - name: data
+              path: /data
+        port:
+            - 8090
+        env:
+            AGENTTEAMS_PROXY_SOCKET: /run/user/1000/podman/podman.sock
+            AGENTTEAMS_CONFIG_DIR: /home/user/agentteams-fs/agentteams-config
+            AGENTTEAMS_AGENT_FS_DIR: /home/user/agentteams-fs/agents
+            AGENTTEAMS_CREDS_DIR: /data/worker-creds
+            AGENTTEAMS_MATRIX_URL: http://127.0.0.1:6167
+            AGENTTEAMS_MATRIX_DOMAIN: matrix-local.agentteams.io:8080
+            AGENTTEAMS_AI_GATEWAY_ADMIN_URL: http://127.0.0.1:8001
+            AGENTTEAMS_FS_ENDPOINT: http://127.0.0.1:9000
+            AGENTTEAMS_CONTROLLER_URL: http://127.0.0.1:8090
+            AGENTTEAMS_AI_GATEWAY_URL: http://127.0.0.1:8080
+            AGENTTEAMS_DOCKER_NETWORK: charly
+            AGENTTEAMS_DEFAULT_MODEL: gpt-5-mini
+            AGENTTEAMS_MANAGER_RUNTIME: openclaw
+            AGENTTEAMS_KUBE_MODE: embedded
+            AGENTTEAMS_MATRIX_APPSERVICE_ENABLED: "0"
+            AGENTTEAMS_AUTH_TOKEN_FILE: /var/run/agentteams/cli-token
+        service:
+            - name: agentteams-controller
+              exec: /opt/agentteams-controller/start-controller.sh
+              priority: 800
+              working_directory: /
+        plan:
+            - run: download the pinned AgentTeams v1.2.2 source tarball
+              download: "https://github.com/agentscope-ai/AgentTeams/archive/refs/tags/v1.2.2.tar.gz"
+              extract: tar.gz
+              strip_components: 1
+              to: /opt/agentteams-src
+            - run: build the controller and agt binaries from source
+              command: |
+                  cd /opt/agentteams-src/agentteams-controller
+                  CGO_ENABLED=1 go build -o /usr/local/bin/agentteams-controller ./cmd/controller/
+                  CGO_ENABLED=0 go build -o /usr/local/bin/agt ./cmd/agt/
+              cache:
+                  - /root/go/pkg/mod
+                  - /root/.cache/go-build
+            - run: download the pinned kube-apiserver binary
+              download: "https://dl.k8s.io/release/v1.31.3/bin/linux/amd64/kube-apiserver"
+              to: /usr/local/bin/kube-apiserver
+              mode: "0755"
+            - run: install the AgentTeams CRD manifests
+              command: |
+                  mkdir -p /opt/agentteams/config/crd
+                  cp -a /opt/agentteams-src/agentteams-controller/config/crd/. /opt/agentteams/config/crd/
+            - run: install the builtin agent trees (worker-agent, worker runtimes, skills)
+              command: |
+                  mkdir -p /opt/agentteams/agent
+                  cp -a /opt/agentteams-src/manager/agent/worker-agent /opt/agentteams/agent/worker-agent
+                  cp -a /opt/agentteams-src/manager/agent/copaw-worker-agent /opt/agentteams/agent/copaw-worker-agent
+                  cp -a /opt/agentteams-src/manager/agent/hermes-worker-agent /opt/agentteams/agent/hermes-worker-agent
+                  cp -a /opt/agentteams-src/manager/agent/team-leader-agent /opt/agentteams/agent/team-leader-agent
+                  cp -a /opt/agentteams-src/manager/agent/skills /opt/agentteams/agent/skills
+                  rm -rf /opt/agentteams-src
+            - run: pre-create the rootless runtime directories (admin CLI token + podman socket)
+              command: |
+                  mkdir -p /run/agentteams
+                  chown 1000:1000 /run/agentteams
+                  mkdir -p /run/user/1000/podman
+                  chown 1000:1000 /run/user/1000/podman
+            - run: write the rootless controller start script
+              write: /opt/agentteams-controller/start-controller.sh
+              mode: "0755"
+              content: |
+                  #!/bin/bash
+                  # start-controller.sh — charly-owned rootless AgentTeams controller
+                  # launcher. Resolves the shared AgentTeams credentials (admin account,
+                  # MinIO root, Matrix registration token) — env wins, else the
+                  # self-provisioned files on the /data volume — then execs the
+                  # controller. The controller itself handles the rest (kube-apiserver
+                  # subprocess, initializer with built-in retries, Manager CR ensure).
+                  set -e
+
+                  log() { echo "[agentteams-controller $(date '+%Y-%m-%d %H:%M:%S')] $1"; }
+
+                  # --- Admin account: controller REST + Matrix admin + Higress console ---
+                  mkdir -p /data/agentteams
+                  ADMIN_USER="${AGENTTEAMS_ADMIN_USER:-admin}"
+                  ADMIN_PASSWORD="${AGENTTEAMS_ADMIN_PASSWORD:-}"
+                  if [ -z "${ADMIN_PASSWORD}" ]; then
+                      if [ -f /data/agentteams/.admin-password ]; then
+                          ADMIN_PASSWORD="$(cat /data/agentteams/.admin-password)"
+                      else
+                          ADMIN_PASSWORD="$(head -c 16 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 16)"
+                          echo "${ADMIN_PASSWORD}" > /data/agentteams/.admin-password
+                      fi
+                  fi
+                  export AGENTTEAMS_ADMIN_USER="${ADMIN_USER}"
+                  export AGENTTEAMS_ADMIN_PASSWORD="${ADMIN_PASSWORD}"
+
+                  # --- MinIO (OSS) credentials — shared with the agentteams-minio candy ---
+                  # Precedence: AGENTTEAMS_MINIO_PASSWORD env wins, else the shared
+                  # self-provisioned /data/minio/.root-password file (what the MinIO
+                  # server actually runs with), else the admin password fallback.
+                  # The admin fallback MUST come last: AGENTTEAMS_ADMIN_PASSWORD is
+                  # exported above (always non-empty once self-provisioned), so naming
+                  # it as the :- default here would shadow the MinIO file and the
+                  # controller's OSS client would sign with the wrong root password.
+                  MINIO_USER="${AGENTTEAMS_MINIO_USER:-${AGENTTEAMS_ADMIN_USER:-admin}}"
+                  MINIO_PASSWORD="${AGENTTEAMS_MINIO_PASSWORD:-}"
+                  if [ -z "${MINIO_PASSWORD}" ] && [ -f /data/minio/.root-password ]; then
+                      MINIO_PASSWORD="$(cat /data/minio/.root-password)"
+                  fi
+                  if [ -z "${MINIO_PASSWORD}" ]; then
+                      MINIO_PASSWORD="${AGENTTEAMS_ADMIN_PASSWORD:-}"
+                  fi
+                  export AGENTTEAMS_MINIO_USER="${MINIO_USER}"
+                  export AGENTTEAMS_MINIO_PASSWORD="${MINIO_PASSWORD}"
+
+                  # --- Matrix registration token — shared with the agentteams-matrix candy ---
+                  REGISTRATION_TOKEN="${AGENTTEAMS_REGISTRATION_TOKEN:-}"
+                  if [ -z "${REGISTRATION_TOKEN}" ] && [ -f /data/tuwunel/.registration-token ]; then
+                      REGISTRATION_TOKEN="$(cat /data/tuwunel/.registration-token)"
+                  fi
+                  export AGENTTEAMS_REGISTRATION_TOKEN="${REGISTRATION_TOKEN}"
+
+                  # --- Runtime dir the controller mints its admin CLI token into ---
+                  # (hardcoded /var/run/agentteams/cli-token; on Arch /var/run is a
+                  # symlink to /run, which the candy pre-created uid-1000-writable.)
+                  mkdir -p /run/agentteams
+
+                  # --- Controller URL for child agents ---
+                  # In embedded mode the controller rewrites the child-facing
+                  # MatrixURL/FSEndpoint/AIGatewayURL to the host extracted from
+                  # AGENTTEAMS_CONTROLLER_URL (config.go). Children reach the
+                  # controller — and every in-container service — by the container's
+                  # DNS name on the charly network (charly runs containers with the
+                  # container name as hostname: --hostname <name> direct-run and
+                  # quadlet Hostname=<name>), never the loopback default, which
+                  # children cannot resolve. $HOSTNAME is bash's builtin hostname
+                  # var — no hostname(1) binary needed, and the quadlet Hostname=
+                  # makes it the charly-network-resolvable name, not a hex ID. An
+                  # explicit non-loopback override is honored.
+                  case "${AGENTTEAMS_CONTROLLER_URL:-}" in
+                      ""|*127.0.0.1*|*localhost*)
+                          export AGENTTEAMS_CONTROLLER_URL="http://${HOSTNAME}:8090"
+                          ;;
+                  esac
+
+                  exec agentteams-controller
+            - check: the controller binary is built
+              file:
+                file: /usr/local/bin/agentteams-controller
+                exists: true
+                filetype: file
+            - check: the agt REST client binary is built
+              file:
+                file: /usr/local/bin/agt
+                exists: true
+                filetype: file
+            - check: the kube-apiserver binary is installed
+              file:
+                file: /usr/local/bin/kube-apiserver
+                exists: true
+                filetype: file
+            - check: the AgentTeams CRD manifests are installed
+              file:
+                file: /opt/agentteams/config/crd/workers.agentteams.io.yaml
+                exists: true
+            - check: the builtin agent trees are installed
+              file:
+                file: /opt/agentteams/agent/skills
+                exists: true
+                filetype: directory
+            - check: the admin CLI token directory is uid-1000-writable
+              command: '[ -d /run/agentteams ] && [ "$(stat -c %u /run/agentteams)" = "1000" ]'
+            - check: the controller health endpoint answers
+              timeout: 120s
+              context:
+                - runtime
+              http:
+                http: "http://127.0.0.1:${HOST_PORT:8090}/healthz"
+                status: 200
+            - check: the controller mints the admin CLI token
+              context:
+                - runtime
+              command: '[ -f /var/run/agentteams/cli-token ]'
+            - check: the controller REST API answers the authenticated status endpoint
+              timeout: 30s
+              context:
+                - runtime
+              command: |
+                  # command: checks run via podman exec INSIDE the container, so the
+                  # controller is on its in-container port 8090 (not the host-mapped
+                  # port). The shell var is deliberately lowercase — the check runner
+                  # expands UPPERCASE-variable refs as runtime variables and SKIPs on
+                  # an unresolved one, so a shell var must not look like one.
+                  token="$(cat /var/run/agentteams/cli-token 2>/dev/null)"
+                  test -n "${token}"
+                  curl -fsS -o /dev/null -H "Authorization: Bearer ${token}" \
+                      "http://127.0.0.1:8090/api/v1/status"
+            - check: the controller REST API lists managers with the admin token
+              timeout: 30s
+              context:
+                - runtime
+              command: |
+                  token="$(cat /var/run/agentteams/cli-token 2>/dev/null)"
+                  test -n "${token}"
+                  curl -fsS -o /dev/null -H "Authorization: Bearer ${token}" \
+                      "http://127.0.0.1:8090/api/v1/managers"
