@@ -1,5 +1,5 @@
 // Command ledger-validate is the mechanical acceptance gate of the K-wave 2
-// residue-ledger program (the plan at /home/atrawog/.claude/plans/kwave2-residue-ledger-plan.md).
+// residue-ledger program (the plan at ~/.claude/plans/kwave2-residue-ledger-plan.md).
 //
 // WHY THIS TOOL EXISTS: K-wave 1's target was an AGGREGATE ESTIMATE, so the outcome could never be
 // validated against the original number — mid-course re-classifications lived in prose. K-wave 2
