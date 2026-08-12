@@ -549,16 +549,16 @@ func renderWorkerStatusSummary(resp *workerResp) string {
 }
 
 type AgentTeamsWorkerUpdateCmd struct {
-	Name    string `name:"name" help:"Worker name (required)"`
-	Model   string `name:"model" help:"LLM model ID"`
-	Runtime string `name:"runtime" help:"Agent runtime (openclaw|copaw|qwenpaw|hermes|openhuman)"`
-	Image   string `name:"image" help:"Container image override"`
+	Name     string `name:"name" help:"Worker name (required)"`
+	Model    string `name:"model" help:"LLM model ID"`
+	Runtime  string `name:"runtime" help:"Agent runtime (openclaw|copaw|qwenpaw|hermes|openhuman)"`
+	Image    string `name:"image" help:"Container image override"`
 	Identity string `name:"identity" help:"Worker identity description"`
-	Soul    string `name:"soul" help:"Worker SOUL.md content"`
-	Skills  string `name:"skills" help:"Comma-separated built-in skills"`
-	Package string `name:"package" help:"Package URI"`
-	Expose  string `name:"expose" help:"Comma-separated ports to expose"`
-	State   string `name:"state" help:"Desired lifecycle state (Running|Sleeping|Stopped)"`
+	Soul     string `name:"soul" help:"Worker SOUL.md content"`
+	Skills   string `name:"skills" help:"Comma-separated built-in skills"`
+	Package  string `name:"package" help:"Package URI"`
+	Expose   string `name:"expose" help:"Comma-separated ports to expose"`
+	State    string `name:"state" help:"Desired lifecycle state (Running|Sleeping|Stopped)"`
 }
 
 func (c *AgentTeamsWorkerUpdateCmd) Run() error {
@@ -604,17 +604,17 @@ func (c *AgentTeamsWorkerUpdateCmd) Run() error {
 }
 
 type AgentTeamsWorkerApplyCmd struct {
-	Name    string `name:"name" help:"Worker name (required)"`
-	Model   string `name:"model" help:"LLM model ID (default: $AGENTTEAMS_DEFAULT_MODEL, else qwen3.6-plus)"`
-	Zip     string `name:"zip" help:"Local ZIP package (manifest.json)"`
-	Runtime string `name:"runtime" help:"Agent runtime (openclaw|copaw|qwenpaw|hermes|openhuman)"`
-	Image   string `name:"image" help:"Container image override"`
+	Name     string `name:"name" help:"Worker name (required)"`
+	Model    string `name:"model" help:"LLM model ID (default: $AGENTTEAMS_DEFAULT_MODEL, else qwen3.6-plus)"`
+	Zip      string `name:"zip" help:"Local ZIP package (manifest.json)"`
+	Runtime  string `name:"runtime" help:"Agent runtime (openclaw|copaw|qwenpaw|hermes|openhuman)"`
+	Image    string `name:"image" help:"Container image override"`
 	Identity string `name:"identity" help:"Worker identity description"`
-	Soul    string `name:"soul" help:"Worker SOUL.md content (inline)"`
+	Soul     string `name:"soul" help:"Worker SOUL.md content (inline)"`
 	SoulFile string `name:"soul-file" help:"Path to SOUL.md file"`
-	Skills  string `name:"skills" help:"Comma-separated built-in skills"`
-	Package string `name:"package" help:"Package URI (nacos://, http://, oss://) or shorthand"`
-	Expose  string `name:"expose" help:"Comma-separated ports to expose"`
+	Skills   string `name:"skills" help:"Comma-separated built-in skills"`
+	Package  string `name:"package" help:"Package URI (nacos://, http://, oss://) or shorthand"`
+	Expose   string `name:"expose" help:"Comma-separated ports to expose"`
 }
 
 func (c *AgentTeamsWorkerApplyCmd) Run() error {
