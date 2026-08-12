@@ -135,7 +135,7 @@ agentteams-skill:
             Deploy-overridable env: `AGENTTEAMS_MANAGER_IMAGE`, `AGENTTEAMS_WORKER_IMAGE`,
             `AGENTTEAMS_LLM_PROVIDER`, `AGENTTEAMS_OPENAI_BASE_URL`, `AGENTTEAMS_LLM_API_KEY`,
             `AGENTTEAMS_DEFAULT_MODEL`, `AGENTTEAMS_EMBEDDING_MODEL`,
-            `AGENTTEAMS_ADMIN_USER` / `AGENTTEAMS_ADMIN_PASSWORD`, `AGENTTEAMS_LOCAL_ONLY`,
+            `AGENTTEAMS_ADMIN_USER` / `AGENTTEAMS_ADMIN_PASSWORD`,
             `AGENTTEAMS_MANAGER_RUNTIME`, `AGENTTEAMS_DEFAULT_WORKER_RUNTIME`,
             `AGENTTEAMS_MATRIX_APPSERVICE_ENABLED`. Secrets (the minio root password, the
             matrix registration token, the controller admin token) resolve from env or
