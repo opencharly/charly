@@ -2886,3 +2886,44 @@ check-agentteams-pod:
                   room="$(curl -fsS "http://127.0.0.1:6167/_matrix/client/v3/directory/room/${alias_enc}" 2>/dev/null)" || { echo "room alias not resolvable"; exit 1; }
                   echo "${room}" | grep -q '"room_id":"!' || { echo "room alias resolved to no room: ${room}"; exit 1; }
                   echo "worker ${worker} Running, room provisioned, room alias resolvable"
+            - # The compiled-in `charly agentteams` command plugin exercised LIVE against the
+              # running controller. The agentteams box does NOT ship charly, so these are
+              # HOST-side steps (in_container: false): the admin SA token is pulled out of
+              # the container with the charly-native `charly cp` (never ad-hoc podman), and
+              # the plugin's token discovery reads it from AGENTTEAMS_AUTH_TOKEN_FILE while
+              # AGENTTEAMS_CONTROLLER_URL points at the controller's effective host port
+              # (${HOST_PORT:8090}). Shell vars are deliberately lowercase: the check runner
+              # expands UPPERCASE-variable refs as runtime variables and SKIPs on an
+              # unresolved one.
+              check: the compiled-in `charly agentteams status` command reaches the live controller with the admin token and reports the resource counts
+              id: agentteams-plugin-status
+              timeout: 60s
+              context:
+                - runtime
+              command:
+                command: |
+                    token_file="$(mktemp)"
+                    trap 'rm -f "${token_file}"' EXIT
+                    "${CHARLY_BIN}" cp check-agentteams-pod :/var/run/agentteams/cli-token "${token_file}"
+                    export AGENTTEAMS_AUTH_TOKEN_FILE="${token_file}"
+                    export AGENTTEAMS_CONTROLLER_URL="http://127.0.0.1:${HOST_PORT:8090}"
+                    "${CHARLY_BIN}" agentteams status
+                in_container: false
+              stdout:
+                - contains: "Total Workers:"
+            - check: the compiled-in `charly agentteams worker list` command lists the bed-worker the controller spawned (proves the plugin's REST client + token discovery work end-to-end)
+              id: agentteams-plugin-worker-list
+              timeout: 60s
+              context:
+                - runtime
+              command:
+                command: |
+                    token_file="$(mktemp)"
+                    trap 'rm -f "${token_file}"' EXIT
+                    "${CHARLY_BIN}" cp check-agentteams-pod :/var/run/agentteams/cli-token "${token_file}"
+                    export AGENTTEAMS_AUTH_TOKEN_FILE="${token_file}"
+                    export AGENTTEAMS_CONTROLLER_URL="http://127.0.0.1:${HOST_PORT:8090}"
+                    "${CHARLY_BIN}" agentteams worker list
+                in_container: false
+              stdout:
+                - contains: "bed-worker"
