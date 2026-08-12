@@ -102,6 +102,11 @@ const (
 	wordBuilder         = "builder"
 	wordLocalPkgInstall = "local-pkg-install"
 	wordOp              = "op"
+	// wordExtract (C1.7) is the machine-venue materialization of a candy's `extract:` entries
+	// (deploykit.RunVenueExtractStep). It is DEPLOY-ONLY: the container build emits extract
+	// stages directly (candy_stage.go), never an ExtractStep, so it declares Emits=false and
+	// never reaches emitHostCoupled — its only leg is the OpExecute host-engine body.
+	wordExtract = "extract"
 	// wordOCIDispatch (K5-A item 2) is the FULL core provider-registry dispatch relocated from
 	// charly/oci_step_emit.go: given ANY InstallStep's wire view (not just this plugin's own 12
 	// kinds), decide which peer class:step/class:verb provider renders the pod-overlay fragment and
@@ -154,6 +159,9 @@ func NewMeta() pb.PluginMetaServer {
 			emit(wordBuilder, true),
 			emit(wordLocalPkgInstall, true),
 			emit(wordOp, true),
+			// extract (C1.7) is deploy-only (the container build emits extract stages directly,
+			// never an ExtractStep), so Emits=false like apk-install/reboot.
+			emit(wordExtract, false),
 			// oci-dispatch (K5-A item 2) always attempts to emit — the per-target Emits gate lives
 			// INSIDE the dispatch (dispatchClassStep consults the TARGET's own declared contract via
 			// DescribeProvider), not on this wrapper capability itself.
@@ -278,8 +286,17 @@ func execDeployStep(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeReply
 			}
 		}
 		reverseOps = st.Reverse()
+	case *spec.ExtractStep:
+		// The machine-venue `extract:` materialization (deploykit.RunVenueExtractStep — podman
+		// create/cp/rm + tar on the host, PutFile + extract on the venue). deps.ResolveImage /
+		// deps.EnsureImage close over the host *Config + the build-ensure dispatch, exactly like
+		// the Builder leg.
+		if rerr := deploykit.RunVenueExtractStep(ctx, deps.Exec, deps.ResolveImage, deps.EnsureImage, st, opts); rerr != nil {
+			return nil, rerr
+		}
+		reverseOps = st.Reverse()
 	default:
-		return nil, fmt.Errorf("plugin-installstep: OpExecute for %q is not a deploy-leg host-engine step (only builder / local-pkg-install / system-packages route here; execute every other kind via RunSystem/RunUser/PutFile)", req.GetReserved())
+		return nil, fmt.Errorf("plugin-installstep: OpExecute for %q is not a deploy-leg host-engine step (only builder / local-pkg-install / system-packages / extract route here; execute every other kind via RunSystem/RunUser/PutFile)", req.GetReserved())
 	}
 	return sdk.BuildDeployReply(reverseOps, "", "")
 }

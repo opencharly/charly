@@ -9,12 +9,15 @@ agentteams:
             (the Higress AI gateway: apiserver, controller, pilot, envoy gateway,
             console), and agentteams-controller (the kine-backed kube-apiserver +
             Manager/Worker/Team/Human reconciler serving the REST API on :8090).
-            Every service runs as the image user (uid 1000) against the /data
-            volume — the rootless charly architecture, no root anywhere. All
-            service start scripts are charly-owned (written by the candies), not
-            upstream AgentTeams scripts. Spawned Manager/Worker containers join
-            the charly network and reach the controller — and every in-container
-            service — by the controller container's DNS name.
+            Every service runs as the image user (uid 1000) against its own
+            home-relative volume (~/.agentteams/minio, ~/.agentteams/matrix,
+            ~/.agentteams/higress, ~/.agentteams/controller) — the rootless charly
+            architecture, no root anywhere, and each candy installable alone or
+            together with any other. All service start scripts are charly-owned
+            (written by the candies), not upstream AgentTeams scripts. Spawned
+            Manager/Worker containers join the charly network and reach the
+            controller — and every in-container service — by the controller
+            container's DNS name.
         candy:
             - agentteams-minio
             - agentteams-matrix

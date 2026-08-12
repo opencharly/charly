@@ -7,8 +7,8 @@ agentteams-minio:
             minio server (S3 API :9000, console :9001) and the mc-mirror storage
             initializer (bucket creation + agentteams-config mirror) as supervisord
             services. Rootless: both run as the image user (uid 1000) against the
-            /data volume. The service start scripts are charly-owned (written by
-            this candy), not upstream AgentTeams scripts.
+            ~/.agentteams/minio volume. The service start scripts are charly-owned
+            (written by this candy), not upstream AgentTeams scripts.
         extract:
             - source: higress-registry.cn-hangzhou.cr.aliyuncs.com/higress/minio:20260216
               path: /usr/bin/minio
@@ -26,8 +26,8 @@ agentteams-minio:
             - name: AGENTTEAMS_ADMIN_PASSWORD
               description: "AgentTeams admin password, also used as the MinIO root password when AGENTTEAMS_MINIO_PASSWORD is unset"
         volume:
-            - name: data
-              path: /data
+            - name: agentteams-minio
+              path: "~/.agentteams/minio"
         port:
             - 9000
             - 9001
@@ -35,12 +35,19 @@ agentteams-minio:
             - name: minio
               exec: /opt/agentteams-minio/start-minio.sh
               priority: 50
+              user: "1000"
+              enable: true
             - name: mc-mirror
               exec: /opt/agentteams-minio/start-mc-mirror.sh
               priority: 700
+              user: "1000"
+              enable: true
               env:
                 AGENTTEAMS_MC_MIRROR_SCOPE: controller
         plan:
+            - run: "create the minio volume directory under the image user's home (venue-agnostic: ${HOME} resolves to the container home on a pod, the guest home on a VM)"
+              mkdir: "${HOME}/.agentteams/minio"
+              run_as: "${USER}"
             - run: write the rootless minio start script
               write: /opt/agentteams-minio/start-minio.sh
               mode: "0755"
@@ -49,32 +56,34 @@ agentteams-minio:
                   # start-minio.sh — charly-owned rootless minio launcher. Resolves
                   # the MinIO root credentials from the AgentTeams env (AGENTTEAMS_MINIO_*
                   # with AGENTTEAMS_ADMIN_* fallback); when no password is provided, a
-                  # random one is generated and persisted on the /data volume so the
-                  # controller and mc-mirror read the same value. Then execs minio.
+                  # random one is generated and persisted on the ~/.agentteams/minio
+                  # volume so the controller and mc-mirror read the same value. Then
+                  # execs minio.
                   set -e
 
                   MINIO_ROOT_USER="${AGENTTEAMS_MINIO_USER:-${AGENTTEAMS_ADMIN_USER:-admin}}"
                   MINIO_ROOT_PASSWORD="${AGENTTEAMS_MINIO_PASSWORD:-${AGENTTEAMS_ADMIN_PASSWORD:-}}"
 
-                  mkdir -p /data/minio
+                  mkdir -p "${HOME}/.agentteams/minio"
 
                   # Self-provision: minio rejects a root password shorter than 8 chars,
                   # so the bare "admin" fallback is invalid. When unset, generate a
-                  # random one and persist it on the durable volume (rootless: /data is
-                  # uid-1000-owned). A deploy that sets AGENTTEAMS_MINIO_PASSWORD wins.
+                  # random one and persist it on the durable volume (rootless: the
+                  # ~/.agentteams/minio dir is uid-1000-owned). A deploy that sets
+                  # AGENTTEAMS_MINIO_PASSWORD wins.
                   if [ -z "${MINIO_ROOT_PASSWORD}" ]; then
-                      if [ -f /data/minio/.root-password ]; then
-                          MINIO_ROOT_PASSWORD="$(cat /data/minio/.root-password)"
+                      if [ -f "${HOME}/.agentteams/minio/.root-password" ]; then
+                          MINIO_ROOT_PASSWORD="$(cat "${HOME}/.agentteams/minio/.root-password")"
                       else
                           MINIO_ROOT_PASSWORD="$(head -c 16 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 16)"
-                          echo "${MINIO_ROOT_PASSWORD}" > /data/minio/.root-password
+                          echo "${MINIO_ROOT_PASSWORD}" > "${HOME}/.agentteams/minio/.root-password"
                       fi
                   fi
 
                   export MINIO_ROOT_USER
                   export MINIO_ROOT_PASSWORD
 
-                  exec minio server /data/minio --console-address ":9001" --address ":9000"
+                  exec minio server "${HOME}/.agentteams/minio" --console-address ":9001" --address ":9000"
             - run: write the rootless mc-mirror start script
               write: /opt/agentteams-minio/start-mc-mirror.sh
               mode: "0755"
@@ -95,13 +104,13 @@ agentteams-minio:
                   MINIO_S3_URL="${MINIO_S3_URL//:8080/:9000}"
 
                   # Resolve the same root credentials start-minio.sh uses: env wins,
-                  # else the self-provisioned password persisted on the /data volume
+                  # else the self-provisioned password persisted on the minio volume
                   # (minio runs at priority 50, so the file exists by the time this
                   # service starts at priority 700).
                   MINIO_ROOT_USER="${AGENTTEAMS_MINIO_USER:-${AGENTTEAMS_ADMIN_USER:-admin}}"
                   MINIO_ROOT_PASSWORD="${AGENTTEAMS_MINIO_PASSWORD:-${AGENTTEAMS_ADMIN_PASSWORD:-}}"
-                  if [ -z "${MINIO_ROOT_PASSWORD}" ] && [ -f /data/minio/.root-password ]; then
-                      MINIO_ROOT_PASSWORD="$(cat /data/minio/.root-password)"
+                  if [ -z "${MINIO_ROOT_PASSWORD}" ] && [ -f "${HOME}/.agentteams/minio/.root-password" ]; then
+                      MINIO_ROOT_PASSWORD="$(cat "${HOME}/.agentteams/minio/.root-password")"
                   fi
 
                   # Configure the mc alias (direct S3, not the Higress gateway).
@@ -181,7 +190,7 @@ agentteams-minio:
             - check: the minio root password is resolvable (env or self-provisioned file)
               context:
                 - runtime
-              command: '[ -n "$AGENTTEAMS_MINIO_PASSWORD" ] || [ -n "$AGENTTEAMS_ADMIN_PASSWORD" ] || [ -f /data/minio/.root-password ]'
+              command: '[ -n "$AGENTTEAMS_MINIO_PASSWORD" ] || [ -n "$AGENTTEAMS_ADMIN_PASSWORD" ] || [ -f "$HOME/.agentteams/minio/.root-password" ]'
             - check: the mc-mirror storage initialization completed
               context:
                 - runtime

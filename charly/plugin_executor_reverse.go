@@ -115,11 +115,13 @@ func (s *executorReverseServer) GetFile(ctx context.Context, req *pb.GetFileRequ
 }
 
 // RunHostStep is the HOST-ENGINE channel leg (the generalization of the former F3 build channel): an
-// OUT-OF-PROCESS deploy/step plugin walking an InstallPlan hits one of the six step kinds
+// OUT-OF-PROCESS deploy/step plugin walking an InstallPlan hits one of the seven step kinds
 // it CANNOT execute itself because each needs in-core host machinery that cannot move into
 // the leaf plugin/kit package — BuilderStep (podman / BuilderRun / dispatchBuildEnsure),
 // LocalPkgInstallStep (makepkg + pacman/dnf/apt), SystemPackagesStep (the format's
-// phase.install.host template, rendered from the project DistroConfig), an act-verb OpStep
+// phase.install.host template, rendered from the project DistroConfig), an ExtractStep (the
+// machine-venue materialization of a candy's `extract:` entries — podman create/cp/rm + tar on
+// the host, shipped into the venue over the executor), an act-verb OpStep
 // (a builtin ProvisionActor shell that needs the in-proc provider registry), an
 // ExternalPluginStep (a verb served by ANOTHER out-of-process plugin, dispatched over a
 // NESTED reverse channel), or a RebootStep (reboot a charly-owned VM guest + wait for the
@@ -185,6 +187,24 @@ func (s *executorReverseServer) RunHostStep(ctx context.Context, req *pb.HostSte
 		// HostStepDeps (the plugin cannot reach the host's distro vocabulary otherwise).
 		deps := &specexec.HostStepDeps{Exec: s.exec, DistroCfg: s.build.DistroCfg, Opts: opts}
 		reply, rerr := s.invokeExternalStep(specexec.ContextWithHostStepDeps(ctx, deps), ClassStep, spec.PluginEmitStepWords[spec.StepKindSystemPackages], req.GetStepJson())
+		if rerr != nil {
+			return &pb.HostStepReply{Error: rerr.Error()}, nil
+		}
+		reverseOps = reply.ReverseOps
+	case *spec.ExtractStep:
+		// The Extract body (deploykit.RunVenueExtractStep — podman create/cp/rm + tar on the
+		// host, PutFile + extract on the venue) runs plugin-side; it needs the SAME
+		// image-resolve/ensure closures the Builder leg injects (the source image must be
+		// present in the host store before the throwaway container is created), so the deps
+		// thread identically.
+		resolveImage := func(img string) (string, error) {
+			return resolveImageRefForEnsure(img, s.build.Cfg, s.build.ProjectDir)
+		}
+		ensureImage := func(ctx context.Context, img string) error {
+			return dispatchBuildEnsure(ctx, img, s.build.ProjectDir, "", "")
+		}
+		deps := &specexec.HostStepDeps{Exec: s.exec, ResolveImage: resolveImage, EnsureImage: ensureImage, DistroCfg: s.build.DistroCfg, Opts: opts}
+		reply, rerr := s.invokeExternalStep(specexec.ContextWithHostStepDeps(ctx, deps), ClassStep, spec.PluginEmitStepWords[spec.StepKindExtract], req.GetStepJson())
 		if rerr != nil {
 			return &pb.HostStepReply{Error: rerr.Error()}, nil
 		}
@@ -255,7 +275,7 @@ func (s *executorReverseServer) RunHostStep(ctx context.Context, req *pb.HostSte
 		// Only the six host-engine step kinds route here. Every other (plugin-renderable)
 		// kind the plugin EXECUTES itself via the RunSystem/RunUser/PutFile legs — reaching
 		// RunHostStep with one is a plugin-walk bug.
-		return &pb.HostStepReply{Error: fmt.Sprintf("RunHostStep: step kind %q is not a host-engine step (only Builder / LocalPkgInstall / SystemPackages / act-verb Op / ExternalPlugin / Reboot route through the host-engine channel; execute every other kind via RunSystem/RunUser/PutFile)", view.Kind)}, nil
+		return &pb.HostStepReply{Error: fmt.Sprintf("RunHostStep: step kind %q is not a host-engine step (only Builder / LocalPkgInstall / SystemPackages / Extract / act-verb Op / ExternalPlugin / Reboot route through the host-engine channel; execute every other kind via RunSystem/RunUser/PutFile)", view.Kind)}, nil
 	}
 
 	revJSON, err := json.Marshal(reverseOps)

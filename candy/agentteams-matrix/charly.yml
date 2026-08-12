@@ -7,8 +7,8 @@ agentteams-matrix:
             image, running as a supervisord service on :6167 with the CONDUWUIT_*
             environment the AgentTeams controller expects (registration token, room
             lifecycle cleanup, displayname suffix off). Rootless: runs as the image
-            user (uid 1000) against the /data volume. The start script is charly-owned
-            (written by this candy), not an upstream AgentTeams script.
+            user (uid 1000) against the ~/.agentteams/matrix volume. The start script
+            is charly-owned (written by this candy), not an upstream AgentTeams script.
         extract:
             - source: higress-registry.cn-hangzhou.cr.aliyuncs.com/higress/tuwunel:20260216
               path: /usr/bin/tuwunel
@@ -19,15 +19,20 @@ agentteams-matrix:
             - name: AGENTTEAMS_REGISTRATION_TOKEN
               description: "Matrix registration token the controller uses to create worker/human accounts"
         volume:
-            - name: data
-              path: /data
+            - name: agentteams-matrix
+              path: "~/.agentteams/matrix"
         port:
             - 6167
         service:
             - name: tuwunel
               exec: /opt/agentteams-matrix/start-tuwunel.sh
               priority: 100
+              user: "1000"
+              enable: true
         plan:
+            - run: "create the matrix volume directory under the image user's home (venue-agnostic: ${HOME} resolves to the container home on a pod, the guest home on a VM)"
+              mkdir: "${HOME}/.agentteams/matrix"
+              run_as: "${USER}"
             - run: write the rootless tuwunel start script
               write: /opt/agentteams-matrix/start-tuwunel.sh
               mode: "0755"
@@ -37,27 +42,29 @@ agentteams-matrix:
                   # launcher. Projects the AgentTeams env onto the CONDUWUIT_* vars the
                   # homeserver expects, then execs tuwunel. Self-provisions the
                   # registration token: when unset, a random one is generated and
-                  # persisted on the /data volume so the controller reads the same value.
+                  # persisted on the ~/.agentteams/matrix volume so the controller
+                  # reads the same value.
                   set -e
 
-                  mkdir -p /data/tuwunel
+                  mkdir -p "${HOME}/.agentteams/matrix"
 
                   # Self-provision: tuwunel rejects an empty registration token when
                   # registration is allowed. When unset, generate a random one and
-                  # persist it on the durable volume (rootless: /data is uid-1000-owned).
-                  # A deploy that sets AGENTTEAMS_REGISTRATION_TOKEN wins.
+                  # persist it on the durable volume (rootless: the ~/.agentteams/matrix
+                  # dir is uid-1000-owned). A deploy that sets
+                  # AGENTTEAMS_REGISTRATION_TOKEN wins.
                   REGISTRATION_TOKEN="${AGENTTEAMS_REGISTRATION_TOKEN:-}"
                   if [ -z "${REGISTRATION_TOKEN}" ]; then
-                      if [ -f /data/tuwunel/.registration-token ]; then
-                          REGISTRATION_TOKEN="$(cat /data/tuwunel/.registration-token)"
+                      if [ -f "${HOME}/.agentteams/matrix/.registration-token" ]; then
+                          REGISTRATION_TOKEN="$(cat "${HOME}/.agentteams/matrix/.registration-token")"
                       else
                           REGISTRATION_TOKEN="$(head -c 24 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)"
-                          echo "${REGISTRATION_TOKEN}" > /data/tuwunel/.registration-token
+                          echo "${REGISTRATION_TOKEN}" > "${HOME}/.agentteams/matrix/.registration-token"
                       fi
                   fi
 
                   export CONDUWUIT_SERVER_NAME="${AGENTTEAMS_MATRIX_DOMAIN:-matrix-local.agentteams.io:8080}"
-                  export CONDUWUIT_DATABASE_PATH="/data/tuwunel"
+                  export CONDUWUIT_DATABASE_PATH="${HOME}/.agentteams/matrix"
                   export CONDUWUIT_ADDRESS="0.0.0.0"
                   export CONDUWUIT_PORT=6167
                   export CONDUWUIT_ALLOW_REGISTRATION=true
@@ -97,4 +104,4 @@ agentteams-matrix:
             - check: the registration token is resolvable (env or self-provisioned file)
               context:
                 - runtime
-              command: '[ -n "$AGENTTEAMS_REGISTRATION_TOKEN" ] || [ -f /data/tuwunel/.registration-token ]'
+              command: '[ -n "$AGENTTEAMS_REGISTRATION_TOKEN" ] || [ -f "$HOME/.agentteams/matrix/.registration-token" ]'

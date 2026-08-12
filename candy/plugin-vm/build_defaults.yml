@@ -475,8 +475,15 @@ arch:
                     repo: list_of_maps
                 phase:
                     install:
+                        # `-u` is MANDATORY on a machine venue: a fresh cloud-image guest
+                        # (or any guest whose package DB predates the repo) would otherwise
+                        # partial-upgrade — `pacman -Sy <pkg>` installs a package built
+                        # against a NEWER shared library than the image ships (e.g. podman
+                        # needing libsubid.so.6 while the image's shadow provides .so.5),
+                        # leaving a broken binary. `-u` upgrades the whole system first,
+                        # matching the container bootstrap's `install_cmd: pacman -Syu`.
                         host: |
-                            pacman -Sy --noconfirm --needed{{range .Options}} {{.}}{{end}}{{range .Packages}} {{.}}{{end}}
+                            pacman -Syu --noconfirm --needed{{range .Options}} {{.}}{{end}}{{range .Packages}} {{.}}{{end}}
                 uninstall_template: |
                     pacman -Rs --noconfirm{{range .Packages}} {{.}}{{end}}
                 local_pkg:

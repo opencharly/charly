@@ -16,8 +16,11 @@ func TestRestartMappingFuncs(t *testing.T) {
 	if got := systemdRestart("unless-stopped"); got != "always" {
 		t.Errorf("systemdRestart(unless-stopped) = %q (want always)", got)
 	}
-	if got := systemdRestart(""); got != "no" {
-		t.Errorf("systemdRestart(empty) = %q (want no)", got)
+	// Unset defaults to always — init-polymorphism parity with supervisord's
+	// autorestart=true default (a service that self-heals in a pod must not
+	// stay dead in a VM).
+	if got := systemdRestart(""); got != "always" {
+		t.Errorf("systemdRestart(empty) = %q (want always)", got)
 	}
 
 	supRestart := funcs["supervisordRestart"].(func(string) string)

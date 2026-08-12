@@ -22,6 +22,7 @@ type VmCpBoxCmd struct {
 	Image    string `arg:"" help:"image ref (short name or full ref) present in host podman storage"`
 	As       string `name:"as" help:"after load, tag the image in the guest under this stable ref (e.g. localhost/charly-selkies-kde:latest)"`
 	Rootless bool   `name:"rootless" help:"load into the guest USER's rootless podman storage instead of root's — so a rootless --user quadlet (e.g. a nested-pod-in-VM deploy) can run it"`
+	Domain   string `name:"domain" help:"per-deploy domain identity (ssh alias charly-<domain>); absent for a direct cp-box (domain = entity). A check bed's domain is the BED name, not the entity — pass --domain <bed> there."`
 }
 
 func (c *VmCpBoxCmd) Run() error {
@@ -35,7 +36,7 @@ func (c *VmCpBoxCmd) Run() error {
 	if !hostImageExists("podman", ref) {
 		return fmt.Errorf("image %q not found in host podman storage — build it first (charly box build)", c.Image)
 	}
-	guest := sshParamsForVm(c.VM)
+	guest := sshParamsForVm(domainOr(c.VM, c.Domain))
 	return TransferImageToGuest(context.Background(), guest, "podman", ref, c.As, c.Rootless, EmitOpts{})
 }
 
