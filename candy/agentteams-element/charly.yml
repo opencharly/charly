@@ -29,6 +29,8 @@ agentteams-element:
             - name: element-web
               exec: /opt/agentteams-element/start-element-web.sh
               priority: 650
+              user: "1000"
+              enable: true
         plan:
             - run: write the rootless nginx main config
               write: /etc/nginx/nginx.conf

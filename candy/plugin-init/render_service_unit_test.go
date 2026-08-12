@@ -139,6 +139,46 @@ func TestRenderServiceCustomSystemd(t *testing.T) {
 	}
 }
 
+// Init-polymorphism restart parity: an unset restart: must render the SAME
+// restart behavior on systemd as supervisord's autorestart=true default —
+// a service that self-heals in a pod must not stay dead in a VM. The
+// systemd template defaults unset (and unless-stopped) to Restart=always;
+// only an explicit "no" opts out.
+func TestRenderServiceSystemdRestartParity(t *testing.T) {
+	cases := []struct {
+		name    string
+		restart string
+		want    string
+	}{
+		{"unset defaults to always", "", "Restart=always"},
+		{"always", "always", "Restart=always"},
+		{"unless-stopped maps to always", "unless-stopped", "Restart=always"},
+		{"on-failure", "on-failure", "Restart=on-failure"},
+		{"no opts out", "no", "Restart=no"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			entry := &spec.ServiceEntry{
+				Name:    "svc",
+				Exec:    "/usr/bin/svc",
+				Restart: tc.restart,
+				Scope:   "system",
+				Enable:  true,
+			}
+			rendered, err := renderService(entry, testSystemdInitDef(), spec.ServiceRenderContext{
+				Candy:         "c",
+				SystemUnitDir: "/etc/systemd/system",
+			})
+			if err != nil {
+				t.Fatalf("renderService: %v", err)
+			}
+			if !strings.Contains(rendered.UnitText, tc.want) {
+				t.Errorf("restart %q: missing %s; got:\n%s", tc.restart, tc.want, rendered.UnitText)
+			}
+		})
+	}
+}
+
 // A user service with an explicit wanted_by must enable into THAT target
 // (graphical-session.target) rather than the user default — so a
 // graphical-session-scoped service is pulled WITH the logged-in session, not at

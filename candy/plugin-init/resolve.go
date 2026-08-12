@@ -135,10 +135,13 @@ func serviceRenderFuncs() template.FuncMap {
 				return "on-failure"
 			case "unless-stopped":
 				return "always"
-			case "no", "":
+			case "no":
 				return "no"
 			}
-			return "no"
+			// Unset defaults to always — parity with supervisord's
+			// autorestart=true default (init polymorphism must not change
+			// restart behavior between substrates).
+			return "always"
 		},
 		"supervisordRestart": func(r string) string {
 			switch r {
