@@ -1,0 +1,96 @@
+agentteams-openclaw:
+    candy:
+        version: 2026.224.0600
+        description: |-
+            The shared AgentTeams openclaw gateway runtime — built from the pinned
+            upstream source commit (2026.4.14) because the matrix channel extension
+            is NOT in the npm openclaw package and the published @openclaw/matrix
+            npm package is broken (its openclaw.extensions entry references
+            ./index.ts, which the tarball does not ship) — the source build is the
+            only complete, version-matched path, and it is what the upstream
+            manager/worker images do. Shared by the agentteams-manager and
+            agentteams-worker images (R3: one build, two consumers). The openclaw
+            build uses the JS pnpm (npm install -g pnpm@10.32.1, matching the
+            repo's packageManager pin) because openclaw's scripts/pnpm-runner.mjs
+            re-execs pnpm via `node $npm_execpath` — the nodejs candy's standalone
+            ELF pnpm would be loaded as JS and fail. The build also re-enables npm
+            git deps (npm_config_allow_git=all): the runtime-postbuild stages the
+            bundled plugins' runtime deps with a bare `npm install`, and baileys
+            depends on libsignal from a git URL — npm 11+ disables git deps by
+            default (EALLOWGIT), while upstream's NodeSource node 22 (npm 10) has
+            no such gate.
+        require:
+            - nodejs
+        distro:
+            arch:
+                package:
+                    - git
+                    - python
+                    - make
+                    - gcc
+                    - gettext
+                    - jq
+        plan:
+            - run: build openclaw from the pinned upstream source commit (cached)
+              command: |
+                  OPENCLAW_CACHE=/var/cache/charly-openclaw
+                  if [ ! -f "${OPENCLAW_CACHE}/.charly-openclaw-complete" ]; then
+                      # The cache mount root is a mount point and cannot be removed
+                      # (rm -rf on it fails with EBUSY), so build into a subdirectory
+                      # and clear a partial previous build by removing that subdir.
+                      rm -rf "${OPENCLAW_CACHE}/src"
+                      mkdir -p "${OPENCLAW_CACHE}/src"
+                      cd "${OPENCLAW_CACHE}/src"
+                      git init .
+                      git remote add origin https://github.com/higress-group/openclaw.git
+                      git fetch --depth 1 origin 2f35b6fa6b65d012e3b0c9f24af3f8a4b617a6e0
+                      git checkout --detach FETCH_HEAD
+                      # The openclaw build's scripts/pnpm-runner.mjs re-execs pnpm
+                      # via `node $npm_execpath` when npm_execpath's basename
+                      # matches pnpm. The nodejs candy's standalone pnpm is a
+                      # self-contained ELF binary (it bundles its own node), so
+                      # `node <elf>` fails with a SyntaxError. Upstream's
+                      # openclaw-base installs pnpm via `npm install -g pnpm`
+                      # (the JS pnpm.cjs), which is what the runner expects —
+                      # match upstream, and put the JS pnpm first on PATH.
+                      npm install -g pnpm@10.32.1
+                      export PATH="/root/.npm-global/bin:${PATH}"
+                      # The openclaw build's runtime-postbuild stages the bundled
+                      # plugins' runtime deps with a bare `npm install` (no
+                      # --allow-git), and @whiskeysockets/baileys depends on
+                      # libsignal from a git URL. npm 11+ disables git deps by
+                      # default (allow-git=none → EALLOWGIT); upstream's
+                      # openclaw-base builds on NodeSource node 22 (npm 10),
+                      # which has no such gate. Re-enable git deps for this
+                      # trusted pinned-source build.
+                      export npm_config_allow_git=all
+                      pnpm install
+                      pnpm build
+                      pnpm ui:build
+                      # The matrix channel's crypto backend is a native addon the
+                      # build may not ship for this arch — fetch it if missing.
+                      MSC_DIR="${OPENCLAW_CACHE}/src/node_modules/@matrix-org/matrix-sdk-crypto-nodejs"
+                      MSC_VER=$(jq -r .version "${MSC_DIR}/package.json")
+                      MSC_FILE=matrix-sdk-crypto.linux-x64-gnu.node
+                      if [ ! -f "${MSC_DIR}/${MSC_FILE}" ]; then
+                          curl -fsSL --retry 3 --retry-delay 2 \
+                              "https://github.com/matrix-org/matrix-rust-sdk-crypto-nodejs/releases/download/v${MSC_VER}/${MSC_FILE}" \
+                              -o "${MSC_DIR}/${MSC_FILE}"
+                      fi
+                      touch "${OPENCLAW_CACHE}/.charly-openclaw-complete"
+                  fi
+                  cp -a "${OPENCLAW_CACHE}/src/." /opt/openclaw/
+                  chmod +x /opt/openclaw/openclaw.mjs
+                  ln -sf /opt/openclaw/openclaw.mjs /usr/local/bin/openclaw
+              cache:
+                  - /var/cache/charly-openclaw
+            - check: the openclaw gateway binary is installed
+              file:
+                file: /usr/local/bin/openclaw
+                exists: true
+                filetype: symlink
+            - check: the matrix channel extension is present
+              file:
+                file: /opt/openclaw/extensions/matrix
+                exists: true
+                filetype: directory

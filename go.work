@@ -67,3 +67,4 @@ use ./candy/plugin-authoring
 use ./candy/plugin-oci
 use ./candy/plugin-status
 use ./candy/plugin-check
+use ./candy/plugin-agentteams

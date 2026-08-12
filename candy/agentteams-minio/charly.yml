@@ -18,9 +18,9 @@ agentteams-minio:
               dest: /usr/local/bin/mc
         env_accept:
             - name: AGENTTEAMS_MINIO_USER
-              description: "MinIO root user (default: admin). Pass via: charly config agentteams-core-app -e AGENTTEAMS_MINIO_USER=<user>"
+              description: "MinIO root user (default: admin). Pass via: charly config agentteams -e AGENTTEAMS_MINIO_USER=<user>"
             - name: AGENTTEAMS_MINIO_PASSWORD
-              description: "MinIO root password (default: admin). Pass via: charly config agentteams-core-app -e AGENTTEAMS_MINIO_PASSWORD=<pass>"
+              description: "MinIO root password (default: admin). Pass via: charly config agentteams -e AGENTTEAMS_MINIO_PASSWORD=<pass>"
             - name: AGENTTEAMS_ADMIN_USER
               description: "AgentTeams admin user, also used as the MinIO root user when AGENTTEAMS_MINIO_USER is unset"
             - name: AGENTTEAMS_ADMIN_PASSWORD
