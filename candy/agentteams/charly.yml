@@ -45,13 +45,18 @@ agentteams-skill:
         content: |-
             # agentteams
 
-            AgentTeams is a multi-agent runtime built on a Manager–Workers model. A
-            controller — a mini Kubernetes API server (kube-apiserver v1.31.3 backed
-            by a kine SQLite store) plus a reconciler — manages four resource kinds
-            (Manager, Worker, Team, Human) and serves a REST API on :8090. The
-            controller spawns Manager containers through the container-runtime
-            socket; a Manager creates Workers; Workers join Teams and converse in
-            Rooms.
+            AgentTeams is a multi-agent runtime built on a Manager–Workers model: a
+            Manager plans and delegates, Workers execute, and they converse in shared
+            Rooms (chat spaces on the Matrix homeserver). You would use it to run a
+            team of AI agents that collaborate on a task. A controller — a mini
+            Kubernetes API server (kube-apiserver v1.31.3 backed by a kine SQLite
+            store; kine is a lightweight storage shim that backs the API server with
+            SQLite) plus a reconciler (a loop that watches declared resources and
+            drives the running system toward them) — manages four resource kinds
+            (Manager, Worker, Team, Human) and serves a REST API on :8090. A Team is
+            a group of Workers that share a Room. The controller spawns Manager
+            containers through the container-runtime socket; a Manager creates
+            Workers; Workers join Teams and converse in Rooms.
 
             This box ships that whole stack as a charly box: a CachyOS base composing
             five decomposed candies — `agentteams-minio` (MinIO S3 + mc-mirror),
@@ -74,13 +79,13 @@ agentteams-skill:
             account (SA) token, then reconciles the declared Manager/Worker/Team/
             Human resources — for each Manager or Worker resource it spawns a
             container through the container-runtime socket. A Manager container runs
-            the openclaw gateway plus the `agt` (AgentTeams CLI) and `mc` (MinIO
-            client) tools; a Worker container runs the openclaw worker runtime plus
-            the shared AgentTeams protocol libs. Workers join Teams and converse in
-            Rooms; the Matrix homeserver (Tuwunel) and the Higress AI gateway carry
-            the traffic, and MinIO stores objects. The whole sequence is verifiable
-            over the REST API: controller-spawns-manager → create-worker →
-            room-exists.
+            the openclaw gateway (openclaw is an AI agent gateway runtime) plus the
+            `agt` (AgentTeams CLI) and `mc` (MinIO client) tools; a Worker container
+            runs the openclaw worker runtime plus the shared AgentTeams protocol
+            libs. Workers join Teams and converse in Rooms; the Matrix homeserver
+            (Tuwunel) and the Higress AI gateway carry the traffic, and MinIO stores
+            objects. The whole sequence is verifiable over the REST API:
+            controller-spawns-manager → create-worker → room-exists.
 
             ## Composition
 
