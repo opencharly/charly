@@ -58,6 +58,9 @@ profile.cov
 .claude/plans/
 .claude/scheduled_tasks.lock
 
+# Python bytecode from the .claude/hooks scripts (imported by the hook wrappers)
+.claude/hooks/__pycache__/
+
 # Machine-specific deploy overrides
 deploy.local.yml
 

@@ -267,12 +267,17 @@ Remove every old identifier and sibling claim in one phase; do not leave shims,
 dual paths, TODOs, or deferred cleanup.
 
 Use a linked feature worktree from current protected `origin/main` for
-substantial work and preserve the operator's checkout. Verify status, HEAD,
+substantial work and preserve the operator's checkout. **Every session works in
+its OWN worktree under `.claude/worktrees/<slug>/`, branched off fresh
+`origin/main`; the main tree stays on `main`.** Create the worktree at session
+start and remove it (worktree + branch) after the change lands, so parallel
+sessions never collide on one checkout. Verify status, HEAD,
 merge-base, submodule lineage, and remote base before implementation and again
 before landing. Existing normal caches may be used only through the runtime's
 approved boundary; never manufacture alternate homes, caches, clones, or
 validator workspaces to make a command pass. A denied required action is
-`BLOCKED`.
+`BLOCKED`. *Detail:* `/charly-internals:git-workflow` (B1 step 0, B4 "Worktree
+hygiene", B7).
 
 ## Post-Execution Policies
 
