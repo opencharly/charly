@@ -3,6 +3,7 @@ package kube
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/opencharly/sdk"
 	pb "github.com/opencharly/spec/proto"
 	"github.com/opencharly/spec/spec"
+	"gopkg.in/yaml.v3"
 )
 
 // deploy.go — the `deploy:kubernetes` SUBSTRATE provider (F1). candy/plugin-kube serves
@@ -81,8 +83,12 @@ func invokeDeployKubernetes(req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 	// kube_context (from the kind:kubernetes template) targets THIS cluster explicitly via
 	// `kubectl --context`, never the ambient current-context.
 	ctxArgs := kubectlContextArgs(kv.KubeContext)
-	if out, aerr := runKubectl(append(ctxArgs, "apply", "-k", kv.OverlayPath)...); aerr != nil {
-		return nil, fmt.Errorf("deploy:kubernetes: kubectl apply -k %s: %w\n%s", kv.OverlayPath, aerr, strings.TrimSpace(out))
+	hasHelm, helmNamespaces, herr := overlayHelmInfo(kv.OverlayPath)
+	if herr != nil {
+		return nil, fmt.Errorf("deploy:kubernetes: read overlay kustomization: %w", herr)
+	}
+	if out, aerr := applyOverlay(ctxArgs, kv.OverlayPath, hasHelm, helmNamespaces); aerr != nil {
+		return nil, fmt.Errorf("deploy:kubernetes: apply overlay %s: %w\n%s", kv.OverlayPath, aerr, strings.TrimSpace(out))
 	}
 
 	// Teardown, recorded in the ledger and replayed at `charly fleet del`
@@ -98,12 +104,26 @@ func invokeDeployKubernetes(req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 	tree := shellSingleQuote(kubernetesTreeRoot(kv))
 	overlay := shellSingleQuote(kv.OverlayPath)
 	ctxPrefix := kubectlContextPrefix(kv.KubeContext)
+	// The delete mirrors the apply: a helmCharts overlay must be rendered with
+	// `kubectl kustomize --enable-helm` first (`kubectl delete -k` cannot enable the
+	// transformer), then deleted from the rendered stream. The namespaces the
+	// helmCharts entries declared are deleted too — the apply created them, so the
+	// teardown removes them (the rendered stream itself never carries a Namespace
+	// object).
+	deleteCmd := fmt.Sprintf("kubectl %sdelete -k %s --ignore-not-found", ctxPrefix, overlay)
+	var nsDelete strings.Builder
+	if hasHelm {
+		deleteCmd = fmt.Sprintf("kubectl kustomize --enable-helm %s | kubectl %sdelete -f - --ignore-not-found", overlay, ctxPrefix)
+		for _, ns := range helmNamespaces {
+			fmt.Fprintf(&nsDelete, "kubectl %sdelete namespace %s --ignore-not-found; ", ctxPrefix, shellSingleQuote(ns))
+		}
+	}
 	teardown := fmt.Sprintf(
 		"if kubectl %s--request-timeout=%s get --raw /readyz >/dev/null 2>&1; then "+
-			"kubectl %sdelete -k %s --ignore-not-found; "+
+			"%s; %s"+
 			"else echo 'deploy:kubernetes: cluster unreachable — its workloads went with it; nothing to delete'; fi; "+
 			"rm -rf %s",
-		ctxPrefix, kubernetesTeardownProbeTimeout, ctxPrefix, overlay, tree)
+		ctxPrefix, kubernetesTeardownProbeTimeout, deleteCmd, nsDelete.String(), tree)
 	reverseOps := []spec.ReverseOp{sdk.PluginScriptReverseOp(spec.ScopeUser, teardown)}
 	return sdk.BuildDeployReply(reverseOps, "plugin-kube", deployKubernetesVersion)
 }
@@ -142,4 +162,85 @@ func runKubectl(args ...string) (string, error) {
 	cmd := exec.Command("kubectl", args...)
 	out, err := cmd.CombinedOutput()
 	return string(out), err
+}
+
+// runKubectlStdin runs the host kubectl with the given stdin (the `apply -f -`
+// stream form).
+func runKubectlStdin(args []string, stdin string) (string, error) {
+	cmd := exec.Command("kubectl", args...)
+	cmd.Stdin = strings.NewReader(stdin)
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
+
+// overlayHelmInfo reports whether the generated overlay kustomization carries a
+// `helmCharts:` entry and the deduplicated namespaces those entries declare.
+// `kubectl apply -k` / `kubectl delete -k` cannot render helmCharts — the kustomize
+// helmCharts transformer is gated behind `--enable-helm`, which only `kubectl
+// kustomize` accepts — so the deploy must render the overlay with `kubectl kustomize
+// --enable-helm` and apply/delete the rendered stream instead. The transformer sets
+// each rendered resource's namespace but does NOT create the namespace object, so
+// the deploy must create the declared namespaces before applying (and delete them at
+// teardown).
+func overlayHelmInfo(overlayPath string) (hasHelm bool, namespaces []string, err error) {
+	raw, err := os.ReadFile(filepath.Join(overlayPath, "kustomization.yaml"))
+	if err != nil {
+		return false, nil, err
+	}
+	var k struct {
+		HelmCharts []struct {
+			Namespace string `yaml:"namespace"`
+		} `yaml:"helmCharts"`
+	}
+	if err := yaml.Unmarshal(raw, &k); err != nil {
+		return false, nil, err
+	}
+	seen := make(map[string]bool)
+	for _, hc := range k.HelmCharts {
+		if hc.Namespace != "" && !seen[hc.Namespace] {
+			seen[hc.Namespace] = true
+			namespaces = append(namespaces, hc.Namespace)
+		}
+	}
+	return len(k.HelmCharts) > 0, namespaces, nil
+}
+
+// overlayHasHelmCharts reports whether the overlay carries a `helmCharts:` entry.
+func overlayHasHelmCharts(overlayPath string) (bool, error) {
+	hasHelm, _, err := overlayHelmInfo(overlayPath)
+	return hasHelm, err
+}
+
+// overlayHelmNamespaces returns the deduplicated namespaces the overlay's
+// helmCharts entries declare.
+func overlayHelmNamespaces(overlayPath string) ([]string, error) {
+	_, namespaces, err := overlayHelmInfo(overlayPath)
+	return namespaces, err
+}
+
+// applyOverlay applies the generated overlay to the cluster. The plain path is
+// `kubectl apply -k <overlay>`; when the overlay carries a `helmCharts:` entry the
+// kustomize helmCharts transformer must be enabled, which `kubectl apply -k` cannot
+// do — so render with `kubectl kustomize --enable-helm` and apply the rendered
+// stream via `kubectl apply -f -`. The transformer sets each rendered resource's
+// namespace but does not create the namespace object, so the declared namespaces are
+// created first (idempotently, via `create --dry-run=client -o yaml | apply -f -`).
+func applyOverlay(ctxArgs []string, overlayPath string, hasHelm bool, namespaces []string) (string, error) {
+	if !hasHelm {
+		return runKubectl(append(ctxArgs, "apply", "-k", overlayPath)...)
+	}
+	for _, ns := range namespaces {
+		manifest, err := runKubectl(append(ctxArgs, "create", "namespace", ns, "--dry-run=client", "-o", "yaml")...)
+		if err != nil {
+			return manifest, err
+		}
+		if out, err := runKubectlStdin(append(ctxArgs, "apply", "-f", "-"), manifest); err != nil {
+			return out, err
+		}
+	}
+	rendered, err := runKubectl("kustomize", "--enable-helm", overlayPath)
+	if err != nil {
+		return rendered, err
+	}
+	return runKubectlStdin(append(ctxArgs, "apply", "-f", "-"), rendered)
 }

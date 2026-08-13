@@ -735,16 +735,41 @@ check-k8s-deploy:
                     namespace: default
                   stdout: {contains: "check-k8s-deploy-workload"}
                   context: [runtime]
+                - check: the helm_charts release's Deployment object landed on the cluster — the kustomize helmCharts transformer rendered the chart and the --enable-helm apply path deployed it
+                  id: kd-helm-release-landed
+                  kube:
+                    method: raw
+                    cluster: "check-k8s-deploy-cluster-ctx"
+                    kube_resource: deployments
+                    kube_group: apps
+                    kube_version: v1
+                    namespace: web
+                    name: web-pushgateway-prometheus-pushgateway
+                  stdout: {contains: "web-pushgateway-prometheus-pushgateway"}
+                  context: [runtime]
     # MEMBER 2 (name-sorts second) — the target:kubernetes workload. check-k8s-deploy-app is built
     # locally by the group bed's member-build arm (box build check-k8s-deploy-app), so the host
     # preresolver's ExtractMetadata reads its OCI labels. `from: check-k8s-deploy-cluster-ctx`
     # selects the kind:kubernetes cluster template (kubeconfig_context: vm-check-k8s-deploy-cluster,
     # task #18 — pinned to the sibling member's own per-domain context). Deploy-only (no
     # own checks — it is an instrument; the cluster member's kube: checks assert it).
+    # helm_charts: the k8sgen emitter translates this into a kustomize `helmCharts:`
+    # overlay entry, and the deploy substrate renders it with `kubectl kustomize
+    # --enable-helm` (the kustomize helmCharts transformer is gated behind
+    # --enable-helm, which `kubectl apply -k` cannot pass) before applying the stream —
+    # the live proof that the Unit 1 helm_charts field runs end to end on the
+    # kubernetes substrate (the check-helm-vm bed proves the vm/helm venue; this proves
+    # the kustomize emission + the --enable-helm apply path).
     check-k8s-deploy-workload:
         kubernetes:
             image: check-k8s-deploy-app
             from: check-k8s-deploy-cluster-ctx
+            deploy:
+                helm_charts:
+                    - repo: https://prometheus-community.github.io/helm-charts
+                      chart: prometheus-pushgateway
+                      release: web-pushgateway
+                      namespace: web
 # =============================================================================
 # check-sidecar-pod — disposable R10 for the sidecar de-type (Cutover D). The
 # sidecar KIND's business logic (embedded<project<deploy template MERGE, CLI
