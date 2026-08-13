@@ -51,7 +51,7 @@ agents-skill:
             | Primitives per harness (Claude Code / Codex / Kimi); when to use a sub-agent vs. dynamic workflow vs. agent team; the charly agent roster (executors/enforcers); the shipped workflows (`/verify-beds`, `/audit-deploy-configs`, `/triage-check-failure`, `/verify-status`); the agent-team primitive setup | `references/agent-roster.md` |
             | The default multi-agent execution model: orchestrator/teammate model-tier split, maximum parallelization, the slot budget, concurrent landing, the orchestrator's bidirectional verification duty, architectural-integrity ownership, the responsibility matrix and tie-breakers | `references/orchestration-model.md` |
             | Program-wide alignment: the north-star protocol, the IOU register, per-merge measurement, migration-ledger discipline, crossed-ruling reconciliation, brief verification and stop-and-respawn, whack-a-mole escalation | `references/program-discipline.md` |
-            | Bed-scoped parallel real-deployment testing: the concurrency ceilings (store lock, exclusive-resource tokens, long-bed ownership, shared-tree walks, per-worktree binaries) and their fixes; the charly binary in a multi-worktree setup; the binding rule for running a bed; implementation-workflow shape; speed levers | `references/parallel-bed-testing.md` |
+            | Bed-scoped parallel real-deployment testing: the concurrency ceilings (store lock, exclusive-resource tokens, long-bed ownership, in-tree build artifacts, per-worktree binaries) and their fixes; the charly binary in a multi-worktree setup; the binding rule for running a bed; implementation-workflow shape; speed levers | `references/parallel-bed-testing.md` |
             | Delegation as fresh context; teammate context lifecycle; the nine sub-agent operational invariants; the hooks doctrine (current hook inventory); agent lifecycle hygiene; the universal PR-gate audit; worktree/validator lifecycle | `references/hooks-and-lifecycle.md` |
 
             ## Cross-References
@@ -646,8 +646,8 @@ agents-skill:
                   **Before opening, updating, or merging any pull request, run the aggregate
                   audit — unconditionally, as a standing preflight, never situational advice
                   reached for only when something already looks off:** `gh pr list` across
-                  every repo touched by the cutover (superproject, `sdk`, `plugins`, each
-                  `box/<distro>`) plus `git worktree list` plus the live teammate/agent
+                  every repo touched by the cutover (superproject, `sdk`, `plugins`, `docs`,
+                  each `box/<distro>`) plus `git worktree list` plus the live teammate/agent
                   roster. This is an invert-the-default step: run it first, every time, not
                   as a response to a suspected conflict. Skipping it risks opening a
                   duplicate PR for scope another teammate's in-flight PR already covers,
@@ -967,9 +967,11 @@ agents-skill:
                     `charly-<bed>` container/VM/domain names, and a bed run tags every
                     fixture image it builds with a per-run `<bed-root>-<runCalver>` tag, so
                     two beds building the same fixture image name never race the
-                    store-global tag namespace; the author assigns each disjoint host ports
-                    too (the loader does not check ports — an overlap fails the second bed
-                    at deploy), so beds run concurrently and safely.
+                    store-global tag namespace; host-port disjointness is not statically
+                    guaranteed, so every bed uses port auto-allocation — never a hardcoded
+                    host port (the loader checks no ports, so a collision surfaces only at
+                    deploy; manual port-picking is forbidden), so beds run concurrently and
+                    safely.
                   - **Check-test at every stage, never only at the end.** Each parallel owner
                     verifies before it changes (Risk Driven Development — proves its bed's
                     high-risk assumptions, above all composition, on its live bed/backend
@@ -983,27 +985,24 @@ agents-skill:
                     single Go package can't have N agents edit-and-build at once, but that's
                     handled by shape: the lead lands the shared core first (compile-clean),
                     each parallel unit is an independent `init()`-registered file (no
-                    shared-file edits), and the one shared tree's `charly` binary rebuild is
-                    a single barrier between the parallel-implement and parallel-bed-R10
-                    phases. Canonical shape: `Core (seq) → Implement (parallel by bed) →
-                    Integrate+build (seq barrier) → BedR10 (parallel by bed) → Review
-                    (parallel, read-only, optional)`. The barrier is load-bearing because
-                    `charly` refuses heavy ops (`image build`, `deploy add`) whenever any
-                    `charly/*.go` source is newer than the invoked binary (remediation: one
-                    `task build:binary` in the shared checkout). A teammate editing
-                    `charly/*.go` while another's bed is mid-run trips that guard on the
-                    bed's deploy step, so rebuild once at the barrier, then run every bed
-                    against the now-stable binary. The barrier carries a bare-`$PATH`
-                    caveat: the shared tree's bed set must actually invoke `./bin/charly`
-                    (explicitly, or with the shared tree's `bin/` prepended onto `$PATH` for
-                    the bed's session) — a bed that shells to bare `charly` otherwise
-                    resolves whatever the host has installed, never the shared tree's
-                    freshly-rebuilt binary (the same trap "Host-local beds are never a
-                    worktree gate" describes below). This barrier binds the shared-tree
-                    model only (one checkout, one binary) — a multi-worktree team needs no
-                    barrier at all, since each worktree's own `bin/charly` is
-                    self-consistently gated (see "Per-worktree binaries" below); never
-                    conflate the two models.
+                    shared-file edits), and each teammate's worktree carries its own
+                    `bin/charly` — there is no shared binary to freeze, so the
+                    parallel-implement and parallel-bed-R10 phases overlap freely.
+                    Canonical shape: `Core (seq) → Implement (parallel by bed, one
+                    worktree each) → Integrate+build (seq) → BedR10 (parallel by bed) →
+                    Review (parallel, read-only, optional)`. The per-worktree binary is
+                    load-bearing because `charly` refuses heavy ops (`image build`, `deploy
+                    add`) whenever any `charly/*.go` source is newer than the invoked
+                    binary — but the guard is per-tree, so a teammate editing `charly/*.go`
+                    in its own worktree never trips another teammate's bed run. The only
+                    freeze that applies is the within-worktree self-freeze: freeze your own
+                    worktree's `charly/*.go` for the duration of your own bed run. The
+                    bare-`$PATH` caveat still applies per worktree: a bed must actually
+                    invoke `./bin/charly` (explicitly, or with the worktree's `bin/`
+                    prepended onto `$PATH` for the bed's session) — a bed that shells to
+                    bare `charly` otherwise resolves whatever the host has installed, never
+                    the worktree's freshly-rebuilt binary (the same trap "Host-local beds
+                    are never a worktree gate" describes below).
                   - **Same binding rule** as below: disposable-only, commit-gated-not-run,
                     no-scope-shrinking-flags, paste-proof survives delegation.
 
@@ -1087,15 +1086,12 @@ agents-skill:
                     its own binary and its own freshness-guard scope, teammates working in
                     distinct worktrees need no freeze barrier between them — each rebuilds
                     its own `./bin/charly` via `task build:binary` whenever it likes, with
-                    zero cross-teammate interference. The "freeze `charly/*.go` plus one
-                    `task build:binary` at the barrier" rule (above, and
-                    `/charly-internals:git-workflow` B3) applies only to the shared-tree team
-                    model — multiple agents editing one checkout with one shared binary,
-                    where the barrier also carries the bare-`$PATH` caveat above. The two
-                    models are not interchangeable: a shared-tree team needs the freeze
-                    because there is exactly one binary every bed run depends on; a
-                    multi-worktree team needs no freeze because there is one binary per
-                    worktree.
+                    zero cross-teammate interference. The only freeze that exists is the
+                    within-worktree self-freeze below: within one worktree, freeze your own
+                    `charly/*.go` for the duration of your own bed run. There is no
+                    shared-tree model — every team is a set of worktrees, each with one
+                    binary every bed run in that tree depends on, so the freeze is always
+                    per-tree, never a team-wide barrier.
                   - **Within-worktree self-freeze — the complementary rule.** The per-tree
                     freshness guard does not check only at the start of a bed run — it
                     compares the invoked binary against the cwd's sources at every heavy
@@ -1447,28 +1443,30 @@ agents-skill:
                      names). Let a roster finish, or tear its deploys down with `charly vm
                      destroy` / `charly remove` — `transient_store` fixes the lock, not a
                      hard mid-write kill.
-                  4d. **A shared-tree walk must tolerate a concurrent sibling's transient
+                  4d. **A tree walk must tolerate a concurrent sibling's transient
                      build artifacts — the fourth concurrency ceiling, invisible to every
-                     serial run.** Beds run in one source tree, and a bed that builds in-tree
-                     (a candy's makepkg under `pkgbuild/{pkg,src}`, a cargo `target/`, an npm
-                     `node_modules/`) creates directories that are transiently unreadable
-                     (fakeroot-owned, mode-0700, or half-written) while a sibling bed's
-                     loader walks the same tree. A walk that aborts on the first per-entry
-                     `EACCES` fails the sibling's entire `LoadUnified` — surfacing as a
-                     bogus downstream error (a swallowed discover-walk `EACCES` on a candy's
-                     `pkgbuild/pkg` directory once became a misleading "unknown kind:local
-                     template" for an unrelated bed). Root-cause fix pattern: a tree walk
-                     skips an unreadable/erroring subtree (`filepath.SkipDir`) and
-                     continues — a discoverable manifest can never live in an unreadable
-                     dir — and skips VCS/build-artifact dirs by name; it never aborts the
-                     whole load. Same lesson for any shared-state read under concurrency:
-                     don't swallow the real error (it hides the class), and don't let one
-                     sibling's transient artifact fail an unrelated bed.
+                     serial run.** Beds run in their own worktree's source tree, and a bed
+                     that builds in-tree (a candy's makepkg under `pkgbuild/{pkg,src}`, a
+                     cargo `target/`, an npm `node_modules/`) creates directories that are
+                     transiently unreadable (fakeroot-owned, mode-0700, or half-written)
+                     while a concurrent load walks the same tree. A walk that aborts on the
+                     first per-entry `EACCES` fails the sibling's entire `LoadUnified` —
+                     surfacing as a bogus downstream error (a swallowed discover-walk
+                     `EACCES` on a candy's `pkgbuild/pkg` directory once became a
+                     misleading "unknown kind:local template" for an unrelated bed).
+                     Root-cause fix pattern: a tree walk skips an unreadable/erroring
+                     subtree (`filepath.SkipDir`) and continues — a discoverable manifest
+                     can never live in an unreadable dir — and skips VCS/build-artifact
+                     dirs by name; it never aborts the whole load. Same lesson for any
+                     shared-state read under concurrency: don't swallow the real error (it
+                     hides the class), and don't let one sibling's transient artifact fail
+                     an unrelated bed.
                   4e. **Per-worktree binaries — bed gates from multiple branches overlap.**
                      See "The charly binary in a multi-teammate / multi-worktree setup"
                      above for the canonical host-vs-worktree-binary rule; this item adds
                      the concurrent-bed proof and the CalVer-stamping detail. The freshness
-                     guard (`main_freshness.go`) compares `os.Executable()` against the
+                     guard (`verb:freshness-guard`, `candy/plugin-doctor/freshness.go`) compares
+                     `os.Executable()` against the
                      cwd-walked source root, so a worktree with its own `task build:binary`
                      output is self-consistent: `PATH=$PWD/bin:$PATH charly check run <bed>`
                      runs the full R10 sequence (deploy-add → check-live → fresh update →
@@ -2169,12 +2167,12 @@ cutover-policy-skill:
             ## Required for every breaking change
 
             - A new **migration-table entry** in `candy/plugin-migrate/migrations.cue` (a declarative `ops:` list, or an `apply:` `goHooks` hook for a structural reshape) PLUS a matching `#SchemaVersion` bump in `spec/schema/version.cue` (the spec repo — landed + tagged first, see `/charly-build:migrate`), applied via `task cue:gen`; the entry's CalVer is strictly greater than the current HEAD. Every cutover is one idempotent step applied by the op-walker on the one `charly migrate` command — there are no per-cutover sub-verbs. Running `charly migrate` twice is a no-op. See `/charly-build:migrate`.
-            - A **fresh release git tag** `v<YYYY.DDD.HHMM>` — ONE per merge, applied by the fresh `pr-validator` at MERGE from the current UTC merge time (never by the author at push time; author-time stamps collide/mis-order across concurrent PRs), **decoupled** from the `charly.yml` `version:` field (the schema version, bumped only when a cutover raises `#SchemaVersion`). Tag EVERY landing, including one that does NOT bump `version:` (content removal — a submodule extraction, an image drop). Tags are **immutable** — only ever added, never moved or force-pushed. Every component is fixed-width zero-padded (4-digit year, 3-digit day-of-year, 4-digit HHMM) so tags sort chronologically under a plain alphanumeric sort; the evaluator computes `v$(date -u +%Y.%j.%H%M)` at merge. Every repo (superproject, `box/<distro>`, `plugins`, `pkg/*`) is tagged on its own merged HEAD — the tag marks the merge, not the schema, so no `charly.yml` is required; `sdk` ALONE uses its Go-module `v0.<YYYYDDD>.<HHMM leading-zeros-stripped>` scheme (a semver requirement, not an exemption). See `/charly-build:migrate` "Per-merge release git tags", `/charly-internals:git-workflow` "CalVer", and the project rulebook "Post-Execution Policies".
+            - A **fresh release git tag** `v<YYYY.DDD.HHMM>` — ONE per merge, applied by the fresh `pr-validator` at MERGE from the current UTC merge time (never by the author at push time; author-time stamps collide/mis-order across concurrent PRs), **decoupled** from the `charly.yml` `version:` field (the schema version, bumped only when a cutover raises `#SchemaVersion`). Tag EVERY landing, including one that does NOT bump `version:` (content removal — a submodule extraction, an image drop). Tags are **immutable** — only ever added, never moved or force-pushed. Every component is fixed-width zero-padded (4-digit year, 3-digit day-of-year, 4-digit HHMM) so tags sort chronologically under a plain alphanumeric sort; the evaluator computes `v$(date -u +%Y.%j.%H%M)` at merge. Every repo (superproject, `box/<distro>`, `plugins`, `pkg/*`, `docs`) is tagged on its own merged HEAD — the tag marks the merge, not the schema, so no `charly.yml` is required; `sdk` ALONE uses its Go-module `v0.<YYYYDDD>.<HHMM leading-zeros-stripped>` scheme (a semver requirement, not an exemption). See `/charly-build:migrate` "Per-merge release git tags", `/charly-internals:git-workflow` "CalVer", and the project rulebook "Post-Execution Policies".
             - **Hard load-time errors** for any residual legacy field, with a one-line remediation hint pointing at the migration command.
             - **Deletion — in the same PR** — of every Go type, function, CLI flag, OCI label, YAML field, skill doc paragraph, and test fixture that references the removed surface.
             - **Relocation step-sequence PARITY (when the cutover relocates a dispatcher, orchestrator, or runner).** Before relocating, ENUMERATE the original's per-CLASS behavior arms — e.g. bring-up / update / teardown × each substrate or shape class — and PROVE each class's step sequence matches the original in the relocated code. Fixing one arm of a class while missing its siblings is the CHARACTERISTIC relocation defect: a generic fallback that silently mis-handles a special class passes every unit test and fails ONLY on that class's live bed. The acceptance roster MUST therefore carry a bed per SPECIAL class (a gate that cannot fail on the class proves nothing — see `/charly-check:check` "R10 gate by change class").
             - **Stale-reference sweep (R5).** Every reference, comment, docstring, error message, skill paragraph, migration help-text, test fixture, and hook string naming a deleted identifier MUST be updated or deleted in the same commit. After commit, `git grep '<deleted-id>'` returns ONLY historical mentions in `CHANGELOG/` or migration help-text.
-            - **A `CHANGELOG/` entry** in the repo's per-CalVer file (`CHANGELOG/<YYYY.DDD.HHMM>.md`, the version shared by the changelog filename and the release tag) recording the cutover narrative — required for EVERY landing in EVERY repo, `plugins` included (`plugins` is no CHANGELOG-exception: the author writes a placeholder CalVer, the `pr-validator` finalizes it at merge and `git mv`s the file to the merge stamp — the same stamp that names the tag). Historical content lives ONLY in the repo's `CHANGELOG/`; the project rulebook and the skills state the new standing rules forward-looking, with no history. See the project rulebook "Where things are documented".
+            - **A `CHANGELOG/` entry** in the repo's per-CalVer file (`CHANGELOG/<YYYY.DDD.HHMM>.md`, the version shared by the changelog filename and the release tag) recording the cutover narrative — required for EVERY landing in EVERY repo, `plugins` and `docs` included (`plugins` and `docs` are no CHANGELOG-exceptions: the author writes a placeholder CalVer, the `pr-validator` finalizes it at merge and `git mv`s the file to the merge stamp — the same stamp that names the tag). Historical content lives ONLY in the repo's `CHANGELOG/`; the project rulebook and the skills state the new standing rules forward-looking, with no history. See the project rulebook "Where things are documented".
             - **Engineering-discipline gates (R1–R5).** See `/charly-internals:strict-policy`. Every failure during the cutover triggers `/charly-internals:root-cause-analyzer` BEFORE any remediation (R1). Every issue surfaced is fixed in the cutover or escalated (R2). Duplication is refactored on first surface (R3). Workarounds are forbidden (R4). Stale references are swept (R5).
 
             ## Rationale
@@ -3500,14 +3498,14 @@ git-workflow-skill:
 
               Stage a rename+edit as `git add <new>` alone, and a deletion by DIRECTORY or with `git add -u`; never name the vanished path. **This shape defeats the post-commit check above**, which is why it needs stating separately: `git show --stat` DOES list the file, as `old.md => new.md | 0`, so "every intended file is listed" passes. Presence is not the signal — the tells are the **magnitude** (`| 0` insertions on a commit meant to change content) and a **leftover ` M <new>`** in `git status` afterwards. Read the numbers and the post-commit status, not just the filenames, and confirm content directly with `git show HEAD:<new-path> | head -1` whenever the edit is the point of the commit. The CalVer-finalization instance of this — renaming a placeholder `CHANGELOG/` file while rewriting its H1 — is in `references/validator-and-calver.md`.
             - **Check-coverage is part of R10.** The change must ship the test coverage that proves its functionality (`check:` checks for new/changed layers & images, Go tests for `charly` code) AND the live run must have exercised it. A change whose new functionality has no test that would fail without it is not landable.
-            - **Every repo is tagged at merge.** The superproject, every `box/<distro>`, `plugins`, and `pkg/*` all mint `v<YYYY.DDD.HHMM>` on their own merged HEAD — the tag marks the MERGE, decoupled from any `charly.yml` `version:` schema field, so a repo needs no `charly.yml` to be tagged. The sole exception is the sdk contract repo, which tags under its own Go-module scheme `v0.<YYYYDDD>.<HHMM with all leading zeros stripped>` (B2 step 0) — **not an exemption but a hard Go-module requirement**: `v<YYYY.DDD.HHMM>` is not a valid Go module version (semver forbids a leading-zero segment — `0733`→`733` — and a `major ≥ 2` would force a `/vN` module-path suffix that breaks every `import github.com/opencharly/sdk`), so the stripped `v0.<…>` form is mandatory, not a choice. A skipped tag is a defect, not an exemption: the orchestrator verifies the tag landed after each merge (`git ls-remote --tags origin v<VER>` non-empty) and, if the evaluator skipped it, backfills it add-only on the merged HEAD (`git tag -a v<VER> -m "<subject>" <merged-HEAD>` + `git push origin refs/tags/v<VER>`) — tags are immutable, so a backfill only adds one, never moves an existing tag.
+            - **Every repo is tagged at merge.** The superproject, every `box/<distro>`, `plugins`, `pkg/*`, and `docs` all mint `v<YYYY.DDD.HHMM>` on their own merged HEAD — the tag marks the MERGE, decoupled from any `charly.yml` `version:` schema field, so a repo needs no `charly.yml` to be tagged. The sole exception is the sdk contract repo, which tags under its own Go-module scheme `v0.<YYYYDDD>.<HHMM with all leading zeros stripped>` (B2 step 0) — **not an exemption but a hard Go-module requirement**: `v<YYYY.DDD.HHMM>` is not a valid Go module version (semver forbids a leading-zero segment — `0733`→`733` — and a `major ≥ 2` would force a `/vN` module-path suffix that breaks every `import github.com/opencharly/sdk`), so the stripped `v0.<…>` form is mandatory, not a choice. A skipped tag is a defect, not an exemption: the orchestrator verifies the tag landed after each merge (`git ls-remote --tags origin v<VER>` non-empty) and, if the evaluator skipped it, backfills it add-only on the merged HEAD (`git tag -a v<VER> -m "<subject>" <merged-HEAD>` + `git push origin refs/tags/v<VER>`) — tags are immutable, so a backfill only adds one, never moves an existing tag.
 
             ## Reference Index
 
             | Topic | File |
             |---|---|
             | B1 (the two-step branch-per-change loop, concurrent landings, the cross-repo WIP landing sequence) and B4 (sync to upstream + prune) | `references/branch-and-pr-loop.md` |
-            | B2 (multi-repo/multi-worktree coordination, per-module verification), B3 (agent teams on one shared tree), B6 (cross-repo `@github` landing), and B7 (multi-worktree landing + refresh, the canonical end-to-end) | `references/multi-repo-coordination.md` |
+            | B2 (multi-repo/multi-worktree coordination, per-module verification), B3 (agent teams in per-teammate worktrees), B6 (cross-repo `@github` landing), and B7 (multi-worktree landing + refresh, the canonical end-to-end) | `references/multi-repo-coordination.md` |
             | B5 (the fresh evaluator + fork/PR path, the two-gate autonomous-landing model), CalVer generation, post-landing cleanliness + report format, and the validation-FAILS recovery sequence | `references/validator-and-calver.md` |
 
             ## Cross-References
@@ -3600,8 +3598,11 @@ git-workflow-skill:
                     gates from multiple branches overlapping under the shared hardware ceiling.
                   - **Validation** — fresh `pr-validator`s run CONCURRENTLY across all ready PRs
                     (each is an independent context; nothing couples them before the merge instant).
-                  - **After each merge** — every still-open PR goes `BEHIND` (all three repos set
-                    `strict: true` require-up-to-date — KEPT deliberately: one shared Go package with
+                  - **After each merge** — every still-open PR goes `BEHIND` (branch protection is
+                    org-wide, not per-repo-set: `opencharly/.github/scripts/branch-protection.sh`
+                    applies `strict: true` require-up-to-date with the single `charly/pr-validator`
+                    context to EVERY active `main`-default repo — 14 today — so every repo in a
+                    cross-repo cutover is covered; KEPT deliberately: one shared Go package with
                     no CI on `main` means merging a stale-base green PR opens a semantic-conflict
                     blind spot; that is the technical reason, not doctrine). Recover with
                     `gh pr update-branch` (never force-push), then a **risk-proportional DELTA
@@ -3697,7 +3698,7 @@ git-workflow-skill:
                   tier gate TRUTHFULLY at the stage it was made — the tier only ever moves UP, to
                   match proof that now exists.
 
-                  ## B4 — sync to upstream + prune (per repo: main, sdk, plugins, box/*, pkg/*)
+                  ## B4 — sync to upstream + prune (per repo: main, sdk, plugins, docs, box/*, pkg/*)
 
                   - **Sync-before-start.** `git fetch origin --prune --tags`; ff local `main` to
                     `origin/main`. Never force-reset a diverged local `main` — if it cannot
@@ -3743,7 +3744,7 @@ git-workflow-skill:
                   ## B2 — multi-repo / multi-worktree coordination
 
                   One logical change spanning several repos uses the **same `feat/<slug>` in each**
-                  (main, `sdk`, `plugins`, `box/<distro>`), so the branches correlate. R10 runs
+                  (main, `sdk`, `plugins`, `docs`, `box/<distro>`), so the branches correlate. R10 runs
                   against the **assembled superproject** (submodule pointers at the `feat/` commits)
                   — the whole change is verified before any PR is opened. Then land in **dependency
                   order**, each repo as its OWN two-step PR (author opens; fresh `pr-validator`
@@ -3776,15 +3777,19 @@ git-workflow-skill:
                   bump references a commit `main` has never seen. Wait for the pair before treating a
                   producer advance as a base.
 
-                  **Submodule-pointer-bump safety (step 3) — bump AFTER the switch, then stage AND
-                  verify.** A `git switch` / `git checkout` re-materializes each submodule at the
-                  gitlink the *target branch* records, silently discarding an **unstaged**
+                  **Submodule-pointer-bump safety (step 3) — bump AFTER the session worktree exists,
+                  then stage AND verify.** A `git switch` / `git checkout` — and equally the
+                  `git worktree add` that creates a session's landing branch — re-materializes each
+                  submodule at the gitlink the *target* records, silently discarding an **unstaged**
                   working-tree pointer bump (it happens even with `submodule.recurse` unset — an
-                  unstaged gitlink is not carried across the switch). So bumping the pointer *before*
-                  `git switch -c feat/<slug>` — or merely `git -C <sub> checkout <new>` without
-                  `git add` — drops it from the commit, and a `git add <sub>; git commit` afterward
-                  stages nothing because the working tree was reset to the old pointer. Always, in
-                  order: (a) create/switch to the landing branch FIRST; (b) THEN `git -C <sub>
+                  unstaged gitlink is not carried across the switch / worktree-add). So bumping the
+                  pointer *before* creating the session worktree (`git worktree add
+                  .claude/worktrees/<slug> -b feat/<slug> origin/main`, B1 step 0 — the feat branch
+                  is created there at session start, never by `git switch -c` in the shared main
+                  tree) — or merely `git -C <sub> checkout <new>` without `git add` — drops it from
+                  the commit, and a `git add <sub>; git commit` afterward stages nothing because the
+                  working tree was reset to the old pointer. Always, in order: (a) create the
+                  session worktree + feat branch FIRST (B1 step 0); (b) THEN `git -C <sub>
                   checkout <new-commit>` + `git add <sub>`; (c) VERIFY it is staged — `git diff
                   --cached --submodule=short <sub>` must print `<old>...<new>`; (d) after committing,
                   confirm the commit records it — `git show --stat` lists `<sub>` and `git ls-tree
@@ -3833,50 +3838,47 @@ git-workflow-skill:
                   symbol). The stamp answers "which commit"; the `strings` marker answers "is my change
                   actually in this binary".
 
-                  ## B3 — agent teams on ONE shared tree (no worktree)
+                  ## B3 — agent teams in per-teammate worktrees
 
-                  When an agent team parallelizes work, **the check bed is the unit of isolation, not
-                  a worktree**. Each teammate owns a disjoint check bed's SOURCE files; distinct beds
-                  get distinct `charly-<bed>` container/VM/domain names, and a bed run tags every
-                  fixture IMAGE it builds with a per-run `<bed-root>-<runCalver>` tag (#75) so two beds
-                  building the SAME fixture image name never race the store-global tag namespace; the
-                  lead assigns each disjoint host ports too (the loader does NOT check ports — an
-                  overlap fails the second bed at deploy),
-                  and a bed pins an image → layers → files, so bed-ownership already isolates the
-                  source files each teammate edits. **Teammates edit; a PERSISTENT owner runs every
-                  full `charly check run <bed>`** as a `run_in_background` task — the lead's
-                  persistent session, a background agent, or (interactive tmux) a split-pane
-                  teammate; an in-process teammate CANNOT (its bg dies on yield). Teammates share ONE
-                  working tree on ONE `feat/<slug>` branch:
+                  When an agent team parallelizes work, **each teammate works in its OWN worktree**
+                  under `.claude/worktrees/<slug>/` (B1 step 0) — the same worktree-per-session
+                  model every session uses, never a shared checkout. A team is N worktrees, each
+                  with its own `bin/charly` and its own freshness-guard scope; there is no
+                  shared-tree alternative. Within a worktree, **the check bed is the unit of
+                  isolation**: each teammate owns a disjoint check bed's SOURCE files; distinct
+                  beds get distinct `charly-<bed>` container/VM/domain names, and a bed run tags
+                  every fixture IMAGE it builds with a per-run `<bed-root>-<runCalver>` tag (#75)
+                  so two beds building the SAME fixture image name never race the store-global tag
+                  namespace; host-port disjointness is not statically guaranteed, so every bed
+                  uses port auto-allocation — never a hardcoded host port (the loader checks no
+                  ports, so a collision surfaces only at deploy; manual port-picking is
+                  forbidden), and a bed pins an
+                  image → layers → files, so bed-ownership already isolates the source files each
+                  teammate edits. **Teammates edit; a PERSISTENT owner runs every full `charly
+                  check run <bed>`** as a `run_in_background` task — the lead's persistent
+                  session, a background agent, or (interactive tmux) a split-pane teammate; an
+                  in-process teammate CANNOT (its bg dies on yield).
 
                   - Teammates edit their bed-scoped files + run short foreground checks (`charly check
                     box`) — never the full `charly check run`, and **never commit, push, or open a
                     PR**. The lead runs the full beds and, on R10 PASS, opens the SINGLE PR for the
                     cutover (B1 step 1); a FRESH `pr-validator` (never a teammate that authored code)
                     merges it.
-                  - Reserve a real `git worktree` (per `isolation: worktree`) only for genuine
-                    **same-file** concurrency that bed-ownership does not separate.
                   - **Schedule longest-pole-first.** `charly check run` has no bed-level concurrency
                     and no `charly` cap — the limit is host CPU/RAM/podman. Run ALL full beds as
                     concurrent background tasks; order by expected DURATION, not bed count: launch the
                     slow VM/desktop beds first and overlap the cheap pod beds, so wall-clock ≈ the
                     slowest single bed, not the sum.
-                  - **Freeze `charly/*.go` during the bed phase.** `charly`'s stale-binary freshness
-                    guard gates every heavy verb the instant any `charly/*.go` is newer than the
-                    INVOKED binary, so a teammate editing Go mid-bed-run aborts every other agent's
-                    next build/deploy/check. For a SHARED-CORE (Go) cutover the lead lands the core
-                    first, runs ONE `task build:binary` in the shared checkout, then fans out beds
-                    with Go frozen — the bed set must actually invoke `./bin/charly` (explicitly, or
-                    with the shared tree's `bin/` prepended onto `$PATH`), since a bed shelling to
-                    bare `charly` otherwise resolves whatever the HOST has installed, never the
-                    freshly-rebuilt shared binary; a BED-LOCAL (YAML/candy/skills) cutover has no
-                    shared binary and needs no barrier.
-                    **This freeze applies ONLY to the SHARED-TREE model** (one checkout, one shared
-                    binary) — a MULTI-WORKTREE team needs no such barrier, since each worktree carries
-                    its own `bin/charly` and its own freshness-guard scope; see
-                    `/charly-internals:agents` "The charly binary in a multi-teammate /
-                    multi-worktree setup" for the full host-vs-worktree-binary discipline — never
-                    conflate the two models.
+                  - **No shared freeze barrier — per-worktree self-freeze instead.** Because each
+                    worktree carries its own `bin/charly` and its own freshness-guard scope, a
+                    teammate editing `charly/*.go` in its own worktree never trips another
+                    teammate's bed run — there is no shared binary to freeze. The only freeze that
+                    applies is the WITHIN-worktree self-freeze: freeze your own worktree's
+                    `charly/*.go` for the duration of your own bed run (the per-tree freshness guard
+                    compares the invoked binary against the cwd's sources at every heavy verb,
+                    mid-run), and keep one binary-build owner per worktree at a time. Full
+                    discipline: `/charly-internals:agents` "The charly binary in a multi-teammate /
+                    multi-worktree setup" + "Within-worktree self-freeze".
 
                   ## B6 — cross-repo landing when a change is referenced via `@github`
 
@@ -4176,7 +4178,7 @@ git-workflow-skill:
                   independently of project root; the scope-of-validity note below). So:
 
                   - **Spawn the validator with its working directory at the superproject root**, for a PR
-                    in any repo (superproject, `sdk`, `plugins`, `box/<distro>`).
+                    in any repo (superproject, `sdk`, `plugins`, `docs`, `box/<distro>`).
                   - **Drive the submodule with a literal absolute path**: `git -C /abs/path/plugins …`,
                     `gh <cmd> --repo <owner>/<repo>`. Never `cd plugins && …` (B7 states the same rule for
                     the commit gate; it is equally load-bearing for permissions).
@@ -4205,12 +4207,17 @@ git-workflow-skill:
                   out of order, an author-time CalVer collides (same minute) and mis-orders (merge
                   order ≠ author order). The evaluator generates it at merge and applies it to both
                   the changelog and the tag (the "one stamp for both" invariant, moved from
-                  author-landing to evaluator-merge). This holds for every repo, `plugins` included:
-                  `plugins` is no CHANGELOG-exception — every `plugins` landing carries a
-                  `CHANGELOG/<YYYY.DDD.HHMM>.md` entry exactly like the superproject and
-                  `box/<distro>`, and now that `plugins` is tagged, the same finalized CalVer names
-                  that changelog file and the `v<…>` tag. Every component is fixed-width zero-padded so
-                  filenames and tags sort chronologically under a plain alphanumeric sort.
+                  author-landing to evaluator-merge). This holds for every repo, `plugins` and `docs` included:
+                  `plugins` and `docs` are no CHANGELOG-exceptions — every `plugins` AND every
+                  `docs` landing carries a `CHANGELOG/<YYYY.DDD.HHMM>.md` entry exactly like the
+                  superproject and `box/<distro>` (the `docs` convention is real: 24 of the last 25
+                  docs first-parent commits carry one; the single exception `a252df9` is exactly
+                  the commit that forced follow-up docs PR #46 to add its missing entry — a fresh
+                  validator reading the pre-this-edit enumeration, which named `plugins` but never
+                  `docs`, would conclude `docs` is an exception and the gap recurs). Once tagged,
+                  the same finalized CalVer names each repo's changelog file and its `v<…>` tag.
+                  Every component is fixed-width zero-padded so filenames and tags sort
+                  chronologically under a plain alphanumeric sort.
 
                   - **The author writes a placeholder** `CHANGELOG/<placeholder>.md` (any valid
                     `YYYY.DDD.HHMM`, so the cutover carries its required history) and — for a schema cutover
@@ -4239,7 +4246,7 @@ git-workflow-skill:
 
                   One fresh stamp per merge, immutable (only ever added), independent of `charly.yml`
                   `version:` (the schema version, bumped only by a cutover raising `#SchemaVersion`).
-                  Every repo (superproject, `box/<distro>`, `plugins`, `pkg/*`) mints `v$VER` on its
+                  Every repo (superproject, `box/<distro>`, `plugins`, `pkg/*`, `docs`) mints `v$VER` on its
                   merged HEAD; `sdk` alone uses its Go-module `v0.<YYYYDDD>.<HHMM
                   leading-zeros-stripped>` scheme (not an exemption — Go modules require semver, which
                   forbids a leading-zero segment — `0733`→`733`). A YAML schema/format change does
@@ -7212,8 +7219,8 @@ skills-skill:
             - the 2 hooks in `.claude/hooks/` (`pre-commit-gate.sh`, `pre-push-gate.sh` — deterministic
               command-mechanics gates only; there is no reminder-hook layer),
             - the agents in `plugins/internals/agents/*.md`,
-            - the 8 per-directory signpost `CLAUDE.md` files (`charly/`, `candy/`,
-              `plugins/`, each `box/<distro>`),
+            - the 9 per-directory signpost `CLAUDE.md` files (`charly/`, `candy/`,
+              `plugins/`, `docs/`, each `box/<distro>`),
             - the workflows in `.claude/workflows/*.js`,
             - every SKILL.md that quotes a section name (grep before assuming).
 
@@ -7266,7 +7273,7 @@ skills-skill:
             ### Per-directory CLAUDE.md signposts (hybrid)
 
             The repo-root `CLAUDE.md` is the complete R0–R10 harness adapter.
-            Per-directory `CLAUDE.md` files (`charly/`, `candy/`, `plugins/`, and each
+            Per-directory `CLAUDE.md` files (`charly/`, `candy/`, `plugins/`, `docs/`, and each
             `box/<distro>` submodule) are THIN signposts only: they name the skills to
             load for that area and point back to root. They MUST NOT restate any rule body —
             duplication drifts (an earlier layer-validator and the reminder hooks both drifted
@@ -7383,10 +7390,12 @@ skills-skill:
             5. **Land docs-only**: skill edits are the Documentation-only change class →
                `documentation reviewed` (no beds); the plugins commit carries a
                `CHANGELOG/<YYYY.DDD.HHMM>.md` entry too (every plugins landing does — `plugins`
-               is no CHANGELOG-exception); plugins commit → superproject pointer bump → both
-               tagged `v<YYYY.DDD.HHMM>` at merge (`plugins` is tagged too, same as every repo —
-               the one finalized CalVer names both its changelog file and its tag). See
-               `/charly-internals:git-workflow`.
+               is no CHANGELOG-exception), and a cutover that regenerates the `docs` mirror
+               lands a `docs` commit carrying its OWN entry (every docs landing does — `docs`
+               is no CHANGELOG-exception either); plugins commit → docs commit → superproject
+               pointer bumps → all tagged `v<YYYY.DDD.HHMM>` at merge (plugins and docs are
+               tagged too, same as every repo — the one finalized CalVer names each repo's
+               changelog file and its tag). See `/charly-internals:git-workflow`.
 
             **Alias residue is a special case — never assert its exact location.** A `charly/*_aliases.go` line is
             transitional K-wave residue that ZERO-ALIASES/K5 deletes, so a skill asserting its exact per-symbol
@@ -8660,7 +8669,7 @@ pr-validator-agent:
 
             **W1 — STAY IN THE SUPERPROJECT. Never `cd` into a submodule.** Your project root is your
             working directory, and Claude Code loads `.claude/settings.json` from it. The submodules
-            (`plugins`, `sdk`, `box/<distro>`) ship NO `.claude/`, so rooting there silently drops the
+            (`plugins`, `sdk`, `docs`, `box/<distro>`) ship NO `.claude/`, so rooting there silently drops the
             superproject's `permissions.allow` rules — and your `success` status POST is then denied as
             Self-Approval ("the only authorization comes from a `<teammate-message>`") unless a
             USER/MANAGED-level grant covers the action (user settings resolve independently of project
@@ -9527,9 +9536,9 @@ pr-validator-agent:
                the sdk tag is `v0.$(date -u +%Y%j).$SDK_MIN`). A leading-zero sdk tag
                (e.g. `v0.2026192.0733`) is INVALID — it makes every consumer's `go.mod`
                unparseable in module mode — so this stripping is mandatory, not cosmetic.
-               `plugins` and `pkg/*` ARE tagged, with the same `v<YYYY.DDD.HHMM>` form as every
-               non-sdk repo (they carry no `charly.yml`, so no schema `version:` bump — but the
-               tag still marks the merge).
+               `plugins`, `pkg/*`, and `docs` ARE tagged, with the same `v<YYYY.DDD.HHMM>` form as
+               every non-sdk repo (they carry no `charly.yml`, so no schema `version:` bump — but
+               the tag still marks the merge).
             3. **Rewrite every merge-time-dependent version surface to `$VER`** on the feat
                branch, then commit (carry the PR's validated `Assisted-by` trailer) and push
                the feat branch (a normal, non-force push — you are ADDING a commit):
@@ -9607,11 +9616,11 @@ pr-validator-agent:
                anomaly, and run R1. The post-merge transcript MUST name `MERGED_SHA` and
                show the exact parser output.
 
-               Only after that proof, tag EVERY repo (`plugins` and `pkg/*` included; `sdk`
-               substitutes its `v0.<…>` form from step 2): `git tag -a v$VER -m "<subject>"
+               Only after that proof, tag EVERY repo (`plugins`, `pkg/*`, and `docs` included;
+               `sdk` substitutes its `v0.<…>` form from step 2): `git tag -a v$VER -m "<subject>"
                "$MERGED_SHA"`; `git push origin refs/tags/v$VER` (a tag push — allowed by
                the pre-push-gate). Only a SUPERPROJECT `v*` tag triggers `release-packages.yml`;
-               a `plugins` / `pkg/*` tag fires NO workflow, so tagging them is harmless.
+               a `plugins` / `pkg/*` / `docs` tag fires NO workflow, so tagging them is harmless.
                **SKIPPING any repo's tag is a DEFECT** — the pre-unification `plugins`/`pkg`
                tag-exempt rule is RETIRED; never omit a tag on a stale "exempt" belief (doing so
                once shipped a `plugins` merge un-tagged, backfilled add-only after the fact). The

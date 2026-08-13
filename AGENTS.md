@@ -266,12 +266,15 @@ tests, schemas, generated artifacts, documentation, and changelogs synchronized.
 Remove every old identifier and sibling claim in one phase; do not leave shims,
 dual paths, TODOs, or deferred cleanup.
 
-Use a linked feature worktree from current protected `origin/main` for
-substantial work and preserve the operator's checkout. **Every session works in
-its OWN worktree under `.claude/worktrees/<slug>/`, branched off fresh
-`origin/main`; the main tree stays on `main`.** Create the worktree at session
-start and remove it (worktree + branch) after the change lands, so parallel
-sessions never collide on one checkout. Verify status, HEAD,
+Use a linked feature worktree from current protected `origin/main` and
+preserve the operator's checkout. **Every session works in its OWN worktree
+under `.claude/worktrees/<slug>/`, branched off fresh `origin/main`; the main
+tree stays on `main`.** Create the worktree at session start and remove it
+(worktree + branch) after the change lands, so parallel sessions never collide
+on one checkout. (In the orchestrator+teammates model the orchestrator owns the
+worktrees of the agents it spawns; a standalone session owns its own —
+`/charly-internals:agents` "Worktree lifecycle and validator identity".) Verify
+status, HEAD,
 merge-base, submodule lineage, and remote base before implementation and again
 before landing. Existing normal caches may be used only through the runtime's
 approved boundary; never manufacture alternate homes, caches, clones, or
@@ -292,8 +295,10 @@ After the final gate:
    verdict before gated actions.
 4. Only PASS may post `charly/pr-validator`, generate the merge-time CalVer,
    squash-merge with the bound head, tag the merge, and clean the branch and
-   worktree. A changed head, warning, anomaly, or live unfinished bed revokes
-   PASS.
+   worktree (orchestrator-owned in the orchestrator+teammates model; the owning
+   session's own in a standalone session — `/charly-internals:agents` "Worktree
+   lifecycle and validator identity"). A changed head, warning, anomaly, or live
+   unfinished bed revokes PASS.
 5. After `main` advances, update interacting PRs and run a risk-proportional
    delta gate. Never guess across divergent submodule lineage.
 
