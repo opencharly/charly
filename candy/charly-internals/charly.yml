@@ -1463,7 +1463,8 @@ agents-skill:
                      See "The charly binary in a multi-teammate / multi-worktree setup"
                      above for the canonical host-vs-worktree-binary rule; this item adds
                      the concurrent-bed proof and the CalVer-stamping detail. The freshness
-                     guard (`main_freshness.go`) compares `os.Executable()` against the
+                     guard (`verb:freshness-guard`, `candy/plugin-doctor/freshness.go`) compares
+                     `os.Executable()` against the
                      cwd-walked source root, so a worktree with its own `task build:binary`
                      output is self-consistent: `PATH=$PWD/bin:$PATH charly check run <bed>`
                      runs the full R10 sequence (deploy-add → check-live → fresh update →
@@ -3846,8 +3847,10 @@ git-workflow-skill:
                   beds get distinct `charly-<bed>` container/VM/domain names, and a bed run tags
                   every fixture IMAGE it builds with a per-run `<bed-root>-<runCalver>` tag (#75)
                   so two beds building the SAME fixture image name never race the store-global tag
-                  namespace; the lead assigns each disjoint host ports too (the loader does NOT
-                  check ports — an overlap fails the second bed at deploy), and a bed pins an
+                  namespace; host-port disjointness is not statically guaranteed, so every bed
+                  uses port auto-allocation — never a hardcoded host port (the loader checks no
+                  ports, so a collision surfaces only at deploy; manual port-picking is
+                  forbidden), and a bed pins an
                   image → layers → files, so bed-ownership already isolates the source files each
                   teammate edits. **Teammates edit; a PERSISTENT owner runs every full `charly
                   check run <bed>`** as a `run_in_background` task — the lead's persistent
