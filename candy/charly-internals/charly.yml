@@ -665,11 +665,18 @@ agents-skill:
                     clean author worktree at the bound PR head. It never creates or uses a
                     validator worktree, clone, alternate Git directory, cache, home, or
                     `/tmp` workspace.
-                  - **Worktree lifecycle is orchestrator-owned.** A validator or teammate
-                    never removes a worktree it does not exclusively own. Post-merge cleanup
-                    begins only after the validator has finished and live GitHub state
-                    confirms the merge; it removes only the merged author worktree and
-                    branch after clean-status and ownership checks.
+                  - **Worktree lifecycle is orchestrator-owned — in the orchestrator+teammates
+                    model.** A validator or teammate never removes a worktree it does not
+                    exclusively own. Post-merge cleanup begins only after the validator has
+                    finished and live GitHub state confirms the merge; it removes only the
+                    merged author worktree and branch after clean-status and ownership checks.
+                  - **Independent parallel sessions own their own worktree lifecycle.** A
+                    session NOT inside an orchestrator team creates its own worktree under
+                    `.claude/worktrees/<slug>/` at session start and removes it (worktree +
+                    branch) after its own PR lands — `/charly-internals:git-workflow` B1 step 0
+                    + B4 "Worktree hygiene". The orchestrator-owned rule above governs only the
+                    worktrees of the agents it spawns; it is never an authorization to touch
+                    another independent session's worktree.
                   - **One validator identity per PR.** Never re-brief or re-spawn a validator
                     for an already-merged PR. A changed candidate requires a newly spawned
                     validator before landing; a merged candidate requires cleanup, not
@@ -918,6 +925,13 @@ agents-skill:
                   always the orchestrator. Merges/tags → always a validator. Code → always a
                   teammate/sub-agent worktree. Scope → always the contract and the
                   orchestrator, never a lane-local decision.
+
+                  **Standalone sessions** (independent parallel sessions NOT inside an
+                  orchestrator team) own their own worktree lifecycle: create at session start,
+                  remove after landing (`/charly-internals:git-workflow` B1 step 0 + B4
+                  "Worktree hygiene"). The orchestrator's "agent and worktree lifecycle"
+                  ownership above covers only the teammates/validators/sub-agents it spawns,
+                  never another session's worktree.
 
                   ## See also
 
@@ -3519,13 +3533,24 @@ git-workflow-skill:
               content: |+
                   ## B1 — the two-step branch-per-change loop
 
+                  **Step 0 — Create your session worktree.** Every session that commits,
+                  branches, or pushes works in its OWN worktree under
+                  `.claude/worktrees/<slug>/`, branched off fresh `origin/main` (B4 "Worktree
+                  hygiene") — never `git switch -c` in the shared main tree. Only ONE worktree
+                  can hold `main` at a time (B7), and a session doing `git switch -c` there
+                  hijacks the checkout from every other session on the system. The main tree
+                  stays on `main`; the session's edits, commits, beds, and PR all happen in its
+                  worktree, which it removes after the PR lands.
+
                   **Step 1 — Author** (opens the PR; NEVER merges it):
 
                   ```bash
-                  # sync-before-start (see B4): branch off up-to-date main
+                  # sync-before-start (see B4): branch off up-to-date origin/main INTO your
+                  # session worktree (step 0) — the main tree stays on `main`
                   git fetch origin --prune --tags
-                  git switch main && git merge --ff-only origin/main
-                  git switch -c feat/<slug>            # slug = kebab summary of the change
+                  git worktree add .claude/worktrees/<slug> -b feat/<slug> origin/main
+                  #                                            ^ slug = kebab summary of the change
+                  # all edits, commits, beds, and the PR happen inside .claude/worktrees/<slug>/
 
                   # ... implement the whole cutover; run beds freely throughout to VERIFY
                   #     (Risk Driven Development: prove high-risk assumptions on a bed first) ...
@@ -3686,9 +3711,26 @@ git-workflow-skill:
                     local; `git fetch --prune` drops remote-tracking refs deleted upstream. **Only
                     ever delete branches confirmed `--merged`**; never `-D` an unmerged/abandoned
                     branch without operator confirmation — it may hold unlanded work.
-                  - **Worktree hygiene.** `git worktree list` to inventory; `git worktree prune` to
-                    clear stale admin entries. Remove an agent `isolation: worktree` after its change
-                    lands. Before reusing a long-lived worktree, ff its base to `origin/main`. A linked
+                  - **Worktree hygiene — the per-session lifecycle (create → work → land →
+                    remove).** Every session that commits/branches/pushes works in its OWN
+                    worktree under `.claude/worktrees/<slug>/`, branched off fresh `origin/main`
+                    (B1 step 0) — never `git switch -c` in the shared main tree, which only ONE
+                    worktree can hold (B7). A session's own lifecycle:
+                      1. **Create at session start** — after `git fetch origin --prune --tags`,
+                         `git worktree add .claude/worktrees/<slug> -b feat/<slug> origin/main`.
+                         The harness `EnterWorktree` tool does exactly this automatically.
+                      2. **Work in it** — all edits, commits, beds, and the PR happen in that
+                         worktree (B1 step 1); initialize only the submodules the cutover needs
+                         (below).
+                      3. **Remove after landing** — once `gh pr view <n> --json state` confirms
+                         the PR is MERGED, `git worktree remove .claude/worktrees/<slug>` + `git
+                         branch -d feat/<slug>` (clean-status and confirmed-merged checks first,
+                         R6). A session never touches another session's worktree — each owns its
+                         own lifecycle (an independent parallel session is NOT an
+                         orchestrator-managed teammate; `/charly-internals:agents` "Worktree
+                         lifecycle").
+                    `git worktree list` inventories; `git worktree prune` clears stale admin
+                    entries. Remove an agent `isolation: worktree` after its change lands. A linked
                     superproject worktree shares superproject objects but not submodule objects:
                     initialize only the submodules the cutover needs, and initialize each from the
                     common Git directory's matching `modules/<path>` reference so its clone records a
@@ -3864,9 +3906,12 @@ git-workflow-skill:
                   ## B7 — Multi-worktree landing + refresh (the canonical end-to-end)
 
                   When this project is driven from multiple git worktrees sharing one `.git`, only
-                  ONE worktree can have `main` checked out at a time. Every "land + update all
-                  worktrees" follows this EXACT ordered sequence. It composes B1 (branch loop), B2
-                  (per-repo order + pointer-bump safety), B4 (sync/prune).
+                  ONE worktree can have `main` checked out at a time. The main tree stays on
+                  `main`; every feature session works in its OWN worktree under
+                  `.claude/worktrees/<slug>/` — one worktree per session, created at session
+                  start and removed after landing (B1 step 0 + B4 "Worktree hygiene"). Every
+                  "land + update all worktrees" follows this EXACT ordered sequence. It composes
+                  B1 (branch loop), B2 (per-repo order + pointer-bump safety), B4 (sync/prune).
 
                   **0. Pre-flight (worktree safety).** `git worktree list` → note which worktree
                   holds `main`. Pin ONE worktree for the whole edit→commit→push sequence; drive every
