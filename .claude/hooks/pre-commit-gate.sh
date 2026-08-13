@@ -135,7 +135,12 @@ def lint_staged_go(repo):
     # golangci-lint's Go build needs far more than a tmpfs can hold. A
     # per-user cache dir on the root fs keeps the gate working on any host.
     cache_root = os.path.join(os.path.expanduser("~"), ".cache", "charly-gate-lint")
-    os.makedirs(cache_root, exist_ok=True)
+    try:
+        os.makedirs(cache_root, exist_ok=True)
+    except OSError:
+        # A HOME that cannot be written must not block the commit (fail-open):
+        # fall back to the system temp dir, exactly as the pre-fix hook did.
+        cache_root = None
     for root in roots:
         env = dict(os.environ)
         if os.path.abspath(root) not in workspace_members:
