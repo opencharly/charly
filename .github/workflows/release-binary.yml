@@ -70,7 +70,12 @@ jobs:
         run: |
           CALVER=$(bash scripts/calver.sh)
           test "$(./bin/charly-linux-amd64 version)" = "$CALVER"
-          test "$(./bin/charly-linux-arm64 version)" = "$CALVER"
+          # The arm64 binary is an aarch64 ELF and CANNOT execute on the amd64
+          # runner ("Exec format error", exit 126), so its stamp is verified via
+          # the embedded build info instead of a runtime `version` call — the
+          # -ldflags "-X main.BuildCalVer=…" build setting is recorded in the
+          # binary's module build info and read back by `go version -m`.
+          go version -m bin/charly-linux-arm64 | grep -q "main.BuildCalVer=${CALVER}"
       - if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v3
         with:
