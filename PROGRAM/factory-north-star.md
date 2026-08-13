@@ -113,7 +113,7 @@ changes keywords, never the recipe:
    overlay* applied inside the guest by a nested step: the spike proves the overlay
    itself, not an approximation of it.
 3. **`helm` flavor** — PROD runs the upstream AgentTeams Helm chart on a cluster charly
-   did not shape. charly has **no helm word today** — the gap cutover 1 closes. Spike =
+   did not shape. charly has **no helm word today** — the gap cutover 2 closes. Spike =
    disposable `vm:` composing `k3s-server` + `helm`, plan installs the chart at PROD's
    pinned version/values via `step:helm-release`, proven by `verb:helm` + `kube:`.
 
@@ -148,7 +148,9 @@ MinIO, which every flavor exposes identically — the venue is below them.
   promote-change, teardown-spike) and the six Worker + Team + Human resource YAMLs as
   candy files — the files are the rollback units.
 - root `charly.yml` — the `agentteams-factory` box (per the agentteams box precedent
-  at 2664; main owns no other boxes): agentteams composition + factory + snapshot +
+  at 2664, joining the six boxes main already owns — `agentteams`,
+  `agentteams-manager`, `agentteams-worker`, `check-k8s-deploy-app`,
+  `docs-site-app`, `marketplace-app`): agentteams composition + factory + snapshot +
   `container-nesting`; the helm layer joins only the vm-flavor guests.
 - `charly.yml` deploy entries — the PROD deploy (never disposable), spike templates
   `factory-spike-native` (`pod:` + nesting) / `factory-spike-kustomize` /
