@@ -11,6 +11,15 @@ k3s-server:
             as the default StorageClass.
         require:
             - k3s
+            # k3s-kernel ensures the FULL distro kernel is installed and reboots the venue so it
+            # boots it. The Arch cloud image boots a minimal kernel without overlayfs or
+            # iptables/netfilter — k3s's containerd and kube-proxy both fail on it. The deploy's
+            # system upgrade installs the full `linux` package, but the running kernel stays the
+            # minimal one until a reboot; this candy's RebootStep (emitted last in ITS plan, which
+            # topo-sorts BEFORE this candy's) reboots the VM mid-deploy so the checks below run
+            # against a kernel that can actually run k3s. Only the vm deploy reboots; pod/OCI/
+            # kubernetes skip the RebootStep and local targets skip + warn.
+            - k3s-kernel
             # plugin-kube is the OUT-OF-TREE plugin that serves the `kube:` cluster-probe
             # check verb AND the clientcmd-backed k3s kubeconfig-merge K3sPostProvision
             # performs (the heavy k8s.io/client-go + k8s.io/apimachinery stack lives there,
@@ -299,8 +308,12 @@ k3s-server:
                 #  - kube-proxy-arg feature-gates KubeletInUserNamespace=true —
                 #    kube-proxy honours the same feature gate for its own
                 #    userns-aware paths.
-                # VM and host deploys run with full kernel access and skip all
-                # of these.
+                # VM and host deploys skip the userns tolerances, but still pin
+                # snapshotter: native — a VM kernel is not guaranteed to support
+                # overlayfs (the Arch cloud image kernel ships without it; k3s's
+                # containerd then loops on "failed to mount overlay: no such
+                # device" and the kubeconfig never lands). native is the most
+                # compatible snapshotter and works on every kernel.
                 if [ -f /etc/supervisord.conf ]; then
                   cat >/etc/rancher/k3s/config.yaml <<YAML
                 write-kubeconfig-mode: "0644"
@@ -321,6 +334,7 @@ k3s-server:
                 tls-san:
                   - "${K3S_SERVER_HOSTNAME:-$(uname -n)}"
                 disable: []
+                snapshotter: native
                 YAML
                 fi
                 chmod 0600 /etc/rancher/k3s/config.yaml

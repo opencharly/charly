@@ -1,0 +1,36 @@
+k3s-kernel:
+    candy:
+        version: 2026.225.1707
+        description: |
+            Ensures the full distro kernel is installed and reboots the venue so it boots it.
+            The Arch cloud image ships a minimal kernel without overlayfs or iptables/netfilter —
+            k3s's containerd and kube-proxy both fail on it ("failed to mount overlay: no such
+            device", "iptables is not available on this host"). The deploy's system upgrade
+            installs the full `linux` package, but the running kernel stays the minimal one until
+            a reboot. This candy installs the full kernel explicitly and requests a reboot
+            (RebootStep, emitted last) so the k3s-server checks run against a kernel that can
+            actually run k3s. Only the vm deploy reboots (rebootVenueAndWait, deterministic
+            boot_id gate); pod/OCI/kubernetes skip the RebootStep and local targets skip + warn.
+        reboot: true
+        distro:
+            arch:
+                package:
+                    - linux
+            debian:
+                package:
+                    - linux-image-amd64
+            fedora:
+                package:
+                    - kernel
+            ubuntu:
+                package:
+                    - linux-image-generic
+        plan:
+            - check: the full kernel package is installed — the precondition the reboot boots it
+              package:
+                package: linux
+                package_map:
+                    debian: linux-image-amd64
+                    fedora: kernel
+                    ubuntu: linux-image-generic
+                installed: true

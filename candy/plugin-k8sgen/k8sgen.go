@@ -181,6 +181,34 @@ func GenerateTree(in spec.KubernetesGenInput) (spec.KubernetesGenReply, error) {
 		}
 		overlayKustomization["patches"] = patches
 	}
+	// Translate deployment.kubernetes.helm_charts into the kustomize "helmCharts"
+	// list (the helm venue's chart releases, rendered by `kubectl kustomize` via the
+	// helm binary at template time). kustomize's helmCharts entry carries ONE
+	// valuesFile per chart, so the first values_files entry maps to it.
+	if in.Deploy.Deploy != nil && len(in.Deploy.Deploy.Helm_charts) > 0 {
+		var charts []map[string]any
+		for _, hc := range in.Deploy.Deploy.Helm_charts {
+			entry := map[string]any{
+				"name":        hc.Chart,
+				"releaseName": hc.Release,
+			}
+			if hc.Repo != "" {
+				entry["repo"] = hc.Repo
+			}
+			if hc.Version != "" {
+				entry["version"] = hc.Version
+			}
+			if hc.Namespace != "" {
+				entry["namespace"] = hc.Namespace
+			}
+			if len(hc.Values_files) > 0 {
+				entry["valuesFile"] = hc.Values_files[0]
+			}
+			entry["includeCRDs"] = true
+			charts = append(charts, entry)
+		}
+		overlayKustomization["helmCharts"] = charts
+	}
 	if err := addFile("overlays/"+overlayName+"/kustomization.yaml", overlayKustomization, "kustomization"); err != nil {
 		return reply, err
 	}
