@@ -45,19 +45,42 @@ agentteams-skill:
         content: |-
             # agentteams
 
-            The AgentTeams multi-agent stack as a charly box: a CachyOS base composing
+            AgentTeams is a multi-agent runtime built on a Manager–Workers model. A
+            controller — a mini Kubernetes API server (kube-apiserver v1.31.3 backed
+            by a kine SQLite store) plus a reconciler — manages four resource kinds
+            (Manager, Worker, Team, Human) and serves a REST API on :8090. The
+            controller spawns Manager containers through the container-runtime
+            socket; a Manager creates Workers; Workers join Teams and converse in
+            Rooms.
+
+            This box ships that whole stack as a charly box: a CachyOS base composing
             five decomposed candies — `agentteams-minio` (MinIO S3 + mc-mirror),
-            `agentteams-matrix` (the Tuwunel Matrix homeserver), `agentteams-element`
-            (Element Web via a rootless nginx), `agentteams-higress` (the Higress AI
-            gateway: apiserver, controller, pilot, envoy gateway, console), and
-            `agentteams-controller` (the kine-backed kube-apiserver + the
-            Manager/Worker/Team/Human reconciler serving the REST API on :8090).
+            `agentteams-matrix` (Tuwunel, a Rust Matrix homeserver — the chat
+            substrate), `agentteams-element` (Element Web via a rootless nginx),
+            `agentteams-higress` (the Higress AI gateway: apiserver, controller,
+            pilot, envoy gateway, console), and `agentteams-controller` (the
+            kine-backed kube-apiserver + the Manager/Worker/Team/Human reconciler
+            serving the REST API on :8090).
 
             Every service runs as the image user (uid 1000) — the rootless charly
             architecture, no root anywhere. Each candy owns its own home-relative
             volume, so any candy installs alone or together with any other at freely
             configurable locations. All service start scripts are charly-owned
             (written by the candies), never upstream AgentTeams scripts.
+
+            ## How it works
+
+            The controller is the entry point. On start it mints an admin service
+            account (SA) token, then reconciles the declared Manager/Worker/Team/
+            Human resources — for each Manager or Worker resource it spawns a
+            container through the container-runtime socket. A Manager container runs
+            the openclaw gateway plus the `agt` (AgentTeams CLI) and `mc` (MinIO
+            client) tools; a Worker container runs the openclaw worker runtime plus
+            the shared AgentTeams protocol libs. Workers join Teams and converse in
+            Rooms; the Matrix homeserver (Tuwunel) and the Higress AI gateway carry
+            the traffic, and MinIO stores objects. The whole sequence is verifiable
+            over the REST API: controller-spawns-manager → create-worker →
+            room-exists.
 
             ## Composition
 
@@ -139,14 +162,21 @@ agentteams-skill:
             `AGENTTEAMS_MANAGER_RUNTIME`, `AGENTTEAMS_DEFAULT_WORKER_RUNTIME`,
             `AGENTTEAMS_MATRIX_APPSERVICE_ENABLED`. Secrets (the minio root password, the
             matrix registration token, the controller admin token) resolve from env or
-            self-provisioned files.
+            self-provisioned files — files the candies write at first start when the
+            env var is unset: the controller's admin token at
+            `/var/run/agentteams/cli-token`, the admin password at
+            `~/.agentteams/controller/.admin-password`, the minio root password at
+            `~/.agentteams/minio/.root-password`, the matrix registration token at
+            `~/.agentteams/matrix/.registration-token`.
 
             ## Verification
 
             Each candy's ADE `plan:` ships deterministic checks (binary present, HTTP 200
-            liveness, service running). The box-level checks prove the
-            controller-spawns-manager → create-worker → room-exists sequence over the
-            REST API (`charly check run check-agentteams-pod` / `check-agentteams-vm`).
+            liveness, service running) — ADE (Agent Driven Evaluation) is charly's
+            check framework: the spec is the test, baked into the image. The box-level
+            checks prove the controller-spawns-manager → create-worker → room-exists
+            sequence over the REST API (`charly check run check-agentteams-pod` /
+            `check-agentteams-vm`).
 
             ## Cross-References
 
