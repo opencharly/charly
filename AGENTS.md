@@ -266,8 +266,8 @@ tests, schemas, generated artifacts, documentation, and changelogs synchronized.
 Remove every old identifier and sibling claim in one phase; do not leave shims,
 dual paths, TODOs, or deferred cleanup.
 
-Use a linked feature worktree from current protected `origin/main` for
-substantial work and preserve the operator's checkout. **Every session works in
+Use a linked feature worktree from current protected `origin/main` and preserve
+the operator's checkout. **Every session works in
 its OWN worktree under `.claude/worktrees/<slug>/`, branched off fresh
 `origin/main`; the main tree stays on `main`.** Create the worktree at session
 start and remove it (worktree + branch) after the change lands, so parallel
@@ -292,8 +292,11 @@ After the final gate:
    verdict before gated actions.
 4. Only PASS may post `charly/pr-validator`, generate the merge-time CalVer,
    squash-merge with the bound head, tag the merge, and clean the branch and
-   worktree. A changed head, warning, anomaly, or live unfinished bed revokes
-   PASS.
+   worktree — the cleanup covers the agent worktrees an orchestrator+teammates
+   run spawned (per `/charly-internals:agents` "Worktree lifecycle and validator
+   identity"); an INDEPENDENT parallel session removes its OWN worktree +
+   branch after its change lands, per the worktree-lifecycle mandate above. A
+   changed head, warning, anomaly, or live unfinished bed revokes PASS.
 5. After `main` advances, update interacting PRs and run a risk-proportional
    delta gate. Never guess across divergent submodule lineage.
 
