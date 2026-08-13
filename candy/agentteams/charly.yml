@@ -54,9 +54,12 @@ agentteams-skill:
             SQLite) plus a reconciler (a loop that watches declared resources and
             drives the running system toward them) — manages four resource kinds
             (Manager, Worker, Team, Human) and serves a REST API on :8090. A Team is
-            a group of Workers that share a Room. The controller spawns Manager
-            containers through the container-runtime socket; a Manager creates
-            Workers; Workers join Teams and converse in Rooms.
+            a group of Workers that share a Room; a Human is a real person — a
+            human-in-the-loop participant with an identity and permission tier —
+            who can observe and intervene in the Rooms their permissions allow. The
+            controller spawns Manager containers through the container-runtime
+            socket; a Manager creates Workers; Workers join Teams and converse in
+            Rooms.
 
             This box ships that whole stack as a charly box: a CachyOS base composing
             five decomposed candies — `agentteams-minio` (MinIO S3 + mc-mirror),
@@ -81,8 +84,9 @@ agentteams-skill:
             container through the container-runtime socket. A Manager container runs
             the openclaw gateway (openclaw is an AI agent gateway runtime) plus the
             `agt` (AgentTeams CLI) and `mc` (MinIO client) tools; a Worker container
-            runs the openclaw worker runtime plus the shared AgentTeams protocol
-            libs. Workers join Teams and converse in Rooms; the Matrix homeserver
+            runs the openclaw gateway plus the `agt` and `mc` tools and the shared
+            AgentTeams protocol libs. Workers join Teams and converse in Rooms; the
+            Matrix homeserver
             (Tuwunel) and the Higress AI gateway carry the traffic, and MinIO stores
             objects. The whole sequence is verifiable over the REST API:
             controller-spawns-manager → create-worker → room-exists.

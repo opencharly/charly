@@ -48,6 +48,9 @@ agentteams-cli-skill:
             REST client: no upstream `agt` binary (the upstream AgentTeams CLI), no
             SDK. Use it to manage a running AgentTeams deployment: create and
             inspect Workers, apply Teams and Humans, and check controller health.
+            A Human is a real person — a human-in-the-loop participant with an
+            identity and permission tier — who can observe and intervene in the
+            Rooms their permissions allow.
 
             ## Command tree
 
