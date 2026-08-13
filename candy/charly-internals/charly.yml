@@ -51,7 +51,7 @@ agents-skill:
             | Primitives per harness (Claude Code / Codex / Kimi); when to use a sub-agent vs. dynamic workflow vs. agent team; the charly agent roster (executors/enforcers); the shipped workflows (`/verify-beds`, `/audit-deploy-configs`, `/triage-check-failure`, `/verify-status`); the agent-team primitive setup | `references/agent-roster.md` |
             | The default multi-agent execution model: orchestrator/teammate model-tier split, maximum parallelization, the slot budget, concurrent landing, the orchestrator's bidirectional verification duty, architectural-integrity ownership, the responsibility matrix and tie-breakers | `references/orchestration-model.md` |
             | Program-wide alignment: the north-star protocol, the IOU register, per-merge measurement, migration-ledger discipline, crossed-ruling reconciliation, brief verification and stop-and-respawn, whack-a-mole escalation | `references/program-discipline.md` |
-            | Bed-scoped parallel real-deployment testing: the concurrency ceilings (store lock, exclusive-resource tokens, long-bed ownership, shared-tree walks, per-worktree binaries) and their fixes; the charly binary in a multi-worktree setup; the binding rule for running a bed; implementation-workflow shape; speed levers | `references/parallel-bed-testing.md` |
+            | Bed-scoped parallel real-deployment testing: the concurrency ceilings (store lock, exclusive-resource tokens, long-bed ownership, in-tree build artifacts, per-worktree binaries) and their fixes; the charly binary in a multi-worktree setup; the binding rule for running a bed; implementation-workflow shape; speed levers | `references/parallel-bed-testing.md` |
             | Delegation as fresh context; teammate context lifecycle; the nine sub-agent operational invariants; the hooks doctrine (current hook inventory); agent lifecycle hygiene; the universal PR-gate audit; worktree/validator lifecycle | `references/hooks-and-lifecycle.md` |
 
             ## Cross-References
@@ -983,27 +983,24 @@ agents-skill:
                     single Go package can't have N agents edit-and-build at once, but that's
                     handled by shape: the lead lands the shared core first (compile-clean),
                     each parallel unit is an independent `init()`-registered file (no
-                    shared-file edits), and the one shared tree's `charly` binary rebuild is
-                    a single barrier between the parallel-implement and parallel-bed-R10
-                    phases. Canonical shape: `Core (seq) → Implement (parallel by bed) →
-                    Integrate+build (seq barrier) → BedR10 (parallel by bed) → Review
-                    (parallel, read-only, optional)`. The barrier is load-bearing because
-                    `charly` refuses heavy ops (`image build`, `deploy add`) whenever any
-                    `charly/*.go` source is newer than the invoked binary (remediation: one
-                    `task build:binary` in the shared checkout). A teammate editing
-                    `charly/*.go` while another's bed is mid-run trips that guard on the
-                    bed's deploy step, so rebuild once at the barrier, then run every bed
-                    against the now-stable binary. The barrier carries a bare-`$PATH`
-                    caveat: the shared tree's bed set must actually invoke `./bin/charly`
-                    (explicitly, or with the shared tree's `bin/` prepended onto `$PATH` for
-                    the bed's session) — a bed that shells to bare `charly` otherwise
-                    resolves whatever the host has installed, never the shared tree's
-                    freshly-rebuilt binary (the same trap "Host-local beds are never a
-                    worktree gate" describes below). This barrier binds the shared-tree
-                    model only (one checkout, one binary) — a multi-worktree team needs no
-                    barrier at all, since each worktree's own `bin/charly` is
-                    self-consistently gated (see "Per-worktree binaries" below); never
-                    conflate the two models.
+                    shared-file edits), and each teammate's worktree carries its own
+                    `bin/charly` — there is no shared binary to freeze, so the
+                    parallel-implement and parallel-bed-R10 phases overlap freely.
+                    Canonical shape: `Core (seq) → Implement (parallel by bed, one
+                    worktree each) → Integrate+build (seq) → BedR10 (parallel by bed) →
+                    Review (parallel, read-only, optional)`. The per-worktree binary is
+                    load-bearing because `charly` refuses heavy ops (`image build`, `deploy
+                    add`) whenever any `charly/*.go` source is newer than the invoked
+                    binary — but the guard is per-tree, so a teammate editing `charly/*.go`
+                    in its own worktree never trips another teammate's bed run. The only
+                    freeze that applies is the within-worktree self-freeze: freeze your own
+                    worktree's `charly/*.go` for the duration of your own bed run. The
+                    bare-`$PATH` caveat still applies per worktree: a bed must actually
+                    invoke `./bin/charly` (explicitly, or with the worktree's `bin/`
+                    prepended onto `$PATH` for the bed's session) — a bed that shells to
+                    bare `charly` otherwise resolves whatever the host has installed, never
+                    the worktree's freshly-rebuilt binary (the same trap "Host-local beds
+                    are never a worktree gate" describes below).
                   - **Same binding rule** as below: disposable-only, commit-gated-not-run,
                     no-scope-shrinking-flags, paste-proof survives delegation.
 
@@ -1087,15 +1084,12 @@ agents-skill:
                     its own binary and its own freshness-guard scope, teammates working in
                     distinct worktrees need no freeze barrier between them — each rebuilds
                     its own `./bin/charly` via `task build:binary` whenever it likes, with
-                    zero cross-teammate interference. The "freeze `charly/*.go` plus one
-                    `task build:binary` at the barrier" rule (above, and
-                    `/charly-internals:git-workflow` B3) applies only to the shared-tree team
-                    model — multiple agents editing one checkout with one shared binary,
-                    where the barrier also carries the bare-`$PATH` caveat above. The two
-                    models are not interchangeable: a shared-tree team needs the freeze
-                    because there is exactly one binary every bed run depends on; a
-                    multi-worktree team needs no freeze because there is one binary per
-                    worktree.
+                    zero cross-teammate interference. The only freeze that exists is the
+                    within-worktree self-freeze below: within one worktree, freeze your own
+                    `charly/*.go` for the duration of your own bed run. There is no
+                    shared-tree model — every team is a set of worktrees, each with one
+                    binary every bed run in that tree depends on, so the freeze is always
+                    per-tree, never a team-wide barrier.
                   - **Within-worktree self-freeze — the complementary rule.** The per-tree
                     freshness guard does not check only at the start of a bed run — it
                     compares the invoked binary against the cwd's sources at every heavy
@@ -1447,23 +1441,24 @@ agents-skill:
                      names). Let a roster finish, or tear its deploys down with `charly vm
                      destroy` / `charly remove` — `transient_store` fixes the lock, not a
                      hard mid-write kill.
-                  4d. **A shared-tree walk must tolerate a concurrent sibling's transient
+                  4d. **A tree walk must tolerate a concurrent sibling's transient
                      build artifacts — the fourth concurrency ceiling, invisible to every
-                     serial run.** Beds run in one source tree, and a bed that builds in-tree
-                     (a candy's makepkg under `pkgbuild/{pkg,src}`, a cargo `target/`, an npm
-                     `node_modules/`) creates directories that are transiently unreadable
-                     (fakeroot-owned, mode-0700, or half-written) while a sibling bed's
-                     loader walks the same tree. A walk that aborts on the first per-entry
-                     `EACCES` fails the sibling's entire `LoadUnified` — surfacing as a
-                     bogus downstream error (a swallowed discover-walk `EACCES` on a candy's
-                     `pkgbuild/pkg` directory once became a misleading "unknown kind:local
-                     template" for an unrelated bed). Root-cause fix pattern: a tree walk
-                     skips an unreadable/erroring subtree (`filepath.SkipDir`) and
-                     continues — a discoverable manifest can never live in an unreadable
-                     dir — and skips VCS/build-artifact dirs by name; it never aborts the
-                     whole load. Same lesson for any shared-state read under concurrency:
-                     don't swallow the real error (it hides the class), and don't let one
-                     sibling's transient artifact fail an unrelated bed.
+                     serial run.** Beds run in their own worktree's source tree, and a bed
+                     that builds in-tree (a candy's makepkg under `pkgbuild/{pkg,src}`, a
+                     cargo `target/`, an npm `node_modules/`) creates directories that are
+                     transiently unreadable (fakeroot-owned, mode-0700, or half-written)
+                     while a concurrent load walks the same tree. A walk that aborts on the
+                     first per-entry `EACCES` fails the sibling's entire `LoadUnified` —
+                     surfacing as a bogus downstream error (a swallowed discover-walk
+                     `EACCES` on a candy's `pkgbuild/pkg` directory once became a
+                     misleading "unknown kind:local template" for an unrelated bed).
+                     Root-cause fix pattern: a tree walk skips an unreadable/erroring
+                     subtree (`filepath.SkipDir`) and continues — a discoverable manifest
+                     can never live in an unreadable dir — and skips VCS/build-artifact
+                     dirs by name; it never aborts the whole load. Same lesson for any
+                     shared-state read under concurrency: don't swallow the real error (it
+                     hides the class), and don't let one sibling's transient artifact fail
+                     an unrelated bed.
                   4e. **Per-worktree binaries — bed gates from multiple branches overlap.**
                      See "The charly binary in a multi-teammate / multi-worktree setup"
                      above for the canonical host-vs-worktree-binary rule; this item adds
@@ -3507,7 +3502,7 @@ git-workflow-skill:
             | Topic | File |
             |---|---|
             | B1 (the two-step branch-per-change loop, concurrent landings, the cross-repo WIP landing sequence) and B4 (sync to upstream + prune) | `references/branch-and-pr-loop.md` |
-            | B2 (multi-repo/multi-worktree coordination, per-module verification), B3 (agent teams on one shared tree), B6 (cross-repo `@github` landing), and B7 (multi-worktree landing + refresh, the canonical end-to-end) | `references/multi-repo-coordination.md` |
+            | B2 (multi-repo/multi-worktree coordination, per-module verification), B3 (agent teams in per-teammate worktrees), B6 (cross-repo `@github` landing), and B7 (multi-worktree landing + refresh, the canonical end-to-end) | `references/multi-repo-coordination.md` |
             | B5 (the fresh evaluator + fork/PR path, the two-gate autonomous-landing model), CalVer generation, post-landing cleanliness + report format, and the validation-FAILS recovery sequence | `references/validator-and-calver.md` |
 
             ## Cross-References
@@ -3600,7 +3595,8 @@ git-workflow-skill:
                     gates from multiple branches overlapping under the shared hardware ceiling.
                   - **Validation** — fresh `pr-validator`s run CONCURRENTLY across all ready PRs
                     (each is an independent context; nothing couples them before the merge instant).
-                  - **After each merge** — every still-open PR goes `BEHIND` (all three repos set
+                  - **After each merge** — every still-open PR goes `BEHIND` (every repo in
+                    the chain — superproject, `sdk`, `plugins`, `box/<distro>`, `pkg/*` — sets
                     `strict: true` require-up-to-date — KEPT deliberately: one shared Go package with
                     no CI on `main` means merging a stale-base green PR opens a semantic-conflict
                     blind spot; that is the technical reason, not doctrine). Recover with
@@ -3776,15 +3772,17 @@ git-workflow-skill:
                   bump references a commit `main` has never seen. Wait for the pair before treating a
                   producer advance as a base.
 
-                  **Submodule-pointer-bump safety (step 3) — bump AFTER the switch, then stage AND
-                  verify.** A `git switch` / `git checkout` re-materializes each submodule at the
-                  gitlink the *target branch* records, silently discarding an **unstaged**
-                  working-tree pointer bump (it happens even with `submodule.recurse` unset — an
-                  unstaged gitlink is not carried across the switch). So bumping the pointer *before*
-                  `git switch -c feat/<slug>` — or merely `git -C <sub> checkout <new>` without
-                  `git add` — drops it from the commit, and a `git add <sub>; git commit` afterward
-                  stages nothing because the working tree was reset to the old pointer. Always, in
-                  order: (a) create/switch to the landing branch FIRST; (b) THEN `git -C <sub>
+                  **Submodule-pointer-bump safety (step 3) — bump AFTER the worktree add, then
+                  stage AND verify.** A `git worktree add` / `git switch` / `git checkout`
+                  re-materializes each submodule at the gitlink the *target branch* records,
+                  silently discarding an **unstaged** working-tree pointer bump (it happens even
+                  with `submodule.recurse` unset — an unstaged gitlink is not carried across the
+                  switch). So bumping the pointer *before* creating the landing worktree
+                  (`git worktree add .claude/worktrees/<slug> -b feat/<slug> origin/main` — B1
+                  step 0) — or merely `git -C <sub> checkout <new>` without `git add` — drops it
+                  from the commit, and a `git add <sub>; git commit` afterward stages nothing
+                  because the working tree was reset to the old pointer. Always, in order:
+                  (a) create the landing worktree FIRST; (b) THEN `git -C <sub>
                   checkout <new-commit>` + `git add <sub>`; (c) VERIFY it is staged — `git diff
                   --cached --submodule=short <sub>` must print `<old>...<new>`; (d) after committing,
                   confirm the commit records it — `git show --stat` lists `<sub>` and `git ls-tree
@@ -3833,50 +3831,45 @@ git-workflow-skill:
                   symbol). The stamp answers "which commit"; the `strings` marker answers "is my change
                   actually in this binary".
 
-                  ## B3 — agent teams on ONE shared tree (no worktree)
+                  ## B3 — agent teams in per-teammate worktrees
 
-                  When an agent team parallelizes work, **the check bed is the unit of isolation, not
-                  a worktree**. Each teammate owns a disjoint check bed's SOURCE files; distinct beds
-                  get distinct `charly-<bed>` container/VM/domain names, and a bed run tags every
-                  fixture IMAGE it builds with a per-run `<bed-root>-<runCalver>` tag (#75) so two beds
-                  building the SAME fixture image name never race the store-global tag namespace; the
-                  lead assigns each disjoint host ports too (the loader does NOT check ports — an
-                  overlap fails the second bed at deploy),
-                  and a bed pins an image → layers → files, so bed-ownership already isolates the
-                  source files each teammate edits. **Teammates edit; a PERSISTENT owner runs every
-                  full `charly check run <bed>`** as a `run_in_background` task — the lead's
-                  persistent session, a background agent, or (interactive tmux) a split-pane
-                  teammate; an in-process teammate CANNOT (its bg dies on yield). Teammates share ONE
-                  working tree on ONE `feat/<slug>` branch:
+                  When an agent team parallelizes work, **each teammate works in its OWN worktree**
+                  under `.claude/worktrees/<slug>/` (B1 step 0) — the same worktree-per-session
+                  model every session uses, never a shared checkout. A team is N worktrees, each
+                  with its own `bin/charly` and its own freshness-guard scope; there is no
+                  shared-tree alternative. Within a worktree, **the check bed is the unit of
+                  isolation**: each teammate owns a disjoint check bed's SOURCE files; distinct
+                  beds get distinct `charly-<bed>` container/VM/domain names, and a bed run tags
+                  every fixture IMAGE it builds with a per-run `<bed-root>-<runCalver>` tag (#75)
+                  so two beds building the SAME fixture image name never race the store-global tag
+                  namespace; the lead assigns each disjoint host ports too (the loader does NOT
+                  check ports — an overlap fails the second bed at deploy), and a bed pins an
+                  image → layers → files, so bed-ownership already isolates the source files each
+                  teammate edits. **Teammates edit; a PERSISTENT owner runs every full `charly
+                  check run <bed>`** as a `run_in_background` task — the lead's persistent
+                  session, a background agent, or (interactive tmux) a split-pane teammate; an
+                  in-process teammate CANNOT (its bg dies on yield).
 
                   - Teammates edit their bed-scoped files + run short foreground checks (`charly check
                     box`) — never the full `charly check run`, and **never commit, push, or open a
                     PR**. The lead runs the full beds and, on R10 PASS, opens the SINGLE PR for the
                     cutover (B1 step 1); a FRESH `pr-validator` (never a teammate that authored code)
                     merges it.
-                  - Reserve a real `git worktree` (per `isolation: worktree`) only for genuine
-                    **same-file** concurrency that bed-ownership does not separate.
                   - **Schedule longest-pole-first.** `charly check run` has no bed-level concurrency
                     and no `charly` cap — the limit is host CPU/RAM/podman. Run ALL full beds as
                     concurrent background tasks; order by expected DURATION, not bed count: launch the
                     slow VM/desktop beds first and overlap the cheap pod beds, so wall-clock ≈ the
                     slowest single bed, not the sum.
-                  - **Freeze `charly/*.go` during the bed phase.** `charly`'s stale-binary freshness
-                    guard gates every heavy verb the instant any `charly/*.go` is newer than the
-                    INVOKED binary, so a teammate editing Go mid-bed-run aborts every other agent's
-                    next build/deploy/check. For a SHARED-CORE (Go) cutover the lead lands the core
-                    first, runs ONE `task build:binary` in the shared checkout, then fans out beds
-                    with Go frozen — the bed set must actually invoke `./bin/charly` (explicitly, or
-                    with the shared tree's `bin/` prepended onto `$PATH`), since a bed shelling to
-                    bare `charly` otherwise resolves whatever the HOST has installed, never the
-                    freshly-rebuilt shared binary; a BED-LOCAL (YAML/candy/skills) cutover has no
-                    shared binary and needs no barrier.
-                    **This freeze applies ONLY to the SHARED-TREE model** (one checkout, one shared
-                    binary) — a MULTI-WORKTREE team needs no such barrier, since each worktree carries
-                    its own `bin/charly` and its own freshness-guard scope; see
-                    `/charly-internals:agents` "The charly binary in a multi-teammate /
-                    multi-worktree setup" for the full host-vs-worktree-binary discipline — never
-                    conflate the two models.
+                  - **No shared freeze barrier — per-worktree self-freeze instead.** Because each
+                    worktree carries its own `bin/charly` and its own freshness-guard scope, a
+                    teammate editing `charly/*.go` in its own worktree never trips another
+                    teammate's bed run — there is no shared binary to freeze. The only freeze that
+                    applies is the WITHIN-worktree self-freeze: freeze your own worktree's
+                    `charly/*.go` for the duration of your own bed run (the per-tree freshness guard
+                    compares the invoked binary against the cwd's sources at every heavy verb,
+                    mid-run), and keep one binary-build owner per worktree at a time. Full
+                    discipline: `/charly-internals:agents` "The charly binary in a multi-teammate /
+                    multi-worktree setup" + "Within-worktree self-freeze".
 
                   ## B6 — cross-repo landing when a change is referenced via `@github`
 
