@@ -390,6 +390,7 @@ second copy of them.
 ## Where things are documented
 
 - `VISION.md`: thesis and direction.
+- `PROGRAM/`: binding program north-star documents (one file per program, named in every spawn brief).
 - `AGENTS.md`: complete current harness-neutral mandates and dispatcher.
 - `CLAUDE.md`: complete harness adapter with equivalent overall policy.
 - `plugins/<plugin>/skills/<name>/SKILL.md`: detailed procedures and technical

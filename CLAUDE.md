@@ -196,5 +196,6 @@ The named skills own the full technical rules; this index never expands into a s
 - **Features & command reference** → `README.md`.
 - **Usage & architecture** → skills (`plugins/README.md` is the index) — the single source of truth for *how*.
 - **Thesis & direction** → `VISION.md`.
+- **Program north-star documents** → `PROGRAM/` (one file per program, named in every spawn brief).
 - **Public site** → [opencharly.ai](https://opencharly.ai), built from the `docs/` submodule: a small hand-authored narrative plus a reference/recipe catalog GENERATED from the sources above by `charly docs generate`. Never hand-edit a generated page; fix the source and run `task docs:sync`.
 - **History** → each repo's `CHANGELOG/` (one file per CalVer release, `<YYYY.DDD.HHMM>.md`, shared with the release tag) — the sanctioned historical context named by R5's grep self-test; everything else states current behavior in present tense.
