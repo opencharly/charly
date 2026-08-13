@@ -18,8 +18,9 @@ AgentTeams deployment that forge **incident spikes** and **improvement spikes** 
 disposable candyboxes carrying a faithful copy of PROD — reproduce failures there, prove
 fixes against ADE plans, and land changes through the normal PR gate with a Human
 approval recorded in the Incident Room. Every reproduced incident becomes a permanent
-`check:` step on the spike bed. The Factory is charly's own RDD loop applied to
-operating a multi-agent system: the candy factory builds factories.
+`check:` step on the regression bed — proven on the disposable spike bed, then committed
+to the regression bed's `plan:` at incident close. The Factory is charly's own RDD loop
+applied to operating a multi-agent system: the candy factory builds factories.
 
 Everything ships in-tree as candies, plugins, boxes and beds — no companion repository.
 Factory *deployment data* (incident snapshots, minted keys) lives in deploy volumes,
@@ -33,7 +34,7 @@ never in git.
 | **improvement spike** | the same disposable deploy, forged to score a candidate change (Skill version, runtime, model routing) against the regression bed before promotion |
 | **spike flavor** | which PROD deployment style the spike reproduces — `native`, `kustomize`, or `helm` (below) |
 | **spike bed** | the spike's check bed. `disposable: true` carries the full `charly check run` cycle — build → check → deploy → steady → check live → destroy → rebuild → check → teardown — for free **[proven upstream]** |
-| **regression bed** | the accumulated `plan:` of every closed incident: ADE's "the spec is the test," grown one incident at a time |
+| **regression bed** | the accumulated `plan:` of every closed incident: ADE's "the spec is the test," grown one incident at a time — `incident close --as-check` appends the incident's committed `check:` (proven on the disposable spike bed) to the regression bed's `plan:`, so the bed fails without the fix and passes with it (R10) |
 | **Forgemaster** | the only Factory Worker whose resource is configured with a `charly mcp serve` endpoint at all — every other Factory Worker gets none; forges and reaps spikes with ordinary charly verbs — the CLI is the only operational interface |
 | **the six** | Sentinel (triage; R1/root-cause-analyzer is its job description), Forgemaster, Replicator (snapshot → hydrate → replay → bisect), Fixer (authors changes, only inside spikes), Verifier (drives beds, pastes proof — a delegate report is a claim, not proof), Archivist (ships verified fixes as Skills) |
 
@@ -211,8 +212,8 @@ cutover 6 lands them.)
 4. Anything the Factory cannot do through a `charly` verb is a gap to close in charly,
    never a license for hand-run `podman`/`kubectl`/`helm` against managed resources.
 5. Repro before remediation: no fix lands without its incident committed as a
-   deterministic `check:` on the spike bed, and coverage must fail without the change
-   (R10).
+   deterministic `check:` on the regression bed (proven on the disposable spike bed),
+   and coverage must fail without the change (R10).
 6. Promotion is a landing: the Human approval event in the Incident Room is the
    operator's authorization; promote-change produces a `feat/` branch and a PR, never a
    direct write to a running PROD outside the resource YAMLs.
