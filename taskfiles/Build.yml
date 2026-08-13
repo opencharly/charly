@@ -21,7 +21,7 @@ tasks:
       # the generator imports only stdlib+yaml and runs without a pre-built charly.
       - cd charly && GOWORK=off go run ./internal/pluginsgen -root .. -config charly/charly.yml -out charly/plugins_generated.go -gowork go.work
       # Stamp the binary's CalVer identity (`charly version` → main.BuildCalVer) at
-      # build time, from the shared pkg/arch/calver.sh — ALWAYS the HEAD commit's
+      # build time, from the shared scripts/calver.sh — ALWAYS the HEAD commit's
       # UTC date (deterministic: same commit → same version, whether the tree is
       # clean or dirty; the build clock is never consulted). Without this stamp
       # `charly version` would read the wall clock at invocation — useless as a build
@@ -38,7 +38,7 @@ tasks:
       # Go's VCS-status walk breaks in a linked worktree outside the main repo path
       # (e.g. /tmp/...) — see plugin_loader.go's pluginBuildVCSFlagForContext.
       - |
-        CALVER=$(bash pkg/arch/calver.sh)
+        CALVER=$(bash scripts/calver.sh)
         cd charly && go build -buildvcs=false -ldflags "-X main.BuildCalVer=${CALVER}" -o ../bin/.charly.next .
       # Workspace-mode Go may extend the tracked go.work.sum when a compiled
       # plugin adds a module-graph requirement. Surface that generated metadata
