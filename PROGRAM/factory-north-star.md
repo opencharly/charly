@@ -57,9 +57,23 @@ it is handed decides the containment story:
   store. One boundary, one teardown, nothing escapes into the host store. This is the
   default spike: a single `pod:` deploy composing the agentteams composition +
   `container-nesting`. Delivering the pre-built `agentteams-manager`/`-worker` images
-  into the spike's *nested* store is a named HOW **[HOW — spike it]** (candidate
-  mechanisms: build-inside via the nested charly, or `charly cp` an OCI archive +
-  load; the winning verb, if missing, is a gap to close in charly, not a script).
+  into the spike's *nested* store is **[proven by the containment spike]**: the
+  container-venue analog of `charly vm cp-box`'s `streamLoadAndTag` — host
+  `podman save <image>` piped into the spike's nested uid-1000 store via
+  `charly shell <spike> -c 'podman --remote --url unix:///run/user/1000/podman/podman.sock load'`,
+  no intermediate tarball. The images are private on ghcr.io (anonymous manifest
+  fetch is 401), so the registry hop is not an option — local delivery is the
+  mechanism, and the winning verb (`charly box load`, cutover 4) is a gap to close
+  in charly, not a script. The controller's reconcile loop self-heals: once the
+  image lands in the nested store, the controller spawns the manager without a
+  restart, so delivery can happen after the controller is up.
+- **The nested socket path needs a runtime-dir volume.** `/run` is a fresh
+  root-owned tmpfs at container start, so the build-time `/run/user/1000` pre-creation
+  (the controller candy's plan step) does not survive — the uid-1000 service cannot
+  create it (root-owned `/run`). The spike template must declare a named volume at
+  `/run/user/1000`, initialized from the image's uid-1000-owned `/run/user/1000`
+  (the WHOLE dir chowned to 1000, not just the `podman/` subdir — the nested podman
+  writes its `libpod` runtime dir there too). **[proven by the containment spike]**
 - **The upstream `check-agentteams-pod` bed instead binds the HOST rootless podman
   socket into the box** **[proven upstream]** — deliberately, so spawned containers use
   the same store the images were built into (no registry hop). That is a *bed
@@ -243,8 +257,11 @@ cutover 6 lands them.)
 
 ## Measured state
 
-- [ ] Cutover 1: containment spike green — nested-socket agentteams proven in one
+- [x] Cutover 1: containment spike green — nested-socket agentteams proven in one
       `pod:` candybox, delivery mechanism named, findings folded back into this file
+      (live proof: `charly check live check-factory-spike-full` — 91 steps, 78
+      passed, 0 failed; manager + worker spawned through the NESTED socket into
+      the nested store, worker room provisioned and alias-resolvable)
 - [ ] Cutover 2: `check-helm` green; provider index shows `step:helm-release` + `verb:helm`
 - [ ] Cutover 3: agentteams beds assert via `verb:agentteams`; zero raw-`http:` remnants (grep self-test)
 - [ ] Cutover 4: snapshot round-trip bed green

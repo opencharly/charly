@@ -127,14 +127,37 @@ def lint_staged_go(repo):
     # go.work) must lint with GOWORK=off or golangci-lint fails typechecking
     # ("does not contain modules listed in go.work").
     workspace_members = workspace_member_roots(repo)
-    for root in sorted(touched_go_modules(repo)):
+    roots = sorted(touched_go_modules(repo))
+    if not roots:
+        return
+    # The lint cache must live on a real filesystem, not the system temp dir:
+    # /tmp is frequently a small tmpfs (or a sandbox caps its writes), and
+    # golangci-lint's Go build needs far more than a tmpfs can hold. A
+    # per-user cache dir on the root fs keeps the gate working on any host.
+    cache_root = os.path.join(os.path.expanduser("~"), ".cache", "charly-gate-lint")
+    try:
+        os.makedirs(cache_root, exist_ok=True)
+    except OSError:
+        # A HOME that cannot be written must not block the commit (fail-open):
+        # fall back to the system temp dir, exactly as the pre-fix hook did.
+        cache_root = None
+    for root in roots:
         env = dict(os.environ)
         if os.path.abspath(root) not in workspace_members:
             env["GOWORK"] = "off"
         try:
-            with tempfile.TemporaryDirectory(prefix="charly-gate-lint-") as cache:
+            with tempfile.TemporaryDirectory(prefix="charly-gate-lint-", dir=cache_root) as cache:
                 env["GOCACHE"] = os.path.join(cache, "go-build")
                 env["GOLANGCI_LINT_CACHE"] = os.path.join(cache, "golangci-lint")
+                env["GOTMPDIR"] = os.path.join(cache, "go-work")
+                env["TMPDIR"] = os.path.join(cache, "tmp")
+                # golangci-lint v2 locks at $TMPDIR/golangci-lint.lock and Go's
+                # build cache needs $GOTMPDIR to exist; create the subdirs so the
+                # lock open and the build work (a missing TMPDIR makes golangci-lint
+                # report "parallel golangci-lint is running" — its ENOENT lock-open
+                # error, not a real parallel run).
+                for sub in ("go-build", "golangci-lint", "go-work", "tmp"):
+                    os.makedirs(os.path.join(cache, sub), exist_ok=True)
                 result = subprocess.run(
                     ["golangci-lint", "run"], cwd=root, env=env,
                     capture_output=True, text=True, timeout=180,
