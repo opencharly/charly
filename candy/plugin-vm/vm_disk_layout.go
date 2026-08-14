@@ -3,6 +3,8 @@ package vm
 import (
 	"bytes"
 	"fmt"
+	"strconv"
+	"strings"
 	"text/template"
 
 	"github.com/opencharly/sdk/buildkit"
@@ -26,6 +28,60 @@ type DiskLayout struct {
 	// Mnt is the absolute path inside the container where the root partition gets mounted
 	// (default /mnt). Bootloader install templates render against this.
 	Mnt string
+}
+
+// parseDiskSizeBytes parses a `truncate -s` size suffix ("20G", "10240M",
+// "536870912", "2GiB", "500MB") into a byte count, matching truncate's
+// semantics: bare K/M/G/T/P are 1024-based, the "iB" forms are 1024-based,
+// and the "B" forms (KB/MB/GB) are 1000-based. Used to compute the
+// MinFreeBytes floor for the privileged disk build — the qcow2 output must
+// fit on the staging + destination filesystems.
+func parseDiskSizeBytes(s string) (int64, error) {
+	orig := s
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, fmt.Errorf("empty disk size")
+	}
+	// Split the numeric prefix from the suffix.
+	i := 0
+	for i < len(s) && (s[i] >= '0' && s[i] <= '9') {
+		i++
+	}
+	if i == 0 {
+		return 0, fmt.Errorf("invalid disk size %q: no numeric prefix", orig)
+	}
+	num, err := strconv.ParseInt(s[:i], 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid disk size %q: %w", orig, err)
+	}
+	suffix := s[i:]
+	if suffix == "" {
+		return num, nil
+	}
+	var mult int64
+	switch strings.ToUpper(suffix) {
+	case "K", "KIB":
+		mult = 1 << 10
+	case "M", "MIB":
+		mult = 1 << 20
+	case "G", "GIB":
+		mult = 1 << 30
+	case "T", "TIB":
+		mult = 1 << 40
+	case "P", "PIB":
+		mult = 1 << 50
+	case "KB":
+		mult = 1000
+	case "MB":
+		mult = 1000 * 1000
+	case "GB":
+		mult = 1000 * 1000 * 1000
+	case "TB":
+		mult = 1000 * 1000 * 1000 * 1000
+	default:
+		return 0, fmt.Errorf("invalid disk size %q: unknown suffix %q", orig, suffix)
+	}
+	return num * mult, nil
 }
 
 // diskBuildScriptTmpl renders the partition + format + mount sequence for a fresh VM disk. The
