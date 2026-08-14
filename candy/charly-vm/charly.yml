@@ -931,11 +931,15 @@ vm-skill:
             | `qemu` | `qemu-system-*` binary | Direct QEMU; air-gapped hosts where libvirt isn't installed |
 
             **`vm start` is idempotent on BOTH backends — the qemu backend's
-            already-running guard is `qemuAlive`.** The libvirt backend checks
-            `already_running`; the qemu backend checks `qemuAlive(stateDir)`
-            (read `<stateDir>/qemu.pid` → `Signal(0)` → `/proc/<pid>/cmdline`
-            contains `qemu-system` — the cmdline check closes the reused-PID
-            false-positive a bare `Signal(0)` would report as "running"). A
+            already-running guard is `vmshared.QemuAlive`.** The libvirt
+            backend checks `already_running`; the qemu backend checks
+            `vmshared.QemuAlive(stateDir)` (read `<stateDir>/qemu.pid` →
+            `Signal(0)` → `/proc/<pid>/cmdline` must carry `-pidfile
+            <stateDir>/qemu.pid` as adjacent NUL-separated argv fields — the
+            ownership match confirms the live process is the qemu started for
+            THAT state dir, closing the reused-PID false-positive a bare
+            `Signal(0)` would report as "running" and the recycled-onto-
+            another-VM case a `qemu-system` substring check would accept). A
             live QEMU recorded in the pidfile makes `vm start` a clean no-op
             (`VM <name> is already running`). This is load-bearing for the
             rebuild path (`vmRebuild`): `vm create` already starts the domain,
@@ -946,8 +950,9 @@ vm-skill:
             file: Cannot lock pid file: Resource temporarily unavailable`) and
             corrupted the VM's state — every `charly check run <vm-bed>`'s
             `update` step failed with this error, even running sequentially.
-            The same `qemuAlive` probe drives the `vm list` qemu state scan
-            (R3, one liveness probe).
+            The same `vmshared.QemuAlive` probe drives the `vm list` qemu
+            state scan and the preempt arbiter's holder probe (R3, one
+            liveness probe).
 
             **Socket path probing for libvirt ≥ 8.0**: modular libvirt splits into `virtqemud` / `virtnetworkd` / ... — the socket is `virtqemud-sock`, not `libvirt-sock`. `libvirtSessionSocket()` probes `virtqemud-sock` first, falls back to `libvirt-sock` on older setups. Symptom of a misprobe: `ConnectToURI(QEMUSession)` returns `End of file while reading data: Input/output error` — means the daemon isn't accepting on the socket you reached.
 
