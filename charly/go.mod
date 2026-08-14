@@ -1,6 +1,6 @@
 module github.com/opencharly/charly/charly
 
-go 1.26.0
+go 1.26.4
 
 require (
 	cuelang.org/go v0.16.1
