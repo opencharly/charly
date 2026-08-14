@@ -930,6 +930,25 @@ vm-skill:
             | `libvirt` (default) | libvirt session daemon socket | Almost always — full domain XML, portForward with passt, SPICE console, per-VM NVRAM |
             | `qemu` | `qemu-system-*` binary | Direct QEMU; air-gapped hosts where libvirt isn't installed |
 
+            **`vm start` is idempotent on BOTH backends — the qemu backend's
+            already-running guard is `qemuAlive`.** The libvirt backend checks
+            `already_running`; the qemu backend checks `qemuAlive(stateDir)`
+            (read `<stateDir>/qemu.pid` → `Signal(0)` → `/proc/<pid>/cmdline`
+            contains `qemu-system` — the cmdline check closes the reused-PID
+            false-positive a bare `Signal(0)` would report as "running"). A
+            live QEMU recorded in the pidfile makes `vm start` a clean no-op
+            (`VM <name> is already running`). This is load-bearing for the
+            rebuild path (`vmRebuild`): `vm create` already starts the domain,
+            and the ensure-running guard must be a no-op for a running VM.
+            The bug this fixed: the qemu backend used to blindly re-execute
+            the stored command, so after `vm create` the guard started a
+            SECOND QEMU, which failed to lock the pidfile (`cannot create PID
+            file: Cannot lock pid file: Resource temporarily unavailable`) and
+            corrupted the VM's state — every `charly check run <vm-bed>`'s
+            `update` step failed with this error, even running sequentially.
+            The same `qemuAlive` probe drives the `vm list` qemu state scan
+            (R3, one liveness probe).
+
             **Socket path probing for libvirt ≥ 8.0**: modular libvirt splits into `virtqemud` / `virtnetworkd` / ... — the socket is `virtqemud-sock`, not `libvirt-sock`. `libvirtSessionSocket()` probes `virtqemud-sock` first, falls back to `libvirt-sock` on older setups. Symptom of a misprobe: `ConnectToURI(QEMUSession)` returns `End of file while reading data: Input/output error` — means the daemon isn't accepting on the socket you reached.
 
             ### Prereq: libvirt user-session daemon
@@ -1166,9 +1185,10 @@ vm-skill:
 
             ### `charly fleet add vm:<vm> <localpkg-candy>` exits 0 WITHOUT installing
 
-            A `localpkg:` candy (the `charly` candy: `pkg/arch` via makepkg + `pacman -U`) needs the
-            package built from local source, which only the check-bed runner does (it sets
-            `--dev-local-pkg` automatically — see `/charly-check:check`). A bare `charly fleet add
+            A candy carrying a `local_pkg` block (the `charly` toolchain) needs the package
+            built via the `charly generate-packages` plugin (nFPM) from local source, which
+            only the check-bed runner does (it sets `--dev-local-pkg` automatically — see
+            `/charly-check:check`). A bare `charly fleet add
             vm:<vm> charly` returns **rc=0** and prints:
 
             ```
@@ -1176,9 +1196,9 @@ vm-skill:
             ```
 
             That line means the deploy **staged** the host binary into the guest for its own use — NOT
-            that `opencharly-git` was installed, and NOT that `charly` is on the guest's PATH. Do not read
-            rc=0 as "installed"; check `pacman -Q opencharly-git` in the guest. The bed that genuinely
-            proves the localpkg deploy path is `check-charly-vm`.
+            that the charly package was installed, and NOT that `charly` is on the guest's PATH. Do not read
+            rc=0 as "installed"; check `command -v charly` in the guest. The bed that genuinely
+            proves the binary-install deploy path is `check-charly-vm`.
 
             (This also means a nested `local:` child of a `vm:` bed needs **no** charly in the guest — the
             vm deploy stages what it needs. See `/charly-core:deploy` "Deploy-into nesting".)

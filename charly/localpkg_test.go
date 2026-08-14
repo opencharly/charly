@@ -27,14 +27,14 @@ import (
 // testPacLocalPkgDef returns a spec.LocalPkg mirroring build.yml's `pac.local_pkg`
 // block — the config that drives the localpkg mechanism. Tests use it so they
 // exercise the SAME config-driven path the loader produces, without parsing YAML.
+// The source-build fields (pkg_glob/source_sentinel/build_template/dep_builder)
+// are GONE (Phase 0a — the plugin builds now); only the install/download/probe
+// machinery remains.
 func testPacLocalPkgDef() *spec.LocalPkg {
 	return &spec.LocalPkg{
-		PkgGlob:         "*.pkg.tar.zst",
-		SourceSentinel:  "PKGBUILD",
-		BuildTemplate:   "cd {{.SrcDir}} && PKGDEST={{.PkgDest}} makepkg -sf --noconfirm",
 		InstallTemplate: "pacman -U --noconfirm {{.StageDir}}/{{.Glob}}",
 		Probe:           "command -v pacman",
-		DepBuilder:      "aur",
+		DownloadTemplate: "https://opencharly.github.io/charly-arch/${ARCH}/charly-${ARCH}.pkg.tar.zst",
 	}
 }
 
@@ -51,7 +51,7 @@ func testPacLocalPkgDef() *spec.LocalPkg {
 // pure function of the step + the BuildEnv scalars, no project structure needed), which returns
 // "" for a nil LocalPkg — so ociEmitStep succeeds and returns nothing.
 func TestOCITargetLocalPkgNilContractEmitsNothing(t *testing.T) {
-	step := &spec.LocalPkgInstallStep{PkgbuildRef: "pkg/arch", CandyName: "charly"}
+	step := &spec.LocalPkgInstallStep{CandyName: "charly"}
 	frag, err := ociEmitStep(step, &spec.InstallPlan{}, nil, buildEngineContext{})
 	if err != nil {
 		t.Fatalf("ociEmitStep(LocalPkgInstallStep, nil LocalPkg) = %v, want nil", err)
@@ -61,9 +61,10 @@ func TestOCITargetLocalPkgNilContractEmitsNothing(t *testing.T) {
 	}
 }
 
-// TestLocalPkgMapRejectsScalar (the candy-manifest localpkg: field is CUE-CLOSED to the
-// per-format map shape) relocated to sdk/loaderkit/decode_entity_test.go (K1 unit 1) — it exercises
-// ONLY spec.CandyYAML + loaderkit.DecodeEntityViaCUE, zero charly-core dependency.
+// TestLocalPkgMapRejectsScalar (the candy-manifest localpkg: field is REMOVED — nFPM cutover —
+// a candy carrying it is a hard schema violation) relocated to sdk/loaderkit/decode_entity_test.go
+// (K1 unit 1) — it exercises ONLY spec.CandyYAML + loaderkit.DecodeEntityViaCUE, zero charly-core
+// dependency.
 
 // TestBuildDepPkgsOnHost_EmptyAndDryRun relocated to candy/plugin-fleet (#55 decoupling,
 // Batch A; fixture-reworked to a synthetic aur builder def, since every asserted case
@@ -78,7 +79,7 @@ func TestLocalPkgDef_RoundTripFromBuildYML(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadBuildConfigForBox: %v", err)
 	}
-	check := func(distro, format string, wantDepBuilder bool) {
+	check := func(distro, format string) {
 		d := dc.ResolveDistro([]string{distro})
 		if d == nil {
 			t.Fatalf("%s distro not found in build.yml", distro)
@@ -87,16 +88,13 @@ func TestLocalPkgDef_RoundTripFromBuildYML(t *testing.T) {
 		if fmtName != format || lp == nil {
 			t.Fatalf("%s %s format has no local_pkg block: fmt=%q lp=%#v", distro, format, fmtName, lp)
 		}
-		if lp.PkgGlob == "" || lp.SourceSentinel == "" || lp.BuildTemplate == "" || lp.InstallTemplate == "" || lp.Probe == "" {
+		if lp.InstallTemplate == "" || lp.Probe == "" || lp.DownloadTemplate == "" {
 			t.Errorf("build.yml %s.%s.local_pkg is incomplete: %#v", distro, format, lp)
 		}
-		if wantDepBuilder && lp.DepBuilder == "" {
-			t.Errorf("%s.%s.local_pkg should declare dep_builder (aur-layer path): %#v", distro, format, lp)
-		}
 	}
-	check("arch", "pac", true)
-	check("fedora", "rpm", false)
-	check("debian", "deb", false)
+	check("arch", "pac")
+	check("fedora", "rpm")
+	check("debian", "deb")
 	// cachyos inherits arch's pac format; ubuntu inherits debian's deb format.
 	if cachy := dc.ResolveDistro([]string{"cachyos"}); cachy != nil {
 		if _, clp := cachy.LocalPkgFormat("pac"); clp == nil {

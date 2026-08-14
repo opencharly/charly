@@ -65,6 +65,7 @@ func (a *testCandyReader) HasData() bool                { return len(a.m.Data) >
 func (a *testCandyReader) Data() []spec.CandyData       { return a.m.Data }
 
 func (a *testCandyReader) LocalPkg(format string) string { return a.m.LocalPkg[format] }
+func (a *testCandyReader) Packaging() *spec.Packaging   { return a.m.Packaging }
 func (a *testCandyReader) FormatSection(name string) *spec.PackageSection {
 	if s, ok := a.m.FormatSections[name]; ok {
 		return &s
