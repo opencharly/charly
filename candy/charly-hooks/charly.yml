@@ -23,12 +23,21 @@ pre-commit-gate:
     hook:
         # No trigger:/matcher: — the AUX form (same as gitcmd/gate-test below), so
         # `charly marketplace generate` EMITS this script to .claude/hooks/ but wires
-        # NO .claude/settings.json PreToolUse entry for it. It ran before every Bash
-        # tool call and fast-path exit 0'd for non-git commands, so it never blocked
-        # what it was meant to catch; the discipline it encodes is judged by the fresh
-        # pr-validator at merge and by branch protection (CLAUDE.md "Hooks"). The
-        # script stays on disk and .reasonix/settings.json still wires it — that file
-        # is hand-maintained, not generated (the generator writes .claude/ only).
+        # NO .claude/settings.json PreToolUse entry for it.
+        #
+        # Be precise about what unwiring costs, because an earlier revision of this
+        # comment was not: this script DID block what it was meant to catch. Measured
+        # directly — `git commit --no-verify` and a `core.hooksPath` override both exit
+        # 2 with a BLOCKED message, while a non-git command exits 0. Removing the
+        # Claude Code wiring removes a WORKING local backstop; it is not a no-op
+        # cleanup. The trade accepted here: it ran before EVERY Bash tool call to catch
+        # a narrow set of git invocations, and the same discipline is judged for every
+        # harness by the fresh pr-validator at merge and (for main) by branch
+        # protection. Under Claude Code, run the checks it encoded yourself.
+        #
+        # The script stays on disk and .reasonix/settings.json still wires it — that
+        # file is hand-maintained, not generated (the generator writes .claude/ only) —
+        # as does ~/.kimi-code/config.toml, which delegates to .claude/hooks/.
         name: pre-commit-gate.sh
         mode: "0755"
         content: |
