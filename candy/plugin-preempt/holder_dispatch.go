@@ -7,9 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
-	"syscall"
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
@@ -247,19 +245,10 @@ func vmRunning(ctx context.Context, exec *sdk.Executor, name string) bool {
 	if err != nil {
 		return false
 	}
-	data, err := os.ReadFile(filepath.Join(dir, name, "qemu.pid"))
-	if err != nil {
-		return false
-	}
-	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
-	if err != nil {
-		return false
-	}
-	proc, err := os.FindProcess(pid)
-	if err != nil {
-		return false
-	}
-	return proc.Signal(syscall.Signal(0)) == nil
+	// One liveness predicate for every caller (R3): a bare Signal(0) probe here
+	// would report a recycled PID as a live holder and let the arbiter refuse to
+	// preempt a VM that is actually stopped.
+	return vmshared.QemuAlive(filepath.Join(dir, name))
 }
 
 func stopVMPlugin(ctx context.Context, exec *sdk.Executor, name string, force bool) error {

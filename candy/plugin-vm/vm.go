@@ -294,7 +294,7 @@ func startVM(box, instance, domain string) error {
 		// (EWOULDBLOCK) and corrupts the VM's state. The rebuild path (vmRebuild)
 		// relies on this: `vm create` already starts the domain, and the
 		// ensure-running guard must be a clean no-op for a running VM.
-		if qemuAlive(stateDir) {
+		if vmshared.QemuAlive(stateDir) {
 			fmt.Fprintf(os.Stderr, "VM %s is already running\n", name)
 			return nil
 		}
@@ -646,7 +646,7 @@ func (c *VmListCmd) Run() error {
 				}
 				name := entry.Name()
 				state := "stopped"
-				alive := qemuAlive(filepath.Join(dir, name))
+				alive := vmshared.QemuAlive(filepath.Join(dir, name))
 				if alive {
 					state = "running"
 				}
