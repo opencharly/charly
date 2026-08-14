@@ -273,6 +273,15 @@ check-k8s-deploy-cluster-ctx:
     kubernetes:
         box: ""
         kubeconfig_context: vm-check-k8s-deploy-cluster
+# check-helm-vm-ctx — the check-helm-vm bed's OWN kind:kubernetes profile (task #18
+# pattern): it shares the k3s-vm entity with check-k3s-vm / check-k8s-deploy-cluster,
+# so its kubeconfig context is per-deploy-DOMAIN-scoped (vm-check-helm-vm), never
+# shared by entity. The bed's kube: readiness steps name this profile by LITERAL
+# string — independent of the DEPLOY_NAME mechanism entirely.
+check-helm-vm-ctx:
+    kubernetes:
+        box: ""
+        kubeconfig_context: vm-check-helm-vm
 claude:
     agent:
         description: Anthropic Claude Code CLI — autonomous coding agent.
@@ -497,6 +506,123 @@ check-k3s-vm:
               command:
                 command: ${CHARLY_BIN} status --json
                 in_container: false
+# check-helm-vm — the R10 bed for the out-of-tree plugin-helm (Unit 1): a disposable
+# libvirt Arch cloud VM (the shared k3s-vm entity) overlaying k3s-server (the cluster)
+# + kubernetes (the helm client — /usr/bin/helm; R3: no dedicated candy/helm, the
+# toolchain candy already installs it) + helm-chart (the install leg). The bed proves
+# BOTH helm capabilities end to end IN-VENUE. The INSTALL lives in the helm-chart
+# candy, NOT the bed's own plan: fleet add lowers only CANDY plans' run: steps, and
+# `charly check live` runs the bed's plan in verify-only mode (mutating steps skipped),
+# so a mutating `run: helm-release:` step in the bed's own plan would never execute.
+# The helm-chart candy's run: steps run during fleet add — an in-venue kubectl wait
+# for the node to be Ready (the k3s-server candy's node-ready check is a check: step
+# that does not run during fleet add), then the `helm-release:` step lowers to the
+# external:helm-release install-step KIND (F3 — the plugin's declared StepContract
+# {Scope system, Venue host-native, Emits false} carried opaquely through the
+# InstallPlan IR), Invokes the plugin's OpExecute over the E3b reverse channel with
+# the guest's live SSH executor, runs `helm upgrade --install` against the guest's own
+# /etc/rancher/k3s/k3s.yaml, and returns a teardown ReverseOp (`helm uninstall`) the
+# host records + replays. The `helm:` check steps in the bed's plan then assert the
+# release is deployed via the EXEC-based verb (release-exists / status / revision) —
+# the declarative release-status assertion, the verb:kube analog. The kube:
+# readiness steps gate the helm assertions (addons must settle before a chart can
+# schedule).
+check-helm-vm:
+    vm:
+        from: k3s-vm
+        disposable: true
+        lifecycle: dev
+        description: >-
+            Sole deterministic proof of the out-of-tree plugin-helm end-to-end path: a
+            disposable libvirt Arch cloud VM overlaying k3s-server + the kubernetes
+            toolchain candy (helm at /usr/bin/helm) + the helm-chart candy installs a
+            real chart via the external:helm-release install step (a deploy-context
+            `run: helm-release:` step in the helm-chart candy's plan, lowered to the
+            F3 external step-kind, Invoked over the E3b reverse channel IN-VENUE
+            against the guest's own k3s kubeconfig) and asserts it deployed via the
+            EXEC-based verb:helm (release-exists/status/revision). The kube: readiness
+            steps run against this bed's OWN per-deploy-domain cluster context
+            (cluster: "check-helm-vm-ctx" — task #18: each bed sharing the k3s-vm
+            entity gets its OWN kind:kubernetes profile pinned to its OWN
+            collision-free kubeconfig context).
+        add_candy:
+            - k3s-server
+            - kubernetes
+            - helm-chart
+        env:
+            # The host port is auto-allocated (network.port_forwards: ["auto:6443"]);
+            # k3s_post rewrites the retrieved kubeconfig's :6443 to the allocated host
+            # port from vm_state automatically, so NO hardcoded K3S_KUBECONFIG_SERVER
+            # override is set. K3S_SERVER_HOSTNAME stays for the tls-san / hostname
+            # rewrite.
+            K3S_SERVER_HOSTNAME: 127.0.0.1
+        install_opts:
+            with_service: true
+            allow_repo_changes: true # pacman sync / repo key import
+            skip_incompatible: true # skip rpm:/deb:-only layer sections
+            verify: true
+        plan:
+            - check: command=id
+              id: ch-guest-identity
+              stdout: {contains: "uid=1000(arch)"}
+              context: [runtime]
+              command: id
+            - check: process=k3s-server
+              id: ch-k3s-process
+              context: [runtime]
+              process:
+                process: "k3s-server"
+                running: true
+            - check: file=/etc/rancher/k3s/k3s.yaml
+              id: ch-kubeconfig-file
+              context: [runtime]
+              file:
+                file: /etc/rancher/k3s/k3s.yaml
+                exists: true
+            - check: command=helm version
+              id: ch-helm-binary
+              # Arch ships helm 4 (v4.2.2+gb05881c) — the `candy/kubernetes` toolchain's
+              # get-helm-3 installs the distro package, which is helm 4 on Arch. Assert the
+              # major version, not a pinned minor.
+              stdout: {contains: "v4"}
+              context: [runtime]
+              command: "helm version --short"
+            - check: kubernetes=wait-nodes
+              id: ch-kubernetes-wait-nodes
+              kube:
+                method: "wait-nodes"
+                cluster: "check-helm-vm-ctx"
+                kube_count: 1
+              timeout: "300s"
+              context: [runtime]
+            - check: kubernetes=addons
+              id: ch-kubernetes-addons
+              kube:
+                method: addons
+                cluster: "check-helm-vm-ctx"
+              timeout: "240s"
+              context: [runtime]
+            # The INSTALL (helm-chart candy's run: steps) already happened during fleet
+            # add — the bed's own plan is verify-only, so it asserts, never mutates.
+            # The release-exists assertion is the helm-chart candy's own ADE check step
+            # (R3 — the candy that installs also asserts existence); the bed keeps the
+            # deeper status + revision assertions.
+            - check: verb=helm status
+              id: ch-helm-status
+              context: [runtime]
+              helm:
+                method: status
+                release: web-pushgateway
+                namespace: web
+                status: deployed
+            - check: verb=helm revision
+              id: ch-helm-revision
+              context: [runtime]
+              helm:
+                method: revision
+                release: web-pushgateway
+                namespace: web
+                revision: 1
 # check-k8s-deploy-app — the check-k8s-deploy bed's target:kubernetes WORKLOAD fixture.
 # A minimal Fedora base box composed from LOCAL pure-rpm candies (supervisord +
 # os-layer; no builder, no @github candy refs), so it builds from the root project —
@@ -609,16 +735,41 @@ check-k8s-deploy:
                     namespace: default
                   stdout: {contains: "check-k8s-deploy-workload"}
                   context: [runtime]
+                - check: the helm_charts release's Deployment object landed on the cluster — the kustomize helmCharts transformer rendered the chart and the --enable-helm apply path deployed it
+                  id: kd-helm-release-landed
+                  kube:
+                    method: raw
+                    cluster: "check-k8s-deploy-cluster-ctx"
+                    kube_resource: deployments
+                    kube_group: apps
+                    kube_version: v1
+                    namespace: web
+                    name: web-pushgateway-prometheus-pushgateway
+                  stdout: {contains: "web-pushgateway-prometheus-pushgateway"}
+                  context: [runtime]
     # MEMBER 2 (name-sorts second) — the target:kubernetes workload. check-k8s-deploy-app is built
     # locally by the group bed's member-build arm (box build check-k8s-deploy-app), so the host
     # preresolver's ExtractMetadata reads its OCI labels. `from: check-k8s-deploy-cluster-ctx`
     # selects the kind:kubernetes cluster template (kubeconfig_context: vm-check-k8s-deploy-cluster,
     # task #18 — pinned to the sibling member's own per-domain context). Deploy-only (no
     # own checks — it is an instrument; the cluster member's kube: checks assert it).
+    # helm_charts: the k8sgen emitter translates this into a kustomize `helmCharts:`
+    # overlay entry, and the deploy substrate renders it with `kubectl kustomize
+    # --enable-helm` (the kustomize helmCharts transformer is gated behind
+    # --enable-helm, which `kubectl apply -k` cannot pass) before applying the stream —
+    # the live proof that the Unit 1 helm_charts field runs end to end on the
+    # kubernetes substrate (the check-helm-vm bed proves the vm/helm venue; this proves
+    # the kustomize emission + the --enable-helm apply path).
     check-k8s-deploy-workload:
         kubernetes:
             image: check-k8s-deploy-app
             from: check-k8s-deploy-cluster-ctx
+            deploy:
+                helm_charts:
+                    - repo: https://prometheus-community.github.io/helm-charts
+                      chart: prometheus-pushgateway
+                      release: web-pushgateway
+                      namespace: web
 # =============================================================================
 # check-sidecar-pod — disposable R10 for the sidecar de-type (Cutover D). The
 # sidecar KIND's business logic (embedded<project<deploy template MERGE, CLI
@@ -2791,108 +2942,53 @@ check-agentteams-pod:
               http:
                 http: "http://127.0.0.1:${HOST_PORT:8001}/"
                 status: 200
-            - check: the controller spawns the default manager and it reaches Running phase (proves the manager image is in the host store under AGENTTEAMS_MANAGER_IMAGE and the controller can spawn it through the bound podman socket)
+            - # The `agentteams:` check verb (the declarative controller-probe counterpart of
+              # the `charly agentteams` command plugin) replaces the raw curl sequence: the
+              # provider resolves the controller's in-venue :8090 to a host-routable address
+              # over the reverse channel (the box's published port), pulls the admin SA token
+              # from the venue, and probes with the SAME apiClient the command uses (R3 — one
+              # REST surface covers the CLI and every bed).
+              check: the controller spawns the default manager and it reaches Running phase (proves the manager image is in the host store under AGENTTEAMS_MANAGER_IMAGE and the controller can spawn it through the bound podman socket)
               id: agentteams-manager-running
               timeout: 300s
               context:
                 - runtime
-              command: |
-                  # Shell vars are deliberately lowercase: the check runner expands
-                  # UPPERCASE-variable refs as runtime variables and SKIPs on an
-                  # unresolved one.
-                  token="$(cat /var/run/agentteams/cli-token 2>/dev/null)"
-                  test -n "${token}"
-                  for i in $(seq 1 90); do
-                      resp="$(curl -fsS -H "Authorization: Bearer ${token}" http://127.0.0.1:8090/api/v1/managers 2>/dev/null)" || { sleep 2; continue; }
-                      if echo "${resp}" | grep -q '"phase":"Running"'; then
-                          echo "${resp}"
-                          exit 0
-                      fi
-                      sleep 2
-                  done
-                  echo "manager never reached Running: ${resp}"
-                  exit 1
+              agentteams:
+                method: manager-running
+              stdout:
+                - contains: "Running"
             - check: the controller creates a Worker CR, spawns the worker container from the pre-built agentteams-worker image, and the worker reaches Running with its Matrix room created (proves AGENTTEAMS_WORKER_IMAGE is in the host store and the controller can spawn the worker through the bound podman socket)
               id: agentteams-worker-running
               timeout: 300s
               context:
                 - runtime
-              command: |
-                  # Shell vars are deliberately lowercase: the check runner expands
-                  # UPPERCASE-variable refs as runtime variables and SKIPs on an
-                  # unresolved one.
-                  token="$(cat /var/run/agentteams/cli-token 2>/dev/null)"
-                  test -n "${token}"
-                  worker="bed-worker"
-                  # Create the Worker CR (containerManaged defaults to true; the
-                  # runtime resolves to openclaw and the image to
-                  # AGENTTEAMS_WORKER_IMAGE). A 409 (already exists) is fine on a
-                  # fresh `charly update` re-run — the controller volume
-                  # (~/.agentteams/controller, holding the kine SQLite store)
-                  # persists, so the Worker CR from the prior run is still there
-                  # and the poll below reconciles it to Running.
-                  curl -fsS -X POST -H "Authorization: Bearer ${token}" \
-                      -H 'Content-Type: application/json' \
-                      -d "{\"name\": \"${worker}\"}" \
-                      http://127.0.0.1:8090/api/v1/workers >/dev/null 2>&1 || true
-                  # Poll until the worker reaches Running AND its Matrix room is
-                  # provisioned (roomID non-empty).
-                  for i in $(seq 1 90); do
-                      resp="$(curl -fsS -H "Authorization: Bearer ${token}" http://127.0.0.1:8090/api/v1/workers/${worker} 2>/dev/null)" || { sleep 2; continue; }
-                      if echo "${resp}" | grep -q '"phase":"Running"' && echo "${resp}" | grep -q '"roomID":"!'; then
-                          break
-                      fi
-                      sleep 2
-                  done
-                  echo "${resp}" | grep -q '"phase":"Running"' || { echo "worker never reached Running: ${resp}"; exit 1; }
-                  echo "${resp}" | grep -q '"roomID":"!' || { echo "worker room never provisioned: ${resp}"; exit 1; }
-                  # The room exists on the homeserver: resolve the worker room
-                  # alias via the public Matrix directory API (the alias is
-                  # #agentteams-worker-<name>:<matrix-domain>, the same shape the
-                  # controller's own matrix client resolves).
-                  alias_enc="%23agentteams-worker-${worker}%3Amatrix-local.agentteams.io%3A8080"
-                  room="$(curl -fsS "http://127.0.0.1:6167/_matrix/client/v3/directory/room/${alias_enc}" 2>/dev/null)" || { echo "room alias not resolvable"; exit 1; }
-                  echo "${room}" | grep -q '"room_id":"!' || { echo "room alias resolved to no room: ${room}"; exit 1; }
-                  echo "worker ${worker} Running, room provisioned, room alias resolvable"
-            - # The compiled-in `charly agentteams` command plugin exercised LIVE against the
-              # running controller. The agentteams box does NOT ship charly, so these are
-              # HOST-side steps (in_container: false): the admin SA token is pulled out of
-              # the container with the charly-native `charly cp` (never ad-hoc podman), and
-              # the plugin's token discovery reads it from AGENTTEAMS_AUTH_TOKEN_FILE while
-              # AGENTTEAMS_CONTROLLER_URL points at the controller's effective host port
-              # (${HOST_PORT:8090}). Shell vars are deliberately lowercase: the check runner
-              # expands UPPERCASE-variable refs as runtime variables and SKIPs on an
-              # unresolved one.
-              check: the compiled-in `charly agentteams status` command reaches the live controller with the admin token and reports the resource counts
+              agentteams:
+                method: worker-running
+              stdout:
+                - contains: "room alias resolvable"
+            - # The `agentteams:` check verb exercised LIVE against the running controller —
+              # the declarative counterpart of the compiled-in `charly agentteams` command
+              # plugin. The verb is HOST-BASED (the mcp pattern): the provider resolves the
+              # controller's in-venue :8090 to a host-routable address over the reverse
+              # channel (the box's published port), pulls the admin SA token from the venue,
+              # and probes with the SAME apiClient the command uses (R3 — one REST surface
+              # covers the CLI and every bed).
+              check: "the `agentteams: status` verb reaches the live controller with the admin token and reports the resource counts"
               id: agentteams-plugin-status
               timeout: 60s
               context:
                 - runtime
-              command:
-                command: |
-                    token_file="$(mktemp)"
-                    trap 'rm -f "${token_file}"' EXIT
-                    "${CHARLY_BIN}" cp check-agentteams-pod :/var/run/agentteams/cli-token "${token_file}"
-                    export AGENTTEAMS_AUTH_TOKEN_FILE="${token_file}"
-                    export AGENTTEAMS_CONTROLLER_URL="http://127.0.0.1:${HOST_PORT:8090}"
-                    "${CHARLY_BIN}" agentteams status
-                in_container: false
+              agentteams:
+                method: status
               stdout:
                 - contains: "Total Workers:"
-            - check: the compiled-in `charly agentteams worker list` command lists the bed-worker the controller spawned (proves the plugin's REST client + token discovery work end-to-end)
+            - check: "the `agentteams: worker-list` verb lists the bed-worker the controller spawned (proves the verb's REST client + token discovery work end-to-end)"
               id: agentteams-plugin-worker-list
               timeout: 60s
               context:
                 - runtime
-              command:
-                command: |
-                    token_file="$(mktemp)"
-                    trap 'rm -f "${token_file}"' EXIT
-                    "${CHARLY_BIN}" cp check-agentteams-pod :/var/run/agentteams/cli-token "${token_file}"
-                    export AGENTTEAMS_AUTH_TOKEN_FILE="${token_file}"
-                    export AGENTTEAMS_CONTROLLER_URL="http://127.0.0.1:${HOST_PORT:8090}"
-                    "${CHARLY_BIN}" agentteams worker list
-                in_container: false
+              agentteams:
+                method: worker-list
               stdout:
                 - contains: "bed-worker"
             - # The compiled-in `charly agentteams config` command reports the controller
@@ -2959,10 +3055,13 @@ agentteams-vm:
 # proving the full controller-spawns-manager → create-worker → room sequence
 # in-guest. The manager reconciler retries a failed spawn every 30s, so the
 # controller's initial spawn (before the images arrive) self-heals once the cp-box
-# delivers them. All probes run IN-GUEST over SSH (the http verb curls in-guest; the
-# command verbs run via the SSH executor), so no host→guest port forwards are
-# needed — the compiled-in `charly agentteams` plugin checks stay on the pod bed,
-# where the controller is host-reachable.
+# delivers them. The liveness probes run IN-GUEST over SSH (the http verb curls
+# in-guest; the command verbs run via the SSH executor), so no host→guest port
+# forwards are needed for them — but the `agentteams:` verb steps are the
+# exception: the verb is HOST-BASED (the mcp pattern), so it runs in the
+# provider's process on the HOST and resolves the controller's in-venue :8090 to
+# a host-routable address over the reverse channel (a live ssh -L forward into
+# the guest), pulling the admin SA token from the venue over the executor.
 check-agentteams-vm:
     vm:
         from: agentteams-vm
@@ -3017,7 +3116,13 @@ check-agentteams-vm:
             # populated for container venues (live_gather populates HOST_PORT:22 for
             # a VM), so these probes run as in-guest command checks over the SSH
             # executor — the same pattern as the higress-apiserver/gateway-health
-            # checks below and the check-k3s-vm bed.
+            # checks below and the check-k3s-vm bed. The `agentteams:` verb steps
+            # below are the exception: the verb is HOST-BASED (the mcp pattern), so
+            # it runs in the provider's process on the HOST and resolves the
+            # controller's in-venue :8090 to a host-routable address over the
+            # reverse channel — a live ssh -L forward into the guest (spec/checkhost
+            # EndpointForVenue) — pulling the admin SA token from the venue over the
+            # executor. No in-guest curl, no host CLI, one REST surface (R3).
             - check: the minio S3 API answers its health probe
               id: agentteams-vm-minio-health
               timeout: 30s
@@ -3071,61 +3176,16 @@ check-agentteams-vm:
               timeout: 600s
               context:
                 - runtime
-              command: |
-                  # Shell vars are deliberately lowercase: the check runner expands
-                  # UPPERCASE-variable refs as runtime variables and SKIPs on an
-                  # unresolved one.
-                  token="$(cat /var/run/agentteams/cli-token 2>/dev/null)"
-                  test -n "${token}"
-                  for i in $(seq 1 150); do
-                      resp="$(curl -fsS -H "Authorization: Bearer ${token}" http://127.0.0.1:8090/api/v1/managers 2>/dev/null)" || { sleep 2; continue; }
-                      if echo "${resp}" | grep -q '"phase":"Running"'; then
-                          echo "${resp}"
-                          exit 0
-                      fi
-                      sleep 2
-                  done
-                  echo "manager never reached Running: ${resp}"
-                  exit 1
+              agentteams:
+                method: manager-running
+              stdout:
+                - contains: "Running"
             - check: the controller creates a Worker CR, spawns the worker container from the pre-built agentteams-worker image, and the worker reaches Running with its Matrix room created (proves AGENTTEAMS_WORKER_IMAGE is in the guest rootless store and the controller can spawn the worker through the rootless podman socket)
               id: agentteams-vm-worker-running
               timeout: 600s
               context:
                 - runtime
-              command: |
-                  # Shell vars are deliberately lowercase: the check runner expands
-                  # UPPERCASE-variable refs as runtime variables and SKIPs on an
-                  # unresolved one.
-                  token="$(cat /var/run/agentteams/cli-token 2>/dev/null)"
-                  test -n "${token}"
-                  worker="bed-worker"
-                  # Create the Worker CR (containerManaged defaults to true; the
-                  # runtime resolves to openclaw and the image to
-                  # AGENTTEAMS_WORKER_IMAGE). A 409 (already exists) is fine on a
-                  # fresh `charly update` re-run — the controller volume
-                  # (~/.agentteams/controller, holding the kine SQLite store)
-                  # persists, so the Worker CR from the prior run is still there
-                  # and the poll below reconciles it to Running.
-                  curl -fsS -X POST -H "Authorization: Bearer ${token}" \
-                      -H 'Content-Type: application/json' \
-                      -d "{\"name\": \"${worker}\"}" \
-                      http://127.0.0.1:8090/api/v1/workers >/dev/null 2>&1 || true
-                  # Poll until the worker reaches Running AND its Matrix room is
-                  # provisioned (roomID non-empty).
-                  for i in $(seq 1 150); do
-                      resp="$(curl -fsS -H "Authorization: Bearer ${token}" http://127.0.0.1:8090/api/v1/workers/${worker} 2>/dev/null)" || { sleep 2; continue; }
-                      if echo "${resp}" | grep -q '"phase":"Running"' && echo "${resp}" | grep -q '"roomID":"!'; then
-                          break
-                      fi
-                      sleep 2
-                  done
-                  echo "${resp}" | grep -q '"phase":"Running"' || { echo "worker never reached Running: ${resp}"; exit 1; }
-                  echo "${resp}" | grep -q '"roomID":"!' || { echo "worker room never provisioned: ${resp}"; exit 1; }
-                  # The room exists on the homeserver: resolve the worker room
-                  # alias via the public Matrix directory API (the alias is
-                  # #agentteams-worker-<name>:<matrix-domain>, the same shape the
-                  # controller's own matrix client resolves).
-                  alias_enc="%23agentteams-worker-${worker}%3Amatrix-local.agentteams.io%3A8080"
-                  room="$(curl -fsS "http://127.0.0.1:6167/_matrix/client/v3/directory/room/${alias_enc}" 2>/dev/null)" || { echo "room alias not resolvable"; exit 1; }
-                  echo "${room}" | grep -q '"room_id":"!' || { echo "room alias resolved to no room: ${room}"; exit 1; }
-                  echo "worker ${worker} Running, room provisioned, room alias resolvable"
+              agentteams:
+                method: worker-running
+              stdout:
+                - contains: "room alias resolvable"

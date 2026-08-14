@@ -3,20 +3,28 @@ plugin-agentteams:
         version: 2026.224.0600
         description: |-
             The `charly agentteams` management CLI for the AgentTeams controller
-            REST API — a COMPILED-IN command:agentteams plugin. `charly agentteams
+            REST API PLUS the declarative `agentteams:` check verb — a COMPILED-IN
+            command:agentteams + verb:agentteams plugin. `charly agentteams
             status` reports controller health + manager/worker/team/human counts;
             `worker list|get|create|update|apply|delete` manages Worker CRs (apply
             incl. ZIP/package import); `team apply|list|get|delete` and `human
             apply|list|get|delete` manage Teams and Humans; `apply -f <file>`
             applies declarative YAML (create-or-update per kind); `config` shows
-            the resolved controller endpoint and token source. A plain net/http
-            REST client — no upstream agt binary, no SDK. Endpoint from
-            AGENTTEAMS_CONTROLLER_URL (default http://127.0.0.1:8090); token from
-            AGENTTEAMS_AUTH_TOKEN env or AGENTTEAMS_AUTH_TOKEN_FILE file (the
-            upstream runtime contract).
+            the resolved controller endpoint and token source. The `agentteams:`
+            check verb is the declarative controller-probe counterpart: authored
+            as a `check:` step (`agentteams: status`, `manager-running`,
+            `worker-running`, `worker-list`), it resolves the controller's
+            in-venue :8090 to a host-routable address over the reverse channel,
+            pulls the admin SA token from the venue, and probes with the SAME
+            REST client the command uses (R3 — one surface covers the CLI and
+            every bed). A plain net/http REST client — no upstream agt binary, no
+            SDK. Endpoint from AGENTTEAMS_CONTROLLER_URL (default
+            http://127.0.0.1:8090); token from AGENTTEAMS_AUTH_TOKEN env or
+            AGENTTEAMS_AUTH_TOKEN_FILE file (the upstream runtime contract).
         plugin:
             providers:
                 - command:agentteams
+                - verb:agentteams
             source: builtin
         plan:
             - # ADE check: a deterministic build-context check that does NOT depend on the
@@ -70,6 +78,30 @@ agentteams-cli-skill:
               (the upstream runtime contract). The controller mints the admin SA
               (service account) token to `/var/run/agentteams/cli-token` — on a pod
               substrate pull it out with `charly cp <deploy> :/var/run/agentteams/cli-token <local>`.
+
+            ## The `agentteams:` check verb
+
+            The plugin ALSO serves the declarative `agentteams:` check verb — the
+            controller-probe counterpart of the CLI, authored as a `check:` step in
+            a candy/box plan. It is HOST-BASED (the mcp pattern): the provider
+            resolves the controller's in-venue :8090 to a host-routable address
+            over the reverse channel (a published port on the pod substrate, a
+            live `ssh -L` forward on the vm substrate), pulls the admin SA token
+            from the venue, and probes with the SAME REST client the command uses
+            (R3 — one surface covers the CLI and every bed). Methods:
+
+            - `agentteams: status` — controller health + resource counts.
+            - `agentteams: manager-running` — poll until a manager reaches Running
+              (`name:` pins a specific manager; default: any).
+            - `agentteams: worker-running` — create the named Worker CR (default
+              `bed-worker`) and poll until Running WITH its Matrix room
+              provisioned and the room alias resolvable on the homeserver.
+            - `agentteams: worker-list` — list the workers the controller manages.
+
+            The verb's method + method-exclusive modifiers ride the desugared
+            plugin input, validated at runtime against the served `#AgentTeamsInput`
+            schema. It skips under `charly check box` (no live controller on a
+            disposable `podman run --rm`).
 
             ## Declarative apply
 

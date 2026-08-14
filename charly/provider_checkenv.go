@@ -113,6 +113,21 @@ func (h *hostVerbResolver) runPluginVerb(ctx context.Context, c *spec.Op) spec.C
 		res.Verb = "plugin"
 		return res
 	}
+	// A COMPILED-IN plugin candy whose pb.ProviderServer ALSO implements the typed
+	// spec.CheckVerbProvider contract (a command+verb candy like agentteams): dispatch the
+	// verb in-proc with the live host CheckContext — the SAME adaptation hostVerbResolver.RunVerb
+	// performs for the host-side walk (planrun_adapter.go), so a compiled-in verb needing the
+	// executor (ResolveEndpoint/Exec) gets it without a broker (the mcp pattern's
+	// sdk.NewCheckContext is out-of-process-only). Without this branch the inprocProvider falls
+	// through to invokeVerbProvider, which marshals the Op into the Invoke envelope and loses the
+	// live host context — the "no go-plugin broker" failure a compiled-in verb hits there.
+	if ip, ok := prov.(*inprocProvider); ok {
+		if kv, ok := ip.srv.(spec.CheckVerbProvider); ok {
+			r := kv.RunVerb(ctx, hostCheckContext{h: h}, c)
+			res = spec.CheckResult{Op: c, Verb: "plugin", Status: r.Status, Message: r.Message}
+			return res
+		}
+	}
 	res = h.invokeVerbProvider(ctx, prov, word, c)
 	res.Verb = "plugin"
 	return res

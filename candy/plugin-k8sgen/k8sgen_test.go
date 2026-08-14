@@ -210,3 +210,69 @@ func keys(m map[string]json.RawMessage) []string {
 	}
 	return out
 }
+
+// TestGenerateTree_HelmCharts covers the helm venue's chart-release emission: a
+// deployment carrying deployment.kubernetes.helm_charts must render the kustomize
+// "helmCharts" list in the OVERLAY kustomization (the base stays chart-free), with
+// the kustomize entry shape {name, repo, version, releaseName, namespace,
+// valuesFile, includeCRDs}.
+func TestGenerateTree_HelmCharts(t *testing.T) {
+	in := spec.KubernetesGenInput{
+		DeploymentName: "web",
+		ImageRef:       "registry.example.com/web:v1",
+		Cluster:        spec.Kubernetes{},
+		Deploy: spec.Deploy{
+			Deploy: &spec.KubernetesDeploy{
+				Workload: "Deployment",
+				Helm_charts: []spec.HelmChart{{
+					Repo:         "https://charts.example.com",
+					Chart:        "nginx",
+					Version:      "4.0.0",
+					Release:      "web-nginx",
+					Namespace:    "web",
+					Values_files: []string{"values/nginx.yaml"},
+				}},
+			},
+		},
+	}
+
+	reply, err := GenerateTree(in)
+	if err != nil {
+		t.Fatalf("GenerateTree: %v", err)
+	}
+	got := map[string]json.RawMessage{}
+	for _, f := range reply.Files {
+		got[f.RelPath] = f.Doc
+	}
+
+	var overlay map[string]any
+	if err := json.Unmarshal(got["overlays/default/kustomization.yaml"], &overlay); err != nil {
+		t.Fatalf("decode overlay kustomization: %v", err)
+	}
+	charts, _ := overlay["helmCharts"].([]any)
+	if len(charts) != 1 {
+		t.Fatalf("overlay helmCharts = %v, want 1 entry", overlay["helmCharts"])
+	}
+	entry, _ := charts[0].(map[string]any)
+	want := map[string]any{
+		"name":        "nginx",
+		"repo":        "https://charts.example.com",
+		"version":     "4.0.0",
+		"releaseName": "web-nginx",
+		"namespace":   "web",
+		"valuesFile":  "values/nginx.yaml",
+		"includeCRDs": true,
+	}
+	if !reflect.DeepEqual(entry, want) {
+		t.Errorf("helmCharts[0] = %v, want %v", entry, want)
+	}
+
+	// The base kustomization must NOT carry helmCharts (charts are an overlay concern).
+	var base map[string]any
+	if err := json.Unmarshal(got["base/kustomization.yaml"], &base); err != nil {
+		t.Fatalf("decode base kustomization: %v", err)
+	}
+	if _, ok := base["helmCharts"]; ok {
+		t.Errorf("base kustomization must not carry helmCharts: %v", base["helmCharts"])
+	}
+}
