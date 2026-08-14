@@ -21,9 +21,15 @@ charly-hooks:
 
 pre-commit-gate:
     hook:
+        # No trigger:/matcher: — the AUX form (same as gitcmd/gate-test below), so
+        # `charly marketplace generate` EMITS this script to .claude/hooks/ but wires
+        # NO .claude/settings.json PreToolUse entry for it. It ran before every Bash
+        # tool call and fast-path exit 0'd for non-git commands, so it never blocked
+        # what it was meant to catch; the discipline it encodes is judged by the fresh
+        # pr-validator at merge and by branch protection (CLAUDE.md "Hooks"). The
+        # script stays on disk and .reasonix/settings.json still wires it — that file
+        # is hand-maintained, not generated (the generator writes .claude/ only).
         name: pre-commit-gate.sh
-        trigger: PreToolUse
-        matcher: Bash
         mode: "0755"
         content: |
             #!/usr/bin/env bash
@@ -320,9 +326,8 @@ pre-commit-gate:
 
 pre-push-gate:
     hook:
+        # No trigger:/matcher: — the AUX form; see pre-commit-gate above for why.
         name: pre-push-gate.sh
-        trigger: PreToolUse
-        matcher: Bash
         mode: "0755"
         content: |
             #!/usr/bin/env bash
