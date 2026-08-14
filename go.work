@@ -68,3 +68,4 @@ use ./candy/plugin-oci
 use ./candy/plugin-status
 use ./candy/plugin-check
 use ./candy/plugin-agentteams
+use ./candy/plugin-dsh

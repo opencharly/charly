@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+set -e
+
+# dsh-web-app 0.1.0-rc.6 rejects --host 0.0.0.0 (RCE safety): it would expose
+# remote code execution to the network. The web app binds 127.0.0.1:3080 ONLY.
+# A container's published port maps to the container's eth0 (0.0.0.0), not
+# loopback — so run `dsh web` in the background on loopback and let socat
+# expose it on eth0. socat CANNOT share port 3080: Linux forbids a wildcard
+# (0.0.0.0) and a specific (127.0.0.1) listener on the same port — whichever
+# binds second fails with EADDRINUSE (SO_REUSEADDR does not permit the pair).
+# So socat listens on 0.0.0.0:3081 and forwards to 127.0.0.1:3080; the
+# published port (auto-allocated host port -> container 3081) reaches the web
+# app through socat. On the vm substrate the ssh -L forward targets loopback
+# directly — socat just doesn't hurt there.
+#
+# The dsh binary lives in the npm-global bin (NPM_CONFIG_PREFIX from the nodejs
+# candy); the service environment may not carry the candy's path_append, so set
+# PATH explicitly. Derive the homedir from passwd when $HOME is unset (the same
+# getent discovery the nodejs candy's pnpm check prescribes — live-container
+# execs provide no HOME).
+export PATH="${HOME:-$(getent passwd "$(id -u)" | cut -d: -f6)}/.npm-global/bin:$PATH"
+
+dsh web &
+# Wait for the web app to bind loopback before socat starts forwarding, so the
+# published port is live the moment it accepts connections. Bounded: if dsh web
+# never comes up, socat still runs and the in-box check reports the failure.
+for i in $(seq 1 60); do
+  if (exec 3<>/dev/tcp/127.0.0.1/3080) 2>/dev/null; then
+    break
+  fi
+  sleep 1
+done
+exec socat TCP-LISTEN:3081,fork,reuseaddr TCP:127.0.0.1:3080
