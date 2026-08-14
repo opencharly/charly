@@ -25,6 +25,7 @@ import (
 	cp_plugin_distro "github.com/opencharly/charly/candy/plugin-distro"
 	cp_plugin_dns "github.com/opencharly/charly/candy/plugin-dns"
 	cp_plugin_doctor "github.com/opencharly/charly/candy/plugin-doctor"
+	cp_plugin_dsh "github.com/opencharly/charly/candy/plugin-dsh"
 	cp_plugin_egress "github.com/opencharly/charly/candy/plugin-egress"
 	cp_plugin_enc "github.com/opencharly/charly/candy/plugin-enc"
 	cp_plugin_example "github.com/opencharly/charly/candy/plugin-example"
@@ -130,4 +131,5 @@ func init() {
 	registerCompiledPlugin(cp_plugin_status.NewProvider(), cp_plugin_status.NewMeta())
 	registerCompiledPlugin(cp_plugin_check.NewProvider(), cp_plugin_check.NewMeta())
 	registerCompiledPlugin(cp_plugin_agentteams.NewProvider(), cp_plugin_agentteams.NewMeta())
+	registerCompiledPlugin(cp_plugin_dsh.NewProvider(), cp_plugin_dsh.NewMeta())
 }

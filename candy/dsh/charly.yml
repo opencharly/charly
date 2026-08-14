@@ -1,0 +1,172 @@
+dsh:
+    candy:
+        version: 2026.226.1600
+        description: |
+            Installs the deepseek-harness dsh CLI globally via npm and serves the
+            dsh web Web UI (port 3080) as a supervised service. The candy depends
+            on nodejs (>=22.19.0 — the dsh floor) and ships a package.json pinning
+            @deepseek-ai/dsh 0.1.0-rc.6, which the build installs globally under
+            NPM_CONFIG_PREFIX (~/.npm-global). The web app binds 127.0.0.1:3080
+            ONLY — dsh-web-app 0.1.0-rc.6 hard-rejects --host 0.0.0.0 (RCE
+            safety) — so a charly-owned entrypoint runs `dsh web` in the
+            background and exec's a socat forwarder that listens on the
+            container's eth0 (0.0.0.0:3081) and forwards to loopback. socat
+            cannot share port 3080 (Linux forbids a wildcard + loopback pair on
+            one port), so the published port (auto-allocated host port ->
+            container 3081) reaches the web UI on the pod substrate. Every fact is
+            observable: the dsh binary at ~/.npm-global/bin/dsh, the unpacked
+            package, `dsh --version`/`--help`, node >= 22.19.0, the running
+            service, and the HTTP 200 the web UI answers on 127.0.0.1:3080.
+        require:
+            - nodejs
+            - supervisord
+        package:
+            - socat
+        env:
+            DSH_HOME: "~/.dsh"
+        # The socat forwarder listens on container 3081 (dsh web holds
+        # 127.0.0.1:3080; a wildcard + loopback pair cannot share one port on
+        # Linux). The deploy auto-allocates the host port; ${HOST_PORT:3081}
+        # resolves it in checks.
+        port:
+            - 3081
+        volume:
+            - name: dsh
+              path: "~/.dsh"
+        service:
+            - name: dsh
+              exec: "%(ENV_HOME)s/.local/bin/dsh-entrypoint"
+              restart: always
+              working_directory: "%(ENV_HOME)s"
+              enable: true
+              scope: system
+        plan:
+            - run: mkdir=${HOME}/.local/bin
+              mkdir: "${HOME}/.local/bin"
+              run_as: "${USER}"
+            - run: copy=dsh-entrypoint
+              copy: dsh-entrypoint
+              to: "${HOME}/.local/bin/dsh-entrypoint"
+              mode: "0755"
+              run_as: "${USER}"
+            - check: the dsh binary is installed into the npm global bin directory
+              file:
+                file: ${HOME}/.npm-global/bin/dsh
+                exists: true
+            - check: the dsh package is unpacked under the npm global lib directory
+              file:
+                file: ${HOME}/.npm-global/lib/node_modules/@deepseek-ai/dsh/package.json
+                exists: true
+            - check: running dsh --version exits cleanly and prints a semantic version
+              exit_status: 0
+              stdout:
+                - matches: "[0-9]+\\.[0-9]+"
+              command: ${HOME}/.npm-global/bin/dsh --version
+            - check: running dsh --help exits cleanly and lists the web and plugin commands
+              exit_status: 0
+              stdout:
+                - contains: "web"
+                - contains: "plugin"
+              command: ${HOME}/.npm-global/bin/dsh --help
+            - # The dsh harness floor (node ^22.19.0 || >=24.0.0). No `${...}` anywhere:
+              # a check step's command goes through charly's variable substitution, which
+              # reads `${HOME:-default}` as a variable named `HOME:-default`, fails to
+              # resolve it, and SKIPS the step — trading a red check for a silently absent
+              # one. `node -e` with single quotes has no `${...}`, so it always runs.
+              check: node is at least 22.19.0 (the deepseek-harness dsh floor)
+              exit_status: 0
+              command: |
+                node -e 'const [maj,min]=process.versions.node.split(".").map(Number); if (maj<22||(maj===22&&min<19)) process.exit(1)'
+            - check: the dsh service is running under the init system
+              context:
+                - runtime
+              service:
+                service: dsh
+                running: true
+            - check: the dsh web UI answers HTTP 200 on 127.0.0.1:3080 in-box
+              timeout: 30s
+              context:
+                - runtime
+              command: curl -fsS -o /dev/null http://127.0.0.1:3080/
+            - check: the dsh web UI answers HTTP 200 through the published port (the socat forwarder)
+              timeout: 30s
+              context:
+                - runtime
+              http:
+                http: http://127.0.0.1:${HOST_PORT:3081}/
+                status: 200
+
+dsh-skill:
+    skill:
+        name: dsh
+        family: tools
+        owner: dsh
+        description: |-
+            DeepSeek Harness (dsh) CLI + web UI via npm with a socat-exposed web service on port 3080.
+            Use when working with the dsh candy.
+        content: |-
+            # dsh -- DeepSeek Harness CLI and web UI
+
+            ## Candy Properties
+
+            | Property | Value |
+            |----------|-------|
+            | Install files | `charly.yml`, `package.json`, `dsh-entrypoint` |
+            | Depends | `nodejs` (>=22.19.0), `supervisord` |
+            | Port | 3080 (web UI, loopback) / 3081 (socat forwarder) |
+            | Volume | `~/.dsh` (profiles + plugin data) |
+
+            ## Environment Variables
+
+            | Variable | Value |
+            |----------|-------|
+            | `DSH_HOME` | `~/.dsh` |
+
+            ## Packages
+
+            RPM/DEB/PAC: `socat` (the loopback→eth0 forwarder)
+
+            ## The web UI is loopback-only — socat exposes it
+
+            `dsh web` binds **127.0.0.1:3080 only**: dsh-web-app 0.1.0-rc.6
+            hard-rejects `--host 0.0.0.0` (RCE safety). A container's published
+            port maps to the container's eth0, not loopback — so the charly-owned
+            `dsh-entrypoint` runs `dsh web` in the background and `exec`s a socat
+            forwarder (`TCP-LISTEN:3081,fork,reuseaddr TCP:127.0.0.1:3080`) that
+            exposes the web app on eth0. socat cannot share port 3080 (Linux
+            forbids a wildcard + loopback listener pair on one port), so the
+            published port (auto-allocated host port → container 3081) reaches
+            the web UI through socat. On the vm substrate the `ssh -L` forward
+            targets loopback directly — socat just doesn't hurt there.
+
+            ## Usage
+
+            ```yaml
+            # charly.yml
+            my-image:
+              candy:
+                - dsh
+            ```
+
+            ## Used In Boxes
+
+            - Composed on demand; requires a builder that declares the npm builder
+              (the mcporter precedent).
+
+            ## Related Candies
+
+            - `/charly-coder:nodejs` -- required runtime dependency (node >=22.19.0)
+            - `/charly-tools:mcporter` -- sibling npm-global CLI candy
+
+            ## When to Use This Skill
+
+            Use when the user asks about:
+
+            - The deepseek-harness `dsh` CLI or web UI
+            - The `dsh` candy or the `dsh:` check verb
+            - The socat forwarder that exposes the loopback-bound web app
+
+            ## Related
+
+            - `/charly-image:layer` — candy authoring reference (`charly.yml` schema, task verbs, service declarations)
+            - `/charly-check:check` — declarative testing (`check:` block, `charly check box`, `charly check live`)

@@ -2758,6 +2758,138 @@ check-marketplace:
               command: command -v rg
 
 # =============================================================================
+# dsh-app + check-dsh-pod — the R10 bed for the deepseek-harness dsh candy + the
+# compiled-in plugin-dsh management plugin (command:dsh + verb:dsh).
+#
+# The bed builds a minimal Fedora box composing nodejs + dsh. The npm builder
+# (fedora.fedora-builder) installs @deepseek-ai/dsh 0.1.0-rc.6 globally; node-pty
+# (a dsh dependency) ships NO linux-x64 prebuild in the npm tarball, so its install
+# script falls through to node-gyp — the fedora-builder's build-toolchain provides
+# gcc/make/python3, and the compiled pty.node is N-API (ABI-stable across node
+# versions, so building against the builder's node 20 runs on the image's node 22).
+# The dsh service boots `dsh web` (loopback-only, 127.0.0.1:3080) and the
+# charly-owned dsh-entrypoint exec's a socat forwarder exposing it on eth0:3081
+# (socat cannot share port 3080 with the loopback listener — Linux forbids a
+# wildcard + specific pair on one port — so the published port maps the
+# auto-allocated host port to container 3081).
+# The bed asserts: the pod reaches steady state, the dsh service runs, the web UI
+# answers HTTP 200 in-box AND through the published port (the socat forwarder),
+# node >= 22.19.0 (the dsh floor), the four dsh: verb methods dispatch in-box, and
+# the compiled-in `charly dsh status` command reaches the deployed box over the
+# pod-lifecycle reverse channel.
+# =============================================================================
+dsh-app:
+    candy:
+        version: 2026.226.1600
+        base: quay.io/fedora/fedora:43
+        description: |-
+            The deepseek-harness box: a minimal Fedora base composing the nodejs and
+            dsh candies. The npm builder installs @deepseek-ai/dsh 0.1.0-rc.6 globally
+            (node-pty's native module builds via node-gyp in the fedora-builder's
+            build-toolchain); the dsh service boots the loopback-bound web UI and a
+            socat forwarder exposes it on the container's eth0. The candy's checks run
+            in BOTH contexts, so `charly check box dsh-app` proves the CLI installs and
+            the node floor holds without deploying, and `charly check live` re-proves
+            the same shape against the running pod plus the service + web UI.
+        # The distro tag chain is load-bearing (the docs-site-app precedent): the
+        # package resolver walks the IMAGE's declared chain most-specific-first, so a
+        # box that declares `base:` alone matches no per-distro section and silently
+        # installs nothing.
+        distro:
+            - fedora:43
+            - fedora
+        # The npm builder must be explicit: a namespace-qualified base contributes no
+        # builder map, and the distro-keyed default (from the fedora box) provides bare
+        # `fedora-builder` values that don't resolve in the main repo. The namespaced
+        # `fedora.fedora-builder` matches the main repo's convention (check-builder-vm).
+        builder:
+            npm: fedora.fedora-builder
+        candy:
+            - nodejs
+            - dsh
+check-dsh-pod:
+    pod:
+        image: dsh-app
+        disposable: true
+        lifecycle: dev
+        description: >-
+            R10 bed for the deepseek-harness dsh candy + the compiled-in plugin-dsh
+            management plugin. Deploying it to steady state proves the dsh-app box —
+            whose image build ran the npm builder (installing @deepseek-ai/dsh
+            0.1.0-rc.6 globally, node-pty's native module built via node-gyp) and
+            asserted the CLI + node floor — builds, starts, and stays up with the dsh
+            service running, the loopback-bound web UI answering HTTP 200 in-box AND
+            through the socat forwarder on the published port, the four dsh: verb
+            methods dispatching in-box, and the compiled-in `charly dsh status`
+            command reaching the deployed box over the pod-lifecycle reverse channel.
+        plan:
+            - check: the dsh-app pod reached steady state (the dsh box runs)
+              id: dsh-pod-running
+              exit_status: 0
+              stdout:
+                - contains: '"kind": "pod"'
+                - contains: check-dsh-pod
+              context:
+                - runtime
+              command:
+                command: ${CHARLY_BIN} status --json
+                in_container: false
+            - check: the dsh service is running under the init system in the pod
+              id: dsh-service-running
+              service:
+                service: dsh
+                running: true
+              context: [runtime]
+            - check: the dsh web UI answers HTTP 200 on 127.0.0.1:3080 in-box
+              id: dsh-web-inbox
+              timeout: 30s
+              context: [runtime]
+              command: curl -fsS -o /dev/null http://127.0.0.1:3080/
+            - check: the dsh web UI answers HTTP 200 through the published port (the socat forwarder)
+              id: dsh-web-published
+              timeout: 30s
+              context: [runtime]
+              http:
+                http: "http://127.0.0.1:${HOST_PORT:3081}/"
+                status: 200
+            - check: node is at least 22.19.0 (the deepseek-harness dsh floor)
+              id: dsh-node-floor
+              exit_status: 0
+              context: [runtime]
+              command: |
+                node -e 'const [maj,min]=process.versions.node.split(".").map(Number); if (maj<22||(maj===22&&min<19)) process.exit(1)'
+            - check: the dsh version verb reports the dsh version in-box
+              id: dsh-verb-version
+              dsh:
+                method: version
+              context: [runtime]
+            - check: the dsh web-running verb probes the web UI in-box
+              id: dsh-verb-web-running
+              dsh:
+                method: web-running
+              context: [runtime]
+            - check: the dsh profile-list verb lists the profiles in-box
+              id: dsh-verb-profile-list
+              dsh:
+                method: profile-list
+              context: [runtime]
+            - check: the dsh plugin-list verb lists the web profile's plugins in-box
+              id: dsh-verb-plugin-list
+              dsh:
+                method: plugin-list
+              context: [runtime]
+            - check: the compiled-in charly dsh status command reaches the deployed box over the reverse channel
+              id: dsh-cmd-status
+              exit_status: 0
+              stdout:
+                - contains: "web UI: HTTP 200 on 127.0.0.1:3080"
+              context:
+                - runtime
+              command:
+                command: ${CHARLY_BIN} dsh status --box check-dsh-pod
+                in_container: false
+
+# =============================================================================
 # agentteams + agentteams-manager + check-agentteams-pod — the R10 bed for the
 # full AgentTeams stack (minio, matrix, element, higress, controller) on the
 # cachyos base. Every service runs as the image user (uid 1000) against its own
