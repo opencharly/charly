@@ -40,23 +40,6 @@
       }
     }
   },
-  "hooks": {
-    "PreToolUse": [
-      {
-        "hooks": [
-          {
-            "command": "bash $CLAUDE_PROJECT_DIR/.claude/hooks/pre-commit-gate.sh",
-            "type": "command"
-          },
-          {
-            "command": "bash $CLAUDE_PROJECT_DIR/.claude/hooks/pre-push-gate.sh",
-            "type": "command"
-          }
-        ],
-        "matcher": "Bash"
-      }
-    ]
-  },
   "includeCoAuthoredBy": false,
   "permissions": {
     "allow": [
