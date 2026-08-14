@@ -1398,8 +1398,8 @@ clean-skill:
 
             - **One-time / transient → always cleaned immediately.** makepkg leftovers under
               `pkg/arch` (`src/`, `pkg/`, `*.pkg.tar.zst`, `*.log`) from a manual bare-host
-              `makepkg` invocation (native-package builds normally run containerized via `task
-              pkg:arch` → `charly box pkg`, which never touches this tree) — `charly clean`
+              `makepkg` invocation (the legacy `charly box pkg` native-package build, removed
+              with the nFPM cutover, never touched this tree) — `charly clean`
               sweeps any such leftover.
             - **Reusable → keep-last-N, configurable in `defaults:`.** Container image tags
               and `.check` run output. Retention is set in `charly.yml` `defaults:` and

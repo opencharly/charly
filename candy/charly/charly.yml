@@ -40,22 +40,17 @@ charly:
                       key: "https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg"
                       suite: noble
                       components: main
-        # On a DEPLOY target charly is installed as the proper OS-tracked package for the
-        # target distro's format (LocalPkgInstallStep): pac → opencharly-git built from
-        # pkg/arch via makepkg + pacman -U; rpm → opencharly built from pkg/fedora via
-        # rpmbuild + dnf install; deb → opencharly built from pkg/debian via
-        # dpkg-buildpackage + apt-get install. Each install AUTO-RESOLVES the package's
-        # dependencies from the target's repos. The sources live at the SUPERPROJECT
-        # root (pkg/<fmt>) — resolved by walking UP from the deploy project dir, so a
-        # consumer nested under box/<distro> still finds them. An IMAGE build has no
-        # host-package-build step, so it DOWNLOADS the published package
-        # (format.<fmt>.local_pkg.download_template) and installs it via the same
-        # dep-resolving install command — same OS-tracked result, no curl'd raw binary.
-        localpkg:
-            pac: pkg/arch
-            rpm: pkg/fedora
-            deb: pkg/debian
+        # The charly binary is installed via a `copy: bin/charly` run step — the in-development
+        # binary at candy/charly/bin/charly (synced by `task build:binary`). The OS-tracked
+        # package install (the former `localpkg:` map) is GONE: the sdk's localpkg machinery now
+        # builds via the `charly generate-packages` plugin (sdk/packagekit) from the candy's
+        # `packaging:` section, which lands with the nFPM cutover (Phase 3). Until then the
+        # copy step is the single binary source for both image builds and deploys.
         plan:
+            - run: copy=bin/charly
+              copy: bin/charly
+              to: /usr/bin/charly
+              mode: "0755"
             - check: the charly binary resolves on the deployment's PATH
               exit_status: 0
               command: command -v charly
@@ -124,28 +119,18 @@ charly-skill:
             the delivered copy. Baking the candy only pre-stages the binary so the first such call
             skips the copy.
             
-            ## Check-vs-production binary source — disposable beds bake the IN-DEV charly
-            
-            The `charly` candy installs the binary as a proper, dependency-resolving OS
-            package via `localpkg:` (`{pac: pkg/arch, rpm: pkg/fedora, deb: pkg/debian}`).
-            The BINARY SOURCE depends on the box type — a hard distinction, NEVER mixed:
-            
-            - **Disposable check beds** (`disposable: true` deploys) bake the latest **in-development**
-              charly: the check-bed runner builds every bed image with `charly box build
-              --dev-local-pkg`, so the package is BUILT from the local working tree
-              (`pkg/<fmt>` + `charly/`). A bed therefore tests the charly code under
-              development — never a stale published release.
-            - **Production boxes** bake the latest **published** charly: a normal
-              `charly box build` DOWNLOADS the published release package
-              (`releases/latest/download/opencharly-<arch>.<fmt>`).
-            
-            ONE decision point (`deploykit.RenderLocalPkgImageInstall`), generic across all kinds and
-            all localpkg candies; the check-bed runner sets `--dev-local-pkg` automatically, a
-            production build never does. A dev build that cannot find its local source HARD
-            errors (R4 — no silent fallback to the release). Full mechanics:
-            `/charly-internals:install-plan` "Check-vs-production charly toolchain". This is
-            WHY a fresh check bed exercises your uncommitted charly changes while a real box
-            ships the released toolchain.
+            ## Binary source — the in-development binary, always
+
+            The `charly` candy installs the binary via a `copy: bin/charly` run step — the
+            in-development binary at `candy/charly/bin/charly`, synced by `task build:binary`.
+            There is ONE binary source for both image builds and deploys: the local working
+            tree. A box therefore always bakes the charly code under development — never a
+            stale published release. The OS-tracked package install (the former `localpkg:`
+            map) is GONE: the sdk's localpkg machinery now builds via the `charly
+            generate-packages` plugin (sdk/packagekit) from the candy's `packaging:` section,
+            which lands with the nFPM cutover (Phase 3). Until then the copy step is the
+            single binary source. This is WHY a fresh check bed exercises your uncommitted
+            charly changes while a real box ships the same in-development toolchain.
             
             ## Updating the Binary — dual-path gotcha
             

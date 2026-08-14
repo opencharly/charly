@@ -1104,23 +1104,24 @@ githubrunner-skill:
             container builds (aarch64) work via the repo `qemu-user-static` +
             `qemu-user-static-binfmt` packages.
             
-            ## CI: builds the org's release packages on itself
-            
-            The repo's `release-packages` workflow (`.github/workflows/release-packages.yml`)
-            runs on this runner via `runs-on: [self-hosted, opencharly]` — no GitHub-hosted
-            runner. Because the runner is an Arch (CachyOS) host carrying the FULL `charly`
-            PKGBUILD `depends=` set, all three package formats build here:
-            
-            - **pac** builds NATIVELY — `charly box pkg pac` → `makepkg -sf` as uid 1000 (makepkg
-              refuses root; the rootless runner's non-root uid is exactly right). Every
-              `depends=` is pre-installed, so makepkg resolves them without `sudo pacman` (the
-              runner has no passwordless sudo). No `archlinux:latest` container.
-            - **rpm + deb** build distro-natively in the runner's rootless nested podman
-              (`charly box pkg rpm deb`).
-            
-            `workflow_dispatch` runs the build jobs from a branch (the release-upload step is
-            tag-guarded), so the build is exercisable without minting a tag. The `github-runner`
-            candy completes the `charly` runtime on the runner — beyond the .NET/runner deps it adds
+            ## CI: the org's release-binary workflow runs on GitHub-hosted runners
+
+            The legacy `release-packages` workflow (`.github/workflows/release-packages.yml`,
+            which built the pac/rpm/deb packages on this self-hosted runner via `charly box
+            pkg`) is REMOVED with the nFPM cutover. The release-binary workflow
+            (`.github/workflows/release-binary.yml`) builds the CalVer-stamped binary + the
+            welded plugins on a GitHub-hosted `ubuntu-latest` runner and publishes them as
+            release assets; the per-distro package repos (built by the `charly
+            generate-packages` plugin) consume those assets. This runner still carries the
+            FULL `charly` PKGBUILD `depends=` set, so the charly CLI (and the CI jobs that
+            drive it) runs fully here:
+
+            - **pac** runs NATIVELY — the runner is an Arch (CachyOS) host, so `charly` and
+              its deps resolve without a container. Every `depends=` is pre-installed, so no
+              `sudo pacman` (the runner has no passwordless sudo).
+            - **rpm + deb** run in the runner's rootless nested podman.
+
+            The `github-runner` candy completes the `charly` runtime on the runner — beyond the .NET/runner deps it adds
             the `depends=` packages the charly/virtualization candies don't already provide
             (`slirp4netns`, `libisoburn`, `cdrtools`, `swtpm`).
             

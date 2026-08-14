@@ -26,14 +26,14 @@ import (
 // testPacLocalPkgDef returns a vmshared.LocalPkgDef mirroring build.yml's `pac.local_pkg`
 // block — the config that drives the localpkg mechanism. Tests use it so they
 // exercise the SAME config-driven path the loader produces, without parsing YAML.
+// The source-build fields (pkg_glob/source_sentinel/build_template/dep_builder)
+// are GONE (Phase 0a — the plugin builds now); only the install/download/probe
+// machinery remains, and the package glob is DERIVED from the download_template URL.
 func testPacLocalPkgDef() *vmshared.LocalPkgDef {
 	return &vmshared.LocalPkgDef{
-		PkgGlob:         "*.pkg.tar.zst",
-		SourceSentinel:  "PKGBUILD",
-		BuildTemplate:   "cd {{.SrcDir}} && PKGDEST={{.PkgDest}} makepkg -sf --noconfirm",
-		InstallTemplate: "pacman -U --noconfirm {{.StageDir}}/{{.Glob}}",
-		Probe:           "command -v pacman",
-		DepBuilder:      "aur",
+		InstallTemplate:  "pacman -U --noconfirm {{.StageDir}}/{{.Glob}}",
+		Probe:            "command -v pacman",
+		DownloadTemplate: "https://opencharly.github.io/charly-arch/${ARCH}/charly-${ARCH}.pkg.tar.zst",
 	}
 }
 
@@ -47,49 +47,47 @@ func testPacDistroDef() *spec.ResolvedDistro {
 	}
 }
 
-// TestCompileLocalPkgStep verifies the per-format `localpkg:` map compiles into a
-// single LocalPkgInstallStep carrying the format-matched source ref + anchors +
-// the config-driven LocalPkg; a candy with no source for the target format, or a
-// distro with no localpkg-capable format, compiles to nothing.
+// TestCompileLocalPkgStep verifies a candy's `packaging:` section + the target
+// distro's per-format `local_pkg:` block compile into a single
+// LocalPkgInstallStep carrying the published package name + the config-driven
+// LocalPkg; a candy with no packaging section, or a distro with no
+// localpkg-capable format, compiles to nothing.
 func TestCompileLocalPkgStep(t *testing.T) {
 	img := &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "charly-host", Pkg: "pac", Builder: map[string]string{"aur": "ghcr.io/opencharly/arch-builder:latest"}}, DistroDef: testPacDistroDef()}
 	hostCtx := deploykit.HostContext{MachineVenue: true, Distro: "arch"}
 
-	// A candy with no localpkg entry for the target format → nil.
+	// A candy with no packaging section → nil (no published package to obtain).
 	if step := deploykit.CompileLocalPkgStep(testCandy("no-pkg", spec.CandyModel{}, spec.CandyView{}), img, hostCtx); step != nil {
-		t.Errorf("candy with no localpkg: should compile to nil, got %T", step)
+		t.Errorf("candy with no packaging: should compile to nil, got %T", step)
 	}
 
-	// The charly candy's per-format map: pac resolves to pkg/arch.
+	// The charly candy's packaging section: pac resolves the format's local_pkg block.
 	l := testCandy("charly", spec.CandyModel{
 		SourceDir: "/layers/charly",
-		LocalPkg:  map[string]string{"pac": "pkg/arch", "rpm": "pkg/fedora", "deb": "pkg/debian"},
+		Packaging: &spec.Packaging{Name: "charly"},
 	}, spec.CandyView{})
 	step := deploykit.CompileLocalPkgStep(l, img, hostCtx)
 	if step == nil {
-		t.Fatal("compileLocalPkgStep returned nil for a candy with a pac localpkg source")
+		t.Fatal("compileLocalPkgStep returned nil for a candy with a packaging section")
 	}
 	pkg, ok := step.(*spec.LocalPkgInstallStep)
 	if !ok {
 		t.Fatalf("compileLocalPkgStep returned %T, want *LocalPkgInstallStep", step)
 	}
-	if pkg.PkgbuildRef != "pkg/arch" || pkg.CandyName != "charly" || pkg.CandyDir != "/layers/charly" {
+	if pkg.PackageName != "charly" || pkg.CandyName != "charly" || pkg.CandyDir != "/layers/charly" {
 		t.Errorf("step fields = %+v", pkg)
 	}
-	if pkg.ProjectDir == "" {
-		t.Error("ProjectDir should be set from os.Getwd()")
-	}
 	// Format + LocalPkg config resolved from the distro's pac format (config-driven).
-	if pkg.Format != "pac" || pkg.LocalPkg == nil || pkg.LocalPkg.PkgGlob != "*.pkg.tar.zst" {
+	if pkg.Format != "pac" || pkg.LocalPkg == nil || pkg.LocalPkg.DownloadTemplate == "" {
 		t.Errorf("LocalPkg config not resolved from the pac format: Format=%q LocalPkg=%#v", pkg.Format, pkg.LocalPkg)
 	}
 
-	// Same candy on an rpm distro → picks the rpm source from the map.
+	// Same candy on an rpm distro → picks the rpm format's local_pkg block.
 	rpmImg := &buildkit.ResolvedBox{ResolvedBox: spec.ResolvedBox{Name: "charly-fedora", Pkg: "rpm"}, DistroDef: &spec.ResolvedDistro{Format: map[string]*vmshared.FormatDef{
-		"rpm": {LocalPkg: &vmshared.LocalPkgDef{PkgGlob: "*.rpm", SourceSentinel: "*.spec", BuildTemplate: "x", InstallTemplate: "dnf install -y {{.StageDir}}/{{.Glob}}", Probe: "command -v dnf"}},
+		"rpm": {LocalPkg: &vmshared.LocalPkgDef{InstallTemplate: "dnf install -y {{.StageDir}}/{{.Glob}}", Probe: "command -v dnf", DownloadTemplate: "https://opencharly.github.io/charly-fedora/${ARCH}/charly-${ARCH}.rpm"}},
 	}}}
-	if rs, ok := deploykit.CompileLocalPkgStep(l, rpmImg, hostCtx).(*spec.LocalPkgInstallStep); !ok || rs.Format != "rpm" || rs.PkgbuildRef != "pkg/fedora" {
-		t.Errorf("rpm distro should pick pkg/fedora via the format map, got %#v", deploykit.CompileLocalPkgStep(l, rpmImg, hostCtx))
+	if rs, ok := deploykit.CompileLocalPkgStep(l, rpmImg, hostCtx).(*spec.LocalPkgInstallStep); !ok || rs.Format != "rpm" || rs.PackageName != "charly" {
+		t.Errorf("rpm distro should pick the rpm format's local_pkg block, got %#v", deploykit.CompileLocalPkgStep(l, rpmImg, hostCtx))
 	}
 
 	// Distro with a format but NO localpkg block → nil (no native package).
@@ -105,7 +103,7 @@ func TestCompileLocalPkgStep(t *testing.T) {
 // (instead of curling a /usr/local/bin/charly that shadows /usr/bin/charly).
 func TestBuildDeployPlanLocalPkgOrdering(t *testing.T) {
 	l := testCandy("charly", spec.CandyModel{
-		LocalPkg: map[string]string{"pac": "pkg/arch"},
+		Packaging: &spec.Packaging{Name: "charly"},
 		Plan: []spec.Step{
 			{Run: "build", Op: spec.Op{Plugin: "command", PluginInput: map[string]any{"command": "echo install charly"}, RunAs: "root"}},
 		},
@@ -151,19 +149,19 @@ func TestBuildDepPkgsOnHost_EmptyAndDryRun(t *testing.T) {
 	lp := testPacLocalPkgDef()
 	aurDef := &buildkit.BuilderDef{DetectConfig: "aur", InstallTemplate: "pacman -U --noconfirm {{.Glob}}"}
 	// Empty packages: pure no-op regardless of builder/dryrun — never shells out.
-	if pkgs, err := deploykit.BuildDepPkgsOnHost(context.Background(), lp, aurDef, "", nil, "", nil, nil, spec.EmitOpts{}); err != nil || pkgs != nil {
+	if pkgs, err := deploykit.BuildDepPkgsOnHost(context.Background(), lp, "", aurDef, "", nil, "", nil, nil, spec.EmitOpts{}); err != nil || pkgs != nil {
 		t.Errorf("empty packages = (%v, %v), want (nil, nil)", pkgs, err)
 	}
 	// DryRun with packages + builder + def: no build, no error.
-	if pkgs, err := deploykit.BuildDepPkgsOnHost(context.Background(), lp, aurDef, "arch-builder:latest", []string{"cloudflared-bin"}, "", nil, nil, spec.EmitOpts{DryRun: true}); err != nil || pkgs != nil {
+	if pkgs, err := deploykit.BuildDepPkgsOnHost(context.Background(), lp, "", aurDef, "arch-builder:latest", []string{"cloudflared-bin"}, "", nil, nil, spec.EmitOpts{DryRun: true}); err != nil || pkgs != nil {
 		t.Errorf("dry-run = (%v, %v), want (nil, nil)", pkgs, err)
 	}
 	// Packages but no builder image (live): hard error, never a silent drop.
-	if _, err := deploykit.BuildDepPkgsOnHost(context.Background(), lp, aurDef, "", []string{"cloudflared-bin"}, "", nil, nil, spec.EmitOpts{}); err == nil {
+	if _, err := deploykit.BuildDepPkgsOnHost(context.Background(), lp, "", aurDef, "", []string{"cloudflared-bin"}, "", nil, nil, spec.EmitOpts{}); err == nil {
 		t.Error("BuildDepPkgsOnHost with packages but no builder image should error")
 	}
 	// Packages + image but nil builder def: hard error.
-	if _, err := deploykit.BuildDepPkgsOnHost(context.Background(), lp, nil, "arch-builder:latest", []string{"cloudflared-bin"}, "", nil, nil, spec.EmitOpts{}); err == nil {
+	if _, err := deploykit.BuildDepPkgsOnHost(context.Background(), lp, "", nil, "arch-builder:latest", []string{"cloudflared-bin"}, "", nil, nil, spec.EmitOpts{}); err == nil {
 		t.Error("BuildDepPkgsOnHost with nil builder def should error")
 	}
 }

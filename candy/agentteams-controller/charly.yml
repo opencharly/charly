@@ -68,6 +68,8 @@ agentteams-controller:
               description: "Embedding model for spawned agents"
             - name: AGENTTEAMS_MATRIX_APPSERVICE_ENABLED
               description: "0 (default) = legacy registration-token Matrix mode; 1 = Matrix application-service mode (requires an appservice token)"
+            - name: AGENTTEAMS_MATRIX_DOMAIN
+              description: "Matrix server name the controller registers worker/human accounts against (default: matrix-local.agentteams.io:8080). MUST match the homeserver's own CONDUWUIT_SERVER_NAME — agentteams-matrix and agentteams-element already read this same var, so overriding it for the deploy keeps all three in step. Documented as settable on agentteams-matrix; it was absent here, so a deploy that set it moved the homeserver's server_name while the controller kept registering against the old one, and every manager/worker reached phase=Failed."
             - name: AGENTTEAMS_MINIO_USER
               description: "MinIO root user (shared with the agentteams-minio candy; default: admin)"
             - name: AGENTTEAMS_MINIO_PASSWORD
@@ -114,7 +116,6 @@ agentteams-controller:
               env:
                   AGENTTEAMS_PROXY_SOCKET: /run/user/1000/podman/podman.sock
                   AGENTTEAMS_MATRIX_URL: http://127.0.0.1:6167
-                  AGENTTEAMS_MATRIX_DOMAIN: matrix-local.agentteams.io:8080
                   AGENTTEAMS_AI_GATEWAY_ADMIN_URL: http://127.0.0.1:8001
                   AGENTTEAMS_FS_ENDPOINT: http://127.0.0.1:9000
                   AGENTTEAMS_AI_GATEWAY_URL: http://127.0.0.1:8080
@@ -259,6 +260,18 @@ agentteams-controller:
                   export AGENTTEAMS_MATRIX_APPSERVICE_ENABLED="${AGENTTEAMS_MATRIX_APPSERVICE_ENABLED:-0}"
                   export AGENTTEAMS_MANAGER_IMAGE="${AGENTTEAMS_MANAGER_IMAGE:-ghcr.io/opencharly/agentteams-manager:manager}"
                   export AGENTTEAMS_WORKER_IMAGE="${AGENTTEAMS_WORKER_IMAGE:-ghcr.io/opencharly/agentteams-worker:worker}"
+                  # The Matrix server name the controller registers worker/human accounts
+                  # against. MUST match the homeserver's own CONDUWUIT_SERVER_NAME —
+                  # agentteams-matrix and agentteams-element read this same var, so an
+                  # override moves all three together. Deliberately NOT on the service env
+                  # map (supervisord environment= would override the pod's `charly config
+                  # -e` overrides — the design rule stated above); this export supplies the
+                  # :- default, so a deploy-level value wins, which is what
+                  # agentteams-matrix's docs have always promised. Without it, setting the
+                  # var moved the homeserver's server_name while the controller kept
+                  # registering against the old one and every manager/worker hit
+                  # phase=Failed (caught by the check-agentteams-pod bed).
+                  export AGENTTEAMS_MATRIX_DOMAIN="${AGENTTEAMS_MATRIX_DOMAIN:-matrix-local.agentteams.io:8080}"
 
                   # --- Config + agent-fs dirs, derived from $HOME (venue-agnostic) ---
                   # /home/user on the pod, /home/arch on the VM — never hardcode the

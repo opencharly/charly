@@ -1,4 +1,4 @@
-version: 2026.223.1018
+version: 2026.225.1508
 # Canonical repo identity. After the 2026-06 box inversion main imports the three
 # active distro submodules (arch / cachyos / fedora) ONE-DIRECTIONALLY to reference
 # their relocated boxes; the submodules no longer import main as a namespace (they
@@ -1016,7 +1016,7 @@ check-local-vm:
         description: >-
             Guest-as-host proof of the kind:local layer-application path via ShellExecutor +
             HostDeployTarget, run INSIDE the disposable eval-host-vm guest (off the operator's
-            workstation). Boots eval-host-vm, welds charly (add_candy:[charly] → opencharly-git),
+            workstation). Boots eval-host-vm, welds charly (add_candy:[charly] → copy: bin/charly),
             rsyncs the pruned check-local closure (check/eval-host-project/charly.yml + sdk/ + spec/ +
             candy/{check-local-layer,examplestep-deploy-consumer,plugin-example-step,plugin-deploy-local})
             into the guest, then runs `charly --host charly-check-local-vm check run check-local`: the
@@ -1029,12 +1029,11 @@ check-local-vm:
             the nested run proves the kind:local path end-to-end; every side-effect is confined to
             the disposable guest.
         add_candy:
-            # Welded charly (opencharly-git) so the guest has `charly` on PATH + the 48
-            # compiled_plugins; the localpkg build runs host-side (makepkg) + pacman -U into
-            # the guest — the same path check-charly-vm proves.
+            # Welded charly (copy: bin/charly) so the guest has `charly` on PATH + the 48
+            # compiled_plugins — the same path check-charly-vm proves.
             - charly
         install_opts:
-            allow_repo_changes: true # pacman -U auto-resolves opencharly-git repo deps in the guest
+            allow_repo_changes: true
             allow_root_tasks: true
         plan:
             - check: deliver the pruned check-local closure + sdk/ + spec/ into the eval-host-vm guest project dir (host-side rsync over the managed charly-check-local-vm ssh alias — the domain is named after this DEPLOY, not the eval-host-vm entity; cwd = this project per main.go:734)
@@ -1273,10 +1272,9 @@ check-exampledeploy:
         disposable: true
         lifecycle: dev
         description: >-
-            Sole proof of the external (out-of-process) deploy-target lifecycle (Add/Test/Update/Del) over the E3b ExecutorService reverse channel, AND of the F2 executable deploy channel AND the F3 build channel. Composes plugin-example-deploy as an external deploy: substrate (plus examplebuild-localpkg for the F3 leg); Add Invokes the host-built plugin out-of-process with the deployment's InstallPlan views — carrying the serializable per-step IR. The plugin dials back through the SDK Executor to (a) write an apply + a probe marker, (b) WALK + EXECUTE the plan's steps on the host venue (a file-write step lands /tmp/charly-exampledeploy-steps/written and a shell-hook env step lands env.d/plugin-example-deploy.env), (c) PUSH /tmp/charly-exampledeploy-steps/pushed via the reverse-channel PutFile leg, and (d) drive the RunHostStep host-engine reverse leg on examplebuild-localpkg's LocalPkgInstallStep — the host runs the EXISTING build engine (makepkg + pacman -U) and installs charly-f3-witness so /opt/charly-f3-witness/marker lands on the venue. Host-side command probes assert the probe marker, the executed-step effects, the pushed file, and the F3-built package marker; the fresh-rebuild (charly update) re-applies idempotently; teardown (charly fleet del) replays the recorded plugin-script reverse ops so every scratch dir is gone and the charly-f3-witness package is pacman -R'd (zero residue).
+            Sole proof of the external (out-of-process) deploy-target lifecycle (Add/Test/Update/Del) over the E3b ExecutorService reverse channel, AND of the F2 executable deploy channel. Composes plugin-example-deploy as an external deploy: substrate; Add Invokes the host-built plugin out-of-process with the deployment's InstallPlan views — carrying the serializable per-step IR. The plugin dials back through the SDK Executor to (a) write an apply + a probe marker, (b) WALK + EXECUTE the plan's steps on the host venue (a file-write step lands /tmp/charly-exampledeploy-steps/written and a shell-hook env step lands env.d/plugin-example-deploy.env), and (c) PUSH /tmp/charly-exampledeploy-steps/pushed via the reverse-channel PutFile leg. Host-side command probes assert the probe marker, the executed-step effects, and the pushed file; the fresh-rebuild (charly update) re-applies idempotently; teardown (charly fleet del) replays the recorded plugin-script reverse ops so every scratch dir is gone (zero residue).
         add_candy:
             - plugin-example-deploy
-            - examplebuild-localpkg
         plan:
             - check: command=test -f /tmp/charly-exampledeploy/check-exampledeploy/probe && echo EXAMPLEDEPLOY-PROBE-PRESENT
               id: exampledeploy-applied
@@ -1318,29 +1316,21 @@ check-exampledeploy:
               command:
                 command: "cat /tmp/charly-exampledeploy-steps/pushed"
                 in_container: false
-            - check: F3 — the external deploy plugin drove the RunHostStep reverse leg on examplebuild-localpkg's LocalPkgInstallStep; the host built charly-f3-witness with makepkg and installed it with pacman -U, so its marker file is present on the venue
-              id: exampledeploy-f3-buildstep
-              description: F3 build channel — the host ran the EXISTING build engine (makepkg + pacman -U) over the reverse channel and installed the built package's artifact onto the venue
-              stdout:
-                - contains: EXAMPLEBUILD-LOCALPKG-OK
-              context:
-                - runtime
-              command:
-                command: "cat /opt/charly-f3-witness/marker"
-                in_container: false
-# pac localpkg AUTO-RESOLVE witness against the LOCAL charly candy (no @github):
-# deploys candy/charly to a disposable Arch Cloud VM, where the layer's localpkg
-# builds the opencharly-git package from pkg/arch (makepkg on the host) and
-# `pacman -U`'s it onto the guest — pacman -U AUTO-RESOLVES the mandatory repo
-# deps. This is main's own live proof of the localpkg DEPLOY path (the rpm/deb
-# legs are proven by the fedora/debian/ubuntu submodule VM beds).
+# charly candy binary-install witness against the LOCAL charly candy (no @github):
+# deploys candy/charly to a disposable Arch Cloud VM, where the layer's `copy:
+# bin/charly` run step places the in-development binary at /usr/bin/charly. The
+# OS-tracked package install (the former localpkg: map) is GONE — the sdk's
+# localpkg machinery now builds via the `charly generate-packages` plugin
+# (sdk/packagekit), which lands with the nFPM cutover (Phase 3). Until then the
+# copy step is the single binary source, and this bed proves the binary lands on a
+# fresh Arch VM (the plugin-based localpkg + welded-plugins proof returns in Phase 3).
 check-charly-vm:
     vm:
         from: charly-vm
         disposable: true
         lifecycle: dev
         description: >-
-            Sole proof of the pac localpkg DEPLOY auto-resolve path on Arch — opencharly-git built via makepkg and installed with pacman -U auto-resolving the mandatory repo deps. A disposable libvirt Arch cloud VM (ssh.port_auto) overlays the LOCAL candy/charly whose localpkg builds opencharly-git on the host and pacman -U's it into the guest; one command probe asserts opencharly-git/podman/libvirt/tailscale/gocryptfs present, charly resolves to /usr/bin/charly, and charly version runs (LOCALPKG-PAC-AUTORESOLVE-OK).
+            Proves the charly candy installs the in-development binary on a disposable Arch cloud VM via the `copy: bin/charly` run step (the OS-tracked localpkg install is gone — the sdk's localpkg machinery now builds via the generate-packages plugin, landing with the nFPM cutover). One command probe asserts charly resolves to /usr/bin/charly and charly version runs (CHARLY-BINARY-OK).
         add_candy:
             - charly
         install_opts:
@@ -1348,46 +1338,20 @@ check-charly-vm:
             allow_root_tasks: true
         plan:
             - check: |
-                command=pacman -Q opencharly-git >/dev/null 2>&1 &&
-                pacman -Q podman >/dev/null 2>&1 &&
-                pacman -Q libvirt >/dev/null 2>&1 &&
-                pacman -Q tailscale >/dev/null 2>&1 &&
-                pacman -Q gocryptfs >/dev/null 2>&1 &&
                 test "$(command -v charly)" -ef /usr/bin/charly &&
                 charly version &&
-                echo LOCALPKG-PAC-AUTORESOLVE-OK
-              id: localpkg-pac-autoresolve
-              description: charly installed as the opencharly-git pacman package via localpkg, mandatory repo deps auto-resolved by pacman -U
+                echo CHARLY-BINARY-OK
+              id: charly-binary-install
+              description: "charly installed at /usr/bin/charly via the candy's copy: bin/charly run step"
               stdout:
-                - contains: LOCALPKG-PAC-AUTORESOLVE-OK
+                - contains: CHARLY-BINARY-OK
               exit_status: 0
               context:
                 - runtime
               command: |
-                pacman -Q opencharly-git >/dev/null 2>&1 &&
-                pacman -Q podman >/dev/null 2>&1 &&
-                pacman -Q libvirt >/dev/null 2>&1 &&
-                pacman -Q tailscale >/dev/null 2>&1 &&
-                pacman -Q gocryptfs >/dev/null 2>&1 &&
                 test "$(command -v charly)" -ef /usr/bin/charly &&
                 charly version &&
-                echo LOCALPKG-PAC-AUTORESOLVE-OK
-            - check: the welded command plugins are baked beside charly at /usr/lib/charly/plugins so a core welded command dispatches project-less on the opencharly-git install
-              id: welded-command-project-less
-              description: the opencharly-git package bakes the command:<word> plugins (doctor/vm/clean/…) beside the binary at /usr/lib/charly/plugins, so `charly doctor` dispatches project-less on the installed package (FAILS on a package that shipped only the binary)
-              stdout:
-                - contains: WELDED-CMD-PROJECT-LESS-OK
-              exit_status: 0
-              context:
-                - runtime
-              command: |
-                test -x /usr/lib/charly/plugins/plugin-doctor &&
-                test -f /usr/lib/charly/plugins/plugin-doctor.providers &&
-                test -x /usr/lib/charly/plugins/plugin-vm &&
-                test -x /usr/lib/charly/plugins/plugin-clean &&
-                cd /tmp &&
-                charly doctor 2>/dev/null | grep -q 'Container Engine' &&
-                echo WELDED-CMD-PROJECT-LESS-OK
+                echo CHARLY-BINARY-OK
 charly-cli:
     group:
         description: AI check — an agent operates the charly management command surface (build → deploy → status) end-to-end.
@@ -2432,7 +2396,7 @@ check-commands-local:
         disposable: true
         lifecycle: dev
         description: >-
-            Sole proof of cutover C15's three remaining externalized COMMANDs (candy/plugin-clean, plugin-settings, plugin-candy — command:clean / command:settings / command:candy), the sixth-through-eighth welded-command externalizations in the core-externalization program. A disposable kind:local deploy on host: local runs each command host-side with a safe read-only / dry-run / --help invocation. clean + settings + candy are all COMPILED-IN and OWN their commands (each Invoke(OpRun) dispatched in-proc): clean reaches a shared core engine over the "retention" HostBuild seam; settings OWNS its config subsystem directly (its "settings" HostBuild seam is RETIRED — the plugin does the config I/O itself, reaching only verb:credential over the reverse channel); candy owns its ENTIRE logic (the yaml.Node candy-manifest mutation) itself, sharing only the generic kit.SetByDotPath / kit.MappingChild utilities. None uses a hidden core command. Every command exits 0 — proving the externalized commands end-to-end. (`charly version` is excluded — it stays a core command; pkgver() stamps the package version via it.) P15 EXTENSION — the bed also composes candy/plugin-box and exercises the `charly box` command verbs (generate/validate/new/pkg, nested under the box grammar group): one step scaffolds a project + candy + box then drives box validate + box generate to a rendered Containerfile (proving command:new/validate/generate end-to-end, generate via InvokeProvider to the build-generate word), and one proves box pkg dispatches. P14a EXTENSION — the bed also composes candy/plugin-status and exercises the externalized `charly status` (command:status): one step asserts `charly status` + `charly status --json` (exit 0 + a JSON array), proving the status command OWNS the render + the PURE nested overlay and reaches the collectors via InvokeProvider(verb:status-fanout) directly (the "status-substrate" HostBuild seam is DELETED, K-wave 2). K5 EXTENSION — the bed also composes candy/plugin-substrate (already compiled-in for its 5 substrate kinds) and exercises the externalized `charly reap-orphans` (command:reap-orphans): a step asserts exit 0 and the clean-bed "no orphaned ephemerals" output, proving reap-orphans dispatches in-proc (dispatchCommand → Invoke(OpRun)) and its vm-liveness probe reaches the verb:libvirt peer provider over InvokeProvider (F10) rather than a deleted core-private accessor. --DEEP EXTENSION — the bed also exercises `charly clean --deep --dry-run` (the store-wide untagged/dangling-image purge category, closing the CLI-only-interface gap issue #173 identified: unlabeled multi-stage build intermediates accumulate invisibly to the charly-labeled default sweep): a step asserts exit 0 and a "deep:" line reporting a would-remove count + an UPPER-BOUND reclaimable-byte total (RDD-verified live: the naive per-image Size sum can heavily overstate actual freed disk when removed images share layers with the many that remain — pair --deep with --invalidate for the fullest reclaim), proving --deep reaches pruneDeepDanglingImages over the SAME "retention" HostBuild seam as the pre-existing charly-labeled sweep, still touching nothing under --dry-run.
+            Sole proof of cutover C15's three remaining externalized COMMANDs (candy/plugin-clean, plugin-settings, plugin-candy — command:clean / command:settings / command:candy), the sixth-through-eighth welded-command externalizations in the core-externalization program. A disposable kind:local deploy on host: local runs each command host-side with a safe read-only / dry-run / --help invocation. clean + settings + candy are all COMPILED-IN and OWN their commands (each Invoke(OpRun) dispatched in-proc): clean reaches a shared core engine over the "retention" HostBuild seam; settings OWNS its config subsystem directly (its "settings" HostBuild seam is RETIRED — the plugin does the config I/O itself, reaching only verb:credential over the reverse channel); candy owns its ENTIRE logic (the yaml.Node candy-manifest mutation) itself, sharing only the generic kit.SetByDotPath / kit.MappingChild utilities. None uses a hidden core command. Every command exits 0 — proving the externalized commands end-to-end. (`charly version` is excluded — it stays a core command; pkgver() stamps the package version via it.) P15 EXTENSION — the bed also composes candy/plugin-box and exercises the `charly box` command verbs (generate/validate/new, nested under the box grammar group): one step scaffolds a project + candy + box then drives box validate + box generate to a rendered Containerfile (proving command:new/validate/generate end-to-end, generate via InvokeProvider to the build-generate word). P14a EXTENSION — the bed also composes candy/plugin-status and exercises the externalized `charly status` (command:status): one step asserts `charly status` + `charly status --json` (exit 0 + a JSON array), proving the status command OWNS the render + the PURE nested overlay and reaches the collectors via InvokeProvider(verb:status-fanout) directly (the "status-substrate" HostBuild seam is DELETED, K-wave 2). K5 EXTENSION — the bed also composes candy/plugin-substrate (already compiled-in for its 5 substrate kinds) and exercises the externalized `charly reap-orphans` (command:reap-orphans): a step asserts exit 0 and the clean-bed "no orphaned ephemerals" output, proving reap-orphans dispatches in-proc (dispatchCommand → Invoke(OpRun)) and its vm-liveness probe reaches the verb:libvirt peer provider over InvokeProvider (F10) rather than a deleted core-private accessor. --DEEP EXTENSION — the bed also exercises `charly clean --deep --dry-run` (the store-wide untagged/dangling-image purge category, closing the CLI-only-interface gap issue #173 identified: unlabeled multi-stage build intermediates accumulate invisibly to the charly-labeled default sweep): a step asserts exit 0 and a "deep:" line reporting a would-remove count + an UPPER-BOUND reclaimable-byte total (RDD-verified live: the naive per-image Size sum can heavily overstate actual freed disk when removed images share layers with the many that remain — pair --deep with --invalidate for the fullest reclaim), proving --deep reaches pruneDeepDanglingImages over the SAME "retention" HostBuild seam as the pre-existing charly-labeled sweep, still touching nothing under --dry-run.
         plan:
             - check: command=charly settings list exits 0 and lists the resolved runtime-config keys (proving the externalized settings command owns the get/set/list/reset/path grammar + owns its config subsystem directly, the "settings" HostBuild seam retired)
               id: settings-list-runs
@@ -2479,14 +2443,6 @@ check-commands-local:
                 - runtime
               command:
                 command: "rm -rf /tmp/charly-p15-boxbed && ${CHARLY_BIN} box new project /tmp/charly-p15-boxbed && ${CHARLY_BIN} -C /tmp/charly-p15-boxbed box new candy my-candy && ${CHARLY_BIN} -C /tmp/charly-p15-boxbed candy add-rpm my-candy curl && ${CHARLY_BIN} -C /tmp/charly-p15-boxbed box new box my-box --base quay.io/fedora/fedora:43 --candy my-candy && ${CHARLY_BIN} -C /tmp/charly-p15-boxbed box validate && ${CHARLY_BIN} -C /tmp/charly-p15-boxbed box generate my-box && test -f /tmp/charly-p15-boxbed/.build/my-box/Containerfile"
-                in_container: false
-            - check: charly box pkg --help exits 0, proving the box command plugin pkg verb is registered and dispatches as a NESTED command under the box grammar group (candy/plugin-box, P15)
-              id: box-pkg-dispatches
-              exit_status: 0
-              context:
-                - runtime
-              command:
-                command: ${CHARLY_BIN} box pkg --help
                 in_container: false
             - check: charly box authoring verbs (set/add-candy/rm-candy/write/cat) dispatch NESTED under the box grammar group and mutate a scratch project's charly.yml byte-faithfully, proving the authoring command plugin (candy/plugin-authoring, command:set/add-candy/rm-candy/write/cat, P14b) owns the yaml.Node candy-list edits (kit.MappingChild / kit.SaveYAMLNodeFile) + the dot-path writer (kit.SetByDotPath) + the project-rooted file escape hatch (resolveProjectFile) host-side — add-candy appends, rm-candy removes (curl absent after), set writes defaults.registry, write+cat round-trip a file. fetch/refresh stay covered by the Go tests + the golden-parity spike (they reenter core over HostBuild("cli") and hit the network, unsuitable for this bed)
               id: box-authoring-dispatches
