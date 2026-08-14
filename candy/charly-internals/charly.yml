@@ -95,7 +95,7 @@ agents-skill:
                   | Fresh validator / teammate | sub-agent or team teammate with the agent brief | fresh agent thread with the role toml | a fresh separate `kimi` session (interactive or `kimi -p`) briefed with the agent `.md` by path — context isolation is what makes it independent |
                   | Dynamic workflows | `.claude/workflows/*.js` (run `/<name>`) | re-derived per thread | re-derived per session (no workflow runtime) |
                   | Teams | `~/.claude/teams/` (experimental) | concurrent fresh threads | concurrent fresh sessions |
-                  | Gates | hooks in `.claude/settings.json` + `permissions.allow` + the auto-mode classifier | sandbox + on-request approvals (`.codex/config.toml`) | hooks + `[[permission.rules]]` in user-level `~/.kimi-code/config.toml` (no project-level config; repo-guarded delegation to `.claude/hooks/`) — no auto-mode classifier |
+                  | Gates | `permissions.allow` + the auto-mode classifier (`.claude/settings.json` wires NO hooks — the gate scripts in `.claude/hooks/` are invoked by the other harnesses, not by Claude Code) | sandbox + on-request approvals (`.codex/config.toml`) | hooks + `[[permission.rules]]` in user-level `~/.kimi-code/config.toml` (no project-level config; repo-guarded delegation to `.claude/hooks/`) — no auto-mode classifier |
                   | Hook events | UserPromptSubmit / PreToolUse / Stop / TaskCreated / TaskCompleted / TeammateIdle | — (approvals instead) | UserPromptSubmit / PreToolUse / Stop / SubagentStart / SubagentStop |
 
                   **Harness-agnostic invariants:** the agent briefs in
@@ -593,10 +593,18 @@ agents-skill:
                   is no reminder layer — rule knowledge lives in the project rulebook and
                   skills, loaded fresh by every agent at session start.
 
-                  | Hook | Event | Role |
+                  The two gate scripts live in `.claude/hooks/` but are **not wired in Claude Code** —
+                  `.claude/settings.json` declares no `PreToolUse` hooks, so under Claude Code they
+                  fire on nothing. They remain wired in the harnesses that invoke them:
+                  `.reasonix/settings.json`, and `~/.kimi-code/config.toml`, which delegates to
+                  `.claude/hooks/` when the repo markers are present. The discipline they encode is
+                  judged for every harness by the fresh `pr-validator` at merge and by GitHub branch
+                  protection, which is why unwiring them in Claude Code costs no enforceable gate.
+
+                  | Hook | Event (where wired) | Role |
                   |---|---|---|
-                  | `pre-commit-gate.sh` | `PreToolUse(Bash)` | blocks hook bypass (`--no-verify`/`-n`/`core.hooksPath`), untokenizable commit commands, configured Go lint failures for staged Go modules, and a new-or-grown `charly/*_aliases.go` file or declaration-form kit-alias line (the ZERO-ALIASES gate) |
-                  | `pre-push-gate.sh` | `PreToolUse(Bash)` | blocks force-push and a direct push to `main` |
+                  | `pre-commit-gate.sh` | `PreToolUse(Bash)` in `.reasonix` / kimi; **unwired in Claude Code** | blocks hook bypass (`--no-verify`/`-n`/`core.hooksPath`), untokenizable commit commands, configured Go lint failures for staged Go modules, and a new-or-grown `charly/*_aliases.go` file or declaration-form kit-alias line (the ZERO-ALIASES gate) |
+                  | `pre-push-gate.sh` | `PreToolUse(Bash)` in `.reasonix` / kimi; **unwired in Claude Code** | blocks force-push and a direct push to `main` |
 
                   Attribution identity/confidence, change class, CHANGELOG coverage,
                   architecture, and R0–R10 evidence belong exclusively to the fresh
@@ -4463,9 +4471,14 @@ go-skill:
               the lock open fail with ENOENT, which golangci-lint reports as "parallel golangci-lint
               is running" — a false positive, not a real parallel run. Create the TMPDIR dir first
               (or pass `--allow-parallel-runners` with a fresh cache). See `/charly-internals:go-quality`.
-            - The pre-commit-gate hook (`.claude/hooks/pre-commit-gate.sh`) already redirects its
-              lint temp dirs to `~/.cache/charly-gate-lint/` and creates the TMPDIR/GOTMPDIR
-              subdirs, so a clean tree can commit on such a host.
+            - `.claude/hooks/pre-commit-gate.sh` (the staged-Go-lint discipline backstop) redirects
+              its own lint temp dirs to `~/.cache/charly-gate-lint/` and creates the TMPDIR/GOTMPDIR
+              subdirs, so it is unaffected by the cap wherever it runs. Note it is NOT wired in
+              Claude Code — `.claude/settings.json` wires no `PreToolUse` hooks, so under Claude
+              Code the script fires on nothing and nothing runs it automatically. It stays live in
+              the other harnesses that invoke it (`.reasonix/settings.json`, and `~/.kimi-code/config.toml`
+              which delegates to `.claude/hooks/`). Running Go work under Claude Code, apply the two
+              bullets above yourself.
 
             ## R9 — deployed binary matches source; runtime deps live in the PKGBUILD
 
@@ -5293,15 +5306,12 @@ go-quality-skill:
             smoke is green at commit time. Doctrine: `/charly-internals:agents` "Hooks doctrine".
 
             **The hook's lint temp dirs live on the root fs.** The hook redirects its golangci-lint
-            run to a per-user cache (`~/.cache/charly-gate-lint/`) and sets `GOTMPDIR`/`TMPDIR` to
-            subdirs it creates there — the system temp dir is frequently a small tmpfs (or a sandbox
-            caps its writes), and the lint build needs far more than a tmpfs can hold. It also
-            creates the `TMPDIR`/`GOTMPDIR` subdirs before running golangci-lint: golangci-lint v2
-            locks at `$TMPDIR/golangci-lint.lock`, and a missing TMPDIR makes the lock open fail
-            with ENOENT, which golangci-lint reports as "parallel golangci-lint is running" — a
-            false positive that blocks every commit on hosts where the dir does not pre-exist.
-            Never diagnose that message as a real parallel run without first checking whether
-            `$TMPDIR` exists.
+            run to a per-user cache (`~/.cache/charly-gate-lint/`) and creates the `TMPDIR`/`GOTMPDIR`
+            subdirs there before running golangci-lint, so the lint never writes into a capped system
+            temp dir. The constraint that motivates it — the per-command write cap, and the
+            "parallel golangci-lint is running" message that is really an ENOENT on a missing
+            `$TMPDIR` directory — is stated once in `/charly-internals:go` "Environment constraints —
+            sandboxed /tmp + Go temp dirs"; see there for the diagnosis and the fix.
 
             ## Cross-References
 

@@ -161,7 +161,7 @@ Delegation is fresh context without stopping — spawn a teammate or sub-agent f
 
 ## Hooks
 
-Hooks enforce deterministic command mechanics only — `.claude/hooks/pre-commit-gate.sh` and `pre-push-gate.sh` (hook bypass, force-push, direct-main push, untokenizable commits, staged lint, alias forms). Attribution truth, change class, CHANGELOG coverage, architecture, and R0–R10 proof are judged by the fresh `pr-validator`, never by hook regexes; there is no reminder layer — rule knowledge lives in this file and the skills. Per-directory CLAUDE.md files are thin signposts naming that area's skills; they restate no rule.
+Hooks enforce deterministic command mechanics only — `.claude/hooks/pre-commit-gate.sh` and `pre-push-gate.sh` (hook bypass, force-push, direct-main push, untokenizable commits, staged lint, alias forms). **They are not wired in Claude Code:** `.claude/settings.json` declares no `PreToolUse` hooks, so under this harness they fire on nothing. They stay wired in the harnesses that invoke them (`.reasonix/settings.json`, and `~/.kimi-code/config.toml`, which delegates to `.claude/hooks/`). No enforceable gate is lost, because the same discipline is judged for every harness by the fresh `pr-validator` at merge and by GitHub branch protection — which is where it binds regardless of harness. Attribution truth, change class, CHANGELOG coverage, architecture, and R0–R10 proof are judged by that validator, never by hook regexes; there is no reminder layer — rule knowledge lives in this file and the skills. Per-directory CLAUDE.md files are thin signposts naming that area's skills; they restate no rule.
 
 ## AI Attribution (Fedora Policy Compliant)
 
