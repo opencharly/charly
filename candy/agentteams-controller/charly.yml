@@ -116,7 +116,6 @@ agentteams-controller:
               env:
                   AGENTTEAMS_PROXY_SOCKET: /run/user/1000/podman/podman.sock
                   AGENTTEAMS_MATRIX_URL: http://127.0.0.1:6167
-                  AGENTTEAMS_MATRIX_DOMAIN: matrix-local.agentteams.io:8080
                   AGENTTEAMS_AI_GATEWAY_ADMIN_URL: http://127.0.0.1:8001
                   AGENTTEAMS_FS_ENDPOINT: http://127.0.0.1:9000
                   AGENTTEAMS_AI_GATEWAY_URL: http://127.0.0.1:8080
@@ -264,10 +263,12 @@ agentteams-controller:
                   # The Matrix server name the controller registers worker/human accounts
                   # against. MUST match the homeserver's own CONDUWUIT_SERVER_NAME —
                   # agentteams-matrix and agentteams-element read this same var, so an
-                  # override moves all three together. The service env: map above sets the
-                  # literal default; this export lets a deploy-level value win, which is
-                  # what agentteams-matrix's docs have always promised. Without it, setting
-                  # the var moved the homeserver's server_name while the controller kept
+                  # override moves all three together. Deliberately NOT on the service env
+                  # map (supervisord environment= would override the pod's `charly config
+                  # -e` overrides — the design rule stated above); this export supplies the
+                  # :- default, so a deploy-level value wins, which is what
+                  # agentteams-matrix's docs have always promised. Without it, setting the
+                  # var moved the homeserver's server_name while the controller kept
                   # registering against the old one and every manager/worker hit
                   # phase=Failed (caught by the check-agentteams-pod bed).
                   export AGENTTEAMS_MATRIX_DOMAIN="${AGENTTEAMS_MATRIX_DOMAIN:-matrix-local.agentteams.io:8080}"
