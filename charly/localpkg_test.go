@@ -8,12 +8,14 @@ import (
 	"github.com/opencharly/spec/spec"
 )
 
-// The pure localpkg-mechanism tests (ResolveLocalPkgDir, BuildLocalPkgOnHost,
-// TransferAndInstallPkgs, VenueHasPkgManager, ExecLocalPkgInstall,
-// RenderLocalPkgImageInstall) moved to sdk/deploykit/localpkg_test.go (W3) —
-// they exercise ONLY deploykit.CandyModel/buildkit.ResolvedBox-adjacent SDK
-// types, no *Config/registry. What stays HERE needs the loader (LoadBuildConfigForBox),
-// the live *Candy concrete type, or a core-only entry point (ociEmitStep).
+// The pure localpkg-mechanism tests (TransferAndInstallPkgs, VenueHasPkgManager,
+// ExecLocalPkgInstall, RenderLocalPkgImageInstall) moved to
+// sdk/deploykit/localpkg_test.go (W3) — they exercise ONLY
+// deploykit.CandyModel/buildkit.ResolvedBox-adjacent SDK types, no
+// *Config/registry. The source-build functions (ResolveLocalPkgDir,
+// BuildLocalPkgOnHost) were removed with the nFPM cutover (the plugin builds now).
+// What stays HERE needs the loader (LoadBuildConfigForBox), the live *Candy
+// concrete type, or a core-only entry point (ociEmitStep).
 
 // TestCompileLocalPkgStep / TestBuildDeployPlanLocalPkgOrdering relocated to
 // candy/plugin-fleet (#55 decoupling, Batch A) — they asserted
@@ -32,8 +34,8 @@ import (
 // machinery remains.
 func testPacLocalPkgDef() *spec.LocalPkg {
 	return &spec.LocalPkg{
-		InstallTemplate: "pacman -U --noconfirm {{.StageDir}}/{{.Glob}}",
-		Probe:           "command -v pacman",
+		InstallTemplate:  "pacman -U --noconfirm {{.StageDir}}/{{.Glob}}",
+		Probe:            "command -v pacman",
 		DownloadTemplate: "https://opencharly.github.io/charly-arch/${ARCH}/charly-${ARCH}.pkg.tar.zst",
 	}
 }

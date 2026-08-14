@@ -1016,7 +1016,7 @@ check-local-vm:
         description: >-
             Guest-as-host proof of the kind:local layer-application path via ShellExecutor +
             HostDeployTarget, run INSIDE the disposable eval-host-vm guest (off the operator's
-            workstation). Boots eval-host-vm, welds charly (add_candy:[charly] → opencharly-git),
+            workstation). Boots eval-host-vm, welds charly (add_candy:[charly] → copy: bin/charly),
             rsyncs the pruned check-local closure (check/eval-host-project/charly.yml + sdk/ + spec/ +
             candy/{check-local-layer,examplestep-deploy-consumer,plugin-example-step,plugin-deploy-local})
             into the guest, then runs `charly --host charly-check-local-vm check run check-local`: the
@@ -1029,12 +1029,11 @@ check-local-vm:
             the nested run proves the kind:local path end-to-end; every side-effect is confined to
             the disposable guest.
         add_candy:
-            # Welded charly (opencharly-git) so the guest has `charly` on PATH + the 48
-            # compiled_plugins; the localpkg build runs host-side (makepkg) + pacman -U into
-            # the guest — the same path check-charly-vm proves.
+            # Welded charly (copy: bin/charly) so the guest has `charly` on PATH + the 48
+            # compiled_plugins — the same path check-charly-vm proves.
             - charly
         install_opts:
-            allow_repo_changes: true # pacman -U auto-resolves opencharly-git repo deps in the guest
+            allow_repo_changes: true
             allow_root_tasks: true
         plan:
             - check: deliver the pruned check-local closure + sdk/ + spec/ into the eval-host-vm guest project dir (host-side rsync over the managed charly-check-local-vm ssh alias — the domain is named after this DEPLOY, not the eval-host-vm entity; cwd = this project per main.go:734)
