@@ -3480,7 +3480,8 @@ git-workflow-skill:
             Every change to an OpenCharly repo lands through ONE discipline: a **pull request**
             that a FRESH `pr-validator` agent independently validates and merges. A **direct
             push to `main` is FORBIDDEN and mechanically disabled** — GitHub branch protection
-            (`enforce_admins`) + the `pre-push-gate` block it in every repo. The **R10 pass
+            (`enforce_admins`) block it in every repo (the `pre-push-gate` adds a local
+            backstop in the harnesses that wire it — NOT Claude Code). The **R10 pass
             authorizes OPENING the PR, never a self-merge**: the two-step landing separates the
             author (who opens the PR) from the fresh evaluator (who validates, merges, tags).
             This skill is the mechanics; the project rulebook "Post-Execution Policies" (`AGENTS.md` / `CLAUDE.md`) carries the
@@ -3490,7 +3491,7 @@ git-workflow-skill:
 
             ## Non-negotiable invariants
 
-            - **No direct push to `main`** (the project rulebook's PR-only landing mandate — see "Post-Execution Policies"). Enforced by GitHub branch protection (the `charly/pr-validator` status + a PR + linear history + `enforce_admins`) and the `pre-push-gate` locally. Organization-wide apply/verify is owned only by `opencharly/.github/scripts/branch-protection.sh`.
+            - **No direct push to `main`** (the project rulebook's PR-only landing mandate — see "Post-Execution Policies"). Enforced by GitHub branch protection (the `charly/pr-validator` status + a PR + linear history + `enforce_admins`), which is what makes it mechanical; the `pre-push-gate` adds a local backstop only in the harnesses that wire it (`.reasonix`, kimi) — it is NOT wired under Claude Code. Organization-wide apply/verify is owned only by `opencharly/.github/scripts/branch-protection.sh`.
             - **Never force-push, on any branch, ever** (mandate, same rulebook section). `main` only fast-forwards via the validator's squash-merge; a `feat/` branch, once pushed, advances only by ADDING commits (the author's change, any review-round fix commits, then the evaluator's merge-time version stamp), and the squash-merge collapses them. A stale `feat/` catches up with `gh pr update-branch` (a merge, NOT a rebase-force); tags are add-only. **Amending a `feat/` branch is a normal authoring action — legal until the first push** (amending a pushed branch would require a force-push, which is forbidden).
             - **R10-gated; the merge requires the fresh `pr-validator`'s green status.** R10 PASS authorizes opening the PR (with pasted evidence); a rule violation or R10 FAIL means no green `charly/pr-validator` status and no merge — fix in the same tree, re-run R10, re-push; the status resets and the evaluator re-runs.
             - **Zero warnings is part of R10** (project rulebook R1). A version-mismatch warning clears with `charly box reconcile`; any other warning gets `/charly-internals:root-cause-analyzer` then a real fix — "warning" is never an accepted end state.
@@ -3702,9 +3703,12 @@ git-workflow-skill:
                     UNPUSHED — the "amend only before the first push" invariant above. THEN push
                     `feat/<slug>` and open the PRs (B1 step 1; multi-repo order = B2).
 
-                  Nothing pre-bed ever ships, and every intermediate commit passes the PreToolUse
-                  tier gate TRUTHFULLY at the stage it was made — the tier only ever moves UP, to
-                  match proof that now exists.
+                  Nothing pre-bed ever ships, and every intermediate commit states its attribution
+                  tier TRUTHFULLY at the stage it was made — the tier only ever moves UP, to match
+                  proof that now exists. No hook enforces this in any harness: the gate scripts
+                  contain no tier logic (`gate_test.py` asserts attribution text is ALLOWed as
+                  validator-owned), so tier truth is judged by the fresh `pr-validator`, per the
+                  rulebook's "never by hook regexes".
 
                   ## B4 — sync to upstream + prune (per repo: main, sdk, plugins, docs, box/*, pkg/*)
 
@@ -5298,12 +5302,16 @@ go-quality-skill:
 
             `go test ./...` + `golangci-lint run` + `task build:binary` are smoke, not the gate — the gate is `charly check run <bed>` on the bed(s) that exercise the change, disposable-only, fresh-rebuild, zero warnings, pasted proof. The bed-selection matrix (incl. cross-cutting fan-out by owner) is owned by `/charly-check:check` "R10 gate by change class"; see also `/charly-internals:cutover-policy`.
 
-            **A mechanical pre-commit backstop is separate from the R10 gate.** The `pre-commit-gate.sh`
-            hook (`.claude/hooks/`) runs the CONFIGURED `golangci-lint run` on every module a commit's
-            `*.go` change touches and BLOCKS a commit that is not lint-clean (fail-open when golangci-lint is
-            absent) — so a lint-dirty commit can't land at all. That backstop does NOT replace the bed R10
-            gate (a green linter still proves compilation, not behaviour); it just guarantees the `golangci-lint`
-            smoke is green at commit time. Doctrine: `/charly-internals:agents` "Hooks doctrine".
+            **A mechanical pre-commit backstop exists in SOME harnesses, and is separate from the R10
+            gate.** The `pre-commit-gate.sh` hook (`.claude/hooks/`) runs the CONFIGURED `golangci-lint
+            run` on every module a commit's `*.go` change touches and blocks a commit that is not
+            lint-clean (fail-open when golangci-lint is absent). **It is NOT wired under Claude Code** —
+            `.claude/settings.json` declares no `PreToolUse` hooks — so under this harness a lint-dirty
+            commit lands and nothing stops it; run the linter yourself. It is wired in
+            `.reasonix/settings.json` and via `~/.kimi-code/config.toml`, which delegates to
+            `.claude/hooks/`. Where it does run, it does NOT replace the bed R10 gate (a green linter
+            proves compilation, not behaviour); it only guarantees the `golangci-lint` smoke is green at
+            commit time. Doctrine: `/charly-internals:agents` "Hooks doctrine".
 
             **The hook's lint temp dirs live on the root fs.** The hook redirects its golangci-lint
             run to a per-user cache (`~/.cache/charly-gate-lint/`) and creates the `TMPDIR`/`GOTMPDIR`
@@ -9187,12 +9195,18 @@ pr-validator-agent:
                   body-move + inventory, stays a blocker. No "permanent residue" framing (a
                   K-wave exit + a tracked task is required). Pre-existing alias files / kit
                   imports = migration INVENTORY (not blockers); NEW/GROWN ones (outside the
-                  migration exception) = blockers. **The `pre-commit-gate.sh` ZERO-ALIASES hook
-                  is the mechanical floor under this check**: it blocks a NEW `charly/*_aliases.go`
-                  file and a declaration-form kit-alias line (`type X = kit.Y` / `var x = kit.Y`)
-                  tier-independently, fail-open — a hook block is a HARD FAIL (never a workaround
-                  target), and a hook ALLOW does NOT discharge the validator's judgment, because
-                  IMPORT-PURITY of a plain kit IMPORT/CALL is validator-judged, not hook-gated.
+                  migration exception) = blockers. **Do NOT assume a mechanical floor under this
+                  check.** The `pre-commit-gate.sh` ZERO-ALIASES hook blocks a NEW
+                  `charly/*_aliases.go` file and a declaration-form kit-alias line (`type X = kit.Y` /
+                  `var x = kit.Y`) tier-independently, fail-open — but it is **NOT wired under Claude
+                  Code**, where validators normally run (`.claude/settings.json` declares no
+                  `PreToolUse` hooks). It is wired in `.reasonix/settings.json` and via
+                  `~/.kimi-code/config.toml`. So under Claude Code this check is ENTIRELY your
+                  judgment and nothing has pre-screened the diff — inspect every staged
+                  `charly/*.go` change yourself. Where the hook does run, a hook block is a HARD FAIL
+                  (never a workaround target), and a hook ALLOW still does NOT discharge your
+                  judgment, because IMPORT-PURITY of a plain kit IMPORT/CALL is validator-judged,
+                  not hook-gated.
                 - **PER-ITEM TRACE (mandatory in the POSTED comment).** For each staged
                   `charly/*.go` change, the POSTED validation comment carries an explicit line
                   per item: any new/grown alias file (→ blocker); any new kit import (→ blocker
