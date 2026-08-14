@@ -94,6 +94,32 @@ if shutil.which("golangci-lint") is not None:
     expect("commit: lint-clean Go allowed", gate(COMMIT_GATE, f"git -C {good} commit -m x"), "ALLOW")
     shutil.rmtree(good, ignore_errors=True)
 
+    # The lint cache must land on the root fs (~/.cache/charly-gate-lint/), not
+    # the system temp dir: /tmp is frequently a small tmpfs (or a sandbox caps
+    # its writes) and the lint build needs far more than a tmpfs can hold. With
+    # HOME redirected to a temp dir, the hook must create the cache root there —
+    # the pre-fix hook used a bare TemporaryDirectory under /tmp and never did.
+    cache_home = tempfile.mkdtemp(prefix="gate-test-home-")
+    cached = repo(go_module=True)
+    with open(os.path.join(cached, "main.go"), "w") as stream:
+        stream.write("package main\n\nfunc main() { helper() }\nfunc helper() {}\n")
+    subprocess.run(["git", "-C", cached, "add", "main.go"], capture_output=True)
+    env = dict(os.environ)
+    env["HOME"] = cache_home
+    env["GOMODCACHE"] = os.path.join(cache_home, "go", "pkg", "mod")
+    env["GOPATH"] = os.path.join(cache_home, "go")
+    result = subprocess.run(
+        [COMMIT_GATE],
+        input=json.dumps({"tool_input": {"command": f"git -C {cached} commit -m x"}}),
+        capture_output=True, text=True, cwd=cached, env=env,
+    )
+    expect("commit: lint-clean Go with redirected HOME allowed",
+           "BLOCK" if result.returncode == 2 else "ALLOW", "ALLOW")
+    expect("commit: lint cache dir created under the redirected HOME",
+           os.path.isdir(os.path.join(cache_home, ".cache", "charly-gate-lint")), True)
+    shutil.rmtree(cached, ignore_errors=True)
+    shutil.rmtree(cache_home, ignore_errors=True)
+
 
 # --- ZERO-ALIASES gate tests (charly superproject shape; no go.mod so the lint
 # gate does not interfere — the alias gate is tested in isolation) ---

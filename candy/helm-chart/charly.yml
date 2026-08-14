@@ -1,0 +1,64 @@
+helm-chart:
+    candy:
+        version: 2026.225.1707
+        description: |
+            Installs a real chart (prometheus-pushgateway) into the k3s cluster via the
+            external helm-release install step, after waiting in-venue for the node to be
+            Ready. This is the check-helm-vm bed's install leg: the bed's own plan runs in
+            verify-only mode (mutating steps skipped) and fleet add lowers only CANDY
+            plans' run: steps, so the mutating install must live in a candy whose run:
+            steps execute during fleet add — never in the bed's own plan. The k3s-server
+            candy's node-ready check is a check: step that does not run during fleet add,
+            so this candy waits for the node itself (kubectl wait, no sleeps) before the
+            helm upgrade --install --wait can schedule the chart's pods.
+        require:
+            - k3s-server
+            # plugin-helm serves the step:helm-release word over the provider registry —
+            # requiring it puts it in the deploy's scanned candy set so loadProjectPlugins
+            # builds + connects it before the install timeline dispatches the step.
+            - plugin-helm
+        plan:
+            - run: wait for the k3s node to be Ready in-venue — the k3s-server candy's node-ready check step does not run during fleet add, so this candy waits itself
+              id: hc-wait-node-ready
+              command: |
+                  set -euo pipefail
+                  export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+                  # The kubeconfig lands when the k3s API server starts, which can be
+                  # seconds-to-minutes after the k3s service starts — so poll /readyz
+                  # (bounded, 1s cadence — the same file-existence synchronization
+                  # primitive the k3s-server artifact retrieval uses) until the
+                  # apiserver answers, then let kubectl wait for the node.
+                  deadline=$(( $(date +%s) + 300 ))
+                  until /usr/local/bin/kubectl get --raw /readyz >/dev/null 2>&1; do
+                    if [ "$(date +%s)" -ge "$deadline" ]; then
+                      echo "k3s apiserver did not become ready within 300s" >&2
+                      exit 1
+                    fi
+                    sleep 1
+                  done
+                  /usr/local/bin/kubectl wait --for=condition=Ready node --all --timeout=300s
+              context:
+                  - deploy
+            - run: install the prometheus-pushgateway chart via the external helm-release install step — the deploy-context run-step sugar (the helm-release word) lowers to the F3 external step-kind and Invokes the plugin's OpExecute over the E3b reverse channel IN-VENUE (helm upgrade --install against the guest's own k3s kubeconfig)
+              id: hc-helm-release-install
+              context:
+                  - deploy
+              helm-release:
+                  repo: https://prometheus-community.github.io/helm-charts
+                  chart: prometheus-pushgateway
+                  release: web-pushgateway
+                  namespace: web
+                  wait: true
+                  timeout: 5m
+            # ADE: the candy that installs the release also asserts it exists (R3 — the
+            # bed's own plan keeps only the deeper status/revision assertions). The verb
+            # is EXEC-based and probes the live cluster, so it runs under check-live
+            # (runtime context) and skips visibly under `charly check box` (no cluster).
+            - check: the prometheus-pushgateway release is deployed in the web namespace
+              id: hc-release-exists
+              context:
+                  - runtime
+              helm:
+                  method: release-exists
+                  release: web-pushgateway
+                  namespace: web

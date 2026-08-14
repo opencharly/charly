@@ -50,8 +50,12 @@ agentteams-controller:
               description: "AgentTeams admin password; self-provisioned on ~/.agentteams/controller/.admin-password when unset"
             - name: AGENTTEAMS_MANAGER_IMAGE
               description: "Container image ref the controller spawns the default Manager from (e.g. ghcr.io/opencharly/agentteams-manager:manager)"
+            - name: AGENTTEAMS_WORKER_IMAGE
+              description: "Container image ref the controller spawns Workers from (e.g. ghcr.io/opencharly/agentteams-worker:worker)"
             - name: AGENTTEAMS_MANAGER_RUNTIME
               description: "Manager agent runtime (default: openclaw)"
+            - name: AGENTTEAMS_DEFAULT_WORKER_RUNTIME
+              description: "Default Worker agent runtime when a Worker CR omits spec.runtime (default: openclaw)"
             - name: AGENTTEAMS_LLM_PROVIDER
               description: "LLM provider for the manager/worker agents (qwen | openai-compat)"
             - name: AGENTTEAMS_LLM_API_KEY
@@ -251,6 +255,7 @@ agentteams-controller:
                   # the local tags the agentteams-manager/worker boxes build to.
                   export AGENTTEAMS_DEFAULT_MODEL="${AGENTTEAMS_DEFAULT_MODEL:-gpt-5-mini}"
                   export AGENTTEAMS_MANAGER_RUNTIME="${AGENTTEAMS_MANAGER_RUNTIME:-openclaw}"
+                  export AGENTTEAMS_DEFAULT_WORKER_RUNTIME="${AGENTTEAMS_DEFAULT_WORKER_RUNTIME:-openclaw}"
                   export AGENTTEAMS_MATRIX_APPSERVICE_ENABLED="${AGENTTEAMS_MATRIX_APPSERVICE_ENABLED:-0}"
                   export AGENTTEAMS_MANAGER_IMAGE="${AGENTTEAMS_MANAGER_IMAGE:-ghcr.io/opencharly/agentteams-manager:manager}"
                   export AGENTTEAMS_WORKER_IMAGE="${AGENTTEAMS_WORKER_IMAGE:-ghcr.io/opencharly/agentteams-worker:worker}"
