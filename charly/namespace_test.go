@@ -8,7 +8,7 @@ import (
 // (flat root imports) and single-key maps (namespaced child imports).
 func TestImportList_Unmarshal(t *testing.T) {
 	root := t.TempDir()
-	writeFixture(t, root, "charly.yml", `version: 2026.223.1018
+	writeFixture(t, root, "charly.yml", `version: 2026.225.1508
 import:
   - build.yml
   - sub: ./sub.yml
@@ -16,7 +16,7 @@ import:
 	writeFixture(t, root, "build.yml", `defaults:
   build: [rpm]
 `)
-	writeFixture(t, root, "sub.yml", `version: 2026.223.1018
+	writeFixture(t, root, "sub.yml", `version: 2026.225.1508
 widget:
   candy:
     base: quay.io/fedora/fedora:43
@@ -53,7 +53,7 @@ widget:
 // charly's to test, what ResolveBox makes of it is plugin-build's).
 func TestResolveImageRef_Qualified(t *testing.T) {
 	root := t.TempDir()
-	writeFixture(t, root, "charly.yml", `version: 2026.223.1018
+	writeFixture(t, root, "charly.yml", `version: 2026.225.1508
 import:
   - sub: ./sub.yml
 app:
@@ -63,7 +63,7 @@ app:
     distro: [fedora]
     candy: []
 `)
-	writeFixture(t, root, "sub.yml", `version: 2026.223.1018
+	writeFixture(t, root, "sub.yml", `version: 2026.225.1508
 widget:
   candy:
     base: quay.io/fedora/fedora:43
@@ -96,7 +96,7 @@ widget:
 // cycle-broken at load (the shared resolved-ref cache).
 func TestImportNamespace_MutualCycle(t *testing.T) {
 	root := t.TempDir()
-	writeFixture(t, root, "charly.yml", `version: 2026.223.1018
+	writeFixture(t, root, "charly.yml", `version: 2026.225.1508
 import:
   - sub: ./sub
 app:
@@ -105,7 +105,7 @@ app:
     build: [rpm]
     distro: [fedora]
 `)
-	writeFixture(t, root, "sub/charly.yml", `version: 2026.223.1018
+	writeFixture(t, root, "sub/charly.yml", `version: 2026.225.1508
 import:
   - up: ../
 widget:

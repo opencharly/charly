@@ -70,14 +70,15 @@ build-skill:
 
             ### `--dev-local-pkg` — disposable check beds bake the IN-DEVELOPMENT charly
 
-            A `localpkg:` candy (the `charly` toolchain) normally installs the latest
-            **published** release in an image build (`releases/latest/download/`). The
+            The charly toolchain normally installs the latest **published** package in an
+            image build (downloaded from the per-distro repo via `download_template`). The
             check-bed runner instead passes `--dev-local-pkg` for EVERY bed image build, so the
-            package is BUILT from the LOCAL working tree (`pkg/<fmt>` + `charly/`) — a
-            disposable check bed always tests the in-development charly, never a stale release.
-            Generic across all kinds + all localpkg candies, one decision point
-            (`deploykit.RenderLocalPkgImageInstall`); a production box build omits the flag. A dev build
-            that cannot find its local source HARD-errors (no silent release fallback, R4).
+            package is BUILT via the `charly generate-packages` plugin (nFPM) from the LOCAL
+            in-development binary + plugins — a disposable check bed always tests the
+            in-development charly, never a stale release. Generic across all kinds + all
+            localpkg candies, one decision point (`deploykit.RenderLocalPkgImageInstall`); a
+            production box build omits the flag. A dev build that cannot build via the plugin
+            HARD-errors (no silent release fallback, R4).
             Full mechanics: `/charly-internals:install-plan` "Check-vs-production charly
             toolchain"; the candy view: `/charly-tools:charly`.
 
@@ -438,7 +439,7 @@ build-skill:
             ./bin/charly box build   # Generate + build + merge all images (drop `./bin/` once installed)
             ```
 
-            For a distro-native package instead (system-wide, via your OWN package manager — never via a Taskfile install step): `task pkg:arch`/`pkg:fedora`/`pkg:debian` builds a `.pkg.tar.zst`/`.rpm`/`.deb` into `dist/`, which you install yourself (`pacman -U dist/*.pkg.tar.zst` / `dnf install dist/*.rpm` / `apt install dist/*.deb`).
+            For a distro-native package instead (system-wide, via your OWN package manager — never via a Taskfile install step): the `charly generate-packages` plugin (nFPM) builds a `.pkg.tar.zst`/`.rpm`/`.deb`/`.apk`/`.ipk`, published to the per-distro package repos, which you install yourself (`pacman -U` / `dnf install` / `apt install` / `apk add`).
 
             ## Common Workflows
 
@@ -469,7 +470,7 @@ build-skill:
 
             ### "charly not found"
 
-            Build a distro-native package (`task pkg:arch`/`pkg:fedora`/`pkg:debian` into `dist/`) and install it with your OWN package manager (`pacman -U`/`dnf install`/`apt install`), or run `task install-portable` for a `$HOME/.local/bin/charly` copy — `task` itself is required (install via your distro package manager or download from go-task/task releases).
+            Install a distro-native package (built by the `charly generate-packages` plugin and published to the per-distro package repos) with your OWN package manager (`pacman -U`/`dnf install`/`apt install`), or run `task install-portable` for a `$HOME/.local/bin/charly` copy — `task` itself is required (install via your distro package manager or download from go-task/task releases).
 
             ### Build Fails with Missing Base
 
@@ -493,7 +494,7 @@ build-skill:
 
             ```bash
             task build:binary && task install-portable   # rebuild + refresh the $HOME/.local/bin copy
-            # or: task pkg:arch && pacman -U dist/*.pkg.tar.zst   # rebuild + reinstall the native package
+            # or: install a freshly published native package with your own package manager
             ```
 
             If you find yourself rebuilding `charly` to chase a bug and the symptom persists, the binary path on $PATH may not be the one you just refreshed — confirm with `which charly`, and remember a worktree's own `./bin/charly` is a THIRD candidate the freshness guard tracks separately (see `/charly-internals:agents` "The charly binary in a multi-teammate / multi-worktree setup").

@@ -23,8 +23,7 @@ import (
 // envelope fetch (inspect/list — sdk.OpResolve; validate — sdk.OpValidate, #55 step3 unit 3-I,
 // with the registry word sets from HostBuild("validate-word-sets") folded onto it) fetch (validate
 // runs the rule ENGINE in-plugin over the reply). build runs its body in-plugin (dispatchBuild —
-// InvokeProvider(build:box) + thin HostBuild seams, P8b), no reentry; pkg likewise runs in-plugin
-// (dispatchPkg — InvokeProvider(build:pkg), K3 build-tail move); pull runs the ensure-image work
+// InvokeProvider(build:box) + thin HostBuild seams, P8b), no reentry; pull runs the ensure-image work
 // in-plugin via InvokeProvider(build:ensure); inspect's deploy-overlay formats (tunnel/bind_mounts)
 // render in-plugin off the deploy overlay + the resolved-project envelope. None of these reenter
 // core — the generic HostBuild("cli") reentry helper this file used to carry (list's SOLE
@@ -44,8 +43,6 @@ func dispatchBoxCommand(hc *hostClient, word string, args []string) error {
 		return dispatchValidate(hc, args)
 	case "new":
 		return dispatchNew(args)
-	case "pkg":
-		return dispatchPkg(hc, args)
 	case "pull":
 		return dispatchPull(hc, args)
 	case "build":
@@ -153,50 +150,6 @@ func dispatchGenerate(hc *hostClient, args []string) error {
 // checks); dispatchValidate is defined there.
 type validateGrammar struct {
 	IncludeDisabled bool `name:"include-disabled" help:"Include boxes with enabled: false in validation (does not modify charly.yml)"`
-}
-
-// --- box pkg ---
-
-// pkgGrammar is the `charly box pkg [formats…] [--candy] [--out]` CLI surface.
-type pkgGrammar struct {
-	Format []string `arg:"" optional:"" help:"Package formats to build (pac/rpm/deb). Default: every format the candy declares a localpkg source for."`
-	Candy  string   `name:"candy" default:"charly" help:"Candy whose localpkg sources to build."`
-	Out    string   `name:"out" default:"dist" help:"Output directory for the built package files."`
-}
-
-// dispatchPkg runs the `charly box pkg` body IN-PLUGIN (K3 build-tail move, coneB-pkgcmd — the
-// former hidden core `__box-pkg` reentry is DELETED): InvokeProvider(build:pkg) drives the
-// candy/plugin-build engine (runBoxPkg), which loads the project + scans candies via the SAME
-// K1-loader seams resolveBuildEngine established, resolves the requested candy's localpkg source,
-// and builds via deploykit.BuildLocalPkgOnHost (already pure sdk). Byte-equivalent to the former
-// BoxPkgCmd.Run: prints each built file's destination path, error on failure.
-func dispatchPkg(hc *hostClient, args []string) error {
-	var g pkgGrammar
-	if done, err := parseLeaf("pkg", &g, args); err != nil || done {
-		return err
-	}
-	dir, err := os.Getwd()
-	if err != nil {
-		return err
-	}
-	reqJSON, err := json.Marshal(spec.BuildPkgRequest{Format: g.Format, Candy: g.Candy, Out: g.Out, Dir: dir})
-	if err != nil {
-		return err
-	}
-	resJSON, err := hc.exec.InvokeProvider(hc.ctx, "build", "pkg", sdk.OpBuild, reqJSON, nil, sdk.InvokeProviderOpts{})
-	if err != nil {
-		return err
-	}
-	var reply spec.BuildPkgReply
-	if len(resJSON) > 0 {
-		if uerr := json.Unmarshal(resJSON, &reply); uerr != nil {
-			return fmt.Errorf("box pkg: decode reply: %w", uerr)
-		}
-	}
-	if reply.Error != "" {
-		return fmt.Errorf("%s", reply.Error)
-	}
-	return nil
 }
 
 // --- box pull ---

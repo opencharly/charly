@@ -56,4 +56,15 @@ migrations: [
 			{op: "rename_key", from: "kubernetes", to: "deploy", scope: "any", under_kind: "kubernetes"},
 		]
 	},
+	{
+		version: "2026.225.1508"
+		name:    "remove-candy-localpkg"
+		// the candy-body `localpkg:` map (the OS-tracked package install) is REMOVED —
+		// replaced by the `packaging:` section (the nFPM cutover). A candy carrying the
+		// old field is a hard schema violation, so migrate deletes it. Candy-body field,
+		// never authored on the per-host deploy overlay — no touches_host needed.
+		ops: [
+			{op: "delete_key", key: "localpkg", scope: "any", under_kind: "candy"},
+		]
+	},
 ]

@@ -66,7 +66,7 @@ func buildOverlay(ctx context.Context, exec *sdk.Executor, reply spec.OverlayBui
 	// construction source candy/plugin-build uses (R3/DRY). Its seams (RenderService for service
 	// fragments, the builder resolves, egress) are InvokeProvider PEER-DISPATCH — since K-wave 2
 	// cone R1 none of them makes a HostBuild callback (placement-invisible either way).
-	dg, err := deploykit.NewRenderGeneratorFromProject(ctx, exec, rp, dir, false)
+	dg, err := deploykit.NewRenderGeneratorFromProject(ctx, exec, rp, dir, false, nil)
 	if err != nil {
 		return "", fmt.Errorf("overlay render: %w", err)
 	}

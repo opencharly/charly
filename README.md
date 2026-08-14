@@ -276,16 +276,14 @@ which mode the host supports.
 
 **Install `charly` as a native package.** That is how you use it, and everything else here — and
 every page on [opencharly.ai](https://opencharly.ai) — assumes a machine with `charly` installed
-and no charly checkout anywhere. Build the package once from a source tree, then install it with
-your own package manager. Building the package needs Go 1.26+ and
-[go-task](https://taskfile.dev); `pkg:fedora` and `pkg:debian` build distro-natively in a
-container, so they also need **podman**, while `pkg:arch` runs `makepkg` directly and therefore
-needs an **Arch-family host**:
+and no charly checkout anywhere. The native packages are built by the `charly generate-packages`
+plugin (nFPM-based) and published to per-distro package repos — landing with the nFPM cutover.
+Until then, build the binary from a source tree and put it on your `$PATH` (needs Go 1.26+ and
+[go-task](https://taskfile.dev)):
 
 ```bash
-task build:pkg:arch   && sudo pacman -U dist/*.pkg.tar.zst    # Arch / CachyOS / Manjaro
-task build:pkg:fedora && sudo dnf install dist/*.rpm          # Fedora
-task build:pkg:debian && sudo apt install ./dist/*.deb        # Debian / Ubuntu
+task build:binary   # builds bin/charly (CalVer-stamped)
+install -Dm755 bin/charly ~/.local/bin/charly
 ```
 
 The system-wide install step is always yours to run, never a side effect of building.

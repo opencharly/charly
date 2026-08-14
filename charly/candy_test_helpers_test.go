@@ -64,7 +64,9 @@ func (a *testCandyReader) Extract() []spec.CandyExtract { return a.m.Extract }
 func (a *testCandyReader) HasData() bool                { return len(a.m.Data) > 0 }
 func (a *testCandyReader) Data() []spec.CandyData       { return a.m.Data }
 
+//nolint:staticcheck // LocalPkg is deprecated (replaced by Packaging) but spec.CandyReader still requires it
 func (a *testCandyReader) LocalPkg(format string) string { return a.m.LocalPkg[format] }
+func (a *testCandyReader) Packaging() *spec.Packaging    { return a.m.Packaging }
 func (a *testCandyReader) FormatSection(name string) *spec.PackageSection {
 	if s, ok := a.m.FormatSections[name]; ok {
 		return &s
@@ -177,6 +179,7 @@ func (a *testCandyReader) TerminalProfiles() map[string]spec.TerminalProfile {
 	return a.v.TerminalProfiles
 }
 
+//nolint:staticcheck // LocalPkg is deprecated (replaced by Packaging) but spec.CandyReader still requires it
 func (a *testCandyReader) LocalPkgFormats() []string {
 	if len(a.m.LocalPkg) == 0 {
 		return nil

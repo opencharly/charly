@@ -39,11 +39,9 @@ github-runner:
                     - libunwind
                     - lttng-ust
                     # charly-host runtime deps that complete the `charly` PKGBUILD `depends=`
-                    # set ON THE RUNNER, so the release-packages CI job builds the pac
-                    # artifact NATIVELY here: with every dep already installed,
-                    # `makepkg -sf` resolves them all and never shells out to
-                    # `sudo pacman` (the rootless runner has no passwordless sudo).
-                    # The rest of depends= is provided by the charly/virtualization layers.
+                    # set ON THE RUNNER, so the charly CLI (and the CI jobs that drive it)
+                    # runs fully here. The rest of depends= is provided by the
+                    # charly/virtualization layers.
                     - slirp4netns # rootless podman networking fallback
                     - libisoburn # xorriso — VM NoCloud seed-ISO builder
                     - cdrtools # genisoimage/mkisofs seed-ISO fallback
@@ -242,10 +240,10 @@ github-runner-skill:
               CachyOS ships `zlib-ng-compat`, which Provides it; an explicit `zlib` conflicts)
             - charly-host `depends=` completion: `slirp4netns`, `libisoburn`, `cdrtools`, `swtpm`
               — the part of the `charly` PKGBUILD `depends=` set the charly/virtualization candies do
-              not already install. With these present, `charly box pkg pac` builds the pac release
-              artifact NATIVELY on the runner (`makepkg -sf` resolves every dep and never
-              shells out to `sudo pacman`). See `/charly-distros:githubrunner` "CI: builds the
-              org's release packages on itself".
+              not already install, so the charly CLI (and the CI jobs that drive it) runs fully
+              on the runner. (The legacy `charly box pkg` release-packages build that ran here
+              is removed with the nFPM cutover — the `charly generate-packages` plugin + the
+              per-distro repos build the packages now.)
             
             `podman`/`buildah`/`skopeo`/`crun`/`fuse-overlayfs` are provided by the
             `container-nesting` dependency (not redeclared here — R3).

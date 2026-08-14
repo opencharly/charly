@@ -201,7 +201,7 @@ func TestPersistBedDeployOverrides_SkipsLocalBed(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 	path := filepath.Join(dir, "charly", "charly.yml")
-	if err := os.WriteFile(path, []byte("version: 2026.223.1018\n"), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte("version: 2026.225.1508\n"), 0o600); err != nil {
 		t.Fatalf("write initial: %v", err)
 	}
 
@@ -254,7 +254,7 @@ func TestPersistBedDeployOverrides_RoundtripsArbiterFields(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 	path := filepath.Join(dir, "charly", "charly.yml")
-	if err := os.WriteFile(path, []byte("version: 2026.223.1018\n"), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte("version: 2026.225.1508\n"), 0o600); err != nil {
 		t.Fatalf("write initial: %v", err)
 	}
 
@@ -307,7 +307,7 @@ func TestPersistBedDeployOverrides_SeedsPortBeforeConfig(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 	// A pre-existing unrelated deploy must survive the seed (merge, not clobber).
-	initialYAML := `version: 2026.223.1018
+	initialYAML := `version: 2026.225.1508
 ollama:
     pod:
         image: ollama

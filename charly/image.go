@@ -13,7 +13,7 @@ import (
 //
 // `charly box` is a SHARED command group with NO retained core verb: every `charly box <word>`
 // subcommand is contributed as a NESTED command provider (CommandParent()=="box") by a COMPILED-IN
-// plugin — candy/plugin-box's generate/validate/new/pkg/pull/build/inspect/list/labels/merge/
+// plugin — candy/plugin-box's generate/validate/new/pull/build/inspect/list/labels/merge/
 // reconcile/feature, and candy/plugin-authoring's set/add-candy/rm-candy/fetch/refresh/write/cat
 // (P14b) — attached into the embedded kong.Plugins below. `box feature` (build-scope Agent Driven
 // Evaluation) was the LAST retained core verb; it moved to candy/plugin-box's command:feature (which
@@ -22,7 +22,7 @@ import (
 // is now PURELY the plugin-attachment holder — the core box grammar knows zero box verbs.
 type BoxCmd struct {
 	// Plugins carries the nested command providers whose CommandParent()=="box"
-	// (candy/plugin-box's generate/validate/new/pkg/pull/build/inspect/list/labels/merge/reconcile/feature
+	// (candy/plugin-box's generate/validate/new/pull/build/inspect/list/labels/merge/reconcile/feature
 	// + candy/plugin-authoring's set/add-candy/rm-candy/fetch/refresh/write/cat).
 	// main() sets this to collectExternalCommandPlugins()'s nestedByParent["box"]
 	// before kong.Parse.
@@ -32,7 +32,7 @@ type BoxCmd struct {
 // MIGRATION INVENTORY (north-star §4.4): the box command-dispersal is now COMPLETE for BoxCmd —
 // every `charly box <word>` verb is a command:<word> plugin (candy/plugin-box), so BoxCmd holds no
 // verb of its own (main.go knows zero box verbs; the struct is purely the plugin-attachment holder).
-// Trace: generate/validate/new/pkg/pull/build/inspect/list/labels/merge/reconcile externalized
+// Trace: generate/validate/new/pull/build/inspect/list/labels/merge/reconcile externalized
 // across K3/P14/Cutover-B (labels fully in K3, merge at P14, reconcile at Cutover B unit 3+4 [no
 // core-only coupling — candy/plugin-box/reconcile.go]; pull FULLY externalized at K3 #39 —
 // candy/plugin-box's dispatchPull runs the ensure-image work itself via InvokeProvider(build:ensure);
@@ -42,11 +42,7 @@ type BoxCmd struct {
 // build-activity flock → InvokeProvider(build:box) → retention prune), so BuildCmd + the hidden
 // __box-build reentry are DELETED, matching the pull move); and feature at cone-C #31 — `charly box
 // feature run` is now candy/plugin-box's command:feature (bridging to the plugin-check engine over
-// InvokeProvider), the former in-core BoxFeatureCmd/BoxFeatureRunCmd + hostFeatureBox DELETED; and
-// pkg at K3 build-tail (coneB-pkgcmd) — candy/plugin-build's build:pkg word (pkg.go) runs the
-// former BoxPkgCmd.Run body ITSELF, reusing the resolveBuildEngine seams (LoadUnified, the
-// scan-local host leg, resolveDistroLeg), dispatched via candy/plugin-box's dispatchPkg over
-// InvokeProvider(build:pkg); pkg_cmd.go + the hidden __box-pkg reentry are DELETED. See
+// InvokeProvider), the former in-core BoxFeatureCmd/BoxFeatureRunCmd + hostFeatureBox DELETED. See
 // sdk/deploykit/write_labels.go + candy/plugin-box/{merge_cmd,reconcile,box}.go's dispatchPull/dispatchBuild.
 // (charly/labels.go, this comment's former citation, no longer exists — the OCI-label surface
 // relocated to sdk/deploykit + spec/container; see /charly-internals:capabilities.)

@@ -134,10 +134,11 @@ func runPrivilegedBootstrap(ctx context.Context, ex *sdk.Executor, dir, engine s
 
 	fmt.Fprintf(os.Stderr, "\n--- Bootstrap (%s) for %s ---\n", builderName, d.Name)
 	if err := buildkit.RunPrivileged(buildkit.PrivilegedRun{
-		Image:      builderRef,
-		Script:     script,
-		OutputPath: output,
-		OutputDest: outDest,
+		Image:        builderRef,
+		Script:       script,
+		OutputPath:   output,
+		OutputDest:   outDest,
+		MinFreeBytes: buildkit.RootfsOutputFloor,
 	}); err != nil {
 		return fmt.Errorf("running %s for %s: %w", builderName, d.Name, err)
 	}
