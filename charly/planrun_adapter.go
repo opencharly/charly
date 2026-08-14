@@ -133,6 +133,18 @@ func (h *hostVerbResolver) RunVerb(ctx context.Context, op *spec.Op) (spec.Check
 	if cv, ok := prov.(CheckVerbProvider); ok {
 		return cv.RunVerb(ctx, h, op), true
 	}
+	// A COMPILED-IN plugin candy whose pb.ProviderServer ALSO implements the typed
+	// spec.CheckVerbProvider contract (a command+verb candy like agentteams): dispatch the
+	// verb in-proc with the live host CheckContext — the SAME adaptation kitVerbAdapter
+	// performs for a kit-shape candy, so a compiled-in verb needing the executor
+	// (ResolveEndpoint/Exec) gets it without a broker (the mcp pattern's sdk.NewCheckContext
+	// is out-of-process-only).
+	if ip, ok := prov.(*inprocProvider); ok {
+		if kv, ok := ip.srv.(spec.CheckVerbProvider); ok {
+			res := kv.RunVerb(ctx, hostCheckContext{h: h}, op)
+			return spec.CheckResult{Op: op, Verb: kv.Reserved(), Status: res.Status, Message: res.Message}, true
+		}
+	}
 	// An OUT-OF-PROCESS verb provider (a grpcProvider, not a CheckVerbProvider): dispatch the
 	// live verb word to the Invoke envelope with the full Op — the external-charly-verb path.
 	return h.invokeVerbProvider(ctx, prov, kind, op), true

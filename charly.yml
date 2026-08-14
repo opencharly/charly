@@ -2985,108 +2985,53 @@ check-agentteams-pod:
               http:
                 http: "http://127.0.0.1:${HOST_PORT:8001}/"
                 status: 200
-            - check: the controller spawns the default manager and it reaches Running phase (proves the manager image is in the host store under AGENTTEAMS_MANAGER_IMAGE and the controller can spawn it through the bound podman socket)
+            - # The `agentteams:` check verb (the declarative controller-probe counterpart of
+              # the `charly agentteams` command plugin) replaces the raw curl sequence: the
+              # provider resolves the controller's in-venue :8090 to a host-routable address
+              # over the reverse channel (the box's published port), pulls the admin SA token
+              # from the venue, and probes with the SAME apiClient the command uses (R3 — one
+              # REST surface covers the CLI and every bed).
+              check: the controller spawns the default manager and it reaches Running phase (proves the manager image is in the host store under AGENTTEAMS_MANAGER_IMAGE and the controller can spawn it through the bound podman socket)
               id: agentteams-manager-running
               timeout: 300s
               context:
                 - runtime
-              command: |
-                  # Shell vars are deliberately lowercase: the check runner expands
-                  # UPPERCASE-variable refs as runtime variables and SKIPs on an
-                  # unresolved one.
-                  token="$(cat /var/run/agentteams/cli-token 2>/dev/null)"
-                  test -n "${token}"
-                  for i in $(seq 1 90); do
-                      resp="$(curl -fsS -H "Authorization: Bearer ${token}" http://127.0.0.1:8090/api/v1/managers 2>/dev/null)" || { sleep 2; continue; }
-                      if echo "${resp}" | grep -q '"phase":"Running"'; then
-                          echo "${resp}"
-                          exit 0
-                      fi
-                      sleep 2
-                  done
-                  echo "manager never reached Running: ${resp}"
-                  exit 1
+              agentteams:
+                method: manager-running
+              stdout:
+                - contains: "Running"
             - check: the controller creates a Worker CR, spawns the worker container from the pre-built agentteams-worker image, and the worker reaches Running with its Matrix room created (proves AGENTTEAMS_WORKER_IMAGE is in the host store and the controller can spawn the worker through the bound podman socket)
               id: agentteams-worker-running
               timeout: 300s
               context:
                 - runtime
-              command: |
-                  # Shell vars are deliberately lowercase: the check runner expands
-                  # UPPERCASE-variable refs as runtime variables and SKIPs on an
-                  # unresolved one.
-                  token="$(cat /var/run/agentteams/cli-token 2>/dev/null)"
-                  test -n "${token}"
-                  worker="bed-worker"
-                  # Create the Worker CR (containerManaged defaults to true; the
-                  # runtime resolves to openclaw and the image to
-                  # AGENTTEAMS_WORKER_IMAGE). A 409 (already exists) is fine on a
-                  # fresh `charly update` re-run — the controller volume
-                  # (~/.agentteams/controller, holding the kine SQLite store)
-                  # persists, so the Worker CR from the prior run is still there
-                  # and the poll below reconciles it to Running.
-                  curl -fsS -X POST -H "Authorization: Bearer ${token}" \
-                      -H 'Content-Type: application/json' \
-                      -d "{\"name\": \"${worker}\"}" \
-                      http://127.0.0.1:8090/api/v1/workers >/dev/null 2>&1 || true
-                  # Poll until the worker reaches Running AND its Matrix room is
-                  # provisioned (roomID non-empty).
-                  for i in $(seq 1 90); do
-                      resp="$(curl -fsS -H "Authorization: Bearer ${token}" http://127.0.0.1:8090/api/v1/workers/${worker} 2>/dev/null)" || { sleep 2; continue; }
-                      if echo "${resp}" | grep -q '"phase":"Running"' && echo "${resp}" | grep -q '"roomID":"!'; then
-                          break
-                      fi
-                      sleep 2
-                  done
-                  echo "${resp}" | grep -q '"phase":"Running"' || { echo "worker never reached Running: ${resp}"; exit 1; }
-                  echo "${resp}" | grep -q '"roomID":"!' || { echo "worker room never provisioned: ${resp}"; exit 1; }
-                  # The room exists on the homeserver: resolve the worker room
-                  # alias via the public Matrix directory API (the alias is
-                  # #agentteams-worker-<name>:<matrix-domain>, the same shape the
-                  # controller's own matrix client resolves).
-                  alias_enc="%23agentteams-worker-${worker}%3Amatrix-local.agentteams.io%3A8080"
-                  room="$(curl -fsS "http://127.0.0.1:6167/_matrix/client/v3/directory/room/${alias_enc}" 2>/dev/null)" || { echo "room alias not resolvable"; exit 1; }
-                  echo "${room}" | grep -q '"room_id":"!' || { echo "room alias resolved to no room: ${room}"; exit 1; }
-                  echo "worker ${worker} Running, room provisioned, room alias resolvable"
-            - # The compiled-in `charly agentteams` command plugin exercised LIVE against the
-              # running controller. The agentteams box does NOT ship charly, so these are
-              # HOST-side steps (in_container: false): the admin SA token is pulled out of
-              # the container with the charly-native `charly cp` (never ad-hoc podman), and
-              # the plugin's token discovery reads it from AGENTTEAMS_AUTH_TOKEN_FILE while
-              # AGENTTEAMS_CONTROLLER_URL points at the controller's effective host port
-              # (${HOST_PORT:8090}). Shell vars are deliberately lowercase: the check runner
-              # expands UPPERCASE-variable refs as runtime variables and SKIPs on an
-              # unresolved one.
-              check: the compiled-in `charly agentteams status` command reaches the live controller with the admin token and reports the resource counts
+              agentteams:
+                method: worker-running
+              stdout:
+                - contains: "room alias resolvable"
+            - # The `agentteams:` check verb exercised LIVE against the running controller —
+              # the declarative counterpart of the compiled-in `charly agentteams` command
+              # plugin. The verb is HOST-BASED (the mcp pattern): the provider resolves the
+              # controller's in-venue :8090 to a host-routable address over the reverse
+              # channel (the box's published port), pulls the admin SA token from the venue,
+              # and probes with the SAME apiClient the command uses (R3 — one REST surface
+              # covers the CLI and every bed).
+              check: "the `agentteams: status` verb reaches the live controller with the admin token and reports the resource counts"
               id: agentteams-plugin-status
               timeout: 60s
               context:
                 - runtime
-              command:
-                command: |
-                    token_file="$(mktemp)"
-                    trap 'rm -f "${token_file}"' EXIT
-                    "${CHARLY_BIN}" cp check-agentteams-pod :/var/run/agentteams/cli-token "${token_file}"
-                    export AGENTTEAMS_AUTH_TOKEN_FILE="${token_file}"
-                    export AGENTTEAMS_CONTROLLER_URL="http://127.0.0.1:${HOST_PORT:8090}"
-                    "${CHARLY_BIN}" agentteams status
-                in_container: false
+              agentteams:
+                method: status
               stdout:
                 - contains: "Total Workers:"
-            - check: the compiled-in `charly agentteams worker list` command lists the bed-worker the controller spawned (proves the plugin's REST client + token discovery work end-to-end)
+            - check: "the `agentteams: worker-list` verb lists the bed-worker the controller spawned (proves the verb's REST client + token discovery work end-to-end)"
               id: agentteams-plugin-worker-list
               timeout: 60s
               context:
                 - runtime
-              command:
-                command: |
-                    token_file="$(mktemp)"
-                    trap 'rm -f "${token_file}"' EXIT
-                    "${CHARLY_BIN}" cp check-agentteams-pod :/var/run/agentteams/cli-token "${token_file}"
-                    export AGENTTEAMS_AUTH_TOKEN_FILE="${token_file}"
-                    export AGENTTEAMS_CONTROLLER_URL="http://127.0.0.1:${HOST_PORT:8090}"
-                    "${CHARLY_BIN}" agentteams worker list
-                in_container: false
+              agentteams:
+                method: worker-list
               stdout:
                 - contains: "bed-worker"
             - # The compiled-in `charly agentteams config` command reports the controller
@@ -3153,10 +3098,13 @@ agentteams-vm:
 # proving the full controller-spawns-manager → create-worker → room sequence
 # in-guest. The manager reconciler retries a failed spawn every 30s, so the
 # controller's initial spawn (before the images arrive) self-heals once the cp-box
-# delivers them. All probes run IN-GUEST over SSH (the http verb curls in-guest; the
-# command verbs run via the SSH executor), so no host→guest port forwards are
-# needed — the compiled-in `charly agentteams` plugin checks stay on the pod bed,
-# where the controller is host-reachable.
+# delivers them. The liveness probes run IN-GUEST over SSH (the http verb curls
+# in-guest; the command verbs run via the SSH executor), so no host→guest port
+# forwards are needed for them — but the `agentteams:` verb steps are the
+# exception: the verb is HOST-BASED (the mcp pattern), so it runs in the
+# provider's process on the HOST and resolves the controller's in-venue :8090 to
+# a host-routable address over the reverse channel (a live ssh -L forward into
+# the guest), pulling the admin SA token from the venue over the executor.
 check-agentteams-vm:
     vm:
         from: agentteams-vm
@@ -3211,7 +3159,13 @@ check-agentteams-vm:
             # populated for container venues (live_gather populates HOST_PORT:22 for
             # a VM), so these probes run as in-guest command checks over the SSH
             # executor — the same pattern as the higress-apiserver/gateway-health
-            # checks below and the check-k3s-vm bed.
+            # checks below and the check-k3s-vm bed. The `agentteams:` verb steps
+            # below are the exception: the verb is HOST-BASED (the mcp pattern), so
+            # it runs in the provider's process on the HOST and resolves the
+            # controller's in-venue :8090 to a host-routable address over the
+            # reverse channel — a live ssh -L forward into the guest (spec/checkhost
+            # EndpointForVenue) — pulling the admin SA token from the venue over the
+            # executor. No in-guest curl, no host CLI, one REST surface (R3).
             - check: the minio S3 API answers its health probe
               id: agentteams-vm-minio-health
               timeout: 30s
@@ -3265,61 +3219,16 @@ check-agentteams-vm:
               timeout: 600s
               context:
                 - runtime
-              command: |
-                  # Shell vars are deliberately lowercase: the check runner expands
-                  # UPPERCASE-variable refs as runtime variables and SKIPs on an
-                  # unresolved one.
-                  token="$(cat /var/run/agentteams/cli-token 2>/dev/null)"
-                  test -n "${token}"
-                  for i in $(seq 1 150); do
-                      resp="$(curl -fsS -H "Authorization: Bearer ${token}" http://127.0.0.1:8090/api/v1/managers 2>/dev/null)" || { sleep 2; continue; }
-                      if echo "${resp}" | grep -q '"phase":"Running"'; then
-                          echo "${resp}"
-                          exit 0
-                      fi
-                      sleep 2
-                  done
-                  echo "manager never reached Running: ${resp}"
-                  exit 1
+              agentteams:
+                method: manager-running
+              stdout:
+                - contains: "Running"
             - check: the controller creates a Worker CR, spawns the worker container from the pre-built agentteams-worker image, and the worker reaches Running with its Matrix room created (proves AGENTTEAMS_WORKER_IMAGE is in the guest rootless store and the controller can spawn the worker through the rootless podman socket)
               id: agentteams-vm-worker-running
               timeout: 600s
               context:
                 - runtime
-              command: |
-                  # Shell vars are deliberately lowercase: the check runner expands
-                  # UPPERCASE-variable refs as runtime variables and SKIPs on an
-                  # unresolved one.
-                  token="$(cat /var/run/agentteams/cli-token 2>/dev/null)"
-                  test -n "${token}"
-                  worker="bed-worker"
-                  # Create the Worker CR (containerManaged defaults to true; the
-                  # runtime resolves to openclaw and the image to
-                  # AGENTTEAMS_WORKER_IMAGE). A 409 (already exists) is fine on a
-                  # fresh `charly update` re-run — the controller volume
-                  # (~/.agentteams/controller, holding the kine SQLite store)
-                  # persists, so the Worker CR from the prior run is still there
-                  # and the poll below reconciles it to Running.
-                  curl -fsS -X POST -H "Authorization: Bearer ${token}" \
-                      -H 'Content-Type: application/json' \
-                      -d "{\"name\": \"${worker}\"}" \
-                      http://127.0.0.1:8090/api/v1/workers >/dev/null 2>&1 || true
-                  # Poll until the worker reaches Running AND its Matrix room is
-                  # provisioned (roomID non-empty).
-                  for i in $(seq 1 150); do
-                      resp="$(curl -fsS -H "Authorization: Bearer ${token}" http://127.0.0.1:8090/api/v1/workers/${worker} 2>/dev/null)" || { sleep 2; continue; }
-                      if echo "${resp}" | grep -q '"phase":"Running"' && echo "${resp}" | grep -q '"roomID":"!'; then
-                          break
-                      fi
-                      sleep 2
-                  done
-                  echo "${resp}" | grep -q '"phase":"Running"' || { echo "worker never reached Running: ${resp}"; exit 1; }
-                  echo "${resp}" | grep -q '"roomID":"!' || { echo "worker room never provisioned: ${resp}"; exit 1; }
-                  # The room exists on the homeserver: resolve the worker room
-                  # alias via the public Matrix directory API (the alias is
-                  # #agentteams-worker-<name>:<matrix-domain>, the same shape the
-                  # controller's own matrix client resolves).
-                  alias_enc="%23agentteams-worker-${worker}%3Amatrix-local.agentteams.io%3A8080"
-                  room="$(curl -fsS "http://127.0.0.1:6167/_matrix/client/v3/directory/room/${alias_enc}" 2>/dev/null)" || { echo "room alias not resolvable"; exit 1; }
-                  echo "${room}" | grep -q '"room_id":"!' || { echo "room alias resolved to no room: ${room}"; exit 1; }
-                  echo "worker ${worker} Running, room provisioned, room alias resolvable"
+              agentteams:
+                method: worker-running
+              stdout:
+                - contains: "room alias resolvable"

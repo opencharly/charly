@@ -138,7 +138,7 @@ func (s *executorReverseServer) InvokeProvider(ctx context.Context, req *pb.Invo
 	)
 	switch class {
 	case ClassVerb:
-		if cv, isCV := prov.(CheckVerbProvider); isCV && op.Op == ops.OpRun {
+		if op.Op == ops.OpRun {
 			// K1-unblock W3 Unit B (operator ruling "path (a)"): a CheckVerbProvider target (a
 			// compiled-in/builtin check verb) dispatched for its CHECK PROBE (ops.OpRun, the runtime
 			// check selector — candy/plugin-check/verb_resolver.go) runs via RunVerb with a live
@@ -192,13 +192,36 @@ func (s *executorReverseServer) InvokeProvider(ctx context.Context, req *pb.Invo
 				httpBase:    &http.Client{Timeout: 10 * time.Second},
 			}
 			hvr := &hostVerbResolver{cc: carrier}
-			cr := cv.RunVerb(ctx, hvr, &op2)
-			hvr.runEndpointCleanups()
-			resJSON, merr := json.Marshal(cr)
-			if merr != nil {
-				return nil, fmt.Errorf("InvokeProvider %s:%s: marshal result: %w", class, word, merr)
+			var (
+				cr      spec.CheckResult
+				handled bool
+			)
+			if cv, isCV := prov.(CheckVerbProvider); isCV {
+				cr = cv.RunVerb(ctx, hvr, &op2)
+				handled = true
+			} else if ip, isIP := prov.(*inprocProvider); isIP {
+				// A COMPILED-IN plugin candy whose pb.ProviderServer ALSO implements the typed
+				// spec.CheckVerbProvider contract (a command+verb candy like agentteams): dispatch the
+				// verb in-proc with the live host CheckContext — the SAME adaptation
+				// hostVerbResolver.RunVerb performs for the host-side walk, so a compiled-in verb
+				// needing the executor (ResolveEndpoint/Exec) gets it without a broker (the mcp
+				// pattern's sdk.NewCheckContext is out-of-process-only). The out-of-process placement
+				// of the SAME candy runs the identical core via its pb Invoke with the broker
+				// attached — placement-invisible, F8.
+				if kv, isKV := ip.srv.(spec.CheckVerbProvider); isKV {
+					res := kv.RunVerb(ctx, hostCheckContext{h: hvr}, &op2)
+					cr = spec.CheckResult{Op: &op2, Verb: kv.Reserved(), Status: res.Status, Message: res.Message}
+					handled = true
+				}
 			}
-			return &pb.InvokeReply{ResultJson: resJSON}, nil
+			if handled {
+				hvr.runEndpointCleanups()
+				resJSON, merr := json.Marshal(cr)
+				if merr != nil {
+					return nil, fmt.Errorf("InvokeProvider %s:%s: marshal result: %w", class, word, merr)
+				}
+				return &pb.InvokeReply{ResultJson: resJSON}, nil
+			}
 		}
 		fallthrough
 	default:
