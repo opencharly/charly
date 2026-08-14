@@ -2040,7 +2040,7 @@ check-skill:
                   tearing it down and rebuilding fearless. The box is restricted at the boundary,
                   never by stripping the candy.
 
-                  1. `charly box build <image> --dev-local-pkg` — build the test artifact (pod beds only). The check-bed runner sets `--dev-local-pkg` automatically, so a bed bakes the **in-development** charly toolchain (any `localpkg:` candy built from local source) — never a stale published release. A bed thus always tests the code under development; a production box build downloads the released package. See `/charly-tools:charly` "Check-vs-production binary source" + `/charly-internals:install-plan` "Check-vs-production charly toolchain".
+                  1. `charly box build <image> --dev-local-pkg` — build the test artifact (pod beds only). The check-bed runner sets `--dev-local-pkg` automatically, so a bed bakes the **in-development** charly toolchain (built via the `charly generate-packages` plugin from the local binary + plugins) — never a stale published release. A bed thus always tests the code under development; a production box build downloads the released package. See `/charly-tools:charly` "Check-vs-production binary source" + `/charly-internals:install-plan` "Check-vs-production charly toolchain".
                   2. `charly check box <image>` — box-section + baked candy-section probes.
                   3. `charly fleet add <bed> <ref>` — apply the bed (or `charly vm create` for vm beds).
                   4. (pod beds) `charly config <bed>` + `charly start <bed>`.
@@ -2178,7 +2178,7 @@ check-skill:
                   | `check-openclaw-pod` | pod | `image: openclaw` | minimal headless gateway + dbus/service/port and exact installed CLI version |
                   | `check-openclaw-full-pod` | pod | `image: openclaw-full` | maximal headless gateway + AI CLI and media/database tool stack |
                   | `check-openclaw-desktop-pod` | pod | `image: openclaw-desktop` | combined streamed desktop + gateway + AI CLI + ollama + nested Charly toolchain |
-                  | `check-charly-vm` | vm | `from: charly-vm` | `charly` toolchain localpkg deploy witness (opencharly-git pacman install + dep auto-resolve) on the cloud VM |
+                  | `check-charly-vm` | vm | `from: charly-vm` | `charly` toolchain binary-install witness (the candy's `copy: bin/charly` run step lands the in-development binary at /usr/bin/charly) on the cloud VM |
 
                   Bed homes: the main repo's `charly.yml` owns `check-k3s-vm`, `check-local`, and
                   `check-charly-vm`; the pod beds above are top-level deploys in the `box/<distro>`

@@ -19,7 +19,7 @@ import (
 // candy/plugin-fleet/deploy_state_writer_test.go's TestFleetNode_DisposableFalseRoundTrip_Writer.
 func TestFleetNode_DisposableFalseRoundTrip_Loader(t *testing.T) {
 	dir := t.TempDir()
-	src := `version: 2026.223.1018
+	src := `version: 2026.225.1508
 locked-pod:
     pod:
         image: foo

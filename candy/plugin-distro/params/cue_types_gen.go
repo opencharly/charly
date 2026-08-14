@@ -117,18 +117,15 @@ type DsFormatRule struct {
 	Rule string `yaml:"rule,omitempty" json:"rule"`
 }
 
+// #DsLocalPkg — the local_pkg INSTALL machinery only (the source-build fields
+// pkg_glob/source_sentinel/build_template/dep_builder were removed with the
+// pkg/ source-build cutover: the `charly generate-packages` plugin builds the
+// package now, so the deploy-time + image-build paths only INSTALL the published
+// package via install_template/download_template). Mirrors spec #LocalPkg.
 type DsLocalPkg struct {
-	Pkg_glob string `yaml:"pkg_glob,omitempty" json:"pkg_glob"`
-
-	Source_sentinel string `yaml:"source_sentinel,omitempty" json:"source_sentinel"`
-
-	Build_template string `yaml:"build_template,omitempty" json:"build_template"`
-
 	Install_template string `yaml:"install_template,omitempty" json:"install_template"`
 
 	Probe string `yaml:"probe,omitempty" json:"probe"`
-
-	Dep_builder string `yaml:"dep_builder,omitempty" json:"dep_builder,omitempty"`
 
 	Download_template string `yaml:"download_template,omitempty" json:"download_template,omitempty"`
 }

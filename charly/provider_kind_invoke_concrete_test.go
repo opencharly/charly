@@ -20,7 +20,7 @@ import (
 // gate) — it silently passed (exit 0) before the validation-correctness fix.
 func TestValidate_VmPCIHostdev_MissingSlotFunction_Rejected(t *testing.T) {
 	dir := writeValidateFixture(t, map[string]string{
-		"charly.yml": `version: 2026.223.1018
+		"charly.yml": `version: 2026.225.1508
 myvm:
   vm:
     source:
@@ -42,7 +42,7 @@ myvm:
 // FULLY-specified PCI hostdev still validates clean.
 func TestValidate_VmPCIHostdev_Complete_Accepted(t *testing.T) {
 	dir := writeValidateFixture(t, map[string]string{
-		"charly.yml": `version: 2026.223.1018
+		"charly.yml": `version: 2026.225.1508
 myvm:
   vm:
     source:
@@ -68,7 +68,7 @@ myvm:
 // concrete sub-field requirement for non-pci types.
 func TestValidate_VmNonPCIHostdev_Incomplete_Accepted(t *testing.T) {
 	dir := writeValidateFixture(t, map[string]string{
-		"charly.yml": `version: 2026.223.1018
+		"charly.yml": `version: 2026.225.1508
 myvm:
   vm:
     source:
@@ -91,7 +91,7 @@ myvm:
 // never authored directly) — validates clean, with zero extra round-trip cost implied.
 func TestValidate_VmNoHostdevsAuthored_Accepted(t *testing.T) {
 	dir := writeValidateFixture(t, map[string]string{
-		"charly.yml": `version: 2026.223.1018
+		"charly.yml": `version: 2026.225.1508
 myvm:
   vm:
     source:
@@ -107,7 +107,7 @@ myvm:
 // deep-check round-trip attempted at all.
 func TestValidate_PodKind_NoOpValidateRoundTrip(t *testing.T) {
 	dir := writeValidateFixture(t, map[string]string{
-		"charly.yml": `version: 2026.223.1018
+		"charly.yml": `version: 2026.225.1508
 mypod:
   pod:
     image: x

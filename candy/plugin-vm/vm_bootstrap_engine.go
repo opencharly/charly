@@ -31,6 +31,11 @@ type BootstrapVMResult struct {
 	CloudInitDigest string
 }
 
+// diskBuildHeadroom is added to the parsed disk size to compute the disk build's MinFreeBytes:
+// the qcow2 output is sized by spec.DiskSize, plus headroom for the copy and container temp
+// writes.
+const diskBuildHeadroom = 2 << 30
+
 // bootstrapRootfsExtractTar extracts the bootstrap rootfs.tar.gz into the VM disk's mounted
 // root. --xattrs-include='*' is REQUIRED: GNU tar's --xattrs default-EXCLUDES the security.*
 // namespace on extract, which silently drops file capabilities (security.capability). Without
@@ -219,10 +224,11 @@ func buildBootstrapRootfs(spec *VmSpec, builder *BuilderDef, distro *DistroDef, 
 		output = "/out/rootfs.tar.gz"
 	}
 	if err := buildkit.RunPrivileged(buildkit.PrivilegedRun{
-		Image:      builderRef,
-		Script:     bootstrapScript,
-		OutputPath: output,
-		OutputDest: rootfsTar,
+		Image:        builderRef,
+		Script:       bootstrapScript,
+		OutputPath:   output,
+		OutputDest:   rootfsTar,
+		MinFreeBytes: buildkit.RootfsOutputFloor,
 	}); err != nil {
 		return "", fmt.Errorf("running bootstrap builder %q: %w", spec.Source.Builder, err)
 	}
@@ -257,12 +263,20 @@ func buildBootstrapDisk(spec *VmSpec, distro *DistroDef, builderRef, rootfsTar, 
 	fullScript := prelude + installBody + finalize
 
 	diskPath := filepath.Join(outputDir, "disk.qcow2")
+	// The qcow2 output must fit on the staging + destination filesystems: the
+	// disk is sized by spec.DiskSize, so require that plus headroom for the
+	// copy. A full disk used to fail cryptically inside the container.
+	diskBytes, perr := parseDiskSizeBytes(spec.DiskSize)
+	if perr != nil {
+		return "", fmt.Errorf("parsing disk_size %q: %w", spec.DiskSize, perr)
+	}
 	if err := buildkit.RunPrivileged(buildkit.PrivilegedRun{
-		Image:      builderRef,
-		Script:     fullScript,
-		Mounts:     []string{fmt.Sprintf("%s:/in/rootfs.tar.gz:ro", rootfsTar)},
-		OutputPath: "/out/disk.qcow2",
-		OutputDest: diskPath,
+		Image:        builderRef,
+		Script:       fullScript,
+		Mounts:       []string{fmt.Sprintf("%s:/in/rootfs.tar.gz:ro", rootfsTar)},
+		OutputPath:   "/out/disk.qcow2",
+		OutputDest:   diskPath,
+		MinFreeBytes: diskBytes + diskBuildHeadroom,
 	}); err != nil {
 		return "", fmt.Errorf("building bootstrap VM disk: %w", err)
 	}

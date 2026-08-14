@@ -22,8 +22,8 @@ func TestCommandParent_NestsUnderBox(t *testing.T) {
 	}
 }
 
-// TestNewMeta_DeclaresNestedCommands proves Describe advertises exactly the eleven nested command
-// capabilities (generate/validate/new/pkg/pull/build/inspect/list/labels/merge/reconcile — "build"
+// TestNewMeta_DeclaresNestedCommands proves Describe advertises exactly the ten nested command
+// capabilities (generate/validate/new/pull/build/inspect/list/labels/merge/reconcile — "build"
 // added FINAL/K5 unit 6a M4d, the CLI-only mirror of "pull"'s M4c move), all class "command", each
 // with no InputDef (a command's args are pass-through tokens, not a structured plugin_input).
 func TestNewMeta_DeclaresNestedCommands(t *testing.T) {
@@ -41,13 +41,13 @@ func TestNewMeta_DeclaresNestedCommands(t *testing.T) {
 		}
 		got[c.GetWord()] = true
 	}
-	for _, want := range []string{"generate", "validate", "new", "pkg", "pull", "build", "inspect", "list", "labels", "merge", "reconcile", "feature"} {
+	for _, want := range []string{"generate", "validate", "new", "pull", "build", "inspect", "list", "labels", "merge", "reconcile", "feature"} {
 		if !got[want] {
 			t.Errorf("Describe missing command:%s (got %v)", want, got)
 		}
 	}
-	if len(caps.GetProvided()) != 12 {
-		t.Errorf("want 12 command capabilities, got %d", len(caps.GetProvided()))
+	if len(caps.GetProvided()) != 11 {
+		t.Errorf("want 11 command capabilities, got %d", len(caps.GetProvided()))
 	}
 }
 
@@ -102,24 +102,6 @@ func TestNewGrammar_Parse(t *testing.T) {
 	}
 	if cmd := mustParse("box", "my-box", "--base", "quay.io/fedora/fedora:43", "--candy", "a,b").Command(); cmd != "box <name>" {
 		t.Errorf("new box: command = %q, want %q", cmd, "box <name>")
-	}
-}
-
-// TestPkgGrammar_Parse confirms `box pkg` parses formats + --candy / --out with the expected
-// defaults.
-func TestPkgGrammar_Parse(t *testing.T) {
-	var g pkgGrammar
-	if _, err := parseLeaf("pkg", &g, []string{"rpm", "deb"}); err != nil {
-		t.Fatalf("parse: %v", err)
-	}
-	if !reflect.DeepEqual(g.Format, []string{"rpm", "deb"}) {
-		t.Errorf("Format = %v, want [rpm deb]", g.Format)
-	}
-	if g.Candy != "charly" {
-		t.Errorf("Candy default = %q, want charly", g.Candy)
-	}
-	if g.Out != "dist" {
-		t.Errorf("Out default = %q, want dist", g.Out)
 	}
 }
 

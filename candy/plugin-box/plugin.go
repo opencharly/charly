@@ -4,8 +4,8 @@
 // compiled_plugins (the canonical placement, P15), or cmd/serve serves them OUT-OF-PROCESS when
 // they are not.
 //
-// It serves TWELVE command capabilities, all NESTED under the `box` parent (CommandParent()=="box",
-// so `charly box generate/validate/new/pkg/pull/build/inspect/list/labels/merge/reconcile/feature`
+// It serves ELEVEN command capabilities, all NESTED under the `box` parent (CommandParent()=="box",
+// so `charly box generate/validate/new/pull/build/inspect/list/labels/merge/reconcile/feature`
 // parse + dispatch here while the authoring verbs (candy/plugin-authoring) stay separate — the core
 // BoxCmd holds no verb of its own):
 //
@@ -24,11 +24,6 @@
 //     still asks the host is the registry question, HostBuild("validate-word-sets") — see
 //     validate.go / validate_rules.go / validate_graph.go / validate_check.go /
 //     validate_config_rules.go / validate_schema_rules.go.
-//
-//   - command:pkg — `charly box pkg`: runs the localpkg build engine IN-PLUGIN (K3 build-tail
-//     move, coneB-pkgcmd fold) by INVOKING the peer compiled-in build:pkg word (candy/plugin-build)
-//     over InvokeProvider — the former hidden core `__box-pkg` reentry is DELETED, the SAME shape
-//     pull's build:ensure fold and build's build:box fold already established.
 //
 //   - command:pull — `charly box pull`: runs the ensure-image work IN-PLUGIN (K3 #39 fold) by
 //     INVOKING the peer compiled-in build:ensure word (candy/plugin-build) over InvokeProvider —
@@ -103,7 +98,7 @@ import (
 const calver = "2026.198.2131"
 
 // boxCommandWords is the set of command words this plugin serves — all nested under `box`.
-var boxCommandWords = []string{"generate", "validate", "new", "pkg", "pull", "build", "inspect", "list", "labels", "merge", "reconcile", "feature"}
+var boxCommandWords = []string{"generate", "validate", "new", "pull", "build", "inspect", "list", "labels", "merge", "reconcile", "feature"}
 
 // boxListSubcommands is the `charly box list <sub>` catalog (F-CLI-NEST), matching listSubcommands
 // in inspect_list.go — hand-declared, not reflected, because dispatchList routes on a plain string
@@ -128,7 +123,7 @@ var boxListSubcommands = []sdk.CLISubcommand{
 // out-of-proc serving.
 func NewProvider() pb.ProviderServer { return &provider{} }
 
-// NewMeta advertises command:generate/validate/new/pkg via sdk.NewMeta → BuildCapabilities so the
+// NewMeta advertises command:generate/validate/new via sdk.NewMeta → BuildCapabilities so the
 // COMPILED-IN path registers each as a command provider (the host builds its dynamic Kong grammar +
 // dispatches Invoke(OpRun)). A command's args are pass-through CLI tokens, not a structured
 // plugin_input, so the capabilities carry no InputDef and the plugin ships no schema. The "list"
@@ -147,9 +142,9 @@ func NewMeta() pb.PluginMetaServer {
 }
 
 // CliMain is the OUT-OF-PROCESS command entry — unreachable in the canonical compiled-in placement.
-// The generate/validate/pkg handlers reach the host reverse channel (build:generate / build:pkg
-// over InvokeProvider, validate-project over HostBuild), which is unavailable out-of-process, so
-// this errors (like candy/plugin-vm's / candy/plugin-alias's CliMain).
+// The generate/validate handlers reach the host reverse channel (build:generate over InvokeProvider,
+// validate-project over HostBuild), which is unavailable out-of-process, so this errors (like
+// candy/plugin-vm's / candy/plugin-alias's CliMain).
 func CliMain(_ []string) int {
 	fmt.Fprintln(os.Stderr, "charly box: requires compiled-in placement (the command's host reverse channel is unavailable out-of-process)")
 	return 1
@@ -160,7 +155,7 @@ type provider struct{ pb.UnimplementedProviderServer }
 // CommandParent is the optional interface buildUnitInProc detects on a compiled-in command
 // plugin's provider (the SAME srv-interface-detection pattern registerCompiledPlugin uses for
 // spec.DocParser / kit.RefsDownloader): every command word this plugin serves NESTS under the
-// core `box` command group, so `charly box generate/validate/new/pkg` parse + dispatch here.
+// core `box` command group, so `charly box generate/validate/new` parse + dispatch here.
 func (provider) CommandParent() string { return "box" }
 
 // Invoke serves the box commands' Invoke(OpRun) AND the validate capability's structured Invoke(OpValidate):
