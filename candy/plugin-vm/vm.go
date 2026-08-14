@@ -288,6 +288,16 @@ func startVM(box, instance, domain string) error {
 			return err
 		}
 		stateDir := filepath.Join(dir, name)
+		// Idempotent start (the libvirt backend's already_running semantic): a live
+		// QEMU process recorded in the pidfile is already running — re-executing the
+		// stored command would start a SECOND QEMU, which fails to lock the pidfile
+		// (EWOULDBLOCK) and corrupts the VM's state. The rebuild path (vmRebuild)
+		// relies on this: `vm create` already starts the domain, and the
+		// ensure-running guard must be a clean no-op for a running VM.
+		if qemuAlive(stateDir) {
+			fmt.Fprintf(os.Stderr, "VM %s is already running\n", name)
+			return nil
+		}
 		cmdFile := filepath.Join(stateDir, "command")
 		data, err := os.ReadFile(cmdFile)
 		if err != nil {
@@ -635,18 +645,10 @@ func (c *VmListCmd) Run() error {
 					continue
 				}
 				name := entry.Name()
-				pidFile := filepath.Join(dir, name, "qemu.pid")
 				state := "stopped"
-				alive := false
-				if data, err := os.ReadFile(pidFile); err == nil {
-					if pid, err := strconv.Atoi(strings.TrimSpace(string(data))); err == nil {
-						if proc, err := os.FindProcess(pid); err == nil {
-							if err := proc.Signal(syscall.Signal(0)); err == nil {
-								state = "running"
-								alive = true
-							}
-						}
-					}
+				alive := qemuAlive(filepath.Join(dir, name))
+				if alive {
+					state = "running"
 				}
 				// Skip QEMU rows that duplicate a libvirt-listed name —
 				// libvirt is authoritative when both backends know about
