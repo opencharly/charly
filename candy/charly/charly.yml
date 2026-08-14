@@ -40,12 +40,190 @@ charly:
                       key: "https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg"
                       suite: noble
                       components: main
-        # The charly binary is installed via a `copy: bin/charly` run step — the in-development
-        # binary at candy/charly/bin/charly (synced by `task build:binary`). The OS-tracked
-        # package install (the former `localpkg:` map) is GONE: the sdk's localpkg machinery now
-        # builds via the `charly generate-packages` plugin (sdk/packagekit) from the candy's
-        # `packaging:` section, which lands with the nFPM cutover (Phase 3). Until then the
-        # copy step is the single binary source for both image builds and deploys.
+        # The `packaging:` section is the native-package metadata source for
+        # `charly generate-packages` (sdk/packagekit): the per-distro package repos
+        # (charly-alpine/arch/fedora/ubuntu/debian/openwrt) download this candy's
+        # charly.yml from the release and pass it to the plugin as --candy. The deps are
+        # transcribed from the three legacy pkg/* files (arch PKGBUILD, fedora spec,
+        # debian control), which stay as fixtures until the Phase 3 removal —
+        # charly/packaging_test.go greps them so a dep added to one format but not here
+        # fails CI. The charly binary is installed by the `copy: bin/charly` run step
+        # below (the in-development binary at candy/charly/bin/charly, synced by
+        # `task build:binary`); that step remains the binary source for image builds,
+        # and the localpkg machinery's transition to build from this section lands with
+        # the Phase 3 cutover.
+        packaging:
+            name: charly
+            description: The OpenCharly CLI — compose, build, deploy, and evaluate boxes.
+            maintainer: Andreas Trawoeger <atrawog@opencharly.ai>
+            homepage: https://github.com/opencharly/charly
+            license: MIT
+            section: admin
+            variants:
+                default:
+                    description: The seven everyday welded command plugins.
+                    plugins:
+                        - plugin-secrets
+                        - plugin-feature
+                        - plugin-vm
+                        - plugin-doctor
+                        - plugin-clean
+                        - plugin-settings
+                        - plugin-candy
+                full:
+                    description: All nine welded command plugins.
+                    plugins:
+                        - plugin-secrets
+                        - plugin-udev
+                        - plugin-preempt
+                        - plugin-feature
+                        - plugin-vm
+                        - plugin-doctor
+                        - plugin-clean
+                        - plugin-settings
+                        - plugin-candy
+                minimal:
+                    description: The doctor/clean/settings core.
+                    plugins:
+                        - plugin-doctor
+                        - plugin-clean
+                        - plugin-settings
+            formats:
+                archlinux:
+                    depends:
+                        - glibc
+                        - podman
+                        - gocryptfs
+                        - fuse3
+                        - openssh
+                        - util-linux
+                        - skopeo
+                        - qemu-full
+                        - qemu-img
+                        - virtiofsd
+                        - libvirt
+                        - tailscale
+                        - libarchive
+                        - iproute2
+                        - tmux
+                        - fuse-overlayfs
+                        - slirp4netns
+                        - libisoburn
+                        - cdrtools
+                        - edk2-ovmf
+                        - dnsmasq
+                        - swtpm
+                        - gnupg
+                        - pinentry
+                    optdepends:
+                        docker: alternative container engine — only needed for engine.run=docker (podman is the default)
+                        cloudflared-bin: Cloudflare tunnels (AUR)
+                        gvisor-tap-vsock: podman-machine networking — provides /usr/lib/podman/gvproxy (AUR)
+                        nvidia-utils: nvidia-smi GPU detection + nvidia-ctk CDI generation (GPU targets only)
+                        kubectl: Kubernetes deploys + charly eval k8s probes (kind:k8s targets only)
+                        android-tools: "host adb for the remote `target: android` package-download install path"
+                        libsecret: secret-tool CLI + pinentry-qt Secret Service passphrase auto-retrieval; the bundled plugin-secrets credential store uses the pure-Go go-keyring D-Bus client
+                        dmidecode: SMBIOS inspection inside guests when debugging VM key-injection
+                        openbsd-netcat: remote virt-manager/virt-viewer SPICE console over qemu+ssh (charly eval spice connects directly without it)
+                        go-task: provides /usr/bin/task for `task build:binary` and dev workflows from a source checkout
+                rpm:
+                    depends:
+                        - glibc
+                        - podman
+                        - gocryptfs
+                        - fuse3
+                        - fuse-overlayfs
+                        - slirp4netns
+                        - openssh-clients
+                        - openssh-server
+                        - util-linux
+                        - skopeo
+                        - qemu-system-x86
+                        - qemu-img
+                        - virtiofsd
+                        - libvirt
+                        - libvirt-client
+                        - tailscale
+                        - bsdtar
+                        - iproute
+                        - xorriso
+                        - genisoimage
+                        - edk2-ovmf
+                        - dnsmasq
+                        - swtpm
+                        - gnupg2
+                        - pinentry
+                    suggests:
+                        - docker
+                        - cloudflared
+                        - gvisor-tap-vsock
+                        - xorg-x11-drv-nvidia-cuda
+                        - kubernetes-client
+                deb:
+                    depends:
+                        - podman
+                        - gocryptfs
+                        - fuse3
+                        - fuse-overlayfs
+                        - slirp4netns
+                        - openssh-client
+                        - openssh-server
+                        - util-linux
+                        - skopeo
+                        - qemu-system-x86
+                        - qemu-utils
+                        - virtiofsd
+                        - libvirt-daemon-system
+                        - libvirt-clients
+                        - libarchive-tools
+                        - iproute2
+                        - xorriso
+                        - genisoimage
+                        - ovmf
+                        - dnsmasq-base
+                        - swtpm
+                        - gnupg
+                        - pinentry-curses
+                    suggests:
+                        - docker.io
+                        - cloudflared
+                        - gvisor-tap-vsock
+                        - nvidia-driver
+                        - kubectl
+                apk:
+                    depends:
+                        - podman
+                        - gocryptfs
+                        - fuse3
+                        - fuse-overlayfs
+                        - slirp4netns
+                        - openssh
+                        - util-linux
+                        - skopeo
+                        - qemu-system-x86_64
+                        - qemu-img
+                        - virtiofsd
+                        - libvirt
+                        - libvirt-client
+                        - tailscale
+                        - libarchive-tools
+                        - iproute2
+                        - xorriso
+                        - ovmf
+                        - dnsmasq
+                        - swtpm
+                        - gnupg
+                        - pinentry
+                ipk:
+                    # OpenWrt's repos lack the mandatory charly deps (podman/qemu/
+                    # libvirt/…), so the .ipk carries an empty depends list — the
+                    # package installs, but full functionality needs the host's tooling.
+                    depends: []
+                msix:
+                    # Deferred: charly has no Windows binary (core uses syscall.Exec —
+                    # Linux-only), so no .msix can be built. Kept so the plugin's msix
+                    # format path has a metadata entry to parse.
+                    depends: []
         plan:
             - run: copy=bin/charly
               copy: bin/charly
