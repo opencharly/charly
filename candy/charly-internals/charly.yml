@@ -95,7 +95,7 @@ agents-skill:
                   | Fresh validator / teammate | sub-agent or team teammate with the agent brief | fresh agent thread with the role toml | a fresh separate `kimi` session (interactive or `kimi -p`) briefed with the agent `.md` by path — context isolation is what makes it independent |
                   | Dynamic workflows | `.claude/workflows/*.js` (run `/<name>`) | re-derived per thread | re-derived per session (no workflow runtime) |
                   | Teams | `~/.claude/teams/` (experimental) | concurrent fresh threads | concurrent fresh sessions |
-                  | Gates | hooks in `.claude/settings.json` + `permissions.allow` + the auto-mode classifier | sandbox + on-request approvals (`.codex/config.toml`) | hooks + `[[permission.rules]]` in user-level `~/.kimi-code/config.toml` (no project-level config; repo-guarded delegation to `.claude/hooks/`) — no auto-mode classifier |
+                  | Gates | `permissions.allow` + the auto-mode classifier (`.claude/settings.json` wires NO hooks — the gate scripts in `.claude/hooks/` are invoked by the other harnesses, not by Claude Code) | sandbox + on-request approvals (`.codex/config.toml`) | hooks + `[[permission.rules]]` in user-level `~/.kimi-code/config.toml` (no project-level config; repo-guarded delegation to `.claude/hooks/`) — no auto-mode classifier |
                   | Hook events | UserPromptSubmit / PreToolUse / Stop / TaskCreated / TaskCompleted / TeammateIdle | — (approvals instead) | UserPromptSubmit / PreToolUse / Stop / SubagentStart / SubagentStop |
 
                   **Harness-agnostic invariants:** the agent briefs in
@@ -593,10 +593,25 @@ agents-skill:
                   is no reminder layer — rule knowledge lives in the project rulebook and
                   skills, loaded fresh by every agent at session start.
 
-                  | Hook | Event | Role |
+                  The two gate scripts live in `.claude/hooks/` but are **not wired in Claude Code** —
+                  `.claude/settings.json` declares no `PreToolUse` hooks, so under Claude Code they
+                  fire on nothing. They remain wired in the harnesses that invoke them:
+                  `.reasonix/settings.json`, and `~/.kimi-code/config.toml`, which delegates to
+                  `.claude/hooks/` when the repo markers are present. Most of the discipline they
+                  encode is judged for every harness by the fresh `pr-validator` at merge and by
+                  GitHub branch protection — but not all of it, so do not read the unwiring as
+                  costing nothing. Measured: both scripts DO block what they exist for (`git commit
+                  --no-verify`, a `core.hooksPath` override, `git push --force`, a direct push to
+                  `main` all exit 2), and branch protection covers `main` ALONE — no rulesets, no
+                  other protected branch. So a `feat/` branch force-push, which the rulebook forbids
+                  everywhere, has no server-side block under Claude Code, and the `pr-validator`
+                  cannot substitute: it inspects a branch that has already been rewritten. Under
+                  this harness the agent is the enforcement for those mechanics.
+
+                  | Hook | Event (where wired) | Role |
                   |---|---|---|
-                  | `pre-commit-gate.sh` | `PreToolUse(Bash)` | blocks hook bypass (`--no-verify`/`-n`/`core.hooksPath`), untokenizable commit commands, configured Go lint failures for staged Go modules, and a new-or-grown `charly/*_aliases.go` file or declaration-form kit-alias line (the ZERO-ALIASES gate) |
-                  | `pre-push-gate.sh` | `PreToolUse(Bash)` | blocks force-push and a direct push to `main` |
+                  | `pre-commit-gate.sh` | `PreToolUse(Bash)` in `.reasonix` / kimi; **unwired in Claude Code** | blocks hook bypass (`--no-verify`/`-n`/`core.hooksPath`), untokenizable commit commands, configured Go lint failures for staged Go modules, and a new-or-grown `charly/*_aliases.go` file or declaration-form kit-alias line (the ZERO-ALIASES gate) |
+                  | `pre-push-gate.sh` | `PreToolUse(Bash)` in `.reasonix` / kimi; **unwired in Claude Code** | blocks force-push and a direct push to `main` |
 
                   Attribution identity/confidence, change class, CHANGELOG coverage,
                   architecture, and R0–R10 evidence belong exclusively to the fresh
@@ -3472,7 +3487,8 @@ git-workflow-skill:
             Every change to an OpenCharly repo lands through ONE discipline: a **pull request**
             that a FRESH `pr-validator` agent independently validates and merges. A **direct
             push to `main` is FORBIDDEN and mechanically disabled** — GitHub branch protection
-            (`enforce_admins`) + the `pre-push-gate` block it in every repo. The **R10 pass
+            (`enforce_admins`) block it in every repo (the `pre-push-gate` adds a local
+            backstop in the harnesses that wire it — NOT Claude Code). The **R10 pass
             authorizes OPENING the PR, never a self-merge**: the two-step landing separates the
             author (who opens the PR) from the fresh evaluator (who validates, merges, tags).
             This skill is the mechanics; the project rulebook "Post-Execution Policies" (`AGENTS.md` / `CLAUDE.md`) carries the
@@ -3482,7 +3498,7 @@ git-workflow-skill:
 
             ## Non-negotiable invariants
 
-            - **No direct push to `main`** (the project rulebook's PR-only landing mandate — see "Post-Execution Policies"). Enforced by GitHub branch protection (the `charly/pr-validator` status + a PR + linear history + `enforce_admins`) and the `pre-push-gate` locally. Organization-wide apply/verify is owned only by `opencharly/.github/scripts/branch-protection.sh`.
+            - **No direct push to `main`** (the project rulebook's PR-only landing mandate — see "Post-Execution Policies"). Enforced by GitHub branch protection (the `charly/pr-validator` status + a PR + linear history + `enforce_admins`), which is what makes it mechanical; the `pre-push-gate` adds a local backstop only in the harnesses that wire it (`.reasonix`, kimi) — it is NOT wired under Claude Code. Organization-wide apply/verify is owned only by `opencharly/.github/scripts/branch-protection.sh`.
             - **Never force-push, on any branch, ever** (mandate, same rulebook section). `main` only fast-forwards via the validator's squash-merge; a `feat/` branch, once pushed, advances only by ADDING commits (the author's change, any review-round fix commits, then the evaluator's merge-time version stamp), and the squash-merge collapses them. A stale `feat/` catches up with `gh pr update-branch` (a merge, NOT a rebase-force); tags are add-only. **Amending a `feat/` branch is a normal authoring action — legal until the first push** (amending a pushed branch would require a force-push, which is forbidden).
             - **R10-gated; the merge requires the fresh `pr-validator`'s green status.** R10 PASS authorizes opening the PR (with pasted evidence); a rule violation or R10 FAIL means no green `charly/pr-validator` status and no merge — fix in the same tree, re-run R10, re-push; the status resets and the evaluator re-runs.
             - **Zero warnings is part of R10** (project rulebook R1). A version-mismatch warning clears with `charly box reconcile`; any other warning gets `/charly-internals:root-cause-analyzer` then a real fix — "warning" is never an accepted end state.
@@ -3694,9 +3710,12 @@ git-workflow-skill:
                     UNPUSHED — the "amend only before the first push" invariant above. THEN push
                     `feat/<slug>` and open the PRs (B1 step 1; multi-repo order = B2).
 
-                  Nothing pre-bed ever ships, and every intermediate commit passes the PreToolUse
-                  tier gate TRUTHFULLY at the stage it was made — the tier only ever moves UP, to
-                  match proof that now exists.
+                  Nothing pre-bed ever ships, and every intermediate commit states its attribution
+                  tier TRUTHFULLY at the stage it was made — the tier only ever moves UP, to match
+                  proof that now exists. No hook enforces this in any harness: the gate scripts
+                  contain no tier logic (`gate_test.py` asserts attribution text is ALLOWed as
+                  validator-owned), so tier truth is judged by the fresh `pr-validator`, per the
+                  rulebook's "never by hook regexes".
 
                   ## B4 — sync to upstream + prune (per repo: main, sdk, plugins, docs, box/*, pkg/*)
 
@@ -4448,6 +4467,29 @@ go-skill:
             ```
 
             This also interacts with the dual-path gotcha documented in `/charly-tools:charly`: `bin/charly` (repo-root, used by host-side invocations) and `candy/charly/bin/charly` (what the `charly` candy actually copies into images) must stay in sync. The canonical `task build:binary` path does both; a manual `go build -o bin/charly ./charly` needs an explicit `cp bin/charly candy/charly/bin/charly` follow-up.
+
+            ## Environment constraints — sandboxed /tmp + Go temp dirs
+
+            Some dev hosts (a sandboxed runner, a small tmpfs `/tmp`) cap writes to the system
+            temp dir at a few tens of MB per command, regardless of the free space `df` reports.
+            Go builds and golangci-lint routinely exceed that, and the failures look like tool
+            bugs ("disk quota exceeded", "parallel golangci-lint is running") — they are
+            environmental, not code defects. On such a host:
+
+            - Run Go builds/tests with `GOTMPDIR=~/.cache/go-tmp` (a root-fs dir) — Go's build
+              work then never touches the capped temp dir.
+            - golangci-lint v2 locks at `$TMPDIR/golangci-lint.lock`; a missing TMPDIR dir makes
+              the lock open fail with ENOENT, which golangci-lint reports as "parallel golangci-lint
+              is running" — a false positive, not a real parallel run. Create the TMPDIR dir first
+              (or pass `--allow-parallel-runners` with a fresh cache). See `/charly-internals:go-quality`.
+            - `.claude/hooks/pre-commit-gate.sh` (the staged-Go-lint discipline backstop) redirects
+              its own lint temp dirs to `~/.cache/charly-gate-lint/` and creates the TMPDIR/GOTMPDIR
+              subdirs, so it is unaffected by the cap wherever it runs. Note it is NOT wired in
+              Claude Code — `.claude/settings.json` wires no `PreToolUse` hooks, so under Claude
+              Code the script fires on nothing and nothing runs it automatically. It stays live in
+              the other harnesses that invoke it (`.reasonix/settings.json`, and `~/.kimi-code/config.toml`
+              which delegates to `.claude/hooks/`). Running Go work under Claude Code, apply the two
+              bullets above yourself.
 
             ## R9 — deployed binary matches source; runtime deps live in the PKGBUILD
 
@@ -5267,12 +5309,24 @@ go-quality-skill:
 
             `go test ./...` + `golangci-lint run` + `task build:binary` are smoke, not the gate — the gate is `charly check run <bed>` on the bed(s) that exercise the change, disposable-only, fresh-rebuild, zero warnings, pasted proof. The bed-selection matrix (incl. cross-cutting fan-out by owner) is owned by `/charly-check:check` "R10 gate by change class"; see also `/charly-internals:cutover-policy`.
 
-            **A mechanical pre-commit backstop is separate from the R10 gate.** The `pre-commit-gate.sh`
-            hook (`.claude/hooks/`) runs the CONFIGURED `golangci-lint run` on every module a commit's
-            `*.go` change touches and BLOCKS a commit that is not lint-clean (fail-open when golangci-lint is
-            absent) — so a lint-dirty commit can't land at all. That backstop does NOT replace the bed R10
-            gate (a green linter still proves compilation, not behaviour); it just guarantees the `golangci-lint`
-            smoke is green at commit time. Doctrine: `/charly-internals:agents` "Hooks doctrine".
+            **A mechanical pre-commit backstop exists in SOME harnesses, and is separate from the R10
+            gate.** The `pre-commit-gate.sh` hook (`.claude/hooks/`) runs the CONFIGURED `golangci-lint
+            run` on every module a commit's `*.go` change touches and blocks a commit that is not
+            lint-clean (fail-open when golangci-lint is absent). **It is NOT wired under Claude Code** —
+            `.claude/settings.json` declares no `PreToolUse` hooks — so under this harness a lint-dirty
+            commit lands and nothing stops it; run the linter yourself. It is wired in
+            `.reasonix/settings.json` and via `~/.kimi-code/config.toml`, which delegates to
+            `.claude/hooks/`. Where it does run, it does NOT replace the bed R10 gate (a green linter
+            proves compilation, not behaviour); it only guarantees the `golangci-lint` smoke is green at
+            commit time. Doctrine: `/charly-internals:agents` "Hooks doctrine".
+
+            **The hook's lint temp dirs live on the root fs.** The hook redirects its golangci-lint
+            run to a per-user cache (`~/.cache/charly-gate-lint/`) and creates the `TMPDIR`/`GOTMPDIR`
+            subdirs there before running golangci-lint, so the lint never writes into a capped system
+            temp dir. The constraint that motivates it — the per-command write cap, and the
+            "parallel golangci-lint is running" message that is really an ENOENT on a missing
+            `$TMPDIR` directory — is stated once in `/charly-internals:go` "Environment constraints —
+            sandboxed /tmp + Go temp dirs"; see there for the diagnosis and the fix.
 
             ## Cross-References
 
@@ -9148,12 +9202,18 @@ pr-validator-agent:
                   body-move + inventory, stays a blocker. No "permanent residue" framing (a
                   K-wave exit + a tracked task is required). Pre-existing alias files / kit
                   imports = migration INVENTORY (not blockers); NEW/GROWN ones (outside the
-                  migration exception) = blockers. **The `pre-commit-gate.sh` ZERO-ALIASES hook
-                  is the mechanical floor under this check**: it blocks a NEW `charly/*_aliases.go`
-                  file and a declaration-form kit-alias line (`type X = kit.Y` / `var x = kit.Y`)
-                  tier-independently, fail-open — a hook block is a HARD FAIL (never a workaround
-                  target), and a hook ALLOW does NOT discharge the validator's judgment, because
-                  IMPORT-PURITY of a plain kit IMPORT/CALL is validator-judged, not hook-gated.
+                  migration exception) = blockers. **Do NOT assume a mechanical floor under this
+                  check.** The `pre-commit-gate.sh` ZERO-ALIASES hook blocks a NEW
+                  `charly/*_aliases.go` file and a declaration-form kit-alias line (`type X = kit.Y` /
+                  `var x = kit.Y`) tier-independently, fail-open — but it is **NOT wired under Claude
+                  Code**, where validators normally run (`.claude/settings.json` declares no
+                  `PreToolUse` hooks). It is wired in `.reasonix/settings.json` and via
+                  `~/.kimi-code/config.toml`. So under Claude Code this check is ENTIRELY your
+                  judgment and nothing has pre-screened the diff — inspect every staged
+                  `charly/*.go` change yourself. Where the hook does run, a hook block is a HARD FAIL
+                  (never a workaround target), and a hook ALLOW still does NOT discharge your
+                  judgment, because IMPORT-PURITY of a plain kit IMPORT/CALL is validator-judged,
+                  not hook-gated.
                 - **PER-ITEM TRACE (mandatory in the POSTED comment).** For each staged
                   `charly/*.go` change, the POSTED validation comment carries an explicit line
                   per item: any new/grown alias file (→ blocker); any new kit import (→ blocker
