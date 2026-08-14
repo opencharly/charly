@@ -340,16 +340,10 @@ handoffs, validator phases, and workflow mechanics belong to
 
 Hooks enforce only deterministic command mechanics such as bypass flags,
 force-push, direct-main push, untokenizable commit commands, configured staged
-lint, and forbidden alias forms. **Where they are wired is harness-specific:**
-`.claude/settings.json` declares no `PreToolUse` hooks, so under Claude Code the
-two gate scripts in `.claude/hooks/` fire on nothing; they are wired in
-`.reasonix/settings.json` and via `~/.kimi-code/config.toml`, which delegates to
-`.claude/hooks/`. Never assume a hook has pre-screened a command — in the
-harness you are running, it may not have. There is no reminder-hook layer: rule
+lint, and forbidden alias forms. There is no reminder-hook layer: rule
 knowledge lives in the rulebooks and skills. The fresh validator alone judges attribution truth, change class,
-changelog coverage, architecture, and R0–R10 proof — and it is the layer that
-binds in EVERY harness, alongside GitHub branch protection. Hooks guard
-mechanics where wired; agents judge policy and evidence everywhere.
+changelog coverage, architecture, and R0–R10 proof. Hooks guard mechanics;
+agents judge policy and evidence.
 
 ## AI Attribution (Fedora Policy Compliant)
 
