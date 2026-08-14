@@ -147,6 +147,26 @@ func verbManagerRunning(ctx context.Context, client *verbAgentTeamsClient, name 
 	}
 }
 
+// matrixDomainDefault mirrors the `${AGENTTEAMS_MATRIX_DOMAIN:-…}` default used
+// by candy/agentteams-matrix, -element and -controller. Kept in one place here
+// so the verb and those candies cannot drift apart silently.
+const matrixDomainDefault = "matrix-local.agentteams.io:8080"
+
+// venueMatrixDomain reads AGENTTEAMS_MATRIX_DOMAIN from the live venue over the
+// executor — the same channel the admin SA token comes through — falling back to
+// the shared default when it is unset. Reading it (rather than exposing a new
+// authoring field) keeps ONE source of truth: whatever the deploy sets is what
+// the verb probes, with no second place for an operator to keep in sync.
+func venueMatrixDomain(ctx context.Context, cc kit.CheckContext) string {
+	stdout, _, _, err := cc.Exec().RunCapture(ctx, "printenv AGENTTEAMS_MATRIX_DOMAIN")
+	if err == nil {
+		if d := strings.TrimSpace(stdout); d != "" {
+			return d
+		}
+	}
+	return matrixDomainDefault
+}
+
 // verbWorkerRunning creates the named Worker CR (idempotent — a 409 on a
 // re-run is fine; the controller volume persists the CR and the poll reconciles
 // it to Running), polls until it reaches Running WITH its Matrix room
@@ -171,8 +191,12 @@ func verbWorkerRunning(ctx context.Context, cc kit.CheckContext, client *verbAge
 		} else {
 			if resp.Phase == "Running" && strings.HasPrefix(resp.RoomID, "!") {
 				// The room exists on the homeserver: resolve the worker room
-				// alias via the public Matrix directory API.
-				alias := fmt.Sprintf("#agentteams-worker-%s:matrix-local.agentteams.io:8080", name)
+				// alias via the public Matrix directory API. The server name is
+				// read from the venue rather than hardcoded — it is operator-
+				// settable everywhere else it appears (AGENTTEAMS_MATRIX_DOMAIN,
+				// documented on candy/agentteams-matrix), so a verb that baked
+				// the default in would work only on a default-domain deploy.
+				alias := fmt.Sprintf("#agentteams-worker-%s:%s", name, venueMatrixDomain(ctx, cc))
 				room, err := resolveMatrixRoom(ctx, cc, client, alias)
 				if err != nil {
 					return "", fmt.Errorf("worker %s Running but room alias unresolvable: %w", name, err)
