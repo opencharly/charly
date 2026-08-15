@@ -353,6 +353,15 @@ helm-skill:
             `fleet add`, so the `k3s-server` candy's own node-ready check cannot gate
             your install. An install candy waits for the node itself.
 
+            **`context:` is what decides when a step runs**, and the example below
+            depends on it. `context: [deploy]` runs during `charly fleet add` —
+            that is where the mutating install belongs. `context: [runtime]` runs
+            under `charly check live` / `charly check run` against the deployed
+            system. That is how one candy can both install a release at deploy time
+            and assert it at check time without the assertion running too early: the
+            `check:` step below is `[runtime]`, so it does not execute during
+            `fleet add`, which is exactly what the law above describes.
+
             `candy/helm-chart` is the worked example — the `check-helm-vm` bed's
             install leg, reproduced in full because the readiness step's exact
             shape is the lesson:
@@ -458,7 +467,7 @@ helm-skill:
             | `repo` | no | chart repository URL |
             | `version` | no | chart version to pin |
             | `namespace` | no | target namespace |
-            | `values_files` | no | values YAML paths → `valuesFile` |
+            | `values_files` | no | **first entry only** → `valuesFile`; see below |
 
             ```yaml
             my-app:
@@ -473,10 +482,21 @@ helm-skill:
                       namespace: web
             ```
 
-            The same three field names carry across both arms — `chart`, `release`,
-            `repo` mean what they mean in `helm-release:` — so one PROD chart pins
-            translate between venues without re-authoring. That is what makes the
-            helm spike flavor reproduce a cluster deploy rather than approximate it.
+            **`values_files` is where the two arms diverge — do not assume it
+            carries over.** A kustomize `helmCharts` entry holds exactly one
+            `valuesFile`, so the emitter takes the FIRST entry and silently discards
+            the rest (`candy/plugin-k8sgen/k8sgen.go:204-205`). The `helm-release:`
+            step passes every file, one `--values` each. So
+            `values_files: [base.yaml, prod.yaml]` applies both files through the
+            step and only `base.yaml` through a `kubernetes:` deploy — no error, no
+            warning. If a `kubernetes:` deploy needs several values files, pre-merge
+            them into one.
+
+            The emitter also sets `includeCRDs: true` on every entry,
+            unconditionally (`k8sgen.go:207`); there is no field to turn it off.
+
+            `chart`, `release`, `repo`, `version` and `namespace` do mean the same
+            thing in both arms, so those transfer between venues unchanged.
 
             Because the kustomize helmCharts transformer is gated behind
             `--enable-helm`, which `kubectl apply -k` cannot pass, the apply path
