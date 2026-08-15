@@ -4046,9 +4046,20 @@ git-workflow-skill:
                   submodule commits, and no single pin reproduces a composite.
 
                   Landing the mirror ahead is not the hazard — it is REQUIRED, because a superproject
-                  cannot pin a commit that does not exist yet. The hazard is the GAP: land each mirror
-                  leg immediately before its superproject leg, so exactly one mirror merge is
-                  outstanding at a time and the two coincide naturally, with no reconciliation to
+                  cannot pin a commit that does not exist yet. The hazard is the GAP, and specifically
+                  **other legs' projections landing inside it**.
+
+                  The mechanism, stated because a reader without it reconstructs the unqualified rule
+                  and then finds it forbids the procedure below: several legs share ONE submodule
+                  pointer. While your mirror merge sits unpinned, every other leg that lands projects
+                  into the same tree. The superproject then has no sha that reproduces only your
+                  change — the mirror is a composite, and **the last leg to pin inherits every
+                  projection beneath it**. That is not hypothetical: it is how a four-cutover forced
+                  union came to carry sources none of its authors chose to couple.
+
+                  So: land each mirror leg immediately before its superproject leg, keeping exactly
+                  one mirror merge outstanding at a time. Nothing intervenes, the mirror contains only
+                  your own projection, and the two shas coincide naturally with no reconciliation to
                   perform.
 
                   *Proof that this is a live invariant rather than an aspiration:* regenerate at
