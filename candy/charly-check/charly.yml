@@ -2360,10 +2360,28 @@ check-skill:
                   - a **full ref** (`ghcr.io/opencharly/web:2026.227.0836`) or a
                     **`<box>:<calver>`** pin names one artifact — it is used verbatim;
                   - a **bare short name** (`web`) is elected against local container storage
-                    by the CalVer ordering (the content-derived `ai.opencharly.version` label
-                    first, the per-build tag as the tiebreak), and the verb **REFUSES** when
-                    that election is not the newest local BUILD of that box, naming both refs
-                    and the pinned re-invocation.
+                    by the content-derived `ai.opencharly.version` label first and the image's
+                    CREATION TIME second, and the verb **REFUSES** when that election is not
+                    the newest local BUILD of that box, naming both refs and the pinned
+                    re-invocation.
+
+                  **"Newest build" means creation time, not the tag** — and that distinction is
+                  load-bearing rather than pedantic. `charly box build --tag <x>` REPLACES the
+                  CalVer tag rather than adding to it, so every bed build carries a single tag
+                  like `check-<bed>-<calver>`, which is not a CalVer at all. An ordering keyed on
+                  the tag therefore ties every bed-built candidate and falls through to a
+                  meaningless last resort; creation time does not tie, needs no tag convention,
+                  and rides the same `images --format json` rows the resolver already reads.
+
+                  Two consequences worth knowing:
+
+                  - **Many tags on ONE image id are one artifact.** A `--tag` build and a plain
+                    CalVer build of identical content share an id, so there is nothing older or
+                    newer to arbitrate and the verb stays silent.
+                  - **When the ordering cannot be established, the verb refuses.** An engine that
+                    reports no creation time for some candidate yields an explicit "could not
+                    establish which build is newest" error rather than a silent pass. Passing on
+                    unknown is the shape that let a 17-hour-old image be certified green.
 
                   The refusal exists because the election's primary key is a CONTENT version:
                   an image built from a differently-versioned source tree (a sibling worktree,
@@ -2372,7 +2390,13 @@ check-skill:
                   step names that proves nothing about what you just built — the worst failure
                   this system has, because it is indistinguishable from a real pass. A verdict
                   verb therefore never guesses; it asks. Every other consumer of a short name
-                  (deploy, `charly vm build`, builder bootstrap) keeps the lenient election.
+                  (deploy, `charly vm build`, builder bootstrap) shares the election but never
+                  refuses.
+
+                  Whatever the outcome, the verb prints the ref it resolved BEFORE it can bail —
+                  including when the image carries no baked plan at all. A verdict that cannot
+                  name the artifact it judged is unverifiable, and "read the `Image:` line" is
+                  only a usable habit if the line is always there.
 
                   This is also why the R10 bed sequence pins: `charly check run <bed>` builds
                   `box build <image> --tag <run-tag>` and then checks `<image>:<run-tag>`, an

@@ -42,7 +42,12 @@ func (c *CheckFeatureBoxCmd) Run() error {
 	if err != nil {
 		return err
 	}
+	// Provenance FIRST, on every path — same rule as `charly check box` (check_cmd.go): a verdict
+	// verb must always name the artifact it judged, and the no-plan path is exactly where that
+	// matters most. Header carries the ref on the normal path; on the no-plan path only
+	// reply.Image is populated, so it is printed directly.
 	if reply.NoSteps {
+		fmt.Fprintf(os.Stderr, "Image: %s\n", reply.Image)
 		fmt.Fprintln(os.Stderr, "No plan steps baked into this image (author a plan: with check: steps).")
 		return nil
 	}

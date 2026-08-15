@@ -89,11 +89,17 @@ func (c *CheckBoxCmd) Run() error {
 	if err != nil {
 		return err
 	}
+	// Provenance FIRST, on every path. A verdict verb that cannot say which artifact it judged is
+	// unverifiable by construction, and the mitigation this cutover told operators to use — "read
+	// the Image: line before believing a verdict" — silently assumed there was a line to read.
+	// There was not: the no-plan path bailed before printing one, so exactly the images where
+	// provenance matters most (a build that baked no plan at all) reported nothing and exited 0.
+	// The ref is already in the reply on that path; it simply was not printed.
+	fmt.Fprintf(os.Stderr, "Image: %s\n", reply.Image)
 	if reply.NoSteps {
 		fmt.Fprintln(os.Stderr, "No plan steps defined for this image.")
 		return nil
 	}
-	fmt.Fprintf(os.Stderr, "Image: %s\n", reply.Image)
 
 	// YAML format emits the shape the benchmark scorer (ParseCharlyTestOutput) expects — the
 	// header prints to stderr above, the scorer payload to stdout. Exact-match "yaml" (mirroring
