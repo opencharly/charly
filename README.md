@@ -279,19 +279,11 @@ which mode the host supports.
 
 ## Install
 
-**Install `charly` as a native package.** That is how you use it, and everything else here — and
-every page on [opencharly.ai](https://opencharly.ai) — assumes a machine with `charly` installed
-and no charly checkout anywhere. The native packages are built by the `charly generate-packages`
-plugin (nFPM-based) and published to per-distro package repos — landing with the nFPM cutover.
-Until then, build the binary from a source tree and put it on your `$PATH` (needs Go 1.26+ and
-[go-task](https://taskfile.dev)):
+**Install `charly` once, then use it from anywhere.** Everything else here — and every page on
+[opencharly.ai](https://opencharly.ai) — assumes a machine with `charly` installed and no charly
+checkout anywhere.
 
-```bash
-task build:binary   # builds bin/charly (CalVer-stamped)
-install -Dm755 bin/charly ~/.local/bin/charly
-```
-
-The system-wide install step is always yours to run, never a side effect of building.
+**[How to install →](https://opencharly.ai/start/install/)**
 
 Once it is on your `$PATH`, `--repo` reads any published project without cloning it:
 
