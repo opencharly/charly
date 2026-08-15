@@ -1,6 +1,11 @@
 # OpenCharly
 
-**The fully stocked gourmet kitchen for you and your agents.**
+**The fully equipped factory floor for you and your agents.**
+
+**A whole factory ready to produce every candy imaginable.** A **candy** is one composable unit of a
+working environment; a **box** is the machine it runs in. The confectionery names are not
+decoration — `candy:` is a real keyword and `candy/` is a real directory. A factory is named for
+what it makes: the floor is the factory, the candy is the output, and the agent is in the loop.
 
 `charly` is a command-line tool that builds container images from a declarative list of **candies**, and applies
 that same list to a VM guest, a Kubernetes cluster, a host, or an Android device. Every substrate
@@ -392,7 +397,7 @@ guest before you point it at your workstation.
 `fedora-coder` and its `arch`, `debian` and `ubuntu` siblings — carry a large set of candies each: the AI
 coding CLIs (`claude-code`, `codex`, `gemini`, `forgecode`), every language runtime, DevOps
 tooling, nested rootless containers and rootless libvirt VMs, all at uid 1000 with no
-`--privileged`. Same format, same commands. A fully stocked kitchen really does ship with the sink.
+`--privileged`. Same format, same commands.
 
 ---
 
