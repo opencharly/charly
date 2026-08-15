@@ -218,6 +218,29 @@ func (r *Registry) resolve(class ProviderClass, word string) (Provider, bool) {
 	return nil, false
 }
 
+// resolveCommand returns the COMMAND provider for word, preferring the capability NESTED under
+// parent when one is parked there. It is the exact INVERSE of register's parking rule and lives
+// beside it so the two cannot drift: register gives the plain key to the TOP-LEVEL command and
+// parks a colliding NESTED one at "command:<word>:<parent>", so a plain-key lookup for a nested
+// invocation returns the WRONG capability — `charly box feature run` resolved to the top-level
+// `charly feature`, whose grammar has no `run`, making the nested command unreachable from the
+// day it was introduced.
+//
+// parent == "" (a top-level invocation) is the plain lookup, unchanged. A nested invocation whose
+// word never collided was never parked, so the parented key misses and the plain key answers —
+// which is every other `box <word>` (build, validate, list, …), each uniquely worded.
+func (r *Registry) resolveCommand(word, parent string) (Provider, bool) {
+	if parent != "" {
+		r.mu.RLock()
+		p, ok := r.byKey[provKey(ClassCommand, word)+":"+parent]
+		r.mu.RUnlock()
+		if ok {
+			return p, true
+		}
+	}
+	return r.resolve(ClassCommand, word)
+}
+
 // Typed resolvers — what the call sites use. They never branch on transport.
 func (r *Registry) ResolveVerb(word string) (Provider, bool) { return r.resolve(ClassVerb, word) }
 func (r *Registry) ResolveKind(word string) (Provider, bool) { return r.resolve(ClassKind, word) }

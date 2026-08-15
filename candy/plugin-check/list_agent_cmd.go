@@ -1,6 +1,6 @@
 package check
 
-// list_agent_cmd.go — `charly check list-ai` (P12 Unit iv). Prints the project's
+// list_agent_cmd.go — `charly check list-agent` (P12 Unit iv). Prints the project's
 // configured agents (the AI-CLI catalog). PrintAgents relocates here from the
 // former core-side agent catalog helper; the OPAQUE kind:agent catalog is read off
 // the resolved-project envelope's AgentBodies (the host's uf.PluginKinds["agent"]).
@@ -18,7 +18,8 @@ import (
 	"text/tabwriter"
 )
 
-// CheckListAgentCmd implements `charly check list-ai`.
+// CheckListAgentCmd implements `charly check list-agent` (the name CheckCmd declares and Kong
+// dispatches — check_cmd.go's ListAgent field records why the old `cmd:"list-ai"` tag was not it).
 type CheckListAgentCmd struct{}
 
 func (c *CheckListAgentCmd) Run() error {
