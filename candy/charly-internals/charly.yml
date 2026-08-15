@@ -3849,8 +3849,10 @@ git-workflow-skill:
                     individually, never as one tree.
 
                   **Prove a fix is in the BUILT BINARY by a content marker, NOT by the version stamp.**
-                  `scripts/calver.sh` derives the CalVer from the HEAD commit's UTC time (`git log -1
-                  --format=%cd`), so the stamp identifies the SOURCE COMMIT, never the build moment — a
+                  `scripts/calver.sh` derives the CalVer from the HEAD commit's UTC time (`TZ=UTC0 git
+                  log -1 --format=%cd --date='format-local:%Y %j %H %M'` — the `TZ=UTC0` is what makes
+                  the bare `%cd` UTC; without it `%cd` uses the commit's own TZ offset), so the stamp
+                  identifies the SOURCE COMMIT, never the build moment — a
                   `task build:binary` on a DIRTY working tree reports the IDENTICAL version as the clean
                   commit under it. So `charly version` matching the expected CalVer does NOT prove your
                   uncommitted fix compiled in. Prove fix-presence by a content marker instead: `strings
@@ -3991,27 +3993,15 @@ git-workflow-skill:
                   to sessions, so refreshing it is mandatory. (A ` M <sub>` in a worktree used only for
                   the ff-merge is this drift, not lost work.)
 
-                  **A disposable `localpkg` bed builds from the submodule's ON-DISK WORKING-TREE
-                  checkout, NOT from the committed gitlink alone.** After a CLEAN gitlink
-                  auto-merge (no conflict), `git ls-tree HEAD <sub>` can already show the correct
-                  new pin while the submodule's on-disk `HEAD` is still the OLD commit — a
-                  gitlink merge does not itself check out the new submodule content; that needs
-                  its own `git -C <wt> submodule update --checkout <path>` (or `--recursive`
-                  over the initialized set), same as any other post-merge refresh in this step.
-                  Skipping it means the bed silently builds STALE source even though the
-                  committed pointer is correct. Signature: the localpkg build derives its repo
-                  root as `/tmp` (a symptom of resolving the wrong tree) and bakes a stale
-                  `pkgver` into the package it builds. (RCA'd 2026-07-20: `pkg/arch`
-                  `96ce37c`-stale on disk vs `5734a83` actually committed.)
-
-                  **A derived `pkgver` left dirty in `pkg/arch/PKGBUILD` persists ACROSS the
-                  session, per worktree.** `pkg/arch/calver.sh` stamps `PKGBUILD` with a
-                  derived `pkgver` at `makepkg` time, and that edit is a real working-tree
-                  change — it does not self-revert between bed runs. Discard it (`git -C <wt>
-                  checkout -- pkg/arch/PKGBUILD`, or the tree's standard clean step) before
-                  EVERY bed re-gate, in EVERY worktree that ran a `localpkg`/package build — not
-                  only the main checkout — or the next run's `git status` reads dirty for a
-                  reason unrelated to your actual edits.
+                  **A disposable bed that builds from a submodule builds from the submodule's
+                  ON-DISK WORKING-TREE checkout, NOT from the committed gitlink alone.** After a
+                  CLEAN gitlink auto-merge (no conflict), `git ls-tree HEAD <sub>` can already
+                  show the correct new pin while the submodule's on-disk `HEAD` is still the OLD
+                  commit — a gitlink merge does not itself check out the new submodule content;
+                  that needs its own `git -C <wt> submodule update --checkout <path>` (or
+                  `--recursive` over the initialized set), same as any other post-merge refresh
+                  in this step. Skipping it means the bed silently builds STALE source even
+                  though the committed pointer is correct.
 
                   **Landing gotchas (each cost real time):** `git merge-base --is-ancestor A B` ERRORS if B's object isn't
                   fetched (common for a sibling-worktree submodule) → `git fetch` first; cross-check
@@ -4491,6 +4481,16 @@ go-skill:
               the other harnesses that invoke it (`.reasonix/settings.json`, and `~/.kimi-code/config.toml`
               which delegates to `.claude/hooks/`). Running Go work under Claude Code, apply the two
               bullets above yourself.
+            - **Cumulative /tmp usage cap — the Bash tool's output capture dies.** Beyond the
+              per-command cap, the sandbox also caps TOTAL /tmp usage (observed at ~80% of the
+              tmpfs). When /tmp fills to that point, the Bash tool's output capture fails: every
+              command that writes to stdout/stderr exits 1 with no output, `python3` exits 120
+              (Python's "failed to flush stdout at shutdown" code), while no-output commands
+              (`true`, `echo x > /dev/null`) still succeed. The underlying error is
+              `write error: Disk quota exceeded`. Fix: clear the accumulated `tmp.*` Go temp
+              dirs (and other junk) in /tmp to drop usage below the cap — on this host 17G of
+              `tmp.*` dirs had accumulated from lint runs and other operations. A session
+              restart also resets it (fresh sandbox quota).
 
             ## R9 — deployed binary matches source; runtime deps live in the PKGBUILD
 
