@@ -62,3 +62,29 @@ func TestCheckBoxNoStepsPrintsProvenance(t *testing.T) {
 		t.Fatalf("the no-plan message was lost:\n%s", out)
 	}
 }
+
+// TestFeatureBoxNoStepsPrintsProvenance gates the SIBLING arm. The rule is cited as R3 in this
+// cutover's own narrative — "both build-scope verbs print it FIRST" — and an ungated half is not
+// applied: deleting the line from feature_box_gather.go broke no test at all, which is how a
+// principle quietly becomes true of one caller and false of the other.
+func TestFeatureBoxNoStepsPrintsProvenance(t *testing.T) {
+	const ref = "ghcr.io/opencharly/fedora-nonfree:2026.227.0836"
+	orig := hostCheckRun
+	defer func() { hostCheckRun = orig }()
+	hostCheckRun = func(spec.CheckRunRequest) (kit.CheckRunReply, error) {
+		return kit.CheckRunReply{Image: ref, NoSteps: true}, nil
+	}
+
+	out := captureStderr(t, func() {
+		cmd := &CheckFeatureBoxCmd{Image: "fedora-nonfree"}
+		if err := cmd.Run(); err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+	})
+	if !strings.Contains(out, "Image: "+ref) {
+		t.Fatalf("feature-box no-plan path printed no provenance:\n%s\nwant an `Image: %s` line", out, ref)
+	}
+	if !strings.Contains(out, "No plan steps baked") {
+		t.Fatalf("the no-plan message was lost:\n%s", out)
+	}
+}

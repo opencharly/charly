@@ -451,6 +451,12 @@ func dispatchLabels(args []string) error {
 	if err != nil {
 		return err
 	}
+	// Provenance FIRST, on every path — the same rule `charly check box` follows. This verb is the
+	// charly-native R8 artifact check, so a reader must be able to tell WHICH image the labels came
+	// from; without the line, `box labels <short-name>` reports a capability contract with no way to
+	// audit which artifact it read. It goes to STDERR so `--format <key>`'s single raw stdout value
+	// (the scripting contract every plan step pipes into grep) is byte-unchanged.
+	fmt.Fprintf(os.Stderr, "Image: %s\n", imageRef)
 	labels, err := kit.InspectImageLabels(rt.RunEngine, imageRef)
 	if err != nil {
 		if !kit.LocalImageExists(rt.RunEngine, imageRef) {
