@@ -39,21 +39,28 @@ Replace the `pkg/` packaging workflow (three `pkg/*` git submodules + the contai
       (cloudinit-fix, `e3ee0b64`, `v2026.226.1719`), and the three box/* distro
       re-stamps (debian `90c260b2`/`v2026.226.1807`, fedora `107298d5`/`v2026.226.1830`,
       ubuntu `72cb06ea`/`v2026.226.1833`).
-- [ ] **Phase 0 — plugin repo** `opencharly/plugin-generate-packages` (the current unit).
-      PR #1 open (`feat: add the generate-packages command plugin`), fresh pr-validator
-      running. The repo was bootstrapped with a clean empty `main` root (aad63cd) after a
-      bootstrap mistake (the first empty `main` commit inherited the Phase 0 tree — fixed
-      via the user-authorized default-branch dance; the content now lands via PR #1).
+- [x] **Phase 0 — plugin repo** `opencharly/plugin-generate-packages` (the current unit).
+      PR #1 landed (`f4125a7b`, tagged `v2026.227.0013`); its release published the
+      prebuilt plugin assets (`generate-packages-linux-<arch>` +
+      `generate-packages.providers`). The repo was bootstrapped with a clean empty `main`
+      root (aad63cd) after a bootstrap mistake (the first empty `main` commit inherited
+      the Phase 0 tree — fixed via the user-authorized default-branch dance).
 - [x] **Phase 1 — main repo release-binary workflow** (additive; parallelizable with 0).
       Landed as `58483b51`; the main repo has published `v2026.226.2134` with the full
       binary assets (`charly-linux-<arch>`, `charly-plugins-linux-<arch>.tar.gz`,
       `charly-candy-charly.yml`) — the Phase 2 binary-source prerequisite is met.
+- [x] **The `packaging:` section** — the charly candy's `candy/charly/charly.yml` now
+      declares it (this cutover; the `--candy` metadata input the distro workflows pass
+      to the plugin). The `localpkg:` source-build transition to build from it lands with
+      the Phase 3 cutover.
 - [ ] **Phase 2 — the 6 distro repos** (each independently; consume the released binary +
-      baked plugin). The 6 repo names are user-authorized; the binary source exists; the
-      baked-plugin source (Phase 0's release) is the remaining prerequisite.
-- [ ] **Phase 3 — main repo cutover** (pkg/ removal + packaging section +
-      download_template URLs + check beds + rules/docs; one atomic cutover, after the
-      distro repos have published at least once).
+      baked plugin + the `packaging:` section). The 6 repo names are user-authorized; the
+      binary source, the baked-plugin source (Phase 0's release), and the `packaging:`
+      section (the `--candy` metadata input) all exist — the prerequisites are met, the
+      distro workflows just need to run.
+- [ ] **Phase 3 — main repo cutover** (pkg/ removal + download_template URLs + check beds
+      + rules/docs; one atomic cutover, after the distro repos have published at least
+      once).
 
 ## Ordered decision heuristics
 
@@ -108,6 +115,7 @@ Replace the `pkg/` packaging workflow (three `pkg/*` git submodules + the contai
 2. **Phase 1** — main repo `release-binary.yml` lands (additive; coexists with the old
    `release-packages.yml`; asset names don't collide).
 3. **Phase 2** — the 6 distro repos land; each workflow runs a first publish (needs
-   Phase 0's plugin release + Phase 1's binary release).
+   Phase 0's plugin release + Phase 1's binary release + the `packaging:` section, landed
+   via charly#273).
 4. **Phase 3** — main repo cutover lands after Phase 2's first publish (the
    download_template URLs must resolve).
