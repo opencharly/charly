@@ -10,9 +10,11 @@ vocabulary, the containment model, the trust boundaries, ordered decision heuris
 the cutover sequence, observed anti-patterns, and measured state. On a
 task-vs-north-star conflict a teammate stops and asks, never resolves locally.
 
-Claims below marked **[proven upstream]** are verified against opencharly.ai; claims
-marked **[HOW — spike it]** are this program's high-risk assumptions, to be proven early
-on live `disposable: true` beds per RDD before any plan rests on them.
+Claims below carry one of three evidence tags. **[proven upstream]** — verified against
+opencharly.ai. **[proven by the containment spike]** — established by unit 1's throwaway
+RDD spike, whose bed no longer exists in the tree; the finding survived, the bed did not.
+**[HOW — spike it]** — this program's high-risk assumptions, to be proven early on live
+`disposable: true` beds per RDD before any plan rests on them.
 
 ## End-state (concrete)
 
@@ -38,7 +40,7 @@ never in git.
 | **spike flavor** | which PROD deployment style the spike reproduces — `native`, `kustomize`, or `helm` (below) |
 | **spike bed** | the spike's check bed. `disposable: true` carries the full `charly check run` cycle — build → check → deploy → steady → check live → destroy → rebuild → check → teardown — for free **[proven upstream]** |
 | **regression bed** | the accumulated `plan:` of every closed incident: ADE's "the spec is the test," grown one incident at a time — `incident close --as-check` appends the incident's committed `check:` (proven on the disposable spike bed) to the regression bed's `plan:`, so the bed fails without the fix and passes with it (R10) |
-| **Forgemaster** | the only Factory Worker holding any host-charly surface — and that surface is the disposable lifecycle only: forge (fleet add of pre-authored `disposable: true` templates), `check run`, `update`, `del`, status/logs. Today `charly mcp serve` exposes every verb, so this scoping is a stated gap: the `--disposable-only` tool filter is a gap to close in charly (unit 7), not a prompt-level promise **[HOW — spike it]** |
+| **Forgemaster** | the only Factory Worker holding the host's disposable-LIFECYCLE surface (Verifier also runs on the host, but only to drive bed runs — it forges and destroys nothing): forge (fleet add of pre-authored `disposable: true` templates), `check run`, `update`, `del`, status/logs. Today `charly mcp serve` exposes every verb, so this scoping is a stated gap: the `--disposable-only` tool filter is a gap to close in charly (unit 7), not a prompt-level promise **[HOW — spike it]** |
 | **the six** | Sentinel (triage; R1/root-cause-analyzer is its job description; PROD read-only), Forgemaster (forge-host, disposable-lifecycle surface only), Replicator and Fixer (**run INSIDE the spike** — candyboxing applied to the Factory's own agents: the spike's nested charly is their whole, unrestricted candy store, and the boundary is the security model), Verifier (the existing `check-bed-runner`/`deploy-verifier` executor pattern; pastes verbatim proof), Archivist (ships verified fixes as Skills; git surface only) |
 
 ## The containment model: candyboxing all the way down
@@ -358,9 +360,12 @@ proposal until unit 9 lands it.)
 
 - [x] Unit 1: containment spike green — nested-socket agentteams proven in one
       `pod:` candybox, delivery mechanism named, findings folded back into this file
-      (live proof: `charly check live check-factory-spike-full` — 91 steps, 78
-      passed, 0 failed; manager + worker spawned through the NESTED socket into
-      the nested store, worker room provisioned and alias-resolvable)
+      (live proof: `charly check live check-factory-spike-full` — 91 steps: 78
+      passed, 0 failed, 13 skipped as out-of-context; manager + worker spawned
+      through the NESTED socket into the nested store, worker room provisioned and
+      alias-resolvable. That bed was unit 1's own throwaway spike bed and is not in
+      the tree — it is NOT one of the `check-factory-spike-<flavor>` beds unit 8
+      creates, which remain unbuilt)
 - [x] Unit 2: `check-helm-vm` executed live against fresh `disposable: true`
       rebuilds — `step:helm-release` install + `verb:helm` assertions, AND the
       `helm_charts:` kustomize emission + `--enable-helm` apply on `check-k8s-deploy`

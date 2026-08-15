@@ -285,7 +285,7 @@ helm-skill:
         family: kubernetes
         owner: charly-kubernetes
         description: |-
-            The helm words — the `step:helm-release` install step (an `helm upgrade --install` performed IN-VENUE, returning a `helm uninstall` ReverseOp) and the `verb:helm` declarative release-status assertion, both served out-of-process by candy/plugin-helm; plus the `helm_charts:` deploy field the k8sgen emitter renders as a kustomize `helmCharts:` transformer entry.
+            The helm words — the `step:helm-release` install step (a `helm upgrade --install` performed IN-VENUE, returning a `helm uninstall` ReverseOp) and the `verb:helm` declarative release-status assertion, both served out-of-process by candy/plugin-helm; plus the `helm_charts:` deploy field the k8sgen emitter renders as a kustomize `helmCharts:` transformer entry.
         triggers:
             - "`step:helm-release` / `verb:helm` / installing a Helm chart from a candy plan / the `helm_charts:` deploy field and its kustomize `helmCharts:` emission / the `--enable-helm` apply path"
         content: |
@@ -365,6 +365,11 @@ helm-skill:
             `check:` step** — not because of its context. Giving it
             `context: [deploy]` would not change that.
 
+            (This is about `fleet add` LOWERING. `context:` on a `check:` step is not
+            inert in general — it selects which CHECK MODE the step runs in, which is
+            a different walk entirely; see "Author the STEP `context: [runtime]`"
+            under `verb:helm` below.)
+
             Then, for `run:` steps only, `context:` splits the work: a step scoped
             runtime-ONLY is left to the check Runner, and everything else goes on
             the install timeline (`install_build.go:701`). That predicate tests only
@@ -431,7 +436,7 @@ helm-skill:
             cluster `kubectl wait node` runs before the apiserver answers at all, so
             the step must gate on the apiserver first.
 
-            And its `export KUBECONFIG=…` is **the candy's own line, for its own
+            And **its `export KUBECONFIG=…` is the candy's own line, for its own
             `kubectl` calls in that one shell** — it is not you configuring the helm
             step, and it does not contradict the three-arm chain above. Each step
             runs in its own shell, so that export does not reach the
@@ -469,11 +474,18 @@ helm-skill:
             `default`). The verb is EXEC-based and probes a live cluster, so it only
             makes sense under `charly check live` / `charly check run`.
 
-            **Author it `context: [runtime]`, and understand that this is what makes
-            it skip under `charly check box` — not the verb.** A plugin verb with no
+            **Author the STEP `context: [runtime]`, and understand that this is what
+            makes it skip under `charly check box` — not the verb's EXEC nature.**
+
+            This does not contradict the `fleet add` rule above, and the two are worth
+            holding apart: THERE, `context:` is irrelevant because a `check:` step is
+            never lowered at all; HERE, `context:` is decisive because it selects the
+            check mode the step is active in. Different walks, different questions.
+
+            A plugin verb with no
             `context:` defaults to `[build, deploy, runtime]`
             (`spec/spec/verb_context.go:148`), and box mode selects `build`
-            (`plan_grammar.go:42`) — so an unscoped `helm:` step is ACTIVE at image
+            (`candy/plugin-check/plan_grammar.go:42`) — so an unscoped `helm:` step is ACTIVE at image
             time and FAILS against a cluster that does not exist, rather than
             skipping. With `[runtime]` the skip is reported visibly, never silently
             green.
