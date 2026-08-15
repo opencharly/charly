@@ -933,7 +933,7 @@ marketplace:
                 profiles: [user]
             kubernetes:
                 category: kind
-                description: "Schema authoring for `kind: kubernetes` — Kustomize manifests + cluster probes via the `kube:` check verb."
+                description: "Schema authoring for `kind: kubernetes` — Kustomize manifests, cluster probes via the `kube:` check verb, and the helm words (`helm-release` install step + `helm:` check verb)."
                 keywords: [charly, kubernetes, k8s]
                 profiles: [user]
             local:
