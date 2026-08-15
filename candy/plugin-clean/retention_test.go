@@ -397,3 +397,95 @@ func TestPruneDeepDanglingImages_LiveBuildGuard(t *testing.T) {
 		t.Errorf("live-build guard: got (%v, %d), want (nil, 0)", ids, totalBytes)
 	}
 }
+
+// --- the bed-tag ordering fix (charly#check-box-target-image) ---
+
+// imgAt is img with a creation time — the recency key that is total over the tags charly mints.
+func imgAt(id, name, short, version string, created int64) kit.LocalImageInfo {
+	i := img(id, name, short, version)
+	i.Created = created
+	return i
+}
+
+// TestCharlyImageTags_BedTaggedOrderIsNewestFirst is the retention half of this cutover, and the
+// only member of it that DESTROYS rather than mis-answers.
+//
+// `charly box build --tag` REPLACES the CalVer tag, so every bed build carries
+// `check-<bed>-<calver>` — which parses as NO CalVer. A group of bed-tagged images therefore had
+// OkTag false for EVERY member, so the sort's final comparator (`OkTag && !OkTag`) was false for
+// every pair and the surviving order was whatever `podman images` happened to emit. `keep_images:
+// N` then kept an ARBITRARY N: it could delete the newest bed build and keep older ones.
+//
+// The fixture is emitted OLDEST-FIRST on purpose — a stable sort leaves it untouched under the
+// pre-fix comparator, which is exactly how the defect presented. Fails without the fix.
+func TestCharlyImageTags_BedTaggedOrderIsNewestFirst(t *testing.T) {
+	orig, origCtr := kit.ListLocalImages, listContainerImageRefs
+	defer func() { kit.ListLocalImages, listContainerImageRefs = orig, origCtr }()
+	listContainerImageRefs = func(string) (map[string]bool, map[string]bool, error) {
+		return map[string]bool{}, map[string]bool{}, nil
+	}
+	// One content version across every build of one source tree — the normal case — and three
+	// distinct builds, each with only a bed tag. Emitted oldest-first.
+	kit.ListLocalImages = func(string) ([]kit.LocalImageInfo, error) {
+		return []kit.LocalImageInfo{
+			imgAt("a", "ghcr.io/opencharly/docs-site-app:check-docs-2026.226.1543", "docs-site-app", "2026.215.1207", 1786000000),
+			imgAt("b", "ghcr.io/opencharly/docs-site-app:check-docs-2026.227.0846", "docs-site-app", "2026.215.1207", 1786100000),
+			imgAt("c", "ghcr.io/opencharly/docs-site-app:check-docs-2026.227.1227", "docs-site-app", "2026.215.1207", 1786200000),
+		}, nil
+	}
+
+	groups, err := charlyImageTags("podman")
+	if err != nil {
+		t.Fatalf("charlyImageTags: %v", err)
+	}
+	got := groups["docs-site-app"]
+	if len(got) != 3 {
+		t.Fatalf("got %d tags, want 3: %+v", len(got), got)
+	}
+	want := []string{
+		"ghcr.io/opencharly/docs-site-app:check-docs-2026.227.1227",
+		"ghcr.io/opencharly/docs-site-app:check-docs-2026.227.0846",
+		"ghcr.io/opencharly/docs-site-app:check-docs-2026.226.1543",
+	}
+	for i, w := range want {
+		if got[i].Ref != w {
+			t.Fatalf("position %d = %q, want %q\nfull order: %v\n\nEvery candidate is bed-tagged, so no CalVer tag orders them; without creation time the comparator is false for every pair and keep_images: N keeps an ARBITRARY N — deleting the newest build while keeping older ones.",
+				i, got[i].Ref, w, refsOf(got))
+		}
+	}
+}
+
+// TestCharlyImageTags_BedTaggedKeepsTheNewest states the consequence the ordering exists for, in
+// the terms the operator experiences: with keep_images: 1, the survivor must be the NEWEST build.
+func TestCharlyImageTags_BedTaggedKeepsTheNewest(t *testing.T) {
+	orig, origCtr := kit.ListLocalImages, listContainerImageRefs
+	defer func() { kit.ListLocalImages, listContainerImageRefs = orig, origCtr }()
+	listContainerImageRefs = func(string) (map[string]bool, map[string]bool, error) {
+		return map[string]bool{}, map[string]bool{}, nil
+	}
+	kit.ListLocalImages = func(string) ([]kit.LocalImageInfo, error) {
+		return []kit.LocalImageInfo{
+			imgAt("a", "ghcr.io/opencharly/check-agent-box:check-agent-pod-2026.226.1543", "check-agent-box", "2026.199.1330", 1786000000),
+			imgAt("b", "ghcr.io/opencharly/check-agent-box:check-agent-pod-2026.227.1300", "check-agent-box", "2026.199.1330", 1786200000),
+		}, nil
+	}
+	groups, err := charlyImageTags("podman")
+	if err != nil {
+		t.Fatalf("charlyImageTags: %v", err)
+	}
+	got := groups["check-agent-box"]
+	if len(got) == 0 {
+		t.Fatal("no tags grouped")
+	}
+	if want := "ghcr.io/opencharly/check-agent-box:check-agent-pod-2026.227.1300"; got[0].Ref != want {
+		t.Fatalf("the retained tag under keep_images: 1 would be %q, want %q — the sweep would delete the build that was just made", got[0].Ref, want)
+	}
+}
+
+func refsOf(in []imageTagInfo) []string {
+	out := make([]string, len(in))
+	for i, t := range in {
+		out[i] = t.Ref
+	}
+	return out
+}
