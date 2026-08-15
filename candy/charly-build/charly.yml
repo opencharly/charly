@@ -428,18 +428,17 @@ build-skill:
             charly settings set engine.run docker     # or podman
             ```
 
-            ## Host Bootstrap (First Time)
+            ## Host Prerequisites (First Time)
 
-            Requires: `go-task`, `go`, `docker` (or `podman`). There is no host-installing build task — `task build:binary` produces ONLY a per-checkout `bin/charly` (no install step); getting `charly` onto `$PATH` is always an explicit follow-up step you choose.
+            Building images needs the `charly` binary and a container engine — `docker` or `podman`, whichever `engine.build` names. Nothing else, and no project checkout: `charly box build` runs against the `charly.yml` in the current directory, one started by `charly box new project <dir>` or read from a published project with `--repo <owner>/<repo>`.
+
+            Install `charly` as a distro-native package with your OWN package manager (`pacman -U` / `dnf install` / `apt install` / `apk add`) — the `charly generate-packages` plugin (nFPM) builds the `.pkg.tar.zst`/`.rpm`/`.deb`/`.apk`/`.ipk` published to the per-distro package repos. Obtaining the binary is covered end to end at [Install](https://opencharly.ai/start/install/); it is the one page that describes building from a source tree.
 
             ```bash
-            task build:binary        # Build ./bin/charly (CalVer-stamped; no install)
-            task install-portable    # Optional: copy it to $HOME/.local/bin/charly, onto $PATH
-            task setup:builder       # Create multi-platform buildx builder
-            ./bin/charly box build   # Generate + build + merge all images (drop `./bin/` once installed)
+            charly box build   # Generate + build + merge all images
             ```
 
-            For a distro-native package instead (system-wide, via your OWN package manager — never via a Taskfile install step): the `charly generate-packages` plugin (nFPM) builds a `.pkg.tar.zst`/`.rpm`/`.deb`/`.apk`/`.ipk`, published to the per-distro package repos, which you install yourself (`pacman -U` / `dnf install` / `apt install` / `apk add`).
+            Multi-platform `--push` builds additionally need a Docker buildx builder that can target more than the host platform — a Docker-side prerequisite, not a charly one. Single-platform local builds need no builder setup.
 
             ## Common Workflows
 
@@ -470,7 +469,7 @@ build-skill:
 
             ### "charly not found"
 
-            Install a distro-native package (built by the `charly generate-packages` plugin and published to the per-distro package repos) with your OWN package manager (`pacman -U`/`dnf install`/`apt install`), or run `task install-portable` for a `$HOME/.local/bin/charly` copy — `task` itself is required (install via your distro package manager or download from go-task/task releases).
+            Install a distro-native package (built by the `charly generate-packages` plugin and published to the per-distro package repos) with your OWN package manager (`pacman -U`/`dnf install`/`apt install`/`apk add`). If it is installed but not resolving, `$PATH` is the usual cause — `which charly` reports which copy wins.
 
             ### Build Fails with Missing Base
 
@@ -486,18 +485,13 @@ build-skill:
 
             ### YAML Unmarshal Error on charly.yml
 
-            If you see `cannot unmarshal !!str ... into int` or similar YAML parsing errors on layer fields, the installed `charly` binary is likely stale. Rebuild with `task build:binary` and `cp bin/charly ~/.local/bin/charly` (or re-run `task install-portable`). Verify with `charly box validate`.
+            If you see `cannot unmarshal !!str ... into int` or similar YAML parsing errors on layer fields, the `charly` binary is older than the schema the file is stamped at. `charly version` prints its CalVer; upgrade to a newer published package and re-run `charly box validate`.
 
             ### Stale `charly` binary produces stale Containerfiles
 
-            Beyond the YAML-unmarshal symptom above, a stale `charly` binary can produce *syntactically valid but outdated* Containerfile output — e.g. emitting an old broken form of a template that HEAD's source has already fixed. Symptom: build fails on a step whose generated shell clearly doesn't match the source you see in `git grep`. Quick diagnostic: `ls -la $(which charly)` vs. `git log -1 sdk/deploykit/generate.go` (the former `charly/generate.go` is DELETED, K-wave 2) — if the binary predates the fix, rebuild:
+            Beyond the YAML-unmarshal symptom above, a stale `charly` binary can produce *syntactically valid but outdated* Containerfile output — e.g. emitting an old broken form of a template a later release already fixed. Symptom: a build fails on a step whose generated shell does not match what the current release documents. Quick diagnostic: `charly version` against the CalVer of the release that carries the fix; if the binary predates it, upgrade to a newer published package and rebuild.
 
-            ```bash
-            task build:binary && task install-portable   # rebuild + refresh the $HOME/.local/bin copy
-            # or: install a freshly published native package with your own package manager
-            ```
-
-            If you find yourself rebuilding `charly` to chase a bug and the symptom persists, the binary path on $PATH may not be the one you just refreshed — confirm with `which charly`, and remember a worktree's own `./bin/charly` is a THIRD candidate the freshness guard tracks separately (see `/charly-internals:agents` "The charly binary in a multi-teammate / multi-worktree setup").
+            If the symptom persists after upgrading, the copy on `$PATH` may not be the one you just installed — `which charly` reports which wins.
 
             ### Buildah cache-mount corruption (pixi tzdata et al.)
 
@@ -1173,6 +1167,41 @@ docs-skill:
 
             Every emitted file carries a `DO-NOT-EDIT` header, and **regeneration on a clean tree is a
             no-op** — the same drift gate SDD applies to generated Go.
+
+            ## Editing a source is a docs landing
+
+            Everything in that table is a PROJECTION, and every one of its sources is an ordinary
+            file people edit for reasons that have nothing to do with the site — a candy's
+            `description:`, a plan step, a skill's prose. Each such edit re-projects its page, and
+            from that moment the committed site no longer matches its sources, so this project's
+            drift gate over the `docs` submodule stays red until the regenerated pages are committed
+            there. **A one-line prose fix is therefore never a one-repo change.** Plan it as a
+            multi-repo landing before starting, not after a gate says so.
+
+            Two chains reach the site, and they are not the same length.
+
+            **Candy and box prose — ONE hop.** `reference/candy/` and `reference/box/` are read
+            straight off disk, walking each repo as its own project root. Editing a
+            `candy/<name>/charly.yml` `description:` or `plan:` re-projects
+            `reference/candy/<name>.md` in the same tree, immediately. The `docs` commit belongs to
+            the same cutover as the candy edit.
+
+            **Skill prose — TWO hops.** `recipes/` is NOT read from `candy/*/charly.yml`. A skill is
+            authored as a `skill:` entity in its owning candy; `charly marketplace generate` projects
+            that into `plugins/<plugin>/skills/<name>/SKILL.md`, and `charly docs generate` reads
+            **that projection** — the `plugins/` submodule tree, never the candy source. Editing a
+            `skill:` entity therefore changes nothing on the site until `charly marketplace generate`
+            has run, and on any CLEAN checkout the tree it reads is the pinned gitlink, so the change
+            reaches readers only once the `plugins` landing merges and the superproject's `plugins`
+            gitlink advances. **Advancing that gitlink without regenerating `docs` in the same change
+            is what leaves the published site stale**, and nothing except this project's drift gate
+            will say so — which is precisely how the mirror has fallen behind before.
+
+            The ordering this forces — regenerate the projection, land the producer repo, then the
+            consumer and its pin — is `/charly-internals:git-workflow` B6's producer→consumer rule
+            applied to documentation. That skill owns the landing sequence, including the
+            maintenance commands this project runs for it; the mechanism above is what makes the
+            sequence necessary, and is all this page needs to carry.
 
             ## Defined, not default-active
 
@@ -1944,6 +1973,8 @@ migrate-skill:
 
             ## Adding a future cutover
 
+            **From here to the end of "Standing rule" is maintenance the charly project performs on its OWN schema**, run from checkouts of the spec repo and the superproject. Nothing in these two sections is a step an charly user runs — the user-facing surface of a schema cutover is the single command `charly migrate`, unchanged. They are recorded here because this skill owns the migration table; the commands are named as this project's maintenance, not as instructions for the reader.
+
             The payoff of the declarative engine: the common case needs **zero new Go** — but since the schema lives in the spec module, a schema-version bump is **CROSS-REPO**: the spec repo lands + tags FIRST, then the superproject consumes it.
 
             1. Bump `#SchemaVersion` in **`spec/schema/version.cue`** to the new CalVer.
@@ -2336,7 +2367,10 @@ reconcile-skill:
             on-disk git-tag pins — for each distinct repo referenced by the project's
             versioned YAML, it rewrites EVERY pin of that repo to ONE target tag, so every
             reference fetches one commit per repo and the next `charly box generate` emits
-            **zero** version warnings. Edits are comment-preserving (yaml.v3 node API) and idempotent.
+            **zero** version warnings. Edits are comment-preserving (yaml.v3 node API). The
+            default mode is idempotent; `--remote` is not, because its target is whatever the
+            remote's newest tag is at the moment of the call — see "`--remote` targets whatever
+            is newest NOW" below before reaching for that flag.
 
             The **zero-warnings R10 gate** (the project rulebook R1 (`AGENTS.md` / `CLAUDE.md`)) makes this load-bearing: a change
             that introduces a version mismatch is not landable until `charly box reconcile`
@@ -2348,7 +2382,7 @@ reconcile-skill:
             |---|---|---|
             | Preview rewrites | `charly box reconcile --dry-run` | Print every pin it would change; touch nothing |
             | Align to newest referenced | `charly box reconcile` | Rewrite each repo's pins to the newest version ALREADY referenced (offline) |
-            | Align to newest remote tag | `charly box reconcile --remote` | Query `git ls-remote --tags` per repo and bump to the newest tag |
+            | Align to newest remote tag | `charly box reconcile --remote` | Query `git ls-remote --tags` per repo and bump to the newest tag. **Moves pins to whatever is newest at call time — not idempotent against a moving remote; never use it to CHECK alignment** |
 
             ```bash
             charly box reconcile --dry-run      # see the plan
@@ -2369,7 +2403,44 @@ reconcile-skill:
                newest tag on the remote (`GitLatestTag`).
             3. **Rewrite** every pin of that repo whose version differs from the target,
                preserving comments and key order. Unpinned refs and single-version repos are
-               left untouched. Idempotent: a second run rewrites nothing.
+               left untouched. In the default mode this converges: the target is the newest
+               version already referenced, which after one run is every pin's version, so a
+               second run rewrites nothing. `--remote` carries no such guarantee.
+
+            ## `--remote` targets whatever is newest NOW
+
+            The default mode is safe to run as a QUESTION — *"are this repo's pins already
+            aligned?"* It reads only the versions the tree already references, so it needs no
+            network, converges, and answers without moving anything you did not intend to move.
+            Use it, or `--dry-run`, to check alignment.
+
+            `--remote` is a different operation. It ignores the referenced set entirely and
+            resolves each repo's target from `git ls-remote --tags` at the moment of the call
+            (`reconcileTargetVersion` returns `GitLatestTag` without consulting the referenced
+            versions at all), so it is idempotent only against a remote that has not moved.
+            Re-run it after a sibling repo publishes a newer tag and EVERY pin of that repo is
+            rewritten again — including pins a previous `--remote` run had just aligned.
+
+            The re-bump is reported, but its explanation is not. `rewrote N pin(s):` prints with
+            every rewritten ref, while the per-repo `<repo> -> <tag> (was at N versions)` summary
+            is emitted only for a repo found at MORE than one version. A freshly-aligned repo is
+            at exactly one — so the line that would say *why* the target moved is suppressed in
+            precisely the case where the target moved for a reason outside the tree.
+
+            **The operational consequence: `--remote` invalidates evidence gathered before it
+            ran.** A bed transcript, a build log, or a `charly check` run describes the tree at
+            the tags the pins held when it was produced. A later `--remote` can move those pins
+            to a tag no proof covers, leaving a tree that still looks correctly reconciled. So:
+
+            - To find out whether pins are aligned, run the plain `charly box reconcile` (or
+              `--dry-run`). Never reach for `--remote` to answer a question.
+            - Run `--remote` deliberately, at the ONE point in a cutover where adopting the
+              producer's newest tag is the intent — `/charly-internals:git-workflow` B6: after
+              the producer is landed and tagged, BEFORE the consumer's authoritative R10.
+            - Once it has run, the pins name the tag the R10 must be produced against. If proofs
+              already exist for an older tag, either re-run the gate against the new pin or
+              restore the tag the proofs cover. Shipping a newer pin on an older proof is an R10
+              failure whether or not anything rebuilt.
 
             ## Scope — one project per invocation
 

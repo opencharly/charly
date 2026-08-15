@@ -41,7 +41,7 @@ docs-site:
             # `main` pointed at when that layer was first built — and went on reporting PASS while
             # proving stale content. It must equal the `docs` submodule gitlink; `task docs:pin`
             # checks that, and the bed asserts it from inside the built image.
-            DOCS_REF: 4331ce9a0c8ecdad907a1b613d889ef888f1bcc4
+            DOCS_REF: ee3d162e8084edf330b7d864042d96619b17dba0
         distro:
             fedora:
                 package:
@@ -79,7 +79,7 @@ docs-site:
               id: docs-site-pinned-commit
               exit_status: 0
               stdout:
-                - contains: 4331ce9a0c8ecdad907a1b613d889ef888f1bcc4
+                - contains: ee3d162e8084edf330b7d864042d96619b17dba0
               context:
                 - build
                 - runtime
@@ -198,7 +198,13 @@ docs-site-skill:
             - "`charly docs` / the opencharly.ai site / the `docs/` submodule / `task docs:sync`/`docs:drift` / Starlight/Astro / `candy/plugin-docs` (runtime plugin) or `candy/docs-site`"
         content: |
             # docs-site — build the opencharly.ai site inside a box
-            
+
+            **Audience: this page describes maintenance the charly repository performs on itself.**
+            `docs-site` builds *this* documentation site, so every `task …` command below names a
+            gate this project runs over its own sources from a charly checkout — never a step a
+            reader runs. They are named because the candy's contract is what keeps the published
+            site honest, not because you invoke them.
+
             ## Candy Properties
             
             | Property | Value |
@@ -231,6 +237,17 @@ docs-site-skill:
             **Ordering consequence.** The candy fetches an IMMUTABLE COMMIT, never a branch, so `DOCS_REF`
             must be re-pinned to each new docs merge before this box — and the `check-docs` bed above it —
             prove the new content. `task docs:pin` fails if it drifts from the `docs` gitlink.
+
+            **The pin is TWO occurrences, and both are asserted.** The sha appears once as `DOCS_REF`
+            (the clone's cache key) and once as a LITERAL in the `docs-site-pinned-commit` check's
+            `contains:` matcher. The duplication is deliberate and cannot be collapsed: a check step's
+            substitution does not resolve a candy `var:`, so writing `${DOCS_REF}` in the matcher makes
+            charly SKIP the step with "unresolved variables: DOCS_REF" — turning the anti-staleness guard
+            into a non-event while the bed still reports PASS, which is the exact failure the guard exists
+            to catch. `task docs:pin` therefore asserts BOTH: it compares `DOCS_REF` against the gitlink
+            AND requires the sha to occur at least twice in the file, so a re-pin that updates only one of
+            them fails the gate instead of leaving the check asserting a commit nobody builds. Re-pinning
+            means editing both.
             
             A branch name here is a correctness bug, not a convenience: `var:` values are emitted as `ENV`
             above the steps, so with `main` the clone layer's cache key never moves and the bed silently
