@@ -7,10 +7,12 @@ registry or the network at build/runtime. They are embedded by
 `cue.Value` (each carries a `package` clause + CUE-stdlib imports, so they cannot
 join the concatenated `sharedCueSchema`). See `/charly-internals:egress`.
 
-Regenerate with `task cue:vendor` (requires the `cue` CLI — the `/charly-tools:cue`
-candy, pinned to the same `cuelang.org/go` version charly embeds). The generated
-files are committed **pristine** so the reproducibility test can match the
-`cue import` output.
+Regenerate by re-running the per-file `cue import` command in the table below
+(requires the `cue` CLI — the `/charly-tools:cue` candy, pinned to the same
+`cuelang.org/go` version charly embeds). There is no Taskfile target: each
+vendored file has its own conversion command, so the table is the single source.
+The generated files are committed **pristine** so the reproducibility test can
+match the `cue import` output.
 
 ## Sources & regen commands
 
