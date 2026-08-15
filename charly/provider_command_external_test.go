@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"sort"
 	"strings"
 	"testing"
 
@@ -367,21 +368,57 @@ func TestResolveCommand_NestedWinsOverCollidingTopLevel(t *testing.T) {
 }
 
 // TestCollectExternalCommandPlugins_NestedCarriesParent proves the wiring between the two halves:
-// the dispatch entry a NESTED command registers must carry its parent, or dispatchCommand has
-// nothing to resolve the parented key with.
+// the dispatch entry collectExternalCommandPlugins BUILDS for a NESTED command must carry that
+// command's parent, or dispatchCommand has nothing to resolve the parented registry key with and
+// falls back to the plain word — the top-level capability, which is the bug this cutover fixes.
+//
+// It drives the REAL collector over a real Registry (the package-level one, swapped for the
+// duration) rather than hand-building the struct: the single assignment under test lives inside
+// collectExternalCommandPlugins, so a test that constructs externalCommandDispatch itself asserts
+// only that the FIELD exists and stays green when the assignment is deleted.
 func TestCollectExternalCommandPlugins_NestedCarriesParent(t *testing.T) {
-	d := externalCommandDispatch{word: "feature", parent: "box"}
-	if d.parent == "" {
-		t.Fatal("externalCommandDispatch has no parent field")
+	nested := &fakeNestedCommandProvider{
+		fakeCommandProvider: fakeCommandProvider{word: "zzfeature"},
+		parent:              "zzbox",
 	}
-	// The table key collectExternalCommandPlugins builds for a nested command, and the parent it
-	// must have recorded alongside it.
-	table := map[string]externalCommandDispatch{"box feature": d}
-	got, sub, ok := resolveCommandDispatch("box feature <args>", table)
+	r := newRegistry()
+	if err := r.register(nested, "test-nested"); err != nil {
+		t.Fatalf("register nested: %v", err)
+	}
+	saved := providerRegistry
+	providerRegistry = r
+	defer func() { providerRegistry = saved }()
+
+	_, nestedByParent, table := collectExternalCommandPlugins()
+
+	// Grammar half: the holder attaches under the parent command, not at the CLI root.
+	if n := len(nestedByParent["zzbox"]); n != 1 {
+		t.Fatalf("nestedByParent[zzbox] has %d holders, want 1 — the nested grammar was not built", n)
+	}
+	// Dispatch half: the entry is keyed by the nested PATH and records the parent.
+	d, ok := table["zzbox zzfeature"]
+	if !ok {
+		t.Fatalf("dispatch table has no %q entry; keys = %v", "zzbox zzfeature", tableKeys(table))
+	}
+	if d.parent != "zzbox" {
+		t.Fatalf("collectExternalCommandPlugins recorded parent = %q, want %q — dispatchCommand would resolve the plain word and reach the TOP-LEVEL capability", d.parent, "zzbox")
+	}
+	// End to end through the lookup dispatchCommand actually performs.
+	got, sub, ok := resolveCommandDispatch("zzbox zzfeature <args>", table)
 	if !ok || sub != "" {
-		t.Fatalf("resolveCommandDispatch(box feature) ok=%v sub=%q", ok, sub)
+		t.Fatalf("resolveCommandDispatch(zzbox zzfeature) ok=%v sub=%q", ok, sub)
 	}
-	if got.parent != "box" {
-		t.Fatalf("resolved dispatch parent = %q, want %q — dispatchCommand would fall back to the plain word and reach the top-level capability", got.parent, "box")
+	if got.parent != "zzbox" {
+		t.Fatalf("resolved dispatch parent = %q, want %q", got.parent, "zzbox")
 	}
+}
+
+// tableKeys lists a dispatch table's keys for a failure message.
+func tableKeys(table map[string]externalCommandDispatch) []string {
+	keys := make([]string, 0, len(table))
+	for k := range table {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
