@@ -60,19 +60,28 @@ type CheckCmd struct {
 	// (candy/plugin-box's command:feature) InvokeProvider's command:check with these args so the
 	// build-scope ADE acceptance runs in plugin-check (where the check runner lives) — the F10
 	// plugin↔plugin bridge (cone-C #31). Never typed by a user (the box command is the surface).
-	FeatureBox CheckFeatureBoxCmd `cmd:"__feature-box" hidden:"" help:"Build-scope feature-run engine (bridged from box feature run)."`
+	//
+	// EVERY `cmd:` tag in this struct is a bare presence marker paired with an explicit `name:`,
+	// because Kong NEVER reads a `cmd:` tag's VALUE as the command name (sdk/kong_reflect.go
+	// documents the RDD spike) — it falls back to the dash-cased FIELD name. This leaf was declared
+	// `cmd:"__feature-box"` and therefore dispatched as `feature-box`, so the bridge's forwarded
+	// `__feature-box` matched nothing and `charly box feature run` could not run. The sibling
+	// value-carrying tags happened to agree with their field's dash-case and worked BY COINCIDENCE
+	// (`cmd:"list-ai"` did not — it dispatched as `list-agent`), which is precisely why the name is
+	// now stated once, explicitly, where Kong actually reads it.
+	FeatureBox CheckFeatureBoxCmd `cmd:"" name:"__feature-box" hidden:"" help:"Build-scope feature-run engine (bridged from box feature run)."`
 
 	// — Wave-2 additions (leaf implementations in their own files) —
 	Run            CheckRunCmd       `cmd:"" name:"run" help:"Run a disposable check bed (R10 sequence) or an iterate: entity (AI loop)."`
-	RunLocal       CheckRunLocalCmd  `cmd:"run-local" hidden:"" help:"In-target harness driver (set by the host)."`
-	SyncCredential CheckSyncCredCmd  `cmd:"sync-credential" help:"Copy AI credentials into a score's target."`
+	RunLocal       CheckRunLocalCmd  `cmd:"" name:"run-local" hidden:"" help:"In-target harness driver (set by the host)."`
+	SyncCredential CheckSyncCredCmd  `cmd:"" name:"sync-credential" help:"Copy AI credentials into a score's target."`
 	Scope          CheckScopeCmd     `cmd:"" name:"scope" help:"AI-facing: print the active iteration's scope.yml."`
-	LastTag        CheckLastTagCmd   `cmd:"last-tag" help:"AI-facing: print the prior iteration's image tag."`
-	SelfEvaluate   CheckSelfCheckCmd `cmd:"self-evaluate" help:"AI-facing: re-run the in-scope plan live."`
+	LastTag        CheckLastTagCmd   `cmd:"" name:"last-tag" help:"AI-facing: print the prior iteration's image tag."`
+	SelfEvaluate   CheckSelfCheckCmd `cmd:"" name:"self-evaluate" help:"AI-facing: re-run the in-scope plan live."`
 	List           CheckListRunsCmd  `cmd:"" name:"list" help:"List past runs under .check/."`
 	Report         CheckReportCmd    `cmd:"" name:"report" help:"Print a past result-<calver>.yml."`
 	Note           CheckNoteCmd      `cmd:"" name:"note" help:"Persistent NOTES.md memory (read/append)."`
-	ListAgent      CheckListAgentCmd `cmd:"list-ai" help:"List configured agents."`
+	ListAgent      CheckListAgentCmd `cmd:"" name:"list-agent" help:"List configured agents."`
 }
 
 // CheckBoxCmd runs a pure-box check: a disposable container built from the image, build-scope steps

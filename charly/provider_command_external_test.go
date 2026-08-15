@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"sort"
 	"strings"
 	"testing"
 
@@ -273,4 +275,213 @@ func assertCommandEnv(t *testing.T, env []string, word string) {
 	if !hasWord {
 		t.Fatalf("env must stamp CHARLY_COMMAND_WORD=%s so a multi-command plugin selects the dispatched grammar", word)
 	}
+}
+
+// --- the `charly box feature run` unreachability cutover (charly#B) ---
+
+// fakeCommandProvider / fakeNestedCommandProvider are minimal ClassCommand Providers for the
+// registry parking + parented-resolve tests. The nested one additionally implements
+// NestedCommandProvider, which is exactly what register keys its parking decision on.
+type fakeCommandProvider struct {
+	word string
+	// invoked records that dispatchCommand actually REACHED this provider. Two providers can share
+	// a word (a top-level one and a nested one parked under its parent), so "which capability did
+	// the CLI run?" is only answerable by asking each of them, not by inspecting the resolve.
+	invoked bool
+}
+
+func (p *fakeCommandProvider) Reserved() string     { return p.word }
+func (p *fakeCommandProvider) Class() ProviderClass { return ClassCommand }
+func (p *fakeCommandProvider) Invoke(context.Context, *Operation) (*Result, error) {
+	p.invoked = true
+	return &Result{}, nil
+}
+
+type fakeNestedCommandProvider struct {
+	fakeCommandProvider
+	parent string
+}
+
+func (p *fakeNestedCommandProvider) CommandParent() string { return p.parent }
+
+// TestExportedCommandField_AlwaysExported is the regression gate for the STARTUP PANIC half of the
+// cutover. exportedCommandField's contract is an EXPORTED Go field name, and reflect.StructOf
+// PANICS on an unexported one — inside collectExternalCommandPlugins, which runs during main(). So
+// a single declared subcommand name that broke the contract did not degrade one command, it
+// aborted the whole binary before any command could run.
+//
+// Capitalizing the first byte only works for a leading LETTER: `__feature-box` (the hidden bridge
+// leaf `charly box feature run` forwards) sanitizes to `__feature_box`, whose leading `_` ToUpper
+// leaves alone. Fails without the fix — not with an assertion, but by panicking in the
+// nestedSubcommandType arm below, exactly as the real binary did.
+func TestExportedCommandField_AlwaysExported(t *testing.T) {
+	cases := []string{"__feature-box", "_leading-underscore", "9lives", "feature-box", "box", "x"}
+	for _, word := range cases {
+		got := exportedCommandField(word)
+		if got == "" {
+			t.Fatalf("exportedCommandField(%q) = empty", word)
+		}
+		if c := got[0]; c < 'A' || c > 'Z' {
+			t.Errorf("exportedCommandField(%q) = %q — first byte %q is not an uppercase letter, so reflect.StructOf rejects the field as unexported", word, got, string(c))
+		}
+	}
+	// The property that actually matters: reflect.StructOf must ACCEPT the derived name. This is
+	// the call that panicked the binary at startup.
+	subs := []climodel.CLISubcommand{{Name: "__feature-box", Help: "hidden bridge leaf", Hidden: true}}
+	_ = nestedSubcommandType(subs) // panics on the pre-fix derivation
+}
+
+// TestResolveCommand_NestedWinsOverCollidingTopLevel is the regression gate for the DISPATCH half.
+// The registry deliberately gives the plain key to a TOP-LEVEL command and parks a colliding NESTED
+// one at "command:<word>:<parent>" (register's parking rule). dispatchCommand resolved by the plain
+// word alone, so `charly box feature run` was handed the TOP-LEVEL `charly feature` capability,
+// whose grammar has no `run` — the nested command was unreachable from the day it was introduced.
+//
+// Fails without resolveCommand: the parented lookup returns the top-level provider.
+func TestResolveCommand_NestedWinsOverCollidingTopLevel(t *testing.T) {
+	r := newRegistry()
+	top := &fakeCommandProvider{word: "zzfeature"}
+	nested := &fakeNestedCommandProvider{fakeCommandProvider: fakeCommandProvider{word: "zzfeature"}, parent: "zzbox"}
+	if err := r.register(top, "test-top"); err != nil {
+		t.Fatalf("register top-level: %v", err)
+	}
+	if err := r.register(nested, "test-nested"); err != nil {
+		t.Fatalf("register nested: %v", err)
+	}
+
+	// A NESTED invocation must reach the nested capability.
+	got, ok := r.resolveCommand("zzfeature", "zzbox")
+	if !ok {
+		t.Fatal("resolveCommand(zzfeature, zzbox) did not resolve")
+	}
+	if got != Provider(nested) {
+		t.Fatalf("resolveCommand(zzfeature, zzbox) returned the TOP-LEVEL provider — `charly zzbox zzfeature` would run `charly zzfeature`")
+	}
+	// A TOP-LEVEL invocation is unchanged.
+	got, ok = r.resolveCommand("zzfeature", "")
+	if !ok || got != Provider(top) {
+		t.Fatalf("resolveCommand(zzfeature, \"\") = %v, ok=%v — want the top-level provider", got, ok)
+	}
+	// A nested word that never COLLIDED was never parked: the parented key misses and the plain key
+	// answers. This is every other `box <word>` (build, validate, list, …), each uniquely worded —
+	// the reason only `feature` was broken.
+	lone := &fakeNestedCommandProvider{fakeCommandProvider: fakeCommandProvider{word: "zzlonely"}, parent: "zzbox"}
+	if err := r.register(lone, "test-lone"); err != nil {
+		t.Fatalf("register lone nested: %v", err)
+	}
+	if got, ok := r.resolveCommand("zzlonely", "zzbox"); !ok || got != Provider(lone) {
+		t.Fatalf("resolveCommand(zzlonely, zzbox) = %v, ok=%v — want the uniquely-worded nested provider via the plain key", got, ok)
+	}
+}
+
+// TestCollectExternalCommandPlugins_NestedCarriesParent proves the wiring between the two halves:
+// the dispatch entry collectExternalCommandPlugins BUILDS for a NESTED command must carry that
+// command's parent, or dispatchCommand has nothing to resolve the parented registry key with and
+// falls back to the plain word — the top-level capability, which is the bug this cutover fixes.
+//
+// It drives the REAL collector over a real Registry (the package-level one, swapped for the
+// duration) rather than hand-building the struct: the single assignment under test lives inside
+// collectExternalCommandPlugins, so a test that constructs externalCommandDispatch itself asserts
+// only that the FIELD exists and stays green when the assignment is deleted.
+func TestCollectExternalCommandPlugins_NestedCarriesParent(t *testing.T) {
+	nested := &fakeNestedCommandProvider{
+		fakeCommandProvider: fakeCommandProvider{word: "zzfeature"},
+		parent:              "zzbox",
+	}
+	r := newRegistry()
+	if err := r.register(nested, "test-nested"); err != nil {
+		t.Fatalf("register nested: %v", err)
+	}
+	saved := providerRegistry
+	providerRegistry = r
+	defer func() { providerRegistry = saved }()
+
+	_, nestedByParent, table := collectExternalCommandPlugins()
+
+	// Grammar half: the holder attaches under the parent command, not at the CLI root.
+	if n := len(nestedByParent["zzbox"]); n != 1 {
+		t.Fatalf("nestedByParent[zzbox] has %d holders, want 1 — the nested grammar was not built", n)
+	}
+	// Dispatch half: the entry is keyed by the nested PATH and records the parent.
+	d, ok := table["zzbox zzfeature"]
+	if !ok {
+		t.Fatalf("dispatch table has no %q entry; keys = %v", "zzbox zzfeature", tableKeys(table))
+	}
+	if d.parent != "zzbox" {
+		t.Fatalf("collectExternalCommandPlugins recorded parent = %q, want %q — dispatchCommand would resolve the plain word and reach the TOP-LEVEL capability", d.parent, "zzbox")
+	}
+	// End to end through the lookup dispatchCommand actually performs.
+	got, sub, ok := resolveCommandDispatch("zzbox zzfeature <args>", table)
+	if !ok || sub != "" {
+		t.Fatalf("resolveCommandDispatch(zzbox zzfeature) ok=%v sub=%q", ok, sub)
+	}
+	if got.parent != "zzbox" {
+		t.Fatalf("resolved dispatch parent = %q, want %q", got.parent, "zzbox")
+	}
+}
+
+// TestDispatchCommand_NestedInvocationReachesNestedCapability is the gate on the line that ACTUALLY
+// FIXES THE BUG. The chain has three load-bearing links and each needs its own gate, because
+// reverting any ONE of them alone restores the defect while the other two stay green:
+//
+//  1. Registry.resolveCommand's parked-key lookup   — TestResolveCommand_NestedWinsOverCollidingTopLevel
+//  2. collectExternalCommandPlugins RECORDING the parent (`d.parent = parent`)
+//     — TestCollectExternalCommandPlugins_NestedCarriesParent
+//  3. dispatchCommand CONSUMING it (`resolveCommand(d.word, d.parent)`, the sole consumer of
+//     d.parent and sole caller of resolveCommand)   — THIS TEST
+//
+// Recording a value and consuming it are different lines. Gating only the recording lets
+// `dispatchCommand` fall back to the pre-fix `resolve(ClassCommand, d.word)` — which hands a NESTED
+// invocation the TOP-LEVEL capability — with the whole suite green.
+//
+// The assertion is deliberately behavioural, not structural: it does not check which provider was
+// resolved, it checks which capability was INVOKED. That is the sentence in this PR's title
+// ("`charly box feature run` ... never once dispatched"), so it is what the gate must say.
+func TestDispatchCommand_NestedInvocationReachesNestedCapability(t *testing.T) {
+	const word, parent = "zzfeature", "zzbox"
+	top := &fakeCommandProvider{word: word}
+	nested := &fakeNestedCommandProvider{
+		fakeCommandProvider: fakeCommandProvider{word: word},
+		parent:              parent,
+	}
+	r := newRegistry()
+	// Registration order matters: the TOP-LEVEL keeps the plain key and parks the nested one, which
+	// is the collision that made `charly box feature run` unreachable in the first place.
+	if err := r.register(top, "test-top"); err != nil {
+		t.Fatalf("register top-level: %v", err)
+	}
+	if err := r.register(nested, "test-nested"); err != nil {
+		t.Fatalf("register nested: %v", err)
+	}
+	saved := providerRegistry
+	providerRegistry = r
+	defer func() { providerRegistry = saved }()
+
+	field := exportedCommandField(word)
+	d := externalCommandDispatch{
+		word:   word,
+		parent: parent,
+		holder: externalCommandHolder(word, field, nil),
+		field:  field,
+	}
+	if err := dispatchCommand(d, ""); err != nil {
+		t.Fatalf("dispatchCommand(%s %s): %v", parent, word, err)
+	}
+
+	if top.invoked {
+		t.Errorf("`charly %s %s` INVOKED the top-level `charly %s` capability — dispatchCommand resolved by the plain word instead of the parented key, which is exactly the bug this PR fixes", parent, word, word)
+	}
+	if !nested.invoked {
+		t.Errorf("`charly %s %s` never reached the nested capability", parent, word)
+	}
+}
+
+// tableKeys lists a dispatch table's keys for a failure message.
+func tableKeys(table map[string]externalCommandDispatch) []string {
+	keys := make([]string, 0, len(table))
+	for k := range table {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
