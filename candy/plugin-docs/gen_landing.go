@@ -38,21 +38,62 @@ func generateLanding(root, out string) error {
 			body = strings.TrimLeft(body[i+1:], "\n")
 		}
 	}
-	// Drop the tagline line that follows it: the hero already renders exactly this sentence, and
-	// showing it twice within one screen is the first thing a reader notices.
-	body = landingTaglinePattern.ReplaceAllString(body, "")
+	// Lift the tagline line that follows it. The hero renders exactly this sentence, and showing it
+	// twice within one screen is the first thing a reader notices — so it is taken OUT of the body
+	// and put INTO the frontmatter, rather than written down in both places.
+	tagline, body, err := liftLandingTagline(body)
+	if err != nil {
+		return err
+	}
 
 	body = rewriteLandingLinks(body)
 
 	dest := filepath.Join(out, "index.md")
-	if err := os.WriteFile(dest, []byte(landingFrontmatter+generatedHeader+"\n\n"+
+	if err := os.WriteFile(dest, []byte(landingFrontmatter(tagline)+generatedHeader+"\n\n"+
 		strings.TrimSpace(body)+"\n"), 0o644); err != nil {
 		return fmt.Errorf("write index.md: %w", err)
 	}
 	return nil
 }
 
-var landingTaglinePattern = regexp.MustCompile(`(?m)\A\*\*The fully stocked gourmet kitchen[^\n]*\n\n`)
+// landingTaglinePattern matches the tagline: the line directly after the H1, consisting of one bold
+// run and nothing else.
+//
+// Both halves of that description are load-bearing, and each rules out a different wrong match.
+//
+// It is POSITION-anchored (\A, applied once the H1 is already stripped) rather than a search for
+// the first bold run in the document, because the README's next paragraph also opens in bold. A
+// first-match search would pick the right line today and silently pick the bridge paragraph the
+// moment the two are reordered — hoisting a paragraph into the hero and deleting it from the body.
+//
+// It also requires the bold run to span the WHOLE line and contain no further emphasis
+// ([^*\n]+), which is what separates a tagline from a paragraph that merely starts bold.
+//
+// What it deliberately does NOT do is match a specific wording. The previous version was keyed to
+// the literal tagline text, so changing the tagline in README.md left the strip silently
+// inoperative and printed the new sentence twice on the home page.
+var landingTaglinePattern = regexp.MustCompile(`\A\*\*([^*\n]+)\*\*\n\n`)
+
+// liftLandingTagline removes the tagline from the body and returns it for the frontmatter.
+//
+// A missing tagline is a hard error rather than an empty hero or a built-in default: the tagline is
+// the product's positioning line, and a silent fallback would ship a home page that quietly
+// disagrees with the README it is projected from.
+func liftLandingTagline(body string) (tagline, rest string, err error) {
+	m := landingTaglinePattern.FindStringSubmatch(body)
+	if m == nil {
+		return "", "", fmt.Errorf("README.md: no tagline found — the line after the H1 must be a " +
+			"single bold run (**…**) followed by a blank line; it becomes the site hero tagline")
+	}
+	return m[1], landingTaglinePattern.ReplaceAllString(body, ""), nil
+}
+
+// yamlQuote renders s as a double-quoted YAML scalar, so a tagline containing ": ", a leading "#",
+// or any other indicator character cannot break the emitted frontmatter.
+func yamlQuote(s string) string {
+	r := strings.NewReplacer(`\`, `\\`, `"`, `\"`)
+	return `"` + r.Replace(s) + `"`
+}
 
 // rewriteLandingLinks maps the README's link targets onto destinations that resolve on the site.
 //
@@ -80,9 +121,14 @@ var landingLinkRewrites = map[string]string{
 }
 
 // landingFrontmatter is the site machinery the README has no business carrying.
-const landingFrontmatter = `---
+//
+// Everything here is either a fixed Starlight choice or derived from the tagline the README already
+// states, so the positioning sentence is authored in exactly one place: README.md. The <title>
+// override drops a trailing period, which reads wrong in a browser tab but right in prose.
+func landingFrontmatter(tagline string) string {
+	return `---
 title: OpenCharly
-description: The fully stocked gourmet kitchen for you and your agents — a tiny core, an all-you-can-eat buffet.
+description: ` + yamlQuote(tagline) + `
 # ` + "`doc`" + ` rather than ` + "`splash`" + `, deliberately: Starlight hard-codes the table of contents to false for
 # splash pages and ignores the ` + "`tableOfContents`" + ` frontmatter entirely, and ` + "`hasSidebar`" + ` is likewise
 # ` + "`template !== 'splash'`" + `. So a splash landing page cannot have either sidebar. The hero renders on
@@ -93,9 +139,9 @@ template: doc
 # only; every other page keeps the useful "Page | OpenCharly" form.
 head:
   - tag: title
-    content: OpenCharly — the fully stocked gourmet kitchen for you and your agents
+    content: ` + yamlQuote("OpenCharly — "+strings.TrimSuffix(tagline, ".")) + `
 hero:
-  tagline: The fully stocked gourmet kitchen for you and your agents — a tiny core, an all-you-can-eat buffet.
+  tagline: ` + yamlQuote(tagline) + `
   actions:
     - text: Get started
       link: /start/install/
@@ -110,3 +156,4 @@ hero:
 ---
 
 `
+}

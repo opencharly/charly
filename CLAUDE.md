@@ -1,6 +1,6 @@
-# OpenCharly — The Fully Stocked Gourmet Kitchen for You and Your Agents
+# OpenCharly — The Agent-in-the-Loop Factory
 
-Compose, build, deploy, and evaluate **boxes** (container images) from a library of configurable **candies**, driven by the `charly` Go CLI — built for you *and* your agents, on Docker, Podman, QEMU, libvirt, Kubernetes, and Android.
+Compose, build, deploy, and evaluate **boxes** (container images) from a library of configurable **candies** — the factory is named for its product — driven by the `charly` Go CLI, built for you *and* your agents, on Docker, Podman, QEMU, libvirt, Kubernetes, and Android.
 
 This file is the Claude Code adapter of the project rulebook: mandates and pointers only, load-bearing and non-negotiable — short so they are always read, never because they are optional. `AGENTS.md` is the equivalent harness-neutral rulebook; skills own detailed procedure; history lives in each repo's `CHANGELOG/`.
 
@@ -65,6 +65,7 @@ Consult this table before the first tool call of every task; when several rows m
 | Verify a cutover by running the R10 beds (drive `charly check run <bed>`) | `/charly-check:check` |
 | Verify a cutover by running the R10 beds (drive `charly check run <bed>`) | `/charly-internals:agents` |
 | VmSpec / libvirt / cloud-init / OVMF internals | `/charly-internals:vm-spec` |
+| `charly agentteams` controller management (workers / teams / humans) / the `verb:agentteams` check verb (`status`, `manager-running`, `worker-running`, `worker-list`) / hydrating a deployment with `charly agentteams apply -f` | `/charly-agentteams:agentteams-cli` |
 | `charly box build` / `charly box generate` / Containerfile | `/charly-build:build` |
 | `charly box build` / `charly box generate` / Containerfile | `/charly-build:generate` |
 | `charly box build` / `charly box generate` / Containerfile | `/charly-internals:generate-source` |
@@ -80,6 +81,7 @@ Consult this table before the first tool call of every task; when several rows m
 | `charly update` / `charly vm *` / VM entities in `vm.yml` or `vm:` | `/charly-vm:vm` |
 | `kind: android` device / `target: android` deploy / `apk:` package format in candies / installing Android apps declaratively / remote-or-emulator adb endpoint / nested `pod → android` | `/charly-check:android` |
 | `kind: android` device / `target: android` deploy / `apk:` package format in candies / installing Android apps declaratively / remote-or-emulator adb endpoint / nested `pod → android` | `/charly-core:deploy` |
+| `step:helm-release` / `verb:helm` / installing a Helm chart from a candy plan / the `helm_charts:` deploy field and its kustomize `helmCharts:` emission / the `--enable-helm` apply path | `/charly-kubernetes:helm` |
 | local-target deploy / `target: local` / `host: local` (default) / SSH-host deploys / `user:` / `ssh_arg:` | `/charly-internals:local-infra` |
 | local-target deploy / `target: local` / `host: local` (default) / SSH-host deploys / `user:` / `ssh_arg:` | `/charly-local:local-deploy` |
 | the `adb:` check verb / Android Debug Bridge probing from a candy/box plan (out-of-process plugin; devices, shell, install, getprop, screencap, logcat, wait-for-device) | `/charly-check:adb` |
@@ -87,6 +89,7 @@ Consult this table before the first tool call of every task; when several rows m
 | the `appium:` check verb / Android UI automation (out-of-process plugin) / W3C WebDriver sessions, element introspection, the gesture/app/key/device sugar groups, the generic `execute`/`raw` escape hatch | `/charly-check:appium` |
 | the `appium:` check verb / Android UI automation (out-of-process plugin) / W3C WebDriver sessions, element introspection, the gesture/app/key/device sugar groups, the generic `execute`/`raw` escape hatch | `/charly-check:check` |
 | the `kube:` check verb / Kubernetes cluster probing from a candy/box plan (out-of-process plugin; nodes, pods, ingress, wait-ready, storageclass, addons, apply/delete, raw resource GETs) | `/charly-kubernetes:check-k8s` |
+| the agentteams box / the AgentTeams multi-agent stack (Manager–Workers, Rooms, the controller + matrix + element + higress + minio candies) on the pod or vm substrate / the `check-agentteams-pod` and `check-agentteams-vm` beds | `/charly-agentteams:agentteams` |
 <!-- END GENERATED SKILL DISPATCHER -->
 
 Full index: `plugins/README.md`. Anything not listed: read the index first, load the matching skill second, touch code third.

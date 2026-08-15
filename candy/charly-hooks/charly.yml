@@ -899,7 +899,7 @@ marketplace:
         name: charly-plugins
         version: 3.1.0
         description: |-
-            Claude Code and Codex plugins for OpenCharly — runtime commands, schema authoring, contributor internals, and deployable image families.
+            Claude Code, Codex, and Kimi plugins for OpenCharly, the Agent-in-the-Loop Factory — runtime commands, schema authoring, contributor internals, and deployable image families.
         families:
             core:
                 category: commands
@@ -933,7 +933,7 @@ marketplace:
                 profiles: [user]
             kubernetes:
                 category: kind
-                description: "Schema authoring for `kind: kubernetes` — Kustomize manifests + cluster probes via the `kube:` check verb."
+                description: "Schema authoring for `kind: kubernetes` — Kustomize manifests, cluster probes via the `kube:` check verb, and the helm words (`helm-release` install step + `helm:` check verb)."
                 keywords: [charly, kubernetes, k8s]
                 profiles: [user]
             local:

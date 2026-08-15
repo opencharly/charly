@@ -42,6 +42,8 @@ agentteams-skill:
             minio / matrix / element / higress / controller candies on both pod and
             vm substrates. MUST be invoked before building, deploying, configuring,
             or troubleshooting the agentteams box.
+        triggers:
+            - "the agentteams box / the AgentTeams multi-agent stack (Manager–Workers, Rooms, the controller + matrix + element + higress + minio candies) on the pod or vm substrate / the `check-agentteams-pod` and `check-agentteams-vm` beds"
         content: |-
             # agentteams
 
