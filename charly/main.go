@@ -196,7 +196,7 @@ func main() {
 	cli.Plugins = cmdPlugins
 	ctx := kong.Parse(&cli,
 		kong.Name("charly"),
-		kong.Description("OpenCharly - the container management experience for you and your agents"),
+		kong.Description("OpenCharly — the fully equipped factory floor for you and your agents"),
 		kong.UsageOnError(),
 	)
 
