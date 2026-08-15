@@ -1321,16 +1321,18 @@ check-exampledeploy:
 # bin/charly` run step places the in-development binary at /usr/bin/charly. The
 # OS-tracked package install (the former localpkg: map) is GONE — the sdk's
 # localpkg machinery now builds via the `charly generate-packages` plugin
-# (sdk/packagekit), which lands with the nFPM cutover (Phase 3). Until then the
-# copy step is the single binary source, and this bed proves the binary lands on a
-# fresh Arch VM (the plugin-based localpkg + welded-plugins proof returns in Phase 3).
+# (sdk/packagekit) from the candy's `packaging:` section (declared now); the
+# localpkg machinery's transition to build from this section lands with the
+# Phase 3 cutover. Until then the copy step is the single binary source, and
+# this bed proves the binary lands on a fresh Arch VM (the plugin-based
+# localpkg + welded-plugins proof returns in Phase 3).
 check-charly-vm:
     vm:
         from: charly-vm
         disposable: true
         lifecycle: dev
         description: >-
-            Proves the charly candy installs the in-development binary on a disposable Arch cloud VM via the `copy: bin/charly` run step (the OS-tracked localpkg install is gone — the sdk's localpkg machinery now builds via the generate-packages plugin, landing with the nFPM cutover). One command probe asserts charly resolves to /usr/bin/charly and charly version runs (CHARLY-BINARY-OK).
+            Proves the charly candy installs the in-development binary on a disposable Arch cloud VM via the `copy: bin/charly` run step (the OS-tracked localpkg install is gone — the sdk's localpkg machinery now builds via the generate-packages plugin from the candy's `packaging:` section, declared now; the localpkg transition to build from it lands with the Phase 3 cutover). One command probe asserts charly resolves to /usr/bin/charly and charly version runs (CHARLY-BINARY-OK).
         add_candy:
             - charly
         install_opts:
