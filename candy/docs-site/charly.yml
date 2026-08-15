@@ -41,7 +41,7 @@ docs-site:
             # `main` pointed at when that layer was first built — and went on reporting PASS while
             # proving stale content. It must equal the `docs` submodule gitlink; `task docs:pin`
             # checks that, and the bed asserts it from inside the built image.
-            DOCS_REF: 93085fb92245025fb561e17a18de4afbdf2728bf
+            DOCS_REF: ee3d162e8084edf330b7d864042d96619b17dba0
         distro:
             fedora:
                 package:
@@ -79,7 +79,7 @@ docs-site:
               id: docs-site-pinned-commit
               exit_status: 0
               stdout:
-                - contains: 93085fb92245025fb561e17a18de4afbdf2728bf
+                - contains: ee3d162e8084edf330b7d864042d96619b17dba0
               context:
                 - build
                 - runtime
@@ -198,7 +198,13 @@ docs-site-skill:
             - "`charly docs` / the opencharly.ai site / the `docs/` submodule / `task docs:sync`/`docs:drift` / Starlight/Astro / `candy/plugin-docs` (runtime plugin) or `candy/docs-site`"
         content: |
             # docs-site — build the opencharly.ai site inside a box
-            
+
+            **Audience: this page describes maintenance the charly repository performs on itself.**
+            `docs-site` builds *this* documentation site, so every `task …` command below names a
+            gate this project runs over its own sources from a charly checkout — never a step a
+            reader runs. They are named because the candy's contract is what keeps the published
+            site honest, not because you invoke them.
+
             ## Candy Properties
             
             | Property | Value |
