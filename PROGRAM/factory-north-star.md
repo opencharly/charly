@@ -127,7 +127,13 @@ tool list:
   most one rebuild), and everything crossing back out — the repro check, the fix
   branch — is untrusted until the deterministic bed and the human PR gate pass it.
 - **Forge host** (Forgemaster): disposable lifecycle only (above). The forge MCP
-  endpoint binds loopback/stdio and is never routable from PROD Workers or spikes.
+  endpoint MUST be reachable only from the forge host — stdio transport, or an
+  explicitly loopback-bound listener. State this as the REQUIREMENT it is, not a
+  property that holds today: `charly mcp serve --listen` defaults to `:18765`,
+  which binds every interface, so a forge deployment that accepts the default is
+  routable from PROD Workers and from spikes. Binding it down is a deployment
+  obligation until unit 7 makes the forge surface enforceable rather than
+  promised **[HOW — spike it]**.
 - **PROD**: no agent-held write path at all. Promotion is a *git landing*: Fixer
   pushes a `feat/` branch from inside the spike (scoped deploy key, branch-namespace
   write only), pr-validator + Human approval land it, and the PROD apply is the
@@ -269,9 +275,12 @@ front-loads the named HOWs.
    named. Gated by a bed that loads an image into a nested uid-1000 store; blocks the
    native spike in unit 8.
 6. **`candy/agentteams-snapshot`** with a round-trip fixture bed.
-7. **`charly mcp serve --disposable-only`.** Spike first: the filter keys on the
-   target's `disposable:` flag, a verb allowlist, or both — the answer decides the
-   shape. Must precede unit 8, which deploys a Forgemaster.
+7. **Make the forge surface enforceable.** Two gaps, one unit, because they are the
+   same license: (a) `charly mcp serve --disposable-only` — spike first, since the
+   filter may key on the target's `disposable:` flag, a verb allowlist, or both, and
+   the answer decides the shape; (b) the listener default — `--listen` defaults to
+   `:18765`, every interface, so an unhardened forge endpoint is reachable from PROD
+   Workers and from spikes. Both must precede unit 8, which deploys a Forgemaster.
 8. **The Factory proper**: `candy/agentteams-factory`, the box in root `charly.yml`,
    PROD deploy + three spike templates + `check-factory-spike-*` beds proving the loop
    end to end (forge → hydrate → replay → repro-as-check → fix → bed green →
@@ -330,6 +339,9 @@ proposal until unit 9 lands it.)
 - Handing any agent the full `charly mcp serve` surface — an unfiltered forge endpoint
   can `stop`/`remove`/`shell` PROD and touch `local:`; the disposable-lifecycle filter
   is the license made enforceable.
+- Accepting `charly mcp serve`'s default listen address for a forge endpoint —
+  `--listen` defaults to `:18765`, every interface, so the default is the exposure.
+  Bind loopback or use stdio until unit 7 lands.
 - Gateway-admin credentials in any Worker — keys come from the pre-minted pool.
 - Real credentials below PROD — a spike's `AGENTTEAMS_LLM_API_KEY` (deploy-overridable
   env **[proven upstream]**) is a scoped, budget-capped consumer key minted at PROD's
@@ -362,7 +374,8 @@ proposal until unit 9 lands it.)
       the gate is the non-runtime standards, not a bed)
 - [ ] Unit 5: `charly box load` delivers an image into a nested uid-1000 store, bed green
 - [ ] Unit 6: snapshot round-trip bed green
-- [ ] Unit 7: `--disposable-only` filter proven to refuse a non-disposable target
+- [ ] Unit 7: `--disposable-only` filter proven to refuse a non-disposable target,
+      and the forge listener proven unreachable from a spike
 - [ ] Unit 8: `check-factory-spike-native|kustomize|helm` green at zero warnings, pasted
 - [ ] Unit 9: `/charly-agentteams:factory` installs through the existing adapters
 - [ ] First real incident: reproduced in a spike, repro committed as a check, fix
