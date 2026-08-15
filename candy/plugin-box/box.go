@@ -426,7 +426,7 @@ func pruneAfterBuild(hc *hostClient, dir string) {
 
 // labelsGrammar is the `charly box labels <image> [--format] [--all]` CLI surface.
 type labelsGrammar struct {
-	Image  string `arg:"" help:"Image reference (full ref or short name resolved against local container storage; never reads charly.yml)"`
+	Image  string `arg:"" help:"Image reference: a full ref, '<box>:<calver>' to pin one build, or a bare short name resolved against local container storage (refused when a newer local build of that box exists); never reads charly.yml"`
 	Format string `name:"format" help:"Print only this label's raw value — a full key, or the ai.opencharly.<key> shorthand (e.g. 'init'); exits non-zero when the label is absent"`
 	All    bool   `name:"all" help:"Print every label, not just the ai.opencharly.* contract"`
 }
@@ -444,7 +444,10 @@ func dispatchLabels(args []string) error {
 	if err != nil {
 		return err
 	}
-	imageRef, err := kit.ResolveLocalImageRef(rt.RunEngine, g.Image)
+	// `charly box labels` is the charly-native R8 artifact check — a verdict on a built artifact.
+	// Reporting an older image's labels as the fresh build's is the same false-proof class as a
+	// stale `charly check box`, so it resolves through the guarded form.
+	imageRef, err := kit.ResolveBuiltImageRef(rt.RunEngine, g.Image)
 	if err != nil {
 		return err
 	}

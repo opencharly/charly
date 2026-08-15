@@ -31,7 +31,7 @@ import (
 // acceptance runs in plugin-check over Mode:"feature-box" (the F10 plugin↔plugin bridge, cone-C #31).
 // Behaviour + flags + output are byte-equivalent to the former in-core BoxFeatureRunCmd.
 type CheckFeatureBoxCmd struct {
-	Image  string `arg:"" help:"Image reference (full ref or short name resolved against local container storage)"`
+	Image  string `arg:"" help:"Image reference: a full ref, '<box>:<calver>' to pin one build, or a bare short name resolved against local container storage (refused when a newer local build of that box exists)"`
 	Format string `name:"format" default:"text" help:"Output format: text, json, tap, junit"`
 	Tag    string `name:"tag" help:"Only run steps matching this tag expression (e.g. 'smoke and not slow')"`
 	Strict bool   `name:"strict" help:"Treat prose-only (unbound) steps as failures instead of skips"`
@@ -63,7 +63,9 @@ func pluginCheckRunFeatureBox(ex *sdk.Executor, ctx context.Context, req spec.Ch
 	if err != nil {
 		return kit.CheckRunReply{}, err
 	}
-	imageRef, err := kit.ResolveLocalImageRef(rt.RunEngine, req.Image)
+	// The build-scope ADE acceptance run is a verdict on a built artifact — same guard as
+	// `charly check box` (kit.ResolveBuiltImageRef refuses a stale short-name election).
+	imageRef, err := kit.ResolveBuiltImageRef(rt.RunEngine, req.Image)
 	if err != nil {
 		return kit.CheckRunReply{}, err
 	}

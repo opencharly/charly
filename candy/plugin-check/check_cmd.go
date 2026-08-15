@@ -80,7 +80,7 @@ type CheckCmd struct {
 // Mode:"box" arm (pluginCheckRunBox); the plugin owns the CLI parse, the "Image:" header, and the
 // formatting.
 type CheckBoxCmd struct {
-	Image  string `arg:"" help:"Image reference (full ref or short name resolved against local container storage)"`
+	Image  string `arg:"" help:"Image reference: a full ref, '<box>:<calver>' to pin one build, or a bare short name resolved against local container storage (refused when a newer local build of that box exists)"`
 	Format string `name:"format" default:"text" help:"Output format: text, json, tap, yaml"`
 }
 
