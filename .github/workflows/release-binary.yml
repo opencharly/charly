@@ -19,6 +19,14 @@
 #
 # `workflow_dispatch` runs the build from a branch (the release-upload step is
 # tag-guarded), so the build can be exercised without minting a tag.
+#
+# The binary's CalVer stamp is the RELEASE TAG's CalVer on a tag push (a binary
+# from release v<X> must report X — the distro repos' install-test asserts
+# `charly version` == the packaged version), falling back to the HEAD commit's
+# date (calver.sh) on a manual dispatch. Stamping from the commit date instead
+# is wrong: the pr-validator computes the tag name just before the squash merge,
+# so a merge that crosses a minute boundary leaves the commit dated tag+1min and
+# every binary built from it reports a version that matches no release.
 name: release-binary
 
 on:
@@ -38,9 +46,15 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
+      - name: Compute the CalVer (release tag on a tag push, else the HEAD commit)
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            echo "CALVER=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+          else
+            echo "CALVER=$(bash scripts/calver.sh)" >> "$GITHUB_ENV"
+          fi
       - name: Build amd64 charly (native)
         run: |
-          CALVER=$(bash scripts/calver.sh)
           cd charly && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -buildvcs=false -ldflags "-X main.BuildCalVer=${CALVER}" -o ../bin/charly-linux-amd64 .
       - name: Build the 9 welded plugins for amd64 + .providers
         run: |
@@ -53,7 +67,6 @@ jobs:
           tar -czf charly-plugins-linux-amd64.tar.gz -C bin/plugins .
       - name: Build arm64 charly (cross-compile)
         run: |
-          CALVER=$(bash scripts/calver.sh)
           cd charly && GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -buildvcs=false -ldflags "-X main.BuildCalVer=${CALVER}" -o ../bin/charly-linux-arm64 .
       - name: Build the 9 welded plugins for arm64 (copy amd64 .providers)
         run: |
@@ -68,7 +81,6 @@ jobs:
         run: cp candy/charly/charly.yml charly-candy-charly.yml
       - name: Verify the built binaries report the CalVer
         run: |
-          CALVER=$(bash scripts/calver.sh)
           test "$(./bin/charly-linux-amd64 version)" = "$CALVER"
           # The arm64 binary is an aarch64 ELF and CANNOT execute on the amd64
           # runner ("Exec format error", exit 126), so its stamp is verified via
