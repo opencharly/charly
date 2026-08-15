@@ -324,9 +324,17 @@ helm-skill:
             | `wait` | no | `--wait` for readiness |
             | `timeout` | no | wait timeout, e.g. `5m` |
 
-            **Kubeconfig resolution is a precedence chain**, not a fixed path: an
-            operator-set `KUBECONFIG` wins; otherwise the k3s guest default
-            `/etc/rancher/k3s/k3s.yaml` is used when present.
+            **Kubeconfig resolution is a three-arm precedence chain**, not a fixed
+            path. In order, first match wins:
+
+            1. an operator-set `KUBECONFIG` — never clobbered;
+            2. the k3s guest default `/etc/rancher/k3s/k3s.yaml`, when present;
+            3. the standard `$HOME/.kube/config`, when present.
+
+            Arm 3 is the one that carries a non-k3s cluster: on any venue that is
+            not a k3s guest, it is what makes an unconfigured `helm-release` step
+            find the cluster at all. helm reads `KUBECONFIG` itself, so exporting it
+            is the whole resolution.
 
             **Teardown is record-and-replay.** The step returns a `helm uninstall`
             ReverseOp that the host records and replays at teardown — you never author
@@ -400,9 +408,10 @@ helm-skill:
             cluster `kubectl wait node` runs before the apiserver answers at all, so
             the step must gate on the apiserver first.
 
-            Note the ADE split (R3): the candy that installs the release also asserts
-            it exists; the bed's own plan keeps only the deeper status/revision
-            assertions.
+            Note the Agent Driven Evaluation (ADE) split (R3) — ADE is the
+            spec-is-the-test discipline owned by `/charly-check:check`: the candy that
+            installs the release also asserts it exists; the bed's own plan keeps only
+            the deeper status/revision assertions.
 
             **Where the `helm` binary comes from.** The step shells `helm` IN-VENUE,
             so the venue must already carry it — `candy/plugin-helm` ships the WORD,
@@ -431,16 +440,48 @@ helm-skill:
             **skips visibly under `charly check box`** — there is no cluster at image
             time, and a skip is reported, never silently green.
 
-            ## The `kubernetes:` substrate arm
+            ## The `kubernetes:` substrate arm — the `helm_charts:` field
 
             A `kubernetes:` deploy does NOT shell out to helm — that would be a
-            boundary-law violation. It declares `helm_charts:`, which the k8sgen
-            emitter translates into a kustomize `helmCharts:` transformer entry in the
-            OVERLAY kustomization (the base stays chart-free). Because the kustomize
-            helmCharts transformer is gated behind `--enable-helm`, which
-            `kubectl apply -k` cannot pass, the apply path renders first:
-            `kubectl kustomize --enable-helm <overlay> | kubectl apply -f -` (and the
-            symmetric form for delete).
+            boundary-law violation. It declares `helm_charts:` on the deploy, which
+            the k8sgen emitter translates into a kustomize `helmCharts:` transformer
+            entry in the OVERLAY kustomization (the base stays chart-free).
+
+            `helm_charts:` is a list of `#HelmChart` entries. Six fields — a SUBSET
+            of the step's, with no `values:`, `wait:` or `timeout:` (kustomize renders
+            the chart, so there is no release to wait on at apply time):
+
+            | Field | Required | Meaning |
+            |---|---|---|
+            | `chart` | yes | chart name → the kustomize entry's `name` |
+            | `release` | yes | release name → `releaseName` |
+            | `repo` | no | chart repository URL |
+            | `version` | no | chart version to pin |
+            | `namespace` | no | target namespace |
+            | `values_files` | no | values YAML paths → `valuesFile` |
+
+            ```yaml
+            my-app:
+              kubernetes:
+                image: my-app
+                from: production
+                deploy:
+                  helm_charts:
+                    - repo: https://prometheus-community.github.io/helm-charts
+                      chart: prometheus-pushgateway
+                      release: web-pushgateway
+                      namespace: web
+            ```
+
+            The same three field names carry across both arms — `chart`, `release`,
+            `repo` mean what they mean in `helm-release:` — so one PROD chart pins
+            translate between venues without re-authoring. That is what makes the
+            helm spike flavor reproduce a cluster deploy rather than approximate it.
+
+            Because the kustomize helmCharts transformer is gated behind
+            `--enable-helm`, which `kubectl apply -k` cannot pass, the apply path
+            renders first: `kubectl kustomize --enable-helm <overlay> | kubectl apply
+            -f -` (and the symmetric form for delete).
 
             ## Beds
 

@@ -195,8 +195,9 @@ MinIO, which every flavor exposes identically — the venue is below them.
   schema spike: `repo?`, `chart!`, `version?`, `release!`, `namespace?`, `values?`, …),
   carried through the InstallPlan IR, validated against the plugin's served schema at
   authoring; the step performs `helm upgrade --install` IN-VENUE against the venue's
-  kubeconfig (an operator-set `KUBECONFIG` wins, else the k3s guest default
-  `/etc/rancher/k3s/k3s.yaml`) and returns a `helm uninstall` ReverseOp the host records
+  kubeconfig (a three-arm chain: an operator-set `KUBECONFIG`, else the k3s guest
+  default `/etc/rancher/k3s/k3s.yaml`, else `$HOME/.kube/config` — arm 3 is what
+  carries a non-k3s cluster) and returns a `helm uninstall` ReverseOp the host records
   and replays — and `verb:helm`, the declarative release-status assertion (`verb:kube`
   analog), EXEC-based over the live DeployExecutor reverse channel, owning NO Kubernetes
   client library. The `kubernetes:` substrate arm is the `helm_charts:` deploy field —
