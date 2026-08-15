@@ -4385,8 +4385,9 @@ git-workflow-skill:
 
                   **That split is load-bearing, and it is why this page's own first revision shipped a false
                   claim.** An epistemic claim is checked by reasoning; a mechanism claim can only be checked
-                  by RUNNING the thing. The first version of the cross-repo section asserted an asymmetry
-                  between the two drift directions that a thirty-second experiment disproves — and it sat in
+                  by RUNNING the thing. The first version of the cross-repo section asserted that the two drift directions
+                  differ in DETECTABILITY, one of them silent — which a thirty-second experiment REVERSES:
+                  the direction called silent is the more legible of the two — and it sat in
                   a mechanism section while the surrounding epistemic ones were sound. **Every factual claim
                   in the three mechanism sections below was verified by executing it.** If you extend them,
                   execute yours too; reasoning is not available for this half of the page.
@@ -4394,7 +4395,8 @@ git-workflow-skill:
                   **Terms.** *The gate* — whichever check a claim rests on; usually `charly box validate`,
                   `charly marketplace drift`, or `charly docs generate`. *`marketplace drift`* compares each
                   generated file in `plugins/` against what the candy `skill:` / `hook:` / `marketplace:`
-                  sources currently project, exiting 1 when any differs. *Superproject* — the `opencharly/charly`
+                  sources currently project — a *candy* being an entity defined in `candy/<name>/charly.yml` —
+                  exiting 1 when any differs. `charly marketplace generate` re-emits them. *Superproject* — the `opencharly/charly`
                   repo, which contains the others as submodules. *Gitlink* — the single commit sha a
                   superproject records for a submodule; it moves only when a superproject commit moves it,
                   never because the submodule repo gained commits. *`BEHIND`* — GitHub's state for a PR whose
@@ -4403,7 +4405,7 @@ git-workflow-skill:
                   can merge. See `/charly-internals:skills` for the source→projection model and
                   `/charly-build:docs` for the site generator.
                   
-                  *Artifact* is used in two senses below and the sections say which: a GENERATED FILE (the
+                  *Artifact* is used in two senses below: a GENERATED FILE (the
                   sense `drift` reports), and, in the epistemic sections, any object a claim is ABOUT — a PR
                   body, a tree, a pasted output.
 
@@ -4435,7 +4437,7 @@ git-workflow-skill:
 
                   ### Three freshness surfaces, failing independently
 
-                  - **The head moves.** Re-resolve with `git ls-remote`, never the API — that read has
+                  - **The head moves.** Resolve a HEAD with `git ls-remote`, not the API — that read has
                     lagged pushes repeatedly. This is also stated as a landing gotcha in
                     `references/multi-repo-coordination.md`; it is repeated here because the failure it
                     causes for a REVIEWER (stamping a verdict on a superseded SHA) differs from the one it
@@ -4483,15 +4485,23 @@ git-workflow-skill:
                   For any PR that goes `BEHIND`, re-derive the gate on the merge result, not the head:
 
                   ```
-                  # <base-tip> must be the CURRENT tip of the base branch, not the merge-base —
-                  # using the merge-base reproduces the very bug this section is about.
-                  BASE=$(git rev-parse origin/main)
-                  TREE=$(git merge-tree --write-tree "$PR_HEAD" "$BASE")   # prints a TREE oid, not a commit
-                  
-                  # A tree oid is not checkoutable, and every gate needs a working tree. Wrap it:
-                  MERGED=$(git commit-tree "$TREE" -p "$PR_HEAD" -p "$BASE" -m "probe")
+                  git fetch origin                      # BASE must be the CURRENT tip, so fetch first
+                  PR_HEAD=$(git rev-parse HEAD)         # or the PR's head sha
+                  BASE=$(git rev-parse origin/main)     # the base TIP, never the merge-base —
+                                                        # the merge-base reproduces this section's bug
+                  TREE=$(git merge-tree --write-tree "$PR_HEAD" "$BASE")   # a TREE oid, not a commit
+
+                  # A tree oid is not checkoutable and every gate needs a working tree, so wrap it:
+                  MERGED=$(git commit-tree "$TREE" -p "$PR_HEAD" -p "$BASE" -m probe)
                   git worktree add --detach /tmp/gate-probe "$MERGED"
-                  # …run the gate in /tmp/gate-probe, then: git worktree remove /tmp/gate-probe
+
+                  # REQUIRED: worktree add leaves submodules EMPTY, and section 1 of this page
+                  # demands every submodule at that commit's pinned gitlink. Skip this and the
+                  # probe measures a tree the gate cannot even read.
+                  git -C /tmp/gate-probe submodule update --init --recursive
+
+                  # …run the gate in /tmp/gate-probe, then:
+                  git worktree remove --force /tmp/gate-probe
                   ```
 
                   **Sibling rule: when a measurement decides what a change can or cannot do, measure the
@@ -4516,7 +4526,7 @@ git-workflow-skill:
                   for whoever runs it. A regeneration performed for an unrelated reason picks the revert up
                   into that person's diff, where it reads as noise from their own change.
 
-                  So: run `charly marketplace drift` before and after any regeneration, and treat an
+                  So: run `charly marketplace drift` before and after any `charly marketplace generate`, and treat an
                   unexplained artifact in the output as someone else's half-landed cutover rather than your
                   own mess.
 
@@ -4539,15 +4549,21 @@ git-workflow-skill:
                   a path nobody thought to check. Compare the whole tree instead:
 
                   ```
-                  # <merge-commit> is the merge you already made; its parents are the two inputs:
-                  #   PR_HEAD=$(git rev-parse <merge-commit>^1)   BASE=$(git rev-parse <merge-commit>^2)
-                  # conflict-free merge: the two trees must be byte-identical
-                  git rev-parse <merge-commit>^{tree}
-                  git merge-tree --write-tree "$PR_HEAD" "$BASE"
+                  MERGE=<merge-commit>                        # the merge you already made
+                  SIDE_A=$(git rev-parse "$MERGE^1")          # your branch
+                  SIDE_B=$(git rev-parse "$MERGE^2")          # what you merged in
+
+                  # conflict-free merge: the trees must be byte-identical
+                  test "$(git rev-parse "$MERGE^{tree}")" = "$(git merge-tree --write-tree "$SIDE_A" "$SIDE_B")" \
+                    && echo "clean: matches git's own resolution" || echo "DIVERGED — inspect below"
 
                   # merge WITH conflicts: identity is the wrong test, since your resolutions
-                  # legitimately differ. Diff them and account for every delta:
-                  git diff --numstat "$(git merge-tree --write-tree "$PR_HEAD" "$BASE")" <merge-commit>
+                  # legitimately differ. Diff them and account for EVERY delta.
+                  # NOTE head -1: on a conflicting merge, merge-tree prints the tree oid on line 1
+                  # and then the conflict stages; without it the substitution captures all of that
+                  # and git reports "invalid object name" — precisely in the case you need this.
+                  git diff --numstat \
+                    "$(git merge-tree --write-tree "$SIDE_A" "$SIDE_B" | head -1)" "$MERGE"
                   ```
 
                   In the motivating incident that diff listed exactly three paths: two intentional
