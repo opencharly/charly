@@ -1037,13 +1037,13 @@ agents-skill:
                     downloaded as a published release) installed with the distro's own
                     package manager
                     — this is the only canonical host-refresh path; no Taskfile target
-                    auto-installs system-wide. (`task install-portable` — a portable
+                    auto-installs system-wide. (`task build:install-portable` — a portable
                     `$HOME/.local/bin/charly` copy — remains for solo bootstrap, but it
                     writes to a host location exactly like a package install, so the same
                     in-flight-work boundary below applies to it too.)
                   - **The host-install boundary — no host-writing target runs during
                     in-flight multi-teammate work, period.** Neither the package-manager
-                    install nor `task install-portable` runs while teammates are
+                    install nor `task build:install-portable` runs while teammates are
                     mid-cutover: both write to host state (`$PATH` or `$HOME`) every
                     concurrent teammate may resolve, and either would publish an unmerged
                     branch's binary where a sibling teammate or the operator expects
@@ -2700,7 +2700,7 @@ egress-skill:
             config files charly WRITES to a system BEFORE the bytes hit disk. MUST be
             invoked before working on candy/plugin-fleet/egress.go, the vendored schemas under
             candy/plugin-egress/egress-schemas/vendor/, the ValidateEgress / registerVendoredEgressKind path,
-            the offline `task cue:vendor` pipeline, or adding an egress schema for any
+            the offline CUE vendoring pipeline, or adding an egress schema for any
             written artifact (cloud-init, kubernetes manifests, traefik routes, runtime config,
             install ledger, systemd/quadlet units, ssh_config, libvirt XML).
         triggers:
@@ -2818,7 +2818,7 @@ egress-skill:
               vendored `package`+`import` file never has to join the SDK's single-blob `BuildCapabilities` /
               `ConcatSchema` / `CompileString` Describe contract (the move that would otherwise break).
 
-            ## The offline vendoring pipeline (`task cue:vendor`)
+            ## The offline vendoring pipeline
 
             Vendoring keeps charly a hermetic single binary — schemas are converted to plain
             `.cue` at DEV time and embedded; nothing is fetched at runtime. Requires the `cue`
@@ -2901,7 +2901,7 @@ egress-skill:
             Invoke before working on `candy/plugin-egress` (the validation logic + the egress CUE schemas
             under `candy/plugin-egress/egress-schemas/` incl. `vendor/cloud_config.cue`), the
             `candy/plugin-fleet/egress.go` SHIM, the `ValidateEgress` path,
-            the `task cue:vendor` pipeline, or adding/validating any config file charly writes
+            the offline vendoring pipeline, or adding/validating any config file charly writes
             to a system.
 generate-source-skill:
     skill:
@@ -4653,7 +4653,7 @@ go-skill:
             |--------|---------|-------------|
             | Build | `task build:binary` | Compile to `bin/charly` (CalVer-stamped), NO install. Also copies to `candy/charly/bin/charly` — does NOT touch the tracked `pkg/arch/PKGBUILD` (that file is read only by the legacy `charly box pkg` native-package build, removed with the nFPM cutover) |
             | Package | `charly generate-packages` (nFPM plugin) | Build a distro-native `.pkg.tar.zst`/`.rpm`/`.deb`/`.apk`/`.ipk` release artifact via the `charly generate-packages` plugin (nFPM, `sdk/packagekit`), published to the per-distro package repos. Install it yourself with your OWN package manager (`pacman -U`/`dnf install`/`apt install`/`apk add`) |
-            | Install (portable) | `task install-portable` | Copy `bin/charly` to `$HOME/.local/bin/charly` (solo bootstrap; NOT a multi-teammate dev-loop step — see below) |
+            | Install (portable) | `task build:install-portable` | Copy `bin/charly` to `$HOME/.local/bin/charly` (solo bootstrap; NOT a multi-teammate dev-loop step — see below) |
             | Run tests | `cd charly && go test ./...` | Run all tests |
             | Run specific test | `cd charly && go test -run TestName ./...` | Run single test |
             | Vet | `cd charly && go vet ./...` | Static analysis |
