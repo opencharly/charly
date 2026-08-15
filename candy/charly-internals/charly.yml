@@ -4355,29 +4355,57 @@ git-workflow-skill:
                   findings, and the majority were not defects in the code but false or stale CLAIMS about
                   it.
 
-                  **Most of them are one question failing against a different noun:** *what exactly did I
-                  measure, and is it the thing my claim is about?*
+                  **The page has two kinds of content, and they are true in different ways.**
 
-                  | The noun that slipped | Where |
+                  **Five sections are epistemic** — ways a claim goes wrong — and they are one question
+                  failing against a different noun: *what exactly did I measure, and is it the thing my
+                  claim is about?*
+
+                  | The noun that slipped | Section |
                   |---|---|
-                  | The artifact — measured the right thing, quoted the wrong copy | "A paste and its label" |
-                  | The moment — a surface moved between measuring and asserting | "Three freshness surfaces" |
-                  | The other party's copy — a negative asserted against a tree they were editing | "Positive and negative claims" |
-                  | The fix's blast radius — swept for what I corrected, not what I broke | "Sweep for what the fix invalidated" |
-                  | The base — gated the head when the merge is what lands | "The merged tree's gate" |
+                  | The artifact — measured the right thing, quoted the wrong copy | A paste and its label are two separate claims |
+                  | The moment — a surface moved between measuring and asserting | Three freshness surfaces, failing independently |
+                  | The fix's blast radius — swept for what I corrected, not what I broke | Sweep for what the fix invalidated |
+                  | The base — gated the head when the merge is what lands | The gate that matters at merge is the merged tree's, not the head's |
+                  | The produced tree — measured the starting state to decide what a change can do | (same section, "Sibling rule") |
 
                   Each is a correct measurement answering the wrong question, which is why none of them
                   feel like errors while you are making them — and why a reader who holds the question can
-                  derive a trap nobody wrote down. The last THREE sections are not instances of it — the
-                  cross-repo cutover, the submodule revert, and the status-absence false negative are
-                  plain mechanism, kept here because they bite in the same situations.
+                  derive a trap nobody wrote down.
 
-                  **Terms.** *The gate* means whichever check a claim rests on — usually `charly box
-                  validate`, `charly marketplace drift`, or `charly docs generate`. `charly marketplace
-                  drift` compares each generated artifact in `plugins/` against what the candy `skill:` /
-                  `hook:` / `marketplace:` sources currently project, and exits 1 when any differs. See
-                  `/charly-internals:skills` for the source→projection model and `/charly-build:docs` for
-                  the site generator.
+                  Four of those five appear above. The table has five ROWS over four SECTIONS because the
+                  merged-tree section contributes two nouns. The fifth epistemic section, "Positive and
+                  negative claims decay differently", is deliberately absent: it is the moment-noun again,
+                  seen from the reader's side rather than the writer's, and giving it a row would blur the
+                  distinction the table exists to draw. Five epistemic plus three mechanism is the whole page.
+
+                  **The remaining three sections are mechanism** — how charly and git actually behave: the
+                  cross-repo `skill:` cutover, the submodule revert, and the validator-status false
+                  negative. They are not instances of the question and no frame unifies them.
+
+                  **That split is load-bearing, and it is why this page's own first revision shipped a false
+                  claim.** An epistemic claim is checked by reasoning; a mechanism claim can only be checked
+                  by RUNNING the thing. The first version of the cross-repo section asserted an asymmetry
+                  between the two drift directions that a thirty-second experiment disproves — and it sat in
+                  a mechanism section while the surrounding epistemic ones were sound. **Every factual claim
+                  in the three mechanism sections below was verified by executing it.** If you extend them,
+                  execute yours too; reasoning is not available for this half of the page.
+
+                  **Terms.** *The gate* — whichever check a claim rests on; usually `charly box validate`,
+                  `charly marketplace drift`, or `charly docs generate`. *`marketplace drift`* compares each
+                  generated file in `plugins/` against what the candy `skill:` / `hook:` / `marketplace:`
+                  sources currently project, exiting 1 when any differs. *Superproject* — the `opencharly/charly`
+                  repo, which contains the others as submodules. *Gitlink* — the single commit sha a
+                  superproject records for a submodule; it moves only when a superproject commit moves it,
+                  never because the submodule repo gained commits. *`BEHIND`* — GitHub's state for a PR whose
+                  base branch has advanced past its merge-base; strict branch protection requires
+                  *`gh pr update-branch`* (a MERGE of the base into the PR branch, never a rebase) before it
+                  can merge. See `/charly-internals:skills` for the source→projection model and
+                  `/charly-build:docs` for the site generator.
+                  
+                  *Artifact* is used in two senses below and the sections say which: a GENERATED FILE (the
+                  sense `drift` reports), and, in the epistemic sections, any object a claim is ABOUT — a PR
+                  body, a tree, a pasted output.
 
                   ### A paste and its label are two separate claims
 
@@ -4455,7 +4483,15 @@ git-workflow-skill:
                   For any PR that goes `BEHIND`, re-derive the gate on the merge result, not the head:
 
                   ```
-                  git merge-tree --write-tree <pr-head-sha> <base-sha>     # prints the resulting tree sha
+                  # <base-tip> must be the CURRENT tip of the base branch, not the merge-base —
+                  # using the merge-base reproduces the very bug this section is about.
+                  BASE=$(git rev-parse origin/main)
+                  TREE=$(git merge-tree --write-tree "$PR_HEAD" "$BASE")   # prints a TREE oid, not a commit
+                  
+                  # A tree oid is not checkoutable, and every gate needs a working tree. Wrap it:
+                  MERGED=$(git commit-tree "$TREE" -p "$PR_HEAD" -p "$BASE" -m "probe")
+                  git worktree add --detach /tmp/gate-probe "$MERGED"
+                  # …run the gate in /tmp/gate-probe, then: git worktree remove /tmp/gate-probe
                   ```
 
                   **Sibling rule: when a measurement decides what a change can or cannot do, measure the
@@ -4503,13 +4539,15 @@ git-workflow-skill:
                   a path nobody thought to check. Compare the whole tree instead:
 
                   ```
+                  # <merge-commit> is the merge you already made; its parents are the two inputs:
+                  #   PR_HEAD=$(git rev-parse <merge-commit>^1)   BASE=$(git rev-parse <merge-commit>^2)
                   # conflict-free merge: the two trees must be byte-identical
                   git rev-parse <merge-commit>^{tree}
-                  git merge-tree --write-tree <pr-head-sha> <base-sha>
+                  git merge-tree --write-tree "$PR_HEAD" "$BASE"
 
                   # merge WITH conflicts: identity is the wrong test, since your resolutions
                   # legitimately differ. Diff them and account for every delta:
-                  git diff --numstat $(git merge-tree --write-tree <pr-head-sha> <base-sha>) <merge-commit>
+                  git diff --numstat "$(git merge-tree --write-tree "$PR_HEAD" "$BASE")" <merge-commit>
                   ```
 
                   In the motivating incident that diff listed exactly three paths: two intentional
