@@ -305,9 +305,10 @@ charly-skill:
             tree. A box therefore always bakes the charly code under development — never a
             stale published release. The OS-tracked package install (the former `localpkg:`
             map) is GONE: the sdk's localpkg machinery now builds via the `charly
-            generate-packages` plugin (sdk/packagekit) from the candy's `packaging:` section,
-            which lands with the nFPM cutover (Phase 3). Until then the copy step is the
-            single binary source. This is WHY a fresh check bed exercises your uncommitted
+            generate-packages` plugin (sdk/packagekit) from the candy's `packaging:` section
+            (declared now); the localpkg machinery's transition to build from this section
+            lands with the Phase 3 cutover. Until then the copy step is the single binary
+            source. This is WHY a fresh check bed exercises your uncommitted
             charly changes while a real box ships the same in-development toolchain.
             
             ## Updating the Binary — dual-path gotcha
