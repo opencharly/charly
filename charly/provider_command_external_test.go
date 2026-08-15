@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -272,5 +273,115 @@ func assertCommandEnv(t *testing.T, env []string, word string) {
 	}
 	if !hasWord {
 		t.Fatalf("env must stamp CHARLY_COMMAND_WORD=%s so a multi-command plugin selects the dispatched grammar", word)
+	}
+}
+
+// --- the `charly box feature run` unreachability cutover (charly#B) ---
+
+// fakeCommandProvider / fakeNestedCommandProvider are minimal ClassCommand Providers for the
+// registry parking + parented-resolve tests. The nested one additionally implements
+// NestedCommandProvider, which is exactly what register keys its parking decision on.
+type fakeCommandProvider struct{ word string }
+
+func (p *fakeCommandProvider) Reserved() string     { return p.word }
+func (p *fakeCommandProvider) Class() ProviderClass { return ClassCommand }
+func (p *fakeCommandProvider) Invoke(context.Context, *Operation) (*Result, error) {
+	return &Result{}, nil
+}
+
+type fakeNestedCommandProvider struct {
+	fakeCommandProvider
+	parent string
+}
+
+func (p *fakeNestedCommandProvider) CommandParent() string { return p.parent }
+
+// TestExportedCommandField_AlwaysExported is the regression gate for the STARTUP PANIC half of the
+// cutover. exportedCommandField's contract is an EXPORTED Go field name, and reflect.StructOf
+// PANICS on an unexported one — inside collectExternalCommandPlugins, which runs during main(). So
+// a single declared subcommand name that broke the contract did not degrade one command, it
+// aborted the whole binary before any command could run.
+//
+// Capitalizing the first byte only works for a leading LETTER: `__feature-box` (the hidden bridge
+// leaf `charly box feature run` forwards) sanitizes to `__feature_box`, whose leading `_` ToUpper
+// leaves alone. Fails without the fix — not with an assertion, but by panicking in the
+// nestedSubcommandType arm below, exactly as the real binary did.
+func TestExportedCommandField_AlwaysExported(t *testing.T) {
+	cases := []string{"__feature-box", "_leading-underscore", "9lives", "feature-box", "box", "x"}
+	for _, word := range cases {
+		got := exportedCommandField(word)
+		if got == "" {
+			t.Fatalf("exportedCommandField(%q) = empty", word)
+		}
+		if c := got[0]; c < 'A' || c > 'Z' {
+			t.Errorf("exportedCommandField(%q) = %q — first byte %q is not an uppercase letter, so reflect.StructOf rejects the field as unexported", word, got, string(c))
+		}
+	}
+	// The property that actually matters: reflect.StructOf must ACCEPT the derived name. This is
+	// the call that panicked the binary at startup.
+	subs := []climodel.CLISubcommand{{Name: "__feature-box", Help: "hidden bridge leaf", Hidden: true}}
+	_ = nestedSubcommandType(subs) // panics on the pre-fix derivation
+}
+
+// TestResolveCommand_NestedWinsOverCollidingTopLevel is the regression gate for the DISPATCH half.
+// The registry deliberately gives the plain key to a TOP-LEVEL command and parks a colliding NESTED
+// one at "command:<word>:<parent>" (register's parking rule). dispatchCommand resolved by the plain
+// word alone, so `charly box feature run` was handed the TOP-LEVEL `charly feature` capability,
+// whose grammar has no `run` — the nested command was unreachable from the day it was introduced.
+//
+// Fails without resolveCommand: the parented lookup returns the top-level provider.
+func TestResolveCommand_NestedWinsOverCollidingTopLevel(t *testing.T) {
+	r := newRegistry()
+	top := &fakeCommandProvider{word: "zzfeature"}
+	nested := &fakeNestedCommandProvider{fakeCommandProvider: fakeCommandProvider{word: "zzfeature"}, parent: "zzbox"}
+	if err := r.register(top, "test-top"); err != nil {
+		t.Fatalf("register top-level: %v", err)
+	}
+	if err := r.register(nested, "test-nested"); err != nil {
+		t.Fatalf("register nested: %v", err)
+	}
+
+	// A NESTED invocation must reach the nested capability.
+	got, ok := r.resolveCommand("zzfeature", "zzbox")
+	if !ok {
+		t.Fatal("resolveCommand(zzfeature, zzbox) did not resolve")
+	}
+	if got != Provider(nested) {
+		t.Fatalf("resolveCommand(zzfeature, zzbox) returned the TOP-LEVEL provider — `charly zzbox zzfeature` would run `charly zzfeature`")
+	}
+	// A TOP-LEVEL invocation is unchanged.
+	got, ok = r.resolveCommand("zzfeature", "")
+	if !ok || got != Provider(top) {
+		t.Fatalf("resolveCommand(zzfeature, \"\") = %v, ok=%v — want the top-level provider", got, ok)
+	}
+	// A nested word that never COLLIDED was never parked: the parented key misses and the plain key
+	// answers. This is every other `box <word>` (build, validate, list, …), each uniquely worded —
+	// the reason only `feature` was broken.
+	lone := &fakeNestedCommandProvider{fakeCommandProvider: fakeCommandProvider{word: "zzlonely"}, parent: "zzbox"}
+	if err := r.register(lone, "test-lone"); err != nil {
+		t.Fatalf("register lone nested: %v", err)
+	}
+	if got, ok := r.resolveCommand("zzlonely", "zzbox"); !ok || got != Provider(lone) {
+		t.Fatalf("resolveCommand(zzlonely, zzbox) = %v, ok=%v — want the uniquely-worded nested provider via the plain key", got, ok)
+	}
+}
+
+// TestCollectExternalCommandPlugins_NestedCarriesParent proves the wiring between the two halves:
+// the dispatch entry a NESTED command registers must carry its parent, or dispatchCommand has
+// nothing to resolve the parented key with.
+func TestCollectExternalCommandPlugins_NestedCarriesParent(t *testing.T) {
+	d := externalCommandDispatch{word: "feature", parent: "box"}
+	if d.parent == "" {
+		t.Fatal("externalCommandDispatch has no parent field")
+	}
+	// The table key collectExternalCommandPlugins builds for a nested command, and the parent it
+	// must have recorded alongside it.
+	table := map[string]externalCommandDispatch{"box feature": d}
+	got, sub, ok := resolveCommandDispatch("box feature <args>", table)
+	if !ok || sub != "" {
+		t.Fatalf("resolveCommandDispatch(box feature) ok=%v sub=%q", ok, sub)
+	}
+	if got.parent != "box" {
+		t.Fatalf("resolved dispatch parent = %q, want %q — dispatchCommand would fall back to the plain word and reach the top-level capability", got.parent, "box")
 	}
 }
