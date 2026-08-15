@@ -3524,6 +3524,7 @@ git-workflow-skill:
             | B1 (the two-step branch-per-change loop, concurrent landings, the cross-repo WIP landing sequence) and B4 (sync to upstream + prune) | `references/branch-and-pr-loop.md` |
             | B2 (multi-repo/multi-worktree coordination, per-module verification), B3 (agent teams in per-teammate worktrees), B6 (cross-repo `@github` landing), and B7 (multi-worktree landing + refresh, the canonical end-to-end) | `references/multi-repo-coordination.md` |
             | B5 (the fresh evaluator + fork/PR path, the two-gate autonomous-landing model), CalVer generation, post-landing cleanliness + report format, and the validation-FAILS recovery sequence | `references/validator-and-calver.md` |
+            | Evidence discipline — provenance vs plausibility of a pasted gate, the three freshness surfaces (head / body / pasted output), positive-vs-negative claim decay, sweeping for claims a fix invalidated, the merged-tree gate for a `BEHIND` PR, source-and-regeneration as one cross-repo cutover, submodule pointers reverted by a non-conflicting merge, and why status-absence on a known head is a false negative | `references/evidence-and-freshness.md` |
 
             ## Cross-References
 
@@ -3647,6 +3648,15 @@ git-workflow-skill:
                   regression this class produces (a sibling merge advances `main` mid-validation, then a
                   naive recovery reverts the gitlink to the older pointer). Only after the descendant-wins
                   check re-post the status and delta-re-gate as above.
+
+                  **Prefer the whole-tree check over this per-path one.** `git ls-tree HEAD <sub>`
+                  only helps when you already suspect the right submodule, and the failure it misses
+                  — a gitlink silently reverted by a merge that never conflicted, so the path is
+                  named nowhere — is the one that actually occurred. Compare the merge result against
+                  git's own resolution instead, which covers every path at once:
+                  `references/evidence-and-freshness.md`, "Submodule pointers can be reverted by a
+                  merge without ever conflicting". Use the per-path form above only as a quick
+                  confirmation once the whole-tree comparison has already told you where to look.
 
                   **Multi-committer main advances — out-of-tree PRs from other committers.** The
                   orchestrator is NOT the sole source of `main` advances: another committer (a human
@@ -4365,6 +4375,248 @@ git-workflow-skill:
                      not just the failing piece — a fix that survives only the targeted re-run is a
                      regression in waiting.
                   4. The PR merges only when validation passes end-to-end on the final code.
+            - name: evidence-and-freshness
+              content: |+
+                  ## Evidence discipline — what a claim in a PR is worth
+
+                  A PR is a bundle of claims: the diff, the body's prose, the pasted gate output, the
+                  CHANGELOG narrative, the commit messages. The diff is checked mechanically. **Everything
+                  else is checked only if someone thinks to check it**, and this section catalogs the ways
+                  those claims go wrong.
+
+                  Every item below was a blocking finding during the Factory unit-4 cutover —
+                  `opencharly/charly#274` and `opencharly/plugins#168`, `#169`, `#170`, `#171` — most of
+                  them more than once. Sixteen validation rounds produced roughly a dozen blocking
+                  findings, and the majority were not defects in the code but false or stale CLAIMS about
+                  it.
+
+                  **The page has two kinds of content, and they are true in different ways.**
+
+                  **Five sections are epistemic** — ways a claim goes wrong — and they are one question
+                  failing against a different noun: *what exactly did I measure, and is it the thing my
+                  claim is about?*
+
+                  | The noun that slipped | Section |
+                  |---|---|
+                  | The artifact — measured the right thing, quoted the wrong copy | A paste and its label are two separate claims |
+                  | The moment — a surface moved between measuring and asserting | Three freshness surfaces, failing independently |
+                  | The fix's blast radius — swept for what I corrected, not what I broke | Sweep for what the fix invalidated |
+                  | The base — gated the head when the merge is what lands | The gate that matters at merge is the merged tree's, not the head's |
+                  | The produced tree — measured the starting state to decide what a change can do | (same section, "Sibling rule") |
+
+                  Each is a correct measurement answering the wrong question, which is why none of them
+                  feel like errors while you are making them — and why a reader who holds the question can
+                  derive a trap nobody wrote down.
+
+                  Four of those five appear above. The table has five ROWS over four SECTIONS because the
+                  merged-tree section contributes two nouns. The fifth epistemic section, "Positive and
+                  negative claims decay differently", is deliberately absent: it is the moment-noun again,
+                  seen from the reader's side rather than the writer's, and giving it a row would blur the
+                  distinction the table exists to draw. Five epistemic plus three mechanism is the whole page.
+
+                  **The remaining three sections are mechanism** — how charly and git actually behave: the
+                  cross-repo `skill:` cutover, the submodule revert, and the validator-status false
+                  negative. They are not instances of the question and no frame unifies them.
+
+                  **That split is load-bearing, and it is why this page's own first revision shipped a false
+                  claim.** An epistemic claim is checked by reasoning; a mechanism claim can only be checked
+                  by RUNNING the thing. The first version of the cross-repo section asserted that the two drift directions
+                  differ in DETECTABILITY, one of them silent — which a thirty-second experiment REVERSES:
+                  the direction called silent is the more legible of the two — and it sat in
+                  a mechanism section while the surrounding epistemic ones were sound. **Every factual claim
+                  in the three mechanism sections below was verified by executing it.** If you extend them,
+                  execute yours too; reasoning is not available for this half of the page.
+
+                  **Terms.** *The gate* — whichever check a claim rests on; usually `charly box validate`,
+                  `charly marketplace drift`, or `charly docs generate`. *`marketplace drift`* compares each
+                  generated file in `plugins/` against what the candy `skill:` / `hook:` / `marketplace:`
+                  sources currently project — a *candy* being an entity defined in `candy/<name>/charly.yml` —
+                  exiting 1 when any differs. `charly marketplace generate` re-emits them. *Superproject* — the `opencharly/charly`
+                  repo, which contains the others as submodules. *Gitlink* — the single commit sha a
+                  superproject records for a submodule; it moves only when a superproject commit moves it,
+                  never because the submodule repo gained commits. *`BEHIND`* — GitHub's state for a PR whose
+                  base branch has advanced past its merge-base; strict branch protection requires
+                  *`gh pr update-branch`* (a MERGE of the base into the PR branch, never a rebase) before it
+                  can merge. See `/charly-internals:skills` for the source→projection model and
+                  `/charly-build:docs` for the site generator.
+                  
+                  *Artifact* is used in two senses below: a GENERATED FILE (the
+                  sense `drift` reports), and, in the epistemic sections, any object a claim is ABOUT — a PR
+                  body, a tree, a pasted output.
+
+                  ### A paste and its label are two separate claims
+
+                  When a body pastes command output and names the tree it ran on, that is two assertions:
+                  the output is real, and it came from where it says. The first is almost always true — the
+                  command did run. The second is the one that fails.
+
+                  So: **verify provenance, not plausibility.** Rebuild the exact tree the body names —
+                  every submodule at that commit's pinned gitlink, the binary built in-tree — and re-run.
+                  Do not ask "is this output believable?"; ask "did it come from where it says?"
+
+                  The motivating case: a body pasted a truthful two-artifact drift result labelled as
+                  having run at `main`. It had run at an unmerged PR's branch. At real `main` the same
+                  command returned six, and a wholesale regeneration there would have *reverted* two
+                  already-merged PRs — a recipe that would have shipped inside an immutable CHANGELOG
+                  entry, in the paragraph written to warn about that failure class.
+
+                  This outranks mutation-testing the gate, and the two are not substitutes:
+
+                  | Instrument | Question it answers |
+                  |---|---|
+                  | Mutation test (perturb an input, confirm the gate goes red on exactly that thing) | Can this gate fail at all, or is it vacuously green? |
+                  | Re-run at the named tree | Was the gate pointed at the thing the claim is about? |
+
+                  A reviewer applying only the first confirms a probative gate and never notices it was
+                  aimed elsewhere.
+
+                  ### Three freshness surfaces, failing independently
+
+                  - **The head moves.** Resolve a HEAD with `git ls-remote`, not the API — that read has
+                    lagged pushes repeatedly. This is also stated as a landing gotcha in
+                    `references/multi-repo-coordination.md`; it is repeated here because the failure it
+                    causes for a REVIEWER (stamping a verdict on a superseded SHA) differs from the one it
+                    causes for an AUTHOR.
+                  - **The body moves.** A body edit produces no new SHA, no notification, and no status
+                    reset, so nothing in head-based discipline covers it. Re-read the body immediately
+                    before the verdict, as a standing step.
+                  - **Pasted gate output goes stale in place.** The sneakiest: the prose around a pasted
+                    verdict stays accurate while the tree moves underneath it. A pasted verdict is the
+                    claim most likely to be true when written and false when read.
+
+                  Corollary for a gate that is red **on purpose** (a disclosed sequencing state): paste the
+                  RED output and enumerate why, rather than an older green one. And re-fetch as the **last
+                  action before the assertion**, not the first action of the turn that makes it — the gap
+                  that matters is fetch→assert.
+
+                  ### Positive and negative claims decay differently
+
+                  Only one of them needs a timestamp:
+
+                  - A **positive** finding — "this is broken, here is the reproduction" — stays true
+                    whether or not it has since been fixed. It degrades gracefully.
+                  - A **negative** claim — "this is still unfixed" — is falsified by any edit at all.
+                    Against an artifact the other party is actively editing it must carry its read time
+                    ("still open as of my fetch at T") or not be made.
+
+                  This applies to any two agents working one artifact, not only to validators.
+
+                  ### Sweep for what the fix invalidated
+
+                  R1's claim-keyed sweep, turned inward on the document you are editing. Fixing one claim
+                  routinely falsifies a different one elsewhere in the same artifact, and grepping for the
+                  claim you just corrected will never surface it.
+
+                  Worked case: restoring a reverted submodule pointer made a pasted `drift: clean` line
+                  elsewhere in the same body false. The edit was verified by re-grepping the live body —
+                  correct technique, right target, **wrong question**.
+
+                  ### The gate that matters at merge is the merged tree's, not the head's
+
+                  Here the artifact does not move; the **base** does. A PR can be green at its head through
+                  every round and still land a red `main`, because another PR merged in between and
+                  `update-branch` inherits its state.
+
+                  For any PR that goes `BEHIND`, re-derive the gate on the merge result, not the head:
+
+                  ```
+                  git fetch origin                      # BASE must be the CURRENT tip, so fetch first
+                  PR_HEAD=$(git rev-parse HEAD)         # or the PR's head sha
+                  BASE=$(git rev-parse origin/main)     # the base TIP, never the merge-base —
+                                                        # the merge-base reproduces this section's bug
+                  TREE=$(git merge-tree --write-tree "$PR_HEAD" "$BASE")   # a TREE oid, not a commit
+
+                  # A tree oid is not checkoutable and every gate needs a working tree, so wrap it:
+                  MERGED=$(git commit-tree "$TREE" -p "$PR_HEAD" -p "$BASE" -m probe)
+                  git worktree add --detach /tmp/gate-probe "$MERGED"
+
+                  # REQUIRED: worktree add leaves submodules EMPTY, and section 1 of this page
+                  # demands every submodule at that commit's pinned gitlink. Skip this and the
+                  # probe measures a tree the gate cannot even read.
+                  git -C /tmp/gate-probe submodule update --init --recursive
+
+                  # …run the gate in /tmp/gate-probe, then:
+                  git worktree remove --force /tmp/gate-probe
+                  ```
+
+                  **Sibling rule: when a measurement decides what a change can or cannot do, measure the
+                  tree that change PRODUCES, not the one it starts from.** A validator measured `main` with
+                  `main`'s own submodule pin, concluded correctly about that tree, then generalized to
+                  "this PR cannot fix the red" without measuring the tree the PR's pin produces. Wrong — a
+                  superproject gitlink does not move when the submodule repo merges; only a superproject PR
+                  bumps it, so that PR was not a bystander to the red, it was the half that closed it.
+
+                  ### A `skill:` source edit and its regeneration are one cutover across two repos
+
+                  Landing either half alone leaves `main` with `marketplace drift` red. **Both directions
+                  fail the same way** — exit 1, a stale-artifact listing — so neither is quiet:
+
+                  | What landed alone | `drift` output |
+                  |---|---|
+                  | Source ahead of generated tree | names the artifacts needing regeneration |
+                  | Generated tree ahead of source | names them too, **plus** an explicit `(stale)` marker on any orphan the source no longer projects |
+
+                  The generated-ahead direction is if anything the more legible of the two. What makes both
+                  dangerous is not detection, it is that **`drift` runs in no CI workflow** — it is red only
+                  for whoever runs it. A regeneration performed for an unrelated reason picks the revert up
+                  into that person's diff, where it reads as noise from their own change.
+
+                  So: run `charly marketplace drift` before and after any `charly marketplace generate`, and treat an
+                  unexplained artifact in the output as someone else's half-landed cutover rather than your
+                  own mess.
+
+                  Repair ownership, when `main` goes red from someone else's half-landed cutover: it is
+                  **blocking for your own landing**, not a separable cleanup. "Already red on main" and
+                  "belongs to that PR's author" are exactly the framings R2 names, and a validator will not
+                  put a release tag on a tree whose gate exits 1.
+
+                  ### Submodule pointers can be reverted by a merge without ever conflicting
+
+                  `git merge` does not check submodule working trees out to the merged pointer. So a
+                  working-tree restore inside a submodule — for instance `git -C docs checkout -- .` after
+                  a generator wrote into it — leaves that submodule at the OLD sha, and a subsequent
+                  `git add -A` re-stages it there, silently discarding the merge's correct resolution. The
+                  path never appears in the conflict listing, because it never conflicted.
+
+                  **This supersedes the per-path forward-gitlink check in
+                  `references/branch-and-pr-loop.md`.** That check works only when you already suspect the
+                  right path, and the motivating incident was not a path checked and gotten wrong — it was
+                  a path nobody thought to check. Compare the whole tree instead:
+
+                  ```
+                  MERGE=<merge-commit>                        # the merge you already made
+                  SIDE_A=$(git rev-parse "$MERGE^1")          # your branch
+                  SIDE_B=$(git rev-parse "$MERGE^2")          # what you merged in
+
+                  # conflict-free merge: the trees must be byte-identical
+                  test "$(git rev-parse "$MERGE^{tree}")" = "$(git merge-tree --write-tree "$SIDE_A" "$SIDE_B")" \
+                    && echo "clean: matches git's own resolution" || echo "DIVERGED — inspect below"
+
+                  # merge WITH conflicts: identity is the wrong test, since your resolutions
+                  # legitimately differ. Diff them and account for EVERY delta.
+                  # NOTE head -1: on a conflicting merge, merge-tree prints the tree oid on line 1
+                  # and then the conflict stages; without it the substitution captures all of that
+                  # and git reports "invalid object name" — precisely in the case you need this.
+                  git diff --numstat \
+                    "$(git merge-tree --write-tree "$SIDE_A" "$SIDE_B" | head -1)" "$MERGE"
+                  ```
+
+                  In the motivating incident that diff listed exactly three paths: two intentional
+                  resolutions and the silent gitlink override sitting between them.
+
+                  ### Status absence on a known head proves nothing
+
+                  On PASS the evaluator typically adds a CalVer-finalization commit and posts
+                  `charly/pr-validator` on THAT sha, then squash-merges and deletes the branch — so polling
+                  `gh api repos/<r>/commits/<known-head>/statuses` can return "(none)" right up until the
+                  merge, indistinguishable from a hung run. (Observed on two of three landings in the
+                  motivating cutover; the pr-validator spec requires a status on the pre-finalization head,
+                  so treat this as behaviour that MAY occur, not a guarantee.) Poll the PR's
+                  `state`/`mergedAt` and re-resolve the head at check time instead.
+
+                  Related: when a validator does look stalled, **ping it for liveness before respawning**.
+                  A `pr-validator` merges and tags on PASS, so two of them on an unanswered head can both
+                  get there and race. Duplicated review is cheap; a double-merge or a contended tag is not.
 go-skill:
     skill:
         name: go
