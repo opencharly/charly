@@ -58,9 +58,24 @@ Replace the `pkg/` packaging workflow (three `pkg/*` git submodules + the contai
       binary source, the baked-plugin source (Phase 0's release), and the `packaging:`
       section (the `--candy` metadata input) all exist — the prerequisites are met, the
       distro workflows just need to run.
+- [ ] **Phase 0 follow-on — Go-module-valid tags on the plugin repo.** The plugin repo's
+      release workflow currently mints only the CalVer `v2026.227.0013`-style tags, which
+      semver REJECTS as Go module versions (leading-zero patch). The superproject shim
+      (below) needs a Go-module-valid tag (`v0.2026227.13`-style, mirroring sdk's
+      `v0.2026226.1201` scheme) to `require`/`replace` against. Owner: the nFPM program.
 - [ ] **Phase 3 — main repo cutover** (pkg/ removal + download_template URLs + check beds
       + rules/docs; one atomic cutover, after the distro repos have published at least
-      once).
+      once). **Phase 3 also lands the superproject's declaration of the external
+      `charly generate-packages` plugin** — the spike-proven mechanism: a THIN re-export
+      shim module under a discovered candy (`candy/generate-packages/` with charly.yml +
+      `go.mod` `require`+`replace` → the Go-module-tagged external module + `cmd/serve`
+      shim + go.sum). It prescans into the CLI grammar (the prescan walks only `discover:`
+      paths — an `import:` declaration is structurally impossible, the prescan never
+      fetches) and host-builds from the shim dir's own `replace` (NOT the external repo —
+      `source:` is identity metadata). This is the `sdk/deploykit` exec-path prerequisite:
+      without a resolvable `require` the declared word appears in the grammar then fails at
+      dispatch — strictly worse than today's clean "unexpected argument" — so the shim and
+      the tags land as ONE coherent unit with the Phase 3 cutover.
 
 ## Ordered decision heuristics
 
