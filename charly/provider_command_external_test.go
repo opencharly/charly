@@ -282,11 +282,18 @@ func assertCommandEnv(t *testing.T, env []string, word string) {
 // fakeCommandProvider / fakeNestedCommandProvider are minimal ClassCommand Providers for the
 // registry parking + parented-resolve tests. The nested one additionally implements
 // NestedCommandProvider, which is exactly what register keys its parking decision on.
-type fakeCommandProvider struct{ word string }
+type fakeCommandProvider struct {
+	word string
+	// invoked records that dispatchCommand actually REACHED this provider. Two providers can share
+	// a word (a top-level one and a nested one parked under its parent), so "which capability did
+	// the CLI run?" is only answerable by asking each of them, not by inspecting the resolve.
+	invoked bool
+}
 
 func (p *fakeCommandProvider) Reserved() string     { return p.word }
 func (p *fakeCommandProvider) Class() ProviderClass { return ClassCommand }
 func (p *fakeCommandProvider) Invoke(context.Context, *Operation) (*Result, error) {
+	p.invoked = true
 	return &Result{}, nil
 }
 
@@ -410,6 +417,62 @@ func TestCollectExternalCommandPlugins_NestedCarriesParent(t *testing.T) {
 	}
 	if got.parent != "zzbox" {
 		t.Fatalf("resolved dispatch parent = %q, want %q", got.parent, "zzbox")
+	}
+}
+
+// TestDispatchCommand_NestedInvocationReachesNestedCapability is the gate on the line that ACTUALLY
+// FIXES THE BUG. The chain has three load-bearing links and each needs its own gate, because
+// reverting any ONE of them alone restores the defect while the other two stay green:
+//
+//  1. Registry.resolveCommand's parked-key lookup   — TestResolveCommand_NestedWinsOverCollidingTopLevel
+//  2. collectExternalCommandPlugins RECORDING the parent (`d.parent = parent`)
+//     — TestCollectExternalCommandPlugins_NestedCarriesParent
+//  3. dispatchCommand CONSUMING it (`resolveCommand(d.word, d.parent)`, the sole consumer of
+//     d.parent and sole caller of resolveCommand)   — THIS TEST
+//
+// Recording a value and consuming it are different lines. Gating only the recording lets
+// `dispatchCommand` fall back to the pre-fix `resolve(ClassCommand, d.word)` — which hands a NESTED
+// invocation the TOP-LEVEL capability — with the whole suite green.
+//
+// The assertion is deliberately behavioural, not structural: it does not check which provider was
+// resolved, it checks which capability was INVOKED. That is the sentence in this PR's title
+// ("`charly box feature run` ... never once dispatched"), so it is what the gate must say.
+func TestDispatchCommand_NestedInvocationReachesNestedCapability(t *testing.T) {
+	const word, parent = "zzfeature", "zzbox"
+	top := &fakeCommandProvider{word: word}
+	nested := &fakeNestedCommandProvider{
+		fakeCommandProvider: fakeCommandProvider{word: word},
+		parent:              parent,
+	}
+	r := newRegistry()
+	// Registration order matters: the TOP-LEVEL keeps the plain key and parks the nested one, which
+	// is the collision that made `charly box feature run` unreachable in the first place.
+	if err := r.register(top, "test-top"); err != nil {
+		t.Fatalf("register top-level: %v", err)
+	}
+	if err := r.register(nested, "test-nested"); err != nil {
+		t.Fatalf("register nested: %v", err)
+	}
+	saved := providerRegistry
+	providerRegistry = r
+	defer func() { providerRegistry = saved }()
+
+	field := exportedCommandField(word)
+	d := externalCommandDispatch{
+		word:   word,
+		parent: parent,
+		holder: externalCommandHolder(word, field, nil),
+		field:  field,
+	}
+	if err := dispatchCommand(d, ""); err != nil {
+		t.Fatalf("dispatchCommand(%s %s): %v", parent, word, err)
+	}
+
+	if top.invoked {
+		t.Errorf("`charly %s %s` INVOKED the top-level `charly %s` capability — dispatchCommand resolved by the plain word instead of the parented key, which is exactly the bug this PR fixes", parent, word, word)
+	}
+	if !nested.invoked {
+		t.Errorf("`charly %s %s` never reached the nested capability", parent, word)
 	}
 }
 
