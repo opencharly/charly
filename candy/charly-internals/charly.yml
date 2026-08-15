@@ -3937,6 +3937,41 @@ git-workflow-skill:
                   Each repo gets ONE R10 against ITS final code; repos land producer→consumer.
                   Multi-level chains (A→B→C) recurse the same way.
 
+                  ### B6a — the documentation landing is the same chain
+
+                  This project publishes opencharly.ai from GENERATED trees, so a prose edit is a
+                  producer→consumer landing exactly like a code one, and the same "producer must be
+                  merged first" rule applies. `/charly-build:docs` owns the projection model; the
+                  load-bearing part of it is that the two chains have DIFFERENT lengths — candy and
+                  box prose is a ONE-hop projection read straight off each repo's `charly.yml`,
+                  while skill prose is a TWO-hop projection that `charly docs generate` reads from
+                  the `plugins/` tree, never from `candy/*/charly.yml`.
+
+                  The commands below are maintenance THIS REPOSITORY performs on itself. They are
+                  not steps an charly user runs, and they never belong on a reader-facing page.
+
+                  1. **Edit the source, never a generated file** — the candy's `description:` /
+                     `plan:`, or the owning candy's `skill:` content.
+                  2. **For a skill edit, project and land `plugins` FIRST** (`charly marketplace
+                     generate`, then the `plugins` PR). Locally the docs generator reads the dirty
+                     `plugins/` tree, so a local regeneration picks the edit up immediately; every
+                     other reader gets it only once the gitlink advances. Advancing that gitlink
+                     WITHOUT regenerating `docs` in the same landing is precisely what leaves the
+                     published site stale, and only the drift gate will say so.
+                  3. **Regenerate and land `docs`** — `task docs:sync`, review the emitted pages,
+                     commit them in the `docs` submodule; `task docs:drift` is the gate, re-syncing
+                     and failing on any dirty path. Regeneration rewrites the generated trees
+                     WHOLESALE, so a mirror already behind cannot be brought forward selectively:
+                     every pending page lands with the next commit or none of them do. Budget for
+                     carrying someone else's backlog when the mirror has drifted.
+                  4. **Re-pin the new `docs` merge** in `candy/docs-site/charly.yml`; `task
+                     docs:pin` is the gate and asserts more than one occurrence
+                     (`/charly-tools:docs-site` owns the pin contract). This step edits candy
+                     CONFIG rather than prose, so its own gate is the `check-docs` bed — a
+                     documentation-only change class does NOT cover it, and the commit that carries
+                     it cannot claim the `documentation reviewed` tier.
+                  5. **Bump the superproject gitlinks** for whichever submodules moved.
+
                   ## B7 — Multi-worktree landing + refresh (the canonical end-to-end)
 
                   When this project is driven from multiple git worktrees sharing one `.git`, only
