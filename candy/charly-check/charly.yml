@@ -2398,6 +2398,14 @@ check-skill:
                   name the artifact it judged is unverifiable, and "read the `Image:` line" is
                   only a usable habit if the line is always there.
 
+                  **The `Image:` line goes to STDERR, and for `charly box labels` that is a
+                  contract, not a detail.** `charly box labels <ref> --format <key>` emits exactly
+                  ONE raw value on stdout — the form every plan step pipes into `grep` — so the
+                  provenance line must not land there. Both halves hold together: you can read
+                  which artifact was inspected, and `--format` stdout stays byte-for-byte what it
+                  always was. A step that captures stdout sees only the value; a human, or a log
+                  that captures stderr, sees the ref as well.
+
                   This is also why the R10 bed sequence pins: `charly check run <bed>` builds
                   `box build <image> --tag <run-tag>` and then checks `<image>:<run-tag>`, an
                   explicit pin, so the guard never fires inside a bed.
