@@ -47,10 +47,21 @@ const provRef = "ghcr.io/opencharly/check-agent-box:check-agent-pod-2026.227.134
 
 func stubLabelsStorage(t *testing.T) {
 	t.Helper()
-	origRT, origList, origInspect := kit.ResolveRuntime, container.ListLocalImages, container.InspectLabels
+	// Stub kit.InspectImageLabels, NOT container.InspectLabels. container.InspectImageLabels is a
+	// plain FUNCTION that shells out to `podman inspect`, and kit.InspectImageLabels copied that
+	// function value at init — so overriding container.InspectLabels (a var pointing at the same
+	// function) does NOT redirect what dispatchLabels calls. The first version of this test did
+	// exactly that and PASSED anyway, against the real image store; it only surfaced when a
+	// concurrent bed's retention sweep deleted the image it had been silently depending on. A test
+	// that reads real storage is not a test of this code.
+	origRT, origList, origInspect, origExists := kit.ResolveRuntime, container.ListLocalImages, kit.InspectImageLabels, kit.LocalImageExists
 	t.Cleanup(func() {
-		kit.ResolveRuntime, container.ListLocalImages, container.InspectLabels = origRT, origList, origInspect
+		kit.ResolveRuntime, container.ListLocalImages, kit.InspectImageLabels, kit.LocalImageExists = origRT, origList, origInspect, origExists
 	})
+	kit.LocalImageExists = func(string, string) bool {
+		t.Fatal("dispatchLabels fell through to a REAL local-storage probe — the stubs are not covering the path under test")
+		return false
+	}
 	kit.ResolveRuntime = func() (*hostenv.ResolvedRuntime, error) {
 		return &hostenv.ResolvedRuntime{RunEngine: "podman"}, nil
 	}
@@ -60,7 +71,7 @@ func stubLabelsStorage(t *testing.T) {
 			Labels: map[string]string{spec.LabelBox: "check-agent-box", spec.LabelVersion: "2026.226.1600"},
 		}}, nil
 	}
-	container.InspectLabels = func(string, string) (map[string]string, error) {
+	kit.InspectImageLabels = func(string, string) (map[string]string, error) {
 		return map[string]string{
 			spec.LabelBox:     "check-agent-box",
 			spec.LabelVersion: "2026.226.1600",
