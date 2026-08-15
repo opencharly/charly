@@ -279,6 +279,195 @@ check-k8s-skill:
               plugin dispatch the `kube:` verb rides on.
             - `/charly-infrastructure:k3s` — the k3s-server / k3s-agent candies whose
               plans author these `kube:` readiness steps.
+helm-skill:
+    skill:
+        name: helm
+        family: kubernetes
+        owner: charly-kubernetes
+        description: |-
+            The helm words — the `step:helm-release` install step (an `helm upgrade --install` performed IN-VENUE, returning a `helm uninstall` ReverseOp) and the `verb:helm` declarative release-status assertion, both served out-of-process by candy/plugin-helm; plus the `helm_charts:` deploy field the k8sgen emitter renders as a kustomize `helmCharts:` transformer entry.
+        triggers:
+            - "`step:helm-release` / `verb:helm` / installing a Helm chart from a candy plan / the `helm_charts:` deploy field and its kustomize `helmCharts:` emission / the `--enable-helm` apply path"
+        content: |
+            MUST be invoked before any work involving: the `helm-release` install
+            step, the `helm:` check verb, the `helm_charts:` deploy field, the
+            `--enable-helm` kustomize apply path, or `candy/plugin-helm`.
+
+            charly speaks helm through **two words and one deploy field**, and none of
+            them puts helm knowledge in the kernel — `candy/plugin-helm` is a
+            standalone Go module served out-of-process over go-plugin gRPC via the
+            SDK, and it owns NO Kubernetes client library (the verb is EXEC-based over
+            the live DeployExecutor reverse channel).
+
+            | Surface | Class | What it does |
+            |---|---|---|
+            | `helm-release:` | install step (`step:helm-release`) | `helm upgrade --install` IN-VENUE; returns a `helm uninstall` ReverseOp |
+            | `helm:` | check verb (`verb:helm`) | assert a release's existence / status / revision / values hash |
+            | `helm_charts:` | `kubernetes:` deploy field | emitted as a kustomize `helmCharts:` entry, applied with `--enable-helm` |
+
+            ## `step:helm-release` — the install step
+
+            A plugin-contributed `external:helm-release` install-step KIND (F3) whose
+            OPAQUE payload is the plugin's `#HelmReleaseStep`, carried through the
+            InstallPlan IR and validated against the plugin's served schema at
+            authoring time. Field set:
+
+            | Field | Required | Meaning |
+            |---|---|---|
+            | `chart` | yes | chart name (bare, resolved via `repo`) or a full reference |
+            | `release` | yes | the release name |
+            | `repo` | no | chart repository URL; omit for a pre-added repo or an OCI ref |
+            | `version` | no | pin the chart version (`--version`) |
+            | `namespace` | no | target namespace (created if absent) |
+            | `values` | no | inline values map |
+            | `values_files` | no | values YAML paths, venue-relative (`-f`) |
+            | `wait` | no | `--wait` for readiness |
+            | `timeout` | no | wait timeout, e.g. `5m` |
+
+            **Kubeconfig resolution is a precedence chain**, not a fixed path: an
+            operator-set `KUBECONFIG` wins; otherwise the k3s guest default
+            `/etc/rancher/k3s/k3s.yaml` is used when present.
+
+            **Teardown is record-and-replay.** The step returns a `helm uninstall`
+            ReverseOp that the host records and replays at teardown — you never author
+            an uninstall step yourself.
+
+            ## The authoring law this surfaced: mutating installs live in a CANDY
+
+            A bed's own plan runs **verify-only** (mutating steps skipped), and
+            `charly fleet add` lowers only **candy** plans' `run:` steps. So any
+            mutating install — the `helm-release` invocation itself, and any in-venue
+            `kubectl wait` it depends on — MUST live in a candy's `run:` steps, never
+            in the bed's own plan. Authoring the install into the bed produces a bed
+            that passes while installing nothing.
+
+            A second-order trap rides along: a `check:` step does **not** run during
+            `fleet add`, so the `k3s-server` candy's own node-ready check cannot gate
+            your install. An install candy waits for the node itself.
+
+            `candy/helm-chart` is the worked example — the `check-helm-vm` bed's
+            install leg, reproduced in full because the readiness step's exact
+            shape is the lesson:
+
+            ```yaml
+            helm-chart:
+              candy:
+                require: [k3s-server, plugin-helm]   # plugin-helm must be in the
+                plan:                                # scanned candy set to be built
+                  - run: wait for the k3s node to be Ready in-venue
+                    id: hc-wait-node-ready
+                    command: |
+                      set -euo pipefail
+                      export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+                      # The kubeconfig lands when the k3s API server STARTS, which can
+                      # be seconds-to-minutes after the k3s service starts. So poll
+                      # /readyz until the apiserver answers, THEN let kubectl wait for
+                      # the node. Waiting on the node alone fails on a cold cluster.
+                      deadline=$(( $(date +%s) + 300 ))
+                      until /usr/local/bin/kubectl get --raw /readyz >/dev/null 2>&1; do
+                        if [ "$(date +%s)" -ge "$deadline" ]; then
+                          echo "k3s apiserver did not become ready within 300s" >&2
+                          exit 1
+                        fi
+                        sleep 1
+                      done
+                      /usr/local/bin/kubectl wait --for=condition=Ready node --all --timeout=300s
+                    context: [deploy]
+                  - run: install the chart via the external helm-release step
+                    id: hc-helm-release-install
+                    context: [deploy]
+                    helm-release:
+                      repo: https://prometheus-community.github.io/helm-charts
+                      chart: prometheus-pushgateway
+                      release: web-pushgateway
+                      namespace: web
+                      wait: true
+                      timeout: 5m
+                  - check: the release is deployed in the web namespace
+                    id: hc-release-exists
+                    context: [runtime]
+                    helm:
+                      method: release-exists
+                      release: web-pushgateway
+                      namespace: web
+            ```
+
+            Two things about that readiness step are deliberate. **The `/readyz`
+            poll is bounded and condition-driven**, with an explicit deadline and a
+            non-zero exit — it is a synchronization primitive, not an R4
+            `sleep`-and-hope; a bare `sleep 60` in its place is the workaround the
+            rule forbids. And **waiting on the node alone is not enough**: on a cold
+            cluster `kubectl wait node` runs before the apiserver answers at all, so
+            the step must gate on the apiserver first.
+
+            Note the ADE split (R3): the candy that installs the release also asserts
+            it exists; the bed's own plan keeps only the deeper status/revision
+            assertions.
+
+            **Where the `helm` binary comes from.** The step shells `helm` IN-VENUE,
+            so the venue must already carry it — `candy/plugin-helm` ships the WORD,
+            never the binary. The binary comes from the **`kubernetes` candy** (the
+            Kubernetes client toolchain: `kubectl`, `helm`, `k3d`, from the distro
+            package with an upstream `get-helm-3` fallback). `check-helm-vm` composes
+            it explicitly — `add_candy: [k3s-server, kubernetes, helm-chart]` — and a
+            venue that omits it fails the step at execution, not at authoring. Compose
+            `kubernetes` into any venue where you author a `helm-release` step.
+
+            ## `verb:helm` — the declarative assertion
+
+            The `verb:kube` analog. Its PRIMARY input field is `method`, so
+            `helm: release-exists` desugars to `{method: "release-exists"}`.
+
+            | `helm:` method | Method-exclusive modifiers | Asserts |
+            |---|---|---|
+            | `release-exists` | — | the release exists |
+            | `status` | `status:` (default `deployed`) | the release status |
+            | `revision` | `revision:` (int) | release revision ≥ N |
+            | `values-hash` | `values_hash:` | SHA-256 of the rendered values |
+
+            Every method takes `release:` (required) and `namespace:` (default
+            `default`). The verb is EXEC-based and probes a live cluster, so it runs
+            under `charly check live` / `charly check run` (runtime context) and
+            **skips visibly under `charly check box`** — there is no cluster at image
+            time, and a skip is reported, never silently green.
+
+            ## The `kubernetes:` substrate arm
+
+            A `kubernetes:` deploy does NOT shell out to helm — that would be a
+            boundary-law violation. It declares `helm_charts:`, which the k8sgen
+            emitter translates into a kustomize `helmCharts:` transformer entry in the
+            OVERLAY kustomization (the base stays chart-free). Because the kustomize
+            helmCharts transformer is gated behind `--enable-helm`, which
+            `kubectl apply -k` cannot pass, the apply path renders first:
+            `kubectl kustomize --enable-helm <overlay> | kubectl apply -f -` (and the
+            symmetric form for delete).
+
+            ## Beds
+
+            - `check-helm-vm` — the R10 bed: a disposable `k3s-server` guest,
+              `candy/helm-chart` as the install leg, `verb:helm` + `kube:` assertions.
+              Its own `kind: kubernetes` profile is `check-helm-vm-ctx`, per-deploy
+              scoped so it never resolves through a sibling bed's context.
+            - `check-k8s-deploy` — proves the `helm_charts:` emission and the
+              `--enable-helm` apply on the externalized `deploy:kubernetes` substrate.
+
+            ## Related skills
+
+            - `/charly-kubernetes:check-k8s` — the `kube:` verb these beds pair with.
+            - `/charly-kubernetes:kubernetes` — the `kubernetes:` deploy substrate and
+              its Kustomize generation.
+            - `/charly-check:check` — the plan-step vocabulary and how the provider
+              registry dispatches declarative verbs.
+            - `/charly-internals:plugin` — the Provider model and out-of-process
+              dispatch this rides on.
+            - `/charly-internals:install-plan` — defines the vocabulary this page
+              uses for the step: the **InstallPlan IR** the step is carried through,
+              the **F3** plugin-contributed `external:<word>` step KIND and its
+              **OPAQUE payload**, and the **ReverseOp** record-and-replay teardown
+              (see that skill's step-kinds reference page).
+            - `/charly-infrastructure:k3s` — the `k3s-server` candy the beds deploy.
+            - `/charly-coder:kubernetes-layer` — the `kubernetes` candy that installs
+              the `helm` binary the step shells in-venue.
 kubernetes-skill:
     skill:
         name: kubernetes

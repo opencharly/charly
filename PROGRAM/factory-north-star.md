@@ -1,11 +1,14 @@
-# Agent-in-the-Loop Factory — Program North-Star
+# Agent Teams Factory — Program North-Star
 
-The binding north-star document for the Factory program, named in every spawn brief. The
-charly repo's `CLAUDE.md` + `AGENTS.md` are the rulebook; this file restates no rule.
-Detailed HOW lives in skills (`plugins/README.md` is the index). This document holds the
-concrete end-state, vocabulary, the containment model, ordered decision heuristics, the
-cutover sequence, observed anti-patterns, and measured state. On a task-vs-north-star
-conflict a teammate stops and asks, never resolves locally.
+The binding north-star document for the Agent Teams Factory program, named in every
+spawn brief. "The Agent-in-the-Loop Factory" is the *product's* name (see `README.md`);
+this program builds the multi-agent subsystem that runs on it, and the two are
+deliberately distinct scopes. The charly repo's `CLAUDE.md` + `AGENTS.md` are the
+rulebook; this file restates no rule. Detailed HOW lives in skills
+(`plugins/README.md` is the index). This document holds the concrete end-state,
+vocabulary, the containment model, the trust boundaries, ordered decision heuristics,
+the cutover sequence, observed anti-patterns, and measured state. On a
+task-vs-north-star conflict a teammate stops and asks, never resolves locally.
 
 Claims below marked **[proven upstream]** are verified against opencharly.ai; claims
 marked **[HOW — spike it]** are this program's high-risk assumptions, to be proven early
@@ -35,8 +38,8 @@ never in git.
 | **spike flavor** | which PROD deployment style the spike reproduces — `native`, `kustomize`, or `helm` (below) |
 | **spike bed** | the spike's check bed. `disposable: true` carries the full `charly check run` cycle — build → check → deploy → steady → check live → destroy → rebuild → check → teardown — for free **[proven upstream]** |
 | **regression bed** | the accumulated `plan:` of every closed incident: ADE's "the spec is the test," grown one incident at a time — `incident close --as-check` appends the incident's committed `check:` (proven on the disposable spike bed) to the regression bed's `plan:`, so the bed fails without the fix and passes with it (R10) |
-| **Forgemaster** | the only Factory Worker whose resource is configured with a `charly mcp serve` endpoint at all — every other Factory Worker gets none; forges and reaps spikes with ordinary charly verbs — the CLI is the only operational interface |
-| **the six** | Sentinel (triage; R1/root-cause-analyzer is its job description), Forgemaster, Replicator (snapshot → hydrate → replay → bisect), Fixer (authors changes, only inside spikes), Verifier (drives beds, pastes proof — a delegate report is a claim, not proof), Archivist (ships verified fixes as Skills) |
+| **Forgemaster** | the only Factory Worker holding any host-charly surface — and that surface is the disposable lifecycle only: forge (fleet add of pre-authored `disposable: true` templates), `check run`, `update`, `del`, status/logs. Today `charly mcp serve` exposes every verb, so this scoping is a stated gap: the `--disposable-only` tool filter is a gap to close in charly (unit 7), not a prompt-level promise **[HOW — spike it]** |
+| **the six** | Sentinel (triage; R1/root-cause-analyzer is its job description; PROD read-only), Forgemaster (forge-host, disposable-lifecycle surface only), Replicator and Fixer (**run INSIDE the spike** — candyboxing applied to the Factory's own agents: the spike's nested charly is their whole, unrestricted candy store, and the boundary is the security model), Verifier (the existing `check-bed-runner`/`deploy-verifier` executor pattern; pastes verbatim proof), Archivist (ships verified fixes as Skills; git surface only) |
 
 ## The containment model: candyboxing all the way down
 
@@ -63,7 +66,7 @@ it is handed decides the containment story:
   `charly shell <spike> -c 'podman --remote --url unix:///run/user/1000/podman/podman.sock load'`,
   no intermediate tarball. The images are private on ghcr.io (anonymous manifest
   fetch is 401), so the registry hop is not an option — local delivery is the
-  mechanism, and the winning verb (`charly box load`, cutover 4) is a gap to close
+  mechanism, and the winning verb (`charly box load`, unit 5) is a gap to close
   in charly, not a script. The controller's reconcile loop self-heals: once the
   image lands in the nested store, the controller spawns the manager without a
   restart, so delivery can happen after the controller is up.
@@ -88,9 +91,10 @@ it is handed decides the containment story:
   runs cleanest under a guest's own systemd and cgroups. The guest pattern itself is
   **[proven upstream]**: `check-agentteams-vm` does `add_candy` into a cloud-image
   guest, systemd units at uid 1000, spawn images delivered with
-  `charly vm cp-box <vm> <image> --rootless --domain <bed>`. Whether
-  rootless k3s can run acceptably *inside* a nested-container spike is an optimization
-  to prove later, never assumed **[HOW — spike it]**.
+  `charly vm cp-box <vm> <image> --rootless --domain <bed>` (the `--domain` flag is
+  the BED name, not the entity). Whether rootless k3s can run acceptably *inside* a
+  nested-container spike is an optimization to prove later, never assumed
+  **[HOW — spike it]**.
 - **Nesting is position in the file, and spikes use it only internally.** Deploys
   indented under the spike run inside its venue (e.g. a `local:` applying the overlay
   inside the k3s guest). A spike is **never** nested under the PROD deploy — the test
@@ -109,12 +113,41 @@ never inferred from its name. PROD is a long-lived deploy in some host's fleet
 (`pod:` realised as user-level quadlets on podman+systemd hosts, or `vm:`) and is never
 disposable.
 
+## Trust boundaries: who holds which surface
+
+Candyboxing, applied to the Factory's own agents — restrict by *boundary*, never by
+tool list:
+
+- **Inside a spike** (Replicator, Fixer): full nested charly, no filtering — the
+  charly-native posture. Hydration bundles are delivered *into* the spike at forge
+  time; the inside agent applies them with the spike's own `charly agentteams apply`.
+  The fix loop IS an `iterate:` bed: the agent + charly run in the bed's `sandbox:`,
+  scored by the bed's `check:` steps — shipped machinery, not new. Incident data is
+  attacker-influenced input; inside-execution is the mitigation (injection wrecks at
+  most one rebuild), and everything crossing back out — the repro check, the fix
+  branch — is untrusted until the deterministic bed and the human PR gate pass it.
+- **Forge host** (Forgemaster): disposable lifecycle only (above). The forge MCP
+  endpoint binds loopback/stdio and is never routable from PROD Workers or spikes.
+- **PROD**: no agent-held write path at all. Promotion is a *git landing*: Fixer
+  pushes a `feat/` branch from inside the spike (scoped deploy key, branch-namespace
+  write only), pr-validator + Human approval land it, and the PROD apply is the
+  operator's charly — not any agent's.
+- **Credentials**: Forgemaster never holds gateway admin. Spike LLM keys come from a
+  pre-minted, budget-capped key pool provisioned at PROD config time; the agent draws
+  the next key and revocation is the pool's job **[HOW — spike it]**. Spike egress is
+  restricted to the PROD Higress endpoint, so a compromised inside-agent cannot
+  exfiltrate snapshot data elsewhere **[HOW — spike it]**.
+- **No recursion, restated structurally**: inside-agents MAY nest deploys inside their
+  spike — recursion *within* the boundary is charly's whole point. The invariant is
+  that no spike reaches the forge host's charly: the boundary enforces what the old
+  skill-exclusion rule merely requested.
+
 ## The venue concept: one recipe, three flavors
 
 A spike reproduces PROD **wherever PROD lives**. Four of the five substrates consume
-the same InstallPlan IR **[proven upstream]** (local/vm/pod/android); the
-`kubernetes:` substrate reads OCI labels + the cluster entity instead — so the flavor
-changes keywords, never the recipe:
+the same InstallPlan IR **[proven upstream]** (local/vm/pod/android — `deploy:android`
+is served by `candy/plugin-adb`); the `kubernetes:` substrate reads OCI labels + the
+cluster entity instead — so the flavor changes keywords, never the recipe:
 
 1. **`native` flavor** — PROD is the charly-composed agentteams deploy. Spike = one
    disposable `pod:` candybox: agentteams composition + `container-nesting`, controller
@@ -128,9 +161,11 @@ changes keywords, never the recipe:
    overlay* applied inside the guest by a nested step: the spike proves the overlay
    itself, not an approximation of it.
 3. **`helm` flavor** — PROD runs the upstream AgentTeams Helm chart on a cluster charly
-   did not shape. charly has **no helm word today** — the gap cutover 2 closes. Spike =
-   disposable `vm:` composing `k3s-server` + `helm`, plan installs the chart at PROD's
-   pinned version/values via `step:helm-release`, proven by `verb:helm` + `kube:`.
+   did not shape. The helm words **landed in unit 2** (`candy/plugin-helm`, commit
+   53cf8499; both arms proven live per CHANGELOG 2026.225.2248). Spike = disposable
+   `vm:` composing `k3s-server` + the chart's install-leg candy, installing at PROD's
+   pinned version/values via `step:helm-release`, proven by `verb:helm` + `kube:` —
+   the `check-helm-vm` pattern.
 
 Forgemaster selects the flavor from the incident record. Replicator's hydration and the
 regression bed are flavor-independent: they speak only the controller REST API and
@@ -141,20 +176,43 @@ MinIO, which every flavor exposes identically — the venue is below them.
 - `spec/schema/*.cue` + per-plugin `.cue` — the helm step/verb shapes and the
   `agentteams:` verb shape. SDD without exception: schema first, `task cue:gen`,
   generated wire types only; an uncertain shape gets a schema spike.
-- `candy/helm` — tool layer: helm binary, non-empty `description:`, `plan:` with
-  deterministic `check:` steps (the ADE floor; `charly box validate` enforces it).
-- `candy/plugin-helm` — out-of-process plugin via the SDK, registering
-  `step:helm-release` (`repo, chart, version, release, namespace, values,
-  values_files, wait, timeout` — field set to be confirmed by the schema spike) and
-  `verb:helm` (release exists / status `deployed` / revision ≥ N / values hash).
-  Venue-honouring realisation: `pod:`/`vm:`/`local:` execute `helm upgrade --install`
-  against the venue's kubeconfig; the `kubernetes:` arm emits a `helmCharts:` kustomize
-  entry and shells out to nothing. Zero helm knowledge enters the kernel — boundary law
-  + import-purity apply; a kind-word switch in core is an incomplete seam, never a kept
-  exception.
-- `candy/plugin-agentteams` — extended with `verb:agentteams` (`status`,
-  `workers_ready`, `room_exists`), reusing the existing `command:agentteams` REST
-  client.
+- `candy/helm-chart` — **[landed]** the `check-helm-vm` bed's install leg, carrying a
+  law the unit surfaced: a bed's own plan runs verify-only and `charly fleet add`
+  lowers only CANDY plans' `run:` steps — so any mutating install (the
+  `step:helm-release` invocation, the in-venue node-ready `kubectl wait`) must live in
+  a candy's `run:` steps, never in the bed's plan. Own ADE `check:` asserts the
+  release exists (R3).
+- `candy/plugin-helm` — **[landed, both arms proven live]** a standalone Go module
+  served out-of-process over go-plugin gRPC via the SDK, registering
+  `step:helm-release` — a plugin-contributed `external:helm-release` install-step KIND
+  (F3) whose OPAQUE payload is `#HelmReleaseStep` (fields confirmed by the unit 2
+  schema spike: `repo?`, `chart!`, `version?`, `release!`, `namespace?`, `values?`, …),
+  carried through the InstallPlan IR, validated against the plugin's served schema at
+  authoring; the step performs `helm upgrade --install` IN-VENUE against the venue's
+  kubeconfig (an operator-set `KUBECONFIG` wins, else the k3s guest default
+  `/etc/rancher/k3s/k3s.yaml`) and returns a `helm uninstall` ReverseOp the host records
+  and replays — and `verb:helm`, the declarative release-status assertion (`verb:kube`
+  analog), EXEC-based over the live DeployExecutor reverse channel, owning NO Kubernetes
+  client library. The `kubernetes:` substrate arm is the `helm_charts:` deploy field —
+  which the k8sgen emitter translates into a kustomize `helmCharts:` transformer entry —
+  plus the `--enable-helm` apply path, proven on `check-k8s-deploy`. Zero helm knowledge
+  in the kernel — boundary law + import-purity hold.
+- `candy/plugin-agentteams` — **[landed]** now serves `providers:
+  [command:agentteams, verb:agentteams]`. The verb is HOST-BASED (the mcp pattern):
+  resolves the controller's in-venue :8090 to a host-routable address over the reverse
+  channel, pulls the admin SA token over the executor, probes with the SAME `apiClient`
+  the command uses (R3 — one REST surface). Methods as built: `status`,
+  `manager-running`, `worker-running` (idempotent Worker-CR create on 409, polls
+  Running WITH its Matrix room provisioned, resolves the alias on :6167),
+  `worker-list`. Dual placement (compiled-in `spec.CheckVerbProvider` in-proc / pb
+  Invoke envelope out-of-process — placement-invisible, F8); skips under
+  `charly check box`.
+- `charly box load` — **[unit 5]** the container-venue image-delivery verb the
+  containment spike named: the analog of `charly vm cp-box` for a `pod:` venue's
+  nested store. Closes the gap that today forces a hand-run `podman save | podman
+  --remote load` pipeline (R4).
+- `charly mcp serve --disposable-only` — **[unit 7]** the tool filter that makes the
+  Forgemaster's license enforceable rather than promised.
 - `candy/agentteams-snapshot` — layer: export Worker/Team/Human via the controller API
   → YAML, PII-redact all room/Tuwunel references, `mc mirror` referenced objects, emit
   one hydration bundle. Composed into `agentteams-worker` so Replicator carries it.
@@ -162,15 +220,15 @@ MinIO, which every flavor exposes identically — the venue is below them.
   snapshot-incident, replay-incident, run-check-bed, diff-agent-variants,
   promote-change, teardown-spike) and the six Worker + Team + Human resource YAMLs as
   candy files — the files are the rollback units.
-- root `charly.yml` — the `agentteams-factory` box (per the agentteams box precedent
-  at 2664, joining the six boxes main already owns — `agentteams`,
-  `agentteams-manager`, `agentteams-worker`, `check-k8s-deploy-app`,
-  `docs-site-app`, `marketplace-app`): agentteams composition + factory + snapshot +
-  `container-nesting`; the helm layer joins only the vm-flavor guests.
+- root `charly.yml` — the `agentteams-factory` box (per the agentteams box precedent,
+  joining the six boxes main already owns — `agentteams`, `agentteams-manager`,
+  `agentteams-worker`, `check-k8s-deploy-app`, `docs-site-app`, `marketplace-app`):
+  agentteams composition + factory + snapshot + `container-nesting`; the helm layer
+  joins only the vm-flavor guests.
 - `charly.yml` deploy entries — the PROD deploy (never disposable), spike templates
   `factory-spike-native` (`pod:` + nesting) / `factory-spike-kustomize` /
-  `factory-spike-helm` (`vm:` + k3s), all `disposable: true`; beds `check-helm`,
-  `check-factory-spike-<flavor>`.
+  `factory-spike-helm` (`vm:` + k3s), all `disposable: true`; beds `check-helm-vm`
+  (+ its `check-helm-vm-ctx` kubernetes profile), `check-factory-spike-<flavor>`.
 - `plugins/` — the Factory owning skill + a bed-executor agent entry (verbatim-proof
   pattern), `model: inherit` like the rest of the roster.
 - Docs — recipe cards in the candy sources; `charly docs generate` + `task docs:sync`;
@@ -187,32 +245,57 @@ front-loads the named HOWs.
    + `container-nesting` in one `pod:` candybox, controller on the *nested* socket,
    spawn images delivered into the nested store, controller-spawns-manager →
    create-worker → room-exists green. This de-risks the default spike before anything
-   else is built on it; its findings name the delivery verb cutover 4 implements.
-2. **The helm words.** Schema spike for `#HelmReleaseStep` on a live disposable
-   `k3s-server` guest → `spec/schema` + per-plugin `.cue` → `candy/helm` +
-   `candy/plugin-helm` → `check-helm` bed green at zero warnings → docs sync.
-3. **`verb:agentteams`** into `candy/plugin-agentteams`, replacing the raw `http:` +
-   `command:` curl + host-CLI mix in the agentteams beds in the same tree (R3 — a fix
-   covers every surface).
-4. **`candy/agentteams-snapshot`** with a round-trip fixture bed.
-5. **The Factory proper**: `candy/agentteams-factory`, the box in root `charly.yml`
-   (per the agentteams box precedent at 2664), PROD deploy + three spike templates +
-   `check-factory-spike-*` beds proving the loop end
-   to end (forge → hydrate → replay → repro-as-check → fix → bed green → teardown).
-6. **Skill tree + dispatcher rows** in `plugins/`, wired into the existing adapters.
+   else is built on it; its findings name the delivery verb unit 5 implements.
+2. **The helm words — LANDED** (commit 53cf8499, CHANGELOG 2026.225.2248). Schema
+   spike → per-plugin `.cue` → `candy/plugin-helm` + `candy/helm-chart` →
+   `check-helm-vm` executed live against fresh disposable rebuilds, plus the
+   `helm_charts:` emission + `--enable-helm` apply on `check-k8s-deploy`.
+3. **`verb:agentteams` — LANDED** (commit 7f3175a2, CHANGELOG 2026.226.0946). The
+   raw curl + host-CLI mix in `check-agentteams-pod` / `check-agentteams-vm` is
+   replaced by `agentteams:` verb steps; the verb executed live against a fresh
+   rebuild of the disposable `check-agentteams-pod` bed. The compiled-in dual-dispatch
+   legs (`runPluginVerb` et al.) were the R10-gate catch, RCA'd live on the bed.
+4. **Factory docs catch-up.** This document's revision, plus the Skill Dispatcher rows
+   and the `/charly-kubernetes:helm` recipe card that units 2 and 3 shipped capability
+   without. The dispatcher is a CURATED fast path, not an index — 60 of 307 skill
+   entities carry `triggers:`, and anything absent falls back to the documented
+   `plugins/README.md` route — so a missing row does not make a capability
+   unreachable, it makes it easy to miss at the first tool call. For surfaces as
+   central as the helm words and the whole agentteams family that is a real routing
+   gap. The row and its skill land together, never split: a row naming a skill that
+   does not exist is a false claim (R1). Documentation-only change class:
+   non-runtime standards, no bed.
+5. **`charly box load`.** The nested-store image-delivery verb the containment spike
+   named. Gated by a bed that loads an image into a nested uid-1000 store; blocks the
+   native spike in unit 8.
+6. **`candy/agentteams-snapshot`** with a round-trip fixture bed.
+7. **`charly mcp serve --disposable-only`.** Spike first: the filter keys on the
+   target's `disposable:` flag, a verb allowlist, or both — the answer decides the
+   shape. Must precede unit 8, which deploys a Forgemaster.
+8. **The Factory proper**: `candy/agentteams-factory`, the box in root `charly.yml`,
+   PROD deploy + three spike templates + `check-factory-spike-*` beds proving the loop
+   end to end (forge → hydrate → replay → repro-as-check → fix → bed green →
+   teardown). Too large for one honest gate, so it decomposes into ordered sub-units as
+   forward motion: factory candy + box → native template + bed → kustomize + helm
+   templates + beds → the key pool and egress restriction.
+9. **`/charly-agentteams:factory`** — the Factory owning skill and its dispatcher row,
+   authorable only once unit 8 exists.
 
-## Skill Dispatcher additions (for the repo CLAUDE.md table, cutover 6)
+## Skill Dispatcher additions (for the repo CLAUDE.md + AGENTS.md tables)
 
-| Trigger | Skill to load |
-| --- | --- |
-| Factory / incident spike / improvement spike / forge-spike / spike flavor / regression-bed growth | `/charly-agentteams:factory` |
-| `step:helm-release` / `verb:helm` / helm flavor / kustomize `helmCharts:` emission | `/charly-kubernetes:helm` |
-| `verb:agentteams` / controller REST probing / hydration via `charly agentteams apply -f` | `/charly-agentteams:agentteams` |
+| Trigger | Skill to load | Lands in |
+| --- | --- | --- |
+| `step:helm-release` / `verb:helm` / helm flavor / kustomize `helmCharts:` emission | `/charly-kubernetes:helm` | unit 4 |
+| `verb:agentteams` / controller REST probing / hydration via `charly agentteams apply -f` | `/charly-agentteams:agentteams` | unit 4 |
+| Factory / incident spike / improvement spike / forge-spike / spike flavor / regression-bed growth | `/charly-agentteams:factory` | unit 9 |
 
-Per-directory CLAUDE.md files under the new candies are thin signposts naming these
-skills; they restate no rule. (`/charly-agentteams:agentteams` exists today as the
-recipe card of the `charly-agentteams` plugin; the other two names are proposals until
-cutover 6 lands them.)
+Skills are GENERATED from a candy's `skill:` entity by `charly marketplace generate` —
+never hand-written into `plugins/`. Per-directory CLAUDE.md files under the new candies
+are thin signposts naming these skills; they restate no rule.
+(`/charly-agentteams:agentteams` exists today as the recipe card of the
+`charly-agentteams` plugin and only lacked a dispatcher row;
+`/charly-kubernetes:helm` is written in unit 4; `/charly-agentteams:factory` remains a
+proposal until unit 9 lands it.)
 
 ## Ordered decision heuristics
 
@@ -242,33 +325,48 @@ cutover 6 lands them.)
   bed's destroy/rebuild prove it reproducible, not merely successful.
 - Marking PROD disposable "to simplify testing" — disposability is the one and only
   autonomy authorization and PROD never carries it.
-- A spike forging a spike — spike Worker resources exclude the forge-spike
-  Skill (`worker create --skills` scopes per Worker) and spike candyboxes get no charly
-  MCP endpoint; depth = 1 by construction.
+- A spike reaching the forge host's charly — the boundary rule that replaced
+  skill-exclusion: nesting *inside* a spike is fine, reaching *out* never is.
+- Handing any agent the full `charly mcp serve` surface — an unfiltered forge endpoint
+  can `stop`/`remove`/`shell` PROD and touch `local:`; the disposable-lifecycle filter
+  is the license made enforceable.
+- Gateway-admin credentials in any Worker — keys come from the pre-minted pool.
 - Real credentials below PROD — a spike's `AGENTTEAMS_LLM_API_KEY` (deploy-overridable
   env **[proven upstream]**) is a scoped, budget-capped consumer key minted at PROD's
   Higress gateway, revoked at teardown; the minting mechanics are upstream-Higress
-  capability, wired and proven in cutover 5 **[HOW — spike it]**.
+  capability, wired and proven in unit 8 **[HOW — spike it]**.
 - "Flake", "transient", blind retry, "pre-existing", "out of scope" — forbidden
   framings; Sentinel triages with root-cause-analyzer or not at all.
 - Helm logic in the kernel, or a `kubernetes:` arm that shells out to helm instead of
-  emitting a `helmCharts:` entry — boundary-law violations, tracked never kept.
+  emitting a `helm_charts:` entry — boundary-law violations, tracked never kept.
 - Hardcoding :8090 — resolve `${HOST_PORT:8090}` or read `charly agentteams config`.
 
 ## Measured state
 
-- [x] Cutover 1: containment spike green — nested-socket agentteams proven in one
+- [x] Unit 1: containment spike green — nested-socket agentteams proven in one
       `pod:` candybox, delivery mechanism named, findings folded back into this file
       (live proof: `charly check live check-factory-spike-full` — 91 steps, 78
       passed, 0 failed; manager + worker spawned through the NESTED socket into
       the nested store, worker room provisioned and alias-resolvable)
-- [ ] Cutover 2: `check-helm` green; provider index shows `step:helm-release` + `verb:helm`
-- [ ] Cutover 3: agentteams beds assert via `verb:agentteams`; zero raw-`http:` remnants (grep self-test)
-- [ ] Cutover 4: snapshot round-trip bed green
-- [ ] Cutover 5: `check-factory-spike-native|kustomize|helm` green at zero warnings, pasted
-- [ ] Cutover 6: dispatcher rows live; skills install through the existing adapters
+- [x] Unit 2: `check-helm-vm` executed live against fresh `disposable: true`
+      rebuilds — `step:helm-release` install + `verb:helm` assertions, AND the
+      `helm_charts:` kustomize emission + `--enable-helm` apply on `check-k8s-deploy`
+      (CHANGELOG 2026.225.2248, class `fully tested and validated`); providers:
+      `step:helm-release` + `verb:helm`
+- [x] Unit 3: `check-agentteams-pod` / `-vm` assert via `agentteams:` verb steps
+      (raw curl + host-CLI sequences replaced); the verb executed live against a fresh
+      rebuild of the disposable `check-agentteams-pod` bed (CHANGELOG 2026.226.0946,
+      class `fully tested and validated`)
+- [ ] Unit 4: dispatcher rows resolve; `/charly-kubernetes:helm` published; this
+      document audited claim-by-claim against the tree (documentation-only class —
+      the gate is the non-runtime standards, not a bed)
+- [ ] Unit 5: `charly box load` delivers an image into a nested uid-1000 store, bed green
+- [ ] Unit 6: snapshot round-trip bed green
+- [ ] Unit 7: `--disposable-only` filter proven to refuse a non-disposable target
+- [ ] Unit 8: `check-factory-spike-native|kustomize|helm` green at zero warnings, pasted
+- [ ] Unit 9: `/charly-agentteams:factory` installs through the existing adapters
 - [ ] First real incident: reproduced in a spike, repro committed as a check, fix
       landed via pr-validator with the Human approval recorded
 
-Update the boxes in the same change that earns them; a checked box without pasted R10
-output is a claim, not proof.
+Update the boxes in the same change that earns them; a checked box without pasted proof
+at the gate its change class requires is a claim, not proof.
