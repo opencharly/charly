@@ -110,7 +110,9 @@ func TestGenerateLandingProjectsReadme(t *testing.T) {
 		"README.md": strings.Join([]string{
 			"# OpenCharly",
 			"",
-			"**The fully stocked gourmet kitchen for you and your agents.**",
+			"**A deliberately unusual tagline.**",
+			"",
+			"**A bold-opening paragraph.** It follows the tagline and must survive into the body.",
 			"",
 			"Compose boxes from candies. See the [recipe cards](https://opencharly.ai/recipes/)",
 			"and the [rulebook](AGENTS.md); built on [podman](https://podman.io/).",
@@ -129,8 +131,16 @@ func TestGenerateLandingProjectsReadme(t *testing.T) {
 	}
 	got := string(raw)
 
-	if !strings.HasPrefix(got, landingFrontmatter) {
+	if !strings.HasPrefix(got, landingFrontmatter("A deliberately unusual tagline.")) {
 		t.Errorf("emitted page does not open with the site frontmatter:\n%s", got)
+	}
+	// The tagline is DERIVED from the README rather than restated in Go, so an arbitrary wording
+	// must reach the hero. Keying this to a real tagline would pass against a hardcoded generator.
+	if !strings.Contains(got, `tagline: "A deliberately unusual tagline."`) {
+		t.Errorf("the README tagline was not lifted into the hero:\n%s", got)
+	}
+	if !strings.Contains(got, `content: "OpenCharly — A deliberately unusual tagline"`) {
+		t.Errorf("the <title> override was not derived from the tagline:\n%s", got)
 	}
 	// The header is the whole safety boundary for prune.go — without it the landing page becomes
 	// an unprunable orphan the moment the generator stops emitting it.
@@ -140,8 +150,13 @@ func TestGenerateLandingProjectsReadme(t *testing.T) {
 	if strings.Contains(got, "# OpenCharly\n") {
 		t.Errorf("the README H1 should be dropped, Starlight renders the frontmatter title:\n%s", got)
 	}
-	if strings.Contains(got, "**The fully stocked gourmet kitchen for you and your agents.**") {
-		t.Errorf("the tagline should be dropped, the hero already renders it:\n%s", got)
+	if strings.Contains(got, "**A deliberately unusual tagline.**") {
+		t.Errorf("the tagline should be dropped from the body, the hero already renders it:\n%s", got)
+	}
+	// The strip is position-anchored, not a first-bold-run search: the paragraph after the tagline
+	// also opens in bold, and hoisting IT into the hero would delete real prose from the page.
+	if !strings.Contains(got, "**A bold-opening paragraph.** It follows the tagline") {
+		t.Errorf("the bold-opening paragraph after the tagline was wrongly stripped:\n%s", got)
 	}
 	if !strings.Contains(got, "[recipe cards](/recipes/)") {
 		t.Errorf("the absolute site link was not rewritten:\n%s", got)
@@ -166,5 +181,22 @@ func TestGenerateLandingMissingReadme(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "README.md") {
 		t.Errorf("error should name the missing source, got: %v", err)
+	}
+}
+
+// TestGenerateLandingMissingTagline covers the other half of the same guarantee. The tagline is the
+// product's positioning line and the generator derives the hero from it, so a README that has lost
+// it must fail loudly rather than ship a home page with an empty hero.
+func TestGenerateLandingMissingTagline(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		"README.md": "# OpenCharly\n\nStraight into prose with no tagline line.\n",
+	})
+
+	err := generateLanding(root, t.TempDir())
+	if err == nil {
+		t.Fatal("expected an error when the README has no tagline, got nil")
+	}
+	if !strings.Contains(err.Error(), "tagline") {
+		t.Errorf("error should name the missing tagline, got: %v", err)
 	}
 }

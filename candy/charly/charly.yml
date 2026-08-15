@@ -54,7 +54,7 @@ charly:
         # the Phase 3 cutover.
         packaging:
             name: charly
-            description: The OpenCharly CLI — compose, build, deploy, and evaluate boxes.
+            description: The OpenCharly CLI — the fully equipped factory floor for you and your agents.
             maintainer: Andreas Trawoeger <atrawog@opencharly.ai>
             homepage: https://github.com/opencharly/charly
             license: MIT

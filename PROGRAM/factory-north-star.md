@@ -1,6 +1,9 @@
-# Agent-in-the-Loop Factory — Program North-Star
+# Agent Teams Factory — Program North-Star
 
-The binding north-star document for the Factory program, named in every spawn brief. The
+The binding north-star document for the Agent Teams Factory program, named in every spawn
+brief. "The Agent-in-the-Loop Factory" is the *product's* name (see `README.md`); this
+program builds the multi-agent subsystem that runs on it, and the two are deliberately
+distinct scopes. The
 charly repo's `CLAUDE.md` + `AGENTS.md` are the rulebook; this file restates no rule.
 Detailed HOW lives in skills (`plugins/README.md` is the index). This document holds the
 concrete end-state, vocabulary, the containment model, ordered decision heuristics, the
