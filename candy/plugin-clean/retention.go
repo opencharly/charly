@@ -198,11 +198,20 @@ type imageTagInfo struct {
 	TagCalVer   kit.CalVer
 	OkTag       bool
 	InUse       bool
+	// Created is the image's creation time (unix seconds) — the build-recency key, total over
+	// every tag charly mints. The CalVer keys above are NOT: `charly box build --tag` REPLACES
+	// the CalVer tag, so a bed build carries `check-<bed>-<calver>`, which parses as no CalVer at
+	// all. A group of bed-tagged images therefore had OkTag false for EVERY member, the sort's
+	// final comparator was false for every pair, and the surviving order was whatever
+	// `podman images` happened to emit — so keep_images: N kept an ARBITRARY N and could delete
+	// the newest build while keeping older ones. Unlike the resolver's wrong ANSWER, this one
+	// destroys an artifact.
+	Created int64
 }
 
 // charlyImageTags inventories local storage: one row PER TAG (deduped by
 // ref), grouped by the ai.opencharly.box label and sorted newest-first
-// (label-CalVer primary, build-tag CalVer tiebreaker; undatable tags last).
+// (label-CalVer primary, CREATION TIME tiebreaker, build-tag CalVer tertiary).
 // Non-charly images (no label) never appear.
 func charlyImageTags(engine string) (map[string][]imageTagInfo, error) {
 	imgs, err := kit.ListLocalImages(engine)
@@ -230,7 +239,7 @@ func charlyImageTags(engine string) (map[string][]imageTagInfo, error) {
 			tcv, okT := kit.ParseCalVer(kit.ExtractCalVerTag(ref))
 			groups[short] = append(groups[short], imageTagInfo{
 				Ref: ref, ID: normImageID(im.ID), LabelCalVer: lcv, OkLabel: okL,
-				TagCalVer: tcv, OkTag: okT, InUse: inUse,
+				TagCalVer: tcv, OkTag: okT, InUse: inUse, Created: im.Created,
 			})
 		}
 	}
@@ -241,6 +250,12 @@ func charlyImageTags(engine string) (map[string][]imageTagInfo, error) {
 			}
 			if group[i].OkLabel != group[j].OkLabel {
 				return group[i].OkLabel // labelled sorts before unlabelled
+			}
+			// Creation time before the build tag: it is the only recency key TOTAL over the tags
+			// charly mints, so a group of bed-tagged images orders correctly instead of collapsing
+			// to "whatever podman emitted" (see imageTagInfo.Created).
+			if group[i].Created != group[j].Created && group[i].Created != 0 && group[j].Created != 0 {
+				return group[i].Created > group[j].Created // newer build first
 			}
 			if group[i].OkTag && group[j].OkTag && group[i].TagCalVer != group[j].TagCalVer {
 				return group[j].TagCalVer.Less(group[i].TagCalVer) // newer build first

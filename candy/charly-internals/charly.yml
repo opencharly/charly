@@ -3633,6 +3633,27 @@ git-workflow-skill:
                     the delta re-gate covers only the mechanical update-branch merge on top of an
                     already-R10'd `main`.
 
+                  **Re-running the bed is HALF the remedy — re-pointing the citations is the other
+                  half.** `gh pr update-branch` merges `main` into the branch, and that merge can
+                  pull a new BUILDER-CHAIN input — a submodule gitlink advance, a candy change —
+                  into the very chain a bed's fixture image builds from. Every bed result pasted
+                  before that merge then describes a tree that is not the one being merged: true
+                  when written, false when read (`references/evidence-and-freshness.md`, "Three
+                  freshness surfaces, failing independently"). The delta re-gate above produces the
+                  fresh run; nothing in it updates the artifacts that CITE the old one, so a run
+                  directory named in the PR body or the CHANGELOG still points at a superseded tree
+                  — and it is the CHANGELOG that ships inside the commit the evaluator tags.
+
+                  **Scope — block on what gets TAGGED, report what gets squashed away.** The
+                  CHANGELOG entry and the PR body are both durable: the entry lands in the tagged
+                  tree, and a merged PR body stays public and quotable long after the branch is
+                  deleted. A superseded run directory in either is BLOCKING. An intermediate commit
+                  message is replaced by the evaluator's squash message, so a stale citation there
+                  is reportable but not blocking. The general form, which outlives the specific
+                  case: **a claim-keyed sweep runs LAST, once the final tree exists** — a record
+                  written alongside the change it describes is written before the tree its reader
+                  will check it against.
+
                   **Gitlink ANCESTOR bump → `gh pr update-branch` flags CONFLICTING (recover
                   locally).** When the just-merged delta and a still-open PR both bump the SAME
                   submodule gitlink and one bump is an ANCESTOR of the other, GitHub's
@@ -3657,6 +3678,22 @@ git-workflow-skill:
                   `references/evidence-and-freshness.md`, "Submodule pointers can be reverted by a
                   merge without ever conflicting". Use the per-path form above only as a quick
                   confirmation once the whole-tree comparison has already told you where to look.
+
+                  **The `docs` gitlink has a TWIN in candy config, and no gitlink check can see
+                  it.** Both checks above compare gitlinks. `candy/docs-site/charly.yml` records
+                  the same `docs` sha twice as ordinary text — once as the `DOCS_REF` var (the
+                  clone step's ENV, hence that layer's cache key) and once as the literal matcher
+                  in the `docs-site-pinned-commit` check — and a merge resolves plain text
+                  line-wise, with no notion that those strings name a commit. So a recovery can
+                  satisfy the descendant-wins check AND the whole-tree comparison while leaving the
+                  candy pinned at the older commit: the same regression this class produces, one
+                  surface over, invisible to every instrument aimed at it. The two gates are
+                  complementary and neither substitutes for the other — the gitlink checks above
+                  catch a gitlink that went backwards; `task docs:pin` catches the gitlink and the
+                  candy pins DISAGREEING, and passes silently when both regressed together. So run
+                  BOTH whenever a recovery touches the `docs` gitlink. The rule is lockstep: the
+                  gitlink and its candy pins move together, on a recovery exactly as on the forward
+                  landing (B6a step 4, which also owns that re-pin's change class).
 
                   **Multi-committer main advances — out-of-tree PRs from other committers.** The
                   orchestrator is NOT the sole source of `main` advances: another committer (a human
@@ -3835,6 +3872,19 @@ git-workflow-skill:
                   cutover lands `plugins` (the `*.md`) at `documentation reviewed`, then the
                   superproject pointer bump at `documentation reviewed` too — both halves honest.
 
+                  **The derivation stops at the gitlink, and the reason is a general rule: a change
+                  class must be decidable FROM THE DIFF.** A gitlink is a pointer git itself
+                  resolves, so "what it points at" is reachable from the PR — the validator reads
+                  the submodule's own `old..new` in the repo the PR is against, and the derivation
+                  above is certifiable without leaving it. A sha inside a candy `var:` is not: it
+                  is a string, and following it means cloning a remote repository at a named
+                  commit. Were "the referenced content is documentation" the test, the class would
+                  be a property of a tree the PR does not contain, and no validator could rule on
+                  it from the PR — which is why re-pinning `DOCS_REF` after a docs merge is a
+                  CONFIG change carrying its own bed gate (B6a step 4), no matter how documentary
+                  the commit it names. Any pin the diff cannot resolve behaves the same way. When
+                  the diff cannot decide the class, the class is the heavier one.
+
                   **For the full multi-worktree end-to-end — the doc-tier `git -C` literal-path
                   rule, and the mandatory post-landing worktree refresh — see B7.**
 
@@ -3969,7 +4019,14 @@ git-workflow-skill:
                      (`/charly-tools:docs-site` owns the pin contract). This step edits candy
                      CONFIG rather than prose, so its own gate is the `check-docs` bed — a
                      documentation-only change class does NOT cover it, and the commit that carries
-                     it cannot claim the `documentation reviewed` tier.
+                     it cannot claim the `documentation reviewed` tier. Positively: its gate is
+                     `charly box validate` PLUS `check-docs` — the `disposable: true` bed that
+                     composes the changed entity, through `docs-site-app` — at `fully tested and
+                     validated`. Watch for it on a landing whose only "extra" is this re-pin: the
+                     step silently upgrades the WHOLE cutover's gate, because `DOCS_REF` is emitted
+                     as an ENV line above the clone step, so re-pinning it changes the emitted
+                     Containerfile and therefore the image. The general rule the boundary rests on
+                     is in B2, "the derivation stops at the gitlink".
                   5. **Bump the superproject gitlinks** for whichever submodules moved.
 
                   ## B7 — Multi-worktree landing + refresh (the canonical end-to-end)
@@ -4390,6 +4447,18 @@ git-workflow-skill:
                   findings, and the majority were not defects in the code but false or stale CLAIMS about
                   it.
 
+                  **Start here — find your symptom, then read the epistemology below if you want the why.**
+                  
+                  | If you are about to… | and you might be wrong because… | read |
+                  |---|---|---|
+                  | paste gate output into a PR body | you re-ran the gate and quoted the older copy | "A paste and its label are two separate claims" |
+                  | assert a sha, a pin, or a status is current | it moved between measuring and writing | "Three freshness surfaces, failing independently" |
+                  | fix a claim a reviewer called false | the correction is a new claim with the same burden | "Sweep for what the fix invalidated" |
+                  | run a gate to decide whether a PR is safe to merge | you gated the head, and the MERGE is what lands | "The gate that matters at merge…" (its recipe is the probe below) |
+                  | land a `skill:` edit | the source and its generated copies are one cutover, not two | "A `skill:` source edit and its regeneration are one cutover across two repos" |
+                  | resolve a submodule conflict | a `checkout -- .` plus `git add -A` silently reverts the gitlink | "Submodule pointers can be reverted by a merge without ever conflicting" |
+                  | conclude a validator never ran | the status can be absent for a reason that is not absence | "Status absence on a known head proves nothing" |
+                  
                   **The page has two kinds of content, and they are true in different ways.**
 
                   **Five sections are epistemic** — ways a claim goes wrong — and they are one question
@@ -4423,9 +4492,65 @@ git-workflow-skill:
                   by RUNNING the thing. The first version of the cross-repo section asserted that the two drift directions
                   differ in DETECTABILITY, one of them silent — which a thirty-second experiment REVERSES:
                   the direction called silent is the more legible of the two — and it sat in
-                  a mechanism section while the surrounding epistemic ones were sound. **Every factual claim
-                  in the three mechanism sections below was verified by executing it.** If you extend them,
-                  execute yours too; reasoning is not available for this half of the page.
+                  a mechanism section while the surrounding epistemic ones were sound.
+                  
+                  **The execution rule is scoped to CONTENT, not to sections, and that correction was
+                  itself forced by a defect.** An earlier revision said "every factual claim in the three
+                  MECHANISM sections was verified by executing it" — and a reviewer found the one broken
+                  shell recipe on the page sitting in an EPISTEMIC section, exempted by that very wording.
+                  The frame had decided what got executed, and routed a runnable command to the
+                  "reasoning is enough" side. So: **every runnable command and every mechanism claim on
+                  this page is executed before it is published, wherever it sits.** If you extend any
+                  section with either, run it.
+                  
+                  **Run the PUBLISHED form, in a default environment.** A command executed in your own shell is
+                  proof about your own shell. This page shipped a fixture opening `git init -q repo`, verified by
+                  running it — in a shell whose git had `init.defaultBranch=main`. Git's out-of-the-box default is
+                  still `master`, so for a reader with a stock config the fixture died on its fourth line with
+                  `fatal: invalid reference: main`, exit 128. The rule above was satisfied to the letter and the
+                  reader still could not run it. So: execute the text AS PUBLISHED, and for anything whose
+                  behaviour depends on configuration — git defaults, locale, `$EDITOR`, an env var you have set
+                  and forgotten — execute it with that configuration NEUTRALIZED, not merely absent from your
+                  attention. Verifying this one meant clearing `HOME`, `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM`
+                  and proving the isolation empty before trusting the result.
+
+                  **And executing it is only half — the other half is PROVENANCE: every measurement
+                  states the tree it was taken on.** This clause exists because the content-scoping rule
+                  two paragraphs up, in the form that shipped without it, did not prevent the next error. A drift figure on this
+                  very cutover was executed, correct, and false: `charly marketplace drift` was run
+                  with the superproject at `main` but the submodules checked out at their repo TIPS,
+                  and the result was reported as a fact about `main` — which pins its submodules at
+                  older gitlinks and is clean. Nothing was unexecuted. The measurement simply answered
+                  a question about a tree nobody had named, which is this page's top-ranked epistemic
+                  trap wearing a mechanism's clothes. So a figure is publishable only with the tree
+                  identified: which commit, which submodule shas, which working-tree state. "On main"
+                  is a claim about pinned gitlinks, and it is false of a checkout whose submodules sit
+                  at their tips.
+
+                  The three merge-tree behaviours the probe recipe below depends on were established
+                  by execution, in a throwaway repo:
+                  
+                  ```
+                  $ git init -q -b main repo && cd repo         # rerunnable: git still defaults to master
+                  $ echo base > a.txt && git add -A && git commit -qm base
+                  $ git switch -qc side-a && echo AAA > a.txt && git commit -qam a
+                  $ git switch -q main  && git switch -qc side-b && echo BBB > a.txt && git commit -qam b
+                  
+                  $ git merge-tree --write-tree side-a side-b   # conflicting pair
+                  $ echo $?
+                  1                                              # → guard on the exit status
+                  $ git commit-tree "$(git merge-tree --write-tree side-a side-b)" -p side-a -m probe
+                  fatal: not a valid object name c5045be2…       # unguarded, the oid is multi-line
+                  $ git cat-file -p "$(git merge-tree --write-tree side-a side-b | head -1):a.txt"
+                  <<<<<<< side-a                                 # `head -1` YIELDS A CONFLICTED TREE —
+                  AAA                                            # checkoutable, plausible, and poison
+                  =======                                        # for anything that then RUNS in it
+                  BBB
+                  >>>>>>> side-b
+                  ```
+                  
+                  The third COMMAND is why the guard is an exit-status test, not an output-shape test:
+                  the shape fix produces a tree a gate runs against and passes.
 
                   **Terms.** *The gate* — whichever check a claim rests on; usually `charly box validate`,
                   `charly marketplace drift`, or `charly docs generate`. *`marketplace drift`* compares each
@@ -4511,6 +4636,30 @@ git-workflow-skill:
                   elsewhere in the same body false. The edit was verified by re-grepping the live body —
                   correct technique, right target, **wrong question**.
 
+                  **The operational rule: grep for what DESCRIBES the construct you changed, not for the
+                  construct.** Searching for the thing you edited finds the place you already fixed. What
+                  goes stale is the prose ABOUT it — a paragraph naming the old flag, a table counting the
+                  old occurrences, a release note narrating the old design — and none of that contains the
+                  new text or, usually, the old code either.
+
+                  This page earned that rule four times across the review of a single cutover, and the
+                  shape was identical each time: **the fix was correct and the thing describing it was
+                  left behind.**
+
+                  | The fix | What it silently falsified |
+                  |---|---|
+                  | scoping the `head -1` note by intent | the note's own claim to be the page's only such use |
+                  | rewriting the recipe over three commits | the CHANGELOG paragraph describing the first draft |
+                  | replacing `\|\| exit 1` with nesting | the paragraph 27 lines below still crediting `\|\| exit 1` |
+                  | the numstat reusing `$RESOLVED` | the R5 sweep pasted in the PR body, still counting six `merge-tree` sites |
+
+                  **All four were caught by a reviewer. The sweep caught none of them** — zero for four,
+                  which is the honest measure of how weak grepping-for-the-construct is. The fourth row is
+                  the sharpest: the sweep missed a miscount in the SWEEP'S OWN OUTPUT, in the very change
+                  that adds this section. A changed construct has a blast radius
+                  in PROSE, and it is widest in exactly the artifacts no gate reads: commit messages, PR
+                  bodies, and the release note — which, unlike the page, is immutable once merged.
+
                   ### The gate that matters at merge is the merged tree's, not the head's
 
                   Here the artifact does not move; the **base** does. A PR can be green at its head through
@@ -4521,23 +4670,57 @@ git-workflow-skill:
 
                   ```
                   git fetch origin                      # BASE must be the CURRENT tip, so fetch first
-                  PR_HEAD=$(git rev-parse HEAD)         # or the PR's head sha
+                  PR_HEAD=$(git rev-parse HEAD)         # assumes cwd IS the PR checkout;
+                                                        # otherwise pass the head sha explicitly
                   BASE=$(git rev-parse origin/main)     # the base TIP, never the merge-base —
                                                         # the merge-base reproduces this section's bug
-                  TREE=$(git merge-tree --write-tree "$PR_HEAD" "$BASE")   # a TREE oid, not a commit
-
+                  # merge-tree EXITS 1 on conflict and prints the tree oid followed by the conflict
+                  # stages. Guard on the EXIT STATUS, not on the output shape: piping through
+                  # `head -1` here would hand you a tree whose files contain <<<<<<< markers, and
+                  # the gate would then run green against garbage. Refuse instead.
+                  # Nested, not `exit`: this block is meant to be PASTED into an interactive
+                  # shell, where an `exit` on the conflict path closes your terminal.
+                  if ! TREE=$(git merge-tree --write-tree "$PR_HEAD" "$BASE"); then
+                    echo "merge conflicts — resolve them before probing; this needs a clean tree" >&2
+                  else
                   # A tree oid is not checkoutable and every gate needs a working tree, so wrap it:
                   MERGED=$(git commit-tree "$TREE" -p "$PR_HEAD" -p "$BASE" -m probe)
-                  git worktree add --detach /tmp/gate-probe "$MERGED"
 
-                  # REQUIRED: worktree add leaves submodules EMPTY, and section 1 of this page
-                  # demands every submodule at that commit's pinned gitlink. Skip this and the
-                  # probe measures a tree the gate cannot even read.
-                  git -C /tmp/gate-probe submodule update --init --recursive
+                  # mktemp, NOT a fixed path. `worktree add` accepts an existing EMPTY dir, so
+                  # this is race-free — and it is what stops the cleanup below from destroying
+                  # somebody else's work. See the warning under this block.
+                  PROBE=$(mktemp -d /tmp/gate-probe.XXXXXX)
+                  if git worktree add --detach "$PROBE" "$MERGED"; then
+                    # REQUIRED: worktree add leaves submodules EMPTY, and "A paste and its label
+                    # are two separate claims" above demands every submodule at that commit's
+                    # pinned gitlink. Skip this and the probe measures a tree the gate cannot
+                    # even read.
+                    git -C "$PROBE" submodule update --init --recursive
 
-                  # …run the gate in /tmp/gate-probe, then:
-                  git worktree remove --force /tmp/gate-probe
+                    # …run the gate in "$PROBE", then:
+                    git worktree remove --force "$PROBE"
+                  fi
+                  fi
                   ```
+
+                  **Why `mktemp` and not a fixed `/tmp/gate-probe`: the cleanup line is destructive
+                  and never checks whose worktree it is removing.** With a fixed path, a second probe
+                  starting while a first still holds it fails its `add` — correctly, exit 128 — and
+                  then, in a script without `set -e`, runs its cleanup anyway and **deletes the first
+                  probe's worktree**, uncommitted contents included. Executed:
+
+                  ```
+                  $ git worktree add --detach /tmp/gate-probe HEAD   # second probe, same path
+                  fatal: '/tmp/gate-probe' already exists
+                  $ git worktree remove --force /tmp/gate-probe      # cleanup runs regardless
+                  $ echo $?
+                  0                                                  # the FIRST probe's tree is gone
+                  ```
+
+                  A per-run `mktemp -d` removes the collision, and nesting the cleanup inside the
+                  `add`'s success branch means a failed setup never reaches a removal. This is R6
+                  tree-safety applied to the recipe rather than to the reader: the guard belongs in
+                  the command, not in remembering to be careful.
 
                   **Sibling rule: when a measurement decides what a change can or cannot do, measure the
                   tree that change PRODUCES, not the one it starts from.** A validator measured `main` with
@@ -4548,8 +4731,9 @@ git-workflow-skill:
 
                   ### A `skill:` source edit and its regeneration are one cutover across two repos
 
-                  Landing either half alone leaves `main` with `marketplace drift` red. **Both directions
-                  fail the same way** — exit 1, a stale-artifact listing — so neither is quiet:
+                  Landing either half alone leaves `main` with `marketplace drift` red. **Both directions fail
+                  LOUDLY** — exit 1 and a stale-artifact listing either way, so neither is quiet. They are not
+                  equally legible, though, and the difference runs opposite to intuition:
 
                   | What landed alone | `drift` output |
                   |---|---|
@@ -4588,17 +4772,30 @@ git-workflow-skill:
                   SIDE_A=$(git rev-parse "$MERGE^1")          # your branch
                   SIDE_B=$(git rev-parse "$MERGE^2")          # what you merged in
 
-                  # conflict-free merge: the trees must be byte-identical
-                  test "$(git rev-parse "$MERGE^{tree}")" = "$(git merge-tree --write-tree "$SIDE_A" "$SIDE_B")" \
-                    && echo "clean: matches git's own resolution" || echo "DIVERGED — inspect below"
-
-                  # merge WITH conflicts: identity is the wrong test, since your resolutions
-                  # legitimately differ. Diff them and account for EVERY delta.
-                  # NOTE head -1: on a conflicting merge, merge-tree prints the tree oid on line 1
-                  # and then the conflict stages; without it the substitution captures all of that
-                  # and git reports "invalid object name" — precisely in the case you need this.
-                  git diff --numstat \
-                    "$(git merge-tree --write-tree "$SIDE_A" "$SIDE_B" | head -1)" "$MERGE"
+                  # ONE merge-tree, and the branch decides which test is even meaningful.
+                  # RESOLVED is assigned even when the substitution FAILS — it then holds the
+                  # tree oid followed by the conflict stages, which is what the else-branch wants.
+                  if RESOLVED=$(git merge-tree --write-tree "$SIDE_A" "$SIDE_B"); then
+                    # conflict-free merge: the trees must be byte-identical
+                    if [ "$(git rev-parse "$MERGE^{tree}")" = "$RESOLVED" ]; then
+                      echo "clean: matches git's own resolution"
+                    else
+                      echo "DIVERGED — every delta below must be one you can account for"
+                      git diff --numstat "$RESOLVED" "$MERGE"
+                    fi
+                  else
+                    # merge WITH conflicts: identity is the wrong test, since your resolutions
+                    # legitimately differ. Diff against the conflicted tree and account for
+                    # EVERY delta.
+                    #
+                    # NOTE the rule for `head -1` is about INTENT, not location. It is right when
+                    # you want the conflicted tree as DATA — to diff or inspect, as here and in
+                    # the evidence block near the top of this page. It is wrong the moment you
+                    # will RUN anything inside the resulting tree: there it yields a tree full of
+                    # conflict markers and the gate passes against garbage, so guard on the exit
+                    # status instead (the probe recipe above does).
+                    git diff --numstat "$(printf '%s\n' "$RESOLVED" | head -1)" "$MERGE"
+                  fi
                   ```
 
                   In the motivating incident that diff listed exactly three paths: two intentional

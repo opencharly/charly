@@ -48,7 +48,10 @@ func dispatchCheckCLI(args []string) error {
 // returning the per-step results the CheckCmd handlers format, using the
 // package-level cmdCtx (valid for the whole `charly check ...` command dispatch). cmdExec is nil
 // on the out-of-process CliMain path (no reverse channel) → a clear error.
-func hostCheckRun(req spec.CheckRunRequest) (kit.CheckRunReply, error) {
+// Package-level var for the same reason live_image.go's containerImageRef is one: it lets a test
+// exercise a CLI arm's OUTPUT decisions (which lines it prints, on which paths) without a live
+// container store or a reverse channel. Override THIS var, never the per-mode bodies.
+var hostCheckRun = func(req spec.CheckRunRequest) (kit.CheckRunReply, error) {
 	return hostCheckRunCtx(cmdCtx, req)
 }
 

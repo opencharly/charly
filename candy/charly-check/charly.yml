@@ -2351,6 +2351,65 @@ check-skill:
                   The mode is explicit in the verb; there is no autodetect or
                   implicit fallback. Choose the mode by picking the right verb.
 
+                  ### Which artifact a build-scope verb evaluates
+
+                  `charly check box`, `charly box feature run`, and `charly box labels` all
+                  pronounce a verdict on a BUILT ARTIFACT, so they all resolve their image
+                  argument the same guarded way (`spec/container.ResolveBuiltImageRef`):
+
+                  - a **full ref** (`ghcr.io/opencharly/web:2026.227.0836`) or a
+                    **`<box>:<calver>`** pin names one artifact — it is used verbatim;
+                  - a **bare short name** (`web`) is elected against local container storage
+                    by the content-derived `ai.opencharly.version` label first and the image's
+                    CREATION TIME second, and the verb **REFUSES** when that election is not
+                    the newest local BUILD of that box, naming both refs and the pinned
+                    re-invocation.
+
+                  **"Newest build" means creation time, not the tag** — and that distinction is
+                  load-bearing rather than pedantic. `charly box build --tag <x>` REPLACES the
+                  CalVer tag rather than adding to it, so every bed build carries a single tag
+                  like `check-<bed>-<calver>`, which is not a CalVer at all. An ordering keyed on
+                  the tag therefore ties every bed-built candidate and falls through to a
+                  meaningless last resort; creation time does not tie, needs no tag convention,
+                  and rides the same `images --format json` rows the resolver already reads.
+
+                  Two consequences worth knowing:
+
+                  - **Many tags on ONE image id are one artifact.** A `--tag` build and a plain
+                    CalVer build of identical content share an id, so there is nothing older or
+                    newer to arbitrate and the verb stays silent.
+                  - **When the ordering cannot be established, the verb refuses.** An engine that
+                    reports no creation time for some candidate yields an explicit "could not
+                    establish which build is newest" error rather than a silent pass. Passing on
+                    unknown is the shape that let a 17-hour-old image be certified green.
+
+                  The refusal exists because the election's primary key is a CONTENT version:
+                  an image built from a differently-versioned source tree (a sibling worktree,
+                  a pulled release) outranks a newer build regardless of when either was
+                  produced. Certifying the older artifact yields a green run with the right
+                  step names that proves nothing about what you just built — the worst failure
+                  this system has, because it is indistinguishable from a real pass. A verdict
+                  verb therefore never guesses; it asks. Every other consumer of a short name
+                  (deploy, `charly vm build`, builder bootstrap) shares the election but never
+                  refuses.
+
+                  Whatever the outcome, the verb prints the ref it resolved BEFORE it can bail —
+                  including when the image carries no baked plan at all. A verdict that cannot
+                  name the artifact it judged is unverifiable, and "read the `Image:` line" is
+                  only a usable habit if the line is always there.
+
+                  **The `Image:` line goes to STDERR, and for `charly box labels` that is a
+                  contract, not a detail.** `charly box labels <ref> --format <key>` emits exactly
+                  ONE raw value on stdout — the form every plan step pipes into `grep` — so the
+                  provenance line must not land there. Both halves hold together: you can read
+                  which artifact was inspected, and `--format` stdout stays byte-for-byte what it
+                  always was. A step that captures stdout sees only the value; a human, or a log
+                  that captures stderr, sees the ref as well.
+
+                  This is also why the R10 bed sequence pins: `charly check run <bed>` builds
+                  `box build <image> --tag <run-tag>` and then checks `<image>:<run-tag>`, an
+                  explicit pin, so the guard never fires inside a bed.
+
                   **Which verb/bed proves what (the project rulebook R7):** `charly check box` passes on
                   zero-content stages too — it is not a substitute for the generated-artifact
                   checks (R8). For the R10 gate, pick the disposable bed whose kind matches
