@@ -54,7 +54,7 @@ defaults:
     cache: image # default build cache mode (image local read / registry read+write)
     # Reusable-artifact retention (auto-pruned at creation; also via `charly clean`).
     # 0 disables. See /charly-core:clean.
-    keep_images: 3 # newest CalVer tags to keep per image after `charly box build`
+    keep_images: 3 # per box: newest 3 distinct images, and at most 3 tags of each
     keep_check_runs: 3 # newest run dirs to keep per bed/score after `charly check run`
 vm:
     vm:
@@ -3322,3 +3322,57 @@ check-agentteams-vm:
                 method: worker-running
               stdout:
                 - contains: "room alias resolvable"
+
+# =============================================================================
+# check-retention-app — the FIXTURE BOX of the retention discriminator bed.
+#
+# BLOCKED, NOT DISABLED. This box is `enabled: false` for ONE named reason, and it
+# becomes satisfiable the moment that reason is removed:
+#
+#   candy/plugin-box/box.go:296-302 acquires the build-activity lock and holds it
+#   "across the whole build (the candy podman drive) + the post-build prune", so
+#   the post-build retention pass ALWAYS observes live >= 1 — its own lock. That
+#   makes candy/plugin-clean/retention.go's `if live > 0 { … if lastTag { return
+#   false } }` engage on every build, so `charly box build` can never remove an
+#   image's LAST tag and therefore can never reclaim a distinct image. The lock's
+#   stated purpose is to stop a SIBLING build from untagging a pin an in-flight
+#   build may still resolve; blocking the build's own prune is an unintended
+#   effect the comment does not contemplate.
+#
+# The bed this fixture serves asserts a PAIR: that a multi-tag image keeps every
+# tag (which discriminates the two-ordinal ranking from the pre-fix tag-row one),
+# and that the distinct sibling past the budget is REMOVED (which discriminates
+# nothing, but fails under exactly the conditions that would falsely satisfy the
+# first). The second assertion is the canary, and it cannot pass while the
+# self-lock stands: the only verb that removes a last tag is `charly clean`, which
+# a bed must not run. Measured live on 2026-08-16 — four generations built, gen1
+# left at rank 3 under keep_images: 3, and NOT reclaimed.
+#
+# EXCLUDE THE BUILD'S OWN LOCK FROM THE LIVE COUNT AND THIS BED GOES GREEN. Until
+# then it would assert something the product cannot do, so it stays unbuilt rather
+# than shipping as a check that cannot fail on its own subject.
+#
+# The base is a raw registry ref rather than a distro box on purpose: the fixture
+# must be a LEAF image with nothing built FROM it, because `podman rmi` refuses an
+# image another image depends on and retention swallows that refusal silently
+# (observed on fedora-nonfree:check-docs-2026.227.1835 — selected by retention,
+# refused by the engine, absent from the removed list, still in the store).
+# =============================================================================
+check-retention-app:
+    candy:
+        version: 2026.228.0400
+        enabled: false
+        base: quay.io/fedora/fedora:43
+        description: |-
+            Fixture box for the retention discriminator bed: a minimal Fedora base composing
+            check-retention-fixture, whose generation stamp is the only varying content. Built
+            repeatedly (four generations plus two `--tag` rebuilds of the third) to construct a
+            box group where one image wears three tags and distinct siblings sit behind it — the
+            only shape on which `keep_images`' two ordinals and the pre-fix single tag-row
+            ordinal choose differently. Blocked on the post-build prune counting its own
+            build-activity lock as live; see the comment above this entry.
+        distro:
+            - fedora:43
+            - fedora
+        candy:
+            - check-retention-fixture
