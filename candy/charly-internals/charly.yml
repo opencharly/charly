@@ -9682,27 +9682,51 @@ pr-validator-agent:
             one glance, and a false negative cost this program four consecutive rounds of improving
             prose that regeneration would erase.
 
-            **The decisive test is not textual. Regenerate and look at what moves:**
+            **The decisive test is DELETE-AND-REGENERATE, and it is the only form that works at
+            validation time:**
 
             ```bash
-            charly marketplace generate    # or: charly docs generate --out <dir> --root .
-            git -C <repo> status --short   # a CARRIER appears here; a MENTIONER never does
+            rm <suspect-file>
+            charly marketplace generate            # from the PR's OWN source head — see below
+            test -f <suspect-file> && echo CARRIER || echo "not generated"
             ```
 
-            A carrier is *defined* by being rewritten from a source, so regeneration is the only
-            instrument that answers the actual question. Everything textual is triage narrowing what
-            to regenerate, never the verdict. Two cheap signals do most of that narrowing: the hit
-            sits in a **comment near the top** and names the generator, and — the one that decides
-            it — **you can find the source entity it comes from.** A file whose prose exists in no
-            candy is either not generated or is prose someone hand-added to an artifact, and those
-            two cases look identical until you regenerate.
+            A carrier is *defined* by being emitted from a source, so the question is whether the
+            generator PRODUCES that path — not whether its bytes currently differ. Deleting forces
+            the generator to answer. Measured both directions: an in-sync generated agent spec
+            reappears byte-identically, and an authored CHANGELOG that merely quotes a banner stays
+            deleted.
 
-            **The failing case has a signature worth recognizing on sight**: regeneration REMOVES
-            the exact lines the change ADDED. A PR adding `+23/+23/+25` across three generated files
-            regenerates to `0/-15`, `0/-15`, `5/-20` — the additions do not survive because no source
-            produces them. **A diff that reverts precisely the change under review is a hand-edit to
-            an artifact**, and it is the same measurement in the opposite direction from the
-            byte-identity check that proves a re-homing faithful.
+            **Do NOT use "does it move in `git status`" as the carrier test.** It answers a
+            different question — *is this carrier IN SYNC* — and it fails in the direction that
+            matters:
+
+            | state | moves? | what a movement test concludes | truth |
+            |---|---|---|---|
+            | carrier, out of sync | yes | carrier | carrier |
+            | **carrier, in sync** | **no** | **"not generated"** | **carrier** |
+            | mentioner | no | not generated | not generated |
+
+            **An in-sync carrier is the NORMAL state of a correct PR at validation time**, so a
+            movement test returns "not generated" for exactly the file the rule exists to protect.
+            Movement can CONVICT (it moved, so a source produces it) but its absence proves nothing.
+
+            **Name the source tree, because regeneration has two inputs and only one of them is the
+            artifact.** "Read the ref, not the checkout" governs the artifact axis; this is the
+            SOURCE axis, and reading the correct artifact ref does not save you. Regenerate from the
+            **PR's own source head** — the commit whose entities are supposed to emit this file. The
+            same artifact against a source one commit older produced a full-file delete
+            (`0/-132`) for a file that was perfectly in sync, which reads exactly like the hand-edit
+            signature below. **A verdict that flips on which source commit you stood at is not a
+            property of the PR.**
+
+            **The hand-edit signature, stated to its evidence**: with the correct source tree,
+            regeneration removes MOST of what the change added, because no entity produces it. A PR
+            adding `+23/+23/+25` across three generated files regenerated to `0/-15`, `0/-15`,
+            `5/-20` — note the five surviving additions in the third file, so this is *predominantly*
+            a revert, not a precise one. **Do not claim "reverts exactly"; the numbers are the
+            claim.** It is the same measurement as the byte-identity check that proves a re-homing
+            faithful, pointed the other way.
 
             The obvious tightenings were measured and both are worse. Restricting to a 20-line
             header window still flags a CHANGELOG that quotes the banner in its opening paragraph.
@@ -9719,28 +9743,33 @@ pr-validator-agent:
 
             Three things make the naive form of this check miss:
 
-            - **The banner's position varies widely.** Positions **1, 7, 8, 9, 10 and 12** have all
-              been measured across the two trees. **Never `head -3`**, and do not trust any fixed
-              window: grep the whole file. A window that fits today's corpus is a window that will
-              silently stop fitting.
+            - **The banner is not reliably near the top at all.** One tree carries it at **24
+              distinct line numbers**, the furthest at line **1214**. **Grep the whole file**; any
+              fixed window is wrong, and an enumeration of "typical" positions undersells the case
+              badly enough to invite one.
             - **The two trees use OPPOSITE separators**, so a matcher written for either alone
               misses almost everything in the other. Measured:
 
-              | tree | `DO NOT EDIT` (spaced) | `DO-NOT-EDIT` (hyphenated) | `DO[- ]NOT[- ]EDIT` |
+              | tree (ref) | `DO NOT EDIT` (spaced) | `DO-NOT-EDIT` (hyphenated) | `DO[- ]NOT[- ]EDIT` |
               |---|---|---|---|
-              | `plugins` | **335** | 3 | **336** |
-              | `docs` | 2 | **897** | **897** |
+              | `plugins` @ `21da8f5` | **339** | 4 | **340** |
+              | `docs` @ `3d11170` | 2 | **899** | **899** |
 
-              A hyphen-only matcher finds 3 of 336 in `plugins`; a space-only matcher finds 2 of 897
-              in `docs`. **Neither convention is wrong and neither is going away**, so `-i` and the
+              A hyphen-only matcher finds 4 of 340 in `plugins`; a space-only matcher finds 2 of
+              899 in `docs`. **Neither convention is wrong and neither is going away**, so `-i` and the
               `[- ]` class are load-bearing rather than stylistic — a matcher that assumes one house
               style reports a clean tree for the other.
 
-              **Counted on the trees as they stood when this rule was written**, and the corpus grows
-              hourly — later counts of 338/4/339 and 899 are the same finding, not a contradiction.
-              **The ratio is the claim; the totals are a timestamp.** State which tree a census came
-              from or two correct measurements will read as a disagreement, which is exactly what
-              happened between two people counting the same thing an hour apart.
+              **The counts above are `spaced / hyphenated / tolerant`, and they do not add up
+              because `grep -l` UNIONS files rather than partitioning them** — 3 files carry BOTH
+              spellings, so `339 + 4 - 3 = 340`. Say that, or a careful reader spends their time
+              suspecting your arithmetic instead of reading your point; one did.
+
+              **Cite the REF a census was taken at, not a date.** "As they stood when this was
+              written" is a timestamp, which is precisely the thing this paragraph tells you is
+              insufficient. The corpus grows hourly, so counts an hour apart differ; the RATIO is
+              the claim and the totals only date it. Two people counting the same corpus an hour
+              apart briefly read two correct measurements as a disagreement.
             - **A targeted edit never sees the top of the file.** `Edit` on a matched string, or a
               jump to a grep hit at line 240, never renders line 8. The banner is invisible to the
               access pattern a targeted edit actually uses, which is why the check has to be a
