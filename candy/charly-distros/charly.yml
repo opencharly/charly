@@ -2007,7 +2007,7 @@ debian-skill:
             
             ## User model — create, not adopt
             
-            The embedded `distro.debian` vocabulary **does not** declare a `base_user:` block, because the upstream `debian:13` base image ships no pre-existing uid-1000 account. `user_policy: auto` (the default for any downstream image) falls through to create mode — the generator emits an idempotent `useradd -m -u 1000 -g 1000 user` during bootstrap.
+            The embedded `distro.debian` vocabulary **does not** declare a `base_user:` block, because the upstream `debian:13` base image ships no pre-existing uid-1000 account. `user_policy: auto` (the default for any downstream image) falls through to create mode — the generator emits an idempotent user creation (`useradd` where shadow-utils is present, busybox `adduser` otherwise) during bootstrap.
             
             This is the intentional asymmetry vs `/charly-distros:ubuntu`, which DOES ship `ubuntu:ubuntu` at uid 1000 and declares `base_user:` to adopt that identity. See `/charly-image:image` "user_policy" and `/charly-build:build` "base_user" for the full decision table.
             
@@ -2022,8 +2022,14 @@ debian-skill:
                 apt-get update && apt-get install -y --no-install-recommends curl ca-certificates gnupg && \
                 ... install go-task binary ...
             RUN if ! getent passwd 1000 >/dev/null 2>&1; then
-                  (getent group 1000 >/dev/null 2>&1 || groupadd -g 1000 user) &&
-                  useradd -m -u 1000 -g 1000 -s /bin/bash user;
+                  LOGIN_SHELL=/bin/sh; [ -x /bin/bash ] && LOGIN_SHELL=/bin/bash;
+                  if command -v useradd >/dev/null 2>&1; then
+                    (getent group 1000 >/dev/null 2>&1 || groupadd -g 1000 user) &&
+                    useradd -m -u 1000 -g 1000 -s "$LOGIN_SHELL" user;
+                  else
+                    (getent group 1000 >/dev/null 2>&1 || addgroup -g 1000 user) &&
+                    adduser -D -h /home/user -u 1000 -G user -s "$LOGIN_SHELL" user;
+                  fi;
                 fi
             WORKDIR /home/user
             USER 1000

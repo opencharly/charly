@@ -1926,7 +1926,7 @@ cloud-init-renderer-skill:
             |---|---|
             | `sdk/vmshared/cloud_init_render.go` | `RenderCloudInit`, `ResolveKeyInjectionChannels`, `composeUsers`, `composePackages`, `composeBootCmd`, `composeRunCmd` |
             | `sdk/vmshared/cloud_init_iso.go` | `WriteSeedISO` via xorriso; `genisoimage` + `mkisofs` fallbacks |
-            | `spec/exec/charly_install.go` | `kit.EnsureCharlyInGuest` state machine (auto/scp/url/skip strategies) |
+            | `spec/exec/charly_install.go` | `kit.EnsureCharlyInGuest` state machine (auto/scp/skip strategies) |
             | `spec/spec/cue_types_gen.go` (generated) | `VmCloudInit`, `VmCloudInitUser`, `VmCloudInitFile`, `VmCloudInitNetwork`, `VmCloudInitMirrors`, `VmCharlyInstall` |
 
             ## RenderCloudInit top-level
@@ -2007,13 +2007,13 @@ cloud-init-renderer-skill:
 
             - `composePackages`: prepends `{openssh (or `openssh-server` on debian/ubuntu), curl, tar}` (deduplicated against user's `Packages`). Guarantees the guest has SSH server + download tools + tar for later layer application.
             - `composeBootCmd`: prepends `systemctl mask ssh.socket || true` — the EARLIEST cloud-init phase (`bootcmd` runs before `write_files`/packages/`runcmd`), so a socket-activated sshd (enabled by default on some cloud images, notably Debian/Ubuntu) can never accept a connection before cloud-init has finished configuring the guest. `|| true` makes this a harmless no-op on a distro that ships no `ssh.socket` unit at all (Arch/Fedora typically don't).
-            - `composeRunCmd`: prepends THREE steps, in order: (1) a self-testing shell snippet that writes a `PerSourcePenalties no` sshd_config.d drop-in and validates the FULL resulting config with `sshd -t`, deleting the drop-in again on failure; (2) `systemctl unmask ssh.socket || true` (the matching unmask for `composeBootCmd`'s mask); (3) `systemctl enable --now sshd` (or `ssh` on debian/ubuntu). Distro-specific user `runcmd:` entries can assume sshd is running and hardened.
+            - `composeRunCmd`: prepends the hardening drop-in, then a sshd START whose form depends on the guest's init system (systemd vs OpenRC) — three steps on systemd, two on OpenRC. Step (1) is unbranched and identical everywhere: a self-testing shell snippet that writes a `PerSourcePenalties no` sshd_config.d drop-in and validates the FULL resulting config with `sshd -t`, deleting the drop-in again on failure. It is hoisted above the branch in the source so "always first, distro-agnostic" is structural rather than duplicated per arm. The start then branches on `effectiveDistro(spec) == "alpine"`: on **systemd** (everything else) (2) `systemctl unmask ssh.socket || true` (the matching unmask for `composeBootCmd`'s mask) and (3) `systemctl enable --now sshd` (or `ssh` on debian/ubuntu); on **OpenRC** (Alpine) (2) `rc-update add sshd default && rc-service sshd start` — there is no ssh.socket to unmask and no systemctl to enable with, and the OpenSSH package ships `/etc/init.d/sshd`. Either way, distro-specific user `runcmd:` entries can assume sshd is running and hardened. `composeBootCmd`'s `systemctl mask ssh.socket || true` stays UNBRANCHED: on Alpine the `|| true` swallows the missing binary and the mask is vacuous where nothing is socket-activated.
 
             User-supplied fields **extend** defaults; they don't replace them. Prevents the common footgun where an author puts `packages: [nginx]` and accidentally breaks SSH because they overrode the default list.
 
             ### Guest SSH hardening (D18) — the RCA'd kex-reset wedge class
 
-            The bootcmd-mask + runcmd-unmask/hardening-drop-in/enable sequence above closes a
+            The bootcmd-mask + runcmd hardening-drop-in + sshd-start sequence above (the start being unmask+enable on systemd, `rc-update`+`rc-service` on OpenRC) closes a
             confirmed wedge: OpenSSH ≥ 9.8 defaults `PerSourcePenalties` ON, penalizing
             repeated connection attempts from ONE source. Every VM guest is reached through
             the SAME single passt gateway source IP, so `kit.WaitForSSH`'s own readiness
@@ -2033,8 +2033,17 @@ cloud-init-renderer-skill:
             `runcmd` makes the guest **deterministically unreachable via SSH for the
             entire package-install phase**, trading the old "sometimes-flaky-but-reachable"
             window (sshd up early, racing a possible host-key rewrite) for
-            "safe-but-fully-blocked-if-package-install-stalls." This is verified live
-            against real Arch cloud_image VM beds (`check-charly-vm`, and
+            "safe-but-fully-blocked-if-package-install-stalls." **On a guest that ships
+            no `ssh.socket` — Arch cloud images among them — the mask is a `|| true`
+            no-op, so neither the blocked window NOR the guarantee that motivates it
+            applies there at all.** Sshd stays live on Arch throughout the package
+            install — which is not an oversight but the precondition for the
+            host-key race documented under D15 below (that race "needs only a live
+            sshd, not a socket-activated one"), and the reason the `--needed`
+            rewrite and the sshd try-restart guard exist. The trade-off in this
+            paragraph is scoped to socket-activated guests; on Arch there is no
+            window to block and nothing for the mask to trade. This
+            is verified live against real Arch cloud_image VM beds (`check-charly-vm`, and
             `check-sidecar-pod`'s nested ephemeral VM member) — including a full
             fresh-rebuild pass (destroy+recreate) for each — with zero wedge, now that the
             companion redundant-package-reinstall fix (below) keeps the package-install
@@ -2044,7 +2053,7 @@ cloud-init-renderer-skill:
             the mask/unmask pair entirely and relying on the `PerSourcePenalties` drop-in
             alone.
 
-            **Delivery is distro-branched (D15): `packages:` for most distros, a `runcmd:`-prepended `pacman -S --needed` for pacman-family.** On every distro EXCEPT the pacman family (arch/cachyos/manjaro/endeavouros), the composed package union rides the `packages:` cloud-config key as documented above. On a pacman-family distro, `packages:` is OMITTED entirely and the union is instead PREPENDED to `runcmd:` as `pacman -S --needed --noconfirm <union>` — AHEAD of `composeRunCmd`'s own three hardening/enable steps (D18, above). This is an R10 bed finding: cloud-init's own package-install module invokes `pacman -S` WITHOUT `--needed`, so on an image that already ships the minimum set (e.g. every Arch cloud image) it unconditionally REINSTALLS them — reinstalling openssh re-triggers its post-install host-key-regen hook while the base image's own socket-activated sshd is already listening, racing a live key-file rewrite against new SSH connections (the observed "reset during `kex_exchange_identification`, guest otherwise idle" signature). apt/dnf installs are naturally no-op-idempotent when the package is already present, so only the pacman-family path needs the `--needed` rewrite. The pacman-family check is `formatForDistroID(effectiveDistro(spec)) == "pac"`; `effectiveDistro` resolves `Source.Distro` when set, and additionally infers `"arch"` for a `cloud_image` source with `base_user: "arch"` and no explicit `distro:` (a narrowing of the pre-existing `composePackages` distro-switch fallback, never a behavior change for a caller that already got the Arch/Fedora shape) — every OTHER empty-distro image stays on the safe, unchanged `packages:`-key path. See `sdk/vmshared/cloud_init_render.go`'s `effectiveDistro`/`composePackages` doc comments for the full narrowing proof. **Note (D18):** the pacman-vs-non-pacman split governs ONLY the `packages:` key vs the `pacman -S --needed` runcmd prepend — every distro's `runcmd:` now ALSO carries the D18 hardening/unmask/enable steps, so "byte-identical to before" no longer applies to the full runcmd list, only to the packages-key handling this paragraph describes.
+            **Delivery is distro-branched (D15): `packages:` for most distros, a `runcmd:`-prepended `pacman -Sy --needed` pair for pacman-family.** On every distro EXCEPT the pacman family (arch/archarm/cachyos/manjaro/endeavouros), the composed package union rides the `packages:` cloud-config key as documented above. On a pacman-family distro, `packages:` is OMITTED entirely and the union is instead PREPENDED to `runcmd:` as TWO entries — `pacman -Sy --needed --noconfirm <union>`, then an sshd try-restart guard (`systemctl try-restart sshd.service ssh.socket sshd.socket`, silenced and `|| true`) that resyncs a live sshd if openssh rode along in the dep closure, since a running sshd would otherwise exec a NEWER sshd-session than the parent that spawned it ("internal error: hostkeys confused"). Both sit AHEAD of `composeRunCmd`'s own D18 steps (above), of which there are three on the pacman family since it is systemd throughout — distinct from the two entries this paragraph prepends. This is an R10 bed finding: cloud-init's own package-install module invokes `pacman -S` WITHOUT `--needed`, so on an image that already ships the minimum set (e.g. every Arch cloud image) it unconditionally REINSTALLS them — reinstalling openssh re-triggers its post-install host-key-regen hook while the base image's own sshd is already listening (on a socket-activated image; Arch cloud images typically ship no `ssh.socket`, which is why `composeBootCmd`'s mask is a `|| true` no-op there — the race needs only a live sshd, not a socket-activated one), racing a live key-file rewrite against new SSH connections (the observed "reset during `kex_exchange_identification`, guest otherwise idle" signature). apt/dnf installs are naturally no-op-idempotent when the package is already present, and apk's `add` is likewise a no-op for an already-present package, so only the pacman-family path needs the `--needed` rewrite. The `y` in `-Sy` is deliberate and its partial-upgrade hazard is ACCEPTED by design: a bare `-S` 404s against a rotated mirror, and the guest is a disposable, minutes-lived provisioning target where nothing long-lived survives on the pre-upgrade library set. The pacman-family check is `formatForDistroID(effectiveDistro(spec)) == "pac"`; `effectiveDistro` resolves `Source.Distro` when set, and additionally infers `"arch"` for a `cloud_image` source with `base_user: "arch"`, and `"alpine"` for one with `base_user: "alpine"`, when no explicit `distro:` is set (a narrowing of the pre-existing `composePackages` distro-switch fallback, never a behavior change for a caller that already got the Arch/Fedora shape) — every OTHER empty-distro image stays on the safe, unchanged `packages:`-key path. See `sdk/vmshared/cloud_init_render.go`'s `effectiveDistro`/`composePackages` doc comments for the full narrowing proof. **Note (D18):** the pacman-vs-non-pacman split governs ONLY the `packages:` key vs the `pacman -Sy` + sshd-resync runcmd prepend — every distro's `runcmd:` now ALSO carries the D18 hardening drop-in plus a per-init sshd start (unmask+enable on systemd, `rc-update`+`rc-service` on OpenRC), so this paragraph's scope is the packages-key handling alone, not the full runcmd list.
 
             ## WriteSeedISO
 
@@ -2074,7 +2083,6 @@ cloud-init-renderer-skill:
             | Strategy | Action |
             |---|---|
             | `auto` / `scp` | `scp $(os.Executable()) guest:/usr/local/bin/charly; chmod +x` |
-            | `url` | ssh-execute `curl -L <url> -o /usr/local/bin/charly && sha256sum -c` (verified against `VmCharlyInstall.Checksum`) |
             | `skip` | `ssh 'which charly'` — fails if missing, returns early if present |
 
             Idempotent. If `charly` is already present at the target version, the function returns without re-scp'ing. See `/charly-internals:vm-deploy-target` for how this plugs into the overall deploy flow.
@@ -3333,8 +3341,14 @@ generate-source-skill:
                   **Create (idempotent useradd):**
                   ```dockerfile
                   RUN if ! getent passwd <UID> >/dev/null 2>&1; then \
-                        (getent group <GID> >/dev/null 2>&1 || groupadd -g <GID> <user>) && \
-                        useradd -m -u <UID> -g <GID> -s /bin/bash <user>; \
+                        LOGIN_SHELL=/bin/sh; [ -x /bin/bash ] && LOGIN_SHELL=/bin/bash; \
+                        if command -v useradd >/dev/null 2>&1; then \
+                          (getent group <GID> >/dev/null 2>&1 || groupadd -g <GID> <user>) && \
+                          useradd -m -u <UID> -g <GID> -s "$LOGIN_SHELL" <user>; \
+                        else \
+                          (getent group <GID> >/dev/null 2>&1 || addgroup -g <GID> <user>) && \
+                          adduser -D -h <home> -u <UID> -G <user> -s "$LOGIN_SHELL" <user>; \
+                        fi; \
                       fi
 
                   WORKDIR /home/<user>
@@ -5332,7 +5346,7 @@ go-skill:
                   | File | Role |
                   |---|---|
                   | `spec/spec/cue_types_gen.go` (generated) | `VmSpec` (= `Vm`) + `VmSource` discriminated union (cloud_image / bootc) + `VmChecksum` + `VmNetwork` + `VmSSH` + `VmKeyInjection` |
-                  | `spec/spec/cue_types_gen.go` (generated) | `VmCloudInit` + `VmCloudInitUser/File/Network/Mirrors` + `VmCharlyInstall` (auto/scp/url/skip state machine) |
+                  | `spec/spec/cue_types_gen.go` (generated) | `VmCloudInit` + `VmCloudInitUser/File/Network/Mirrors` + `VmCharlyInstall` (auto/scp/skip state machine) |
                   | `sdk/vmshared/libvirt_yaml.go` | `LibvirtDomain` + 30+ sub-types (features, CPU, clock, memory backing, numatune, cputune, devices, seclabel, launch security, resource, sysinfo) — the opencharly YAML-facing shape of the `libvirt:` stanza |
                   | `candy/plugin-vm/libvirt_yaml_bridge.go` | `RenderDomainXML`/`BuildLibvirtDomainXML` pure functions (build a `libvirtxml.Domain` tree, marshal to XML) + `buildDomainDevices` device emission (passt backend, portForward attribute order, virtio-gpu default, SMBIOS credentials, `XMLPassthrough` merge) |
                   | `sdk/vmshared/qemu_render.go` | `RenderQemuArgv` for direct-QEMU backend |
@@ -8519,7 +8533,7 @@ vm-deploy-target-skill:
             When a layer declares `reboot: true`, `BuildDeployPlan` appends a trailing
             `RebootStep`. Only the external `vm` deploy acts on it: the plugin drives it
             over `RunHostStep`, where the HOST reboots the guest (records the guest's
-            `/proc/sys/kernel/random/boot_id`, fires `(sleep 1; systemctl reboot) &` so the
+            `/proc/sys/kernel/random/boot_id`, fires `(sleep 1; systemctl reboot || reboot) &` (the `|| reboot` arm is what lets a non-systemd guest reboot at all) so the
             ssh session closes cleanly, then polls until SSH answers AND the boot_id has
             changed — deterministic, not a fixed sleep, so the still-up pre-reboot sshd
             can't be mistaken for "back up"). OCI/pod/kubernetes skip it; the external `local:`
@@ -8712,9 +8726,11 @@ vm-spec-skill:
                 Checksum VmChecksum
                 Cache    string
                 BaseUser string       // adopt-user pattern — see below
+                Distro   string       // OPTIONAL; steers the render when set — see below
 
                 // bootc branch:
-                Image      string     // `candy:` image entry name (carries base:/from:)
+                Box        string     // WIRE KEY `box:` — the `candy:` image entry name
+                                       // (carries base:/from: and `bootc: true`)
                 Transport  string     // registry | containers-storage | oci | oci-archive
                 Rootfs     string     // ext4 | xfs | btrfs
                 RootSize   string     // "10G" — caps root partition, rest unpartitioned
@@ -8732,7 +8748,20 @@ vm-spec-skill:
             2. `spec.ssh.user` defaults to `BaseUser`.
             3. cloud-init appends the pubkey to `~<base_user>/.ssh/authorized_keys` without touching sudoers/shell/home.
 
-            Common values: `arch` (Arch cloud image), `ubuntu` (Ubuntu Cloud), `fedora` (Fedora Cloud), `debian` (Debian Cloud), `cloud-user` (CentOS Cloud).
+            Common values: `arch` (Arch cloud image), `alpine` (Alpine Cloud), `ubuntu` (Ubuntu Cloud), `fedora` (Fedora Cloud), `debian` (Debian Cloud), `cloud-user` (CentOS Cloud).
+
+            **`base_user:` is not only the adopt-user selector — two of its values STEER RENDERING.** When no explicit `distro:` is set on a `cloud_image` source, `effectiveDistro` infers `"arch"` from `base_user: "arch"` and `"alpine"` from `base_user: "alpine"`, and those inferences pick the package-delivery branch (the `pacman -Sy` runcmd prepend vs the `packages:` key) and the sshd-start branch (`rc-update`+`rc-service` on OpenRC vs `systemctl unmask`+`enable --now`). Every other value, and an empty one, falls through to the systemd/`packages:` path. **So an Alpine image declared with a custom account name, or with `base_user:` left empty, gets `systemctl enable --now sshd` on a guest that has no systemd, and the VM boots unreachable.** Set `distro: alpine` explicitly whenever the account is not literally `alpine`. That is `source.distro` — an OPTIONAL free-form string on the `cloud_image` arm (`spec/schema/vm.cue`: `distro?: string`), a sibling of `base_user:`, authored as:
+
+            ```yaml
+            my-vm:
+                vm:
+                    source:
+                        kind: cloud_image
+                        base_user: myuser
+                        distro: alpine
+            ```
+
+            When set it WINS over the `base_user` inference; when unset the inference runs. Do not confuse it with the `bootstrap` source kind, where `distro:` is REQUIRED and names the bootstrap target rather than steering the render.
 
             Leave empty **only** when the image has no default account — then declare a custom user in `spec.cloud_init.users`.
 
@@ -8764,7 +8793,7 @@ vm-spec-skill:
             The renderer combines structured fields with renderer defaults:
 
             - `Packages`: prepended with `{openssh, curl, tar}`.
-            - `RunCmd`: prepended with three D18 hardening steps — a self-testing `PerSourcePenalties no` sshd drop-in write+validate, `systemctl unmask ssh.socket`, then `systemctl enable --now sshd` — so distro-specific setup can assume sshd is running and hardened. See `/charly-internals:cloud-init-renderer` "Guest SSH hardening (D18)" for the full mechanism + design trade-off.
+            - `RunCmd`: prepended with the D18 hardening drop-in, then an sshd start whose form depends on the guest's init system (systemd vs OpenRC) — so distro-specific setup can assume sshd is running and hardened. Step 1 is always the same self-testing `PerSourcePenalties no` sshd drop-in write+validate (plain shell into `sshd_config.d`, which OpenSSH Includes on every init); the start that follows is branched — `systemctl unmask ssh.socket` then `systemctl enable --now sshd` on systemd, `rc-update add sshd default && rc-service sshd start` on OpenRC (Alpine), which has neither ssh.socket nor systemctl. See `/charly-internals:cloud-init-renderer` "Guest SSH hardening (D18)" for the full mechanism + design trade-off.
             - `Users`: the `VmSSH.User` account is auto-injected unless already present; if present, the renderer appends the ssh pubkey to the user's existing entry.
 
             `Extra` is a raw-YAML escape hatch merged after structured fields. Prefer structured fields; `Extra` exists for long-tail cloud-init options the schema doesn't cover.
@@ -8773,9 +8802,7 @@ vm-spec-skill:
 
             ```go
             type VmCharlyInstall struct {
-                Strategy string  // auto | scp | url | skip
-                URL      string  // when Strategy == "url"
-                Checksum string  // "sha256:<hex>" for url strategy
+                Strategy string  // auto | scp | skip
             }
             ```
 
@@ -8783,7 +8810,6 @@ vm-spec-skill:
             |---|---|
             | `auto` (default) | scp the local `charly` binary (`os.Executable()`) into the guest post-boot via the vm deploy plugin's `OpPrepareVenue` (`kit.EnsureCharlyInGuest`) |
             | `scp` | explicit form of auto |
-            | `url` | cloud-init runcmd downloads charly from URL at first boot |
             | `skip` | user manages charly install; the vm deploy plugin's `OpPrepareVenue` verifies presence only |
 
             ## Validation (spec/schema/vm.cue)
