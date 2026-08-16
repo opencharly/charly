@@ -298,7 +298,11 @@ build-skill:
             tag cannot serve as the image recency key. The two consequences that matter here:
             **between distinct images**, the datable `ai.opencharly.version` label decides when the
             two differ, and creation time decides when they tie — which is the usual case, because
-            repeated builds of an unchanged image share one label; **within one image's tag rows**, the
+            that label is **declared, not derived from content**: it is the box's own `version:`,
+            else the highest candy `version:` across its whole candy set, else the base image's
+            (`sdk/deploykit/effective_version.go`). So DISTINCT images built from DIFFERENT trees
+            carry the SAME label until somebody bumps one of those fields, and creation time is
+            what actually orders them; **within one image's tag rows**, the
             `:YYYY.DDD.HHMM` tag decides, because those rows share everything else. Do not carry
             *"creation time, not the tag"* across to the tag budget — it is true of the first and
             false of the second.

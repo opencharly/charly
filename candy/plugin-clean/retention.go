@@ -368,13 +368,23 @@ func retentionRemovable(c imageTagInfo, rank, keepN int, floor kit.CalVer, floor
 		return false // keep every tag of the newest keepN DISTINCT images
 	}
 	// ORDER IS LOAD-BEARING — do not reorder these guards. The undatable check sits AFTER the
-	// rank check, so a tag that falls outside EITHER retention ordinal still lands here and is
-	// protected. That is what keeps a stable non-CalVer tag (`:latest` and friends) unprunable by
-	// tag ordinal: it has no date, so it can never be elected for removal however many tags its
-	// image wears. Hoisting the rank check below this one would silently make such tags
-	// reclaimable.
+	// rank check, so a tag that falls outside either retention ordinal still reaches this guard
+	// and is protected when it qualifies. Hoisting the rank check below this one would change
+	// which rows are even considered.
+	//
+	// The guard is an AND, and that bounds it much more tightly than "non-CalVer tags are safe":
+	// a row is undatable only when it has NEITHER a datable ai.opencharly.version label NOR a
+	// datable :YYYY.DDD.HHMM tag. A `:latest` on an image that carries a datable label has
+	// OkLabel == true, so it does NOT qualify and IS reclaimable by tag ordinal. Since the label
+	// is a DECLARED version (deploykit.ComputeEffectiveVersions: the box's version:, else the
+	// highest candy version:, else the base's) rather than a content hash, most charly-built
+	// images carry one — so this exemption protects far fewer rows than its name suggests, and
+	// `latest` on a managed image is not among them. An earlier version of this comment claimed
+	// such a tag "can never be elected for removal however many tags its image wears", which is
+	// the OR reading of an AND guard; the docs prose generated from candy/charly-core stated the
+	// AND correctly while this comment did not.
 	if !c.OkLabel && !c.OkTag {
-		return false // never remove a tag we can't date
+		return false // never remove a tag we can't date by EITHER key
 	}
 	if c.InUse {
 		return false // image referenced by a container/deploy

@@ -107,3 +107,53 @@ func TestPruneImagesByRetention_MultiTagGroupSurvivesIntact(t *testing.T) {
 		t.Errorf("expected exactly 1 selected ref, got %d: %v", len(removed), removed)
 	}
 }
+
+// TestRetentionUndatableGuardIsAnAND pins the exemption's exact width. The guard is
+// `!OkLabel && !OkTag`, so a row is protected only when NEITHER key can date it. A `:latest` on an
+// image that carries a datable ai.opencharly.version label has OkLabel == true and is therefore
+// RECLAIMABLE by tag ordinal — the opposite of what a comment in this file used to claim
+// ("can never be elected for removal however many tags its image wears", the OR reading).
+//
+// This matters more than it sounds: the version label is a DECLARED version
+// (deploykit.ComputeEffectiveVersions — the box's version:, else the highest candy version:, else
+// the base's), not a content hash, so nearly every charly-built image carries one. The exemption
+// protects far fewer rows than its name suggests, and `latest` on a managed image is not among
+// them. Perturbing the guard to `||` makes the labelled case pass and this test fail.
+func TestRetentionUndatableGuardIsAnAND(t *testing.T) {
+	origList, origCtr, origFloor := kit.ListLocalImages, listContainerImageRefs, liveBuildFloor
+	defer func() { kit.ListLocalImages, listContainerImageRefs, liveBuildFloor = origList, origCtr, origFloor }()
+	liveBuildFloor = func() (kit.CalVer, bool, int) { return kit.CalVer{}, false, 0 }
+	listContainerImageRefs = func(string) (map[string]bool, map[string]bool, error) {
+		return map[string]bool{}, map[string]bool{}, nil
+	}
+
+	// One image, five undatable `:latest`-style tags, so tag ordinals 3 and 4 fall outside
+	// keep_images=3. The ONLY difference between the two cases is the version label.
+	names := []string{"ghcr/x:latest", "ghcr/x:dev", "ghcr/x:stable", "ghcr/x:edge", "ghcr/x:main"}
+	run := func(labels map[string]string) []string {
+		rows := make([]kit.LocalImageInfo, len(names))
+		for i := range names {
+			rows[i] = kit.LocalImageInfo{ID: "aaa", Created: 100, Labels: labels, Names: names}
+		}
+		kit.ListLocalImages = func(string) ([]kit.LocalImageInfo, error) { return rows, nil }
+		removed, err := pruneImagesByRetention("podman", 3, true)
+		if err != nil {
+			t.Fatalf("prune: %v", err)
+		}
+		return removed
+	}
+
+	// Datable LABEL present -> OkLabel true -> the AND does NOT protect -> surplus tags removable.
+	labelled := run(map[string]string{"ai.opencharly.box": "x", "ai.opencharly.version": "2026.100.0000"})
+	if len(labelled) == 0 {
+		t.Errorf("a datable ai.opencharly.version label must defeat the undatable exemption, "+
+			"leaving surplus undatable tags reclaimable by tag ordinal — got %d removals", len(labelled))
+	}
+
+	// NEITHER key datable -> the exemption applies -> nothing removable, however many tags.
+	unlabelled := run(map[string]string{"ai.opencharly.box": "x"})
+	if len(unlabelled) != 0 {
+		t.Errorf("with neither a datable label nor a datable tag the exemption must protect every "+
+			"row however many tags the image wears — got %d removals: %v", len(unlabelled), unlabelled)
+	}
+}
