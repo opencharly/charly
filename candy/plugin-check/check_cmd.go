@@ -60,19 +60,28 @@ type CheckCmd struct {
 	// (candy/plugin-box's command:feature) InvokeProvider's command:check with these args so the
 	// build-scope ADE acceptance runs in plugin-check (where the check runner lives) — the F10
 	// plugin↔plugin bridge (cone-C #31). Never typed by a user (the box command is the surface).
-	FeatureBox CheckFeatureBoxCmd `cmd:"__feature-box" hidden:"" help:"Build-scope feature-run engine (bridged from box feature run)."`
+	//
+	// EVERY `cmd:` tag in this struct is a bare presence marker paired with an explicit `name:`,
+	// because Kong NEVER reads a `cmd:` tag's VALUE as the command name (sdk/kong_reflect.go
+	// documents the RDD spike) — it falls back to the dash-cased FIELD name. This leaf was declared
+	// `cmd:"__feature-box"` and therefore dispatched as `feature-box`, so the bridge's forwarded
+	// `__feature-box` matched nothing and `charly box feature run` could not run. The sibling
+	// value-carrying tags happened to agree with their field's dash-case and worked BY COINCIDENCE
+	// (`cmd:"list-ai"` did not — it dispatched as `list-agent`), which is precisely why the name is
+	// now stated once, explicitly, where Kong actually reads it.
+	FeatureBox CheckFeatureBoxCmd `cmd:"" name:"__feature-box" hidden:"" help:"Build-scope feature-run engine (bridged from box feature run)."`
 
 	// — Wave-2 additions (leaf implementations in their own files) —
 	Run            CheckRunCmd       `cmd:"" name:"run" help:"Run a disposable check bed (R10 sequence) or an iterate: entity (AI loop)."`
-	RunLocal       CheckRunLocalCmd  `cmd:"run-local" hidden:"" help:"In-target harness driver (set by the host)."`
-	SyncCredential CheckSyncCredCmd  `cmd:"sync-credential" help:"Copy AI credentials into a score's target."`
+	RunLocal       CheckRunLocalCmd  `cmd:"" name:"run-local" hidden:"" help:"In-target harness driver (set by the host)."`
+	SyncCredential CheckSyncCredCmd  `cmd:"" name:"sync-credential" help:"Copy AI credentials into a score's target."`
 	Scope          CheckScopeCmd     `cmd:"" name:"scope" help:"AI-facing: print the active iteration's scope.yml."`
-	LastTag        CheckLastTagCmd   `cmd:"last-tag" help:"AI-facing: print the prior iteration's image tag."`
-	SelfEvaluate   CheckSelfCheckCmd `cmd:"self-evaluate" help:"AI-facing: re-run the in-scope plan live."`
+	LastTag        CheckLastTagCmd   `cmd:"" name:"last-tag" help:"AI-facing: print the prior iteration's image tag."`
+	SelfEvaluate   CheckSelfCheckCmd `cmd:"" name:"self-evaluate" help:"AI-facing: re-run the in-scope plan live."`
 	List           CheckListRunsCmd  `cmd:"" name:"list" help:"List past runs under .check/."`
 	Report         CheckReportCmd    `cmd:"" name:"report" help:"Print a past result-<calver>.yml."`
 	Note           CheckNoteCmd      `cmd:"" name:"note" help:"Persistent NOTES.md memory (read/append)."`
-	ListAgent      CheckListAgentCmd `cmd:"list-ai" help:"List configured agents."`
+	ListAgent      CheckListAgentCmd `cmd:"" name:"list-agent" help:"List configured agents."`
 }
 
 // CheckBoxCmd runs a pure-box check: a disposable container built from the image, build-scope steps
@@ -80,7 +89,7 @@ type CheckCmd struct {
 // Mode:"box" arm (pluginCheckRunBox); the plugin owns the CLI parse, the "Image:" header, and the
 // formatting.
 type CheckBoxCmd struct {
-	Image  string `arg:"" help:"Image reference (full ref or short name resolved against local container storage)"`
+	Image  string `arg:"" help:"Image reference: a full ref, '<box>:<calver>' to pin one build, or a bare short name resolved against local container storage (refused when a newer local build of that box exists)"`
 	Format string `name:"format" default:"text" help:"Output format: text, json, tap, yaml"`
 }
 
@@ -89,11 +98,17 @@ func (c *CheckBoxCmd) Run() error {
 	if err != nil {
 		return err
 	}
+	// Provenance FIRST, on every path. A verdict verb that cannot say which artifact it judged is
+	// unverifiable by construction, and the mitigation this cutover told operators to use — "read
+	// the Image: line before believing a verdict" — silently assumed there was a line to read.
+	// There was not: the no-plan path bailed before printing one, so exactly the images where
+	// provenance matters most (a build that baked no plan at all) reported nothing and exited 0.
+	// The ref is already in the reply on that path; it simply was not printed.
+	fmt.Fprintf(os.Stderr, "Image: %s\n", reply.Image)
 	if reply.NoSteps {
 		fmt.Fprintln(os.Stderr, "No plan steps defined for this image.")
 		return nil
 	}
-	fmt.Fprintf(os.Stderr, "Image: %s\n", reply.Image)
 
 	// YAML format emits the shape the benchmark scorer (ParseCharlyTestOutput) expects — the
 	// header prints to stderr above, the scorer payload to stdout. Exact-match "yaml" (mirroring

@@ -312,7 +312,9 @@ charly-skill:
             charly changes while a real box ships the same in-development toolchain.
             
             ## Updating the Binary — dual-path gotcha
-            
+
+            **The commands in this section are maintenance the charly repository performs on itself.** They are not steps an charly user runs: this candy's binary source is a working tree (see "Binary source" above), so keeping its two paths in sync is something a contributor does inside a charly checkout. It is recorded here because it is this candy's own build contract — named as maintenance, not as instructions for the reader.
+
             The `charly` candy's `copy: bin/charly` run step is resolved **relative to the candy directory**, so the box build reads `candy/charly/bin/charly` — NOT the repo-root `bin/charly`. Two independent paths need to stay in sync:
             
             | Path | Who reads it |

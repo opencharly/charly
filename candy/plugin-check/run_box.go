@@ -28,7 +28,10 @@ func pluginCheckRunBox(ex *sdk.Executor, ctx context.Context, req spec.CheckRunR
 	if err != nil {
 		return kit.CheckRunReply{}, err
 	}
-	imageRef, err := kit.ResolveLocalImageRef(rt.RunEngine, req.Image)
+	// ResolveBuiltImageRef, not the lenient ResolveLocalImageRef: this verb pronounces a verdict
+	// on a built artifact, so a short name that elects an image older than the newest local build
+	// is refused rather than silently certified (spec/container.ResolveBuiltImageRef).
+	imageRef, err := kit.ResolveBuiltImageRef(rt.RunEngine, req.Image)
 	if err != nil {
 		return kit.CheckRunReply{}, err
 	}

@@ -91,6 +91,29 @@ arch-cloud-vm-skill:
                   checksum:
                     type: sha256
                   base_user: arch
+                  # distro:               # **Always SET `distro:`, to a BARE id. Never omit it, and never rely
+                                          # on the inference** — `effectiveDistro` infers only `arch`/`alpine`
+                                          # from `base_user` and never checks the guest. Two consumers read it,
+                                          # against DIFFERENT sets, and that is the whole difficulty:
+                                          # `effectiveDistro` feeds the cloud-init dispatches and accepts ANY
+                                          # string; `buildVmSyntheticBox` (`candy/plugin-fleet/candy_select.go`,
+                                          # not source-kind gated) resolves it against a FIVE-id vocabulary
+                                          # `{arch, cachyos, debian, fedora, ubuntu}` and, on a miss, leaves
+                                          # `img.Pkg` unset so candy installation compiles ZERO steps silently.
+                                          # So: if the guest IS one of those five, name it. **Alpine: set
+                                          # `distro: alpine`** — not a vocabulary member, but the init dispatch
+                                          # keys on `effectiveDistro`, so this is the ONLY way to reach the
+                                          # OpenRC path; any other value renders systemd onto a guest that has
+                                          # none and the VM boots unreachable. Candy installation stays
+                                          # unresolvable for Alpine either way. For a guest outside the five,
+                                          # naming a near relative (`arch` for manjaro/archarm/endeavouros,
+                                          # `fedora` for rocky/alma, `ubuntu` for a Ubuntu derivative) makes
+                                          # candy steps compile — but it selects THAT distro's DistroDef,
+                                          # version tags and repos (fedora's carries `version: "43"` and COPR),
+                                          # so it is a workaround with its own risk, not a repair. The repair is
+                                          # a vocabulary entry. openSUSE has none and no near relative (zypper).
+                                          # Use a bare id: `ResolveDistro` strips at `:` but the cloud-init
+                                          # dispatches compare exactly, so `debian:13` yields `openssh`.
                 backend: libvirt            # REQUIRED — the bed's libvirt-RPC + spice probes hit the session daemon
                 disk_size: 40G
                 ram: 8G
@@ -892,6 +915,29 @@ vm-skill:
                   url: https://fastly.mirror.pkgbuild.com/images/latest/Arch-Linux-x86_64-cloudimg.qcow2
                   checksum: {type: sha256}                      # value auto-resolves from <url>.SHA256 sidecar
                   base_user: arch                               # adopt pattern (no useradd)
+                  # distro:                                    # **Always SET `distro:`, to a BARE id. Never omit it, and never rely
+                                                               # on the inference** — `effectiveDistro` infers only `arch`/`alpine`
+                                                               # from `base_user` and never checks the guest. Two consumers read it,
+                                                               # against DIFFERENT sets, and that is the whole difficulty:
+                                                               # `effectiveDistro` feeds the cloud-init dispatches and accepts ANY
+                                                               # string; `buildVmSyntheticBox` (`candy/plugin-fleet/candy_select.go`,
+                                                               # not source-kind gated) resolves it against a FIVE-id vocabulary
+                                                               # `{arch, cachyos, debian, fedora, ubuntu}` and, on a miss, leaves
+                                                               # `img.Pkg` unset so candy installation compiles ZERO steps silently.
+                                                               # So: if the guest IS one of those five, name it. **Alpine: set
+                                                               # `distro: alpine`** — not a vocabulary member, but the init dispatch
+                                                               # keys on `effectiveDistro`, so this is the ONLY way to reach the
+                                                               # OpenRC path; any other value renders systemd onto a guest that has
+                                                               # none and the VM boots unreachable. Candy installation stays
+                                                               # unresolvable for Alpine either way. For a guest outside the five,
+                                                               # naming a near relative (`arch` for manjaro/archarm/endeavouros,
+                                                               # `fedora` for rocky/alma, `ubuntu` for a Ubuntu derivative) makes
+                                                               # candy steps compile — but it selects THAT distro's DistroDef,
+                                                               # version tags and repos (fedora's carries `version: "43"` and COPR),
+                                                               # so it is a workaround with its own risk, not a repair. The repair is
+                                                               # a vocabulary entry. openSUSE has none and no near relative (zypper).
+                                                               # Use a bare id: `ResolveDistro` strips at `:` but the cloud-init
+                                                               # dispatches compare exactly, so `debian:13` yields `openssh`.
                 disk_size: 40G
                 ram: 8G
                 cpu: 4
@@ -1280,6 +1326,29 @@ vms-catalog-skill:
                   url: https://…
                   checksum: { type: sha256, value?: <hex> }
                   base_user: arch                     # adopt this account (see Adopt pattern below)
+                  distro: debian                      # **Always SET `distro:`, to a BARE id. Never omit it, and never rely
+                                                      # on the inference** — `effectiveDistro` infers only `arch`/`alpine`
+                                                      # from `base_user` and never checks the guest. Two consumers read it,
+                                                      # against DIFFERENT sets, and that is the whole difficulty:
+                                                      # `effectiveDistro` feeds the cloud-init dispatches and accepts ANY
+                                                      # string; `buildVmSyntheticBox` (`candy/plugin-fleet/candy_select.go`,
+                                                      # not source-kind gated) resolves it against a FIVE-id vocabulary
+                                                      # `{arch, cachyos, debian, fedora, ubuntu}` and, on a miss, leaves
+                                                      # `img.Pkg` unset so candy installation compiles ZERO steps silently.
+                                                      # So: if the guest IS one of those five, name it. **Alpine: set
+                                                      # `distro: alpine`** — not a vocabulary member, but the init dispatch
+                                                      # keys on `effectiveDistro`, so this is the ONLY way to reach the
+                                                      # OpenRC path; any other value renders systemd onto a guest that has
+                                                      # none and the VM boots unreachable. Candy installation stays
+                                                      # unresolvable for Alpine either way. For a guest outside the five,
+                                                      # naming a near relative (`arch` for manjaro/archarm/endeavouros,
+                                                      # `fedora` for rocky/alma, `ubuntu` for a Ubuntu derivative) makes
+                                                      # candy steps compile — but it selects THAT distro's DistroDef,
+                                                      # version tags and repos (fedora's carries `version: "43"` and COPR),
+                                                      # so it is a workaround with its own risk, not a repair. The repair is
+                                                      # a vocabulary entry. openSUSE has none and no near relative (zypper).
+                                                      # Use a bare id: `ResolveDistro` strips at `:` but the cloud-init
+                                                      # dispatches compare exactly, so `debian:13` yields `openssh`.
                   cache: ~/.cache/charly/vm-images/       # optional override
                   # bootc branch:
                   box: <candy: image entry name>           # `box:` source field → a `candy:` image carrying base:/from:
@@ -1312,10 +1381,10 @@ vms-catalog-skill:
                 # Cloud-init (structured intent):
                 cloud_init:
                   timezone: UTC
-                  packages: [sudo, spice-vdagent, …]
+                  package: [sudo, spice-vdagent, …]
                   runcmd: ["…", …]
                   charly_install:
-                    strategy: auto | none
+                    strategy: auto | scp | skip
                 # Libvirt XML knobs (see /charly-internals:libvirt-renderer):
                 libvirt:
                   devices:
@@ -1396,8 +1465,8 @@ vms-catalog-skill:
             ### Authoring a new cloud_image VM
 
             1. Find the upstream qcow2 URL + verify a sha256 sidecar exists (<url>.SHA256 / .sha256 / .sha256sum).
-            2. Identify the **pre-existing user account** in the upstream image (`arch`, `ubuntu`, `fedora`, `debian`, `cloud-user`, etc.). This becomes `source.base_user:` — triggers the adopt pattern described below.
-            3. Start from `/charly-vm:arch-cloud-vm` as a template. Change `url`, `base_user`, distro-specific cloud_init `package:` and `runcmd:`.
+            2. Identify the **pre-existing user account** in the upstream image (`arch`, `alpine`, `ubuntu`, `fedora`, `debian`, `cloud-user`, etc.). Note that `effectiveDistro` infers ONLY `arch` and `alpine`, and only from `base_user` — those two STEER rendering (they select the package-delivery and sshd-start branches) when no explicit `distro:` is set. **Always set `distro:` — see the rule below. Do NOT reason from which dispatch tables an id appears in: the render's dispatch union and the vocabulary `candy_select` resolves against are DIFFERENT SETS, and an id in the first but not the second is exactly where the silent zero-package failure lives.** They are: `composePackages` keys on {`debian`, `ubuntu`} (omitting picks `openssh` over `openssh-server`, so cloud-init hard-fails `E: Unable to locate package openssh`); `sshUnitForDistro` keys on the same two (omitting yields unit `sshd` where Debian needs `ssh`); `pacmanFamily`, i.e. `FormatForDistroID(distro) == "pac"`, keys on **five** ids — {`arch`, `archarm`, `manjaro`, `endeavouros`, `cachyos`} — and omitting drops the guest onto the `packages:` path instead of `pacman -Sy --needed` plus the sshd try-restart guard, so cloud-init's bare `pacman -S` re-triggers exactly the host-key regen race described in `/charly-internals:cloud-init-renderer` (its D15 section); and the init branch keys on {`alpine`} (omitting renders systemd onto an OpenRC guest, and the VM boots unreachable). Since `effectiveDistro` infers only `arch` and `alpine`, and only from `base_user`, a **CachyOS, Manjaro, EndeavourOS or archarm image whose account is not literally `arch`** — or an Arch image whose account is not literally `arch` — resolves to the empty distro, silently leaves the pacman family and takes the racy install path; likewise an Alpine image whose account is not literally `alpine`. The qualifier is load-bearing in both directions, and both are statements about the MECHANISM, not permissions that compete with the rule above: an Arch derivative shipping an `arch` account happens to resolve to `arch` and render correctly, while a Debian image shipping an `alpine` account resolves to `alpine` and breaks. Neither changes what to write — **the SET rule stated at the top of this section governs** — a Manjaro image writes `distro: arch`, whatever its account happens to make the inference do. Not `manjaro`: that is a `pacmanFamily` key, so cloud-init would render it correctly, but it is **not** one of the five ids `candy_select` resolves against, so candy installation would compile nothing. The two tables are different sets, and this clause is scoped to the candy vocabulary. **Always SET `distro:`, as a BARE id. Never omit it, and never rely on the inference.** Two consumers read this field against **different sets**, which is the whole difficulty. `effectiveDistro` feeds the four cloud-init dispatches, accepts any string, and infers only the literals `arch` and `alpine` from `base_user` without checking the guest. `buildVmSyntheticBox` (`candy/plugin-fleet/candy_select.go`, not source-kind gated) instead resolves this field — or `base_user` when empty — against a **five-id vocabulary**, `{arch, cachyos, debian, fedora, ubuntu}`, with exact-then-base-name lookup and no alias or `ID_LIKE` rescue; a miss leaves `img.Pkg` unset and candy installation compiles **zero package steps silently** while `fleet add` reports success. **If the guest is one of those five, name it.** **Alpine is the case that must not be generalised: set `distro: alpine`.** It is not a vocabulary member, but the init dispatch keys on `effectiveDistro`, so naming it is the only way to reach the OpenRC path — any other value renders systemd onto a guest that has none and the VM boots unreachable. Alpine's candy installation is unresolvable either way; losing the packages is recoverable, losing the boot is not. **For a guest outside the five, naming a near relative is a workaround, not a repair** — `arch` for manjaro/archarm/endeavouros, `fedora` for Rocky or AlmaLinux, `ubuntu` for a Ubuntu derivative. It makes candy steps compile, but it selects **that** distro's DistroDef, version tags and repositories: fedora's carries `version: "43"`, so candies' `fedora:43` sections apply to a Rocky guest and its rpm templates reach for COPR, which is Fedora infrastructure. The lookup succeeding is not the install working. The repair is a vocabulary entry, which is a product gap; openSUSE has neither an entry nor a near relative, since its manager is zypper. Use a bare id — `ResolveDistro` strips at `:` while the dispatches compare exactly, so `distro: debian:13` yields `openssh` instead of `openssh-server`. (The `rocky: fedora` line in `charly.yml` is `ovmf_distro_aliases`, an OVMF FIRMWARE table, not consulted here.) Conversely a wrong id that the vocabulary DOES resolve is actively harmful — `distro:` also selects the guest's package manager for candy installation via `buildVmSyntheticBox` (`candy/plugin-fleet/candy_select.go`, with no source-kind gate), whose own comment records a candy deploy running `pacman` on a debian guest and failing exit 127, and a missing `DistroDef` compiling zero package steps for every candy, silently. `base_user: debian` or `ubuntu` without it resolves to the empty distro, which picks `openssh` instead of `openssh-server` (cloud-init hard-fails `E: Unable to locate package openssh`) and unit `sshd` where Debian needs `ssh`; an Alpine image whose account is named anything but `alpine` renders the systemd path onto an OpenRC guest. All three boot unreachable. This becomes `source.base_user:` — triggers the adopt pattern described below.
+            3. Start from `/charly-vm:arch-cloud-vm` as a template. Change `url`, `base_user`, **`distro:`** (the template ships it commented out, which is legal only for the `arch` guest it happens to be — see the rule above), and the distro-specific cloud_init `package:` and `runcmd:`.
             4. Pick firmware: default to `bios` unless the upstream image explicitly requires UEFI (e.g., secure boot lock-in).
             5. Run `charly vm build <name>` — observe the fetched qcow2 sha256 + rendered seed ISO path.
             6. Run `charly vm create <name>` + `charly vm ssh <name>` to verify cloud-init completed.
@@ -1440,7 +1509,7 @@ vms-catalog-skill:
 
             `charly_install.strategy: auto` in `cloud_init:` wires `charly`'s in-guest installer (`/charly-internals:cloud-init-renderer` → emitted `runcmd:` entries) so the provisioned VM comes up with `charly` already installed. Lets `charly fleet add vm:<name>` apply host-deploy-style layer recipes inside the VM over SSH without a bootstrap round-trip. See `/charly-internals:cloud-init-renderer` for the emission + handshake.
 
-            `strategy: none` skips the step entirely — useful when the VM will be managed by something other than `charly` after provisioning.
+            `strategy: skip` skips the step entirely — useful when the VM will be managed by something other than `charly` after provisioning. (`none` is NOT a value: the closed schema is `auto | scp | skip` and `none` hard-fails it.)
 
             ## Validation rules
 
@@ -1456,7 +1525,7 @@ vms-catalog-skill:
 
             ## Migration from legacy (box.bootc / box.vm / box.libvirt)
 
-            Projects predating this schema had three coupled fields on image entries (`candy:` nodes carrying `base:`/`from:`): `bootc: true`, `vm: {...}`, `libvirt: [...]`. All three were deleted in the hard cutover, and the step that harvested them into VM nodes lived in the migration chain that was **removed at the `2026.186.2323` migration-baseline reset**. So `charly migrate` no longer converts those legacy fields: a config still carrying them predates the supported schema floor (`2026.174.1100`) and is **unmigratable** — `charly migrate` refuses it (`predates the supported floor … re-author against the current schema`) and changes nothing on disk. Re-author such a VM by hand as a name-first `<name>: {vm: {…}}` node (the shape this skill documents).
+            Projects predating this schema had three coupled fields on image entries (`candy:` nodes carrying `base:`/`from:`): `bootc: true`, `vm: {...}`, `libvirt: [...]`. **Two** were deleted in the hard cutover — `vm:` and `libvirt:`. `bootc: true` is LIVE and stays on the image entry (`spec/schema/box.cue` declares `bootc?: bool`); it marks the image bootable, and a separate `kind: vm` entity with `source.kind: bootc` references it via `source.box:`, exactly as `/charly-image:image` states. Those two fields are gone, and the step that harvested them into VM nodes lived in the migration chain that was **removed at the `2026.186.2323` migration-baseline reset**. So `charly migrate` no longer converts those legacy fields: a config still carrying them predates the supported schema floor (`2026.174.1100`) and is **unmigratable** — `charly migrate` refuses it (`predates the supported floor … re-author against the current schema`) and changes nothing on disk. Re-author such a VM by hand as a name-first `<name>: {vm: {…}}` node (the shape this skill documents).
 
             For a config already within the migratable window (`[floor, HEAD)`), `charly migrate` is one idempotent command that brings it to the current schema. See `/charly-build:migrate` for the floor/HEAD gate and the full command reference, and `/charly-internals:cutover-policy` for why hard-cutover was the chosen policy.
 

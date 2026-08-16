@@ -24,6 +24,12 @@ import (
 // inherits charly's terminal stdio/TTY natively (the whole point of the fork/exec seam).
 type externalCommandDispatch struct {
 	word string // the command word: keys the binary resolve
+	// parent is the command this one NESTS under (CommandParent(), e.g. "box" for `charly box
+	// feature`), or "" for a top-level command. Load-bearing at dispatch, not decoration: the
+	// registry parks a nested command whose word COLLIDES with a top-level one at
+	// "command:<word>:<parent>", so resolving by the plain word alone hands a nested invocation
+	// the top-level capability instead (see Registry.resolveCommand).
+	parent string
 	// holder is *struct{ <field> *struct{ Args []string } } (the flat pass-through shape) when
 	// subcommands is empty, or *struct{ <field> *struct{ <Child1> *struct{Args []string} `cmd:""...`; ... } }
 	// (F-CLI-NEST — one level of DECLARED subcommands, each still ending in a pass-through leaf)
@@ -76,6 +82,7 @@ func collectExternalCommandPlugins() (topLevel kong.Plugins, nestedByParent map[
 		seen[word] = true
 		if ncp, ok := p.(NestedCommandProvider); ok {
 			if parent := ncp.CommandParent(); parent != "" {
+				d.parent = parent // dispatch must resolve the PARENTED registry key, not the plain word
 				nestedByParent[parent] = append(nestedByParent[parent], holder)
 				table[parent+" "+word] = d
 				continue
@@ -228,7 +235,7 @@ func nestedSubcommandType(subcommands []climodel.CLISubcommand) reflect.Type {
 // sub is the declared-subcommand NAME resolveCommandDispatch recovered ("" for the flat case, or a
 // CommandParent nesting with no further declared subcommands).
 func dispatchCommand(d externalCommandDispatch, sub string) error {
-	if prov, ok := providerRegistry.resolve(ClassCommand, d.word); ok {
+	if prov, ok := providerRegistry.resolveCommand(d.word, d.parent); ok {
 		if _, external := prov.(*grpcProvider); !external {
 			return dispatchInProcCommand(prov, d, sub)
 		}
@@ -404,6 +411,15 @@ func commandExecEnv(word string) []string {
 // exportedCommandField makes an exported (capitalized, alnum-only) Go field name from a
 // command word so reflect.StructOf accepts it (Kong requires exported fields); the `name:`
 // tag carries the real CLI word, so the field name itself is never user-visible.
+//
+// The export guarantee is unconditional, and it has to be: reflect.StructOf PANICS on an
+// unexported field name, and this runs inside collectExternalCommandPlugins during main(), so a
+// single command word that failed the guarantee would not degrade one command — it would abort
+// the whole binary before any command could run. Capitalizing the first byte only WORKS for a
+// leading letter; a word beginning with a digit or an underscore (`__feature-box`, the hidden
+// bridge leaf `charly box feature run` forwards) sanitizes to `__feature_box`, whose first byte
+// is unchanged by ToUpper. Such a word gets a `Cmd` prefix, which no ToUpper-of-a-letter result
+// can collide with beyond the collisions the sanitizer already allows.
 func exportedCommandField(word string) string {
 	clean := strings.Map(func(r rune) rune {
 		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
@@ -414,5 +430,14 @@ func exportedCommandField(word string) string {
 	if clean == "" {
 		return "Cmd"
 	}
+	if !asciiLetter(clean[0]) {
+		clean = "Cmd" + clean
+	}
 	return strings.ToUpper(clean[:1]) + clean[1:]
+}
+
+// asciiLetter reports whether c is an ASCII letter — the only first byte strings.ToUpper can turn
+// into an EXPORTED Go identifier, which is what exportedCommandField's contract rests on.
+func asciiLetter(c byte) bool {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
 }
