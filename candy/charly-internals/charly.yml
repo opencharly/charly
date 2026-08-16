@@ -9671,8 +9671,17 @@ pr-validator-agent:
             **STEP ONE, before you read a single line of content: find the GENERATED files.**
 
             ```bash
-            git grep -lEi "DO[- ]NOT[- ]EDIT" -- <the PR's changed file set>
+            # PER SUBMODULE — git grep does NOT cross a gitlink.
+            git -C <repo-or-submodule> grep -lEi "DO[- ]NOT[- ]EDIT" -- <that repo's changed paths>
             ```
+
+            **Run it once per repository the PR touches, with paths relative to that repository.**
+            From a superproject, `git grep -- plugins/<path>` returns **nothing** — not because the
+            tree is clean but because `git grep` does not descend into a gitlink, and a zero-hit
+            result is indistinguishable from a clean tree. That is the silent-false-negative
+            direction this whole step exists to prevent, so getting the invocation wrong defeats it
+            exactly as thoroughly as not running it. **This page's own worked example is a case the
+            superproject-relative form cannot reproduce.**
 
             **Then decide, per hit, whether the file CARRIES a banner or merely MENTIONS one** — the
             grep cannot tell them apart, and you should not try to make it. Run against the change
@@ -9685,11 +9694,44 @@ pr-validator-agent:
             **The decisive test is DELETE-AND-REGENERATE, and it is the only form that works at
             validation time:**
 
+            **Run it in a SCRATCH WORKTREE. It deletes a tracked file; never do that in a checkout
+            anyone else is using**, and never in the one you are validating from.
+
             ```bash
-            rm <suspect-file>
-            charly marketplace generate            # from the PR's OWN source head — see below
-            test -f <suspect-file> && echo CARRIER || echo "not generated"
+            # 0. resolve the SOURCE head (see below) and stand a scratch tree on it
+            git -C <superproject> worktree add /tmp/carrier-<n> <source-head>
+            cd /tmp/carrier-<n> && git submodule update --init --recursive
+            task build:binary
+
+            # 1. delete the suspect and ask the generator to answer
+            rm <repo>/<suspect-path>
+            ./bin/charly marketplace generate                          # emits plugins/**
+            ./bin/charly docs generate --out docs/src/content/docs --root .   # emits docs/**
+            rc=$?; [ "$rc" -eq 0 ] || { echo "UNEVALUATED: generator exited $rc"; exit 1; }
+
+            # 2. read the answer
+            test -f <repo>/<suspect-path> && echo CARRIER || echo "not generated"
+
+            # 3. tear the scratch tree down
+            cd - && git -C <superproject> worktree remove --force /tmp/carrier-<n>
             ```
+
+            **Both generators, always.** `marketplace generate` emits the `plugins` tree and
+            `docs generate` emits `docs`; running only the first makes every carrier in `docs`
+            answer *"not generated"* — by the census below, the larger of the two corpora.
+
+            **Classify the generator's exit code before reading the file.** A crashed generator and
+            a genuine mentioner both leave the file absent, and `test -f` cannot tell them apart —
+            the same absence-without-scope trap this page warns about elsewhere. A non-zero exit is
+            **unevaluated**, never a verdict.
+
+            **Resolving "the source head" when the artifact is in another repo.** For a `plugins` or
+            `docs` PR the emitting source is a branch in the **superproject**, so it is not derivable
+            from the artifact PR alone. Take it, in order: the superproject PR the artifact PR names
+            as its source; failing that, the superproject branch whose head emits this artifact
+            content; failing that, `charly/main`. **State which you used in the verdict** — the whole
+            point of the source axis is that a verdict which flips on it is not a property of the PR,
+            and an unstated input cannot be checked.
 
             A carrier is *defined* by being emitted from a source, so the question is whether the
             generator PRODUCES that path — not whether its bytes currently differ. Deleting forces
@@ -9731,8 +9773,9 @@ pr-validator-agent:
             The obvious tightenings were measured and both are worse. Restricting to a 20-line
             header window still flags a CHANGELOG that quotes the banner in its opening paragraph.
             Requiring a comment-form line carrying both *generated* and the phrase drops the false
-            positives but **misses 2 of 336 real banners in `plugins` and 6 of 897 in `docs`** —
-            trading a cost-one-glance error for the exact error that motivated the rule.
+            positives but **misses 6 of 340 real banners in `plugins` and 7 of 899 in `docs`** — the
+            same corpora and refs as the census below, so the two figures are comparable — trading a
+            cost-one-glance error for the exact error that motivated the rule.
 
             A hand-edit to a generated artifact is a defect in KIND, independent of whether the
             prose is correct — the next regeneration silently reverts it, so a change that reads
