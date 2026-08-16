@@ -1409,7 +1409,8 @@ clean-skill:
 
             ```yaml
             defaults:
-              keep_images: 3      # newest CalVer tags to keep per image after `charly box build`
+              keep_images: 3      # per box: newest 3 distinct images, and at most 3 tags
+                                  # of each, after `charly box build`
               keep_check_runs: 3   # newest run dirs to keep per bed/score after `charly check run`
             ```
 
@@ -1467,12 +1468,61 @@ clean-skill:
             ## What gets pruned (and what never does)
 
             **Image-tag retention** (`keep_images`): images are grouped by the
-            `ai.opencharly.box` label and ordered by the `ai.opencharly.version`
-            CalVer label; all but the newest N per group are `podman rmi`'d. **Safety**: any
-            image referenced by a container (`podman ps -a`, including stopped/quadlet
-            deploys) is skipped, and `rmi` runs WITHOUT `-f` so the engine refuses any
-            still-referenced image as a backstop. Non-charly images (no `ai.opencharly.box`
-            label) and images with an unparseable version are never touched.
+            `ai.opencharly.box` label and ordered by the `ai.opencharly.version` CalVer label
+            **when both rows carry one**, then a row carrying that label before one that does
+            not, then **image creation time**, and only then the build tag.
+
+            **Which key decides depends on which ordinal you are asking about**, and this page owns
+            that fact. **Between distinct images**, the label decides whenever the two carry
+            DIFFERENT datable labels — it is the primary key. Creation time decides only when the
+            labels tie, which is the common case that motivates it — and the reason is that the
+            label is **DECLARED, never derived from content**. `ai.opencharly.version` is the
+            image's own `version:` if it has one, else the HIGHEST candy `version:` across its
+            entire candy set (own plus base chain), else the internal base's own effective version,
+            else a hard error — there is no content hash and no build-timestamp fallback
+            (`sdk/deploykit/effective_version.go`). Two images built from genuinely different trees
+            therefore carry the SAME label until somebody bumps one of those fields, so ties between
+            DISTINCT images are the norm rather than the exception and creation time is what
+            actually orders them. Observed: four distinct `fedora-nonfree` images, built hours
+            apart from different trees, all labelled `2026.227.0830`. **Within one image's tag
+            rows, the build tag decides** — every row of
+            one image shares its label, its labelled-ness and its creation time by construction
+            (`charlyImageTags` hoists them out of the per-ref loop), so the first three keys tie and
+            the `:YYYY.DDD.HHMM` tag is the only one left to break it. So *"creation time, not the
+            tag"* is true of the image budget and **false of the tag budget**.
+
+            Why the tag cannot serve as the *image* recency key: `charly box build --tag` REPLACES
+            the CalVer tag, so a bed build carries `check-<bed>-<calver>`, which parses as no CalVer
+            at all. Ordering distinct images on the tag made every member of such a group compare
+            equal, so `keep_images: N` kept an arbitrary N and could delete the newest build.
+            Creation time is the only recency key total over the tags charly mints — and it is
+            exactly the key that ties within one image, which is why the tag still ranks that image's
+            own rows.
+
+            `keep_images: N` budgets **two ordinals**: the newest N **distinct images** per group
+            survive — a *distinct image* being a distinct image ID, so every tag pointing at one ID
+            counts once — **and at most N tags of each, the same N** — so one image wearing many
+            CalVer tags no longer consumes the whole budget, starving the distinct images behind it,
+            while a content-stable image rebuilt many times still has its surplus tag rows reclaimed.
+
+            **Within an image, the newest tags survive and the oldest are dropped** — newest by
+            build-tag CalVer, since that is the only key that varies across one image's rows.
+            **Tags that carry no CalVer — `latest`, `dev`, a bed's `check-<bed>-<calver>` — all tie
+            on that key**, and a stable sort then keeps whatever order the engine listed them in. So
+            which of several undatable tags survives the tag budget is NOT specified, and if the
+            image itself carries a datable `ai.opencharly.version` label those rows are **not**
+            protected by the undatable-row exemption (that guard needs BOTH to be undatable). Do not
+            rely on `keep_images` to preserve a `latest` or a hand-applied tag on a
+            frequently-rebuilt image — pin it with a full ref, or keep it on an image that retention
+            does not group.
+
+            **Safety**: any image referenced by a container (`podman ps -a`, including
+            stopped/quadlet deploys) is skipped, and `rmi` runs WITHOUT `-f` so the engine refuses
+            any still-referenced image as a backstop. Non-charly images (no `ai.opencharly.box`
+            label) are never touched, and a tag row is exempted only when it has NEITHER a datable
+            `ai.opencharly.version` label NOR a datable `:YYYY.DDD.HHMM` tag — the guard is an AND,
+            so a row with either one is a normal candidate. A bed build (datable label, non-CalVer
+            tag) is therefore prunable, not exempt.
 
             **Check-run retention** (`keep_check_runs`): each `.check/<bed|score>/` dir is
             trimmed to the newest N run artifacts — CalVer-named run dirs (bed runs),
@@ -1496,7 +1546,17 @@ clean-skill:
             - After `charly check run` (any path: bed / score) → `keep_check_runs`,
               after the new run's output is written so the newest run is kept.
 
-            `charly clean` exists for on-demand sweeps and to clear a pre-existing backlog.
+            **The post-build pass reclaims tags, never whole images.** It runs while the build
+            still holds its own build-activity lock, so it always observes a live build, and the
+            live-build path never removes an image's LAST tag — the guard that protects a
+            concurrent build's base. A build therefore trims surplus tag rows from images that
+            wear several and leaves every single-tagged image in place, so the **distinct-image**
+            half of `keep_images` is not enforced by building. Nothing reports this: the summary
+            counts what it removed, not what it selected and could not remove.
+
+            `charly clean` exists for on-demand sweeps and to clear a pre-existing backlog — and
+            it is the only verb that reclaims a distinct image, so a project that only ever builds
+            accumulates them past `keep_images` indefinitely.
 
             ## Out of scope
 

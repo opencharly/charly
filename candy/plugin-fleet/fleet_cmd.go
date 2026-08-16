@@ -91,6 +91,21 @@ type FleetDelCmd struct {
 	KeepServices    bool `name:"keep-services" help:"Don't disable systemd units (just stop tracking)"`
 	KeepImage       bool `name:"keep-image" help:"Don't remove the synthesized overlay image (container target only)"`
 	DryRun          bool `name:"dry-run" help:"Print the teardown plan without executing"`
+
+	// RequireTimerUnit marks this invocation as TIMER-DRIVEN and names the incarnation it was
+	// registered for. Set only by the ephemeral TTL reaper unit (candy/plugin-fleet/ephemeral.go);
+	// a human `charly fleet del` never passes it and takes a byte-identical path to before.
+	//
+	// It is a FLAG rather than an environment variable on purpose, and that is load-bearing: the
+	// identity guarantee is enforced by the binary that RUNS, not the one that registered, so a
+	// binary predating this check must not be able to reap. An env var would be silently ignored by
+	// such a binary and it would delete with no incarnation check at all — fail-OPEN on exactly the
+	// case the guard exists for. An unknown flag is a Kong parse error instead: measured on an
+	// installed 2026.223.1347 binary, `fleet del <name> --assume-yes --require-timer-unit=x` exits
+	// 80 with usage and never enters the command body, while the same command without the flag
+	// parses and proceeds. The flag is its own version gate — a binary that cannot enforce the
+	// guarantee cannot run the command.
+	RequireTimerUnit string `name:"require-timer-unit" hidden:"" help:"Internal: the TTL reaper's own systemd unit; refuses if the recorded registration differs"`
 }
 
 // FleetFromBoxCmd is the `charly fleet from-box <ref> [name]` grammar. The pod path (default)

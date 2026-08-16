@@ -1,6 +1,7 @@
 package fleet
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -225,23 +226,43 @@ func TestRegisterTransientTimerArgs_PinsWorkingDirectory(t *testing.T) {
 		30*time.Minute,
 		"/home/user/projects/myproject",
 		"/usr/local/bin/charly",
+		"/tmp/charly-bed-cfg-x/charly.yml",
 		[]string{"fleet", "del", "myapp", "--assume-yes"},
 	)
-	want := []string{
-		"--user",
-		"--unit=charly-fleet-del-myapp-12345",
-		"--on-active=30m0s",
-		"--working-directory=/home/user/projects/myproject",
-		"/usr/local/bin/charly",
-		"fleet", "del", "myapp", "--assume-yes",
-	}
-	if len(got) != len(want) {
-		t.Fatalf("registerTransientTimerArgs() = %v, want %v", got, want)
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Errorf("registerTransientTimerArgs()[%d] = %q, want %q", i, got[i], want[i])
+	// Asserted as INVARIANTS, not as an exact argv. The whole-slice equality this replaces failed
+	// the moment a flag was added even though every property it documents still held — an
+	// over-specified assertion reports a regression where there is none, and the tempting response
+	// is to update the expectation without checking which property broke. These four checks name
+	// the properties instead, so a real regression is distinguishable from an addition.
+	head := []string{"--user", "--unit=charly-fleet-del-myapp-12345", "--on-active=30m0s"}
+	for i, w := range head {
+		if i >= len(got) || got[i] != w {
+			t.Errorf("registerTransientTimerArgs()[%d] = %q, want %q", i, got[i], w)
 		}
+	}
+	// The exe and the del-argv must stay contiguous AND last: systemd-run treats the first
+	// non-flag word as the command, so any flag appended AFTER the exe would be handed to
+	// `charly fleet del` as an argument instead of to systemd-run.
+	tail := []string{"/usr/local/bin/charly", "fleet", "del", "myapp", "--assume-yes"}
+	if len(got) < len(tail) {
+		t.Fatalf("registerTransientTimerArgs() = %v, too short for exe+del argv", got)
+	}
+	for i, w := range tail {
+		if g := got[len(got)-len(tail)+i]; g != w {
+			t.Errorf("tail[%d] = %q, want %q (exe + del argv must be contiguous and last)", i, g, w)
+		}
+	}
+	// `fleet del` is not freshness-safe, so without this the reaper refuses to run whenever the
+	// source tree is newer than the binary — the normal state on a developer host.
+	if !slices.Contains(got, "--setenv=CHARLY_SKIP_FRESHNESS_CHECK=1") {
+		t.Errorf("missing freshness bypass for the machine-invoked reaper; got %v", got)
+	}
+	// The registration's own deploy-config path must ride along, or a timer firing after a bed
+	// session ends reads the operator overlay — which has no record of the entity, so it can
+	// neither resolve it nor verify identity. This is what makes the state lifetime match the
+	// timer lifetime.
+	if !slices.Contains(got, "--setenv=CHARLY_DEPLOY_CONFIG=/tmp/charly-bed-cfg-x/charly.yml") {
+		t.Errorf("missing deploy-config passthrough; got %v", got)
 	}
 	// Explicit assertion that the working-directory flag is present at all — the exact bug class
 	// (a silently-omitted flag) that produced the "no charly.yml found in /home/<user>" failure.
@@ -360,4 +381,33 @@ func TestClipTTLToParent(t *testing.T) {
 			t.Errorf("clipTTLToParent() = (%v, %v), want (1h, nil)", got, err)
 		}
 	})
+}
+
+// TestReaperDelArgv_UniformVmForm asserts the reaper's argv: the "vm:" address form for EVERY
+// registration, plus the incarnation token as a FLAG.
+//
+// The prefix is what lets the reaper resolve with no project tree — the worktree it registered from
+// is routinely deleted once its PR lands. It used to be unsafe for registrations whose state does
+// not outlive their session, because resolveDelNode's fallback synthesises a node from the address
+// alone; that is now handled by verifying identity BEFORE resolution (timerDrivenDelRefusal), so
+// the form is uniform.
+//
+// The token is a FLAG, never an environment variable: the guarantee is enforced by the binary that
+// RUNS, and a binary predating the check would silently ignore an env var and reap with no
+// incarnation check at all. An unknown flag is a parse error instead — measured on an installed
+// 2026.223.1347 binary, `fleet del … --require-timer-unit=x` exits 80 without entering the command
+// body, while the same command without it parses and proceeds.
+func TestReaperDelArgv_UniformVmForm(t *testing.T) {
+	got := reaperDelArgv("bed.ephvm", "charly-fleet-del-bed-ephvm-1786830381")
+	if !slices.Contains(got, "vm:bed.ephvm") {
+		t.Errorf("reaper argv must use the vm: form so it resolves without a project; got %v", got)
+	}
+	if !slices.Contains(got, "--require-timer-unit=charly-fleet-del-bed-ephvm-1786830381") {
+		t.Errorf("incarnation token must travel as a FLAG (fails closed on an old binary); got %v", got)
+	}
+	for _, a := range got {
+		if len(a) > 8 && a[:8] == "--setenv" {
+			t.Errorf("reaper argv must carry no setenv token — two channels means the weakest defines the guarantee; got %v", got)
+		}
+	}
 }

@@ -1,0 +1,32 @@
+check-retention-fixture:
+    candy:
+        version: 2026.228.0400
+        description: |
+            Drop /etc/charly-retention-fixture, stamped with a GENERATION string, into the
+            filesystem it is composed into. The fixture layer of the retention discriminator
+            bed (check-retention): rebuilding the box after changing the generation stamp
+            yields a genuinely DISTINCT image id, while rebuilding it UNCHANGED with a fresh
+            `--tag` yields the SAME id wearing another tag. Those two moves are what let the
+            bed construct the one group shape on which the pre-fix and post-fix `keep_images`
+            rankings disagree: one image wearing several tags, with distinct siblings behind it.
+
+            The generation stamp is the only content that varies, so every build after the
+            first is a cache hit down to this final layer — the fixture costs a layer, not an
+            image. A DEDICATED marker path (not check-group's / check-local's) so the beds
+            never collide when they are fanned out concurrently.
+        plan:
+            - run: write=/etc/charly-retention-fixture
+              write: /etc/charly-retention-fixture
+              run_as: root
+              mode: "0644"
+              content: |
+                retention fixture gen4
+            - check: the retention fixture marker is present at /etc/charly-retention-fixture
+              file:
+                file: /etc/charly-retention-fixture
+                exists: true
+            - check: the marker records a generation stamp
+              file:
+                file: /etc/charly-retention-fixture
+                contains:
+                    - contains: "retention fixture gen"

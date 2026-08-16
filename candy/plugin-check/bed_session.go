@@ -100,6 +100,16 @@ func (s *bedSession) release(ctx context.Context, ex *sdk.Executor, ok bool) {
 		}
 	}
 	if s.cfgSet {
+		// An ephemeral registration is TWO artifacts — the state in this overlay and an armed
+		// systemd TTL timer — and this teardown used to destroy only the first. The timer then
+		// fired later against an overlay that no longer held the entity: it could neither resolve
+		// it nor verify its identity, so the VM it was registered to reap leaked permanently and
+		// the unit accumulated as a failure nobody reads. Measured 2026-08-15: ten armed units for
+		// one reused entity name, all firing at once, none able to reap.
+		//
+		// Cancel BEFORE removing the state, so a cancellation failure leaves the overlay intact and
+		// the timer still able to work — the safe ordering of two operations that must both happen.
+		cancelBedEphemeralTimers(ctx, ex)
 		_ = os.Unsetenv(spec.DeployConfigEnv)
 		_ = os.RemoveAll(s.cfgDir)
 	}
