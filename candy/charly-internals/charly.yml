@@ -1926,7 +1926,7 @@ cloud-init-renderer-skill:
             |---|---|
             | `sdk/vmshared/cloud_init_render.go` | `RenderCloudInit`, `ResolveKeyInjectionChannels`, `composeUsers`, `composePackages`, `composeBootCmd`, `composeRunCmd` |
             | `sdk/vmshared/cloud_init_iso.go` | `WriteSeedISO` via xorriso; `genisoimage` + `mkisofs` fallbacks |
-            | `spec/exec/charly_install.go` | `kit.EnsureCharlyInGuest` state machine (auto/scp/url/skip strategies) |
+            | `spec/exec/charly_install.go` | `kit.EnsureCharlyInGuest` state machine (auto/scp/skip strategies) |
             | `spec/spec/cue_types_gen.go` (generated) | `VmCloudInit`, `VmCloudInitUser`, `VmCloudInitFile`, `VmCloudInitNetwork`, `VmCloudInitMirrors`, `VmCharlyInstall` |
 
             ## RenderCloudInit top-level
@@ -2033,8 +2033,11 @@ cloud-init-renderer-skill:
             `runcmd` makes the guest **deterministically unreachable via SSH for the
             entire package-install phase**, trading the old "sometimes-flaky-but-reachable"
             window (sshd up early, racing a possible host-key rewrite) for
-            "safe-but-fully-blocked-if-package-install-stalls." This is verified live
-            against real Arch cloud_image VM beds (`check-charly-vm`, and
+            "safe-but-fully-blocked-if-package-install-stalls." **On a guest that ships
+            no `ssh.socket` — Arch cloud images among them — the mask is a `|| true`
+            no-op and this blocked window does not arise; the guarantee is delivered
+            there by cloud-init not starting sshd until `runcmd`, not by the mask.** This
+            is verified live against real Arch cloud_image VM beds (`check-charly-vm`, and
             `check-sidecar-pod`'s nested ephemeral VM member) — including a full
             fresh-rebuild pass (destroy+recreate) for each — with zero wedge, now that the
             companion redundant-package-reinstall fix (below) keeps the package-install
@@ -5337,7 +5340,7 @@ go-skill:
                   | File | Role |
                   |---|---|
                   | `spec/spec/cue_types_gen.go` (generated) | `VmSpec` (= `Vm`) + `VmSource` discriminated union (cloud_image / bootc) + `VmChecksum` + `VmNetwork` + `VmSSH` + `VmKeyInjection` |
-                  | `spec/spec/cue_types_gen.go` (generated) | `VmCloudInit` + `VmCloudInitUser/File/Network/Mirrors` + `VmCharlyInstall` (auto/scp/url/skip state machine) |
+                  | `spec/spec/cue_types_gen.go` (generated) | `VmCloudInit` + `VmCloudInitUser/File/Network/Mirrors` + `VmCharlyInstall` (auto/scp/skip state machine) |
                   | `sdk/vmshared/libvirt_yaml.go` | `LibvirtDomain` + 30+ sub-types (features, CPU, clock, memory backing, numatune, cputune, devices, seclabel, launch security, resource, sysinfo) — the opencharly YAML-facing shape of the `libvirt:` stanza |
                   | `candy/plugin-vm/libvirt_yaml_bridge.go` | `RenderDomainXML`/`BuildLibvirtDomainXML` pure functions (build a `libvirtxml.Domain` tree, marshal to XML) + `buildDomainDevices` device emission (passt backend, portForward attribute order, virtio-gpu default, SMBIOS credentials, `XMLPassthrough` merge) |
                   | `sdk/vmshared/qemu_render.go` | `RenderQemuArgv` for direct-QEMU backend |
@@ -8720,7 +8723,8 @@ vm-spec-skill:
                 Distro   string       // OPTIONAL; steers the render when set — see below
 
                 // bootc branch:
-                Image      string     // `candy:` image entry name (carries base:/from:)
+                Box        string     // WIRE KEY `box:` — the `candy:` image entry name
+                                       // (carries base:/from: and `bootc: true`)
                 Transport  string     // registry | containers-storage | oci | oci-archive
                 Rootfs     string     // ext4 | xfs | btrfs
                 RootSize   string     // "10G" — caps root partition, rest unpartitioned

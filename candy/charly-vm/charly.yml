@@ -1444,7 +1444,7 @@ vms-catalog-skill:
 
             `charly_install.strategy: auto` in `cloud_init:` wires `charly`'s in-guest installer (`/charly-internals:cloud-init-renderer` → emitted `runcmd:` entries) so the provisioned VM comes up with `charly` already installed. Lets `charly fleet add vm:<name>` apply host-deploy-style layer recipes inside the VM over SSH without a bootstrap round-trip. See `/charly-internals:cloud-init-renderer` for the emission + handshake.
 
-            `strategy: none` skips the step entirely — useful when the VM will be managed by something other than `charly` after provisioning.
+            `strategy: skip` skips the step entirely — useful when the VM will be managed by something other than `charly` after provisioning. (`none` is NOT a value: the closed schema is `auto | scp | skip` and `none` hard-fails it.)
 
             ## Validation rules
 
