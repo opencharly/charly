@@ -91,6 +91,11 @@ arch-cloud-vm-skill:
                   checksum:
                     type: sha256
                   base_user: arch
+                  # distro: alpine        # OPTIONAL — steers the package-delivery and
+                                        # sshd-start branches. Omit for arch/fedora/debian/
+                                        # ubuntu; REQUIRED for an Alpine image whose account
+                                        # is not literally `alpine`, or it renders systemd
+                                        # onto an OpenRC guest and the VM boots unreachable.
                 backend: libvirt            # REQUIRED — the bed's libvirt-RPC + spice probes hit the session daemon
                 disk_size: 40G
                 ram: 8G
