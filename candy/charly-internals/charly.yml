@@ -2013,7 +2013,7 @@ cloud-init-renderer-skill:
 
             ### Guest SSH hardening (D18) — the RCA'd kex-reset wedge class
 
-            The bootcmd-mask + runcmd-unmask/hardening-drop-in/enable sequence above closes a
+            The bootcmd-mask + runcmd hardening-drop-in + sshd-start sequence above (the start being unmask+enable on systemd, `rc-update`+`rc-service` on OpenRC) closes a
             confirmed wedge: OpenSSH ≥ 9.8 defaults `PerSourcePenalties` ON, penalizing
             repeated connection attempts from ONE source. Every VM guest is reached through
             the SAME single passt gateway source IP, so `kit.WaitForSSH`'s own readiness
@@ -2044,7 +2044,7 @@ cloud-init-renderer-skill:
             the mask/unmask pair entirely and relying on the `PerSourcePenalties` drop-in
             alone.
 
-            **Delivery is distro-branched (D15): `packages:` for most distros, a `runcmd:`-prepended `pacman -S --needed` for pacman-family.** On every distro EXCEPT the pacman family (arch/cachyos/manjaro/endeavouros), the composed package union rides the `packages:` cloud-config key as documented above. On a pacman-family distro, `packages:` is OMITTED entirely and the union is instead PREPENDED to `runcmd:` as `pacman -S --needed --noconfirm <union>` — AHEAD of `composeRunCmd`'s own three hardening/enable steps (D18, above). This is an R10 bed finding: cloud-init's own package-install module invokes `pacman -S` WITHOUT `--needed`, so on an image that already ships the minimum set (e.g. every Arch cloud image) it unconditionally REINSTALLS them — reinstalling openssh re-triggers its post-install host-key-regen hook while the base image's own socket-activated sshd is already listening, racing a live key-file rewrite against new SSH connections (the observed "reset during `kex_exchange_identification`, guest otherwise idle" signature). apt/dnf installs are naturally no-op-idempotent when the package is already present, so only the pacman-family path needs the `--needed` rewrite. The pacman-family check is `formatForDistroID(effectiveDistro(spec)) == "pac"`; `effectiveDistro` resolves `Source.Distro` when set, and additionally infers `"arch"` for a `cloud_image` source with `base_user: "arch"`, and `"alpine"` for one with `base_user: "alpine"`, when no explicit `distro:` is set (a narrowing of the pre-existing `composePackages` distro-switch fallback, never a behavior change for a caller that already got the Arch/Fedora shape) — every OTHER empty-distro image stays on the safe, unchanged `packages:`-key path. See `sdk/vmshared/cloud_init_render.go`'s `effectiveDistro`/`composePackages` doc comments for the full narrowing proof. **Note (D18):** the pacman-vs-non-pacman split governs ONLY the `packages:` key vs the `pacman -S --needed` runcmd prepend — every distro's `runcmd:` now ALSO carries the D18 hardening/unmask/enable steps, so "byte-identical to before" no longer applies to the full runcmd list, only to the packages-key handling this paragraph describes.
+            **Delivery is distro-branched (D15): `packages:` for most distros, a `runcmd:`-prepended `pacman -S --needed` for pacman-family.** On every distro EXCEPT the pacman family (arch/cachyos/manjaro/endeavouros), the composed package union rides the `packages:` cloud-config key as documented above. On a pacman-family distro, `packages:` is OMITTED entirely and the union is instead PREPENDED to `runcmd:` as `pacman -S --needed --noconfirm <union>` — AHEAD of `composeRunCmd`'s own D18 steps (above) — three of them on the pacman family, which is systemd throughout. This is an R10 bed finding: cloud-init's own package-install module invokes `pacman -S` WITHOUT `--needed`, so on an image that already ships the minimum set (e.g. every Arch cloud image) it unconditionally REINSTALLS them — reinstalling openssh re-triggers its post-install host-key-regen hook while the base image's own socket-activated sshd is already listening, racing a live key-file rewrite against new SSH connections (the observed "reset during `kex_exchange_identification`, guest otherwise idle" signature). apt/dnf installs are naturally no-op-idempotent when the package is already present, so only the pacman-family path needs the `--needed` rewrite. The pacman-family check is `formatForDistroID(effectiveDistro(spec)) == "pac"`; `effectiveDistro` resolves `Source.Distro` when set, and additionally infers `"arch"` for a `cloud_image` source with `base_user: "arch"`, and `"alpine"` for one with `base_user: "alpine"`, when no explicit `distro:` is set (a narrowing of the pre-existing `composePackages` distro-switch fallback, never a behavior change for a caller that already got the Arch/Fedora shape) — every OTHER empty-distro image stays on the safe, unchanged `packages:`-key path. See `sdk/vmshared/cloud_init_render.go`'s `effectiveDistro`/`composePackages` doc comments for the full narrowing proof. **Note (D18):** the pacman-vs-non-pacman split governs ONLY the `packages:` key vs the `pacman -S --needed` runcmd prepend — every distro's `runcmd:` now ALSO carries the D18 hardening drop-in plus a per-init sshd start (unmask+enable on systemd, `rc-update`+`rc-service` on OpenRC), so "byte-identical to before" no longer applies to the full runcmd list, only to the packages-key handling this paragraph describes.
 
             ## WriteSeedISO
 
@@ -3333,8 +3333,14 @@ generate-source-skill:
                   **Create (idempotent useradd):**
                   ```dockerfile
                   RUN if ! getent passwd <UID> >/dev/null 2>&1; then \
-                        (getent group <GID> >/dev/null 2>&1 || groupadd -g <GID> <user>) && \
-                        useradd -m -u <UID> -g <GID> -s /bin/bash <user>; \
+                        LOGIN_SHELL=/bin/sh; [ -x /bin/bash ] && LOGIN_SHELL=/bin/bash; \
+                        if command -v useradd >/dev/null 2>&1; then \
+                          (getent group <GID> >/dev/null 2>&1 || groupadd -g <GID> <user>) && \
+                          useradd -m -u <UID> -g <GID> -s "$LOGIN_SHELL" <user>; \
+                        else \
+                          (getent group <GID> >/dev/null 2>&1 || addgroup -g <GID> <user>) && \
+                          adduser -D -h <home> -u <UID> -G <user> -s "$LOGIN_SHELL" <user>; \
+                        fi; \
                       fi
 
                   WORKDIR /home/<user>
