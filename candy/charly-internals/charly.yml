@@ -2035,8 +2035,14 @@ cloud-init-renderer-skill:
             window (sshd up early, racing a possible host-key rewrite) for
             "safe-but-fully-blocked-if-package-install-stalls." **On a guest that ships
             no `ssh.socket` — Arch cloud images among them — the mask is a `|| true`
-            no-op and this blocked window does not arise; the guarantee is delivered
-            there by cloud-init not starting sshd until `runcmd`, not by the mask.** This
+            no-op, so neither the blocked window NOR the guarantee that motivates it
+            applies there at all.** Sshd stays live on Arch throughout the package
+            install — which is not an oversight but the precondition for the
+            host-key race documented under D15 below (that race "needs only a live
+            sshd, not a socket-activated one"), and the reason the `--needed`
+            rewrite and the sshd try-restart guard exist. The trade-off in this
+            paragraph is scoped to socket-activated guests; on Arch there is no
+            window to block and nothing for the mask to trade. This
             is verified live against real Arch cloud_image VM beds (`check-charly-vm`, and
             `check-sidecar-pod`'s nested ephemeral VM member) — including a full
             fresh-rebuild pass (destroy+recreate) for each — with zero wedge, now that the
