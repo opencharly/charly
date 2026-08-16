@@ -267,6 +267,24 @@ func (c *FleetDelCmd) Run() error {
 	}
 	defer lock.Release() //nolint:errcheck
 
+	// PRIMARY identity gate for the TTL reaper — BEFORE resolution, and gated entirely on the flag
+	// so a human `charly fleet del` reads no overlay and behaves exactly as before.
+	//
+	// It must precede resolution because resolution is itself the hazard: with no project tree the
+	// "vm:" fallback synthesises a node from the ADDRESS ALONE, needing no recorded registration,
+	// so a superseded timer would resolve and delete whichever incarnation now holds the reused
+	// entity name. Checking identity first makes that fallback safe, which is what lets every
+	// registration use the "vm:" form instead of only the ones whose state outlives a session.
+	//
+	// This is also why the gate could not stay in teardownEphemeral: on a missing ephemeral record
+	// dispatchVmEphemeralTeardown returns EARLY (prior == nil) and never dispatches, so the later
+	// gate is never consulted — while the domain teardown has already run. That is a concrete
+	// defect this relocation fixes, not a tidiness argument. The teardownEphemeral gate REMAINS as
+	// defence-in-depth for non-timer callers, which never carry this flag.
+	if refuse, reason := timerDrivenDelRefusal(c.Name, c.RequireTimerUnit); refuse {
+		return fmt.Errorf("ephemeral reaper %q refusing to reap %q: %s", c.RequireTimerUnit, c.Name, reason)
+	}
+
 	// Resolve the merged deploy tree + the target node PLUGIN-SIDE (resolveTreeViaLoader also
 	// connects the deployment's plugins; resolveDelNode is the del_resolve.go port of the deleted
 	// host seam). A tree-absent project yields a nil tree, which resolveDelNode handles via its

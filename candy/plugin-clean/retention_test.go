@@ -489,3 +489,66 @@ func refsOf(in []imageTagInfo) []string {
 	}
 	return out
 }
+
+// TestPruneImagesByRetention_DistinctImageBudget is the regression guard for the keep_images
+// refs-vs-artifacts defect: `keep_images: N` must budget N DISTINCT IMAGES, not N tag rows.
+//
+// Fixture — one image wearing three tags, then three older distinct images:
+//
+//	newest   aaa  3 tags   <- one image, three refs
+//	         bbb  1 tag    <- distinct image #2  MUST SURVIVE
+//	         ccc  1 tag    <- distinct image #3  MUST SURVIVE
+//	oldest   ddd  1 tag    <- distinct image #4  MUST BE REMOVED
+//
+// Pre-fix, ranking by TAG INDEX gave aaa's three tags ranks 0-2, exhausting keep_images: 3, so
+// bbb, ccc AND ddd all fell outside the budget and were pruned — the over-prune this fixes.
+//
+// The canary pair is deliberate: the plausible over-broad fix ("keep every tag of every image")
+// passes the must-survive half and FAILS the must-be-removed half, so only a correct fix is green.
+func TestPruneImagesByRetention_DistinctImageBudget(t *testing.T) {
+	origList, origCtr, origFloor := kit.ListLocalImages, listContainerImageRefs, liveBuildFloor
+	defer func() { kit.ListLocalImages, listContainerImageRefs, liveBuildFloor = origList, origCtr, origFloor }()
+	liveBuildFloor = func() (kit.CalVer, bool, int) { return kit.CalVer{}, false, 0 }
+
+	multi := kit.LocalImageInfo{
+		ID: "aaa",
+		Names: []string{
+			"ghcr/box:2026.001.0500",
+			"ghcr/box:2026.001.0400",
+			"ghcr/box:2026.001.0350",
+		},
+		Labels: map[string]string{"ai.opencharly.box": "box", "ai.opencharly.version": "2026.001.0500"},
+	}
+	kit.ListLocalImages = func(string) ([]kit.LocalImageInfo, error) {
+		return []kit.LocalImageInfo{
+			multi,
+			img("bbb", "ghcr/box:2026.001.0300", "box", "2026.001.0300"),
+			img("ccc", "ghcr/box:2026.001.0200", "box", "2026.001.0200"),
+			img("ddd", "ghcr/box:2026.001.0100", "box", "2026.001.0100"),
+		}, nil
+	}
+	listContainerImageRefs = func(string) (map[string]bool, map[string]bool, error) {
+		return map[string]bool{}, map[string]bool{}, nil
+	}
+
+	removed, err := pruneImagesByRetention("podman", 3, true)
+	if err != nil {
+		t.Fatalf("prune: %v", err)
+	}
+	gone := map[string]bool{}
+	for _, r := range removed {
+		gone[r] = true
+	}
+
+	// MUST SURVIVE — distinct images #2 and #3, wrongly pruned before the fix.
+	for _, keep := range []string{"ghcr/box:2026.001.0300", "ghcr/box:2026.001.0200"} {
+		if gone[keep] {
+			t.Errorf("removed %q — keep_images:3 must keep the newest 3 DISTINCT images, not 3 tag rows", keep)
+		}
+	}
+	// MUST BE REMOVED — distinct image #4 is outside the budget. This half is what a
+	// "keep every tag of every image" over-fix would fail.
+	if !gone["ghcr/box:2026.001.0100"] {
+		t.Errorf("kept ghcr/box:2026.001.0100 — the 4th distinct image is outside keep_images:3 and must go; removed=%v", removed)
+	}
+}

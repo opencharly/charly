@@ -352,17 +352,27 @@ func defaultLiveBuildFloor() (floor kit.CalVer, floorOK bool, live int) {
 }
 
 // retentionRemovable is the pure retention decision for one inventoried tag:
-// the standing rules (keep the newest keepN, never remove an undatable tag,
-// never an in-use one) plus the build-activity protections — while ANY build
+// the standing rules (keep every tag of the newest keepN DISTINCT images, never
+// remove an undatable tag, never an in-use one) plus the build-activity
+// protections. `rank` is the tag's DISTINCT-IMAGE rank within its box group —
+// not its index among tags: keep_images budgets IMAGES, and a tag is kept when
+// the image it names is inside the budget, however many tags that image wears
+// (see imageRanksByDistinctID) — while ANY build
 // is live, (a) a tag at or above the oldest live build's generate CalVer may
 // still be FROM-resolved and is kept (an unknown floor keeps everything), and
 // (b) an image's LAST local tag is never removed (an outright mid-build image
 // deletion corrupts buildah's layer store — the layer-not-known/SIGSEGV
 // variant the fan-out surfaced).
-func retentionRemovable(c imageTagInfo, idx, keepN int, floor kit.CalVer, floorOK bool, live int, lastTag bool) bool {
-	if idx < keepN {
-		return false // keep the newest keepN tags
+func retentionRemovable(c imageTagInfo, rank, keepN int, floor kit.CalVer, floorOK bool, live int, lastTag bool) bool {
+	if rank < keepN {
+		return false // keep every tag of the newest keepN DISTINCT images
 	}
+	// ORDER IS LOAD-BEARING — do not reorder these guards. The undatable check sits AFTER the
+	// rank check, so a tag that falls outside EITHER retention ordinal still lands here and is
+	// protected. That is what keeps a stable non-CalVer tag (`:latest` and friends) unprunable by
+	// tag ordinal: it has no date, so it can never be elected for removal however many tags its
+	// image wears. Hoisting the rank check below this one would silently make such tags
+	// reclaimable.
 	if !c.OkLabel && !c.OkTag {
 		return false // never remove a tag we can't date
 	}
@@ -381,6 +391,56 @@ func retentionRemovable(c imageTagInfo, idx, keepN int, floor kit.CalVer, floorO
 		}
 	}
 	return true
+}
+
+// retentionRanks maps each tag in a newest-first box group onto the TWO ordinals `keep_images: N`
+// budgets, because one number alone cannot express what retention has to protect:
+//
+//   - imageRank — the rank of the DISTINCT IMAGE the tag names. Every tag of the newest image
+//     ranks 0, every tag of the next distinct image ranks 1, and so on.
+//   - tagOrd — the tag's ordinal WITHIN its own image, newest first.
+//
+// A tag survives when BOTH are inside the budget, i.e. `keep_images: N` keeps the newest N
+// distinct images AND at most N tags of each. Both halves are load-bearing and each one alone
+// regresses the other:
+//
+//   - Ranking by TAG INDEX alone (the form this replaces) let ONE image wearing three tags consume
+//     the whole `keep_images: 3` budget, so the 2nd and 3rd DISTINCT images fell outside it and
+//     were pruned — measured live on `fedora-nonfree` (id e2efeb1c). Direction matters: that made
+//     retention keep FEWER distinct images, so it OVER-pruned within a managed family. It could
+//     never cause under-reclaim, and it is not an explanation for any observed disk shortfall.
+//   - Ranking by IMAGE alone reclaims no tags at all: a content-stable image rebuilt many times
+//     wears every CalVer tag it ever had at imageRank 0, so its tag rows would grow without bound.
+//     TestPruneImagesByRetention_SharedID is that invariant, and it caught this exact regression
+//     when the first cut of this fix budgeted images only.
+//
+// An entry with no resolvable ID gets an imageRank of its own rather than joining a neighbour's:
+// two unidentifiable rows are not evidence of one image, and merging them would silently widen
+// what the budget protects. Such rows are usually also undatable, which retentionRemovable refuses
+// to remove on a separate axis.
+func retentionRanks(group []imageTagInfo) (imageRank, tagOrd []int) {
+	imageRank = make([]int, len(group))
+	tagOrd = make([]int, len(group))
+	byID := map[string]int{}
+	seenTags := map[string]int{}
+	next := 0
+	for i, c := range group {
+		if c.ID == "" {
+			imageRank[i], tagOrd[i] = next, 0
+			next++
+			continue
+		}
+		r, seen := byID[c.ID]
+		if !seen {
+			r = next
+			byID[c.ID] = r
+			next++
+		}
+		imageRank[i] = r
+		tagOrd[i] = seenTags[c.ID]
+		seenTags[c.ID]++
+	}
+	return imageRank, tagOrd
 }
 
 func pruneImagesByRetention(engine string, keepN int, dryRun bool) ([]string, error) {
@@ -402,9 +462,16 @@ func pruneImagesByRetention(engine string, keepN int, dryRun bool) ([]string, er
 	}
 	var removed []string
 	for _, group := range groups {
+		imageRank, tagOrd := retentionRanks(group)
 		for idx, c := range group {
 			lastTag := c.ID != "" && tagCount[c.ID] <= 1
-			if !retentionRemovable(c, idx, keepN, floor, floorOK, live, lastTag) {
+			// Inside the budget on EITHER axis keeps the tag: a kept image's surplus tags are
+			// reclaimable, and a kept tag's image is never pruned out from under it.
+			rank := imageRank[idx]
+			if rank < keepN && tagOrd[idx] >= keepN {
+				rank = tagOrd[idx] // surplus tag of a kept image — budget it as a tag
+			}
+			if !retentionRemovable(c, rank, keepN, floor, floorOK, live, lastTag) {
 				continue
 			}
 			if dryRun {
