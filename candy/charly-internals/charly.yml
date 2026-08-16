@@ -9702,13 +9702,21 @@ pr-validator-agent:
             git -C <repo-or-submodule> grep -lEi "DO[- ]NOT[- ]EDIT" -- <that repo's changed paths>
             ```
 
-            **Run it once per repository the PR touches, with paths relative to that repository.**
-            From a superproject, `git grep -- plugins/<path>` returns **nothing** — not because the
-            tree is clean but because `git grep` does not descend into a gitlink, and a zero-hit
-            result is indistinguishable from a clean tree. That is the silent-false-negative
-            direction this whole step exists to prevent, so getting the invocation wrong defeats it
-            exactly as thoroughly as not running it. **This page's own worked example is a case the
-            superproject-relative form cannot reproduce.**
+            **This one command has THREE independent ways to return a confident wrong number, and
+            every one of them fails silently.** Measured, one tree each:
+
+            | getting it wrong | finds |
+            |---|---|
+            | wrong **separator** (hyphen-only matcher) | 4 of 340 in `plugins` |
+            | wrong **repo scope** (superproject-relative across a gitlink) | **0** of 340 |
+            | wrong **pathspec** (`-- '*.md'`) | **0** of 4 in `sdk`, **0** of 8 in `spec` |
+
+            **Each in isolation returns a plausible result**, and two of the three return a clean
+            tree. The lesson is not *use `-i`* or *use `git -C`* or *drop the `*.md`* — it is that
+            **a zero here means "I found nothing" and never "there is nothing", until all three are
+            right.** Run it once per repository the PR touches, with paths relative to THAT
+            repository, no extension filter, and the separator-tolerant pattern. **This page's own
+            worked example is a case the superproject-relative form cannot reproduce.**
 
             **Then decide, per hit, whether the file CARRIES a banner or merely MENTIONS one** — the
             grep cannot tell them apart, and you should not try to make it. Run against the change
@@ -9841,6 +9849,11 @@ pr-validator-agent:
               **Grep the whole file** — not because the distribution is flat, but because the tail
               is real, and a window sized to 96.6% of a corpus silently misses the rest.
 
+              **Here the RATIO is the claim and the totals only date it**: 338/350 and 339/351 at
+              two refs one commit apart — 96.57% and 96.58%, stable to two decimals while both
+              totals moved. That is the statistic this rule holds for; file it against the one it
+              is true of.
+
               **Do not describe this as "24 distinct line numbers."** That is a UNION over the
               tree, and a union of positions looks like a spread while the underlying distribution
               is tightly clustered — the population/union error this page warns about two
@@ -9866,9 +9879,11 @@ pr-validator-agent:
 
               **Cite the REF a census was taken at, not a date.** "As they stood when this was
               written" is a timestamp, which is precisely the thing this paragraph tells you is
-              insufficient. The corpus grows hourly, so counts an hour apart differ; the RATIO is
-              the claim and the totals only date it. Two people counting the same corpus an hour
-              apart briefly read two correct measurements as a disagreement.
+              insufficient — two people counting the same corpus an hour apart briefly read two
+              correct measurements as a disagreement. **State the claim here as an ORDINAL one:
+              spaced dominates `plugins`, hyphenated dominates `docs`.** That survives the corpus
+              growing; the separator RATIO does not — it swung 24% (111.7:1 → 84.8:1) across a
+              single ref change, so it is not the durable form of this finding.
             - **A targeted edit never sees the top of the file.** `Edit` on a matched string, or a
               jump to a grep hit at line 240, never renders line 8. The banner is invisible to the
               access pattern a targeted edit actually uses, which is why the check has to be a
@@ -10068,6 +10083,12 @@ pr-validator-agent:
                (the sdk#66 over-removal incident: 4 wire types removed as dead were live
                on charly `main`). Re-run the liveness grep yourself against the consumer's
                `origin/main`, not the PR author's claim.
+               **How to CLASSIFY the sweep's hits — `references/evidence-and-freshness.md`.**
+               The `CHANGELOG/` clause above covers only one slice: a hit in a prior release
+               entry, which is expected. The general case is a **retraction in live prose** —
+               a page quoting the claim it corrects — and it is indistinguishable by pattern
+               from the assertion, because they are the same string. A sweep produces a
+               CANDIDATE list, never an EDIT list; every hit is read before it is touched.
             10. **R6/R8/R9 — artifact + binary integrity (where the class applies).** R6: a
                 destructive git action was preceded by a status/stash check. R8 (generation
                 changes): the emitted `.build/<img>/Containerfile` critical sections + every
