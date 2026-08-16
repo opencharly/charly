@@ -9725,23 +9725,44 @@ pr-validator-agent:
             anyone else is using**, and never in the one you are validating from.
 
             ```bash
-            # 0. resolve the SOURCE head (see below) and stand a scratch tree on it
+            # 0. stand a scratch tree on the SOURCE head (resolution below), then put the
+            #    ARTIFACT submodule on the PR HEAD — `submodule update` lands the source's
+            #    PINNED gitlink, which is NOT the PR you are validating.
             git -C <superproject> worktree add /tmp/carrier-<n> <source-head>
             cd /tmp/carrier-<n> && git submodule update --init --recursive
+            git -C <artifact-repo> fetch origin <pr-head-sha> && git -C <artifact-repo> checkout <pr-head-sha>
+            git -C <artifact-repo> rev-parse HEAD    # MUST equal the PR head — read it back
             task build:binary
 
-            # 1. delete the suspect and ask the generator to answer
-            rm <repo>/<suspect-path>
-            ./bin/charly marketplace generate                          # emits plugins/**
-            ./bin/charly docs generate --out docs/src/content/docs --root .   # emits docs/**
-            rc=$?; [ "$rc" -eq 0 ] || { echo "UNEVALUATED: generator exited $rc"; exit 1; }
+            # 1. delete the suspect and ask the generators to answer. `&&`, never `;` —
+            #    with `;` the guard captures only the LAST command's status.
+            rm <artifact-repo>/<suspect-path>
+            ./bin/charly marketplace generate \
+              && ./bin/charly docs generate --out docs/src/content/docs --root .
+            rc=$?; [ "$rc" -eq 0 ] || { echo "UNEVALUATED: generation exited $rc"; exit 1; }
 
             # 2. read the answer
-            test -f <repo>/<suspect-path> && echo CARRIER || echo "not generated"
+            test -f <artifact-repo>/<suspect-path> && echo CARRIER || echo "not generated"
 
             # 3. tear the scratch tree down
             cd - && git -C <superproject> worktree remove --force /tmp/carrier-<n>
             ```
+
+            **Two setup traps, both of which produce a confident wrong answer rather than an
+            error:**
+
+            - **`git submodule update` lands the SOURCE's pinned gitlink, not the artifact PR
+              head.** A source branch typically pins an artifact commit several revisions behind
+              the PR under review, so the block would delete and test **the pin**, and
+              *"reappears byte-identically"* would be measured against the wrong artifact
+              entirely. Check the PR head out explicitly and **read it back** — this is the
+              source-vs-artifact distinction reappearing on the axis the earlier fix did not
+              touch.
+            - **`;` between the generators discards the first one's exit status.** `false; true;
+              rc=$?` is `0`; `false && true; rc=$?` is `1`. A crashed `marketplace generate`
+              followed by a successful `docs generate` therefore passes the guard, and `test -f`
+              reports *"not generated"* for a real carrier — **the exact silent false negative
+              the guard exists to prevent**, reintroduced by the separator.
 
             **Both generators, always.** `marketplace generate` emits the `plugins` tree and
             `docs generate` emits `docs`; running only the first makes every carrier in `docs`
@@ -9813,10 +9834,18 @@ pr-validator-agent:
 
             Three things make the naive form of this check miss:
 
-            - **The banner is not reliably near the top at all.** One tree carries it at **24
-              distinct line numbers**, the furthest at line **1214**. **Grep the whole file**; any
-              fixed window is wrong, and an enumeration of "typical" positions undersells the case
-              badly enough to invite one.
+            - **The banner is usually near the top — and a fixed window still fails, because of a
+              one-file tail.** Measured over `plugins` @ `32f48d2`: **339 of 351 hits sit at line
+              ≤ 15 (96.6%)**, three above line 100, and **two of those three are this page quoting
+              the banner in prose**. There is exactly ONE genuinely deep carrier, at line **1214**.
+              **Grep the whole file** — not because the distribution is flat, but because the tail
+              is real, and a window sized to 96.6% of a corpus silently misses the rest.
+
+              **Do not describe this as "24 distinct line numbers."** That is a UNION over the
+              tree, and a union of positions looks like a spread while the underlying distribution
+              is tightly clustered — the population/union error this page warns about two
+              paragraphs below, committed in the sentence warning about it. **Cite the
+              distribution, not the union.**
             - **The two trees use OPPOSITE separators**, so a matcher written for either alone
               misses almost everything in the other. Measured:
 
@@ -10519,11 +10548,21 @@ pr-validator-agent:
 
             W0 forbids bootstrapping another CHECKOUT to validate FROM, because permissions
             and plugin resolution depend on running rooted in the superproject. It does NOT
-            forbid a **read-only worktree at the PR head**, driven with `git -C` from that
-            root — and after a destructive experiment leaked into the shared checkout during
-            PR #9, a scratch worktree is the CORRECT way to run any mutation test. Create it,
-            drive everything with absolute paths from the superproject root, verify the shared
-            checkout clean afterwards, and remove it.
+            forbid a **scratch worktree**, driven with `git -C` from that root — and after a
+            destructive experiment leaked into the shared checkout during PR #9, a scratch
+            worktree is the CORRECT way to run any mutation test. Create it, drive everything
+            with absolute paths from the superproject root, verify the shared checkout clean
+            afterwards, and remove it.
+
+            **The exemption covers WRITE-and-RUN worktrees, not only read-only ones at the PR
+            head.** The carrier test (STEP ONE) deletes a tracked file, runs two generators, and
+            stands on the SOURCE head rather than the artifact PR head — none of which a
+            read-only-at-the-PR-head exemption permits, and all of which are the point: a
+            mutation test that cannot mutate is not a test. **A narrower exemption than the
+            mandated procedure needs is a rule conflict, not a caveat** — it makes the procedure
+            either unusable or a violation, and a reader facing that will pick one silently.
+            What W0 actually protects is *validating FROM* a bootstrapped checkout; a scratch
+            tree you write to, read once, and destroy is not that.
 
             ### 1b.2 — The standing questions
 
