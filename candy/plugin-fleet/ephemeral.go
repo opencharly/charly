@@ -260,6 +260,19 @@ func registerTransientTimer(deployName string, ttl time.Duration) (string, error
 	if _, err := exec.LookPath("systemd-run"); err != nil {
 		return "", fmt.Errorf("systemd-run not in PATH; TTL safety net disabled")
 	}
+	// DELIBERATELY os.Executable(), not a resolved installed `charly`. Pointing the unit at a
+	// stable installed path is the obvious answer to "the worktree binary gets deleted", and it is
+	// wrong twice over. First, `fleet del` is correctly NOT freshness-safe, so an installed binary
+	// older than the source tree REFUSES to run — the normal state on a developer host, i.e. the
+	// reaper would fail exactly where this defect lives. Second and worse: the identity gate that
+	// makes the freshness bypass safe lives in the REAPING binary, so an installed binary predating
+	// that gate would reap with no incarnation check at all. The safety property depends on the
+	// vintage of the binary that runs, not the one that registers.
+	//
+	// The worktree-deletion case is handled where it belongs instead — the bed cancels its own
+	// timers at teardown (candy/plugin-check/bed_ephemeral_timers.go), so a unit pointing into a
+	// removed worktree should not exist; if one does, it fails visibly at 203/EXEC rather than
+	// silently reaping on a stale identity.
 	exe, err := os.Executable()
 	if err != nil {
 		return "", fmt.Errorf("locating charly binary: %w", err)
@@ -269,7 +282,8 @@ func registerTransientTimer(deployName string, ttl time.Duration) (string, error
 		return "", fmt.Errorf("resolving working directory: %w", err)
 	}
 	unitName := fmt.Sprintf("%s-%d", ephemeralTimerUnitPrefix(deployName), time.Now().Unix())
-	args := registerTransientTimerArgs(unitName, ttl, wd, exe, spec.FleetDelArgv(deployName))
+	deployConfig := os.Getenv(spec.DeployConfigEnv)
+	args := registerTransientTimerArgs(unitName, ttl, wd, exe, deployConfig, reaperDelArgv(deployName, unitName))
 	cmd := exec.Command("systemd-run", args...)
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -283,16 +297,69 @@ func registerTransientTimer(deployName string, ttl time.Duration) (string, error
 // out to systemd-run, not unit-testable standalone). `--working-directory=<wd>` is the load-bearing
 // fix: without it the transient unit's ExecStart runs from the user systemd manager's default
 // WorkingDirectory (the user's home), never the project directory the deploy was registered from.
-func registerTransientTimerArgs(unitName string, ttl time.Duration, wd, exe string, delArgv []string) []string {
+func registerTransientTimerArgs(unitName string, ttl time.Duration, wd, exe, deployConfig string, delArgv []string) []string {
 	args := []string{
 		"--user",
 		"--unit=" + unitName,
 		"--on-active=" + ttl.String(),
 		"--working-directory=" + wd,
-		exe,
+		// INCARNATION IDENTITY. The reaper argv is `fleet del <entity> --assume-yes` — it names the
+		// ENTITY, never the incarnation, and bed entity names are REUSED run over run. Registration
+		// also overwrites the single recorded EphemeralRuntime.TimerUnit, so every earlier run's
+		// timer stays armed and permanently un-cancellable (cancelTransientTimer only ever reaches
+		// the most recently recorded unit). A stale timer's `fleet del` is therefore byte-identical
+		// to a legitimate one and would delete whichever incarnation currently holds the name.
+		//
+		// Passing the unit its OWN name lets the teardown compare it against the recorded
+		// TimerUnit and no-op when it has been superseded. Observed 2026-08-15: nine stale timers
+		// fired at 00:19:26 while a live incarnation held the entity name; only a missing
+		// executable (203/EXEC) stopped them. Fixing the executable path WITHOUT this guard would
+		// have converted a silent leak into deletion of live work — and it would have looked like
+		// a successful fix, because the reaper would finally be running.
+		// The reaper is a machine-invoked TTL janitor, not an interactive command. The freshness
+		// guard refuses non-read-only verbs (`fleet del` is correctly NOT in isFreshnessSafeVerb)
+		// whenever the source tree is newer than the running binary — the normal state on a
+		// developer host, and measured on this one. Without this the reaper simply fails a
+		// different way and the VM leaks exactly as before. Scoped to THIS unit's environment: no
+		// human invocation is affected.
+		"--setenv=CHARLY_SKIP_FRESHNESS_CHECK=1",
 	}
+	// STATE LIFETIME. A bed session isolates its ephemeral deploy state into a per-run temp overlay
+	// (bed_session.go: MkdirTemp + Setenv(CHARLY_DEPLOY_CONFIG)) and REMOVES it at teardown, while
+	// unsetting the variable. A timer firing later therefore reads the OPERATOR overlay, which has
+	// no record of the entity — so it can neither resolve it nor verify its identity. Carrying the
+	// path the registration was made under makes the timer's state lifetime match the timer's own:
+	// on a normal teardown the bed cancels the timer AND removes the dir, so nothing is left
+	// stale; on an ABNORMAL exit neither runs, the dir survives, and the reaper can still work —
+	// which is precisely the case a TTL net exists for. The isolation is preserved exactly: each
+	// unit reads its OWN bed's overlay, never the operator's and never a peer's.
+	if deployConfig != "" {
+		args = append(args, "--setenv="+spec.DeployConfigEnv+"="+deployConfig)
+	}
+	args = append(args, exe)
 	return append(args, delArgv...)
 }
+
+// reaperDelArgv builds the `fleet del` argv the TTL unit executes.
+//
+// The "vm:" form is used for EVERY registration. `resolveDelNode` resolves a plain dotted address
+// only through the project tree, and a reaper runs with no project — the worktree it was registered
+// from is routinely deleted once its PR lands — so only the prefixed form reaches the tree-absent
+// fallback. The prefix is what makes the reaper work without a project.
+//
+// It used to be unsafe to give that form to registrations whose state does not outlive their
+// session, because the fallback synthesises a node from the ADDRESS ALONE and a stale timer would
+// then delete whichever incarnation holds the reused name. That is no longer a property of the
+// address: --require-timer-unit makes FleetDelCmd verify the incarnation BEFORE it resolves
+// anything, and refuse when no registration is recorded. Identity is checked first, so the
+// fallback is safe for every population and the address form is uniform.
+func reaperDelArgv(deployName, unitName string) []string {
+	return append(spec.FleetDelArgv("vm:"+deployName), "--require-timer-unit="+unitName)
+}
+
+// cancelTransientTimerFn is the cancel call as a package var, for testability — the seam shape
+// plugin-clean uses for liveBuildFloor. Production always points at cancelTransientTimer.
+var cancelTransientTimerFn = cancelTransientTimer
 
 // cancelTransientTimer stops a previously registered transient unit. Best-effort.
 func cancelTransientTimer(unit string) {
@@ -402,6 +469,26 @@ func persistEphemeralInto(dc *deploykit.FleetConfig, authored *spec.Deploy, depl
 	}
 	if node.VmState == nil {
 		node.VmState = &spec.VmDeployState{}
+	}
+	// CANCEL THE TIMER THIS RECORD IS ABOUT TO ORPHAN. EphemeralRuntime holds ONE TimerUnit, so
+	// overwriting it strands the previous registration's timer: still armed, no longer referenced
+	// by anything, and therefore un-cancellable by any later teardown — which reads only the
+	// recorded unit. That is how ten armed units accumulated for one reused entity name, and how a
+	// single bed run left three (it registers once per deploy/rebuild phase, and only the last was
+	// cancellable at teardown).
+	//
+	// Cancelling here makes at most ONE timer armed per entity at any moment, which fixes three
+	// things at their source rather than downstream: the within-run surplus, the cross-run pile,
+	// and — most importantly — the stale-timer hazard itself. A run that deploys over a name whose
+	// previous incarnation was killed cancels that armed timer HERE, so it never survives into the
+	// run it could damage. The identity gate stops a stale timer from ACTING; this stops it from
+	// EXISTING.
+	//
+	// Both are kept deliberately, and each covers a case the other does not: cancelTransientTimer
+	// is best-effort, so a systemctl failure leaves a timer armed with no second chance — and that
+	// is precisely what the gate refuses at fire time. Do not delete either as redundant.
+	if prior := node.VmState.Ephemeral; prior != nil && prior.TimerUnit != "" && prior.TimerUnit != h.timerUnit {
+		cancelTransientTimerFn(prior.TimerUnit)
 	}
 	node.VmState.Ephemeral = &spec.EphemeralRuntime{
 		ID:              h.id,
