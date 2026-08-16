@@ -1538,7 +1538,17 @@ clean-skill:
             - After `charly check run` (any path: bed / score) → `keep_check_runs`,
               after the new run's output is written so the newest run is kept.
 
-            `charly clean` exists for on-demand sweeps and to clear a pre-existing backlog.
+            **The post-build pass reclaims tags, never whole images.** It runs while the build
+            still holds its own build-activity lock, so it always observes a live build, and the
+            live-build path never removes an image's LAST tag — the guard that protects a
+            concurrent build's base. A build therefore trims surplus tag rows from images that
+            wear several and leaves every single-tagged image in place, so the **distinct-image**
+            half of `keep_images` is not enforced by building. Nothing reports this: the summary
+            counts what it removed, not what it selected and could not remove.
+
+            `charly clean` exists for on-demand sweeps and to clear a pre-existing backlog — and
+            it is the only verb that reclaims a distinct image, so a project that only ever builds
+            accumulates them past `keep_images` indefinitely.
 
             ## Out of scope
 
