@@ -465,8 +465,13 @@ func pruneImagesByRetention(engine string, keepN int, dryRun bool) ([]string, er
 		imageRank, tagOrd := retentionRanks(group)
 		for idx, c := range group {
 			lastTag := c.ID != "" && tagCount[c.ID] <= 1
-			// Inside the budget on EITHER axis keeps the tag: a kept image's surplus tags are
-			// reclaimable, and a kept tag's image is never pruned out from under it.
+			// BOTH ordinals must be inside the budget for a tag to survive — this is an AND, not
+			// an OR. A tag whose IMAGE is inside the budget but which is itself a surplus tag of
+			// that image (tagOrd >= keepN) is re-ranked to its tag ordinal and becomes removable;
+			// that is the half that keeps a content-stable image's tag rows bounded. Reading this
+			// as "either axis keeps it" invites deleting the reassignment below, which would
+			// restore the unbounded tag growth TestPruneImagesByRetention_SharedID guards.
+			// Verified by probe, not by reading: 1 image / 5 tags / keepN=3 removes 2.
 			rank := imageRank[idx]
 			if rank < keepN && tagOrd[idx] >= keepN {
 				rank = tagOrd[idx] // surplus tag of a kept image — budget it as a tag
