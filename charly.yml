@@ -54,7 +54,7 @@ defaults:
     cache: image # default build cache mode (image local read / registry read+write)
     # Reusable-artifact retention (auto-pruned at creation; also via `charly clean`).
     # 0 disables. See /charly-core:clean.
-    keep_images: 3 # newest CalVer tags to keep per image after `charly box build`
+    keep_images: 3 # per box: newest 3 distinct images, and at most 3 tags of each
     keep_check_runs: 3 # newest run dirs to keep per bed/score after `charly check run`
 vm:
     vm:

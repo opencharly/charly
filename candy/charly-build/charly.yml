@@ -259,20 +259,48 @@ build-skill:
 
             ## Image-tag retention (`defaults.keep_images`)
 
-            After `charly box build` (push runs excluded), charly prunes old CalVer tags per image
-            down to `defaults.keep_images` — keeping the newest N builds per
-            `ai.opencharly.box` group, ordered by the `ai.opencharly.version` label
-            (the content-derived EffectiveVersion) as the PRIMARY key, with the `:YYYY.DDD.HHMM`
-            build TAG as the tiebreaker. The tag tiebreak is load-bearing: the label is
-            content-stable, so many builds of an unchanged image share one label-CalVer and
-            the tag is what distinguishes (and retains) the newest BUILDS. Images referenced
-            by a container (`podman ps -a`) are skipped, and `rmi` runs without `-f` as a
-            backstop, so a running deploy's image is never removed.
+            After `charly box build` (push runs excluded), charly prunes **tag rows** within each
+            `ai.opencharly.box` group, keeping the newest `defaults.keep_images` **distinct
+            images** and at most that same number of tags of each. A *distinct image* is a
+            distinct image ID — every tag pointing at one ID is one image, however many tags it
+            wears — so with `keep_images: 3`, four images carrying one tag each lose the oldest,
+            while one image carrying six tags keeps three of them.
+
+            **Tag rows, not "CalVer tags":** a row is exempted from removal only when it has
+            NEITHER a datable `ai.opencharly.version` label NOR a datable `:YYYY.DDD.HHMM` tag
+            (`retention.go`'s guard is an AND). A bed build has a datable label and a non-CalVer
+            tag, so it is a normal removal candidate rather than an excluded one.
+
+            **Preview before enabling it**, with the value you are considering rather than one you
+            have already committed to:
+
+            ```bash
+            charly clean --keep 3 --images --dry-run   # what keep_images: 3 WOULD remove
+            ```
+
+            `--keep` supplies the budget on the command line, so this answers the question while
+            `defaults.keep_images` is still absent — with the key unset, retention is disabled and a
+            plain `charly clean --dry-run` correctly shows nothing, which is not the preview you
+            want. The count that surprises people is **tag rows, not images**.
+
+            **Ordering is owned by `/charly-core:clean`**, which documents the retention engine
+            itself — the full comparator chain, which key decides which ordinal, and why the build
+            tag cannot serve as the image recency key. The two consequences that matter here:
+            **between distinct images**, the datable `ai.opencharly.version` label decides when the
+            two differ, and creation time decides when they tie — which is the usual case, because
+            repeated builds of an unchanged image share one label; **within one image's tag rows**, the
+            `:YYYY.DDD.HHMM` tag decides, because those rows share everything else. Do not carry
+            *"creation time, not the tag"* across to the tag budget — it is true of the first and
+            false of the second.
+
+            Images referenced by a container (`podman ps -a`) are skipped, and `rmi` runs without
+            `-f` as a backstop.
 
             ```yaml
             # charly.yml — defaults:
             defaults:
-              keep_images: 3   # newest CalVer tags to keep per image; 0 (or absent) disables
+              keep_images: 3   # newest distinct images per box, and at most 3 tags of each;
+                               # 0 (or absent) disables
             ```
 
             This stops the iterative-build tag accumulation that otherwise reclaims
