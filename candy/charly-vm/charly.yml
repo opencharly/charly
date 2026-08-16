@@ -1395,7 +1395,7 @@ vms-catalog-skill:
             ### Authoring a new cloud_image VM
 
             1. Find the upstream qcow2 URL + verify a sha256 sidecar exists (<url>.SHA256 / .sha256 / .sha256sum).
-            2. Identify the **pre-existing user account** in the upstream image (`arch`, `ubuntu`, `fedora`, `debian`, `cloud-user`, etc.). This becomes `source.base_user:` — triggers the adopt pattern described below.
+            2. Identify the **pre-existing user account** in the upstream image (`arch`, `alpine`, `ubuntu`, `fedora`, `debian`, `cloud-user`, etc.). Note `arch` and `alpine` additionally STEER rendering when no explicit `distro:` is set — they select the package-delivery and sshd-start branches — so an Alpine image whose account is named anything else needs `distro: alpine` set explicitly or it renders the systemd path onto an OpenRC guest. This becomes `source.base_user:` — triggers the adopt pattern described below.
             3. Start from `/charly-vm:arch-cloud-vm` as a template. Change `url`, `base_user`, distro-specific cloud_init `package:` and `runcmd:`.
             4. Pick firmware: default to `bios` unless the upstream image explicitly requires UEFI (e.g., secure boot lock-in).
             5. Run `charly vm build <name>` — observe the fetched qcow2 sha256 + rendered seed ISO path.
