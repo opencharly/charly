@@ -2074,7 +2074,6 @@ cloud-init-renderer-skill:
             | Strategy | Action |
             |---|---|
             | `auto` / `scp` | `scp $(os.Executable()) guest:/usr/local/bin/charly; chmod +x` |
-            | `url` | ssh-execute `curl -L <url> -o /usr/local/bin/charly && sha256sum -c` (verified against `VmCharlyInstall.Checksum`) |
             | `skip` | `ssh 'which charly'` — fails if missing, returns early if present |
 
             Idempotent. If `charly` is already present at the target version, the function returns without re-scp'ing. See `/charly-internals:vm-deploy-target` for how this plugs into the overall deploy flow.
@@ -8793,8 +8792,6 @@ vm-spec-skill:
             ```go
             type VmCharlyInstall struct {
                 Strategy string  // auto | scp | skip
-                URL      string  // when Strategy == "url"
-                Checksum string  // "sha256:<hex>" for url strategy
             }
             ```
 
@@ -8802,7 +8799,6 @@ vm-spec-skill:
             |---|---|
             | `auto` (default) | scp the local `charly` binary (`os.Executable()`) into the guest post-boot via the vm deploy plugin's `OpPrepareVenue` (`kit.EnsureCharlyInGuest`) |
             | `scp` | explicit form of auto |
-            | `url` | cloud-init runcmd downloads charly from URL at first boot |
             | `skip` | user manages charly install; the vm deploy plugin's `OpPrepareVenue` verifies presence only |
 
             ## Validation (spec/schema/vm.cue)
