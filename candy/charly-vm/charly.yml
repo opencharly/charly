@@ -91,21 +91,18 @@ arch-cloud-vm-skill:
                   checksum:
                     type: sha256
                   base_user: arch
-                  # distro:               # `distro:` is inferred from `base_user`, and ONLY for the two
-                                          # literal values `arch` and `alpine` — the inference does not check
-                                          # that the guest IS that distro. So: OMIT only when the guest's id
-                                          # is `arch` and `base_user` is literally `arch`, or the guest's id
-                                          # is `alpine` and `base_user` is literally `alpine`. For any other
-                                          # id in {debian, ubuntu, arch, archarm, manjaro, endeavouros,
-                                          # cachyos, alpine}, SET it to the guest's own id. For any id
-                                          # outside that set, omit — provided `base_user` is neither
-                                          # literally `arch` nor literally `alpine`, since the
-                                          # inference reads the account, not the guest. Set the
-                                          # CORRECT id, never a guess:
-                                          # `distro:` ALSO selects the guest's package manager for candy
-                                          # installation (`candy/plugin-fleet/candy_select.go`, not
-                                          # source-kind gated), so a wrong in-set value runs `pacman` on a
-                                          # deb guest (exit 127) or compiles zero package steps.
+                  # distro:               # **Set `distro:` to the guest's own id** — as a BARE id, no `:version`
+                                          # tag: `ResolveDistro` strips at `:` but the cloud-init dispatches match
+                                          # the string exactly, so `debian:13` yields `openssh` instead of
+                                          # `openssh-server` and cloud-init hard-fails. **Omit it only when the
+                                          # guest is `arch` and `base_user` is literally `arch`, or the guest is
+                                          # `alpine` and `base_user` is literally `alpine`** — the only two cases
+                                          # where the inference supplies the right value, since it reads the
+                                          # account and never checks the guest. Setting an id no dispatch knows is
+                                          # not harmful: it misses all four cloud-init dispatches exactly as the
+                                          # empty value does, and gives `candy_select` a resolvable key where one
+                                          # exists. Never guess: a wrong id that IS known selects the wrong
+                                          # package manager for candy installation.
                 backend: libvirt            # REQUIRED — the bed's libvirt-RPC + spice probes hit the session daemon
                 disk_size: 40G
                 ram: 8G
@@ -906,21 +903,18 @@ vm-skill:
                   url: https://fastly.mirror.pkgbuild.com/images/latest/Arch-Linux-x86_64-cloudimg.qcow2
                   checksum: {type: sha256}                      # value auto-resolves from <url>.SHA256 sidecar
                   base_user: arch                               # adopt pattern (no useradd)
-                  # distro:                                    # `distro:` is inferred from `base_user`, and ONLY for the two
-                                                               # literal values `arch` and `alpine` — the inference does not check
-                                                               # that the guest IS that distro. So: OMIT only when the guest's id
-                                                               # is `arch` and `base_user` is literally `arch`, or the guest's id
-                                                               # is `alpine` and `base_user` is literally `alpine`. For any other
-                                                               # id in {debian, ubuntu, arch, archarm, manjaro, endeavouros,
-                                                               # cachyos, alpine}, SET it to the guest's own id. For any id
-                                                               # outside that set, omit — provided `base_user` is neither
-                                                               # literally `arch` nor literally `alpine`, since the
-                                                               # inference reads the account, not the guest. Set the
-                                                               # CORRECT id, never a guess:
-                                                               # `distro:` ALSO selects the guest's package manager for candy
-                                                               # installation (`candy/plugin-fleet/candy_select.go`, not
-                                                               # source-kind gated), so a wrong in-set value runs `pacman` on a
-                                                               # deb guest (exit 127) or compiles zero package steps.
+                  # distro:                                    # **Set `distro:` to the guest's own id** — as a BARE id, no `:version`
+                                                               # tag: `ResolveDistro` strips at `:` but the cloud-init dispatches match
+                                                               # the string exactly, so `debian:13` yields `openssh` instead of
+                                                               # `openssh-server` and cloud-init hard-fails. **Omit it only when the
+                                                               # guest is `arch` and `base_user` is literally `arch`, or the guest is
+                                                               # `alpine` and `base_user` is literally `alpine`** — the only two cases
+                                                               # where the inference supplies the right value, since it reads the
+                                                               # account and never checks the guest. Setting an id no dispatch knows is
+                                                               # not harmful: it misses all four cloud-init dispatches exactly as the
+                                                               # empty value does, and gives `candy_select` a resolvable key where one
+                                                               # exists. Never guess: a wrong id that IS known selects the wrong
+                                                               # package manager for candy installation.
                 disk_size: 40G
                 ram: 8G
                 cpu: 4
@@ -1309,21 +1303,18 @@ vms-catalog-skill:
                   url: https://…
                   checksum: { type: sha256, value?: <hex> }
                   base_user: arch                     # adopt this account (see Adopt pattern below)
-                  distro: debian                      # `distro:` is inferred from `base_user`, and ONLY for the two
-                                                      # literal values `arch` and `alpine` — the inference does not check
-                                                      # that the guest IS that distro. So: OMIT only when the guest's id
-                                                      # is `arch` and `base_user` is literally `arch`, or the guest's id
-                                                      # is `alpine` and `base_user` is literally `alpine`. For any other
-                                                      # id in {debian, ubuntu, arch, archarm, manjaro, endeavouros,
-                                                      # cachyos, alpine}, SET it to the guest's own id. For any id
-                                                      # outside that set, omit — provided `base_user` is neither
-                                                      # literally `arch` nor literally `alpine`, since the
-                                                      # inference reads the account, not the guest. Set the
-                                                      # CORRECT id, never a guess:
-                                                      # `distro:` ALSO selects the guest's package manager for candy
-                                                      # installation (`candy/plugin-fleet/candy_select.go`, not
-                                                      # source-kind gated), so a wrong in-set value runs `pacman` on a
-                                                      # deb guest (exit 127) or compiles zero package steps.
+                  distro: debian                      # **Set `distro:` to the guest's own id** — as a BARE id, no `:version`
+                                                      # tag: `ResolveDistro` strips at `:` but the cloud-init dispatches match
+                                                      # the string exactly, so `debian:13` yields `openssh` instead of
+                                                      # `openssh-server` and cloud-init hard-fails. **Omit it only when the
+                                                      # guest is `arch` and `base_user` is literally `arch`, or the guest is
+                                                      # `alpine` and `base_user` is literally `alpine`** — the only two cases
+                                                      # where the inference supplies the right value, since it reads the
+                                                      # account and never checks the guest. Setting an id no dispatch knows is
+                                                      # not harmful: it misses all four cloud-init dispatches exactly as the
+                                                      # empty value does, and gives `candy_select` a resolvable key where one
+                                                      # exists. Never guess: a wrong id that IS known selects the wrong
+                                                      # package manager for candy installation.
                   cache: ~/.cache/charly/vm-images/       # optional override
                   # bootc branch:
                   box: <candy: image entry name>           # `box:` source field → a `candy:` image carrying base:/from:
@@ -1440,7 +1431,7 @@ vms-catalog-skill:
             ### Authoring a new cloud_image VM
 
             1. Find the upstream qcow2 URL + verify a sha256 sidecar exists (<url>.SHA256 / .sha256 / .sha256sum).
-            2. Identify the **pre-existing user account** in the upstream image (`arch`, `alpine`, `ubuntu`, `fedora`, `debian`, `cloud-user`, etc.). Note that `effectiveDistro` infers ONLY `arch` and `alpine`, and only from `base_user` — those two STEER rendering (they select the package-delivery and sshd-start branches) when no explicit `distro:` is set. **Set `distro:` explicitly whenever the guest's id appears in one of the render's dispatch tables and `effectiveDistro` would not supply it — derive the set from the rule below, never from the examples in front of you, because each dispatch has its OWN key set.** They are: `composePackages` keys on {`debian`, `ubuntu`} (omitting picks `openssh` over `openssh-server`, so cloud-init hard-fails `E: Unable to locate package openssh`); `sshUnitForDistro` keys on the same two (omitting yields unit `sshd` where Debian needs `ssh`); `pacmanFamily`, i.e. `FormatForDistroID(distro) == "pac"`, keys on **five** ids — {`arch`, `archarm`, `manjaro`, `endeavouros`, `cachyos`} — and omitting drops the guest onto the `packages:` path instead of `pacman -Sy --needed` plus the sshd try-restart guard, so cloud-init's bare `pacman -S` re-triggers exactly the host-key regen race described in `/charly-internals:cloud-init-renderer` (its D15 section); and the init branch keys on {`alpine`} (omitting renders systemd onto an OpenRC guest, and the VM boots unreachable). Since `effectiveDistro` infers only `arch` and `alpine`, and only from `base_user`, a **CachyOS, Manjaro, EndeavourOS or archarm image whose account is not literally `arch`** — or an Arch image whose account is not literally `arch` — resolves to the empty distro, silently leaves the pacman family and takes the racy install path; likewise an Alpine image whose account is not literally `alpine`. The qualifier is load-bearing in both directions, and both are statements about the MECHANISM, not permissions that compete with the rule above: an Arch derivative shipping an `arch` account happens to resolve to `arch` and render correctly, while a Debian image shipping an `alpine` account resolves to `alpine` and breaks. Neither changes what to write — **the boxed rule governs, and it says set the guest's own id for every in-set id** (so a Manjaro image writes `distro: manjaro`, whatever its account happens to make the inference do). **The omit-test keys on the ACCOUNT, and the inference does not check that the account matches the guest.** `effectiveDistro` returns `arch` for `base_user: arch` and `alpine` for `base_user: alpine`, full stop — so a Debian image shipping an `alpine` account renders `openssh` (Debian needs `openssh-server`, and cloud-init hard-fails) onto the OpenRC branch of a systemd guest, and boots unreachable. The rule that survives all twelve cases: **omit only when the guest's id is `arch` and `base_user` is literally `arch`, or the guest's id is `alpine` and `base_user` is literally `alpine`. For any other id in {`debian`, `ubuntu`, `arch`, `archarm`, `manjaro`, `endeavouros`, `cachyos`, `alpine`}, set it to the guest's own id. For any id outside that set, omit — provided `base_user` is neither literally `arch` nor literally `alpine`, since the inference reads the account and not the guest.** Note the set is of DISTRO ids while the inference reads an ACCOUNT name — an Arch cloud image whose account is `cloud-user` must set `distro: arch`, and conversely a CachyOS image shipping an `arch` account already resolves to `arch` and renders correctly. **Set the CORRECT id, never a guess:** do not reason about which wrong values are harmless. The cloud-init dispatches ignore an out-of-set id, but `buildVmSyntheticBox` does NOT: with `distro:` omitted it falls back to `base_user`, and an unresolvable key leaves `img.Pkg` unset, so a Rocky or openSUSE image with a `cloud-user` account installs **zero packages, silently**, while `fleet add` reports success. There is no `distro:` value that repairs that: `ResolveDistro` does exact-then-base-name lookup against the embedded vocabulary only — no alias table, no `ID_LIKE` rescue — so `distro: rocky` fails exactly as the account did. (The `rocky: fedora` entry in `charly.yml` is `ovmf_distro_aliases`, an OVMF FIRMWARE table, and is not consulted here.) A guest outside the vocabulary needs a vocabulary entry, not a config change. Conversely a wrong id INSIDE the set is actively harmful — `distro:` also selects the guest's package manager for candy installation via `buildVmSyntheticBox` (`candy/plugin-fleet/candy_select.go`, with no source-kind gate), whose own comment records a candy deploy running `pacman` on a debian guest and failing exit 127, and a missing `DistroDef` compiling zero package steps for every candy, silently. `base_user: debian` or `ubuntu` without it resolves to the empty distro, which picks `openssh` instead of `openssh-server` (cloud-init hard-fails `E: Unable to locate package openssh`) and unit `sshd` where Debian needs `ssh`; an Alpine image whose account is named anything but `alpine` renders the systemd path onto an OpenRC guest. All three boot unreachable. This becomes `source.base_user:` — triggers the adopt pattern described below.
+            2. Identify the **pre-existing user account** in the upstream image (`arch`, `alpine`, `ubuntu`, `fedora`, `debian`, `cloud-user`, etc.). Note that `effectiveDistro` infers ONLY `arch` and `alpine`, and only from `base_user` — those two STEER rendering (they select the package-delivery and sshd-start branches) when no explicit `distro:` is set. **Set `distro:` explicitly whenever the guest's id appears in one of the render's dispatch tables and `effectiveDistro` would not supply it — derive the set from the rule below, never from the examples in front of you, because each dispatch has its OWN key set.** They are: `composePackages` keys on {`debian`, `ubuntu`} (omitting picks `openssh` over `openssh-server`, so cloud-init hard-fails `E: Unable to locate package openssh`); `sshUnitForDistro` keys on the same two (omitting yields unit `sshd` where Debian needs `ssh`); `pacmanFamily`, i.e. `FormatForDistroID(distro) == "pac"`, keys on **five** ids — {`arch`, `archarm`, `manjaro`, `endeavouros`, `cachyos`} — and omitting drops the guest onto the `packages:` path instead of `pacman -Sy --needed` plus the sshd try-restart guard, so cloud-init's bare `pacman -S` re-triggers exactly the host-key regen race described in `/charly-internals:cloud-init-renderer` (its D15 section); and the init branch keys on {`alpine`} (omitting renders systemd onto an OpenRC guest, and the VM boots unreachable). Since `effectiveDistro` infers only `arch` and `alpine`, and only from `base_user`, a **CachyOS, Manjaro, EndeavourOS or archarm image whose account is not literally `arch`** — or an Arch image whose account is not literally `arch` — resolves to the empty distro, silently leaves the pacman family and takes the racy install path; likewise an Alpine image whose account is not literally `alpine`. The qualifier is load-bearing in both directions, and both are statements about the MECHANISM, not permissions that compete with the rule above: an Arch derivative shipping an `arch` account happens to resolve to `arch` and render correctly, while a Debian image shipping an `alpine` account resolves to `alpine` and breaks. Neither changes what to write — **the boxed rule governs, and it says set the guest's own id for every in-set id** (so a Manjaro image writes `distro: manjaro`, whatever its account happens to make the inference do). **Set `distro:` to the guest's own id, as a BARE id.** Omit it only when the guest is `arch` and `base_user` is literally `arch`, or the guest is `alpine` and `base_user` is literally `alpine` — the only two cases where the inference supplies the right value, because `effectiveDistro` reads the ACCOUNT and never checks the guest. That is the whole rule; there is no third branch and no exception list. **Bare id matters:** `ResolveDistro` strips at `:` but the cloud-init dispatches compare the string exactly, so `distro: debian:13` yields `openssh` instead of `openssh-server` and cloud-init hard-fails. **Setting is safe, guessing is not.** An id no dispatch knows misses all four cloud-init dispatches exactly as the empty value does, and hands `candy_select` a resolvable key where one exists — but a wrong id that IS known selects the wrong package manager for candy installation via `buildVmSyntheticBox` (`candy/plugin-fleet/candy_select.go`, not source-kind gated), whose own comment records a candy deploy running `pacman` on a debian guest and failing exit 127. **And omission has a silent mode:** with `distro:` unset, `candy_select` falls back to `base_user`, an unresolvable key leaves `img.Pkg` unset, and a Rocky or openSUSE image with a `cloud-user` account installs zero packages while `fleet add` reports success. Writing `distro: rocky` is still correct there — it is what this rule says — but it does not by itself fix that: the embedded vocabulary holds `{arch, cachyos, debian, fedora, ubuntu}` and `ResolveDistro` has no alias or `ID_LIKE` rescue, so a guest outside it needs a vocabulary entry, which is a product gap rather than something to fix in a VM entry. (The `rocky: fedora` line in `charly.yml` is `ovmf_distro_aliases`, an OVMF FIRMWARE table, not consulted here.) Conversely a wrong id INSIDE the set is actively harmful — `distro:` also selects the guest's package manager for candy installation via `buildVmSyntheticBox` (`candy/plugin-fleet/candy_select.go`, with no source-kind gate), whose own comment records a candy deploy running `pacman` on a debian guest and failing exit 127, and a missing `DistroDef` compiling zero package steps for every candy, silently. `base_user: debian` or `ubuntu` without it resolves to the empty distro, which picks `openssh` instead of `openssh-server` (cloud-init hard-fails `E: Unable to locate package openssh`) and unit `sshd` where Debian needs `ssh`; an Alpine image whose account is named anything but `alpine` renders the systemd path onto an OpenRC guest. All three boot unreachable. This becomes `source.base_user:` — triggers the adopt pattern described below.
             3. Start from `/charly-vm:arch-cloud-vm` as a template. Change `url`, `base_user`, distro-specific cloud_init `package:` and `runcmd:`.
             4. Pick firmware: default to `bios` unless the upstream image explicitly requires UEFI (e.g., secure boot lock-in).
             5. Run `charly vm build <name>` — observe the fetched qcow2 sha256 + rendered seed ISO path.
