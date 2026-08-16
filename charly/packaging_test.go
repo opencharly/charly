@@ -4,13 +4,12 @@ package main
 // (candy/charly/charly.yml) is the single source of truth for native-package
 // metadata: `charly generate-packages` (sdk/packagekit) reads ONLY it, and the
 // per-distro package repos pass it to the plugin as --candy. The three legacy
-// pkg/* files (arch PKGBUILD, fedora spec, debian control) stay as test fixtures
-// until the Phase 3 removal, so this file asserts (a) the section parses into the
-// spec.Packaging type with every entry a plain package name, and (b) completeness —
-// a dependency added to one of the legacy files but not the section fails CI.
+// pkg/* files (arch PKGBUILD, fedora spec, debian control) were removed with the
+// nFPM cutover, so this file asserts (a) the section parses into the
+// spec.Packaging type with every entry a plain package name, and (b) the variant
+// plugin sets are exactly the 9 welded plugins the release workflow publishes.
 
 import (
-	"bufio"
 	"os"
 	"regexp"
 	"sort"
@@ -23,9 +22,6 @@ import (
 
 const (
 	candyCharlyYML = "../candy/charly/charly.yml"
-	archPKGBUILD   = "../pkg/arch/PKGBUILD"
-	fedoraSpec     = "../pkg/fedora/opencharly.spec"
-	debianControl  = "../pkg/debian/debian/control"
 	hostPlugins    = "../scripts/host-command-plugins.txt"
 )
 
@@ -94,31 +90,15 @@ func checkPlainNames(t *testing.T, what string, names ...string) {
 	}
 }
 
-// TestPackagingSectionCompleteness — every dependency declared in the three legacy
-// pkg/* files must be present in the packaging section. A dep added to a PKGBUILD/
-// spec/control but not here fails CI; the section is the single source of truth the
-// generate-packages plugin reads. (The reverse — a dep here but not in a legacy
-// file — is NOT an error: deb-family deliberately omits tailscale, and the legacy
-// files are fixtures scheduled for removal.)
-func TestPackagingSectionCompleteness(t *testing.T) {
+// TestPackagingVariantsCoverWeldedPlugins — every variant plugin must be one of
+// the 9 welded plugins the release workflow publishes, and the union of all
+// variant plugin sets must cover every one of them. A variant naming a plugin
+// absent from the release tarball fails loudly at package-build time (the plugin
+// validates the variant's list against the --plugins dir); this test catches the
+// drift at the source.
+func TestPackagingVariantsCoverWeldedPlugins(t *testing.T) {
 	pkg := loadPackaging(t)
 
-	arch := pkg.Formats["archlinux"]
-	rpm := pkg.Formats["rpm"]
-	deb := pkg.Formats["deb"]
-	if arch == nil || rpm == nil || deb == nil {
-		t.Fatal("packaging.formats must have archlinux, rpm, and deb entries")
-	}
-
-	requireSubset(t, "archlinux.depends vs PKGBUILD depends", parsePkgbuildArray(t, archPKGBUILD, "depends"), arch.Depends)
-	requireSubset(t, "archlinux.optdepends vs PKGBUILD optdepends", parsePkgbuildOptdepNames(t, archPKGBUILD), optdepNames(arch))
-	requireSubset(t, "rpm.depends vs spec Requires", parseSpecList(t, fedoraSpec, "Requires"), rpm.Depends)
-	requireSubset(t, "rpm.suggests vs spec Suggests", parseSpecList(t, fedoraSpec, "Suggests"), rpm.Suggests)
-	requireSubset(t, "deb.depends vs control Depends", parseControlList(t, debianControl, "Depends"), deb.Depends)
-	requireSubset(t, "deb.suggests vs control Suggests", parseControlList(t, debianControl, "Suggests"), deb.Suggests)
-
-	// Every variant plugin must be one of the 9 welded plugins the release workflow
-	// publishes, and the union of all variant plugin sets must cover every one of them.
 	welded := readWeldedPlugins(t)
 	union := map[string]bool{}
 	for _, v := range pkg.Variants {
@@ -136,20 +116,6 @@ func TestPackagingSectionCompleteness(t *testing.T) {
 	}
 }
 
-// requireSubset fails if any name in want is absent from have.
-func requireSubset(t *testing.T, what string, want, have []string) {
-	t.Helper()
-	haveSet := make(map[string]bool, len(have))
-	for _, h := range have {
-		haveSet[h] = true
-	}
-	for _, w := range want {
-		if !haveSet[w] {
-			t.Errorf("%s: %q is missing from the packaging section", what, w)
-		}
-	}
-}
-
 // optdepNames returns the sorted keys of a format's optdepends map.
 func optdepNames(f *spec.PackagingFormat) []string {
 	if f == nil {
@@ -160,108 +126,6 @@ func optdepNames(f *spec.PackagingFormat) []string {
 		out = append(out, k)
 	}
 	sort.Strings(out)
-	return out
-}
-
-// parsePkgbuildArray extracts the single-quoted entries of a PKGBUILD array
-// (`name=(\n 'a'\n 'b'\n)`), skipping comment lines. Entry lines carry inline
-// comments with apostrophes (e.g. "exec'd"), so each line is parsed only up to its
-// closing quote rather than with a span-matching regex.
-func parsePkgbuildArray(t *testing.T, path, name string) []string {
-	t.Helper()
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read %s: %v", path, err)
-	}
-	re := regexp.MustCompile(`(?ms)^` + regexp.QuoteMeta(name) + `=\(\n(.*?)\n\)`)
-	m := re.FindStringSubmatch(string(data))
-	if m == nil {
-		t.Fatalf("%s: no ^%s=(…) array", path, name)
-	}
-	var out []string
-	for _, line := range strings.Split(m[1], "\n") {
-		line = strings.TrimSpace(line)
-		if !strings.HasPrefix(line, "'") {
-			continue
-		}
-		end := strings.Index(line[1:], "'")
-		if end < 0 {
-			continue
-		}
-		out = append(out, line[1:1+end])
-	}
-	return out
-}
-
-// parsePkgbuildOptdepNames returns the package-name part (before the colon) of each
-// `'name: description'` entry in a PKGBUILD optdepends array.
-func parsePkgbuildOptdepNames(t *testing.T, path string) []string {
-	names := parsePkgbuildArray(t, path, "optdepends")
-	for i, n := range names {
-		if j := strings.Index(n, ":"); j >= 0 {
-			names[i] = strings.TrimSpace(n[:j])
-		}
-	}
-	return names
-}
-
-// parseSpecList extracts the package names from `Name: value` lines of a fedora
-// spec (one package per line, e.g. `Requires: glibc`).
-func parseSpecList(t *testing.T, path, keyword string) []string {
-	t.Helper()
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read %s: %v", path, err)
-	}
-	re := regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(keyword) + `:\s+(\S+)\s*$`)
-	matches := re.FindAllStringSubmatch(string(data), -1)
-	out := make([]string, 0, len(matches))
-	for _, m := range matches {
-		out = append(out, m[1])
-	}
-	return out
-}
-
-// parseControlList extracts the comma-separated package names from a debian control
-// field that may span continuation lines (leading-space lines). Debian substitution
-// variables (${...}) are dropped.
-func parseControlList(t *testing.T, path, keyword string) []string {
-	t.Helper()
-	f, err := os.Open(path)
-	if err != nil {
-		t.Fatalf("open %s: %v", path, err)
-	}
-	defer func() { _ = f.Close() }()
-
-	sc := bufio.NewScanner(f)
-	var value strings.Builder
-	collecting := false
-	for sc.Scan() {
-		line := sc.Text()
-		if strings.HasPrefix(line, keyword+":") {
-			collecting = true
-			value.WriteString(strings.TrimPrefix(line, keyword+":"))
-			continue
-		}
-		if collecting && !strings.HasPrefix(line, " ") {
-			break // the next field begins
-		}
-		if collecting {
-			value.WriteString(line)
-		}
-	}
-	if err := sc.Err(); err != nil {
-		t.Fatalf("scan %s: %v", path, err)
-	}
-
-	var out []string
-	for _, part := range strings.Split(value.String(), ",") {
-		p := strings.TrimSpace(part)
-		if p == "" || strings.HasPrefix(p, "${") {
-			continue
-		}
-		out = append(out, p)
-	}
 	return out
 }
 

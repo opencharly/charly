@@ -168,7 +168,8 @@ arch-cloud-vm-skill:
 
             **Required host dep**: `nc` (openbsd-netcat on Arch, netcat-openbsd on
             Debian/Ubuntu, nmap-ncat on Fedora) must be installed on the libvirt
-            host. charly's `setup.sh` and `pkg/arch/PKGBUILD` install it automatically.
+            host. charly's `setup.sh` and the native package's deps
+            (`packaging.formats.*.depends`) install it automatically.
             Without `nc`, virt-manager hangs at "Connecting to graphical console
             for guest" — no error, just silent failure. Diagnose with
             `ssh <host> which nc` (should return a path).

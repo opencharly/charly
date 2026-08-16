@@ -1137,10 +1137,9 @@ agents-skill:
                     build:binary` keeps the dual path `bin/charly` ↔ `candy/charly/bin/charly`
                     in sync (a manual `go build -o` does not) — see `/charly-internals:go`
                     "Quick Reference" / "Debug a Build Issue" + `/charly-tools:charly`. It
-                    does not touch the tracked `pkg/arch/PKGBUILD` — that file is read only
-                    by the legacy `charly box pkg` native-package build (removed with the
-                    nFPM cutover; the `charly generate-packages` plugin builds the packages
-                    now), never by a bare-host `go build`.
+                    does not touch any packaging source — the native packages are built by
+                    the `charly generate-packages` plugin (sdk/packagekit) from the candy's
+                    `packaging:` section, never by a bare-host `go build`.
                   - **Post-merge resync.** After a wave lands, the orchestrator/operator
                     updates the host package from the new `main` via the native-package path
                     — install a freshly published release from the per-distro package repos
@@ -2007,7 +2006,7 @@ cloud-init-renderer-skill:
 
             - `composePackages`: prepends `{openssh (or `openssh-server` on debian/ubuntu), curl, tar}` (deduplicated against user's `Packages`). Guarantees the guest has SSH server + download tools + tar for later layer application.
             - `composeBootCmd`: prepends `systemctl mask ssh.socket || true` — the EARLIEST cloud-init phase (`bootcmd` runs before `write_files`/packages/`runcmd`), so a socket-activated sshd (enabled by default on some cloud images, notably Debian/Ubuntu) can never accept a connection before cloud-init has finished configuring the guest. `|| true` makes this a harmless no-op on a distro that ships no `ssh.socket` unit at all (Arch/Fedora typically don't).
-            - `composeRunCmd`: prepends THREE steps, in order: (1) a self-testing shell snippet that writes a `PerSourcePenalties no` sshd_config.d drop-in and validates the FULL resulting config with `sshd -t`, deleting the drop-in again on failure; (2) `systemctl unmask ssh.socket || true` (the matching unmask for `composeBootCmd`'s mask); (3) `systemctl enable --now sshd` (or `ssh` on debian/ubuntu). Distro-specific user `runcmd:` entries can assume sshd is running and hardened.
+            - `composeRunCmd`: prepends the hardening drop-in, then a per-init sshd START — three steps on systemd, two on OpenRC. Step (1) is unbranched and identical everywhere: a self-testing shell snippet that writes a `PerSourcePenalties no` sshd_config.d drop-in and validates the FULL resulting config with `sshd -t`, deleting the drop-in again on failure. It is hoisted above the branch in the source so "always first, distro-agnostic" is structural rather than duplicated per arm. The start then branches on `effectiveDistro(spec) == "alpine"`: on **systemd** (everything else) (2) `systemctl unmask ssh.socket || true` (the matching unmask for `composeBootCmd`'s mask) and (3) `systemctl enable --now sshd` (or `ssh` on debian/ubuntu); on **OpenRC** (Alpine) (2) `rc-update add sshd default && rc-service sshd start` — there is no ssh.socket to unmask and no systemctl to enable with, and the OpenSSH package ships `/etc/init.d/sshd`. Either way, distro-specific user `runcmd:` entries can assume sshd is running and hardened. `composeBootCmd`'s `systemctl mask ssh.socket || true` stays UNBRANCHED: on Alpine the `|| true` swallows the missing binary and the mask is vacuous where nothing is socket-activated.
 
             User-supplied fields **extend** defaults; they don't replace them. Prevents the common footgun where an author puts `packages: [nginx]` and accidentally breaks SSH because they overrode the default list.
 
@@ -2044,7 +2043,7 @@ cloud-init-renderer-skill:
             the mask/unmask pair entirely and relying on the `PerSourcePenalties` drop-in
             alone.
 
-            **Delivery is distro-branched (D15): `packages:` for most distros, a `runcmd:`-prepended `pacman -S --needed` for pacman-family.** On every distro EXCEPT the pacman family (arch/cachyos/manjaro/endeavouros), the composed package union rides the `packages:` cloud-config key as documented above. On a pacman-family distro, `packages:` is OMITTED entirely and the union is instead PREPENDED to `runcmd:` as `pacman -S --needed --noconfirm <union>` — AHEAD of `composeRunCmd`'s own three hardening/enable steps (D18, above). This is an R10 bed finding: cloud-init's own package-install module invokes `pacman -S` WITHOUT `--needed`, so on an image that already ships the minimum set (e.g. every Arch cloud image) it unconditionally REINSTALLS them — reinstalling openssh re-triggers its post-install host-key-regen hook while the base image's own socket-activated sshd is already listening, racing a live key-file rewrite against new SSH connections (the observed "reset during `kex_exchange_identification`, guest otherwise idle" signature). apt/dnf installs are naturally no-op-idempotent when the package is already present, so only the pacman-family path needs the `--needed` rewrite. The pacman-family check is `formatForDistroID(effectiveDistro(spec)) == "pac"`; `effectiveDistro` resolves `Source.Distro` when set, and additionally infers `"arch"` for a `cloud_image` source with `base_user: "arch"` and no explicit `distro:` (a narrowing of the pre-existing `composePackages` distro-switch fallback, never a behavior change for a caller that already got the Arch/Fedora shape) — every OTHER empty-distro image stays on the safe, unchanged `packages:`-key path. See `sdk/vmshared/cloud_init_render.go`'s `effectiveDistro`/`composePackages` doc comments for the full narrowing proof. **Note (D18):** the pacman-vs-non-pacman split governs ONLY the `packages:` key vs the `pacman -S --needed` runcmd prepend — every distro's `runcmd:` now ALSO carries the D18 hardening/unmask/enable steps, so "byte-identical to before" no longer applies to the full runcmd list, only to the packages-key handling this paragraph describes.
+            **Delivery is distro-branched (D15): `packages:` for most distros, a `runcmd:`-prepended `pacman -S --needed` for pacman-family.** On every distro EXCEPT the pacman family (arch/cachyos/manjaro/endeavouros), the composed package union rides the `packages:` cloud-config key as documented above. On a pacman-family distro, `packages:` is OMITTED entirely and the union is instead PREPENDED to `runcmd:` as `pacman -S --needed --noconfirm <union>` — AHEAD of `composeRunCmd`'s own three hardening/enable steps (D18, above). This is an R10 bed finding: cloud-init's own package-install module invokes `pacman -S` WITHOUT `--needed`, so on an image that already ships the minimum set (e.g. every Arch cloud image) it unconditionally REINSTALLS them — reinstalling openssh re-triggers its post-install host-key-regen hook while the base image's own socket-activated sshd is already listening, racing a live key-file rewrite against new SSH connections (the observed "reset during `kex_exchange_identification`, guest otherwise idle" signature). apt/dnf installs are naturally no-op-idempotent when the package is already present, so only the pacman-family path needs the `--needed` rewrite. The pacman-family check is `formatForDistroID(effectiveDistro(spec)) == "pac"`; `effectiveDistro` resolves `Source.Distro` when set, and additionally infers `"arch"` for a `cloud_image` source with `base_user: "arch"`, and `"alpine"` for one with `base_user: "alpine"`, when no explicit `distro:` is set (a narrowing of the pre-existing `composePackages` distro-switch fallback, never a behavior change for a caller that already got the Arch/Fedora shape) — every OTHER empty-distro image stays on the safe, unchanged `packages:`-key path. See `sdk/vmshared/cloud_init_render.go`'s `effectiveDistro`/`composePackages` doc comments for the full narrowing proof. **Note (D18):** the pacman-vs-non-pacman split governs ONLY the `packages:` key vs the `pacman -S --needed` runcmd prepend — every distro's `runcmd:` now ALSO carries the D18 hardening/unmask/enable steps, so "byte-identical to before" no longer applies to the full runcmd list, only to the packages-key handling this paragraph describes.
 
             ## WriteSeedISO
 
@@ -2183,7 +2182,7 @@ cutover-policy-skill:
             ## Required for every breaking change
 
             - A new **migration-table entry** in `candy/plugin-migrate/migrations.cue` (a declarative `ops:` list, or an `apply:` `goHooks` hook for a structural reshape) PLUS a matching `#SchemaVersion` bump in `spec/schema/version.cue` (the spec repo — landed + tagged first, see `/charly-build:migrate`), applied via `task cue:gen`; the entry's CalVer is strictly greater than the current HEAD. Every cutover is one idempotent step applied by the op-walker on the one `charly migrate` command — there are no per-cutover sub-verbs. Running `charly migrate` twice is a no-op. See `/charly-build:migrate`.
-            - A **fresh release git tag** `v<YYYY.DDD.HHMM>` — ONE per merge, applied by the fresh `pr-validator` at MERGE from the current UTC merge time (never by the author at push time; author-time stamps collide/mis-order across concurrent PRs), **decoupled** from the `charly.yml` `version:` field (the schema version, bumped only when a cutover raises `#SchemaVersion`). Tag EVERY landing, including one that does NOT bump `version:` (content removal — a submodule extraction, an image drop). Tags are **immutable** — only ever added, never moved or force-pushed. Every component is fixed-width zero-padded (4-digit year, 3-digit day-of-year, 4-digit HHMM) so tags sort chronologically under a plain alphanumeric sort; the evaluator computes `v$(date -u +%Y.%j.%H%M)` at merge. Every repo (superproject, `box/<distro>`, `plugins`, `pkg/*`, `docs`) is tagged on its own merged HEAD — the tag marks the merge, not the schema, so no `charly.yml` is required; `sdk` ALONE uses its Go-module `v0.<YYYYDDD>.<HHMM leading-zeros-stripped>` scheme (a semver requirement, not an exemption). See `/charly-build:migrate` "Per-merge release git tags", `/charly-internals:git-workflow` "CalVer", and the project rulebook "Post-Execution Policies".
+            - A **fresh release git tag** `v<YYYY.DDD.HHMM>` — ONE per merge, applied by the fresh `pr-validator` at MERGE from the current UTC merge time (never by the author at push time; author-time stamps collide/mis-order across concurrent PRs), **decoupled** from the `charly.yml` `version:` field (the schema version, bumped only when a cutover raises `#SchemaVersion`). Tag EVERY landing, including one that does NOT bump `version:` (content removal — a submodule extraction, an image drop). Tags are **immutable** — only ever added, never moved or force-pushed. Every component is fixed-width zero-padded (4-digit year, 3-digit day-of-year, 4-digit HHMM) so tags sort chronologically under a plain alphanumeric sort; the evaluator computes `v$(date -u +%Y.%j.%H%M)` at merge. Every repo (superproject, `box/<distro>`, `plugins`, `docs`) is tagged on its own merged HEAD — the tag marks the merge, not the schema, so no `charly.yml` is required; `sdk` ALONE uses its Go-module `v0.<YYYYDDD>.<HHMM leading-zeros-stripped>` scheme (a semver requirement, not an exemption). See `/charly-build:migrate` "Per-merge release git tags", `/charly-internals:git-workflow` "CalVer", and the project rulebook "Post-Execution Policies".
             - **Hard load-time errors** for any residual legacy field, with a one-line remediation hint pointing at the migration command.
             - **Deletion — in the same PR** — of every Go type, function, CLI flag, OCI label, YAML field, skill doc paragraph, and test fixture that references the removed surface.
             - **Relocation step-sequence PARITY (when the cutover relocates a dispatcher, orchestrator, or runner).** Before relocating, ENUMERATE the original's per-CLASS behavior arms — e.g. bring-up / update / teardown × each substrate or shape class — and PROVE each class's step sequence matches the original in the relocated code. Fixing one arm of a class while missing its siblings is the CHARACTERISTIC relocation defect: a generic fallback that silently mis-handles a special class passes every unit test and fails ONLY on that class's live bed. The acceptance roster MUST therefore carry a bed per SPECIAL class (a gate that cannot fail on the class proves nothing — see `/charly-check:check` "R10 gate by change class").
@@ -3515,7 +3514,7 @@ git-workflow-skill:
 
               Stage a rename+edit as `git add <new>` alone, and a deletion by DIRECTORY or with `git add -u`; never name the vanished path. **This shape defeats the post-commit check above**, which is why it needs stating separately: `git show --stat` DOES list the file, as `old.md => new.md | 0`, so "every intended file is listed" passes. Presence is not the signal — the tells are the **magnitude** (`| 0` insertions on a commit meant to change content) and a **leftover ` M <new>`** in `git status` afterwards. Read the numbers and the post-commit status, not just the filenames, and confirm content directly with `git show HEAD:<new-path> | head -1` whenever the edit is the point of the commit. The CalVer-finalization instance of this — renaming a placeholder `CHANGELOG/` file while rewriting its H1 — is in `references/validator-and-calver.md`.
             - **Check-coverage is part of R10.** The change must ship the test coverage that proves its functionality (`check:` checks for new/changed layers & images, Go tests for `charly` code) AND the live run must have exercised it. A change whose new functionality has no test that would fail without it is not landable.
-            - **Every repo is tagged at merge.** The superproject, every `box/<distro>`, `plugins`, `pkg/*`, and `docs` all mint `v<YYYY.DDD.HHMM>` on their own merged HEAD — the tag marks the MERGE, decoupled from any `charly.yml` `version:` schema field, so a repo needs no `charly.yml` to be tagged. The sole exception is the sdk contract repo, which tags under its own Go-module scheme `v0.<YYYYDDD>.<HHMM with all leading zeros stripped>` (B2 step 0) — **not an exemption but a hard Go-module requirement**: `v<YYYY.DDD.HHMM>` is not a valid Go module version (semver forbids a leading-zero segment — `0733`→`733` — and a `major ≥ 2` would force a `/vN` module-path suffix that breaks every `import github.com/opencharly/sdk`), so the stripped `v0.<…>` form is mandatory, not a choice. A skipped tag is a defect, not an exemption: the orchestrator verifies the tag landed after each merge (`git ls-remote --tags origin v<VER>` non-empty) and, if the evaluator skipped it, backfills it add-only on the merged HEAD (`git tag -a v<VER> -m "<subject>" <merged-HEAD>` + `git push origin refs/tags/v<VER>`) — tags are immutable, so a backfill only adds one, never moves an existing tag.
+            - **Every repo is tagged at merge.** The superproject, every `box/<distro>`, `plugins`, and `docs` all mint `v<YYYY.DDD.HHMM>` on their own merged HEAD — the tag marks the MERGE, decoupled from any `charly.yml` `version:` schema field, so a repo needs no `charly.yml` to be tagged. The sole exception is the sdk contract repo, which tags under its own Go-module scheme `v0.<YYYYDDD>.<HHMM with all leading zeros stripped>` (B2 step 0) — **not an exemption but a hard Go-module requirement**: `v<YYYY.DDD.HHMM>` is not a valid Go module version (semver forbids a leading-zero segment — `0733`→`733` — and a `major ≥ 2` would force a `/vN` module-path suffix that breaks every `import github.com/opencharly/sdk`), so the stripped `v0.<…>` form is mandatory, not a choice. A skipped tag is a defect, not an exemption: the orchestrator verifies the tag landed after each merge (`git ls-remote --tags origin v<VER>` non-empty) and, if the evaluator skipped it, backfills it add-only on the merged HEAD (`git tag -a v<VER> -m "<subject>" <merged-HEAD>` + `git push origin refs/tags/v<VER>`) — tags are immutable, so a backfill only adds one, never moves an existing tag.
 
             ## Reference Index
 
@@ -3728,7 +3727,7 @@ git-workflow-skill:
                   validator-owned), so tier truth is judged by the fresh `pr-validator`, per the
                   rulebook's "never by hook regexes".
 
-                  ## B4 — sync to upstream + prune (per repo: main, sdk, plugins, docs, box/*, pkg/*)
+                  ## B4 — sync to upstream + prune (per repo: main, sdk, plugins, docs, box/*)
 
                   - **Sync-before-start.** `git fetch origin --prune --tags`; ff local `main` to
                     `origin/main`. Never force-reset a diverged local `main` — if it cannot
@@ -4071,8 +4070,8 @@ git-workflow-skill:
                   offender) run against a stale, ambient cwd doesn't just misreport, it
                   MUTATES the wrong tree. Live incident: a fresh evaluator ran `task cue:gen`
                   with a persisted shell cwd that had drifted to the main session worktree —
-                  the task's own `git submodule update` chain rewound 5 submodule checkouts +
-                  the `pkg/arch` gitlink there before the mistake was caught (fully restored,
+                  the task's own `git submodule update` chain rewound 5 submodule checkouts
+                  there before the mistake was caught (fully restored,
                   disclosed). So every mutating task/command invocation in an isolated-worktree
                   workflow (a validator run, a teammate's branch work, a spike) carries an
                   explicit `cd <worktree> &&` anchor IN THE SAME compound command — never a
@@ -4301,7 +4300,7 @@ git-workflow-skill:
 
                   One fresh stamp per merge, immutable (only ever added), independent of `charly.yml`
                   `version:` (the schema version, bumped only by a cutover raising `#SchemaVersion`).
-                  Every repo (superproject, `box/<distro>`, `plugins`, `pkg/*`, `docs`) mints `v$VER` on its
+                  Every repo (superproject, `box/<distro>`, `plugins`, `docs`) mints `v$VER` on its
                   merged HEAD; `sdk` alone uses its Go-module `v0.<YYYYDDD>.<HHMM
                   leading-zeros-stripped>` scheme (not an exemption — Go modules require semver, which
                   forbids a leading-zero segment — `0733`→`733`). A YAML schema/format change does
@@ -4651,7 +4650,7 @@ go-skill:
 
             | Action | Command | Description |
             |--------|---------|-------------|
-            | Build | `task build:binary` | Compile to `bin/charly` (CalVer-stamped), NO install. Also copies to `candy/charly/bin/charly` — does NOT touch the tracked `pkg/arch/PKGBUILD` (that file is read only by the legacy `charly box pkg` native-package build, removed with the nFPM cutover) |
+            | Build | `task build:binary` | Compile to `bin/charly` (CalVer-stamped), NO install. Also copies to `candy/charly/bin/charly` — does NOT touch any packaging source (the native packages are built by the `charly generate-packages` plugin from the candy's `packaging:` section) |
             | Package | `charly generate-packages` (nFPM plugin) | Build a distro-native `.pkg.tar.zst`/`.rpm`/`.deb`/`.apk`/`.ipk` release artifact via the `charly generate-packages` plugin (nFPM, `sdk/packagekit`), published to the per-distro package repos. Install it yourself with your OWN package manager (`pacman -U`/`dnf install`/`apt install`/`apk add`) |
             | Install (portable) | `task install-portable` | Copy `bin/charly` to `$HOME/.local/bin/charly` (solo bootstrap; NOT a multi-teammate dev-loop step — see below) |
             | Run tests | `cd charly && go test ./...` | Run all tests |
@@ -4791,11 +4790,12 @@ go-skill:
               multi-teammate / multi-worktree setup") catches a stale invoked binary against
               newer `charly/*.go` in the same tree, but the version check is still the
               explicit proof — the per-worktree-vs-host-package split lives there too.
-            - **Every runtime OS dependency goes into `pkg/arch/PKGBUILD` `depends=`** —
-              the single source of truth (`nc`, `socat`, `xorriso`, `qemu-guest-agent`, …);
-              the `pkg/fedora` / `pkg/debian` packaging mirrors it. A manual install on one
-              host is a bug report disguised as a fix — it won't survive a fresh install on
-              a synced host.
+            - **Every runtime OS dependency goes into the charly candy's `packaging:`
+              section** (`candy/charly/charly.yml` `packaging.formats.*.depends`) — the
+              single source of truth (`nc`, `socat`, `xorriso`, `qemu-guest-agent`, …),
+              read by the `charly generate-packages` plugin (sdk/packagekit). A manual
+              install on one host is a bug report disguised as a fix — it won't survive a
+              fresh install on a synced host.
 
             The verification side (checking the deployed binary + deps on a live target)
             is `/charly-check:check` Standards 7–9; the dual-path `bin/charly` ↔
@@ -5184,7 +5184,7 @@ go-skill:
                   | `candy/plugin-box/{validate_config_rules.go, validate_schema_rules.go}` | The host-natural validation checks that need the raw loader — the former `charly/validate.go` is DELETED, K-wave 2 (they moved to the compiled-in `command:box` plugin): CUE-conformance (`validateCandyCUESchemas` / `validateProjectCUESchemas`), `validateBuildAndDistro`, `validateBuildTunables`, `validateMergeConfig`, `validateBuilderRefs`, `validateBoxBaseFrom`, `validateRemoteCandies`, `boxEntityWireYAML`, `isNodeFormFile` (`validate_schema_rules.go`); the box+config rule set lives in `validate_config_rules.go`. Format/builder validation against config definitions (not hardcoded maps). The per-kind/op/candy/graph rule ENGINE (`validateCandyTasks` / `validateCandyContents` / `validateAliases` / `validateVolume` / `validateCandyReferences` / the box+candy DAGs / `validateOps` / the candy `plugin:` block checks) moved to the compiled-in `command:box` plugin (`candy/plugin-box/{validate.go, validate_rules.go, validate_graph.go, validate_check.go}`), reading the resolved-project envelope. (`validateVocabularyCollections` + its sibling `validateEntityCUE`, and core's `validatePluginCandy`, were dead-code-radical-removal-batch deletions — the modern per-kind LOAD-time plugin gate and `candy/plugin-box`'s own `plugin:`-block checks supersede them; see the batch's CHANGELOG entry for the coverage-comparison evidence.) |
                   | `version.go` | CalVer computation |
                   | `sdk/kit/scaffold.go` | `new layer` scaffolding (`kit.ScaffoldCandy` — single-layer dir creation with stub `charly.yml`; the former `charly/scaffold.go` is DELETED, K-wave 2) |
-                  | `box_fetch_reentry.go` — DELETED (K-wave 2). | The hidden `charly __box-fetch` / `__box-refresh` core reentry points behind the COMPILED-IN candy/plugin-authoring command:fetch / command:refresh verbs (P14b) moved with the file. The repo resolver (`ResolveProjectRepo` → `EnsureRepoDownloaded`: `CHARLY_REPO_OVERRIDE` + the refs-backend dispatch + the command:migrate auto-migration) is host-coupled, so the authoring plugin re-runs these hidden commands over `HostBuild("cli")` (the SAME seam candy/plugin-box's `pkg` verb uses for `__box-pkg`). The `box set/add-candy/rm-candy/write/cat` authoring verbs + the `AddCandyToBox`/`RemoveCandyFromBox` yaml.Node helpers + `resolveProjectFile` (the path-traversal guard for `box write` / `box cat`) MOVED to the compiled-in `command:authoring` plugin (`candy/plugin-authoring`, P14b) — they run PURE on sdk/kit (`kit.SetByDotPath` / `kit.MappingChild` / `kit.SaveYAMLNodeFile`) + stdlib, zero core reentry. The create-side `box new project/box/candy` ENGINE is `kit.ScaffoldProject` / `kit.AddBox` / `kit.ScaffoldCandy` (shared with candy/plugin-box's command:new). Tested in `sdk/kit/scaffold_test.go` (the kit-scaffolder tests) + `candy/plugin-authoring/authoring_edit_test.go` (the moved helpers). |
+                  | `box_fetch_reentry.go` — DELETED (K-wave 2). | The hidden `charly __box-fetch` / `__box-refresh` core reentry points behind the COMPILED-IN candy/plugin-authoring command:fetch / command:refresh verbs (P14b) moved with the file. The repo resolver (`ResolveProjectRepo` → `EnsureRepoDownloaded`: `CHARLY_REPO_OVERRIDE` + the refs-backend dispatch + the command:migrate auto-migration) is host-coupled, so the authoring plugin re-runs these hidden commands over `HostBuild("cli")`. The `box set/add-candy/rm-candy/write/cat` authoring verbs + the `AddCandyToBox`/`RemoveCandyFromBox` yaml.Node helpers + `resolveProjectFile` (the path-traversal guard for `box write` / `box cat`) MOVED to the compiled-in `command:authoring` plugin (`candy/plugin-authoring`, P14b) — they run PURE on sdk/kit (`kit.SetByDotPath` / `kit.MappingChild` / `kit.SaveYAMLNodeFile`) + stdlib, zero core reentry. The create-side `box new project/box/candy` ENGINE is `kit.ScaffoldProject` / `kit.AddBox` / `kit.ScaffoldCandy` (shared with candy/plugin-box's command:new). Tested in `sdk/kit/scaffold_test.go` (the kit-scaffolder tests) + `candy/plugin-authoring/authoring_edit_test.go` (the moved helpers). |
                   | `sdk/kit/yaml.go` *(SDK kit, not `charly/`)* | `kit.SetByDotPath(path, dotpath, valueYAML)` + `kit.MappingChild(m, key)` — the generic comment-preserving YAML node utilities used by `charly box set` and the `command:candy` plugin. Walk `*yaml.Node` trees; create intermediate mappings on demand; reject descent into scalars. Tested in `sdk/kit/yaml_test.go` (`TestSetByDotPath_ScalarReplacement` + list-value, intermediate-mapping, scalar-descent-error cases). |
 
                   ### Plugins, external deploy & build-time emit
@@ -8567,7 +8567,7 @@ vm-spec-skill:
             The renderer combines structured fields with renderer defaults:
 
             - `Packages`: prepended with `{openssh, curl, tar}`.
-            - `RunCmd`: prepended with three D18 hardening steps — a self-testing `PerSourcePenalties no` sshd drop-in write+validate, `systemctl unmask ssh.socket`, then `systemctl enable --now sshd` — so distro-specific setup can assume sshd is running and hardened. See `/charly-internals:cloud-init-renderer` "Guest SSH hardening (D18)" for the full mechanism + design trade-off.
+            - `RunCmd`: prepended with the D18 hardening drop-in, then a per-init sshd start — so distro-specific setup can assume sshd is running and hardened. Step 1 is always the same self-testing `PerSourcePenalties no` sshd drop-in write+validate (plain shell into `sshd_config.d`, which OpenSSH Includes on every init); the start that follows is branched — `systemctl unmask ssh.socket` then `systemctl enable --now sshd` on systemd, `rc-update add sshd default && rc-service sshd start` on OpenRC (Alpine), which has neither ssh.socket nor systemctl. See `/charly-internals:cloud-init-renderer` "Guest SSH hardening (D18)" for the full mechanism + design trade-off.
             - `Users`: the `VmSSH.User` account is auto-injected unless already present; if present, the renderer appends the ssh pubkey to the user's existing entry.
 
             `Extra` is a raw-YAML escape hatch merged after structured fields. Prefer structured fields; `Extra` exists for long-tail cloud-init options the schema doesn't cover.
@@ -9291,7 +9291,8 @@ pr-validator-agent:
                 `ai.opencharly.*` label are asserted post-build (an empty/missing label is a
                 FAILURE, not a warning). R9 (any change exercised on a target): the deployed
                 binary was REBUILT and `charly version` matches source, and every new runtime
-                OS dep is in `pkg/arch/PKGBUILD` `depends=` (never a manual host install).
+                OS dep is in the charly candy's `packaging:` section (never a manual host
+                install).
             11. **R10 — disposable-only, fresh-rebuild, coverage.** Runtime proof is on a
                 `disposable: true` target only, on a FRESH `charly update`/rebuild, at ZERO
                 warnings, with pasted output for EACH changed piece. The change ships the
@@ -9884,7 +9885,7 @@ pr-validator-agent:
                the sdk tag is `v0.$(date -u +%Y%j).$SDK_MIN`). A leading-zero sdk tag
                (e.g. `v0.2026192.0733`) is INVALID — it makes every consumer's `go.mod`
                unparseable in module mode — so this stripping is mandatory, not cosmetic.
-               `plugins`, `pkg/*`, and `docs` ARE tagged, with the same `v<YYYY.DDD.HHMM>` form as
+               `plugins` and `docs` ARE tagged, with the same `v<YYYY.DDD.HHMM>` form as
                every non-sdk repo (they carry no `charly.yml`, so no schema `version:` bump — but
                the tag still marks the merge).
             3. **Rewrite every merge-time-dependent version surface to `$VER`** on the feat
@@ -9964,11 +9965,11 @@ pr-validator-agent:
                anomaly, and run R1. The post-merge transcript MUST name `MERGED_SHA` and
                show the exact parser output.
 
-               Only after that proof, tag EVERY repo (`plugins`, `pkg/*`, and `docs` included;
+               Only after that proof, tag EVERY repo (`plugins` and `docs` included;
                `sdk` substitutes its `v0.<…>` form from step 2): `git tag -a v$VER -m "<subject>"
                "$MERGED_SHA"`; `git push origin refs/tags/v$VER` (a tag push — allowed by
                the pre-push-gate). Only a SUPERPROJECT `v*` tag triggers the release-binary
-               workflow; a `plugins` / `pkg/*` / `docs` tag fires NO workflow, so tagging them is
+               workflow; a `plugins` / `docs` tag fires NO workflow, so tagging them is
                harmless.
                **SKIPPING any repo's tag is a DEFECT** — the pre-unification `plugins`/`pkg`
                tag-exempt rule is RETIRED; never omit a tag on a stale "exempt" belief (doing so

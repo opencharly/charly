@@ -2465,7 +2465,7 @@ check-skill:
                      than inferring it from a PASS. Same failure family as invoking a stale
                      `/usr/bin/charly`: "the binary under test must be the one invoked" applies to
                      every binary in the chain.
-                  9. **Verify runtime deps are installed via package management** (R9) — on the host: `charly doctor` (dependency status), or the host package manager directly (`rpm -q <pkg>` / `pacman -Q <pkg>` — host packages are not charly-managed resources, so the package manager IS their interface); inside a container: `charly cmd <box> 'rpm -q <pkg>'`. Manual installs do not count — they won't survive a fresh install on a synced host. Every runtime dep must live in `setup.sh` + `pkg/arch/PKGBUILD`.
+                  9. **Verify runtime deps are installed via package management** (R9) — on the host: `charly doctor` (dependency status), or the host package manager directly (`rpm -q <pkg>` / `pacman -Q <pkg>` — host packages are not charly-managed resources, so the package manager IS their interface); inside a container: `charly cmd <box> 'rpm -q <pkg>'`. Manual installs do not count — they won't survive a fresh install on a synced host. Every runtime dep must live in `setup.sh` + the charly candy's `packaging:` section (`candy/charly/charly.yml`).
                   10. **Leave the target healthy, not paused/errored** — the final `charly status` (and `charly check libvirt info <vm>` for a VM) is healthy. If the target is in a broken state during exploration, `charly update` it back to the committed config before continuing — never layer experiments on broken state.
                   11. **Re-verify on a fresh rebuild after committing the source-level fix** (R10) — `charly update <disposable-target>` one more time from clean, with the new source applied. Run standards 1–10 again against this fresh rebuild. **This is the acceptance gate.** A fix that works on a hand-patched target but not on a fresh rebuild is a regression waiting for the next unrelated rebuild to wipe your patch. Paste both the exploratory-pass output and the fresh-rebuild-pass output into the conversation — the user sees both.
 
@@ -3919,7 +3919,7 @@ libvirt-skill:
 
             - `github.com/digitalocean/go-libvirt` — pure-Go libvirt RPC client.
             - `libvirt.org/go/libvirtxml` — typed domain XML parsing/generation.
-            - The `libvirt` Arch package (libvirtd, session socket) is already a hard dep of the `opencharly-git` PKGBUILD.
+            - The `libvirt` Arch package (libvirtd, session socket) is already a hard dep of the charly package (`packaging.formats.archlinux.depends`).
 
             ## Cross-References
 

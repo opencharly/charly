@@ -20,9 +20,9 @@ charly:
         distro:
             debian:
                 # tailscale is a mandatory charly dep but is NOT in Debian main, so the
-                # .deb (pkg/debian) omits it; the charly candy supplies it for deb-family
-                # via the tailscale apt repo. arch/fedora get tailscale from their
-                # native package's deps instead, so it is deb-family-scoped here.
+                # .deb (packaging.formats.deb) omits it; the charly candy supplies it for
+                # deb-family via the tailscale apt repo. arch/fedora get tailscale from
+                # their native package's deps instead, so it is deb-family-scoped here.
                 package:
                     - tailscale
                 repo:
@@ -43,15 +43,15 @@ charly:
         # The `packaging:` section is the native-package metadata source for
         # `charly generate-packages` (sdk/packagekit): the per-distro package repos
         # (charly-alpine/arch/fedora/ubuntu/debian/openwrt) download this candy's
-        # charly.yml from the release and pass it to the plugin as --candy. The deps are
-        # transcribed from the three legacy pkg/* files (arch PKGBUILD, fedora spec,
-        # debian control), which stay as fixtures until the Phase 3 removal —
-        # charly/packaging_test.go greps them so a dep added to one format but not here
-        # fails CI. The charly binary is installed by the `copy: bin/charly` run step
-        # below (the in-development binary at candy/charly/bin/charly, synced by
-        # `task build:binary`); that step remains the binary source for image builds,
-        # and the localpkg machinery's transition to build from this section lands with
-        # the Phase 3 cutover.
+        # charly.yml from the release and pass it to the plugin as --candy. The deps
+        # were transcribed from the three legacy pkg/* files (arch PKGBUILD, fedora
+        # spec, debian control), removed with the nFPM cutover; the section is now the
+        # single source — charly/packaging_test.go asserts it parses and every entry
+        # is a plain package name. The charly binary is installed by the `copy:
+        # bin/charly` run step below (the in-development binary at
+        # candy/charly/bin/charly, synced by `task build:binary`); that step remains
+        # the binary source for image builds, and the localpkg machinery builds from
+        # this section via the generate-packages plugin (sdk/packagekit).
         packaging:
             name: charly
             description: The OpenCharly CLI — the fully equipped factory floor for you and your agents.

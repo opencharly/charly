@@ -276,9 +276,9 @@ func TestCommandProviders_ExtractedReachMCP(t *testing.T) {
 	// only the generic kit.SetByDotPath / kit.MappingChild — no hidden core command for any). All are
 	// absent from this builtin-only model — a compiled-in command
 	// is a DYNAMIC holder (collectExternalCommandPlugins), never a builtin CommandProvider.
-	// NOTE: `version` is DELIBERATELY NOT here — it was excluded from C15 (pkg/arch's pkgver()
-	// stamps the package version via `bin/charly version`), so it stays a CORE command and IS
-	// present in the builtin model (asserted by TestCLIModel_CoversCommands).
+	// NOTE: `version` is DELIBERATELY NOT here — it was excluded from C15 (the distro repos'
+	// packaging workflows stamp the package version via `bin/charly version`), so it stays a CORE
+	// command and IS present in the builtin model (asserted by TestCLIModel_CoversCommands).
 	if paths["clean"] {
 		t.Error("clean unexpectedly present in the builtin CLI model — `clean` is now a compiled-in command (candy/plugin-clean, command:clean), a dynamic holder not a builtin CommandProvider")
 	}

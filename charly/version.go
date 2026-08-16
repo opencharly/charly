@@ -9,8 +9,8 @@ import (
 // BuildCalVer is the CalVer build identity of THIS binary, injected at compile
 // time via `-ldflags "-X main.BuildCalVer=<calver>"` (see taskfiles/Build.yml,
 // which derives it from the git commit date through scripts/calver.sh — the
-// same value the native package's pkgver() reports). Empty
-// for an unstamped build (`go build` / `go test` without the ldflag).
+// same value the distro repos' packaging workflows stamp as the release version).
+// Empty for an unstamped build (`go build` / `go test` without the ldflag).
 //
 // This is the binary's TRUE identity — frozen at build time — as opposed to
 // ComputeCalVer() below, which is a wall-clock readout of the current moment.
