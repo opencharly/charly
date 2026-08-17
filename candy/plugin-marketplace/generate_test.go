@@ -1,6 +1,7 @@
 package marketplace
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -181,6 +182,62 @@ func TestGenerateThenDriftIsClean(t *testing.T) {
 	if err := drift(dir); err != nil {
 		t.Fatalf("drift after generate must be clean: %v", err)
 	}
+}
+
+// The success line is a CLAIM about what drift compared, and it is the claim the tool got wrong:
+// it read "match the committed tree" while comparing bytes on disk, so it printed a git fact on a
+// working tree `git status` called dirty. This fixture proves the semantics and not just the
+// wording — it is a t.TempDir() that is never `git init`'d, so a check that consulted git could
+// not report clean here at all, and the assertion fails the moment the message claims one.
+func TestDriftCleanMessageNamesWhatItCompared(t *testing.T) {
+	dir := writeFixture(t)
+	if _, err := os.Stat(filepath.Join(dir, ".git")); !os.IsNotExist(err) {
+		t.Fatalf("fixture must NOT be a git repository — that is what makes this test discriminating: %v", err)
+	}
+	if err := generate(dir); err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	var driftErr error
+	out := captureStdout(t, func() { driftErr = drift(dir) })
+	if driftErr != nil {
+		t.Fatalf("drift after generate must be clean: %v", driftErr)
+	}
+	for _, want := range []string{"on disk match their sources", "regeneration is a no-op"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("clean message must state what was compared (%q), got: %q", want, out)
+		}
+	}
+	if strings.Contains(out, "committed") {
+		t.Fatalf("clean message must claim nothing about commit state — drift never reads git; got: %q", out)
+	}
+}
+
+// captureStdout collects what fn writes to os.Stdout. fn must not call t.Fatal — record the error
+// and assert after the return, or the restore below is skipped by runtime.Goexit.
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	orig := os.Stdout
+	os.Stdout = w
+	collected := make(chan string, 1)
+	go func() {
+		var b strings.Builder
+		_, _ = io.Copy(&b, r)
+		collected <- b.String()
+	}()
+	fn()
+	os.Stdout = orig
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+	out := <-collected
+	if err := r.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return out
 }
 
 func TestDriftFailsClosedOnMutation(t *testing.T) {

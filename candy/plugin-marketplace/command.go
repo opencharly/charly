@@ -12,7 +12,7 @@ import (
 // forwards (out-of-process: the syscall.Exec'd argv tail; compiled-in: the decoded params args).
 type marketplaceCLI struct {
 	Generate generateCmd `cmd:"" help:"Regenerate the charly-plugins marketplace + harness surface from candy config"`
-	Drift    driftCmd    `cmd:"" help:"Fail-closed no-op check: regenerate in memory and compare with the committed tree"`
+	Drift    driftCmd    `cmd:"" help:"Fail-closed no-op check: regenerate in memory and compare with the artifacts on disk (git is never consulted)"`
 }
 
 // generateCmd renders every generated artifact (plugins/ corpus, .claude/ hooks + settings,
