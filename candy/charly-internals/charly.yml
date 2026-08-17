@@ -8782,6 +8782,35 @@ vm-spec-skill:
 
             **`base_user:` is not only the adopt-user selector — two of its values STEER RENDERING.** When no explicit `distro:` is set on a `cloud_image` source, `effectiveDistro` infers `"arch"` from `base_user: "arch"` and `"alpine"` from `base_user: "alpine"`, and those inferences pick the package-delivery branch (the `pacman -Sy` runcmd prepend vs the `packages:` key) and the sshd-start branch (`rc-update`+`rc-service` on OpenRC vs `systemctl unmask`+`enable --now`). Every other value, and an empty one, falls through to the systemd/`packages:` path. **So an Alpine image declared with a custom account name, or with `base_user:` left empty, gets `systemctl enable --now sshd` on a guest that has no systemd, and the VM boots unreachable.** Set `distro: alpine` explicitly whenever the account is not literally `alpine`. That is `source.distro` — an OPTIONAL free-form string on the `cloud_image` arm (`spec/schema/vm.cue`: `distro?: string`), a sibling of `base_user:`, authored as:
 
+            **And the inverse trap, which is worse because NOTHING is inferred: a Debian-family**
+            **`cloud_image` that omits `distro:` renders Arch conventions and boots unreachable.**
+            `sshUnitForDistro` and `composePackages` read `spec.Source.Distro` — the EXPLICIT field,
+            not `effectiveDistro` — so `base_user: ubuntu` steers nothing at all. The render then
+            emits the Arch package name `openssh` (apt: `Unable to locate package openssh`) and
+            `systemctl enable --now sshd`, a unit Debian/Ubuntu do not have (theirs is `ssh`). Since
+            `composeBootCmd` masks `ssh.socket` until cloud-init finishes, a socket-activated sshd —
+            Ubuntu 24.04's default — is left MASKED and never restarted, and the guest boots fully
+            while serving nothing. Set `distro: debian` / `distro: ubuntu` on every Debian-family
+            `cloud_image` source. The sshd START now falls back to the other unit name, so omitting
+            it costs a redundant `systemctl` call rather than an unreachable VM — but the PACKAGE
+            name still has no fallback, and a wrong one hard-fails cloud-init's install stage.
+
+            **The symptom is worth memorising, because it names nothing:** the domain reports
+            `running`, the libvirt portForward is correct (`passt --tcp-ports 127.0.0.1/<port>:22`),
+            TCP is ACCEPTED and then reset — `kex_exchange_identification: read: Connection reset by
+            peer` — and the serial console shows cloud-init completing every stage and reaching a
+            login prompt. That signature is ALSO produced by an unrelated defect (pacman reinstalling
+            openssh under a live sshd, documented in `sdk/vmshared/cloud_init_render.go`), so it
+            cannot serve as a diagnosis on its own. **Read the rendered artifact, not the code path:**
+
+            ```bash
+            osirrox -indev output/qcow2/<vm>/seed.iso -extract / /tmp/seed && cat /tmp/seed/user-data
+            ```
+
+            The `packages:` and `runcmd:` lines state which convention was rendered, in plain text.
+            Four structural theories (firmware, an image-cache race, an "unmaterialized" disk, a
+            "corrupt" qcow2) preceded that one command on the run that found this.
+
             ```yaml
             my-vm:
                 vm:
