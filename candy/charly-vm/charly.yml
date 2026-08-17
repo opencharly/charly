@@ -1055,11 +1055,38 @@ vm-skill:
 
             | Firmware | When to pick |
             |---|---|
-            | `bios` (default) | Cloud images (Arch, Fedora Cloud, Ubuntu Cloud, Debian Cloud, CentOS Cloud) that ship a GPT BIOS boot partition. Avoids stale BOOTX64.EFI issues. No OVMF package dependency. No per-VM NVRAM. See `/charly-vm:arch-cloud-vm` Finding B for the RCA. |
-            | `uefi-insecure` | bootc Fedora images (ship signed BOOTX64.EFI built at image-build time). Guests needing GPT > 2 TiB disks. ARM hosts (aarch64). |
+            | `bios` (default) | Cloud images that ship a GPT BIOS boot partition — **Arch, Fedora Cloud, CentOS Cloud are proven on beds** (`check-arch-repo`, `check-fedora-repo`, `box/fedora`). Avoids stale BOOTX64.EFI issues. No OVMF package dependency. No per-VM NVRAM. See `/charly-vm:arch-cloud-vm` Finding B for the RCA. |
+            | `uefi-insecure` | bootc Fedora images (ship signed BOOTX64.EFI built at image-build time). **Debian and Ubuntu cloud images** — `debian-13-generic-amd64.qcow2` does NOT boot under `bios` (measured below), and `box/debian` + `box/ubuntu` already pin this. Guests needing GPT > 2 TiB disks. ARM hosts (aarch64). |
             | `uefi-secure` | Guests needing Secure Boot (signed kernel + initramfs). Locks to Microsoft UEFI CA keys. |
 
             See `/charly-internals:ovmf` for the per-distro OVMF_CODE/OVMF_VARS path table and the per-VM NVRAM mechanics. When `firmware: bios`, `ResolveOvmfForSpec` returns empty strings and the libvirt renderer skips `<loader>`/`<nvram>` entirely.
+
+            **Debian/Ubuntu cloud images are the correction to the row above, and it was measured, not reasoned.**
+            `debian-13-generic-amd64.qcow2` under `firmware: bios` stalled a bed twice; the same bed passed
+            (`check-debian-repo` PASS, steps=9) with `firmware: uefi-insecure` and nothing else changed. The
+            guidance to prefer `bios` still holds for Arch/Fedora/CentOS — `box/fedora` runs `bios` today — so
+            this is a per-image property, not a global preference, and the honest test is whether the specific
+            image boots.
+
+            **The signature of a firmware mismatch, because it looks like anything but firmware.** The domain
+            starts and `charly vm list` reports it `running`; the port forward ACCEPTS TCP (qemu user-net binds
+            the forward before the guest listens); `sshd` never answers, giving
+            `Connection timed out during banner exchange` or `kex_exchange_identification: Connection reset by
+            peer`; the serial console is silent; and the deploy step waits indefinitely with no next-step log.
+            The discriminating probe is the **deployed disk's growth**, read twice:
+
+            ```bash
+            stat -c '%s %y' ~/.local/share/charly/vm/charly-<domain>/disk.qcow2   # twice, ~20s apart
+            ```
+
+            A booted guest's mtime ADVANCES (it may sit at a few hundred MB while it does); a guest that never
+            booted stays frozen at ~200 KB. **Size alone cannot separate them** — every deployed disk starts as
+            a small qcow2 overlay backed by the cached base image, so it grows only as the guest writes, and a
+            2 GB disk means "booted and installed packages" rather than "image materialized". Two traps inside
+            this probe: `qemu-img info` on a RUNNING guest's disk fails with `Failed to get shared "write" lock`
+            (that is the VM holding it, not a corrupt image), and the presence of `nvram.fd` in the VM's state
+            dir confirms the UEFI path applied — but it is REMOVED when a bed completes and cleans up, so its
+            absence after a passing run says nothing.
 
             ## Video-model choice
 

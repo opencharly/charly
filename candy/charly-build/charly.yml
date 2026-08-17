@@ -1415,6 +1415,31 @@ generate-skill:
             6. Reset to USER root (unless last layer and no further root steps follow)
             ```
 
+            **An unrenderable install is a LOUD failure, never a dropped step.** Step 3 above resolves
+            a candy's packages through the shared cascade; if they cannot then be rendered, generation
+            hard-errors naming the candy, the format and the box. Four conditions used to drop them
+            silently — a nil `DistroDef`, a primary build format with no definition in the box's distro,
+            a `RenderTemplate` error discarded by an `if err == nil` with no `else`, and an `EmitTasks`
+            error written into the Containerfile as a comment. The third one shipped: a format's
+            `install_template` calling a function absent from `buildkit.TemplateFuncs` is an ordinary
+            authoring mistake, and the emitter turned it into a Containerfile that built successfully,
+            exited 0, and produced an image with NONE of the candy's packages. Nothing in the artifact
+            showed a missing step; it surfaced later, elsewhere, as an absent binary.
+
+            A candy that resolves NO packages for this box still passes through untouched — that is the
+            ordinary per-distro case (a `distro:` map with no section for this box), and it is not an
+            error. The distinction that matters is *resolved but unrenderable* versus *nothing to do*.
+
+            Two authoring consequences:
+
+            - **A box inherits `defaults.build:` when it declares no `build:`.** A box on an Alpine base
+              with no `build:` took `[rpm]`, so the cascade resolved its packages correctly and then had
+              no rpm template in the alpine distro to render them with. Declare `build:` on any box whose
+              base is not the project default's family.
+            - **`git grep` a template function before using it.** `buildkit.TemplateFuncs` is the whole
+              set (`cacheMounts`, `cacheMountsAuto`, `cacheMountsOwned`, `default`, `quote`,
+              `splitFirst`); anything else — `base`, say — fails at render time, which is now loud but
+              is still cheaper to avoid. Prefer doing the work in the shell the template emits.
             ### Per-verb emitters (single Go file: `charly/tasks.go`)
 
             | Verb | Emitter | Containerfile output |

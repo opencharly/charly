@@ -1933,6 +1933,32 @@ check-skill:
                         - contains: "NOPASSWD"
                   ```
 
+                  **The same applies to a `vm:` bed**, where steps run as the cloud image's default
+                  user (`arch`/`fedora`/`debian`/`ubuntu`) over `ssh vm sudo bash -s`. Every step that
+                  drives a native package manager or writes under `/etc` must escalate explicitly —
+                  `pacman-key needs to be run as root`, `dnf`/`apt-get` refusing, `Permission denied`
+                  on `/etc/pacman.conf` are all this, not a repo or signing problem.
+
+                  **`sudo` on the command does NOT cover a shell redirect**, and this is the half that
+                  is easy to miss because the command itself looks elevated:
+
+                  ```yaml
+                  # ❌ the redirect is performed by the CALLING shell, still uid 1000
+                  command: sudo echo 'deb …' > /etc/apt/sources.list.d/charly.list
+                  # ❌ same trap with a heredoc
+                  command: sudo cat > /etc/yum.repos.d/charly.repo <<'EOF'
+
+                  # ✓ let the elevated process own the write
+                  command: echo 'deb …' | sudo tee /etc/apt/sources.list.d/charly.list >/dev/null
+                  command: sudo tee /etc/yum.repos.d/charly.repo >/dev/null <<'EOF'
+                  command: curl -fsSL <url> | sudo gpg --dearmor -o /etc/apt/keyrings/charly.gpg
+                  ```
+
+                  **Where `sudo` comes from differs by substrate.** A cloud-image VM has passwordless
+                  sudo via cloud-init, so it is simply available. A container box does NOT — a box that
+                  needs in-container elevation has to install `sudo` and write its own
+                  `/etc/sudoers.d/` drop-in (a candy doing exactly that should refuse if no uid-1000
+                  account exists, rather than writing a rule for an account that is not there).
                   ### 11. Bootc images keep USER=root — tests must cover both modes
 
                   Gotcha 10 flips for bootc. `sdk/deploykit` (relocated from `charly/generate.go` in #67) deliberately omits the final `USER <uid>` directive on bootc images because systemd (PID 1 in a bootc VM) manages user sessions via login, so the container's own USER directive is irrelevant. Result: the same `charly check box` that runs as uid 1000 in a container runs as uid 0 in a bootc image.
@@ -1965,6 +1991,62 @@ check-skill:
 
                   Worked example: `/charly-coder:sshd` ships exactly the `-u user --` pattern. Alternative: give the step `context: [deploy]` so it runs against a live container where you control the user-switch externally.
 
+                  ### 13. A step is SIGKILLed at 90s unless it declares `timeout:`
+
+                  `ProbeNeverHang` (`sdk/kit/runner.go`) bounds every probe ATTEMPT at
+                  `runnerProbeNeverHangFallback` = **90 seconds**. A step that runs longer is killed,
+                  and the runner names the bound in the message — but the underlying exec-layer text is
+                  still `process terminated by signal (signal: killed)`, which describes the mechanism
+                  of death and not its cause. Read alone, it looks like the command crashed.
+
+                  What crosses 90s in practice: **installing charly from a published distro repo pulls
+                  ~190 packages** (podman, qemu, libvirt, gnupg, tailscale). On a 2-vCPU cloud-image VM
+                  `dnf install` does not finish in time while `pacman -S` does — so two beds differing
+                  only in package manager come out one green and one "killed", which invites a
+                  distro-specific theory (repo layout, signing, cloud image) when the variable is
+                  elapsed time against a shared floor. **Compare the step's duration to 90s before
+                  theorising about the distro.**
+
+                  The fix is authored, not code: `#Op` carries `timeout?: #Duration`, and
+                  `ProbeNeverHang` honours a longer authored value over the floor (the effective
+                  ceiling becomes `declared + 30s`). Declaring it is USING the mechanism's own
+                  parameter — not an R4 workaround:
+
+                  ```yaml
+                  - check: dnf install charly installs the package
+                    id: fedora-charly-installed
+                    timeout: 10m          # ~190 packages on 2 vCPUs; the 90s floor kills this
+                    exit_status: 0
+                    command: |
+                        sudo dnf install -y charly &&
+                        rpm -q charly
+                  ```
+
+                  ### 14. A check must be able to FAIL for the reason it names
+
+                  Four ways a step passed while measuring nothing, all found in one bed roster:
+
+                  - **`test "$(a)" = "$(b)"` with both sides empty PASSES.** A version comparison whose
+                    extraction was wrong for its tool (`apk info -v <pkg>` prints the package
+                    DESCRIPTION, not `name-version-rN`) compared `""` with `""` and reported success.
+                    Guard both sides — `test -n "$installed" && test -n "$packaged"` — and `echo` the two
+                    values so a failure is diagnosable.
+                  - **`apk update` / `apt-get update` / `pacman -Sy` exit 0 when a configured repo is
+                    unreachable** (they warn and carry on), so none of them proves the repo resolved.
+                    Prove the package is VISIBLE from a repo only that repo could serve
+                    (`apk list <pkg>` / `pacman -Si <pkg>` / `apt-cache policy` showing a Candidate).
+                  - **An installer's exit code is not registration.** Follow it with `apk info -e` /
+                    `pacman -Q` / `rpm -q` / `dpkg-query -W`.
+                  - **`<cmd>` on PATH inside a check may be the check runner's own STAGED binary**, not
+                    the one the package installed. A check about a PACKAGED binary must name the
+                    package's absolute path (`/usr/bin/charly version`), or it can pass with the package
+                    absent entirely.
+
+                  And query the INSTALLED package, not the available candidate: `dnf info` and
+                  `apt-cache policy` report what COULD be installed. Prefer brace-free extraction
+                  (`dpkg-query -W <pkg> | awk '{print $2}'`, `rpm -q <pkg> | sed …`) over
+                  `-f='${Version}'` / `--queryformat '%{VERSION}'`, since a check `command:` also passes
+                  through charly's own `${VAR}` substitution.
                   ### 12. `charly check box <short-name>` is ambiguous with multiple CalVer tags — use the full registry ref
 
                   `charly check box` resolves its positional argument against local podman storage, not `charly.yml`. When the host has accumulated many CalVer tags for the same image (a normal consequence of iterative `charly box build` runs), the short form errors out:

@@ -7685,9 +7685,39 @@ skills-skill:
 
             ## How to Update
 
-            1. Edit the skill file at `plugins/<plugin>/skills/<skill-name>/SKILL.md`
+            1. **Edit the candy's `skill:` entity in `candy/<candy>/charly.yml`, then regenerate**
+               (`charly marketplace generate` → `task docs:sync`). Most of the corpus under
+               `plugins/**/SKILL.md` is a PROJECTION and carries a DO-NOT-EDIT banner: an edit
+               there is reverted by the next regeneration, silently and without conflict. `git grep
+               -l 'DO[- ]NOT[- ]EDIT'` tells you which files are generated — but triage the hits
+               rather than trusting them, since a file may MENTION the banner without carrying one
+               (agent definitions under `plugins/<plugin>/agents/` are hand-authored).
             2. If the insight affects cross-skill behavior, update the project rulebook (`AGENTS.md` / `CLAUDE.md`) too
             3. After any non-trivial deployment session, ask: "Did we learn anything that future sessions should know?"
+
+            ### Regenerate ONLY the projections of the sources you edited
+
+            **A projection merges before the superproject source that pins it**, so prose can be
+            correct and landed in `plugins`/`docs` while its candy source is still in flight on
+            another branch. Regenerating from a superproject tree that lacks that pending source
+            does not bring the projection up to date — it **drags it backwards**, and the diff is
+            indistinguishable from a legitimate update.
+
+            Measured: a wholesale `charly marketplace generate` touched **21** files in `plugins`
+            and **41** in `docs` when three candy sources had changed. The extra ones were reverts,
+            ~500 lines of landed prose including 317 from one `git-workflow` reference and 107 from
+            the `pr-validator` agent spec. Nothing in the output flagged it.
+
+            So: after regenerating, **restore every file whose candy source you did not touch**, and
+            audit the deletions that remain — each one should be a line you deliberately replaced.
+
+            ```bash
+            git -C plugins diff --numstat        # +added -deleted per file
+            git -C plugins diff | grep '^-[^-]'  # every deleted line, read in full
+            ```
+
+            A file you never edited appearing in that list is the signal, and "it was probably just
+            stale" is the reading that ships the revert.
 
             ## Skill File Structure
 
