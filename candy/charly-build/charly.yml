@@ -1448,6 +1448,7 @@ generate-skill:
               helpers. It came from a `grep` over a windowed region of the FuncMap whose output was
               published as complete. Read the map's full literal, or count it in Go — never a
               windowed grep.
+
             ### Per-verb emitters (single Go file: `charly/tasks.go`)
 
             | Verb | Emitter | Containerfile output |

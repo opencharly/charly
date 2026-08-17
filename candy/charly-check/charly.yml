@@ -1968,6 +1968,7 @@ check-skill:
                   needs in-container elevation has to install `sudo` and write its own
                   `/etc/sudoers.d/` drop-in (a candy doing exactly that should refuse if no uid-1000
                   account exists, rather than writing a rule for an account that is not there).
+
                   ### 11. Bootc images keep USER=root — tests must cover both modes
 
                   Gotcha 10 flips for bootc. `sdk/deploykit` (relocated from `charly/generate.go` in #67) deliberately omits the final `USER <uid>` directive on bootc images because systemd (PID 1 in a bootc VM) manages user sessions via login, so the container's own USER directive is irrelevant. Result: the same `charly check box` that runs as uid 1000 in a container runs as uid 0 in a bootc image.
@@ -2043,6 +2044,7 @@ check-skill:
                   when the pattern would also match the wrapping bash. The harness
                   defense is a safety net, not a license to use the broken pattern
                   deliberately.
+
                   ### 13. A step is SIGKILLed at 90s unless it declares `timeout:`
 
                   `ProbeNeverHang` (`sdk/kit/runner.go`) bounds every probe ATTEMPT at
