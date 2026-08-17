@@ -91,13 +91,15 @@ var distroBearingSourceKinds = map[string]bool{"cloud_image": true, "bootstrap":
 
 // validateSourceDistro enforces that a distro-bearing VM source declares `distro:`.
 //
-// The CUE schema marks it required (`distro!: #DistroID`) and closes it to the generated
-// vocabulary, which DOES reject a misspelled value — a typo is a unification conflict. But
-// the host's value gate is closedness-only by design (charly/provider_kind_invoke.go, which
-// documents why that is permanent), so an OMITTED field produces no conflict and slips
-// through. Presence is therefore checked here, in the kind's own plugin, exactly as the PCI
-// hostdev fields above are: this is the same "Go distinguishes absent from empty where
-// non-concrete CUE cannot" shape.
+// The CUE schema types it `distro?: #DistroID` — OPTIONAL, and closed to the generated
+// vocabulary. Closedness does real work: a misspelled value is a unification conflict, so
+// `distro: redhat` fails validation. Presence does not: the host's value gate is
+// closedness-only by design (charly/provider_kind_invoke.go documents why that is
+// permanent), and vm.cue's own comment records why a `!` marker or a non-optional field
+// would not help either — the former is not reported by that gate, the latter only turns an
+// absent value into a non-concrete DECODE error in applyCueDefaults. So PRESENCE is checked
+// here, in the kind's own plugin, exactly as the PCI hostdev fields above are: the same "Go
+// distinguishes absent from empty where non-concrete CUE cannot" shape.
 //
 // Why it is worth a check rather than a default: the renderers used to INFER the distro from
 // `base_user` (arch/alpine only) and fall back to Arch/Fedora conventions for everything
