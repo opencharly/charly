@@ -78,6 +78,7 @@ type CheckCmd struct {
 	Scope          CheckScopeCmd     `cmd:"" name:"scope" help:"AI-facing: print the active iteration's scope.yml."`
 	LastTag        CheckLastTagCmd   `cmd:"" name:"last-tag" help:"AI-facing: print the prior iteration's image tag."`
 	SelfEvaluate   CheckSelfCheckCmd `cmd:"" name:"self-evaluate" help:"AI-facing: re-run the in-scope plan live."`
+	Stop           CheckStopCmd      `cmd:"" name:"stop" help:"Stop the in-flight run of a bed, scoped to that bed's lock holder."`
 	List           CheckListRunsCmd  `cmd:"" name:"list" help:"List past runs under .check/."`
 	Report         CheckReportCmd    `cmd:"" name:"report" help:"Print a past result-<calver>.yml."`
 	Note           CheckNoteCmd      `cmd:"" name:"note" help:"Persistent NOTES.md memory (read/append)."`
