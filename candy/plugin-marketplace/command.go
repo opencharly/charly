@@ -22,8 +22,9 @@ type generateCmd struct {
 	Root string `name:"root" help:"Repo root holding charly.yml, candy/, box/, plugins/ and .claude/ (default: cwd)"`
 }
 
-// driftCmd is the CI gate: the same pipeline in memory, compared byte-for-byte with the on-disk
-// generated artifacts. Exit 1 with a diff summary on any drift (the docs:drift model).
+// driftCmd is a fail-closed no-op check: the same pipeline in memory, compared byte-for-byte with
+// the on-disk generated artifacts. Exit 1 with a diff summary on any drift. It runs in no CI
+// workflow — it is red only for whoever runs it, via `task skills:drift` or by hand.
 type driftCmd struct {
 	Root string `name:"root" help:"Repo root (default: cwd)"`
 }

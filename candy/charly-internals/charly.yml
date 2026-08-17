@@ -3539,7 +3539,7 @@ git-workflow-skill:
             | B1 (the two-step branch-per-change loop, concurrent landings, the cross-repo WIP landing sequence) and B4 (sync to upstream + prune) | `references/branch-and-pr-loop.md` |
             | B2 (multi-repo/multi-worktree coordination, per-module verification), B3 (agent teams in per-teammate worktrees), B6 (cross-repo `@github` landing), and B7 (multi-worktree landing + refresh, the canonical end-to-end) | `references/multi-repo-coordination.md` |
             | B5 (the fresh evaluator + fork/PR path, the two-gate autonomous-landing model), CalVer generation, post-landing cleanliness + report format, and the validation-FAILS recovery sequence | `references/validator-and-calver.md` |
-            | Evidence discipline — provenance vs plausibility of a pasted gate, the three freshness surfaces (head / body / pasted output), positive-vs-negative claim decay, sweeping for claims a fix invalidated, the merged-tree gate for a `BEHIND` PR, source-and-regeneration as one cross-repo cutover, submodule pointers reverted by a non-conflicting merge, and why status-absence on a known head is a false negative | `references/evidence-and-freshness.md` |
+            | Evidence discipline — provenance vs plausibility of a pasted gate, the three freshness surfaces (head / body / pasted output), positive-vs-negative claim decay, sweeping for claims a fix invalidated, the merged-tree gate for a `BEHIND` PR, source-and-regeneration as one cross-repo cutover, submodule pointers reverted by a non-conflicting merge, and why status-absence on a known head proves nothing | `references/evidence-and-freshness.md` |
 
             ## Cross-References
 
@@ -10653,7 +10653,8 @@ pr-validator-agent:
                 RECENT convention, and the two regimes interleave — measured in `plugins`: of 203
                 CalVer entries, **66 carry no tag**, all of them at or before `2026.215.1207`, while
                 the earliest tagged entry is `2026.193.1934`, well inside that stretch. From
-                `2026.215.1207` forward it is **67 for 67**. So the invariant reads: *every entry
+                the entry AFTER `2026.215.1207` forward it is **67 for 67** — that entry is itself the latest
+                untagged one, so it belongs to the old regime and the run opens above it. So the invariant reads: *every entry
                 landed since the convention took hold has a matching tag*; earlier entries predate
                 it and are evidence of nothing. A check written without that clause returns 66 false
                 positives and gets disabled by whoever inherits it.
