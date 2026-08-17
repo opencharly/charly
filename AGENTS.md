@@ -233,7 +233,8 @@ skills and are mandatory when dispatched.
 - **R9 — Binary equals source.** Build the CalVer-stamped worktree-local binary
   with `task build:binary`, invoke it through that worktree's `bin`, verify its
   version and dependency/gitlink consistency, and never install it as a shared
-  binary. Runtime OS dependencies belong in `pkg/arch/PKGBUILD`.
+  binary. Runtime OS dependencies belong in the charly candy's `packaging:`
+  section (`candy/charly/charly.yml`).
 - **R10 — Fresh disposable proof.** Run the exact gate selected by
   `/charly-check:check` on the final committed tree. Runtime changes require a
   complete fresh rebuild and live execution on every affected explicit

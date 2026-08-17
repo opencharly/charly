@@ -9,27 +9,28 @@ import (
 )
 
 // TestCalverScriptDeterministic locks the build-time version-stamp invariant:
-// pkg/arch/calver.sh derives the CalVer ONLY from the HEAD commit date, so EVERY
+// scripts/calver.sh derives the CalVer ONLY from the HEAD commit date, so EVERY
 // binary built from one commit reports the IDENTICAL `charly version` — a dirty
-// working-tree `task build:binary`, the clean git+file:// makepkg clone, an AUR
-// build. The single source of truth (charly_calver) is shared by taskfiles/Build.yml
-// and the PKGBUILD's pkgver()+build(); this test guards the bash side that the Go
-// CharlyVersion()/ComputeCalVerAt path (version_test.go) cannot reach.
+// working-tree `task build:binary` and a clean checkout build agree. The single
+// source of truth (charly_calver) is shared by taskfiles/Build.yml and the distro
+// repos' packaging workflows (the release tag's CalVer is the version they package);
+// this test guards the bash side that the Go CharlyVersion()/ComputeCalVerAt path
+// (version_test.go) cannot reach.
 //
 // It FAILS against the prior wall-clock fallback: that stamped `date -u` for a
 // dirty tree, so a dirty build disagreed with a clean clone of the same commit
-// (the pacman-pkgver vs `charly version` split) and a stale binary could falsely sort
-// "newer". The dirty-tree assertion below reproduces exactly that case.
+// and a stale binary could falsely sort "newer". The dirty-tree assertion below
+// reproduces exactly that case.
 func TestCalverScriptDeterministic(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not on PATH")
 	}
-	script, err := filepath.Abs(filepath.Join("..", "pkg", "arch", "calver.sh"))
+	script, err := filepath.Abs(filepath.Join("..", "scripts", "calver.sh"))
 	if err != nil {
 		t.Fatalf("resolving calver.sh path: %v", err)
 	}
 	if _, err := os.Stat(script); err != nil {
-		t.Skipf("calver.sh not present (submodule not checked out?): %v", err)
+		t.Skipf("calver.sh not present: %v", err)
 	}
 
 	dir := t.TempDir()

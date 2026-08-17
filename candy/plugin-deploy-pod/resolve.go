@@ -178,7 +178,7 @@ func resolvePodStartDirect(ctx context.Context, ex *sdk.Executor, box, instance 
 	ports := meta.Port
 	security := meta.Security
 	network := meta.Network
-	entrypoint := resolveEntrypointFromMeta(meta)
+	entrypoint := kit.ResolveEntrypointFromMeta(meta)
 
 	encJSON, err := resolvePodEncEnsurePlan(ctx, ex, dc, box, instance, false)
 	if err != nil {

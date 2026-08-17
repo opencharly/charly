@@ -184,7 +184,9 @@ func runPodProbes(ctx context.Context, engine *enginekit.EngineClient, snap *eng
 // applyQuadletDescription fills snap.Image and snap.Instance from the
 // `Description=OpenCharly <image> (<instance>)` line of the matching quadlet
 // unit. Falls through to the joined `charly-*` name when the description isn't
-// present (legacy / hand-rolled units).
+// present — a unit charly did not write (hand-rolled, or authored directly by an
+// operator). NOT a legacy charly path: there is no superseded charly format here, so this
+// branch is capability for external units rather than something to remove.
 func applyQuadletDescription(snap *enginekit.ContainerSnapshot, quadletDir string) {
 	joined := strings.TrimPrefix(snap.Name, "charly-")
 	snap.Box = joined

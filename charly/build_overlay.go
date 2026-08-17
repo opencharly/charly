@@ -57,7 +57,7 @@ import (
 // candies' secrets plugin-side, renders the overlay Containerfile in its own code, and runs
 // podman build + the alias tag via the served executor. The per-step Containerfile fragments are
 // rendered HOST-SIDE via the generic "step-emit" host-builder (HostBuild("step-emit",
-// "oci-emit-step") → ociEmitStep), unchanged by this cutover.
+// "oci-emit-step") → stepEmitOCIEmitStep → dispatchOCIStep), unchanged by this cutover.
 
 // overlayBuilderKind is the F10 hostBuilders key for the pod-overlay build — a generic action noun,
 // the pod-substrate sibling of "image"/"containerfiles"/"plugin-binary"/"cli". Deliberately NOT a
@@ -182,7 +182,7 @@ func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ build
 	// Cache the overlay buildEngineContext for the "oci-emit-step" step-emitter. The candy's
 	// deploykit.OCITarget.EmitStepOp seam calls HostBuild("step-emit", {Word:"oci-emit-step",
 	// Payload: OCIEmitStepParams{Dir, StepView, PlanView}, Distros}) per step; the emitter looks up
-	// this cache by Dir + calls ociEmitStep, which reads ONLY build.Box.Name (env.Image) and
+	// this cache by Dir + calls dispatchOCIStep, which reads ONLY build.Box.Name (env.Image) and
 	// build.Generator.DevLocalPkg/ExtraCandyRefs (env.DevLocalPkg/ExtraCandyRefs — the RCA'd fix
 	// that widens candy/plugin-installstep's own independent envelope re-fetch for these SAME
 	// overlay candies) — traced in full in charly/oci_step_emit.go's dispatchOCIStep. Neither field

@@ -22,7 +22,7 @@ import (
 // in sdk/deploykit's NewRenderGeneratorFromProject now, beside its two siblings.
 
 // invokeOpEmitFragmentOpt is the ops.OpEmit → EmitReply → Fragment path for the build-context
-// external-STEP emit (ociEmitStep, F-STEP-EMIT — the pod-overlay deploykit.OCITarget's
+// external-STEP emit (dispatchOCIStep, F-STEP-EMIT — the pod-overlay deploykit.OCITarget's
 // compiler-emitted-step build-emit). It Invokes the provider's ops.OpEmit with the already-marshalled
 // params (a step's opaque Payload) and the caller-supplied spec.BuildEnv descriptor, decodes the
 // EmitReply, and returns the Containerfile fragment. (The build-context VERB emit — the

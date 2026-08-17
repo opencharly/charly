@@ -27,8 +27,9 @@ tasks:
       # `charly version` would read the wall clock at invocation — useless as a build
       # identity / freshness signal. The copy into candy/charly/bin/charly carries the
       # same stamp, so the `charly` layer (and every image/VM baking it) ships a
-      # self-identifying binary, and the PKGBUILD's pkgver() reads this same
-      # binary's `charly version` so the pacman package can never disagree.
+      # self-identifying binary, and the distro repos' packaging workflows stamp
+      # the release version from this same binary's `charly version` so the
+      # package can never disagree.
       # Build to a temp path FIRST so a guard failure below can never leave
       # bin/charly newer than the image-baked candy/charly/bin/charly copy
       # (split-brain freshness): promotion happens only after every check

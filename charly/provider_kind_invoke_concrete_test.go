@@ -25,6 +25,7 @@ myvm:
   vm:
     source:
       kind: cloud_image
+      distro: fedora
       url: http://x
     libvirt:
       devices:
@@ -47,6 +48,7 @@ myvm:
   vm:
     source:
       kind: cloud_image
+      distro: fedora
       url: http://x
     libvirt:
       devices:
@@ -73,6 +75,7 @@ myvm:
   vm:
     source:
       kind: cloud_image
+      distro: fedora
       url: http://x
     libvirt:
       devices:
@@ -96,6 +99,7 @@ myvm:
   vm:
     source:
       kind: cloud_image
+      distro: fedora
       url: http://x
 `,
 	})

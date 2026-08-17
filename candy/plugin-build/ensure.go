@@ -20,11 +20,12 @@ package build
 //     @github.com/... ref instead routes through "remote-image-resolve" for the git clone/cache,
 //     then resolveRemoteImageRef), attempt `podman pull`, and on failure fall back to a local
 //     build — reached via the SAME in-process runBoxBuild this candy already owns for the
-//     build:box word (no new build seam), tag-aliasing the produced image onto a pinned-tag
-//     input ref when the two differ.
+//     build:box word (no new build seam), then tag-aliasing the built image onto the requested
+//     ref via aliasBuiltImageOntoRequestedRef, whose doc comment carries the cold-store ordering
+//     constraint that alias must respect.
 //
-// Tier 3 needs NO host round trip anymore: the box-ref resolve (ExistsRef/PullRef/
-// BuildFallbackShort/ProducedRef) is computed plugin-side off the cfg the K1 loader reverse legs
+// Tier 3 needs NO host round trip anymore: the box-ref resolve (the exists/pull ref +
+// the buildable short name) is computed plugin-side off the cfg the K1 loader reverse legs
 // return (byte-identical Registry/Name to the former host-side deploykit.ResolveSpecBox path —
 // buildkit config_resolve.go:101-103: resolved.Registry = img.Registry || cfg.Defaults.Registry,
 // resolved.Name = leaf after namespace descent). The "box-ref-resolve" HostBuild seam is DELETED
@@ -125,6 +126,44 @@ func ensureRemoteRef(ctx context.Context, ex *sdk.Executor, image, stripped stri
 	if _, berr := runBoxBuild(ctx, ex, spec.BuildRequest{Boxes: []string{rr.BoxName}, Dir: rr.CacheDir}); berr != nil {
 		return fmt.Errorf("ensure-image %q: pull failed and remote build failed: %w", image, berr)
 	}
+	return aliasBuiltImageOntoRequestedRef(ctx, image, func() string {
+		return resolveRemoteImageRef(ctx, ex, rr.CacheDir, rr.BoxName)
+	})
+}
+
+// aliasBuiltImageOntoRequestedRef enforces the post-condition every build fallback owes its
+// caller: the caller asked for `image` and will run it with `--pull=never`, so after a successful
+// build `image` ITSELF must resolve in local storage. A box build produces the project's
+// CalVer-tagged ref, so a full input ref (pinned to a different tag, or tagless) needs an alias.
+//
+// resolveProduced is a CALLBACK, deliberately, because it must run AFTER the build: every producer
+// of it bottoms out in ResolveShellImageRef with an empty tag, which READS THE LOCAL IMAGE STORE
+// (spec/container/local_image_coneb.go — empty tag → ResolveNewestLocalCalVer). Resolved BEFORE
+// the build, on a store that does not yet hold the image, it degrades to the bare
+// `<registry>/<name>` — which both EQUALS `image` (silently defeating a `produced != image` guard)
+// and names a ref the build never created. That was a real cold-store defect: the first run on a
+// fresh store left the requested ref absent and failed ~1000 log lines later with podman's
+// `image not known`, while every subsequent run passed because run 1's build had seeded the store
+// — so the bug reproduced only on the fresh-machine path R10 exists to cover.
+//
+// A failed alias is a HARD error, not a warning: the caller cannot proceed without the ref, and a
+// warning here only relocates the failure to a downstream message that names neither this build
+// nor the alias.
+func aliasBuiltImageOntoRequestedRef(ctx context.Context, image string, resolveProduced func() string) error {
+	// A short-name input carries no tag to satisfy, and a build that already produced the exact
+	// requested ref needs nothing further.
+	if !kit.LooksLikeFullRef(image) || kit.LocalImageExists("podman", image) {
+		return nil
+	}
+	produced := resolveProduced()
+	if produced == "" || produced == image {
+		return fmt.Errorf("ensure-image %q: the build reported success but produced no local ref that satisfies it "+
+			"(resolved produced ref: %q) — the requested ref is still absent from local storage", image, produced)
+	}
+	if terr := podmanTag(ctx, produced, image); terr != nil {
+		return fmt.Errorf("ensure-image %q: tagging the built %s as the requested ref failed: %w", image, produced, terr)
+	}
+	fmt.Fprintf(os.Stderr, "ensure-image: tagged %s as %s\n", produced, image)
 	return nil
 }
 
@@ -166,37 +205,33 @@ func ensureProjectRef(ctx context.Context, ex *sdk.Executor, image, dir string) 
 	// attempted against a nil cfg (→ "" → the "no buildable short-name match" error).
 	cfg := loadProjectCfgForEnsure(ctx, ex, dir)
 
-	var br spec.BoxRefResolveReply
-	if ref := resolveImageRefPlugin(image, cfg); ref != "" {
-		br.ExistsRef = ref
-		br.PullRef = ref
-	}
-	br.BuildFallbackShort = buildableShortNamePlugin(image, cfg)
-	if br.BuildFallbackShort != "" {
-		br.ProducedRef = resolveImageRefPlugin(br.BuildFallbackShort, cfg)
-	}
+	// existsRef doubles as the pull ref — one resolve, one meaning. There is deliberately NO
+	// pre-build "produced ref": that resolve reads the local image store and is only meaningful
+	// after the build (see aliasBuiltImageOntoRequestedRef).
+	existsRef := resolveImageRefPlugin(image, cfg)
+	fallbackShort := buildableShortNamePlugin(image, cfg)
 
-	if br.ExistsRef != "" && kit.LocalImageExists("podman", br.ExistsRef) {
-		fmt.Fprintf(os.Stderr, "ensure-image: %s present\n", br.ExistsRef)
+	if existsRef != "" && kit.LocalImageExists("podman", existsRef) {
+		fmt.Fprintf(os.Stderr, "ensure-image: %s present\n", existsRef)
 		return nil
 	}
 
-	if br.PullRef != "" {
-		fmt.Fprintf(os.Stderr, "ensure-image: pulling %s\n", br.PullRef)
-		if perr := podmanPull(ctx, br.PullRef); perr == nil {
+	if existsRef != "" {
+		fmt.Fprintf(os.Stderr, "ensure-image: pulling %s\n", existsRef)
+		if perr := podmanPull(ctx, existsRef); perr == nil {
 			return nil
 		} else {
-			fmt.Fprintf(os.Stderr, "ensure-image: pull %s failed: %v\n", br.PullRef, perr)
+			fmt.Fprintf(os.Stderr, "ensure-image: pull %s failed: %v\n", existsRef, perr)
 		}
 	}
 
-	if br.BuildFallbackShort == "" {
+	if fallbackShort == "" {
 		return fmt.Errorf("ensure-image %q: not present locally, pull failed, and no buildable short-name match in charly.yml — make the registry public, log in to the registry, or pre-build the image manually", image)
 	}
 
-	fmt.Fprintf(os.Stderr, "ensure-image: building %s locally\n", br.BuildFallbackShort)
+	fmt.Fprintf(os.Stderr, "ensure-image: building %s locally\n", fallbackShort)
 	if _, berr := runBoxBuild(ctx, ex, spec.BuildRequest{
-		Boxes:           []string{br.BuildFallbackShort},
+		Boxes:           []string{fallbackShort},
 		Dir:             dir,
 		IncludeDisabled: true,
 		Jobs:            4,
@@ -204,16 +239,9 @@ func ensureProjectRef(ctx context.Context, ex *sdk.Executor, image, dir string) 
 		return fmt.Errorf("ensure-image %q: pull failed and local build failed: %w", image, berr)
 	}
 
-	// The build produced the project's current-CalVer-tagged ref; when the input ref pinned a
-	// specific tag (e.g. an older builder version on a kind:local install_opts.builder_image),
-	// alias the just-built image to that tag so callers using `--pull=never` find the requested
-	// ref locally. Skipped when the input was already a short name (no pinned tag).
-	if br.ProducedRef != "" && br.ProducedRef != image && kit.LooksLikeFullRef(image) {
-		if terr := podmanTag(ctx, br.ProducedRef, image); terr != nil {
-			fmt.Fprintf(os.Stderr, "ensure-image: warning: tag alias %s -> %s failed: %v\n", br.ProducedRef, image, terr)
-		}
-	}
-	return nil
+	return aliasBuiltImageOntoRequestedRef(ctx, image, func() string {
+		return resolveImageRefPlugin(fallbackShort, cfg)
+	})
 }
 
 // loadProjectCfgForEnsure loads the project cfg for the build:ensure plugin-side resolve, via the

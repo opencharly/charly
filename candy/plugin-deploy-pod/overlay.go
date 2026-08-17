@@ -30,7 +30,7 @@ import (
 // Containerfile fragment is rendered HOST-SIDE over the generic "step-emit" host-builder: the
 // deploykit.OCITarget.EmitStepOp seam calls HostBuild("step-emit", {Word:"oci-emit-step",
 // Payload: OCIEmitStepParams{Dir, StepView, PlanView}, Distros}) per step; the host reconstructs
-// the step + plan from their wire views + calls ociEmitStep (the SAME single source of truth the
+// the step + plan from their wire views + calls dispatchOCIStep (the SAME single source of truth the
 // former in-core OCITarget.emitStep delegated to — byte-identical fragments).
 //
 // The host prep (charly/build_overlay.go hostBuildOverlay) returns the OverlayBuildReply envelope
@@ -106,7 +106,7 @@ func buildOverlay(ctx context.Context, exec *sdk.Executor, reply spec.OverlayBui
 
 	// The overlay OCITarget walker. EmitStepOp is the per-step render seam: each step's fragment is
 	// rendered HOST-SIDE via HostBuild("step-emit", "oci-emit-step", …) (the host looks up the
-	// cached overlay buildEngineContext by Dir + calls ociEmitStep — the full provider-registry
+	// cached overlay buildEngineContext by Dir + calls dispatchOCIStep — the full provider-registry
 	// dispatch, byte-identical to the former in-core OCITarget.emitStep). Home/Distros feed the
 	// walker's ResolveHome + per-step distro threading (the former OCITarget.read them off t.Box).
 	var home string
