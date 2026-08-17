@@ -4585,11 +4585,20 @@ git-workflow-skill:
                   feel like errors while you are making them — and why a reader who holds the question can
                   derive a trap nobody wrote down.
 
-                  Seven of those eight appear above. The table has eight ROWS over seven SECTIONS because the
+                  Seven epistemic sections appear above. The table has eight ROWS over those seven because the
                   merged-tree section contributes two nouns. The epistemic section deliberately absent from
                   it — "Positive and negative claims decay differently" — is left out because it is the moment-noun again,
                   seen from the reader's side rather than the writer's, and giving it a row would blur the
-                  distinction the table exists to draw. No total is given for the page: a section count is a
+                  distinction the table exists to draw.
+
+                    **The two groupings do not cover the page, and that is not an oversight.** "A guard
+                    that cannot fail is worse than no guard" arrived later, from a different cutover,
+                    and belongs to neither: it is about what a passing check licenses you to believe,
+                    which is upstream of both the nouns and the mechanisms. It is left unbucketed
+                    rather than forced into one, because a grouping that stretches to cover everything
+                    stops distinguishing anything.
+
+                    No total is given for the page: a section count is a
                   figure whose subject is the document stating it, and a merge that adds a section
                   falsifies it without touching the sentence.
 
