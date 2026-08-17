@@ -1,19 +1,20 @@
-# Root config — the ONLY config the 91 `candy/*` modules see.
+# Root config — the ONLY config the 95 modules below this directory see:
+# the 91 `candy/*` modules and the 4 `tools/*` modules. (An earlier revision said
+# "the 91 candy/* modules"; it governs `tools/` too, which nobody had enumerated.)
 #
 # golangci-lint discovers a config by walking UP from the working directory, and
 # `charly/.golangci.yml` is NOT an ancestor of `candy/<name>/`, so before this file
-# every candy module ran with "No config file detected" and was gated by nothing.
+# those modules ran with "No config file detected" — which means they ran golangci-lint's
+# DEFAULT STANDARD SET (errcheck, govet, ineffassign, staticcheck, unused), not nothing.
 # A per-module copy would put the same block in 90+ places (R3); one root config
 # covers them all, and a module that wants more (candy/plugin-check) keeps its own,
 # because the CLOSEST config wins.
 #
-# `default: standard` is what these modules ALREADY run: golangci-lint with no config
-# applies its default standard set (errcheck, govet, ineffassign, staticcheck, unused).
-# An earlier revision set `default: none` on the belief that "no config" meant "no
-# linting" — it does not, and that silenced 6 live findings across 4 modules. This
-# config therefore ADDS gofmt and removes nothing. The eleven quality linters the three
-# named module configs use are still deliberately NOT enabled here; that remains a
-# separate, measured cutover.
+# `default: standard` is therefore what these modules ALREADY ran. An earlier revision
+# set `default: none` on the belief that "no config" meant "no linting" — it does not,
+# and that silenced 5 live findings across 3 modules. This config ADDS gofmt and removes
+# nothing. The eleven quality linters the three named module configs use are still
+# deliberately NOT enabled here; that remains a separate, measured cutover.
 version: "2"
 
 run:
