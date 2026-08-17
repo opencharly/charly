@@ -8811,6 +8811,18 @@ vm-spec-skill:
             Four structural theories (firmware, an image-cache race, an "unmaterialized" disk, a
             "corrupt" qcow2) preceded that one command on the run that found this.
 
+            **And the limit of the validation, which is the part an author must not over-read:**
+            `distro:` is closed to `#DistroID`, so a MISSPELLED id is a unification conflict —
+            `distro: redhat` fails. A **wrong-but-valid** id is not: `distro: debian` on a Fedora cloud
+            image validates cleanly, exit 0, and then selects apt, `openssh-server` and the `ssh` unit
+            for a guest that has dnf, `openssh` and `sshd`. Closedness cannot express "matches the
+            image this URL points at", and no gate in charly does.
+
+            So the value is a HUMAN check against the image URL, every time. Verified against the live
+            gate rather than assumed: a fresh validator ran exactly this mutation on a Fedora repo and
+            got exit 0. Treating a green `charly box validate` as proof the distro is *correct* — rather
+            than merely *spelled like a real distro* — is the one misreading this field invites.
+
             ```yaml
             my-vm:
                 vm:
