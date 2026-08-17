@@ -87,6 +87,7 @@ arch-cloud-vm-skill:
               vm:
                 source:
                   kind: cloud_image
+                  distro: arch
                   url: https://fastly.mirror.pkgbuild.com/images/latest/Arch-Linux-x86_64-cloudimg.qcow2
                   checksum:
                     type: sha256
@@ -912,6 +913,7 @@ vm-skill:
               vm:
                 source:
                   kind: cloud_image
+                  distro: arch
                   url: https://fastly.mirror.pkgbuild.com/images/latest/Arch-Linux-x86_64-cloudimg.qcow2
                   checksum: {type: sha256}                      # value auto-resolves from <url>.SHA256 sidecar
                   base_user: arch                               # adopt pattern (no useradd)
