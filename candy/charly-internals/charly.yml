@@ -7740,6 +7740,14 @@ skills-skill:
 
             ## Progressive disclosure: multi-file skills
 
+            Both halves are GENERATED. You author the split on the candy's `skill:` entity — the entry body
+            plus one `reference:` entry per topic — and `charly marketplace generate` writes the `SKILL.md` and
+            `references/*.md` files. The shapes below describe what the projection must come out looking like,
+            never files to create or edit by hand; every one of them carries a DO-NOT-EDIT banner. This is
+            stated here because the section reads as a set of file operations, and the previous revision of
+            this skill opened its update instructions by telling the reader to edit `SKILL.md` directly — so a
+            reader arriving at this section had already been pointed the wrong way once.
+
             A skill is either a single `SKILL.md`, or an entry `SKILL.md` plus sibling `references/*.md` files in the same skill directory, loaded on demand by path. Split once a single file grows past ~400 lines or spans more than one cleanly-separable topic.
 
             - The entry `SKILL.md` keeps its frontmatter unchanged, an overview, a "when to use" section, and an index table mapping each topic to its `references/<file>.md` with a one-line description — entries stay ~100–150 lines total.
