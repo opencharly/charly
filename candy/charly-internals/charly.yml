@@ -5044,7 +5044,7 @@ git-workflow-skill:
 
                   Pasted rather than described, because "a paste and its label are two separate
                   claims" applies to this page's own tables. **Provenance, which this page's own
-                  rule demands of every figure in THIS section:** one continuous session at superproject
+                  rule demands of every figure in the BLOCK below:** one continuous session at superproject
                   `a56240f0` — the commit that corrected the `drift` message quoted throughout. A
                   squash-merge lands that commit on no branch, so it survives as an ancestor of
                   `refs/pull/289/head`, which is where anything that needs it has to look. `plugins`
@@ -5248,8 +5248,11 @@ git-workflow-skill:
                   into that person's diff, where it reads as noise from their own change.
 
                   **`git status` distinguishes THREE dirty-submodule states, and which one you see
-                  says whose half is outstanding** — but ONLY under `--short`. Measured at this tree,
-                  git 2.55.0:
+                  says whose half is outstanding** — but ONLY under `--short`. Measured at the same
+                  commit as the six-run session above, in a **separate** session re-taken in a
+                  worktree checked out there — same provenance, different sitting, which is why it
+                  carries its own setup and revert rather than continuing the block above. git
+                  2.55.0:
 
                   ```
                   $ echo canary >> plugins/README.md          # content modified INSIDE the submodule
