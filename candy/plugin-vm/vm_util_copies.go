@@ -80,13 +80,6 @@ func expandHostPath(p string) (string, error) {
 // memlockUnlimited reports whether a hard RLIMIT_MEMLOCK is effectively unlimited (verbatim from core).
 func memlockUnlimited(hard uint64) bool { return hard >= 1<<62 }
 
-// ResolveNewestLocalCalVer is a best-effort local-image newest-CalVer resolver for `charly vm cp-box`.
-// The core resolver (local_image.go) queries the local podman store; the plugin has no direct store
-// access, so this returns empty and the caller uses the ref as-authored (correct for an explicit tag).
-// cp-box is not exercised by the vm beds; a follow-up adds a generic local-image-resolve seam for the
-// bare-ref newest-CalVer convenience. Signature matches core's (engine, ref) -> (resolved, err).
-func ResolveNewestLocalCalVer(_, _ string) (string, error) { return "", nil }
-
 // resolveVmSshPort resolves the guest SSH host port. For ssh.port_auto it reuses the persisted port
 // (from the config-resolve seam's VmState) for idempotency, else allocates a free one; a fixed port or
 // the 2222 default otherwise. The persisted READ is the ONE core-coupled bit (routed through the seam).

@@ -1,0 +1,139 @@
+nested-podman-socket:
+    candy:
+        version: 2026.229.1100
+        description: |-
+            Serves the nested rootless podman API socket at uid 1000, so a pod's OWN podman store
+            is reachable as an API endpoint rather than only as a CLI inside the container.
+
+            container-nesting supplies nested rootless podman; this candy supplies its SOCKET. The
+            two are separate because a nesting box that only builds and runs containers needs no
+            API endpoint, while anything that must be driven from outside the container — the
+            `charly box load` delivery verb, or an AgentTeams controller spawning Manager/Worker
+            containers into the pod's own store — needs exactly that endpoint. Composing this
+            candy is what makes a pod a venue `charly box load` can deliver into.
+
+            The socket's store IS the container's rootless store (container-nesting's user
+            storage.conf graphroot), which is the whole point: containers spawned through it stay
+            inside the candybox instead of landing in the host store beside everything else.
+        candy:
+            - container-nesting
+        # /run is a fresh root-owned tmpfs at container start, so the build-time seed below does
+        # NOT survive into the running container, and the uid-1000 service cannot create its own
+        # runtime dir under a root-owned /run/user. A NAMED VOLUME at the runtime path is the fix:
+        # podman copy-up populates an empty named volume from the image's content at that path,
+        # ownership preserved, so the container starts with the uid-1000-owned dir baked at build.
+        #
+        # A tmpfs is NOT an alternative, and this is measured rather than assumed: podman's
+        # --tmpfs rejects uid=/gid= ("unknown mount option \"uid=1000\": invalid mount option"),
+        # so a tmpfs at this path can only ever be root-owned. The named volume is the one
+        # mechanism that yields a uid-1000-owned runtime dir on a pod venue.
+        volume:
+            - name: runtime-dir
+              path: /run/user/1000
+        service:
+            - name: podman-socket
+              exec: /usr/bin/podman system service --time=0 unix:///run/user/1000/podman/podman.sock
+              user: "1000"
+              enable: true
+              env:
+                  XDG_RUNTIME_DIR: /run/user/1000
+        plan:
+            - run: seed the uid-1000 runtime dir so the named volume copies it up at first start
+              run_as: root
+              command: |
+                  mkdir -p /run/user/1000/podman
+                  chown -R 1000:1000 /run/user/1000
+            - check: the seeded runtime dir is uid-1000-owned as a WHOLE, not just its podman/ subdir
+              # The nested podman writes its libpod runtime dir alongside podman/, so seeding only
+              # the subdir leaves the service unable to start. Asserting the PARENT's owner is what
+              # discriminates the two.
+              id: nested-podman-socket-seed-owned
+              context:
+                - build
+              exit_status: 0
+              command: |
+                  test "$(stat -c %u /run/user/1000)" = 1000
+            - check: the podman binary the socket serves is present
+              id: nested-podman-socket-binary
+              context:
+                - build
+                - runtime
+              file:
+                file: /usr/bin/podman
+                exists: true
+            - check: the API socket exists at the uid-1000 runtime path
+              id: nested-podman-socket-file
+              context:
+                - runtime
+              file:
+                file: /run/user/1000/podman/podman.sock
+                exists: true
+            - check: the socket answers, and its store is the container's OWN rootless store
+              # Asserting the graph root — not merely that the call succeeds — is what makes this
+              # check fail if the socket were ever wired to a store outside the candybox. A bare
+              # exit-0 assertion would pass against the host's store just as happily.
+              id: nested-podman-socket-nested-store
+              context:
+                - runtime
+              exit_status: 0
+              stdout:
+                - contains: /home/user/.local/share/containers/storage
+              command:
+                command: podman --remote --url unix:///run/user/1000/podman/podman.sock info --format '{{.Store.GraphRoot}}'
+                in_container: true
+nested-podman-socket-skill:
+    skill:
+        name: nested-podman-socket
+        family: distros
+        owner: nested-podman-socket
+        description: |-
+            Use when a pod's OWN podman store must be reachable as an API socket — the
+            prerequisite for `charly box load`, and for any in-pod service that spawns
+            containers into the candybox rather than the host store.
+        triggers:
+            - "nested-podman-socket / serving a rootless podman API socket at uid 1000 inside a pod / the `/run/user/1000` runtime-dir named volume"
+        content: |
+            # nested-podman-socket — the nested podman's API socket
+
+            Composes `container-nesting` (`/charly-distros:container-nesting`) and serves that
+            nested rootless podman as an API socket at
+            `unix:///run/user/1000/podman/podman.sock`.
+
+            ## Why it is separate from container-nesting
+
+            `container-nesting` supplies nested podman; this candy supplies its SOCKET. A
+            nesting box that only builds and runs containers itself needs no API endpoint,
+            and starting a podman service in every such box would be scope it did not ask
+            for. Anything driven from OUTSIDE the container needs exactly that endpoint —
+            `charly box load` (`/charly-build:load`) delivering images in, or an in-pod
+            controller spawning its own containers.
+
+            The socket's store IS the container's rootless store, which is the whole point:
+            containers spawned through it stay inside the candybox instead of landing in the
+            host store beside everything else.
+
+            ## The runtime-dir named volume is load-bearing
+
+            `/run` is a fresh ROOT-OWNED tmpfs at container start. A build-time
+            `mkdir /run/user/1000` therefore does not survive into the running container, and
+            the uid-1000 service cannot create its own runtime dir under a root-owned
+            `/run/user`. The candy declares a NAMED VOLUME at `/run/user/1000`: podman
+            copy-up populates an empty named volume from the image's content at that path,
+            ownership preserved, so the container starts with the uid-1000-owned directory
+            seeded at build time.
+
+            A tmpfs is NOT an alternative, and this is measured rather than argued: podman's
+            `--tmpfs` rejects `uid=`/`gid=` (`unknown mount option "uid=1000"`), so a tmpfs
+            at this path can only ever be root-owned.
+
+            The seed chowns the WHOLE directory, not just its `podman/` subdirectory — the
+            nested podman writes its `libpod` runtime dir alongside, and seeding only the
+            subdirectory leaves the service unable to start. The candy's build-context check
+            asserts the PARENT's owner for exactly that reason.
+
+            ## Verification
+
+            The candy's own plan asserts the socket exists, answers, and reports a graph root
+            inside the container's rootless store — the last of which is what would fail if
+            the socket were ever wired to a store outside the candybox. `check-boxload-pod`
+            exercises the whole arrangement end to end.

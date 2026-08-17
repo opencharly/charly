@@ -3376,3 +3376,57 @@ check-retention-app:
             - fedora
         candy:
             - check-retention-fixture
+
+# =============================================================================
+# `charly box load` — the container-venue image-delivery verb (Factory unit 5).
+# The fixture box is a pod that serves its own nested podman API socket; the bed
+# delivers a host image into THAT store and proves it landed there and nowhere
+# else. Without the verb this transfer has no charly-native form at all — the
+# only path was a hand-run `podman save | podman --remote load` pipeline (R4).
+# =============================================================================
+check-boxload-app:
+    candy:
+        version: 2026.229.1100
+        base: quay.io/fedora/fedora:43
+        description: |-
+            Fixture box for the `charly box load` bed: a minimal Fedora base composing
+            container-nesting (nested rootless podman, zero added capabilities) plus
+            nested-podman-socket, which serves that podman's API socket at uid 1000. Together
+            they make the pod a venue with an image store of its own, separate from the host's
+            — which is the venue `charly box load` exists to deliver into.
+        distro:
+            - fedora:43
+            - fedora
+        candy:
+            - nested-podman-socket
+check-boxload-pod:
+    pod:
+        image: check-boxload-app
+        disposable: true
+        lifecycle: dev
+        description: >-
+            R10 bed for `charly box load`. It delivers a host-store image into the pod's NESTED
+            uid-1000 podman store and then asserts, through the socket, that the image is
+            actually there — the pair of facts the verb claims. The image loaded is the bed's own
+            app image, which step 1 of the bed guarantees is in the host store, so the bed needs
+            no external image and no second build. The assertion deliberately queries the nested
+            socket rather than running `podman images` in the container: only the socket-scoped
+            query can fail if the image were ever delivered to the wrong store.
+        plan:
+            - check: box load delivers the host image into the pod's nested uid-1000 store
+              id: boxload-deliver
+              timeout: 600s
+              context:
+                - runtime
+              exit_status: 0
+              command:
+                command: ${CHARLY_BIN} box load check-boxload-pod check-boxload-app --as localhost/charly-boxload-probe:latest
+                in_container: false
+            - check: the delivered image is present in the NESTED store, queried through the socket
+              id: boxload-present-in-nested-store
+              context:
+                - runtime
+              exit_status: 0
+              command:
+                command: podman --remote --url unix:///run/user/1000/podman/podman.sock image exists localhost/charly-boxload-probe:latest
+                in_container: true
