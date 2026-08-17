@@ -373,6 +373,47 @@ pixi:
         env:
             PIXI_CACHE_DIR: /tmp/pixi-cache
             RATTLER_CACHE_DIR: /tmp/rattler-cache
+alpine:
+    distro:
+        version: "3.24"
+        bootstrap:
+            install_cmd: apk add --no-cache
+            package:
+                - curl
+                - ca-certificates
+            cache_mount:
+                - dst: /var/cache/apk
+                  sharing: locked
+        format:
+            apk:
+                cache_mount:
+                    - dst: /var/cache/apk
+                      sharing: locked
+                section_field:
+                    option: list
+                    package: list
+                    repo: list_of_maps
+                local_pkg:
+                    install_template: |
+                        apk add --no-cache --allow-untrusted {{.PkgFile}}
+                    download_template: https://opencharly.github.io/charly-alpine/${ARCH}/charly-${ARCH}.apk
+                    probe: command -v apk
+                uninstall_template: |
+                    apk del{{range .Packages}} {{.}}{{end}}
+                install_template: |
+                    RUN {{cacheMounts .CacheMounts}} \
+                    {{- range .Repos}}
+                    {{- if .key}}
+                        key={{quote .key}} && curl -fsSL "$key" -o "/etc/apk/keys/$(basename "$key")" && \
+                    {{- end}}
+                    {{- if .url}}
+                        echo {{quote .url}} >> /etc/apk/repositories && \
+                    {{- end}}
+                    {{- end}}
+                        apk add --no-cache
+                    {{- range .Options}} {{.}}{{end}}
+                    {{- range .Packages}} \
+                          {{.}}{{end}}
 arch:
     distro:
         bootstrap:

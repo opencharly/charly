@@ -352,6 +352,47 @@ ubuntu-repo-vm:
 # phase resolves it as a box name — so the pod needs a real charly box whose base IS the
 # alpine image). No init metadata → the pod deploy starts it with `sleep infinity`; the
 # repo-install check steps run in-container.
+sudo-nopasswd:
+    candy:
+        version: 2026.229.0900
+        description: |-
+            Installs sudo and grants the uid-1000 account passwordless sudo via
+            /etc/sudoers.d/charly-user, for a check bed that must drive a native
+            package manager IN-CONTAINER. A charly box runs as uid 1000
+            (WriteBootstrap has no root branch) and `run_as:` on a check step is not
+            honoured by the check executor, so an in-container `apk add` has no other
+            elevation path. Mirrors the sudoers rule /charly-coder:sshd installs,
+            without pulling in an sshd service.
+        distro:
+            alpine:
+                package:
+                    - sudo
+        plan:
+            - run: grant the uid-1000 account passwordless sudo
+              run_as: root
+              command: |
+                  account=$(getent passwd 1000 | cut -d: -f1)
+                  if [ -z "$account" ]; then
+                    echo "sudo-nopasswd: no uid-1000 account found, refusing to write sudoers" >&2
+                    exit 1
+                  fi
+                  printf '%s ALL=(ALL) NOPASSWD: ALL\n' "$account" > /etc/sudoers.d/charly-user
+                  chmod 0440 /etc/sudoers.d/charly-user
+            - check: the sudo binary is installed
+              id: sudo-nopasswd-binary
+              exit_status: 0
+              command: command -v sudo
+            - check: passwordless sudo works and the drop-in is mode 0440
+              id: sudo-nopasswd-sudoers
+              exit_status: 0
+              stdout:
+                  - contains: "440"
+              # Routed THROUGH sudo deliberately: /etc/sudoers.d is 0750 root:root,
+              # so the uid-1000 account cannot stat inside it directly. Reading the
+              # mode via sudo proves both halves at once — the drop-in is 0440 AND
+              # the NOPASSWD rule actually grants elevation. The step fails if
+              # either is wrong, which a direct stat could never show.
+              command: sudo -n stat -c '%a' /etc/sudoers.d/charly-user
 alpine-repo-box:
     candy:
         version: 2026.225.1508
@@ -361,6 +402,10 @@ alpine-repo-box:
             charly image whose ai.opencharly labels the pod deploy reads to start the
             container (no init → sleep infinity). The repo-install check steps run
             in-container.
+        candy:
+            - sudo-nopasswd
+        build:
+            - apk
         distro:
             - alpine
         plan:
@@ -1491,7 +1536,7 @@ check-alpine-repo:
         disposable: true
         lifecycle: dev
         description: >-
-            Proves the repo-based install from the published charly-alpine apk repo (opencharly.github.io/charly-alpine) — the R10 acceptance for the nFPM packaging cutover's Alpine leg. Deploys a disposable Alpine container pod (alpine-repo-box — a raw registry image cannot be a pod's `image:`, and Alpine's cloud-init/OpenRC path is not systemd, so a container is the honest substrate), installs the charly RSA key + adds the apk repo, `apk add charly`, asserts `charly version` equals the repo's published CalVer, and proves the welded command plugins dispatch project-less from /tmp.
+            Proves the repo-based install from the published charly-alpine apk repo (opencharly.github.io/charly-alpine) — the R10 acceptance for the nFPM packaging cutover's Alpine leg. Deploys a disposable Alpine container pod (alpine-repo-box — a raw registry image cannot be a pod's `image:`, and Alpine's cloud-init/OpenRC path is not systemd, so a container is the honest substrate), installs the charly RSA key + adds the apk repo, `apk add charly`, asserts the PACKAGED /usr/bin/charly reports the same version the package manager recorded for the installed package, and proves the welded command plugins dispatch project-less from /tmp.
         install_opts:
             allow_repo_changes: true
             allow_root_tasks: true
@@ -1502,22 +1547,31 @@ check-alpine-repo:
               context:
                 - runtime
               command: |
-                apk add --no-cache curl &&
-                curl -fsSL -o /etc/apk/keys/charly.rsa.pub https://opencharly.github.io/charly-alpine/charly.rsa.pub &&
-                echo 'https://opencharly.github.io/charly-alpine/amd64' >> /etc/apk/repositories &&
+                sudo apk add --no-cache curl &&
+                sudo curl -fsSL -o /etc/apk/keys/charly.rsa.pub https://opencharly.github.io/charly-alpine/charly.rsa.pub &&
+                echo 'https://opencharly.github.io/charly-alpine/amd64' | sudo tee -a /etc/apk/repositories >/dev/null &&
                 grep -q '^https://opencharly.github.io/charly-alpine/amd64$' /etc/apk/repositories
             - check: apk update resolves the charly repo
               id: alpine-apk-update
               exit_status: 0
               context:
                 - runtime
-              command: apk update
+              # `apk update` alone exits 0 even when a repo is unreachable — it
+              # warns and carries on — so it cannot prove the charly index was
+              # fetched. Listing the package proves it: `charly` is in no Alpine
+              # repo, so a non-empty listing is only possible from the charly
+              # index at <repo>/<apk-arch>/APKINDEX.tar.gz.
+              command: |
+                sudo apk update &&
+                apk list charly | grep -q '^charly-'
             - check: apk add charly installs the package
               id: alpine-charly-installed
               exit_status: 0
               context:
                 - runtime
-              command: apk add charly
+              command: |
+                sudo apk add charly &&
+                apk info -e charly
             - check: charly version equals the repo's published CalVer
               id: alpine-charly-version
               exit_status: 0
@@ -1526,7 +1580,11 @@ check-alpine-repo:
               context:
                 - runtime
               command: |
-                test "$(charly version)" = "$(apk info -v charly | sed -n 's/^charly-\([0-9.]*\)-r[0-9]*.*/\1/p')" &&
+                installed="$(/usr/bin/charly version)" &&
+                packaged="$(apk list --installed charly | sed -n 's/^charly-\([0-9][0-9.]*\) .*/\1/p')" &&
+                echo "installed=[$installed] packaged=[$packaged]" &&
+                test -n "$installed" && test -n "$packaged" &&
+                test "$installed" = "$packaged" &&
                 echo ALPINE-REPO-VERSION-OK
             - check: the welded command plugins dispatch project-less from /tmp
               id: alpine-welded-command-project-less
@@ -1545,7 +1603,7 @@ check-arch-repo:
         disposable: true
         lifecycle: dev
         description: >-
-            Proves the repo-based install from the published charly-arch pacman repo (opencharly.github.io/charly-arch) — the R10 acceptance for the nFPM packaging cutover's Arch leg. Boots the disposable Arch cloud-image VM (arch-repo-vm, ssh.port_auto so it never collides with check-arch-vm's fixed port 2224), imports + locally signs the charly GPG key, adds the [charly] repo, `pacman -S charly`, asserts `charly version` equals the repo's published CalVer, then removes charly and installs the `charly-minimal` variant, asserting its minimal plugin set dispatches.
+            Proves the repo-based install from the published charly-arch pacman repo (opencharly.github.io/charly-arch) — the R10 acceptance for the nFPM packaging cutover's Arch leg. Boots the disposable Arch cloud-image VM (arch-repo-vm, ssh.port_auto so it never collides with check-arch-vm's fixed port 2224), imports + locally signs the charly GPG key, adds the [charly] repo, `pacman -S charly`, asserts the PACKAGED /usr/bin/charly reports the same version the package manager recorded for the installed package, then removes charly and installs the `charly-minimal` variant, asserting its minimal plugin set dispatches.
         install_opts:
             allow_repo_changes: true
             allow_root_tasks: true
@@ -1577,13 +1635,19 @@ check-arch-repo:
               exit_status: 0
               context:
                 - runtime
-              command: pacman -Sy --noconfirm
+              # -Sy alone cannot prove the charly repo resolved (it warns and
+              # carries on); -Si can only succeed from the charly sync DB.
+              command: |
+                pacman -Sy --noconfirm &&
+                pacman -Si charly >/dev/null
             - check: pacman -S charly installs the package
               id: arch-charly-installed
               exit_status: 0
               context:
                 - runtime
-              command: pacman -S --noconfirm charly
+              command: |
+                pacman -S --noconfirm charly &&
+                pacman -Q charly
             - check: charly version equals the repo's published CalVer
               id: arch-charly-version
               exit_status: 0
@@ -1592,7 +1656,11 @@ check-arch-repo:
               context:
                 - runtime
               command: |
-                test "$(charly version)" = "$(pacman -Qi charly | awk '/^Version/{print $3}' | cut -d- -f1)" &&
+                installed="$(/usr/bin/charly version)" &&
+                packaged="$(pacman -Q charly | awk '{print $2}' | cut -d- -f1)" &&
+                echo "installed=[$installed] packaged=[$packaged]" &&
+                test -n "$installed" && test -n "$packaged" &&
+                test "$installed" = "$packaged" &&
                 echo ARCH-REPO-VERSION-OK
             - check: the welded command plugins dispatch project-less from /tmp
               id: arch-welded-command-project-less
@@ -1632,7 +1700,7 @@ check-fedora-repo:
         disposable: true
         lifecycle: dev
         description: >-
-            Proves the repo-based install from the published charly-fedora dnf repo (opencharly.github.io/charly-fedora) — the R10 acceptance for the nFPM packaging cutover's Fedora leg. Boots the disposable Fedora Cloud 43 VM, adds the charly .repo, `dnf install charly`, asserts `charly version` equals the repo's published CalVer, and proves the welded command plugins dispatch project-less from /tmp.
+            Proves the repo-based install from the published charly-fedora dnf repo (opencharly.github.io/charly-fedora) — the R10 acceptance for the nFPM packaging cutover's Fedora leg. Boots the disposable Fedora Cloud 43 VM, adds the charly .repo, `dnf install charly`, asserts the PACKAGED /usr/bin/charly reports the same version the package manager recorded for the installed package, and proves the welded command plugins dispatch project-less from /tmp.
         install_opts:
             allow_repo_changes: true
             allow_root_tasks: true
@@ -1657,7 +1725,9 @@ check-fedora-repo:
               exit_status: 0
               context:
                 - runtime
-              command: dnf install -y charly
+              command: |
+                dnf install -y charly &&
+                rpm -q charly
             - check: charly version equals the repo's published CalVer
               id: fedora-charly-version
               exit_status: 0
@@ -1666,7 +1736,11 @@ check-fedora-repo:
               context:
                 - runtime
               command: |
-                test "$(charly version)" = "$(dnf info charly | awk '/^Version/{print $3}')" &&
+                installed="$(/usr/bin/charly version)" &&
+                packaged="$(rpm -q charly | sed -n 's/^charly-\([0-9][0-9.]*\)-.*/\1/p')" &&
+                echo "installed=[$installed] packaged=[$packaged]" &&
+                test -n "$installed" && test -n "$packaged" &&
+                test "$installed" = "$packaged" &&
                 echo FEDORA-REPO-VERSION-OK
             - check: the welded command plugins dispatch project-less from /tmp
               id: fedora-welded-command-project-less
@@ -1685,7 +1759,7 @@ check-debian-repo:
         disposable: true
         lifecycle: dev
         description: >-
-            Proves the repo-based install from the published charly-debian apt repo (opencharly.github.io/charly-debian) — the R10 acceptance for the nFPM packaging cutover's Debian leg. Boots the disposable Debian 13 (trixie) cloud-image VM (debian-repo-vm), installs the charly GPG key + adds the apt repo, `apt install charly`, asserts `charly version` equals the repo's published CalVer, and proves the welded command plugins dispatch project-less from /tmp.
+            Proves the repo-based install from the published charly-debian apt repo (opencharly.github.io/charly-debian) — the R10 acceptance for the nFPM packaging cutover's Debian leg. Boots the disposable Debian 13 (trixie) cloud-image VM (debian-repo-vm), installs the charly GPG key + adds the apt repo, `apt install charly`, asserts the PACKAGED /usr/bin/charly reports the same version the package manager recorded for the installed package, and proves the welded command plugins dispatch project-less from /tmp.
         install_opts:
             allow_repo_changes: true
             allow_root_tasks: true
@@ -1720,13 +1794,19 @@ check-debian-repo:
               exit_status: 0
               context:
                 - runtime
-              command: apt-get update
+              # apt-get update can exit 0 with only a warning for a failed repo;
+              # a Candidate version can only come from the charly repo.
+              command: |
+                apt-get update &&
+                apt-cache policy charly | grep -qE 'Candidate: [0-9]'
             - check: apt-get install charly installs the package
               id: debian-charly-installed
               exit_status: 0
               context:
                 - runtime
-              command: apt-get install -y charly
+              command: |
+                apt-get install -y charly &&
+                dpkg-query -W charly
             - check: charly version equals the repo's published CalVer
               id: debian-charly-version
               exit_status: 0
@@ -1735,7 +1815,11 @@ check-debian-repo:
               context:
                 - runtime
               command: |
-                test "$(charly version)" = "$(apt-cache policy charly | awk '/^  Candidate:/{print $2}')" &&
+                installed="$(/usr/bin/charly version)" &&
+                packaged="$(dpkg-query -W charly | awk '{print $2}')" &&
+                echo "installed=[$installed] packaged=[$packaged]" &&
+                test -n "$installed" && test -n "$packaged" &&
+                test "$installed" = "$packaged" &&
                 echo DEBIAN-REPO-VERSION-OK
             - check: the welded command plugins dispatch project-less from /tmp
               id: debian-welded-command-project-less
@@ -1754,7 +1838,7 @@ check-ubuntu-repo:
         disposable: true
         lifecycle: dev
         description: >-
-            Proves the repo-based install from the published charly-ubuntu apt repo (opencharly.github.io/charly-ubuntu) — the R10 acceptance for the nFPM packaging cutover's Ubuntu leg. Boots the disposable Ubuntu 24.04 (noble) cloud-image VM (ubuntu-repo-vm), installs the charly GPG key + adds the apt repo, `apt install charly`, asserts `charly version` equals the repo's published CalVer, and proves the welded command plugins dispatch project-less from /tmp.
+            Proves the repo-based install from the published charly-ubuntu apt repo (opencharly.github.io/charly-ubuntu) — the R10 acceptance for the nFPM packaging cutover's Ubuntu leg. Boots the disposable Ubuntu 24.04 (noble) cloud-image VM (ubuntu-repo-vm), installs the charly GPG key + adds the apt repo, `apt install charly`, asserts the PACKAGED /usr/bin/charly reports the same version the package manager recorded for the installed package, and proves the welded command plugins dispatch project-less from /tmp.
         install_opts:
             allow_repo_changes: true
             allow_root_tasks: true
@@ -1789,13 +1873,19 @@ check-ubuntu-repo:
               exit_status: 0
               context:
                 - runtime
-              command: apt-get update
+              # apt-get update can exit 0 with only a warning for a failed repo;
+              # a Candidate version can only come from the charly repo.
+              command: |
+                apt-get update &&
+                apt-cache policy charly | grep -qE 'Candidate: [0-9]'
             - check: apt-get install charly installs the package
               id: ubuntu-charly-installed
               exit_status: 0
               context:
                 - runtime
-              command: apt-get install -y charly
+              command: |
+                apt-get install -y charly &&
+                dpkg-query -W charly
             - check: charly version equals the repo's published CalVer
               id: ubuntu-charly-version
               exit_status: 0
@@ -1804,7 +1894,11 @@ check-ubuntu-repo:
               context:
                 - runtime
               command: |
-                test "$(charly version)" = "$(apt-cache policy charly | awk '/^  Candidate:/{print $2}')" &&
+                installed="$(/usr/bin/charly version)" &&
+                packaged="$(dpkg-query -W charly | awk '{print $2}')" &&
+                echo "installed=[$installed] packaged=[$packaged]" &&
+                test -n "$installed" && test -n "$packaged" &&
+                test "$installed" = "$packaged" &&
                 echo UBUNTU-REPO-VERSION-OK
             - check: the welded command plugins dispatch project-less from /tmp
               id: ubuntu-welded-command-project-less

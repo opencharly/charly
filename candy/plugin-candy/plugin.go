@@ -1,5 +1,5 @@
 // Package candy is the charly plugin OWNING the externalized `charly candy` command — the
-// candy-manifest authoring surface (set / add-rpm / add-deb / add-pac / add-aur). The plugin owns the
+// candy-manifest authoring surface (set / add-rpm / add-deb / add-pac / add-aur / add-apk). The plugin owns the
 // ENTIRE logic: the subcommand grammar AND the comment-preserving yaml.Node mutation of
 // candy/<name>/charly.yml. The only shared pieces are the GENERIC yaml utilities kit.SetByDotPath /
 // kit.MappingChild (also used by `charly box set` / `charly box scaffold`); there is no core candy
