@@ -320,7 +320,7 @@ debian-repo-vm:
         ram: 4G
         cpu: 2
         machine: q35
-        firmware: bios
+        firmware: uefi-insecure
         ssh:
             port_auto: true
             key_source: generate
@@ -339,7 +339,7 @@ ubuntu-repo-vm:
         ram: 4G
         cpu: 2
         machine: q35
-        firmware: bios
+        firmware: uefi-insecure
         ssh:
             port_auto: true
             key_source: generate
@@ -1553,6 +1553,7 @@ check-alpine-repo:
                 grep -q '^https://opencharly.github.io/charly-alpine/amd64$' /etc/apk/repositories
             - check: apk update resolves the charly repo
               id: alpine-apk-update
+              timeout: 10m
               exit_status: 0
               context:
                 - runtime
@@ -1566,6 +1567,7 @@ check-alpine-repo:
                 apk list charly | grep -q '^charly-'
             - check: apk add charly installs the package
               id: alpine-charly-installed
+              timeout: 10m
               exit_status: 0
               context:
                 - runtime
@@ -1610,43 +1612,46 @@ check-arch-repo:
         plan:
             - check: the charly GPG key is imported and locally signed
               id: arch-repo-key-imported
+              timeout: 10m
               exit_status: 0
               context:
                 - runtime
               command: |
-                pacman-key --init &&
-                pacman-key --populate archlinux &&
+                sudo pacman-key --init &&
+                sudo pacman-key --populate archlinux &&
                 curl -fsSL -o /tmp/charly.gpg https://opencharly.github.io/charly-arch/charly.gpg &&
-                pacman-key --add /tmp/charly.gpg &&
+                sudo pacman-key --add /tmp/charly.gpg &&
                 KEYID=$(gpg --with-colons --import-options show-only --import /tmp/charly.gpg | awk -F: '/^pub/{print $5}') &&
                 test -n "$KEYID" &&
-                pacman-key --lsign-key "$KEYID"
+                sudo pacman-key --lsign-key "$KEYID"
             - check: the [charly] repo is added to pacman.conf
               id: arch-repo-added
               exit_status: 0
               context:
                 - runtime
               command: |
-                printf '[charly]\nServer = https://opencharly.github.io/charly-arch/amd64\nSigLevel = Required\n' >> /etc/pacman.conf &&
+                printf '[charly]\nServer = https://opencharly.github.io/charly-arch/amd64\nSigLevel = Required\n' | sudo tee -a /etc/pacman.conf >/dev/null &&
                 grep -q '^\[charly\]$' /etc/pacman.conf &&
                 grep -q '^Server = https://opencharly.github.io/charly-arch/amd64$' /etc/pacman.conf
             - check: pacman -Sy refreshes the charly repo db
               id: arch-pacman-sy
+              timeout: 10m
               exit_status: 0
               context:
                 - runtime
               # -Sy alone cannot prove the charly repo resolved (it warns and
               # carries on); -Si can only succeed from the charly sync DB.
               command: |
-                pacman -Sy --noconfirm &&
+                sudo pacman -Sy --noconfirm &&
                 pacman -Si charly >/dev/null
             - check: pacman -S charly installs the package
               id: arch-charly-installed
+              timeout: 10m
               exit_status: 0
               context:
                 - runtime
               command: |
-                pacman -S --noconfirm charly &&
+                sudo pacman -S --noconfirm charly &&
                 pacman -Q charly
             - check: charly version equals the repo's published CalVer
               id: arch-charly-version
@@ -1675,12 +1680,13 @@ check-arch-repo:
                 echo ARCH-WELDED-CMD-OK
             - check: charly-minimal installs after removing charly (both provide /usr/bin/charly)
               id: arch-charly-minimal-installed
+              timeout: 10m
               exit_status: 0
               context:
                 - runtime
               command: |
-                pacman -R --noconfirm charly &&
-                pacman -S --noconfirm charly-minimal
+                sudo pacman -R --noconfirm charly &&
+                sudo pacman -S --noconfirm charly-minimal
             - check: the minimal variant ships only the doctor/clean/settings plugin set
               id: arch-minimal-plugin-set
               exit_status: 0
@@ -1711,7 +1717,7 @@ check-fedora-repo:
               context:
                 - runtime
               command: |
-                cat > /etc/yum.repos.d/charly.repo <<'EOF'
+                sudo tee /etc/yum.repos.d/charly.repo >/dev/null <<'EOF'
                 [charly]
                 name=charly
                 baseurl=https://opencharly.github.io/charly-fedora/amd64
@@ -1722,11 +1728,12 @@ check-fedora-repo:
                 grep -q 'charly-fedora' /etc/yum.repos.d/charly.repo
             - check: dnf install charly installs the package
               id: fedora-charly-installed
+              timeout: 10m
               exit_status: 0
               context:
                 - runtime
               command: |
-                dnf install -y charly &&
+                sudo dnf install -y charly &&
                 rpm -q charly
             - check: charly version equals the repo's published CalVer
               id: fedora-charly-version
@@ -1766,20 +1773,21 @@ check-debian-repo:
         plan:
             - check: curl + gnupg are available for the key import
               id: debian-key-tooling
+              timeout: 10m
               exit_status: 0
               context:
                 - runtime
               command: |
-                apt-get update &&
-                apt-get install -y curl gnupg
+                sudo apt-get update &&
+                sudo apt-get install -y curl gnupg
             - check: the charly GPG key is dearmored into /etc/apt/keyrings
               id: debian-repo-key-installed
               exit_status: 0
               context:
                 - runtime
               command: |
-                mkdir -p /etc/apt/keyrings &&
-                curl -fsSL https://opencharly.github.io/charly-debian/charly.gpg | gpg --dearmor -o /etc/apt/keyrings/charly.gpg &&
+                sudo mkdir -p /etc/apt/keyrings &&
+                curl -fsSL https://opencharly.github.io/charly-debian/charly.gpg | sudo gpg --dearmor -o /etc/apt/keyrings/charly.gpg &&
                 test -s /etc/apt/keyrings/charly.gpg
             - check: the charly apt repo is added
               id: debian-repo-added
@@ -1787,25 +1795,27 @@ check-debian-repo:
               context:
                 - runtime
               command: |
-                echo 'deb [signed-by=/etc/apt/keyrings/charly.gpg] https://opencharly.github.io/charly-debian/ stable main' > /etc/apt/sources.list.d/charly.list &&
+                echo 'deb [signed-by=/etc/apt/keyrings/charly.gpg] https://opencharly.github.io/charly-debian/ stable main' | sudo tee /etc/apt/sources.list.d/charly.list >/dev/null &&
                 grep -q 'charly-debian' /etc/apt/sources.list.d/charly.list
             - check: apt-get update resolves the charly repo
               id: debian-apt-update
+              timeout: 10m
               exit_status: 0
               context:
                 - runtime
               # apt-get update can exit 0 with only a warning for a failed repo;
               # a Candidate version can only come from the charly repo.
               command: |
-                apt-get update &&
+                sudo apt-get update &&
                 apt-cache policy charly | grep -qE 'Candidate: [0-9]'
             - check: apt-get install charly installs the package
               id: debian-charly-installed
+              timeout: 10m
               exit_status: 0
               context:
                 - runtime
               command: |
-                apt-get install -y charly &&
+                sudo apt-get install -y charly &&
                 dpkg-query -W charly
             - check: charly version equals the repo's published CalVer
               id: debian-charly-version
@@ -1845,20 +1855,21 @@ check-ubuntu-repo:
         plan:
             - check: curl + gnupg are available for the key import
               id: ubuntu-key-tooling
+              timeout: 10m
               exit_status: 0
               context:
                 - runtime
               command: |
-                apt-get update &&
-                apt-get install -y curl gnupg
+                sudo apt-get update &&
+                sudo apt-get install -y curl gnupg
             - check: the charly GPG key is dearmored into /etc/apt/keyrings
               id: ubuntu-repo-key-installed
               exit_status: 0
               context:
                 - runtime
               command: |
-                mkdir -p /etc/apt/keyrings &&
-                curl -fsSL https://opencharly.github.io/charly-ubuntu/charly.gpg | gpg --dearmor -o /etc/apt/keyrings/charly.gpg &&
+                sudo mkdir -p /etc/apt/keyrings &&
+                curl -fsSL https://opencharly.github.io/charly-ubuntu/charly.gpg | sudo gpg --dearmor -o /etc/apt/keyrings/charly.gpg &&
                 test -s /etc/apt/keyrings/charly.gpg
             - check: the charly apt repo is added
               id: ubuntu-repo-added
@@ -1866,25 +1877,27 @@ check-ubuntu-repo:
               context:
                 - runtime
               command: |
-                echo 'deb [signed-by=/etc/apt/keyrings/charly.gpg] https://opencharly.github.io/charly-ubuntu/ stable main' > /etc/apt/sources.list.d/charly.list &&
+                echo 'deb [signed-by=/etc/apt/keyrings/charly.gpg] https://opencharly.github.io/charly-ubuntu/ stable main' | sudo tee /etc/apt/sources.list.d/charly.list >/dev/null &&
                 grep -q 'charly-ubuntu' /etc/apt/sources.list.d/charly.list
             - check: apt-get update resolves the charly repo
               id: ubuntu-apt-update
+              timeout: 10m
               exit_status: 0
               context:
                 - runtime
               # apt-get update can exit 0 with only a warning for a failed repo;
               # a Candidate version can only come from the charly repo.
               command: |
-                apt-get update &&
+                sudo apt-get update &&
                 apt-cache policy charly | grep -qE 'Candidate: [0-9]'
             - check: apt-get install charly installs the package
               id: ubuntu-charly-installed
+              timeout: 10m
               exit_status: 0
               context:
                 - runtime
               command: |
-                apt-get install -y charly &&
+                sudo apt-get install -y charly &&
                 dpkg-query -W charly
             - check: charly version equals the repo's published CalVer
               id: ubuntu-charly-version
