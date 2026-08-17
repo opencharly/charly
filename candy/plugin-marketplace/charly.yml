@@ -13,9 +13,10 @@ plugin-marketplace:
             the generated R0 dispatcher section in CLAUDE.md/AGENTS.md, and the plugins/setup
             launcher. `charly marketplace drift` is the fail-closed no-op gate: it regenerates in
             memory and compares with the artifacts ON DISK, never with git, so it proves
-            "regeneration is a no-op" and says nothing about whether the tree is committed
-            (`task skills:drift` adds that `git status` half). A stale mirror is a hard failure,
-            but it is red only for whoever runs it — drift runs in no CI workflow.
+            "regeneration is a no-op" and says nothing about whether the tree is committed —
+            this repository's own `task skills:drift` recipe is what adds that `git status`
+            half. A stale mirror is a hard failure, but it is red only for whoever runs it:
+            drift runs in no CI workflow.
 
             PLACEMENT — deliberately NOT listed in charly/charly.yml compiled_plugins. This is a
             DEV-TIME generator, run on a contributor's machine to regenerate the harness surface
