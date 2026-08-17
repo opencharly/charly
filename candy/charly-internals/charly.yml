@@ -3667,6 +3667,32 @@ git-workflow-skill:
                   written alongside the change it describes is written before the tree its reader
                   will check it against.
 
+                  **Before merging a superproject leg, verify every gitlink is an ANCESTOR of its own repo's
+                  `origin/main` — not merely that it matches a local checkout.** Those are different questions and
+                  only the first discriminates:
+
+                  ```bash
+                  git config --file .gitmodules --get-regexp path | awk '{print $2}' | while read -r s; do
+                    g=$(git ls-tree HEAD "$s" | awk '{print $3}')
+                    (cd "$s" && git fetch -q origin &&
+                     git merge-base --is-ancestor "$g" origin/main && echo "$s MERGED" || echo "$s NOT ON main")
+                  done
+                  ```
+
+                  "The gitlink matches the submodule's HEAD" **cannot fail in the case it exists to catch**: a checkout
+                  sitting on a PR head satisfies it perfectly. Measured on one leg, that phrasing reported nine
+                  submodules clean while **four** named commits on no branch — and it counted seven, with both
+                  uncounted submodules in the failing set, so the miscount and the wrong question compounded.
+
+                  **An unmerged pin is worse than an early one:** when the target PR merges, the CalVer commit plus the
+                  squash produce a DIFFERENT sha, so the pin becomes permanently wrong rather than eventually right. A
+                  pin may legitimately name an unmerged head while its PR is open — the normal mid-flight state — but it
+                  must be re-derived from `origin/main` before the leg merges.
+
+                  Expect **post-squash staleness** too: a pin at a pre-squash feat head stops being an ancestor the
+                  moment its PR squash-merges. Check whether `origin/main` is strictly AHEAD (it usually is, carrying the
+                  CalVer finalization) before concluding anything was orphaned.
+
                   **Gitlink ANCESTOR bump → `gh pr update-branch` flags CONFLICTING (recover
                   locally).** When the just-merged delta and a still-open PR both bump the SAME
                   submodule gitlink and one bump is an ANCESTOR of the other, GitHub's
