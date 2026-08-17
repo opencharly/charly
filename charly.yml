@@ -315,6 +315,11 @@ debian-repo-vm:
             kind: cloud_image
             url: https://cloud.debian.org/images/cloud/trixie/latest/debian-13-generic-amd64.qcow2
             base_user: debian
+            # REQUIRED, not decorative: sshUnitForDistro + composePackages key on this
+            # EXPLICIT field (effectiveDistro infers only arch/alpine from base_user), so
+            # omitting it renders the Arch package name `openssh` and unit `sshd` on a
+            # Debian-family guest.
+            distro: debian
         backend: libvirt
         disk_size: 20G
         ram: 4G
@@ -334,6 +339,11 @@ ubuntu-repo-vm:
             kind: cloud_image
             url: https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
             base_user: ubuntu
+            # REQUIRED, not decorative: sshUnitForDistro + composePackages key on this
+            # EXPLICIT field (effectiveDistro infers only arch/alpine from base_user), so
+            # omitting it renders the Arch package name `openssh` and unit `sshd` on a
+            # Debian-family guest.
+            distro: ubuntu
         backend: libvirt
         disk_size: 20G
         ram: 4G
