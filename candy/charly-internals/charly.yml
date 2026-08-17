@@ -10621,9 +10621,21 @@ pr-validator-agent:
                 self-announcing to a human and accepted by rule one, so *self-announcing* and
                 *regex-valid* are not the exclusive alternatives this paragraph once implied. What it
                 does NOT do is bind anything: nothing rejects it, and a leg that skips Phase 3 still
-                merges a file whose name is a guess — merely a conspicuous one. **That is why the
-                check below is the fix and a naming convention is not** — the check fails the merge,
-                and a convention only fails the reader's eye.
+                merges a file whose name is a guess — merely a conspicuous one.
+
+                **And the check below does not cover that case either, because it lives inside
+                Phase 3.** It compares the landed entry against the version you MINTED, which
+                distinguishes a guessed date from a minted one — but only when Phase 3 runs at all.
+                Nothing inside a phase can detect that phase being skipped.
+
+                **The invariant that survives a skipped Phase 3 is external to it: an entry on
+                `main` with no matching `v<CalVer>` tag.** A skipped Phase 3 leaves both the
+                placeholder name and the absent tag, so the pair is checkable by anyone, at any
+                time, without knowing what was minted. Measured across the last 25 entries of this
+                repo: 25 checked, 0 missing. **That is the check that catches the PLAUSIBLE
+                placeholder** — the dangerous kind, where filename and H1 agree because both are the
+                guess. A conspicuous stamp is caught by the reader's eye; a plausible one is caught
+                only by the tag.
 
             None of these is a formality: a rule you cannot POSITIVELY confirm from the diff +
             your own re-run is not "probably fine" — it is unverified, and unverified is FAIL
