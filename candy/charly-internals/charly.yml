@@ -5044,7 +5044,7 @@ git-workflow-skill:
 
                   Pasted rather than described, because "a paste and its label are two separate
                   claims" applies to this page's own tables. **Provenance, which this page's own
-                  rule demands of every figure below:** one continuous session at superproject
+                  rule demands of every figure in THIS section:** one continuous session at superproject
                   `a56240f0` — the commit that corrected the `drift` message quoted throughout. A
                   squash-merge lands that commit on no branch, so it survives as an ancestor of
                   `refs/pull/289/head`, which is where anything that needs it has to look. `plugins`
@@ -10611,14 +10611,19 @@ pr-validator-agent:
                 rather than a failed lookup). **The rules and the agent performing Phase 3 are the
                 only things standing between a guessed date and `main`.**
 
-                The tempting remedy — a sentinel that announces itself, `CHANGELOG/UNSTAMPED-<slug>.md`
+                One tempting remedy — a sentinel that announces itself, `CHANGELOG/UNSTAMPED-<slug>.md`
                 with `# UNSTAMPED — …` — **fails rule one by construction** and would be rejected on
                 the filename regex before anything else was read, and the org PR template
-                independently instructs authors to use a placeholder `CHANGELOG/<CalVer>.md`. So the
-                shape cannot be changed per-leg or by convention: these rules, the template, and the
-                Phase-3 step would all have to move in ONE cutover, or every leg adopting the new
-                shape fails against the old rules. The check below closes the hazard without moving
-                any of that.
+                independently instructs authors to use a placeholder `CHANGELOG/<CalVer>.md`.
+
+                **A second remedy does pass the regex, and is already in live use**: a stamp that is
+                well-formed but impossible as a wall clock, `CHANGELOG/2026.229.9998.md`. It is
+                self-announcing to a human and accepted by rule one, so *self-announcing* and
+                *regex-valid* are not the exclusive alternatives this paragraph once implied. What it
+                does NOT do is bind anything: nothing rejects it, and a leg that skips Phase 3 still
+                merges a file whose name is a guess — merely a conspicuous one. **That is why the
+                check below is the fix and a naming convention is not** — the check fails the merge,
+                and a convention only fails the reader's eye.
 
             None of these is a formality: a rule you cannot POSITIVELY confirm from the diff +
             your own re-run is not "probably fine" — it is unverified, and unverified is FAIL
