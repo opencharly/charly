@@ -7769,7 +7769,15 @@ skills-skill:
 
             ```bash
             git -C plugins diff --numstat        # +added -deleted per file
-            git -C plugins diff | grep '^-[^-]'  # every deleted line, read in full
+            # Every deleted line, read in full. Do NOT use `grep '^-[^-]'` to skip the
+            # `--- a/file` header: a deleted markdown BULLET renders as `-- text`, so that
+            # pattern silently drops it — and in a prose repo bullets are the majority shape,
+            # not an edge case. Measured on one real regeneration: 90 reported vs 96 actual,
+            # every missed line a bullet. Exclude the header explicitly instead, and
+            # cross-check against --numstat, which counts independently of any regex: if the
+            # two disagree, the regex is wrong, and that disagreement IS the alarm.
+            git -C plugins diff | grep '^-' | grep -v '^--- '
+            git -C plugins diff --numstat | awk '{s+=$2} END{print s}'   # must equal the count above
             ```
 
             A file you never edited appearing in that list is the signal, and "it was probably just
