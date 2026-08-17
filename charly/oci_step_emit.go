@@ -23,9 +23,11 @@ import (
 // thread (so a HOST-COUPLED peer's own ops.OpEmit can still call back HostBuild — the
 // "resolved-project" envelope seam, K5-Unit-6b), and Invoke.
 //
-// dispatchOCIStep is the single source of truth (R3): charly/step_emit_hostbuild.go's
-// stepEmitOCIEmitStep (the production "step-emit"/"oci-emit-step" handler) and ociEmitStep (below,
-// a Go-object-typed compatibility wrapper existing unit tests drive directly) both funnel through it.
+// dispatchOCIStep is the single source of truth (R3) AND the production terminus:
+// charly/step_emit_hostbuild.go's stepEmitOCIEmitStep (the "step-emit"/"oci-emit-step" handler)
+// is its only production caller. The Go-object-typed convenience the unit tests drive lives in
+// oci_step_emit_helper_test.go — it is test scaffolding, not a production path, and used to sit
+// in this file where it read as one.
 
 // dispatchOCIStep forwards ONE pod-overlay step's rendering to candy/plugin-installstep's
 // "oci-dispatch" word: marshal the step/plan WIRE VIEWS + the caller's Distros/build-context
@@ -69,15 +71,4 @@ func dispatchOCIStep(stepView spec.InstallStepView, planView spec.InstallPlanVie
 		return "", fmt.Errorf("oci-dispatch: %w", err)
 	}
 	return frag, nil
-}
-
-// ociEmitStep is a Go-object-typed compatibility wrapper over dispatchOCIStep: it serializes step
-// and plan to their wire views (the SAME serialization the production "oci-emit-step" caller
-// already sends) and forwards through the identical seam. Kept for the existing unit-test suite
-// (apk_format_test.go, build_target_oci_test.go, localpkg_test.go, plugin_externalstep_e2e_test.go),
-// which drives ociEmitStep with concrete spec.InstallStep/spec.InstallPlan values rather than
-// pre-marshaled wire views — a real, non-mocked path through the SAME relocated dispatch, not a
-// parallel implementation (R3).
-func ociEmitStep(step spec.InstallStep, plan *spec.InstallPlan, distros []string, build buildEngineContext) (string, error) {
-	return dispatchOCIStep(spec.StepToView(step), spec.WireView(plan), distros, build)
 }
