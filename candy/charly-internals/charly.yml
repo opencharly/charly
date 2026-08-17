@@ -10654,15 +10654,12 @@ pr-validator-agent:
                 **66 entries carry no tag**, all of them at or before `2026.215.1207`, while the
                 earliest tagged entry is `2026.193.1934`, well inside that stretch. Every entry
                 above `2026.215.1207` carries a tag; `2026.215.1207` is itself the LATEST untagged
-                entry, so it belongs to the old regime and the tagged run opens above it. The
-                corpus total and the length of that tagged run are deliberately NOT stated: both
-                grow with every merge, so either would be stale within hours of being written —
-                the untagged count is the durable one for a narrower reason: those 66 all PREDATE
-                the tag-every-merge convention, and a regime that minted no tags has nothing to
-                backfill. That is not a claim that an untagged entry can never become tagged — this
-                same spec records a `plugins` merge that shipped un-tagged and was backfilled
-                add-only, which is precisely why the orchestrator re-verifies each merge's tag. A
-                RECENT untagged entry is a defect awaiting a backfill; these are a closed regime. So the invariant reads: *every entry
+                entry, so it belongs to the old regime and the tagged run opens above it. Tagging
+                before that boundary was SPORADIC rather than absent — 70 of the 136 entries at or
+                below it do carry tags, which is what "interleave" means here. The corpus total and
+                the length of the tagged run are deliberately NOT stated: both grow with every
+                merge, so either is stale within hours of being written, while the untagged count
+                does not move. So the invariant reads: *every entry
                 landed since the convention took hold has a matching tag*; earlier entries predate
                 it and are evidence of nothing. A check written without that clause returns 66 false
                 positives and gets disabled by whoever inherits it.
