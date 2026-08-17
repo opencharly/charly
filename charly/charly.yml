@@ -1098,10 +1098,11 @@ openrc:
     init:
         # openrc — a FIRST-CLASS init system, peer to systemd: and supervisord:.
         #
-        # Declared here rather than in Go on purpose: candy/plugin-pod's wellKnownInitDefs is a
-        # frozen legacy fallback for images predating the ai.opencharly.init_def label, and its own
-        # comment says to declare new init systems in this vocabulary instead — a vocabulary entry
-        # bakes its whole contract into that label, so it resolves at runtime with no Go change.
+        # Declared here rather than in Go because there is nowhere in Go to declare it: an init
+        # system's whole contract bakes into the ai.opencharly.init_def label and resolves from
+        # there at runtime. A frozen fallback table used to shadow this (triplicated across
+        # sdk/kit, plugin-pod and plugin-deploy-pod, and stuck at supervisord + systemd); it was
+        # deleted, so the label is the only path and a third init system needs no Go change.
         #
         # OpenRC is the init of Alpine (and Gentoo/Artix). Before this entry the only OpenRC support
         # anywhere was a hardcoded `if distro == "alpine"` in the cloud-init renderer that enabled
