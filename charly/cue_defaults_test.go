@@ -18,6 +18,7 @@ machine: q35
 backend: libvirt
 source:
   kind: cloud_image
+  distro: fedora
   url: https://example.com/arch.qcow2
   base_user: arch
 network:

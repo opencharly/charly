@@ -70,6 +70,7 @@ vm:
     vm:
         source:
             kind: cloud_image
+            distro: fedora
             url: https://download.fedoraproject.org/pub/fedora/linux/releases/41/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-41-1.4.x86_64.qcow2
             checksum:
                 type: sha256
@@ -275,6 +276,7 @@ arch-repo-vm:
     vm:
         source:
             kind: cloud_image
+            distro: arch
             url: https://geo.mirror.pkgbuild.com/images/latest/Arch-Linux-x86_64-cloudimg.qcow2
             base_user: arch
         backend: libvirt
@@ -294,6 +296,7 @@ fedora-repo-vm:
     vm:
         source:
             kind: cloud_image
+            distro: fedora
             url: https://download.fedoraproject.org/pub/fedora/linux/releases/43/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-43-1.6.x86_64.qcow2
             base_user: fedora
         backend: libvirt
