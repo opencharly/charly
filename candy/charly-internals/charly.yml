@@ -5221,10 +5221,18 @@ git-workflow-skill:
                   cannot reproduce — the source is still in an unmerged superproject PR. **The number
                   of open windows is the number of superproject legs that have not landed, each
                   invisible from inside the others.** So regenerate from your own source tree, never
-                  from `charly/main`, and **scope the byte-identity assertion to the files your PR
-                  touches**: a clean whole-tree `git status` is the one thing that cannot be true
-                  while any window is open, and reaching for it is how a regeneration silently
-                  reverts someone else's landed projection.
+                  from `charly/main`.
+
+                  **Your OWN leg's window is harmless; another leg's is not** — and the difference
+                  decides which check to run. While no other leg has landed into your base, an
+                  UNSCOPED whole-tree regenerate is clean and is the strongest evidence available:
+                  it proves byte-identity across all 400 artifacts, not just yours. The moment
+                  another leg's projection lands in your base, that same check turns destructive —
+                  regenerating from a source that lacks their candy entities deletes and reverts
+                  their landed work, and reports success while doing it. **The trigger is the base
+                  moving under you, not the mere existence of a window:** run the unscoped check
+                  while you can, and scope the assertion to the files your PR touches once another
+                  leg has merged beneath it.
 
                   The anecdote it carried is unaffected and still worth having: the first two
                   attempts at this perturbation used a header-less canary, got `clean`, and came
