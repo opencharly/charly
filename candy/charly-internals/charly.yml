@@ -5195,12 +5195,19 @@ git-workflow-skill:
                   of sites is checkable; the absence of a string is not.
 
                   **Run that sweep once per REPO, because `git grep` does not cross a gitlink.**
-                  `git grep -n scanGenerated` from the superproject returns the candy source and the
-                  Go files and never looks inside `plugins/` or `docs/`; the same command inside
-                  each submodule returns that submodule's copies. This page is projected twice, so
-                  a claim about it lives in three trees. That is not a hypothetical: the first draft
-                  of THIS rule prescribed one unrooted grep, and the live instance of the very claim
-                  it was written to kill was sitting in the `docs` projection, invisible to it.
+                  `git grep -n scanGenerated` reaches, by tree — stated as reach rather than as a
+                  file count, since every entry that discusses the mechanism adds a hit and any
+                  number here would be stale by the next one:
+
+                  - **superproject** — the candy source, the two Go files, and whatever `CHANGELOG/`
+                    entries discuss it; **never a path under `plugins/` or `docs/`**;
+                  - **`plugins`** — this page, plus the entries beside it that discuss it;
+                  - **`docs`** — the docs projection of this page.
+
+                  This page is projected twice, so a claim about it lives in three trees, and no one
+                  of them can see the other two. That is not hypothetical: the first draft of THIS
+                  rule prescribed one unrooted grep, and the live instance of the very claim it was
+                  written to kill was sitting in the `docs` projection, invisible to it.
 
                   No count of those hits is published, and not for the reason a first draft gave.
                   **The count is tree-dependent** — one number cannot be right for the superproject,
@@ -5208,6 +5215,16 @@ git-workflow-skill:
                   diffstat's self-reference: writing `3` adds no occurrence of the search term, so
                   that count would converge immediately. Self-inclusion is not self-invalidation,
                   and the earlier draft conflated them.
+
+                  **And the sweep has a window in which it cannot be complete.** The projection-first
+                  ordering guarantees a period where `plugins/main` carries prose `charly/main`
+                  cannot reproduce — the source is still in an unmerged superproject PR. **The number
+                  of open windows is the number of superproject legs that have not landed, each
+                  invisible from inside the others.** So regenerate from your own source tree, never
+                  from `charly/main`, and **scope the byte-identity assertion to the files your PR
+                  touches**: a clean whole-tree `git status` is the one thing that cannot be true
+                  while any window is open, and reaching for it is how a regeneration silently
+                  reverts someone else's landed projection.
 
                   The anecdote it carried is unaffected and still worth having: the first two
                   attempts at this perturbation used a header-less canary, got `clean`, and came
