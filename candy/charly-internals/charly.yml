@@ -5148,6 +5148,11 @@ git-workflow-skill:
                   this perturbation used a header-less canary, got `clean`, and came close to being
                   filed as a defect against the very claim they failed to test.
 
+                  The generated-ahead direction is if anything the more legible of the two. What makes both
+                  dangerous is not detection, it is that **`drift` runs in no CI workflow** — it is red only
+                  for whoever runs it. A regeneration performed for an unrelated reason picks the revert up
+                  into that person's diff, where it reads as noise from their own change.
+
                   **`git status` distinguishes the two dirty-submodule states, and which one you
                   see says whose half is outstanding** — but ONLY under `--short`. Measured at this
                   tree, git 2.55.0:
@@ -5175,18 +5180,6 @@ git-workflow-skill:
                   version` identifies the COMMIT a build was made at, never the bytes that were
                   compiled — which is why the runs above were re-taken in a worktree checked out at
                   `a56240f0` with nothing uncommitted in it.
-
-                  **The orphan scan keys on the GENERATED HEADER, not on the path** — `scanGenerated`
-                  collects files carrying it and reports any the emissions map does not claim, so a
-                  file without that header is invisible to drift wherever it sits. That is not a
-                  hypothetical caution: the first two attempts at the perturbation above used a
-                  header-less canary, got `clean`, and came close to being filed as a defect against
-                  the very claim they failed to test.
-
-                  The generated-ahead direction is if anything the more legible of the two. What makes both
-                  dangerous is not detection, it is that **`drift` runs in no CI workflow** — it is red only
-                  for whoever runs it. A regeneration performed for an unrelated reason picks the revert up
-                  into that person's diff, where it reads as noise from their own change.
 
                   So: run `charly marketplace drift` before and after any `charly marketplace generate`, and treat an
                   unexplained artifact in the output as someone else's half-landed cutover rather than your
