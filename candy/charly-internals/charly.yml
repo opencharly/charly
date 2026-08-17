@@ -4596,7 +4596,10 @@ git-workflow-skill:
 
                   **No total is given for the page:** a section count is a
                   figure whose subject is the document stating it, and a merge that adds a section
-                  falsifies it without touching the sentence. The counts this page DOES state —
+                  falsifies it without touching the sentence. Two counts on this page fail that test — *sixteen validation rounds* and *roughly a dozen
+                  blocking findings*, in the opening paragraph, neither with members beside it; they
+                  are provenance for the page's origin rather than claims a reader checks against
+                  it. The counts in the body —
                   the table's rows and sections, the epistemic group, the mechanism group — each sit
                   beside the members they count, so a reader checks them at a glance and a merge that
                   changes one changes the list next to it. **A count whose members are enumerated
