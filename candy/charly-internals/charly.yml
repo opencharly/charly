@@ -7780,6 +7780,26 @@ skills-skill:
             git -C plugins diff --numstat | awk '{s+=$2} END{print s}'   # must equal the count above
             ```
 
+
+            **After ANY merge, `update-branch`, or conflict resolution, RE-RUN this audit against the NEW
+            base.** A revert introduced by catching up is invisible to the old one, and the old number keeps
+            looking right. Measured on one branch: against the original merge-base 580 deletions; against
+            `origin/main` after the catch-up, **1170** — the second is what the squash actually lands. Both
+            numbers were correct; only one was the merge. A grep-vs-`--numstat` cross-check agreed perfectly
+            throughout and was measuring the wrong baseline, so **agreement between two methods does not
+            rescue a wrong base**. The one-line form that surfaces every offender:
+
+            ```bash
+            git diff --numstat origin/main...HEAD | awk '$2>$1'   # every file losing net lines
+            ```
+
+            It caught eleven files at once, including a whole skill file deleted outright — after five
+            consecutive audits had reported the branch clean.
+
+            **And a conflict resolution is not separate from the exclusion list — it is the same concern.**
+            Resolving conflicts by regenerating is right for projections, but a regeneration run WITHOUT the
+            protected-file list re-introduces exactly what the list exists to prevent. This recurred on two
+            hops within an hour, the second at ~19x the scale of the first.
             A file you never edited appearing in that list is the signal, and "it was probably just
             stale" is the reading that ships the revert.
 
