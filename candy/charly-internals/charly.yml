@@ -5277,9 +5277,15 @@ git-workflow-skill:
                   0
                   ```
 
-                  **This reading is about the SUBMODULE line only.** These letters also appear on
-                  ordinary paths carrying their usual meanings: run 3's ` M` on the candy source is
-                  a modified file and has nothing to do with a gitlink. The rule below is about the
+                  **This reading is about the SUBMODULE line only — and only ONE of the three has
+                  an ordinary-path meaning at all.** Measured in an isolated repo at git 2.55.0: a
+                  modified tracked file renders ` M root.txt`, so run 3's ` M` on the candy source
+                  is an ordinary modified file with nothing to do with a gitlink. The other two do
+                  not transfer: an untracked ordinary path is `?? untracked.txt` — **two columns,
+                  not ` ?`** — and lowercase ` m` never appears on an ordinary path at all, because
+                  it exists only to say *modified content inside a submodule*. So the collision a
+                  reader must watch for is ` M` alone; ` m` and ` ?` are unambiguous wherever they
+                  appear. The rule below is about the
                   `plugins` line, not about every line of the run it sits in.
 
                   Lowercase ` m` is modified content inside the submodule — someone regenerated and
@@ -5298,8 +5304,11 @@ git-workflow-skill:
                   pasted here rather than pointed at.
 
                   **`--porcelain` collapses all three to ` M`**, so the script-safe spelling is the
-                  one that loses every distinction; the transcript uses `--porcelain` only where it
-                  asserts *empty*, and `--short` everywhere the distinction carries the argument.
+                  one that loses every distinction. The two blocks use it differently on purpose:
+                  the **six-run session** above reaches for `--porcelain` only where it asserts
+                  *empty*, because there the count is the claim; the **three-state block** here uses
+                  it four times, three of them non-empty, because demonstrating the collapse IS its
+                  purpose. `--short` carries the argument in both.
 
                   **And `charly version` cannot stand in for any of this.** The stamp is derived
                   from the HEAD commit's UTC timestamp (`scripts/calver.sh`), deliberately, so that
