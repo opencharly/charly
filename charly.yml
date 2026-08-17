@@ -22,7 +22,7 @@ import:
     # self-contained (import: []) and cachyos imports the `arch` namespace; none
     # imports main back (they reach main's shared candies via @github refs), so the
     # former main↔cachyos / main↔fedora mutual cycles are dissolved.
-    - arch: '@github.com/opencharly/distro-arch:v2026.204.1300'
+    - arch: '@github.com/opencharly/distro-arch:v2026.229.1615'
     - cachyos: '@github.com/opencharly/distro-cachyos:v2026.204.1336'
     - debian: '@github.com/opencharly/distro-debian:v2026.226.1807'
     - fedora: '@github.com/opencharly/distro-fedora:v2026.216.0232'
