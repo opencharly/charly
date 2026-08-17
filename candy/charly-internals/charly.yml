@@ -5185,19 +5185,29 @@ git-workflow-skill:
                   easily when it is the *unchanged* part of a diff everyone is reading for what
                   changed.
 
-                  **Then a paraphrase of it survived the correction, four lines above the retraction
-                  you are reading** — and the gate that was supposed to catch it looked for the
-                  retired WORDING (`git grep` on the deleted sentence, which returned 0) rather than
-                  for the MODEL. A claim-keyed sweep keyed on a string cannot find the same claim
-                  restated in other words, and restating it is exactly what a correcting author does
-                  in the neighbouring paragraph. **Sweep for every site that NAMES the mechanism** —
-                  `git grep -n scanGenerated` — **and reconcile each hit against one derived ground
-                  truth.** An enumeration of sites is checkable; the absence of a string is not.
+                  **Then a paraphrase of it survived the correction itself, in the paragraph beside
+                  the one that replaced it** — and the gate that was supposed to catch it looked for
+                  the retired WORDING (`git grep` on the deleted sentence, which returned 0) rather
+                  than for the MODEL. A claim-keyed sweep keyed on a string cannot find the same
+                  claim restated in other words, and restating it is exactly what a correcting
+                  author does in the neighbouring paragraph. **Sweep for every site that NAMES the
+                  mechanism, and reconcile each against one derived ground truth.** An enumeration
+                  of sites is checkable; the absence of a string is not.
 
-                  No count of those hits appears here on purpose: this sentence names the command,
-                  so it is itself a hit, and any number written beside it would count itself. That
-                  is the same fixed point as a diffstat inside the diff it measures — and it is why
-                  the instruction is *enumerate and reconcile* rather than *expect N*.
+                  **Run that sweep once per REPO, because `git grep` does not cross a gitlink.**
+                  `git grep -n scanGenerated` from the superproject returns the candy source and the
+                  Go files and never looks inside `plugins/` or `docs/`; the same command inside
+                  each submodule returns that submodule's copies. This page is projected twice, so
+                  a claim about it lives in three trees. That is not a hypothetical: the first draft
+                  of THIS rule prescribed one unrooted grep, and the live instance of the very claim
+                  it was written to kill was sitting in the `docs` projection, invisible to it.
+
+                  No count of those hits is published, and not for the reason a first draft gave.
+                  **The count is tree-dependent** — one number cannot be right for the superproject,
+                  `plugins` and `docs` at once — and it goes stale on the next edit. It is NOT the
+                  diffstat's self-reference: writing `3` adds no occurrence of the search term, so
+                  that count would converge immediately. Self-inclusion is not self-invalidation,
+                  and the earlier draft conflated them.
 
                   The anecdote it carried is unaffected and still worth having: the first two
                   attempts at this perturbation used a header-less canary, got `clean`, and came
