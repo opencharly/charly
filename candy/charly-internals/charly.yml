@@ -4777,10 +4777,13 @@ git-workflow-skill:
                   `rm` is destructive, knows a scratch worktree is the right mutation harness, and knows an
                   exit code must be classified before absence is believed — and states all three several
                   hundred lines away from the step that does the deleting — **has the knowledge and none of
-                  the benefit.** Measured in this very spec: a procedure opened with `rm` on a tracked file,
-                  in whatever checkout the reader was standing in, while all three safeguards sat ~700 lines
-                  below it; and the same page's `git -C <submodule> grep` form sat 288 lines from a command
-                  that could not reproduce its own worked example without it.
+                  the benefit.** Measured in this very spec, twice: a procedure opened with `rm` on a
+                  tracked file, in whatever checkout the reader was standing in, while all three
+                  safeguards sat far below it; and the same page's `git -C <submodule> grep` form sat
+                  sections away from a command that could not reproduce its own worked example
+                  without it. **The exact distances are not published**, for the reason given below
+                  about counts: a line offset inside the document it measures is stale the next time
+                  that document is edited, which for this page has been every round.
 
                   **A reader executes the invocation printed next to the instruction.** Anything true
                   elsewhere in the document is, operationally, absent — so the test for a rule is not
@@ -5268,9 +5271,13 @@ git-workflow-skill:
                    M plugins
                   $ git status --porcelain
                    M plugins
+
+                  $ git -C plugins checkout -q --detach a8b51b16   # revert: back to the pinned gitlink
+                  $ git status --porcelain | wc -l
+                  0
                   ```
 
-                  **This reading is about the SUBMODULE line only.** Both letters also appear on
+                  **This reading is about the SUBMODULE line only.** These letters also appear on
                   ordinary paths carrying their usual meanings: run 3's ` M` on the candy source is
                   a modified file and has nothing to do with a gitlink. The rule below is about the
                   `plugins` line, not about every line of the run it sits in.
@@ -5290,8 +5297,8 @@ git-workflow-skill:
                   needs most, and it is the one the session cannot produce — which is why it is
                   pasted here rather than pointed at.
 
-                  **`--porcelain` collapses both to ` M`**, so the script-safe spelling is the one
-                  that loses the discriminator; the transcript uses `--porcelain` only where it
+                  **`--porcelain` collapses all three to ` M`**, so the script-safe spelling is the
+                  one that loses every distinction; the transcript uses `--porcelain` only where it
                   asserts *empty*, and `--short` everywhere the distinction carries the argument.
 
                   **And `charly version` cannot stand in for any of this.** The stamp is derived
