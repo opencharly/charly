@@ -392,7 +392,7 @@ build-skill:
 
             ### `write:` vs `copy:` — cache granularity
 
-            - `write:` steps use `stageInlineContent` (content-addressed staging under `.build/<image>/_inline/<layer>/<sha256>/`). Editing a `write: content:` block changes only that single COPY layer's cache key — siblings in the same layer keep their cache.
+            - `write:` steps use `StageInlineContent` (content-addressed staging under `.build/<image>/_inline/<layer>/<sha256>/`). Editing a `write: content:` block changes only that single COPY layer's cache key — siblings in the same layer keep their cache.
             - `copy:` steps reference files from the layer directory. Editing any file under `candy/<name>/` changes the WHOLE scratch stage's content hash (since `COPY candy/<name>/ /` is one instruction), invalidating every downstream `COPY --from=<layer>` step.
 
             ### Rule of thumb for rebuild cost
@@ -1613,7 +1613,7 @@ generate-skill:
 
             - `/charly-image:layer` — **Canonical task verb catalog, `var:` substitution, YAML anchors, execution order.** Read this first for authoring questions.
             - `/charly-check:check` — test-authoring workflow; `check:` blocks are embedded via `writeJSONLabel` and benefit directly from LABELs-at-end cache efficiency.
-            - `/charly-internals:generate-source` — Deep dive on Containerfile emission internals, `Task` struct, per-verb emitters, `stageInlineContent`, `shellSingleQuote` + `shellAnsiQuote` helpers, LABEL-placement rationale.
+            - `/charly-internals:generate-source` — Deep dive on Containerfile emission internals, `Task` struct, per-verb emitters, `StageInlineContent`, the `spec.ShellQuote` quoting helper and the `BuildStepShellDashC`/`BuildStepShellHeredoc` shell-prefix pair, LABEL-placement rationale.
             - `/charly-internals:go` — Source-code map: `charly/tasks.go` (~430 lines, `emitTasks` shim → deploykit), `sdk/deploykit` (`WriteCandySteps` + `WriteLabels`, relocated in #67), `charly/layers.go` struct definitions.
             - `/charly-selkies:ffmpeg` — canonical URL-repo consumer (triggers the `dnf5-plugins` prepend).
 
