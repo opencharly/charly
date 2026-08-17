@@ -5048,7 +5048,7 @@ git-workflow-skill:
                   binary built by `task build:binary`. Every command runs at the superproject root.
                   `git status --porcelain` is shown EMPTY at the start and again at the end,
                   untracked files included, because an untracked file carrying the generated header
-                  is itself one of the perturbations. **Every elision is marked inline**; nothing is
+                  inside a walked tree is itself one of the perturbations. **Every elision is marked inline**; nothing is
                   dropped silently. The count is 400 in all three clean runs — 1, 3 and 6 — because
                   a content edit changes bytes, not the set of artifacts, and that holds across run
                   3's perturbed tree as much as across the two baselines.
@@ -5150,10 +5150,10 @@ git-workflow-skill:
 
                   **`(stale)` marks the ORPHAN, and it reads backwards.** Run 2's artifact is the
                   one that is genuinely out of date, and it gets no suffix; run 5's gets it. The
-                  suffix means *no source claims this path* — `scanGenerated` collects every file
-                  carrying the generated header and reports the ones the emissions map does not
-                  contain, so `(stale)` is the report of a file projected by NOTHING, not of a file
-                  behind its source. Both directions print the same "are stale" headline, so the
+                  suffix means *no source claims this path* — `scanGenerated` collects the files its
+                  three arms reach (see below, and they are not all header-based) and reports the
+                  ones the emissions map does not contain, so `(stale)` is the report of a file
+                  projected by NOTHING, not of a file behind its source. Both directions print the same "are stale" headline, so the
                   suffix is the only thing that tells them apart — and it names the rarer one.
 
                   **The orphan scan is PATH-GATED, and the header only decides inside the trees it
@@ -5176,6 +5176,20 @@ git-workflow-skill:
                   block around it was rebuilt twice — a false mechanism claim survives review most
                   easily when it is the *unchanged* part of a diff everyone is reading for what
                   changed.
+
+                  **Then a paraphrase of it survived the correction, four lines above the retraction
+                  you are reading** — and the gate that was supposed to catch it looked for the
+                  retired WORDING (`git grep` on the deleted sentence, which returned 0) rather than
+                  for the MODEL. A claim-keyed sweep keyed on a string cannot find the same claim
+                  restated in other words, and restating it is exactly what a correcting author does
+                  in the neighbouring paragraph. **Sweep for every site that NAMES the mechanism** —
+                  `git grep -n scanGenerated` — **and reconcile each hit against one derived ground
+                  truth.** An enumeration of sites is checkable; the absence of a string is not.
+
+                  No count of those hits appears here on purpose: this sentence names the command,
+                  so it is itself a hit, and any number written beside it would count itself. That
+                  is the same fixed point as a diffstat inside the diff it measures — and it is why
+                  the instruction is *enumerate and reconcile* rather than *expect N*.
 
                   The anecdote it carried is unaffected and still worth having: the first two
                   attempts at this perturbation used a header-less canary, got `clean`, and came
