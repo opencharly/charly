@@ -5041,9 +5041,10 @@ git-workflow-skill:
                   Pasted rather than described, because "a paste and its label are two separate
                   claims" applies to this page's own tables. **Provenance, which this page's own
                   rule demands of every figure below:** one continuous session at superproject
-                  `a56240f0` — this cutover's own first commit, and after its squash-merge still
-                  reachable on `refs/pull/289/head` — with `plugins` at `a8b51b16` and `docs` at
-                  `c641b99`, in a worktree checked out at that commit and a binary built there by
+                  `a56240f0` — the commit that corrected the `drift` message quoted throughout, and
+                  one a reader can still fetch after the squash-merge, which lands it on no branch
+                  but leaves it an ancestor of `refs/pull/289/head` — with `plugins` at `a8b51b16`
+                  and `docs` at `c641b99`, in a worktree checked out there and a binary built by
                   `task build:binary`. Every command runs at the superproject root. `git status
                   --porcelain` is shown EMPTY at the start and again at the end, untracked files
                   included, because an untracked file carrying the generated header is itself one
@@ -5124,9 +5125,9 @@ git-workflow-skill:
                   0
                   ```
 
-                  Runs 1, 3 and 6 print the identical `clean` line from three different git states,
-                  which is why the success message names what it compared instead of calling the
-                  tree committed. It once did — `clean (N artifact(s) match the committed tree)`, a
+                  Runs 1, 3 and 6 print the identical `clean` line — twice from a tree `git status`
+                  calls empty and once from a tree it calls dirty — which is why the success message
+                  names what it compared instead of calling the tree committed. It once did — `clean (N artifact(s) match the committed tree)`, a
                   claim `drift` has no mechanism to establish — and that wording is what put the
                   ambiguity into the example shipping with the rule against it. The code was right
                   and its own prose was wrong, so the prose moved (R4a), in the cutover that fixed
