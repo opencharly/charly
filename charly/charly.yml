@@ -89,6 +89,7 @@ compiled_plugins:
     - plugin-check
     - plugin-agentteams
     - plugin-dsh
+    - plugin-ollama
 # context_ignore_baseline — the built-in build-context ignore patterns (VCS/binary
 # excludes + cache-hygiene globs), formerly the Go var baselineContextIgnore. Read by
 # generate.go to emit .containerignore / .dockerignore; a project's

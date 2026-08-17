@@ -1,6 +1,6 @@
 ollama:
     candy:
-        version: 2026.144.1443
+        version: 2026.229.1013
         description: |
             GPU-agnostic Ollama LLM inference server on port 11434
             Installs the upstream Ollama binary (release tarball extracted to /usr,
@@ -9,7 +9,10 @@ ollama:
             falls back to CPU inference, so the candy carries no CUDA dependency.
             Pulled models persist under the ~/.ollama models volume. The running
             service exposes the Ollama HTTP API (e.g. /api/tags) so any composing box
-            can serve and query local models.
+            can serve and query local models. The installed upstream version follows
+            the var OLLAMA_VERSION (default `latest`; set a release tag to pin). The
+            companion plugin candy plugin-ollama adds the `charly ollama` management
+            CLI against a deployed server.
         require:
             # GPU-agnostic: the ollama binary auto-detects the GPU at runtime (CPU
             # fallback when none present), so CUDA is an IMAGE-level composition choice
@@ -17,6 +20,11 @@ ollama:
             # This lets CPU consumers (e.g. `openclaw-desktop` on cachyos) compose the
             # layer without dragging the Fedora/NVIDIA `cuda` layer onto a pac base.
             - supervisord
+        var:
+            # Upstream Ollama version to install: `latest` tracks the newest
+            # GitHub release; set a release tag (e.g. v0.32.14) to pin an exact
+            # version.
+            OLLAMA_VERSION: latest
         env:
             OLLAMA_HOST: "0.0.0.0"
             OLLAMA_MODELS: "~/.ollama/models"
@@ -37,10 +45,16 @@ ollama:
               enable: true
               scope: system
         plan:
-            - run: download=https://github.com/ollama/ollama/releases/latest/download/ollama-linux-amd64.tar.zst
-              download: "https://github.com/ollama/ollama/releases/latest/download/ollama-linux-amd64.tar.zst"
-              extract: tar.zst
-              to: /usr
+            - run: download and install the upstream ollama binary release (var OLLAMA_VERSION, default latest)
+              command: |
+                  if [ "${OLLAMA_VERSION}" = "latest" ]; then
+                      URL="https://github.com/ollama/ollama/releases/latest/download/ollama-linux-amd64.tar.zst"
+                  else
+                      URL="https://github.com/ollama/ollama/releases/download/${OLLAMA_VERSION}/ollama-linux-amd64.tar.zst"
+                  fi
+                  curl -fSL --retry 3 --retry-delay 2 -o /tmp/ollama.tar.zst "${URL}"
+                  tar -I zstd -xf /tmp/ollama.tar.zst -C /usr
+                  rm -f /tmp/ollama.tar.zst
               run_as: root
             - check: the ollama binary is installed at /usr/bin/ollama
               file:
@@ -58,6 +72,11 @@ ollama:
               context:
                 - runtime
               command: ollama --version
+            - check: the ollama CLI lists models against the live service with exit 0
+              exit_status: 0
+              context:
+                - runtime
+              command: ollama list
             - agent-check: models pulled via `ollama pull` are stored under the ~/.ollama models volume and survive a service restart
 
 ollama-skill:
@@ -133,6 +152,27 @@ ollama-skill:
             # Now: ollama pull llama3  (runs inside the container)
             ```
             
+            ## The `charly ollama` management CLI
+            
+            The compiled-in `command:ollama` plugin (`candy/plugin-ollama`) manages a
+            deployed Ollama server from the host over its HTTP API — no shell alias
+            needed:
+            
+            ```bash
+            charly ollama list --server http://127.0.0.1:11434
+            charly ollama pull llama3 --server http://127.0.0.1:11434
+            charly ollama run llama3 "Hello" --server http://127.0.0.1:11434
+            ```
+            
+            Endpoint resolution: `--server` flag > `OLLAMA_HOST` env > `http://127.0.0.1:11434`.
+            See `/charly-ollama:ollama-cli` for the full command tree.
+            
+            ## Pinning the upstream version
+            
+            The candy installs the newest upstream release by default. Set the
+            candy-local `var:` `OLLAMA_VERSION` to a release tag (e.g. `v0.32.14`)
+            to pin an exact version.
+            
             ## Service Environment
             
             When deployed via `charly config ollama`, this box automatically provides `OLLAMA_HOST=http://charly-ollama:11434` to all other deployed containers via the `env_provide` mechanism. Use `--update-all` to propagate to already-deployed services:
@@ -159,6 +199,7 @@ ollama-skill:
             ## Related Candies
             
             - `/charly-ollama:ollama` — the Ollama binary candy
+            - `/charly-ollama:ollama-cli` — the compiled-in `charly ollama` management CLI (candy/plugin-ollama)
             - `/charly-jupyter:notebook-ollama` — 6 Jupyter notebooks demonstrating Ollama APIs (requests, OpenAI, ollama lib, Anthropic, HuggingFace, GPU)
             
             ## Verification
@@ -167,6 +208,7 @@ ollama-skill:
             - `charly status ollama` — container running
             - `charly service status ollama` — all services RUNNING
             - `curl -s http://localhost:11434/api/tags` — Ollama API responds
+            - `charly ollama list` (or `charly check live ollama`) — the baked runtime checks pass: `/api/tags` 200, `ollama --version`, `ollama list` exit 0
             
             ## When to Use This Skill
             
