@@ -4827,6 +4827,62 @@ git-workflow-skill:
                   Related: when a validator does look stalled, **ping it for liveness before respawning**.
                   A `pr-validator` merges and tags on PASS, so two of them on an unanswered head can both
                   get there and race. Duplicated review is cheap; a double-merge or a contended tag is not.
+
+                  ### A guard that cannot fail is worse than no guard
+
+                  Four times in one cutover an unmerged change was written as landed fact — "presence **is**
+                  enforced", the traits "**are now**" generated, the inference "**is** deleted", the defect "**is**
+                  fixed". Each was caught by a reviewer AFTER it shipped into a PR body or CHANGELOG. The pattern is
+                  not carelessness: while you hold a whole cutover in your head, the branch state IS your reality,
+                  and present tense is the honest-feeling voice for it. So the guard has to be **mechanical, not
+                  attentional** — you cannot pay closer attention to a bias you cannot feel.
+
+                  **Guard 1 — every commit SHA an entry names, checked for landed state AND subject:**
+
+                  ```bash
+                  for sha in $(grep -ohE '\b[0-9a-f]{7,40}\b' CHANGELOG/<entry>.md | sort -u); do
+                    for repo in . <superproject-path>; do        # BOTH — see below
+                      git -C "$repo" cat-file -e "${sha}^{commit}" 2>/dev/null || continue
+                      git -C "$repo" merge-base --is-ancestor "$sha" origin/main && st=LANDED || st=UNMERGED
+                      printf '%s %s %s\n' "$sha" "$st" "$(git -C "$repo" log -1 --format=%s "$sha")"; break
+                    done
+                  done
+                  ```
+
+                  The **subject** is half the value: it catches citing the wrong commit, which happened here — a
+                  CHANGELOG named the branch HEAD (a docs commit) as the commit carrying a code fix. A docs subject
+                  printed beside a "the fix is" claim is visible at a glance; a bare SHA is not.
+
+                  **The first version of that guard was VACUOUS, and this is the part to carry.** It ran
+                  `git cat-file -e` only in the submodule, for a SHA that lived in the **superproject**. The SHA
+                  resolved nowhere, the loop `continue`d, and the guard printed nothing — reporting clean while
+                  skipping the single citation it existed to check. A cross-repo citation is exactly the case a
+                  local-only resolve drops silently.
+
+                  > **A guard that reports "all citations verified" without discriminating is more dangerous than no
+                  > guard: it converts an open question into a false answer.** Before trusting one, feed it the
+                  > failing case on purpose and require it to complain.
+
+                  **Guard 2 — grep the entry's own prose, with the exclusion that makes it usable:**
+
+                  ```bash
+                  grep -nE '\b(is|are) (now )?(enforced|generated|deleted|removed|fixed)\b' CHANGELOG/<entry>.md
+                  ```
+
+                  Most hits are CORRECT and must not be hedged. The discriminator:
+
+                  | the claim is about… | verdict |
+                  |---|---|
+                  | **this entry's own diff** | present tense is right — the entry ships with the commit that does it |
+                  | **another repo's unmerged branch** | defect — scope it ("lands with this cutover's sdk leg, unmerged") |
+
+                  Omitting that exclusion turns the guard into busywork: true sentences get rewritten into hedged
+                  ones, and an entry that hedges its own change reads as uncertainty about the change itself.
+
+                  **Why this matters more than it looks.** In the cutover that produced these guards, one PR took six
+                  heads to land and the change itself was correct at head one and never moved — every round was the
+                  *evidence narrative* being written faster than it could be verified. The code was never the
+                  bottleneck. These two checks cost seconds and catch precisely that class.
 go-skill:
     skill:
         name: go
