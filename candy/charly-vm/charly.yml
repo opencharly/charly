@@ -104,6 +104,11 @@ arch-cloud-vm-skill:
                                           # alpine — so naming a near relative as a workaround is no longer needed for
                                           # any of them. Alpine is first-class: `distro: alpine` selects apk and
                                           # OpenRC. openSUSE is still absent and has no near relative (zypper);
+                                          # note also that #DistroID (13 ids) and the embedded `distro:` BUILD vocabulary are
+                                          # different sets, and the gap is SILENT: `buildVmSyntheticBox` resolves this field against
+                                          # the build vocabulary and on a miss leaves `img.Pkg` unset, so candy installation compiles
+                                          # ZERO package steps while `fleet add` reports success. A schema-valid id is therefore not
+                                          # automatically a resolvable one.
                                           # adding it is one entry in that file.
                                           # Use a bare id: `ResolveDistro` strips at `:` but the cloud-init
                                           # dispatches compare exactly, so `debian:13` yields `openssh`.
@@ -921,6 +926,11 @@ vm-skill:
                                                                # alpine — so naming a near relative as a workaround is no longer needed for
                                                                # any of them. Alpine is first-class: `distro: alpine` selects apk and
                                                                # OpenRC. openSUSE is still absent and has no near relative (zypper);
+                                                               # note also that #DistroID (13 ids) and the embedded `distro:` BUILD vocabulary are
+                                                               # different sets, and the gap is SILENT: `buildVmSyntheticBox` resolves this field against
+                                                               # the build vocabulary and on a miss leaves `img.Pkg` unset, so candy installation compiles
+                                                               # ZERO package steps while `fleet add` reports success. A schema-valid id is therefore not
+                                                               # automatically a resolvable one.
                                                                # adding it is one entry in that file.
                                                                # Use a bare id: `ResolveDistro` strips at `:` but the cloud-init
                                                                # dispatches compare exactly, so `debian:13` yields `openssh`.
@@ -1349,6 +1359,11 @@ vms-catalog-skill:
                                                       # (fedora/rhel/centos/rocky/almalinux), Debian-family (debian/ubuntu) and
                                                       # alpine, which is first-class: `distro: alpine` selects apk and OpenRC. Only
                                                       # openSUSE is still absent, with no near relative (zypper) — one entry adds it.
+                                                      # note also that #DistroID (13 ids) and the embedded `distro:` BUILD vocabulary are
+                                                      # different sets, and the gap is SILENT: `buildVmSyntheticBox` resolves this field against
+                                                      # the build vocabulary and on a miss leaves `img.Pkg` unset, so candy installation compiles
+                                                      # ZERO package steps while `fleet add` reports success. A schema-valid id is therefore not
+                                                      # automatically a resolvable one.
                                                       # Use a bare id: `ResolveDistro` strips at `:` but the cloud-init
                                                       # dispatches compare exactly, so `debian:13` yields `openssh`.
                   cache: ~/.cache/charly/vm-images/       # optional override
