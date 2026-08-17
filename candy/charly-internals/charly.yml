@@ -4508,9 +4508,10 @@ git-workflow-skill:
                   it.
 
                   **Terms.** *The gate* — whichever check a claim rests on; usually `charly box validate`,
-                  `charly marketplace drift`, or `charly docs generate`. *`marketplace drift`* compares each
-                  generated file in `plugins/` against what the candy `skill:` / `hook:` / `marketplace:`
-                  sources currently project — a *candy* being an entity defined in `candy/<name>/charly.yml` —
+                  `charly marketplace drift`, or `charly docs generate`. *`marketplace drift`* compares every
+                  generated artifact — the `plugins/` corpus AND the harness surface it also emits
+                  (`CLAUDE.md`, `AGENTS.md`, `.claude/settings.json`, `.claude/hooks/*`) — against what the
+                  candy `skill:` / `hook:` / `marketplace:` sources currently project — a *candy* being an entity defined in `candy/<name>/charly.yml` —
                   exiting 1 when any differs. `charly marketplace generate` re-emits them. *Superproject* — the `opencharly/charly`
                   repo, which contains the others as submodules. *Gitlink* — the single commit sha a
                   superproject records for a submodule; it moves only when a superproject commit moves it,
@@ -4615,7 +4616,7 @@ git-workflow-skill:
                   pasting it wholesale would run the output lines as commands. Retype the commands,
                   or read it as a record.
 
-                  Blocks on this page come in THREE kinds, and prompts identify only the first:
+                  Blocks in this corpus come in THREE kinds, and prompts identify only the first:
                   TRANSCRIPTS (prompts + interleaved output — read, do not paste); RUNNABLE recipes
                   (no prompts, no output — paste freely); and PASTED OUTPUT (no prompts, no commands
                   — evidence, with nothing to run). So a prompt marks a transcript, but its ABSENCE
@@ -5148,13 +5149,20 @@ git-workflow-skill:
                   the block whose own rule forbids exactly that. The code was right and its own
                   prose was wrong, so the prose moved (R4a), in the cutover that fixed this block.
 
-                  **`(stale)` marks the ORPHAN, and it reads backwards.** Run 2's artifact is the
-                  one that is genuinely out of date, and it gets no suffix; run 5's gets it. The
-                  suffix means *no source claims this path* — `scanGenerated` collects the files its
-                  three arms reach (see below, and they are not all header-based) and reports the
-                  ones the emissions map does not contain, so `(stale)` is the report of a file
-                  projected by NOTHING, not of a file behind its source. Both directions print the same "are stale" headline, so the
-                  suffix is the only thing that tells them apart — and it names the rarer one.
+                  **`(stale)` marks the ORPHAN: a generated path no source claims.** `scanGenerated`
+                  collects the files its three arms reach (see below, and they are not all
+                  header-based); any of those the emissions map does not contain gets the suffix. So
+                  run 5's canary carries it — nothing projects that path — while run 2's artifact,
+                  which is behind its source, does not.
+
+                  The headline covers both directions: `N generated artifact(s) are stale`. The
+                  suffix therefore repeats the headline's word rather than naming what separates the
+                  subset, which is why it is the only discriminator between the two red outputs and
+                  also the least self-explaining part of them. `(orphan)` would say it; the code's
+                  own comment already calls them *"stale orphans"*, seven lines above the line that
+                  emits the suffix. **Filed as a message fix, not compensated for here** — this page
+                  does not teach a reader to invert a label, because a page that teaches the
+                  compensation has documented the defect instead of removing it.
 
                   **The orphan scan is PATH-GATED, and the header only decides inside the trees it
                   walks.** `scanGenerated` has three arms, and only the first reads a byte of any
@@ -5201,9 +5209,9 @@ git-workflow-skill:
                   for whoever runs it. A regeneration performed for an unrelated reason picks the revert up
                   into that person's diff, where it reads as noise from their own change.
 
-                  **`git status` distinguishes the two dirty-submodule states, and which one you
-                  see says whose half is outstanding** — but ONLY under `--short`. Measured at this
-                  tree, git 2.55.0:
+                  **`git status` distinguishes THREE dirty-submodule states, and which one you see
+                  says whose half is outstanding** — but ONLY under `--short`. Measured at this tree,
+                  git 2.55.0:
 
                   ```
                   $ echo canary >> plugins/README.md          # content modified INSIDE the submodule
@@ -5212,7 +5220,14 @@ git-workflow-skill:
                   $ git status --porcelain
                    M plugins
 
-                  $ git -C plugins checkout -- README.md      # revert, then move the gitlink instead
+                  $ git -C plugins checkout -- README.md      # revert; now UNTRACKED content instead
+                  $ head -1 plugins/README.md > plugins/zz-canary.md
+                  $ git status --short
+                   ? plugins
+                  $ git status --porcelain
+                   M plugins
+
+                  $ rm plugins/zz-canary.md                   # revert, then move the gitlink instead
                   $ git -C plugins checkout -q --detach HEAD~1
                   $ git status --short
                    M plugins
@@ -5226,13 +5241,19 @@ git-workflow-skill:
                   `plugins` line, not about every line of the run it sits in.
 
                   Lowercase ` m` is modified content inside the submodule — someone regenerated and
-                  has not committed there (run 3). Uppercase ` M` is a moved gitlink — the
+                  has not committed there (run 3). ` ?` is untracked content inside it, which is run
+                  5's own state seen from the superproject. Uppercase ` M` is a moved gitlink — the
                   projection has landed in `plugins` and it is the superproject pin that is
-                  uncommitted. **The six-run session never reaches that second state**, which is why
-                  it is pasted above rather than pointed at: run 5 reports from inside the submodule
-                  (`git -C plugins`), so the superproject's view of a moved gitlink is the one state
-                  the session does not produce — and it is the half that says someone else's
-                  projection has landed.
+                  uncommitted.
+
+                  **The six-run session never reaches that third state, and not because of where it
+                  looks from.** No gitlink moves anywhere in the six runs — every perturbation edits
+                  or adds a file — so ` M` is unreachable no matter which repo you run `git status`
+                  in. Run 5 happens to report from inside the submodule (`git -C plugins`), but the
+                  superproject view of that same moment is ` ? plugins`, measured above. The state
+                  that says *someone else's projection has landed* is the one a two-repo cutover
+                  needs most, and it is the one the session cannot produce — which is why it is
+                  pasted here rather than pointed at.
 
                   **`--porcelain` collapses both to ` M`**, so the script-safe spelling is the one
                   that loses the discriminator; the transcript uses `--porcelain` only where it
