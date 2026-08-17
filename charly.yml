@@ -25,7 +25,7 @@ import:
     - arch: '@github.com/opencharly/distro-arch:v2026.229.1615'
     - cachyos: '@github.com/opencharly/distro-cachyos:v2026.204.1336'
     - debian: '@github.com/opencharly/distro-debian:v2026.226.1807'
-    - fedora: '@github.com/opencharly/distro-fedora:v2026.216.0232'
+    - fedora: '@github.com/opencharly/distro-fedora:v2026.229.1620'
     - ubuntu: '@github.com/opencharly/distro-ubuntu:v2026.226.1833'
 # Main owns NO boxes after the 2026-06 box inversion — only the shared candy
 # library + the inline check/vm/local/kubernetes orchestration. Discover candies only.
