@@ -133,7 +133,7 @@ func TestValidateVmDeep_NonPCIHostdevIncomplete_NoDiagnostics(t *testing.T) {
 // TestValidateVmDeep_NoHostdevsAuthored_NoDiagnostics proves the empty-body / no-hostdevs fast
 // path is a genuine no-op.
 func TestValidateVmDeep_NoHostdevsAuthored_NoDiagnostics(t *testing.T) {
-	for _, body := range [][]byte{nil, []byte(`{}`), mustMarshal(t, map[string]any{"source": map[string]any{"kind": "cloud_image"}})} {
+	for _, body := range [][]byte{nil, []byte(`{}`), mustMarshal(t, map[string]any{"source": map[string]any{"kind": "cloud_image", "distro": "fedora"}})} {
 		diags, err := validateVmDeep(body)
 		if err != nil {
 			t.Fatalf("validateVmDeep(%s): %v", body, err)
@@ -141,5 +141,45 @@ func TestValidateVmDeep_NoHostdevsAuthored_NoDiagnostics(t *testing.T) {
 		if diags.HasErrors() {
 			t.Fatalf("validateVmDeep(%s): expected no diagnostics, got %+v", body, diags.Items)
 		}
+	}
+}
+
+// TestValidateVmDeep_SourceDistro covers the distro-presence check. `distro:` selects the
+// guest's package name, package manager and sshd unit; it used to be inferred from base_user
+// (arch/alpine only) with everything else silently defaulting to Arch/Fedora conventions, so a
+// Debian-family image that omitted it booted with sshd masked and unreachable. The inference is
+// deleted, which only helps if the omission is now caught — that is what this pins.
+func TestValidateVmDeep_SourceDistro(t *testing.T) {
+	cases := []struct {
+		name      string
+		source    map[string]any
+		wantError bool
+	}{
+		{"cloud_image without distro", map[string]any{"kind": "cloud_image"}, true},
+		{"bootstrap without distro", map[string]any{"kind": "bootstrap", "builder": "debootstrap"}, true},
+		{"cloud_image with an unknown distro", map[string]any{"kind": "cloud_image", "distro": "ubunut"}, true},
+		{"cloud_image with a known distro", map[string]any{"kind": "cloud_image", "distro": "ubuntu"}, false},
+		{"bootstrap with a known distro", map[string]any{"kind": "bootstrap", "distro": "debian"}, false},
+		// The presence controls: arms that carry no distro at all must NOT be asked for one,
+		// or every disk-backed or bootc VM would fail. Without these the check could be
+		// satisfied by demanding distro unconditionally.
+		{"bootc carries no distro", map[string]any{"kind": "bootc", "box": "b"}, false},
+		{"disk carries no distro", map[string]any{"kind": "disk", "disk_path": "/d.qcow2"}, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			diags, err := validateVmDeep(mustMarshal(t, map[string]any{"source": c.source}))
+			if err != nil {
+				t.Fatalf("validateVmDeep: %v", err)
+			}
+			if got := diags.HasErrors(); got != c.wantError {
+				t.Fatalf("HasErrors() = %v, want %v (diags: %+v)", got, c.wantError, diags.Items)
+			}
+			if c.wantError {
+				if len(diags.Items) == 0 || diags.Items[0].Path != "source.distro" {
+					t.Errorf("diagnostic must be anchored at source.distro, got %+v", diags.Items)
+				}
+			}
+		})
 	}
 }

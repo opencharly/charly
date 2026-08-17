@@ -385,7 +385,7 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 		BindMounts: bindMounts, GPU: detected.GPU, BindAddress: rt.BindAddress, Tunnel: tunnelCfg,
 		UID: uid, GID: gid, Env: envVars, EnvFile: quadletEnvFile, Instance: c.Instance,
 		Security: security, Network: resolvedNetwork, Status: meta.Status, Info: meta.Info,
-		Entrypoint: resolveEntrypointFromMeta(&meta), Secrets: provisioned, CharlyBin: charlyBin,
+		Entrypoint: kit.ResolveEntrypointFromMeta(&meta), Secrets: provisioned, CharlyBin: charlyBin,
 		EncryptedMounts: deploykit.HasEncryptedBindMounts(bindMounts), KeyringBackend: isKeyring,
 		PodName: podName, Sidecar: resolvedSidecars,
 	}

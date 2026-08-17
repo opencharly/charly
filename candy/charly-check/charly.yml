@@ -1933,6 +1933,42 @@ check-skill:
                         - contains: "NOPASSWD"
                   ```
 
+                  **The same applies to a `vm:` bed**, where steps run as the cloud image's default
+                  user (`arch`/`fedora`/`debian`/`ubuntu`) over `ssh vm sudo bash -s`. Every step that
+                  drives a native package manager or writes under `/etc` must escalate explicitly —
+                  `pacman-key needs to be run as root`, `dnf`/`apt-get` refusing, `Permission denied`
+                  on `/etc/pacman.conf` are all this, not a repo or signing problem.
+
+                  **`sudo` on the command does NOT cover a shell redirect**, and this is the half that
+                  is easy to miss because the command itself looks elevated:
+
+                  Wrong — the redirect is performed by the CALLING shell, still uid 1000:
+
+                  ```sh
+                  sudo echo 'deb …' > /etc/apt/sources.list.d/charly.list
+                  sudo cat  > /etc/yum.repos.d/charly.repo <<'EOF'   # same trap with a heredoc
+                  ```
+
+                  Right — let the elevated process own the write:
+
+                  ```sh
+                  echo 'deb …' | sudo tee /etc/apt/sources.list.d/charly.list >/dev/null
+                  sudo tee /etc/yum.repos.d/charly.repo >/dev/null <<'EOF'
+                  curl -fsSL <url> | sudo gpg --dearmor -o /etc/apt/keyrings/charly.gpg
+                  ```
+
+                  Shown as shell rather than YAML on purpose: the earlier revision put all five lines in one
+                  `yaml` fence as sibling `command:` keys. A duplicate-key-strict loader rejects that at line 4,
+                  and — worse — a permissive `yaml.safe_load` PARSES it and keeps only the last key, silently
+                  discarding both wrong examples. A fenced block that a parser reads differently from a human is
+                  a defect even when the fence is only illustrative.
+
+                  **Where `sudo` comes from differs by substrate.** A cloud-image VM has passwordless
+                  sudo via cloud-init, so it is simply available. A container box does NOT — a box that
+                  needs in-container elevation has to install `sudo` and write its own
+                  `/etc/sudoers.d/` drop-in (a candy doing exactly that should refuse if no uid-1000
+                  account exists, rather than writing a rule for an account that is not there).
+
                   ### 11. Bootc images keep USER=root — tests must cover both modes
 
                   Gotcha 10 flips for bootc. `sdk/deploykit` (relocated from `charly/generate.go` in #67) deliberately omits the final `USER <uid>` directive on bootc images because systemd (PID 1 in a bootc VM) manages user sessions via login, so the container's own USER directive is irrelevant. Result: the same `charly check box` that runs as uid 1000 in a container runs as uid 0 in a bootc image.
@@ -2008,6 +2044,63 @@ check-skill:
                   when the pattern would also match the wrapping bash. The harness
                   defense is a safety net, not a license to use the broken pattern
                   deliberately.
+
+                  ### 13. A step is SIGKILLed at 90s unless it declares `timeout:`
+
+                  `ProbeNeverHang` (`sdk/kit/runner.go`) bounds every probe ATTEMPT at
+                  `runnerProbeNeverHangFallback` = **90 seconds**. A step that runs longer is killed,
+                  and the runner names the bound in the message — but the underlying exec-layer text is
+                  still `process terminated by signal (signal: killed)`, which describes the mechanism
+                  of death and not its cause. Read alone, it looks like the command crashed.
+
+                  What crosses 90s in practice: **installing charly from a published distro repo pulls
+                  ~190 packages** (podman, qemu, libvirt, gnupg, tailscale). On a 2-vCPU cloud-image VM
+                  `dnf install` does not finish in time while `pacman -S` does — so two beds differing
+                  only in package manager come out one green and one "killed", which invites a
+                  distro-specific theory (repo layout, signing, cloud image) when the variable is
+                  elapsed time against a shared floor. **Compare the step's duration to 90s before
+                  theorising about the distro.**
+
+                  The fix is authored, not code: `#Op` carries `timeout?: #Duration`, and
+                  `ProbeNeverHang` honours a longer authored value over the floor (the effective
+                  ceiling becomes `declared + 30s`). Declaring it is USING the mechanism's own
+                  parameter — not an R4 workaround:
+
+                  ```yaml
+                  - check: dnf install charly installs the package
+                    id: fedora-charly-installed
+                    timeout: 10m          # ~190 packages on 2 vCPUs; the 90s floor kills this
+                    exit_status: 0
+                    command: |
+                        sudo dnf install -y charly &&
+                        rpm -q charly
+                  ```
+
+                  ### 14. A check must be able to FAIL for the reason it names
+
+                  Four ways a step passed while measuring nothing, all found in one bed roster:
+
+                  - **`test "$(a)" = "$(b)"` with both sides empty PASSES.** A version comparison whose
+                    extraction was wrong for its tool (`apk info -v <pkg>` prints the package
+                    DESCRIPTION, not `name-version-rN`) compared `""` with `""` and reported success.
+                    Guard both sides — `test -n "$installed" && test -n "$packaged"` — and `echo` the two
+                    values so a failure is diagnosable.
+                  - **`apk update` / `apt-get update` / `pacman -Sy` exit 0 when a configured repo is
+                    unreachable** (they warn and carry on), so none of them proves the repo resolved.
+                    Prove the package is VISIBLE from a repo only that repo could serve
+                    (`apk list <pkg>` / `pacman -Si <pkg>` / `apt-cache policy` showing a Candidate).
+                  - **An installer's exit code is not registration.** Follow it with `apk info -e` /
+                    `pacman -Q` / `rpm -q` / `dpkg-query -W`.
+                  - **`<cmd>` on PATH inside a check may be the check runner's own STAGED binary**, not
+                    the one the package installed. A check about a PACKAGED binary must name the
+                    package's absolute path (`/usr/bin/charly version`), or it can pass with the package
+                    absent entirely.
+
+                  And query the INSTALLED package, not the available candidate: `dnf info` and
+                  `apt-cache policy` report what COULD be installed. Prefer brace-free extraction
+                  (`dpkg-query -W <pkg> | awk '{print $2}'`, `rpm -q <pkg> | sed …`) over
+                  `-f='${Version}'` / `--queryformat '%{VERSION}'`, since a check `command:` also passes
+                  through charly's own `${VAR}` substitution.
             - name: beds-and-r10
               content: |
                   # Beds and R10 — disposable acceptance gate reference
@@ -2524,7 +2617,7 @@ check-skill:
                      than inferring it from a PASS. Same failure family as invoking a stale
                      `/usr/bin/charly`: "the binary under test must be the one invoked" applies to
                      every binary in the chain.
-                  9. **Verify runtime deps are installed via package management** (R9) — on the host: `charly doctor` (dependency status), or the host package manager directly (`rpm -q <pkg>` / `pacman -Q <pkg>` — host packages are not charly-managed resources, so the package manager IS their interface); inside a container: `charly cmd <box> 'rpm -q <pkg>'`. Manual installs do not count — they won't survive a fresh install on a synced host. Every runtime dep must live in `setup.sh` + `pkg/arch/PKGBUILD`.
+                  9. **Verify runtime deps are installed via package management** (R9) — on the host: `charly doctor` (dependency status), or the host package manager directly (`rpm -q <pkg>` / `pacman -Q <pkg>` — host packages are not charly-managed resources, so the package manager IS their interface); inside a container: `charly cmd <box> 'rpm -q <pkg>'`. Manual installs do not count — they won't survive a fresh install on a synced host. Every runtime dep must live in `setup.sh` + the charly candy's `packaging:` section (`candy/charly/charly.yml`).
                   10. **Leave the target healthy, not paused/errored** — the final `charly status` (and `charly check libvirt info <vm>` for a VM) is healthy. If the target is in a broken state during exploration, `charly update` it back to the committed config before continuing — never layer experiments on broken state.
                   11. **Re-verify on a fresh rebuild after committing the source-level fix** (R10) — `charly update <disposable-target>` one more time from clean, with the new source applied. Run standards 1–10 again against this fresh rebuild. **This is the acceptance gate.** A fix that works on a hand-patched target but not on a fresh rebuild is a regression waiting for the next unrelated rebuild to wipe your patch. Paste both the exploratory-pass output and the fresh-rebuild-pass output into the conversation — the user sees both.
 
@@ -3978,7 +4071,7 @@ libvirt-skill:
 
             - `github.com/digitalocean/go-libvirt` — pure-Go libvirt RPC client.
             - `libvirt.org/go/libvirtxml` — typed domain XML parsing/generation.
-            - The `libvirt` Arch package (libvirtd, session socket) is already a hard dep of the `opencharly-git` PKGBUILD.
+            - The `libvirt` Arch package (libvirtd, session socket) is already a hard dep of the charly package (`packaging.formats.archlinux.depends`).
 
             ## Cross-References
 

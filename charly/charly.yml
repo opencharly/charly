@@ -373,6 +373,47 @@ pixi:
         env:
             PIXI_CACHE_DIR: /tmp/pixi-cache
             RATTLER_CACHE_DIR: /tmp/rattler-cache
+alpine:
+    distro:
+        version: "3.24"
+        bootstrap:
+            install_cmd: apk add --no-cache
+            package:
+                - curl
+                - ca-certificates
+            cache_mount:
+                - dst: /var/cache/apk
+                  sharing: locked
+        format:
+            apk:
+                cache_mount:
+                    - dst: /var/cache/apk
+                      sharing: locked
+                section_field:
+                    option: list
+                    package: list
+                    repo: list_of_maps
+                local_pkg:
+                    install_template: |
+                        apk add --no-cache --allow-untrusted {{.PkgFile}}
+                    download_template: https://opencharly.github.io/charly-alpine/${ARCH}/charly-${ARCH}.apk
+                    probe: command -v apk
+                uninstall_template: |
+                    apk del{{range .Packages}} {{.}}{{end}}
+                install_template: |
+                    RUN {{cacheMounts .CacheMounts}} \
+                    {{- range .Repos}}
+                    {{- if .key}}
+                        key={{quote .key}} && curl -fsSL "$key" -o "/etc/apk/keys/$(basename "$key")" && \
+                    {{- end}}
+                    {{- if .url}}
+                        echo {{quote .url}} >> /etc/apk/repositories && \
+                    {{- end}}
+                    {{- end}}
+                        apk add --no-cache
+                    {{- range .Options}} {{.}}{{end}}
+                    {{- range .Packages}} \
+                          {{.}}{{end}}
 arch:
     distro:
         bootstrap:
@@ -1053,6 +1094,99 @@ supervisord:
                 stderr_logfile=/dev/fd/2
                 stderr_logfile_maxbytes=0
                 {{- end}}
+openrc:
+    init:
+        # openrc — a FIRST-CLASS init system, peer to systemd: and supervisord:.
+        #
+        # Declared here rather than in Go because there is nowhere in Go to declare it: an init
+        # system's whole contract bakes into the ai.opencharly.init_def label and resolves from
+        # there at runtime. A frozen fallback table used to shadow this (triplicated across
+        # sdk/kit, plugin-pod and plugin-deploy-pod, and stuck at supervisord + systemd); it was
+        # deleted, so the label is the only path and a third init system needs no Go change.
+        #
+        # OpenRC is the init of Alpine (and Gentoo/Artix). Before this entry the only OpenRC support
+        # anywhere was a hardcoded `if distro == "alpine"` in the cloud-init renderer that enabled
+        # sshd in a GUEST; a container box on an Alpine base could not declare service: entries at
+        # all. schema/distro_vocab.cue's #Distros now declares each distro's init as data
+        # (alpine → openrc), so nothing branches on a distro name.
+        candy_field:
+            - service
+        candy_file:
+            - '*.initd'
+        # file_copy, like systemd: each service is its own /etc/init.d script, not fragments
+        # concatenated into one config (which is supervisord's fragment_assembly model).
+        model: file_copy
+        fragment_dir: openrc
+        stage_name: openrc-services
+        stage_fragment_copy: COPY .build/{{.BoxName}}/{{.FragmentDir}}/{{.FileName}} /openrc/{{.FileName}}
+        assembly_template: |
+            # Install OpenRC service scripts. They must be executable — OpenRC silently ignores
+            # a non-executable file in /etc/init.d, which is the classic "service does not exist"
+            # symptom, so the chmod is not optional.
+            RUN --mount=type=bind,from=openrc-services,source=/openrc,target=/openrc \
+                install -d /etc/init.d && \
+                for svc in /openrc/*; do install -m 0755 "$svc" "/etc/init.d/$(basename "$svc")"; done
+        system_enable_template: |
+            # Add to the default runlevel so the service starts on boot.
+            RUN{{range $i, $unit := .Units}}{{if $i}} && \
+               {{else}} {{end}}rc-update add {{$unit}} default{{end}}
+        # A container has no OpenRC pid-1 supervisor to hand control to, exactly as with
+        # supervisord's own fallback: keep the container alive so `charly fleet` can exec into it.
+        fallback_entrypoint:
+            - sleep
+            - infinity
+        management_tool: rc-service
+        # rc-service takes `<service> <action>` — the inverse argument order of systemctl, which
+        # is why the action cannot be hardcoded around a single tool.
+        management_command:
+            restart: '{{.Service}} restart'
+            start: '{{.Service}} start'
+            status: '{{.Service}} status'
+            stop: '{{.Service}} stop'
+        label_key: ai.opencharly.service.openrc
+        service_schema:
+            supports_packaged: true
+            unit_path_template: /etc/init.d/{{.Name}}
+            service_template: |
+                #!/sbin/openrc-run
+                # Generated by charly — do not edit.
+                name="{{.Name}}"
+                description="{{.Candy}} service {{.Name}} (generated by charly)"
+
+                # supervise-daemon is what gives OpenRC the restart semantics systemd expresses
+                # with Restart=: the default start-stop-daemon path starts a service and forgets
+                # it, so a crash would go unnoticed.
+                supervisor=supervise-daemon
+                command="/bin/sh"
+                command_args="-c '{{.Exec}}'"
+                {{- if .User}}
+                command_user="{{.User}}"
+                {{- end}}
+                {{- if .WorkingDirectory}}
+                directory="{{.WorkingDirectory}}"
+                {{- end}}
+                {{- if eq .Restart "no"}}
+                supervise_daemon_args="--no-respawn"
+                {{- end}}
+                {{- if .StopTimeout}}
+                retry="{{.StopTimeout}}"
+                {{- end}}
+                {{- if .EnvList}}
+                {{- range .EnvList}}
+                export {{.Key}}="{{.Value}}"
+                {{- end}}
+                {{- end}}
+
+                depend() {
+                {{- range .After}}
+                    after {{.}}
+                {{- end}}
+                {{- range .Before}}
+                    before {{.}}
+                {{- end}}
+                    need localmount
+                }
+
 systemd:
     init:
         candy_field:

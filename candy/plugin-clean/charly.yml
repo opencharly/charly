@@ -5,9 +5,8 @@ plugin-clean:
             COMPILED-IN charly COMMAND-class plugin that OWNS the externalized `charly clean`
             CLI — the build-artifact retention/prune surface. The plugin owns the command end to
             end: the flag grammar (--dry-run / --images / --check / --deep / --keep / --invalidate),
-            the category orchestration, the report output, and the local pkg/arch makepkg sweep
-            (cleanMakepkgArtifacts — a single-caller pure file op moved out of core into the
-            plugin). No plugin-specific command LOGIC is left in core.
+            the category orchestration, and the report output. No plugin-specific command LOGIC is
+            left in core.
 
             --deep is the store-wide untagged/dangling-image purge category — the CLI-only-
             interface gap-closing capability for issue #173: a multi-stage build's INTERMEDIATE

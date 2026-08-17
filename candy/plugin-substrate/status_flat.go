@@ -316,8 +316,9 @@ func (c *flatCollector) enrichVmRow(cs *spec.DeploymentStatus, opts flatCollectO
 }
 
 // lookupDeploy resolves the charly.yml entry for one image+instance. Tries the canonical
-// deployKey() shape first, then a few legacy fallbacks for bed-rolled keys (joined container name
-// minus charly- prefix).
+// deployKey() shape first, then the bed-rolled key shapes (joined container name minus the
+// charly- prefix). Those alternates are NOT a legacy charly format — a bed names its own
+// containers, so they are shapes charly must still match, not a superseded path to delete.
 func (c *flatCollector) lookupDeploy(box, instance, joinedContainerName string) (spec.FleetNode, bool) {
 	if c.deploy == nil || c.deploy.Fleet == nil {
 		return spec.FleetNode{}, false

@@ -96,8 +96,8 @@ func withRunTag(args []string, tag string) []string {
 //
 // --dev-local-pkg is the deploy-side twin of the flag every bed image build already passes. Without
 // it, a localpkg candy whose package source cannot be found takes the deploy path's benign skip and
-// the bed installs nothing — which is how check-fedora-vm stopped building its rpm against an
-// uninitialized pkg/fedora submodule and failed later at a live `rpm -q` that explained none of it.
+// the bed installs nothing — which is how check-fedora-vm stopped building its rpm against a
+// missing package source and failed later at a live `rpm -q` that explained none of it.
 // A bed exists to prove the in-development package builds and installs, so on a bed that condition
 // must be loud.
 func bedAdd(args ...string) []string {

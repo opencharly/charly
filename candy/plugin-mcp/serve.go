@@ -146,6 +146,7 @@ var mcpDestructivePaths = map[string]bool{
 	"candy.add-deb": true,
 	"candy.add-pac": true,
 	"candy.add-aur": true,
+	"candy.add-apk": true,
 	// Benchmark — run mutates workspace + rebuilds images; self-evaluate
 	// rebuilds images. Read-only siblings (scope, last-test-tag, list,
 	// list-runners, report) stay exposed.
