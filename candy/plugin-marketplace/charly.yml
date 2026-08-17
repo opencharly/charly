@@ -33,7 +33,7 @@ plugin-marketplace:
             providers:
                 - command:marketplace
         plan:
-            - check: the marketplace command plugin ships a buildable Go module (go.mod + the provider package); the full generate → drift round trip is exercised by the live R10 bed (check-marketplace) and the plugin's own golden tests
+            - check: the marketplace command plugin ships a buildable Go module (go.mod + the provider package); the generate → drift round trip is covered by this plugin's own Go tests and this repository's `task skills:drift`, while the live R10 bed (check-marketplace) covers the ARTIFACT they produce — the baked ai.opencharly.skill label
               id: marketplace-module-present
               context:
                 - build
