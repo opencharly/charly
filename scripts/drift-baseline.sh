@@ -26,6 +26,17 @@
 # prove a revert by ABSENCE (`git diff main..head -- ':!intended' ':!files'` empty), prove a
 # generated carrier by DELETING it and regenerating, and read a per-item artifact per item.
 #
+# THE SHARPEST MEMBER OF THAT FAMILY, because its WRONG answer is the default: an ancestry check
+# run from the SUPERPROJECT against a SUBMODULE commit exits 128 — the objects are not in that
+# repository, so the question was never evaluated. Verified here:
+#
+#	$ git -C plugins merge-base --is-ancestor <sha> origin/main ; echo $?   ->  0    (correct)
+#	$ git          merge-base --is-ancestor <sha> origin/main ; echo $?   ->  128  (UNEVALUATED)
+#
+# 128 is falsy, so `if git merge-base --is-ancestor …; then` collapses "objects absent" and "not
+# an ancestor" into the same branch and reports a pin as unmerged when it is merged. Run ancestry
+# INSIDE the submodule, and test for rc=0 explicitly rather than relying on if/&&.
+#
 # WHAT A GREEN VERDICT ACTUALLY MEANS — read this before trusting one. `docs:drift` feeds
 # `git -C docs status --porcelain`, and `git status` compares the worktree against the CHECKED-OUT
 # HEAD. On a CI checkout that is the GITLINK. So green means "regeneration reproduces the gitlink"
