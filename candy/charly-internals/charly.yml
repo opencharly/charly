@@ -5477,8 +5477,15 @@ git-workflow-skill:
                   **Guard 1 — every commit SHA an entry names, checked for landed state AND subject:**
 
                   ```bash
-                  entry=CHANGELOG/2026.228.0609.md   # the entry under review
-                  repos=". $(git config -f .gitmodules --get-regexp path | awk '{print $2}')"
+                  # Run from the superproject OR any submodule — the root is resolved, not assumed.
+                  root=$(git rev-parse --show-superproject-working-tree)
+                  root=${root:-$(git rev-parse --show-toplevel)}
+                  entry=$root/CHANGELOG/2026.228.0609.md    # substitute the entry under review
+                  repos="$root $(git config -f "$root/.gitmodules" --get-regexp path \
+                                   | awk -v r="$root" '{print r"/"$2}')"
+                  
+                  # REFUSE to report rather than narrow silently — this is the whole point.
+                  [ "$repos" = "$root " ] && { echo "guard: no submodules under $root" >&2; exit 1; }
 
                   for sha in $(grep -ohE '\b[0-9a-f]{7,40}\b' "$entry" | sort -u); do
                     for repo in $repos; do                     # EVERY repo a citation may name
