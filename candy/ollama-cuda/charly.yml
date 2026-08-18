@@ -8,7 +8,9 @@ ollama-cuda:
             ollama candy, never a replacement: it contributes only the backend
             libraries that drop into ollama's own runner directory
             (/usr/lib/ollama/cuda_v*/libggml-cuda.so plus the CUDA runtime it links),
-            which is why the base ollama candy can stay CPU-only and small. Keeping
+            which is why the base ollama candy can stay CPU-only and small ON A PACKAGED
+            DISTRO — on the tarball path the upstream archive already carries this backend,
+            so this candy asserts rather than installs. Keeping
             the backend in its own candy is what makes GPU support a per-box
             composition choice: an image that wants CUDA composes this, an image
             that does not pays none of its ~1 GiB.

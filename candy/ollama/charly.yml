@@ -12,10 +12,13 @@ ollama:
             selects. That var is PINNED to a release tag and must stay one: the download
             cache is content-addressed by the sha256 of the URL, so a `latest` URL would
             hash to one key forever and serve the first tarball it ever fetched, long
-            after upstream moved on. The candy is CPU-only
-            and carries no GPU dependency — a GPU backend is an IMAGE-level composition
-            choice (compose ollama-cuda or ollama-rocm), which is what keeps this layer
-            small. Pulled models persist under the ~/.ollama models volume. The running
+            after upstream moved on. The candy declares NO GPU dependency — a GPU backend is
+            an IMAGE-level composition choice (compose ollama-cuda or ollama-rocm). What that
+            buys differs by install path, and the difference is worth stating rather than
+            averaging: on a PACKAGED distro the base package is genuinely CPU-only at 66 MiB
+            and a backend is strictly opt-in, which is what keeps this layer small; on the
+            TARBALL path the single upstream archive already contains the CUDA backend, so a
+            tarball consumer pays for it whether or not any box composes ollama-cuda. Pulled models persist under the ~/.ollama models volume. The running
             service exposes the Ollama HTTP API (e.g. /api/tags) so any composing box
             can serve and query local models. The companion plugin candy plugin-ollama
             adds the `charly ollama` management CLI against a deployed server.
@@ -48,9 +51,10 @@ ollama:
             # tracking upstream closely — 0.32.14-1 landed the day upstream tagged
             # v0.32.14. The packaged base is 66 MiB installed (16 MiB download); the
             # upstream tarball it replaces is a 1.32 GiB DOWNLOAD, because that one
-            # archive bundles every GPU backend
-            # while the package splits them into the ollama-cuda / ollama-rocm
-            # add-ons this candy deliberately does NOT require.
+            # archive bundles the CPU and CUDA backends together (ROCm is NOT in it —
+            # upstream publishes that as a separate ollama-linux-amd64-rocm archive),
+            # while the packages split even CUDA out into the ollama-cuda add-on this
+            # candy deliberately does NOT require.
             arch:
                 package:
                     - ollama
@@ -165,8 +169,9 @@ ollama-skill:
         content: |-
             # ollama
             
-            Ollama LLM inference server. CPU-only by itself; a GPU backend is composed
-            at the box level.
+            Ollama LLM inference server. On a distro that packages ollama it is CPU-only by
+            itself and a GPU backend is composed at the box level; on a tarball distro the
+            upstream archive already bundles the CUDA backend.
             
             ## Box Properties
             
@@ -196,17 +201,26 @@ ollama-skill:
             whether the binary already exists rather than on a distro name, so any distro
             that gains an ollama package is picked up without an edit.
 
-            GPU support is a **composition choice made at the box level**, and on the
-            packaged path that choice is what keeps images small: the tarball bundles
-            every backend into one 1.32 GiB download, while the packages split them out.
+            GPU support is a **composition choice made at the box level** — but only on the
+            PACKAGED path is it also a size choice, and conflating the two is easy to do:
+
+            - **Packaged distros** (Arch and derivatives) install a 66 MiB CPU-only base, and a
+              backend is strictly opt-in. This is where the split earns its keep.
+            - **Tarball distros** get one 1.32 GiB archive that already contains the CUDA
+              backend, so there is nothing to opt out of. ROCm is the exception in the other
+              direction: it is NOT in that archive — upstream publishes it as a separate
+              `ollama-linux-amd64-rocm` download — which is why `ollama-rocm` is Arch-only and
+              says so on its own page.
+
             Sizes below are INSTALLED, not download, so they are comparable to each other.
 
             - A GPU box composes `ollama-cuda` (~988 MiB) beside this candy for the
               CUDA backend, or `ollama-rocm` (~2.9 GiB) for AMD. Both are candies in
               this repository; which boxes compose them is decided in the `box/<distro>`
               submodules, so consult those rather than this page for the current list.
-            - CPU-only consumers compose the `ollama` candy alone and pay for neither —
-              e.g. `/charly-openclaw:openclaw-desktop` (cachyos base, no GPU candy).
+            - A consumer that composes neither pays for neither ON A PACKAGED DISTRO —
+              e.g. `/charly-openclaw:openclaw-desktop` (cachyos base, no GPU candy). On a
+              tarball distro it still carries the bundled CUDA backend.
             
             ## Ports
             

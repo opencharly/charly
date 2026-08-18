@@ -8,7 +8,8 @@ ollama-rocm:
             never a replacement: it contributes only the backend libraries that drop
             into ollama's own runner directory (/usr/lib/ollama/rocm_v*/libggml-hip.so
             plus the HIP/HSA runtime it links), which is why the base ollama candy can
-            stay CPU-only and small. It is by far the largest of the backends (~2.9 GiB
+            stay CPU-only and small on a packaged distro. Unlike CUDA, ROCm is never in the
+            upstream tarball at all, so there is no path on which the base candy carries it. It is by far the largest of the backends (~2.9 GiB
             installed), so keeping it in its own candy is what stops every ollama image
             from paying for it — an image opts in only when it targets AMD hardware.
 

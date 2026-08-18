@@ -55,8 +55,10 @@ ollama-layer-skill:
 
             ## GPU backends (opt-in, box level)
 
-            The candy itself is CPU-only. A box adds a backend by composing one of
-            the sibling candies, which is what keeps a CPU image small:
+            On a distro that PACKAGES ollama the candy itself is CPU-only, and a box adds a
+            backend by composing one of the sibling candies — which is what keeps a CPU image
+            small. On a TARBALL distro the single upstream archive already contains the CUDA
+            backend, so there is nothing to opt out of there; ROCm is never in it:
 
             | Candy | Adds | Installed size |
             |-------|------|----------------|
