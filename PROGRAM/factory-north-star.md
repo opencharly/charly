@@ -69,11 +69,12 @@ it is handed decides the containment story:
   no intermediate tarball. The images are private on ghcr.io (anonymous manifest
   fetch is 401), so the registry hop is not an option — local delivery is the
   mechanism, and the winning verb (`charly box load`, unit 5) is a gap to close
-  in charly, not a script. Unit 5 landed it, and unified both venues onto one path —
-  `sdk/deploykit.TransferImageToVenue` over `spec/container.StreamLoad` — so the
-  VM-only `streamLoadAndTag` this paragraph once named no longer exists. The controller's reconcile loop self-heals: once the
-  image lands in the nested store, the controller spawns the manager without a
-  restart, so delivery can happen after the controller is up.
+  in charly, not a script. Unit 5 landed it, and unified both venues onto one path:
+  `sdk/deploykit.TransferImageToVenue` over `spec/container.StreamLoad`, with
+  `charly box load` and `charly vm cp-box` as its two bindings. The controller's
+  reconcile loop self-heals: once the image lands in the nested store, the
+  controller spawns the manager without a restart, so delivery can happen after
+  the controller is up.
 - **The nested socket path needs a runtime-dir volume.** `/run` is a fresh
   root-owned tmpfs at container start, so the build-time `/run/user/1000` pre-creation
   (the controller candy's plan step) does not survive — the uid-1000 service cannot
