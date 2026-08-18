@@ -2,12 +2,12 @@
   "$schema": "https://opencode.ai/config.json",
   "permission": {
     "bash": {
-      "charly check run:*": "allow",
-      "charly check live:*": "allow",
-      "charly check box:*": "allow",
-      "charly status:*": "allow",
-      "gh pr merge:*": "allow",
-      "gh api --method POST repos/opencharly:*": "allow"
+      "charly check run *": "allow",
+      "charly check live *": "allow",
+      "charly check box *": "allow",
+      "charly status *": "allow",
+      "gh pr merge *": "allow",
+      "gh api --method POST repos/opencharly/*": "allow"
     }
   },
   "lsp": {
