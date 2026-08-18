@@ -14,7 +14,8 @@ plugin-udev:
             charly's loader fetches this candy's repo, go-builds the provider binary on the
             HOST, and on `charly udev <args…>` syscall.Exec's it in CLI mode (sdk.Main →
             cliMain) — or runs the host-installed /usr/lib/charly/plugins binary on a
-            project-less host (the pkg/arch bake). The plugin owns real terminal stdio, so
+            project-less host (the native package's baked plugin set). The plugin owns real
+            terminal stdio, so
             `charly udev install` / `remove` shell out to `sudo tee` / `sudo udevadm` and reach
             the real terminal natively.
 

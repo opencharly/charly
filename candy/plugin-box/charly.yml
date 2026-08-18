@@ -5,9 +5,9 @@ plugin-box:
             The build-mode `charly box …` verb HANDLERS relocated into a COMPILED-IN command plugin
             candy (P15, K5). `charly box` is a SHARED command group whose subcommands have different
             owners: the core BoxCmd keeps the grammar spine + build (→plugin-build) / merge / labels /
-            feature / the authoring verbs, while THIS candy contributes six NESTED command providers
+            feature / the authoring verbs, while THIS candy contributes five NESTED command providers
             under the `box` parent (each command:<word> with CommandParent()=="box"): generate,
-            validate, new, pkg, inspect, list. COMPILED-IN, each dispatches IN-PROC via Invoke(OpRun)
+            validate, new, inspect, list. COMPILED-IN, each dispatches IN-PROC via Invoke(OpRun)
             (kong-parse its sub-grammar), so the handlers own charly's real stdio. `generate` renders
             the .build/ tree by InvokeProvider'ing the peer build:generate word (candy/plugin-build),
             which drives HostBuild("build-resolve", GenerateOnly); `new` (candy/project/box) calls the
@@ -15,8 +15,7 @@ plugin-box:
             reentry; `validate` fetches the error-TOLERANT resolved-project envelope
             (HostBuild("validate-project")) and runs the whole per-kind/op rule engine + the deploykit
             resolution-graph checks IN-PLUGIN over it, merging the host's CUE-conformance / tunable /
-            base⊻from diagnostics for the verdict; `pkg` reaches the hidden core __box-pkg reentry
-            over HostBuild("cli"); `inspect` and `list` read the generic spec.ResolvedProject envelope
+            base⊻from diagnostics for the verdict; `inspect` and `list` read the generic spec.ResolvedProject envelope
             (InvokeProvider("build","project")) — inspect's default JSON is snake_case canonical — with the
             deploy-overlay formats (inspect tunnel/bind_mounts) + store-live `list tags` reaching the
             hidden core __box-inspect-overlay / __box-list-tags reentries. Their data still needs the
@@ -28,18 +27,17 @@ plugin-box:
                 - command:generate
                 - command:validate
                 - command:new
-                - command:pkg
                 - command:inspect
                 - command:list
             source: github.com/opencharly/charly/candy/plugin-box
         plan:
             - # ADE check: a deterministic build-context check that does NOT depend on the host
-              # reverse channel the box handlers need (the generate/validate/pkg words reach the host
+              # reverse channel the box handlers need (the generate/validate words reach the host
               # in-proc, unavailable in a disposable `charly box feature run` container). It mirrors
               # candy/plugin-alias's pattern — a trivial build-context `command` (the built-in command
               # CHECK verb) running `true`. The full CLI end-to-end (`charly box generate/validate/
-              # new/pkg`) is exercised by the live R10 + the Go tests.
-              check: the box command plugin ships a buildable Go module (go.mod + the provider) the host can compile in; the full `charly box generate/validate/new/pkg` end-to-end is exercised by the live R10 + the Go tests
+              # new`) is exercised by the live R10 + the Go tests.
+              check: the box command plugin ships a buildable Go module (go.mod + the provider) the host can compile in; the full `charly box generate/validate/new` end-to-end is exercised by the live R10 + the Go tests
               id: box-module-present
               context:
                 - build

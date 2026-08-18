@@ -62,12 +62,6 @@ type CLI struct {
 	// the gRPC Describe, is not missed). Reuses collectPluginProviders (R3).
 	PluginProviders PluginProvidersCmd `cmd:"" name:"__plugin-providers" hidden:"" help:"internal: print a candy's plugin.providers (one <class>:<word> per line)"`
 
-	// (K3 build-tail move, coneB-pkgcmd: the former hidden __box-pkg reentry is DELETED.
-	// candy/plugin-box's dispatchPkg now InvokeProviders(build:pkg) directly — the SAME shape
-	// dispatchBuild already established for __box-build — so the localpkg build engine
-	// (candy/plugin-build's runBoxPkg) runs entirely plugin-side, reusing the K1-loader seams
-	// resolveBuildEngine already set up (LoadUnified, the scan-local host leg, resolveDistroLeg).)
-
 	// (The former hidden `__cmd` deploy-lifecycle reentry behind `charly cmd` is DELETED — cmd.go's
 	// dissolution: candy/plugin-cmd now drives the "pod-lifecycle" host-builder's op="cmd" (cmd's
 	// slot in the floored pod-lifecycle-dispatch family, joining op="shell" — #55 W3 A10b unified
@@ -103,9 +97,9 @@ type CLI struct {
 	// reentries for now.
 
 	// `charly version` is a DELIBERATE value/risk EXCEPTION kept core (the Version field below) — NOT
-	// an "unfixable" one. RDD (2026-07-01) refuted the old chicken-and-egg claim: pkgver()'s
+	// an "unfixable" one. RDD (2026-07-01) refuted the old chicken-and-egg claim:
 	// `bin/charly version` is only a convenience (the CalVer is already Taskfile-computed via
-	// pkg/arch/calver.sh, and reading it from a sidecar / recomputing at the superproject root
+	// scripts/calver.sh, and reading it from a sidecar / recomputing at the superproject root
 	// sidesteps the submodule mismatch), so externalizing IS feasible. It is excluded because it sheds
 	// ZERO deps, removes ~5 core lines, and would make R9's canonical identity command depend on the
 	// plugin-resolution subsystem across 3 package repos — worst-value, highest-blast-radius of any
@@ -202,7 +196,7 @@ func main() {
 	cli.Plugins = cmdPlugins
 	ctx := kong.Parse(&cli,
 		kong.Name("charly"),
-		kong.Description("OpenCharly - the container management experience for you and your agents"),
+		kong.Description("OpenCharly — the fully equipped factory floor for you and your agents"),
 		kong.UsageOnError(),
 	)
 

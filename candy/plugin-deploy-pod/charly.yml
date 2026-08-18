@@ -22,7 +22,7 @@ plugin-deploy-pod:
             own code, and runs podman build + the deploy-name alias tag via its served host
             executor. Each per-step Containerfile fragment is rendered HOST-SIDE over the
             generic "step-emit" host-builder (deploykit.OCITarget.EmitStepOp →
-            HostBuild("step-emit","oci-emit-step",…) → the host's ociEmitStep, byte-identical to
+            HostBuild("step-emit","oci-emit-step",…) → the host's dispatchOCIStep, byte-identical to
             the former in-core emitStep) — so the render lives in the candy while each step
             fragment crosses the reverse channel. The bed runner / `charly start` configs +
             starts the container.

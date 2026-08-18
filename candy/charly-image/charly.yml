@@ -161,7 +161,7 @@ image-skill:
             | Append a candy to a box | `charly box add-candy <image> <layer>` |
             | Remove a candy from a box | `charly box rm-candy <image> <layer>` |
             | Edit a value in `candy/<name>/charly.yml` | `charly candy set <name> <dotpath> <yaml-value>` |
-            | Append rpm/deb/pac/aur packages to a candy | `charly candy add-rpm <name> <pkg…>` (and `add-deb`, `add-pac`, `add-aur`) |
+            | Append rpm/deb/pac/aur/apk packages to a candy | `charly candy add-rpm <name> <pkg…>` (and `add-deb`, `add-pac`, `add-aur`, `add-apk`) |
             | Write any file under the project root | `charly box write <rel-path> [--content X \| --from-stdin]` |
             | Read any file under the project root | `charly box cat <rel-path>` |
 
@@ -236,7 +236,7 @@ image-skill:
             | `tag` | `"auto"` | Image tag. `"auto"` for CalVer |
             | `registry` | `""` | Container registry prefix |
             | `distro` | `[]` | Distro identity tags in priority order: `["fedora:43", fedora]`. For packages: first matching section wins (override). For plan steps: additive. Inherited from base image |
-            | `build` | `["rpm"]` | Package formats tied to builder definitions: `[rpm]` or `[pac, aur]`. ALL formats installed in order. Valid: rpm, deb, pac, aur. Inherited from base image |
+            | `build` | `["rpm"]` | Package formats tied to builder definitions: `[rpm]` or `[pac, aur]`. ALL formats installed in order. Valid: rpm, deb, pac, aur, apk. Inherited from base image |
             | `candy` | `[]` | Candy composition list (image-specific, not inherited) |
             | `extract` | `[]` | Pull files out of another OCI image at build time — each `{source, path, dest}` renders `FROM <source> AS <candy>-extract-<i>` + `COPY --from=<stage> --chown=<uid>:<gid> <path> <dest>` (`sdk/deploykit/candy_stage.go`). The charly-native way to reuse a binary or static tree from an upstream image without adopting its init, scripts, or root layout. Counts as an install file for Agent Driven Evaluation (ADE) validation (a candy that only extracts ships no package/manifest/task files). First consumer: the agentteams candies (minio/mc, tuwunel, element-web from the `higress/*` images) |
             | `user` | `"user"` | Username for non-root operations. See `user_policy:` — may be overridden at resolve time when adopt mode fires |
@@ -706,6 +706,19 @@ layer-skill:
             maps). The `charly box` COMMAND family is UNCHANGED — only the YAML `box:` KIND
             keyword was removed.
 
+            **`description:` and `plan:` can be PROJECTED, not just stored.** They are not inert
+            metadata: `charly docs generate` renders both into a per-candy reference page, so in a
+            project that publishes a documentation site a candy's prose is published prose. Whether
+            that matters to you depends on the project — a candy in a project that generates no site
+            carries no such obligation, and editing its `description:` is exactly the one-line change
+            it looks like.
+
+            In THIS repository it does matter: the per-candy pages are published on opencharly.ai
+            from the `docs` submodule, so editing either field re-projects that candy's page and the
+            change is only half-landed until the regenerated page is committed too. Treat a
+            `description:` fix here as a multi-repo change rather than a one-liner. The projection
+            model is `/charly-build:docs`; the landing order is `/charly-internals:git-workflow` B6.
+
             ## A candy's files live in the candy's own directory
 
             A charly.yml's relative file references (`copy:` / `write:` step paths, `data.src`, install-file
@@ -751,7 +764,7 @@ layer-skill:
             |--------|---------|-------------|
             | Scaffold new candy | `charly box new candy <name>` | Create candy directory with starter `charly.yml` (see `/charly-build:new`) |
             | Edit a candy field | `charly candy set <name> <dotpath> <value>` | Comment-preserving YAML edit by dot-path |
-            | Append rpm/deb/pac/aur packages | `charly candy add-rpm <name> <pkg…>` (plus `add-deb`, `add-pac`, `add-aur`) | Idempotent append; auto-upgrades scaffold's null `package:` to a sequence |
+            | Append rpm/deb/pac/aur/apk packages | `charly candy add-rpm <name> <pkg…>` (plus `add-deb`, `add-pac`, `add-aur`, `add-apk`) | Idempotent append; auto-upgrades scaffold's null `package:` to a sequence |
             | Add a plan step (`run:` / `check:` / agent step) | hand-edit the `plan:` list in `charly.yml`, or `charly candy set <name> <dotpath> <value>` | No dedicated convenience command — append plan steps by hand or via the comment-preserving dot-path setter (and `charly box write` for free-form files). See `/charly-check:check` "Agent Driven Evaluation" |
             | Write a free-form file (`pixi.toml`, `root.yml`, …) | `charly box write <rel-path> --content X` | Escape hatch for files the schema setters don't cover; guarded against `..` traversal |
             | List all candies | `charly box list candies` | Show available candies from filesystem |
@@ -1151,7 +1164,7 @@ layer-skill:
             | `route` | `{host, port}` | Traefik reverse proxy route. |
             | `package` / `distro` | list / map | The package surface: top-level `package:` base + per-distro/version `distro:` map (bare / versioned / compound keys). Resolved via the most-specific-first cascade (see Package Surface). |
             | `apk` | `[]ApkPackageSpec` | **Android app-install package format** — apps installed onto a `kind: android` device by a `target: android` deploy (NOT into the image). Each entry is `package:` (apkeep download by id, with `source`/`arch`/`version`) XOR `apk:` (committed local APK). Device-scoped (top-level, not under `distro:`); compiles to an `ApkInstallStep` that ONLY `target: android` executes (skipped at image-build + on every other target). See `/charly-check:android`. |
-            | `localpkg` | map (format→dir) | **Native-package deploy format** (sibling of `apk`). A per-format map (`pac`/`rpm`/`deb` → a bundled package SOURCE dir, e.g. the `charly` layer's `{pac: pkg/arch, rpm: pkg/fedora, deb: pkg/debian}`). Compiles to a `LocalPkgInstallStep` (`/charly-internals:install-plan`) emitted at "step 2.5", BEFORE the layer's `run:` steps. On a DEPLOY target (`target: local` / `target: vm`) charly picks the entry matching the target distro's package format, builds the package on the HOST (pac via `makepkg`; rpm/deb distro-natively in a podman container), and installs it via the format's AUTO-RESOLVING local-file install (`pacman -U` / `dnf install` / `apt-get install`) — so the package's repo dependencies resolve automatically and there is NO dependency-closure builder. Every command (build / install / probe / glob / `source_sentinel`) is rendered from the distro's `format.<fmt>.local_pkg:` block in the embedded build vocabulary — zero hardcoded package-manager literals in Go. The legacy scalar form (`localpkg: pkg/arch`) is rejected at load with an `charly migrate` hint. Resolution walks up from the deploy project dir, so a consumer under `box/<distro>` finds the superproject's `pkg/<fmt>`. Skipped at image build — the layer's own `run:` steps (curl/COPY) are the fallback. The `charly` layer uses this to install `charly` as the native OS package at `/usr/bin/charly` on every distro instead of a curl'd binary. |
+            | `localpkg` | — | **REMOVED** (nFPM cutover). The candy-body `localpkg:` map (format→source-dir) is gone — a candy carrying it is a hard schema violation (`charly migrate` deletes it). The OS-tracked package install is now driven entirely by the embedded build vocabulary's `format.<fmt>.local_pkg:` block (`install_template`/`probe`/`download_template`), which the sdk's localpkg machinery (`sdk/deploykit/localpkg.go`) uses to install the charly package: a PRODUCTION deploy/image DOWNLOADS the published package from the per-distro repo (`download_template`), while the DEV path (`--dev-local-pkg`) builds it via the `charly generate-packages` plugin (nFPM) from the in-development binary. The `charly` layer installs the binary via a `copy: bin/charly` run step. |
             | `volume` | `[]{name, path}` | Persistent named volumes. |
             | `alias` | `[]{name, command}` | Host command aliases. |
             | `security` | object | Container security: `privileged`, `cap_add`, `devices`, `security_opt`, `shm_size`, resource caps. |
@@ -1916,7 +1929,7 @@ layer-skill:
             ## Cross-References
 
             - `/charly-image:image` — Adding candies to box definitions; box composition; `data_image:` for data-only bundles; the full MCP-first authoring table including `box set`, `box add-candy`, `box rm-candy`, `box write`, `box cat`.
-            - `/charly-build:charly-mcp-cmd` — "Authoring tools" table exposing `candy.set`, `candy.add-rpm`, `candy.add-deb`, `candy.add-pac`, `candy.add-aur` as MCP tools; end-to-end build-from-scratch worked example.
+            - `/charly-build:charly-mcp-cmd` — "Authoring tools" table exposing `candy.set`, `candy.add-rpm`, `candy.add-deb`, `candy.add-pac`, `candy.add-aur`, `candy.add-apk` as MCP tools; end-to-end build-from-scratch worked example.
             - `/charly-build:generate` — What `charly box generate` actually emits; the per-verb emitter pipeline; `.build/<image>/` layout.
             - `/charly-build:validate` — Validation rules (including per-verb step requirements).
             - `/charly-build:new` — Scaffolding a new candy directory.

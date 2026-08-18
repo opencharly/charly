@@ -1,9 +1,7 @@
 // Package build is the importable form of charly's BUILD-DRIVE plugin: it OWNS the podman
 // build drive (the build-order loop, the per-image build lock, the push, and the merge gate)
 // for the two build words `build:box` (the `charly box build` engine) and `build:generate`
-// (the `charly box generate` engine), plus `build:ensure` (ensure-image) and `build:pkg`
-// (`charly box pkg` — native package-artifact builds for a candy's localpkg sources, K3
-// build-tail move: the former hidden core `__box-pkg` reentry is DELETED).
+// (the `charly box generate` engine), plus `build:ensure` (ensure-image).
 //
 // OWNS THE DRIVE, RUNS THE RESOLVE PLUGIN-SIDE (K3 U6). resolveBuildEngine (resolve.go) runs the
 // whole build-engine RESOLVE ITSELF — loaderkit.LoadUnified over the K1 loader legs, the vocab
@@ -41,11 +39,11 @@ const calver = "2026.182.1600"
 // NewProvider returns the build-drive provider for in-proc registration or out-of-proc serving.
 func NewProvider() pb.ProviderServer { return &provider{} }
 
-// NewMeta advertises the four build-drive capabilities (Class "build", words "box" +
-// "generate" + "ensure" + "pkg", Phase "build") + the plugin's self-contained CUE schema (via
-// sdk.NewMeta → BuildCapabilities). InputDef is "" for all four: the BuildRequest /
-// BuildEnsureRequest / BuildPkgRequest is HOST-constructed (by candy/plugin-box's dispatchBuild /
-// dispatchBuildEnsure / dispatchPkg / the box command plugin's generate handler), never
+// NewMeta advertises the build-drive capabilities (Class "build", words "box" +
+// "generate" + "ensure", Phase "build") + the plugin's self-contained CUE schema (via
+// sdk.NewMeta → BuildCapabilities). InputDef is "" for all three: the BuildRequest /
+// BuildEnsureRequest is HOST-constructed (by candy/plugin-box's dispatchBuild /
+// dispatchBuildEnsure / the box command plugin's generate handler), never
 // user-authored in charly.yml, so there is no plugin_input to validate against a served schema.
 // The self-contained #BuildDispatch def exists only to satisfy the non-empty-schema load gate +
 // document the seam.
@@ -55,7 +53,6 @@ func NewMeta() pb.PluginMetaServer {
 			{Class: "build", Word: "box", Phase: sdk.PhaseBuild},
 			{Class: "build", Word: "generate", Phase: sdk.PhaseBuild},
 			{Class: "build", Word: "ensure", Phase: sdk.PhaseBuild},
-			{Class: "build", Word: "pkg", Phase: sdk.PhaseBuild},
 			{Class: "build", Word: "project", Phase: sdk.PhaseBuild},
 		},
 		schemaFS)
@@ -167,8 +164,8 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 	if req.GetOp() != sdk.OpBuild {
 		return nil, fmt.Errorf("build: unsupported op %q (only %q)", req.GetOp(), sdk.OpBuild)
 	}
-	if word != "box" && word != "generate" && word != "ensure" && word != "pkg" {
-		return nil, fmt.Errorf("build: unknown build word %q (want box|generate|ensure|pkg|project)", word)
+	if word != "box" && word != "generate" && word != "ensure" {
+		return nil, fmt.Errorf("build: unknown build word %q (want box|generate|ensure|project)", word)
 	}
 	ex, err := sdk.ExecutorForInvoke(ctx, req.GetExecutorBrokerId())
 	if err != nil {
@@ -186,21 +183,6 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 		out, err := json.Marshal(spec.BuildEnsureReply{Error: errString(ensureErr)})
 		if err != nil {
 			return nil, fmt.Errorf("build ensure: encode reply: %w", err)
-		}
-		return &pb.InvokeReply{ResultJson: out}, nil
-	}
-
-	if word == "pkg" {
-		var preq spec.BuildPkgRequest
-		if len(req.GetParamsJson()) > 0 {
-			if err := json.Unmarshal(req.GetParamsJson(), &preq); err != nil {
-				return nil, fmt.Errorf("build pkg: decode BuildPkgRequest: %w", err)
-			}
-		}
-		written, pkgErr := runBoxPkg(ctx, ex, preq)
-		out, err := json.Marshal(spec.BuildPkgReply{Written: written, Error: errString(pkgErr)})
-		if err != nil {
-			return nil, fmt.Errorf("build pkg: encode reply: %w", err)
 		}
 		return &pb.InvokeReply{ResultJson: out}, nil
 	}

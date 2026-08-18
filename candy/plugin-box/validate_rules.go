@@ -62,14 +62,14 @@ func validateCandyContents(vc *vctx, e *vErr) {
 		v := vc.views[name]
 		dk := vc.dk[name]
 
-		// At least one install file, a candy: composition, data, external_builder, localpkg, OR a
+		// At least one install file, a candy: composition, data, external_builder, OR a
 		// plugin: block — all legitimately ship no install files. HasInstallFiles is the core
-		// package/manifest/task/apk predicate (NOT the adapter's broader HasContent, which also
-		// counts env/ports/route/volumes/aliases/extract/data/services), replicated from the
-		// envelope.
+		// package/manifest/task/apk predicate (NOT the adapter's broad HasContent, which counts plan
+		// steps every ADE candy has), replicated from the envelope. (The candy-body `localpkg:` map
+		// is REMOVED — nFPM cutover — so it no longer counts as an install-file source.)
 		if !candyHasInstallFiles(m, dk) && len(v.IncludedCandy) == 0 && !dk.HasData() &&
-			!v.IsPlugin && m.ExternalBuilder == "" && len(m.LocalPkg) == 0 {
-			e.Add("candy %q: must have at least one install file (candy manifest distro: packages, root.yml, pixi.toml, pyproject.toml, environment.yml, package.json, Cargo.toml, or user.yml), a candy: field, a localpkg:, an external_builder:, or a plugin: block", name)
+			!v.IsPlugin && m.ExternalBuilder == "" {
+			e.Add("candy %q: must have at least one install file (candy manifest distro: packages, root.yml, pixi.toml, pyproject.toml, environment.yml, package.json, Cargo.toml, or user.yml), a candy: field, an external_builder:, or a plugin: block", name)
 		}
 
 		// ADE is MANDATORY per LOCAL candy: a non-empty description: + a plan: with ≥1 deterministic
@@ -777,12 +777,8 @@ func validatePlanStepsPure(desc string, plan []spec.Step, eid string) []string {
 }
 
 // candyHasInstallFiles replicates the core Candy.HasInstallFiles predicate from the envelope (package
-// sections / manifests / tasks / apk / extract) — NOT the adapter's broader HasContent, which ORs in
-// env/ports/route/volumes/aliases/extract/data/services (sdk/loaderkit/scan_candy.go) and so would let
-// a candy carrying only, say, an env var pass this install-file gate. Note HasContent does NOT count
-// plan steps or the description — the candy GRAPH admits those separately, via deploykit's
-// layerEntersOrder, so a plan-bearing pure-composition candy bakes its spec into the description label
-// without ever being treated as having install content. `extract:` counts: it is a
+// sections / manifests / tasks / apk / extract) — NOT the adapter's broad HasContent (which counts plan
+// steps every ADE candy has, so it would never flag a content-less candy). `extract:` counts: it is a
 // first-class install mechanism (spec/schema/candy.cue #CandyExtract, rendered by
 // sdk/deploykit/candy_stage.go) — a candy that pulls binaries out of another OCI image ships no
 // package/manifest/task files, and agentteams is the first consumer to rely on that.

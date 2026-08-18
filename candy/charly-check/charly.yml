@@ -1933,6 +1933,42 @@ check-skill:
                         - contains: "NOPASSWD"
                   ```
 
+                  **The same applies to a `vm:` bed**, where steps run as the cloud image's default
+                  user (`arch`/`fedora`/`debian`/`ubuntu`) over `ssh vm sudo bash -s`. Every step that
+                  drives a native package manager or writes under `/etc` must escalate explicitly —
+                  `pacman-key needs to be run as root`, `dnf`/`apt-get` refusing, `Permission denied`
+                  on `/etc/pacman.conf` are all this, not a repo or signing problem.
+
+                  **`sudo` on the command does NOT cover a shell redirect**, and this is the half that
+                  is easy to miss because the command itself looks elevated:
+
+                  Wrong — the redirect is performed by the CALLING shell, still uid 1000:
+
+                  ```sh
+                  sudo echo 'deb …' > /etc/apt/sources.list.d/charly.list
+                  sudo cat  > /etc/yum.repos.d/charly.repo <<'EOF'   # same trap with a heredoc
+                  ```
+
+                  Right — let the elevated process own the write:
+
+                  ```sh
+                  echo 'deb …' | sudo tee /etc/apt/sources.list.d/charly.list >/dev/null
+                  sudo tee /etc/yum.repos.d/charly.repo >/dev/null <<'EOF'
+                  curl -fsSL <url> | sudo gpg --dearmor -o /etc/apt/keyrings/charly.gpg
+                  ```
+
+                  Shown as shell rather than YAML on purpose: five sibling `command:` keys in one `yaml`
+                  fence is rejected at line 4 by a duplicate-key-strict loader and — worse — PARSED by a
+                  permissive `yaml.safe_load`, which keeps only the last key and silently discards the
+                  other examples. A fenced block that a parser reads differently from a human is
+                  a defect even when the fence is only illustrative.
+
+                  **Where `sudo` comes from differs by substrate.** A cloud-image VM has passwordless
+                  sudo via cloud-init, so it is simply available. A container box does NOT — a box that
+                  needs in-container elevation has to install `sudo` and write its own
+                  `/etc/sudoers.d/` drop-in (a candy doing exactly that should refuse if no uid-1000
+                  account exists, rather than writing a rule for an account that is not there).
+
                   ### 11. Bootc images keep USER=root — tests must cover both modes
 
                   Gotcha 10 flips for bootc. `sdk/deploykit` (relocated from `charly/generate.go` in #67) deliberately omits the final `USER <uid>` directive on bootc images because systemd (PID 1 in a bootc VM) manages user sessions via login, so the container's own USER directive is irrelevant. Result: the same `charly check box` that runs as uid 1000 in a container runs as uid 0 in a bootc image.
@@ -2008,6 +2044,63 @@ check-skill:
                   when the pattern would also match the wrapping bash. The harness
                   defense is a safety net, not a license to use the broken pattern
                   deliberately.
+
+                  ### 13. A step is SIGKILLed at 90s unless it declares `timeout:`
+
+                  `ProbeNeverHang` (`sdk/kit/runner.go`) bounds every probe ATTEMPT at
+                  `runnerProbeNeverHangFallback` = **90 seconds**. A step that runs longer is killed,
+                  and the runner names the bound in the message — but the underlying exec-layer text is
+                  still `process terminated by signal (signal: killed)`, which describes the mechanism
+                  of death and not its cause. Read alone, it looks like the command crashed.
+
+                  What crosses 90s in practice: **installing charly from a published distro repo pulls
+                  ~190 packages** (podman, qemu, libvirt, gnupg, tailscale). On a 2-vCPU cloud-image VM
+                  `dnf install` does not finish in time while `pacman -S` does — so two beds differing
+                  only in package manager come out one green and one "killed", which invites a
+                  distro-specific theory (repo layout, signing, cloud image) when the variable is
+                  elapsed time against a shared floor. **Compare the step's duration to 90s before
+                  theorising about the distro.**
+
+                  The fix is authored, not code: `#Op` carries `timeout?: #Duration`, and
+                  `ProbeNeverHang` honours a longer authored value over the floor (the effective
+                  ceiling becomes `declared + 30s`). Declaring it is USING the mechanism's own
+                  parameter — not an R4 workaround:
+
+                  ```yaml
+                  - check: dnf install charly installs the package
+                    id: fedora-charly-installed
+                    timeout: 10m          # ~190 packages on 2 vCPUs; the 90s floor kills this
+                    exit_status: 0
+                    command: |
+                        sudo dnf install -y charly &&
+                        rpm -q charly
+                  ```
+
+                  ### 14. A check must be able to FAIL for the reason it names
+
+                  Four ways a step passed while measuring nothing, all found in one bed roster:
+
+                  - **`test "$(a)" = "$(b)"` with both sides empty PASSES.** A version comparison whose
+                    extraction was wrong for its tool (`apk info -v <pkg>` prints the package
+                    DESCRIPTION, not `name-version-rN`) compared `""` with `""` and reported success.
+                    Guard both sides — `test -n "$installed" && test -n "$packaged"` — and `echo` the two
+                    values so a failure is diagnosable.
+                  - **`apk update` / `apt-get update` / `pacman -Sy` exit 0 when a configured repo is
+                    unreachable** (they warn and carry on), so none of them proves the repo resolved.
+                    Prove the package is VISIBLE from a repo only that repo could serve
+                    (`apk list <pkg>` / `pacman -Si <pkg>` / `apt-cache policy` showing a Candidate).
+                  - **An installer's exit code is not registration.** Follow it with `apk info -e` /
+                    `pacman -Q` / `rpm -q` / `dpkg-query -W`.
+                  - **`<cmd>` on PATH inside a check may be the check runner's own STAGED binary**, not
+                    the one the package installed. A check about a PACKAGED binary must name the
+                    package's absolute path (`/usr/bin/charly version`), or it can pass with the package
+                    absent entirely.
+
+                  And query the INSTALLED package, not the available candidate: `dnf info` and
+                  `apt-cache policy` report what COULD be installed. Prefer brace-free extraction
+                  (`dpkg-query -W <pkg> | awk '{print $2}'`, `rpm -q <pkg> | sed …`) over
+                  `-f='${Version}'` / `--queryformat '%{VERSION}'`, since a check `command:` also passes
+                  through charly's own `${VAR}` substitution.
             - name: beds-and-r10
               content: |
                   # Beds and R10 — disposable acceptance gate reference
@@ -2040,7 +2133,7 @@ check-skill:
                   tearing it down and rebuilding fearless. The box is restricted at the boundary,
                   never by stripping the candy.
 
-                  1. `charly box build <image> --dev-local-pkg` — build the test artifact (pod beds only). The check-bed runner sets `--dev-local-pkg` automatically, so a bed bakes the **in-development** charly toolchain (any `localpkg:` candy built from local source) — never a stale published release. A bed thus always tests the code under development; a production box build downloads the released package. See `/charly-tools:charly` "Check-vs-production binary source" + `/charly-internals:install-plan` "Check-vs-production charly toolchain".
+                  1. `charly box build <image> --dev-local-pkg` — build the test artifact (pod beds only). The check-bed runner sets `--dev-local-pkg` automatically, so a bed bakes the **in-development** charly toolchain (built via the `charly generate-packages` plugin from the local binary + plugins) — never a stale published release. A bed thus always tests the code under development; a production box build downloads the released package. See `/charly-tools:charly` "Check-vs-production binary source" + `/charly-internals:install-plan` "Check-vs-production charly toolchain".
                   2. `charly check box <image>` — box-section + baked candy-section probes.
                   3. `charly fleet add <bed> <ref>` — apply the bed (or `charly vm create` for vm beds).
                   4. (pod beds) `charly config <bed>` + `charly start <bed>`.
@@ -2178,7 +2271,7 @@ check-skill:
                   | `check-openclaw-pod` | pod | `image: openclaw` | minimal headless gateway + dbus/service/port and exact installed CLI version |
                   | `check-openclaw-full-pod` | pod | `image: openclaw-full` | maximal headless gateway + AI CLI and media/database tool stack |
                   | `check-openclaw-desktop-pod` | pod | `image: openclaw-desktop` | combined streamed desktop + gateway + AI CLI + ollama + nested Charly toolchain |
-                  | `check-charly-vm` | vm | `from: charly-vm` | `charly` toolchain localpkg deploy witness (opencharly-git pacman install + dep auto-resolve) on the cloud VM |
+                  | `check-charly-vm` | vm | `from: charly-vm` | `charly` toolchain binary-install witness (the candy's `copy: bin/charly` run step lands the in-development binary at /usr/bin/charly) on the cloud VM |
 
                   Bed homes: the main repo's `charly.yml` owns `check-k3s-vm`, `check-local`, and
                   `check-charly-vm`; the pod beds above are top-level deploys in the `box/<distro>`
@@ -2351,6 +2444,65 @@ check-skill:
                   The mode is explicit in the verb; there is no autodetect or
                   implicit fallback. Choose the mode by picking the right verb.
 
+                  ### Which artifact a build-scope verb evaluates
+
+                  `charly check box`, `charly box feature run`, and `charly box labels` all
+                  pronounce a verdict on a BUILT ARTIFACT, so they all resolve their image
+                  argument the same guarded way (`spec/container.ResolveBuiltImageRef`):
+
+                  - a **full ref** (`ghcr.io/opencharly/web:2026.227.0836`) or a
+                    **`<box>:<calver>`** pin names one artifact — it is used verbatim;
+                  - a **bare short name** (`web`) is elected against local container storage
+                    by the content-derived `ai.opencharly.version` label first and the image's
+                    CREATION TIME second, and the verb **REFUSES** when that election is not
+                    the newest local BUILD of that box, naming both refs and the pinned
+                    re-invocation.
+
+                  **"Newest build" means creation time, not the tag** — and that distinction is
+                  load-bearing rather than pedantic. `charly box build --tag <x>` REPLACES the
+                  CalVer tag rather than adding to it, so every bed build carries a single tag
+                  like `check-<bed>-<calver>`, which is not a CalVer at all. An ordering keyed on
+                  the tag therefore ties every bed-built candidate and falls through to a
+                  meaningless last resort; creation time does not tie, needs no tag convention,
+                  and rides the same `images --format json` rows the resolver already reads.
+
+                  Two consequences worth knowing:
+
+                  - **Many tags on ONE image id are one artifact.** A `--tag` build and a plain
+                    CalVer build of identical content share an id, so there is nothing older or
+                    newer to arbitrate and the verb stays silent.
+                  - **When the ordering cannot be established, the verb refuses.** An engine that
+                    reports no creation time for some candidate yields an explicit "could not
+                    establish which build is newest" error rather than a silent pass. Passing on
+                    unknown is the shape that let a 17-hour-old image be certified green.
+
+                  The refusal exists because the election's primary key is a CONTENT version:
+                  an image built from a differently-versioned source tree (a sibling worktree,
+                  a pulled release) outranks a newer build regardless of when either was
+                  produced. Certifying the older artifact yields a green run with the right
+                  step names that proves nothing about what you just built — the worst failure
+                  this system has, because it is indistinguishable from a real pass. A verdict
+                  verb therefore never guesses; it asks. Every other consumer of a short name
+                  (deploy, `charly vm build`, builder bootstrap) shares the election but never
+                  refuses.
+
+                  Whatever the outcome, the verb prints the ref it resolved BEFORE it can bail —
+                  including when the image carries no baked plan at all. A verdict that cannot
+                  name the artifact it judged is unverifiable, and "read the `Image:` line" is
+                  only a usable habit if the line is always there.
+
+                  **The `Image:` line goes to STDERR, and for `charly box labels` that is a
+                  contract, not a detail.** `charly box labels <ref> --format <key>` emits exactly
+                  ONE raw value on stdout — the form every plan step pipes into `grep` — so the
+                  provenance line must not land there. Both halves hold together: you can read
+                  which artifact was inspected, and `--format` stdout stays byte-for-byte what it
+                  always was. A step that captures stdout sees only the value; a human, or a log
+                  that captures stderr, sees the ref as well.
+
+                  This is also why the R10 bed sequence pins: `charly check run <bed>` builds
+                  `box build <image> --tag <run-tag>` and then checks `<image>:<run-tag>`, an
+                  explicit pin, so the guard never fires inside a bed.
+
                   **Which verb/bed proves what (the project rulebook R7):** `charly check box` passes on
                   zero-content stages too — it is not a substitute for the generated-artifact
                   checks (R8). For the R10 gate, pick the disposable bed whose kind matches
@@ -2465,7 +2617,7 @@ check-skill:
                      than inferring it from a PASS. Same failure family as invoking a stale
                      `/usr/bin/charly`: "the binary under test must be the one invoked" applies to
                      every binary in the chain.
-                  9. **Verify runtime deps are installed via package management** (R9) — on the host: `charly doctor` (dependency status), or the host package manager directly (`rpm -q <pkg>` / `pacman -Q <pkg>` — host packages are not charly-managed resources, so the package manager IS their interface); inside a container: `charly cmd <box> 'rpm -q <pkg>'`. Manual installs do not count — they won't survive a fresh install on a synced host. Every runtime dep must live in `setup.sh` + `pkg/arch/PKGBUILD`.
+                  9. **Verify runtime deps are installed via package management** (R9) — on the host: `charly doctor` (dependency status), or the host package manager directly (`rpm -q <pkg>` / `pacman -Q <pkg>` — host packages are not charly-managed resources, so the package manager IS their interface); inside a container: `charly cmd <box> 'rpm -q <pkg>'`. Manual installs do not count — they won't survive a fresh install on a synced host. Every runtime dep must live in `setup.sh` + the charly candy's `packaging:` section (`candy/charly/charly.yml`).
                   10. **Leave the target healthy, not paused/errored** — the final `charly status` (and `charly check libvirt info <vm>` for a VM) is healthy. If the target is in a broken state during exploration, `charly update` it back to the committed config before continuing — never layer experiments on broken state.
                   11. **Re-verify on a fresh rebuild after committing the source-level fix** (R10) — `charly update <disposable-target>` one more time from clean, with the new source applied. Run standards 1–10 again against this fresh rebuild. **This is the acceptance gate.** A fix that works on a hand-patched target but not on a fresh rebuild is a regression waiting for the next unrelated rebuild to wipe your patch. Paste both the exploratory-pass output and the fresh-rebuild-pass output into the conversation — the user sees both.
 
@@ -3919,7 +4071,7 @@ libvirt-skill:
 
             - `github.com/digitalocean/go-libvirt` — pure-Go libvirt RPC client.
             - `libvirt.org/go/libvirtxml` — typed domain XML parsing/generation.
-            - The `libvirt` Arch package (libvirtd, session socket) is already a hard dep of the `opencharly-git` PKGBUILD.
+            - The `libvirt` Arch package (libvirtd, session socket) is already a hard dep of the charly package (`packaging.formats.archlinux.depends`).
 
             ## Cross-References
 

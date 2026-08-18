@@ -328,7 +328,7 @@ func getGenerator(ctx context.Context, exec *sdk.Executor, dir string, devLocalP
 	if err := json.Unmarshal(resJSON, &rp); err != nil {
 		return nil, fmt.Errorf("decode resolved-project envelope: %w", err)
 	}
-	dg, err := deploykit.NewRenderGeneratorFromProject(ctx, exec, &rp, dir, devLocalPkg)
+	dg, err := deploykit.NewRenderGeneratorFromProject(ctx, exec, &rp, dir, devLocalPkg, nil)
 	if err != nil {
 		return nil, fmt.Errorf("construct render generator: %w", err)
 	}
@@ -538,7 +538,7 @@ func emitLocalPkgInstall(view spec.InstallStepView, env spec.BuildEnv) (string, 
 	if !ok {
 		return "", fmt.Errorf("plugin-installstep: view kind %q is not a LocalPkgInstallStep", view.Kind)
 	}
-	return deploykit.RenderLocalPkgImageInstall(s, env.DevLocalPkg, env.ImageBuildDir, env.Image)
+	return deploykit.RenderLocalPkgImageInstall(s, env.DevLocalPkg, nil, env.ImageBuildDir, env.Image)
 }
 
 // emitOp renders the Op InstallStep's BUILD-context Containerfile fragment: reconstruct the

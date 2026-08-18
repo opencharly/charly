@@ -7,10 +7,10 @@ import (
 )
 
 // BuildCalVer is the CalVer build identity of THIS binary, injected at compile
-// time via `-ldflags "-X main.BuildCalVer=<calver>"` (see taskfiles/Build.yml +
-// pkg/arch/PKGBUILD, both of which derive it from the git commit date through
-// pkg/arch/calver.sh — the same value `pacman -Q opencharly-git` reports). Empty
-// for an unstamped build (`go build` / `go test` without the ldflag).
+// time via `-ldflags "-X main.BuildCalVer=<calver>"` (see taskfiles/Build.yml,
+// which derives it from the git commit date through scripts/calver.sh — the
+// same value the distro repos' packaging workflows stamp as the release version).
+// Empty for an unstamped build (`go build` / `go test` without the ldflag).
 //
 // This is the binary's TRUE identity — frozen at build time — as opposed to
 // ComputeCalVer() below, which is a wall-clock readout of the current moment.

@@ -23,8 +23,7 @@ import (
 // envelope fetch (inspect/list — sdk.OpResolve; validate — sdk.OpValidate, #55 step3 unit 3-I,
 // with the registry word sets from HostBuild("validate-word-sets") folded onto it) fetch (validate
 // runs the rule ENGINE in-plugin over the reply). build runs its body in-plugin (dispatchBuild —
-// InvokeProvider(build:box) + thin HostBuild seams, P8b), no reentry; pkg likewise runs in-plugin
-// (dispatchPkg — InvokeProvider(build:pkg), K3 build-tail move); pull runs the ensure-image work
+// InvokeProvider(build:box) + thin HostBuild seams, P8b), no reentry; pull runs the ensure-image work
 // in-plugin via InvokeProvider(build:ensure); inspect's deploy-overlay formats (tunnel/bind_mounts)
 // render in-plugin off the deploy overlay + the resolved-project envelope. None of these reenter
 // core — the generic HostBuild("cli") reentry helper this file used to carry (list's SOLE
@@ -44,8 +43,6 @@ func dispatchBoxCommand(hc *hostClient, word string, args []string) error {
 		return dispatchValidate(hc, args)
 	case "new":
 		return dispatchNew(args)
-	case "pkg":
-		return dispatchPkg(hc, args)
 	case "pull":
 		return dispatchPull(hc, args)
 	case "build":
@@ -153,50 +150,6 @@ func dispatchGenerate(hc *hostClient, args []string) error {
 // checks); dispatchValidate is defined there.
 type validateGrammar struct {
 	IncludeDisabled bool `name:"include-disabled" help:"Include boxes with enabled: false in validation (does not modify charly.yml)"`
-}
-
-// --- box pkg ---
-
-// pkgGrammar is the `charly box pkg [formats…] [--candy] [--out]` CLI surface.
-type pkgGrammar struct {
-	Format []string `arg:"" optional:"" help:"Package formats to build (pac/rpm/deb). Default: every format the candy declares a localpkg source for."`
-	Candy  string   `name:"candy" default:"charly" help:"Candy whose localpkg sources to build."`
-	Out    string   `name:"out" default:"dist" help:"Output directory for the built package files."`
-}
-
-// dispatchPkg runs the `charly box pkg` body IN-PLUGIN (K3 build-tail move, coneB-pkgcmd — the
-// former hidden core `__box-pkg` reentry is DELETED): InvokeProvider(build:pkg) drives the
-// candy/plugin-build engine (runBoxPkg), which loads the project + scans candies via the SAME
-// K1-loader seams resolveBuildEngine established, resolves the requested candy's localpkg source,
-// and builds via deploykit.BuildLocalPkgOnHost (already pure sdk). Byte-equivalent to the former
-// BoxPkgCmd.Run: prints each built file's destination path, error on failure.
-func dispatchPkg(hc *hostClient, args []string) error {
-	var g pkgGrammar
-	if done, err := parseLeaf("pkg", &g, args); err != nil || done {
-		return err
-	}
-	dir, err := os.Getwd()
-	if err != nil {
-		return err
-	}
-	reqJSON, err := json.Marshal(spec.BuildPkgRequest{Format: g.Format, Candy: g.Candy, Out: g.Out, Dir: dir})
-	if err != nil {
-		return err
-	}
-	resJSON, err := hc.exec.InvokeProvider(hc.ctx, "build", "pkg", sdk.OpBuild, reqJSON, nil, sdk.InvokeProviderOpts{})
-	if err != nil {
-		return err
-	}
-	var reply spec.BuildPkgReply
-	if len(resJSON) > 0 {
-		if uerr := json.Unmarshal(resJSON, &reply); uerr != nil {
-			return fmt.Errorf("box pkg: decode reply: %w", uerr)
-		}
-	}
-	if reply.Error != "" {
-		return fmt.Errorf("%s", reply.Error)
-	}
-	return nil
 }
 
 // --- box pull ---
@@ -473,7 +426,7 @@ func pruneAfterBuild(hc *hostClient, dir string) {
 
 // labelsGrammar is the `charly box labels <image> [--format] [--all]` CLI surface.
 type labelsGrammar struct {
-	Image  string `arg:"" help:"Image reference (full ref or short name resolved against local container storage; never reads charly.yml)"`
+	Image  string `arg:"" help:"Image reference: a full ref, '<box>:<calver>' to pin one build, or a bare short name resolved against local container storage (refused when a newer local build of that box exists); never reads charly.yml"`
 	Format string `name:"format" help:"Print only this label's raw value — a full key, or the ai.opencharly.<key> shorthand (e.g. 'init'); exits non-zero when the label is absent"`
 	All    bool   `name:"all" help:"Print every label, not just the ai.opencharly.* contract"`
 }
@@ -491,10 +444,19 @@ func dispatchLabels(args []string) error {
 	if err != nil {
 		return err
 	}
-	imageRef, err := kit.ResolveLocalImageRef(rt.RunEngine, g.Image)
+	// `charly box labels` is the charly-native R8 artifact check — a verdict on a built artifact.
+	// Reporting an older image's labels as the fresh build's is the same false-proof class as a
+	// stale `charly check box`, so it resolves through the guarded form.
+	imageRef, err := kit.ResolveBuiltImageRef(rt.RunEngine, g.Image)
 	if err != nil {
 		return err
 	}
+	// Provenance FIRST, on every path — the same rule `charly check box` follows. This verb is the
+	// charly-native R8 artifact check, so a reader must be able to tell WHICH image the labels came
+	// from; without the line, `box labels <short-name>` reports a capability contract with no way to
+	// audit which artifact it read. It goes to STDERR so `--format <key>`'s single raw stdout value
+	// (the scripting contract every plan step pipes into grep) is byte-unchanged.
+	fmt.Fprintf(os.Stderr, "Image: %s\n", imageRef)
 	labels, err := kit.InspectImageLabels(rt.RunEngine, imageRef)
 	if err != nil {
 		if !kit.LocalImageExists(rt.RunEngine, imageRef) {

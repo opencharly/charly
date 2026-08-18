@@ -31,8 +31,8 @@ func cliModelLeafPaths(t *testing.T) map[string]bool {
 // catalog workaround. `secrets` is an EXTERNAL command now —
 // candy/plugin-secrets — so it is absent from this builtin model, as are the C15-externalized
 // clean/settings/candy and the P14 command:alias — candy/plugin-alias — see
-// TestCommandProviders_ExtractedReachMCP. `version` stays a CORE command — pkg/arch's pkgver()
-// stamps the package version via it — so it remains present here).
+// TestCommandProviders_ExtractedReachMCP. `version` stays a CORE command — the distro repos'
+// packaging workflows stamp the package version via it — so it remains present here).
 //
 // `box.build` is DELIBERATELY not asserted here (FINAL/K5 unit 6a M4d): it used to reach this
 // model as a static BoxCmd Kong field; externalizing it (mirroring `pull`'s M4c move) drops it

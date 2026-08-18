@@ -70,14 +70,15 @@ build-skill:
 
             ### `--dev-local-pkg` — disposable check beds bake the IN-DEVELOPMENT charly
 
-            A `localpkg:` candy (the `charly` toolchain) normally installs the latest
-            **published** release in an image build (`releases/latest/download/`). The
+            The charly toolchain normally installs the latest **published** package in an
+            image build (downloaded from the per-distro repo via `download_template`). The
             check-bed runner instead passes `--dev-local-pkg` for EVERY bed image build, so the
-            package is BUILT from the LOCAL working tree (`pkg/<fmt>` + `charly/`) — a
-            disposable check bed always tests the in-development charly, never a stale release.
-            Generic across all kinds + all localpkg candies, one decision point
-            (`deploykit.RenderLocalPkgImageInstall`); a production box build omits the flag. A dev build
-            that cannot find its local source HARD-errors (no silent release fallback, R4).
+            package is BUILT via the `charly generate-packages` plugin (nFPM) from the LOCAL
+            in-development binary + plugins — a disposable check bed always tests the
+            in-development charly, never a stale release. Generic across all kinds + all
+            localpkg candies, one decision point (`deploykit.RenderLocalPkgImageInstall`); a
+            production box build omits the flag. A dev build that cannot build via the plugin
+            HARD-errors (no silent release fallback, R4).
             Full mechanics: `/charly-internals:install-plan` "Check-vs-production charly
             toolchain"; the candy view: `/charly-tools:charly`.
 
@@ -258,20 +259,62 @@ build-skill:
 
             ## Image-tag retention (`defaults.keep_images`)
 
-            After `charly box build` (push runs excluded), charly prunes old CalVer tags per image
-            down to `defaults.keep_images` — keeping the newest N builds per
-            `ai.opencharly.box` group, ordered by the `ai.opencharly.version` label
-            (the content-derived EffectiveVersion) as the PRIMARY key, with the `:YYYY.DDD.HHMM`
-            build TAG as the tiebreaker. The tag tiebreak is load-bearing: the label is
-            content-stable, so many builds of an unchanged image share one label-CalVer and
-            the tag is what distinguishes (and retains) the newest BUILDS. Images referenced
-            by a container (`podman ps -a`) are skipped, and `rmi` runs without `-f` as a
-            backstop, so a running deploy's image is never removed.
+            After `charly box build` (push runs excluded), charly prunes **tag rows** within each
+            `ai.opencharly.box` group, keeping the newest `defaults.keep_images` **distinct
+            images** and at most that same number of tags of each — except for rows the engine
+            refuses to date, which are never removed **however many tags their image wears**, so
+            the per-image cap binds datable rows only. A *distinct image* is a distinct image
+            ID — every tag pointing at one ID is one image, however many tags it wears — so with
+            `keep_images: 3`, four images carrying one tag each lose the oldest, while one image
+            carrying six datable tags keeps three of them.
+
+            **Which verb reclaims what.** The post-build pass cannot remove an image's LAST tag,
+            so it never reclaims a *distinct image* — only surplus tags of images that wear
+            several. `charly box build` holds the build-activity lock across its own prune, so
+            that prune always observes a live build and the last-tag guard always engages. The
+            distinct-image budget above is therefore enforced by `charly clean`, and a project
+            that only ever builds will accumulate distinct images past `keep_images` without any
+            surface reporting it.
+
+            **Tag rows, not "CalVer tags":** a row is exempted from removal only when it has
+            NEITHER a datable `ai.opencharly.version` label NOR a datable `:YYYY.DDD.HHMM` tag
+            (`retention.go`'s guard is an AND). A bed build has a datable label and a non-CalVer
+            tag, so it is a normal removal candidate rather than an excluded one.
+
+            **Preview before enabling it**, with the value you are considering rather than one you
+            have already committed to:
+
+            ```bash
+            charly clean --keep 3 --images --dry-run   # what keep_images: 3 WOULD remove
+            ```
+
+            `--keep` supplies the budget on the command line, so this answers the question while
+            `defaults.keep_images` is still absent — with the key unset, retention is disabled and a
+            plain `charly clean --dry-run` correctly shows nothing, which is not the preview you
+            want. The count that surprises people is **tag rows, not images**.
+
+            **Ordering is owned by `/charly-core:clean`**, which documents the retention engine
+            itself — the full comparator chain, which key decides which ordinal, and why the build
+            tag cannot serve as the image recency key. The two consequences that matter here:
+            **between distinct images**, the datable `ai.opencharly.version` label decides when the
+            two differ, and creation time decides when they tie — which is the usual case, because
+            that label is **declared, not derived from content**: it is the box's own `version:`,
+            else the highest candy `version:` across its whole candy set, else the base image's
+            (`sdk/deploykit/effective_version.go`). So DISTINCT images built from DIFFERENT trees
+            carry the SAME label until somebody bumps one of those fields, and creation time is
+            what actually orders them; **within one image's tag rows**, the
+            `:YYYY.DDD.HHMM` tag decides, because those rows share everything else. Do not carry
+            *"creation time, not the tag"* across to the tag budget — it is true of the first and
+            false of the second.
+
+            Images referenced by a container (`podman ps -a`) are skipped, and `rmi` runs without
+            `-f` as a backstop.
 
             ```yaml
             # charly.yml — defaults:
             defaults:
-              keep_images: 3   # newest CalVer tags to keep per image; 0 (or absent) disables
+              keep_images: 3   # newest distinct images per box, and at most 3 tags of each;
+                               # 0 (or absent) disables
             ```
 
             This stops the iterative-build tag accumulation that otherwise reclaims
@@ -427,18 +470,17 @@ build-skill:
             charly settings set engine.run docker     # or podman
             ```
 
-            ## Host Bootstrap (First Time)
+            ## Host Prerequisites (First Time)
 
-            Requires: `go-task`, `go`, `docker` (or `podman`). There is no host-installing build task — `task build:binary` produces ONLY a per-checkout `bin/charly` (no install step); getting `charly` onto `$PATH` is always an explicit follow-up step you choose.
+            Building images needs the `charly` binary and a container engine — `docker` or `podman`, whichever `engine.build` names. Nothing else, and no project checkout: `charly box build` runs against the `charly.yml` in the current directory, one started by `charly box new project <dir>` or read from a published project with `--repo <owner>/<repo>`.
+
+            Install `charly` as a distro-native package with your OWN package manager (`pacman -U` / `dnf install` / `apt install` / `apk add`) — the `charly generate-packages` plugin (nFPM) builds the `.pkg.tar.zst`/`.rpm`/`.deb`/`.apk`/`.ipk` published to the per-distro package repos. Obtaining the binary is covered end to end at [Install](https://opencharly.ai/start/install/); it is the one page that describes building from a source tree.
 
             ```bash
-            task build:binary        # Build ./bin/charly (CalVer-stamped; no install)
-            task install-portable    # Optional: copy it to $HOME/.local/bin/charly, onto $PATH
-            task setup:builder       # Create multi-platform buildx builder
-            ./bin/charly box build   # Generate + build + merge all images (drop `./bin/` once installed)
+            charly box build   # Generate + build + merge all images
             ```
 
-            For a distro-native package instead (system-wide, via your OWN package manager — never via a Taskfile install step): `task pkg:arch`/`pkg:fedora`/`pkg:debian` builds a `.pkg.tar.zst`/`.rpm`/`.deb` into `dist/`, which you install yourself (`pacman -U dist/*.pkg.tar.zst` / `dnf install dist/*.rpm` / `apt install dist/*.deb`).
+            Multi-platform `--push` builds additionally need a Docker buildx builder that can target more than the host platform — a Docker-side prerequisite, not a charly one. Single-platform local builds need no builder setup.
 
             ## Common Workflows
 
@@ -469,7 +511,7 @@ build-skill:
 
             ### "charly not found"
 
-            Build a distro-native package (`task pkg:arch`/`pkg:fedora`/`pkg:debian` into `dist/`) and install it with your OWN package manager (`pacman -U`/`dnf install`/`apt install`), or run `task install-portable` for a `$HOME/.local/bin/charly` copy — `task` itself is required (install via your distro package manager or download from go-task/task releases).
+            Install a distro-native package (built by the `charly generate-packages` plugin and published to the per-distro package repos) with your OWN package manager (`pacman -U`/`dnf install`/`apt install`/`apk add`). If it is installed but not resolving, `$PATH` is the usual cause — `which charly` reports which copy wins.
 
             ### Build Fails with Missing Base
 
@@ -485,18 +527,13 @@ build-skill:
 
             ### YAML Unmarshal Error on charly.yml
 
-            If you see `cannot unmarshal !!str ... into int` or similar YAML parsing errors on layer fields, the installed `charly` binary is likely stale. Rebuild with `task build:binary` and `cp bin/charly ~/.local/bin/charly` (or re-run `task install-portable`). Verify with `charly box validate`.
+            If you see `cannot unmarshal !!str ... into int` or similar YAML parsing errors on layer fields, the `charly` binary is older than the schema the file is stamped at. `charly version` prints its CalVer; upgrade to a newer published package and re-run `charly box validate`.
 
             ### Stale `charly` binary produces stale Containerfiles
 
-            Beyond the YAML-unmarshal symptom above, a stale `charly` binary can produce *syntactically valid but outdated* Containerfile output — e.g. emitting an old broken form of a template that HEAD's source has already fixed. Symptom: build fails on a step whose generated shell clearly doesn't match the source you see in `git grep`. Quick diagnostic: `ls -la $(which charly)` vs. `git log -1 sdk/deploykit/generate.go` (the former `charly/generate.go` is DELETED, K-wave 2) — if the binary predates the fix, rebuild:
+            Beyond the YAML-unmarshal symptom above, a stale `charly` binary can produce *syntactically valid but outdated* Containerfile output — e.g. emitting an old broken form of a template a later release already fixed. Symptom: a build fails on a step whose generated shell does not match what the current release documents. Quick diagnostic: `charly version` against the CalVer of the release that carries the fix; if the binary predates it, upgrade to a newer published package and rebuild.
 
-            ```bash
-            task build:binary && task install-portable   # rebuild + refresh the $HOME/.local/bin copy
-            # or: task pkg:arch && pacman -U dist/*.pkg.tar.zst   # rebuild + reinstall the native package
-            ```
-
-            If you find yourself rebuilding `charly` to chase a bug and the symptom persists, the binary path on $PATH may not be the one you just refreshed — confirm with `which charly`, and remember a worktree's own `./bin/charly` is a THIRD candidate the freshness guard tracks separately (see `/charly-internals:agents` "The charly binary in a multi-teammate / multi-worktree setup").
+            If the symptom persists after upgrading, the copy on `$PATH` may not be the one you just installed — `which charly` reports which wins.
 
             ### Buildah cache-mount corruption (pixi tzdata et al.)
 
@@ -1018,7 +1055,7 @@ charly-mcp-cmd-skill:
             | `box.set` | Set any value in `charly.yml` by dot-path (`defaults.tag`, `images.foo.layers`, …). Value is parsed as YAML. |
             | `box.add-candy` / `box.rm-candy` | Append / remove a layer from an image's `candy:` list (idempotent). |
             | `candy.set` | Set any value in `candy/<name>/charly.yml` by dot-path. |
-            | `candy.add-rpm` / `candy.add-deb` / `candy.add-pac` / `candy.add-aur` | Append packages to a layer's `<format>.packages` list. Idempotent. Upgrades scaffold's null `package:` value to a real sequence. |
+            | `candy.add-rpm` / `candy.add-deb` / `candy.add-pac` / `candy.add-aur` / `candy.add-apk` | Append packages to a layer's `<format>.packages` list. Idempotent. Upgrades scaffold's null `package:` value to a real sequence. |
             | `box.fetch` / `box.refresh` | Pre-prime / re-clone the remote-repo cache. Spec defaults to `default` (opencharly/charly). |
             | `box.write` / `box.cat` | Write / read any file under the project root — escape hatch for free-form auxiliary files (`pixi.toml`, `package.json`, `root.yml`, scripts, `*.service`). Path is resolved against `os.Getwd()` and rejected if it escapes the project root. |
 
@@ -1172,6 +1209,41 @@ docs-skill:
 
             Every emitted file carries a `DO-NOT-EDIT` header, and **regeneration on a clean tree is a
             no-op** — the same drift gate SDD applies to generated Go.
+
+            ## Editing a source is a docs landing
+
+            Everything in that table is a PROJECTION, and every one of its sources is an ordinary
+            file people edit for reasons that have nothing to do with the site — a candy's
+            `description:`, a plan step, a skill's prose. Each such edit re-projects its page, and
+            from that moment the committed site no longer matches its sources, so this project's
+            drift gate over the `docs` submodule stays red until the regenerated pages are committed
+            there. **A one-line prose fix is therefore never a one-repo change.** Plan it as a
+            multi-repo landing before starting, not after a gate says so.
+
+            Two chains reach the site, and they are not the same length.
+
+            **Candy and box prose — ONE hop.** `reference/candy/` and `reference/box/` are read
+            straight off disk, walking each repo as its own project root. Editing a
+            `candy/<name>/charly.yml` `description:` or `plan:` re-projects
+            `reference/candy/<name>.md` in the same tree, immediately. The `docs` commit belongs to
+            the same cutover as the candy edit.
+
+            **Skill prose — TWO hops.** `recipes/` is NOT read from `candy/*/charly.yml`. A skill is
+            authored as a `skill:` entity in its owning candy; `charly marketplace generate` projects
+            that into `plugins/<plugin>/skills/<name>/SKILL.md`, and `charly docs generate` reads
+            **that projection** — the `plugins/` submodule tree, never the candy source. Editing a
+            `skill:` entity therefore changes nothing on the site until `charly marketplace generate`
+            has run, and on any CLEAN checkout the tree it reads is the pinned gitlink, so the change
+            reaches readers only once the `plugins` landing merges and the superproject's `plugins`
+            gitlink advances. **Advancing that gitlink without regenerating `docs` in the same change
+            is what leaves the published site stale**, and nothing except this project's drift gate
+            will say so — which is precisely how the mirror has fallen behind before.
+
+            The ordering this forces — regenerate the projection, land the producer repo, then the
+            consumer and its pin — is `/charly-internals:git-workflow` B6's producer→consumer rule
+            applied to documentation. That skill owns the landing sequence, including the
+            maintenance commands this project runs for it; the mechanism above is what makes the
+            sequence necessary, and is all this page needs to carry.
 
             ## Defined, not default-active
 
@@ -1329,7 +1401,7 @@ generate-skill:
             ```
             1. Comment header:    # Layer: <name>
             2. ENV from `var:` + ARG TARGETARCH + ENV ARCH=${TARGETARCH} (once per layer)
-            3. Package install (rpm/deb/pac/aur) — always USER root
+            3. Package install (rpm/deb/pac/aur/apk) — always USER root
             4. tasks: iterated in author order:
                a. Resolve ${VAR} in non-verbatim fields
                b. Determine user: (default root)
@@ -1343,6 +1415,40 @@ generate-skill:
             6. Reset to USER root (unless last layer and no further root steps follow)
             ```
 
+            **An unrenderable install is a LOUD failure, never a dropped step.** Step 3 above resolves
+            a candy's packages through the shared cascade; if they cannot then be rendered, generation
+            hard-errors naming the candy, the format and the box. Four conditions used to drop them
+            silently — a nil `DistroDef`, a primary build format with no definition in the box's distro,
+            a `RenderTemplate` error discarded by an `if err == nil` with no `else`, and an `EmitTasks`
+            error written into the Containerfile as a comment. The third one shipped: a format's
+            `install_template` calling a function absent from `buildkit.TemplateFuncs` is an ordinary
+            authoring mistake, and the emitter turned it into a Containerfile that built successfully,
+            exited 0, and produced an image with NONE of the candy's packages. Nothing in the artifact
+            showed a missing step; it surfaced later, elsewhere, as an absent binary.
+
+            A candy that resolves NO packages for this box still passes through untouched — that is the
+            ordinary per-distro case (a `distro:` map with no section for this box), and it is not an
+            error. The distinction that matters is *resolved but unrenderable* versus *nothing to do*.
+
+            Two authoring consequences:
+
+            - **A box inherits `defaults.build:` when it declares no `build:`.** A box on an Alpine base
+              with no `build:` took `[rpm]`, so the cascade resolved its packages correctly and then had
+              no rpm template in the alpine distro to render them with. Declare `build:` on any box whose
+              base is not the project default's family.
+            - **Check a template function against `buildkit.TemplateFuncs` before using it.** The set is
+              twelve: `anyRepoHasURL`, `cacheMounts`, `cacheMountsAuto`, `cacheMountsOwned`,
+              `default`, `hasSuffix`, `join`, `printf`, `quote`, `replace`, `shquote`, `splitFirst`.
+              Anything else — `base`, say — fails at render time, which is now loud but is still
+              cheaper to avoid. Prefer doing the work in the shell the template emits.
+
+              A partial list here is worse than saying nothing: the paragraph exists to BE the list a
+              reader greps against, so naming six of the twelve teaches that `join` and `replace`
+              fail when they are shipped helpers. The way that happens is a `grep` over a windowed
+              region of the FuncMap whose output is published as complete. Read the map's full
+              literal, or count it in Go — never a
+              windowed grep.
+
             ### Per-verb emitters (single Go file: `charly/tasks.go`)
 
             | Verb | Emitter | Containerfile output |
@@ -1351,11 +1457,20 @@ generate-skill:
             | `copy` | `emitCopy` | `COPY --from=<layer-stage> --chmod=<mode> [--chown=<uid>:<gid>] <src> <dest>` — **no RUN** |
             | `write` | `emitWrite` | `COPY --from=<layer-stage> --chmod=<mode> [--chown=] .build/<image>/_inline/<layer>/<sha256> <dest>` — **no RUN, no shell heredoc** |
             | `link` | `emitLinkBatch` | `RUN ln -sf t1 l1 && ln -sf t2 l2 …` (one RUN per batch) |
-            | `download` | `emitDownload` | `RUN --mount=type=cache,dst=/tmp/downloads bash -c 'export BUILD_ARCH=$(uname -m); curl -fsSL <url> \| <extractor>'` (one RUN per download; `export ...;` termination is required so bash expands `${BUILD_ARCH}` in the URL) |
+            | `download` | `emitDownload` | `RUN --mount=type=cache,dst=/tmp/downloads <shell-probe> 'export BUILD_ARCH=$(uname -m); curl -fsSL <url> \| <extractor>'` (one RUN per download; `export ...;` termination is required so the shell expands `${BUILD_ARCH}` in the URL) |
             | `setcap` | `emitSetcapBatch` | `RUN setcap -r … && setcap caps path …` (strip + set chained) |
-            | `cmd` | `emitCmd` | `RUN --mount=type=bind,from=<layer-stage>,source=/,target=/ctx [--mount=type=cache,…] bash -c $'BUILD_ARCH=$(uname -m)\nset -e\n<command>'` — ANSI-C `$'...'` quoting keeps the multi-line body on one physical line (podman's Dockerfile parser splits at unescaped newlines) |
+            | `cmd` | `emitCmd` | `RUN --mount=type=bind,from=<layer-stage>,source=/,target=/ctx [--mount=type=cache,…] <shell-probe> <<'OVCMD'` + the body + `OVCMD` — a heredoc carries the multi-line body without escaping, which podman's Dockerfile parser accepts (it would otherwise split at unescaped newlines) |
             | `build` | handled inline in `WriteCandySteps` (deploykit) | Existing pixi/npm/cargo/aur multi-stage + inline blocks |
             | `plugin` | `ProvisionActor.RenderProvisionScript` (builtin, in-proc) **or** `emitPluginFragment` → `Invoke(OpEmit)` | A builtin act-renderer emits a shell `RUN`; any other resolved provider (external `grpcProvider`, or a fragment-emitting builtin) returns a `spec.EmitReply.Fragment` spliced verbatim. The single seam every Containerfile plugin-step emit flows through; an unresolved verb is a loud error. `plugin: command` is the one exception — its act IS the full `emitCmd` install-task RUN. |
+
+            `<shell-probe>` above is the shared prefix both emit sites use instead of naming a
+            shell directly (`sdk/deploykit.BuildStepShellDashC` / `BuildStepShellHeredoc`):
+            `sh -c 'SH=/bin/sh; [ -x /bin/bash ] && SH=/bin/bash; exec "$SH" …' sh`. It prefers
+            `/bin/bash` where the base image has it and falls back to POSIX `sh` where it does not,
+            so a candy's shell steps build on a busybox base (Alpine) as well as on a bash one. The
+            authored command reaches the chosen shell unchanged — the `-c` form passes it as `$1` and
+            re-execs, the heredoc form relies on `exec` preserving stdin — so author `$(cmd)` and
+            `${VAR}` still expand in the shell that runs them.
 
             ## Cache-mount inheritance
 
@@ -1398,8 +1513,14 @@ generate-skill:
 
             ```dockerfile
             RUN if ! getent passwd 1000 >/dev/null 2>&1; then \
-                  (getent group 1000 >/dev/null 2>&1 || groupadd -g 1000 user) && \
-                  useradd -m -u 1000 -g 1000 -s /bin/bash user; \
+                  LOGIN_SHELL=/bin/sh; [ -x /bin/bash ] && LOGIN_SHELL=/bin/bash; \
+                  if command -v useradd >/dev/null 2>&1; then \
+                    (getent group 1000 >/dev/null 2>&1 || groupadd -g 1000 user) && \
+                    useradd -m -u 1000 -g 1000 -s "$LOGIN_SHELL" user; \
+                  else \
+                    (getent group 1000 >/dev/null 2>&1 || addgroup -g 1000 user) && \
+                    adduser -D -h /home/user -u 1000 -G user -s "$LOGIN_SHELL" user; \
+                  fi; \
                 fi
 
             WORKDIR /home/user
@@ -1878,7 +1999,7 @@ migrate-skill:
 
             ### Per-merge release git tags (decoupled from `version:`)
 
-            Every landing of ANY repo carries a **fresh** annotated release git tag `v<YYYY.DDD.HHMM>` — ONE per merge, so a repo accumulates MULTIPLE `v…` tags over time. The tag is **generated and applied by the fresh `pr-validator` at MERGE**, from the current UTC merge time — never by the author at push time (author-time stamps collide and mis-order across concurrent out-of-sync PRs; see `/charly-internals:git-workflow` "CalVer"). This is **decoupled** from the `charly.yml` `version:` field: `version:` is the SCHEMA version (bumped only when a cutover raises `#SchemaVersion`), whereas the tag marks the merge moment. Tag EVERY landing — including one at an unchanged `version:` (a content change, submodule extraction, image drop). Tags are **immutable**: only ever ADD new ones, never move or force-push an existing tag (so the load-time gate never sees a "newer than supported" CalVer from a re-tag). Every component is fixed-width zero-padded — 4-digit year, 3-digit day-of-year, 4-digit HHMM (`v2026.064.1937`, `v2026.142.1640`) — so tags sort chronologically under a plain alphanumeric sort; the evaluator computes `v$(date -u +%Y.%j.%H%M)` at merge (`%j` and `%H%M` are already zero-padded). Each repo — the superproject, every `box/<distro>` submodule, `plugins`, and `pkg/*` — is tagged independently on its merged `main` HEAD (the tag marks the merge, so a repo needs no `charly.yml` to be tagged); a producer repo's PR merges + tags BEFORE its consumer's pointer bump. The SOLE exception is `sdk`, which tags under its Go-module `v0.<YYYYDDD>.<HHMM leading-zeros-stripped>` scheme (a semver requirement, not an exemption). See the project rulebook "Post-Execution Policies" (`AGENTS.md` / `CLAUDE.md`) and `/charly-internals:git-workflow`.
+            Every landing of ANY repo carries a **fresh** annotated release git tag `v<YYYY.DDD.HHMM>` — ONE per merge, so a repo accumulates MULTIPLE `v…` tags over time. The tag is **generated and applied by the fresh `pr-validator` at MERGE**, from the current UTC merge time — never by the author at push time (author-time stamps collide and mis-order across concurrent out-of-sync PRs; see `/charly-internals:git-workflow` "CalVer"). This is **decoupled** from the `charly.yml` `version:` field: `version:` is the SCHEMA version (bumped only when a cutover raises `#SchemaVersion`), whereas the tag marks the merge moment. Tag EVERY landing — including one at an unchanged `version:` (a content change, submodule extraction, image drop). Tags are **immutable**: only ever ADD new ones, never move or force-push an existing tag (so the load-time gate never sees a "newer than supported" CalVer from a re-tag). Every component is fixed-width zero-padded — 4-digit year, 3-digit day-of-year, 4-digit HHMM (`v2026.064.1937`, `v2026.142.1640`) — so tags sort chronologically under a plain alphanumeric sort; the evaluator computes `v$(date -u +%Y.%j.%H%M)` at merge (`%j` and `%H%M` are already zero-padded). Each repo — the superproject, every `box/<distro>` submodule, `plugins`, and `docs` — is tagged independently on its merged `main` HEAD (the tag marks the merge, so a repo needs no `charly.yml` to be tagged); a producer repo's PR merges + tags BEFORE its consumer's pointer bump. The SOLE exception is `sdk`, which tags under its Go-module `v0.<YYYYDDD>.<HHMM leading-zeros-stripped>` scheme (a semver requirement, not an exemption). See the project rulebook "Post-Execution Policies" (`AGENTS.md` / `CLAUDE.md`) and `/charly-internals:git-workflow`.
 
             ## The migration table (declarative data)
 
@@ -1942,6 +2063,8 @@ migrate-skill:
             A non-CalVer value (a legacy integer, empty, or garbage) parses as "older than every real CalVer", so a stale config trips the gate with a uniform `Run: charly migrate` hint — the forward-compat trigger that makes a future migration fire. Whether that migrate then SUCCEEDS depends on the floor: a config in `[floor, HEAD)` migrates; one below the floor is refused (see "How it runs"). Residual-key checks (e.g. `kind: deployment`, `target: host`, `secret_backend: kdbx`) remain as defense-in-depth, but every remediation hint points uniformly at bare `charly migrate`.
 
             ## Adding a future cutover
+
+            **From here to the end of "Standing rule" is maintenance the charly project performs on its OWN schema**, run from checkouts of the spec repo and the superproject. Nothing in these two sections is a step an charly user runs — the user-facing surface of a schema cutover is the single command `charly migrate`, unchanged. They are recorded here because this skill owns the migration table; the commands are named as this project's maintenance, not as instructions for the reader.
 
             The payoff of the declarative engine: the common case needs **zero new Go** — but since the schema lives in the spec module, a schema-version bump is **CROSS-REPO**: the spec repo lands + tags FIRST, then the superproject consumes it.
 
@@ -2335,7 +2458,10 @@ reconcile-skill:
             on-disk git-tag pins — for each distinct repo referenced by the project's
             versioned YAML, it rewrites EVERY pin of that repo to ONE target tag, so every
             reference fetches one commit per repo and the next `charly box generate` emits
-            **zero** version warnings. Edits are comment-preserving (yaml.v3 node API) and idempotent.
+            **zero** version warnings. Edits are comment-preserving (yaml.v3 node API). The
+            default mode is idempotent; `--remote` is not, because its target is whatever the
+            remote's newest tag is at the moment of the call — see "`--remote` targets whatever
+            is newest NOW" below before reaching for that flag.
 
             The **zero-warnings R10 gate** (the project rulebook R1 (`AGENTS.md` / `CLAUDE.md`)) makes this load-bearing: a change
             that introduces a version mismatch is not landable until `charly box reconcile`
@@ -2347,7 +2473,7 @@ reconcile-skill:
             |---|---|---|
             | Preview rewrites | `charly box reconcile --dry-run` | Print every pin it would change; touch nothing |
             | Align to newest referenced | `charly box reconcile` | Rewrite each repo's pins to the newest version ALREADY referenced (offline) |
-            | Align to newest remote tag | `charly box reconcile --remote` | Query `git ls-remote --tags` per repo and bump to the newest tag |
+            | Align to newest remote tag | `charly box reconcile --remote` | Query `git ls-remote --tags` per repo and bump to the newest tag. **Moves pins to whatever is newest at call time — not idempotent against a moving remote; never use it to CHECK alignment** |
 
             ```bash
             charly box reconcile --dry-run      # see the plan
@@ -2368,7 +2494,44 @@ reconcile-skill:
                newest tag on the remote (`GitLatestTag`).
             3. **Rewrite** every pin of that repo whose version differs from the target,
                preserving comments and key order. Unpinned refs and single-version repos are
-               left untouched. Idempotent: a second run rewrites nothing.
+               left untouched. In the default mode this converges: the target is the newest
+               version already referenced, which after one run is every pin's version, so a
+               second run rewrites nothing. `--remote` carries no such guarantee.
+
+            ## `--remote` targets whatever is newest NOW
+
+            The default mode is safe to run as a QUESTION — *"are this repo's pins already
+            aligned?"* It reads only the versions the tree already references, so it needs no
+            network, converges, and answers without moving anything you did not intend to move.
+            Use it, or `--dry-run`, to check alignment.
+
+            `--remote` is a different operation. It ignores the referenced set entirely and
+            resolves each repo's target from `git ls-remote --tags` at the moment of the call
+            (`reconcileTargetVersion` returns `GitLatestTag` without consulting the referenced
+            versions at all), so it is idempotent only against a remote that has not moved.
+            Re-run it after a sibling repo publishes a newer tag and EVERY pin of that repo is
+            rewritten again — including pins a previous `--remote` run had just aligned.
+
+            The re-bump is reported, but its explanation is not. `rewrote N pin(s):` prints with
+            every rewritten ref, while the per-repo `<repo> -> <tag> (was at N versions)` summary
+            is emitted only for a repo found at MORE than one version. A freshly-aligned repo is
+            at exactly one — so the line that would say *why* the target moved is suppressed in
+            precisely the case where the target moved for a reason outside the tree.
+
+            **The operational consequence: `--remote` invalidates evidence gathered before it
+            ran.** A bed transcript, a build log, or a `charly check` run describes the tree at
+            the tags the pins held when it was produced. A later `--remote` can move those pins
+            to a tag no proof covers, leaving a tree that still looks correctly reconciled. So:
+
+            - To find out whether pins are aligned, run the plain `charly box reconcile` (or
+              `--dry-run`). Never reach for `--remote` to answer a question.
+            - Run `--remote` deliberately, at the ONE point in a cutover where adopting the
+              producer's newest tag is the intent — `/charly-internals:git-workflow` B6: after
+              the producer is landed and tagged, BEFORE the consumer's authoritative R10.
+            - Once it has run, the pins name the tag the R10 must be produced against. If proofs
+              already exist for an older tag, either re-run the gate against the new pin or
+              restore the tag the proofs cover. Shipping a newer pin on an older proof is an R10
+              failure whether or not anything rebuilt.
 
             ## Scope — one project per invocation
 
@@ -2930,8 +3093,8 @@ secrets-skill:
             `CredentialStore` interface + Get/Set/Delete/List/Name/awaitUnlock were DELETED at K-wave 2
             cone CONTESTED, zero production callers) + `candy/plugin-fleet/secrets_artifacts.go` + `candy/plugin-deploy-pod/secrets_resolve.go` (podman-secret provisioning — the former `charly/secrets.go` is DELETED, K-wave 2). On an
             installed host the plugin lives beside charly at `/usr/lib/charly/plugins` (every native
-            package build — the arch PKGBUILD and the fedora `.rpm` / debian `.deb` builds — bakes the
-            binary + its `.providers` manifest, off the shared `pkg/host-command-plugins.txt` set).
+            package build — the distro repos' packaging workflows — bakes the binary + its `.providers`
+            manifest, off the shared `scripts/host-command-plugins.txt` set).
 
             ## When to Use This Skill
 

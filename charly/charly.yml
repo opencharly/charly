@@ -1,4 +1,4 @@
-version: 2026.223.1018
+version: 2026.225.1508
 # providers — the registry membership manifest (provider class -> the words it
 # contributes). Read at init (registry_bootstrap.go) to drive built-in provider
 # registration from THIS embedded default config instead of a hardcoded Go list. A
@@ -88,6 +88,7 @@ compiled_plugins:
     - plugin-status
     - plugin-check
     - plugin-agentteams
+    - plugin-dsh
 # context_ignore_baseline — the built-in build-context ignore patterns (VCS/binary
 # excludes + cache-hygiene globs), formerly the Go var baselineContextIgnore. Read by
 # generate.go to emit .containerignore / .dockerignore; a project's
@@ -372,6 +373,47 @@ pixi:
         env:
             PIXI_CACHE_DIR: /tmp/pixi-cache
             RATTLER_CACHE_DIR: /tmp/rattler-cache
+alpine:
+    distro:
+        version: "3.24"
+        bootstrap:
+            install_cmd: apk add --no-cache
+            package:
+                - curl
+                - ca-certificates
+            cache_mount:
+                - dst: /var/cache/apk
+                  sharing: locked
+        format:
+            apk:
+                cache_mount:
+                    - dst: /var/cache/apk
+                      sharing: locked
+                section_field:
+                    option: list
+                    package: list
+                    repo: list_of_maps
+                local_pkg:
+                    install_template: |
+                        apk add --no-cache --allow-untrusted {{.PkgFile}}
+                    download_template: https://opencharly.github.io/charly-alpine/${ARCH}/charly-${ARCH}.apk
+                    probe: command -v apk
+                uninstall_template: |
+                    apk del{{range .Packages}} {{.}}{{end}}
+                install_template: |
+                    RUN {{cacheMounts .CacheMounts}} \
+                    {{- range .Repos}}
+                    {{- if .key}}
+                        key={{quote .key}} && curl -fsSL "$key" -o "/etc/apk/keys/$(basename "$key")" && \
+                    {{- end}}
+                    {{- if .url}}
+                        echo {{quote .url}} >> /etc/apk/repositories && \
+                    {{- end}}
+                    {{- end}}
+                        apk add --no-cache
+                    {{- range .Options}} {{.}}{{end}}
+                    {{- range .Packages}} \
+                          {{.}}{{end}}
 arch:
     distro:
         bootstrap:
@@ -419,16 +461,6 @@ arch:
                 uninstall_template: |
                     pacman -Rs --noconfirm{{range .Packages}} {{.}}{{end}}
                 local_pkg:
-                    pkg_glob: '*.pkg.tar.zst'
-                    source_sentinel: PKGBUILD
-                    # #72: GIT_CONFIG_* disables git's DEFAULT on-demand submodule recursion, so
-                    # makepkg's working-copy `git fetch` of the (worktree-shared, all-branches) .git
-                    # superproject does NOT try to pull a sibling branch's unpushed sdk gitlink from
-                    # the sdk remote ("fatal: … not our ref"). sdk is wired by PKGBUILD prepare() from
-                    # a SEPARATE file:// source, so superproject-fetch recursion is never needed.
-                    build_template: |
-                        SOURCE_ROOT=$(cd {{.SourceDir}}/../.. && pwd)
-                        cd {{.SrcDir}} && CHARLY_LOCALPKG_SOURCE_ROOT="$SOURCE_ROOT" PKGDEST={{.PkgDest}} GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=fetch.recurseSubmodules GIT_CONFIG_VALUE_0=false makepkg -sf --noconfirm
                     # Refresh the sync DB (+ reseed the keyring from the installed keyring
                     # packages) BEFORE installing the local pkg — `pacman -U` resolves the
                     # pkg's depends= from the sync DB, and a pinned base image's DB drifts
@@ -439,9 +471,8 @@ arch:
                     # command (&&-chained) so the localpkg renderer wraps it in one RUN.
                     install_template: |
                         (pacman-key --populate 2>/dev/null || true) && pacman -Sy --noconfirm && pacman -U --noconfirm {{.StageDir}}/{{.Glob}}
-                    download_template: https://github.com/opencharly/charly/releases/latest/download/opencharly-${ARCH}.pkg.tar.zst
+                    download_template: https://opencharly.github.io/charly-arch/${ARCH}/charly-${ARCH}.pkg.tar.zst
                     probe: command -v pacman
-                    dep_builder: aur
                 install_template: |
                     RUN {{cacheMounts .CacheMounts}} \
                     {{- range .Keys}}
@@ -656,39 +687,9 @@ debian:
                     package: list
                     repo: list_of_maps
                 local_pkg:
-                    pkg_glob: '*.deb'
-                    source_sentinel: debian/control
-                    build_template: |
-                        set -e
-                        SUPER=$(cd {{.SourceDir}}/../.. && pwd)
-                        mkdir -p "$SUPER/bin/plugins"
-                        [ -x "$SUPER/bin/charly" ] || (cd "$SUPER" && CGO_ENABLED=1 task build:binary)
-                        # Build the welded command plugins beside charly (the SAME
-                        # pkg/host-command-plugins.txt set the arch PKGBUILD bakes) so
-                        # `charly doctor`/`clean`/`vm` and the other welded commands resolve
-                        # project-less on the installed deb.
-                        while read -r p; do
-                          case "$p" in ''|\#*) continue ;; esac
-                          t="."; [ -d "$SUPER/candy/$p/cmd/serve" ] && t="./cmd/serve"
-                          ( cd "$SUPER/candy/$p" && GOWORK=off go build -trimpath -o "$SUPER/bin/plugins/$p" "$t" )
-                          "$SUPER/bin/charly" __plugin-providers "$SUPER/candy/$p" > "$SUPER/bin/plugins/$p.providers"
-                        done < "$SUPER/pkg/host-command-plugins.txt"
-                        podman run --rm -v {{.SrcDir}}:/src:ro -v "$SUPER/bin":/ovbin:ro -v {{.PkgDest}}:/out:Z docker.io/library/debian:13 bash -lc '
-                          set -e
-                          export DEBIAN_FRONTEND=noninteractive
-                          apt-get update -qq && apt-get install -y -qq build-essential debhelper >/dev/null
-                          cp -aT /src /tmp/src && cp /ovbin/charly /tmp/src/charly && cp -a /ovbin/plugins /tmp/src/plugins
-                          cd /tmp/src
-                          # Stamp the .deb version from the binary CalVer so each
-                          # build is upgradeable (a static changelog version would
-                          # make apt skip the reinstall on charly update).
-                          sed -i "1s/([^)]*)/($(/ovbin/charly version))/" debian/changelog
-                          dpkg-buildpackage -us -uc -b
-                          cp ../*.deb /out/
-                        '
                     install_template: |
                         DEBIAN_FRONTEND=noninteractive apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y {{.StageDir}}/{{.Glob}}
-                    download_template: https://github.com/opencharly/charly/releases/latest/download/opencharly-${ARCH}.deb
+                    download_template: https://opencharly.github.io/charly-debian/pool/main/c/charly/charly-${ARCH}.deb
                     probe: command -v apt-get
                 phase:
                     install:
@@ -760,15 +761,21 @@ debian:
                 # but we force-enable here for parity and to handle
                 # cloud-init.target which has no [Install] WantedBy.
                 #
-                # Notes on unit names (Debian/Ubuntu, cloud-init >= 24.x):
+                # Notes on unit names (Debian/Ubuntu):
                 #   - sshd is named `ssh.service` (not `sshd.service` like
                 #     Fedora/Arch). Both are aliases on Ubuntu but `ssh`
                 #     is the canonical Debian name.
-                #   - cloud-init's stage services are the same on Debian
-                #     as on Arch: cloud-init-local, cloud-init,
-                #     cloud-config, cloud-final.
-                for unit in ssh qemu-guest-agent cloud-init-local cloud-init cloud-config cloud-final systemd-networkd systemd-resolved; do
-                  chroot {{.Mnt}} systemctl enable "$unit" 2>&1 | grep -v "^$" || true
+                #   - cloud-init's unit layout is version-dependent:
+                #     cloud-init < 24.3 (Ubuntu 24.04 ships 24.1.3) uses a
+                #     single `cloud-init.service`; cloud-init >= 24.3
+                #     (Debian 13 ships 25.1.4) split it into
+                #     `cloud-init-main.service` + `cloud-init-network.service`
+                #     and the legacy name no longer exists. The existence
+                #     check below enables whichever layout the distro ships.
+                for unit in ssh qemu-guest-agent cloud-init-local cloud-init cloud-init-main cloud-init-network cloud-config cloud-final systemd-networkd systemd-resolved; do
+                  if [ -e "{{.Mnt}}/usr/lib/systemd/system/$unit.service" ] || [ -e "{{.Mnt}}/lib/systemd/system/$unit.service" ]; then
+                    chroot {{.Mnt}} systemctl enable "$unit" 2>&1 | grep -v "^$" || true
+                  fi
                 done
                 # cloud-init.target has no [Install] WantedBy: it's a sync
                 # point activated by cloud-init-generator at boot time.
@@ -898,32 +905,9 @@ fedora:
                     package: list
                     repo: list_of_maps
                 local_pkg:
-                    pkg_glob: '*.rpm'
-                    source_sentinel: '*.spec'
-                    build_template: |
-                        set -e
-                        SUPER=$(cd {{.SourceDir}}/../.. && pwd)
-                        mkdir -p "$SUPER/bin/plugins"
-                        [ -x "$SUPER/bin/charly" ] || (cd "$SUPER" && CGO_ENABLED=1 task build:binary)
-                        # Build the welded command plugins beside charly (the SAME
-                        # pkg/host-command-plugins.txt set the arch PKGBUILD bakes) so
-                        # `charly doctor`/`clean`/`vm` and the other welded commands resolve
-                        # project-less on the installed rpm. /ovbin/plugins = $SUPER/bin/plugins.
-                        while read -r p; do
-                          case "$p" in ''|\#*) continue ;; esac
-                          t="."; [ -d "$SUPER/candy/$p/cmd/serve" ] && t="./cmd/serve"
-                          ( cd "$SUPER/candy/$p" && GOWORK=off go build -trimpath -o "$SUPER/bin/plugins/$p" "$t" )
-                          "$SUPER/bin/charly" __plugin-providers "$SUPER/candy/$p" > "$SUPER/bin/plugins/$p.providers"
-                        done < "$SUPER/pkg/host-command-plugins.txt"
-                        podman run --rm -v {{.SrcDir}}:/src:ro -v "$SUPER/bin":/ovbin:ro -v {{.PkgDest}}:/out:Z docker.io/library/fedora:43 bash -lc '
-                          set -e
-                          dnf install -y -q rpm-build >/dev/null
-                          rpmbuild -bb --define "_topdir /tmp/rb" --define "ovbin /ovbin/charly" --define "ovplugins /ovbin/plugins" --define "ovver $(/ovbin/charly version)" /src/opencharly.spec
-                          find /tmp/rb/RPMS -name "*.rpm" -exec install -Dm644 -t /out {} +
-                        '
                     install_template: |
                         dnf install -y {{.StageDir}}/{{.Glob}}
-                    download_template: https://github.com/opencharly/charly/releases/latest/download/opencharly-${ARCH}.rpm
+                    download_template: https://opencharly.github.io/charly-fedora/${ARCH}/charly-${ARCH}.rpm
                     probe: command -v dnf
                 phase:
                     install:
@@ -1110,6 +1094,99 @@ supervisord:
                 stderr_logfile=/dev/fd/2
                 stderr_logfile_maxbytes=0
                 {{- end}}
+openrc:
+    init:
+        # openrc — a FIRST-CLASS init system, peer to systemd: and supervisord:.
+        #
+        # Declared here rather than in Go because there is nowhere in Go to declare it: an init
+        # system's whole contract bakes into the ai.opencharly.init_def label and resolves from
+        # there at runtime. A frozen fallback table used to shadow this (triplicated across
+        # sdk/kit, plugin-pod and plugin-deploy-pod, and stuck at supervisord + systemd); it was
+        # deleted, so the label is the only path and a third init system needs no Go change.
+        #
+        # OpenRC is the init of Alpine (and Gentoo/Artix). Before this entry the only OpenRC support
+        # anywhere was a hardcoded `if distro == "alpine"` in the cloud-init renderer that enabled
+        # sshd in a GUEST; a container box on an Alpine base could not declare service: entries at
+        # all. schema/distro_vocab.cue's #Distros now declares each distro's init as data
+        # (alpine → openrc), so nothing branches on a distro name.
+        candy_field:
+            - service
+        candy_file:
+            - '*.initd'
+        # file_copy, like systemd: each service is its own /etc/init.d script, not fragments
+        # concatenated into one config (which is supervisord's fragment_assembly model).
+        model: file_copy
+        fragment_dir: openrc
+        stage_name: openrc-services
+        stage_fragment_copy: COPY .build/{{.BoxName}}/{{.FragmentDir}}/{{.FileName}} /openrc/{{.FileName}}
+        assembly_template: |
+            # Install OpenRC service scripts. They must be executable — OpenRC silently ignores
+            # a non-executable file in /etc/init.d, which is the classic "service does not exist"
+            # symptom, so the chmod is not optional.
+            RUN --mount=type=bind,from=openrc-services,source=/openrc,target=/openrc \
+                install -d /etc/init.d && \
+                for svc in /openrc/*; do install -m 0755 "$svc" "/etc/init.d/$(basename "$svc")"; done
+        system_enable_template: |
+            # Add to the default runlevel so the service starts on boot.
+            RUN{{range $i, $unit := .Units}}{{if $i}} && \
+               {{else}} {{end}}rc-update add {{$unit}} default{{end}}
+        # A container has no OpenRC pid-1 supervisor to hand control to, exactly as with
+        # supervisord's own fallback: keep the container alive so `charly fleet` can exec into it.
+        fallback_entrypoint:
+            - sleep
+            - infinity
+        management_tool: rc-service
+        # rc-service takes `<service> <action>` — the inverse argument order of systemctl, which
+        # is why the action cannot be hardcoded around a single tool.
+        management_command:
+            restart: '{{.Service}} restart'
+            start: '{{.Service}} start'
+            status: '{{.Service}} status'
+            stop: '{{.Service}} stop'
+        label_key: ai.opencharly.service.openrc
+        service_schema:
+            supports_packaged: true
+            unit_path_template: /etc/init.d/{{.Name}}
+            service_template: |
+                #!/sbin/openrc-run
+                # Generated by charly — do not edit.
+                name="{{.Name}}"
+                description="{{.Candy}} service {{.Name}} (generated by charly)"
+
+                # supervise-daemon is what gives OpenRC the restart semantics systemd expresses
+                # with Restart=: the default start-stop-daemon path starts a service and forgets
+                # it, so a crash would go unnoticed.
+                supervisor=supervise-daemon
+                command="/bin/sh"
+                command_args="-c '{{.Exec}}'"
+                {{- if .User}}
+                command_user="{{.User}}"
+                {{- end}}
+                {{- if .WorkingDirectory}}
+                directory="{{.WorkingDirectory}}"
+                {{- end}}
+                {{- if eq .Restart "no"}}
+                supervise_daemon_args="--no-respawn"
+                {{- end}}
+                {{- if .StopTimeout}}
+                retry="{{.StopTimeout}}"
+                {{- end}}
+                {{- if .EnvList}}
+                {{- range .EnvList}}
+                export {{.Key}}="{{.Value}}"
+                {{- end}}
+                {{- end}}
+
+                depend() {
+                {{- range .After}}
+                    after {{.}}
+                {{- end}}
+                {{- range .Before}}
+                    before {{.}}
+                {{- end}}
+                    need localmount
+                }
+
 systemd:
     init:
         candy_field:

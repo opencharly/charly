@@ -341,7 +341,7 @@ func TestOCITargetEmitBuilderMultiStageViaPlugin(t *testing.T) {
 // localpkg add_candy runs.
 func TestOCITargetEmitLocalPkgInstallViaPlugin(t *testing.T) {
 	lp := testPacLocalPkgDef()
-	lp.DownloadTemplate = "https://github.com/opencharly/charly/releases/latest/download/opencharly-${ARCH}.pkg.tar.zst"
+	lp.DownloadTemplate = "https://opencharly.github.io/charly-arch/${ARCH}/charly-${ARCH}.pkg.tar.zst"
 	tgt := ociTestTarget(buildEngineContext{Box: &spec.ResolvedBox{Name: "charly-arch"}})
 	plan := &spec.InstallPlan{Candy: "charly", Steps: []spec.InstallStep{
 		&spec.LocalPkgInstallStep{CandyName: "charly", Format: "pac", LocalPkg: lp},
@@ -350,8 +350,8 @@ func TestOCITargetEmitLocalPkgInstallViaPlugin(t *testing.T) {
 		t.Fatalf("Emit: %v", err)
 	}
 	got := tgt.String()
-	if !strings.Contains(got, "curl -fsSL") || !strings.Contains(got, "releases/latest/download/opencharly-${ARCH}.pkg.tar.zst") {
-		t.Errorf("production localpkg build-emit must DOWNLOAD the published release via the step:local-pkg-install plugin chain; got:\n%s", got)
+	if !strings.Contains(got, "curl -fsSL") || !strings.Contains(got, "opencharly.github.io/charly-arch/${ARCH}/charly-${ARCH}.pkg.tar.zst") {
+		t.Errorf("production localpkg build-emit must DOWNLOAD the published package from the distro repo via the step:local-pkg-install plugin chain; got:\n%s", got)
 	}
 	if !strings.Contains(got, "pacman -U --noconfirm") {
 		t.Errorf("production localpkg build-emit must install via the format install template via the plugin chain; got:\n%s", got)

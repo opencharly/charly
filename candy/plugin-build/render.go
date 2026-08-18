@@ -24,7 +24,7 @@ import (
 // + runs Generate, returning the rendered Containerfile content per box name. Called by
 // runBoxGenerate (generate-only) and runBoxBuild (build).
 func renderContainerfiles(ctx context.Context, ex *sdk.Executor, reply spec.BuildResolveReply, dir string, devLocalPkg bool) (map[string]string, error) {
-	dg, err := deploykit.NewRenderGeneratorFromProject(ctx, ex, reply.ResolvedProject, dir, devLocalPkg)
+	dg, err := deploykit.NewRenderGeneratorFromProject(ctx, ex, reply.ResolvedProject, dir, devLocalPkg, nil)
 	if err != nil {
 		return nil, err
 	}

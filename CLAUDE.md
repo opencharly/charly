@@ -1,6 +1,6 @@
-# OpenCharly — The Fully Stocked Gourmet Kitchen for You and Your Agents
+# OpenCharly — The Agent-in-the-Loop Factory
 
-Compose, build, deploy, and evaluate **boxes** (container images) from a library of configurable **candies**, driven by the `charly` Go CLI — built for you *and* your agents, on Docker, Podman, QEMU, libvirt, Kubernetes, and Android.
+Compose, build, deploy, and evaluate **boxes** (container images) from a library of configurable **candies** — the factory is named for its product — driven by the `charly` Go CLI, built for you *and* your agents, on Docker, Podman, QEMU, libvirt, Kubernetes, and Android.
 
 This file is the Claude Code adapter of the project rulebook: mandates and pointers only, load-bearing and non-negotiable — short so they are always read, never because they are optional. `AGENTS.md` is the equivalent harness-neutral rulebook; skills own detailed procedure; history lives in each repo's `CHANGELOG/`.
 
@@ -65,6 +65,7 @@ Consult this table before the first tool call of every task; when several rows m
 | Verify a cutover by running the R10 beds (drive `charly check run <bed>`) | `/charly-check:check` |
 | Verify a cutover by running the R10 beds (drive `charly check run <bed>`) | `/charly-internals:agents` |
 | VmSpec / libvirt / cloud-init / OVMF internals | `/charly-internals:vm-spec` |
+| `charly agentteams` controller management (workers / teams / humans) / the `verb:agentteams` check verb (`status`, `manager-running`, `worker-running`, `worker-list`) / hydrating a deployment with `charly agentteams apply -f` | `/charly-agentteams:agentteams-cli` |
 | `charly box build` / `charly box generate` / Containerfile | `/charly-build:build` |
 | `charly box build` / `charly box generate` / Containerfile | `/charly-build:generate` |
 | `charly box build` / `charly box generate` / Containerfile | `/charly-internals:generate-source` |
@@ -80,6 +81,7 @@ Consult this table before the first tool call of every task; when several rows m
 | `charly update` / `charly vm *` / VM entities in `vm.yml` or `vm:` | `/charly-vm:vm` |
 | `kind: android` device / `target: android` deploy / `apk:` package format in candies / installing Android apps declaratively / remote-or-emulator adb endpoint / nested `pod → android` | `/charly-check:android` |
 | `kind: android` device / `target: android` deploy / `apk:` package format in candies / installing Android apps declaratively / remote-or-emulator adb endpoint / nested `pod → android` | `/charly-core:deploy` |
+| `step:helm-release` / `verb:helm` / installing a Helm chart from a candy plan / the `helm_charts:` deploy field and its kustomize `helmCharts:` emission / the `--enable-helm` apply path | `/charly-kubernetes:helm` |
 | local-target deploy / `target: local` / `host: local` (default) / SSH-host deploys / `user:` / `ssh_arg:` | `/charly-internals:local-infra` |
 | local-target deploy / `target: local` / `host: local` (default) / SSH-host deploys / `user:` / `ssh_arg:` | `/charly-local:local-deploy` |
 | the `adb:` check verb / Android Debug Bridge probing from a candy/box plan (out-of-process plugin; devices, shell, install, getprop, screencap, logcat, wait-for-device) | `/charly-check:adb` |
@@ -87,6 +89,7 @@ Consult this table before the first tool call of every task; when several rows m
 | the `appium:` check verb / Android UI automation (out-of-process plugin) / W3C WebDriver sessions, element introspection, the gesture/app/key/device sugar groups, the generic `execute`/`raw` escape hatch | `/charly-check:appium` |
 | the `appium:` check verb / Android UI automation (out-of-process plugin) / W3C WebDriver sessions, element introspection, the gesture/app/key/device sugar groups, the generic `execute`/`raw` escape hatch | `/charly-check:check` |
 | the `kube:` check verb / Kubernetes cluster probing from a candy/box plan (out-of-process plugin; nodes, pods, ingress, wait-ready, storageclass, addons, apply/delete, raw resource GETs) | `/charly-kubernetes:check-k8s` |
+| the agentteams box / the AgentTeams multi-agent stack (Manager–Workers, Rooms, the controller + matrix + element + higress + minio candies) on the pod or vm substrate / the `check-agentteams-pod` and `check-agentteams-vm` beds | `/charly-agentteams:agentteams` |
 <!-- END GENERATED SKILL DISPATCHER -->
 
 Full index: `plugins/README.md`. Anything not listed: read the index first, load the matching skill second, touch code third.
@@ -116,7 +119,7 @@ Engineering discipline (R1–R5) before artifact verification (R6–R9) before t
 - **R6 — Git safety.** Check `git status` and stashes before any destructive working-tree action; never overwrite unrelated changes; no force-push, pushed-history rewrite, hook bypass, or direct push to `main`.
 - **R7 — Prove behavior, not compilation.** A green `go test ./...` proves compilation. Runtime-affecting changes run the end-to-end gate — `charly box build` → `charly check box` → deploy to steady state → `charly check live`, or `charly check run <bed>`, which automates the whole sequence — before "done".
 - **R8 — Verify emitted artifacts.** Generation changes assert the emitted Containerfile sections and every claimed `ai.opencharly.*` label (`charly box labels`); an empty or missing label is a failure.
-- **R9 — Binary equals source.** Build the CalVer-stamped worktree-local binary with `task build:binary` and invoke it through that worktree's `bin/`; verify `charly version`. Runtime OS dependencies belong in `pkg/arch/PKGBUILD`.
+- **R9 — Binary equals source.** Build the CalVer-stamped worktree-local binary with `task build:binary` and invoke it through that worktree's `bin/`; verify `charly version`. Runtime OS dependencies belong in the charly candy's `packaging:` section (`candy/charly/charly.yml`).
 - **R10 — Fresh disposable proof.** Verify only on targets explicitly marked `disposable: true`; after committing, re-verify on a fresh `charly update` — pasted output, zero warnings, with check coverage that fails without the change. Run the gate selected by change class (`/charly-check:check` "R10 gate by change class"): documentation-only changes run the non-runtime standards and no bed; code/config run the beds that exercise the change. A dry-run, a rebuild without invocation, a redefined pending gate, or a scope-shrinking flag the user did not name this turn (the flag-override clause) does not count.
 
 Any rule violation forbids commit. Fix it and re-run the full gate, or stop and ask the operator — there is no "downgrade the tier and ship anyway" path.
@@ -161,7 +164,7 @@ Delegation is fresh context without stopping — spawn a teammate or sub-agent f
 
 ## Hooks
 
-Hooks enforce deterministic command mechanics only — `.claude/hooks/pre-commit-gate.sh` and `pre-push-gate.sh` (hook bypass, force-push, direct-main push, untokenizable commits, staged lint, alias forms). Attribution truth, change class, CHANGELOG coverage, architecture, and R0–R10 proof are judged by the fresh `pr-validator`, never by hook regexes; there is no reminder layer — rule knowledge lives in this file and the skills. Per-directory CLAUDE.md files are thin signposts naming that area's skills; they restate no rule.
+Hooks enforce deterministic command mechanics only — `.claude/hooks/pre-commit-gate.sh` and `pre-push-gate.sh` (hook bypass, force-push, direct-main push, untokenizable commits, staged lint, alias forms). **They are not wired in Claude Code:** `.claude/settings.json` declares no `PreToolUse` hooks, so under this harness they fire on nothing. They stay wired in the harnesses that invoke them (`.reasonix/settings.json`, and `~/.kimi-code/config.toml`, which delegates to `.claude/hooks/`). **Under Claude Code you are the enforcement** for the mechanics they cover — most sharply for force-push: branch protection covers `main` only (no rulesets, no other protected branch), so a `feat/` branch force-push, which this rulebook forbids everywhere, has NO server-side block, and the `pr-validator` cannot substitute because it inspects a branch already rewritten. Never force-push; never assume something upstream will stop you. The gates that do bind in every harness are the fresh `pr-validator` at merge and branch protection on `main`. Attribution truth, change class, CHANGELOG coverage, architecture, and R0–R10 proof are judged by that validator, never by hook regexes; there is no reminder layer — rule knowledge lives in this file and the skills. Per-directory CLAUDE.md files are thin signposts naming that area's skills; they restate no rule.
 
 ## AI Attribution (Fedora Policy Compliant)
 

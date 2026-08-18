@@ -1,6 +1,11 @@
 # OpenCharly
 
-**The fully stocked gourmet kitchen for you and your agents.**
+**The fully equipped factory floor for you and your agents.**
+
+**A whole factory ready to produce every candy imaginable.** A **candy** is one composable unit of a
+working environment; a **box** is the machine it runs in. The confectionery names are not
+decoration — `candy:` is a real keyword and `candy/` is a real directory. A factory is named for
+what it makes: the floor is the factory, the candy is the output, and the agent is in the loop.
 
 `charly` is a command-line tool that builds container images from a declarative list of **candies**, and applies
 that same list to a VM guest, a Kubernetes cluster, a host, or an Android device. Every substrate
@@ -274,21 +279,11 @@ which mode the host supports.
 
 ## Install
 
-**Install `charly` as a native package.** That is how you use it, and everything else here — and
-every page on [opencharly.ai](https://opencharly.ai) — assumes a machine with `charly` installed
-and no charly checkout anywhere. Build the package once from a source tree, then install it with
-your own package manager. Building the package needs Go 1.26+ and
-[go-task](https://taskfile.dev); `pkg:fedora` and `pkg:debian` build distro-natively in a
-container, so they also need **podman**, while `pkg:arch` runs `makepkg` directly and therefore
-needs an **Arch-family host**:
+**Install `charly` once, then use it from anywhere.** Everything else here — and every page on
+[opencharly.ai](https://opencharly.ai) — assumes a machine with `charly` installed and no charly
+checkout anywhere.
 
-```bash
-task build:pkg:arch   && sudo pacman -U dist/*.pkg.tar.zst    # Arch / CachyOS / Manjaro
-task build:pkg:fedora && sudo dnf install dist/*.rpm          # Fedora
-task build:pkg:debian && sudo apt install ./dist/*.deb        # Debian / Ubuntu
-```
-
-The system-wide install step is always yours to run, never a side effect of building.
+**[How to install →](https://opencharly.ai/start/install/)**
 
 Once it is on your `$PATH`, `--repo` reads any published project without cloning it:
 
@@ -394,7 +389,7 @@ guest before you point it at your workstation.
 `fedora-coder` and its `arch`, `debian` and `ubuntu` siblings — carry a large set of candies each: the AI
 coding CLIs (`claude-code`, `codex`, `gemini`, `forgecode`), every language runtime, DevOps
 tooling, nested rootless containers and rootless libvirt VMs, all at uid 1000 with no
-`--privileged`. Same format, same commands. A fully stocked kitchen really does ship with the sink.
+`--privileged`. Same format, same commands.
 
 ---
 

@@ -96,128 +96,9 @@ func runVerbAgentTeams(ctx context.Context, cc kit.CheckContext, op *spec.Op, in
 		return verbWorkerRunning(ctx, cc, client, in.Name, parseTimeout(op.Timeout, 300*time.Second))
 	case "worker-list":
 		return verbWorkerList(client)
-	case "snapshot":
-		return verbSnapshot(ctx, cc, client, in.Out, in.NoMinio)
-	case "hydrate":
-		return verbHydrate(ctx, cc, client, in.Bundle, in.NoMinio)
 	default:
 		return "", fmt.Errorf("unknown agentteams method %q", in.Method)
 	}
-}
-
-// verbSnapshot runs the snapshot core host-side: the bundle is written to a HOST
-// path (the verb is host-based — the mcp pattern), the MinIO credentials are
-// pulled from the venue over the executor (the controller container carries
-// AGENTTEAMS_MINIO_USER/PASSWORD in its env), and the SAME runSnapshot core the
-// in-venue command uses does the work (R3).
-func verbSnapshot(ctx context.Context, cc kit.CheckContext, client *verbAgentTeamsClient, out string, noMinio bool) (string, error) {
-	if out == "" {
-		out = "/tmp/agentteams-snapshot"
-	}
-	var s3 *s3Client
-	if !noMinio {
-		s3c, err := verbS3Client(ctx, cc)
-		if err != nil {
-			return "", err
-		}
-		s3 = s3c
-	}
-	return runSnapshot(ctx, &client.apiClient, s3, out)
-}
-
-// verbHydrate runs the hydrate core host-side: the bundle is read from a HOST
-// path, applied back to the controller (workers → teams → humans), and the
-// mirrored MinIO objects are restored.
-func verbHydrate(ctx context.Context, cc kit.CheckContext, client *verbAgentTeamsClient, bundle string, noMinio bool) (string, error) {
-	if bundle == "" {
-		return "", fmt.Errorf("hydrate requires bundle: <dir>")
-	}
-	var s3 *s3Client
-	if !noMinio {
-		s3c, err := verbS3Client(ctx, cc)
-		if err != nil {
-			return "", err
-		}
-		s3 = s3c
-	}
-	return runHydrate(ctx, &client.apiClient, s3, bundle)
-}
-
-// verbS3Client builds the S3 client for the host-side verb: resolve the MinIO
-// endpoint (:9000) over the reverse channel and pull the MinIO credentials from
-// the venue over the executor (venueMinioCreds — the deploy-set env when a
-// deploy overrides it, else the self-provisioned root-password file).
-func verbS3Client(ctx context.Context, cc kit.CheckContext) (*s3Client, error) {
-	addr, err := cc.ResolveEndpoint(ctx, 9000)
-	if err != nil {
-		return nil, fmt.Errorf("resolve minio endpoint: %w", err)
-	}
-	if addr == "" {
-		return nil, fmt.Errorf("no live venue for the minio endpoint")
-	}
-	user, pass, err := venueMinioCreds(ctx, cc)
-	if err != nil {
-		return nil, err
-	}
-	bucket := "agentteams-storage"
-	if v, _ := venueEnv(ctx, cc, "AGENTTEAMS_FS_BUCKET"); v != "" {
-		bucket = v
-	}
-	prefix := "agentteams/agentteams-storage"
-	if v, _ := venueEnv(ctx, cc, "AGENTTEAMS_STORAGE_PREFIX"); v != "" {
-		prefix = v
-	}
-	return &s3Client{
-		endpoint: "http://" + addr,
-		bucket:   bucket,
-		prefix:   prefix,
-		user:     user,
-		pass:     pass,
-		http:     &http.Client{Timeout: 60 * time.Second},
-	}, nil
-}
-
-// venueMinioCreds resolves the MinIO root credentials from the venue. The
-// deploy-overridable AGENTTEAMS_MINIO_USER/PASSWORD are NOT on the container env
-// (the controller's start script resolves them with :- defaults and exports them
-// only into its own process — supervisord environment= would override the pod's
-// `charly config -e` overrides), so a bare printenv finds nothing on a default
-// deploy. The canonical source is the self-provisioned root-password file on the
-// uid-1000 volume (~/.agentteams/minio/.root-password) — the SAME file the minio
-// server and the controller's OSS client read. The user defaults to "admin".
-func venueMinioCreds(ctx context.Context, cc kit.CheckContext) (user, pass string, err error) {
-	user, _ = venueEnv(ctx, cc, "AGENTTEAMS_MINIO_USER")
-	pass, _ = venueEnv(ctx, cc, "AGENTTEAMS_MINIO_PASSWORD")
-	if user == "" {
-		user = "admin"
-	}
-	if pass != "" {
-		return user, pass, nil
-	}
-	// Self-provisioned fallback: read the root-password file from the uid-1000
-	// volume. getent resolves the home deterministically regardless of the exec
-	// user (root on a pod venue, the image user on a machine venue).
-	stdout, _, _, err := cc.Exec().RunCapture(ctx,
-		`cat "$(getent passwd 1000 | cut -d: -f6)/.agentteams/minio/.root-password"`)
-	if err != nil {
-		return "", "", fmt.Errorf("minio credentials not found in the venue (AGENTTEAMS_MINIO_PASSWORD unset and no self-provisioned root-password file)")
-	}
-	pass = strings.TrimSpace(stdout)
-	if pass == "" {
-		return "", "", fmt.Errorf("minio credentials not found in the venue (empty self-provisioned root-password)")
-	}
-	return user, pass, nil
-}
-
-// venueEnv reads one env var from the venue over the executor. An unset var
-// (printenv exits non-zero) is not an error — the caller decides whether the
-// value is required.
-func venueEnv(ctx context.Context, cc kit.CheckContext, name string) (string, error) {
-	stdout, _, _, err := cc.Exec().RunCapture(ctx, "printenv "+name)
-	if err != nil {
-		return "", nil
-	}
-	return strings.TrimSpace(stdout), nil
 }
 
 // verbStatus prints the controller's cluster status summary.
@@ -266,6 +147,26 @@ func verbManagerRunning(ctx context.Context, client *verbAgentTeamsClient, name 
 	}
 }
 
+// matrixDomainDefault mirrors the `${AGENTTEAMS_MATRIX_DOMAIN:-…}` default used
+// by candy/agentteams-matrix, -element and -controller. Kept in one place here
+// so the verb and those candies cannot drift apart silently.
+const matrixDomainDefault = "matrix-local.agentteams.io:8080"
+
+// venueMatrixDomain reads AGENTTEAMS_MATRIX_DOMAIN from the live venue over the
+// executor — the same channel the admin SA token comes through — falling back to
+// the shared default when it is unset. Reading it (rather than exposing a new
+// authoring field) keeps ONE source of truth: whatever the deploy sets is what
+// the verb probes, with no second place for an operator to keep in sync.
+func venueMatrixDomain(ctx context.Context, cc kit.CheckContext) string {
+	stdout, _, _, err := cc.Exec().RunCapture(ctx, "printenv AGENTTEAMS_MATRIX_DOMAIN")
+	if err == nil {
+		if d := strings.TrimSpace(stdout); d != "" {
+			return d
+		}
+	}
+	return matrixDomainDefault
+}
+
 // verbWorkerRunning creates the named Worker CR (idempotent — a 409 on a
 // re-run is fine; the controller volume persists the CR and the poll reconciles
 // it to Running), polls until it reaches Running WITH its Matrix room
@@ -290,8 +191,12 @@ func verbWorkerRunning(ctx context.Context, cc kit.CheckContext, client *verbAge
 		} else {
 			if resp.Phase == "Running" && strings.HasPrefix(resp.RoomID, "!") {
 				// The room exists on the homeserver: resolve the worker room
-				// alias via the public Matrix directory API.
-				alias := fmt.Sprintf("#agentteams-worker-%s:matrix-local.agentteams.io:8080", name)
+				// alias via the public Matrix directory API. The server name is
+				// read from the venue rather than hardcoded — it is operator-
+				// settable everywhere else it appears (AGENTTEAMS_MATRIX_DOMAIN,
+				// documented on candy/agentteams-matrix), so a verb that baked
+				// the default in would work only on a default-domain deploy.
+				alias := fmt.Sprintf("#agentteams-worker-%s:%s", name, venueMatrixDomain(ctx, cc))
 				room, err := resolveMatrixRoom(ctx, cc, client, alias)
 				if err != nil {
 					return "", fmt.Errorf("worker %s Running but room alias unresolvable: %w", name, err)
@@ -376,4 +281,92 @@ func parseTimeout(s string, def time.Duration) time.Duration {
 		return def
 	}
 	return d
+}
+
+func venueEnv(ctx context.Context, cc kit.CheckContext, name string) (string, error) {
+	stdout, _, _, err := cc.Exec().RunCapture(ctx, "printenv "+name)
+	if err != nil {
+		return "", nil
+	}
+	return strings.TrimSpace(stdout), nil
+}
+func venueMinioCreds(ctx context.Context, cc kit.CheckContext) (user, pass string, err error) {
+	user, _ = venueEnv(ctx, cc, "AGENTTEAMS_MINIO_USER")
+	pass, _ = venueEnv(ctx, cc, "AGENTTEAMS_MINIO_PASSWORD")
+	if user == "" {
+		user = "admin"
+	}
+	if pass != "" {
+		return user, pass, nil
+	}
+	// Self-provisioned fallback: read the root-password file from the uid-1000
+	// volume. getent resolves the home deterministically regardless of the exec
+	// user (root on a pod venue, the image user on a machine venue).
+	stdout, _, _, err := cc.Exec().RunCapture(ctx,
+		`cat "$(getent passwd 1000 | cut -d: -f6)/.agentteams/minio/.root-password"`)
+	if err != nil {
+		return "", "", fmt.Errorf("minio credentials not found in the venue (AGENTTEAMS_MINIO_PASSWORD unset and no self-provisioned root-password file)")
+	}
+	pass = strings.TrimSpace(stdout)
+	if pass == "" {
+		return "", "", fmt.Errorf("minio credentials not found in the venue (empty self-provisioned root-password)")
+	}
+	return user, pass, nil
+}
+func verbHydrate(ctx context.Context, cc kit.CheckContext, client *verbAgentTeamsClient, bundle string, noMinio bool) (string, error) {
+	if bundle == "" {
+		return "", fmt.Errorf("hydrate requires bundle: <dir>")
+	}
+	var s3 *s3Client
+	if !noMinio {
+		s3c, err := verbS3Client(ctx, cc)
+		if err != nil {
+			return "", err
+		}
+		s3 = s3c
+	}
+	return runHydrate(ctx, &client.apiClient, s3, bundle)
+}
+func verbS3Client(ctx context.Context, cc kit.CheckContext) (*s3Client, error) {
+	addr, err := cc.ResolveEndpoint(ctx, 9000)
+	if err != nil {
+		return nil, fmt.Errorf("resolve minio endpoint: %w", err)
+	}
+	if addr == "" {
+		return nil, fmt.Errorf("no live venue for the minio endpoint")
+	}
+	user, pass, err := venueMinioCreds(ctx, cc)
+	if err != nil {
+		return nil, err
+	}
+	bucket := "agentteams-storage"
+	if v, _ := venueEnv(ctx, cc, "AGENTTEAMS_FS_BUCKET"); v != "" {
+		bucket = v
+	}
+	prefix := "agentteams/agentteams-storage"
+	if v, _ := venueEnv(ctx, cc, "AGENTTEAMS_STORAGE_PREFIX"); v != "" {
+		prefix = v
+	}
+	return &s3Client{
+		endpoint: "http://" + addr,
+		bucket:   bucket,
+		prefix:   prefix,
+		user:     user,
+		pass:     pass,
+		http:     &http.Client{Timeout: 60 * time.Second},
+	}, nil
+}
+func verbSnapshot(ctx context.Context, cc kit.CheckContext, client *verbAgentTeamsClient, out string, noMinio bool) (string, error) {
+	if out == "" {
+		out = "/tmp/agentteams-snapshot"
+	}
+	var s3 *s3Client
+	if !noMinio {
+		s3c, err := verbS3Client(ctx, cc)
+		if err != nil {
+			return "", err
+		}
+		s3 = s3c
+	}
+	return runSnapshot(ctx, &client.apiClient, s3, out)
 }

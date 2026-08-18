@@ -1,13 +1,13 @@
 nodejs:
     candy:
-        version: 2026.159.1324
+        version: 2026.226.1600
         description: |
             A Node.js runtime with the npm and pnpm package managers on the default PATH.
-            Installs the distro nodejs package (NodeSource node 20.x on Ubuntu so the
-            in-box CLIs that require node >=20 work), the matching npm CLI, and a
-            self-contained pnpm standalone binary at /usr/local/bin/pnpm. Every artifact
-            is a real file at a known path with a working --version, so the runtime is
-            directly verifiable.
+            Installs the distro nodejs package (NodeSource node 22.x on Ubuntu and
+            Debian so the in-box CLIs that require node >=22 work — the deepseek-harness
+            dsh floor), the matching npm CLI, and a self-contained pnpm standalone
+            binary at /usr/local/bin/pnpm. Every artifact is a real file at a known
+            path with a working --version, so the runtime is directly verifiable.
         env:
             NPM_CONFIG_PREFIX: "~/.npm-global"
             npm_config_cache: "~/.cache/npm"
@@ -20,8 +20,19 @@ nodejs:
                 package:
                     - npm
             debian:
-                package:
-                    - npm
+                # Debian 13 (trixie) distro nodejs is 20 — too old for the dsh
+                # harness floor (node >=22.19.0). Install nodejs from NodeSource
+                # (node 22.x) exactly as Ubuntu does: apt prefers its higher
+                # version over trixie's 20. The apt `npm` package is DROPPED —
+                # NodeSource's nodejs BUNDLES npm at /usr/bin/npm, and installing
+                # the separate apt `npm` alongside pulls conflicting node-* deps
+                # (the same rationale as the Ubuntu section below).
+                repo:
+                    - name: nodesource
+                      url: "https://deb.nodesource.com/node_22.x"
+                      key: "https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key"
+                      suite: nodistro
+                      components: main
             fedora:
                 package:
                     - npm
@@ -29,19 +40,20 @@ nodejs:
                 # Ubuntu 24.04 (noble) apt freezes nodejs at 18.19.1 — too old for the
                 # box's own npm CLIs (firebase requires node >=20; gemini-cli's undici
                 # needs the node>=20 global `File`; oracle's string-width needs the
-                # node>=20 unicode-sets `v` regex flag). Install nodejs from NodeSource
-                # (node 20.x): apt prefers its higher version over noble's 18. The base
+                # node>=20 unicode-sets `v` regex flag) AND for the deepseek-harness
+                # dsh floor (node >=22.19.0). Install nodejs from NodeSource (node
+                # 22.x): apt prefers its higher version over noble's 18. The base
                 # `package: [nodejs]` (top-level) supplies the package name; this section
                 # only adds the repo. The apt `npm` package is INTENTIONALLY omitted —
                 # NodeSource's nodejs BUNDLES npm at /usr/bin/npm, and installing the
                 # separate apt `npm` alongside it pulls conflicting node-* deps (broken
-                # packages). debian/fedora/arch keep their apt/dnf/pacman npm (their base
-                # node is already >=20). This is the deliberate "NodeSource upgrade that
+                # packages). fedora/arch keep their dnf/pacman npm (their base node is
+                # already >=22). This is the deliberate "NodeSource upgrade that
                 # DROPS the separate npm" the prior note described — now required because
-                # the in-box CLIs outgrew noble's frozen node 18.
+                # the in-box CLIs outgrew noble's frozen node 18 and dsh needs node 22.
                 repo:
                     - name: nodesource
-                      url: "https://deb.nodesource.com/node_20.x"
+                      url: "https://deb.nodesource.com/node_22.x"
                       key: "https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key"
                       suite: nodistro
                       components: main
@@ -72,6 +84,15 @@ nodejs:
             - check: node reports its version and exits cleanly
               exit_status: 0
               command: /usr/bin/node --version
+            - # The dsh harness floor (node ^22.19.0 || >=24.0.0). No `${...}` anywhere:
+              # a check step's command goes through charly's variable substitution, which
+              # reads `${HOME:-default}` as a variable named `HOME:-default`, fails to
+              # resolve it, and SKIPS the step — trading a red check for a silently absent
+              # one. `node -e` with single quotes has no `${...}`, so it always runs.
+              check: node is at least 22.19.0 (the deepseek-harness dsh floor)
+              exit_status: 0
+              command: |
+                node -e 'const [maj,min]=process.versions.node.split(".").map(Number); if (maj<22||(maj===22&&min<19)) process.exit(1)'
             - check: the npm package manager is installed at /usr/bin/npm
               file:
                 file: /usr/bin/npm
@@ -131,9 +152,10 @@ nodejs-skill:
             PATH additions: `~/.npm-global/bin`
             
             ## Packages
-            
+
             RPM: `nodejs`, `npm`
-            DEB: `nodejs`, `npm`
+            DEB: `nodejs` (NodeSource node 22.x on Ubuntu + Debian; npm is bundled
+            by NodeSource, not the separate apt `npm` package)
             PAC: `nodejs`, `npm`
             
             ## pnpm (standalone binary)

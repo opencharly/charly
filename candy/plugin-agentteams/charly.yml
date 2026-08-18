@@ -48,6 +48,8 @@ agentteams-cli-skill:
             The compiled-in `charly agentteams` management CLI for the AgentTeams
             controller REST API. MUST be invoked before managing workers, teams,
             humans, or the controller of a running AgentTeams deployment.
+        triggers:
+            - "`charly agentteams` controller management (workers / teams / humans) / the `verb:agentteams` check verb (`status`, `manager-running`, `worker-running`, `worker-list`) / hydrating a deployment with `charly agentteams apply -f`"
         content: |-
             # agentteams-cli
 

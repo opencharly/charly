@@ -9,7 +9,7 @@
 //
 // CLI dispatch contract (charly/provider_command_external.go dispatchExternalCommand): on
 // `charly udev <args…>`, charly RESOLVES this plugin's binary (host-built from source, or
-// baked into /usr/lib/charly/plugins via pkg/arch) and syscall.Exec's it with the
+// baked into /usr/lib/charly/plugins by the native package) and syscall.Exec's it with the
 // pass-through tokens after the `udev` word, in CLI mode (the go-plugin handshake cookie is
 // stripped, so sdk.Main runs cliMain instead of serving gRPC). The plugin therefore owns
 // real terminal stdio/TTY — `charly udev install` / `remove` shell out to `sudo tee` /

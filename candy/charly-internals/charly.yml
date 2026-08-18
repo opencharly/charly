@@ -95,7 +95,7 @@ agents-skill:
                   | Fresh validator / teammate | sub-agent or team teammate with the agent brief | fresh agent thread with the role toml | a fresh separate `kimi` session (interactive or `kimi -p`) briefed with the agent `.md` by path — context isolation is what makes it independent |
                   | Dynamic workflows | `.claude/workflows/*.js` (run `/<name>`) | re-derived per thread | re-derived per session (no workflow runtime) |
                   | Teams | `~/.claude/teams/` (experimental) | concurrent fresh threads | concurrent fresh sessions |
-                  | Gates | hooks in `.claude/settings.json` + `permissions.allow` + the auto-mode classifier | sandbox + on-request approvals (`.codex/config.toml`) | hooks + `[[permission.rules]]` in user-level `~/.kimi-code/config.toml` (no project-level config; repo-guarded delegation to `.claude/hooks/`) — no auto-mode classifier |
+                  | Gates | `permissions.allow` + the auto-mode classifier (`.claude/settings.json` wires NO hooks — the gate scripts in `.claude/hooks/` are invoked by the other harnesses, not by Claude Code) | sandbox + on-request approvals (`.codex/config.toml`) | hooks + `[[permission.rules]]` in user-level `~/.kimi-code/config.toml` (no project-level config; repo-guarded delegation to `.claude/hooks/`) — no auto-mode classifier |
                   | Hook events | UserPromptSubmit / PreToolUse / Stop / TaskCreated / TaskCompleted / TeammateIdle | — (approvals instead) | UserPromptSubmit / PreToolUse / Stop / SubagentStart / SubagentStop |
 
                   **Harness-agnostic invariants:** the agent briefs in
@@ -593,10 +593,25 @@ agents-skill:
                   is no reminder layer — rule knowledge lives in the project rulebook and
                   skills, loaded fresh by every agent at session start.
 
-                  | Hook | Event | Role |
+                  The two gate scripts live in `.claude/hooks/` but are **not wired in Claude Code** —
+                  `.claude/settings.json` declares no `PreToolUse` hooks, so under Claude Code they
+                  fire on nothing. They remain wired in the harnesses that invoke them:
+                  `.reasonix/settings.json`, and `~/.kimi-code/config.toml`, which delegates to
+                  `.claude/hooks/` when the repo markers are present. Most of the discipline they
+                  encode is judged for every harness by the fresh `pr-validator` at merge and by
+                  GitHub branch protection — but not all of it, so do not read the unwiring as
+                  costing nothing. Measured: both scripts DO block what they exist for (`git commit
+                  --no-verify`, a `core.hooksPath` override, `git push --force`, a direct push to
+                  `main` all exit 2), and branch protection covers `main` ALONE — no rulesets, no
+                  other protected branch. So a `feat/` branch force-push, which the rulebook forbids
+                  everywhere, has no server-side block under Claude Code, and the `pr-validator`
+                  cannot substitute: it inspects a branch that has already been rewritten. Under
+                  this harness the agent is the enforcement for those mechanics.
+
+                  | Hook | Event (where wired) | Role |
                   |---|---|---|
-                  | `pre-commit-gate.sh` | `PreToolUse(Bash)` | blocks hook bypass (`--no-verify`/`-n`/`core.hooksPath`), untokenizable commit commands, configured Go lint failures for staged Go modules, and a new-or-grown `charly/*_aliases.go` file or declaration-form kit-alias line (the ZERO-ALIASES gate) |
-                  | `pre-push-gate.sh` | `PreToolUse(Bash)` | blocks force-push and a direct push to `main` |
+                  | `pre-commit-gate.sh` | `PreToolUse(Bash)` in `.reasonix` / kimi; **unwired in Claude Code** | blocks hook bypass (`--no-verify`/`-n`/`core.hooksPath`), untokenizable commit commands, configured Go lint failures for staged Go modules, and a new-or-grown `charly/*_aliases.go` file or declaration-form kit-alias line (the ZERO-ALIASES gate) |
+                  | `pre-push-gate.sh` | `PreToolUse(Bash)` in `.reasonix` / kimi; **unwired in Claude Code** | blocks force-push and a direct push to `main` |
 
                   Attribution identity/confidence, change class, CHANGELOG coverage,
                   architecture, and R0–R10 evidence belong exclusively to the fresh
@@ -1017,17 +1032,18 @@ agents-skill:
                     copy, gitignored, no install step) — is the dev binary: every teammate
                     uses its own worktree's `./bin/charly` for every charly verb. The
                     host-installed `charly` is a distro-native package
-                    (`.pkg.tar.zst`/`.rpm`/`.deb`, built via `task
-                    pkg:arch`/`pkg:fedora`/`pkg:debian`/`pkg:all` into `dist/`, or downloaded
-                    as a published release) installed with the distro's own package manager
+                    (`.pkg.tar.zst`/`.rpm`/`.deb`, built by the `charly generate-packages`
+                    plugin (nFPM) and published to the per-distro package repos, or
+                    downloaded as a published release) installed with the distro's own
+                    package manager
                     — this is the only canonical host-refresh path; no Taskfile target
-                    auto-installs system-wide. (`task install-portable` — a portable
+                    auto-installs system-wide. (`task build:install-portable` — a portable
                     `$HOME/.local/bin/charly` copy — remains for solo bootstrap, but it
                     writes to a host location exactly like a package install, so the same
                     in-flight-work boundary below applies to it too.)
                   - **The host-install boundary — no host-writing target runs during
                     in-flight multi-teammate work, period.** Neither the package-manager
-                    install nor `task install-portable` runs while teammates are
+                    install nor `task build:install-portable` runs while teammates are
                     mid-cutover: both write to host state (`$PATH` or `$HOME`) every
                     concurrent teammate may resolve, and either would publish an unmerged
                     branch's binary where a sibling teammate or the operator expects
@@ -1121,15 +1137,14 @@ agents-skill:
                     build:binary` keeps the dual path `bin/charly` ↔ `candy/charly/bin/charly`
                     in sync (a manual `go build -o` does not) — see `/charly-internals:go`
                     "Quick Reference" / "Debug a Build Issue" + `/charly-tools:charly`. It
-                    does not touch the tracked `pkg/arch/PKGBUILD` — that file is read only
-                    by the distro-native package build (`charly box pkg`, run inside a
-                    container from its own embedded template), never by a bare-host `go
-                    build`.
+                    does not touch any packaging source — the native packages are built by
+                    the `charly generate-packages` plugin (sdk/packagekit) from the candy's
+                    `packaging:` section, never by a bare-host `go build`.
                   - **Post-merge resync.** After a wave lands, the orchestrator/operator
                     updates the host package from the new `main` via the native-package path
-                    — build a fresh release artifact (`task pkg:arch`/`pkg:fedora`/
-                    `pkg:debian` into `dist/`, from the main checkout) and install it with
-                    the distro's package manager, or install a newly published release —
+                    — install a freshly published release from the per-distro package repos
+                    (built by the `charly generate-packages` plugin), or build one from the
+                    main checkout —
                     never via a Taskfile target that installs directly. Each long-lived
                     worktree is then either removed (its cutover is done) or fast-forwarded
                     to the new `main` plus a `task build:binary` re-run before reuse — never
@@ -1301,7 +1316,7 @@ agents-skill:
                   specific container ports, never a bare `auto` token. References the
                   assigned port via `${HOST_PORT}` / `${HOST:<member>:<port>}` in its checks
                   — never a literal host port. A bed pins an image → layers → files, so
-                  owning a bed owns those source files. (Task #19, 2026-08-04: a nil/absent
+                  owning a bed owns those source files. (A nil/absent
                   per-host overlay on a bed's first-ever `charly config` used to SKIP port
                   resolution entirely — `candy/plugin-deploy-pod/config_setup.go`'s
                   `resolveDeployPorts` now self-heals a nil overlay instead of skipping it,
@@ -1476,8 +1491,8 @@ agents-skill:
                      trees ran overlapping (one finishing in roughly 79s, nested inside a
                      sibling's roughly 265s window), with separate per-tree
                      `.check/`/`.build/` outputs, zero cross-contamination, zero leftover
-                     deploys. Requirements: the worktree needs the `sdk` and `pkg/arch`
-                     submodules inited (`task build:binary` reads `pkg/arch/calver.sh`) but
+                     deploys. Requirements: the worktree needs the `sdk` submodule inited
+                     (`task build:binary` reads `scripts/calver.sh`) but
                      not the `box/<distro>` submodules for the root disposable roster: root
                      `charly.yml` imports the distro namespaces (arch/cachyos/fedora) via
                      remote `@github.com/opencharly/distro-*` refs (resolver-fetched into
@@ -1770,7 +1785,7 @@ capabilities-skill:
             | `Version` | `LabelVersion` (`ai.opencharly.version`) | The image's content-derived **`EffectiveVersion`** — its dedicated `version:` if set, else the highest layer `version:` across the chain (`deploykit.ComputeEffectiveVersions`, called from `candy/plugin-build/resolve.go`'s build-engine RESOLVE). NOT the per-build tag; stable when no layer changed. Short-name resolution + `charly clean` retention prefer this label over the tag. Also the "is this an charly image?" presence sentinel (`ExtractMetadata` returns nil when empty). |
             | `Service` | `LabelService` (`ai.opencharly.service`) | **Structured JSON array of `CapabilityService`** — not just names. 23 per-entry fields including `kind`, `events`, `auto_start`, `start_retries`, `priority`, `init`, `layer`. See "LabelService" below. |
             | `Init` | `LabelInit` | Init system name (supervisord / systemd / none). |
-            | `InitDef` | `LabelInitDef` (`ai.opencharly.init_def`) | **`*CapabilityInitDef`** — the build-resolved runtime subset of the init: vocabulary entry: `entrypoint`, `fallback_entrypoint`, `management_tool`, `management_commands`. Makes the init system TRUE single-source: `resolveEntrypointFromMeta` (container entrypoint) and `resolveInitDefFromMeta` (in-container service-management) read this label FIRST, falling back to the legacy `wellKnownInitDefs` registry only for pre-`init_def`-label images. Because the contract travels in the label, init systems declared ONLY in the embedded vocabulary now work at runtime too. |
+            | `InitDef` | `LabelInitDef` (`ai.opencharly.init_def`) | **`*CapabilityInitDef`** — the build-resolved runtime subset of the init: vocabulary entry: `entrypoint`, `fallback_entrypoint`, `management_tool`, `management_commands`. Makes the init system TRUE single-source: `kit.ResolveEntrypointFromMeta` (container entrypoint) and `resolveInitDefFromMeta` (in-container service-management) read this label as their ONLY source. A frozen `wellKnownInitDefs` registry used to back them for pre-`init_def`-label images; it was deleted (it was triplicated across sdk/kit, plugin-pod and plugin-deploy-pod, and frozen at supervisord + systemd, so it could never answer for a third init system such as openrc). An image without the label now errors, naming the rebuild, rather than resolving a guessed management CLI. Because the contract travels in the label, init systems declared ONLY in the embedded vocabulary now work at runtime too. |
             | `ServiceNames` | `LabelInit` | Per-init active-name list; baked alongside `LabelInit` for CLI ergonomics (e.g., `charly service status`). |
             | `Description` | `LabelDescription` (`ai.opencharly.description`) | **Three-section `{candy, box, deploy}` `LabelDescriptionSet`** — the self-description baked into the image. Each `LabeledDescription` carries a `Description` string plus a `Plan []Step` list (each step is an intent keyword `run:`/`check:`/`agent-run:`/`agent-check:` + an inline Op); the deterministic `check:` steps are the acceptance checks consumed by `charly check live` / `charly check box`. See `/charly-check:check`. |
             | `CheckLevel` | `LabelCheckLevel` (`ai.opencharly.check_level`) | The per-box acceptance-depth rung (`none` / `build` / `noagent` (default) / `agent`) gating how deep `charly check run <bed>` drives acceptance. |
@@ -1910,7 +1925,7 @@ cloud-init-renderer-skill:
             |---|---|
             | `sdk/vmshared/cloud_init_render.go` | `RenderCloudInit`, `ResolveKeyInjectionChannels`, `composeUsers`, `composePackages`, `composeBootCmd`, `composeRunCmd` |
             | `sdk/vmshared/cloud_init_iso.go` | `WriteSeedISO` via xorriso; `genisoimage` + `mkisofs` fallbacks |
-            | `spec/exec/charly_install.go` | `kit.EnsureCharlyInGuest` state machine (auto/scp/url/skip strategies) |
+            | `spec/exec/charly_install.go` | `kit.EnsureCharlyInGuest` state machine (auto/scp/skip strategies) |
             | `spec/spec/cue_types_gen.go` (generated) | `VmCloudInit`, `VmCloudInitUser`, `VmCloudInitFile`, `VmCloudInitNetwork`, `VmCloudInitMirrors`, `VmCharlyInstall` |
 
             ## RenderCloudInit top-level
@@ -1991,13 +2006,13 @@ cloud-init-renderer-skill:
 
             - `composePackages`: prepends `{openssh (or `openssh-server` on debian/ubuntu), curl, tar}` (deduplicated against user's `Packages`). Guarantees the guest has SSH server + download tools + tar for later layer application.
             - `composeBootCmd`: prepends `systemctl mask ssh.socket || true` — the EARLIEST cloud-init phase (`bootcmd` runs before `write_files`/packages/`runcmd`), so a socket-activated sshd (enabled by default on some cloud images, notably Debian/Ubuntu) can never accept a connection before cloud-init has finished configuring the guest. `|| true` makes this a harmless no-op on a distro that ships no `ssh.socket` unit at all (Arch/Fedora typically don't).
-            - `composeRunCmd`: prepends THREE steps, in order: (1) a self-testing shell snippet that writes a `PerSourcePenalties no` sshd_config.d drop-in and validates the FULL resulting config with `sshd -t`, deleting the drop-in again on failure; (2) `systemctl unmask ssh.socket || true` (the matching unmask for `composeBootCmd`'s mask); (3) `systemctl enable --now sshd` (or `ssh` on debian/ubuntu). Distro-specific user `runcmd:` entries can assume sshd is running and hardened.
+            - `composeRunCmd`: prepends the hardening drop-in, then a sshd START whose form depends on the guest's init system (systemd vs OpenRC) — three steps on systemd, two on OpenRC. Step (1) is unbranched and identical everywhere: a self-testing shell snippet that writes a `PerSourcePenalties no` sshd_config.d drop-in and validates the FULL resulting config with `sshd -t`, deleting the drop-in again on failure. It is hoisted above the branch in the source so "always first, distro-agnostic" is structural rather than duplicated per arm. The start then branches on `distroInit(spec.Source.Distro) == "openrc"` — a lookup into the generated `spec.DistroInits` table, never a compare against the literal `"alpine"`: on **systemd** (everything else) (2) `systemctl unmask ssh.socket || true` (the matching unmask for `composeBootCmd`'s mask) and (3) `systemctl enable --now sshd` (or `ssh` on debian/ubuntu); on **OpenRC** (Alpine) (2) `rc-update add sshd default && rc-service sshd start` — there is no ssh.socket to unmask and no systemctl to enable with, and the OpenSSH package ships `/etc/init.d/sshd`. Either way, distro-specific user `runcmd:` entries can assume sshd is running and hardened. `composeBootCmd`'s `systemctl mask ssh.socket || true` stays UNBRANCHED: on Alpine the `|| true` swallows the missing binary and the mask is vacuous where nothing is socket-activated.
 
             User-supplied fields **extend** defaults; they don't replace them. Prevents the common footgun where an author puts `packages: [nginx]` and accidentally breaks SSH because they overrode the default list.
 
             ### Guest SSH hardening (D18) — the RCA'd kex-reset wedge class
 
-            The bootcmd-mask + runcmd-unmask/hardening-drop-in/enable sequence above closes a
+            The bootcmd-mask + runcmd hardening-drop-in + sshd-start sequence above (the start being unmask+enable on systemd, `rc-update`+`rc-service` on OpenRC) closes a
             confirmed wedge: OpenSSH ≥ 9.8 defaults `PerSourcePenalties` ON, penalizing
             repeated connection attempts from ONE source. Every VM guest is reached through
             the SAME single passt gateway source IP, so `kit.WaitForSSH`'s own readiness
@@ -2017,8 +2032,17 @@ cloud-init-renderer-skill:
             `runcmd` makes the guest **deterministically unreachable via SSH for the
             entire package-install phase**, trading the old "sometimes-flaky-but-reachable"
             window (sshd up early, racing a possible host-key rewrite) for
-            "safe-but-fully-blocked-if-package-install-stalls." This is verified live
-            against real Arch cloud_image VM beds (`check-charly-vm`, and
+            "safe-but-fully-blocked-if-package-install-stalls." **On a guest that ships
+            no `ssh.socket` — Arch cloud images among them — the mask is a `|| true`
+            no-op, so neither the blocked window NOR the guarantee that motivates it
+            applies there at all.** Sshd stays live on Arch throughout the package
+            install — which is not an oversight but the precondition for the
+            host-key race documented under D15 below (that race "needs only a live
+            sshd, not a socket-activated one"), and the reason the `--needed`
+            rewrite and the sshd try-restart guard exist. The trade-off in this
+            paragraph is scoped to socket-activated guests; on Arch there is no
+            window to block and nothing for the mask to trade. This
+            is verified live against real Arch cloud_image VM beds (`check-charly-vm`, and
             `check-sidecar-pod`'s nested ephemeral VM member) — including a full
             fresh-rebuild pass (destroy+recreate) for each — with zero wedge, now that the
             companion redundant-package-reinstall fix (below) keeps the package-install
@@ -2028,7 +2052,7 @@ cloud-init-renderer-skill:
             the mask/unmask pair entirely and relying on the `PerSourcePenalties` drop-in
             alone.
 
-            **Delivery is distro-branched (D15): `packages:` for most distros, a `runcmd:`-prepended `pacman -S --needed` for pacman-family.** On every distro EXCEPT the pacman family (arch/cachyos/manjaro/endeavouros), the composed package union rides the `packages:` cloud-config key as documented above. On a pacman-family distro, `packages:` is OMITTED entirely and the union is instead PREPENDED to `runcmd:` as `pacman -S --needed --noconfirm <union>` — AHEAD of `composeRunCmd`'s own three hardening/enable steps (D18, above). This is an R10 bed finding: cloud-init's own package-install module invokes `pacman -S` WITHOUT `--needed`, so on an image that already ships the minimum set (e.g. every Arch cloud image) it unconditionally REINSTALLS them — reinstalling openssh re-triggers its post-install host-key-regen hook while the base image's own socket-activated sshd is already listening, racing a live key-file rewrite against new SSH connections (the observed "reset during `kex_exchange_identification`, guest otherwise idle" signature). apt/dnf installs are naturally no-op-idempotent when the package is already present, so only the pacman-family path needs the `--needed` rewrite. The pacman-family check is `formatForDistroID(effectiveDistro(spec)) == "pac"`; `effectiveDistro` resolves `Source.Distro` when set, and additionally infers `"arch"` for a `cloud_image` source with `base_user: "arch"` and no explicit `distro:` (a narrowing of the pre-existing `composePackages` distro-switch fallback, never a behavior change for a caller that already got the Arch/Fedora shape) — every OTHER empty-distro image stays on the safe, unchanged `packages:`-key path. See `sdk/vmshared/cloud_init_render.go`'s `effectiveDistro`/`composePackages` doc comments for the full narrowing proof. **Note (D18):** the pacman-vs-non-pacman split governs ONLY the `packages:` key vs the `pacman -S --needed` runcmd prepend — every distro's `runcmd:` now ALSO carries the D18 hardening/unmask/enable steps, so "byte-identical to before" no longer applies to the full runcmd list, only to the packages-key handling this paragraph describes.
+            **Delivery is distro-branched (D15): `packages:` for most distros, a `runcmd:`-prepended `pacman -Sy --needed` pair for pacman-family.** On every distro EXCEPT the pacman family (arch/archarm/cachyos/manjaro/endeavouros), the composed package union rides the `packages:` cloud-config key as documented above. On a pacman-family distro, `packages:` is OMITTED entirely and the union is instead PREPENDED to `runcmd:` as TWO entries — `pacman -Sy --needed --noconfirm <union>`, then an sshd try-restart guard (`systemctl try-restart sshd.service ssh.socket sshd.socket`, silenced and `|| true`) that resyncs a live sshd if openssh rode along in the dep closure, since a running sshd would otherwise exec a NEWER sshd-session than the parent that spawned it ("internal error: hostkeys confused"). Both sit AHEAD of `composeRunCmd`'s own D18 steps (above), of which there are three on the pacman family since it is systemd throughout — distinct from the two entries this paragraph prepends. This is an R10 bed finding: cloud-init's own package-install module invokes `pacman -S` WITHOUT `--needed`, so on an image that already ships the minimum set (e.g. every Arch cloud image) it unconditionally REINSTALLS them — reinstalling openssh re-triggers its post-install host-key-regen hook while the base image's own sshd is already listening (on a socket-activated image; Arch cloud images typically ship no `ssh.socket`, which is why `composeBootCmd`'s mask is a `|| true` no-op there — the race needs only a live sshd, not a socket-activated one), racing a live key-file rewrite against new SSH connections (the observed "reset during `kex_exchange_identification`, guest otherwise idle" signature). apt/dnf installs are naturally no-op-idempotent when the package is already present, and apk's `add` is likewise a no-op for an already-present package, so only the pacman-family path needs the `--needed` rewrite. The `y` in `-Sy` is deliberate and its partial-upgrade hazard is ACCEPTED by design: a bare `-S` 404s against a rotated mirror, and the guest is a disposable, minutes-lived provisioning target where nothing long-lived survives on the pre-upgrade library set. The pacman-family check is `spec.DistroFormats[spec.Source.Distro] == "pac"` — a lookup into the generated format table keyed on the EXPLICIT field. Nothing is inferred from `base_user` or the image URL, and there is no fallback: an unset or out-of-vocabulary distro yields an empty format rather than the Arch/Fedora shape, which is why the vm kind's `OpValidate` requires the field at author time. See `sdk/vmshared/cloud_init_render.go` and `spec/schema/distro_vocab.cue`. **Note (D18):** the pacman-vs-non-pacman split governs ONLY the `packages:` key vs the `pacman -Sy` + sshd-resync runcmd prepend — every distro's `runcmd:` now ALSO carries the D18 hardening drop-in plus a per-init sshd start (unmask+enable on systemd, `rc-update`+`rc-service` on OpenRC), so this paragraph's scope is the packages-key handling alone, not the full runcmd list.
 
             ## WriteSeedISO
 
@@ -2058,7 +2082,6 @@ cloud-init-renderer-skill:
             | Strategy | Action |
             |---|---|
             | `auto` / `scp` | `scp $(os.Executable()) guest:/usr/local/bin/charly; chmod +x` |
-            | `url` | ssh-execute `curl -L <url> -o /usr/local/bin/charly && sha256sum -c` (verified against `VmCharlyInstall.Checksum`) |
             | `skip` | `ssh 'which charly'` — fails if missing, returns early if present |
 
             Idempotent. If `charly` is already present at the target version, the function returns without re-scp'ing. See `/charly-internals:vm-deploy-target` for how this plugs into the overall deploy flow.
@@ -2167,7 +2190,7 @@ cutover-policy-skill:
             ## Required for every breaking change
 
             - A new **migration-table entry** in `candy/plugin-migrate/migrations.cue` (a declarative `ops:` list, or an `apply:` `goHooks` hook for a structural reshape) PLUS a matching `#SchemaVersion` bump in `spec/schema/version.cue` (the spec repo — landed + tagged first, see `/charly-build:migrate`), applied via `task cue:gen`; the entry's CalVer is strictly greater than the current HEAD. Every cutover is one idempotent step applied by the op-walker on the one `charly migrate` command — there are no per-cutover sub-verbs. Running `charly migrate` twice is a no-op. See `/charly-build:migrate`.
-            - A **fresh release git tag** `v<YYYY.DDD.HHMM>` — ONE per merge, applied by the fresh `pr-validator` at MERGE from the current UTC merge time (never by the author at push time; author-time stamps collide/mis-order across concurrent PRs), **decoupled** from the `charly.yml` `version:` field (the schema version, bumped only when a cutover raises `#SchemaVersion`). Tag EVERY landing, including one that does NOT bump `version:` (content removal — a submodule extraction, an image drop). Tags are **immutable** — only ever added, never moved or force-pushed. Every component is fixed-width zero-padded (4-digit year, 3-digit day-of-year, 4-digit HHMM) so tags sort chronologically under a plain alphanumeric sort; the evaluator computes `v$(date -u +%Y.%j.%H%M)` at merge. Every repo (superproject, `box/<distro>`, `plugins`, `pkg/*`, `docs`) is tagged on its own merged HEAD — the tag marks the merge, not the schema, so no `charly.yml` is required; `sdk` ALONE uses its Go-module `v0.<YYYYDDD>.<HHMM leading-zeros-stripped>` scheme (a semver requirement, not an exemption). See `/charly-build:migrate` "Per-merge release git tags", `/charly-internals:git-workflow` "CalVer", and the project rulebook "Post-Execution Policies".
+            - A **fresh release git tag** `v<YYYY.DDD.HHMM>` — ONE per merge, applied by the fresh `pr-validator` at MERGE from the current UTC merge time (never by the author at push time; author-time stamps collide/mis-order across concurrent PRs), **decoupled** from the `charly.yml` `version:` field (the schema version, bumped only when a cutover raises `#SchemaVersion`). Tag EVERY landing, including one that does NOT bump `version:` (content removal — a submodule extraction, an image drop). Tags are **immutable** — only ever added, never moved or force-pushed. Every component is fixed-width zero-padded (4-digit year, 3-digit day-of-year, 4-digit HHMM) so tags sort chronologically under a plain alphanumeric sort; the evaluator computes `v$(date -u +%Y.%j.%H%M)` at merge. Every repo (superproject, `box/<distro>`, `plugins`, `docs`, and the `pkg/*` submodules until the nFPM cutover removes them — not yet done on `main`) is tagged on its own merged HEAD — the tag marks the merge, not the schema, so no `charly.yml` is required; `sdk` ALONE uses its Go-module `v0.<YYYYDDD>.<HHMM leading-zeros-stripped>` scheme (a semver requirement, not an exemption). See `/charly-build:migrate` "Per-merge release git tags", `/charly-internals:git-workflow` "CalVer", and the project rulebook "Post-Execution Policies".
             - **Hard load-time errors** for any residual legacy field, with a one-line remediation hint pointing at the migration command.
             - **Deletion — in the same PR** — of every Go type, function, CLI flag, OCI label, YAML field, skill doc paragraph, and test fixture that references the removed surface.
             - **Relocation step-sequence PARITY (when the cutover relocates a dispatcher, orchestrator, or runner).** Before relocating, ENUMERATE the original's per-CLASS behavior arms — e.g. bring-up / update / teardown × each substrate or shape class — and PROVE each class's step sequence matches the original in the relocated code. Fixing one arm of a class while missing its siblings is the CHARACTERISTIC relocation defect: a generic fallback that silently mis-handles a special class passes every unit test and fails ONLY on that class's live bed. The acceptance roster MUST therefore carry a bed per SPECIAL class (a gate that cannot fail on the class proves nothing — see `/charly-check:check` "R10 gate by change class").
@@ -2684,7 +2707,7 @@ egress-skill:
             config files charly WRITES to a system BEFORE the bytes hit disk. MUST be
             invoked before working on candy/plugin-fleet/egress.go, the vendored schemas under
             candy/plugin-egress/egress-schemas/vendor/, the ValidateEgress / registerVendoredEgressKind path,
-            the offline `task cue:vendor` pipeline, or adding an egress schema for any
+            the offline CUE vendoring pipeline, or adding an egress schema for any
             written artifact (cloud-init, kubernetes manifests, traefik routes, runtime config,
             install ledger, systemd/quadlet units, ssh_config, libvirt XML).
         triggers:
@@ -2705,7 +2728,7 @@ egress-skill:
             > `sdk/deploykit`'s `renderSeamCaller.validateEgress` (a direct `verb:egress` `InvokeProvider`
             > peer dispatch, no host round-trip) — `charly` core no longer has a "text" mode caller at all.
             > The core-side `ValidateXMLEgress` wrapper was itself deleted as
-            > unreached residue in the 2026-07-22 dead-code-radical-removal batch — the sole surviving
+            > unreached residue in the dead-code-radical-removal batch — the sole surviving
             > `ValidateXMLEgress` is `candy/plugin-vm`'s own copy (`vm_egress_shim.go`), which Invokes
             > `verb:egress` directly (mode `xml`) over its own reverse channel for the rendered
             > libvirt-domain-XML path; every OTHER caller + the `vmshared.ValidateEgress` hook are unchanged. The
@@ -2771,7 +2794,7 @@ egress-skill:
             **best-effort**: a koala *decode* error → pass, deferring to the authoritative downstream gate; only a
             schema violation on a decoded document hard-fails) is still fully served by `verb:egress`'s
             `OpValidate` — there is simply no core-side `ValidateXMLEgress` convenience wrapper anymore (deleted as
-            unreached residue, 2026-07-22). Its one real caller, `candy/plugin-vm`, Invokes `verb:egress` with
+            unreached residue). Its one real caller, `candy/plugin-vm`, Invokes `verb:egress` with
             `mode: "xml"` directly through its own `ValidateXMLEgress` wrapper (`vm_egress_shim.go`) rather than
             through a core shim.
 
@@ -2802,7 +2825,7 @@ egress-skill:
               vendored `package`+`import` file never has to join the SDK's single-blob `BuildCapabilities` /
               `ConcatSchema` / `CompileString` Describe contract (the move that would otherwise break).
 
-            ## The offline vendoring pipeline (`task cue:vendor`)
+            ## The offline vendoring pipeline
 
             Vendoring keeps charly a hermetic single binary — schemas are converted to plain
             `.cue` at DEV time and embedded; nothing is fetched at runtime. Requires the `cue`
@@ -2885,7 +2908,7 @@ egress-skill:
             Invoke before working on `candy/plugin-egress` (the validation logic + the egress CUE schemas
             under `candy/plugin-egress/egress-schemas/` incl. `vendor/cloud_config.cue`), the
             `candy/plugin-fleet/egress.go` SHIM, the `ValidateEgress` path,
-            the `task cue:vendor` pipeline, or adding/validating any config file charly writes
+            the offline vendoring pipeline, or adding/validating any config file charly writes
             to a system.
 generate-source-skill:
     skill:
@@ -3317,8 +3340,14 @@ generate-source-skill:
                   **Create (idempotent useradd):**
                   ```dockerfile
                   RUN if ! getent passwd <UID> >/dev/null 2>&1; then \
-                        (getent group <GID> >/dev/null 2>&1 || groupadd -g <GID> <user>) && \
-                        useradd -m -u <UID> -g <GID> -s /bin/bash <user>; \
+                        LOGIN_SHELL=/bin/sh; [ -x /bin/bash ] && LOGIN_SHELL=/bin/bash; \
+                        if command -v useradd >/dev/null 2>&1; then \
+                          (getent group <GID> >/dev/null 2>&1 || groupadd -g <GID> <user>) && \
+                          useradd -m -u <UID> -g <GID> -s "$LOGIN_SHELL" <user>; \
+                        else \
+                          (getent group <GID> >/dev/null 2>&1 || addgroup -g <GID> <user>) && \
+                          adduser -D -h <home> -u <UID> -G <user> -s "$LOGIN_SHELL" <user>; \
+                        fi; \
                       fi
 
                   WORKDIR /home/<user>
@@ -3343,7 +3372,7 @@ generate-source-skill:
                   1. # Layer: <name>                 (comment header)
                   2. ARG TARGETARCH + ENV ARCH=${TARGETARCH}    (once; from emitVarsEnv)
                   3. ENV <K>=<V> for each layer.Vars entry      (also from emitVarsEnv)
-                  4. Package install: rpm/deb/pac/aur  (unchanged — format template render)
+                  4. Package install: rpm/deb/pac/aur/apk  (unchanged — format template render)
                   5. emitTasks(b, layer, img, buildDir, contextRelPrefix, initialUser):
                      for each t in layer.tasks:
                        resolve ${VAR} in non-verbatim fields
@@ -3364,7 +3393,7 @@ generate-source-skill:
                   6. USER root reset (unless last layer + skipRootReset)
                   ```
 
-                  The `plugin:` verb case is placement-agnostic above the registry. `plugin: command` is the one special case — it rehydrates `plugin_input.command` and emits via the SAME `emitCmd` as the literal `command` verb. Every other `plugin:` step resolves its provider via `providerRegistry.ResolveVerb`: a builtin `ProvisionActor` renders an act shell `RUN` in-proc (the zero-JSON fast path, `resolveProvisionScript`), while ANY other resolved provider — an external `grpcProvider` (host-built + connected by `NewGenerator`'s build-time plugin connect seam, `loadProjectPlugins`), or a builtin emitting a richer fragment — renders via `emitPluginFragment`, which calls `prov.Invoke(OpEmit)` with the step's `plugin_input` (`op.Params`) + a `spec.BuildEnv` descriptor (`op.Env`) and splices the returned `spec.EmitReply.Fragment` verbatim into the Containerfile. An unresolved verb is a loud error, never a silently-dropped step. This is the build half of operator-authorized build-time plugin execution — see `/charly-internals:plugin` (placement) + `/charly-build:generate`. (`emitPluginFragment`'s core is factored into the shared `invokeOpEmitFragment` seam, which the DEPLOY-mode pod-overlay `ociEmitStep` external-step arm (reached by the candy's `deploykit.OCITarget.EmitStepOp` over `HostBuild("step-emit","oci-emit-step")`) ALSO uses to bake an `external:<word>` `class:step` step declaring `StepContract.Emits=true` — F-STEP-EMIT, see `/charly-internals:install-plan`.)
+                  The `plugin:` verb case is placement-agnostic above the registry. `plugin: command` is the one special case — it rehydrates `plugin_input.command` and emits via the SAME `emitCmd` as the literal `command` verb. Every other `plugin:` step resolves its provider via `providerRegistry.ResolveVerb`: a builtin `ProvisionActor` renders an act shell `RUN` in-proc (the zero-JSON fast path, `resolveProvisionScript`), while ANY other resolved provider — an external `grpcProvider` (host-built + connected by `NewGenerator`'s build-time plugin connect seam, `loadProjectPlugins`), or a builtin emitting a richer fragment — renders via `emitPluginFragment`, which calls `prov.Invoke(OpEmit)` with the step's `plugin_input` (`op.Params`) + a `spec.BuildEnv` descriptor (`op.Env`) and splices the returned `spec.EmitReply.Fragment` verbatim into the Containerfile. An unresolved verb is a loud error, never a silently-dropped step. This is the build half of operator-authorized build-time plugin execution — see `/charly-internals:plugin` (placement) + `/charly-build:generate`. (`emitPluginFragment`'s core is factored into the shared `invokeOpEmitFragment` seam, which the DEPLOY-mode pod-overlay `dispatchOCIStep` external-step arm (reached by the candy's `deploykit.OCITarget.EmitStepOp` over `HostBuild("step-emit","oci-emit-step")`) ALSO uses to bake an `external:<word>` `class:step` step declaring `StepContract.Emits=true` — F-STEP-EMIT, see `/charly-internals:install-plan`.)
 
                   ### `Task` struct (`charly/layers.go:604`)
 
@@ -3472,7 +3501,8 @@ git-workflow-skill:
             Every change to an OpenCharly repo lands through ONE discipline: a **pull request**
             that a FRESH `pr-validator` agent independently validates and merges. A **direct
             push to `main` is FORBIDDEN and mechanically disabled** — GitHub branch protection
-            (`enforce_admins`) + the `pre-push-gate` block it in every repo. The **R10 pass
+            (`enforce_admins`) block it in every repo (the `pre-push-gate` adds a local
+            backstop in the harnesses that wire it — NOT Claude Code). The **R10 pass
             authorizes OPENING the PR, never a self-merge**: the two-step landing separates the
             author (who opens the PR) from the fresh evaluator (who validates, merges, tags).
             This skill is the mechanics; the project rulebook "Post-Execution Policies" (`AGENTS.md` / `CLAUDE.md`) carries the
@@ -3482,7 +3512,7 @@ git-workflow-skill:
 
             ## Non-negotiable invariants
 
-            - **No direct push to `main`** (the project rulebook's PR-only landing mandate — see "Post-Execution Policies"). Enforced by GitHub branch protection (the `charly/pr-validator` status + a PR + linear history + `enforce_admins`) and the `pre-push-gate` locally. Organization-wide apply/verify is owned only by `opencharly/.github/scripts/branch-protection.sh`.
+            - **No direct push to `main`** (the project rulebook's PR-only landing mandate — see "Post-Execution Policies"). Enforced by GitHub branch protection (the `charly/pr-validator` status + a PR + linear history + `enforce_admins`), which is what makes it mechanical; the `pre-push-gate` adds a local backstop only in the harnesses that wire it (`.reasonix`, kimi) — it is NOT wired under Claude Code. Organization-wide apply/verify is owned only by `opencharly/.github/scripts/branch-protection.sh`.
             - **Never force-push, on any branch, ever** (mandate, same rulebook section). `main` only fast-forwards via the validator's squash-merge; a `feat/` branch, once pushed, advances only by ADDING commits (the author's change, any review-round fix commits, then the evaluator's merge-time version stamp), and the squash-merge collapses them. A stale `feat/` catches up with `gh pr update-branch` (a merge, NOT a rebase-force); tags are add-only. **Amending a `feat/` branch is a normal authoring action — legal until the first push** (amending a pushed branch would require a force-push, which is forbidden).
             - **R10-gated; the merge requires the fresh `pr-validator`'s green status.** R10 PASS authorizes opening the PR (with pasted evidence); a rule violation or R10 FAIL means no green `charly/pr-validator` status and no merge — fix in the same tree, re-run R10, re-push; the status resets and the evaluator re-runs.
             - **Zero warnings is part of R10** (project rulebook R1). A version-mismatch warning clears with `charly box reconcile`; any other warning gets `/charly-internals:root-cause-analyzer` then a real fix — "warning" is never an accepted end state.
@@ -3498,7 +3528,7 @@ git-workflow-skill:
 
               Stage a rename+edit as `git add <new>` alone, and a deletion by DIRECTORY or with `git add -u`; never name the vanished path. **This shape defeats the post-commit check above**, which is why it needs stating separately: `git show --stat` DOES list the file, as `old.md => new.md | 0`, so "every intended file is listed" passes. Presence is not the signal — the tells are the **magnitude** (`| 0` insertions on a commit meant to change content) and a **leftover ` M <new>`** in `git status` afterwards. Read the numbers and the post-commit status, not just the filenames, and confirm content directly with `git show HEAD:<new-path> | head -1` whenever the edit is the point of the commit. The CalVer-finalization instance of this — renaming a placeholder `CHANGELOG/` file while rewriting its H1 — is in `references/validator-and-calver.md`.
             - **Check-coverage is part of R10.** The change must ship the test coverage that proves its functionality (`check:` checks for new/changed layers & images, Go tests for `charly` code) AND the live run must have exercised it. A change whose new functionality has no test that would fail without it is not landable.
-            - **Every repo is tagged at merge.** The superproject, every `box/<distro>`, `plugins`, `pkg/*`, and `docs` all mint `v<YYYY.DDD.HHMM>` on their own merged HEAD — the tag marks the MERGE, decoupled from any `charly.yml` `version:` schema field, so a repo needs no `charly.yml` to be tagged. The sole exception is the sdk contract repo, which tags under its own Go-module scheme `v0.<YYYYDDD>.<HHMM with all leading zeros stripped>` (B2 step 0) — **not an exemption but a hard Go-module requirement**: `v<YYYY.DDD.HHMM>` is not a valid Go module version (semver forbids a leading-zero segment — `0733`→`733` — and a `major ≥ 2` would force a `/vN` module-path suffix that breaks every `import github.com/opencharly/sdk`), so the stripped `v0.<…>` form is mandatory, not a choice. A skipped tag is a defect, not an exemption: the orchestrator verifies the tag landed after each merge (`git ls-remote --tags origin v<VER>` non-empty) and, if the evaluator skipped it, backfills it add-only on the merged HEAD (`git tag -a v<VER> -m "<subject>" <merged-HEAD>` + `git push origin refs/tags/v<VER>`) — tags are immutable, so a backfill only adds one, never moves an existing tag.
+            - **Every repo is tagged at merge.** The superproject, every `box/<distro>`, `plugins`, and `docs` — plus the `pkg/*` submodules until the nFPM cutover removes them, which it has not yet done on `main` — all mint `v<YYYY.DDD.HHMM>` on their own merged HEAD — the tag marks the MERGE, decoupled from any `charly.yml` `version:` schema field, so a repo needs no `charly.yml` to be tagged. The sole exception is the sdk contract repo, which tags under its own Go-module scheme `v0.<YYYYDDD>.<HHMM with all leading zeros stripped>` (B2 step 0) — **not an exemption but a hard Go-module requirement**: `v<YYYY.DDD.HHMM>` is not a valid Go module version (semver forbids a leading-zero segment — `0733`→`733` — and a `major ≥ 2` would force a `/vN` module-path suffix that breaks every `import github.com/opencharly/sdk`), so the stripped `v0.<…>` form is mandatory, not a choice. A skipped tag is a defect, not an exemption: the orchestrator verifies the tag landed after each merge (`git ls-remote --tags origin v<VER>` non-empty) and, if the evaluator skipped it, backfills it add-only on the merged HEAD (`git tag -a v<VER> -m "<subject>" <merged-HEAD>` + `git push origin refs/tags/v<VER>`) — tags are immutable, so a backfill only adds one, never moves an existing tag.
 
             ## Reference Index
 
@@ -3507,6 +3537,7 @@ git-workflow-skill:
             | B1 (the two-step branch-per-change loop, concurrent landings, the cross-repo WIP landing sequence) and B4 (sync to upstream + prune) | `references/branch-and-pr-loop.md` |
             | B2 (multi-repo/multi-worktree coordination, per-module verification), B3 (agent teams in per-teammate worktrees), B6 (cross-repo `@github` landing), and B7 (multi-worktree landing + refresh, the canonical end-to-end) | `references/multi-repo-coordination.md` |
             | B5 (the fresh evaluator + fork/PR path, the two-gate autonomous-landing model), CalVer generation, post-landing cleanliness + report format, and the validation-FAILS recovery sequence | `references/validator-and-calver.md` |
+            | Evidence discipline — provenance vs plausibility of a pasted gate, the three freshness surfaces (head / body / pasted output), positive-vs-negative claim decay, sweeping for claims a fix invalidated, the merged-tree gate for a `BEHIND` PR, source-and-regeneration as one cross-repo cutover, submodule pointers reverted by a non-conflicting merge, and why status-absence on a known head is a false negative | `references/evidence-and-freshness.md` |
 
             ## Cross-References
 
@@ -3615,6 +3646,53 @@ git-workflow-skill:
                     the delta re-gate covers only the mechanical update-branch merge on top of an
                     already-R10'd `main`.
 
+                  **Re-running the bed is HALF the remedy — re-pointing the citations is the other
+                  half.** `gh pr update-branch` merges `main` into the branch, and that merge can
+                  pull a new BUILDER-CHAIN input — a submodule gitlink advance, a candy change —
+                  into the very chain a bed's fixture image builds from. Every bed result pasted
+                  before that merge then describes a tree that is not the one being merged: true
+                  when written, false when read (`references/evidence-and-freshness.md`, "Three
+                  freshness surfaces, failing independently"). The delta re-gate above produces the
+                  fresh run; nothing in it updates the artifacts that CITE the old one, so a run
+                  directory named in the PR body or the CHANGELOG still points at a superseded tree
+                  — and it is the CHANGELOG that ships inside the commit the evaluator tags.
+
+                  **Scope — block on what gets TAGGED, report what gets squashed away.** The
+                  CHANGELOG entry and the PR body are both durable: the entry lands in the tagged
+                  tree, and a merged PR body stays public and quotable long after the branch is
+                  deleted. A superseded run directory in either is BLOCKING. An intermediate commit
+                  message is replaced by the evaluator's squash message, so a stale citation there
+                  is reportable but not blocking. The general form, which outlives the specific
+                  case: **a claim-keyed sweep runs LAST, once the final tree exists** — a record
+                  written alongside the change it describes is written before the tree its reader
+                  will check it against.
+
+                  **Before merging a superproject leg, verify every gitlink is an ANCESTOR of its own repo's
+                  `origin/main` — not merely that it matches a local checkout.** Those are different questions and
+                  only the first discriminates:
+
+                  ```bash
+                  git config --file .gitmodules --get-regexp path | awk '{print $2}' | while read -r s; do
+                    g=$(git ls-tree HEAD "$s" | awk '{print $3}')
+                    (cd "$s" && git fetch -q origin &&
+                     git merge-base --is-ancestor "$g" origin/main && echo "$s MERGED" || echo "$s NOT ON main")
+                  done
+                  ```
+
+                  "The gitlink matches the submodule's HEAD" **cannot fail in the case it exists to catch**: a checkout
+                  sitting on a PR head satisfies it perfectly. Measured on one leg, that phrasing reported nine
+                  submodules clean while **four** named commits on no branch — and it counted seven, with both
+                  uncounted submodules in the failing set, so the miscount and the wrong question compounded.
+
+                  **An unmerged pin is worse than an early one:** when the target PR merges, the CalVer commit plus the
+                  squash produce a DIFFERENT sha, so the pin becomes permanently wrong rather than eventually right. A
+                  pin may legitimately name an unmerged head while its PR is open — the normal mid-flight state — but it
+                  must be re-derived from `origin/main` before the leg merges.
+
+                  Expect **post-squash staleness** too: a pin at a pre-squash feat head stops being an ancestor the
+                  moment its PR squash-merges. Check whether `origin/main` is strictly AHEAD (it usually is, carrying the
+                  CalVer finalization) before concluding anything was orphaned.
+
                   **Gitlink ANCESTOR bump → `gh pr update-branch` flags CONFLICTING (recover
                   locally).** When the just-merged delta and a still-open PR both bump the SAME
                   submodule gitlink and one bump is an ANCESTOR of the other, GitHub's
@@ -3630,6 +3708,31 @@ git-workflow-skill:
                   regression this class produces (a sibling merge advances `main` mid-validation, then a
                   naive recovery reverts the gitlink to the older pointer). Only after the descendant-wins
                   check re-post the status and delta-re-gate as above.
+
+                  **Prefer the whole-tree check over this per-path one.** `git ls-tree HEAD <sub>`
+                  only helps when you already suspect the right submodule, and the failure it misses
+                  — a gitlink silently reverted by a merge that never conflicted, so the path is
+                  named nowhere — is the one that actually occurred. Compare the merge result against
+                  git's own resolution instead, which covers every path at once:
+                  `references/evidence-and-freshness.md`, "Submodule pointers can be reverted by a
+                  merge without ever conflicting". Use the per-path form above only as a quick
+                  confirmation once the whole-tree comparison has already told you where to look.
+
+                  **The `docs` gitlink has a TWIN in candy config, and no gitlink check can see
+                  it.** Both checks above compare gitlinks. `candy/docs-site/charly.yml` records
+                  the same `docs` sha twice as ordinary text — once as the `DOCS_REF` var (the
+                  clone step's ENV, hence that layer's cache key) and once as the literal matcher
+                  in the `docs-site-pinned-commit` check — and a merge resolves plain text
+                  line-wise, with no notion that those strings name a commit. So a recovery can
+                  satisfy the descendant-wins check AND the whole-tree comparison while leaving the
+                  candy pinned at the older commit: the same regression this class produces, one
+                  surface over, invisible to every instrument aimed at it. The two gates are
+                  complementary and neither substitutes for the other — the gitlink checks above
+                  catch a gitlink that went backwards; `task docs:pin` catches the gitlink and the
+                  candy pins DISAGREEING, and passes silently when both regressed together. So run
+                  BOTH whenever a recovery touches the `docs` gitlink. The rule is lockstep: the
+                  gitlink and its candy pins move together, on a recovery exactly as on the forward
+                  landing (B6a step 4, which also owns that re-pin's change class).
 
                   **Multi-committer main advances — out-of-tree PRs from other committers.** The
                   orchestrator is NOT the sole source of `main` advances: another committer (a human
@@ -3694,11 +3797,14 @@ git-workflow-skill:
                     UNPUSHED — the "amend only before the first push" invariant above. THEN push
                     `feat/<slug>` and open the PRs (B1 step 1; multi-repo order = B2).
 
-                  Nothing pre-bed ever ships, and every intermediate commit passes the PreToolUse
-                  tier gate TRUTHFULLY at the stage it was made — the tier only ever moves UP, to
-                  match proof that now exists.
+                  Nothing pre-bed ever ships, and every intermediate commit states its attribution
+                  tier TRUTHFULLY at the stage it was made — the tier only ever moves UP, to match
+                  proof that now exists. No hook enforces this in any harness: the gate scripts
+                  contain no tier logic (`gate_test.py` asserts attribution text is ALLOWed as
+                  validator-owned), so tier truth is judged by the fresh `pr-validator`, per the
+                  rulebook's "never by hook regexes".
 
-                  ## B4 — sync to upstream + prune (per repo: main, sdk, plugins, docs, box/*, pkg/*)
+                  ## B4 — sync to upstream + prune (per repo: main, sdk, plugins, docs, box/*)
 
                   - **Sync-before-start.** `git fetch origin --prune --tags`; ff local `main` to
                     `origin/main`. Never force-reset a diverged local `main` — if it cannot
@@ -3805,6 +3911,19 @@ git-workflow-skill:
                   cutover lands `plugins` (the `*.md`) at `documentation reviewed`, then the
                   superproject pointer bump at `documentation reviewed` too — both halves honest.
 
+                  **The derivation stops at the gitlink, and the reason is a general rule: a change
+                  class must be decidable FROM THE DIFF.** A gitlink is a pointer git itself
+                  resolves, so "what it points at" is reachable from the PR — the validator reads
+                  the submodule's own `old..new` in the repo the PR is against, and the derivation
+                  above is certifiable without leaving it. A sha inside a candy `var:` is not: it
+                  is a string, and following it means cloning a remote repository at a named
+                  commit. Were "the referenced content is documentation" the test, the class would
+                  be a property of a tree the PR does not contain, and no validator could rule on
+                  it from the PR — which is why re-pinning `DOCS_REF` after a docs merge is a
+                  CONFIG change carrying its own bed gate (B6a step 4), no matter how documentary
+                  the commit it names. Any pin the diff cannot resolve behaves the same way. When
+                  the diff cannot decide the class, the class is the heavier one.
+
                   **For the full multi-worktree end-to-end — the doc-tier `git -C` literal-path
                   rule, and the mandatory post-landing worktree refresh — see B7.**
 
@@ -3829,8 +3948,10 @@ git-workflow-skill:
                     individually, never as one tree.
 
                   **Prove a fix is in the BUILT BINARY by a content marker, NOT by the version stamp.**
-                  `pkg/arch/calver.sh` derives the CalVer from the HEAD commit's UTC time (`git log -1
-                  --format=%cd`), so the stamp identifies the SOURCE COMMIT, never the build moment — a
+                  `scripts/calver.sh` derives the CalVer from the HEAD commit's UTC time (`TZ=UTC0 git
+                  log -1 --format=%cd --date='format-local:%Y %j %H %M'` — the `TZ=UTC0` is what makes
+                  the bare `%cd` UTC; without it `%cd` uses the commit's own TZ offset), so the stamp
+                  identifies the SOURCE COMMIT, never the build moment — a
                   `task build:binary` on a DIRTY working tree reports the IDENTICAL version as the clean
                   commit under it. So `charly version` matching the expected CalVer does NOT prove your
                   uncommitted fix compiled in. Prove fix-presence by a content marker instead: `strings
@@ -3905,6 +4026,48 @@ git-workflow-skill:
                   Each repo gets ONE R10 against ITS final code; repos land producer→consumer.
                   Multi-level chains (A→B→C) recurse the same way.
 
+                  ### B6a — the documentation landing is the same chain
+
+                  This project publishes opencharly.ai from GENERATED trees, so a prose edit is a
+                  producer→consumer landing exactly like a code one, and the same "producer must be
+                  merged first" rule applies. `/charly-build:docs` owns the projection model; the
+                  load-bearing part of it is that the two chains have DIFFERENT lengths — candy and
+                  box prose is a ONE-hop projection read straight off each repo's `charly.yml`,
+                  while skill prose is a TWO-hop projection that `charly docs generate` reads from
+                  the `plugins/` tree, never from `candy/*/charly.yml`.
+
+                  The commands below are maintenance THIS REPOSITORY performs on itself. They are
+                  not steps an charly user runs, and they never belong on a reader-facing page.
+
+                  1. **Edit the source, never a generated file** — the candy's `description:` /
+                     `plan:`, or the owning candy's `skill:` content.
+                  2. **For a skill edit, project and land `plugins` FIRST** (`charly marketplace
+                     generate`, then the `plugins` PR). Locally the docs generator reads the dirty
+                     `plugins/` tree, so a local regeneration picks the edit up immediately; every
+                     other reader gets it only once the gitlink advances. Advancing that gitlink
+                     WITHOUT regenerating `docs` in the same landing is precisely what leaves the
+                     published site stale, and only the drift gate will say so.
+                  3. **Regenerate and land `docs`** — `task docs:sync`, review the emitted pages,
+                     commit them in the `docs` submodule; `task docs:drift` is the gate, re-syncing
+                     and failing on any dirty path. Regeneration rewrites the generated trees
+                     WHOLESALE, so a mirror already behind cannot be brought forward selectively:
+                     every pending page lands with the next commit or none of them do. Budget for
+                     carrying someone else's backlog when the mirror has drifted.
+                  4. **Re-pin the new `docs` merge** in `candy/docs-site/charly.yml`; `task
+                     docs:pin` is the gate and asserts more than one occurrence
+                     (`/charly-tools:docs-site` owns the pin contract). This step edits candy
+                     CONFIG rather than prose, so its own gate is the `check-docs` bed — a
+                     documentation-only change class does NOT cover it, and the commit that carries
+                     it cannot claim the `documentation reviewed` tier. Positively: its gate is
+                     `charly box validate` PLUS `check-docs` — the `disposable: true` bed that
+                     composes the changed entity, through `docs-site-app` — at `fully tested and
+                     validated`. Watch for it on a landing whose only "extra" is this re-pin: the
+                     step silently upgrades the WHOLE cutover's gate, because `DOCS_REF` is emitted
+                     as an ENV line above the clone step, so re-pinning it changes the emitted
+                     Containerfile and therefore the image. The general rule the boundary rests on
+                     is in B2, "the derivation stops at the gitlink".
+                  5. **Bump the superproject gitlinks** for whichever submodules moved.
+
                   ## B7 — Multi-worktree landing + refresh (the canonical end-to-end)
 
                   When this project is driven from multiple git worktrees sharing one `.git`, only
@@ -3950,7 +4113,7 @@ git-workflow-skill:
 
                   **4. Tags: annotated only** (`git tag -a v<…> -m "<desc>" <merged-HEAD>`), applied
                   by the evaluator on the merged `main` HEAD and pushed as `refs/tags/…` (allowed by
-                  the pre-push-gate; the user token triggers `release-packages.yml`). Verify `git
+                  the pre-push-gate; the user token triggers the release-binary workflow). Verify `git
                   cat-file -t <tag>` == `tag` AND `git ls-remote --tags origin <tag>` is non-empty.
 
                   **5. Reconcile (when box submodules were re-stamped).** Bump the superproject
@@ -3963,35 +4126,23 @@ git-workflow-skill:
                   worktree: the one on `main` → `git -C <wt> merge --ff-only origin/main`; each other
                   → `git -C <wt> checkout --detach origin/main`; THEN refresh only already-initialized
                   submodules with `git -C <wt> submodule update --recursive` (no `--init`). Initialize
-                  only the paths the next task needs: a root R10 worktree needs `sdk` and `pkg/arch`, so
-                  use `git -C <wt> submodule update --init --recursive sdk pkg/arch`; box-submodule work
+                  only the paths the next task needs: a root R10 worktree needs `sdk`, so
+                  use `git -C <wt> submodule update --init --recursive sdk`; box-submodule work
                   initializes its own declared path. Never blanket-initialize every submodule merely to
                   refresh a worktree: it creates unnecessary per-worktree clone state. The Skill tool
                   serves skills from the MAIN worktree — a stale main worktree silently serves STALE SKILLS
                   to sessions, so refreshing it is mandatory. (A ` M <sub>` in a worktree used only for
                   the ff-merge is this drift, not lost work.)
 
-                  **A disposable `localpkg` bed builds from the submodule's ON-DISK WORKING-TREE
-                  checkout, NOT from the committed gitlink alone.** After a CLEAN gitlink
-                  auto-merge (no conflict), `git ls-tree HEAD <sub>` can already show the correct
-                  new pin while the submodule's on-disk `HEAD` is still the OLD commit — a
-                  gitlink merge does not itself check out the new submodule content; that needs
-                  its own `git -C <wt> submodule update --checkout <path>` (or `--recursive`
-                  over the initialized set), same as any other post-merge refresh in this step.
-                  Skipping it means the bed silently builds STALE source even though the
-                  committed pointer is correct. Signature: the localpkg build derives its repo
-                  root as `/tmp` (a symptom of resolving the wrong tree) and bakes a stale
-                  `pkgver` into the package it builds. (RCA'd 2026-07-20: `pkg/arch`
-                  `96ce37c`-stale on disk vs `5734a83` actually committed.)
-
-                  **A derived `pkgver` left dirty in `pkg/arch/PKGBUILD` persists ACROSS the
-                  session, per worktree.** `pkg/arch/calver.sh` stamps `PKGBUILD` with a
-                  derived `pkgver` at `makepkg` time, and that edit is a real working-tree
-                  change — it does not self-revert between bed runs. Discard it (`git -C <wt>
-                  checkout -- pkg/arch/PKGBUILD`, or the tree's standard clean step) before
-                  EVERY bed re-gate, in EVERY worktree that ran a `localpkg`/package build — not
-                  only the main checkout — or the next run's `git status` reads dirty for a
-                  reason unrelated to your actual edits.
+                  **A disposable bed that builds from a submodule builds from the submodule's
+                  ON-DISK WORKING-TREE checkout, NOT from the committed gitlink alone.** After a
+                  CLEAN gitlink auto-merge (no conflict), `git ls-tree HEAD <sub>` can already
+                  show the correct new pin while the submodule's on-disk `HEAD` is still the OLD
+                  commit — a gitlink merge does not itself check out the new submodule content;
+                  that needs its own `git -C <wt> submodule update --checkout <path>` (or
+                  `--recursive` over the initialized set), same as any other post-merge refresh
+                  in this step. Skipping it means the bed silently builds STALE source even
+                  though the committed pointer is correct.
 
                   **Landing gotchas (each cost real time):** `git merge-base --is-ancestor A B` ERRORS if B's object isn't
                   fetched (common for a sibling-worktree submodule) → `git fetch` first; cross-check
@@ -4014,10 +4165,10 @@ git-workflow-skill:
                   footgun: a MUTATING command (anything that writes files or runs `git
                   submodule update` as a side effect — `task cue:gen` is the canonical
                   offender) run against a stale, ambient cwd doesn't just misreport, it
-                  MUTATES the wrong tree. Live incident: a fresh evaluator ran `task cue:gen`
+                  MUTATES the wrong tree. Failure mode: a fresh evaluator runs `task cue:gen`
                   with a persisted shell cwd that had drifted to the main session worktree —
-                  the task's own `git submodule update` chain rewound 5 submodule checkouts +
-                  the `pkg/arch` gitlink there before the mistake was caught (fully restored,
+                  the task's own `git submodule update` chain rewound 5 submodule checkouts
+                  there before the mistake was caught (fully restored,
                   disclosed). So every mutating task/command invocation in an isolated-worktree
                   workflow (a validator run, a teammate's branch work, a spike) carries an
                   explicit `cd <worktree> &&` anchor IN THE SAME compound command — never a
@@ -4246,7 +4397,7 @@ git-workflow-skill:
 
                   One fresh stamp per merge, immutable (only ever added), independent of `charly.yml`
                   `version:` (the schema version, bumped only by a cutover raising `#SchemaVersion`).
-                  Every repo (superproject, `box/<distro>`, `plugins`, `pkg/*`, `docs`) mints `v$VER` on its
+                  Every repo (superproject, `box/<distro>`, `plugins`, `docs`, and `pkg/*` while it still exists on `main`) mints `v$VER` on its
                   merged HEAD; `sdk` alone uses its Go-module `v0.<YYYYDDD>.<HHMM
                   leading-zeros-stripped>` scheme (not an exemption — Go modules require semver, which
                   forbids a leading-zero segment — `0733`→`733`). A YAML schema/format change does
@@ -4320,6 +4471,444 @@ git-workflow-skill:
                      not just the failing piece — a fix that survives only the targeted re-run is a
                      regression in waiting.
                   4. The PR merges only when validation passes end-to-end on the final code.
+            - name: evidence-and-freshness
+              content: |+
+                  ## Evidence discipline — what a claim in a PR is worth
+
+                  A PR is a bundle of claims: the diff, the body's prose, the pasted gate output, the
+                  CHANGELOG narrative, the commit messages. The diff is checked mechanically. **Everything
+                  else is checked only if someone thinks to check it**, and this section catalogs the ways
+                  those claims go wrong.
+
+                  Every item below was a blocking finding during the Factory unit-4 cutover —
+                  `opencharly/charly#274` and `opencharly/plugins#168`, `#169`, `#170`, `#171` — most of
+                  them more than once. Sixteen validation rounds produced roughly a dozen blocking
+                  findings, and the majority were not defects in the code but false or stale CLAIMS about
+                  it.
+
+                  **Start here — find your symptom, then read the epistemology below if you want the why.**
+                  
+                  | If you are about to… | and you might be wrong because… | read |
+                  |---|---|---|
+                  | paste gate output into a PR body | you re-ran the gate and quoted the older copy | "A paste and its label are two separate claims" |
+                  | assert a sha, a pin, or a status is current | it moved between measuring and writing | "Three freshness surfaces, failing independently" |
+                  | fix a claim a reviewer called false | the correction is a new claim with the same burden | "Sweep for what the fix invalidated" |
+                  | run a gate to decide whether a PR is safe to merge | you gated the head, and the MERGE is what lands | "The gate that matters at merge…" (its recipe is the probe below) |
+                  | land a `skill:` edit | the source and its generated copies are one cutover, not two | "A `skill:` source edit and its regeneration are one cutover across two repos" |
+                  | resolve a submodule conflict | a `checkout -- .` plus `git add -A` silently reverts the gitlink | "Submodule pointers can be reverted by a merge without ever conflicting" |
+                  | conclude a validator never ran | the status can be absent for a reason that is not absence | "Status absence on a known head proves nothing" |
+                  
+                  **The page has two kinds of content, and they are true in different ways.**
+
+                  **Five sections are epistemic** — ways a claim goes wrong — and they are one question
+                  failing against a different noun: *what exactly did I measure, and is it the thing my
+                  claim is about?*
+
+                  | The noun that slipped | Section |
+                  |---|---|
+                  | The artifact — measured the right thing, quoted the wrong copy | A paste and its label are two separate claims |
+                  | The moment — a surface moved between measuring and asserting | Three freshness surfaces, failing independently |
+                  | The fix's blast radius — swept for what I corrected, not what I broke | Sweep for what the fix invalidated |
+                  | The base — gated the head when the merge is what lands | The gate that matters at merge is the merged tree's, not the head's |
+                  | The produced tree — measured the starting state to decide what a change can do | (same section, "Sibling rule") |
+
+                  Each is a correct measurement answering the wrong question, which is why none of them
+                  feel like errors while you are making them — and why a reader who holds the question can
+                  derive a trap nobody wrote down.
+
+                  Four of those five appear above. The table has five ROWS over four SECTIONS because the
+                  merged-tree section contributes two nouns. The fifth epistemic section, "Positive and
+                  negative claims decay differently", is deliberately absent: it is the moment-noun again,
+                  seen from the reader's side rather than the writer's, and giving it a row would blur the
+                  distinction the table exists to draw. Five epistemic plus three mechanism is the whole page.
+
+                  **The remaining three sections are mechanism** — how charly and git actually behave: the
+                  cross-repo `skill:` cutover, the submodule revert, and the validator-status false
+                  negative. They are not instances of the question and no frame unifies them.
+
+                  **That split is load-bearing, and it is why this page's own first revision shipped a false
+                  claim.** An epistemic claim is checked by reasoning; a mechanism claim can only be checked
+                  by RUNNING the thing. The first version of the cross-repo section asserted that the two drift directions
+                  differ in DETECTABILITY, one of them silent — which a thirty-second experiment REVERSES:
+                  the direction called silent is the more legible of the two — and it sat in
+                  a mechanism section while the surrounding epistemic ones were sound.
+                  
+                  **The execution rule is scoped to CONTENT, not to sections, and that correction was
+                  itself forced by a defect.** An earlier revision said "every factual claim in the three
+                  MECHANISM sections was verified by executing it" — and a reviewer found the one broken
+                  shell recipe on the page sitting in an EPISTEMIC section, exempted by that very wording.
+                  The frame had decided what got executed, and routed a runnable command to the
+                  "reasoning is enough" side. So: **every runnable command and every mechanism claim on
+                  this page is executed before it is published, wherever it sits.** If you extend any
+                  section with either, run it.
+                  
+                  **Run the PUBLISHED form, in a default environment.** A command executed in your own shell is
+                  proof about your own shell. This page shipped a fixture opening `git init -q repo`, verified by
+                  running it — in a shell whose git had `init.defaultBranch=main`. Git's out-of-the-box default is
+                  still `master`, so for a reader with a stock config the fixture died on its fourth line with
+                  `fatal: invalid reference: main`, exit 128. The rule above was satisfied to the letter and the
+                  reader still could not run it. So: execute the text AS PUBLISHED, and for anything whose
+                  behaviour depends on configuration — git defaults, locale, `$EDITOR`, an env var you have set
+                  and forgotten — execute it with that configuration NEUTRALIZED, not merely absent from your
+                  attention. Verifying this one meant clearing `HOME`, `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM`
+                  and proving the isolation empty before trusting the result.
+
+                  **And executing it is only half — the other half is PROVENANCE: every measurement
+                  states the tree it was taken on.** This clause exists because the content-scoping rule
+                  two paragraphs up, in the form that shipped without it, did not prevent the next error. A drift figure on this
+                  very cutover was executed, correct, and false: `charly marketplace drift` was run
+                  with the superproject at `main` but the submodules checked out at their repo TIPS,
+                  and the result was reported as a fact about `main` — which pins its submodules at
+                  older gitlinks and is clean. Nothing was unexecuted. The measurement simply answered
+                  a question about a tree nobody had named, which is this page's top-ranked epistemic
+                  trap wearing a mechanism's clothes. So a figure is publishable only with the tree
+                  identified: which commit, which submodule shas, which working-tree state. "On main"
+                  is a claim about pinned gitlinks, and it is false of a checkout whose submodules sit
+                  at their tips.
+
+                  The three merge-tree behaviours the probe recipe below depends on were established
+                  by execution, in a throwaway repo:
+                  
+                  ```
+                  $ git init -q -b main repo && cd repo         # rerunnable: git still defaults to master
+                  $ echo base > a.txt && git add -A && git commit -qm base
+                  $ git switch -qc side-a && echo AAA > a.txt && git commit -qam a
+                  $ git switch -q main  && git switch -qc side-b && echo BBB > a.txt && git commit -qam b
+                  
+                  $ git merge-tree --write-tree side-a side-b   # conflicting pair
+                  $ echo $?
+                  1                                              # → guard on the exit status
+                  $ git commit-tree "$(git merge-tree --write-tree side-a side-b)" -p side-a -m probe
+                  fatal: not a valid object name c5045be2…       # unguarded, the oid is multi-line
+                  $ git cat-file -p "$(git merge-tree --write-tree side-a side-b | head -1):a.txt"
+                  <<<<<<< side-a                                 # `head -1` YIELDS A CONFLICTED TREE —
+                  AAA                                            # checkoutable, plausible, and poison
+                  =======                                        # for anything that then RUNS in it
+                  BBB
+                  >>>>>>> side-b
+                  ```
+                  
+                  The third COMMAND is why the guard is an exit-status test, not an output-shape test:
+                  the shape fix produces a tree a gate runs against and passes.
+
+                  **Terms.** *The gate* — whichever check a claim rests on; usually `charly box validate`,
+                  `charly marketplace drift`, or `charly docs generate`. *`marketplace drift`* compares each
+                  generated file in `plugins/` against what the candy `skill:` / `hook:` / `marketplace:`
+                  sources currently project — a *candy* being an entity defined in `candy/<name>/charly.yml` —
+                  exiting 1 when any differs. `charly marketplace generate` re-emits them. *Superproject* — the `opencharly/charly`
+                  repo, which contains the others as submodules. *Gitlink* — the single commit sha a
+                  superproject records for a submodule; it moves only when a superproject commit moves it,
+                  never because the submodule repo gained commits. *`BEHIND`* — GitHub's state for a PR whose
+                  base branch has advanced past its merge-base; strict branch protection requires
+                  *`gh pr update-branch`* (a MERGE of the base into the PR branch, never a rebase) before it
+                  can merge. See `/charly-internals:skills` for the source→projection model and
+                  `/charly-build:docs` for the site generator.
+                  
+                  *Artifact* is used in two senses below: a GENERATED FILE (the
+                  sense `drift` reports), and, in the epistemic sections, any object a claim is ABOUT — a PR
+                  body, a tree, a pasted output.
+
+                  ### A paste and its label are two separate claims
+
+                  When a body pastes command output and names the tree it ran on, that is two assertions:
+                  the output is real, and it came from where it says. The first is almost always true — the
+                  command did run. The second is the one that fails.
+
+                  So: **verify provenance, not plausibility.** Rebuild the exact tree the body names —
+                  every submodule at that commit's pinned gitlink, the binary built in-tree — and re-run.
+                  Do not ask "is this output believable?"; ask "did it come from where it says?"
+
+                  The motivating case: a body pasted a truthful two-artifact drift result labelled as
+                  having run at `main`. It had run at an unmerged PR's branch. At real `main` the same
+                  command returned six, and a wholesale regeneration there would have *reverted* two
+                  already-merged PRs — a recipe that would have shipped inside an immutable CHANGELOG
+                  entry, in the paragraph written to warn about that failure class.
+
+                  This outranks mutation-testing the gate, and the two are not substitutes:
+
+                  | Instrument | Question it answers |
+                  |---|---|
+                  | Mutation test (perturb an input, confirm the gate goes red on exactly that thing) | Can this gate fail at all, or is it vacuously green? |
+                  | Re-run at the named tree | Was the gate pointed at the thing the claim is about? |
+
+                  A reviewer applying only the first confirms a probative gate and never notices it was
+                  aimed elsewhere.
+
+                  ### Three freshness surfaces, failing independently
+
+                  - **The head moves.** Resolve a HEAD with `git ls-remote`, not the API — that read has
+                    lagged pushes repeatedly. This is also stated as a landing gotcha in
+                    `references/multi-repo-coordination.md`; it is repeated here because the failure it
+                    causes for a REVIEWER (stamping a verdict on a superseded SHA) differs from the one it
+                    causes for an AUTHOR.
+                  - **The body moves.** A body edit produces no new SHA, no notification, and no status
+                    reset, so nothing in head-based discipline covers it. Re-read the body immediately
+                    before the verdict, as a standing step.
+                  - **Pasted gate output goes stale in place.** The sneakiest: the prose around a pasted
+                    verdict stays accurate while the tree moves underneath it. A pasted verdict is the
+                    claim most likely to be true when written and false when read.
+
+                  Corollary for a gate that is red **on purpose** (a disclosed sequencing state): paste the
+                  RED output and enumerate why, rather than an older green one. And re-fetch as the **last
+                  action before the assertion**, not the first action of the turn that makes it — the gap
+                  that matters is fetch→assert.
+
+                  ### Positive and negative claims decay differently
+
+                  Only one of them needs a timestamp:
+
+                  - A **positive** finding — "this is broken, here is the reproduction" — stays true
+                    whether or not it has since been fixed. It degrades gracefully.
+                  - A **negative** claim — "this is still unfixed" — is falsified by any edit at all.
+                    Against an artifact the other party is actively editing it must carry its read time
+                    ("still open as of my fetch at T") or not be made.
+
+                  This applies to any two agents working one artifact, not only to validators.
+
+                  ### Sweep for what the fix invalidated
+
+                  R1's claim-keyed sweep, turned inward on the document you are editing. Fixing one claim
+                  routinely falsifies a different one elsewhere in the same artifact, and grepping for the
+                  claim you just corrected will never surface it.
+
+                  Worked case: restoring a reverted submodule pointer made a pasted `drift: clean` line
+                  elsewhere in the same body false. The edit was verified by re-grepping the live body —
+                  correct technique, right target, **wrong question**.
+
+                  **The operational rule: grep for what DESCRIBES the construct you changed, not for the
+                  construct.** Searching for the thing you edited finds the place you already fixed. What
+                  goes stale is the prose ABOUT it — a paragraph naming the old flag, a table counting the
+                  old occurrences, a release note narrating the old design — and none of that contains the
+                  new text or, usually, the old code either.
+
+                  This page earned that rule four times across the review of a single cutover, and the
+                  shape was identical each time: **the fix was correct and the thing describing it was
+                  left behind.**
+
+                  | The fix | What it silently falsified |
+                  |---|---|
+                  | scoping the `head -1` note by intent | the note's own claim to be the page's only such use |
+                  | rewriting the recipe over three commits | the CHANGELOG paragraph describing the first draft |
+                  | replacing `\|\| exit 1` with nesting | the paragraph 27 lines below still crediting `\|\| exit 1` |
+                  | the numstat reusing `$RESOLVED` | the R5 sweep pasted in the PR body, still counting six `merge-tree` sites |
+
+                  **All four were caught by a reviewer. The sweep caught none of them** — zero for four,
+                  which is the honest measure of how weak grepping-for-the-construct is. The fourth row is
+                  the sharpest: the sweep missed a miscount in the SWEEP'S OWN OUTPUT, in the very change
+                  that adds this section. A changed construct has a blast radius
+                  in PROSE, and it is widest in exactly the artifacts no gate reads: commit messages, PR
+                  bodies, and the release note — which, unlike the page, is immutable once merged.
+
+                  ### The gate that matters at merge is the merged tree's, not the head's
+
+                  Here the artifact does not move; the **base** does. A PR can be green at its head through
+                  every round and still land a red `main`, because another PR merged in between and
+                  `update-branch` inherits its state.
+
+                  For any PR that goes `BEHIND`, re-derive the gate on the merge result, not the head:
+
+                  ```
+                  git fetch origin                      # BASE must be the CURRENT tip, so fetch first
+                  PR_HEAD=$(git rev-parse HEAD)         # assumes cwd IS the PR checkout;
+                                                        # otherwise pass the head sha explicitly
+                  BASE=$(git rev-parse origin/main)     # the base TIP, never the merge-base —
+                                                        # the merge-base reproduces this section's bug
+                  # merge-tree EXITS 1 on conflict and prints the tree oid followed by the conflict
+                  # stages. Guard on the EXIT STATUS, not on the output shape: piping through
+                  # `head -1` here would hand you a tree whose files contain <<<<<<< markers, and
+                  # the gate would then run green against garbage. Refuse instead.
+                  # Nested, not `exit`: this block is meant to be PASTED into an interactive
+                  # shell, where an `exit` on the conflict path closes your terminal.
+                  if ! TREE=$(git merge-tree --write-tree "$PR_HEAD" "$BASE"); then
+                    echo "merge conflicts — resolve them before probing; this needs a clean tree" >&2
+                  else
+                  # A tree oid is not checkoutable and every gate needs a working tree, so wrap it:
+                  MERGED=$(git commit-tree "$TREE" -p "$PR_HEAD" -p "$BASE" -m probe)
+
+                  # mktemp, NOT a fixed path. `worktree add` accepts an existing EMPTY dir, so
+                  # this is race-free — and it is what stops the cleanup below from destroying
+                  # somebody else's work. See the warning under this block.
+                  PROBE=$(mktemp -d /tmp/gate-probe.XXXXXX)
+                  if git worktree add --detach "$PROBE" "$MERGED"; then
+                    # REQUIRED: worktree add leaves submodules EMPTY, and "A paste and its label
+                    # are two separate claims" above demands every submodule at that commit's
+                    # pinned gitlink. Skip this and the probe measures a tree the gate cannot
+                    # even read.
+                    git -C "$PROBE" submodule update --init --recursive
+
+                    # …run the gate in "$PROBE", then:
+                    git worktree remove --force "$PROBE"
+                  fi
+                  fi
+                  ```
+
+                  **Why `mktemp` and not a fixed `/tmp/gate-probe`: the cleanup line is destructive
+                  and never checks whose worktree it is removing.** With a fixed path, a second probe
+                  starting while a first still holds it fails its `add` — correctly, exit 128 — and
+                  then, in a script without `set -e`, runs its cleanup anyway and **deletes the first
+                  probe's worktree**, uncommitted contents included. Executed:
+
+                  ```
+                  $ git worktree add --detach /tmp/gate-probe HEAD   # second probe, same path
+                  fatal: '/tmp/gate-probe' already exists
+                  $ git worktree remove --force /tmp/gate-probe      # cleanup runs regardless
+                  $ echo $?
+                  0                                                  # the FIRST probe's tree is gone
+                  ```
+
+                  A per-run `mktemp -d` removes the collision, and nesting the cleanup inside the
+                  `add`'s success branch means a failed setup never reaches a removal. This is R6
+                  tree-safety applied to the recipe rather than to the reader: the guard belongs in
+                  the command, not in remembering to be careful.
+
+                  **Sibling rule: when a measurement decides what a change can or cannot do, measure the
+                  tree that change PRODUCES, not the one it starts from.** A validator measured `main` with
+                  `main`'s own submodule pin, concluded correctly about that tree, then generalized to
+                  "this PR cannot fix the red" without measuring the tree the PR's pin produces. Wrong — a
+                  superproject gitlink does not move when the submodule repo merges; only a superproject PR
+                  bumps it, so that PR was not a bystander to the red, it was the half that closed it.
+
+                  ### A `skill:` source edit and its regeneration are one cutover across two repos
+
+                  Landing either half alone leaves `main` with `marketplace drift` red. **Both directions fail
+                  LOUDLY** — exit 1 and a stale-artifact listing either way, so neither is quiet. They are not
+                  equally legible, though, and the difference runs opposite to intuition:
+
+                  | What landed alone | `drift` output |
+                  |---|---|
+                  | Source ahead of generated tree | names the artifacts needing regeneration |
+                  | Generated tree ahead of source | names them too, **plus** an explicit `(stale)` marker on any orphan the source no longer projects |
+
+                  The generated-ahead direction is if anything the more legible of the two. What makes both
+                  dangerous is not detection, it is that **`drift` runs in no CI workflow** — it is red only
+                  for whoever runs it. A regeneration performed for an unrelated reason picks the revert up
+                  into that person's diff, where it reads as noise from their own change.
+
+                  So: run `charly marketplace drift` before and after any `charly marketplace generate`, and treat an
+                  unexplained artifact in the output as someone else's half-landed cutover rather than your
+                  own mess.
+
+                  Repair ownership, when `main` goes red from someone else's half-landed cutover: it is
+                  **blocking for your own landing**, not a separable cleanup. "Already red on main" and
+                  "belongs to that PR's author" are exactly the framings R2 names, and a validator will not
+                  put a release tag on a tree whose gate exits 1.
+
+                  ### Submodule pointers can be reverted by a merge without ever conflicting
+
+                  `git merge` does not check submodule working trees out to the merged pointer. So a
+                  working-tree restore inside a submodule — for instance `git -C docs checkout -- .` after
+                  a generator wrote into it — leaves that submodule at the OLD sha, and a subsequent
+                  `git add -A` re-stages it there, silently discarding the merge's correct resolution. The
+                  path never appears in the conflict listing, because it never conflicted.
+
+                  **This supersedes the per-path forward-gitlink check in
+                  `references/branch-and-pr-loop.md`.** That check works only when you already suspect the
+                  right path, and the motivating incident was not a path checked and gotten wrong — it was
+                  a path nobody thought to check. Compare the whole tree instead:
+
+                  ```
+                  MERGE=<merge-commit>                        # the merge you already made
+                  SIDE_A=$(git rev-parse "$MERGE^1")          # your branch
+                  SIDE_B=$(git rev-parse "$MERGE^2")          # what you merged in
+
+                  # ONE merge-tree, and the branch decides which test is even meaningful.
+                  # RESOLVED is assigned even when the substitution FAILS — it then holds the
+                  # tree oid followed by the conflict stages, which is what the else-branch wants.
+                  if RESOLVED=$(git merge-tree --write-tree "$SIDE_A" "$SIDE_B"); then
+                    # conflict-free merge: the trees must be byte-identical
+                    if [ "$(git rev-parse "$MERGE^{tree}")" = "$RESOLVED" ]; then
+                      echo "clean: matches git's own resolution"
+                    else
+                      echo "DIVERGED — every delta below must be one you can account for"
+                      git diff --numstat "$RESOLVED" "$MERGE"
+                    fi
+                  else
+                    # merge WITH conflicts: identity is the wrong test, since your resolutions
+                    # legitimately differ. Diff against the conflicted tree and account for
+                    # EVERY delta.
+                    #
+                    # NOTE the rule for `head -1` is about INTENT, not location. It is right when
+                    # you want the conflicted tree as DATA — to diff or inspect, as here and in
+                    # the evidence block near the top of this page. It is wrong the moment you
+                    # will RUN anything inside the resulting tree: there it yields a tree full of
+                    # conflict markers and the gate passes against garbage, so guard on the exit
+                    # status instead (the probe recipe above does).
+                    git diff --numstat "$(printf '%s\n' "$RESOLVED" | head -1)" "$MERGE"
+                  fi
+                  ```
+
+                  In the motivating incident that diff listed exactly three paths: two intentional
+                  resolutions and the silent gitlink override sitting between them.
+
+                  ### Status absence on a known head proves nothing
+
+                  On PASS the evaluator typically adds a CalVer-finalization commit and posts
+                  `charly/pr-validator` on THAT sha, then squash-merges and deletes the branch — so polling
+                  `gh api repos/<r>/commits/<known-head>/statuses` can return "(none)" right up until the
+                  merge, indistinguishable from a hung run. (Observed on two of three landings in the
+                  motivating cutover; the pr-validator spec requires a status on the pre-finalization head,
+                  so treat this as behaviour that MAY occur, not a guarantee.) Poll the PR's
+                  `state`/`mergedAt` and re-resolve the head at check time instead.
+
+                  Related: when a validator does look stalled, **ping it for liveness before respawning**.
+                  A `pr-validator` merges and tags on PASS, so two of them on an unanswered head can both
+                  get there and race. Duplicated review is cheap; a double-merge or a contended tag is not.
+
+                  ### A guard that cannot fail is worse than no guard
+
+                  Four times in one cutover an unmerged change was written as landed fact — "presence **is**
+                  enforced", the traits "**are now**" generated, the inference "**is** deleted", the defect "**is**
+                  fixed". Each was caught by a reviewer AFTER it shipped into a PR body or CHANGELOG. The pattern is
+                  not carelessness: while you hold a whole cutover in your head, the branch state IS your reality,
+                  and present tense is the honest-feeling voice for it. So the guard has to be **mechanical, not
+                  attentional** — you cannot pay closer attention to a bias you cannot feel.
+
+                  **Guard 1 — every commit SHA an entry names, checked for landed state AND subject:**
+
+                  ```bash
+                  for sha in $(grep -ohE '\b[0-9a-f]{7,40}\b' CHANGELOG/<entry>.md | sort -u); do
+                    for repo in . <superproject-path>; do        # BOTH — see below
+                      git -C "$repo" cat-file -e "${sha}^{commit}" 2>/dev/null || continue
+                      git -C "$repo" merge-base --is-ancestor "$sha" origin/main && st=LANDED || st=UNMERGED
+                      printf '%s %s %s\n' "$sha" "$st" "$(git -C "$repo" log -1 --format=%s "$sha")"; break
+                    done
+                  done
+                  ```
+
+                  The **subject** is half the value: it catches citing the wrong commit, which happened here — a
+                  CHANGELOG named the branch HEAD (a docs commit) as the commit carrying a code fix. A docs subject
+                  printed beside a "the fix is" claim is visible at a glance; a bare SHA is not.
+
+                  **The first version of that guard was VACUOUS, and this is the part to carry.** It ran
+                  `git cat-file -e` only in the submodule, for a SHA that lived in the **superproject**. The SHA
+                  resolved nowhere, the loop `continue`d, and the guard printed nothing — reporting clean while
+                  skipping the single citation it existed to check. A cross-repo citation is exactly the case a
+                  local-only resolve drops silently.
+
+                  > **A guard that reports "all citations verified" without discriminating is more dangerous than no
+                  > guard: it converts an open question into a false answer.** Before trusting one, feed it the
+                  > failing case on purpose and require it to complain.
+
+                  **Guard 2 — grep the entry's own prose, with the exclusion that makes it usable:**
+
+                  ```bash
+                  grep -nE '\b(is|are) (now )?(enforced|generated|deleted|removed|fixed)\b' CHANGELOG/<entry>.md
+                  ```
+
+                  Most hits are CORRECT and must not be hedged. The discriminator:
+
+                  | the claim is about… | verdict |
+                  |---|---|
+                  | **this entry's own diff** | present tense is right — the entry ships with the commit that does it |
+                  | **another repo's unmerged branch** | defect — scope it ("lands with this cutover's sdk leg, unmerged") |
+
+                  Omitting that exclusion turns the guard into busywork: true sentences get rewritten into hedged
+                  ones, and an entry that hedges its own change reads as uncertainty about the change itself.
+
+                  **Why this matters more than it looks.** In the cutover that produced these guards, one PR took six
+                  heads to land and the change itself was correct at head one and never moved — every round was the
+                  *evidence narrative* being written faster than it could be verified. The code was never the
+                  bottleneck. These two checks cost seconds and catch precisely that class.
 go-skill:
     skill:
         name: go
@@ -4354,9 +4943,9 @@ go-skill:
 
             | Action | Command | Description |
             |--------|---------|-------------|
-            | Build | `task build:binary` | Compile to `bin/charly` (CalVer-stamped), NO install. Also copies to `candy/charly/bin/charly` — does NOT touch the tracked `pkg/arch/PKGBUILD` (that file is read only by the containerized `charly box pkg` native-package build) |
-            | Package | `task pkg:arch` / `pkg:fedora` / `pkg:debian` / `pkg:all` | Build a distro-native `.pkg.tar.zst`/`.rpm`/`.deb` release artifact into `dist/`, containerized via `charly box pkg`. Install it yourself with your OWN package manager (`pacman -U`/`dnf install`/`apt install`) |
-            | Install (portable) | `task install-portable` | Copy `bin/charly` to `$HOME/.local/bin/charly` (solo bootstrap; NOT a multi-teammate dev-loop step — see below) |
+            | Build | `task build:binary` | Compile to `bin/charly` (CalVer-stamped), NO install. Also copies to `candy/charly/bin/charly` — does NOT touch any packaging source (the native packages are built by the `charly generate-packages` plugin from the candy's `packaging:` section) |
+            | Package | `charly generate-packages` (nFPM plugin) | Build a distro-native `.pkg.tar.zst`/`.rpm`/`.deb`/`.apk`/`.ipk` release artifact via the `charly generate-packages` plugin (nFPM, `sdk/packagekit`), published to the per-distro package repos. Install it yourself with your OWN package manager (`pacman -U`/`dnf install`/`apt install`/`apk add`) |
+            | Install (portable) | `task build:install-portable` | Copy `bin/charly` to `$HOME/.local/bin/charly` (solo bootstrap; NOT a multi-teammate dev-loop step — see below) |
             | Run tests | `cd charly && go test ./...` | Run all tests |
             | Run specific test | `cd charly && go test -run TestName ./...` | Run single test |
             | Vet | `cd charly && go vet ./...` | Static analysis |
@@ -4449,6 +5038,139 @@ go-skill:
 
             This also interacts with the dual-path gotcha documented in `/charly-tools:charly`: `bin/charly` (repo-root, used by host-side invocations) and `candy/charly/bin/charly` (what the `charly` candy actually copies into images) must stay in sync. The canonical `task build:binary` path does both; a manual `go build -o bin/charly ./charly` needs an explicit `cp bin/charly candy/charly/bin/charly` follow-up.
 
+            ## Environment constraints — sandboxed /tmp + Go temp dirs
+
+            Some dev hosts (a sandboxed runner, a small tmpfs `/tmp`) cap writes to the system
+            temp dir at a few tens of MB per command, regardless of the free space `df` reports.
+            Go builds and golangci-lint routinely exceed that, and the failures look like tool
+            bugs ("disk quota exceeded", "parallel golangci-lint is running") — they are
+            environmental, not code defects. On such a host:
+
+            - Run Go builds/tests with `GOTMPDIR=~/.cache/go-tmp` (a root-fs dir) — Go's build
+              work then never touches the capped temp dir.
+            - golangci-lint v2 locks at `$TMPDIR/golangci-lint.lock`; a missing TMPDIR dir makes
+              the lock open fail with ENOENT, which golangci-lint reports as "parallel golangci-lint
+              is running" — a false positive, not a real parallel run. Create the TMPDIR dir first
+              (or pass `--allow-parallel-runners` with a fresh cache). See `/charly-internals:go-quality`.
+            - **Keep `$TMPDIR` short for any suite that connects a plugin.** go-plugin serves
+              each plugin over a UNIX socket at `$TMPDIR/plugin<random digits>`, and `sun_path`
+              caps the whole path at 107 BYTES — leaving `$TMPDIR` a little under 90 bytes once
+              the `/plugin<digits>` suffix is accounted for. The digit count varies, so a path
+              near the budget fails intermittently: the same directory passes, then fails,
+              unchanged. Use a short path such as `/tmp/cs` and leave headroom.
+
+              **This does not contradict the `GOTMPDIR=~/.cache/go-tmp` rule above; the two
+              variables go to different places for different reasons.** `GOTMPDIR` carries Go's
+              build work, which is large, so it moves OFF the quota-capped temp dir and may be
+              long — no socket is created there. `$TMPDIR` carries the plugin socket, which is a
+              few bytes, so the quota is irrelevant TO THE SOCKET and the binding constraint on
+              `$TMPDIR` is path LENGTH. Short-and-on-`/tmp` for `$TMPDIR`, long-and-off-`/tmp`
+              for `GOTMPDIR`. (`/tmp` still has a cumulative cap — see the last bullet in this
+              section — and golangci-lint's lock also lives under `$TMPDIR`; neither changes
+              where the socket must go.)
+
+              Over budget, `bind` returns `invalid argument` and the loader reports
+              `Unrecognized remote plugin message` / `Failed to read any lines from plugin's
+              stdout`, blaming architecture, libraries, or permissions — none of which is the
+              cause. The visible failure is a downstream assertion, e.g.
+              `TestExternalStructKind_StructuralDecode` reporting `structural plugin kind not
+              folded into uf.Fleet; have fleet keys []`.
+
+            - **`CHARLY_PLUGIN_DIR` prepends; `CHARLY_PLUGIN_ONLY=1` is what excludes.** A word
+              is **BAKED** when a provider binary for it sits in `/usr/lib/charly/plugins/`
+              beside a `<name>.providers` manifest naming that word — put there by the OS
+              package, or by a candy's `bake_plugin:` step at image-build time. Baked-ness is
+              per WORD, not per machine: `cat /usr/lib/charly/plugins/*.providers` lists exactly
+              which words are baked on the host you are standing on.
+              `bakedPluginDirs()` returns `$CHARLY_PLUGIN_DIR` when set and then appends the FHS
+              `/usr/lib/charly/plugins`, so pointing the dir at an empty directory masks nothing.
+              `CHARLY_PLUGIN_ONLY=1` drops the FHS path, making the search exactly
+              `$CHARLY_PLUGIN_DIR` (or empty when that is unset). It is an EXACT `1` match, so a
+              typo leaves the FHS path in place. That is safe for a deployed container — it keeps
+              finding its own baked plugins — but it is NOT safe for the test below, where the
+              same typo produces a silently ineffective flag. Which is why that procedure leads
+              with a control rather than trusting the variable was read.
+
+              **Baked lookup is keyed by WORD and short-circuits the project scan.**
+              `resolveCommandPluginBinary` returns on a baked hit before the project loads: a
+              baked word resolves to the baked binary and its project declaration is never
+              consulted, while an unbaked word falls through to the project scan normally. So
+              `charly examplecommand hello world` prints `hello world` from the project candy
+              even where the charly package is installed — `examplecommand` is not baked.
+
+              To exercise a BAKED word's project declaration, drop the FHS path. Worked with
+              `generate-packages`. **Check the two preconditions first** — the procedure is only
+              meaningful for a word that is both baked and declared:
+
+              ```
+              $ cat /usr/lib/charly/plugins/*.providers | grep -c '^command:generate-packages$'
+              1
+              $ ls candy/generate-packages/charly.yml | wc -l
+              1
+              ```
+
+              Then run the two arms. **The `Note: local candy … shadows …` preamble is the
+              signal, not noise** — it appears because the flag made charly load the PROJECT.
+              Check for it with a predicate rather than by counting; the preamble is two identical
+              lines per shadowed candy (the project loads twice); the set varies by host and the
+              ordering varies from run to run:
+
+              ```
+              $ CHARLY_PLUGIN_ONLY=1 ./bin/charly generate-packages 2>&1 \
+                  | grep -q '^Note: local candy' && echo "project loaded" || echo "baked short-circuit"
+              project loaded
+
+              $ ./bin/charly generate-packages 2>&1 \
+                  | grep -q '^Note: local candy' && echo "project loaded" || echo "baked short-circuit"
+              baked short-circuit
+              ```
+
+              **Run that control first.** Without it you cannot tell a working flag from a
+              silently ineffective one: `CHARLY_PLUGIN_ONLY` is an EXACT `1` match, so a typo
+              leaves the FHS path in place — and the last line of the run is BYTE-IDENTICAL with
+              and without the flag. A `tail -1` alone therefore has exactly the property this
+              section opens by warning about: it cannot distinguish the two sources.
+
+              With the control passing, the arms read the resolution itself:
+
+              ```
+              $ CHARLY_PLUGIN_ONLY=1 ./bin/charly generate-packages 2>&1 | tail -1
+              generate-packages: missing flags: --arch=STRING, --binary=STRING, --candy=STRING, --out=STRING, --plugins=STRING, --version=STRING
+
+              $ mv candy/generate-packages /tmp/gp-aside
+              $ CHARLY_PLUGIN_ONLY=1 ./bin/charly generate-packages 2>&1 | tail -1
+              charly: error: unexpected argument generate-packages
+              $ mv /tmp/gp-aside candy/generate-packages
+              ```
+
+              **What each step licenses.** The control establishes that the flag took effect and
+              the project was loaded. Given that, arm 1 succeeding shows a PROJECT candy served
+              the word — with `CHARLY_PLUGIN_DIR` unset the baked search is empty, so nothing else
+              could have. Arm 2 attributes it to `candy/generate-packages` specifically, by
+              removing that one candy and watching the word stop resolving.
+
+              Both arms need the flag. Without it, arm 2 still succeeds — the baked binary
+              answers once the project candy is gone — so the removal would tell you nothing.
+
+            - `.claude/hooks/pre-commit-gate.sh` (the staged-Go-lint discipline backstop) redirects
+              its own lint temp dirs to `~/.cache/charly-gate-lint/` and creates the TMPDIR/GOTMPDIR
+              subdirs, so it is unaffected by the cap wherever it runs. Note it is NOT wired in
+              Claude Code — `.claude/settings.json` wires no `PreToolUse` hooks, so under Claude
+              Code the script fires on nothing and nothing runs it automatically. It stays live in
+              the other harnesses that invoke it (`.reasonix/settings.json`, and `~/.kimi-code/config.toml`
+              which delegates to `.claude/hooks/`). Running Go work under Claude Code, apply the two
+              bullets above yourself.
+            - **Cumulative /tmp usage cap — the Bash tool's output capture dies.** Beyond the
+              per-command cap, the sandbox also caps TOTAL /tmp usage (observed at ~80% of the
+              tmpfs). When /tmp fills to that point, the Bash tool's output capture fails: every
+              command that writes to stdout/stderr exits 1 with no output, `python3` exits 120
+              (Python's "failed to flush stdout at shutdown" code), while no-output commands
+              (`true`, `echo x > /dev/null`) still succeed. The underlying error is
+              `write error: Disk quota exceeded`. Fix: clear the accumulated `tmp.*` Go temp
+              dirs (and other junk) in /tmp to drop usage below the cap — on this host 17G of
+              `tmp.*` dirs had accumulated from lint runs and other operations. A session
+              restart also resets it (fresh sandbox quota).
+
             ## R9 — deployed binary matches source; runtime deps live in the PKGBUILD
 
             See the project rulebook's R9 mandate (`CLAUDE.md`/`AGENTS.md`). Applied to the `charly` toolchain:
@@ -4461,11 +5183,12 @@ go-skill:
               multi-teammate / multi-worktree setup") catches a stale invoked binary against
               newer `charly/*.go` in the same tree, but the version check is still the
               explicit proof — the per-worktree-vs-host-package split lives there too.
-            - **Every runtime OS dependency goes into `pkg/arch/PKGBUILD` `depends=`** —
-              the single source of truth (`nc`, `socat`, `xorriso`, `qemu-guest-agent`, …);
-              the `pkg/fedora` / `pkg/debian` packaging mirrors it. A manual install on one
-              host is a bug report disguised as a fix — it won't survive a fresh install on
-              a synced host.
+            - **Every runtime OS dependency goes into the charly candy's `packaging:`
+              section** (`candy/charly/charly.yml` `packaging.formats.*.depends`) — the
+              single source of truth (`nc`, `socat`, `xorriso`, `qemu-guest-agent`, …),
+              read by the `charly generate-packages` plugin (sdk/packagekit). A manual
+              install on one host is a bug report disguised as a fix — it won't survive a
+              fresh install on a synced host.
 
             The verification side (checking the deployed binary + deps on a live target)
             is `/charly-check:check` Standards 7–9; the dual-path `bin/charly` ↔
@@ -4653,7 +5376,7 @@ go-skill:
                   - `spec/spec/charly_names.go` — charly-name Go type aliases (def-level `@go(CharlyName)` is broken in cue v0.16.1; see the next section). Not a wire struct.
                   - The host↔plugin & render-context wire structs are **fully CUE-SOURCED — the `spec/spec/*_wire.go` hand-written-file class is EXTINCT** (the last 13 — deploy/init/gpu/doctor/enc/feature/k8sgen/resource/settings/substrate_template/agent/distro/vm — converted in the SDD-conversion batch; `arbiter_wire.go` landed earlier, FLOOR-SLIM Unit-8B). `buildctx.cue` (`InstallContext`/`BuildStageContext`), `clean.cue` (`RetentionRequest`/`RetentionReply`), `arbiter.cue` (+ the hand `spec/spec/arbiter_consts.go` string-enum residue), and now `agent.cue`/`distro.cue`/`init.cue`/`vm.cue`/`resource.cue`/`sidecar.cue` (appended) plus `settings.cue`/`feature.cue`/`doctor.cue`/`gpu.cue`/`enc.cue`/`k8sgen.cue`/`substrate_template.cue`/`buildwire.cue` (new) and `deploy.cue`/`seam.cue` (appended, the deploy-IR/build-time/lifecycle wire) are ALL LANDED — no hand-written wire-struct file remains anywhere in `spec/spec`. Any NEW wire type is authored the same way: a CUE def in `spec/schema/*.cue`, generated by `task cue:gen` (a plain/discriminated struct always generates, referencing a disjunction/state type by name where one is genuinely needed) — hand-writing one is a mandate violation from the first line, never a "conversion-in-progress" grace period. The handful of NAMED ENUM TYPES with Go behavior gengotypes cannot generate (`Scope` + its `String()`/`ScopeFromName`, mirroring `Status` in `status_result.go`) and the per-domain STRING-CONSTANT groups (`ReverseOpKind`, `EncMethod*`, `GpuMode*`/`HostDriver*`, `ArbiterAction*`) stay hand-written in small `spec/spec/*_consts.go` / `spec/spec/*_methods.go` files beside their CUE-generated struct siblings — never a type CUE could express, always a documented, spike-justified exception per the taxonomy above.
                   - `spec/protocol/schema/*.cue` — the gRPC transport model, including services and streaming flags. The project-owned `spec/internal/wiregen` generator closes the former CUE→proto tooling gap; `spec/proto/plugin.proto` and all language stubs are generated and must never be edited directly.
-                  - **`json:"-"` fields (keep-in-Go, drop-from-wire)** — `gengotypes` has NO construct for a field that exists in memory but is excluded from marshaling (it emits a real `json:"<name>,omitempty"` tag instead). **RDD spike (2026-07-12, cue v0.16.x, the P12 check seam):** `kit.CheckResult.DeadlineExceeded bool json:"-"` (an engine-internal retry signal that must never cross the wire) is genuinely inexpressible — but the spike ALSO confirmed the REST of `CheckResult` (`Op`/`Verb`/`Status`/`Message`/`Elapsed`/`Attempts`/`TotalElapsed`/`CapturedValue`) generates faithfully. FLOOR-SLIM Unit 4 acted on that: `spec/schema/checkresult.cue` → `spec.CheckResult` is CUE-sourced (the base), and `kit.CheckResult` is now `struct { spec.CheckResult; DeadlineExceeded bool json:"-" }` — an EMBEDDING WRAPPER adding back ONLY the one field, not a hand-duplicated whole type. The legal exception this bullet documents is narrower than it once was: a hand-written field on an otherwise CUE-sourced type is the LEGAL documented shape, not a hand-written type in its entirety — apply the same embed-wrapper pattern to any other single-field `json:"-"` exception before assuming the whole containing type must stay hand-written.
+                  - **`json:"-"` fields (keep-in-Go, drop-from-wire)** — `gengotypes` has NO construct for a field that exists in memory but is excluded from marshaling (it emits a real `json:"<name>,omitempty"` tag instead). **RDD spike (cue v0.16.x, the P12 check seam):** `kit.CheckResult.DeadlineExceeded bool json:"-"` (an engine-internal retry signal that must never cross the wire) is genuinely inexpressible — but the spike ALSO confirmed the REST of `CheckResult` (`Op`/`Verb`/`Status`/`Message`/`Elapsed`/`Attempts`/`TotalElapsed`/`CapturedValue`) generates faithfully. FLOOR-SLIM Unit 4 acted on that: `spec/schema/checkresult.cue` → `spec.CheckResult` is CUE-sourced (the base), and `kit.CheckResult` is now `struct { spec.CheckResult; DeadlineExceeded bool json:"-" }` — an EMBEDDING WRAPPER adding back ONLY the one field, not a hand-duplicated whole type. The legal exception this bullet documents is narrower than it once was: a hand-written field on an otherwise CUE-sourced type is the LEGAL documented shape, not a hand-written type in its entirety — apply the same embed-wrapper pattern to any other single-field `json:"-"` exception before assuming the whole containing type must stay hand-written.
                   - `Op.Kind()` (`spec/spec/charly_methods.go`) — the exactly-one-discriminator cross-field rule, kept in Go because CUE cannot express it as a generable annotation. A method, not a type.
 
                   **Spike-proven CAN/CANNOT quick reference (reuse these results — do NOT re-spike settled shapes; DO spike any new shape class):**
@@ -4805,7 +5528,7 @@ go-skill:
                   | File | Role |
                   |---|---|
                   | `spec/spec/cue_types_gen.go` (generated) | `VmSpec` (= `Vm`) + `VmSource` discriminated union (cloud_image / bootc) + `VmChecksum` + `VmNetwork` + `VmSSH` + `VmKeyInjection` |
-                  | `spec/spec/cue_types_gen.go` (generated) | `VmCloudInit` + `VmCloudInitUser/File/Network/Mirrors` + `VmCharlyInstall` (auto/scp/url/skip state machine) |
+                  | `spec/spec/cue_types_gen.go` (generated) | `VmCloudInit` + `VmCloudInitUser/File/Network/Mirrors` + `VmCharlyInstall` (auto/scp/skip state machine) |
                   | `sdk/vmshared/libvirt_yaml.go` | `LibvirtDomain` + 30+ sub-types (features, CPU, clock, memory backing, numatune, cputune, devices, seclabel, launch security, resource, sysinfo) — the opencharly YAML-facing shape of the `libvirt:` stanza |
                   | `candy/plugin-vm/libvirt_yaml_bridge.go` | `RenderDomainXML`/`BuildLibvirtDomainXML` pure functions (build a `libvirtxml.Domain` tree, marshal to XML) + `buildDomainDevices` device emission (passt backend, portForward attribute order, virtio-gpu default, SMBIOS credentials, `XMLPassthrough` merge) |
                   | `sdk/vmshared/qemu_render.go` | `RenderQemuArgv` for direct-QEMU backend |
@@ -4854,7 +5577,7 @@ go-skill:
                   | `candy/plugin-box/{validate_config_rules.go, validate_schema_rules.go}` | The host-natural validation checks that need the raw loader — the former `charly/validate.go` is DELETED, K-wave 2 (they moved to the compiled-in `command:box` plugin): CUE-conformance (`validateCandyCUESchemas` / `validateProjectCUESchemas`), `validateBuildAndDistro`, `validateBuildTunables`, `validateMergeConfig`, `validateBuilderRefs`, `validateBoxBaseFrom`, `validateRemoteCandies`, `boxEntityWireYAML`, `isNodeFormFile` (`validate_schema_rules.go`); the box+config rule set lives in `validate_config_rules.go`. Format/builder validation against config definitions (not hardcoded maps). The per-kind/op/candy/graph rule ENGINE (`validateCandyTasks` / `validateCandyContents` / `validateAliases` / `validateVolume` / `validateCandyReferences` / the box+candy DAGs / `validateOps` / the candy `plugin:` block checks) moved to the compiled-in `command:box` plugin (`candy/plugin-box/{validate.go, validate_rules.go, validate_graph.go, validate_check.go}`), reading the resolved-project envelope. (`validateVocabularyCollections` + its sibling `validateEntityCUE`, and core's `validatePluginCandy`, were dead-code-radical-removal-batch deletions — the modern per-kind LOAD-time plugin gate and `candy/plugin-box`'s own `plugin:`-block checks supersede them; see the batch's CHANGELOG entry for the coverage-comparison evidence.) |
                   | `version.go` | CalVer computation |
                   | `sdk/kit/scaffold.go` | `new layer` scaffolding (`kit.ScaffoldCandy` — single-layer dir creation with stub `charly.yml`; the former `charly/scaffold.go` is DELETED, K-wave 2) |
-                  | `box_fetch_reentry.go` — DELETED (K-wave 2). | The hidden `charly __box-fetch` / `__box-refresh` core reentry points behind the COMPILED-IN candy/plugin-authoring command:fetch / command:refresh verbs (P14b) moved with the file. The repo resolver (`ResolveProjectRepo` → `EnsureRepoDownloaded`: `CHARLY_REPO_OVERRIDE` + the refs-backend dispatch + the command:migrate auto-migration) is host-coupled, so the authoring plugin re-runs these hidden commands over `HostBuild("cli")` (the SAME seam candy/plugin-box's `pkg` verb uses for `__box-pkg`). The `box set/add-candy/rm-candy/write/cat` authoring verbs + the `AddCandyToBox`/`RemoveCandyFromBox` yaml.Node helpers + `resolveProjectFile` (the path-traversal guard for `box write` / `box cat`) MOVED to the compiled-in `command:authoring` plugin (`candy/plugin-authoring`, P14b) — they run PURE on sdk/kit (`kit.SetByDotPath` / `kit.MappingChild` / `kit.SaveYAMLNodeFile`) + stdlib, zero core reentry. The create-side `box new project/box/candy` ENGINE is `kit.ScaffoldProject` / `kit.AddBox` / `kit.ScaffoldCandy` (shared with candy/plugin-box's command:new). Tested in `sdk/kit/scaffold_test.go` (the kit-scaffolder tests) + `candy/plugin-authoring/authoring_edit_test.go` (the moved helpers). |
+                  | `box_fetch_reentry.go` — DELETED (K-wave 2). | The hidden `charly __box-fetch` / `__box-refresh` core reentry points behind the COMPILED-IN candy/plugin-authoring command:fetch / command:refresh verbs (P14b) moved with the file. The repo resolver (`ResolveProjectRepo` → `EnsureRepoDownloaded`: `CHARLY_REPO_OVERRIDE` + the refs-backend dispatch + the command:migrate auto-migration) is host-coupled, so the authoring plugin re-runs these hidden commands over `HostBuild("cli")`. The `box set/add-candy/rm-candy/write/cat` authoring verbs + the `AddCandyToBox`/`RemoveCandyFromBox` yaml.Node helpers + `resolveProjectFile` (the path-traversal guard for `box write` / `box cat`) MOVED to the compiled-in `command:authoring` plugin (`candy/plugin-authoring`, P14b) — they run PURE on sdk/kit (`kit.SetByDotPath` / `kit.MappingChild` / `kit.SaveYAMLNodeFile`) + stdlib, zero core reentry. The create-side `box new project/box/candy` ENGINE is `kit.ScaffoldProject` / `kit.AddBox` / `kit.ScaffoldCandy` (shared with candy/plugin-box's command:new). Tested in `sdk/kit/scaffold_test.go` (the kit-scaffolder tests) + `candy/plugin-authoring/authoring_edit_test.go` (the moved helpers). |
                   | `sdk/kit/yaml.go` *(SDK kit, not `charly/`)* | `kit.SetByDotPath(path, dotpath, valueYAML)` + `kit.MappingChild(m, key)` — the generic comment-preserving YAML node utilities used by `charly box set` and the `command:candy` plugin. Walk `*yaml.Node` trees; create intermediate mappings on demand; reject descent into scalars. Tested in `sdk/kit/yaml_test.go` (`TestSetByDotPath_ScalarReplacement` + list-value, intermediate-mapping, scalar-descent-error cases). |
 
                   ### Plugins, external deploy & build-time emit
@@ -5104,10 +5827,10 @@ go-quality-skill:
             go vet ./...
             ```
 
-            Baseline at authoring (2026-06, broadest uncapped): **1017 issues** — errcheck 457,
-            staticcheck 242, unparam 100, unused 53, gocyclo 46, gocritic 43, errorlint 29, prealloc 29,
-            dupl 10, ineffassign 4, unconvert 3, misspell 1. Re-run to refresh; the per-linter shape is the
-            triage map.
+            Run it uncapped to get the current baseline, and read the per-linter SHAPE rather than the
+            total — which linter leads tells you what kind of debt you are looking at. Neither a count
+            nor a distribution is pasted here: both would be stale before they were read, and a stale
+            SHAPE misleads more quietly than a stale total.
 
             **Measurement gotcha — measure with the configured run, never `--enable-only`.** The
             authoritative count is `golangci-lint run ./...` (the configured set), which DEDUPLICATES
@@ -5120,7 +5843,7 @@ go-quality-skill:
 
             ## Auto-fix safety — never blanket `--fix`
 
-            **`golangci-lint run --fix` corrupts this source tree** (confirmed 2026-06-14, v2.12.2):
+            **`golangci-lint run --fix` corrupts this source tree** (confirmed with v2.12.2):
             gocritic's autofixer rewrites multi-statement blocks into a one-liner whose body it emits as a
             literal `{ ... }` elision placeholder — the `...` is gocritic's snip marker, written verbatim
             into the file → `syntax error: unexpected ...` (broke `ssh_client.go` + `deploy_executor_nested.go`,
@@ -5267,12 +5990,24 @@ go-quality-skill:
 
             `go test ./...` + `golangci-lint run` + `task build:binary` are smoke, not the gate — the gate is `charly check run <bed>` on the bed(s) that exercise the change, disposable-only, fresh-rebuild, zero warnings, pasted proof. The bed-selection matrix (incl. cross-cutting fan-out by owner) is owned by `/charly-check:check` "R10 gate by change class"; see also `/charly-internals:cutover-policy`.
 
-            **A mechanical pre-commit backstop is separate from the R10 gate.** The `pre-commit-gate.sh`
-            hook (`.claude/hooks/`) runs the CONFIGURED `golangci-lint run` on every module a commit's
-            `*.go` change touches and BLOCKS a commit that is not lint-clean (fail-open when golangci-lint is
-            absent) — so a lint-dirty commit can't land at all. That backstop does NOT replace the bed R10
-            gate (a green linter still proves compilation, not behaviour); it just guarantees the `golangci-lint`
-            smoke is green at commit time. Doctrine: `/charly-internals:agents` "Hooks doctrine".
+            **A mechanical pre-commit backstop exists in SOME harnesses, and is separate from the R10
+            gate.** The `pre-commit-gate.sh` hook (`.claude/hooks/`) runs the CONFIGURED `golangci-lint
+            run` on every module a commit's `*.go` change touches and blocks a commit that is not
+            lint-clean (fail-open when golangci-lint is absent). **It is NOT wired under Claude Code** —
+            `.claude/settings.json` declares no `PreToolUse` hooks — so under this harness a lint-dirty
+            commit lands and nothing stops it; run the linter yourself. It is wired in
+            `.reasonix/settings.json` and via `~/.kimi-code/config.toml`, which delegates to
+            `.claude/hooks/`. Where it does run, it does NOT replace the bed R10 gate (a green linter
+            proves compilation, not behaviour); it only guarantees the `golangci-lint` smoke is green at
+            commit time. Doctrine: `/charly-internals:agents` "Hooks doctrine".
+
+            **The hook's lint temp dirs live on the root fs.** The hook redirects its golangci-lint
+            run to a per-user cache (`~/.cache/charly-gate-lint/`) and creates the `TMPDIR`/`GOTMPDIR`
+            subdirs there before running golangci-lint, so the lint never writes into a capped system
+            temp dir. The constraint that motivates it — the per-command write cap, and the
+            "parallel golangci-lint is running" message that is really an ENOENT on a missing
+            `$TMPDIR` directory — is stated once in `/charly-internals:go` "Environment constraints —
+            sandboxed /tmp + Go temp dirs"; see there for the diagnosis and the fix.
 
             ## Cross-References
 
@@ -5328,8 +6063,8 @@ install-plan-skill:
             |---|---|
             | `spec/spec/provider_carriers.go` + `charly/provider_registry.go` | The provider carrier interfaces are `spec.StepContractCarrier` / `StructuralKindCarrier` / `ValidatingKindCarrier` / `DeployTraitsCarrier` / `PhaseCarrier` (spec-side, so host and plugin read ONE definition); core keeps only the `phaseOfProvider` reader in `charly/provider_registry.go`. `charly/install_plan.go` is GONE — every IR type it once declared natively lives in spec: `InstallPlan` + `DeployTarget` → `spec/spec/install_plan.go`; `InstallStep` → `spec/spec/install_step.go`; `EmitOpts` → `spec/spec/deploy_executor.go`; `GateEnabled` → `spec/spec/install_plan_view.go`; `ReverseOp` → CUE-sourced at `spec/schema/deploy.cue` (`#ReverseOp`, listed below); `HomeToken` → `spec.HomeToken`, re-exported by `sdk/deploykit/plan.go`. Package main and the SDK share ONE type (R3) — a charly-side re-declaration is the ZERO-ALIASES violation this move dissolved |
             | `sdk/deploykit/install_build.go` | `BuildDeployPlan` pure compiler: `Candy` → `InstallPlan` (moved from `charly/install_build.go`) |
-            | `charly/build_target_oci.go` | Residual helper only (P11c): the pod-overlay Containerfile WALKER (`OCITarget`) MOVED to `sdk/deploykit/oci_target.go` as the kind-blind `deploykit.OCITarget` walker, and the per-step DISPATCH ENTRY POINT is `charly/oci_step_emit.go` (`ociEmitStep`/`dispatchOCIStep` — a thin forwarder; the dispatch DECISION itself relocated to `candy/plugin-installstep`'s `"oci-dispatch"` word, K5-A item 2). This file keeps only `formatDefCacheMountDefs` (a `FormatDef.CacheMount` bridge `deploy_host_helpers.go` reads). The DEPLOY-mode overlay render — `add_candy:` Containerfile synthesis — now lives in `candy/plugin-deploy-pod/overlay.go`; `dispatchOCIStep` forwards the plugin-served build-emit kinds (`deploykit.PluginEmitStepWords` — the PURE C1.1 kinds + the no-op-emit `reboot` (C1.6) + the HOST-COUPLED `system-packages` (C1.2) + `builder` (C1.3) + `local-pkg-install` (C1.4) + `op` (C1.5)) plus the authored `external:<word>` step and the `ExternalPlugin` verb step to the compiled-in `class:step` plugin `candy/plugin-installstep`'s `"oci-dispatch"` word, which itself resolves the TARGET provider via the class-generic `DescribeProvider` (cached StepContract metadata) + `InvokeProvider` (dispatch) reverse-channel legs — no direct in-core `providerRegistry` consult anymore. The host-coupled kinds (`system-packages`/`builder`/`local-pkg-install`/`op`) no longer call back a host `step-emit` renderer at all (K5-Unit-6b): the plugin's `"oci-dispatch"` word fetches the `"resolved-project"` envelope once per project dir and renders them DIRECTLY against its own `deploykit.Generator` (built via `deploykit.NewRenderGeneratorFromProject`), so the `HostBuild("step-emit","oci-emit-step")` seam is a thin dispatch forwarder only, not a render callback; a no-op-emit word like `apk-install`/`reboot` declares `Emits=false` and the plugin's dispatch skips its `OpEmit` entirely |
-            | `candy/plugin-installstep` | Compiled-in DUAL-PLACEMENT `class:step` plugin serving the BUILD-context `OpEmit` for the compiler-emitted builtin InstallStep kinds. Three sub-categories: the PURE kinds — `file`/`shell-hook`/`shell-snippet`/`service-packaged`/`service-custom`/`repo-change`/`apk-install` (C1.1) + the no-op-emit `reboot` (C1.6) — whose fragment is pure string formatting from the compiler-produced `spec.InstallStepView` (the SAME view the deploy walk consumes), returned directly from `OpEmit`; `local-pkg-install` (C1.4), whose render (`deploykit.RenderLocalPkgImageInstall` — `deploykit.BuildLocalPkgOnHost` + host-dir staging for a dev bed, the release-download RUN for production, W3) is a PURE `sdk/deploykit` function operating only on its step argument (no `*Config`, no live `*Candy` graph) — it renders the SAME pure way as its siblings (no host callback); and the genuinely HOST-COUPLED `system-packages` (C1.2) + `builder` (C1.3) + `op` (C1.5) kinds. NONE of these call back a host `step-emit` renderer (K5-Unit-6b): the plugin's `"oci-dispatch"` word fetches the `"resolved-project"` envelope once per project dir and renders all four DIRECTLY against its own `deploykit.Generator` (built via `deploykit.NewRenderGeneratorFromProject`) — `system-packages` against the DistroDef format templates, `builder` against the multi-stage `buildStageContext` + `RenderTemplate` engine, `op` (the RICHEST) via the SAME `Generator.emitTasks` the box build uses (the full per-verb render pipeline with COPY staging + op coalescing), just invoked from the plugin's own Generator instance rather than a host round-trip. `apk-install` and `reboot` declare `Emits=false` (no-op build-emit — an image build installs no apk / reboots nothing). The DEPLOY leg for ALL these kinds is UNCHANGED (`sdk/kit.WalkPlans`; `system-packages` + `builder` + `local-pkg-install` are host-engine via `RunHostStep` → `renderHostPackageCommand` / `runVenueBuilderStep` / `deploykit.ExecLocalPkgInstall`; `op` is the act-OpStep `resolveProvisionScript` path (`charly/checkrun_act.go` / `charly/plugin_executor_reverse.go` — the former `renderOpCommand` wrapper around it was dead-code-radical-removal-batch deleted, test-only, zero production callers); `reboot` is the host-side guest reboot via `RunHostStep` → `rebootVenueAndWait`) — this plugin serves ONLY `OpEmit`; with C1.6 the compiler-emitted kinds are plugin-served (ExternalPlugin dispatched by its own `class:step` plugin) |
+            | `charly/build_target_oci.go` | Residual helper only (P11c): the pod-overlay Containerfile WALKER (`OCITarget`) MOVED to `sdk/deploykit/oci_target.go` as the kind-blind `deploykit.OCITarget` walker, and the per-step DISPATCH ENTRY POINT is `charly/oci_step_emit.go` (`dispatchOCIStep` — a thin forwarder; the dispatch DECISION itself relocated to `candy/plugin-installstep`'s `"oci-dispatch"` word, K5-A item 2). This file keeps only `formatDefCacheMountDefs` (a `FormatDef.CacheMount` bridge `deploy_host_helpers.go` reads). The DEPLOY-mode overlay render — `add_candy:` Containerfile synthesis — now lives in `candy/plugin-deploy-pod/overlay.go`; `dispatchOCIStep` forwards the plugin-served build-emit kinds (`deploykit.PluginEmitStepWords` — the PURE C1.1 kinds + the no-op-emit `reboot` (C1.6) + the HOST-COUPLED `system-packages` (C1.2) + `builder` (C1.3) + `local-pkg-install` (C1.4) + `op` (C1.5)) plus the authored `external:<word>` step and the `ExternalPlugin` verb step to the compiled-in `class:step` plugin `candy/plugin-installstep`'s `"oci-dispatch"` word, which itself resolves the TARGET provider via the class-generic `DescribeProvider` (cached StepContract metadata) + `InvokeProvider` (dispatch) reverse-channel legs — no direct in-core `providerRegistry` consult anymore. The host-coupled kinds (`system-packages`/`builder`/`local-pkg-install`/`op`) no longer call back a host `step-emit` renderer at all (K5-Unit-6b): the plugin's `"oci-dispatch"` word fetches the `"resolved-project"` envelope once per project dir and renders them DIRECTLY against its own `deploykit.Generator` (built via `deploykit.NewRenderGeneratorFromProject`), so the `HostBuild("step-emit","oci-emit-step")` seam is a thin dispatch forwarder only, not a render callback; a no-op-emit word like `apk-install`/`reboot` declares `Emits=false` and the plugin's dispatch skips its `OpEmit` entirely |
+            | `candy/plugin-installstep` | Compiled-in DUAL-PLACEMENT `class:step` plugin serving the BUILD-context `OpEmit` for the compiler-emitted builtin InstallStep kinds. Three sub-categories: the PURE kinds — `file`/`shell-hook`/`shell-snippet`/`service-packaged`/`service-custom`/`repo-change`/`apk-install` (C1.1) + the no-op-emit `reboot` (C1.6) — whose fragment is pure string formatting from the compiler-produced `spec.InstallStepView` (the SAME view the deploy walk consumes), returned directly from `OpEmit`; `local-pkg-install` (C1.4), whose render (`deploykit.RenderLocalPkgImageInstall` — the `charly generate-packages` plugin build + host-dir staging for a dev bed, the release-download RUN for production, W3) is a PURE `sdk/deploykit` function operating only on its step argument (no `*Config`, no live `*Candy` graph) — it renders the SAME pure way as its siblings (no host callback); and the genuinely HOST-COUPLED `system-packages` (C1.2) + `builder` (C1.3) + `op` (C1.5) kinds. NONE of these call back a host `step-emit` renderer (K5-Unit-6b): the plugin's `"oci-dispatch"` word fetches the `"resolved-project"` envelope once per project dir and renders all four DIRECTLY against its own `deploykit.Generator` (built via `deploykit.NewRenderGeneratorFromProject`) — `system-packages` against the DistroDef format templates, `builder` against the multi-stage `buildStageContext` + `RenderTemplate` engine, `op` (the RICHEST) via the SAME `Generator.emitTasks` the box build uses (the full per-verb render pipeline with COPY staging + op coalescing), just invoked from the plugin's own Generator instance rather than a host round-trip. `apk-install` and `reboot` declare `Emits=false` (no-op build-emit — an image build installs no apk / reboots nothing). The DEPLOY leg for ALL these kinds is UNCHANGED (`sdk/kit.WalkPlans`; `system-packages` + `builder` + `local-pkg-install` are host-engine via `RunHostStep` → `renderHostPackageCommand` / `runVenueBuilderStep` / `deploykit.ExecLocalPkgInstall`; `op` is the act-OpStep `resolveProvisionScript` path (`charly/checkrun_act.go` / `charly/plugin_executor_reverse.go` — the former `renderOpCommand` wrapper around it was dead-code-radical-removal-batch deleted, test-only, zero production callers); `reboot` is the host-side guest reboot via `RunHostStep` → `rebootVenueAndWait`) — this plugin serves ONLY `OpEmit`; with C1.6 the compiler-emitted kinds are plugin-served (ExternalPlugin dispatched by its own `class:step` plugin) |
             | `charly/deploy_target_pod.go` | DELETED (P11c). The former in-core pod overlay target — the overlay Containerfile synthesis + `tagDeployAlias` + the render helpers — MOVED to `candy/plugin-deploy-pod/overlay.go` (the candy renders the overlay in its own code via `deploykit.OCITarget` + `deploykit.NewRenderGeneratorFromProject`). The two pure helpers core still needs (`collectOverlayCandies`, `readImageRegistry`) moved into `charly/build_overlay.go`. The pod config-WRITE path (quadlet) is a SEPARATE batch (#86, excluded from P11c) |
             | `charly/build_overlay.go` | The host-side pod-overlay build PREP+RESOLVE M-seam (P11c — the overlay-BUILD dissolution). `hostBuildOverlay` is the F10 `overlay` host-builder: it reconstructs the core `*Generator` (with the deploy's `add_candy` refs as `ExtraCandyRefs`), resolves the base image ref + distro + init + base-image metadata (`ExtractMetadata`), stages remote candy copies (host-fs `createRemoteCandyCopies`), projects an overlay-scoped `*spec.ResolvedProject`, serializes the live plans, caches the `buildEngineContext` for the `"oci-emit-step"` step-emitter, and returns the `OverlayBuildReply` envelope. The candy (`candy/plugin-deploy-pod` `podPrepareVenue`) consumes the envelope, constructs a `deploykit.Generator` via the shared `deploykit.NewRenderGeneratorFromProject`, renders the overlay Containerfile in its own code, and runs `podman build` + the alias tag via the served executor. The per-step fragments render via the generic `"step-emit"` host-builder (`HostBuild("step-emit","oci-emit-step")` → `dispatchOCIStep`, a thin forwarder to `candy/plugin-installstep`'s `"oci-dispatch"` word — K5-A item 2). The LIVE plans + nested-venue `ParentExec`/`ParentNode` ride the ctx (`overlayBuildInputs`), never serialized |
             | `sdk/deploykit/deploy_chain.go` | `rootExecutorForDeployNode` — picks the root `DeployExecutor` for an external `local:` deploy node (`ShellExecutor` for `host:local`/absent, `SSHExecutor` for `host:<user@machine>`); the `deploy:local` substrate itself is served out-of-process by `candy/plugin-deploy-local`, which walks the plan via `sdk/kit.WalkPlans` (moved from `charly/deploy_chain.go`) |
@@ -5389,7 +6124,7 @@ install-plan-skill:
                   NO in-proc targets implement the bare `DeployTarget` (Name + Emit) interface — the former in-proc overlay walker + the pod overlay target were DELETED in P11c (the pod overlay render now lives in the candy `plugin-deploy-pod`, via `deploykit.OCITarget`), so there are no deploy targets dispatched by `ResolveTarget`. The deploy LIFECYCLE is the separate `UnifiedDeployTarget` interface (Add/Del/Update/Start/Stop/Status/Logs/Shell/Rebuild — `Test` DELETED, #55 W3 B3 remainder: zero real callers anywhere in the tree), and its sole implementer is the thin, data-only `pluginDeployTarget` (`charly/unified_targets.go`, S3b — see "`pluginDeployTarget` + `candy/plugin-fleet`" below): ALL FIVE substrates — `local`, `vm`, `pod`, `kubernetes`, `android` — route through it over `candy/plugin-fleet`'s `Invoke(OpDeployDispatch)` and, from there, the executor reverse channel to the ACTUAL substrate's own out-of-process plugin:
 
                   ### `deploykit.OCITarget` (`sdk/deploykit/oci_target.go`) — the pod-overlay walker (P11c relocation)
-                  The kind-blind Containerfile walker MOVED out of `charly/build_target_oci.go` (P11c) into `sdk/deploykit`; the candy `plugin-deploy-pod` constructs it + renders via `deploykit.NewRenderGeneratorFromProject`. Emits Containerfile text. Consumes `phases.install.container` from the embedded `charly/charly.yml` build vocabulary (falls back to `install_template:`). All compiler-emitted step kinds' build-emit is plugin-served: the plugin-served build-emit kinds (`deploykit.PluginEmitStepWords` — the PURE C1.1 kinds + the no-op-emit `reboot` (C1.6) + the HOST-COUPLED `system-packages` (C1.2), `builder` (C1.3), `local-pkg-install` (C1.4), `op` (C1.5)) route through the host's thin `oci-emit-step` forwarding seam (`charly/oci_step_emit.go`'s `ociEmitStep`/`dispatchOCIStep`, reached by the candy's `deploykit.OCITarget.EmitStepOp` over `HostBuild("step-emit","oci-emit-step")`) to `candy/plugin-installstep`'s `"oci-dispatch"` word, which itself resolves the serving `class:step` provider via `DescribeProvider`/`InvokeProvider` and Invokes its `OpEmit` (K5-A item 2) — their former in-core overlay-walker `emit*` methods are gone; the payload is the step VIEW (`StepToView`), and a legitimately-empty render is tolerated (`allowEmpty`; a no-op-emit `apk-install`/`reboot` declares `Emits=false` and is skipped entirely). The HOST-COUPLED kinds (`system-packages`/`builder`/`local-pkg-install`/`op`) no longer call back a host `step-emit` renderer at all (K5-Unit-6b): `candy/plugin-installstep` fetches the `"resolved-project"` envelope once per project dir and renders them DIRECTLY against its own `deploykit.Generator` (built via the shared `deploykit.NewRenderGeneratorFromProject`) — `op`'s render still delegates to the SAME `Generator.EmitTasks` (the per-verb emitters `emitCopy`/`emitWrite`/`emitCmd`/`emitMkdirBatch`/...) the box build uses, just invoked from the plugin's own Generator instance rather than a host round-trip. Only `ExternalPlugin` keeps an in-proc `StepProvider.EmitOCI` at the Go-object level (dispatched to its `class:verb` provider via `InvokeProvider` from the plugin's `"oci-dispatch"` word) — the C1.1–C1.6 externalization is COMPLETE, every InstallStep kind now plugin-served.
+                  The kind-blind Containerfile walker MOVED out of `charly/build_target_oci.go` (P11c) into `sdk/deploykit`; the candy `plugin-deploy-pod` constructs it + renders via `deploykit.NewRenderGeneratorFromProject`. Emits Containerfile text. Consumes `phases.install.container` from the embedded `charly/charly.yml` build vocabulary (falls back to `install_template:`). All compiler-emitted step kinds' build-emit is plugin-served: the plugin-served build-emit kinds (`deploykit.PluginEmitStepWords` — the PURE C1.1 kinds + the no-op-emit `reboot` (C1.6) + the HOST-COUPLED `system-packages` (C1.2), `builder` (C1.3), `local-pkg-install` (C1.4), `op` (C1.5)) route through the host's thin `oci-emit-step` forwarding seam (`charly/oci_step_emit.go`'s `dispatchOCIStep`, reached by the candy's `deploykit.OCITarget.EmitStepOp` over `HostBuild("step-emit","oci-emit-step")`) to `candy/plugin-installstep`'s `"oci-dispatch"` word, which itself resolves the serving `class:step` provider via `DescribeProvider`/`InvokeProvider` and Invokes its `OpEmit` (K5-A item 2) — their former in-core overlay-walker `emit*` methods are gone; the payload is the step VIEW (`StepToView`), and a legitimately-empty render is tolerated (`allowEmpty`; a no-op-emit `apk-install`/`reboot` declares `Emits=false` and is skipped entirely). The HOST-COUPLED kinds (`system-packages`/`builder`/`local-pkg-install`/`op`) no longer call back a host `step-emit` renderer at all (K5-Unit-6b): `candy/plugin-installstep` fetches the `"resolved-project"` envelope once per project dir and renders them DIRECTLY against its own `deploykit.Generator` (built via the shared `deploykit.NewRenderGeneratorFromProject`) — `op`'s render still delegates to the SAME `Generator.EmitTasks` (the per-verb emitters `emitCopy`/`emitWrite`/`emitCmd`/`emitMkdirBatch`/...) the box build uses, just invoked from the plugin's own Generator instance rather than a host round-trip. Only `ExternalPlugin` keeps an in-proc `StepProvider.EmitOCI` at the Go-object level (dispatched to its `class:verb` provider via `InvokeProvider` from the plugin's `"oci-dispatch"` word) — the C1.1–C1.6 externalization is COMPLETE, every InstallStep kind now plugin-served.
 
                   Used by: pod deploys with `add_candy:` (overlay Containerfile synthesis) — the ONLY `deploykit.OCITarget` construction site (the candy `plugin-deploy-pod`'s `buildOverlay`). `charly box build` / `charly box generate` do NOT use `deploykit.OCITarget`; build-mode Containerfile emission is the separate `WriteCandySteps` → `EmitTasks` generator in `sdk/deploykit` (see the Overview "Build mode is a SEPARATE path").
 
@@ -5709,7 +6444,7 @@ install-plan-skill:
                   | `ShellSnippetStep` | CandyName, Origin, Shell (bash/zsh/fish/sh), Snippet, PathAppend, Destination, Marker, UseDropin, Priority | HostNative | `pathIsSystemScoped(Destination)` (system for container drop-ins, user-profile for ~/.bashrc etc.) |
                   | `RepoChangeStep` | Format, File, Content, Checksum, CandyName | HostNative | Always system |
                   | `ApkInstallStep` | Packages (apk specs), CandyName, CandyDir | HostNative | Always system. Only `target: android` executes it; every other target records a skip. |
-                  | `LocalPkgInstallStep` | PkgbuildRef, CandyName, CandyDir, ProjectDir, Format, LocalPkg (`*LocalPkgDef`) | HostNative | Always system. Compiled from a layer's per-format `localpkg:` map (the `charly` layer's `{pac: pkg/arch, rpm: pkg/fedora, deb: pkg/debian}`) at "step 2.5" (before tasks); `compileLocalPkgStep` resolves the target distro's format FIRST (`DistroDef.LocalPkgFormat`), then the layer's source for that format, so `Format` + `LocalPkg` come from the `format.<fmt>.local_pkg:` block in the embedded `charly/charly.yml` — EVERY command rendered from config, no hardcoded build/install/glob literals. On a localpkg-capable deploy target (`target: local` / `target: vm`) the HOST builds the format's source via `LocalPkg.BuildTemplate` (pac → `makepkg`; rpm/deb → a distro-matched podman container) into `LocalPkg.PkgGlob` artifacts, then installs them onto the target via `LocalPkg.InstallTemplate` — the format's AUTO-RESOLVING local-file install (`pacman -U` / `dnf install` / `apt-get install`), which pulls the package's repo deps automatically. There is NO dependency-closure builder (the aur-LAYER deploy path still reuses the shared `deploykit.BuildDepPkgsOnHost`/`deploykit.TransferAndInstallPkgs` leg, R3). `LocalPkg.Probe` gates the install leg; `LocalPkg.SourceSentinel` (`PKGBUILD`/`*.spec`/`debian/control`) marks the source dir. `deploykit.ResolveLocalPkgDir` walks up from `ProjectDir`, so a consumer nested under `box/<distro>` finds the superproject `pkg/<fmt>`. At IMAGE build the install is **mode-switched by box type** (unified in `deploykit.RenderLocalPkgImageInstall`, shared by `sdk/deploykit WriteCandySteps` (the `charly box build`/`generate` image build, relocated in #67) + the pod-overlay build-emit (rendered DIRECTLY by `candy/plugin-installstep`'s `"oci-dispatch"` word against its own `deploykit.Generator` via the fetched `"resolved-project"` envelope since K5-Unit-6b — the former host `step-emit` seam `stepEmitLocalPkgInstall` is GONE) — R3): a PRODUCTION box DOWNLOADS the published release (`LocalPkg.DownloadTemplate`), while a DISPOSABLE check bed BUILDS the package from LOCAL in-development source and COPYs it in — see "Check-vs-production charly toolchain" below. Skipped only on a distro with no localpkg-capable format (the layer's task fallback). Machinery: `sdk/deploykit/localpkg.go` (relocated from `charly/localpkg.go` in W3 — pure, no `*Config`/registry dependency); config: the embedded `charly/charly.yml` `format.<fmt>.local_pkg:` block. |
+                  | `LocalPkgInstallStep` | PkgbuildRef, CandyName, CandyDir, ProjectDir, Format, LocalPkg (`*LocalPkgDef`) | HostNative | Always system. Compiled from the embedded `format.<fmt>.local_pkg:` block (the candy-body `localpkg:` map is REMOVED — nFPM cutover) at "step 2.5" (before tasks); `compileLocalPkgStep` resolves the target distro's format FIRST (`DistroDef.LocalPkgFormat`), so `Format` + `LocalPkg` come from the `format.<fmt>.local_pkg:` block in the embedded `charly/charly.yml` — EVERY command rendered from config, no hardcoded build/install/glob literals. On a localpkg-capable deploy target (`target: local` / `target: vm`) the HOST runs the sdk's localpkg machinery (`sdk/deploykit/localpkg.go`): the PRODUCTION path (`!DevLocalPkg`) DOWNLOADS the published package from the per-distro repo (`LocalPkg.DownloadTemplate`, the glob derived from the URL via `localPkgGlobFromDownload`), while the DEV path (`--dev-local-pkg`) builds it via the `charly generate-packages` plugin (nFPM, `sdk/packagekit`) from the in-development binary — then installs it onto the target via `LocalPkg.InstallTemplate` — the format's AUTO-RESOLVING local-file install (`pacman -U` / `dnf install` / `apt-get install`), which pulls the package's repo deps automatically. There is NO dependency-closure builder. `LocalPkg.Probe` gates the install leg. At IMAGE build the install is **mode-switched by box type** (unified in `deploykit.RenderLocalPkgImageInstall`, shared by `sdk/deploykit WriteCandySteps` (the `charly box build`/`generate` image build, relocated in #67) + the pod-overlay build-emit (rendered DIRECTLY by `candy/plugin-installstep`'s `"oci-dispatch"` word against its own `deploykit.Generator` via the fetched `"resolved-project"` envelope since K5-Unit-6b — the former host `step-emit` seam `stepEmitLocalPkgInstall` is GONE) — R3): a PRODUCTION box DOWNLOADS the published release (`LocalPkg.DownloadTemplate`), while a DISPOSABLE check bed BUILDS the package via the plugin from LOCAL in-development source and COPYs it in — see "Check-vs-production charly toolchain" below. Skipped only on a distro with no localpkg-capable format (the layer's task fallback). Machinery: `sdk/deploykit/localpkg.go` (relocated from `charly/localpkg.go` in W3 — pure, no `*Config`/registry dependency); config: the embedded `charly/charly.yml` `format.<fmt>.local_pkg:` block. |
                   | `RebootStep` | CandyName | HostNative | Always system; `Reverse()` empty. Emitted last when a layer sets `reboot: true`. Its BUILD-emit is a plugin-served no-op (`pluginEmitStepWords[Reboot]="reboot"` → `candy/plugin-installstep`, `Emits=false` — an image build reboots nothing, C1.6; NO in-proc `StepProvider`, mirroring `ApkInstall`). Its DEPLOY leg is unchanged: only the external `vm` deploy reboots — its `candy/plugin-deploy-vm` walk drives the step host-side over `RunHostStep` → `rebootVenueAndWait`, where the host reboots the guest + waits for the deterministic boot_id change (a rebootable venue). OCI/pod/kubernetes skip; the external `local:` deploy skips + warns (never reboots the operator host). |
                   | `ExternalPluginStep` | Op (the desugared plugin-verb op — verb word + internal `plugin_input` + `RunAs`), CandyName, ResolvedUser, Distros | HostNative | From ResolvedUser (`opStepScope`: root/empty → system; else user). `Reverse()` static-nil — teardown ops are recorded DYNAMICALLY from the plugin's `OpExecute` reply. A plugin-verb `run:` step (authored `<word>: <input>`) whose verb is served by an EXTERNAL (out-of-process) `class:verb` plugin — see "ExternalPluginStep notes" below. |
                   | `deploykit.ExternalStep` (F3, kind `external:<word>`) | Word, ScopeV/VenueV/GateV (plugin-DECLARED), Payload (opaque `json.RawMessage`), CandyName, reverseOps (dynamic) | DECLARED (StepContract.venue) | DECLARED (StepContract.scope) — advisory, since the plugin self-execs `RunSystem`/`RunUser`. A PLUGIN-CONTRIBUTED step kind: a plugin-word `run:` step (authored `<word>: <input>`) whose word is a `class:step` provider declaring a `StepContract`. `compileActOp` lowers it (resolve(ClassStep) + the carrier's contract → `deploykit.ExternalStep` with the opaque desugared `plugin_input` as Payload) — **only when the word is NOT a verb (verb-first precedence)**: a plugin-word step whose word resolves as a `class:verb` is a verb act (falls through to `OpStep`), so a `class:step` word COLLIDING with a verb word (`file` = `verb:file` act + `step:file` build-emit, C1.1) resolves as the VERB, never a spurious `external:file`; `stepToView`/`stepFromView` round-trip it with the Scope/Venue/Gate AUTHORITATIVE (not recomputed); the host's OPEN DEFAULT ARM in `kit.WalkPlans` + `RunHostStep` dispatches it via the shared `invokeExternalStep` (`charly/plugin_executor_reverse.go`, S4/R3) → `Invoke(OpExecute)` over the SAME PLUGIN↔PLUGIN `InvokeProvider` leg `ExternalPluginStep` uses. `Reverse()` returns the dynamic ops recorded from the reply. THE carrier M2 reuses to externalize the builtin step kinds. The `StepContract` declaration rides `ProvidedCapability.step_contract` over Describe (`spec/proto`); example: `candy/plugin-example-stepkind`. **BUILD leg (F-STEP-EMIT):** `StepContract.Emits` (proto `step_contract.emits`) declares the step produces a build-context Containerfile FRAGMENT; the pod-overlay dispatch's external-step arm (`candy/plugin-installstep`'s `"oci-dispatch"` word, reached from the host's thin `charly/oci_step_emit.go` forwarder over the candy's `deploykit.OCITarget.EmitStepOp` → `HostBuild("step-emit","oci-emit-step")`) resolves the `class:step` provider by the trimmed word via `DescribeProvider`, and for `Emits=true` Invokes `OpEmit` via `InvokeProvider` (K5-A item 2, the plugin-side mirror of the SAME `invokeOpEmitFragment` shape `emitPluginFragment` uses host-side) and splices the fragment; `Emits=false` → skip (a deploy-only external step, like apk on an image build). A HOST-COUPLED step (system-packages/builder/local-pkg-install/op) needs no host round-trip at all: `candy/plugin-installstep` fetches the `"resolved-project"` envelope once per project dir (K5-Unit-6b) and renders directly against its own `deploykit.Generator`. |
@@ -5720,7 +6455,7 @@ install-plan-skill:
                   compile from candy fields and project to the deploy view), but their pod-overlay BUILD-emit no
                   longer lives in an in-core overlay-walker `emit*` method — it moved to the compiled-in `class:step` plugin
                   `candy/plugin-installstep`. The candy's `deploykit.OCITarget` reaches the plugin over the
-                  `HostBuild("step-emit","oci-emit-step")` seam (`ociEmitStep`/`dispatchOCIStep`, a thin host-side
+                  `HostBuild("step-emit","oci-emit-step")` seam (`dispatchOCIStep`, a thin host-side
                   forwarder); the plugin's OWN `"oci-dispatch"` word maps each kind to its serving word via
                   `deploykit.PluginEmitStepWords`, serializes the step VIEW (`StepToView`) as the `OpEmit` payload,
                   resolves the target via `DescribeProvider` + `InvokeProvider` (K5-A item 2), and splices
@@ -5746,8 +6481,8 @@ install-plan-skill:
                   `"resolved-project"` envelope ONCE per project dir and renders ALL FOUR host-coupled kinds DIRECTLY against its OWN
                   `deploykit.Generator` (built via the shared `deploykit.NewRenderGeneratorFromProject`) — there is NO call back to a
                   host `step-emit` renderer and NO `EmitReply` echo. LocalPkgInstall (C1.4) was already in this shape (W3): its render
-                  `deploykit.RenderLocalPkgImageInstall` (→ `deploykit.BuildLocalPkgOnHost` + host-dir staging for a dev bed, the
-                  release-download RUN for production) is a PURE `sdk/deploykit` function of its step argument — no `*Config`,
+                  `deploykit.RenderLocalPkgImageInstall` (→ the `charly generate-packages` plugin build + host-dir staging for a
+                  dev bed, the release-download RUN for production) is a PURE `sdk/deploykit` function of its step argument — no `*Config`,
                   no live `*Candy` graph, no host callback — and it now renders the SAME way, against the plugin's own Generator,
                   no longer routing through a host `step-emit` seam for `buildEngineContext` threading. The former in-core per-word
                   renders (`stepEmitSystemPackages` / `stepEmitBuilder` / `stepEmitLocalPkgInstall` / `stepEmitOp` in
@@ -5787,15 +6522,15 @@ install-plan-skill:
 
                   ### Check-vs-production charly toolchain (the `--dev-local-pkg` distinction)
 
-                  A `localpkg:` candy (the `charly` toolchain) installs the charly binary as a
-                  proper OS package on every distro image. The BINARY SOURCE depends on the box
-                  type — a hard, GENERIC distinction, NEVER mixed, decided in ONE place
+                  The charly toolchain installs the charly binary as a proper OS package on
+                  every distro image. The BINARY SOURCE depends on the box type — a hard,
+                  GENERIC distinction, NEVER mixed, decided in ONE place
                   (`deploykit.RenderLocalPkgImageInstall`, `sdk/deploykit/localpkg.go` — relocated from `charly/localpkg.go` in W3):
 
                   | Box type | charly binary source | How |
                   |---|---|---|
-                  | **Disposable check box** (a `disposable: true` deploy) | latest **in-development** | the check-bed runner ALWAYS passes `charly box build --dev-local-pkg`, so the localpkg is BUILT from local source (`pkg/<fmt>` + `charly/`, via `deploykit.BuildLocalPkgOnHost`) and COPY'd into the image — a bed tests the charly code under development |
-                  | **Production box** (any normal `charly box build`) | latest **published** | the default: the localpkg DOWNLOADS the published release (`releases/latest/download/opencharly-<arch>.<fmt>`) |
+                  | **Disposable check box** (a `disposable: true` deploy) | latest **in-development** | the check-bed runner ALWAYS passes `charly box build --dev-local-pkg`, so the localpkg is BUILT via the `charly generate-packages` plugin (nFPM, `sdk/packagekit`) from the in-development binary + plugins and COPY'd into the image — a bed tests the charly code under development |
+                  | **Production box** (any normal `charly box build`) | latest **published** | the default: the localpkg DOWNLOADS the published package from the per-distro repo (`LocalPkg.DownloadTemplate`, e.g. `https://opencharly.github.io/charly-arch/${ARCH}/charly-${ARCH}.pkg.tar.zst`) |
 
                   Both install via the SAME dep-resolving `InstallTemplate` (`pacman -U` / `dnf
                   install` / `apt-get install`) — only the package SOURCE differs, so the toolchain
@@ -5803,8 +6538,8 @@ install-plan-skill:
                   `BuildCmd.DevLocalPkg` (`--dev-local-pkg`); the check-bed runner sets it for EVERY
                   bed image build (`candy/plugin-check/bed_run.go`, driving `charly box build` over
                   the `HostBuild("cli")` seam), a production build never does. Generic
-                  across all kinds + all localpkg candies. A dev build that cannot locate its local
-                  source **HARD-ERRORS** — it NEVER silently falls back to the release (R4), so a
+                  across all kinds + all localpkg candies. A dev build that cannot build via the
+                  plugin **HARD-ERRORS** — it NEVER silently falls back to the release (R4), so a
                   bed can never accidentally test a stale published binary. Net: a disposable check
                   bed always exercises the in-development charly; a real box ships the released one.
 
@@ -6335,7 +7070,7 @@ plugin-skill:
             - `task cue:gen` — regenerates spec + every plugin's params; reproducible (a second run is a no-op).
             - `charly box validate` — the candy + `plugin:` block (`candy/plugin-box/validate_rules.go`'s
               `IsPlugin` check — an explicit, documented 1:1 port of the former core `validatePluginCandy`, deleted
-              as dead code in the 2026-07-22 dead-code-radical-removal batch once its call site moved here —
+              as dead code in the dead-code-radical-removal batch once its call site moved here —
               verifies each capability is well-formed and, for `source: builtin`, that the provider is actually
               compiled in).
             - R10: a disposable bed composing a builtin AND an external plugin, driven to a fresh `charly update` — the
@@ -6811,7 +7546,7 @@ plugin-skill:
                   REGARDLESS of what it aliases — even a genuine E-envelope type. The alias is not "permanent because it's
                   an E-type"; the alias IS the mislocated call site, the whole point of ZERO-ALIASES. Classify every
                   `charly/*_aliases.go` (and stray `_alias.go`) entry as residue: delete it and repoint its callers to
-                  `spec.*` (or the owning kit) directly. Motivating incident: an auditor counted `labels.go`'s `BoxMetadata =
+                  `spec.*` (or the owning kit) directly. Failure mode: an auditor counts `labels.go`'s `BoxMetadata =
                   spec.BoxMetadata` alias and `install_plan.go`'s `Scope`/`Venue`/`Phase` aliases (all grep-verified genuine
                   `spec.*` E-types) as "permanent E," then self-corrected — an alias's TARGET being E doesn't make the alias
                   itself permanent.
@@ -6820,12 +7555,8 @@ plugin-skill:
                   `InstallPlan`, `VenueDescriptor`, `#Node`/`#Step`/`#Op`, the wire replies. A struct NAMED after a concrete
                   kind, with kind-specific fields and accessors, is that kind's TYPED SHAPE: an R-item, moving to its
                   owning kit/plugin. `ResolvedBox` (now `spec.ResolvedBox`, CUE-generated) is the already-relocated
-                  precedent. "Carries data" is not the E test; kind-AGNOSTIC is. Motivating incident (CLOSED, kept as a
-                  historical illustration — do not cite `layers.go`'s `Candy` struct as a still-live example, it no longer
-                  exists in ANY form): an auditor counted `layers.go`'s then-current `Candy` struct (grep-verified: 60+
-                  accessor methods, every one kind-specific) as E because it "carries data," then self-corrected — the
-                  struct was later fully dissolved (not relocated wholesale) into the `spec.CandyModel`/`spec.CandyView`
-                  pair (W9), so `layers.go` today holds only kind-blind scan/parse functions, not the typed shape itself.
+                  precedent. "Carries data" is not the E test; kind-AGNOSTIC is. `layers.go` holds only kind-blind scan/parse
+                  functions; the typed shape lives in the `spec.CandyModel`/`spec.CandyView` pair.
 
                   **The practical audit framing — invert the default.** Every file is an R-item (it moves to a plugin)
                   UNLESS it is LITERALLY one of the tiny kernel whitelist: the three in-core M-mechanisms (plugin loading /
@@ -6833,9 +7564,9 @@ plugin-skill:
                   data, or an E generic envelope. Auditing a cone by asking "is this hard to move" instead of "is this one
                   of E/M/B/D" is the exact failure this framing forecloses: the bed runner, the check/ADE harness, the build
                   engine, the deploy walk, and the VM engine are ALL R-items (the v2 ledger already names them plugins) —
-                  none of them earns kernel status by being awkward to relocate. Motivating incident: two auditors
-                  independently mis-classified the deploy + check cones as ~90% permanent using exactly the
-                  "host-boundary/gather-engine" excuse; the true kernel in those cones is ~0.3%.
+                  none of them earns kernel status by being awkward to relocate. Failure mode: auditors mis-classify the deploy + check cones as
+                  ~90% permanent using exactly the "host-boundary/gather-engine"
+                  excuse; the true kernel in those cones is ~0.3%.
 
                   **The canonical shape every kind copies — resolve-to-envelope.** `builder` is the reference: its plugin
                   serves its own `#BuilderInput` schema, decodes into its own params, validates its own input, and RESOLVES
@@ -6961,7 +7692,7 @@ plugin-skill:
                   `StepContract.Emits=true` declares the step ALSO produces a build-context Containerfile FRAGMENT — served by
                   `Invoke(OpEmit)` → `spec.EmitReply.Fragment`. Composed into a POD overlay (add_candy), the pod-overlay
                   `deploykit.OCITarget` (in the candy `plugin-deploy-pod`) reaches the host's open external-step arm
-                  (`ociEmitStep`, over `HostBuild("step-emit","oci-emit-step")`) which Invokes that OpEmit and splices the fragment (`Emits=false` → a
+                  (`dispatchOCIStep`, over `HostBuild("step-emit","oci-emit-step")`) which Invokes that OpEmit and splices the fragment (`Emits=false` → a
                   deploy-only step, skipped on the image build, like apk); a HOST-COUPLED step's OpEmit calls back
                   `HostBuild("step-emit", …)` for a host-engine-rendered fragment. A step plugin serving OpEmit is a PURE
                   step (self-contained fragment); the reference `candy/plugin-example-stepkind` serves BOTH legs (OpExecute at
@@ -7132,11 +7863,78 @@ skills-skill:
 
             ## How to Update
 
-            1. Edit the skill file at `plugins/<plugin>/skills/<skill-name>/SKILL.md`
+            1. **Edit the candy's `skill:` entity in `candy/<candy>/charly.yml`, then regenerate**
+               (`charly marketplace generate` → `task docs:sync`). Most of the corpus under
+               `plugins/**/SKILL.md` is a PROJECTION and carries a DO-NOT-EDIT banner: an edit
+               there is reverted by the next regeneration, silently and without conflict. `git grep
+               -l 'DO[- ]NOT[- ]EDIT'` tells you which files are generated — but triage the hits
+               rather than trusting them, since a file may MENTION the banner without carrying one
+               (agent definitions under `plugins/<plugin>/agents/` are hand-authored).
             2. If the insight affects cross-skill behavior, update the project rulebook (`AGENTS.md` / `CLAUDE.md`) too
             3. After any non-trivial deployment session, ask: "Did we learn anything that future sessions should know?"
 
+            ### Regenerate ONLY the projections of the sources you edited
+
+            **A projection merges before the superproject source that pins it**, so prose can be
+            correct and landed in `plugins`/`docs` while its candy source is still in flight on
+            another branch. Regenerating from a superproject tree that lacks that pending source
+            does not bring the projection up to date — it **drags it backwards**, and the diff is
+            indistinguishable from a legitimate update.
+
+            Measured: a wholesale `charly marketplace generate` touched **21** files in `plugins`
+            and **41** in `docs` when three candy sources had changed. The extra ones were reverts,
+            ~500 lines of landed prose including 317 from one `git-workflow` reference and 107 from
+            the `pr-validator` agent spec. Nothing in the output flagged it.
+
+            So: after regenerating, **restore every file whose candy source you did not touch**, and
+            audit the deletions that remain — each one should be a line you deliberately replaced.
+
+            ```bash
+            git -C plugins diff --numstat        # +added -deleted per file
+            # Every deleted line, read in full. Do NOT use `grep '^-[^-]'` to skip the
+            # `--- a/file` header: a deleted markdown BULLET renders as `-- text`, so that
+            # pattern silently drops it — and in a prose repo bullets are the majority shape,
+            # not an edge case. Measured on one real regeneration: 90 reported vs 96 actual,
+            # every missed line a bullet. Exclude the header explicitly instead, and
+            # cross-check against --numstat, which counts independently of any regex: if the
+            # two disagree, the regex is wrong, and that disagreement IS the alarm.
+            git -C plugins diff | grep '^-' | grep -v '^--- '
+            git -C plugins diff --numstat | awk '{s+=$2} END{print s}'   # must equal the count above
+            ```
+
+
+            **After ANY merge, `update-branch`, or conflict resolution, RE-RUN this audit against the NEW
+            base.** A revert introduced by catching up is invisible to the old one, and the old number keeps
+            looking right. Measured on one branch: against the original merge-base 580 deletions; against
+            `origin/main` after the catch-up, **1170** — the second is what the squash actually lands. Both
+            numbers were correct; only one was the merge. A grep-vs-`--numstat` cross-check agreed perfectly
+            throughout and was measuring the wrong baseline, so **agreement between two methods does not
+            rescue a wrong base**. The one-line form that surfaces every offender:
+
+            ```bash
+            git diff --numstat origin/main...HEAD | awk '$2>$1'   # every file losing net lines
+            ```
+
+            It caught eleven files at once, including a whole skill file deleted outright — after five
+            consecutive audits had reported the branch clean.
+
+            **And a conflict resolution is not separate from the exclusion list — it is the same concern.**
+            Resolving conflicts by regenerating is right for projections, but a regeneration run WITHOUT the
+            protected-file list re-introduces exactly what the list exists to prevent. This recurred on two
+            hops within an hour, the second at ~19x the scale of the first.
+            A file you never edited appearing in that list is the signal, and "it was probably just
+            stale" is the reading that ships the revert.
+
             ## Skill File Structure
+
+
+            This is the SHAPE the projection EMITS, not a file you create. You author it on the candy's
+
+            `skill:` entity — frontmatter fields as entity fields, the body as its content — and
+
+            `charly marketplace generate` writes the `SKILL.md`. Every emitted file carries a DO-NOT-EDIT
+
+            banner; if you find yourself editing one, the change belongs one hop upstream.
 
             ```markdown
             ---
@@ -7156,6 +7954,14 @@ skills-skill:
             ```
 
             ## Progressive disclosure: multi-file skills
+
+            Both halves are GENERATED. You author the split on the candy's `skill:` entity — the entry body
+            plus one `reference:` entry per topic — and `charly marketplace generate` writes the `SKILL.md` and
+            `references/*.md` files. The shapes below describe what the projection must come out looking like,
+            never files to create or edit by hand; every one of them carries a DO-NOT-EDIT banner. This is
+            stated here because the section reads as a set of file operations, and the previous revision of
+            this skill opened its update instructions by telling the reader to edit `SKILL.md` directly — so a
+            reader arriving at this section had already been pointed the wrong way once.
 
             A skill is either a single `SKILL.md`, or an entry `SKILL.md` plus sibling `references/*.md` files in the same skill directory, loaded on demand by path. Split once a single file grows past ~400 lines or spans more than one cleanly-separable topic.
 
@@ -7402,9 +8208,8 @@ skills-skill:
             file:line desyncs on every alias relocation and documents a path already scheduled for deletion. State the
             stable spec-source (the owning plugin/sdk package) and the K5-dissolution destination instead of a
             concrete alias location, and `grep -rn` every concrete alias-attribution claim (a file:line or symbol
-            name) against the live tree before asserting it. Motivating incident: a go-skill row produced 5
-            alias-attribution errors across 5 validation rounds by naming exact residue locations that had already
-            moved.
+            name) against the live tree before asserting it. Failure mode: a row naming exact residue locations
+            produces alias-attribution errors round after round once that residue moves.
 
             The code-side companion (golangci-lint, the `.go` compliance checklist) is
             `/charly-internals:go-quality`.
@@ -7980,7 +8785,7 @@ vm-deploy-target-skill:
             When a layer declares `reboot: true`, `BuildDeployPlan` appends a trailing
             `RebootStep`. Only the external `vm` deploy acts on it: the plugin drives it
             over `RunHostStep`, where the HOST reboots the guest (records the guest's
-            `/proc/sys/kernel/random/boot_id`, fires `(sleep 1; systemctl reboot) &` so the
+            `/proc/sys/kernel/random/boot_id`, fires `(sleep 1; systemctl reboot || reboot) &` (the `|| reboot` arm is what lets a non-systemd guest reboot at all) so the
             ssh session closes cleanly, then polls until SSH answers AND the boot_id has
             changed — deterministic, not a fixed sleep, so the still-up pre-reboot sshd
             can't be mistaken for "back up"). OCI/pod/kubernetes skip it; the external `local:`
@@ -8173,9 +8978,12 @@ vm-spec-skill:
                 Checksum VmChecksum
                 Cache    string
                 BaseUser string       // adopt-user pattern — see below
+                Distro   string       // REQUIRED on a cloud_image source once this cutover lands (still
+                                               // OPTIONAL on released charly) — see below
 
                 // bootc branch:
-                Image      string     // `candy:` image entry name (carries base:/from:)
+                Box        string     // WIRE KEY `box:` — the `candy:` image entry name
+                                       // (carries base:/from: and `bootc: true`)
                 Transport  string     // registry | containers-storage | oci | oci-archive
                 Rootfs     string     // ext4 | xfs | btrfs
                 RootSize   string     // "10G" — caps root partition, rest unpartitioned
@@ -8193,9 +9001,68 @@ vm-spec-skill:
             2. `spec.ssh.user` defaults to `BaseUser`.
             3. cloud-init appends the pubkey to `~<base_user>/.ssh/authorized_keys` without touching sudoers/shell/home.
 
-            Common values: `arch` (Arch cloud image), `ubuntu` (Ubuntu Cloud), `fedora` (Fedora Cloud), `debian` (Debian Cloud), `cloud-user` (CentOS Cloud).
+            Common values: `arch` (Arch cloud image), `alpine` (Alpine Cloud), `ubuntu` (Ubuntu Cloud), `fedora` (Fedora Cloud), `debian` (Debian Cloud), `cloud-user` (CentOS Cloud).
 
-            Leave empty **only** when the image has no default account — then declare a custom user in `spec.cloud_init.users`.
+            **`base_user:` does NOT steer rendering — `source.distro` does, and it is REQUIRED on a `cloud_image` source.** An earlier design inferred the distro from `base_user:` (`"arch"` from `base_user: "arch"`, `"alpine"` from `"alpine"`, everything else falling through to systemd/`packages:`), so an Alpine image whose account was not literally `alpine` got `systemctl enable --now sshd` on a guest with no systemd and booted unreachable. That inference is **deleted**: nothing derives a distro from an account name, an image URL, or a source kind. `distro:` is a closed `#DistroID` (`spec/schema/distro_vocab.cue` is the single source for the id space and each id's package format, sshd unit and init system), and the vm kind's own `OpValidate` rejects a `cloud_image` source that omits it. Authored as:
+
+            ```yaml
+            my-vm:
+                vm:
+                    source:
+                        kind: cloud_image
+                        base_user: myuser
+                        distro: alpine
+            ```
+
+            **Why it is required rather than optional-with-a-default.** A Debian-family `cloud_image` that
+            omitted `distro:` used to render Arch conventions and boot unreachable: `sshUnitForDistro` and
+            `composePackages` read the EXPLICIT field, so `base_user: ubuntu` steered nothing. The render
+            emitted the Arch package name `openssh` (apt: `Unable to locate package openssh`) and
+            `systemctl enable --now sshd`, a unit Debian/Ubuntu do not have (theirs is `ssh`) — and because
+            `composeBootCmd` masks `ssh.socket` until cloud-init finishes, a socket-activated sshd (Ubuntu
+            24.04's default) was left MASKED and never restarted. The guest booted fully and served nothing.
+
+            There is deliberately **no fallback** for either value. `spec.DistroSSHUnits[distro]` and
+            `spec.DistroInits[distro]` are bare lookups into the generated tables: an id outside the
+            vocabulary yields an EMPTY unit name rather than a guess, and there is no fallback to the other
+            unit name — a fallback is what lets a wrong input survive long enough to fail somewhere
+            else. Omitting the value is a VALIDATION ERROR at author time
+            (`candy/plugin-substrate/validate_vm.go` `validateSourceDistro`, severity `error`); the
+            unreachable-VM outcome is what the now-deleted `base_user` inference used to produce,
+            not what omission costs today. Presence
+            is enforced at author time instead, which is the only place the answer is actually known.
+
+            **The symptom is worth memorising, because it names nothing:** the domain reports
+            `running`, the libvirt portForward is correct (`passt --tcp-ports 127.0.0.1/<port>:22`),
+            TCP is ACCEPTED and then reset — `kex_exchange_identification: read: Connection reset by
+            peer` — and the serial console shows cloud-init completing every stage and reaching a
+            login prompt. That signature is ALSO produced by an unrelated defect (pacman reinstalling
+            openssh under a live sshd, documented in `sdk/vmshared/cloud_init_render.go`), so it
+            cannot serve as a diagnosis on its own. **Read the rendered artifact, not the code path:**
+
+            ```bash
+            osirrox -indev output/qcow2/<vm>/seed.iso -extract / /tmp/seed && cat /tmp/seed/user-data
+            ```
+
+            The `packages:` and `runcmd:` lines state which convention was rendered, in plain text.
+            Four structural theories (firmware, an image-cache race, an "unmaterialized" disk, a
+            "corrupt" qcow2) preceded that one command on the run that found this.
+
+            **And the limit of the validation, which is the part an author must not over-read:**
+            `distro:` is closed to `#DistroID`, so a MISSPELLED id is a unification conflict —
+            `distro: redhat` fails. A **wrong-but-valid** id is not: `distro: debian` on a Fedora cloud
+            image validates cleanly, exit 0, and then selects apt, `openssh-server` and the `ssh` unit
+            for a guest that has dnf, `openssh` and `sshd`. Closedness cannot express "matches the
+            image this URL points at", and no gate in charly does.
+
+            So the value is a HUMAN check against the image URL, every time. Verified against the live
+            gate rather than assumed: a fresh validator ran exactly this mutation on a Fedora repo and
+            got exit 0. Treating a green `charly box validate` as proof the distro is *correct* — rather
+            than merely *spelled like a real distro* — is the one misreading this field invites.
+
+            Do not confuse it with the `bootstrap` source kind, where `distro:` is also required but names the bootstrap TARGET rather than selecting the render conventions.
+
+            `base_user:` remains the adopt-user selector and nothing more. Leave IT empty only when the image has no default account — then declare a custom user in `spec.cloud_init.users`.
 
             ## VmSSH / VmKeyInjection
 
@@ -8225,7 +9092,7 @@ vm-spec-skill:
             The renderer combines structured fields with renderer defaults:
 
             - `Packages`: prepended with `{openssh, curl, tar}`.
-            - `RunCmd`: prepended with three D18 hardening steps — a self-testing `PerSourcePenalties no` sshd drop-in write+validate, `systemctl unmask ssh.socket`, then `systemctl enable --now sshd` — so distro-specific setup can assume sshd is running and hardened. See `/charly-internals:cloud-init-renderer` "Guest SSH hardening (D18)" for the full mechanism + design trade-off.
+            - `RunCmd`: prepended with the D18 hardening drop-in, then an sshd start whose form depends on the guest's init system (systemd vs OpenRC) — so distro-specific setup can assume sshd is running and hardened. Step 1 is always the same self-testing `PerSourcePenalties no` sshd drop-in write+validate (plain shell into `sshd_config.d`, which OpenSSH Includes on every init); the start that follows is branched — `systemctl unmask ssh.socket` then `systemctl enable --now sshd` on systemd, `rc-update add sshd default && rc-service sshd start` on OpenRC (Alpine), which has neither ssh.socket nor systemctl. See `/charly-internals:cloud-init-renderer` "Guest SSH hardening (D18)" for the full mechanism + design trade-off.
             - `Users`: the `VmSSH.User` account is auto-injected unless already present; if present, the renderer appends the ssh pubkey to the user's existing entry.
 
             `Extra` is a raw-YAML escape hatch merged after structured fields. Prefer structured fields; `Extra` exists for long-tail cloud-init options the schema doesn't cover.
@@ -8234,9 +9101,7 @@ vm-spec-skill:
 
             ```go
             type VmCharlyInstall struct {
-                Strategy string  // auto | scp | url | skip
-                URL      string  // when Strategy == "url"
-                Checksum string  // "sha256:<hex>" for url strategy
+                Strategy string  // auto | scp | skip
             }
             ```
 
@@ -8244,7 +9109,6 @@ vm-spec-skill:
             |---|---|
             | `auto` (default) | scp the local `charly` binary (`os.Executable()`) into the guest post-boot via the vm deploy plugin's `OpPrepareVenue` (`kit.EnsureCharlyInGuest`) |
             | `scp` | explicit form of auto |
-            | `url` | cloud-init runcmd downloads charly from URL at first boot |
             | `skip` | user manages charly install; the vm deploy plugin's `OpPrepareVenue` verifies presence only |
 
             ## Validation (spec/schema/vm.cue)
@@ -8940,8 +9804,8 @@ pr-validator-agent:
                branch.** A symbol unreferenced on a consumer's in-flight `feat/` branch can
                still be live on that consumer's `main`; removing it as "dead" from the
                producer breaks every consumer that hasn't rebased onto the branch yet
-               (the sdk#66 over-removal incident: 4 wire types removed as dead were live
-               on charly `main`). Re-run the liveness grep yourself against the consumer's
+               (sdk#66 — over-removal: 4 wire types removed as dead were
+               live on charly `main`). Re-run the liveness grep yourself against the consumer's
                `origin/main`, not the PR author's claim.
             10. **R6/R8/R9 — artifact + binary integrity (where the class applies).** R6: a
                 destructive git action was preceded by a status/stash check. R8 (generation
@@ -8949,7 +9813,8 @@ pr-validator-agent:
                 `ai.opencharly.*` label are asserted post-build (an empty/missing label is a
                 FAILURE, not a warning). R9 (any change exercised on a target): the deployed
                 binary was REBUILT and `charly version` matches source, and every new runtime
-                OS dep is in `pkg/arch/PKGBUILD` `depends=` (never a manual host install).
+                OS dep is in the charly candy's `packaging:` section (never a manual host
+                install).
             11. **R10 — disposable-only, fresh-rebuild, coverage.** Runtime proof is on a
                 `disposable: true` target only, on a FRESH `charly update`/rebuild, at ZERO
                 warnings, with pasted output for EACH changed piece. The change ships the
@@ -9081,7 +9946,7 @@ pr-validator-agent:
                  non-compliant while building more on top of it. Landed precedent:
                  `sdk#85`'s `clean_wire` cutover (the touched hand-written wire type was
                  CUE-sourced in the same PR instead of extended as-is). Generalized by
-                 standing operator directive 2026-07-22 (any PR modifying a hand-written
+                 standing operator directive (any PR modifying a hand-written
                  wire surface must convert it) — first applied to `sdk/spec/arbiter_wire.go`
                  (`sdk#90`, LANDED: FLOOR-SLIM Unit-8B) and then to the entire remaining
                  `sdk/spec/*_wire.go` class in one SDD-conversion batch (deploy, init, gpu,
@@ -9096,7 +9961,7 @@ pr-validator-agent:
                  unless the real command and its real output appear in the PR body or a
                  comment; a plausible-sounding claim that was never actually re-run at the
                  final head is a FRAUD-class finding, exactly like the R10 fraud clauses.
-                 Motivating incident: `opencharly/charly#175` round 1 — the PR body's
+                 Failure mode (charly#175): a PR body's
                  pasted `git grep` output claimed only `CHANGELOG/`-context hits for a set
                  of removed identifiers, but a fresh re-run against the PR's OWN head found
                  60+ LIVE source hits (comments still naming the retired identifiers); the
@@ -9148,12 +10013,18 @@ pr-validator-agent:
                   body-move + inventory, stays a blocker. No "permanent residue" framing (a
                   K-wave exit + a tracked task is required). Pre-existing alias files / kit
                   imports = migration INVENTORY (not blockers); NEW/GROWN ones (outside the
-                  migration exception) = blockers. **The `pre-commit-gate.sh` ZERO-ALIASES hook
-                  is the mechanical floor under this check**: it blocks a NEW `charly/*_aliases.go`
-                  file and a declaration-form kit-alias line (`type X = kit.Y` / `var x = kit.Y`)
-                  tier-independently, fail-open — a hook block is a HARD FAIL (never a workaround
-                  target), and a hook ALLOW does NOT discharge the validator's judgment, because
-                  IMPORT-PURITY of a plain kit IMPORT/CALL is validator-judged, not hook-gated.
+                  migration exception) = blockers. **Do NOT assume a mechanical floor under this
+                  check.** The `pre-commit-gate.sh` ZERO-ALIASES hook blocks a NEW
+                  `charly/*_aliases.go` file and a declaration-form kit-alias line (`type X = kit.Y` /
+                  `var x = kit.Y`) tier-independently, fail-open — but it is **NOT wired under Claude
+                  Code**, where validators normally run (`.claude/settings.json` declares no
+                  `PreToolUse` hooks). It is wired in `.reasonix/settings.json` and via
+                  `~/.kimi-code/config.toml`. So under Claude Code this check is ENTIRELY your
+                  judgment and nothing has pre-screened the diff — inspect every staged
+                  `charly/*.go` change yourself. Where the hook does run, a hook block is a HARD FAIL
+                  (never a workaround target), and a hook ALLOW still does NOT discharge your
+                  judgment, because IMPORT-PURITY of a plain kit IMPORT/CALL is validator-judged,
+                  not hook-gated.
                 - **PER-ITEM TRACE (mandatory in the POSTED comment).** For each staged
                   `charly/*.go` change, the POSTED validation comment carries an explicit line
                   per item: any new/grown alias file (→ blocker); any new kit import (→ blocker
@@ -9536,7 +10407,7 @@ pr-validator-agent:
                the sdk tag is `v0.$(date -u +%Y%j).$SDK_MIN`). A leading-zero sdk tag
                (e.g. `v0.2026192.0733`) is INVALID — it makes every consumer's `go.mod`
                unparseable in module mode — so this stripping is mandatory, not cosmetic.
-               `plugins`, `pkg/*`, and `docs` ARE tagged, with the same `v<YYYY.DDD.HHMM>` form as
+               `plugins` and `docs` ARE tagged, with the same `v<YYYY.DDD.HHMM>` form as
                every non-sdk repo (they carry no `charly.yml`, so no schema `version:` bump — but
                the tag still marks the merge).
             3. **Rewrite every merge-time-dependent version surface to `$VER`** on the feat
@@ -9616,11 +10487,12 @@ pr-validator-agent:
                anomaly, and run R1. The post-merge transcript MUST name `MERGED_SHA` and
                show the exact parser output.
 
-               Only after that proof, tag EVERY repo (`plugins`, `pkg/*`, and `docs` included;
+               Only after that proof, tag EVERY repo (`plugins` and `docs` included;
                `sdk` substitutes its `v0.<…>` form from step 2): `git tag -a v$VER -m "<subject>"
                "$MERGED_SHA"`; `git push origin refs/tags/v$VER` (a tag push — allowed by
-               the pre-push-gate). Only a SUPERPROJECT `v*` tag triggers `release-packages.yml`;
-               a `plugins` / `pkg/*` / `docs` tag fires NO workflow, so tagging them is harmless.
+               the pre-push-gate). Only a SUPERPROJECT `v*` tag triggers the release-binary
+               workflow; a `plugins` / `docs` tag fires NO workflow, so tagging them is
+               harmless.
                **SKIPPING any repo's tag is a DEFECT** — the pre-unification `plugins`/`pkg`
                tag-exempt rule is RETIRED; never omit a tag on a stale "exempt" belief (doing so
                once shipped a `plugins` merge un-tagged, backfilled add-only after the fact). The

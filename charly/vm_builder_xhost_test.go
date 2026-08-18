@@ -26,9 +26,10 @@ func TestRunVenueBuilderStepRoutesHomeBuilders_LoaderShape(t *testing.T) {
 			t.Fatalf("builder %q missing from build.yml", b)
 		}
 		// LocalPkg (the OTHER half of the routing condition, s.LocalPkg == nil) is not part of
-		// the loaded BuilderDef at all — it comes from the candy's own `localpkg:` declaration,
-		// compiled separately by the deploy-plan compiler; npm/pixi/cargo candies simply never
-		// declare one, which is exactly why they take the home-artifact path.
+		// the loaded BuilderDef at all — it comes from the embedded build vocabulary's
+		// `format.<fmt>.local_pkg:` block (the candy-body `localpkg:` map is REMOVED — nFPM
+		// cutover), compiled separately by the deploy-plan compiler; npm/pixi/cargo candies
+		// simply never declare one, which is exactly why they take the home-artifact path.
 		if def.Phases == nil || def.Phases.Install == nil || def.Phases.Install.Host == "" {
 			t.Errorf("builder %q has no phase.install.host cell in build.yml — the home-artifact routing decision has nothing to dispatch on", b)
 		}

@@ -1,0 +1,36 @@
+generate-packages:
+    candy:
+        version: 2026.230.0645
+        description: |-
+            Superproject declaration of the OUT-OF-TREE `charly generate-packages` command
+            plugin — the nFPM packaging engine that builds charly's own native packages
+            (deb/rpm/apk/archlinux/ipk) from the charly candy's `packaging:` section. The
+            plugin itself lives in opencharly/plugin-generate-packages; this candy is a THIN
+            RE-EXPORT SHIM whose only Go content is a `cmd/serve` main that hands the
+            external module's provider to `sdk.Main`. Declaring it here is what puts
+            `generate-packages` into charly's CLI grammar: the prescan walks the project's
+            `discover:` paths, finds this candy's `plugin.providers`, and registers the word;
+            a `charly generate-packages …` invocation then host-builds this shim directory
+            (resolved through its OWN go.mod `require` + `replace` — `source:` is identity
+            metadata, never a fetch) and fork/execs the result in CLI mode. The distro-repo
+            workflows do NOT use this path — they drop a prebuilt plugin binary into
+            /usr/lib/charly/plugins/ and resolve project-less via discoverBakedPluginWords.
+            This shim is the DEV path: it makes the verb resolvable from a charly checkout.
+        plugin:
+            providers:
+                - command:generate-packages
+            source: github.com/opencharly/plugin-generate-packages/candy/generate-packages
+        plan:
+            - # ADE check: build-context, and deliberately trivial — mirroring
+              # candy/plugin-example-command, the reference template for an out-of-tree
+              # command plugin. The shim carries no image content to probe, and the CLI it
+              # declares needs a project context a build-context check does not have. What
+              # this step actually asserts is upstream of itself: the candy loads, the
+              # `plugin.providers` word parses, and the module the host will build is
+              # present. The verb's real proof is the R10 bed — `charly generate-packages
+              # --help` resolving through the host-built shim — not this step.
+              check: the generate-packages shim ships a buildable Go module (go.mod + the cmd/serve main) that re-exports the out-of-tree provider; the resolvable-verb end-to-end is exercised by the R10 bed
+              id: generate-packages-module-present
+              context:
+                - build
+              command: "true"
