@@ -5196,11 +5196,25 @@ git-workflow-skill:
                     entry=$root/CHANGELOG/2026.229.2153.md   # substitute the entry under review
 
                     [ -f "$entry" ] || { echo "guard: no such entry: $entry" >&2; exit 1; }
-                    hits=$(grep -nE '\b(is|are) (now )?(enforced|generated|deleted|removed|fixed)\b' "$entry")
-                    # SAY the empty case. "found nothing" and "never ran" must not look alike.
-                    [ -n "$hits" ] && printf '%s\n' "$hits" || echo "guard: no present-tense landed-state claims in $entry"
+                    hits=$(grep -nE '\b(is|are) (now )?(enforced|generated|deleted|removed|fixed)\b' "$entry"); rc=$?
+                    # BRANCH ON THE STATUS, not on the output. grep returns 0 matched, 1 matched
+                    # NOTHING, >=2 COULD NOT RUN (unreadable file, a directory, an I/O error) — and
+                    # rc 1 and rc 2 both produce empty output, so `[ -n "$hits" ]` alone reports a
+                    # grep that never ran as a clean tree. "found nothing" and "never ran" must not
+                    # look alike, and only the status tells them apart.
+                    case $rc in
+                      0) printf '%s\n' "$hits" ;;
+                      1) echo "guard: no present-tense landed-state claims in $entry" ;;
+                      *) echo "guard: FAILED to read $entry (grep rc=$rc)" >&2; exit 1 ;;
+                    esac
                   )
                   ```
+
+                  **Feed it the failing case before trusting it**, exactly as the block above demands
+                  of guard 1: point `entry` at a file you have `chmod 000`'d and require a nonzero exit
+                  with `FAILED to read`. The first version of this guard tested `[ -n "$hits" ]` and
+                  printed its clean line for that case, at exit 0 — the same vacuity as guard 1's, in a
+                  guard whose own comment forbids it.
 
                   Most hits are CORRECT and must not be hedged. The discriminator:
 
@@ -10156,8 +10170,9 @@ pr-validator-agent:
 
               **The counts above are `spaced / hyphenated / tolerant`, and they do not add up
               because `grep -l` UNIONS files rather than partitioning them** — 4 files carry BOTH
-              spellings, so `347 + 6 - 4 = 349`. Say that, or a careful reader spends their time
-              suspecting your arithmetic instead of reading your point; one did.
+              spellings, so `347 + 6 - 4 = 349`. Say that: unstated, the three figures read as a
+              partition that does not add up, and one review round was spent on the arithmetic
+              rather than the point.
 
               **Cite the REF a census was taken at, not a date.** "As they stood when this was
               written" is a timestamp, which is precisely the thing this paragraph tells you is
@@ -10673,8 +10688,9 @@ pr-validator-agent:
                 placeholder name and the absent tag, so the pair is checkable by anyone, at any
                 time, without knowing what was minted. **That is the check that catches the
                 PLAUSIBLE placeholder** — the dangerous kind, where filename and H1 agree because
-                both are the guess. A conspicuous stamp is caught by the reader's eye; a plausible
-                one is caught by nothing else.
+                both are the guess. A conspicuous stamp such as `9998` is at least visible in a file
+                listing; a plausible one has no surface that distinguishes it from a minted date,
+                so the tag pair is the only check that reaches it.
 
                 **Scope it, or it fires on a third of the history.** Tagging every landing is a
                 RECENT convention, and the two regimes interleave — measured in `plugins`:
@@ -10899,7 +10915,8 @@ pr-validator-agent:
             read-only-at-the-PR-head exemption permits, and all of which are the point: a
             mutation test that cannot mutate is not a test. **A narrower exemption than the
             mandated procedure needs is a rule conflict, not a caveat** — it makes the procedure
-            either unusable or a violation, and a reader facing that will pick one silently.
+            either unusable or a violation, with nothing in the text to say which — and the
+            choice is then made per-run, unrecorded.
             What W0 actually protects is *validating FROM* a bootstrapped checkout; a scratch
             tree you write to, read once, and destroy is not that.
 
@@ -11051,10 +11068,13 @@ pr-validator-agent:
                  the final status (step 4);
                - **AFTER tagging, verify the landed entry's CalVer equals the version you MINTED**
                  — for every `CHANGELOG/*.md` this merge added on `main`, its basename MUST equal
-                 `$VER`, the same string as the `v$VER` tag you just pushed. This is the check that
-                 catches a SKIPPED Phase 3 rather than a botched one: the self-verify above only
-                 runs if you are already performing the rewrite, so it cannot fire when the rewrite
-                 never happened. **A surviving placeholder is self-consistent by construction** —
+                 `$VER`, the same string as the `v$VER` tag you just pushed. This catches a SKIPPED
+                 RENAME — a Phase 3 that ran but never performed this step — rather than a botched
+                 one: the self-verify above only runs if you are already performing the rewrite, so
+                 it cannot fire when the rewrite never happened. **It does NOT catch a skipped
+                 Phase 3**, because it is itself inside Phase 3; that case is caught only by the
+                 external invariant (an entry on `main` with no matching `v<CalVer>` tag), for the
+                 reason given under "The CHANGELOG placeholder can SURVIVE, not just collide". **A surviving placeholder is self-consistent by construction** —
                  CalVer-shaped filename, byte-matching H1, no collision — so every pre-merge rule
                  passes on it and only the post-merge comparison against the minted version can
                  distinguish a guessed date from a minted one. A mismatch means the entry carries an
@@ -11073,19 +11093,31 @@ pr-validator-agent:
                canonical helper from the literal superproject path supplied by W0:
 
                ```bash
-               SQUASH_BODY="$(printf '%s' "$SQUASH_PROSE" |
-                 python3 <absolute-superproject-root>/plugins/scripts/squash_body.py \
-                   --trailer "$AUTHOR_TRAILER")" || exit 1
-               printf '%s' "$SQUASH_BODY" |
-                 python3 <absolute-superproject-root>/plugins/scripts/squash_body.py \
-                   --check --trailer "$AUTHOR_TRAILER"
-               PARSED_TRAILER="$(printf '%s' "$SQUASH_BODY" |
-                 git interpret-trailers --parse)"
-               test "$PARSED_TRAILER" = "$AUTHOR_TRAILER"
-               printf '%s\n' "$PARSED_TRAILER"
-               printf '%s' "$SQUASH_BODY" |
-                 gh pr merge <N> --repo <owner>/<repo> --squash --delete-branch \
-                   --subject "<the cutover's conventional-commit subject>" --body-file -
+               ( # ONE subshell, and EVERY step carries its own `|| exit 1`, so `gh pr merge` is
+                 # UNREACHABLE unless all three checks passed. Without the guards these are
+                 # independent statements: a failed `--check` or a trailer mismatch prints its
+                 # error and the merge runs on the next line anyway — the `;`-discards-the-status
+                 # defect this skill documents, on the most destructive command in this spec.
+                 # `set -e` is deliberately NOT used: this block is pasted into a live shell,
+                 # where it would kill the operator's session; the subshell keeps `exit` local.
+                 SQUASH_BODY="$(printf '%s' "$SQUASH_PROSE" |
+                   python3 <absolute-superproject-root>/plugins/scripts/squash_body.py \
+                     --trailer "$AUTHOR_TRAILER")" || exit 1
+                 printf '%s' "$SQUASH_BODY" |
+                   python3 <absolute-superproject-root>/plugins/scripts/squash_body.py \
+                     --check --trailer "$AUTHOR_TRAILER" || exit 1
+                 PARSED_TRAILER="$(printf '%s' "$SQUASH_BODY" |
+                   git interpret-trailers --parse)" || exit 1
+                 test "$PARSED_TRAILER" = "$AUTHOR_TRAILER" || {
+                   echo "trailer mismatch — NOT merging" >&2
+                   printf 'parsed:   %s\nexpected: %s\n' "$PARSED_TRAILER" "$AUTHOR_TRAILER" >&2
+                   exit 1
+                 }
+                 printf '%s\n' "$PARSED_TRAILER"
+                 printf '%s' "$SQUASH_BODY" |
+                   gh pr merge <N> --repo <owner>/<repo> --squash --delete-branch \
+                     --subject "<the cutover's conventional-commit subject>" --body-file -
+               )
                ```
 
                The helper inserts exactly one blank line before the standalone trailer and
@@ -11114,10 +11146,18 @@ pr-validator-agent:
                submodule recursion, and run:
 
                ```bash
-               MERGED_TRAILER="$(git -C <absolute-target-path> show -s --format=%B \
-                 "$MERGED_SHA" | git interpret-trailers --parse)"
-               test "$MERGED_TRAILER" = "$AUTHOR_TRAILER"
-               printf '%s\n' "$MERGED_TRAILER"
+               ( # Same shape, same reason: "revokes PASS" below is only enforceable if the
+                 # mismatch STOPS the sequence. Unguarded, `test` sets `$?` and nothing reads it,
+                 # and the tag push in the next paragraph proceeds over a revoked PASS.
+                 MERGED_TRAILER="$(git -C <absolute-target-path> show -s --format=%B \
+                   "$MERGED_SHA" | git interpret-trailers --parse)" || exit 1
+                 test "$MERGED_TRAILER" = "$AUTHOR_TRAILER" || {
+                   echo "merged trailer != validated trailer — PASS REVOKED; do NOT tag" >&2
+                   printf 'merged:   %s\nexpected: %s\n' "$MERGED_TRAILER" "$AUTHOR_TRAILER" >&2
+                   exit 1
+                 }
+                 printf '%s\n' "$MERGED_TRAILER"
+               )
                ```
 
                The fetched merge object, not the submitted input or a plain-text substring,

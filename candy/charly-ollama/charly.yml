@@ -22,7 +22,7 @@ ollama-layer-skill:
         family: ollama
         owner: charly-ollama
         description: |-
-            Ollama LLM server on port 11434 with model persistence; CUDA is composed by the GPU boxes, not by this candy.
+            Ollama LLM server on port 11434 with model persistence; this candy declares no CUDA dependency — GPU support is composed outside it.
             Use when working with Ollama, LLM serving, or local AI model inference.
         content: |-
             # ollama -- Local LLM inference server
@@ -36,7 +36,7 @@ ollama-layer-skill:
             | Volumes | `models` -> `~/.ollama` |
             | Aliases | `ollama` -> `ollama` |
             | Service | `ollama` (supervisord) |
-            | Install | `download:` + `extract:` plan step |
+            | Install | `download:` + `extract:` plan step (the mechanism this candy currently defines) |
             
             ## Environment Variables
             
@@ -98,7 +98,7 @@ ollama-layer-skill:
             
             ## Related Candies
             
-            - `/charly-distros:cuda` -- CUDA toolkit; GPU boxes compose it at the IMAGE level, not via this candy
+            - `/charly-distros:cuda` -- CUDA toolkit; composed OUTSIDE this candy (today by the GPU boxes, at the image level) and never declared as its dependency
             - `/charly-infrastructure:supervisord` -- process manager dependency
             - `/charly-openclaw:openclaw` -- AI gateway that can use Ollama as backend
             - `/charly-hermes:hermes` -- AI agent that auto-detects `OLLAMA_HOST` for local Ollama provider
