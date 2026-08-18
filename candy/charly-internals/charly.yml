@@ -4593,8 +4593,7 @@ git-workflow-skill:
 
                   **Five sections are mechanism** — how charly and git actually behave: the
                   cross-repo `skill:` cutover, the submodule revert, the validator-status false
-                  negative, multi-source assembly, and the vacuous guard. They are not instances
-                  of the question.
+                  negative, multi-source assembly, and the vacuous guard.
 
                   **That split is load-bearing, and it is why this page's own first revision shipped a false
                   claim.** An epistemic claim is checked by reasoning; a mechanism claim can only be checked
