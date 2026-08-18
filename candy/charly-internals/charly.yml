@@ -5477,7 +5477,7 @@ git-workflow-skill:
                   **Guard 1 — every commit SHA an entry names, checked for landed state AND subject:**
 
                   ```bash
-                  ( # subshell: a refusal must not terminate the shell you pasted this into
+                  ( # Run from the superproject OR any submodule — the root is resolved, not assumed.
                     root=$(git rev-parse --show-superproject-working-tree)
                     root=${root:-$(git rev-parse --show-toplevel)}
                     entry=$root/CHANGELOG/2026.229.2153.md   # substitute the entry under review
@@ -5498,9 +5498,11 @@ git-workflow-skill:
                         git -C "$repo" merge-base --is-ancestor "$sha" origin/main 2>/dev/null && st=LANDED || st=UNMERGED
                         printf '%-9s %-10s %-9s %s\n' "$sha" "$st" "$(basename "$repo")" \
                                "$(git -C "$repo" log -1 --format=%s "$sha")"
-                        found=1; [ "$st" = UNMERGED ] && bad=1
+                        found=1
                         break
                       done
+                      # UNRESOLVED is a failure: nobody can check that citation. UNMERGED is INFORMATION --
+                      # an entry citing its own open branch is legitimate, so the reader judges it, not the exit code.
                       [ -n "$found" ] || { printf '%-9s %-10s\n' "$sha" UNRESOLVED; bad=1; }
                     done
                     exit $bad
@@ -5524,8 +5526,11 @@ git-workflow-skill:
                   **Guard 2 — grep the entry's own prose, with the exclusion that makes it usable:**
 
                   ```bash
-                  ( # self-contained: guard 1's assignment lives in ITS subshell and cannot reach here
-                    entry=CHANGELOG/2026.229.2153.md   # substitute the entry under review
+                  ( # Same root resolution as guard 1 — the two guards MUST audit the same file.
+                    root=$(git rev-parse --show-superproject-working-tree)
+                    root=${root:-$(git rev-parse --show-toplevel)}
+                    entry=$root/CHANGELOG/2026.229.2153.md   # substitute the entry under review
+
                     [ -f "$entry" ] || { echo "guard: no such entry: $entry" >&2; exit 1; }
                     hits=$(grep -nE '\b(is|are) (now )?(enforced|generated|deleted|removed|fixed)\b' "$entry")
                     # SAY the empty case. "found nothing" and "never ran" must not look alike.
