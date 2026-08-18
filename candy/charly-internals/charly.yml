@@ -5054,11 +5054,20 @@ go-skill:
               (or pass `--allow-parallel-runners` with a fresh cache). See `/charly-internals:go-quality`.
             - **Keep `$TMPDIR` short for any suite that connects a plugin.** go-plugin serves
               each plugin over a UNIX socket at `$TMPDIR/plugin<random digits>`, and `sun_path`
-              caps the whole path at 107 bytes — leaving `$TMPDIR` a little under 90. The digit
-              count varies, so a path near the budget fails intermittently: the same directory
-              passes, then fails, unchanged. Use a short path under `/tmp` and leave headroom.
-              `GOTMPDIR` is a separate variable and may stay long — Go's build work needs no
-              socket.
+              caps the whole path at 107 BYTES — leaving `$TMPDIR` a little under 90 bytes once
+              the `/plugin<digits>` suffix is accounted for. The digit count varies, so a path
+              near the budget fails intermittently: the same directory passes, then fails,
+              unchanged. Use a short path such as `/tmp/cs` and leave headroom.
+
+              **This does not contradict the `GOTMPDIR=~/.cache/go-tmp` rule above; the two
+              variables go to different places for different reasons.** `GOTMPDIR` carries Go's
+              build work, which is large, so it moves OFF the quota-capped temp dir and may be
+              long — no socket is created there. `$TMPDIR` carries the plugin socket, which is a
+              few bytes, so the quota is irrelevant TO THE SOCKET and the binding constraint on
+              `$TMPDIR` is path LENGTH. Short-and-on-`/tmp` for `$TMPDIR`, long-and-off-`/tmp`
+              for `GOTMPDIR`. (`/tmp` still has a cumulative cap — see the last bullet in this
+              section — and golangci-lint's lock also lives under `$TMPDIR`; neither changes
+              where the socket must go.)
 
               Over budget, `bind` returns `invalid argument` and the loader reports
               `Unrecognized remote plugin message` / `Failed to read any lines from plugin's
@@ -5067,12 +5076,20 @@ go-skill:
               `TestExternalStructKind_StructuralDecode` reporting `structural plugin kind not
               folded into uf.Fleet; have fleet keys []`.
 
-            - **`CHARLY_PLUGIN_DIR` prepends; `CHARLY_PLUGIN_ONLY=1` is what excludes.**
+            - **`CHARLY_PLUGIN_DIR` prepends; `CHARLY_PLUGIN_ONLY=1` is what excludes.** A word
+              is **BAKED** when a provider binary for it sits in `/usr/lib/charly/plugins/`
+              beside a `<name>.providers` manifest naming that word — put there by the OS
+              package, or by a candy's `bake_plugin:` step at image-build time. Baked-ness is
+              per WORD, not per machine: `cat /usr/lib/charly/plugins/*.providers` lists exactly
+              which words are baked on the host you are standing on.
               `bakedPluginDirs()` returns `$CHARLY_PLUGIN_DIR` when set and then appends the FHS
               `/usr/lib/charly/plugins`, so pointing the dir at an empty directory masks nothing.
               `CHARLY_PLUGIN_ONLY=1` drops the FHS path, making the search exactly
               `$CHARLY_PLUGIN_DIR` (or empty when that is unset). It is an EXACT `1` match, so a
-              typo fails closed and a deployed container keeps finding its own baked plugins.
+              typo leaves the FHS path in place. That is safe for a deployed container — it keeps
+              finding its own baked plugins — but it is NOT safe for the test below, where the
+              same typo produces a silently ineffective flag. Which is why that procedure leads
+              with a control rather than trusting the variable was read.
 
               **Baked lookup is keyed by WORD and short-circuits the project scan.**
               `resolveCommandPluginBinary` returns on a baked hit before the project loads: a
@@ -5081,20 +5098,59 @@ go-skill:
               `charly examplecommand hello world` prints `hello world` from the project candy
               even where the charly package is installed — `examplecommand` is not baked.
 
-              To exercise a BAKED word's project declaration, drop the FHS path — a `--help`
-              probe cannot distinguish the two sources:
+              To exercise a BAKED word's project declaration, drop the FHS path. Worked with
+              `generate-packages`. **Check the two preconditions first** — the procedure is only
+              meaningful for a word that is both baked and declared:
 
               ```
-              CHARLY_PLUGIN_ONLY=1 ./bin/charly <word>
+              $ cat /usr/lib/charly/plugins/*.providers | grep -c '^command:generate-packages$'
+              1
+              $ ls candy/generate-packages/charly.yml | wc -l
+              1
               ```
 
-              With the project candy present this reaches the project-built plugin; remove the
-              candy and the same command gives `charly: error: unexpected argument <word>`.
-              **Run both arms.** The first shows the word resolves but not WHAT served it; the
-              second is what ties the resolution to the project candy, by removing the only
-              remaining source and watching it break. (Without the flag the second arm still
-              resolves — via the baked binary — which is why the flag is required for the pair
-              to mean anything.)
+              Then run the two arms. **The `Note: local candy … shadows …` preamble is the
+              signal, not noise** — it appears because the flag made charly load the PROJECT.
+              Check for it with a predicate rather than by counting; the preamble is two identical
+              lines per shadowed candy (the project loads twice); the set varies by host and the
+              ordering varies from run to run:
+
+              ```
+              $ CHARLY_PLUGIN_ONLY=1 ./bin/charly generate-packages 2>&1 \
+                  | grep -q '^Note: local candy' && echo "project loaded" || echo "baked short-circuit"
+              project loaded
+
+              $ ./bin/charly generate-packages 2>&1 \
+                  | grep -q '^Note: local candy' && echo "project loaded" || echo "baked short-circuit"
+              baked short-circuit
+              ```
+
+              **Run that control first.** Without it you cannot tell a working flag from a
+              silently ineffective one: `CHARLY_PLUGIN_ONLY` is an EXACT `1` match, so a typo
+              leaves the FHS path in place — and the last line of the run is BYTE-IDENTICAL with
+              and without the flag. A `tail -1` alone therefore has exactly the property this
+              section opens by warning about: it cannot distinguish the two sources.
+
+              With the control passing, the arms read the resolution itself:
+
+              ```
+              $ CHARLY_PLUGIN_ONLY=1 ./bin/charly generate-packages 2>&1 | tail -1
+              generate-packages: missing flags: --arch=STRING, --binary=STRING, --candy=STRING, --out=STRING, --plugins=STRING, --version=STRING
+
+              $ mv candy/generate-packages /tmp/gp-aside
+              $ CHARLY_PLUGIN_ONLY=1 ./bin/charly generate-packages 2>&1 | tail -1
+              charly: error: unexpected argument generate-packages
+              $ mv /tmp/gp-aside candy/generate-packages
+              ```
+
+              **What each step licenses.** The control establishes that the flag took effect and
+              the project was loaded. Given that, arm 1 succeeding shows a PROJECT candy served
+              the word — with `CHARLY_PLUGIN_DIR` unset the baked search is empty, so nothing else
+              could have. Arm 2 attributes it to `candy/generate-packages` specifically, by
+              removing that one candy and watching the word stop resolving.
+
+              Both arms need the flag. Without it, arm 2 still succeeds — the baked binary
+              answers once the project candy is gone — so the removal would tell you nothing.
 
             - `.claude/hooks/pre-commit-gate.sh` (the staged-Go-lint discipline backstop) redirects
               its own lint temp dirs to `~/.cache/charly-gate-lint/` and creates the TMPDIR/GOTMPDIR
