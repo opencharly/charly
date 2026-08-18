@@ -37,6 +37,5 @@ src/content/docs/recipes/distros/nested-podman-socket.md
 src/content/docs/recipes/image/layer.md
 src/content/docs/recipes/index.md
 src/content/docs/recipes/internals/git-workflow/evidence-and-freshness.md
-src/content/docs/recipes/internals/go/source-map.md
 src/content/docs/recipes/internals/install-plan/step-kinds.md
 src/content/docs/reference/candy/agentteams-snapshot.md
