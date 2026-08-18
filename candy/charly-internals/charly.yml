@@ -4556,7 +4556,7 @@ git-workflow-skill:
                   | fix a claim a reviewer called false | the correction is a new claim with the same burden | "Sweep for what the fix invalidated" |
                   | trust a check that reported nothing wrong | an absence claim decays differently from a presence claim, and goes stale silently | "Positive and negative claims decay differently" |
                   | run a gate to decide whether a PR is safe to merge | you gated the head, and the MERGE is what lands | "The gate that matters at merge…" (its recipe is the probe below) |
-                  | land a `skill:` edit | the source and its generated copies are one cutover, not two | "A `skill:` source edit and its regeneration are one cutover across two repos" |
+                  | land a `skill:` edit | the source and its generated copies are one cutover, not two | "A `skill:` source edit and its regeneration are one cutover" |
                   | resolve a submodule conflict | a `checkout -- .` plus `git add -A` silently reverts the gitlink | "Submodule pointers can be reverted by a merge without ever conflicting" |
                   | conclude a validator never ran | the status can be absent for a reason that is not absence | "Status absence on a known head proves nothing" |
                   | sweep for a claim a reviewer called false | the sweep inherits its key from that finding and stops at the register it arrived in | "A sweep inherits its key from the finding that prompted it" |
