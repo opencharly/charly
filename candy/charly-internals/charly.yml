@@ -5052,33 +5052,56 @@ go-skill:
               the lock open fail with ENOENT, which golangci-lint reports as "parallel golangci-lint
               is running" — a false positive, not a real parallel run. Create the TMPDIR dir first
               (or pass `--allow-parallel-runners` with a fresh cache). See `/charly-internals:go-quality`.
-            - **A LONG `TMPDIR` breaks every go-plugin test — and it reads as a code failure.**
-              go-plugin serves each plugin over a UNIX DOMAIN SOCKET created under `$TMPDIR`, and
-              `sun_path` caps a socket path at ~107 bytes. Past that, `bind` returns
-              `invalid argument`, the handshake never completes, and the loader reports
-              `Unrecognized remote plugin message` / `Failed to read any lines from plugin's stdout`
-              with a plausible-looking list of causes (wrong architecture, missing libraries,
-              permissions) — none of which is the actual cause. The visible test failure is then a
-              downstream assertion, e.g. `TestExternalStructKind_StructuralDecode` reporting
+            - **A LONG `TMPDIR` breaks go-plugin tests, and near the limit it does so
+              INTERMITTENTLY.** go-plugin serves each plugin over a UNIX socket at
+              `$TMPDIR/plugin<random digits>`, and `sun_path` allows 107 bytes for the whole
+              path. Past that, `bind` returns `invalid argument`, the handshake never
+              completes, and the loader reports `Unrecognized remote plugin message` /
+              `Failed to read any lines from plugin's stdout` with a plausible list of causes
+              (wrong architecture, missing libraries, permissions) — none of them the cause.
+              The visible failure is a downstream assertion, e.g.
+              `TestExternalStructKind_StructuralDecode` reporting
               `structural plugin kind not folded into uf.Fleet; have fleet keys []`.
 
-              Measured: a 129-byte socket path failed; the SAME test passed unchanged under a
-              24-byte `TMPDIR`. This interacts badly with the `GOTMPDIR=~/.cache/go-tmp` advice
-              above — a deep per-session scratch path satisfies the quota rule and violates this
-              one. **Keep `TMPDIR` SHORT for any suite that connects a plugin** (`/tmp/<something
-              short>`), and treat "plugin failed to negotiate the handshake" as a path-length
-              question before an architecture one.
+              **The budget:** the suffix is `/plugin` plus the random digits — 16-17 bytes
+              observed — so `$TMPDIR` has roughly 90 bytes before the socket stops fitting.
+              **The digit count is not fixed, so the boundary is fuzzy and the failure near it
+              is intermittent** — the same directory can pass and then fail with nothing
+              changed. Measured on one host: 79 bytes always passed, 93+ always failed, and 91
+              gave both outcomes across runs. **Keep `$TMPDIR` at or under ~85 bytes** for any
+              suite that connects a plugin, so the variable suffix always fits.
+
+              This interacts badly with the `GOTMPDIR=~/.cache/go-tmp` advice above: a deep
+              per-session scratch path satisfies the quota rule and violates this one. They are
+              separate variables — `GOTMPDIR` may stay long (Go's build work needs no socket)
+              while `TMPDIR` must stay short.
 
             - **`CHARLY_PLUGIN_DIR` cannot HIDE a baked plugin — it only reorders precedence.**
-              `bakedPluginDirs()` returns `$CHARLY_PLUGIN_DIR` (when set) and then ALWAYS appends
-              the FHS `/usr/lib/charly/plugins`. Pointing the env var at an empty directory
-              therefore masks nothing. Compounding it, `resolveCommandPluginBinary` consults the
-              baked map FIRST and returns on a hit, before the project is loaded at all — so on any
-              machine with the charly package installed, a project-declared external command plugin
-              is NEVER consulted, and a `charly <word> --help` probe cannot distinguish "my project
-              declares this" from "the installed package provides it". Proving a project-declared
-              command plugin resolves requires an environment WITHOUT the baked file (a bed), or an
-              assertion on the project fall-through itself rather than on CLI output.
+              `bakedPluginDirs()` returns `$CHARLY_PLUGIN_DIR` (when set) and then ALWAYS
+              appends the FHS `/usr/lib/charly/plugins`. Pointing the env var at an empty
+              directory therefore masks nothing.
+
+              **The masking is PER WORD, not per machine.** `resolveCommandPluginBinary`
+              consults the baked map keyed by WORD and returns on a hit, before the project is
+              loaded at all — so a word that is baked resolves to the baked binary and the
+              project declaration is never consulted, while a word that is NOT baked falls
+              through to the project scan normally. On a host with the charly package
+              installed, `charly examplecommand hello world` still prints `hello world` from
+              the project candy, because `examplecommand` is not among the baked words.
+
+              The consequence for TESTING is therefore narrow: for a word that IS baked here,
+              a `charly <word> --help` probe cannot distinguish "my project declares this" from
+              "the installed package provides it". **A mount namespace settles it without a bed
+              or a second machine** — mask the directory rather than trying to out-configure
+              the loader:
+
+              ```
+              bwrap --dev-bind / / --tmpfs /usr/lib/charly/plugins ./bin/charly <word>
+              ```
+
+              With the project candy present this reaches the project-built plugin; with the
+              candy removed the same command gives `charly: error: unexpected argument <word>`.
+              That counterfactual pair is the proof; the env var is not.
 
             - `.claude/hooks/pre-commit-gate.sh` (the staged-Go-lint discipline backstop) redirects
               its own lint temp dirs to `~/.cache/charly-gate-lint/` and creates the TMPDIR/GOTMPDIR

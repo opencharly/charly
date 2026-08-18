@@ -89,7 +89,7 @@ Replace the `pkg/` packaging workflow (three `pkg/*` git submodules + the contai
       repos, and all five `check-{alpine,arch,fedora,debian,ubuntu}-repo` beds present. The
       R5 sweep is clean — every surviving mention of a removed identifier is prose
       describing the removal, which R5 permits.
-- [ ] **Phase 3 remainder — the superproject shim.** The last open unit: the
+- [x] **Phase 3 remainder — the superproject shim.** Landed by this commit — the
       superproject's declaration of the external `charly generate-packages` plugin — the
       spike-proven mechanism: a THIN re-export shim module under a discovered candy
       (`candy/generate-packages/` with charly.yml + `go.mod` `require`+`replace` → the
