@@ -169,3 +169,55 @@ func TestAliasNameRegex(t *testing.T) {
 		})
 	}
 }
+
+// TestValidateUnlessExistsPlacement covers the rule that keeps `unless_exists:` from being a
+// SILENT no-op.
+//
+// The field sits in #Op's shared modifier block, so the schema advertises it on every step kind,
+// but only the two emitters that produce ONE RUN for ONE op can express it — EmitDownload and
+// EmitCmd. On a copy: step there is nowhere to put a shell test at all, and without this rule the
+// step would simply run, which for a capability GATE means the guarded work happens exactly when
+// the author believed it would be skipped. That failure is invisible in the emitted Containerfile
+// and in the build log, which is why it has to be rejected at validation rather than documented.
+func TestValidateUnlessExistsPlacement(t *testing.T) {
+	msgsFor := func(verb string, op spec.Op) string {
+		e := &vErr{}
+		validateSingleTask("mylyr", 0, verb, &op, map[string]bool{}, e)
+		return strings.Join(e.msgs, "\n")
+	}
+
+	// Accepted: the two emitters that honour it.
+	if got := msgsFor("download", spec.Op{
+		Download: "https://example.invalid/t.tar.gz", UnlessExists: "/usr/bin/tool",
+	}); strings.Contains(got, "unless_exists") {
+		t.Errorf("download: must accept unless_exists; got: %s", got)
+	}
+	if got := msgsFor("plugin", spec.Op{
+		Plugin: "command", Command: "make install", UnlessExists: "/usr/bin/tool",
+	}); strings.Contains(got, "unless_exists") {
+		t.Errorf("run:/plugin: command must accept unless_exists; got: %s", got)
+	}
+
+	// Rejected: every emitter that cannot express the guard.
+	for _, verb := range []string{"copy", "write", "mkdir", "link", "setcap"} {
+		got := msgsFor(verb, spec.Op{UnlessExists: "/usr/bin/tool"})
+		if !strings.Contains(got, "unless_exists: is only valid on") {
+			t.Errorf("%s: must reject unless_exists (it would silently do nothing); got: %s", verb, got)
+		}
+	}
+
+	// A relative guard is rejected even where the verb is right: it is tested with [ -e ] inside
+	// the image, against whatever WORKDIR happens to be set.
+	if got := msgsFor("download", spec.Op{
+		Download: "https://example.invalid/t.tar.gz", UnlessExists: "bin/tool",
+	}); !strings.Contains(got, "must be an absolute path") {
+		t.Errorf("a relative unless_exists must be rejected; got: %s", got)
+	}
+
+	// And an ABSENT guard must not fire anything, so the rule cannot pass by rejecting always.
+	for _, verb := range []string{"copy", "download", "mkdir"} {
+		if got := msgsFor(verb, spec.Op{}); strings.Contains(got, "unless_exists") {
+			t.Errorf("%s: an absent unless_exists must not fire the rule; got: %s", verb, got)
+		}
+	}
+}
