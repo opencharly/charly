@@ -10375,12 +10375,14 @@ pr-validator-agent:
             Three things make the naive form of this check miss:
 
             - **The banner is usually near the top — and a fixed window still fails, because of a
-              one-file tail.** Measured over `plugins` @ `01edd45e`, spaced matcher, case-sensitive, unrestricted:
-              **345 of 351 hits sit at line
-              ≤ 15 (98.29%)**, two above line 100, and **both are this page quoting
-              the banner in prose**. At this ref there is **no** genuinely deep carrier — the deepest
-              banner sits at line 610 and is this same page. The rule stands on a tail being
-              possible, not on this tree having one.
+              real tail.** Measured over `plugins` @ `01edd45e`, spaced matcher, case-sensitive,
+              unrestricted: **345 of 351 hits sit at line ≤ 15 (98.29%)**. Of the six above it, **two are
+              genuine carriers** — `strict-policy/SKILL.md:19` and `vm-deploy-target/SKILL.md:20`, pushed
+              past a 15-line window by long frontmatter — and the two deepest, at lines 331 and 610, are
+              this page quoting the banner in prose.
+
+              **A 15-line window misses both carriers; a 20-line window catches them.** So the tail is not
+              hypothetical here, and a window sized to 98.29% of a corpus silently misses the rest.
               **Grep the whole file** — not because the distribution is flat, but because the tail
               is real, and a window sized to 98.29% of a corpus silently misses the rest.
 
