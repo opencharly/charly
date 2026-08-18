@@ -13,4 +13,17 @@ type AgentTeamsInput struct {
 	// matching the beds' created Worker CR); manager-running's optional specific
 	// manager (default: any manager reaching Running).
 	Name string `yaml:"name,omitempty" json:"name,omitempty"`
+
+	// out — snapshot's output directory for the hydration bundle. A HOST path for
+	// the verb (the verb is host-based — the mcp pattern); a local path for the
+	// in-venue command. Default: /tmp/agentteams-snapshot (verb) /
+	// ./agentteams-snapshot (command).
+	Out string `yaml:"out,omitempty" json:"out,omitempty"`
+
+	// bundle — hydrate's bundle directory to apply back (workers → teams → humans
+	// in dependency order) and restore the mirrored MinIO objects from.
+	Bundle string `yaml:"bundle,omitempty" json:"bundle,omitempty"`
+
+	// no_minio — skip the MinIO object mirroring (snapshot) / restore (hydrate).
+	NoMinio bool `yaml:"no_minio,omitempty" json:"no_minio,omitempty"`
 }

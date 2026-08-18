@@ -21,6 +21,7 @@ agentteams-worker:
         require:
             - agentteams-openclaw
             - agentteams-cli
+            - agentteams-snapshot
         service:
             - name: agentteams-worker
               exec: /opt/agentteams-worker/start-worker.sh

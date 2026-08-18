@@ -3034,6 +3034,53 @@ check-agentteams-pod:
                 method: worker-list
               stdout:
                 - contains: "bed-worker"
+            - # The Replicator's snapshot→hydrate round-trip (Unit 3 of the factory
+              # north-star), exercised LIVE: snapshot GETs the workers/teams/humans via
+              # the shared apiClient, renders the declarative apply-form YAML (the PII
+              # redaction — runtime/identity fields are never emitted), scrubs residual
+              # Matrix/Tuwunel references, mirrors the referenced MinIO objects, and
+              # writes ONE hydration bundle. The step passing IS the PII assertion —
+              # the core hard-fails if any Matrix/Tuwunel reference survives in the
+              # bundle. The `out` is a HOST path (the verb is host-based — the mcp
+              # pattern); the in-venue `charly agentteams snapshot` command uses a local
+              # path instead.
+              check: "the `agentteams: snapshot` verb captures the live deploy into a PII-redacted hydration bundle (workers/teams/humans + mirrored MinIO objects)"
+              id: agentteams-plugin-snapshot
+              timeout: 120s
+              context:
+                - runtime
+              agentteams:
+                method: snapshot
+                out: /tmp/agentteams-snapshot
+              stdout:
+                - contains: "workers: 1"
+                - contains: "PII refs redacted:"
+            - # hydrate applies the bundle back (workers → teams → humans in dependency
+              # order) and restores the mirrored MinIO objects. The bed-worker already
+              # exists (the controller spawned it), so the apply is an update — the
+              # "configured" line proves the round-trip reached the controller and
+              # re-applied the captured spec.
+              check: "the `agentteams: hydrate` verb applies the snapshot bundle back to the live controller (the round-trip closes)"
+              id: agentteams-plugin-hydrate
+              timeout: 120s
+              context:
+                - runtime
+              agentteams:
+                method: hydrate
+                bundle: /tmp/agentteams-snapshot
+              stdout:
+                - contains: "worker/bed-worker configured"
+            - # The controller still reports the worker after the hydrate re-apply — the
+              # round-trip left the deploy in the same steady state it captured.
+              check: "the `agentteams: status` verb still reports the bed-worker after the hydrate re-apply"
+              id: agentteams-plugin-status-after-hydrate
+              timeout: 60s
+              context:
+                - runtime
+              agentteams:
+                method: status
+              stdout:
+                - contains: "Total Workers: 1"
             - # The compiled-in `charly agentteams config` command reports the controller
               # endpoint WITHOUT any network — a deterministic live proof that the CLI's
               # default fallback matches the box's actual host-mapped port. The controller
