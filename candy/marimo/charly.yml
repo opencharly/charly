@@ -117,7 +117,7 @@ marimo:
               # written inline here via `write:` — that's the volume-shadow
               # anti-pattern (in-image content shadowed by the workspace volume
               # at runtime, plus root-owned files when DAGs need user write).
-              # Replaced 2026-05-09 with the notebook-osm data layer which seeds
+              # Replaced by the notebook-osm data layer, which seeds
               # /workspace/notebooks/ via charly's data-layer machinery
               # (--userns=keep-id ensures user-owned files). See
               # /charly-build:layer "Data layer" pattern + candy/notebook-templates/
