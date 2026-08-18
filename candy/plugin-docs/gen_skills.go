@@ -73,8 +73,12 @@ func readMarketplace(root string) (*marketplace, error) {
 }
 
 // collectSkills reads every skill of every plugin named by the manifest. The plugins tree is a
-// submodule, so this reads it at whatever gitlink the superproject currently pins — the site
-// therefore always matches the plugins version this repo actually ships.
+// submodule, but this reads it off the FILESYSTEM — so the generated site matches whatever the
+// plugins WORKING TREE is checked out at, which is not necessarily the gitlink the superproject
+// pins. On a clean checkout the two agree and the distinction is invisible; in a worktree whose
+// plugins checkout has moved they do not, and regeneration then projects the checkout. Check
+// plugins out at the commit you intend to publish before regenerating, or the drift gate
+// (`task docs:drift`) goes red for a reason that is not obvious from the diff.
 func collectSkills(root string, m *marketplace) ([]skill, error) {
 	var out []skill
 	for _, p := range m.Plugins {

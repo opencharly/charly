@@ -1,6 +1,6 @@
 charly-ollama:
     candy:
-        version: 2026.229.1013
+        version: 2026.229.1218
         description: |-
             Metadata concept candy owning the charly-ollama skills whose names have no namesake candy (ollama LLM-server image). Owns its family's `skill:` kind entities (sibling nodes in this file) — the
             plugins→candies migration; candy/plugin-marketplace regenerates the plugins/ corpus
@@ -22,7 +22,8 @@ ollama-layer-skill:
         family: ollama
         owner: charly-ollama
         description: |-
-            Ollama LLM server on port 11434 with CUDA GPU support and model persistence.
+            Ollama LLM server on port 11434 with model persistence, CPU-only by default and
+            opt-in CUDA/ROCm backends composed at the box level.
             Use when working with Ollama, LLM serving, or local AI model inference.
         content: |-
             # ollama -- Local LLM inference server
@@ -36,7 +37,7 @@ ollama-layer-skill:
             | Volumes | `models` -> `~/.ollama` |
             | Aliases | `ollama` -> `ollama` |
             | Service | `ollama` (supervisord) |
-            | Install files | none (binary `download` + install in `plan:`) |
+            | Install files | none — packaged `ollama` on Arch (`distro:`), upstream tarball in `plan:` elsewhere |
             
             ## Environment Variables
             
@@ -49,7 +50,21 @@ ollama-layer-skill:
             
             | Variable | Default | Purpose |
             |----------|---------|---------|
-            | `OLLAMA_VERSION` | `latest` | Upstream release to install — `latest` tracks the newest GitHub release; set a tag (e.g. `v0.32.14`) to pin |
+            | `OLLAMA_VERSION` | `latest` | Upstream release for the TARBALL path only — `latest` tracks the newest GitHub release; set a tag (e.g. `v0.32.14`) to pin. Ignored on Arch, where the packaged `ollama` is installed and pacman owns the version |
+
+            ## GPU backends (opt-in, box level)
+
+            The candy itself is CPU-only. A box adds a backend by composing one of
+            the sibling candies, which is what keeps a CPU image small:
+
+            | Candy | Adds | Installed size |
+            |-------|------|----------------|
+            | `ollama-cuda` | NVIDIA CUDA backend (`libggml-cuda.so`) | ~988 MiB |
+            | `ollama-rocm` | AMD ROCm/HIP backend (`libggml-hip.so`) | ~2.9 GiB |
+
+            On Arch these are the split `ollama-cuda` / `ollama-rocm` packages, which
+            depend on `ollama` and drop their backend into the same
+            `/usr/lib/ollama/` runner directory rather than replacing anything.
             
             ## Service Environment (injected into other containers)
             
@@ -98,8 +113,19 @@ ollama-layer-skill:
               - `GET http://127.0.0.1:${HOST_PORT:11434}/api/tags` returns 200 (`http:` check)
               - `ollama --version` stdout matches `^ollama version` (`command:` check)
               - `ollama list` exits 0 against the live service (`command:` check)
+              - three HOST-side steps (`in_container: false`) driving `${CHARLY_BIN}`,
+                which prove the companion `command:ollama` plugin end to end:
+                `charly ollama help` dispatches, `charly ollama version` round-trips
+                the live API, and `charly ollama list` reads the model table. They
+                live on the candy rather than on any one bed, so every box composing
+                ollama inherits them.
             - one `agent-check:` grades that models pulled via `ollama pull` persist
               under the `~/.ollama` models volume across a service restart.
+
+            A composed backend candy adds its own build-scope probe — `ollama-cuda`
+            asserts `libggml-cuda.so` and `ollama-rocm` asserts `libggml-hip.so`, each
+            globbed under `/usr/lib/ollama/*/` so a CUDA/ROCm version bump does not
+            break the check.
             
             ## Related Candies
             

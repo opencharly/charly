@@ -934,9 +934,26 @@ fedora:
                     {{- if .gpgkey}}
                         rpm --import {{.gpgkey}} || true && \
                     {{- end}}
-                    {{- if eq (default .gpgcheck "true") "false"}}
                     {{- if hasSuffix (printf "%s" .url) ".repo"}}
+                    {{- /* A vendor .repo file is copied in VERBATIM, so its own gpgcheck/
+                           repo_gpgcheck win unless we say otherwise. Both knobs are
+                           TRI-STATE: absent inherits the vendor's value, false forces the
+                           check off, true forces it ON. The "true" arm is what lets a candy
+                           REPAIR a vendor that ships gpgcheck=0 (NVIDIA's
+                           nvidia-container-toolkit does); without it the knob could only ever
+                           weaken the vendor's policy and packages installed unverified even
+                           though gpgkey: had imported a perfectly good key. */}}
+                    {{- $gc := printf "%v" .gpgcheck}}
+                    {{- if eq $gc "false"}}
                         dnf5 config-manager setopt {{quote (printf "%s.gpgcheck=0" .name)}} && \
+                    {{- else if eq $gc "true"}}
+                        dnf5 config-manager setopt {{quote (printf "%s.gpgcheck=1" .name)}} && \
+                    {{- end}}
+                    {{- $rgc := printf "%v" .repo_gpgcheck}}
+                    {{- if eq $rgc "false"}}
+                        dnf5 config-manager setopt {{quote (printf "%s.repo_gpgcheck=0" .name)}} && \
+                    {{- else if eq $rgc "true"}}
+                        dnf5 config-manager setopt {{quote (printf "%s.repo_gpgcheck=1" .name)}} && \
                     {{- end}}
                     {{- end}}{{end}}{{end}}
                     {{- range .Copr}}

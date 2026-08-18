@@ -1,6 +1,6 @@
 cuda:
     candy:
-        version: 2026.144.1443
+        version: 2026.229.1218
         description: |
             CUDA toolkit (nvcc, cudart, cuDNN, onnxruntime) stitched into the canonical /usr layout on Fedora and Arch
             Installs the CUDA compiler driver (nvcc), the CUDA runtime/dev
@@ -61,9 +61,17 @@ cuda:
                     # (single-server, ~24 KB/s on big files like cuda-nvcc 32 MiB).
                     # negativo17 is kept below ONLY for onnxruntime, which is the one
                     # package not available on NVIDIA's repo.
+                    # The key is the one the LIVE cuda-fedora43.repo names. NVIDIA rotated
+                    # it (D42D0685 -> 1940C73E, "Kitmaker (Fedora 43)") and DELETED the old
+                    # URL, so the stale pin 404'd and `rpm --import` failed with
+                    # "import read failed(2)" on every GPU image build. That was survivable
+                    # only by accident — the cuda-* packages happened to resolve from
+                    # fedora-multimedia, so this repo's gpgcheck=1 never had to verify
+                    # anything. Re-pin here when NVIDIA rotates again; the repo file itself
+                    # is the source of truth for the current key name.
                     - name: cuda-fedora43-x86_64
                       url: "https://developer.download.nvidia.com/compute/cuda/repos/fedora43/x86_64/cuda-fedora43.repo"
-                      gpgkey: "https://developer.download.nvidia.com/compute/cuda/repos/fedora43/x86_64/D42D0685.pub"
+                      gpgkey: "https://developer.download.nvidia.com/compute/cuda/repos/fedora43/x86_64/1940C73E.pub"
                     - name: fedora-multimedia
                       url: "https://negativo17.org/repos/fedora-multimedia.repo"
                       gpgkey: "https://negativo17.org/repos/RPM-GPG-KEY-slaanesh"

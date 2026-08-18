@@ -1,18 +1,21 @@
 ollama:
     candy:
-        version: 2026.229.1013
+        version: 2026.229.1218
         description: |
             GPU-agnostic Ollama LLM inference server on port 11434
-            Installs the upstream Ollama binary (release tarball extracted to /usr,
-            no systemd) and runs `ollama serve` as a custom supervisord service that
-            listens on 0.0.0.0:11434. The binary auto-detects a GPU at runtime and
-            falls back to CPU inference, so the candy carries no CUDA dependency.
-            Pulled models persist under the ~/.ollama models volume. The running
+            Installs the Ollama binary and runs `ollama serve` as a custom supervisord
+            service that listens on 0.0.0.0:11434 (no systemd). Two install paths, one
+            resulting layout (/usr/bin/ollama plus the backend libraries under
+            /usr/lib/ollama): on a distro that PACKAGES ollama the package is installed
+            and the package manager owns the version; everywhere else the upstream
+            release tarball is extracted to /usr at the version the var OLLAMA_VERSION
+            selects (default `latest`; set a release tag to pin). The candy is CPU-only
+            and carries no GPU dependency — a GPU backend is an IMAGE-level composition
+            choice (compose ollama-cuda or ollama-rocm), which is what keeps this layer
+            small. Pulled models persist under the ~/.ollama models volume. The running
             service exposes the Ollama HTTP API (e.g. /api/tags) so any composing box
-            can serve and query local models. The installed upstream version follows
-            the var OLLAMA_VERSION (default `latest`; set a release tag to pin). The
-            companion plugin candy plugin-ollama adds the `charly ollama` management
-            CLI against a deployed server.
+            can serve and query local models. The companion plugin candy plugin-ollama
+            adds the `charly ollama` management CLI against a deployed server.
         require:
             # GPU-agnostic: the ollama binary auto-detects the GPU at runtime (CPU
             # fallback when none present), so CUDA is an IMAGE-level composition choice
@@ -21,10 +24,21 @@ ollama:
             # layer without dragging the Fedora/NVIDIA `cuda` layer onto a pac base.
             - supervisord
         var:
-            # Upstream Ollama version to install: `latest` tracks the newest
-            # GitHub release; set a release tag (e.g. v0.32.14) to pin an exact
-            # version.
+            # Upstream Ollama version for the TARBALL path only (the distros that
+            # package ollama let their package manager own the version): `latest`
+            # tracks the newest GitHub release; set a release tag (e.g. v0.32.14)
+            # to pin an exact version.
             OLLAMA_VERSION: latest
+        distro:
+            # Arch (and its derivatives, CachyOS included) ships ollama in `extra`,
+            # tracking upstream closely — 0.32.14-1 landed the day upstream tagged
+            # v0.32.14. Taking the package instead of the 1.36 GiB upstream tarball
+            # costs 66 MiB installed, because the tarball bundles every GPU backend
+            # while the package splits them into the ollama-cuda / ollama-rocm
+            # add-ons this candy deliberately does NOT require.
+            arch:
+                package:
+                    - ollama
         env:
             OLLAMA_HOST: "0.0.0.0"
             OLLAMA_MODELS: "~/.ollama/models"
@@ -45,8 +59,19 @@ ollama:
               enable: true
               scope: system
         plan:
-            - run: download and install the upstream ollama binary release (var OLLAMA_VERSION, default latest)
+            # Capability-gated, not distro-gated: the `distro:` package sections above
+            # are compiled into the plan BEFORE this step (BuildDeployPlan phase 1 vs
+            # phase 3), so on a distro that packages ollama the binary already exists
+            # here and the tarball is skipped. Detection rather than a distro name so
+            # any distro that gains an ollama package is picked up with no edit — and
+            # because a plan step has no build-time distro filter to gate it with (the
+            # `exclude_distro:` modifier is read by the check runner, not the emitter).
+            - run: install the upstream ollama release tarball on distros that ship no ollama package (var OLLAMA_VERSION, default latest)
               command: |
+                  if [ -x /usr/bin/ollama ]; then
+                      echo "ollama already provided by the distro package — skipping the upstream tarball"
+                      exit 0
+                  fi
                   if [ "${OLLAMA_VERSION}" = "latest" ]; then
                       URL="https://github.com/ollama/ollama/releases/latest/download/ollama-linux-amd64.tar.zst"
                   else
@@ -77,6 +102,41 @@ ollama:
               context:
                 - runtime
               command: ollama list
+            # Host-side proof of the companion command:ollama plugin, authored HERE on
+            # the candy that provides the server rather than on any one bed, so every
+            # box composing ollama inherits it (R3) instead of each bed repeating the
+            # steps. ${CHARLY_BIN} is the ACTIVE charly (kit.StampCharlyBin), never a
+            # stale PATH pick, and is stamped for any runtime check run — not just beds.
+            - check: charly ollama help exits 0 and prints the plugin usage, proving the compiled-in command:ollama plugin registers and dispatches
+              id: ollama-cli-help
+              exit_status: 0
+              stdout:
+                - contains: 'manage a deployed Ollama server'
+              context:
+                - runtime
+              command:
+                command: ${CHARLY_BIN} ollama help
+                in_container: false
+            - check: charly ollama version reports the server version over the published port, proving a live API round-trip against the deployed server
+              id: ollama-cli-version
+              exit_status: 0
+              stdout:
+                - contains: 'ollama server version is'
+              context:
+                - runtime
+              command:
+                command: ${CHARLY_BIN} ollama version --server http://127.0.0.1:${HOST_PORT:11434}
+                in_container: false
+            - check: charly ollama list prints the model table header over the published port, proving the list API path against the deployed server
+              id: ollama-cli-list
+              exit_status: 0
+              stdout:
+                - contains: 'NAME'
+              context:
+                - runtime
+              command:
+                command: ${CHARLY_BIN} ollama list --server http://127.0.0.1:${HOST_PORT:11434}
+                in_container: false
             - agent-check: models pulled via `ollama pull` are stored under the ~/.ollama models volume and survive a service restart
 
 ollama-skill:
@@ -111,17 +171,24 @@ ollama-skill:
             
             ## GPU is box-level — the `ollama` candy is GPU-agnostic
             
-            The `ollama` **candy** installs the distro-agnostic Ollama binary (a tarball
-            extracted to `/usr`) and a supervisord `ollama serve` service. The binary
-            auto-detects the GPU at runtime and falls back to CPU inference when none is
-            present, so the candy carries **no `cuda` dependency** — it only `require:`s
-            `supervisord`. GPU support is a **composition choice made at the box level**:
-            
-            - This `ollama` box keeps GPU acceleration via `base: nvidia` (the `nvidia`
-              box composes the `cuda` candy, inherited through the base chain).
-            - CPU-only consumers compose the `ollama` candy on a non-NVIDIA base and get
-              CPU inference for free — e.g. `/charly-openclaw:openclaw-desktop` (cachyos base,
-              no `cuda`).
+            The `ollama` **candy** installs the Ollama binary and a supervisord
+            `ollama serve` service, and carries **no GPU dependency** — it only
+            `require:`s `supervisord`. Two install paths converge on one layout
+            (`/usr/bin/ollama` plus backends under `/usr/lib/ollama`): on Arch and its
+            derivatives the packaged `ollama` (66 MiB) is installed, and everywhere else
+            the upstream release tarball is extracted to `/usr`. The step is gated on
+            whether the binary already exists rather than on a distro name, so any distro
+            that gains an ollama package is picked up without an edit.
+
+            GPU support is a **composition choice made at the box level**, and on the
+            packaged path that choice is what keeps images small: the tarball bundles
+            every backend (1.36 GiB), while the packages split them out.
+
+            - The `ollama` box keeps GPU acceleration via `base: nvidia` and composes
+              `ollama-cuda` (~988 MiB) for the CUDA backend.
+            - The `ollama-rocm` box composes `ollama-rocm` (~2.9 GiB) for AMD.
+            - CPU-only consumers compose the `ollama` candy alone and pay for neither —
+              e.g. `/charly-openclaw:openclaw-desktop` (cachyos base, no GPU candy).
             
             ## Ports
             

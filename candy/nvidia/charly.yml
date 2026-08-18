@@ -1,6 +1,6 @@
 nvidia:
     candy:
-        version: 2026.167.0603
+        version: 2026.229.1218
         description: |
             NVIDIA GPU runtime — nvidia-container-toolkit (nvidia-ctk CDI) plus the driver-lib path and Vulkan ICD wiring
             Installs nvidia-container-toolkit (the nvidia-ctk CLI that generates
@@ -28,9 +28,23 @@ nvidia:
                     - name: fedora-multimedia
                       url: "https://negativo17.org/repos/fedora-multimedia.repo"
                       gpgkey: "https://negativo17.org/repos/RPM-GPG-KEY-slaanesh"
+                    # NVIDIA ships this repo file with gpgcheck=0 — the only repo in the
+                    # tree that does — so its 4 packages (a container runtime hook) were
+                    # installing UNVERIFIED even though the gpgkey below imports fine and
+                    # every one of them is validly signed by the primary key. gpgcheck: true
+                    # forces the check back on; before the tri-state knob existed the
+                    # `gpgcheck:` field could only ever weaken a vendor's policy, so there
+                    # was no value expressible here that fixed it.
+                    # No gpgkey: here ON PURPOSE. The repo file already declares the same
+                    # key, so dnf5 imports it itself under gpgcheck=1 — whereas an explicit
+                    # `rpm --import` of NVIDIA's published certificate emits
+                    # "Subkey 6ED91CA3AC1160CD is expired" on every build, because that
+                    # certificate carries a subkey that died 2021-06-16 and every NVIDIA
+                    # copy of it still ships the dead subkey. Nothing is trusted less: the
+                    # packages are signed by the PRIMARY key and are verified either way.
                     - name: nvidia-container-toolkit
                       url: "https://nvidia.github.io/libnvidia-container/stable/rpm/nvidia-container-toolkit.repo"
-                      gpgkey: "https://nvidia.github.io/libnvidia-container/gpgkey"
+                      gpgcheck: true
         env:
             LD_LIBRARY_PATH: "/usr/lib64"
         plan:

@@ -244,6 +244,38 @@ func TestPull(t *testing.T) {
 	}
 }
 
+func TestPush(t *testing.T) {
+	f := newFakeOllama(t, map[string]http.HandlerFunc{
+		"/api/push": streamReply(
+			`{"status":"retrieving manifest"}`,
+			`{"status":"pushing","digest":"sha256:y","total":100,"completed":100}`,
+			`{"status":"success"}`,
+		),
+	})
+	out, err := captureStdout(t, func() error {
+		return runOllamaCLI([]string{"push", "mine:latest", "--server", f.URL})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "pushed mine:latest") {
+		t.Errorf("unexpected push output: %q", out)
+	}
+	var body map[string]any
+	if err := json.Unmarshal(f.bodies["/api/push"], &body); err != nil {
+		t.Fatal(err)
+	}
+	if body["model"] != "mine:latest" {
+		t.Errorf("push body = %v", body)
+	}
+}
+
+func TestPushRequiresModel(t *testing.T) {
+	if err := runOllamaCLI([]string{"push"}); err == nil {
+		t.Fatal("expected usage error without a model argument")
+	}
+}
+
 func TestCreate(t *testing.T) {
 	f := newFakeOllama(t, map[string]http.HandlerFunc{
 		"/api/create": streamReply(`{"status":"success"}`),
