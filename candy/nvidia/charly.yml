@@ -23,7 +23,7 @@ nvidia:
                 repo:
                     # negativo17 fedora-multimedia provides the driver libs (libva-nvidia-driver)
                     # but NOT nvidia-container-toolkit; that lives ONLY in NVIDIA's own
-                    # libnvidia-container repo (RDD-confirmed on fedora:43, 2026-06-16:
+                    # libnvidia-container repo (RDD-confirmed on fedora:43:
                     # negativo17 → "No matching packages"; NVIDIA repo → installs 1.19.1).
                     - name: fedora-multimedia
                       url: "https://negativo17.org/repos/fedora-multimedia.repo"

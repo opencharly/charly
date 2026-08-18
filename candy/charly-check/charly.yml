@@ -1957,10 +1957,10 @@ check-skill:
                   curl -fsSL <url> | sudo gpg --dearmor -o /etc/apt/keyrings/charly.gpg
                   ```
 
-                  Shown as shell rather than YAML on purpose: the earlier revision put all five lines in one
-                  `yaml` fence as sibling `command:` keys. A duplicate-key-strict loader rejects that at line 4,
-                  and — worse — a permissive `yaml.safe_load` PARSES it and keeps only the last key, silently
-                  discarding both wrong examples. A fenced block that a parser reads differently from a human is
+                  Shown as shell rather than YAML on purpose: five sibling `command:` keys in one `yaml`
+                  fence is rejected at line 4 by a duplicate-key-strict loader and — worse — PARSED by a
+                  permissive `yaml.safe_load`, which keeps only the last key and silently discards the
+                  other examples. A fenced block that a parser reads differently from a human is
                   a defect even when the fence is only illustrative.
 
                   **Where `sudo` comes from differs by substrate.** A cloud-image VM has passwordless

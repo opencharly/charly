@@ -1,0 +1,54 @@
+# Runs charly's own Go gates on every push and pull request.
+#
+# Until this existed, `release-binary.yml` was the repo's ONLY workflow: it builds the binary
+# and asserts `charly version`, so a compile break is caught but a failing test is not. Nothing
+# ran `go test`, which means a red suite on `main` would sit unnoticed until someone happened to
+# run it locally — and local runs are exactly where environment noise lives (a long $TMPDIR
+# breaks every go-plugin test with a misleading handshake error; uninitialized submodules break
+# the fixture tests). A clean runner is the honest arbiter.
+#
+# `charly/` resolves through the workspace, so go.work must be ON here and the submodules must be
+# checked out — spec and sdk are `use`d by go.work and the box/* fixtures are read by tests.
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: charly/go.mod
+          cache-dependency-path: charly/go.sum
+
+      # A short TMPDIR is load-bearing, not hygiene: go-plugin serves each plugin over a UNIX
+      # socket at $TMPDIR/plugin<random digits> and sun_path caps the whole path at 107 bytes.
+      # Over budget, bind() returns EINVAL and the loader blames the plugin's architecture or
+      # libraries instead. The runner default is already short; setting it explicitly keeps the
+      # job independent of that.
+      - name: Test
+        env:
+          TMPDIR: /tmp/charly-ci
+          GOTMPDIR: /tmp/charly-ci
+        run: |
+          mkdir -p /tmp/charly-ci
+          go test ./charly/...
+
+      - name: gofmt
+        run: |
+          out=$(gofmt -l charly candy tools)
+          if [ -n "$out" ]; then
+            echo "gofmt would rewrite these files:" >&2
+            echo "$out" >&2
+            exit 1
+          fi

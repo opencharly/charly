@@ -325,7 +325,7 @@ android-emulator-layer:
                 method: shell
                 # Launch raises a runtime-permission dialog (GrantPermissionsActivity)
                 # that covers F-Droid, so assert the PROCESS is running (pidof prints a
-                # PID), NOT the focused activity (live-observed 2026-05-25).
+                # PID), NOT the focused activity.
                 arg: [sh, -c, "monkey -p org.fdroid.fdroid -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1; sleep 3; pidof org.fdroid.fdroid"]
               stdout:
                 - matches: "[0-9]"

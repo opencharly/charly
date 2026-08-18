@@ -287,7 +287,7 @@ cachyos-pacstrap-skill:
         owner: charly-distros
         description: |-
             Bootstrap-from-scratch CachyOS rootfs via pacstrap inside a privileged builder.
-            Builds end-to-end as of charly 2026.141.1850 (shared pacstrap renderer emits
+            Builds end-to-end (the shared pacstrap renderer emits
             Architecture + SigLevel); retained for offline/air-gapped builds. Lives in the
             opencharly/distro-cachyos submodule (box/cachyos).
             MUST be invoked before building or troubleshooting cachyos-pacstrap.
@@ -311,10 +311,10 @@ cachyos-pacstrap-skill:
             
             ## pacstrap x86_64_v3 + SigLevel (fixed)
             
-            Earlier this path was unusable: the privileged pacstrap step rejected the
-            CachyOS `x86_64_v3` packages (`package architecture is not valid`) and, on the
-            VM path, tripped GPGME signature checks (`GPGME error: No data`). **Fixed as of
-            charly 2026.141.1850** by the shared `renderPacstrapExtraConf` helper
+            Without the shared `renderPacstrapExtraConf` helper the privileged pacstrap step rejects the CachyOS `x86_64_v3`
+            packages (`package architecture is not valid`) and, on the VM path, trips GPGME
+            signature checks (`GPGME error: No data`) — both symptoms are worth recognising.
+            It handles them
             (`candy/plugin-vm/vm_bootstrap_engine.go:57`,
             used by both `runPrivilegedBootstrap` and the VM bootstrap engine — the former
             `charly/build.go`/`charly/vm_bootstrap.go` are DELETED, K-wave 2):
@@ -1275,7 +1275,7 @@ nvidia-layer-skill:
             
             NVIDIA VAAPI acceleration requires the container to know which DRM render node to bind the EGL context against. On multi-GPU hosts there may be `/dev/dri/renderD128`, `/dev/dri/renderD129`, … and the correct one depends on which physical card backs the NVIDIA driver.
             
-            `charly` does **not** bake a hardcoded `DRINODE=/dev/dri/renderD128` into this candy. Instead, it auto-detects the correct render node at container-launch time and injects it as an environment variable. The detection + injection is consolidated in a single function, `appendAutoDetectedEnv()` in `candy/plugin-deploy-pod/config_setup_helpers.go` (relocated wholesale from charly-core's `charly/devices.go` in the 2026-07-22 dead-code-radical-removal batch), which is called by `charly config`, `charly start`, and `charly shell` via that candy's own `config_setup.go` / `resolve.go` / `resolve_f12.go` resolvers — so the commands always produce the same env set.
+            `charly` does **not** bake a hardcoded `DRINODE=/dev/dri/renderD128` into this candy. Instead, it auto-detects the correct render node at container-launch time and injects it as an environment variable. The detection + injection is consolidated in a single function, `appendAutoDetectedEnv()` in `candy/plugin-deploy-pod/config_setup_helpers.go` (relocated wholesale from charly-core's `charly/devices.go` in the dead-code-radical-removal batch), which is called by `charly config`, `charly start`, and `charly shell` via that candy's own `config_setup.go` / `resolve.go` / `resolve_f12.go` resolvers — so the commands always produce the same env set.
             
             Selkies is the primary consumer: pixelflux's Wayland compositor uses `DRINODE` to open the render node and set up the VAAPI H.264 encoder. Without the injection, selkies would fall back to software encode (`libx264`) and lose ~40% of its streaming bandwidth budget.
             
