@@ -5764,9 +5764,10 @@ go-quality-skill:
             go vet ./...
             ```
 
-            Run it uncapped to get the current baseline. The per-linter SHAPE is the triage map, not the
-            total: errcheck and staticcheck dominate, and which linter leads tells you what kind of debt
-            you are looking at. A count pasted here would be stale before it was read.
+            Run it uncapped to get the current baseline, and read the per-linter SHAPE rather than the
+            total — which linter leads tells you what kind of debt you are looking at. Neither a count
+            nor a distribution is pasted here: both would be stale before they were read, and a stale
+            SHAPE misleads more quietly than a stale total.
 
             **Measurement gotcha — measure with the configured run, never `--enable-only`.** The
             authoritative count is `golangci-lint run ./...` (the configured set), which DEDUPLICATES

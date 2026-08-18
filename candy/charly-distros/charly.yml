@@ -311,10 +311,10 @@ cachyos-pacstrap-skill:
             
             ## pacstrap x86_64_v3 + SigLevel (fixed)
             
-            Without it the privileged pacstrap step rejects the CachyOS `x86_64_v3`
+            Without the shared `renderPacstrapExtraConf` helper the privileged pacstrap step rejects the CachyOS `x86_64_v3`
             packages (`package architecture is not valid`) and, on the VM path, trips GPGME
             signature checks (`GPGME error: No data`) — both symptoms are worth recognising.
-            The shared `renderPacstrapExtraConf` helper handles them
+            It handles them
             (`candy/plugin-vm/vm_bootstrap_engine.go:57`,
             used by both `runPrivilegedBootstrap` and the VM bootstrap engine — the former
             `charly/build.go`/`charly/vm_bootstrap.go` are DELETED, K-wave 2):
