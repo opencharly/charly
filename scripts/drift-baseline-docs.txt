@@ -1,41 +1,105 @@
 # scripts/drift-baseline-docs.txt — TEMPORARY record of generated artifacts that are ALREADY stale on main.
 #
-# Its only job is to let `task docs:drift` fail on NEW drift without reding every PR in
-# the repo for debt it did not create. Inherited debt is reported by name on every run.
+# Its only job is to let `task docs:drift` fail on NEW drift without reding every PR in the repo
+# for debt it did not create. Inherited debt is reported by name on every run.
 #
-# HOW THIS WAS MEASURED, and how to re-measure it: origin/main @ 162b54a3 with EVERY
-# SUBMODULE AT ITS GITLINK — the tree `actions/checkout --submodules recursive` produces.
-# Do NOT re-measure by running the gate in a working tree. Both generators read plugins/
-# off the FILESYSTEM, not at the gitlink, so a checkout that has moved records drift CI
-# will never see; every such entry then reds CI forever as "no longer stale", and every
-# real gitlink-level entry it omits reds CI as new.
+# THIS FILE JUST GREW, 8 -> 64, AND THAT NEEDS ITS EVIDENCE IN FRONT OF YOU. A baseline is
+# supposed to shrink. It grew because this cutover advances the `docs` gitlink onto a mirror that
+# `main` cannot reproduce: docs@d9afc66 was projected from `ec484b4b`, which is unlanded and lives
+# only on opencharly/charly's feat/factory-unit5-box-load (charly#315).
 #
-# RE-MEASURED at 162b54a3 (was 70daf9cb). The first measurement was taken two `main`
-# merges before this branch's merge-base, and because the comparison is EXACT the skew
-# alone red the gate: 3 already-stale artifacts were missing and 2 already-paid entries
-# were still listed. A baseline measured at the wrong commit is not a smaller problem
-# than no baseline — it fails in both directions at once.
+# MEASURED, not argued. A scratch worktree at superproject origin/main, submodules recursive, docs
+# moved to docs-main d9afc66, `task build:binary`, `task docs:sync`:
 #
-# THIS IS NOT AN ALLOWLIST. scripts/drift-baseline.sh compares EXACTLY: an entry here
-# that is no longer stale fails the gate just as loudly as an artifact that is stale and
-# absent. That is what makes this file self-liquidating — it can only shrink, and when it
-# reaches zero you delete it and the gate runs absolute.
+#	$ git -C docs status --porcelain | wc -l
+#	74
+#
+# So an UNMODIFIED main already fails to reproduce docs main — including DELETING
+# recipes/build/load.md and recipes/distros/nested-podman-socket.md. Then, at this branch's pin:
+#
+#	stale here                     64
+#	also stale on unmodified main  64
+#	attributable to this branch     0
+#
+# Every entry below is in that intersection. None is this cutover's drift, and the empty third row
+# is the check that says so — computed with `comm`, not asserted.
+#
+# HOW IT LIQUIDATES: when charly#315 lands, `main` reproduces d9afc66's pages and these entries
+# stop being stale. The gate will then red with "no longer stale — delete these lines", which is
+# the file doing its job. Expect it to fall back toward single digits in one step.
+#
+# HOW THIS WAS MEASURED, and how to re-measure it: at this branch's head with EVERY SUBMODULE AT
+# ITS GITLINK — the tree `actions/checkout --submodules recursive` produces. Do NOT re-measure by
+# running the gate in a working tree whose submodule has moved; see scripts/drift-baseline.sh's
+# header for why, and for what a green verdict does and does not mean.
+#
+# THIS IS NOT AN ALLOWLIST. scripts/drift-baseline.sh compares EXACTLY: an entry here that is no
+# longer stale fails the gate just as loudly as an artifact that is stale and absent.
 #
 # Do not add a line to silence a red. If your change made an artifact stale, the fix is to
 # regenerate and commit, never to record it here.
-#
-# RE-MEASURED AGAIN at this branch's own head with ITS gitlinks (plugins 40229ad, docs e213d51),
-# because that is the tree CI checks out for this PR and the comparison is EXACT. Measuring at
-# `main` alone was wrong in both directions once this branch bumps a projection gitlink: the
-# artifacts the projection FIXES stop being stale, and the artifacts `main` has moved past
-# become stale. Neither of the entries below is this branch's own drift — every one is inherited,
-# and every one is reported by name on each run.
 
 src/content/docs/recipes/build/generate.md
-src/content/docs/recipes/build/load.md
-src/content/docs/recipes/distros/nested-podman-socket.md
-src/content/docs/recipes/image/layer.md
 src/content/docs/recipes/index.md
 src/content/docs/recipes/internals/git-workflow/evidence-and-freshness.md
 src/content/docs/recipes/internals/install-plan/step-kinds.md
 src/content/docs/reference/candy/agentteams-snapshot.md
+src/content/docs/reference/candy/nested-podman-socket.md
+src/content/docs/reference/candy/plugin-box.md
+src/content/docs/reference/cli/add-candy.md
+src/content/docs/reference/cli/agent.md
+src/content/docs/reference/cli/agentteams.md
+src/content/docs/reference/cli/alias.md
+src/content/docs/reference/cli/build.md
+src/content/docs/reference/cli/candy.md
+src/content/docs/reference/cli/cat.md
+src/content/docs/reference/cli/check.md
+src/content/docs/reference/cli/clean.md
+src/content/docs/reference/cli/cmd.md
+src/content/docs/reference/cli/config.md
+src/content/docs/reference/cli/cp.md
+src/content/docs/reference/cli/docs.md
+src/content/docs/reference/cli/doctor.md
+src/content/docs/reference/cli/dsh.md
+src/content/docs/reference/cli/examplecommand.md
+src/content/docs/reference/cli/feature.md
+src/content/docs/reference/cli/fetch.md
+src/content/docs/reference/cli/fleet.md
+src/content/docs/reference/cli/generate-packages.md
+src/content/docs/reference/cli/generate.md
+src/content/docs/reference/cli/inspect.md
+src/content/docs/reference/cli/labels.md
+src/content/docs/reference/cli/list.md
+src/content/docs/reference/cli/load.md
+src/content/docs/reference/cli/logs.md
+src/content/docs/reference/cli/marketplace.md
+src/content/docs/reference/cli/mcp.md
+src/content/docs/reference/cli/merge.md
+src/content/docs/reference/cli/migrate.md
+src/content/docs/reference/cli/new.md
+src/content/docs/reference/cli/preempt.md
+src/content/docs/reference/cli/pull.md
+src/content/docs/reference/cli/reconcile.md
+src/content/docs/reference/cli/refresh.md
+src/content/docs/reference/cli/remove.md
+src/content/docs/reference/cli/restart.md
+src/content/docs/reference/cli/rm-candy.md
+src/content/docs/reference/cli/secrets.md
+src/content/docs/reference/cli/service.md
+src/content/docs/reference/cli/set.md
+src/content/docs/reference/cli/settings.md
+src/content/docs/reference/cli/shell.md
+src/content/docs/reference/cli/ssh.md
+src/content/docs/reference/cli/start.md
+src/content/docs/reference/cli/status.md
+src/content/docs/reference/cli/stop.md
+src/content/docs/reference/cli/tmux.md
+src/content/docs/reference/cli/tui.md
+src/content/docs/reference/cli/udev.md
+src/content/docs/reference/cli/update.md
+src/content/docs/reference/cli/validate.md
+src/content/docs/reference/cli/vm.md
+src/content/docs/reference/cli/volume.md
+src/content/docs/reference/cli/write.md
+src/content/docs/reference/plugin/plugin-box.md
+src/content/docs/reference/providers.md
