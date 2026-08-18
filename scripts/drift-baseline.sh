@@ -12,6 +12,20 @@
 # find yourself about to say "the X gate does A while the Y gate does B", grep BOTH taskfiles
 # first; a zero from one of them means "I found nothing here", never "there is nothing there".
 #
+# BEFORE TRUSTING ANY CHECK HERE: ASK WHAT ITS OUTPUT SHAPE DISCARDS. Three instruments were
+# each used in this repo to answer a question they cannot answer, and in every case the command
+# succeeded and returned something that felt verified:
+#
+#   `git status` as a carrier test      answers "is this in sync", NOT "is this generated"
+#   stat symmetry on a revert           answers "are the counts mirrored", NOT "is the content identical"
+#   `gh ... --jq '.comments[] | .body'` CONCATENATES, so a line number from it indexes the
+#                                       concatenation and no single comment has one — it cannot
+#                                       tell you WHICH comment carried the text
+#
+# The instrument was fine each time; the question was not the one it answers. The durable forms:
+# prove a revert by ABSENCE (`git diff main..head -- ':!intended' ':!files'` empty), prove a
+# generated carrier by DELETING it and regenerating, and read a per-item artifact per item.
+#
 # WHAT A GREEN VERDICT ACTUALLY MEANS — read this before trusting one. `docs:drift` feeds
 # `git -C docs status --porcelain`, and `git status` compares the worktree against the CHECKED-OUT
 # HEAD. On a CI checkout that is the GITLINK. So green means "regeneration reproduces the gitlink"
