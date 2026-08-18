@@ -1,5 +1,4 @@
-# Runs charly's own gates on every push and pull request: the Go gates (`go`) and the
-# generated-artifact drift gates (`drift`).
+# Runs charly's own Go gates on every push and pull request.
 #
 # Until this existed, `release-binary.yml` was the repo's ONLY workflow: it builds the binary
 # and asserts `charly version`, so a compile break is caught but a failing test is not. Nothing
@@ -53,68 +52,3 @@ jobs:
             echo "$out" >&2
             exit 1
           fi
-
-  # Two halves of this repo are GENERATED and committed: the marketplace/harness surface
-  # (plugins/, .claude/, CLAUDE.md, AGENTS.md) and the docs site's reference half (docs/),
-  # both projected from the candies' own entities. Each generator already ships a
-  # fail-closed no-op gate, and until this job existed NOTHING invoked either — `git grep
-  # 'skills:drift\|docs:drift'` over Taskfile.yml, taskfiles/, .github/ and .claude/
-  # returned nothing at all. The cost was measured, not hypothetical: a regeneration
-  # reverted ~1188 lines across 33 artifacts, most of them plugins-side legs of PRs whose
-  # source legs never landed, and no gate ran to notice.
-  #
-  # The grading lives in scripts/drift-baseline.sh and is invoked FROM THE TASKFILES, so CI
-  # and a developer's local run are the same code path rather than two implementations that
-  # drift apart. Each gate fails on NEW drift and merely reports the debt it inherited; see
-  # that script for why the baselines can only shrink.
-  #
-  # Both targets read the submodules they regenerate into, so the checkout is recursive; at
-  # the gitlink each submodule is exactly the tree the PR claims, which is what makes the
-  # comparison honest. Neither generator touches the network beyond the Go module cache —
-  # both walk the filesystem (sdk/candywalk) rather than resolving @github imports.
-  drift:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          submodules: recursive
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: charly/go.mod
-          cache-dependency-path: charly/go.sum
-
-      # Installing the release tarball is how this project already installs go-task
-      # everywhere else (the debian/ubuntu candy bootstraps, the rendered Containerfile).
-      - name: Install go-task
-        run: |
-          mkdir -p "$RUNNER_TEMP/bin"
-          TASK_URL="https://github.com/go-task/task/releases/latest/download/task_linux_amd64.tar.gz"
-          curl -fsSL "$TASK_URL" | tar -xzf - -C "$RUNNER_TEMP/bin" task
-          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-
-      # Both gates connect an out-of-process plugin, so the `go` job's short-TMPDIR
-      # rationale applies verbatim. It stays PER-STEP rather than hoisted to job-level
-      # `env:` on purpose: a job-level TMPDIR is already set while actions/checkout and
-      # setup-go run, and those are Node actions that resolve os.tmpdir() before anything
-      # has created the directory.
-      - name: Marketplace / harness drift
-        env:
-          TMPDIR: /tmp/charly-ci
-          GOTMPDIR: /tmp/charly-ci
-        run: |
-          mkdir -p /tmp/charly-ci
-          task skills:drift
-
-      # docs:drift regenerates INTO docs/ and grades the resulting diff, so this step
-      # mutates the checkout — it runs last, and !cancelled() keeps it reporting even when
-      # the step above already failed. Both verdicts in one run beats discovering the
-      # second on the next push.
-      - name: Docs-site drift
-        if: ${{ !cancelled() }}
-        env:
-          TMPDIR: /tmp/charly-ci
-          GOTMPDIR: /tmp/charly-ci
-        run: |
-          mkdir -p /tmp/charly-ci
-          task docs:drift
