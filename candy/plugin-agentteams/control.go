@@ -25,12 +25,13 @@ import (
 // plain net/http REST call against the AgentTeams controller — the same surface
 // the upstream `agt` CLI uses, with no upstream binary and no SDK.
 type AgentTeamsCmd struct {
-	Status AgentTeamsStatusCmd `cmd:"" help:"Show controller health and resource counts"`
-	Worker AgentTeamsWorkerCmd `cmd:"" help:"Manage Worker CRs"`
-	Team   AgentTeamsTeamCmd   `cmd:"" help:"Manage Teams"`
-	Human  AgentTeamsHumanCmd  `cmd:"" help:"Manage Humans"`
-	Apply  AgentTeamsApplyCmd  `cmd:"" help:"Apply declarative YAML (create-or-update per kind)"`
-	Config AgentTeamsConfigCmd `cmd:"" help:"Show the resolved controller endpoint and token source"`
+	Status   AgentTeamsStatusCmd   `cmd:"" help:"Show controller health and resource counts"`
+	Worker   AgentTeamsWorkerCmd   `cmd:"" help:"Manage Worker CRs"`
+	Team     AgentTeamsTeamCmd     `cmd:"" help:"Manage Teams"`
+	Human    AgentTeamsHumanCmd    `cmd:"" help:"Manage Humans"`
+	Apply    AgentTeamsApplyCmd    `cmd:"" help:"Apply declarative YAML (create-or-update per kind)"`
+	Snapshot AgentTeamsSnapshotCmd `cmd:"" help:"Snapshot the deploy into a PII-redacted hydration bundle"`
+	Config   AgentTeamsConfigCmd   `cmd:"" help:"Show the resolved controller endpoint and token source"`
 }
 
 // ---------------------------------------------------------------------------
@@ -60,19 +61,35 @@ func newAPIClient() *apiClient {
 // discoverToken returns a bearer token using the AgentTeams runtime contract:
 //  1. AGENTTEAMS_AUTH_TOKEN env var
 //  2. AGENTTEAMS_AUTH_TOKEN_FILE token file
-//  3. empty string (unauthenticated, for controllers with auth disabled)
+//  3. the controller-projected SA token at /var/run/secrets/agentteams/token
+//     (the worker's projected credential — the Replicator's in-venue surface)
+//  4. the controller's minted admin token at /var/run/agentteams/cli-token
+//  5. empty string (unauthenticated, for controllers with auth disabled)
 func discoverToken() string {
 	if token := os.Getenv("AGENTTEAMS_AUTH_TOKEN"); token != "" {
 		return token
 	}
 	if path := os.Getenv("AGENTTEAMS_AUTH_TOKEN_FILE"); path != "" {
-		if data, err := os.ReadFile(path); err == nil {
-			if t := strings.TrimSpace(string(data)); t != "" {
-				return t
-			}
+		if t := readTokenFile(path); t != "" {
+			return t
+		}
+	}
+	for _, path := range []string{"/var/run/secrets/agentteams/token", "/var/run/agentteams/cli-token"} {
+		if t := readTokenFile(path); t != "" {
+			return t
 		}
 	}
 	return ""
+}
+
+// readTokenFile reads and trims a token file, returning "" when the file is
+// absent or empty.
+func readTokenFile(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
 }
 
 // apiError represents a non-2xx response from the controller.
@@ -325,6 +342,10 @@ func (c *AgentTeamsConfigCmd) Run() error {
 		tokenSource = "AGENTTEAMS_AUTH_TOKEN env"
 	case os.Getenv("AGENTTEAMS_AUTH_TOKEN_FILE") != "":
 		tokenSource = "AGENTTEAMS_AUTH_TOKEN_FILE (" + os.Getenv("AGENTTEAMS_AUTH_TOKEN_FILE") + ")"
+	case readTokenFile("/var/run/secrets/agentteams/token") != "":
+		tokenSource = "/var/run/secrets/agentteams/token (controller-projected SA token)"
+	case readTokenFile("/var/run/agentteams/cli-token") != "":
+		tokenSource = "/var/run/agentteams/cli-token (controller-minted admin token)"
 	}
 	fmt.Printf("Controller URL: %s\n", strings.TrimRight(baseURL, "/"))
 	fmt.Printf("Token source: %s\n", tokenSource)
@@ -1065,55 +1086,92 @@ type yamlMetadata struct {
 func applyFromFiles(files []string) error {
 	client := newAPIClient()
 	for _, f := range files {
-		data, err := os.ReadFile(f)
+		lines, err := applyPathWithClient(client, f)
 		if err != nil {
-			return fmt.Errorf("read %s: %w", f, err)
+			return err
 		}
-		docs := splitYAMLDocs(string(data))
-		for _, doc := range docs {
-			doc = strings.TrimSpace(doc)
-			if doc == "" {
-				continue
-			}
-			var res yamlResource
-			if err := yaml.Unmarshal([]byte(doc), &res); err != nil {
-				return fmt.Errorf("parse YAML in %s: %w", f, err)
-			}
-			if res.Kind == "" || res.Metadata.Name == "" {
-				continue
-			}
-			if err := applyOneResource(client, res); err != nil {
-				return err
-			}
-		}
+		fmt.Print(lines)
 	}
 	return nil
 }
 
-func applyOneResource(client *apiClient, res yamlResource) error {
+// applyPathWithClient applies one path — a single YAML resource file OR a
+// hydration bundle directory (workers.yml → teams.yml → humans.yml in dependency
+// order, so a team's workerMembers resolve) — and returns the per-resource
+// result lines. Reached from the apply command; there is no hydrate verb.
+func applyPathWithClient(client *apiClient, path string) (string, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", fmt.Errorf("read %s: %w", path, err)
+	}
+	if info.IsDir() {
+		var b strings.Builder
+		for _, name := range []string{"workers.yml", "teams.yml", "humans.yml"} {
+			p := filepath.Join(path, name)
+			if _, err := os.Stat(p); err != nil {
+				continue
+			}
+			lines, err := applyFileWithClient(client, p)
+			if err != nil {
+				return "", err
+			}
+			b.WriteString(lines)
+		}
+		return b.String(), nil
+	}
+	return applyFileWithClient(client, path)
+}
+
+func applyFileWithClient(client *apiClient, f string) (string, error) {
+	data, err := os.ReadFile(f)
+	if err != nil {
+		return "", fmt.Errorf("read %s: %w", f, err)
+	}
+	var b strings.Builder
+	docs := splitYAMLDocs(string(data))
+	for _, doc := range docs {
+		doc = strings.TrimSpace(doc)
+		if doc == "" {
+			continue
+		}
+		var res yamlResource
+		if err := yaml.Unmarshal([]byte(doc), &res); err != nil {
+			return "", fmt.Errorf("parse YAML in %s: %w", f, err)
+		}
+		if res.Kind == "" || res.Metadata.Name == "" {
+			continue
+		}
+		line, err := applyOneResource(client, res)
+		if err != nil {
+			return "", err
+		}
+		b.WriteString(line)
+	}
+	return b.String(), nil
+}
+
+func applyOneResource(client *apiClient, res yamlResource) (string, error) {
 	kind := strings.ToLower(res.Kind)
 	name := res.Metadata.Name
 	endpoint := "/api/v1/" + kind + "s"
 
 	exists, err := client.resourceExists(endpoint + "/" + name)
 	if err != nil {
-		return fmt.Errorf("check %s/%s: %w", kind, name, err)
+		return "", fmt.Errorf("check %s/%s: %w", kind, name, err)
 	}
 	var resp map[string]any
 	if exists {
 		updateBody := buildApplyBody(res, false)
 		if err := client.do("PUT", endpoint+"/"+name, updateBody, &resp); err != nil {
-			return fmt.Errorf("update %s/%s: %w", kind, name, err)
+			return "", fmt.Errorf("update %s/%s: %w", kind, name, err)
 		}
-		fmt.Printf("  %s/%s configured\n", kind, name)
-	} else {
-		body := buildApplyBody(res, true)
-		if err := client.do("POST", endpoint, body, &resp); err != nil {
-			return fmt.Errorf("create %s/%s: %w", kind, name, err)
-		}
-		fmt.Printf("  %s/%s created\n", kind, name)
+		return fmt.Sprintf("  %s/%s configured\n", kind, name), nil
 	}
-	return nil
+	body := buildApplyBody(res, true)
+	if err := client.do("POST", endpoint, body, &resp); err != nil {
+		return "", fmt.Errorf("create %s/%s: %w", kind, name, err)
+	}
+	return fmt.Sprintf("  %s/%s created\n", kind, name), nil
 }
 
 func buildApplyBody(res yamlResource, includeName bool) map[string]any {
