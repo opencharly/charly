@@ -10237,34 +10237,46 @@ pr-validator-agent:
             artifact=plugins                         # or docs — the submodule the PR targets
             suspect=path/inside/the/artifact.md      # the file you suspect is generated
             srchead=origin/main                      # or the source PR's head
-            prhead=                                  # the ARTIFACT PR's head sha — REQUIRED, no default
-            [ -n "$prhead" ] || { echo "guard: set \$prhead to the artifact PR head sha" >&2; exit 1; }
+            prhead=                                  # the ARTIFACT PR's head sha — REQUIRED
 
-            # mktemp, NOT a fixed path: step 3 is destructive and a fixed name can name
-            # a peer's live worktree.
-            probe=$(mktemp -d /tmp/carrier.XXXXXX)
-            git -C "$super" worktree add "$probe" "$srchead"
-            # The cd MUST be guarded: step 1 deletes a relative path, so an unentered
-            # $probe would run `rm` in whatever directory you were already standing in.
-            cd "$probe" || { echo "guard: cannot enter $probe" >&2; exit 1; }
-            git submodule update --init --recursive
-            git -C "$artifact" fetch origin "$prhead" && git -C "$artifact" checkout "$prhead"
-            git -C "$artifact" rev-parse HEAD    # MUST equal the PR head — read it back
+            # Nested, not `exit`: this block is meant to be PASTED, and an `exit` on a guard
+            # path closes your terminal. Check what can be checked BEFORE anything exists.
+            if [ -z "$prhead" ]; then
+              echo "guard: set \$prhead to the artifact PR head sha" >&2
+            else
+              # mktemp, NOT a fixed path: the teardown is destructive and a fixed name can
+              # name a peer's live worktree.
+              probe=$(mktemp -d /tmp/carrier.XXXXXX)
+              git -C "$super" worktree add "$probe" "$srchead"
 
-            task build:binary
+              if ! cd "$probe"; then
+                # the probe already EXISTS by now — remove it rather than leak it
+                echo "guard: cannot enter $probe" >&2
+                git -C "$super" worktree remove --force "$probe"
+              else
+                git submodule update --init --recursive
+                git -C "$artifact" fetch origin "$prhead" && git -C "$artifact" checkout "$prhead"
+                git -C "$artifact" rev-parse HEAD    # MUST equal the PR head — read it back
 
-            # 1. Delete the suspect and ask the generators to answer. `&&`, never `;` —
-            #    with `;` the guard captures only the LAST command's status.
-            rm "$artifact/$suspect"
-            ./bin/charly marketplace generate \
-              && ./bin/charly docs generate --out docs/src/content/docs --root .
-            rc=$?; [ "$rc" -eq 0 ] || { echo "UNEVALUATED: generation exited $rc"; exit 1; }
+                task build:binary
 
-            # 2. Read the answer.
-            test -f "$artifact/$suspect" && echo CARRIER || echo "not generated"
+                # 1. Delete the suspect and ask the generators to answer. `&&`, never `;` —
+                #    with `;` the guard captures only the LAST command's status.
+                rm "$artifact/$suspect"
+                ./bin/charly marketplace generate \
+                  && ./bin/charly docs generate --out docs/src/content/docs --root .
+                rc=$?
+                if [ "$rc" -ne 0 ]; then
+                  echo "UNEVALUATED: generation exited $rc" >&2
+                else
+                  # 2. Read the answer.
+                  test -f "$artifact/$suspect" && echo CARRIER || echo "not generated"
+                fi
 
-            # 3. Tear the scratch tree down — destructive, which is why $probe is mktemp'd.
-            cd - && git -C "$super" worktree remove --force "$probe"
+                # 3. Tear the scratch tree down — destructive, which is why $probe is mktemp'd.
+                cd - && git -C "$super" worktree remove --force "$probe"
+              fi
+            fi
             ```
 
             **Two setup traps, both of which produce a confident wrong answer rather than an
@@ -10363,7 +10375,7 @@ pr-validator-agent:
               **Grep the whole file** — not because the distribution is flat, but because the tail
               is real, and a window sized to 98.29% of a corpus silently misses the rest.
 
-              **Do not describe this as "24 distinct line numbers."** That is a UNION over the
+              **Do not describe this as "19 distinct line numbers."** That is a UNION over the
               tree, and a union of positions looks like a spread while the underlying distribution
               is tightly clustered — the population/union error this page warns about two
               paragraphs below, committed in the sentence warning about it. **Cite the
