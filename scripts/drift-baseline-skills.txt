@@ -3,52 +3,58 @@
 # Its only job is to let `task skills:drift` fail on NEW drift without reding every PR in
 # the repo for debt it did not create. Inherited debt is reported by name on every run.
 #
-# HOW THIS WAS MEASURED, and how to re-measure it: origin/main @ 70daf9cb with EVERY
+# HOW THIS WAS MEASURED, and how to re-measure it: origin/main @ 162b54a3 with EVERY
 # SUBMODULE AT ITS GITLINK — the tree `actions/checkout --submodules recursive` produces.
 # Do NOT re-measure by running the gate in a working tree. Both generators read plugins/
 # off the FILESYSTEM, not at the gitlink, so a checkout that has moved records drift CI
 # will never see; every such entry then reds CI forever as "no longer stale", and every
-# real gitlink-level entry it omits reds CI as new. Measured in this worktree, whose
-# plugins/ sat 1 commit off the gitlink, 12 of 33 entries were of exactly that kind.
+# real gitlink-level entry it omits reds CI as new.
+#
+# RE-MEASURED at 162b54a3 (was 70daf9cb). The first measurement was taken two `main`
+# merges before this branch's merge-base, and because the comparison is EXACT the skew
+# alone red the gate: 3 already-stale artifacts were missing and 2 already-paid entries
+# were still listed. A baseline measured at the wrong commit is not a smaller problem
+# than no baseline — it fails in both directions at once.
 #
 # THIS IS NOT AN ALLOWLIST. scripts/drift-baseline.sh compares EXACTLY: an entry here
-# that is no longer stale fails the gate just as loudly as an unlisted artifact that is.
-# So the file can only shrink — when the missing work lands, the gate names the lines to
-# delete. Delete the file once it is empty and the gate runs absolute.
-#
-# KNOWN LIMITATION: a listed path is UNGUARDED until its debt is paid — new drift on an
-# already-drifted artifact is masked, because the key is the path, not its content. That
-# is the price of the baseline, it is bounded by this list, and it shrinks to zero with it.
-#
-# ALREADY SHRUNK ONCE: plugins/ollama/skills/ollama-cli/SKILL.md was stale on main as an
-# ORPHAN (a generated skill with no source entity). This branch's ollama candy work gave it
-# a source, so it is no longer stale and the gate demanded its removal. That is the intended
-# lifecycle, on its first real case.
+# that is no longer stale fails the gate just as loudly as an artifact that is stale and
+# absent. That is what makes this file self-liquidating — it can only shrink, and when it
+# reaches zero you delete it and the gate runs absolute.
 #
 # Do not add a line to silence a red. If your change made an artifact stale, the fix is to
 # regenerate and commit, never to record it here.
+#
+# RE-MEASURED AGAIN at this branch's own head with ITS gitlinks (plugins 40229ad, docs e213d51),
+# because that is the tree CI checks out for this PR and the comparison is EXACT. Measuring at
+# `main` alone was wrong in both directions once this branch bumps a projection gitlink: the
+# artifacts the projection FIXES stop being stale, and the artifacts `main` has moved past
+# become stale. Neither of the entries below is this branch's own drift — every one is inherited,
+# and every one is reported by name on each run.
+
 plugins/build/skills/generate/SKILL.md
+plugins/build/skills/load/SKILL.md
 plugins/check/skills/check/references/authoring-gotchas.md
 plugins/core/skills/charly-doctor/SKILL.md
-plugins/core/skills/clean/SKILL.md
 plugins/core/skills/shell/SKILL.md
 plugins/distros/skills/cachyos-pacstrap/SKILL.md
 plugins/distros/skills/container-nesting/SKILL.md
+plugins/distros/skills/nested-podman-socket/SKILL.md
 plugins/distros/skills/nvidia-layer/SKILL.md
 plugins/distros/skills/rocm/SKILL.md
+plugins/image/skills/layer/SKILL.md
 plugins/internals/agents/pr-validator.md
 plugins/internals/skills/agents/references/parallel-bed-testing.md
+plugins/internals/skills/cutover-policy/SKILL.md
 plugins/internals/skills/egress/SKILL.md
-plugins/internals/skills/git-workflow/references/branch-and-pr-loop.md
+plugins/internals/skills/generate-source/references/task-emission.md
+plugins/internals/skills/git-workflow/SKILL.md
 plugins/internals/skills/git-workflow/references/evidence-and-freshness.md
 plugins/internals/skills/git-workflow/references/multi-repo-coordination.md
-plugins/internals/skills/git-workflow/SKILL.md
+plugins/internals/skills/git-workflow/references/validator-and-calver.md
 plugins/internals/skills/go-quality/SKILL.md
-plugins/internals/skills/go/references/source-map.md
 plugins/internals/skills/go/SKILL.md
-plugins/internals/skills/plugin/references/boundary-law.md
+plugins/internals/skills/go/references/source-map.md
 plugins/internals/skills/plugin/SKILL.md
+plugins/internals/skills/plugin/references/boundary-law.md
 plugins/internals/skills/skills/SKILL.md
 plugins/internals/skills/vm-spec/SKILL.md
-plugins/ollama/skills/ollama-layer/SKILL.md
-plugins/ollama/skills/ollama/SKILL.md
