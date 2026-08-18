@@ -5052,56 +5052,42 @@ go-skill:
               the lock open fail with ENOENT, which golangci-lint reports as "parallel golangci-lint
               is running" — a false positive, not a real parallel run. Create the TMPDIR dir first
               (or pass `--allow-parallel-runners` with a fresh cache). See `/charly-internals:go-quality`.
-            - **A LONG `TMPDIR` breaks go-plugin tests, and near the limit it does so
-              INTERMITTENTLY.** go-plugin serves each plugin over a UNIX socket at
-              `$TMPDIR/plugin<random digits>`, and `sun_path` allows 107 bytes for the whole
-              path. Past that, `bind` returns `invalid argument`, the handshake never
-              completes, and the loader reports `Unrecognized remote plugin message` /
-              `Failed to read any lines from plugin's stdout` with a plausible list of causes
-              (wrong architecture, missing libraries, permissions) — none of them the cause.
-              The visible failure is a downstream assertion, e.g.
-              `TestExternalStructKind_StructuralDecode` reporting
-              `structural plugin kind not folded into uf.Fleet; have fleet keys []`.
+            - **Keep `$TMPDIR` short for any suite that connects a plugin.** go-plugin serves
+              each plugin over a UNIX socket at `$TMPDIR/plugin<random digits>`, and `sun_path`
+              caps the whole path at 107 bytes — leaving `$TMPDIR` a little under 90. The digit
+              count varies, so a path near the budget fails intermittently: the same directory
+              passes, then fails, unchanged. Use a short path under `/tmp` and leave headroom.
+              `GOTMPDIR` is a separate variable and may stay long — Go's build work needs no
+              socket.
 
-              **The budget:** `sun_path` allows 107 bytes for the whole socket path, and the
-              suffix is `/plugin` plus a random number — so `$TMPDIR` gets the remainder, a
-              little under 90 bytes. **The digit count is not fixed, so the boundary is fuzzy
-              and the failure near it is intermittent** — the same directory can pass, then
-              fail, with nothing changed, which invites calling it a flake. Leave headroom
-              rather than sitting on the limit: a short `$TMPDIR` under `/tmp` always fits, and
-              anything approaching the budget is a latent intermittent failure.
+              Over budget, `bind` returns `invalid argument` and the loader reports
+              `Unrecognized remote plugin message` / `Failed to read any lines from plugin's
+              stdout`, blaming architecture, libraries, or permissions — none of which is the
+              cause. The visible failure is a downstream assertion, e.g.
+              `TestExternalStructKind_StructuralDecode` reporting `structural plugin kind not
+              folded into uf.Fleet; have fleet keys []`.
 
-              This interacts badly with the `GOTMPDIR=~/.cache/go-tmp` advice above: a deep
-              per-session scratch path satisfies the quota rule and violates this one. They are
-              separate variables — `GOTMPDIR` may stay long (Go's build work needs no socket)
-              while `TMPDIR` must stay short.
+            - **`CHARLY_PLUGIN_DIR` prepends; it never replaces.** `bakedPluginDirs()` returns
+              it (when set) and then ALWAYS appends the FHS `/usr/lib/charly/plugins`, so
+              pointing it at an empty directory masks nothing.
 
-            - **`CHARLY_PLUGIN_DIR` cannot HIDE a baked plugin — it only reorders precedence.**
-              `bakedPluginDirs()` returns `$CHARLY_PLUGIN_DIR` (when set) and then ALWAYS
-              appends the FHS `/usr/lib/charly/plugins`. Pointing the env var at an empty
-              directory therefore masks nothing.
+              **Baked lookup is keyed by WORD and short-circuits the project scan.**
+              `resolveCommandPluginBinary` returns on a baked hit before the project loads: a
+              baked word resolves to the baked binary and its project declaration is never
+              consulted, while an unbaked word falls through to the project scan normally. So
+              `charly examplecommand hello world` prints `hello world` from the project candy
+              even where the charly package is installed — `examplecommand` is not baked.
 
-              **The masking is PER WORD, not per machine.** `resolveCommandPluginBinary`
-              consults the baked map keyed by WORD and returns on a hit, before the project is
-              loaded at all — so a word that is baked resolves to the baked binary and the
-              project declaration is never consulted, while a word that is NOT baked falls
-              through to the project scan normally. On a host with the charly package
-              installed, `charly examplecommand hello world` still prints `hello world` from
-              the project candy, because `examplecommand` is not among the baked words.
-
-              The consequence for TESTING is therefore narrow: for a word that IS baked here,
-              a `charly <word> --help` probe cannot distinguish "my project declares this" from
-              "the installed package provides it". **A mount namespace settles it without a bed
-              or a second machine** — mask the directory rather than trying to out-configure
-              the loader:
+              To exercise a BAKED word's project declaration, mask the directory with a mount
+              namespace — a `--help` probe cannot distinguish the two sources:
 
               ```
               bwrap --dev-bind / / --tmpfs /usr/lib/charly/plugins ./bin/charly <word>
               ```
 
-              With the project candy present this reaches the project-built plugin; with the
-              candy removed the same command gives `charly: error: unexpected argument <word>`.
-              That counterfactual pair is the proof; the env var is not.
+              With the project candy present this reaches the project-built plugin; remove the
+              candy and the same command gives `charly: error: unexpected argument <word>`.
+              Run both arms — the pair is the proof.
 
             - `.claude/hooks/pre-commit-gate.sh` (the staged-Go-lint discipline backstop) redirects
               its own lint temp dirs to `~/.cache/charly-gate-lint/` and creates the TMPDIR/GOTMPDIR
