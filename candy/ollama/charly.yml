@@ -25,12 +25,20 @@ ollama:
             - supervisord
         var:
             # Upstream Ollama release for the TARBALL path only — the distros that
-            # package ollama let their package manager own the version. A concrete tag,
-            # not `latest`: GitHub serves the two cases from structurally different URLs
-            # (releases/latest/download/... vs releases/download/<tag>/...), so one
-            # template cannot express both, and a pinned tag is the reproducible half of
-            # that choice. It also matches the house pattern (CUE_VERSION, APKEEP_VERSION).
-            # Bump it here to move the tarball distros forward.
+            # package ollama let their package manager own the version.
+            #
+            # A concrete tag, NOT `latest`, and the reason is correctness rather than
+            # taste. The download verb content-addresses its cache by sha256 OF THE URL.
+            # With `latest` the URL is constant while the artifact behind it changes, so
+            # the cache would serve whichever build was fetched first, forever — a silent
+            # pin to an arbitrary old version that no amount of rebuilding would shake
+            # loose. A `latest` URL and a content-addressed cache are incompatible; the
+            # tag is what makes the key honest.
+            #
+            # (Secondarily: GitHub serves the two cases from structurally different URLs —
+            # releases/latest/download/... vs releases/download/<tag>/... — so one template
+            # could not express both anyway, and pinning matches the house pattern set by
+            # CUE_VERSION and APKEEP_VERSION.) Bump it here to move the tarball distros.
             OLLAMA_VERSION: v0.32.14
         distro:
             # Arch (and its derivatives, CachyOS included) ships ollama in `extra`,

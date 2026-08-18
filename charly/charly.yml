@@ -501,7 +501,7 @@ arch:
                         # newer cachyos-v3 digest in box/cachyos/charly.yml —
                         # the upstream rebuild carries the updated keyring package.
                         (pacman-key --populate 2>/dev/null || true) && \
-                        pacman -Syu --noconfirm
+                        pacman -Syu --noconfirm --needed
                     {{- range .Options}} {{.}}{{end}}
                     {{- range .Packages}} \
                           {{.}}{{end}}
@@ -621,6 +621,50 @@ cachyos:
     distro:
         inherits: arch
         inherit_packages: true
+        # CachyOS's pacman is a -4 REBUILD of the same 7.1.0.r9.g54d9411 Arch ships as -2,
+        # carrying a scriptlet network-isolation patch Arch's lacks. It runs every install
+        # scriptlet and hook in a fresh netns and ABORTS the scriptlet when that netns
+        # cannot be created — always true in a rootless build container (unshare(CLONE_NEWNET)
+        # = EPERM). 46-51 scriptlets/hooks silently never ran in ANY shipped CachyOS image:
+        # ldconfig, systemd-hook x34-37, update-ca-trust, locale-gen, fc-cache, and
+        # nvidia-ctk-cdi on the GPU boxes. pacman treats a refused hook as non-fatal, so
+        # every build "succeeded". pacman.conf(5) inside the image names this option as the
+        # supported fix for unprivileged containers; it is strictly narrower than the
+        # DisableSandboxFilesystem Arch's own container image ships.
+        #
+        # It goes in the CACHYOS bootstrap and NOT the shared pac install_template because
+        # cachyos inherits arch, and Arch's -2 pacman does not recognise the directive — it
+        # would emit "directive not recognized" on every Arch build. The bootstrap is the
+        # first RUN in the base image, so every derived image inherits the setting via FROM.
+        # NOTE: `bootstrap:` REPLACES the inherited block wholesale rather than deep-merging,
+        # so package: and cache_mount: are restated here verbatim from arch. Dropping them
+        # silently cost the curl/ca-certificates install and the pacman package cache.
+        bootstrap:
+            # Two pacman settings a ROOTLESS BUILD CONTAINER needs, both applied before the
+            # first package transaction because that is the only point early enough:
+            #
+            # 1. DisableSandboxNetwork — see the note above; without it 46-51 scriptlets and
+            #    hooks are refused outright in every image.
+            # 2. An empty /etc/pacman.d/hooks/nvidia-ctk-cdi.hook, which overrides the
+            #    package's own hook of that name. Once (1) lets hooks actually run, that hook
+            #    starts firing on every transaction and can only ever FAIL here — it calls
+            #    nvidia-ctk to regenerate /etc/cdi/nvidia.yaml, and a build container has no
+            #    driver ("failed to initialize NVML: Driver Not Loaded" -> "error: command
+            #    failed to execute correctly"). Nothing is lost: a CDI spec describes the
+            #    HOST's devices, so one generated at build time would be wrong even if it
+            #    succeeded, and charly regenerates it on the host at deploy (pluginEnsureCDI).
+            #    It lives here rather than in candy/nvidia because a candy's plan: steps are
+            #    emitted AFTER its distro: packages (BuildDeployPlan phase 3 vs phase 1), so a
+            #    mask written there arrives one transaction too late. The file is inert on an
+            #    image that never installs nvidia-container-toolkit.
+            install_cmd: >-
+                (grep -q '^DisableSandboxNetwork' /etc/pacman.conf || sed -i '/^\[options\]/a DisableSandboxNetwork' /etc/pacman.conf) && mkdir -p /etc/pacman.d/hooks && : > /etc/pacman.d/hooks/nvidia-ctk-cdi.hook && pacman -Syu --noconfirm --needed
+            package:
+                - curl
+                - ca-certificates
+            cache_mount:
+                - dst: /var/cache/pacman/pkg
+                  sharing: locked
         pacstrap:
             base_package:
                 - base
@@ -929,7 +973,14 @@ fedora:
                         dnf5 config-manager addrepo --from-repofile={{quote .url}} 2>/dev/null || true && \
                         dnf5 config-manager setopt {{quote (printf "%s.enabled=0" .name)}} && \
                     {{- else}}
-                        printf '%s\n' '[{{.name}}]' 'name={{.name}}' 'baseurl={{.url}}' 'enabled=0' 'gpgcheck={{if eq (default .gpgcheck "true") "false"}}0{{else}}1{{end}}'{{if .gpgkey}} 'gpgkey={{.gpgkey}}'{{end}} > /etc/yum.repos.d/{{.name}}.repo && \
+                        {{- /* Bare baseurl: charly AUTHORS the .repo file, so there is no vendor
+                               value to inherit and `gpgcheck` is two-state (default ON). But
+                               `repo_gpgcheck` IS tri-state here in the sense that matters: it is
+                               emitted only when the candy sets it, because dnf's own default
+                               (off) is the right silence. Without this line the knob read as
+                               supported on a bare-baseurl repo and was silently dropped — the
+                               `.repo`-file branch below honoured it while this one ignored it. */}}
+                        printf '%s\n' '[{{.name}}]' 'name={{.name}}' 'baseurl={{.url}}' 'enabled=0' 'gpgcheck={{if eq (default .gpgcheck "true") "false"}}0{{else}}1{{end}}'{{if .repo_gpgcheck}} 'repo_gpgcheck={{if eq (printf "%v" .repo_gpgcheck) "false"}}0{{else}}1{{end}}'{{end}}{{if .gpgkey}} 'gpgkey={{.gpgkey}}'{{end}} > /etc/yum.repos.d/{{.name}}.repo && \
                     {{- end}}
                     {{- if .gpgkey}}
                         rpm --import {{.gpgkey}} || true && \
