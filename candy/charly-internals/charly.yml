@@ -5090,8 +5090,11 @@ go-skill:
 
               With the project candy present this reaches the project-built plugin; remove the
               candy and the same command gives `charly: error: unexpected argument <word>`.
-              **Run both arms — the pair is the proof**, because with the FHS path in place the
-              removal still resolves via the baked binary and the single run proves nothing.
+              **Run both arms.** The first shows the word resolves but not WHAT served it; the
+              second is what ties the resolution to the project candy, by removing the only
+              remaining source and watching it break. (Without the flag the second arm still
+              resolves — via the baked binary — which is why the flag is required for the pair
+              to mean anything.)
 
             - `.claude/hooks/pre-commit-gate.sh` (the staged-Go-lint discipline backstop) redirects
               its own lint temp dirs to `~/.cache/charly-gate-lint/` and creates the TMPDIR/GOTMPDIR
