@@ -1,29 +1,47 @@
 version: '3'
 
-# Plugins.yml — maintenance sweeps over the per-module plugin-candy surface.
+# Modules.yml — maintenance sweeps over every in-repo Go module that resolves the sdk and
+# spec contract modules through a LOCAL `replace`.
 #
-# Every plugin candy is its OWN Go module (the deliberate dependency-shed design:
-# a heavy plugin's deps never merge into the ~60 light plugins' graphs). That
-# 74-module surface is kept drift-free by two mechanisms: the canonical-go.mod
-# GATE (tools/gomod-canonical/gomod_canonical_test.go asserts each go.mod matches
-# the Shape-A template) and this `plugins:tidy` sweep (keeps each go.sum in step with
-# its imports). Run tidy after adding/removing a plugin dep; the gate then proves
-# the module line + sdk require/replace stayed canonical.
+# That set is larger than it looks, and the difference is what makes this a sweep rather
+# than a one-liner. Every plugin candy is its OWN module (the deliberate dependency-shed
+# design: a heavy plugin's deps never merge into the ~60 light plugins' graphs), but the
+# same coupling reaches `candy/generate-packages` — a candy module that is NOT named
+# `plugin-*` — and the `tools/golden-*` fixture modules. A glob that assumes `candy/plugin-*`
+# silently skips all three.
+#
+# WHY they must move together. A module here requires `github.com/opencharly/sdk` with a
+# local replace, so sdk's OWN `github.com/opencharly/spec` requirement enters its module
+# graph. Under MVS the module must then list a spec version at least as new as sdk's — and
+# the local `replace` to ../../spec is exactly what hides a stale one from review, because
+# the CODE resolves from the checkout while the NUMBER is what Go validates. Bump sdk's spec
+# require without this sweep and `GOWORK=off go build` dies in every straggler with
+# "go: updates to go.mod needed", which the build-time plugin loader then demotes to a
+# warning before failing downstream on an unrelated-looking "no provider registered".
+#
+# Two mechanisms keep the surface drift-free: the canonical-go.mod GATE
+# (tools/gomod-canonical/gomod_canonical_test.go — Shape-A for the plugin candies, plus the
+# spec-pin equality assertion across every module this sweep touches) and this `mods:tidy`
+# sweep, which keeps each go.sum in step with its imports. Run tidy after adding or removing
+# a dep, and after ANY change to sdk/go.mod's spec require.
 
 tasks:
   tidy:
-    desc: Run `GOWORK=off go mod tidy` in every candy/plugin-* module (keeps go.sum in step)
+    desc: Run `GOWORK=off go mod tidy` in every in-repo module that replaces sdk/spec locally (keeps go.sum and the spec pin in step)
     cmds:
       - |
         set -e
         n=0; fail=0
-        for d in candy/plugin-*/; do
+        for d in candy/*/ tools/*/; do
           [ -f "$d/go.mod" ] || continue
+          # Only modules that resolve the contract modules locally are part of the lockstep
+          # set; a module with no sdk/spec replace has nothing to keep in step.
+          grep -qE '^replace github\.com/opencharly/(sdk|spec) =>' "$d/go.mod" || continue
           if ( cd "$d" && GOWORK=off GOFLAGS=-mod=mod go mod tidy ); then
             n=$((n+1))
           else
             echo "TIDY FAILED: $d" >&2; fail=1
           fi
         done
-        echo "tidied $n plugin modules"
+        echo "tidied $n modules"
         exit $fail
