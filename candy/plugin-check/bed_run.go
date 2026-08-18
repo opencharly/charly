@@ -53,6 +53,11 @@ type stepResult struct {
 	Name     string
 	Duration time.Duration
 	OK       bool
+	// Diag is the scan of this step's retained log (bed_diagnostics.go). The exit code alone
+	// is NOT the verdict: a tool that treats its own failure as non-fatal — pacman refusing an
+	// install scriptlet, the RCA case — exits 0 with the failure sitting in the log, and R10
+	// requires zero warnings. Only step() populates it; a phase() has no log to scan.
+	Diag stepDiagnostics
 }
 
 // bedRunResult captures one bed's full run outcome.
@@ -147,6 +152,11 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 	}
 
 	res := &bedRunResult{Bed: name, CalVer: d.Calver, OK: true}
+
+	// diagPolicy decides what step()'s log scan DOES with what it finds. One value, read at
+	// every step, so the disposition is reviewable in one place rather than inferred from
+	// conditions scattered through the sequence (bed_diagnostics.go owns the rationale).
+	diagPolicy := defaultDiagnosticPolicy()
 
 	// GPU-prereq skip: setup acquired NOTHING (sess is nil), so run NO other op — write the
 	// prereq-skip summary + return CheckSkippedError (exit 3).
@@ -290,21 +300,33 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 		}
 		reply, cerr := bedCliCombined(ex, ctx, argv...)
 		dur := time.Since(t0)
-		ok := cerr == nil && reply.ExitCode == 0
-		res.Step = append(res.Step, stepResult{Name: stepName, Duration: dur, OK: ok})
+		logText := cliStepLog(reply)
+		// R10's "a warning is not a pass", MEASURED. Scan the retained log before deciding the
+		// step passed: an `error:` line under a zero exit code is a failure the child swallowed
+		// (pacman's refused hooks shipped 51 unexecuted scriptlets in every CachyOS image that
+		// way). diagPolicy owns the disposition; the report goes to summary.yml either way.
+		diag := scanStepDiagnostics(logText)
+		diagFail := diag.failure(diagPolicy, stepName, logPath)
+		ok := cerr == nil && reply.ExitCode == 0 && diagFail == ""
+		res.Step = append(res.Step, stepResult{Name: stepName, Duration: dur, OK: ok, Diag: diag})
 		if !ok {
 			res.OK = false
 			if res.FailExitCode == 0 {
 				// First failure wins; capture the sub-charly exit code so the caller
 				// can tell a check-check failure (2) from an infra failure (1).
-				if cerr != nil {
+				switch {
+				case cerr != nil:
 					res.FailExitCode = 1
-				} else {
+				case reply.ExitCode != 0:
 					res.FailExitCode = reply.ExitCode
+				default:
+					// The child exited 0 and its LOG carried the failure: the thing under test is
+					// broken, not the harness — the same class `charly check live` reports as 2.
+					res.FailExitCode = CheckFailExitCode
 				}
 			}
 		}
-		if writeErr := os.WriteFile(logPath, []byte(cliStepLog(reply)), 0o644); writeErr != nil {
+		if writeErr := os.WriteFile(logPath, []byte(logText), 0o644); writeErr != nil {
 			fmt.Fprintf(os.Stderr, "charly check run %s: writing %s: %v\n", name, logPath, writeErr)
 		}
 		if cerr != nil {
@@ -319,7 +341,14 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 			fmt.Fprintf(os.Stderr, "charly check run %s: [%s] FAIL after %s: exit %d: %s (log: %s)\n", name, stepName, dur.Round(time.Millisecond), reply.ExitCode, detail, logPath)
 			return fmt.Errorf("%s (%s) exited %d after %s: %s; log: %s", stepName, command, reply.ExitCode, dur.Round(time.Millisecond), detail, logPath)
 		}
-		fmt.Fprintf(os.Stderr, "charly check run %s: [%s] PASS after %s (log: %s)\n", name, stepName, dur.Round(time.Millisecond), logPath)
+		if diagFail != "" {
+			// The child was happy; its log was not. Print the distinct shapes so the reason is
+			// on the console, not only in the log the message points at.
+			fmt.Fprintf(os.Stderr, "charly check run %s: [%s] FAIL after %s: %s\n", name, stepName, dur.Round(time.Millisecond), diagFail)
+			printDiagnosticShapes(os.Stderr, diag)
+			return fmt.Errorf("%s: %s", command, diagFail)
+		}
+		fmt.Fprintf(os.Stderr, "charly check run %s: [%s] PASS after %s%s (log: %s)\n", name, stepName, dur.Round(time.Millisecond), diagNotice(diag), logPath)
 		return nil
 	}
 
@@ -720,13 +749,24 @@ func writeBedSummary(dir string, res *bedRunResult) {
 	fmt.Fprintf(&buf, "calver: %s\n", res.CalVer)
 	fmt.Fprintln(&buf, "steps:")
 	var total time.Duration
+	var run stepDiagnostics
 	for _, s := range res.Step {
 		fmt.Fprintf(&buf, "  - name: %s\n", s.Name)
 		fmt.Fprintf(&buf, "    duration_seconds: %d\n", int(s.Duration.Round(time.Second)/time.Second))
 		fmt.Fprintf(&buf, "    ok: %t\n", s.OK)
+		writeStepDiagnostics(&buf, "    ", s.Diag)
 		total += s.Duration
+		run.Warnings += s.Diag.Warnings
+		run.Errors += s.Diag.Errors
+		run.Allowlisted += s.Diag.Allowlisted
+		run.CacheSteps += s.Diag.CacheSteps
+		run.CacheHits += s.Diag.CacheHits
+		// Findings travel too, not just the counters: the run rollup reports WHICH exemption
+		// suppressed what, and it can only do that from the findings themselves.
+		run.Findings = append(run.Findings, s.Diag.Findings...)
 	}
 	fmt.Fprintf(&buf, "total_seconds: %d\n", int(total.Round(time.Second)/time.Second))
+	writeRunDiagnostics(&buf, run)
 	fmt.Fprintf(&buf, "ok: %t\n", res.OK)
 
 	path := filepath.Join(dir, "summary.yml")

@@ -35,8 +35,37 @@ tasks:
   drift:
     desc: Fail if the generated marketplace/harness surface is stale (regeneration must be a no-op)
     cmds:
+      # The gate runs THIS tree's binary, never whatever bin/charly happens to be lying
+      # around: a stale (or absent) binary would emit a stale (or no) verdict, and a gate
+      # that cannot fail truthfully is worse than no gate. `sync` builds for the same
+      # reason; drift is the read-only half of the same pair.
+      - task: :build:binary
+      # The gate fails on NEW drift only, measured against scripts/drift-baseline-skills.txt
+      # (see scripts/drift-baseline.sh for why, and for why that file can only shrink).
+      #
+      # `marketplace drift` exits non-zero for stale artifacts AND for real errors — a bad
+      # decode, a stale-binary refusal. Those must not parse as "no artifacts, therefore
+      # clean", so a non-zero exit without the artifact header is a hard failure with the
+      # raw output. Only the block BETWEEN the header and the `run ...` trailer is treated
+      # as the stale set; charly's own diagnostics indent lines too.
+      #
+      # The `&& rc=0 || rc=$?` form is load-bearing, not style: Task's shell aborts the whole
+      # cmd on a failing `raw=$(...)` assignment, so the plain `; rc=$?` form exits 1 having
+      # printed NOTHING — drift and a real error become the same silent red.
+      #
+      # The trailing ` (stale)` annotation charly appends to ORPHANED artifacts is stripped:
+      # the baseline keys on the artifact PATH, and orphaned-vs-rewritten is a property of
+      # how it is stale, not of which artifact it is.
       - cmd: |
-          {{.ROOT_DIR}}/bin/charly marketplace drift --root {{.ROOT_DIR}}
+          raw=$({{.ROOT_DIR}}/bin/charly marketplace drift --root {{.ROOT_DIR}} 2>&1) && rc=0 || rc=$?
+          printf '%s\n' "$raw"
+          if [ "$rc" -ne 0 ] && ! printf '%s\n' "$raw" | grep -q 'generated artifact(s) are stale:'; then
+            echo "skills: marketplace drift failed for a reason that is NOT drift (see above)." >&2
+            exit 1
+          fi
+          printf '%s\n' "$raw" \
+            | awk '/generated artifact\(s\) are stale:/{i=1;next} /^run /{i=0} i&&/^  /{sub(/^  /,"");sub(/ \(stale\)$/,"");print}' \
+            | bash {{.ROOT_DIR}}/scripts/drift-baseline.sh {{.ROOT_DIR}}/scripts/drift-baseline-skills.txt skills
         silent: true
       - cmd: |
           if [ -n "$(git -C {{.ROOT_DIR}} status --porcelain -- .claude CLAUDE.md AGENTS.md charly.yml go.work charly/plugins_generated.go)" ]; then

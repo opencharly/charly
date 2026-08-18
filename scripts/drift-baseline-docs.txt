@@ -1,0 +1,43 @@
+# scripts/drift-baseline-docs.txt — TEMPORARY record of generated artifacts that are ALREADY stale on main.
+#
+# Its only job is to let `task docs:drift` fail on NEW drift without reding every PR in
+# the repo for debt it did not create. Inherited debt is reported by name on every run.
+#
+# HOW THIS WAS MEASURED, and how to re-measure it: origin/main @ 70daf9cb with EVERY
+# SUBMODULE AT ITS GITLINK — the tree `actions/checkout --submodules recursive` produces.
+# Do NOT re-measure by running the gate in a working tree. Both generators read docs/ (and plugins/)
+# off the FILESYSTEM, not at the gitlink, so a checkout that has moved records drift CI
+# will never see; every such entry then reds CI forever as "no longer stale", and every
+# real gitlink-level entry it omits reds CI as new. Measured in this worktree, whose
+# plugins/ sat 1 commit off the gitlink, 12 of 33 entries were of exactly that kind.
+#
+# THIS IS NOT AN ALLOWLIST. scripts/drift-baseline.sh compares EXACTLY: an entry here
+# that is no longer stale fails the gate just as loudly as an unlisted artifact that is.
+# So the file can only shrink — when the missing work lands, the gate names the lines to
+# delete. Delete the file once it is empty and the gate runs absolute.
+#
+# KNOWN LIMITATION: a listed path is UNGUARDED until its debt is paid — new drift on an
+# already-drifted artifact is masked, because the key is the path, not its content. That
+# is the price of the baseline, it is bounded by this list, and it shrinks to zero with it.
+#
+# Do not add a line to silence a red. If your change made an artifact stale, the fix is to
+# regenerate and commit, never to record it here.
+src/content/docs/recipes/index.md
+src/content/docs/recipes/internals/git-workflow.md
+src/content/docs/recipes/internals/skills.md
+src/content/docs/recipes/internals/vm-spec.md
+src/content/docs/recipes/ollama/ollama-cli.md
+src/content/docs/recipes/ollama/ollama-layer.md
+src/content/docs/recipes/ollama/ollama.md
+src/content/docs/recipes/vm/arch-cloud-vm.md
+src/content/docs/recipes/vm/vm.md
+src/content/docs/recipes/vm/vms-catalog.md
+src/content/docs/reference/candy/container-nesting.md
+src/content/docs/reference/candy/generate-packages.md
+src/content/docs/reference/candy/plugin-marketplace.md
+src/content/docs/reference/candy/shortbread.md
+src/content/docs/reference/cli/generate-packages.md
+src/content/docs/reference/cli/marketplace.md
+src/content/docs/reference/plugin/generate-packages.md
+src/content/docs/reference/plugin/plugin-marketplace.md
+src/content/docs/reference/providers.md
