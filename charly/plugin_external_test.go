@@ -116,12 +116,10 @@ func TestPluginSchemaSpliceValidation(t *testing.T) {
 	}
 }
 
-// TestBuiltinPluginSchemasSplice is the deterministic assertion for the symmetric
+// TestBuiltinPluginSchemasSplice is the deterministic CI gate for the symmetric
 // builtin schema load gate: loadBuiltinPluginUnits must splice EVERY in-tree
-// builtin unit's schema onto the base, so a broken builtin schema fails this test
-// rather than only a live run. Like `charly marketplace drift`, it runs in no CI
-// workflow — release-binary.yml is the only one and it runs no `go test` — so it
-// is red only for whoever runs it. It then validates the exampleprobe builtin's plugin_input
+// builtin unit's schema onto the base, so a broken builtin schema fails CI, not
+// only a live run. It then validates the exampleprobe builtin's plugin_input
 // through the same validator an external goes through (zero distinction).
 func TestBuiltinPluginSchemasSplice(t *testing.T) {
 	if err := loadBuiltinPluginUnits(); err != nil {
