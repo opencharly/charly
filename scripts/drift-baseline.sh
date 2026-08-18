@@ -12,6 +12,29 @@
 # find yourself about to say "the X gate does A while the Y gate does B", grep BOTH taskfiles
 # first; a zero from one of them means "I found nothing here", never "there is nothing there".
 #
+# WHAT A GREEN VERDICT ACTUALLY MEANS — read this before trusting one. `docs:drift` feeds
+# `git -C docs status --porcelain`, and `git status` compares the worktree against the CHECKED-OUT
+# HEAD. On a CI checkout that is the GITLINK. So green means "regeneration reproduces the gitlink"
+# — it never consults the submodule's own `origin/main` and cannot. A submodule main that is
+# AHEAD of the gitlink, or that carries a projection generated from an unlanded source, is
+# invisible here: the gate reports truthfully about a different commit. This is not hypothetical;
+# it is the state docs `main` was in when this paragraph was written (a projection depending on a
+# commit that existed only on an unmerged branch), and both gates read green throughout.
+#
+# The two-line preflight that makes it visible, worth running before acting on green:
+#
+#	git -C docs    rev-parse HEAD;  git ls-remote <docs-remote>    refs/heads/main
+#	git -C plugins rev-parse HEAD;  git ls-remote <plugins-remote> refs/heads/main
+#
+# HEAD != that repo's main means the verdict is about HEAD, not about main.
+#
+# Note how this hazard arrived: scripts/drift-baseline-skills.txt already warned about the same
+# filesystem-vs-gitlink confusion — but for the PLUGINS arm, and aimed at the MEASUREMENT
+# procedure ("do NOT re-measure by running the gate in a working tree"). The identical trap
+# pointed at the DOCS arm and aimed at the VERDICT went unwritten for months. A hazard understood
+# for one arm of a two-arm system is not a hazard that has been handled; see the paragraph above
+# about checking both arms before asserting a difference between them.
+#
 # WHERE THE REAL ASYMMETRY LIVES — in the GENERATORS, not here. `charly docs generate` does not
 # read candy sources: collectSkills reads plugins/<plugin>/skills (candy/plugin-docs/gen_skills.go).
 # The docs generator consumes the PROJECTION. So when a candy `skill:` entity has not landed, the
