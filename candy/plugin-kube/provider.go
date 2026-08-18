@@ -15,7 +15,7 @@ import (
 
 // provider.go is the out-of-process provider for ALL of plugin-kube's capabilities.
 // Invoke branches on the request class: a "deploy" op drives the `deploy:kubernetes`
-// SUBSTRATE (deploy.go — `kubectl apply -k` on the host-generated Kustomize tree);
+// SUBSTRATE (deploy.go — `kubectl apply -k` on the plugin-generated Kustomize tree (materialize.go's materializeKustomize, on the host));
 // every other op is the `kube:` check VERB. For the verb, charly's host dispatches a
 // `kube:` check step through the registry (ResolveVerb("kube") → this grpcProvider →
 // Provider.Invoke) with the FULL #Op marshaled as params_json and a CheckEnv snapshot
@@ -45,7 +45,7 @@ type provider struct{ pb.UnimplementedProviderServer }
 
 // Invoke runs one operation for the plugin's capabilities. The plugin serves BOTH
 // the `kube:` check verb AND the `deploy:kubernetes` SUBSTRATE (F1), distinguished by the
-// request's class: a "deploy" op runs `kubectl apply -k` against the host-generated
+// request's class: a "deploy" op runs `kubectl apply -k` against the plugin-generated
 // Kustomize tree (deploy.go); every other op is the `kube:` verb. It decodes the
 // full #Op + the env, handles the k3s-post-provision deploy seam first, skips in box
 // mode (cluster probes need a reachable cluster, never a disposable `charly check

@@ -1,7 +1,7 @@
 // Package kube is the charly plugin owning ALL Kubernetes
 // cluster interaction: the `kube` cluster-probe check VERB, the `deploy:kubernetes`
 // SUBSTRATE (the `target: kubernetes` workload deploy, F1 — `kubectl apply -k` on the
-// host-generated Kustomize tree), AND the k3s kubeconfig-merge the k3s-server /
+// plugin-generated Kustomize tree (materialize.go's materializeKustomize, on the host)), AND the k3s kubeconfig-merge the k3s-server /
 // target:kubernetes deploy seam needs (an importable root package + its own go.mod). It exists
 // to keep the heavy k8s.io/client-go + k8s.io/apimachinery stack OUT of charly's
 // core go.mod: the host go-builds this binary and serves it OUT-OF-PROCESS over

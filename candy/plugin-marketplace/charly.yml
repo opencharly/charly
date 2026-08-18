@@ -11,8 +11,12 @@ plugin-marketplace:
             plugin.json + .mcp.json, plugins/.claude-plugin/marketplace.json + plugins/profiles.json,
             the .claude/settings.json plugin-owned keys, .claude/hooks/* (from hook entities),
             the generated R0 dispatcher section in CLAUDE.md/AGENTS.md, and the plugins/setup
-            launcher. `charly marketplace drift` is the fail-closed no-op gate (the docs:drift
-            model); a stale mirror is a hard failure.
+            launcher. `charly marketplace drift` is the fail-closed no-op gate: it regenerates in
+            memory and compares with the artifacts ON DISK, never with git, so it proves
+            "regeneration is a no-op" and says nothing about whether the tree is committed —
+            this repository's own `task skills:drift` recipe is what adds that `git status`
+            half. A stale mirror is a hard failure, but it is red only for whoever runs it:
+            drift runs in no CI workflow.
 
             PLACEMENT — deliberately NOT listed in charly/charly.yml compiled_plugins. This is a
             DEV-TIME generator, run on a contributor's machine to regenerate the harness surface
@@ -29,7 +33,7 @@ plugin-marketplace:
             providers:
                 - command:marketplace
         plan:
-            - check: the marketplace command plugin ships a buildable Go module (go.mod + the provider package); the full generate → drift round trip is exercised by the live R10 bed (check-marketplace) and the plugin's own golden tests
+            - check: the marketplace command plugin ships a buildable Go module (go.mod + the provider package); the generate → drift round trip is covered by this plugin's own Go tests and this repository's `task skills:drift`, while the live R10 bed (check-marketplace) covers the ARTIFACT they produce — the baked ai.opencharly.skill label
               id: marketplace-module-present
               context:
                 - build

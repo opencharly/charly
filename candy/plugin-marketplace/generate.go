@@ -10,7 +10,12 @@ import (
 
 // generate.go — the orchestrator. Both `charly marketplace generate` and `drift` build the SAME
 // emissions map (readKinds → buildModel → buildEmissions); generate prunes + writes it, drift
-// compares it byte-for-byte with the committed tree and fails closed on any difference.
+// compares it byte-for-byte with the artifacts ON DISK and fails closed on any difference.
+//
+// Both sides of that comparison are the working tree: readKinds walks the on-disk sources and
+// readOnDisk is an os.ReadFile. Git is never consulted — drift proves "regeneration is a no-op",
+// never "the tree is committed", and it answers the same on a directory that is not a repository
+// at all. `task skills:drift` is what adds the `git status --porcelain` half.
 
 func generate(root string) error {
 	ks, err := readKinds(root)
@@ -59,8 +64,8 @@ func buildEmissions(root string, ks *kindSet, families []family) (emissions, err
 }
 
 // drift runs the same pipeline in memory and compares with the on-disk generated artifacts.
-// Any difference is a hard failure (exit 1) with a diff summary — the CI gate, the docs:drift
-// model. It never writes.
+// Any difference is a hard failure (exit 1) with a diff summary. It never writes, and it runs in
+// no CI workflow — it is red only for whoever runs it, via `task skills:drift` or by hand.
 func drift(root string) error {
 	ks, err := readKinds(root)
 	if err != nil {
@@ -97,7 +102,7 @@ func drift(root string) error {
 		}
 	}
 	if len(diffs) == 0 {
-		fmt.Printf("marketplace drift: clean (%d artifact(s) match the committed tree)\n", len(em))
+		fmt.Printf("marketplace drift: clean (%d artifact(s) on disk match their sources; regeneration is a no-op)\n", len(em))
 		return nil
 	}
 	sort.Strings(diffs)

@@ -12,7 +12,7 @@ import (
 // forwards (out-of-process: the syscall.Exec'd argv tail; compiled-in: the decoded params args).
 type marketplaceCLI struct {
 	Generate generateCmd `cmd:"" help:"Regenerate the charly-plugins marketplace + harness surface from candy config"`
-	Drift    driftCmd    `cmd:"" help:"Fail-closed no-op check: regenerate in memory and compare with the committed tree"`
+	Drift    driftCmd    `cmd:"" help:"Fail-closed no-op check: regenerate in memory and compare with the artifacts on disk (git is never consulted)"`
 }
 
 // generateCmd renders every generated artifact (plugins/ corpus, .claude/ hooks + settings,
@@ -22,8 +22,9 @@ type generateCmd struct {
 	Root string `name:"root" help:"Repo root holding charly.yml, candy/, box/, plugins/ and .claude/ (default: cwd)"`
 }
 
-// driftCmd is the CI gate: the same pipeline in memory, compared byte-for-byte with the on-disk
-// generated artifacts. Exit 1 with a diff summary on any drift (the docs:drift model).
+// driftCmd is a fail-closed no-op check: the same pipeline in memory, compared byte-for-byte with
+// the on-disk generated artifacts. Exit 1 with a diff summary on any drift. It runs in no CI
+// workflow — it is red only for whoever runs it, via `task skills:drift` or by hand.
 type driftCmd struct {
 	Root string `name:"root" help:"Repo root (default: cwd)"`
 }
