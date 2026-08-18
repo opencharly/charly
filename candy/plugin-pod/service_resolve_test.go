@@ -10,38 +10,27 @@ import (
 // from charly/init_def_label_test.go (Cutover B unit 2 service-verb completion) alongside the
 // functions themselves.
 
-// TestResolveInitDefFromMeta_LegacyLabelAbsent proves the management-surface
-// fallback still resolves supervisord + systemd from wellKnownInitDefs when
-// the init_def label is absent, and errors on a truly unknown legacy init.
-func TestResolveInitDefFromMeta_LegacyLabelAbsent(t *testing.T) {
-	for _, tc := range []struct{ init, tool string }{
-		{"supervisord", "supervisorctl"},
-		{"systemd", "systemctl"},
-	} {
-		meta := &spec.BoxMetadata{Init: tc.init} // InitDef nil → legacy fallback
-		def, err := resolveInitDefFromMeta(meta)
-		if err != nil {
-			t.Fatalf("resolveInitDefFromMeta(%q): %v", tc.init, err)
+// TestResolveInitDefFromMeta_LabelRequired proves the management surface comes ONLY from the
+// baked ai.opencharly.init_def label. The frozen wellKnownInitDefs fallback table it used to
+// consult is deleted: it was legacy support for images built before the label existed, it was
+// triplicated across sdk/kit, this plugin and plugin-deploy-pod, and it was frozen at
+// supervisord + systemd — so with openrc now a first-class init system, the table could only
+// ever answer for two of the three, silently.
+//
+// An image without the label errors, naming the rebuild. That is the point: a management
+// command guessed for an unknown init system runs the WRONG supervisor's CLI.
+func TestResolveInitDefFromMeta_LabelRequired(t *testing.T) {
+	for _, init := range []string{"supervisord", "systemd", "openrc", "vocab-only-custom"} {
+		if _, err := resolveInitDefFromMeta(&spec.BoxMetadata{Init: init}); err == nil {
+			t.Errorf("init %q with no init_def label must error — there is no fallback table", init)
 		}
-		if def.ManagementTool != tc.tool {
-			t.Errorf("init %q: management tool = %q, want %q", tc.init, def.ManagementTool, tc.tool)
-		}
-	}
-
-	if _, err := resolveInitDefFromMeta(&spec.BoxMetadata{Init: "vocab-only-custom"}); err == nil {
-		t.Error("resolveInitDefFromMeta with unknown init + no label should error")
 	}
 }
 
-// TestInitDefLabel_CustomInitAtRuntime proves the capability win: an init
-// system declared ONLY in the vocabulary (so absent from wellKnownInitDefs)
-// now resolves at RUNTIME via the baked label — the prior build-only
-// limitation is gone. The management surface comes from meta.InitDef even
-// though "myinit" has no registry entry.
+// TestInitDefLabel_CustomInitAtRuntime proves the capability that makes the deleted table
+// unnecessary: an init system declared ONLY in the embedded vocabulary resolves at RUNTIME from
+// the baked label, with nothing to register in Go. This is the mechanism openrc: uses.
 func TestInitDefLabel_CustomInitAtRuntime(t *testing.T) {
-	if _, ok := wellKnownInitDefs["myinit"]; ok {
-		t.Fatal("precondition: myinit must NOT be a well-known init")
-	}
 	meta := &spec.BoxMetadata{
 		Init: "myinit",
 		InitDef: &spec.CapabilityInitDef{

@@ -93,6 +93,7 @@ func TestSubstrateKind_BothShapesByteEquivalent(t *testing.T) {
     vm:
         source:
             kind: cloud_image
+            distro: fedora
             url: https://example.invalid/img.qcow2
             base_user: arch
         disk_size: 20 GiB

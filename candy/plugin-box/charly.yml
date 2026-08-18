@@ -43,12 +43,12 @@ plugin-box:
             source: github.com/opencharly/charly/candy/plugin-box
         plan:
             - # ADE check: a deterministic build-context check that does NOT depend on the host
-              # reverse channel the box handlers need (the generate/validate/pkg words reach the host
+              # reverse channel the box handlers need (the generate/validate words reach the host
               # in-proc, unavailable in a disposable `charly box feature run` container). It mirrors
               # candy/plugin-alias's pattern — a trivial build-context `command` (the built-in command
               # CHECK verb) running `true`. The full CLI end-to-end (`charly box generate/validate/
-              # new/pkg`) is exercised by the live R10 + the Go tests.
-              check: the box command plugin ships a buildable Go module (go.mod + the provider) the host can compile in; the full `charly box generate/validate/new/pkg` end-to-end is exercised by the live R10 + the Go tests
+              # new`) is exercised by the live R10 + the Go tests.
+              check: the box command plugin ships a buildable Go module (go.mod + the provider) the host can compile in; the full `charly box generate/validate/new` end-to-end is exercised by the live R10 + the Go tests
               id: box-module-present
               context:
                 - build

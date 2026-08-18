@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk/deploykit"
-	specexec "github.com/opencharly/spec/exec"
 	"github.com/opencharly/spec/container"
+	specexec "github.com/opencharly/spec/exec"
 )
 
 // box_load.go — `charly box load`, the CONTAINER-venue image-delivery verb: it streams a

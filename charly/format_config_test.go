@@ -94,24 +94,33 @@ func TestLoadDistroConfigFromFile(t *testing.T) {
 func TestAllFormatNames(t *testing.T) {
 	dc := testDistroConfig()
 	names := dc.AllFormatNames()
-	if len(names) != 4 {
-		t.Errorf("expected 4 format names, got %d: %v", len(names), names)
+	// apk joined the vocabulary with the alpine distro entity.
+	want := []string{"apk", "aur", "deb", "pac", "rpm"}
+	if len(names) != len(want) {
+		t.Errorf("expected %d format names, got %d: %v", len(want), len(names), names)
 	}
 	// Should be sorted
-	if names[0] != "aur" || names[1] != "deb" || names[2] != "pac" || names[3] != "rpm" {
-		t.Errorf("format names not sorted: %v", names)
+	for i := range want {
+		if i >= len(names) || names[i] != want[i] {
+			t.Errorf("format names not sorted or incomplete: got %v, want %v", names, want)
+			break
+		}
 	}
 }
 
 func TestValidFormat(t *testing.T) {
 	dc := testDistroConfig()
-	for _, name := range []string{"rpm", "deb", "pac", "aur"} {
+	// apk is valid since the alpine distro entity declares it.
+	for _, name := range []string{"rpm", "deb", "pac", "aur", "apk"} {
 		if !dc.ValidFormat(name) {
 			t.Errorf("expected format %q to be valid", name)
 		}
 	}
-	if dc.ValidFormat("apk") {
-		t.Error("apk should not be valid in default config")
+	// Negative control — an nFPM format the build vocabulary does NOT declare.
+	// Without a rejected case this test could not tell ValidFormat from a
+	// function that returns true for everything.
+	if dc.ValidFormat("ipk") {
+		t.Error("ipk should not be valid in default config (no distro declares it)")
 	}
 }
 

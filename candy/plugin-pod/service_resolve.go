@@ -24,40 +24,9 @@ import (
 // "pod-service" kind + #PodServiceRequest into the single "pod-lifecycle" kind + #PodServicePayload),
 // receiving the fully-built argv over that payload.
 
-// wellKnownInitDefs is the legacy fallback for pre-init_def-label images — images built before
-// the ai.opencharly.init_def label existed, whose labels cannot be re-baked. Current images carry
-// their full init contract in that label, so resolveInitDefFromMeta reads it label-first and only
-// consults this table when meta.InitDef is absent. Frozen at the two init systems that predate the
-// label; do NOT add new ones (declare them in the embedded init: vocabulary instead, where they
-// bake into the label).
-var wellKnownInitDefs = map[string]*spec.ResolvedInit{
-	"supervisord": {
-		Entrypoint:     []string{"supervisord", "-n", "-c", "/etc/supervisord.conf"},
-		ManagementTool: "supervisorctl",
-		ManagementCommands: map[string]string{
-			"status":  "status",
-			"start":   "start {{.Service}}",
-			"stop":    "stop {{.Service}}",
-			"restart": "restart {{.Service}}",
-		},
-	},
-	"systemd": {
-		// Systemd-on-bootc boots via VM init; container has no entrypoint.
-		Entrypoint:     nil,
-		ManagementTool: "systemctl",
-		ManagementCommands: map[string]string{
-			"status":  "--user status {{.Service}}",
-			"start":   "--user start {{.Service}}",
-			"stop":    "--user stop {{.Service}}",
-			"restart": "--user restart {{.Service}}",
-		},
-	},
-}
-
-// resolveInitDefFromMeta returns the init contract for management-command rendering. Label-first:
-// the build-resolved def is baked into the ai.opencharly.init_def label (meta.InitDef), so any
-// vocabulary-declared init system — including custom ones — resolves at runtime. Falls back to
-// wellKnownInitDefs only for pre-init_def-label images (built before the label existed).
+// resolveInitDefFromMeta returns the init contract for management-command rendering, read from the
+// ai.opencharly.init_def label. EVERY vocabulary-declared init system reaches runtime through it,
+// so there is no table to register in; an image without the label predates it and must be rebuilt.
 func resolveInitDefFromMeta(meta *spec.BoxMetadata) (*spec.ResolvedInit, error) {
 	if meta.InitDef != nil {
 		return &spec.ResolvedInit{
@@ -67,10 +36,8 @@ func resolveInitDefFromMeta(meta *spec.BoxMetadata) (*spec.ResolvedInit, error) 
 			ManagementCommands: meta.InitDef.ManagementCommands,
 		}, nil
 	}
-	if def, ok := wellKnownInitDefs[meta.Init]; ok {
-		return def, nil
-	}
-	return nil, fmt.Errorf("unknown init system %q; cannot determine management commands (image predates the ai.opencharly.init_def label — rebuild it to bake the init contract)", meta.Init)
+	return nil, fmt.Errorf("image carries no ai.opencharly.init_def label for init system %q; "+
+		"cannot determine management commands — rebuild the image to bake the init contract", meta.Init)
 }
 
 // serviceCommandContext is the template context for management_commands rendering.

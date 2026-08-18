@@ -7,7 +7,7 @@
 // It serves SEVEN command capabilities, all NESTED under the `box` parent (CommandParent()=="box",
 // so `charly box set/add-candy/rm-candy/fetch/refresh/write/cat` parse + dispatch here while the
 // retained core BoxCmd verbs — build/merge/pull/labels/feature/reconcile — stay in core, and the
-// P15 candy/plugin-box owns generate/validate/new/pkg/inspect/list):
+// P15 candy/plugin-box owns generate/validate/new/inspect/list):
 //
 //   - command:set — `charly box set <dotpath> <value>`: calls kit.SetByDotPath directly (the
 //     comment-preserving yaml.Node dot-path writer already lives in sdk/kit). Zero core reentry.

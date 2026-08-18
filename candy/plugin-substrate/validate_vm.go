@@ -33,6 +33,10 @@ import (
 // body the host threads via op.Params (the same body the flat op.Params kind path validates
 // against) — no re-decode into a canonical spec.Vm needed.
 type vmValidateBody struct {
+	Source struct {
+		Kind   string `json:"kind"`
+		Distro string `json:"distro"`
+	} `json:"source"`
 	Libvirt struct {
 		Devices struct {
 			Hostdevs []struct {
@@ -61,6 +65,7 @@ func validateVmDeep(paramsJSON json.RawMessage) (spec.Diagnostics, error) {
 		}
 	}
 	var diags spec.Diagnostics
+	diags.Items = append(diags.Items, validateSourceDistro(body.Source.Kind, body.Source.Distro)...)
 	for i, hd := range body.Libvirt.Devices.Hostdevs {
 		if hd.Type != "pci" {
 			continue
@@ -76,4 +81,53 @@ func validateVmDeep(paramsJSON json.RawMessage) (spec.Diagnostics, error) {
 		}
 	}
 	return diags, nil
+}
+
+// distroBearingSourceKinds are the VmSource arms whose `distro:` the renderers consume.
+// A cloud_image's distro selects the guest package NAME, package MANAGER and sshd UNIT
+// name; a bootstrap's keys the embedded build vocabulary and the guest package manager.
+// The other arms (disk / from_vm / from_snapshot / bootc) carry no distro at all.
+var distroBearingSourceKinds = map[string]bool{"cloud_image": true, "bootstrap": true}
+
+// validateSourceDistro enforces that a distro-bearing VM source declares `distro:`.
+//
+// The CUE schema types it `distro?: #DistroID` — OPTIONAL, and closed to the generated
+// vocabulary. Closedness does real work: a misspelled value is a unification conflict, so
+// `distro: redhat` fails validation. Presence does not: the host's value gate is
+// closedness-only by design (charly/provider_kind_invoke.go documents why that is
+// permanent), and vm.cue's own comment records why a `!` marker or a non-optional field
+// would not help either — the former is not reported by that gate, the latter only turns an
+// absent value into a non-concrete DECODE error in applyCueDefaults. So PRESENCE is checked
+// here, in the kind's own plugin, exactly as the PCI hostdev fields above are: the same "Go
+// distinguishes absent from empty where non-concrete CUE cannot" shape.
+//
+// Why it is worth a check rather than a default: the renderers used to INFER the distro from
+// `base_user` (arch/alpine only) and fall back to Arch/Fedora conventions for everything
+// else, so a Debian-family image that omitted it was rendered `openssh` +
+// `systemctl enable --now sshd` and booted with sshd masked and unreachable — a silent wrong
+// render, days from the authoring mistake. The inference is deleted; this makes the omission
+// it used to paper over a validation error instead.
+func validateSourceDistro(kind, distro string) []spec.Diagnostic {
+	if !distroBearingSourceKinds[kind] {
+		return nil
+	}
+	if distro == "" {
+		return []spec.Diagnostic{{
+			Severity: "error",
+			Path:     "source.distro",
+			Message: fmt.Sprintf("must be declared for a %s source (one of %v) — it selects the guest's "+
+				"package name, package manager and sshd unit name, and nothing else in the spec implies it",
+				kind, spec.DistroIDs),
+		}}
+	}
+	for _, id := range spec.DistroIDs {
+		if distro == id {
+			return nil
+		}
+	}
+	return []spec.Diagnostic{{
+		Severity: "error",
+		Path:     "source.distro",
+		Message:  fmt.Sprintf("%q is not a known distro id (one of %v)", distro, spec.DistroIDs),
+	}}
 }

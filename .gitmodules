@@ -1,15 +1,6 @@
 [submodule "plugins"]
 	path = plugins
 	url = https://github.com/opencharly/plugins.git
-[submodule "pkg/arch"]
-	path = pkg/arch
-	url = https://github.com/opencharly/pkg-arch.git
-[submodule "pkg/fedora"]
-	path = pkg/fedora
-	url = https://github.com/opencharly/pkg-fedora.git
-[submodule "pkg/debian"]
-	path = pkg/debian
-	url = https://github.com/opencharly/pkg-debian.git
 [submodule "box/arch"]
 	path = box/arch
 	url = https://github.com/opencharly/distro-arch.git
