@@ -2470,6 +2470,24 @@ load-skill:
             makes it possible. Without it the verb reports that the venue serves no socket
             and names the path it tried.
 
+            The default socket is `/run/user/1000/podman/podman.sock` — the uid-1000
+            rootless path that composition serves. `--socket` overrides it.
+
+            Composing it looks like this:
+
+            ```yaml
+            my-spike-box:
+                candy:
+                    version: 2026.230.1200
+                    base: quay.io/fedora/fedora:43
+                    description: A pod whose own podman store can receive images.
+                    distro:
+                        - fedora:43
+                        - fedora
+                    candy:
+                        - nested-podman-socket    # pulls in container-nesting itself
+            ```
+
             ## Usage
 
             ```bash
@@ -2506,10 +2524,25 @@ load-skill:
 
             ## Verification
 
-            `check-boxload-pod` is the R10 bed: it delivers a host image into the pod's nested
+            `check-boxload-pod` (a `disposable: true` deploy in the project's own
+            `charly.yml`) is the R10 bed: it delivers a host image into the pod's nested
             store and asserts, THROUGH the socket, that the image is there. The assertion is
             socket-scoped deliberately — a plain in-container `podman images` would pass even
             if the image had gone to the wrong store.
+
+            A successful delivery reports each stage, so a skip is distinguishable from a
+            transfer:
+
+            ```
+            box load: streaming localhost/my-image:latest into venue storage (save | load)...
+            box load: localhost/my-image:latest is now in venue storage (verified intact)
+            ```
+
+            and an already-present, verified image says so instead of re-streaming:
+
+            ```
+            box load: venue already has localhost/my-image:latest (verified intact) — skipping transfer
+            ```
 
 reconcile-skill:
     skill:
