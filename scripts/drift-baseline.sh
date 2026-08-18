@@ -28,10 +28,10 @@ drift_baseline() {
 	local baseline="$1" label="$2"
 	local current expected new resolved rc=0 n
 
-	current=$(mktemp) && expected=$(mktemp) && new=$(mktemp) && resolved=$(mktemp) || {
+	if ! { current=$(mktemp) && expected=$(mktemp) && new=$(mktemp) && resolved=$(mktemp); }; then
 		echo "drift-baseline: cannot create temp files" >&2
 		return 2
-	}
+	fi
 	# shellcheck disable=SC2064
 	trap "rm -f '$current' '$expected' '$new' '$resolved'" RETURN
 

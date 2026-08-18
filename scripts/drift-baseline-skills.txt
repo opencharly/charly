@@ -20,6 +20,11 @@
 # already-drifted artifact is masked, because the key is the path, not its content. That
 # is the price of the baseline, it is bounded by this list, and it shrinks to zero with it.
 #
+# ALREADY SHRUNK ONCE: plugins/ollama/skills/ollama-cli/SKILL.md was stale on main as an
+# ORPHAN (a generated skill with no source entity). This branch's ollama candy work gave it
+# a source, so it is no longer stale and the gate demanded its removal. That is the intended
+# lifecycle, on its first real case.
+#
 # Do not add a line to silence a red. If your change made an artifact stale, the fix is to
 # regenerate and commit, never to record it here.
 plugins/build/skills/generate/SKILL.md
@@ -45,6 +50,5 @@ plugins/internals/skills/plugin/references/boundary-law.md
 plugins/internals/skills/plugin/SKILL.md
 plugins/internals/skills/skills/SKILL.md
 plugins/internals/skills/vm-spec/SKILL.md
-plugins/ollama/skills/ollama-cli/SKILL.md
 plugins/ollama/skills/ollama-layer/SKILL.md
 plugins/ollama/skills/ollama/SKILL.md
