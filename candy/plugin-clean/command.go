@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
@@ -21,8 +20,7 @@ import (
 // verb:tunnel already use). The engine runs LOCALLY here — no wire hop for the plugin's own CLI.
 // The project's defaults.keep_images / keep_check_runs resolve PLUGIN-SIDE via the shared
 // sdk/loaderkit.ResolveRetentionDefaultsViaExecutor (K-wave 2 cone R6 — the "retention-defaults"
-// HostBuild seam is DELETED: the loader is plugin-reachable). The pkg/arch makepkg sweep is a
-// single-caller pure file op done locally too. No hidden core-command forward.
+// HostBuild seam is DELETED: the loader is plugin-reachable). No hidden core-command forward.
 //
 // clean is COMPILED-IN (charly.yml compiled_plugins): its Invoke(OpRun) runs in charly's process
 // and gets the in-proc reverse channel (provider_command_external.go dispatchInProcCommand
@@ -32,8 +30,7 @@ import (
 // defaults).
 
 // runCleanCLI parses the clean flags and drives the categories: --invalidate (targeted image-tag
-// invalidation), images (+ build-candy staging), check runs, the store-wide --deep purge, and the
-// local makepkg sweep.
+// invalidation), images (+ build-candy staging), check runs, and the store-wide --deep purge.
 func runCleanCLI(ctx context.Context, exec *sdk.Executor, args []string) error {
 	fs := flag.NewFlagSet("clean", flag.ContinueOnError)
 	dryRun := fs.Bool("dry-run", false, "Print everything that would be removed; touch nothing")
@@ -67,7 +64,7 @@ func runCleanCLI(ctx context.Context, exec *sdk.Executor, args []string) error {
 		return nil
 	}
 
-	doImages, doCheck, doDeep, doMakepkg := cleanCategories(*images, *check, *deep)
+	doImages, doCheck, doDeep := cleanCategories(*images, *check, *deep)
 
 	if doImages || doCheck || doDeep {
 		keepImages, keepCheck, derr := resolveRetentionDefaults(ctx, exec, dir)
@@ -114,33 +111,24 @@ func runCleanCLI(ctx context.Context, exec *sdk.Executor, args []string) error {
 			}
 		}
 	}
-
-	if doMakepkg {
-		paths := cleanMakepkgArtifacts(dir, *dryRun)
-		fmt.Printf("makepkg: %s %d leftover(s) under pkg/arch\n", tag, len(paths))
-		for _, p := range paths {
-			fmt.Printf("  %s\n", p)
-		}
-	}
 	return nil
 }
 
 // cleanCategories resolves the --images/--check/--deep flags into which categories run this
 // invocation. --images and --check keep their pre-existing "only this" semantics (any one given
-// alone suppresses the other two default categories, including makepkg). --deep joins that same
-// "explicit category" gate but NEVER fires implicitly: on a plain `charly clean` (no flags at
-// all) doDeep is always false — the store-wide untagged-image sweep is a strictly broader
-// operation than the default per-charly-labeled retention (it can remove far more, and scans the
-// whole local store), so it stays opt-in-only and the default `charly clean` behavior is
-// unchanged. Passing --deep alone runs ONLY the deep category (mirroring --invalidate's "runs
-// ONLY this"); combine it with --images/--check to run more than one category in one invocation.
-func cleanCategories(images, check, deep bool) (doImages, doCheck, doDeep, doMakepkg bool) {
+// alone suppresses the other default categories). --deep joins that same "explicit category" gate
+// but NEVER fires implicitly: on a plain `charly clean` (no flags at all) doDeep is always false —
+// the store-wide untagged-image sweep is a strictly broader operation than the default
+// per-charly-labeled retention (it can remove far more, and scans the whole local store), so it
+// stays opt-in-only and the default `charly clean` behavior is unchanged. Passing --deep alone runs
+// ONLY the deep category (mirroring --invalidate's "runs ONLY this"); combine it with
+// --images/--check to run more than one category in one invocation.
+func cleanCategories(images, check, deep bool) (doImages, doCheck, doDeep bool) {
 	anyCategory := images || check || deep
 	doImages = images || !anyCategory
 	doCheck = check || !anyCategory
 	doDeep = deep
-	doMakepkg = !anyCategory
-	return doImages, doCheck, doDeep, doMakepkg
+	return doImages, doCheck, doDeep
 }
 
 // resolveRetentionDefaults resolves defaults.keep_images/keep_check_runs PLUGIN-SIDE via the
@@ -155,33 +143,4 @@ func resolveRetentionDefaults(ctx context.Context, exec *sdk.Executor, dir strin
 	}
 	keepImages, keepCheck = loaderkit.ResolveRetentionDefaultsViaExecutor(ctx, exec, dir)
 	return keepImages, keepCheck, nil
-}
-
-// cleanMakepkgArtifacts removes the one-time makepkg build leftovers under pkg/arch (src/, pkg/,
-// *.pkg.tar.zst, *.log) — pure transient waste (the package is already installed via pacman). Moved
-// from charly core (its sole caller). Returns the paths removed.
-func cleanMakepkgArtifacts(projectDir string, dryRun bool) []string {
-	base := filepath.Join(projectDir, "pkg", "arch")
-	var targets []string
-	for _, sub := range []string{"src", "pkg"} {
-		p := filepath.Join(base, sub)
-		if _, err := os.Stat(p); err == nil {
-			targets = append(targets, p)
-		}
-	}
-	for _, pat := range []string{"*.pkg.tar.zst", "*.log"} {
-		matches, _ := filepath.Glob(filepath.Join(base, pat))
-		targets = append(targets, matches...)
-	}
-	var removed []string
-	for _, p := range targets {
-		if dryRun {
-			removed = append(removed, p)
-			continue
-		}
-		if err := os.RemoveAll(p); err == nil {
-			removed = append(removed, p)
-		}
-	}
-	return removed
 }

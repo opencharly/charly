@@ -96,8 +96,8 @@ func withRunTag(args []string, tag string) []string {
 //
 // --dev-local-pkg is the deploy-side twin of the flag every bed image build already passes. Without
 // it, a localpkg candy whose package source cannot be found takes the deploy path's benign skip and
-// the bed installs nothing — which is how check-fedora-vm stopped building its rpm against an
-// uninitialized pkg/fedora submodule and failed later at a live `rpm -q` that explained none of it.
+// the bed installs nothing — which is how check-fedora-vm stopped building its rpm against a
+// missing package source and failed later at a live `rpm -q` that explained none of it.
 // A bed exists to prove the in-development package builds and installs, so on a bed that condition
 // must be loud.
 func bedAdd(args ...string) []string {
@@ -330,6 +330,31 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 		if opts.Keep {
 			return nil
 		}
+		// NESTED CHILDREN FIRST — the reverse of the deploy order above, which walks d.ChildKeys
+		// pre-order issuing `fleet add <root>.<child>`. Teardown mirrors that exact collection with
+		// `fleet del`, so the two halves cannot drift: a child the bed knows how to deploy is a
+		// child it knows how to remove.
+		//
+		// This is an ADDITION, not a change to the root verb. The pod branch below keeps
+		// `remove --purge`, which is the ONLY path that reaches purgeDeployArtifacts — named
+		// volumes, gocryptfs volumes and the synthesized <name>-overlay images. `fleet del` cannot
+		// purge: both purge call sites in candy/plugin-pod/remove_orchestration.go are gated on the
+		// flag and candy/plugin-fleet never sets it, so swapping the root verb to `fleet del` would
+		// have left three artifact classes behind on EVERY pod bed teardown.
+		//
+		// Without this loop a nested child simply survives the bed: `charly remove` is a container
+		// verb with no deploy-tree walk, so check-sidecar-pod's ephemeral VM outlived every run —
+		// contradicting the bed's own authored comment that it is "torn down as part of the bed's
+		// own cleanup". No new tree walk is introduced here; d.ChildKeys is already host-resolved.
+		for i := len(d.ChildKeys) - 1; i >= 0; i-- {
+			childKey := d.ChildKeys[i]
+			if err := step("cleanup-"+childKey, "fleet", "del", name+"."+childKey, "--assume-yes"); err != nil {
+				// Warn, never fail: the root teardown below must still run, and a child that is
+				// already gone (torn down mid-plan by the bed's own steps) is the common case.
+				fmt.Fprintf(os.Stderr, "warning: tearing down nested child %s.%s: %v\n", name, childKey, err)
+			}
+		}
+
 		var targetErr error
 		switch {
 		case d.IsVM:

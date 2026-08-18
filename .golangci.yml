@@ -1,0 +1,46 @@
+# Root config — the ONLY config the 95 modules below this directory see:
+# the 91 `candy/*` modules and the 4 `tools/*` modules. (An earlier revision said
+# "the 91 candy/* modules"; it governs `tools/` too, which nobody had enumerated.)
+#
+# DISCOVERED by 95, ANALYSABLE in 93. `tools/golden-cloudinit` and `tools/golden-compile`
+# do not build — `go: updates to go.mod needed` — so golangci-lint reports "no go files to
+# analyze" even though both have a main.go. That is a pre-existing defect this gate now
+# surfaces, not one it causes; its fix is a `go mod tidy` that also bumps the go directive
+# and the spec require, i.e. a version adoption, routed to the module-hygiene batch.
+#
+# golangci-lint discovers a config by walking UP from the working directory, and
+# `charly/.golangci.yml` is NOT an ancestor of `candy/<name>/`, so before this file
+# those modules ran with "No config file detected" — which means they ran golangci-lint's
+# DEFAULT STANDARD SET (errcheck, govet, ineffassign, staticcheck, unused), not nothing.
+# A per-module copy would put the same block in 90+ places (R3); one root config
+# covers them all, and a module that wants more (candy/plugin-check) keeps its own,
+# because the CLOSEST config wins.
+#
+# `default: standard` is therefore what these modules ALREADY ran. An earlier revision
+# set `default: none` on the belief that "no config" meant "no linting" — it does not,
+# and that silenced 5 live findings across 3 modules. This config ADDS gofmt and removes
+# nothing. The eleven quality linters the three named module configs use are still
+# deliberately NOT enabled here; that remains a separate, measured cutover.
+version: "2"
+
+run:
+  timeout: 10m
+
+linters:
+  default: standard
+  settings:
+    errcheck:
+      # The SAME exclusions charly/sdk/spec already carry. Without them the root config
+      # would hold the 91 candy modules to a STRICTER errcheck than core, which is not a
+      # gate improvement — it is an inconsistency that happens to fail. A deferred
+      # best-effort Close on a response body or a read handle is the idiomatic form;
+      # genuinely actionable errors are not excluded.
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - (io.Closer).Close
+
+formatters:
+  enable:
+    - gofmt

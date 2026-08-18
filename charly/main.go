@@ -97,7 +97,7 @@ type CLI struct {
 	// reentries for now.
 
 	// `charly version` is a DELIBERATE value/risk EXCEPTION kept core (the Version field below) — NOT
-	// an "unfixable" one. RDD (2026-07-01) refuted the old chicken-and-egg claim: pkgver()'s
+	// an "unfixable" one. RDD (2026-07-01) refuted the old chicken-and-egg claim:
 	// `bin/charly version` is only a convenience (the CalVer is already Taskfile-computed via
 	// scripts/calver.sh, and reading it from a sidecar / recomputing at the superproject root
 	// sidesteps the submodule mismatch), so externalizing IS feasible. It is excluded because it sheds

@@ -31,7 +31,7 @@ container-nesting:
                     # cap_setuid=ep to newuidmap so a nested rootless userns can be
                     # delegated. Fedora/Arch ship setcap transitively (libcap in base);
                     # Debian/Ubuntu do NOT, so without this the setcap step exits 127
-                    # and the RUN hard-fails the build. RDD-confirmed 2026-06-15.
+                    # and the RUN hard-fails the build. RDD-confirmed.
                     - libcap2-bin
                     - libsecret-1-0
                     - passwd
@@ -44,7 +44,7 @@ container-nesting:
                     # cap_setuid=ep to newuidmap so a nested rootless userns can be
                     # delegated. Fedora/Arch ship setcap transitively (libcap in base);
                     # Debian/Ubuntu do NOT, so without this the setcap step exits 127
-                    # and the RUN hard-fails the build. RDD-confirmed 2026-06-15.
+                    # and the RUN hard-fails the build. RDD-confirmed.
                     - libcap2-bin
                     - libsecret-1-0
                     - passwd
@@ -74,7 +74,7 @@ container-nesting:
                     # cap_setuid=ep to newuidmap so a nested rootless userns can be
                     # delegated. Fedora/Arch ship setcap transitively (libcap in base);
                     # Debian/Ubuntu do NOT, so without this the setcap step exits 127
-                    # and the RUN hard-fails the build. RDD-confirmed 2026-06-15.
+                    # and the RUN hard-fails the build. RDD-confirmed.
                     - libcap2-bin
                     - libsecret-1-0
                     - passwd
@@ -87,7 +87,7 @@ container-nesting:
                     # cap_setuid=ep to newuidmap so a nested rootless userns can be
                     # delegated. Fedora/Arch ship setcap transitively (libcap in base);
                     # Debian/Ubuntu do NOT, so without this the setcap step exits 127
-                    # and the RUN hard-fails the build. RDD-confirmed 2026-06-15.
+                    # and the RUN hard-fails the build. RDD-confirmed.
                     - libcap2-bin
                     - libsecret-1-0
                     - passwd
@@ -108,7 +108,7 @@ container-nesting:
             # when the mount_too_revealing kernel check is bypassed at the mount
             # level (via security_opt unmask=/proc/* below).
             #
-            # Root cause empirically identified 2026-04-19: podman's default rootless
+            # Root cause, empirically identified: podman's default rootless
             # container spec includes linux.maskedPaths covering /proc/kcore,
             # /proc/keys, /proc/timer_list etc. When nested crun tries to mount /proc
             # for an inner container, the kernel's fs/namespace.c:mount_too_revealing
@@ -202,7 +202,7 @@ container-nesting:
                 "newuidmap: open of uid_map failed: Permission denied". Fedora/Arch
                 ship them cap-only (no setuid bit), so `chmod u-s` makes every distro
                 match that working posture and is a no-op where the bit is already
-                absent. RDD-confirmed 2026-06-16.
+                absent. RDD-confirmed.
               run_as: root
               command: |
                 if [ -f /usr/bin/newuidmap ]; then
@@ -554,7 +554,7 @@ container-nesting-skill:
             build hard-fails on the deb path (and any image that did slip through would ship
             a capability-less `newuidmap`, so nested podman dies at runtime with
             `newuidmap: open of uid_map failed: Permission denied`). RDD-confirmed
-            2026-06-15: this is the one non-format-agnostic deb dependency — every other
+            This is the one non-format-agnostic deb dependency — every other
             piece of the recipe is shared.
             
             ## Config files — written to both system-wide and user locations

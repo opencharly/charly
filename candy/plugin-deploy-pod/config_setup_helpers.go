@@ -156,48 +156,6 @@ func warnMissingMCPRequires(boxName string, requires []spec.EnvDependency, mcpSe
 	}
 }
 
-// wellKnownInitDefs mirrors charly-core service.go's table VERBATIM — the frozen legacy fallback
-// for pre-init_def-label images (do NOT add new entries; new init systems declare in the
-// embedded vocabulary and bake into the label instead).
-var wellKnownInitDefs = map[string]*spec.ResolvedInit{
-	"supervisord": {
-		Entrypoint:     []string{"supervisord", "-n", "-c", "/etc/supervisord.conf"},
-		ManagementTool: "supervisorctl",
-		ManagementCommands: map[string]string{
-			"status":  "status",
-			"start":   "start {{.Service}}",
-			"stop":    "stop {{.Service}}",
-			"restart": "restart {{.Service}}",
-		},
-	},
-	"systemd": {
-		Entrypoint:     nil,
-		ManagementTool: "systemctl",
-		ManagementCommands: map[string]string{
-			"status":  "--user status {{.Service}}",
-			"start":   "--user start {{.Service}}",
-			"stop":    "--user stop {{.Service}}",
-			"restart": "--user restart {{.Service}}",
-		},
-	},
-}
-
-// resolveEntrypointFromMeta is the plugin-side twin of the equivalent charly-core function of the
-// same name that P13-KERNEL step-4(ii) moved here; Cutover B unit 2 confirmed the core copy was
-// dead (zero non-test callers) and deleted it — this is now the ONLY live implementation.
-func resolveEntrypointFromMeta(meta *spec.BoxMetadata) []string {
-	if meta.Init == "" {
-		return []string{"sleep", "infinity"}
-	}
-	if meta.InitDef != nil {
-		return meta.InitDef.Entrypoint
-	}
-	if def, ok := wellKnownInitDefs[meta.Init]; ok {
-		return def.Entrypoint
-	}
-	return []string{"sleep", "infinity"}
-}
-
 // parseVolumeFlags mirrors the former BoxConfigSetupCmd.parseVolumeFlags.
 func parseVolumeFlags(c *spec.PodConfigSetupRequest) []spec.DeployVolume {
 	var configs []spec.DeployVolume
@@ -845,7 +803,7 @@ func updateAllDeployedQuadlets(ctx context.Context, ex *sdk.Executor, rt *kit.Re
 			Volumes: volumes, BindMounts: bindMounts, GPU: detected.GPU, BindAddress: rt.BindAddress,
 			Tunnel: tunnelCfg, UID: meta.UID, GID: meta.GID, Env: envVars, EnvFile: quadletEnvFile,
 			Security: security, Network: resolvedNetwork, Status: meta.Status, Info: meta.Info,
-			Entrypoint: resolveEntrypointFromMeta(&meta), Secrets: provisioned, CharlyBin: charlyBin,
+			Entrypoint: kit.ResolveEntrypointFromMeta(&meta), Secrets: provisioned, CharlyBin: charlyBin,
 			EncryptedMounts: deploykit.HasEncryptedBindMounts(bindMounts), KeyringBackend: isKeyring,
 			PodName: podName, Sidecar: resolvedSidecars,
 		}

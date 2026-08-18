@@ -25,8 +25,8 @@ pre-commit-gate:
         # `charly marketplace generate` EMITS this script to .claude/hooks/ but wires
         # NO .claude/settings.json PreToolUse entry for it.
         #
-        # Be precise about what unwiring costs, because an earlier revision of this
-        # comment was not: this script DID block what it was meant to catch. Measured
+        # Be precise about what unwiring costs: this script DOES block what it is
+        # meant to catch. Measured
         # directly — `git commit --no-verify` and a `core.hooksPath` override both exit
         # 2 with a BLOCKED message, while a non-git command exits 0. Removing the
         # Claude Code wiring removes a WORKING local backstop; it is not a no-op

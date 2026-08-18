@@ -1,22 +1,32 @@
 version: 2026.225.1508
-# Canonical repo identity. After the 2026-06 box inversion main imports the three
-# active distro submodules (arch / cachyos / fedora) ONE-DIRECTIONALLY to reference
-# their relocated boxes; the submodules no longer import main as a namespace (they
-# reach main's shared candies via @github refs), so the former mutual cycle is
-# dissolved. See /charly-internals:go.
+# Canonical repo identity. After the 2026-06 box inversion main imports the five
+# active distro submodules (arch / cachyos / debian / fedora / ubuntu)
+# ONE-DIRECTIONALLY to reference their relocated boxes; the submodules no longer
+# import main as a namespace (they reach main's shared candies via @github refs),
+# so the former mutual cycle is dissolved. See /charly-internals:go.
 repo: github.com/opencharly/charly
 import:
-    # After the 2026-06 box inversion main owns NO boxes — it imports the three
+    # After the 2026-06 box inversion main owns NO boxes — it imports the five
     # active distro submodules ONE-DIRECTIONALLY to reference their relocated boxes
     # in the inline check/vm/local/kubernetes/android orchestration below (e.g. the
     # check-cross-* mechanism beds reference `fedora.web` / `fedora.chrome-headless`).
-    # Each submodule owns its own base stack: arch + fedora are self-contained
-    # (import: []) and cachyos imports the `arch` namespace; none imports main back
-    # (they reach main's shared candies via @github refs), so the former
-    # main↔cachyos / main↔fedora mutual cycles are dissolved.
-    - arch: '@github.com/opencharly/distro-arch:v2026.204.1300'
-    - cachyos: '@github.com/opencharly/distro-cachyos:v2026.204.1336'
-    - fedora: '@github.com/opencharly/distro-fedora:v2026.216.0232'
+    # The check-*-repo beds do NOT reference the submodule templates: a check bed's
+    # `from:` is constrained to #EntityRef (a same-project entity, no namespace
+    # dots), so each repo bed uses its own minimal cloud-image VM template
+    # (arch-repo-vm / fedora-repo-vm / debian-repo-vm / ubuntu-repo-vm) defined
+    # below — except check-alpine-repo, which is a `pod:` bed on the
+    # alpine-repo-box candy (a raw registry image cannot be a pod's `image:`,
+    # and Alpine's cloud-init/OpenRC path is not systemd, so a container is the
+    # honest substrate for the Alpine leg).
+    # Each submodule owns its own base stack: arch + fedora + debian + ubuntu are
+    # self-contained (import: []) and cachyos imports the `arch` namespace; none
+    # imports main back (they reach main's shared candies via @github refs), so the
+    # former main↔cachyos / main↔fedora mutual cycles are dissolved.
+    - arch: '@github.com/opencharly/distro-arch:v2026.229.1615'
+    - cachyos: '@github.com/opencharly/distro-cachyos:v2026.229.1634'
+    - debian: '@github.com/opencharly/distro-debian:v2026.226.1807'
+    - fedora: '@github.com/opencharly/distro-fedora:v2026.229.1620'
+    - ubuntu: '@github.com/opencharly/distro-ubuntu:v2026.226.1833'
 # Main owns NO boxes after the 2026-06 box inversion — only the shared candy
 # library + the inline check/vm/local/kubernetes orchestration. Discover candies only.
 discover:
@@ -54,12 +64,13 @@ defaults:
     cache: image # default build cache mode (image local read / registry read+write)
     # Reusable-artifact retention (auto-pruned at creation; also via `charly clean`).
     # 0 disables. See /charly-core:clean.
-    keep_images: 3 # newest CalVer tags to keep per image after `charly box build`
+    keep_images: 3 # per box: newest 3 distinct images, and at most 3 tags of each
     keep_check_runs: 3 # newest run dirs to keep per bed/score after `charly check run`
 vm:
     vm:
         source:
             kind: cloud_image
+            distro: fedora
             url: https://download.fedoraproject.org/pub/fedora/linux/releases/41/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-41-1.4.x86_64.qcow2
             checksum:
                 type: sha256
@@ -247,6 +258,174 @@ charly-vm:
             timezone: UTC
             package:
                 - sudo
+# The five per-distro REPO check beds (check-<distro>-repo, below) prove the
+# repo-based install from the published distro repos. Their `from:` cross-ref is
+# constrained to #EntityRef (spec/schema/_common.cue — a simple lowercase-hyphenated
+# name, NO namespace dots), so a bed can only reference a VM template in the SAME
+# charly.yml — the box/<distro> submodule templates (arch, fedora-vm,
+# debian-debootstrap, ubuntu-debootstrap) are NOT referenceable from main. Each
+# substrate below is therefore a minimal cloud-image VM for its distro: boot the
+# distro, run the native package manager (apk/pacman/dnf/apt) against the published
+# repo, and provide passwordless sudo for the check runner's `ssh vm sudo bash -s`
+# root escalation. The default distro cloud-image user (alpine/arch/fedora/debian/
+# ubuntu) has passwordless sudo via cloud-init. Alpine publishes only SHA512
+# checksums, which the #VmChecksum schema (sha256-only) cannot express, so the
+# checksum is omitted there; the others omit it too (the images are official distro
+# cloud images, and the beds verify the boot + package install empirically).
+arch-repo-vm:
+    vm:
+        source:
+            kind: cloud_image
+            distro: arch
+            url: https://geo.mirror.pkgbuild.com/images/latest/Arch-Linux-x86_64-cloudimg.qcow2
+            base_user: arch
+        backend: libvirt
+        disk_size: 20G
+        ram: 4G
+        cpu: 2
+        machine: q35
+        firmware: bios
+        ssh:
+            port_auto: true
+            key_source: generate
+        cloud_init:
+            timezone: UTC
+            package:
+                - sudo
+fedora-repo-vm:
+    vm:
+        source:
+            kind: cloud_image
+            distro: fedora
+            url: https://download.fedoraproject.org/pub/fedora/linux/releases/43/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-43-1.6.x86_64.qcow2
+            base_user: fedora
+        backend: libvirt
+        disk_size: 20G
+        ram: 4G
+        cpu: 2
+        machine: q35
+        firmware: bios
+        ssh:
+            port_auto: true
+            key_source: generate
+        cloud_init:
+            timezone: UTC
+            package:
+                - sudo
+debian-repo-vm:
+    vm:
+        source:
+            kind: cloud_image
+            url: https://cloud.debian.org/images/cloud/trixie/latest/debian-13-generic-amd64.qcow2
+            base_user: debian
+            # REQUIRED, not decorative: sshUnitForDistro + composePackages are bare
+            # lookups into the generated distro tables — nothing is inferred from
+            # base_user, so omitting this renders an EMPTY sshd unit name and the wrong
+            # package name on a Debian-family guest.
+            distro: debian
+        backend: libvirt
+        disk_size: 20G
+        ram: 4G
+        cpu: 2
+        machine: q35
+        firmware: uefi-insecure
+        ssh:
+            port_auto: true
+            key_source: generate
+        cloud_init:
+            timezone: UTC
+            package:
+                - sudo
+ubuntu-repo-vm:
+    vm:
+        source:
+            kind: cloud_image
+            url: https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
+            base_user: ubuntu
+            # REQUIRED, not decorative: sshUnitForDistro + composePackages are bare
+            # lookups into the generated distro tables — nothing is inferred from
+            # base_user, so omitting this renders an EMPTY sshd unit name and the wrong
+            # package name on a Debian-family guest.
+            distro: ubuntu
+        backend: libvirt
+        disk_size: 20G
+        ram: 4G
+        cpu: 2
+        machine: q35
+        firmware: uefi-insecure
+        ssh:
+            port_auto: true
+            key_source: generate
+        cloud_init:
+            timezone: UTC
+            package:
+                - sudo
+# alpine-repo-box — the check-alpine-repo bed's pod workload. A minimal Alpine base box
+# (a raw registry image cannot be a pod's `image:` — the check-bed runner's image-build
+# phase resolves it as a box name — so the pod needs a real charly box whose base IS the
+# alpine image). No init metadata → the pod deploy starts it with `sleep infinity`; the
+# repo-install check steps run in-container.
+sudo-nopasswd:
+    candy:
+        version: 2026.229.0900
+        description: |-
+            Installs sudo and grants the uid-1000 account passwordless sudo via
+            /etc/sudoers.d/charly-user, for a check bed that must drive a native
+            package manager IN-CONTAINER. A charly box runs as uid 1000
+            (WriteBootstrap has no root branch) and `run_as:` on a check step is not
+            honoured by the check executor, so an in-container `apk add` has no other
+            elevation path. Mirrors the sudoers rule /charly-coder:sshd installs,
+            without pulling in an sshd service.
+        distro:
+            alpine:
+                package:
+                    - sudo
+        plan:
+            - run: grant the uid-1000 account passwordless sudo
+              run_as: root
+              command: |
+                  account=$(getent passwd 1000 | cut -d: -f1)
+                  if [ -z "$account" ]; then
+                    echo "sudo-nopasswd: no uid-1000 account found, refusing to write sudoers" >&2
+                    exit 1
+                  fi
+                  printf '%s ALL=(ALL) NOPASSWD: ALL\n' "$account" > /etc/sudoers.d/charly-user
+                  chmod 0440 /etc/sudoers.d/charly-user
+            - check: the sudo binary is installed
+              id: sudo-nopasswd-binary
+              exit_status: 0
+              command: command -v sudo
+            - check: passwordless sudo works and the drop-in is mode 0440
+              id: sudo-nopasswd-sudoers
+              exit_status: 0
+              stdout:
+                  - contains: "440"
+              # Routed THROUGH sudo deliberately: /etc/sudoers.d is 0750 root:root,
+              # so the uid-1000 account cannot stat inside it directly. Reading the
+              # mode via sudo proves both halves at once — the drop-in is 0440 AND
+              # the NOPASSWD rule actually grants elevation. The step fails if
+              # either is wrong, which a direct stat could never show.
+              command: sudo -n stat -c '%a' /etc/sudoers.d/charly-user
+alpine-repo-box:
+    candy:
+        version: 2026.225.1508
+        base: docker.io/library/alpine:3.24
+        description: |-
+            Minimal Alpine base box — the check-alpine-repo bed's pod workload. A small
+            charly image whose ai.opencharly labels the pod deploy reads to start the
+            container (no init → sleep infinity). The repo-install check steps run
+            in-container.
+        candy:
+            - sudo-nopasswd
+        build:
+            - apk
+        distro:
+            - alpine
+        plan:
+            - check: the alpine base image is present
+              id: alpine-base-present
+              exit_status: 0
+              command: cat /etc/alpine-release
 # check-k3s-vm-ctx / check-k8s-deploy-cluster-ctx — per-BED kind:kubernetes cluster templates (task #18
 # rework). check-k3s-vm and check-k8s-deploy-cluster both `from: k3s-vm` (the SAME shared kind:vm
 # entity), so their kubeconfig contexts are now per-deploy-DOMAIN-scoped, not shared by entity (see
@@ -1321,18 +1500,17 @@ check-exampledeploy:
 # bin/charly` run step places the in-development binary at /usr/bin/charly. The
 # OS-tracked package install (the former localpkg: map) is GONE — the sdk's
 # localpkg machinery now builds via the `charly generate-packages` plugin
-# (sdk/packagekit) from the candy's `packaging:` section (declared now); the
-# localpkg machinery's transition to build from this section lands with the
-# Phase 3 cutover. Until then the copy step is the single binary source, and
-# this bed proves the binary lands on a fresh Arch VM (the plugin-based
-# localpkg + welded-plugins proof returns in Phase 3).
+# (sdk/packagekit) from the candy's `packaging:` section. The copy step remains
+# the binary source for image builds; this bed proves the binary lands on a
+# fresh Arch VM (the repo-based install proof lives in the per-distro check
+# beds).
 check-charly-vm:
     vm:
         from: charly-vm
         disposable: true
         lifecycle: dev
         description: >-
-            Proves the charly candy installs the in-development binary on a disposable Arch cloud VM via the `copy: bin/charly` run step (the OS-tracked localpkg install is gone — the sdk's localpkg machinery now builds via the generate-packages plugin from the candy's `packaging:` section, declared now; the localpkg transition to build from it lands with the Phase 3 cutover). One command probe asserts charly resolves to /usr/bin/charly and charly version runs (CHARLY-BINARY-OK).
+            Proves the charly candy installs the in-development binary on a disposable Arch cloud VM via the `copy: bin/charly` run step (the OS-tracked localpkg install is gone — the sdk's localpkg machinery now builds via the generate-packages plugin from the candy's `packaging:` section). One command probe asserts charly resolves to /usr/bin/charly and charly version runs (CHARLY-BINARY-OK).
         add_candy:
             - charly
         install_opts:
@@ -1354,6 +1532,411 @@ check-charly-vm:
                 test "$(command -v charly)" -ef /usr/bin/charly &&
                 charly version &&
                 echo CHARLY-BINARY-OK
+# The five per-distro REPO check beds — the R10 acceptance for the nFPM packaging
+# cutover's repo-based install leg. Each proves the published distro repo
+# (opencharly.github.io/charly-{alpine,arch,fedora,ubuntu,debian}) installs charly
+# via the NATIVE package manager (apk add / pacman -S / dnf install / apt install),
+# that `charly version` equals the repo's published CalVer, and that the welded
+# command plugins dispatch project-less from /tmp. They deliberately do NOT rely on
+# the localpkg mechanism (the check-bed runner auto-sets --dev-local-pkg, which
+# forces the dev build path) — the plan steps add the published repo + key and
+# install via the package manager, so a bed passes only when the published repo is
+# live and correct. The arch bed additionally installs the `charly-minimal` variant
+# and asserts its minimal plugin set.
+check-alpine-repo:
+    pod:
+        image: alpine-repo-box
+        disposable: true
+        lifecycle: dev
+        description: >-
+            Proves the repo-based install from the published charly-alpine apk repo (opencharly.github.io/charly-alpine) — the R10 acceptance for the nFPM packaging cutover's Alpine leg. Deploys a disposable Alpine container pod (alpine-repo-box — a raw registry image cannot be a pod's `image:`, and Alpine's cloud-init/OpenRC path is not systemd, so a container is the honest substrate), installs the charly RSA key + adds the apk repo, `apk add charly`, asserts the PACKAGED /usr/bin/charly reports the same version the package manager recorded for the installed package, and proves the welded command plugins dispatch project-less from /tmp.
+        install_opts:
+            allow_repo_changes: true
+            allow_root_tasks: true
+        plan:
+            - check: the charly apk repo RSA key is installed and the repo is added
+              id: alpine-repo-key-and-repo
+              exit_status: 0
+              context:
+                - runtime
+              command: |
+                sudo apk add --no-cache curl &&
+                sudo curl -fsSL -o /etc/apk/keys/charly.rsa.pub https://opencharly.github.io/charly-alpine/charly.rsa.pub &&
+                echo 'https://opencharly.github.io/charly-alpine/amd64' | sudo tee -a /etc/apk/repositories >/dev/null &&
+                grep -q '^https://opencharly.github.io/charly-alpine/amd64$' /etc/apk/repositories
+            - check: apk update resolves the charly repo
+              id: alpine-apk-update
+              timeout: 10m
+              exit_status: 0
+              context:
+                - runtime
+              # `apk update` alone exits 0 even when a repo is unreachable — it
+              # warns and carries on — so it cannot prove the charly index was
+              # fetched. Listing the package proves it: `charly` is in no Alpine
+              # repo, so a non-empty listing is only possible from the charly
+              # index at <repo>/<apk-arch>/APKINDEX.tar.gz.
+              command: |
+                sudo apk update &&
+                apk list charly | grep -q '^charly-'
+            - check: apk add charly installs the package
+              id: alpine-charly-installed
+              timeout: 10m
+              exit_status: 0
+              context:
+                - runtime
+              command: |
+                sudo apk add charly &&
+                apk info -e charly
+            - check: charly version equals the repo's published CalVer
+              id: alpine-charly-version
+              exit_status: 0
+              stdout:
+                - contains: ALPINE-REPO-VERSION-OK
+              context:
+                - runtime
+              command: |
+                installed="$(/usr/bin/charly version)" &&
+                packaged="$(apk list --installed charly | sed -n 's/^charly-\([0-9][0-9.]*\) .*/\1/p')" &&
+                echo "installed=[$installed] packaged=[$packaged]" &&
+                test -n "$installed" && test -n "$packaged" &&
+                test "$installed" = "$packaged" &&
+                echo ALPINE-REPO-VERSION-OK
+            - check: the welded command plugins dispatch project-less from /tmp
+              id: alpine-welded-command-project-less
+              exit_status: 0
+              stdout:
+                - contains: ALPINE-WELDED-CMD-OK
+              context:
+                - runtime
+              command: |
+                cd /tmp &&
+                charly doctor 2>/dev/null | grep -q 'Summary:' &&
+                echo ALPINE-WELDED-CMD-OK
+check-arch-repo:
+    vm:
+        from: arch-repo-vm
+        disposable: true
+        lifecycle: dev
+        description: >-
+            Proves the repo-based install from the published charly-arch pacman repo (opencharly.github.io/charly-arch) — the R10 acceptance for the nFPM packaging cutover's Arch leg. Boots the disposable Arch cloud-image VM (arch-repo-vm, ssh.port_auto so it never collides with check-arch-vm's fixed port 2224), imports + locally signs the charly GPG key, adds the [charly] repo, `pacman -S charly`, asserts the PACKAGED /usr/bin/charly reports the same version the package manager recorded for the installed package, then removes charly and installs the `charly-minimal` variant, asserting its minimal plugin set dispatches.
+        install_opts:
+            allow_repo_changes: true
+            allow_root_tasks: true
+        plan:
+            - check: the charly GPG key is imported and locally signed
+              id: arch-repo-key-imported
+              timeout: 10m
+              exit_status: 0
+              context:
+                - runtime
+              command: |
+                sudo pacman-key --init &&
+                sudo pacman-key --populate archlinux &&
+                curl -fsSL -o /tmp/charly.gpg https://opencharly.github.io/charly-arch/charly.gpg &&
+                sudo pacman-key --add /tmp/charly.gpg &&
+                KEYID=$(gpg --with-colons --import-options show-only --import /tmp/charly.gpg | awk -F: '/^pub/{print $5}') &&
+                test -n "$KEYID" &&
+                sudo pacman-key --lsign-key "$KEYID"
+            - check: the [charly] repo is added to pacman.conf
+              id: arch-repo-added
+              exit_status: 0
+              context:
+                - runtime
+              command: |
+                printf '[charly]\nServer = https://opencharly.github.io/charly-arch/amd64\nSigLevel = Required\n' | sudo tee -a /etc/pacman.conf >/dev/null &&
+                grep -q '^\[charly\]$' /etc/pacman.conf &&
+                grep -q '^Server = https://opencharly.github.io/charly-arch/amd64$' /etc/pacman.conf
+            - check: pacman -Sy refreshes the charly repo db
+              id: arch-pacman-sy
+              timeout: 10m
+              exit_status: 0
+              context:
+                - runtime
+              # -Sy alone cannot prove the charly repo resolved (it warns and
+              # carries on); -Si can only succeed from the charly sync DB.
+              command: |
+                sudo pacman -Sy --noconfirm &&
+                pacman -Si charly >/dev/null
+            - check: pacman -S charly installs the package
+              id: arch-charly-installed
+              timeout: 10m
+              exit_status: 0
+              context:
+                - runtime
+              command: |
+                sudo pacman -S --noconfirm charly &&
+                pacman -Q charly
+            - check: charly version equals the repo's published CalVer
+              id: arch-charly-version
+              exit_status: 0
+              stdout:
+                - contains: ARCH-REPO-VERSION-OK
+              context:
+                - runtime
+              command: |
+                installed="$(/usr/bin/charly version)" &&
+                packaged="$(pacman -Q charly | awk '{print $2}' | cut -d- -f1)" &&
+                echo "installed=[$installed] packaged=[$packaged]" &&
+                test -n "$installed" && test -n "$packaged" &&
+                test "$installed" = "$packaged" &&
+                echo ARCH-REPO-VERSION-OK
+            - check: the welded command plugins dispatch project-less from /tmp
+              id: arch-welded-command-project-less
+              exit_status: 0
+              stdout:
+                - contains: ARCH-WELDED-CMD-OK
+              context:
+                - runtime
+              command: |
+                cd /tmp &&
+                charly doctor 2>/dev/null | grep -q 'Summary:' &&
+                echo ARCH-WELDED-CMD-OK
+            - check: charly-minimal installs after removing charly (both provide /usr/bin/charly)
+              id: arch-charly-minimal-installed
+              timeout: 10m
+              exit_status: 0
+              context:
+                - runtime
+              command: |
+                sudo pacman -R --noconfirm charly &&
+                sudo pacman -S --noconfirm charly-minimal
+            - check: the minimal variant ships only the doctor/clean/settings plugin set
+              id: arch-minimal-plugin-set
+              exit_status: 0
+              stdout:
+                - contains: ARCH-MINIMAL-PLUGIN-SET-OK
+              context:
+                - runtime
+              command: |
+                test -f /usr/lib/charly/plugins/plugin-doctor.providers &&
+                test -f /usr/lib/charly/plugins/plugin-clean.providers &&
+                test -f /usr/lib/charly/plugins/plugin-settings.providers &&
+                test ! -f /usr/lib/charly/plugins/plugin-vm.providers &&
+                echo ARCH-MINIMAL-PLUGIN-SET-OK
+check-fedora-repo:
+    vm:
+        from: fedora-repo-vm
+        disposable: true
+        lifecycle: dev
+        description: >-
+            Proves the repo-based install from the published charly-fedora dnf repo (opencharly.github.io/charly-fedora) — the R10 acceptance for the nFPM packaging cutover's Fedora leg. Boots the disposable Fedora Cloud 43 VM, adds the charly .repo, `dnf install charly`, asserts the PACKAGED /usr/bin/charly reports the same version the package manager recorded for the installed package, and proves the welded command plugins dispatch project-less from /tmp.
+        install_opts:
+            allow_repo_changes: true
+            allow_root_tasks: true
+        plan:
+            - check: the charly dnf repo is added
+              id: fedora-repo-added
+              exit_status: 0
+              context:
+                - runtime
+              command: |
+                sudo tee /etc/yum.repos.d/charly.repo >/dev/null <<'EOF'
+                [charly]
+                name=charly
+                baseurl=https://opencharly.github.io/charly-fedora/amd64
+                enabled=1
+                gpgcheck=1
+                gpgkey=https://opencharly.github.io/charly-fedora/RPM-GPG-KEY-charly
+                EOF
+                grep -q 'charly-fedora' /etc/yum.repos.d/charly.repo
+            - check: dnf install charly installs the package
+              id: fedora-charly-installed
+              timeout: 10m
+              exit_status: 0
+              context:
+                - runtime
+              command: |
+                sudo dnf install -y charly &&
+                rpm -q charly
+            - check: charly version equals the repo's published CalVer
+              id: fedora-charly-version
+              exit_status: 0
+              stdout:
+                - contains: FEDORA-REPO-VERSION-OK
+              context:
+                - runtime
+              command: |
+                installed="$(/usr/bin/charly version)" &&
+                packaged="$(rpm -q charly | sed -n 's/^charly-\([0-9][0-9.]*\)-.*/\1/p')" &&
+                echo "installed=[$installed] packaged=[$packaged]" &&
+                test -n "$installed" && test -n "$packaged" &&
+                test "$installed" = "$packaged" &&
+                echo FEDORA-REPO-VERSION-OK
+            - check: the welded command plugins dispatch project-less from /tmp
+              id: fedora-welded-command-project-less
+              exit_status: 0
+              stdout:
+                - contains: FEDORA-WELDED-CMD-OK
+              context:
+                - runtime
+              command: |
+                cd /tmp &&
+                charly doctor 2>/dev/null | grep -q 'Summary:' &&
+                echo FEDORA-WELDED-CMD-OK
+check-debian-repo:
+    vm:
+        from: debian-repo-vm
+        disposable: true
+        lifecycle: dev
+        description: >-
+            Proves the repo-based install from the published charly-debian apt repo (opencharly.github.io/charly-debian) — the R10 acceptance for the nFPM packaging cutover's Debian leg. Boots the disposable Debian 13 (trixie) cloud-image VM (debian-repo-vm), installs the charly GPG key + adds the apt repo, `apt install charly`, asserts the PACKAGED /usr/bin/charly reports the same version the package manager recorded for the installed package, and proves the welded command plugins dispatch project-less from /tmp.
+        install_opts:
+            allow_repo_changes: true
+            allow_root_tasks: true
+        plan:
+            - check: curl + gnupg are available for the key import
+              id: debian-key-tooling
+              timeout: 10m
+              exit_status: 0
+              context:
+                - runtime
+              command: |
+                sudo apt-get update &&
+                sudo apt-get install -y curl gnupg
+            - check: the charly GPG key is dearmored into /etc/apt/keyrings
+              id: debian-repo-key-installed
+              exit_status: 0
+              context:
+                - runtime
+              command: |
+                sudo mkdir -p /etc/apt/keyrings &&
+                curl -fsSL https://opencharly.github.io/charly-debian/charly.gpg | sudo gpg --dearmor -o /etc/apt/keyrings/charly.gpg &&
+                test -s /etc/apt/keyrings/charly.gpg
+            - check: the charly apt repo is added
+              id: debian-repo-added
+              exit_status: 0
+              context:
+                - runtime
+              command: |
+                echo 'deb [signed-by=/etc/apt/keyrings/charly.gpg] https://opencharly.github.io/charly-debian/ stable main' | sudo tee /etc/apt/sources.list.d/charly.list >/dev/null &&
+                grep -q 'charly-debian' /etc/apt/sources.list.d/charly.list
+            - check: apt-get update resolves the charly repo
+              id: debian-apt-update
+              timeout: 10m
+              exit_status: 0
+              context:
+                - runtime
+              # apt-get update can exit 0 with only a warning for a failed repo;
+              # a Candidate version can only come from the charly repo.
+              command: |
+                sudo apt-get update &&
+                apt-cache policy charly | grep -qE 'Candidate: [0-9]'
+            - check: apt-get install charly installs the package
+              id: debian-charly-installed
+              timeout: 10m
+              exit_status: 0
+              context:
+                - runtime
+              command: |
+                sudo apt-get install -y charly &&
+                dpkg-query -W charly
+            - check: charly version equals the repo's published CalVer
+              id: debian-charly-version
+              exit_status: 0
+              stdout:
+                - contains: DEBIAN-REPO-VERSION-OK
+              context:
+                - runtime
+              command: |
+                installed="$(/usr/bin/charly version)" &&
+                packaged="$(dpkg-query -W charly | awk '{print $2}')" &&
+                echo "installed=[$installed] packaged=[$packaged]" &&
+                test -n "$installed" && test -n "$packaged" &&
+                test "$installed" = "$packaged" &&
+                echo DEBIAN-REPO-VERSION-OK
+            - check: the welded command plugins dispatch project-less from /tmp
+              id: debian-welded-command-project-less
+              exit_status: 0
+              stdout:
+                - contains: DEBIAN-WELDED-CMD-OK
+              context:
+                - runtime
+              command: |
+                cd /tmp &&
+                charly doctor 2>/dev/null | grep -q 'Summary:' &&
+                echo DEBIAN-WELDED-CMD-OK
+check-ubuntu-repo:
+    vm:
+        from: ubuntu-repo-vm
+        disposable: true
+        lifecycle: dev
+        description: >-
+            Proves the repo-based install from the published charly-ubuntu apt repo (opencharly.github.io/charly-ubuntu) — the R10 acceptance for the nFPM packaging cutover's Ubuntu leg. Boots the disposable Ubuntu 24.04 (noble) cloud-image VM (ubuntu-repo-vm), installs the charly GPG key + adds the apt repo, `apt install charly`, asserts the PACKAGED /usr/bin/charly reports the same version the package manager recorded for the installed package, and proves the welded command plugins dispatch project-less from /tmp.
+        install_opts:
+            allow_repo_changes: true
+            allow_root_tasks: true
+        plan:
+            - check: curl + gnupg are available for the key import
+              id: ubuntu-key-tooling
+              timeout: 10m
+              exit_status: 0
+              context:
+                - runtime
+              command: |
+                sudo apt-get update &&
+                sudo apt-get install -y curl gnupg
+            - check: the charly GPG key is dearmored into /etc/apt/keyrings
+              id: ubuntu-repo-key-installed
+              exit_status: 0
+              context:
+                - runtime
+              command: |
+                sudo mkdir -p /etc/apt/keyrings &&
+                curl -fsSL https://opencharly.github.io/charly-ubuntu/charly.gpg | sudo gpg --dearmor -o /etc/apt/keyrings/charly.gpg &&
+                test -s /etc/apt/keyrings/charly.gpg
+            - check: the charly apt repo is added
+              id: ubuntu-repo-added
+              exit_status: 0
+              context:
+                - runtime
+              command: |
+                echo 'deb [signed-by=/etc/apt/keyrings/charly.gpg] https://opencharly.github.io/charly-ubuntu/ stable main' | sudo tee /etc/apt/sources.list.d/charly.list >/dev/null &&
+                grep -q 'charly-ubuntu' /etc/apt/sources.list.d/charly.list
+            - check: apt-get update resolves the charly repo
+              id: ubuntu-apt-update
+              timeout: 10m
+              exit_status: 0
+              context:
+                - runtime
+              # apt-get update can exit 0 with only a warning for a failed repo;
+              # a Candidate version can only come from the charly repo.
+              command: |
+                sudo apt-get update &&
+                apt-cache policy charly | grep -qE 'Candidate: [0-9]'
+            - check: apt-get install charly installs the package
+              id: ubuntu-charly-installed
+              timeout: 10m
+              exit_status: 0
+              context:
+                - runtime
+              command: |
+                sudo apt-get install -y charly &&
+                dpkg-query -W charly
+            - check: charly version equals the repo's published CalVer
+              id: ubuntu-charly-version
+              exit_status: 0
+              stdout:
+                - contains: UBUNTU-REPO-VERSION-OK
+              context:
+                - runtime
+              command: |
+                installed="$(/usr/bin/charly version)" &&
+                packaged="$(dpkg-query -W charly | awk '{print $2}')" &&
+                echo "installed=[$installed] packaged=[$packaged]" &&
+                test -n "$installed" && test -n "$packaged" &&
+                test "$installed" = "$packaged" &&
+                echo UBUNTU-REPO-VERSION-OK
+            - check: the welded command plugins dispatch project-less from /tmp
+              id: ubuntu-welded-command-project-less
+              exit_status: 0
+              stdout:
+                - contains: UBUNTU-WELDED-CMD-OK
+              context:
+                - runtime
+              command: |
+                cd /tmp &&
+                charly doctor 2>/dev/null | grep -q 'Summary:' &&
+                echo UBUNTU-WELDED-CMD-OK
 charly-cli:
     group:
         description: AI check — an agent operates the charly management command surface (build → deploy → status) end-to-end.
@@ -2087,7 +2670,7 @@ check-builder-local-app:
 #   - `charly udev status`   → exits 0 (graceful device + rule report on a GPU-less host)
 # The host `charly` resolves the `udev` word via the discovered candy/plugin-udev
 # prescan and syscall.Exec's the plugin binary (host-built, or baked at
-# /usr/lib/charly/plugins by pkg/arch). install/remove (sudo + udevadm, host-mutating)
+# /usr/lib/charly/plugins by the native package). install/remove (sudo + udevadm, host-mutating)
 # stay out of the bed — the Go e2e (TestExternalCommandExecPlan_Udev) + plugin-udev's
 # build-context ADE check cover the dispatch + module-builds legs.
 # =================================================================
@@ -2367,8 +2950,8 @@ check-doctor-local:
 # candy-manifest mutation) itself, sharing only the generic kit.SetByDotPath / kit.MappingChild utilities
 # (sdk/kit/yaml.go). None uses a hidden core command — proving the externalized commands end-to-end.
 # NOTE: `charly version` is a DELIBERATE value/risk EXCEPTION kept core — NOT "unfixable". RDD (2026-07-01)
-# refuted the chicken-and-egg claim (pkgver()'s `bin/charly version` is a convenience; the CalVer is already
-# Taskfile-computed via pkg/arch/calver.sh, so externalizing IS feasible), but it sheds ZERO deps and would
+# refuted the chicken-and-egg claim (the CalVer is already
+# Taskfile-computed via scripts/calver.sh, so externalizing IS feasible), but it sheds ZERO deps and would
 # make R9's canonical identity command depend on the plugin subsystem across 3 package repos — worst-value,
 # highest-blast-radius; operator-decided to keep it a core command. Not exercised here (covered by
 # candy/charly's own version check).
@@ -3322,3 +3905,57 @@ check-agentteams-vm:
                 method: worker-running
               stdout:
                 - contains: "room alias resolvable"
+
+# =============================================================================
+# check-retention-app — the FIXTURE BOX of the retention discriminator bed.
+#
+# BLOCKED, NOT DISABLED. This box is `enabled: false` for ONE named reason, and it
+# becomes satisfiable the moment that reason is removed:
+#
+#   candy/plugin-box/box.go:296-302 acquires the build-activity lock and holds it
+#   "across the whole build (the candy podman drive) + the post-build prune", so
+#   the post-build retention pass ALWAYS observes live >= 1 — its own lock. That
+#   makes candy/plugin-clean/retention.go's `if live > 0 { … if lastTag { return
+#   false } }` engage on every build, so `charly box build` can never remove an
+#   image's LAST tag and therefore can never reclaim a distinct image. The lock's
+#   stated purpose is to stop a SIBLING build from untagging a pin an in-flight
+#   build may still resolve; blocking the build's own prune is an unintended
+#   effect the comment does not contemplate.
+#
+# The bed this fixture serves asserts a PAIR: that a multi-tag image keeps every
+# tag (which discriminates the two-ordinal ranking from the pre-fix tag-row one),
+# and that the distinct sibling past the budget is REMOVED (which discriminates
+# nothing, but fails under exactly the conditions that would falsely satisfy the
+# first). The second assertion is the canary, and it cannot pass while the
+# self-lock stands: the only verb that removes a last tag is `charly clean`, which
+# a bed must not run. Measured live on 2026-08-16 — four generations built, gen1
+# left at rank 3 under keep_images: 3, and NOT reclaimed.
+#
+# EXCLUDE THE BUILD'S OWN LOCK FROM THE LIVE COUNT AND THIS BED GOES GREEN. Until
+# then it would assert something the product cannot do, so it stays unbuilt rather
+# than shipping as a check that cannot fail on its own subject.
+#
+# The base is a raw registry ref rather than a distro box on purpose: the fixture
+# must be a LEAF image with nothing built FROM it, because `podman rmi` refuses an
+# image another image depends on and retention swallows that refusal silently
+# (observed on fedora-nonfree:check-docs-2026.227.1835 — selected by retention,
+# refused by the engine, absent from the removed list, still in the store).
+# =============================================================================
+check-retention-app:
+    candy:
+        version: 2026.228.0400
+        enabled: false
+        base: quay.io/fedora/fedora:43
+        description: |-
+            Fixture box for the retention discriminator bed: a minimal Fedora base composing
+            check-retention-fixture, whose generation stamp is the only varying content. Built
+            repeatedly (four generations plus two `--tag` rebuilds of the third) to construct a
+            box group where one image wears three tags and distinct siblings sit behind it — the
+            only shape on which `keep_images`' two ordinals and the pre-fix single tag-row
+            ordinal choose differently. Blocked on the post-build prune counting its own
+            build-activity lock as live; see the comment above this entry.
+        distro:
+            - fedora:43
+            - fedora
+        candy:
+            - check-retention-fixture

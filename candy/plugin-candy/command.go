@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -13,22 +14,38 @@ import (
 )
 
 // command.go — the externalized `charly candy` command (the candy-manifest authoring tree: set /
-// add-{rpm,deb,pac,aur}). The plugin OWNS the ENTIRE logic — the subcommand grammar AND the
+// add-{rpm,deb,pac,aur,apk}). The plugin OWNS the ENTIRE logic — the subcommand grammar AND the
 // comment-preserving yaml.Node mutation of candy/<name>/charly.yml. The only shared pieces are the
 // GENERIC yaml utilities kit.SetByDotPath / kit.MappingChild (also used by `charly box set` /
 // `charly box scaffold`); there is NO core candy logic and NO HostBuild seam — a plugin editing yaml
 // owns that itself, so `charly candy` works identically compiled-in OR out-of-process.
 
-var candyUsage = `usage: charly candy <set <name> <path> <value> | add-rpm|add-deb|add-pac|add-aur <name> <pkg…>>`
-
 // sectionDistroPath maps an add-<fmt> section name to the `distro:` map path its packages land under:
-// add-rpm→fedora, add-pac→arch, add-aur→arch.aur, add-deb→the shared `debian,ubuntu` compound.
+// add-rpm→fedora, add-pac→arch, add-aur→arch.aur, add-apk→alpine, add-deb→the shared
+// `debian,ubuntu` compound. This map is the SINGLE source for which add-<fmt> verbs exist —
+// the dispatch and the usage string both derive from it, so a new package format is one row
+// here and nothing else (it previously had to be added to three separate lists).
 var sectionDistroPath = map[string][]string{
 	"rpm": {"distro", "fedora"},
 	"deb": {"distro", "debian,ubuntu"},
 	"pac": {"distro", "arch"},
 	"aur": {"distro", "arch", "aur"},
+	"apk": {"distro", "alpine"},
 }
+
+// addFormatWords returns the add-<fmt> verbs in deterministic order, derived from
+// sectionDistroPath so the usage string can never drift from the dispatch.
+func addFormatWords() []string {
+	words := make([]string, 0, len(sectionDistroPath))
+	for fmtName := range sectionDistroPath {
+		words = append(words, "add-"+fmtName)
+	}
+	sort.Strings(words)
+	return words
+}
+
+var candyUsage = `usage: charly candy <set <name> <path> <value> | ` +
+	strings.Join(addFormatWords(), "|") + ` <name> <pkg…>>`
 
 // runCandyCLI dispatches the candy subcommand (the first token). set mutates a dot-path; add-<fmt>
 // appends packages to the distro-map section its alias targets.
@@ -46,12 +63,15 @@ func runCandyCLI(args []string) error {
 			return fmt.Errorf("usage: charly candy set <name> <path> <value>")
 		}
 		return candySet(rest[0], rest[1], rest[2])
-	case "add-rpm", "add-deb", "add-pac", "add-aur":
-		if len(rest) < 2 {
-			return fmt.Errorf("usage: charly candy %s <name> <pkg…>", sub)
-		}
-		return appendCandyPackages(rest[0], strings.TrimPrefix(sub, "add-"), rest[1:])
 	default:
+		// Dispatch every add-<fmt> verb from sectionDistroPath (the single source),
+		// so the set of verbs cannot drift from the set of mapped formats.
+		if _, ok := sectionDistroPath[strings.TrimPrefix(sub, "add-")]; ok && strings.HasPrefix(sub, "add-") {
+			if len(rest) < 2 {
+				return fmt.Errorf("usage: charly candy %s <name> <pkg…>", sub)
+			}
+			return appendCandyPackages(rest[0], strings.TrimPrefix(sub, "add-"), rest[1:])
+		}
 		return fmt.Errorf("unknown candy subcommand %q\n%s", sub, candyUsage)
 	}
 }

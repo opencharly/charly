@@ -1137,10 +1137,9 @@ agents-skill:
                     build:binary` keeps the dual path `bin/charly` ↔ `candy/charly/bin/charly`
                     in sync (a manual `go build -o` does not) — see `/charly-internals:go`
                     "Quick Reference" / "Debug a Build Issue" + `/charly-tools:charly`. It
-                    does not touch the tracked `pkg/arch/PKGBUILD` — that file is read only
-                    by the legacy `charly box pkg` native-package build (removed with the
-                    nFPM cutover; the `charly generate-packages` plugin builds the packages
-                    now), never by a bare-host `go build`.
+                    does not touch any packaging source — the native packages are built by
+                    the `charly generate-packages` plugin (sdk/packagekit) from the candy's
+                    `packaging:` section, never by a bare-host `go build`.
                   - **Post-merge resync.** After a wave lands, the orchestrator/operator
                     updates the host package from the new `main` via the native-package path
                     — install a freshly published release from the per-distro package repos
@@ -1317,7 +1316,7 @@ agents-skill:
                   specific container ports, never a bare `auto` token. References the
                   assigned port via `${HOST_PORT}` / `${HOST:<member>:<port>}` in its checks
                   — never a literal host port. A bed pins an image → layers → files, so
-                  owning a bed owns those source files. (Task #19, 2026-08-04: a nil/absent
+                  owning a bed owns those source files. (A nil/absent
                   per-host overlay on a bed's first-ever `charly config` used to SKIP port
                   resolution entirely — `candy/plugin-deploy-pod/config_setup.go`'s
                   `resolveDeployPorts` now self-heals a nil overlay instead of skipping it,
@@ -1786,7 +1785,7 @@ capabilities-skill:
             | `Version` | `LabelVersion` (`ai.opencharly.version`) | The image's content-derived **`EffectiveVersion`** — its dedicated `version:` if set, else the highest layer `version:` across the chain (`deploykit.ComputeEffectiveVersions`, called from `candy/plugin-build/resolve.go`'s build-engine RESOLVE). NOT the per-build tag; stable when no layer changed. Short-name resolution + `charly clean` retention prefer this label over the tag. Also the "is this an charly image?" presence sentinel (`ExtractMetadata` returns nil when empty). |
             | `Service` | `LabelService` (`ai.opencharly.service`) | **Structured JSON array of `CapabilityService`** — not just names. 23 per-entry fields including `kind`, `events`, `auto_start`, `start_retries`, `priority`, `init`, `layer`. See "LabelService" below. |
             | `Init` | `LabelInit` | Init system name (supervisord / systemd / none). |
-            | `InitDef` | `LabelInitDef` (`ai.opencharly.init_def`) | **`*CapabilityInitDef`** — the build-resolved runtime subset of the init: vocabulary entry: `entrypoint`, `fallback_entrypoint`, `management_tool`, `management_commands`. Makes the init system TRUE single-source: `resolveEntrypointFromMeta` (container entrypoint) and `resolveInitDefFromMeta` (in-container service-management) read this label FIRST, falling back to the legacy `wellKnownInitDefs` registry only for pre-`init_def`-label images. Because the contract travels in the label, init systems declared ONLY in the embedded vocabulary now work at runtime too. |
+            | `InitDef` | `LabelInitDef` (`ai.opencharly.init_def`) | **`*CapabilityInitDef`** — the build-resolved runtime subset of the init: vocabulary entry: `entrypoint`, `fallback_entrypoint`, `management_tool`, `management_commands`. Makes the init system TRUE single-source: `kit.ResolveEntrypointFromMeta` (container entrypoint) and `resolveInitDefFromMeta` (in-container service-management) read this label as their ONLY source. A frozen `wellKnownInitDefs` registry used to back them for pre-`init_def`-label images; it was deleted (it was triplicated across sdk/kit, plugin-pod and plugin-deploy-pod, and frozen at supervisord + systemd, so it could never answer for a third init system such as openrc). An image without the label now errors, naming the rebuild, rather than resolving a guessed management CLI. Because the contract travels in the label, init systems declared ONLY in the embedded vocabulary now work at runtime too. |
             | `ServiceNames` | `LabelInit` | Per-init active-name list; baked alongside `LabelInit` for CLI ergonomics (e.g., `charly service status`). |
             | `Description` | `LabelDescription` (`ai.opencharly.description`) | **Three-section `{candy, box, deploy}` `LabelDescriptionSet`** — the self-description baked into the image. Each `LabeledDescription` carries a `Description` string plus a `Plan []Step` list (each step is an intent keyword `run:`/`check:`/`agent-run:`/`agent-check:` + an inline Op); the deterministic `check:` steps are the acceptance checks consumed by `charly check live` / `charly check box`. See `/charly-check:check`. |
             | `CheckLevel` | `LabelCheckLevel` (`ai.opencharly.check_level`) | The per-box acceptance-depth rung (`none` / `build` / `noagent` (default) / `agent`) gating how deep `charly check run <bed>` drives acceptance. |
@@ -1926,7 +1925,7 @@ cloud-init-renderer-skill:
             |---|---|
             | `sdk/vmshared/cloud_init_render.go` | `RenderCloudInit`, `ResolveKeyInjectionChannels`, `composeUsers`, `composePackages`, `composeBootCmd`, `composeRunCmd` |
             | `sdk/vmshared/cloud_init_iso.go` | `WriteSeedISO` via xorriso; `genisoimage` + `mkisofs` fallbacks |
-            | `spec/exec/charly_install.go` | `kit.EnsureCharlyInGuest` state machine (auto/scp/url/skip strategies) |
+            | `spec/exec/charly_install.go` | `kit.EnsureCharlyInGuest` state machine (auto/scp/skip strategies) |
             | `spec/spec/cue_types_gen.go` (generated) | `VmCloudInit`, `VmCloudInitUser`, `VmCloudInitFile`, `VmCloudInitNetwork`, `VmCloudInitMirrors`, `VmCharlyInstall` |
 
             ## RenderCloudInit top-level
@@ -2007,13 +2006,13 @@ cloud-init-renderer-skill:
 
             - `composePackages`: prepends `{openssh (or `openssh-server` on debian/ubuntu), curl, tar}` (deduplicated against user's `Packages`). Guarantees the guest has SSH server + download tools + tar for later layer application.
             - `composeBootCmd`: prepends `systemctl mask ssh.socket || true` — the EARLIEST cloud-init phase (`bootcmd` runs before `write_files`/packages/`runcmd`), so a socket-activated sshd (enabled by default on some cloud images, notably Debian/Ubuntu) can never accept a connection before cloud-init has finished configuring the guest. `|| true` makes this a harmless no-op on a distro that ships no `ssh.socket` unit at all (Arch/Fedora typically don't).
-            - `composeRunCmd`: prepends THREE steps, in order: (1) a self-testing shell snippet that writes a `PerSourcePenalties no` sshd_config.d drop-in and validates the FULL resulting config with `sshd -t`, deleting the drop-in again on failure; (2) `systemctl unmask ssh.socket || true` (the matching unmask for `composeBootCmd`'s mask); (3) `systemctl enable --now sshd` (or `ssh` on debian/ubuntu). Distro-specific user `runcmd:` entries can assume sshd is running and hardened.
+            - `composeRunCmd`: prepends the hardening drop-in, then a sshd START whose form depends on the guest's init system (systemd vs OpenRC) — three steps on systemd, two on OpenRC. Step (1) is unbranched and identical everywhere: a self-testing shell snippet that writes a `PerSourcePenalties no` sshd_config.d drop-in and validates the FULL resulting config with `sshd -t`, deleting the drop-in again on failure. It is hoisted above the branch in the source so "always first, distro-agnostic" is structural rather than duplicated per arm. The start then branches on `distroInit(spec.Source.Distro) == "openrc"` — a lookup into the generated `spec.DistroInits` table, never a compare against the literal `"alpine"`: on **systemd** (everything else) (2) `systemctl unmask ssh.socket || true` (the matching unmask for `composeBootCmd`'s mask) and (3) `systemctl enable --now sshd` (or `ssh` on debian/ubuntu); on **OpenRC** (Alpine) (2) `rc-update add sshd default && rc-service sshd start` — there is no ssh.socket to unmask and no systemctl to enable with, and the OpenSSH package ships `/etc/init.d/sshd`. Either way, distro-specific user `runcmd:` entries can assume sshd is running and hardened. `composeBootCmd`'s `systemctl mask ssh.socket || true` stays UNBRANCHED: on Alpine the `|| true` swallows the missing binary and the mask is vacuous where nothing is socket-activated.
 
             User-supplied fields **extend** defaults; they don't replace them. Prevents the common footgun where an author puts `packages: [nginx]` and accidentally breaks SSH because they overrode the default list.
 
             ### Guest SSH hardening (D18) — the RCA'd kex-reset wedge class
 
-            The bootcmd-mask + runcmd-unmask/hardening-drop-in/enable sequence above closes a
+            The bootcmd-mask + runcmd hardening-drop-in + sshd-start sequence above (the start being unmask+enable on systemd, `rc-update`+`rc-service` on OpenRC) closes a
             confirmed wedge: OpenSSH ≥ 9.8 defaults `PerSourcePenalties` ON, penalizing
             repeated connection attempts from ONE source. Every VM guest is reached through
             the SAME single passt gateway source IP, so `kit.WaitForSSH`'s own readiness
@@ -2033,8 +2032,17 @@ cloud-init-renderer-skill:
             `runcmd` makes the guest **deterministically unreachable via SSH for the
             entire package-install phase**, trading the old "sometimes-flaky-but-reachable"
             window (sshd up early, racing a possible host-key rewrite) for
-            "safe-but-fully-blocked-if-package-install-stalls." This is verified live
-            against real Arch cloud_image VM beds (`check-charly-vm`, and
+            "safe-but-fully-blocked-if-package-install-stalls." **On a guest that ships
+            no `ssh.socket` — Arch cloud images among them — the mask is a `|| true`
+            no-op, so neither the blocked window NOR the guarantee that motivates it
+            applies there at all.** Sshd stays live on Arch throughout the package
+            install — which is not an oversight but the precondition for the
+            host-key race documented under D15 below (that race "needs only a live
+            sshd, not a socket-activated one"), and the reason the `--needed`
+            rewrite and the sshd try-restart guard exist. The trade-off in this
+            paragraph is scoped to socket-activated guests; on Arch there is no
+            window to block and nothing for the mask to trade. This
+            is verified live against real Arch cloud_image VM beds (`check-charly-vm`, and
             `check-sidecar-pod`'s nested ephemeral VM member) — including a full
             fresh-rebuild pass (destroy+recreate) for each — with zero wedge, now that the
             companion redundant-package-reinstall fix (below) keeps the package-install
@@ -2044,7 +2052,7 @@ cloud-init-renderer-skill:
             the mask/unmask pair entirely and relying on the `PerSourcePenalties` drop-in
             alone.
 
-            **Delivery is distro-branched (D15): `packages:` for most distros, a `runcmd:`-prepended `pacman -S --needed` for pacman-family.** On every distro EXCEPT the pacman family (arch/cachyos/manjaro/endeavouros), the composed package union rides the `packages:` cloud-config key as documented above. On a pacman-family distro, `packages:` is OMITTED entirely and the union is instead PREPENDED to `runcmd:` as `pacman -S --needed --noconfirm <union>` — AHEAD of `composeRunCmd`'s own three hardening/enable steps (D18, above). This is an R10 bed finding: cloud-init's own package-install module invokes `pacman -S` WITHOUT `--needed`, so on an image that already ships the minimum set (e.g. every Arch cloud image) it unconditionally REINSTALLS them — reinstalling openssh re-triggers its post-install host-key-regen hook while the base image's own socket-activated sshd is already listening, racing a live key-file rewrite against new SSH connections (the observed "reset during `kex_exchange_identification`, guest otherwise idle" signature). apt/dnf installs are naturally no-op-idempotent when the package is already present, so only the pacman-family path needs the `--needed` rewrite. The pacman-family check is `formatForDistroID(effectiveDistro(spec)) == "pac"`; `effectiveDistro` resolves `Source.Distro` when set, and additionally infers `"arch"` for a `cloud_image` source with `base_user: "arch"` and no explicit `distro:` (a narrowing of the pre-existing `composePackages` distro-switch fallback, never a behavior change for a caller that already got the Arch/Fedora shape) — every OTHER empty-distro image stays on the safe, unchanged `packages:`-key path. See `sdk/vmshared/cloud_init_render.go`'s `effectiveDistro`/`composePackages` doc comments for the full narrowing proof. **Note (D18):** the pacman-vs-non-pacman split governs ONLY the `packages:` key vs the `pacman -S --needed` runcmd prepend — every distro's `runcmd:` now ALSO carries the D18 hardening/unmask/enable steps, so "byte-identical to before" no longer applies to the full runcmd list, only to the packages-key handling this paragraph describes.
+            **Delivery is distro-branched (D15): `packages:` for most distros, a `runcmd:`-prepended `pacman -Sy --needed` pair for pacman-family.** On every distro EXCEPT the pacman family (arch/archarm/cachyos/manjaro/endeavouros), the composed package union rides the `packages:` cloud-config key as documented above. On a pacman-family distro, `packages:` is OMITTED entirely and the union is instead PREPENDED to `runcmd:` as TWO entries — `pacman -Sy --needed --noconfirm <union>`, then an sshd try-restart guard (`systemctl try-restart sshd.service ssh.socket sshd.socket`, silenced and `|| true`) that resyncs a live sshd if openssh rode along in the dep closure, since a running sshd would otherwise exec a NEWER sshd-session than the parent that spawned it ("internal error: hostkeys confused"). Both sit AHEAD of `composeRunCmd`'s own D18 steps (above), of which there are three on the pacman family since it is systemd throughout — distinct from the two entries this paragraph prepends. This is an R10 bed finding: cloud-init's own package-install module invokes `pacman -S` WITHOUT `--needed`, so on an image that already ships the minimum set (e.g. every Arch cloud image) it unconditionally REINSTALLS them — reinstalling openssh re-triggers its post-install host-key-regen hook while the base image's own sshd is already listening (on a socket-activated image; Arch cloud images typically ship no `ssh.socket`, which is why `composeBootCmd`'s mask is a `|| true` no-op there — the race needs only a live sshd, not a socket-activated one), racing a live key-file rewrite against new SSH connections (the observed "reset during `kex_exchange_identification`, guest otherwise idle" signature). apt/dnf installs are naturally no-op-idempotent when the package is already present, and apk's `add` is likewise a no-op for an already-present package, so only the pacman-family path needs the `--needed` rewrite. The `y` in `-Sy` is deliberate and its partial-upgrade hazard is ACCEPTED by design: a bare `-S` 404s against a rotated mirror, and the guest is a disposable, minutes-lived provisioning target where nothing long-lived survives on the pre-upgrade library set. The pacman-family check is `spec.DistroFormats[spec.Source.Distro] == "pac"` — a lookup into the generated format table keyed on the EXPLICIT field. Nothing is inferred from `base_user` or the image URL, and there is no fallback: an unset or out-of-vocabulary distro yields an empty format rather than the Arch/Fedora shape, which is why the vm kind's `OpValidate` requires the field at author time. See `sdk/vmshared/cloud_init_render.go` and `spec/schema/distro_vocab.cue`. **Note (D18):** the pacman-vs-non-pacman split governs ONLY the `packages:` key vs the `pacman -Sy` + sshd-resync runcmd prepend — every distro's `runcmd:` now ALSO carries the D18 hardening drop-in plus a per-init sshd start (unmask+enable on systemd, `rc-update`+`rc-service` on OpenRC), so this paragraph's scope is the packages-key handling alone, not the full runcmd list.
 
             ## WriteSeedISO
 
@@ -2074,7 +2082,6 @@ cloud-init-renderer-skill:
             | Strategy | Action |
             |---|---|
             | `auto` / `scp` | `scp $(os.Executable()) guest:/usr/local/bin/charly; chmod +x` |
-            | `url` | ssh-execute `curl -L <url> -o /usr/local/bin/charly && sha256sum -c` (verified against `VmCharlyInstall.Checksum`) |
             | `skip` | `ssh 'which charly'` — fails if missing, returns early if present |
 
             Idempotent. If `charly` is already present at the target version, the function returns without re-scp'ing. See `/charly-internals:vm-deploy-target` for how this plugs into the overall deploy flow.
@@ -2183,7 +2190,7 @@ cutover-policy-skill:
             ## Required for every breaking change
 
             - A new **migration-table entry** in `candy/plugin-migrate/migrations.cue` (a declarative `ops:` list, or an `apply:` `goHooks` hook for a structural reshape) PLUS a matching `#SchemaVersion` bump in `spec/schema/version.cue` (the spec repo — landed + tagged first, see `/charly-build:migrate`), applied via `task cue:gen`; the entry's CalVer is strictly greater than the current HEAD. Every cutover is one idempotent step applied by the op-walker on the one `charly migrate` command — there are no per-cutover sub-verbs. Running `charly migrate` twice is a no-op. See `/charly-build:migrate`.
-            - A **fresh release git tag** `v<YYYY.DDD.HHMM>` — ONE per merge, applied by the fresh `pr-validator` at MERGE from the current UTC merge time (never by the author at push time; author-time stamps collide/mis-order across concurrent PRs), **decoupled** from the `charly.yml` `version:` field (the schema version, bumped only when a cutover raises `#SchemaVersion`). Tag EVERY landing, including one that does NOT bump `version:` (content removal — a submodule extraction, an image drop). Tags are **immutable** — only ever added, never moved or force-pushed. Every component is fixed-width zero-padded (4-digit year, 3-digit day-of-year, 4-digit HHMM) so tags sort chronologically under a plain alphanumeric sort; the evaluator computes `v$(date -u +%Y.%j.%H%M)` at merge. Every repo (superproject, `box/<distro>`, `plugins`, `pkg/*`, `docs`) is tagged on its own merged HEAD — the tag marks the merge, not the schema, so no `charly.yml` is required; `sdk` ALONE uses its Go-module `v0.<YYYYDDD>.<HHMM leading-zeros-stripped>` scheme (a semver requirement, not an exemption). See `/charly-build:migrate` "Per-merge release git tags", `/charly-internals:git-workflow` "CalVer", and the project rulebook "Post-Execution Policies".
+            - A **fresh release git tag** `v<YYYY.DDD.HHMM>` — ONE per merge, applied by the fresh `pr-validator` at MERGE from the current UTC merge time (never by the author at push time; author-time stamps collide/mis-order across concurrent PRs), **decoupled** from the `charly.yml` `version:` field (the schema version, bumped only when a cutover raises `#SchemaVersion`). Tag EVERY landing, including one that does NOT bump `version:` (content removal — a submodule extraction, an image drop). Tags are **immutable** — only ever added, never moved or force-pushed. Every component is fixed-width zero-padded (4-digit year, 3-digit day-of-year, 4-digit HHMM) so tags sort chronologically under a plain alphanumeric sort; the evaluator computes `v$(date -u +%Y.%j.%H%M)` at merge. Every repo (superproject, `box/<distro>`, `plugins`, `docs`, and the `pkg/*` submodules until the nFPM cutover removes them — not yet done on `main`) is tagged on its own merged HEAD — the tag marks the merge, not the schema, so no `charly.yml` is required; `sdk` ALONE uses its Go-module `v0.<YYYYDDD>.<HHMM leading-zeros-stripped>` scheme (a semver requirement, not an exemption). See `/charly-build:migrate` "Per-merge release git tags", `/charly-internals:git-workflow` "CalVer", and the project rulebook "Post-Execution Policies".
             - **Hard load-time errors** for any residual legacy field, with a one-line remediation hint pointing at the migration command.
             - **Deletion — in the same PR** — of every Go type, function, CLI flag, OCI label, YAML field, skill doc paragraph, and test fixture that references the removed surface.
             - **Relocation step-sequence PARITY (when the cutover relocates a dispatcher, orchestrator, or runner).** Before relocating, ENUMERATE the original's per-CLASS behavior arms — e.g. bring-up / update / teardown × each substrate or shape class — and PROVE each class's step sequence matches the original in the relocated code. Fixing one arm of a class while missing its siblings is the CHARACTERISTIC relocation defect: a generic fallback that silently mis-handles a special class passes every unit test and fails ONLY on that class's live bed. The acceptance roster MUST therefore carry a bed per SPECIAL class (a gate that cannot fail on the class proves nothing — see `/charly-check:check` "R10 gate by change class").
@@ -2721,7 +2728,7 @@ egress-skill:
             > `sdk/deploykit`'s `renderSeamCaller.validateEgress` (a direct `verb:egress` `InvokeProvider`
             > peer dispatch, no host round-trip) — `charly` core no longer has a "text" mode caller at all.
             > The core-side `ValidateXMLEgress` wrapper was itself deleted as
-            > unreached residue in the 2026-07-22 dead-code-radical-removal batch — the sole surviving
+            > unreached residue in the dead-code-radical-removal batch — the sole surviving
             > `ValidateXMLEgress` is `candy/plugin-vm`'s own copy (`vm_egress_shim.go`), which Invokes
             > `verb:egress` directly (mode `xml`) over its own reverse channel for the rendered
             > libvirt-domain-XML path; every OTHER caller + the `vmshared.ValidateEgress` hook are unchanged. The
@@ -2787,7 +2794,7 @@ egress-skill:
             **best-effort**: a koala *decode* error → pass, deferring to the authoritative downstream gate; only a
             schema violation on a decoded document hard-fails) is still fully served by `verb:egress`'s
             `OpValidate` — there is simply no core-side `ValidateXMLEgress` convenience wrapper anymore (deleted as
-            unreached residue, 2026-07-22). Its one real caller, `candy/plugin-vm`, Invokes `verb:egress` with
+            unreached residue). Its one real caller, `candy/plugin-vm`, Invokes `verb:egress` with
             `mode: "xml"` directly through its own `ValidateXMLEgress` wrapper (`vm_egress_shim.go`) rather than
             through a core shim.
 
@@ -3333,8 +3340,14 @@ generate-source-skill:
                   **Create (idempotent useradd):**
                   ```dockerfile
                   RUN if ! getent passwd <UID> >/dev/null 2>&1; then \
-                        (getent group <GID> >/dev/null 2>&1 || groupadd -g <GID> <user>) && \
-                        useradd -m -u <UID> -g <GID> -s /bin/bash <user>; \
+                        LOGIN_SHELL=/bin/sh; [ -x /bin/bash ] && LOGIN_SHELL=/bin/bash; \
+                        if command -v useradd >/dev/null 2>&1; then \
+                          (getent group <GID> >/dev/null 2>&1 || groupadd -g <GID> <user>) && \
+                          useradd -m -u <UID> -g <GID> -s "$LOGIN_SHELL" <user>; \
+                        else \
+                          (getent group <GID> >/dev/null 2>&1 || addgroup -g <GID> <user>) && \
+                          adduser -D -h <home> -u <UID> -G <user> -s "$LOGIN_SHELL" <user>; \
+                        fi; \
                       fi
 
                   WORKDIR /home/<user>
@@ -3359,7 +3372,7 @@ generate-source-skill:
                   1. # Layer: <name>                 (comment header)
                   2. ARG TARGETARCH + ENV ARCH=${TARGETARCH}    (once; from emitVarsEnv)
                   3. ENV <K>=<V> for each layer.Vars entry      (also from emitVarsEnv)
-                  4. Package install: rpm/deb/pac/aur  (unchanged — format template render)
+                  4. Package install: rpm/deb/pac/aur/apk  (unchanged — format template render)
                   5. emitTasks(b, layer, img, buildDir, contextRelPrefix, initialUser):
                      for each t in layer.tasks:
                        resolve ${VAR} in non-verbatim fields
@@ -3380,7 +3393,7 @@ generate-source-skill:
                   6. USER root reset (unless last layer + skipRootReset)
                   ```
 
-                  The `plugin:` verb case is placement-agnostic above the registry. `plugin: command` is the one special case — it rehydrates `plugin_input.command` and emits via the SAME `emitCmd` as the literal `command` verb. Every other `plugin:` step resolves its provider via `providerRegistry.ResolveVerb`: a builtin `ProvisionActor` renders an act shell `RUN` in-proc (the zero-JSON fast path, `resolveProvisionScript`), while ANY other resolved provider — an external `grpcProvider` (host-built + connected by `NewGenerator`'s build-time plugin connect seam, `loadProjectPlugins`), or a builtin emitting a richer fragment — renders via `emitPluginFragment`, which calls `prov.Invoke(OpEmit)` with the step's `plugin_input` (`op.Params`) + a `spec.BuildEnv` descriptor (`op.Env`) and splices the returned `spec.EmitReply.Fragment` verbatim into the Containerfile. An unresolved verb is a loud error, never a silently-dropped step. This is the build half of operator-authorized build-time plugin execution — see `/charly-internals:plugin` (placement) + `/charly-build:generate`. (`emitPluginFragment`'s core is factored into the shared `invokeOpEmitFragment` seam, which the DEPLOY-mode pod-overlay `ociEmitStep` external-step arm (reached by the candy's `deploykit.OCITarget.EmitStepOp` over `HostBuild("step-emit","oci-emit-step")`) ALSO uses to bake an `external:<word>` `class:step` step declaring `StepContract.Emits=true` — F-STEP-EMIT, see `/charly-internals:install-plan`.)
+                  The `plugin:` verb case is placement-agnostic above the registry. `plugin: command` is the one special case — it rehydrates `plugin_input.command` and emits via the SAME `emitCmd` as the literal `command` verb. Every other `plugin:` step resolves its provider via `providerRegistry.ResolveVerb`: a builtin `ProvisionActor` renders an act shell `RUN` in-proc (the zero-JSON fast path, `resolveProvisionScript`), while ANY other resolved provider — an external `grpcProvider` (host-built + connected by `NewGenerator`'s build-time plugin connect seam, `loadProjectPlugins`), or a builtin emitting a richer fragment — renders via `emitPluginFragment`, which calls `prov.Invoke(OpEmit)` with the step's `plugin_input` (`op.Params`) + a `spec.BuildEnv` descriptor (`op.Env`) and splices the returned `spec.EmitReply.Fragment` verbatim into the Containerfile. An unresolved verb is a loud error, never a silently-dropped step. This is the build half of operator-authorized build-time plugin execution — see `/charly-internals:plugin` (placement) + `/charly-build:generate`. (`emitPluginFragment`'s core is factored into the shared `invokeOpEmitFragment` seam, which the DEPLOY-mode pod-overlay `dispatchOCIStep` external-step arm (reached by the candy's `deploykit.OCITarget.EmitStepOp` over `HostBuild("step-emit","oci-emit-step")`) ALSO uses to bake an `external:<word>` `class:step` step declaring `StepContract.Emits=true` — F-STEP-EMIT, see `/charly-internals:install-plan`.)
 
                   ### `Task` struct (`charly/layers.go:604`)
 
@@ -3515,7 +3528,7 @@ git-workflow-skill:
 
               Stage a rename+edit as `git add <new>` alone, and a deletion by DIRECTORY or with `git add -u`; never name the vanished path. **This shape defeats the post-commit check above**, which is why it needs stating separately: `git show --stat` DOES list the file, as `old.md => new.md | 0`, so "every intended file is listed" passes. Presence is not the signal — the tells are the **magnitude** (`| 0` insertions on a commit meant to change content) and a **leftover ` M <new>`** in `git status` afterwards. Read the numbers and the post-commit status, not just the filenames, and confirm content directly with `git show HEAD:<new-path> | head -1` whenever the edit is the point of the commit. The CalVer-finalization instance of this — renaming a placeholder `CHANGELOG/` file while rewriting its H1 — is in `references/validator-and-calver.md`.
             - **Check-coverage is part of R10.** The change must ship the test coverage that proves its functionality (`check:` checks for new/changed layers & images, Go tests for `charly` code) AND the live run must have exercised it. A change whose new functionality has no test that would fail without it is not landable.
-            - **Every repo is tagged at merge.** The superproject, every `box/<distro>`, `plugins`, `pkg/*`, and `docs` all mint `v<YYYY.DDD.HHMM>` on their own merged HEAD — the tag marks the MERGE, decoupled from any `charly.yml` `version:` schema field, so a repo needs no `charly.yml` to be tagged. The sole exception is the sdk contract repo, which tags under its own Go-module scheme `v0.<YYYYDDD>.<HHMM with all leading zeros stripped>` (B2 step 0) — **not an exemption but a hard Go-module requirement**: `v<YYYY.DDD.HHMM>` is not a valid Go module version (semver forbids a leading-zero segment — `0733`→`733` — and a `major ≥ 2` would force a `/vN` module-path suffix that breaks every `import github.com/opencharly/sdk`), so the stripped `v0.<…>` form is mandatory, not a choice. A skipped tag is a defect, not an exemption: the orchestrator verifies the tag landed after each merge (`git ls-remote --tags origin v<VER>` non-empty) and, if the evaluator skipped it, backfills it add-only on the merged HEAD (`git tag -a v<VER> -m "<subject>" <merged-HEAD>` + `git push origin refs/tags/v<VER>`) — tags are immutable, so a backfill only adds one, never moves an existing tag.
+            - **Every repo is tagged at merge.** The superproject, every `box/<distro>`, `plugins`, and `docs` — plus the `pkg/*` submodules until the nFPM cutover removes them, which it has not yet done on `main` — all mint `v<YYYY.DDD.HHMM>` on their own merged HEAD — the tag marks the MERGE, decoupled from any `charly.yml` `version:` schema field, so a repo needs no `charly.yml` to be tagged. The sole exception is the sdk contract repo, which tags under its own Go-module scheme `v0.<YYYYDDD>.<HHMM with all leading zeros stripped>` (B2 step 0) — **not an exemption but a hard Go-module requirement**: `v<YYYY.DDD.HHMM>` is not a valid Go module version (semver forbids a leading-zero segment — `0733`→`733` — and a `major ≥ 2` would force a `/vN` module-path suffix that breaks every `import github.com/opencharly/sdk`), so the stripped `v0.<…>` form is mandatory, not a choice. A skipped tag is a defect, not an exemption: the orchestrator verifies the tag landed after each merge (`git ls-remote --tags origin v<VER>` non-empty) and, if the evaluator skipped it, backfills it add-only on the merged HEAD (`git tag -a v<VER> -m "<subject>" <merged-HEAD>` + `git push origin refs/tags/v<VER>`) — tags are immutable, so a backfill only adds one, never moves an existing tag.
 
             ## Reference Index
 
@@ -3654,6 +3667,32 @@ git-workflow-skill:
                   written alongside the change it describes is written before the tree its reader
                   will check it against.
 
+                  **Before merging a superproject leg, verify every gitlink is an ANCESTOR of its own repo's
+                  `origin/main` — not merely that it matches a local checkout.** Those are different questions and
+                  only the first discriminates:
+
+                  ```bash
+                  git config --file .gitmodules --get-regexp path | awk '{print $2}' | while read -r s; do
+                    g=$(git ls-tree HEAD "$s" | awk '{print $3}')
+                    (cd "$s" && git fetch -q origin &&
+                     git merge-base --is-ancestor "$g" origin/main && echo "$s MERGED" || echo "$s NOT ON main")
+                  done
+                  ```
+
+                  "The gitlink matches the submodule's HEAD" **cannot fail in the case it exists to catch**: a checkout
+                  sitting on a PR head satisfies it perfectly. Measured on one leg, that phrasing reported nine
+                  submodules clean while **four** named commits on no branch — and it counted seven, with both
+                  uncounted submodules in the failing set, so the miscount and the wrong question compounded.
+
+                  **An unmerged pin is worse than an early one:** when the target PR merges, the CalVer commit plus the
+                  squash produce a DIFFERENT sha, so the pin becomes permanently wrong rather than eventually right. A
+                  pin may legitimately name an unmerged head while its PR is open — the normal mid-flight state — but it
+                  must be re-derived from `origin/main` before the leg merges.
+
+                  Expect **post-squash staleness** too: a pin at a pre-squash feat head stops being an ancestor the
+                  moment its PR squash-merges. Check whether `origin/main` is strictly AHEAD (it usually is, carrying the
+                  CalVer finalization) before concluding anything was orphaned.
+
                   **Gitlink ANCESTOR bump → `gh pr update-branch` flags CONFLICTING (recover
                   locally).** When the just-merged delta and a still-open PR both bump the SAME
                   submodule gitlink and one bump is an ANCESTOR of the other, GitHub's
@@ -3765,7 +3804,7 @@ git-workflow-skill:
                   validator-owned), so tier truth is judged by the fresh `pr-validator`, per the
                   rulebook's "never by hook regexes".
 
-                  ## B4 — sync to upstream + prune (per repo: main, sdk, plugins, docs, box/*, pkg/*)
+                  ## B4 — sync to upstream + prune (per repo: main, sdk, plugins, docs, box/*)
 
                   - **Sync-before-start.** `git fetch origin --prune --tags`; ff local `main` to
                     `origin/main`. Never force-reset a diverged local `main` — if it cannot
@@ -4172,10 +4211,10 @@ git-workflow-skill:
                   footgun: a MUTATING command (anything that writes files or runs `git
                   submodule update` as a side effect — `task cue:gen` is the canonical
                   offender) run against a stale, ambient cwd doesn't just misreport, it
-                  MUTATES the wrong tree. Live incident: a fresh evaluator ran `task cue:gen`
+                  MUTATES the wrong tree. Failure mode: a fresh evaluator runs `task cue:gen`
                   with a persisted shell cwd that had drifted to the main session worktree —
-                  the task's own `git submodule update` chain rewound 5 submodule checkouts +
-                  the `pkg/arch` gitlink there before the mistake was caught (fully restored,
+                  the task's own `git submodule update` chain rewound 5 submodule checkouts
+                  there before the mistake was caught (fully restored,
                   disclosed). So every mutating task/command invocation in an isolated-worktree
                   workflow (a validator run, a teammate's branch work, a spike) carries an
                   explicit `cd <worktree> &&` anchor IN THE SAME compound command — never a
@@ -4404,7 +4443,7 @@ git-workflow-skill:
 
                   One fresh stamp per merge, immutable (only ever added), independent of `charly.yml`
                   `version:` (the schema version, bumped only by a cutover raising `#SchemaVersion`).
-                  Every repo (superproject, `box/<distro>`, `plugins`, `pkg/*`, `docs`) mints `v$VER` on its
+                  Every repo (superproject, `box/<distro>`, `plugins`, `docs`, and `pkg/*` while it still exists on `main`) mints `v$VER` on its
                   merged HEAD; `sdk` alone uses its Go-module `v0.<YYYYDDD>.<HHMM
                   leading-zeros-stripped>` scheme (not an exemption — Go modules require semver, which
                   forbids a leading-zero segment — `0733`→`733`). A YAML schema/format change does
@@ -5144,6 +5183,61 @@ git-workflow-skill:
                   argument for the mechanical form, and it is now measured rather than asserted**: the
                   documentary version was given the most favourable test available and failed it three times
                   in one session.
+                  ### A guard that cannot fail is worse than no guard
+
+                  Four times in one cutover an unmerged change was written as landed fact — "presence **is**
+                  enforced", the traits "**are now**" generated, the inference "**is** deleted", the defect "**is**
+                  fixed". Each was caught by a reviewer AFTER it shipped into a PR body or CHANGELOG. The pattern is
+                  not carelessness: while you hold a whole cutover in your head, the branch state IS your reality,
+                  and present tense is the honest-feeling voice for it. So the guard has to be **mechanical, not
+                  attentional** — you cannot pay closer attention to a bias you cannot feel.
+
+                  **Guard 1 — every commit SHA an entry names, checked for landed state AND subject:**
+
+                  ```bash
+                  for sha in $(grep -ohE '\b[0-9a-f]{7,40}\b' CHANGELOG/<entry>.md | sort -u); do
+                    for repo in . <superproject-path>; do        # BOTH — see below
+                      git -C "$repo" cat-file -e "${sha}^{commit}" 2>/dev/null || continue
+                      git -C "$repo" merge-base --is-ancestor "$sha" origin/main && st=LANDED || st=UNMERGED
+                      printf '%s %s %s\n' "$sha" "$st" "$(git -C "$repo" log -1 --format=%s "$sha")"; break
+                    done
+                  done
+                  ```
+
+                  The **subject** is half the value: it catches citing the wrong commit, which happened here — a
+                  CHANGELOG named the branch HEAD (a docs commit) as the commit carrying a code fix. A docs subject
+                  printed beside a "the fix is" claim is visible at a glance; a bare SHA is not.
+
+                  **The first version of that guard was VACUOUS, and this is the part to carry.** It ran
+                  `git cat-file -e` only in the submodule, for a SHA that lived in the **superproject**. The SHA
+                  resolved nowhere, the loop `continue`d, and the guard printed nothing — reporting clean while
+                  skipping the single citation it existed to check. A cross-repo citation is exactly the case a
+                  local-only resolve drops silently.
+
+                  > **A guard that reports "all citations verified" without discriminating is more dangerous than no
+                  > guard: it converts an open question into a false answer.** Before trusting one, feed it the
+                  > failing case on purpose and require it to complain.
+
+                  **Guard 2 — grep the entry's own prose, with the exclusion that makes it usable:**
+
+                  ```bash
+                  grep -nE '\b(is|are) (now )?(enforced|generated|deleted|removed|fixed)\b' CHANGELOG/<entry>.md
+                  ```
+
+                  Most hits are CORRECT and must not be hedged. The discriminator:
+
+                  | the claim is about… | verdict |
+                  |---|---|
+                  | **this entry's own diff** | present tense is right — the entry ships with the commit that does it |
+                  | **another repo's unmerged branch** | defect — scope it ("lands with this cutover's sdk leg, unmerged") |
+
+                  Omitting that exclusion turns the guard into busywork: true sentences get rewritten into hedged
+                  ones, and an entry that hedges its own change reads as uncertainty about the change itself.
+
+                  **Why this matters more than it looks.** In the cutover that produced these guards, one PR took six
+                  heads to land and the change itself was correct at head one and never moved — every round was the
+                  *evidence narrative* being written faster than it could be verified. The code was never the
+                  bottleneck. These two checks cost seconds and catch precisely that class.
 go-skill:
     skill:
         name: go
@@ -5178,7 +5272,7 @@ go-skill:
 
             | Action | Command | Description |
             |--------|---------|-------------|
-            | Build | `task build:binary` | Compile to `bin/charly` (CalVer-stamped), NO install. Also copies to `candy/charly/bin/charly` — does NOT touch the tracked `pkg/arch/PKGBUILD` (that file is read only by the legacy `charly box pkg` native-package build, removed with the nFPM cutover) |
+            | Build | `task build:binary` | Compile to `bin/charly` (CalVer-stamped), NO install. Also copies to `candy/charly/bin/charly` — does NOT touch any packaging source (the native packages are built by the `charly generate-packages` plugin from the candy's `packaging:` section) |
             | Package | `charly generate-packages` (nFPM plugin) | Build a distro-native `.pkg.tar.zst`/`.rpm`/`.deb`/`.apk`/`.ipk` release artifact via the `charly generate-packages` plugin (nFPM, `sdk/packagekit`), published to the per-distro package repos. Install it yourself with your OWN package manager (`pacman -U`/`dnf install`/`apt install`/`apk add`) |
             | Install (portable) | `task build:install-portable` | Copy `bin/charly` to `$HOME/.local/bin/charly` (solo bootstrap; NOT a multi-teammate dev-loop step — see below) |
             | Run tests | `cd charly && go test ./...` | Run all tests |
@@ -5287,6 +5381,50 @@ go-skill:
               the lock open fail with ENOENT, which golangci-lint reports as "parallel golangci-lint
               is running" — a false positive, not a real parallel run. Create the TMPDIR dir first
               (or pass `--allow-parallel-runners` with a fresh cache). See `/charly-internals:go-quality`.
+            - **Keep `$TMPDIR` short for any suite that connects a plugin.** go-plugin serves
+              each plugin over a UNIX socket at `$TMPDIR/plugin<random digits>`, and `sun_path`
+              caps the whole path at 107 bytes — leaving `$TMPDIR` a little under 90. The digit
+              count varies, so a path near the budget fails intermittently: the same directory
+              passes, then fails, unchanged. Use a short path under `/tmp` and leave headroom.
+              `GOTMPDIR` is a separate variable and may stay long — Go's build work needs no
+              socket.
+
+              Over budget, `bind` returns `invalid argument` and the loader reports
+              `Unrecognized remote plugin message` / `Failed to read any lines from plugin's
+              stdout`, blaming architecture, libraries, or permissions — none of which is the
+              cause. The visible failure is a downstream assertion, e.g.
+              `TestExternalStructKind_StructuralDecode` reporting `structural plugin kind not
+              folded into uf.Fleet; have fleet keys []`.
+
+            - **`CHARLY_PLUGIN_DIR` prepends; `CHARLY_PLUGIN_ONLY=1` is what excludes.**
+              `bakedPluginDirs()` returns `$CHARLY_PLUGIN_DIR` when set and then appends the FHS
+              `/usr/lib/charly/plugins`, so pointing the dir at an empty directory masks nothing.
+              `CHARLY_PLUGIN_ONLY=1` drops the FHS path, making the search exactly
+              `$CHARLY_PLUGIN_DIR` (or empty when that is unset). It is an EXACT `1` match, so a
+              typo fails closed and a deployed container keeps finding its own baked plugins.
+
+              **Baked lookup is keyed by WORD and short-circuits the project scan.**
+              `resolveCommandPluginBinary` returns on a baked hit before the project loads: a
+              baked word resolves to the baked binary and its project declaration is never
+              consulted, while an unbaked word falls through to the project scan normally. So
+              `charly examplecommand hello world` prints `hello world` from the project candy
+              even where the charly package is installed — `examplecommand` is not baked.
+
+              To exercise a BAKED word's project declaration, drop the FHS path — a `--help`
+              probe cannot distinguish the two sources:
+
+              ```
+              CHARLY_PLUGIN_ONLY=1 ./bin/charly <word>
+              ```
+
+              With the project candy present this reaches the project-built plugin; remove the
+              candy and the same command gives `charly: error: unexpected argument <word>`.
+              **Run both arms.** The first shows the word resolves but not WHAT served it; the
+              second is what ties the resolution to the project candy, by removing the only
+              remaining source and watching it break. (Without the flag the second arm still
+              resolves — via the baked binary — which is why the flag is required for the pair
+              to mean anything.)
+
             - `.claude/hooks/pre-commit-gate.sh` (the staged-Go-lint discipline backstop) redirects
               its own lint temp dirs to `~/.cache/charly-gate-lint/` and creates the TMPDIR/GOTMPDIR
               subdirs, so it is unaffected by the cap wherever it runs. Note it is NOT wired in
@@ -5318,11 +5456,12 @@ go-skill:
               multi-teammate / multi-worktree setup") catches a stale invoked binary against
               newer `charly/*.go` in the same tree, but the version check is still the
               explicit proof — the per-worktree-vs-host-package split lives there too.
-            - **Every runtime OS dependency goes into `pkg/arch/PKGBUILD` `depends=`** —
-              the single source of truth (`nc`, `socat`, `xorriso`, `qemu-guest-agent`, …);
-              the `pkg/fedora` / `pkg/debian` packaging mirrors it. A manual install on one
-              host is a bug report disguised as a fix — it won't survive a fresh install on
-              a synced host.
+            - **Every runtime OS dependency goes into the charly candy's `packaging:`
+              section** (`candy/charly/charly.yml` `packaging.formats.*.depends`) — the
+              single source of truth (`nc`, `socat`, `xorriso`, `qemu-guest-agent`, …),
+              read by the `charly generate-packages` plugin (sdk/packagekit). A manual
+              install on one host is a bug report disguised as a fix — it won't survive a
+              fresh install on a synced host.
 
             The verification side (checking the deployed binary + deps on a live target)
             is `/charly-check:check` Standards 7–9; the dual-path `bin/charly` ↔
@@ -5510,7 +5649,7 @@ go-skill:
                   - `spec/spec/charly_names.go` — charly-name Go type aliases (def-level `@go(CharlyName)` is broken in cue v0.16.1; see the next section). Not a wire struct.
                   - The host↔plugin & render-context wire structs are **fully CUE-SOURCED — the `spec/spec/*_wire.go` hand-written-file class is EXTINCT** (the last 13 — deploy/init/gpu/doctor/enc/feature/k8sgen/resource/settings/substrate_template/agent/distro/vm — converted in the SDD-conversion batch; `arbiter_wire.go` landed earlier, FLOOR-SLIM Unit-8B). `buildctx.cue` (`InstallContext`/`BuildStageContext`), `clean.cue` (`RetentionRequest`/`RetentionReply`), `arbiter.cue` (+ the hand `spec/spec/arbiter_consts.go` string-enum residue), and now `agent.cue`/`distro.cue`/`init.cue`/`vm.cue`/`resource.cue`/`sidecar.cue` (appended) plus `settings.cue`/`feature.cue`/`doctor.cue`/`gpu.cue`/`enc.cue`/`k8sgen.cue`/`substrate_template.cue`/`buildwire.cue` (new) and `deploy.cue`/`seam.cue` (appended, the deploy-IR/build-time/lifecycle wire) are ALL LANDED — no hand-written wire-struct file remains anywhere in `spec/spec`. Any NEW wire type is authored the same way: a CUE def in `spec/schema/*.cue`, generated by `task cue:gen` (a plain/discriminated struct always generates, referencing a disjunction/state type by name where one is genuinely needed) — hand-writing one is a mandate violation from the first line, never a "conversion-in-progress" grace period. The handful of NAMED ENUM TYPES with Go behavior gengotypes cannot generate (`Scope` + its `String()`/`ScopeFromName`, mirroring `Status` in `status_result.go`) and the per-domain STRING-CONSTANT groups (`ReverseOpKind`, `EncMethod*`, `GpuMode*`/`HostDriver*`, `ArbiterAction*`) stay hand-written in small `spec/spec/*_consts.go` / `spec/spec/*_methods.go` files beside their CUE-generated struct siblings — never a type CUE could express, always a documented, spike-justified exception per the taxonomy above.
                   - `spec/protocol/schema/*.cue` — the gRPC transport model, including services and streaming flags. The project-owned `spec/internal/wiregen` generator closes the former CUE→proto tooling gap; `spec/proto/plugin.proto` and all language stubs are generated and must never be edited directly.
-                  - **`json:"-"` fields (keep-in-Go, drop-from-wire)** — `gengotypes` has NO construct for a field that exists in memory but is excluded from marshaling (it emits a real `json:"<name>,omitempty"` tag instead). **RDD spike (2026-07-12, cue v0.16.x, the P12 check seam):** `kit.CheckResult.DeadlineExceeded bool json:"-"` (an engine-internal retry signal that must never cross the wire) is genuinely inexpressible — but the spike ALSO confirmed the REST of `CheckResult` (`Op`/`Verb`/`Status`/`Message`/`Elapsed`/`Attempts`/`TotalElapsed`/`CapturedValue`) generates faithfully. FLOOR-SLIM Unit 4 acted on that: `spec/schema/checkresult.cue` → `spec.CheckResult` is CUE-sourced (the base), and `kit.CheckResult` is now `struct { spec.CheckResult; DeadlineExceeded bool json:"-" }` — an EMBEDDING WRAPPER adding back ONLY the one field, not a hand-duplicated whole type. The legal exception this bullet documents is narrower than it once was: a hand-written field on an otherwise CUE-sourced type is the LEGAL documented shape, not a hand-written type in its entirety — apply the same embed-wrapper pattern to any other single-field `json:"-"` exception before assuming the whole containing type must stay hand-written.
+                  - **`json:"-"` fields (keep-in-Go, drop-from-wire)** — `gengotypes` has NO construct for a field that exists in memory but is excluded from marshaling (it emits a real `json:"<name>,omitempty"` tag instead). **RDD spike (cue v0.16.x, the P12 check seam):** `kit.CheckResult.DeadlineExceeded bool json:"-"` (an engine-internal retry signal that must never cross the wire) is genuinely inexpressible — but the spike ALSO confirmed the REST of `CheckResult` (`Op`/`Verb`/`Status`/`Message`/`Elapsed`/`Attempts`/`TotalElapsed`/`CapturedValue`) generates faithfully. FLOOR-SLIM Unit 4 acted on that: `spec/schema/checkresult.cue` → `spec.CheckResult` is CUE-sourced (the base), and `kit.CheckResult` is now `struct { spec.CheckResult; DeadlineExceeded bool json:"-" }` — an EMBEDDING WRAPPER adding back ONLY the one field, not a hand-duplicated whole type. The legal exception this bullet documents is narrower than it once was: a hand-written field on an otherwise CUE-sourced type is the LEGAL documented shape, not a hand-written type in its entirety — apply the same embed-wrapper pattern to any other single-field `json:"-"` exception before assuming the whole containing type must stay hand-written.
                   - `Op.Kind()` (`spec/spec/charly_methods.go`) — the exactly-one-discriminator cross-field rule, kept in Go because CUE cannot express it as a generable annotation. A method, not a type.
 
                   **Spike-proven CAN/CANNOT quick reference (reuse these results — do NOT re-spike settled shapes; DO spike any new shape class):**
@@ -5662,7 +5801,7 @@ go-skill:
                   | File | Role |
                   |---|---|
                   | `spec/spec/cue_types_gen.go` (generated) | `VmSpec` (= `Vm`) + `VmSource` discriminated union (cloud_image / bootc) + `VmChecksum` + `VmNetwork` + `VmSSH` + `VmKeyInjection` |
-                  | `spec/spec/cue_types_gen.go` (generated) | `VmCloudInit` + `VmCloudInitUser/File/Network/Mirrors` + `VmCharlyInstall` (auto/scp/url/skip state machine) |
+                  | `spec/spec/cue_types_gen.go` (generated) | `VmCloudInit` + `VmCloudInitUser/File/Network/Mirrors` + `VmCharlyInstall` (auto/scp/skip state machine) |
                   | `sdk/vmshared/libvirt_yaml.go` | `LibvirtDomain` + 30+ sub-types (features, CPU, clock, memory backing, numatune, cputune, devices, seclabel, launch security, resource, sysinfo) — the opencharly YAML-facing shape of the `libvirt:` stanza |
                   | `candy/plugin-vm/libvirt_yaml_bridge.go` | `RenderDomainXML`/`BuildLibvirtDomainXML` pure functions (build a `libvirtxml.Domain` tree, marshal to XML) + `buildDomainDevices` device emission (passt backend, portForward attribute order, virtio-gpu default, SMBIOS credentials, `XMLPassthrough` merge) |
                   | `sdk/vmshared/qemu_render.go` | `RenderQemuArgv` for direct-QEMU backend |
@@ -5711,7 +5850,7 @@ go-skill:
                   | `candy/plugin-box/{validate_config_rules.go, validate_schema_rules.go}` | The host-natural validation checks that need the raw loader — the former `charly/validate.go` is DELETED, K-wave 2 (they moved to the compiled-in `command:box` plugin): CUE-conformance (`validateCandyCUESchemas` / `validateProjectCUESchemas`), `validateBuildAndDistro`, `validateBuildTunables`, `validateMergeConfig`, `validateBuilderRefs`, `validateBoxBaseFrom`, `validateRemoteCandies`, `boxEntityWireYAML`, `isNodeFormFile` (`validate_schema_rules.go`); the box+config rule set lives in `validate_config_rules.go`. Format/builder validation against config definitions (not hardcoded maps). The per-kind/op/candy/graph rule ENGINE (`validateCandyTasks` / `validateCandyContents` / `validateAliases` / `validateVolume` / `validateCandyReferences` / the box+candy DAGs / `validateOps` / the candy `plugin:` block checks) moved to the compiled-in `command:box` plugin (`candy/plugin-box/{validate.go, validate_rules.go, validate_graph.go, validate_check.go}`), reading the resolved-project envelope. (`validateVocabularyCollections` + its sibling `validateEntityCUE`, and core's `validatePluginCandy`, were dead-code-radical-removal-batch deletions — the modern per-kind LOAD-time plugin gate and `candy/plugin-box`'s own `plugin:`-block checks supersede them; see the batch's CHANGELOG entry for the coverage-comparison evidence.) |
                   | `version.go` | CalVer computation |
                   | `sdk/kit/scaffold.go` | `new layer` scaffolding (`kit.ScaffoldCandy` — single-layer dir creation with stub `charly.yml`; the former `charly/scaffold.go` is DELETED, K-wave 2) |
-                  | `box_fetch_reentry.go` — DELETED (K-wave 2). | The hidden `charly __box-fetch` / `__box-refresh` core reentry points behind the COMPILED-IN candy/plugin-authoring command:fetch / command:refresh verbs (P14b) moved with the file. The repo resolver (`ResolveProjectRepo` → `EnsureRepoDownloaded`: `CHARLY_REPO_OVERRIDE` + the refs-backend dispatch + the command:migrate auto-migration) is host-coupled, so the authoring plugin re-runs these hidden commands over `HostBuild("cli")` (the SAME seam candy/plugin-box's `pkg` verb uses for `__box-pkg`). The `box set/add-candy/rm-candy/write/cat` authoring verbs + the `AddCandyToBox`/`RemoveCandyFromBox` yaml.Node helpers + `resolveProjectFile` (the path-traversal guard for `box write` / `box cat`) MOVED to the compiled-in `command:authoring` plugin (`candy/plugin-authoring`, P14b) — they run PURE on sdk/kit (`kit.SetByDotPath` / `kit.MappingChild` / `kit.SaveYAMLNodeFile`) + stdlib, zero core reentry. The create-side `box new project/box/candy` ENGINE is `kit.ScaffoldProject` / `kit.AddBox` / `kit.ScaffoldCandy` (shared with candy/plugin-box's command:new). Tested in `sdk/kit/scaffold_test.go` (the kit-scaffolder tests) + `candy/plugin-authoring/authoring_edit_test.go` (the moved helpers). |
+                  | `box_fetch_reentry.go` — DELETED (K-wave 2). | The hidden `charly __box-fetch` / `__box-refresh` core reentry points behind the COMPILED-IN candy/plugin-authoring command:fetch / command:refresh verbs (P14b) moved with the file. The repo resolver (`ResolveProjectRepo` → `EnsureRepoDownloaded`: `CHARLY_REPO_OVERRIDE` + the refs-backend dispatch + the command:migrate auto-migration) is host-coupled, so the authoring plugin re-runs these hidden commands over `HostBuild("cli")`. The `box set/add-candy/rm-candy/write/cat` authoring verbs + the `AddCandyToBox`/`RemoveCandyFromBox` yaml.Node helpers + `resolveProjectFile` (the path-traversal guard for `box write` / `box cat`) MOVED to the compiled-in `command:authoring` plugin (`candy/plugin-authoring`, P14b) — they run PURE on sdk/kit (`kit.SetByDotPath` / `kit.MappingChild` / `kit.SaveYAMLNodeFile`) + stdlib, zero core reentry. The create-side `box new project/box/candy` ENGINE is `kit.ScaffoldProject` / `kit.AddBox` / `kit.ScaffoldCandy` (shared with candy/plugin-box's command:new). Tested in `sdk/kit/scaffold_test.go` (the kit-scaffolder tests) + `candy/plugin-authoring/authoring_edit_test.go` (the moved helpers). |
                   | `sdk/kit/yaml.go` *(SDK kit, not `charly/`)* | `kit.SetByDotPath(path, dotpath, valueYAML)` + `kit.MappingChild(m, key)` — the generic comment-preserving YAML node utilities used by `charly box set` and the `command:candy` plugin. Walk `*yaml.Node` trees; create intermediate mappings on demand; reject descent into scalars. Tested in `sdk/kit/yaml_test.go` (`TestSetByDotPath_ScalarReplacement` + list-value, intermediate-mapping, scalar-descent-error cases). |
 
                   ### Plugins, external deploy & build-time emit
@@ -5961,10 +6100,10 @@ go-quality-skill:
             go vet ./...
             ```
 
-            Baseline at authoring (2026-06, broadest uncapped): **1017 issues** — errcheck 457,
-            staticcheck 242, unparam 100, unused 53, gocyclo 46, gocritic 43, errorlint 29, prealloc 29,
-            dupl 10, ineffassign 4, unconvert 3, misspell 1. Re-run to refresh; the per-linter shape is the
-            triage map.
+            Run it uncapped to get the current baseline, and read the per-linter SHAPE rather than the
+            total — which linter leads tells you what kind of debt you are looking at. Neither a count
+            nor a distribution is pasted here: both would be stale before they were read, and a stale
+            SHAPE misleads more quietly than a stale total.
 
             **Measurement gotcha — measure with the configured run, never `--enable-only`.** The
             authoritative count is `golangci-lint run ./...` (the configured set), which DEDUPLICATES
@@ -5977,7 +6116,7 @@ go-quality-skill:
 
             ## Auto-fix safety — never blanket `--fix`
 
-            **`golangci-lint run --fix` corrupts this source tree** (confirmed 2026-06-14, v2.12.2):
+            **`golangci-lint run --fix` corrupts this source tree** (confirmed with v2.12.2):
             gocritic's autofixer rewrites multi-statement blocks into a one-liner whose body it emits as a
             literal `{ ... }` elision placeholder — the `...` is gocritic's snip marker, written verbatim
             into the file → `syntax error: unexpected ...` (broke `ssh_client.go` + `deploy_executor_nested.go`,
@@ -6197,7 +6336,7 @@ install-plan-skill:
             |---|---|
             | `spec/spec/provider_carriers.go` + `charly/provider_registry.go` | The provider carrier interfaces are `spec.StepContractCarrier` / `StructuralKindCarrier` / `ValidatingKindCarrier` / `DeployTraitsCarrier` / `PhaseCarrier` (spec-side, so host and plugin read ONE definition); core keeps only the `phaseOfProvider` reader in `charly/provider_registry.go`. `charly/install_plan.go` is GONE — every IR type it once declared natively lives in spec: `InstallPlan` + `DeployTarget` → `spec/spec/install_plan.go`; `InstallStep` → `spec/spec/install_step.go`; `EmitOpts` → `spec/spec/deploy_executor.go`; `GateEnabled` → `spec/spec/install_plan_view.go`; `ReverseOp` → CUE-sourced at `spec/schema/deploy.cue` (`#ReverseOp`, listed below); `HomeToken` → `spec.HomeToken`, re-exported by `sdk/deploykit/plan.go`. Package main and the SDK share ONE type (R3) — a charly-side re-declaration is the ZERO-ALIASES violation this move dissolved |
             | `sdk/deploykit/install_build.go` | `BuildDeployPlan` pure compiler: `Candy` → `InstallPlan` (moved from `charly/install_build.go`) |
-            | `charly/build_target_oci.go` | Residual helper only (P11c): the pod-overlay Containerfile WALKER (`OCITarget`) MOVED to `sdk/deploykit/oci_target.go` as the kind-blind `deploykit.OCITarget` walker, and the per-step DISPATCH ENTRY POINT is `charly/oci_step_emit.go` (`ociEmitStep`/`dispatchOCIStep` — a thin forwarder; the dispatch DECISION itself relocated to `candy/plugin-installstep`'s `"oci-dispatch"` word, K5-A item 2). This file keeps only `formatDefCacheMountDefs` (a `FormatDef.CacheMount` bridge `deploy_host_helpers.go` reads). The DEPLOY-mode overlay render — `add_candy:` Containerfile synthesis — now lives in `candy/plugin-deploy-pod/overlay.go`; `dispatchOCIStep` forwards the plugin-served build-emit kinds (`deploykit.PluginEmitStepWords` — the PURE C1.1 kinds + the no-op-emit `reboot` (C1.6) + the HOST-COUPLED `system-packages` (C1.2) + `builder` (C1.3) + `local-pkg-install` (C1.4) + `op` (C1.5)) plus the authored `external:<word>` step and the `ExternalPlugin` verb step to the compiled-in `class:step` plugin `candy/plugin-installstep`'s `"oci-dispatch"` word, which itself resolves the TARGET provider via the class-generic `DescribeProvider` (cached StepContract metadata) + `InvokeProvider` (dispatch) reverse-channel legs — no direct in-core `providerRegistry` consult anymore. The host-coupled kinds (`system-packages`/`builder`/`local-pkg-install`/`op`) no longer call back a host `step-emit` renderer at all (K5-Unit-6b): the plugin's `"oci-dispatch"` word fetches the `"resolved-project"` envelope once per project dir and renders them DIRECTLY against its own `deploykit.Generator` (built via `deploykit.NewRenderGeneratorFromProject`), so the `HostBuild("step-emit","oci-emit-step")` seam is a thin dispatch forwarder only, not a render callback; a no-op-emit word like `apk-install`/`reboot` declares `Emits=false` and the plugin's dispatch skips its `OpEmit` entirely |
+            | `charly/build_target_oci.go` | Residual helper only (P11c): the pod-overlay Containerfile WALKER (`OCITarget`) MOVED to `sdk/deploykit/oci_target.go` as the kind-blind `deploykit.OCITarget` walker, and the per-step DISPATCH ENTRY POINT is `charly/oci_step_emit.go` (`dispatchOCIStep` — a thin forwarder; the dispatch DECISION itself relocated to `candy/plugin-installstep`'s `"oci-dispatch"` word, K5-A item 2). This file keeps only `formatDefCacheMountDefs` (a `FormatDef.CacheMount` bridge `deploy_host_helpers.go` reads). The DEPLOY-mode overlay render — `add_candy:` Containerfile synthesis — now lives in `candy/plugin-deploy-pod/overlay.go`; `dispatchOCIStep` forwards the plugin-served build-emit kinds (`deploykit.PluginEmitStepWords` — the PURE C1.1 kinds + the no-op-emit `reboot` (C1.6) + the HOST-COUPLED `system-packages` (C1.2) + `builder` (C1.3) + `local-pkg-install` (C1.4) + `op` (C1.5)) plus the authored `external:<word>` step and the `ExternalPlugin` verb step to the compiled-in `class:step` plugin `candy/plugin-installstep`'s `"oci-dispatch"` word, which itself resolves the TARGET provider via the class-generic `DescribeProvider` (cached StepContract metadata) + `InvokeProvider` (dispatch) reverse-channel legs — no direct in-core `providerRegistry` consult anymore. The host-coupled kinds (`system-packages`/`builder`/`local-pkg-install`/`op`) no longer call back a host `step-emit` renderer at all (K5-Unit-6b): the plugin's `"oci-dispatch"` word fetches the `"resolved-project"` envelope once per project dir and renders them DIRECTLY against its own `deploykit.Generator` (built via `deploykit.NewRenderGeneratorFromProject`), so the `HostBuild("step-emit","oci-emit-step")` seam is a thin dispatch forwarder only, not a render callback; a no-op-emit word like `apk-install`/`reboot` declares `Emits=false` and the plugin's dispatch skips its `OpEmit` entirely |
             | `candy/plugin-installstep` | Compiled-in DUAL-PLACEMENT `class:step` plugin serving the BUILD-context `OpEmit` for the compiler-emitted builtin InstallStep kinds. Three sub-categories: the PURE kinds — `file`/`shell-hook`/`shell-snippet`/`service-packaged`/`service-custom`/`repo-change`/`apk-install` (C1.1) + the no-op-emit `reboot` (C1.6) — whose fragment is pure string formatting from the compiler-produced `spec.InstallStepView` (the SAME view the deploy walk consumes), returned directly from `OpEmit`; `local-pkg-install` (C1.4), whose render (`deploykit.RenderLocalPkgImageInstall` — the `charly generate-packages` plugin build + host-dir staging for a dev bed, the release-download RUN for production, W3) is a PURE `sdk/deploykit` function operating only on its step argument (no `*Config`, no live `*Candy` graph) — it renders the SAME pure way as its siblings (no host callback); and the genuinely HOST-COUPLED `system-packages` (C1.2) + `builder` (C1.3) + `op` (C1.5) kinds. NONE of these call back a host `step-emit` renderer (K5-Unit-6b): the plugin's `"oci-dispatch"` word fetches the `"resolved-project"` envelope once per project dir and renders all four DIRECTLY against its own `deploykit.Generator` (built via `deploykit.NewRenderGeneratorFromProject`) — `system-packages` against the DistroDef format templates, `builder` against the multi-stage `buildStageContext` + `RenderTemplate` engine, `op` (the RICHEST) via the SAME `Generator.emitTasks` the box build uses (the full per-verb render pipeline with COPY staging + op coalescing), just invoked from the plugin's own Generator instance rather than a host round-trip. `apk-install` and `reboot` declare `Emits=false` (no-op build-emit — an image build installs no apk / reboots nothing). The DEPLOY leg for ALL these kinds is UNCHANGED (`sdk/kit.WalkPlans`; `system-packages` + `builder` + `local-pkg-install` are host-engine via `RunHostStep` → `renderHostPackageCommand` / `runVenueBuilderStep` / `deploykit.ExecLocalPkgInstall`; `op` is the act-OpStep `resolveProvisionScript` path (`charly/checkrun_act.go` / `charly/plugin_executor_reverse.go` — the former `renderOpCommand` wrapper around it was dead-code-radical-removal-batch deleted, test-only, zero production callers); `reboot` is the host-side guest reboot via `RunHostStep` → `rebootVenueAndWait`) — this plugin serves ONLY `OpEmit`; with C1.6 the compiler-emitted kinds are plugin-served (ExternalPlugin dispatched by its own `class:step` plugin) |
             | `charly/deploy_target_pod.go` | DELETED (P11c). The former in-core pod overlay target — the overlay Containerfile synthesis + `tagDeployAlias` + the render helpers — MOVED to `candy/plugin-deploy-pod/overlay.go` (the candy renders the overlay in its own code via `deploykit.OCITarget` + `deploykit.NewRenderGeneratorFromProject`). The two pure helpers core still needs (`collectOverlayCandies`, `readImageRegistry`) moved into `charly/build_overlay.go`. The pod config-WRITE path (quadlet) is a SEPARATE batch (#86, excluded from P11c) |
             | `charly/build_overlay.go` | The host-side pod-overlay build PREP+RESOLVE M-seam (P11c — the overlay-BUILD dissolution). `hostBuildOverlay` is the F10 `overlay` host-builder: it reconstructs the core `*Generator` (with the deploy's `add_candy` refs as `ExtraCandyRefs`), resolves the base image ref + distro + init + base-image metadata (`ExtractMetadata`), stages remote candy copies (host-fs `createRemoteCandyCopies`), projects an overlay-scoped `*spec.ResolvedProject`, serializes the live plans, caches the `buildEngineContext` for the `"oci-emit-step"` step-emitter, and returns the `OverlayBuildReply` envelope. The candy (`candy/plugin-deploy-pod` `podPrepareVenue`) consumes the envelope, constructs a `deploykit.Generator` via the shared `deploykit.NewRenderGeneratorFromProject`, renders the overlay Containerfile in its own code, and runs `podman build` + the alias tag via the served executor. The per-step fragments render via the generic `"step-emit"` host-builder (`HostBuild("step-emit","oci-emit-step")` → `dispatchOCIStep`, a thin forwarder to `candy/plugin-installstep`'s `"oci-dispatch"` word — K5-A item 2). The LIVE plans + nested-venue `ParentExec`/`ParentNode` ride the ctx (`overlayBuildInputs`), never serialized |
@@ -6258,7 +6397,7 @@ install-plan-skill:
                   NO in-proc targets implement the bare `DeployTarget` (Name + Emit) interface — the former in-proc overlay walker + the pod overlay target were DELETED in P11c (the pod overlay render now lives in the candy `plugin-deploy-pod`, via `deploykit.OCITarget`), so there are no deploy targets dispatched by `ResolveTarget`. The deploy LIFECYCLE is the separate `UnifiedDeployTarget` interface (Add/Del/Update/Start/Stop/Status/Logs/Shell/Rebuild — `Test` DELETED, #55 W3 B3 remainder: zero real callers anywhere in the tree), and its sole implementer is the thin, data-only `pluginDeployTarget` (`charly/unified_targets.go`, S3b — see "`pluginDeployTarget` + `candy/plugin-fleet`" below): ALL FIVE substrates — `local`, `vm`, `pod`, `kubernetes`, `android` — route through it over `candy/plugin-fleet`'s `Invoke(OpDeployDispatch)` and, from there, the executor reverse channel to the ACTUAL substrate's own out-of-process plugin:
 
                   ### `deploykit.OCITarget` (`sdk/deploykit/oci_target.go`) — the pod-overlay walker (P11c relocation)
-                  The kind-blind Containerfile walker MOVED out of `charly/build_target_oci.go` (P11c) into `sdk/deploykit`; the candy `plugin-deploy-pod` constructs it + renders via `deploykit.NewRenderGeneratorFromProject`. Emits Containerfile text. Consumes `phases.install.container` from the embedded `charly/charly.yml` build vocabulary (falls back to `install_template:`). All compiler-emitted step kinds' build-emit is plugin-served: the plugin-served build-emit kinds (`deploykit.PluginEmitStepWords` — the PURE C1.1 kinds + the no-op-emit `reboot` (C1.6) + the HOST-COUPLED `system-packages` (C1.2), `builder` (C1.3), `local-pkg-install` (C1.4), `op` (C1.5)) route through the host's thin `oci-emit-step` forwarding seam (`charly/oci_step_emit.go`'s `ociEmitStep`/`dispatchOCIStep`, reached by the candy's `deploykit.OCITarget.EmitStepOp` over `HostBuild("step-emit","oci-emit-step")`) to `candy/plugin-installstep`'s `"oci-dispatch"` word, which itself resolves the serving `class:step` provider via `DescribeProvider`/`InvokeProvider` and Invokes its `OpEmit` (K5-A item 2) — their former in-core overlay-walker `emit*` methods are gone; the payload is the step VIEW (`StepToView`), and a legitimately-empty render is tolerated (`allowEmpty`; a no-op-emit `apk-install`/`reboot` declares `Emits=false` and is skipped entirely). The HOST-COUPLED kinds (`system-packages`/`builder`/`local-pkg-install`/`op`) no longer call back a host `step-emit` renderer at all (K5-Unit-6b): `candy/plugin-installstep` fetches the `"resolved-project"` envelope once per project dir and renders them DIRECTLY against its own `deploykit.Generator` (built via the shared `deploykit.NewRenderGeneratorFromProject`) — `op`'s render still delegates to the SAME `Generator.EmitTasks` (the per-verb emitters `emitCopy`/`emitWrite`/`emitCmd`/`emitMkdirBatch`/...) the box build uses, just invoked from the plugin's own Generator instance rather than a host round-trip. Only `ExternalPlugin` keeps an in-proc `StepProvider.EmitOCI` at the Go-object level (dispatched to its `class:verb` provider via `InvokeProvider` from the plugin's `"oci-dispatch"` word) — the C1.1–C1.6 externalization is COMPLETE, every InstallStep kind now plugin-served.
+                  The kind-blind Containerfile walker MOVED out of `charly/build_target_oci.go` (P11c) into `sdk/deploykit`; the candy `plugin-deploy-pod` constructs it + renders via `deploykit.NewRenderGeneratorFromProject`. Emits Containerfile text. Consumes `phases.install.container` from the embedded `charly/charly.yml` build vocabulary (falls back to `install_template:`). All compiler-emitted step kinds' build-emit is plugin-served: the plugin-served build-emit kinds (`deploykit.PluginEmitStepWords` — the PURE C1.1 kinds + the no-op-emit `reboot` (C1.6) + the HOST-COUPLED `system-packages` (C1.2), `builder` (C1.3), `local-pkg-install` (C1.4), `op` (C1.5)) route through the host's thin `oci-emit-step` forwarding seam (`charly/oci_step_emit.go`'s `dispatchOCIStep`, reached by the candy's `deploykit.OCITarget.EmitStepOp` over `HostBuild("step-emit","oci-emit-step")`) to `candy/plugin-installstep`'s `"oci-dispatch"` word, which itself resolves the serving `class:step` provider via `DescribeProvider`/`InvokeProvider` and Invokes its `OpEmit` (K5-A item 2) — their former in-core overlay-walker `emit*` methods are gone; the payload is the step VIEW (`StepToView`), and a legitimately-empty render is tolerated (`allowEmpty`; a no-op-emit `apk-install`/`reboot` declares `Emits=false` and is skipped entirely). The HOST-COUPLED kinds (`system-packages`/`builder`/`local-pkg-install`/`op`) no longer call back a host `step-emit` renderer at all (K5-Unit-6b): `candy/plugin-installstep` fetches the `"resolved-project"` envelope once per project dir and renders them DIRECTLY against its own `deploykit.Generator` (built via the shared `deploykit.NewRenderGeneratorFromProject`) — `op`'s render still delegates to the SAME `Generator.EmitTasks` (the per-verb emitters `emitCopy`/`emitWrite`/`emitCmd`/`emitMkdirBatch`/...) the box build uses, just invoked from the plugin's own Generator instance rather than a host round-trip. Only `ExternalPlugin` keeps an in-proc `StepProvider.EmitOCI` at the Go-object level (dispatched to its `class:verb` provider via `InvokeProvider` from the plugin's `"oci-dispatch"` word) — the C1.1–C1.6 externalization is COMPLETE, every InstallStep kind now plugin-served.
 
                   Used by: pod deploys with `add_candy:` (overlay Containerfile synthesis) — the ONLY `deploykit.OCITarget` construction site (the candy `plugin-deploy-pod`'s `buildOverlay`). `charly box build` / `charly box generate` do NOT use `deploykit.OCITarget`; build-mode Containerfile emission is the separate `WriteCandySteps` → `EmitTasks` generator in `sdk/deploykit` (see the Overview "Build mode is a SEPARATE path").
 
@@ -6589,7 +6728,7 @@ install-plan-skill:
                   compile from candy fields and project to the deploy view), but their pod-overlay BUILD-emit no
                   longer lives in an in-core overlay-walker `emit*` method — it moved to the compiled-in `class:step` plugin
                   `candy/plugin-installstep`. The candy's `deploykit.OCITarget` reaches the plugin over the
-                  `HostBuild("step-emit","oci-emit-step")` seam (`ociEmitStep`/`dispatchOCIStep`, a thin host-side
+                  `HostBuild("step-emit","oci-emit-step")` seam (`dispatchOCIStep`, a thin host-side
                   forwarder); the plugin's OWN `"oci-dispatch"` word maps each kind to its serving word via
                   `deploykit.PluginEmitStepWords`, serializes the step VIEW (`StepToView`) as the `OpEmit` payload,
                   resolves the target via `DescribeProvider` + `InvokeProvider` (K5-A item 2), and splices
@@ -7204,7 +7343,7 @@ plugin-skill:
             - `task cue:gen` — regenerates spec + every plugin's params; reproducible (a second run is a no-op).
             - `charly box validate` — the candy + `plugin:` block (`candy/plugin-box/validate_rules.go`'s
               `IsPlugin` check — an explicit, documented 1:1 port of the former core `validatePluginCandy`, deleted
-              as dead code in the 2026-07-22 dead-code-radical-removal batch once its call site moved here —
+              as dead code in the dead-code-radical-removal batch once its call site moved here —
               verifies each capability is well-formed and, for `source: builtin`, that the provider is actually
               compiled in).
             - R10: a disposable bed composing a builtin AND an external plugin, driven to a fresh `charly update` — the
@@ -7680,7 +7819,7 @@ plugin-skill:
                   REGARDLESS of what it aliases — even a genuine E-envelope type. The alias is not "permanent because it's
                   an E-type"; the alias IS the mislocated call site, the whole point of ZERO-ALIASES. Classify every
                   `charly/*_aliases.go` (and stray `_alias.go`) entry as residue: delete it and repoint its callers to
-                  `spec.*` (or the owning kit) directly. Motivating incident: an auditor counted `labels.go`'s `BoxMetadata =
+                  `spec.*` (or the owning kit) directly. Failure mode: an auditor counts `labels.go`'s `BoxMetadata =
                   spec.BoxMetadata` alias and `install_plan.go`'s `Scope`/`Venue`/`Phase` aliases (all grep-verified genuine
                   `spec.*` E-types) as "permanent E," then self-corrected — an alias's TARGET being E doesn't make the alias
                   itself permanent.
@@ -7689,12 +7828,8 @@ plugin-skill:
                   `InstallPlan`, `VenueDescriptor`, `#Node`/`#Step`/`#Op`, the wire replies. A struct NAMED after a concrete
                   kind, with kind-specific fields and accessors, is that kind's TYPED SHAPE: an R-item, moving to its
                   owning kit/plugin. `ResolvedBox` (now `spec.ResolvedBox`, CUE-generated) is the already-relocated
-                  precedent. "Carries data" is not the E test; kind-AGNOSTIC is. Motivating incident (CLOSED, kept as a
-                  historical illustration — do not cite `layers.go`'s `Candy` struct as a still-live example, it no longer
-                  exists in ANY form): an auditor counted `layers.go`'s then-current `Candy` struct (grep-verified: 60+
-                  accessor methods, every one kind-specific) as E because it "carries data," then self-corrected — the
-                  struct was later fully dissolved (not relocated wholesale) into the `spec.CandyModel`/`spec.CandyView`
-                  pair (W9), so `layers.go` today holds only kind-blind scan/parse functions, not the typed shape itself.
+                  precedent. "Carries data" is not the E test; kind-AGNOSTIC is. `layers.go` holds only kind-blind scan/parse
+                  functions; the typed shape lives in the `spec.CandyModel`/`spec.CandyView` pair.
 
                   **The practical audit framing — invert the default.** Every file is an R-item (it moves to a plugin)
                   UNLESS it is LITERALLY one of the tiny kernel whitelist: the three in-core M-mechanisms (plugin loading /
@@ -7702,9 +7837,9 @@ plugin-skill:
                   data, or an E generic envelope. Auditing a cone by asking "is this hard to move" instead of "is this one
                   of E/M/B/D" is the exact failure this framing forecloses: the bed runner, the check/ADE harness, the build
                   engine, the deploy walk, and the VM engine are ALL R-items (the v2 ledger already names them plugins) —
-                  none of them earns kernel status by being awkward to relocate. Motivating incident: two auditors
-                  independently mis-classified the deploy + check cones as ~90% permanent using exactly the
-                  "host-boundary/gather-engine" excuse; the true kernel in those cones is ~0.3%.
+                  none of them earns kernel status by being awkward to relocate. Failure mode: auditors mis-classify the deploy + check cones as
+                  ~90% permanent using exactly the "host-boundary/gather-engine"
+                  excuse; the true kernel in those cones is ~0.3%.
 
                   **The canonical shape every kind copies — resolve-to-envelope.** `builder` is the reference: its plugin
                   serves its own `#BuilderInput` schema, decodes into its own params, validates its own input, and RESOLVES
@@ -7830,7 +7965,7 @@ plugin-skill:
                   `StepContract.Emits=true` declares the step ALSO produces a build-context Containerfile FRAGMENT — served by
                   `Invoke(OpEmit)` → `spec.EmitReply.Fragment`. Composed into a POD overlay (add_candy), the pod-overlay
                   `deploykit.OCITarget` (in the candy `plugin-deploy-pod`) reaches the host's open external-step arm
-                  (`ociEmitStep`, over `HostBuild("step-emit","oci-emit-step")`) which Invokes that OpEmit and splices the fragment (`Emits=false` → a
+                  (`dispatchOCIStep`, over `HostBuild("step-emit","oci-emit-step")`) which Invokes that OpEmit and splices the fragment (`Emits=false` → a
                   deploy-only step, skipped on the image build, like apk); a HOST-COUPLED step's OpEmit calls back
                   `HostBuild("step-emit", …)` for a host-engine-rendered fragment. A step plugin serving OpEmit is a PURE
                   step (self-contained fragment); the reference `candy/plugin-example-stepkind` serves BOTH legs (OpExecute at
@@ -8001,11 +8136,78 @@ skills-skill:
 
             ## How to Update
 
-            1. Edit the skill file at `plugins/<plugin>/skills/<skill-name>/SKILL.md`
+            1. **Edit the candy's `skill:` entity in `candy/<candy>/charly.yml`, then regenerate**
+               (`charly marketplace generate` → `task docs:sync`). Most of the corpus under
+               `plugins/**/SKILL.md` is a PROJECTION and carries a DO-NOT-EDIT banner: an edit
+               there is reverted by the next regeneration, silently and without conflict. `git grep
+               -l 'DO[- ]NOT[- ]EDIT'` tells you which files are generated — but triage the hits
+               rather than trusting them, since a file may MENTION the banner without carrying one
+               (agent definitions under `plugins/<plugin>/agents/` are hand-authored).
             2. If the insight affects cross-skill behavior, update the project rulebook (`AGENTS.md` / `CLAUDE.md`) too
             3. After any non-trivial deployment session, ask: "Did we learn anything that future sessions should know?"
 
+            ### Regenerate ONLY the projections of the sources you edited
+
+            **A projection merges before the superproject source that pins it**, so prose can be
+            correct and landed in `plugins`/`docs` while its candy source is still in flight on
+            another branch. Regenerating from a superproject tree that lacks that pending source
+            does not bring the projection up to date — it **drags it backwards**, and the diff is
+            indistinguishable from a legitimate update.
+
+            Measured: a wholesale `charly marketplace generate` touched **21** files in `plugins`
+            and **41** in `docs` when three candy sources had changed. The extra ones were reverts,
+            ~500 lines of landed prose including 317 from one `git-workflow` reference and 107 from
+            the `pr-validator` agent spec. Nothing in the output flagged it.
+
+            So: after regenerating, **restore every file whose candy source you did not touch**, and
+            audit the deletions that remain — each one should be a line you deliberately replaced.
+
+            ```bash
+            git -C plugins diff --numstat        # +added -deleted per file
+            # Every deleted line, read in full. Do NOT use `grep '^-[^-]'` to skip the
+            # `--- a/file` header: a deleted markdown BULLET renders as `-- text`, so that
+            # pattern silently drops it — and in a prose repo bullets are the majority shape,
+            # not an edge case. Measured on one real regeneration: 90 reported vs 96 actual,
+            # every missed line a bullet. Exclude the header explicitly instead, and
+            # cross-check against --numstat, which counts independently of any regex: if the
+            # two disagree, the regex is wrong, and that disagreement IS the alarm.
+            git -C plugins diff | grep '^-' | grep -v '^--- '
+            git -C plugins diff --numstat | awk '{s+=$2} END{print s}'   # must equal the count above
+            ```
+
+
+            **After ANY merge, `update-branch`, or conflict resolution, RE-RUN this audit against the NEW
+            base.** A revert introduced by catching up is invisible to the old one, and the old number keeps
+            looking right. Measured on one branch: against the original merge-base 580 deletions; against
+            `origin/main` after the catch-up, **1170** — the second is what the squash actually lands. Both
+            numbers were correct; only one was the merge. A grep-vs-`--numstat` cross-check agreed perfectly
+            throughout and was measuring the wrong baseline, so **agreement between two methods does not
+            rescue a wrong base**. The one-line form that surfaces every offender:
+
+            ```bash
+            git diff --numstat origin/main...HEAD | awk '$2>$1'   # every file losing net lines
+            ```
+
+            It caught eleven files at once, including a whole skill file deleted outright — after five
+            consecutive audits had reported the branch clean.
+
+            **And a conflict resolution is not separate from the exclusion list — it is the same concern.**
+            Resolving conflicts by regenerating is right for projections, but a regeneration run WITHOUT the
+            protected-file list re-introduces exactly what the list exists to prevent. This recurred on two
+            hops within an hour, the second at ~19x the scale of the first.
+            A file you never edited appearing in that list is the signal, and "it was probably just
+            stale" is the reading that ships the revert.
+
             ## Skill File Structure
+
+
+            This is the SHAPE the projection EMITS, not a file you create. You author it on the candy's
+
+            `skill:` entity — frontmatter fields as entity fields, the body as its content — and
+
+            `charly marketplace generate` writes the `SKILL.md`. Every emitted file carries a DO-NOT-EDIT
+
+            banner; if you find yourself editing one, the change belongs one hop upstream.
 
             ```markdown
             ---
@@ -8025,6 +8227,14 @@ skills-skill:
             ```
 
             ## Progressive disclosure: multi-file skills
+
+            Both halves are GENERATED. You author the split on the candy's `skill:` entity — the entry body
+            plus one `reference:` entry per topic — and `charly marketplace generate` writes the `SKILL.md` and
+            `references/*.md` files. The shapes below describe what the projection must come out looking like,
+            never files to create or edit by hand; every one of them carries a DO-NOT-EDIT banner. This is
+            stated here because the section reads as a set of file operations, and the previous revision of
+            this skill opened its update instructions by telling the reader to edit `SKILL.md` directly — so a
+            reader arriving at this section had already been pointed the wrong way once.
 
             A skill is either a single `SKILL.md`, or an entry `SKILL.md` plus sibling `references/*.md` files in the same skill directory, loaded on demand by path. Split once a single file grows past ~400 lines or spans more than one cleanly-separable topic.
 
@@ -8271,9 +8481,8 @@ skills-skill:
             file:line desyncs on every alias relocation and documents a path already scheduled for deletion. State the
             stable spec-source (the owning plugin/sdk package) and the K5-dissolution destination instead of a
             concrete alias location, and `grep -rn` every concrete alias-attribution claim (a file:line or symbol
-            name) against the live tree before asserting it. Motivating incident: a go-skill row produced 5
-            alias-attribution errors across 5 validation rounds by naming exact residue locations that had already
-            moved.
+            name) against the live tree before asserting it. Failure mode: a row naming exact residue locations
+            produces alias-attribution errors round after round once that residue moves.
 
             The code-side companion (golangci-lint, the `.go` compliance checklist) is
             `/charly-internals:go-quality`.
@@ -8849,7 +9058,7 @@ vm-deploy-target-skill:
             When a layer declares `reboot: true`, `BuildDeployPlan` appends a trailing
             `RebootStep`. Only the external `vm` deploy acts on it: the plugin drives it
             over `RunHostStep`, where the HOST reboots the guest (records the guest's
-            `/proc/sys/kernel/random/boot_id`, fires `(sleep 1; systemctl reboot) &` so the
+            `/proc/sys/kernel/random/boot_id`, fires `(sleep 1; systemctl reboot || reboot) &` (the `|| reboot` arm is what lets a non-systemd guest reboot at all) so the
             ssh session closes cleanly, then polls until SSH answers AND the boot_id has
             changed — deterministic, not a fixed sleep, so the still-up pre-reboot sshd
             can't be mistaken for "back up"). OCI/pod/kubernetes skip it; the external `local:`
@@ -9042,9 +9251,12 @@ vm-spec-skill:
                 Checksum VmChecksum
                 Cache    string
                 BaseUser string       // adopt-user pattern — see below
+                Distro   string       // REQUIRED on a cloud_image source once this cutover lands (still
+                                               // OPTIONAL on released charly) — see below
 
                 // bootc branch:
-                Image      string     // `candy:` image entry name (carries base:/from:)
+                Box        string     // WIRE KEY `box:` — the `candy:` image entry name
+                                       // (carries base:/from: and `bootc: true`)
                 Transport  string     // registry | containers-storage | oci | oci-archive
                 Rootfs     string     // ext4 | xfs | btrfs
                 RootSize   string     // "10G" — caps root partition, rest unpartitioned
@@ -9062,9 +9274,68 @@ vm-spec-skill:
             2. `spec.ssh.user` defaults to `BaseUser`.
             3. cloud-init appends the pubkey to `~<base_user>/.ssh/authorized_keys` without touching sudoers/shell/home.
 
-            Common values: `arch` (Arch cloud image), `ubuntu` (Ubuntu Cloud), `fedora` (Fedora Cloud), `debian` (Debian Cloud), `cloud-user` (CentOS Cloud).
+            Common values: `arch` (Arch cloud image), `alpine` (Alpine Cloud), `ubuntu` (Ubuntu Cloud), `fedora` (Fedora Cloud), `debian` (Debian Cloud), `cloud-user` (CentOS Cloud).
 
-            Leave empty **only** when the image has no default account — then declare a custom user in `spec.cloud_init.users`.
+            **`base_user:` does NOT steer rendering — `source.distro` does, and it is REQUIRED on a `cloud_image` source.** An earlier design inferred the distro from `base_user:` (`"arch"` from `base_user: "arch"`, `"alpine"` from `"alpine"`, everything else falling through to systemd/`packages:`), so an Alpine image whose account was not literally `alpine` got `systemctl enable --now sshd` on a guest with no systemd and booted unreachable. That inference is **deleted**: nothing derives a distro from an account name, an image URL, or a source kind. `distro:` is a closed `#DistroID` (`spec/schema/distro_vocab.cue` is the single source for the id space and each id's package format, sshd unit and init system), and the vm kind's own `OpValidate` rejects a `cloud_image` source that omits it. Authored as:
+
+            ```yaml
+            my-vm:
+                vm:
+                    source:
+                        kind: cloud_image
+                        base_user: myuser
+                        distro: alpine
+            ```
+
+            **Why it is required rather than optional-with-a-default.** A Debian-family `cloud_image` that
+            omitted `distro:` used to render Arch conventions and boot unreachable: `sshUnitForDistro` and
+            `composePackages` read the EXPLICIT field, so `base_user: ubuntu` steered nothing. The render
+            emitted the Arch package name `openssh` (apt: `Unable to locate package openssh`) and
+            `systemctl enable --now sshd`, a unit Debian/Ubuntu do not have (theirs is `ssh`) — and because
+            `composeBootCmd` masks `ssh.socket` until cloud-init finishes, a socket-activated sshd (Ubuntu
+            24.04's default) was left MASKED and never restarted. The guest booted fully and served nothing.
+
+            There is deliberately **no fallback** for either value. `spec.DistroSSHUnits[distro]` and
+            `spec.DistroInits[distro]` are bare lookups into the generated tables: an id outside the
+            vocabulary yields an EMPTY unit name rather than a guess, and there is no fallback to the other
+            unit name — a fallback is what lets a wrong input survive long enough to fail somewhere
+            else. Omitting the value is a VALIDATION ERROR at author time
+            (`candy/plugin-substrate/validate_vm.go` `validateSourceDistro`, severity `error`); the
+            unreachable-VM outcome is what the now-deleted `base_user` inference used to produce,
+            not what omission costs today. Presence
+            is enforced at author time instead, which is the only place the answer is actually known.
+
+            **The symptom is worth memorising, because it names nothing:** the domain reports
+            `running`, the libvirt portForward is correct (`passt --tcp-ports 127.0.0.1/<port>:22`),
+            TCP is ACCEPTED and then reset — `kex_exchange_identification: read: Connection reset by
+            peer` — and the serial console shows cloud-init completing every stage and reaching a
+            login prompt. That signature is ALSO produced by an unrelated defect (pacman reinstalling
+            openssh under a live sshd, documented in `sdk/vmshared/cloud_init_render.go`), so it
+            cannot serve as a diagnosis on its own. **Read the rendered artifact, not the code path:**
+
+            ```bash
+            osirrox -indev output/qcow2/<vm>/seed.iso -extract / /tmp/seed && cat /tmp/seed/user-data
+            ```
+
+            The `packages:` and `runcmd:` lines state which convention was rendered, in plain text.
+            Four structural theories (firmware, an image-cache race, an "unmaterialized" disk, a
+            "corrupt" qcow2) preceded that one command on the run that found this.
+
+            **And the limit of the validation, which is the part an author must not over-read:**
+            `distro:` is closed to `#DistroID`, so a MISSPELLED id is a unification conflict —
+            `distro: redhat` fails. A **wrong-but-valid** id is not: `distro: debian` on a Fedora cloud
+            image validates cleanly, exit 0, and then selects apt, `openssh-server` and the `ssh` unit
+            for a guest that has dnf, `openssh` and `sshd`. Closedness cannot express "matches the
+            image this URL points at", and no gate in charly does.
+
+            So the value is a HUMAN check against the image URL, every time. Verified against the live
+            gate rather than assumed: a fresh validator ran exactly this mutation on a Fedora repo and
+            got exit 0. Treating a green `charly box validate` as proof the distro is *correct* — rather
+            than merely *spelled like a real distro* — is the one misreading this field invites.
+
+            Do not confuse it with the `bootstrap` source kind, where `distro:` is also required but names the bootstrap TARGET rather than selecting the render conventions.
+
+            `base_user:` remains the adopt-user selector and nothing more. Leave IT empty only when the image has no default account — then declare a custom user in `spec.cloud_init.users`.
 
             ## VmSSH / VmKeyInjection
 
@@ -9094,7 +9365,7 @@ vm-spec-skill:
             The renderer combines structured fields with renderer defaults:
 
             - `Packages`: prepended with `{openssh, curl, tar}`.
-            - `RunCmd`: prepended with three D18 hardening steps — a self-testing `PerSourcePenalties no` sshd drop-in write+validate, `systemctl unmask ssh.socket`, then `systemctl enable --now sshd` — so distro-specific setup can assume sshd is running and hardened. See `/charly-internals:cloud-init-renderer` "Guest SSH hardening (D18)" for the full mechanism + design trade-off.
+            - `RunCmd`: prepended with the D18 hardening drop-in, then an sshd start whose form depends on the guest's init system (systemd vs OpenRC) — so distro-specific setup can assume sshd is running and hardened. Step 1 is always the same self-testing `PerSourcePenalties no` sshd drop-in write+validate (plain shell into `sshd_config.d`, which OpenSSH Includes on every init); the start that follows is branched — `systemctl unmask ssh.socket` then `systemctl enable --now sshd` on systemd, `rc-update add sshd default && rc-service sshd start` on OpenRC (Alpine), which has neither ssh.socket nor systemctl. See `/charly-internals:cloud-init-renderer` "Guest SSH hardening (D18)" for the full mechanism + design trade-off.
             - `Users`: the `VmSSH.User` account is auto-injected unless already present; if present, the renderer appends the ssh pubkey to the user's existing entry.
 
             `Extra` is a raw-YAML escape hatch merged after structured fields. Prefer structured fields; `Extra` exists for long-tail cloud-init options the schema doesn't cover.
@@ -9103,9 +9374,7 @@ vm-spec-skill:
 
             ```go
             type VmCharlyInstall struct {
-                Strategy string  // auto | scp | url | skip
-                URL      string  // when Strategy == "url"
-                Checksum string  // "sha256:<hex>" for url strategy
+                Strategy string  // auto | scp | skip
             }
             ```
 
@@ -9113,7 +9382,6 @@ vm-spec-skill:
             |---|---|
             | `auto` (default) | scp the local `charly` binary (`os.Executable()`) into the guest post-boot via the vm deploy plugin's `OpPrepareVenue` (`kit.EnsureCharlyInGuest`) |
             | `scp` | explicit form of auto |
-            | `url` | cloud-init runcmd downloads charly from URL at first boot |
             | `skip` | user manages charly install; the vm deploy plugin's `OpPrepareVenue` verifies presence only |
 
             ## Validation (spec/schema/vm.cue)
@@ -9809,8 +10077,8 @@ pr-validator-agent:
                branch.** A symbol unreferenced on a consumer's in-flight `feat/` branch can
                still be live on that consumer's `main`; removing it as "dead" from the
                producer breaks every consumer that hasn't rebased onto the branch yet
-               (the sdk#66 over-removal incident: 4 wire types removed as dead were live
-               on charly `main`). Re-run the liveness grep yourself against the consumer's
+               (sdk#66 — over-removal: 4 wire types removed as dead were
+               live on charly `main`). Re-run the liveness grep yourself against the consumer's
                `origin/main`, not the PR author's claim.
             10. **R6/R8/R9 — artifact + binary integrity (where the class applies).** R6: a
                 destructive git action was preceded by a status/stash check. R8 (generation
@@ -9818,7 +10086,8 @@ pr-validator-agent:
                 `ai.opencharly.*` label are asserted post-build (an empty/missing label is a
                 FAILURE, not a warning). R9 (any change exercised on a target): the deployed
                 binary was REBUILT and `charly version` matches source, and every new runtime
-                OS dep is in `pkg/arch/PKGBUILD` `depends=` (never a manual host install).
+                OS dep is in the charly candy's `packaging:` section (never a manual host
+                install).
             11. **R10 — disposable-only, fresh-rebuild, coverage.** Runtime proof is on a
                 `disposable: true` target only, on a FRESH `charly update`/rebuild, at ZERO
                 warnings, with pasted output for EACH changed piece. The change ships the
@@ -9950,7 +10219,7 @@ pr-validator-agent:
                  non-compliant while building more on top of it. Landed precedent:
                  `sdk#85`'s `clean_wire` cutover (the touched hand-written wire type was
                  CUE-sourced in the same PR instead of extended as-is). Generalized by
-                 standing operator directive 2026-07-22 (any PR modifying a hand-written
+                 standing operator directive (any PR modifying a hand-written
                  wire surface must convert it) — first applied to `sdk/spec/arbiter_wire.go`
                  (`sdk#90`, LANDED: FLOOR-SLIM Unit-8B) and then to the entire remaining
                  `sdk/spec/*_wire.go` class in one SDD-conversion batch (deploy, init, gpu,
@@ -9965,7 +10234,7 @@ pr-validator-agent:
                  unless the real command and its real output appear in the PR body or a
                  comment; a plausible-sounding claim that was never actually re-run at the
                  final head is a FRAUD-class finding, exactly like the R10 fraud clauses.
-                 Motivating incident: `opencharly/charly#175` round 1 — the PR body's
+                 Failure mode (charly#175): a PR body's
                  pasted `git grep` output claimed only `CHANGELOG/`-context hits for a set
                  of removed identifiers, but a fresh re-run against the PR's OWN head found
                  60+ LIVE source hits (comments still naming the retired identifiers); the
@@ -10411,7 +10680,7 @@ pr-validator-agent:
                the sdk tag is `v0.$(date -u +%Y%j).$SDK_MIN`). A leading-zero sdk tag
                (e.g. `v0.2026192.0733`) is INVALID — it makes every consumer's `go.mod`
                unparseable in module mode — so this stripping is mandatory, not cosmetic.
-               `plugins`, `pkg/*`, and `docs` ARE tagged, with the same `v<YYYY.DDD.HHMM>` form as
+               `plugins` and `docs` ARE tagged, with the same `v<YYYY.DDD.HHMM>` form as
                every non-sdk repo (they carry no `charly.yml`, so no schema `version:` bump — but
                the tag still marks the merge).
             3. **Rewrite every merge-time-dependent version surface to `$VER`** on the feat
@@ -10491,11 +10760,11 @@ pr-validator-agent:
                anomaly, and run R1. The post-merge transcript MUST name `MERGED_SHA` and
                show the exact parser output.
 
-               Only after that proof, tag EVERY repo (`plugins`, `pkg/*`, and `docs` included;
+               Only after that proof, tag EVERY repo (`plugins` and `docs` included;
                `sdk` substitutes its `v0.<…>` form from step 2): `git tag -a v$VER -m "<subject>"
                "$MERGED_SHA"`; `git push origin refs/tags/v$VER` (a tag push — allowed by
                the pre-push-gate). Only a SUPERPROJECT `v*` tag triggers the release-binary
-               workflow; a `plugins` / `pkg/*` / `docs` tag fires NO workflow, so tagging them is
+               workflow; a `plugins` / `docs` tag fires NO workflow, so tagging them is
                harmless.
                **SKIPPING any repo's tag is a DEFECT** — the pre-unification `plugins`/`pkg`
                tag-exempt rule is RETIRED; never omit a tag on a stale "exempt" belief (doing so

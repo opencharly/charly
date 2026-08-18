@@ -53,14 +53,14 @@ func TestBuildVmSyntheticBoxDistroFormat(t *testing.T) {
 		},
 		{
 			name:       "fedora cloud (base_user)",
-			vmSpec:     &spec.ResolvedVm{Source: spec.VmSource{Kind: "cloud_image", BaseUser: "fedora"}},
+			vmSpec:     &spec.ResolvedVm{Source: spec.VmSource{Kind: "cloud_image", BaseUser: "fedora", Distro: "fedora"}},
 			wantUser:   "fedora",
 			wantPkg:    "rpm",
 			wantDistro: []string{"fedora"},
 		},
 		{
 			name:       "arch cloud (base_user)",
-			vmSpec:     &spec.ResolvedVm{Source: spec.VmSource{Kind: "cloud_image", BaseUser: "arch"}},
+			vmSpec:     &spec.ResolvedVm{Source: spec.VmSource{Kind: "cloud_image", BaseUser: "arch", Distro: "arch"}},
 			wantUser:   "arch",
 			wantPkg:    "pac",
 			wantDistro: []string{"arch"},
@@ -181,7 +181,7 @@ func TestBuildVmSyntheticBox_SetsBuilderConfig(t *testing.T) {
 		t.Errorf("root-fallback branch: BuilderConfig.Builder missing npm: %+v", rootImg.BuilderConfig.Builder)
 	}
 
-	userImg := buildVmSyntheticBox(&spec.ResolvedVm{Source: spec.VmSource{Kind: "cloud_image", BaseUser: "fedora"}}, distro, builder)
+	userImg := buildVmSyntheticBox(&spec.ResolvedVm{Source: spec.VmSource{Kind: "cloud_image", BaseUser: "fedora", Distro: "fedora"}}, distro, builder)
 	if userImg.BuilderConfig == nil {
 		t.Fatal("non-root branch: BuilderConfig is nil")
 	}

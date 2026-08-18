@@ -196,10 +196,12 @@ func buildVmSyntheticBox(vmSpec *spec.ResolvedVm, distro map[string]*spec.Resolv
 		},
 		BuilderConfig: &spec.BuilderConfig{Builder: builder},
 	}
+	// The distro comes from the EXPLICIT field only. There is deliberately no fallback to
+	// BaseUser: an account name is not a distro, and inferring one from the other is what left a
+	// Debian-family guest rendered with Arch package names. The vm kind's OpValidate requires
+	// source.distro on every distro-bearing source arm, so an empty value here is an authoring
+	// error that was already rejected upstream — not a case to guess at.
 	distroKey := vmSpec.Source.Distro
-	if distroKey == "" {
-		distroKey = vmSpec.Source.BaseUser
-	}
 	distroCfg := &spec.DistroConfig{Distro: distro}
 	if distroKey != "" {
 		if def := distroCfg.ResolveDistro([]string{distroKey}); def != nil {

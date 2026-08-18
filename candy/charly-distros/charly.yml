@@ -287,7 +287,7 @@ cachyos-pacstrap-skill:
         owner: charly-distros
         description: |-
             Bootstrap-from-scratch CachyOS rootfs via pacstrap inside a privileged builder.
-            Builds end-to-end as of charly 2026.141.1850 (shared pacstrap renderer emits
+            Builds end-to-end (the shared pacstrap renderer emits
             Architecture + SigLevel); retained for offline/air-gapped builds. Lives in the
             opencharly/distro-cachyos submodule (box/cachyos).
             MUST be invoked before building or troubleshooting cachyos-pacstrap.
@@ -311,10 +311,10 @@ cachyos-pacstrap-skill:
             
             ## pacstrap x86_64_v3 + SigLevel (fixed)
             
-            Earlier this path was unusable: the privileged pacstrap step rejected the
-            CachyOS `x86_64_v3` packages (`package architecture is not valid`) and, on the
-            VM path, tripped GPGME signature checks (`GPGME error: No data`). **Fixed as of
-            charly 2026.141.1850** by the shared `renderPacstrapExtraConf` helper
+            Without the shared `renderPacstrapExtraConf` helper the privileged pacstrap step rejects the CachyOS `x86_64_v3`
+            packages (`package architecture is not valid`) and, on the VM path, trips GPGME
+            signature checks (`GPGME error: No data`) — both symptoms are worth recognising.
+            It handles them
             (`candy/plugin-vm/vm_bootstrap_engine.go:57`,
             used by both `runPrivilegedBootstrap` and the VM bootstrap engine — the former
             `charly/build.go`/`charly/vm_bootstrap.go` are DELETED, K-wave 2):
@@ -1275,7 +1275,7 @@ nvidia-layer-skill:
             
             NVIDIA VAAPI acceleration requires the container to know which DRM render node to bind the EGL context against. On multi-GPU hosts there may be `/dev/dri/renderD128`, `/dev/dri/renderD129`, … and the correct one depends on which physical card backs the NVIDIA driver.
             
-            `charly` does **not** bake a hardcoded `DRINODE=/dev/dri/renderD128` into this candy. Instead, it auto-detects the correct render node at container-launch time and injects it as an environment variable. The detection + injection is consolidated in a single function, `appendAutoDetectedEnv()` in `candy/plugin-deploy-pod/config_setup_helpers.go` (relocated wholesale from charly-core's `charly/devices.go` in the 2026-07-22 dead-code-radical-removal batch), which is called by `charly config`, `charly start`, and `charly shell` via that candy's own `config_setup.go` / `resolve.go` / `resolve_f12.go` resolvers — so the commands always produce the same env set.
+            `charly` does **not** bake a hardcoded `DRINODE=/dev/dri/renderD128` into this candy. Instead, it auto-detects the correct render node at container-launch time and injects it as an environment variable. The detection + injection is consolidated in a single function, `appendAutoDetectedEnv()` in `candy/plugin-deploy-pod/config_setup_helpers.go` (relocated wholesale from charly-core's `charly/devices.go` in the dead-code-radical-removal batch), which is called by `charly config`, `charly start`, and `charly shell` via that candy's own `config_setup.go` / `resolve.go` / `resolve_f12.go` resolvers — so the commands always produce the same env set.
             
             Selkies is the primary consumer: pixelflux's Wayland compositor uses `DRINODE` to open the render node and set up the VAAPI H.264 encoder. Without the injection, selkies would fall back to software encode (`libx264`) and lose ~40% of its streaming bandwidth budget.
             
@@ -2007,7 +2007,7 @@ debian-skill:
             
             ## User model — create, not adopt
             
-            The embedded `distro.debian` vocabulary **does not** declare a `base_user:` block, because the upstream `debian:13` base image ships no pre-existing uid-1000 account. `user_policy: auto` (the default for any downstream image) falls through to create mode — the generator emits an idempotent `useradd -m -u 1000 -g 1000 user` during bootstrap.
+            The embedded `distro.debian` vocabulary **does not** declare a `base_user:` block, because the upstream `debian:13` base image ships no pre-existing uid-1000 account. `user_policy: auto` (the default for any downstream image) falls through to create mode — the generator emits an idempotent user creation (`useradd` where shadow-utils is present, busybox `adduser` otherwise) during bootstrap.
             
             This is the intentional asymmetry vs `/charly-distros:ubuntu`, which DOES ship `ubuntu:ubuntu` at uid 1000 and declares `base_user:` to adopt that identity. See `/charly-image:image` "user_policy" and `/charly-build:build` "base_user" for the full decision table.
             
@@ -2022,8 +2022,14 @@ debian-skill:
                 apt-get update && apt-get install -y --no-install-recommends curl ca-certificates gnupg && \
                 ... install go-task binary ...
             RUN if ! getent passwd 1000 >/dev/null 2>&1; then
-                  (getent group 1000 >/dev/null 2>&1 || groupadd -g 1000 user) &&
-                  useradd -m -u 1000 -g 1000 -s /bin/bash user;
+                  LOGIN_SHELL=/bin/sh; [ -x /bin/bash ] && LOGIN_SHELL=/bin/bash;
+                  if command -v useradd >/dev/null 2>&1; then
+                    (getent group 1000 >/dev/null 2>&1 || groupadd -g 1000 user) &&
+                    useradd -m -u 1000 -g 1000 -s "$LOGIN_SHELL" user;
+                  else
+                    (getent group 1000 >/dev/null 2>&1 || addgroup -g 1000 user) &&
+                    adduser -D -h /home/user -u 1000 -G user -s "$LOGIN_SHELL" user;
+                  fi;
                 fi
             WORKDIR /home/user
             USER 1000
