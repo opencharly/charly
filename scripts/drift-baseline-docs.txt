@@ -34,8 +34,11 @@
 #
 # `recipes/index.md` is consequently NOT in this list any more: it is regenerated and committed,
 # which is what the rule at the bottom of this header requires. `reference/providers.md` remains,
-# and remains honestly — regenerating it would add the `ollama` row but drop seven command words
-# main has, because those come from the unlanded ec484b4b. It is inherited debt AND carries one
+# and remains honestly — regenerating it would add the `ollama` row but drop seven ROWS main has
+# (`build`, `feature`, `labels`, `load`, `merge`, `pull`, `reconcile`, each served by plugin-box),
+# which is SIX distinct words: `feature` is listed twice on main and survives via plugin-feature.
+# Rows and words are not the same count here, and this file said "seven command words" until a
+# reviewer measured it. Those rows come from the unlanded ec484b4b. It is inherited debt AND carries one
 # line of this cutover's, and it cannot be split until charly#315 lands.
 #
 # HOW IT LIQUIDATES: when charly#315 lands, `main` reproduces d9afc66's pages and these entries
