@@ -10363,11 +10363,6 @@ pr-validator-agent:
               **Grep the whole file** — not because the distribution is flat, but because the tail
               is real, and a window sized to 98.29% of a corpus silently misses the rest.
 
-              **Here the RATIO is the claim and the totals only date it**: 344/350 and 345/351 at
-              the `*.md` and unrestricted denominators of ONE ref — 98.29% both, identical while the
-              totals moved. That is the statistic this rule holds for; file it against the one it
-              is true of.
-
               **Do not describe this as "24 distinct line numbers."** That is a UNION over the
               tree, and a union of positions looks like a spread while the underlying distribution
               is tightly clustered — the population/union error this page warns about two
