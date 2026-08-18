@@ -5067,9 +5067,12 @@ go-skill:
               `TestExternalStructKind_StructuralDecode` reporting `structural plugin kind not
               folded into uf.Fleet; have fleet keys []`.
 
-            - **`CHARLY_PLUGIN_DIR` prepends; it never replaces.** `bakedPluginDirs()` returns
-              it (when set) and then ALWAYS appends the FHS `/usr/lib/charly/plugins`, so
-              pointing it at an empty directory masks nothing.
+            - **`CHARLY_PLUGIN_DIR` prepends; `CHARLY_PLUGIN_ONLY=1` is what excludes.**
+              `bakedPluginDirs()` returns `$CHARLY_PLUGIN_DIR` when set and then appends the FHS
+              `/usr/lib/charly/plugins`, so pointing the dir at an empty directory masks nothing.
+              `CHARLY_PLUGIN_ONLY=1` drops the FHS path, making the search exactly
+              `$CHARLY_PLUGIN_DIR` (or empty when that is unset). It is an EXACT `1` match, so a
+              typo fails closed and a deployed container keeps finding its own baked plugins.
 
               **Baked lookup is keyed by WORD and short-circuits the project scan.**
               `resolveCommandPluginBinary` returns on a baked hit before the project loads: a
@@ -5078,16 +5081,20 @@ go-skill:
               `charly examplecommand hello world` prints `hello world` from the project candy
               even where the charly package is installed — `examplecommand` is not baked.
 
-              To exercise a BAKED word's project declaration, mask the directory with a mount
-              namespace — a `--help` probe cannot distinguish the two sources:
+              To exercise a BAKED word's project declaration, drop the FHS path — a `--help`
+              probe cannot distinguish the two sources:
 
               ```
-              bwrap --dev-bind / / --tmpfs /usr/lib/charly/plugins ./bin/charly <word>
+              CHARLY_PLUGIN_ONLY=1 ./bin/charly <word>
               ```
 
               With the project candy present this reaches the project-built plugin; remove the
               candy and the same command gives `charly: error: unexpected argument <word>`.
-              Run both arms — the pair is the proof.
+              **Run both arms.** The first shows the word resolves but not WHAT served it; the
+              second is what ties the resolution to the project candy, by removing the only
+              remaining source and watching it break. (Without the flag the second arm still
+              resolves — via the baked binary — which is why the flag is required for the pair
+              to mean anything.)
 
             - `.claude/hooks/pre-commit-gate.sh` (the staged-Go-lint discipline backstop) redirects
               its own lint temp dirs to `~/.cache/charly-gate-lint/` and creates the TMPDIR/GOTMPDIR
