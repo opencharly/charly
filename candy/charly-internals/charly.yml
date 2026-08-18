@@ -10230,27 +10230,36 @@ pr-validator-agent:
             anyone else is using**, and never in the one you are validating from.
 
             ```bash
-            # 0. stand a scratch tree on the SOURCE head (resolution below), then put the
-            #    ARTIFACT submodule on the PR HEAD — `submodule update` lands the source's
-            #    PINNED gitlink, which is NOT the PR you are validating.
-            git -C <superproject> worktree add /tmp/carrier-<n> <source-head>
-            cd /tmp/carrier-<n> && git submodule update --init --recursive
-            git -C <artifact-repo> fetch origin <pr-head-sha> && git -C <artifact-repo> checkout <pr-head-sha>
-            git -C <artifact-repo> rev-parse HEAD    # MUST equal the PR head — read it back
+            # 0. Stand a scratch tree on the SOURCE head, then put the ARTIFACT submodule on
+            #    the PR HEAD — `submodule update` lands the source's PINNED gitlink, which is
+            #    NOT the PR you are validating. Set these four first:
+            super=$(git rev-parse --show-toplevel)   # the superproject
+            artifact=plugins                         # or docs — the submodule the PR targets
+            suspect=path/inside/the/artifact.md      # the file you suspect is generated
+            srchead=origin/main                      # or the source PR's head
+
+            # mktemp, NOT a fixed path: step 3 is destructive and a fixed name can name
+            # a peer's live worktree.
+            probe=$(mktemp -d /tmp/carrier.XXXXXX)
+            git -C "$super" worktree add "$probe" "$srchead"
+            cd "$probe" && git submodule update --init --recursive
+            git -C "$artifact" fetch origin "$prhead" && git -C "$artifact" checkout "$prhead"
+            git -C "$artifact" rev-parse HEAD    # MUST equal the PR head — read it back
+
             task build:binary
 
-            # 1. delete the suspect and ask the generators to answer. `&&`, never `;` —
+            # 1. Delete the suspect and ask the generators to answer. `&&`, never `;` —
             #    with `;` the guard captures only the LAST command's status.
-            rm <artifact-repo>/<suspect-path>
+            rm "$artifact/$suspect"
             ./bin/charly marketplace generate \
               && ./bin/charly docs generate --out docs/src/content/docs --root .
             rc=$?; [ "$rc" -eq 0 ] || { echo "UNEVALUATED: generation exited $rc"; exit 1; }
 
-            # 2. read the answer
-            test -f <artifact-repo>/<suspect-path> && echo CARRIER || echo "not generated"
+            # 2. Read the answer.
+            test -f "$artifact/$suspect" && echo CARRIER || echo "not generated"
 
-            # 3. tear the scratch tree down
-            cd - && git -C <superproject> worktree remove --force /tmp/carrier-<n>
+            # 3. Tear the scratch tree down — destructive, which is why $probe is mktemp'd.
+            cd - && git -C "$super" worktree remove --force "$probe"
             ```
 
             **Two setup traps, both of which produce a confident wrong answer rather than an
@@ -10340,7 +10349,7 @@ pr-validator-agent:
             Three things make the naive form of this check miss:
 
             - **The banner is usually near the top — and a fixed window still fails, because of a
-              one-file tail.** Measured over `plugins` @ `32f48d2`: **339 of 351 hits sit at line
+              one-file tail.** Measured over `plugins` @ `01edd45e`: **344 of 350 hits sit at line
               ≤ 15 (96.6%)**, three above line 100, and **two of those three are this page quoting
               the banner in prose**. There is exactly ONE genuinely deep carrier, at line **1214**.
               **Grep the whole file** — not because the distribution is flat, but because the tail
@@ -10361,10 +10370,10 @@ pr-validator-agent:
 
               | tree (ref) | `DO NOT EDIT` (spaced) | `DO-NOT-EDIT` (hyphenated) | `DO[- ]NOT[- ]EDIT` |
               |---|---|---|---|
-              | `plugins` @ `32f48d2` | **339** | 4 | **340** |
-              | `docs` @ `3d11170` | 2 | **899** | **899** |
+              | `plugins` @ `01edd45e` | **346** | 6 | **348** |
+              | `docs` @ `eb92dc24` | 3 | **904** | **905** |
 
-              A hyphen-only matcher finds 4 of 340 in `plugins`; a space-only matcher finds 2 of
+              A hyphen-only matcher finds 6 of 348 in `plugins`; a space-only matcher finds 3 of
               899 in `docs`. **Neither convention is wrong and neither is going away**, so `-i` and the
               `[- ]` class are load-bearing rather than stylistic — a matcher that assumes one house
               style reports a clean tree for the other.
@@ -10379,8 +10388,7 @@ pr-validator-agent:
               insufficient — two people counting the same corpus an hour apart briefly read two
               correct measurements as a disagreement. **State the claim here as an ORDINAL one:
               spaced dominates `plugins`, hyphenated dominates `docs`.** That survives the corpus
-              growing; the separator RATIO does not — it swung 24% (111.7:1 → 84.8:1) across a
-              single ref change, so it is not the durable form of this finding.
+              growing; the separator RATIO does not survive a change of ref, so it is not the durable form of this finding.
             - **A targeted edit never sees the top of the file.** `Edit` on a matched string, or a
               jump to a grep hit at line 240, never renders line 8. The banner is invisible to the
               access pattern a targeted edit actually uses, which is why the check has to be a
