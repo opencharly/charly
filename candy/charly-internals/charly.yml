@@ -10661,9 +10661,10 @@ pr-validator-agent:
                 so a placeholder whose Phase-3 rename is SKIPPED merges as a file indistinguishable
                 from a properly stamped entry — well-formed by construction, because these rules
                 demand it. Nothing downstream can tell that the date was guessed by an author rather
-                than minted at merge, and `plugins` has NO CI (its `.github/workflows` is empty;
-                the same probe finds one in `charly`, which is what makes that absence evidence
-                rather than a failed lookup). **The rules and the agent performing Phase 3 are the
+                than minted at merge, and `plugins` has NO CI to catch it: at the gitlink this entry
+                pins it has no `.github` tree at all — 0 tracked paths under it, not an empty
+                workflows directory — while the same probe returns `ci.yml` and `release-binary.yml`
+                in `charly`, which is what makes that absence evidence rather than a failed lookup. **The rules and the agent performing Phase 3 are the
                 only things standing between a guessed date and `main`.**
 
                 One tempting remedy — a sentinel that announces itself, `CHANGELOG/UNSTAMPED-<slug>.md`
