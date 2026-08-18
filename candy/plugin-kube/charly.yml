@@ -5,7 +5,7 @@ plugin-kube:
             OUT-OF-TREE charly plugin owning ALL Kubernetes cluster interaction: the
             `kube` cluster-probe check VERB, the `deploy:kubernetes` SUBSTRATE (the
             `target: kubernetes` workload deploy, F1 — `kubectl apply -k` on the
-            host-generated Kustomize tree), AND the k3s post-provision finalization
+            plugin-generated Kustomize tree (`candy/plugin-kube/materialize.go`'s `materializeKustomize`, on the host)), AND the k3s post-provision finalization
             (S3, FINAL/K5 unit 6 — relocated wholesale from charly/k3s_post.go: the
             guest-forward kubeconfig rewrite + the ~/.kube/config merge) the
             k3s-server / target:kubernetes deploy seam needs — a standalone Go module
