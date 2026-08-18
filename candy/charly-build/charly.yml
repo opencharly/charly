@@ -1442,11 +1442,11 @@ generate-skill:
               Anything else — `base`, say — fails at render time, which is now loud but is still
               cheaper to avoid. Prefer doing the work in the shell the template emits.
 
-              An earlier revision of this list named six of the twelve and called it "the whole set",
-              which is worse than saying nothing: the paragraph exists to BE the list a reader greps
-              against, so a short list teaches that `join` and `replace` fail when they are shipped
-              helpers. It came from a `grep` over a windowed region of the FuncMap whose output was
-              published as complete. Read the map's full literal, or count it in Go — never a
+              A partial list here is worse than saying nothing: the paragraph exists to BE the list a
+              reader greps against, so naming six of the twelve teaches that `join` and `replace`
+              fail when they are shipped helpers. The way that happens is a `grep` over a windowed
+              region of the FuncMap whose output is published as complete. Read the map's full
+              literal, or count it in Go — never a
               windowed grep.
 
             ### Per-verb emitters (single Go file: `charly/tasks.go`)

@@ -52,7 +52,7 @@ shortbread:
                 command=set -euo pipefail
                 git clone --depth 1 https://github.com/systemed/tilemaker /tmp/tilemaker
                 cd /tmp/tilemaker
-                # Boost 1.91+ (CachyOS / Arch as of 2026-Q1) made
+                # Boost 1.91+ (shipped by CachyOS / Arch) made
                 # boost::system a HEADER-ONLY library: `libboost_system.so`
                 # no longer exists. tilemaker's Makefile still ships
                 # `-lboost_system` in its link line, which fails with
@@ -70,7 +70,7 @@ shortbread:
                 set -euo pipefail
                 git clone --depth 1 https://github.com/systemed/tilemaker /tmp/tilemaker
                 cd /tmp/tilemaker
-                # Boost 1.91+ (CachyOS / Arch as of 2026-Q1) made
+                # Boost 1.91+ (shipped by CachyOS / Arch) made
                 # boost::system a HEADER-ONLY library: `libboost_system.so`
                 # no longer exists. tilemaker's Makefile still ships
                 # `-lboost_system` in its link line, which fails with
