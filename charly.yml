@@ -3791,52 +3791,24 @@ check-agentteams-snapshot:
             security_opt:
                 - label=disable
         plan:
-            - check: a worker is listed BEFORE the round-trip, so the later assertion can discriminate
-              id: snapshot-precondition-worker
+            - check: the snapshot/hydrate round-trip preserves the controller's worker
+              id: snapshot-roundtrip
               exit_status: 0
               stdout:
-                - contains: bed-worker
+                - contains: ROUNDTRIP-OK
               context:
                 - runtime
               command:
-                command: ${CHARLY_BIN} agentteams worker list
-                in_container: false
-            - run: capture the live deploy into a hydration bundle
-              id: snapshot-take
-              exit_status: 0
-              context:
-                - runtime
-              command:
-                command: ${CHARLY_BIN} agentteams snapshot --out /tmp/at-snap
-                in_container: false
-            - check: the bundle is non-empty and carries the worker kind
-              id: snapshot-bundle-contents
-              exit_status: 0
-              stdout:
-                - contains: Worker
-              context:
-                - runtime
-              command:
-                command: sh -c 'test -d /tmp/at-snap && cat /tmp/at-snap/*.yaml'
-                in_container: false
-            - run: hydrate the deploy back from the bundle
-              id: snapshot-hydrate
-              exit_status: 0
-              context:
-                - runtime
-              command:
-                command: ${CHARLY_BIN} agentteams apply -f /tmp/at-snap
-                in_container: false
-            - check: the worker is still listed after the round-trip
-              id: snapshot-roundtrip-worker-list
-              exit_status: 0
-              stdout:
-                - contains: bed-worker
-              context:
-                - runtime
-              command:
-                command: ${CHARLY_BIN} agentteams worker list
-                in_container: false
+                command: >-
+                    sh -c 'set -e;
+                    charly agentteams worker list | grep -q bed-worker;
+                    charly agentteams snapshot --out /tmp/at-snap;
+                    test -s "$(ls /tmp/at-snap/*.yaml | head -1)";
+                    grep -q Worker /tmp/at-snap/*.yaml;
+                    charly agentteams apply -f /tmp/at-snap;
+                    charly agentteams worker list | grep -q bed-worker;
+                    echo ROUNDTRIP-OK'
+                in_container: true
 # agentteams-vm — the disposable VM substrate for the AgentTeams stack. The
 # check-agentteams-vm bed installs the agentteams top composition candy (all five
 # foundation candies) into this Arch cloud-image guest via add_candy, so the
