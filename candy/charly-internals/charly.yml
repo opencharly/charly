@@ -9123,7 +9123,8 @@ vm-deploy-target-skill:
             intact present image, re-streams a torn-overlay one — a name-only check would
             wrongly skip a corrupt image) and offline (no registry). `--rootless` selects the
             storage, and ALL of the load / integrity-probe / tag steps follow it consistently
-            (via the `podmanCmd(rootless)` helper):
+            (via `deploykit.ImageVenue.PodmanCmd`, the ONE field every step reads, so they
+            cannot disagree about which store they are addressing):
 
             - **default** → the guest's ROOT podman (`sudo podman`), for a `sudo podman run
               --device nvidia.com/gpu=all` consumer that needs `/dev/nvidia*` via root.

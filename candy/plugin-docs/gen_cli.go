@@ -54,12 +54,22 @@ func generateCLI(outRoot string, plugins []pluginEntity) (int, error) {
 
 	for _, c := range cmds {
 		var b strings.Builder
+		// Key the rows by OWNER, not by field name. With one row per (field, owner) the
+		// keys repeat with no grouping, and while both Placement values may coincide, the
+		// Version values do not — so a reader cannot tell which version belongs to which
+		// candy. Single-owner pages keep the plain field names they always had.
 		b.WriteString("| | |\n|---|---|\n")
 		for _, o := range c.owners {
-			fmt.Fprintf(&b, "| **Served by** | [%s](%s) |\n", o.Name, pluginSitePath(o))
-			fmt.Fprintf(&b, "| **Placement** | %s |\n", o.Placement())
+			label := func(field string) string {
+				if len(c.owners) == 1 {
+					return field
+				}
+				return o.Name + " — " + field
+			}
+			fmt.Fprintf(&b, "| **%s** | [%s](%s) |\n", label("Served by"), o.Name, pluginSitePath(o))
+			fmt.Fprintf(&b, "| **%s** | %s |\n", label("Placement"), o.Placement())
 			if v := o.Version(); v != "" {
-				fmt.Fprintf(&b, "| **Version** | `%s` |\n", v)
+				fmt.Fprintf(&b, "| **%s** | `%s` |\n", label("Version"), v)
 			}
 		}
 		b.WriteString("\n")
@@ -102,17 +112,41 @@ func generateCLI(outRoot string, plugins []pluginEntity) (int, error) {
 		// It also asserts NOTHING about this word's nesting: the plugin description rendered
 		// above often states it, and a generic "may be top-level or nested" line contradicted
 		// that on all twelve box pages.
-		fmt.Fprintf(&b, "`charly --help` prints the command tree, including where `%s` "+
-			"is invoked and under which parent.\n", c.word)
+		if len(c.owners) == 1 {
+			fmt.Fprintf(&b, "`charly --help` prints the command tree, including where `%s` "+
+				"is invoked and under which parent.\n", c.word)
+		} else {
+			fmt.Fprintf(&b, "`charly --help` prints the command tree, including where each "+
+				"`%s` is invoked and under which parent.\n", c.word)
+		}
 
 		if err := (page{
 			Path:        "reference/cli/" + c.word + ".md",
 			Title:       c.word,
-			Description: fmt.Sprintf("The %s command word, served by the %s plugin candy.", c.word, c.owners[0].Name),
+			Description: cliPageDescription(c.word, c.owners),
 			Body:        b.String(),
 		}).write(outRoot); err != nil {
 			return 0, err
 		}
 	}
 	return len(cmds), nil
+}
+
+// cliPageDescription renders the page subtitle, which is ALSO the search-result text and is
+// therefore read before the body. It must not name one owner when a word has several: the
+// definite article ("served by THE x plugin candy") asserts exclusivity, and a per-page
+// constant with a single name substituted only survives contact with single-server pages.
+// Choosing WHICH single owner to name is the same clobbering the grouped body exists to
+// prevent, one field up — the previous form did exactly that, and a fix that moved the name
+// from one owner to the other would have preserved the defect while looking like a cure.
+func cliPageDescription(word string, owners []pluginEntity) string {
+	if len(owners) == 1 {
+		return fmt.Sprintf("The %s command word, served by the %s plugin candy.", word, owners[0].Name)
+	}
+	names := make([]string, 0, len(owners))
+	for _, o := range owners {
+		names = append(names, o.Name)
+	}
+	return fmt.Sprintf("The %s command word, served by %d plugin candies: %s.",
+		word, len(owners), strings.Join(names, " and "))
 }
