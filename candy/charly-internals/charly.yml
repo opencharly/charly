@@ -5480,20 +5480,29 @@ git-workflow-skill:
                   # Run from the superproject OR any submodule — the root is resolved, not assumed.
                   root=$(git rev-parse --show-superproject-working-tree)
                   root=${root:-$(git rev-parse --show-toplevel)}
-                  entry=$root/CHANGELOG/2026.228.0609.md    # substitute the entry under review
+                  entry=$root/CHANGELOG/2026.229.2153.md   # substitute the entry under review
+
+                  # REFUSE rather than narrow: every one of these is a way to report nothing convincingly.
+                  [ -f "$entry" ] || { echo "guard: no such entry: $entry" >&2; exit 1; }
                   repos="$root $(git config -f "$root/.gitmodules" --get-regexp path \
                                    | awk -v r="$root" '{print r"/"$2}')"
-                  
-                  # REFUSE to report rather than narrow silently — this is the whole point.
                   [ "$repos" = "$root " ] && { echo "guard: no submodules under $root" >&2; exit 1; }
 
+                  bad=0
                   for sha in $(grep -ohE '\b[0-9a-f]{7,40}\b' "$entry" | sort -u); do
-                    for repo in $repos; do                     # EVERY repo a citation may name
+                    found=
+                    for repo in $repos; do
                       git -C "$repo" cat-file -e "${sha}^{commit}" 2>/dev/null || continue
-                      git -C "$repo" merge-base --is-ancestor "$sha" origin/main && st=LANDED || st=UNMERGED
-                      printf '%s %-8s %-8s %s\n' "$sha" "$st" "$repo" "$(git -C "$repo" log -1 --format=%s "$sha")"; break
+                      git -C "$repo" merge-base --is-ancestor "$sha" origin/main 2>/dev/null && st=LANDED || st=UNMERGED
+                      printf '%-9s %-10s %-9s %s\n' "$sha" "$st" "$(basename "$repo")" \
+                             "$(git -C "$repo" log -1 --format=%s "$sha")"
+                      found=1; [ "$st" = UNMERGED ] && bad=1
+                      break
                     done
+                    # a SHA that resolves nowhere must SAY SO — `|| continue` alone drops it silently
+                    [ -n "$found" ] || { printf '%-9s %-10s\n' "$sha" UNRESOLVED; bad=1; }
                   done
+                  exit $bad
                   ```
 
                   The **subject** is half the value: it catches citing the wrong commit, which happened here — a
