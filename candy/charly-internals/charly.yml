@@ -5063,13 +5063,13 @@ go-skill:
               `TestExternalStructKind_StructuralDecode` reporting
               `structural plugin kind not folded into uf.Fleet; have fleet keys []`.
 
-              **The budget:** the suffix is `/plugin` plus the random digits — 16-17 bytes
-              observed — so `$TMPDIR` has roughly 90 bytes before the socket stops fitting.
-              **The digit count is not fixed, so the boundary is fuzzy and the failure near it
-              is intermittent** — the same directory can pass and then fail with nothing
-              changed. Measured on one host: 79 bytes always passed, 93+ always failed, and 91
-              gave both outcomes across runs. **Keep `$TMPDIR` at or under ~85 bytes** for any
-              suite that connects a plugin, so the variable suffix always fits.
+              **The budget:** `sun_path` allows 107 bytes for the whole socket path, and the
+              suffix is `/plugin` plus a random number — so `$TMPDIR` gets the remainder, a
+              little under 90 bytes. **The digit count is not fixed, so the boundary is fuzzy
+              and the failure near it is intermittent** — the same directory can pass, then
+              fail, with nothing changed, which invites calling it a flake. Leave headroom
+              rather than sitting on the limit: a short `$TMPDIR` under `/tmp` always fits, and
+              anything approaching the budget is a latent intermittent failure.
 
               This interacts badly with the `GOTMPDIR=~/.cache/go-tmp` advice above: a deep
               per-session scratch path satisfies the quota rule and violates this one. They are
