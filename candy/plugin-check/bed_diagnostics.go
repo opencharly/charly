@@ -157,6 +157,21 @@ var diagnosticAllowlist = []diagnosticAllowance{
 			"entry rather than folded into one alternation so that exempting a THIRD package is a " +
 			"visible, separately reviewed diff.",
 	},
+	{
+		ID:       "pacman-needed-package-already-current",
+		Severity: severityWarning,
+		Match:    regexp.MustCompile(`^warning: [A-Za-z0-9_.+-]+ is up to date -- skipping$`),
+		Why: "pacman prints this for every package an install names that is ALREADY at the " +
+			"target version, and it prints it because of `--needed` — the flag that makes a " +
+			"repeated install idempotent instead of a reinstall (R4). A candy declares the " +
+			"packages it depends on regardless of what a particular base image happens to ship, " +
+			"so on a base that already carries one the two correct behaviours meet and pacman " +
+			"says so. There is nothing for charly to fix at either end: dropping --needed would " +
+			"trade a message for a reinstall, and filtering the list would mean predicting the " +
+			"image's package state at generate time, which is exactly the decision --needed " +
+			"exists to make at run time. Scoped to the exact single-package sentence so a " +
+			"multi-line pacman warning cannot hide behind it.",
+	},
 }
 
 // diagnosticFinding is one matched line, resolved against the allowlist.
