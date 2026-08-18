@@ -3726,6 +3726,83 @@ check-agentteams-pod:
                 in_container: false
               stdout:
                 - contains: "Controller URL: http://127.0.0.1:8090"
+# check-agentteams-snapshot — the R10 bed for Factory Unit 6, the snapshot/hydrate
+# round-trip. Deploys the SAME stack as check-agentteams-pod, whose bed already proves
+# the five services reach steady state; those assertions are NOT repeated here (R3).
+# This bed asserts only what Unit 6 adds: that `charly agentteams snapshot --out` writes
+# a PII-redacted hydration bundle, and `charly agentteams apply -f` restores it.
+#
+# The round-trip is asserted by STATE THAT SURVIVES IT, never by the two commands
+# exiting 0 — a snapshot that writes an empty bundle and a hydrate that applies nothing
+# both exit 0, so exit status cannot distinguish a working round-trip from a vacuous
+# one. The worker-list assertion after hydrate is what discriminates.
+check-agentteams-snapshot:
+    pod:
+        image: agentteams
+        disposable: true
+        lifecycle: dev
+        description: >-
+            R10 bed for Factory Unit 6. Proves the snapshot/hydrate round-trip against a
+            live AgentTeams deploy: the controller's worker is captured into a hydration
+            bundle, the bundle is applied back, and the worker is still listed afterwards.
+        volume:
+            - name: podman-socket
+              type: bind
+              host: /run/user/1000/podman/podman.sock
+              path: /run/user/1000/podman/podman.sock
+        env:
+            AGENTTEAMS_MANAGER_IMAGE: ghcr.io/opencharly/agentteams-manager:manager
+            AGENTTEAMS_WORKER_IMAGE: ghcr.io/opencharly/agentteams-worker:worker
+        security:
+            security_opt:
+                - label=disable
+        plan:
+            - check: a worker is listed BEFORE the round-trip, so the later assertion can discriminate
+              id: snapshot-precondition-worker
+              exit_status: 0
+              stdout:
+                - contains: bed-worker
+              context:
+                - runtime
+              command:
+                command: ${CHARLY_BIN} agentteams worker list
+                in_container: false
+            - run: capture the live deploy into a hydration bundle
+              id: snapshot-take
+              exit_status: 0
+              context:
+                - runtime
+              command:
+                command: ${CHARLY_BIN} agentteams snapshot --out /tmp/at-snap
+                in_container: false
+            - check: the bundle is non-empty and carries the worker kind
+              id: snapshot-bundle-contents
+              exit_status: 0
+              stdout:
+                - contains: Worker
+              context:
+                - runtime
+              command:
+                command: sh -c 'test -d /tmp/at-snap && cat /tmp/at-snap/*.yaml'
+                in_container: false
+            - run: hydrate the deploy back from the bundle
+              id: snapshot-hydrate
+              exit_status: 0
+              context:
+                - runtime
+              command:
+                command: ${CHARLY_BIN} agentteams apply -f /tmp/at-snap
+                in_container: false
+            - check: the worker is still listed after the round-trip
+              id: snapshot-roundtrip-worker-list
+              exit_status: 0
+              stdout:
+                - contains: bed-worker
+              context:
+                - runtime
+              command:
+                command: ${CHARLY_BIN} agentteams worker list
+                in_container: false
 # agentteams-vm — the disposable VM substrate for the AgentTeams stack. The
 # check-agentteams-vm bed installs the agentteams top composition candy (all five
 # foundation candies) into this Arch cloud-image guest via add_candy, so the
