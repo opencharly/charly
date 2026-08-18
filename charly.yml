@@ -3805,6 +3805,15 @@ check-agentteams-snapshot:
             R10 bed for Factory Unit 6. Proves the snapshot/hydrate round-trip against a
             live AgentTeams deploy: the controller's worker is captured into a hydration
             bundle, the bundle is applied back, and the worker is still listed afterwards.
+        # The round-trip check runs `charly agentteams snapshot|apply` INSIDE the
+        # controller pod: the controller serves its REST API on 127.0.0.1:8090 and
+        # refuses a connection from outside, so a host-side invocation cannot reach
+        # it. The `agentteams` box deliberately does NOT carry the charly toolchain
+        # — it is a production composition — so the bed overlays it here instead of
+        # bloating the box for a check. Without this the step fails with
+        # `sh: charly: command not found`, which is what the first run did.
+        add_candy:
+            - agentteams-snapshot
         volume:
             - name: podman-socket
               type: bind
@@ -3827,11 +3836,14 @@ check-agentteams-snapshot:
               command:
                 command: >-
                     sh -c 'set -e;
+                    charly agentteams worker list | grep -q bed-worker ||
+                    charly agentteams worker create --name bed-worker --no-wait;
                     charly agentteams worker list | grep -q bed-worker;
-                    charly agentteams snapshot --out /tmp/at-snap;
-                    test -s "$(ls /tmp/at-snap/*.yaml | head -1)";
-                    grep -q Worker /tmp/at-snap/*.yaml;
-                    charly agentteams apply -f /tmp/at-snap;
+                    rm -rf /tmp/at-snap;
+                    charly agentteams snapshot --out /tmp/at-snap >/dev/null;
+                    test -s /tmp/at-snap/workers.yml;
+                    grep -q bed-worker /tmp/at-snap/workers.yml;
+                    charly agentteams apply -f /tmp/at-snap >/dev/null;
                     charly agentteams worker list | grep -q bed-worker;
                     echo ROUNDTRIP-OK'
                 in_container: true
