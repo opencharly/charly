@@ -25,37 +25,69 @@ func generateCLI(outRoot string, plugins []pluginEntity) (int, error) {
 
 	type cmd struct {
 		word   string
-		plugin pluginEntity
+		owners []pluginEntity
 	}
-	var cmds []cmd
+	// Group by WORD, not one entry per provider. A word can legitimately be served by
+	// more than one plugin — `feature` is both a top-level command (candy/plugin-feature)
+	// and a box-nested one (candy/plugin-box), and both declarations are true. Keyed by
+	// word alone with one page written per PROVIDER, the second write silently overwrote
+	// the first: 56 emitted, 55 written, and `box feature` ended up with no page while the
+	// provider index still counted 56. Silent overwrite is the bug — this file's
+	// cross-reference gate already fails closed, and the page-write path must not fail
+	// open beside it.
+	byWord := map[string][]pluginEntity{}
 	for _, p := range plugins {
 		for _, prov := range p.Providers() {
 			class, word, ok := strings.Cut(prov, ":")
 			if !ok || class != "command" {
 				continue
 			}
-			cmds = append(cmds, cmd{word: word, plugin: p})
+			byWord[word] = append(byWord[word], p)
 		}
+	}
+	var cmds []cmd
+	for word, owners := range byWord {
+		sort.Slice(owners, func(i, j int) bool { return owners[i].Name < owners[j].Name })
+		cmds = append(cmds, cmd{word: word, owners: owners})
 	}
 	sort.Slice(cmds, func(i, j int) bool { return cmds[i].word < cmds[j].word })
 
 	for _, c := range cmds {
 		var b strings.Builder
 		b.WriteString("| | |\n|---|---|\n")
-		fmt.Fprintf(&b, "| **Served by** | [%s](%s) |\n", c.plugin.Name, pluginSitePath(c.plugin))
-		fmt.Fprintf(&b, "| **Placement** | %s |\n", c.plugin.Placement())
-		if v := c.plugin.Version(); v != "" {
-			fmt.Fprintf(&b, "| **Version** | `%s` |\n", v)
+		for _, o := range c.owners {
+			fmt.Fprintf(&b, "| **Served by** | [%s](%s) |\n", o.Name, pluginSitePath(o))
+			fmt.Fprintf(&b, "| **Placement** | %s |\n", o.Placement())
+			if v := o.Version(); v != "" {
+				fmt.Fprintf(&b, "| **Version** | `%s` |\n", v)
+			}
 		}
 		b.WriteString("\n")
 
-		fmt.Fprintf(&b, "`%s` is a command word served by the `%s` plugin candy. %s\n\n",
-			c.word, c.plugin.Name, c.plugin.PlacementNote())
+		if len(c.owners) == 1 {
+			fmt.Fprintf(&b, "`%s` is a command word served by the `%s` plugin candy. %s\n\n",
+				c.word, c.owners[0].Name, c.owners[0].PlacementNote())
+		} else {
+			names := make([]string, 0, len(c.owners))
+			for _, o := range c.owners {
+				names = append(names, "`"+o.Name+"`")
+			}
+			fmt.Fprintf(&b, "`%s` is a command word served by %d plugin candies — %s — "+
+				"at different points in the command tree. Both are real invocations; "+
+				"`charly --help` prints which is which.\n\n",
+				c.word, len(c.owners), strings.Join(names, " and "))
+		}
 
-		if d := strings.TrimSpace(c.plugin.Description()); d != "" {
-			b.WriteString("## About the plugin that serves it\n\n")
-			b.WriteString(d)
-			b.WriteString("\n\n")
+		for _, o := range c.owners {
+			if d := strings.TrimSpace(o.Description()); d != "" {
+				if len(c.owners) == 1 {
+					b.WriteString("## About the plugin that serves it\n\n")
+				} else {
+					fmt.Fprintf(&b, "## About `%s`, which serves it\n\n", o.Name)
+				}
+				b.WriteString(d)
+				b.WriteString("\n\n")
+			}
 		}
 
 		// NOT `charly <word> --help`. Most command words are NESTED (twelve live under
@@ -76,7 +108,7 @@ func generateCLI(outRoot string, plugins []pluginEntity) (int, error) {
 		if err := (page{
 			Path:        "reference/cli/" + c.word + ".md",
 			Title:       c.word,
-			Description: fmt.Sprintf("The %s command word, served by the %s plugin candy.", c.word, c.plugin.Name),
+			Description: fmt.Sprintf("The %s command word, served by the %s plugin candy.", c.word, c.owners[0].Name),
 			Body:        b.String(),
 		}).write(outRoot); err != nil {
 			return 0, err

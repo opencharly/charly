@@ -185,16 +185,30 @@ func generateProviderIndex(outRoot string, plugins []pluginEntity) (int, error) 
 			compiled++
 		}
 	}
-	classCount := map[string]int{}
+	// Count DISTINCT words per class, not rows. A word can be served by more than one
+	// plugin candy — `feature` is both a top-level command and a box-nested one, and both
+	// declarations are true — so a row count says "56 words" over a 55-word class and the
+	// page contradicts itself. The rows below still list every (word, plugin) pair, which
+	// is the useful thing; only the HEADLINE counts words, because that is what it says.
+	classWords := map[string]map[string]bool{}
 	for _, r := range rows {
-		classCount[r.class]++
+		if classWords[r.class] == nil {
+			classWords[r.class] = map[string]bool{}
+		}
+		classWords[r.class][r.word] = true
+	}
+	classCount := map[string]int{}
+	distinctTotal := 0
+	for class, words := range classWords {
+		classCount[class] = len(words)
+		distinctTotal += len(words)
 	}
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "**%d words across %d plugin candies, %d compiled into the binary.** "+
 		"Every reserved word charly can dispatch, and the plugin candy that serves it. "+
 		"A word's class tells you where it appears: a `verb` in a plan step, a `kind` as an entity's "+
-		"kind key, a `command` as a `charly <word>` subcommand, and so on.\n\n", len(rows), len(plugins), compiled)
+		"kind key, a `command` as a `charly <word>` subcommand, and so on.\n\n", distinctTotal, len(plugins), compiled)
 	current := ""
 	for _, r := range rows {
 		if r.class != current {
