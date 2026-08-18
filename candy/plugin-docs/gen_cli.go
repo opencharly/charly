@@ -58,11 +58,24 @@ func generateCLI(outRoot string, plugins []pluginEntity) (int, error) {
 			b.WriteString("\n\n")
 		}
 
-		fmt.Fprintf(&b, "Run `charly %s --help` for the live flag grammar.\n", c.word)
+		// NOT `charly <word> --help`. Most command words are NESTED (twelve live under
+		// `box` alone), so that spelling is wrong for the majority and — worse — wrong
+		// SILENTLY: an unrecognised leading word makes charly print ROOT usage and exit 0,
+		// so a reader following it sees output and no error. Parenthood is a Go method
+		// (CommandParent()), and `charly __cli-model` only synthesises leaves for words
+		// that declare Subcommands (95 leaves; `box.list.*` is there, `box.load` is not),
+		// so the generator cannot resolve the parent from any machine-readable source.
+		// It therefore points at the command tree, which is both runnable and authoritative,
+		// instead of fabricating an invocation (R4a: never document a command that fails).
+		// It also asserts NOTHING about this word's nesting: the plugin description rendered
+		// above often states it, and a generic "may be top-level or nested" line contradicted
+		// that on all twelve box pages.
+		fmt.Fprintf(&b, "`charly --help` prints the command tree, including where `%s` "+
+			"is invoked and under which parent.\n", c.word)
 
 		if err := (page{
 			Path:        "reference/cli/" + c.word + ".md",
-			Title:       "charly " + c.word,
+			Title:       c.word,
 			Description: fmt.Sprintf("The %s command word, served by the %s plugin candy.", c.word, c.plugin.Name),
 			Body:        b.String(),
 		}).write(outRoot); err != nil {
