@@ -5524,7 +5524,13 @@ git-workflow-skill:
                   **Guard 2 — grep the entry's own prose, with the exclusion that makes it usable:**
 
                   ```bash
-                  grep -nE '\b(is|are) (now )?(enforced|generated|deleted|removed|fixed)\b' "$entry"
+                  ( # self-contained: guard 1's assignment lives in ITS subshell and cannot reach here
+                    entry=CHANGELOG/2026.229.2153.md   # substitute the entry under review
+                    [ -f "$entry" ] || { echo "guard: no such entry: $entry" >&2; exit 1; }
+                    hits=$(grep -nE '\b(is|are) (now )?(enforced|generated|deleted|removed|fixed)\b' "$entry")
+                    # SAY the empty case. "found nothing" and "never ran" must not look alike.
+                    [ -n "$hits" ] && printf '%s\n' "$hits" || echo "guard: no present-tense landed-state claims in $entry"
+                  )
                   ```
 
                   Most hits are CORRECT and must not be hedged. The discriminator:
