@@ -9739,8 +9739,8 @@ pr-validator-agent:
                branch.** A symbol unreferenced on a consumer's in-flight `feat/` branch can
                still be live on that consumer's `main`; removing it as "dead" from the
                producer breaks every consumer that hasn't rebased onto the branch yet
-               (over-removal: wire types removed as dead can still be live
-               on charly `main`). Re-run the liveness grep yourself against the consumer's
+               (sdk#66 — over-removal: wire types removed as dead can still be
+               live on charly `main`). Re-run the liveness grep yourself against the consumer's
                `origin/main`, not the PR author's claim.
             10. **R6/R8/R9 — artifact + binary integrity (where the class applies).** R6: a
                 destructive git action was preceded by a status/stash check. R8 (generation
@@ -9896,7 +9896,7 @@ pr-validator-agent:
                  unless the real command and its real output appear in the PR body or a
                  comment; a plausible-sounding claim that was never actually re-run at the
                  final head is a FRAUD-class finding, exactly like the R10 fraud clauses.
-                 Failure mode: a PR body's
+                 Failure mode (charly#175): a PR body's
                  pasted `git grep` output claimed only `CHANGELOG/`-context hits for a set
                  of removed identifiers, but a fresh re-run against the PR's OWN head found
                  60+ LIVE source hits (comments still naming the retired identifiers); the

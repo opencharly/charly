@@ -87,6 +87,23 @@ Replace the `pkg/` packaging workflow (three `pkg/*` git submodules + the contai
       path; they drop a prebuilt binary into `/usr/lib/charly/plugins/` and resolve
       project-less. The shim is the DEV path: it makes the verb resolvable from a checkout.
 
+## Open batches
+
+- **Skill prose: provenance out, incidents stay.** A skill states how the system behaves NOW;
+  when someone confirmed a fact is not part of that. Strip provenance-of-the-text — dated
+  confirmations (`RDD-confirmed <date>`, `live-observed <date>`), narrative about what an
+  earlier draft said, and one-run measurements that decay.
+
+  **Explicitly NOT in scope: an incident citation that justifies a rule.** `Motivating
+  incident: <repo>#<n>` and `Landed precedent:` are a deliberate structured idiom — the rules
+  exist because those failure modes happened, and the reference is what tells a reader what the
+  failure looked like and where the full account lives. Removing it strips the rule of its
+  evidence. Keep the citation; drop only the storytelling around it.
+
+  Owner: the nFPM program. Started: the provenance sweep across nine candies landed with the
+  generate-packages shim. Remaining: roughly nine further occurrences in `charly-internals`
+  alone, plus whatever the same key finds elsewhere.
+
 ## Ordered decision heuristics
 
 1. **Producer-first landing (B6).** A consumer's R10 cannot see an unmerged producer
