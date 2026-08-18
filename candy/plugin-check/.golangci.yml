@@ -15,3 +15,10 @@ linters:
         - fmt.Fprintf
         - fmt.Fprintln
         - (io.Closer).Close
+
+# golangci-lint v2 moved formatters OUT of `linters:` into their own top-level block.
+# Without this the run reports "0 issues." over a file `gofmt -l` rejects. This module
+# has its own config, so the root config does NOT apply to it — the closest one wins.
+formatters:
+  enable:
+    - gofmt

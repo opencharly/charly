@@ -53,3 +53,10 @@ linters:
           disabled: true    # exported-doc-comment churn is out of scope for this audit
     nakedret:
       max-func-lines: 60
+
+# golangci-lint v2 moved formatters OUT of `linters:` into their own top-level block.
+# Without this the run reports "0 issues." over a file `gofmt -l` rejects — a gate that
+# cannot fail in the case it exists to catch.
+formatters:
+  enable:
+    - gofmt
