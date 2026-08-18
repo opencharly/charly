@@ -56,7 +56,7 @@ airflow:
             # headroom and reclaims ~28 PIDs against the disposable pod's
             # default pids.max=2048 cgroup cap (cap headroom matters because
             # marimo cells using cudf-polars / dask leak ~4 PIDs per re-execute
-            # — see CLAUDE.md R1 RCA notes 2026-05-13 — and a tight Airflow
+            # — see CLAUDE.md R1 — and a tight Airflow
             # baseline buys more cells before the cap pinches DuckDB's
             # LOAD spatial thread-pool spawn).
             AIRFLOW__CORE__PARALLELISM: "4"

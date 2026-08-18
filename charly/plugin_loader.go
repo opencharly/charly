@@ -371,7 +371,10 @@ func pluginBuildEnv(base []string, srcDir string) []string {
 // pre-built provider binary to at image-build time, so a DEPLOYED container (which has
 // neither the candy source nor a go toolchain) can run an external plugin its
 // in-container charly needs at runtime — e.g. the charly-mcp service's `charly mcp
-// serve`. `CHARLY_PLUGIN_DIR` overrides it (tests, non-FHS layouts).
+// serve`. `CHARLY_PLUGIN_DIR` PREPENDS a directory ahead of it (tests, non-FHS
+// layouts) — it does NOT replace it: bakedPluginDirs always appends this FHS path,
+// so setting the env var cannot HIDE a plugin baked here. Masking a baked word for a
+// test needs an environment without the file, not an env var.
 const bakedPluginDir = "/usr/lib/charly/plugins"
 
 // bakedPluginFileName is the filename a baked plugin binary takes under bakedPluginDir.
@@ -385,8 +388,9 @@ func bakedPluginFileName(name string) string {
 	return safePluginBinName(filepath.Base(name))
 }
 
-// bakedPluginDirs returns the directories baked plugin binaries (+ their .providers word
-// manifests) live in: $CHARLY_PLUGIN_DIR (override) then the FHS bakedPluginDir.
+// bakedPluginDirs returns the SEARCH PATH baked plugin binaries (+ their .providers word
+// manifests) live on: $CHARLY_PLUGIN_DIR first when set, then ALWAYS the FHS bakedPluginDir.
+// The env var reorders precedence; it never removes the FHS path from the search.
 func bakedPluginDirs() []string {
 	dirs := []string{}
 	if d := os.Getenv("CHARLY_PLUGIN_DIR"); d != "" {
@@ -456,7 +460,8 @@ func discoverBakedPluginWords() {
 					continue // only command + verb words are dispatched lazily by word today
 				}
 				// FIRST dir wins (CHARLY_PLUGIN_DIR ahead of the FHS path) — consistent with
-				// bakedPluginBinary's override-wins lookup, so $CHARLY_PLUGIN_DIR is a true override.
+				// bakedPluginBinary's first-hit lookup. Precedence only: a word baked under the
+				// FHS path is still discovered when $CHARLY_PLUGIN_DIR lacks it.
 				if _, seen := bakedPluginBinaries[provKey(class, word)]; !seen {
 					bakedPluginBinaries[provKey(class, word)] = binPath
 				}

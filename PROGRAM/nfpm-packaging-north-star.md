@@ -57,26 +57,52 @@ Replace the `pkg/` packaging workflow (three `pkg/*` git submodules + the contai
       baked plugin + the `packaging:` section). All 6 published their first release
       (`v2026.227.1426`) and their install-tests pass from the live Pages repos; the arch
       repo additionally asserts the `charly-minimal` variant's plugin set.
-- [ ] **Phase 0 follow-on — Go-module-valid tags on the plugin repo.** The plugin repo's
-      release workflow currently mints only the CalVer `v2026.227.0013`-style tags, which
-      semver REJECTS as Go module versions (leading-zero patch). The superproject shim
-      (below) needs a Go-module-valid tag (`v0.2026227.13`-style, mirroring sdk's
-      `v0.2026226.1201` scheme) to `require`/`replace` against. Owner: the nFPM program.
-- [ ] **Phase 3 — main repo cutover** (pkg/ removal + download_template URLs + check beds
-      + rules/docs; one atomic cutover, after the distro repos have published at least
-      once). In progress: the `pkg/*` submodules are removed, the stale-reference sweep is
-      underway, and the 5 per-distro check beds land here. **Phase 3 also lands the
-      superproject's declaration of the external `charly generate-packages` plugin** — the
-      spike-proven mechanism: a THIN re-export shim module under a discovered candy
-      (`candy/generate-packages/` with charly.yml + `go.mod` `require`+`replace` → the
-      Go-module-tagged external module + `cmd/serve` shim + go.sum). It prescans into the
-      CLI grammar (the prescan walks only `discover:` paths — an `import:` declaration is
-      structurally impossible, the prescan never fetches) and host-builds from the shim
-      dir's own `replace` (NOT the external repo — `source:` is identity metadata). This
-      is the `sdk/deploykit` exec-path prerequisite: without a resolvable `require` the
-      declared word appears in the grammar then fails at dispatch — strictly worse than
-      today's clean "unexpected argument" — so the shim and the tags land as ONE coherent
-      unit with the Phase 3 cutover.
+- [x] **Phase 0 follow-on — Go-module tags on the plugin repo.** The plugin repo mints two
+      tags per merge: `v<YYYY.DDD.HHMM>` (release, triggers the release workflow) and
+      `candy/generate-packages/v0.<YYYYDDD>.<HHMM>` (Go module, `<HHMM>` zero-stripped).
+
+      **The module tag is SUBDIRECTORY-PREFIXED.** The module lives at
+      `candy/generate-packages/`, so Go resolves its versions only from a tag carrying that
+      prefix; a bare root tag is never consulted, and the sdk's bare `v0.*` form works there
+      only because sdk is a repo-ROOT module. Copy the prefix or the tag resolves nothing.
+
+      **A missing module tag does not block a consumer** — the module resolves via
+      pseudo-version. The tag supplies release identity, not resolvability.
+
+- [x] **Phase 3 — main repo cutover** — LANDED on `main` except the shim (below).
+      Verified against `origin/main` rather than a working tree: no `pkg/` entries in
+      `.gitmodules`, `candy/charly/charly.yml` carries `packaging:`, no
+      `dispatchPkg`/`pkgGrammar`/`runBoxPkg`, no `pkg:*` taskfile targets,
+      `release-packages.yml` gone, all four `download_template` URLs pointing at the distro
+      repos, and all five `check-{alpine,arch,fedora,debian,ubuntu}-repo` beds present. The
+      R5 sweep is clean — every surviving mention of a removed identifier is prose
+      describing the removal, which R5 permits.
+- [x] **Phase 3 remainder — the superproject shim.** `candy/generate-packages/` declares the
+      external `charly generate-packages` plugin to the superproject: a thin re-export module
+      (charly.yml + `cmd/serve` + `go.mod` `require` + `replace`) under a discovered candy.
+
+      The prescan walks `discover:` paths only, so the word enters the CLI grammar without any
+      fetch, and the host builds the shim directory through its own `go.mod` — `source:` is
+      identity metadata, never a fetch instruction. The distro-repo workflows do not use this
+      path; they drop a prebuilt binary into `/usr/lib/charly/plugins/` and resolve
+      project-less. The shim is the DEV path: it makes the verb resolvable from a checkout.
+
+## Open batches
+
+- **Skill prose: provenance out, incidents stay.** A skill states how the system behaves NOW;
+  when someone confirmed a fact is not part of that. Strip provenance-of-the-text — dated
+  confirmations (`RDD-confirmed <date>`, `live-observed <date>`), narrative about what an
+  earlier draft said, and one-run measurements that decay.
+
+  **Explicitly NOT in scope: an incident citation that justifies a rule.** `Motivating
+  incident: <repo>#<n>` and `Landed precedent:` are a deliberate structured idiom — the rules
+  exist because those failure modes happened, and the reference is what tells a reader what the
+  failure looked like and where the full account lives. Removing it strips the rule of its
+  evidence. Keep the citation; drop only the storytelling around it.
+
+  Owner: the nFPM program. Started: the provenance sweep across nine candies landed with the
+  generate-packages shim. Remaining: roughly nine further occurrences in `charly-internals`
+  alone, plus whatever the same key finds elsewhere.
 
 ## Ordered decision heuristics
 
@@ -129,7 +155,7 @@ Replace the `pkg/` packaging workflow (three `pkg/*` git submodules + the contai
 1. **Phase 0** — `opencharly/plugin-generate-packages` lands (its CI proves it
    independently; its release publishes the prebuilt plugin the distro workflows bake).
 2. **Phase 1** — main repo `release-binary.yml` lands (additive; the old
-   `release-packages.yml` is removed with the Phase 3 cutover).
+   `release-packages.yml` was removed with the Phase 3 cutover, and is gone from `main`).
 3. **Phase 2** — the 6 distro repos land; each workflow runs a first publish (needs
    Phase 0's plugin release + Phase 1's binary release + the `packaging:` section, landed
    via charly#273).
