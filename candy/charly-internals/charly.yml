@@ -5052,6 +5052,34 @@ go-skill:
               the lock open fail with ENOENT, which golangci-lint reports as "parallel golangci-lint
               is running" — a false positive, not a real parallel run. Create the TMPDIR dir first
               (or pass `--allow-parallel-runners` with a fresh cache). See `/charly-internals:go-quality`.
+            - **A LONG `TMPDIR` breaks every go-plugin test — and it reads as a code failure.**
+              go-plugin serves each plugin over a UNIX DOMAIN SOCKET created under `$TMPDIR`, and
+              `sun_path` caps a socket path at ~107 bytes. Past that, `bind` returns
+              `invalid argument`, the handshake never completes, and the loader reports
+              `Unrecognized remote plugin message` / `Failed to read any lines from plugin's stdout`
+              with a plausible-looking list of causes (wrong architecture, missing libraries,
+              permissions) — none of which is the actual cause. The visible test failure is then a
+              downstream assertion, e.g. `TestExternalStructKind_StructuralDecode` reporting
+              `structural plugin kind not folded into uf.Fleet; have fleet keys []`.
+
+              Measured: a 129-byte socket path failed; the SAME test passed unchanged under a
+              24-byte `TMPDIR`. This interacts badly with the `GOTMPDIR=~/.cache/go-tmp` advice
+              above — a deep per-session scratch path satisfies the quota rule and violates this
+              one. **Keep `TMPDIR` SHORT for any suite that connects a plugin** (`/tmp/<something
+              short>`), and treat "plugin failed to negotiate the handshake" as a path-length
+              question before an architecture one.
+
+            - **`CHARLY_PLUGIN_DIR` cannot HIDE a baked plugin — it only reorders precedence.**
+              `bakedPluginDirs()` returns `$CHARLY_PLUGIN_DIR` (when set) and then ALWAYS appends
+              the FHS `/usr/lib/charly/plugins`. Pointing the env var at an empty directory
+              therefore masks nothing. Compounding it, `resolveCommandPluginBinary` consults the
+              baked map FIRST and returns on a hit, before the project is loaded at all — so on any
+              machine with the charly package installed, a project-declared external command plugin
+              is NEVER consulted, and a `charly <word> --help` probe cannot distinguish "my project
+              declares this" from "the installed package provides it". Proving a project-declared
+              command plugin resolves requires an environment WITHOUT the baked file (a bed), or an
+              assertion on the project fall-through itself rather than on CLI output.
+
             - `.claude/hooks/pre-commit-gate.sh` (the staged-Go-lint discipline backstop) redirects
               its own lint temp dirs to `~/.cache/charly-gate-lint/` and creates the TMPDIR/GOTMPDIR
               subdirs, so it is unaffected by the cap wherever it runs. Note it is NOT wired in

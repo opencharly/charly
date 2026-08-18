@@ -57,16 +57,40 @@ Replace the `pkg/` packaging workflow (three `pkg/*` git submodules + the contai
       baked plugin + the `packaging:` section). All 6 published their first release
       (`v2026.227.1426`) and their install-tests pass from the live Pages repos; the arch
       repo additionally asserts the `charly-minimal` variant's plugin set.
-- [ ] **Phase 0 follow-on — Go-module-valid tags on the plugin repo.** The plugin repo's
-      release workflow currently mints only the CalVer `v2026.227.0013`-style tags, which
-      semver REJECTS as Go module versions (leading-zero patch). The superproject shim
-      (below) needs a Go-module-valid tag (`v0.2026227.13`-style, mirroring sdk's
-      `v0.2026226.1201` scheme) to `require`/`replace` against. Owner: the nFPM program.
-- [ ] **Phase 3 — main repo cutover** (pkg/ removal + download_template URLs + check beds
-      + rules/docs; one atomic cutover, after the distro repos have published at least
-      once). In progress: the `pkg/*` submodules are removed, the stale-reference sweep is
-      underway, and the 5 per-distro check beds land here. **Phase 3 also lands the
-      superproject's declaration of the external `charly generate-packages` plugin** — the
+- [x] **Phase 0 follow-on — Go-module tags on the plugin repo.** Landed as
+      `opencharly/plugin-generate-packages#3` (merged `38565a61`), which mints
+      `v2026.230.0708` (release) and `candy/generate-packages/v0.2026230.708` (Go module).
+
+      **This item's original diagnosis was wrong on two counts, both corrected by
+      measurement rather than reading.** Recorded here because the wrong version was
+      actionable and would have produced a dead tag:
+
+      1. **The tag must be SUBDIRECTORY-PREFIXED**, not a bare root tag. The module lives
+         at `candy/generate-packages/`, so Go resolves its versions from
+         `candy/generate-packages/v0.<YYYYDDD>.<HHMM>`. The prescribed `v0.2026227.13`-style
+         root tag "mirroring sdk's scheme" would never have been consulted — sdk is a
+         repo-ROOT module, which is why the bare form works THERE and not here. Go names the
+         ref it wants:
+
+         ```
+         $ go list -m .../candy/generate-packages@v0.2026227.1233
+         go: invalid version: unknown revision candy/generate-packages/v0.2026227.1233
+         ```
+
+      2. **The shim was never blocked on this tag.** The module already resolved via
+         pseudo-version (`@latest` -> `v0.0.0-20260815123931-cf852b9ad3b6`), so the claim
+         below that a missing tag makes the word "appear in the grammar then fail at
+         dispatch" did not hold. The tag supplies release IDENTITY, not resolvability.
+- [x] **Phase 3 — main repo cutover** — LANDED on `main` except the shim (below).
+      Verified against `origin/main` rather than a working tree: no `pkg/` entries in
+      `.gitmodules`, `candy/charly/charly.yml` carries `packaging:`, no
+      `dispatchPkg`/`pkgGrammar`/`runBoxPkg`, no `pkg:*` taskfile targets,
+      `release-packages.yml` gone, all four `download_template` URLs pointing at the distro
+      repos, and all five `check-{alpine,arch,fedora,debian,ubuntu}-repo` beds present. The
+      R5 sweep is clean — every surviving mention of a removed identifier is prose
+      describing the removal, which R5 permits.
+- [ ] **Phase 3 remainder — the superproject shim.** The last open unit: the
+      superproject's declaration of the external `charly generate-packages` plugin — the
       spike-proven mechanism: a THIN re-export shim module under a discovered candy
       (`candy/generate-packages/` with charly.yml + `go.mod` `require`+`replace` → the
       Go-module-tagged external module + `cmd/serve` shim + go.sum). It prescans into the
@@ -75,8 +99,10 @@ Replace the `pkg/` packaging workflow (three `pkg/*` git submodules + the contai
       dir's own `replace` (NOT the external repo — `source:` is identity metadata). This
       is the `sdk/deploykit` exec-path prerequisite: without a resolvable `require` the
       declared word appears in the grammar then fails at dispatch — strictly worse than
-      today's clean "unexpected argument" — so the shim and the tags land as ONE coherent
-      unit with the Phase 3 cutover.
+      today's clean "unexpected argument". **That premise is retired** — see the Phase 0
+      follow-on above: the module resolves via pseudo-version, so the shim and the tag did
+      not have to land together, and did not. The tag landed first (producer-first, B6) and
+      the shim pins it.
 
 ## Ordered decision heuristics
 
@@ -129,7 +155,7 @@ Replace the `pkg/` packaging workflow (three `pkg/*` git submodules + the contai
 1. **Phase 0** — `opencharly/plugin-generate-packages` lands (its CI proves it
    independently; its release publishes the prebuilt plugin the distro workflows bake).
 2. **Phase 1** — main repo `release-binary.yml` lands (additive; the old
-   `release-packages.yml` is removed with the Phase 3 cutover).
+   `release-packages.yml` was removed with the Phase 3 cutover, and is gone from `main`).
 3. **Phase 2** — the 6 distro repos land; each workflow runs a first publish (needs
    Phase 0's plugin release + Phase 1's binary release + the `packaging:` section, landed
    via charly#273).
