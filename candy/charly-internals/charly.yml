@@ -5086,7 +5086,10 @@ go-skill:
               `/usr/lib/charly/plugins`, so pointing the dir at an empty directory masks nothing.
               `CHARLY_PLUGIN_ONLY=1` drops the FHS path, making the search exactly
               `$CHARLY_PLUGIN_DIR` (or empty when that is unset). It is an EXACT `1` match, so a
-              typo fails closed and a deployed container keeps finding its own baked plugins.
+              typo leaves the FHS path in place. That is safe for a deployed container — it keeps
+              finding its own baked plugins — but it is NOT safe for the test below, where the
+              same typo produces a silently ineffective flag. Which is why that procedure leads
+              with a control rather than trusting the variable was read.
 
               **Baked lookup is keyed by WORD and short-circuits the project scan.**
               `resolveCommandPluginBinary` returns on a baked hit before the project loads: a
@@ -5109,8 +5112,8 @@ go-skill:
               Then run the two arms. **The `Note: local candy … shadows …` preamble is the
               signal, not noise** — it appears because the flag made charly load the PROJECT.
               Check for it with a predicate rather than by counting; the preamble is two identical
-              lines per shadowed candy (the project loads twice) and both the set and the ordering
-              vary by host and by run:
+              lines per shadowed candy (the project loads twice); the set varies by host and the
+              ordering varies from run to run:
 
               ```
               $ CHARLY_PLUGIN_ONLY=1 ./bin/charly generate-packages 2>&1 \
