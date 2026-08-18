@@ -4768,15 +4768,14 @@ git-workflow-skill:
 
                   ### A sweep inherits its key from the finding that prompted it
 
-                  The section above says to sweep for what a fix invalidated. This one says why sweeps
-                  still miss, when run by people who know to run them.
+                  The section above says to sweep for what a fix invalidated. This one says why sweeps still
+                  miss, when run by people who know to run them.
 
                   > **A sweep inherits its key from the finding that prompted it.**
 
-                  Every miss catalogued here was made with class-thinking fully engaged, by someone who
-                  had just fixed the same class elsewhere — and scoped to the artifact they arrived
-                  holding. Rigor pointed at the wrong domain by the thing that summoned it. `charly#280`
-                  produced four instances across three review rounds and one post-merge round:
+                  Every miss catalogued here was made with class-thinking fully engaged, by someone who had
+                  just fixed the same class elsewhere — and scoped to the artifact they arrived holding.
+                  `charly#280` produced four instances across three review rounds and one post-merge round:
 
                   | Round | Fixed | Left bare | Why the sweep could not see it |
                   |---|---|---|---|
@@ -4785,62 +4784,49 @@ git-workflow-skill:
                   | 3 | the line that **records** the parent | the line that **consumes** it | the key was the finding's line, not the chain |
                   | 4 (post-merge) | — | a miscount two lines from a rewritten sentence | the key was `list-ai`, so `Five` was invisible |
 
-                  Round 4 is the sharpest, and it caught two independent reviewers by different routes: the
-                  author swept on `list-ai` while editing the adjacent sentence, and the validator skipped a
-                  prose pass on a property of the **diff** ("touches no reader-facing page") where the
-                  standard keys on a property of the **claim** (a count authored into a permanent record).
-                  Different keys, same law. The code/prose register boundary is one special case of it, not
-                  the whole.
+                  Round 4 caught two independent reviewers by different routes: the author swept on `list-ai`
+                  while editing the adjacent sentence, and the validator keyed on a property of the **diff**
+                  where the standard keys on a property of the **claim**. The code/prose register boundary is
+                  one special case of this, not the whole.
 
-                  **A pattern must anchor to the construct, not the token.** A token-anchored key produced both a
-                  miss and a false positive: `grep 'cmd:"[a-z_]'` later counted two *comment* lines as
+                  **A pattern must anchor to the construct, not the token.** A token-anchored key produced
+                  both a miss and a false positive: `grep 'cmd:"[a-z_]'` later counted two *comment* lines as
                   surviving tags. A count that cannot tell a tag from prose was never a measurement of the
-                  invariant. Anchor to what the construct looks like — `^\s+[A-Z]\w*\s+\S+\s+`...`cmd:"` —
-                  or state that the figure is a candidate count, not an answer.
+                  invariant. Anchor to the construct — `^\s+[A-Z]\w*\s+\S+\s+`...`cmd:"` — or state that the
+                  figure is a candidate count, not an answer.
 
-                  **Put the safeguard where the reader ACTS, not where it is true.** A rule that knows
-                  `rm` is destructive, knows a scratch worktree is the right mutation harness, and knows an
-                  exit code must be classified before absence is believed — and states all three several
-                  hundred lines away from the step that does the deleting — **has the knowledge and none of
-                  the benefit.** Measured in this very spec, twice: a procedure opened with `rm` on a
-                  tracked file, in whatever checkout the reader was standing in, while all three
-                  safeguards sat far below it; and the same page's `git -C <submodule> grep` form sat
-                  sections away from a command that could not reproduce its own worked example
-                  without it. **The exact distances are not published**, for the reason given below
-                  about counts: a line offset inside the document it measures is stale the next time
-                  that document is edited, which for this page has been every round.
-
-                  **A reader executes the invocation printed next to the instruction.** Anything true
-                  elsewhere in the document is, operationally, absent — so the test for a rule is not
-                  *"does the page contain the answer"* but *"is the answer at the point of action"*.
+                  **Put the safeguard where the reader ACTS, not where it is true.** A reader executes the
+                  invocation printed next to the instruction; anything true elsewhere in the document is
+                  operationally absent. So the test is not *"does the page contain the answer"* but *"is the
+                  answer at the point of action"*. Measured in this very spec twice: a procedure opened with
+                  `rm` on a tracked file while all three relevant safeguards sat far below it, and a
+                  `git -C <submodule> grep` form sat sections away from a command that could not reproduce
+                  its own worked example without it. **The exact distances are not published** — a line
+                  offset inside the document it measures is stale the next time that document is edited.
 
                   **The operational corollary, which is where sweeps do damage rather than just miss:**
 
                   > **A claim-keyed sweep produces a CANDIDATE list, never an EDIT list.**
 
                   Every hit is re-derived against the artifact before it is touched. A sweep that edits its
-                  own hits is a find-and-replace wearing a sweep's name — and it fails in the direction that
-                  reports success. Three separate times in this program a mechanical unification across
+                  own hits is a find-and-replace wearing a sweep's name, and it fails in the direction that
+                  reports success. Three times in this program a mechanical unification across
                   instances-that-must-differ turned a **correct** statement false while the sweep reported
-                  clean: a comment explaining why a name tag exists (correct, and a blanket deletion would
-                  have removed the explanation); a sibling count that genuinely was five (correct, and a
-                  blanket `Five → Four` would have falsified it); and a pair of comparators that were
-                  supposed to differ (unified, turning a staleness guard into a tautology while the suite
-                  stayed green).
+                  clean: a comment explaining why a name tag exists; a sibling count that genuinely was five;
+                  and a pair of comparators that were supposed to differ, unified into a tautology while the
+                  suite stayed green.
 
                   **The sharpest case is sweeping a claim you have just CORRECTED**, because the correction
-                  itself quotes the old wording in order to retract it — so the sweep's hits include the
-                  fix. Measured: four hits for a superseded rule across two CHANGELOGs, **three of them
-                  retractions and one a live assertion.** A mechanical pass would have deleted the three
-                  retractions, leaving a page that no longer states the wrong thing and no longer records
-                  that it was wrong — **clean-looking, and stripped of exactly the history that stops the
-                  claim coming back.** Only reading each hit distinguishes *asserting X* from *saying X was
-                  wrong*, and no pattern can, because the two are the same string.
+                  quotes the old wording in order to retract it — so the sweep's hits include the fix.
+                  Measured: four hits for a superseded rule across two CHANGELOGs, **three retractions and one
+                  live assertion.** A mechanical pass would have deleted the three retractions, leaving a page
+                  that no longer states the wrong thing and no longer records that it was wrong. Only reading
+                  each hit distinguishes *asserting X* from *saying X was wrong*, and no pattern can, because
+                  the two are the same string.
 
                   **Sweep across every REPO the claim reached, not the files a finding named.** The live
-                  assertion in that set was in a repository no finding mentioned, twenty lines above its own
-                  correction, and was found only because the sweep was run over the whole cutover rather
-                  than the reported sites.
+                  assertion in that set was in a repository no finding mentioned, and was found only because
+                  the sweep ran over the whole cutover rather than the reported sites.
 
                   ### Gate the behaviour the title claims, not the artifact of the fix
 
@@ -4878,69 +4864,45 @@ git-workflow-skill:
                   > One tree's state never distinguished the cases — at the start, in the middle, or at the
                   > end. **Two observations at one timestamp did, every time.**
 
-                  Four measured instances, each failing at a different point:
+                  Four measured instances, each with the observation that separated them:
 
-                  **A shared worktree, written by a concurrent process.** `go test ./...` went green, then
-                  the same tests under `-run` failed seconds later on the same tree. That reads exactly like
-                  an ordering dependency in the test just added — the most plausible wrong answer available.
-                  **A concurrent writer presents as a flaky test**, which is the worst possible disguise
-                  when R1 forbids accepting that classification. The discriminator was **file mtime against
-                  the test-run timestamps**, not the test output. A green figure was retracted for *when* it
-                  ran rather than what it said.
-
-                  **A test reaching real storage.** A provenance test passed for weeks while stubbing a var
-                  the code under test never consulted — it called a different symbol the var was merely
-                  initialised from — so the stub was skipped and the test reached the real image store. The
-                  available wrong reading: *"it passes, the fixture is fine."* It surfaced only when a
-                  concurrent prune deleted the image it had silently depended on, again presenting as a
-                  flaky test caused by unrelated churn. The discriminating measurement was the **absence
-                  proof**: confirming the image was ABSENT *while the test still passed*. Only that pairing
-                  separates "hermetic" from "happens to find the image."
-
-                  **Two counts of one invariant.** Two reviewers measured the same thing and got 2 and 1.
-                  The 2 matched a **token** in two comments; the 1 matched the **construct**. The token
-                  figure was never a measurement of the invariant — and it failed in the direction that
-                  looks safer, because over-counting reads as extra coverage and nothing in the number says
-                  it drifted off what it names. It was reconcilable in one exchange **only because both
-                  parties published the pattern beside the number**; two bare figures could have been traded,
-                  not checked.
-
-                  **A claim one degree stronger than its table.** *"Measured against the exact tree that
-                  shipped"* was offered for a suite run — and was false by one commit, the validator's
-                  merge-time CalVer rename. The reachable claim was *"the shipped **code**, exactly; the
-                  shipped **tree** minus that rename"*: materially the same reassurance, one degree weaker,
-                  true. **A validator's CalVer commit lands after the author's last measurement by
-                  construction**, so "I measured the tree that shipped" is essentially never available to an
-                  author. The reachable form is always *"I measured the code that shipped, and here is the
-                  delta."*
+                  - **A shared worktree, written by a concurrent process.** `go test ./...` green, the same
+                    tests under `-run` failing seconds later on the same tree. A concurrent writer presents
+                    as a flaky test — the worst disguise available where R1 forbids that classification.
+                    Discriminator: **file mtime against the test-run timestamps**, not the test output.
+                  - **A test reaching real storage.** A provenance test stubbed a var the code under test
+                    never consulted, so it reached the real image store for weeks; it surfaced only when a
+                    concurrent prune deleted the image. Discriminator: the **absence proof** — the image
+                    ABSENT while the test still passed. Only that pairing separates "hermetic" from
+                    "happens to find the image."
+                  - **Two counts of one invariant.** 2 matched a **token** in two comments; 1 matched the
+                    **construct**. Over-counting reads as extra coverage, so it failed in the direction that
+                    looks safer. Reconcilable in one exchange only because **both parties published the
+                    pattern beside the number**.
+                  - **A claim one degree stronger than its table.** *"Measured against the exact tree that
+                    shipped"* was false by one commit — the validator's merge-time CalVer rename, which
+                    lands after the author's last measurement **by construction**. The reachable claim is
+                    always *"the shipped code, exactly; the tree minus that rename."*
 
                   **The remedy, one part per instance:**
 
-                  - **Make the silent dependency loud.** Where a test can silently reach shared state, make
-                    reaching it an ERROR rather than a fallback — a stub that `t.Fatal()`s on any
-                    real-storage fallthrough. A test that can pass by accident eventually will.
-                  - **Make the provenance inseparable from the figure.** Stamp every pasted measurement with
-                    the tree it came from: head sha plus `git status`, bracketed **before and after** the
-                    run. A suite result that straddles a write is a figure with no owner. And *clean
-                    relative to a mutable reference is not clean* — diff against a recorded immutable ref,
-                    never bare `HEAD`.
+                  - **Make the silent dependency loud** — a stub that `t.Fatal()`s on any real-storage
+                    fallthrough. A test that can pass by accident eventually will.
+                  - **Make the provenance inseparable from the figure** — head sha plus `git status`,
+                    bracketed before and after the run. Clean relative to a mutable reference is not clean:
+                    diff against a recorded immutable ref, never bare `HEAD`.
                   - **Publish the pattern beside the number.** A count whose pattern is not shown cannot be
                     reconciled, only traded.
-                  - **State claims at the strength the table carries, and mark ANCHORED vs PROSPECTIVE.** An
-                    anchored figure is reproducible from a recorded immutable reference and may be quoted
-                    as-is; a prospective one is derived from live state that keeps moving and must be
-                    re-derived at the moment of use, or quoted as a timestamped snapshot. Saying which is
-                    which is half of what this section teaches, because the reader cannot infer it.
+                  - **Mark ANCHORED vs PROSPECTIVE.** Anchored reproduces from an immutable reference and
+                    may be quoted as-is; prospective derives from live state and must be re-derived at use.
+                    The reader cannot infer which.
 
-                  **What would refute this taxonomy**, named in advance because one remedy per instance is
-                  tidy enough to be suspicious: *if a fifth instance maps onto an existing bullet, the
-                  structure is real; if one maps onto none, it is decoration and should go.* It has since
-                  been tested and passed **by accident**, which is the only way that counts — a later
-                  finding (a count naming four items while asserting five) arrived from an unrelated
-                  direction and mapped cleanly onto *make the provenance inseparable from the figure*, since
-                  four names under a "five" is visible on the page the moment the figure carries what
-                  produced it. A test the author arranges to pass proves nothing; one a later finding
-                  happens to satisfy is evidence.
+                  **Pre-registered refutation:** if a fifth instance maps onto an existing bullet the
+                  structure is real; if one maps onto none it is decoration. It has since passed **by
+                  accident** — a later finding (a count naming four items while asserting five) arrived from
+                  an unrelated direction and mapped onto *make the provenance inseparable from the figure*.
+                  A test the author arranges to pass proves nothing; one a later finding happens to satisfy
+                  is evidence.
 
                   ### Assembling several sources into one tree — measure between applications
 
