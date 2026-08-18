@@ -5106,11 +5106,29 @@ go-skill:
               1
               ```
 
-              Then run the two arms. **`tail -1` is part of each command, not an elision**: with
-              the FHS path dropped charly loads the project, which prints a `Note: local candy …
-              shadows …` line per shadowed candy first, and the failing arm prints a full usage
-              dump — the line that matters is last in both, and the preamble varies by host and
-              by run.
+              Then run the two arms. **The `Note: local candy … shadows …` preamble is the
+              signal, not noise** — it appears because the flag made charly load the PROJECT.
+              Check for it with a predicate rather than by counting; the preamble is two identical
+              lines per shadowed candy (the project loads twice) and both the set and the ordering
+              vary by host and by run:
+
+              ```
+              $ CHARLY_PLUGIN_ONLY=1 ./bin/charly generate-packages 2>&1 \
+                  | grep -q '^Note: local candy' && echo "project loaded" || echo "baked short-circuit"
+              project loaded
+
+              $ ./bin/charly generate-packages 2>&1 \
+                  | grep -q '^Note: local candy' && echo "project loaded" || echo "baked short-circuit"
+              baked short-circuit
+              ```
+
+              **Run that control first.** Without it you cannot tell a working flag from a
+              silently ineffective one: `CHARLY_PLUGIN_ONLY` is an EXACT `1` match, so a typo
+              leaves the FHS path in place — and the last line of the run is BYTE-IDENTICAL with
+              and without the flag. A `tail -1` alone therefore has exactly the property this
+              section opens by warning about: it cannot distinguish the two sources.
+
+              With the control passing, the arms read the resolution itself:
 
               ```
               $ CHARLY_PLUGIN_ONLY=1 ./bin/charly generate-packages 2>&1 | tail -1
@@ -5122,11 +5140,11 @@ go-skill:
               $ mv /tmp/gp-aside candy/generate-packages
               ```
 
-              **What each arm licenses.** With `CHARLY_PLUGIN_ONLY=1` and `CHARLY_PLUGIN_DIR`
-              unset the baked search is EMPTY, so arm 1 succeeding already establishes that a
-              PROJECT candy served the word — that is the whole point of the flag. Arm 2 is not
-              needed for that; it attributes the resolution to `candy/generate-packages`
-              specifically, by removing that one candy and watching the word stop resolving.
+              **What each step licenses.** The control establishes that the flag took effect and
+              the project was loaded. Given that, arm 1 succeeding shows a PROJECT candy served
+              the word — with `CHARLY_PLUGIN_DIR` unset the baked search is empty, so nothing else
+              could have. Arm 2 attributes it to `candy/generate-packages` specifically, by
+              removing that one candy and watching the word stop resolving.
 
               Both arms need the flag. Without it, arm 2 still succeeds — the baked binary
               answers once the project candy is gone — so the removal would tell you nothing.
