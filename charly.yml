@@ -3750,8 +3750,34 @@ check-agentteams-pod:
 #      endpoint answers 200.
 #
 # So the round-trip has nowhere to run: the host cannot reach the controller, and the
-# venue has no binary. The prerequisite is REBUILDING agentteams-worker with the
-# agentteams-snapshot candy composed in, then pointing AGENTTEAMS_WORKER_IMAGE at it.
+# venue has no binary.
+#
+# THE PREREQUISITE IS NOT MERELY A REBUILD — IT IS BLOCKED ON A LATENT DEFECT, and
+# building it is how that was found. `charly box build agentteams-worker` FAILS:
+#
+#   STEP 24/47: RUN rc-update add virtqemud.socket default && \
+#               rc-update add virtnetworkd.socket default
+#   /bin/sh: rc-update: command not found          exit status 127
+#
+# `rc-update` is OpenRC. The worker's base is Arch (systemd), and the service being
+# enabled is declared `use_packaged: virtqemud.socket` with `distro: [fedora, arch]`
+# in candy/virtualization — a SYSTEMD unit. Verified against the emitted artifact
+# (R8): .build/agentteams-worker/Containerfile carries 2 `rc-update` lines (181-182)
+# beside 1 `systemctl` line, so the generator emits BOTH init forms and the container
+# has neither OpenRC nor systemd — it runs supervisord. The correct emission for this
+# target is virtualization's sibling `exec:` entry, not the packaged-unit arm.
+#
+# ATTRIBUTION, measured rather than assumed: this is LATENT, not a regression. The
+# `virtualization` candy reaches an image only via the `charly` candy, and `charly` is
+# composed by 15 files in the superproject of which ZERO are deployable boxes, and by
+# nothing at all in any box/ submodule. So `charly` HAS NEVER BEEN BUILT INTO A
+# CONTAINER IMAGE. agentteams-snapshot is the first thing to compose it, which is why
+# this surfaces now — and it means the snapshot candy's own premise, "the charly
+# toolchain carried into a deployment", has never been built by anyone.
+#
+# Unblocking Unit 6 therefore requires fixing the init-form selection for a
+# supervisord container target first; rebuilding the worker and repointing
+# AGENTTEAMS_WORKER_IMAGE follows it, not the other way round.
 #
 # SECOND, INDEPENDENT DEFECT IN THIS BED, recorded because it is a design error and
 # not a prerequisite: the round-trip was authored as two `run:` steps, and
