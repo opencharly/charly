@@ -5495,7 +5495,14 @@ git-workflow-skill:
                       found=
                       for repo in $repos; do
                         git -C "$repo" cat-file -e "${sha}^{commit}" 2>/dev/null || continue
-                        git -C "$repo" merge-base --is-ancestor "$sha" origin/main 2>/dev/null && st=LANDED || st=UNMERGED
+                        # Capture rc and CLASSIFY it. 128 means "could not check" and is never a verdict;
+                        # `&& ||` cannot tell it from 1, so it would print UNMERGED and pass.
+                        git -C "$repo" merge-base --is-ancestor "$sha" origin/main; rc=$?
+                        case $rc in
+                          0) st=LANDED ;;
+                          1) st=UNMERGED ;;
+                          *) st=UNCHECKED; bad=1 ;;
+                        esac
                         printf '%-9s %-10s %-9s %s\n' "$sha" "$st" "$(basename "$repo")" \
                                "$(git -C "$repo" log -1 --format=%s "$sha")"
                         found=1
