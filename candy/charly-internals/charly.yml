@@ -10236,13 +10236,15 @@ pr-validator-agent:
             super=$(git rev-parse --show-toplevel)   # the superproject
             artifact=plugins                         # or docs — the submodule the PR targets
             suspect=path/inside/the/artifact.md      # the file you suspect is generated
-            srchead=origin/main                      # or the source PR's head
+            srchead=                                 # the SOURCE head — REQUIRED, no default:
+                                         # a verdict that flips on which source commit you
+                                         # stood at is not a property of the PR
             prhead=                                  # the ARTIFACT PR's head sha — REQUIRED
 
             # Nested, not `exit`: this block is meant to be PASTED, and an `exit` on a guard
             # path closes your terminal. Check what can be checked BEFORE anything exists.
-            if [ -z "$prhead" ]; then
-              echo "guard: set \$prhead to the artifact PR head sha" >&2
+            if [ -z "$prhead" ] || [ -z "$srchead" ]; then
+              echo "guard: set \$prhead and \$srchead — neither has a safe default" >&2
             else
               # mktemp, NOT a fixed path: the teardown is destructive and a fixed name can
               # name a peer's live worktree.
@@ -10352,10 +10354,16 @@ pr-validator-agent:
             The obvious tightenings were measured, and neither removes the need to triage. Restricting to a 20-line
             header window still flags a CHANGELOG that quotes the banner in its opening paragraph.
             Requiring a comment-form line carrying both *generated* and the phrase drops the false
-            positives — but **how many real files it also drops is a property of the matcher, not of the
-            corpus**: the same trees lose 1, 11, or 344 files depending on case-sensitivity and match
-            direction alone. A count that swings three orders of magnitude on an undeclared switch is not
-            evidence about a corpus, so none is published here.
+            positives, and drops **1 of 349** in `plugins` and **5 of 905** in `docs` — matcher pinned on
+            all three axes it turns on: **comment-form, either order, case-insensitive**. **Every one of
+            those six is a hand-authored mentioner**, so the tightening drops no genuine carrier.
+
+            **Three unnamed switches, not an unstable corpus.** The same trees appear to drop 1, 11 or 344
+            files depending on case, match direction, and comment-form-vs-loose — and the 344 is not a
+            measurement at all: the banner reads `GENERATED`, lowercase `generated` appears in 5 files of
+            349, so a case-sensitive arm reports 344 drops because it **never found them**. That is this
+            page's own rule — a zero means *I found nothing*, never *there is nothing* — and a correct
+            figure was once deleted here on the strength of it.
 
             A hand-edit to a generated artifact is a defect in KIND, independent of whether the
             prose is correct — the next regeneration silently reverts it, so a change that reads
@@ -10384,7 +10392,7 @@ pr-validator-agent:
             - **The two trees use OPPOSITE separators**, so a matcher written for either alone
               misses almost everything in the other. Measured:
 
-              | tree (ref) | `DO NOT EDIT` (spaced) | `DO-NOT-EDIT` (hyphenated) | `DO[- ]NOT[- ]EDIT` |
+              | tree (ref), **case-sensitive**, files | `DO NOT EDIT` (spaced) | `DO-NOT-EDIT` (hyphenated) | `DO[- ]NOT[- ]EDIT` |
               |---|---|---|---|
               | `plugins` @ `01edd45e` | **347** | 6 | **349** |
               | `docs` @ `eb92dc24` | 3 | **904** | **905** |
