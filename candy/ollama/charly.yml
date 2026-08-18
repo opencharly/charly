@@ -175,7 +175,8 @@ ollama-skill:
             
             ## Box Properties
             
-            The `ollama` BOX lives in a `box/<distro>` submodule, not here, so its exact
+            The `ollama` BOX lives in a distro submodule — `box/fedora` and `box/cachyos` each
+            define one today — not here, so its exact
             composition is stated there and not on this page — an earlier version of this
             table listed a candy set that a later box edit made wrong, which is the failure
             mode a cross-repo composition table has by construction. What is stable, and
@@ -220,8 +221,9 @@ ollama-skill:
 
             - A GPU box composes `ollama-cuda` (~988 MiB) beside this candy for the
               CUDA backend, or `ollama-rocm` (~2.9 GiB) for AMD. Both are candies in
-              this repository; which boxes compose them is decided in the `box/<distro>`
-              submodules, so consult those rather than this page for the current list.
+              this repository; which boxes compose them is decided in the distro submodules
+              (`box/fedora`, `box/cachyos`), so consult those rather than this page for the
+              current list.
             - A consumer that composes neither pays for neither ON A PACKAGED DISTRO —
               e.g. `/charly-openclaw:openclaw-desktop` (cachyos base, no GPU candy). On a
               tarball distro it still carries the bundled CUDA backend.
@@ -261,12 +263,21 @@ ollama-skill:
             deployed Ollama server from the host over its HTTP API — no shell alias
             needed:
             
+            **11434 is the port INSIDE the container, not necessarily on your host.** A deploy
+            can publish it elsewhere, and a check bed allocates the host port automatically. Read
+            it from the PORTS column before you connect:
+
             ```bash
-            charly ollama list --server http://127.0.0.1:11434
-            charly ollama pull llama3 --server http://127.0.0.1:11434
-            charly ollama run llama3 "Hello" --server http://127.0.0.1:11434
+            charly status ollama          # PORTS shows <host>-><container>, e.g. 34117->11434
+            charly ollama list                --server http://127.0.0.1:34117
+            charly ollama pull llama3         --server http://127.0.0.1:34117
+            charly ollama run  llama3 "Hello" --server http://127.0.0.1:34117
             ```
-            
+
+            On a deploy that publishes 11434 unchanged, drop the flag entirely — that is the
+            default. On a bed-allocated port you cannot, and a copied hardcoded 11434 gets you a
+            connection refused.
+
             Endpoint resolution: `--server` flag > `OLLAMA_HOST` env > `http://127.0.0.1:11434`.
             See `/charly-ollama:ollama-cli` for the full command tree.
             
@@ -320,7 +331,9 @@ ollama-skill:
             After `charly start`:
             - `charly status ollama` — container running
             - `charly service status ollama` — all services RUNNING
-            - `curl -s http://localhost:11434/api/tags` — Ollama API responds
+            - `curl -s http://localhost:<host-port>/api/tags` — Ollama API responds, where
+              `<host-port>` is the left-hand side of the PORTS column in `charly status ollama`
+              (11434 is the container-side port)
             - `charly check live ollama` — the baked runtime checks pass: `/api/tags` 200,
               `ollama --version`, `ollama list` exit 0. This is the only one of these that
               reports on the checks; `charly ollama list` lists MODELS and says nothing about
