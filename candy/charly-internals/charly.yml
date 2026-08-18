@@ -10349,14 +10349,13 @@ pr-validator-agent:
             claim.** It is the same measurement as the byte-identity check that proves a re-homing
             faithful, pointed the other way.
 
-            The obvious tightenings were measured and both are worse. Restricting to a 20-line
+            The obvious tightenings were measured, and neither removes the need to triage. Restricting to a 20-line
             header window still flags a CHANGELOG that quotes the banner in its opening paragraph.
             Requiring a comment-form line carrying both *generated* and the phrase drops the false
-            positives but **drops 1 of 349 hits in `plugins` and 5 of 905 in `docs` — and **every one of the six is a
-            hand-authored mentioner**: five `CHANGELOG/` entries and `docs/CLAUDE.md`, none carrying a
-            banner** — the
-            same corpora and refs as the census below, so the two figures are comparable — trading a
-            cost-one-glance error for the exact error that motivated the rule.
+            positives, and drops 1 of 349 hits in `plugins` and 5 of 905 in `docs`. **Every one of those
+            six is a hand-authored mentioner** — five `CHANGELOG/` entries and `docs/CLAUDE.md`, none
+            carrying a banner — the same corpora and refs as the census below, so the two figures are
+            comparable.
 
             A hand-edit to a generated artifact is a defect in KIND, independent of whether the
             prose is correct — the next regeneration silently reverts it, so a change that reads
