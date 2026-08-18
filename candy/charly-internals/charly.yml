@@ -10204,8 +10204,8 @@ pr-validator-agent:
 
             | getting it wrong | finds |
             |---|---|
-            | wrong **separator** (hyphen-only matcher) | 4 of 340 in `plugins` |
-            | wrong **repo scope** (superproject-relative across a gitlink) | **0** of 340 |
+            | wrong **separator** (hyphen-only matcher) | 6 of 349 in `plugins` |
+            | wrong **repo scope** (superproject-relative across a gitlink) | **0** of 349 |
             | wrong **pathspec** (`-- '*.md'`) | **0** of 4 in `sdk`, **0** of 8 in `spec` |
 
             **Each in isolation returns a plausible result**, and two of the three return a clean
@@ -10238,6 +10238,7 @@ pr-validator-agent:
             suspect=path/inside/the/artifact.md      # the file you suspect is generated
             srchead=origin/main                      # or the source PR's head
             prhead=                                  # the ARTIFACT PR's head sha — REQUIRED, no default
+            [ -n "$prhead" ] || { echo "guard: set \$prhead to the artifact PR head sha" >&2; exit 1; }
 
             # mktemp, NOT a fixed path: step 3 is destructive and a fixed name can name
             # a peer's live worktree.
@@ -10339,7 +10340,7 @@ pr-validator-agent:
             The obvious tightenings were measured and both are worse. Restricting to a 20-line
             header window still flags a CHANGELOG that quotes the banner in its opening paragraph.
             Requiring a comment-form line carrying both *generated* and the phrase drops the false
-            positives but **misses 2 of 348 real banners in `plugins` and 902 of 905 in `docs`** — the
+            positives but **misses 1 of 349 real banners in `plugins` and 5 of 905 in `docs`** — the
             same corpora and refs as the census below, so the two figures are comparable — trading a
             cost-one-glance error for the exact error that motivated the rule.
 
@@ -10353,16 +10354,16 @@ pr-validator-agent:
             Three things make the naive form of this check miss:
 
             - **The banner is usually near the top — and a fixed window still fails, because of a
-              one-file tail.** Measured over `plugins` @ `01edd45e`: **344 of 350 hits sit at line
-              ≤ 15 (98.3%)**, two above line 100, and **both are this page quoting
+              one-file tail.** Measured over `plugins` @ `01edd45e`: **345 of 351 hits sit at line
+              ≤ 15 (98.29%)**, two above line 100, and **both are this page quoting
               the banner in prose**. At this ref there is **no** genuinely deep carrier — the deepest
               banner sits at line 610 and is this same page. The rule stands on a tail being
               possible, not on this tree having one.
               **Grep the whole file** — not because the distribution is flat, but because the tail
-              is real, and a window sized to 98.3% of a corpus silently misses the rest.
+              is real, and a window sized to 98.29% of a corpus silently misses the rest.
 
-              **Here the RATIO is the claim and the totals only date it**: 338/350 and 339/351 at
-              two refs one commit apart — 96.57% and 96.58%, stable to two decimals while both
+              **Here the RATIO is the claim and the totals only date it**: 344/350 and 345/351 at
+              the `*.md` and unrestricted denominators of ONE ref — 98.29% both, identical while the
               totals moved. That is the statistic this rule holds for; file it against the one it
               is true of.
 
@@ -10376,17 +10377,17 @@ pr-validator-agent:
 
               | tree (ref) | `DO NOT EDIT` (spaced) | `DO-NOT-EDIT` (hyphenated) | `DO[- ]NOT[- ]EDIT` |
               |---|---|---|---|
-              | `plugins` @ `01edd45e` | **346** | 6 | **348** |
+              | `plugins` @ `01edd45e` | **347** | 6 | **349** |
               | `docs` @ `eb92dc24` | 3 | **904** | **905** |
 
-              A hyphen-only matcher finds 6 of 348 in `plugins`; a space-only matcher finds 3 of
+              A hyphen-only matcher finds 6 of 349 in `plugins`; a space-only matcher finds 3 of
               905 in `docs`. **Neither convention is wrong and neither is going away**, so `-i` and the
               `[- ]` class are load-bearing rather than stylistic — a matcher that assumes one house
               style reports a clean tree for the other.
 
               **The counts above are `spaced / hyphenated / tolerant`, and they do not add up
-              because `grep -l` UNIONS files rather than partitioning them** — 3 files carry BOTH
-              spellings, so `346 + 6 - 4 = 348`. Say that, or a careful reader spends their time
+              because `grep -l` UNIONS files rather than partitioning them** — 4 files carry BOTH
+              spellings, so `347 + 6 - 4 = 349`. Say that, or a careful reader spends their time
               suspecting your arithmetic instead of reading your point; one did.
 
               **Cite the REF a census was taken at, not a date.** "As they stood when this was
