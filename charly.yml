@@ -3727,7 +3727,41 @@ check-agentteams-pod:
               stdout:
                 - contains: "Controller URL: http://127.0.0.1:8090"
 # check-agentteams-snapshot — the R10 bed for Factory Unit 6, the snapshot/hydrate
-# round-trip. Deploys the SAME stack as check-agentteams-pod, whose bed already proves
+# round-trip.
+#
+# BLOCKED, NOT DISABLED — and blocked on ONE named prerequisite it becomes
+# satisfiable the moment that is removed. RUN 2026.230.1051 established it live:
+#
+#   image-build PASS 4m51s · check-image PASS · deploy-add PASS · config PASS ·
+#   start PASS · check-live FAIL (3 of my 5 steps).
+#
+#   1. `charly` IS NOT PRESENT in the deployed venue. Neither the `agentteams` box
+#      (minio/matrix/element/higress/controller — no charly candy) nor the published
+#      ghcr.io/opencharly/agentteams-worker:worker image carries it; verified by
+#      `find / -name charly` in the running pod and `ls /usr/local/bin/charly` in the
+#      worker image, both absent. The `agentteams-snapshot` candy exists to stage it
+#      and has NEVER BEEN BUILT INTO AN IMAGE — it is new in this cutover, so its own
+#      claim ("composed into agentteams-worker so the Replicator carries it") is not
+#      yet true of anything deployable.
+#
+#   2. Host-side invocation cannot substitute: `${CHARLY_BIN} agentteams worker list`
+#      with in_container:false gets `dial tcp 127.0.0.1:8090: connection refused`,
+#      because the controller REST API is inside the pod. From inside, the same
+#      endpoint answers 200.
+#
+# So the round-trip has nowhere to run: the host cannot reach the controller, and the
+# venue has no binary. The prerequisite is REBUILDING agentteams-worker with the
+# agentteams-snapshot candy composed in, then pointing AGENTTEAMS_WORKER_IMAGE at it.
+#
+# SECOND, INDEPENDENT DEFECT IN THIS BED, recorded because it is a design error and
+# not a prerequisite: the round-trip was authored as two `run:` steps, and
+# `charly check live` SKIPS every `run:` step as mutating ("verify-only mode"). No bed
+# on this machine has ever executed one — measured across every run in .check/:
+# check-agentteams-pod 9 skipped / 0 executed, check-helm-vm 3/0, this bed 11/0. A
+# round-trip expressed as `run:` steps can therefore never execute, and the `check:`
+# steps that depend on it fail because the mutation never happened. The fix is one
+# self-asserting `check:` step that performs and verifies the round-trip in a single
+# command — NOT a `run:`/`check:` pair. Deploys the SAME stack as check-agentteams-pod, whose bed already proves
 # the five services reach steady state; those assertions are NOT repeated here (R3).
 # This bed asserts only what Unit 6 adds: that `charly agentteams snapshot --out` writes
 # a PII-redacted hydration bundle, and `charly agentteams apply -f` restores it.
