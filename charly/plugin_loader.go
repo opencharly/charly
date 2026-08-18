@@ -372,9 +372,9 @@ func pluginBuildEnv(base []string, srcDir string) []string {
 // neither the candy source nor a go toolchain) can run an external plugin its
 // in-container charly needs at runtime — e.g. the charly-mcp service's `charly mcp
 // serve`. `CHARLY_PLUGIN_DIR` PREPENDS a directory ahead of it (tests, non-FHS
-// layouts) — it does NOT replace it: bakedPluginDirs always appends this FHS path,
-// so setting the env var cannot HIDE a plugin baked here. Masking a baked word for a
-// test needs an environment without the file, not an env var.
+// layouts) — it does NOT replace it, so setting it alone cannot HIDE a plugin baked
+// here. `CHARLY_PLUGIN_ONLY=1` is what drops this path from the search; see
+// bakedPluginDirs.
 const bakedPluginDir = "/usr/lib/charly/plugins"
 
 // bakedPluginFileName is the filename a baked plugin binary takes under bakedPluginDir.
