@@ -1316,7 +1316,7 @@ agents-skill:
                   specific container ports, never a bare `auto` token. References the
                   assigned port via `${HOST_PORT}` / `${HOST:<member>:<port>}` in its checks
                   — never a literal host port. A bed pins an image → layers → files, so
-                  owning a bed owns those source files. (a nil/absent
+                  owning a bed owns those source files. (A nil/absent
                   per-host overlay on a bed's first-ever `charly config` used to SKIP port
                   resolution entirely — `candy/plugin-deploy-pod/config_setup.go`'s
                   `resolveDeployPorts` now self-heals a nil overlay instead of skipping it,
@@ -7502,8 +7502,8 @@ plugin-skill:
                   of E/M/B/D" is the exact failure this framing forecloses: the bed runner, the check/ADE harness, the build
                   engine, the deploy walk, and the VM engine are ALL R-items (the v2 ledger already names them plugins) —
                   none of them earns kernel status by being awkward to relocate. Failure mode: auditors mis-classify the deploy + check cones as
-                  overwhelmingly permanent using exactly the "host-boundary/gather-engine" excuse. The true
-                  kernel in those cones is a fraction of a percent.
+                  ~90% permanent using exactly the "host-boundary/gather-engine"
+                  excuse; the true kernel in those cones is ~0.3%.
 
                   **The canonical shape every kind copies — resolve-to-envelope.** `builder` is the reference: its plugin
                   serves its own `#BuilderInput` schema, decodes into its own params, validates its own input, and RESOLVES
@@ -9739,7 +9739,7 @@ pr-validator-agent:
                branch.** A symbol unreferenced on a consumer's in-flight `feat/` branch can
                still be live on that consumer's `main`; removing it as "dead" from the
                producer breaks every consumer that hasn't rebased onto the branch yet
-               (sdk#66 — over-removal: wire types removed as dead can still be
+               (sdk#66 — over-removal: 4 wire types removed as dead were
                live on charly `main`). Re-run the liveness grep yourself against the consumer's
                `origin/main`, not the PR author's claim.
             10. **R6/R8/R9 — artifact + binary integrity (where the class applies).** R6: a
