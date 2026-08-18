@@ -21,8 +21,22 @@
 #	also stale on unmodified main  64
 #	attributable to this branch     0
 #
-# Every entry below is in that intersection. None is this cutover's drift, and the empty third row
-# is the check that says so — computed with `comm`, not asserted.
+# Every entry below is in that intersection. THAT IS NOT THE SAME AS "none is this cutover's
+# drift", and an earlier version of this header claimed it was.
+#
+# `comm` differences PATHS, not REASONS. A file stale on main for reason A and stale here for
+# reasons A *and* B lands in both sets and subtracts to zero — carrying B with it, invisibly. Two
+# entries did exactly that: `recipes/index.md` (whose entire branch-side regeneration was this
+# cutover's own `ollama-cli` card) and `reference/providers.md` (its `ollama` row). Found by a
+# reviewer who looked INSIDE the intersection instead of only across it — `git diff -- <path> |
+# grep -ci ollama` — which is this repo's own "ask what the output shape discards" rule
+# (scripts/drift-baseline.sh) turned on the file that cites it.
+#
+# `recipes/index.md` is consequently NOT in this list any more: it is regenerated and committed,
+# which is what the rule at the bottom of this header requires. `reference/providers.md` remains,
+# and remains honestly — regenerating it would add the `ollama` row but drop seven command words
+# main has, because those come from the unlanded ec484b4b. It is inherited debt AND carries one
+# line of this cutover's, and it cannot be split until charly#315 lands.
 #
 # HOW IT LIQUIDATES: when charly#315 lands, `main` reproduces d9afc66's pages and these entries
 # stop being stale. The gate will then red with "no longer stale — delete these lines", which is
@@ -40,7 +54,6 @@
 # regenerate and commit, never to record it here.
 
 src/content/docs/recipes/build/generate.md
-src/content/docs/recipes/index.md
 src/content/docs/recipes/internals/git-workflow/evidence-and-freshness.md
 src/content/docs/recipes/internals/install-plan/step-kinds.md
 src/content/docs/reference/candy/agentteams-snapshot.md
