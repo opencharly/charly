@@ -10354,7 +10354,8 @@ pr-validator-agent:
             Three things make the naive form of this check miss:
 
             - **The banner is usually near the top — and a fixed window still fails, because of a
-              one-file tail.** Measured over `plugins` @ `01edd45e`: **345 of 351 hits sit at line
+              one-file tail.** Measured over `plugins` @ `01edd45e`, spaced matcher, unrestricted:
+              **345 of 351 hits sit at line
               ≤ 15 (98.29%)**, two above line 100, and **both are this page quoting
               the banner in prose**. At this ref there is **no** genuinely deep carrier — the deepest
               banner sits at line 610 and is this same page. The rule stands on a tail being
