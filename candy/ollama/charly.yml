@@ -265,10 +265,11 @@ ollama-skill:
             
             **11434 is the port INSIDE the container, not necessarily on your host.** A deploy
             can publish it elsewhere, and a check bed allocates the host port automatically. Read
-            it from the PORTS column before you connect:
+            it from the `Ports:` line before you connect:
 
             ```bash
-            charly status ollama          # PORTS shows <host>-><container>, e.g. 34117->11434
+            charly status ollama
+            #   Ports:     34117:11434/tcp        <- HOST:CONTAINER, so the host port is 34117
             charly ollama list                --server http://127.0.0.1:34117
             charly ollama pull llama3         --server http://127.0.0.1:34117
             charly ollama run  llama3 "Hello" --server http://127.0.0.1:34117
@@ -332,8 +333,8 @@ ollama-skill:
             - `charly status ollama` — container running
             - `charly service status ollama` — all services RUNNING
             - `curl -s http://localhost:<host-port>/api/tags` — Ollama API responds, where
-              `<host-port>` is the left-hand side of the PORTS column in `charly status ollama`
-              (11434 is the container-side port)
+              `<host-port>` is the left-hand side of the `Ports:` line in `charly status ollama`
+              (that line reads HOST:CONTAINER/proto; 11434 is the container-side port)
             - `charly check live ollama` — the baked runtime checks pass: `/api/tags` 200,
               `ollama --version`, `ollama list` exit 0. This is the only one of these that
               reports on the checks; `charly ollama list` lists MODELS and says nothing about
