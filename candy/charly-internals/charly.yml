@@ -10232,17 +10232,21 @@ pr-validator-agent:
             ```bash
             # 0. Stand a scratch tree on the SOURCE head, then put the ARTIFACT submodule on
             #    the PR HEAD — `submodule update` lands the source's PINNED gitlink, which is
-            #    NOT the PR you are validating. Set these four first:
+            #    NOT the PR you are validating. Set these five first:
             super=$(git rev-parse --show-toplevel)   # the superproject
             artifact=plugins                         # or docs — the submodule the PR targets
             suspect=path/inside/the/artifact.md      # the file you suspect is generated
             srchead=origin/main                      # or the source PR's head
+            prhead=                                  # the ARTIFACT PR's head sha — REQUIRED, no default
 
             # mktemp, NOT a fixed path: step 3 is destructive and a fixed name can name
             # a peer's live worktree.
             probe=$(mktemp -d /tmp/carrier.XXXXXX)
             git -C "$super" worktree add "$probe" "$srchead"
-            cd "$probe" && git submodule update --init --recursive
+            # The cd MUST be guarded: step 1 deletes a relative path, so an unentered
+            # $probe would run `rm` in whatever directory you were already standing in.
+            cd "$probe" || { echo "guard: cannot enter $probe" >&2; exit 1; }
+            git submodule update --init --recursive
             git -C "$artifact" fetch origin "$prhead" && git -C "$artifact" checkout "$prhead"
             git -C "$artifact" rev-parse HEAD    # MUST equal the PR head — read it back
 
@@ -10335,7 +10339,7 @@ pr-validator-agent:
             The obvious tightenings were measured and both are worse. Restricting to a 20-line
             header window still flags a CHANGELOG that quotes the banner in its opening paragraph.
             Requiring a comment-form line carrying both *generated* and the phrase drops the false
-            positives but **misses 6 of 340 real banners in `plugins` and 7 of 899 in `docs`** — the
+            positives but **misses 2 of 348 real banners in `plugins` and 902 of 905 in `docs`** — the
             same corpora and refs as the census below, so the two figures are comparable — trading a
             cost-one-glance error for the exact error that motivated the rule.
 
@@ -10350,10 +10354,12 @@ pr-validator-agent:
 
             - **The banner is usually near the top — and a fixed window still fails, because of a
               one-file tail.** Measured over `plugins` @ `01edd45e`: **344 of 350 hits sit at line
-              ≤ 15 (96.6%)**, three above line 100, and **two of those three are this page quoting
-              the banner in prose**. There is exactly ONE genuinely deep carrier, at line **1214**.
+              ≤ 15 (98.3%)**, two above line 100, and **both are this page quoting
+              the banner in prose**. At this ref there is **no** genuinely deep carrier — the deepest
+              banner sits at line 610 and is this same page. The rule stands on a tail being
+              possible, not on this tree having one.
               **Grep the whole file** — not because the distribution is flat, but because the tail
-              is real, and a window sized to 96.6% of a corpus silently misses the rest.
+              is real, and a window sized to 98.3% of a corpus silently misses the rest.
 
               **Here the RATIO is the claim and the totals only date it**: 338/350 and 339/351 at
               two refs one commit apart — 96.57% and 96.58%, stable to two decimals while both
@@ -10374,13 +10380,13 @@ pr-validator-agent:
               | `docs` @ `eb92dc24` | 3 | **904** | **905** |
 
               A hyphen-only matcher finds 6 of 348 in `plugins`; a space-only matcher finds 3 of
-              899 in `docs`. **Neither convention is wrong and neither is going away**, so `-i` and the
+              905 in `docs`. **Neither convention is wrong and neither is going away**, so `-i` and the
               `[- ]` class are load-bearing rather than stylistic — a matcher that assumes one house
               style reports a clean tree for the other.
 
               **The counts above are `spaced / hyphenated / tolerant`, and they do not add up
               because `grep -l` UNIONS files rather than partitioning them** — 3 files carry BOTH
-              spellings, so `339 + 4 - 3 = 340`. Say that, or a careful reader spends their time
+              spellings, so `346 + 6 - 4 = 348`. Say that, or a careful reader spends their time
               suspecting your arithmetic instead of reading your point; one did.
 
               **Cite the REF a census was taken at, not a date.** "As they stood when this was
