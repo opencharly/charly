@@ -5764,10 +5764,9 @@ go-quality-skill:
             go vet ./...
             ```
 
-            Baseline at authoring (2026-06, broadest uncapped): **1017 issues** — errcheck 457,
-            staticcheck 242, unparam 100, unused 53, gocyclo 46, gocritic 43, errorlint 29, prealloc 29,
-            dupl 10, ineffassign 4, unconvert 3, misspell 1. Re-run to refresh; the per-linter shape is the
-            triage map.
+            Run it uncapped to get the current baseline. The per-linter SHAPE is the triage map, not the
+            total: errcheck and staticcheck dominate, and which linter leads tells you what kind of debt
+            you are looking at. A count pasted here would be stale before it was read.
 
             **Measurement gotcha — measure with the configured run, never `--enable-only`.** The
             authoritative count is `golangci-lint run ./...` (the configured set), which DEDUPLICATES
@@ -8961,10 +8960,12 @@ vm-spec-skill:
 
             There is deliberately **no fallback** for either value. `spec.DistroSSHUnits[distro]` and
             `spec.DistroInits[distro]` are bare lookups into the generated tables: an id outside the
-            vocabulary yields an EMPTY unit name rather than a guess. The sshd start does NOT fall back to
-            the other unit name — a fallback is what lets a wrong input survive long enough to fail
-            somewhere else, so omitting the value costs an unreachable VM, not a redundant
-            `systemctl` call. Presence
+            vocabulary yields an EMPTY unit name rather than a guess, and there is no fallback to the other
+            unit name — a fallback is what lets a wrong input survive long enough to fail somewhere
+            else. Omitting the value is a VALIDATION ERROR at author time
+            (`candy/plugin-substrate/validate_vm.go` `validateSourceDistro`, severity `error`); the
+            unreachable-VM outcome is what the now-deleted `base_user` inference used to produce,
+            not what omission costs today. Presence
             is enforced at author time instead, which is the only place the answer is actually known.
 
             **The symptom is worth memorising, because it names nothing:** the domain reports
