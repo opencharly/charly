@@ -41,13 +41,17 @@ func TestNewMeta_DeclaresNestedCommands(t *testing.T) {
 		}
 		got[c.GetWord()] = true
 	}
-	for _, want := range []string{"generate", "validate", "new", "pull", "build", "inspect", "list", "labels", "merge", "reconcile", "feature"} {
+	for _, want := range []string{"generate", "validate", "new", "pull", "build", "inspect", "list", "labels", "load", "merge", "reconcile", "feature"} {
 		if !got[want] {
 			t.Errorf("Describe missing command:%s (got %v)", want, got)
 		}
 	}
-	if len(caps.GetProvided()) != 11 {
-		t.Errorf("want 11 command capabilities, got %d", len(caps.GetProvided()))
+	// The literal and the want list above must move TOGETHER. This assertion is the
+	// plugin's declared-surface guard: bumping the count alone would leave it unable to
+	// distinguish "12 because we added load" from "12 because something leaked a provider",
+	// which is the only question it exists to answer.
+	if len(caps.GetProvided()) != 12 {
+		t.Errorf("want 12 command capabilities, got %d", len(caps.GetProvided()))
 	}
 }
 

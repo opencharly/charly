@@ -63,13 +63,15 @@ it is handed decides the containment story:
   default spike: a single `pod:` deploy composing the agentteams composition +
   `container-nesting`. Delivering the pre-built `agentteams-manager`/`-worker` images
   into the spike's *nested* store is **[proven by the containment spike]**: the
-  container-venue analog of `charly vm cp-box`'s `streamLoadAndTag` — host
+  container-venue analog of `charly vm cp-box`'s streamed transfer: host
   `podman save <image>` piped into the spike's nested uid-1000 store via
   `charly shell <spike> -c 'podman --remote --url unix:///run/user/1000/podman/podman.sock load'`,
   no intermediate tarball. The images are private on ghcr.io (anonymous manifest
   fetch is 401), so the registry hop is not an option — local delivery is the
   mechanism, and the winning verb (`charly box load`, unit 5) is a gap to close
-  in charly, not a script. The controller's reconcile loop self-heals: once the
+  in charly, not a script. Unit 5 landed it, and unified both venues onto one path —
+  `sdk/deploykit.TransferImageToVenue` over `spec/container.StreamLoad` — so the
+  VM-only `streamLoadAndTag` this paragraph once named no longer exists. The controller's reconcile loop self-heals: once the
   image lands in the nested store, the controller spawns the manager without a
   restart, so delivery can happen after the controller is up.
 - **The nested socket path needs a runtime-dir volume.** `/run` is a fresh

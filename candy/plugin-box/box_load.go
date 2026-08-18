@@ -48,18 +48,12 @@ func dispatchLoad(args []string) error {
 	if done || err != nil {
 		return err
 	}
-	// An explicit ref that exists locally is used exactly as authored — naming a tag IS the
-	// choice. A bare box name resolves through the STRICT resolver, which refuses to elect an
-	// image older than the newest local build: delivering a stale artifact into a venue is the
-	// same wrong-artifact class that `charly check box` refuses to certify, and it is far harder
-	// to notice here, because the load succeeds and the venue simply runs the wrong image.
-	ref := g.Image
-	if !container.LocalImageExists("podman", ref) {
-		resolved, err := container.ResolveBuiltImageRef("podman", ref)
-		if err != nil {
-			return fmt.Errorf("box load: %q is not in host podman storage and could not be resolved to a local build (build it first: charly box build %s): %w", g.Image, g.Image, err)
-		}
-		ref = resolved
+	// Shared with `charly vm cp-box` — both delivery verbs need exactly this resolution, and
+	// each had grown its own copy until spec's ResolveDeliverableRef collapsed them (R3, in
+	// the cutover whose own thesis is that a second venue costs a constructor, not a copy).
+	ref, err := container.ResolveDeliverableRef("podman", g.Image)
+	if err != nil {
+		return fmt.Errorf("box load: %w", err)
 	}
 
 	// Resolve the running container the same way charly shell / charly cp do, so a name that
@@ -80,9 +74,23 @@ func dispatchLoad(args []string) error {
 	// in-container podman would otherwise default to.
 	podman := "podman --remote --url " + socketURL
 
+	// The probe jump MUST follow the engine ResolveContainer just returned. Hardcoding
+	// JumpPodmanExec while the load below honours `engine` makes the two halves address the
+	// venue through different binaries on a docker deploy: the load runs `docker exec` and
+	// the probes run `podman exec` against the same container. Both then fail at transport
+	// level — and VenueHasImage / VenueImageCorrupt both return FALSE on error, so the
+	// verified idempotency and the torn-overlay re-stream do not fail, they silently stop
+	// meaning anything. That is the safety property this verb advertises, going vacuous
+	// without a symptom. spec/exec/deploy_chain.go already pairs engine→jump this way; this
+	// was a wiring omission, not a design question.
+	engineJump := specexec.JumpPodmanExec
+	if strings.Contains(engine, "docker") {
+		engineJump = specexec.JumpDockerExec
+	}
+
 	ctx := context.Background()
 	venue := deploykit.ImageVenue{
-		Exec:      &specexec.NestedExecutor{Parent: specexec.ShellExecutor{}, Jump: specexec.NestedJump{Kind: specexec.JumpPodmanExec, Target: name}},
+		Exec:      &specexec.NestedExecutor{Parent: specexec.ShellExecutor{}, Jump: specexec.NestedJump{Kind: engineJump, Target: name}},
 		PodmanCmd: podman,
 		Rootless:  true,
 		Label:     "box load",
@@ -92,10 +100,16 @@ func dispatchLoad(args []string) error {
 		},
 	}
 	if err := deploykit.TransferImageToVenue(ctx, venue, "podman", ref, g.As, deploykit.EmitOpts{}); err != nil {
-		if strings.Contains(err.Error(), "Cannot connect") || strings.Contains(err.Error(), "no such file") {
-			return fmt.Errorf("%w\n\nthe venue serves no podman API socket at %s — compose the nested-podman-socket candy into the box, or pass --socket", err, g.Socket)
-		}
-		return err
+		// The hint is attached UNCONDITIONALLY rather than keyed on substrings of the
+		// error. The previous form matched "Cannot connect" / "no such file", but a
+		// missing in-venue socket surfaces as `load failed: exit status 125` from the
+		// exec'd process — so the hint never fired for the case it was written for, and
+		// DID fire when the HOST podman binary was missing, telling the operator to
+		// compose a candy into the box for a fault on their own machine. A hint that
+		// cannot identify its case should not pretend to: it now names the socket it
+		// tried and leaves the diagnosis to the reader.
+		return fmt.Errorf("%w\n\nif the venue serves no podman API socket at %s, compose the "+
+			"nested-podman-socket candy into its box or pass --socket", err, g.Socket)
 	}
 	return nil
 }

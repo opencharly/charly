@@ -28,17 +28,11 @@ type VmCpBoxCmd struct {
 }
 
 func (c *VmCpBoxCmd) Run() error {
-	// An explicit ref that exists locally is used exactly as authored. A short name (e.g.
-	// "cachyos.selkies-kde-nvidia") resolves through the STRICT resolver, which refuses to elect
-	// an image older than the newest local build — delivering a stale artifact into a guest is
-	// the wrong-artifact class `charly check box` refuses to certify, and harder to spot here.
-	ref := c.Image
-	if !container.LocalImageExists("podman", ref) {
-		resolved, err := container.ResolveBuiltImageRef("podman", ref)
-		if err != nil {
-			return fmt.Errorf("image %q not found in host podman storage and not resolvable to a local build — build it first (charly box build): %w", c.Image, err)
-		}
-		ref = resolved
+	// Shared with `charly box load` — see spec's ResolveDeliverableRef. Both delivery verbs
+	// need exactly this resolution and each had grown its own copy (R3).
+	ref, err := container.ResolveDeliverableRef("podman", c.Image)
+	if err != nil {
+		return fmt.Errorf("vm cp-box: %w", err)
 	}
 	guest := sshParamsForVm(domainOr(c.VM, c.Domain))
 	return TransferImageToGuest(context.Background(), guest, "podman", ref, c.As, c.Rootless, EmitOpts{})

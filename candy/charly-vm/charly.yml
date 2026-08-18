@@ -709,7 +709,7 @@ vm-skill:
             | GPU passthrough block | `charly vm gpu list` | Emit a ready-to-paste `libvirt.devices.hostdevs:` block (whole IOMMU group, `managed: "yes"`) |
             | GPU driver mode (switch) | `charly vm gpu mode [vfio\|nvidia]` | Flip the WHOLE IOMMU group (display→nvidia/vfio, audio→snd_hda_intel/vfio); omit the arg to SHOW the mode |
             | GPU recover | `charly vm gpu recover` | Rebind an unbound/half-switched card to vfio-pci; reports **reboot-required** and does nothing on a true device_lock wedge |
-            | Load image into guest | `charly vm cp-box <vm> <ref> [--as <tag>]` | `podman save | scp | podman load` a host image into a running guest (idempotent) |
+            | Load image into guest | `charly vm cp-box <vm> <ref> [--as <tag>]` | `podman save | ssh … podman load` a host image into a running guest — streamed, no intermediate tarball, verified-idempotent |
 
             VM name convention: `charly-<name>[-<instance>]`. Default libvirt URI: `qemu:///session`.
 

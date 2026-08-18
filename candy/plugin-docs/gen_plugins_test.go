@@ -27,15 +27,22 @@ func TestGenerateProviderIndexCensusComputed(t *testing.T) {
 		t.Fatalf("generateProviderIndex: %v", err)
 	}
 
-	// Independently re-derive the census from the same slice.
-	wantWords := 0
+	// Independently re-derive the census from the same slice. DISTINCT words, not rows:
+	// this fixture deliberately carries a duplicate — `verb:file` is served by BOTH plugin-a
+	// and plugin-c — and a word served twice is still one word. Counting rows is what made
+	// the index headline say "56 words" over a 55-word class in production, and made the
+	// console disagree with the page it had just written.
+	distinct := map[string]bool{}
 	wantCompiled := 0
 	for _, p := range plugins {
-		wantWords += len(p.Providers())
+		for _, prov := range p.Providers() {
+			distinct[string(prov)] = true
+		}
 		if p.CompiledIn {
 			wantCompiled++
 		}
 	}
+	wantWords := len(distinct)
 	if words != wantWords {
 		t.Errorf("returned word count = %d, want %d", words, wantWords)
 	}
@@ -52,10 +59,14 @@ func TestGenerateProviderIndexCensusComputed(t *testing.T) {
 		t.Errorf("census line missing %q in:\n%s", census, got)
 	}
 
-	// Per-class headers carry the per-class word count, so the class breakdown is computed too.
-	// Singular classes read "1 word", not "1 words".
+	// Per-class headers carry the per-class DISTINCT word count, so the class breakdown is
+	// computed too. Singular classes read "1 word", not "1 words".
+	//
+	// `verb` is 2, not 3: the fixture serves `verb:file` from BOTH plugin-a and plugin-c, so
+	// the class has three ROWS and two WORDS. That gap is the whole point of this fixture —
+	// asserting 3 here is what let the production index publish "56 words" above 55 pages.
 	for _, want := range []string{
-		"## `verb` — 3 words",
+		"## `verb` — 2 words",
 		"## `kind` — 1 word",
 		"## `command` — 1 word",
 		"## `step` — 1 word",

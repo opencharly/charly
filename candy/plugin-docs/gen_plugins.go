@@ -222,7 +222,11 @@ func generateProviderIndex(outRoot string, plugins []pluginEntity) (int, error) 
 		fmt.Fprintf(&b, "| `%s` | [%s](%s) |\n", r.word, r.plugin, r.page)
 	}
 
-	return len(rows), (page{
+	// distinctTotal, NOT len(rows): the caller prints this as "%d provider words", and the
+	// page written just below counts distinct words. Returning the row count made the console
+	// and the page disagree by exactly the number of multiply-served words — the same defect
+	// this commit fixes in the headline, surviving one function away (R3).
+	return distinctTotal, (page{
 		Path:        "reference/providers.md",
 		Title:       "Provider index",
 		Description: "Every reserved word — verb, kind, deploy target, step, builder, command — mapped to the plugin candy that serves it.",
