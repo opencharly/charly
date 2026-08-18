@@ -97,6 +97,7 @@ ollama-cli-skill:
 
             ## Cross-References
 
-            - `/charly-ollama:ollama` — the ollama box (GPU deployment of the server).
-            - `/charly-ollama:ollama-layer` — the ollama candy (the server itself).
+            - `/charly-ollama:ollama` — the ollama BOX (a deployment of the server).
+            - `/charly-ollama:ollama-layer` — the ollama CANDY (the server itself), which that
+              box composes.
             - `/charly-internals:plugin` — compiled-in command plugins, the provider model.
