@@ -5477,32 +5477,34 @@ git-workflow-skill:
                   **Guard 1 — every commit SHA an entry names, checked for landed state AND subject:**
 
                   ```bash
-                  # Run from the superproject OR any submodule — the root is resolved, not assumed.
-                  root=$(git rev-parse --show-superproject-working-tree)
-                  root=${root:-$(git rev-parse --show-toplevel)}
-                  entry=$root/CHANGELOG/2026.229.2153.md   # substitute the entry under review
+                  ( # subshell: a refusal must not terminate the shell you pasted this into
+                    root=$(git rev-parse --show-superproject-working-tree)
+                    root=${root:-$(git rev-parse --show-toplevel)}
+                    entry=$root/CHANGELOG/2026.229.2153.md   # substitute the entry under review
 
-                  # REFUSE rather than narrow: every one of these is a way to report nothing convincingly.
-                  [ -f "$entry" ] || { echo "guard: no such entry: $entry" >&2; exit 1; }
-                  repos="$root $(git config -f "$root/.gitmodules" --get-regexp path \
-                                   | awk -v r="$root" '{print r"/"$2}')"
-                  [ "$repos" = "$root " ] && { echo "guard: no submodules under $root" >&2; exit 1; }
+                    # REFUSE rather than narrow. Each of these is a way to report nothing convincingly.
+                    [ -f "$entry" ] || { echo "guard: no such entry: $entry" >&2; exit 1; }
+                    repos="$root $(git config -f "$root/.gitmodules" --get-regexp path \
+                                     | awk -v r="$root" '{print r"/"$2}')"
+                    [ "$repos" = "$root " ] && { echo "guard: no submodules under $root" >&2; exit 1; }
+                    shas=$(grep -ohE '\b[0-9a-f]{7,40}\b' "$entry" | sort -u)
+                    [ -n "$shas" ] || { echo "guard: $entry cites no SHAs — nothing was checked" >&2; exit 1; }
 
-                  bad=0
-                  for sha in $(grep -ohE '\b[0-9a-f]{7,40}\b' "$entry" | sort -u); do
-                    found=
-                    for repo in $repos; do
-                      git -C "$repo" cat-file -e "${sha}^{commit}" 2>/dev/null || continue
-                      git -C "$repo" merge-base --is-ancestor "$sha" origin/main 2>/dev/null && st=LANDED || st=UNMERGED
-                      printf '%-9s %-10s %-9s %s\n' "$sha" "$st" "$(basename "$repo")" \
-                             "$(git -C "$repo" log -1 --format=%s "$sha")"
-                      found=1; [ "$st" = UNMERGED ] && bad=1
-                      break
+                    bad=0
+                    for sha in $shas; do
+                      found=
+                      for repo in $repos; do
+                        git -C "$repo" cat-file -e "${sha}^{commit}" 2>/dev/null || continue
+                        git -C "$repo" merge-base --is-ancestor "$sha" origin/main 2>/dev/null && st=LANDED || st=UNMERGED
+                        printf '%-9s %-10s %-9s %s\n' "$sha" "$st" "$(basename "$repo")" \
+                               "$(git -C "$repo" log -1 --format=%s "$sha")"
+                        found=1; [ "$st" = UNMERGED ] && bad=1
+                        break
+                      done
+                      [ -n "$found" ] || { printf '%-9s %-10s\n' "$sha" UNRESOLVED; bad=1; }
                     done
-                    # a SHA that resolves nowhere must SAY SO — `|| continue` alone drops it silently
-                    [ -n "$found" ] || { printf '%-9s %-10s\n' "$sha" UNRESOLVED; bad=1; }
-                  done
-                  exit $bad
+                    exit $bad
+                  )
                   ```
 
                   The **subject** is half the value: it catches citing the wrong commit, which happened here — a
