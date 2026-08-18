@@ -5063,8 +5063,11 @@ go-skill:
               variables go to different places for different reasons.** `GOTMPDIR` carries Go's
               build work, which is large, so it moves OFF the quota-capped temp dir and may be
               long — no socket is created there. `$TMPDIR` carries the plugin socket, which is a
-              few bytes, so the quota is irrelevant and the only constraint is path LENGTH.
-              Short-and-on-`/tmp` for `$TMPDIR`, long-and-off-`/tmp` for `GOTMPDIR`.
+              few bytes, so the quota is irrelevant TO THE SOCKET and the binding constraint on
+              `$TMPDIR` is path LENGTH. Short-and-on-`/tmp` for `$TMPDIR`, long-and-off-`/tmp`
+              for `GOTMPDIR`. (`/tmp` still has a cumulative cap — see the last bullet in this
+              section — and golangci-lint's lock also lives under `$TMPDIR`; neither changes
+              where the socket must go.)
 
               Over budget, `bind` returns `invalid argument` and the loader reports
               `Unrecognized remote plugin message` / `Failed to read any lines from plugin's
@@ -5092,28 +5095,41 @@ go-skill:
               `charly examplecommand hello world` prints `hello world` from the project candy
               even where the charly package is installed — `examplecommand` is not baked.
 
-              To exercise a BAKED word's project declaration, drop the FHS path. Worked example
-              with `generate-packages`, which is baked by the package AND declared by
-              `candy/generate-packages/` — check both first, because the procedure is only
-              meaningful for a word that is genuinely baked:
+              To exercise a BAKED word's project declaration, drop the FHS path. Worked with
+              `generate-packages`. **Check the two preconditions first** — the procedure is only
+              meaningful for a word that is both baked and declared:
 
               ```
-              # arm 1 — the project candy is present
-              $ CHARLY_PLUGIN_ONLY=1 ./bin/charly generate-packages
-              generate-packages: missing flags: --arch=STRING, --binary=STRING, --candy=STRING, ...
+              $ cat /usr/lib/charly/plugins/*.providers | grep -c '^command:generate-packages$'
+              1
+              $ ls candy/generate-packages/charly.yml | wc -l
+              1
+              ```
 
-              # arm 2 — same command, project candy moved aside
-              $ CHARLY_PLUGIN_ONLY=1 ./bin/charly generate-packages
+              Then run the two arms. **`tail -1` is part of each command, not an elision**: with
+              the FHS path dropped charly loads the project, which prints a `Note: local candy …
+              shadows …` line per shadowed candy first, and the failing arm prints a full usage
+              dump — the line that matters is last in both, and the preamble varies by host and
+              by run.
+
+              ```
+              $ CHARLY_PLUGIN_ONLY=1 ./bin/charly generate-packages 2>&1 | tail -1
+              generate-packages: missing flags: --arch=STRING, --binary=STRING, --candy=STRING, --out=STRING, --plugins=STRING, --version=STRING
+
+              $ mv candy/generate-packages /tmp/gp-aside
+              $ CHARLY_PLUGIN_ONLY=1 ./bin/charly generate-packages 2>&1 | tail -1
               charly: error: unexpected argument generate-packages
+              $ mv /tmp/gp-aside candy/generate-packages
               ```
 
-              **Run both arms**, and read them as one observation. Arm 1 alone tells you the word
-              resolved; it does NOT tell you which source served it. Arm 2 supplies that: with
-              the FHS path dropped, the project candy is the only remaining source, so removing
-              it must break resolution — and it does. The pair is what licenses the conclusion.
+              **What each arm licenses.** With `CHARLY_PLUGIN_ONLY=1` and `CHARLY_PLUGIN_DIR`
+              unset the baked search is EMPTY, so arm 1 succeeding already establishes that a
+              PROJECT candy served the word — that is the whole point of the flag. Arm 2 is not
+              needed for that; it attributes the resolution to `candy/generate-packages`
+              specifically, by removing that one candy and watching the word stop resolving.
 
-              The flag is what makes the pair mean anything: without it, arm 2 still succeeds,
-              because the baked binary answers once the project candy is gone.
+              Both arms need the flag. Without it, arm 2 still succeeds — the baked binary
+              answers once the project candy is gone — so the removal would tell you nothing.
 
             - `.claude/hooks/pre-commit-gate.sh` (the staged-Go-lint discipline backstop) redirects
               its own lint temp dirs to `~/.cache/charly-gate-lint/` and creates the TMPDIR/GOTMPDIR
