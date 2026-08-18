@@ -50,7 +50,7 @@ ollama-layer-skill:
             
             | Variable | Default | Purpose |
             |----------|---------|---------|
-            | `OLLAMA_VERSION` | `latest` | Upstream release for the TARBALL path only — `latest` tracks the newest GitHub release; set a tag (e.g. `v0.32.14`) to pin. Ignored on Arch, where the packaged `ollama` is installed and pacman owns the version |
+            | `OLLAMA_VERSION` | `v0.32.14` | Upstream release for the TARBALL path only, and it must be a release TAG — the download cache is content-addressed by the sha256 of the URL, so a `latest` URL would hash to one key forever and keep serving the first tarball it ever fetched. Ignored on Arch, where the packaged `ollama` is installed and pacman owns the version |
 
             ## GPU backends (opt-in, box level)
 

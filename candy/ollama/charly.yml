@@ -9,7 +9,10 @@ ollama:
             /usr/lib/ollama): on a distro that PACKAGES ollama the package is installed
             and the package manager owns the version; everywhere else the upstream
             release tarball is extracted to /usr at the version the var OLLAMA_VERSION
-            selects (default `latest`; set a release tag to pin). The candy is CPU-only
+            selects. That var is PINNED to a release tag and must stay one: the download
+            cache is content-addressed by the sha256 of the URL, so a `latest` URL would
+            hash to one key forever and serve the first tarball it ever fetched, long
+            after upstream moved on. The candy is CPU-only
             and carries no GPU dependency — a GPU backend is an IMAGE-level composition
             choice (compose ollama-cuda or ollama-rocm), which is what keeps this layer
             small. Pulled models persist under the ~/.ollama models volume. The running
