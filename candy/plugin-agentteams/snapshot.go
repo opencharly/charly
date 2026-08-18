@@ -126,27 +126,6 @@ func runSnapshot(ctx context.Context, client *apiClient, s3 *s3Client, out strin
 		out, len(workers.Workers), len(teams.Teams), len(humans.Humans), mirrored, redacted), nil
 }
 
-// runHydrate is the hydrate core shared by the command and the verb: apply the
-// bundle back (workers → teams → humans in dependency order — teams reference
-// workers as members) and restore the mirrored MinIO objects.
-func runHydrate(ctx context.Context, client *apiClient, s3 *s3Client, bundle string) (string, error) {
-	lines, err := applyPathWithClient(client, bundle)
-	if err != nil {
-		return "", err
-	}
-	restored := 0
-	if s3 != nil {
-		minioDir := filepath.Join(bundle, "minio")
-		if _, err := os.Stat(minioDir); err == nil {
-			restored, err = restoreObjects(ctx, s3, minioDir)
-			if err != nil {
-				return "", err
-			}
-		}
-	}
-	return fmt.Sprintf("Hydrated %s\n%s  minio objects restored: %d\n", bundle, lines, restored), nil
-}
-
 // ---------------------------------------------------------------------------
 // Declarative apply-form renderers — the PII redaction.
 // ---------------------------------------------------------------------------
@@ -351,34 +330,6 @@ func mirrorObjects(ctx context.Context, s3 *s3Client, out string) (int, error) {
 		mirrored++
 	}
 	return mirrored, nil
-}
-
-// restoreObjects writes the bundle's minio/ objects back to the store.
-func restoreObjects(ctx context.Context, s3 *s3Client, minioDir string) (int, error) {
-	restored := 0
-	err := filepath.Walk(minioDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info.IsDir() {
-			return nil
-		}
-		rel, err := filepath.Rel(minioDir, path)
-		if err != nil {
-			return err
-		}
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		key := s3.prefix + "/" + filepath.ToSlash(rel)
-		if err := s3.putObject(ctx, key, data); err != nil {
-			return err
-		}
-		restored++
-		return nil
-	})
-	return restored, err
 }
 
 // skipObject reports whether a storage object is excluded from the snapshot —

@@ -1,7 +1,6 @@
 package agentteams
 
 import (
-	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
@@ -126,26 +125,6 @@ func (c *s3Client) getObject(ctx context.Context, key string) ([]byte, error) {
 		return nil, fmt.Errorf("get object %s: HTTP %d: %s", key, resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 	return body, nil
-}
-
-// putObject writes one object's bytes.
-func (c *s3Client) putObject(ctx context.Context, key string, data []byte) error {
-	req, err := http.NewRequestWithContext(ctx, "PUT", c.endpoint+"/"+c.bucket+"/"+s3EscapePath(key), bytes.NewReader(data))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/octet-stream")
-	c.sign(req, data, time.Now())
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return fmt.Errorf("put object %s: %w", key, err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("put object %s: HTTP %d: %s", key, resp.StatusCode, strings.TrimSpace(string(body)))
-	}
-	return nil
 }
 
 // s3EscapePath escapes each path segment of an object key, keeping the `/`

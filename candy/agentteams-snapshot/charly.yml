@@ -9,8 +9,8 @@ agentteams-snapshot:
             The snapshot/hydrate cores live in the compiled-in
             candy/plugin-agentteams (the SAME surface the host-side `agentteams:`
             verb methods use — R3); this candy only pre-stages the charly binary
-            that carries them. Composed into agentteams-worker so the Replicator
-            carries it.
+            that carries them. Overlaid onto a bed's deploy via add_candy: rather than composed into a
+            production box.
         candy:
             - charly
         plan:

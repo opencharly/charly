@@ -31,7 +31,7 @@
 #AgentTeamsInput: {
 	// method — the agentteams verb method name (the verb's PRIMARY input field, so
 	// `agentteams: status` desugars to {method: "status"}).
-	method: ("status" | "manager-running" | "worker-running" | "worker-list" | "snapshot" | "hydrate") @go(Method,type=string)
+	method: ("status" | "manager-running" | "worker-running" | "worker-list") @go(Method,type=string)
 	// name — the worker/manager name. worker-running's target (default "bed-worker",
 	// matching the beds' created Worker CR); manager-running's optional specific
 	// manager (default: any manager reaching Running).
