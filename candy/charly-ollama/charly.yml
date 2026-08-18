@@ -22,8 +22,9 @@ ollama-layer-skill:
         family: ollama
         owner: charly-ollama
         description: |-
-            Ollama LLM server on port 11434 with model persistence, CPU-only by default and
-            opt-in CUDA/ROCm backends composed at the box level.
+            Ollama LLM server on port 11434 with model persistence; this candy declares no CUDA
+            dependency — GPU support is composed outside it, by opting a box into the
+            `ollama-cuda` or `ollama-rocm` backend candy.
             Use when working with Ollama, LLM serving, or local AI model inference.
         content: |-
             # ollama -- Local LLM inference server
@@ -37,7 +38,7 @@ ollama-layer-skill:
             | Volumes | `models` -> `~/.ollama` |
             | Aliases | `ollama` -> `ollama` |
             | Service | `ollama` (supervisord) |
-            | Install files | none — packaged `ollama` on Arch (`distro:`), upstream tarball in `plan:` elsewhere |
+            | Install | the packaged `ollama` via `distro:` where the distro ships one (Arch and its derivatives), else a `download:` + `extract:` plan step gated on `unless_exists:` |
             
             ## Environment Variables
             
@@ -105,34 +106,34 @@ ollama-layer-skill:
             for the full schema). Each step is one inline Op — a probe is a `check:`
             step — and its `context:` list gates where it runs:
             
-            - **ungated** (no `context:`, so it runs wherever the plan runs — under
-              `charly check box` against the image AND under `charly check live`
-              against the deployed service):
-              - the ollama binary exists at `/usr/bin/ollama` (`file:` check)
-            - **`context: [runtime]`** (run under `charly check live` against a live
-              service; `${HOST_PORT:11434}` resolves the deploy-time host port so
-              port remapping works unchanged):
-              - `GET http://127.0.0.1:${HOST_PORT:11434}/api/tags` returns 200 (`http:` check)
-              - `ollama --version` stdout matches `^ollama version` (`command:` check)
-              - `ollama list` exits 0 against the live service (`command:` check)
-              - three HOST-side steps (`in_container: false`) driving `${CHARLY_BIN}`,
-                which prove the companion `command:ollama` plugin end to end:
-                `charly ollama help` dispatches, `charly ollama version` round-trips
-                the live API, and `charly ollama list` reads the model table. They
-                live on the candy rather than on any one bed, so every box composing
+            - **ungated** (no `context:`, so it runs wherever the plan runs):
+              - `/usr/bin/ollama` exists
+            - **`context: [runtime]`** (run against a live service;
+              uses `127.0.0.1:${HOST_PORT:11434}` — the host-side form, not `${CONTAINER_IP}`, so port remapping
+              works unchanged):
+              - `GET http://127.0.0.1:${HOST_PORT:11434}/api/tags` returns 200
+              - `ollama --version` stdout matches `^ollama version`
+              - `ollama list` exits 0 against the live service
+              - three HOST-side steps (`in_container: false`) driving `${CHARLY_BIN}`, which prove
+                the companion `command:ollama` plugin end to end: `charly ollama help` dispatches,
+                `charly ollama version` round-trips the live API, and `charly ollama list` reads
+                the model table. These three DO carry `id:` keys (`ollama-cli-help`,
+                `ollama-cli-version`, `ollama-cli-list`); the steps above them do not, and are
+                named here by what they assert rather than by an identifier the source does not
+                define. They live on the candy rather than on any one bed, so every box composing
                 ollama inherits them.
-            - one `agent-check:` grades that models pulled via `ollama pull` persist
-              under the `~/.ollama` models volume across a service restart.
 
-            A composed backend candy adds its own build-scope probe — `ollama-cuda`
-            asserts `libggml-cuda.so` and `ollama-rocm` asserts `libggml-hip.so`, each
-            globbed under `/usr/lib/ollama/*/` so a CUDA/ROCm version bump does not
-            break the check.
+              The plan also ends with an `agent-check:` step covering model persistence across a
+              service restart.
+
+            A composed backend candy adds its own build-scope probe — `ollama-cuda` asserts
+            `libggml-cuda.so` and `ollama-rocm` asserts `libggml-hip.so`, each globbed under
+            `/usr/lib/ollama/*/` so a CUDA/ROCm version bump does not break the check.
             
             ## Related Candies
             
+            - `/charly-distros:cuda` -- CUDA toolkit; composed OUTSIDE this candy (today by the GPU boxes, at the image level) and never declared as its dependency
             - `/charly-infrastructure:supervisord` -- process manager dependency
-            - `/charly-distros:cuda` -- CUDA toolkit (GPU boxes compose it at the IMAGE level, not via this candy)
             - `/charly-ollama:ollama-cli` -- the compiled-in `charly ollama` management CLI (candy/plugin-ollama)
             - `/charly-openclaw:openclaw` -- AI gateway that can use Ollama as backend
             - `/charly-hermes:hermes` -- AI agent that auto-detects `OLLAMA_HOST` for local Ollama provider
