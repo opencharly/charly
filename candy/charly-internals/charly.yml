@@ -4835,8 +4835,7 @@ git-workflow-skill:
                   gate for it; an assertion that a struct field holds the right value is a gate for
                   something else, and it stays green while the behaviour breaks.
 
-                  This is why rounds 2 and 3 above each left the next link bare. Recording a value and
-                  consuming it are different lines. A structural assertion about a stored field can only
+                  Recording a value and consuming it are different lines. A structural assertion about a stored field can only
                   ever catch **one** link of a chain; a behavioural one catches every link the behaviour
                   passes through — in `charly#280`, one behavioural test caught two of three load-bearing
                   lines where three structural tests had caught one each.
@@ -4938,8 +4937,7 @@ git-workflow-skill:
                   **A diagnostic that counts is not a diagnostic that verifies.** `charly docs: walking N
                   repo root(s)` reports how many roots the generator visited — useful, and routinely
                   misread as confirmation that all of them produced output. It says nothing about
-                  emission. The generalisation is the one this page keeps arriving at from different
-                  directions: **a check reporting "0 candidates examined" must FAIL, not pass.** A gate
+                  emission. **A check reporting "0 candidates examined" must FAIL, not pass.** A gate
                   that finds nothing to inspect has not passed; it has abstained, and abstention rendered
                   as green is the most expensive false signal a pipeline can carry.
 
