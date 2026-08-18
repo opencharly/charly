@@ -11,16 +11,63 @@ import (
 // than vanishing, and every allowance is narrow enough that it cannot swallow a neighbouring
 // finding.
 
-// TestErrorAllowlistIsEmpty is the load-bearing assertion of the whole table. An `error:` line
-// emitted under a zero exit code is a swallowed failure by construction; the moment an error-tier
-// exemption exists, the gate can be talked out of the exact finding it was built to catch. If a
-// future entry genuinely needs to be error-tier, deleting this test must be a deliberate, visible
-// act rather than a side effect.
-func TestErrorAllowlistIsEmpty(t *testing.T) {
+// TestErrorTierEntriesAreConditional replaces TestErrorAllowlistIsEmpty, deliberately and
+// visibly — which is the bar the deleted test set for its own removal.
+//
+// The empty error tier rested on a premise: "an `error:` line under a zero exit code is a
+// swallowed failure by construction." pacman falsifies it. Its mirror fallback prints one
+// `error: failed retrieving file …` per unreachable mirror and then installs from the next.
+//
+// So the invariant is no longer emptiness; it is that an error-tier exemption must be CONDITIONAL
+// on a proof of recovery. That keeps what emptiness was protecting — the gate cannot be talked
+// into tolerating an error — while letting it stop firing on a retry that worked. An
+// unconditional error entry would be the weakening, and this test is what blocks one.
+func TestErrorTierEntriesAreConditional(t *testing.T) {
 	for _, a := range diagnosticAllowlist {
-		if a.Severity == severityError {
-			t.Errorf("allowlist entry %q is error-tier; the error allowlist must stay empty", a.ID)
+		if a.Severity != severityError {
+			continue
 		}
+		if a.RecoveredBy == "" {
+			t.Errorf("allowlist entry %q is error-tier and UNCONDITIONAL; an error exemption must "+
+				"carry RecoveredBy so it still fails when the operation did not recover", a.ID)
+		}
+		if a.Match.NumSubexp() < 1 {
+			t.Errorf("allowlist entry %q is conditional but its Match has no capture group; the "+
+				"recovery proof must be tied to the subject that failed, not to the log at large",
+				a.ID)
+		}
+	}
+}
+
+// TestConditionalErrorFailsWithoutRecovery is the half that makes the conditional form worth
+// having: the SAME error line is exempt when the log proves recovery and fatal when it does not.
+// Without this, "conditional" would be a comment rather than a behaviour.
+func TestConditionalErrorFailsWithoutRecovery(t *testing.T) {
+	const errLine = "error: failed retrieving file 'libyuv-r2921+644251f25-1.1-x86_64_v3.pkg.tar.zst' " +
+		"from cdn77.cachyos.org : The requested URL returned error: 404\n"
+
+	recovered := scanStepDiagnostics("STEP 1/1: RUN pacman -S libyuv\n" + errLine +
+		"installing libyuv...\n")
+	if recovered.Errors != 0 || recovered.Allowlisted != 1 {
+		t.Errorf("with `installing libyuv...` present the line must be exempt; got %+v", recovered)
+	}
+	if recovered.fails(defaultDiagnosticPolicy()) {
+		t.Error("a recovered mirror retry must not fail the step")
+	}
+
+	stranded := scanStepDiagnostics("STEP 1/1: RUN pacman -S libyuv\n" + errLine)
+	if stranded.Errors != 1 || stranded.Allowlisted != 0 {
+		t.Errorf("with no install line the SAME error must count as an error; got %+v", stranded)
+	}
+	if !stranded.fails(defaultDiagnosticPolicy()) {
+		t.Error("an unrecovered retrieval error must still fail the step — that is the whole point")
+	}
+
+	// And the proof must be subject-specific: another package installing is not this one recovering.
+	wrongSubject := scanStepDiagnostics("STEP 1/1: RUN pacman -S libyuv\n" + errLine +
+		"installing something-else...\n")
+	if wrongSubject.Errors != 1 {
+		t.Errorf("an unrelated install line must not discharge this error; got %+v", wrongSubject)
 	}
 }
 

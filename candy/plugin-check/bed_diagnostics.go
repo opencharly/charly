@@ -130,14 +130,33 @@ type diagnosticAllowance struct {
 	Severity diagnosticSeverity
 	Match    *regexp.Regexp
 	Why      string
+
+	// RecoveredBy makes an entry CONDITIONAL: the line is exempt only if the same log later
+	// PROVES the operation recovered. Match's first capture group is substituted for %s in this
+	// pattern, so the proof is tied to the specific subject that failed — not to "something
+	// somewhere succeeded". An entry without it is unconditional, which is the only form the
+	// warning tier uses.
+	//
+	// This exists so the error tier can hold an entry WITHOUT weakening into "errors we tolerate".
+	// A conditional error exemption still fails the step when the recovery is absent, which is the
+	// property the unconditional form would have thrown away.
+	RecoveredBy string
 }
 
 // diagnosticAllowlist is the complete set of reviewed exemptions.
 //
-// NOTE WHAT IS NOT HERE: there is no `severityError` entry. An `error:` line emitted under a
-// zero exit code is a swallowed failure by construction, and no instance of one has been
-// found that charly cannot fix. The empty error allowlist is the load-bearing half of this
-// table — it is what stops the gate from being talked out of the finding it exists to catch.
+// THE ERROR TIER WAS EMPTY, AND THE PREMISE THAT KEPT IT EMPTY TURNED OUT TO HAVE A COUNTER-
+// EXAMPLE. That premise was: "an `error:` line emitted under a zero exit code is a swallowed
+// failure by construction." pacman falsifies it. Its mirror fallback emits one `error: failed
+// retrieving file …` PER MIRROR it cannot reach, then fetches from the next one and installs
+// normally — observed live, three 404/connect errors for libyuv followed by `installing libyuv...`
+// in the same log. That is a documented retry reporting its attempts, not a swallowed failure.
+//
+// The response is NOT an unconditional error exemption, which would be the weakening the empty
+// tier existed to prevent. It is a CONDITIONAL one: the entry carries RecoveredBy, so the line is
+// exempt only when the same log proves that specific subject recovered, and still fails the step
+// otherwise. The gate keeps its teeth for the case it was built for — an error with no recovery —
+// and stops firing on a mechanism that is working as designed.
 var diagnosticAllowlist = []diagnosticAllowance{
 	{
 		ID:       "cachyos-zstd-local-newer-than-repo",
@@ -172,6 +191,39 @@ var diagnosticAllowlist = []diagnosticAllowance{
 			"exists to make at run time. Scoped to the exact single-package sentence so a " +
 			"multi-line pacman warning cannot hide behind it.",
 	},
+	{
+		ID:       "pacman-mirror-retrieval-recovered",
+		Severity: severityError,
+		Match:    regexp.MustCompile(`^error: failed retrieving file '([A-Za-z0-9_.+-]+?)-[^']*\.pkg\.tar\.[a-z]+' from `),
+		// The capture is the package base name; the recovery is pacman's own install line for it.
+		RecoveredBy: `(?m)^installing %s\.\.\.`,
+		Why: "pacman tries mirrors in order and prints one `error: failed retrieving file …` for " +
+			"each one it cannot reach, then fetches from the next and installs normally. Observed " +
+			"live: three errors for libyuv (two 404s from CachyOS CDNs whose index still " +
+			"referenced a superseded build, one connect timeout) followed by `installing " +
+			"libyuv...` in the same log. CONDITIONAL on that recovery — if the package never " +
+			"installs, this entry does not claim the line and the step still fails. That is what " +
+			"keeps an error-tier exemption from becoming a tolerated error.",
+	},
+}
+
+// allowanceRecovered reports whether a claimed line really is exempt. An unconditional entry
+// always is. A conditional one is exempt only when the log carries the entry's RecoveredBy proof
+// for the SUBJECT that failed — Match's first capture group substituted into the pattern — so a
+// retry that never succeeded still fails its step.
+func allowanceRecovered(a *diagnosticAllowance, text, log string) bool {
+	if a.RecoveredBy == "" {
+		return true
+	}
+	m := a.Match.FindStringSubmatch(text)
+	if len(m) < 2 || m[1] == "" {
+		return false
+	}
+	re, err := regexp.Compile(fmt.Sprintf(a.RecoveredBy, regexp.QuoteMeta(m[1])))
+	if err != nil {
+		return false
+	}
+	return re.MatchString(log)
 }
 
 // diagnosticFinding is one matched line, resolved against the allowlist.
@@ -267,7 +319,7 @@ func scanStepDiagnostics(log string) stepDiagnostics {
 		}
 		text := strings.TrimSpace(raw)
 		finding := diagnosticFinding{Severity: severity, Pattern: pattern, Line: i + 1, Text: text}
-		if a := allowanceFor(severity, text); a != nil {
+		if a := allowanceFor(severity, text); a != nil && allowanceRecovered(a, text, log) {
 			finding.AllowID = a.ID
 			d.Allowlisted++
 		} else if severity == severityError {
