@@ -2,6 +2,12 @@
 # the 91 `candy/*` modules and the 4 `tools/*` modules. (An earlier revision said
 # "the 91 candy/* modules"; it governs `tools/` too, which nobody had enumerated.)
 #
+# DISCOVERED by 95, ANALYSABLE in 93. `tools/golden-cloudinit` and `tools/golden-compile`
+# do not build — `go: updates to go.mod needed` — so golangci-lint reports "no go files to
+# analyze" even though both have a main.go. That is a pre-existing defect this gate now
+# surfaces, not one it causes; its fix is a `go mod tidy` that also bumps the go directive
+# and the spec require, i.e. a version adoption, routed to the module-hygiene batch.
+#
 # golangci-lint discovers a config by walking UP from the working directory, and
 # `charly/.golangci.yml` is NOT an ancestor of `candy/<name>/`, so before this file
 # those modules ran with "No config file detected" — which means they ran golangci-lint's

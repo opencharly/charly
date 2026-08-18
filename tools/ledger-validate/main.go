@@ -121,7 +121,7 @@ func loadLedger(path string) ([]Row, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck // read-only handle; nothing to recover from on close
 	return parseLedger(f)
 }
 
