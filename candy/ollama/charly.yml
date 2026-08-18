@@ -24,16 +24,20 @@ ollama:
             # layer without dragging the Fedora/NVIDIA `cuda` layer onto a pac base.
             - supervisord
         var:
-            # Upstream Ollama version for the TARBALL path only (the distros that
-            # package ollama let their package manager own the version): `latest`
-            # tracks the newest GitHub release; set a release tag (e.g. v0.32.14)
-            # to pin an exact version.
-            OLLAMA_VERSION: latest
+            # Upstream Ollama release for the TARBALL path only — the distros that
+            # package ollama let their package manager own the version. A concrete tag,
+            # not `latest`: GitHub serves the two cases from structurally different URLs
+            # (releases/latest/download/... vs releases/download/<tag>/...), so one
+            # template cannot express both, and a pinned tag is the reproducible half of
+            # that choice. It also matches the house pattern (CUE_VERSION, APKEEP_VERSION).
+            # Bump it here to move the tarball distros forward.
+            OLLAMA_VERSION: v0.32.14
         distro:
             # Arch (and its derivatives, CachyOS included) ships ollama in `extra`,
             # tracking upstream closely — 0.32.14-1 landed the day upstream tagged
-            # v0.32.14. Taking the package instead of the 1.36 GiB upstream tarball
-            # costs 66 MiB installed, because the tarball bundles every GPU backend
+            # v0.32.14. The packaged base is 66 MiB installed (16 MiB download); the
+            # upstream tarball it replaces is a 1.32 GiB DOWNLOAD, because that one
+            # archive bundles every GPU backend
             # while the package splits them into the ollama-cuda / ollama-rocm
             # add-ons this candy deliberately does NOT require.
             arch:
@@ -59,27 +63,25 @@ ollama:
               enable: true
               scope: system
         plan:
-            # Capability-gated, not distro-gated: the `distro:` package sections above
-            # are compiled into the plan BEFORE this step (BuildDeployPlan phase 1 vs
-            # phase 3), so on a distro that packages ollama the binary already exists
-            # here and the tarball is skipped. Detection rather than a distro name so
-            # any distro that gains an ollama package is picked up with no edit — and
-            # because a plan step has no build-time distro filter to gate it with (the
-            # `exclude_distro:` modifier is read by the check runner, not the emitter).
-            - run: install the upstream ollama release tarball on distros that ship no ollama package (var OLLAMA_VERSION, default latest)
-              command: |
-                  if [ -x /usr/bin/ollama ]; then
-                      echo "ollama already provided by the distro package — skipping the upstream tarball"
-                      exit 0
-                  fi
-                  if [ "${OLLAMA_VERSION}" = "latest" ]; then
-                      URL="https://github.com/ollama/ollama/releases/latest/download/ollama-linux-amd64.tar.zst"
-                  else
-                      URL="https://github.com/ollama/ollama/releases/download/${OLLAMA_VERSION}/ollama-linux-amd64.tar.zst"
-                  fi
-                  curl -fSL --retry 3 --retry-delay 2 -o /tmp/ollama.tar.zst "${URL}"
-                  tar -I zstd -xf /tmp/ollama.tar.zst -C /usr
-                  rm -f /tmp/ollama.tar.zst
+            # Capability-gated, not distro-gated. The `distro:` package sections above
+            # compile into the plan BEFORE this step (BuildDeployPlan phase 1 vs phase 3),
+            # so on a distro that packages ollama the binary already exists here and
+            # `unless_exists:` skips the fetch entirely. Detection rather than a distro
+            # name, so any distro that later gains an ollama package is picked up with no
+            # edit — and a plan step has no build-time distro filter to gate it with
+            # anyway (`exclude_distro:` is read by the check runner, not the emitter).
+            #
+            # This is the declarative `download:` verb rather than a hand-rolled curl, so
+            # it keeps what the verb provides and a hand-rolled step forfeits: the
+            # content-addressed /tmp/downloads cache (no re-fetch of a 1.32 GiB archive on
+            # every cache-miss build), the atomic .part -> mv rename, and the stage-user
+            # -correct cache mount. `unless_exists:` is the capability that made that
+            # possible; before it, the gate could only be expressed by abandoning the verb.
+            - run: install the upstream ollama release tarball on distros that ship no ollama package (var OLLAMA_VERSION)
+              download: "https://github.com/ollama/ollama/releases/download/${OLLAMA_VERSION}/ollama-linux-amd64.tar.zst"
+              extract: tar.zst
+              to: /usr
+              unless_exists: /usr/bin/ollama
               run_as: root
             - check: the ollama binary is installed at /usr/bin/ollama
               file:
@@ -175,14 +177,15 @@ ollama-skill:
             `ollama serve` service, and carries **no GPU dependency** — it only
             `require:`s `supervisord`. Two install paths converge on one layout
             (`/usr/bin/ollama` plus backends under `/usr/lib/ollama`): on Arch and its
-            derivatives the packaged `ollama` (66 MiB) is installed, and everywhere else
+            derivatives the packaged `ollama` (66 MiB installed) is installed, and elsewhere
             the upstream release tarball is extracted to `/usr`. The step is gated on
             whether the binary already exists rather than on a distro name, so any distro
             that gains an ollama package is picked up without an edit.
 
             GPU support is a **composition choice made at the box level**, and on the
             packaged path that choice is what keeps images small: the tarball bundles
-            every backend (1.36 GiB), while the packages split them out.
+            every backend into one 1.32 GiB download, while the packages split them out.
+            Sizes below are INSTALLED, not download, so they are comparable to each other.
 
             - The `ollama` box keeps GPU acceleration via `base: nvidia` and composes
               `ollama-cuda` (~988 MiB) for the CUDA backend.

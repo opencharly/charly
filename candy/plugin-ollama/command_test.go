@@ -47,7 +47,7 @@ func captureStdout(t *testing.T, fn func() error) (string, error) {
 	os.Stdout = w
 	runErr := fn()
 	os.Stdout = orig
-	w.Close()
+	_ = w.Close()
 	out, _ := io.ReadAll(r)
 	return string(out), runErr
 }
@@ -364,7 +364,7 @@ func TestChatRepl(t *testing.T) {
 	}
 	fmt.Fprintln(w, "hello")
 	fmt.Fprintln(w, "/bye")
-	w.Close()
+	_ = w.Close()
 	orig := os.Stdin
 	os.Stdin = r
 	defer func() { os.Stdin = orig }()

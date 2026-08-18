@@ -286,7 +286,7 @@ func cmdCreate(client *api.Client, args []string) error {
 
 func cmdRemove(client *api.Client, args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: charly ollama rm <model>...")
+		return fmt.Errorf("usage: charly ollama rm <model> [<model> ...]")
 	}
 	for _, m := range args {
 		if err := client.Delete(context.Background(), &api.DeleteRequest{Model: m}); err != nil {
