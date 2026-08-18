@@ -372,9 +372,9 @@ func pluginBuildEnv(base []string, srcDir string) []string {
 // neither the candy source nor a go toolchain) can run an external plugin its
 // in-container charly needs at runtime — e.g. the charly-mcp service's `charly mcp
 // serve`. `CHARLY_PLUGIN_DIR` PREPENDS a directory ahead of it (tests, non-FHS
-// layouts) — it does NOT replace it: bakedPluginDirs always appends this FHS path,
-// so setting the env var cannot HIDE a plugin baked here. Masking a baked word for a
-// test needs an environment without the file, not an env var.
+// layouts) — it does NOT replace it, so setting it alone cannot HIDE a plugin baked
+// here. `CHARLY_PLUGIN_ONLY=1` is what drops this path from the search; see
+// bakedPluginDirs.
 const bakedPluginDir = "/usr/lib/charly/plugins"
 
 // bakedPluginFileName is the filename a baked plugin binary takes under bakedPluginDir.
@@ -389,12 +389,23 @@ func bakedPluginFileName(name string) string {
 }
 
 // bakedPluginDirs returns the SEARCH PATH baked plugin binaries (+ their .providers word
-// manifests) live on: $CHARLY_PLUGIN_DIR first when set, then ALWAYS the FHS bakedPluginDir.
-// The env var reorders precedence; it never removes the FHS path from the search.
+// manifests) live on: $CHARLY_PLUGIN_DIR first when set, then the FHS bakedPluginDir.
+// The env var reorders precedence; it does not remove the FHS path from the search, because a
+// deployed image's in-container charly must still find what the package baked there.
+//
+// $CHARLY_PLUGIN_ONLY=1 DROPS the FHS path, so the search is exactly $CHARLY_PLUGIN_DIR (or
+// empty when that is unset). That is the supported way to resolve AS-IF-UNPACKAGED: on a host
+// with the charly package installed, a baked word short-circuits the project scan
+// (resolveCommandPluginBinary returns on the first baked hit), so a project's own declaration
+// of that word is otherwise unreachable and untestable. Without this, the only way to observe
+// the project path was to mask /usr/lib/charly/plugins with a mount namespace.
 func bakedPluginDirs() []string {
 	dirs := []string{}
 	if d := os.Getenv("CHARLY_PLUGIN_DIR"); d != "" {
 		dirs = append(dirs, d)
+	}
+	if os.Getenv("CHARLY_PLUGIN_ONLY") == "1" {
+		return dirs
 	}
 	return append(dirs, bakedPluginDir)
 }
