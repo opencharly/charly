@@ -78,8 +78,8 @@ func invokeDeployKubernetes(req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 		return nil, fmt.Errorf("deploy:kubernetes: venue carries no overlay path")
 	}
 
-	// Apply the host-generated Kustomize overlay to the cluster — the LIVE cluster
-	// I/O the plugin owns (the host generated + egress-validated the tree). The
+	// Apply the plugin-generated Kustomize overlay (materialize.go's materializeKustomize, on the host) to the cluster — the LIVE cluster
+	// I/O the plugin owns (this plugin generated + egress-validated the tree, on the host). The
 	// kube_context (from the kind:kubernetes template) targets THIS cluster explicitly via
 	// `kubectl --context`, never the ambient current-context.
 	ctxArgs := kubectlContextArgs(kv.KubeContext)

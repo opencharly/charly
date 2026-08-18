@@ -3726,6 +3726,86 @@ check-agentteams-pod:
                 in_container: false
               stdout:
                 - contains: "Controller URL: http://127.0.0.1:8090"
+# check-agentteams-snapshot — the R10 bed for Factory Unit 6, the snapshot/hydrate
+# round-trip.
+#
+# The round-trip is asserted by STATE THAT SURVIVES IT, never by the two commands
+# exiting 0 — a snapshot that writes an empty bundle and a hydrate that applies
+# nothing both exit 0, so exit status cannot distinguish a working round-trip from
+# a vacuous one.
+#
+# The worker is DELETED between snapshot and apply and its absence asserted. That
+# is what makes the hydrate half discriminate: `charly agentteams apply` never
+# deletes (control.go's applyPathWithClient has no delete path), so with the worker
+# left in place a completely vacuous hydrate would still satisfy the final
+# assertion. Without the delete the check could not fail for the reason it names.
+#
+# The check runs INSIDE the controller pod: the controller serves its REST API on
+# 127.0.0.1:8090 and refuses a connection from outside, so a host-side invocation
+# cannot reach it. The `agentteams` box deliberately does NOT carry the charly
+# toolchain — it is a production composition — so the bed overlays
+# candy/agentteams-snapshot via add_candy: on the DEPLOY rather than bloating the
+# box for a check.
+check-agentteams-snapshot:
+    pod:
+        image: agentteams
+        disposable: true
+        lifecycle: dev
+        description: >-
+            R10 bed for Factory Unit 6. Proves the snapshot/hydrate round-trip against a
+            live AgentTeams deploy: the controller's worker is captured into a hydration
+            bundle, the worker is DELETED, the bundle is applied back, and the worker is listed again.
+        # The worker is DELETED between snapshot and apply, and its absence asserted,
+        # so the hydrate half can fail: `charly agentteams apply` never deletes
+        # (control.go's applyPathWithClient has no delete path), so without the
+        # delete a completely vacuous hydrate would leave the worker in place and
+        # the final assertion would pass regardless. That made the check unable to
+        # fail for the reason it names.
+        #
+        # The round-trip check runs `charly agentteams snapshot|apply` INSIDE the
+        # controller pod: the controller serves its REST API on 127.0.0.1:8090 and
+        # refuses a connection from outside, so a host-side invocation cannot reach
+        # it. The `agentteams` box deliberately does NOT carry the charly toolchain
+        # — it is a production composition — so the bed overlays it here instead of
+        # bloating the box for a check. Without this the step fails with
+        # `sh: charly: command not found`, which is what the first run did.
+        add_candy:
+            - agentteams-snapshot
+        volume:
+            - name: podman-socket
+              type: bind
+              host: /run/user/1000/podman/podman.sock
+              path: /run/user/1000/podman/podman.sock
+        env:
+            AGENTTEAMS_MANAGER_IMAGE: ghcr.io/opencharly/agentteams-manager:manager
+            AGENTTEAMS_WORKER_IMAGE: ghcr.io/opencharly/agentteams-worker:worker
+        security:
+            security_opt:
+                - label=disable
+        plan:
+            - check: the snapshot/hydrate round-trip preserves the controller's worker
+              id: snapshot-roundtrip
+              exit_status: 0
+              stdout:
+                - contains: ROUNDTRIP-OK
+              context:
+                - runtime
+              command:
+                command: >-
+                    sh -c 'set -e;
+                    charly agentteams worker list | grep -q bed-worker ||
+                    charly agentteams worker create --name bed-worker --no-wait;
+                    charly agentteams worker list | grep -q bed-worker;
+                    rm -rf /tmp/at-snap;
+                    charly agentteams snapshot --out /tmp/at-snap >/dev/null;
+                    test -s /tmp/at-snap/workers.yml;
+                    grep -q bed-worker /tmp/at-snap/workers.yml;
+                    charly agentteams worker delete bed-worker >/dev/null;
+                    ! charly agentteams worker list | grep -q bed-worker;
+                    charly agentteams apply -f /tmp/at-snap >/dev/null;
+                    charly agentteams worker list | grep -q bed-worker;
+                    echo ROUNDTRIP-OK'
+                in_container: true
 # agentteams-vm — the disposable VM substrate for the AgentTeams stack. The
 # check-agentteams-vm bed installs the agentteams top composition candy (all five
 # foundation candies) into this Arch cloud-image guest via add_candy, so the
