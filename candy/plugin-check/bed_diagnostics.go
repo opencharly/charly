@@ -37,7 +37,7 @@ package check
 //	                  EMPTY; no entry has been found that is legitimate.
 //	severityWarning → counted and reported, NOT fatal yet. Promoting it today would red beds
 //	                  that are otherwise perfectly green, on two enumerable upstream/config
-//	                  classes — pacman's `<pkg> is up to date -- reinstalling` and the
+//	                  classes — pacman's `<pkg> is up to date -- skipping` and the
 //	                  `could not isolate the network` sandbox residue whose ROOT CAUSE is the
 //	                  same defect the error tier now catches. That is a bounded, named
 //	                  promotion condition, not an open-ended "someday" (CLAUDE.md R2: the

@@ -105,7 +105,9 @@ ollama-layer-skill:
             for the full schema). Each step is one inline Op — a probe is a `check:`
             step — and its `context:` list gates where it runs:
             
-            - **`context: [build]`** (run under `charly check box`):
+            - **ungated** (no `context:`, so it runs wherever the plan runs — under
+              `charly check box` against the image AND under `charly check live`
+              against the deployed service):
               - the ollama binary exists at `/usr/bin/ollama` (`file:` check)
             - **`context: [runtime]`** (run under `charly check live` against a live
               service; `${HOST_PORT:11434}` resolves the deploy-time host port so

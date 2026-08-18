@@ -1,6 +1,9 @@
 package check
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // The bed diagnostics gate exists because a bed once reported ok:true over 56 error lines: the
 // runner graded exit codes and nothing else. These tests pin the three properties that make the
@@ -109,5 +112,98 @@ func TestScanCountsAllowlistedSeparately(t *testing.T) {
 	}
 	if exempted != 1 {
 		t.Errorf("findings carrying an AllowID = %d, want 1 — an exemption must stay auditable", exempted)
+	}
+}
+
+// TestPromotedWarningTierGoesRed and TestWarningTierIsReportedEvenWhenNotFatal are the two
+// assertions the file header cites as what keeps the warning stage from being a permanent
+// weakening. They were named there before they were written — review caught the citation pointing
+// at nothing, which is worse than an uncovered stage, because it asserts the stage is safe on
+// evidence that does not exist.
+
+// TestPromotedWarningTierGoesRed proves the promotion is a FLAG FLIP and not a new feature: the
+// same scan result that passes today fails the moment WarningsFatal is true, and the failure
+// message names the warning rather than reporting a generic red. The log is a real captured shape
+// — a pacman skew line the allowlist does NOT claim — so this cannot pass on a synthetic string
+// the matcher was written around.
+func TestPromotedWarningTierGoesRed(t *testing.T) {
+	const log = "STEP 1/2: RUN pacman -Syu --noconfirm --needed some-package\n" +
+		"warning: could not fully load metadata for package some-package-1.0-1\n" +
+		"STEP 2/2: RUN true\n"
+
+	d := scanStepDiagnostics(log)
+	if d.Warnings != 1 || d.Errors != 0 {
+		t.Fatalf("fixture must produce exactly one non-allowlisted warning and no error; got %+v", d)
+	}
+
+	staged := diagnosticPolicy{ErrorsFatal: true, WarningsFatal: false}
+	if d.fails(staged) {
+		t.Errorf("the STAGED policy must not fail on a warning — that is what makes it staged")
+	}
+	if got := defaultDiagnosticPolicy(); got != staged {
+		t.Errorf("defaultDiagnosticPolicy() = %+v, want %+v — the header claims the stage is one field", got, staged)
+	}
+
+	promoted := diagnosticPolicy{ErrorsFatal: true, WarningsFatal: true}
+	if !d.fails(promoted) {
+		t.Errorf("flipping WarningsFatal must turn this log red; it did not")
+	}
+	msg := d.failure(promoted, "image-build", ".check/x/y/image-build.log")
+	if msg == "" || !strings.Contains(msg, "warning") {
+		t.Errorf("the promoted failure must name the warning tier; got %q", msg)
+	}
+
+	// The allowlist must survive promotion: an EXEMPTED warning stays exempt when the tier is
+	// fatal, or promotion would silently invalidate every reviewed exemption at once.
+	exempt := scanStepDiagnostics("STEP 1/1: RUN pacman -Syu --needed dbus\n" +
+		"warning: dbus-1.16.2-1.1 is up to date -- skipping\n")
+	if exempt.Allowlisted != 1 || exempt.Warnings != 0 {
+		t.Fatalf("fixture must be fully allowlisted; got %+v", exempt)
+	}
+	if exempt.fails(promoted) {
+		t.Errorf("an allowlisted warning must not fail even under the promoted policy")
+	}
+}
+
+// TestWarningTierIsReportedEvenWhenNotFatal proves the count is never silently dropped while the
+// tier is staged off. A gate that stopped REPORTING what it stopped FAILING on would be a
+// weakening dressed as a stage — the operator would have no way to see the debt accumulating, and
+// the promotion condition in the header could never be evaluated.
+func TestWarningTierIsReportedEvenWhenNotFatal(t *testing.T) {
+	const log = "STEP 1/2: RUN pacman -Syu --noconfirm --needed dbus other\n" +
+		"warning: dbus-1.16.2-1.1 is up to date -- skipping\n" +
+		"warning: could not fully load metadata for package other-1.0-1\n" +
+		"STEP 2/2: RUN true\n"
+
+	d := scanStepDiagnostics(log)
+	staged := defaultDiagnosticPolicy()
+	if d.fails(staged) {
+		t.Fatalf("the staged policy must not fail here; got %+v", d)
+	}
+
+	// Counted, not erased — both tiers, separately.
+	if d.Warnings != 1 {
+		t.Errorf("Warnings = %d, want 1 (the non-exempt line)", d.Warnings)
+	}
+	if d.Allowlisted != 1 {
+		t.Errorf("Allowlisted = %d, want 1 (the exempt line)", d.Allowlisted)
+	}
+
+	// And REPORTED: the per-run notice a reader actually sees must mention the warning even
+	// though nothing failed. This is the half that makes the stage auditable.
+	notice := diagNotice(d)
+	if notice == "" || !strings.Contains(notice, "warning") {
+		t.Errorf("a non-fatal warning must still appear in the run notice; got %q", notice)
+	}
+
+	// The shape report must carry it too, so the promotion condition can be evaluated from a
+	// real run rather than from a count alone.
+	var shapes []string
+	for _, sh := range d.shapes() {
+		shapes = append(shapes, sh.Text)
+	}
+	joined := strings.Join(shapes, "\n")
+	if !strings.Contains(joined, "could not fully load metadata") {
+		t.Errorf("the non-fatal warning is missing from the shape report:\n%s", joined)
 	}
 }
