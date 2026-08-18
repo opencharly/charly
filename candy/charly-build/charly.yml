@@ -2473,14 +2473,17 @@ load-skill:
             The default socket is `/run/user/1000/podman/podman.sock` — the uid-1000
             rootless path that composition serves. `--socket` overrides it.
 
-            Composing it looks like this:
+            Composing it looks like this. Note what the entity IS: `base:` marks this a
+            BOX — an image — and the pod is what you get when you deploy it. `charly box
+            load` addresses the running deploy, never the image.
+
 
             ```yaml
             my-spike-box:
                 candy:
                     version: 2026.230.1200
                     base: quay.io/fedora/fedora:43
-                    description: A pod whose own podman store can receive images.
+                    description: A box that serves its own rootless podman socket, so a deploy of it can receive images.
                     distro:
                         - fedora:43
                         - fedora
@@ -2524,8 +2527,9 @@ load-skill:
 
             ## Verification
 
-            `check-boxload-pod` (a `disposable: true` deploy in the project's own
-            `charly.yml`) is the R10 bed: it delivers a host image into the pod's nested
+            `check-boxload-pod` is the R10 bed — a deploy in the project's own `charly.yml`
+            marked `disposable: true`, the flag that authorizes charly to destroy and
+            rebuild it unattended. It it delivers a host image into the pod's nested
             store and asserts, THROUGH the socket, that the image is there. The assertion is
             socket-scoped deliberately — a plain in-container `podman images` would pass even
             if the image had gone to the wrong store.
