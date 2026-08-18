@@ -5,6 +5,23 @@
 #   - taskfiles/Skills.yml `skills:drift` — `charly marketplace drift`'s artifact list
 #   - taskfiles/Docs.yml   `docs:drift`   — `git -C docs status --porcelain`'s path list
 #
+# THE TWO GATES ARE IDENTICAL. Same script, same exact-match rule, one baseline file each.
+# Do not build an argument on them differing — two people have now independently asserted a
+# gate asymmetry that does not exist, in opposite directions (one that both fail, one that only
+# skills is baselined), and each was reasoning from ONE arm of a two-sided comparison. If you
+# find yourself about to say "the X gate does A while the Y gate does B", grep BOTH taskfiles
+# first; a zero from one of them means "I found nothing here", never "there is nothing there".
+#
+# WHERE THE REAL ASYMMETRY LIVES — in the GENERATORS, not here. `charly docs generate` does not
+# read candy sources: collectSkills reads plugins/<plugin>/skills (candy/plugin-docs/gen_skills.go).
+# The docs generator consumes the PROJECTION. So when a candy `skill:` entity has not landed, the
+# chain breaks at hop 1 (candy -> plugins) and NOT at hop 2 (plugins -> docs) — docs re-emits the
+# page from the copy sitting in plugins and the site stays clean, while a wholesale plugins
+# regeneration deletes it as an orphan. A two-hop chain breaks at the hop nearest the missing
+# source, not at every hop (CHANGELOG/2026.227.1725.md). That is why a wholesale docs projection
+# is safe while a wholesale plugins projection can destroy an in-review page, and it is a fact
+# about the generators that no amount of reading THIS file will tell you.
+#
 # WHY A BASELINE EXISTS AT ALL. Both generated trees are already stale on main, for
 # changes nobody in a given PR made. An absolute gate would therefore red every PR in
 # the repo until somebody else's work lands — and a gate that reds everything gets
