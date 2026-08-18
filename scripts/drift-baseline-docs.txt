@@ -3,7 +3,7 @@
 # Its only job is to let `task docs:drift` fail on NEW drift without reding every PR in the repo
 # for debt it did not create. Inherited debt is reported by name on every run.
 #
-# THIS FILE JUST GREW, 8 -> 64, AND THAT NEEDS ITS EVIDENCE IN FRONT OF YOU. A baseline is
+# THIS FILE JUST GREW, 8 -> 63, AND THAT NEEDS ITS EVIDENCE IN FRONT OF YOU. A baseline is
 # supposed to shrink. It grew because this cutover advances the `docs` gitlink onto a mirror that
 # `main` cannot reproduce: docs@d9afc66 was projected from `ec484b4b`, which is unlanded and lives
 # only on opencharly/charly's feat/factory-unit5-box-load (charly#315).
@@ -17,9 +17,9 @@
 # So an UNMODIFIED main already fails to reproduce docs main — including DELETING
 # recipes/build/load.md and recipes/distros/nested-podman-socket.md. Then, at this branch's pin:
 #
-#	stale here                     64
-#	also stale on unmodified main  64
-#	attributable to this branch     0
+#	stale here                     63     (55 modified, 7 deleted, 1 untracked)
+#	also stale on unmodified main  63
+#	attributable to this branch     0     (by path; see the caveat below)
 #
 # Every entry below is in that intersection. THAT IS NOT THE SAME AS "none is this cutover's
 # drift", and an earlier version of this header claimed it was.
@@ -41,9 +41,13 @@
 # reviewer measured it. Those rows come from the unlanded ec484b4b. It is inherited debt AND carries one
 # line of this cutover's, and it cannot be split until charly#315 lands.
 #
-# HOW IT LIQUIDATES: when charly#315 lands, `main` reproduces d9afc66's pages and these entries
-# stop being stale. The gate will then red with "no longer stale — delete these lines", which is
-# the file doing its job. Expect it to fall back toward single digits in one step.
+# HOW IT LIQUIDATES, and NOT all at once. 62 of the 63 trace to charly#315: they are pages
+# docs@d9afc66 projected from ec484b4b, so when that lands `main` reproduces them and the gate
+# reds with "no longer stale — delete these lines". The 63rd does NOT share that trigger:
+# `reference/candy/agentteams-snapshot.md` is stale as an UNTRACKED emission (`??`, the only one;
+# the rest are 55 `M` + 7 `D`) — a page the generator writes that docs has never carried. #315
+# landing cannot resolve it; committing that page in docs can. Naming one trigger for the whole
+# set, as this header did, would have left someone waiting for a red that never came for it.
 #
 # HOW THIS WAS MEASURED, and how to re-measure it: at this branch's head with EVERY SUBMODULE AT
 # ITS GITLINK — the tree `actions/checkout --submodules recursive` produces. Do NOT re-measure by

@@ -23,8 +23,9 @@ ollama-layer-skill:
         owner: charly-ollama
         description: |-
             Ollama LLM server on port 11434 with model persistence; this candy declares no CUDA
-            dependency — GPU support is composed outside it, by opting a box into the
-            `ollama-cuda` or `ollama-rocm` backend candy.
+            dependency, and a backend is composed outside it by opting a box into `ollama-cuda` or
+            `ollama-rocm`. On a tarball distro the upstream archive already bundles CUDA, so the
+            declaration describes what the candy REQUIRES rather than what the image contains.
             Use when working with Ollama, LLM serving, or local AI model inference.
         content: |-
             # ollama -- Local LLM inference server

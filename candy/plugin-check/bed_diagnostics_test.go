@@ -41,34 +41,78 @@ func TestErrorTierEntriesAreConditional(t *testing.T) {
 
 // TestConditionalErrorFailsWithoutRecovery is the half that makes the conditional form worth
 // having: the SAME error line is exempt when the log proves recovery and fatal when it does not.
-// Without this, "conditional" would be a comment rather than a behaviour.
+//
+// The fixtures use a HYPHENATED package name deliberately. An earlier version of this test used
+// `libyuv` against a wrong-subject line of "installing something-else..." — two names sharing no
+// prefix — and so it passed while the implementation was broken for every multi-token name, which
+// is most of them. A reviewer caught it by driving the real gate with `nvidia-container-toolkit`:
+// the capture stopped at the first hyphen, so "installing nvidia..." discharged the error and
+// "installing nvidia-container-toolkit..." did not. A negative case that cannot fail is not a
+// negative case.
+//
+// The verb axis is enumerated for the same reason. The first fix named `installing` and
+// `upgrading`, which left the entry too TIGHT in the same edit that stopped it being too loose:
+// a `reinstalling` recovery — 23 occurrences in this tree's retained logs — would have failed a
+// step for a package that arrived. The table below drives all four installing verbs plus
+// `removing`, which must NOT discharge.
 func TestConditionalErrorFailsWithoutRecovery(t *testing.T) {
-	const errLine = "error: failed retrieving file 'libyuv-r2921+644251f25-1.1-x86_64_v3.pkg.tar.zst' " +
+	const pkg = "nvidia-container-toolkit"
+	errLine := "error: failed retrieving file '" + pkg + "-1.17.8-1-x86_64.pkg.tar.zst' " +
 		"from cdn77.cachyos.org : The requested URL returned error: 404\n"
+	const step = "STEP 1/1: RUN pacman -S nvidia-container-toolkit\n"
 
-	recovered := scanStepDiagnostics("STEP 1/1: RUN pacman -S libyuv\n" + errLine +
-		"installing libyuv...\n")
-	if recovered.Errors != 0 || recovered.Allowlisted != 1 {
-		t.Errorf("with `installing libyuv...` present the line must be exempt; got %+v", recovered)
-	}
-	if recovered.fails(defaultDiagnosticPolicy()) {
-		t.Error("a recovered mirror retry must not fail the step")
-	}
-
-	stranded := scanStepDiagnostics("STEP 1/1: RUN pacman -S libyuv\n" + errLine)
-	if stranded.Errors != 1 || stranded.Allowlisted != 0 {
-		t.Errorf("with no install line the SAME error must count as an error; got %+v", stranded)
-	}
-	if !stranded.fails(defaultDiagnosticPolicy()) {
-		t.Error("an unrecovered retrieval error must still fail the step — that is the whole point")
+	// Every alpm package operation that ENDS WITH THE PACKAGE INSTALLED is a recovery. The
+	// enumeration is ALPM_EVENT_PACKAGE_OPERATION_START's five, minus REMOVE — naming only
+	// `installing` would fail a step for a package that demonstrably arrived, and `reinstalling`
+	// alone occurs 23 times in this tree's retained bed logs.
+	for _, verb := range []string{"installing", "upgrading", "reinstalling", "downgrading"} {
+		t.Run("recovered by "+verb, func(t *testing.T) {
+			d := scanStepDiagnostics(step + errLine + verb + " " + pkg + "...\n")
+			if d.Errors != 0 || d.Allowlisted != 1 || d.fails(defaultDiagnosticPolicy()) {
+				t.Errorf("%q is a recovery and must be exempt; got %+v", verb, d)
+			}
+		})
 	}
 
-	// And the proof must be subject-specific: another package installing is not this one recovering.
-	wrongSubject := scanStepDiagnostics("STEP 1/1: RUN pacman -S libyuv\n" + errLine +
-		"installing something-else...\n")
-	if wrongSubject.Errors != 1 {
-		t.Errorf("an unrelated install line must not discharge this error; got %+v", wrongSubject)
+	// REMOVE is the one operation that leaves the package ABSENT, so it must NOT discharge the
+	// error. This is the row that fails if someone ever widens the verb set by reaching for
+	// "every line pacman prints about the package" instead of the enumeration above.
+	t.Run("removing is not a recovery", func(t *testing.T) {
+		d := scanStepDiagnostics(step + errLine + "removing " + pkg + "...\n")
+		if d.Errors != 1 || d.Allowlisted != 0 || !d.fails(defaultDiagnosticPolicy()) {
+			t.Errorf("a removal leaves the package absent and must not discharge; got %+v", d)
+		}
+	})
+
+	t.Run("no recovery at all is fatal", func(t *testing.T) {
+		d := scanStepDiagnostics(step + errLine)
+		if d.Errors != 1 || d.Allowlisted != 0 || !d.fails(defaultDiagnosticPolicy()) {
+			t.Errorf("an unrecovered retrieval error must still fail the step; got %+v", d)
+		}
+	})
+
+	// The cases that matter, and that the previous fixture could not reach: a name that shares a
+	// PREFIX with the failed package must not discharge it, in either direction.
+	for _, wrong := range []string{"nvidia", "nvidia-container", "nvidia-container-toolkit-extra"} {
+		t.Run("wrong subject: "+wrong, func(t *testing.T) {
+			d := scanStepDiagnostics(step + errLine + "installing " + wrong + "...\n")
+			if d.Errors != 1 || d.Allowlisted != 0 {
+				t.Errorf("%q must NOT discharge an error for %q; got %+v", wrong, pkg, d)
+			}
+		})
 	}
+
+	// And the single-token name the original fixture used still works, so the fix did not trade
+	// one shape for another.
+	t.Run("single-token name still recovers", func(t *testing.T) {
+		d := scanStepDiagnostics("STEP 1/1: RUN pacman -S libyuv\n" +
+			"error: failed retrieving file 'libyuv-r2921+644251f25-1.1-x86_64_v3.pkg.tar.zst' " +
+			"from us.cachyos.org : The requested URL returned error: 404\n" +
+			"installing libyuv...\n")
+		if d.Errors != 0 || d.Allowlisted != 1 {
+			t.Errorf("the originally-observed shape must still be exempt; got %+v", d)
+		}
+	})
 }
 
 // TestAllowlistEntriesAreWellFormed keeps the audit trail honest: the Why is printed verbatim

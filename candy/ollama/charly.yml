@@ -162,8 +162,11 @@ ollama-skill:
         family: ollama
         owner: ollama
         description: |-
-            Standalone Ollama LLM inference server. GPU acceleration is composed at the
-            box level (`ollama-cuda` / `ollama-rocm`), never by this candy.
+            Standalone Ollama LLM inference server. This candy DECLARES no GPU dependency —
+            a backend is composed at the box level (`ollama-cuda` / `ollama-rocm`). What that
+            yields differs by install path: on a packaged distro the base is genuinely CPU-only,
+            while on a tarball distro the single upstream archive already contains CUDA, so the
+            declaration is about what this candy REQUIRES, not about what ends up in the image.
             Runs as a supervisord service on port 11434 with persistent model storage.
             MUST be invoked before building, deploying, configuring, or troubleshooting the ollama box.
         content: |-
@@ -217,13 +220,19 @@ ollama-skill:
             deliberately not compared against them: the tarball's installed size is not stated
             anywhere here, so weighing 1.32 GiB against the installed numbers would compare two
             different axes. Read the download figure as what a tarball build FETCHES, and the
-            table as what a packaged build COSTS on disk.
+            two figures in the bullets below as what a packaged build COSTS on disk. (They are
+            bullets, not a table — this page's only tables are Box Properties, Ports and Volumes.)
 
             - A GPU box composes `ollama-cuda` (~988 MiB) beside this candy for the
-              CUDA backend, or `ollama-rocm` (~2.9 GiB) for AMD. Both are candies in
-              this repository; which boxes compose them is decided in the distro submodules
-              (`box/fedora`, `box/cachyos`), so consult those rather than this page for the
-              current list.
+              CUDA backend, or `ollama-rocm` (~2.9 GiB) for AMD. Both are candies in this
+              repository and BOTH package only on Arch (`distro: {arch: …}` and nothing
+              else), which means the two behave differently off it: `ollama-cuda` degrades
+              into an ASSERTION that the tarball's bundled CUDA is present, while
+              `ollama-rocm` has no tarball path at all and its check correctly fails rather
+              than pretending. So an AMD box is an Arch-family box today. Which boxes
+              actually compose them is decided in the distro submodules — `box/cachyos` for
+              both, `box/fedora` for the CUDA assertion only — so consult those rather than
+              this page for the current list.
             - A consumer that composes neither pays for neither ON A PACKAGED DISTRO —
               e.g. `/charly-openclaw:openclaw-desktop` (cachyos base, no GPU candy). On a
               tarball distro it still carries the bundled CUDA backend.

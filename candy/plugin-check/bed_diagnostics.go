@@ -33,8 +33,10 @@ package check
 //
 //	severityError   → FATAL from this first iteration. It has real teeth (13 beds red, the RCA
 //	                  case among them) without reding the roster (48 stay green), and every red
-//	                  is a defect CLAUDE.md R1/R2 already require fixing. The error allowlist is
-//	                  EMPTY; no entry has been found that is legitimate.
+//	                  is a defect CLAUDE.md R1/R2 already require fixing. The error allowlist holds
+//	                  exactly ONE entry, and it is CONDITIONAL — see diagnosticAllowlist below for
+//	                  why the premise that kept it empty turned out to have a counter-example, and
+//	                  why a conditional exemption does not weaken the tier.
 //	severityWarning → counted and reported, NOT fatal yet. Promoting it today would red beds
 //	                  that are otherwise perfectly green, on two enumerable upstream/config
 //	                  classes — pacman's `<pkg> is up to date -- skipping` and the
@@ -194,9 +196,23 @@ var diagnosticAllowlist = []diagnosticAllowance{
 	{
 		ID:       "pacman-mirror-retrieval-recovered",
 		Severity: severityError,
-		Match:    regexp.MustCompile(`^error: failed retrieving file '([A-Za-z0-9_.+-]+?)-[^']*\.pkg\.tar\.[a-z]+' from `),
-		// The capture is the package base name; the recovery is pacman's own install line for it.
-		RecoveredBy: `(?m)^installing %s\.\.\.`,
+		// An Arch package filename is <name>-<version>-<rel>-<arch>.pkg.tar.<ext>, and the NAME
+		// itself routinely contains hyphens (nvidia-container-toolkit, pacman-contrib). So the
+		// capture must be GREEDY and anchored by the three trailing hyphen-separated fields —
+		// a non-greedy class that includes `-` stops at the first hyphen and captures `nvidia`
+		// out of `nvidia-container-toolkit`, which is how the first version of this entry let a
+		// DIFFERENT package's install line discharge the error.
+		Match: regexp.MustCompile(`^error: failed retrieving file '(.+)-[^-']+-[^-']+-[^-']+\.pkg\.tar\.[a-z]+' from `),
+		// The recovery is pacman's own line for THAT package, in ANY of the four verbs that end
+		// with the package installed. alpm's ALPM_EVENT_PACKAGE_OPERATION_START enumerates five
+		// operations — INSTALL, UPGRADE, REINSTALL, DOWNGRADE, REMOVE — and only REMOVE leaves the
+		// package absent, so the other four are exactly the lines that prove it arrived. Measured
+		// across every retained bed image-build.log in this tree: installing 2285, upgrading 109,
+		// reinstalling 23, downgrading 0. Naming only `installing` made the entry too TIGHT in the
+		// same edit that made it too LOOSE — a recovered `reinstalling` would have failed a step
+		// for a package that demonstrably arrived, on wording that occurs 23 times already.
+		// `downgrading` closes the enumeration rather than waiting for the run that proves it.
+		RecoveredBy: `(?m)^(installing|upgrading|reinstalling|downgrading) %s\.\.\.`,
 		Why: "pacman tries mirrors in order and prints one `error: failed retrieving file …` for " +
 			"each one it cannot reach, then fetches from the next and installs normally. Observed " +
 			"live: three errors for libyuv (two 404s from CachyOS CDNs whose index still " +
