@@ -10354,9 +10354,9 @@ pr-validator-agent:
             The obvious tightenings were measured, and neither removes the need to triage. Restricting to a 20-line
             header window still flags a CHANGELOG that quotes the banner in its opening paragraph.
             Requiring a comment-form line carrying both *generated* and the phrase drops the false
-            positives, and drops **1 of 349** in `plugins` and **5 of 905** in `docs` — matcher pinned on
+            positives, and drops **11 of 349** in `plugins` and **13 of 905** in `docs` — matcher pinned on
             all three axes it turns on: **comment-form, either order, case-insensitive**. **Every one of
-            those six is a hand-authored mentioner**, so the tightening drops no genuine carrier.
+            those twenty-four is a hand-authored mentioner**, so the tightening drops no genuine carrier.
 
             **Three unnamed switches, not an unstable corpus.** The same trees appear to drop 1, 11 or 344
             files depending on case, match direction, and comment-form-vs-loose — and the 344 is not a
@@ -10398,9 +10398,9 @@ pr-validator-agent:
               | `docs` @ `eb92dc24` | 3 | **904** | **905** |
 
               A hyphen-only matcher finds 6 of 349 in `plugins`; a space-only matcher finds 3 of
-              905 in `docs`. **Neither convention is wrong and neither is going away**, so `-i` and the
-              `[- ]` class are load-bearing rather than stylistic — a matcher that assumes one house
-              style reports a clean tree for the other.
+              905 in `docs`. **Neither convention is wrong and neither is going away**, so the
+              `[- ]` class is load-bearing rather than stylistic. **`-i` moves nothing on the tolerant
+              matcher** — 349 and 905 either way — but moves the `docs` spaced-only arm from 3 to 7.
 
               **The counts above are `spaced / hyphenated / tolerant`, and they do not add up
               because `grep -l` UNIONS files rather than partitioning them** — 4 files carry BOTH
