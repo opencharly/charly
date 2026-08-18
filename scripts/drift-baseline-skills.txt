@@ -44,13 +44,10 @@ plugins/distros/skills/rocm/SKILL.md
 plugins/image/skills/layer/SKILL.md
 plugins/internals/agents/pr-validator.md
 plugins/internals/skills/agents/references/parallel-bed-testing.md
-plugins/internals/skills/cutover-policy/SKILL.md
 plugins/internals/skills/egress/SKILL.md
 plugins/internals/skills/generate-source/references/task-emission.md
-plugins/internals/skills/git-workflow/SKILL.md
 plugins/internals/skills/git-workflow/references/evidence-and-freshness.md
 plugins/internals/skills/git-workflow/references/multi-repo-coordination.md
-plugins/internals/skills/git-workflow/references/validator-and-calver.md
 plugins/internals/skills/go-quality/SKILL.md
 plugins/internals/skills/go/SKILL.md
 plugins/internals/skills/go/references/source-map.md

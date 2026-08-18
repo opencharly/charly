@@ -40,5 +40,3 @@ src/content/docs/recipes/internals/git-workflow/evidence-and-freshness.md
 src/content/docs/recipes/internals/go/source-map.md
 src/content/docs/recipes/internals/install-plan/step-kinds.md
 src/content/docs/reference/candy/agentteams-snapshot.md
-src/content/docs/reference/candy/plugin-kube.md
-src/content/docs/reference/plugin/plugin-kube.md
