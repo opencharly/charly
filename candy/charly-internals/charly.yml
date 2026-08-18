@@ -5477,11 +5477,14 @@ git-workflow-skill:
                   **Guard 1 — every commit SHA an entry names, checked for landed state AND subject:**
 
                   ```bash
-                  for sha in $(grep -ohE '\b[0-9a-f]{7,40}\b' CHANGELOG/<entry>.md | sort -u); do
-                    for repo in . <superproject-path>; do        # BOTH — see below
+                  entry=CHANGELOG/2026.228.0609.md   # the entry under review
+                  repos=". $(git config -f .gitmodules --get-regexp path | awk '{print $2}')"
+
+                  for sha in $(grep -ohE '\b[0-9a-f]{7,40}\b' "$entry" | sort -u); do
+                    for repo in $repos; do                     # EVERY repo a citation may name
                       git -C "$repo" cat-file -e "${sha}^{commit}" 2>/dev/null || continue
                       git -C "$repo" merge-base --is-ancestor "$sha" origin/main && st=LANDED || st=UNMERGED
-                      printf '%s %s %s\n' "$sha" "$st" "$(git -C "$repo" log -1 --format=%s "$sha")"; break
+                      printf '%s %-8s %-8s %s\n' "$sha" "$st" "$repo" "$(git -C "$repo" log -1 --format=%s "$sha")"; break
                     done
                   done
                   ```
@@ -5503,7 +5506,7 @@ git-workflow-skill:
                   **Guard 2 — grep the entry's own prose, with the exclusion that makes it usable:**
 
                   ```bash
-                  grep -nE '\b(is|are) (now )?(enforced|generated|deleted|removed|fixed)\b' CHANGELOG/<entry>.md
+                  grep -nE '\b(is|are) (now )?(enforced|generated|deleted|removed|fixed)\b' "$entry"
                   ```
 
                   Most hits are CORRECT and must not be hedged. The discriminator:
