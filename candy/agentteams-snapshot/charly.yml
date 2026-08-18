@@ -7,7 +7,7 @@ agentteams-snapshot:
             agentteams snapshot --out <bundle>` (the PII-redacted hydration
             bundle) and `charly agentteams apply -f <bundle>` (hydrate) in-venue.
             The snapshot/hydrate cores live in the compiled-in
-            candy/plugin-agentteams (the SAME surface the host-side `agentteams:`
+            candy/plugin-agentteams (the CLI surface; the host-side `agentteams:`
             verb methods use — R3); this candy only pre-stages the charly binary
             that carries them. Overlaid onto a bed's deploy via add_candy: rather than composed into a
             production box.

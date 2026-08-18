@@ -36,7 +36,4 @@
 	// matching the beds' created Worker CR); manager-running's optional specific
 	// manager (default: any manager reaching Running).
 	name?: string
-	// bundle — hydrate's bundle directory to apply back (workers → teams → humans
-	// in dependency order) and restore the mirrored MinIO objects from.
-	bundle?: string
 }

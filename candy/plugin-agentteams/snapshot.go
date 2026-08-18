@@ -21,7 +21,8 @@ import (
 // objects, and writes ONE hydration bundle dir. hydrate applies the bundle back
 // (workers → teams → humans in dependency order) and restores the MinIO
 // objects. The SAME cores serve the in-venue `charly agentteams snapshot`
-// command AND the host-side `agentteams: {method: snapshot|hydrate}` verb
+// command. The host-side `agentteams:` verb dispatches four methods and does
+// NOT carry snapshot/hydrate — the CLI is the only surface for those
 // methods (R3 — one surface, two placements).
 
 // AgentTeamsSnapshotCmd is the `charly agentteams snapshot` command — the
@@ -53,7 +54,7 @@ func (c *AgentTeamsSnapshotCmd) Run() error {
 	return nil
 }
 
-// runSnapshot is the snapshot core shared by the command and the verb. It
+// runSnapshot is the snapshot core, reached from the CLI command only. It
 // returns the human-readable summary (the verb's stdout).
 func runSnapshot(ctx context.Context, client *apiClient, s3 *s3Client, out string) (string, error) {
 	var workers workerListResp

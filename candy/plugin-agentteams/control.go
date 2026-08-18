@@ -1098,7 +1098,7 @@ func applyFromFiles(files []string) error {
 // applyPathWithClient applies one path — a single YAML resource file OR a
 // hydration bundle directory (workers.yml → teams.yml → humans.yml in dependency
 // order, so a team's workerMembers resolve) — and returns the per-resource
-// result lines. Shared by the apply command and the hydrate verb core (R3).
+// result lines. Reached from the apply command; there is no hydrate verb.
 func applyPathWithClient(client *apiClient, path string) (string, error) {
 	info, err := os.Stat(path)
 	if err != nil {

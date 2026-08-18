@@ -3754,7 +3754,7 @@ check-agentteams-snapshot:
         description: >-
             R10 bed for Factory Unit 6. Proves the snapshot/hydrate round-trip against a
             live AgentTeams deploy: the controller's worker is captured into a hydration
-            bundle, the bundle is applied back, and the worker is still listed afterwards.
+            bundle, the worker is DELETED, the bundle is applied back, and the worker is listed again.
         # The worker is DELETED between snapshot and apply, and its absence asserted,
         # so the hydrate half can fail: `charly agentteams apply` never deletes
         # (control.go's applyPathWithClient has no delete path), so without the

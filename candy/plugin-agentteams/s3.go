@@ -21,7 +21,8 @@ import (
 // the AgentTeams MinIO file system — the snapshot/hydrate round-trip's object
 // mirroring. Hand-rolled AWS SigV4 (no AWS SDK in the charly binary) so the SAME
 // core serves the in-venue `charly agentteams snapshot` command (no `mc` needed
-// in the venue) AND the host-side `agentteams: {method: snapshot|hydrate}` verb
+// in the venue). The host-side `agentteams:` verb does not carry snapshot or
+// hydrate; the CLI is the only surface for them
 // methods (no `mc` on the host) — R3, one surface, two placements.
 type s3Client struct {
 	endpoint string // e.g. http://127.0.0.1:9000

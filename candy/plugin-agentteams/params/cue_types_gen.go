@@ -13,8 +13,4 @@ type AgentTeamsInput struct {
 	// matching the beds' created Worker CR); manager-running's optional specific
 	// manager (default: any manager reaching Running).
 	Name string `yaml:"name,omitempty" json:"name,omitempty"`
-
-	// bundle — hydrate's bundle directory to apply back (workers → teams → humans
-	// in dependency order) and restore the mirrored MinIO objects from.
-	Bundle string `yaml:"bundle,omitempty" json:"bundle,omitempty"`
 }
