@@ -2529,7 +2529,7 @@ load-skill:
 
             `check-boxload-pod` is the R10 bed — a deploy in the project's own `charly.yml`
             marked `disposable: true`, the flag that authorizes charly to destroy and
-            rebuild it unattended. It it delivers a host image into the pod's nested
+            rebuild it unattended. It delivers a host image into the pod's nested
             store and asserts, THROUGH the socket, that the image is there. The assertion is
             socket-scoped deliberately — a plain in-container `podman images` would pass even
             if the image had gone to the wrong store.
