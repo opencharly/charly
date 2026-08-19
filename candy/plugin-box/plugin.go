@@ -4,8 +4,8 @@
 // compiled_plugins (the canonical placement, P15), or cmd/serve serves them OUT-OF-PROCESS when
 // they are not.
 //
-// It serves ELEVEN command capabilities, all NESTED under the `box` parent (CommandParent()=="box",
-// so `charly box generate/validate/new/pull/build/inspect/list/labels/merge/reconcile/feature`
+// It serves TWELVE command capabilities, all NESTED under the `box` parent (CommandParent()=="box",
+// so `charly box generate/validate/new/pull/build/inspect/list/labels/load/merge/reconcile/feature`
 // parse + dispatch here while the authoring verbs (candy/plugin-authoring) stay separate — the core
 // BoxCmd holds no verb of its own):
 //
@@ -58,6 +58,11 @@
 //     container-storage probes with zero loader coupling, so this needs NO core reentry (K3
 //     reentry-class dissolution; the former `__box-labels` HostBuild("cli") hop is gone).
 //
+//   - command:load — `charly box load <target> <image>`: streams a host-store image into a RUNNING
+//     pod venue's NESTED podman store (the container twin of `charly vm cp-box`), over the
+//     venue-generic deploykit.TransferImageToVenue. Pure sdk/deploykit + spec/container — zero
+//     HostBuild, zero InvokeProvider, zero core reentry. See box_load.go.
+//
 //   - command:merge — `charly box merge`: reads Registry/Tag/Merge settings for one (or every
 //     merge.auto) box off the resolved-project envelope, then reaches verb:oci DIRECTLY via
 //     InvokeProvider (the SAME F10 peer-dispatch leg candy/plugin-build's own post-build inline
@@ -98,7 +103,7 @@ import (
 const calver = "2026.198.2131"
 
 // boxCommandWords is the set of command words this plugin serves — all nested under `box`.
-var boxCommandWords = []string{"generate", "validate", "new", "pull", "build", "inspect", "list", "labels", "merge", "reconcile", "feature"}
+var boxCommandWords = []string{"generate", "validate", "new", "pull", "build", "inspect", "list", "labels", "load", "merge", "reconcile", "feature"}
 
 // boxListSubcommands is the `charly box list <sub>` catalog (F-CLI-NEST), matching listSubcommands
 // in inspect_list.go — hand-declared, not reflected, because dispatchList routes on a plain string

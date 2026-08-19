@@ -54,3 +54,20 @@ plugin-check:
               context:
                 - build
               command: "true"
+            - # `charly check stop <bed>` — the scoped bed-stop verb. This check is the answer to
+              # "delete stop_cmd.go and every gate still passes": with the word absent, the CLI
+              # rejects the invocation and this step fails, so the verb's EXISTENCE is now gated
+              # rather than merely demonstrated. It asserts the idempotent no-run-in-flight path,
+              # which needs no bed of its own and is a success by design: a bed that is not
+              # running is the desired end state, not an error.
+              check: >-
+                  the `charly check stop` word is registered and reports cleanly when the named
+                  bed has no run in flight — the idempotent path, a success by design because a
+                  bed that is not running is the desired end state, never an error
+              id: check-stop-registered
+              context:
+                - build
+              exit_status: 0
+              stdout:
+                - contains: "no run in flight"
+              command: "${CHARLY_BIN} check stop check-stop-ade-probe"

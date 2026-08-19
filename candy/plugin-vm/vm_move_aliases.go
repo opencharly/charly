@@ -51,7 +51,6 @@ var (
 	PromoteSnapshot             = vmshared.PromoteSnapshot
 	RevertSnapshot              = vmshared.RevertSnapshot
 	IncrementSnapshotRefcount   = vmshared.IncrementSnapshotRefcount
-	deployShellQuote            = spec.ShellQuote
 	EnsureSshConfigInclude      = kit.EnsureSshConfigInclude
 	RemoveSshConfigInclude      = kit.RemoveSshConfigInclude
 	RemoveVmSshStanza           = kit.RemoveVmSshStanza
