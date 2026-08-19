@@ -24,6 +24,28 @@
 # Do not add a line to silence a red. If your change made an artifact stale, the fix is to
 # regenerate and commit, never to record it here.
 #
+# THE ONE CASE THAT RULE DOES NOT COVER, and it is why two entries were added at this branch's
+# pins rather than regenerated: a PROJECTION that is AHEAD of its source. plugins#208 landed the
+# projection of charly#315's work before #315 itself merged — which is B6a working as designed,
+# not a defect. `main` therefore holds text NEWER than anything this superproject can generate,
+# and regenerating REVERTS it. Measured:
+#
+#     $ # plugins at origin/main, then: charly marketplace generate
+#     $ git -C plugins diff -- internals/skills/vm-deploy-target/SKILL.md
+#     -(via `deploykit.ImageVenue.PodmanCmd`, the ONE field every step reads, so they
+#     -cannot disagree about which store they are addressing):
+#     +(via the `podmanCmd(rootless)` helper):
+#
+# The `-` side is what main carries; the `+` side is what the generator produces. So "regenerate
+# and commit" would destroy landed content, and the entries below are NOT a silenced red — they
+# record pages that are CORRECT and that this tree cannot reproduce until #315 lands. They
+# liquidate then, in the normal way, by reding as "no longer stale".
+#
+# Do not delete them by regenerating. charly#336 carries the finding that the gate cannot itself
+# distinguish projection-ahead-of-source from source-ahead-of-projection — both print "newly
+# stale", and only the diff DIRECTION tells them apart. Check the direction before acting on a
+# red in this file's neighbourhood.
+#
 # RE-MEASURED AGAIN at this branch's own head with ITS gitlinks (plugins 40229ad, docs e213d51),
 # because that is the tree CI checks out for this PR and the comparison is EXACT. Measuring at
 # `main` alone was wrong in both directions once this branch bumps a projection gitlink: the
@@ -55,3 +77,5 @@ plugins/internals/skills/plugin/SKILL.md
 plugins/internals/skills/plugin/references/boundary-law.md
 plugins/internals/skills/skills/SKILL.md
 plugins/internals/skills/vm-spec/SKILL.md
+plugins/internals/skills/vm-deploy-target/SKILL.md
+plugins/vm/skills/vm/SKILL.md

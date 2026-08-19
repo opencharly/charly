@@ -3,7 +3,7 @@
 # Its only job is to let `task docs:drift` fail on NEW drift without reding every PR in the repo
 # for debt it did not create. Inherited debt is reported by name on every run.
 #
-# THIS FILE JUST GREW, 8 -> 63, AND THAT NEEDS ITS EVIDENCE IN FRONT OF YOU. A baseline is
+# THIS FILE GREW 8 -> 63 AND HAS NOW SHRUNK TO 62. THAT NEEDS ITS EVIDENCE IN FRONT OF YOU. A baseline is
 # supposed to shrink. It grew because this cutover advances the `docs` gitlink onto a mirror that
 # `main` cannot reproduce: docs@d9afc66 was projected from `ec484b4b`, which is unlanded and lives
 # only on opencharly/charly's feat/factory-unit5-box-load (charly#315).
@@ -17,8 +17,8 @@
 # So an UNMODIFIED main already fails to reproduce docs main — including DELETING
 # recipes/build/load.md and recipes/distros/nested-podman-socket.md. Then, at this branch's pin:
 #
-#	stale here                     63     (55 modified, 7 deleted, 1 untracked)
-#	also stale on unmodified main  63
+#	stale at the first measurement 63     (55 modified, 7 deleted, 1 untracked)
+#	stale now, at this branch's pins 62   (the untracked one liquidated — see below)
 #	attributable to this branch     0     (by path; see the caveat below)
 #
 # Every entry below is in that intersection. THAT IS NOT THE SAME AS "none is this cutover's
@@ -41,29 +41,21 @@
 # reviewer measured it. Those rows come from the unlanded ec484b4b. It is inherited debt AND carries one
 # line of this cutover's, and it cannot be split until charly#315 lands.
 #
-# HOW IT LIQUIDATES, and NOT all at once. 62 of the 63 trace to charly#315: they are pages
-# docs@d9afc66 projected from ec484b4b, so when that lands `main` reproduces them and the gate
-# reds with "no longer stale — delete these lines". The 63rd does NOT share that trigger:
-# `reference/candy/agentteams-snapshot.md` is stale as an UNTRACKED emission (`??`, the only one;
-# the rest are 55 `M` + 7 `D`) — a page the generator writes that docs has never carried. #315
-# landing cannot resolve it; committing that page in docs can. Naming one trigger for the whole
-# set, as this header did, would have left someone waiting for a red that never came for it.
+# HOW IT LIQUIDATES, and NOT all at once. 62 of the original 63 trace to charly#315: they are
+# pages docs@d9afc66 projected from ec484b4b, so when that lands `main` reproduces them and the
+# gate reds with "no longer stale — delete these lines". The 63rd did NOT share that trigger:
+# `reference/candy/agentteams-snapshot.md` was stale as an UNTRACKED emission (`??`, the only one;
+# the rest were 55 `M` + 7 `D`) — a page the generator writes that docs had never carried. #315
+# landing could not resolve it; committing that page in docs could.
 #
-# HOW THIS WAS MEASURED, and how to re-measure it: at this branch's head with EVERY SUBMODULE AT
-# ITS GITLINK — the tree `actions/checkout --submodules recursive` produces. Do NOT re-measure by
-# running the gate in a working tree whose submodule has moved; see scripts/drift-baseline.sh's
-# header for why, and for what a green verdict does and does not mean.
-#
-# THIS IS NOT AN ALLOWLIST. scripts/drift-baseline.sh compares EXACTLY: an entry here that is no
-# longer stale fails the gate just as loudly as an artifact that is stale and absent.
-#
-# Do not add a line to silence a red. If your change made an artifact stale, the fix is to
-# regenerate and commit, never to record it here.
+# IT HAS NOW LIQUIDATED, exactly that way and separately from the other 62, which is the file
+# working as designed: docs main gained the page, the gate red with "no longer stale", and the
+# line is deleted here. Recording the two triggers separately is what made that legible instead
+# of looking like an unexplained red.
 
 src/content/docs/recipes/build/generate.md
 src/content/docs/recipes/internals/git-workflow/evidence-and-freshness.md
 src/content/docs/recipes/internals/install-plan/step-kinds.md
-src/content/docs/reference/candy/agentteams-snapshot.md
 src/content/docs/reference/candy/nested-podman-socket.md
 src/content/docs/reference/candy/plugin-box.md
 src/content/docs/reference/cli/add-candy.md
