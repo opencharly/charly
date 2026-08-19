@@ -2473,9 +2473,11 @@ load-skill:
             The default socket is `/run/user/1000/podman/podman.sock` — the uid-1000
             rootless path that composition serves. `--socket` overrides it.
 
-            Composing it looks like this. Note what the entity IS: `base:` marks this a
-            BOX — an image — and the pod is what you get when you deploy it. `charly box
-            load` addresses the running deploy, never the image.
+            Composing it looks like this. Note which entity this is: `base:` marks it a
+            BOX — the thing you build. Deploying that box on a container venue gives you
+            the pod this verb targets; on a VM venue the twin verb is `charly vm cp-box`.
+            The two arguments follow from that: `<target>` names the running deploy, never
+            the box, and `<image>` is the artifact being delivered into it.
 
 
             ```yaml
