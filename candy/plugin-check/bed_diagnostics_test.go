@@ -115,6 +115,45 @@ func TestConditionalErrorFailsWithoutRecovery(t *testing.T) {
 	})
 }
 
+// TestPipResolverConflictAllowanceIsConditional covers the entry added for pip's
+// dependency-resolver conflict notice. pip prints the notice when the environment ALREADY
+// carries packages that conflict with the install's requirements, then installs anyway and
+// exits 0 — observed live in the jupyter-ml image-build (vllm's pinned requirements vs the
+// pixi.toml loose pins). The entry is CONDITIONAL on the same log proving the install
+// completed (`Successfully installed ...`), so an install that never reports success still
+// fails its step.
+func TestPipResolverConflictAllowanceIsConditional(t *testing.T) {
+	const notice = "ERROR: pip's dependency resolver does not currently take into account " +
+		"all the packages that are installed. This behaviour is the source of the " +
+		"following dependency conflicts.\n"
+	const step = "STEP 1/1: RUN pip install fastmcp\n"
+
+	t.Run("recovered by Successfully installed", func(t *testing.T) {
+		d := scanStepDiagnostics(step + notice + "Successfully installed fastmcp-3.4.7 mcp-1.29.0\n")
+		if d.Errors != 0 || d.Allowlisted != 1 || d.fails(defaultDiagnosticPolicy()) {
+			t.Errorf("a completed pip install must exempt the notice; got %+v", d)
+		}
+	})
+
+	t.Run("no recovery is fatal", func(t *testing.T) {
+		d := scanStepDiagnostics(step + notice)
+		if d.Errors != 1 || d.Allowlisted != 0 || !d.fails(defaultDiagnosticPolicy()) {
+			t.Errorf("an install that never reports success must still fail the step; got %+v", d)
+		}
+	})
+
+	// The allowance is anchored to the EXACT pip message. A different error line followed by a
+	// pip success must not be exempted — the recovery proves the install completed, not that
+	// some other error was harmless.
+	t.Run("unrelated error is not exempted by a pip success", func(t *testing.T) {
+		d := scanStepDiagnostics(step + "ERROR: Could not find a version that satisfies the requirement foo\n" +
+			"Successfully installed fastmcp-3.4.7\n")
+		if d.Errors != 1 || d.Allowlisted != 0 {
+			t.Errorf("an unrelated error must not be discharged by a pip success; got %+v", d)
+		}
+	})
+}
+
 // TestAllowlistEntriesAreWellFormed keeps the audit trail honest: the Why is printed verbatim
 // into summary.yml on every run, so an empty or throwaway one silently converts a reviewed
 // exemption into an unexplained one.
