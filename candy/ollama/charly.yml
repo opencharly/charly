@@ -219,9 +219,13 @@ ollama-skill:
             Every size below is INSTALLED. The one figure above is a COMPRESSED DOWNLOAD and is
             deliberately not compared against them: the tarball's installed size is not stated
             anywhere here, so weighing 1.32 GiB against the installed numbers would compare two
-            different axes. Read the download figure as what a tarball build FETCHES, and the
-            two figures in the bullets below as what a packaged build COSTS on disk. (They are
-            bullets, not a table — this page's only tables are Box Properties, Ports and Volumes.)
+            different axes. Read the download figure as what a tarball build FETCHES. The two
+            figures in the bullets below are the two ALTERNATIVE BACKENDS, not the cost of a
+            packaged build: a packaged image pays the 66 MiB base plus AT MOST ONE of them, and
+            pays neither if it composes neither. Both are Arch figures — off Arch `ollama-cuda`
+            adds no package at all, so its ~988 MiB is not a cost a tarball image pays on top.
+            (They are bullets, not a table — this page's only tables are Box Properties, Ports
+            and Volumes.)
 
             - A GPU box composes `ollama-cuda` (~988 MiB) beside this candy for the
               CUDA backend, or `ollama-rocm` (~2.9 GiB) for AMD. Both are candies in this
