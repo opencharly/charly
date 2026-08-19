@@ -4,7 +4,7 @@ go 1.26.4
 
 require (
 	github.com/opencharly/sdk v0.0.0
-	github.com/opencharly/spec v0.2026230.1336
+	github.com/opencharly/spec v0.2026230.1417
 	google.golang.org/grpc v1.61.0
 	gopkg.in/yaml.v3 v3.0.1
 )

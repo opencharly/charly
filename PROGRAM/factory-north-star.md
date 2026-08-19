@@ -63,15 +63,18 @@ it is handed decides the containment story:
   default spike: a single `pod:` deploy composing the agentteams composition +
   `container-nesting`. Delivering the pre-built `agentteams-manager`/`-worker` images
   into the spike's *nested* store is **[proven by the containment spike]**: the
-  container-venue analog of `charly vm cp-box`'s `streamLoadAndTag` — host
+  container-venue analog of `charly vm cp-box`'s streamed transfer: host
   `podman save <image>` piped into the spike's nested uid-1000 store via
   `charly shell <spike> -c 'podman --remote --url unix:///run/user/1000/podman/podman.sock load'`,
   no intermediate tarball. The images are private on ghcr.io (anonymous manifest
   fetch is 401), so the registry hop is not an option — local delivery is the
   mechanism, and the winning verb (`charly box load`, unit 5) is a gap to close
-  in charly, not a script. The controller's reconcile loop self-heals: once the
-  image lands in the nested store, the controller spawns the manager without a
-  restart, so delivery can happen after the controller is up.
+  in charly, not a script. Unit 5 landed it, and unified both venues onto one path:
+  `sdk/deploykit.TransferImageToVenue` over `spec/container.StreamLoad`, with
+  `charly box load` and `charly vm cp-box` as its two bindings. The controller's
+  reconcile loop self-heals: once the image lands in the nested store, the
+  controller spawns the manager without a restart, so delivery can happen after
+  the controller is up.
 - **The nested socket path needs a runtime-dir volume.** `/run` is a fresh
   root-owned tmpfs at container start, so the build-time `/run/user/1000` pre-creation
   (the controller candy's plan step) does not survive — the uid-1000 service cannot
@@ -79,6 +82,22 @@ it is handed decides the containment story:
   `/run/user/1000`, initialized from the image's uid-1000-owned `/run/user/1000`
   (the WHOLE dir chowned to 1000, not just the `podman/` subdir — the nested podman
   writes its `libpod` runtime dir there too). **[proven by the containment spike]**
+  Unit 5 re-proved both halves on its own bed and closed the two questions unit 1
+  left open. First, the build-time seed DOES survive into the image, so the copy-up
+  has a source — that was the open risk in the named-volume approach, and a
+  build-context check now asserts it. Second, a tmpfs is not an alternative: podman's
+  `--tmpfs` rejects `uid=`/`gid=` (`unknown mount option "uid=1000"`), so a tmpfs at
+  this path can only ever be root-owned. The named volume is the ONE mechanism that
+  yields a uid-1000-owned runtime dir on a pod venue.
+- **Serving the socket is its own candy, and unit 1 never recorded how.** The
+  containment spike proved a controller running on the nested socket but its bed was
+  throwaway, and the mechanism died with it — `podman system service` appeared nowhere
+  in the tree afterwards, so the finding was unreproducible. `candy/nested-podman-socket`
+  (unit 5) is that mechanism made permanent: a supervisord `exec:` entry running
+  `podman system service` as uid 1000, plus the runtime-dir volume above. It is
+  deliberately SEPARATE from `container-nesting` — nesting supplies podman, this
+  supplies its API endpoint, and the nine boxes composing nesting have no need of a
+  podman service. **[proven by the `check-boxload-pod` bed]**
 - **The upstream `check-agentteams-pod` bed instead binds the HOST rootless podman
   socket into the box** **[proven upstream]** — deliberately, so spawned containers use
   the same store the images were built into (no registry hop). That is a *bed
@@ -216,10 +235,22 @@ MinIO, which every flavor exposes identically — the venue is below them.
   `worker-list`. Dual placement (compiled-in `spec.CheckVerbProvider` in-proc / pb
   Invoke envelope out-of-process — placement-invisible, F8); skips under
   `charly check box`.
-- `charly box load` — **[unit 5]** the container-venue image-delivery verb the
+- `charly box load` — **[landed, unit 5]** the container-venue image-delivery verb the
   containment spike named: the analog of `charly vm cp-box` for a `pod:` venue's
-  nested store. Closes the gap that today forces a hand-run `podman save | podman
-  --remote load` pipeline (R4).
+  nested store. Closes the gap that forced a hand-run `podman save | podman
+  --remote load` pipeline (R4). Both verbs are now bindings of ONE venue-generic path
+  — `sdk/deploykit.TransferImageToVenue` (verified idempotency, the torn-overlay probe
+  and its drop-and-re-stream recovery, the post-load tag) over
+  `spec/container.StreamLoad` (the tarball-free pipe) — so a third venue costs a
+  constructor, not a fourth copy. Both resolve a bare box name through the STRICT
+  `ResolveBuiltImageRef`, which refuses an image older than the newest local build:
+  delivering a stale artifact is the wrong-artifact class `charly check box` refuses
+  to certify, and harder to notice, since the load succeeds and the venue simply runs
+  the wrong image. (`vm cp-box` never actually had working short-name support — a
+  local stub returning `""` shadowed the canonical resolver; unit 5 deleted it.)
+- `candy/nested-podman-socket` — **[landed, unit 5]** the prerequisite the verb
+  delivers INTO: the nested podman's API socket at uid 1000, plus the `/run/user/1000`
+  named volume that makes it possible.
 - `charly mcp serve --disposable-only` — **[unit 7]** the tool filter that makes the
   Forgemaster's license enforceable rather than promised.
 - `candy/agentteams-snapshot` — layer: export Worker/Team/Human via the controller API
@@ -274,9 +305,11 @@ front-loads the named HOWs.
    gap. The row and its skill land together, never split: a row naming a skill that
    does not exist is a false claim (R1). Documentation-only change class:
    non-runtime standards, no bed.
-5. **`charly box load`.** The nested-store image-delivery verb the containment spike
-   named. Gated by a bed that loads an image into a nested uid-1000 store; blocks the
-   native spike in unit 8.
+5. **`charly box load` — LANDED.** The nested-store image-delivery verb the containment
+   spike named, gated by `check-boxload-pod`. It also had to ship the socket mechanism
+   itself (`candy/nested-podman-socket`), because unit 1 recorded the FINDING that a
+   nested socket works without recording HOW it was served — the throwaway bed took the
+   mechanism with it. The unit unblocks the native spike in unit 8.
 6. **`candy/agentteams-snapshot`** with a round-trip fixture bed.
 7. **Make the forge surface enforceable.** Two gaps, one unit, because they are the
    same license: (a) `charly mcp serve --disposable-only` — spike first, since the
@@ -375,10 +408,20 @@ proposal until unit 9 lands it.)
       (raw curl + host-CLI sequences replaced); the verb executed live against a fresh
       rebuild of the disposable `check-agentteams-pod` bed (CHANGELOG 2026.226.0946,
       class `fully tested and validated`)
-- [ ] Unit 4: dispatcher rows resolve; `/charly-kubernetes:helm` published; this
+- [x] Unit 4: dispatcher rows resolve; `/charly-kubernetes:helm` published; this
       document audited claim-by-claim against the tree (documentation-only class —
-      the gate is the non-runtime standards, not a bed)
-- [ ] Unit 5: `charly box load` delivers an image into a nested uid-1000 store, bed green
+      the gate is the non-runtime standards, not a bed). The rows are live in
+      `CLAUDE.md` and `AGENTS.md` and `plugins/kubernetes/skills/helm/` exists; the
+      box went unchecked at the time and was corrected during unit 5
+- [x] Unit 5: `charly box load` delivers an image into a nested uid-1000 store, bed
+      green — `check-boxload-pod` PASS (13 steps), with `boxload-deliver` and
+      `boxload-present-in-nested-store` passing on BOTH the initial and the
+      fresh-rebuild live legs (36 steps: 31 passed, 0 failed). Coverage proven to
+      discriminate by perturbation: with the `load` word removed the verb is rejected
+      outright, so the delivery check fails. Shipped with `candy/nested-podman-socket`
+      (the socket mechanism unit 1 never recorded) and the R3 unification of the four
+      `save | load` paths onto `spec/container.StreamLoad` +
+      `sdk/deploykit.TransferImageToVenue`
 - [ ] Unit 6: snapshot round-trip bed green
 - [ ] Unit 7: `--disposable-only` filter proven to refuse a non-disposable target,
       and the forge listener proven unreachable from a spike
