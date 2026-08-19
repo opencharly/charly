@@ -24,27 +24,22 @@
 # Do not add a line to silence a red. If your change made an artifact stale, the fix is to
 # regenerate and commit, never to record it here.
 #
-# THE ONE CASE THAT RULE DOES NOT COVER, and it is why two entries were added at this branch's
-# pins rather than regenerated: a PROJECTION that is AHEAD of its source. plugins#208 landed the
-# projection of charly#315's work before #315 itself merged — which is B6a working as designed,
-# not a defect. `main` therefore holds text NEWER than anything this superproject can generate,
-# and regenerating REVERTS it. Measured:
+# THE ONE CASE THAT RULE DOES NOT COVER — and it has now RESOLVED, kept because the reasoning
+# recurs. A PROJECTION can be AHEAD of its source: plugins#208 landed the projection of
+# charly#315's work before #315 itself merged, which is B6a working as designed. `main` then held
+# text NEWER than anything this superproject could generate, and regenerating REVERTED it. Two
+# entries were recorded here rather than regenerated for exactly that reason.
 #
-#     $ # plugins at origin/main, then: charly marketplace generate
-#     $ git -C plugins diff -- internals/skills/vm-deploy-target/SKILL.md
-#     -(via `deploykit.ImageVenue.PodmanCmd`, the ONE field every step reads, so they
-#     -cannot disagree about which store they are addressing):
-#     +(via the `podmanCmd(rootless)` helper):
+# charly#315 has since landed (c8ba494f), the source caught up, and both entries liquidated in the
+# normal way — the gate red with "no longer stale" and they were deleted. That is the mechanism
+# working end to end, and it is why they were recorded rather than "fixed".
 #
-# The `-` side is what main carries; the `+` side is what the generator produces. So "regenerate
-# and commit" would destroy landed content, and the entries below are NOT a silenced red — they
-# record pages that are CORRECT and that this tree cannot reproduce until #315 lands. They
-# liquidate then, in the normal way, by reding as "no longer stale".
-#
-# Do not delete them by regenerating. charly#336 carries the finding that the gate cannot itself
-# distinguish projection-ahead-of-source from source-ahead-of-projection — both print "newly
-# stale", and only the diff DIRECTION tells them apart. Check the direction before acting on a
-# red in this file's neighbourhood.
+# The lasting rule: BEFORE acting on a red here, measure the DIRECTION.
+#   regenerating ADDS text    -> the SOURCE is ahead; regenerate and land the projection (#318)
+#   regenerating REMOVES text -> the PROJECTION is ahead; regenerating destroys landed content,
+#                                so record it here instead
+# charly#336 carries the finding that the gate cannot tell these apart on its own: both print
+# "newly stale", and only the diff direction separates them.
 #
 # RE-MEASURED AGAIN at this branch's own head with ITS gitlinks (plugins 40229ad, docs e213d51),
 # because that is the tree CI checks out for this PR and the comparison is EXACT. Measuring at
@@ -54,16 +49,13 @@
 # and every one is reported by name on each run.
 
 plugins/build/skills/generate/SKILL.md
-plugins/build/skills/load/SKILL.md
 plugins/check/skills/check/references/authoring-gotchas.md
 plugins/core/skills/charly-doctor/SKILL.md
 plugins/core/skills/shell/SKILL.md
 plugins/distros/skills/cachyos-pacstrap/SKILL.md
 plugins/distros/skills/container-nesting/SKILL.md
-plugins/distros/skills/nested-podman-socket/SKILL.md
 plugins/distros/skills/nvidia-layer/SKILL.md
 plugins/distros/skills/rocm/SKILL.md
-plugins/image/skills/layer/SKILL.md
 plugins/internals/agents/pr-validator.md
 plugins/internals/skills/agents/references/parallel-bed-testing.md
 plugins/internals/skills/egress/SKILL.md
@@ -77,5 +69,3 @@ plugins/internals/skills/plugin/SKILL.md
 plugins/internals/skills/plugin/references/boundary-law.md
 plugins/internals/skills/skills/SKILL.md
 plugins/internals/skills/vm-spec/SKILL.md
-plugins/internals/skills/vm-deploy-target/SKILL.md
-plugins/vm/skills/vm/SKILL.md
