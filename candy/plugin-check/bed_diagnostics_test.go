@@ -115,6 +115,56 @@ func TestConditionalErrorFailsWithoutRecovery(t *testing.T) {
 	})
 }
 
+// TestDnfCommandlineGpgcheckAllowanceIsConditional covers the entry added for dnf's
+// "skipped OpenPGP checks for N package from repository: @commandline" warning. dnf prints it
+// when a package passed on the command line (a local RPM) has no signature to verify — the
+// charly package built from source in the check bed. The entry is CONDITIONAL on the same log
+// proving the transaction completed (`Complete!`), so a transaction that never completes still
+// fails its step.
+func TestDnfCommandlineGpgcheckAllowanceIsConditional(t *testing.T) {
+	const warning = "Warning: skipped OpenPGP checks for 1 package from repository: @commandline\n"
+	const step = "STEP 1/1: RUN dnf install -y /tmp/charly.rpm\n"
+
+	t.Run("recovered by Complete!", func(t *testing.T) {
+		d := scanStepDiagnostics(step + warning + "Complete!\n")
+		if d.Warnings != 0 || d.Allowlisted != 1 || d.fails(defaultDiagnosticPolicy()) {
+			t.Errorf("a completed dnf transaction must exempt the warning; got %+v", d)
+		}
+	})
+
+	t.Run("no recovery is not exempted", func(t *testing.T) {
+		d := scanStepDiagnostics(step + warning)
+		if d.Warnings != 1 || d.Allowlisted != 0 {
+			t.Errorf("a transaction that never completes must not be exempted; got %+v", d)
+		}
+		// The warning tier is not fatal under the default policy, but the entry must not claim
+		// the line either — and under the promoted policy the unrecovered warning goes red.
+		promoted := diagnosticPolicy{ErrorsFatal: true, WarningsFatal: true}
+		if !d.fails(promoted) {
+			t.Errorf("an unrecovered warning must fail the step under the promoted policy; got %+v", d)
+		}
+	})
+
+	// The allowance is anchored to the EXACT dnf message. A different warning line followed by a
+	// dnf success must not be exempted — the recovery proves the transaction completed, not that
+	// some other warning was harmless.
+	t.Run("unrelated warning is not exempted by a dnf success", func(t *testing.T) {
+		d := scanStepDiagnostics(step + "Warning: some other dnf warning\n" + "Complete!\n")
+		if d.Warnings != 1 || d.Allowlisted != 0 {
+			t.Errorf("an unrelated warning must not be discharged by a dnf success; got %+v", d)
+		}
+	})
+
+	// The count is variable (1 package, 2 packages, …) and the message is a fixed sentence
+	// otherwise — the pattern must claim every count.
+	t.Run("plural count is claimed", func(t *testing.T) {
+		d := scanStepDiagnostics(step + "Warning: skipped OpenPGP checks for 2 packages from repository: @commandline\n" + "Complete!\n")
+		if d.Warnings != 0 || d.Allowlisted != 1 {
+			t.Errorf("the plural form must be claimed; got %+v", d)
+		}
+	})
+}
+
 // TestPipResolverConflictAllowanceIsConditional covers the entry added for pip's
 // dependency-resolver conflict notice. pip prints the notice when the environment ALREADY
 // carries packages that conflict with the install's requirements, then installs anyway and

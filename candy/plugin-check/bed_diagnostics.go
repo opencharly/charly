@@ -136,8 +136,10 @@ type diagnosticAllowance struct {
 	// RecoveredBy makes an entry CONDITIONAL: the line is exempt only if the same log later
 	// PROVES the operation recovered. Match's first capture group is substituted for %s in this
 	// pattern, so the proof is tied to the specific subject that failed — not to "something
-	// somewhere succeeded". An entry without it is unconditional, which is the only form the
-	// warning tier uses.
+	// somewhere succeeded". An entry without it is unconditional. The warning tier's entries
+	// are unconditional except the dnf-commandline one, which is conditional on dnf's own
+	// transaction-completion line — the one warning whose benign-ness is only proven by the
+	// transaction actually completing.
 	//
 	// The %s subject-tie is OPTIONAL. An entry whose subject names no recoverable token — pip's
 	// resolver-conflict notice names no package — omits the placeholder and the recovery pattern
@@ -250,6 +252,30 @@ var diagnosticAllowlist = []diagnosticAllowance{
 			"install completed (`Successfully installed ...`); if pip never reports success, " +
 			"this entry does not claim the line and the step still fails. That is what keeps " +
 			"an error-tier exemption from becoming a tolerated error.",
+	},
+	{
+		ID:       "dnf-commandline-skipped-gpgcheck",
+		Severity: severityWarning,
+		// dnf skips OpenPGP verification for packages passed on the command line
+		// (@commandline repository) because a locally-built RPM has no signature to check.
+		// The charly package is built from source in the check bed and installed as a local
+		// RPM, so this warning is expected on every fresh build. The capture group wraps the
+		// whole message (the count names no recoverable token); the recovery is dnf's own
+		// transaction-completion line, and a step log is one `charly box build` invocation,
+		// so the step boundary is the tie.
+		Match: regexp.MustCompile(`^Warning: (skipped OpenPGP checks for \d+ packages? from repository: @commandline)$`),
+		// The recovery is dnf's own success line for the transaction. No %s placeholder: the
+		// message names no package to tie to, so the pattern is used as-is (see
+		// allowanceRecovered). The step's exit code already confirms dnf exited 0, and this
+		// line is the log-side corroboration.
+		RecoveredBy: `(?m)^Complete!$`,
+		Why: "dnf skips OpenPGP verification for packages passed on the command line " +
+			"(@commandline repository) because a locally-built RPM has no signature to " +
+			"check — observed live in the check-charly-fedora-pod image-build, where the " +
+			"charly package built from source is installed as a local RPM. It is a " +
+			"description of the install source, not a swallowed failure. CONDITIONAL on the " +
+			"same log proving the transaction completed (`Complete!`); if dnf never " +
+			"completes, this entry does not claim the line and the step still fails.",
 	},
 }
 
