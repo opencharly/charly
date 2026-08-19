@@ -10,8 +10,30 @@ compared to the other harnesses: a **hooks system**.
 
 | Path | Purpose |
 |---|---|
-| `settings.json` | Registers the project extension. |
+| `settings.json` | Registers the project extension and the project pi packages. |
 | `extensions/charly-gates.ts` | Pi's equivalent of the `.reasonix`/kimi `PreToolUse(Bash)` wiring of `.claude/hooks/pre-commit-gate.sh` + `pre-push-gate.sh`. Intercepts every `bash` tool call and blocks commands the gates reject (force-push, direct push to `main`, `--no-verify` commit bypass, untokenizable commits, new alias files). |
+
+## Project packages
+
+`settings.json` pins the following pi packages (installed automatically on
+startup after the project is trusted):
+
+| Package | Version | Purpose |
+|---|---|---|
+| `pi-mcp-adapter` | 2.26.1 | MCP (Model Context Protocol) adapter extension for Pi. |
+| `pi-subagents` | 0.51.0 | Single-agent delegation and scripted multi-agent workflows. |
+| `@narumitw/pi-plan-mode` | 0.49.3 | Codex-like read-only `/plan` collaboration mode. |
+| `pi-lens` | 4.0.1 | Real-time code feedback — LSP, linters, formatters, type-checking, structural analysis. |
+| `@juicesharp/rpiv-todo` | 2.6.2 | A todo list for the model, rendered as a live overlay that survives `/reload` and compaction. |
+| `pi-memory` | 0.4.2 | Memory with qmd-powered semantic search across daily logs, long-term memory, and scratchpad. |
+| `pi-ollama-cloud` | 0.9.0 | Ollama Cloud provider plugin (also installed at the user level). |
+
+Versions are pinned for reproducibility; `pi update --extensions` skips pinned
+packages. Move a package to a newer ref with `pi install npm:<pkg>@<new-ver>`.
+
+> **Security:** pi packages run with full system access and their extensions
+execute arbitrary code. Review a package's source before adding it to a shared
+project config.
 
 ## Why this is needed
 
