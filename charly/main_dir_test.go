@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/spec/spec"
 )
 
 // TestCharlyDir_FlagChdir verifies that -C / --dir / CHARLY_PROJECT_DIR causes
@@ -38,7 +40,7 @@ func TestCharlyDir_FlagChdir(t *testing.T) {
 	}{
 		{name: "short flag -C", args: []string{"-C", scratch, "box", "list", "boxes"}},
 		{name: "long flag --dir", args: []string{"--dir", scratch, "box", "list", "boxes"}},
-		{name: "env var CHARLY_PROJECT_DIR", args: []string{"box", "list", "boxes"}, env: []string{"CHARLY_PROJECT_DIR=" + scratch}},
+		{name: "env var CHARLY_PROJECT_DIR", args: []string{"box", "list", "boxes"}, env: []string{spec.ProjectDirEnv + "=" + scratch}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -645,6 +645,23 @@ func validateSingleTask(candyName string, idx int, verb string, t *spec.Op, know
 		}
 	}
 
+	// unless_exists: is honoured by the two emitters that produce ONE RUN for ONE op —
+	// EmitDownload and EmitCmd (sdk/deploykit, via WrapUnlessExists). It has no expressible
+	// position anywhere else: the mkdir/link/setcap emitters fold MANY ops into a single RUN,
+	// and copy/write emit a COPY instruction that no shell test can wrap. Rejecting the
+	// combination is the whole point — the schema advertises the field on #Op's shared modifier
+	// block, so without this rule `unless_exists:` on a copy: step would be a SILENT no-op, and
+	// a silent no-op on a capability GATE means the guarded work runs when the author believed
+	// it would be skipped.
+	if strings.TrimSpace(t.UnlessExists) != "" {
+		if verb != "download" && (verb != "plugin" || t.Plugin != "command") {
+			e.Add("candy %q: tasks[%d]: unless_exists: is only valid on download: or run:/plugin: command tasks (got %s) — the other emitters batch or emit COPY, so a guard there cannot be expressed and would silently do nothing", candyName, idx, verb)
+		}
+		if !isAbsOrHomePath(t.UnlessExists) {
+			e.Add("candy %q: tasks[%d]: unless_exists: %q must be an absolute path (or start with ~/ / ${HOME}) — it is tested with [ -e ] inside the image, where a relative path resolves against whatever WORKDIR happens to be set", candyName, idx, t.UnlessExists)
+		}
+	}
+
 	switch verb {
 	case "mkdir":
 		validateMkdirTask(candyName, idx, t, e)

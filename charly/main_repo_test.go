@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/spec/spec"
 )
 
 // TestNormalizeRepoSpec (all four spec shapes + the "default" sentinel) and
@@ -47,7 +49,7 @@ func TestCharlyRepo_FlagChdir(t *testing.T) {
 		{
 			name: "env var CHARLY_PROJECT_REPO",
 			args: []string{"box", "list", "boxes"},
-			env:  []string{"CHARLY_REPO_CACHE=" + cacheRoot, "CHARLY_PROJECT_REPO=foo/bar@v1.0.0"},
+			env:  []string{"CHARLY_REPO_CACHE=" + cacheRoot, spec.ProjectRepoEnv + "=foo/bar@v1.0.0"},
 		},
 	}
 	for _, tc := range cases {

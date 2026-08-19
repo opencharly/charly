@@ -606,15 +606,10 @@ func sortedKeys(m map[string]any) []string {
 // clear it, or the model fetch fails, fetchCLIModel downgrades to the no-prefix path, and every
 // project-dependent tool (box.*) then runs without --repo default and errors "no charly.yml".
 func childCharlyEnv() []string {
-	env := os.Environ()
-	filtered := env[:0]
-	for _, e := range env {
-		if strings.HasPrefix(e, "CHARLY_PROJECT_DIR=") || strings.HasPrefix(e, "CHARLY_PROJECT_REPO=") {
-			continue
-		}
-		filtered = append(filtered, e)
-	}
-	return filtered
+	// One implementation, shared with sdk/deploykit's packaging child (R3). Both names must go
+	// together — they are mutually exclusive in the CLI — which is exactly the invariant the
+	// shared helper exists to hold.
+	return spec.ChildProjectEnv(os.Environ(), "")
 }
 
 func forkCharly(ctx context.Context, bin string, argv []string) (stdout, stderr string, err error) {

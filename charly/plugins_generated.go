@@ -50,6 +50,7 @@ import (
 	cp_plugin_migrate "github.com/opencharly/charly/candy/plugin-migrate"
 	cp_plugin_mount "github.com/opencharly/charly/candy/plugin-mount"
 	cp_plugin_oci "github.com/opencharly/charly/candy/plugin-oci"
+	cp_plugin_ollama "github.com/opencharly/charly/candy/plugin-ollama"
 	cp_plugin_package "github.com/opencharly/charly/candy/plugin-package"
 	cp_plugin_pod "github.com/opencharly/charly/candy/plugin-pod"
 	cp_plugin_port "github.com/opencharly/charly/candy/plugin-port"
@@ -132,4 +133,5 @@ func init() {
 	registerCompiledPlugin(cp_plugin_check.NewProvider(), cp_plugin_check.NewMeta())
 	registerCompiledPlugin(cp_plugin_agentteams.NewProvider(), cp_plugin_agentteams.NewMeta())
 	registerCompiledPlugin(cp_plugin_dsh.NewProvider(), cp_plugin_dsh.NewMeta())
+	registerCompiledPlugin(cp_plugin_ollama.NewProvider(), cp_plugin_ollama.NewMeta())
 }

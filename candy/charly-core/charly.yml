@@ -942,7 +942,7 @@ charly-status-skill:
             | Container | `charly-jupyter` |
             | Secrets | `charly-jupyter-db-password` — engine secrets provisioned for this box (detail view only; JSON `secrets`) |
             | Mode | `quadlet` |
-            | Ports | `8888/tcp -> 127.0.0.1:8888` |
+            | Ports | `8888:8888/tcp` — HOST:CONTAINER/proto, comma-joined when there are several (`longPorts`). The detail view carries BOTH sides; the table's PORTS column carries host ports only |
             | Devices | `nvidia (CUDA)` |
             | Tools | `cdp:9222, vnc:5900, sway, wl` |
             | Volumes | `data: bind /home/user/data` |

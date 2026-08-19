@@ -1,0 +1,38 @@
+ollama-cuda:
+    candy:
+        version: 2026.229.1218
+        description: |
+            NVIDIA CUDA inference backend for the ollama LLM server
+            Adds the CUDA ggml backend so a composing GPU box runs inference on an
+            NVIDIA card instead of falling back to CPU. This is an ADD-ON to the
+            ollama candy, never a replacement: it contributes only the backend
+            libraries that drop into ollama's own runner directory
+            (/usr/lib/ollama/cuda_v*/libggml-cuda.so plus the CUDA runtime it links),
+            which is why the base ollama candy can stay CPU-only and small ON A PACKAGED
+            DISTRO — on the tarball path the upstream archive already carries this backend,
+            so this candy asserts rather than installs. Keeping
+            the backend in its own candy is what makes GPU support a per-box
+            composition choice: an image that wants CUDA composes this, an image
+            that does not pays none of its ~1 GiB.
+
+            Two install paths, one assertion. On Arch (CachyOS included) the split
+            `ollama-cuda` package supplies the backend — it depends on the `ollama`
+            package, so the two compose rather than conflict. On a distro that has no
+            ollama package the base candy installs the upstream tarball, which already
+            bundles the CUDA backend, so this candy adds no package there and simply
+            asserts the backend really is present. Either way the check below fails
+            when the CUDA backend is missing, which is the property worth having.
+        require:
+            - ollama
+        distro:
+            arch:
+                package:
+                    - ollama-cuda
+        plan:
+            # Version-agnostic on purpose: the runner directory carries the CUDA major
+            # in its name (cuda_v13 today), so a fixed path would rot on the next CUDA
+            # bump while the glob keeps asserting the same property.
+            - check: the CUDA ggml backend library is installed in ollama's runner directory
+              id: ollama-cuda-backend-present
+              exit_status: 0
+              command: ls /usr/lib/ollama/*/libggml-cuda.so

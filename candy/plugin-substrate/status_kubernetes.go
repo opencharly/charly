@@ -82,7 +82,19 @@ func collectKubernetesStatus(ctx context.Context, req spec.SubstrateStatusReques
 // compiled-in substrate plugin shares the host process's cwd, so the host-side
 // "resolved-project" handler's own os.Getwd() already resolves the right
 // project without this plugin naming a directory.
+// When ctx carries a fan-out memo (status_project_memo.go) the resolution is shared with every
+// other collector in the same `charly status`; without one it resolves directly.
 func fetchResolvedProject(ctx context.Context) (*spec.ResolvedProject, error) {
+	if m := memoFromContext(ctx); m != nil {
+		m.once.Do(func() { m.rp, m.err = resolveProjectDirect(ctx) })
+		return m.rp, m.err
+	}
+	return resolveProjectDirect(ctx)
+}
+
+// resolveProjectDirect performs the un-memoised resolution — the body fetchResolvedProject used
+// to be, kept whole so the memo is a pure addition rather than a rewrite of the seam.
+func resolveProjectDirect(ctx context.Context) (*spec.ResolvedProject, error) {
 	exec, err := sdk.ExecutorForInvoke(ctx, 0)
 	if err != nil {
 		return nil, fmt.Errorf("reach host reverse channel: %w", err)

@@ -59,14 +59,15 @@ tasks:
   drift:
     desc: Fail if the generated docs are stale (regeneration on a clean tree must be a no-op)
     cmds:
+      # `sync` regenerates IN PLACE, so this target mutates docs/ — the stale set is then
+      # read straight off git. It fails on NEW drift only, measured against
+      # scripts/drift-baseline-docs.txt (see scripts/drift-baseline.sh for why, and for why
+      # that file can only shrink). `cut -c4-` strips the fixed 2-char status field plus its
+      # separator, so a path is never split on whitespace.
       - task: sync
       - cmd: |
-          if [ -n "$(git -C {{.DOCS_DIR}} status --porcelain)" ]; then
-            echo "docs: DRIFT — the committed site does not match its sources." >&2
-            git -C {{.DOCS_DIR}} status --short >&2
-            exit 1
-          fi
-          echo "docs: no drift."
+          git -C {{.DOCS_DIR}} status --porcelain | cut -c4- \
+            | bash {{.ROOT_DIR}}/scripts/drift-baseline.sh {{.ROOT_DIR}}/scripts/drift-baseline-docs.txt docs
         silent: true
 
   install:

@@ -1,0 +1,103 @@
+plugin-ollama:
+    candy:
+        version: 2026.229.1013
+        description: |-
+            COMPILED-IN charly COMMAND-class plugin (command:ollama) OWNING the entire
+            `charly ollama` CLI — the host-side management surface for a DEPLOYED Ollama
+            server: list / ps / pull / rm / show / cp / create / push / run / stop /
+            version. The plugin owns the ENTIRE logic: the hand-rolled subcommand grammar
+            AND the Ollama HTTP API calls, built on the official upstream Go client
+            (github.com/ollama/ollama/api, pinned in the candy's own go.mod). There is NO
+            core ollama logic and NO HostBuild seam.
+
+            The command talks to the server over plain HTTP, so it is fully self-contained
+            and works IDENTICALLY compiled-in OR out-of-process: listed in charly.yml
+            compiled_plugins it registers in-proc and the host dispatches it through
+            dispatchInProcCommand → Invoke(OpRun) → runOllamaCLI; the out-of-process
+            placement fork/execs cmd/serve → CliMain running the SAME runOllamaCLI.
+            Endpoint resolution is deliberately lightweight: --server flag > OLLAMA_HOST env
+            > http://127.0.0.1:11434.
+
+            This is a sibling of the ollama CANDY (candy/ollama — which deploys the
+            server) and of the candy's host shell `alias: ollama` (which execs the
+            upstream CLI inside the container): three disjoint surfaces. Full Modelfile
+            authoring stays with the upstream CLI; `charly ollama create` covers the
+            lightweight --from form.
+
+            The R10 witness is the disposable check-ollama-pod bed (box/fedora): it deploys
+            the ollama image and runs `charly ollama list|version --server
+            http://127.0.0.1:${HOST_PORT:11434}` host-side against the live server, plus
+            the candy's baked checks.
+        plugin:
+            source: github.com/opencharly/charly/candy/plugin-ollama
+            providers:
+                - command:ollama
+        plan:
+            - # ADE build-context check: a deterministic check that does NOT depend on a
+              # live deployment — a trivial build-context `plugin: command` (the built-in
+              # command CHECK verb) running `true`, proving the host can build the module.
+              # The command is compiled-in and self-contained (plain HTTP, no reverse
+              # channel), so the full CLI end-to-end (`charly ollama list|version --server
+              # ...` against a live server) is exercised by the live R10 bed
+              # (check-ollama-pod).
+              check: the command plugin ships a buildable Go module (go.mod + the provider) the host can build; the full `charly ollama` end-to-end is exercised by the live R10 bed (check-ollama-pod)
+              id: ollama-module-present
+              context:
+                - build
+              command: "true"
+
+ollama-cli-skill:
+    skill:
+        name: ollama-cli
+        family: ollama
+        owner: plugin-ollama
+        description: |-
+            The compiled-in `charly ollama` management CLI for a deployed Ollama server
+            (command:ollama plugin, candy/plugin-ollama). MUST be invoked before managing
+            models (pull/list/ps/rm/show/create/cp/push/run/stop) on a running Ollama
+            deployment from the host.
+        content: |-
+            # ollama-cli
+
+            The compiled-in `charly ollama` management CLI for a deployed Ollama server — a
+            `command:ollama` plugin (candy/plugin-ollama). It talks to the server's HTTP
+            API via the official upstream Go client (github.com/ollama/ollama/api), so it
+            works identically compiled-in or out-of-process and needs no reverse channel.
+
+            ## Endpoint resolution
+
+            `--server <url>` flag > `OLLAMA_HOST` env > `http://127.0.0.1:11434`. A
+            schemeless value gets `http://` prepended; `0.0.0.0` (the candy's server-bind
+            value) maps to `127.0.0.1` for client use. The deployment's actual host port
+            comes from `charly status <name>` (auto-allocated on 127.0.0.1 at deploy).
+
+            ## Command tree
+
+            - `charly ollama list` — pulled models (NAME / SIZE / MODIFIED).
+            - `charly ollama ps` — models loaded in memory (NAME / SIZE / VRAM / UNTIL).
+            - `charly ollama pull <model>` — pull with compact transfer progress on stderr.
+            - `charly ollama rm <model>...` — delete one or more models.
+            - `charly ollama show <model>` — details (format/family/parameters/quantization) + Modelfile.
+            - `charly ollama cp <src> <dst>` — copy a model.
+            - `charly ollama create <name> --from <base> [--system <text>]` — create from a base model. Full Modelfile authoring stays with the upstream CLI (the ollama candy's host alias).
+            - `charly ollama push <model>` — push with progress.
+            - `charly ollama run <model> [prompt…]` — streaming generate; a simple interactive chat REPL (`/bye` or Ctrl-D exits) when no prompt is given.
+            - `charly ollama stop <model>` — unload from memory (zero-keepalive generate, the upstream mechanism).
+            - `charly ollama version` — the server version.
+
+            Every leaf takes `--server <url>` (anywhere in the args). A non-zero server
+            response propagates as the command's own non-zero exit.
+
+            ## Sibling surfaces (disjoint)
+
+            - `candy/ollama` — deploys the server (supervisord `ollama serve` on 11434).
+            - The candy's host shell `alias: ollama` (`charly alias install ollama`) —
+              execs the upstream CLI INSIDE the container.
+            - This plugin — manages the server from the HOST over HTTP.
+
+            ## Cross-References
+
+            - `/charly-ollama:ollama` — the ollama BOX (a deployment of the server).
+            - `/charly-ollama:ollama-layer` — the ollama CANDY (the server itself), which that
+              box composes.
+            - `/charly-internals:plugin` — compiled-in command plugins, the provider model.

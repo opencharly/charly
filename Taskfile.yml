@@ -12,8 +12,8 @@ includes:
   cue:
     taskfile: ./taskfiles/Cue.yml
     dir: "{{.ROOT_DIR}}"
-  plugins:
-    taskfile: ./taskfiles/Plugins.yml
+  mods:
+    taskfile: ./taskfiles/Modules.yml
     dir: "{{.ROOT_DIR}}"
   docs:
     taskfile: ./taskfiles/Docs.yml

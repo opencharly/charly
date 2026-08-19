@@ -52,7 +52,7 @@ func prescanProjectCommandWords() {
 // pre-registered" is not a benign gap — the grammar is frozen by kong.Parse, so an unregistered
 // word is an unknown verb, which made --repo unable to reach the very commands it exists to serve.
 func projectDirPreParse() string {
-	if d := os.Getenv("CHARLY_PROJECT_DIR"); d != "" {
+	if d := os.Getenv(spec.ProjectDirEnv); d != "" {
 		return d
 	}
 	if d := scanDirFlag(os.Args); d != "" {
@@ -68,8 +68,8 @@ func projectDirPreParse() string {
 	// Resolution can clone, so it is attempted only when the flag or env var is actually present.
 	// A failure returns "" and falls through to cwd: main() resolves the same spec moments later
 	// and reports the error properly, so a broken --repo must not also lose the local grammar.
-	if spec := scanRepoFlag(os.Args); spec != "" {
-		if d, err := ResolveProjectRepo(spec); err == nil {
+	if repoSpec := scanRepoFlag(os.Args); repoSpec != "" {
+		if d, err := ResolveProjectRepo(repoSpec); err == nil {
 			return d
 		}
 		// Deliberately NO early return: fall through to cwd. An unresolvable --repo must not
@@ -79,7 +79,7 @@ func projectDirPreParse() string {
 		// `charly --repo <bad> mcp …` died on `unexpected argument mcp, did you mean "cp"?` —
 		// the unknown-verb dead end this whole cutover exists to remove, reproduced in its own
 		// error path.
-	} else if envSpec := os.Getenv("CHARLY_PROJECT_REPO"); envSpec != "" {
+	} else if envSpec := os.Getenv(spec.ProjectRepoEnv); envSpec != "" {
 		if d, err := ResolveProjectRepo(envSpec); err == nil {
 			return d
 		}

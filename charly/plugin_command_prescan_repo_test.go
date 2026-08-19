@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/opencharly/spec/spec"
 )
 
 // The prescan is what puts an out-of-process command word into the Kong grammar, and the grammar
@@ -45,14 +47,14 @@ func TestProjectDirPreParse_Precedence(t *testing.T) {
 	dirA := t.TempDir()
 	dirB := t.TempDir()
 
-	t.Setenv("CHARLY_PROJECT_DIR", dirA)
-	t.Setenv("CHARLY_PROJECT_REPO", "")
+	t.Setenv(spec.ProjectDirEnv, dirA)
+	t.Setenv(spec.ProjectRepoEnv, "")
 	if got := projectDirPreParse(); got != dirA {
 		t.Fatalf("CHARLY_PROJECT_DIR must win: got %q, want %q", got, dirA)
 	}
 
 	// With the env var cleared, an explicit -C wins over cwd.
-	t.Setenv("CHARLY_PROJECT_DIR", "")
+	t.Setenv(spec.ProjectDirEnv, "")
 	saved := os.Args
 	t.Cleanup(func() { os.Args = saved })
 	os.Args = []string{"charly", "-C", dirB, "box", "validate"}
@@ -83,8 +85,8 @@ func TestProjectDirPreParse_Precedence(t *testing.T) {
 // `charly --repo <bad> mcp …` died on `unexpected argument mcp, did you mean "cp"?` — the exact
 // unknown-verb dead end this cutover removes. An unasserted test is not coverage.
 func TestProjectDirPreParse_UnresolvableRepoFallsBackToCwd(t *testing.T) {
-	t.Setenv("CHARLY_PROJECT_DIR", "")
-	t.Setenv("CHARLY_PROJECT_REPO", "")
+	t.Setenv(spec.ProjectDirEnv, "")
+	t.Setenv(spec.ProjectRepoEnv, "")
 	saved := os.Args
 	t.Cleanup(func() { os.Args = saved })
 
@@ -106,7 +108,7 @@ func TestProjectDirPreParse_UnresolvableRepoFallsBackToCwd(t *testing.T) {
 
 	// Same contract via the env var, which takes the sibling branch.
 	os.Args = []string{"charly", "mcp"}
-	t.Setenv("CHARLY_PROJECT_REPO", unresolvable)
+	t.Setenv(spec.ProjectRepoEnv, unresolvable)
 	if got := projectDirPreParse(); got != wd {
 		t.Errorf("an unresolvable CHARLY_PROJECT_REPO must fall back to cwd; got %q, want %q", got, wd)
 	}

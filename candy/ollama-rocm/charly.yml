@@ -1,0 +1,46 @@
+ollama-rocm:
+    candy:
+        version: 2026.229.1218
+        description: |
+            AMD ROCm inference backend for the ollama LLM server
+            Adds the ROCm/HIP ggml backend so a composing box runs inference on an AMD
+            card instead of falling back to CPU. This is an ADD-ON to the ollama candy,
+            never a replacement: it contributes only the backend libraries that drop
+            into ollama's own runner directory (/usr/lib/ollama/rocm_v*/libggml-hip.so
+            plus the HIP/HSA runtime it links), which is why the base ollama candy can
+            stay CPU-only and small on a packaged distro. Unlike CUDA, ROCm is never in the
+            upstream tarball at all, so there is no path on which the base candy carries it. It is by far the largest of the backends (~2.9 GiB
+            installed), so keeping it in its own candy is what stops every ollama image
+            from paying for it — an image opts in only when it targets AMD hardware.
+
+            On Arch (CachyOS included) the split `ollama-rocm` package supplies the
+            backend and depends on the `ollama` package, so the two compose rather than
+            conflict. A distro without an ollama package is NOT covered here: the base
+            upstream tarball ships no ROCm backend (upstream publishes ROCm as a
+            separate ollama-linux-amd64-rocm archive), so composing this candy there
+            would install nothing and the check below would correctly fail rather than
+            pretend. Extending it to the tarball distros means teaching the ollama
+            candy to select the ROCm archive, which is a change to that candy, not a
+            second copy of this one.
+
+            keep-groups preserves the host video/render groups so a passed-through AMD
+            GPU (/dev/kfd + /dev/dri/renderD*) is usable from the container. The
+            backend library is verifiable at build scope; live GPU enumeration is
+            verifiable only on a host with a real AMD GPU passed through.
+        require:
+            - ollama
+        security:
+            group_add:
+                - keep-groups
+        distro:
+            arch:
+                package:
+                    - ollama-rocm
+        plan:
+            # Version-agnostic on purpose: the runner directory carries the ROCm version
+            # in its name (rocm_v7_2 today), so a fixed path would rot on the next ROCm
+            # bump while the glob keeps asserting the same property.
+            - check: the ROCm/HIP ggml backend library is installed in ollama's runner directory
+              id: ollama-rocm-backend-present
+              exit_status: 0
+              command: ls /usr/lib/ollama/*/libggml-hip.so

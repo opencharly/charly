@@ -1,6 +1,6 @@
 nvidia:
     candy:
-        version: 2026.167.0603
+        version: 2026.229.1218
         description: |
             NVIDIA GPU runtime — nvidia-container-toolkit (nvidia-ctk CDI) plus the driver-lib path and Vulkan ICD wiring
             Installs nvidia-container-toolkit (the nvidia-ctk CLI that generates
@@ -28,9 +28,23 @@ nvidia:
                     - name: fedora-multimedia
                       url: "https://negativo17.org/repos/fedora-multimedia.repo"
                       gpgkey: "https://negativo17.org/repos/RPM-GPG-KEY-slaanesh"
+                    # NVIDIA ships this repo file with gpgcheck=0 — the only repo in the
+                    # tree that does — so its 4 packages (a container runtime hook) were
+                    # installing UNVERIFIED even though the gpgkey below imports fine and
+                    # every one of them is validly signed by the primary key. gpgcheck: true
+                    # forces the check back on; before the tri-state knob existed the
+                    # `gpgcheck:` field could only ever weaken a vendor's policy, so there
+                    # was no value expressible here that fixed it.
+                    # No gpgkey: here ON PURPOSE. The repo file already declares the same
+                    # key, so dnf5 imports it itself under gpgcheck=1 — whereas an explicit
+                    # `rpm --import` of NVIDIA's published certificate emits
+                    # "Subkey 6ED91CA3AC1160CD is expired" on every build, because that
+                    # certificate carries a subkey that died 2021-06-16 and every NVIDIA
+                    # copy of it still ships the dead subkey. Nothing is trusted less: the
+                    # packages are signed by the PRIMARY key and are verified either way.
                     - name: nvidia-container-toolkit
                       url: "https://nvidia.github.io/libnvidia-container/stable/rpm/nvidia-container-toolkit.repo"
-                      gpgkey: "https://nvidia.github.io/libnvidia-container/gpgkey"
+                      gpgcheck: true
         env:
             LD_LIBRARY_PATH: "/usr/lib64"
         plan:
@@ -48,6 +62,34 @@ nvidia:
                   ln -sf /usr/share/vulkan/icd.d/nvidia_icd.x86_64.json /etc/vulkan/icd.d/nvidia_icd.json || true
                 [ -f /usr/share/vulkan/implicit_layer.d/nvidia_layers.json ] && \
                   ln -sf /usr/share/vulkan/implicit_layer.d/nvidia_layers.json /etc/vulkan/icd.d/nvidia_layers.json || true
+            # THE coverage for the gpgcheck fix, and it reads the one observable that
+            # DISCRIMINATES. Two wrong candidates, both ruled out by experiment:
+            #   - "the signing key is in the rpmdb" does NOT discriminate — the previous
+            #     code imported the key explicitly via `rpm --import` while still
+            #     installing unverified under NVIDIA's shipped gpgcheck=0, so the key was
+            #     present either way.
+            #   - the vendor .repo file does NOT change — `dnf5 config-manager setopt`
+            #     never rewrites it; /etc/yum.repos.d/nvidia-container-toolkit.repo still
+            #     reads gpgcheck=0 in the built image.
+            # setopt persists into /etc/dnf/repos.override.d/99-config_manager.repo, which
+            # overrides the vendor file and DOES survive into the image. The awk pulls just
+            # this repo's section, because that file also carries other repos' setopts.
+            # Revert `gpgcheck: true` above (or the template's `true` arm) and it fails.
+            - check: the nvidia-container-toolkit repo enforces package signature verification, so its packages cannot install unverified
+              id: nvidia-container-toolkit-gpgcheck-enforced
+              # Fedora-scoped, because the thing it asserts is: the `repo:` block that
+              # ships gpgcheck=0 lives under distro.fedora, and dnf5/`/etc/dnf` exist only
+              # there. The Arch arm of this candy installs nvidia-utils from pacman and has
+              # no such repo, so on arch/cachyos this step would assert a file that is
+              # correctly absent. exclude_distro is read by the check runner, which is
+              # exactly the layer this step runs in.
+              exclude_distro:
+                - arch
+                - cachyos
+              exit_status: 0
+              stdout:
+                - contains: "gpgcheck=1"
+              command: awk '/^\[nvidia-container-toolkit\]/{f=1;next} /^\[/{f=0} f' /etc/dnf/repos.override.d/99-config_manager.repo
             - check: the nvidia-container-toolkit package is installed for CDI device generation
               package:
                 package: nvidia-container-toolkit

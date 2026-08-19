@@ -119,9 +119,6 @@ fedora:
                         dnf5 config-manager setopt {{quote (printf "%s.enabled=0" .name)}} && \
                     {{- if .gpgkey}}
                         rpm --import {{.gpgkey}} || true && \
-                    {{- end}}
-                    {{- if eq (default .gpgcheck "true") "false"}}
-                        dnf5 config-manager setopt {{quote (printf "%s.gpgcheck=0" .name)}} && \
                     {{- end}}{{end}}{{end}}
                     {{- range .Copr}}
                         dnf5 copr enable -y {{.}} && \
