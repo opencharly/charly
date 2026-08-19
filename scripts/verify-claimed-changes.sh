@@ -34,15 +34,30 @@
 
 set -uo pipefail
 
-base="origin/main"
-head="HEAD"
+# Positional binding uses a COUNTER, not a comparison against the default value. The first
+# version tested `[ "$base" = "origin/main" ]` to decide "has base been set yet", which is false
+# reasoning the moment someone passes the literal string `origin/main` as the base — the test
+# still reads true, so the SECOND positional overwrites base and `head` silently stays `HEAD`.
+# That is not hypothetical: it is how this script reported CLEAN on a branch a reviewer proved
+# dirty, in the very run its author cited as evidence. A guard against verifying-the-wrong-object
+# that verified the wrong object.
+base=""
+head=""
 repo="."
+npos=0
 while [ $# -gt 0 ]; do
   case "$1" in
     -C) repo="$2"; shift 2 ;;
-    *)  if [ "$base" = "origin/main" ] && [ "${1:-}" != "" ]; then base="$1"; else head="$1"; fi; shift ;;
+    *)  npos=$((npos+1))
+        if [ "$npos" -eq 1 ]; then base="$1"
+        elif [ "$npos" -eq 2 ]; then head="$1"
+        else echo "verify-claimed-changes: unexpected argument '$1'" >&2; exit 2
+        fi
+        shift ;;
   esac
 done
+[ -n "$base" ] || base="origin/main"
+[ -n "$head" ] || head="HEAD"
 g() { git -C "$repo" "$@"; }
 
 if ! g rev-parse --verify -q "$base" >/dev/null; then
@@ -73,7 +88,15 @@ done <<< "$changed"
 # because neither the commit subject ("the two size figures are alternative backends") nor the
 # CHANGELOG ("the `ollama` page") ever wrote the path. Prose is not a reliable index of intent.
 # What IS reliable: the branch touched the file, and the branch's net effect no longer does.
-touched=$(g log --format=%H "$base".."$head" | while read -r c; do
+# --no-merges is load-bearing. `git diff $c^ $c` on a MERGE is the FIRST-PARENT diff, i.e.
+# everything the other parent brought in from the base branch. Those paths sit at their base blobs
+# on both sides, so they are absent from the net diff and every one of them gets reported. A
+# catch-up merge is not optional here — git-workflow REQUIRES it for a behind branch, since a
+# rebase would need the force-push this project forbids — so without this flag the guard fires on
+# every branch that ever caught up, and a check with false positives gets disabled by whoever
+# inherits it. Excluding merges cannot hide a real changed-then-undone: a merge introduces no
+# authored edit, and the commit that does the undoing is an ordinary commit, still walked.
+touched=$(g log --no-merges --format=%H "$base".."$head" | while read -r c; do
   g diff --name-only "$c^" "$c" 2>/dev/null
 done | sort -u)
 while IFS= read -r p; do
