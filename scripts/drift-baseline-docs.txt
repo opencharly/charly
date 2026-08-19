@@ -41,27 +41,39 @@
 # reviewer measured it. Those rows come from the unlanded ec484b4b. It is inherited debt AND carries one
 # line of this cutover's, and it cannot be split until charly#315 lands.
 #
-# THIS BRANCH'S OWN PENDING PROJECTIONS — the four ollama pages below, and why recording them is
-# not the "silence a red" the rule forbids.
+# THIS BRANCH'S OWN PENDING PROJECTIONS — two pages, and why recording them is not the
+# "silence a red" the rule forbids.
 #
-# They project `candy/plugin-ollama` and the two distro `ollama` boxes, which exist on NO landed
-# tree — only on the open charly#309 (this branch), distro-fedora#18 and distro-cachyos#15. So
-# "regenerate and commit" cannot be done in docs today: docs would carry pages describing a CLI
-# and boxes that charly/main does not have. docs#83's validator rejected exactly that splice in
-# its round 1, and the reasoning binds here too.
+#   reference/cli/ollama.md      projects candy/plugin-ollama, which exists on NO landed tree —
+#                                only on this branch (charly#309).
+#   recipes/internals/...        is the docs half of a TWO-HOP chain that reads the plugins tree
+#     libvirt-renderer.md        AT THE PINNED GITLINK. Its source landed in plugins#212
+#                                (cb804e7b), but charly/main still pins plugins at 7c48f573, and
+#                                cb804e7b is NOT an ancestor of it. THIS PR is what bumps that pin.
 #
-# They are therefore blocked on THIS cutover's own merge, not on someone else's, and they
-# liquidate in one step: when #309 and the two submodule PRs land, a docs projection PR carries
-# all four and the gate reds with "no longer stale — delete these lines".
+# So neither can be regenerated-and-landed in docs today: from a clean charly/main the first page
+# does not exist and the second regenerates BACKWARDS, removing the cell. docs#83's validator
+# proved the second by measuring from clean main rather than from a working tree.
 #
-# Direction, measured rather than assumed: regenerating ADDS these pages (the source is ahead),
-# which is the case that normally means REGENERATE. The exception is not the direction but the
-# LANDING ORDER — the source is ahead on an unmerged branch, so the projection has nowhere
-# correct to go yet. charly#336 carries the finding that the gate reports neither.
-src/content/docs/reference/box/cachyos/ollama.md
-src/content/docs/reference/box/cachyos/ollama-rocm.md
-src/content/docs/reference/box/fedora/ollama.md
+# MEASURE THE DIRECTION FROM A CLEAN `main`, NEVER FROM THIS WORKING TREE. That is the rule both
+# corrections above teach, and it is easy to get wrong because the working tree answers instantly
+# and plausibly. "Regenerating adds it" is a property of the page AND the tree; the tree that
+# decides whether a projection can land is the one a clean checkout produces.
+#
+# Direction, measured properly this time — and the correction is the point. From THIS branch both
+# ADD, which is the case that normally means REGENERATE AND LAND. From clean charly/main they do
+# not. The blocker is the LANDING ORDER, not the direction: the sources are ahead on an unmerged
+# branch, so the projections have nowhere correct to go yet. They liquidate in one step when this
+# PR lands and one docs projection PR carries both.
+#
+# THREE BOX PAGES WERE HERE AND ARE NOT ANY MORE, because recording them was a MEASUREMENT ERROR:
+# reference/box/{fedora,cachyos}/ollama*.md were measured while the box submodules sat on their
+# feat branches for a bed run. At the PINNED gitlinks those boxes do not exist, the generator emits
+# no page, and nothing is stale. This file's own header says to measure at the gitlink for exactly
+# this reason; the entries were removed when a re-measure at the pins reported them "no longer
+# stale".
 src/content/docs/reference/cli/ollama.md
+src/content/docs/recipes/internals/libvirt-renderer.md
 #
 # HOW IT LIQUIDATES, and NOT all at once. 62 of the original 63 trace to charly#315: they are
 # pages docs@d9afc66 projected from ec484b4b, so when that lands `main` reproduces them and the
