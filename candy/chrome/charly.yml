@@ -53,6 +53,8 @@ chrome:
                     - cups-libs
                     - iproute
                     - google-chrome-stable
+                option:
+                    - "--setopt=tsflags=noscripts"
                 repo:
                     - name: google-chrome
                       url: "https://dl.google.com/linux/chrome/rpm/stable/x86_64"
