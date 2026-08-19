@@ -41,30 +41,18 @@
 # reviewer measured it. Those rows come from the unlanded ec484b4b. It is inherited debt AND carries one
 # line of this cutover's, and it cannot be split until charly#315 lands.
 #
-# THIS BRANCH'S OWN PENDING PROJECTIONS — two pages, and why recording them is not the
-# "silence a red" the rule forbids.
-#
-#   reference/cli/ollama.md      projects candy/plugin-ollama, which exists on NO landed tree —
-#                                only on this branch (charly#309).
-#   recipes/internals/...        is the docs half of a TWO-HOP chain that reads the plugins tree
-#     libvirt-renderer.md        AT THE PINNED GITLINK. Its source landed in plugins#212
-#                                (cb804e7b), but charly/main still pins plugins at 7c48f573, and
-#                                cb804e7b is NOT an ancestor of it. THIS PR is what bumps that pin.
-#
-# So neither can be regenerated-and-landed in docs today: from a clean charly/main the first page
-# does not exist and the second regenerates BACKWARDS, removing the cell. docs#83's validator
-# proved the second by measuring from clean main rather than from a working tree.
+# THIS BRANCH'S OWN PENDING PROJECTIONS HAVE LIQUIDATED. The two pages recorded below were pending
+# because their sources were unlanded when the baseline was written: reference/cli/ollama.md
+# projected candy/plugin-ollama (charly#309) and recipes/internals/libvirt-renderer.md was the
+# docs half of a two-hop chain reading the plugins tree at a pin this branch advanced (plugins#212).
+# Both sources landed, docs#84 carried the pages, and the docs gitlink advance in this change makes
+# them reproducible from a clean checkout — so the entries are deleted here, the "no longer stale"
+# rule working as designed.
 #
 # MEASURE THE DIRECTION FROM A CLEAN `main`, NEVER FROM THIS WORKING TREE. That is the rule both
 # corrections above teach, and it is easy to get wrong because the working tree answers instantly
 # and plausibly. "Regenerating adds it" is a property of the page AND the tree; the tree that
 # decides whether a projection can land is the one a clean checkout produces.
-#
-# Direction, measured properly this time — and the correction is the point. From THIS branch both
-# ADD, which is the case that normally means REGENERATE AND LAND. From clean charly/main they do
-# not. The blocker is the LANDING ORDER, not the direction: the sources are ahead on an unmerged
-# branch, so the projections have nowhere correct to go yet. They liquidate in one step when this
-# PR lands and one docs projection PR carries both.
 #
 # THREE BOX PAGES WERE HERE AND ARE NOT ANY MORE, because recording them was a MEASUREMENT ERROR:
 # reference/box/{fedora,cachyos}/ollama*.md were measured while the box submodules sat on their
@@ -72,8 +60,6 @@
 # no page, and nothing is stale. This file's own header says to measure at the gitlink for exactly
 # this reason; the entries were removed when a re-measure at the pins reported them "no longer
 # stale".
-src/content/docs/reference/cli/ollama.md
-src/content/docs/recipes/internals/libvirt-renderer.md
 #
 # HOW IT LIQUIDATES, and NOT all at once. 62 of the original 63 trace to charly#315: they are
 # pages docs@d9afc66 projected from ec484b4b, so when that lands `main` reproduces them and the
