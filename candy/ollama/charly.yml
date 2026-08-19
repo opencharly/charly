@@ -229,10 +229,11 @@ ollama-skill:
               else), which means the two behave differently off it: `ollama-cuda` degrades
               into an ASSERTION that the tarball's bundled CUDA is present, while
               `ollama-rocm` has no tarball path at all and its check correctly fails rather
-              than pretending. So an AMD box is an Arch-family box today. Which boxes
-              actually compose them is decided in the distro submodules — `box/cachyos` for
-              both, `box/fedora` for the CUDA assertion only — so consult those rather than
-              this page for the current list.
+              than pretending. A ROCm image is therefore an Arch-family image. Which boxes
+              compose which backend is decided in the distro submodules and changes there,
+              so consult those for the current list rather than this page — and read any
+              such list through the Arch-only rule above, which is the part that does not
+              move.
             - A consumer that composes neither pays for neither ON A PACKAGED DISTRO —
               e.g. `/charly-openclaw:openclaw-desktop` (cachyos base, no GPU candy). On a
               tarball distro it still carries the bundled CUDA backend.
