@@ -2479,7 +2479,6 @@ load-skill:
             The two arguments follow from that: `<target>` names the running deploy, never
             the box, and `<image>` is the artifact being delivered into it.
 
-
             ```yaml
             my-spike-box:
                 candy:
