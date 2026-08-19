@@ -63,6 +63,11 @@ func loadFleetConfig(ctx context.Context) (*deploykit.FleetConfig, error) {
 // pod-scoped detail path (mirrors the former core status command's Collector.Single call);
 // otherwise it runs the full multi-substrate fan-out (collectFlat).
 func runStatusFanout(ctx context.Context, req spec.StatusSubstrateRequest) (spec.StatusSubstrateReply, error) {
+	// ONE resolved-project resolution for the whole fan-out: the kubernetes and android
+	// collectors both need the envelope, and resolving it twice is what pushed the check-pod
+	// bed's status probe past its 2-minute ceiling under a concurrent roster.
+	ctx = withResolvedProjectMemo(ctx)
+
 	rt, err := kit.ResolveRuntime()
 	if err != nil {
 		return spec.StatusSubstrateReply{}, fmt.Errorf("status-fanout: resolve runtime: %w", err)
