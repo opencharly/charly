@@ -41,6 +41,28 @@
 # reviewer measured it. Those rows come from the unlanded ec484b4b. It is inherited debt AND carries one
 # line of this cutover's, and it cannot be split until charly#315 lands.
 #
+# THIS BRANCH'S OWN PENDING PROJECTIONS — the four ollama pages below, and why recording them is
+# not the "silence a red" the rule forbids.
+#
+# They project `candy/plugin-ollama` and the two distro `ollama` boxes, which exist on NO landed
+# tree — only on the open charly#309 (this branch), distro-fedora#18 and distro-cachyos#15. So
+# "regenerate and commit" cannot be done in docs today: docs would carry pages describing a CLI
+# and boxes that charly/main does not have. docs#83's validator rejected exactly that splice in
+# its round 1, and the reasoning binds here too.
+#
+# They are therefore blocked on THIS cutover's own merge, not on someone else's, and they
+# liquidate in one step: when #309 and the two submodule PRs land, a docs projection PR carries
+# all four and the gate reds with "no longer stale — delete these lines".
+#
+# Direction, measured rather than assumed: regenerating ADDS these pages (the source is ahead),
+# which is the case that normally means REGENERATE. The exception is not the direction but the
+# LANDING ORDER — the source is ahead on an unmerged branch, so the projection has nowhere
+# correct to go yet. charly#336 carries the finding that the gate reports neither.
+src/content/docs/reference/box/cachyos/ollama.md
+src/content/docs/reference/box/cachyos/ollama-rocm.md
+src/content/docs/reference/box/fedora/ollama.md
+src/content/docs/reference/cli/ollama.md
+#
 # HOW IT LIQUIDATES, and NOT all at once. 62 of the original 63 trace to charly#315: they are
 # pages docs@d9afc66 projected from ec484b4b, so when that lands `main` reproduces them and the
 # gate reds with "no longer stale — delete these lines". The 63rd did NOT share that trigger:
@@ -56,62 +78,4 @@
 src/content/docs/recipes/build/generate.md
 src/content/docs/recipes/internals/git-workflow/evidence-and-freshness.md
 src/content/docs/recipes/internals/install-plan/step-kinds.md
-src/content/docs/reference/candy/nested-podman-socket.md
-src/content/docs/reference/candy/plugin-box.md
-src/content/docs/reference/cli/add-candy.md
-src/content/docs/reference/cli/agent.md
-src/content/docs/reference/cli/agentteams.md
-src/content/docs/reference/cli/alias.md
-src/content/docs/reference/cli/build.md
-src/content/docs/reference/cli/candy.md
-src/content/docs/reference/cli/cat.md
-src/content/docs/reference/cli/check.md
-src/content/docs/reference/cli/clean.md
-src/content/docs/reference/cli/cmd.md
-src/content/docs/reference/cli/config.md
-src/content/docs/reference/cli/cp.md
-src/content/docs/reference/cli/docs.md
-src/content/docs/reference/cli/doctor.md
-src/content/docs/reference/cli/dsh.md
-src/content/docs/reference/cli/examplecommand.md
-src/content/docs/reference/cli/feature.md
-src/content/docs/reference/cli/fetch.md
-src/content/docs/reference/cli/fleet.md
-src/content/docs/reference/cli/generate-packages.md
-src/content/docs/reference/cli/generate.md
-src/content/docs/reference/cli/inspect.md
-src/content/docs/reference/cli/labels.md
-src/content/docs/reference/cli/list.md
-src/content/docs/reference/cli/load.md
-src/content/docs/reference/cli/logs.md
-src/content/docs/reference/cli/marketplace.md
-src/content/docs/reference/cli/mcp.md
-src/content/docs/reference/cli/merge.md
-src/content/docs/reference/cli/migrate.md
-src/content/docs/reference/cli/new.md
-src/content/docs/reference/cli/preempt.md
-src/content/docs/reference/cli/pull.md
-src/content/docs/reference/cli/reconcile.md
-src/content/docs/reference/cli/refresh.md
-src/content/docs/reference/cli/remove.md
-src/content/docs/reference/cli/restart.md
-src/content/docs/reference/cli/rm-candy.md
-src/content/docs/reference/cli/secrets.md
-src/content/docs/reference/cli/service.md
-src/content/docs/reference/cli/set.md
-src/content/docs/reference/cli/settings.md
-src/content/docs/reference/cli/shell.md
-src/content/docs/reference/cli/ssh.md
-src/content/docs/reference/cli/start.md
-src/content/docs/reference/cli/status.md
-src/content/docs/reference/cli/stop.md
-src/content/docs/reference/cli/tmux.md
-src/content/docs/reference/cli/tui.md
-src/content/docs/reference/cli/udev.md
-src/content/docs/reference/cli/update.md
-src/content/docs/reference/cli/validate.md
-src/content/docs/reference/cli/vm.md
-src/content/docs/reference/cli/volume.md
-src/content/docs/reference/cli/write.md
-src/content/docs/reference/plugin/plugin-box.md
 src/content/docs/reference/providers.md
