@@ -213,13 +213,16 @@ ollama-skill:
             - **Tarball distros** get one archive (1.32 GiB compressed) that already contains
               the CUDA backend, so there is nothing to opt out of. ROCm is the exception in the
               other direction: it is NOT in that archive — upstream publishes it as a separate
-              `ollama-linux-amd64-rocm` download — which is why `ollama-rocm` is Arch-only and
-              says so on its own page.
+              `ollama-linux-amd64-rocm` download, which this candy does not select. That is why
+              `ollama-rocm` is packaged for Arch only — it has no candy page of its own to say so
+              on, since it declares no `skill:` entity, so the constraint is stated here.
 
-            Every size below is INSTALLED. The one figure above is a COMPRESSED DOWNLOAD and is
-            deliberately not compared against them: the tarball's installed size is not stated
-            anywhere here, so weighing 1.32 GiB against the installed numbers would compare two
-            different axes. Read the download figure as what a tarball build FETCHES. The two
+            Every size on this page is INSTALLED except ONE: the 1.32 GiB tarball figure, which
+            is a COMPRESSED DOWNLOAD. (The 66 MiB figures above are installed sizes, so the axis
+            does not split by position on the page — it splits by which figure.) The download is
+            deliberately not compared against the installed numbers: the tarball's installed size
+            is not stated anywhere here, so weighing 1.32 GiB against them would compare two
+            different axes. Read it as what a tarball build FETCHES. The two
             figures in the bullets below are the two ALTERNATIVE BACKENDS, not the cost of a
             packaged build: a packaged image pays the 66 MiB base plus AT MOST ONE of them, and
             pays neither if it composes neither. Both are Arch figures — off Arch `ollama-cuda`
