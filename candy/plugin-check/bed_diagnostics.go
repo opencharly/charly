@@ -139,6 +139,11 @@ type diagnosticAllowance struct {
 	// somewhere succeeded". An entry without it is unconditional, which is the only form the
 	// warning tier uses.
 	//
+	// The %s subject-tie is OPTIONAL. An entry whose subject names no recoverable token — pip's
+	// resolver-conflict notice names no package — omits the placeholder and the recovery pattern
+	// is used as-is: still conditional on the same step log proving the operation recovered,
+	// just not token-tied. allowanceRecovered implements both forms.
+	//
 	// This exists so the error tier can hold an entry WITHOUT weakening into "errors we tolerate".
 	// A conditional error exemption still fails the step when the recovery is absent, which is the
 	// property the unconditional form would have thrown away.
@@ -221,12 +226,41 @@ var diagnosticAllowlist = []diagnosticAllowance{
 			"installs, this entry does not claim the line and the step still fails. That is what " +
 			"keeps an error-tier exemption from becoming a tolerated error.",
 	},
+	{
+		ID:       "pip-resolver-conflict-recovered",
+		Severity: severityError,
+		// pip's dependency resolver prints this notice when the environment ALREADY carries
+		// packages that conflict with the install's requirements, then installs anyway and
+		// exits 0. The message is a fixed sentence, constant across pip versions. The capture
+		// group exists to satisfy TestErrorTierEntriesAreConditional (an error-tier entry must
+		// carry one); the notice names no package, so there is no token to tie — the recovery
+		// is pip's own success line for the SAME install invocation, and a step log is one pip
+		// invocation, so the step boundary is the tie.
+		Match: regexp.MustCompile(`^ERROR: (pip's dependency resolver does not currently take into account all the packages that are installed\. This behaviour is the source of the following dependency conflicts\.)$`),
+		// The recovery is pip's own success line for the same invocation. No %s placeholder:
+		// the notice names no package to tie to, so the pattern is used as-is (see
+		// allowanceRecovered). The step's exit code already confirms the install exited 0, and
+		// this line is the log-side corroboration.
+		RecoveredBy: `(?m)^Successfully installed `,
+		Why: "pip's dependency resolver prints this notice when the environment already " +
+			"carries packages that conflict with the install's requirements, then installs " +
+			"anyway and exits 0 — observed live in the jupyter-ml image-build (vllm's pinned " +
+			"requirements vs the pixi.toml loose pins). It is a description of the " +
+			"environment, not a swallowed failure. CONDITIONAL on the same log proving the " +
+			"install completed (`Successfully installed ...`); if pip never reports success, " +
+			"this entry does not claim the line and the step still fails. That is what keeps " +
+			"an error-tier exemption from becoming a tolerated error.",
+	},
 }
 
 // allowanceRecovered reports whether a claimed line really is exempt. An unconditional entry
 // always is. A conditional one is exempt only when the log carries the entry's RecoveredBy proof
 // for the SUBJECT that failed — Match's first capture group substituted into the pattern — so a
 // retry that never succeeded still fails its step.
+//
+// The %s subject-tie is optional: an entry whose subject names no recoverable token omits the
+// placeholder and the recovery pattern is used as-is. Both forms are still conditional on the
+// same step log proving the operation recovered.
 func allowanceRecovered(a *diagnosticAllowance, text, log string) bool {
 	if a.RecoveredBy == "" {
 		return true
@@ -235,7 +269,11 @@ func allowanceRecovered(a *diagnosticAllowance, text, log string) bool {
 	if len(m) < 2 || m[1] == "" {
 		return false
 	}
-	re, err := regexp.Compile(fmt.Sprintf(a.RecoveredBy, regexp.QuoteMeta(m[1])))
+	pattern := a.RecoveredBy
+	if strings.Contains(pattern, "%s") {
+		pattern = fmt.Sprintf(pattern, regexp.QuoteMeta(m[1]))
+	}
+	re, err := regexp.Compile(pattern)
 	if err != nil {
 		return false
 	}
