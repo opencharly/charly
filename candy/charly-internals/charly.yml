@@ -4052,7 +4052,11 @@ git-workflow-skill:
                      `plugins/` tree, so a local regeneration picks the edit up immediately; every
                      other reader gets it only once the gitlink advances. Advancing that gitlink
                      WITHOUT regenerating `docs` in the same landing is precisely what leaves the
-                     published site stale, and only the drift gate will say so.
+                     published site stale, and only the drift gate will say so. Superproject-facing
+                     drift is EXPECTED while the projection PR is in flight — the superproject
+                     necessarily still pins the old gitlink until the projection merges — so that
+                     redness is not the tagging bar for the projection PR itself: its gate is the
+                     `plugins` tree, and the superproject catches up at step 5.
                   3. **Regenerate and land `docs`** — `task docs:sync`, review the emitted pages,
                      commit them in the `docs` submodule; `task docs:drift` is the gate, re-syncing
                      and failing on any dirty path. Regeneration rewrites the generated trees
@@ -4568,6 +4572,7 @@ git-workflow-skill:
                   | add a test that proves the fix is gated | you gated the value the fix stores, not the behaviour the title claims | "Gate the behaviour the title claims, not the artifact of the fix" |
                   | retry a test that passed once and failed once | a concurrent writer presents as a flaky test, and only a second observation separates them | "One observation never distinguishes the cases — two at one timestamp do" |
                   | fold several branches into one tree | a discrepancy you cannot attribute reads as inherited drift | "Assembling several sources into one tree — measure between applications" |
+                  | write a guard to enforce a claim | the guard reports clean on the exact case it was meant to catch | "A guard that cannot fail is worse than no guard" |
 
                   **The page has two kinds of content, and they are true in different ways.**
 
@@ -4628,9 +4633,11 @@ git-workflow-skill:
                   and proving the isolation empty before trusting the result.
 
                   **And executing it is only half — the other half is PROVENANCE: every measurement
-                  states the tree it was taken on.** This clause exists because the content-scoping rule
-                  two paragraphs up, in the form that shipped without it, did not prevent the next error. A drift figure on this
-                  very cutover was executed, correct, and false: `charly marketplace drift` was run
+                  states the tree it was taken on.** This clause exists because the content-scoping
+                  rule above ("The execution rule is scoped to CONTENT, not to sections"), in the
+                  form that shipped without it, did not prevent the next error. A drift figure on
+                  this very cutover was executed, correct, and false: `charly marketplace drift`
+                  was run
                   with the superproject at `main` but the submodules checked out at their repo TIPS,
                   and the result was reported as a fact about `main` — which pins its submodules at
                   older gitlinks and is clean. Nothing was unexecuted. The measurement simply answered
@@ -5230,6 +5237,17 @@ git-workflow-skill:
                   heads to land and the change itself was correct at head one and never moved — every round was the
                   *evidence narrative* being written faster than it could be verified. The code was never the
                   bottleneck. These two checks cost seconds and catch precisely that class.
+
+                  **And it generalizes past guards — the page-wide detector.** A zero from a broken
+                  query is indistinguishable from a zero that is an answer, and the strongest form of
+                  the detector is: **a before/after check must show a NONZERO BEFORE** — the
+                  before-side is a positive control you are already running, proving the instrument
+                  can find the thing at all. If the before-side is zero, the instrument has never
+                  once proven it matches, and the after-side's zero carries no information
+                  whatsoever. Zero-on-both-sides can also be a true answer to a badly chosen question
+                  (the phrase genuinely was never there), so it does not prove the instrument broke —
+                  it proves the check never DISCRIMINATED, which is sufficient grounds to refuse the
+                  result either way.
 go-skill:
     skill:
         name: go
@@ -5850,7 +5868,7 @@ go-skill:
                   |---|---|
                   | `spec/spec/cue_types_gen.go` (generated) | `VmSpec` (= `Vm`) + `VmSource` discriminated union (cloud_image / bootc) + `VmChecksum` + `VmNetwork` + `VmSSH` + `VmKeyInjection` |
                   | `spec/spec/cue_types_gen.go` (generated) | `VmCloudInit` + `VmCloudInitUser/File/Network/Mirrors` + `VmCharlyInstall` (auto/scp/skip state machine) |
-                  | `sdk/vmshared/libvirt_yaml.go` | `LibvirtDomain` + 30+ sub-types (features, CPU, clock, memory backing, numatune, cputune, devices, seclabel, launch security, resource, sysinfo) — the opencharly YAML-facing shape of the `libvirt:` stanza |
+                  | `sdk/vmshared/libvirt_yaml.go` | stub — the per-device structs moved to `#LibvirtDomain` in `spec/schema/vm.cue` (generated `LibvirtDomain` into `spec/spec/cue_types_gen.go`); the opencharly YAML-facing shape of the `libvirt:` stanza is now CUE, its renderers `candy/plugin-vm/libvirt_yaml_bridge.go` |
                   | `candy/plugin-vm/libvirt_yaml_bridge.go` | `RenderDomainXML`/`BuildLibvirtDomainXML` pure functions (build a `libvirtxml.Domain` tree, marshal to XML) + `buildDomainDevices` device emission (passt backend, portForward attribute order, virtio-gpu default, SMBIOS credentials, `XMLPassthrough` merge) |
                   | `sdk/vmshared/qemu_render.go` | `RenderQemuArgv` for direct-QEMU backend |
                   | `sdk/vmshared/cloud_init_render.go` + `cloud_init_iso.go` | `RenderCloudInit` + `ResolveKeyInjectionChannels` + `composeUsers` (adopt-merge) + `WriteSeedISO` via xorriso/genisoimage/mkisofs |
@@ -6925,10 +6943,10 @@ libvirt-renderer-skill:
 
             | File | Contents | LOC |
             |---|---|---|
-            | `sdk/vmshared/libvirt_yaml.go` | `LibvirtDomain` + 30+ sub-types (features, CPU, clock, memory backing, memtune, numatune, cputune, devices, seclabel, launch security, resource, sysinfo) | ~480 |
-            | `candy/plugin-vm/libvirt_yaml_bridge.go` | `RenderDomainXML`/`BuildLibvirtDomainXML` top-level composition (builds a `libvirtxml.Domain`); `buildDomainDevices` `<devices>` child emitters — channels, graphics, video, rng, memballoon, hostdev, interface (with portForward), filesystem; firmware plumbing (D17); SMBIOS credentials; `XMLPassthrough` merge | ~1850 |
+            | `sdk/vmshared/libvirt_yaml.go` | stub — the per-device structs moved to `#LibvirtDomain` in `spec/schema/vm.cue` (generated into `spec/spec/cue_types_gen.go`); `RenderDomainXML`/`BuildLibvirtDomainXML` moved to `candy/plugin-vm/libvirt_yaml_bridge.go` | ~3 |
+            | `candy/plugin-vm/libvirt_yaml_bridge.go` | `RenderDomainXML`/`BuildLibvirtDomainXML` top-level composition (builds a `libvirtxml.Domain`); `buildDomainDevices` `<devices>` child emitters — channels, graphics, video, rng, memballoon, hostdev, interface (with portForward), filesystem; firmware plumbing (D17); SMBIOS credentials; `XMLPassthrough` merge | ~1800 |
             | `sdk/vmshared/libvirt_helpers.go` | helpers shared by the libvirt YAML bridge + `qemu_render` argv emitter (incl. `VmRuntimeParams`) | ~160 |
-            | `sdk/vmshared/libvirt_yaml_listen.go` | structured `<listen>` support for `LibvirtGraphics` | ~130 |
+            | `sdk/vmshared/libvirt_yaml_listen.go` | structured `<listen>` support for `LibvirtGraphics` | ~24 |
             | `sdk/vmshared/qemu_render.go` | `RenderQemuArgv` for direct-QEMU backend | ~340 |
             | `spec/schema/vm.cue` | `#LibvirtDomain` — the closed CUE schema for the libvirt subtree (enums/ranges/PCI-hex + the `uefi-secure ⇒ smm` cross-rule); registered via `cue_kind_vm.go`. Validation lives here, not in Go | ~720 |
 
@@ -9250,7 +9268,7 @@ vm-spec-skill:
             |---|---|
             | `spec/spec/cue_types_gen.go` (generated; charly-name aliases in `spec/spec/charly_names.go`) | `VmSpec` (= `Vm`), `VmSource`, `VmChecksum`, `VmNetwork`, `VmSSH`, `VmKeyInjection` |
             | `spec/spec/cue_types_gen.go` (generated) | `VmCloudInit`, `VmCloudInitUser`, `VmCloudInitFile`, `VmCloudInitNetwork`, `VmCloudInitMirrors`, `VmCharlyInstall` |
-            | `sdk/vmshared/libvirt_yaml.go` | `LibvirtDomain` + 30+ sub-types (features, CPU, clock, devices, etc.) |
+            | `sdk/vmshared/libvirt_yaml.go` | stub — `LibvirtDomain` is the GENERATED struct in `spec/spec/cue_types_gen.go`, from `#LibvirtDomain` in `spec/schema/vm.cue` (see the CUE row below) |
             | `spec/schema/vm.cue` + `cue_kind_vm.go` | `#Vm` — the closed CUE schema validating `VmSpec` + the `#LibvirtDomain`/`#VmCloudInit` subtrees (registered in the per-kind CUE registry; the Go VM/libvirt validators were deleted) |
 
             ## VmSpec (top-level shape)
@@ -10654,9 +10672,15 @@ pr-validator-agent:
                 docs-only change carrying history also stages one. Absent where required FAILS.
                 **Strict CalVer checks:**
                 - Filename MUST match `^\d{4}\.\d{3}\.\d{4}\.md$` (valid CalVer format)
-                - H1 heading MUST match `# <filename-without-.md> — <title>` (byte-equal CalVer)
+                - H1 heading MUST byte-equal the WHOLE line `# <filename-without-.md> — <title>`
+                  (a reading scoping the byte-equality to the CalVer alone would exempt an H1 with
+                  the right date and no title — the two-reader ambiguity this rule once caused)
                 - The placeholder CalVer MUST NOT already exist as a `CHANGELOG/*.md` or `v*` tag on `main`
-                - `head -1 CHANGELOG/<file>.md` MUST byte-equal `# <CalVer> — <title>`
+                - `git show :CHANGELOG/<file>.md | head -1` MUST byte-equal `# <CalVer> — <title>`
+                  — read the INDEX, what the commit will carry, never the working-tree path: the
+                  path is the one layer that already agrees with you, so a staged rename with an
+                  unstaged edit (the `RM` second character in `git status --short`) would pass it
+                  while the index, commit and merge all hold the old H1
 
                 **These four rules prevent a COLLISION, not a SURVIVAL, and the difference is the
                 whole hazard.** The placeholder is required to be CalVer-shaped and self-consistent,
@@ -11067,8 +11091,10 @@ pr-validator-agent:
                  the FILE but never touches its H1, so skipping this leaves the heading at the
                  placeholder date — a filename↔H1 divergence (a recurring R1 incident). After
                  the rewrite, SELF-VERIFY for EVERY `CHANGELOG/*.md` you staged this phase:
-                 `head -1 CHANGELOG/$VER.md` MUST byte-equal `# $VER — <title>` before you post
-                 the final status (step 4);
+                 `git show :CHANGELOG/$VER.md | head -1` MUST byte-equal `# $VER — <title>` before
+                 you post the final status (step 4) — the INDEX read: `head -1 <path>` returns the
+                 working tree, which is exactly the layer an unstaged edit-after-rename leaves
+                 agreeing with you while the commit still holds the old H1;
                - **AFTER tagging, verify the landed entry's CalVer equals the version you MINTED**
                  — for every `CHANGELOG/*.md` this merge added on `main`, its basename MUST equal
                  `$VER`, the same string as the `v$VER` tag you just pushed. This catches a SKIPPED
