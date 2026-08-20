@@ -25,11 +25,17 @@ jobs:
             echo "No open PR found for head SHA — already merged or not a PR branch"
             exit 0
           fi
-          echo "Merging PR #$PR"
-          gh pr merge "$PR" --squash --delete-branch=false
-          sleep 3
-          VER="v$(date -u +%Y.%j.%H%M)"
-          MS=$(gh api "/repos/${{ github.repository }}/pulls/$PR" --jq '.merge_commit.sha // empty')
+          MERGE_RESPONSE=$(gh api -X PUT "/repos/${{ github.repository }}/pulls/$PR/merge" \
+            -f merge_method="squash" \
+            -f commit_title="${{ github.event.workflow_run.display_title }}" 2>&1)
+          echo "$MERGE_RESPONSE"
+          MS=$(echo "$MERGE_RESPONSE" | jq -r '.sha // empty' 2>/dev/null)
+          if [ -z "$MS" ]; then
+            echo "Merge failed, trying auto-merge queue"
+            gh pr merge "$PR" --squash --auto --delete-branch=false
+            sleep 5
+            MS=$(gh api "/repos/${{ github.repository }}/pulls/$PR" --jq '.merge_commit.sha // empty')
+          fi
           if [ -n "$MS" ]; then
             gh api -X POST "/repos/${{ github.repository }}/git/refs" \
               -f ref="refs/tags/$VER" -f sha="$MS" && echo "Tagged $VER at $MS"
