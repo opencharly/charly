@@ -23,7 +23,7 @@ jobs:
     name: charly/pr-validator
     runs-on: ubuntu-latest
     steps:
-      - uses: opencharly/pi-review-action@v1.0.6
+      - uses: opencharly/pi-review-action@v1.0.7
         id: review
         with:
           provider: ${{ vars.AI_REVIEW_PROVIDER }}
