@@ -1,0 +1,21 @@
+# ORG-WIDE GATE DISPATCHER — inherits the single reusable gate
+# `opencharly/.github/.github/workflows/pr-validator.yml` (workflow_call). One source of
+# truth; this file only triggers it for this repo's pull requests.
+name: charly/pr-validator
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+jobs:
+  pr-validator:
+    name: charly/pr-validator
+    if: github.event.pull_request.head.repo.fork == false
+    uses: opencharly/.github/.github/workflows/pr-validator.yml@v1.0.0
+    with:
+      ai_review_provider: ${{ vars.AI_REVIEW_PROVIDER }}
+      ai_review_model: ${{ vars.AI_REVIEW_MODEL }}
+      ai_review_base_url: ${{ vars.AI_REVIEW_BASE_URL }}
+    secrets: inherit

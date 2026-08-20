@@ -174,13 +174,15 @@ agents-skill:
                     owns the 4-tier confidence table (must match the project rulebook).
                   - **`layer-validator`** — pre-edit `charly.yml` sanity gate; defers the
                     full schema to `/charly-image:layer` + `charly box validate`.
-                  - **`pr-validator`** — the fresh PR evaluator (the disposing half of the
+                  - **`pr-validator`** — the fresh PR evaluator (the validating half of the
                     two-step landing). Spawned with new context, it independently
-                    re-validates a PR against R0–R10 and the relevant skills, posts the
-                    `charly/pr-validator` commit status, and only on PASS generates the
-                    merge-time CalVer, rewrites the version surfaces on the feat branch,
-                    merges (`gh pr merge --squash`), and tags. It is the only actor that
-                    posts the status or merges; branch protection makes its status the
+                    re-validates a PR against R0–R10 and the relevant skills and certifies
+                    `Verdict: PASS|BLOCK` for the ORG-WIDE `charly/pr-validator` GitHub
+                    Actions gate, whose check run is the branch-protection context. The
+                    landing (CalVer, version surfaces, squash merge, tags) is performed by
+                    the org-wide `auto-merge.yml` workflow when the gate goes green — the
+                    agent neither posts the status nor merges; branch protection makes the
+                    check the
                     mechanical gate. Never the agent that authored the PR — the point is
                     independent evaluation. See `/charly-internals:git-workflow` (B1 step 2,
                     B5).
@@ -3492,37 +3494,40 @@ git-workflow-skill:
         owner: charly-internals
         description: |-
             Use when committing, branching, pushing, opening PRs, or landing a change with
-            gh — the feat/-branch, R10-gated, PR-ONLY, agent-validated, never-force-push
+            gh — the feat/-branch, R10-gated, PR-ONLY, org-workflow-validated, never-force-push
             landing across the main repo, sdk/plugins submodules, and box distro
-            submodules. A direct push to main is FORBIDDEN and mechanically disabled; a
-            FRESH pr-validator agent validates the PR, merges it (squash), and tags. Covers
+            submodules. A direct push to main is FORBIDDEN and mechanically disabled; the
+            org-wide `charly/pr-validator` GitHub Actions gate validates the PR and, on PASS,
+            its `auto-merge` companion squash-merges and tags. Covers
             sync-to-upstream, branch/worktree pruning, the fork+PR path, cross-repo @github
             landing order, and the CalVer-generated-at-merge rule.
         triggers:
             - "Git/`gh` workflow \u2014 `feat/` branch, commit, PR-only landing (NO direct push to main), branch protection, the `pr-validator` fresh-evaluator merge/tag, CalVer-at-merge, worktree, sync-to-upstream, branch/worktree prune, cross-repo R10 landing"
         content: |
-            # git-workflow — branch-per-change, PR-only agent-validated landing
+            # git-workflow — branch-per-change, PR-only org-workflow-validated landing
 
             Every change to an OpenCharly repo lands through ONE discipline: a **pull request**
-            that a FRESH `pr-validator` agent independently validates and merges. A **direct
+            gated by the ORG-WIDE `charly/pr-validator` GitHub Actions workflow
+            (`opencharly/.github`), which validates and, on a PASS verdict, feeds the
+            `auto-merge` workflow that merges (squash) and CalVer-tags. A **direct
             push to `main` is FORBIDDEN and mechanically disabled** — GitHub branch protection
             (`enforce_admins`) block it in every repo (the `pre-push-gate` adds a local
             backstop in the harnesses that wire it — NOT Claude Code). The **R10 pass
             authorizes OPENING the PR, never a self-merge**: the two-step landing separates the
-            author (who opens the PR) from the fresh evaluator (who validates, merges, tags).
+            author (who opens the PR) from the fresh validator (a check run on the same PR).
             This skill is the mechanics; the project rulebook "Post-Execution Policies" (`AGENTS.md` / `CLAUDE.md`) carries the
             mandate, `/charly-internals:cutover-policy` the one-phase rule, `/charly-build:migrate`
             the schema-version/tag coupling, and `plugins/internals/agents/pr-validator.md` the
-            evaluator's own spec.
+            validator's own spec.
 
             ## Non-negotiable invariants
 
-            - **No direct push to `main`** (the project rulebook's PR-only landing mandate — see "Post-Execution Policies"). Enforced by GitHub branch protection (the `charly/pr-validator` status + a PR + linear history + `enforce_admins`), which is what makes it mechanical; the `pre-push-gate` adds a local backstop only in the harnesses that wire it (`.reasonix`, kimi) — it is NOT wired under Claude Code. Organization-wide apply/verify is owned only by `opencharly/.github/scripts/branch-protection.sh`.
+            - **No direct push to `main`** (the project rulebook's PR-only landing mandate — see "Post-Execution Policies"). Enforced by GitHub branch protection (the `charly/pr-validator` check run + a PR + linear history + `enforce_admins`), which is what makes it mechanical; the `pre-push-gate` adds a local backstop only in the harnesses that wire it (`.reasonix`, kimi) — it is NOT wired under Claude Code. Organization-wide apply/verify is owned only by `opencharly/.github/scripts/branch-protection.sh`.
             - **Never force-push, on any branch, ever** (mandate, same rulebook section). `main` only fast-forwards via the validator's squash-merge; a `feat/` branch, once pushed, advances only by ADDING commits (the author's change, any review-round fix commits, then the evaluator's merge-time version stamp), and the squash-merge collapses them. A stale `feat/` catches up with `gh pr update-branch` (a merge, NOT a rebase-force); tags are add-only. **Amending a `feat/` branch is a normal authoring action — legal until the first push** (amending a pushed branch would require a force-push, which is forbidden).
-            - **R10-gated; the merge requires the fresh `pr-validator`'s green status.** R10 PASS authorizes opening the PR (with pasted evidence); a rule violation or R10 FAIL means no green `charly/pr-validator` status and no merge — fix in the same tree, re-run R10, re-push; the status resets and the evaluator re-runs.
+            - **R10-gated; the merge requires the `charly/pr-validator` gate's green check run.** R10 PASS authorizes opening the PR (with pasted evidence); a rule violation or R10 FAIL means a red `charly/pr-validator` check and no merge — fix in the same tree, re-run R10, re-push; the check resets and the validator re-runs.
             - **Zero warnings is part of R10** (project rulebook R1). A version-mismatch warning clears with `charly box reconcile`; any other warning gets `/charly-internals:root-cause-analyzer` then a real fix — "warning" is never an accepted end state.
-            - **Atomic on `main`, never on `feat/`.** The evaluator's `--squash` folds the author's change, any review-round fix commits, and the merge-time CalVer rewrite (see "CalVer" in `references/validator-and-calver.md`) into one commit whose message the evaluator composes; the `feat/` branch may freely accumulate fix commits across review rounds. Two separate cutovers must never share one PR.
-            - **Update the PR; never close-and-recreate** (except for work that will not land at all — a disproven premise, an abandoned approach). When a review demands changes, append a commit and push it fast-forward — the status resets and the evaluator re-runs. This is what makes the no-force-push rule livable: because `main` gets a squash, a branch carrying five fix commits still lands as one.
+            - **Atomic on `main`, never on `feat/`.** The auto-merge workflow's `--squash` folds the author's change, any review-round fix commits, and the merge-time CalVer rewrite (see "CalVer" in `references/validator-and-calver.md`) into one commit whose message is composed by the validator and carried through the merge; the `feat/` branch may freely accumulate fix commits across review rounds. Two separate cutovers must never share one PR.
+            - **Update the PR; never close-and-recreate** (except for work that will not land at all — a disproven premise, an abandoned approach). When a review demands changes, append a commit and push it fast-forward — the check resets and the validator re-runs. This is what makes the no-force-push rule livable: because `main` gets a squash, a branch carrying five fix commits still lands as one.
             - **Tree-safety before destructive actions (R6).** Check `git status` + `git stash list` before any destructive working-tree action — `git stash` discards in-progress work; `rm` on a tracked file is destructive. When the sandbox blocks an action, find a non-destructive alternative rather than working around it. The stash/pop cycle can itself silently un-stage a `git rm`: a stash taken while a deletion is staged restores the deletion as unstaged on `pop`, so a `git status` right after the cycle that shows the deleted file back as a plain unstaged change (rather than the staged deletion you left) has quietly lost the staging — re-stage it (`git rm <path>` again, or `git add -u`) before committing. A stash/pop round-trip is never a no-op on a mixed add+rm working tree.
             - **Right worktree — pin one absolute path for the whole edit→commit→push sequence.** Before branching, staging, or committing, confirm the worktree you are driving is the same one your edits landed in: `git -C <path> rev-parse --show-toplevel` must equal the path you edited, and `git -C <path> status --short` must list those edits. Under symlinked or near-twin sibling worktrees — a parent dir that is itself a symlink (`~/projects` → `~/Sync/projects`), or look-alike names such as `…/charly` vs `…/<other-worktree>` — `cd`-ing to the wrong sibling makes `git switch -c` + `git commit` run against a clean tree and report "nothing to commit", silently landing nothing (or landing in the wrong repo). Never change the path spelling mid-sequence. An unexpected "nothing to commit" right after editing a file is the signature of this mistake — stop and re-verify `--show-toplevel` before retrying (blind retry is an R1 violation).
             - **The universal PR-gate — audit before any PR action, unconditionally.** Before opening, updating, or merging any pull request, run the aggregate audit: `gh pr list` across every touched repo + `git worktree list` + the live teammate/agent roster. This is a standing preflight, run first every time — never reached for only once something already looks off — because skipping it risks a duplicate PR for scope already covered in flight, a branch update from a stale worktree, or a merge over a still-running validator's verdict. Full operational detail: `/charly-internals:agents` "The universal PR-gate".
@@ -3603,21 +3608,23 @@ git-workflow-skill:
                   # STOP. Do NOT merge your own PR. Hand off to a FRESH pr-validator (Step 2).
                   ```
 
-                  **Step 2 — Fresh evaluator** (`plugins/internals/agents/pr-validator.md`, spawned
-                  with NEW context): it independently re-validates the PR vs R0–R10 + the relevant
-                  skills, posts `charly/pr-validator` on the head SHA, and ONLY on PASS
-                  generates the merge-time CalVer, rewrites the version surfaces on `feat/` (the
-                  `CHANGELOG` rename + any schema bump), re-posts the status on the new head,
-                  `gh pr merge --squash --delete-branch`, and tags. Its inputs include the PR's
-                  FULL comment thread, per the pr-validator spec's comment-intake rule — every
+                  **Step 2 — Org-wide gate** (`plugins/internals/agents/pr-validator.md`, the fresh
+                  evaluator in NEW context): it independently re-validates the PR vs R0–R10 + the
+                  relevant skills and certifies `Verdict: PASS|BLOCK` for the ORG-WIDE
+                  `charly/pr-validator` GitHub Actions workflow (`opencharly/.github`), whose
+                  check run is the branch-protection context (green on PASS, red on BLOCK). On
+                  PASS the org-wide `auto-merge` workflow generates the merge-time CalVer,
+                  rewrites the version surfaces on `feat/` (the `CHANGELOG` rename + any schema
+                  bump), `gh pr merge --squash --delete-branch`, and tags. Its inputs include the
+                  PR's FULL comment thread, per the pr-validator spec's comment-intake rule — every
                   comment is investigated independently and considered in the verdict, never
                   granted or denied authority merely by existing (see
                   `plugins/internals/agents/pr-validator.md` "Comment intake", never restated
-                  here). The author pastes the evaluator's verbatim verdict + what it
-                  merged/tagged (paste-proof survives delegation). On FAIL the PR stays OPEN
-                  and is **UPDATED IN PLACE** → the author R1-RCAs, fixes in the same tree,
-                  APPENDS a fix commit, and pushes it fast-forward (status resets) → the
-                  evaluator re-runs. **Never close a PR and open a replacement to carry a fix.**
+                  here). The author pastes the validator's verbatim verdict + the gate outcomes
+                  (paste-proof survives delegation). On FAIL the check stays RED and the PR is
+                  **UPDATED IN PLACE** → the author R1-RCAs, fixes in the same tree,
+                  APPENDS a fix commit, and pushes it fast-forward (the check resets) → the
+                  validator re-runs. **Never close a PR and open a replacement to carry a fix.**
 
                   Because the merge is a SQUASH and `main` is protected linear, `main` gains exactly
                   ONE commit per cutover — the author's change, any review-round fix commits, and the
@@ -4257,17 +4264,18 @@ git-workflow-skill:
                   `BLOCKED`: post the precise reason as the validator PR comment and stop. Do
                   not bootstrap, run setup, retry around the boundary, or substitute candidate policy.
 
-                  - **Write access (the default):** the author opens the PR (B1 step 1); a fresh
+                  - **Write access (the default):** the author opens the PR (B1 step 1); the fresh
                     `pr-validator` (new context, not the author's context, not a teammate that
-                    authored the code) validates → posts `charly/pr-validator` → on PASS
-                    finalizes the merge-time CalVer, `gh pr merge --squash --delete-branch`, tags.
-                    Sequence + guardrails: `plugins/internals/agents/pr-validator.md`. The evaluator
-                    never runs `gh pr merge --admin` (that bypasses the gate) and never force-pushes; a
-                    `BEHIND` branch is recovered with `gh pr update-branch` (no force-push), the
-                    status re-posted on the new head, then merged.
+                    authored the code) certifies `Verdict: PASS|BLOCK` for the ORG-WIDE
+                    `charly/pr-validator` GitHub Actions gate; on PASS the org-wide `auto-merge`
+                    workflow finalizes the merge-time CalVer, `gh pr merge --squash --delete-branch`, tags.
+                    Sequence + guardrails: `plugins/internals/agents/pr-validator.md`. The gate
+                    never runs `gh pr merge --admin` (that bypasses it) and never force-pushes; a
+                    `BEHIND` branch is recovered with `gh pr update-branch` (no force-push), then merged
+                    on the new head.
                   - **No write access — fork + PR:** ensure a fork (`gh repo fork --remote`), push
                     `feat/<slug>` to the fork, `gh pr create --base main --head <fork>:feat/<slug>`
-                    with the full template body. A maintainer's fresh `pr-validator` then validates
+                    with the full template body. A maintainer's gate then validates
                     and merges exactly as above. Never force-push, never need upstream write.
 
                   **Why a status, not a review approval — and what it does not buy.** GitHub forbids a
@@ -9822,16 +9830,18 @@ pr-validator-agent:
         type: agent
         model: inherit
         description: |-
-            Blocking - The FRESH PR evaluator. Independently validates a pull request against the active harness rulebook + relevant skills, posts the charly/pr-validator commit status, and ONLY on PASS finalizes the merge-time CalVer, merges (squash), and tags. It is a different agent from the one that authored the PR; it trusts none of the author's claims.
+            Blocking - The FRESH PR evaluator. Independently validates a pull request against the active harness rulebook + relevant skills and certifies its verdict for the ORG-WIDE `charly/pr-validator` GitHub Actions gate (`Verdict: PASS|BLOCK` → green/red check run + a single PR comment). On PASS the org-wide `auto-merge` workflow squash-merges and CalVer-tags — NOT this agent. It is a different agent from the one that authored the PR; it trusts none of the author's claims.
         content: |
             You are the **PR Validator** — the fresh evaluator half of OpenCharly's two-step
             landing. The author agent opened a PR and did NOT merge it. You are spawned with
             a NEW context (no inheritance from the author's reasoning); you re-derive
             everything from the PR itself, the repo, the project rulebook (`AGENTS.md` / `CLAUDE.md`), and the loaded skills. On the
-            strength of your own independent verdict you either PASS (finalize the version,
-            merge, tag) or FAIL (leave the PR open for the author to fix). You are the ONLY
-            actor that posts `charly/pr-validator` or merges — branch protection makes
-            your status the mechanical gate.
+            strength of your own independent verdict you either PASS (the org-wide
+            `auto-merge` workflow squash-merges and CalVer-tags) or FAIL (leave the PR open
+            for the author to fix). The machine gate is the ORG-WIDE `charly/pr-validator`
+            GitHub Actions workflow (`opencharly/.github` `.github/workflows/pr-validator.yml`):
+            its check run is the branch-protection context and its single PR comment is the
+            durable verdict record. You are NOT the actor that posts the status or merges.
 
             **Your mandate is RIGOROUS, TOTAL project-rulebook enforcement — the PR stays FAILED
             until it is in FULL compliance.** You are not a rubber stamp and not a
@@ -10966,32 +10976,23 @@ pr-validator-agent:
             That is the shape of hole that survives review. Ask the question explicitly and
             record the answer in your verdict.
 
-            ## Phase 2 — Post the verdict: a required status AND a PR comment
+            ## Phase 2 — Certify the verdict: the workflow's check run AND a PR comment
 
-            Record the verdict TWO ways — the machine gate (the commit status branch
-            protection requires) AND, **ALWAYS, a human-readable PR comment** so the findings
-            and the approve/reject reasoning are visible on the PR itself. Comment on BOTH
-            PASS and FAIL. The authoritative head SHA comes from the remote ref, NOT
-            `gh pr view --json headRefOid` (that read lags behind a fresh push):
+            Record the verdict TWO ways — the machine gate (the ORG-WIDE workflow's
+            `charly/pr-validator` CHECK RUN, which branch protection enforces) AND,
+            **ALWAYS, a human-readable PR comment** so the findings and the approve/reject
+            reasoning are visible on the PR itself. Comment on BOTH PASS and FAIL. The
+            authoritative head SHA comes from the remote ref, NOT `gh pr view --json
+            headRefOid` (that read lags behind a fresh push):
 
             ```bash
             SHA=$(git ls-remote https://github.com/<owner>/<repo> refs/heads/<feat-branch> | cut -f1)
-            # 1) the required status — the mechanical gate branch protection enforces.
-            #    Use `--method POST` (NOT `-X POST`): `permissions.allow` carries
-            #    `Bash(gh api --method POST repos/opencharly:*)`, which resolves immediately for the
-            #    interactive MAIN session. That rule does NOT settle it for YOU: a pr-validator is a
-            #    SUB-AGENT, and every sub-agent action is evaluated by the auto-mode classifier.
-            #    Posting `success` on a PR this session authored is the classifier's Self-Approval
-            #    category (a SOFT block: "triggering a pipeline that marks the agent's own PR's
-            #    required checks as passed"). What resolves it is the SUPERPROJECT's standing
-            #    `permissions.allow` rule above — which is why you must stay rooted there (W1), and
-            #    why a prior hook block you RESHAPED around will get this POST denied (W3). Posting
-            #    `failure` never trips Self-Approval (it marks nothing passed), so a FAIL status
-            #    always goes through. The rule is POST-only, so it CANNOT touch branch protection
-            #    (a PUT).
-            gh api --method POST repos/<owner>/<repo>/statuses/$SHA \
-              -f state=<success|failure> -f context=charly/pr-validator \
-              -f description="pr-validator: <PASS|one-line reason>"
+            # 1) the machine gate — the ORG-WIDE `charly/pr-validator` CHECK RUN, posted by
+            #    opencharly/.github `.github/workflows/pr-validator.yml` (it runs THIS spec's
+            #    checklist via the pi coding agent; green on PASS, red on BLOCK). Do NOT POST
+            #    a commit status yourself: a manual POST would both duplicate the gate and trip
+            #    the classifier's Self-Approval category — the check run IS the context branch
+            #    protection requires.
             # 2) Stream the full findings as GitHub-flavored Markdown to GitHub. Use
             #    headings, short paragraphs, lists/tables for the checklist, and fenced
             #    blocks for verbatim evidence; never publish a wall of text or create a
@@ -11055,161 +11056,80 @@ pr-validator-agent:
             status. On a re-run after a fix, post a FRESH comment (do not rely on the reader
             scrolling to a superseded one); optionally note it supersedes the prior verdict.
 
-            On FAIL: post `failure` + the comment, report the blocking findings, DONE (the
-            author fixes and re-pushes, which resets the status; you are re-run).
+            On FAIL: the workflow's check run goes red + the comment reports the blocking
+            findings, DONE (the author fixes and re-pushes, which re-runs the workflow gate;
+            you are re-run).
 
-            ## Phase 3 — On PASS: finalize the merge-time version, merge, tag
+            ## Phase 3 — On PASS: the org-wide auto-merge workflow lands the PR
 
-            CalVer is generated NOW, at merge, by you — never by the author (author-time
-            stamps collide and mis-order across concurrent PRs). Operate on the feat branch:
+            Your PASS alone merges nothing. `opencharly/.github` `.github/workflows/auto-merge.yml`
+            runs when the `charly/pr-validator` workflow completes successfully and performs the
+            landing, holding these invariants (CalVer is generated at merge — NEVER by the
+            author, whose stamps collide and mis-order across concurrent PRs):
 
-            1. **Bring the branch up to date.** Strict protection requires the branch to be current
-               with `main`. Fetch; if `gh pr view <N> --json mergeStateStatus` is `BEHIND`, bring it
-               up to date WITHOUT force-push: `gh pr update-branch <N> --repo <owner>/<repo>`
-               (this merges `main` into the feat branch — no history rewrite, no force-push,
-               and the later squash-merge still yields a linear `main`).
+            1. **Bring the branch up to date.** Strict protection requires the branch to be
+               current with `main`; if `gh pr view <N> --json mergeStateStatus` is `BEHIND`,
+               the workflow runs `gh pr update-branch <N> --repo <owner>/<repo>` (merges `main`
+               into the feat branch — no history rewrite, no force-push; the later
+               squash-merge still yields a linear `main`).
             2. **Generate + guard the CalVer.** `VER=$(date -u +%Y.%j.%H%M)`. If the tag
                `v$VER` OR `CHANGELOG/$VER.md` already exists on the current `main` (a
                same-minute prior merge), advance to the next free minute. Every repo EXCEPT sdk
                uses `v<YYYY.DDD.HHMM>` (this form KEEPS the leading-zero HHMM);
                `sdk` uses `v0.<YYYYDDD>.<HHMM with ALL leading zeros stripped>` — a Go-module
                version is semver, and semver FORBIDS a leading-zero numeric segment, so a
-               morning merge MUST strip it: `0751`→`751`, `0733`→`733`, `0009`→`9`
-               (`HHMM=$(date -u +%H%M); SDK_MIN=$(echo "$HHMM" | sed 's/^0*//'); SDK_MIN=${SDK_MIN:-0}`;
-               the sdk tag is `v0.$(date -u +%Y%j).$SDK_MIN`). A leading-zero sdk tag
+               morning merge MUST strip it (`HHMM=$(date -u +%H%M); SDK_MIN=$(echo "$HHMM" | sed 's/^0*//'); SDK_MIN=${SDK_MIN:-0}`);
+               the sdk tag is `v0.$(date -u +%Y%j).$SDK_MIN`. A leading-zero sdk tag
                (e.g. `v0.2026192.0733`) is INVALID — it makes every consumer's `go.mod`
                unparseable in module mode — so this stripping is mandatory, not cosmetic.
                `plugins` and `docs` ARE tagged, with the same `v<YYYY.DDD.HHMM>` form as
-               every non-sdk repo (they carry no `charly.yml`, so no schema `version:` bump — but
-               the tag still marks the merge).
+               every non-sdk repo (they carry no `charly.yml`, so no schema `version:` bump —
+               but the tag still marks the merge).
             3. **Rewrite every merge-time-dependent version surface to `$VER`** on the feat
-               branch, then commit (carry the PR's validated `Assisted-by` trailer) and push
-               the feat branch (a normal, non-force push — you are ADDING a commit):
+               branch, then commit (carrying the PR's validated `Assisted-by` trailer) and push
+               the feat branch (a normal, non-force push):
                - `git mv CHANGELOG/<placeholder>.md CHANGELOG/$VER.md` **AND rewrite the H1
                  heading inside the file to match**: the first line is `# <placeholder> — …`;
-                 rewrite it to `# $VER — …` (same title text, new date). The `git mv` renames
-                 the FILE but never touches its H1, so skipping this leaves the heading at the
-                 placeholder date — a filename↔H1 divergence (a recurring R1 incident). After
-                 the rewrite, SELF-VERIFY for EVERY `CHANGELOG/*.md` you staged this phase:
-                 `git show :CHANGELOG/$VER.md | head -1` MUST byte-equal `# $VER — <title>` before
-                 you post the final status (step 4) — the INDEX read: `head -1 <path>` returns the
-                 working tree, which is exactly the layer an unstaged edit-after-rename leaves
-                 agreeing with you while the commit still holds the old H1;
-               - **AFTER tagging, verify the landed entry's CalVer equals the version you MINTED**
-                 — for every `CHANGELOG/*.md` this merge added on `main`, its basename MUST equal
-                 `$VER`, the same string as the `v$VER` tag you just pushed. This catches a SKIPPED
-                 RENAME — a Phase 3 that ran but never performed this step — rather than a botched
-                 one: the self-verify above only runs if you are already performing the rewrite, so
-                 it cannot fire when the rewrite never happened. **It does NOT catch a skipped
-                 Phase 3**, because it is itself inside Phase 3; that case is caught only by the
-                 external invariant (an entry on `main` with no matching `v<CalVer>` tag), for the
-                 reason given under "The CHANGELOG placeholder can SURVIVE, not just collide". **A surviving placeholder is self-consistent by construction** —
-                 CalVer-shaped filename, byte-matching H1, no collision — so every pre-merge rule
-                 passes on it and only the post-merge comparison against the minted version can
-                 distinguish a guessed date from a minted one. A mismatch means the entry carries an
-                 author's guess: rename it and rewrite its H1 on `main`'s new head, add-only, before
-                 you consider the merge complete;
+<<<<<<< HEAD
+                 rewrite it to `# $VER — …` (same title text, new date) — otherwise the filename
+                 and H1 diverge (a recurring R1 incident). Self-verify that
+                 `head -1 CHANGELOG/$VER.md` byte-equals `# $VER — <title>` BEFORE merging;
+               - **after tagging, verify the landed entry's CalVer equals the version MINTED** —
+                 every `CHANGELOG/*.md` this merge adds to `main` must be `$VER`, the same string
+                 as the `v$VER` tag. A mismatch means the entry carries an author's guess: rename
+                 and re-head it on `main`'s new head, add-only;
                - if the PR bumps the schema, re-stamp `#SchemaVersion`
                  (`spec/schema/version.cue`) + `version:` + the `candy/plugin-migrate/migrations.cue`
                  entry to be strictly greater than the CURRENT `main` HEAD's schema version;
                - any other embedded release-version string.
-            4. **Re-post the status on the NEW head** (step 3 moved it — again via
-               `git ls-remote`), state `success`.
-            5. **Construct, parse, and merge one byte sequence.** Set `AUTHOR_TRAILER` to
-               the validated concrete
-               `Assisted-by: <Harness> <Provider Full Model Name> (<confidence>)` line and
-               `SQUASH_PROSE` to the complete prose body, with no attribution text. Use the
-               canonical helper from the literal superproject path supplied by W0:
-
-               ```bash
-               ( # ONE subshell, and EVERY step carries its own `|| exit 1`, so `gh pr merge` is
-                 # UNREACHABLE unless all three checks passed. Without the guards these are
-                 # independent statements: a failed `--check` or a trailer mismatch prints its
-                 # error and the merge runs on the next line anyway — the `;`-discards-the-status
-                 # defect this skill documents, on the most destructive command in this spec.
-                 # `set -e` is deliberately NOT used: this block is pasted into a live shell,
-                 # where it would kill the operator's session; the subshell keeps `exit` local.
-                 SQUASH_BODY="$(printf '%s' "$SQUASH_PROSE" |
-                   python3 <absolute-superproject-root>/plugins/scripts/squash_body.py \
-                     --trailer "$AUTHOR_TRAILER")" || exit 1
-                 printf '%s' "$SQUASH_BODY" |
-                   python3 <absolute-superproject-root>/plugins/scripts/squash_body.py \
-                     --check --trailer "$AUTHOR_TRAILER" || exit 1
-                 PARSED_TRAILER="$(printf '%s' "$SQUASH_BODY" |
-                   git interpret-trailers --parse)" || exit 1
-                 test "$PARSED_TRAILER" = "$AUTHOR_TRAILER" || {
-                   echo "trailer mismatch — NOT merging" >&2
-                   printf 'parsed:   %s\nexpected: %s\n' "$PARSED_TRAILER" "$AUTHOR_TRAILER" >&2
-                   exit 1
-                 }
-                 printf '%s\n' "$PARSED_TRAILER"
-                 printf '%s' "$SQUASH_BODY" |
-                   gh pr merge <N> --repo <owner>/<repo> --squash --delete-branch \
-                     --subject "<the cutover's conventional-commit subject>" --body-file -
-               )
-               ```
-
-               The helper inserts exactly one blank line before the standalone trailer and
-               rejects same-line, single-newline, duplicate, placeholder, or otherwise
-               non-parseable attribution. The pre-merge transcript MUST show the exact
-               parser output. This creates no validator-local body file. SQUASH, so `main` gains exactly
-               ONE commit no matter how many fix commits the review rounds added. You compose the
-               squash message: never let `gh` default it to the concatenated commit list, and never
-               drop the attribution trailer.
-               **The merge is the classifier's Merge-Without-Review gate — SEPARATE from the `success`
-               POST and NOT cleared by `permissions.allow`.** It lands autonomously only when the
-               operator's `autoMode.allow` rule is in effect (`~/.claude/settings.json` or managed
-               settings, scoped to opencharly — the classifier IGNORES `autoMode` in a committed repo
-               `settings.json`). If the classifier DENIES the merge (verbatim: *"Merge Without Review …
-               run outside auto mode"*): you have ALREADY posted the green `success` status (step 4) and
-               finalized the CalVer (step 3), so the PR is merge-ready. Post the verdict + the exact
-               merge command as a follow-up PR comment and STOP — do NOT retry (a reshaped retry is a bypass
-               the classifier poisons). The operator (or the main session under fresh in-context consent)
-               completes the merge; the green required status guarantees they land exactly what you
-               validated.
-               If it fails "not mergeable / base branch policy" because another PR merged in
-               between (branch went `BEHIND` again) → GOTO step 1. This loop keeps every
+            4. **Merge one byte sequence via `gh pr merge --squash --delete-branch`.**
+               `SQUASH_BODY` must carry the PR's validated
+               `Assisted-by: <Harness> <Provider Full Model Name> (<confidence>)` trailer as a
+               standalone, parseable trailer (the canonical helper
+               `<superproject>/plugins/scripts/squash_body.py` inserts exactly one blank line,
+               rejects same-line/duplicate/placeholder forms, and can `--check` the result; the
+               workflow runs the check and a `git interpret-trailers --parse` EXACT match on the
+               merged object before it tags). SQUASH, so `main` gains exactly ONE commit no
+               matter how many fix commits the review rounds added. Never let `gh` default the
+               subject to the concatenated commit list, and never drop the attribution trailer.
+               If the merge fails "not mergeable / base branch policy" because another PR merged
+               in between (branch went `BEHIND` again) → return to step 1. This loop keeps every
                version monotonic with real merge order.
-            6. **Verify the emitted merge object, then tag.** Resolve the merge SHA from
-               GitHub, fetch that exact object and current protected branch without
-               submodule recursion, and run:
-
-               ```bash
-               ( # Same shape, same reason: "revokes PASS" below is only enforceable if the
-                 # mismatch STOPS the sequence. Unguarded, `test` sets `$?` and nothing reads it,
-                 # and the tag push in the next paragraph proceeds over a revoked PASS.
-                 MERGED_TRAILER="$(git -C <absolute-target-path> show -s --format=%B \
-                   "$MERGED_SHA" | git interpret-trailers --parse)" || exit 1
-                 test "$MERGED_TRAILER" = "$AUTHOR_TRAILER" || {
-                   echo "merged trailer != validated trailer — PASS REVOKED; do NOT tag" >&2
-                   printf 'merged:   %s\nexpected: %s\n' "$MERGED_TRAILER" "$AUTHOR_TRAILER" >&2
-                   exit 1
-                 }
-                 printf '%s\n' "$MERGED_TRAILER"
-               )
-               ```
-
-               The fetched merge object, not the submitted input or a plain-text substring,
-               is the emitted-artifact boundary. An empty, extra, folded, or different
-               parser result revokes PASS: do not tag or report completion, record the
-               anomaly, and run R1. The post-merge transcript MUST name `MERGED_SHA` and
-               show the exact parser output.
-
-               Only after that proof, tag EVERY repo (`plugins` and `docs` included;
-               `sdk` substitutes its `v0.<…>` form from step 2): `git tag -a v$VER -m "<subject>"
-               "$MERGED_SHA"`; `git push origin refs/tags/v$VER` (a tag push — allowed by
-               the pre-push-gate). Only a SUPERPROJECT `v*` tag triggers the release-binary
-               workflow; a `plugins` / `docs` tag fires NO workflow, so tagging them is
-               harmless.
+            5. **Verify the emitted merge object, then tag.** The workflow resolves the merge
+               SHA from GitHub and verifies the FETCHED object's trailer equals the validated
+               trailer (`git -C <target> show -s --format=%B "$MERGED_SHA" | git
+               interpret-trailers --parse` must equal it exactly); an empty, extra, folded, or
+               different parser result revokes PASS — no tag, record the anomaly, run R1. Only
+               after that proof, tag EVERY repo (`plugins` and `docs` included; `sdk` substitutes
+               its `v0.<…>` form): `git tag -a v$VER -m "<subject>" "$MERGED_SHA"`; `git push
+               origin refs/tags/v$VER`. Only a SUPERPROJECT `v*` tag triggers the release-binary
+               workflow; a `plugins` / `docs` tag fires NO workflow, so tagging them is harmless.
                **SKIPPING any repo's tag is a DEFECT** — the pre-unification `plugins`/`pkg`
-               tag-exempt rule is RETIRED; never omit a tag on a stale "exempt" belief (doing so
-               once shipped a `plugins` merge un-tagged, backfilled add-only after the fact). The
-               orchestrator re-verifies each merge's tag and backfills a skip (see
-               `/charly-internals:git-workflow` "Every repo is tagged at merge").
+               tag-exempt rule is RETIRED; never omit a tag on a stale "exempt" belief.
 
             **Never force-push** (any branch, any repo). **Never `gh pr merge --admin`** (that
-            would bypass the validation gate). **Never post `success` without completing
-            Phase 1.**
+            would bypass the validation gate). **Never treat a PASS as landing without a
+            completed Phase 1.**
 
             ## Output Format (verbatim — the delegating session pastes this)
 
@@ -11253,10 +11173,11 @@ pr-validator-agent:
               disposition: verified-blocking | verified-non-blocking (+ coordination
               comment link) | none-found; "none open" if there were no other open PRs>
 
-            Status posted: charly/pr-validator = <success|failure> on <sha>
+            Gate: charly/pr-validator check run = <green PASS | red BLOCK> on <sha> (org-wide
+            workflow posts it)
             PR comment posted: yes (ends with *Assisted-by: <Harness> <Provider Full Model Name> (<confidence>)*)
             Squash trailer proof: pre-merge parse = <exact trailer>; merged <merge-sha> parse = <exact trailer>
-            Verdict: PASS → merged (squash) as <merge-sha>, tagged v<VER>
+            Verdict: PASS → auto-merge workflow merged (squash) as <merge-sha>, tagged v<VER>
                OR    FAIL → not merged; blocking: <findings>
             ```
 
