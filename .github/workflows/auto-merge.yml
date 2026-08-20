@@ -1,77 +1,193 @@
 name: auto-merge
+
 on:
   workflow_run:
     workflows: ["charly/pr-validator"]
     types: [completed]
+
 permissions:
   pull-requests: write
   contents: write
+
 jobs:
   auto-merge:
     if: >
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
+      # `gh pr merge` resolves the repository through a local git repo and runs
+      # `git status` against it; the workflow_run trigger checks out nothing, so
+      # without this every merge died with
+      #   failed to run git: fatal: not a git repository
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
       - name: Check all statuses and merge
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -e
+          set -euo pipefail
 
-          PR=$(gh api "/repos/${{ github.repository }}/commits/${{ github.event.workflow_run.head_sha }}/pulls" \
+          REPO="${{ github.repository }}"
+          HEAD_SHA="${{ github.event.workflow_run.head_sha }}"
+          STAMP=""
+
+          # ---- Locate the PR for this head SHA ----
+          PR=$(gh api "/repos/$REPO/commits/$HEAD_SHA/pulls" \
             --jq '.[0].number // empty')
           if [ -z "$PR" ]; then
-            echo "No open PR found for head SHA"
+            echo "No open PR found for head SHA $HEAD_SHA"
             exit 0
           fi
+          echo "PR #$PR (head $HEAD_SHA)"
 
-          STATE=$(gh api "/repos/${{ github.repository }}/pulls/$PR" --jq '.state')
+          # ---- Already merged/closed: tag idempotently and stop ----
+          STATE=$(gh api "/repos/$REPO/pulls/$PR" --jq '.state')
           if [ "$STATE" = "closed" ]; then
-            echo "PR #$PR is already closed — tagging if needed"
-            MS=$(gh api "/repos/${{ github.repository }}/pulls/$PR" --jq '.merge_commit.sha // empty')
+            MS=$(gh api "/repos/$REPO/pulls/$PR" --jq '.merge_commit.sha // empty')
             if [ -n "$MS" ]; then
-              VER="v$(TZ=UTC0 git log -1 --date='format-local:%Y.%j.%H%M' --format='%cd' "$MS" 2>/dev/null)"
-              TAG_EXISTS=$(gh api "/repos/${{ github.repository }}/git/refs/tags/$VER" -q '.ref' 2>/dev/null || echo "")
-              if [ -z "$TAG_EXISTS" ]; then
-                gh api -X POST "/repos/${{ github.repository }}/git/refs" \
-                  -f ref="refs/tags/$VER" -f sha="$MS" && echo "Tagged $VER"
+              VER="v$(date -u -d "$(gh api "/repos/$REPO/commits/$MS" \
+                --jq '.commit.committer.date')" +%Y.%j.%H%M)"
+              if [ -z "$(gh api "/repos/$REPO/git/refs/tags/$VER" -q '.ref' 2>/dev/null || true)" ]; then
+                gh api -X POST "/repos/$REPO/git/refs" \
+                  -f ref="refs/tags/$VER" -f sha="$MS" >/dev/null && echo "Tagged $VER"
+              else
+                echo "Tag $VER already exists"
               fi
             fi
+            echo "PR #$PR already closed"
             exit 0
           fi
 
-          # Check ALL status checks — not just the validator
-          HEAD=$(gh api "/repos/${{ github.repository }}/pulls/$PR" --jq '.head.sha')
-          ALL_GREEN=true
-          FAILED_CHECKS=""
-          while IFS=$'\t' read -r name conclusion; do
-            if [ "$conclusion" != "success" ] && [ "$conclusion" != "skipped" ] && [ "$conclusion" != "neutral" ]; then
-              ALL_GREEN=false
-              FAILED_CHECKS="$FAILED_CHECKS\n  - $name: $conclusion"
-            fi
-          done < <(gh api "/repos/${{ github.repository }}/commits/$HEAD/check-runs" --jq '.check_runs[] | [.name, .conclusion // "null"] | @tsv')
+          BASE_REF=$(gh api "/repos/$REPO/pulls/$PR" --jq '.base.ref')
+          HEAD=$(gh api "/repos/$REPO/pulls/$PR" --jq '.head.sha')
 
-          if [ "$ALL_GREEN" != "true" ]; then
-            echo "Not all checks pass:"
-            printf "$FAILED_CHECKS"
-            exit 1
+          # ---- Wait until EVERY status check has settled ----
+          wait_all_settled() {
+            local head="$1" label="$2" i pending total
+            for i in $(seq 1 180); do
+              pending=$(gh api "/repos/$REPO/commits/$head/check-runs" \
+                --jq '[.check_runs[] | select(.status != "completed")] | length')
+              total=$(( pending + $(gh api "/repos/$REPO/commits/$head/status" \
+                --jq 'if .state == "pending" then ([.statuses[] | select(.state == "pending")] | length) else 0 end') ))
+              if [ "$total" = "0" ]; then
+                echo "$label: all status checks have completed"
+                return 0
+              fi
+              echo "$label: $total check(s) still pending (attempt $i/180)"
+              sleep 5
+            done
+            echo "Timed out waiting for status checks to complete"
+            return 1
+          }
+
+          # ---- Verify every check concluded green (success/skipped/neutral) ----
+          verify_all_green() {
+            local head=$1 name conclusion state all_green=true failed=""
+            while IFS=$'\t' read -r name conclusion; do
+              case "$conclusion" in
+                success|skipped|neutral) ;;
+                *) all_green=false; failed="${failed} $name: ${conclusion};" ;;
+              esac
+            done < <(gh api "/repos/$REPO/commits/$head/check-runs" \
+              --jq '.check_runs[] | [.name, (.conclusion // "null")] | @tsv')
+            state=$(gh api "/repos/$REPO/commits/$head/status" --jq '.state')
+            if [ "$state" = "failure" ]; then
+              all_green=false
+              failed="${failed} commit-status contexts (state=${state});"
+            fi
+            if [ "$all_green" != "true" ]; then
+              echo "Not all checks pass:"
+              printf '%s\n' "$failed"
+              return 1
+            fi
+            echo "All status checks green on $head"
+          }
+
+          wait_all_settled "$HEAD" "initial" || exit 1
+          verify_all_green "$HEAD" || exit 1
+
+          # ---- Rulebook merge-time CHANGELOG finalization (best-effort) ----
+          # The author writes a placeholder CHANGELOG/<calver>.md; the merge
+          # contract finalizes it to the merge-time CalVer (git mv + H1 rewrite)
+          # so the changelog filename/H1 and the release tag agree. Same-repo
+          # PRs only (a fork head cannot be pushed by this token). Any failure
+          # falls back to a plain merge + merge-commit-date tag.
+          head_repo=$(gh api "/repos/$REPO/pulls/$PR" --jq '.head.repo.full_name')
+          head_branch=$(gh api "/repos/$REPO/pulls/$PR" --jq '.head.ref')
+          if [ "$head_repo" = "$REPO" ]; then
+            if git fetch -q origin "+refs/heads/$BASE_REF:refs/remotes/origin/$BASE_REF" \
+                 "+refs/heads/$head_branch:refs/remotes/origin/$head_branch"; then
+              placeholder=$(git diff --name-status "origin/$BASE_REF...origin/$head_branch" -- CHANGELOG/ \
+                | awk '{print $NF}' \
+                | grep -E '^CHANGELOG/[0-9]{4}\.[0-9]{3}\.[0-9]{4}\.md$' | head -1 || true)
+              if [ -n "$placeholder" ]; then
+                stamp=$(date -u +%Y.%j.%H%M)
+                if [ "$(basename "$placeholder" .md)" = "$stamp" ]; then
+                  echo "CHANGELOG placeholder already at the merge stamp $stamp"
+                else
+                  echo "Finalizing $placeholder -> CHANGELOG/$stamp.md"
+                  if git checkout -q -B dev/auto-merge "origin/$head_branch" \
+                     && git mv "$placeholder" "CHANGELOG/$stamp.md" \
+                     && sed -i "1s/^# [0-9]\{4\}\.[0-9]\{3\}\.[0-9]\{4\}/# $stamp/" "CHANGELOG/$stamp.md" \
+                     && git add "CHANGELOG/$stamp.md"; then
+                    # `git add <new>` stages the whole rename (deletion of the
+                    # placeholder + the sed edit); committing with a pathspec
+                    # would drop the deletion side and leave the old file behind.
+                    if git -c user.name='opencharly auto-merge' \
+                       -c user.email='actions@github.com' \
+                       commit -q -m "docs: finalize CHANGELOG placeholder to $stamp (merge-time CalVer)" \
+                       && out=$(git push -q origin "HEAD:$head_branch" 2>&1); then
+                      HEAD=$(git rev-parse HEAD)
+                      STAMP="$stamp"
+                      echo "CHANGELOG finalized; new head $HEAD — waiting for re-validation"
+                      wait_all_settled "$HEAD" "revalidation" || exit 1
+                      verify_all_green "$HEAD" || exit 1
+                    else
+                      echo "CHANGELOG finalize push failed — falling back to a plain merge"
+                    fi
+                  else
+                    echo "CHANGELOG finalize edit failed — falling back to a plain merge"
+                  fi
+                fi
+              else
+                echo "No CHANGELOG placeholder in the PR diff — skipping finalization"
+              fi
+            else
+              echo "Could not fetch PR head — skipping finalization"
+            fi
+          else
+            echo "Fork PR (head repo $head_repo) — skipping CHANGELOG finalization"
           fi
 
-          echo "All checks green — enabling auto-merge for PR #$PR"
-          gh pr merge "$PR" --squash --auto --delete-branch=false
+          # ---- Merge: enable GitHub auto-merge (atomic re-check of branch
+          #      protection) and wait for it to land ----
+          echo "All status checks green — merging PR #$PR (squash)"
+          if ! gh pr merge "$PR" --squash --auto --delete-branch=false; then
+            echo "Auto-merge enable failed — trying a direct squash merge"
+            gh pr merge "$PR" --squash --delete-branch=false
+          fi
 
-          # Wait for the merge to complete
-          echo "Waiting for merge to complete..."
           for i in $(seq 1 120); do
             sleep 5
-            STATE=$(gh api "/repos/${{ github.repository }}/pulls/$PR" --jq '.state')
-            MS=$(gh api "/repos/${{ github.repository }}/pulls/$PR" --jq '.merge_commit.sha // empty')
+            STATE=$(gh api "/repos/$REPO/pulls/$PR" --jq '.state')
+            MS=$(gh api "/repos/$REPO/pulls/$PR" --jq '.merge_commit.sha // empty')
             if [ "$STATE" = "closed" ] && [ -n "$MS" ]; then
-              TAG_VER="v$(TZ=UTC0 git log -1 --date='format-local:%Y.%j.%H%M' --format='%cd' "$MS" 2>/dev/null)"
-              echo "Merged at $MS — tagging $TAG_VER"
-              gh api -X POST "/repos/${{ github.repository }}/git/refs" \
-                -f ref="refs/tags/$TAG_VER" -f sha="$MS" && echo "Tagged $TAG_VER"
+              if [ -z "$STAMP" ]; then
+                STAMP=$(date -u -d "$(gh api "/repos/$REPO/commits/$MS" \
+                  --jq '.commit.committer.date')" +%Y.%j.%H%M)
+              fi
+              VER="v$STAMP"
+              echo "Merged at $MS — tagging $VER"
+              if [ -z "$(gh api "/repos/$REPO/git/refs/tags/$VER" -q '.ref' 2>/dev/null || true)" ]; then
+                gh api -X POST "/repos/$REPO/git/refs" \
+                  -f ref="refs/tags/$VER" -f sha="$MS" >/dev/null && echo "Tagged $VER"
+              else
+                echo "Tag $VER already exists"
+              fi
               exit 0
             fi
           done
