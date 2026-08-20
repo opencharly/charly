@@ -40,11 +40,11 @@
  * call is cheap and matches the doctrine exactly.
  */
 
-import type { ExtensionAPI, BuildSystemPromptOptions } from "@earendil-works/pi-coding-agent";
-import { writeFile, unlink, access, readFile, mkdir } from "node:fs/promises";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { writeFile, unlink, access, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, dirname } from "node:path";
+import { join } from "node:path";
 import { Type } from "typebox";
 
 /** Gate scripts, relative to the project root (ctx.cwd). */
