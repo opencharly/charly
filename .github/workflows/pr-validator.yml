@@ -20,6 +20,7 @@ permissions:
 
 jobs:
   pr-validator:
+    name: charly/pr-validator
     runs-on: ubuntu-latest
     steps:
       - uses: opencharly/pi-review-action@v1.0.3
