@@ -393,6 +393,13 @@ excuses a policy failure: any rule violation forbids commit.
 The named skills own the full technical rules. Do not expand this index into a
 second copy of them.
 
+- **Validator verdict discipline: EVERY validator BLOCK must be read in full and ALL
+  listed issues fixed before the next push.** The validator is the mechanical gate. A
+  partial fix that addresses only one of several findings is a defective cycle: the
+  author must read the entire verdict, fix every named finding, and only then push a
+  new commit. Skipping, deferring, or "noted for later" a finding is a rule violation.
+  The auto-merge workflow will not merge a PR whose check is red.
+
 ## Where things are documented
 
 - `VISION.md`: thesis and direction.
