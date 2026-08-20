@@ -69,6 +69,27 @@ jobs:
             fi
           }
 
+          # ---- Tag version from the merge stamp. EXCEPTION: the sdk contract repo
+          #      tags under its Go-module scheme v0.<YYYYDDD>.<HHMM with all leading
+          #      zeros stripped> — the plain v<YYYY.DDD.HHMM> is not a valid Go module
+          #      version (semver forbids a leading-zero segment, and a major >= 2 would
+          #      force a /vN module-path suffix that breaks every import). Mandatory,
+          #      not an exemption.
+          tag_ver() {
+            local stamp="$1" ddd rest doy hhmm
+            if [ "$REPO" = "opencharly/sdk" ]; then
+              ddd=${stamp%%.*}
+              rest=${stamp#*.}
+              doy=${rest%%.*}
+              hhmm=${rest#*.}
+              hhmm=${hhmm#0}; hhmm=${hhmm#0}; hhmm=${hhmm#0}; hhmm=${hhmm#0}
+              [ -z "$hhmm" ] && hhmm=0
+              printf 'v0.%s%s.%s' "$ddd" "$doy" "$hhmm"
+            else
+              printf 'v%s' "$stamp"
+            fi
+          }
+
           # ---- Locate the PR for this head SHA ----
           PR=$(gh api "/repos/$REPO/commits/$HEAD_SHA/pulls" \
             --jq '.[0].number // empty')
@@ -83,8 +104,8 @@ jobs:
           if [ "$STATE" = "closed" ]; then
             MS=$(gh api "/repos/$REPO/pulls/$PR" --jq '.merge_commit_sha // empty')
             if [ -n "$MS" ]; then
-              VER="v$(date -u -d "$(gh api "/repos/$REPO/commits/$MS" \
-                --jq '.commit.committer.date')" +%Y.%j.%H%M)"
+              VER="$(tag_ver "$(date -u -d "$(gh api "/repos/$REPO/commits/$MS" \
+                --jq '.commit.committer.date')" +%Y.%j.%H%M)")"
               ensure_tag "$VER" "$MS"
             fi
             echo "PR #$PR already closed"
@@ -228,7 +249,7 @@ jobs:
                 | grep -E '^CHANGELOG/[0-9]{4}\.[0-9]{3}\.[0-9]{4}\.md$' | head -1 || true)
               if [ -n "$placeholder" ]; then
                 if git show "origin/$head_branch:$placeholder" 2>/dev/null >/tmp/am-placeholder-check \
-                   && grep -q 'auto-merge-finalized' /tmp/am-placeholder-check; then
+                   && grep -q "auto-merge-finalized: $(basename "$placeholder" .md)" /tmp/am-placeholder-check; then
                   echo "CHANGELOG already finalized — skipping finalization"
                   STAMP=$(basename "$placeholder" .md)
                 else
@@ -321,7 +342,7 @@ jobs:
                 STAMP=$(date -u -d "$(gh api "/repos/$REPO/commits/$MS" \
                   --jq '.commit.committer.date')" +%Y.%j.%H%M)
               fi
-              VER="v$STAMP"
+              VER="$(tag_ver "$STAMP")"
               echo "Merged at $MS — tagging $VER"
               ensure_tag "$VER" "$MS"
               exit 0
