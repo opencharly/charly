@@ -13,7 +13,7 @@ jobs:
   pr-validator:
     name: charly/pr-validator
     if: github.event.pull_request.head.repo.fork == false
-    uses: opencharly/.github/.github/workflows/pr-validator.yml@main
+    uses: opencharly/.github/.github/workflows/pr-validator.yml@v1.0.0
     with:
       ai_review_provider: ${{ vars.AI_REVIEW_PROVIDER }}
       ai_review_model: ${{ vars.AI_REVIEW_MODEL }}
