@@ -1,52 +1,30 @@
-# PR validator — AI-powered review gate for the opencharly org.
-#
-# Runs the org-wide `opencharly/pi-review-action` as a fresh, independent
-# validator on every pull request. Posts a single PR comment and sets the
-# `charly/pr-validator` check from the deterministic `Verdict: PASS|BLOCK`.
-#
-# Fully generic — nothing is hardcoded. Provider, model, and endpoint come
-# from org-level variables; the API key comes from the org-level secret.
+# ORG-WIDE PR-VALIDATOR DISPATCHER — installed in every opencharly repo.
 name: charly/pr-validator
 
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
+    inputs:
+      pr-number:
+        required: true
+        type: string
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
-  issues: write
+  actions: write
 
 jobs:
-  pr-validator:
-    name: charly/pr-validator
-    runs-on: ubuntu-latest
-    steps:
-      - uses: opencharly/pi-review-action@v1.0.7
-        id: review
-        with:
-          provider: ${{ vars.AI_REVIEW_PROVIDER }}
-          model: ${{ vars.AI_REVIEW_MODEL }}
-          base_url: ${{ vars.AI_REVIEW_BASE_URL }}
-          api_key: ${{ secrets.AI_REVIEW_API_KEY }}
-          max_turns: 20
-
-      - name: Gate verdict
-        if: always()
-        env:
-          REVIEW: ${{ steps.review.outputs.response }}
-        run: |
-          if [ "${{ steps.review.outputs.success }}" != "true" ]; then
-            echo "::error::Validator run failed (infra/model error)"
-            exit 2
-          fi
-          found=$(printf '%s\n' "$REVIEW" | grep -E '^Verdict: (BLOCK|PASS)[[:space:]]*$')
-          n=$(printf '%s\n' "$found" | grep -cE '^Verdict:')
-          [ "$n" -eq 0 ] && { echo "::error::No verdict in response"; exit 2; }
-          distinct=$(printf '%s\n' "$found" | sed -E 's/^Verdict: (BLOCK|PASS).*/\1/' | sort -u)
-          case "$distinct" in
-            BLOCK) echo "::error::AI review blocked this PR"; exit 1 ;;
-            PASS) echo "AI review passed"; exit 0 ;;
-            *) echo "::error::Ambiguous verdicts"; exit 2 ;;
-          esac
+  validate:
+    name: validate
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.pull_request.head.repo.fork == false
+    uses: opencharly/.github/.github/workflows/pr-validator.yml@main
+    with:
+      pr-number: ${{ inputs.pr-number || github.event.pull_request.number }}
+      ai_review_provider: ${{ vars.AI_REVIEW_PROVIDER }}
+      ai_review_model: ${{ vars.AI_REVIEW_MODEL }}
+      ai_review_base_url: ${{ vars.AI_REVIEW_BASE_URL }}
+    secrets: inherit
