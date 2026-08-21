@@ -4,6 +4,9 @@ name: auto-merge
 on:
   check_run:
     types: [completed]
+  workflow_run:
+    workflows: ["charly/pr-validator"]
+    types: [completed]
 
 permissions:
   contents: write
@@ -12,8 +15,10 @@ permissions:
 
 jobs:
   engine:
-    if: github.event.check_run.check_suite.head_branch != github.event.repository.default_branch
+    if: >
+      (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch != github.event.repository.default_branch) ||
+      (github.event_name == 'check_run' && github.event.check_run.check_suite.head_branch != github.event.repository.default_branch)
     uses: opencharly/.github/.github/workflows/auto-merge-reusable.yml@main
     with:
-      head-sha: ${{ github.event.check_run.check_suite.head_sha }}
+      head-sha: ${{ github.event.check_run.check_suite.head_sha || github.event.workflow_run.head_sha }}
     secrets: inherit
