@@ -118,6 +118,9 @@ dist/
 # KeePass credential databases (local, not committed)
 *.kdbx
 
+# GitHub App / bot private keys (local, never committed)
+*.pem
+
 # Containerfile regression snapshot (ephemeral; used during the charly fleet
 # refactor to verify byte-identical output after IR lift)
 /.regression-snapshot/
