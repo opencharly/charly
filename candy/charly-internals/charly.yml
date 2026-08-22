@@ -11105,8 +11105,8 @@ pr-validator-agent:
             Gate: charly/pr-validator check run = <green PASS | red BLOCK> on <sha> (org-wide
             workflow posts it)
             PR comment posted: yes (ends with *Assisted-by: <Harness> <Provider Full Model Name> (<confidence>)*)
-            Squash trailer proof: pre-merge parse = <exact trailer>; merged <merge-sha> parse = <exact trailer>
-            Verdict: PASS → auto-merge workflow merged (squash) as <merge-sha>, tag-on-merge wrote CHANGELOG and tagged v<VER>
+            Squash trailer: <exact trailer carried in the native auto-merge squash body>
+            Verdict: PASS → native auto-merge merged (squash) as <merge-sha>, tag-on-merge wrote CHANGELOG and tagged v<VER>
                OR    FAIL → not merged; blocking: <findings>
             ```
 
