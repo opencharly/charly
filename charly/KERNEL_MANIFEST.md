@@ -120,7 +120,8 @@ name across 4 different git repos beyond `charly/` itself —
 - `charly/layers.go:504,507,508`
 - `tools/golden-compile/main.go:430`
 
-A rename requires a cross-submodule R5 sweep (spec + sdk + candy/plugin-check +
+A rename requires a cross-repo R5 sweep (the in-repo spec module + the sdk submodule +
+candy/plugin-check +
 candy/plugin-fleet + charly + tools) — a real cutover of its own, not a B5-scope drive-by edit.
 Registering it here as a NON-BLOCKING finding for a future thematic batch (rename + doc-comment
 sweep), per R2's discriminator: B5's own claim (the 10-file STAY confirm-and-close) is true and

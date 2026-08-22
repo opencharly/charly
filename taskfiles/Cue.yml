@@ -1,7 +1,7 @@
 version: '3'
 
 vars:
-  # Pinned cue CLI — MUST match the spec submodule's pin (spec/Taskfile.yml) and
+  # Pinned cue CLI — MUST match the spec module's pin (spec/Taskfile.yml) and
   # the embedded cuelang.org/go library so the CLI that runs gengotypes is the
   # same CUE version the library compiles the schema with. The gen task asserts
   # equality against spec/Taskfile.yml so the two pins cannot drift silently.
@@ -17,8 +17,9 @@ tasks:
   # self-contained schema/*.cue.
   #
   # The BASE schema → spec generation (spec/{cue_types,vocab,version}_gen.go)
-  # lives in the spec submodule (`cd spec && task cue:gen`) — the schema and the
-  # types generated from it are one module (github.com/opencharly/spec). This
+  # lives in the in-repo spec module (`cd spec && task cue:gen`) — the schema and the
+  # types generated from it are one module (github.com/opencharly/spec, vendored into
+  # this repository; the sdk submodule is the only contract submodule). This
   # task runs the spec generation FIRST, then the per-plugin params loop, using
   # the SAME spec/internal/schemagen + pinned cue CLI (R3: one pipeline).
   # ---------------------------------------------------------------------------
