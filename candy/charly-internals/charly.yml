@@ -2193,7 +2193,7 @@ cutover-policy-skill:
             ## Required for every breaking change
 
             - A new **migration-table entry** in `candy/plugin-migrate/migrations.cue` (a declarative `ops:` list, or an `apply:` `goHooks` hook for a structural reshape) PLUS a matching `#SchemaVersion` bump in `spec/schema/version.cue` (the spec repo — landed + tagged first, see `/charly-build:migrate`), applied via `task cue:gen`; the entry's CalVer is strictly greater than the current HEAD. Every cutover is one idempotent step applied by the op-walker on the one `charly migrate` command — there are no per-cutover sub-verbs. Running `charly migrate` twice is a no-op. See `/charly-build:migrate`.
-            - A **fresh release git tag** `v<YYYY.DDD.HHMM>` — ONE per merge, applied by the fresh `pr-validator` at MERGE from the current UTC merge time (never by the author at push time; author-time stamps collide/mis-order across concurrent PRs), **decoupled** from the `charly.yml` `version:` field (the schema version, bumped only when a cutover raises `#SchemaVersion`). Tag EVERY landing, including one that does NOT bump `version:` (content removal — a submodule extraction, an image drop). Tags are **immutable** — only ever added, never moved or force-pushed. Every component is fixed-width zero-padded (4-digit year, 3-digit day-of-year, 4-digit HHMM) so tags sort chronologically under a plain alphanumeric sort; the evaluator computes `v$(date -u +%Y.%j.%H%M)` at merge. Every repo (superproject, `box/<distro>`, `plugins`, `docs`) is tagged on its own merged HEAD — the tag marks the merge, not the schema, so no `charly.yml` is required; `sdk` ALONE uses its Go-module `v0.<YYYYDDD>.<HHMM leading-zeros-stripped>` scheme (a semver requirement, not an exemption). See `/charly-build:migrate` "Per-merge release git tags", `/charly-internals:git-workflow` "CalVer", and the project rulebook "Post-Execution Policies".
+            - A **fresh release git tag** `v<YYYY.DDD.HHMM>` — ONE per merge, applied by the org-wide `tag-on-merge` workflow at MERGE from the current UTC merge time (never by the author at push time; author-time stamps collide/mis-order across concurrent PRs), **decoupled** from the `charly.yml` `version:` field (the schema version, bumped only when a cutover raises `#SchemaVersion`). Tag EVERY landing, including one that does NOT bump `version:` (content removal — a submodule extraction, an image drop). Tags are **immutable** — only ever added, never moved or force-pushed. Every component is fixed-width zero-padded (4-digit year, 3-digit day-of-year, 4-digit HHMM) so tags sort chronologically under a plain alphanumeric sort; tag-on-merge computes `v$(date -u +%Y.%j.%H%M)` at merge. Every repo (superproject, `box/<distro>`, `plugins`, `docs`) is tagged on its own merged HEAD — the tag marks the merge, not the schema, so no `charly.yml` is required; `sdk` ALONE uses its Go-module `v0.<YYYYDDD>.<HHMM leading-zeros-stripped>` scheme (a semver requirement, not an exemption). See `/charly-build:migrate` "Per-merge release git tags", `/charly-internals:git-workflow` "CalVer", and the project rulebook "Post-Execution Policies".
             - **Hard load-time errors** for any residual legacy field, with a one-line remediation hint pointing at the migration command.
             - **Deletion — in the same PR** — of every Go type, function, CLI flag, OCI label, YAML field, skill doc paragraph, and test fixture that references the removed surface.
             - **Relocation step-sequence PARITY (when the cutover relocates a dispatcher, orchestrator, or runner).** Before relocating, ENUMERATE the original's per-CLASS behavior arms — e.g. bring-up / update / teardown × each substrate or shape class — and PROVE each class's step sequence matches the original in the relocated code. Fixing one arm of a class while missing its siblings is the CHARACTERISTIC relocation defect: a generic fallback that silently mis-handles a special class passes every unit test and fails ONLY on that class's live bed. The acceptance roster MUST therefore carry a bed per SPECIAL class (a gate that cannot fail on the class proves nothing — see `/charly-check:check` "R10 gate by change class").
@@ -3514,7 +3514,7 @@ git-workflow-skill:
             sync-to-upstream, branch/worktree pruning, the fork+PR path, cross-repo @github
             landing order, and the CalVer-generated-at-merge rule.
         triggers:
-            - "Git/`gh` workflow \u2014 `feat/` branch, commit, PR-only landing (NO direct push to main), branch protection, the `pr-validator` fresh-evaluator merge/tag, CalVer-at-merge, worktree, sync-to-upstream, branch/worktree prune, cross-repo R10 landing"
+            - "Git/`gh` workflow \u2014 `feat/` branch, commit, PR-only landing (NO direct push to main), branch protection, the `pr-validator` fresh-evaluator gate, native auto-merge + tag-on-merge CalVer-at-merge, worktree, sync-to-upstream, branch/worktree prune, cross-repo R10 landing"
         content: |
             # git-workflow — branch-per-change, PR-only org-workflow-validated landing
 
@@ -3535,7 +3535,7 @@ git-workflow-skill:
             ## Non-negotiable invariants
 
             - **No direct push to `main`** (the project rulebook's PR-only landing mandate — see "Post-Execution Policies"). Enforced by GitHub branch protection (the `charly/pr-validator` check run + a PR + linear history + `enforce_admins`), which is what makes it mechanical; the `pre-push-gate` adds a local backstop only in the harnesses that wire it (`.reasonix`, kimi) — it is NOT wired under Claude Code. Organization-wide apply/verify is owned only by `opencharly/.github/scripts/branch-protection.sh`.
-            - **Never force-push, on any branch, ever** (mandate, same rulebook section). `main` only fast-forwards via the validator's squash-merge; a `feat/` branch, once pushed, advances only by ADDING commits (the author's change, any review-round fix commits, then the evaluator's merge-time version stamp), and the squash-merge collapses them. A stale `feat/` catches up with `gh pr update-branch` (a merge, NOT a rebase-force); tags are add-only. **Amending a `feat/` branch is a normal authoring action — legal until the first push** (amending a pushed branch would require a force-push, which is forbidden).
+            - **Never force-push, on any branch, ever** (mandate, same rulebook section). `main` only fast-forwards via native auto-merge's squash; a `feat/` branch, once pushed, advances only by ADDING commits (the author's change plus any review-round fix commits), and the squash-merge collapses them. A stale `feat/` catches up with `gh pr update-branch` (a merge, NOT a rebase-force); tags are add-only. **Amending a `feat/` branch is a normal authoring action — legal until the first push** (amending a pushed branch would require a force-push, which is forbidden).
             - **R10-gated; the merge requires the `charly/pr-validator` gate's green check run.** R10 PASS authorizes opening the PR (with pasted evidence); a rule violation or R10 FAIL means a red `charly/pr-validator` check and no merge — fix in the same tree, re-run R10, re-push; the check resets and the validator re-runs.
             - **Zero warnings is part of R10** (project rulebook R1). A version-mismatch warning clears with `charly box reconcile`; any other warning gets `/charly-internals:root-cause-analyzer` then a real fix — "warning" is never an accepted end state.
             - **Atomic on `main`, never on `feat/`.** The org-wide `charly/pr-validator` workflow's PASS enables GitHub native auto-merge (squash), which folds the author's change and any review-round fix commits into one commit on `main`; the `feat/` branch may freely accumulate fix commits across review rounds. The merge-time CalVer tag and the `CHANGELOG/<CalVer>.md` entry (written from the PR body — the PR body IS the changelog) are created after merge by the org-wide `tag-on-merge` workflow (see "CalVer" in `references/validator-and-calver.md`). Two separate cutovers must never share one PR.
@@ -3551,7 +3551,7 @@ git-workflow-skill:
 
               Stage a rename+edit as `git add <new>` alone, and a deletion by DIRECTORY or with `git add -u`; never name the vanished path. **This shape defeats the post-commit check above**, which is why it needs stating separately: `git show --stat` DOES list the file, as `old.md => new.md | 0`, so "every intended file is listed" passes. Presence is not the signal — the tells are the **magnitude** (`| 0` insertions on a commit meant to change content) and a **leftover ` M <new>`** in `git status` afterwards. Read the numbers and the post-commit status, not just the filenames, and confirm content directly with `git show HEAD:<new-path> | head -1` whenever the edit is the point of the commit.
             - **Check-coverage is part of R10.** The change must ship the test coverage that proves its functionality (`check:` checks for new/changed layers & images, Go tests for `charly` code) AND the live run must have exercised it. A change whose new functionality has no test that would fail without it is not landable.
-            - **Every repo is tagged at merge.** The superproject, every `box/<distro>`, `plugins`, and `docs` all mint `v<YYYY.DDD.HHMM>` on their own merged HEAD — the tag marks the MERGE, decoupled from any `charly.yml` `version:` schema field, so a repo needs no `charly.yml` to be tagged. The sole exception is the sdk contract repo, which tags under its own Go-module scheme `v0.<YYYYDDD>.<HHMM with all leading zeros stripped>` (B2 step 0) — **not an exemption but a hard Go-module requirement**: `v<YYYY.DDD.HHMM>` is not a valid Go module version (semver forbids a leading-zero segment — `0733`→`733` — and a `major ≥ 2` would force a `/vN` module-path suffix that breaks every `import github.com/opencharly/sdk`), so the stripped `v0.<…>` form is mandatory, not a choice. A skipped tag is a defect, not an exemption: the orchestrator verifies the tag landed after each merge (`git ls-remote --tags origin v<VER>` non-empty) and, if the evaluator skipped it, backfills it add-only on the merged HEAD (`git tag -a v<VER> -m "<subject>" <merged-HEAD>` + `git push origin refs/tags/v<VER>`) — tags are immutable, so a backfill only adds one, never moves an existing tag.
+            - **Every repo is tagged at merge.** The superproject, every `box/<distro>`, `plugins`, and `docs` all mint `v<YYYY.DDD.HHMM>` on their own merged HEAD — the tag marks the MERGE, decoupled from any `charly.yml` `version:` schema field, so a repo needs no `charly.yml` to be tagged. The sole exception is the sdk contract repo, which tags under its own Go-module scheme `v0.<YYYYDDD>.<HHMM with all leading zeros stripped>` (B2 step 0) — **not an exemption but a hard Go-module requirement**: `v<YYYY.DDD.HHMM>` is not a valid Go module version (semver forbids a leading-zero segment — `0733`→`733` — and a `major ≥ 2` would force a `/vN` module-path suffix that breaks every `import github.com/opencharly/sdk`), so the stripped `v0.<…>` form is mandatory, not a choice. A skipped tag is a defect, not an exemption: the orchestrator verifies the tag landed after each merge (`git ls-remote --tags origin v<VER>` non-empty) and, if tag-on-merge skipped it, backfills it add-only on the merged HEAD (`git tag -a v<VER> -m "<subject>" <merged-HEAD>` + `git push origin refs/tags/v<VER>`) — tags are immutable, so a backfill only adds one, never moves an existing tag.
 
             ## Reference Index
 
@@ -3885,18 +3885,18 @@ git-workflow-skill:
                   merges + tags):
 
                   0. the **sdk contract repo** (`github.com/opencharly/sdk`, submodule `sdk/`) — PR →
-                     evaluator merges → tag `v0.<YYYYDDD>.<HHMM leading-zeros-stripped>` (its
+                     native auto-merge + tag-on-merge → tag `v0.<YYYYDDD>.<HHMM leading-zeros-stripped>` (its
                      Go-module tag scheme; the superproject `vYYYY.DDD.HHMM` form is not a valid Go
                      module version — e.g. superproject `v2026.185.0751` ⇄ sdk `v0.2026185.751`) —
                      whenever the cutover touched sdk content;
-                  1. each `box/<distro>` submodule — PR → evaluator merges + tags (it has `charly.yml`);
-                  2. `plugins` — PR → evaluator merges **+ tags `v<YYYY.DDD.HHMM>`** (no `charly.yml`,
+                  1. each `box/<distro>` submodule — PR → auto-merge + tag-on-merge tags (it has `charly.yml`);
+                  2. `plugins` — PR → auto-merge **+ tag-on-merge tags `v<YYYY.DDD.HHMM>`** (no `charly.yml`,
                      so no schema `version:` bump — but the tag marks the merge, same as every repo);
                   3. the superproject — stage the now-MERGED submodule pointers (a touched sdk: the
                      `sdk` gitlink bump PLUS the `charly/go.mod` require version — in-tree resolution
                      rides `replace github.com/opencharly/sdk => ../sdk`, so the require version
-                     matters only for out-of-tree consumers, but it is staged here) → PR → evaluator
-                     merges + tags `main`.
+                     matters only for out-of-tree consumers, but it is staged here) → PR → native
+                     auto-merge + tag-on-merge tags `main`.
 
                   A producer PR must be **merged** (not merely green) before the consumer's pointer
                   bump — the superproject pointer must reference a commit that is on the submodule's
@@ -4178,18 +4178,18 @@ git-workflow-skill:
                       shell variable that may be unset or an in-command directory change.
                     - **box/<distro> re-stamp** (schema-HEAD bump): edit on the submodule's own feat
                       branch; **gate = `charly box validate` standalone** (a version-stamp change has
-                      no build behavior — building proves nothing); commit, open PR, evaluator merges +
-                      tags.
+                      no build behavior — building proves nothing); commit, open PR, native
+                      auto-merge + tag-on-merge tags.
 
                   **3. Land `main` via the PR — NEVER `git push origin main` (blocked) and NEVER `git
                   switch main` in another worktree** (git fatals "already used by worktree"). The
-                  fresh `pr-validator` performs the server-side `gh pr merge --squash` (it advances
+                  org-wide native auto-merge performs the server-side squash merge (it advances
                   `origin/main` remotely); then advance the LOCAL `main` ref where it lives:
                   `git -C <main-wt> merge --ff-only origin/main`. A local `main` now only ever
-                  fast-forwards to what the evaluator merged remotely.
+                  fast-forwards to what was merged remotely.
 
                   **4. Tags: annotated only** (`git tag -a v<…> -m "<desc>" <merged-HEAD>`), applied
-                  by the evaluator on the merged `main` HEAD and pushed as `refs/tags/…` (allowed by
+                  by tag-on-merge on the merged `main` HEAD and pushed as `refs/tags/…` (allowed by
                   the pre-push-gate; the user token triggers the release-binary workflow). Verify `git
                   cat-file -t <tag>` == `tag` AND `git ls-remote --tags origin <tag>` is non-empty.
 
@@ -4429,7 +4429,7 @@ git-workflow-skill:
                   for the durable-verdict-first protocol every validator must follow (a permission denial
                   ends the agent's turn, so it records its verdict before attempting any gated action).
 
-                  ## CalVer — generated AND rewritten at MERGE, by the evaluator
+                  ## CalVer — generated at MERGE, by tag-on-merge
 
                   The single CalVer stamp is `<YYYY.DDD.HHMM>` from the current UTC time. It is
                   generated at the moment of merge, by the org-wide tag-on-merge workflow — not by the author.
@@ -9836,7 +9836,7 @@ pr-validator-agent:
         type: agent
         model: inherit
         description: |-
-            Blocking - The FRESH PR evaluator. Independently validates a pull request against the active harness rulebook + relevant skills and certifies its verdict for the ORG-WIDE `charly/pr-validator` GitHub Actions gate (`Verdict: PASS|BLOCK` → green/red check run + a single PR comment). On PASS the org-wide `auto-merge` workflow squash-merges and CalVer-tags — NOT this agent. It is a different agent from the one that authored the PR; it trusts none of the author's claims.
+            Blocking - The FRESH PR evaluator. Independently validates a pull request against the active harness rulebook + relevant skills and certifies its verdict for the ORG-WIDE `charly/pr-validator` GitHub Actions gate (`Verdict: PASS|BLOCK` → green/red check run + a single PR comment). On PASS the org-wide workflow enables native auto-merge (squash), and tag-on-merge writes the CHANGELOG and CalVer-tags — NOT this agent. It is a different agent from the one that authored the PR; it trusts none of the author's claims.
         content: |
             You are the **PR Validator** — the fresh evaluator half of OpenCharly's two-step
             landing. The author agent opened a PR and did NOT merge it. You are spawned with
