@@ -477,7 +477,7 @@ android-skill:
             - `candy/plugin-adb/deploy.go` — the `deploy:android` provider (boot gate + install
               loop with retry + uninstall reverse ops); `install.go` — the shared installer.
             - `deploykit.ApkInstallStep` (`sdk/deploykit/steps.go`); `sdk/deploykit/install_build.go` —
-              `compileApkStep` (the plugin-side preresolver reads this step; no DeployTarget executes it).
+              `compileApkStep` (the plugin-side preresolver reads this step; no deploy target executes it).
             - `sdk/loaderkit/load_unified.go` — loader wiring (mirrors every `kubernetes` site; the former `charly/unified.go` is DELETED, K-wave 2).
             - `spec.Deploy` (the deploy node — the former `charly/deploy.go`'s `FleetNode` is DELETED, K-wave 2) with `target: android`; `charly/fleet_add_cmd.go` dispatch +
               `--node-only`; `sdk/deploykit/deploy_chain.go` / `charly/deploy_tree.go` passthrough.
@@ -2262,7 +2262,7 @@ check-skill:
                   |---|---|---|---|
                   | `check-sway-browser-vnc-pod` | pod | `image: sway-browser-vnc` | cdp/wl/vnc/dbus/mcp/record + pod-side file/service/port/process/http |
                   | `check-k3s-vm` | vm | `from: k3s-vm` | kube (all the methods) + guest-side file/service/port/process, http via port-forward, the external vm deploy end-to-end |
-                  | `check-pod` | pod | `image: check-pod` | combined mechanism bed: `candy:` image build (a `candy:` carrying `base:`/`from:`) + `candy:` layer composition order + `kind: pod` runtime (nc :18794 + supervisord) + every DeployTarget rendering path |
+                  | `check-pod` | pod | `image: check-pod` | combined mechanism bed: `candy:` image build (a `candy:` carrying `base:`/`from:`) + `candy:` layer composition order + `kind: pod` runtime (nc :18794 + supervisord) + every deploy-target rendering path |
                   | `check-local` | local | `from: check-local-app` | `kind: local` layer apply via ShellExecutor |
                   | `check-jupyter-pod` | pod | `image: jupyter` | jupyter-mcp regression coverage |
                   | `check-jupyter-ml-pod` | pod | `image: jupyter-ml` | jupyter-ml spacy/quarto + GPU MCP probes |
@@ -2506,7 +2506,7 @@ check-skill:
                   **Which verb/bed proves what (the project rulebook R7):** `charly check box` passes on
                   zero-content stages too — it is not a substitute for the generated-artifact
                   checks (R8). For the R10 gate, pick the disposable bed whose kind matches
-                  what you changed (`check-pod` for the combined box/candy/pod/DeployTarget
+                  what you changed (`check-pod` for the combined box/candy/pod/deploy-target
                   mechanism, `check-local`, `check-k3s-vm`, or a feature bed). `charly check run`
                   on an `iterate:` bed is the multi-hour AI-iteration benchmark, never a quick
                   gate — the same verb dispatches by whether the entity carries an `iterate:` block.
@@ -2538,7 +2538,7 @@ check-skill:
                   | **Documentation-only change class** — `*.md` (`AGENTS.md` / `CLAUDE.md`, `plugins/**/SKILL.md`, READMEs, CHANGELOG), comment-only code edits, or a submodule pointer bump to an all-documentation submodule commit; zero behavior change | markdown integrity, link checks | The non-runtime standards: adversarial consistency review, the R5 grep self-test, cross-reference validation, and command-safety gates | `documentation reviewed` | ANY bed run or image build — beds cannot fail on prose |
                   | **Hook / workflow scripts** — `.claude/hooks/*.sh`, `.claude/workflows/*.js` | `bash -n` / async-body parse | Execute the changed script live: run the hook directly (paste its output); a workflow whose control flow changed runs against ONE bed matching the change. Prompt-string-only workflow edits: parse + the non-runtime standards | `fully tested and validated` | The full bed fan-out |
                   | **Harness project configuration** — `AGENTS.md`, `.codex/**`, repo-native `.agents/**`, or an executable that provisions or validates those surfaces | Parse the changed configuration; run the project profile and static-validator checks; verify exact gitlink and linked-worktree provenance | Run the final-tree repository harness gate: execute each changed validator/provisioner directly, verify only the gitlinks dispatched by the change class at their recorded revisions, and run the committed developer-profile checks. A Git-provisioning change also proves its canonical-object reference and exact-gitlink behavior in a dedicated linked worktree. Record the exact approved commands and active managed sandbox available for this run. This proves repository-controlled behavior; never claim that it proves settings loaded by a newly launched harness process. The fresh validator independently decides whether the final-tree delta additionally requires a Charly R10 bed and runs it when required. | `fully tested and validated` | A forced restart/new session, alternate home/cache/workspace, or unrelated VM/container roster that cannot exercise repository configuration |
-                  | **`charly` Go code** | `go test ./...` + `go vet` + `task build:binary` (R9 freshness + `charly version` check against `./bin/charly`) | `charly check run <bed>` for EACH bed whose kind matches a touched code path: box/candy/pod/DeployTarget mechanism → `check-pod`; `target: local` → `check-local`; VM / kubernetes → `check-k3s-vm`; a feature surface → its feature bed. Cross-cutting loader / resolver / IR / unified-schema changes → fan every matching bed out concurrently, by owner: short beds via `/verify-beds` (one `charly check run <bed>` per agent), every long bed (`vm`/`android`, or last run ≥600s) as a persistent-session `run_in_background` task — in-spec for that class, not a scope override; a `/verify-beds` result with `gateComplete: false` is a partial roster, never a green gate | `fully tested and validated` | Beds whose substrate the change cannot reach |
+                  | **`charly` Go code** | `go test ./...` + `go vet` + `task build:binary` (R9 freshness + `charly version` check against `./bin/charly`) | `charly check run <bed>` for EACH bed whose kind matches a touched code path: box/candy/pod/deploy-target mechanism → `check-pod`; `target: local` → `check-local`; VM / kubernetes → `check-k3s-vm`; a feature surface → its feature bed. Cross-cutting loader / resolver / IR / unified-schema changes → fan every matching bed out concurrently, by owner: short beds via `/verify-beds` (one `charly check run <bed>` per agent), every long bed (`vm`/`android`, or last run ≥600s) as a persistent-session `run_in_background` task — in-spec for that class, not a scope override; a `/verify-beds` result with `gateComplete: false` is a partial roster, never a green gate | `fully tested and validated` | Beds whose substrate the change cannot reach |
                   | **Candy / box / pod / vm / kubernetes / local / android config** | `charly box validate` | Build + run a bed that composes the changed entity (a candy edit → a bed whose image stacks that candy); when no bed composes it, the R7 sequence on a disposable deploy: build → `charly check box` → deploy → `charly check live` → fresh `charly update` | `fully tested and validated` | Beds that do not compose the changed entity |
                   | **`iterate:` / ai check config** | `charly box validate` | The affected `iterate:` bed run as specified (see "Flag discipline") | `fully tested and validated` | Unrelated beds |
 
@@ -3511,7 +3511,7 @@ check-sway-browser-vnc-skill:
             live-container test verbs (cdp / wl / vnc / dbus / mcp / record) on the Sway
             stack. It deploys the **shipping `/charly-selkies:sway-browser-vnc` image directly**
             — there is no separate check image. It sits alongside the other `check-*` smoke
-            beds (`check-pod` — the combined image/layer/pod/DeployTarget mechanism bed —
+            beds (`check-pod` — the combined image/layer/pod/deploy-target mechanism bed —
             and `check-local`) — all `disposable: true` deploys, top-level entries in their
             project's `charly.yml` (this bed and `check-pod` in `box/fedora`; `check-local`
             in main).

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/opencharly/spec/shellquote"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -90,7 +91,7 @@ fi`
 }
 
 // shellSingleQuote is the shared kit helper (FU-11 — formerly duplicated in core + plugins).
-var shellSingleQuote = spec.ShellQuote
+var shellSingleQuote = shellquote.ShellQuote
 
 // installByPackage downloads an app by package id via apkeep and installs it onto
 // the device. In-pod runs the script via `engine exec`; host/endpoint runs it via

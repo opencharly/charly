@@ -174,7 +174,7 @@ func (c *VmCreateCmd) runVmSpecCreate(vmName string, spec *VmSpec, backend strin
 			st = vmState
 		}
 		if spec.SSH != nil && spec.SSH.PortAuto {
-			st.SshPort = sshPort
+			st.SSHPort = sshPort
 		}
 		if len(allocatedForwards) > 0 {
 			st.PortForwards = allocatedForwards
@@ -194,7 +194,7 @@ func (c *VmCreateCmd) runVmSpecCreate(vmName string, spec *VmSpec, backend strin
 		SMBIOSCredentials: smbiosCreds,
 		RamMB:             parseRAMtoMB(resolveVmRam(spec)),
 		Cpus:              resolveVmCpus(spec),
-		SshPort:           sshPort,
+		SSHPort:           sshPort,
 		// ExtraPortForwards carries the RESOLVED "<host>:<guest>" forwards (auto
 		// sentinels already allocated host-side); both renderers read ONLY this,
 		// never spec.Network.PortForwards — the spec=intent / rt=resolved rule.
@@ -315,7 +315,7 @@ func publishVmSshAlias(home, domainName string, spec *VmSpec, rt VmRuntimeParams
 	stanza := VmSshStanza{
 		Alias:          VmSshAlias(domainName),
 		Hostname:       "127.0.0.1",
-		Port:           rt.SshPort,
+		Port:           rt.SSHPort,
 		User:           resolveVmSshUser(spec),
 		IdentityFile:   filepath.Join(stateDir, "id_ed25519"),
 		KnownHostsFile: knownHostsPath,

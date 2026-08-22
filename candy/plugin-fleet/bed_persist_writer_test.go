@@ -164,7 +164,7 @@ func bedTestDecodeNode(entryMap map[string]any) *spec.FleetNode {
 				state.InstanceID = s
 			}
 			if n, ok := vs["ssh_port"].(int); ok {
-				state.SshPort = n
+				state.SSHPort = n
 			}
 			node.VmState = state
 		}

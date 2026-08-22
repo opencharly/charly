@@ -5,7 +5,7 @@ go 1.26.4
 require (
 	github.com/ollama/ollama v0.32.14
 	github.com/opencharly/sdk v0.0.0
-	github.com/opencharly/spec v0.2026230.2320
+	github.com/opencharly/spec v0.2026232.520
 )
 
 require (

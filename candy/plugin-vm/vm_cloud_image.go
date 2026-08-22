@@ -95,7 +95,7 @@ type CloudImageBuildResult struct {
 //     with the cached base as its backing file.
 //  3. qemu-img resize the overlay to spec.DiskSize (cloud-utils-growpart
 //     inside the guest expands the partition at first boot).
-//  4. Resolve VmSSH key injection channels (D13 auto-defaults) and pick
+//  4. Resolve VmSsh key injection channels (D13 auto-defaults) and pick
 //     the SSH public key per spec.SSH.KeySource.
 //  5. Render cloud-init via RenderCloudInit.
 //  6. Pack user-data / meta-data / network-config into outputDir/seed.iso
@@ -305,7 +305,7 @@ func newUUID4() string {
 		hex.EncodeToString(buf[10:16]))
 }
 
-// resolveSSHPubKeyForSpec picks the SSH pubkey per VmSSH.KeySource
+// resolveSSHPubKeyForSpec picks the SSH pubkey per VmSsh.KeySource
 // semantics (auto | generate | none | <path>). vmStateDir is used as
 // the home for generate-mode keys.
 func resolveSSHPubKeyForSpec(spec *VmSpec, vmStateDir string) (string, error) {

@@ -14,6 +14,7 @@ import (
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/fleet"
 	pb "github.com/opencharly/spec/proto"
 	"github.com/opencharly/spec/spec"
 )
@@ -875,10 +876,10 @@ func arbiterBracketAcquire(ctx context.Context, exec *sdk.Executor, name string,
 		Action:          action,
 		Claimant:        name,
 		Tokens:          tokens,
-		ClaimAddr:       spec.HolderAddrFor(name, node),
+		ClaimAddr:       fleet.HolderAddrFor(name, node),
 		Transient:       false,
 		IsGroup:         node.IsGroup(),
-		IsPodMember:     spec.IsContainerVenue(&node),
+		IsPodMember:     fleet.IsContainerVenue(&node),
 		SecurityDevices: secDevices,
 	})
 	if err != nil {

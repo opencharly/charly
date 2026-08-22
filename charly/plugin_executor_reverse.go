@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	specexec "github.com/opencharly/spec/exec"
+	"github.com/opencharly/spec/poll"
 	pb "github.com/opencharly/spec/proto"
 	"github.com/opencharly/spec/spec"
 )
@@ -343,11 +344,11 @@ func rebootVenueAndWait(ctx context.Context, exec spec.DeployExecutor, candyName
 	// delay is for clean session close, not a correctness-timing workaround.
 	_ = exec.RunSystem(ctx, "(sleep 1; systemctl reboot || reboot) >/dev/null 2>&1 &\nexit 0", opts)
 
-	// BINARY/EDGE readiness (guest down→boot_id-changed) → cap-only via spec.PollUntil (spec/poll.go)
+	// BINARY/EDGE readiness (guest down→boot_id-changed) → cap-only via poll.PollUntil (spec/poll.go)
 	// at the GENEROUS config cap. The marker is frozen "down" for the whole legitimate reboot,
 	// so a no-progress window would be a wrong (too-short) timeout — cap-only is correct here.
-	cfg := loadedReadiness().WaitCapped(fmt.Sprintf("reboot %s", venue), spec.PollRemote, 0)
-	if err := spec.PollUntil(ctx, cfg, func(actx context.Context) (bool, float64, error) {
+	cfg := loadedReadiness().WaitCapped(fmt.Sprintf("reboot %s", venue), poll.PollRemote, 0)
+	if err := poll.PollUntil(ctx, cfg, func(actx context.Context) (bool, float64, error) {
 		out, _, _, rerr := exec.RunCapture(actx, "cat /proc/sys/kernel/random/boot_id 2>/dev/null")
 		if rerr != nil {
 			return false, 0, nil // guest still down or sshd not yet accepting

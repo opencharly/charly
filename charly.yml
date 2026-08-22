@@ -1,4 +1,4 @@
-version: 2026.225.1508
+version: 2026.232.0520
 # Canonical repo identity. After the 2026-06 box inversion main imports the five
 # active distro submodules (arch / cachyos / debian / fedora / ubuntu)
 # ONE-DIRECTIONALLY to reference their relocated boxes; the submodules no longer
@@ -525,7 +525,7 @@ kimi:
 #   check-pod                  (pod) — combined: kind:image build + kind:layer
 #                                     composition order + kind:pod runtime
 #                                     (nc :18794 + supervisord) + every
-#                                     DeployTarget rendering path
+#                                     deploy-target rendering path
 #   check-local                (local) — kind:local layer apply via ShellExecutor
 #   check-jupyter-pod          (pod) — jupyter-mcp regression coverage
 #   check-jupyter-ml-pod       (pod) — jupyter-ml spacy/quarto + GPU MCP probes
@@ -862,7 +862,7 @@ check-k8s-deploy:
         disposable: true
         lifecycle: dev
         description: >-
-            R10 for the EXTERNALIZED deploy:kubernetes substrate (F1) — `target: kubernetes` resolves out-of-process to candy/plugin-kube's deploy:kubernetes provider over the E3b reverse channel, not a compiled-in DeployTarget. A group bed with two name-sorted sibling members: check-k8s-deploy-cluster (a disposable libvirt k3s VM, the shared k3s-vm + k3s-server stack, an auto-allocated host->guest 6443 forward) brings up a control plane and merges kubeconfig to context vm-check-k8s-deploy-cluster (its own per-deploy domain identity, task #18 — collision-free from check-k3s-vm's own context despite sharing the k3s-vm entity); check-k8s-deploy-workload (a target:kubernetes deploy of check-k8s-deploy-app) is brought up second — its host preresolver generates an egress-validated Kustomize tree and its out-of-process plugin runs `kubectl --context vm-check-k8s-deploy-cluster apply -k`. The kube: checks (wait-nodes + raw deployments GET + pods) prove the Deployment object landed on the cluster — the externalized substrate applied the workload end-to-end. The pod is not asserted Ready (the local box image is absent from the VM's containerd; image-into-cluster delivery is orthogonal to the substrate).
+            R10 for the EXTERNALIZED deploy:kubernetes substrate (F1) — `target: kubernetes` resolves out-of-process to candy/plugin-kube's deploy:kubernetes provider over the E3b reverse channel, not a compiled-in deploy target. A group bed with two name-sorted sibling members: check-k8s-deploy-cluster (a disposable libvirt k3s VM, the shared k3s-vm + k3s-server stack, an auto-allocated host->guest 6443 forward) brings up a control plane and merges kubeconfig to context vm-check-k8s-deploy-cluster (its own per-deploy domain identity, task #18 — collision-free from check-k3s-vm's own context despite sharing the k3s-vm entity); check-k8s-deploy-workload (a target:kubernetes deploy of check-k8s-deploy-app) is brought up second — its host preresolver generates an egress-validated Kustomize tree and its out-of-process plugin runs `kubectl --context vm-check-k8s-deploy-cluster apply -k`. The kube: checks (wait-nodes + raw deployments GET + pods) prove the Deployment object landed on the cluster — the externalized substrate applied the workload end-to-end. The pod is not asserted Ready (the local box image is absent from the VM's containerd; image-into-cluster delivery is orthogonal to the substrate).
     # MEMBER 1 (name-sorts first) — the k3s control plane. bringUpMembers does vm
     # create + fleet add (k3s-server over SSH); K3sPostProvision merges the
     # kubeconfig to context vm-check-k8s-deploy-cluster (this member's own per-deploy

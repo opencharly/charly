@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 
+	spechttp "github.com/opencharly/spec/http"
 	pb "github.com/opencharly/spec/proto"
 	"github.com/opencharly/spec/spec"
 )
@@ -30,7 +31,7 @@ type checkContextReverseServer struct {
 // returns status/body/header-blob. A transport-level failure rides the reply error field (the
 // RPC itself succeeds), like RunReply/CaptureReply.
 func (s *checkContextReverseServer) HTTPDo(ctx context.Context, req *pb.HTTPDoRequest) (*pb.HTTPDoReply, error) {
-	resp, err := spec.DoHTTPRequest(ctx, s.httpBase, spec.CheckHTTPRequest{
+	resp, err := spechttp.DoHTTPRequest(ctx, s.httpBase, spec.CheckHTTPRequest{
 		Method:            req.GetMethod(),
 		URL:               req.GetUrl(),
 		Body:              req.GetBody(),

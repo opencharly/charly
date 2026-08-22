@@ -45,6 +45,7 @@ import (
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/loaderkit"
+	"github.com/opencharly/spec/fleet"
 	"github.com/opencharly/spec/hostenv"
 	"github.com/opencharly/spec/lock"
 	"github.com/opencharly/spec/proc"
@@ -177,10 +178,10 @@ func arbiterAcquire(ctx context.Context, ex *sdk.Executor, claimant string, node
 		Action:          action,
 		Claimant:        claimant,
 		Tokens:          tokens,
-		ClaimAddr:       spec.HolderAddrFor(claimant, node),
+		ClaimAddr:       fleet.HolderAddrFor(claimant, node),
 		Transient:       transient,
 		IsGroup:         node.IsGroup(),
-		IsPodMember:     spec.IsContainerVenue(&node),
+		IsPodMember:     fleet.IsContainerVenue(&node),
 		SecurityDevices: secDevices,
 	})
 	if ierr != nil {
@@ -247,7 +248,7 @@ func bedCheckLevel(uf *spec.UnifiedFile, node spec.FleetNode) string {
 
 // bedMemberDescriptors projects a group bed's sibling members into the descriptor the plugin
 // drives its per-member image-build loop from. Ported from charly/host_build_check_bed.go, using
-// spec.IsVmVenue instead of the former core-private isVmMember (same Descent-stamped read).
+// fleet.IsVmVenue instead of the former core-private isVmMember (same Descent-stamped read).
 func bedMemberDescriptors(members map[string]*spec.FleetNode) []spec.CheckBedMember {
 	keys := spec.SortedMemberKeys(members)
 	if len(keys) == 0 {
@@ -256,7 +257,7 @@ func bedMemberDescriptors(members map[string]*spec.FleetNode) []spec.CheckBedMem
 	out := make([]spec.CheckBedMember, 0, len(keys))
 	for _, key := range keys {
 		m := members[key]
-		out = append(out, spec.CheckBedMember{Key: key, IsVM: spec.IsVmVenue(m), Image: m.Image, From: m.From})
+		out = append(out, spec.CheckBedMember{Key: key, IsVM: fleet.IsVmVenue(m), Image: m.Image, From: m.From})
 	}
 	return out
 }
@@ -273,13 +274,13 @@ func bedRunImageTag(bed, calver string) string {
 
 // bedLocalChildKeys is the HOST-ROOTED (kind:local) subset of a node's nested children, in
 // sortedNestedKeys order — the set a VM root deploys host-side. Ported from
-// charly/host_build_check_bed.go, using spec.HostRooted instead of the former core-private
+// charly/host_build_check_bed.go, using fleet.HostRooted instead of the former core-private
 // nodeTraits(child).HostRooted read (same Descent-stamped predicate, already promoted #55 U4).
 func bedLocalChildKeys(children map[string]*spec.FleetNode) []string {
 	var out []string
-	for _, childKey := range spec.SortedNestedKeys(children) {
+	for _, childKey := range fleet.SortedNestedKeys(children) {
 		child := children[childKey]
-		if spec.HostRooted(child) {
+		if fleet.HostRooted(child) {
 			out = append(out, childKey)
 		}
 	}
@@ -418,9 +419,9 @@ func bedSetup(ctx context.Context, ex *sdk.Executor, bed, dir string) (spec.Chec
 	s.leaseClaimant = bed
 	s.leaseActive = active
 
-	isVM := spec.IsVmVenue(&node)
-	isLocal := spec.HostRooted(&node)
-	isExternal := spec.ExternalInPlaceVenue(&node)
+	isVM := fleet.IsVmVenue(&node)
+	isLocal := fleet.HostRooted(&node)
+	isExternal := fleet.ExternalInPlaceVenue(&node)
 	isGroup := node.IsGroup()
 
 	// VM/group beds need the libvirt user-session daemon (probes + the backend resolver). Best-effort.
@@ -445,8 +446,8 @@ func bedSetup(ctx context.Context, ex *sdk.Executor, bed, dir string) (spec.Chec
 		ImageTag:       imageTag,
 		LocalRef:       node.From,
 		VMDomains:      domains,
-		CheckLiveRefs:  spec.BedCheckLiveRefs(bed, node.Children),
-		ChildKeys:      spec.SortedNestedKeys(node.Children),
+		CheckLiveRefs:  fleet.BedCheckLiveRefs(bed, node.Children),
+		ChildKeys:      fleet.SortedNestedKeys(node.Children),
 		LocalChildKeys: bedLocalChildKeys(node.Children),
 		Members:        bedMemberDescriptors(node.Members),
 		RunBuild:       spec.CheckLevelReaches(level, spec.CheckLevelBuild),

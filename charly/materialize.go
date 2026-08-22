@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/opencharly/spec/merge"
 	"github.com/opencharly/spec/spec"
 	"gopkg.in/yaml.v3"
 )
@@ -139,7 +140,7 @@ func materializeDocStream(data []byte, srcLabel string, uf *spec.UnifiedFile) er
 			return fmt.Errorf("%s: %w", label, err)
 		}
 		sub.Import = nil
-		spec.MergeUnified(uf, &sub, "")
+		merge.MergeUnified(uf, &sub, "")
 	}
 	return nil
 }

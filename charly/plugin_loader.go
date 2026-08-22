@@ -17,6 +17,7 @@ import (
 
 	"cuelang.org/go/cue"
 
+	"github.com/opencharly/spec/fleet"
 	"github.com/opencharly/spec/lock"
 	sdkschema "github.com/opencharly/spec/schema"
 	"github.com/opencharly/spec/schemaconcat"
@@ -842,7 +843,7 @@ func deployNodePluginContext(dir, name string) (addCandy []string, refWords []st
 				refWords = append(refWords, v)
 			}
 		}
-		for _, ck := range spec.SortedNestedKeys(n.Children) {
+		for _, ck := range fleet.SortedNestedKeys(n.Children) {
 			visit(n.Children[ck])
 		}
 	}

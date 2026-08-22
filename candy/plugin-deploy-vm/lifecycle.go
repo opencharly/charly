@@ -363,7 +363,7 @@ func vmPrepareVenue(ctx context.Context, exec *sdk.Executor, p lifecycleParams, 
 	}
 	var persistedPort int
 	if vm.SSH != nil && vm.SSH.PortAuto && prior != nil {
-		persistedPort = prior.SshPort
+		persistedPort = prior.SSHPort
 	}
 
 	// R3/R4 (bed-robustness batch, item 2 — VM ssh-port dual-allocation race, confirmed real):

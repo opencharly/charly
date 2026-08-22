@@ -58,7 +58,7 @@ func (t *LocalTransport) Connect(ctx context.Context) (*PluginUnit, io.Closer, e
 	cmd := exec.Command(t.BinPath, args...)
 	// Thread the host's RESOLVED readiness (project defaults.readiness ⊕ host env) into the
 	// plugin via CHARLY_READINESS_* env — the out-of-process plugin cannot LoadUnified, so its
-	// spec.ResolveReadiness picks these up instead of only the built-in fallbacks. Other plugins
+	// poll.ResolveReadiness picks these up instead of only the built-in fallbacks. Other plugins
 	// ignore the unknown env; the vm plugin's poll-gates honor it.
 	cmd.Env = append(os.Environ(), readinessPluginEnv()...)
 	// Thread the host's own executable path so a command plugin that must shell BACK to

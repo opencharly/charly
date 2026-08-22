@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/opencharly/spec/spec"
+	"github.com/opencharly/spec/poll"
 )
 
 // TestLoadedReadiness_ReentrancyGuard locks in the fix for the re-entrant sync.Once deadlock in
@@ -27,7 +27,7 @@ func TestLoadedReadiness_ReentrancyGuard(t *testing.T) {
 
 	select {
 	case got := <-done:
-		def, _ := spec.ResolveReadiness(nil)
+		def, _ := poll.ResolveReadiness(nil)
 		if !slices.Equal(got, def.PluginEnv()) {
 			t.Fatalf("re-entrant loadedReadiness PluginEnv = %v, want built-in defaults %v", got, def.PluginEnv())
 		}

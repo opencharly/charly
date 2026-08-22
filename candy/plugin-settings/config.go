@@ -171,8 +171,8 @@ func GetConfigValue(ctx context.Context, exec *sdk.Executor, key string) (string
 		}
 		return "", nil
 	case "forward_ssh_agent":
-		if cfg.ForwardSshAgent != nil {
-			if *cfg.ForwardSshAgent {
+		if cfg.ForwardSSHAgent != nil {
+			if *cfg.ForwardSSHAgent {
 				return "true", nil
 			}
 			return "false", nil
@@ -342,7 +342,7 @@ func SetConfigValue(ctx context.Context, exec *sdk.Executor, key, value string) 
 		cfg.ForwardGpgAgent = &b
 	case "forward_ssh_agent":
 		b := value == "true"
-		cfg.ForwardSshAgent = &b
+		cfg.ForwardSSHAgent = &b
 	case "vm.backend":
 		cfg.Vm.Backend = value
 	case "vm.disk_size":
@@ -418,7 +418,7 @@ func ResetConfigValue(ctx context.Context, exec *sdk.Executor, key string) error
 	case "forward_gpg_agent":
 		cfg.ForwardGpgAgent = nil
 	case "forward_ssh_agent":
-		cfg.ForwardSshAgent = nil
+		cfg.ForwardSSHAgent = nil
 	case "vm.backend":
 		cfg.Vm.Backend = ""
 	case "vm.disk_size":
@@ -563,7 +563,7 @@ func ListConfigValues() ([]configKeySource, error) {
 		resolve("secret_backend", "CHARLY_SECRET_BACKEND", cfg.SecretBackend, "auto"),
 		resolve("keyring_collection_label", "CHARLY_KEYRING_COLLECTION_LABEL", cfg.KeyringCollectionLabel, ""),
 		boolEntry("forward_gpg_agent", "CHARLY_FORWARD_GPG_AGENT", cfg.ForwardGpgAgent, "true"),
-		boolEntry("forward_ssh_agent", "CHARLY_FORWARD_SSH_AGENT", cfg.ForwardSshAgent, "true"),
+		boolEntry("forward_ssh_agent", "CHARLY_FORWARD_SSH_AGENT", cfg.ForwardSSHAgent, "true"),
 		resolve("vm.backend", "CHARLY_VM_BACKEND", cfg.Vm.Backend, "auto"),
 		resolve("vm.disk_size", "CHARLY_VM_DISK_SIZE", cfg.Vm.DiskSize, "10 GiB"),
 		resolve("vm.root_size", "CHARLY_VM_ROOT_SIZE", cfg.Vm.RootSize, ""),

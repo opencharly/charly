@@ -256,11 +256,11 @@ func pluginLoadVmCheckPlans(ctx context.Context, ex *sdk.Executor, rp *spec.Reso
 		if ok {
 			localPlan = entry.Plan
 			if entry.VmState != nil {
-				if entry.VmState.SshUser != "" {
-					outUser = entry.VmState.SshUser
+				if entry.VmState.SSHUser != "" {
+					outUser = entry.VmState.SSHUser
 				}
-				if entry.VmState.SshPort > 0 {
-					outPort = entry.VmState.SshPort
+				if entry.VmState.SSHPort > 0 {
+					outPort = entry.VmState.SSHPort
 				}
 			}
 		}

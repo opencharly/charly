@@ -20,6 +20,7 @@ import (
 	"github.com/charmbracelet/x/vt"
 	"github.com/opencharly/sdk"
 	pb "github.com/opencharly/spec/proto"
+	"github.com/opencharly/spec/shellquote"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -498,7 +499,7 @@ func (c *tmuxChannel) start(stream sdk.ProviderChannel) (bool, error) {
 func (c *tmuxChannel) launchEntrypoint() error {
 	entry := make([]string, len(c.profile.Entrypoint))
 	for i, arg := range c.profile.Entrypoint {
-		entry[i] = spec.ShellQuote(arg)
+		entry[i] = shellquote.ShellQuote(arg)
 	}
 	command := "exec " + strings.Join(entry, " ")
 	fmt.Fprintf(os.Stderr, "plugin-tmux: profile %q launching entrypoint after control attachment on socket %s\n", c.profile.Name, c.socket)
@@ -837,8 +838,8 @@ func (c *tmuxChannel) runCommandInput(ctx context.Context, command string, seque
 	if err := waiter.Start(); err != nil {
 		return fmt.Errorf("tmux command completion waiter %s: %w", token, err)
 	}
-	signal := "tmux -L " + spec.ShellQuote(c.socket) + " wait-for -U " + spec.ShellQuote(token)
-	wrapped := "sh -lc " + spec.ShellQuote(command) + "; " + signal
+	signal := "tmux -L " + shellquote.ShellQuote(c.socket) + " wait-for -U " + shellquote.ShellQuote(token)
+	wrapped := "sh -lc " + shellquote.ShellQuote(command) + "; " + signal
 	fmt.Fprintf(os.Stderr, "plugin-tmux: socket %s command sequence %d waiting for event %s\n", c.socket, sequence, token)
 	if err := runTmux(c.socket, "send-keys", "-t", tmuxPane, "-l", "--", wrapped); err != nil {
 		cancel()

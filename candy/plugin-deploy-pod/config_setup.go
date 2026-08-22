@@ -277,9 +277,9 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 		return err
 	}
 
-	if c.SshKey != "" {
+	if c.SSHKey != "" {
 		cName := kit.ContainerNameInstance(c.Box, c.Instance)
-		pubkey, err := resolveSSHPubKey(c.SshKey, cName)
+		pubkey, err := resolveSSHPubKey(c.SSHKey, cName)
 		if err != nil {
 			return err
 		}

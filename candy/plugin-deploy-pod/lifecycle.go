@@ -12,6 +12,7 @@ import (
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/spec/proto"
+	"github.com/opencharly/spec/shellquote"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -199,9 +200,9 @@ func podContainerStart(ctx context.Context, exec *sdk.Executor, plan spec.PodLif
 	case plan.Mode == "direct":
 		return execErr(exec, ctx, shellJoin(plan.RunArgv), "start (direct)", plan.ContainerName)
 	case plan.DirectDeploy:
-		return execErr(exec, ctx, "podman start "+spec.ShellQuote(plan.ContainerName), "start (direct-deploy)", plan.ContainerName)
+		return execErr(exec, ctx, "podman start "+shellquote.ShellQuote(plan.ContainerName), "start (direct-deploy)", plan.ContainerName)
 	default:
-		return execErr(exec, ctx, "systemctl --user start "+spec.ShellQuote(plan.SvcName), "start", plan.SvcName)
+		return execErr(exec, ctx, "systemctl --user start "+shellquote.ShellQuote(plan.SvcName), "start", plan.SvcName)
 	}
 }
 
@@ -209,9 +210,9 @@ func podContainerStart(ctx context.Context, exec *sdk.Executor, plan spec.PodLif
 // via systemctl so podman-stop + Restart=always cannot restart-loop); direct → `<engine> stop <ctr>`.
 func podContainerStop(ctx context.Context, exec *sdk.Executor, plan spec.PodLifecyclePlan) error {
 	if plan.Mode == "quadlet" {
-		return execErr(exec, ctx, "systemctl --user stop "+spec.ShellQuote(plan.SvcName), "stop", plan.SvcName)
+		return execErr(exec, ctx, "systemctl --user stop "+shellquote.ShellQuote(plan.SvcName), "stop", plan.SvcName)
 	}
-	return execErr(exec, ctx, plan.EngineBin+" stop "+spec.ShellQuote(plan.ContainerName), "stop", plan.ContainerName)
+	return execErr(exec, ctx, plan.EngineBin+" stop "+shellquote.ShellQuote(plan.ContainerName), "stop", plan.ContainerName)
 }
 
 // podTunnelOp composes verb:tunnel over InvokeProvider with the {plugin_input:{method,config}}
@@ -249,13 +250,13 @@ func tunnelReplyError(resJSON []byte) error {
 	return nil
 }
 
-// shellJoin renders an argv into a single shell-safe command string (each token spec.ShellQuote'd)
+// shellJoin renders an argv into a single shell-safe command string (each token shellquote.ShellQuote'd)
 // for the served host executor, which runs a script string rather than an argv (the direct-mode
 // `podman run -d …` path — buildStartArgs produced the argv host-side).
 func shellJoin(argv []string) string {
 	quoted := make([]string, len(argv))
 	for i, a := range argv {
-		quoted[i] = spec.ShellQuote(a)
+		quoted[i] = shellquote.ShellQuote(a)
 	}
 	return strings.Join(quoted, " ")
 }

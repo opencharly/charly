@@ -10,7 +10,7 @@ import (
 
 	"github.com/opencharly/charly/candy/plugin-helm/params"
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/spec/spec"
+	"github.com/opencharly/spec/shellquote"
 )
 
 // helm.go is the venue-driving layer for BOTH helm capabilities: the step's
@@ -47,27 +47,27 @@ func helmCapture(ctx context.Context, ex *sdk.Executor, cmd string) (string, err
 // wait/timeout modifiers. The release is created if absent (upgrade --install) and
 // upgraded in place on re-deploy — the idempotent install shape.
 func runHelmUpgradeInstall(ctx context.Context, ex *sdk.Executor, in *params.HelmReleaseStep) error {
-	args := []string{"helm", "upgrade", "--install", spec.ShellQuote(in.Release), spec.ShellQuote(in.Chart)}
+	args := []string{"helm", "upgrade", "--install", shellquote.ShellQuote(in.Release), shellquote.ShellQuote(in.Chart)}
 	if in.Repo != "" {
-		args = append(args, "--repo", spec.ShellQuote(in.Repo))
+		args = append(args, "--repo", shellquote.ShellQuote(in.Repo))
 	}
 	if in.Version != "" {
-		args = append(args, "--version", spec.ShellQuote(in.Version))
+		args = append(args, "--version", shellquote.ShellQuote(in.Version))
 	}
 	if in.Namespace != "" {
-		args = append(args, "--namespace", spec.ShellQuote(in.Namespace), "--create-namespace")
+		args = append(args, "--namespace", shellquote.ShellQuote(in.Namespace), "--create-namespace")
 	}
 	for _, f := range in.Values_files {
-		args = append(args, "--values", spec.ShellQuote(f))
+		args = append(args, "--values", shellquote.ShellQuote(f))
 	}
 	for _, set := range flattenValues(in.Values) {
-		args = append(args, "--set", spec.ShellQuote(set))
+		args = append(args, "--set", shellquote.ShellQuote(set))
 	}
 	if in.Wait {
 		args = append(args, "--wait")
 	}
 	if in.Timeout != "" {
-		args = append(args, "--timeout", spec.ShellQuote(in.Timeout))
+		args = append(args, "--timeout", shellquote.ShellQuote(in.Timeout))
 	}
 	_, stderr, exit, err := ex.RunCapture(ctx, helmShellCmd(strings.Join(args, " ")))
 	if err != nil {
@@ -163,7 +163,7 @@ func dispatchVerb(ctx context.Context, ex *sdk.Executor, in *params.HelmInput) (
 // Output is the matching `helm list` row (NAME NAMESPACE REVISION UPDATED STATUS
 // CHART APP VERSION) so a `stdout: {contains: <release>}` matcher sees the release.
 func helmReleaseExists(ctx context.Context, ex *sdk.Executor, release, ns string) (string, error) {
-	out, err := helmCapture(ctx, ex, fmt.Sprintf("helm list -n %s -o json", spec.ShellQuote(ns)))
+	out, err := helmCapture(ctx, ex, fmt.Sprintf("helm list -n %s -o json", shellquote.ShellQuote(ns)))
 	if err != nil {
 		return "", fmt.Errorf("helm list: %w", err)
 	}
@@ -187,7 +187,7 @@ func helmStatus(ctx context.Context, ex *sdk.Executor, release, ns, want string)
 	if want == "" {
 		want = "deployed"
 	}
-	out, err := helmCapture(ctx, ex, fmt.Sprintf("helm status %s -n %s -o json", spec.ShellQuote(release), spec.ShellQuote(ns)))
+	out, err := helmCapture(ctx, ex, fmt.Sprintf("helm status %s -n %s -o json", shellquote.ShellQuote(release), shellquote.ShellQuote(ns)))
 	if err != nil {
 		return "", fmt.Errorf("helm status: %w", err)
 	}
@@ -208,7 +208,7 @@ func helmStatus(ctx context.Context, ex *sdk.Executor, release, ns, want string)
 // helmRevision asserts the release's revision is ≥ the expected minimum via `helm
 // status -o json`. Output is the revision line.
 func helmRevision(ctx context.Context, ex *sdk.Executor, release, ns string, want int64) (string, error) {
-	out, err := helmCapture(ctx, ex, fmt.Sprintf("helm status %s -n %s -o json", spec.ShellQuote(release), spec.ShellQuote(ns)))
+	out, err := helmCapture(ctx, ex, fmt.Sprintf("helm status %s -n %s -o json", shellquote.ShellQuote(release), shellquote.ShellQuote(ns)))
 	if err != nil {
 		return "", fmt.Errorf("helm status: %w", err)
 	}
@@ -227,7 +227,7 @@ func helmRevision(ctx context.Context, ex *sdk.Executor, release, ns string, wan
 // helmValuesHash asserts the SHA-256 of the release's rendered values (`helm get
 // values -o json | sha256sum`) equals the expected hash. Output is the hash line.
 func helmValuesHash(ctx context.Context, ex *sdk.Executor, release, ns, want string) (string, error) {
-	out, err := helmCapture(ctx, ex, fmt.Sprintf("helm get values %s -n %s -o json | sha256sum", spec.ShellQuote(release), spec.ShellQuote(ns)))
+	out, err := helmCapture(ctx, ex, fmt.Sprintf("helm get values %s -n %s -o json | sha256sum", shellquote.ShellQuote(release), shellquote.ShellQuote(ns)))
 	if err != nil {
 		return "", fmt.Errorf("helm get values: %w", err)
 	}

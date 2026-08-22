@@ -85,8 +85,8 @@ func memlockUnlimited(hard uint64) bool { return hard >= 1<<62 }
 // the 2222 default otherwise. The persisted READ is the ONE core-coupled bit (routed through the seam).
 func resolveVmSshPort(spec *VmSpec, vmName string) (int, error) {
 	if spec.SSH != nil && spec.SSH.PortAuto {
-		if reply, err := hostConfigResolve(vmName); err == nil && reply.VmState != nil && reply.VmState.SshPort > 0 {
-			return reply.VmState.SshPort, nil
+		if reply, err := hostConfigResolve(vmName); err == nil && reply.VmState != nil && reply.VmState.SSHPort > 0 {
+			return reply.VmState.SSHPort, nil
 		}
 		alloc, err := kit.AllocateAutoPorts([]int{22}, nil)
 		if err != nil {

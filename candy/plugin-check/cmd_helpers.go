@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/spec/shellquote"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -59,15 +60,15 @@ func guestNestedCheckCmd(guestPod, format, section string, filter []string, inst
 		format = "text"
 	}
 	var cmd strings.Builder
-	cmd.WriteString("charly check live " + spec.ShellQuote(guestPod) + " --format " + spec.ShellQuote(format))
+	cmd.WriteString("charly check live " + shellquote.ShellQuote(guestPod) + " --format " + shellquote.ShellQuote(format))
 	if section != "" {
-		cmd.WriteString(" --section " + spec.ShellQuote(section))
+		cmd.WriteString(" --section " + shellquote.ShellQuote(section))
 	}
 	for _, f := range filter {
-		cmd.WriteString(" --filter " + spec.ShellQuote(f))
+		cmd.WriteString(" --filter " + shellquote.ShellQuote(f))
 	}
 	if instance != "" {
-		cmd.WriteString(" -i " + spec.ShellQuote(instance))
+		cmd.WriteString(" -i " + shellquote.ShellQuote(instance))
 	}
 	return cmd.String()
 }

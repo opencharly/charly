@@ -1,4 +1,4 @@
-version: 2026.225.1508
+version: 2026.232.0520
 # providers — the registry membership manifest (provider class -> the words it
 # contributes). Read at init (registry_bootstrap.go) to drive built-in provider
 # registration from THIS embedded default config instead of a hardcoded Go list. A
@@ -401,20 +401,22 @@ alpine:
                     probe: command -v apk
                 uninstall_template: |
                     apk del{{range .Packages}} {{.}}{{end}}
-                install_template: |
-                    RUN {{cacheMounts .CacheMounts}} \
-                    {{- range .Repos}}
-                    {{- if .key}}
-                        key={{quote .key}} && curl -fsSL "$key" -o "/etc/apk/keys/$(basename "$key")" && \
-                    {{- end}}
-                    {{- if .url}}
-                        echo {{quote .url}} >> /etc/apk/repositories && \
-                    {{- end}}
-                    {{- end}}
-                        apk add --no-cache
-                    {{- range .Options}} {{.}}{{end}}
-                    {{- range .Packages}} \
-                          {{.}}{{end}}
+                phase:
+                    install:
+                        container: |
+                            RUN {{cacheMounts .CacheMounts}} \
+                            {{- range .Repos}}
+                            {{- if .key}}
+                                key={{quote .key}} && curl -fsSL "$key" -o "/etc/apk/keys/$(basename "$key")" && \
+                            {{- end}}
+                            {{- if .url}}
+                                echo {{quote .url}} >> /etc/apk/repositories && \
+                            {{- end}}
+                            {{- end}}
+                                apk add --no-cache
+                            {{- range .Options}} {{.}}{{end}}
+                            {{- range .Packages}} \
+                                  {{.}}{{end}}
 arch:
     distro:
         bootstrap:
@@ -434,11 +436,13 @@ arch:
                 section_field:
                     option: list
                     package: list
-                install_template: |
-                    COPY --from={{.StageName}} /tmp/aur-pkgs/ /tmp/aur-pkgs/
-                    RUN {{cacheMounts .CacheMounts}} \
-                        pacman -U --noconfirm /tmp/aur-pkgs/*.pkg.tar.zst && \
-                        rm -rf /tmp/aur-pkgs
+                phase:
+                    install:
+                        container: |
+                            COPY --from={{.StageName}} /tmp/aur-pkgs/ /tmp/aur-pkgs/
+                            RUN {{cacheMounts .CacheMounts}} \
+                                pacman -U --noconfirm /tmp/aur-pkgs/*.pkg.tar.zst && \
+                                rm -rf /tmp/aur-pkgs
             pac:
                 cache_mount:
                     - dst: /var/cache/pacman/pkg
@@ -459,6 +463,37 @@ arch:
                         # matching the container bootstrap's `install_cmd: pacman -Syu`.
                         host: |
                             pacman -Syu --noconfirm --needed{{range .Options}} {{.}}{{end}}{{range .Packages}} {{.}}{{end}}
+                        container: |
+                            RUN {{cacheMounts .CacheMounts}} \
+                            {{- range .Keys}}
+                                pacman-key --recv-keys {{.}} && pacman-key --lsign-key {{.}} && \
+                            {{- end}}
+                            {{- range .Repos}}
+                                printf '[{{.name}}]\nServer = {{.server}}\nSigLevel = {{default .siglevel "Optional TrustAll"}}\n' >> /etc/pacman.conf && \
+                            {{- if .key}}
+                                pacman-key --recv-keys {{.key}} && pacman-key --lsign-key {{.key}} && \
+                            {{- end}}
+                            {{- end}}
+                                # Reseed pacman keyring from the locally-installed
+                                # keyring packages (cachyos-keyring, archlinux-keyring).
+                                # Surfaced 2026-05 when a freshly-published cachyos-
+                                # extra-v3 package metadata signature failed to verify
+                                # against a stale keyring inside the pinned cachyos-v3
+                                # base image. `--populate` is local-only and
+                                # FAST (sub-second per repo); does NOT do keyserver
+                                # roundtrips. Made non-fatal with `|| true` so
+                                # air-gapped / restricted-network builds still succeed
+                                # when the keyring was already current. If `--populate`
+                                # alone isn't enough (i.e. cachyos rotates its master
+                                # signing key without updating the bundled keyring
+                                # package), the fix is to repin the cachyos base to a
+                                # newer cachyos-v3 digest in box/cachyos/charly.yml —
+                                # the upstream rebuild carries the updated keyring package.
+                                (pacman-key --populate 2>/dev/null || true) && \
+                                pacman -Syu --noconfirm --needed
+                            {{- range .Options}} {{.}}{{end}}
+                            {{- range .Packages}} \
+                                  {{.}}{{end}}
                 uninstall_template: |
                     pacman -Rs --noconfirm{{range .Packages}} {{.}}{{end}}
                 local_pkg:
@@ -474,37 +509,6 @@ arch:
                         (pacman-key --populate 2>/dev/null || true) && pacman -Sy --noconfirm && pacman -U --noconfirm {{.StageDir}}/{{.Glob}}
                     download_template: https://opencharly.github.io/charly-arch/${ARCH}/charly-${ARCH}.pkg.tar.zst
                     probe: command -v pacman
-                install_template: |
-                    RUN {{cacheMounts .CacheMounts}} \
-                    {{- range .Keys}}
-                        pacman-key --recv-keys {{.}} && pacman-key --lsign-key {{.}} && \
-                    {{- end}}
-                    {{- range .Repos}}
-                        printf '[{{.name}}]\nServer = {{.server}}\nSigLevel = {{default .siglevel "Optional TrustAll"}}\n' >> /etc/pacman.conf && \
-                    {{- if .key}}
-                        pacman-key --recv-keys {{.key}} && pacman-key --lsign-key {{.key}} && \
-                    {{- end}}
-                    {{- end}}
-                        # Reseed pacman keyring from the locally-installed
-                        # keyring packages (cachyos-keyring, archlinux-keyring).
-                        # Surfaced 2026-05 when a freshly-published cachyos-
-                        # extra-v3 package metadata signature failed to verify
-                        # against a stale keyring inside the pinned cachyos-v3
-                        # base image. `--populate` is local-only and
-                        # FAST (sub-second per repo); does NOT do keyserver
-                        # roundtrips. Made non-fatal with `|| true` so
-                        # air-gapped / restricted-network builds still succeed
-                        # when the keyring was already current. If `--populate`
-                        # alone isn't enough (i.e. cachyos rotates its master
-                        # signing key without updating the bundled keyring
-                        # package), the fix is to repin the cachyos base to a
-                        # newer cachyos-v3 digest in box/cachyos/charly.yml —
-                        # the upstream rebuild carries the updated keyring package.
-                        (pacman-key --populate 2>/dev/null || true) && \
-                        pacman -Syu --noconfirm --needed
-                    {{- range .Options}} {{.}}{{end}}
-                    {{- range .Packages}} \
-                          {{.}}{{end}}
         pacstrap:
             base_package:
                 - base
@@ -751,25 +755,25 @@ debian:
                             {{- end}}
                             {{- end}}
                             DEBIAN_FRONTEND=noninteractive apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y{{range .Options}} {{.}}{{end}}{{range .Packages}} {{.}}{{end}}
+                        container: |
+                            RUN {{cacheMounts .CacheMounts}} \
+                            {{- range .Repos}}
+                            {{- if .key}}
+                                curl -fsSL {{quote .key}} | gpg --batch --yes --dearmor -o {{default .signed_by (printf "/etc/apt/keyrings/%s.gpg" .name)}} && \
+                            {{- end}}
+                            {{- if .url}}
+                                echo "deb [{{if or .key .signed_by}}signed-by={{default .signed_by (printf "/etc/apt/keyrings/%s.gpg" .name)}}{{end}}] {{.url}} {{default .suite "stable"}}{{if eq (default .suite "stable") "/"}}{{else}} {{default .components "main"}}{{end}}" > /etc/apt/sources.list.d/{{.name}}.list && \
+                            {{- end}}
+                            {{- if .ppa}}
+                                add-apt-repository -y ppa:{{.ppa}} && \
+                            {{- end}}
+                            {{- end}}
+                                apt-get update && apt-get install -y --no-install-recommends
+                            {{- range .Options}} {{.}}{{end}}
+                            {{- range .Packages}} \
+                                  {{.}}{{end}}
                 uninstall_template: |
                     DEBIAN_FRONTEND=noninteractive apt-get purge -y{{range .Packages}} {{.}}{{end}}
-                install_template: |
-                    RUN {{cacheMounts .CacheMounts}} \
-                    {{- range .Repos}}
-                    {{- if .key}}
-                        curl -fsSL {{quote .key}} | gpg --batch --yes --dearmor -o {{default .signed_by (printf "/etc/apt/keyrings/%s.gpg" .name)}} && \
-                    {{- end}}
-                    {{- if .url}}
-                        echo "deb [{{if or .key .signed_by}}signed-by={{default .signed_by (printf "/etc/apt/keyrings/%s.gpg" .name)}}{{end}}] {{.url}} {{default .suite "stable"}}{{if eq (default .suite "stable") "/"}}{{else}} {{default .components "main"}}{{end}}" > /etc/apt/sources.list.d/{{.name}}.list && \
-                    {{- end}}
-                    {{- if .ppa}}
-                        add-apt-repository -y ppa:{{.ppa}} && \
-                    {{- end}}
-                    {{- end}}
-                        apt-get update && apt-get install -y --no-install-recommends
-                    {{- range .Options}} {{.}}{{end}}
-                    {{- range .Packages}} \
-                          {{.}}{{end}}
         debootstrap:
             suite: trixie
             mirror: http://deb.debian.org/debian
@@ -958,70 +962,70 @@ fedora:
                     install:
                         host: |
                             dnf install -y{{range .Options}} {{.}}{{end}}{{range .Packages}} {{.}}{{end}}
+                        container: |
+                            RUN {{cacheMounts .CacheMounts}} \
+                            {{- range .Repos}}{{if .rpm}}
+                                dnf install -y {{quote .rpm}} && \
+                            {{- end}}{{end}}
+                            {{- if or (anyRepoHasURL .Repos) .Copr}}
+                                dnf install -y dnf5-plugins && \
+                            {{- end}}
+                            {{- range .Repos}}{{if .url}}
+                            {{- if hasSuffix (printf "%s" .url) ".repo"}}
+                                dnf5 config-manager addrepo --from-repofile={{quote .url}} 2>/dev/null || true && \
+                                dnf5 config-manager setopt {{quote (printf "%s.enabled=0" .name)}} && \
+                            {{- else}}
+                                {{- /* Bare baseurl: charly AUTHORS the .repo file, so there is no vendor
+                                       value to inherit and `gpgcheck` is two-state (default ON). But
+                                       `repo_gpgcheck` IS tri-state here in the sense that matters: it is
+                                       emitted only when the candy sets it, because dnf's own default
+                                       (off) is the right silence. Without this line the knob read as
+                                       supported on a bare-baseurl repo and was silently dropped — the
+                                       `.repo`-file branch below honoured it while this one ignored it. */}}
+                                printf '%s\n' '[{{.name}}]' 'name={{.name}}' 'baseurl={{.url}}' 'enabled=0' 'gpgcheck={{if eq (default .gpgcheck "true") "false"}}0{{else}}1{{end}}'{{if .repo_gpgcheck}} 'repo_gpgcheck={{if eq (printf "%v" .repo_gpgcheck) "false"}}0{{else}}1{{end}}'{{end}}{{if .gpgkey}} 'gpgkey={{.gpgkey}}'{{end}} > /etc/yum.repos.d/{{.name}}.repo && \
+                            {{- end}}
+                            {{- if .gpgkey}}
+                                rpm --import {{.gpgkey}} || true && \
+                            {{- end}}
+                            {{- if hasSuffix (printf "%s" .url) ".repo"}}
+                            {{- /* A vendor .repo file is copied in VERBATIM, so its own gpgcheck/
+                                   repo_gpgcheck win unless we say otherwise. Both knobs are
+                                   TRI-STATE: absent inherits the vendor's value, false forces the
+                                   check off, true forces it ON. The "true" arm is what lets a candy
+                                   REPAIR a vendor that ships gpgcheck=0 (NVIDIA's
+                                   nvidia-container-toolkit does); without it the knob could only ever
+                                   weaken the vendor's policy and packages installed unverified even
+                                   though gpgkey: had imported a perfectly good key. */}}
+                            {{- $gc := printf "%v" .gpgcheck}}
+                            {{- if eq $gc "false"}}
+                                dnf5 config-manager setopt {{quote (printf "%s.gpgcheck=0" .name)}} && \
+                            {{- else if eq $gc "true"}}
+                                dnf5 config-manager setopt {{quote (printf "%s.gpgcheck=1" .name)}} && \
+                            {{- end}}
+                            {{- $rgc := printf "%v" .repo_gpgcheck}}
+                            {{- if eq $rgc "false"}}
+                                dnf5 config-manager setopt {{quote (printf "%s.repo_gpgcheck=0" .name)}} && \
+                            {{- else if eq $rgc "true"}}
+                                dnf5 config-manager setopt {{quote (printf "%s.repo_gpgcheck=1" .name)}} && \
+                            {{- end}}
+                            {{- end}}{{end}}{{end}}
+                            {{- range .Copr}}
+                                dnf5 copr enable -y {{.}} && \
+                            {{- end}}
+                            {{- range .Modules}}
+                                dnf module reset -y {{splitFirst . ":"}} && \
+                                dnf module enable -y {{.}} && \
+                            {{- end}}
+                                dnf install -y{{range .Options}} {{.}}{{end}}
+                            {{- range .Repos}}{{if .url}} --enable-repo={{quote .name}}{{end}}{{end}}
+                            {{- range .Exclude}} --exclude='{{.}}'{{end}}
+                            {{- range .Packages}} \
+                                  {{.}}{{end}}
+                            {{- range .Copr}} && \
+                                dnf5 config-manager setopt "copr:copr.fedorainfracloud.org:{{replace . "/" ":"}}.enabled=0"
+                            {{- end}}
                 uninstall_template: |
                     dnf remove -y{{range .Packages}} {{.}}{{end}}
-                install_template: |
-                    RUN {{cacheMounts .CacheMounts}} \
-                    {{- range .Repos}}{{if .rpm}}
-                        dnf install -y {{quote .rpm}} && \
-                    {{- end}}{{end}}
-                    {{- if or (anyRepoHasURL .Repos) .Copr}}
-                        dnf install -y dnf5-plugins && \
-                    {{- end}}
-                    {{- range .Repos}}{{if .url}}
-                    {{- if hasSuffix (printf "%s" .url) ".repo"}}
-                        dnf5 config-manager addrepo --from-repofile={{quote .url}} 2>/dev/null || true && \
-                        dnf5 config-manager setopt {{quote (printf "%s.enabled=0" .name)}} && \
-                    {{- else}}
-                        {{- /* Bare baseurl: charly AUTHORS the .repo file, so there is no vendor
-                               value to inherit and `gpgcheck` is two-state (default ON). But
-                               `repo_gpgcheck` IS tri-state here in the sense that matters: it is
-                               emitted only when the candy sets it, because dnf's own default
-                               (off) is the right silence. Without this line the knob read as
-                               supported on a bare-baseurl repo and was silently dropped — the
-                               `.repo`-file branch below honoured it while this one ignored it. */}}
-                        printf '%s\n' '[{{.name}}]' 'name={{.name}}' 'baseurl={{.url}}' 'enabled=0' 'gpgcheck={{if eq (default .gpgcheck "true") "false"}}0{{else}}1{{end}}'{{if .repo_gpgcheck}} 'repo_gpgcheck={{if eq (printf "%v" .repo_gpgcheck) "false"}}0{{else}}1{{end}}'{{end}}{{if .gpgkey}} 'gpgkey={{.gpgkey}}'{{end}} > /etc/yum.repos.d/{{.name}}.repo && \
-                    {{- end}}
-                    {{- if .gpgkey}}
-                        rpm --import {{.gpgkey}} || true && \
-                    {{- end}}
-                    {{- if hasSuffix (printf "%s" .url) ".repo"}}
-                    {{- /* A vendor .repo file is copied in VERBATIM, so its own gpgcheck/
-                           repo_gpgcheck win unless we say otherwise. Both knobs are
-                           TRI-STATE: absent inherits the vendor's value, false forces the
-                           check off, true forces it ON. The "true" arm is what lets a candy
-                           REPAIR a vendor that ships gpgcheck=0 (NVIDIA's
-                           nvidia-container-toolkit does); without it the knob could only ever
-                           weaken the vendor's policy and packages installed unverified even
-                           though gpgkey: had imported a perfectly good key. */}}
-                    {{- $gc := printf "%v" .gpgcheck}}
-                    {{- if eq $gc "false"}}
-                        dnf5 config-manager setopt {{quote (printf "%s.gpgcheck=0" .name)}} && \
-                    {{- else if eq $gc "true"}}
-                        dnf5 config-manager setopt {{quote (printf "%s.gpgcheck=1" .name)}} && \
-                    {{- end}}
-                    {{- $rgc := printf "%v" .repo_gpgcheck}}
-                    {{- if eq $rgc "false"}}
-                        dnf5 config-manager setopt {{quote (printf "%s.repo_gpgcheck=0" .name)}} && \
-                    {{- else if eq $rgc "true"}}
-                        dnf5 config-manager setopt {{quote (printf "%s.repo_gpgcheck=1" .name)}} && \
-                    {{- end}}
-                    {{- end}}{{end}}{{end}}
-                    {{- range .Copr}}
-                        dnf5 copr enable -y {{.}} && \
-                    {{- end}}
-                    {{- range .Modules}}
-                        dnf module reset -y {{splitFirst . ":"}} && \
-                        dnf module enable -y {{.}} && \
-                    {{- end}}
-                        dnf install -y{{range .Options}} {{.}}{{end}}
-                    {{- range .Repos}}{{if .url}} --enable-repo={{quote .name}}{{end}}{{end}}
-                    {{- range .Exclude}} --exclude='{{.}}'{{end}}
-                    {{- range .Packages}} \
-                          {{.}}{{end}}
-                    {{- range .Copr}} && \
-                        dnf5 config-manager setopt "copr:copr.fedorainfracloud.org:{{replace . "/" ":"}}.enabled=0"
-                    {{- end}}
 ubuntu:
     distro:
         inherits: debian

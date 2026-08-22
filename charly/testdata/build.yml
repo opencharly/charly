@@ -16,11 +16,13 @@ arch:
                 section_field:
                     option: list
                     package: list
-                install_template: |
-                    COPY --from={{.StageName}} /tmp/aur-pkgs/ /tmp/aur-pkgs/
-                    RUN {{cacheMounts .CacheMounts}} \
-                        pacman -U --noconfirm /tmp/aur-pkgs/*.pkg.tar.zst && \
-                        rm -rf /tmp/aur-pkgs
+                phase:
+                    install:
+                        container: |
+                            COPY --from={{.StageName}} /tmp/aur-pkgs/ /tmp/aur-pkgs/
+                            RUN {{cacheMounts .CacheMounts}} \
+                                pacman -U --noconfirm /tmp/aur-pkgs/*.pkg.tar.zst && \
+                                rm -rf /tmp/aur-pkgs
             pac:
                 cache_mount:
                     - dst: /var/cache/pacman/pkg
@@ -30,21 +32,23 @@ arch:
                     option: list
                     package: list
                     repo: list_of_maps
-                install_template: |
-                    RUN {{cacheMounts .CacheMounts}} \
-                    {{- range .Keys}}
-                        pacman-key --recv-keys {{.}} && pacman-key --lsign-key {{.}} && \
-                    {{- end}}
-                    {{- range .Repos}}
-                        printf '[{{.name}}]\nServer = {{.server}}\nSigLevel = {{default .siglevel "Optional TrustAll"}}\n' >> /etc/pacman.conf && \
-                    {{- if .key}}
-                        pacman-key --recv-keys {{.key}} && pacman-key --lsign-key {{.key}} && \
-                    {{- end}}
-                    {{- end}}
-                        pacman -Syu --noconfirm
-                    {{- range .Options}} {{.}}{{end}}
-                    {{- range .Packages}} \
-                          {{.}}{{end}}
+                phase:
+                    install:
+                        container: |
+                            RUN {{cacheMounts .CacheMounts}} \
+                            {{- range .Keys}}
+                                pacman-key --recv-keys {{.}} && pacman-key --lsign-key {{.}} && \
+                            {{- end}}
+                            {{- range .Repos}}
+                                printf '[{{.name}}]\nServer = {{.server}}\nSigLevel = {{default .siglevel "Optional TrustAll"}}\n' >> /etc/pacman.conf && \
+                            {{- if .key}}
+                                pacman-key --recv-keys {{.key}} && pacman-key --lsign-key {{.key}} && \
+                            {{- end}}
+                            {{- end}}
+                                pacman -Syu --noconfirm
+                            {{- range .Options}} {{.}}{{end}}
+                            {{- range .Packages}} \
+                                  {{.}}{{end}}
 debian:
     distro:
         bootstrap:
@@ -68,23 +72,25 @@ debian:
                     option: list
                     package: list
                     repo: list_of_maps
-                install_template: |
-                    RUN {{cacheMounts .CacheMounts}} \
-                    {{- range .Repos}}
-                    {{- if .key}}
-                        curl -fsSL {{quote .key}} | gpg --dearmor -o {{default .signed_by (printf "/etc/apt/keyrings/%s.gpg" .name)}} && \
-                    {{- end}}
-                    {{- if .url}}
-                        echo "deb [{{if or .key .signed_by}}signed-by={{default .signed_by (printf "/etc/apt/keyrings/%s.gpg" .name)}}{{end}}] {{.url}} {{default .suite "stable"}} {{default .components "main"}}" > /etc/apt/sources.list.d/{{.name}}.list && \
-                    {{- end}}
-                    {{- if .ppa}}
-                        add-apt-repository -y ppa:{{.ppa}} && \
-                    {{- end}}
-                    {{- end}}
-                        apt-get update && apt-get install -y --no-install-recommends
-                    {{- range .Options}} {{.}}{{end}}
-                    {{- range .Packages}} \
-                          {{.}}{{end}}
+                phase:
+                    install:
+                        container: |
+                            RUN {{cacheMounts .CacheMounts}} \
+                            {{- range .Repos}}
+                            {{- if .key}}
+                                curl -fsSL {{quote .key}} | gpg --dearmor -o {{default .signed_by (printf "/etc/apt/keyrings/%s.gpg" .name)}} && \
+                            {{- end}}
+                            {{- if .url}}
+                                echo "deb [{{if or .key .signed_by}}signed-by={{default .signed_by (printf "/etc/apt/keyrings/%s.gpg" .name)}}{{end}}] {{.url}} {{default .suite "stable"}} {{default .components "main"}}" > /etc/apt/sources.list.d/{{.name}}.list && \
+                            {{- end}}
+                            {{- if .ppa}}
+                                add-apt-repository -y ppa:{{.ppa}} && \
+                            {{- end}}
+                            {{- end}}
+                                apt-get update && apt-get install -y --no-install-recommends
+                            {{- range .Options}} {{.}}{{end}}
+                            {{- range .Packages}} \
+                                  {{.}}{{end}}
 fedora:
     distro:
         bootstrap:
@@ -109,32 +115,34 @@ fedora:
                     option: list
                     package: list
                     repo: list_of_maps
-                install_template: |
-                    RUN {{cacheMounts .CacheMounts}} \
-                    {{- range .Repos}}{{if .rpm}}
-                        dnf install -y {{quote .rpm}} && \
-                    {{- end}}{{end}}
-                    {{- range .Repos}}{{if .url}}
-                        dnf5 config-manager addrepo --from-repofile={{quote .url}} 2>/dev/null || true && \
-                        dnf5 config-manager setopt {{quote (printf "%s.enabled=0" .name)}} && \
-                    {{- if .gpgkey}}
-                        rpm --import {{.gpgkey}} || true && \
-                    {{- end}}{{end}}{{end}}
-                    {{- range .Copr}}
-                        dnf5 copr enable -y {{.}} && \
-                    {{- end}}
-                    {{- range .Modules}}
-                        dnf module reset -y {{splitFirst . ":"}} && \
-                        dnf module enable -y {{.}} && \
-                    {{- end}}
-                        dnf install -y{{range .Options}} {{.}}{{end}}
-                    {{- range .Repos}}{{if .url}} --enable-repo={{quote .name}}{{end}}{{end}}
-                    {{- range .Exclude}} --exclude='{{.}}'{{end}}
-                    {{- range .Packages}} \
-                          {{.}}{{end}}
-                    {{- range .Copr}} && \
-                        dnf5 config-manager setopt "copr:copr.fedorainfracloud.org:{{replace . "/" ":"}}.enabled=0"
-                    {{- end}}
+                phase:
+                    install:
+                        container: |
+                            RUN {{cacheMounts .CacheMounts}} \
+                            {{- range .Repos}}{{if .rpm}}
+                                dnf install -y {{quote .rpm}} && \
+                            {{- end}}{{end}}
+                            {{- range .Repos}}{{if .url}}
+                                dnf5 config-manager addrepo --from-repofile={{quote .url}} 2>/dev/null || true && \
+                                dnf5 config-manager setopt {{quote (printf "%s.enabled=0" .name)}} && \
+                            {{- if .gpgkey}}
+                                rpm --import {{.gpgkey}} || true && \
+                            {{- end}}{{end}}{{end}}
+                            {{- range .Copr}}
+                                dnf5 copr enable -y {{.}} && \
+                            {{- end}}
+                            {{- range .Modules}}
+                                dnf module reset -y {{splitFirst . ":"}} && \
+                                dnf module enable -y {{.}} && \
+                            {{- end}}
+                                dnf install -y{{range .Options}} {{.}}{{end}}
+                            {{- range .Repos}}{{if .url}} --enable-repo={{quote .name}}{{end}}{{end}}
+                            {{- range .Exclude}} --exclude='{{.}}'{{end}}
+                            {{- range .Packages}} \
+                                  {{.}}{{end}}
+                            {{- range .Copr}} && \
+                                dnf5 config-manager setopt "copr:copr.fedorainfracloud.org:{{replace . "/" ":"}}.enabled=0"
+                            {{- end}}
 ubuntu:
     distro:
         inherits: debian
@@ -159,9 +167,11 @@ cargo:
         inline: true
         cache_mount:
             - dst: /tmp/cargo-cache
-        install_template: |
-            RUN --mount=type=bind,from={{.LayerStage}},source=/,target=/ctx \
-                {{cacheMountsOwned .CacheMounts .UID .GID}}cargo install --path /ctx
+        phase:
+            install:
+                container: |
+                    RUN --mount=type=bind,from={{.LayerStage}},source=/,target=/ctx \
+                        {{cacheMountsOwned .CacheMounts .UID .GID}}cargo install --path /ctx
 npm:
     builder:
         detect_file:

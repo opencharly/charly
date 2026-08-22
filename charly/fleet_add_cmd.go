@@ -17,6 +17,7 @@ import (
 	"fmt"
 
 	specexec "github.com/opencharly/spec/exec"
+	"github.com/opencharly/spec/fleet"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -29,7 +30,7 @@ func deriveChildExecutorForPath(path string, node *spec.FleetNode, parentExec sp
 	if node == nil || !node.HasChildren() {
 		return parentExec, nil
 	}
-	switch deployTraitDescent(spec.ClassifyNodeTarget(node, path)).Transport {
+	switch deployTraitDescent(fleet.ClassifyNodeTarget(node, path)).Transport {
 	case "none":
 		if parentExec != nil {
 			return parentExec, nil

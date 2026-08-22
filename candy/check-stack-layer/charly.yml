@@ -2,7 +2,7 @@ check-stack-layer:
     candy:
         version: 2026.209.1500
         description: |
-            Combined kind:layer + kind:pod + DeployTarget smoke on top of check-base-layer
+            Combined kind:layer + kind:pod + deploy-target smoke on top of check-base-layer
             The second (and final) layer of the check-pod stack. In one layer it
             proves three mechanisms the combined check-pod bed
             (`charly check run check-pod`) covers beyond the build smoke:
@@ -10,7 +10,7 @@ check-stack-layer:
                 the prior check-base-layer) is still present;
               * kind:pod runtime — runs `nc -lk 18794` under the configured init
                 system and probes the listening port (harness + in-container ss);
-              * DeployTarget rendering — runs `sleep infinity` under supervisord and
+              * deploy-target rendering — runs `sleep infinity` under supervisord and
                 probes the service is running.
             Installs ncat + iproute (port listener) + coreutils (sleep) + supervisor.
             Both services are custom exec entries — fedora-minimal ships no systemd

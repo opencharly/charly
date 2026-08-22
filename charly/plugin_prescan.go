@@ -33,6 +33,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/opencharly/spec/loader"
 	"github.com/opencharly/spec/spec"
 	"gopkg.in/yaml.v3"
 )
@@ -403,7 +404,7 @@ func prescanDeclaredPluginWords(rootData []byte, baseDir string) {
 		if !filepath.IsAbs(root) {
 			root = filepath.Join(baseDir, root)
 		}
-		dirs, err := spec.FindEntityDirs(root, manifest, disc.Recursive)
+		dirs, err := loader.FindEntityDirs(root, manifest, disc.Recursive)
 		if err != nil {
 			continue
 		}

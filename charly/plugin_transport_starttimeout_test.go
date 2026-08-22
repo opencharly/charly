@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/opencharly/spec/spec"
+	"github.com/opencharly/spec/poll"
 )
 
 // TestLocalPluginClientConfig_StartTimeoutIsReadinessBound guards the exec→handshake bound. With
@@ -35,7 +35,7 @@ func TestLocalPluginClientConfig_StartTimeoutHonorsOperatorOverride(t *testing.T
 	// loadedReadiness caches through a sync.Once, so resolve the override the same way it does
 	// rather than fighting the cache — this asserts the field the config feeds, not the cache.
 	t.Setenv("CHARLY_READINESS_PER_ATTEMPT", "7m")
-	rr, err := spec.ResolveReadiness(nil)
+	rr, err := poll.ResolveReadiness(nil)
 	if err != nil {
 		t.Fatalf("ResolveReadiness() error = %v", err)
 	}

@@ -100,9 +100,9 @@ func dispatchInspect(hc *hostClient, args []string) error {
 	// tunnel/bind_mounts read the DEPLOY OVERLAY (charly.yml), not the build-mode envelope. The
 	// deploy-overlay volume/tunnel state is a pure sdk read (loaderkit.LoadHostFleetConfigViaExecutor,
 	// the cycle-free plugin-side overlay read); the tunnel resolution's published-port set is the
-	// projector-filled box-aggregate view.Ports (deploykit.ResolveTunnelConfig ignores the candy
-	// graph), so no host reentry / project reload is needed — the former hidden __box-inspect-overlay
-	// core command is DELETED (K5 seam-death).
+	// projector-filled box-aggregate view.Ports (deploykit.TunnelConfigFromMetadata resolves off the
+	// overlay Tunnel + that port set, no candy graph), so no host reentry / project reload is needed
+	// — the former hidden __box-inspect-overlay core command is DELETED (K5 seam-death).
 	switch g.Format {
 	case "bind_mounts":
 		return inspectBindMounts(hc.ctx, hc.exec, g.Box, g.Instance)
@@ -137,8 +137,8 @@ func inspectBindMounts(ctx context.Context, ex *sdk.Executor, box, instance stri
 
 // inspectTunnel prints the DEPLOY-OVERLAY (charly.yml) tunnel config for a box. The tunnel resolves
 // off the deploy overlay's Tunnel spec + the box-aggregate published-port set (boxPorts, the
-// projector-filled view.Ports — deploykit.ResolveTunnelConfig ignores the candy-reader/candy-list
-// args, so nil is passed). Ported byte-identically from the former core InspectOverlayCmd.
+// projector-filled view.Ports) via deploykit.TunnelConfigFromMetadata (a BoxMetadata built from the
+// overlay's Tunnel + that port set). Ported byte-identically from the former core InspectOverlayCmd.
 func inspectTunnel(ctx context.Context, ex *sdk.Executor, box, instance string, boxPorts []string) error {
 	dc, derr := loaderkit.LoadHostFleetConfigViaExecutor(ctx, ex)
 	if derr != nil || dc == nil {
@@ -148,7 +148,11 @@ func inspectTunnel(ctx context.Context, ex *sdk.Executor, box, instance string, 
 	if !ok || overlay.Tunnel == nil {
 		return nil
 	}
-	tc := deploykit.ResolveTunnelConfig(overlay.Tunnel, box, "", nil, nil, map[string]string{}, boxPorts)
+	tc := deploykit.TunnelConfigFromMetadata(&spec.BoxMetadata{
+		Box:    box,
+		Tunnel: overlay.Tunnel,
+		Port:   boxPorts,
+	})
 	if tc == nil || len(tc.Ports) == 0 {
 		return nil
 	}

@@ -4,7 +4,7 @@ package check
 // charly/checkrun.go's newCheckRunner. Wires the SAME three seams every check runner needs
 // (Verbs/Grammar/ProbeTimeout) using this file's own portable implementations instead of core's
 // hostVerbResolver/hostPlanGrammar/loadedReadiness — confirmed byte-identical behavior for
-// Grammar (plan_grammar.go, ported verbatim) and ProbeTimeout (spec.ReadinessProvider() is the
+// Grammar (plan_grammar.go, ported verbatim) and ProbeTimeout (poll.ReadinessProvider() is the
 // SAME resolver loadedReadiness() wraps, already threaded to this plugin process via
 // CHARLY_READINESS_* env at Connect — see venue.go's header). Verbs is the new mechanism
 // (verb_resolver.go's pluginVerbResolver), proven by the W3 Unit B spike.
@@ -15,6 +15,7 @@ import (
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/vmshared"
+	"github.com/opencharly/spec/poll"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -40,7 +41,7 @@ func newPluginCheckRunner(ex *sdk.Executor, ctx context.Context, env spec.CheckE
 	cfg.Verbs = pvr
 	cfg.Grammar = pluginPlanGrammar{}
 	if cfg.ProbeTimeout == 0 {
-		cfg.ProbeTimeout = spec.ReadinessProvider().PerAttemptFor(vmshared.PollLocal)
+		cfg.ProbeTimeout = poll.ReadinessProvider().PerAttemptFor(vmshared.PollLocal)
 	}
 	kr := kit.NewRunner(cfg)
 	pvr.kr = kr

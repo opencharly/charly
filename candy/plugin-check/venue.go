@@ -10,7 +10,7 @@ package check
 // outside the loader (this package never builds one). Everything else — the poll/readiness/SSH
 // forwarding machinery, the container/VM/host classification, the dotted-path tree walk — was
 // ALREADY portable via existing sdk/vmshared + sdk/kit primitives; the mechanical rename
-// loadedReadiness()→spec.ReadinessProvider() / pollUntil→vmshared.PollUntil /
+// loadedReadiness()→poll.ReadinessProvider() / pollUntil→vmshared.PollUntil /
 // ErrPollFatal→vmshared.ErrPollFatal / PollLocal→vmshared.PollLocal / vmDomainIdentity→
 // vmshared.VmDomainIdentity is the WHOLE of the "no new mechanism" claim for this file (RDD-
 // confirmed by reading sdk/vmshared's own alias/re-export tables before this move).

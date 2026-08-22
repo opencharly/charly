@@ -58,12 +58,12 @@ func (f *fakeExecutorServiceClient) InvokeProvider(ctx context.Context, in *pb.I
 // prior-state read must return a NON-EMPTY VmDeployState rather than silently degrading. Since
 // K-wave 2 cone R2 bank D the read is PLUGIN-SIDE (resolvePriorVmState → loaderkit.ResolveVmStateViaExecutor
 // — the "config-resolve" HostBuild seam is DELETED); the seam var is stubbed here to return a
-// real persisted SshPort/DiskPath and the assertion requires it to come through — the same
+// real persisted SSHPort/DiskPath and the assertion requires it to come through — the same
 // regression guard, applied to the caller's use of the resolved state.
 func TestResolvePriorVmState_ReadsNonEmptyOutOfProcess(t *testing.T) {
 	prev := resolvePriorVmState
 	resolvePriorVmState = func(context.Context, *sdk.Executor, string) (*spec.VmDeployState, error) {
-		return &spec.VmDeployState{SshPort: 2244, DiskPath: "/tmp/disk.qcow2"}, nil
+		return &spec.VmDeployState{SSHPort: 2244, DiskPath: "/tmp/disk.qcow2"}, nil
 	}
 	t.Cleanup(func() { resolvePriorVmState = prev })
 	ex := sdk.NewInProcExecutor(&fakeExecutorServiceClient{})
@@ -75,8 +75,8 @@ func TestResolvePriorVmState_ReadsNonEmptyOutOfProcess(t *testing.T) {
 	if got == nil {
 		t.Fatal("resolvePriorVmState() = nil, want a non-empty VmDeployState")
 	}
-	if got.SshPort != 2244 {
-		t.Errorf("resolvePriorVmState().SshPort = %d, want 2244", got.SshPort)
+	if got.SSHPort != 2244 {
+		t.Errorf("resolvePriorVmState().SSHPort = %d, want 2244", got.SSHPort)
 	}
 	if got.DiskPath != "/tmp/disk.qcow2" {
 		t.Errorf("resolvePriorVmState().DiskPath = %q, want /tmp/disk.qcow2", got.DiskPath)
@@ -112,7 +112,7 @@ func TestDispatchVmEphemeralTeardown_InvokesFleetProviderWhenEphemeral(t *testin
 	prev := resolvePriorVmState
 	resolvePriorVmState = func(context.Context, *sdk.Executor, string) (*spec.VmDeployState, error) {
 		return &spec.VmDeployState{
-			SshPort:   12345,
+			SSHPort:   12345,
 			Ephemeral: &spec.EphemeralRuntime{ID: "test-id", Status: "active", DeployAddress: "check-sidecar-pod.check-sidecar-pod-ephvm"},
 		}, nil
 	}
@@ -158,7 +158,7 @@ func TestDispatchVmEphemeralTeardown_InvokesFleetProviderWhenEphemeral(t *testin
 func TestDispatchVmEphemeralTeardown_NoEphemeral_SkipsDispatch(t *testing.T) {
 	prev := resolvePriorVmState
 	resolvePriorVmState = func(context.Context, *sdk.Executor, string) (*spec.VmDeployState, error) {
-		return &spec.VmDeployState{SshPort: 12345}, nil
+		return &spec.VmDeployState{SSHPort: 12345}, nil
 	}
 	t.Cleanup(func() { resolvePriorVmState = prev })
 	fake := &fakeExecutorServiceClient{}

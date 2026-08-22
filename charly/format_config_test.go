@@ -38,8 +38,8 @@ func TestLoadDistroConfigFromFile(t *testing.T) {
 		t.Fatal("expected fedora to have rpm format")
 	}
 	rpm := fedora.Format["rpm"]
-	if rpm.InstallTemplate == "" {
-		t.Error("rpm install_template is empty")
+	if rpm.Phases == nil || rpm.Phases.Install == nil || rpm.Phases.Install.Container == "" {
+		t.Error("rpm phase.install.container is empty")
 	}
 	if len(rpm.CacheMount) == 0 {
 		t.Error("rpm cache_mounts is empty")

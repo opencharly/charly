@@ -12,6 +12,7 @@ import (
 
 	"github.com/opencharly/charly/candy/plugin-wl/params"
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/spec/shellquote"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -280,7 +281,7 @@ func wlGeometry(ctx context.Context, ex *sdk.Executor, in *params.WlInput) (stri
 
 	shellCmd := fmt.Sprintf(
 		`export DISPLAY=:0 && WID=$(xdotool search --class %s 2>/dev/null | head -1 || xdotool search --name %s 2>/dev/null | head -1) && [ -n "$WID" ] && xdotool getwindowgeometry "$WID" 2>/dev/null`,
-		spec.ShellQuote(in.Target), spec.ShellQuote(in.Target),
+		shellquote.ShellQuote(in.Target), shellquote.ShellQuote(in.Target),
 	)
 	if data, err := wlCapture(ctx, ex, shellCmd); err == nil {
 		var x, y, w, h int
@@ -332,7 +333,7 @@ func wlXprop(ctx context.Context, ex *sdk.Executor, in *params.WlInput) (string,
 	} else {
 		shellCmd = fmt.Sprintf(
 			`export DISPLAY=:0 && WID=$(xdotool search --class %s 2>/dev/null | head -1 || xdotool search --name %s 2>/dev/null | head -1) && [ -n "$WID" ] && xprop -id "$WID" WM_CLASS _NET_WM_NAME _NET_WM_WINDOW_TYPE _NET_WM_PID 2>/dev/null && xdotool getwindowgeometry "$WID" 2>/dev/null || echo "No X11 window matching %s"`,
-			spec.ShellQuote(in.Target), spec.ShellQuote(in.Target), in.Target,
+			shellquote.ShellQuote(in.Target), shellquote.ShellQuote(in.Target), in.Target,
 		)
 	}
 	return wlCapture(ctx, ex, shellCmd)
@@ -349,9 +350,9 @@ func wlAtspi(ctx context.Context, ex *sdk.Executor, in *params.WlInput) (string,
 	}
 	var shellCmd string
 	if in.Query != "" {
-		shellCmd = fmt.Sprintf("/usr/bin/python3 -c %s %s %s", spec.ShellQuote(atspiScript), spec.ShellQuote(in.Action), spec.ShellQuote(in.Query))
+		shellCmd = fmt.Sprintf("/usr/bin/python3 -c %s %s %s", shellquote.ShellQuote(atspiScript), shellquote.ShellQuote(in.Action), shellquote.ShellQuote(in.Query))
 	} else {
-		shellCmd = fmt.Sprintf("/usr/bin/python3 -c %s %s", spec.ShellQuote(atspiScript), spec.ShellQuote(in.Action))
+		shellCmd = fmt.Sprintf("/usr/bin/python3 -c %s %s", shellquote.ShellQuote(atspiScript), shellquote.ShellQuote(in.Action))
 	}
 	wrapped := fmt.Sprintf(`export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=/tmp/dbus-session}" && %s`, shellCmd)
 	return wlCapture(ctx, ex, wrapped)
@@ -364,9 +365,9 @@ func wlScreenshot(ctx context.Context, ex *sdk.Executor, in *params.WlInput) (st
 	var captureCmd string
 	switch {
 	case ex.VenueHasTool(ctx, "pixelflux-screenshot"):
-		captureCmd = "pixelflux-screenshot > " + spec.ShellQuote(screenshotVenuePath)
+		captureCmd = "pixelflux-screenshot > " + shellquote.ShellQuote(screenshotVenuePath)
 	case ex.VenueHasTool(ctx, "grim"):
-		captureCmd = "grim -o HEADLESS-1 " + spec.ShellQuote(screenshotVenuePath)
+		captureCmd = "grim -o HEADLESS-1 " + shellquote.ShellQuote(screenshotVenuePath)
 	default:
 		return "", fmt.Errorf("no screenshot tool available (need pixelflux-screenshot or grim)")
 	}
@@ -380,7 +381,7 @@ func wlScreenshot(ctx context.Context, ex *sdk.Executor, in *params.WlInput) (st
 	if err := os.WriteFile(in.Artifact, data, 0o644); err != nil {
 		return "", fmt.Errorf("writing screenshot to %s: %w", in.Artifact, err)
 	}
-	_ = ex.VenueRunSilent(ctx, "rm -f "+spec.ShellQuote(screenshotVenuePath))
+	_ = ex.VenueRunSilent(ctx, "rm -f "+shellquote.ShellQuote(screenshotVenuePath))
 	return fmt.Sprintf("Screenshot saved to %s (%d bytes)", in.Artifact, len(data)), nil
 }
 
@@ -399,7 +400,7 @@ func wlClipboard(ctx context.Context, ex *sdk.Executor, in *params.WlInput) (str
 		if in.Text == "" {
 			return "", fmt.Errorf("text argument required for 'set' action")
 		}
-		if _, err := wlCapture(ctx, ex, fmt.Sprintf("printf '%%s' %s | wl-copy", spec.ShellQuote(in.Text))); err != nil {
+		if _, err := wlCapture(ctx, ex, fmt.Sprintf("printf '%%s' %s | wl-copy", shellquote.ShellQuote(in.Text))); err != nil {
 			return "", fmt.Errorf("setting clipboard: %w", err)
 		}
 		return fmt.Sprintf("Clipboard set (%d chars)", len(in.Text)), nil
@@ -536,7 +537,7 @@ func wlType(ctx context.Context, ex *sdk.Executor, in *params.WlInput) (string, 
 	if detectCompositor(ctx, ex) == "kwin" {
 		return "", fmt.Errorf("keyboard typing unsupported on KWin (needs zwp_virtual_keyboard_manager_v1, which KWin does not implement)")
 	}
-	if _, err := wlCapture(ctx, ex, "wtype -- "+spec.ShellQuote(in.Text)); err != nil {
+	if _, err := wlCapture(ctx, ex, "wtype -- "+shellquote.ShellQuote(in.Text)); err != nil {
 		return "", fmt.Errorf("typing text: %w", err)
 	}
 	return fmt.Sprintf("Typed %d characters", len(in.Text)), nil
@@ -546,7 +547,7 @@ func wlKey(ctx context.Context, ex *sdk.Executor, in *params.WlInput) (string, e
 	if !wlValidKey(in.KeyName) {
 		return "", fmt.Errorf("unknown key %q (valid: %s)", in.KeyName, wlKeyNames())
 	}
-	if _, err := wlCapture(ctx, ex, "wtype -k "+spec.ShellQuote(in.KeyName)); err != nil {
+	if _, err := wlCapture(ctx, ex, "wtype -k "+shellquote.ShellQuote(in.KeyName)); err != nil {
 		return "", fmt.Errorf("pressing key %s: %w", in.KeyName, err)
 	}
 	return fmt.Sprintf("Pressed key %s", in.KeyName), nil
@@ -580,13 +581,13 @@ func wlFocus(ctx context.Context, ex *sdk.Executor, in *params.WlInput) (string,
 		return fmt.Sprintf("Focused window matching %q via kdotool", in.Target), nil
 	}
 	if ex.VenueRunSilent(ctx, "command -v wlrctl >/dev/null 2>&1") == nil {
-		if wlSilent(ctx, ex, "wlrctl toplevel focus "+spec.ShellQuote(in.Target)) == nil {
+		if wlSilent(ctx, ex, "wlrctl toplevel focus "+shellquote.ShellQuote(in.Target)) == nil {
 			return fmt.Sprintf("Focused window matching %q via wlrctl", in.Target), nil
 		}
 	}
 	cmd := fmt.Sprintf(
 		`export DISPLAY=:0 && xdotool search --name %s windowactivate 2>/dev/null || export DISPLAY=:0 && xdotool search --class %s windowactivate`,
-		spec.ShellQuote(in.Target), spec.ShellQuote(in.Target),
+		shellquote.ShellQuote(in.Target), shellquote.ShellQuote(in.Target),
 	)
 	if _, err := wlCapture(ctx, ex, cmd); err != nil {
 		return "", fmt.Errorf("focusing window %q: %w", in.Target, err)
@@ -668,7 +669,7 @@ func wlResolution(ctx context.Context, ex *sdk.Executor, in *params.WlInput) (st
 	if output == "" {
 		output = "HEADLESS-1"
 	}
-	cmd := fmt.Sprintf("wlr-randr --output %s --custom-mode %s", spec.ShellQuote(output), spec.ShellQuote(res))
+	cmd := fmt.Sprintf("wlr-randr --output %s --custom-mode %s", shellquote.ShellQuote(output), shellquote.ShellQuote(res))
 	if _, err := wlCapture(ctx, ex, cmd); err != nil {
 		return "", fmt.Errorf("setting resolution: %w", err)
 	}
@@ -691,9 +692,9 @@ func wlOverlayShow(ctx context.Context, ex *sdk.Executor, in *params.WlInput) (s
 	}
 	// The declarative overlay-show is the text-overlay positional form: the text is
 	// required; in.Target, when set, names the overlay.
-	args := "charly-overlay show --type text --text " + spec.ShellQuote(in.Text)
+	args := "charly-overlay show --type text --text " + shellquote.ShellQuote(in.Text)
 	if in.Target != "" {
-		args += " --name " + spec.ShellQuote(in.Target)
+		args += " --name " + shellquote.ShellQuote(in.Target)
 	}
 	return wlCapture(ctx, ex, args)
 }
@@ -702,7 +703,7 @@ func wlOverlayHide(ctx context.Context, ex *sdk.Executor, in *params.WlInput) (s
 	if in.Target == "all" {
 		return wlCapture(ctx, ex, "charly-overlay hide --all")
 	}
-	return wlCapture(ctx, ex, "charly-overlay hide --name "+spec.ShellQuote(in.Target))
+	return wlCapture(ctx, ex, "charly-overlay hide --name "+shellquote.ShellQuote(in.Target))
 }
 
 // checkOverlayAvailable verifies charly-overlay is installed on the venue.
@@ -725,7 +726,7 @@ func ensureOverlayDaemon(ctx context.Context, ex *sdk.Executor) error {
 	}
 	_ = ex.VenueRunSilent(ctx, "rm -f /tmp/charly-overlay.sock")
 	daemonCmd := wlShellCmd("charly-overlay daemon")
-	startScript := fmt.Sprintf("tmux new-session -d -s %s sh -c %s", overlayDaemonSession, spec.ShellQuote(daemonCmd))
+	startScript := fmt.Sprintf("tmux new-session -d -s %s sh -c %s", overlayDaemonSession, shellquote.ShellQuote(daemonCmd))
 	if _, stderr, exit, err := ex.RunCapture(ctx, startScript); err != nil {
 		return fmt.Errorf("starting overlay daemon: %w", err)
 	} else if exit != 0 {
@@ -890,7 +891,7 @@ func errKWinPointerUnsupported(method string) error {
 // kdotoolSearchAction chains a kdotool window query with an action verb (KWin focus/close/
 // minimize/fullscreen/geometry), operating on the first match, and returns its stdout.
 func kdotoolSearchAction(ctx context.Context, ex *sdk.Executor, title, verb string, extra ...string) (string, error) {
-	cmd := fmt.Sprintf("kdotool search --name %s %s", spec.ShellQuote(title), verb)
+	cmd := fmt.Sprintf("kdotool search --name %s %s", shellquote.ShellQuote(title), verb)
 	if len(extra) > 0 {
 		cmd += " " + strings.Join(extra, " ")
 	}
@@ -899,7 +900,7 @@ func kdotoolSearchAction(ctx context.Context, ex *sdk.Executor, title, verb stri
 
 // wlrctlToplevel runs a wlrctl toplevel action matching by app_id (sway/labwc).
 func wlrctlToplevel(ctx context.Context, ex *sdk.Executor, action, target string) error {
-	return wlSilent(ctx, ex, fmt.Sprintf("wlrctl toplevel %s %s", action, spec.ShellQuote(target)))
+	return wlSilent(ctx, ex, fmt.Sprintf("wlrctl toplevel %s %s", action, shellquote.ShellQuote(target)))
 }
 
 // ---------------------------------------------------------------------------
@@ -910,7 +911,7 @@ func wlrctlToplevel(ctx context.Context, ex *sdk.Executor, action, target string
 func swaymsgShellCmd(args ...string) string {
 	quoted := make([]string, len(args))
 	for i, a := range args {
-		quoted[i] = spec.ShellQuote(a)
+		quoted[i] = shellquote.ShellQuote(a)
 	}
 	return fmt.Sprintf(
 		`export SWAYSOCK=$(ls -t /tmp/sway-ipc.*.sock 2>/dev/null | head -1) && [ -n "$SWAYSOCK" ] && swaymsg %s`,

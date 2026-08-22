@@ -401,7 +401,7 @@ image-skill:
                 candy: [sshd, qemu-guest-agent, ffmpeg]
             ```
 
-            Symptom without `distro:`: `charly box inspect <image>` shows `"Distro": null`. The generator's install_template Phase-2 branch short-circuits on `img.DistroDef == nil`, so **no declarative package-install RUN steps are emitted**. The image builds cleanly but is missing every package from every layer that uses the declarative `distro:` package sections. Explicit `command: dnf install …` steps still run; the bug affects only the declarative package surface.
+            Symptom without `distro:`: `charly box inspect <image>` shows `"Distro": null`. The generator's package-install emission short-circuits on `img.DistroDef == nil`, so **no declarative package-install RUN steps are emitted**. The image builds cleanly but is missing every package from every layer that uses the declarative `distro:` package sections. Explicit `command: dnf install …` steps still run; the bug affects only the declarative package surface.
 
             Internal bases (`base: fedora`) inherit `distro:` and `build:` from the parent image automatically — you only need explicit tags on images whose `base:` is a URL. The `quay.io/fedora/fedora-bootc:43` example above is the canonical pattern: an external bootc base must declare its own `distro:` tags, or the generator sees `Distro: null` and emits no rpm-install RUN steps.
 

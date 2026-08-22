@@ -13,6 +13,7 @@ package fleet
 
 import (
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/spec/fleet"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -34,6 +35,6 @@ func persistMemberDeployOverrides(root *spec.FleetNode) {
 		if member == nil {
 			continue
 		}
-		deploykit.PersistBedDeployOverrides(memberKey, *member, spec.ExternalInPlaceVenue(member), marshalNode, loadFleetConfig)
+		deploykit.PersistBedDeployOverrides(memberKey, *member, fleet.ExternalInPlaceVenue(member), marshalNode, loadFleetConfig)
 	}
 }

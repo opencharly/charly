@@ -39,14 +39,14 @@ func TestBuildVmSyntheticBoxDistroFormat(t *testing.T) {
 	}{
 		{
 			name:       "debian debootstrap (bootstrap distro)",
-			vmSpec:     &spec.ResolvedVm{Source: spec.VmSource{Kind: "bootstrap", Distro: "debian"}, SSH: &spec.VmSSH{User: "debian"}},
+			vmSpec:     &spec.ResolvedVm{Source: spec.VmSource{Kind: "bootstrap", Distro: "debian"}, SSH: &spec.VmSsh{User: "debian"}},
 			wantUser:   "debian",
 			wantPkg:    "deb",
 			wantDistro: []string{"debian"},
 		},
 		{
 			name:       "ubuntu debootstrap (inherits debian -> deb)",
-			vmSpec:     &spec.ResolvedVm{Source: spec.VmSource{Kind: "bootstrap", Distro: "ubuntu"}, SSH: &spec.VmSSH{User: "ubuntu"}},
+			vmSpec:     &spec.ResolvedVm{Source: spec.VmSource{Kind: "bootstrap", Distro: "ubuntu"}, SSH: &spec.VmSsh{User: "ubuntu"}},
 			wantUser:   "ubuntu",
 			wantPkg:    "deb",
 			wantDistro: []string{"ubuntu"},
@@ -70,7 +70,7 @@ func TestBuildVmSyntheticBoxDistroFormat(t *testing.T) {
 			// to [cachyos, arch] — an `arch:` candy block reaches the cachyos VM.
 			// Pkg is still the resolved pac primary (aur is secondary, skipped).
 			name:       "cachyos bootstrap (inherit_packages -> [cachyos, arch], pac primary)",
-			vmSpec:     &spec.ResolvedVm{Source: spec.VmSource{Kind: "bootstrap", Distro: "cachyos"}, SSH: &spec.VmSSH{User: "cachyos"}},
+			vmSpec:     &spec.ResolvedVm{Source: spec.VmSource{Kind: "bootstrap", Distro: "cachyos"}, SSH: &spec.VmSsh{User: "cachyos"}},
 			wantUser:   "cachyos",
 			wantPkg:    "pac",
 			wantDistro: []string{"cachyos", "arch"},

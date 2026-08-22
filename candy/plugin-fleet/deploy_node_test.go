@@ -187,7 +187,7 @@ func equalSlices(a, b []string) bool {
 // TestMergeDeployConfigsPreservesAllFields locks in the 2026-05 regression
 // fix: pre-fix MergeDeployConfigs hand-rolled per-field copies and silently
 // dropped 19+ FleetNode fields (ResolvedPort, Description, Secret,
-// Sidecar, Shell, Deploy, ForwardGpgAgent, ForwardSshAgent, Kind,
+// Sidecar, Shell, Deploy, ForwardGpgAgent, ForwardSSHAgent, Kind,
 // Replica, Restart, Schedule, Resources, Expose, Storage, Probes, Cpus,
 // Ram, DiskSize). Any future addition of a struct field would silently
 // regress in the same way. The post-fix reflect-based merger walks every
@@ -212,7 +212,7 @@ func TestMergeDeployConfigsPreservesAllFields(t *testing.T) {
 		Description:     desc,
 		Secret:          sec,
 		ForwardGpgAgent: &tr,
-		ForwardSshAgent: &tr,
+		ForwardSSHAgent: &tr,
 		Sidecar:         sd,
 		Deploy:          kubernetesDeploy,
 		Kind:            "service",
@@ -239,7 +239,7 @@ func TestMergeDeployConfigsPreservesAllFields(t *testing.T) {
 		{"Description", got.Description == ""},
 		{"Secret", len(got.Secret) != 1},
 		{"ForwardGpgAgent", got.ForwardGpgAgent == nil || !*got.ForwardGpgAgent},
-		{"ForwardSshAgent", got.ForwardSshAgent == nil || !*got.ForwardSshAgent},
+		{"ForwardSSHAgent", got.ForwardSSHAgent == nil || !*got.ForwardSSHAgent},
 		{"Sidecar", len(got.Sidecar) != 1},
 		{"Deploy", got.Deploy == nil},
 		{"Kind", got.Kind != "service"},

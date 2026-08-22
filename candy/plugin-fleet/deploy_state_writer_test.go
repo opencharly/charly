@@ -177,7 +177,7 @@ func TestCharlyUpdatePreservesPerHostDeployFields(t *testing.T) {
 		"vm:cachyos-gpu": {
 			Target:      "vm",
 			From:        "cachyos-gpu",
-			VmState:     &spec.VmDeployState{InstanceID: "original-uuid", SshPort: 2222},
+			VmState:     &spec.VmDeployState{InstanceID: "original-uuid", SSHPort: 2222},
 			Preemptible: &spec.PreemptibleConfig{Holds: []string{"nvidia-gpu"}},
 			Env:         map[string]string{"EDITOR": "nvim"},
 			Tunnel:      &spec.TunnelYAML{},
@@ -194,7 +194,7 @@ func TestCharlyUpdatePreservesPerHostDeployFields(t *testing.T) {
 	if err := deploykit.RemoveVmDeployEntry("vm:cachyos-gpu", save, bedTestLoadFleetConfig); err != nil {
 		t.Fatalf("RemoveVmDeployEntry (destroy leg): %v", err)
 	}
-	if err := deploykit.SaveVmDeployState("vm:cachyos-gpu", "cachyos-gpu", &spec.VmDeployState{InstanceID: "rebuilt-uuid", SshPort: 2222}, save, bedTestLoadFleetConfig); err != nil {
+	if err := deploykit.SaveVmDeployState("vm:cachyos-gpu", "cachyos-gpu", &spec.VmDeployState{InstanceID: "rebuilt-uuid", SSHPort: 2222}, save, bedTestLoadFleetConfig); err != nil {
 		t.Fatalf("SaveVmDeployState (create leg): %v", err)
 	}
 
@@ -233,7 +233,7 @@ func TestVmDestroyRemovesPureAutoEntry(t *testing.T) {
 		"vm:check-cachyos-gpu-vm": {
 			Target:  "vm",
 			From:    "check-cachyos-gpu-vm",
-			VmState: &spec.VmDeployState{InstanceID: "bed-uuid", SshPort: 12227},
+			VmState: &spec.VmDeployState{InstanceID: "bed-uuid", SSHPort: 12227},
 		},
 	}}
 	if err := deploykit.SaveFleetConfig(dc, bedTestMarshalNode, bedTestLoadFleetConfig); err != nil {

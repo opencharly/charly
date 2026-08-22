@@ -1,10 +1,11 @@
 package main
 
 import (
-	"github.com/opencharly/spec/spec"
 	"sort"
 	"testing"
 	"time"
+
+	"github.com/opencharly/spec/calver"
 )
 
 func TestCharlyVersion(t *testing.T) {
@@ -23,7 +24,7 @@ func TestCharlyVersion(t *testing.T) {
 		t.Errorf("unstamped CharlyVersion() = %q, want %q", got, "unknown")
 	}
 	// "unknown" must be rejected by ParseCalVer so freshness treats it as oldest.
-	if _, ok := spec.ParseCalVer(CharlyVersion()); ok {
+	if _, ok := calver.ParseCalVer(CharlyVersion()); ok {
 		t.Errorf("ParseCalVer(%q) parsed ok; an unstamped build must sort as oldest", CharlyVersion())
 	}
 }
@@ -124,7 +125,7 @@ func TestParseCalVer(t *testing.T) {
 		{"+026.001.0000", false, 0, 0, 0}, // non-digit component (sign)
 	}
 	for _, c := range cases {
-		got, ok := spec.ParseCalVer(c.in)
+		got, ok := calver.ParseCalVer(c.in)
 		if ok != c.ok {
 			t.Errorf("ParseCalVer(%q) ok = %v, want %v", c.in, ok, c.ok)
 			continue
@@ -140,7 +141,7 @@ func TestParseCalVer(t *testing.T) {
 
 func TestCalVerRoundTrip(t *testing.T) {
 	for _, s := range []string{"2026.141.1530", "2026.001.0000", "2026.366.2359"} {
-		v, ok := spec.ParseCalVer(s)
+		v, ok := calver.ParseCalVer(s)
 		if !ok {
 			t.Fatalf("ParseCalVer(%q) failed", s)
 		}
@@ -181,8 +182,8 @@ func TestCalVerAlphanumericSort(t *testing.T) {
 	// CalVer.Less must agree with the alphanumeric order, and every canonical
 	// string must parse.
 	for i := 0; i+1 < len(chrono); i++ {
-		a, okA := spec.ParseCalVer(chrono[i])
-		b, okB := spec.ParseCalVer(chrono[i+1])
+		a, okA := calver.ParseCalVer(chrono[i])
+		b, okB := calver.ParseCalVer(chrono[i+1])
 		if !okA || !okB {
 			t.Fatalf("canonical CalVer rejected: %q ok=%v, %q ok=%v", chrono[i], okA, chrono[i+1], okB)
 		}
@@ -205,8 +206,8 @@ func TestCalVerLess(t *testing.T) {
 		{"2025.366.2359", "2026.001.0000", true},  // year boundary
 	}
 	for _, c := range cases {
-		a, _ := spec.ParseCalVer(c.a)
-		b, _ := spec.ParseCalVer(c.b)
+		a, _ := calver.ParseCalVer(c.a)
+		b, _ := calver.ParseCalVer(c.b)
 		if got := a.Less(b); got != c.less {
 			t.Errorf("(%s).Less(%s) = %v, want %v", c.a, c.b, got, c.less)
 		}

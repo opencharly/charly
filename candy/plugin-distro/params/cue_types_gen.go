@@ -83,8 +83,6 @@ type DsFormat struct {
 
 	Section_field map[string]string `yaml:"section_field,omitempty" json:"section_field,omitempty"`
 
-	Install_template string `yaml:"install_template,omitempty" json:"install_template,omitempty"`
-
 	Uninstall_template string `yaml:"uninstall_template,omitempty" json:"uninstall_template,omitempty"`
 
 	Phase DsPhaseSet `yaml:"phase,omitempty" json:"phase,omitempty"`

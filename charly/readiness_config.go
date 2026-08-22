@@ -6,36 +6,37 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/opencharly/spec/poll"
 	"github.com/opencharly/spec/spec"
 )
 
 // The host/guest executors (spec/exec) resolve their wait bounds through
-// spec.ReadinessProvider. Point it at the project-aware loadedReadiness so an
+// poll.ReadinessProvider. Point it at the project-aware loadedReadiness so an
 // SSHExecutor's wait-for-SSH honors the project's defaults.readiness (the
 // built-in default is the fallback bounds — safe, but project-unaware).
 func init() {
-	spec.ReadinessProvider = loadedReadiness
+	poll.ReadinessProvider = loadedReadiness
 }
 
 // readiness_config.go — charly core's readiness ENTRY. The config→resolved resolver AND the
 // CHARLY_READINESS_* field table live ONCE in sdk/vmshared (ResolveReadiness + the PluginEnv
-// emitter, aliased here as spec.ResolveReadiness via vmshared_aliases.go), shared with the
+// emitter, aliased here as poll.ResolveReadiness via vmshared_aliases.go), shared with the
 // out-of-process plugins. loadedReadiness feeds the resolver the PROJECT's defaults.readiness —
 // which the plugins cannot LoadUnified to read; the host threads its resolved bounds to them via
-// spec.ResolvedReadiness.PluginEnv (see readinessPluginEnv + LocalTransport.Connect).
+// poll.ResolvedReadiness.PluginEnv (see readinessPluginEnv + LocalTransport.Connect).
 
 // loadedReadiness resolves the project's readiness bounds ONCE (the project defaults.readiness
 // block + CHARLY_READINESS_* env + the named fallbacks, validated). A site deep in the executors
-// with no threaded spec.ResolvedReadiness calls this. On absence/error it falls back to the built-in
+// with no threaded poll.ResolvedReadiness calls this. On absence/error it falls back to the built-in
 // defaults (always safe + never-hang) with a logged warning — a bad config block degrades to the
 // built-in defaults rather than breaking every deploy.
 var (
 	readinessOnce    sync.Once
-	readinessCached  spec.ResolvedReadiness
+	readinessCached  poll.ResolvedReadiness
 	readinessLoading atomic.Bool // re-entrancy guard — see loadedReadiness
 )
 
-func loadedReadiness() spec.ResolvedReadiness {
+func loadedReadiness() poll.ResolvedReadiness {
 	// Re-entrancy guard (sync.Once is NOT re-entrant). The Once's resolver below calls
 	// LoadUnified, which connects the project's kind plugins; each LocalTransport.Connect threads
 	// readiness env via readinessPluginEnv → loadedReadiness — a SAME-goroutine re-entry into this
@@ -46,7 +47,7 @@ func loadedReadiness() spec.ResolvedReadiness {
 	// load) call returns the built-in defaults: a plugin connected to LOAD the config cannot depend
 	// on the not-yet-resolved readiness, and the built-in defaults are always safe + never-hang.
 	if readinessLoading.Load() {
-		rr, _ := spec.ResolveReadiness(nil)
+		rr, _ := poll.ResolveReadiness(nil)
 		return rr
 	}
 	readinessOnce.Do(func() {
@@ -56,10 +57,10 @@ func loadedReadiness() spec.ResolvedReadiness {
 		if uf, ok, err := LoadUnified("."); err == nil && ok && uf != nil {
 			def = uf.Defaults.Readiness
 		}
-		rr, err := spec.ResolveReadiness(def)
+		rr, err := poll.ResolveReadiness(def)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "readiness config invalid (%v) — using built-in defaults\n", err)
-			rr, _ = spec.ResolveReadiness(nil)
+			rr, _ = poll.ResolveReadiness(nil)
 		}
 		readinessCached = rr
 	})
@@ -68,8 +69,8 @@ func loadedReadiness() spec.ResolvedReadiness {
 
 // readinessPluginEnv emits the host's RESOLVED readiness as CHARLY_READINESS_* env entries, for
 // threading into an out-of-process plugin's spawn env (LocalTransport.Connect) — the plugin's own
-// spec.ResolveReadiness re-reads them, so it honors the project's defaults.readiness without a project
-// loader. The emitter (spec.ResolvedReadiness.PluginEnv) lives in vmshared, beside the resolver.
+// poll.ResolveReadiness re-reads them, so it honors the project's defaults.readiness without a project
+// loader. The emitter (poll.ResolvedReadiness.PluginEnv) lives in vmshared, beside the resolver.
 func readinessPluginEnv() []string {
 	return loadedReadiness().PluginEnv()
 }

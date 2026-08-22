@@ -11,7 +11,7 @@ import (
 	"os"
 
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/spec/spec"
+	"github.com/opencharly/spec/shellquote"
 )
 
 // sendVenueNotification sends a desktop notification on the venue (container / VM / host).
@@ -28,7 +28,7 @@ func sendVenueNotification(ex deploykit.DeployExecutor, title, body string) {
 				`--object-path=/org/freedesktop/Notifications `+
 				`--method=org.freedesktop.Notifications.Notify `+
 				`"charly" 0 "" %s %s "[]" "{}" -- -1`,
-			spec.ShellQuote(title), spec.ShellQuote(body))
+			shellquote.ShellQuote(title), shellquote.ShellQuote(body))
 		_, _, _, _ = ex.RunCapture(context.Background(), gdbusCmd) // best-effort
 		return
 	}
