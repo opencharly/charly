@@ -3508,8 +3508,9 @@ git-workflow-skill:
         description: |-
             Use when committing, branching, pushing, opening PRs, or landing a change with
             gh — the feat/-branch, R10-gated, PR-ONLY, org-workflow-validated, never-force-push
-            landing across the main repo, sdk/plugins submodules, and box distro
-            submodules. A direct push to main is FORBIDDEN and mechanically disabled; the
+            landing across the main repo, its plugins/docs/box submodules, and the
+            proxy-resolved sdk contract module (no submodule — consumed at the pinned
+            go.mod require). A direct push to main is FORBIDDEN and mechanically disabled; the
             org-wide `charly/pr-validator` GitHub Actions gate validates the PR and, on PASS,
             its `auto-merge` companion squash-merges and tags. Covers
             sync-to-upstream, branch/worktree pruning, the fork+PR path, cross-repo @github
@@ -3885,7 +3886,9 @@ git-workflow-skill:
                   order**, each repo as its OWN two-step PR (author opens; fresh `pr-validator`
                   merges + tags):
 
-                  0. the **sdk contract repo** (`github.com/opencharly/sdk`, submodule `sdk/`) — PR →
+                  0. the **sdk contract repo** (`github.com/opencharly/sdk` — NOT a submodule;
+                     this repo consumes it from the module proxy at the pinned require version,
+                     so only a touched CONTRACT lands there) — PR →
                      native auto-merge + tag-on-merge → tag `v0.<YYYYDDD>.<HHMM leading-zeros-stripped>` (its
                      Go-module tag scheme; the superproject `vYYYY.DDD.HHMM` form is not a valid Go
                      module version — e.g. superproject `v2026.185.0751` ⇄ sdk `v0.2026185.751`) —
@@ -3893,10 +3896,10 @@ git-workflow-skill:
                   1. each `box/<distro>` submodule — PR → auto-merge + tag-on-merge tags (it has `charly.yml`);
                   2. `plugins` — PR → auto-merge **+ tag-on-merge tags `v<YYYY.DDD.HHMM>`** (no `charly.yml`,
                      so no schema `version:` bump — but the tag marks the merge, same as every repo);
-                  3. the superproject — stage the now-MERGED submodule pointers (a touched sdk: the
-                     `sdk` gitlink bump PLUS the `charly/go.mod` require version — in-tree resolution
-                     rides `replace github.com/opencharly/sdk => ../sdk`, so the require version
-                     matters only for out-of-tree consumers, but it is staged here) → PR → native
+                  3. the superproject — stage the now-MERGED submodule pointers (a touched sdk:
+                     adopt the tagged sdk release as the new shared pinned require in every
+                     module — `task mods:tidy` re-syncs go.sum and the canonical-go.mod gate
+                     asserts the ONE shared pin; there is no gitlink and no `replace`) → PR → native
                      auto-merge + tag-on-merge tags `main`.
 
                   A producer PR must be **merged** (not merely green) before the consumer's pointer
@@ -5318,22 +5321,20 @@ go-skill:
             │                              # build vocabulary + the sidecar: template library.
             │                              # Parsed by the SAME unified loader as any project
             │                              # charly.yml; a project ships none of it.
-            ├── sdk/                       # Git submodule (github.com/opencharly/sdk) — the plugin
-            │                              # contract module: root package sdk, sdk/kit, spec/spec,
-            │                              # spec/proto, spec/schema/*.cue, spec/schemaconcat, sdk/vmshared;
-            │                              # its own Taskfile owns `task cue:gen` + `task proto:gen`
             ├── .build/                    # Generated Containerfiles (gitignored)
             ├── charly.yml                  # Image definitions
             ├── Taskfile.yml               # Bootstrap tasks only
             ├── taskfiles/                 # Build.yml, Cue.yml, Setup.yml
             ├── candy/<name>/             # Layer directories
             ├── plugins/                   # Git submodule (opencharly/plugins)
+            ├── docs/                      # Git submodule (opencharly/docs)
             └── templates/                 # supervisord.header.conf (referenced by init.supervisord.header_file)
             ```
 
-            Submodule convention: `plugins/` is a submodule rooted at the
-            `opencharly/plugins` repo, and `sdk/` is a submodule rooted at the
-            `github.com/opencharly/sdk` repo. Clone with `--recurse-submodules` or run
+            Submodule convention: `plugins/` (and `docs/`, `box/<distro>`) are submodules rooted at
+            their own repos; the sdk contract module (`github.com/opencharly/sdk`) is NOT a
+            submodule — it resolves from the module proxy at the pinned require version in every
+            go.mod. Clone with `--recurse-submodules` (no sdk checkout exists to fetch) or run
             `git submodule update --init` after a plain clone. See
             `/charly-internals:skills` for the skill-authoring and sync conventions.
 
