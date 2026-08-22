@@ -1,10 +1,10 @@
 version: '3'
 
 vars:
-  # Pinned cue CLI — MUST match the spec submodule's pin (spec/Taskfile.yml) and
-  # the embedded cuelang.org/go library so the CLI that runs gengotypes is the
-  # same CUE version the library compiles the schema with. The gen task asserts
-  # equality against spec/Taskfile.yml so the two pins cannot drift silently.
+  # Pinned cue CLI — MUST match the cuelang.org/go version embedded in the spec
+  # contract module (github.com/opencharly/spec, resolved from the module proxy at
+  # the pinned require version), so the CLI that runs gengotypes is the same CUE
+  # version the library compiles the schema with.
   CUE_VERSION: v0.16.1
   # sha256 of cue_{{.CUE_VERSION}}_linux_amd64.tar.gz (verified: the extracted
   # binary reports `cue version v0.16.1`). A download whose digest differs is a
@@ -17,36 +17,34 @@ tasks:
   # self-contained schema/*.cue.
   #
   # The BASE schema → spec generation (spec/{cue_types,vocab,version}_gen.go)
-  # lives in the spec submodule (`cd spec && task cue:gen`) — the schema and the
-  # types generated from it are one module (github.com/opencharly/spec). This
-  # task runs the spec generation FIRST, then the per-plugin params loop, using
-  # the SAME spec/internal/schemagen + pinned cue CLI (R3: one pipeline).
+  # lives in the SPEC REPO (github.com/opencharly/spec — `task cue:gen` there,
+  # published as the tagged module this repo consumes at the pinned require
+  # version in every go.mod; there is NO local spec checkout). This task runs
+  # only the per-plugin params loop, using the SAME schemagen pipeline from the
+  # published spec module (R3: one pipeline) + the pinned cue CLI.
   # ---------------------------------------------------------------------------
   gen:
-    desc: Regenerate spec + every plugin candy's params from its schema (self-bootstraps the pinned cue CLI into ./bin/cue)
+    desc: Regenerate every plugin candy's params from its schema (self-bootstraps the pinned cue CLI into ./bin/cue)
     dir: "{{.ROOT_DIR}}"
     cmds:
-      - |
-        # Pin-equality gate: the superproject and spec cue pins must match.
-        set -euo pipefail
-        SPEC_PIN="$(grep -m1 'CUE_VERSION:' spec/Taskfile.yml | awk '{print $2}')"
-        test "$SPEC_PIN" = "{{.CUE_VERSION}}" || {
-          echo "cue:gen: CUE_VERSION pin drift — superproject {{.CUE_VERSION}} vs spec $SPEC_PIN" >&2; exit 1; }
       - task: bootstrap-cue
       - |
         set -euo pipefail
-        # 1) The spec (base schema → spec) generation, in its own module.
-        cp bin/cue spec/bin/cue 2>/dev/null || true
-        ( cd spec && GOWORK=off task cue:gen )
-        # 2) Plugin param structs — each plugin's OWN self-contained schema → its
-        #    params package, via the SAME gengotypes pipeline as spec (-pkg=params
-        #    header, R3). A plugin schema is self-contained, so it compiles + gens
-        #    standalone; the host's base ++ plugin splice provides the collision
-        #    check. Covers every in-tree builtin unit AND the in-repo external
-        #    examples that compile generated params against their own module
-        #    (plugin-example-external — a verb; plugin-example-command — a command).
+        # The spec module version every schemagen invocation must use: read it
+        # from charly/go.mod's require line (the ONE source of truth — the
+        # canonical-go.mod gate asserts every lockstep module pins the same).
+        SPEC_VERSION="$(grep -m1 'github.com/opencharly/spec' charly/go.mod | awk '{print $2}')"
+        test -n "$SPEC_VERSION" || { echo "cue:gen: no github.com/opencharly/spec require in charly/go.mod" >&2; exit 1; }
+        # Plugin param structs — each plugin's OWN self-contained schema → its
+        # params package, via the SAME gengotypes pipeline as spec (-pkg=params
+        # header, R3). A plugin schema is self-contained, so it compiles + gens
+        # standalone; the host's base ++ plugin splice provides the collision
+        # check. Covers every in-tree builtin unit AND the in-repo external
+        # examples that compile generated params against their own module
+        # (plugin-example-external — a verb; plugin-example-command — a command).
         CUE="$PWD/bin/cue"
         ROOT="$PWD"
+        SCHEMAGEN="github.com/opencharly/spec/internal/schemagen@${SPEC_VERSION}"
         for SCHEMA_DIR in candy/plugin-init/schema candy/plugin-agent/schema candy/plugin-agent-pi/schema candy/plugin-builder/schema candy/plugin-distro/schema candy/plugin-resource/schema candy/plugin-sidecar/schema candy/plugin-example/schema candy/plugin-port/schema candy/plugin-process/schema candy/plugin-interface/schema candy/plugin-addr/schema candy/plugin-dns/schema candy/plugin-examplerunverb/schema candy/plugin-matching/schema candy/plugin-http/schema candy/plugin-kernel-param/schema candy/plugin-mount/schema candy/plugin-user/schema candy/plugin-unix-group/schema candy/plugin-file/schema candy/plugin-command/schema candy/plugin-service/schema candy/plugin-package/schema candy/plugin-example-external/schema candy/plugin-mcp/schema candy/plugin-cdp/schema candy/plugin-vnc/schema candy/plugin-spice/schema candy/plugin-record/schema candy/plugin-tmux/schema candy/plugin-wl/schema candy/plugin-dbus/schema candy/plugin-adb/schema candy/plugin-appium/schema candy/plugin-kube/schema candy/plugin-vm/schema candy/plugin-secrets/schema candy/plugin-tunnel/schema candy/plugin-helm/schema candy/plugin-agentteams/schema candy/plugin-dsh/schema; do
           test -d "$SCHEMA_DIR" || continue
           PARAMS_DIR="$(dirname "$SCHEMA_DIR")/params"
@@ -56,20 +54,20 @@ tasks:
         module: "github.com/opencharly/spec/schema/params-codegen"
         language: version: "{{.CUE_VERSION}}"
         EOF
-          ( cd spec && GOWORK=off go run ./internal/schemagen -mode=concat -pkg=params -schema="$ROOT/$SCHEMA_DIR" -out="$PDIR/p.cue" )
+          GOWORK=off go run "$SCHEMAGEN" -mode=concat -pkg=params -schema="$ROOT/$SCHEMA_DIR" -out="$PDIR/p.cue"
           ( cd "$PDIR" && "$CUE" exp gengotypes ./p.cue )
           PGEN="$(ls "$PDIR"/cue_types*_gen.go 2>/dev/null | head -1)"
           test -n "$PGEN" || { echo "cue:gen: gengotypes produced no params for $SCHEMA_DIR" >&2; exit 1; }
           cp "$PGEN" "$PARAMS_DIR/cue_types_gen.go"
-          ( cd spec && GOWORK=off go run ./internal/schemagen -mode=retag -out="$ROOT/$PARAMS_DIR/cue_types_gen.go" )
+          GOWORK=off go run "$SCHEMAGEN" -mode=retag -out="$ROOT/$PARAMS_DIR/cue_types_gen.go"
           gofmt -w "$PARAMS_DIR/cue_types_gen.go"
           rm -rf "$PDIR"
           echo "cue:gen: regenerated $PARAMS_DIR/cue_types_gen.go"
         done
-        echo "cue:gen: regenerated spec + plugin params"
+        echo "cue:gen: regenerated plugin params"
 
   bootstrap-cue:
-    desc: Ensure ./bin/cue is the pinned cue CLI (prefers the spec checkout's bin/cue, else checksum-verified download)
+    desc: Ensure ./bin/cue is the pinned cue CLI (checksum-verified download)
     dir: "{{.ROOT_DIR}}"
     status:
       - test -x bin/cue && bin/cue version 2>/dev/null | grep -q '{{.CUE_VERSION}}'
@@ -77,26 +75,20 @@ tasks:
       - |
         set -euo pipefail
         mkdir -p bin
-        # Prefer the spec checkout's already-bootstrapped binary, else download the
-        # pinned release and checksum-verify before extracting.
-        if [ -x spec/bin/cue ] && spec/bin/cue version 2>/dev/null | grep -q '{{.CUE_VERSION}}'; then
-          cp spec/bin/cue bin/cue
-        else
-          ARCH="$(uname -m)"
-          case "$ARCH" in
-            x86_64) GOARCH=amd64; SHA='{{.CUE_SHA256_amd64}}' ;;
-            *) echo "bootstrap-cue: unsupported arch $ARCH (only linux/amd64 is checksum-pinned)" >&2; exit 1 ;;
-          esac
-          TARBALL="cue_{{.CUE_VERSION}}_linux_${GOARCH}.tar.gz"
-          URL="https://github.com/cue-lang/cue/releases/download/{{.CUE_VERSION}}/${TARBALL}"
-          TMP="$(mktemp -d)"
-          trap 'rm -rf "$TMP"' EXIT
-          echo "bootstrap-cue: downloading $URL"
-          curl -fsSL -o "$TMP/$TARBALL" "$URL"
-          echo "${SHA}  $TMP/$TARBALL" | sha256sum -c - || { echo "bootstrap-cue: checksum mismatch — refusing to extract" >&2; exit 1; }
-          tar -xzf "$TMP/$TARBALL" -C "$TMP" cue
-          mv "$TMP/cue" bin/cue
-        fi
+        ARCH="$(uname -m)"
+        case "$ARCH" in
+          x86_64) GOARCH=amd64; SHA='{{.CUE_SHA256_amd64}}' ;;
+          *) echo "bootstrap-cue: unsupported arch $ARCH (only linux/amd64 is checksum-pinned)" >&2; exit 1 ;;
+        esac
+        TARBALL="cue_{{.CUE_VERSION}}_linux_${GOARCH}.tar.gz"
+        URL="https://github.com/cue-lang/cue/releases/download/{{.CUE_VERSION}}/${TARBALL}"
+        TMP="$(mktemp -d)"
+        trap 'rm -rf "$TMP"' EXIT
+        echo "bootstrap-cue: downloading $URL"
+        curl -fsSL -o "$TMP/$TARBALL" "$URL"
+        echo "${SHA}  $TMP/$TARBALL" | sha256sum -c - || { echo "bootstrap-cue: checksum mismatch — refusing to extract" >&2; exit 1; }
+        tar -xzf "$TMP/$TARBALL" -C "$TMP" cue
+        mv "$TMP/cue" bin/cue
         chmod +x bin/cue
         bin/cue version | grep -q '{{.CUE_VERSION}}' || { echo "bootstrap-cue: bin/cue is not {{.CUE_VERSION}}" >&2; exit 1; }
         echo "bootstrap-cue: bin/cue is $(bin/cue version | head -1)"

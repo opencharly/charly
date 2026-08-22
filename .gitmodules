@@ -20,10 +20,6 @@
 [submodule "sdk"]
 	path = sdk
 	url = https://github.com/opencharly/sdk.git
-[submodule "spec"]
-	path = spec
-	url = https://github.com/opencharly/spec.git
-	branch = main
 [submodule "docs"]
 	path = docs
 	url = https://github.com/opencharly/docs.git
