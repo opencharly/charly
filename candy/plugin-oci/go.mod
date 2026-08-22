@@ -4,7 +4,7 @@ go 1.26.4
 
 require (
 	github.com/google/go-containerregistry v0.20.7
-	github.com/opencharly/sdk v0.0.0
+	github.com/opencharly/sdk v0.2026234.347
 )
 
 require (
@@ -45,5 +45,3 @@ require (
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-replace github.com/opencharly/sdk => ../../sdk

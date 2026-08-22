@@ -5,7 +5,7 @@ go 1.26.4
 require (
 	cuelang.org/go v0.16.1
 	github.com/alecthomas/kong v1.15.0
-	github.com/opencharly/sdk v0.0.0
+	github.com/opencharly/sdk v0.2026234.347
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -33,5 +33,3 @@ require (
 	google.golang.org/grpc v1.61.0 // indirect
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af // indirect
 )
-
-replace github.com/opencharly/sdk => ../../sdk

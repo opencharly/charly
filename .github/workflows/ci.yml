@@ -8,8 +8,8 @@
 # the fixture tests). A clean runner is the honest arbiter.
 #
 # `charly/` resolves through the workspace, so go.work must be ON here and the submodules must be
-# checked out — sdk is `use`d by go.work (the spec contract module resolves from the module proxy
-# at the pinned require version) and the box/* fixtures are read by tests.
+# checked out — the box/* fixtures are read by tests (the sdk + spec contract modules resolve from
+# the module proxy at the pinned require versions in every go.mod; neither is a workspace member).
 name: ci
 
 on:

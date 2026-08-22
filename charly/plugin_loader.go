@@ -197,7 +197,8 @@ func pluginBuildCacheDir() string {
 // the build), different source (a different worktree, or a remote @github ref fetched to a different
 // cache dir) lands a distinct path, so the cross-worktree overwrite race is gone. The digest is of the
 // ABSOLUTE srcDir (worktree-distinct by path), not the source CONTENT — go-build correctness depends
-// on the full dependency graph (the sdk submodule, replace directives), so a content hash would
+// on the full dependency graph (local replace targets, the proxy-resolved contract modules at their
+// pinned require versions), so a content hash would
 // cache-hit a STALE binary after a dependency bump; always-rebuild (no cache-hit skip) keeps it fresh.
 func pluginSourceTag(srcDir string) string {
 	sum := sha256.Sum256([]byte(filepath.Clean(srcDir)))
