@@ -17,6 +17,7 @@ import (
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/spec/proto"
+	"github.com/opencharly/spec/shellquote"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -52,7 +53,7 @@ func (verb) RunVerb(ctx context.Context, cc kit.CheckContext, op *spec.Op) kit.R
 		wantResolvable = *in.Resolvable
 	}
 	if cc.Mode() == kit.ModeBox {
-		probe := fmt.Sprintf(`getent hosts %s >/dev/null 2>&1`, spec.ShellQuote(in.DNS))
+		probe := fmt.Sprintf(`getent hosts %s >/dev/null 2>&1`, shellquote.ShellQuote(in.DNS))
 		_, _, exit, err := cc.Exec().RunCapture(ctx, probe)
 		if err != nil {
 			return kit.Failf("probe: %v", err)

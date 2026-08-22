@@ -37,10 +37,6 @@ type BuilderInput struct {
 
 	Runtime_env BdStrMap `yaml:"runtime_env,omitempty" json:"runtime_env,omitempty"`
 
-	Stage_template string `yaml:"stage_template,omitempty" json:"stage_template,omitempty"`
-
-	Install_template string `yaml:"install_template,omitempty" json:"install_template,omitempty"`
-
 	Manylinux_fix string `yaml:"manylinux_fix,omitempty" json:"manylinux_fix,omitempty"`
 
 	Build_script string `yaml:"build_script,omitempty" json:"build_script,omitempty"`

@@ -147,7 +147,7 @@ func TestBuildDeployPlanLocalPkgOrdering(t *testing.T) {
 // RoundTripFromBuildYML, staying in charly, verifies directly).
 func TestBuildDepPkgsOnHost_EmptyAndDryRun(t *testing.T) {
 	lp := testPacLocalPkgDef()
-	aurDef := &buildkit.BuilderDef{DetectConfig: "aur", InstallTemplate: "pacman -U --noconfirm {{.Glob}}"}
+	aurDef := &buildkit.BuilderDef{DetectConfig: "aur", Phases: &spec.PhaseSet{Install: &spec.PhaseTemplates{Container: "pacman -U --noconfirm {{.Glob}}"}}}
 	// Empty packages: pure no-op regardless of builder/dryrun — never shells out.
 	if pkgs, err := deploykit.BuildDepPkgsOnHost(context.Background(), lp, "", aurDef, "", nil, "", nil, nil, spec.EmitOpts{}); err != nil || pkgs != nil {
 		t.Errorf("empty packages = (%v, %v), want (nil, nil)", pkgs, err)

@@ -934,18 +934,18 @@ func buildDefaultInterface(spec *VmSpec, rt VmRuntimeParams) libvirtxml.DomainIn
 		}
 	default: // user
 		out.Source = &libvirtxml.DomainInterfaceSource{User: &libvirtxml.DomainInterfaceSourceUser{}}
-		if rt.SshPort > 0 || len(rt.ExtraPortForwards) > 0 {
+		if rt.SSHPort > 0 || len(rt.ExtraPortForwards) > 0 {
 			out.Backend = &libvirtxml.DomainInterfaceBackend{Type: "passt"}
 			var ranges []libvirtxml.DomainInterfaceSourcePortForwardRange
-			if rt.SshPort > 0 {
+			if rt.SSHPort > 0 {
 				ranges = append(ranges, libvirtxml.DomainInterfaceSourcePortForwardRange{
-					Start: uint(rt.SshPort),
+					Start: uint(rt.SSHPort),
 					To:    uint(22),
 				})
 			}
 			// Extra forwards come from rt.ExtraPortForwards — the RESOLVED "host:guest"
 			// strings the orchestrator produced (auto sentinels already allocated to
-			// concrete host ports). Like rt.SshPort, the renderer reads the resolved rt
+			// concrete host ports). Like rt.SSHPort, the renderer reads the resolved rt
 			// value, never spec.Network.PortForwards directly.
 			for _, pf := range rt.ExtraPortForwards {
 				if r := parsePortForwardRange(pf); r != nil {

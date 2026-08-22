@@ -8,6 +8,8 @@ import (
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/fleet"
+	"github.com/opencharly/spec/poll"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -51,7 +53,7 @@ func injectCandySecrets(ctx context.Context, exec *sdk.Executor, dir string, pla
 		return nil, nil, fmt.Errorf("loading candies for secret resolution: %w", err)
 	}
 	secretEnv := deploykit.ResolveSecretForCandy(candyList, deploykit.CredentialAccessViaExecutor(ctx, exec))
-	registers := spec.CandyArtifactRegisters(candyList)
+	registers := fleet.CandyArtifactRegisters(candyList)
 	hints := make([]string, 0, len(registers))
 	for register := range registers {
 		hints = append(hints, register)
@@ -72,12 +74,12 @@ func retrieveArtifactsAndDispatchRegisters(ctx context.Context, exec *sdk.Execut
 	if err != nil {
 		return fmt.Errorf("loading candies for artifact retrieval: %w", err)
 	}
-	// Readiness: spec.ResolveReadiness(nil) reads CHARLY_READINESS_* env + built-in defaults —
+	// Readiness: poll.ResolveReadiness(nil) reads CHARLY_READINESS_* env + built-in defaults —
 	// byte-identical to the host TODAY (zero configs set defaults.readiness:). NAMED EXIT #87
 	// (spec.Threaded CUE-sourcing): threading the project defaults.readiness: block plugin-side is
 	// deferred there — spec.Threaded is a hand-written wire type today, so readiness must NOT ride it;
 	// env+defaults is the SDD-compliant + currently-equivalent path. A nil config never errors.
-	readiness, _ := spec.ResolveReadiness(nil)
+	readiness, _ := poll.ResolveReadiness(nil)
 	// The artifact READ must run on the deploy's VENUE executor — a VM deploy's artifact
 	// (e.g. k3s-server's /etc/rancher/k3s/k3s.yaml) lives INSIDE the guest, reachable only
 	// over the venue's SSH executor (SSHExecutor.GetFile's sudo-cat path exists for exactly

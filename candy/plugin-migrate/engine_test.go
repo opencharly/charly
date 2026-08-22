@@ -45,8 +45,8 @@ func TestMigrationTable_CompactNodeForm(t *testing.T) {
 // `libvirt:` field removal as a project-only (non-touches_host) apply: goHook
 // entry, strictly after compact-node-form.
 func TestMigrationTable_StripCandyLibvirtField(t *testing.T) {
-	if len(migrationTable) != 5 {
-		t.Fatalf("migration table should carry exactly 5 entries, got %d", len(migrationTable))
+	if len(migrationTable) != 6 {
+		t.Fatalf("migration table should carry exactly 6 entries, got %d", len(migrationTable))
 	}
 	m := migrationTable[1]
 	if m.Name != "strip-candy-libvirt-field" || m.Apply != "stripCandyLibvirtField" || m.TouchesHost {

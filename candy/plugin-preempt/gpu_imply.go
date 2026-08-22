@@ -27,7 +27,7 @@ import (
 //
 // IsGroup/IsPodMember are pre-derived CORE-SIDE (spec.FleetNode.IsGroup() + the former in-core
 // isPodMember — the core-side copies are DELETED, K-wave 2 cone CONTESTED; the surviving
-// spec.IsContainerVenue predicate the wire projection uses stays); this file receives them as
+// fleet.IsContainerVenue predicate the wire projection uses stays); this file receives them as
 // plain booleans on the wire, never re-derives them from a FleetNode. detectGPU below reaches
 // the SAME candy/plugin-gpu detection primitive charly-core's own DetectGPU (gpu_shim.go) calls,
 // via the EXISTING plugin-to-plugin InvokeProvider(ClassVerb,"gpu",...) peer-dispatch pattern

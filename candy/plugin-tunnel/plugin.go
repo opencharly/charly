@@ -8,9 +8,11 @@
 // Describe either way.
 //
 // The RESOLUTION half of the tunnel subsystem lives in sdk/deploykit/tunnel_resolve.go
-// (ResolveTunnelConfig / TunnelConfigFromMetadata + the pure schemeTarget/tailscaleFlag/
-// isTCPFamily helpers the quadlet emitter shares, FLOOR-SLIM mechanical batch — charly/
-// tunnel.go, the former core home, carried nothing but dead aliases and was deleted).
+// (TunnelConfigFromMetadata — the deleted core resolver's former callers construct a
+// BoxMetadata from the overlay Tunnel + published-port set — plus the pure
+// schemeTarget/tailscaleFlag/isTCPFamily helpers the quadlet emitter shares, FLOOR-SLIM
+// mechanical batch — charly/tunnel.go, the former core home, carried nothing but dead aliases
+// and was deleted).
 // Only the
 // EXECUTION leg lives HERE: the pod-lifecycle plugins that resolve a TunnelConfig
 // (candy/plugin-deploy-pod for start/stop, candy/plugin-pod for remove — Cutover B unit 2,

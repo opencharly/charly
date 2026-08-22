@@ -19,6 +19,7 @@ import (
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/loaderkit"
+	"github.com/opencharly/spec/fleet"
 	"github.com/opencharly/spec/spec"
 	"gopkg.in/yaml.v3"
 )
@@ -65,9 +66,9 @@ func bedConfigReader(ctx context.Context, ex *sdk.Executor) func() (*deploykit.F
 // wrapper. The bed-root FleetNode (with nested peer Members) arrives as d.NodeJSON; the root
 // persist is guarded by !d.IsVM (matching the former host guard — a VM bed runs no `charly config`)
 // and passes d.IsExternal as externalInPlace (bed_session.go's bedSetup computes it via
-// spec.ExternalInPlaceVenue, #55 W3 B2-full — no more host registry round-trip). Each member is
+// fleet.ExternalInPlaceVenue, #55 W3 B2-full — no more host registry round-trip). Each member is
 // persisted from the root's nested peer map, with externalInPlace derived the SAME way
-// (spec.ExternalInPlaceVenue, R3 — one shared predicate, no third copy). deploykit.
+// (fleet.ExternalInPlaceVenue, R3 — one shared predicate, no third copy). deploykit.
 // PersistBedDeployOverrides internally self-skips a group root (IsGroup), a local/host-rooted
 // node, and an in-place external node — so calling it unconditionally for the root + members is
 // safe + matches the former host behavior. Best-effort (stderr warnings, no error return) —
@@ -91,13 +92,13 @@ func persistBedDeployOverridePluginSide(ctx context.Context, ex *sdk.Executor, n
 	}
 	// Member persist — each peer member from the root's nested map, BEFORE members-up
 	// runs the member's `charly config`/`charly start`. A member's externalInPlace is derivable from
-	// its stamped Descent (spec.ExternalInPlaceVenue). Mirrors the former bringUpMembers per-member
+	// its stamped Descent (fleet.ExternalInPlaceVenue). Mirrors the former bringUpMembers per-member
 	// persist.
 	for _, memberKey := range spec.SortedMemberKeys(root.Members) {
 		member := root.Members[memberKey]
 		if member == nil {
 			continue
 		}
-		deploykit.PersistBedDeployOverrides(memberKey, *member, spec.ExternalInPlaceVenue(member), marshalNode, reader)
+		deploykit.PersistBedDeployOverrides(memberKey, *member, fleet.ExternalInPlaceVenue(member), marshalNode, reader)
 	}
 }

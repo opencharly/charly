@@ -16,6 +16,7 @@ import (
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/spec/proto"
+	"github.com/opencharly/spec/shellquote"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -51,7 +52,7 @@ func (verb) RunVerb(ctx context.Context, cc kit.CheckContext, op *spec.Op) kit.R
 	}
 	if cc.Mode() == kit.ModeBox {
 		host, port := splitHostPort(in.Addr)
-		probe := fmt.Sprintf(`nc -z -w %d %s %s 2>/dev/null`, 3, spec.ShellQuote(host), spec.ShellQuote(port))
+		probe := fmt.Sprintf(`nc -z -w %d %s %s 2>/dev/null`, 3, shellquote.ShellQuote(host), shellquote.ShellQuote(port))
 		_, _, exit, err := cc.Exec().RunCapture(ctx, probe)
 		if err != nil {
 			return kit.Failf("probe: %v", err)

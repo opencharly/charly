@@ -1113,7 +1113,7 @@ vm-skill:
             | `none` | No key injection |
             | `/path/to/key.pub` | Uses the specified public key |
 
-            See `/charly-internals:vm-spec` for the `VmSSH.KeyInjection` tri-state (`auto` | `enabled` | `disabled`) per channel, and `/charly-internals:cloud-init-renderer` for the `composeUsers` adopt-merge pattern that delivers the key into the guest.
+            See `/charly-internals:vm-spec` for the `VmSsh.KeyInjection` tri-state (`auto` | `enabled` | `disabled`) per channel, and `/charly-internals:cloud-init-renderer` for the `composeUsers` adopt-merge pattern that delivers the key into the guest.
 
             ## User-Level Defaults
 
@@ -1317,7 +1317,7 @@ vm-skill:
 
             **MUST be invoked** when the task involves virtual machines, charly vm commands, kind:vm entities, cloud_image vs bootc source types, libvirt/QEMU backends, BIOS vs UEFI firmware choice, or VM lifecycle management. Invoke this skill BEFORE reading source code or launching Explore agents.
 
-            **Workflow position:** Standalone workflow. VM management is separate from container lifecycle, but `charly fleet add vm:<name>` bridges into the shared InstallPlan + DeployTarget machinery.
+            **Workflow position:** Standalone workflow. VM management is separate from container lifecycle, but `charly fleet add vm:<name>` bridges into the shared InstallPlan + deploy-target machinery.
 
             Live-deploy verification: see /charly-check:check (the 11 Testing Standards) and /charly-internals:disposable.
 vms-catalog-skill:

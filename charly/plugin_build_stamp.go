@@ -18,20 +18,24 @@ import (
 // WHY. buildPluginBinary was always-rebuild by design: pluginSourceTag keys the cache path by the
 // ABSOLUTE srcDir so two worktrees never race one output file (#76), and its header explains that a
 // path key cannot also serve as a freshness key — go-build correctness depends on the whole
-// dependency graph (the sdk and spec submodules reached through the candy's `replace` directives),
-// so skipping a rebuild on a path match would hand back a STALE binary after a submodule bump. That
+// dependency graph (the sdk submodule reached through the candy's local `replace`, and the
+// spec contract module resolved from the module proxy at the require version pinned in the
+// candy's own go.mod — a file the source hash covers), so skipping a rebuild on a path match
+// would hand back a STALE binary after a sdk bump or a spec require bump. That
 // reasoning is right, and this stamp does not weaken it: it keys freshness on CONTENT, so a
-// submodule bump — or any uncommitted edit inside it — changes the stamp and forces the rebuild.
+// submodule bump or a go.mod require bump — or any uncommitted edit — changes the stamp and
+// forces the rebuild.
 //
 // The cost of always-rebuilding is not theoretical: every charly subprocess relinked every plugin
 // it needed (~30MB each), the roster window recorded 36 relinks, and the plugin cache reached 96GB
 // / 6,791 files. That relink storm is the single largest self-inflicted load on a bed roster.
 //
-// WHY CONTENT AND NOT VCS STATE. Hashing the submodules' git HEAD would be cheaper and would catch
-// a submodule bump, but it is WRONG here: the sdk and spec trees carry uncommitted working-tree
+// WHY CONTENT AND NOT VCS STATE. Hashing the sdk submodule's git HEAD would be cheaper and would
+// catch a sdk bump, but it is WRONG here: the sdk submodule carries uncommitted working-tree
 // edits for most of a development session, and a HEAD-keyed stamp would happily reuse a binary
 // built before those edits — reintroducing exactly the staleness #76 warned about, in the case that
-// matters most day to day. Content hashing catches both.
+// matters most day to day. Content hashing catches both (and the spec module is not in VCS state
+// at all — it resolves from the proxy at a pinned require version).
 
 // pluginBuildStampVersion prefixes every stamp so a change to the stamping RULES (a new input, a
 // different traversal) invalidates every existing stamp rather than silently comparing
@@ -47,7 +51,8 @@ var pluginBuildStampEnvKeys = []string{"GOOS", "GOARCH", "GOARM", "GOAMD64", "CG
 // pluginBuildStamp digests everything that determines the built binary: the Go toolchain, the
 // build-relevant environment, the build target and vcs flag, and the CONTENT of the candy's own
 // source tree plus every module it reaches through a local `replace` directive (transitively — the
-// candy replaces sdk, and sdk replaces spec).
+// candy replaces sdk; the spec contract module resolves from the module proxy at the require
+// version pinned in the candy's own go.mod, which the source-tree hash covers).
 //
 // An error is never fatal to the caller: buildPluginBinary degrades to its previous always-rebuild
 // behavior, which is correct, just slower.

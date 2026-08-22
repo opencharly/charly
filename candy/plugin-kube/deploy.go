@@ -10,6 +10,7 @@ import (
 
 	"github.com/opencharly/sdk"
 	pb "github.com/opencharly/spec/proto"
+	"github.com/opencharly/spec/shellquote"
 	"github.com/opencharly/spec/spec"
 	"gopkg.in/yaml.v3"
 )
@@ -56,7 +57,7 @@ const kubernetesTeardownProbeTimeout = "5s"
 
 // shellSingleQuote is the shared kit helper (R3 — the SAME POSIX single-quoter
 // core + every other plugin alias).
-var shellSingleQuote = spec.ShellQuote
+var shellSingleQuote = shellquote.ShellQuote
 
 // invokeDeployKubernetes handles an OpExecute Invoke for the deploy:kubernetes substrate. It
 // decodes the host-preresolved venue (the generated overlay path), applies the

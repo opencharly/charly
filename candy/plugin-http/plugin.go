@@ -22,6 +22,7 @@ import (
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/spec/proto"
+	"github.com/opencharly/spec/shellquote"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -130,9 +131,9 @@ func runHTTPInContainer(ctx context.Context, cc kit.CheckContext, _ *spec.Op, h 
 	// In-container HTTP via curl. We only check status/body here; full header-matching
 	// is host-side. Sufficient to validate the service inside the disposable container
 	// answers.
-	cmd := fmt.Sprintf("curl -sS -o /tmp/.charly-test-body -w '%%{http_code}' %s", spec.ShellQuote(h.URL))
+	cmd := fmt.Sprintf("curl -sS -o /tmp/.charly-test-body -w '%%{http_code}' %s", shellquote.ShellQuote(h.URL))
 	if h.AllowInsecure {
-		cmd = "curl -sSk -o /tmp/.charly-test-body -w '%{http_code}' " + spec.ShellQuote(h.URL)
+		cmd = "curl -sSk -o /tmp/.charly-test-body -w '%{http_code}' " + shellquote.ShellQuote(h.URL)
 	}
 	stdout, stderr, exit, err := cc.Exec().RunCapture(ctx, cmd)
 	if err != nil || exit != 0 {

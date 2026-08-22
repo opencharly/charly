@@ -62,6 +62,7 @@ import (
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/spec/proto"
+	"github.com/opencharly/spec/shellquote"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -142,7 +143,7 @@ func NewMeta() pb.PluginMetaServer {
 		return sdk.ProvidedCapability{
 			Class:        "step",
 			Word:         word,
-			StepContract: &sdk.StepContract{Scope: "system", Venue: 0, Gate: "", Emits: emits},
+			StepContract: &sdk.StepContract{Scope: spec.ScopeSystem, Venue: 0, Gate: "", Emits: emits},
 		}
 	}
 	return sdk.NewMeta(calver,
@@ -479,7 +480,7 @@ func emitBuilder(dg *deploykit.Generator, view spec.InstallStepView, env spec.Bu
 	// separate FROM stage. Switch USER to the image user for the inline builder steps. An
 	// EXTERNALIZED inline builder (cargo) renders via kit.BuilderResolve (the SAME render the
 	// box-build path and the builder plugin's own OpResolve use, R3); a custom one via its
-	// vocabulary install_template.
+	// vocabulary phases.install.container.
 	if bDef.Inline {
 		ctx := &spec.BuildStageContext{
 			LayerStage:  layer.GetName(),
@@ -494,7 +495,7 @@ func emitBuilder(dg *deploykit.Generator, view spec.InstallStepView, env spec.Bu
 			}
 			return fmt.Sprintf("USER %d\n", img.UID) + reply.InlineFragment, nil
 		}
-		rendered, err := buildkit.RenderTemplate(s.Builder+"-inline", bDef.InstallTemplate, ctx)
+		rendered, err := buildkit.RenderTemplate(s.Builder+"-inline", buildkit.BuilderPhaseTemplate(bDef, spec.PhaseInstall, spec.VenueContainerBuilder), ctx)
 		if err != nil {
 			return "", fmt.Errorf("inline builder %s: %w", s.Builder, err)
 		}
@@ -646,8 +647,8 @@ func renderShellSnippet(v spec.InstallStepView) string {
 	marker := fmt.Sprintf("CHARLY_SHELL_%s_%x", strings.ToUpper(v.Shell), h[:4])
 	return fmt.Sprintf(
 		"RUN mkdir -p %s && cat > %s <<'%s'\n%s\n%s\n",
-		spec.ShellQuote(filepath.Dir(v.Destination)),
-		spec.ShellQuote(v.Destination),
+		shellquote.ShellQuote(filepath.Dir(v.Destination)),
+		shellquote.ShellQuote(v.Destination),
 		marker,
 		v.Snippet,
 		marker,

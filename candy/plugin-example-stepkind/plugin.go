@@ -26,6 +26,7 @@ import (
 
 	"github.com/opencharly/sdk"
 	pb "github.com/opencharly/spec/proto"
+	"github.com/opencharly/spec/shellquote"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -65,7 +66,7 @@ func NewMeta() pb.PluginMetaServer {
 			Class:        "step",
 			Word:         "examplestepkind",
 			InputDef:     "#ExamplestepkindInput",
-			StepContract: &sdk.StepContract{Scope: "user", Venue: 0, Gate: "", Emits: true},
+			StepContract: &sdk.StepContract{Scope: spec.ScopeUser, Venue: spec.VenueHostNative, Gate: spec.GateNone, Emits: true},
 		}},
 		schemaFS)
 }
@@ -97,7 +98,7 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 		if marker == "" {
 			marker = "EXAMPLE-STEPKIND-BUILD-BAKED"
 		}
-		fragment := fmt.Sprintf("RUN mkdir -p /etc && printf '%%s\\n' %s > %s\n", spec.ShellQuote(marker), buildMarkerPath)
+		fragment := fmt.Sprintf("RUN mkdir -p /etc && printf '%%s\\n' %s > %s\n", shellquote.ShellQuote(marker), buildMarkerPath)
 		j, err := json.Marshal(spec.EmitReply{Fragment: fragment})
 		if err != nil {
 			return nil, err
@@ -111,7 +112,7 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 		if in.Marker == "" {
 			in.Marker = "EXAMPLE-STEPKIND-OK"
 		}
-		script := fmt.Sprintf("mkdir -p %s && printf '%%s\\n' %s > %s", markerDir, spec.ShellQuote(in.Marker), markerPath)
+		script := fmt.Sprintf("mkdir -p %s && printf '%%s\\n' %s > %s", markerDir, shellquote.ShellQuote(in.Marker), markerPath)
 		if err := exec.RunUser(ctx, script, nil); err != nil {
 			return nil, fmt.Errorf("plugin-example-stepkind: write marker: %w", err)
 		}

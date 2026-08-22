@@ -49,7 +49,7 @@ Consult this table before the first tool call of every task; when several rows m
 | Go code-quality / CLAUDE.md-compliance audit / `golangci-lint` / `dupl` / duplication or dead-code check / `.golangci.yml` | `/charly-internals:strict-policy` |
 | Go source work (adding/modifying `charly` commands) | `/charly-internals:go` |
 | Hard-cutover concerns / rename sweeps | `/charly-internals:cutover-policy` |
-| IR / InstallPlan / DeployTarget / OCITarget | `/charly-internals:install-plan` |
+| IR / InstallPlan / EmitTarget / OCITarget | `/charly-internals:install-plan` |
 | Managed `~/.config/charly/ssh_config` fragment / `charly vm create` writes Host stanza | `/charly-local:local-deploy` |
 | Managed `~/.config/charly/ssh_config` fragment / `charly vm create` writes Host stanza | `/charly-vm:vm` |
 | OCI labels / capabilities contract | `/charly-internals:capabilities` |

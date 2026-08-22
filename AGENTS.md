@@ -62,7 +62,7 @@ match, load ALL their skills before doing anything.
 | Go code-quality / CLAUDE.md-compliance audit / `golangci-lint` / `dupl` / duplication or dead-code check / `.golangci.yml` | `/charly-internals:strict-policy` |
 | Go source work (adding/modifying `charly` commands) | `/charly-internals:go` |
 | Hard-cutover concerns / rename sweeps | `/charly-internals:cutover-policy` |
-| IR / InstallPlan / DeployTarget / OCITarget | `/charly-internals:install-plan` |
+| IR / InstallPlan / EmitTarget / OCITarget | `/charly-internals:install-plan` |
 | Managed `~/.config/charly/ssh_config` fragment / `charly vm create` writes Host stanza | `/charly-local:local-deploy` |
 | Managed `~/.config/charly/ssh_config` fragment / `charly vm create` writes Host stanza | `/charly-vm:vm` |
 | OCI labels / capabilities contract | `/charly-internals:capabilities` |
@@ -341,56 +341,6 @@ retains and reports them. Fresh context means independent judgment, not a new
 clone, cache, worktree, or weaker permission model. Detailed agent roles,
 handoffs, validator phases, and workflow mechanics belong to
 `/charly-internals:agents` and `/charly-internals:git-workflow`.
-
-### Pi-specific sub-agent usage
-
-In pi sessions, delegation uses the `subagent` tool (pi-subagents package):
-
-- **Single delegate:** `subagent({ agent: "reviewer", task: "...", skill: "charly-check:check" })`
-  - The `skill` parameter makes the named skill available to the child agent.
-  - The child sees the skill in its system prompt and can load it by name.
-  - Use `context: "fresh"` for independent judgment (R10 validators).
-  - Use `context: "fork"` when the child needs the parent's session history.
-
-- **Parallel fan-out:** Use `workflowScript` with `runs.all()`:
-  ```
-  subagent({
-    workflowScript: `
-      const results = await runs.all([
-        { key: "bed1", agent: "worker", task: "Run bed X", skill: "charly-check:check" },
-        { key: "bed2", agent: "worker", task: "Run bed Y", skill: "charly-check:check" },
-      ]);
-      return results.map(r => r.output);
-    `,
-  })
-  ```
-
-- **Fresh validator:** Use a fresh-context sub-agent for pr-validator:
-  ```
-  subagent({
-    agent: "reviewer",
-    task: "Validate PR #N against R0-R10...",
-    context: "fresh",
-    skill: "charly-internals:agents,charly-internals:git-workflow,charly-check:check",
-  })
-  ```
-
-- **Long-running beds:** Launch as async background:
-  ```
-  subagent({
-    agent: "worker",
-    task: "Run charly check run <bed> and report results",
-    async: true,
-  })
-  ```
-
-- **Prompt templates:** Use `/cutover`, `/pr-body`, `/skill`, `/rulebook`,
-  `/subagent-review`, `/subagent-verify` in the pi editor for structured
-  workflows.
-
-- **Custom tools:** The extension registers `charly_load_skills`,
-  `charly_worktree_create`, and `charly_worktree_remove`. Call these
-  directly instead of crafting the equivalent bash commands.
 
 ## Hooks
 

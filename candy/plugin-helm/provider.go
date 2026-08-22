@@ -9,6 +9,7 @@ import (
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/spec/proto"
+	"github.com/opencharly/spec/shellquote"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -116,9 +117,9 @@ func invokeHelmReleaseStep(ctx context.Context, req *pb.InvokeRequest) (*pb.Invo
 	// Teardown: `helm uninstall` the release we just installed (record-and-replay).
 	// Scope system — helm needs the kubeconfig + the release's namespace, both
 	// operator-level, and the uninstall must survive the deploy user's teardown.
-	uninstall := fmt.Sprintf("helm uninstall %s", spec.ShellQuote(in.Release))
+	uninstall := fmt.Sprintf("helm uninstall %s", shellquote.ShellQuote(in.Release))
 	if in.Namespace != "" {
-		uninstall += " -n " + spec.ShellQuote(in.Namespace)
+		uninstall += " -n " + shellquote.ShellQuote(in.Namespace)
 	}
 	reverseOps := []spec.ReverseOp{sdk.PluginScriptReverseOp(spec.ScopeSystem, uninstall)}
 	return sdk.BuildDeployReply(reverseOps, "plugin-helm", calver)

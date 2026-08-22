@@ -14,6 +14,7 @@ import (
 	"github.com/opencharly/sdk/enginekit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/vmshared"
+	"github.com/opencharly/spec/poll"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -26,7 +27,7 @@ import (
 // charly-core-private mechanisms (providerRegistry, the connectPluginByWordRef/deployTraitDescent
 // registry calls) that have a plugin-side equivalent (sdk.Executor.InvokeProvider, the addr.Vm
 // discriminator already carried on the wire type) or are already plugin-importable (sdk/kit,
-// sdk/deploykit, sdk/enginekit, sdk/vmshared — including spec.ReadinessProvider, the SAME
+// sdk/deploykit, sdk/enginekit, sdk/vmshared — including poll.ReadinessProvider, the SAME
 // project-aware resolver charly-core's own readiness_config.go injects at init and this
 // compiled-in plugin shares via the SAME process, so no new HostBuild seam is needed for the
 // stop-wait gate either).
@@ -53,7 +54,7 @@ func pluginHolderRunning(ctx context.Context, exec *sdk.Executor, addr spec.Hold
 
 // pluginHolderStop gracefully stops addr's deployment AND WAITS until it is actually powered off
 // (the resource is truly freed) — the folded stop+wait seam (arbiter_host.go's stopAndWait),
-// using spec.ReadinessProvider() (the SAME project-aware resolver charly-core injects — shared
+// using poll.ReadinessProvider() (the SAME project-aware resolver charly-core injects — shared
 // in-process, compiled-in placement) for the wait bound instead of a new HostBuild seam.
 func pluginHolderStop(ctx context.Context, exec *sdk.Executor, addr spec.HolderAddr) error {
 	var stopErr error
@@ -65,7 +66,7 @@ func pluginHolderStop(ctx context.Context, exec *sdk.Executor, addr spec.HolderA
 	if stopErr != nil {
 		return stopErr
 	}
-	cfg := spec.ReadinessProvider().StopGate("stop " + addr.Name)
+	cfg := poll.ReadinessProvider().StopGate("stop " + addr.Name)
 	if vmshared.PollUntil(ctx, cfg, func(context.Context) (bool, float64, error) {
 		return !pluginHolderRunning(ctx, exec, addr), 0, nil
 	}) != nil {

@@ -9,6 +9,7 @@ import (
 
 	"github.com/opencharly/charly/candy/plugin-record/params"
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/spec/shellquote"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -86,16 +87,16 @@ func recordStart(ctx context.Context, ex *sdk.Executor, in *params.RecordInput) 
 	var recorderCmd string
 	switch tool {
 	case "asciinema":
-		recorderCmd = fmt.Sprintf("asciinema rec %s", spec.ShellQuote(outFile))
+		recorderCmd = fmt.Sprintf("asciinema rec %s", shellquote.ShellQuote(outFile))
 	case "pixelflux-record":
-		recorderCmd = fmt.Sprintf("pixelflux-record %s --fps %d", spec.ShellQuote(outFile), recordFps(in))
+		recorderCmd = fmt.Sprintf("pixelflux-record %s --fps %d", shellquote.ShellQuote(outFile), recordFps(in))
 		if in.RecordAudio {
 			recorderCmd += " --audio"
 		}
 	case "wf-recorder":
 		recorderCmd = fmt.Sprintf(
 			"env XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/tmp} WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-wayland-0} wf-recorder -f %s",
-			spec.ShellQuote(outFile))
+			shellquote.ShellQuote(outFile))
 		if in.RecordAudio {
 			recorderCmd += " --audio"
 		}
@@ -106,7 +107,7 @@ func recordStart(ctx context.Context, ex *sdk.Executor, in *params.RecordInput) 
 	}
 	// Write mode metadata for stop (best-effort).
 	modeFile := recordingDir + "/" + name + ".mode"
-	_ = ex.VenueRunSilent(ctx, fmt.Sprintf("printf '%%s' %s > %s", spec.ShellQuote(mode), spec.ShellQuote(modeFile)))
+	_ = ex.VenueRunSilent(ctx, fmt.Sprintf("printf '%%s' %s > %s", shellquote.ShellQuote(mode), shellquote.ShellQuote(modeFile)))
 	return fmt.Sprintf("Recording started (mode: %s, tool: %s, session: %s); output: %s", mode, tool, session, outFile), nil
 }
 
@@ -283,7 +284,7 @@ func recordingFilePath(name, mode string) string {
 // falling back to "desktop" when absent/unreadable.
 func readRecordingMode(ctx context.Context, ex *sdk.Executor, name string) string {
 	modeFile := recordingDir + "/" + name + ".mode"
-	out, err := ex.VenueCapture(ctx, "cat "+spec.ShellQuote(modeFile))
+	out, err := ex.VenueCapture(ctx, "cat "+shellquote.ShellQuote(modeFile))
 	if err == nil {
 		mode := strings.TrimSpace(out)
 		if mode == "terminal" || mode == "desktop" {
@@ -295,7 +296,7 @@ func readRecordingMode(ctx context.Context, ex *sdk.Executor, name string) strin
 
 func cleanupModeFile(ctx context.Context, ex *sdk.Executor, name string) {
 	modeFile := recordingDir + "/" + name + ".mode"
-	_ = ex.VenueRunSilent(ctx, "rm -f "+spec.ShellQuote(modeFile))
+	_ = ex.VenueRunSilent(ctx, "rm -f "+shellquote.ShellQuote(modeFile))
 }
 
 // --- tmux helpers ---
@@ -303,7 +304,7 @@ func cleanupModeFile(ctx context.Context, ex *sdk.Executor, name string) {
 func tmuxArgs(args []string) string {
 	quoted := make([]string, len(args))
 	for i, a := range args {
-		quoted[i] = spec.ShellQuote(a)
+		quoted[i] = shellquote.ShellQuote(a)
 	}
 	return strings.Join(quoted, " ")
 }
@@ -316,7 +317,7 @@ func checkTmuxInstalled(ctx context.Context, ex *sdk.Executor) error {
 }
 
 func tmuxHasSession(ctx context.Context, ex *sdk.Executor, session string) bool {
-	return ex.VenueRunSilent(ctx, "tmux has-session -t "+spec.ShellQuote(session)) == nil
+	return ex.VenueRunSilent(ctx, "tmux has-session -t "+shellquote.ShellQuote(session)) == nil
 }
 
 func execTmux(ctx context.Context, ex *sdk.Executor, args ...string) error {

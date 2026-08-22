@@ -318,7 +318,7 @@ func fedoraCoderLikeImg() *buildkit.ResolvedBox {
 	img.Pkg = "rpm"
 	img.Home = "/home/user"
 	img.DistroDef = &buildkit.DistroDef{Format: map[string]*spec.Format{
-		"rpm": {InstallTemplate: "dnf install -y {{.Packages}}"},
+		"rpm": {Phases: &spec.PhaseSet{Install: &spec.PhaseTemplates{Container: "dnf install -y {{.Packages}}"}}},
 	}}
 	return img
 }

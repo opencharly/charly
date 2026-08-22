@@ -51,7 +51,7 @@ require (
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/oklog/run v1.1.0 // indirect
-	github.com/opencharly/spec v0.2026230.1417 // indirect
+	github.com/opencharly/spec v0.2026232.520 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/pjbgf/sha1cd v0.6.0 // indirect
 	github.com/protocolbuffers/txtpbfmt v0.0.0-20260217160748-a481f6a22f94 // indirect
@@ -78,5 +78,3 @@ require (
 )
 
 replace github.com/opencharly/sdk => ../../sdk
-
-replace github.com/opencharly/spec => ../../spec

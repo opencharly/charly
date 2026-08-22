@@ -21,7 +21,7 @@ import (
 func fixtureNamespacedProject(t *testing.T) (string, *spec.Config) {
 	t.Helper()
 	root := t.TempDir()
-	writeFixture(t, root, "charly.yml", `version: 2026.225.1508
+	writeFixture(t, root, "charly.yml", `version: "`+latestSchemaVersion.String()+`"
 import:
   - sub: ./sub.yml
 app:
@@ -31,7 +31,7 @@ app:
     distro: [fedora]
     candy: []
 `)
-	writeFixture(t, root, "sub.yml", `version: 2026.225.1508
+	writeFixture(t, root, "sub.yml", `version: "`+latestSchemaVersion.String()+`"
 widget:
   candy:
     base: quay.io/fedora/fedora:43
@@ -81,7 +81,7 @@ func TestFindImageByLeaf(t *testing.T) {
 // name-resolution concern, not a per-image collection concern.
 func TestWalkBaseChain_RootInternalOnly(t *testing.T) {
 	root := t.TempDir()
-	writeFixture(t, root, "charly.yml", `version: 2026.225.1508
+	writeFixture(t, root, "charly.yml", `version: "`+latestSchemaVersion.String()+`"
 import:
   - sub: ./sub.yml
 parent:
@@ -103,7 +103,7 @@ nschild:
     distro: [fedora]
     candy: []
 `)
-	writeFixture(t, root, "sub.yml", `version: 2026.225.1508
+	writeFixture(t, root, "sub.yml", `version: "`+latestSchemaVersion.String()+`"
 widget:
   candy:
     base: quay.io/fedora/fedora:43

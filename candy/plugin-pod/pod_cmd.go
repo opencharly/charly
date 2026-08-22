@@ -12,6 +12,7 @@ import (
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/loaderkit"
+	"github.com/opencharly/spec/fleet"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -463,7 +464,7 @@ func (c *ConfigSetupCmd) Run() error {
 		ForceSeed:     c.ForceSeed,
 		DataFrom:      c.DataFrom,
 		UpdateAll:     c.UpdateAll,
-		SshKey:        c.SshKey,
+		SSHKey:        c.SshKey,
 		Sidecar:       c.Sidecar,
 		ListSidecars:  c.ListSidecars,
 		NoAutoDetect:  c.NoAutoDetect,
@@ -620,12 +621,12 @@ func resolveUpdateDeployNode(image, instance string) (*spec.Deploy, error) {
 }
 
 // lookupDeployNode walks the merged deploy tree for the FULL deploy key — the pure
-// spec.ResolveNodePath step, split out for the unit test. deployKey applies the -i instance
+// fleet.ResolveNodePath step, split out for the unit test. deployKey applies the -i instance
 // (returning the bare or dotted-nested name unchanged when instance is empty), so an
 // instance-only `<base>/<inst>` entry resolves and a bare-base lookup correctly does NOT match it.
 func lookupDeployNode(tree map[string]spec.FleetNode, image, instance string) (*spec.Deploy, error) {
 	key := spec.DeployKey(image, instance)
-	node, _, err := spec.ResolveNodePath(tree, key)
+	node, _, err := fleet.ResolveNodePath(tree, key)
 	if err != nil || node == nil {
 		return nil, fmt.Errorf("no deploy named %q in charly.yml. To refresh an image artifact only, use 'charly box pull %s'", key, image)
 	}

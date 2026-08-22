@@ -27,6 +27,7 @@ import (
 
 	"github.com/opencharly/sdk"
 	pb "github.com/opencharly/spec/proto"
+	"github.com/opencharly/spec/spec"
 )
 
 //go:embed schema/*.cue
@@ -49,7 +50,7 @@ func NewMeta() pb.PluginMetaServer {
 				Class:        "step",
 				Word:         "helm-release",
 				InputDef:     "#HelmReleaseStep",
-				StepContract: &sdk.StepContract{Scope: "system", Venue: 0, Gate: "", Emits: false},
+				StepContract: &sdk.StepContract{Scope: spec.ScopeSystem, Venue: spec.VenueHostNative, Gate: spec.GateNone, Emits: false},
 			},
 			{
 				Class:    "verb",

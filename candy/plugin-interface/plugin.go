@@ -18,6 +18,7 @@ import (
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/spec/proto"
+	"github.com/opencharly/spec/shellquote"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -47,7 +48,7 @@ func (verb) RunVerb(ctx context.Context, cc kit.CheckContext, op *spec.Op) kit.R
 	var in params.InterfaceInput
 	kit.DecodeInput(op.PluginInput, &in)
 
-	probe := fmt.Sprintf(`ip -o addr show %s 2>/dev/null`, spec.ShellQuote(in.Interface))
+	probe := fmt.Sprintf(`ip -o addr show %s 2>/dev/null`, shellquote.ShellQuote(in.Interface))
 	out, _, exit, err := cc.Exec().RunCapture(ctx, probe)
 	if err != nil {
 		return kit.Failf("probe: %v", err)
@@ -59,7 +60,7 @@ func (verb) RunVerb(ctx context.Context, cc kit.CheckContext, op *spec.Op) kit.R
 	if in.MTU != nil {
 		mtuOut, _, exit, err := cc.Exec().RunCapture(ctx,
 			fmt.Sprintf(`ip -o link show %s 2>/dev/null | awk '{for(i=1;i<=NF;i++)if($i=="mtu"){print $(i+1);exit}}'`,
-				spec.ShellQuote(in.Interface)))
+				shellquote.ShellQuote(in.Interface)))
 		if err != nil || exit != 0 {
 			return kit.Failf("mtu probe exit %d err %v", exit, err)
 		}

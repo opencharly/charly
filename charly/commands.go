@@ -35,7 +35,7 @@ type podUpdateCmd struct {
 	ForceSeed bool
 	DataFrom  string
 	// Node is the resolved deploy entry command:update (plugin-pod) resolved PLUGIN-SIDE
-	// (loaderkit.ResolveMergedTreeViaExecutor → spec.ResolveNodePath) and threaded on the
+	// (loaderkit.ResolveMergedTreeViaExecutor → fleet.ResolveNodePath) and threaded on the
 	// "pod-lifecycle" op="update" request.
 	Node *spec.Deploy
 }

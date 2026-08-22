@@ -105,7 +105,7 @@ func TestEnrichVmRow(t *testing.T) {
 					"vm:cachyos-gpu": {
 						Target:  "vm",
 						From:    "cachyos-gpu",
-						VmState: &spec.VmDeployState{SshPort: 12228, SshUser: "cachy", Backend: "libvirt"},
+						VmState: &spec.VmDeployState{SSHPort: 12228, SSHUser: "cachy", Backend: "libvirt"},
 					},
 				},
 			},
@@ -120,7 +120,7 @@ func TestEnrichVmRow(t *testing.T) {
 					"check-k3s-vm": {
 						Target:  "vm",
 						From:    "k3s-vm",
-						VmState: &spec.VmDeployState{SshPort: 2225, SshUser: "arch"},
+						VmState: &spec.VmDeployState{SSHPort: 2225, SSHUser: "arch"},
 					},
 				},
 			},

@@ -13,6 +13,7 @@ package main
 import (
 	"testing"
 
+	"github.com/opencharly/spec/poll"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -20,25 +21,25 @@ import (
 // the generous whole-pass per-attempt while every other class keeps the tight
 // single-probe per-attempt — the poll.go half of the load-robustness fix.
 func TestResolvedReadiness_PerAttemptHeavyForPollHeavy(t *testing.T) {
-	var rr spec.ResolvedReadiness // zero value → all fallback constants
-	if rr.PerAttemptFor(spec.PollHeavy) != spec.ReadinessPerAttemptHeavyFallback {
-		t.Fatalf("perAttemptHeavy fallback = %s, want %s", rr.PerAttemptFor(spec.PollHeavy), spec.ReadinessPerAttemptHeavyFallback)
+	var rr poll.ResolvedReadiness // zero value → all fallback constants
+	if rr.PerAttemptFor(poll.PollHeavy) != poll.ReadinessPerAttemptHeavyFallback {
+		t.Fatalf("perAttemptHeavy fallback = %s, want %s", rr.PerAttemptFor(poll.PollHeavy), poll.ReadinessPerAttemptHeavyFallback)
 	}
-	for _, class := range []spec.PollClass{spec.PollLocal, spec.PollRemote} {
-		if got := rr.WaitCapped("x", class, 0).PerAttempt; got != rr.PerAttemptFor(spec.PollLocal) {
-			t.Errorf("WaitCapped(class=%d).PerAttempt = %s, want single-probe %s", class, got, rr.PerAttemptFor(spec.PollLocal))
+	for _, class := range []poll.PollClass{poll.PollLocal, poll.PollRemote} {
+		if got := rr.WaitCapped("x", class, 0).PerAttempt; got != rr.PerAttemptFor(poll.PollLocal) {
+			t.Errorf("WaitCapped(class=%d).PerAttempt = %s, want single-probe %s", class, got, rr.PerAttemptFor(poll.PollLocal))
 		}
 	}
-	if got := rr.WaitCapped("x", spec.PollHeavy, 0).PerAttempt; got != rr.PerAttemptFor(spec.PollHeavy) {
-		t.Errorf("WaitCapped(PollHeavy).PerAttempt = %s, want heavy %s", got, rr.PerAttemptFor(spec.PollHeavy))
+	if got := rr.WaitCapped("x", poll.PollHeavy, 0).PerAttempt; got != rr.PerAttemptFor(poll.PollHeavy) {
+		t.Errorf("WaitCapped(PollHeavy).PerAttempt = %s, want heavy %s", got, rr.PerAttemptFor(poll.PollHeavy))
 	}
-	if got := rr.Wait("x", spec.PollHeavy).PerAttempt; got != rr.PerAttemptFor(spec.PollHeavy) {
-		t.Errorf("Wait(PollHeavy).PerAttempt = %s, want heavy %s", got, rr.PerAttemptFor(spec.PollHeavy))
+	if got := rr.Wait("x", poll.PollHeavy).PerAttempt; got != rr.PerAttemptFor(poll.PollHeavy) {
+		t.Errorf("Wait(PollHeavy).PerAttempt = %s, want heavy %s", got, rr.PerAttemptFor(poll.PollHeavy))
 	}
 	// The heavy bound must be generously larger than the single-probe one — the
 	// whole point is to stop the 120s mid-pass guillotine.
-	if rr.PerAttemptFor(spec.PollHeavy) <= rr.PerAttemptFor(spec.PollLocal) {
-		t.Errorf("perAttemptHeavy (%s) must be > perAttempt (%s)", rr.PerAttemptFor(spec.PollHeavy), rr.PerAttemptFor(spec.PollLocal))
+	if rr.PerAttemptFor(poll.PollHeavy) <= rr.PerAttemptFor(poll.PollLocal) {
+		t.Errorf("perAttemptHeavy (%s) must be > perAttempt (%s)", rr.PerAttemptFor(poll.PollHeavy), rr.PerAttemptFor(poll.PollLocal))
 	}
 }
 
@@ -47,19 +48,19 @@ func TestResolvedReadiness_PerAttemptHeavyForPollHeavy(t *testing.T) {
 func TestReadinessConfig_PerAttemptHeavyOrdering(t *testing.T) {
 	t.Run("valid passes", func(t *testing.T) {
 		rc := &spec.ReadinessConfig{PerAttempt: "120s", PerAttemptHeavy: "15m", AbsoluteCap: "30m"}
-		if _, err := spec.ResolveReadiness(rc); err != nil {
+		if _, err := poll.ResolveReadiness(rc); err != nil {
 			t.Fatalf("valid config rejected: %v", err)
 		}
 	})
 	t.Run("heavy < per_attempt rejected", func(t *testing.T) {
 		rc := &spec.ReadinessConfig{PerAttempt: "120s", PerAttemptHeavy: "60s"}
-		if _, err := spec.ResolveReadiness(rc); err == nil {
+		if _, err := poll.ResolveReadiness(rc); err == nil {
 			t.Fatal("expected error: per_attempt_heavy < per_attempt")
 		}
 	})
 	t.Run("heavy > absolute_cap rejected", func(t *testing.T) {
 		rc := &spec.ReadinessConfig{PerAttemptHeavy: "40m", AbsoluteCap: "30m"}
-		if _, err := spec.ResolveReadiness(rc); err == nil {
+		if _, err := poll.ResolveReadiness(rc); err == nil {
 			t.Fatal("expected error: per_attempt_heavy > absolute_cap")
 		}
 	})

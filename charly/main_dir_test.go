@@ -118,7 +118,7 @@ func writeMinProject(t *testing.T, dir string) {
 	// Compact node-form: every entity flattens to a top-level
 	// `<name>: {<kind>: <FULL BODY>}` node with its collections (here `distro:`)
 	// INLINE in the kind value. LoadConfig reads charly.yml exclusively.
-	charlyYAML := `version: 2026.225.1508
+	charlyYAML := `version: "` + latestSchemaVersion.String() + `"
 defaults:
   registry: ghcr.io/test
   tag: latest

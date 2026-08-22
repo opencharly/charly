@@ -17,6 +17,7 @@ import (
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/spec/proto"
+	"github.com/opencharly/spec/shellquote"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -47,7 +48,7 @@ func (verb) Reserved() string { return "user" }
 func (verb) RunVerb(ctx context.Context, cc kit.CheckContext, op *spec.Op) kit.Result {
 	var in params.UserInput
 	kit.DecodeInput(op.PluginInput, &in)
-	probe := fmt.Sprintf(`getent passwd %s`, spec.ShellQuote(in.User))
+	probe := fmt.Sprintf(`getent passwd %s`, shellquote.ShellQuote(in.User))
 	out, _, exit, err := cc.Exec().RunCapture(ctx, probe)
 	if err != nil {
 		return kit.Failf("probe: %v", err)
@@ -89,11 +90,11 @@ func (verb) RenderProvisionScript(op *spec.Op, _ []string) (string, bool) {
 		flags += fmt.Sprintf(" -u %d", *in.UID)
 	}
 	if in.Home != "" {
-		flags += " -m -d " + spec.ShellQuote(in.Home)
+		flags += " -m -d " + shellquote.ShellQuote(in.Home)
 	}
 	if in.Shell != "" {
-		flags += " -s " + spec.ShellQuote(in.Shell)
+		flags += " -s " + shellquote.ShellQuote(in.Shell)
 	}
-	name := spec.ShellQuote(in.User)
+	name := shellquote.ShellQuote(in.User)
 	return fmt.Sprintf("id %[1]s >/dev/null 2>&1 || useradd%[2]s %[1]s", name, flags), true
 }

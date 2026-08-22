@@ -98,7 +98,7 @@ func TestResolvePortForwards(t *testing.T) {
 // net.PortForwards and would emit a Start=16443 range below).
 func TestBuildDefaultInterface_ForwardsFromResolvedRtOnly(t *testing.T) {
 	spec := &VmSpec{Network: &VmNetwork{Mode: "user", PortForwards: []string{"auto:6443", "16443:6443"}}}
-	rt := VmRuntimeParams{SshPort: 2299, ExtraPortForwards: []string{"45000:6443"}}
+	rt := VmRuntimeParams{SSHPort: 2299, ExtraPortForwards: []string{"45000:6443"}}
 
 	out := buildDefaultInterface(spec, rt)
 	if len(out.PortForward) != 1 {

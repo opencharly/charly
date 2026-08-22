@@ -67,4 +67,18 @@ migrations: [
 			{op: "delete_key", key: "localpkg", scope: "any", under_kind: "candy"},
 		]
 	},
+	{
+		version: "2026.232.0520"
+		name:    "install-template-to-phases"
+		// the legacy top-level `#Format.install_template` / `#Builder.install_template`
+		// fields (the (install, container) fallback) are REMOVED — their content
+		// migrates into `format.<fmt>.phase.install.container` / the builder equivalent,
+		// the phase: block's single source of truth (strict-cleanup cutover, Unit 3b).
+		// The nested move can't be expressed as rename_key/move_key ops (spec-side
+		// version.cue), so a Go reshaper hook moves it. A project charly.yml carrying
+		// the old field is a hard schema violation; the embedded build vocabulary is
+		// migrated in-tree — no touches_host (the format/builder vocab is a project
+		// charly.yml section, never a per-host deploy-overlay field).
+		apply: "installTemplateToPhases"
+	},
 ]

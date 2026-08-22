@@ -9,6 +9,7 @@ import (
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/loaderkit"
+	"github.com/opencharly/spec/fleet"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -50,7 +51,7 @@ func setCommandContext(ctx context.Context, ex *sdk.Executor) {
 // spec.ResolvedVm, so the former VmJSON envelope decode was identity), the resources via
 // spec.ResolvePluginKindViaPlugin over loaderkit.ResolveResourceViaExecutor, the runtime settings
 // via kit.ResolveRuntime, and VmState via loaderkit.ResolveVmStateViaExecutor.
-// Claimant/ClaimantNode are computed PLUGIN-SIDE (deploykit.MergedDeployTree + spec.FindVMClaimant
+// Claimant/ClaimantNode are computed PLUGIN-SIDE (deploykit.MergedDeployTree + fleet.FindVMClaimant
 // over the plugin's loader-backed reader).
 type resolvedConfig struct {
 	VM           *VmSpec
@@ -74,7 +75,7 @@ type resolvedConfig struct {
 // loaderkit.ResolveResourceViaExecutor, and the persisted VmState via
 // loaderkit.ResolveVmStateViaExecutor. The exclusive-resource Claimant is computed PLUGIN-SIDE
 // (#55 coneC-dsh β2 config-RESOLVE) from the loaded project fleet via deploykit.MergedDeployTree +
-// spec.FindVMClaimant; the effective VM backend is computed HERE (resolveVmBackendPlugin/
+// fleet.FindVMClaimant; the effective VM backend is computed HERE (resolveVmBackendPlugin/
 // vmConfiguredBackendPlugin, F6 vm-lifecycle move, vm_backend_resolve.go).
 func hostConfigResolve(entity string) (resolvedConfig, error) {
 	if cmdExec == nil {
@@ -124,11 +125,11 @@ func hostConfigResolve(entity string) (resolvedConfig, error) {
 		cfg.Resources = spec.ResolvePluginKindViaPlugin(uf, "resource", loaderkit.ResolveResourceViaExecutor(cmdCtx, cmdExec))
 		// Claimant computation moved plugin-side (#55 coneC-dsh β2 config-RESOLVE): merge the
 		// per-host overlay via deploykit.MergedDeployTree (placement-invariant reader =
-		// loaderkit.LoadHostFleetConfigViaExecutor) + spec.FindVMClaimant.
+		// loaderkit.LoadHostFleetConfigViaExecutor) + fleet.FindVMClaimant.
 		merged := deploykit.MergedDeployTree(uf.Fleet, "vm config-resolve", func() (*deploykit.FleetConfig, error) {
 			return loaderkit.LoadHostFleetConfigViaExecutor(cmdCtx, cmdExec)
 		})
-		if claimant, claimantNode, hasClaimant := spec.FindVMClaimant(merged, entity); hasClaimant {
+		if claimant, claimantNode, hasClaimant := fleet.FindVMClaimant(merged, entity); hasClaimant {
 			cfg.Claimant = claimant
 			cfg.ClaimantNode = &claimantNode
 		}

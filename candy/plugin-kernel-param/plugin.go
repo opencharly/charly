@@ -19,6 +19,7 @@ import (
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/spec/proto"
+	"github.com/opencharly/spec/shellquote"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -51,7 +52,7 @@ func (verb) RunVerb(ctx context.Context, cc kit.CheckContext, op *spec.Op) kit.R
 	var in params.KernelParamInput
 	kit.DecodeInput(op.PluginInput, &in)
 	path := "/proc/sys/" + strings.ReplaceAll(in.KernelParam, ".", "/")
-	probe := fmt.Sprintf(`cat %s 2>/dev/null`, spec.ShellQuote(path))
+	probe := fmt.Sprintf(`cat %s 2>/dev/null`, shellquote.ShellQuote(path))
 	out, _, exit, err := cc.Exec().RunCapture(ctx, probe)
 	if err != nil {
 		return kit.Failf("probe: %v", err)
@@ -77,7 +78,7 @@ func (verb) RenderProvisionScript(op *spec.Op, _ []string) (string, bool) {
 	var in params.KernelParamInput
 	kit.DecodeInput(op.PluginInput, &in)
 	if v, ok := firstMatcherScalar(decodeMatcherList(in.Value)); ok {
-		return fmt.Sprintf("sysctl -w %s=%s", spec.ShellQuote(in.KernelParam), spec.ShellQuote(v)), true
+		return fmt.Sprintf("sysctl -w %s=%s", shellquote.ShellQuote(in.KernelParam), shellquote.ShellQuote(v)), true
 	}
 	return "", false
 }

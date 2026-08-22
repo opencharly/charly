@@ -232,7 +232,7 @@ func TestRenderDomainXML_AutoSynthesizedDisk(t *testing.T) {
 		HostArch:    "x86_64",
 		QCOW2Path:   "/tmp/charly-disk.qcow2",
 		SeedISOPath: "/tmp/charly-disk.iso",
-		SshPort:     2224,
+		SSHPort:     2224,
 	}
 	out, err := RenderDomainXML(spec, rt)
 	if err != nil {

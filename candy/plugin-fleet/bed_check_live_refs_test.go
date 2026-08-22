@@ -2,7 +2,7 @@ package fleet
 
 // Relocated from charly/check_bed_run_test.go (#55 decoupling cone, Batch C,
 // per the binding file-ownership ruling): TestBedCheckLiveRefs asserts
-// spec.BedCheckLiveRefs directly — a genuine deploykit-behavior
+// fleet.BedCheckLiveRefs directly — a genuine deploykit-behavior
 // assertion (per Ambiguous-item-1's ruling), not charly-loader integration
 // coverage, so it moves here rather than staying in charly/check_bed_run_test.go
 // alongside the bed-persist cluster's genuinely-integration tests.
@@ -10,6 +10,7 @@ package fleet
 import (
 	"testing"
 
+	"github.com/opencharly/spec/fleet"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -31,7 +32,7 @@ func stubTraitsFor(word string) *spec.DeployTraits {
 // only [name], so a nested selkies-kde pod was deployed but never evaluated.
 func TestBedCheckLiveRefs(t *testing.T) {
 	// Flat bed: just the substrate (identical to the prior behavior).
-	if got := spec.BedCheckLiveRefs("check-pod", nil); len(got) != 1 || got[0] != "check-pod" {
+	if got := fleet.BedCheckLiveRefs("check-pod", nil); len(got) != 1 || got[0] != "check-pod" {
 		t.Fatalf("flat bed: got %v, want [check-pod]", got)
 	}
 	// Nested bed: substrate first, then each child as a sorted dotted path.
@@ -39,7 +40,7 @@ func TestBedCheckLiveRefs(t *testing.T) {
 		"selkies-kde": {Target: "pod"},
 		"cuda-pod":    {Target: "pod"},
 	}
-	got := spec.BedCheckLiveRefs("check-cachyos-gpu-vm", nested)
+	got := fleet.BedCheckLiveRefs("check-cachyos-gpu-vm", nested)
 	want := []string{
 		"check-cachyos-gpu-vm",
 		"check-cachyos-gpu-vm.cuda-pod", // sorted before selkies-kde
@@ -70,7 +71,7 @@ func TestBedCheckLiveRefs(t *testing.T) {
 	for _, c := range androidNested {
 		spec.StampDescent(c, stubTraitsFor)
 	}
-	gotA := spec.BedCheckLiveRefs("check-android-emulator-pod", androidNested)
+	gotA := fleet.BedCheckLiveRefs("check-android-emulator-pod", androidNested)
 	wantA := []string{
 		"check-android-emulator-pod",
 		"check-android-emulator-pod.web", // pod child kept; android "device" omitted

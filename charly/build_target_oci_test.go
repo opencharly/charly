@@ -186,50 +186,18 @@ func TestOCITargetEmitShellHook(t *testing.T) {
 	}
 }
 
-func TestOCITargetEmitSystemPackagesWithLegacyTemplate(t *testing.T) {
+// TestOCITargetEmitSystemPackagesPhases proves the SystemPackagesStep's (install,
+// container) emission reads the format's `phase.install.container` cell — the
+// single source of truth since the format/builder-level `install_template` fallback
+// was removed (spec strict-cleanup, Unit 3b).
+func TestOCITargetEmitSystemPackagesPhases(t *testing.T) {
 	chdirTemp(t)
-	// Legacy InstallTemplate set; PhaseTemplate returns it for (install, container).
 	distro := &spec.ResolvedDistro{
 		Format: map[string]*spec.Format{
 			"rpm": {
-				InstallTemplate: "RUN dnf install -y {{join .Packages \" \"}}\n",
-			},
-		},
-	}
-	stubResolvedProject(t, spec.ResolvedProject{
-		Distro: map[string]*spec.ResolvedDistro{"test-distro": distro},
-		Boxes:  map[string]spec.ResolvedBoxView{"ripgrep-box": {Name: "ripgrep-box", Distro: []string{"test-distro"}}},
-	})
-	tgt := ociTestTarget(buildEngineContext{Box: &spec.ResolvedBox{Name: "ripgrep-box"}})
-	plan := &spec.InstallPlan{Candy: "ripgrep", Steps: []spec.InstallStep{
-		&spec.SystemPackagesStep{
-			Format:   "rpm",
-			Phase:    spec.PhaseInstall,
-			Packages: []string{"ripgrep"},
-			RawInstallContext: map[string]any{
-				"package": []any{"ripgrep"},
-			},
-		},
-	}}
-	if err := tgt.Emit([]*spec.InstallPlan{plan}, spec.EmitOpts{}); err != nil {
-		t.Fatalf("Emit: %v", err)
-	}
-	got := tgt.String()
-	if !strings.Contains(got, "dnf install -y ripgrep") {
-		t.Errorf("legacy template not rendered: %s", got)
-	}
-}
-
-func TestOCITargetEmitSystemPackagesPrefersNewPhases(t *testing.T) {
-	chdirTemp(t)
-	// Both legacy and new path set; new path must win.
-	distro := &spec.ResolvedDistro{
-		Format: map[string]*spec.Format{
-			"rpm": {
-				InstallTemplate: "RUN legacy-install\n",
 				Phases: &spec.PhaseSet{
 					Install: &spec.PhaseTemplates{
-						Container: "RUN new-install {{join .Packages \" \"}}\n",
+						Container: "RUN dnf install -y {{join .Packages \" \"}}\n",
 					},
 				},
 			},
@@ -254,11 +222,8 @@ func TestOCITargetEmitSystemPackagesPrefersNewPhases(t *testing.T) {
 		t.Fatalf("Emit: %v", err)
 	}
 	got := tgt.String()
-	if !strings.Contains(got, "new-install foo") {
-		t.Errorf("expected new phase template to win, got: %s", got)
-	}
-	if strings.Contains(got, "legacy-install") {
-		t.Errorf("legacy template leaked despite new phases path: %s", got)
+	if !strings.Contains(got, "dnf install -y foo") {
+		t.Errorf("phase.install.container template not rendered: %s", got)
 	}
 }
 

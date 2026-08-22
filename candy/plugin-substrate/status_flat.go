@@ -311,9 +311,9 @@ func (c *flatCollector) enrichVmRow(cs *spec.DeploymentStatus, opts flatCollectO
 	// Surface the guest SSH endpoint as a host->guest:22 port mapping so the
 	// PORTS column reflects how an operator reaches the VM. This is the live
 	// truth recorded by the vm lifecycle hook's PrepareVenue on first apply.
-	if state.SshPort > 0 {
+	if state.SSHPort > 0 {
 		cs.Ports = append(cs.Ports, spec.PortMapping{
-			HostPort: state.SshPort,
+			HostPort: state.SSHPort,
 			CtrPort:  22,
 			Proto:    "tcp",
 		})

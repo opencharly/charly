@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/opencharly/spec/checkstep"
+	"github.com/opencharly/spec/http"
 	"github.com/opencharly/spec/ops"
 	"github.com/opencharly/spec/spec"
 
@@ -33,7 +34,7 @@ func (c hostCheckContext) DialTimeout() time.Duration { return c.h.cc.DialTimeou
 // (spec.DoHTTPRequest — the SAME builder the out-of-process CheckContextService.HTTPDo uses, R3),
 // derived from the carrier's base client.
 func (c hostCheckContext) HTTPDo(ctx context.Context, req spec.CheckHTTPRequest) (spec.CheckHTTPResponse, error) {
-	return spec.DoHTTPRequest(ctx, c.h.cc.HTTPClient(), req)
+	return http.DoHTTPRequest(ctx, c.h.cc.HTTPClient(), req)
 }
 func (c hostCheckContext) Box() string             { return c.h.cc.Box() }
 func (c hostCheckContext) Instance() string        { return c.h.cc.Instance() }
@@ -162,9 +163,9 @@ func (a kitVerbActStepAdapter) ConstructStep(op *spec.Op, ctx stepConstructCtx) 
 // materializer contract.
 func kitStepKindToCharly(k checkstep.StepKindName) spec.StepKind {
 	switch k {
-	case checkstep.StepKindServicePackaged:
+	case checkstep.StepKindNameServicePackaged:
 		return spec.StepKindServicePackaged
-	case checkstep.StepKindSystemPackages:
+	case checkstep.StepKindNameSystemPackages:
 		return spec.StepKindSystemPackages
 	}
 	panic("kitStepKindToCharly: unknown kit step kind " + string(k))

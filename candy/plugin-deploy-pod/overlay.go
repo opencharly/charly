@@ -15,6 +15,7 @@ import (
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/spec/shellquote"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -38,7 +39,7 @@ import (
 // bind-mount volumes for a nested pod-in-pod). The candy consumes it here. The render is
 // byte-faithful to the former in-core PodDeployTarget: the SAME Containerfile structure (FROM
 // scratch stages → FROM base → USER root → OCITarget fragment → service append → security LABEL
-// → USER restore), the SAME podman build + tag scripts (spec.ShellQuote == the core shellSingleQuote
+// → USER restore), the SAME podman build + tag scripts (shellquote.ShellQuote == the core shellSingleQuote
 // / deployShellQuote, byte-identical), the SAME overlay tag hash. The orchestrator's
 // `charly check run check-pod` bed is the parity gate (R8).
 
@@ -242,7 +243,7 @@ func buildOverlay(ctx context.Context, exec *sdk.Executor, reply spec.OverlayBui
 	}
 
 	buildScript := fmt.Sprintf("%s build -f %s -t %s %s",
-		engineBin, spec.ShellQuote(cfPathInVenue), spec.ShellQuote(overlayRef), spec.ShellQuote(venueBuildContext))
+		engineBin, shellquote.ShellQuote(cfPathInVenue), shellquote.ShellQuote(overlayRef), shellquote.ShellQuote(venueBuildContext))
 	if err := exec.VenueRunSilent(ctx, buildScript); err != nil {
 		return "", fmt.Errorf("overlay build: %w", err)
 	}
@@ -327,7 +328,7 @@ func renderOverlayServices(dg *deploykit.Generator, box *buildkit.ResolvedBox, o
 // candyByName(dg.Candies, name).Security() (Q1, RDD-confirmed: no host-only dependency here). The
 // EX-`PodDeployTarget.renderOverlaySecurityLabel` body otherwise byte-faithful: same merge semantics
 // (Privileged OR, CgroupNS last-writer, CapAdd/Devices/SecurityOpt/GroupAdd/Mounts appendUnique
-// dedup), same json.Marshal, same LABEL directive (spec.ShellQuote == the core shellSingleQuote,
+// dedup), same json.Marshal, same LABEL directive (shellquote.ShellQuote == the core shellSingleQuote,
 // byte-identical). Picked up at deploy time by `charly config` via ExtractMetadata.
 func renderOverlaySecurityLabel(dg *deploykit.Generator, reply spec.OverlayBuildReply, overlayCandies []string, baseSecurity *spec.Security) string {
 	if reply.BaseImage == "" {
@@ -368,7 +369,7 @@ func renderOverlaySecurityLabel(dg *deploykit.Generator, reply spec.OverlayBuild
 	if err != nil {
 		return ""
 	}
-	return fmt.Sprintf("LABEL %s=%s\n", spec.LabelSecurity, spec.ShellQuote(string(data)))
+	return fmt.Sprintf("LABEL %s=%s\n", spec.LabelSecurity, shellquote.ShellQuote(string(data)))
 }
 
 // tagDeployAlias tags imageRef under <registry>/<deploy-name>:<calver> so deployment-name-keyed
@@ -386,7 +387,7 @@ func tagDeployAlias(ctx context.Context, exec *sdk.Executor, reply spec.OverlayB
 	if aliasRef == imageRef {
 		return nil
 	}
-	tagScript := fmt.Sprintf("%s tag %s %s", engineBin, spec.ShellQuote(imageRef), spec.ShellQuote(aliasRef))
+	tagScript := fmt.Sprintf("%s tag %s %s", engineBin, shellquote.ShellQuote(imageRef), shellquote.ShellQuote(aliasRef))
 	if err := exec.VenueRunSilent(ctx, tagScript); err != nil {
 		return fmt.Errorf("deploy-name alias tag: %w", err)
 	}

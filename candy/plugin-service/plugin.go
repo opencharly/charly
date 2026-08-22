@@ -18,6 +18,7 @@ import (
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/spec/proto"
+	"github.com/opencharly/spec/shellquote"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -49,7 +50,7 @@ func (verb) Reserved() string { return "service" }
 func (verb) RunVerb(ctx context.Context, cc kit.CheckContext, op *spec.Op) kit.Result {
 	var in params.ServiceInput
 	kit.DecodeInput(op.PluginInput, &in)
-	svc := spec.ShellQuote(in.Service)
+	svc := shellquote.ShellQuote(in.Service)
 	if in.Running != nil {
 		probe := fmt.Sprintf(`supervisorctl status %[1]s 2>/dev/null | grep -q RUNNING || systemctl is-active --quiet %[1]s`, svc)
 		_, _, exit, err := cc.Exec().RunCapture(ctx, probe)
@@ -77,7 +78,7 @@ func (verb) RunVerb(ctx context.Context, cc kit.CheckContext, op *spec.Op) kit.R
 func (verb) RenderProvisionScript(op *spec.Op, _ []string) (string, bool) {
 	var in params.ServiceInput
 	kit.DecodeInput(op.PluginInput, &in)
-	svc := spec.ShellQuote(in.Service)
+	svc := shellquote.ShellQuote(in.Service)
 	return fmt.Sprintf(`if command -v systemctl >/dev/null 2>&1; then systemctl enable --now %[1]s; `+
 		`elif command -v supervisorctl >/dev/null 2>&1; then supervisorctl start %[1]s; `+
 		`else echo "no service manager" >&2; exit 1; fi`, svc), true

@@ -16,8 +16,44 @@ permissions:
   actions: write
 
 jobs:
+  # The review's B18 ground rule requires the Go gates to be green on the head
+  # before it passes. Every push starts this workflow and the ci (go) gate at
+  # the same moment, and the review (~2 min) finishes before the go gate
+  # (~5 min) — so a fresh-head review always sees in-progress CI and
+  # self-blocks, and each blocked run leaves a red validate check that later
+  # re-runs treat as a failed project gate. Wait for the head's `go` check-run
+  # conclusion before invoking the review; the dispatched re-run path gets the
+  # same guarantee.
+  wait-ci:
+    name: wait-for-ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Wait for the go gate on the head
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: pr } = await github.rest.pulls.get({
+              ...context.repo, pull_number: context.issue.number,
+            });
+            const head = pr.head.sha;
+            const deadline = Date.now() + 19 * 60 * 1000;
+            while (Date.now() < deadline) {
+              const { data: runs } = await github.rest.checks.listForRef({
+                ...context.repo, ref: head,
+              });
+              const go = runs.check_runs.find((r) => r.name === 'go');
+              if (go && go.conclusion) {
+                console.log(`go gate on ${head.slice(0, 8)}: ${go.conclusion}`);
+                if (go.conclusion === 'success') process.exit(0);
+                core.setFailed(`go gate ${go.conclusion} on ${head.slice(0, 8)}`);
+              }
+              await new Promise((r) => setTimeout(r, 15000));
+            }
+            core.setFailed(`go gate did not conclude on ${head.slice(0, 8)} within 19m`);
   validate:
     name: validate
+    needs: wait-ci
     if: >
       github.event_name == 'workflow_dispatch' ||
       github.event.pull_request.head.repo.fork == false
