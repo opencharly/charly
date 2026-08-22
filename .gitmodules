@@ -17,9 +17,6 @@
 [submodule "box/ubuntu"]
 	path = box/ubuntu
 	url = https://github.com/opencharly/distro-ubuntu.git
-[submodule "sdk"]
-	path = sdk
-	url = https://github.com/opencharly/sdk.git
 [submodule "docs"]
 	path = docs
 	url = https://github.com/opencharly/docs.git

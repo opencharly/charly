@@ -6,22 +6,24 @@ import (
 	"testing"
 )
 
-// plugin_build_stamp_test.go — the red/green pair for content-stamped plugin-build reuse.
-//
 // The property that matters is a conjunction, and both halves have teeth: an UNCHANGED source tree
 // must stamp identically (so the ~30MB relink is skipped — the relink storm this fixes), and ANY
 // change to the candy OR to a module it reaches through a local `replace` must change the stamp (so
-// the #76 staleness rule survives a submodule bump).
+// the #76 staleness rule survives a local-replace-target bump).
 
-// newStampFixture writes a candy module that replaces a local sdk module, which in turn replaces a
-// local spec module — the real shape (candy → sdk → spec) the transitive root walk must follow.
-func newStampFixture(t *testing.T) (candyDir, sdkDir, specDir string) {
+// newStampFixture writes a synthetic module chain whose middle leg is reached through a local
+// `replace` and transitively replaces a third module — the shape the transitive root walk must
+// follow (the same mechanism a vendored third-party replace such as plugin-spice's
+// `=> ./third_party/spice` takes). The names are deliberately NOT real org modules: the sdk and
+// spec contract modules resolve from the module proxy at their pinned require versions (there is
+// no local replace of either, anywhere).
+func newStampFixture(t *testing.T) (candyDir, kitDir, contractDir string) {
 	t.Helper()
 	root := t.TempDir()
 	candyDir = filepath.Join(root, "candy", "plugin-example")
-	sdkDir = filepath.Join(root, "sdk")
-	specDir = filepath.Join(root, "spec")
-	for _, d := range []string{candyDir, sdkDir, specDir} {
+	kitDir = filepath.Join(root, "kit")
+	contractDir = filepath.Join(root, "contract")
+	for _, d := range []string{candyDir, kitDir, contractDir} {
 		if err := os.MkdirAll(d, 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -32,13 +34,13 @@ func newStampFixture(t *testing.T) (candyDir, sdkDir, specDir string) {
 			t.Fatal(err)
 		}
 	}
-	write(candyDir, "go.mod", "module example.com/candy\n\ngo 1.26.0\n\nrequire example.com/sdk v0.0.0\n\nreplace example.com/sdk => ../../sdk\n")
+	write(candyDir, "go.mod", "module example.com/candy\n\ngo 1.26.0\n\nrequire example.com/kit v0.0.0\n\nreplace example.com/kit => ../../kit\n")
 	write(candyDir, "main.go", "package main\n\nfunc main() {}\n")
-	write(sdkDir, "go.mod", "module example.com/sdk\n\ngo 1.26.0\n\nreplace (\n\texample.com/spec => ../spec\n)\n")
-	write(sdkDir, "sdk.go", "package sdk\n")
-	write(specDir, "go.mod", "module example.com/spec\n\ngo 1.26.0\n")
-	write(specDir, "spec.go", "package spec\n")
-	return candyDir, sdkDir, specDir
+	write(kitDir, "go.mod", "module example.com/kit\n\ngo 1.26.0\n\nreplace (\n\texample.com/contract => ../contract\n)\n")
+	write(kitDir, "kit.go", "package kit\n")
+	write(contractDir, "go.mod", "module example.com/contract\n\ngo 1.26.0\n")
+	write(contractDir, "contract.go", "package contract\n")
+	return candyDir, kitDir, contractDir
 }
 
 func stampOf(t *testing.T, dir string) string {
@@ -78,7 +80,7 @@ func TestPluginBuildStamp_UnchangedSourceIsStable(t *testing.T) {
 // build depends on and asserts each one, edited alone, changes the stamp. A stamp that missed any of
 // these would hand back a stale binary — precisely the failure #76's always-rebuild guarded against.
 func TestPluginBuildStamp_AnySourceChangeInvalidates(t *testing.T) {
-	candyDir, sdkDir, specDir := newStampFixture(t)
+	candyDir, kitDir, contractDir := newStampFixture(t)
 	base := stampOf(t, candyDir)
 
 	cases := []struct {
@@ -91,11 +93,11 @@ func TestPluginBuildStamp_AnySourceChangeInvalidates(t *testing.T) {
 		{"a new file in the candy", func() {
 			mustWrite(t, filepath.Join(candyDir, "extra.go"), "package main\n")
 		}},
-		{"the replaced sdk module (a submodule bump, or an uncommitted edit inside it)", func() {
-			mustWrite(t, filepath.Join(sdkDir, "sdk.go"), "package sdk\n\nvar Added = 1\n")
+		{"the replaced kit module (a local replace target bump, or an uncommitted edit inside it)", func() {
+			mustWrite(t, filepath.Join(kitDir, "kit.go"), "package kit\n\nvar Added = 1\n")
 		}},
-		{"the transitively-replaced spec module", func() {
-			mustWrite(t, filepath.Join(specDir, "spec.go"), "package spec\n\nvar Added = 1\n")
+		{"the transitively-replaced contract module", func() {
+			mustWrite(t, filepath.Join(contractDir, "contract.go"), "package contract\n\nvar Added = 1\n")
 		}},
 		{"the candy's dependency pins (go.sum)", func() {
 			mustWrite(t, filepath.Join(candyDir, "go.sum"), "example.com/dep v1.0.0 h1:deadbeef\n")

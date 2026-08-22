@@ -18,24 +18,25 @@ import (
 // WHY. buildPluginBinary was always-rebuild by design: pluginSourceTag keys the cache path by the
 // ABSOLUTE srcDir so two worktrees never race one output file (#76), and its header explains that a
 // path key cannot also serve as a freshness key — go-build correctness depends on the whole
-// dependency graph (the sdk submodule reached through the candy's local `replace`, and the
-// spec contract module resolved from the module proxy at the require version pinned in the
-// candy's own go.mod — a file the source hash covers), so skipping a rebuild on a path match
-// would hand back a STALE binary after a sdk bump or a spec require bump. That
+// dependency graph (a module reached through a local `replace` — the candy's own tree covers the
+// replace target only if this stamp walks it — and the sdk + spec contract modules resolved from
+// the module proxy at the require versions pinned in the candy's own go.mod, a file the source
+// hash covers), so skipping a rebuild on a path match
+// would hand back a STALE binary after a dependency bump. That
 // reasoning is right, and this stamp does not weaken it: it keys freshness on CONTENT, so a
-// submodule bump or a go.mod require bump — or any uncommitted edit — changes the stamp and
-// forces the rebuild.
+// local-replace-target bump or a go.mod require bump — or any uncommitted edit — changes the stamp
+// and forces the rebuild.
 //
 // The cost of always-rebuilding is not theoretical: every charly subprocess relinked every plugin
 // it needed (~30MB each), the roster window recorded 36 relinks, and the plugin cache reached 96GB
 // / 6,791 files. That relink storm is the single largest self-inflicted load on a bed roster.
 //
-// WHY CONTENT AND NOT VCS STATE. Hashing the sdk submodule's git HEAD would be cheaper and would
-// catch a sdk bump, but it is WRONG here: the sdk submodule carries uncommitted working-tree
-// edits for most of a development session, and a HEAD-keyed stamp would happily reuse a binary
+// WHY CONTENT AND NOT VCS STATE. Hashing a local replace target's git HEAD would be cheaper and
+// would catch a bump, but it is WRONG here: a replace target under development carries uncommitted
+// working-tree edits for most of a session, and a HEAD-keyed stamp would happily reuse a binary
 // built before those edits — reintroducing exactly the staleness #76 warned about, in the case that
-// matters most day to day. Content hashing catches both (and the spec module is not in VCS state
-// at all — it resolves from the proxy at a pinned require version).
+// matters most day to day. Content hashing catches both (and neither contract module is in VCS
+// state at all — the sdk and spec modules resolve from the proxy at pinned require versions).
 
 // pluginBuildStampVersion prefixes every stamp so a change to the stamping RULES (a new input, a
 // different traversal) invalidates every existing stamp rather than silently comparing
@@ -51,8 +52,9 @@ var pluginBuildStampEnvKeys = []string{"GOOS", "GOARCH", "GOARM", "GOAMD64", "CG
 // pluginBuildStamp digests everything that determines the built binary: the Go toolchain, the
 // build-relevant environment, the build target and vcs flag, and the CONTENT of the candy's own
 // source tree plus every module it reaches through a local `replace` directive (transitively — the
-// candy replaces sdk; the spec contract module resolves from the module proxy at the require
-// version pinned in the candy's own go.mod, which the source-tree hash covers).
+// candy replaces e.g. a vendored third-party module; the sdk + spec contract modules resolve from
+// the module proxy at the require versions pinned in the candy's own go.mod, which the source-tree
+// hash covers).
 //
 // An error is never fatal to the caller: buildPluginBinary degrades to its previous always-rebuild
 // behavior, which is correct, just slower.
@@ -113,8 +115,9 @@ func pluginSourceRoots(srcDir string) ([]string, error) {
 }
 
 // localReplaceDirs parses dir/go.mod and returns the absolute directories of its LOCAL-path
-// replace targets (`replace <mod> => ../../sdk`). A version-replace (`=> other/mod v1.2.3`) is not
-// a local path and is already pinned by go.sum, which lives inside dir and is hashed with it.
+// replace targets (e.g. `replace example.com/kit => ../vendored/kit`). A version-replace
+// (`=> other/mod v1.2.3`) is not a local path and is already pinned by go.sum, which lives inside
+// dir and is hashed with it.
 //
 // This is a deliberately small hand parser rather than a modfile dependency: the only construct it
 // must understand is a replace arrow whose right-hand side starts with "./" or "../", in both the

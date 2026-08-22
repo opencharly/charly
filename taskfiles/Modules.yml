@@ -1,7 +1,7 @@
 version: '3'
 
-# Modules.yml — maintenance sweeps over every in-repo Go module that resolves the sdk and
-# spec contract modules through a LOCAL `replace`.
+# Modules.yml — maintenance sweeps over every in-repo Go module that requires the
+# sdk / spec contract modules at the shared pins.
 #
 # That set is larger than it looks, and the difference is what makes this a sweep rather
 # than a one-liner. Every plugin candy is its OWN module (the deliberate dependency-shed
@@ -10,33 +10,34 @@ version: '3'
 # `plugin-*` — and the `tools/golden-*` fixture modules. A glob that assumes `candy/plugin-*`
 # silently skips all three.
 #
-# WHY they must move together. A module here requires `github.com/opencharly/sdk` with a
-# local replace, so sdk's OWN `github.com/opencharly/spec` requirement enters its module
-# graph. Under MVS the module must then list a spec version at least as new as sdk's — and
-# the local `replace` to ../../spec is exactly what hides a stale one from review, because
-# the CODE resolves from the checkout while the NUMBER is what Go validates. Bump sdk's spec
-# require without this sweep and `GOWORK=off go build` dies in every straggler with
-# "go: updates to go.mod needed", which the build-time plugin loader then demotes to a
-# warning before failing downstream on an unrelated-looking "no provider registered".
+# WHY they must move together. A module here requires `github.com/opencharly/sdk` at the
+# shared pinned version, so sdk's OWN `github.com/opencharly/spec` requirement enters its
+# module graph. Under MVS the module must then list a spec version at least as new as sdk's —
+# and the shared-pin invariant is what keeps the numbers honest now that both contract
+# modules resolve from the module proxy (there is no local checkout whose code could hide
+# a stale number: the require version IS the resolution). Bump the shared sdk pin without
+# this sweep and `GOWORK=off go build` dies in every straggler with "go: updates to go.mod
+# needed", which the build-time plugin loader then demotes to a warning before failing
+# downstream on an unrelated-looking "no provider registered".
 #
 # Two mechanisms keep the surface drift-free: the canonical-go.mod GATE
-# (tools/gomod-canonical/gomod_canonical_test.go — Shape-A for the plugin candies, plus the
-# spec-pin equality assertion across every module this sweep touches) and this `mods:tidy`
-# sweep, which keeps each go.sum in step with its imports. Run tidy after adding or removing
-# a dep, and after ANY change to sdk/go.mod's spec require.
+# (tools/gomod-canonical/gomod_canonical_test.go — Shape-A' for the plugin candies, plus
+# the shared-pin equality assertion across every module this sweep touches) and this
+# `mods:tidy` sweep, which keeps each go.sum in step with its imports. Run tidy after
+# adding or removing a dep, and after ANY shared-pin adoption.
 
 tasks:
   tidy:
-    desc: Run `GOWORK=off go mod tidy` in every in-repo module that replaces sdk/spec locally (keeps go.sum and the spec pin in step)
+    desc: Run `GOWORK=off go mod tidy` in every in-repo module that requires sdk/spec at the shared pins (keeps go.sum in step)
     cmds:
       - |
         set -e
         n=0; fail=0
         for d in candy/*/ tools/*/; do
           [ -f "$d/go.mod" ] || continue
-          # Only modules that resolve the contract modules locally are part of the lockstep
-          # set; a module with no sdk/spec replace has nothing to keep in step.
-          grep -qE '^replace github\.com/opencharly/(sdk|spec) =>' "$d/go.mod" || continue
+          # Only modules that require either contract module are part of the lockstep
+          # set; a module with no sdk/spec require has nothing to keep in step.
+          grep -qE 'github\.com/opencharly/(sdk|spec)' "$d/go.mod" || continue
           if ( cd "$d" && GOWORK=off GOFLAGS=-mod=mod go mod tidy ); then
             n=$((n+1))
           else

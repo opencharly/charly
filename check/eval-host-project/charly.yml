@@ -1,7 +1,7 @@
 # Pruned GUEST PROJECT for the check-local guest-as-host bed (eval-host-vm).
 #
 # The superproject `check-local` bed (a top-level `vm: {from: eval-host-vm}` deploy)
-# rsyncs THIS file + `sdk/` + the four closure candies (check-local-layer,
+# rsyncs THIS file + the four closure candies (check-local-layer,
 # examplestep-deploy-consumer, plugin-example-step, plugin-deploy-local) into the guest
 # at /home/arch/eval-project, then runs `charly --host charly-check-local-vm check run
 # check-local` (the guest's domain/alias is named after the DEPLOY check-local-vm, not the
@@ -11,8 +11,9 @@
 # HostDeployTarget path — so the kind:local layer-application coverage is preserved OFF
 # the operator's workstation (all /etc + /tmp markers land in the disposable guest).
 #
-# PRUNED: only deploy:local + examplestep build in-guest (2 out-of-tree Go plugins,
-# `replace => ../../sdk`), never the full superproject plugin fleet (which OOM'd a 3.8G
+# PRUNED: only deploy:local + examplestep build in-guest (2 out-of-tree Go plugins whose
+# go.mods resolve the sdk + spec contract modules from the module proxy at the pinned
+# require versions), never the full superproject plugin fleet (which OOM'd a 3.8G
 # guest). No `import:` of the distro submodules — check-local-app is a kind:local template
 # with no base image, so no distro closure is needed.
 #
@@ -44,7 +45,7 @@ check-local:
             ALSO the witness for the STEP DEPLOY-EXECUTE leg of external plugin execution:
             add_candy composes examplestep-deploy-consumer (a DEPLOY-context `run: plugin:
             examplestep` step) + plugin-example-step (the out-of-tree examplestep verb, built
-            in-guest against the delivered sdk/), so at local deploy charly lowers the run-step
+            in-guest from the proxy-resolved sdk contract module), so at local deploy charly lowers the run-step
             to an ExternalPluginStep and Invokes the plugin's OpExecute over the E3b
             ExecutorService reverse channel — the plugin writes /tmp/charly-examplestep/
             examplestep-deploy/{applied,probe} on the GUEST venue and returns a plugin-script

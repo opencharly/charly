@@ -1494,8 +1494,9 @@ agents-skill:
                      trees ran overlapping (one finishing in roughly 79s, nested inside a
                      sibling's roughly 265s window), with separate per-tree
                      `.check/`/`.build/` outputs, zero cross-contamination, zero leftover
-                     deploys. Requirements: the worktree needs the `sdk` submodule inited
-                     (`task build:binary` reads `scripts/calver.sh`) but
+                     deploys. Requirements: the worktree needs NO sdk/spec checkout
+                     (`task build:binary` reads `scripts/calver.sh`; the sdk + spec contract
+                     modules resolve from the module proxy at the pinned require versions) but
                      not the `box/<distro>` submodules for the root disposable roster: root
                      `charly.yml` imports the distro namespaces (arch/cachyos/fedora) via
                      remote `@github.com/opencharly/distro-*` refs (resolver-fetched into
@@ -3507,8 +3508,9 @@ git-workflow-skill:
         description: |-
             Use when committing, branching, pushing, opening PRs, or landing a change with
             gh — the feat/-branch, R10-gated, PR-ONLY, org-workflow-validated, never-force-push
-            landing across the main repo, sdk/plugins submodules, and box distro
-            submodules. A direct push to main is FORBIDDEN and mechanically disabled; the
+            landing across the main repo, its plugins/docs/box submodules, and the
+            proxy-resolved sdk contract module (no submodule — consumed at the pinned
+            go.mod require). A direct push to main is FORBIDDEN and mechanically disabled; the
             org-wide `charly/pr-validator` GitHub Actions gate validates the PR and, on PASS,
             its `auto-merge` companion squash-merges and tags. Covers
             sync-to-upstream, branch/worktree pruning, the fork+PR path, cross-repo @github
@@ -3884,7 +3886,9 @@ git-workflow-skill:
                   order**, each repo as its OWN two-step PR (author opens; fresh `pr-validator`
                   merges + tags):
 
-                  0. the **sdk contract repo** (`github.com/opencharly/sdk`, submodule `sdk/`) — PR →
+                  0. the **sdk contract repo** (`github.com/opencharly/sdk` — NOT a submodule;
+                     this repo consumes it from the module proxy at the pinned require version,
+                     so only a touched CONTRACT lands there) — PR →
                      native auto-merge + tag-on-merge → tag `v0.<YYYYDDD>.<HHMM leading-zeros-stripped>` (its
                      Go-module tag scheme; the superproject `vYYYY.DDD.HHMM` form is not a valid Go
                      module version — e.g. superproject `v2026.185.0751` ⇄ sdk `v0.2026185.751`) —
@@ -3892,10 +3896,10 @@ git-workflow-skill:
                   1. each `box/<distro>` submodule — PR → auto-merge + tag-on-merge tags (it has `charly.yml`);
                   2. `plugins` — PR → auto-merge **+ tag-on-merge tags `v<YYYY.DDD.HHMM>`** (no `charly.yml`,
                      so no schema `version:` bump — but the tag marks the merge, same as every repo);
-                  3. the superproject — stage the now-MERGED submodule pointers (a touched sdk: the
-                     `sdk` gitlink bump PLUS the `charly/go.mod` require version — in-tree resolution
-                     rides `replace github.com/opencharly/sdk => ../sdk`, so the require version
-                     matters only for out-of-tree consumers, but it is staged here) → PR → native
+                  3. the superproject — stage the now-MERGED submodule pointers (a touched sdk:
+                     adopt the tagged sdk release as the new shared pinned require in every
+                     module — `task mods:tidy` re-syncs go.sum and the canonical-go.mod gate
+                     asserts the ONE shared pin; there is no gitlink and no `replace`) → PR → native
                      auto-merge + tag-on-merge tags `main`.
 
                   A producer PR must be **merged** (not merely green) before the consumer's pointer
@@ -3905,7 +3909,8 @@ git-workflow-skill:
                   **A valid base is an ASSEMBLED PAIR, not a lone submodule advance.** A new consumer
                   cutover branches from a base that is valid only once BOTH halves have merged: an `sdk`
                   `main` advance is a valid consumer base ONLY after its superproject adaptation (the
-                  gitlink bump + any `charly/go.mod` require) has ALSO merged. Branch a consumer off a bare
+                  tagged sdk release adopted as the new shared pinned require — there is no gitlink) has
+                  ALSO merged. Branch a consumer off a bare
                   `sdk` main advance whose super side is still open and you pin a superproject state no
                   `main` records — the consumer's R10 builds against a half-assembled base and its pointer
                   bump references a commit `main` has never seen. Wait for the pair before treating a
@@ -5317,29 +5322,27 @@ go-skill:
             │                              # build vocabulary + the sidecar: template library.
             │                              # Parsed by the SAME unified loader as any project
             │                              # charly.yml; a project ships none of it.
-            ├── sdk/                       # Git submodule (github.com/opencharly/sdk) — the plugin
-            │                              # contract module: root package sdk, sdk/kit, spec/spec,
-            │                              # spec/proto, spec/schema/*.cue, spec/schemaconcat, sdk/vmshared;
-            │                              # its own Taskfile owns `task cue:gen` + `task proto:gen`
             ├── .build/                    # Generated Containerfiles (gitignored)
             ├── charly.yml                  # Image definitions
             ├── Taskfile.yml               # Bootstrap tasks only
             ├── taskfiles/                 # Build.yml, Cue.yml, Setup.yml
             ├── candy/<name>/             # Layer directories
             ├── plugins/                   # Git submodule (opencharly/plugins)
+            ├── docs/                      # Git submodule (opencharly/docs)
             └── templates/                 # supervisord.header.conf (referenced by init.supervisord.header_file)
             ```
 
-            Submodule convention: `plugins/` is a submodule rooted at the
-            `opencharly/plugins` repo, and `sdk/` is a submodule rooted at the
-            `github.com/opencharly/sdk` repo. Clone with `--recurse-submodules` or run
+            Submodule convention: `plugins/` (and `docs/`, `box/<distro>`) are submodules rooted at
+            their own repos; the sdk contract module (`github.com/opencharly/sdk`) is NOT a
+            submodule — it resolves from the module proxy at the pinned require version in every
+            go.mod. Clone with `--recurse-submodules` (no sdk checkout exists to fetch) or run
             `git submodule update --init` after a plain clone. See
             `/charly-internals:skills` for the skill-authoring and sync conventions.
 
             ## Go Module Info
 
             - Go version: 1.26.0
-            - Key dependencies: `kong` (CLI), `go-containerregistry` (OCI), and `github.com/opencharly/sdk` (the plugin contract module — required with `replace github.com/opencharly/sdk => ../sdk` for in-tree resolution). The credential store's `go-keyring` (Secret Service API) is NOT a core dependency — it links only into the out-of-process `candy/plugin-secrets` plugin (the C2 dep-shed)
+            - Key dependencies: `kong` (CLI), `go-containerregistry` (OCI), and `github.com/opencharly/sdk` (the plugin contract module — required at the shared pinned version, resolved from the module proxy; there is no `replace`). The credential store's `go-keyring` (Secret Service API) is NOT a core dependency — it links only into the out-of-process `candy/plugin-secrets` plugin (the C2 dep-shed)
             - Module path: `charly/go.mod`
 
             ## Common Workflows
@@ -5751,7 +5754,7 @@ go-skill:
 
                   ### CUE is the single source of truth — the `spec/spec` package
 
-                  The `charly.yml` ingress schema has ONE author-of-record: the CUE definitions in `spec/schema/*.cue` — in the spec contract module (`github.com/opencharly/spec`, resolved from the module proxy at the pinned require version in every go.mod — there is NO submodule and NO local checkout). The Go param structs, the reserved-word vocabulary, and the kind/verb wiring are GENERATED or DERIVED from that source — there are no hand-maintained parallel copies. `charly/go.mod` requires `github.com/opencharly/spec` at the pinned version (no `replace` — the require version IS the resolution), and the repo-root `go.work` carries NO spec entry (generated by pluginsgen, which guards only the sdk submodule). The pieces:
+                  The `charly.yml` ingress schema has ONE author-of-record: the CUE definitions in `spec/schema/*.cue` — in the spec contract module (`github.com/opencharly/spec`, resolved from the module proxy at the pinned require version in every go.mod — there is NO submodule and NO local checkout). The Go param structs, the reserved-word vocabulary, and the kind/verb wiring are GENERATED or DERIVED from that source — there are no hand-maintained parallel copies. `charly/go.mod` requires `github.com/opencharly/spec` at the pinned version (no `replace` — the require version IS the resolution), and the repo-root `go.work` carries NO entry for either contract module (generated by pluginsgen; both the sdk and spec contract modules resolve via the module proxy at the pinned require versions). The pieces:
 
                   - **`spec/spec` — the generated param structs** (import path `github.com/opencharly/spec/spec`; charly core reaches these types via `spec.X` directly — the ZERO-ALIASES v2 target is REACHED: no `charly/*_aliases.go` re-export file exists, held that way by `TestZeroAliases_NoAliasFilesInCharlyCore` in `charly/import_purity_test.go`; see "The alias surface" below). `task cue:gen` (the spec repo's task; the superproject `task cue:gen` regenerates only the per-plugin params loop) regenerates this package from `spec/schema/*.cue`. Its members:
                     - `spec/spec/cue_types_gen.go` — **generated** by `cue exp gengotypes` (then yaml-tag retagged). Carries the `Code generated … DO NOT EDIT` banner; NEVER hand-edit. Every authored param type lives here (`Box`, `Candy`, `Vm`, `Op`, `Deploy`, …).
@@ -7364,7 +7367,7 @@ plugin-skill:
             external (out-of-tree git repo). Covers the unified Provider model, the per-plugin CUE-schema contract
             (single source → Go params for dev + schema-over-Describe RPC for runtime), the SDK, and the loader.
         triggers:
-            - "Authoring a plugin (a candy with a `plugin:` block) / builtin vs out-of-tree plugin / per-plugin `.cue` schema (single source \u2192 `gengotypes` for dev + schema-over-`Describe` RPC at runtime) / the plugin SDK (`github.com/opencharly/sdk`, the `sdk/` submodule) / `sdk/**` / a compiled-in plugin candy (`compiled_plugins:`) or host-coupled kit candy / an external plugin module"
+            - "Authoring a plugin (a candy with a `plugin:` block) / builtin vs out-of-tree plugin / per-plugin `.cue` schema (single source \u2192 `gengotypes` for dev + schema-over-`Describe` RPC at runtime) / the plugin SDK (`github.com/opencharly/sdk`, the proxy-resolved contract module — no submodule) / `sdk/**` / a compiled-in plugin candy (`compiled_plugins:`) or host-coupled kit candy / an external plugin module"
             - "Editing `sdk/schema/*.cue` / `task cue:gen` / `cue exp gengotypes` / generated `cue_types_gen.go` / Schema Driven Design (SDD) / a schema spike"
         content: |
             # Plugins — the unified Provider + per-plugin CUE-schema model
@@ -7675,9 +7678,9 @@ plugin-skill:
 
                   ## Authoring an EXTERNAL plugin (out-of-tree git repo)
 
-                  The candy IS its own Go module — its `go.mod` carries `require github.com/opencharly/sdk v0.0.0`
-                  plus, while in-repo, `replace github.com/opencharly/sdk => ../../sdk`; a PUBLISHED out-of-tree module
-                  drops the replace and requires a TAGGED `github.com/opencharly/sdk` instead (tag scheme
+                  The candy IS its own Go module — its `go.mod` carries `require github.com/opencharly/sdk` at
+                  the shared pinned version (the require IS the resolution — the sdk contract module resolves
+                  from the module proxy at that version; there is no local checkout and no `replace`, tag scheme
                   `v0.<YYYYDDD>.<HHMM leading-zeros-stripped>`, e.g. superproject `v2026.185.0751` ⇄ sdk `v0.2026185.751` —
                   the superproject's own `vYYYY.DDD.HHMM` tags are not valid Go module versions). A plugin module imports
                   ONLY the sdk module, never charly core. Mirror `candy/plugin-example-external/`:
@@ -7711,9 +7714,9 @@ plugin-skill:
                   - `pluginsgen` (`charly/internal/pluginsgen`, run by `task build:binary` before `go build`, `GOWORK=off`,
                     stdlib+yaml only) reads `compiled_plugins:` and emits `charly/plugins_generated.go` (one
                     `registerCompiledPlugin(<pkg>.NewProvider(), <pkg>.NewMeta())` per candy) + the repo-root `go.work`
-                    (`use ./charly` + `use ./sdk` + a `use ./candy/<name>` per candy, so `go build ./charly` resolves the
-                    candy imports; pluginsgen guards a missing sdk submodule with a clear `git submodule update --init sdk`
-                    error). Both are COMMITTED + reproducibility-gated (`TestPluginsGenReproducible`).
+                    (`use ./charly` + a `use ./candy/<name>` per candy, so `go build ./charly` resolves the
+                    candy imports; the sdk + spec contract modules resolve from the module proxy at the
+                    pinned require versions — no submodule, no checkout). Both are COMMITTED + reproducibility-gated (`TestPluginsGenReproducible`).
                   - `registerCompiledPlugin` drives `InProcServedTransport`: it calls the candy's `Describe` IN-PROCESS, runs
                     the SAME `buildUnit` capability-lift + schema gate an external goes through (so the compiled-in schema
                     enters the SAME `loadBuiltinPluginUnits` gate), and registers each capability wrapped in an

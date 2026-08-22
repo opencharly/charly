@@ -2,7 +2,7 @@ module github.com/opencharly/charly/candy/plugin-deploy-pod
 
 go 1.26.4
 
-require github.com/opencharly/sdk v0.0.0
+require github.com/opencharly/sdk v0.2026234.347
 
 require golang.org/x/crypto v0.52.0 // indirect
 
@@ -34,5 +34,3 @@ require (
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af // indirect
 	gopkg.in/yaml.v3 v3.0.1
 )
-
-replace github.com/opencharly/sdk => ../../sdk

@@ -30,7 +30,7 @@ linters:
   default: standard
   settings:
     errcheck:
-      # The SAME exclusions charly/sdk/spec already carry. Without them the root config
+      # The SAME exclusions the charly core module already carries. Without them the root config
       # would hold the 91 candy modules to a STRICTER errcheck than core, which is not a
       # gate improvement — it is an inconsistency that happens to fail. A deferred
       # best-effort Close on a response body or a read handle is the idiomatic form;

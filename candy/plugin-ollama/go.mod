@@ -4,7 +4,7 @@ go 1.26.4
 
 require (
 	github.com/ollama/ollama v0.32.14
-	github.com/opencharly/sdk v0.0.0
+	github.com/opencharly/sdk v0.2026234.347
 	github.com/opencharly/spec v0.2026232.520
 )
 
@@ -40,5 +40,3 @@ require (
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-replace github.com/opencharly/sdk => ../../sdk

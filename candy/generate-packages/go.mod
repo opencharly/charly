@@ -4,7 +4,7 @@ go 1.26.4
 
 require (
 	github.com/opencharly/plugin-generate-packages/candy/generate-packages v0.2026230.708
-	github.com/opencharly/sdk v0.2026227.1215
+	github.com/opencharly/sdk v0.2026234.347
 )
 
 require (
@@ -76,5 +76,3 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	software.sslmate.com/src/go-pkcs12 v0.7.1 // indirect
 )
-
-replace github.com/opencharly/sdk => ../../sdk
