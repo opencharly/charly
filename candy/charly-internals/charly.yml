@@ -179,8 +179,9 @@ agents-skill:
                     re-validates a PR against R0–R10 and the relevant skills and certifies
                     `Verdict: PASS|BLOCK` for the ORG-WIDE `charly/pr-validator` GitHub
                     Actions gate, whose check run is the branch-protection context. The
-                    landing (CalVer, version surfaces, squash merge, tags) is performed by
-                    the org-wide `auto-merge.yml` workflow when the gate goes green — the
+                    landing (native auto-merge squash, then the tag-on-merge workflow's
+                    CHANGELOG-from-PR-body + CalVer tag) is performed by
+                    the org-wide workflows when the gate goes green — the
                     agent neither posts the status nor merges; branch protection makes the
                     check the
                     mechanical gate. Never the agent that authored the PR — the point is
@@ -2197,7 +2198,14 @@ cutover-policy-skill:
             - **Deletion — in the same PR** — of every Go type, function, CLI flag, OCI label, YAML field, skill doc paragraph, and test fixture that references the removed surface.
             - **Relocation step-sequence PARITY (when the cutover relocates a dispatcher, orchestrator, or runner).** Before relocating, ENUMERATE the original's per-CLASS behavior arms — e.g. bring-up / update / teardown × each substrate or shape class — and PROVE each class's step sequence matches the original in the relocated code. Fixing one arm of a class while missing its siblings is the CHARACTERISTIC relocation defect: a generic fallback that silently mis-handles a special class passes every unit test and fails ONLY on that class's live bed. The acceptance roster MUST therefore carry a bed per SPECIAL class (a gate that cannot fail on the class proves nothing — see `/charly-check:check` "R10 gate by change class").
             - **Stale-reference sweep (R5).** Every reference, comment, docstring, error message, skill paragraph, migration help-text, test fixture, and hook string naming a deleted identifier MUST be updated or deleted in the same commit. After commit, `git grep '<deleted-id>'` returns ONLY historical mentions in `CHANGELOG/` or migration help-text.
-            - **A `CHANGELOG/` entry** in the repo's per-CalVer file (`CHANGELOG/<YYYY.DDD.HHMM>.md`, the version shared by the changelog filename and the release tag) recording the cutover narrative — required for EVERY landing in EVERY repo, `plugins` and `docs` included (`plugins` and `docs` are no CHANGELOG-exceptions: the author writes a placeholder CalVer, the `pr-validator` finalizes it at merge and `git mv`s the file to the merge stamp — the same stamp that names the tag). Historical content lives ONLY in the repo's `CHANGELOG/`; the project rulebook and the skills state the new standing rules forward-looking, with no history. See the project rulebook "Where things are documented".
+            - **A `CHANGELOG/` entry at merge** — the PR body IS the changelog: the org-wide
+              tag-on-merge workflow writes the merged PR's title + body to the repo's per-CalVer file
+              (`CHANGELOG/<YYYY.DDD.HHMM>.md`, the version shared by the changelog filename and the
+              release tag) at merge time, in EVERY repo, `plugins` and `docs` included. The author
+              stages no CHANGELOG file and mints no CalVer. Historical content lives ONLY in the
+              repo's `CHANGELOG/`; the project rulebook and the skills state the new standing rules
+              forward-looking, with no history. See the project rulebook "Where things are
+              documented".
             - **Engineering-discipline gates (R1–R5).** See `/charly-internals:strict-policy`. Every failure during the cutover triggers `/charly-internals:root-cause-analyzer` BEFORE any remediation (R1). Every issue surfaced is fixed in the cutover or escalated (R2). Duplication is refactored on first surface (R3). Workarounds are forbidden (R4). Stale references are swept (R5).
 
             ## Rationale
@@ -2240,7 +2248,10 @@ cutover-policy-skill:
             - **Load-time error** — old projects loading under the new code get a hard error naming the legacy field and pointing at `charly migrate`.
             - **Documentation refresh** — every referring skill revised in the same sweep; no stale references to any deleted identifier in `plugins/`, `README.md`, or `AGENTS.md` / `CLAUDE.md` (R5 grep self-test).
             - **Test deletions** — fixtures and assertions exercising the legacy surface removed; new fixtures exercise the replacement.
-            - **CHANGELOG entry** — the cutover narrative written to the repo's per-CalVer file `CHANGELOG/<YYYY.DDD.HHMM>.md` (the version shared by the changelog filename and the release tag); the repo's `CHANGELOG/` is the only home for its history.
+            - **CHANGELOG entry at merge** — the merged PR's title + body are written by the
+              tag-on-merge workflow to the repo's per-CalVer file `CHANGELOG/<YYYY.DDD.HHMM>.md`
+              (the version shared by the changelog filename and the release tag); the repo's
+              `CHANGELOG/` is the only home for its history. The author stages no CHANGELOG file.
 
             The commit uses the Conventional Commits `!` breaking-change marker; the body lists every deleted identifier, every removed YAML field, and every updated test. `charly migrate` is runnable against old projects from that commit forward, with no additional steps.
 
@@ -3527,7 +3538,7 @@ git-workflow-skill:
             - **Never force-push, on any branch, ever** (mandate, same rulebook section). `main` only fast-forwards via the validator's squash-merge; a `feat/` branch, once pushed, advances only by ADDING commits (the author's change, any review-round fix commits, then the evaluator's merge-time version stamp), and the squash-merge collapses them. A stale `feat/` catches up with `gh pr update-branch` (a merge, NOT a rebase-force); tags are add-only. **Amending a `feat/` branch is a normal authoring action — legal until the first push** (amending a pushed branch would require a force-push, which is forbidden).
             - **R10-gated; the merge requires the `charly/pr-validator` gate's green check run.** R10 PASS authorizes opening the PR (with pasted evidence); a rule violation or R10 FAIL means a red `charly/pr-validator` check and no merge — fix in the same tree, re-run R10, re-push; the check resets and the validator re-runs.
             - **Zero warnings is part of R10** (project rulebook R1). A version-mismatch warning clears with `charly box reconcile`; any other warning gets `/charly-internals:root-cause-analyzer` then a real fix — "warning" is never an accepted end state.
-            - **Atomic on `main`, never on `feat/`.** The auto-merge workflow's `--squash` folds the author's change, any review-round fix commits, and the merge-time CalVer rewrite (see "CalVer" in `references/validator-and-calver.md`) into one commit whose message is composed by the validator and carried through the merge; the `feat/` branch may freely accumulate fix commits across review rounds. Two separate cutovers must never share one PR.
+            - **Atomic on `main`, never on `feat/`.** The org-wide `charly/pr-validator` workflow's PASS enables GitHub native auto-merge (squash), which folds the author's change and any review-round fix commits into one commit on `main`; the `feat/` branch may freely accumulate fix commits across review rounds. The merge-time CalVer tag and the `CHANGELOG/<CalVer>.md` entry (written from the PR body — the PR body IS the changelog) are created after merge by the org-wide `tag-on-merge` workflow (see "CalVer" in `references/validator-and-calver.md`). Two separate cutovers must never share one PR.
             - **Update the PR; never close-and-recreate** (except for work that will not land at all — a disproven premise, an abandoned approach). When a review demands changes, append a commit and push it fast-forward — the check resets and the validator re-runs. This is what makes the no-force-push rule livable: because `main` gets a squash, a branch carrying five fix commits still lands as one.
             - **Tree-safety before destructive actions (R6).** Check `git status` + `git stash list` before any destructive working-tree action — `git stash` discards in-progress work; `rm` on a tracked file is destructive. When the sandbox blocks an action, find a non-destructive alternative rather than working around it. The stash/pop cycle can itself silently un-stage a `git rm`: a stash taken while a deletion is staged restores the deletion as unstaged on `pop`, so a `git status` right after the cycle that shows the deleted file back as a plain unstaged change (rather than the staged deletion you left) has quietly lost the staging — re-stage it (`git rm <path>` again, or `git add -u`) before committing. A stash/pop round-trip is never a no-op on a mixed add+rm working tree.
             - **Right worktree — pin one absolute path for the whole edit→commit→push sequence.** Before branching, staging, or committing, confirm the worktree you are driving is the same one your edits landed in: `git -C <path> rev-parse --show-toplevel` must equal the path you edited, and `git -C <path> status --short` must list those edits. Under symlinked or near-twin sibling worktrees — a parent dir that is itself a symlink (`~/projects` → `~/Sync/projects`), or look-alike names such as `…/charly` vs `…/<other-worktree>` — `cd`-ing to the wrong sibling makes `git switch -c` + `git commit` run against a clean tree and report "nothing to commit", silently landing nothing (or landing in the wrong repo). Never change the path spelling mid-sequence. An unexpected "nothing to commit" right after editing a file is the signature of this mistake — stop and re-verify `--show-toplevel` before retrying (blind retry is an R1 violation).
@@ -3538,7 +3549,7 @@ git-workflow-skill:
               - **a deletion**, where the removed file's path is still named in the `add` (the deletion was already staged) — lands a partial commit carrying only the deletion;
               - **a rename plus a content edit**, where `git mv old new` is followed by `git add old new` (the `mv` already staged the rename) — lands the rename with the content edit dropped.
 
-              Stage a rename+edit as `git add <new>` alone, and a deletion by DIRECTORY or with `git add -u`; never name the vanished path. **This shape defeats the post-commit check above**, which is why it needs stating separately: `git show --stat` DOES list the file, as `old.md => new.md | 0`, so "every intended file is listed" passes. Presence is not the signal — the tells are the **magnitude** (`| 0` insertions on a commit meant to change content) and a **leftover ` M <new>`** in `git status` afterwards. Read the numbers and the post-commit status, not just the filenames, and confirm content directly with `git show HEAD:<new-path> | head -1` whenever the edit is the point of the commit. The CalVer-finalization instance of this — renaming a placeholder `CHANGELOG/` file while rewriting its H1 — is in `references/validator-and-calver.md`.
+              Stage a rename+edit as `git add <new>` alone, and a deletion by DIRECTORY or with `git add -u`; never name the vanished path. **This shape defeats the post-commit check above**, which is why it needs stating separately: `git show --stat` DOES list the file, as `old.md => new.md | 0`, so "every intended file is listed" passes. Presence is not the signal — the tells are the **magnitude** (`| 0` insertions on a commit meant to change content) and a **leftover ` M <new>`** in `git status` afterwards. Read the numbers and the post-commit status, not just the filenames, and confirm content directly with `git show HEAD:<new-path> | head -1` whenever the edit is the point of the commit.
             - **Check-coverage is part of R10.** The change must ship the test coverage that proves its functionality (`check:` checks for new/changed layers & images, Go tests for `charly` code) AND the live run must have exercised it. A change whose new functionality has no test that would fail without it is not landable.
             - **Every repo is tagged at merge.** The superproject, every `box/<distro>`, `plugins`, and `docs` all mint `v<YYYY.DDD.HHMM>` on their own merged HEAD — the tag marks the MERGE, decoupled from any `charly.yml` `version:` schema field, so a repo needs no `charly.yml` to be tagged. The sole exception is the sdk contract repo, which tags under its own Go-module scheme `v0.<YYYYDDD>.<HHMM with all leading zeros stripped>` (B2 step 0) — **not an exemption but a hard Go-module requirement**: `v<YYYY.DDD.HHMM>` is not a valid Go module version (semver forbids a leading-zero segment — `0733`→`733` — and a `major ≥ 2` would force a `/vN` module-path suffix that breaks every `import github.com/opencharly/sdk`), so the stripped `v0.<…>` form is mandatory, not a choice. A skipped tag is a defect, not an exemption: the orchestrator verifies the tag landed after each merge (`git ls-remote --tags origin v<VER>` non-empty) and, if the evaluator skipped it, backfills it add-only on the merged HEAD (`git tag -a v<VER> -m "<subject>" <merged-HEAD>` + `git push origin refs/tags/v<VER>`) — tags are immutable, so a backfill only adds one, never moves an existing tag.
 
@@ -3597,9 +3608,10 @@ git-workflow-skill:
                   #     (Risk Driven Development: prove high-risk assumptions on a bed first) ...
 
                   # on R10 PASS, open the PR (do NOT merge):
-                  # write the cutover narrative to CHANGELOG/<placeholder>.md — a PLACEHOLDER CalVer
-                  #   (any valid YYYY.DDD.HHMM; the evaluator OVERWRITES it with the merge-time VER).
-                  git add <only the cutover's files> CHANGELOG/<placeholder>.md
+                  # the PR body IS the changelog — no CHANGELOG file is staged; the
+                  # org-wide tag-on-merge workflow writes CHANGELOG/<merge-time VER>.md
+                  # from the merged PR title + body after merge.
+                  git add <only the cutover's files>
                   git commit -m "<conventional commit>" \
                     -m "Assisted-by: <Harness> <Provider Full Model Name> (<confidence>)"
                   git push origin feat/<slug>                       # feat push — allowed by the gate
@@ -3614,9 +3626,9 @@ git-workflow-skill:
                   relevant skills and certifies `Verdict: PASS|BLOCK` for the ORG-WIDE
                   `charly/pr-validator` GitHub Actions workflow (`opencharly/.github`), whose
                   check run is the branch-protection context (green on PASS, red on BLOCK). On
-                  PASS the org-wide `auto-merge` workflow generates the merge-time CalVer,
-                  rewrites the version surfaces on `feat/` (the `CHANGELOG` rename + any schema
-                  bump), `gh pr merge --squash --delete-branch`, and tags. Its inputs include the
+                  PASS the workflow enables GitHub native auto-merge (squash); after the merge
+                  the org-wide `tag-on-merge` workflow writes `CHANGELOG/<VER>.md` from the PR
+                  body, mints the `v<VER>` tag, and backfills any schema version bump. Its inputs include the
                   PR's FULL comment thread, per the pr-validator spec's comment-intake rule — every
                   comment is investigated independently and considered in the verdict, never
                   granted or denied authority merely by existing (see
@@ -3669,13 +3681,15 @@ git-workflow-skill:
                   freshness surfaces, failing independently"). The delta re-gate above produces the
                   fresh run; nothing in it updates the artifacts that CITE the old one, so a run
                   directory named in the PR body or the CHANGELOG still points at a superseded tree
-                  — and it is the CHANGELOG that ships inside the commit the evaluator tags.
+                  — and it is the PR body that the tag-on-merge workflow writes to the CHANGELOG
+                  file at merge time.
 
                   **Scope — block on what gets TAGGED, report what gets squashed away.** The
-                  CHANGELOG entry and the PR body are both durable: the entry lands in the tagged
+                  CHANGELOG entry (written from the PR body at merge) and the PR body are both
+                  durable: the entry lands in the tagged
                   tree, and a merged PR body stays public and quotable long after the branch is
                   deleted. A superseded run directory in either is BLOCKING. An intermediate commit
-                  message is replaced by the evaluator's squash message, so a stale citation there
+                  message is replaced by the squash merge, so a stale citation there
                   is reportable but not blocking. The general form, which outlives the specific
                   case: **a claim-keyed sweep runs LAST, once the final tree exists** — a record
                   written alongside the change it describes is written before the tree its reader
@@ -4418,47 +4432,36 @@ git-workflow-skill:
                   ## CalVer — generated AND rewritten at MERGE, by the evaluator
 
                   The single CalVer stamp is `<YYYY.DDD.HHMM>` from the current UTC time. It is
-                  generated at the moment of merge, by the fresh evaluator — not by the author.
+                  generated at the moment of merge, by the org-wide tag-on-merge workflow — not by the author.
                   Author-time stamps do not survive concurrency: with multiple PRs open and approved
                   out of order, an author-time CalVer collides (same minute) and mis-orders (merge
-                  order ≠ author order). The evaluator generates it at merge and applies it to both
-                  the changelog and the tag (the "one stamp for both" invariant, moved from
-                  author-landing to evaluator-merge). This holds for every repo, `plugins` and `docs` included:
+                  order ≠ author order). tag-on-merge generates it at merge and applies it to both
+                  the changelog and the tag (the "one stamp for both" invariant, applied at merge
+                  time). This holds for every repo, `plugins` and `docs` included:
                   `plugins` and `docs` are no CHANGELOG-exceptions — every `plugins` AND every
-                  `docs` landing carries a `CHANGELOG/<YYYY.DDD.HHMM>.md` entry exactly like the
-                  superproject and `box/<distro>` (the `docs` convention is real: 24 of the last 25
-                  docs first-parent commits carry one; the single exception `a252df9` is exactly
-                  the commit that forced follow-up docs PR #46 to add its missing entry — a fresh
-                  validator reading the pre-this-edit enumeration, which named `plugins` but never
-                  `docs`, would conclude `docs` is an exception and the gap recurs). Once tagged,
+                  `docs` landing gets a `CHANGELOG/<YYYY.DDD.HHMM>.md` entry written from the merged
+                  PR body (the PR body IS the changelog) exactly like the
+                  superproject and `box/<distro>`. Once tagged,
                   the same finalized CalVer names each repo's changelog file and its `v<…>` tag.
                   Every component is fixed-width zero-padded so filenames and tags sort
                   chronologically under a plain alphanumeric sort.
 
-                  - **The author writes a placeholder** `CHANGELOG/<placeholder>.md` (any valid
-                    `YYYY.DDD.HHMM`, so the cutover carries its required history) and — for a schema cutover
-                    — a placeholder `#SchemaVersion` / `migrations.cue` bump. The author owns none of
-                    the final numbers.
-                  - **The evaluator, at merge:** `VER=$(date -u +%Y.%j.%H%M)` (guard uniqueness — if
+                  - **The author writes no CalVer and no CHANGELOG file.** The PR body IS the
+                    changelog (title + body are the release-notes source). For a schema cutover
+                    the author still bumps `#SchemaVersion` / `migrations.cue` strictly above
+                    current `main` — but the final CalVer for tag and changelog filename is minted
+                    at merge, never by the author.
+                  - **tag-on-merge, at merge:** `VER=$(date -u +%Y.%j.%H%M)` (guard uniqueness — if
                     `v$VER` or `CHANGELOG/$VER.md` already exists on the current `main`, advance to
-                    the next free minute); bring the branch up to date (`gh pr update-branch` on `BEHIND`,
-                    no force-push); rewrite every merge-time-dependent version surface to `$VER`
-                    (`git mv CHANGELOG/<placeholder>.md CHANGELOG/$VER.md`; a schema bump re-stamped
-                    strictly above the current HEAD's `#SchemaVersion` + `version:` +
-                    `migrations.cue` entry); commit + push feat (a normal, non-force push — an added
-                    commit); re-post `charly/pr-validator` on the new head; `gh pr merge
-                    --squash --delete-branch`; then tag the merged HEAD — `git tag -a v$VER -m
-                    "<subject>" <merged-HEAD>` and `git push origin refs/tags/v$VER` (every repo;
-                    `sdk` substitutes its Go-module `v0.<…>` form).
-                  - **Guard the `git mv` stale-pathspec footgun** — this flow's instance of the
-                    all-or-nothing `git add` invariant in `SKILL.md` (see "never name a path that no
-                    longer exists" for the mechanism and its tells). Here it lands as: `git mv
-                    CHANGELOG/<placeholder>.md CHANGELOG/$VER.md` followed by `git add <old-path>
-                    <new-path>` silently drops the H1-heading rewrite, leaving a rename-only commit
-                    whose filename and heading disagree. Stage with `git add <new-path>` alone, then
-                    verify `git show HEAD:<new-path> | head -1` (or `git diff --cached`) matches the
-                    intended content BEFORE committing or posting the status. The most common
-                    recurrence in this repo, and the one this step exists to stop.
+                    the next free minute); after the squash merge, write `CHANGELOG/$VER.md` on
+                    `main` from the merged PR's title + body (a bot token — GitHub App preferred,
+                    PAT fallback — authorizes the protected-main write; the App is the ruleset
+                    bypass actor for the single CHANGELOG path); then tag the merged HEAD —
+                    `git tag -a v$VER -m "<subject>" <merged-HEAD>` and
+                    `git push origin refs/tags/v$VER` (every repo;
+                    `sdk` substitutes its Go-module `v0.<…>` form). A schema cutover's
+                    `#SchemaVersion` + `version:` + `migrations.cue` re-stamp stays strictly above
+                    the current HEAD.
 
                   One fresh stamp per merge, immutable (only ever added), independent of `charly.yml`
                   `version:` (the schema version, bumped only by a cutover raising `#SchemaVersion`).
@@ -4469,15 +4472,14 @@ git-workflow-skill:
                   both: the schema bump and the tag. See `/charly-build:migrate`.
 
                   **A merged `CHANGELOG/<CalVer>.md` is immutable, exactly like the tag sharing its
-                  CalVer.** Once the evaluator renames a cutover's placeholder to its final
-                  `CHANGELOG/$VER.md` and merges it, that file is closed history — follow-up work in
+                  CalVer.** Once tag-on-merge writes the entry from a PR body at
+                  `CHANGELOG/$VER.md`, that file is closed history — follow-up work in
                   the same theme, branch, or session never appends to it or edits its content, even to
-                  add a directly-related narrative. It writes its own new placeholder
-                  `CHANGELOG/<placeholder>.md` entry instead, which its own evaluator stamps with its
-                  own merge-time CalVer at its own merge. Editing an already-merged entry re-dates
+                  add a directly-related narrative. It gets its own
+                  `CHANGELOG/<merge-time VER>.md` entry written from its own PR body at its own merge.
+                  Editing an already-merged entry re-dates
                   history out from under its own filename↔tag pairing — a permanent divergence the
-                  instant it lands, not a convenience. (A fresh `pr-validator` FAIL is what catches this
-                  mistake before it lands.)
+                  instant it lands, not a convenience.
 
                   ## After landing — cleanliness + report
 
@@ -10681,77 +10683,13 @@ pr-validator-agent:
                 surface (or wrongly vanish) against another's, producing a stale/incorrect
                 result attributed to the wrong PR. Set `GOLANGCI_LINT_CACHE` to a
                 per-worktree path before every lint invocation you run.
-            18. **CHANGELOG present.** A runtime-tier change stages a `CHANGELOG/<CalVer>.md`
-                entry (a placeholder CalVer is fine — you finalize it in Phase 3); a
-                docs-only change carrying history also stages one. Absent where required FAILS.
-                **Strict CalVer checks:**
-                - Filename MUST match `^\d{4}\.\d{3}\.\d{4}\.md$` (valid CalVer format)
-                - H1 heading MUST byte-equal the WHOLE line `# <filename-without-.md> — <title>`
-                  (a reading scoping the byte-equality to the CalVer alone would exempt an H1 with
-                  the right date and no title — the two-reader ambiguity this rule once caused)
-                - The placeholder CalVer MUST NOT already exist as a `CHANGELOG/*.md` or `v*` tag on `main`
-                - `git show :CHANGELOG/<file>.md | head -1` MUST byte-equal `# <CalVer> — <title>`
-                  — read the INDEX, what the commit will carry, never the working-tree path: the
-                  path is the one layer that already agrees with you, so a staged rename with an
-                  unstaged edit (the `RM` second character in `git status --short`) would pass it
-                  while the index, commit and merge all hold the old H1
-
-                **These four rules prevent a COLLISION, not a SURVIVAL, and the difference is the
-                whole hazard.** The placeholder is required to be CalVer-shaped and self-consistent,
-                so a placeholder whose Phase-3 rename is SKIPPED merges as a file indistinguishable
-                from a properly stamped entry — well-formed by construction, because these rules
-                demand it. Nothing downstream can tell that the date was guessed by an author rather
-                than minted at merge, and `plugins` has NO CI to catch it: at the gitlink this entry
-                pins it has no `.github` tree at all — 0 tracked paths under it, not an empty
-                workflows directory — while the same probe returns `ci.yml` and `release-binary.yml`
-                in `charly`, which is what makes that absence evidence rather than a failed lookup. **The rules and the agent performing Phase 3 are the
-                only things standing between a guessed date and `main`.**
-
-                One tempting remedy — a sentinel that announces itself, `CHANGELOG/UNSTAMPED-<slug>.md`
-                with `# UNSTAMPED — …` — **fails rule one by construction** and would be rejected on
-                the filename regex before anything else was read, and the org PR template
-                independently instructs authors to use a placeholder `CHANGELOG/<CalVer>.md`.
-
-                **A second remedy does pass the regex, and is already in live use**: a stamp that is
-                well-formed but impossible as a wall clock, `CHANGELOG/2026.229.9998.md`. It is
-                self-announcing to a human and accepted by rule one, so *self-announcing* and
-                *regex-valid* are not the exclusive alternatives this paragraph once implied. What it
-                does NOT do is bind anything: nothing rejects it, and a leg that skips Phase 3 still
-                merges a file whose name is a guess — merely a conspicuous one.
-
-                **And the check below does not cover that case either, because it lives inside
-                Phase 3.** It compares the landed entry against the version you MINTED, which
-                distinguishes a guessed date from a minted one — but only when Phase 3 runs at all.
-                Nothing inside a phase can detect that phase being skipped.
-
-                **The invariant that survives a skipped Phase 3 is external to it: an entry on
-                `main` with no matching `v<CalVer>` tag.** A skipped Phase 3 leaves both the
-                placeholder name and the absent tag, so the pair is checkable by anyone, at any
-                time, without knowing what was minted. **That is the check that catches the
-                PLAUSIBLE placeholder** — the dangerous kind, where filename and H1 agree because
-                both are the guess. A conspicuous stamp such as `9998` is at least visible in a file
-                listing; a plausible one has no surface that distinguishes it from a minted date,
-                so the tag pair is the only check that reaches it.
-
-                **Scope it, or it fires on a third of the history.** Tagging every landing is a
-                RECENT convention, and the two regimes interleave — measured in `plugins`:
-                **66 entries carry no tag**, all of them at or before `2026.215.1207`, while the
-                earliest tagged entry is `2026.193.1934`, well inside that stretch. Every entry
-                above `2026.215.1207` carries a tag; `2026.215.1207` is itself the LATEST untagged
-                entry, so it belongs to the old regime and the tagged run opens above it. Tagging
-                before that boundary was SPORADIC rather than absent — 70 of the 136 entries at or
-                below it do carry tags, which is what "interleave" means here. The corpus total and
-                the length of the tagged run are deliberately NOT stated: both grow with every
-                merge, so either is stale within hours of being written, while the untagged count
-                does not move. So the invariant reads: *every entry
-                landed since the convention took hold has a matching tag*; earlier entries predate
-                it and are evidence of nothing. A check written without that clause returns 66 false
-                positives and gets disabled by whoever inherits it.
-
-                And do not write it bidirectionally without a second clause: **3 tags have no
-                entry** (`v2026.195.0603`, `v2026.197.2231`, `v2026.215.1236`). That is not a
-                defect — a tag marks a merge, and a content-removal landing needs no CHANGELOG — but
-                a symmetric check fires on all three.
+            18. **PR body IS the changelog.** No CHANGELOG file is staged in the PR diff and
+                no `## CHANGELOG` section is required — the merged PR's title + body ARE the
+                release notes. The org-wide tag-on-merge workflow writes
+                `CHANGELOG/<CalVer>.md` from the merged PR body at merge time (CalVer minted
+                at merge, never by the author). Absent a PR body where one is required FAILS.
+                A CHANGELOG file in the diff is neither required nor expected; treat one as an
+                ordinary diff item (it must not duplicate the merge-time entry).
 
             None of these is a formality: a rule you cannot POSITIVELY confirm from the diff +
             your own re-run is not "probably fine" — it is unverified, and unverified is FAIL
@@ -11064,19 +11002,21 @@ pr-validator-agent:
             findings, DONE (the author fixes and re-pushes, which re-runs the workflow gate;
             you are re-run).
 
-            ## Phase 3 — On PASS: the org-wide auto-merge workflow lands the PR
+            ## Phase 3 — On PASS: the org-wide workflow enables native auto-merge; tag-on-merge lands the CalVer
 
-            Your PASS alone merges nothing. `opencharly/.github` `.github/workflows/auto-merge.yml`
-            runs when the `charly/pr-validator` workflow completes successfully and performs the
-            landing, holding these invariants (CalVer is generated at merge — NEVER by the
+            Your PASS alone merges nothing. `opencharly/.github` `.github/workflows/pr-validator.yml`
+            enables GitHub native auto-merge (squash) when it completes successfully, and the
+            org-wide `tag-on-merge` workflow writes the CHANGELOG and tags after the merge,
+            holding these invariants (CalVer is generated at merge — NEVER by the
             author, whose stamps collide and mis-order across concurrent PRs):
 
-            1. **Bring the branch up to date.** Strict protection requires the branch to be
-               current with `main`; if `gh pr view <N> --json mergeStateStatus` is `BEHIND`,
-               the workflow runs `gh pr update-branch <N> --repo <owner>/<repo>` (merges `main`
-               into the feat branch — no history rewrite, no force-push; the later
+            1. **Native auto-merge waits for every required check.** GitHub's
+               `enablePullRequestAutoMerge` (squash) merges only when ALL branch-protection
+               required checks (the repo's CI gate + `validate / validate`) are green on the
+               head. If the branch is `BEHIND`, `gh pr update-branch <N> --repo <owner>/<repo>`
+               merges `main` into the feat branch (no history rewrite, no force-push; the
                squash-merge still yields a linear `main`).
-            2. **Generate + guard the CalVer.** `VER=$(date -u +%Y.%j.%H%M)`. If the tag
+            2. **Generate + guard the CalVer at merge time.** `VER=$(date -u +%Y.%j.%H%M)`. If the tag
                `v$VER` OR `CHANGELOG/$VER.md` already exists on the current `main` (a
                same-minute prior merge), advance to the next free minute. Every repo EXCEPT sdk
                uses `v<YYYY.DDD.HHMM>` (this form KEEPS the leading-zero HHMM);
@@ -11089,41 +11029,27 @@ pr-validator-agent:
                `plugins` and `docs` ARE tagged, with the same `v<YYYY.DDD.HHMM>` form as
                every non-sdk repo (they carry no `charly.yml`, so no schema `version:` bump —
                but the tag still marks the merge).
-            3. **Rewrite every merge-time-dependent version surface to `$VER`** on the feat
-               branch, then commit (carrying the PR's validated `Assisted-by` trailer) and push
-               the feat branch (a normal, non-force push):
-               - `git mv CHANGELOG/<placeholder>.md CHANGELOG/$VER.md` **AND rewrite the H1
-                 heading inside the file to match**: the first line is `# <placeholder> — …`;
-                 rewrite it to `# $VER — …` (same title text, new date) — otherwise the filename
-                 and H1 diverge (a recurring R1 incident). Self-verify that
-                 `head -1 CHANGELOG/$VER.md` byte-equals `# $VER — <title>` BEFORE merging;
-               - **after tagging, verify the landed entry's CalVer equals the version MINTED** —
-                 every `CHANGELOG/*.md` this merge adds to `main` must be `$VER`, the same string
-                 as the `v$VER` tag. A mismatch means the entry carries an author's guess: rename
-                 and re-head it on `main`'s new head, add-only;
-               - if the PR bumps the schema, re-stamp `#SchemaVersion`
+            3. **Write the CHANGELOG from the PR body after the merge.** tag-on-merge creates
+               `CHANGELOG/$VER.md` on `main` from the merged PR's title + body (the PR body IS
+               the changelog; the author staged no CHANGELOG file), using a bot token (GitHub
+               App preferred, PAT fallback) that is the ruleset bypass actor for the single
+               CHANGELOG path on protected `main`:
+               - verify the landed entry's H1 byte-equals `# $VER — <title>` — a mismatch
+                 means the entry carries an author's guess: rewrite it on `main`'s new head, add-only;
+               - if the PR bumped the schema, re-stamp `#SchemaVersion`
                  (`spec/schema/version.cue`) + `version:` + the `candy/plugin-migrate/migrations.cue`
                  entry to be strictly greater than the CURRENT `main` HEAD's schema version;
                - any other embedded release-version string.
-            4. **Merge one byte sequence via `gh pr merge --squash --delete-branch`.**
-               `SQUASH_BODY` must carry the PR's validated
-               `Assisted-by: <Harness> <Provider Full Model Name> (<confidence>)` trailer as a
-               standalone, parseable trailer (the canonical helper
-               `<superproject>/plugins/scripts/squash_body.py` inserts exactly one blank line,
-               rejects same-line/duplicate/placeholder forms, and can `--check` the result; the
-               workflow runs the check and a `git interpret-trailers --parse` EXACT match on the
-               merged object before it tags). SQUASH, so `main` gains exactly ONE commit no
-               matter how many fix commits the review rounds added. Never let `gh` default the
-               subject to the concatenated commit list, and never drop the attribution trailer.
-               If the merge fails "not mergeable / base branch policy" because another PR merged
-               in between (branch went `BEHIND` again) → return to step 1. This loop keeps every
+            4. **The squash merge keeps `main` linear.** Native auto-merge's squash produces
+               exactly ONE commit on `main` no matter how many fix commits the review rounds
+               added; the PR's validated
+               `Assisted-by: <Harness> <Provider Full Model Name> (<confidence>)` trailer is
+               carried in the squash body. If the merge fails "not mergeable / base branch
+               policy" because another PR merged in between (branch went `BEHIND` again) →
+               update the branch and re-validate. This keeps every
                version monotonic with real merge order.
-            5. **Verify the emitted merge object, then tag.** The workflow resolves the merge
-               SHA from GitHub and verifies the FETCHED object's trailer equals the validated
-               trailer (`git -C <target> show -s --format=%B "$MERGED_SHA" | git
-               interpret-trailers --parse` must equal it exactly); an empty, extra, folded, or
-               different parser result revokes PASS — no tag, record the anomaly, run R1. Only
-               after that proof, tag EVERY repo (`plugins` and `docs` included; `sdk` substitutes
+            5. **Tag after the merge.** tag-on-merge resolves the merged SHA and tags EVERY repo
+               (`plugins` and `docs` included; `sdk` substitutes
                its `v0.<…>` form): `git tag -a v$VER -m "<subject>" "$MERGED_SHA"`; `git push
                origin refs/tags/v$VER`. Only a SUPERPROJECT `v*` tag triggers the release-binary
                workflow; a `plugins` / `docs` tag fires NO workflow, so tagging them is harmless.
@@ -11166,7 +11092,7 @@ pr-validator-agent:
                              per-item trace: <for each staged charly/*.go: alias? kit-import(+exception conditions verified)? boundary-law E/M/B/D/R placement? *Legacy* relocation smell?>
               [PASS/FAIL] 16. disposable-only autonomy (destroy only on disposable: true)
               [PASS/FAIL] 17. clean architecture + go gates (gofmt/golangci-0/vet/test; repo invariants)
-              [PASS/FAIL] 18. CHANGELOG present
+              [PASS/FAIL] 18. PR body IS the changelog (no CHANGELOG file required; merge-time CalVer minted by tag-on-merge from the PR body)
 
             Comments considered: <one line per PR comment — author, one-line summary,
               disposition: verified-blocking | verified-non-blocking | unverified-dismissed
@@ -11180,7 +11106,7 @@ pr-validator-agent:
             workflow posts it)
             PR comment posted: yes (ends with *Assisted-by: <Harness> <Provider Full Model Name> (<confidence>)*)
             Squash trailer proof: pre-merge parse = <exact trailer>; merged <merge-sha> parse = <exact trailer>
-            Verdict: PASS → auto-merge workflow merged (squash) as <merge-sha>, tagged v<VER>
+            Verdict: PASS → auto-merge workflow merged (squash) as <merge-sha>, tag-on-merge wrote CHANGELOG and tagged v<VER>
                OR    FAIL → not merged; blocking: <findings>
             ```
 
