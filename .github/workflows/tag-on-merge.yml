@@ -1,20 +1,88 @@
 # ORG-WIDE TAG-ON-MERGE DISPATCHER — installed in every opencharly repo.
 name: tag-on-merge
 
+# Event-driven — no cron (RCA of all previous trigger designs, measured in
+# this repo across 8 merges and 17 schedule runs):
+#
+# 1. `on: push` / `on: pull_request: [closed]` CANNOT see auto-merge merges.
+#    Native-auto-merge squash merges (actor `app/github-actions`) fire their
+#    webhook events — they are visible in the public event stream, e.g.
+#    `21:35:01Z sha=e222762 by=github-actions[bot]` for PR #8 — but GitHub
+#    Actions creates ZERO workflow runs for them (API-confirmed: no run for
+#    any merge commit, and 0 `pull_request`-event runs in the workflow's
+#    whole history). This is platform-level run suppression for auto-merge
+#    commits; no trigger selection can observe them. (Human merges and
+#    bot contents-API commits DO create runs — hence `push` is kept as a
+#    secondary trigger for those paths.)
+# 2. `schedule: */15` cron: GitHub cron delivery is best-effort with no SLA.
+#    Measured 21-44 min gaps (never the configured 15); PR #3's tag landed
+#    4+ hours late; PR #7's tag was still missing 30 min after merge.
+# 3. `workflow_run` on `charly/pr-validator`: the ONE trigger whose event
+#    delivery is proven (the 12:12-12:51Z 8/22 runs all received the event;
+#    they died at startup on a workflow-file issue, not on delivery).
+#
+# The pr-validator run is the last actor before the merge (its final step
+# arms native auto-merge). Firing on its completion and waiting (bounded) for
+# the squash to land makes the MERGE the effective gate for tagging. The org
+# reusable sweep is idempotent and scans the last 24h of merged PRs, so any
+# PR missed by a wait timeout self-heals on the next validator completion.
+# The rulebook's add-only backfill remains the ultimate documented path.
 on:
   workflow_run:
     workflows: ["charly/pr-validator"]
     types: [completed]
-  schedule:
-    - cron: "*/15 * * * *"
+  push:
+    branches:
+      - main
 
 permissions:
   contents: write
+  pull-requests: read
 
 jobs:
+  wait-for-merge:
+    if: >
+      github.event_name == 'push' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for triggering PR to merge (bounded readiness probe)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Push events: the merged PR is already on main — no wait needed.
+            if (context.eventName !== 'workflow_run') {
+              core.info('push event — merged PRs are in the sweep window');
+              return;
+            }
+            const run = context.payload.workflow_run;
+            const { data: prs } = await github.rest.pulls.list({
+              ...context.repo,
+              state: 'open',
+              head: `${context.repo.owner}:${run.head_branch}`,
+            });
+            if (!prs.length) {
+              core.info('No open PR for head branch — sweep covers already-merged PRs');
+              return;
+            }
+            const pr = prs[0];
+            const deadline = Date.now() + 5 * 60 * 1000;
+            while (Date.now() < deadline) {
+              const { data: p } = await github.rest.pulls.get({
+                ...context.repo, pull_number: pr.number,
+              });
+              if (p.merged_at) {
+                core.info(`PR #${pr.number} merged at ${p.merged_at} — proceeding to tag`);
+                return;
+              }
+              await new Promise((r) => setTimeout(r, 20 * 1000));
+            }
+            core.info(`PR #${pr.number} not merged within 5m — sweep still runs; next validator completion self-heals`);
+
   tag:
     if: >
-      github.event_name == 'schedule' ||
+      github.event_name == 'push' ||
       github.event.workflow_run.conclusion == 'success'
+    needs: wait-for-merge
     uses: opencharly/.github/.github/workflows/tag-on-merge.yml@main
     secrets: inherit
