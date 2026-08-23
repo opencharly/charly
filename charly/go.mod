@@ -23,7 +23,7 @@ require (
 	github.com/opencharly/charly/candy/plugin-distro v0.0.0-20260729064511-fdae3cc3d4dd
 	github.com/opencharly/charly/candy/plugin-dns v0.0.0-20260729064511-fdae3cc3d4dd
 	github.com/opencharly/charly/candy/plugin-doctor v0.0.0-20260729064511-fdae3cc3d4dd
-	github.com/opencharly/charly/candy/plugin-egress v0.0.0-20260729064511-fdae3cc3d4dd
+	github.com/opencharly/charly/candy/plugin-egress v0.0.0-20260806230842-5cda00cb0fbc
 	github.com/opencharly/charly/candy/plugin-enc v0.0.0-20260729064511-fdae3cc3d4dd
 	github.com/opencharly/charly/candy/plugin-example v0.0.0-20260729064511-fdae3cc3d4dd
 	github.com/opencharly/charly/candy/plugin-example-bootstrap v0.0.0-20260729064511-fdae3cc3d4dd
@@ -35,7 +35,7 @@ require (
 	github.com/opencharly/charly/candy/plugin-gpu v0.0.0-20260729064511-fdae3cc3d4dd
 	github.com/opencharly/charly/candy/plugin-group v0.0.0-20260729064511-fdae3cc3d4dd
 	github.com/opencharly/charly/candy/plugin-http v0.0.0-20260729064511-fdae3cc3d4dd
-	github.com/opencharly/charly/candy/plugin-init v0.0.0-20260729064511-fdae3cc3d4dd
+	github.com/opencharly/charly/candy/plugin-init v0.0.0-20260806230842-5cda00cb0fbc
 	github.com/opencharly/charly/candy/plugin-installstep v0.0.0-20260729064511-fdae3cc3d4dd
 	github.com/opencharly/charly/candy/plugin-interface v0.0.0-20260729064511-fdae3cc3d4dd
 	github.com/opencharly/charly/candy/plugin-k8sgen v0.0.0-20260729064511-fdae3cc3d4dd
@@ -92,6 +92,7 @@ require (
 	github.com/mattn/go-runewidth v0.0.23 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
+	github.com/opencharly/sdk v0.2026235.1716 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
@@ -128,4 +129,3 @@ require (
 	golang.org/x/text v0.37.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20231106174013-bbf56f31fb17 // indirect
 )
-

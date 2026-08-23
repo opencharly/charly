@@ -1145,7 +1145,7 @@ check-pod-overlay:
             itself or drops ripgrep from the running container, on EITHER the initial deploy
             or the fresh rebuild.
         add_candy:
-            - ripgrep
+            - '@github.com/opencharly/ripgrep:v2026.235.1653'
         plan:
             - check: command=charly status --json
               id: pod-overlay-running
