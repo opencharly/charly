@@ -4,10 +4,11 @@ import (
 	"sort"
 )
 
-// emit_marketplace.go — the marketplace ROOT manifests: plugins/.claude-plugin/marketplace.json
-// (the `charly-plugins` catalog the harness's extraKnownMarketplaces + the docs generator read)
-// and plugins/profiles.json (the developer/user/container_families membership the setup installer
-// used). Both derive entirely from the marketplace entity — the single source.
+// emit_marketplace.go — the marketplace ROOT manifests: .claude-plugin/marketplace.json
+// (the `charly-plugins` catalog the harness's extraKnownMarketplaces + the docs generator read),
+// .agents/plugins/marketplace.json (the Codex CLI / AGENTS-framework catalog), and
+// profiles.json (the developer/user/container_families membership the setup installer used).
+// All derive entirely from the marketplace entity — the single source.
 
 type marketplaceManifest struct {
 	Name  string `json:"name"`
@@ -35,6 +36,36 @@ type marketplacePluginEntry struct {
 	Category   string   `json:"category"`
 }
 
+// agentsMarketplaceManifest is the Codex CLI / AGENTS-framework catalog shape: the same plugin
+// list with explicit local sources (resolved against the marketplace repo root) and an
+// installation policy.
+type agentsMarketplaceManifest struct {
+	Name      string              `json:"name"`
+	Interface agentsInterface     `json:"interface"`
+	Plugins   []agentsPluginEntry `json:"plugins"`
+}
+
+type agentsInterface struct {
+	DisplayName string `json:"displayName"`
+}
+
+type agentsPluginEntry struct {
+	Name     string       `json:"name"`
+	Source   agentsSource `json:"source"`
+	Policy   agentsPolicy `json:"policy"`
+	Category string       `json:"category"`
+}
+
+type agentsSource struct {
+	Source string `json:"source"`
+	Path   string `json:"path"`
+}
+
+type agentsPolicy struct {
+	Installation   string `json:"installation"`
+	Authentication string `json:"authentication"`
+}
+
 type profilesManifest struct {
 	Developer         []string `json:"developer"`
 	User              []string `json:"user"`
@@ -43,7 +74,23 @@ type profilesManifest struct {
 
 func emitMarketplace(em emissions, ks *kindSet, families []family) {
 	em["plugins/.claude-plugin/marketplace.json"] = mustJSON(buildMarketplace(ks, families))
+	em["plugins/.agents/plugins/marketplace.json"] = mustJSON(buildAgentsMarketplace(ks, families))
 	em["plugins/profiles.json"] = mustJSON(buildProfiles(families))
+}
+
+func buildAgentsMarketplace(ks *kindSet, families []family) agentsMarketplaceManifest {
+	var m agentsMarketplaceManifest
+	m.Name = ks.Marketplace.Name
+	m.Interface.DisplayName = "OpenCharly"
+	for _, f := range families {
+		m.Plugins = append(m.Plugins, agentsPluginEntry{
+			Name:     "charly-" + f.Name,
+			Source:   agentsSource{Source: "local", Path: "./" + f.Name},
+			Policy:   agentsPolicy{Installation: "INSTALLED_BY_DEFAULT", Authentication: "ON_INSTALL"},
+			Category: firstNonEmpty(f.Meta.Category, "images"),
+		})
+	}
+	return m
 }
 
 func buildMarketplace(ks *kindSet, families []family) marketplaceManifest {

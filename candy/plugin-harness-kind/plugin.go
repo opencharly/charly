@@ -1,5 +1,5 @@
 // Package harnesskind is the importable form of the charly HARNESS-SURFACE kinds: `skill`,
-// `hook`, and `marketplace` — first-class entities carrying the plugins/ skill corpus, the
+// `hook`, and `marketplace` — first-class entities carrying the marketplace skill corpus, the
 // .claude/hooks/* gate scripts, and the marketplace/harness config into candy config (the
 // plugins→candies migration). A KIND provider dispatches via the pb Invoke(OpLoad) envelope:
 // decode the authored `skill:`/`hook:`/`marketplace:` entity from op.Params into the core

@@ -1,9 +1,9 @@
 // Package marketplace is the charly plugin housing the `charly marketplace …` CLI — the
 // generator that regenerates the ENTIRE `charly-plugins` marketplace + harness surface from
-// candy config (the plugins→candies migration's deliverable). It reads every candy's `skill:` /
-// `hook:` / `marketplace:` kind entities, aggregates them by marketplace family, and emits the
-// plugins/ corpus + .claude/ hooks + settings + the R0 dispatcher. `charly marketplace drift` is
-// the fail-closed no-op gate.
+// candy config. It reads every candy's `skill:` / `hook:` / `marketplace:` kind entities,
+// aggregates them by marketplace family, and emits the corpus into --out (the standalone
+// opencharly/marketplace repo root) + the .claude/ hooks + settings + the R0 dispatcher into
+// --root (the charly checkout). `charly marketplace drift` is the fail-closed no-op gate.
 //
 // command:marketplace — `charly marketplace generate|drift`. This plugin is deliberately NOT
 // listed in charly/charly.yml's compiled_plugins: it is a DEV-TIME generator, run on a

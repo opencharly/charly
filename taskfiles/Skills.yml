@@ -1,34 +1,38 @@
 # Skills.yml — the harness/marketplace surface, generated from candy config.
 #
-# The `charly-plugins` marketplace (plugins/) + the harness wiring (.claude/ hooks + settings,
-# the R0 dispatcher) are generated from the candies' `skill:` / `hook:` / `marketplace:` kind
-# entities by `charly marketplace generate`, served by candy/plugin-marketplace — a RUNTIME
-# plugin, deliberately absent from charly/charly.yml's compiled_plugins (a dev-time generator,
-# the plugin-docs placement). `charly marketplace drift` is the fail-closed no-op gate; the
-# committed plugins/ tree + .claude/ files must be a no-op regeneration.
+# The `charly-plugins` marketplace lives in the STANDALONE opencharly/marketplace repo since the
+# marketplace de-submodule cutover: it pins charly in its own .gitmodules, and its own deploy
+# workflow builds charly from the pin and regenerates the corpus under a drift gate. charly
+# itself carries only the harness surface (.claude/ hooks + settings, the R0 dispatcher),
+# generated here by the same `charly marketplace generate` from the candies' `skill:` / `hook:` /
+# `marketplace:` kind entities — served by candy/plugin-marketplace, a RUNTIME plugin,
+# deliberately absent from charly/charly.yml's compiled_plugins (a dev-time generator, the
+# plugin-docs placement). `--out` is the marketplace checkout the corpus is written to (or
+# compared against); `charly marketplace drift` is the fail-closed no-op gate for both trees.
 version: '3'
 
 vars:
-  PLUGINS_DIR: '{{.ROOT_DIR}}/plugins'
+  # The sibling checkout of the opencharly/marketplace repo. Contributors keep one clone next to
+  # this repo (the default below) and regenerate the corpus into it; its own CI gates it.
+  MARKETPLACE_DIR: '{{.ROOT_DIR}}/../marketplace'
 
 tasks:
   sync:
-    desc: Regenerate the plugins/ marketplace + harness surface from candy config
+    desc: Regenerate the charly harness surface + the marketplace corpus from candy config
     cmds:
       - task: :build:binary
-      - '{{.ROOT_DIR}}/bin/charly marketplace generate --root {{.ROOT_DIR}}'
+      - '{{.ROOT_DIR}}/bin/charly marketplace generate --root {{.ROOT_DIR}} --out {{.MARKETPLACE_DIR}}'
       - cmd: |
-          if ! git -C {{.ROOT_DIR}} diff --quiet || [ -n "$(git -C {{.ROOT_DIR}} status --porcelain -- .claude CLAUDE.md AGENTS.md charly.yml go.work charly/plugins_generated.go)" ]; then
+          if [ -n "$(git -C {{.ROOT_DIR}} status --porcelain -- .claude CLAUDE.md AGENTS.md)" ]; then
             echo
             echo "skills: regeneration changed the harness surface — review and commit:"
-            git -C {{.ROOT_DIR}} status --short -- .claude CLAUDE.md AGENTS.md charly.yml go.work charly/plugins_generated.go | head -20
+            git -C {{.ROOT_DIR}} status --short -- .claude CLAUDE.md AGENTS.md | head -20
           fi
-          if ! git -C {{.PLUGINS_DIR}} diff --quiet || [ -n "$(git -C {{.PLUGINS_DIR}} status --porcelain)" ]; then
+          if [ -d {{.MARKETPLACE_DIR}}/.git ] && [ -n "$(git -C {{.MARKETPLACE_DIR}} status --porcelain)" ]; then
             echo
-            echo "skills: regeneration changed the plugins/ submodule — review and commit there:"
-            git -C {{.PLUGINS_DIR}} status --short | head -20
-          else
-            echo "skills: plugins/ already up to date (regeneration is a no-op)."
+            echo "skills: regeneration changed the marketplace corpus — review and commit it in the"
+            echo "marketplace repo (opencharly/marketplace):"
+            git -C {{.MARKETPLACE_DIR}} status --short | head -20
           fi
         silent: true
 
@@ -40,43 +44,50 @@ tasks:
       # that cannot fail truthfully is worse than no gate. `sync` builds for the same
       # reason; drift is the read-only half of the same pair.
       - task: :build:binary
-      # The gate fails on NEW drift only, measured against scripts/drift-baseline-skills.txt
-      # (see scripts/drift-baseline.sh for why, and for why that file can only shrink).
-      #
-      # `marketplace drift` exits non-zero for stale artifacts AND for real errors — a bad
-      # decode, a stale-binary refusal. Those must not parse as "no artifacts, therefore
-      # clean", so a non-zero exit without the artifact header is a hard failure with the
-      # raw output. Only the block BETWEEN the header and the `run ...` trailer is treated
-      # as the stale set; charly's own diagnostics indent lines too.
-      #
-      # The `&& rc=0 || rc=$?` form is load-bearing, not style: Task's shell aborts the whole
-      # cmd on a failing `raw=$(...)` assignment, so the plain `; rc=$?` form exits 1 having
-      # printed NOTHING — drift and a real error become the same silent red.
-      #
-      # The trailing ` (stale)` annotation charly appends to ORPHANED artifacts is stripped:
-      # the baseline keys on the artifact PATH, and orphaned-vs-rewritten is a property of
-      # how it is stale, not of which artifact it is.
       - cmd: |
-          raw=$({{.ROOT_DIR}}/bin/charly marketplace drift --root {{.ROOT_DIR}} 2>&1) && rc=0 || rc=$?
+          raw=$({{.ROOT_DIR}}/bin/charly marketplace drift --root {{.ROOT_DIR}} --out {{.MARKETPLACE_DIR}} 2>&1) && rc=0 || rc=$?
           printf '%s\n' "$raw"
-          if [ "$rc" -ne 0 ] && ! printf '%s\n' "$raw" | grep -q 'generated artifact(s) are stale:'; then
-            echo "skills: marketplace drift failed for a reason that is NOT drift (see above)." >&2
-            exit 1
-          fi
-          printf '%s\n' "$raw" \
-            | awk '/generated artifact\(s\) are stale:/{i=1;next} /^run /{i=0} i&&/^  /{sub(/^  /,"");sub(/ \(stale\)$/,"");print}' \
-            | bash {{.ROOT_DIR}}/scripts/drift-baseline.sh {{.ROOT_DIR}}/scripts/drift-baseline-skills.txt skills
+          [ "$rc" -eq 0 ] || { echo "skills: marketplace drift failed (see above)." >&2; exit 1; }
         silent: true
       - cmd: |
-          if [ -n "$(git -C {{.ROOT_DIR}} status --porcelain -- .claude CLAUDE.md AGENTS.md charly.yml go.work charly/plugins_generated.go)" ]; then
+          if [ -n "$(git -C {{.ROOT_DIR}} status --porcelain -- .claude CLAUDE.md AGENTS.md)" ]; then
             echo "skills: DRIFT — the committed harness surface does not match candy config." >&2
-            git -C {{.ROOT_DIR}} status --short -- .claude CLAUDE.md AGENTS.md charly.yml go.work charly/plugins_generated.go >&2
-            exit 1
-          fi
-          if [ -n "$(git -C {{.PLUGINS_DIR}} status --porcelain)" ]; then
-            echo "skills: DRIFT — the plugins/ submodule does not match candy config." >&2
-            git -C {{.PLUGINS_DIR}} status --short >&2
+            git -C {{.ROOT_DIR}} status --short -- .claude CLAUDE.md AGENTS.md >&2
             exit 1
           fi
           echo "skills: no drift."
+        silent: true
+
+  pin:
+    desc: Fail if candy/plugin-marketplace's MARKETPLACE_REF has drifted from the marketplace repo's current main HEAD
+    cmds:
+      - cmd: |
+          file=candy/plugin-marketplace/charly.yml
+          declared=$(grep -E '^\s+MARKETPLACE_REF:' "$file" | awk '{print $2}')
+          # The sha appears TWICE in the candy on purpose: once as MARKETPLACE_REF (the clone's
+          # cache key) and once as a literal in the pinned-commit check's stdout matcher, because
+          # a check step's substitution does not resolve a candy var: and would SKIP the step
+          # instead. Both must track the marketplace main commit, so both are asserted here.
+          occurrences=$(grep -c "$declared" "$file" || true)
+          live=$(git ls-remote https://github.com/opencharly/marketplace.git refs/heads/main | awk '{print $1}')
+          if [ -z "$live" ]; then
+            echo "marketplace: could not fetch opencharly/marketplace main HEAD (network?) — skipping" >&2
+            exit 0
+          fi
+          if [ "$declared" != "$live" ]; then
+            echo "marketplace: MARKETPLACE_REF drift" >&2
+            echo "  MARKETPLACE_REF: $declared" >&2
+            echo "  marketplace main: $live" >&2
+            echo "The check-marketplace bed would build the WRONG commit — and, because the clone" >&2
+            echo "layer's cache key is that string, would keep passing while doing it." >&2
+            echo "Bump both occurrences in candy/plugin-marketplace/charly.yml in a charly PR." >&2
+            exit 1
+          fi
+          if [ "$occurrences" -lt 2 ]; then
+            echo "marketplace: the pinned sha appears $occurrences time(s) in candy/plugin-marketplace/charly.yml; expected 2" >&2
+            echo "(MARKETPLACE_REF plus the marketplace-pinned-commit check's stdout matcher)" >&2
+            echo "A stale literal means the anti-staleness check asserts the WRONG public commit." >&2
+            exit 1
+          fi
+          echo "marketplace: MARKETPLACE_REF ($declared) matches the marketplace repo's current main head; both occurrences present."
         silent: true

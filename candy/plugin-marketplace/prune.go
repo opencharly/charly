@@ -5,51 +5,55 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
-// prune.go — the generated-artifact boundary. `scanGenerated` returns every repo-relative path
-// that is CURRENTLY generated on disk: header-carrying markdown under the owned trees
-// (plugins/<family>/skills + agents), the known JSON paths (per-family plugin.json/.mcp.json +
-// the marketplace root manifests + the setup launcher), and .claude/hooks (fully generated —
-// every gate script + aux file is a hook entity). The boundary is content (the header) for
-// markdown and known-path + existence for JSON/hooks — never location inference. Hand-authored
-// files (plugins/README.md, plugins/CHANGELOG/, plugins/LICENSE, plugins/scripts/squash_body.py,
-// plugins/kimi-user-config.toml) carry no header and sit outside the known paths, so they are
-// preserved. `generate` deletes the scanned set before writing; `drift` flags a scanned path
-// absent from the emissions map as stale.
+// prune.go — the generated-artifact boundary. `scanGenerated` returns every canonical path that
+// is CURRENTLY generated on disk: header-carrying markdown under the owned corpus trees
+// (<out>/<family>/skills + agents), the known JSON paths (per-family plugin.json/.mcp.json +
+// the marketplace root manifests + the setup launcher), and .claude/hooks under root (fully
+// generated — every gate script + aux file is a hook entity). The boundary is content (the
+// header) for markdown and known-path + existence for JSON/hooks — never location inference.
+// Hand-authored files (README.md, CHANGELOG/, LICENSE, scripts/, kimi-user-config.toml) carry no
+// header and sit outside the known paths, so they are preserved. `generate` deletes the scanned
+// set before writing; `drift` flags a scanned path absent from the emissions map as stale.
 
-func pruneGenerated(root string, families []family, ks *kindSet) error {
-	paths, err := scanGenerated(root, families, ks)
+func pruneGenerated(root, out string, families []family, ks *kindSet) error {
+	paths, err := scanGenerated(root, out, families, ks)
 	if err != nil {
 		return err
 	}
 	for _, rel := range paths {
-		if err := os.Remove(filepath.Join(root, filepath.FromSlash(rel))); err != nil && !os.IsNotExist(err) {
+		base, target := root, rel
+		if strings.HasPrefix(rel, corpusPrefix) {
+			base, target = out, strings.TrimPrefix(rel, corpusPrefix)
+		}
+		if err := os.Remove(filepath.Join(base, filepath.FromSlash(target))); err != nil && !os.IsNotExist(err) {
 			return err
 		}
 	}
 	// Sweep empty dirs left under the owned trees.
 	for _, f := range families {
 		for _, sub := range []string{"skills", "agents"} {
-			_ = removeEmptyDirs(filepath.Join(root, "plugins", f.Name, sub))
+			_ = removeEmptyDirs(filepath.Join(out, f.Name, sub))
 		}
 	}
 	return nil
 }
 
-// scanGenerated lists the repo-relative paths of every currently-generated artifact that EXISTS.
-func scanGenerated(root string, families []family, ks *kindSet) ([]string, error) {
+// scanGenerated lists the canonical paths of every currently-generated artifact that EXISTS,
+// under both trees: the corpus under outDir and the harness surface under root.
+func scanGenerated(root, outDir string, families []family, ks *kindSet) ([]string, error) {
 	var out []string
-	add := func(rel string) {
-		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(rel))); err == nil {
+	addCorpus := func(rel string) {
+		if _, err := os.Stat(filepath.Join(outDir, filepath.FromSlash(strings.TrimPrefix(rel, corpusPrefix)))); err == nil {
 			out = append(out, rel)
 		}
 	}
-	// 1. header-scanned markdown trees: plugins/<family>/skills + agents.
-	pluginsDir := filepath.Join(root, "plugins")
+	// 1. header-scanned markdown trees: <out>/<family>/skills + agents.
 	for _, f := range families {
 		for _, sub := range []string{"skills", "agents"} {
-			dir := filepath.Join(pluginsDir, f.Name, sub)
+			dir := filepath.Join(outDir, f.Name, sub)
 			if _, err := os.Stat(dir); err != nil {
 				continue
 			}
@@ -65,7 +69,7 @@ func scanGenerated(root string, families []family, ks *kindSet) ([]string, error
 					return err
 				}
 				if hasGeneratedHeader(b) {
-					out = append(out, fileKey(root, path))
+					out = append(out, corpusPrefix+fileKey(outDir, path))
 				}
 				return nil
 			})
@@ -76,14 +80,17 @@ func scanGenerated(root string, families []family, ks *kindSet) ([]string, error
 	}
 	// 2. known JSON paths per family + the marketplace root + the setup launcher.
 	for _, f := range families {
-		add("plugins/" + f.Name + "/.claude-plugin/plugin.json")
-		add("plugins/" + f.Name + "/.codex-plugin/plugin.json")
-		add("plugins/" + f.Name + "/.mcp.json")
+		addCorpus("plugins/" + f.Name + "/.claude-plugin/plugin.json")
+		addCorpus("plugins/" + f.Name + "/.codex-plugin/plugin.json")
+		addCorpus("plugins/" + f.Name + "/.mcp.json")
 	}
-	add("plugins/.claude-plugin/marketplace.json")
-	add("plugins/profiles.json")
-	add("plugins/setup")
-	// 3. .claude/hooks — entirely generated (every gate + aux file is a hook entity).
+	addCorpus("plugins/.claude-plugin/marketplace.json")
+	addCorpus("plugins/.agents/plugins/marketplace.json")
+	addCorpus("plugins/kimi.plugin.json")
+	addCorpus("plugins/package.json")
+	addCorpus("plugins/profiles.json")
+	addCorpus("plugins/setup")
+	// 3. .claude/hooks under root — entirely generated (every gate + aux file is a hook entity).
 	hooksDir := filepath.Join(root, ".claude", "hooks")
 	if ents, err := os.ReadDir(hooksDir); err == nil {
 		for _, de := range ents {

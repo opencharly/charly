@@ -35,8 +35,8 @@
   "extraKnownMarketplaces": {
     "charly-plugins": {
       "source": {
-        "path": "./plugins",
-        "source": "directory"
+        "repo": "opencharly/marketplace",
+        "source": "github"
       }
     }
   },

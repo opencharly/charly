@@ -20,7 +20,12 @@ type docsCLI struct {
 // lingering as an orphan page.
 type generateCmd struct {
 	Out  string `name:"out" required:"" help:"Docs content root to write into (e.g. docs/src/content/docs)"`
-	Root string `name:"root" help:"Repo root holding charly.yml, candy/, box/ and plugins/ (default: cwd)"`
+	Root string `name:"root" help:"Repo root holding charly.yml, candy/, box/ (default: cwd)"`
+	// Plugins is the marketplace checkout the plugin corpus is read from. Since the marketplace
+	// de-submodule cutover the plugins tree is no longer INSIDE the charly checkout — it lives in
+	// the standalone opencharly/marketplace repo — so the docs workflow passes its marketplace
+	// submodule here. Default: <root>/plugins (the pre-cutover location).
+	Plugins string `name:"plugins" help:"Marketplace checkout holding the plugin corpus (default: <root>/plugins)"`
 }
 
 // dispatchDocsCLI is the single entry point both placements use (CliMain out-of-process,
@@ -65,5 +70,13 @@ func (c *generateCmd) Run() error {
 	if err != nil {
 		return fmt.Errorf("resolve --out: %w", err)
 	}
-	return generate(root, out)
+	pluginsDir := c.Plugins
+	if pluginsDir == "" {
+		pluginsDir = filepath.Join(root, "plugins")
+	}
+	pluginsDir, err = filepath.Abs(pluginsDir)
+	if err != nil {
+		return fmt.Errorf("resolve --plugins: %w", err)
+	}
+	return generate(root, out, pluginsDir)
 }

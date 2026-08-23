@@ -9,14 +9,19 @@ History belongs only in `CHANGELOG/`.
 
 Before reading source, running repository commands, delegating, planning, or
 editing, load every skill selected by the dispatcher below. Use a registered
-project skill when available; otherwise read the corresponding
-`plugins/<plugin>/skills/<name>/SKILL.md` completely. Load all matches before
-acting. Missing registration is a project-profile defect, not permission to
-skip the skill.
+project skill when available — the harness loads it from the opencharly/marketplace
+repo (Claude Code's `charly-plugins` marketplace, pi's `git:` package, Kimi's
+plugin, Codex's catalog); otherwise read the corresponding
+`<family>/skills/<skill>/SKILL.md` in the opencharly/marketplace repo (the
+standalone marketplace since the de-submodule cutover — every checkout's harness
+loads it natively; `opencharly.github.io/marketplace` hosts the catalogs).
+Load all matches before acting. Missing registration is a project-profile
+defect, not permission to skip the skill.
 
 Work from the superproject root. Run submodule Git through literal
 `git -C <absolute-path>` commands; never root a worker in a submodule. Use this
-dispatcher and `plugins/README.md` to discover every applicable skill. A tool
+dispatcher and the marketplace repo's README (the skill index) to discover every
+applicable skill. A tool
 action before R0 admission is a violation: stop, run the root-cause-analyzer
 process, and re-derive conclusions after loading the required skills.
 
@@ -107,8 +112,9 @@ match, load ALL their skills before doing anything.
 | the agentteams box / the AgentTeams multi-agent stack (Manager–Workers, Rooms, the controller + matrix + element + higress + minio candies) on the pod or vm substrate / the `check-agentteams-pod` and `check-agentteams-vm` beds | `/charly-agentteams:agentteams` |
 <!-- END GENERATED SKILL DISPATCHER -->
 
-Full index: `plugins/README.md`. Anything not listed requires reading the index
-first, loading the matching skill second, and touching code third.
+Full index: the opencharly/marketplace repo's README. Anything not listed
+requires reading the index first, loading the matching skill second, and touching
+code third.
 
 ## Candyboxing
 
@@ -406,9 +412,10 @@ second copy of them.
 - `PROGRAM/`: binding program north-star documents (one file per program, named in every spawn brief).
 - `AGENTS.md`: complete current harness-neutral mandates and dispatcher.
 - `CLAUDE.md`: complete harness adapter with equivalent overall policy.
-- `plugins/<plugin>/skills/<name>/SKILL.md`: detailed procedures and technical
-  ownership.
-- `plugins/README.md`: complete skill index.
+- the opencharly/marketplace repo's `<family>/skills/<skill>/SKILL.md`: detailed
+  procedures and technical ownership (the harness loads it; read it directly from
+  the marketplace repo).
+- the opencharly/marketplace repo's README: complete skill index.
 - `README.md` and current subsystem docs: present behavior and user guidance.
 - [opencharly.ai](https://opencharly.ai) (the standalone [opencharly/docs](https://github.com/opencharly/docs) repo): the public site — a small
   hand-authored narrative plus a reference/recipe catalog GENERATED from the sources above by

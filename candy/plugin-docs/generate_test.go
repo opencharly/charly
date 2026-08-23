@@ -39,7 +39,7 @@ func generateSite(t *testing.T, sidebarEntries ...string) (out string, err error
 	}
 	seedHandAuthoredPages(t, root, out)
 
-	return out, generate(root, out)
+	return out, generate(root, out, filepath.Join(root, "plugins"))
 }
 
 // superprojectRoot resolves the repository root this package lives two levels below. generate()
@@ -182,7 +182,7 @@ func TestGeneratePreservesHeaderlessFilesUnderGeneratedTrees(t *testing.T) {
 		t.Fatalf("write keep-me.md: %v", err)
 	}
 
-	if err := generate(root, out); err != nil {
+	if err := generate(root, out, filepath.Join(root, "plugins")); err != nil {
 		t.Fatalf("generate: %v", err)
 	}
 	if _, err := os.Stat(kept); err != nil {

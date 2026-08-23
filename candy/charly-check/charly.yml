@@ -3,14 +3,14 @@ charly-check:
         version: 2026.218.1200
         description: |-
             Concept candy owning the charly-check evaluation skills (check orchestration + the probe verbs). Owns its family's `skill:` kind entities (sibling nodes in this file) — the
-            plugins→candies migration; candy/plugin-marketplace regenerates the plugins/ corpus
-            from them.
+            the plugins→candies migration; candy/plugin-marketplace regenerates the marketplace
+            corpus (the standalone opencharly/marketplace repo) from them.
         plan:
             - run: this documentation-only candy ships no install content (it carries the family's skill/hook/marketplace entities); validate-satisfying no-op
               command: "true"
               context:
                 - build
-            - check: the check concept candy's skill entities are present and generated into plugins/check/skills
+            - check: the check concept candy's skill entities are present and generated into the marketplace's check/skills
               id: charly-check-present
               context:
                 - build
@@ -2535,7 +2535,7 @@ check-skill:
 
                   | Change class | Pre-flight | The R10 gate | Tier on a clean pass | Explicitly NOT required |
                   |---|---|---|---|---|
-                  | **Documentation-only change class** — `*.md` (`AGENTS.md` / `CLAUDE.md`, `plugins/**/SKILL.md`, READMEs, CHANGELOG), comment-only code edits, or a submodule pointer bump to an all-documentation submodule commit; zero behavior change | markdown integrity, link checks | The non-runtime standards: adversarial consistency review, the R5 grep self-test, cross-reference validation, and command-safety gates | `documentation reviewed` | ANY bed run or image build — beds cannot fail on prose |
+                  | **Documentation-only change class** — `*.md` (`AGENTS.md` / `CLAUDE.md`, the marketplace corpus's `**/SKILL.md`, READMEs, CHANGELOG), comment-only code edits, or a submodule pointer bump to an all-documentation submodule commit; zero behavior change | markdown integrity, link checks | The non-runtime standards: adversarial consistency review, the R5 grep self-test, cross-reference validation, and command-safety gates | `documentation reviewed` | ANY bed run or image build — beds cannot fail on prose |
                   | **Hook / workflow scripts** — `.claude/hooks/*.sh`, `.claude/workflows/*.js` | `bash -n` / async-body parse | Execute the changed script live: run the hook directly (paste its output); a workflow whose control flow changed runs against ONE bed matching the change. Prompt-string-only workflow edits: parse + the non-runtime standards | `fully tested and validated` | The full bed fan-out |
                   | **Harness project configuration** — `AGENTS.md`, `.codex/**`, repo-native `.agents/**`, or an executable that provisions or validates those surfaces | Parse the changed configuration; run the project profile and static-validator checks; verify exact gitlink and linked-worktree provenance | Run the final-tree repository harness gate: execute each changed validator/provisioner directly, verify only the gitlinks dispatched by the change class at their recorded revisions, and run the committed developer-profile checks. A Git-provisioning change also proves its canonical-object reference and exact-gitlink behavior in a dedicated linked worktree. Record the exact approved commands and active managed sandbox available for this run. This proves repository-controlled behavior; never claim that it proves settings loaded by a newly launched harness process. The fresh validator independently decides whether the final-tree delta additionally requires a Charly R10 bed and runs it when required. | `fully tested and validated` | A forced restart/new session, alternate home/cache/workspace, or unrelated VM/container roster that cannot exercise repository configuration |
                   | **`charly` Go code** | `go test ./...` + `go vet` + `task build:binary` (R9 freshness + `charly version` check against `./bin/charly`) | `charly check run <bed>` for EACH bed whose kind matches a touched code path: box/candy/pod/deploy-target mechanism → `check-pod`; `target: local` → `check-local`; VM / kubernetes → `check-k3s-vm`; a feature surface → its feature bed. Cross-cutting loader / resolver / IR / unified-schema changes → fan every matching bed out concurrently, by owner: short beds via `/verify-beds` (one `charly check run <bed>` per agent), every long bed (`vm`/`android`, or last run ≥600s) as a persistent-session `run_in_background` task — in-spec for that class, not a scope override; a `/verify-beds` result with `gateComplete: false` is a partial roster, never a green gate | `fully tested and validated` | Beds whose substrate the change cannot reach |

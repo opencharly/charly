@@ -17,7 +17,7 @@ Every candy, every box, every probe serves one end: **to build a better candybox
    → README "Build → run → deploy → evaluate".
 
 3. **Every candy ships with its recipe card.** Every candy, box, and verb carries a dedicated skill, so nothing in the candy store is a mystery — neither you nor your agents ever have to guess what a piece does, how it's made, or how it should taste.
-   → `plugins/README.md`.
+   → the opencharly/marketplace repo's README.
 
 4. **Two tasters at one bench.** The same `charly` surface serves you at the keyboard and your agents driving the line, with no second-class channel for either. Built for you *and* your agents, in the same breath.
    → CLAUDE.md "Candyboxing", `/charly-internals:agents`.
@@ -61,4 +61,4 @@ Every candy, every box, every probe serves one end: **to build a better candybox
 
 ---
 
-*The factory floor is documented in [README.md](README.md); the house rules in [CLAUDE.md](CLAUDE.md); every candy and box has a recipe card in [plugins/README.md](plugins/README.md) — all of it published, and generated rather than retyped, at [opencharly.ai](https://opencharly.ai). Dated history lives — and only lives — in each repo's [CHANGELOG/](CHANGELOG/README.md), one file per CalVer version.*
+*The factory floor is documented in [README.md](README.md); the house rules in [CLAUDE.md](CLAUDE.md); every candy and box has a recipe card in the [opencharly/marketplace](https://github.com/opencharly/marketplace) repo's README — all of it published, and generated rather than retyped, at [opencharly.ai](https://opencharly.ai). Dated history lives — and only lives — in each repo's [CHANGELOG/](CHANGELOG/README.md), one file per CalVer version.*

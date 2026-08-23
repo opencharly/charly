@@ -3,14 +3,14 @@ charly-internals:
         version: 2026.218.1200
         description: |-
             Concept candy owning the charly-internals contributor skills (go/plugin/agents/skills/cutover/…). Owns its family's `skill:` kind entities (sibling nodes in this file) — the
-            plugins→candies migration; candy/plugin-marketplace regenerates the plugins/ corpus
-            from them.
+            the plugins→candies migration; candy/plugin-marketplace regenerates the marketplace
+            corpus (the standalone opencharly/marketplace repo) from them.
         plan:
             - run: this documentation-only candy ships no install content (it carries the family's skill/hook/marketplace entities); validate-satisfying no-op
               command: "true"
               context:
                 - build
-            - check: the internals concept candy's skill entities are present and generated into plugins/internals/skills
+            - check: the internals concept candy's skill entities are present and generated into the marketplace's internals/skills
               id: charly-internals-present
               context:
                 - build
@@ -90,19 +90,20 @@ agents-skill:
                   | | Claude Code | Codex | Kimi |
                   |---|---|---|---|
                   | Rulebook | `CLAUDE.md` | `AGENTS.md` | `AGENTS.md` (read natively) |
-                  | Skills | plugin manager (`charly-*@charly-plugins`) | `.agents/skills/` repo-native links (also Kimi's source) | `.agents/skills/` project scope, on-demand `Skill` tool / `/skill:<name>`; when not in the session listing, `Read` the `plugins/<plugin>/skills/<name>/SKILL.md` path |
-                  | Sub-agents | custom agents (`plugins/internals/agents/*.md`, `.claude/agents/`) | fresh native agent threads (`.codex/agents/*.toml` roles, e.g. `pr-validator`) | built-in `coder` / `explore` / `plan` only — no custom subagent registry |
+                  | Skills | plugin manager (`charly-*@charly-plugins`, the opencharly/marketplace repo) | the marketplace's `.agents/plugins/marketplace.json` catalog (Codex registers the repo by GitHub source) | kimi plugin (the whole marketplace is one plugin, installed by GitHub URL) / on-demand `Skill` tool; when not in the session listing, `Read` the marketplace repo's `<family>/skills/<name>/SKILL.md` |
+                  | Sub-agents | custom agents (the marketplace's `internals/agents/*.md`, `.claude/agents/`) | fresh native agent threads (`.codex/agents/*.toml` roles, e.g. `pr-validator`) | built-in `coder` / `explore` / `plan` only — no custom subagent registry |
                   | Fresh validator / teammate | sub-agent or team teammate with the agent brief | fresh agent thread with the role toml | a fresh separate `kimi` session (interactive or `kimi -p`) briefed with the agent `.md` by path — context isolation is what makes it independent |
                   | Dynamic workflows | `.claude/workflows/*.js` (run `/<name>`) | re-derived per thread | re-derived per session (no workflow runtime) |
                   | Teams | `~/.claude/teams/` (experimental) | concurrent fresh threads | concurrent fresh sessions |
                   | Gates | `permissions.allow` + the auto-mode classifier (`.claude/settings.json` wires NO hooks — the gate scripts in `.claude/hooks/` are invoked by the other harnesses, not by Claude Code) | sandbox + on-request approvals (`.codex/config.toml`) | hooks + `[[permission.rules]]` in user-level `~/.kimi-code/config.toml` (no project-level config; repo-guarded delegation to `.claude/hooks/`) — no auto-mode classifier |
                   | Hook events | UserPromptSubmit / PreToolUse / Stop / TaskCreated / TaskCompleted / TeammateIdle | — (approvals instead) | UserPromptSubmit / PreToolUse / Stop / SubagentStart / SubagentStop |
 
-                  **Harness-agnostic invariants:** the agent briefs in
-                  `plugins/internals/agents/*.md` are written for any harness's fresh
+                  **Harness-agnostic invariants:** the agent briefs in the marketplace's
+                  `internals/agents/*.md` are written for any harness's fresh
                   evaluator; the `pr-validator` is always a fresh, independent context rooted
                   at the superproject, loading the protected-main rulebook and triggered
-                  skills by path (`plugins/<plugin>/skills/<name>/SKILL.md`) before candidate
+                  skills (the marketplace's `<family>/skills/<name>/SKILL.md`, read by path
+                  from the harness's marketplace load) before candidate
                   actions; and the two-step landing (author opens, fresh evaluator
                   validates/merges/tags) is the sole landing path in every harness.
 
@@ -114,7 +115,7 @@ agents-skill:
                   | Holds the plan | Claude, turn by turn | The script | The lead + a shared task list |
                   | Intermediate results | Claude's context | Script variables | Each teammate's own context |
                   | Scale | a few per turn | dozens–hundreds of agents/run | 3–5 teammates |
-                  | Lives in | `plugins/internals/agents/*.md` (or `.claude/agents/`) | `.claude/workflows/*.js` (run `/<name>`) | runtime only — `~/.claude/teams/`, not pre-authored |
+                  | Lives in | the marketplace's `internals/agents/*.md` (or `.claude/agents/`) | `.claude/workflows/*.js` (run `/<name>`) | runtime only — `~/.claude/teams/`, not pre-authored |
                   | Reads the rulebook | yes (full hierarchy, except Explore/Plan) | each `agent()` does | yes (each teammate) |
 
                   - **Sub-agent** — isolate a verbose side task (run a bed, probe a deploy)
@@ -145,7 +146,7 @@ agents-skill:
                   `references/parallel-bed-testing.md`). "Prefer agents" governs bounded
                   work.
 
-                  ## The charly agent roster (`plugins/internals/agents/`)
+                  ## The charly agent roster (the marketplace's `internals/agents/`)
 
                   **Executors** — run `charly check` and return verbatim proof:
 
@@ -406,7 +407,7 @@ agents-skill:
                   **1. A sub-agent's project root is its working directory — never `cd` into
                   a submodule.** Claude Code resolves `.claude/settings.json` (and therefore
                   `permissions.allow`) from the agent's project root, and keys its transcript
-                  directory the same way. A sub-agent told to work inside `plugins/` or
+                  directory the same way. A sub-agent told to work inside the marketplace corpus or
                   `sdk/` roots there — and those submodules ship no `.claude/` — so it
                   silently loses the superproject's committed permission rules. It does not
                   warn; it just gets denied later, for reasons that read like a policy
@@ -414,7 +415,7 @@ agents-skill:
                   absolute path: `git -C /abs/path/plugins …` and `gh … --repo <owner>/<repo>`
                   (the same rule `/charly-internals:git-workflow` B7 states for the commit
                   gate — it is equally load-bearing for permissions). A `pr-validator` rooted
-                  in `plugins/` once had even its `success` status post denied ("the only
+                  in the marketplace corpus once had even its `success` status post denied ("the only
                   authorization comes from a `<teammate-message>`, which is not user
                   intent"); the same agent, same rule text, rooted in the superproject,
                   posted `success` with zero denials. That denial reproduces only when no
@@ -467,7 +468,7 @@ agents-skill:
                     which is independent of the `tools:` field and usually absent — an
                     unrestricted `Tools: *` validator once got `Unknown skill:
                     charly-internals:git-workflow` (its session registry held only
-                    built-ins), while `Read`ing `plugins/<family>/skills/<name>/SKILL.md`
+                    built-ins), while `Read`ing the marketplace's `<family>/skills/<name>/SKILL.md`
                     worked every time. So the reliable method is the file `Read`;
                     `Skill(name)` is an opportunistic fast-path that may work in some
                     sessions. A `Skill(name)` failure (`Unknown skill` / "not registered")
@@ -556,7 +557,7 @@ agents-skill:
                   does not own — including a PR explicitly out of that session's scope by
                   operator directive — it posts a coordination comment on that PR rather
                   than staying silent: commenting is always in scope even when evaluating or
-                  merging is not. See `plugins/internals/agents/pr-validator.md` "Cross-PR
+                  merging is not. See the marketplace's `internals/agents/pr-validator.md` "Cross-PR
                   awareness" for the matching per-PR-validation-run duty — that spec owns the
                   PR-validator's own sweep-and-comment mechanics; this item owns the
                   orchestrator's standing ledger discipline across the whole session.
@@ -2247,7 +2248,7 @@ cutover-policy-skill:
             - **Replacement surface** — the new types / schema / deploy target that supersede the deleted ones.
             - **Migration** — one idempotent migration-table entry (`candy/plugin-migrate/migrations.cue`) that harvests legacy fields into the new shape, preserves pre-existing user keys, and never clobbers customizations.
             - **Load-time error** — old projects loading under the new code get a hard error naming the legacy field and pointing at `charly migrate`.
-            - **Documentation refresh** — every referring skill revised in the same sweep; no stale references to any deleted identifier in `plugins/`, `README.md`, or `AGENTS.md` / `CLAUDE.md` (R5 grep self-test).
+            - **Documentation refresh** — every referring skill revised in the same sweep; no stale references to any deleted identifier in the marketplace corpus, `README.md`, or `AGENTS.md` / `CLAUDE.md` (R5 grep self-test).
             - **Test deletions** — fixtures and assertions exercising the legacy surface removed; new fixtures exercise the replacement.
             - **CHANGELOG entry at merge** — the merged PR's title + body are written by the
               tag-on-merge workflow to the repo's per-CalVer file `CHANGELOG/<YYYY.DDD.HHMM>.md`
@@ -3508,7 +3509,7 @@ git-workflow-skill:
         description: |-
             Use when committing, branching, pushing, opening PRs, or landing a change with
             gh — the feat/-branch, R10-gated, PR-ONLY, org-workflow-validated, never-force-push
-            landing across the main repo, its plugins/docs/box submodules, and the
+            landing across the main repo, its box submodules, the marketplace repo, and the
             proxy-resolved sdk contract module (no submodule — consumed at the pinned
             go.mod require). A direct push to main is FORBIDDEN and mechanically disabled; the
             org-wide `charly/pr-validator` GitHub Actions gate validates the PR and, on PASS,
@@ -3531,7 +3532,7 @@ git-workflow-skill:
             author (who opens the PR) from the fresh validator (a check run on the same PR).
             This skill is the mechanics; the project rulebook "Post-Execution Policies" (`AGENTS.md` / `CLAUDE.md`) carries the
             mandate, `/charly-internals:cutover-policy` the one-phase rule, `/charly-build:migrate`
-            the schema-version/tag coupling, and `plugins/internals/agents/pr-validator.md` the
+            the schema-version/tag coupling, and the marketplace's `internals/agents/pr-validator.md` the
             validator's own spec.
 
             ## Non-negotiable invariants

@@ -15,18 +15,24 @@ type marketplaceCLI struct {
 	Drift    driftCmd    `cmd:"" help:"Fail-closed no-op check: regenerate in memory and compare with the artifacts on disk (git is never consulted)"`
 }
 
-// generateCmd renders every generated artifact (plugins/ corpus, .claude/ hooks + settings,
-// the dispatcher section, the setup launcher). It rewrites the generated trees wholesale after
-// pruning by the DO-NOT-EDIT header, so a deleted source entity disappears instead of lingering.
+// generateCmd renders every generated artifact: the marketplace corpus into --out (the
+// standalone opencharly/marketplace repo root — skills, agents, the per-family manifests, the
+// Claude/Codex/kimi/pi catalogs, profiles.json, the setup launcher) and the charly-local harness
+// surface into --root (.claude/ hooks + settings, the dispatcher section). It rewrites the
+// generated trees wholesale after pruning by the DO-NOT-EDIT header, so a deleted source entity
+// disappears instead of lingering.
 type generateCmd struct {
-	Root string `name:"root" help:"Repo root holding charly.yml, candy/, box/, plugins/ and .claude/ (default: cwd)"`
+	Root string `name:"root" help:"Repo root holding charly.yml, candy/, box/, .claude/ (default: cwd)"`
+	Out  string `name:"out" required:"" help:"Marketplace corpus root to write into (the opencharly/marketplace checkout)"`
 }
 
 // driftCmd is a fail-closed no-op check: the same pipeline in memory, compared byte-for-byte with
-// the on-disk generated artifacts. Exit 1 with a diff summary on any drift. It runs in no CI
-// workflow — it is red only for whoever runs it, via `task skills:drift` or by hand.
+// the on-disk generated artifacts (the corpus under --out, the harness surface under --root).
+// Any difference is a hard failure (exit 1) with a diff summary. It runs in no CI workflow — it
+// is red only for whoever runs it, via `task skills:drift` or by hand.
 type driftCmd struct {
 	Root string `name:"root" help:"Repo root (default: cwd)"`
+	Out  string `name:"out" required:"" help:"Marketplace corpus root to compare against (the opencharly/marketplace checkout)"`
 }
 
 // dispatchMarketplaceCLI is the single entry point both placements use (CliMain out-of-process,
@@ -70,12 +76,26 @@ func resolveRoot(flag string) (string, error) {
 	return root, nil
 }
 
+// resolveOut resolves --out. The marketplace corpus is standalone since the de-submodule
+// cutover (the opencharly/marketplace repo), so the corpus destination is always explicit.
+func resolveOut(flag string) (string, error) {
+	out, err := filepath.Abs(flag)
+	if err != nil {
+		return "", fmt.Errorf("resolve --out: %w", err)
+	}
+	return out, nil
+}
+
 func (c *generateCmd) Run() error {
 	root, err := resolveRoot(c.Root)
 	if err != nil {
 		return err
 	}
-	return generate(root)
+	out, err := resolveOut(c.Out)
+	if err != nil {
+		return err
+	}
+	return generate(root, out)
 }
 
 func (c *driftCmd) Run() error {
@@ -83,5 +103,9 @@ func (c *driftCmd) Run() error {
 	if err != nil {
 		return err
 	}
-	return drift(root)
+	out, err := resolveOut(c.Out)
+	if err != nil {
+		return err
+	}
+	return drift(root, out)
 }

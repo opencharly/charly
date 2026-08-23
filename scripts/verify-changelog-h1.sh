@@ -5,7 +5,7 @@
 #
 # WHY A SCRIPT. This is not a style nit, it is a RECURRING mechanical failure with a known
 # population: opencharly/charly#332 records nine instances (charly 1, sdk 6, spec 2), and a tenth
-# landed on plugins/main while that issue was open.
+# landed on the marketplace repo's main while that issue was open.
 #
 # The mechanism is always the same, and it is not carelessness. A merge-time stamp does
 # `git mv CHANGELOG/<placeholder>.md CHANGELOG/$VER.md`, which STAGES a rename, then edits the H1
@@ -55,7 +55,7 @@ while IFS= read -r f; do
   # the filename's. That is #332 exactly — an author-time stamp surviving a merge-time rename.
   #
   # Everything else is deliberately NOT a finding. A first draft of this script flagged any H1
-  # that did not match `# <CalVer> — <title>`, which reported 35 hits on plugins/main where ONE
+  # that did not match `# <CalVer> — <title>`, which reported 35 hits on the marketplace repo's main where ONE
   # was real: 34 entries predate the convention, some carrying a bare `# <CalVer>` and some a
   # descriptive title. A check that cries wolf 34 times gets disabled by whoever inherits it —
   # the same reasoning that put --no-merges in verify-claimed-changes.sh.

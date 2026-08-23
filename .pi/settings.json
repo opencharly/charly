@@ -3,6 +3,7 @@
     "./extensions/charly-gates.ts"
   ],
   "packages": [
+    "git:github.com/opencharly/marketplace",
     "npm:pi-mcp-adapter@2.26.1",
     "npm:pi-subagents@0.51.0",
     "npm:@narumitw/pi-plan-mode@0.49.3",

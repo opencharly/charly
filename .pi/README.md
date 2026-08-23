@@ -1,10 +1,12 @@
 # Pi project config (`.pi/`)
 
 Project-local configuration for [pi](https://pi.dev) agent sessions in this
-repository. Pi auto-loads `AGENTS.md`/`CLAUDE.md` as context and auto-discovers
-the skills under `.agents/skills/` (symlinks into `plugins/`), so no config is
-needed for those. This directory exists to give pi the one thing it lacks
-compared to the other harnesses: a **hooks system**.
+repository. Pi auto-loads `AGENTS.md`/`CLAUDE.md` as context, and loads the
+OpenCharly skill corpus as a pi PACKAGE — `git:github.com/opencharly/marketplace`
+in `settings.json` below, installed automatically at startup after the project
+is trusted (the marketplace repo's root `package.json` declares the `pi` resource
+with a `./*/skills` glob). This directory also gives pi the one thing the other
+harnesses get from their own plugin systems: a **hooks system**.
 
 ## What's here
 

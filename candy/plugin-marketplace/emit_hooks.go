@@ -80,16 +80,14 @@ func mergeSettings(root string, ks *kindSet) ([]byte, error) {
 		delete(existing, "enabledPlugins")
 	}
 
-	// 2. extraKnownMarketplaces: drop the <name> entry, regenerate from settings.source_path.
+	// 2. extraKnownMarketplaces: drop the <name> entry, regenerate with the remote GitHub
+	//    source — the marketplace is the standalone opencharly/marketplace repo (the
+	//    de-submodule cutover); Claude Code clones it and resolves the relative plugin sources.
 	if m, ok := existing["extraKnownMarketplaces"].(map[string]any); ok {
 		delete(m, name)
 		existing["extraKnownMarketplaces"] = m
 	} else if existing["extraKnownMarketplaces"] != nil {
 		delete(existing, "extraKnownMarketplaces")
-	}
-	sourcePath := ks.Marketplace.Settings.SourcePath
-	if sourcePath == "" {
-		sourcePath = "./plugins"
 	}
 	ekm := map[string]any{}
 	if v, ok := existing["extraKnownMarketplaces"].(map[string]any); ok {
@@ -98,7 +96,7 @@ func mergeSettings(root string, ks *kindSet) ([]byte, error) {
 		}
 	}
 	ekm[name] = map[string]any{
-		"source": map[string]any{"source": "directory", "path": sourcePath},
+		"source": map[string]any{"source": "github", "repo": marketplaceRepository},
 	}
 	existing["extraKnownMarketplaces"] = ekm
 

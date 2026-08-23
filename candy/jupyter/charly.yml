@@ -575,7 +575,7 @@ jupyter-skill:
             claude mcp add --transport http --scope project jupyter http://localhost:8888/mcp
             ```
             
-            **The `charly-jupyter` plugin** (`plugins/charly-jupyter/.mcp.json`) — declares
+            **The `charly-jupyter` plugin** (the marketplace's `jupyter/.mcp.json`) — declares
             the same server at the project level for the opencharly repo itself.
             Suitable when you're working IN the opencharly checkout (the file is
             gitignored downstream of `.claude-plugin/plugin.json`).
