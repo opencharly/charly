@@ -4288,7 +4288,9 @@ git-workflow-skill:
                     `pr-validator` (new context, not the author's context, not a teammate that
                     authored the code) certifies `Verdict: PASS|BLOCK` for the ORG-WIDE
                     `charly/pr-validator` GitHub Actions gate; on PASS the org-wide `auto-merge`
-                    workflow finalizes the merge-time CalVer, `gh pr merge --squash --delete-branch`, tags.
+                    workflow enables native auto-merge (squash), and the org-wide `tag-on-merge`
+                    workflow then finalizes the merge-time CalVer, writes `CHANGELOG/<CalVer>.md`
+                    from the merged PR body, and tags the merged HEAD.
                     Sequence + guardrails: `plugins/internals/agents/pr-validator.md`. The gate
                     never runs `gh pr merge --admin` (that bypasses it) and never force-pushes; a
                     `BEHIND` branch is recovered with `gh pr update-branch` (no force-push), then merged
