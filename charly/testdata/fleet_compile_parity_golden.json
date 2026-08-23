@@ -339,13 +339,13 @@
       }
     ]
   },
-  "ripgrep": {
+  "tmux": {
     "box": "k4b-parity",
     "version": "2026.144.1443",
     "distro": "fedora:43",
-    "candy": "ripgrep",
+    "candy": "tmux",
     "candies_included": [
-      "ripgrep"
+      "tmux"
     ],
     "steps": [
       {
@@ -355,14 +355,14 @@
             "kind": "package-remove",
             "format": "rpm",
             "targets": [
-              "ripgrep"
+              "tmux"
             ]
           }
         ],
         "format": "rpm",
         "phase": 1,
         "packages": [
-          "ripgrep"
+          "tmux"
         ],
         "cache_mount": [
           {
@@ -372,7 +372,7 @@
         ],
         "raw_install_context": {
           "package": [
-            "ripgrep"
+            "tmux"
           ]
         }
       }
