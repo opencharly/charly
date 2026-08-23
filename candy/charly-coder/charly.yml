@@ -84,7 +84,7 @@ arch-coder-skill:
                 # AI coding CLIs
                 - claude-code
                 - codex
-                - '@github.com/opencharly/layer-gemini:v2026.235.2057'
+                - '@github.com/opencharly/layer-gemini:v2026.235.2110'
                 - forgecode
                 - oracle
             
@@ -499,7 +499,7 @@ debian-coder-skill:
                 # AI coding CLIs
                 - claude-code
                 - codex
-                - '@github.com/opencharly/layer-gemini:v2026.235.2057'
+                - '@github.com/opencharly/layer-gemini:v2026.235.2110'
                 - forgecode
                 - oracle
             
@@ -706,7 +706,7 @@ fedora-coder-skill:
                 # AI coding CLIs
                 - claude-code
                 - codex
-                - '@github.com/opencharly/layer-gemini:v2026.235.2057'
+                - '@github.com/opencharly/layer-gemini:v2026.235.2110'
                 - forgecode                   # 5th CLI (astral-sh-style)
                 - oracle
             
@@ -1046,7 +1046,7 @@ ubuntu-coder-skill:
                 - asciinema
                 - claude-code
                 - codex
-                - '@github.com/opencharly/layer-gemini:v2026.235.2057'
+                - '@github.com/opencharly/layer-gemini:v2026.235.2110'
                 - forgecode
                 - oracle
                 - devops-tools

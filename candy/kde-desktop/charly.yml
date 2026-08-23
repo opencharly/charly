@@ -21,7 +21,7 @@ kde-desktop:
             selkies-kde-desktop, which composes kde-shell directly without SDDM.
         require:
             - '@github.com/opencharly/pod-dbus:v2026.235.2057'
-            - '@github.com/opencharly/pod-pipewire:v2026.235.2057'
+            - '@github.com/opencharly/pod-pipewire:v2026.235.2110'
         candy:
             # The SDDM-free Plasma session packages (kwin_wayland + plasmashell + the
             # curated app set) are shared with the headless kde-selkies pod (R3).

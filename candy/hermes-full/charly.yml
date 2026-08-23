@@ -15,7 +15,7 @@ hermes-full:
             - hermes
             - claude-code
             - codex
-            - '@github.com/opencharly/layer-gemini:v2026.235.2057'
+            - '@github.com/opencharly/layer-gemini:v2026.235.2110'
             - forgecode
             - dev-tools
             - devops-tools

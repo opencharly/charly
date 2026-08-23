@@ -20,7 +20,7 @@ openclaw-full:
             - openclaw
             - claude-code
             - codex
-            - '@github.com/opencharly/layer-gemini:v2026.235.2057'
+            - '@github.com/opencharly/layer-gemini:v2026.235.2110'
             - clawhub
             - mcporter
             - oracle

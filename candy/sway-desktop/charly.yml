@@ -12,7 +12,7 @@ sway-desktop:
             image, so the metalayer is verified by asserting those composed
             artifacts are present and actually run inside a disposable container.
         candy:
-            - '@github.com/opencharly/pod-pipewire:v2026.235.2057'
+            - '@github.com/opencharly/pod-pipewire:v2026.235.2110'
             - xdg-portal
             - wl-tools
             - wl-screenshot-grim

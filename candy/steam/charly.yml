@@ -10,7 +10,7 @@ steam:
             binary, both RPM packages, and the runtime env pin are all directly
             verifiable inside the built image.
         require:
-            - '@github.com/opencharly/pod-sway:v2026.235.2057'
+            - '@github.com/opencharly/pod-sway:v2026.235.2110'
         env:
             STEAM_RUNTIME_PREFER_HOST_LIBRARIES: "0"
         distro:

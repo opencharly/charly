@@ -10,8 +10,8 @@ xdg-portal:
             files land at their expected paths.
         require:
             - '@github.com/opencharly/pod-dbus:v2026.235.2057'
-            - '@github.com/opencharly/pod-sway:v2026.235.2057'
-            - '@github.com/opencharly/pod-pipewire:v2026.235.2057'
+            - '@github.com/opencharly/pod-sway:v2026.235.2110'
+            - '@github.com/opencharly/pod-pipewire:v2026.235.2110'
         env:
             XDG_CURRENT_DESKTOP: "sway"
         distro:
@@ -80,8 +80,8 @@ xdg-portal-skill:
             ```yaml
             require:
               - '@github.com/opencharly/pod-dbus:v2026.235.2057'
-              - '@github.com/opencharly/pod-sway:v2026.235.2057'
-              - '@github.com/opencharly/pod-pipewire:v2026.235.2057'
+              - '@github.com/opencharly/pod-sway:v2026.235.2110'
+              - '@github.com/opencharly/pod-pipewire:v2026.235.2110'
             
             env:
               XDG_CURRENT_DESKTOP: "sway"

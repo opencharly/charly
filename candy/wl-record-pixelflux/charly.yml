@@ -8,7 +8,7 @@ wl-record-pixelflux:
             the desktop as H.264. Verifiable: the wrapper script is installed and
             executable.
         require:
-            - '@github.com/opencharly/pod-selkies:v2026.235.2057'
+            - '@github.com/opencharly/pod-selkies:v2026.235.2110'
             - '@github.com/opencharly/layer-ffmpeg:v2026.235.2057'
             # plugin-record is the OUT-OF-TREE plugin that serves the `record:` check verb
             # (the asciinema/wf-recorder/pixelflux recording driver lives there, not in

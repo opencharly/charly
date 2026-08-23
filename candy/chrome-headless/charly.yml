@@ -20,7 +20,7 @@ chrome-headless:
             - '@github.com/opencharly/layer-chrome:v2026.235.2057'
             - '@github.com/opencharly/layer-supervisord:v2026.235.2056'
         candy:
-            - '@github.com/opencharly/pod-chrome-cdp:v2026.235.2057'
+            - '@github.com/opencharly/pod-chrome-cdp:v2026.235.2110'
         service:
             - name: chrome-headless
               exec: "%(ENV_HOME)s/.local/bin/chrome-headless-launch"
