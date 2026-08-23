@@ -421,7 +421,7 @@ dynamic workflows. It installs into whichever harnesses have an adapter today â€
 Code, Codex and Kimi â€” in these modes: `developer` (every plugin), `user` (use and author with
 charly, without contributor internals), and `container <family>` (one generated container family).
 It writes only target-repository files, never any user configuration, and does not depend on MCP.
-See [plugins/README.md](plugins/README.md) for the full index.
+See the [opencharly/marketplace](https://github.com/opencharly/marketplace) repo's README for the full skill index.
 
 Setup instructions live in that repository's own README. They currently require a checkout, which
 is a gap rather than a design: there is no way to install the skill tree with only the `charly`

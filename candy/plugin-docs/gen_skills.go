@@ -57,9 +57,9 @@ var categoryTitle = map[string]string{
 	"images":      "Images — the deployable catalog",
 }
 
-// readMarketplace loads the plugin taxonomy.
-func readMarketplace(root string) (*marketplace, error) {
-	path := filepath.Join(root, "plugins", ".claude-plugin", "marketplace.json")
+// readMarketplace loads the plugin taxonomy from the marketplace checkout.
+func readMarketplace(pluginsDir string) (*marketplace, error) {
+	path := filepath.Join(pluginsDir, ".claude-plugin", "marketplace.json")
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read marketplace.json: %w", err)
@@ -72,17 +72,19 @@ func readMarketplace(root string) (*marketplace, error) {
 	return &m, nil
 }
 
-// collectSkills reads every skill of every plugin named by the manifest. The plugins tree is a
-// submodule, but this reads it off the FILESYSTEM — so the generated site matches whatever the
-// plugins WORKING TREE is checked out at, which is not necessarily the gitlink the superproject
-// pins. On a clean checkout the two agree and the distinction is invisible; in a worktree whose
-// plugins checkout has moved they do not, and regeneration then projects the checkout. Check
-// plugins out at the commit you intend to publish before regenerating, or the docs repo's drift
-// gate goes red for a reason that is not obvious from the diff.
-func collectSkills(root string, m *marketplace) ([]skill, error) {
+// collectSkills reads every skill of every plugin named by the manifest. The corpus is read
+// off the FILESYSTEM at the marketplace checkout (a submodule of the docs repo since the
+// marketplace de-submodule cutover — the docs deploy passes its marketplace checkout via
+// --plugins) — so the generated site matches whatever that checkout is at, which is not
+// necessarily the gitlink the docs repo pins. On a clean checkout the two agree and git rev
+// is invisible; in a worktree whose marketplace checkout has moved they do not, and
+// regeneration then projects the checkout. Check the marketplace out at the commit you intend
+// to publish before regenerating, or the drift gate goes red for a reason that is not obvious
+// from the diff.
+func collectSkills(pluginsDir string, m *marketplace) ([]skill, error) {
 	var out []skill
 	for _, p := range m.Plugins {
-		skillsDir := filepath.Join(root, "plugins", p.Dir(), "skills")
+		skillsDir := filepath.Join(pluginsDir, p.Dir(), "skills")
 		ents, err := os.ReadDir(skillsDir)
 		if err != nil {
 			if os.IsNotExist(err) {

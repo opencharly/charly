@@ -18,7 +18,7 @@ import (
 // A copy drifts; a projection cannot. The home page moved into this list precisely because it was
 // the counter-example — two thirds of it was README prose maintained twice, across a submodule
 // boundary, under a footnote claiming nothing on the site was a hand-maintained copy.
-func generate(root, out string) error {
+func generate(root, out, pluginsDir string) error {
 	if _, err := os.Stat(filepath.Join(root, unifiedFileName)); err != nil {
 		return fmt.Errorf("--root %s does not look like an charly project (no %s): %w", root, unifiedFileName, err)
 	}
@@ -64,11 +64,11 @@ func generate(root, out string) error {
 		pluginNames[p.Name] = true
 	}
 
-	market, err := readMarketplace(root)
+	market, err := readMarketplace(pluginsDir)
 	if err != nil {
 		return err
 	}
-	skills, err := collectSkills(root, market)
+	skills, err := collectSkills(pluginsDir, market)
 	if err != nil {
 		return err
 	}

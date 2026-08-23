@@ -5,7 +5,7 @@ spawn brief. "The Agent-in-the-Loop Factory" is the *product's* name (see `READM
 this program builds the multi-agent subsystem that runs on it, and the two are
 deliberately distinct scopes. The charly repo's `CLAUDE.md` + `AGENTS.md` are the
 rulebook; this file restates no rule. Detailed HOW lives in skills
-(`plugins/README.md` is the index). This document holds the concrete end-state,
+(the opencharly/marketplace repo's README is the index). This document holds the concrete end-state,
 vocabulary, the containment model, the trust boundaries, ordered decision heuristics,
 the cutover sequence, observed anti-patterns, and measured state. On a
 task-vs-north-star conflict a teammate stops and asks, never resolves locally.
@@ -269,7 +269,7 @@ MinIO, which every flavor exposes identically — the venue is below them.
   `factory-spike-native` (`pod:` + nesting) / `factory-spike-kustomize` /
   `factory-spike-helm` (`vm:` + k3s), all `disposable: true`; beds `check-helm-vm`
   (+ its `check-helm-vm-ctx` kubernetes profile), `check-factory-spike-<flavor>`.
-- `plugins/` — the Factory owning skill + a bed-executor agent entry (verbatim-proof
+- the marketplace repo's corpus — the Factory owning skill + a bed-executor agent entry (verbatim-proof
   pattern), `model: inherit` like the rest of the roster.
 - Docs — recipe cards in the candy sources; `charly docs generate` runs in the opencharly/docs
   repo's deploy workflow against its pinned charly checkout; never hand-edit a generated page;
@@ -299,7 +299,7 @@ front-loads the named HOWs.
    and the `/charly-kubernetes:helm` recipe card that units 2 and 3 shipped capability
    without. The dispatcher is a CURATED fast path, not an index — 60 of 307 skill
    entities carry `triggers:`, and anything absent falls back to the documented
-   `plugins/README.md` route — so a missing row does not make a capability
+   the marketplace README route — so a missing row does not make a capability
    unreachable, it makes it easy to miss at the first tool call. For surfaces as
    central as the helm words and the whole agentteams family that is a real routing
    gap. The row and its skill land together, never split: a row naming a skill that
@@ -335,7 +335,7 @@ front-loads the named HOWs.
 | Factory / incident spike / improvement spike / forge-spike / spike flavor / regression-bed growth | `/charly-agentteams:factory` | unit 9 |
 
 Skills are GENERATED from a candy's `skill:` entity by `charly marketplace generate` —
-never hand-written into `plugins/`. Per-directory CLAUDE.md files under the new candies
+never hand-written into the marketplace corpus. Per-directory CLAUDE.md files under the new candies
 are thin signposts naming these skills; they restate no rule.
 (`/charly-agentteams:agentteams` exists today as the recipe card of the
 `charly-agentteams` plugin and only lacked a dispatcher row;
@@ -411,7 +411,7 @@ proposal until unit 9 lands it.)
 - [x] Unit 4: dispatcher rows resolve; `/charly-kubernetes:helm` published; this
       document audited claim-by-claim against the tree (documentation-only class —
       the gate is the non-runtime standards, not a bed). The rows are live in
-      `CLAUDE.md` and `AGENTS.md` and `plugins/kubernetes/skills/helm/` exists; the
+      `CLAUDE.md` and `AGENTS.md` and the marketplace's `kubernetes/skills/helm/` exists; the
       box went unchecked at the time and was corrected during unit 5
 - [x] Unit 5: `charly box load` delivers an image into a nested uid-1000 store, bed
       green — `check-boxload-pod` PASS (13 steps), with `boxload-deliver` and

@@ -27,7 +27,7 @@ import (
 // Relocated (#55 decoupling cone, Batch D) from charly/plugin_gomod_canonical_test.go:
 // this is pure plugin-go.mod-file HYGIENE (string assertions on go.mod TEXT — it makes
 // no Go import of any sdk package, and imports nothing itself), so it lives in its own
-// standalone module rather than in charly/ or the plugins/ submodule (which carries no
+// standalone module rather than in charly/ or the marketplace repo (which carries no
 // Go code at all — skills/docs/config only). The glob is adjusted for the new
 // location: tools/gomod-canonical/ is two levels below the repo root
 // (tools/gomod-canonical -> tools -> root), where charly/ was only one level below

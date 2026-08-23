@@ -203,7 +203,7 @@ pi.registerTool({
 
     // If no match, try the full index
     if (matched.size === 0) {
-      // Fall back to plugins/README.md for full index
+      // Fall back to the marketplace README for full index
     }
 
     // Read each matching SKILL.md
@@ -337,8 +337,8 @@ truth approach — the JSON is generated from the same source as the Markdown.
     {
       "trigger_patterns": ["charly box build", "Containerfile", "build"],
       "skills": [
-        {"name": "build", "path": "plugins/charly-build/skills/build/SKILL.md"},
-        {"name": "generate", "path": "plugins/charly-build/skills/generate/SKILL.md"}
+        {"name": "build", "path": "build/skills/build/SKILL.md"},
+        {"name": "generate", "path": "build/skills/generate/SKILL.md"}
       ]
     },
     ...
@@ -515,7 +515,7 @@ pi.registerTool({
 | 1 | `.pi/extensions/charly-gates.ts` | Add `before_agent_start` handler that injects condensed R0–R10 + PR body rules |
 | 2 | `.pi/extensions/charly-gates.ts` | Add `charly_load_skills` custom tool with `promptGuidelines` |
 | 3 | `.pi/prompts/*.md` | Create 6 prompt templates |
-| 4 | `plugins/.../generate/` | Extend marketplace generate to emit `skill_triggers.json` |
+| 4 | the marketplace's `build` family | Extend marketplace generate to emit `skill_triggers.json` |
 | 4 | `.agents/skill_triggers.json` | Generated file (consumed by Layer 2) |
 | 5 | `AGENTS.md` | Add pi-specific sub-agent instructions |
 | 5 | `.pi/subagents/` | Agent definitions for charly roles |
@@ -531,6 +531,6 @@ pi.registerTool({
 3. **Layer 6** (pre-push PR body validation) — extend existing gate script.
 4. **Layer 7** (worktree tool) — extension change, no charly repo code.
 5. **Layer 4** (machine-readable dispatcher) — requires changes to the `charly
-   marketplace generate` pipeline (Go code in `plugins/`). This is the only
+   marketplace generate` pipeline (Go code in `candy/plugin-marketplace/`). This is the only
    item that touches charly source code. All others are pi config + extension
    changes only.

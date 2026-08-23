@@ -94,7 +94,7 @@ Consult this table before the first tool call of every task; when several rows m
 | the agentteams box / the AgentTeams multi-agent stack (Manager–Workers, Rooms, the controller + matrix + element + higress + minio candies) on the pod or vm substrate / the `check-agentteams-pod` and `check-agentteams-vm` beds | `/charly-agentteams:agentteams` |
 <!-- END GENERATED SKILL DISPATCHER -->
 
-Full index: `plugins/README.md`. Anything not listed: read the index first, load the matching skill second, touch code third.
+Full index: the opencharly/marketplace repo's README. Anything not listed: read the index first, load the matching skill second, touch code third.
 
 ## The pillars
 
@@ -206,7 +206,7 @@ The named skills own the full technical rules; this index never expands into a s
 
 - **Rules & mandates** → this file + `AGENTS.md` (equivalent policy).
 - **Features & command reference** → `README.md`.
-- **Usage & architecture** → skills (`plugins/README.md` is the index) — the single source of truth for *how*.
+- **Usage & architecture** → skills (the opencharly/marketplace repo's README is the index) — the single source of truth for *how*.
 - **Thesis & direction** → `VISION.md`.
 - **Program north-star documents** → `PROGRAM/` (one file per program, named in every spawn brief).
 - **Public site** → [opencharly.ai](https://opencharly.ai), built from the standalone [opencharly/docs](https://github.com/opencharly/docs) repo: a small hand-authored narrative plus a reference/recipe catalog GENERATED from the sources above by `charly docs generate` against the charly commit the docs repo's `.gitmodules` pins. Never hand-edit a generated page; fix the source — regeneration is a docs PR that bumps the charly pin, and the docs repo's deploy workflow (the sole generator/builder/publisher) enforces it.

@@ -4,19 +4,23 @@ plugin-marketplace:
         description: |-
             RUNTIME (out-of-process) charly plugin serving `charly marketplace …` — the generator
             that regenerates the ENTIRE `charly-plugins` marketplace + harness surface from candy
-            config, the plugins→candies migration's deliverable. It reads every candy's `skill:`
-            / `hook:` / `marketplace:` kind entities (the candywalk discovery), aggregates them
-            by marketplace family, and emits: plugins/<family>/skills/*/SKILL.md + references/*.md,
-            plugins/<family>/agents/*.md, per-family .claude-plugin/plugin.json + .codex-plugin/
-            plugin.json + .mcp.json, plugins/.claude-plugin/marketplace.json + plugins/profiles.json,
-            the .claude/settings.json plugin-owned keys, .claude/hooks/* (from hook entities),
-            the generated R0 dispatcher section in CLAUDE.md/AGENTS.md, and the plugins/setup
-            launcher. `charly marketplace drift` is the fail-closed no-op gate: it regenerates in
-            memory and compares with the artifacts ON DISK, never with git, so it proves
-            "regeneration is a no-op" and says nothing about whether the tree is committed —
-            this repository's own `task skills:drift` recipe is what adds that `git status`
-            half. A stale mirror is a hard failure, but it is red only for whoever runs it:
-            drift runs in no CI workflow.
+            config. It reads every candy's `skill:` / `hook:` / `marketplace:` kind entities (the
+            candywalk discovery), aggregates them by marketplace family, and emits — into --out,
+            the STANDALONE opencharly/marketplace repo's root (the corpus): <family>/skills/*/
+            SKILL.md + references/*.md, <family>/agents/*.md, per-family .claude-plugin/plugin.json
+            + .codex-plugin/plugin.json + .mcp.json, .claude-plugin/marketplace.json (Claude Code /
+            Cursor), .agents/plugins/marketplace.json (Codex / the AGENTS framework), kimi.plugin.json
+            (Kimi — the whole marketplace is one plugin), package.json (pi — the whole marketplace
+            is one pi package), profiles.json, and the setup launcher — and — into --root, the
+            charly-local harness surface: the .claude/settings.json plugin-owned keys, .claude/hooks/*
+            (from hook entities) and the generated R0 dispatcher section in CLAUDE.md/AGENTS.md.
+            `charly marketplace drift` is the fail-closed no-op gate: it regenerates in memory and
+            compares with the artifacts ON DISK (the corpus under --out, the surface under --root),
+            never with git, so it proves "regeneration is a no-op" and says nothing about whether
+            the tree is committed — this repository's `task skills:drift` recipe adds that `git
+            status` half, and the marketplace repo's deploy workflow runs the same gate on a fresh
+            checkout at its pinned charly. A stale mirror is a hard failure, but drift runs in no
+            CI workflow of this repo: the marketplace repo's own gate owns the corpus.
 
             PLACEMENT — deliberately NOT listed in charly/charly.yml compiled_plugins. This is a
             DEV-TIME generator, run on a contributor's machine to regenerate the harness surface
@@ -25,16 +29,144 @@ plugin-marketplace:
             reverse channel — which is what makes the out-of-process placement free here (the same
             property that lets `charly docs` and `charly migrate` run in either placement).
 
-            HAND-AUTHORED, NEVER TOUCHED: plugins/README.md, plugins/CHANGELOG/, plugins/CLAUDE.md,
-            plugins/LICENSE, plugins/scripts/squash_body.py, plugins/kimi-user-config.toml, and the
-            hand-owned keys of .claude/settings.json (permissions, env, teammateMode, …).
+            HAND-AUTHORED, NEVER TOUCHED (in the marketplace repo): README.md, CHANGELOG/,
+            CLAUDE.md, LICENSE, scripts/squash_body.py, kimi-user-config.toml, and the hand-owned
+            keys of .claude/settings.json (permissions, env, teammateMode, …).
         plugin:
             source: github.com/opencharly/charly/candy/plugin-marketplace
             providers:
                 - command:marketplace
+        var:
+            MARKETPLACE_REPO: https://github.com/opencharly/marketplace.git
+            # An IMMUTABLE COMMIT, never a branch name (the same cache-correctness rule as the
+            # docs-site bed's DOCS_REF): `var:` values are emitted as ENV above the steps, so the
+            # clone layer's cache key moves only when this string moves. It must equal the
+            # marketplace repo's current `main` head; `task marketplace:pin` checks that, and the
+            # pinned-commit check below asserts it from inside the built image.
+            MARKETPLACE_REF: f4f5980fc9540e6a4cf88b9a0d86de7ba7717b1e
+        distro:
+            fedora:
+                package:
+                    - git
         plan:
-            - check: the marketplace command plugin ships a buildable Go module (go.mod + the provider package); the generate → drift round trip is covered by this plugin's own Go tests and this repository's `task skills:drift`, while the live R10 bed (check-marketplace) covers the ARTIFACT they produce — the baked ai.opencharly.skill label
+            - check: the marketplace command plugin ships a buildable Go module (go.mod + the provider package); the generate → drift round trip is covered by this plugin's own Go tests and this repository's `task skills:drift`, while the live R10 bed (check-marketplace) covers the ARTIFACT they produce — the published marketplace corpus at the pinned commit
               id: marketplace-module-present
               context:
                 - build
               command: "true"
+
+            - run: clone the published marketplace at the pinned commit
+              command: |
+                rm -rf /srv/marketplace
+                git init -q /srv/marketplace
+                git -C /srv/marketplace remote add origin "${MARKETPLACE_REPO}"
+                git -C /srv/marketplace fetch -q --depth 1 origin "${MARKETPLACE_REF}"
+                git -C /srv/marketplace checkout -q FETCH_HEAD
+                # Record what was ACTUALLY fetched, in the same layer as the fetch, so a stale
+                # cached layer carries a stale sha (the docs-site bed precedent).
+                git -C /srv/marketplace rev-parse HEAD > /srv/marketplace/.charly-pinned-commit
+              run_as: root
+
+            - # The sha is a LITERAL here, duplicating MARKETPLACE_REF above, because charly's
+              # check-step substitution does not resolve a candy `var:` — it SKIPS the step with
+              # "unresolved variables" instead, turning this guard into a non-event while the bed
+              # still reported PASS. `task marketplace:pin` asserts BOTH occurrences against the
+              # marketplace repo's live main head, so the duplication cannot drift unnoticed.
+              check: the cloned marketplace is the pinned commit, not a stale cached layer
+              id: marketplace-pinned-commit
+              exit_status: 0
+              stdout:
+                - contains: f4f5980f9540e6a4cf88b9a0d86de7ba7717b1e
+              context:
+                - build
+                - runtime
+              command: cat /srv/marketplace/.charly-pinned-commit
+
+            - check: the Claude Code / Cursor catalog exists and parses, and every entry's source resolves to a real family directory (the corpus shape the marketplace's own drift gate guarantees; the bed re-proves it on the published artifact)
+              id: marketplace-claude-catalog
+              exit_status: 0
+              stdout:
+                - contains: charly-plugins
+              context:
+                - build
+                - runtime
+              command: |
+                test -f /srv/marketplace/.claude-plugin/marketplace.json && python3 -c '
+                import json,sys
+                m=json.load(open("/srv/marketplace/.claude-plugin/marketplace.json"))
+                assert m["name"]=="charly-plugins" and m["plugins"]
+                for p in m["plugins"]:
+                    assert p["source"].startswith("./"), p
+                    import os; assert os.path.isdir("/srv/marketplace/"+p["source"][2:]), p["source"]
+                print("charly-plugins catalog OK (%d plugins)" % len(m["plugins"]))
+                '
+
+            - check: the Codex / AGENTS catalog exists and every entry's local source resolves
+              id: marketplace-agents-catalog
+              exit_status: 0
+              stdout:
+                - contains: INSTALLED_BY_DEFAULT
+              context:
+                - build
+                - runtime
+              command: |
+                test -f /srv/marketplace/.agents/plugins/marketplace.json && python3 -c '
+                import json,os
+                m=json.load(open("/srv/marketplace/.agents/plugins/marketplace.json"))
+                assert m["plugins"]
+                for p in m["plugins"]:
+                    assert p["source"]["source"]=="local" and os.path.isdir("/srv/marketplace/"+p["source"]["path"][2:]), p
+                    assert p["policy"]["installation"]=="INSTALLED_BY_DEFAULT"
+                print("INSTALLED_BY_DEFAULT: %d plugins" % len(m["plugins"]))'
+
+            - check: the kimi + pi manifests ship at the marketplace root (the whole marketplace is one kimi plugin and one pi package)
+              id: marketplace-kimi-pi-manifests
+              exit_status: 0
+              stdout:
+                - contains: pi-package
+              context:
+                - build
+                - runtime
+              command: |
+                test -f /srv/marketplace/kimi.plugin.json
+                test -f /srv/marketplace/package.json
+                grep -q pi-package /srv/marketplace/package.json
+                python3 -c 'import json; m=json.load(open("/srv/marketplace/kimi.plugin.json")); assert m["skills"]'
+                echo "pi-package + kimi manifests present"
+
+            - check: a baked corpus skill carries the generator header and the two-key frontmatter contract (the ai.opencharly.skill label the generator bakes)
+              id: marketplace-baked-skill
+              exit_status: 0
+              stdout:
+                - contains: GENERATED by `charly marketplace generate`
+                - contains: "name: build"
+              context:
+                - build
+                - runtime
+              command: cat /srv/marketplace/build/skills/build/SKILL.md
+
+            - check: per-family manifests carry NO version field (commit-SHA versioning) and the marketplace repository URL
+              id: marketplace-no-version-manifests
+              exit_status: 0
+              stdout:
+                - contains: opencharly/marketplace
+              context:
+                - build
+                - runtime
+              command: |
+                python3 -c '
+                import json
+                d=json.load(open("/srv/marketplace/build/.claude-plugin/plugin.json"))
+                assert "version" not in d, d
+                assert d["repository"].endswith("opencharly/marketplace"), d
+                print("opencharly/marketplace manifest: no version field")'
+
+            - check: the setup launcher ships executable at the marketplace root
+              id: marketplace-setup-launcher
+              exit_status: 0
+              stdout:
+                - contains: charly marketplace
+              context:
+                - build
+                - runtime
+              command: test -x /srv/marketplace/setup && head -1 /srv/marketplace/setup

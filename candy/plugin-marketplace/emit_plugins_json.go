@@ -13,16 +13,21 @@ import (
 // surface (a description/keyword edit regenerates the manifests).
 
 const (
-	pluginAuthor     = "opencharly"
-	pluginRepository = "https://github.com/opencharly/charly-plugins"
-	pluginLicense    = "MIT"
+	pluginAuthor          = "opencharly"
+	pluginRepository      = "https://github.com/opencharly/marketplace"
+	marketplaceRepository = "opencharly/marketplace"
+	pluginLicense         = "MIT"
 )
 
 // claudePluginJSON is the .claude-plugin/plugin.json shape.
+// claudePluginJSON is the .claude-plugin/plugin.json shape. There is deliberately NO version
+// field: per the Claude Code marketplace docs, an omitted version resolves to the plugin
+// source's commit SHA, so users receive updates whenever the marketplace commit changes — the
+// continuous-corpus model this org runs on. A pinned version would freeze every installed
+// plugin at an explicit bump.
 type claudePluginJSON struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
-	Version     string `json:"version"`
 	Author      struct {
 		Name string `json:"name"`
 	} `json:"author"`
@@ -34,9 +39,10 @@ type claudePluginJSON struct {
 }
 
 // codexPluginJSON is the .codex-plugin/plugin.json shape (the expanded Codex schema).
+// codexPluginJSON is the .codex-plugin/plugin.json shape (the expanded Codex schema). Version is
+// omitted for the same commit-SHA-versioning reason as the Claude manifest.
 type codexPluginJSON struct {
 	Name        string `json:"name"`
-	Version     string `json:"version"`
 	Description string `json:"description"`
 	Author      struct {
 		Name string `json:"name"`
@@ -65,18 +71,10 @@ func emitPluginsJSON(em emissions, families []family) {
 	}
 }
 
-func familyVersion(f family) string {
-	if f.Meta.Version != "" {
-		return f.Meta.Version
-	}
-	return "1.0.0"
-}
-
 func emitClaudePluginJSON(em emissions, f family) {
 	doc := claudePluginJSON{
 		Name:        "charly-" + f.Name,
 		Description: f.Meta.Description,
-		Version:     familyVersion(f),
 		Author: struct {
 			Name string `json:"name"`
 		}{Name: pluginAuthor},
@@ -95,7 +93,6 @@ func emitCodexPluginJSON(em emissions, f family) {
 	display := "OpenCharly " + strings.ToUpper(f.Name[:1]) + f.Name[1:]
 	doc := codexPluginJSON{
 		Name:        "charly-" + f.Name,
-		Version:     familyVersion(f),
 		Description: f.Meta.Description,
 		Author: struct {
 			Name string `json:"name"`

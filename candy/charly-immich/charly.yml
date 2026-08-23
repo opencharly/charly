@@ -3,14 +3,14 @@ charly-immich:
         version: 2026.218.1200
         description: |-
             Metadata concept candy owning the charly-immich skills whose names have no namesake candy (immich photo-management images). Owns its family's `skill:` kind entities (sibling nodes in this file) — the
-            plugins→candies migration; candy/plugin-marketplace regenerates the plugins/ corpus
-            from them.
+            the plugins→candies migration; candy/plugin-marketplace regenerates the marketplace
+            corpus (the standalone opencharly/marketplace repo) from them.
         plan:
             - run: this documentation-only candy ships no install content (it carries the family's skill/hook/marketplace entities); validate-satisfying no-op
               command: "true"
               context:
                 - build
-            - check: the immich concept candy's skill entities are present and generated into plugins/immich/skills
+            - check: the immich concept candy's skill entities are present and generated into the marketplace's immich/skills
               id: charly-immich-present
               context:
                 - build

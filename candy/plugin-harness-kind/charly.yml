@@ -15,7 +15,7 @@ plugin-harness-kind:
             COMPILED-IN (in the embedded compiled_plugins:) — the plugin-candy-kind placement,
             because the words must be recognized on every parse (validate/build/deploy) without an
             out-of-process build. The `skill` bodies feed BOTH the ai.opencharly.skills OCI label
-            (CollectSkills → `charly box labels`) and the regenerated plugins/ corpus
+            (CollectSkills → `charly box labels`) and the regenerated marketplace corpus
             (candy/plugin-marketplace, command:marketplace); `hook` bodies feed the .claude/hooks/*
             emission + settings.json wiring; the `marketplace` body feeds the plugin.json /
             marketplace.json / profiles.json / settings.json generated surface.

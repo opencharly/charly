@@ -1,6 +1,3 @@
-[submodule "plugins"]
-	path = plugins
-	url = https://github.com/opencharly/plugins.git
 [submodule "box/arch"]
 	path = box/arch
 	url = https://github.com/opencharly/distro-arch.git

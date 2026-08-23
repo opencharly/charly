@@ -28,8 +28,6 @@ const fixtureMarketplace = `marketplace:
                 category: commands
                 description: Runtime verbs.
                 profiles: [user]
-        settings:
-            source_path: ./plugins
 `
 
 const fixturePostgres = `postgresql:
@@ -154,7 +152,7 @@ func writeFixture(t *testing.T) string {
 
 func TestGenerateThenDriftIsClean(t *testing.T) {
 	dir := writeFixture(t)
-	if err := generate(dir); err != nil {
+	if err := generate(dir, filepath.Join(dir, "plugins")); err != nil {
 		t.Fatalf("generate: %v", err)
 	}
 	assertFile(t, dir, "plugins/infrastructure/skills/postgresql/SKILL.md",
@@ -165,10 +163,19 @@ func TestGenerateThenDriftIsClean(t *testing.T) {
 	assertFile(t, dir, "plugins/infrastructure/.claude-plugin/plugin.json", "charly-infrastructure")
 	assertFile(t, dir, "plugins/.claude-plugin/marketplace.json", "charly-plugins", "charly-core")
 	assertFile(t, dir, "plugins/profiles.json", "charly-infrastructure")
+	assertFile(t, dir, "plugins/.agents/plugins/marketplace.json", "charly-plugins", "./core", "INSTALLED_BY_DEFAULT")
+	assertFile(t, dir, "plugins/kimi.plugin.json", `"name": "charly"`, "./core/skills", "./infrastructure/skills")
+	assertFile(t, dir, "plugins/package.json", "opencharly-marketplace", "pi-package", "./*/skills")
+	// per-plugin manifests carry NO version field (commit-SHA versioning — Claude Code docs).
+	for _, rel := range []string{"plugins/core/.claude-plugin/plugin.json", "plugins/infrastructure/.claude-plugin/plugin.json"} {
+		if strings.Contains(readFile(t, dir, rel), `"version"`) {
+			t.Fatalf("%s must not carry a version field (commit-SHA versioning):\n%s", rel, readFile(t, dir, rel))
+		}
+	}
 	assertFile(t, dir, ".claude/hooks/pre-commit-gate.sh", "pre-commit discipline")
 	assertFile(t, dir, ".claude/hooks/gitcmd.py", "AUX file")
 	assertFile(t, dir, ".claude/settings.json", "permissions", "claude-md-management@claude-plugins-official",
-		"charly-core@charly-plugins", "charly-infrastructure@charly-plugins", "pre-commit-gate.sh")
+		"charly-core@charly-plugins", "charly-infrastructure@charly-plugins", "pre-commit-gate.sh", "opencharly/marketplace")
 	assertFile(t, dir, "CLAUDE.md", "BEGIN GENERATED SKILL DISPATCHER", "postgres / postgresql / pg",
 		"/charly-infrastructure:postgresql")
 	// settings preserves the hand-owned keys (permissions + the official plugin) while
@@ -179,7 +186,7 @@ func TestGenerateThenDriftIsClean(t *testing.T) {
 	}
 
 	// drift on the fresh output is a no-op (fail-closed gate).
-	if err := drift(dir); err != nil {
+	if err := drift(dir, filepath.Join(dir, "plugins")); err != nil {
 		t.Fatalf("drift after generate must be clean: %v", err)
 	}
 }
@@ -194,11 +201,11 @@ func TestDriftCleanMessageNamesWhatItCompared(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, ".git")); !os.IsNotExist(err) {
 		t.Fatalf("fixture must NOT be a git repository — that is what makes this test discriminating: %v", err)
 	}
-	if err := generate(dir); err != nil {
+	if err := generate(dir, filepath.Join(dir, "plugins")); err != nil {
 		t.Fatalf("generate: %v", err)
 	}
 	var driftErr error
-	out := captureStdout(t, func() { driftErr = drift(dir) })
+	out := captureStdout(t, func() { driftErr = drift(dir, filepath.Join(dir, "plugins")) })
 	if driftErr != nil {
 		t.Fatalf("drift after generate must be clean: %v", driftErr)
 	}
@@ -242,7 +249,7 @@ func captureStdout(t *testing.T, fn func()) string {
 
 func TestDriftFailsClosedOnMutation(t *testing.T) {
 	dir := writeFixture(t)
-	if err := generate(dir); err != nil {
+	if err := generate(dir, filepath.Join(dir, "plugins")); err != nil {
 		t.Fatalf("generate: %v", err)
 	}
 	// Mutate a generated artifact — drift must FAIL.
@@ -254,7 +261,7 @@ func TestDriftFailsClosedOnMutation(t *testing.T) {
 	if err := os.WriteFile(path, append([]byte("MUTATED\n"), cur...), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	err = drift(dir)
+	err = drift(dir, filepath.Join(dir, "plugins"))
 	if err == nil {
 		t.Fatal("drift must fail after a mutation to a generated artifact")
 	}
@@ -265,7 +272,7 @@ func TestDriftFailsClosedOnMutation(t *testing.T) {
 
 func TestGeneratePrunesRemovedSkill(t *testing.T) {
 	dir := writeFixture(t)
-	if err := generate(dir); err != nil {
+	if err := generate(dir, filepath.Join(dir, "plugins")); err != nil {
 		t.Fatalf("generate: %v", err)
 	}
 	// Remove the postgresql skill from the fixture — the SKILL.md must disappear.
@@ -273,7 +280,7 @@ func TestGeneratePrunesRemovedSkill(t *testing.T) {
 	if err := os.WriteFile(path, []byte(strings.ReplaceAll(fixturePostgres, fixtureSkillBlock, "")), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := generate(dir); err != nil {
+	if err := generate(dir, filepath.Join(dir, "plugins")); err != nil {
 		t.Fatalf("regenerate after skill removal: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "plugins", "charly-infrastructure", "skills", "postgresql", "SKILL.md")); !os.IsNotExist(err) {
@@ -323,3 +330,35 @@ postgresql-skill:
         triggers:
             - "postgres / postgresql / pg"
 `
+
+// TestGenerateSplitOut proves the cutover shape: the corpus lands under --out with the legacy
+// "plugins/" prefix stripped, while the harness surface (.claude/, dispatcher) stays at root —
+// the standalone-marketplace invocation (`charly marketplace generate --root <charly> --out
+// <marketplace>`).
+func TestGenerateSplitOut(t *testing.T) {
+	dir := writeFixture(t)
+	out := filepath.Join(dir, "marketplace")
+	if err := generate(dir, out); err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	// Corpus under out, prefix-free.
+	assertFile(t, out, "core/skills/charly-status/SKILL.md", "name: charly-status")
+	assertFile(t, out, "infrastructure/.claude-plugin/plugin.json", "charly-infrastructure")
+	assertFile(t, out, ".claude-plugin/marketplace.json", "charly-plugins")
+	assertFile(t, out, ".agents/plugins/marketplace.json", "./core")
+	assertFile(t, out, "kimi.plugin.json", `"name": "charly"`)
+	assertFile(t, out, "package.json", "opencharly-marketplace")
+	assertFile(t, out, "profiles.json", "charly-infrastructure")
+	assertFile(t, out, "setup", "charly marketplace")
+	// Harness surface stays at root; the legacy corpus dir at <root>/plugins must NOT exist.
+	assertFile(t, dir, ".claude/hooks/pre-commit-gate.sh", "pre-commit discipline")
+	assertFile(t, dir, ".claude/settings.json", "charly-core@charly-plugins")
+	assertFile(t, dir, "CLAUDE.md", "BEGIN GENERATED SKILL DISPATCHER")
+	if _, err := os.Stat(filepath.Join(dir, "plugins")); !os.IsNotExist(err) {
+		t.Fatalf("legacy <root>/plugins must not exist when --out is given (err=%v)", err)
+	}
+	// drift against the split trees is a no-op.
+	if err := drift(dir, out); err != nil {
+		t.Fatalf("drift after split generate must be clean: %v", err)
+	}
+}

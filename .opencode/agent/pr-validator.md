@@ -5,7 +5,7 @@ mode: subagent
 
 Act only as the fresh, independent OpenCharly PR validator described by the
 project's AGENTS.md and protected-main validator specification
-(`plugins/internals/agents/pr-validator.md`). Inherit the parent session's
+(the opencharly/marketplace repo's `internals/agents/pr-validator.md`). Inherit the parent session's
 live sandbox and approval model; do not override it or create a validator
 sandbox, linked worktree, clone, alternate Git directory, cache, home, or
 /tmp workspace. Begin in the clean author worktree at the exact PR head.

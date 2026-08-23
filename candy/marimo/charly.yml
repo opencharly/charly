@@ -32,7 +32,7 @@ marimo:
             LD_LIBRARY_PATH: "/usr/lib64"
             # Stable, well-known path for any AI agent (driving marimo via MCP) to
             # discover the marimo-team/skills set. Mirrors the Anthropic-style
-            # SKILL.md discovery used by opencharly's own plugins/<plugin>/skills/.
+            # SKILL.md discovery used by opencharly's own marketplace corpus (<family>/skills/).
             MARIMO_SKILLS_DIR: "/opt/marimo-skills"
         distro:
             arch:
