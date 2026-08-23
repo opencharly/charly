@@ -28,7 +28,7 @@
 //
 // REGENERATE with: go run ./tools/golden-compile   (run from the repo root, or pass -repo)
 // whenever the compiler (sdk/deploykit's BuildDeployPlan or its sub-compilers) or one of the three
-// fixture candies (candy/supervisord, candy/dev-tools, candy/pre-commit) changes in a way that alters
+// fixture candies (candy/tmux, candy/dev-tools, candy/pre-commit) changes in a way that alters
 // its compiled InstallPlan.
 package main
 
