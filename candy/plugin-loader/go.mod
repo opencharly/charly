@@ -3,7 +3,7 @@ module github.com/opencharly/charly/candy/plugin-loader
 go 1.26.4
 
 require (
-	github.com/opencharly/sdk v0.2026234.347
+	github.com/opencharly/sdk v0.2026235.2124
 	gopkg.in/yaml.v3 v3.0.1
 )
 
