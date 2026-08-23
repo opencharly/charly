@@ -349,7 +349,15 @@ func TestGenerateSplitOut(t *testing.T) {
 	assertFile(t, out, "kimi.plugin.json", `"name": "charly"`)
 	assertFile(t, out, "package.json", "opencharly-marketplace")
 	assertFile(t, out, "profiles.json", "charly-infrastructure")
-	assertFile(t, out, "setup", "charly marketplace")
+	// The setup launcher must run FROM the pinned charly checkout (the charly CLI prescans
+	// the marketplace word from the cwd's project root) with explicit --root/--out — the
+	// launcher-cwd fix (the marketplace repo's ./setup + ./setup --check contract).
+	setup := readFile(t, out, "setup")
+	for _, want := range []string{`cd "$(dirname "$0")/charly"`, "drift --root . --out ..", "generate --root . --out .."} {
+		if !strings.Contains(setup, want) {
+			t.Fatalf("setup launcher must carry %q (the cwd/flag contract):\n%s", want, setup)
+		}
+	}
 	// Harness surface stays at root; the legacy corpus dir at <root>/plugins must NOT exist.
 	assertFile(t, dir, ".claude/hooks/pre-commit-gate.sh", "pre-commit discipline")
 	assertFile(t, dir, ".claude/settings.json", "charly-core@charly-plugins")
