@@ -205,7 +205,7 @@ func isolateProviderRegistry(t *testing.T) {
 //
 // Regenerate the golden with `go run ./tools/golden-compile` (from the repo root) whenever the
 // compiler (sdk/deploykit's BuildDeployPlan or its sub-compilers) or one of the three fixture
-// candies (candy/ripgrep, candy/dev-tools, candy/pre-commit) changes in a way that alters its
+// candies (candy/tmux, candy/dev-tools, candy/pre-commit) changes in a way that alters its
 // compiled InstallPlan — a stale golden fails this test loudly (a wire-form diff), never silently.
 //
 // For each fixture candy (across 3 classes — pkg/op/builder) the golden asserts BOTH:
@@ -246,7 +246,7 @@ func TestFleetCompileParity_PluginRoundTrip(t *testing.T) {
 		UserAdopted: true, Distro: []string{"fedora:43", "fedora"}, BuildFormats: []string{"rpm"}, Pkg: "rpm",
 	}
 
-	candidates := []string{"ripgrep", "dev-tools", "pre-commit"}
+	candidates := []string{"tmux", "dev-tools", "pre-commit"}
 	var exercised []string
 	classes := map[string]bool{}
 	oldJSON := map[string]string{}

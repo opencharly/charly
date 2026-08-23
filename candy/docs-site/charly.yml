@@ -139,7 +139,7 @@ docs-site:
               context:
                 - build
                 - runtime
-              command: cat /srv/docs/dist/reference/candy/ripgrep/index.html
+              command: cat /srv/docs/dist/reference/candy/charly/index.html
 
             - check: a recipe card from the skill corpus rendered, with its harness cross-references rewritten into working site links
               id: docs-site-recipe-card
