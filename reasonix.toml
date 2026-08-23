@@ -3,12 +3,9 @@ mode = "ask"
 allow = [
     # Built-in exploration
     "explore",
-    # Submodule and plugin discovery
-    "Bash(cd $PWD && ls .claude/skills/ 2>/dev/null || echo \"no .claude/skills/\"; echo \"---\"; ls .reasonix/ 2>/dev/null || echo \"no .reasonix/\")",
-    "Bash(cd $PWD && cat .agents/skills/.charly-profile.json | python3 -c \"import json,sys; d=json.load(sys.stdin); print(json.dumps(list(d.keys())[:5], indent=2)); print('...'); print('total entries:', len(d))\" 2>/dev/null || echo \"parse failed\")",
-    "Bash(cd $PWD && cat .agents/skills/.charly-profile.json | python3 -c \"\nimport json,sys\nd=json.load(sys.stdin)\nprint('version:', d.get('version'))\nprint('links count:', len(d.get('links',[])))\nfor l in d.get('links',[])[:3]:\n    print(' ', l)\n\")",
+    # Marketplace + harness discovery
+    "Bash(ls .pi/git/github.com/opencharly/marketplace 2>/dev/null || echo \"marketplace not fetched\"; echo \"---\"; ls .claude/skills/ 2>/dev/null || echo \"no .claude/skills/\"; echo \"---\"; ls .reasonix/ 2>/dev/null || echo \"no .reasonix/\")",
     "Bash(cd $PWD && git submodule status 2>/dev/null)",
-    "Bash(cd $PWD && cat .agents/skills/.charly-profile.json | python3 -c \"\nimport json,sys\nd=json.load(sys.stdin)\nprint('version:', d.get('version'))\nlinks = d.get('links',{})\nprint('links count:', len(links))\n# Show a few entries\nfor k in list(links.keys())[:5]:\n    print(f'  {k} -> {links[k]}')\n\")",
     # Charly R10/check verbs (parity with Claude Code + Kimi)
     "Bash(charly check run:*)",
     "Bash(charly check live:*)",
