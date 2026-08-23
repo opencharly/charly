@@ -40,16 +40,15 @@ going stale.
 
 ## In practice
 
-The mechanism is a regeneration step and a drift gate. In *this* repository they are
-`task docs:sync` and `task docs:drift` — repository-maintenance commands, run by whoever changes a
-source, from a charly checkout. They are named here because the tenet is about how this site stays
-honest, not because you run them: `charly docs` is an out-of-process plugin supplied by the charly
-project itself, so it is not part of an installed `charly`.
-
-`docs:sync` re-emits every generated page from its source. `docs:drift` re-emits into a scratch
-tree and fails if anything differs — regeneration on a clean tree must be a no-op. If someone edits a generated page by hand, or
-changes a candy's `description:` without regenerating, `docs:drift` fails. Staleness becomes a
-build failure rather than a discovery someone makes months later.
+The mechanism is a regeneration step and a drift gate. In *this* site's repository the
+`deploy.yml` workflow is the sole owner: it checks out the pinned charly checkout, re-emits every
+generated page from its source (`charly docs generate`), and fails if the committed tree differs —
+regeneration on a clean tree must be a no-op. If someone edits a generated page by hand, or changes
+a candy's `description:` without regenerating, the drift gate fails. Staleness becomes a build
+failure rather than a discovery someone makes months later. The commands are named here because
+the tenet is about how this site stays honest, not because you run them: `charly docs` is an
+out-of-process plugin supplied by the charly project itself, so it is not part of an installed
+`charly`.
 
 The same discipline covers the examples on this site. The box quoted throughout these pages —
 [`tutorial-shell`](/reference/box/fedora/tutorial-shell/) — is not illustrative YAML; it is a real
