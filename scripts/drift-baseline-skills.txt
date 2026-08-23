@@ -64,7 +64,6 @@ plugins/internals/skills/git-workflow/references/evidence-and-freshness.md
 plugins/internals/skills/git-workflow/references/multi-repo-coordination.md
 plugins/internals/skills/go-quality/SKILL.md
 plugins/internals/skills/go/SKILL.md
-plugins/internals/skills/go/references/source-map.md
 plugins/internals/skills/plugin/SKILL.md
 plugins/internals/skills/plugin/references/boundary-law.md
 plugins/internals/skills/skills/SKILL.md
