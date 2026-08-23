@@ -42,7 +42,7 @@ openclaw-full:
             - gh
             - tmux
             - ffmpeg
-            - '@github.com/opencharly/ripgrep:v2026.235.1653'
+            - '@github.com/opencharly/layer-ripgrep:v2026.235.1653'
             - sqlite
         plan:
             - check: the claude-code CLI is composed into the image under the native install location

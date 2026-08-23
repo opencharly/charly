@@ -17,7 +17,7 @@ hermes:
         require:
             - nodejs
             - supervisord
-            - '@github.com/opencharly/ripgrep:v2026.235.1653'
+            - '@github.com/opencharly/layer-ripgrep:v2026.235.1653'
             - ffmpeg
             - pipewire
         env:
