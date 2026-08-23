@@ -76,7 +76,7 @@ plugin-marketplace:
               id: marketplace-pinned-commit
               exit_status: 0
               stdout:
-                - contains: f4f5980f9540e6a4cf88b9a0d86de7ba7717b1e
+                - contains: f4f5980fc9540e6a4cf88b9a0d86de7ba7717b1e
               context:
                 - build
                 - runtime
@@ -169,4 +169,4 @@ plugin-marketplace:
               context:
                 - build
                 - runtime
-              command: test -x /srv/marketplace/setup && head -1 /srv/marketplace/setup
+              command: test -x /srv/marketplace/setup && head -2 /srv/marketplace/setup
