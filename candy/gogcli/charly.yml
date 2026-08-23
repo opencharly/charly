@@ -12,7 +12,7 @@ gogcli:
             is verifiable at build scope; live Workspace access additionally
             needs OAuth credentials provisioned at deploy time.
         require:
-            - golang
+            - '@github.com/opencharly/layer-golang:v2026.235.2057'
         env:
             GOPATH: "~/go"
         path_append:

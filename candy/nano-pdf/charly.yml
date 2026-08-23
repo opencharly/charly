@@ -10,7 +10,7 @@ nano-pdf:
             importable, so it is verifiable by the script's existence, the installed
             distribution version it reports, and the CLI's own --help usage banner.
         require:
-            - python
+            - '@github.com/opencharly/layer-python:v2026.235.2057'
         plan:
             - check: the nano-pdf console script exists in the default pixi environment
               file:

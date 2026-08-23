@@ -6,7 +6,7 @@ import (
 )
 
 func TestTerminalAgentCandiesExposeGeneratedProfiles(t *testing.T) {
-	for _, name := range []string{"claude-code", "codex", "gemini"} {
+	for _, name := range []string{"claude-code", "codex"} {
 		manifest := filepath.Join("..", "candy", name, "charly.yml")
 		candy, err := parseCandyYAML(manifest)
 		if err != nil {

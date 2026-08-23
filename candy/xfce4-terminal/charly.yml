@@ -7,7 +7,7 @@ xfce4-terminal:
             is available in the desktop. Verifiable: the xfce4-terminal binary is
             installed and the sway config snippet lands at its expected path.
         require:
-            - sway
+            - '@github.com/opencharly/pod-sway:v2026.235.2057'
         distro:
             fedora:
                 package:

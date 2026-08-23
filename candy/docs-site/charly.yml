@@ -32,7 +32,7 @@ docs-site:
             The deliberately-last liberation easter-egg page is asserted too — the bed fails the
             moment that page stops shipping.
         require:
-            - nodejs
+            - '@github.com/opencharly/layer-nodejs:v2026.235.2056'
         var:
             DOCS_REPO: https://github.com/opencharly/docs.git
             # An IMMUTABLE COMMIT, never a branch name. This is a cache-correctness requirement,

@@ -15,11 +15,11 @@ hermes-full:
             - hermes
             - claude-code
             - codex
-            - gemini
+            - '@github.com/opencharly/layer-gemini:v2026.235.2057'
             - forgecode
             - dev-tools
             - devops-tools
-            - tmux
+            - '@github.com/opencharly/layer-tmux:v2026.235.2057'
         plan:
             - check: the hermes agent binary is installed in the pixi default env
               file:

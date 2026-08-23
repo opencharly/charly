@@ -20,7 +20,7 @@ airflow:
             issuance (deploy scope).
         require:
             - marimo
-            - supervisord
+            - '@github.com/opencharly/layer-supervisord:v2026.235.2056'
         env:
             AIRFLOW_HOME: "~/airflow"
             # LocalExecutor + SQLite — zero external services. Airflow auto-creates

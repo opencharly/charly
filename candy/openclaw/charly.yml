@@ -14,9 +14,9 @@ openclaw:
             and a `data` volume persists ~/.openclaw. Binary presence, the
             supervised service, and the reachable port are all verifiable.
         require:
-            - nodejs
-            - socat
-            - supervisord
+            - '@github.com/opencharly/layer-nodejs:v2026.235.2056'
+            - '@github.com/opencharly/layer-socat:v2026.235.2057'
+            - '@github.com/opencharly/layer-supervisord:v2026.235.2056'
         env:
             NODE_ENV: "production"
         port:

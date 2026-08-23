@@ -29,7 +29,7 @@ agentteams-controller:
             ~/.agentteams/matrix for the Matrix registration token) before
             exec'ing the controller.
         require:
-            - golang
+            - '@github.com/opencharly/layer-golang:v2026.235.2057'
         distro:
             arch:
                 package:

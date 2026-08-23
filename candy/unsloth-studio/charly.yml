@@ -11,8 +11,8 @@ unsloth-studio:
             at ~/llama.cpp -- so the environment and the composition's effect are
             directly checkable.
         require:
-            - cuda
-            - supervisord
+            - '@github.com/opencharly/layer-cuda:v2026.235.2057'
+            - '@github.com/opencharly/layer-supervisord:v2026.235.2056'
         candy:
             - llama-cpp
             - unsloth

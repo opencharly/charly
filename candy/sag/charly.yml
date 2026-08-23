@@ -10,7 +10,7 @@ sag:
             for the cgo audio backend. The install is verifiable by the binary's
             presence and its resolution on PATH.
         require:
-            - golang
+            - '@github.com/opencharly/layer-golang:v2026.235.2057'
         distro:
             fedora:
                 package:

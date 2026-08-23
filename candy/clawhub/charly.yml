@@ -11,7 +11,7 @@ clawhub:
             version offline, so the install + bin wiring is verifiable without
             network access.
         require:
-            - nodejs
+            - '@github.com/opencharly/layer-nodejs:v2026.235.2056'
         plan:
             - check: the clawhub CLI binary is installed on the npm global bin path
               file:

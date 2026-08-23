@@ -76,7 +76,7 @@ filebrowser-layer-skill:
               candy:
                 - agent-forwarding
                 - filebrowser
-                - dbus
+                - '@github.com/opencharly/pod-dbus:v2026.235.2057'
                 - charly
               ports:
                 - "8085:8080"

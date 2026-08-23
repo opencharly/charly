@@ -18,7 +18,7 @@ android-emulator-layer:
         require:
             - android-sdk
             - appium-server
-            - supervisord
+            - '@github.com/opencharly/layer-supervisord:v2026.235.2056'
             # plugin-appium is the OUT-OF-TREE plugin that serves the `appium:` check
             # verb (the heavy github.com/tebeka/selenium dep lives there, not in charly's
             # core). Requiring it puts it in this image's scanned candy set, so

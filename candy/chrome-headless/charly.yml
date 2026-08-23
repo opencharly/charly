@@ -17,10 +17,10 @@ chrome-headless:
             running service, and the HTTP 200 that Chrome's /json/version endpoint
             returns through the proxy. Container-only.
         require:
-            - chrome
-            - supervisord
+            - '@github.com/opencharly/layer-chrome:v2026.235.2057'
+            - '@github.com/opencharly/layer-supervisord:v2026.235.2056'
         candy:
-            - chrome-cdp
+            - '@github.com/opencharly/pod-chrome-cdp:v2026.235.2057'
         service:
             - name: chrome-headless
               exec: "%(ENV_HOME)s/.local/bin/chrome-headless-launch"

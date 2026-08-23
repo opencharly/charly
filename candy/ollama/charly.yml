@@ -28,7 +28,7 @@ ollama:
             # (the `ollama` image lists `cuda` explicitly), NOT a layer dependency.
             # This lets CPU consumers (e.g. `openclaw-desktop` on cachyos) compose the
             # layer without dragging the Fedora/NVIDIA `cuda` layer onto a pac base.
-            - supervisord
+            - '@github.com/opencharly/layer-supervisord:v2026.235.2056'
         var:
             # Upstream Ollama release for the TARBALL path only — the distros that
             # package ollama let their package manager own the version.

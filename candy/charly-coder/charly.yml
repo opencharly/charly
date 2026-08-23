@@ -61,12 +61,12 @@ arch-coder-skill:
                 - charly
                 - charly-mcp
                 - container-nesting
-                - dbus
-                - tmux
+                - '@github.com/opencharly/pod-dbus:v2026.235.2057'
+                - '@github.com/opencharly/layer-tmux:v2026.235.2057'
             
                 # Language runtimes + managers
                 - language-runtimes           # Go + PHP + .NET 9 + python3-devel
-                - golang
+                - '@github.com/opencharly/layer-golang:v2026.235.2057'
                 - nodejs                      # Arch ships a current Node (v26)
                 - rust
                 - pixi
@@ -84,7 +84,7 @@ arch-coder-skill:
                 # AI coding CLIs
                 - claude-code
                 - codex
-                - gemini
+                - '@github.com/opencharly/layer-gemini:v2026.235.2057'
                 - forgecode
                 - oracle
             
@@ -476,12 +476,12 @@ debian-coder-skill:
                 - charly
                 - charly-mcp
                 - container-nesting
-                - dbus
-                - tmux
+                - '@github.com/opencharly/pod-dbus:v2026.235.2057'
+                - '@github.com/opencharly/layer-tmux:v2026.235.2057'
             
                 # Language runtimes
                 - language-runtimes           # Go + PHP + .NET 9 (via Microsoft dotnet-install.sh)
-                - golang
+                - '@github.com/opencharly/layer-golang:v2026.235.2057'
                 - nodejs                      # nodejs — Debian's packaged Node
                 - rust
                 - pixi
@@ -499,7 +499,7 @@ debian-coder-skill:
                 # AI coding CLIs
                 - claude-code
                 - codex
-                - gemini
+                - '@github.com/opencharly/layer-gemini:v2026.235.2057'
                 - forgecode
                 - oracle
             
@@ -683,12 +683,12 @@ fedora-coder-skill:
                 - charly                          # the full toolchain: charly binary + virtualization + gocryptfs + socat
                 - charly-mcp                      # MCP gateway for the entire charly CLI
                 - container-nesting           # rootless nested podman/buildah/skopeo
-                - dbus
-                - tmux
+                - '@github.com/opencharly/pod-dbus:v2026.235.2057'
+                - '@github.com/opencharly/layer-tmux:v2026.235.2057'
             
                 # Language runtimes + managers
                 - language-runtimes           # Go + PHP + .NET 9 + nodejs-devel + python3-devel
-                - golang
+                - '@github.com/opencharly/layer-golang:v2026.235.2057'
                 - nodejs                       # generic nodejs candy (Node 22 on Fedora)
                 - rust
                 - pixi
@@ -706,7 +706,7 @@ fedora-coder-skill:
                 # AI coding CLIs
                 - claude-code
                 - codex
-                - gemini
+                - '@github.com/opencharly/layer-gemini:v2026.235.2057'
                 - forgecode                   # 5th CLI (astral-sh-style)
                 - oracle
             
@@ -1029,11 +1029,11 @@ ubuntu-coder-skill:
                 - charly
                 - charly-mcp
                 - container-nesting
-                - dbus
-                - tmux
+                - '@github.com/opencharly/pod-dbus:v2026.235.2057'
+                - '@github.com/opencharly/layer-tmux:v2026.235.2057'
                 - language-runtimes
-                - golang
-                - nodejs
+                - '@github.com/opencharly/layer-golang:v2026.235.2057'
+                - '@github.com/opencharly/layer-nodejs:v2026.235.2056'
                 - rust
                 - pixi
                 - uv
@@ -1046,7 +1046,7 @@ ubuntu-coder-skill:
                 - asciinema
                 - claude-code
                 - codex
-                - gemini
+                - '@github.com/opencharly/layer-gemini:v2026.235.2057'
                 - forgecode
                 - oracle
                 - devops-tools

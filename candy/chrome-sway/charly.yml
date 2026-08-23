@@ -13,10 +13,10 @@ chrome-sway:
             chrome-wrapper target it references, and the composed Chrome + Sway
             binaries the autostart depends on.
         require:
-            - sway
+            - '@github.com/opencharly/pod-sway:v2026.235.2057'
         candy:
-            - chrome
-            - chrome-cdp
+            - '@github.com/opencharly/layer-chrome:v2026.235.2057'
+            - '@github.com/opencharly/pod-chrome-cdp:v2026.235.2057'
         plan:
             - run: mkdir=${HOME}/.config/sway/config.d
               mkdir: "${HOME}/.config/sway/config.d"

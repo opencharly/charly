@@ -10,7 +10,7 @@ devops-tools:
             version, so the composition is verifiable in a disposable container
             without any cloud account or live cluster.
         require:
-            - nodejs
+            - '@github.com/opencharly/layer-nodejs:v2026.235.2056'
         package:
             - jq
             - rsync

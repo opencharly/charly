@@ -42,10 +42,10 @@ selkies-core:
             # (Same cross-repo reconcile lag as plugin-cdp.)
             - plugin-wl
         candy:
-            - selkies
-            - pipewire
-            - chrome
-            - chrome-cdp
+            - '@github.com/opencharly/pod-selkies:v2026.235.2057'
+            - '@github.com/opencharly/pod-pipewire:v2026.235.2057'
+            - '@github.com/opencharly/layer-chrome:v2026.235.2057'
+            - '@github.com/opencharly/pod-chrome-cdp:v2026.235.2057'
             - desktop-fonts
             - wl-tools
             - wl-screenshot-pixelflux
@@ -53,7 +53,7 @@ selkies-core:
             - wl-record-pixelflux
             - a11y-tools
             - xterm
-            - tmux
+            - '@github.com/opencharly/layer-tmux:v2026.235.2057'
             - asciinema
             - fastfetch
             - sshd

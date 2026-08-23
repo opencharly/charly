@@ -48,9 +48,9 @@ openclaw-desktop-skill:
                 - ollama                   # CPU ollama (GPU-agnostic layer)
                 - charly                       # the full toolchain: charly binary + virtualization + gocryptfs + socat
                 - container-nesting        # nested rootless podman/buildah/skopeo
-                - golang
+                - '@github.com/opencharly/layer-golang:v2026.235.2057'
                 - gh
-                - dbus
+                - '@github.com/opencharly/pod-dbus:v2026.235.2057'
                 - charly
               port:
                 - "3000:3000"              # Selkies web UI (Traefik HTTPS)

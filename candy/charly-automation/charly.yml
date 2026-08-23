@@ -892,7 +892,7 @@ openclaw-deploy-skill:
                   - agent-forwarding
                   - openclaw-full
                   - sway-desktop
-                  - dbus
+                  - '@github.com/opencharly/pod-dbus:v2026.235.2057'
                   - charly
             ```
 

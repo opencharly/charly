@@ -205,7 +205,7 @@ image-skill:
                 produce: [pixi, npm, cargo]  # declares what this builder can build
                 candy:
                   - pixi
-                  - nodejs
+                  - '@github.com/opencharly/layer-nodejs:v2026.235.2056'
                   - build-toolchain
 
             my-app:
@@ -1325,7 +1325,7 @@ layer-skill:
             my-app:
               candy:
                 require:
-                  - python
+                  - '@github.com/opencharly/layer-python:v2026.235.2057'
                   - build-toolchain
             ```
 
@@ -1750,7 +1750,7 @@ layer-skill:
               candy:
                 version: 2026.144.1531
                 require:
-                  - golang
+                  - '@github.com/opencharly/layer-golang:v2026.235.2057'
                 env:
                   GOPATH: "~/go"
                 path_append:

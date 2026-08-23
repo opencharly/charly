@@ -11,7 +11,7 @@ labwc:
             binary and config file is verifiable on the built image, and the
             supervised labwc service must reach a stable RUNNING state at deploy.
         require:
-            - dbus
+            - '@github.com/opencharly/pod-dbus:v2026.235.2057'
         # autostart script has a wait-for-supervisord-socket guard (see autostart)
         env:
             WAYLAND_DISPLAY: "wayland-0"

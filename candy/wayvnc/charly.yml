@@ -10,7 +10,7 @@ wayvnc:
             scope; at deploy scope the wayvnc service runs and the VNC port
             accepts a TCP connection.
         require:
-            - supervisord
+            - '@github.com/opencharly/layer-supervisord:v2026.235.2056'
         port:
             - tcp:5900
         distro:

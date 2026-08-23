@@ -11,7 +11,7 @@ swaync:
             supervisord-managed instance owns the notification bus name (no
             competing daemon spawned via D-Bus activation).
         require:
-            - dbus
+            - '@github.com/opencharly/pod-dbus:v2026.235.2057'
         distro:
             arch:
                 package:

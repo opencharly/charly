@@ -15,11 +15,11 @@ hermes:
             the source tree are real files in the image, and the running service +
             data volume are probed against a live deployment.
         require:
-            - nodejs
-            - supervisord
+            - '@github.com/opencharly/layer-nodejs:v2026.235.2056'
+            - '@github.com/opencharly/layer-supervisord:v2026.235.2056'
             - ripgrep
-            - ffmpeg
-            - pipewire
+            - '@github.com/opencharly/layer-ffmpeg:v2026.235.2057'
+            - '@github.com/opencharly/pod-pipewire:v2026.235.2057'
         env:
             HERMES_HOME: "/opt/data"
             TERMINAL_ENV: "local"
@@ -147,7 +147,7 @@ hermes-skill:
               candy:
                 - agent-forwarding
                 - hermes-full      # hermes + claude-code + codex + gemini + dev-tools + devops-tools + charly + tmux
-                - dbus
+                - '@github.com/opencharly/pod-dbus:v2026.235.2057'
             ```
             
             ## Candy Stack

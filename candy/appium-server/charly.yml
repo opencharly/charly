@@ -13,10 +13,10 @@ appium-server:
             response from the running server, so each step is independently
             verifiable.
         require:
-            - nodejs
+            - '@github.com/opencharly/layer-nodejs:v2026.235.2056'
             - java-openjdk
             - android-sdk
-            - supervisord
+            - '@github.com/opencharly/layer-supervisord:v2026.235.2056'
         var:
             # Tracks the API-36 google_apis_playstore System WebView Chrome version
             # (live-probed 133.0.6943.137). Pinned to the nearest Chrome-for-Testing

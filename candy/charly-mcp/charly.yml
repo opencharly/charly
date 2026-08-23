@@ -32,7 +32,7 @@ charly-mcp:
             - plugin-mcp
         candy:
             - charly
-            - supervisord
+            - '@github.com/opencharly/layer-supervisord:v2026.235.2056'
         port:
             - 18765
         mcp_provide:

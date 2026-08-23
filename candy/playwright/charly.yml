@@ -12,7 +12,7 @@ playwright:
             and `playwright --help` lists the core automation commands (install,
             codegen) that define the CLI surface.
         require:
-            - nodejs
+            - '@github.com/opencharly/layer-nodejs:v2026.235.2056'
         plan:
             - check: the playwright binary is installed into the npm global bin directory
               file:

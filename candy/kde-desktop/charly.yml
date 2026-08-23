@@ -20,8 +20,8 @@ kde-desktop:
             entry is skipped (warn) by design. For the headless streamed KDE pod use
             selkies-kde-desktop, which composes kde-shell directly without SDDM.
         require:
-            - dbus
-            - pipewire
+            - '@github.com/opencharly/pod-dbus:v2026.235.2057'
+            - '@github.com/opencharly/pod-pipewire:v2026.235.2057'
         candy:
             # The SDDM-free Plasma session packages (kwin_wayland + plasmashell + the
             # curated app set) are shared with the headless kde-selkies pod (R3).

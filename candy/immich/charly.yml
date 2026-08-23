@@ -12,11 +12,11 @@ immich:
             installed wrappers, the image-codec toolchain, the seeded init SQL, and a
             live /api/server/ping response.
         require:
-            - supervisord
-            - nodejs
+            - '@github.com/opencharly/layer-supervisord:v2026.235.2056'
+            - '@github.com/opencharly/layer-nodejs:v2026.235.2056'
             - postgresql
             - redis
-            - ffmpeg
+            - '@github.com/opencharly/layer-ffmpeg:v2026.235.2057'
         env:
             IMMICH_VERSION: "v2.7.5"
             IMMICH_HOST: "0.0.0.0"

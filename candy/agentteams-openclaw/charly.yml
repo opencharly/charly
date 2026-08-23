@@ -20,7 +20,7 @@ agentteams-openclaw:
             default (EALLOWGIT), while upstream's NodeSource node 22 (npm 10) has
             no such gate.
         require:
-            - nodejs
+            - '@github.com/opencharly/layer-nodejs:v2026.235.2056'
         distro:
             arch:
                 package:
