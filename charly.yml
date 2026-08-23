@@ -3286,52 +3286,49 @@ check-docs:
               command: cat /srv/docs/dist/index.html
 
 # =============================================================================
-# marketplace-app + check-marketplace — the R10 bed for the plugins->candies harness surface.
+# marketplace-app + check-marketplace — the R10 bed for the published marketplace corpus.
 #
-# The bed builds a minimal box composing the ripgrep candy, which OWNS a skill: entity (the
-# plugins->candies migration relocated it into candy/ripgrep/charly.yml). The load-bearing
-# assertion is R8: the composed image's ai.opencharly.skill OCI label carries the actual skill
-# definition (family/name/description/content) — readable via `charly box labels`, no external
-# fetch. The marketplace generator's fail-closed drift gate + ADE checks are covered by the
-# plugin's Go tests + `task skills:drift` on the host; this bed covers the artifact those produce.
+# The bed builds a minimal box composing the plugin-marketplace candy, whose plan: clones the
+# PUBLISHED opencharly/marketplace repo at the immutable MARKETPLACE_REF and gates its SHAPE:
+# the per-harness catalogs parse and their entries resolve (Claude/Codex/kimi/pi), the
+# per-family manifests carry no version field (commit-SHA versioning) and the marketplace
+# repository URL, the baked skill headers carry the generator marker + the two-key frontmatter,
+# and the setup launcher ships executable — the same gates the marketplace repo's own deploy
+# workflow runs. The generator's fail-closed drift gate + the ADE checks are covered by the
+# plugin's Go tests + `task skills:drift`; this bed covers the published ARTIFACT at the pin.
 # =============================================================================
 marketplace-app:
     candy:
         version: 2026.218.1200
         base: quay.io/fedora/fedora:43
         description: |-
-            The marketplace-surface box: a minimal Fedora base composing the ripgrep candy,
-            whose skill: entity the marketplace generator baked into the ai.opencharly.skill
-            OCI label (R8) — an image is self-describing, no external fetch.
+            The marketplace-corpus box: a minimal Fedora base composing the plugin-marketplace
+            candy, whose plan: clones the published opencharly/marketplace repo at the pinned
+            MARKETPLACE_REF and gates its shape (catalogs, manifests, baked headers, setup).
+            The checks run in BOTH contexts, so `charly check box marketplace-app` proves the
+            published corpus shape without deploying anything, and `charly check live` re-proves
+            it against the running pod.
+        # The distro tag chain is load-bearing (the docs-site-app precedent).
         distro:
             - fedora:43
             - fedora
         candy:
-            - ripgrep
+            - plugin-marketplace
 check-marketplace:
     pod:
         image: marketplace-app
         disposable: true
         lifecycle: dev
         description: >-
-            R10 bed for the plugins->candies harness surface. Building the marketplace-app box
-            proves the composed ripgrep candy's skill: entity renders into the ai.opencharly.skill
-            OCI label (the R8 assertion reads it back host-side); deploying the pod to steady
-            state proves the box builds, starts, and stays up. The generator's fail-closed drift
-            gate + the ADE checks are covered by the plugin's Go tests and `task skills:drift`.
+            R10 bed for the published marketplace corpus. Building the marketplace-app box ran
+            the plugin-marketplace candy's plan: — the clone at the pinned MARKETPLACE_REF plus
+            the shape gates (catalogs, no-version manifests, baked skill headers, executable
+            setup, pinned-commit check); deploying the pod to steady state proves the box
+            builds, starts, and stays up. The generator's fail-closed drift gate + the Go
+            coverage are covered by the plugin's Go tests and `task skills:drift`; this bed
+            covers the published artifact those produce.
         plan:
-            - check: the marketplace-app image carries the composed ripgrep skill in its ai.opencharly.skill label (R8 — skills are readable from the image, no fetch)
-              id: marketplace-skill-label
-              exit_status: 0
-              stdout:
-                - contains: ai.opencharly.skill
-                - contains: ripgrep
-              context:
-                - runtime
-              command:
-                command: ${CHARLY_BIN} box labels marketplace-app
-                in_container: false
-            - check: the marketplace-app pod reached steady state (the skill-owning box runs)
+            - check: the marketplace-app pod reached steady state (the corpus-gating box runs)
               id: marketplace-pod-running
               exit_status: 0
               stdout:
@@ -3342,12 +3339,14 @@ check-marketplace:
               command:
                 command: ${CHARLY_BIN} status --json
                 in_container: false
-            - check: the composed ripgrep binary is present in the running pod
-              id: marketplace-ripgrep-present
+            - check: the published marketplace clone is present in the running pod
+              id: marketplace-clone-present
               exit_status: 0
+              stdout:
+                - contains: charly-plugins
               context:
                 - runtime
-              command: command -v rg
+              command: cat /srv/marketplace/.claude-plugin/marketplace.json
 
 # =============================================================================
 # dsh-app + check-dsh-pod — the R10 bed for the deepseek-harness dsh candy + the

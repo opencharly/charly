@@ -43,7 +43,7 @@ plugin-marketplace:
             # clone layer's cache key moves only when this string moves. It must equal the
             # marketplace repo's current `main` head; `task marketplace:pin` checks that, and the
             # pinned-commit check below asserts it from inside the built image.
-            MARKETPLACE_REF: f4f5980fc9540e6a4cf88b9a0d86de7ba7717b1e
+            MARKETPLACE_REF: e8efdb1562ec227a0d6ed015f0e43c7f191f4ad8
         distro:
             fedora:
                 package:
@@ -76,7 +76,7 @@ plugin-marketplace:
               id: marketplace-pinned-commit
               exit_status: 0
               stdout:
-                - contains: f4f5980fc9540e6a4cf88b9a0d86de7ba7717b1e
+                - contains: e8efdb1562ec227a0d6ed015f0e43c7f191f4ad8
               context:
                 - build
                 - runtime

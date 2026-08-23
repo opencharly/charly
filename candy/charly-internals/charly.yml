@@ -412,7 +412,7 @@ agents-skill:
                   silently loses the superproject's committed permission rules. It does not
                   warn; it just gets denied later, for reasons that read like a policy
                   problem. Drive every submodule action from the superproject with a literal
-                  absolute path: `git -C /abs/path/plugins …` and `gh … --repo <owner>/<repo>`
+                  absolute path: `git -C /abs/path/marketplace …` and `gh … --repo <owner>/<repo>`
                   (the same rule `/charly-internals:git-workflow` B7 states for the commit
                   gate — it is equally load-bearing for permissions). A `pr-validator` rooted
                   in the marketplace corpus once had even its `success` status post denied ("the only
@@ -4419,7 +4419,7 @@ git-workflow-skill:
 
                   - **Spawn the validator with its working directory at the superproject root**, for a PR
                     in any repo (superproject, `sdk`, `plugins`, `docs`, `box/<distro>`).
-                  - **Drive the submodule with a literal absolute path**: `git -C /abs/path/plugins …`,
+                  - **Drive the submodule with a literal absolute path**: `git -C /abs/path/marketplace …`,
                     `gh <cmd> --repo <owner>/<repo>`. Never `cd plugins && …` (B7 states the same rule for
                     the commit gate; it is equally load-bearing for permissions).
                   - Verify after the fact: the agent's transcript must live under
@@ -9905,7 +9905,7 @@ pr-validator-agent:
             USER/MANAGED-level grant covers the action (user settings resolve independently of project
             root — see `/charly-internals:git-workflow` B5's scope-of-validity note; superproject
             rooting stays the rule). Validate a submodule PR from the superproject root using literal
-            absolute paths: `git -C /abs/path/plugins …` and `gh <cmd> --repo <owner>/<repo>`. Verify
+            absolute paths: `git -C /abs/path/marketplace …` and `gh <cmd> --repo <owner>/<repo>`. Verify
             your own transcript is under the SUPERPROJECT project dir, not a `…-<submodule>` sibling.
 
             **W2 — RECORD YOUR VERDICT DURABLY BEFORE ANY GATED ACTION.** A permission denial ENDS your
