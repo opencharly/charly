@@ -28,8 +28,8 @@ type generateCmd struct {
 
 // driftCmd is a fail-closed no-op check: the same pipeline in memory, compared byte-for-byte with
 // the on-disk generated artifacts (the corpus under --out, the harness surface under --root).
-// Exit 0 with a diff summary on any drift. It runs in no CI workflow — it is red only for whoever
-// runs it, via `task skills:drift` or by hand.
+// Any difference is a hard failure (exit 1) with a diff summary. It runs in no CI workflow — it
+// is red only for whoever runs it, via `task skills:drift` or by hand.
 type driftCmd struct {
 	Root string `name:"root" help:"Repo root (default: cwd)"`
 	Out  string `name:"out" required:"" help:"Marketplace corpus root to compare against (the opencharly/marketplace checkout)"`
@@ -78,7 +78,7 @@ func resolveRoot(flag string) (string, error) {
 
 // resolveOut resolves --out. The marketplace corpus is standalone since the de-submodule
 // cutover (the opencharly/marketplace repo), so the corpus destination is always explicit.
-func resolveOut(root, flag string) (string, error) {
+func resolveOut(flag string) (string, error) {
 	out, err := filepath.Abs(flag)
 	if err != nil {
 		return "", fmt.Errorf("resolve --out: %w", err)
@@ -91,7 +91,7 @@ func (c *generateCmd) Run() error {
 	if err != nil {
 		return err
 	}
-	out, err := resolveOut(root, c.Out)
+	out, err := resolveOut(c.Out)
 	if err != nil {
 		return err
 	}
@@ -103,7 +103,7 @@ func (c *driftCmd) Run() error {
 	if err != nil {
 		return err
 	}
-	out, err := resolveOut(root, c.Out)
+	out, err := resolveOut(c.Out)
 	if err != nil {
 		return err
 	}

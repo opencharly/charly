@@ -32,7 +32,8 @@ const corpusPrefix = "plugins/"
 // writeAll writes every emitted artifact, creating parent directories. Corpus artifacts (the
 // plugins/ tree) are written under out (the marketplace corpus root) with the prefix stripped;
 // the harness-surface artifacts (.claude/, CLAUDE.md, AGENTS.md) go under root (the charly
-// checkout). With the default out = <root>/plugins the two coincide exactly with the legacy paths.
+// checkout). The corpus destination is always explicit (--out is required since the
+// de-submodule cutover — the marketplace is a standalone repo).
 func (em emissions) writeAll(root, out string) error {
 	for rel, b := range em {
 		base, target := root, rel
