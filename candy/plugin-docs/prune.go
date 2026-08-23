@@ -18,12 +18,12 @@ import (
 // generator was removed, or which was renamed — stays in the tree forever, and every gate above it
 // reports a pass:
 //
-//   - `task docs:drift` compares the committed tree against a regeneration. A stale page is
-//     identical in both, so it is not drift.
+//   - the docs repo's drift gate compares the committed tree against a regeneration. A stale page
+//     is identical in both, so it is not drift.
 //   - `verifySiteLinks` walks the emitted tree, so links INTO the stale page still resolve.
 //
 // That combination is worse than a missing check, because it reads as proof. It was measured, not
-// theorised: removing the generateGrievances call and re-running `task docs:sync` reported
+// theorised: removing the generateGrievances call and re-running the generator reported
 // "already up to date (regeneration is a no-op)" and exit 0 while the generator no longer produced
 // the page at all.
 //

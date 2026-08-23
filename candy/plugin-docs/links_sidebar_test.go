@@ -59,8 +59,8 @@ func TestVerifySidebarLinksPassesWhenComplete(t *testing.T) {
 
 // TestVerifySidebarLinksCatchesDeadTarget is the regression guard for the measured hole: pointing
 // a sidebar entry at a nonexistent page builds `853 page(s) built`, exit 0 — and then renders that
-// dead link on EVERY page of the site. `task docs:build`, `task docs:drift` and verifySiteLinks
-// each miss it for their own structural reason.
+// dead link on EVERY page of the site. `task docs:build`, the docs repo's drift gate and
+// verifySiteLinks each miss it for their own structural reason.
 func TestVerifySidebarLinksCatchesDeadTarget(t *testing.T) {
 	out := sidebarTree(t, astroConfig(
 		"      { label: 'The Vision', link: '/vision/' },",

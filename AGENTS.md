@@ -87,8 +87,8 @@ match, load ALL their skills before doing anything.
 | `charly box validate` / schema error | `/charly-build:validate` |
 | `charly check *` (ANY check verb, incl. `charly check box`) / `charly check run <bed>` (the disposable-deploy R10 bed) / authoring `disposable: true` check beds / `charly check live` / the probe verbs (cdp/wl/dbus/vnc/mcp/record/spice/libvirt) / `iterate:` AI-agent scoring / `plan:` step authoring / `charlycheck/*` branches | `/charly-check:check` |
 | `charly clean` / build-artifact retention / `keep_images` / `keep_check_runs` / image-tag pruning / `.check` run cleanup | `/charly-core:clean` |
-| `charly docs` / the opencharly.ai site / the `docs/` submodule / `task docs:sync`/`docs:drift` / Starlight/Astro / `candy/plugin-docs` (runtime plugin) or `candy/docs-site` | `/charly-build:docs` |
-| `charly docs` / the opencharly.ai site / the `docs/` submodule / `task docs:sync`/`docs:drift` / Starlight/Astro / `candy/plugin-docs` (runtime plugin) or `candy/docs-site` | `/charly-tools:docs-site` |
+| `charly docs` / the opencharly.ai site / the opencharly/docs repo / Starlight/Astro / `candy/plugin-docs` (runtime plugin) or `candy/docs-site` | `/charly-build:docs` |
+| `charly docs` / the opencharly.ai site / the opencharly/docs repo / `candy/docs-site` / the check-docs bed / Starlight/Astro | `/charly-tools:docs-site` |
 | `charly fleet add/del` / pod or container deploys | `/charly-core:deploy` |
 | `charly migrate` / schema migration / legacy → latest CalVer / CalVer schema version | `/charly-build:migrate` |
 | `charly update` / `charly vm *` / VM entities in `vm.yml` or `vm:` | `/charly-internals:vm-deploy-target` |
@@ -410,8 +410,9 @@ second copy of them.
   ownership.
 - `plugins/README.md`: complete skill index.
 - `README.md` and current subsystem docs: present behavior and user guidance.
-- [opencharly.ai](https://opencharly.ai) (the `docs/` submodule): the public site — a small
+- [opencharly.ai](https://opencharly.ai) (the standalone [opencharly/docs](https://github.com/opencharly/docs) repo): the public site — a small
   hand-authored narrative plus a reference/recipe catalog GENERATED from the sources above by
-  `charly docs generate`. Never hand-edit a generated page; fix the source and run
-  `task docs:sync`.
+  `charly docs generate` at the charly commit the docs repo's `.gitmodules` pins. Never
+  hand-edit a generated page; fix the source — regeneration is a docs repo PR that bumps that
+  pin, enforced by the docs repo's deploy workflow.
 - `CHANGELOG/`: historical events, retired names, and migration narrative.

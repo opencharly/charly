@@ -271,9 +271,9 @@ MinIO, which every flavor exposes identically — the venue is below them.
   (+ its `check-helm-vm-ctx` kubernetes profile), `check-factory-spike-<flavor>`.
 - `plugins/` — the Factory owning skill + a bed-executor agent entry (verbatim-proof
   pattern), `model: inherit` like the rest of the roster.
-- Docs — recipe cards in the candy sources; `charly docs generate` + `task docs:sync`;
-  never hand-edit a generated page; every documented command works with nothing but the
-  `charly` binary installed (R4a).
+- Docs — recipe cards in the candy sources; `charly docs generate` runs in the opencharly/docs
+  repo's deploy workflow against its pinned charly checkout; never hand-edit a generated page;
+  every documented command works with nothing but the `charly` binary installed (R4a).
 
 ## Ordered cutover units
 

@@ -58,20 +58,26 @@ func superprojectRoot(t *testing.T) string {
 	return root
 }
 
-// seedHandAuthoredPages copies the committed site's hand-authored pages into a fresh --out.
+// seedHandAuthoredPages copies the fixture's hand-authored pages into a fresh --out.
 //
-// They are selected by the same rule pruneGeneratedPages uses — a page is generated if and only if
-// it carries the generated header — rather than by a hardcoded list of directories, so a new
+// The fixture lives in testdata/site (a snapshot of the docs repo's start/ concepts/ guides/
+// trees, taken at the docs de-submodule cutover): charly no longer carries the docs submodule,
+// and the whole-site link gates still need the hand-authored pages the generator links to but
+// does not own. The snapshot is versioned with the generator; when the README projection or the
+// gates' expectations change, refresh it from the opencharly/docs repo's src/content/docs.
+//
+// Pages are selected by the same rule pruneGeneratedPages uses — a page is generated if and only
+// if it carries the generated header — rather than by a hardcoded list of directories, so a new
 // hand-authored tree needs no change here and, more importantly, so nothing generated can leak in.
 // That exclusion is what makes the assertions in these tests airtight: a seeded page can never
 // carry the generated header, so a page that carries one was written by the run under test.
 func seedHandAuthoredPages(t *testing.T, root, out string) {
 	t.Helper()
 
-	src := filepath.Join(root, "docs", "src", "content", "docs")
+	src := filepath.Join(root, "candy", "plugin-docs", "testdata", "site")
 	if _, err := os.Stat(src); err != nil {
-		t.Fatalf("no committed content tree at %s — the docs submodule is not checked out "+
-			"(git submodule update --init docs): %v", src, err)
+		t.Fatalf("no hand-authored fixture tree at %s — refresh it from the opencharly/docs "+
+			"repo's src/content/docs (start/ concepts/ guides/): %v", src, err)
 	}
 
 	header := []byte(generatedHeader)

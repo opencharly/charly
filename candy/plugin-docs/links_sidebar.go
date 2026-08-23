@@ -27,7 +27,8 @@ var astroConfigNames = []string{"astro.config.mjs", "astro.config.js", "astro.co
 // structural reason:
 //
 //   - `task docs:build` — Astro does not resolve sidebar link targets.
-//   - `task docs:drift` — compares a regeneration of the CONTENT tree; it never reads the config.
+//   - the docs repo's drift gate — compares a regeneration of the CONTENT tree; it never reads
+//     the config.
 //   - verifySiteLinks — walks `.md`/`.mdx` under the content root, so a file outside that root is
 //     beyond its reach by construction.
 //

@@ -3216,8 +3216,11 @@ check-preflight-local:
 # The bed builds the SITE ITSELF inside a disposable box: `npm ci` against the committed
 # lockfile, then the production Astro build, then a set of checks asserting the built site's
 # SHAPE. It is the acceptance gate for candy/plugin-docs (the runtime `charly docs` plugin) and
-# for the docs/ submodule's committed content together — a generator regression and a site-source
-# regression both surface here, at image build, rather than as a broken deploy on Cloudflare.
+# for the published docs repo's committed content at the pinned DOCS_REF — a generator regression
+# and a site-source regression both surface here, at image build, rather than as a broken deploy
+# on Cloudflare. (The docs repo is standalone since the de-submodule cutover; its own deploy
+# workflow owns generation, the content-drift gate, the Astro build and the publish — this bed
+# proves the recipe still works against the current site.)
 #
 # The load-bearing assertion lives in the docs-site candy: a page for a plugin that is NOT in
 # compiled_plugins (plugin-cdp), rendering both its runtime placement and its CUE parameter
@@ -3259,7 +3262,8 @@ check-docs:
             out-of-process plugin's page with its CUE schema, and the provider cross-index) —
             builds, starts, and stays up. The generator's own cross-reference integrity gate (an
             unresolvable /charly-x:y reference fails generation) is covered by the plugin's Go
-            tests plus `task docs:drift` on the host; this bed covers the artifact those produce.
+            tests; this bed covers the artifact those produce. Content staleness against the
+            pinned charly is gated by the docs repo's own deploy workflow, not here.
         plan:
             - check: the docs-site pod reached steady state (the built site's box runs)
               id: docs-pod-running

@@ -1129,12 +1129,14 @@ docs-skill:
         owner: charly-build
         description: |-
             The `charly docs generate` verb — the generator that renders the reference half of the
-            opencharly.ai documentation site from this repo's canonical sources.
-            MUST be invoked before any work involving the `charly docs` command, the docs/ submodule's
-            generated trees, `task docs:sync` / `task docs:drift`, the candy/plugin-docs runtime plugin,
-            or the cross-reference rewriting that turns `/charly-<plugin>:<skill>` into site links.
+            opencharly.ai documentation site from this repo's canonical sources. The site lives in
+            the standalone opencharly/docs repo: its deploy workflow runs this verb against the
+            charly commit its .gitmodules pins, and regeneration is a docs PR that bumps that pin.
+            MUST be invoked before any work involving the `charly docs` command, the opencharly.ai
+            site's generated trees, the candy/plugin-docs runtime plugin, or the cross-reference
+            rewriting that turns `/charly-<plugin>:<skill>` into site links.
         triggers:
-            - "`charly docs` / the opencharly.ai site / the `docs/` submodule / `task docs:sync`/`docs:drift` / Starlight/Astro / `candy/plugin-docs` (runtime plugin) or `candy/docs-site`"
+            - "`charly docs` / the opencharly.ai site / the opencharly/docs repo / Starlight/Astro / `candy/plugin-docs` (runtime plugin) or `candy/docs-site`"
         content: |
             # docs — generate the opencharly.ai site
 
@@ -1145,8 +1147,9 @@ docs-skill:
             ## Placement: a RUNTIME plugin, deliberately
 
             `plugin-docs` is **not** listed in `charly/charly.yml`'s `compiled_plugins:`. A dev-time
-            documentation generator has no business inside every shipped `charly` binary — it is run on a
-            contributor's machine to regenerate the site and nowhere else.
+            documentation generator has no business inside every shipped `charly` binary — it is run by
+            the opencharly/docs repo's deploy workflow against a pinned charly checkout, and on a
+            contributor's machine for local preview, and nowhere else.
 
             charly prescans the declared `docs` word into the Kong grammar before parse and syscall.Exec's
             the plugin binary in CLI mode on the first actual `charly docs` invocation. Nothing about the
@@ -1154,10 +1157,10 @@ docs-skill:
             what makes the out-of-process placement free here — the same property that lets `charly candy`
             and `charly migrate` run in either placement.
 
-            Because it is not in `compiled_plugins:`, the plugin is **not in `go.work`**. The repository's
-            checked-in automation owns generator synchronization, drift checks, plugin tests, dependency
-            installation, local preview, and production builds; those are maintainer workflows rather than
-            public CLI instructions.
+            Because it is not in `compiled_plugins:`, the plugin is **not in `go.work`**. Its Go tests
+            and the docs-site R10 bed live in charly; generation, the content-drift gate, the Astro
+            build and the publish all live in the opencharly/docs repo's `deploy.yml` workflow, which
+            runs this verb against the charly commit its `.gitmodules` pins.
 
             ## Usage
 
@@ -1215,18 +1218,18 @@ docs-skill:
             Everything in that table is a PROJECTION, and every one of its sources is an ordinary
             file people edit for reasons that have nothing to do with the site — a candy's
             `description:`, a plan step, a skill's prose. Each such edit re-projects its page, and
-            from that moment the committed site no longer matches its sources, so this project's
-            drift gate over the `docs` submodule stays red until the regenerated pages are committed
-            there. **A one-line prose fix is therefore never a one-repo change.** Plan it as a
-            multi-repo landing before starting, not after a gate says so.
+            from that moment the committed site no longer matches its sources, so the docs repo's
+            drift gate (its deploy workflow regenerates and fails on any diff) stays red until a docs
+            PR lands the regenerated pages. **A one-line prose fix is therefore never a one-repo
+            change.** Plan it as a multi-repo landing before starting, not after a gate says so.
 
             Two chains reach the site, and they are not the same length.
 
             **Candy and box prose — ONE hop.** `reference/candy/` and `reference/box/` are read
             straight off disk, walking each repo as its own project root. Editing a
             `candy/<name>/charly.yml` `description:` or `plan:` re-projects
-            `reference/candy/<name>.md` in the same tree, immediately. The `docs` commit belongs to
-            the same cutover as the candy edit.
+            `reference/candy/<name>.md` in the same tree, immediately. The docs PR (regenerating at
+            the pinned charly) belongs to the same cutover as the candy edit.
 
             **Skill prose — TWO hops.** `recipes/` is NOT read from `candy/*/charly.yml`. A skill is
             authored as a `skill:` entity in its owning candy; `charly marketplace generate` projects
@@ -1236,14 +1239,14 @@ docs-skill:
             has run, and on any CLEAN checkout the tree it reads is the pinned gitlink, so the change
             reaches readers only once the `plugins` landing merges and the superproject's `plugins`
             gitlink advances. **Advancing that gitlink without regenerating `docs` in the same change
-            is what leaves the published site stale**, and nothing except this project's drift gate
+            is what leaves the published site stale**, and nothing except the docs repo's drift gate
             will say so — which is precisely how the mirror has fallen behind before.
 
             The ordering this forces — regenerate the projection, land the producer repo, then the
-            consumer and its pin — is `/charly-internals:git-workflow` B6's producer→consumer rule
-            applied to documentation. That skill owns the landing sequence, including the
-            maintenance commands this project runs for it; the mechanism above is what makes the
-            sequence necessary, and is all this page needs to carry.
+            consumer (docs) and its charly pin — is `/charly-internals:git-workflow` B6's
+            producer→consumer rule applied to documentation. That skill owns the landing sequence;
+            the mechanism above is what makes the sequence necessary, and is all this page needs to
+            carry.
 
             ## Defined, not default-active
 
@@ -1328,7 +1331,7 @@ docs-skill:
             ## When to Use This Skill
 
             Invoke before running or modifying `charly docs`, editing `candy/plugin-docs`, touching the
-            `docs/` submodule's generated trees, or changing anything the generator reads (a candy's
+            generated trees in the opencharly/docs repo, or changing anything the generator reads (a candy's
             `description:`, a plugin's `providers:` or CUE schema, a skill's frontmatter or cross-references).
 
 generate-skill:

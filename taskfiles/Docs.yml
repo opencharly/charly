@@ -1,50 +1,42 @@
-# Docs.yml — the opencharly.ai documentation site.
+# Docs.yml — the opencharly.ai documentation site (standalone since the docs de-submodule cutover).
 #
-# The site lives in the `docs/` submodule (opencharly/docs) and is published by Cloudflare Pages
-# on every push to its `main`. Its REFERENCE half is generated from this repo's canonical sources
-# by `charly docs generate`, served by candy/plugin-docs — a RUNTIME plugin, deliberately absent
-# from charly/charly.yml's compiled_plugins, because a dev-time documentation generator has no
-# business inside every shipped charly binary. charly prescans the `docs` word into the CLI
-# grammar and connects the plugin lazily on the first `charly docs` invocation.
+# The site lives in the opencharly/docs repo (a subrepo NO LONGER — charly dropped the docs
+# submodule; the docs repo pins charly in ITS .gitmodules instead). Generation, the
+# content-drift gate, the Astro build and the publish are owned SOLELY by the docs repo's
+# `deploy.yml` workflow, which runs `charly docs generate` against the charly commit its
+# .gitmodules pins; a docs PR bumps that pin and carries the regenerated pages.
+#
+# What remains here is ONE maintenance task: keeping candy/docs-site's DOCS_REF honest. The
+# check-docs R10 bed clones the published docs repo at that immutable commit, so a stale pin
+# silently stops testing new site content. There is no `docs` gitlink to compare against
+# anymore — charly has none since the cutover — so `docs:pin` compares DOCS_REF against the
+# docs repo's LIVE main HEAD (a network fetch) and fails with bump instructions on drift.
 version: '3'
 
-vars:
-  DOCS_DIR: '{{.ROOT_DIR}}/docs'
-  DOCS_CONTENT: '{{.ROOT_DIR}}/docs/src/content/docs'
-
 tasks:
-  sync:
-    desc: Regenerate the docs site's reference + recipe-card pages from this repo's sources
-    cmds:
-      - task: :build:binary
-      - '{{.ROOT_DIR}}/bin/charly docs generate --out {{.DOCS_CONTENT}} --root {{.ROOT_DIR}}'
-      - cmd: |
-          if ! git -C {{.DOCS_DIR}} diff --quiet || [ -n "$(git -C {{.DOCS_DIR}} status --porcelain)" ]; then
-            echo
-            echo "docs: regeneration changed the site — review and commit in the docs submodule:"
-            git -C {{.DOCS_DIR}} status --short | head -20
-          else
-            echo "docs: already up to date (regeneration is a no-op)."
-          fi
-        silent: true
-
   pin:
-    desc: Fail if candy/docs-site's DOCS_REF has drifted from the docs submodule gitlink
+    desc: Fail if candy/docs-site's DOCS_REF has drifted from the docs repo's current main HEAD
     cmds:
       - cmd: |
-          pinned=$(git ls-tree HEAD docs | awk '{print $3}')
-          declared=$(grep -E '^\s+DOCS_REF:' candy/docs-site/charly.yml | awk '{print $2}')
+          file=candy/docs-site/charly.yml
+          declared=$(grep -E '^\s+DOCS_REF:' "$file" | awk '{print $2}')
           # The sha appears TWICE in the candy on purpose: once as DOCS_REF (the clone's cache
           # key) and once as a literal in the pinned-commit check's stdout matcher, because a
           # check step's substitution does not resolve a candy var: and would SKIP the step
-          # instead. Both must track the gitlink, so both are asserted here.
-          occurrences=$(grep -c "$pinned" candy/docs-site/charly.yml || true)
-          if [ "$pinned" != "$declared" ]; then
+          # instead. Both must track the docs main commit, so both are asserted here.
+          occurrences=$(grep -c "$declared" "$file" || true)
+          live=$(git ls-remote https://github.com/opencharly/docs.git refs/heads/main | awk '{print $1}')
+          if [ -z "$live" ]; then
+            echo "docs: could not fetch opencharly/docs main HEAD (network?) — skipping" >&2
+            exit 0
+          fi
+          if [ "$declared" != "$live" ]; then
             echo "docs: DOCS_REF drift" >&2
-            echo "  gitlink:  $pinned" >&2
             echo "  DOCS_REF: $declared" >&2
+            echo "  docs main: $live" >&2
             echo "The check-docs bed would build the WRONG commit — and, because the clone" >&2
             echo "layer's cache key is that string, would keep passing while doing it." >&2
+            echo "Bump both occurrences in candy/docs-site/charly.yml in a charly PR." >&2
             exit 1
           fi
           if [ "$occurrences" -lt 2 ]; then
@@ -53,43 +45,5 @@ tasks:
             echo "A stale literal means the anti-staleness check asserts the WRONG commit." >&2
             exit 1
           fi
-          echo "docs: DOCS_REF and the pinned-commit matcher both match the gitlink ($pinned)."
+          echo "docs: DOCS_REF ($declared) matches the docs repo's current main head; both occurrences present."
         silent: true
-
-  drift:
-    desc: Fail if the generated docs are stale (regeneration on a clean tree must be a no-op)
-    cmds:
-      # `sync` regenerates IN PLACE, so this target mutates docs/ — the stale set is then
-      # read straight off git. It fails on NEW drift only, measured against
-      # scripts/drift-baseline-docs.txt (see scripts/drift-baseline.sh for why, and for why
-      # that file can only shrink). `cut -c4-` strips the fixed 2-char status field plus its
-      # separator, so a path is never split on whitespace.
-      - task: sync
-      - cmd: |
-          git -C {{.DOCS_DIR}} status --porcelain | cut -c4- \
-            | bash {{.ROOT_DIR}}/scripts/drift-baseline.sh {{.ROOT_DIR}}/scripts/drift-baseline-docs.txt docs
-        silent: true
-
-  install:
-    desc: Install the docs site's node dependencies from the committed lockfile
-    dir: docs
-    cmds:
-      - npm ci --no-audit --no-fund
-
-  dev:
-    desc: Serve the docs site locally with hot reload (http://localhost:4321)
-    dir: docs
-    cmds:
-      - npm run dev
-
-  build:
-    desc: Build the production docs site into docs/dist
-    dir: docs
-    cmds:
-      - npm run build
-
-  preview:
-    desc: Serve the production build of the docs site
-    dir: docs
-    cmds:
-      - npm run preview

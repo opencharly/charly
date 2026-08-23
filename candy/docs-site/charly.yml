@@ -12,15 +12,16 @@ docs-site:
             markdown will not parse — fails the IMAGE BUILD, which builds from the same input
             Cloudflare Pages does, so the box catches it before a deploy can.
 
-            WHY IT CLONES rather than copying the docs/ submodule out of the working tree: a
-            candy's copy: source may not traverse above its own directory (`..` is rejected at
-            validate time), and there is no schema field for pointing a candy at a sibling
-            directory. Cloning the published repository is the schema-legal path, and it happens
-            to test the more useful thing — the exact source Cloudflare builds. It fetches an
-            IMMUTABLE COMMIT (`DOCS_REF` below), never a branch: that is what keeps the clone
-            layer's cache key moving with the pin. The consequence is an ordering dependency —
-            docs content must be merged, and `DOCS_REF` re-pinned to that merge, before this box
-            (and the check-docs bed above it) prove the new content.
+            WHY IT CLONES the published repo rather than reading a local checkout: charly no
+            longer carries the docs/ submodule (the docs de-submodule cutover made the docs repo
+            standalone), and even with a checkout a candy's copy: source may not traverse above
+            its own directory (`..` is rejected at validate time) — there is no schema field for
+            pointing a candy at a sibling directory. Cloning the published repository is the
+            schema-legal path, and it happens to test the more useful thing — the exact source
+            Cloudflare builds. It fetches an IMMUTABLE COMMIT (`DOCS_REF` below), never a branch:
+            that is what keeps the clone layer's cache key moving with the pin. The consequence is
+            an ordering dependency — docs content must be merged, and `DOCS_REF` re-pinned to that
+            merge, before this box (and the check-docs bed above it) prove the new content.
 
             The checks below assert the site's SHAPE, not merely its existence: a generated CLI
             page, a candy page carrying its published acceptance plan, a recipe card from the
@@ -39,9 +40,11 @@ docs-site:
             # layer's cache key moves only when this string moves. With `main` here the key was
             # CONSTANT, so once the clone layer was cached the bed kept rebuilding whatever docs
             # `main` pointed at when that layer was first built — and went on reporting PASS while
-            # proving stale content. It must equal the `docs` submodule gitlink; `task docs:pin`
-            # checks that, and the bed asserts it from inside the built image.
-            DOCS_REF: 051ea2c2e0dd6160df9baa7ecf631542b98db9b8
+            # proving stale content. It must equal the docs repo's current `main` head; `task
+            # docs:pin` checks that (charly no longer carries a `docs` gitlink — the docs repo is
+            # standalone since the de-submodule cutover), and the bed asserts it from inside the
+            # built image.
+            DOCS_REF: bec9143cbd20b25be95c19ad25c17cdd82d3882b
         distro:
             fedora:
                 package:
@@ -79,7 +82,7 @@ docs-site:
               id: docs-site-pinned-commit
               exit_status: 0
               stdout:
-                - contains: 051ea2c2e0dd6160df9baa7ecf631542b98db9b8
+                - contains: bec9143cbd20b25be95c19ad25c17cdd82d3882b
               context:
                 - build
                 - runtime
@@ -195,7 +198,7 @@ docs-site-skill:
             Use when working with the docs-site candy, the docs-site-app box, the check-docs bed, or when
             the documentation site fails to build.
         triggers:
-            - "`charly docs` / the opencharly.ai site / the `docs/` submodule / `task docs:sync`/`docs:drift` / Starlight/Astro / `candy/plugin-docs` (runtime plugin) or `candy/docs-site`"
+            - "`charly docs` / the opencharly.ai site / the opencharly/docs repo / `candy/docs-site` / the check-docs bed / Starlight/Astro"
         content: |
             # docs-site — build the opencharly.ai site inside a box
 
@@ -220,10 +223,10 @@ docs-site-skill:
             fails the **image build**, from the same input Cloudflare Pages builds, so the box catches it
             before a deploy can.
             
-            ## Why it clones instead of copying the submodule
+            ## Why it clones the published repo
             
-            The `docs/` submodule sits right beside `candy/docs-site/` in the working tree, and the candy
-            still cannot read it. Both escapes are closed by design:
+            The docs repo is standalone — charly no longer carries it as a submodule — and the candy
+            cannot read another directory even if it did. The escapes are closed by design:
             
             - `copy:` rejects `..` — `copy: "../../docs/x" may not contain .. (no traversal)` at validate.
             - There is **no** field for pointing a candy at another directory. (An older revision of
@@ -236,8 +239,10 @@ docs-site-skill:
             
             **Ordering consequence.** The candy fetches an IMMUTABLE COMMIT, never a branch, so `DOCS_REF`
             must be re-pinned to each new docs merge before this box — and the `check-docs` bed above it —
-            prove the new content. `task docs:pin` fails if it drifts from the `docs` gitlink. That re-pin
-            is a CONFIG edit and changes the landing's gate and attribution tier — see
+            prove the new content. `task docs:pin` fails when `DOCS_REF` is not the docs repo's current
+            `main` head (it fetches `ls-remote` and compares — charly has no `docs` gitlink anymore: the
+            docs repo is standalone, and this candy's pin is the only thing that fixes what the bed tests).
+            That re-pin is a CONFIG edit and changes the landing's gate and attribution tier — see
             `/charly-internals:git-workflow` (B6a step 4, and B2 "the derivation stops at the gitlink" for
             the general rule), which owns landing mechanics.
 
@@ -247,10 +252,10 @@ docs-site-skill:
             substitution does not resolve a candy `var:`, so writing `${DOCS_REF}` in the matcher makes
             charly SKIP the step with "unresolved variables: DOCS_REF" — turning the anti-staleness guard
             into a non-event while the bed still reports PASS, which is the exact failure the guard exists
-            to catch. `task docs:pin` therefore asserts BOTH: it compares `DOCS_REF` against the gitlink
-            AND requires the sha to occur at least twice in the file, so a re-pin that updates only one of
-            them fails the gate instead of leaving the check asserting a commit nobody builds. Re-pinning
-            means editing both.
+            to catch. `task docs:pin` therefore asserts BOTH: it compares `DOCS_REF` against the docs
+            repo's current `main` head AND requires the sha to occur at least twice in the file, so a
+            re-pin that updates only one of them fails the gate instead of leaving the check asserting a
+            commit nobody builds. Re-pinning means editing both.
             
             A branch name here is a correctness bug, not a convenience: `var:` values are emitted as `ENV`
             above the steps, so with `main` the clone layer's cache key never moves and the bed silently
@@ -260,7 +265,7 @@ docs-site-skill:
             | Var | Default |
             |---|---|
             | `DOCS_REPO` | `https://github.com/opencharly/docs.git` |
-            | `DOCS_REF` | the `docs` gitlink sha — an immutable commit, **never a branch** (see above) |
+            | `DOCS_REF` | the docs repo commit this bed tests — an immutable commit, **never a branch** (see above) |
             
             ## Verification
             
@@ -298,19 +303,20 @@ docs-site-skill:
             starts and stays up; the shape assertions already ran at image build.
             
             The generator's own cross-reference integrity gate (an unresolvable
-            `/charly-<plugin>:<skill>` reference fails generation) is covered by the plugin's Go tests plus
-            `task docs:drift` on the host — this bed covers the artifact those produce.
+            `/charly-<plugin>:<skill>` reference fails generation) is covered by the plugin's Go tests —
+            this bed covers the artifact those produce. The committed content's staleness against the
+            pinned charly is gated by the docs repo's own deploy workflow, not here.
             
             ## Troubleshooting
             
             | Symptom | Cause |
             |---|---|
             | `docs-site-pinned-commit` FAILS | the clone layer is stale, or `DOCS_REF` was re-pinned without rebuilding |
-            | `task docs:pin` fails | `DOCS_REF` (or the check's literal sha) drifted from the `docs` gitlink |
+            | `task docs:pin` fails | `DOCS_REF` (or the check's literal sha) is not the docs repo's current `main` head — bump it in a charly PR |
             | fetch fails `upload-pack: not our ref <sha>` | `DOCS_REF` names a commit not reachable from ANY ref in the docs repo — never pushed, or garbage-collected |
             | fetch fails `couldn't find remote ref <x>` | `DOCS_REF` is not a FULL 40-hex sha — either a ref name (which the pinned-commit contract forbids) or an abbreviated sha, which `git fetch` rejects even when the commit exists |
             | `npm ci` fails on a lockfile mismatch | `package.json` and `package-lock.json` disagree — regenerate the lockfile in the docs repo |
-            | a shape check fails but `index.html` exists | the generator emitted a different tree layout; re-run `task docs:sync` and check the diff |
+            | a shape check fails but `index.html` exists | the generator emitted a different tree layout; regenerate in the docs repo (its deploy workflow) and check the diff in a docs PR |
             
             ## Cross-References
             
