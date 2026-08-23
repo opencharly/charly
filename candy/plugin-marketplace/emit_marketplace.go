@@ -40,9 +40,9 @@ type marketplacePluginEntry struct {
 // list with explicit local sources (resolved against the marketplace repo root) and an
 // installation policy.
 type agentsMarketplaceManifest struct {
-	Name      string               `json:"name"`
-	Interface agentsInterface      `json:"interface"`
-	Plugins   []agentsPluginEntry  `json:"plugins"`
+	Name      string              `json:"name"`
+	Interface agentsInterface     `json:"interface"`
+	Plugins   []agentsPluginEntry `json:"plugins"`
 }
 
 type agentsInterface struct {
@@ -84,9 +84,9 @@ func buildAgentsMarketplace(ks *kindSet, families []family) agentsMarketplaceMan
 	m.Interface.DisplayName = "OpenCharly"
 	for _, f := range families {
 		m.Plugins = append(m.Plugins, agentsPluginEntry{
-			Name:   "charly-" + f.Name,
-			Source: agentsSource{Source: "local", Path: "./" + f.Name},
-			Policy: agentsPolicy{Installation: "INSTALLED_BY_DEFAULT", Authentication: "ON_INSTALL"},
+			Name:     "charly-" + f.Name,
+			Source:   agentsSource{Source: "local", Path: "./" + f.Name},
+			Policy:   agentsPolicy{Installation: "INSTALLED_BY_DEFAULT", Authentication: "ON_INSTALL"},
 			Category: firstNonEmpty(f.Meta.Category, "images"),
 		})
 	}
