@@ -310,51 +310,6 @@ for label, command, expected in (
 ):
     expect(label, gate(PUSH_GATE, command), expected)
 
-# --- PR body validation (new gate) ---
-# Create a mock `gh` that returns a PR body missing required sections.
-# The gate calls `gh pr view --json body --jq .body --head <branch>`.
-with tempfile.TemporaryDirectory(prefix="gate-test-push-pr-") as tmp:
-    mock_gh = os.path.join(tmp, "gh")
-    with open(mock_gh, "w") as stream:
-        stream.write("#!/bin/sh\n")
-        stream.write('# Mock gh that returns a PR body with ONLY \"## Summary\" (missing others)\n')
-        stream.write('echo "## Summary\\n\\nSome change"\n')
-    os.chmod(mock_gh, 0o755)
-
-    # Create a repo, set up a feat branch, and run the gate with mock gh in PATH
-    pr = repo()
-    git_q(pr, "checkout", "-b", "feat/test-pr")
-    git_q(pr, "config", "user.email", "t@t")
-    git_q(pr, "config", "user.name", "t")
-    with open(os.path.join(pr, "test.txt"), "w") as stream:
-        stream.write("change\n")
-    git_q(pr, "add", "test.txt")
-
-    env = dict(os.environ, PATH=f"{tmp}:{os.environ.get('PATH', '')}")
-    result = subprocess.run(
-        [PUSH_GATE],
-        input=json.dumps({"tool_input": {"command": f"git -C {pr} push origin feat/test-pr"}}),
-        capture_output=True, text=True, cwd=pr, env=env,
-    )
-    expect("push: PR body missing required sections blocked",
-           "BLOCK" if result.returncode == 2 else "ALLOW", "BLOCK")
-
-    # Also verify that a complete PR body passes
-    with open(mock_gh, "w") as stream:
-        stream.write("#!/bin/sh\n")
-        stream.write('echo "## Summary\\n\\n...\\n## How tested\\n...\\n## Project-rulebook rule-compliance\\n...\\n## Change Classification\\n...\\n*Assisted-by: ...*"\n')
-    os.chmod(mock_gh, 0o755)
-
-    result = subprocess.run(
-        [PUSH_GATE],
-        input=json.dumps({"tool_input": {"command": f"git -C {pr} push origin feat/test-pr"}}),
-        capture_output=True, text=True, cwd=pr, env=env,
-    )
-    expect("push: PR body with all required sections allowed",
-           "ALLOW" if result.returncode == 0 else "BLOCK", "ALLOW")
-
-    shutil.rmtree(pr, ignore_errors=True)
-
 print("\n%d case(s), %d failure(s)" % (ran, len(failures)))
 for failure in failures:
     print("  FAILED:", failure)

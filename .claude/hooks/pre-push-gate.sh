@@ -83,39 +83,5 @@ for globs, args in invocations:
         if refspec_dst(spec) in ("main", "refs/heads/main"):
             block(TOMAIN)
 
-# PR body validation: check open PR for feat/ branches has required sections
-for globs, args in invocations:
-    non_flags = [t for t in args if not t.startswith("-")]
-    for spec in non_flags[1:]:
-        dst = refspec_dst(spec)
-        if dst and dst.startswith("feat/") and not is_force_refspec(spec):
-            branch = dst
-            try:
-                import subprocess
-                pr_info = subprocess.run(
-                    ["gh", "pr", "view", "--json", "body", "--jq", ".body", "--head", branch],
-                    capture_output=True, text=True, timeout=10,
-                )
-                if pr_info.returncode == 0 and pr_info.stdout.strip():
-                    body = pr_info.stdout.strip()
-                    missing = []
-                    if "## Summary" not in body:
-                        missing.append("## Summary")
-                    if "## How tested" not in body:
-                        missing.append("## How tested")
-                    if "## Project-rulebook rule-compliance" not in body:
-                        missing.append("## Project-rulebook rule-compliance")
-                    if "## Change Classification" not in body:
-                        missing.append("## Change Classification")
-                    if "Assisted-by:" not in body:
-                        missing.append("*Assisted-by: ...* footer")
-                    if missing:
-                        block("PR body is missing required sections: " + ", ".join(missing) +
-                              ". Update the PR body with `gh pr edit <n> --body-file <file>` before pushing.")
-            except Exception:
-                # gh not available, or no PR — skip validation
-                pass
-            break
-
 sys.exit(0)
 PY

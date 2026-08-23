@@ -143,8 +143,8 @@ func generate(root, out string) error {
 	// here cover five page families; five further generated pages (reference/providers.md plus
 	// the grievances, landing, liberation and vision pages) are not among them, so cleared always
 	// exceeds the printed sum by five even when nothing is wrong. A generator that stops emitting
-	// something is caught by `task docs:drift` — prune-first means the page simply does not come
-	// back, and git reports it as a deletion.
+	// something is caught by the docs repo's drift gate — prune-first means the page simply does not
+	// come back, and git reports it as a deletion.
 	fmt.Printf("charly docs: %d recipe pages, %d plugin pages (%d provider words), %d cli pages, %d candy pages, %d box pages (%d generated pages cleared before regeneration)\n",
 		skillPages, pluginPages, providerWords, cliPages, candyPages, boxPages, pruned)
 	return nil

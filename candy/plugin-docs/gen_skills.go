@@ -77,8 +77,8 @@ func readMarketplace(root string) (*marketplace, error) {
 // plugins WORKING TREE is checked out at, which is not necessarily the gitlink the superproject
 // pins. On a clean checkout the two agree and the distinction is invisible; in a worktree whose
 // plugins checkout has moved they do not, and regeneration then projects the checkout. Check
-// plugins out at the commit you intend to publish before regenerating, or the drift gate
-// (`task docs:drift`) goes red for a reason that is not obvious from the diff.
+// plugins out at the commit you intend to publish before regenerating, or the docs repo's drift
+// gate goes red for a reason that is not obvious from the diff.
 func collectSkills(root string, m *marketplace) ([]skill, error) {
 	var out []skill
 	for _, p := range m.Plugins {

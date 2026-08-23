@@ -1,16 +1,14 @@
 # shellcheck shell=bash
 # drift-baseline — compare a generator's CURRENT stale set against a checked-in baseline.
 #
-# Single source of truth for baseline comparison, shared (R3) by both drift gates:
-#   - taskfiles/Skills.yml `skills:drift` — `charly marketplace drift`'s artifact list
-#   - taskfiles/Docs.yml   `docs:drift`   — `git -C docs status --porcelain`'s path list
+# drift-baseline — compare a generator's CURRENT stale set against a checked-in baseline.
 #
-# THE TWO GATES ARE IDENTICAL. Same script, same exact-match rule, one baseline file each.
-# Do not build an argument on them differing — two people have now independently asserted a
-# gate asymmetry that does not exist, in opposite directions (one that both fail, one that only
-# skills is baselined), and each was reasoning from ONE arm of a two-sided comparison. If you
-# find yourself about to say "the X gate does A while the Y gate does B", grep BOTH taskfiles
-# first; a zero from one of them means "I found nothing here", never "there is nothing there".
+# Single source of truth for baseline comparison. The skills:drift gate is its only remaining
+# consumer since the docs de-submodule cutover: taskfiles/Docs.yml no longer has a `docs:drift`
+# target (the docs repo's deploy workflow owns the docs content gate now — it regenerates on a
+# fresh checkout at its pinned charly and fails on any diff, so the docs arm moved out of this
+# repo entirely, baseline and all).
+#   - taskfiles/Skills.yml `skills:drift` — `charly marketplace drift`'s artifact list
 #
 # BEFORE TRUSTING ANY CHECK HERE: ASK WHAT ITS OUTPUT SHAPE DISCARDS. Three instruments were
 # each used in this repo to answer a question they cannot answer, and in every case the command
@@ -37,28 +35,19 @@
 # an ancestor" into the same branch and reports a pin as unmerged when it is merged. Run ancestry
 # INSIDE the submodule, and test for rc=0 explicitly rather than relying on if/&&.
 #
-# WHAT A GREEN VERDICT ACTUALLY MEANS — read this before trusting one. `docs:drift` feeds
-# `git -C docs status --porcelain`, and `git status` compares the worktree against the CHECKED-OUT
-# HEAD. On a CI checkout that is the GITLINK. So green means "regeneration reproduces the gitlink"
-# — it never consults the submodule's own `origin/main` and cannot. A submodule main that is
-# AHEAD of the gitlink, or that carries a projection generated from an unlanded source, is
-# invisible here: the gate reports truthfully about a different commit. This is not hypothetical;
-# it is the state docs `main` was in when this paragraph was written (a projection depending on a
-# commit that existed only on an unmerged branch), and both gates read green throughout.
+# WHAT A GREEN VERDICT ACTUALLY MEANS — read this before trusting one. The docs arm that
+# used to feed this script moved with the docs de-submodule cutover: `docs:drift` read
+# `git -C docs status --porcelain`, which compares the worktree against the CHECKED-OUT HEAD
+# (on a CI checkout, the GITLINK) — so green meant "regeneration reproduces the gitlink", never
+# "the site matches docs main". That trap no longer applies to docs: the docs repo's deploy
+# workflow regenerates on a fresh checkout at its pinned charly and fails on any diff, and the
+# pin itself is gated by `task docs:pin` against the live docs main head. The skills arm below
+# still carries the same filesystem-vs-gitlink hazard — the preflight that makes it visible,
+# worth running before acting on green:
 #
-# The two-line preflight that makes it visible, worth running before acting on green:
-#
-#	git -C docs    rev-parse HEAD;  git ls-remote <docs-remote>    refs/heads/main
 #	git -C plugins rev-parse HEAD;  git ls-remote <plugins-remote> refs/heads/main
 #
 # HEAD != that repo's main means the verdict is about HEAD, not about main.
-#
-# Note how this hazard arrived: scripts/drift-baseline-skills.txt already warned about the same
-# filesystem-vs-gitlink confusion — but for the PLUGINS arm, and aimed at the MEASUREMENT
-# procedure ("do NOT re-measure by running the gate in a working tree"). The identical trap
-# pointed at the DOCS arm and aimed at the VERDICT went unwritten for months. A hazard understood
-# for one arm of a two-arm system is not a hazard that has been handled; see the paragraph above
-# about checking both arms before asserting a difference between them.
 #
 # WHERE THE REAL ASYMMETRY LIVES — in the GENERATORS, not here. `charly docs generate` does not
 # read candy sources: collectSkills reads plugins/<plugin>/skills (candy/plugin-docs/gen_skills.go).

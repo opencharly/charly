@@ -26,8 +26,9 @@ var astroConfigNames = []string{"astro.config.mjs", "astro.config.js", "astro.co
 // renders that dead link on every page that has a sidebar. Three gates miss it, each for its own
 // structural reason:
 //
-//   - `task docs:build` — Astro does not resolve sidebar link targets.
-//   - `task docs:drift` — compares a regeneration of the CONTENT tree; it never reads the config.
+//   - the docs repo's Astro build — Astro does not resolve sidebar link targets.
+//   - the docs repo's drift gate — compares a regeneration of the CONTENT tree; it never reads
+//     the config.
 //   - verifySiteLinks — walks `.md`/`.mdx` under the content root, so a file outside that root is
 //     beyond its reach by construction.
 //
