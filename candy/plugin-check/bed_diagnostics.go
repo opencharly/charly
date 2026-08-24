@@ -337,6 +337,30 @@ var diagnosticAllowlist = []diagnosticAllowance{
 			"entry does not claim the line and the step still fails.",
 	},
 	{
+		ID:       "pacman-hook-failed-mkinitcpio-recovered",
+		Severity: severityError,
+		// pacman runs package install hooks (mkinitcpio's install hook regenerates the
+		// initramfs); the hook wraps mkinitcpio which prints the allowlisted autodetect
+		// chroot error, and pacman then reports the hook's nonzero exit as
+		// `error: command failed to execute correctly`. The initramfs IS still created
+		// (mkinitcpio falls back to a full image), so the recovery is the same
+		// `Initcpio image generation successful` line.
+		Match:       regexp.MustCompile(`^error: (command failed to execute correctly)$`),
+		RecoveredBy: `(?m)^==> Initcpio image generation successful$`,
+		Why: "pacman's install hooks (mkinitcpio regenerating the initramfs after a " +
+			"kernel/initramfs package install) wrap the allowlisted chroot autodetect " +
+			"failure: the hook's mkinitcpio invocation exits nonzero (autodetect cannot " +
+			"find a root device inside the pacstrap chroot) and pacman reports the hook " +
+			"failure as 'error: command failed to execute correctly'. The image IS " +
+			"created despite the autodetect fallback (Initcpio image generation " +
+			"successful in the same log) — the same recovery as " +
+			"mkinitcpio-chroot-autodetect-fallback. Observed live in the " +
+			"check-cachyos-vm deploy-add (a guest-side pacman -Syu triggering the kernel " +
+			"hook). Inherent to ANY pacstrap bootstrap VM; CONDITIONAL on the image being " +
+			"created — if mkinitcpio never succeeds, this entry does not claim the line " +
+			"and the step still fails.",
+	},
+	{
 		ID:       "mkinitcpio-chroot-warnings",
 		Severity: severityWarning,
 		// The pacstrap bootstrap VM's mkinitcpio/grub build emits four warning lines that

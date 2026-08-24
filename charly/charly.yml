@@ -482,7 +482,7 @@ arch:
                         install: |
                             {{- range .Keys}}
                             {{- if hasPrefix (printf "%v" .) "http"}}
-                            curl -fsSL {{quote .}} -o /tmp/charly-key.asc && pacman-key --add /tmp/charly-key.asc && pacman-key --lsign-key $(gpg --homedir /etc/pacman.d/gnupg --with-colons /tmp/charly-key.asc | awk -F: '$1=="fpr"{print $10; exit}') && rm -f /tmp/charly-key.asc && \
+                            curl -fsSL {{quote .}} -o /tmp/charly-key.asc && pacman-key --add /tmp/charly-key.asc && pacman-key --lsign-key $(gpg --homedir /etc/pacman.d/gnupg --batch --show-keys --with-colons /tmp/charly-key.asc 2>/dev/null | awk -F: '$1=="fpr"{print $10; exit}') && rm -f /tmp/charly-key.asc && \
                             {{- else}}
                             pacman-key --recv-keys {{.}} && pacman-key --lsign-key {{.}} && \
                             {{- end}}
@@ -491,7 +491,7 @@ arch:
                             printf '[{{.name}}]\nServer = {{.server}}\nSigLevel = {{default .siglevel "Optional TrustAll"}}\n' >> /etc/pacman.conf && \
                             {{- if .key}}
                             {{- if hasPrefix (printf "%v" .key) "http"}}
-                            curl -fsSL {{quote .key}} -o /tmp/{{.name}}.gpg && pacman-key --add /tmp/{{.name}}.gpg && pacman-key --lsign-key $(gpg --homedir /etc/pacman.d/gnupg --with-colons /tmp/{{.name}}.gpg | awk -F: '$1=="fpr"{print $10; exit}') && rm -f /tmp/{{.name}}.gpg && \
+                            curl -fsSL {{quote .key}} -o /tmp/{{.name}}.gpg && pacman-key --add /tmp/{{.name}}.gpg && pacman-key --lsign-key $(gpg --homedir /etc/pacman.d/gnupg --batch --show-keys --with-colons /tmp/{{.name}}.gpg 2>/dev/null | awk -F: '$1=="fpr"{print $10; exit}') && rm -f /tmp/{{.name}}.gpg && \
                             {{- else}}
                             pacman-key --recv-keys {{.key}} && pacman-key --lsign-key {{.key}} && \
                             {{- end}}
