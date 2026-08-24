@@ -39,8 +39,9 @@ Every piece has a page, and you can reach it three ways.
 **Browse it.** The box this site teaches with has a card of its own:
 [`tutorial-shell`](/recipes/distros/tutorial-shell/), alongside its generated
 [box reference](/reference/box/fedora/tutorial-shell/) listing what it composes. Each candy it
-composes has one too — [`ripgrep`](/recipes/tools/ripgrep/), [`sshd`](/recipes/coder/sshd/),
-[`supervisord`](/recipes/infrastructure/supervisord/).
+composes has one too, wherever that candy lives — [`sshd`](/recipes/coder/sshd/) and
+[`supervisord`](/recipes/infrastructure/supervisord/) here, and
+[`ripgrep`](https://github.com/opencharly/layer-ripgrep) in its own repository.
 
 **Look it up by word.** If you meet a reserved word and want to know what implements it, the
 [provider index](/reference/providers/) maps every one to its owning plugin.
