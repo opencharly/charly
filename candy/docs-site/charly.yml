@@ -44,7 +44,7 @@ docs-site:
             # docs:pin` checks that (charly no longer carries a `docs` gitlink — the docs repo is
             # standalone since the de-submodule cutover), and the bed asserts it from inside the
             # built image.
-            DOCS_REF: ae43232f17b464709800ff18e9f7e0916f1a0553
+            DOCS_REF: f1c823b181e8316b20184f4b4d6dd8a495ff1e78
         distro:
             fedora:
                 package:
@@ -82,7 +82,7 @@ docs-site:
               id: docs-site-pinned-commit
               exit_status: 0
               stdout:
-                - contains: ae43232f17b464709800ff18e9f7e0916f1a0553
+                - contains: f1c823b181e8316b20184f4b4d6dd8a495ff1e78
               context:
                 - build
                 - runtime
