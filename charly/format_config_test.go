@@ -311,6 +311,38 @@ func TestFormatForDistroID(t *testing.T) {
 	}
 }
 
+// TestRpmHostCellHandlesRepos proves the rpm phase.install.host cell carries the
+// repo setup the container cell has always had: the .repo file write (with the
+// gpgkey), the key import, and --enable-repo on the install line. Regression for
+// the check-fedora-vm `No match for argument: charly` — the host cell was bare
+// `dnf install -y ...` with no repo handling, so a candy's distro repo was never
+// added on the host/VM venue. (Presence check only — the full render lives in the
+// sdk repo's buildkit/render_test.go with a literal host-cell fixture, because
+// charly/ core must not import sdk.)
+func TestRpmHostCellHandlesRepos(t *testing.T) {
+	dc, _, _, err := LoadBuildConfigForBox(repoRootDir(t))
+	if err != nil {
+		t.Fatalf("LoadBuildConfigForBox: %v", err)
+	}
+	fd := dc.FindFormat("rpm")
+	if fd == nil {
+		t.Fatal("FindFormat(rpm) = nil")
+	}
+	tmpl := spec.FormatPhaseTemplate(fd, spec.PhaseInstall, spec.VenueHostNative)
+	if tmpl == "" {
+		t.Fatal("rpm format has no phase.install.host cell")
+	}
+	for _, want := range []string{
+		"/etc/yum.repos.d/{{.name}}.repo",
+		"rpm --import {{.gpgkey}}",
+		"--enable-repo={{quote .name}}",
+	} {
+		if !strings.Contains(tmpl, want) {
+			t.Errorf("rpm host cell missing %q; got:\n%s", want, tmpl)
+		}
+	}
+}
+
 // TestDistroConfigFindFormat proves FindFormat resolves a format across distros
 // (inherits-aware) and that the real build.yml pac format carries the host cell.
 func TestDistroConfigFindFormat(t *testing.T) {
