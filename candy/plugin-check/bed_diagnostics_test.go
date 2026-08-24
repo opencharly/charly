@@ -296,6 +296,31 @@ func TestPacmanNeededAllowanceIsScoped(t *testing.T) {
 	}
 }
 
+// TestPacmanHookFailedMkinitcpioIsConditional proves the pacman hook-wrapper
+// error (`error: command failed to execute correctly`) is exempted ONLY when the
+// initramfs image is actually created — the same recovery as the mkinitcpio
+// autodetect allowance.
+func TestPacmanHookFailedMkinitcpioIsConditional(t *testing.T) {
+	const errLine = "error: command failed to execute correctly\n"
+	const step = "STEP 1/1: RUN pacman -Syu --needed linux\n"
+
+	t.Run("recovered by Initcpio image generation successful", func(t *testing.T) {
+		d := scanStepDiagnostics(step + errLine +
+			"==> Creating zstd-compressed initcpio image: '/boot/initramfs-linux.img'\n" +
+			"==> Initcpio image generation successful\n")
+		if d.Errors != 0 || d.Allowlisted != 1 || d.fails(defaultDiagnosticPolicy()) {
+			t.Errorf("a completed hook must exempt the wrapper error; got %+v", d)
+		}
+	})
+
+	t.Run("no recovery is fatal", func(t *testing.T) {
+		d := scanStepDiagnostics(step + errLine)
+		if d.Errors != 1 || d.Allowlisted != 0 || !d.fails(defaultDiagnosticPolicy()) {
+			t.Errorf("a hook that never creates the image must still fail; got %+v", d)
+		}
+	})
+}
+
 // TestSystemdUnitFileDaemonReloadAllowanceIsScoped proves the systemd 'unit file
 // changed on disk' notice (printed by RPM scriptlets when a package ships/modifies
 // a unit — nfs-utils/gssproxy etc.) is allowlisted, while a REAL unit-file error

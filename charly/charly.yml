@@ -469,48 +469,42 @@ arch:
                         # pacman.conf that has no repo, so pacman reports
                         # `target not found: <pkg>` (observed live in check-cachyos-vm
                         # deploy-add).
-                        host: |
+                        # R3: ONE venue-agnostic install body (repo setup + key import
+                        # + package install), written with `&& \` continuations valid in
+                        # both plain shell and a Dockerfile RUN. The venue wrapper
+                        # (RUN {{cacheMounts}} for the container venue) is applied by
+                        # spec.FormatPhaseTemplate — never two hand-maintained copies
+                        # (the rpm/pac host cells had drifted bare, the #396/#401 bugs).
+                        # A repo `key:` that is an http(s) URL is a published key FILE
+                        # (charly.gpg etc.): fetched via curl + pacman-key --add, the
+                        # deterministic keyserver-free mechanism every other format uses.
+                        # A bare fingerprint (hex) falls back to pacman-key --recv-keys.
+                        install: |
                             {{- range .Keys}}
+                            {{- if hasPrefix (printf "%v" .) "http"}}
+                            curl -fsSL {{quote .}} -o /tmp/charly-key.asc && pacman-key --add /tmp/charly-key.asc && pacman-key --lsign-key $(gpg --homedir /etc/pacman.d/gnupg --batch --show-keys --with-colons /tmp/charly-key.asc 2>/dev/null | awk -F: '$1=="fpr"{print $10; exit}') && rm -f /tmp/charly-key.asc && \
+                            {{- else}}
                             pacman-key --recv-keys {{.}} && pacman-key --lsign-key {{.}} && \
+                            {{- end}}
                             {{- end}}
                             {{- range .Repos}}
                             printf '[{{.name}}]\nServer = {{.server}}\nSigLevel = {{default .siglevel "Optional TrustAll"}}\n' >> /etc/pacman.conf && \
                             {{- if .key}}
+                            {{- if hasPrefix (printf "%v" .key) "http"}}
+                            curl -fsSL {{quote .key}} -o /tmp/{{.name}}.gpg && pacman-key --add /tmp/{{.name}}.gpg && pacman-key --lsign-key $(gpg --homedir /etc/pacman.d/gnupg --batch --show-keys --with-colons /tmp/{{.name}}.gpg 2>/dev/null | awk -F: '$1=="fpr"{print $10; exit}') && rm -f /tmp/{{.name}}.gpg && \
+                            {{- else}}
                             pacman-key --recv-keys {{.key}} && pacman-key --lsign-key {{.key}} && \
                             {{- end}}
                             {{- end}}
+                            {{- end}}
+                            # Reseed pacman keyring from the locally-installed
+                            # keyring packages (cachyos-keyring, archlinux-keyring).
+                            # `--populate` is local-only and FAST (sub-second per
+                            # repo); does NOT do keyserver roundtrips. Non-fatal
+                            # (`|| true`) so air-gapped / restricted-network builds
+                            # succeed when the keyring was already current.
+                            (pacman-key --populate 2>/dev/null || true) && \
                             pacman -Syu --noconfirm --needed{{range .Options}} {{.}}{{end}}{{range .Packages}} {{.}}{{end}}
-                        container: |
-                            RUN {{cacheMounts .CacheMounts}} \
-                            {{- range .Keys}}
-                                pacman-key --recv-keys {{.}} && pacman-key --lsign-key {{.}} && \
-                            {{- end}}
-                            {{- range .Repos}}
-                                printf '[{{.name}}]\nServer = {{.server}}\nSigLevel = {{default .siglevel "Optional TrustAll"}}\n' >> /etc/pacman.conf && \
-                            {{- if .key}}
-                                pacman-key --recv-keys {{.key}} && pacman-key --lsign-key {{.key}} && \
-                            {{- end}}
-                            {{- end}}
-                                # Reseed pacman keyring from the locally-installed
-                                # keyring packages (cachyos-keyring, archlinux-keyring).
-                                # Surfaced 2026-05 when a freshly-published cachyos-
-                                # extra-v3 package metadata signature failed to verify
-                                # against a stale keyring inside the pinned cachyos-v3
-                                # base image. `--populate` is local-only and
-                                # FAST (sub-second per repo); does NOT do keyserver
-                                # roundtrips. Made non-fatal with `|| true` so
-                                # air-gapped / restricted-network builds still succeed
-                                # when the keyring was already current. If `--populate`
-                                # alone isn't enough (i.e. cachyos rotates its master
-                                # signing key without updating the bundled keyring
-                                # package), the fix is to repin the cachyos base to a
-                                # newer cachyos-v3 digest in box/cachyos/charly.yml —
-                                # the upstream rebuild carries the updated keyring package.
-                                (pacman-key --populate 2>/dev/null || true) && \
-                                pacman -Syu --noconfirm --needed
-                            {{- range .Options}} {{.}}{{end}}
-                            {{- range .Packages}} \
-                                  {{.}}{{end}}
                 uninstall_template: |
                     pacman -Rs --noconfirm{{range .Packages}} {{.}}{{end}}
                 local_pkg:

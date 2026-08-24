@@ -104,6 +104,12 @@ type DsPhaseSet struct {
 }
 
 type DsPhaseTemplates struct {
+	// install is the ONE venue-agnostic install body (spec#50 — R3: never two
+	// hand-maintained host/container copies). The venue wrapper (RUN {{cacheMounts}}
+	// for container, plain shell for host) is applied by spec.FormatPhaseTemplate.
+	// host/container remain as venue-specific OVERRIDES.
+	Install string `yaml:"install,omitempty" json:"install,omitempty"`
+
 	Container string `yaml:"container,omitempty" json:"container,omitempty"`
 
 	Host string `yaml:"host,omitempty" json:"host,omitempty"`

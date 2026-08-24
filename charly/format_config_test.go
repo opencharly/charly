@@ -343,12 +343,16 @@ func TestRpmHostCellHandlesRepos(t *testing.T) {
 	}
 }
 
-// TestPacHostCellHandlesRepos proves the pac phase.install.host cell carries the
-// Keys/Repos setup the container cell has always had — the repo appended to
-// /etc/pacman.conf + key import — so a candy's distro repo resolves on the
-// host/VM venue. Regression for the check-cachyos-vm `target not found: charly`
-// (the host cell was bare `pacman -Syu ...` with no repo handling). Presence
-// check only — the full render lives in the sdk repo's buildkit/render_test.go
+// TestPacHostCellHandlesRepos proves the pac phase.install cell carries the
+// Keys/Repos setup — the repo appended to /etc/pacman.conf + key import — so a
+// candy's distro repo resolves on BOTH venues. Regression for the
+// check-cachyos-vm `target not found: charly` (the old host cell was bare
+// `pacman -Syu ...` with no repo handling). The R3 shape: ONE venue-agnostic
+// install body; the container venue gets the RUN {{cacheMounts}} wrapper from
+// FormatPhaseTemplate, the host venue runs it verbatim. The body supports a
+// repo `key:` that is either a published key FILE URL (curl + pacman-key --add,
+// deterministic and keyserver-free) or a keyserver fingerprint. Presence check
+// only — the full render lives in the sdk repo's buildkit/render_test.go
 // (charly/ core must not import sdk).
 func TestPacHostCellHandlesRepos(t *testing.T) {
 	dc, _, _, err := LoadBuildConfigForBox(repoRootDir(t))
@@ -361,16 +365,23 @@ func TestPacHostCellHandlesRepos(t *testing.T) {
 	}
 	tmpl := spec.FormatPhaseTemplate(fd, spec.PhaseInstall, spec.VenueHostNative)
 	if tmpl == "" {
-		t.Fatal("pac format has no phase.install.host cell")
+		t.Fatal("pac format has no phase.install cell")
 	}
 	for _, want := range []string{
 		"/etc/pacman.conf",
 		"pacman-key --recv-keys {{.key}}",
+		"curl -fsSL {{quote .key}} -o /tmp/{{.name}}.gpg && pacman-key --add",
 		"Server = {{.server}}",
 	} {
 		if !strings.Contains(tmpl, want) {
-			t.Errorf("pac host cell missing %q; got:\n%s", want, tmpl)
+			t.Errorf("pac install body missing %q; got:\n%s", want, tmpl)
 		}
+	}
+	// The container venue must wrap the SAME body with the cacheMounts RUN prefix
+	// (R3 — never a second copy).
+	containerTmpl := spec.FormatPhaseTemplate(fd, spec.PhaseInstall, spec.VenueContainerBuilder)
+	if !strings.Contains(containerTmpl, "RUN {{cacheMounts .CacheMounts}} \\\n") {
+		t.Errorf("pac container venue missing the RUN cacheMounts wrapper; got:\n%s", containerTmpl)
 	}
 }
 
