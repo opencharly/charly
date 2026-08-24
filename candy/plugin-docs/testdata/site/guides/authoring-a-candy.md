@@ -56,8 +56,8 @@ non-empty `description:`, and a `plan:` carrying at least one deterministic `che
 not ceremony — it is what makes the [catalog](/recipes/) and
 [the spec is the test](/concepts/06-the-spec-is-the-test/) true rather than aspirational.
 
-A complete, real one — this is [`ripgrep`](/reference/candy/ripgrep/), quoted from
-`candy/ripgrep/charly.yml`:
+A complete, real one — this is [`ripgrep`](/recipes/tools/ripgrep/), quoted from
+its `charly.yml` in [opencharly/layer-ripgrep](https://github.com/opencharly/layer-ripgrep):
 
 ```yaml
 ripgrep:

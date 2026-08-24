@@ -42,7 +42,7 @@ deployment and judges. That half stays opt-in; the deterministic half never is.
 
 ## In practice
 
-Here is a real plan, quoted from `candy/ripgrep/charly.yml`. Note that it does not merely assert
+Here is a real plan, quoted from the ripgrep candy's `charly.yml` ([opencharly/layer-ripgrep](https://github.com/opencharly/layer-ripgrep)). Note that it does not merely assert
 the binary exists — it asserts the tool *behaves*, including the negative case:
 
 ```yaml
