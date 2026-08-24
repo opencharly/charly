@@ -87,7 +87,7 @@ charly:
         # generate-packages plugin (sdk/packagekit) builds from this section.
         packaging:
             name: charly
-            description: The OpenCharly CLI — the fully equipped factory floor for you and your agents.
+            description: The OpenCharly CLI — the open infrastructure compiler for you and your agents.
             maintainer: Andreas Trawoeger <atrawog@opencharly.ai>
             homepage: https://github.com/opencharly/charly
             license: MIT

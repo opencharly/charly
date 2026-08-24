@@ -27,8 +27,8 @@ func generateRecipesIndex(outRoot string, skills []skill, m *marketplace) error 
 	}
 
 	var b strings.Builder
-	b.WriteString("Every candy, box, verb and subsystem in OpenCharly ships a **recipe card**: what a " +
-		"factory floor runs on, and what an agent loads as a skill. Each card is a dedicated page " +
+	b.WriteString("Every candy, box, verb and subsystem in OpenCharly ships a **recipe card**: the " +
+		"vocabulary the compiler runs on, and what an agent loads as a skill. Each card is a dedicated page " +
 		"describing what the thing does, how it is made, and how it should behave — the same cards an " +
 		"agent loads while working on the project, published here unchanged.\n\n")
 	fmt.Fprintf(&b, "%d cards across %d plugins, in four groups.\n", len(skills), len(m.Plugins))
