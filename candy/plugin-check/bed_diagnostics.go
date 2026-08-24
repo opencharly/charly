@@ -307,6 +307,34 @@ var diagnosticAllowlist = []diagnosticAllowance{
 			"so the allowance matches the stable prefix. There is no pin or candy that removes " +
 			"the notice, and silencing it would mean suppressing systemd's own reload hint.",
 	},
+	{
+		ID:       "mkinitcpio-chroot-autodetect-fallback",
+		Severity: severityError,
+		// mkinitcpio's autodetect hook reads the kernel command line / fstab to learn the
+		// guest's root device. Inside the pacstrap chroot (arch-chroot during the bootstrap
+		// VM's base-image build) there is no booted kernel and no root device, so the hook
+		// prints this error and falls back to a full-featured (non-autodetect) initramfs —
+		// which is exactly what a bootstrapped VM needs (the real root device is supplied at
+		// boot by the kernel command line). The capture group is the mkinitcpio hook name;
+		// the recovery is mkinitcpio's own success line for the SAME image.
+		Match: regexp.MustCompile(`^==> ERROR: (failed to detect root filesystem)$`),
+		// The recovery is mkinitcpio's success line: the initramfs image was created despite
+		// the autodetect fallback. No %s placeholder — the error names no package/device to
+		// tie to, so the pattern is used as-is (see allowanceRecovered). The step log is one
+		// mkinitcpio invocation, so the step boundary is the tie.
+		RecoveredBy: `(?m)^==> Initcpio image generation successful$`,
+		Why: "mkinitcpio's autodetect hook cannot find a root filesystem inside the " +
+			"pacstrap chroot (no booted kernel, no /proc/cmdline root device) and falls back " +
+			"to a full initramfs — the standard chroot behavior, and the correct initramfs " +
+			"for a booting VM whose real root device is supplied by the kernel cmdline at " +
+			"boot. Observed live in the check-cachyos-vm base-image build: the ERROR is " +
+			"immediately followed by '==> Creating zstd-compressed initcpio image' and " +
+			"'==> Initcpio image generation successful' in the same log. Inherent to ANY " +
+			"pacstrap bootstrap VM build; suppressing it would mean faking a root device in " +
+			"the chroot, which autodetect would then bake into every boot. CONDITIONAL on " +
+			"mkinitcpio proving the image was created — if the initramfs never builds, this " +
+			"entry does not claim the line and the step still fails.",
+	},
 }
 
 // allowanceRecovered reports whether a claimed line really is exempt. An unconditional entry
