@@ -65,7 +65,8 @@ charly:
                 repo:
                     - name: charly
                       server: "https://opencharly.github.io/charly-arch/amd64/"
-                      siglevel: Optional TrustAll
+                      key: 978DFF11A951A830F7ADA2D4062B073E9D1BAE2E
+                      siglevel: Required DatabaseOptional
             alpine:
                 package:
                     - charly

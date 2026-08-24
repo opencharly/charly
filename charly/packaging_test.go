@@ -12,6 +12,7 @@ package main
 import (
 	"os"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -147,4 +148,45 @@ func readWeldedPlugins(t *testing.T) map[string]bool {
 		out[line] = true
 	}
 	return out
+}
+
+// TestDistroRepoInstallDeclared — the charly candy's `distro:` section must
+// declare the charly package + a signed repo entry for every distro the
+// release workflow publishes (debian, ubuntu, fedora, arch, alpine). The
+// distro repo install is the canonical binary source for box compositions
+// (the baked `copy: bin/charly` step was removed with the repo-install
+// cutover); a box composing the candy without these entries would have no
+// charly binary. Fails without the distro-repo change.
+func TestDistroRepoInstallDeclared(t *testing.T) {
+	data, err := os.ReadFile(candyCharlyYML)
+	if err != nil {
+		t.Fatalf("read %s: %v", candyCharlyYML, err)
+	}
+	var doc struct {
+		Charly struct {
+			Candy struct {
+				Distro map[string]struct {
+					Package []string `yaml:"package"`
+					Repo    []map[string]any `yaml:"repo"`
+				} `yaml:"distro"`
+			} `yaml:"candy"`
+		} `yaml:"charly"`
+	}
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("parse %s: %v", candyCharlyYML, err)
+	}
+	distros := doc.Charly.Candy.Distro
+	for _, d := range []string{"debian", "ubuntu", "fedora", "arch", "alpine"} {
+		cfg, ok := distros[d]
+		if !ok {
+			t.Errorf("distro %q: no distro: section entry", d)
+			continue
+		}
+		if !slices.Contains(cfg.Package, "charly") {
+			t.Errorf("distro %q: package: list %v does not include %q", d, cfg.Package, "charly")
+		}
+		if len(cfg.Repo) == 0 {
+			t.Errorf("distro %q: no repo: entry (the charly binary has no install source)", d)
+		}
+	}
 }
