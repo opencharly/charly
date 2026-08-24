@@ -63,7 +63,7 @@ hermes-full-layer-skill:
                 candy:
                   - agent-forwarding
                   - hermes-full
-                  - '@github.com/opencharly/pod-dbus:v2026.235.2057'
+                  - '@github.com/opencharly/pod-dbus:v2026.235.2115'
             ```
             
             ## Related Candies
@@ -246,7 +246,7 @@ hermes-layer-skill:
               candy:
                 - agent-forwarding
                 - hermes-full
-                - '@github.com/opencharly/pod-dbus:v2026.235.2057'
+                - '@github.com/opencharly/pod-dbus:v2026.235.2115'
             ```
             
             ## Related Candies
@@ -349,7 +349,7 @@ hermes-playwright-layer-skill:
                 - agent-forwarding
                 - hermes
                 - hermes-playwright
-                - '@github.com/opencharly/pod-dbus:v2026.235.2057'
+                - '@github.com/opencharly/pod-dbus:v2026.235.2115'
                 - charly
             ```
             

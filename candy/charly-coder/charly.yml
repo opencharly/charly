@@ -61,7 +61,7 @@ arch-coder-skill:
                 - charly
                 - charly-mcp
                 - container-nesting
-                - '@github.com/opencharly/pod-dbus:v2026.235.2057'
+                - '@github.com/opencharly/pod-dbus:v2026.235.2115'
                 - '@github.com/opencharly/layer-tmux:v2026.235.2057'
             
                 # Language runtimes + managers
@@ -476,7 +476,7 @@ debian-coder-skill:
                 - charly
                 - charly-mcp
                 - container-nesting
-                - '@github.com/opencharly/pod-dbus:v2026.235.2057'
+                - '@github.com/opencharly/pod-dbus:v2026.235.2115'
                 - '@github.com/opencharly/layer-tmux:v2026.235.2057'
             
                 # Language runtimes
@@ -683,7 +683,7 @@ fedora-coder-skill:
                 - charly                          # the full toolchain: charly binary + virtualization + gocryptfs + socat
                 - charly-mcp                      # MCP gateway for the entire charly CLI
                 - container-nesting           # rootless nested podman/buildah/skopeo
-                - '@github.com/opencharly/pod-dbus:v2026.235.2057'
+                - '@github.com/opencharly/pod-dbus:v2026.235.2115'
                 - '@github.com/opencharly/layer-tmux:v2026.235.2057'
             
                 # Language runtimes + managers
@@ -1029,7 +1029,7 @@ ubuntu-coder-skill:
                 - charly
                 - charly-mcp
                 - container-nesting
-                - '@github.com/opencharly/pod-dbus:v2026.235.2057'
+                - '@github.com/opencharly/pod-dbus:v2026.235.2115'
                 - '@github.com/opencharly/layer-tmux:v2026.235.2057'
                 - language-runtimes
                 - '@github.com/opencharly/layer-golang:v2026.235.2057'

@@ -147,7 +147,7 @@ hermes-skill:
               candy:
                 - agent-forwarding
                 - hermes-full      # hermes + claude-code + codex + gemini + dev-tools + devops-tools + charly + tmux
-                - '@github.com/opencharly/pod-dbus:v2026.235.2057'
+                - '@github.com/opencharly/pod-dbus:v2026.235.2115'
             ```
             
             ## Candy Stack

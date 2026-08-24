@@ -9,7 +9,7 @@ whisper:
             runs `--help`, and ffmpeg is available for decoding.
         require:
             - '@github.com/opencharly/layer-python:v2026.235.2057'
-            - '@github.com/opencharly/layer-cuda:v2026.235.2110'
+            - '@github.com/opencharly/layer-cuda:v2026.235.2121'
             - '@github.com/opencharly/layer-ffmpeg:v2026.235.2057'
         plan:
             - check: the whisper CLI is installed in the pixi default env

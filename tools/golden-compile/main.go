@@ -28,7 +28,7 @@
 //
 // REGENERATE with: go run ./tools/golden-compile   (run from the repo root, or pass -repo)
 // whenever the compiler (sdk/deploykit's BuildDeployPlan or its sub-compilers) or one of the three
-// fixture candies (candy/tmux, candy/dev-tools, candy/pre-commit) changes in a way that alters
+// fixture candies (candy/debootstrap-builder, candy/dev-tools, candy/pre-commit) changes in a way that alters
 // its compiled InstallPlan.
 package main
 
@@ -56,9 +56,9 @@ import (
 const goldenOutputRelPath = "charly/testdata/fleet_compile_parity_golden.json"
 
 // fixtureCandidates mirrors the parity test's own candidate list (K4B RDD spike): a pure-package
-// candy (tmux), a package+task candy (dev-tools), and a pixi-builder candy (pre-commit) — the
+// candy (debootstrap-builder), a package+task candy (dev-tools), and a pixi-builder candy (pre-commit) — the
 // same ≥3-candies/≥2-step-classes non-vacuity requirement the test itself enforces.
-var fixtureCandidates = []string{"tmux", "dev-tools", "pre-commit"}
+var fixtureCandidates = []string{"debootstrap-builder", "dev-tools", "pre-commit"}
 
 func main() {
 	repoFlag := flag.String("repo", "", "path to the opencharly repo root (default: two directories up from this tool)")

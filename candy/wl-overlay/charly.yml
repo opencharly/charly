@@ -8,7 +8,7 @@ wl-overlay:
             windows (e.g. recording indicators). Verifiable: the helper script is
             installed and executable and the gtk4-layer-shell package is present.
         require:
-            - '@github.com/opencharly/pod-dbus:v2026.235.2057'
+            - '@github.com/opencharly/pod-dbus:v2026.235.2115'
         distro:
             arch:
                 package:

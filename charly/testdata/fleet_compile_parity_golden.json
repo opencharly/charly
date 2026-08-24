@@ -1,4 +1,88 @@
 {
+  "debootstrap-builder": {
+    "box": "k4b-parity",
+    "version": "2026.195.0600",
+    "distro": "fedora:43",
+    "candy": "debootstrap-builder",
+    "candies_included": [
+      "debootstrap-builder"
+    ],
+    "steps": [
+      {
+        "kind": "SystemPackages",
+        "reverse_ops": [
+          {
+            "kind": "package-remove",
+            "format": "rpm",
+            "targets": [
+              "debootstrap",
+              "debian-archive-keyring",
+              "ubuntu-keyring",
+              "qemu-utils",
+              "dosfstools",
+              "e2fsprogs",
+              "xfsprogs",
+              "btrfs-progs",
+              "parted",
+              "util-linux",
+              "grub-efi-amd64-bin",
+              "grub-common",
+              "grub2-common",
+              "efibootmgr",
+              "mount",
+              "ca-certificates"
+            ]
+          }
+        ],
+        "format": "rpm",
+        "phase": 1,
+        "packages": [
+          "debootstrap",
+          "debian-archive-keyring",
+          "ubuntu-keyring",
+          "qemu-utils",
+          "dosfstools",
+          "e2fsprogs",
+          "xfsprogs",
+          "btrfs-progs",
+          "parted",
+          "util-linux",
+          "grub-efi-amd64-bin",
+          "grub-common",
+          "grub2-common",
+          "efibootmgr",
+          "mount",
+          "ca-certificates"
+        ],
+        "cache_mount": [
+          {
+            "dst": "/var/cache/libdnf5",
+            "sharing": "locked"
+          }
+        ],
+        "raw_install_context": {
+          "package": [
+            "debootstrap",
+            "debian-archive-keyring",
+            "ubuntu-keyring",
+            "qemu-utils",
+            "dosfstools",
+            "e2fsprogs",
+            "xfsprogs",
+            "btrfs-progs",
+            "parted",
+            "util-linux",
+            "grub-efi-amd64-bin",
+            "grub-common",
+            "grub2-common",
+            "efibootmgr",
+            "mount",
+            "ca-certificates"
+          ]
+        }
+      }
+    ]
+  },
   "dev-tools": {
     "box": "k4b-parity",
     "version": "2026.165.0843",
@@ -336,45 +420,6 @@
         },
         "ctx_path": "${REPO_ROOT}/candy/pre-commit",
         "resolved_user": "1000"
-      }
-    ]
-  },
-  "tmux": {
-    "box": "k4b-parity",
-    "version": "2026.144.1443",
-    "distro": "fedora:43",
-    "candy": "tmux",
-    "candies_included": [
-      "tmux"
-    ],
-    "steps": [
-      {
-        "kind": "SystemPackages",
-        "reverse_ops": [
-          {
-            "kind": "package-remove",
-            "format": "rpm",
-            "targets": [
-              "tmux"
-            ]
-          }
-        ],
-        "format": "rpm",
-        "phase": 1,
-        "packages": [
-          "tmux"
-        ],
-        "cache_mount": [
-          {
-            "dst": "/var/cache/libdnf5",
-            "sharing": "locked"
-          }
-        ],
-        "raw_install_context": {
-          "package": [
-            "tmux"
-          ]
-        }
       }
     ]
   }

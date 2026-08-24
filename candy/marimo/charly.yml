@@ -16,7 +16,7 @@ marimo:
             directory, the config line, and — at deploy scope — the live notebook
             UI plus the MCP endpoint on /mcp/server.
         require:
-            - '@github.com/opencharly/layer-cuda:v2026.235.2110'
+            - '@github.com/opencharly/layer-cuda:v2026.235.2121'
             - '@github.com/opencharly/layer-supervisord:v2026.235.2056'
             # plugin-mcp is the OUT-OF-TREE plugin that serves the `mcp:` check verb
             # (the github.com/modelcontextprotocol/go-sdk MCP CLIENT lives there, not in

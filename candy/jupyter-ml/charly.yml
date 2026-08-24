@@ -13,7 +13,7 @@ jupyter-ml:
             env, the spaCy model, the quarto labextension, and the live notebook +
             MCP API — so being wrong is observable, not silent.
         require:
-            - '@github.com/opencharly/layer-cuda:v2026.235.2110'
+            - '@github.com/opencharly/layer-cuda:v2026.235.2121'
             - '@github.com/opencharly/layer-supervisord:v2026.235.2056'
             # plugin-mcp is the OUT-OF-TREE plugin that serves the `mcp:` check verb
             # (the github.com/modelcontextprotocol/go-sdk MCP CLIENT lives there, not in
@@ -155,7 +155,7 @@ jupyter-ml-skill:
                 - agent-forwarding
                 - jupyter-ml
                 - notebook-templates
-                - '@github.com/opencharly/pod-dbus:v2026.235.2057'
+                - '@github.com/opencharly/pod-dbus:v2026.235.2115'
                 - charly
               ports:
                 - "8888:8888"
