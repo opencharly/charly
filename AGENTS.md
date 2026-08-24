@@ -396,6 +396,25 @@ excuses a policy failure: any rule violation forbids commit.
 - Strict operator commands and idempotent internal reconciliation are separate
   contracts.
 
+## Command hygiene & context discipline
+
+The harness runs commands with SIGPIPE ignored, so `grep <pat> <huge-file> | head -N`
+floods output with `grep: write error: Broken pipe` (grep never dies on the closed
+pipe) and truncates the response. Mandatory rules:
+
+- **Use `grep -m N` for "first N matches"** — never `grep | head`. `-m` terminates
+  grep itself; no closed pipe, deterministic everywhere.
+- **Redirect large outputs to a file first** (`cmd > /tmp/x.log 2>&1`), then read
+  with `grep -m N` / `sed -n 'a,bp'`. Never stream multi-MB logs through the
+  response.
+- **Bound every command's output** (`-m`, `-n`, `tail -c`) or redirect to a file.
+- **Delegate output-heavy investigation to a subagent** (log archaeology, repo-wide
+  greps, build/validator loops): the subagent returns a concise verdict + evidence
+  paths, keeping the main context clean. The main agent plans, decides, lands.
+- **Never re-issue the same diagnostic command in a loop.** If output was truncated
+  or the answer is not visible, change the approach (file + bounded read, or a
+  subagent) — repeating the identical command is the failure mode, not the fix.
+
 The named skills own the full technical rules. Do not expand this index into a
 second copy of them.
 

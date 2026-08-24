@@ -16,7 +16,7 @@ charly:
         candy:
             - virtualization
             - gocryptfs
-            - '@github.com/opencharly/layer-socat:v2026.235.2057'
+            - socat
         distro:
             debian:
                 # tailscale is a mandatory charly dep but is NOT in Debian main, so the
@@ -57,7 +57,7 @@ charly:
                     - charly
                 repo:
                     - name: charly
-                      url: "https://opencharly.github.io/charly-fedora/repo/amd64/"
+                      url: "https://opencharly.github.io/charly-fedora/amd64/"
                       gpgkey: "https://opencharly.github.io/charly-fedora/RPM-GPG-KEY-charly"
             arch:
                 package:
@@ -65,7 +65,8 @@ charly:
                 repo:
                     - name: charly
                       server: "https://opencharly.github.io/charly-arch/amd64/"
-                      siglevel: Optional TrustAll
+                      key: 978DFF11A951A830F7ADA2D4062B073E9D1BAE2E
+                      siglevel: Required DatabaseOptional
             alpine:
                 package:
                     - charly
@@ -86,7 +87,7 @@ charly:
         # generate-packages plugin (sdk/packagekit) builds from this section.
         packaging:
             name: charly
-            description: The OpenCharly CLI — the fully equipped factory floor for you and your agents.
+            description: The OpenCharly CLI — the open infrastructure compiler for you and your agents.
             maintainer: Andreas Trawoeger <atrawog@opencharly.ai>
             homepage: https://github.com/opencharly/charly
             license: MIT

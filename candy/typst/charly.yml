@@ -12,8 +12,23 @@ typst:
             `typst compile` turns a minimal .typ source into a real PDF whose
             bytes start with the %PDF magic.
         package:
-            - xz-utils
             - curl
+        distro:
+            debian:
+                package:
+                    - xz-utils
+            ubuntu:
+                package:
+                    - xz-utils
+            fedora:
+                package:
+                    - xz
+            arch:
+                package:
+                    - xz
+            alpine:
+                package:
+                    - xz
         plan:
             - run: |
                 command=VER=$(curl -fsSL https://api.github.com/repos/typst/typst/releases/latest | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/')

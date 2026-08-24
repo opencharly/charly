@@ -1,6 +1,6 @@
-# OpenCharly — The Agent-in-the-Loop Factory
+# OpenCharly — The Open Infrastructure Compiler
 
-Compose, build, deploy, and evaluate **boxes** (container images) from a library of configurable **candies** — the factory is named for its product — driven by the `charly` Go CLI, built for you *and* your agents, on Docker, Podman, QEMU, libvirt, Kubernetes, and Android.
+Compose, build, deploy, and evaluate **boxes** (container images) from a library of configurable **candies**, driven by the `charly` Go CLI, built for you *and* your agents, on Docker, Podman, QEMU, libvirt, Kubernetes, and Android.
 
 This file is the Claude Code adapter of the project rulebook: mandates and pointers only, load-bearing and non-negotiable — short so they are always read, never because they are optional. `AGENTS.md` is the equivalent harness-neutral rulebook; skills own detailed procedure; history lives in each repo's `CHANGELOG/`.
 
