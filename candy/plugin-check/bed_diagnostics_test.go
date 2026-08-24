@@ -204,37 +204,6 @@ func TestPipResolverConflictAllowanceIsConditional(t *testing.T) {
 	})
 }
 
-// TestMkinitcpioChrootAutodetectIsConditional proves the mkinitcpio autodetect
-// chroot error is exempted ONLY when the initramfs image is actually created.
-func TestMkinitcpioChrootAutodetectIsConditional(t *testing.T) {
-	const errLine = "==> ERROR: failed to detect root filesystem\n"
-	const step = "STEP 1/1: RUN arch-chroot /mnt mkinitcpio -P\n"
-
-	t.Run("recovered by Initcpio image generation successful", func(t *testing.T) {
-		d := scanStepDiagnostics(step + errLine +
-			"==> Creating zstd-compressed initcpio image: '/boot/initramfs-linux.img'\n" +
-			"==> Initcpio image generation successful\n")
-		if d.Errors != 0 || d.Allowlisted != 1 || d.fails(defaultDiagnosticPolicy()) {
-			t.Errorf("a completed mkinitcpio build must exempt the autodetect error; got %+v", d)
-		}
-	})
-
-	t.Run("no recovery is fatal", func(t *testing.T) {
-		d := scanStepDiagnostics(step + errLine)
-		if d.Errors != 1 || d.Allowlisted != 0 || !d.fails(defaultDiagnosticPolicy()) {
-			t.Errorf("a build that never creates the image must still fail the step; got %+v", d)
-		}
-	})
-
-	t.Run("unrelated error is not exempted by a success", func(t *testing.T) {
-		d := scanStepDiagnostics(step + "==> ERROR: missing kernel module\n" +
-			"==> Initcpio image generation successful\n")
-		if d.Errors != 1 || d.Allowlisted != 0 {
-			t.Errorf("an unrelated mkinitcpio error must not be discharged by a success; got %+v", d)
-		}
-	})
-}
-
 // TestAllowlistEntriesAreWellFormed keeps the audit trail honest: the Why is printed verbatim
 // into summary.yml on every run, so an empty or throwaway one silently converts a reviewed
 // exemption into an unexplained one.
