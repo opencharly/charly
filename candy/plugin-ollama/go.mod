@@ -4,15 +4,15 @@ go 1.26.4
 
 require (
 	github.com/ollama/ollama v0.32.14
-	github.com/opencharly/sdk v0.2026234.347
-	github.com/opencharly/spec v0.2026232.520
+	github.com/opencharly/sdk v0.2026236.813
+	github.com/opencharly/spec v0.2026232.521-0.20260823190543-d35d15fd2a87
 )
 
 require (
 	cuelang.org/go v0.16.1 // indirect
 	github.com/alecthomas/kong v1.15.0 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
-	github.com/buger/jsonparser v1.1.1 // indirect
+	github.com/buger/jsonparser v1.1.2 // indirect
 	github.com/cockroachdb/apd/v3 v3.2.1 // indirect
 	github.com/emicklei/proto v1.14.3 // indirect
 	github.com/fatih/color v1.15.0 // indirect
@@ -28,6 +28,7 @@ require (
 	github.com/oklog/run v1.1.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/protocolbuffers/txtpbfmt v0.0.0-20260217160748-a481f6a22f94 // indirect
+	github.com/stretchr/testify v1.11.1 // indirect
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/crypto v0.52.0 // indirect
