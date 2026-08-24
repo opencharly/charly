@@ -1,8 +1,9 @@
 # Agent Teams Factory — Program North-Star
 
 The binding north-star document for the Agent Teams Factory program, named in every
-spawn brief. "The Agent-in-the-Loop Factory" is the *product's* name (see `README.md`);
-this program builds the multi-agent subsystem that runs on it, and the two are
+spawn brief. The product positions as "the open infrastructure compiler" (see `README.md`);
+the "Factory" in this document's name is the Agent Teams Factory subsystem — this program
+builds the multi-agent subsystem that runs on the product, and the two are
 deliberately distinct scopes. The charly repo's `CLAUDE.md` + `AGENTS.md` are the
 rulebook; this file restates no rule. Detailed HOW lives in skills
 (the opencharly/marketplace repo's README is the index). This document holds the concrete end-state,
