@@ -67,7 +67,7 @@ arch-coder-skill:
                 # Language runtimes + managers
                 - language-runtimes           # Go + PHP + .NET 9 + python3-devel
                 - '@github.com/opencharly/layer-golang:v2026.235.2057'
-                - nodejs                      # Arch ships a current Node (v26)
+                - '@github.com/opencharly/layer-nodejs:v2026.235.2056'  # Arch ships a current Node (v26)
                 - rust
                 - pixi
                 - uv
@@ -482,7 +482,7 @@ debian-coder-skill:
                 # Language runtimes
                 - language-runtimes           # Go + PHP + .NET 9 (via Microsoft dotnet-install.sh)
                 - '@github.com/opencharly/layer-golang:v2026.235.2057'
-                - nodejs                      # nodejs — Debian's packaged Node
+                - '@github.com/opencharly/layer-nodejs:v2026.235.2056'  # Debian's packaged Node
                 - rust
                 - pixi
                 - uv
@@ -689,7 +689,7 @@ fedora-coder-skill:
                 # Language runtimes + managers
                 - language-runtimes           # Go + PHP + .NET 9 + nodejs-devel + python3-devel
                 - '@github.com/opencharly/layer-golang:v2026.235.2057'
-                - nodejs                       # generic nodejs candy (Node 22 on Fedora)
+                - '@github.com/opencharly/layer-nodejs:v2026.235.2056'  # generic nodejs candy (Node 22 on Fedora)
                 - rust
                 - pixi
                 - uv                          # direct-download binary (no pixi env)
