@@ -265,6 +265,42 @@ func TestPacmanNeededAllowanceIsScoped(t *testing.T) {
 	}
 }
 
+// TestSystemdUnitFileDaemonReloadAllowanceIsScoped proves the systemd 'unit file
+// changed on disk' notice (printed by RPM scriptlets when a package ships/modifies
+// a unit — nfs-utils/gssproxy etc.) is allowlisted, while a REAL unit-file error
+// (a warning that does mean something went wrong) is not claimed.
+func TestSystemdUnitFileDaemonReloadAllowanceIsScoped(t *testing.T) {
+	claimed := []string{
+		">>> Warning: The unit file, source configuration file or drop-ins of gssproxy.se",
+		">>> Warning: The unit file, source configuration file or drop-ins of nfs-utils.service changed on disk. Run 'systemctl daemon-reload' to reload.",
+	}
+	for _, line := range claimed {
+		sev, _, ok := classifyDiagnosticLine(line)
+		if !ok {
+			t.Fatalf("%q was not recognised as a diagnostic at all", line)
+		}
+		a := allowanceFor(sev, line)
+		if a == nil || a.ID != "systemd-unit-file-daemon-reload" {
+			t.Errorf("%q: want the systemd-unit-file allowance, got %v", line, a)
+		}
+	}
+
+	notClaimed := []string{
+		">>> Warning: Failed to connect to bus: No such file or directory",
+		">>> Warning: systemd-machine-id-setup failed: no machine ID found",
+		">>> Warning: unit file gssproxy.service could not be loaded (not a valid unit)",
+	}
+	for _, line := range notClaimed {
+		sev, _, ok := classifyDiagnosticLine(line)
+		if !ok {
+			continue // not recognised as a diagnostic; nothing to exempt
+		}
+		if a := allowanceFor(sev, line); a != nil && a.ID == "systemd-unit-file-daemon-reload" {
+			t.Errorf("%q must NOT be claimed by the systemd-unit-file allowance", line)
+		}
+	}
+}
+
 // TestScanCountsAllowlistedSeparately proves an exempted line is REPORTED, not erased. A gate that
 // deleted its exemptions would read "0 warnings" while suppressing eight, which is the failure
 // mode the summary's separate Allowlisted count exists to prevent.

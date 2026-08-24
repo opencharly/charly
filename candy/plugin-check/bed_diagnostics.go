@@ -292,6 +292,21 @@ var diagnosticAllowlist = []diagnosticAllowance{
 			"policy-rc.d deny into the chroot, which would break the very init-script " +
 			"configuration the postinst is performing.",
 	},
+	{
+		ID:       "systemd-unit-file-daemon-reload",
+		Severity: severityWarning,
+		Match:    regexp.MustCompile(`^[ \t]*(?:==>|-->|>>>|\*\*\*)[ \t]+Warning: The unit file, source configuration file or drop-ins of `),
+		Why: "Fedora/Arch RPM scriptlets print this when a package ships or modifies a " +
+			"systemd unit (nfs-utils/gssproxy, qatlib-service, nbdkit, ...). It is systemd's " +
+			"standard 'unit file changed on disk' notice telling the operator to run " +
+			"`systemctl daemon-reload` — informational, not a failure: the unit is installed " +
+			"correctly and systemd picks it up at next daemon reload / boot. Inherent to ANY " +
+			"fedora-family package install; the deploy log shows the RPM %triggerin scriptlet " +
+			"completes right after (Finished %triggerin scriptlet) and the install proceeds. " +
+			"The dnf progress display truncates the line at the package name (…gssproxy.se), " +
+			"so the allowance matches the stable prefix. There is no pin or candy that removes " +
+			"the notice, and silencing it would mean suppressing systemd's own reload hint.",
+	},
 }
 
 // allowanceRecovered reports whether a claimed line really is exempt. An unconditional entry
