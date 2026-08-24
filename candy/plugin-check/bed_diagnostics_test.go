@@ -455,6 +455,43 @@ func TestWarningTierIsReportedEvenWhenNotFatal(t *testing.T) {
 	}
 }
 
+// TestMkinitcpioChrootWarningsAllowanceIsScoped proves the four chroot-artifact
+// warnings (sd-vconsole default, os-prober skip, fsck helpers absent, and the
+// aggregate errors-encountered summary) are allowlisted while a REAL mkinitcpio
+// warning is not.
+func TestMkinitcpioChrootWarningsAllowanceIsScoped(t *testing.T) {
+	claimed := []string{
+		"==> WARNING: sd-vconsole: \"/etc/vconsole.conf\" not found, will use default values",
+		"Warning: os-prober will not be executed to detect other bootable partitions.",
+		"==> WARNING: No fsck helpers found. fsck will not be run on boot.",
+		"==> WARNING: errors were encountered during the build. The image may not be complete.",
+	}
+	for _, line := range claimed {
+		sev, _, ok := classifyDiagnosticLine(line)
+		if !ok {
+			t.Fatalf("%q was not recognised as a diagnostic at all", line)
+		}
+		a := allowanceFor(sev, line)
+		if a == nil || a.ID != "mkinitcpio-chroot-warnings" {
+			t.Errorf("%q: want the mkinitcpio-chroot-warnings allowance, got %v", line, a)
+		}
+	}
+
+	notClaimed := []string{
+		"==> WARNING: missing kernel module for root device",
+		"Warning: grub-install failed to embed a core image",
+	}
+	for _, line := range notClaimed {
+		sev, _, ok := classifyDiagnosticLine(line)
+		if !ok {
+			continue // not recognised as a diagnostic; nothing to exempt
+		}
+		if a := allowanceFor(sev, line); a != nil && a.ID == "mkinitcpio-chroot-warnings" {
+			t.Errorf("%q must NOT be claimed by the mkinitcpio-chroot-warnings allowance", line)
+		}
+	}
+}
+
 // TestUpdateRcDAllowanceIsScoped covers the debootstrap update-rc.d allowance and its
 // BOUNDARY: the pattern must claim ONLY that exact sentence. The negative cases are real
 // update-rc.d lines that share its opening words but are NOT the chroot fallback notice.
