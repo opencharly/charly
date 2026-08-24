@@ -32,7 +32,8 @@ Full documentation: **[opencharly.ai](https://opencharly.ai)**.
 
 ## Install
 
-**Install `charly` once, then use it from anywhere.** Everything else here — and every page on
+**Install `charly` once, then use it from anywhere.** `charly` runs on Linux; container deploys
+need Podman or Docker, VM deploys need libvirt. Everything else here — and every page on
 [opencharly.ai](https://opencharly.ai) — assumes a machine with `charly` installed.
 
 **[How to install →](https://opencharly.ai/start/install/)**
@@ -41,6 +42,17 @@ Once `charly` is on your `$PATH`, `--repo` reads any published project without c
 
 ```bash
 charly --repo opencharly/charly box list boxes
+```
+
+The first lines of its output:
+
+```
+agentteams [testing]
+agentteams-manager [testing]
+agentteams-worker [testing]
+alpine-repo-box [testing]
+arch.arch [testing]
+…
 ```
 
 Clone the repository only if you are working *on* charly itself:
@@ -113,10 +125,10 @@ deploy and evaluate into one command. It builds the image and checks it, deploys
 steady state. Then it checks the running candybox live, destroys and rebuilds it from scratch,
 checks it again, and tears everything down.
 
-### Change the substrate, keep the recipe
+### Change the substrate, keep the shape
 
-Both stanzas below are real entries in `box/fedora/charly.yml`, cut down to the lines that carry
-the point.
+Both stanzas below are real entries in `box/fedora/charly.yml`: this page's example as a container
+bed, and its VM twin.
 
 ```yaml
 # a CONTAINER
@@ -134,8 +146,11 @@ check-fedora-vm:
             - '@github.com/opencharly/charly/candy/charly:v2026.231.0714'
 ```
 
-The substrate is the keyword — `pod:` versus `vm:`. The VM stanza reaches its guest over SSH and
-installs packages there; the pod stanza builds an image. `kubernetes:`, `local:` and `android:`
+The payloads differ — the pod runs the built `tutorial-shell` image; the VM boots the `fedora-vm`
+template (`from:` inherits its settings) and overlays the `charly` candy. The grammar does not:
+the substrate is the keyword, `pod:` versus `vm:`, and each candy a deploy names is realised
+through the same install plan on either side — the VM stanza reaches its guest over SSH and
+installs packages there, the pod stanza runs an image. `kubernetes:`, `local:` and `android:`
 take the same shape —
 [how that is wired →](https://opencharly.ai/concepts/02-one-recipe-many-molds/)
 
@@ -216,9 +231,9 @@ host, an APK install — and, on `pod:`, the very image the build path produced.
 declared capabilities and its acceptance plan — are written into the image as `ai.opencharly.*`
 labels, so a pulled image can be inspected and tested by a machine that has never seen the source.
 
-**5. The schema is upstream of the code.** The base grammar of `charly.yml` is CUE, in the spec
-module (`github.com/opencharly/spec`); each plugin ships its own CUE schema for the words it
-registers. The Go wire types are generated from that base schema, and load-time validation runs
+**5. The schema is upstream of the code.** The base grammar of `charly.yml` is
+[CUE](https://cuelang.org/), a typed configuration language, in the spec module
+(`github.com/opencharly/spec`); each plugin ships its own CUE schema for the words it registers. The Go wire types are generated from that base schema, and load-time validation runs
 against the same embedded schema — a grammar change cannot reach the code without going through the
 module both sides consume.
 
@@ -249,7 +264,8 @@ machine of its own.
 
 A top-level `local:` deploy installs packages and systemd units onto *the machine charly is
 running on*. The same deploy, nested under a disposable `vm:`, installs them into a throwaway
-guest instead.
+guest instead. Either way it is reversible: a `local:` deploy records each step it applies in an
+install ledger, and `charly fleet del <name>` tears it back down.
 
 ### Where a running candybox actually lives
 
