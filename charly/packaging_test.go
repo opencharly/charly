@@ -166,7 +166,7 @@ func TestDistroRepoInstallDeclared(t *testing.T) {
 		Charly struct {
 			Candy struct {
 				Distro map[string]struct {
-					Package []string `yaml:"package"`
+					Package []string         `yaml:"package"`
 					Repo    []map[string]any `yaml:"repo"`
 				} `yaml:"distro"`
 			} `yaml:"candy"`
