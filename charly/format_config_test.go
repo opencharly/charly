@@ -343,6 +343,37 @@ func TestRpmHostCellHandlesRepos(t *testing.T) {
 	}
 }
 
+// TestPacHostCellHandlesRepos proves the pac phase.install.host cell carries the
+// Keys/Repos setup the container cell has always had — the repo appended to
+// /etc/pacman.conf + key import — so a candy's distro repo resolves on the
+// host/VM venue. Regression for the check-cachyos-vm `target not found: charly`
+// (the host cell was bare `pacman -Syu ...` with no repo handling). Presence
+// check only — the full render lives in the sdk repo's buildkit/render_test.go
+// (charly/ core must not import sdk).
+func TestPacHostCellHandlesRepos(t *testing.T) {
+	dc, _, _, err := LoadBuildConfigForBox(repoRootDir(t))
+	if err != nil {
+		t.Fatalf("LoadBuildConfigForBox: %v", err)
+	}
+	fd := dc.FindFormat("pac")
+	if fd == nil {
+		t.Fatal("FindFormat(pac) = nil")
+	}
+	tmpl := spec.FormatPhaseTemplate(fd, spec.PhaseInstall, spec.VenueHostNative)
+	if tmpl == "" {
+		t.Fatal("pac format has no phase.install.host cell")
+	}
+	for _, want := range []string{
+		"/etc/pacman.conf",
+		"pacman-key --recv-keys {{.key}}",
+		"Server = {{.server}}",
+	} {
+		if !strings.Contains(tmpl, want) {
+			t.Errorf("pac host cell missing %q; got:\n%s", want, tmpl)
+		}
+	}
+}
+
 // TestDistroConfigFindFormat proves FindFormat resolves a format across distros
 // (inherits-aware) and that the real build.yml pac format carries the host cell.
 func TestDistroConfigFindFormat(t *testing.T) {

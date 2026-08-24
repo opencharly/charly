@@ -461,7 +461,24 @@ arch:
                         # needing libsubid.so.6 while the image's shadow provides .so.5),
                         # leaving a broken binary. `-u` upgrades the whole system first,
                         # matching the container bootstrap's `install_cmd: pacman -Syu`.
+                        # The Keys/Repos legs mirror the container cell below (R3): a
+                        # candy's `distro: <pac-family>` repo entry (e.g. the charly
+                        # candy's charly-arch repo) must be added to /etc/pacman.conf and
+                        # its key imported on the HOST/VM venue too — without them the
+                        # SystemPackages pac step runs `pacman -Syu <pkg>` against a
+                        # pacman.conf that has no repo, so pacman reports
+                        # `target not found: <pkg>` (observed live in check-cachyos-vm
+                        # deploy-add).
                         host: |
+                            {{- range .Keys}}
+                            pacman-key --recv-keys {{.}} && pacman-key --lsign-key {{.}} && \
+                            {{- end}}
+                            {{- range .Repos}}
+                            printf '[{{.name}}]\nServer = {{.server}}\nSigLevel = {{default .siglevel "Optional TrustAll"}}\n' >> /etc/pacman.conf && \
+                            {{- if .key}}
+                            pacman-key --recv-keys {{.key}} && pacman-key --lsign-key {{.key}} && \
+                            {{- end}}
+                            {{- end}}
                             pacman -Syu --noconfirm --needed{{range .Options}} {{.}}{{end}}{{range .Packages}} {{.}}{{end}}
                         container: |
                             RUN {{cacheMounts .CacheMounts}} \
