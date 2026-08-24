@@ -292,6 +292,96 @@ var diagnosticAllowlist = []diagnosticAllowance{
 			"policy-rc.d deny into the chroot, which would break the very init-script " +
 			"configuration the postinst is performing.",
 	},
+	{
+		ID:       "systemd-unit-file-daemon-reload",
+		Severity: severityWarning,
+		Match:    regexp.MustCompile(`^[ \t]*(?:==>|-->|>>>|\*\*\*)[ \t]+Warning: The unit file, source configuration file or drop-ins of `),
+		Why: "Fedora/Arch RPM scriptlets print this when a package ships or modifies a " +
+			"systemd unit (nfs-utils/gssproxy, qatlib-service, nbdkit, ...). It is systemd's " +
+			"standard 'unit file changed on disk' notice telling the operator to run " +
+			"`systemctl daemon-reload` — informational, not a failure: the unit is installed " +
+			"correctly and systemd picks it up at next daemon reload / boot. Inherent to ANY " +
+			"fedora-family package install; the deploy log shows the RPM %triggerin scriptlet " +
+			"completes right after (Finished %triggerin scriptlet) and the install proceeds. " +
+			"The dnf progress display truncates the line at the package name (…gssproxy.se), " +
+			"so the allowance matches the stable prefix. There is no pin or candy that removes " +
+			"the notice, and silencing it would mean suppressing systemd's own reload hint.",
+	},
+	{
+		ID:       "mkinitcpio-chroot-autodetect-fallback",
+		Severity: severityError,
+		// mkinitcpio's autodetect hook reads the kernel command line / fstab to learn the
+		// guest's root device. Inside the pacstrap chroot (arch-chroot during the bootstrap
+		// VM's base-image build) there is no booted kernel and no root device, so the hook
+		// prints this error and falls back to a full-featured (non-autodetect) initramfs —
+		// which is exactly what a bootstrapped VM needs (the real root device is supplied at
+		// boot by the kernel command line). The capture group holds the error TEXT
+		// (failed to detect root filesystem), satisfying the conditional-allowance
+		// capture-group requirement; RecoveredBy carries no %s so the pattern is used as-is.
+		Match: regexp.MustCompile(`^==> ERROR: (failed to detect root filesystem)$`),
+		// The recovery is mkinitcpio's success line: the initramfs image was created despite
+		// the autodetect fallback. No %s placeholder — the error names no package/device to
+		// tie to, so the pattern is used as-is (see allowanceRecovered). The step log is one
+		// mkinitcpio invocation, so the step boundary is the tie.
+		RecoveredBy: `(?m)^==> Initcpio image generation successful$`,
+		Why: "mkinitcpio's autodetect hook cannot find a root filesystem inside the " +
+			"pacstrap chroot (no booted kernel, no /proc/cmdline root device) and falls back " +
+			"to a full initramfs — the standard chroot behavior, and the correct initramfs " +
+			"for a booting VM whose real root device is supplied by the kernel cmdline at " +
+			"boot. Observed live in the check-cachyos-vm base-image build: the ERROR is " +
+			"immediately followed by '==> Creating zstd-compressed initcpio image' and " +
+			"'==> Initcpio image generation successful' in the same log. Inherent to ANY " +
+			"pacstrap bootstrap VM build; suppressing it would mean faking a root device in " +
+			"the chroot, which autodetect would then bake into every boot. CONDITIONAL on " +
+			"mkinitcpio proving the image was created — if the initramfs never builds, this " +
+			"entry does not claim the line and the step still fails.",
+	},
+	{
+		ID:       "pacman-hook-failed-mkinitcpio-recovered",
+		Severity: severityError,
+		// pacman runs package install hooks (mkinitcpio's install hook regenerates the
+		// initramfs); the hook wraps mkinitcpio which prints the allowlisted autodetect
+		// chroot error, and pacman then reports the hook's nonzero exit as
+		// `error: command failed to execute correctly`. The initramfs IS still created
+		// (mkinitcpio falls back to a full image), so the recovery is the same
+		// `Initcpio image generation successful` line.
+		Match:       regexp.MustCompile(`^error: (command failed to execute correctly)$`),
+		RecoveredBy: `(?m)^==> Initcpio image generation successful$`,
+		Why: "pacman's install hooks (mkinitcpio regenerating the initramfs after a " +
+			"kernel/initramfs package install) wrap the allowlisted chroot autodetect " +
+			"failure: the hook's mkinitcpio invocation exits nonzero (autodetect cannot " +
+			"find a root device inside the pacstrap chroot) and pacman reports the hook " +
+			"failure as 'error: command failed to execute correctly'. The image IS " +
+			"created despite the autodetect fallback (Initcpio image generation " +
+			"successful in the same log) — the same recovery as " +
+			"mkinitcpio-chroot-autodetect-fallback. Observed live in the " +
+			"check-cachyos-vm deploy-add (a guest-side pacman -Syu triggering the kernel " +
+			"hook). Inherent to ANY pacstrap bootstrap VM; CONDITIONAL on the image being " +
+			"created — if mkinitcpio never succeeds, this entry does not claim the line " +
+			"and the step still fails.",
+	},
+	{
+		ID:       "mkinitcpio-chroot-warnings",
+		Severity: severityWarning,
+		// The pacstrap bootstrap VM's mkinitcpio/grub build emits four warning lines that
+		// are the same chroot artifact family as the allowlisted autodetect error: the
+		// chroot has no /etc/vconsole.conf (sd-vconsole falls back), no os-prober (grub
+		// skips other-OS detection), no fsck helpers (mkinitcpio skips fsck-on-boot), and
+		// the aggregate 'errors were encountered' that summarizes the autodetect fallback.
+		Match: regexp.MustCompile(`^==> WARNING: sd-vconsole: "/etc/vconsole\.conf" not found, will use default values$|^Warning: os-prober will not be executed to detect other bootable partitions\.$|^==> WARNING: No fsck helpers found\. fsck will not be run on boot\.$|^==> WARNING: errors were encountered during the build\. The image may not be complete\.$`),
+		Why: "The pacstrap bootstrap VM base-image build runs mkinitcpio and grub inside the " +
+			"chroot, which by construction lacks the guest runtime's /etc/vconsole.conf " +
+			"(sd-vconsole falls back to defaults), os-prober (grub skips other-OS detection — " +
+			"the expected boot config is authored declaratively), and fsck helpers (no " +
+			"fsck-on-boot until the guest's own package set installs them at first boot). The " +
+			"fourth line is mkinitcpio's aggregate warning that summarizes the allowlisted " +
+			"autodetect fallback — the image IS created (Initcpio image generation successful) " +
+			"and the guest boots from the kernel-cmdline root device. Observed live in every " +
+			"retained check-cachyos-vm vm-build log; all four are informational chroot " +
+			"defaults with no failure behind them. Inherent to ANY pacstrap bootstrap VM build; " +
+			"suppressing them would mean seeding chroot config that the guest would then " +
+			"inherit incorrectly.",
+	},
 }
 
 // allowanceRecovered reports whether a claimed line really is exempt. An unconditional entry

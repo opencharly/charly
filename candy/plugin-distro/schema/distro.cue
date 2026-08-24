@@ -138,6 +138,11 @@
 	cleanup?: #DsPhaseTemplates
 }
 #DsPhaseTemplates: {
+	// install is the ONE venue-agnostic install body (spec#50 — R3: never two
+	// hand-maintained host/container copies). The venue wrapper (RUN {{cacheMounts}}
+	// for container, plain shell for host) is applied by spec.FormatPhaseTemplate.
+	// host/container remain as venue-specific OVERRIDES.
+	install?:   string
 	container?: string
 	host?:      string
 }

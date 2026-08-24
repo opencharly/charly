@@ -253,7 +253,7 @@ hermes-layer-skill:
             
             - `/charly-coder:nodejs` -- Node.js runtime dependency
             - `/charly-infrastructure:supervisord` -- process manager dependency
-            - `/charly-tools:ripgrep` -- fast search dependency
+            - `ripgrep` (opencharly/layer-ripgrep) -- fast search dependency
             - `/charly-selkies:ffmpeg` -- audio/video processing (negativo17 nonfree codecs)
             - `/charly-selkies:pipewire` -- audio support for voice features
             - `/charly-hermes:hermes-playwright` -- optional Playwright Chromium browser (standalone headless mode)

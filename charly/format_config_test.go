@@ -311,6 +311,80 @@ func TestFormatForDistroID(t *testing.T) {
 	}
 }
 
+// TestRpmHostCellHandlesRepos proves the rpm phase.install.host cell carries the
+// repo setup the container cell has always had: the .repo file write (with the
+// gpgkey), the key import, and --enable-repo on the install line. Regression for
+// the check-fedora-vm `No match for argument: charly` — the host cell was bare
+// `dnf install -y ...` with no repo handling, so a candy's distro repo was never
+// added on the host/VM venue. (Presence check only — the full render lives in the
+// sdk repo's buildkit/render_test.go with a literal host-cell fixture, because
+// charly/ core must not import sdk.)
+func TestRpmHostCellHandlesRepos(t *testing.T) {
+	dc, _, _, err := LoadBuildConfigForBox(repoRootDir(t))
+	if err != nil {
+		t.Fatalf("LoadBuildConfigForBox: %v", err)
+	}
+	fd := dc.FindFormat("rpm")
+	if fd == nil {
+		t.Fatal("FindFormat(rpm) = nil")
+	}
+	tmpl := spec.FormatPhaseTemplate(fd, spec.PhaseInstall, spec.VenueHostNative)
+	if tmpl == "" {
+		t.Fatal("rpm format has no phase.install.host cell")
+	}
+	for _, want := range []string{
+		"/etc/yum.repos.d/{{.name}}.repo",
+		"rpm --import {{.gpgkey}}",
+		"--enable-repo={{quote .name}}",
+	} {
+		if !strings.Contains(tmpl, want) {
+			t.Errorf("rpm host cell missing %q; got:\n%s", want, tmpl)
+		}
+	}
+}
+
+// TestPacHostCellHandlesRepos proves the pac phase.install cell carries the
+// Keys/Repos setup — the repo appended to /etc/pacman.conf + key import — so a
+// candy's distro repo resolves on BOTH venues. Regression for the
+// check-cachyos-vm `target not found: charly` (the old host cell was bare
+// `pacman -Syu ...` with no repo handling). The R3 shape: ONE venue-agnostic
+// install body; the container venue gets the RUN {{cacheMounts}} wrapper from
+// FormatPhaseTemplate, the host venue runs it verbatim. The body supports a
+// repo `key:` that is either a published key FILE URL (curl + pacman-key --add,
+// deterministic and keyserver-free) or a keyserver fingerprint. Presence check
+// only — the full render lives in the sdk repo's buildkit/render_test.go
+// (charly/ core must not import sdk).
+func TestPacHostCellHandlesRepos(t *testing.T) {
+	dc, _, _, err := LoadBuildConfigForBox(repoRootDir(t))
+	if err != nil {
+		t.Fatalf("LoadBuildConfigForBox: %v", err)
+	}
+	fd := dc.FindFormat("pac")
+	if fd == nil {
+		t.Fatal("FindFormat(pac) = nil")
+	}
+	tmpl := spec.FormatPhaseTemplate(fd, spec.PhaseInstall, spec.VenueHostNative)
+	if tmpl == "" {
+		t.Fatal("pac format has no phase.install cell")
+	}
+	for _, want := range []string{
+		"/etc/pacman.conf",
+		"pacman-key --recv-keys {{.key}}",
+		"curl -fsSL {{quote .key}} -o /tmp/{{.name}}.gpg && pacman-key --add",
+		"Server = {{.server}}",
+	} {
+		if !strings.Contains(tmpl, want) {
+			t.Errorf("pac install body missing %q; got:\n%s", want, tmpl)
+		}
+	}
+	// The container venue must wrap the SAME body with the cacheMounts RUN prefix
+	// (R3 — never a second copy).
+	containerTmpl := spec.FormatPhaseTemplate(fd, spec.PhaseInstall, spec.VenueContainerBuilder)
+	if !strings.Contains(containerTmpl, "RUN {{cacheMounts .CacheMounts}} \\\n") {
+		t.Errorf("pac container venue missing the RUN cacheMounts wrapper; got:\n%s", containerTmpl)
+	}
+}
+
 // TestDistroConfigFindFormat proves FindFormat resolves a format across distros
 // (inherits-aware) and that the real build.yml pac format carries the host cell.
 func TestDistroConfigFindFormat(t *testing.T) {

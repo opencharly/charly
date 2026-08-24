@@ -32,7 +32,7 @@ making a best-effort guess at cleanup.
 ## In practice
 
 The whole model in one worked example. First a **layer** — one concern, and the probes that prove
-it ([`ripgrep`](/recipes/tools/ripgrep/), quoted from its `charly.yml` in [opencharly/layer-ripgrep](https://github.com/opencharly/layer-ripgrep)):
+it ([`ripgrep`](https://github.com/opencharly/layer-ripgrep), quoted from its `charly.yml`):
 
 ```yaml
 ripgrep:

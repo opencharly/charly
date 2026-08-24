@@ -65,7 +65,13 @@ charly:
                 repo:
                     - name: charly
                       server: "https://opencharly.github.io/charly-arch/amd64/"
-                      key: 978DFF11A951A830F7ADA2D4062B073E9D1BAE2E
+                      # The published key FILE (charly.gpg — fingerprint
+                      # 978DFF11A951A830F7ADA2D4062B073E9D1BAE2E): fetched via curl +
+                      # pacman-key --add by the unified pac install body. Deterministic
+                      # and keyserver-free, matching deb/ubuntu/fedora/alpine — a VM
+                      # guest cannot always reach the keyservers the fingerprint form
+                      # depends on.
+                      key: "https://opencharly.github.io/charly-arch/charly.gpg"
                       siglevel: Required DatabaseOptional
             alpine:
                 package:

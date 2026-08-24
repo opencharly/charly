@@ -204,6 +204,37 @@ func TestPipResolverConflictAllowanceIsConditional(t *testing.T) {
 	})
 }
 
+// TestMkinitcpioChrootAutodetectIsConditional proves the mkinitcpio autodetect
+// chroot error is exempted ONLY when the initramfs image is actually created.
+func TestMkinitcpioChrootAutodetectIsConditional(t *testing.T) {
+	const errLine = "==> ERROR: failed to detect root filesystem\n"
+	const step = "STEP 1/1: RUN arch-chroot /mnt mkinitcpio -P\n"
+
+	t.Run("recovered by Initcpio image generation successful", func(t *testing.T) {
+		d := scanStepDiagnostics(step + errLine +
+			"==> Creating zstd-compressed initcpio image: '/boot/initramfs-linux.img'\n" +
+			"==> Initcpio image generation successful\n")
+		if d.Errors != 0 || d.Allowlisted != 1 || d.fails(defaultDiagnosticPolicy()) {
+			t.Errorf("a completed mkinitcpio build must exempt the autodetect error; got %+v", d)
+		}
+	})
+
+	t.Run("no recovery is fatal", func(t *testing.T) {
+		d := scanStepDiagnostics(step + errLine)
+		if d.Errors != 1 || d.Allowlisted != 0 || !d.fails(defaultDiagnosticPolicy()) {
+			t.Errorf("a build that never creates the image must still fail the step; got %+v", d)
+		}
+	})
+
+	t.Run("unrelated error is not exempted by a success", func(t *testing.T) {
+		d := scanStepDiagnostics(step + "==> ERROR: missing kernel module\n" +
+			"==> Initcpio image generation successful\n")
+		if d.Errors != 1 || d.Allowlisted != 0 {
+			t.Errorf("an unrelated mkinitcpio error must not be discharged by a success; got %+v", d)
+		}
+	})
+}
+
 // TestAllowlistEntriesAreWellFormed keeps the audit trail honest: the Why is printed verbatim
 // into summary.yml on every run, so an empty or throwaway one silently converts a reviewed
 // exemption into an unexplained one.
@@ -261,6 +292,67 @@ func TestPacmanNeededAllowanceIsScoped(t *testing.T) {
 		}
 		if a := allowanceFor(sev, line); a != nil && a.ID == "pacman-needed-package-already-current" {
 			t.Errorf("%q must NOT be claimed by the pacman-needed allowance", line)
+		}
+	}
+}
+
+// TestPacmanHookFailedMkinitcpioIsConditional proves the pacman hook-wrapper
+// error (`error: command failed to execute correctly`) is exempted ONLY when the
+// initramfs image is actually created — the same recovery as the mkinitcpio
+// autodetect allowance.
+func TestPacmanHookFailedMkinitcpioIsConditional(t *testing.T) {
+	const errLine = "error: command failed to execute correctly\n"
+	const step = "STEP 1/1: RUN pacman -Syu --needed linux\n"
+
+	t.Run("recovered by Initcpio image generation successful", func(t *testing.T) {
+		d := scanStepDiagnostics(step + errLine +
+			"==> Creating zstd-compressed initcpio image: '/boot/initramfs-linux.img'\n" +
+			"==> Initcpio image generation successful\n")
+		if d.Errors != 0 || d.Allowlisted != 1 || d.fails(defaultDiagnosticPolicy()) {
+			t.Errorf("a completed hook must exempt the wrapper error; got %+v", d)
+		}
+	})
+
+	t.Run("no recovery is fatal", func(t *testing.T) {
+		d := scanStepDiagnostics(step + errLine)
+		if d.Errors != 1 || d.Allowlisted != 0 || !d.fails(defaultDiagnosticPolicy()) {
+			t.Errorf("a hook that never creates the image must still fail; got %+v", d)
+		}
+	})
+}
+
+// TestSystemdUnitFileDaemonReloadAllowanceIsScoped proves the systemd 'unit file
+// changed on disk' notice (printed by RPM scriptlets when a package ships/modifies
+// a unit — nfs-utils/gssproxy etc.) is allowlisted, while a REAL unit-file error
+// (a warning that does mean something went wrong) is not claimed.
+func TestSystemdUnitFileDaemonReloadAllowanceIsScoped(t *testing.T) {
+	claimed := []string{
+		">>> Warning: The unit file, source configuration file or drop-ins of gssproxy.se",
+		">>> Warning: The unit file, source configuration file or drop-ins of nfs-utils.service changed on disk. Run 'systemctl daemon-reload' to reload.",
+	}
+	for _, line := range claimed {
+		sev, _, ok := classifyDiagnosticLine(line)
+		if !ok {
+			t.Fatalf("%q was not recognised as a diagnostic at all", line)
+		}
+		a := allowanceFor(sev, line)
+		if a == nil || a.ID != "systemd-unit-file-daemon-reload" {
+			t.Errorf("%q: want the systemd-unit-file allowance, got %v", line, a)
+		}
+	}
+
+	notClaimed := []string{
+		">>> Warning: Failed to connect to bus: No such file or directory",
+		">>> Warning: systemd-machine-id-setup failed: no machine ID found",
+		">>> Warning: unit file gssproxy.service could not be loaded (not a valid unit)",
+	}
+	for _, line := range notClaimed {
+		sev, _, ok := classifyDiagnosticLine(line)
+		if !ok {
+			continue // not recognised as a diagnostic; nothing to exempt
+		}
+		if a := allowanceFor(sev, line); a != nil && a.ID == "systemd-unit-file-daemon-reload" {
+			t.Errorf("%q must NOT be claimed by the systemd-unit-file allowance", line)
 		}
 	}
 }
@@ -385,6 +477,43 @@ func TestWarningTierIsReportedEvenWhenNotFatal(t *testing.T) {
 	joined := strings.Join(shapes, "\n")
 	if !strings.Contains(joined, "could not fully load metadata") {
 		t.Errorf("the non-fatal warning is missing from the shape report:\n%s", joined)
+	}
+}
+
+// TestMkinitcpioChrootWarningsAllowanceIsScoped proves the four chroot-artifact
+// warnings (sd-vconsole default, os-prober skip, fsck helpers absent, and the
+// aggregate errors-encountered summary) are allowlisted while a REAL mkinitcpio
+// warning is not.
+func TestMkinitcpioChrootWarningsAllowanceIsScoped(t *testing.T) {
+	claimed := []string{
+		"==> WARNING: sd-vconsole: \"/etc/vconsole.conf\" not found, will use default values",
+		"Warning: os-prober will not be executed to detect other bootable partitions.",
+		"==> WARNING: No fsck helpers found. fsck will not be run on boot.",
+		"==> WARNING: errors were encountered during the build. The image may not be complete.",
+	}
+	for _, line := range claimed {
+		sev, _, ok := classifyDiagnosticLine(line)
+		if !ok {
+			t.Fatalf("%q was not recognised as a diagnostic at all", line)
+		}
+		a := allowanceFor(sev, line)
+		if a == nil || a.ID != "mkinitcpio-chroot-warnings" {
+			t.Errorf("%q: want the mkinitcpio-chroot-warnings allowance, got %v", line, a)
+		}
+	}
+
+	notClaimed := []string{
+		"==> WARNING: missing kernel module for root device",
+		"Warning: grub-install failed to embed a core image",
+	}
+	for _, line := range notClaimed {
+		sev, _, ok := classifyDiagnosticLine(line)
+		if !ok {
+			continue // not recognised as a diagnostic; nothing to exempt
+		}
+		if a := allowanceFor(sev, line); a != nil && a.ID == "mkinitcpio-chroot-warnings" {
+			t.Errorf("%q must NOT be claimed by the mkinitcpio-chroot-warnings allowance", line)
+		}
 	}
 }
 
