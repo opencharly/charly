@@ -387,3 +387,37 @@ func TestWarningTierIsReportedEvenWhenNotFatal(t *testing.T) {
 		t.Errorf("the non-fatal warning is missing from the shape report:\n%s", joined)
 	}
 }
+
+// TestUpdateRcDAllowanceIsScoped covers the debootstrap update-rc.d allowance and its
+// BOUNDARY: the pattern must claim ONLY that exact sentence. The negative cases are real
+// update-rc.d lines that share its opening words but are NOT the chroot fallback notice.
+func TestUpdateRcDAllowanceIsScoped(t *testing.T) {
+	claimed := []string{
+		"update-rc.d: warning: start and stop actions are no longer supported; falling back to defaults",
+	}
+	for _, line := range claimed {
+		sev, _, ok := classifyDiagnosticLine(line)
+		if !ok {
+			t.Fatalf("%q was not recognised as a diagnostic at all", line)
+		}
+		a := allowanceFor(sev, line)
+		if a == nil || a.ID != "update-rc-d-chroot-fallback" {
+			t.Errorf("%q: want the update-rc.d allowance, got %v", line, a)
+		}
+	}
+
+	notClaimed := []string{
+		"update-rc.d: warning: /etc/init.d/foo exists but is not executable",
+		"update-rc.d: error: cannot find a LSB script for foo",
+		"update-rc.d: warning: start and stop actions are no longer supported; falling back to defaults and something else",
+	}
+	for _, line := range notClaimed {
+		sev, _, ok := classifyDiagnosticLine(line)
+		if !ok {
+			continue // not recognised as a diagnostic; nothing to exempt
+		}
+		if a := allowanceFor(sev, line); a != nil && a.ID == "update-rc-d-chroot-fallback" {
+			t.Errorf("%q: the update-rc.d allowance must not claim this line", line)
+		}
+	}
+}
