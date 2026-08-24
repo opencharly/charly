@@ -277,6 +277,21 @@ var diagnosticAllowlist = []diagnosticAllowance{
 			"same log proving the transaction completed (`Complete!`); if dnf never " +
 			"completes, this entry does not claim the line and the step still fails.",
 	},
+	{
+		ID:       "update-rc-d-chroot-fallback",
+		Severity: severityWarning,
+		Match:    regexp.MustCompile(`^update-rc\.d: warning: start and stop actions are no longer supported; falling back to defaults$`),
+		Why: "Debian-family packages with init scripts (grub-common, dbus, qemu-guest-agent, " +
+			"...) run update-rc.d from their postinst; inside the debootstrap chroot (no " +
+			"policy-rc.d denying) update-rc.d prints this warning and falls back to its " +
+			"defaults — the standard debootstrap behavior, same postinst that then prints " +
+			"'Running in chroot, ignoring request'. Inherent to ANY debootstrap base build " +
+			"(the vm-build composing debootstrap-builder); the postinst completes and the " +
+			"service is configured by systemd at first boot. There is no pin or candy the " +
+			"box can choose that removes it, and suppressing it would mean shipping a " +
+			"policy-rc.d deny into the chroot, which would break the very init-script " +
+			"configuration the postinst is performing.",
+	},
 }
 
 // allowanceRecovered reports whether a claimed line really is exempt. An unconditional entry
