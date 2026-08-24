@@ -32,7 +32,7 @@ making a best-effort guess at cleanup.
 ## In practice
 
 The whole model in one worked example. First a **layer** — one concern, and the probes that prove
-it ([`ripgrep`](/reference/candy/ripgrep/), quoted from `candy/ripgrep/charly.yml`):
+it ([`ripgrep`](/recipes/tools/ripgrep/), quoted from its `charly.yml` in [opencharly/layer-ripgrep](https://github.com/opencharly/layer-ripgrep)):
 
 ```yaml
 ripgrep:
@@ -168,6 +168,6 @@ format as the two-candy box above.
 ## See also
 
 - **[The words](/concepts/00-vocabulary/)** — candy, box, candybox, plus polymorphism and nesting.
-- **[Candy reference](/reference/candy/ripgrep/)** — every defined candy, with its acceptance plan.
+- **[Candy reference](/reference/candy/sshd/)** — every defined candy, with its acceptance plan.
 - **[Box reference](/reference/box/fedora/tutorial-shell/)** — every defined box and what it composes.
 - **[The spec is the test](/concepts/06-the-spec-is-the-test/)** — what those `check:` steps are.
