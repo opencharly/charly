@@ -24,8 +24,14 @@ charly:
                 # deb-family via the tailscale apt repo. arch/fedora get tailscale from
                 # their native package's deps instead, so it is deb-family-scoped here.
                 package:
+                    - charly
                     - tailscale
                 repo:
+                    - name: charly
+                      url: "https://opencharly.github.io/charly-debian"
+                      key: "https://opencharly.github.io/charly-debian/charly.gpg"
+                      suite: stable
+                      components: main
                     - name: tailscale
                       url: "https://pkgs.tailscale.com/stable/debian"
                       key: "https://pkgs.tailscale.com/stable/debian/trixie.noarmor.gpg"
@@ -33,13 +39,41 @@ charly:
                       components: main
             ubuntu:
                 package:
+                    - charly
                     - tailscale
                 repo:
+                    - name: charly
+                      url: "https://opencharly.github.io/charly-ubuntu"
+                      key: "https://opencharly.github.io/charly-ubuntu/charly.gpg"
+                      suite: stable
+                      components: main
                     - name: tailscale
                       url: "https://pkgs.tailscale.com/stable/ubuntu"
                       key: "https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg"
                       suite: noble
                       components: main
+            fedora:
+                package:
+                    - charly
+                repo:
+                    - name: charly
+                      url: "https://opencharly.github.io/charly-fedora/repo/amd64/"
+                      gpgkey: "https://opencharly.github.io/charly-fedora/RPM-GPG-KEY-charly"
+            arch:
+                package:
+                    - charly
+                repo:
+                    - name: charly
+                      server: "https://opencharly.github.io/charly-arch/amd64/"
+                      key: 978DFF11A951A830F7ADA2D4062B073E9D1BAE2E
+                      siglevel: Required DatabaseOptional
+            alpine:
+                package:
+                    - charly
+                repo:
+                    - name: charly
+                      url: "https://opencharly.github.io/charly-alpine/amd64/"
+                      key: "https://opencharly.github.io/charly-alpine/charly.rsa.pub"
         # The `packaging:` section is the native-package metadata source for
         # `charly generate-packages` (sdk/packagekit): the per-distro package repos
         # (charly-alpine/arch/fedora/ubuntu/debian/openwrt) download this candy's
@@ -47,11 +81,10 @@ charly:
         # were transcribed from the three legacy pkg/* files (arch PKGBUILD, fedora
         # spec, debian control), removed with the nFPM cutover; the section is now the
         # single source — charly/packaging_test.go asserts it parses and every entry
-        # is a plain package name. The charly binary is installed by the `copy:
-        # bin/charly` run step below (the in-development binary at
-        # candy/charly/bin/charly, synced by `task build:binary`); that step remains
-        # the binary source for image builds, and the localpkg machinery builds from
-        # this section via the generate-packages plugin (sdk/packagekit).
+        # is a plain package name. The charly binary is installed from the published
+        # per-distro package repos (charly-{alpine,arch,fedora,ubuntu,debian,openwrt})
+        # via the distro: repo: + package: entries above — the same repos the
+        # generate-packages plugin (sdk/packagekit) builds from this section.
         packaging:
             name: charly
             description: The OpenCharly CLI — the fully equipped factory floor for you and your agents.
@@ -225,10 +258,6 @@ charly:
                     # format path has a metadata entry to parse.
                     depends: []
         plan:
-            - run: copy=bin/charly
-              copy: bin/charly
-              to: /usr/bin/charly
-              mode: "0755"
             - check: the charly binary resolves on the deployment's PATH
               exit_status: 0
               command: command -v charly
