@@ -12,7 +12,7 @@ versatiles-fonts:
             cell render labels without hitting tiles.versatiles.org as a runtime
             font CDN; the bundle is re-exported by versatiles-frontend at /fonts/.
         require:
-            - supervisord
+            - '@github.com/opencharly/layer-supervisord:v2026.235.2056'
         distro:
             arch:
                 package:

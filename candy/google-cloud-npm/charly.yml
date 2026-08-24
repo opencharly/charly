@@ -15,8 +15,8 @@ google-cloud-npm:
             version overwritten by a `*` install.
         require:
             - google-cloud
-            - nodejs
-            - gemini
+            - '@github.com/opencharly/layer-nodejs:v2026.235.2056'
+            - '@github.com/opencharly/layer-gemini:v2026.235.2110'
         plan:
             - check: the firebase binary is installed into the npm global bin directory
               file:

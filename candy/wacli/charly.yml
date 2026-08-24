@@ -10,7 +10,7 @@ wacli:
             carries the executable bit, and the required Go toolchain that builds
             and runs it is present at /usr/bin/go (the golang dependency).
         require:
-            - golang
+            - '@github.com/opencharly/layer-golang:v2026.235.2057'
         env:
             GOPATH: "~/go"
         path_append:

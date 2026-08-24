@@ -11,7 +11,7 @@ language-runtimes:
             (Go and Node.js are installed too but their acceptance is owned by the
             golang/nodejs candies — not duplicated here, per R3.)
         require:
-            - nodejs
+            - '@github.com/opencharly/layer-nodejs:v2026.235.2056'
             - rust
         distro:
             arch:

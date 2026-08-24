@@ -26,10 +26,10 @@ kde-selkies:
             intentionally distinct from any SDDM/Plasma DRM session a physical monitor
             shows on a real GPU output (that is kde-desktop's job).
         require:
-            - selkies
+            - '@github.com/opencharly/pod-selkies:v2026.235.2110'
             - kde-shell
-            - pipewire
-            - dbus
+            - '@github.com/opencharly/pod-pipewire:v2026.235.2110'
+            - '@github.com/opencharly/pod-dbus:v2026.235.2115'
         env:
             SELKIES_FRAMERATE: "60"
         service:

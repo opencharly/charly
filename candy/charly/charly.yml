@@ -16,7 +16,7 @@ charly:
         candy:
             - virtualization
             - gocryptfs
-            - socat
+            - '@github.com/opencharly/layer-socat:v2026.235.2057'
         distro:
             debian:
                 # tailscale is a mandatory charly dep but is NOT in Debian main, so the

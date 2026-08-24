@@ -12,7 +12,7 @@ filebrowser:
             Every fact below is observable: the installed binary, the config
             contents, the running service, and the HTTP 200 the web UI returns.
         require:
-            - supervisord
+            - '@github.com/opencharly/layer-supervisord:v2026.235.2056'
         env:
             FILEBROWSER_CONFIG: "/etc/filebrowser/config.yaml"
         port:

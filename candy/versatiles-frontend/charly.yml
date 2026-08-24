@@ -19,7 +19,7 @@ versatiles-frontend:
             Access-Control-Allow-Origin header (the reason this layer ships a
             custom server instead of plain `python -m http.server`).
         require:
-            - supervisord
+            - '@github.com/opencharly/layer-supervisord:v2026.235.2056'
             - versatiles-style # the http.server re-exports its bundle at /style/
             - versatiles-fonts # re-exported at /fonts/
             - maplibre-versatiles-styler # re-exported at /styler/

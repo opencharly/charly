@@ -16,7 +16,7 @@ osm-tools:
             the wrapper script present and executable, and a live service +
             reachable-port + HTTP-catalog probe against the running deployment.
         require:
-            - supervisord
+            - '@github.com/opencharly/layer-supervisord:v2026.235.2056'
         distro:
             arch:
                 # gdal pulls in ocl-icd which collides with opencl-nvidia's

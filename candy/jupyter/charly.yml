@@ -10,7 +10,7 @@ jupyter:
             from jupyter-mcp) exposes notebook_*/cell_* tools at /mcp so an agent
             can create and edit notebooks over the Model Context Protocol.
         require:
-            - supervisord
+            - '@github.com/opencharly/layer-supervisord:v2026.235.2056'
             # plugin-mcp is the OUT-OF-TREE plugin that serves the `mcp:` check verb
             # (the github.com/modelcontextprotocol/go-sdk MCP CLIENT lives there, not in
             # charly's core check surface). This candy AUTHORS `mcp:` checks, so requiring

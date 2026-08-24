@@ -10,7 +10,7 @@ github-runner:
             deps (icu/krb5/openssl/libunwind/lttng-ust) are declared explicitly because the
             runner's installdependencies.sh has no Arch branch — so config.sh actually runs.
         require:
-            - supervisord
+            - '@github.com/opencharly/layer-supervisord:v2026.235.2056'
             # Rootless nested podman/buildah/skopeo + subuid/subgid layout +
             # newuidmap/newgidmap file-caps + containers/storage/policy configs all
             # come from container-nesting. This layer carries only the

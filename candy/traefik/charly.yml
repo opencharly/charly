@@ -10,7 +10,7 @@ traefik:
             dynamic-provider directory at /etc/traefik/dynamic. It runs as a supervisord
             service, so every install artifact and the live API are independently verifiable.
         require:
-            - supervisord
+            - '@github.com/opencharly/layer-supervisord:v2026.235.2056'
         var:
             TRAEFIK_VERSION: v3.4.0
         port:

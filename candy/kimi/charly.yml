@@ -10,7 +10,7 @@ kimi:
             is unpacked under ~/.npm-global/lib/node_modules/@moonshot-ai/kimi-code,
             and `kimi --version` exits cleanly and prints a semantic version.
         require:
-            - nodejs
+            - '@github.com/opencharly/layer-nodejs:v2026.235.2056'
         plan:
             - check: the kimi binary is installed into the npm global bin directory
               file:

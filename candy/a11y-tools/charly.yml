@@ -9,7 +9,7 @@ a11y-tools:
             so every check targets the absolute /usr/bin/python3. Verifiable by importing
             both modules and by confirming each distro's package is installed.
         require:
-            - dbus
+            - '@github.com/opencharly/pod-dbus:v2026.235.2115'
         distro:
             arch:
                 package:
@@ -62,7 +62,7 @@ a11y-tools-skill:
             
             ```yaml
             require:
-              - dbus
+              - '@github.com/opencharly/pod-dbus:v2026.235.2115'
             
             rpm:
               packages:

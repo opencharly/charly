@@ -15,8 +15,8 @@ openwebui:
             entrypoint, the running service, the admin email injected into its
             environment, and the HTTP 200 the web UI returns on its published port.
         require:
-            - python
-            - supervisord
+            - '@github.com/opencharly/layer-python:v2026.235.2057'
+            - '@github.com/opencharly/layer-supervisord:v2026.235.2056'
         env:
             DATA_DIR: "/opt/data"
             PORT: "8080"
@@ -153,7 +153,7 @@ openwebui-skill:
               candy:
                 - agent-forwarding
                 - openwebui
-                - dbus
+                - '@github.com/opencharly/pod-dbus:v2026.235.2115'
                 - charly
               ports:
                 - "8080:8080"

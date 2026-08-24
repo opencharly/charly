@@ -12,7 +12,7 @@ agentteams-cli:
             use. The agt build is CGO-disabled (a thin REST client, no cgo
             deps), so this candy needs only the golang toolchain.
         require:
-            - golang
+            - '@github.com/opencharly/layer-golang:v2026.235.2057'
         extract:
             - source: higress-registry.cn-hangzhou.cr.aliyuncs.com/higress/mc:20260216
               path: /usr/bin/mc

@@ -12,7 +12,7 @@ python-ml:
             fixed path under ~/.pixi/envs/default, so its presence and
             importability are directly checkable.
         require:
-            - cuda
+            - '@github.com/opencharly/layer-cuda:v2026.235.2121'
         candy:
             - llama-cpp
         env:

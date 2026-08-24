@@ -211,7 +211,7 @@ selkies-kde-skill:
               candy:
                 - agent-forwarding
                 - selkies-kde-desktop    # the KDE metalayer (selkies-core + kde-selkies → kde-shell)
-                - dbus
+                - '@github.com/opencharly/pod-dbus:v2026.235.2115'
                 - charly
               port: ["3000:3000", "9222:9222", "9224:9224", "2222:2222"]
               platform: [linux/amd64]
@@ -297,7 +297,7 @@ selkies-kde-nvidia-skill:
               candy:
                 - agent-forwarding
                 - selkies-kde-desktop
-                - dbus
+                - '@github.com/opencharly/pod-dbus:v2026.235.2115'
                 - charly
               port: ["3000:3000", "9222:9222", "9224:9224", "2222:2222"]
               platform: [linux/amd64]
@@ -366,7 +366,7 @@ selkies-labwc-skill:
               candy:
                 - agent-forwarding
                 - selkies-desktop
-                - dbus
+                - '@github.com/opencharly/pod-dbus:v2026.235.2115'
                 - charly
               ports:
                 - "3000:3000"
@@ -790,7 +790,7 @@ selkies-labwc-nvidia-skill:
               candy:
                 - agent-forwarding
                 - selkies-desktop
-                - dbus
+                - '@github.com/opencharly/pod-dbus:v2026.235.2115'
                 - charly
               port:
                 - "3000:3000"

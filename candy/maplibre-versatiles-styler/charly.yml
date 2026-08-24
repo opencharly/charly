@@ -14,7 +14,7 @@ maplibre-versatiles-styler:
             Observable by the install directory and at least one non-empty
             JavaScript bundle landing there, plus the node/npm bundling toolchain.
         require:
-            - supervisord
+            - '@github.com/opencharly/layer-supervisord:v2026.235.2056'
         distro:
             arch:
                 package:

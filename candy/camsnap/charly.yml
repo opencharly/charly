@@ -9,7 +9,7 @@ camsnap:
             binary exists, is executable, and `go version -m` reports it was built
             from the upstream github.com/steipete/camsnap module.
         require:
-            - golang
+            - '@github.com/opencharly/layer-golang:v2026.235.2057'
         env:
             GOPATH: "~/go"
         path_append:

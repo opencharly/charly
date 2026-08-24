@@ -13,7 +13,7 @@ pi-agent:
             It also installs a pi-tui controller that renders durable Charly
             sessions/events and invokes only the typed `charly agent` API.
         require:
-            - nodejs
+            - '@github.com/opencharly/layer-nodejs:v2026.235.2056'
         volume:
             - name: sessions
               path: ~/.pi/agent/sessions

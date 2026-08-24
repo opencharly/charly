@@ -20,7 +20,7 @@ openclaw-full:
             - openclaw
             - claude-code
             - codex
-            - gemini
+            - '@github.com/opencharly/layer-gemini:v2026.235.2110'
             - clawhub
             - mcporter
             - oracle
@@ -40,8 +40,8 @@ openclaw-full:
             - uv
             - nano-pdf
             - gh
-            - tmux
-            - ffmpeg
+            - '@github.com/opencharly/layer-tmux:v2026.235.2057'
+            - '@github.com/opencharly/layer-ffmpeg:v2026.235.2057'
             - '@github.com/opencharly/layer-ripgrep:v2026.235.1653'
             - sqlite
         plan:

@@ -10,7 +10,7 @@ gifgrep:
             executable, and `gifgrep --help` runs (exit 0) and prints its Kong
             usage banner listing the search/tui/still/sheet subcommands.
         require:
-            - golang
+            - '@github.com/opencharly/layer-golang:v2026.235.2057'
         env:
             GOPATH: "~/go"
         path_append:

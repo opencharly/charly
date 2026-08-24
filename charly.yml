@@ -3396,7 +3396,7 @@ dsh-app:
         builder:
             npm: fedora.fedora-builder
         candy:
-            - nodejs
+            - '@github.com/opencharly/layer-nodejs:v2026.235.2056'
             - dsh
 check-dsh-pod:
     pod:
@@ -3535,7 +3535,7 @@ agentteams-manager:
         # inherited default command is cleared at emission (CMD []), so the
         # entrypoint runs bare. /etc/supervisord.conf is assembled at build time.
         entrypoint:
-            - supervisord
+            - '@github.com/opencharly/layer-supervisord:v2026.235.2056'
             - -n
             - -c
             - /etc/supervisord.conf
@@ -3563,7 +3563,7 @@ agentteams-worker:
         # emission (CMD []), so the entrypoint runs bare. /etc/supervisord.conf is
         # assembled at build time.
         entrypoint:
-            - supervisord
+            - '@github.com/opencharly/layer-supervisord:v2026.235.2056'
             - -n
             - -c
             - /etc/supervisord.conf

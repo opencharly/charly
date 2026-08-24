@@ -18,8 +18,8 @@ dsh:
             package, `dsh --version`/`--help`, node >= 22.19.0, the running
             service, and the HTTP 200 the web UI answers on 127.0.0.1:3080.
         require:
-            - nodejs
-            - supervisord
+            - '@github.com/opencharly/layer-nodejs:v2026.235.2056'
+            - '@github.com/opencharly/layer-supervisord:v2026.235.2056'
         package:
             - socat
         env:

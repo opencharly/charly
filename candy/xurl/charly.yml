@@ -11,7 +11,7 @@ xurl:
             itself after the global install. Verifiable: the xurl binary lands at
             ~/.npm-global/bin/xurl and runs `--help`.
         require:
-            - nodejs
+            - '@github.com/opencharly/layer-nodejs:v2026.235.2056'
         plan:
             - run: fetch the xurl platform binary — npm >=12 blocks the package postinstall (install.js) by default; run the package's own download script explicitly
               command: node "${HOME}/.npm-global/lib/node_modules/@xdevplatform/xurl/install.js"
