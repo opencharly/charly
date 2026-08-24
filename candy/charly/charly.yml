@@ -58,7 +58,7 @@ charly:
                 repo:
                     - name: charly
                       url: "https://opencharly.github.io/charly-fedora/amd64/"
-                      gpgkey: "https://opencharly.github.io/charly-fedora/RPM-GPG-KEY-charly"
+                      key: "https://opencharly.github.io/charly-fedora/RPM-GPG-KEY-charly"
             arch:
                 package:
                     - charly
