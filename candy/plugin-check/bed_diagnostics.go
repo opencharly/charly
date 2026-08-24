@@ -315,8 +315,9 @@ var diagnosticAllowlist = []diagnosticAllowance{
 		// VM's base-image build) there is no booted kernel and no root device, so the hook
 		// prints this error and falls back to a full-featured (non-autodetect) initramfs —
 		// which is exactly what a bootstrapped VM needs (the real root device is supplied at
-		// boot by the kernel command line). The capture group is the mkinitcpio hook name;
-		// the recovery is mkinitcpio's own success line for the SAME image.
+		// boot by the kernel command line). The capture group holds the error TEXT
+		// (failed to detect root filesystem), satisfying the conditional-allowance
+		// capture-group requirement; RecoveredBy carries no %s so the pattern is used as-is.
 		Match: regexp.MustCompile(`^==> ERROR: (failed to detect root filesystem)$`),
 		// The recovery is mkinitcpio's success line: the initramfs image was created despite
 		// the autodetect fallback. No %s placeholder — the error names no package/device to
