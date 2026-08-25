@@ -58,7 +58,7 @@ libnotify-skill:
             # charly.yml
             my-image:
               candy:
-                - libnotify
+                - '@github.com/opencharly/layer-libnotify:v2026.237.457'
             ```
             
             ## Purpose

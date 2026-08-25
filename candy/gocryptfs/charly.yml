@@ -60,7 +60,7 @@ gocryptfs-skill:
             # charly.yml
             my-image:
               candy:
-                - gocryptfs
+                - '@github.com/opencharly/layer-gocryptfs:v2026.237.457'
             ```
             
             Typically used as part of the `charly` candy (the full toolchain: charly binary + virtualization + gocryptfs + socat) rather than directly.

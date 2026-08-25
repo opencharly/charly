@@ -204,16 +204,16 @@ image-skill:
                 base: fedora
                 produce: [pixi, npm, cargo]  # declares what this builder can build
                 candy:
-                  - pixi
+                  - '@github.com/opencharly/layer-pixi:v2026.237.457'
                   - '@github.com/opencharly/layer-nodejs:v2026.235.2056'
-                  - build-toolchain
+                  - '@github.com/opencharly/layer-build-toolchain:v2026.237.455'
 
             my-app:
               candy:
                 base: fedora
                 env_file: "~/.config/my-app/.env"
                 candy:
-                  - traefik
+                  - '@github.com/opencharly/pod-traefik:v2026.237.558'
                   - my-service          # declares service: — the init is injected, not listed here.
                                         # Published ports are inherited from the candies (no box `port:`)
                 env:
@@ -1326,7 +1326,7 @@ layer-skill:
               candy:
                 require:
                   - '@github.com/opencharly/layer-python:v2026.235.2057'
-                  - build-toolchain
+                  - '@github.com/opencharly/layer-build-toolchain:v2026.237.455'
             ```
 
             ### `require` vs `candy` (composition)

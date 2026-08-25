@@ -14,8 +14,8 @@ immich:
         require:
             - '@github.com/opencharly/layer-supervisord:v2026.235.2056'
             - '@github.com/opencharly/layer-nodejs:v2026.235.2056'
-            - postgresql
-            - redis
+            - '@github.com/opencharly/pod-postgresql:v2026.237.458'
+            - '@github.com/opencharly/pod-redis:v2026.237.458'
             - '@github.com/opencharly/layer-ffmpeg:v2026.235.2057'
         env:
             IMMICH_VERSION: "v2.7.5"

@@ -14,8 +14,8 @@ charly:
             path) need NOT bake it — the host copies `charly` in on demand
             (`EnsureCharlyInDeployVenue`; see `/charly-tools:charly`).
         candy:
-            - virtualization
-            - gocryptfs
+            - '@github.com/opencharly/pod-virtualization:v2026.237.458'
+            - '@github.com/opencharly/layer-gocryptfs:v2026.237.457'
             - '@github.com/opencharly/layer-socat:v2026.235.2057'
         distro:
             debian:

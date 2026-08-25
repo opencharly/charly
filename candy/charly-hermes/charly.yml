@@ -38,8 +38,8 @@ hermes-full-layer-skill:
                 version: 2026.156.1921   # mandatory CalVer
                 candy:                   # the candies it pulls in
                   - hermes          # AI agent with browser tools, MCP, LLM auto-config
-                  - claude-code     # Anthropic Claude Code CLI
-                  - codex           # OpenAI Codex CLI
+                  - '@github.com/opencharly/layer-claude-code:v2026.237.456'     # Anthropic Claude Code CLI
+                  - '@github.com/opencharly/layer-codex:v2026.237.556'           # OpenAI Codex CLI
                   - gemini          # Google Gemini CLI
                   - dev-tools       # bat, ripgrep, neovim, gh, direnv, fd-find, htop, etc.
                   - devops-tools    # AWS CLI, Scaleway, kubectx, OpenTofu, wrangler, jq, rsync
@@ -398,7 +398,7 @@ playwright-layer-skill:
               candy:
                 base: fedora
                 candy:
-                  - playwright
+                  - '@github.com/opencharly/layer-playwright:v2026.237.557'
             ```
             
             ## Used In Boxes

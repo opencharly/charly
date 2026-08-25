@@ -124,7 +124,7 @@ rocm-skill:
             my-amd-app:
               base: fedora
               candy:
-                - rocm
+                - '@github.com/opencharly/layer-rocm:v2026.237.458'
                 - my-app
             ```
             

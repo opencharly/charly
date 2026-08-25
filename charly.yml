@@ -832,7 +832,7 @@ check-k8s-deploy-app:
             - fedora
         candy:
             - check-keepalive
-            - os-layer
+            - '@github.com/opencharly/pod-os-layer:v2026.237.457'
 # =============================================================================
 # check-k8s-deploy — disposable proof of the EXTERNALIZED deploy:kubernetes SUBSTRATE
 # (F1, candy/plugin-kube serving deploy:kubernetes beside verb:kube). A GROUP bed (the
@@ -3248,7 +3248,7 @@ docs-site-app:
             - fedora:43
             - fedora
         candy:
-            - docs-site
+            - '@github.com/opencharly/layer-docs-site:v2026.237.456'
 check-docs:
     pod:
         image: docs-site-app
@@ -3397,7 +3397,7 @@ dsh-app:
             npm: fedora.fedora-builder
         candy:
             - '@github.com/opencharly/layer-nodejs:v2026.235.2056'
-            - dsh
+            - '@github.com/opencharly/pod-dsh:v2026.237.558'
 check-dsh-pod:
     pod:
         image: dsh-app

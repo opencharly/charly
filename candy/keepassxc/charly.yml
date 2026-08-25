@@ -70,7 +70,7 @@ keepassxc-skill:
             my-desktop-image:
               candy:
                 - selkies-desktop      # or another desktop base
-                - keepassxc            # this layer
+                - '@github.com/opencharly/layer-keepassxc:v2026.237.457'            # this layer
             ```
             
             ## Used In Boxes

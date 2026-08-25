@@ -13,10 +13,10 @@ hermes-full:
             candy: list makes the matching check below fail.
         candy:
             - hermes
-            - claude-code
-            - codex
+            - '@github.com/opencharly/layer-claude-code:v2026.237.456'
+            - '@github.com/opencharly/layer-codex:v2026.237.556'
             - '@github.com/opencharly/layer-gemini:v2026.235.2110'
-            - forgecode
+            - '@github.com/opencharly/layer-forgecode:v2026.237.556'
             - dev-tools
             - devops-tools
             - '@github.com/opencharly/layer-tmux:v2026.235.2057'

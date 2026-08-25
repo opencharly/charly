@@ -7,7 +7,7 @@ check-redis-init-layer:
             after redis-server is up so the tier4-redis recipe's
             `redis-cli get bench:hello` probe returns the expected value.
         require:
-            - redis
+            - '@github.com/opencharly/pod-redis:v2026.237.458'
         distro:
             fedora:
                 package:

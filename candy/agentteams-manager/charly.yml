@@ -20,8 +20,8 @@ agentteams-manager:
             /root/.openclaw uid-1000-writable at build time. Rootless: the service
             runs as the image user (uid 1000).
         require:
-            - agentteams-openclaw
-            - agentteams-cli
+            - '@github.com/opencharly/layer-agentteams-openclaw:v2026.237.454'
+            - '@github.com/opencharly/layer-agentteams-cli:v2026.237.454'
         service:
             - name: agentteams-manager
               exec: /opt/agentteams-manager/start-manager.sh

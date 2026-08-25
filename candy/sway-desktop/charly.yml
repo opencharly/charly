@@ -14,20 +14,20 @@ sway-desktop:
         candy:
             - '@github.com/opencharly/pod-pipewire:v2026.235.2110'
             - xdg-portal
-            - wl-tools
-            - wl-screenshot-grim
-            - wl-overlay
-            - wf-recorder
-            - chrome-sway
+            - '@github.com/opencharly/layer-wl-tools:v2026.237.459'
+            - '@github.com/opencharly/layer-wl-screenshot-grim:v2026.237.459'
+            - '@github.com/opencharly/layer-wl-overlay:v2026.237.557'
+            - '@github.com/opencharly/layer-wf-recorder:v2026.237.458'
+            - '@github.com/opencharly/layer-chrome-sway:v2026.237.556'
             - xfce4-terminal
             - thunar
-            - waybar
+            - '@github.com/opencharly/pod-waybar:v2026.237.559'
             - desktop-fonts
-            - swaync
-            - pavucontrol
+            - '@github.com/opencharly/pod-swaync:v2026.237.558'
+            - '@github.com/opencharly/layer-pavucontrol:v2026.237.457'
             - '@github.com/opencharly/layer-tmux:v2026.235.2057'
-            - asciinema
-            - fastfetch
+            - '@github.com/opencharly/layer-asciinema:v2026.237.455'
+            - '@github.com/opencharly/layer-fastfetch:v2026.237.456'
         plan:
             - check: the waybar status bar binary from the composed waybar candy is installed
               file:

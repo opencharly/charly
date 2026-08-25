@@ -50,7 +50,7 @@ kimi-skill:
             # charly.yml
             my-dev:
               candy:
-                - kimi
+                - '@github.com/opencharly/layer-kimi:v2026.237.556'
             ```
             
             ## Used In Boxes

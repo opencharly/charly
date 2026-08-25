@@ -39,20 +39,20 @@ selkies-desktop-layer-skill:
                 candy:
                   - pipewire                # Audio (PulseAudio compat)
                   - chrome                  # Google Chrome with CDP on :9222, Chrome DevTools MCP on :9224
-                  - labwc                   # Wayland compositor (nested in pixelflux)
+                  - '@github.com/opencharly/pod-labwc:v2026.237.558'                   # Wayland compositor (nested in pixelflux)
                   - waybar-labwc            # Top status bar (Catppuccin Mocha, system monitors)
                   - desktop-fonts           # JetBrains Mono + Nerd Fonts
-                  - swaync                  # SwayNotificationCenter (notification daemon)
-                  - pavucontrol             # PulseAudio volume control GUI
-                  - wl-tools                # Desktop automation (wtype, wlrctl, xdotool, wl-clipboard, wlr-randr)
-                  - wl-screenshot-pixelflux # Screenshots via selkies capture bridge
-                  - wl-overlay              # Fullscreen overlays via gtk4-layer-shell (for recordings)
-                  - wl-record-pixelflux    # Desktop video recording via selkies capture bridge
-                  - a11y-tools              # AT-SPI2 accessibility introspection (python3-pyatspi)
+                  - '@github.com/opencharly/pod-swaync:v2026.237.558'                  # SwayNotificationCenter (notification daemon)
+                  - '@github.com/opencharly/layer-pavucontrol:v2026.237.457'             # PulseAudio volume control GUI
+                  - '@github.com/opencharly/layer-wl-tools:v2026.237.459'                # Desktop automation (wtype, wlrctl, xdotool, wl-clipboard, wlr-randr)
+                  - '@github.com/opencharly/layer-wl-screenshot-pixelflux:v2026.237.557' # Screenshots via selkies capture bridge
+                  - '@github.com/opencharly/layer-wl-overlay:v2026.237.557'              # Fullscreen overlays via gtk4-layer-shell (for recordings)
+                  - '@github.com/opencharly/layer-wl-record-pixelflux:v2026.237.557'    # Desktop video recording via selkies capture bridge
+                  - '@github.com/opencharly/layer-a11y-tools:v2026.237.454'              # AT-SPI2 accessibility introspection (python3-pyatspi)
                   - xterm                   # X11 terminal for XWayland testing
                   - tmux                    # Terminal multiplexer (required by the record: check verb)
-                  - asciinema               # Terminal session recording
-                  - fastfetch               # System information display
+                  - '@github.com/opencharly/layer-asciinema:v2026.237.455'               # Terminal session recording
+                  - '@github.com/opencharly/layer-fastfetch:v2026.237.456'               # System information display
                   - selkies                 # Streaming server (pixelflux + pcmflux + nginx)
             ```
             
@@ -1127,7 +1127,7 @@ wl-overlay-layer-skill:
             # Already part of sway-desktop, selkies-desktop
             my-desktop:
               candy:
-                - wl-overlay
+                - '@github.com/opencharly/layer-wl-overlay:v2026.237.557'
             ```
             
             ```yaml

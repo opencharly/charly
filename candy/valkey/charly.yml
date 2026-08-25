@@ -136,7 +136,7 @@ valkey-skill:
             # charly.yml
             my-app:
               candy:
-                - valkey
+                - '@github.com/opencharly/pod-valkey:v2026.237.458'
               ports:
                 - "6379:6379"
             ```

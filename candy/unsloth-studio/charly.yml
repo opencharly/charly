@@ -14,8 +14,8 @@ unsloth-studio:
             - '@github.com/opencharly/layer-cuda:v2026.235.2121'
             - '@github.com/opencharly/layer-supervisord:v2026.235.2056'
         candy:
-            - llama-cpp
-            - unsloth
+            - '@github.com/opencharly/layer-llama-cpp:v2026.237.457'
+            - '@github.com/opencharly/layer-unsloth:v2026.237.557'
         # The unsloth Studio installer (install.sh) builds its GGUF inference engine
         # from source at install time and HARD-requires cmake + git + a C/C++ toolchain;
         # on Arch it does NOT auto-install them (apt-only), so it aborts with

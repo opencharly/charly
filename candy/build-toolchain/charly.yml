@@ -270,7 +270,7 @@ build-toolchain-skill:
             # charly.yml
             my-image:
               candy:
-                - build-toolchain
+                - '@github.com/opencharly/layer-build-toolchain:v2026.237.455'
             ```
             
             ## Used In Boxes

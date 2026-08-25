@@ -116,7 +116,7 @@ github-actions-skill:
             # charly.yml
             my-ci:
               candy:
-                - github-actions
+                - '@github.com/opencharly/layer-github-actions:v2026.237.457'
             ```
             
             ## Used In Boxes

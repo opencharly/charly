@@ -28,7 +28,7 @@ ollama-rocm:
             backend library is verifiable at build scope; live GPU enumeration is
             verifiable only on a host with a real AMD GPU passed through.
         require:
-            - ollama
+            - '@github.com/opencharly/pod-ollama:v2026.237.457'
         security:
             group_add:
                 - keep-groups

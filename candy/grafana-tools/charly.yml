@@ -150,7 +150,7 @@ grafana-tools-skill:
             # charly.yml
             my-image:
               candy:
-                - grafana-tools
+                - '@github.com/opencharly/layer-grafana-tools:v2026.237.457'
             ```
             
             ## Used In Boxes

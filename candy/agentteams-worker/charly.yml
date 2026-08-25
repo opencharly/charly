@@ -19,8 +19,8 @@ agentteams-worker:
             time; the per-worker agents/<name> workspace is created at runtime.
             Rootless: the service runs as the image user (uid 1000).
         require:
-            - agentteams-openclaw
-            - agentteams-cli
+            - '@github.com/opencharly/layer-agentteams-openclaw:v2026.237.454'
+            - '@github.com/opencharly/layer-agentteams-cli:v2026.237.454'
         service:
             - name: agentteams-worker
               exec: /opt/agentteams-worker/start-worker.sh

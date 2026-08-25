@@ -700,7 +700,7 @@ container-nesting-skill:
               candy:
                 - selkies-desktop
                 - openclaw-full
-                - ollama
+                - '@github.com/opencharly/pod-ollama:v2026.237.457'
                 - charly
                 - container-nesting   # donates unmask + devices + config + env
                 - ...

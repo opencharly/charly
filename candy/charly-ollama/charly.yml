@@ -86,7 +86,7 @@ ollama-layer-skill:
             # charly.yml
             ollama:
               candy:
-                - ollama
+                - '@github.com/opencharly/pod-ollama:v2026.237.457'
             ```
             
             ```bash

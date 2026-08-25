@@ -19,8 +19,8 @@ openclaw-full-ml:
             no-op composition fails every check below.
         candy:
             - openclaw-full
-            - whisper
-            - sherpa-onnx
+            - '@github.com/opencharly/layer-whisper:v2026.237.557'
+            - '@github.com/opencharly/layer-sherpa-onnx:v2026.237.458'
         plan:
             - check: the OpenClaw gateway binary is installed (provided by openclaw-full)
               file:
