@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-oci
+module github.com/opencharly/plugin-oci/candy/plugin-oci
 
 go 1.26.4
 

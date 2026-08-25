@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-helm
+module github.com/opencharly/plugin-helm/candy/plugin-helm
 
 go 1.26.4
 

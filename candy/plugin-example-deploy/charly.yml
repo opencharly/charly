@@ -25,7 +25,7 @@ plugin-example-deploy:
         plugin:
             providers:
                 - deploy:exampledeploy
-            source: github.com/opencharly/charly/candy/plugin-example-deploy
+            source: github.com/opencharly/plugin-example-deploy/candy/plugin-example-deploy
         env:
             EXAMPLEDEPLOY_STEP_ENV: present
         plan:

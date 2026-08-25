@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-example-external
+module github.com/opencharly/plugin-example-external/candy/plugin-example-external
 
 go 1.26.4
 

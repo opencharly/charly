@@ -11,7 +11,7 @@ plugin-http:
             CheckContextService reverse channel (F2). A pure check verb; the matcher
             evaluation reuses the shared sdk.MatchAll.
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-http
+            source: github.com/opencharly/plugin-http/candy/plugin-http
             providers:
                 - verb:http
             primary:

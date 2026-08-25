@@ -32,7 +32,7 @@ plugin-adb:
             providers:
                 - verb:adb
                 - deploy:android
-            source: github.com/opencharly/charly/candy/plugin-adb
+            source: github.com/opencharly/plugin-adb/candy/plugin-adb
             primary:
                 adb: method
         plan:

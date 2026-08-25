@@ -6,7 +6,7 @@
 package main
 
 import (
-	vm "github.com/opencharly/charly/candy/plugin-vm"
+	vm "github.com/opencharly/plugin-vm/candy/plugin-vm"
 	"github.com/opencharly/sdk"
 )
 

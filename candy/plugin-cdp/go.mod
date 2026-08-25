@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-cdp
+module github.com/opencharly/plugin-cdp/candy/plugin-cdp
 
 go 1.26.4
 

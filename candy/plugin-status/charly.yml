@@ -51,7 +51,7 @@ plugin-status:
             TestCollectPodLiveGolden (candy/plugin-substrate/status_test.go) — the relocated
             pod-live transform golden (P14a, moved from charly/status_golden_test.go).
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-status
+            source: github.com/opencharly/plugin-status/candy/plugin-status
             providers:
                 - command:status
         plan:

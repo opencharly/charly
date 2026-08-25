@@ -6,7 +6,7 @@
 package main
 
 import (
-	exampledeploy "github.com/opencharly/charly/candy/plugin-example-deploy"
+	exampledeploy "github.com/opencharly/plugin-example-deploy/candy/plugin-example-deploy"
 	"github.com/opencharly/sdk"
 )
 

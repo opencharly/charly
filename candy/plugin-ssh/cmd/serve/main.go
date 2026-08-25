@@ -6,7 +6,7 @@
 package main
 
 import (
-	ssh "github.com/opencharly/charly/candy/plugin-ssh"
+	ssh "github.com/opencharly/plugin-ssh/candy/plugin-ssh"
 	"github.com/opencharly/sdk"
 )
 

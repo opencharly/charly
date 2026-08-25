@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-installstep
+module github.com/opencharly/plugin-installstep/candy/plugin-installstep
 
 go 1.26.4
 

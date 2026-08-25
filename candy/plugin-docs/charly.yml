@@ -32,7 +32,7 @@ plugin-docs:
             fedora only, so a catalog built on it silently omits every debian.* and ubuntu.* box
             while duplicating ten arch boxes under transitive cachyos.arch.* aliases.
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-docs
+            source: github.com/opencharly/plugin-docs/candy/plugin-docs
             providers:
                 - command:docs
         plan:

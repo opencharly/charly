@@ -23,7 +23,7 @@ import (
 
 	"github.com/alecthomas/kong"
 
-	"github.com/opencharly/charly/candy/plugin-agentteams/params"
+	"github.com/opencharly/plugin-agentteams/candy/plugin-agentteams/params"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/spec/proto"

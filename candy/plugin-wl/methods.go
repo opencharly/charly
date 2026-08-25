@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/opencharly/charly/candy/plugin-wl/params"
+	"github.com/opencharly/plugin-wl/candy/plugin-wl/params"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/spec/shellquote"
 	"github.com/opencharly/spec/spec"

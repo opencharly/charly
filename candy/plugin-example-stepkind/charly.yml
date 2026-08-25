@@ -19,7 +19,7 @@ plugin-example-stepkind:
         plugin:
             providers:
                 - step:examplestepkind
-            source: github.com/opencharly/charly/candy/plugin-example-stepkind
+            source: github.com/opencharly/plugin-example-stepkind/candy/plugin-example-stepkind
         plan:
             - check: the out-of-tree class:step plugin ships a buildable Go module the host can build + serve out-of-process (both legs — OpExecute at deploy, OpEmit at build)
               id: examplestepkind-module-present

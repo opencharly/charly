@@ -29,7 +29,7 @@ plugin-ollama:
             http://127.0.0.1:${HOST_PORT:11434}` host-side against the live server, plus
             the candy's baked checks.
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-ollama
+            source: github.com/opencharly/plugin-ollama/candy/plugin-ollama
             providers:
                 - command:ollama
         plan:

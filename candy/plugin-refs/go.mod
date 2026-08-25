@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-refs
+module github.com/opencharly/plugin-refs/candy/plugin-refs
 
 go 1.26.4
 

@@ -12,7 +12,7 @@ plugin-example:
             Companion of candy/plugin-example-external (now identical in shape; the
             in-charly-module builtin form was retired).
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-example
+            source: github.com/opencharly/plugin-example/candy/plugin-example
             providers:
                 - verb:exampleprobe
         plan:

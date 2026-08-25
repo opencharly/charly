@@ -7,7 +7,7 @@
 package main
 
 import (
-	process "github.com/opencharly/charly/candy/plugin-process"
+	process "github.com/opencharly/plugin-process/candy/plugin-process"
 	"github.com/opencharly/sdk"
 )
 

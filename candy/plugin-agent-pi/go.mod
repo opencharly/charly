@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-agent-pi
+module github.com/opencharly/plugin-agent-pi/candy/plugin-agent-pi
 
 go 1.26.4
 

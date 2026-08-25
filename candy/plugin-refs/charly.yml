@@ -17,7 +17,7 @@ plugin-refs:
             cycle, so registering this at init() before the first load is likewise cycle-free.
             COMPILED-IN (in the embedded compiled_plugins:); unlocks alternative ref backends.
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-refs
+            source: github.com/opencharly/plugin-refs/candy/plugin-refs
             providers:
                 - refs:refs
         plan:

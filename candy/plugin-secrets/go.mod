@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-secrets
+module github.com/opencharly/plugin-secrets/candy/plugin-secrets
 
 go 1.26.4
 

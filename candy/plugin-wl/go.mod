@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-wl
+module github.com/opencharly/plugin-wl/candy/plugin-wl
 
 go 1.26.4
 

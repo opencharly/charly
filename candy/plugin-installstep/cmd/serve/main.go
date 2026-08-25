@@ -7,7 +7,7 @@
 package main
 
 import (
-	installstep "github.com/opencharly/charly/candy/plugin-installstep"
+	installstep "github.com/opencharly/plugin-installstep/candy/plugin-installstep"
 	"github.com/opencharly/sdk"
 )
 

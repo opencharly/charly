@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-dns
+module github.com/opencharly/plugin-dns/candy/plugin-dns
 
 go 1.26.4
 

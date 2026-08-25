@@ -17,7 +17,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/opencharly/charly/candy/plugin-package/params"
+	"github.com/opencharly/plugin-package/candy/plugin-package/params"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/spec/proto"

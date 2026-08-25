@@ -24,7 +24,7 @@ plugin-authoring:
                 - command:refresh
                 - command:write
                 - command:cat
-            source: github.com/opencharly/charly/candy/plugin-authoring
+            source: github.com/opencharly/plugin-authoring/candy/plugin-authoring
         plan:
             - # ADE check: a deterministic build-context check that does NOT depend on the host
               # reverse channel the `charly box fetch`/`refresh` handlers need (the prescan finds

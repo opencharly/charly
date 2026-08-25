@@ -7,7 +7,7 @@
 package main
 
 import (
-	iface "github.com/opencharly/charly/candy/plugin-interface"
+	iface "github.com/opencharly/plugin-interface/candy/plugin-interface"
 	"github.com/opencharly/sdk"
 )
 

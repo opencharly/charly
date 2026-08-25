@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-examplerunverb
+module github.com/opencharly/plugin-examplerunverb/candy/plugin-examplerunverb
 
 go 1.26.4
 

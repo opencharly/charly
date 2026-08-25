@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-matching
+module github.com/opencharly/plugin-matching/candy/plugin-matching
 
 go 1.26.4
 

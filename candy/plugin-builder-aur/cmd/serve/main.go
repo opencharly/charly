@@ -6,7 +6,7 @@
 package main
 
 import (
-	builderaur "github.com/opencharly/charly/candy/plugin-builder-aur"
+	builderaur "github.com/opencharly/plugin-builder-aur/candy/plugin-builder-aur"
 	"github.com/opencharly/sdk"
 )
 

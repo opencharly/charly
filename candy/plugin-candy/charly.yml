@@ -26,7 +26,7 @@ plugin-candy:
             The R10 witness is the disposable check-commands-local bed: `charly candy --help` exits
             0, proving the command tree resolves and dispatches end-to-end.
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-candy
+            source: github.com/opencharly/plugin-candy/candy/plugin-candy
             providers:
                 - command:candy
         plan:

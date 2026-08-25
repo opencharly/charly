@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-substrate
+module github.com/opencharly/plugin-substrate/candy/plugin-substrate
 
 go 1.26.4
 

@@ -8,7 +8,7 @@ plugin-distro:
             placements (compiled-in OR out-of-process) like the matching/exampleprobe
             verbs + the init kind — no kit contract needed (kinds are pb-shape).
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-distro
+            source: github.com/opencharly/plugin-distro/candy/plugin-distro
             providers:
                 - kind:distro
         plan:

@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-tmux
+module github.com/opencharly/plugin-tmux/candy/plugin-tmux
 
 go 1.26.4
 

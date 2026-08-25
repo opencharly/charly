@@ -17,7 +17,7 @@ plugin-example-structkind:
         plugin:
             providers:
                 - kind:examplestructkind
-            source: github.com/opencharly/charly/candy/plugin-example-structkind
+            source: github.com/opencharly/plugin-example-structkind/candy/plugin-example-structkind
         plan:
             - check: the out-of-tree structural class:kind plugin ships a buildable Go module the host can build + serve out-of-process
               id: examplestructkind-module-present

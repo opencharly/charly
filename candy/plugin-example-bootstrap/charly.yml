@@ -13,7 +13,7 @@ plugin-example-bootstrap:
         plugin:
             providers:
                 - verb:examplebootstrap
-            source: github.com/opencharly/charly/candy/plugin-example-bootstrap
+            source: github.com/opencharly/plugin-example-bootstrap/candy/plugin-example-bootstrap
         plan:
             - check: the bootstrap-phase plugin ships a buildable Go module the host can compile in
               id: examplebootstrap-module-present

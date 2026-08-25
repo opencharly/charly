@@ -6,7 +6,7 @@
 package main
 
 import (
-	buildercargo "github.com/opencharly/charly/candy/plugin-builder-cargo"
+	buildercargo "github.com/opencharly/plugin-builder-cargo/candy/plugin-builder-cargo"
 	"github.com/opencharly/sdk"
 )
 

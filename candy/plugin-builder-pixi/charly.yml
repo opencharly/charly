@@ -14,7 +14,7 @@ plugin-builder-pixi:
         plugin:
             providers:
                 - builder:pixi
-            source: github.com/opencharly/charly/candy/plugin-builder-pixi
+            source: github.com/opencharly/plugin-builder-pixi/candy/plugin-builder-pixi
         plan:
             - check: the out-of-tree pixi builder plugin ships a buildable Go module (go.mod + the provider main) the host builds + serves out-of-process for the build-time OpResolve + deploy-time OpCollectContext/OpReverse legs
               id: pixi-builder-module-present

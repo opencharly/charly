@@ -14,7 +14,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
-	"github.com/opencharly/charly/candy/plugin-kube/params"
+	"github.com/opencharly/plugin-kube/candy/plugin-kube/params"
 )
 
 // cluster.go holds the cluster connection + the shared client-go helpers moved

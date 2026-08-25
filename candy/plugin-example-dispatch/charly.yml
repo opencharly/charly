@@ -13,7 +13,7 @@ plugin-example-dispatch:
             providers:
                 - verb:exampledispatch
                 - verb:exampledispatchpeer
-            source: github.com/opencharly/charly/candy/plugin-example-dispatch
+            source: github.com/opencharly/plugin-example-dispatch/candy/plugin-example-dispatch
         plan:
             - check: the F10 dispatch demo plugin ships a buildable Go module the host can build + serve out-of-process
               id: exampledispatch-module-present

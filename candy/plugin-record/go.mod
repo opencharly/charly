@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-record
+module github.com/opencharly/plugin-record/candy/plugin-record
 
 go 1.26.4
 

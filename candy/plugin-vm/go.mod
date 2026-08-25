@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-vm
+module github.com/opencharly/plugin-vm/candy/plugin-vm
 
 go 1.26.4
 

@@ -4,7 +4,7 @@
 package main
 
 import (
-	distrokind "github.com/opencharly/charly/candy/plugin-distro"
+	distrokind "github.com/opencharly/plugin-distro/candy/plugin-distro"
 	"github.com/opencharly/sdk"
 )
 

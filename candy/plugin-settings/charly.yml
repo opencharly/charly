@@ -38,7 +38,7 @@ plugin-settings:
             resolved runtime-config keys, proving the externalized command + its plugin-owned
             config I/O end-to-end.
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-settings
+            source: github.com/opencharly/plugin-settings/candy/plugin-settings
             providers:
                 - command:settings
         plan:

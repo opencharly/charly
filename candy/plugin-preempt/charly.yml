@@ -47,7 +47,7 @@ plugin-preempt:
             teardown -> ReleaseClaimant -> restoreHolders, all THROUGH the externalized dispatch +
             the resolved-project envelope (gather/resources) + InvokeProvider (the rest).
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-preempt
+            source: github.com/opencharly/plugin-preempt/candy/plugin-preempt
             providers:
                 - verb:arbiter
                 - command:preempt

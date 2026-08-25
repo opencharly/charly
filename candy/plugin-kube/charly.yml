@@ -44,7 +44,7 @@ plugin-kube:
             providers:
                 - verb:kube
                 - deploy:kubernetes
-            source: github.com/opencharly/charly/candy/plugin-kube
+            source: github.com/opencharly/plugin-kube/candy/plugin-kube
             primary:
                 kube: method
         plan:

@@ -23,7 +23,7 @@ plugin-cmd:
             errors. command:cmd is a FLAT command (Box + Command positionals), so NewMeta declares no
             Subcommands and ships no plugin_input.
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-cmd
+            source: github.com/opencharly/plugin-cmd/candy/plugin-cmd
             providers:
                 - command:cmd
         plan:

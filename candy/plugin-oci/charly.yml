@@ -34,7 +34,7 @@ plugin-oci:
             engine's byte-identical relocation is locked by the candy's
             TestMergeEngineGoldenParity (the merged-layer DiffID golden).
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-oci
+            source: github.com/opencharly/plugin-oci/candy/plugin-oci
             providers:
                 - verb:oci
         plan:

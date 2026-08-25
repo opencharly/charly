@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-gpu
+module github.com/opencharly/plugin-gpu/candy/plugin-gpu
 
 go 1.26.4
 

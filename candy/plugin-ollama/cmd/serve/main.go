@@ -6,7 +6,7 @@
 package main
 
 import (
-	ollama "github.com/opencharly/charly/candy/plugin-ollama"
+	ollama "github.com/opencharly/plugin-ollama/candy/plugin-ollama"
 	"github.com/opencharly/sdk"
 )
 

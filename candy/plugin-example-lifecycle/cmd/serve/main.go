@@ -6,7 +6,7 @@
 package main
 
 import (
-	examplelifecycle "github.com/opencharly/charly/candy/plugin-example-lifecycle"
+	examplelifecycle "github.com/opencharly/plugin-example-lifecycle/candy/plugin-example-lifecycle"
 	"github.com/opencharly/sdk"
 )
 

@@ -7,7 +7,7 @@
 package main
 
 import (
-	user "github.com/opencharly/charly/candy/plugin-user"
+	user "github.com/opencharly/plugin-user/candy/plugin-user"
 	"github.com/opencharly/sdk"
 )
 

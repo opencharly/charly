@@ -12,7 +12,7 @@ plugin-tmux:
             Operators and MCP clients use `charly agent terminal`, so terminal
             operations never recursively invoke `charly cmd` or `charly shell`.
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-tmux
+            source: github.com/opencharly/plugin-tmux/candy/plugin-tmux
             providers:
                 - terminal:tmux
                 - agent-runtime:tmux

@@ -6,7 +6,7 @@
 package main
 
 import (
-	clean "github.com/opencharly/charly/candy/plugin-clean"
+	clean "github.com/opencharly/plugin-clean/candy/plugin-clean"
 	"github.com/opencharly/sdk"
 )
 

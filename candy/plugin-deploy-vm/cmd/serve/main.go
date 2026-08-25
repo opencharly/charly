@@ -6,7 +6,7 @@
 package main
 
 import (
-	deployvm "github.com/opencharly/charly/candy/plugin-deploy-vm"
+	deployvm "github.com/opencharly/plugin-deploy-vm/candy/plugin-deploy-vm"
 	"github.com/opencharly/sdk"
 )
 

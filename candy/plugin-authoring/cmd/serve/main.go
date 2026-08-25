@@ -6,7 +6,7 @@
 package main
 
 import (
-	authoring "github.com/opencharly/charly/candy/plugin-authoring"
+	authoring "github.com/opencharly/plugin-authoring/candy/plugin-authoring"
 	"github.com/opencharly/sdk"
 )
 

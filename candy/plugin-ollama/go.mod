@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-ollama
+module github.com/opencharly/plugin-ollama/candy/plugin-ollama
 
 go 1.26.4
 

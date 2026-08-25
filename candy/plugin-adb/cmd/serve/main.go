@@ -6,7 +6,7 @@
 package main
 
 import (
-	adb "github.com/opencharly/charly/candy/plugin-adb"
+	adb "github.com/opencharly/plugin-adb/candy/plugin-adb"
 	"github.com/opencharly/sdk"
 )
 

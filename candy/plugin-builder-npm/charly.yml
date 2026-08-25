@@ -14,7 +14,7 @@ plugin-builder-npm:
         plugin:
             providers:
                 - builder:npm
-            source: github.com/opencharly/charly/candy/plugin-builder-npm
+            source: github.com/opencharly/plugin-builder-npm/candy/plugin-builder-npm
         plan:
             - check: the out-of-tree npm builder plugin ships a buildable Go module (go.mod + the provider main) the host builds + serves out-of-process for the build-time OpResolve + deploy-time OpCollectContext/OpReverse legs
               id: npm-builder-module-present

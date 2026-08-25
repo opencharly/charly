@@ -29,7 +29,7 @@ plugin-migrate:
             end-to-end: (a) at-HEAD no-op, (b) --dry-run flag plumbing, (c) below-floor refusal. The
             declarative transform ops are covered by the plugin's engine_test.go unit tests.
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-migrate
+            source: github.com/opencharly/plugin-migrate/candy/plugin-migrate
             providers:
                 - command:migrate
         plan:

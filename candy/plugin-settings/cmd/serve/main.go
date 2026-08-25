@@ -6,7 +6,7 @@
 package main
 
 import (
-	settings "github.com/opencharly/charly/candy/plugin-settings"
+	settings "github.com/opencharly/plugin-settings/candy/plugin-settings"
 	"github.com/opencharly/sdk"
 )
 

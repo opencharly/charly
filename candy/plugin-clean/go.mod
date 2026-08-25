@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-clean
+module github.com/opencharly/plugin-clean/candy/plugin-clean
 
 go 1.26.4
 

@@ -6,7 +6,7 @@
 package main
 
 import (
-	fleet "github.com/opencharly/charly/candy/plugin-fleet"
+	fleet "github.com/opencharly/plugin-fleet/candy/plugin-fleet"
 	"github.com/opencharly/sdk"
 )
 

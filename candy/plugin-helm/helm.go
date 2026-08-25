@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/opencharly/charly/candy/plugin-helm/params"
+	"github.com/opencharly/plugin-helm/candy/plugin-helm/params"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/spec/shellquote"
 )

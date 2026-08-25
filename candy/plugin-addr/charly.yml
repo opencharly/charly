@@ -9,7 +9,7 @@ plugin-addr:
             so it is COMPILED-IN-ONLY. A pure check verb; a port/process-template
             relocation on the kit contract.
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-addr
+            source: github.com/opencharly/plugin-addr/candy/plugin-addr
             providers:
                 - verb:addr
             primary:

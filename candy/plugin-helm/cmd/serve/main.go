@@ -6,7 +6,7 @@
 package main
 
 import (
-	helm "github.com/opencharly/charly/candy/plugin-helm"
+	helm "github.com/opencharly/plugin-helm/candy/plugin-helm"
 	"github.com/opencharly/sdk"
 )
 

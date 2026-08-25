@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-example-deploy
+module github.com/opencharly/plugin-example-deploy/candy/plugin-example-deploy
 
 go 1.26.4
 

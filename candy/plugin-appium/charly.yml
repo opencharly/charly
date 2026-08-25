@@ -20,7 +20,7 @@ plugin-appium:
         plugin:
             providers:
                 - verb:appium
-            source: github.com/opencharly/charly/candy/plugin-appium
+            source: github.com/opencharly/plugin-appium/candy/plugin-appium
             primary:
                 appium: method
         plan:

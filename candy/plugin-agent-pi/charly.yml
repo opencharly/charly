@@ -9,7 +9,7 @@ plugin-agent-pi:
             An opt-in adapter delegates to the official experimental Pi
             orchestrator rpc-stream CLI without duplicating its socket protocol.
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-agent-pi
+            source: github.com/opencharly/plugin-agent-pi/candy/plugin-agent-pi
             providers:
                 - agent-runtime:pi
         require:

@@ -31,7 +31,7 @@ plugin-build:
             Also serves out-of-process via cmd/serve for module-shape parity (one provider, two
             placements).
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-build
+            source: github.com/opencharly/plugin-build/candy/plugin-build
             providers:
                 - build:box
                 - build:generate

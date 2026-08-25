@@ -7,7 +7,7 @@
 package main
 
 import (
-	check "github.com/opencharly/charly/candy/plugin-check"
+	check "github.com/opencharly/plugin-check/candy/plugin-check"
 	"github.com/opencharly/sdk"
 )
 

@@ -14,7 +14,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/opencharly/charly/candy/plugin-file/params"
+	"github.com/opencharly/plugin-file/candy/plugin-file/params"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/spec/proto"

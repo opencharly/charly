@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-adb
+module github.com/opencharly/plugin-adb/candy/plugin-adb
 
 go 1.26.4
 

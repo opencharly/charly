@@ -11,7 +11,7 @@ plugin-group:
             embedded compiled_plugins:), like the tier-1 kinds, because `group` is a core deploy
             primitive every box/submodule must always resolve; also serves out-of-process via cmd/serve.
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-group
+            source: github.com/opencharly/plugin-group/candy/plugin-group
             providers:
                 - kind:group
         plan:

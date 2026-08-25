@@ -61,6 +61,14 @@ var allowedThirdPartyPrefixes = []string{
 //     (host_build_buildengine.go) — a same-repo registry-seed import, NOT an
 //     sdk-mechanism-kit import, so it is its own reviewed exception, distinct
 //     from (and never a loophole for) the sdk ban below.
+//   - github.com/opencharly/plugin-* is the STANDALONE plugin-module tree (the
+//     candy de-submodule cutover, Phase 2): the compiled-in-plugin registry
+//     (plugins_generated.go) imports the compiled-in plugin candies at their
+//     standalone module paths (github.com/opencharly/plugin-<name>/candy/<name>)
+//     — the same B-bootstrap registry-seed exception as the in-repo
+//     candy/plugin-* imports it replaces, now cross-repo. The prefix is
+//     deliberately narrow (plugin- only): it cannot be a loophole for the sdk
+//     ban below, and it matches the kind-prefixed standalone plugin repos.
 //
 // github.com/opencharly/sdk (root OR any subpackage — kit/buildkit/deploykit/
 // loaderkit/vmshared) is NEVER allowed here: the sdk mechanism kits + the sdk
@@ -68,6 +76,7 @@ var allowedThirdPartyPrefixes = []string{
 var allowedOpencharlyPrefixes = []string{
 	"github.com/opencharly/spec",
 	"github.com/opencharly/charly",
+	"github.com/opencharly/plugin-",
 }
 
 // forbiddenSDKPrefix names the ONE forbidden opencharly module — checked
@@ -118,7 +127,7 @@ func TestImportPurity_HostImportsOnlySpecAndVettedThirdParty(t *testing.T) {
 					path, line, importPath))
 				continue
 			}
-			if hasAllowedPrefix(importPath, allowedOpencharlyPrefixes) || hasAllowedPrefix(importPath, allowedThirdPartyPrefixes) {
+			if hasAllowedPrefix(importPath, allowedOpencharlyPrefixes) || hasAllowedPrefix(importPath, allowedThirdPartyPrefixes) || isStandalonePluginModule(importPath) {
 				continue
 			}
 			otherViolations = append(otherViolations, fmt.Sprintf(
@@ -151,6 +160,18 @@ func TestImportPurity_HostImportsOnlySpecAndVettedThirdParty(t *testing.T) {
 func isStdlibImport(importPath string) bool {
 	first, _, _ := strings.Cut(importPath, "/")
 	return !strings.Contains(first, ".")
+}
+
+// isStandalonePluginModule reports whether importPath is a STANDALONE plugin
+// module (the candy de-submodule cutover, Phase 2): github.com/opencharly/
+// plugin-<name>/candy/<name> — the compiled-in-plugin registry's cross-repo
+// registry-seed import (plugins_generated.go), the same B-bootstrap exception
+// as the in-repo candy/plugin-* imports it replaces. The shape is precise
+// (kind-prefixed repo + /candy/ subpath) so it cannot be a loophole for the
+// sdk ban or an unvetted third-party module.
+func isStandalonePluginModule(importPath string) bool {
+	return strings.HasPrefix(importPath, "github.com/opencharly/plugin-") &&
+		strings.Contains(importPath, "/candy/")
 }
 
 // hasAllowedPrefix reports whether importPath equals one of prefixes, or is a

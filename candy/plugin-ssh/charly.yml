@@ -21,7 +21,7 @@ plugin-ssh:
             resolve(ClassCommand,"ssh") → dispatchInProcCommand → Invoke(OpRun)); NewMeta advertises
             command:ssh with no plugin_input (the args are plain CLI tokens kong-parsed into SshCmd).
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-ssh
+            source: github.com/opencharly/plugin-ssh/candy/plugin-ssh
             providers:
                 - command:ssh
         plan:

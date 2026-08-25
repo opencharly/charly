@@ -1,7 +1,7 @@
 package main
 
 import (
-	pi "github.com/opencharly/charly/candy/plugin-agent-pi"
+	pi "github.com/opencharly/plugin-agent-pi/candy/plugin-agent-pi"
 	"github.com/opencharly/sdk"
 )
 

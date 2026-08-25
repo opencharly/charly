@@ -7,7 +7,7 @@
 package main
 
 import (
-	examplerunverb "github.com/opencharly/charly/candy/plugin-examplerunverb"
+	examplerunverb "github.com/opencharly/plugin-examplerunverb/candy/plugin-examplerunverb"
 	"github.com/opencharly/sdk"
 )
 

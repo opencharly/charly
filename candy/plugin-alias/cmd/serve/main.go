@@ -6,7 +6,7 @@
 package main
 
 import (
-	alias "github.com/opencharly/charly/candy/plugin-alias"
+	alias "github.com/opencharly/plugin-alias/candy/plugin-alias"
 	"github.com/opencharly/sdk"
 )
 

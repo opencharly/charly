@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-spice
+module github.com/opencharly/plugin-spice/candy/plugin-spice
 
 go 1.26.4
 

@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-builder-aur
+module github.com/opencharly/plugin-builder-aur/candy/plugin-builder-aur
 
 go 1.26.4
 

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/opencharly/charly/candy/plugin-spice/params"
+	"github.com/opencharly/plugin-spice/candy/plugin-spice/params"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/spec/proto"

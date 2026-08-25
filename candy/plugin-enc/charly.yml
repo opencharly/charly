@@ -17,7 +17,7 @@ plugin-enc:
         plugin:
             providers:
                 - verb:enc
-            source: github.com/opencharly/charly/candy/plugin-enc
+            source: github.com/opencharly/plugin-enc/candy/plugin-enc
         plan:
             - check: the encrypted-volume mechanics plugin ships a buildable Go module the host compiles in
               id: enc-module-present

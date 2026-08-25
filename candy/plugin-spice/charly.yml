@@ -27,7 +27,7 @@ plugin-spice:
         plugin:
             providers:
                 - verb:spice
-            source: github.com/opencharly/charly/candy/plugin-spice
+            source: github.com/opencharly/plugin-spice/candy/plugin-spice
         plan:
             - check: the SPICE wire handshake completes against the bed VM (the out-of-process plugin verb dispatches through the registry and dials the host-resolved SPICE endpoint)
               id: spice-status-handshake

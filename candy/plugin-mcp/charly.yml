@@ -40,7 +40,7 @@ plugin-mcp:
             (e.g. jupyter / chrome-devtools-mcp) plus the charly-mcp candy that runs
             `charly mcp serve`.
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-mcp
+            source: github.com/opencharly/plugin-mcp/candy/plugin-mcp
             providers:
                 - verb:mcp
                 - command:mcp

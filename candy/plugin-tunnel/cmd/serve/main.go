@@ -8,7 +8,7 @@
 package main
 
 import (
-	tunnelverb "github.com/opencharly/charly/candy/plugin-tunnel"
+	tunnelverb "github.com/opencharly/plugin-tunnel/candy/plugin-tunnel"
 	"github.com/opencharly/sdk"
 )
 

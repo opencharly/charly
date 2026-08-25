@@ -8,7 +8,7 @@ plugin-builder:
             placements (compiled-in OR out-of-process) like the matching/exampleprobe
             verbs + the init kind — no kit contract needed (kinds are pb-shape).
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-builder
+            source: github.com/opencharly/plugin-builder/candy/plugin-builder
             providers:
                 - kind:builder
         plan:

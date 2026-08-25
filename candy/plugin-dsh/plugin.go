@@ -29,7 +29,7 @@ import (
 
 	"github.com/alecthomas/kong"
 
-	"github.com/opencharly/charly/candy/plugin-dsh/params"
+	"github.com/opencharly/plugin-dsh/candy/plugin-dsh/params"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/spec/proto"

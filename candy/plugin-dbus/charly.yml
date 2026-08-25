@@ -24,7 +24,7 @@ plugin-dbus:
             The R10 consumer is a desktop pod bed whose check composes this plugin (the
             sway-browser-vnc bed's dbus list probe).
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-dbus
+            source: github.com/opencharly/plugin-dbus/candy/plugin-dbus
             providers:
                 - verb:dbus
         plan:

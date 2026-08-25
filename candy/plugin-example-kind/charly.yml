@@ -12,7 +12,7 @@ plugin-example-kind:
         plugin:
             providers:
                 - kind:examplekind
-            source: github.com/opencharly/charly/candy/plugin-example-kind
+            source: github.com/opencharly/plugin-example-kind/candy/plugin-example-kind
         plan:
             - check: the out-of-tree class:kind plugin ships a buildable Go module the host can build + serve out-of-process
               id: examplekind-module-present

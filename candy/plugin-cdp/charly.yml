@@ -25,7 +25,7 @@ plugin-cdp:
             (spa-status/click/mouse/type/key/key-combo). The R10 consumer is a Chrome-bearing
             pod bed whose check composes this plugin (e.g. sway-browser-vnc).
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-cdp
+            source: github.com/opencharly/plugin-cdp/candy/plugin-cdp
             providers:
                 - verb:cdp
         plan:

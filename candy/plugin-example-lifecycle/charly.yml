@@ -13,7 +13,7 @@ plugin-example-lifecycle:
         plugin:
             providers:
                 - deploy:examplelifecycle
-            source: github.com/opencharly/charly/candy/plugin-example-lifecycle
+            source: github.com/opencharly/plugin-example-lifecycle/candy/plugin-example-lifecycle
         plan:
             - check: the out-of-tree lifecycle deploy-substrate plugin ships a buildable Go module the host can build + serve out-of-process
               id: examplelifecycle-module-present

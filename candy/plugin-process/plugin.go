@@ -9,7 +9,7 @@ import (
 	"context"
 	"embed"
 
-	"github.com/opencharly/charly/candy/plugin-process/params"
+	"github.com/opencharly/plugin-process/candy/plugin-process/params"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/spec/proto"

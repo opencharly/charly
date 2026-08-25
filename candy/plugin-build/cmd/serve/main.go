@@ -4,7 +4,7 @@
 package main
 
 import (
-	build "github.com/opencharly/charly/candy/plugin-build"
+	build "github.com/opencharly/plugin-build/candy/plugin-build"
 	"github.com/opencharly/sdk"
 )
 

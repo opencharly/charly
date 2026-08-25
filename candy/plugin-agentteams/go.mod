@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-agentteams
+module github.com/opencharly/plugin-agentteams/candy/plugin-agentteams
 
 go 1.26.4
 

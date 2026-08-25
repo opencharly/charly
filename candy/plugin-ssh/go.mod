@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-ssh
+module github.com/opencharly/plugin-ssh/candy/plugin-ssh
 
 go 1.26.4
 

@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-deploy-pod
+module github.com/opencharly/plugin-deploy-pod/candy/plugin-deploy-pod
 
 go 1.26.4
 

@@ -10,7 +10,7 @@ package main
 import (
 	"github.com/opencharly/sdk"
 
-	dsh "github.com/opencharly/charly/candy/plugin-dsh"
+	dsh "github.com/opencharly/plugin-dsh/candy/plugin-dsh"
 )
 
 func main() {

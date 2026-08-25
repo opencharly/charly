@@ -6,7 +6,7 @@
 package main
 
 import (
-	exampleprobe "github.com/opencharly/charly/candy/plugin-example"
+	exampleprobe "github.com/opencharly/plugin-example/candy/plugin-example"
 	"github.com/opencharly/sdk"
 )
 

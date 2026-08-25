@@ -5,7 +5,7 @@
 package main
 
 import (
-	gpu "github.com/opencharly/charly/candy/plugin-gpu"
+	gpu "github.com/opencharly/plugin-gpu/candy/plugin-gpu"
 	"github.com/opencharly/sdk"
 )
 

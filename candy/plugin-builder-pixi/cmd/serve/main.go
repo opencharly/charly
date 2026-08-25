@@ -6,7 +6,7 @@
 package main
 
 import (
-	builderpixi "github.com/opencharly/charly/candy/plugin-builder-pixi"
+	builderpixi "github.com/opencharly/plugin-builder-pixi/candy/plugin-builder-pixi"
 	"github.com/opencharly/sdk"
 )
 

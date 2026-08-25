@@ -6,7 +6,7 @@
 package main
 
 import (
-	appium "github.com/opencharly/charly/candy/plugin-appium"
+	appium "github.com/opencharly/plugin-appium/candy/plugin-appium"
 	"github.com/opencharly/sdk"
 )
 

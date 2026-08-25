@@ -22,7 +22,7 @@ plugin-helm:
             providers:
                 - step:helm-release
                 - verb:helm
-            source: github.com/opencharly/charly/candy/plugin-helm
+            source: github.com/opencharly/plugin-helm/candy/plugin-helm
             primary:
                 helm: method
         plan:

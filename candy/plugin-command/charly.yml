@@ -10,7 +10,7 @@ plugin-command:
             extension), so it is COMPILED-IN-ONLY. Its run: ACT is the dedicated
             package-main install-task emitCmd branch, not a kit role. Matchers via sdk.MatchAll.
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-command
+            source: github.com/opencharly/plugin-command/candy/plugin-command
             providers:
                 - verb:command
             primary:

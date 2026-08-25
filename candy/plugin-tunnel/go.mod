@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-tunnel
+module github.com/opencharly/plugin-tunnel/candy/plugin-tunnel
 
 go 1.26.4
 

@@ -39,7 +39,7 @@ plugin-check:
             short iterate: smoke, proving the externalized command + the full box→deploy→live→bed-run
             gate machinery end-to-end.
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-check
+            source: github.com/opencharly/plugin-check/candy/plugin-check
             providers:
                 - command:check
         plan:

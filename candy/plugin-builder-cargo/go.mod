@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-builder-cargo
+module github.com/opencharly/plugin-builder-cargo/candy/plugin-builder-cargo
 
 go 1.26.4
 

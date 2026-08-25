@@ -34,7 +34,7 @@ plugin-secrets:
             through the externalized store (e.g. check-k3s-vm's K3S_CLUSTER_TOKEN autogen, or a
             pod bed) plus a host `charly secrets` round-trip.
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-secrets
+            source: github.com/opencharly/plugin-secrets/candy/plugin-secrets
             providers:
                 - verb:credential
                 - command:secrets

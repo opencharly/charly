@@ -6,7 +6,7 @@
 package main
 
 import (
-	dbus "github.com/opencharly/charly/candy/plugin-dbus"
+	dbus "github.com/opencharly/plugin-dbus/candy/plugin-dbus"
 	"github.com/opencharly/sdk"
 )
 

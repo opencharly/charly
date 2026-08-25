@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-appium
+module github.com/opencharly/plugin-appium/candy/plugin-appium
 
 go 1.26.4
 

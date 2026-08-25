@@ -6,7 +6,7 @@
 package main
 
 import (
-	record "github.com/opencharly/charly/candy/plugin-record"
+	record "github.com/opencharly/plugin-record/candy/plugin-record"
 	"github.com/opencharly/sdk"
 )
 

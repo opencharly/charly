@@ -9,7 +9,7 @@ plugin-port:
             or OUT-OF-PROCESS via the CheckContextService reverse channel (F2). The
             relocation template for the other host-coupled check verbs/kinds.
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-port
+            source: github.com/opencharly/plugin-port/candy/plugin-port
             providers:
                 - verb:port
             primary:

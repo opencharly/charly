@@ -8,7 +8,7 @@ plugin-mount:
             HOST-COUPLED verb on the sdk/kit contract (CheckVerbProvider +
             ProvisionActor), so it is COMPILED-IN-ONLY; matchers reuse sdk.MatchAll.
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-mount
+            source: github.com/opencharly/plugin-mount/candy/plugin-mount
             providers:
                 - verb:mount
             primary:

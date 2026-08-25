@@ -4,7 +4,7 @@
 package main
 
 import (
-	resourcekind "github.com/opencharly/charly/candy/plugin-resource"
+	resourcekind "github.com/opencharly/plugin-resource/candy/plugin-resource"
 	"github.com/opencharly/sdk"
 )
 

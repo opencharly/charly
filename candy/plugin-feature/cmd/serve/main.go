@@ -6,7 +6,7 @@
 package main
 
 import (
-	feature "github.com/opencharly/charly/candy/plugin-feature"
+	feature "github.com/opencharly/plugin-feature/candy/plugin-feature"
 	"github.com/opencharly/sdk"
 )
 

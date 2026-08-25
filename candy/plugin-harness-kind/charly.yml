@@ -20,7 +20,7 @@ plugin-harness-kind:
             emission + settings.json wiring; the `marketplace` body feeds the plugin.json /
             marketplace.json / profiles.json / settings.json generated surface.
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-harness-kind
+            source: github.com/opencharly/plugin-harness-kind/candy/plugin-harness-kind
             providers:
                 - kind:skill
                 - kind:hook

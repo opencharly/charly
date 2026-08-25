@@ -7,7 +7,7 @@
 package main
 
 import (
-	dns "github.com/opencharly/charly/candy/plugin-dns"
+	dns "github.com/opencharly/plugin-dns/candy/plugin-dns"
 	"github.com/opencharly/sdk"
 )
 

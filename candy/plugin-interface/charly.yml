@@ -8,7 +8,7 @@ plugin-interface:
             (sdk/kit.CheckContext), so it is COMPILED-IN-ONLY. A pure check
             verb (probe-only); a port/process-template relocation on the kit contract.
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-interface
+            source: github.com/opencharly/plugin-interface/candy/plugin-interface
             providers:
                 - verb:interface
             primary:

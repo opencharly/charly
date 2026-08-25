@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/opencharly/charly/candy/plugin-dbus/params"
+	"github.com/opencharly/plugin-dbus/candy/plugin-dbus/params"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/spec/shellquote"
 	"github.com/opencharly/spec/spec"

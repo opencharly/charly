@@ -5,7 +5,7 @@
 package main
 
 import (
-	initkind "github.com/opencharly/charly/candy/plugin-init"
+	initkind "github.com/opencharly/plugin-init/candy/plugin-init"
 	"github.com/opencharly/sdk"
 )
 

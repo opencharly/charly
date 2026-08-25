@@ -4,7 +4,7 @@
 package main
 
 import (
-	marketplace "github.com/opencharly/charly/candy/plugin-marketplace"
+	marketplace "github.com/opencharly/plugin-marketplace/candy/plugin-marketplace"
 	"github.com/opencharly/sdk"
 )
 

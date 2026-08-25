@@ -14,7 +14,7 @@ plugin-k8sgen:
         plugin:
             providers:
                 - verb:k8sgen
-            source: github.com/opencharly/charly/candy/plugin-k8sgen
+            source: github.com/opencharly/plugin-k8sgen/candy/plugin-k8sgen
         plan:
             - check: the kustomize-generator plugin ships a buildable Go module the host compiles in
               id: k8sgen-module-present

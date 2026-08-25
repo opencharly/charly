@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-udev
+module github.com/opencharly/plugin-udev/candy/plugin-udev
 
 go 1.26.4
 

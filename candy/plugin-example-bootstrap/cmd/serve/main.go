@@ -5,7 +5,7 @@
 package main
 
 import (
-	examplebootstrap "github.com/opencharly/charly/candy/plugin-example-bootstrap"
+	examplebootstrap "github.com/opencharly/plugin-example-bootstrap/candy/plugin-example-bootstrap"
 	"github.com/opencharly/sdk"
 )
 

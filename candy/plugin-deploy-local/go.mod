@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-deploy-local
+module github.com/opencharly/plugin-deploy-local/candy/plugin-deploy-local
 
 go 1.26.4
 

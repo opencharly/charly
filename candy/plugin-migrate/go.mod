@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-migrate
+module github.com/opencharly/plugin-migrate/candy/plugin-migrate
 
 go 1.26.4
 
