@@ -132,7 +132,7 @@ charly:
                     depends:
                         - glibc
                         - podman
-                        - '@github.com/opencharly/layer-gocryptfs:v2026.237.457'
+                        - gocryptfs
                         - fuse3
                         - openssh
                         - util-linux
@@ -141,7 +141,7 @@ charly:
                         - qemu-img
                         - virtiofsd
                         - libvirt
-                        - '@github.com/opencharly/layer-tailscale:v2026.237.458'
+                        - tailscale
                         - libarchive
                         - iproute2
                         - tmux
@@ -152,7 +152,7 @@ charly:
                         - edk2-ovmf
                         - dnsmasq
                         - swtpm
-                        - '@github.com/opencharly/layer-gnupg:v2026.237.457'
+                        - gnupg
                         - pinentry
                     optdepends:
                         docker: alternative container engine — only needed for engine.run=docker (podman is the default)
@@ -169,7 +169,7 @@ charly:
                     depends:
                         - glibc
                         - podman
-                        - '@github.com/opencharly/layer-gocryptfs:v2026.237.457'
+                        - gocryptfs
                         - fuse3
                         - fuse-overlayfs
                         - slirp4netns
@@ -182,7 +182,7 @@ charly:
                         - virtiofsd
                         - libvirt
                         - libvirt-client
-                        - '@github.com/opencharly/layer-tailscale:v2026.237.458'
+                        - tailscale
                         - bsdtar
                         - iproute
                         - xorriso
@@ -201,7 +201,7 @@ charly:
                 deb:
                     depends:
                         - podman
-                        - '@github.com/opencharly/layer-gocryptfs:v2026.237.457'
+                        - gocryptfs
                         - fuse3
                         - fuse-overlayfs
                         - slirp4netns
@@ -221,7 +221,7 @@ charly:
                         - ovmf
                         - dnsmasq-base
                         - swtpm
-                        - '@github.com/opencharly/layer-gnupg:v2026.237.457'
+                        - gnupg
                         - pinentry-curses
                     suggests:
                         - docker.io
@@ -232,7 +232,7 @@ charly:
                 apk:
                     depends:
                         - podman
-                        - '@github.com/opencharly/layer-gocryptfs:v2026.237.457'
+                        - gocryptfs
                         - fuse3
                         - fuse-overlayfs
                         - slirp4netns
@@ -244,14 +244,14 @@ charly:
                         - virtiofsd
                         - libvirt
                         - libvirt-client
-                        - '@github.com/opencharly/layer-tailscale:v2026.237.458'
+                        - tailscale
                         - libarchive-tools
                         - iproute2
                         - xorriso
                         - ovmf
                         - dnsmasq
                         - swtpm
-                        - '@github.com/opencharly/layer-gnupg:v2026.237.457'
+                        - gnupg
                         - pinentry
                 ipk:
                     # OpenWrt's repos lack the mandatory charly deps (podman/qemu/
