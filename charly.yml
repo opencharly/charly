@@ -2663,7 +2663,7 @@ check-builder-local-app:
             builder fixture candy check-builder-npm so the bed exercises the builder DEPLOY leg
             (runVenueBuilderStep → runVenueHomeArtifactBuilder) inside the eval VM guest venue.
         candy:
-            - '@github.com/opencharly/layer-check-builder-npm:v2026.237.455'
+            - '@github.com/opencharly/layer-check-builder-npm:v2026.237.556'
 # =================================================================
 # check-udev-local — R10 witness for the externalized `charly udev` COMMAND
 # (candy/plugin-udev, command:udev) — the first externalizable-command precedent.
@@ -3397,7 +3397,7 @@ dsh-app:
             npm: fedora.fedora-builder
         candy:
             - '@github.com/opencharly/layer-nodejs:v2026.235.2056'
-            - '@github.com/opencharly/pod-dsh:v2026.237.456'
+            - '@github.com/opencharly/pod-dsh:v2026.237.558'
 check-dsh-pod:
     pod:
         image: dsh-app

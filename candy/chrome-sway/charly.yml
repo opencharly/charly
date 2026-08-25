@@ -75,7 +75,7 @@ chrome-sway-skill:
             # charly.yml -- typically included via sway-desktop composition
             my-browser:
               candy:
-                - '@github.com/opencharly/layer-chrome-sway:v2026.237.456'
+                - '@github.com/opencharly/layer-chrome-sway:v2026.237.556'
             ```
             
             ## Used In Boxes

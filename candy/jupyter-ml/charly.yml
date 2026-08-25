@@ -26,8 +26,8 @@ jupyter-ml:
             - plugin-mcp
         candy:
             - '@github.com/opencharly/layer-llama-cpp:v2026.237.457'
-            - '@github.com/opencharly/layer-unsloth:v2026.237.458'
-            - '@github.com/opencharly/layer-jupyter-mcp:v2026.237.457'
+            - '@github.com/opencharly/layer-unsloth:v2026.237.557'
+            - '@github.com/opencharly/layer-jupyter-mcp:v2026.237.556'
         env:
             NVIDIA_PYTHON_PROJECT: "~/.pixi"
             LD_LIBRARY_PATH: "/usr/lib64:$HOME/llama.cpp"
@@ -154,7 +154,7 @@ jupyter-ml-skill:
               candy:
                 - agent-forwarding
                 - jupyter-ml
-                - '@github.com/opencharly/layer-notebook-templates:v2026.237.457'
+                - '@github.com/opencharly/layer-notebook-templates:v2026.237.557'
                 - '@github.com/opencharly/pod-dbus:v2026.235.2115'
                 - charly
               ports:

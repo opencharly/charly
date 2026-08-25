@@ -16,14 +16,14 @@ sway-desktop:
             - xdg-portal
             - '@github.com/opencharly/layer-wl-tools:v2026.237.459'
             - '@github.com/opencharly/layer-wl-screenshot-grim:v2026.237.459'
-            - '@github.com/opencharly/layer-wl-overlay:v2026.237.458'
+            - '@github.com/opencharly/layer-wl-overlay:v2026.237.557'
             - '@github.com/opencharly/layer-wf-recorder:v2026.237.458'
-            - '@github.com/opencharly/layer-chrome-sway:v2026.237.456'
+            - '@github.com/opencharly/layer-chrome-sway:v2026.237.556'
             - xfce4-terminal
             - thunar
-            - '@github.com/opencharly/pod-waybar:v2026.237.458'
+            - '@github.com/opencharly/pod-waybar:v2026.237.559'
             - desktop-fonts
-            - '@github.com/opencharly/pod-swaync:v2026.237.458'
+            - '@github.com/opencharly/pod-swaync:v2026.237.558'
             - '@github.com/opencharly/layer-pavucontrol:v2026.237.457'
             - '@github.com/opencharly/layer-tmux:v2026.235.2057'
             - '@github.com/opencharly/layer-asciinema:v2026.237.455'

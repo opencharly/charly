@@ -18,9 +18,9 @@ selkies-desktop:
             at deploy.
         candy:
             - selkies-core
-            - '@github.com/opencharly/pod-labwc:v2026.237.457'
+            - '@github.com/opencharly/pod-labwc:v2026.237.558'
             - waybar-labwc
-            - '@github.com/opencharly/pod-swaync:v2026.237.458'
+            - '@github.com/opencharly/pod-swaync:v2026.237.558'
             - '@github.com/opencharly/layer-pavucontrol:v2026.237.457'
         plan:
             - check: the labwc nested Wayland compositor — this flavor's defining compositor — is installed

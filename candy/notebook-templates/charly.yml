@@ -78,7 +78,7 @@ notebook-templates-skill:
             # charly.yml
             jupyter:
               candy:
-                - '@github.com/opencharly/layer-notebook-templates:v2026.237.457'
+                - '@github.com/opencharly/layer-notebook-templates:v2026.237.557'
                 # ... other candies
             ```
             

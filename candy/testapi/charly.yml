@@ -119,7 +119,7 @@ testapi-skill:
             # charly.yml
             fedora-test:
               candy:
-                - '@github.com/opencharly/pod-testapi:v2026.237.458'
+                - '@github.com/opencharly/pod-testapi:v2026.237.558'
             ```
             
             ## Used In Boxes

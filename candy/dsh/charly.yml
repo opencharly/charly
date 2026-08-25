@@ -145,7 +145,7 @@ dsh-skill:
             # charly.yml
             my-image:
               candy:
-                - '@github.com/opencharly/pod-dsh:v2026.237.456'
+                - '@github.com/opencharly/pod-dsh:v2026.237.558'
             ```
 
             ## Used In Boxes

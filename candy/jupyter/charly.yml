@@ -21,7 +21,7 @@ jupyter:
             # lag; the R10 bed loads the LOCAL candy via the superproject override.)
             - plugin-mcp
         candy:
-            - '@github.com/opencharly/layer-jupyter-mcp:v2026.237.457'
+            - '@github.com/opencharly/layer-jupyter-mcp:v2026.237.556'
         env:
             MCP_SERVER_NAME: "jupyter"
         distro:

@@ -57,7 +57,7 @@ arch-coder-skill:
               candy:
                 # Baseline — identical to fedora-coder
                 - agent-forwarding
-                - '@github.com/opencharly/pod-sshd:v2026.237.458'
+                - '@github.com/opencharly/pod-sshd:v2026.237.558'
                 - charly
                 - charly-mcp
                 - container-nesting
@@ -75,7 +75,7 @@ arch-coder-skill:
                 # Build + developer tooling
                 - '@github.com/opencharly/layer-build-toolchain:v2026.237.455'
                 - dev-tools
-                - '@github.com/opencharly/layer-pre-commit:v2026.237.458'
+                - '@github.com/opencharly/layer-pre-commit:v2026.237.557'
                 - direnv
                 - '@github.com/opencharly/layer-gh:v2026.237.456'
                 - '@github.com/opencharly/layer-typst:v2026.237.458'
@@ -83,10 +83,10 @@ arch-coder-skill:
             
                 # AI coding CLIs
                 - '@github.com/opencharly/layer-claude-code:v2026.237.456'
-                - '@github.com/opencharly/layer-codex:v2026.237.456'
+                - '@github.com/opencharly/layer-codex:v2026.237.556'
                 - '@github.com/opencharly/layer-gemini:v2026.235.2110'
-                - '@github.com/opencharly/layer-forgecode:v2026.237.456'
-                - '@github.com/opencharly/layer-oracle:v2026.237.457'
+                - '@github.com/opencharly/layer-forgecode:v2026.237.556'
+                - '@github.com/opencharly/layer-oracle:v2026.237.557'
             
                 # DevOps / cloud / infra
                 - devops-tools
@@ -472,7 +472,7 @@ debian-coder-skill:
               candy:
                 # Baseline
                 - agent-forwarding
-                - '@github.com/opencharly/pod-sshd:v2026.237.458'
+                - '@github.com/opencharly/pod-sshd:v2026.237.558'
                 - charly
                 - charly-mcp
                 - container-nesting
@@ -490,7 +490,7 @@ debian-coder-skill:
                 # Build + developer tooling
                 - '@github.com/opencharly/layer-build-toolchain:v2026.237.455'
                 - dev-tools                   # ripgrep, bat→batcat symlink, fd-find, neovim, …
-                - '@github.com/opencharly/layer-pre-commit:v2026.237.458'
+                - '@github.com/opencharly/layer-pre-commit:v2026.237.557'
                 - direnv
                 - '@github.com/opencharly/layer-gh:v2026.237.456'
                 - '@github.com/opencharly/layer-typst:v2026.237.458'
@@ -498,10 +498,10 @@ debian-coder-skill:
             
                 # AI coding CLIs
                 - '@github.com/opencharly/layer-claude-code:v2026.237.456'
-                - '@github.com/opencharly/layer-codex:v2026.237.456'
+                - '@github.com/opencharly/layer-codex:v2026.237.556'
                 - '@github.com/opencharly/layer-gemini:v2026.235.2110'
-                - '@github.com/opencharly/layer-forgecode:v2026.237.456'
-                - '@github.com/opencharly/layer-oracle:v2026.237.457'
+                - '@github.com/opencharly/layer-forgecode:v2026.237.556'
+                - '@github.com/opencharly/layer-oracle:v2026.237.557'
             
                 # DevOps / cloud / infra
                 - devops-tools
@@ -679,7 +679,7 @@ fedora-coder-skill:
               candy:
                 # Baseline (matches the charly-cachyos power-user pattern)
                 - agent-forwarding
-                - '@github.com/opencharly/pod-sshd:v2026.237.458'
+                - '@github.com/opencharly/pod-sshd:v2026.237.558'
                 - charly                          # the full toolchain: charly binary + virtualization + gocryptfs + socat
                 - charly-mcp                      # MCP gateway for the entire charly CLI
                 - container-nesting           # rootless nested podman/buildah/skopeo
@@ -697,7 +697,7 @@ fedora-coder-skill:
                 # Build + developer tooling
                 - '@github.com/opencharly/layer-build-toolchain:v2026.237.455'
                 - dev-tools                   # ripgrep, bat, fd, neovim, htop, …
-                - '@github.com/opencharly/layer-pre-commit:v2026.237.458'
+                - '@github.com/opencharly/layer-pre-commit:v2026.237.557'
                 - direnv
                 - '@github.com/opencharly/layer-gh:v2026.237.456'                          # GitHub CLI + git + git-lfs (single-responsibility)
                 - '@github.com/opencharly/layer-typst:v2026.237.458'
@@ -705,10 +705,10 @@ fedora-coder-skill:
             
                 # AI coding CLIs
                 - '@github.com/opencharly/layer-claude-code:v2026.237.456'
-                - '@github.com/opencharly/layer-codex:v2026.237.456'
+                - '@github.com/opencharly/layer-codex:v2026.237.556'
                 - '@github.com/opencharly/layer-gemini:v2026.235.2110'
-                - '@github.com/opencharly/layer-forgecode:v2026.237.456'                   # 5th CLI (astral-sh-style)
-                - '@github.com/opencharly/layer-oracle:v2026.237.457'
+                - '@github.com/opencharly/layer-forgecode:v2026.237.556'                   # 5th CLI (astral-sh-style)
+                - '@github.com/opencharly/layer-oracle:v2026.237.557'
             
                 # DevOps / cloud / infra
                 - devops-tools                # AWS, Scaleway, kubectx/kubens, OpenTofu
@@ -1025,7 +1025,7 @@ ubuntu-coder-skill:
               candy:
                 # Same stack as debian-coder — see that skill for the full list
                 - agent-forwarding
-                - '@github.com/opencharly/pod-sshd:v2026.237.458'
+                - '@github.com/opencharly/pod-sshd:v2026.237.558'
                 - charly
                 - charly-mcp
                 - container-nesting
@@ -1039,16 +1039,16 @@ ubuntu-coder-skill:
                 - '@github.com/opencharly/layer-uv:v2026.237.458'
                 - '@github.com/opencharly/layer-build-toolchain:v2026.237.455'
                 - dev-tools
-                - '@github.com/opencharly/layer-pre-commit:v2026.237.458'
+                - '@github.com/opencharly/layer-pre-commit:v2026.237.557'
                 - direnv
                 - '@github.com/opencharly/layer-gh:v2026.237.456'
                 - '@github.com/opencharly/layer-typst:v2026.237.458'
                 - '@github.com/opencharly/layer-asciinema:v2026.237.455'
                 - '@github.com/opencharly/layer-claude-code:v2026.237.456'
-                - '@github.com/opencharly/layer-codex:v2026.237.456'
+                - '@github.com/opencharly/layer-codex:v2026.237.556'
                 - '@github.com/opencharly/layer-gemini:v2026.235.2110'
-                - '@github.com/opencharly/layer-forgecode:v2026.237.456'
-                - '@github.com/opencharly/layer-oracle:v2026.237.457'
+                - '@github.com/opencharly/layer-forgecode:v2026.237.556'
+                - '@github.com/opencharly/layer-oracle:v2026.237.557'
                 - devops-tools
                 - '@github.com/opencharly/layer-kubernetes:v2026.237.457'
                 - '@github.com/opencharly/layer-docker-ce:v2026.237.456'

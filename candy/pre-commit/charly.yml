@@ -68,7 +68,7 @@ pre-commit-skill:
             # charly.yml
             my-dev:
               candy:
-                - '@github.com/opencharly/layer-pre-commit:v2026.237.458'
+                - '@github.com/opencharly/layer-pre-commit:v2026.237.557'
             ```
             
             ## Used In Boxes

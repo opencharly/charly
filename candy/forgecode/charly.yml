@@ -51,7 +51,7 @@ forgecode-skill:
             # charly.yml
             my-dev:
               candy:
-                - '@github.com/opencharly/layer-forgecode:v2026.237.456'
+                - '@github.com/opencharly/layer-forgecode:v2026.237.556'
             ```
             
             ## Used In Boxes

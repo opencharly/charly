@@ -46,7 +46,7 @@ sway-desktop-vnc:
             - plugin-wl
         candy:
             - sway-desktop
-            - '@github.com/opencharly/pod-wayvnc:v2026.237.458'
+            - '@github.com/opencharly/pod-wayvnc:v2026.237.559'
         env:
             WLR_RENDERER: "pixman"
         plan:

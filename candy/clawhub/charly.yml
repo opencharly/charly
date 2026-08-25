@@ -62,7 +62,7 @@ clawhub-skill:
                 candy:
                     base: fedora
                     candy:
-                        - '@github.com/opencharly/layer-clawhub:v2026.237.456'
+                        - '@github.com/opencharly/layer-clawhub:v2026.237.556'
             ```
             
             ## Used In Boxes

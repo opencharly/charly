@@ -10,7 +10,7 @@ cloud-init:
             the growpart binary, and the NoCloud drop-in are all baked into the
             image and independently checkable.
         require:
-            - '@github.com/opencharly/pod-sshd:v2026.237.458'
+            - '@github.com/opencharly/pod-sshd:v2026.237.558'
         package:
             - cloud-init
         distro:

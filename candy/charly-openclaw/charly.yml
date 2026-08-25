@@ -456,7 +456,7 @@ openclaw-layer-skill:
             # charly.yml
             openclaw:
               candy:
-                - '@github.com/opencharly/pod-openclaw:v2026.237.457'
+                - '@github.com/opencharly/pod-openclaw:v2026.237.558'
             ```
             
             ```bash

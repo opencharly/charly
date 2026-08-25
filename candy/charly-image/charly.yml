@@ -213,7 +213,7 @@ image-skill:
                 base: fedora
                 env_file: "~/.config/my-app/.env"
                 candy:
-                  - '@github.com/opencharly/pod-traefik:v2026.237.458'
+                  - '@github.com/opencharly/pod-traefik:v2026.237.558'
                   - my-service          # declares service: — the init is injected, not listed here.
                                         # Published ports are inherited from the candies (no box `port:`)
                 env:

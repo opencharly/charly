@@ -181,7 +181,7 @@ notebook-ollama-skill:
             jupyter-ml-notebook:
               candy:
                 - jupyter-ml
-                - '@github.com/opencharly/layer-notebook-templates:v2026.237.457'
+                - '@github.com/opencharly/layer-notebook-templates:v2026.237.557'
                 - notebook-finetuning
                 - notebook-ollama
                 # ... other candies
