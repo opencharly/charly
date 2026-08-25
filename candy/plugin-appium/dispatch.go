@@ -14,7 +14,7 @@ import (
 
 	"github.com/tebeka/selenium"
 
-	"github.com/opencharly/charly/candy/plugin-appium/params"
+	"github.com/opencharly/plugin-appium/candy/plugin-appium/params"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/spec/spec"

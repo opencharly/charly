@@ -22,7 +22,7 @@ plugin-substrate:
             `charly status` fan-out; the deploy-cone-coupled enrichment + the vm/kubernetes/android collectors
             stay host-side until K5.
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-substrate
+            source: github.com/opencharly/plugin-substrate/candy/plugin-substrate
             providers:
                 - kind:pod
                 - kind:vm

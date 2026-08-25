@@ -6,7 +6,7 @@
 package main
 
 import (
-	preempt "github.com/opencharly/charly/candy/plugin-preempt"
+	preempt "github.com/opencharly/plugin-preempt/candy/plugin-preempt"
 	"github.com/opencharly/sdk"
 )
 

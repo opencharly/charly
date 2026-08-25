@@ -17,7 +17,7 @@ plugin-loader:
             NO bootstrap cycle. COMPILED-IN (in the embedded compiled_plugins:), registered at init()
             before the first LoadUnified call; unlocks alternative config front-ends.
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-loader
+            source: github.com/opencharly/plugin-loader/candy/plugin-loader
             providers:
                 - loader:loader
         plan:

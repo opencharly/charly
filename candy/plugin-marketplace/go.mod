@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-marketplace
+module github.com/opencharly/plugin-marketplace/candy/plugin-marketplace
 
 go 1.26.4
 

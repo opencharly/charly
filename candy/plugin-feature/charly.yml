@@ -29,7 +29,7 @@ plugin-feature:
             exits 0 and lists this project's candies — including the plugin-feature candy itself —
             proving the compiled-in command + the plugin-side loader enumeration end-to-end.
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-feature
+            source: github.com/opencharly/plugin-feature/candy/plugin-feature
             providers:
                 - command:feature
         plan:

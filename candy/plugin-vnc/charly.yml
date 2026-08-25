@@ -25,7 +25,7 @@ plugin-vnc:
             type/key/rfb. The R10 consumer is a wayvnc-bearing pod bed whose check composes this
             plugin (e.g. sway-browser-vnc via sway-desktop-vnc).
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-vnc
+            source: github.com/opencharly/plugin-vnc/candy/plugin-vnc
             providers:
                 - verb:vnc
         plan:

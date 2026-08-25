@@ -19,7 +19,7 @@ plugin-example-step:
         plugin:
             providers:
                 - verb:examplestep
-            source: github.com/opencharly/charly/candy/plugin-example-step
+            source: github.com/opencharly/plugin-example-step/candy/plugin-example-step
         plan:
             - check: the out-of-tree build-emit plugin ships a buildable Go module (go.mod + the provider main) the host can build + serve out-of-process at image build
               id: examplestep-module-present

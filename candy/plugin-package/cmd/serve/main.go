@@ -7,7 +7,7 @@
 package main
 
 import (
-	pkgverb "github.com/opencharly/charly/candy/plugin-package"
+	pkgverb "github.com/opencharly/plugin-package/candy/plugin-package"
 	"github.com/opencharly/sdk"
 )
 

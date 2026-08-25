@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-authoring
+module github.com/opencharly/plugin-authoring/candy/plugin-authoring
 
 go 1.26.4
 

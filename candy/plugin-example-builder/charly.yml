@@ -16,7 +16,7 @@ plugin-example-builder:
         plugin:
             providers:
                 - builder:examplebuilder
-            source: github.com/opencharly/charly/candy/plugin-example-builder
+            source: github.com/opencharly/plugin-example-builder/candy/plugin-example-builder
         plan:
             - check: the out-of-tree build-resolve plugin ships a buildable Go module (go.mod + the provider main) the host can build + serve out-of-process at image build
               id: examplebuilder-module-present

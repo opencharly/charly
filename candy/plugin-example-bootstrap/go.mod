@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-example-bootstrap
+module github.com/opencharly/plugin-example-bootstrap/candy/plugin-example-bootstrap
 
 go 1.26.4
 

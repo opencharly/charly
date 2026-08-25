@@ -6,7 +6,7 @@
 package main
 
 import (
-	mcp "github.com/opencharly/charly/candy/plugin-mcp"
+	mcp "github.com/opencharly/plugin-mcp/candy/plugin-mcp"
 	"github.com/opencharly/sdk"
 )
 

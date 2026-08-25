@@ -17,7 +17,7 @@ plugin-candy-kind:
             is the candy-KIND plugin; the sibling candy/plugin-candy is the DISTINCT `command:candy`
             CLI authoring plugin. Also serves out-of-process via cmd/serve.
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-candy-kind
+            source: github.com/opencharly/plugin-candy-kind/candy/plugin-candy-kind
             providers:
                 - kind:candy
         plan:

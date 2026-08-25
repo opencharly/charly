@@ -15,7 +15,7 @@ plugin-builder-aur:
         plugin:
             providers:
                 - builder:aur
-            source: github.com/opencharly/charly/candy/plugin-builder-aur
+            source: github.com/opencharly/plugin-builder-aur/candy/plugin-builder-aur
         plan:
             - check: the out-of-tree aur builder plugin ships a buildable Go module (go.mod + the provider main) the host builds + serves out-of-process for the build-time OpResolve + deploy-time OpCollectContext/OpReverse legs
               id: aur-builder-module-present

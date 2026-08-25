@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-kernel-param
+module github.com/opencharly/plugin-kernel-param/candy/plugin-kernel-param
 
 go 1.26.4
 

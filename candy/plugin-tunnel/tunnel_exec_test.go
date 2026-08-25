@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/charly/candy/plugin-tunnel/params"
+	"github.com/opencharly/plugin-tunnel/candy/plugin-tunnel/params"
 	pb "github.com/opencharly/spec/proto"
 )
 

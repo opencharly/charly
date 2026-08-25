@@ -19,7 +19,7 @@ import (
 	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/dynamic"
 
-	"github.com/opencharly/charly/candy/plugin-kube/params"
+	"github.com/opencharly/plugin-kube/candy/plugin-kube/params"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/spec/spec"
 )

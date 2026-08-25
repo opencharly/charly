@@ -37,7 +37,7 @@ plugin-doctor:
             check-doctor-local bed: `charly doctor` exits 0 and prints the host-dependency report,
             proving the externalized command + its peer verb:gpu/verb:credential dispatches end-to-end.
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-doctor
+            source: github.com/opencharly/plugin-doctor/candy/plugin-doctor
             providers:
                 - command:doctor
         plan:

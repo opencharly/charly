@@ -25,7 +25,7 @@ plugin-udev:
             is the disposable check-udev-local bed: `charly udev generate` asserting the exact
             rule-file content + `charly udev status` exit 0, run host-side (GPU-less).
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-udev
+            source: github.com/opencharly/plugin-udev/candy/plugin-udev
             providers:
                 - command:udev
         plan:

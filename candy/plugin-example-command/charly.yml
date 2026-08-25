@@ -17,7 +17,7 @@ plugin-example-command:
         plugin:
             providers:
                 - command:examplecommand
-            source: github.com/opencharly/charly/candy/plugin-example-command
+            source: github.com/opencharly/plugin-example-command/candy/plugin-example-command
         plan:
             - # ADE check: a deterministic build-context check that does NOT depend on the project
               # context the `charly examplecommand` CLI needs (the prescan finds this candy from the

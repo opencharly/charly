@@ -6,7 +6,7 @@
 package main
 
 import (
-	examplebuilder "github.com/opencharly/charly/candy/plugin-example-builder"
+	examplebuilder "github.com/opencharly/plugin-example-builder/candy/plugin-example-builder"
 	"github.com/opencharly/sdk"
 )
 

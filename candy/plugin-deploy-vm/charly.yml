@@ -28,7 +28,7 @@ plugin-deploy-vm:
         plugin:
             providers:
                 - deploy:vm
-            source: github.com/opencharly/charly/candy/plugin-deploy-vm
+            source: github.com/opencharly/plugin-deploy-vm/candy/plugin-deploy-vm
         plan:
             - check: the out-of-tree deploy:vm plugin ships a buildable Go module (go.mod + the provider main) the host can build + serve out-of-process
               id: deploy-vm-module-present

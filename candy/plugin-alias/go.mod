@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-alias
+module github.com/opencharly/plugin-alias/candy/plugin-alias
 
 go 1.26.4
 

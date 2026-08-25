@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/opencharly/charly/candy/plugin-vnc/params"
+	"github.com/opencharly/plugin-vnc/candy/plugin-vnc/params"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/spec/proto"

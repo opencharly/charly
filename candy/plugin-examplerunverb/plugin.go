@@ -11,7 +11,7 @@ import (
 	"context"
 	"embed"
 
-	"github.com/opencharly/charly/candy/plugin-examplerunverb/params"
+	"github.com/opencharly/plugin-examplerunverb/candy/plugin-examplerunverb/params"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/spec/proto"

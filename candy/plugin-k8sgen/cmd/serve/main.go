@@ -6,7 +6,7 @@
 package main
 
 import (
-	k8sgen "github.com/opencharly/charly/candy/plugin-k8sgen"
+	k8sgen "github.com/opencharly/plugin-k8sgen/candy/plugin-k8sgen"
 	"github.com/opencharly/sdk"
 )
 

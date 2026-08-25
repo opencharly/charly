@@ -6,7 +6,7 @@
 package main
 
 import (
-	pod "github.com/opencharly/charly/candy/plugin-pod"
+	pod "github.com/opencharly/plugin-pod/candy/plugin-pod"
 	"github.com/opencharly/sdk"
 )
 

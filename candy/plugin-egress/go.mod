@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-egress
+module github.com/opencharly/plugin-egress/candy/plugin-egress
 
 go 1.26.4
 

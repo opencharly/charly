@@ -13,7 +13,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/opencharly/charly/candy/plugin-user/params"
+	"github.com/opencharly/plugin-user/candy/plugin-user/params"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/spec/proto"

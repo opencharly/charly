@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/opencharly/charly/candy/plugin-cdp/params"
+	"github.com/opencharly/plugin-cdp/candy/plugin-cdp/params"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/spec/spec"
 )

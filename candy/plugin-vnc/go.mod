@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-vnc
+module github.com/opencharly/plugin-vnc/candy/plugin-vnc
 
 go 1.26.4
 

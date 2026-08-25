@@ -7,7 +7,7 @@
 package main
 
 import (
-	httpverb "github.com/opencharly/charly/candy/plugin-http"
+	httpverb "github.com/opencharly/plugin-http/candy/plugin-http"
 	"github.com/opencharly/sdk"
 )
 

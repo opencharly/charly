@@ -6,7 +6,7 @@
 package main
 
 import (
-	spice "github.com/opencharly/charly/candy/plugin-spice"
+	spice "github.com/opencharly/plugin-spice/candy/plugin-spice"
 	"github.com/opencharly/sdk"
 )
 

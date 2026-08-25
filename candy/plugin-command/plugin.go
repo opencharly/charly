@@ -16,7 +16,7 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/opencharly/charly/candy/plugin-command/params"
+	"github.com/opencharly/plugin-command/candy/plugin-command/params"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/spec/proto"

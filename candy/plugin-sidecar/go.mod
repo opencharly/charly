@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-sidecar
+module github.com/opencharly/plugin-sidecar/candy/plugin-sidecar
 
 go 1.26.4
 

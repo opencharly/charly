@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-dsh
+module github.com/opencharly/plugin-dsh/candy/plugin-dsh
 
 go 1.26.4
 

@@ -24,7 +24,7 @@ plugin-record:
             consumer is a desktop pod bed whose check composes this plugin (the
             sway-browser-vnc bed's `record: start`).
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-record
+            source: github.com/opencharly/plugin-record/candy/plugin-record
             providers:
                 - verb:record
         plan:

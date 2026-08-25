@@ -6,7 +6,7 @@
 package main
 
 import (
-	exampledispatch "github.com/opencharly/charly/candy/plugin-example-dispatch"
+	exampledispatch "github.com/opencharly/plugin-example-dispatch/candy/plugin-example-dispatch"
 	"github.com/opencharly/sdk"
 )
 

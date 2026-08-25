@@ -20,7 +20,7 @@ import (
 
 	libvirt "github.com/digitalocean/go-libvirt"
 
-	"github.com/opencharly/charly/candy/plugin-vm/params"
+	"github.com/opencharly/plugin-vm/candy/plugin-vm/params"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/spec/proto"

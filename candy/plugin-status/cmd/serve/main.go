@@ -7,7 +7,7 @@
 package main
 
 import (
-	status "github.com/opencharly/charly/candy/plugin-status"
+	status "github.com/opencharly/plugin-status/candy/plugin-status"
 	"github.com/opencharly/sdk"
 )
 

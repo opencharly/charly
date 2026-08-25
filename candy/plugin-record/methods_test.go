@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/charly/candy/plugin-record/params"
+	"github.com/opencharly/plugin-record/candy/plugin-record/params"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/spec/spec"
 )

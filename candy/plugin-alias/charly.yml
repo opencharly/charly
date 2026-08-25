@@ -14,7 +14,7 @@ plugin-alias:
         plugin:
             providers:
                 - command:alias
-            source: github.com/opencharly/charly/candy/plugin-alias
+            source: github.com/opencharly/plugin-alias/candy/plugin-alias
         plan:
             - # ADE check: a deterministic build-context check that does NOT depend on the host
               # reverse channel the `charly alias add`/`install` handlers need (the prescan finds

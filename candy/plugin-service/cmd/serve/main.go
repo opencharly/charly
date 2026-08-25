@@ -7,7 +7,7 @@
 package main
 
 import (
-	service "github.com/opencharly/charly/candy/plugin-service"
+	service "github.com/opencharly/plugin-service/candy/plugin-service"
 	"github.com/opencharly/sdk"
 )
 

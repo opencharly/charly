@@ -7,7 +7,7 @@ import (
 
 	pb "github.com/opencharly/spec/proto"
 
-	"github.com/opencharly/charly/candy/plugin-secrets/params"
+	"github.com/opencharly/plugin-secrets/candy/plugin-secrets/params"
 )
 
 // provider.go is the out-of-process verb:credential provider — charly's host

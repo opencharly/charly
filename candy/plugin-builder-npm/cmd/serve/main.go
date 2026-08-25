@@ -6,7 +6,7 @@
 package main
 
 import (
-	buildernpm "github.com/opencharly/charly/candy/plugin-builder-npm"
+	buildernpm "github.com/opencharly/plugin-builder-npm/candy/plugin-builder-npm"
 	"github.com/opencharly/sdk"
 )
 

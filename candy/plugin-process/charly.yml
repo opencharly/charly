@@ -8,7 +8,7 @@ plugin-process:
             COMPILED-IN-ONLY. A pure check verb (probe-only, no act/step role); the
             second relocation on the kit contract after candy/plugin-port.
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-process
+            source: github.com/opencharly/plugin-process/candy/plugin-process
             providers:
                 - verb:process
             primary:

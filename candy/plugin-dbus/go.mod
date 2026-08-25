@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-dbus
+module github.com/opencharly/plugin-dbus/candy/plugin-dbus
 
 go 1.26.4
 

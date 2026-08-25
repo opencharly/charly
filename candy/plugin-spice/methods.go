@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/opencharly/charly/candy/plugin-spice/params"
+	"github.com/opencharly/plugin-spice/candy/plugin-spice/params"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/spec/spec"
 )

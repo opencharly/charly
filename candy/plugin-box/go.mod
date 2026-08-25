@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-box
+module github.com/opencharly/plugin-box/candy/plugin-box
 
 go 1.26.4
 

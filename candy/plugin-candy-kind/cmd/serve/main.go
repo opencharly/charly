@@ -4,7 +4,7 @@
 package main
 
 import (
-	candykind "github.com/opencharly/charly/candy/plugin-candy-kind"
+	candykind "github.com/opencharly/plugin-candy-kind/candy/plugin-candy-kind"
 	"github.com/opencharly/sdk"
 )
 

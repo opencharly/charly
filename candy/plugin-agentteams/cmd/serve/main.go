@@ -8,7 +8,7 @@ package main
 import (
 	"github.com/opencharly/sdk"
 
-	agentteams "github.com/opencharly/charly/candy/plugin-agentteams"
+	agentteams "github.com/opencharly/plugin-agentteams/candy/plugin-agentteams"
 )
 
 func main() {

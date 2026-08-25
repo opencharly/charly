@@ -33,7 +33,7 @@ plugin-marketplace:
             CLAUDE.md, LICENSE, scripts/squash_body.py, kimi-user-config.toml, and the hand-owned
             keys of .claude/settings.json (permissions, env, teammateMode, …).
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-marketplace
+            source: github.com/opencharly/plugin-marketplace/candy/plugin-marketplace
             providers:
                 - command:marketplace
         var:

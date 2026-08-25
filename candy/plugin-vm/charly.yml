@@ -24,7 +24,7 @@ plugin-vm:
             validated against this plugin's own #LibvirtInput; authoring unchanged), running the
             LibvirtCmd Kong tree IN this plugin's process.
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-vm
+            source: github.com/opencharly/plugin-vm/candy/plugin-vm
             providers:
                 - verb:libvirt
                 - command:vm

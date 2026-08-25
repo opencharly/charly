@@ -7,7 +7,7 @@
 package main
 
 import (
-	oci "github.com/opencharly/charly/candy/plugin-oci"
+	oci "github.com/opencharly/plugin-oci/candy/plugin-oci"
 	"github.com/opencharly/sdk"
 )
 

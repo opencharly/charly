@@ -6,7 +6,7 @@
 package main
 
 import (
-	vnc "github.com/opencharly/charly/candy/plugin-vnc"
+	vnc "github.com/opencharly/plugin-vnc/candy/plugin-vnc"
 	"github.com/opencharly/sdk"
 )
 

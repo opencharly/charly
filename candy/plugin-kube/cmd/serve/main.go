@@ -6,7 +6,7 @@
 package main
 
 import (
-	kube "github.com/opencharly/charly/candy/plugin-kube"
+	kube "github.com/opencharly/plugin-kube/candy/plugin-kube"
 	"github.com/opencharly/sdk"
 )
 

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/opencharly/charly/candy/plugin-vnc/params"
+	"github.com/opencharly/plugin-vnc/candy/plugin-vnc/params"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/spec/spec"
 )

@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-builder-pixi
+module github.com/opencharly/plugin-builder-pixi/candy/plugin-builder-pixi
 
 go 1.26.4
 

@@ -7,7 +7,7 @@
 package main
 
 import (
-	mount "github.com/opencharly/charly/candy/plugin-mount"
+	mount "github.com/opencharly/plugin-mount/candy/plugin-mount"
 	"github.com/opencharly/sdk"
 )
 

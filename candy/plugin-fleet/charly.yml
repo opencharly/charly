@@ -20,7 +20,7 @@ plugin-fleet:
         plugin:
             providers:
                 - command:fleet
-            source: github.com/opencharly/charly/candy/plugin-fleet
+            source: github.com/opencharly/plugin-fleet/candy/plugin-fleet
         plan:
             - # ADE check: a deterministic build-context check that does NOT depend on the
               # project context the `charly fleet` CLI needs. Mirrors plugin-vm /

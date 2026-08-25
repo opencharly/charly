@@ -13,7 +13,7 @@ plugin-egress:
         plugin:
             providers:
                 - verb:egress
-            source: github.com/opencharly/charly/candy/plugin-egress
+            source: github.com/opencharly/plugin-egress/candy/plugin-egress
         plan:
             - check: the egress validation plugin ships a buildable Go module the host compiles in
               id: egress-module-present

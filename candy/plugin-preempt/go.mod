@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-preempt
+module github.com/opencharly/plugin-preempt/candy/plugin-preempt
 
 go 1.26.4
 

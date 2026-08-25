@@ -6,7 +6,7 @@
 package main
 
 import (
-	examplestructkind "github.com/opencharly/charly/candy/plugin-example-structkind"
+	examplestructkind "github.com/opencharly/plugin-example-structkind/candy/plugin-example-structkind"
 	"github.com/opencharly/sdk"
 )
 

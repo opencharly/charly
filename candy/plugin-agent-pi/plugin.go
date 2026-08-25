@@ -13,7 +13,7 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/opencharly/charly/candy/plugin-agent-pi/params"
+	"github.com/opencharly/plugin-agent-pi/candy/plugin-agent-pi/params"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/spec/proc"
 	pb "github.com/opencharly/spec/proto"

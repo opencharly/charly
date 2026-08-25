@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/opencharly/charly/candy/plugin-dsh/params"
+	"github.com/opencharly/plugin-dsh/candy/plugin-dsh/params"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/spec/spec"
 )

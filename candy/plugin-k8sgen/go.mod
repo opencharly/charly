@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-k8sgen
+module github.com/opencharly/plugin-k8sgen/candy/plugin-k8sgen
 
 go 1.26.4
 

@@ -6,7 +6,7 @@
 package main
 
 import (
-	doctor "github.com/opencharly/charly/candy/plugin-doctor"
+	doctor "github.com/opencharly/plugin-doctor/candy/plugin-doctor"
 	"github.com/opencharly/sdk"
 )
 

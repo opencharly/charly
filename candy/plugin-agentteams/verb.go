@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/opencharly/charly/candy/plugin-agentteams/params"
+	"github.com/opencharly/plugin-agentteams/candy/plugin-agentteams/params"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/spec/spec"
 )

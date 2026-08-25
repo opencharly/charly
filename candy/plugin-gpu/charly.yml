@@ -46,7 +46,7 @@ plugin-gpu:
         plugin:
             providers:
                 - verb:gpu
-            source: github.com/opencharly/charly/candy/plugin-gpu
+            source: github.com/opencharly/plugin-gpu/candy/plugin-gpu
         plan:
             - # ADE build-context check: a deterministic check that does NOT depend on a live
               # deployment — it mirrors candy/plugin-k8sgen's k8sgen-module-present: a trivial

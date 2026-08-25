@@ -7,7 +7,7 @@
 package main
 
 import (
-	addr "github.com/opencharly/charly/candy/plugin-addr"
+	addr "github.com/opencharly/plugin-addr/candy/plugin-addr"
 	"github.com/opencharly/sdk"
 )
 

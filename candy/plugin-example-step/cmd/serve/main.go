@@ -6,7 +6,7 @@
 package main
 
 import (
-	examplestep "github.com/opencharly/charly/candy/plugin-example-step"
+	examplestep "github.com/opencharly/plugin-example-step/candy/plugin-example-step"
 	"github.com/opencharly/sdk"
 )
 

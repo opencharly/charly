@@ -4,7 +4,7 @@
 package main
 
 import (
-	sidecarkind "github.com/opencharly/charly/candy/plugin-sidecar"
+	sidecarkind "github.com/opencharly/plugin-sidecar/candy/plugin-sidecar"
 	"github.com/opencharly/sdk"
 )
 

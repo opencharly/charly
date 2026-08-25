@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-resource
+module github.com/opencharly/plugin-resource/candy/plugin-resource
 
 go 1.26.4
 

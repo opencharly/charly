@@ -7,7 +7,7 @@
 package main
 
 import (
-	externalprobe "github.com/opencharly/charly/candy/plugin-example-external"
+	externalprobe "github.com/opencharly/plugin-example-external/candy/plugin-example-external"
 	"github.com/opencharly/sdk"
 )
 

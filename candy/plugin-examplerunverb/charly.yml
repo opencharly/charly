@@ -8,7 +8,7 @@ plugin-examplerunverb:
             into a candy and still dispatches in-process. The *Runner-keeping analogue
             of the stateless candy/plugin-example exampleprobe; COMPILED-IN-ONLY.
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-examplerunverb
+            source: github.com/opencharly/plugin-examplerunverb/candy/plugin-examplerunverb
             providers:
                 - verb:examplerunverb
         plan:

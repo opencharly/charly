@@ -6,7 +6,7 @@
 package main
 
 import (
-	secrets "github.com/opencharly/charly/candy/plugin-secrets"
+	secrets "github.com/opencharly/plugin-secrets/candy/plugin-secrets"
 	"github.com/opencharly/sdk"
 )
 

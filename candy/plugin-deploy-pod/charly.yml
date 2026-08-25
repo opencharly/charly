@@ -45,7 +45,7 @@ plugin-deploy-pod:
         plugin:
             providers:
                 - deploy:pod
-            source: github.com/opencharly/charly/candy/plugin-deploy-pod
+            source: github.com/opencharly/plugin-deploy-pod/candy/plugin-deploy-pod
         plan:
             - check: the out-of-tree deploy:pod plugin ships a buildable Go module (go.mod + the provider main) the host can build + serve out-of-process
               id: deploy-pod-module-present

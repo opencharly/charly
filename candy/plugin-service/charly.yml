@@ -10,7 +10,7 @@ plugin-service:
             the sdk/kit contract (CheckVerbProvider + ProvisionActor +
             StepProvider), so it is COMPILED-IN-ONLY.
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-service
+            source: github.com/opencharly/plugin-service/candy/plugin-service
             providers:
                 - verb:service
             primary:

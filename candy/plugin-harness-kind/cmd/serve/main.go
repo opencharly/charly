@@ -4,7 +4,7 @@
 package main
 
 import (
-	harnesskind "github.com/opencharly/charly/candy/plugin-harness-kind"
+	harnesskind "github.com/opencharly/plugin-harness-kind/candy/plugin-harness-kind"
 	"github.com/opencharly/sdk"
 )
 

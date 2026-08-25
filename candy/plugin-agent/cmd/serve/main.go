@@ -4,7 +4,7 @@
 package main
 
 import (
-	agentkind "github.com/opencharly/charly/candy/plugin-agent"
+	agentkind "github.com/opencharly/plugin-agent/candy/plugin-agent"
 	"github.com/opencharly/sdk"
 )
 

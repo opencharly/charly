@@ -28,7 +28,7 @@ plugin-wl:
             a desktop pod bed whose check composes this plugin (the sway-browser-vnc bed's wl
             sway-tree + screenshot probes).
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-wl
+            source: github.com/opencharly/plugin-wl/candy/plugin-wl
             providers:
                 - verb:wl
         plan:

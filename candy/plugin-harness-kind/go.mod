@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-harness-kind
+module github.com/opencharly/plugin-harness-kind/candy/plugin-harness-kind
 
 go 1.26.4
 

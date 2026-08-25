@@ -49,7 +49,7 @@ plugin-installstep:
                 - step:builder
                 - step:local-pkg-install
                 - step:op
-            source: github.com/opencharly/charly/candy/plugin-installstep
+            source: github.com/opencharly/plugin-installstep/candy/plugin-installstep
         plan:
             - check: the compiled-in class:step build-emit plugin ships a buildable Go module the host can build + serve (in-proc in the default binary, out-of-process via cmd/serve when not compiled in)
               id: installstep-module-present

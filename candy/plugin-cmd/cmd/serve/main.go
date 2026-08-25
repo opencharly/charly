@@ -7,7 +7,7 @@
 package main
 
 import (
-	cmd "github.com/opencharly/charly/candy/plugin-cmd"
+	cmd "github.com/opencharly/plugin-cmd/candy/plugin-cmd"
 	"github.com/opencharly/sdk"
 )
 

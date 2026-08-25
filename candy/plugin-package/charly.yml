@@ -10,7 +10,7 @@ plugin-package:
             A HOST-COUPLED verb on the sdk/kit contract (CheckVerbProvider +
             ProvisionActor + StepProvider), so it is COMPILED-IN-ONLY.
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-package
+            source: github.com/opencharly/plugin-package/candy/plugin-package
             providers:
                 - verb:package
             primary:

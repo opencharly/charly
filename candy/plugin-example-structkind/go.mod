@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-example-structkind
+module github.com/opencharly/plugin-example-structkind/candy/plugin-example-structkind
 
 go 1.26.4
 

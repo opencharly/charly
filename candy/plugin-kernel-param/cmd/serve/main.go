@@ -7,7 +7,7 @@
 package main
 
 import (
-	kernelparam "github.com/opencharly/charly/candy/plugin-kernel-param"
+	kernelparam "github.com/opencharly/plugin-kernel-param/candy/plugin-kernel-param"
 	"github.com/opencharly/sdk"
 )
 

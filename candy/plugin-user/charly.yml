@@ -8,7 +8,7 @@ plugin-user:
             sdk/kit contract (CheckVerbProvider + ProvisionActor), so it is
             COMPILED-IN-ONLY. No matchers — direct field comparison.
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-user
+            source: github.com/opencharly/plugin-user/candy/plugin-user
             providers:
                 - verb:user
             primary:

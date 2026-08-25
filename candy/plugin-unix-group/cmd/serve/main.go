@@ -7,7 +7,7 @@
 package main
 
 import (
-	unixgroup "github.com/opencharly/charly/candy/plugin-unix-group"
+	unixgroup "github.com/opencharly/plugin-unix-group/candy/plugin-unix-group"
 	"github.com/opencharly/sdk"
 )
 

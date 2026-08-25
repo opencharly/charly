@@ -9,7 +9,7 @@ import (
 
 	adb "github.com/zach-klippenstein/goadb"
 
-	"github.com/opencharly/charly/candy/plugin-adb/params"
+	"github.com/opencharly/plugin-adb/candy/plugin-adb/params"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/spec/spec"

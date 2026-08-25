@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/opencharly/charly/candy/plugin-secrets/params"
+	"github.com/opencharly/plugin-secrets/candy/plugin-secrets/params"
 )
 
 // withConfigBackend points the plugin at an isolated config-file backend in a temp dir,

@@ -8,7 +8,7 @@ plugin-unix-group:
             sdk/kit contract (CheckVerbProvider + ProvisionActor), so it is
             COMPILED-IN-ONLY. No matchers — direct field comparison.
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-unix-group
+            source: github.com/opencharly/plugin-unix-group/candy/plugin-unix-group
             providers:
                 - verb:unix_group
             primary:

@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-port
+module github.com/opencharly/plugin-port/candy/plugin-port
 
 go 1.26.4
 

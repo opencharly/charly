@@ -4,7 +4,7 @@
 package main
 
 import (
-	groupkind "github.com/opencharly/charly/candy/plugin-group"
+	groupkind "github.com/opencharly/plugin-group/candy/plugin-group"
 	"github.com/opencharly/sdk"
 )
 

@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-mount
+module github.com/opencharly/plugin-mount/candy/plugin-mount
 
 go 1.26.4
 

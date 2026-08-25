@@ -10,7 +10,7 @@ plugin-agent:
             tmux compatibility surface is a typed facade and never constructs remote
             tmux shell strings or accesses an operator tmux socket.
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-agent
+            source: github.com/opencharly/plugin-agent/candy/plugin-agent
             providers:
                 - kind:agent
                 - kind:agent-team

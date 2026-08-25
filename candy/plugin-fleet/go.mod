@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-fleet
+module github.com/opencharly/plugin-fleet/candy/plugin-fleet
 
 go 1.26.4
 

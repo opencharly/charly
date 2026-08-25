@@ -5,7 +5,7 @@
 package main
 
 import (
-	egress "github.com/opencharly/charly/candy/plugin-egress"
+	egress "github.com/opencharly/plugin-egress/candy/plugin-egress"
 	"github.com/opencharly/sdk"
 )
 

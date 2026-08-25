@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/opencharly/charly/candy/plugin-cdp/params"
+	"github.com/opencharly/plugin-cdp/candy/plugin-cdp/params"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/spec/proto"

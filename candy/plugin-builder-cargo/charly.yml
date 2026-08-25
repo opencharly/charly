@@ -14,7 +14,7 @@ plugin-builder-cargo:
         plugin:
             providers:
                 - builder:cargo
-            source: github.com/opencharly/charly/candy/plugin-builder-cargo
+            source: github.com/opencharly/plugin-builder-cargo/candy/plugin-builder-cargo
         plan:
             - check: the out-of-tree cargo builder plugin ships a buildable Go module (go.mod + the provider main) the host builds + serves out-of-process for the build-time OpResolve + deploy-time OpCollectContext/OpReverse legs
               id: cargo-builder-module-present

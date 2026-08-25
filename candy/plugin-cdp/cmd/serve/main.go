@@ -6,7 +6,7 @@
 package main
 
 import (
-	cdp "github.com/opencharly/charly/candy/plugin-cdp"
+	cdp "github.com/opencharly/plugin-cdp/candy/plugin-cdp"
 	"github.com/opencharly/sdk"
 )
 

@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-addr
+module github.com/opencharly/plugin-addr/candy/plugin-addr
 
 go 1.26.4
 

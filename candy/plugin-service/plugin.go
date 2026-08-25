@@ -14,7 +14,7 @@ import (
 	"embed"
 	"fmt"
 
-	"github.com/opencharly/charly/candy/plugin-service/params"
+	"github.com/opencharly/plugin-service/candy/plugin-service/params"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/spec/proto"

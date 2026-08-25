@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/opencharly/charly/candy/plugin-secrets/params"
+	"github.com/opencharly/plugin-secrets/candy/plugin-secrets/params"
 )
 
 // verb_credential.go dispatches the verb:credential operation (the host's pluginCredentialStore

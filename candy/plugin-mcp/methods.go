@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/opencharly/charly/candy/plugin-mcp/params"
+	"github.com/opencharly/plugin-mcp/candy/plugin-mcp/params"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/spec/spec"
 )

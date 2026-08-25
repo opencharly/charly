@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-example-step
+module github.com/opencharly/plugin-example-step/candy/plugin-example-step
 
 go 1.26.4
 

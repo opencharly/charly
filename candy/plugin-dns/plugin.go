@@ -13,7 +13,7 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/opencharly/charly/candy/plugin-dns/params"
+	"github.com/opencharly/plugin-dns/candy/plugin-dns/params"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/spec/proto"

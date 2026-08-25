@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-mcp
+module github.com/opencharly/plugin-mcp/candy/plugin-mcp
 
 go 1.26.4
 

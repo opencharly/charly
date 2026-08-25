@@ -7,7 +7,7 @@
 package main
 
 import (
-	substratekind "github.com/opencharly/charly/candy/plugin-substrate"
+	substratekind "github.com/opencharly/plugin-substrate/candy/plugin-substrate"
 	"github.com/opencharly/sdk"
 )
 

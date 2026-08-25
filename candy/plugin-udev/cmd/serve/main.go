@@ -6,7 +6,7 @@
 package main
 
 import (
-	udev "github.com/opencharly/charly/candy/plugin-udev"
+	udev "github.com/opencharly/plugin-udev/candy/plugin-udev"
 	"github.com/opencharly/sdk"
 )
 

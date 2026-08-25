@@ -6,7 +6,7 @@
 package main
 
 import (
-	wl "github.com/opencharly/charly/candy/plugin-wl"
+	wl "github.com/opencharly/plugin-wl/candy/plugin-wl"
 	"github.com/opencharly/sdk"
 )
 

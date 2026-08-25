@@ -7,7 +7,7 @@
 package main
 
 import (
-	port "github.com/opencharly/charly/candy/plugin-port"
+	port "github.com/opencharly/plugin-port/candy/plugin-port"
 	"github.com/opencharly/sdk"
 )
 

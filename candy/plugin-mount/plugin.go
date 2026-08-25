@@ -13,7 +13,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/opencharly/charly/candy/plugin-mount/params"
+	"github.com/opencharly/plugin-mount/candy/plugin-mount/params"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/spec/proto"

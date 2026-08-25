@@ -34,7 +34,7 @@ plugin-tunnel:
             R10 consumer is box/fedora's check-tunnel-pod bed (a `plugin: tunnel`
             method:plan step asserting the built argv).
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-tunnel
+            source: github.com/opencharly/plugin-tunnel/candy/plugin-tunnel
             providers:
                 - verb:tunnel
         plan:

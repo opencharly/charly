@@ -3,7 +3,7 @@
 package main
 
 import (
-	tmux "github.com/opencharly/charly/candy/plugin-tmux"
+	tmux "github.com/opencharly/plugin-tmux/candy/plugin-tmux"
 	"github.com/opencharly/sdk"
 )
 

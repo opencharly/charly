@@ -23,7 +23,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/opencharly/charly/candy/plugin-tunnel/params"
+	"github.com/opencharly/plugin-tunnel/candy/plugin-tunnel/params"
 )
 
 // --- pure helpers (plugin-local copies of the core helpers) ---

@@ -24,7 +24,7 @@ plugin-deploy-local:
         plugin:
             providers:
                 - deploy:local
-            source: github.com/opencharly/charly/candy/plugin-deploy-local
+            source: github.com/opencharly/plugin-deploy-local/candy/plugin-deploy-local
         plan:
             - check: the out-of-tree deploy:local plugin ships a buildable Go module (go.mod + the provider main) the host can build + serve out-of-process
               id: deploy-local-module-present

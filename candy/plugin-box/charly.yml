@@ -40,7 +40,7 @@ plugin-box:
                 - command:merge
                 - command:reconcile
                 - command:feature
-            source: github.com/opencharly/charly/candy/plugin-box
+            source: github.com/opencharly/plugin-box/candy/plugin-box
         plan:
             - # ADE check: a deterministic build-context check that does NOT depend on the host
               # reverse channel the box handlers need (the generate/validate words reach the host

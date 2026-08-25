@@ -4,7 +4,7 @@
 package main
 
 import (
-	builderkind "github.com/opencharly/charly/candy/plugin-builder"
+	builderkind "github.com/opencharly/plugin-builder/candy/plugin-builder"
 	"github.com/opencharly/sdk"
 )
 

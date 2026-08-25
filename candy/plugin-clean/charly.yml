@@ -74,7 +74,7 @@ plugin-clean:
             externalized command + the local retention engine + the loader-resolved
             retention-defaults end-to-end for both the charly-labeled and the store-wide sweep.
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-clean
+            source: github.com/opencharly/plugin-clean/candy/plugin-clean
             providers:
                 - command:clean
                 - verb:retention

@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-kube
+module github.com/opencharly/plugin-kube/candy/plugin-kube
 
 go 1.26.4
 

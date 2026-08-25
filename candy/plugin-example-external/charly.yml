@@ -17,7 +17,7 @@ plugin-example-external:
         plugin:
             providers:
                 - verb:externalprobe
-            source: github.com/opencharly/charly/candy/plugin-example-external
+            source: github.com/opencharly/plugin-example-external/candy/plugin-example-external
         plan:
             - check: the externalprobe verb dispatches through the provider registry and passes — transport-invisible (compiled-in in the default build, out-of-process when not selected); the plugin_input marker round-trips author -> provider -> result
               id: externalprobe-dispatches

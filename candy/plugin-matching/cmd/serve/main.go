@@ -6,7 +6,7 @@
 package main
 
 import (
-	matching "github.com/opencharly/charly/candy/plugin-matching"
+	matching "github.com/opencharly/plugin-matching/candy/plugin-matching"
 	"github.com/opencharly/sdk"
 )
 

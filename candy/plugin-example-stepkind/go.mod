@@ -1,4 +1,4 @@
-module github.com/opencharly/charly/candy/plugin-example-stepkind
+module github.com/opencharly/plugin-example-stepkind/candy/plugin-example-stepkind
 
 go 1.26.4
 

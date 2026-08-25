@@ -14,7 +14,7 @@ import (
 	"embed"
 	"encoding/json"
 
-	"github.com/opencharly/charly/candy/plugin-example/params"
+	"github.com/opencharly/plugin-example/candy/plugin-example/params"
 	"github.com/opencharly/sdk"
 	pb "github.com/opencharly/spec/proto"
 )

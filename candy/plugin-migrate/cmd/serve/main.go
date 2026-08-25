@@ -7,7 +7,7 @@
 package main
 
 import (
-	migrate "github.com/opencharly/charly/candy/plugin-migrate"
+	migrate "github.com/opencharly/plugin-migrate/candy/plugin-migrate"
 	"github.com/opencharly/sdk"
 )
 

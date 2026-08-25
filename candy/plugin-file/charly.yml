@@ -10,7 +10,7 @@ plugin-file:
             is COMPILED-IN-ONLY; the `contains` matchers default a bare scalar to the
             `contains` operator (substring) and reuse sdk.MatchAll.
         plugin:
-            source: github.com/opencharly/charly/candy/plugin-file
+            source: github.com/opencharly/plugin-file/candy/plugin-file
             providers:
                 - verb:file
             primary:
