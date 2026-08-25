@@ -3512,7 +3512,7 @@ agentteams:
             and reach the controller — and every in-container service — by the
             controller container's DNS name.
         candy:
-            - agentteams
+            - '@github.com/opencharly/layer-agentteams:v2026.237.804'
 agentteams-manager:
     candy:
         version: 2026.224.0600
@@ -3540,7 +3540,7 @@ agentteams-manager:
             - -c
             - /etc/supervisord.conf
         candy:
-            - agentteams-manager
+            - '@github.com/opencharly/pod-agentteams-manager:v2026.237.804'
 agentteams-worker:
     candy:
         version: 2026.224.0600
@@ -3568,7 +3568,7 @@ agentteams-worker:
             - -c
             - /etc/supervisord.conf
         candy:
-            - agentteams-worker
+            - '@github.com/opencharly/pod-agentteams-worker:v2026.237.804'
 check-agentteams-pod:
     pod:
         image: agentteams

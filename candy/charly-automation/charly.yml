@@ -889,7 +889,7 @@ openclaw-deploy-skill:
               candy:
                 base: fedora
                 candy:
-                  - agent-forwarding
+                  - '@github.com/opencharly/layer-agent-forwarding:v2026.237.804'
                   - openclaw-full
                   - sway-desktop
                   - '@github.com/opencharly/pod-dbus:v2026.235.2115'

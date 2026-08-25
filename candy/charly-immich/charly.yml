@@ -86,7 +86,7 @@ immich-layer-skill:
             # charly.yml
             immich:
               candy:
-                - immich
+                - '@github.com/opencharly/pod-immich:v2026.237.806'
             ```
             
             ## Used In Boxes

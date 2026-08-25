@@ -36,7 +36,7 @@ openclaw-full:
             - '@github.com/opencharly/layer-camsnap:v2026.237.455'
             - '@github.com/opencharly/layer-gogcli:v2026.237.457'
             - '@github.com/opencharly/layer-ordercli:v2026.237.457'
-            - himalaya
+            - '@github.com/opencharly/layer-himalaya:v2026.237.806'
             - '@github.com/opencharly/layer-uv:v2026.237.458'
             - '@github.com/opencharly/layer-nano-pdf:v2026.237.556'
             - '@github.com/opencharly/layer-gh:v2026.237.456'

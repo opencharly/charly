@@ -16,7 +16,7 @@ android-emulator-layer:
             helper scripts, the AVD home directory, and the booted device are all
             directly observable, so the behaviour is verifiable end to end.
         require:
-            - android-sdk
+            - '@github.com/opencharly/layer-android-sdk:v2026.237.805'
             - appium-server
             - '@github.com/opencharly/layer-supervisord:v2026.235.2056'
             # plugin-appium is the OUT-OF-TREE plugin that serves the `appium:` check

@@ -11,7 +11,7 @@ immich-ml:
             Immich server can offload face detection and CLIP smart-search
             embedding to this backend.
         require:
-            - immich
+            - '@github.com/opencharly/pod-immich:v2026.237.806'
         env:
             IMMICH_MACHINE_LEARNING_ENABLED: "true"
             IMMICH_MACHINE_LEARNING_URL: "http://127.0.0.1:3003"
