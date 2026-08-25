@@ -104,8 +104,8 @@ jupyter-layer-skill:
             jupyter:
               base: fedora
               candy:
-                - agent-forwarding
-                - jupyter
+                - '@github.com/opencharly/layer-agent-forwarding:v2026.237.804'
+                - '@github.com/opencharly/pod-jupyter:v2026.237.0806'
                 - '@github.com/opencharly/pod-dbus:v2026.235.2115'
                 - charly
               ports:
@@ -402,7 +402,7 @@ jupyter-ml-notebook-skill:
             jupyter-ml-notebook:
               base: nvidia
               candy:
-                - agent-forwarding
+                - '@github.com/opencharly/layer-agent-forwarding:v2026.237.804'
                 - jupyter-ml
                 - '@github.com/opencharly/layer-notebook-templates:v2026.237.557'
                 - notebook-finetuning

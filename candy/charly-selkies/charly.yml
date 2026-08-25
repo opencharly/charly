@@ -209,7 +209,7 @@ selkies-kde-skill:
               base: cachyos              # plain CachyOS base (x86_64_v3 Arch derivative)
               build: [pac, aur]          # aur: chrome (google-chrome) + wl-tools (wlrctl)
               candy:
-                - agent-forwarding
+                - '@github.com/opencharly/layer-agent-forwarding:v2026.237.804'
                 - selkies-kde-desktop    # the KDE metalayer (selkies-core + kde-selkies → kde-shell)
                 - '@github.com/opencharly/pod-dbus:v2026.235.2115'
                 - charly
@@ -295,7 +295,7 @@ selkies-kde-nvidia-skill:
               build: [pac, aur]
               builder: {pixi: arch.cuda-arch-builder}   # nvcc + ffnvcodec headers → real NVENC
               candy:
-                - agent-forwarding
+                - '@github.com/opencharly/layer-agent-forwarding:v2026.237.804'
                 - selkies-kde-desktop
                 - '@github.com/opencharly/pod-dbus:v2026.235.2115'
                 - charly
@@ -364,7 +364,7 @@ selkies-labwc-skill:
               base: cachyos               # local cachyos base (same box/cachyos submodule)
               build: [pac, aur]          # aur required: chrome (google-chrome) + wl-tools (wlrctl)
               candy:
-                - agent-forwarding
+                - '@github.com/opencharly/layer-agent-forwarding:v2026.237.804'
                 - selkies-desktop
                 - '@github.com/opencharly/pod-dbus:v2026.235.2115'
                 - charly
@@ -788,7 +788,7 @@ selkies-labwc-nvidia-skill:
               builder:
                 pixi: arch.cuda-arch-builder
               candy:
-                - agent-forwarding
+                - '@github.com/opencharly/layer-agent-forwarding:v2026.237.804'
                 - selkies-desktop
                 - '@github.com/opencharly/pod-dbus:v2026.235.2115'
                 - charly

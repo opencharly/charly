@@ -56,7 +56,7 @@ arch-coder-skill:
                 - "18765:18765"               # charly-mcp (Streamable HTTP)
               candy:
                 # Baseline — identical to fedora-coder
-                - agent-forwarding
+                - '@github.com/opencharly/layer-agent-forwarding:v2026.237.804'
                 - '@github.com/opencharly/pod-sshd:v2026.237.558'
                 - charly
                 - charly-mcp
@@ -94,7 +94,7 @@ arch-coder-skill:
                 - '@github.com/opencharly/layer-docker-ce:v2026.237.456'
                 - '@github.com/opencharly/layer-github-actions:v2026.237.457'
                 - '@github.com/opencharly/layer-google-cloud:v2026.237.457'
-                - google-cloud-npm
+                - '@github.com/opencharly/layer-google-cloud-npm:v2026.237.0806'
                 - '@github.com/opencharly/layer-grafana-tools:v2026.237.457'
             ```
             
@@ -471,7 +471,7 @@ debian-coder-skill:
                 - "18765:18765"               # charly-mcp (Streamable HTTP)
               candy:
                 # Baseline
-                - agent-forwarding
+                - '@github.com/opencharly/layer-agent-forwarding:v2026.237.804'
                 - '@github.com/opencharly/pod-sshd:v2026.237.558'
                 - charly
                 - charly-mcp
@@ -509,7 +509,7 @@ debian-coder-skill:
                 - '@github.com/opencharly/layer-docker-ce:v2026.237.456'
                 - '@github.com/opencharly/layer-github-actions:v2026.237.457'
                 - '@github.com/opencharly/layer-google-cloud:v2026.237.457'
-                - google-cloud-npm
+                - '@github.com/opencharly/layer-google-cloud-npm:v2026.237.0806'
                 - '@github.com/opencharly/layer-grafana-tools:v2026.237.457'
             ```
             
@@ -678,7 +678,7 @@ fedora-coder-skill:
                 - "18765:18765"               # charly-mcp (Streamable HTTP)
               candy:
                 # Baseline (matches the charly-cachyos power-user pattern)
-                - agent-forwarding
+                - '@github.com/opencharly/layer-agent-forwarding:v2026.237.804'
                 - '@github.com/opencharly/pod-sshd:v2026.237.558'
                 - charly                          # the full toolchain: charly binary + virtualization + gocryptfs + socat
                 - charly-mcp                      # MCP gateway for the entire charly CLI
@@ -1024,14 +1024,14 @@ ubuntu-coder-skill:
                 - "18765:18765"               # charly-mcp (Streamable HTTP)
               candy:
                 # Same stack as debian-coder — see that skill for the full list
-                - agent-forwarding
+                - '@github.com/opencharly/layer-agent-forwarding:v2026.237.804'
                 - '@github.com/opencharly/pod-sshd:v2026.237.558'
                 - charly
                 - charly-mcp
                 - container-nesting
                 - '@github.com/opencharly/pod-dbus:v2026.235.2115'
                 - '@github.com/opencharly/layer-tmux:v2026.235.2057'
-                - language-runtimes
+                - '@github.com/opencharly/layer-language-runtimes:v2026.237.807'
                 - '@github.com/opencharly/layer-golang:v2026.235.2057'
                 - '@github.com/opencharly/layer-nodejs:v2026.235.2056'
                 - '@github.com/opencharly/layer-rust:v2026.237.458'
@@ -1054,7 +1054,7 @@ ubuntu-coder-skill:
                 - '@github.com/opencharly/layer-docker-ce:v2026.237.456'
                 - '@github.com/opencharly/layer-github-actions:v2026.237.457'
                 - '@github.com/opencharly/layer-google-cloud:v2026.237.457'
-                - google-cloud-npm
+                - '@github.com/opencharly/layer-google-cloud-npm:v2026.237.0806'
                 - '@github.com/opencharly/layer-grafana-tools:v2026.237.457'
             ```
             

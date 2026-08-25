@@ -60,7 +60,7 @@ google-cloud-npm-skill:
             # charly.yml
             my-image:
               candy:
-                - google-cloud-npm
+                - '@github.com/opencharly/layer-google-cloud-npm:v2026.237.0806'
             ```
             
             ## Used In Boxes

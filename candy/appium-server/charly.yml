@@ -15,7 +15,7 @@ appium-server:
         require:
             - '@github.com/opencharly/layer-nodejs:v2026.235.2056'
             - '@github.com/opencharly/layer-java-openjdk:v2026.237.457'
-            - android-sdk
+            - '@github.com/opencharly/layer-android-sdk:v2026.237.805'
             - '@github.com/opencharly/layer-supervisord:v2026.235.2056'
         var:
             # Tracks the API-36 google_apis_playstore System WebView Chrome version

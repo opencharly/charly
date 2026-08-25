@@ -42,7 +42,7 @@ openclaw-desktop-skill:
               base: cachyos.cachyos        # Arch-derived, pacman/AUR, x86_64_v3 (via the `cachyos` import namespace)
               build: [pac, aur]            # required — selkies' chrome (AUR google-chrome) + wl-tools (AUR wlrctl)
               candy:
-                - agent-forwarding
+                - '@github.com/opencharly/layer-agent-forwarding:v2026.237.804'
                 - selkies-desktop          # full streaming desktop stack
                 - openclaw-full            # gateway + the OpenClaw tools incl. claude-code/codex/gemini
                 - '@github.com/opencharly/pod-ollama:v2026.237.457'                   # CPU ollama (GPU-agnostic layer)

@@ -12,7 +12,7 @@ helm-chart:
             so this candy waits for the node itself (kubectl wait, no sleeps) before the
             helm upgrade --install --wait can schedule the chart's pods.
         require:
-            - k3s-server
+            - '@github.com/opencharly/vm-k3s-server:v2026.237.807'
             # plugin-helm serves the step:helm-release word over the provider registry —
             # requiring it puts it in the deploy's scanned candy set so loadProjectPlugins
             # builds + connects it before the install timeline dispatches the step.
