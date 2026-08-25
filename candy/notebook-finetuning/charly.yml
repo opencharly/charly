@@ -123,7 +123,7 @@ notebook-finetuning-skill:
             # charly.yml
             unsloth-studio:
               candy:
-                - unsloth-studio
+                - '@github.com/opencharly/pod-unsloth-studio:v2026.237.0808'
                 - notebook-finetuning
                 # ... other candies
             ```

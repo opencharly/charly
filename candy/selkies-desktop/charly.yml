@@ -17,9 +17,9 @@ selkies-desktop:
             built image, and the labwc desktop daemons reach a supervised RUNNING state
             at deploy.
         candy:
-            - selkies-core
+            - '@github.com/opencharly/pod-selkies-core:v2026.237.808'
             - '@github.com/opencharly/pod-labwc:v2026.237.558'
-            - waybar-labwc
+            - '@github.com/opencharly/pod-waybar-labwc:v2026.237.0808'
             - '@github.com/opencharly/pod-swaync:v2026.237.558'
             - '@github.com/opencharly/layer-pavucontrol:v2026.237.457'
         plan:

@@ -61,7 +61,7 @@ hermes-full-layer-skill:
               candy:
                 base: fedora
                 candy:
-                  - agent-forwarding
+                  - '@github.com/opencharly/layer-agent-forwarding:v2026.237.804'
                   - hermes-full
                   - '@github.com/opencharly/pod-dbus:v2026.235.2115'
             ```
@@ -244,7 +244,7 @@ hermes-layer-skill:
             hermes:
               base: fedora
               candy:
-                - agent-forwarding
+                - '@github.com/opencharly/layer-agent-forwarding:v2026.237.804'
                 - hermes-full
                 - '@github.com/opencharly/pod-dbus:v2026.235.2115'
             ```
@@ -346,7 +346,7 @@ hermes-playwright-layer-skill:
             hermes-playwright:
               base: fedora
               candy:
-                - agent-forwarding
+                - '@github.com/opencharly/layer-agent-forwarding:v2026.237.804'
                 - hermes
                 - hermes-playwright
                 - '@github.com/opencharly/pod-dbus:v2026.235.2115'
