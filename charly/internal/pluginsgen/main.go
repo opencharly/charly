@@ -10,11 +10,12 @@
 // candy-inclusion choice, expressed in charly.yml.
 //
 // It imports only the stdlib + gopkg.in/yaml.v3 and NEVER imports the candy modules
-// (it string-templates their import paths from each candy's go.mod), so it builds and
-// runs without a pre-built charly and without the candy modules resolving — which is
-// what lets `task build:binary` run it BEFORE the `go build` that needs go.work
-// (dodging the chicken-and-egg). Run it with GOWORK=off so a stale go.work can't fail
-// workspace load before regeneration.
+// (it string-templates their import paths from each candy's `plugin.source:` field —
+// the module path of record — falling back to the candy's go.mod module directive),
+// so it builds and runs without a pre-built charly and without the candy modules
+// resolving — which is what lets `task build:binary` run it BEFORE the `go build`
+// that needs go.work (dodging the chicken-and-egg). Run it with GOWORK=off so a stale
+// go.work can't fail workspace load before regeneration.
 //
 // Reproducible: same `compiled_plugins:` list -> byte-identical outputs (guarded by
 // TestPluginsGenReproducible). Run from `task build:binary`; edit charly.yml's
@@ -79,7 +80,7 @@ func generate(root, cfg string) (genGo, genWork []byte, err error) {
 	entries := make([]entry, 0, len(names))
 	for _, name := range names {
 		candyDir := filepath.Join(root, "candy", name)
-		mod, err := readModulePath(filepath.Join(candyDir, "go.mod"))
+		mod, err := pluginModulePath(candyDir, name)
 		if err != nil {
 			return nil, nil, fmt.Errorf("compiled plugin %q: %w", name, err)
 		}
@@ -162,6 +163,56 @@ func readCompiledPlugins(path string) ([]string, error) {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
 	return doc.CompiledPlugins, nil
+}
+
+// pluginModulePath returns a compiled plugin candy's module path: the candy's
+// `plugin.source:` field when it names a module path (the candy de-submodule
+// cutover's standalone shape — e.g. github.com/opencharly/plugin-port/candy/plugin-port),
+// falling back to candy/<name>/go.mod when source is absent or `builtin` (the
+// in-repo state). source: is the module path of record for compiled-in plugins;
+// the go.mod fallback keeps `source: builtin` candies (plugin-agentteams,
+// plugin-dsh) resolving against their in-repo module.
+func pluginModulePath(candyDir, name string) (string, error) {
+	src, err := readPluginSource(filepath.Join(candyDir, "charly.yml"), name)
+	if err != nil {
+		return "", err
+	}
+	if src != "" {
+		return src, nil
+	}
+	return readModulePath(filepath.Join(candyDir, "go.mod"))
+}
+
+// readPluginSource returns the module path from a compiled plugin candy's
+// `plugin.source:` field, or "" when the field is absent or `builtin` (the two
+// forms meaning "no standalone module path — fall back to candy/<name>/go.mod").
+// The top-level charly.yml key is the candy name; sibling entities (e.g. a
+// `<name>-cli-skill` block) carry other top-level keys and no candy.plugin.source,
+// so the lookup is by the candy name itself.
+func readPluginSource(path, name string) (string, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("read candy charly.yml: %w", err)
+	}
+	var doc map[string]struct {
+		Candy struct {
+			Plugin struct {
+				Source string `yaml:"source"`
+			} `yaml:"plugin"`
+		} `yaml:"candy"`
+	}
+	if err := yaml.Unmarshal(b, &doc); err != nil {
+		return "", fmt.Errorf("parse candy charly.yml %s: %w", path, err)
+	}
+	e, ok := doc[name]
+	if !ok {
+		return "", nil
+	}
+	src := strings.TrimSpace(e.Candy.Plugin.Source)
+	if src == "builtin" {
+		return "", nil
+	}
+	return src, nil
 }
 
 // readModulePath returns the `module` path declared in a go.mod.
