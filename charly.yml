@@ -831,7 +831,7 @@ check-k8s-deploy-app:
             - fedora:43
             - fedora
         candy:
-            - '@github.com/opencharly/pod-check-keepalive:v2026.237.456'
+            - check-keepalive
             - '@github.com/opencharly/pod-os-layer:v2026.237.457'
 # =============================================================================
 # check-k8s-deploy — disposable proof of the EXTERNALIZED deploy:kubernetes SUBSTRATE
@@ -1307,7 +1307,7 @@ check-group-app:
             applies INSIDE the disposable eval VM over kit.NestedExecutor and the marker lands
             in the guest, never on the operator's host.
         candy:
-            - '@github.com/opencharly/layer-check-group-layer:v2026.237.455'
+            - check-group-layer
 check-group:
     group:
         disposable: true
@@ -1364,7 +1364,7 @@ check-structkind-app:
             check-structkind-layer (drops /etc/check-structkind-marker in the guest) so the
             structural-kind member has a deterministic, collision-free deploy effect.
         candy:
-            - '@github.com/opencharly/layer-check-structkind-layer:v2026.237.456'
+            - check-structkind-layer
 check-structkind:
     examplestructkind:
         disposable: true
@@ -1420,7 +1420,7 @@ check-substrate-app:
             fold arm (C2-substrate). Composes check-substrate-layer (drops /etc/check-substrate-marker
             in the guest) so the member has a deterministic, collision-free deploy effect.
         candy:
-            - '@github.com/opencharly/layer-check-substrate-layer:v2026.237.456'
+            - check-substrate-layer
 check-substrate:
     vm:
         from: eval-vm
@@ -2663,7 +2663,7 @@ check-builder-local-app:
             builder fixture candy check-builder-npm so the bed exercises the builder DEPLOY leg
             (runVenueBuilderStep → runVenueHomeArtifactBuilder) inside the eval VM guest venue.
         candy:
-            - '@github.com/opencharly/layer-check-builder-npm:v2026.237.556'
+            - check-builder-npm
 # =================================================================
 # check-udev-local — R10 witness for the externalized `charly udev` COMMAND
 # (candy/plugin-udev, command:udev) — the first externalizable-command precedent.
@@ -4044,7 +4044,7 @@ check-retention-app:
             - fedora:43
             - fedora
         candy:
-            - '@github.com/opencharly/layer-check-retention-fixture:v2026.237.456'
+            - check-retention-fixture
 
 # =============================================================================
 # `charly box load` — the container-venue image-delivery verb (Factory unit 5).
