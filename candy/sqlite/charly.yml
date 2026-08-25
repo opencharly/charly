@@ -63,7 +63,7 @@ sqlite-skill:
               candy:
                 base: fedora
                 candy:
-                  - sqlite
+                  - '@github.com/opencharly/layer-sqlite:v2026.237.458'
             ```
             
             ## Used In Boxes

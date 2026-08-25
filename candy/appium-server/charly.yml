@@ -14,7 +14,7 @@ appium-server:
             verifiable.
         require:
             - '@github.com/opencharly/layer-nodejs:v2026.235.2056'
-            - java-openjdk
+            - '@github.com/opencharly/layer-java-openjdk:v2026.237.457'
             - android-sdk
             - '@github.com/opencharly/layer-supervisord:v2026.235.2056'
         var:

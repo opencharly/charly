@@ -45,11 +45,11 @@ openclaw-desktop-skill:
                 - agent-forwarding
                 - selkies-desktop          # full streaming desktop stack
                 - openclaw-full            # gateway + the OpenClaw tools incl. claude-code/codex/gemini
-                - ollama                   # CPU ollama (GPU-agnostic layer)
+                - '@github.com/opencharly/pod-ollama:v2026.237.457'                   # CPU ollama (GPU-agnostic layer)
                 - charly                       # the full toolchain: charly binary + virtualization + gocryptfs + socat
                 - container-nesting        # nested rootless podman/buildah/skopeo
                 - '@github.com/opencharly/layer-golang:v2026.235.2057'
-                - gh
+                - '@github.com/opencharly/layer-gh:v2026.237.456'
                 - '@github.com/opencharly/pod-dbus:v2026.235.2115'
                 - charly
               port:
@@ -456,7 +456,7 @@ openclaw-layer-skill:
             # charly.yml
             openclaw:
               candy:
-                - openclaw
+                - '@github.com/opencharly/pod-openclaw:v2026.237.457'
             ```
             
             ```bash

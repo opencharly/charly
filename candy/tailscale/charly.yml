@@ -94,7 +94,7 @@ tailscale-skill:
               bootc: true
               distro: ["fedora:43", fedora]
               candy:
-                - tailscale
+                - '@github.com/opencharly/layer-tailscale:v2026.237.458'
                 - ...
             ```
             

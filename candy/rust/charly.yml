@@ -94,7 +94,7 @@ rust-skill:
             # charly.yml
             my-image:
               candy:
-                - rust
+                - '@github.com/opencharly/layer-rust:v2026.237.458'
             ```
             
             ## Used In Boxes

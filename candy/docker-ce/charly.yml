@@ -125,7 +125,7 @@ docker-ce-skill:
             # charly.yml
             my-image:
               candy:
-                - docker-ce
+                - '@github.com/opencharly/layer-docker-ce:v2026.237.456'
             ```
             
             ## Used In Boxes

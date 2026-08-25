@@ -80,7 +80,7 @@ ssh-client-skill:
             # charly.yml
             my-image:
               candy:
-                - ssh-client
+                - '@github.com/opencharly/layer-ssh-client:v2026.237.458'
             ```
             
             Typically used as part of the `agent-forwarding` composition candy rather than directly. Use the `sshd` candy instead if you need an SSH *server*.

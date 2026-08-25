@@ -94,7 +94,7 @@ rpmfusion-skill:
             fedora-nonfree:
               base: fedora
               candy:
-                - rpmfusion
+                - '@github.com/opencharly/layer-rpmfusion:v2026.237.458'
             ```
             
             ## Used In Boxes

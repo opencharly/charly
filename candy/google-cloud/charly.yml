@@ -80,7 +80,7 @@ google-cloud-skill:
             # charly.yml
             my-image:
               candy:
-                - google-cloud
+                - '@github.com/opencharly/layer-google-cloud:v2026.237.457'
             ```
             
             ## Used In Boxes

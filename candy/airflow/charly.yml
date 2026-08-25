@@ -19,7 +19,7 @@ airflow:
             are the wrapper scripts (build scope) and the live REST API + JWT
             issuance (deploy scope).
         require:
-            - marimo
+            - '@github.com/opencharly/pod-marimo:v2026.237.457'
             - '@github.com/opencharly/layer-supervisord:v2026.235.2056'
         env:
             AIRFLOW_HOME: "~/airflow"

@@ -74,7 +74,7 @@ gnupg-skill:
             # charly.yml
             my-image:
               candy:
-                - gnupg
+                - '@github.com/opencharly/layer-gnupg:v2026.237.457'
             ```
             
             Typically used as part of the `agent-forwarding` composition candy rather than directly.

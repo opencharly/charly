@@ -14,7 +14,7 @@ python-ml:
         require:
             - '@github.com/opencharly/layer-cuda:v2026.235.2121'
         candy:
-            - llama-cpp
+            - '@github.com/opencharly/layer-llama-cpp:v2026.237.457'
         env:
             NVIDIA_PYTHON_PROJECT: "~/.pixi"
             LD_LIBRARY_PATH: "/usr/lib64:$HOME/llama.cpp"

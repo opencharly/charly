@@ -23,7 +23,7 @@ ollama-cuda:
             asserts the backend really is present. Either way the check below fails
             when the CUDA backend is missing, which is the property worth having.
         require:
-            - ollama
+            - '@github.com/opencharly/pod-ollama:v2026.237.457'
         distro:
             arch:
                 package:

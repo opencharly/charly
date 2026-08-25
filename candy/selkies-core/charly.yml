@@ -47,16 +47,16 @@ selkies-core:
             - '@github.com/opencharly/layer-chrome:v2026.235.2057'
             - '@github.com/opencharly/pod-chrome-cdp:v2026.235.2110'
             - desktop-fonts
-            - wl-tools
-            - wl-screenshot-pixelflux
-            - wl-overlay
-            - wl-record-pixelflux
-            - a11y-tools
+            - '@github.com/opencharly/layer-wl-tools:v2026.237.459'
+            - '@github.com/opencharly/layer-wl-screenshot-pixelflux:v2026.237.459'
+            - '@github.com/opencharly/layer-wl-overlay:v2026.237.458'
+            - '@github.com/opencharly/layer-wl-record-pixelflux:v2026.237.459'
+            - '@github.com/opencharly/layer-a11y-tools:v2026.237.454'
             - xterm
             - '@github.com/opencharly/layer-tmux:v2026.235.2057'
-            - asciinema
-            - fastfetch
-            - sshd
+            - '@github.com/opencharly/layer-asciinema:v2026.237.455'
+            - '@github.com/opencharly/layer-fastfetch:v2026.237.456'
+            - '@github.com/opencharly/pod-sshd:v2026.237.458'
         service:
             # Chrome is launched + SUPERVISED here for BOTH selkies flavors (labwc +
             # KDE), instead of the former fire-once launch from each per-flavor

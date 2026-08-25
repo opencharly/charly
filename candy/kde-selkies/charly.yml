@@ -27,7 +27,7 @@ kde-selkies:
             shows on a real GPU output (that is kde-desktop's job).
         require:
             - '@github.com/opencharly/pod-selkies:v2026.235.2110'
-            - kde-shell
+            - '@github.com/opencharly/layer-kde-shell:v2026.237.457'
             - '@github.com/opencharly/pod-pipewire:v2026.235.2110'
             - '@github.com/opencharly/pod-dbus:v2026.235.2115'
         env:

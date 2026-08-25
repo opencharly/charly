@@ -404,10 +404,10 @@ jupyter-ml-notebook-skill:
               candy:
                 - agent-forwarding
                 - jupyter-ml
-                - notebook-templates
+                - '@github.com/opencharly/layer-notebook-templates:v2026.237.457'
                 - notebook-finetuning
                 - notebook-ollama
-                - notebook-llm-on-supercomputers
+                - '@github.com/opencharly/layer-notebook-llm-on-supercomputers:v2026.237.457'
                 - notebook-openrouter
                 - '@github.com/opencharly/pod-dbus:v2026.235.2115'
                 - charly

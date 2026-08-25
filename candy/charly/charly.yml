@@ -14,8 +14,8 @@ charly:
             path) need NOT bake it — the host copies `charly` in on demand
             (`EnsureCharlyInDeployVenue`; see `/charly-tools:charly`).
         candy:
-            - virtualization
-            - gocryptfs
+            - '@github.com/opencharly/pod-virtualization:v2026.237.458'
+            - '@github.com/opencharly/layer-gocryptfs:v2026.237.457'
             - '@github.com/opencharly/layer-socat:v2026.235.2057'
         distro:
             debian:
@@ -132,7 +132,7 @@ charly:
                     depends:
                         - glibc
                         - podman
-                        - gocryptfs
+                        - '@github.com/opencharly/layer-gocryptfs:v2026.237.457'
                         - fuse3
                         - openssh
                         - util-linux
@@ -141,7 +141,7 @@ charly:
                         - qemu-img
                         - virtiofsd
                         - libvirt
-                        - tailscale
+                        - '@github.com/opencharly/layer-tailscale:v2026.237.458'
                         - libarchive
                         - iproute2
                         - tmux
@@ -152,7 +152,7 @@ charly:
                         - edk2-ovmf
                         - dnsmasq
                         - swtpm
-                        - gnupg
+                        - '@github.com/opencharly/layer-gnupg:v2026.237.457'
                         - pinentry
                     optdepends:
                         docker: alternative container engine — only needed for engine.run=docker (podman is the default)
@@ -169,7 +169,7 @@ charly:
                     depends:
                         - glibc
                         - podman
-                        - gocryptfs
+                        - '@github.com/opencharly/layer-gocryptfs:v2026.237.457'
                         - fuse3
                         - fuse-overlayfs
                         - slirp4netns
@@ -182,7 +182,7 @@ charly:
                         - virtiofsd
                         - libvirt
                         - libvirt-client
-                        - tailscale
+                        - '@github.com/opencharly/layer-tailscale:v2026.237.458'
                         - bsdtar
                         - iproute
                         - xorriso
@@ -201,7 +201,7 @@ charly:
                 deb:
                     depends:
                         - podman
-                        - gocryptfs
+                        - '@github.com/opencharly/layer-gocryptfs:v2026.237.457'
                         - fuse3
                         - fuse-overlayfs
                         - slirp4netns
@@ -221,7 +221,7 @@ charly:
                         - ovmf
                         - dnsmasq-base
                         - swtpm
-                        - gnupg
+                        - '@github.com/opencharly/layer-gnupg:v2026.237.457'
                         - pinentry-curses
                     suggests:
                         - docker.io
@@ -232,7 +232,7 @@ charly:
                 apk:
                     depends:
                         - podman
-                        - gocryptfs
+                        - '@github.com/opencharly/layer-gocryptfs:v2026.237.457'
                         - fuse3
                         - fuse-overlayfs
                         - slirp4netns
@@ -244,14 +244,14 @@ charly:
                         - virtiofsd
                         - libvirt
                         - libvirt-client
-                        - tailscale
+                        - '@github.com/opencharly/layer-tailscale:v2026.237.458'
                         - libarchive-tools
                         - iproute2
                         - xorriso
                         - ovmf
                         - dnsmasq
                         - swtpm
-                        - gnupg
+                        - '@github.com/opencharly/layer-gnupg:v2026.237.457'
                         - pinentry
                 ipk:
                     # OpenWrt's repos lack the mandatory charly deps (podman/qemu/

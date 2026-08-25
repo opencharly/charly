@@ -12,7 +12,7 @@ language-runtimes:
             golang/nodejs candies — not duplicated here, per R3.)
         require:
             - '@github.com/opencharly/layer-nodejs:v2026.235.2056'
-            - rust
+            - '@github.com/opencharly/layer-rust:v2026.237.458'
         distro:
             arch:
                 package:

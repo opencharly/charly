@@ -183,7 +183,7 @@ k3s-skill:
               candy:
                 base: fedora
                 candy:
-                  - k3s
+                  - '@github.com/opencharly/layer-k3s:v2026.237.457'
             ```
             
             ## Cross-distro coverage

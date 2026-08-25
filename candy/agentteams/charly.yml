@@ -19,11 +19,11 @@ agentteams:
             controller — and every in-container service — by the controller
             container's DNS name.
         candy:
-            - agentteams-minio
-            - agentteams-matrix
-            - agentteams-element
-            - agentteams-higress
-            - agentteams-controller
+            - '@github.com/opencharly/pod-agentteams-minio:v2026.237.454'
+            - '@github.com/opencharly/pod-agentteams-matrix:v2026.237.454'
+            - '@github.com/opencharly/pod-agentteams-element:v2026.237.454'
+            - '@github.com/opencharly/pod-agentteams-higress:v2026.237.454'
+            - '@github.com/opencharly/pod-agentteams-controller:v2026.237.454'
         plan:
             - check: the full AgentTeams composition is present (controller, minio, matrix, element, higress)
               command: |

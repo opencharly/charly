@@ -17,33 +17,33 @@ openclaw-full:
             dropped from the metalayer. The gateway's own port reachability is
             already checked by the composed openclaw candy and rides along.
         candy:
-            - openclaw
-            - claude-code
-            - codex
+            - '@github.com/opencharly/pod-openclaw:v2026.237.457'
+            - '@github.com/opencharly/layer-claude-code:v2026.237.456'
+            - '@github.com/opencharly/layer-codex:v2026.237.456'
             - '@github.com/opencharly/layer-gemini:v2026.235.2110'
-            - clawhub
-            - mcporter
-            - oracle
+            - '@github.com/opencharly/layer-clawhub:v2026.237.456'
+            - '@github.com/opencharly/layer-mcporter:v2026.237.457'
+            - '@github.com/opencharly/layer-oracle:v2026.237.457'
             - xurl
-            - summarize
-            - playwright
-            - blogwatcher
-            - gifgrep
-            - wacli
-            - goplaces
-            - songsee
-            - sag
-            - camsnap
-            - gogcli
-            - ordercli
+            - '@github.com/opencharly/layer-summarize:v2026.237.458'
+            - '@github.com/opencharly/layer-playwright:v2026.237.458'
+            - '@github.com/opencharly/layer-blogwatcher:v2026.237.455'
+            - '@github.com/opencharly/layer-gifgrep:v2026.237.457'
+            - '@github.com/opencharly/layer-wacli:v2026.237.458'
+            - '@github.com/opencharly/layer-goplaces:v2026.237.457'
+            - '@github.com/opencharly/layer-songsee:v2026.237.458'
+            - '@github.com/opencharly/layer-sag:v2026.237.458'
+            - '@github.com/opencharly/layer-camsnap:v2026.237.455'
+            - '@github.com/opencharly/layer-gogcli:v2026.237.457'
+            - '@github.com/opencharly/layer-ordercli:v2026.237.457'
             - himalaya
-            - uv
-            - nano-pdf
-            - gh
+            - '@github.com/opencharly/layer-uv:v2026.237.458'
+            - '@github.com/opencharly/layer-nano-pdf:v2026.237.457'
+            - '@github.com/opencharly/layer-gh:v2026.237.456'
             - '@github.com/opencharly/layer-tmux:v2026.235.2057'
             - '@github.com/opencharly/layer-ffmpeg:v2026.235.2057'
             - '@github.com/opencharly/layer-ripgrep:v2026.235.1653'
-            - sqlite
+            - '@github.com/opencharly/layer-sqlite:v2026.237.458'
         plan:
             - check: the claude-code CLI is composed into the image under the native install location
               file:

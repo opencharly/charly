@@ -103,7 +103,7 @@ claude-code-skill:
             # charly.yml
             my-dev:
               candy:
-                - claude-code
+                - '@github.com/opencharly/layer-claude-code:v2026.237.456'
             ```
             
             ## Used In Boxes

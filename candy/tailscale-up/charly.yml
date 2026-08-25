@@ -15,7 +15,7 @@ tailscale-up:
             why the build-scope composition facts (CLI + daemon present) are
             verifiable independently of the conditional runtime operator wiring.
         require:
-            - tailscale
+            - '@github.com/opencharly/layer-tailscale:v2026.237.458'
         plan:
             - run: |
                 command=set -eu

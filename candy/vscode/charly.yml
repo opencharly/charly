@@ -131,7 +131,7 @@ vscode-skill:
             # charly.yml
             my-image:
               candy:
-                - vscode
+                - '@github.com/opencharly/layer-vscode:v2026.237.458'
             ```
             
             ## Used In Boxes

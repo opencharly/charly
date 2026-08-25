@@ -13,7 +13,7 @@ plugin-agent-pi:
             providers:
                 - agent-runtime:pi
         require:
-            - pi-agent
+            - '@github.com/opencharly/layer-pi-agent:v2026.237.457'
         plan:
             - check: the compiled provider registry exposes Pi as a typed streaming agent runtime
               context: [runtime]

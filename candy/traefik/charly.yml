@@ -127,7 +127,7 @@ traefik-skill:
             # charly.yml
             fedora-test:
               candy:
-                - traefik
+                - '@github.com/opencharly/pod-traefik:v2026.237.458'
             ```
             
             ## Used In Boxes

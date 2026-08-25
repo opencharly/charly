@@ -9,7 +9,7 @@ k3s-agent:
             agent registers with the control plane and the node reaches the Ready state —
             no join-token handoff, only the server URL plus the credential-store token.
         require:
-            - k3s
+            - '@github.com/opencharly/layer-k3s:v2026.237.457'
         # Same pre-shared token as k3s-server consumes. Both layers declare
         # secret_require with the same name, so whichever resolves first
         # auto-generates a 32-byte hex token via the credential store

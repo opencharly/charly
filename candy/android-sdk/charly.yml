@@ -15,7 +15,7 @@ android-sdk:
             under /opt/android-sdk, so the SDK is verifiable by probing those
             paths and running adb.
         require:
-            - java-openjdk
+            - '@github.com/opencharly/layer-java-openjdk:v2026.237.457'
         env:
             ANDROID_HOME: "/opt/android-sdk"
             ANDROID_SDK_ROOT: "/opt/android-sdk"

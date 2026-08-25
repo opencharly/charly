@@ -10,7 +10,7 @@ waybar-labwc:
             wayland-0 socket before exec'ing waybar so the bar attaches to the
             labwc compositor, not the pixelflux capture display.
         require:
-            - labwc
+            - '@github.com/opencharly/pod-labwc:v2026.237.457'
         distro:
             arch:
                 package:

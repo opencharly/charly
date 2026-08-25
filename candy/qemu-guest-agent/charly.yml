@@ -132,7 +132,7 @@ qemu-guest-agent-skill:
             my-vm-image:
               bootc: true
               candy:
-                - qemu-guest-agent
+                - '@github.com/opencharly/pod-qemu-guest-agent:v2026.237.458'
             # or applied to a VM guest at deploy time:
             #   charly fleet add vm:<name> qemu-guest-agent
             ```

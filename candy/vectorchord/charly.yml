@@ -13,7 +13,7 @@ vectorchord:
             the download-and-install ran; CREATE EXTENSION vchord against the live
             server proves it is actually loadable.
         require:
-            - postgresql
+            - '@github.com/opencharly/pod-postgresql:v2026.237.458'
         distro:
             arch:
                 package:
@@ -191,7 +191,7 @@ vectorchord-skill:
             # charly.yml -- used alongside postgresql for Immich smart search
             my-image:
               candy:
-                - postgresql
+                - '@github.com/opencharly/pod-postgresql:v2026.237.458'
                 - vectorchord
                 - immich
             ```

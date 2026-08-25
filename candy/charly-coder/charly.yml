@@ -57,7 +57,7 @@ arch-coder-skill:
               candy:
                 # Baseline — identical to fedora-coder
                 - agent-forwarding
-                - sshd
+                - '@github.com/opencharly/pod-sshd:v2026.237.458'
                 - charly
                 - charly-mcp
                 - container-nesting
@@ -68,34 +68,34 @@ arch-coder-skill:
                 - language-runtimes           # Go + PHP + .NET 9 + python3-devel
                 - '@github.com/opencharly/layer-golang:v2026.235.2057'
                 - '@github.com/opencharly/layer-nodejs:v2026.235.2056'  # Arch ships a current Node (v26)
-                - rust
-                - pixi
-                - uv
+                - '@github.com/opencharly/layer-rust:v2026.237.458'
+                - '@github.com/opencharly/layer-pixi:v2026.237.457'
+                - '@github.com/opencharly/layer-uv:v2026.237.458'
             
                 # Build + developer tooling
-                - build-toolchain
+                - '@github.com/opencharly/layer-build-toolchain:v2026.237.455'
                 - dev-tools
-                - pre-commit
+                - '@github.com/opencharly/layer-pre-commit:v2026.237.458'
                 - direnv
-                - gh
-                - typst
-                - asciinema
+                - '@github.com/opencharly/layer-gh:v2026.237.456'
+                - '@github.com/opencharly/layer-typst:v2026.237.458'
+                - '@github.com/opencharly/layer-asciinema:v2026.237.455'
             
                 # AI coding CLIs
-                - claude-code
-                - codex
+                - '@github.com/opencharly/layer-claude-code:v2026.237.456'
+                - '@github.com/opencharly/layer-codex:v2026.237.456'
                 - '@github.com/opencharly/layer-gemini:v2026.235.2110'
-                - forgecode
-                - oracle
+                - '@github.com/opencharly/layer-forgecode:v2026.237.456'
+                - '@github.com/opencharly/layer-oracle:v2026.237.457'
             
                 # DevOps / cloud / infra
                 - devops-tools
-                - kubernetes
-                - docker-ce
-                - github-actions
-                - google-cloud
+                - '@github.com/opencharly/layer-kubernetes:v2026.237.457'
+                - '@github.com/opencharly/layer-docker-ce:v2026.237.456'
+                - '@github.com/opencharly/layer-github-actions:v2026.237.457'
+                - '@github.com/opencharly/layer-google-cloud:v2026.237.457'
                 - google-cloud-npm
-                - grafana-tools
+                - '@github.com/opencharly/layer-grafana-tools:v2026.237.457'
             ```
             
             No explicit `user:` / `uid:` / `gid:` — inherits the defaults. `user_policy:` defaults to `auto`; the `arch` base image declares no `base_user:` in its `distro:` vocabulary, so the policy falls through to create mode — the bootstrap emits an idempotent user creation (`useradd` where shadow-utils is present, busybox `adduser` otherwise). See `/charly-image:image` "user_policy" and `/charly-build:build` "base_user".
@@ -472,7 +472,7 @@ debian-coder-skill:
               candy:
                 # Baseline
                 - agent-forwarding
-                - sshd
+                - '@github.com/opencharly/pod-sshd:v2026.237.458'
                 - charly
                 - charly-mcp
                 - container-nesting
@@ -483,34 +483,34 @@ debian-coder-skill:
                 - language-runtimes           # Go + PHP + .NET 9 (via Microsoft dotnet-install.sh)
                 - '@github.com/opencharly/layer-golang:v2026.235.2057'
                 - '@github.com/opencharly/layer-nodejs:v2026.235.2056'  # Debian's packaged Node
-                - rust
-                - pixi
-                - uv
+                - '@github.com/opencharly/layer-rust:v2026.237.458'
+                - '@github.com/opencharly/layer-pixi:v2026.237.457'
+                - '@github.com/opencharly/layer-uv:v2026.237.458'
             
                 # Build + developer tooling
-                - build-toolchain
+                - '@github.com/opencharly/layer-build-toolchain:v2026.237.455'
                 - dev-tools                   # ripgrep, bat→batcat symlink, fd-find, neovim, …
-                - pre-commit
+                - '@github.com/opencharly/layer-pre-commit:v2026.237.458'
                 - direnv
-                - gh
-                - typst
-                - asciinema
+                - '@github.com/opencharly/layer-gh:v2026.237.456'
+                - '@github.com/opencharly/layer-typst:v2026.237.458'
+                - '@github.com/opencharly/layer-asciinema:v2026.237.455'
             
                 # AI coding CLIs
-                - claude-code
-                - codex
+                - '@github.com/opencharly/layer-claude-code:v2026.237.456'
+                - '@github.com/opencharly/layer-codex:v2026.237.456'
                 - '@github.com/opencharly/layer-gemini:v2026.235.2110'
-                - forgecode
-                - oracle
+                - '@github.com/opencharly/layer-forgecode:v2026.237.456'
+                - '@github.com/opencharly/layer-oracle:v2026.237.457'
             
                 # DevOps / cloud / infra
                 - devops-tools
-                - kubernetes
-                - docker-ce
-                - github-actions
-                - google-cloud
+                - '@github.com/opencharly/layer-kubernetes:v2026.237.457'
+                - '@github.com/opencharly/layer-docker-ce:v2026.237.456'
+                - '@github.com/opencharly/layer-github-actions:v2026.237.457'
+                - '@github.com/opencharly/layer-google-cloud:v2026.237.457'
                 - google-cloud-npm
-                - grafana-tools
+                - '@github.com/opencharly/layer-grafana-tools:v2026.237.457'
             ```
             
             ## User model — create mode
@@ -679,7 +679,7 @@ fedora-coder-skill:
               candy:
                 # Baseline (matches the charly-cachyos power-user pattern)
                 - agent-forwarding
-                - sshd
+                - '@github.com/opencharly/pod-sshd:v2026.237.458'
                 - charly                          # the full toolchain: charly binary + virtualization + gocryptfs + socat
                 - charly-mcp                      # MCP gateway for the entire charly CLI
                 - container-nesting           # rootless nested podman/buildah/skopeo
@@ -690,34 +690,34 @@ fedora-coder-skill:
                 - language-runtimes           # Go + PHP + .NET 9 + nodejs-devel + python3-devel
                 - '@github.com/opencharly/layer-golang:v2026.235.2057'
                 - '@github.com/opencharly/layer-nodejs:v2026.235.2056'  # generic nodejs candy (Node 22 on Fedora)
-                - rust
-                - pixi
-                - uv                          # direct-download binary (no pixi env)
+                - '@github.com/opencharly/layer-rust:v2026.237.458'
+                - '@github.com/opencharly/layer-pixi:v2026.237.457'
+                - '@github.com/opencharly/layer-uv:v2026.237.458'                          # direct-download binary (no pixi env)
             
                 # Build + developer tooling
-                - build-toolchain
+                - '@github.com/opencharly/layer-build-toolchain:v2026.237.455'
                 - dev-tools                   # ripgrep, bat, fd, neovim, htop, …
-                - pre-commit
+                - '@github.com/opencharly/layer-pre-commit:v2026.237.458'
                 - direnv
-                - gh                          # GitHub CLI + git + git-lfs (single-responsibility)
-                - typst
-                - asciinema
+                - '@github.com/opencharly/layer-gh:v2026.237.456'                          # GitHub CLI + git + git-lfs (single-responsibility)
+                - '@github.com/opencharly/layer-typst:v2026.237.458'
+                - '@github.com/opencharly/layer-asciinema:v2026.237.455'
             
                 # AI coding CLIs
-                - claude-code
-                - codex
+                - '@github.com/opencharly/layer-claude-code:v2026.237.456'
+                - '@github.com/opencharly/layer-codex:v2026.237.456'
                 - '@github.com/opencharly/layer-gemini:v2026.235.2110'
-                - forgecode                   # 5th CLI (astral-sh-style)
-                - oracle
+                - '@github.com/opencharly/layer-forgecode:v2026.237.456'                   # 5th CLI (astral-sh-style)
+                - '@github.com/opencharly/layer-oracle:v2026.237.457'
             
                 # DevOps / cloud / infra
                 - devops-tools                # AWS, Scaleway, kubectx/kubens, OpenTofu
-                - kubernetes                  # kubectl, helm, k3d
-                - docker-ce
-                - github-actions              # act, actionlint
-                - google-cloud
+                - '@github.com/opencharly/layer-kubernetes:v2026.237.457'                  # kubectl, helm, k3d
+                - '@github.com/opencharly/layer-docker-ce:v2026.237.456'
+                - '@github.com/opencharly/layer-github-actions:v2026.237.457'              # act, actionlint
+                - '@github.com/opencharly/layer-google-cloud:v2026.237.457'
                 - google-cloud-npm            # firebase npm bindings (Gemini CLI comes from the gemini candy)
-                - grafana-tools
+                - '@github.com/opencharly/layer-grafana-tools:v2026.237.457'
             ```
             
             Network: default `charly` bridge. The `port:` mapping is the right way to expose
@@ -958,7 +958,7 @@ kubernetes-layer-skill:
             # charly.yml
             my-devops:
               candy:
-                - kubernetes
+                - '@github.com/opencharly/layer-kubernetes:v2026.237.457'
             ```
             
             ## Used In Boxes
@@ -1025,7 +1025,7 @@ ubuntu-coder-skill:
               candy:
                 # Same stack as debian-coder — see that skill for the full list
                 - agent-forwarding
-                - sshd
+                - '@github.com/opencharly/pod-sshd:v2026.237.458'
                 - charly
                 - charly-mcp
                 - container-nesting
@@ -1034,28 +1034,28 @@ ubuntu-coder-skill:
                 - language-runtimes
                 - '@github.com/opencharly/layer-golang:v2026.235.2057'
                 - '@github.com/opencharly/layer-nodejs:v2026.235.2056'
-                - rust
-                - pixi
-                - uv
-                - build-toolchain
+                - '@github.com/opencharly/layer-rust:v2026.237.458'
+                - '@github.com/opencharly/layer-pixi:v2026.237.457'
+                - '@github.com/opencharly/layer-uv:v2026.237.458'
+                - '@github.com/opencharly/layer-build-toolchain:v2026.237.455'
                 - dev-tools
-                - pre-commit
+                - '@github.com/opencharly/layer-pre-commit:v2026.237.458'
                 - direnv
-                - gh
-                - typst
-                - asciinema
-                - claude-code
-                - codex
+                - '@github.com/opencharly/layer-gh:v2026.237.456'
+                - '@github.com/opencharly/layer-typst:v2026.237.458'
+                - '@github.com/opencharly/layer-asciinema:v2026.237.455'
+                - '@github.com/opencharly/layer-claude-code:v2026.237.456'
+                - '@github.com/opencharly/layer-codex:v2026.237.456'
                 - '@github.com/opencharly/layer-gemini:v2026.235.2110'
-                - forgecode
-                - oracle
+                - '@github.com/opencharly/layer-forgecode:v2026.237.456'
+                - '@github.com/opencharly/layer-oracle:v2026.237.457'
                 - devops-tools
-                - kubernetes
-                - docker-ce
-                - github-actions
-                - google-cloud
+                - '@github.com/opencharly/layer-kubernetes:v2026.237.457'
+                - '@github.com/opencharly/layer-docker-ce:v2026.237.456'
+                - '@github.com/opencharly/layer-github-actions:v2026.237.457'
+                - '@github.com/opencharly/layer-google-cloud:v2026.237.457'
                 - google-cloud-npm
-                - grafana-tools
+                - '@github.com/opencharly/layer-grafana-tools:v2026.237.457'
             ```
             
             ## User model — adopt mode

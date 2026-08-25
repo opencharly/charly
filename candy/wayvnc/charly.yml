@@ -102,7 +102,7 @@ wayvnc-skill:
             # charly.yml -- typically included via sway-desktop composition
             my-desktop:
               candy:
-                - wayvnc
+                - '@github.com/opencharly/pod-wayvnc:v2026.237.458'
             ```
             
             ```bash

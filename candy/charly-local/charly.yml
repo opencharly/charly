@@ -345,7 +345,7 @@ local-spec-skill:
                 candy:                       # required (use [] for a placeholder; see below)
                   - ripgrep
                   - direnv
-                  - uv
+                  - '@github.com/opencharly/layer-uv:v2026.237.458'
                 install_opts:                # optional — defaults merged 3-tier (CLI > deploy > template)
                   with_service: false
                   allow_repo_changes: true

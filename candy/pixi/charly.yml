@@ -73,7 +73,7 @@ pixi-skill:
             # charly.yml
             my-image:
               candy:
-                - pixi
+                - '@github.com/opencharly/layer-pixi:v2026.237.457'
             ```
             
             ## Used In Boxes

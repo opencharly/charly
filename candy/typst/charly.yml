@@ -86,7 +86,7 @@ typst-skill:
             # charly.yml
             my-image:
               candy:
-                - typst
+                - '@github.com/opencharly/layer-typst:v2026.237.458'
             ```
             
             ## Used In Boxes
