@@ -60,7 +60,7 @@ arch-coder-skill:
                 - '@github.com/opencharly/pod-sshd:v2026.237.558'
                 - charly
                 - charly-mcp
-                - container-nesting
+                - '@github.com/opencharly/layer-container-nesting:v2026.237.938'
                 - '@github.com/opencharly/pod-dbus:v2026.235.2115'
                 - '@github.com/opencharly/layer-tmux:v2026.235.2057'
             
@@ -475,7 +475,7 @@ debian-coder-skill:
                 - '@github.com/opencharly/pod-sshd:v2026.237.558'
                 - charly
                 - charly-mcp
-                - container-nesting
+                - '@github.com/opencharly/layer-container-nesting:v2026.237.938'
                 - '@github.com/opencharly/pod-dbus:v2026.235.2115'
                 - '@github.com/opencharly/layer-tmux:v2026.235.2057'
             
@@ -1028,7 +1028,7 @@ ubuntu-coder-skill:
                 - '@github.com/opencharly/pod-sshd:v2026.237.558'
                 - charly
                 - charly-mcp
-                - container-nesting
+                - '@github.com/opencharly/layer-container-nesting:v2026.237.938'
                 - '@github.com/opencharly/pod-dbus:v2026.235.2115'
                 - '@github.com/opencharly/layer-tmux:v2026.235.2057'
                 - '@github.com/opencharly/layer-language-runtimes:v2026.237.807'

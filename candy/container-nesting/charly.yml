@@ -698,8 +698,8 @@ container-nesting-skill:
             openclaw-desktop:
               base: cachyos.cachyos
               candy:
-                - selkies-desktop
-                - openclaw-full
+                - '@github.com/opencharly/pod-selkies-desktop:v2026.237.937'
+                - '@github.com/opencharly/layer-openclaw-full:v2026.237.937'
                 - '@github.com/opencharly/pod-ollama:v2026.237.457'
                 - charly
                 - container-nesting   # donates unmask + devices + config + env
@@ -724,7 +724,7 @@ container-nesting-skill:
                   - seccomp=unconfined
               candy:
                 - charly
-                - container-nesting
+                - '@github.com/opencharly/layer-container-nesting:v2026.237.938'
                 - ...
             ```
             

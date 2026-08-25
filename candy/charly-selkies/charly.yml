@@ -296,7 +296,7 @@ selkies-kde-nvidia-skill:
               builder: {pixi: arch.cuda-arch-builder}   # nvcc + ffnvcodec headers → real NVENC
               candy:
                 - '@github.com/opencharly/layer-agent-forwarding:v2026.237.804'
-                - selkies-kde-desktop
+                - '@github.com/opencharly/layer-selkies-kde-desktop:v2026.237.937'
                 - '@github.com/opencharly/pod-dbus:v2026.235.2115'
                 - charly
               port: ["3000:3000", "9222:9222", "9224:9224", "2222:2222"]
@@ -365,7 +365,7 @@ selkies-labwc-skill:
               build: [pac, aur]          # aur required: chrome (google-chrome) + wl-tools (wlrctl)
               candy:
                 - '@github.com/opencharly/layer-agent-forwarding:v2026.237.804'
-                - selkies-desktop
+                - '@github.com/opencharly/pod-selkies-desktop:v2026.237.937'
                 - '@github.com/opencharly/pod-dbus:v2026.235.2115'
                 - charly
               ports:
@@ -789,7 +789,7 @@ selkies-labwc-nvidia-skill:
                 pixi: arch.cuda-arch-builder
               candy:
                 - '@github.com/opencharly/layer-agent-forwarding:v2026.237.804'
-                - selkies-desktop
+                - '@github.com/opencharly/pod-selkies-desktop:v2026.237.937'
                 - '@github.com/opencharly/pod-dbus:v2026.235.2115'
                 - charly
               port:

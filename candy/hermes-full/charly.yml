@@ -12,7 +12,7 @@ hermes-full:
             supervised service when the box is deployed. Dropping any candy from the
             candy: list makes the matching check below fail.
         candy:
-            - hermes
+            - '@github.com/opencharly/pod-hermes:v2026.237.936'
             - '@github.com/opencharly/layer-claude-code:v2026.237.456'
             - '@github.com/opencharly/layer-codex:v2026.237.556'
             - '@github.com/opencharly/layer-gemini:v2026.235.2110'

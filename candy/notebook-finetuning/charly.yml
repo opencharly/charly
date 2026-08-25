@@ -124,7 +124,7 @@ notebook-finetuning-skill:
             unsloth-studio:
               candy:
                 - '@github.com/opencharly/pod-unsloth-studio:v2026.237.0808'
-                - notebook-finetuning
+                - '@github.com/opencharly/layer-notebook-finetuning:v2026.237.936'
                 # ... other candies
             ```
             

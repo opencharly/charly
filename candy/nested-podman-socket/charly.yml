@@ -16,7 +16,7 @@ nested-podman-socket:
             storage.conf graphroot), which is the whole point: containers spawned through it stay
             inside the candybox instead of landing in the host store beside everything else.
         candy:
-            - container-nesting
+            - '@github.com/opencharly/layer-container-nesting:v2026.237.938'
         # /run is a fresh root-owned tmpfs at container start, so the build-time seed below does
         # NOT survive into the running container, and the uid-1000 service cannot create its own
         # runtime dir under a root-owned /run/user. A NAMED VOLUME at the runtime path is the fix:

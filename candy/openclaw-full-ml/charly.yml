@@ -18,7 +18,7 @@ openclaw-full-ml:
             Each branch is verifiable by the presence of its landed artifact, so a
             no-op composition fails every check below.
         candy:
-            - openclaw-full
+            - '@github.com/opencharly/layer-openclaw-full:v2026.237.937'
             - '@github.com/opencharly/layer-whisper:v2026.237.557'
             - '@github.com/opencharly/layer-sherpa-onnx:v2026.237.458'
         plan:

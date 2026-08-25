@@ -330,7 +330,7 @@ openclaw-full-layer-skill:
                 candy:
                     base: fedora
                     candy:
-                        - openclaw-full
+                        - '@github.com/opencharly/layer-openclaw-full:v2026.237.937'
             ```
             
             ## Used In Boxes
@@ -393,7 +393,7 @@ openclaw-full-ml-layer-skill:
                 candy:
                     base: nvidia
                     candy:
-                        - openclaw-full-ml
+                        - '@github.com/opencharly/layer-openclaw-full-ml:v2026.237.939'
             ```
             
             ## Used In Boxes
