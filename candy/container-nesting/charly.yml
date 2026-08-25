@@ -702,7 +702,7 @@ container-nesting-skill:
                 - '@github.com/opencharly/layer-openclaw-full:v2026.237.937'
                 - '@github.com/opencharly/pod-ollama:v2026.237.457'
                 - charly
-                - container-nesting   # donates unmask + devices + config + env
+                - '@github.com/opencharly/layer-container-nesting:v2026.237.938'   # donates unmask + devices + config + env
                 - ...
               # NO uid/gid/user/network override
             ```

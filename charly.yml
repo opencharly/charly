@@ -4067,7 +4067,7 @@ check-boxload-app:
             - fedora:43
             - fedora
         candy:
-            - nested-podman-socket
+            - '@github.com/opencharly/pod-nested-podman-socket:v2026.237.940'
 check-boxload-pod:
     pod:
         image: check-boxload-app
