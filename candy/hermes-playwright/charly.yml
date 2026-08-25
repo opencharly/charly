@@ -9,7 +9,7 @@ hermes-playwright:
             launch. Verifiable: the browser build dir + chrome executable land
             under the cache path, and the runtime libraries are in the rpm db.
         require:
-            - hermes
+            - '@github.com/opencharly/pod-hermes:v2026.237.936'
         env:
             PLAYWRIGHT_BROWSERS_PATH: "/tmp/.cache/ms-playwright"
         distro:

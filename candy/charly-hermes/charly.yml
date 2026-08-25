@@ -62,7 +62,7 @@ hermes-full-layer-skill:
                 base: fedora
                 candy:
                   - '@github.com/opencharly/layer-agent-forwarding:v2026.237.804'
-                  - hermes-full
+                  - '@github.com/opencharly/pod-hermes-full:v2026.237.938'
                   - '@github.com/opencharly/pod-dbus:v2026.235.2115'
             ```
             
@@ -245,7 +245,7 @@ hermes-layer-skill:
               base: fedora
               candy:
                 - '@github.com/opencharly/layer-agent-forwarding:v2026.237.804'
-                - hermes-full
+                - '@github.com/opencharly/pod-hermes-full:v2026.237.938'
                 - '@github.com/opencharly/pod-dbus:v2026.235.2115'
             ```
             
@@ -347,8 +347,8 @@ hermes-playwright-layer-skill:
               base: fedora
               candy:
                 - '@github.com/opencharly/layer-agent-forwarding:v2026.237.804'
-                - hermes
-                - hermes-playwright
+                - '@github.com/opencharly/pod-hermes:v2026.237.936'
+                - '@github.com/opencharly/layer-hermes-playwright:v2026.237.938'
                 - '@github.com/opencharly/pod-dbus:v2026.235.2115'
                 - charly
             ```

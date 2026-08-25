@@ -180,10 +180,10 @@ notebook-ollama-skill:
             # charly.yml
             jupyter-ml-notebook:
               candy:
-                - jupyter-ml
+                - '@github.com/opencharly/pod-jupyter-ml:v2026.237.936'
                 - '@github.com/opencharly/layer-notebook-templates:v2026.237.557'
-                - notebook-finetuning
-                - notebook-ollama
+                - '@github.com/opencharly/layer-notebook-finetuning:v2026.237.936'
+                - '@github.com/opencharly/layer-notebook-ollama:v2026.237.939'
                 # ... other candies
             ```
             

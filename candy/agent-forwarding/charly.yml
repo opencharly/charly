@@ -12,7 +12,7 @@ agent-forwarding:
             this candy — that is what the scenarios and check block assert.
         candy:
             - '@github.com/opencharly/layer-gnupg:v2026.237.457'
-            - direnv
+            - '@github.com/opencharly/layer-direnv:v2026.237.504'
             - '@github.com/opencharly/layer-ssh-client:v2026.237.458'
         plan:
             - check: the GnuPG client binary is installed so a forwarded host GPG agent socket can be used for signing and decryption

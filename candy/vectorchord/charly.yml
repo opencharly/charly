@@ -192,7 +192,7 @@ vectorchord-skill:
             my-image:
               candy:
                 - '@github.com/opencharly/pod-postgresql:v2026.237.458'
-                - vectorchord
+                - '@github.com/opencharly/layer-vectorchord:v2026.237.937'
                 - '@github.com/opencharly/pod-immich:v2026.237.806'
             ```
             

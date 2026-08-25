@@ -89,7 +89,7 @@ direnv-skill:
             # charly.yml
             my-image:
               candy:
-                - direnv
+                - '@github.com/opencharly/layer-direnv:v2026.237.504'
             ```
             
             Typically used as part of the `agent-forwarding` composition candy rather than directly. Also available in the heavyweight `dev-tools` candy.

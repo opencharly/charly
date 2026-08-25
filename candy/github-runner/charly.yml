@@ -15,7 +15,7 @@ github-runner:
             # newuidmap/newgidmap file-caps + containers/storage/policy configs all
             # come from container-nesting. This layer carries only the
             # runner-specific pieces (R3 — no duplication).
-            - container-nesting
+            - '@github.com/opencharly/layer-container-nesting:v2026.237.938'
         distro:
             arch:
                 package:
