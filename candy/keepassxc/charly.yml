@@ -69,7 +69,7 @@ keepassxc-skill:
             # charly.yml
             my-desktop-image:
               candy:
-                - selkies-desktop      # or another desktop base
+                - '@github.com/opencharly/pod-selkies-desktop:v2026.237.937'  # or another desktop base
                 - '@github.com/opencharly/layer-keepassxc:v2026.237.457'            # this layer
             ```
             

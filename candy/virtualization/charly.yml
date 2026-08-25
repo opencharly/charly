@@ -477,7 +477,7 @@ virtualization-skill:
               candy:
                 - ...
                 - charly                  # the full toolchain — pulls virtualization
-                - container-nesting   # donates /dev/fuse + /dev/net/tun devices (VMs only need /dev/kvm)
+                - '@github.com/opencharly/layer-container-nesting:v2026.237.938'  # donates /dev/fuse + /dev/net/tun devices (VMs only need /dev/kvm)
             ```
             
             `/dev/kvm` is auto-detected at `charly shell`/`charly start`/`charly config` time by the

@@ -65,7 +65,7 @@ arch-coder-skill:
                 - '@github.com/opencharly/layer-tmux:v2026.235.2057'
             
                 # Language runtimes + managers
-                - language-runtimes           # Go + PHP + .NET 9 + python3-devel
+                - '@github.com/opencharly/layer-language-runtimes:v2026.237.807'  # Go + PHP + .NET 9 + python3-devel
                 - '@github.com/opencharly/layer-golang:v2026.235.2057'
                 - '@github.com/opencharly/layer-nodejs:v2026.235.2056'  # Arch ships a current Node (v26)
                 - '@github.com/opencharly/layer-rust:v2026.237.458'
@@ -76,7 +76,7 @@ arch-coder-skill:
                 - '@github.com/opencharly/layer-build-toolchain:v2026.237.455'
                 - dev-tools
                 - '@github.com/opencharly/layer-pre-commit:v2026.237.557'
-                - direnv
+                - '@github.com/opencharly/layer-direnv:v2026.237.504'
                 - '@github.com/opencharly/layer-gh:v2026.237.456'
                 - '@github.com/opencharly/layer-typst:v2026.237.458'
                 - '@github.com/opencharly/layer-asciinema:v2026.237.455'
@@ -480,7 +480,7 @@ debian-coder-skill:
                 - '@github.com/opencharly/layer-tmux:v2026.235.2057'
             
                 # Language runtimes
-                - language-runtimes           # Go + PHP + .NET 9 (via Microsoft dotnet-install.sh)
+                - '@github.com/opencharly/layer-language-runtimes:v2026.237.807'  # Go + PHP + .NET 9 (via Microsoft dotnet-install.sh)
                 - '@github.com/opencharly/layer-golang:v2026.235.2057'
                 - '@github.com/opencharly/layer-nodejs:v2026.235.2056'  # Debian's packaged Node
                 - '@github.com/opencharly/layer-rust:v2026.237.458'
@@ -491,7 +491,7 @@ debian-coder-skill:
                 - '@github.com/opencharly/layer-build-toolchain:v2026.237.455'
                 - dev-tools                   # ripgrep, bat→batcat symlink, fd-find, neovim, …
                 - '@github.com/opencharly/layer-pre-commit:v2026.237.557'
-                - direnv
+                - '@github.com/opencharly/layer-direnv:v2026.237.504'
                 - '@github.com/opencharly/layer-gh:v2026.237.456'
                 - '@github.com/opencharly/layer-typst:v2026.237.458'
                 - '@github.com/opencharly/layer-asciinema:v2026.237.455'
@@ -682,12 +682,12 @@ fedora-coder-skill:
                 - '@github.com/opencharly/pod-sshd:v2026.237.558'
                 - charly                          # the full toolchain: charly binary + virtualization + gocryptfs + socat
                 - charly-mcp                      # MCP gateway for the entire charly CLI
-                - container-nesting           # rootless nested podman/buildah/skopeo
+                - '@github.com/opencharly/layer-container-nesting:v2026.237.938'  # rootless nested podman/buildah/skopeo
                 - '@github.com/opencharly/pod-dbus:v2026.235.2115'
                 - '@github.com/opencharly/layer-tmux:v2026.235.2057'
             
                 # Language runtimes + managers
-                - language-runtimes           # Go + PHP + .NET 9 + nodejs-devel + python3-devel
+                - '@github.com/opencharly/layer-language-runtimes:v2026.237.807'  # Go + PHP + .NET 9 + nodejs-devel + python3-devel
                 - '@github.com/opencharly/layer-golang:v2026.235.2057'
                 - '@github.com/opencharly/layer-nodejs:v2026.235.2056'  # generic nodejs candy (Node 22 on Fedora)
                 - '@github.com/opencharly/layer-rust:v2026.237.458'
@@ -698,7 +698,7 @@ fedora-coder-skill:
                 - '@github.com/opencharly/layer-build-toolchain:v2026.237.455'
                 - dev-tools                   # ripgrep, bat, fd, neovim, htop, …
                 - '@github.com/opencharly/layer-pre-commit:v2026.237.557'
-                - direnv
+                - '@github.com/opencharly/layer-direnv:v2026.237.504'
                 - '@github.com/opencharly/layer-gh:v2026.237.456'                          # GitHub CLI + git + git-lfs (single-responsibility)
                 - '@github.com/opencharly/layer-typst:v2026.237.458'
                 - '@github.com/opencharly/layer-asciinema:v2026.237.455'
@@ -716,7 +716,7 @@ fedora-coder-skill:
                 - '@github.com/opencharly/layer-docker-ce:v2026.237.456'
                 - '@github.com/opencharly/layer-github-actions:v2026.237.457'              # act, actionlint
                 - '@github.com/opencharly/layer-google-cloud:v2026.237.457'
-                - google-cloud-npm            # firebase npm bindings (Gemini CLI comes from the gemini candy)
+                - '@github.com/opencharly/layer-google-cloud-npm:v2026.237.0806'  # firebase npm bindings (Gemini CLI comes from the gemini candy)
                 - '@github.com/opencharly/layer-grafana-tools:v2026.237.457'
             ```
             
@@ -1040,7 +1040,7 @@ ubuntu-coder-skill:
                 - '@github.com/opencharly/layer-build-toolchain:v2026.237.455'
                 - dev-tools
                 - '@github.com/opencharly/layer-pre-commit:v2026.237.557'
-                - direnv
+                - '@github.com/opencharly/layer-direnv:v2026.237.504'
                 - '@github.com/opencharly/layer-gh:v2026.237.456'
                 - '@github.com/opencharly/layer-typst:v2026.237.458'
                 - '@github.com/opencharly/layer-asciinema:v2026.237.455'

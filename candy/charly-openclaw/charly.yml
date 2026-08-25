@@ -43,11 +43,11 @@ openclaw-desktop-skill:
               build: [pac, aur]            # required — selkies' chrome (AUR google-chrome) + wl-tools (AUR wlrctl)
               candy:
                 - '@github.com/opencharly/layer-agent-forwarding:v2026.237.804'
-                - selkies-desktop          # full streaming desktop stack
-                - openclaw-full            # gateway + the OpenClaw tools incl. claude-code/codex/gemini
+                - '@github.com/opencharly/pod-selkies-desktop:v2026.237.937'  # full streaming desktop stack
+                - '@github.com/opencharly/layer-openclaw-full:v2026.237.937'  # gateway + the OpenClaw tools incl. claude-code/codex/gemini
                 - '@github.com/opencharly/pod-ollama:v2026.237.457'                   # CPU ollama (GPU-agnostic layer)
                 - charly                       # the full toolchain: charly binary + virtualization + gocryptfs + socat
-                - container-nesting        # nested rootless podman/buildah/skopeo
+                - '@github.com/opencharly/layer-container-nesting:v2026.237.938'  # nested rootless podman/buildah/skopeo
                 - '@github.com/opencharly/layer-golang:v2026.235.2057'
                 - '@github.com/opencharly/layer-gh:v2026.237.456'
                 - '@github.com/opencharly/pod-dbus:v2026.235.2115'

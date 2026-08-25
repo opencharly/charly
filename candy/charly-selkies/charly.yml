@@ -37,10 +37,10 @@ selkies-desktop-layer-skill:
             selkies-desktop:
               candy:
                 candy:
-                  - pipewire                # Audio (PulseAudio compat)
-                  - chrome                  # Google Chrome with CDP on :9222, Chrome DevTools MCP on :9224
+                  - '@github.com/opencharly/pod-pipewire:v2026.235.2110'  # Audio (PulseAudio compat)
+                  - '@github.com/opencharly/layer-chrome:v2026.235.2057'  # Google Chrome with CDP on :9222, Chrome DevTools MCP on :9224
                   - '@github.com/opencharly/pod-labwc:v2026.237.558'                   # Wayland compositor (nested in pixelflux)
-                  - waybar-labwc            # Top status bar (Catppuccin Mocha, system monitors)
+                  - '@github.com/opencharly/pod-waybar-labwc:v2026.237.0808'  # Top status bar (Catppuccin Mocha, system monitors)
                   - desktop-fonts           # JetBrains Mono + Nerd Fonts
                   - '@github.com/opencharly/pod-swaync:v2026.237.558'                  # SwayNotificationCenter (notification daemon)
                   - '@github.com/opencharly/layer-pavucontrol:v2026.237.457'             # PulseAudio volume control GUI
@@ -50,10 +50,10 @@ selkies-desktop-layer-skill:
                   - '@github.com/opencharly/layer-wl-record-pixelflux:v2026.237.557'    # Desktop video recording via selkies capture bridge
                   - '@github.com/opencharly/layer-a11y-tools:v2026.237.454'              # AT-SPI2 accessibility introspection (python3-pyatspi)
                   - xterm                   # X11 terminal for XWayland testing
-                  - tmux                    # Terminal multiplexer (required by the record: check verb)
+                  - '@github.com/opencharly/layer-tmux:v2026.235.2057'  # Terminal multiplexer (required by the record: check verb)
                   - '@github.com/opencharly/layer-asciinema:v2026.237.455'               # Terminal session recording
                   - '@github.com/opencharly/layer-fastfetch:v2026.237.456'               # System information display
-                  - selkies                 # Streaming server (pixelflux + pcmflux + nginx)
+                  - '@github.com/opencharly/pod-selkies:v2026.235.2110'  # Streaming server (pixelflux + pcmflux + nginx)
             ```
             
             ## What You Get
@@ -210,7 +210,7 @@ selkies-kde-skill:
               build: [pac, aur]          # aur: chrome (google-chrome) + wl-tools (wlrctl)
               candy:
                 - '@github.com/opencharly/layer-agent-forwarding:v2026.237.804'
-                - selkies-kde-desktop    # the KDE metalayer (selkies-core + kde-selkies → kde-shell)
+                - '@github.com/opencharly/layer-selkies-kde-desktop:v2026.237.937'  # the KDE metalayer (selkies-core + kde-selkies → kde-shell)
                 - '@github.com/opencharly/pod-dbus:v2026.235.2115'
                 - charly
               port: ["3000:3000", "9222:9222", "9224:9224", "2222:2222"]
