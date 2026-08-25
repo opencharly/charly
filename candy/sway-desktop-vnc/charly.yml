@@ -45,7 +45,7 @@ sway-desktop-vnc:
             # lag as plugin-cdp.)
             - plugin-wl
         candy:
-            - sway-desktop
+            - '@github.com/opencharly/layer-sway-desktop:v2026.237.1056'
             - '@github.com/opencharly/pod-wayvnc:v2026.237.559'
         env:
             WLR_RENDERER: "pixman"

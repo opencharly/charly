@@ -19,8 +19,8 @@ sway-desktop:
             - '@github.com/opencharly/layer-wl-overlay:v2026.237.557'
             - '@github.com/opencharly/layer-wf-recorder:v2026.237.458'
             - '@github.com/opencharly/layer-chrome-sway:v2026.237.556'
-            - xfce4-terminal
-            - thunar
+            - '@github.com/opencharly/layer-xfce4-terminal:v2026.237.1057'
+            - '@github.com/opencharly/layer-thunar:v2026.237.1056'
             - '@github.com/opencharly/pod-waybar:v2026.237.559'
             - desktop-fonts
             - '@github.com/opencharly/pod-swaync:v2026.237.558'
@@ -117,7 +117,7 @@ sway-desktop-skill:
             # charly.yml — VNC variant
             sway-browser-vnc:
               candy:
-                - sway-desktop-vnc
+                - '@github.com/opencharly/layer-sway-desktop-vnc:v2026.237.1056'
             ```
             
             ## Related Candies
