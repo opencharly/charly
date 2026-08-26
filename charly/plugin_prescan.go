@@ -503,7 +503,6 @@ func prescanRemotePluginManifests(rootData []byte, baseDir string) {
 	}
 }
 
-
 // prescanPluginManifest reads one candy manifest's `plugin: providers:` declarations
 // and registers each external DEPLOY substrate word (the PARSE-time loader recognition
 // that lets a root-charly.yml bed using an external deploy substrate as its entity
