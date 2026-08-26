@@ -27,10 +27,7 @@ func TestExternalKind_PrescanConnectDecode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	srcCandy, err := filepath.Abs("../candy/plugin-example-kind")
-	if err != nil {
-		t.Fatal(err)
-	}
+	srcCandy := pluginModuleDir(t, "example-kind")
 	if _, err := os.Stat(filepath.Join(srcCandy, "go.mod")); err != nil {
 		t.Fatalf("example kind plugin module not found at %s: %v", srcCandy, err)
 	}
@@ -86,10 +83,7 @@ func TestExternalKind_OpValidateRejectsInvalidBody(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	srcCandy, err := filepath.Abs("../candy/plugin-example-kind")
-	if err != nil {
-		t.Fatal(err)
-	}
+	srcCandy := pluginModuleDir(t, "example-kind")
 	if _, err := os.Stat(filepath.Join(srcCandy, "go.mod")); err != nil {
 		t.Fatalf("example kind plugin module not found at %s: %v", srcCandy, err)
 	}

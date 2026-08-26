@@ -1,7 +1,0 @@
-{
-  "name": "google-cloud-npm",
-  "version": "1.0.0",
-  "dependencies": {
-    "firebase-tools": "*"
-  }
-}

@@ -28,6 +28,7 @@ import (
 	"go/token"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strconv"
@@ -38,8 +39,11 @@ import (
 )
 
 // kongGrammarTrees are the directories, relative to the repo root, that hold
-// this repo's Kong grammar structs.
-var kongGrammarTrees = []string{"charly", "candy"}
+// this repo's Kong grammar structs. The candy de-submodule cutover (Phase 4) deleted the
+// in-repo candy/ dirs — the compiled-in plugin grammars now resolve from the STANDALONE
+// plugin modules (proxy-pinned in charly/go.mod), so this gate walks the charly tree AND
+// every resolved plugin module dir in the go module cache.
+var kongGrammarTrees = []string{"charly"}
 
 // scanFloor guards against a VACUOUS pass. If the walk finds fewer than this
 // many `name:`-tagged fields, it did not read the tree it reports on — a moved
@@ -58,8 +62,18 @@ func TestKongFlagTags_NoIgnoredLongTagSurvives(t *testing.T) {
 	var offenders []string
 	nameTags, filesScanned := 0, 0
 
-	for _, tree := range kongGrammarTrees {
-		base := filepath.Join(root, tree)
+	// Phase 4: the compiled-in plugin grammars live in the standalone plugin modules, resolved
+	// through the Go module cache (proxy-pinned in charly/go.mod). Walk every cache dir whose
+	// module path is github.com/opencharly/plugin-<name>/candy/plugin-<name>.
+	pluginTrees := pluginModuleGrammarTrees()
+
+	for _, tree := range append(kongGrammarTrees, pluginTrees...) {
+		// The plugin module trees are absolute (the go module cache); the kongGrammarTrees are
+		// relative to the repo root.
+		base := tree
+		if !filepath.IsAbs(base) {
+			base = filepath.Join(root, base)
+		}
 		err := filepath.WalkDir(base, func(path string, d fs.DirEntry, walkErr error) error {
 			if walkErr != nil {
 				return walkErr
@@ -164,4 +178,47 @@ func kongFlagName(field string) string {
 		}
 	}
 	return "?"
+}
+
+// pluginModuleGrammarTrees returns the on-disk dirs of the compiled-in plugin modules resolved
+// through the Go module cache (github.com/opencharly/plugin-<name>/candy/plugin-<name>@<version>).
+// The candy de-submodule cutover (Phase 4) moved the plugin grammars out of the in-repo candy/
+// dirs; this gate now walks them from the proxy cache, so an inert `long:` tag in a compiled-in
+// plugin's Kong grammar still fails the gate.
+func pluginModuleGrammarTrees() []string {
+	var out []string
+	gopath, err := exec.Command("go", "env", "GOMODCACHE").Output()
+	if err != nil {
+		return nil
+	}
+	base := filepath.Join(strings.TrimSpace(string(gopath)), "github.com", "opencharly")
+	entries, err := os.ReadDir(base)
+	if err != nil {
+		return nil
+	}
+	for _, e := range entries {
+		if !e.IsDir() || !strings.HasPrefix(e.Name(), "plugin-") {
+			continue
+		}
+		// The module cache layout: <repo>/candy/plugin-<name>@<version>/ — the repo dir holds
+		// the candy subdir, which holds the @version dirs. Walk the newest @version dir.
+		// The module cache layout for the module path
+		// github.com/opencharly/plugin-<name>/candy/plugin-<name> is
+		// <modcache>/github.com/opencharly/<repo>/candy/plugin-<name>@<version> — the @version
+		// suffix lands on the LAST path element. Walk <repo>/candy/ for plugin-<name>@<version>
+		// dirs.
+		candyDir := filepath.Join(base, e.Name(), "candy")
+		ents, err := os.ReadDir(candyDir)
+		if err != nil {
+			continue
+		}
+		prefix := e.Name() + "@"
+		for _, v := range ents {
+			if !v.IsDir() || !strings.HasPrefix(v.Name(), prefix) || strings.HasSuffix(v.Name(), ".info") || strings.HasSuffix(v.Name(), ".mod") || strings.HasSuffix(v.Name(), ".zip") {
+				continue
+			}
+			out = append(out, filepath.Join(candyDir, v.Name()))
+		}
+	}
+	return out
 }

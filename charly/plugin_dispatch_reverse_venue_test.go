@@ -41,10 +41,7 @@ type venuePeerResult struct {
 func buildAndConnectExampleDispatchPlugin(t *testing.T) *grpcProvider {
 	t.Helper()
 	ctx := context.Background()
-	srcA, err := filepath.Abs("../candy/plugin-example-dispatch")
-	if err != nil {
-		t.Fatal(err)
-	}
+	srcA := pluginModuleDir(t, "example-dispatch")
 	if _, err := os.Stat(filepath.Join(srcA, "go.mod")); err != nil {
 		t.Fatalf("dispatch plugin module not found at %s: %v", srcA, err)
 	}
@@ -333,7 +330,15 @@ func TestInvokeProvider_LazyConnectFallback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Chdir(repoRoot)
+	// Chdir to a MINIMAL synthetic project (only plugin-example-dispatch + deps) so the
+	// lazy-connect's pass-1 project-closure scan is tiny — a cwd at the repo root (50+ remote
+	// candies) made the scan take minutes. The plugin binary build is content-stamp-cached
+	// (pluginBuildCacheDir), so the second run reuses it. t.Chdir restores the ORIGINAL cwd
+	// on cleanup (the framework-managed restore — a manual os.Chdir + t.Cleanup would leak the
+	// repo-root cwd into later tests).
+	dispatchDir := seedDispatchProject(t, repoRoot)
+	t.Cleanup(func() { _ = os.RemoveAll(dispatchDir) })
+	t.Chdir(dispatchDir)
 
 	if _, ok := providerRegistry.resolve(ClassVerb, "exampledispatchpeer"); ok {
 		t.Fatal("test invariant violated: exampledispatchpeer is already registered — the fallback path would not be exercised")
@@ -370,7 +375,13 @@ func TestInvokeProvider_LazyConnectFallback_DuringNestedKindConnectPass_NoDeadlo
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Chdir(repoRoot)
+	// Chdir to a MINIMAL synthetic project (only the example-dispatch plugin + its deps) so the
+	// lazy-connect's pass-1 project-closure scan is tiny — a cwd at the repo root (50+ remote
+	// candies) made the scan take minutes and blew the deadlock test's 30s budget. t.Chdir
+	// restores the ORIGINAL cwd on cleanup (framework-managed).
+	dispatchDir := seedDispatchProject(t, repoRoot)
+	t.Cleanup(func() { _ = os.RemoveAll(dispatchDir) })
+	t.Chdir(dispatchDir)
 
 	if _, ok := providerRegistry.resolve(ClassVerb, "exampledispatchpeer"); ok {
 		t.Fatal("test invariant violated: exampledispatchpeer is already registered — the fallback path would not be exercised")
@@ -438,4 +449,31 @@ func TestSubstrateFallbackRef(t *testing.T) {
 			}
 		})
 	}
+}
+
+// seedDispatchProject materializes a minimal synthetic project (<repoRoot>/.dispatch-test/) whose
+// candy closure pins ONLY plugin-example-dispatch (the exampledispatchpeer word source) — the
+// lazy-connect pass-1 scan stays tiny instead of walking the full repo's 50+ remote candies.
+func seedDispatchProject(t *testing.T, repoRoot string) string {
+	t.Helper()
+	dir := filepath.Join(repoRoot, ".dispatch-test")
+	if err := os.RemoveAll(dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	rootManifest := "version: 2026.232.0520\ndiscover:\n    - path: candy\n      recursive: true\n"
+	if err := os.WriteFile(filepath.Join(dir, spec.UnifiedFileName), []byte(rootManifest), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	seed := "fixture-seed:\n    candy:\n        version: 2026.001.0001\n        description: Dispatch fixture seed.\n        candy:\n            - '@github.com/opencharly/plugin-example-dispatch/candy/plugin-example-dispatch:v2026.237.1420'\n"
+	seedDir := filepath.Join(dir, "candy", "fixture-seed")
+	if err := os.MkdirAll(seedDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(seedDir, spec.UnifiedFileName), []byte(seed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return dir
 }

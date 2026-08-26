@@ -38,8 +38,11 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/buildkit"
@@ -47,6 +50,7 @@ import (
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/loaderkit"
 	pb "github.com/opencharly/spec/proto"
+	"github.com/opencharly/spec/refs"
 	"github.com/opencharly/spec/spec"
 	"gopkg.in/yaml.v3"
 
@@ -309,7 +313,31 @@ func loadEmbeddedBuildVocabulary(repoRoot string) (*spec.DistroConfig, *spec.Bui
 // fixture-loading pattern, reused here verbatim since this tool has the identical constraint (no
 // charly-core project loader available).
 func loadRealCandy(repoRoot, name string) (spec.CandyReader, error) {
-	dir := filepath.Join(repoRoot, "candy", name)
+	// The candy de-submodule cutover (Phase 4): the in-repo candy/<name> dirs are deleted, so a
+	// fixture candy is fetched from its STANDALONE repo (layer-<name> — the fixtures here are
+	// config candies with root-level manifests) at its newest tag, then parsed identically.
+	// The compiled plan embeds candy_dir/ctx_path, which the golden normalizes to ${REPO_ROOT}
+	// — so the fixture MUST be materialized UNDER the repo root (a temp dir would bake an
+	// absolute path the parity test could not normalize).
+	// The parity test compiles against the SAME minimal synthetic project <repoRoot>/.parity/
+	// (a charly.yml + the three fixture candies) — so the golden must materialize the fixtures
+	// there for the ${REPO_ROOT} normalization to match the NEW side, and the compile envelope
+	// stays tiny (3 candies, not the whole repo's 50+ remote candies — the Phase-4 speed fix).
+	dir := filepath.Join(repoRoot, ".parity", "candy", name)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, err
+	}
+	tag := newestCandyTag(name)
+	cacheDir, err := refs.DownloadRepo("github.com/opencharly/layer-"+name, tag)
+	if err != nil {
+		return nil, fmt.Errorf("fetch layer-%s@%s: %w", name, tag, err)
+	}
+	// Copy the FULL fetched candy tree (charly.yml + pixi.toml/package.json/lock) — the
+	// builder DETECTION (pixi/npm/cargo) reads the support files, not just the manifest, and
+	// the parity test seeds the identical tree.
+	if err := copyGoldenTree(cacheDir, dir); err != nil {
+		return nil, fmt.Errorf("copy layer-%s tree: %w", name, err)
+	}
 	yamlPath := filepath.Join(dir, "charly.yml")
 	data, err := os.ReadFile(yamlPath)
 	if err != nil {
@@ -319,6 +347,10 @@ func loadRealCandy(repoRoot, name string) (spec.CandyReader, error) {
 	if err := yaml.Unmarshal(data, &doc); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", yamlPath, err)
 	}
+	// The standalone repos carry a prepended scalar `version: <calver>` schema header — the
+	// name-first decode rejects a scalar top-level key, so drop it (the candy's own
+	// `candy: version:` is the manifest version).
+	dropScalarHeader(&doc)
 	normalizePackageShorthand(&doc)
 	desugarCommandSugar(&doc)
 	var root map[string]struct {
@@ -476,4 +508,79 @@ func (stubExecutorClient) HostBuild(_ context.Context, in *pb.HostBuildRequest, 
 
 func stubExecutor() (context.Context, *sdk.Executor) {
 	return context.Background(), sdk.NewInProcExecutor(stubExecutorClient{})
+}
+
+// newestCandyTag resolves a standalone candy repo's newest v-calver tag via git ls-remote.
+func newestCandyTag(name string) string {
+	out, err := exec.Command("git", "ls-remote", "--tags", refs.RepoGitURL("github.com/opencharly/layer-"+name)).Output()
+	if err != nil {
+		return ""
+	}
+	var tags []string
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line == "" {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		refName := strings.TrimPrefix(fields[1], "refs/tags/")
+		if !strings.HasPrefix(refName, "v") || strings.HasSuffix(refName, "^{}") {
+			continue
+		}
+		tags = append(tags, refName)
+	}
+	if len(tags) == 0 {
+		return ""
+	}
+	return tags[len(tags)-1]
+}
+
+// dropScalarHeader removes a scalar top-level key (the standalone repos' prepended
+// `version: <calver>` schema header) from a decoded yaml.Node document, so the name-first
+// decode (map[string]{Candy}) accepts it.
+func dropScalarHeader(doc *yaml.Node) {
+	if doc.Kind != yaml.DocumentNode || len(doc.Content) == 0 {
+		return
+	}
+	root := doc.Content[0]
+	if root.Kind != yaml.MappingNode {
+		return
+	}
+	var kept []*yaml.Node
+	for i := 0; i+1 < len(root.Content); i += 2 {
+		key := root.Content[i]
+		if key.Kind == yaml.ScalarNode && key.Tag == "!!str" && key.Value == "version" {
+			continue
+		}
+		kept = append(kept, root.Content[i], root.Content[i+1])
+	}
+	root.Content = kept
+}
+
+// copyGoldenTree copies a directory tree recursively (the standalone repo's candy export to
+// the .parity fixture dir).
+func copyGoldenTree(src, dst string) error {
+	return filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, rerr := filepath.Rel(src, path)
+		if rerr != nil {
+			return rerr
+		}
+		if rel == "." {
+			return os.MkdirAll(dst, 0o755)
+		}
+		target := filepath.Join(dst, rel)
+		if d.IsDir() {
+			return os.MkdirAll(target, 0o755)
+		}
+		b, rerr := os.ReadFile(path)
+		if rerr != nil {
+			return rerr
+		}
+		return os.WriteFile(target, b, 0o644)
+	})
 }

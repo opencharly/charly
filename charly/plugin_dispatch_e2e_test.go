@@ -26,14 +26,8 @@ func TestPluginDispatch_InvokeProviderAndHostBuild(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	buildDir, err := filepath.Abs("../candy/plugin-example-kind")
-	if err != nil {
-		t.Fatal(err)
-	}
-	srcA, err := filepath.Abs("../candy/plugin-example-dispatch")
-	if err != nil {
-		t.Fatal(err)
-	}
+	buildDir := pluginModuleDir(t, "example-kind")
+	srcA := pluginModuleDir(t, "example-dispatch")
 	if _, err := os.Stat(filepath.Join(srcA, "go.mod")); err != nil {
 		t.Fatalf("dispatch plugin module not found at %s: %v", srcA, err)
 	}

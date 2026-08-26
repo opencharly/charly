@@ -4,10 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io/fs"
 	"maps"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	specexec "github.com/opencharly/spec/exec"
@@ -226,11 +229,27 @@ func TestFleetCompileParity_PluginRoundTrip(t *testing.T) {
 	dir, cleanup := compilerTestProjectDir(t)
 	defer cleanup()
 
-	cfg, err := LoadConfig(dir)
+	// Phase 4: compile against a MINIMAL synthetic project (.parity/) holding only the three
+	// fixture candies (fetched from their standalone repos) — the envelope stays tiny so each
+	// compile is fast (the full repo's 50+ remote candies made the compile time out at 10m).
+	// The golden tool materializes the identical .parity/ tree, so the ${REPO_ROOT}
+	// normalization aligns both sides.
+	parityDir := seedParityProject(t, dir)
+	// Chdir to the MINIMAL parity project for the compile phase: connectPluginByWordRef's
+	// lazy-connect pass-1 scans os.Getwd(), and a cwd at the repo root (50+ remote candies)
+	// made every compile's plugin connect scan the full repo (~6m each). The parity dir holds
+	// only the 3 fixtures + the builder/example pins resolve fast. Deferred restore to the
+	// repo root (the compilerTestProjectDir cleanup below restores the ORIGINAL cwd — defers
+	// run LIFO, so this one restores parityDir→dir first, then dir→prev).
+	defer func() { _ = os.Chdir(dir) }()
+	if err := os.Chdir(parityDir); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadConfig(parityDir)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
-	layers, err := ScanAllCandyWithConfig(dir, cfg)
+	layers, err := ScanAllCandyWithConfig(parityDir, cfg)
 	if err != nil {
 		t.Fatalf("ScanAllCandyWithConfig: %v", err)
 	}
@@ -272,7 +291,7 @@ func TestFleetCompileParity_PluginRoundTrip(t *testing.T) {
 			t.Fatalf("marshal empty host context: %v", err)
 		}
 		plans, err := invokeOpCompile(t, spec.DeployCompileRequest{
-			Dir:             dir,
+			Dir:             parityDir,
 			BoxView:         boxView,
 			Order:           []string{name}, // single-candy compile, matching the golden's single-candy BuildDeployPlan
 			HostContextJSON: emptyHostCtxJSON,
@@ -339,7 +358,7 @@ func TestFleetCompileParity_PluginRoundTrip(t *testing.T) {
 		var broke bool
 		for _, name := range exercised {
 			plans, err := invokeOpCompile(t, spec.DeployCompileRequest{
-				Dir:             dir,
+				Dir:             parityDir,
 				BoxView:         perturbed,
 				Order:           []string{name},
 				HostContextJSON: emptyHostCtxJSON,
@@ -400,4 +419,95 @@ func loadCompileParityGolden(t *testing.T, dir string) map[string]spec.InstallPl
 		t.Fatalf("decode golden fixture %s: %v", path, err)
 	}
 	return golden
+}
+
+// newestFixtureTag resolves a fixture candy repo's newest v-calver tag via git ls-remote.
+func newestFixtureTag(name string) string {
+	out, err := exec.Command("git", "ls-remote", "--tags", "https://github.com/opencharly/layer-"+name+".git").Output()
+	if err != nil {
+		return ""
+	}
+	var tags []string
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line == "" {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		refName := strings.TrimPrefix(fields[1], "refs/tags/")
+		if !strings.HasPrefix(refName, "v") || strings.HasSuffix(refName, "^{}") {
+			continue
+		}
+		tags = append(tags, refName)
+	}
+	if len(tags) == 0 {
+		return ""
+	}
+	return tags[len(tags)-1]
+}
+
+// seedParityProject materializes the minimal synthetic project at <repoRoot>/.parity/: a root
+// charly.yml (discover: candy) + the three fixture candies (manifests fetched from their
+// standalone repos layer-<name> at the newest tags). The compile envelope is then just these
+// three candies — the Phase-4 fix for the 10m timeout (the full repo's remote-resolution cost
+// on every compile). The golden tool builds the identical tree.
+func seedParityProject(t *testing.T, repoRoot string) string {
+	t.Helper()
+	parityDir := filepath.Join(repoRoot, ".parity")
+	if err := os.RemoveAll(parityDir); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(parityDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	rootManifest := "version: 2026.232.0520\ndiscover:\n    - path: candy\n      recursive: true\n"
+	if err := os.WriteFile(filepath.Join(parityDir, spec.UnifiedFileName), []byte(rootManifest), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"debootstrap-builder", "dev-tools", "pre-commit"} {
+		tag := newestFixtureTag(name)
+		if tag == "" {
+			t.Fatalf("no tag for layer-%s", name)
+		}
+		cacheDir, err := requireProjectLoader().EnsureRepoDownloaded(hostInProcCtx(), "github.com/opencharly/layer-"+name, tag)
+		if err != nil {
+			t.Fatalf("fetch layer-%s: %v", name, err)
+		}
+		// Copy the FULL fetched candy dir (charly.yml + pixi.toml/package.json/lock — the
+		// pixi builder step the parity rider's home-anchoring depends on is emitted from the
+		// support files, not just the manifest).
+		seedDir := filepath.Join(parityDir, "candy", name)
+		if err := copyTree(cacheDir, seedDir); err != nil {
+			t.Fatalf("copy layer-%s tree: %v", name, err)
+		}
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(parityDir) })
+	return parityDir
+}
+
+// copyTree copies a directory tree recursively.
+func copyTree(src, dst string) error {
+	return filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, rerr := filepath.Rel(src, path)
+		if rerr != nil {
+			return rerr
+		}
+		if rel == "." {
+			return os.MkdirAll(dst, 0o755)
+		}
+		target := filepath.Join(dst, rel)
+		if d.IsDir() {
+			return os.MkdirAll(target, 0o755)
+		}
+		b, rerr := os.ReadFile(path)
+		if rerr != nil {
+			return rerr
+		}
+		return os.WriteFile(target, b, 0o644)
+	})
 }

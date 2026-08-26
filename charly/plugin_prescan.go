@@ -31,6 +31,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"sync"
 
 	"github.com/opencharly/spec/loader"
@@ -411,6 +413,93 @@ func prescanDeclaredPluginWords(rootData []byte, baseDir string) {
 		for _, dir := range dirs {
 			prescanPluginManifest(filepath.Join(dir, manifest))
 		}
+	}
+	// The remote leg must ALSO see the discovered candy manifests' refs (a plugin pinned in a
+	// discovered candy's require:/candy: list — e.g. the charly meta-candy pinning the example
+	// plugins), not just the root file's own refs: concatenate the discovered manifests' bytes
+	// with the root so every pinned plugin ref is fetched + prescanned at parse time.
+	allData := rootData
+	for _, disc := range doc.Discover {
+		if disc.Path == "" {
+			continue
+		}
+		manifest := disc.Manifest
+		if manifest == "" {
+			manifest = spec.UnifiedFileName
+		}
+		root := disc.Path
+		if !filepath.IsAbs(root) {
+			root = filepath.Join(baseDir, root)
+		}
+		dirs, err := loader.FindEntityDirs(root, manifest, disc.Recursive)
+		if err != nil {
+			continue
+		}
+		for _, dir := range dirs {
+			if b, err := os.ReadFile(filepath.Join(dir, manifest)); err == nil {
+				allData = append(allData, b...)
+			}
+		}
+	}
+	prescanRemotePluginManifests(allData, baseDir)
+}
+
+// remotePrescanRefRe matches the @github.com/opencharly/... plugin candy refs a project's
+// require:/candy: lists carry (the candy de-submodule cutover's standalone pins). The capture
+// is the FULL ref path (repo[/subpath]): a config candy ref is the bare repo
+// (github.com/opencharly/layer-<name>), a plugin candy ref carries the /candy/<name> subpath
+// (github.com/opencharly/plugin-<name>/candy/plugin-<name>) because the plugin manifest lives
+// at candy/<name>/charly.yml inside the repo, not the repo root.
+var remotePrescanRefRe = regexp.MustCompile(`@github\.com/opencharly/([a-zA-Z0-9._/-]+):v[0-9]+\.[0-9]+\.[0-9]+`)
+
+// prescanRemotePluginManifests is the REMOTE-REF-AWARE leg of the parse-time prescan (the
+// candy de-submodule cutover, Phase 4): after the in-repo candy/ dirs are deleted, the plugin
+// manifests that declare external deploy/kind/command words live in the STANDALONE repos. The
+// project's root charly.yml require:/candy: lists pin them via @github.com/opencharly/... refs,
+// so this leg fetches each pinned repo (the same standalone fetch the runtime scan uses —
+// requireProjectLoader().EnsureRepoDownloaded) and prescans the fetched candy/<name>/charly.yml
+// manifests, registering their declared words at parse time — restoring the pre-cutover
+// parse-time recognition that the in-repo discover walk provided. Best-effort: an unfetchable
+// ref or a non-plugin manifest is skipped, never fatal.
+func prescanRemotePluginManifests(rootData []byte, baseDir string) {
+	if !bytes.Contains(rootData, []byte("@github.com/opencharly/")) {
+		return
+	}
+	seen := map[string]bool{}
+	for _, m := range remotePrescanRefRe.FindAllStringSubmatch(string(rootData), -1) {
+		// The regex captures everything after the literal @github.com/opencharly/ prefix, so
+		// m[1] is repo[/subpath] (e.g. plugin-example-structkind/candy/plugin-example-
+		// structkind for a plugin candy, or layer-ripgrep for a config candy). The repo is
+		// the FIRST segment; any remaining segments (e.g. candy/plugin-<name>) are the
+		// manifest dir relative to the fetched repo root — mirroring the runtime scan's
+		// bare-ref split (loaderkit.ScanRemoteCandy).
+		refPath := m[1]
+		segs := strings.Split(refPath, "/")
+		if len(segs) < 1 || segs[0] == "" {
+			continue
+		}
+		subPath := strings.Join(segs[1:], "/")
+		// ONLY plugin candies can declare external words: a plugin manifest lives at
+		// candy/plugin-<name>/charly.yml inside its repo (the subpath starts with
+		// candy/plugin-). Config candies (layer-/pod-<name>, bare repo refs) never carry a
+		// `plugin:` block, so fetching them here is pure overhead — the Phase-4 prescan
+		// cost RCA (46 refs fetched, only 13 plugin). Skip every non-plugin ref.
+		if !strings.HasPrefix(subPath, "candy/plugin-") {
+			continue
+		}
+		repoPath := "github.com/opencharly/" + segs[0]
+		if seen[repoPath] {
+			continue
+		}
+		seen[repoPath] = true
+		// CanonicalRef resolves the ref (fetching a remote repo through the same
+		// clone-and-cache machinery the runtime scan uses) into its on-disk path.
+		_, cachePath, err := requireProjectLoader().CanonicalRef(hostInProcCtx(), "@"+repoPath, baseDir)
+		if err != nil {
+			continue
+		}
+		manifest := filepath.Join(cachePath, subPath, spec.UnifiedFileName)
+		prescanPluginManifest(manifest)
 	}
 }
 

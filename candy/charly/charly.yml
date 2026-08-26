@@ -17,6 +17,27 @@ charly:
             - '@github.com/opencharly/pod-virtualization:v2026.237.458'
             - '@github.com/opencharly/layer-gocryptfs:v2026.237.457'
             - '@github.com/opencharly/layer-socat:v2026.235.2057'
+            # The four DETECTION-builders (pixi/npm/cargo/aur) are EXTERNAL out-of-process
+            # plugins; the candy de-submodule cutover (Phase 4) deleted their in-repo dirs, so
+            # they must be PINNED here for the connect path's pass-1 (the project's own candy
+            # closure) to vendor them by tag — a version-less remote ref would fall to the
+            # mutable default branch and hang on the freshness check.
+            - '@github.com/opencharly/plugin-builder-pixi/candy/plugin-builder-pixi:v2026.237.1416'
+            - '@github.com/opencharly/plugin-builder-npm/candy/plugin-builder-npm:v2026.237.1415'
+            - '@github.com/opencharly/plugin-builder-cargo/candy/plugin-builder-cargo:v2026.237.1415'
+            - '@github.com/opencharly/plugin-builder-aur/candy/plugin-builder-aur:v2026.237.1415'
+            # The example plugins the test fixtures + check beds host-build/connect by word ref —
+            # pinned here (post-cutover) so the project closure vendors them and the lazy-connect
+            # pass-1 finds them by word without a version-less remote fetch.
+            - '@github.com/opencharly/plugin-example-dispatch/candy/plugin-example-dispatch:v2026.237.1420'
+            - '@github.com/opencharly/plugin-example-bootstrap/candy/plugin-example-bootstrap:v2026.237.1419'
+            - '@github.com/opencharly/plugin-example-command/candy/plugin-example-command:v2026.237.1420'
+            - '@github.com/opencharly/plugin-example-deploy/candy/plugin-example-deploy:v2026.237.1420'
+            - '@github.com/opencharly/plugin-example-external/candy/plugin-example-external:v2026.237.1420'
+            - '@github.com/opencharly/plugin-example-kind/candy/plugin-example-kind:v2026.237.1421'
+            - '@github.com/opencharly/plugin-example-step/candy/plugin-example-step:v2026.237.1421'
+            - '@github.com/opencharly/plugin-example-stepkind/candy/plugin-example-stepkind:v2026.237.1421'
+            - '@github.com/opencharly/plugin-example-structkind/candy/plugin-example-structkind:v2026.237.1422'
         distro:
             debian:
                 # tailscale is a mandatory charly dep but is NOT in Debian main, so the

@@ -1456,7 +1456,7 @@ check-exampledeploy:
         description: >-
             Sole proof of the external (out-of-process) deploy-target lifecycle (Add/Test/Update/Del) over the E3b ExecutorService reverse channel, AND of the F2 executable deploy channel. Composes plugin-example-deploy as an external deploy: substrate; Add Invokes the host-built plugin out-of-process with the deployment's InstallPlan views — carrying the serializable per-step IR. The plugin dials back through the SDK Executor to (a) write an apply + a probe marker, (b) WALK + EXECUTE the plan's steps on the host venue (a file-write step lands /tmp/charly-exampledeploy-steps/written and a shell-hook env step lands env.d/plugin-example-deploy.env), and (c) PUSH /tmp/charly-exampledeploy-steps/pushed via the reverse-channel PutFile leg. Host-side command probes assert the probe marker, the executed-step effects, and the pushed file; the fresh-rebuild (charly update) re-applies idempotently; teardown (charly fleet del) replays the recorded plugin-script reverse ops so every scratch dir is gone (zero residue).
         add_candy:
-            - plugin-example-deploy
+            - '@github.com/opencharly/plugin-example-deploy/candy/plugin-example-deploy:v2026.237.1420'
         plan:
             - check: command=test -f /tmp/charly-exampledeploy/check-exampledeploy/probe && echo EXAMPLEDEPLOY-PROBE-PRESENT
               id: exampledeploy-applied
@@ -2684,7 +2684,7 @@ check-udev-app:
             command-only candy/plugin-udev (no install content) so the bed exercises the
             externalized `charly udev` CLI host-side.
         candy:
-            - plugin-udev
+            - '@github.com/opencharly/plugin-udev/candy/plugin-udev:v2026.237.1429'
 check-udev-local:
     local:
         from: check-udev-app
@@ -2741,7 +2741,7 @@ check-preempt-app:
             command-only candy/plugin-preempt (no install content) so the bed exercises the
             externalized `charly preempt` CLI host-side.
         candy:
-            - plugin-preempt
+            - '@github.com/opencharly/plugin-preempt/candy/plugin-preempt:v2026.237.1426'
 check-preempt-local:
     local:
         from: check-preempt-app
@@ -2776,7 +2776,7 @@ check-migrate-app:
             command-only candy/plugin-migrate (no install content) so the bed exercises the
             externalized `charly migrate` engine host-side.
         candy:
-            - plugin-migrate
+            - '@github.com/opencharly/plugin-migrate/candy/plugin-migrate:v2026.237.1425'
 check-migrate-local:
     local:
         from: check-migrate-app
@@ -2841,7 +2841,7 @@ check-feature-app:
             command-only candy/plugin-feature (no install content) so the bed exercises the
             externalized `charly feature` CLI host-side.
         candy:
-            - plugin-feature
+            - '@github.com/opencharly/plugin-feature/candy/plugin-feature:v2026.237.1422'
 check-feature-local:
     local:
         from: check-feature-app
@@ -2916,7 +2916,7 @@ check-doctor-app:
             command-only candy/plugin-doctor (no install content) so the bed exercises the
             externalized `charly doctor` CLI host-side.
         candy:
-            - plugin-doctor
+            - '@github.com/opencharly/plugin-doctor/candy/plugin-doctor:v2026.237.1419'
 check-doctor-local:
     local:
         from: check-doctor-app
@@ -2970,13 +2970,13 @@ check-commands-app:
             (K5) `charly reap-orphans` (candy/plugin-substrate's command:reap-orphans, alongside its
             existing kind:pod/vm/kubernetes/local/android substrate capabilities) host-side.
         candy:
-            - plugin-clean
-            - plugin-settings
-            - plugin-candy
-            - plugin-box
-            - plugin-authoring
-            - plugin-status
-            - plugin-substrate
+            - '@github.com/opencharly/plugin-clean/candy/plugin-clean:v2026.237.1417'
+            - '@github.com/opencharly/plugin-settings/candy/plugin-settings:v2026.237.1428'
+            - '@github.com/opencharly/plugin-candy/candy/plugin-candy:v2026.237.1416'
+            - '@github.com/opencharly/plugin-box/candy/plugin-box:v2026.237.1414'
+            - '@github.com/opencharly/plugin-authoring/candy/plugin-authoring:v2026.237.1414'
+            - '@github.com/opencharly/plugin-status/candy/plugin-status:v2026.237.1429'
+            - '@github.com/opencharly/plugin-substrate/candy/plugin-substrate:v2026.237.1429'
 check-commands-local:
     local:
         from: check-commands-app
@@ -3093,7 +3093,7 @@ check-gpu-app:
             compiled-in candy/plugin-gpu (verb:gpu, no install content) so the bed exercises
             the externalized GPU/VFIO host-detection via `charly vm gpu` host-side.
         candy:
-            - plugin-gpu
+            - '@github.com/opencharly/plugin-gpu/candy/plugin-gpu:v2026.237.1422'
 check-gpu-local:
     local:
         from: check-gpu-app
@@ -3313,7 +3313,7 @@ marketplace-app:
             - fedora:43
             - fedora
         candy:
-            - plugin-marketplace
+            - '@github.com/opencharly/plugin-marketplace/candy/plugin-marketplace:v2026.238.0024'
 check-marketplace:
     pod:
         image: marketplace-app

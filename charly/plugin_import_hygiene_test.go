@@ -19,6 +19,7 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -45,7 +46,11 @@ var directRequireRE = regexp.MustCompile(`^\s*(github\.com/opencharly/(?:sdk|spe
 // actually imports that module (or a subpackage of it) somewhere. A direct
 // require with zero corresponding import is a dragged, unused dependency.
 func TestPluginImportHygiene_NoUnusedOpencharlyModuleDeps(t *testing.T) {
-	candyRoot := filepath.Join("..", "candy")
+	// The candy de-submodule cutover (Phase 4): the in-repo candy/ dirs are deleted, so the
+	// plugin modules are walked from the GO MODULE CACHE (proxy-resolved in charly/go.mod) —
+	// the same source the compiled-in plugins build from. Each plugin module's go.mod is
+	// checked for a direct sdk/spec require with no corresponding import.
+	candyRoot := pluginModuleCacheRoot()
 	entries, err := os.ReadDir(candyRoot)
 	if err != nil {
 		t.Fatalf("read %s: %v", candyRoot, err)
@@ -147,4 +152,14 @@ func candyModuleUsage(dir string) (map[string]bool, error) {
 		return nil
 	})
 	return used, err
+}
+
+// pluginModuleCacheRoot returns the go module cache dir holding the standalone plugin modules
+// (github.com/opencharly/plugin-<name>/candy/plugin-<name>@<version>).
+func pluginModuleCacheRoot() string {
+	out, err := exec.Command("go", "env", "GOMODCACHE").Output()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(strings.TrimSpace(string(out)), "github.com", "opencharly")
 }

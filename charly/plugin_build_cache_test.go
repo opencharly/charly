@@ -127,12 +127,7 @@ func TestFinalizeDeclaredKindConnectionsRetainsUnconnectedCause(t *testing.T) {
 // normal configured build cache.
 func TestBuildPluginBinary_DifferentPluginsConcurrent(t *testing.T) {
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())
-	sources := []string{filepath.Join("..", "candy", "plugin-record"), filepath.Join("..", "candy", "plugin-wl")}
-	for _, src := range sources {
-		if _, err := os.Stat(filepath.Join(src, "go.mod")); err != nil {
-			t.Fatalf("plugin fixture %s: %v", src, err)
-		}
-	}
+	sources := []string{pluginModuleDir(t, "record"), pluginModuleDir(t, "wl")}
 
 	start := make(chan struct{})
 	errs := make(chan error, len(sources))

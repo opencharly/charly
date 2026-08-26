@@ -29,7 +29,7 @@ charly-mcp:
             # (box/<distro> adopts the matching @github pin via reconcile later — the
             # deliberate cross-repo lag; the R10 bed loads the LOCAL candy via the
             # superproject override.)
-            - plugin-mcp
+            - '@github.com/opencharly/plugin-mcp/candy/plugin-mcp:v2026.237.1425'
         candy:
             - charly
             - '@github.com/opencharly/layer-supervisord:v2026.235.2056'

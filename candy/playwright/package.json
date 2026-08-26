@@ -1,7 +1,0 @@
-{
-  "name": "playwright-layer",
-  "version": "1.0.0",
-  "dependencies": {
-    "playwright": "*"
-  }
-}
