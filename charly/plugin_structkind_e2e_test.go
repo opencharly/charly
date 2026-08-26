@@ -54,10 +54,7 @@ func TestExternalStructKind_StructuralDecode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	srcCandy, err := filepath.Abs("../candy/plugin-example-structkind")
-	if err != nil {
-		t.Fatal(err)
-	}
+	srcCandy := pluginModuleDir(t, "example-structkind")
 	if _, err := os.Stat(filepath.Join(srcCandy, "go.mod")); err != nil {
 		t.Fatalf("example structkind plugin module not found at %s: %v", srcCandy, err)
 	}

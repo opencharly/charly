@@ -108,10 +108,7 @@ func TestExternalPluginStep_ReverseChannelEndToEnd(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	srcDir, err := filepath.Abs("../candy/plugin-example-step")
-	if err != nil {
-		t.Fatal(err)
-	}
+	srcDir := pluginModuleDir(t, "example-step")
 	if _, err := os.Stat(filepath.Join(srcDir, "go.mod")); err != nil {
 		t.Fatalf("external step plugin module not found at %s: %v", srcDir, err)
 	}

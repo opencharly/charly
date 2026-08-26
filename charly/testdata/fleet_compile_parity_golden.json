@@ -256,7 +256,7 @@
         "kind": "Op",
         "gate": "allow-root-tasks",
         "candy_name": "dev-tools",
-        "candy_dir": "${REPO_ROOT}/candy/dev-tools",
+        "candy_dir": "${REPO_ROOT}/.parity/candy/dev-tools",
         "op": {
           "plugin": "command",
           "plugin_input": {
@@ -264,7 +264,7 @@
           },
           "run_as": "root"
         },
-        "ctx_path": "${REPO_ROOT}/candy/dev-tools",
+        "ctx_path": "${REPO_ROOT}/.parity/candy/dev-tools",
         "resolved_user": "0"
       }
     ]
@@ -311,7 +311,7 @@
         "scope": 1,
         "venue": 1,
         "candy_name": "pre-commit",
-        "candy_dir": "${REPO_ROOT}/candy/pre-commit",
+        "candy_dir": "${REPO_ROOT}/.parity/candy/pre-commit",
         "phase": 1,
         "builder": "npm",
         "raw_stage_context": {
@@ -354,7 +354,7 @@
           }
         ],
         "candy_name": "pre-commit",
-        "candy_dir": "${REPO_ROOT}/candy/pre-commit",
+        "candy_dir": "${REPO_ROOT}/.parity/candy/pre-commit",
         "phase": 1,
         "builder": "pixi",
         "raw_stage_context": {
@@ -410,7 +410,7 @@
         "kind": "Op",
         "scope": 1,
         "candy_name": "pre-commit",
-        "candy_dir": "${REPO_ROOT}/candy/pre-commit",
+        "candy_dir": "${REPO_ROOT}/.parity/candy/pre-commit",
         "op": {
           "plugin": "command",
           "plugin_input": {
@@ -418,7 +418,7 @@
           },
           "run_as": "${USER}"
         },
-        "ctx_path": "${REPO_ROOT}/candy/pre-commit",
+        "ctx_path": "${REPO_ROOT}/.parity/candy/pre-commit",
         "resolved_user": "1000"
       }
     ]

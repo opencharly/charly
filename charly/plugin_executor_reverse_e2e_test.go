@@ -102,10 +102,7 @@ func TestExternalDeployPlugin_ReverseChannelEndToEnd(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	srcDir, err := filepath.Abs("../candy/plugin-example-deploy")
-	if err != nil {
-		t.Fatal(err)
-	}
+	srcDir := pluginModuleDir(t, "example-deploy")
 	if _, err := os.Stat(filepath.Join(srcDir, "go.mod")); err != nil {
 		t.Fatalf("external deploy plugin module not found at %s: %v", srcDir, err)
 	}

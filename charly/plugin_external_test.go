@@ -25,10 +25,7 @@ func TestExternalPluginEndToEnd(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	srcDir, err := filepath.Abs("../candy/plugin-example-external")
-	if err != nil {
-		t.Fatal(err)
-	}
+	srcDir := pluginModuleDir(t, "example-external")
 	if _, err := os.Stat(filepath.Join(srcDir, "go.mod")); err != nil {
 		t.Fatalf("external plugin module not found at %s: %v", srcDir, err)
 	}
@@ -94,7 +91,7 @@ func TestExternalPluginEndToEnd(t *testing.T) {
 // #ExternalprobeInput — a non-empty marker passes, an empty or missing marker is a
 // hard error (the `& !=""` / required constraint).
 func TestPluginSchemaSpliceValidation(t *testing.T) {
-	src, err := os.ReadFile("../candy/plugin-example-external/schema/externalprobe.cue")
+	src, err := os.ReadFile(filepath.Join(pluginModuleDir(t, "example-external"), "schema", "externalprobe.cue"))
 	if err != nil {
 		t.Fatal(err)
 	}

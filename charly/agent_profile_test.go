@@ -5,12 +5,26 @@ import (
 	"testing"
 )
 
+// TestTerminalAgentCandiesExposeGeneratedProfiles asserts the claude-code/codex terminal
+// profiles + agent_provide wiring survive the candy de-submodule cutover (Phase 4): the in-repo
+// candy dirs are deleted, so the manifests are resolved from the STANDALONE repos via the
+// canonical loader fetch (requireProjectLoader().EnsureRepoDownloaded — the same fetch the
+// runtime scan uses), and parsed with the same parseCandyYAML seam.
 func TestTerminalAgentCandiesExposeGeneratedProfiles(t *testing.T) {
 	for _, name := range []string{"claude-code", "codex"} {
-		manifest := filepath.Join("..", "candy", name, "charly.yml")
+		repo := "layer-" + name
+		tag := "v2026.237.456"
+		if name == "codex" {
+			tag = "v2026.237.556"
+		}
+		dir, err := requireProjectLoader().EnsureRepoDownloaded(hostInProcCtx(), "github.com/opencharly/"+repo, tag)
+		if err != nil {
+			t.Fatalf("%s: fetch %s@%s: %v", name, repo, tag, err)
+		}
+		manifest := filepath.Join(dir, "charly.yml")
 		candy, err := parseCandyYAML(manifest)
 		if err != nil {
-			t.Fatalf("%s: %v", name, err)
+			t.Fatalf("%s: parse %s: %v", name, manifest, err)
 		}
 		profile, ok := candy.TerminalProfiles[name]
 		if !ok {

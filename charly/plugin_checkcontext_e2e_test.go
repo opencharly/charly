@@ -31,10 +31,7 @@ func TestKitVerbOutOfProcess_HTTPDoEndToEnd(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	srcDir, err := filepath.Abs("../candy/plugin-http")
-	if err != nil {
-		t.Fatal(err)
-	}
+	srcDir := pluginModuleDir(t, "http")
 	if _, err := os.Stat(filepath.Join(srcDir, "go.mod")); err != nil {
 		t.Fatalf("http kit plugin module not found at %s: %v", srcDir, err)
 	}

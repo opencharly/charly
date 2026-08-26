@@ -29,10 +29,7 @@ func TestAppiumExternalPluginLoads(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	srcDir, err := filepath.Abs("../candy/plugin-appium")
-	if err != nil {
-		t.Fatal(err)
-	}
+	srcDir := pluginModuleDir(t, "appium")
 	if _, err := os.Stat(filepath.Join(srcDir, "go.mod")); err != nil {
 		t.Fatalf("external appium plugin module not found at %s: %v", srcDir, err)
 	}

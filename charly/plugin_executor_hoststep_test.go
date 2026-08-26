@@ -80,10 +80,12 @@ func TestRunHostStep_Dispatch(t *testing.T) {
 	})
 
 	t.Run("external-plugin arm", func(t *testing.T) {
-		// An ExternalPluginStep whose verb is not connected (no plugin loaded in the unit
-		// test) routes to invokeExternalStep → InvokeProvider, which errors "no provider
-		// registered" — proving the ExternalPlugin arm was taken (vs the default arm).
-		rep := call(t, &spec.ExternalPluginStep{CandyName: "x", Op: &spec.Op{Plugin: "examplestep", PluginInput: map[string]any{"marker": "m"}}}, spec.EmitOpts{})
+		// An ExternalPluginStep whose verb is NOT CONNECTABLE anywhere (a nonexistent word —
+		// the candy de-submodule cutover Phase 4: the real example-step plugin now resolves
+		// via the charly meta-candy pins, so a genuinely-unconnectable word is needed to
+		// prove the arm routes to invokeExternalStep → InvokeProvider's "no provider
+		// registered") — proving the ExternalPlugin arm was taken (vs the default arm).
+		rep := call(t, &spec.ExternalPluginStep{CandyName: "x", Op: &spec.Op{Plugin: "nonexistent-step-word", PluginInput: map[string]any{"marker": "m"}}}, spec.EmitOpts{})
 		if !strings.Contains(rep.GetError(), "no provider registered") {
 			t.Fatalf("external-plugin arm: want a 'no provider registered' error, got %q", rep.GetError())
 		}
