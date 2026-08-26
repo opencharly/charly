@@ -1,7 +1,0 @@
-{
-  "name": "chrome-devtools-mcp-layer",
-  "version": "1.0.0",
-  "dependencies": {
-    "chrome-devtools-mcp": "*"
-  }
-}

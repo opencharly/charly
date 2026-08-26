@@ -1,7 +1,0 @@
-{
-  "name": "summarize-layer",
-  "version": "1.0.0",
-  "dependencies": {
-    "@steipete/summarize": "*"
-  }
-}
