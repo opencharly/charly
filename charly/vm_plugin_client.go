@@ -36,15 +36,18 @@ func invokeVmPlugin(vmOp, vmName, uri string) (json.RawMessage, bool) {
 	return invokeVmPluginEnv(spec.VmPluginEnv{VmOp: vmOp, VmName: vmName, URI: uri})
 }
 
-// vmPluginCandyRef is the canonical @github ref to the external VM plugin candy (candy/plugin-vm,
-// the verb:libvirt provider). Core RPCs verb:libvirt directly + unconditionally, but the plugin
-// candy is external (not in compiled_plugins, not in any box's image closure), so the VM-RPC load
-// paths — the invokeVmPluginEnv out-call here (via connectPluginByWordRef) + the check runner
-// (resolveCheckRunnerContext) — must pull it in via spec.ResolveOpts.ExtraCandyRefs (its documented purpose: a host-side plugin candy
-// outside the image closure). In a check bed CHARLY_REPO_OVERRIDE redirects it to the local
-// superproject under development; outside a bed it fetches the published candy.
+// vmPluginCandyRef is the canonical @github ref to the external VM plugin candy
+// (github.com/opencharly/plugin-vm/candy/plugin-vm, the verb:libvirt provider) — the
+// STANDALONE repo (the Phase-4 cutover moved candy/plugin-vm out of the main repo into
+// opencharly/plugin-vm). Core RPCs verb:libvirt directly + unconditionally, but the plugin
+// candy is external (not in compiled_plugins, not in any box's image closure), so the VM-RPC
+// load paths — the invokeVmPluginEnv out-call here (via connectPluginByWordRef) + the check
+// runner (resolveCheckRunnerContext) — must pull it in via spec.ResolveOpts.ExtraCandyRefs
+// (its documented purpose: a host-side plugin candy outside the image closure). In a check
+// bed CHARLY_REPO_OVERRIDE redirects it to the local superproject under development;
+// outside a bed it fetches the published candy.
 func vmPluginCandyRef() string {
-	return "@" + spec.DefaultProjectRepo + "/candy/plugin-vm"
+	return "@github.com/opencharly/plugin-vm/candy/plugin-vm"
 }
 
 // invokeVmPluginEnv is the full-env variant (lifecycle ops carry Force/DeleteDisk).
