@@ -3536,7 +3536,7 @@ agentteams-manager:
         # inherited default command is cleared at emission (CMD []), so the
         # entrypoint runs bare. /etc/supervisord.conf is assembled at build time.
         entrypoint:
-            - '@github.com/opencharly/layer-supervisord:v2026.235.2056'
+            - '@github.com/opencharly/layer-supervisord:v2026.239.1300'
             - -n
             - -c
             - /etc/supervisord.conf
@@ -3564,7 +3564,7 @@ agentteams-worker:
         # emission (CMD []), so the entrypoint runs bare. /etc/supervisord.conf is
         # assembled at build time.
         entrypoint:
-            - '@github.com/opencharly/layer-supervisord:v2026.235.2056'
+            - '@github.com/opencharly/layer-supervisord:v2026.239.1300'
             - -n
             - -c
             - /etc/supervisord.conf
