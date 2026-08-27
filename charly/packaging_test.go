@@ -190,3 +190,67 @@ func TestDistroRepoInstallDeclared(t *testing.T) {
 		}
 	}
 }
+
+// TestCharlyDevCandyDeclared — the candy split contract: `charly` installs from the
+// published per-distro package repos (no copy step), and `charly-dev` is the
+// local-source install for charly check beds ONLY (the sole surviving `copy:
+// bin/charly` step, resolved relative to candy/charly-dev). A regress here (e.g.
+// the copy step leaking back into `charly`, or charly-dev losing its copy step)
+// would silently reintroduce the stale-binary install that broke every
+// remote-fetched `charly` candy (bin/charly is gitignored).
+func TestCharlyDevCandyDeclared(t *testing.T) {
+	dev, err := os.ReadFile("../candy/charly-dev/charly.yml")
+	if err != nil {
+		t.Fatalf("read ../candy/charly-dev/charly.yml: %v", err)
+	}
+	devDoc := struct {
+		CharlyDev struct {
+			Candy struct {
+				Version string `yaml:"version"`
+				Plan    []struct {
+					Run  string `yaml:"run"`
+					Copy string `yaml:"copy"`
+					To   string `yaml:"to"`
+				} `yaml:"plan"`
+			} `yaml:"candy"`
+		} `yaml:"charly-dev"`
+	}{}
+	if err := yaml.Unmarshal(dev, &devDoc); err != nil {
+		t.Fatalf("parse ../candy/charly-dev/charly.yml: %v", err)
+	}
+	devC := devDoc.CharlyDev.Candy
+	foundCopy := false
+	for _, step := range devC.Plan {
+		if step.Run == "copy=bin/charly" && step.Copy == "bin/charly" && step.To == "/usr/bin/charly" {
+			foundCopy = true
+		}
+	}
+	if !foundCopy {
+		t.Errorf("charly-dev: plan has no `run: copy=bin/charly` / `copy: bin/charly` / `to: /usr/bin/charly` step")
+	}
+
+	// The `charly` candy must NOT carry the copy step — its binary comes from the
+	// published package repos (TestDistroRepoInstallDeclared asserts those exist).
+	mainData, err := os.ReadFile(candyCharlyYML)
+	if err != nil {
+		t.Fatalf("read %s: %v", candyCharlyYML, err)
+	}
+	mainDoc := struct {
+		Charly struct {
+			Candy struct {
+				Plan []struct {
+					Run  string `yaml:"run"`
+					Copy string `yaml:"copy"`
+				} `yaml:"plan"`
+			} `yaml:"candy"`
+		} `yaml:"charly"`
+	}{}
+	if err := yaml.Unmarshal(mainData, &mainDoc); err != nil {
+		t.Fatalf("parse %s: %v", candyCharlyYML, err)
+	}
+	for _, step := range mainDoc.Charly.Candy.Plan {
+		if step.Copy != "" {
+			t.Errorf("charly: plan must not carry a copy step (the package install is the binary source); found copy=%q", step.Copy)
+		}
+	}
+}

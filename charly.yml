@@ -188,7 +188,7 @@ eval-vm:
 # coverage is PRESERVED off the operator's workstation (a nested-as-member move
 # would drop it to NestedExecutor). Needs: go+git (build the 2 out-of-tree plugins
 # check-local composes — deploy:local + examplestep — in-guest), the welded charly
-# (add_candy:[charly] on the bed), the pruned check-local project delivered (the sdk + spec
+# (add_candy:[charly-dev] on the bed), the pruned check-local project delivered (the sdk + spec
 # contract modules resolve from the module proxy at the pinned require versions)
 # by the bed's plan, and CHARLY_PROJECT_DIR in /etc/environment so the guest charly
 # finds the delivered project (`charly --host` strips -C; ssh is non-interactive, so
@@ -1175,8 +1175,8 @@ check-pod-overlay:
 # runs stays named `check-local`, a top-level host:local deploy in the pruned guest project).
 # Formerly a top-level `host: local` bed that dropped /etc/check-local-marker + /tmp markers
 # on the OPERATOR's workstation. It is now a
-# disposable `vm:` bed: it boots eval-host-vm, welds charly into the guest
-# (add_candy:[charly]), rsyncs the PRUNED check-local closure into the guest
+# disposable `vm:` bed: it boots eval-host-vm, welds charly-dev into the guest
+# (add_candy:[charly-dev]), rsyncs the PRUNED check-local closure into the guest
 # (the sdk + spec contract modules resolve from the module proxy)
 # (check/eval-host-project/), then runs `charly --host charly-check-local-vm check run
 # check-local` so the GUEST's charly applies check-local-layer to its OWN `host: local`
@@ -1198,7 +1198,7 @@ check-local-vm:
         description: >-
             Guest-as-host proof of the kind:local layer-application path via ShellExecutor +
             HostDeployTarget, run INSIDE the disposable eval-host-vm guest (off the operator's
-            workstation). Boots eval-host-vm, welds charly (add_candy:[charly] → copy: bin/charly),
+            workstation). Boots eval-host-vm, welds charly-dev (add_candy:[charly-dev] → copy: bin/charly),
             rsyncs the pruned check-local closure (check/eval-host-project/charly.yml +
             candy/{check-local-layer,examplestep-deploy-consumer,plugin-example-step,plugin-deploy-local};
             the sdk + spec contract modules resolve from the module proxy in the guest)
@@ -1213,9 +1213,10 @@ check-local-vm:
             the nested run proves the kind:local path end-to-end; every side-effect is confined to
             the disposable guest.
         add_candy:
-            # Welded charly (copy: bin/charly) so the guest has `charly` on PATH + the 48
-            # compiled_plugins — the same path check-charly-vm proves.
-            - charly
+            # Welded charly-dev (copy: bin/charly — the local-source install, charly check
+            # beds only) so the guest has `charly` on PATH + the 48 compiled_plugins — the
+            # same path check-charly-vm proves.
+            - charly-dev
         install_opts:
             allow_repo_changes: true
             allow_root_tasks: true
@@ -1498,24 +1499,24 @@ check-exampledeploy:
               command:
                 command: "cat /tmp/charly-exampledeploy-steps/pushed"
                 in_container: false
-# charly candy binary-install witness against the LOCAL charly candy (no @github):
-# deploys candy/charly to a disposable Arch Cloud VM, where the layer's `copy:
+# charly-dev candy binary-install witness against the LOCAL charly-dev candy (no @github):
+# deploys candy/charly-dev to a disposable Arch Cloud VM, where the layer's `copy:
 # bin/charly` run step places the in-development binary at /usr/bin/charly. The
 # OS-tracked package install (the former localpkg: map) is GONE — the sdk's
 # localpkg machinery now builds via the `charly generate-packages` plugin
-# (sdk/packagekit) from the candy's `packaging:` section. The copy step remains
-# the binary source for image builds; this bed proves the binary lands on a
-# fresh Arch VM (the repo-based install proof lives in the per-distro check
-# beds).
+# (sdk/packagekit) from the `charly` candy's `packaging:` section. The copy step
+# survives ONLY in the charly-dev candy (the local-source install for charly check
+# beds); this bed proves the in-development binary lands on a fresh Arch VM (the
+# repo-based install proof lives in the per-distro check beds).
 check-charly-vm:
     vm:
         from: charly-vm
         disposable: true
         lifecycle: dev
         description: >-
-            Proves the charly candy installs the in-development binary on a disposable Arch cloud VM via the `copy: bin/charly` run step (the OS-tracked localpkg install is gone — the sdk's localpkg machinery now builds via the generate-packages plugin from the candy's `packaging:` section). One command probe asserts charly resolves to /usr/bin/charly and charly version runs (CHARLY-BINARY-OK).
+            Proves the charly-dev candy installs the in-development binary on a disposable Arch cloud VM via the `copy: bin/charly` run step (the OS-tracked package install lives in the `charly` candy — this is the local-source variant for charly check beds). One command probe asserts charly resolves to /usr/bin/charly and charly version runs (CHARLY-BINARY-OK).
         add_candy:
-            - charly
+            - charly-dev
         install_opts:
             allow_repo_changes: true
             allow_root_tasks: true
@@ -1525,7 +1526,7 @@ check-charly-vm:
                 charly version &&
                 echo CHARLY-BINARY-OK
               id: charly-binary-install
-              description: "charly installed at /usr/bin/charly via the candy's copy: bin/charly run step"
+              description: "charly installed at /usr/bin/charly via the charly-dev candy's copy: bin/charly run step"
               stdout:
                 - contains: CHARLY-BINARY-OK
               exit_status: 0
@@ -3535,7 +3536,7 @@ agentteams-manager:
         # inherited default command is cleared at emission (CMD []), so the
         # entrypoint runs bare. /etc/supervisord.conf is assembled at build time.
         entrypoint:
-            - '@github.com/opencharly/layer-supervisord:v2026.235.2056'
+            - '@github.com/opencharly/layer-supervisord:v2026.239.1300'
             - -n
             - -c
             - /etc/supervisord.conf
@@ -3563,7 +3564,7 @@ agentteams-worker:
         # emission (CMD []), so the entrypoint runs bare. /etc/supervisord.conf is
         # assembled at build time.
         entrypoint:
-            - '@github.com/opencharly/layer-supervisord:v2026.235.2056'
+            - '@github.com/opencharly/layer-supervisord:v2026.239.1300'
             - -n
             - -c
             - /etc/supervisord.conf

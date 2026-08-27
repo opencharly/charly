@@ -87,9 +87,14 @@ var deployTargetWords = func() []string {
 var externalizedDeploySubstrates = setFromSlice(deployTargetWords)
 
 // externalDeploySubstratePlugins maps each first-party EXTERNALIZED deploy-substrate word
-// to the candy SUBPATH of the plugin that serves it (in the default project repo). It is the
-// substrate→plugin-candy companion of externalizedDeploySubstrates: that set says a word is
-// external; this map says WHICH candy serves it.
+// to the STANDALONE repo + candy subpath of the plugin that serves it. The candy
+// de-submodule cutover (Phase 4) moved every candy/plugin-deploy-* out of the main repo
+// into its own kind-prefixed repo (opencharly/plugin-deploy-{local,vm,pod}, plugin-adb,
+// plugin-kube), so the canonical ref is now the STANDALONE repo path — NOT
+// github.com/opencharly/charly/candy/… (that path no longer exists; a stale ref there
+// leaves the substrate provider unconnected and every vm:/local:/kubernetes: bed fails
+// at deploy-add with "target %q is a known substrate but its deploy provider is not
+// connected").
 //
 // SDD CUE-sourcing spike (K1-α, settled — do not re-open without new evidence): this map does
 // NOT need CUE-sourcing. It is neither authored config (no user ever writes it in a charly.yml)
@@ -101,11 +106,11 @@ var externalizedDeploySubstrates = setFromSlice(deployTargetWords)
 // itself CUE-derived from spec.ResourceKinds; only the VALUES (literal candy path strings) are
 // hand-written, and they have no generated source to drift from.
 var externalDeploySubstratePlugins = map[string]string{
-	"local":      "candy/plugin-deploy-local",
-	"vm":         "candy/plugin-deploy-vm",
-	"pod":        "candy/plugin-deploy-pod",
-	"android":    "candy/plugin-adb",
-	"kubernetes": "candy/plugin-kube",
+	"local":      "github.com/opencharly/plugin-deploy-local/candy/plugin-deploy-local",
+	"vm":         "github.com/opencharly/plugin-deploy-vm/candy/plugin-deploy-vm",
+	"pod":        "github.com/opencharly/plugin-deploy-pod/candy/plugin-deploy-pod",
+	"android":    "github.com/opencharly/plugin-adb/candy/plugin-adb",
+	"kubernetes": "github.com/opencharly/plugin-kube/candy/plugin-kube",
 }
 
 // externalDeploySubstratePluginRef returns the canonical @github ref to the candy serving an
@@ -122,7 +127,7 @@ func externalDeploySubstratePluginRef(word string) (string, bool) {
 	if !ok {
 		return "", false
 	}
-	return "@" + spec.DefaultProjectRepo + "/" + sub, true
+	return "@" + sub, true
 }
 
 // checkDeployProviderBijection: every canonical deploy-target word is served by an

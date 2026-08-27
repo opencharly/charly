@@ -12,7 +12,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/opencharly/spec/proc"
 	"github.com/opencharly/spec/spec"
 
 	"cuelang.org/go/cue"
@@ -796,7 +795,9 @@ func deployNodePluginContext(dir, name string) (addCandy []string, refWords []st
 	if !ok {
 		return nil, nil
 	}
-	inSubmodule := proc.SelfSuperprojectOverridePair(dir) != ""
+	// The node's plugin words are collected below (no inSubmodule gate — the Phase-4 cutover
+	// moved every substrate plugin candy out of the main repo, so BOTH main and submodule
+	// contexts need the standalone-repo auto-inject; see the visit loop).
 	// Collect the node's plugin words AND recurse into its nested children: a deploy whose
 	// OWN substrate OR whose nested children's substrates are externalized must load each
 	// serving plugin. Two cases this covers, GENERALLY (never substrate-special-cased):
@@ -813,21 +814,18 @@ func deployNodePluginContext(dir, name string) (addCandy []string, refWords []st
 		if n.Target != "" {
 			refWords = append(refWords, n.Target)
 			// An EXTERNALIZED deploy substrate (vm/local/android/kubernetes) is served by an
-			// out-of-process plugin candy. A main-repo project discovers that candy from
-			// candy/ directly (its `discover:` scans candy/*), but a box/<distro> SUBMODULE
-			// scans only its own + imported candies — so the parent's
-			// candy/plugin-deploy-<substrate> is absent from the submodule's scan and the
-			// substrate word would never resolve to its provider. Auto-inject the canonical
-			// ref via ExtraCandyRefs, but ONLY in a submodule context — the main repo already
-			// has it locally, and injecting a remote ref there over the local candy is both
-			// redundant and (for an as-yet-unpublished plugin) a fetch failure. In a submodule
-			// bed CHARLY_REPO_OVERRIDE redirects the ref to the local superproject under
-			// development. The SAME host-side-plugin pattern as vmPluginCandyRef (verb:libvirt),
-			// generalized to every external substrate (R3).
-			if inSubmodule {
-				if ref, ok := externalDeploySubstratePluginRef(n.Target); ok {
-					addCandy = append(addCandy, ref)
-				}
+			// out-of-process plugin candy in its STANDALONE repo (the Phase-4 cutover moved every
+			// candy/plugin-deploy-* out of the main repo into opencharly/plugin-deploy-*). Neither
+			// the main repo nor a box/<distro> submodule scans that repo in its own closure — the
+			// main repo's candy/ no longer holds plugin-deploy-* (deleted at the cutover) and a
+			// submodule scans only its own + imported candies — so the substrate word would never
+			// resolve to its provider without the auto-inject. Inject the canonical ref via
+			// ExtraCandyRefs UNCONDITIONALLY (both contexts). In a check bed CHARLY_REPO_OVERRIDE
+			// redirects the ref to the local superproject under development. The SAME
+			// host-side-plugin pattern as vmPluginCandyRef (verb:libvirt), generalized to every
+			// external substrate (R3).
+			if ref, ok := externalDeploySubstratePluginRef(n.Target); ok {
+				addCandy = append(addCandy, ref)
 			}
 		}
 		for i := range n.Plan {

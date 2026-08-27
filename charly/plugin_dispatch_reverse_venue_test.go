@@ -436,9 +436,9 @@ func TestSubstrateFallbackRef(t *testing.T) {
 		extraRef string
 		want     string
 	}{
-		{"pod substrate default", ClassDeployTarget, "pod", "", "@" + spec.DefaultProjectRepo + "/candy/plugin-deploy-pod"},
-		{"kubernetes substrate default", ClassDeployTarget, "kubernetes", "", "@" + spec.DefaultProjectRepo + "/candy/plugin-kube"},
-		{"vm substrate default", ClassDeployTarget, "vm", "", "@" + spec.DefaultProjectRepo + "/candy/plugin-deploy-vm"},
+		{"pod substrate default", ClassDeployTarget, "pod", "", "@github.com/opencharly/plugin-deploy-pod/candy/plugin-deploy-pod"},
+		{"kubernetes substrate default", ClassDeployTarget, "kubernetes", "", "@github.com/opencharly/plugin-kube/candy/plugin-kube"},
+		{"vm substrate default", ClassDeployTarget, "vm", "", "@github.com/opencharly/plugin-deploy-vm/candy/plugin-deploy-vm"},
 		{"caller ref wins", ClassDeployTarget, "pod", "@example.org/candy/custom", "@example.org/candy/custom"},
 		{"unknown word no default", ClassDeployTarget, "builder-nope", "", ""},
 		{"non-deploy class no default", ClassVerb, "pod", "", ""},
