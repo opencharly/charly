@@ -1032,7 +1032,7 @@ agents-skill:
                   common way an in-flight cutover leaks onto shared host state.
 
                   - **Two binaries, two roles.** Per-worktree `bin/charly` — built via `task
-                    build:binary` (a CalVer-stamped build plus a `candy/charly/bin/charly`
+                    build:binary` (a CalVer-stamped build plus a `candy/charly-dev/bin/charly`
                     copy, gitignored, no install step) — is the dev binary: every teammate
                     uses its own worktree's `./bin/charly` for every charly verb. The
                     host-installed `charly` is a distro-native package
@@ -1138,7 +1138,7 @@ agents-skill:
                     at the same time — see "Handling a long-running bed" below for the
                     launch-mechanism half of the same failure.)
                   - **Side-effects (documented elsewhere — pointers, not copies).** `task
-                    build:binary` keeps the dual path `bin/charly` ↔ `candy/charly/bin/charly`
+                    build:binary` keeps the dual path `bin/charly` ↔ `candy/charly-dev/bin/charly`
                     in sync (a manual `go build -o` does not) — see `/charly-internals:go`
                     "Quick Reference" / "Debug a Build Issue" + `/charly-tools:charly`. It
                     does not touch any packaging source — the native packages are built by
@@ -5303,7 +5303,7 @@ go-skill:
 
             | Action | Command | Description |
             |--------|---------|-------------|
-            | Build | `task build:binary` | Compile to `bin/charly` (CalVer-stamped), NO install. Also copies to `candy/charly/bin/charly` — does NOT touch any packaging source (the native packages are built by the `charly generate-packages` plugin from the candy's `packaging:` section) |
+            | Build | `task build:binary` | Compile to `bin/charly` (CalVer-stamped), NO install. Also copies to `candy/charly-dev/bin/charly` (the charly-dev local-source candy, check beds only) — does NOT touch any packaging source (the native packages are built by the `charly generate-packages` plugin from the candy's `packaging:` section) |
             | Package | `charly generate-packages` (nFPM plugin) | Build a distro-native `.pkg.tar.zst`/`.rpm`/`.deb`/`.apk`/`.ipk` release artifact via the `charly generate-packages` plugin (nFPM, `sdk/packagekit`), published to the per-distro package repos. Install it yourself with your OWN package manager (`pacman -U`/`dnf install`/`apt install`/`apk add`) |
             | Install (portable) | `task build:install-portable` | Copy `bin/charly` to `$HOME/.local/bin/charly` (solo bootstrap; NOT a multi-teammate dev-loop step — see below) |
             | Run tests | `cd charly && go test ./...` | Run all tests |
@@ -5387,7 +5387,7 @@ go-skill:
 
             ### Intermediate image cache invalidation
 
-            `charly box build` auto-generates intermediate images (e.g., `ghcr.io/opencharly/charly-fedora-2-dbus-nodejs`) that fleet the `charly` layer plus common layers for cache reuse across many downstream images. These intermediates are aggressively podman-cached. Updating `candy/charly/bin/charly` does invalidate the COPY step inside the intermediate, but if the intermediate tag already exists locally, `charly box build` may reuse it without re-running the build chain. To force a fresh binary propagation after a manual `bin/charly` update:
+            `charly box build` auto-generates intermediate images (e.g., `ghcr.io/opencharly/charly-fedora-2-dbus-nodejs`) that fleet the `charly` layer plus common layers for cache reuse across many downstream images. These intermediates are aggressively podman-cached. Updating `candy/charly-dev/bin/charly` does invalidate the COPY step inside the intermediate, but if the intermediate tag already exists locally, `charly box build` may reuse it without re-running the build chain. To force a fresh binary propagation after a manual `bin/charly` update:
 
             ```bash
             charly clean --invalidate 'charly-fedora-2*'
@@ -5550,7 +5550,7 @@ go-skill:
 
             The verification side (checking the deployed binary + deps on a live target)
             is `/charly-check:check` Standards 7–9; the dual-path `bin/charly` ↔
-            `candy/charly/bin/charly` gotcha is above and in `/charly-tools:charly`.
+            `candy/charly-dev/bin/charly` gotcha is above and in `/charly-tools:charly`.
 
             ## Style Guide
 

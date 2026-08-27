@@ -340,7 +340,8 @@ charly-skill:
             
             | Property | Value |
             |----------|-------|
-            | Install files | `run:` step, `bin/charly` |
+            | Install | native package from the published per-distro repos (`distro:` `package:`/`repo:`) |
+            | Binary source | the published release (charly-{alpine,arch,fedora,ubuntu,debian,openwrt}); the in-development binary lives in the `charly-dev` candy (check beds only) |
             
             ## What It Provides
             
@@ -353,32 +354,33 @@ charly-skill:
             the delivered copy. Baking the candy only pre-stages the binary so the first such call
             skips the copy.
             
-            ## Binary source — the in-development binary, always
+            ## Binary source — the published per-distro package repos
 
-            The `charly` candy installs the binary via a `copy: bin/charly` run step — the
-            in-development binary at `candy/charly/bin/charly`, synced by `task build:binary`.
-            There is ONE binary source for both image builds and deploys: the local working
-            tree. A box therefore always bakes the charly code under development — never a
-            stale published release. The OS-tracked package install (the former `localpkg:`
-            map) is GONE: the sdk's localpkg machinery now builds via the `charly
-            generate-packages` plugin (sdk/packagekit) from the candy's `packaging:` section
-            (declared now); the localpkg machinery's transition to build from this section
-            lands with the Phase 3 cutover. Until then the copy step is the single binary
-            source. This is WHY a fresh check bed exercises your uncommitted
-            charly changes while a real box ships the same in-development toolchain.
+            The `charly` candy installs the binary from the **published per-distro package
+            repos** (charly-{alpine,arch,fedora,ubuntu,debian,openwrt}) via the `distro:`
+            `package:` + `repo:` entries above — the native package manager (apk add /
+            pacman -S / dnf install / apt install) pulls the release binary + its OS deps.
+            The `packaging:` section is the single metadata source those repos build from
+            (`charly generate-packages`, sdk/packagekit).
+
+            The IN-DEVELOPMENT binary (the local working tree, synced by
+            `task build:binary`) installs via the **`charly-dev`** candy — the local-source
+            variant used ONLY by charly check beds (`add_candy: [charly-dev]`), so a fresh
+            bed always exercises the code under development while a real box ships the
+            published release.
             
-            ## Updating the Binary — dual-path gotcha
+            ## Updating the Binary — the charly-dev sync path
 
-            **The commands in this section are maintenance the charly repository performs on itself.** They are not steps an charly user runs: this candy's binary source is a working tree (see "Binary source" above), so keeping its two paths in sync is something a contributor does inside a charly checkout. It is recorded here because it is this candy's own build contract — named as maintenance, not as instructions for the reader.
+            **The commands in this section are maintenance the charly repository performs on itself.** They are not steps an charly user runs: the charly-dev candy's binary source is a working tree (see "Binary source" above), so keeping its two paths in sync is something a contributor does inside a charly checkout. It is recorded here because it is this candy's own build contract — named as maintenance, not as instructions for the reader.
 
-            The `charly` candy's `copy: bin/charly` run step is resolved **relative to the candy directory**, so the box build reads `candy/charly/bin/charly` — NOT the repo-root `bin/charly`. Two independent paths need to stay in sync:
+            The `charly-dev` candy's `copy: bin/charly` run step is resolved **relative to the candy directory**, so the box build reads `candy/charly-dev/bin/charly` — NOT the repo-root `bin/charly`. Two independent paths need to stay in sync:
             
             | Path | Who reads it |
             |------|-------------|
             | `bin/charly` (repo root) | Host-side `charly` invocations; users running `/tmp/charly` style tests |
-            | `candy/charly/bin/charly` | The `charly` candy's COPY into boxes during `charly box build` |
+            | `candy/charly-dev/bin/charly` | The `charly-dev` candy's COPY into check-bed boxes during `charly box build` |
             
-            **Canonical workflow** — `task build:binary` compiles to repo-root AND syncs to the layer:
+            **Canonical workflow** — `task build:binary` compiles to repo-root AND syncs to the charly-dev layer:
             
             ```bash
             task build:binary                              # Builds + syncs both paths; rebuild images after.
@@ -389,11 +391,11 @@ charly-skill:
             
             ```bash
             cd charly && go build -o ../bin/charly .           # Only updates repo-root bin/charly.
-            cp bin/charly candy/charly/bin/charly                 # REQUIRED — sync to layer path.
+            cp bin/charly candy/charly-dev/bin/charly           # REQUIRED — sync to layer path.
             ./bin/charly box build <image>               # Rebuild affected images.
             ```
             
-            **Why this bites**: `charly box build` uses auto-generated intermediate images (e.g., `ghcr.io/opencharly/charly-fedora-2-dbus-nodejs`) that cache the `charly` candy. If you update `bin/charly` in repo-root but forget the candy copy, the intermediate's cache hit serves stale content. After cleaning up a stale dual-path situation, `charly clean --invalidate 'charly-fedora-2*'` forces a clean intermediate rebuild.
+            **Why this bites**: `charly box build` uses auto-generated intermediate images (e.g., `ghcr.io/opencharly/charly-fedora-2-dbus-nodejs`) that cache the `charly-dev` candy. If you update `bin/charly` in repo-root but forget the candy copy, the intermediate's cache hit serves stale content. After cleaning up a stale dual-path situation, `charly clean --invalidate 'charly-fedora-2*'` forces a clean intermediate rebuild.
             
             ## `charly status` Probe
             
