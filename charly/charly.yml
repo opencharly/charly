@@ -1185,7 +1185,12 @@ supervisord:
                 {{- else -}}
                 [program:{{.Name}}]
                 {{- end}}
+                {{- $wait := waitForScript .WaitFor}}
+                {{- if $wait}}
+                command=/bin/sh -c '{{$wait}}; exec {{.Exec}}'
+                {{- else}}
                 command={{.Exec}}
+                {{- end}}
                 {{- if eq .Kind "eventlistener" -}}
                 {{- if .Events}}
                 events={{.Events}}
@@ -1330,6 +1335,14 @@ openrc:
                 error_log="{{openrcLog .Stdout}}"
                 {{- end}}
 
+                {{- $wait := waitForScript .WaitFor}}
+                {{- if $wait}}
+
+                start_pre() {
+                    {{$wait}}
+                }
+                {{- end}}
+
                 depend() {
                 {{- range .After}}
                     after {{.}}
@@ -1424,6 +1437,10 @@ systemd:
                 Type={{.Type}}
                 {{- else}}
                 Type=simple
+                {{- end}}
+                {{- $wait := waitForScript .WaitFor}}
+                {{- if $wait}}
+                ExecStartPre=/bin/sh -c '{{$wait}}'
                 {{- end}}
                 {{- range .ExecStartPre}}
                 ExecStartPre={{.}}
