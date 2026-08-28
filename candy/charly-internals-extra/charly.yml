@@ -11,6 +11,11 @@ charly-internals-extra:
               command: "true"
               context:
                 - build
+            - check: the overflow internals skill/agent entities are present and generated into the marketplace's internals/skills
+              id: charly-internals-extra-present
+              context:
+                - build
+              command: "true"
 strict-policy-skill:
     skill:
         name: strict-policy
