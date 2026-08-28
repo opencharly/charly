@@ -90,7 +90,7 @@ agents-skill:
                   | | Claude Code | Codex | Kimi |
                   |---|---|---|---|
                   | Rulebook | `CLAUDE.md` | `AGENTS.md` | `AGENTS.md` (read natively) |
-                  | Skills | plugin manager (`charly-*@charly-plugins`, the opencharly/marketplace repo) | the marketplace's `.agents/plugins/marketplace.json` catalog (Codex registers the repo by GitHub source) | kimi plugin (the whole marketplace is one plugin, installed by GitHub URL) / on-demand `Skill` tool; when not in the session listing, `Read` the marketplace repo's `<family>/skills/<name>/SKILL.md` |
+                  | Skills | plugin manager (`charly-*@charly-plugins`, the opencharly/marketplace repo) | the marketplace's `.agents/marketplace/.claude-plugin/marketplace.json` catalog (Codex registers the repo by GitHub source) | kimi plugin (the whole marketplace is one plugin, installed by GitHub URL) / on-demand `Skill` tool; when not in the session listing, `Read` the marketplace repo's `<family>/skills/<name>/SKILL.md` |
                   | Sub-agents | custom agents (the marketplace's `internals/agents/*.md`, `.claude/agents/`) | fresh native agent threads (`.codex/agents/*.toml` roles, e.g. `pr-validator`) | built-in `coder` / `explore` / `plan` only — no custom subagent registry |
                   | Fresh validator / teammate | sub-agent or team teammate with the agent brief | fresh agent thread with the role toml | a fresh separate `kimi` session (interactive or `kimi -p`) briefed with the agent `.md` by path — context isolation is what makes it independent |
                   | Dynamic workflows | `.claude/workflows/*.js` (run `/<name>`) | re-derived per thread | re-derived per session (no workflow runtime) |
@@ -3523,11 +3523,17 @@ git-workflow-skill:
 
             Every change to an OpenCharly repo lands through ONE discipline: a **pull request**
             gated by the ORG-WIDE `charly/pr-validator` GitHub Actions workflow
-            (`opencharly/.github`), which validates and, on a PASS verdict, feeds the
-            `auto-merge` workflow that merges (squash) and CalVer-tags. A **direct
-            push to `main` is FORBIDDEN and mechanically disabled** — GitHub branch protection
-            (`enforce_admins`) block it in every repo (the `pre-push-gate` adds a local
-            backstop in the harnesses that wire it — NOT Claude Code). The **R10 pass
+            (`opencharly/.github`), which validates and, on a PASS verdict, enables GitHub's
+            OWN native auto-merge (squash) inline — there is no separate `auto-merge`
+            workflow; the CalVer tag and the CHANGELOG are written afterwards by the
+            independent `tag-on-merge` workflow, triggered by the merge. A **direct
+            push to `main` is FORBIDDEN and mechanically disabled** — a per-repo branch
+            RULESET blocks it (`creation`/`deletion`/`non_fast_forward` + a required
+            `validate / validate` status check); the legacy branch-protection API is NOT used
+            and `branch-protection.sh` actively removes it, because it has no bypass slot for
+            the app that writes the CHANGELOG. The `pre-push-gate` adds a local backstop in
+            every harness that wires it — including Claude Code, via
+            `.claude/settings.json`'s PreToolUse hooks. The **R10 pass
             authorizes OPENING the PR, never a self-merge**: the two-step landing separates the
             author (who opens the PR) from the fresh validator (a check run on the same PR).
             This skill is the mechanics; the project rulebook "Post-Execution Policies" (`AGENTS.md` / `CLAUDE.md`) carries the
@@ -3537,7 +3543,7 @@ git-workflow-skill:
 
             ## Non-negotiable invariants
 
-            - **No direct push to `main`** (the project rulebook's PR-only landing mandate — see "Post-Execution Policies"). Enforced by GitHub branch protection (the `charly/pr-validator` check run + a PR + linear history + `enforce_admins`), which is what makes it mechanical; the `pre-push-gate` adds a local backstop only in the harnesses that wire it (`.reasonix`, kimi) — it is NOT wired under Claude Code. Organization-wide apply/verify is owned only by `opencharly/.github/scripts/branch-protection.sh`.
+            - **No direct push to `main`** (the project rulebook's PR-only landing mandate — see "Post-Execution Policies"). Enforced by a per-repo branch RULESET on `refs/heads/main` — `creation` + `deletion` + `non_fast_forward` + a strict required status check named exactly **`validate / validate`**, with the `charly-auto-merge` GitHub App as the only bypass actor (its scoped bypass is what lets tag-on-merge's CHANGELOG commit land on a protected `main`). The LEGACY branch-protection API is deliberately NOT used: it has no bypass slot for that app, so `branch-protection.sh` deletes it wherever it survives, and `enforce_admins` plays no part. The `pre-push-gate` adds a local backstop in every harness that wires it — Claude Code included, via `.claude/settings.json`'s PreToolUse hooks. Organization-wide apply/verify is owned only by `opencharly/.github/scripts/branch-protection.sh`.
             - **Never force-push, on any branch, ever** (mandate, same rulebook section). `main` only fast-forwards via native auto-merge's squash; a `feat/` branch, once pushed, advances only by ADDING commits (the author's change plus any review-round fix commits), and the squash-merge collapses them. A stale `feat/` catches up with `gh pr update-branch` (a merge, NOT a rebase-force); tags are add-only. **Amending a `feat/` branch is a normal authoring action — legal until the first push** (amending a pushed branch would require a force-push, which is forbidden).
             - **R10-gated; the merge requires the `charly/pr-validator` gate's green check run.** R10 PASS authorizes opening the PR (with pasted evidence); a rule violation or R10 FAIL means a red `charly/pr-validator` check and no merge — fix in the same tree, re-run R10, re-push; the check resets and the validator re-runs.
             - **Zero warnings is part of R10** (project rulebook R1). A version-mismatch warning clears with `charly box reconcile`; any other warning gets `/charly-internals:root-cause-analyzer` then a real fix — "warning" is never an accepted end state.
@@ -3568,7 +3574,7 @@ git-workflow-skill:
             ## Cross-References
 
             - the project rulebook "Post-Execution Policies" — the mandate this skill operationalizes.
-            - `plugins/internals/agents/pr-validator.md` — the fresh evaluator's full spec.
+            - `marketplace/internals/agents/pr-validator.md` — the fresh evaluator's full spec.
             - `opencharly/.github/scripts/branch-protection.sh` — the sole organization-wide
               branch-protection apply/verify owner.
             - `/charly-internals:cutover-policy` — one-phase, atomic-commit, R10-at-the-end.
@@ -3624,7 +3630,7 @@ git-workflow-skill:
                   # STOP. Do NOT merge your own PR. Hand off to a FRESH pr-validator (Step 2).
                   ```
 
-                  **Step 2 — Org-wide gate** (`plugins/internals/agents/pr-validator.md`, the fresh
+                  **Step 2 — Org-wide gate** (`marketplace/internals/agents/pr-validator.md`, the fresh
                   evaluator in NEW context): it independently re-validates the PR vs R0–R10 + the
                   relevant skills and certifies `Verdict: PASS|BLOCK` for the ORG-WIDE
                   `charly/pr-validator` GitHub Actions workflow (`opencharly/.github`), whose
@@ -3635,7 +3641,7 @@ git-workflow-skill:
                   PR's FULL comment thread, per the pr-validator spec's comment-intake rule — every
                   comment is investigated independently and considered in the verdict, never
                   granted or denied authority merely by existing (see
-                  `plugins/internals/agents/pr-validator.md` "Comment intake", never restated
+                  `marketplace/internals/agents/pr-validator.md` "Comment intake", never restated
                   here). The author pastes the validator's verbatim verdict + the gate outcomes
                   (paste-proof survives delegation). On FAIL the check stays RED and the PR is
                   **UPDATED IN PLACE** → the author R1-RCAs, fixes in the same tree,
@@ -4068,7 +4074,7 @@ git-workflow-skill:
                   load-bearing part of it is that the two chains have DIFFERENT lengths — candy and
                   box prose is a ONE-hop projection read straight off each repo's `charly.yml`,
                   while skill prose is a TWO-hop projection that `charly docs generate` reads from
-                  the `plugins/` tree, never from `candy/*/charly.yml`.
+                  the `marketplace/` tree, never from `candy/*/charly.yml`.
 
                   The commands below are maintenance THIS REPOSITORY performs on itself. They are
                   not steps an charly user runs, and they never belong on a reader-facing page.
@@ -4077,7 +4083,7 @@ git-workflow-skill:
                      `plan:`, or the owning candy's `skill:` content.
                   2. **For a skill edit, project and land `plugins` FIRST** (`charly marketplace
                      generate`, then the `plugins` PR). Locally the docs generator reads the dirty
-                     `plugins/` tree, so a local regeneration picks the edit up immediately; every
+                     `marketplace/` tree, so a local regeneration picks the edit up immediately; every
                      other reader gets it only once the gitlink advances. Advancing that gitlink
                      WITHOUT regenerating `docs` in the same landing is precisely what leaves the
                      published site stale, and only the drift gate will say so. Superproject-facing
@@ -4294,7 +4300,7 @@ git-workflow-skill:
                     workflow enables native auto-merge (squash), and the org-wide `tag-on-merge`
                     workflow then finalizes the merge-time CalVer, writes `CHANGELOG/<CalVer>.md`
                     from the merged PR body, and tags the merged HEAD.
-                    Sequence + guardrails: `plugins/internals/agents/pr-validator.md`. The gate
+                    Sequence + guardrails: `marketplace/internals/agents/pr-validator.md`. The gate
                     never runs `gh pr merge --admin` (that bypasses it) and never force-pushes; a
                     `BEHIND` branch is recovered with `gh pr update-branch` (no force-push), then merged
                     on the new head.
@@ -4319,7 +4325,7 @@ git-workflow-skill:
                   the session spawned is "an automation the agent controls." So by those definitions an
                   agent posting the status is self-approval and an agent merging is merge-without-review.
                   The project accepts that posture deliberately. What branch protection still mechanically
-                  enforces: PR-only landing, linear history, `enforce_admins`, no force-push, and that the
+                  enforces: PR-only landing, linear history, no force-push (the ruleset's `non_fast_forward`), and that the
                   status exists — never `gh pr merge --admin`, never a force-push, never editing protection.
 
                   **Two separate gates — landing must clear both, and they are not the same thing.**
@@ -4379,7 +4385,7 @@ git-workflow-skill:
 
                   - **The `permissions.allow` rules live in the superproject.** Claude Code resolves
                     `.claude/settings.json` from the agent's project root (its working directory), and
-                    neither `plugins/` nor `sdk/` ships a `.claude/`. A validator rooted inside a submodule
+                    neither `marketplace/` nor `sdk/` ships a `.claude/`. A validator rooted inside a submodule
                     loads no permission rules, so even its `success` POST is denied as Self-Approval
                     (*"the only authorization comes from a `<teammate-message>`"*) — unless a user/managed-level
                     grant covers the action (user settings resolve independently of project root; see the
@@ -4410,7 +4416,7 @@ git-workflow-skill:
                   there, so a whole team inherits them and the `success` POST is autonomous by default
                   (the merge half additionally needs the operator's `autoMode.allow` rule — the two-gate
                   model above). Claude Code resolves `.claude/settings.json` from the agent's project root,
-                  which is its working directory. A validator told to work *inside* `plugins/` or `sdk/`
+                  which is its working directory. A validator told to work *inside* `marketplace/` or `sdk/`
                   roots in that submodule — which ships no `.claude/` — and therefore silently loads no
                   permission rules at all. Its `success` status POST is then denied as Self-Approval
                   (*"the only authorization comes from a `<teammate-message>`"*), because nothing ever
@@ -4426,7 +4432,7 @@ git-workflow-skill:
                     `~/.claude/projects/-<superproject-path-slug>/`, not the `…-plugins` sibling.
 
                   **Proven by controlled experiment (single variable):** with the rule text unchanged, a
-                  `pr-validator` rooted in `plugins/` was denied even the `success` POST; the same validator
+                  `pr-validator` rooted in `marketplace/` was denied even the `success` POST; the same validator
                   rooted in the superproject posted `success` with zero denials. Scope was the entire cause
                   of the status-post denial (the merge is the separate Merge-Without-Review gate above).
                   **Scope of validity:** the denial reproduces only when no
@@ -4520,7 +4526,7 @@ git-workflow-skill:
                   composing a squash-merge trailer preserves the authoring harness, full provider
                   model name, and proof-supported confidence.
 
-                  The canonical constructor is `plugins/scripts/squash_body.py` in the
+                  The canonical constructor is `marketplace/scripts/squash_body.py` in the
                   superproject. It receives prose on standard input plus the concrete trailer via
                   `--trailer`, inserts the required blank line, and refuses output unless
                   `git interpret-trailers --parse` returns exactly that trailer. The validator
@@ -4565,7 +4571,7 @@ git-workflow-skill:
 
                   **Terms.** *The gate* — whichever check a claim rests on; usually `charly box validate`,
                   `charly marketplace drift`, or `charly docs generate`. *`marketplace drift`* compares every
-                  generated artifact — the `plugins/` corpus AND the harness surface it also emits
+                  generated artifact — the `marketplace/` corpus AND the harness surface it also emits
                   (`CLAUDE.md`, `AGENTS.md`, `.claude/settings.json`, `.claude/hooks/*`) — against what the
                   candy `skill:` / `hook:` / `marketplace:` sources currently project — a *candy* being an entity defined in `candy/<name>/charly.yml` —
                   exiting 1 when any differs. `charly marketplace generate` re-emits them. *Superproject* — the `opencharly/charly`
@@ -5056,7 +5062,7 @@ git-workflow-skill:
 
                   ### A `skill:` source edit and its regeneration are one cutover
 
-                  A `skill:` entity in a candy projects to `plugins/<family>/skills/<name>/SKILL.md`, and
+                  A `skill:` entity in a candy projects to `marketplace/<family>/skills/<name>/SKILL.md`, and
                   `charly docs generate` reads that projection — never the candy. So a source edit reaches
                   readers only after the `plugins` landing merges and the superproject's gitlink advances.
                   Advancing the gitlink without regenerating `docs` leaves the site stale, and only the drift
@@ -5332,12 +5338,12 @@ go-skill:
             ├── Taskfile.yml               # Bootstrap tasks only
             ├── taskfiles/                 # Build.yml, Cue.yml, Setup.yml
             ├── candy/<name>/             # Layer directories
-            ├── plugins/                   # Git submodule (opencharly/plugins)
+            ├── marketplace/                   # Git submodule (opencharly/plugins)
             ├── docs/                      # Git submodule (opencharly/docs)
             └── templates/                 # supervisord.header.conf (referenced by init.supervisord.header_file)
             ```
 
-            Submodule convention: `plugins/` (and `docs/`, `box/<distro>`) are submodules rooted at
+            Submodule convention: `marketplace/` (and `docs/`, `box/<distro>`) are submodules rooted at
             their own repos; the sdk contract module (`github.com/opencharly/sdk`) is NOT a
             submodule — it resolves from the module proxy at the pinned require version in every
             go.mod. Clone with `--recurse-submodules` (no sdk checkout exists to fetch) or run
@@ -5831,7 +5837,7 @@ go-skill:
 
                   `target: vm` is an EXTERNAL deploy substrate, exactly like `local`/`android`/`kubernetes`: there is no in-proc VM deploy target. It resolves to `pluginDeployTarget` (S3b), dispatched via `candy/plugin-fleet`'s `Invoke(OpDeployDispatch)` to the ACTUAL substrate, served out-of-process by `candy/plugin-deploy-vm`'s `deploy:vm` provider. UNLIKE kubernetes, the vm substrate DOES consume the InstallPlan IR — the plugin walks the plan via the SAME shared `sdk/kit.WalkPlans` the local deploy uses, but the executor the reverse channel serves is the **guest `SSHExecutor`** (`spec/exec/deploy_executor_ssh.go`), so the same walk runs INSIDE the guest (bash bodies via `ssh guest 'sudo bash -s'`). The `DeployExecutor` interface (`spec/exec/deploy_executor.go`) decouples "how shell commands run" from the walk — `ShellExecutor` + `SSHExecutor` are the two implementations.
 
-                  The VM venue lifecycle (boot the domain, build the guest SSH executor, nested pod-in-guest, teardown, the `charly vm` Start/Stop/Status/Logs/Shell/Rebuild) is IMPLEMENTED IN THE PLUGIN `candy/plugin-deploy-vm/lifecycle.go` (`Lifecycle:true`) over generic seams — `sdk/kit` (ssh-config stanza, guest waits, charly delivery), `HostBuild("cli")` (the `charly vm`/`charly box build` family), self-loading the project directly for its OWN `spec.LifecyclePrepareInput` (`sdk/loaderkit.ResolveVmEntityViaExecutor`, K-wave W3a A3-phase-2 — the former host-side `lifecyclePrepareHook` DATA-seam AND the "deploy-entity-resolve" HostBuild seam it later used are BOTH gone), and the served guest executor reverse channel (nested pod-in-guest). Core keeps NO residual cleanup for the vm substrate: the F12 `vmAttachResolver` (`charly/vm_lifecycle_preresolve.go`) was DELETED at K-wave 2 cone CONTESTED — its body was `strings.Join(cmd, " ")`, derivable from the raw wire cmd candy/plugin-fleet threads for OpAttach; `candy/plugin-deploy-vm/lifecycle.go`'s `vmAttach` derives it from `lifecycleParams.Cmd` and `charly/unified_targets.go`'s Attach threads the raw cmd for hookless lifecycle substrates. The vm `lifecyclePostTeardownHook` moved plugin-side too (`candy/plugin-deploy-vm/lifecycle.go`'s `vmPostTeardown`, F6 vm-lifecycle move). The lifecycle Ops are reached through `pluginDeployTarget` → `candy/plugin-fleet`'s `Invoke(OpDeployDispatch)` → the plugin's own `sdk.Executor.InvokeProvider` call into the vm substrate provider (S3b, replacing the former dedicated `grpcSubstrateLifecycle` proxy + `substrateLifecycle` interface, both DELETED) — and persists the returned `VmDeployState`. Both pod and vm own a real venue lifecycle, each externalized to its plugin.
+                  The VM venue lifecycle (boot the domain, build the guest SSH executor, nested pod-in-guest, teardown, the `charly vm` Start/Stop/Status/Logs/Shell/Rebuild) is IMPLEMENTED IN THE PLUGIN `plugin-deploy-vm/candy/plugin-deploy-vm/lifecycle.go` (`Lifecycle:true`) over generic seams — `sdk/kit` (ssh-config stanza, guest waits, charly delivery), `HostBuild("cli")` (the `charly vm`/`charly box build` family), self-loading the project directly for its OWN `spec.LifecyclePrepareInput` (`sdk/loaderkit.ResolveVmEntityViaExecutor`, K-wave W3a A3-phase-2 — the former host-side `lifecyclePrepareHook` DATA-seam AND the "deploy-entity-resolve" HostBuild seam it later used are BOTH gone), and the served guest executor reverse channel (nested pod-in-guest). Core keeps NO residual cleanup for the vm substrate: the F12 `vmAttachResolver` (`charly/vm_lifecycle_preresolve.go`) was DELETED at K-wave 2 cone CONTESTED — its body was `strings.Join(cmd, " ")`, derivable from the raw wire cmd candy/plugin-fleet threads for OpAttach; `plugin-deploy-vm/candy/plugin-deploy-vm/lifecycle.go`'s `vmAttach` derives it from `lifecycleParams.Cmd` and `charly/unified_targets.go`'s Attach threads the raw cmd for hookless lifecycle substrates. The vm `lifecyclePostTeardownHook` moved plugin-side too (`plugin-deploy-vm/candy/plugin-deploy-vm/lifecycle.go`'s `vmPostTeardown`, F6 vm-lifecycle move). The lifecycle Ops are reached through `pluginDeployTarget` → `candy/plugin-fleet`'s `Invoke(OpDeployDispatch)` → the plugin's own `sdk.Executor.InvokeProvider` call into the vm substrate provider (S3b, replacing the former dedicated `grpcSubstrateLifecycle` proxy + `substrateLifecycle` interface, both DELETED) — and persists the returned `VmDeployState`. Both pod and vm own a real venue lifecycle, each externalized to its plugin.
 
                   `charly fleet add vm:<name>` dispatches through `fleet_add_cmd.go::dispatchNode` → `ResolveTarget` → `pluginDeployTarget` (no per-kind dispatch function); `fleet_add_cmd_vm.go` carries the host-side VM-only helpers that REMAIN (`vmNameFromDeployName`, `sshReverseRunner`, `resolveVmSshUser` / `resolveVmSshPort`, `saveVmDeployState`, `removeVmDeployEntry`). Full architecture + preflight flow lives in `/charly-internals:vm-deploy-target`.
 
@@ -5890,8 +5896,8 @@ go-skill:
                   |---|---|
                   | `spec/spec/cue_types_gen.go` (generated) | `VmSpec` (= `Vm`) + `VmSource` discriminated union (cloud_image / bootc) + `VmChecksum` + `VmNetwork` + `VmSsh` + `VmKeyInjection` |
                   | `spec/spec/cue_types_gen.go` (generated) | `VmCloudInit` + `VmCloudInitUser/File/Network/Mirrors` + `VmCharlyInstall` (auto/scp/skip state machine) |
-                  | `sdk/vmshared/libvirt_yaml.go` | stub — the per-device structs moved to `#LibvirtDomain` in `spec/schema/vm.cue` (generated `LibvirtDomain` into `spec/spec/cue_types_gen.go`); the opencharly YAML-facing shape of the `libvirt:` stanza is now CUE, its renderers `candy/plugin-vm/libvirt_yaml_bridge.go` |
-                  | `candy/plugin-vm/libvirt_yaml_bridge.go` | `RenderDomainXML`/`BuildLibvirtDomainXML` pure functions (build a `libvirtxml.Domain` tree, marshal to XML) + `buildDomainDevices` device emission (passt backend, portForward attribute order, virtio-gpu default, SMBIOS credentials, `XMLPassthrough` merge) |
+                  | `sdk/vmshared/libvirt_yaml.go` | stub — the per-device structs moved to `#LibvirtDomain` in `spec/schema/vm.cue` (generated `LibvirtDomain` into `spec/spec/cue_types_gen.go`); the opencharly YAML-facing shape of the `libvirt:` stanza is now CUE, its renderers `plugin-vm/candy/plugin-vm/libvirt_yaml_bridge.go` |
+                  | `plugin-vm/candy/plugin-vm/libvirt_yaml_bridge.go` | `RenderDomainXML`/`BuildLibvirtDomainXML` pure functions (build a `libvirtxml.Domain` tree, marshal to XML) + `buildDomainDevices` device emission (passt backend, portForward attribute order, virtio-gpu default, SMBIOS credentials, `XMLPassthrough` merge) |
                   | `sdk/vmshared/qemu_render.go` | `RenderQemuArgv` for direct-QEMU backend |
                   | `sdk/vmshared/cloud_init_render.go` + `cloud_init_iso.go` | `RenderCloudInit` + `ResolveKeyInjectionChannels` + `composeUsers` (adopt-merge) + `WriteSeedISO` via xorriso/genisoimage/mkisofs |
                   | `candy/plugin-vm/vm_cloud_image.go` + `sdk/kit/http_fetch.go` | `BuildCloudImage` pipeline: fetch URL (`FetchQcow2`, in sdk/kit) + sha256 sidecar + resize + seed ISO render (the former `charly/vm_cloud_image.go` is DELETED, K-wave 2) |
@@ -5900,10 +5906,10 @@ go-skill:
                   | `spec/schema/vm.cue` + `cue_kind_vm.go` | `#Vm` — the closed CUE schema validating VmSpec + the `#LibvirtDomain`/`#VmCloudInit` subtrees (the Go VM/libvirt validators were deleted; CUE owns it via the per-kind registry) |
                   | `spec/exec/deploy_executor*.go` | `DeployExecutor` interface + `ShellExecutor` + `SSHExecutor` with `WaitForSSH` + `WaitForCloudInit` |
                   | `charly/unified_targets.go` + `charly/deploy_target_dispatch.go` | S3b: `pluginDeployTarget` — the thin, data-only adapter EVERY external substrate (local/vm/pod/kubernetes/android) routes through, dispatching via `dispatchDeployTarget` to `candy/plugin-fleet`'s `Invoke(OpDeployDispatch)`; the ONE surviving core arbiter primitive is the op="remove" release chain folded into `charly/host_build_pod_lifecycle_dispatch.go` from the deleted preempt.go (K-wave 2 cone CONTESTED — the deploy-dispatch Start/Stop bracket went peer-dispatch at R2 bank E, `host_build_arbiter_bracket.go` DELETED). Replaces the DELETED `charly/deploy_target_external.go` (`externalDeployTarget`), `charly/substrate_lifecycle_grpc.go` (`grpcSubstrateLifecycle`), `charly/deploy_preresolve.go` (`wireDeployPreresolver`), and `charly/deploy_substrate_lifecycle.go` (the `substrateLifecycle` interface) |
-                  | `candy/plugin-fleet/deploy_target.go` | S3b: the ORCHESTRATION bulk ported from the deleted core files above, behind `runDeployDispatch` (`sdk.OpDeployDispatch`, discriminated by an `Op` field: add/update/del/start/stop/status/logs/shell/attach/rebuild); reaches the ACTUAL substrate provider via its own `sdk.Executor.InvokeProvider` (S1) |
-                  | `charly/vm_lifecycle_preresolve.go` — DELETED (K-wave 2 cone CONTESTED). | FINAL/K5 unit 6a + CONTESTED: the vm `lifecyclePrepareHook` DATA-seam is GONE — the plugin resolves its own `spec.LifecyclePrepareInput` by self-loading the project directly now (`sdk/loaderkit.ResolveVmEntityViaExecutor`, K-wave W3a A3-phase-2 — the "deploy-entity-resolve" HostBuild seam it used in between is also gone). The last survivor, the F12 `vmAttachResolver`, was DELETED at K-wave 2 cone CONTESTED (the plugin derives the attach script from the raw wire cmd — `vmAttach` over `lifecycleParams.Cmd`; `charly/unified_targets.go`'s Attach threads it for hookless lifecycle substrates). The vm `lifecyclePostTeardownHook` moved plugin-side too (`candy/plugin-deploy-vm/lifecycle.go`'s `vmPostTeardown`); the vm venue lifecycle itself lives in `candy/plugin-deploy-vm/lifecycle.go` |
+                  | `plugin-fleet/candy/plugin-fleet/deploy_target.go` | S3b: the ORCHESTRATION bulk ported from the deleted core files above, behind `runDeployDispatch` (`sdk.OpDeployDispatch`, discriminated by an `Op` field: add/update/del/start/stop/status/logs/shell/attach/rebuild); reaches the ACTUAL substrate provider via its own `sdk.Executor.InvokeProvider` (S1) |
+                  | `charly/vm_lifecycle_preresolve.go` — DELETED (K-wave 2 cone CONTESTED). | FINAL/K5 unit 6a + CONTESTED: the vm `lifecyclePrepareHook` DATA-seam is GONE — the plugin resolves its own `spec.LifecyclePrepareInput` by self-loading the project directly now (`sdk/loaderkit.ResolveVmEntityViaExecutor`, K-wave W3a A3-phase-2 — the "deploy-entity-resolve" HostBuild seam it used in between is also gone). The last survivor, the F12 `vmAttachResolver`, was DELETED at K-wave 2 cone CONTESTED (the plugin derives the attach script from the raw wire cmd — `vmAttach` over `lifecycleParams.Cmd`; `charly/unified_targets.go`'s Attach threads it for hookless lifecycle substrates). The vm `lifecyclePostTeardownHook` moved plugin-side too (`plugin-deploy-vm/candy/plugin-deploy-vm/lifecycle.go`'s `vmPostTeardown`); the vm venue lifecycle itself lives in `plugin-deploy-vm/candy/plugin-deploy-vm/lifecycle.go` |
                   | `candy/plugin-deploy-vm/` | the out-of-process `deploy:vm` plugin — the plan WALK (`kit.WalkPlans` over the guest `SSHExecutor`) + the venue lifecycle (`lifecycle.go`, over `kit` + `HostBuild("cli")` + the served guest executor) |
-                  | `sdk/deploykit/vm_deploy_state.go` + `candy/plugin-vm/vm_util_copies.go` | VM-only deploy helpers (the former `charly/fleet_add_cmd_vm.go` is DELETED, K-wave 2): `vmshared.VmNameFromDeployName` (`spec/spec/vm_domain.go`), `resolveVmSshUser` / `resolveVmSshPort` (`candy/plugin-vm/vm_util_copies.go`), `deploykit.SaveVmDeployState` / `deploykit.RemoveVmDeployEntry` (`sdk/deploykit/vm_deploy_state.go`); `charly fleet add vm:<name>` itself dispatches through `dispatchNode` → `ResolveTarget` → `pluginDeployTarget` |
+                  | `sdk/deploykit/vm_deploy_state.go` + `plugin-vm/candy/plugin-vm/vm_util_copies.go` | VM-only deploy helpers (the former `charly/fleet_add_cmd_vm.go` is DELETED, K-wave 2): `vmshared.VmNameFromDeployName` (`spec/spec/vm_domain.go`), `resolveVmSshUser` / `resolveVmSshPort` (`plugin-vm/candy/plugin-vm/vm_util_copies.go`), `deploykit.SaveVmDeployState` / `deploykit.RemoveVmDeployEntry` (`sdk/deploykit/vm_deploy_state.go`); `charly fleet add vm:<name>` itself dispatches through `dispatchNode` → `ResolveTarget` → `pluginDeployTarget` |
                   | `candy/plugin-vm/vm_create_spec.go` + `candy/plugin-vm/vm_build_resolve.go` | `charly vm create` CLI wiring (in the `command:vm` plugin) + the VM-disk build ENGINE (plugin-side — the former `charly/vm_build.go` HostBuild("vm-build") host-builder is DELETED; the resolve moved into the plugin) reading `kind: vm` entities |
                   | `sdk/vmshared/libvirt_helpers.go` + `libvirt_yaml_listen.go` | helpers shared by the libvirt YAML bridge + `qemu_render` argv emitter (`VmRuntimeParams`); structured `<listen>` support for `LibvirtGraphics` |
 
@@ -6430,11 +6436,11 @@ install-plan-skill:
             | `charly/deploy_target_pod.go` | DELETED (P11c). The former in-core pod overlay target — the overlay Containerfile synthesis + `tagDeployAlias` + the render helpers — MOVED to `candy/plugin-deploy-pod/overlay.go` (the candy renders the overlay in its own code via `deploykit.OCITarget` + `deploykit.NewRenderGeneratorFromProject`). The two pure helpers core still needs (`collectOverlayCandies`, `readImageRegistry`) moved into `charly/build_overlay.go`. The pod config-WRITE path (quadlet) is a SEPARATE batch (#86, excluded from P11c) |
             | `charly/build_overlay.go` | The host-side pod-overlay build PREP+RESOLVE M-seam (P11c — the overlay-BUILD dissolution). `hostBuildOverlay` is the F10 `overlay` host-builder: it reconstructs the core `*Generator` (with the deploy's `add_candy` refs as `ExtraCandyRefs`), resolves the base image ref + distro + init + base-image metadata (`ExtractMetadata`), stages remote candy copies (host-fs `createRemoteCandyCopies`), projects an overlay-scoped `*spec.ResolvedProject`, serializes the live plans, caches the `buildEngineContext` for the `"oci-emit-step"` step-emitter, and returns the `OverlayBuildReply` envelope. The candy (`candy/plugin-deploy-pod` `podPrepareVenue`) consumes the envelope, constructs a `deploykit.Generator` via the shared `deploykit.NewRenderGeneratorFromProject`, renders the overlay Containerfile in its own code, and runs `podman build` + the alias tag via the served executor. The per-step fragments render via the generic `"step-emit"` host-builder (`HostBuild("step-emit","oci-emit-step")` → `dispatchOCIStep`, a thin forwarder to `candy/plugin-installstep`'s `"oci-dispatch"` word — K5-A item 2). The LIVE plans + nested-venue `ParentExec`/`ParentNode` ride the ctx (`overlayBuildInputs`), never serialized |
             | `sdk/deploykit/deploy_chain.go` | `rootExecutorForDeployNode` — picks the root `DeployExecutor` for an external `local:` deploy node (`ShellExecutor` for `host:local`/absent, `SSHExecutor` for `host:<user@machine>`); the `deploy:local` substrate itself is served out-of-process by `candy/plugin-deploy-local`, which walks the plan via `sdk/kit.WalkPlans` (moved from `charly/deploy_chain.go`) |
-            | `charly/vm_lifecycle_preresolve.go` — DELETED (K-wave 2 cone CONTESTED). | FINAL/K5 unit 6a, M4b + K-wave 2 cone CONTESTED: the vm `lifecyclePrepareHook` DATA-seam is GONE (hard cutover) — `candy/plugin-deploy-vm` resolves its OWN `spec.LifecyclePrepareInput` end-to-end by self-loading the project directly (K-wave W3a A3-phase-2: `sdk/loaderkit.ResolveVmEntityViaExecutor`, `vmPrepareVenue` — the reference every future `Lifecycle:true` substrate's own prepare body follows; no HostBuild seam remains for this leg). The last survivor, the F12 `vmAttachResolver`, was then DELETED too (K-wave 2 cone CONTESTED): its body was `strings.Join(cmd, " ")`, derivable from the raw cmd candy/plugin-fleet threads for OpAttach — `candy/plugin-deploy-vm/lifecycle.go`'s `vmAttach` now derives the script from `lifecycleParams.Cmd`, and `charly/unified_targets.go`'s Attach threads the raw cmd for a hookless lifecycle substrate (the lifecycleAttachPlanHooks map keeps only "pod"). The vm `lifecyclePostTeardownHook`/`vmLifecyclePostTeardown` had already moved plugin-side (`candy/plugin-deploy-vm/lifecycle.go`'s `vmPostTeardown`, F6 vm-lifecycle move; the residual ephemeral-lifecycle host cleanup — systemd transient timers + libvirt snapshot refcounts — runs there, reached via `OpEphemeralTeardown`). The vm venue lifecycle ITSELF (boot the domain, build the guest `SSHExecutor`, nested pod-in-guest, teardown, `charly vm` Start/Stop/…/Rebuild) is IMPLEMENTED IN THE PLUGIN `candy/plugin-deploy-vm/lifecycle.go` over `kit` + `HostBuild("cli")` + the served guest executor; the plan WALK likewise runs there via `kit.WalkPlans` over the guest executor (so the same walk runs inside the guest) |
+            | `charly/vm_lifecycle_preresolve.go` — DELETED (K-wave 2 cone CONTESTED). | FINAL/K5 unit 6a, M4b + K-wave 2 cone CONTESTED: the vm `lifecyclePrepareHook` DATA-seam is GONE (hard cutover) — `candy/plugin-deploy-vm` resolves its OWN `spec.LifecyclePrepareInput` end-to-end by self-loading the project directly (K-wave W3a A3-phase-2: `sdk/loaderkit.ResolveVmEntityViaExecutor`, `vmPrepareVenue` — the reference every future `Lifecycle:true` substrate's own prepare body follows; no HostBuild seam remains for this leg). The last survivor, the F12 `vmAttachResolver`, was then DELETED too (K-wave 2 cone CONTESTED): its body was `strings.Join(cmd, " ")`, derivable from the raw cmd candy/plugin-fleet threads for OpAttach — `plugin-deploy-vm/candy/plugin-deploy-vm/lifecycle.go`'s `vmAttach` now derives the script from `lifecycleParams.Cmd`, and `charly/unified_targets.go`'s Attach threads the raw cmd for a hookless lifecycle substrate (the lifecycleAttachPlanHooks map keeps only "pod"). The vm `lifecyclePostTeardownHook`/`vmLifecyclePostTeardown` had already moved plugin-side (`plugin-deploy-vm/candy/plugin-deploy-vm/lifecycle.go`'s `vmPostTeardown`, F6 vm-lifecycle move; the residual ephemeral-lifecycle host cleanup — systemd transient timers + libvirt snapshot refcounts — runs there, reached via `OpEphemeralTeardown`). The vm venue lifecycle ITSELF (boot the domain, build the guest `SSHExecutor`, nested pod-in-guest, teardown, `charly vm` Start/Stop/…/Rebuild) is IMPLEMENTED IN THE PLUGIN `plugin-deploy-vm/candy/plugin-deploy-vm/lifecycle.go` over `kit` + `HostBuild("cli")` + the served guest executor; the plan WALK likewise runs there via `kit.WalkPlans` over the guest executor (so the same walk runs inside the guest) |
             | `charly/unified_targets.go` | S3b (Unit-6 core-minimization): `pluginDeployTarget` — the THIN, DATA-ONLY `UnifiedDeployTarget`/`LifecycleTarget` proxy that replaced `externalDeployTarget`/`grpcSubstrateLifecycle`. It holds ONLY plain data (name/word/hasLifecycle/hasPreresolve/node) + a live venue executor — never a core-private `*grpcProvider` (constructed only at plugin-CONNECT time, a clause-M mechanism that cannot move into a plugin). ALL FIVE substrates (local/vm/pod/kubernetes/android) resolve to it via `ResolveTarget`; every method (`Add`/`Update`/`Del`/`Start`/`Stop`/`Status`/`Logs`/`Shell`/`Attach`/`Rebuild` — `Test` DELETED, #55 W3 B3 remainder: zero real callers anywhere in the tree) marshals a `spec.DeployTargetDispatchRequest{Op: "add"\|"update"\|…}` and calls its own `dispatch()`, which threads a live executor and calls `dispatchDeployTarget` (below). One thing stays core-resident BY DESIGN, wrapping the dispatch rather than living inside it: the pod Start/Stop/Attach/Logs plan-hook table read (`pod_lifecycle_dispatch.go`, unmoved — a pure ctx-opts marshal with no core-only dependency). The arbiter acquire/release ENV bracket is FULLY PLUGIN-SIDE (candy/plugin-fleet's `handleLifecycleSimple` Invokes verb:arbiter directly; the "arbiter-bracket-*" HostBuild seam is DELETED, K-wave 2 cone R2 bank E). The ONE remaining core arbiter primitive is the op="remove" release chain folded into `host_build_pod_lifecycle_dispatch.go` (K-wave 2 cone CONTESTED — `envPreemptLeaseHeld`/`arbiterProxy`/`arbiterInvoke`/`ReleaseClaimant`/`releaseResourceClaim`, relocated from the deleted preempt.go): `CHARLY_PREEMPT_LEASE` is host-process env state that only behaves correctly in the SAME OS process as the host, and candy/plugin-pod ships out-of-process — so the pod-remove release bracket stays host-side |
             | `charly/deploy_target_dispatch.go` | `dispatchDeployTarget` — the core-side half of the S3b move: threads a live executor onto the ctx via the SAME "compiled-in in-proc reverse channel" pattern `arbiterInvoke` uses (the former `dispatchEphemeralOp` is DELETED — only a comment survives; no broker needed — `command:fleet` is COMPILED-IN), then `Invoke`s `command:fleet`'s `sdk.OpDeployDispatch` with the marshalled `spec.DeployTargetDispatchRequest`. Core never touches the substrate's `*grpcProvider` directly once this call returns |
-            | `charly/host_build_arbiter_bracket.go` — DELETED (K-wave 2 cone R2 bank E). | The Q1 resource-arbiter bracket is FULLY PLUGIN-SIDE: `candy/plugin-fleet/deploy_target.go`'s `handleLifecycleSimple` wires the acquire/release as `InvokeProvider("verb","arbiter",OpRun)` calls (`arbiterBracketAcquire`/`arbiterBracketRelease`) into the pure, directly-testable `runLifecycleBracket` (brackets only when `HasPlan` + non-nil `Node` + Start or Stop). The `CHARLY_PREEMPT_LEASE` outer-orchestrator GUARD lives in `candy/plugin-preempt`'s `invokeArbiter` (the arbiter is the ONE dispatch every acquire/release passes through; plugin-fleet + plugin-preempt are both compiled-in, sharing charly's process — a nested `charly` subprocess still inherits the lease and skips re-acquiring). The former "placement-agnostic plugin cannot own [the lease env]" framing was stale. |
-            | `candy/plugin-fleet/deploy_target.go` | S3b: the ORCHESTRATION bulk of the former `externalDeployTarget` (`deploy_target_external.go`, DELETED) + `grpcSubstrateLifecycle` (`substrate_lifecycle_grpc.go`, DELETED), ported here behind the ONE generic `sdk.OpDeployDispatch` selector (`runDeployDispatch`, discriminated by the request's `Op` field: `add`/`update`/`del`/`start`/`stop`/`status`/`logs`/`shell`/`attach`/`rebuild`). What moved: `PrepareVenue`, the plan/venue marshal + `InvokeProvider` dispatch to the ACTUAL substrate provider (candy/plugin-deploy-pod/-vm/-local, candy/plugin-kube, candy/plugin-adb — S1), `recordDeploy`, `recordVenueLedger`, `prepareReverseState`, Del's ledger-read+teardown+PostTeardown, `ArtifactKey`, `PostApply`, and the ready-to-dispatch Start/Stop/Status/Logs/Shell/Attach/Rebuild bodies. What did NOT move (per Unit-6 design Q1–Q4): the arbiter bracket (above) and the pod/vm plan-hook tables — genuinely core-resident, process-env-gated or zero-dependency respectively. Secret injection/artifact retrieval (`injectCandySecrets`/`retrieveArtifactsAndDispatchRegisters`, `secrets_artifacts.go`) and `--verify` (`verifyLocalDeployScope`/`localDeployScopePlan`, `verify_local.go`, #55 W3 B3) run HERE too, inside `handleDeployApply` itself, not core siblings wrapping the dispatch call — `pluginDeployTarget.Add` (`charly/unified_targets.go`) only dispatches and returns now |
+            | `charly/host_build_arbiter_bracket.go` — DELETED (K-wave 2 cone R2 bank E). | The Q1 resource-arbiter bracket is FULLY PLUGIN-SIDE: `plugin-fleet/candy/plugin-fleet/deploy_target.go`'s `handleLifecycleSimple` wires the acquire/release as `InvokeProvider("verb","arbiter",OpRun)` calls (`arbiterBracketAcquire`/`arbiterBracketRelease`) into the pure, directly-testable `runLifecycleBracket` (brackets only when `HasPlan` + non-nil `Node` + Start or Stop). The `CHARLY_PREEMPT_LEASE` outer-orchestrator GUARD lives in `candy/plugin-preempt`'s `invokeArbiter` (the arbiter is the ONE dispatch every acquire/release passes through; plugin-fleet + plugin-preempt are both compiled-in, sharing charly's process — a nested `charly` subprocess still inherits the lease and skips re-acquiring). The former "placement-agnostic plugin cannot own [the lease env]" framing was stale. |
+            | `plugin-fleet/candy/plugin-fleet/deploy_target.go` | S3b: the ORCHESTRATION bulk of the former `externalDeployTarget` (`deploy_target_external.go`, DELETED) + `grpcSubstrateLifecycle` (`substrate_lifecycle_grpc.go`, DELETED), ported here behind the ONE generic `sdk.OpDeployDispatch` selector (`runDeployDispatch`, discriminated by the request's `Op` field: `add`/`update`/`del`/`start`/`stop`/`status`/`logs`/`shell`/`attach`/`rebuild`). What moved: `PrepareVenue`, the plan/venue marshal + `InvokeProvider` dispatch to the ACTUAL substrate provider (candy/plugin-deploy-pod/-vm/-local, candy/plugin-kube, candy/plugin-adb — S1), `recordDeploy`, `recordVenueLedger`, `prepareReverseState`, Del's ledger-read+teardown+PostTeardown, `ArtifactKey`, `PostApply`, and the ready-to-dispatch Start/Stop/Status/Logs/Shell/Attach/Rebuild bodies. What did NOT move (per Unit-6 design Q1–Q4): the arbiter bracket (above) and the pod/vm plan-hook tables — genuinely core-resident, process-env-gated or zero-dependency respectively. Secret injection/artifact retrieval (`injectCandySecrets`/`retrieveArtifactsAndDispatchRegisters`, `secrets_artifacts.go`) and `--verify` (`verifyLocalDeployScope`/`localDeployScopePlan`, `verify_local.go`, #55 W3 B3) run HERE too, inside `handleDeployApply` itself, not core siblings wrapping the dispatch call — `pluginDeployTarget.Add` (`charly/unified_targets.go`) only dispatches and returns now |
             | `charly/plugin_dispatch_reverse.go` | The F10 reverse legs on `ExecutorService` (host-served on the SAME broker `InvokeWithExecutor` stands up). `InvokeProvider` — PLUGIN↔PLUGIN: the host resolves another provider by (class, word) + Invokes it on the calling plugin's behalf, threading the SAME venue executor into an OUT-OF-PROCESS target via `InvokeWithExecutor` (a fresh nested broker — the generalization of the RunHostStep `ExternalPlugin` arm from OpExecute-only to ANY class/op) or a direct `Invoke` for an in-proc target. `HostBuild` — the calling plugin requests a HOST-side build (the build engine is in core TODAY — K3 build-engine migration inventory, not permanent core; the box-build podman DRIVE moved into candy/plugin-build in P8b, and the Containerfile RENDER DRIVE moved to sdk/deploykit (#67, driven by plugin-build over the envelope + the render-seam reverse legs; the host render-leg is DELETED)): the host runs the registered `hostBuilder` for `kind` (`registerHostBuilder`/`hostBuilderFor` — registered kinds today; the count drifts per cone, so the authoritative list is `git grep 'registerHostBuilder(' charly/*.go` resolving the `*BuilderKind` constants). The build/render-relevant: the `buildengine-*` kinds → `hostBuildPrep`/`hostBuildScanLocal`/`hostBuildScanRemote`/`hostBuildCollectRemoteRefs`/`hostBuildEnsureRepo`/`hostBuildConnectPlugins`/`hostBuildNamespaced`/`hostBuildContextIgnoreBaseline` (host_build_buildengine.go — REPLACES the former fat `build-prep` seam `hostBuildBuildResolve`/build_resolve_host.go, DELETED — the box-build loader + prep + resolved-project envelope seam the candy drive calls, now split into the buildengine verbs) + `render-seam` → `hostBuildRenderSeam` (host_build_render_seam.go — the #67 render's host-coupled seams: RenderService, builder resolves, ValidateEgress, EmitPluginOp, localpkg) + `overlay` → `hostBuildOverlay` (build_overlay.go — the prep+resolve M-seam, P11c) + `step-emit` → `hostBuildStepEmit` (step_emit_hostbuild.go) + `plugin-binary` → `buildPluginBinary` (F10). `bake_plugin:` binary baking is INLINE via `deploykit.EmitBakedPlugins` (the former `bake-plugins`/`hostBuildBakePlugins` host-builder + host_build_bake_plugins.go are DELETED — no HostBuild round-trip). The remaining kinds span the `loader-*` (bootstrap/walk/threaded/materialize), `pod-*` (start/stop/shell/cmd/logs/update/service/remove lifecycle verbs), `pod-config-*` (setup/remove/detect-devices/list-sidecars — the ensure-image and ssh-key legs DIED, K-wave W3a B6: candy/plugin-deploy-pod drives podman/build:ensure and reads the host SSH-key FS itself now), `resolve-target-add`/`deploy-node-del-dispatch`/`deploy-plugins-connect` (`deploy-entity-resolve` DIED too, K-wave W3a A3-phase-2 — every kind:<word> caller self-loads the project plugin-side via sdk/loaderkit now; `deploy-members-up`/`-down` DIED at K-wave W3a A4 — candy/plugin-fleet calls sdk/deploykit.BringUpMembers/TearDownMembers directly; `deploy-from-box` DIED at K-wave 2 cone R2 — candy/plugin-fleet's from_box_pod.go reaches deploy:pod's OpConfigSetup by direct InvokeProvider; `deploy-del-resolve` DIED at K-wave 2 cone R2 bank C — the del resolution moved to candy/plugin-fleet's del_resolve.go; `config-resolve` DIED at K-wave 2 cone R2 bank D — the three consumers self-serve via loaderkit: candy/plugin-vm's hostConfigResolve, plugin-deploy-vm's resolvePriorVmState, plugin-kube's hostConfigResolveVmState; config-persist is DELETED — persist moved plugin-side to candy/plugin-vm/vm_host_persist.go), `check-run`/`check-load-plugins`, `check-bed-gpu-prereq` (the ONE narrow seam surviving `check-bed`'s full dissolution, K-wave W3 B2-full — GPU host-DETECTION is the project's operator-dropped exception; every other former check-bed responsibility — flock/lease/repo-override/deploy-config env — moved into candy/plugin-check/bed_session.go, no HostBuild round-trip; `arbiter-bracket-acquire`/`-release` DIED at K-wave 2 cone R2 bank E — the bracket is plugin-side InvokeProvider(verb:arbiter); `retention-defaults` DIED at K-wave 2 cone R6 — the defaults resolve plugin-side via loaderkit.ResolveRetentionDefaultsViaExecutor; `feature` DIED at K-wave 2 cone R6 — the enumeration loads the project plugin-side via loaderkit), `remote-image-resolve`, `box-fetch-resolve`, `validate-project-checks`, `render-service`, `construct-step`, `hostprobe`, and `cli` families (host_build_*.go). SDK clients: `sdk.Executor.InvokeProvider` / `.HostBuild`. (M13 k8s-gen + M16 egress did NOT use HostBuild — they are compiled-in candies fronted by a host shim, the lighter pattern when the subsystem has no venue-coupled build.) The dispatch + host-build MACHINERY M14/M17 consume; example `candy/plugin-example-dispatch` |
             | `charly/plugin_executor_reverse.go` + `candy/plugin-installstep/oci_dispatch.go` | `StepKindExternalPlugin` (a plugin-verb `run:` step — authored as `<word>: <input>` sugar, desugared to the internal `plugin`/`plugin_input` op — served by an OUT-OF-PROCESS plugin); the former `charly/plugin_step_external.go` `externalPluginStepProvider` is DELETED (K-wave 2), its in-proc EmitOCI now `candy/plugin-installstep/oci_dispatch.go`'s `dispatchExternalPluginVerb` (`Invoke(OpEmit)` — the image-build / pod-overlay Containerfile fragment). At DEPLOY time the step is executed via the shared `invokeExternalStep` dispatch (`charly/plugin_executor_reverse.go`, S4) — `Invoke(OpExecute)` WITH the host's executor over the reverse channel, recording the reply's dynamic `ReverseOp`s to the `CandyRecord`; the external local/vm deploy walks reach it as a host-engine step over `RunHostStep`. The `executorInvoker` capability is the discriminator |
             | `charly/step_emit_hostbuild.go` | F-STEP-EMIT: the generic `step-emit` HostBuild builder — `registerHostBuilder("step-emit", hostBuildStepEmit)` dispatches by step WORD to the `stepEmitters` per-word registry (`registerStepEmitter`), returning a `spec.EmitReply`. After K5-Unit-6b the FOUR HOST-COUPLED per-word emitters (`stepEmitSystemPackages` / `stepEmitBuilder` / `stepEmitLocalPkgInstall` / `stepEmitOp`, the former C1.2–C1.5 host renderers) are GONE — the host-coupled kinds no longer call back a host `step-emit` renderer at all; `candy/plugin-installstep`'s `"oci-dispatch"` word fetches the `"resolved-project"` envelope once per project dir and renders them DIRECTLY against its own `deploykit.Generator` (built via `deploykit.NewRenderGeneratorFromProject`). What REMAINS on this seam is the `oci-emit-step` dispatch forwarder (`stepEmitOCIEmitStep`, the pod-overlay step-emitter): the candy's `deploykit.OCITarget.EmitStepOp` reaches it over `HostBuild("step-emit","oci-emit-step")`, and it forwards the step/plan WIRE views + the caller's `Distros`/`buildEngineContext` to `candy/plugin-installstep`'s `"oci-dispatch"` word — a thin forwarder, NOT a render (the render lives plugin-side). The `spec.StepEmitRequest` envelope (`{Word,Payload,Distros}`) carries the dispatch payload. |
@@ -6442,7 +6448,7 @@ install-plan-skill:
             | `charly/plugin_prescan.go` | The byte-gated, additive parse pre-scan that recognizes an EXTERNAL deploy SUBSTRATE word at config-parse time, before the provider connects |
             | `candy/plugin-kube/preresolve.go` | F6/FINAL-K5-unit-6a: the PLUGIN-side `deploy:kubernetes` preresolver (relocated from the now-DELETED `charly/k8s_deploy_preresolve.go`) — serves `Invoke(OpPreresolve)`, resolves the image Capabilities + the kind:kubernetes cluster template by self-loading the project PLUGIN-SIDE (K-wave W3a A3-phase-2: `sdk/loaderkit.ResolveKubernetesEntityViaExecutor` — no HostBuild round trip remains for this lookup), generates the egress-validated Kustomize tree ENTIRELY plugin-side too (`materialize.go`'s `materializeKustomize`, InvokeProviding the compiled-in `verb:k8sgen`/`OpEmit` + `verb:egress`/`OpValidate` peer-to-peer — the former `host_build_k8s_generate.go` "k8s-generate-kustomize" HostBuild seam + `charly/k8s_generate.go`'s `GenerateK8sKustomize` it used to wrap are BOTH DELETED, K5-A item 6), and returns a `spec.KubernetesDeployVenue` carrying the overlay path |
             | `spec/exec/deploy_executor*.go` | `DeployExecutor` interface + `ShellExecutor` + `SSHExecutor` — shell + file-copy abstraction (the core `SSHExecutor.WaitFor*` are thin delegates to `sdk/kit`'s `WaitForSSH` / `WaitForCloudInit` / `WaitForPackageLock`). The external `vm` deploy's `OpPrepareVenue` builds the guest `SSHExecutor` the reverse channel serves; a `local: {host: user@machine}` remote also uses `SSHExecutor` |
-            | `spec/exec/venue_descriptor.go` | FIX ROUND (S3b follow-up, R10 bed-found): `VenueFromDescriptor(spec.VenueDescriptor) (spec.DeployExecutor, error)` re-materializes a wire descriptor into a live `ShellExecutor`/`*SSHExecutor` (moved here from the deleted `charly/substrate_lifecycle_grpc.go`'s `venueFromDescriptor` — zero core-only dependency, pure `sdk/kit`+`spec/spec`); its pure INVERSE `DescriptorFromExecutor(spec.DeployExecutor) spec.VenueDescriptor` flattens a live executor back into the wire shape (`""`/`"shell"`/`"ssh"` only — any other concrete type, e.g. a composed `*NestedExecutor`, returns the zero descriptor). Promoted here because it now has TWO callers needing the byte-identical conversion: the host (`charly/unified_targets.go`'s `pluginDeployTarget.applyParentExecOverride`, converting a nested child's live `ParentExec` into `venue_json` before it crosses the wire) and the plugin (`candy/plugin-fleet/deploy_target.go`'s `venueDescriptorFromExecutor`, now a thin forward to this SAME function — R3, one function for both directions) |
+            | `spec/exec/venue_descriptor.go` | FIX ROUND (S3b follow-up, R10 bed-found): `VenueFromDescriptor(spec.VenueDescriptor) (spec.DeployExecutor, error)` re-materializes a wire descriptor into a live `ShellExecutor`/`*SSHExecutor` (moved here from the deleted `charly/substrate_lifecycle_grpc.go`'s `venueFromDescriptor` — zero core-only dependency, pure `sdk/kit`+`spec/spec`); its pure INVERSE `DescriptorFromExecutor(spec.DeployExecutor) spec.VenueDescriptor` flattens a live executor back into the wire shape (`""`/`"shell"`/`"ssh"` only — any other concrete type, e.g. a composed `*NestedExecutor`, returns the zero descriptor). Promoted here because it now has TWO callers needing the byte-identical conversion: the host (`charly/unified_targets.go`'s `pluginDeployTarget.applyParentExecOverride`, converting a nested child's live `ParentExec` into `venue_json` before it crosses the wire) and the plugin (`plugin-fleet/candy/plugin-fleet/deploy_target.go`'s `venueDescriptorFromExecutor`, now a thin forward to this SAME function — R3, one function for both directions) |
             | `charly/install_plan_test.go` | IR unit tests (scope/venue/gate/reverse derivations) |
             | `sdk/deploykit/plan_compile_test.go` | Compiler integration tests (ripgrep, dev-tools, pixi layer — the former `charly/install_build_test.go` is DELETED, K-wave 2) |
 
@@ -6499,14 +6505,14 @@ install-plan-skill:
                   ### `vm` is EXTERNAL (`deploy:vm`, candy/plugin-deploy-vm) — consumes the IR over the reverse channel, INSIDE the guest
                   There is no in-proc VM deploy target. `vm:` resolves to `pluginDeployTarget` (below), served out-of-process by `candy/plugin-deploy-vm`'s `deploy:vm` provider — the vm-substrate sibling of `candy/plugin-deploy-local`. UNLIKE kubernetes, the vm substrate DOES consume the InstallPlan IR: the plugin walks the plan via the SAME shared `sdk/kit.WalkPlans` the local deploy uses. The difference is purely the executor's TRANSPORT — the executor the reverse channel serves for a vm deploy is the **guest `SSHExecutor`**, so the same walk runs INSIDE the guest (shell bodies exec via `ssh guest 'sudo bash -s'`). Plugin-renderable steps (Op/File/ShellHook + the env.d managed-block finalizer/ShellSnippet/Service*/RepoChange) the plugin executes itself via the reverse legs; host-engine steps (`Builder`/`LocalPkgInstall`/`SystemPackages`/act-`Op`/`ExternalPlugin`) AND the `RebootStep` it drives on the HOST via `RunHostStep` (so builders run on the host's podman + artifacts scp into the guest, and the host reboots the guest).
 
-                  The VM venue lifecycle — boot the domain, build the guest `SSHExecutor` (`kit.WaitForSSH` → `kit.WaitForCloudInit` → `kit.EnsureCharlyInGuest`), return the `VmDeployState` patch, deploy nested `target: pod` children as in-guest quadlets, and teardown — is IMPLEMENTED IN THE PLUGIN `candy/plugin-deploy-vm/lifecycle.go` (`Lifecycle:true`) over `sdk/kit` + `HostBuild("cli")` + the served guest executor. The plugin resolves its OWN `spec.LifecyclePrepareInput` end-to-end by self-loading the project directly (K-wave W3a A3-phase-2: `sdk/loaderkit.ResolveVmEntityViaExecutor` — the former host-side `lifecyclePrepareHook` DATA-seam AND the "deploy-entity-resolve" HostBuild seam it later used are BOTH GONE — FINAL/K5 unit 6a + K-wave W3a A3-phase-2). Core keeps NO residual cleanup for the vm substrate: the last survivor, the F12 `vmAttachResolver` (`charly/vm_lifecycle_preresolve.go`), was DELETED at K-wave 2 cone CONTESTED — the plugin derives the attach script from the raw wire cmd (`vmAttach` over `lifecycleParams.Cmd`), and `charly/unified_targets.go`'s Attach threads it for hookless lifecycle substrates. The vm `lifecyclePostTeardownHook` moved plugin-side too (`candy/plugin-deploy-vm/lifecycle.go`'s `vmPostTeardown`). The lifecycle Ops are reached through `pluginDeployTarget` → `candy/plugin-fleet`'s `Invoke(OpDeployDispatch)` → the plugin's own `sdk.Executor.InvokeProvider` call into the vm substrate provider (S3b — the generic dispatch every substrate now shares, replacing the former dedicated `grpcSubstrateLifecycle` proxy), which also persists the returned `VmDeployState` via `saveDeployState`. The teardown ledger is keyed HOST-SIDE by `computeDeployID(name)` (like every external deploy); the recorded `ReverseOps` replay over the guest `SSHExecutor` (an `sshReverseRunner`), so teardown runs in the guest.
+                  The VM venue lifecycle — boot the domain, build the guest `SSHExecutor` (`kit.WaitForSSH` → `kit.WaitForCloudInit` → `kit.EnsureCharlyInGuest`), return the `VmDeployState` patch, deploy nested `target: pod` children as in-guest quadlets, and teardown — is IMPLEMENTED IN THE PLUGIN `plugin-deploy-vm/candy/plugin-deploy-vm/lifecycle.go` (`Lifecycle:true`) over `sdk/kit` + `HostBuild("cli")` + the served guest executor. The plugin resolves its OWN `spec.LifecyclePrepareInput` end-to-end by self-loading the project directly (K-wave W3a A3-phase-2: `sdk/loaderkit.ResolveVmEntityViaExecutor` — the former host-side `lifecyclePrepareHook` DATA-seam AND the "deploy-entity-resolve" HostBuild seam it later used are BOTH GONE — FINAL/K5 unit 6a + K-wave W3a A3-phase-2). Core keeps NO residual cleanup for the vm substrate: the last survivor, the F12 `vmAttachResolver` (`charly/vm_lifecycle_preresolve.go`), was DELETED at K-wave 2 cone CONTESTED — the plugin derives the attach script from the raw wire cmd (`vmAttach` over `lifecycleParams.Cmd`), and `charly/unified_targets.go`'s Attach threads it for hookless lifecycle substrates. The vm `lifecyclePostTeardownHook` moved plugin-side too (`plugin-deploy-vm/candy/plugin-deploy-vm/lifecycle.go`'s `vmPostTeardown`). The lifecycle Ops are reached through `pluginDeployTarget` → `candy/plugin-fleet`'s `Invoke(OpDeployDispatch)` → the plugin's own `sdk.Executor.InvokeProvider` call into the vm substrate provider (S3b — the generic dispatch every substrate now shares, replacing the former dedicated `grpcSubstrateLifecycle` proxy), which also persists the returned `VmDeployState` via `saveDeployState`. The teardown ledger is keyed HOST-SIDE by `computeDeployID(name)` (like every external deploy); the recorded `ReverseOps` replay over the guest `SSHExecutor` (an `sshReverseRunner`), so teardown runs in the guest.
 
                   Used by: `charly fleet add vm:<name> <ref>` / `charly fleet del vm:<name>`. See `/charly-internals:vm-deploy-target` for the full flow, the plugin-implemented venue lifecycle, `VmDeployState` persistence, and SSH-key idempotency.
 
                   ### kubernetes is EXTERNAL (`deploy:kubernetes`, candy/plugin-kube) — NOT an IR-consuming deploy target
                   There is no in-proc kubernetes deploy target. `target: kubernetes` resolves to `pluginDeployTarget` (below), served out-of-process by candy/plugin-kube's `deploy:kubernetes` provider (F1, beside its `kube:` verb). The Kustomize GENERATION is the COMPILED-IN `candy/plugin-k8sgen` (M13, `verb:k8sgen`/`OpEmit`) — split from the heavy external plugin-kube because the generator has no client-go dep and must resolve in the project-less `from-box` path; the package-main `Capabilities` is NOT crossed (only its 3 scalars Port/UID/GID, alongside `spec.Deploy`/`spec.Kubernetes`, in a `spec.KubernetesGenInput`). `charly/k8s_generate.go` + the former "k8s-generate-kustomize" HostBuild seam it served (`host_build_k8s_generate.go`) are BOTH DELETED (K5-A item 6): the WHOLE generation + validation step now runs ENTIRELY plugin-side, in `candy/plugin-kube/materialize.go`'s `materializeKustomize` — it InvokeProviders `verb:k8sgen`/`OpEmit` for the manifest docs and `verb:egress`/`OpValidate` (`#K8sObject`/`#Kustomization`) to validate each one, both peer-to-peer, no host round trip for either leg. The PLUGIN-side `deploy:kubernetes` preresolver (`candy/plugin-kube/preresolve.go`, F6/FINAL-K5-unit-6a) + `charly fleet from-box` (`candy/plugin-fleet/deploy_from_box.go`) both call `materializeKustomize` directly, which writes the `base/`+`overlays/` tree under `.opencharly/k8s/<name>/` and shipping the overlay path in `DeployVenue.Substrate` (`spec.KubernetesDeployVenue`). The plugin then runs `kubectl --context <ctx> apply -k` (the LIVE cluster I/O it owns) and returns the `kubectl delete -k` + tree-removal teardown op the host records. kubernetes does NOT consume the InstallPlan IR (a kubernetes deploy compiles no primary image plan). Cluster-specific choices come from a `kind: kubernetes` cluster template (the `kubernetes:` entity), resolved by the plugin's own self-load (`sdk/loaderkit.ResolveKubernetesEntityViaExecutor`, K-wave W3a A3-phase-2), not the InstallPlan. See `/charly-kubernetes:kubernetes` + `/charly-internals:plugin`.
 
-                  ### `pluginDeployTarget` (`charly/unified_targets.go`) + `candy/plugin-fleet/deploy_target.go` (S3b)
+                  ### `pluginDeployTarget` (`charly/unified_targets.go`) + `plugin-fleet/candy/plugin-fleet/deploy_target.go` (S3b)
 
                   The `UnifiedDeployTarget`/`LifecycleTarget` adapter for ALL FIVE substrates. Unit-6 S3b moved the
                   orchestration bulk of the former dedicated `externalDeployTarget` (`charly/deploy_target_external.go`,
@@ -6529,7 +6535,7 @@ install-plan-skill:
                     `command:fleet` is COMPILED-IN today), then
                     `Invoke`s `command:fleet`'s `sdk.OpDeployDispatch` with the marshalled request. Core never touches
                     the substrate's `*grpcProvider` directly once this call returns.
-                  - **`runDeployDispatch`** (`candy/plugin-fleet/deploy_target.go`) is the plugin-side handler: it
+                  - **`runDeployDispatch`** (`plugin-fleet/candy/plugin-fleet/deploy_target.go`) is the plugin-side handler: it
                     recovers the threaded executor via `sdk.ExecutorForInvoke`, decodes the `spec.DeployTargetDispatchRequest`,
                     and switches on `req.Op` to `handleDeployApply`/`handleDeployDel`/`handleLifecycleSimple`/
                     `handleDeployStatus`/`handleDeployExec`/`handleDeployRebuild` — each of which marshals the
@@ -6564,7 +6570,7 @@ install-plan-skill:
                   INSIDE the parent's already-prepared venue, never the operator host — mirroring the pre-move
                   `externalDeployTarget.apply`'s `else if opts.ParentExec != nil { t.exec = opts.ParentExec }` swap
                   exactly (the DELETED `charly/deploy_target_external.go:262`). The bug this fix closes: for a
-                  nested child, `resolveRootExecutor` (`candy/plugin-fleet/deploy_target.go`) would silently fall
+                  nested child, `resolveRootExecutor` (`plugin-fleet/candy/plugin-fleet/deploy_target.go`) would silently fall
                   back to `deploykit.RootExecutorForDeployNode(req.Node)` — which, for a child carrying no `host:`
                   field of its own, defaults to the operator's host `ShellExecutor` — so every plain-vm nested
                   child's plan/step walk ran on the OPERATOR'S HOST instead of the guest venue. The fix:
@@ -6578,7 +6584,7 @@ install-plan-skill:
                     interface value cannot itself cross the `[]byte` wire into the plugin's decoded
                     `spec.DeployTargetDispatchRequest`. `pluginDeployTarget.Add` threads the result as the dispatch
                     request's `VenueJSON`.
-                  - `resolveRootExecutor` (`candy/plugin-fleet/deploy_target.go`) now checks `req.VenueJSON` FIRST:
+                  - `resolveRootExecutor` (`plugin-fleet/candy/plugin-fleet/deploy_target.go`) now checks `req.VenueJSON` FIRST:
                     non-empty → decode + `kit.VenueFromDescriptor` re-materializes the IDENTICAL parent venue;
                     empty → the original `deploykit.RootExecutorForDeployNode(req.Node)` fallback (correct for a
                     TOP-LEVEL hookless deploy, which has no ancestor venue to inherit).
@@ -6917,7 +6923,7 @@ install-plan-skill:
                   - **What it is.** The install-timeline IR node for a plugin-verb `run:` step (authored `<word>: <input>`) whose verb is served by an EXTERNAL (out-of-process) plugin — a `grpcProvider`, not a built-in `TypedStepProvider` (package/service) nor a `ProvisionActor` (the state-provision shell verbs) nor the `command` install verb. It is operator-authorized build/deploy-time plugin execution: the candy author opted in by composing the verb-step.
                   - **Routing (`compileActOp`, `install_build.go`).** A `plugin:` verb resolves through `providerRegistry.ResolveVerb`; if its provider is NOT a `TypedStepProvider` but DOES satisfy `executorInvoker` (an `InvokeWithExecutor` method, implemented SOLELY by the out-of-process `grpcProvider`), it routes to `ExternalPluginStep`. Every builtin `ProvisionActor` verb and `command` fall through to the generic `OpStep` path, unchanged. The `executorInvoker` capability is the precise discriminator — it mirrors the build-context `BuildEmitter` marker (`provider_verb.go`), placement-agnostic above the registry.
                   - **EmitOCI — the BUILD venue** (image build / pod-overlay Containerfile): `Invoke(OpEmit)` via the SHARED `invokeOpEmitFragmentOpt` seam (R3 — the SAME path `sdk/deploykit/tasks_render.go`'s `EmitTasks` `case "plugin"` takes for an external verb), splicing the plugin's Containerfile FRAGMENT verbatim. It cannot deploy-execute at build (no live venue); a deploy-only plugin (empty `OpEmit` fragment) fails loudly at `invokeOpEmitFragmentOpt`'s empty-fragment guard, never bakes nothing silently.
-                  - **The DEPLOY venue — the shared `invokeExternalStep` dispatch** (the install runs ON the target, not into an image): there is NO `EmitLocal`/`EmitVM` on `StepProvider` (only `EmitOCI` remains — both deploy venues externalized with `target:local`/`target:vm`). When the external `local:`/`vm:` deploy walk reaches an `ExternalPluginStep` (a host-engine step), the host drives it over `RunHostStep` → `invokeExternalStep` (`charly/plugin_executor_reverse.go`, S4/R3 — the SAME shared dispatch `deploykit.ExternalStep` uses): `Invoke(OpExecute)` over the PLUGIN↔PLUGIN `InvokeProvider` leg (a nested reverse channel delegating to the SAME venue executor), so the plugin runs its deploy-context effect (RunSystem/RunUser) on the real venue it cannot hold across the process boundary, and RETURNS its teardown `ReverseOp`s. The host appends `reply.ReverseOps` to the `CandyRecord` in the HOST-side ledger (keyed by `computeDeployID`, like every external deploy — for a vm deploy too, NOT a guest-side ledger) — record-and-replay: only recorded ops are reversed at `charly fleet del`, reusing the SAME `spec.DeployReply` / `ReverseOp` wire the deploy-substrate dispatch (`candy/plugin-fleet/deploy_target.go`, R3) uses. `plugin_input` rides `op.Params` UNWRAPPED; a `spec.DeployVenue` rides `op.Env`. A `DryRun` short-circuits BEFORE the wire call (Invoke IS the apply).
+                  - **The DEPLOY venue — the shared `invokeExternalStep` dispatch** (the install runs ON the target, not into an image): there is NO `EmitLocal`/`EmitVM` on `StepProvider` (only `EmitOCI` remains — both deploy venues externalized with `target:local`/`target:vm`). When the external `local:`/`vm:` deploy walk reaches an `ExternalPluginStep` (a host-engine step), the host drives it over `RunHostStep` → `invokeExternalStep` (`charly/plugin_executor_reverse.go`, S4/R3 — the SAME shared dispatch `deploykit.ExternalStep` uses): `Invoke(OpExecute)` over the PLUGIN↔PLUGIN `InvokeProvider` leg (a nested reverse channel delegating to the SAME venue executor), so the plugin runs its deploy-context effect (RunSystem/RunUser) on the real venue it cannot hold across the process boundary, and RETURNS its teardown `ReverseOp`s. The host appends `reply.ReverseOps` to the `CandyRecord` in the HOST-side ledger (keyed by `computeDeployID`, like every external deploy — for a vm deploy too, NOT a guest-side ledger) — record-and-replay: only recorded ops are reversed at `charly fleet del`, reusing the SAME `spec.DeployReply` / `ReverseOp` wire the deploy-substrate dispatch (`plugin-fleet/candy/plugin-fleet/deploy_target.go`, R3) uses. `plugin_input` rides `op.Params` UNWRAPPED; a `spec.DeployVenue` rides `op.Env`. A `DryRun` short-circuits BEFORE the wire call (Invoke IS the apply).
                   - **`OpExecute` is the deploy-context counterpart of `OpEmit` (build).** Same verb-step, two legs: bake a Containerfile fragment at build (`OpEmit`), or execute the effect on a live `local:`/`vm:` target at deploy (`OpExecute`) — picked by venue, placement-agnostic.
                   - **No longer self-registers, and there is no provider to register.** `charly/plugin_step_external.go` was deleted with its `externalPluginStepProvider` and that kind's in-proc `EmitOCI` (`charly/plugin_dispatch_reverse.go:63-67`, K5-A item 2), leaving **zero live callers** of `EmitOCI`/`StepProvider` for this kind. The pod-overlay build-emit dispatch relocated into `candy/plugin-installstep`'s `oci-dispatch` word (`dispatchExternalPluginVerb`); the deploy-time side is `charly/plugin_executor_reverse.go`'s `invokeExternalStep`. There is no `registerDedicatedBuiltin` in any module.
 
@@ -6953,7 +6959,7 @@ libvirt-renderer-skill:
             libvirtxml library) and QEMU argv. Covers RenderDomainXML, device emission (passt
             backend, portForward attribute order, virtio-gpu defaults), firmware plumbing, and
             LibvirtDomain schema shape.
-            Source: sdk/vmshared/libvirt_yaml.go, candy/plugin-vm/libvirt_yaml_bridge.go,
+            Source: sdk/vmshared/libvirt_yaml.go, plugin-vm/candy/plugin-vm/libvirt_yaml_bridge.go,
             sdk/vmshared/libvirt_helpers.go, sdk/vmshared/qemu_render.go.
             MUST be invoked before editing libvirt XML emission.
         content: |
@@ -6965,8 +6971,8 @@ libvirt-renderer-skill:
 
             | File | Contents | LOC |
             |---|---|---|
-            | `sdk/vmshared/libvirt_yaml.go` | stub — the per-device structs moved to `#LibvirtDomain` in `spec/schema/vm.cue` (generated into `spec/spec/cue_types_gen.go`); `RenderDomainXML`/`BuildLibvirtDomainXML` moved to `candy/plugin-vm/libvirt_yaml_bridge.go` | ~3 |
-            | `candy/plugin-vm/libvirt_yaml_bridge.go` | `RenderDomainXML`/`BuildLibvirtDomainXML` top-level composition (builds a `libvirtxml.Domain`); `buildDomainDevices` `<devices>` child emitters — channels, graphics, video, rng, memballoon, hostdev, interface (with portForward), filesystem; firmware plumbing (D17); SMBIOS credentials; `XMLPassthrough` merge | ~1800 |
+            | `sdk/vmshared/libvirt_yaml.go` | stub — the per-device structs moved to `#LibvirtDomain` in `spec/schema/vm.cue` (generated into `spec/spec/cue_types_gen.go`); `RenderDomainXML`/`BuildLibvirtDomainXML` moved to `plugin-vm/candy/plugin-vm/libvirt_yaml_bridge.go` | ~3 |
+            | `plugin-vm/candy/plugin-vm/libvirt_yaml_bridge.go` | `RenderDomainXML`/`BuildLibvirtDomainXML` top-level composition (builds a `libvirtxml.Domain`); `buildDomainDevices` `<devices>` child emitters — channels, graphics, video, rng, memballoon, hostdev, interface (with portForward), filesystem; firmware plumbing (D17); SMBIOS credentials; `XMLPassthrough` merge | ~1800 |
             | `sdk/vmshared/libvirt_helpers.go` | helpers shared by the libvirt YAML bridge + `qemu_render` argv emitter (incl. `VmRuntimeParams`) | ~160 |
             | `sdk/vmshared/libvirt_yaml_listen.go` | structured `<listen>` support for `LibvirtGraphics` | ~24 |
             | `sdk/vmshared/qemu_render.go` | `RenderQemuArgv` for direct-QEMU backend | ~340 |
@@ -7215,7 +7221,7 @@ local-infra-skill:
             |---|---|---|
             | `candy/plugin-fleet/node_resolve.go` | `lookupLocalTemplate` — resolves a `kind: local` template by name PLUGIN-SIDE (the resolved-project envelope + a direct `InvokeProvider(kind,"local",OpResolve)` call, no LoadUnified). The former `charly/local_spec.go` (DELETED, K-wave 2) core-only `findLocalSpec` DIED once this became its last consumer's resolver too (#55 W3 B3) | `lookupLocalTemplate` |
             | `sdk/deploykit/deploy_chain.go` | `rootExecutorForDeployNode` — picks the root `DeployExecutor` for a `local:` deploy node (`ShellExecutor` for `host:local`/absent, `SSHExecutor` for `host:<user@machine>`) (moved from `charly/deploy_chain.go`) | `rootExecutorForDeployNode` |
-            | `charly/unified_targets.go` + `candy/plugin-fleet/deploy_target.go` | S3b: `pluginDeployTarget` (thin, data-only core proxy) + the plugin-side `runDeployDispatch` orchestration — Add/Test/Update/Del lifecycle for the externalized `local:` substrate (and kubernetes/android) over the executor reverse channel; records/replays teardown ops via the ledger (full detail in `/charly-internals:install-plan`). Replaces the DELETED `charly/deploy_target_external.go` (`externalDeployTarget`) | `pluginDeployTarget`, `runDeployDispatch` |
+            | `charly/unified_targets.go` + `plugin-fleet/candy/plugin-fleet/deploy_target.go` | S3b: `pluginDeployTarget` (thin, data-only core proxy) + the plugin-side `runDeployDispatch` orchestration — Add/Test/Update/Del lifecycle for the externalized `local:` substrate (and kubernetes/android) over the executor reverse channel; records/replays teardown ops via the ledger (full detail in `/charly-internals:install-plan`). Replaces the DELETED `charly/deploy_target_external.go` (`externalDeployTarget`) | `pluginDeployTarget`, `runDeployDispatch` |
             | `sdk/kit/sshconfig.go` | `~/.config/charly/ssh_config` fragment writer (managed-block protocol) | `kit.WriteVmSshStanza`, `kit.RemoveVmSshStanza`, `kit.ListVmSshAliases`, `kit.EnsureSshConfigInclude`, `kit.RemoveSshConfigInclude`, `kit.VmSshAlias`, `kit.SshFragmentPath`, `kit.SshConfigPath` |
             | `spec/exec/deploy_executor_ssh.go` | Credential-free `SSHExecutor` (no `-i`, no host-key overrides) | `SSHExecutor` |
             | `spec/exec/deploy_executor.go` | `ShellExecutor` — local shell venue | `ShellExecutor` |
@@ -7636,7 +7642,7 @@ plugin-skill:
                     into a real executor (the live executor never crosses the wire), and `OpPreresolve` still returns the
                     opaque `DeployVenue.Substrate` payload, generalizing the in-core kubernetes/android preresolvers. Reference
                     (out-of-process-only): `candy/plugin-example-lifecycle`; mechanism: `/charly-internals:install-plan`
-                    (`candy/plugin-fleet/deploy_target.go`). This is the channel M4 reuses to externalize the pod/vm lifecycles. An external **`run:` plugin verb /
+                    (`plugin-fleet/candy/plugin-fleet/deploy_target.go`). This is the channel M4 reuses to externalize the pod/vm lifecycles. An external **`run:` plugin verb /
                     step** composed INSIDE a deploy (a `local:`/`vm:` target, where the install runs ON the target, not baked
                     into an image) likewise EXECUTES at deploy: it lowers to an `ExternalPluginStep` IR node which the external
                     `local:`/`vm:` deploy walk reaches as a host-engine step over `RunHostStep`, where the shared `invokeExternalStep`
@@ -8117,7 +8123,7 @@ root-cause-analyzer-skill:
 
             ## Overview
 
-            The root-cause-analyzer is an **enforcer agent** at `plugins/internals/agents/root-cause-analyzer.md`. It is the mandatory first response to any failure, error, warning, or anomaly (R1).
+            The root-cause-analyzer is an **enforcer agent** at `marketplace/internals/agents/root-cause-analyzer.md`. It is the mandatory first response to any failure, error, warning, or anomaly (R1).
 
             ## When to Use
 
@@ -8151,7 +8157,7 @@ root-cause-analyzer-skill:
 
             ## When to Use This Skill
 
-            Invoke when you need to understand the root-cause-analyzer agent's purpose, when it must be invoked, or what its 8-step process covers. The agent itself is at `plugins/internals/agents/root-cause-analyzer.md`.
+            Invoke when you need to understand the root-cause-analyzer agent's purpose, when it must be invoked, or what its 8-step process covers. The agent itself is at `marketplace/internals/agents/root-cause-analyzer.md`.
 skills-skill:
     skill:
         name: skills
@@ -8167,7 +8173,7 @@ skills-skill:
 
             ## Overview
 
-            Skills are living documents at `plugins/<plugin>/skills/<name>/SKILL.md`. They
+            Skills are living documents at `marketplace/<family>/skills/<name>/SKILL.md`. They
             are the primary procedural knowledge source for every supported agent harness
             and are always loaded before codebase exploration. This skill covers when and
             how to update them.
@@ -8179,7 +8185,7 @@ skills-skill:
             compatible readers. Keep their trigger → skill mappings and overall policy
             equivalent while confining harness-specific mechanics to the adapter and
             skills. When multiple triggers apply, load all matching skills before acting.
-            Full index: `plugins/README.md`.
+            Full index: `marketplace/README.md`.
 
             ## The corpus must actually LOAD — audit delivery, not just content
 
@@ -8270,11 +8276,11 @@ skills-skill:
 
             1. **Edit the candy's `skill:` entity in `candy/<candy>/charly.yml`, then regenerate**
                (`charly marketplace generate` → a docs PR carrying the regenerated pages). Most of the corpus under
-               `plugins/**/SKILL.md` is a PROJECTION and carries a DO-NOT-EDIT banner: an edit
+               `marketplace/**/SKILL.md` is a PROJECTION and carries a DO-NOT-EDIT banner: an edit
                there is reverted by the next regeneration, silently and without conflict. `git grep
                -l 'DO[- ]NOT[- ]EDIT'` tells you which files are generated — but triage the hits
                rather than trusting them, since a file may MENTION the banner without carrying one
-               (agent definitions under `plugins/<plugin>/agents/` are hand-authored).
+               (agent definitions under `marketplace/<family>/agents/` are hand-authored).
             2. If the insight affects cross-skill behavior, update the project rulebook (`AGENTS.md` / `CLAUDE.md`) too
             3. After any non-trivial deployment session, ask: "Did we learn anything that future sessions should know?"
 
@@ -8429,9 +8435,9 @@ skills-skill:
 
             - the 2 hooks in `.claude/hooks/` (`pre-commit-gate.sh`, `pre-push-gate.sh` — deterministic
               command-mechanics gates only; there is no reminder-hook layer),
-            - the agents in `plugins/internals/agents/*.md`,
+            - the agents in `marketplace/internals/agents/*.md`,
             - the 9 per-directory signpost `CLAUDE.md` files (`charly/`, `candy/`,
-              `plugins/`, `docs/`, each `box/<distro>`),
+              `marketplace/`, `docs/`, each `box/<distro>`),
             - the workflows in `.claude/workflows/*.js`,
             - every SKILL.md that quotes a section name (grep before assuming).
 
@@ -8442,7 +8448,7 @@ skills-skill:
 
             ## Command skills vs topic skills
 
-            Most skills under `plugins/charly-core/skills/` and `plugins/charly-build/skills/`
+            Most skills under `marketplace/core/skills/` and `marketplace/build/skills/`
             map 1:1 to a top-level charly command (e.g. `/charly-build:build` ↔ `charly box build`,
             `/charly-core:charly-status` ↔ `charly status`).
             **Topic skills** are the exception: they don't correspond to a
@@ -8460,15 +8466,15 @@ skills-skill:
             ## Plugin Structure
 
             Plugins are sorted into four use-case buckets. Directory names live at
-            `plugins/<name>/` (no `charly-` prefix); plugin.json `name:` fields keep the
+            `marketplace/<name>/` (no `charly-` prefix); plugin.json `name:` fields keep the
             `charly-` prefix; every skill is invoked as `/charly-<plugin>:<skill>`.
 
             The authoritative per-plugin skill counts and purposes are the bucket tables
-            in `plugins/README.md` — point there, never copy them (counts drift).
+            in `marketplace/README.md` — point there, never copy them (counts drift).
 
             ## Agent & signpost conventions
 
-            ### Agents (`plugins/<plugin>/agents/<name>.md`)
+            ### Agents (`marketplace/<family>/agents/<name>.md`)
 
             Sub-agents are markdown + YAML frontmatter (`name`, `description`, `tools`,
             `model`, …), discovered from a plugin's `agents/` directory
@@ -8484,7 +8490,7 @@ skills-skill:
             ### Per-directory CLAUDE.md signposts (hybrid)
 
             The repo-root `CLAUDE.md` is the complete R0–R10 harness adapter.
-            Per-directory `CLAUDE.md` files (`charly/`, `candy/`, `plugins/`, `docs/`, and each
+            Per-directory `CLAUDE.md` files (`charly/`, `candy/`, `marketplace/`, `docs/`, and each
             `box/<distro>` submodule) are THIN signposts only: they name the skills to
             load for that area and point back to root. They MUST NOT restate any rule body —
             duplication drifts (an earlier layer-validator and the reminder hooks both drifted
@@ -8579,7 +8585,7 @@ skills-skill:
             1. **Extract the claims**: pull every `charly/*.go` filename reference and identifier
                reference out of the skills, and check each against the live source — file exists?
                symbol still defined? (`gopls`/`grep` confirm.)
-            2. **Search INSIDE the submodule**: `plugins/` is a git submodule, so a superproject
+            2. **Search INSIDE the submodule**: `marketplace/` is a git submodule, so a superproject
                `git grep -- plugins` is a **FALSE ZERO** (git grep does not cross the gitlink). Use
                `git -C plugins grep` or filesystem `grep -rn`.
             3. **Filter the false-positive classes** before flagging:
@@ -8644,10 +8650,10 @@ vm-deploy-target-skill:
             candy/plugin-fleet's Invoke(OpDeployDispatch), replacing the deleted
             grpcSubstrateLifecycle/externalDeployTarget).
             SSHExecutor, VmDeployState persistence, and the host-side ledger.
-            Source: candy/plugin-deploy-vm/lifecycle.go,
+            Source: plugin-deploy-vm/candy/plugin-deploy-vm/lifecycle.go,
             charly/unified_targets.go, charly/deploy_target_dispatch.go,
-            candy/plugin-fleet/deploy_target.go, spec/exec/deploy_executor*.go,
-            sdk/deploykit/vm_deploy_state.go, candy/plugin-vm/vm_util_copies.go.
+            plugin-fleet/candy/plugin-fleet/deploy_target.go, spec/exec/deploy_executor*.go,
+            sdk/deploykit/vm_deploy_state.go, plugin-vm/candy/plugin-vm/vm_util_copies.go.
             (The former charly/fleet_add_cmd_vm.go is DELETED, K-wave 2.)
             MUST be invoked before editing VM-target deploy code.
         triggers:
@@ -8730,13 +8736,13 @@ vm-deploy-target-skill:
               (S3b — there is no longer a separate wire-backed proxy object registered at
               plugin-load; the DELETED `charly/substrate_lifecycle_grpc.go`/
               `charly/deploy_substrate_lifecycle.go` implemented that older shape). The
-              plugin's `lifecycleInvoke` (`candy/plugin-fleet/deploy_target.go`) Invokes
+              plugin's `lifecycleInvoke` (`plugin-fleet/candy/plugin-fleet/deploy_target.go`) Invokes
               the substrate's lifecycle Ops (`OpPrepareVenue` / `OpPostApply` / `OpStart` /
               `OpStop` / `OpStatus` / `OpLogs` / `OpShell` / `OpRebuild` /
               `OpTeardownExecutor` / `OpArtifactKey` / `OpPostTeardown`) via its OWN
               `sdk.Executor.InvokeProvider(class:"deploy", word, op, …)` (S1) — consulting
               the registry GENERICALLY, never branching on `"vm"` directly.
-            - The plugin (`candy/plugin-deploy-vm/lifecycle.go`) implements each Op ITSELF
+            - The plugin (`plugin-deploy-vm/candy/plugin-deploy-vm/lifecycle.go`) implements each Op ITSELF
               over three GENERIC seams:
               - **sdk/kit** — the ssh-config stanza (`kit.WriteVmSshStanza` +
                 `kit.EnsureSshConfigInclude`), the guest-readiness waits (`kit.WaitForSSH` /
@@ -8752,7 +8758,7 @@ vm-deploy-target-skill:
 
             **FINAL/K5 unit 6a (M4b) deleted the host-side `lifecyclePrepareHook` DATA-seam
             entirely (hard cutover) — the plugin now resolves its OWN PrepareVenue data
-            end-to-end.** `candy/plugin-deploy-vm/lifecycle.go`'s `vmPrepareVenue` does what
+            end-to-end.** `plugin-deploy-vm/candy/plugin-deploy-vm/lifecycle.go`'s `vmPrepareVenue` does what
             the deleted host-side `vmLifecyclePrepare` used to do, but INSIDE the plugin:
             `vmEntityForPrepare` (ported verbatim from the deleted `vmEntityForAdd`)
             resolves the `kind:vm` entity from the node's `vm:` cross-ref / a legacy
@@ -8774,7 +8780,7 @@ vm-deploy-target-skill:
               `vmAttachResolver` (`charly/vm_lifecycle_preresolve.go`) is DELETED (K-wave 2
               cone CONTESTED) — its body was `strings.Join(cmd, " ")`, derivable from the raw
               cmd candy/plugin-fleet threads over the wire for OpAttach
-              (`lifecycleParams.Cmd`); `candy/plugin-deploy-vm/lifecycle.go`'s `vmAttach`
+              (`lifecycleParams.Cmd`); `plugin-deploy-vm/candy/plugin-deploy-vm/lifecycle.go`'s `vmAttach`
               resolves it itself. `charly/unified_targets.go`'s Attach threads the raw cmd
               for a HOOKLESS lifecycle substrate instead of requiring a host attach hook
               (the lifecycleAttachPlanHooks map keeps only "pod").
@@ -8782,14 +8788,14 @@ vm-deploy-target-skill:
               registration with panic-vs-warning classification (RCA #5) that must run
               host-side. The former `charly/host_build_ephemeral_register.go` + the generic
               `"ephemeral-register"` HostBuild seam are DELETED (K-wave 2); the plugin
-              (`candy/plugin-deploy-vm/lifecycle.go`) Invokes `command:fleet`'s
+              (`plugin-deploy-vm/candy/plugin-deploy-vm/lifecycle.go`) Invokes `command:fleet`'s
               `OpEphemeralRegister` DIRECTLY over the peer reverse channel as its FIRST
               action, matching the deleted host-side hook's own ordering.
             - **The `lifecyclePostTeardownHook`** is DELETED (K-wave 2 — zero refs; only an
               "is deleted" comment survives at `charly/unified_targets.go:302`). vm's
               ephemeral-lifecycle teardown (systemd timers + libvirt snapshot refcounts) is
               plugin-side (`vmPostTeardown` / `OpEphemeralTeardown`).
-            - **`saveDeployState`**, called from `candy/plugin-fleet/deploy_target.go`'s
+            - **`saveDeployState`**, called from `plugin-fleet/candy/plugin-fleet/deploy_target.go`'s
               lifecycle dispatch, persists the plugin's returned `VmDeployState` patch
               (extended with `VmState` / `VmCrossRef`), and removes the charly.yml entry
               keys the plugin ships in `PostTeardownReply.RemoveEntries`.
@@ -8814,7 +8820,7 @@ vm-deploy-target-skill:
             ## Implementation notes
 
             - The `pod` substrate is EXTERNAL (`deploy:pod`, candy/plugin-deploy-pod); the pod overlay render MOVED to the candy (P11c — `candy/plugin-deploy-pod/overlay.go`, via `deploykit.OCITarget`), and `charly/build_overlay.go` is now the host-side prep+resolve M-seam the candy reaches over `HostBuild("overlay")`. Its teardown record is keyed HOST-SIDE by `computeDeployID(name)` like every external deploy (the in-proc pod was record-free).
-            - `vmNameFromDeployName` strips the `vm:` prefix. `vmEntityForPrepare` (`candy/plugin-deploy-vm/lifecycle.go`, ported verbatim from the DELETED `charly/vm_lifecycle_preresolve.go`'s `vmEntityForAdd` — FINAL/K5 unit 6a, M4b) resolves the `kind:vm` entity from a deploy node: the node's `vm:` cross-ref (`node.From`) wins, then a legacy `vm:<entity>` prefix, then the leaf of a nested dotted path.
+            - `vmNameFromDeployName` strips the `vm:` prefix. `vmEntityForPrepare` (`plugin-deploy-vm/candy/plugin-deploy-vm/lifecycle.go`, ported verbatim from the DELETED `charly/vm_lifecycle_preresolve.go`'s `vmEntityForAdd` — FINAL/K5 unit 6a, M4b) resolves the `kind:vm` entity from a deploy node: the node's `vm:` cross-ref (`node.From`) wins, then a legacy `vm:<entity>` prefix, then the leaf of a nested dotted path.
             - `UnifiedDeployTarget` / `LifecycleTarget` interfaces (`spec/spec/deploy_target_unified.go`, the kind-agnostic contract — the option types repoint to the CUE-sourced `spec.DeployTargetDispatch*` wire types) + the `ResolveTarget` dispatcher (`charly/unified_targets.go`) provide the full lifecycle contract (`Add` / `Del` / `Update` / `Start` / `Stop` / `Status` / `Logs` / `Shell` / `Rebuild` — `Test` DELETED, #55 W3 B3 remainder: zero real callers anywhere in the tree). `ResolveTarget` returns a `pluginDeployTarget` (S3b) for every externalized substrate (local/vm/pod/kubernetes/android — all five).
             - Disposability is read per-`spec.Deploy` via `Deploy.IsDisposable()` (`spec/spec/charly_methods.go` — `disposable: true`, or ephemeral); it is NOT a `VmSpec` field. The disposability-as-authorization gate is NOT applied in the `charly update` path — `charly update <vm>` rebuilds on explicit invocation regardless (it only NOTES non-disposability, never refuses). `pluginDeployTarget.Rebuild` dispatches via `candy/plugin-fleet`'s `Invoke(OpDeployDispatch)` to the plugin's `OpRebuild` (over `HostBuild("cli")`), which recreates the domain THEN re-applies the deploy node's layers via the shared `charly fleet add <node>` path — the same layer-apply primitive the local/pod Rebuild use (R3).
 
@@ -8832,13 +8838,13 @@ vm-deploy-target-skill:
             | File | Contents |
             |---|---|
             | `charly/unified_targets.go` + `charly/deploy_target_dispatch.go` + `charly/host_build_arbiter_bracket.go` | S3b: `pluginDeployTarget` — the thin, data-only generic out-of-process adapter for all five external substrates, dispatching via `dispatchDeployTarget` to `candy/plugin-fleet`'s `Invoke(OpDeployDispatch)`; `Del` replays recorded `ReverseOps`. Replaces the DELETED `charly/deploy_target_external.go` (`externalDeployTarget`), `charly/substrate_lifecycle_grpc.go` (`grpcSubstrateLifecycle`), `charly/deploy_preresolve.go` (`wireDeployPreresolver`), and `charly/deploy_substrate_lifecycle.go` (the `substrateLifecycle` interface + `registerPluginSubstrateLifecycle`) |
-            | `candy/plugin-fleet/deploy_target.go` | S3b: `runDeployDispatch`'s `lifecycleInvoke`/`preresolveSubstrate` — Invokes the substrate's `OpPrepareVenue`/`OpStart`/`OpStop`/`OpStatus`/`OpRebuild`/`OpPreresolve`/… via its OWN `sdk.Executor.InvokeProvider(class:"deploy", word, op, …)` (S1); re-materializes the plugin's returned `VenueDescriptor`, and persists the returned `VmDeployState` via `saveDeployState` |
-            | `charly/vm_lifecycle_preresolve.go` | DELETED (K-wave 2 cone CONTESTED). The FINAL/K5 unit 6a (M4b) move had already removed the `lifecyclePrepareHook` DATA-seam + `lifecyclePostTeardownHook` (the plugin self-resolves `spec.LifecyclePrepareInput`); the last remaining F12 `vmAttachResolver` was then DELETED too — the plugin derives the attach script from the raw wire cmd (`vmAttach` over `lifecycleParams.Cmd`, `candy/plugin-deploy-vm/lifecycle.go`), and `charly/unified_targets.go`'s Attach threads it for hookless lifecycle substrates |
-            | `candy/plugin-deploy-vm/lifecycle.go` | the plugin's venue lifecycle — implements every lifecycle Op (`OpPrepareVenue` / `OpPostApply` / `OpStart` / … / `OpPostTeardown`) over `kit` + `HostBuild("cli")` + the served guest executor; `vmEntityForPrepare` + `vmPrepareVenue` (self-resolving `spec.LifecyclePrepareInput` via `sdk/loaderkit.ResolveVmEntityViaExecutor`, K-wave W3a A3-phase-2, ported from the deleted `charly/vm_lifecycle_preresolve.go`'s `vmEntityForAdd`/`vmLifecyclePrepare`) |
+            | `plugin-fleet/candy/plugin-fleet/deploy_target.go` | S3b: `runDeployDispatch`'s `lifecycleInvoke`/`preresolveSubstrate` — Invokes the substrate's `OpPrepareVenue`/`OpStart`/`OpStop`/`OpStatus`/`OpRebuild`/`OpPreresolve`/… via its OWN `sdk.Executor.InvokeProvider(class:"deploy", word, op, …)` (S1); re-materializes the plugin's returned `VenueDescriptor`, and persists the returned `VmDeployState` via `saveDeployState` |
+            | `charly/vm_lifecycle_preresolve.go` | DELETED (K-wave 2 cone CONTESTED). The FINAL/K5 unit 6a (M4b) move had already removed the `lifecyclePrepareHook` DATA-seam + `lifecyclePostTeardownHook` (the plugin self-resolves `spec.LifecyclePrepareInput`); the last remaining F12 `vmAttachResolver` was then DELETED too — the plugin derives the attach script from the raw wire cmd (`vmAttach` over `lifecycleParams.Cmd`, `plugin-deploy-vm/candy/plugin-deploy-vm/lifecycle.go`), and `charly/unified_targets.go`'s Attach threads it for hookless lifecycle substrates |
+            | `plugin-deploy-vm/candy/plugin-deploy-vm/lifecycle.go` | the plugin's venue lifecycle — implements every lifecycle Op (`OpPrepareVenue` / `OpPostApply` / `OpStart` / … / `OpPostTeardown`) over `kit` + `HostBuild("cli")` + the served guest executor; `vmEntityForPrepare` + `vmPrepareVenue` (self-resolving `spec.LifecyclePrepareInput` via `sdk/loaderkit.ResolveVmEntityViaExecutor`, K-wave W3a A3-phase-2, ported from the deleted `charly/vm_lifecycle_preresolve.go`'s `vmEntityForAdd`/`vmLifecyclePrepare`) |
             | `candy/plugin-deploy-vm/` | the out-of-process `deploy:vm` plugin (the plan WALK via `kit.WalkPlans` over the guest `SSHExecutor`) |
             | `spec/exec/deploy_executor.go` | `DeployExecutor` interface (RunShell, Scp, Close) + `ShellExecutor` — local shell exec (used host-side for the builder-image step and `RunHostStep`) |
             | `spec/exec/deploy_executor_ssh.go` | `SSHExecutor` — ssh client with passt-friendly timeouts + WaitForSSH + WaitForCloudInit |
-            | `sdk/deploykit/vm_deploy_state.go` + `candy/plugin-vm/vm_util_copies.go` | VM-only deploy helpers (the former `charly/fleet_add_cmd_vm.go` is DELETED, K-wave 2): `vmshared.VmNameFromDeployName` (`spec/spec/vm_domain.go`), `resolveVmSshUser` / `resolveVmSshPort` (`candy/plugin-vm/vm_util_copies.go`), `deploykit.SaveVmDeployState` / `deploykit.RemoveVmDeployEntry` (`sdk/deploykit/vm_deploy_state.go`) |
+            | `sdk/deploykit/vm_deploy_state.go` + `plugin-vm/candy/plugin-vm/vm_util_copies.go` | VM-only deploy helpers (the former `charly/fleet_add_cmd_vm.go` is DELETED, K-wave 2): `vmshared.VmNameFromDeployName` (`spec/spec/vm_domain.go`), `resolveVmSshUser` / `resolveVmSshPort` (`plugin-vm/candy/plugin-vm/vm_util_copies.go`), `deploykit.SaveVmDeployState` / `deploykit.RemoveVmDeployEntry` (`sdk/deploykit/vm_deploy_state.go`) |
             | `candy/plugin-vm/vm_create_orchestrate.go` | `VmCreateCmd.runVmSpecCreate` — prereq: VM must be created before deploy (the `command:vm` plugin; the backend-specific `runVmSpecCreateLibvirt`/`-Qemu` are in `vm_create_spec.go`) |
 
             ## DeployExecutor interface
@@ -8863,7 +8869,7 @@ vm-deploy-target-skill:
             **FINAL/K5 unit 6a (M4b) collapsed this from a TWO-part flow (a host-side
             DATA-resolve hook, then the plugin's own venue steps) into ONE part entirely
             inside the plugin** — the DELETED `lifecyclePrepareHook`/`vmLifecyclePrepare`
-            (`charly/vm_lifecycle_preresolve.go`) is gone; `candy/plugin-deploy-vm/lifecycle.go`'s
+            (`charly/vm_lifecycle_preresolve.go`) is gone; `plugin-deploy-vm/candy/plugin-deploy-vm/lifecycle.go`'s
             `vmPrepareVenue` now does it all, BEFORE the walk:
 
             0. **Register the ephemeral Add-time side effect** — Invokes `command:fleet`'s
@@ -8900,7 +8906,7 @@ vm-deploy-target-skill:
             Home-bearing step fields — `ShellHookStep` env values + `path_append`,
             `ShellSnippetStep` snippet/destination, `FileStep.Dest` — are compiled with the
             deferred `{{.Home}}` token (`HomeToken`), NOT a baked compile-time home. For an
-            external deploy, `prepareReverseState` (`candy/plugin-fleet/deploy_target.go`, S3b)
+            external deploy, `prepareReverseState` (`plugin-fleet/candy/plugin-fleet/deploy_target.go`, S3b)
             resolves the token host-side against the VENUE home (`exec.ResolveHome`) before projecting the
             views — for `vm` the **GUEST** home, because the served executor is the guest
             `SSHExecutor`. This is why a `target: vm` deploy writes
