@@ -11,7 +11,7 @@ charly-marketplace:
             not the source — regeneration is a no-op on a clean tree (the drift gate).
         candy:
             - '@github.com/opencharly/charly:v2026.238.1242'
-            - '@github.com/opencharly/pod-charly-hooks:v2026.239.1634'
+            - '@github.com/opencharly/pod-charly-hooks:v2026.240.2141'
             - '@github.com/opencharly/layer-ripgrep:v2026.235.1653'
             - '@github.com/opencharly/layer-supervisord:v2026.239.1300'
             - '@github.com/opencharly/layer-nodejs:v2026.239.1624'
