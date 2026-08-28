@@ -34,7 +34,7 @@ require (
 	github.com/opencharly/plugin-examplerunverb/candy/plugin-examplerunverb v0.2026237.1421
 	github.com/opencharly/plugin-feature/candy/plugin-feature v0.2026237.1422
 	github.com/opencharly/plugin-file/candy/plugin-file v0.2026237.1422
-	github.com/opencharly/plugin-fleet/candy/plugin-fleet v0.2026238.955
+	github.com/opencharly/plugin-fleet/candy/plugin-fleet v0.2026240.756
 	github.com/opencharly/plugin-gpu/candy/plugin-gpu v0.2026237.1422
 	github.com/opencharly/plugin-group/candy/plugin-group v0.2026237.1423
 	github.com/opencharly/plugin-harness-kind/candy/plugin-harness-kind v0.2026237.1423
