@@ -255,12 +255,16 @@ github.com/opencharly/sdk v0.2026240.1520 h1:/MLz4OPCg+4w6hovN2wBgYfIzGQ+6spXcUU
 github.com/opencharly/sdk v0.2026240.1520/go.mod h1:BSl+KMnWVAeW4FpGwVXLz53SyBbUAjiqNoeLxfwocA4=
 github.com/opencharly/sdk v0.2026240.1542 h1:6P0o+GjnxJzxAXinMVyoW5b9FNXNF+9L22yoJys4kZ8=
 github.com/opencharly/sdk v0.2026240.1542/go.mod h1:BSl+KMnWVAeW4FpGwVXLz53SyBbUAjiqNoeLxfwocA4=
+github.com/opencharly/sdk v0.2026240.1834 h1:lkxptC+6SksOIrkcfdfsCaoR1+I3H+Y4d2WXWtvUpBU=
+github.com/opencharly/sdk v0.2026240.1834/go.mod h1:5ipJmgdsK1wQJS8T+oe6WMIhjw15EwJjuPWJ91zWcSk=
 github.com/opencharly/spec v0.2026232.521-0.20260826090151-ce44afab8bbf h1:WiX4D2P29ZJ84/kxwmJbqgPJjLqQYfiOxbHG+Qx61r0=
 github.com/opencharly/spec v0.2026232.521-0.20260826090151-ce44afab8bbf/go.mod h1:yaB8ABSTiJClK1xq/zCtWizcqfKKOhnuKcgGrHwxmW8=
 github.com/opencharly/spec v0.2026240.1623 h1:XpZy1vyFPmD/mO/MCtqqETo+JTnLBKBxCI8756CGBSY=
 github.com/opencharly/spec v0.2026240.1623/go.mod h1:yaB8ABSTiJClK1xq/zCtWizcqfKKOhnuKcgGrHwxmW8=
 github.com/opencharly/spec v0.2026240.1719 h1:iVsUOi4Ng/5tt7HaFcUG7DhKV7nTEHpD2MFSxR/7Ouk=
 github.com/opencharly/spec v0.2026240.1719/go.mod h1:yaB8ABSTiJClK1xq/zCtWizcqfKKOhnuKcgGrHwxmW8=
+github.com/opencharly/spec v0.2026240.1812 h1:lYh9s0BgyxzMURxgL6rUyoUX9jfCWzEbbG8kb9wCduA=
+github.com/opencharly/spec v0.2026240.1812/go.mod h1:yaB8ABSTiJClK1xq/zCtWizcqfKKOhnuKcgGrHwxmW8=
 github.com/opencontainers/go-digest v1.0.0 h1:apOUWs51W5PlhuyGyz9FCeeBIOUDA/6nW8Oi/yOhh5U=
 github.com/opencontainers/go-digest v1.0.0/go.mod h1:0JzlMkj0TRzQZfJkVvzbP0HBR3IKzErnv2BNG4W4MAM=
 github.com/opencontainers/image-spec v1.1.1 h1:y0fUlFfIZhPF1W537XOLg0/fcx6zcHCJwooC2xJA040=
