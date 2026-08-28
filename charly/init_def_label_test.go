@@ -96,6 +96,9 @@ func TestEmbeddedVocab_OpenRCIsAFirstClassInit(t *testing.T) {
 			"initDirectives": func(map[string]map[string]any, string) []struct{ Key, Value string } {
 				return nil
 			},
+			// Third stub, same reasoning: the lowering is owned by
+			// candy/plugin-init's waitForScript and pinned by its TestWaitForScript.
+			"waitForScript": func(any) string { return "" },
 		}).
 		Parse(def.ServiceSchema.ServiceTemplate)
 	if err != nil {
@@ -112,6 +115,7 @@ func TestEmbeddedVocab_OpenRCIsAFirstClassInit(t *testing.T) {
 		// Same for the B2 fields the template now references.
 		"Requires": []string{}, "RestartSec": "", "WatchdogSec": "",
 		"UnitOptions": map[string]map[string]any{},
+		"WaitFor":     nil,
 	}); err != nil {
 		t.Fatalf("openrc service_template failed to render: %v", err)
 	}
