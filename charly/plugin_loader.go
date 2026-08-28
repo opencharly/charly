@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -1023,6 +1024,11 @@ func loadProjectPlugins(ctx context.Context, candies map[string]spec.CandyReader
 		// + deployNodePluginContext), so a skip here can never drop a referenced plugin
 		// (over-load safe; under-load is a bug — see the HARD CONSTRAINT in those docs).
 		if !pluginProvidesReferencedWord(providers, refs) {
+			// Record WHAT was skipped and by which candy. A skip here is invisible at
+			// the dispatch site — no warning is printed, because a skip is the normal,
+			// correct case — so without this note an unresolved word later looks like a
+			// broken plugin rather than one charly deliberately did not load.
+			recordScopedOutPlugin(name, providers)
 			continue
 		}
 		// Idempotent re-load: loadProjectPlugins runs on EVERY connect path (build,
@@ -1100,4 +1106,115 @@ func cueDefHasField(d cue.Value, field string) bool {
 		}
 	}
 	return false
+}
+
+// pluginScopedOut records out-of-tree plugin candies that loadProjectPlugins SKIPPED because
+// none of their providers was referenced by the resolved work (the perf-scoping skip). Keyed
+// by provKey(class, word) → candy name.
+//
+// It exists so an unresolved dispatch can distinguish "charly decided not to load it" from
+// "the plugin is broken". Those are opposite problems with opposite fixes, and without this
+// record they produce the same message.
+var pluginScopedOut = map[string]string{}
+
+// recordScopedOutPlugin notes every provider word a perf-scoped-out candy would have served.
+func recordScopedOutPlugin(candyName string, providers []string) {
+	for _, p := range providers {
+		class, word, ok := splitCapability(strings.TrimSpace(p))
+		if !ok {
+			continue
+		}
+		if _, seen := pluginScopedOut[provKey(class, word)]; !seen {
+			pluginScopedOut[provKey(class, word)] = candyName
+		}
+	}
+}
+
+// explainUnresolvedPluginWord renders the failure for a plugin word that resolved to no
+// provider, naming the CAUSE rather than only the symptom.
+//
+// Four different situations reach this point and used to be indistinguishable:
+//
+//   - a project candy declares the word but perf-scoping dropped it (charly never loaded it),
+//   - the word is in a `.providers` manifest but its binary is missing,
+//   - the word is in no manifest on the search path at all,
+//   - the search path itself is empty ($CHARLY_PLUGIN_ONLY=1 with no $CHARLY_PLUGIN_DIR).
+//
+// The bare "no provider registered" message reads as "the plugin is broken", when the common
+// cause is "charly never looked where the plugin is" or "charly chose not to load it".
+func explainUnresolvedPluginWord(class ProviderClass, word string) string {
+	key := provKey(class, word)
+	var b strings.Builder
+	fmt.Fprintf(&b, "no provider registered for plugin %s %q", class, word)
+
+	// 1. A project candy declares it, but nothing referenced it, so it was never loaded.
+	// This is the cause the old message hid most completely: the plugin is fine.
+	if candy, ok := pluginScopedOut[key]; ok {
+		fmt.Fprintf(&b, "\n  cause: the project candy %q declares %s, but it was not loaded —"+
+			" nothing in the resolved work referenced that word (perf-scoping)."+
+			"\n  fix: reference the word from the plan being run, or add the candy to the"+
+			" bed's add_candy: so the check runner passes it as an extra candy ref", candy, key)
+		return b.String()
+	}
+
+	// 2. Otherwise report the baked search path exactly as bakedPluginDirs() walked it.
+	dirs := bakedPluginDirs()
+	if len(dirs) == 0 {
+		b.WriteString("\n  cause: the baked-plugin search path is EMPTY —" +
+			" $CHARLY_PLUGIN_ONLY=1 drops the FHS path and $CHARLY_PLUGIN_DIR is unset")
+		return b.String()
+	}
+
+	b.WriteString("\n  searched (in order):")
+	foundWord := ""
+	for _, d := range dirs {
+		entries, err := os.ReadDir(d)
+		if err != nil {
+			fmt.Fprintf(&b, "\n    %s  (unreadable: %v)", d, err)
+			continue
+		}
+		words := []string{}
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".providers") {
+				continue
+			}
+			data, err := os.ReadFile(filepath.Join(d, e.Name()))
+			if err != nil {
+				continue
+			}
+			bin := filepath.Join(d, strings.TrimSuffix(e.Name(), ".providers"))
+			for _, line := range strings.Split(string(data), "\n") {
+				c, w, ok := splitCapability(strings.TrimSpace(line))
+				if !ok {
+					continue
+				}
+				words = append(words, provKey(c, w)+" -> "+filepath.Base(bin))
+				if provKey(c, w) == key {
+					if _, statErr := os.Stat(bin); statErr != nil {
+						foundWord = fmt.Sprintf("declared by %s but its binary %s is missing",
+							e.Name(), bin)
+					} else {
+						foundWord = fmt.Sprintf("declared by %s and %s exists — the connect"+
+							" or schema gate failed; see the preceding warning", e.Name(), bin)
+					}
+				}
+			}
+		}
+		sort.Strings(words)
+		if len(words) == 0 {
+			fmt.Fprintf(&b, "\n    %s  (no .providers manifests)", d)
+			continue
+		}
+		fmt.Fprintf(&b, "\n    %s  %s", d, strings.Join(words, ", "))
+	}
+
+	if foundWord != "" {
+		fmt.Fprintf(&b, "\n  cause: %s", foundWord)
+		return b.String()
+	}
+	fmt.Fprintf(&b, "\n  cause: %s is declared by no .providers manifest on that path, and no"+
+		" project candy declares it either."+
+		"\n  fix: for a host-built verb plugin, set $CHARLY_PLUGIN_DIR to a directory holding"+
+		" the provider binary beside a <binary>.providers manifest listing %s", key, key)
+	return b.String()
 }
