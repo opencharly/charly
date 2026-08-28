@@ -87,7 +87,16 @@ func TestEmbeddedVocab_OpenRCIsAFirstClassInit(t *testing.T) {
 	// Duplicating the semantics here would create a second source of truth that could drift
 	// from the one the renderer actually uses.
 	tmpl, err := template.New("openrc-service").
-		Funcs(template.FuncMap{"openrcLog": func(string) string { return "" }}).
+		Funcs(template.FuncMap{
+			"openrcLog": func(string) string { return "" },
+			// Same reasoning as openrcLog: the flattening semantics belong to
+			// candy/plugin-init's initDirectives and are pinned by its
+			// TestInitDirectivesFlattensUnitOptions. Returning an empty slice keeps
+			// this test about "the template parses and renders".
+			"initDirectives": func(map[string]map[string]any, string) []struct{ Key, Value string } {
+				return nil
+			},
+		}).
 		Parse(def.ServiceSchema.ServiceTemplate)
 	if err != nil {
 		t.Fatalf("openrc service_template does not parse: %v", err)
@@ -100,6 +109,9 @@ func TestEmbeddedVocab_OpenRCIsAFirstClassInit(t *testing.T) {
 		"EnvList": []map[string]string{{"Key": "MODE", "Value": "live"}},
 		// The template reads .Stdout; an absent key renders as an invalid reflect.Value.
 		"Stdout": "",
+		// Same for the B2 fields the template now references.
+		"Requires": []string{}, "RestartSec": "", "WatchdogSec": "",
+		"UnitOptions": map[string]map[string]any{},
 	}); err != nil {
 		t.Fatalf("openrc service_template failed to render: %v", err)
 	}

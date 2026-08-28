@@ -1308,6 +1308,15 @@ openrc:
                 {{- if eq .Restart "no"}}
                 supervise_daemon_args="--no-respawn"
                 {{- end}}
+                {{- if .RestartSec}}
+                respawn_delay="{{.RestartSec}}"
+                {{- end}}
+                {{- if .WatchdogSec}}
+                healthcheck_timer="{{.WatchdogSec}}"
+                {{- end}}
+                {{- range initDirectives .UnitOptions "openrc"}}
+                {{.Key}}="{{.Value}}"
+                {{- end}}
                 {{- if .StopTimeout}}
                 retry="{{.StopTimeout}}"
                 {{- end}}
@@ -1327,6 +1336,9 @@ openrc:
                 {{- end}}
                 {{- range .Before}}
                     before {{.}}
+                {{- end}}
+                {{- range .Requires}}
+                    need {{.}}
                 {{- end}}
                     need localmount
                 }
@@ -1400,12 +1412,19 @@ systemd:
                 {{- range .After}}
                 After={{.}}
                 {{- end}}
+                {{- range .Requires}}
+                Requires={{.}}
+                {{- end}}
                 {{- range .Before}}
                 Before={{.}}
                 {{- end}}
 
                 [Service]
+                {{- if .Type}}
+                Type={{.Type}}
+                {{- else}}
                 Type=simple
+                {{- end}}
                 {{- range .ExecStartPre}}
                 ExecStartPre={{.}}
                 {{- end}}
@@ -1437,6 +1456,15 @@ systemd:
                 {{- if .Stdout}}
                 StandardOutput={{systemdStdout .Stdout}}
                 StandardError={{systemdStdout .Stdout}}
+                {{- end}}
+                {{- if .RestartSec}}
+                RestartSec={{.RestartSec}}
+                {{- end}}
+                {{- if .WatchdogSec}}
+                WatchdogSec={{.WatchdogSec}}
+                {{- end}}
+                {{- range initDirectives .UnitOptions "systemd"}}
+                {{.Key}}={{.Value}}
                 {{- end}}
 
                 [Install]
