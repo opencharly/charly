@@ -1335,17 +1335,41 @@ systemd:
     init:
         candy_field:
             - service
+        # The unit types a candy may ship for systemd to install. Widened beyond
+        # *.service now that candy_file: is actually honoured (sdk#176): the patterns
+        # are globbed at the point of use, so a type listed here is genuinely
+        # collected, and one omitted here is genuinely not. Templated units
+        # (foo@.service) match the same globs.
+        #
+        # .slice is deliberately present but NOT enabled below — a slice is a resource
+        # container referenced by other units' Slice=, and `systemctl enable` on one is
+        # an error, not a no-op.
         candy_file:
             - '*.service'
+            - '*.socket'
+            - '*.target'
+            - '*.timer'
+            - '*.path'
+            - '*.slice'
         model: file_copy
         fragment_dir: systemd
         stage_name: systemd-services
         stage_fragment_copy: COPY .build/{{.BoxName}}/{{.FragmentDir}}/{{.FileName}} /systemd/{{.FileName}}
         assembly_template: |
-            # Install systemd user services
+            # Install systemd user units
+            #
+            # Copies EVERY staged unit, then enables only the types systemd can enable.
+            # This used to hardcode *.service twice, so a candy could ship nothing else:
+            # a .socket or .target was staged into the image and then never copied. The
+            # nullglob-free `[ -e ]` guard is required because an unmatched glob stays
+            # literal in sh, and `systemctl enable '/systemd/*.socket'` would fail the
+            # build for a candy that ships only services.
             RUN --mount=type=bind,from=systemd-services,source=/systemd,target=/systemd \
-                cp /systemd/*.service /usr/lib/systemd/user/ && \
-                for svc in /systemd/*.service; do systemctl --global enable "$(basename "$svc")"; done
+                cp /systemd/* /usr/lib/systemd/user/ && \
+                for unit in /systemd/*.service /systemd/*.socket /systemd/*.target /systemd/*.timer /systemd/*.path; do \
+                    [ -e "$unit" ] || continue; \
+                    systemctl --global enable "$(basename "$unit")"; \
+                done
         system_enable_template: |
             # Enable system-level services
             RUN{{range $i, $unit := .Units}}{{if $i}} && \

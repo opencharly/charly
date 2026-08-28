@@ -125,3 +125,64 @@ func TestEmbeddedVocab_OpenRCIsAFirstClassInit(t *testing.T) {
 		}
 	}
 }
+
+// TestEmbeddedVocab_SystemdClaimsEveryUnitTypeItInstalls guards the pair that has to
+// stay consistent: the unit types systemd's candy_file: CLAIMS, and the types its
+// assembly_template actually COPIES and ENABLES.
+//
+// They were inconsistent by construction before. candy_file: listed only *.service
+// while the assembly hardcoded that same extension twice, so the pair agreed only
+// because both were frozen — a candy could not ship a .socket or .target at all, and
+// widening one side without the other would stage units the image never copies (or
+// enable a .slice, which is an error rather than a no-op).
+func TestEmbeddedVocab_SystemdClaimsEveryUnitTypeItInstalls(t *testing.T) {
+	uf, err := embeddedDefaults()
+	if err != nil {
+		t.Fatalf("embeddedDefaults: %v", err)
+	}
+	ic := spec.ProjectInitConfig(uf, resolveInitConfigViaPlugin)
+	if ic == nil || ic.Init["systemd"] == nil {
+		t.Fatal("embedded vocabulary missing systemd init def")
+	}
+	def := ic.Init["systemd"]
+
+	claimed := map[string]bool{}
+	for _, p := range def.CandyFiles {
+		claimed[strings.TrimPrefix(p, "*")] = true
+	}
+	// The service unit is the historical floor; the rest are what the widening added.
+	for _, ext := range []string{".service", ".socket", ".target"} {
+		if !claimed[ext] {
+			t.Errorf("systemd candy_file: does not claim %s — a candy shipping one is "+
+				"silently ignored, because the glob happens at the point of use", ext)
+		}
+	}
+
+	asm := def.AssemblyTemplate
+	if asm == "" {
+		t.Fatal("systemd declares no assembly_template")
+	}
+	// The copy must not be extension-specific: a claimed type the copy misses is
+	// staged into the build context and then dropped on the floor.
+	if strings.Contains(asm, "cp /systemd/*.service ") {
+		t.Error("the assembly still copies only *.service, so every other claimed unit " +
+			"type is staged and then never installed")
+	}
+	// Enabling must cover the enableable claimed types...
+	for _, ext := range []string{".service", ".socket", ".target"} {
+		if !strings.Contains(asm, "/systemd/*"+ext) {
+			t.Errorf("the assembly never enables %s units, though candy_file: claims them", ext)
+		}
+	}
+	// ...and must NOT enable a slice, which systemctl rejects.
+	if strings.Contains(asm, "enable") && strings.Contains(asm, "*.slice") {
+		t.Error("the assembly enables *.slice; a slice is a resource container referenced " +
+			"by other units' Slice=, and enabling one is an error")
+	}
+	// An unmatched glob stays literal in sh, so a candy shipping only services would
+	// otherwise fail the build on `systemctl enable '/systemd/*.socket'`.
+	if !strings.Contains(asm, `[ -e "$unit" ] || continue`) {
+		t.Error("the enable loop has no existence guard: an unmatched glob stays literal " +
+			"in sh and would fail the build for a candy that ships only one unit type")
+	}
+}
