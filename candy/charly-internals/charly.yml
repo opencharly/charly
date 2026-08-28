@@ -8181,6 +8181,48 @@ skills-skill:
             skills. When multiple triggers apply, load all matching skills before acting.
             Full index: `plugins/README.md`.
 
+            ## The corpus must actually LOAD — audit delivery, not just content
+
+            A skill that never reaches the agent is indistinguishable from one that was
+            never written. Enablement and installation are SEPARATE halves of the harness
+            contract, and satisfying only the first fails SILENTLY:
+
+            - **Claude Code** — `enabledPlugins` in `.claude/settings.json` flips
+              enablement only. Skills load when the harness ALSO holds an install record
+              for that plugin scoped to the CURRENT project. A `settings.json` listing a
+              plugin whose install record belongs to a different project, or whose
+              recorded `installPath` no longer exists, loads NONE of its skills — the
+              marketplace, manifest, and `SKILL.md` frontmatter can all be valid while
+              the corpus is entirely absent.
+            - `claude plugin list` reads enablement from `settings.json` and prints
+              `Status: enabled` regardless of whether the install record resolves, so it
+              CONFIRMS a corpus that is not loading. It is not evidence; never close an
+              audit on it.
+
+            **The only reliable probe is a fresh session's own answer:**
+
+            ```bash
+            claude -p "List the skills available to you whose name contains ':'"
+            ```
+
+            **The fix writes both halves** — never hand-edit the settings JSON, which
+            would reproduce the same half-configured state:
+
+            ```bash
+            claude plugin install <plugin>@<marketplace> --scope project
+            ```
+
+            Run the probe after any change to a marketplace, to a plugin's enablement, or
+            to a harness config — and BEFORE concluding that a dispatcher row is wrong. A
+            dispatcher pointing at a skill the session cannot load presents exactly like a
+            badly written dispatcher, and the wrong fix (rewriting the row) leaves the
+            real defect in place.
+
+            Scope the enabled set to what the repo actually does. A repo that never builds
+            images or runs pods should not enable the image/pod plugins: besides the token
+            cost, each one contributes its pod-provided MCP servers, which then log
+            connection failures for boxes that were never meant to be running there.
+
             ## When to Update Skills
 
             | Trigger | Action |
