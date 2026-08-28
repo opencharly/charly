@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/opencharly/spec/proc"
@@ -150,6 +151,15 @@ func TestCandyCutoverSweep_AllRemotePinsResolve(t *testing.T) {
 	loader := requireProjectLoader()
 	unique := map[string]bool{}
 	var failures []string
+
+	// Deduplicate FIRST, then resolve concurrently. Each miss is one network round trip,
+	// and the cutover left 226 unique pins: resolving them one after another cost ~7
+	// minutes of the package's 10-minute default timeout on a cold CI cache, so the
+	// package ran with no headroom and ANY test added to it tipped the whole package over.
+	// A warm cache hides this completely (0.04s locally), which is why it surfaced as an
+	// unrelated PR's CI failure rather than as this test's.
+	type job struct{ pin, repo, version string }
+	var jobs []job
 	for _, pin := range pins {
 		parsed := spec.ParseRemoteRef(pin)
 		if parsed.RepoPath == "" || parsed.Version == "" {
@@ -161,13 +171,39 @@ func TestCandyCutoverSweep_AllRemotePinsResolve(t *testing.T) {
 			continue
 		}
 		unique[key] = true
-		path, err := loader.EnsureRepoDownloaded(ctx, parsed.RepoPath, parsed.Version)
-		if err != nil {
-			failures = append(failures, fmt.Sprintf("%s: %v", pin, err))
-			continue
-		}
-		t.Logf("resolved %s -> %s", pin, path)
+		jobs = append(jobs, job{pin: pin, repo: parsed.RepoPath, version: parsed.Version})
 	}
+
+	// Bounded: the point is to overlap network latency, not to open 226 sockets at a
+	// remote we do not own.
+	const workers = 12
+	var (
+		mu sync.Mutex
+		wg sync.WaitGroup
+	)
+	ch := make(chan job)
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := range ch {
+				path, err := loader.EnsureRepoDownloaded(ctx, j.repo, j.version)
+				mu.Lock()
+				if err != nil {
+					failures = append(failures, fmt.Sprintf("%s: %v", j.pin, err))
+				} else {
+					t.Logf("resolved %s -> %s", j.pin, path)
+				}
+				mu.Unlock()
+			}
+		}()
+	}
+	for _, j := range jobs {
+		ch <- j
+	}
+	close(ch)
+	wg.Wait()
+
 	if len(failures) > 0 {
 		t.Fatalf("%d remote pins failed to resolve at their pinned tag:\n  %s",
 			len(failures), strings.Join(failures, "\n  "))
