@@ -80,7 +80,7 @@ func (h *hostVerbResolver) runPluginVerb(ctx context.Context, c *spec.Op) spec.C
 		// plugin verb that never registered must go red, not fake-green (mirrors
 		// the unresolvable-${HOST:...} rule).
 		res.Status = spec.StatusFail
-		res.Message = fmt.Sprintf("no provider registered for plugin verb %q", word)
+		res.Message = explainUnresolvedPluginWord(ClassVerb, word)
 		return res
 	}
 	// Validate the authored plugin_input against the plugin's SERVED CUE schema
