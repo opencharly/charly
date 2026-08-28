@@ -389,6 +389,62 @@ func bakedPluginFileName(name string) string {
 	return safePluginBinName(filepath.Base(name))
 }
 
+// packagedInstallExe is the executable path `packagedInstall` inspects. A var (not a direct
+// os.Executable call) so tests can simulate a packaged vs dev/worktree install without
+// relocating the test binary.
+var packagedInstallExe = func() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	return exe
+}()
+
+// packagedInstallDirs are the FHS bin dirs that own bakedPluginDir. The packaged install (the
+// charly candy's distro package) places the binary at /usr/bin/charly and bakes plugins to
+// /usr/lib/charly/plugins; a binary anywhere else is a dev/worktree build, and the FHS plugin
+// dir belongs to a DIFFERENT charly install whose plugins were built against a different API
+// version (issue #328).
+var packagedInstallDirs = []string{"/usr/bin", "/usr/local/bin"}
+
+// packagedInstall reports whether the running charly binary is itself installed in the FHS
+// location that owns bakedPluginDir. Only a packaged install (or a deployed container, where
+// the charly candy installs the binary to /usr/bin/charly) may load the FHS plugin dir; a
+// dev/worktree binary must not silently reach into the installed package's plugins.
+func packagedInstall() bool {
+	dir := filepath.Dir(packagedInstallExe)
+	for _, d := range packagedInstallDirs {
+		if dir == d {
+			return true
+		}
+	}
+	return false
+}
+
+// devPluginDirWarned gates the one-time warning in warnSkippedFHSPlugins so a dev binary does
+// not spam the warning on every invocation.
+var devPluginDirWarned sync.Once
+
+// warnSkippedFHSPlugins emits a one-time loud warning when the running binary is a dev/worktree
+// build (not installed at the FHS location) but the installed package's plugin dir exists with
+// baked plugins. The dev binary deliberately does NOT load them — they were built against a
+// different charly version (issue #328) — and the warning makes that skip visible instead of
+// silent.
+func warnSkippedFHSPlugins() {
+	devPluginDirWarned.Do(func() {
+		entries, err := os.ReadDir(bakedPluginDir)
+		if err != nil {
+			return // no installed package plugins — nothing to warn about
+		}
+		for _, e := range entries {
+			if !e.IsDir() && strings.HasSuffix(e.Name(), ".providers") {
+				fmt.Fprintf(os.Stderr, "WARNING: charly is a dev/worktree build (not installed at %s); NOT loading the installed package's plugins from %s (they may be built against a different charly version). Set CHARLY_PLUGIN_DIR to load plugins from a custom location.\n", strings.Join(packagedInstallDirs, " or "), bakedPluginDir)
+				return
+			}
+		}
+	})
+}
+
 // bakedPluginDirs returns the SEARCH PATH baked plugin binaries (+ their .providers word
 // manifests) live on: $CHARLY_PLUGIN_DIR first when set, then the FHS bakedPluginDir.
 // The env var reorders precedence; it does not remove the FHS path from the search, because a
@@ -400,12 +456,20 @@ func bakedPluginFileName(name string) string {
 // (resolveCommandPluginBinary returns on the first baked hit), so a project's own declaration
 // of that word is otherwise unreachable and untestable. Without this, the only way to observe
 // the project path was to mask /usr/lib/charly/plugins with a mount namespace.
+//
+// A dev/worktree binary (not installed at the FHS location) ALSO drops the FHS path — with a
+// one-time warning when the installed package's plugins exist — so it never silently loads
+// plugins built against a different charly version (issue #328).
 func bakedPluginDirs() []string {
 	dirs := []string{}
 	if d := os.Getenv("CHARLY_PLUGIN_DIR"); d != "" {
 		dirs = append(dirs, d)
 	}
 	if os.Getenv("CHARLY_PLUGIN_ONLY") == "1" {
+		return dirs
+	}
+	if !packagedInstall() {
+		warnSkippedFHSPlugins()
 		return dirs
 	}
 	return append(dirs, bakedPluginDir)
