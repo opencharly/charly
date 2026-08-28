@@ -480,6 +480,7 @@ arch:
                         # deterministic keyserver-free mechanism every other format uses.
                         # A bare fingerprint (hex) falls back to pacman-key --recv-keys.
                         install: |
+                            pacman-key --init && \
                             {{- range .Keys}}
                             {{- if hasPrefix (printf "%v" .) "http"}}
                             curl -fsSL {{quote .}} -o /tmp/charly-key.asc && pacman-key --add /tmp/charly-key.asc && pacman-key --lsign-key $(gpg --homedir /etc/pacman.d/gnupg --batch --show-keys --with-colons /tmp/charly-key.asc 2>/dev/null | awk -F: '$1=="fpr"{print $10; exit}') && rm -f /tmp/charly-key.asc && \

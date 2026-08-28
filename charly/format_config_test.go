@@ -369,6 +369,7 @@ func TestPacHostCellHandlesRepos(t *testing.T) {
 	}
 	for _, want := range []string{
 		"/etc/pacman.conf",
+		"pacman-key --init",
 		"pacman-key --recv-keys {{.key}}",
 		"curl -fsSL {{quote .key}} -o /tmp/{{.name}}.gpg && pacman-key --add",
 		"Server = {{.server}}",
