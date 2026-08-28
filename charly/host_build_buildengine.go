@@ -104,4 +104,5 @@ var _ = func() bool {
 	registerHostBuilder("buildengine-context-ignore-baseline", typedHostBuilder("buildengine-context-ignore-baseline", hostBuildContextIgnoreBaseline))
 	return true
 }()
+
 // B12 regression gate: see host_build_buildengine_test.go

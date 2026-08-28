@@ -57,7 +57,7 @@ discover:
 	// The work references the plugin's verb, so loadProjectPlugins MUST try to
 	// build+connect it and fail.
 	_, err := hostBuildConnectPlugins(context.Background(), spec.ResolvedProjectRequest{
-		Dir:           dir,
+		Dir:            dir,
 		ExtraCandyRefs: []string{"testverb"},
 	}, buildEngineContext{})
 	if err == nil {
