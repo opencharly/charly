@@ -79,8 +79,16 @@ func TestEmbeddedVocab_OpenRCIsAFirstClassInit(t *testing.T) {
 	}
 
 	// The shipped template must parse and render. Context mirrors what the init renderer
-	// supplies for a service; only builtin template actions are used by this template.
-	tmpl, err := template.New("openrc-service").Parse(def.ServiceSchema.ServiceTemplate)
+	// supplies for a service.
+	//
+	// openrcLog is STUBBED, not reimplemented: this test asserts the template parses and
+	// renders, and the real mapping (journal -> omitted, none -> /dev/null, file:<p> -> <p>)
+	// is owned by candy/plugin-init's serviceRenderFuncs and pinned by its TestOpenrcLogging.
+	// Duplicating the semantics here would create a second source of truth that could drift
+	// from the one the renderer actually uses.
+	tmpl, err := template.New("openrc-service").
+		Funcs(template.FuncMap{"openrcLog": func(string) string { return "" }}).
+		Parse(def.ServiceSchema.ServiceTemplate)
 	if err != nil {
 		t.Fatalf("openrc service_template does not parse: %v", err)
 	}
@@ -90,6 +98,8 @@ func TestEmbeddedVocab_OpenRCIsAFirstClassInit(t *testing.T) {
 		"Restart": "always", "User": "demo", "WorkingDirectory": "/srv/demo",
 		"StopTimeout": "30", "After": []string{"net"}, "Before": []string{},
 		"EnvList": []map[string]string{{"Key": "MODE", "Value": "live"}},
+		// The template reads .Stdout; an absent key renders as an invalid reflect.Value.
+		"Stdout": "",
 	}); err != nil {
 		t.Fatalf("openrc service_template failed to render: %v", err)
 	}
