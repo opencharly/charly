@@ -8229,6 +8229,24 @@ skills-skill:
             cost, each one contributes its pod-provided MCP servers, which then log
             connection failures for boxes that were never meant to be running there.
 
+            **Updating the marketplace is NOT updating the plugin.** The corpus is cached
+            per marketplace COMMIT
+            (`~/.claude/plugins/cache/<marketplace>/<plugin>/<sha>/`).
+            `claude plugin marketplace update <marketplace>` refreshes the marketplace
+            clone only — an installed plugin keeps resolving its OLD commit, so a fix that
+            has already merged and regenerated stays invisible: a removed skill still
+            loads, a removed MCP server still fails on every session. Move the plugin
+            itself, at the scope it is installed at:
+
+            ```bash
+            claude plugin update <plugin>@<marketplace> --scope project
+            ```
+
+            It names the commits it moved between (`updated from <old> to <new>`), and
+            that line is the confirmation to look for — a refreshed marketplace clone is
+            not evidence that any session sees the change. `--scope` defaults to `user`
+            and fails outright on a project-scoped plugin.
+
             ## When to Update Skills
 
             | Trigger | Action |
