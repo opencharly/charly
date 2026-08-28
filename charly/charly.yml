@@ -136,21 +136,6 @@ ovmf_paths:
         nonsecure:
             - {code: /usr/share/OVMF/OVMF_CODE_4M.fd, vars: /usr/share/OVMF/OVMF_VARS_4M.fd}
             - {code: /usr/share/OVMF/OVMF_CODE.fd, vars: /usr/share/OVMF/OVMF_VARS.fd}
-# ovmf_distro_aliases — host distro ID -> OVMF firmware family (fedora|arch|debian),
-# formerly the inline switches in ovmfCandidatesForDistro + ovmfNotFoundError
-# (ovmf_paths.go). An unlisted distro has no entry; ovmfCandidatesForDistro then tries the
-# union of all families and ovmfNotFoundError emits the generic install hint (logic).
-ovmf_distro_aliases:
-    fedora: fedora
-    centos: fedora
-    rhel: fedora
-    rocky: fedora
-    alma: fedora
-    arch: arch
-    manjaro: arch
-    endeavouros: arch
-    debian: debian
-    ubuntu: debian
 nvidia-gpu:
     resource:
         gpu:
