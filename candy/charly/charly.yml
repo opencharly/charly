@@ -162,7 +162,6 @@ charly:
                         - qemu-img
                         - virtiofsd
                         - libvirt
-                        - tailscale
                         - libarchive
                         - iproute2
                         - tmux
@@ -176,6 +175,7 @@ charly:
                         - gnupg
                         - pinentry
                     optdepends:
+                        tailscale: deploy-time tunnels (the tailscale-up candy installs it when a deploy opts in)
                         docker: alternative container engine — only needed for engine.run=docker (podman is the default)
                         cloudflared-bin: Cloudflare tunnels (AUR)
                         gvisor-tap-vsock: podman-machine networking — provides /usr/lib/podman/gvproxy (AUR)
@@ -203,7 +203,6 @@ charly:
                         - virtiofsd
                         - libvirt
                         - libvirt-client
-                        - tailscale
                         - bsdtar
                         - iproute
                         - xorriso
@@ -214,6 +213,7 @@ charly:
                         - gnupg2
                         - pinentry
                     suggests:
+                        - tailscale
                         - docker
                         - cloudflared
                         - gvisor-tap-vsock
@@ -265,7 +265,6 @@ charly:
                         - virtiofsd
                         - libvirt
                         - libvirt-client
-                        - tailscale
                         - libarchive-tools
                         - iproute2
                         - xorriso
@@ -274,6 +273,8 @@ charly:
                         - swtpm
                         - gnupg
                         - pinentry
+                    suggests:
+                        - tailscale
                 ipk:
                     # OpenWrt's repos lack the mandatory charly deps (podman/qemu/
                     # libvirt/…), so the .ipk carries an empty depends list — the
