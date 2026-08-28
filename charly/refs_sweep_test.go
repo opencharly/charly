@@ -101,9 +101,7 @@ func collectRefs(repoRoot string) (movedBare []string, pins []string) {
 				}
 			}
 		}
-		for _, p := range remoteRefRe.FindAllString(string(b), -1) {
-			pins = append(pins, p)
-		}
+		pins = append(pins, remoteRefRe.FindAllString(string(b), -1)...)
 	}
 	slices.Sort(movedBare)
 	movedBare = slices.Compact(movedBare)
@@ -224,10 +222,15 @@ func TestCandyCutoverSweep_NoCharlyCandyRefs(t *testing.T) {
 // minimal tree (a smoke of collectRefs's error tolerance).
 func TestCandyCutoverSweep_WalkerToleratesBoxLess(t *testing.T) {
 	repoRoot := t.TempDir()
-	os.WriteFile(filepath.Join(repoRoot, "charly.yml"), []byte("discover:\n  - path: candy\n    recursive: true\n"), 0o644)
-	os.MkdirAll(filepath.Join(repoRoot, "candy", "keepalive"), 0o755)
-	os.WriteFile(filepath.Join(repoRoot, "candy", "keepalive", "charly.yml"),
-		[]byte("keepalive:\n  candy:\n    - base: quay.io/fedora/fedora:43\n    - '@github.com/opencharly/pod-keepalive:v2026.237.100'\n"), 0o644)
+	// The fixture IS the precondition: a write that silently failed would make the
+	// walker terminate on an empty tree and pass for the wrong reason.
+	mustWrite(t, filepath.Join(repoRoot, "charly.yml"),
+		"discover:\n  - path: candy\n    recursive: true\n")
+	if err := os.MkdirAll(filepath.Join(repoRoot, "candy", "keepalive"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, filepath.Join(repoRoot, "candy", "keepalive", "charly.yml"),
+		"keepalive:\n  candy:\n    - base: quay.io/fedora/fedora:43\n    - '@github.com/opencharly/pod-keepalive:v2026.237.100'\n")
 	movedBare, pins := collectRefs(repoRoot)
 	if len(movedBare) != 0 {
 		t.Fatalf("bare moved ref: %v", movedBare)
