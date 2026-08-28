@@ -1316,6 +1316,10 @@ openrc:
                 export {{.Key}}="{{.Value}}"
                 {{- end}}
                 {{- end}}
+                {{- if openrcLog .Stdout}}
+                output_log="{{openrcLog .Stdout}}"
+                error_log="{{openrcLog .Stdout}}"
+                {{- end}}
 
                 depend() {
                 {{- range .After}}
@@ -1403,8 +1407,12 @@ systemd:
                 {{- end}}
                 {{- if .EnvList}}
                 {{- range .EnvList}}
-                Environment={{.Key}}={{.Value}}
+                Environment="{{.Key}}={{.Value}}"
                 {{- end}}
+                {{- end}}
+                {{- if .Stdout}}
+                StandardOutput={{systemdStdout .Stdout}}
+                StandardError={{systemdStdout .Stdout}}
                 {{- end}}
 
                 [Install]

@@ -39,7 +39,7 @@ require (
 	github.com/opencharly/plugin-group/candy/plugin-group v0.2026237.1423
 	github.com/opencharly/plugin-harness-kind/candy/plugin-harness-kind v0.2026237.1423
 	github.com/opencharly/plugin-http/candy/plugin-http v0.2026237.1423
-	github.com/opencharly/plugin-init/candy/plugin-init v0.2026237.1424
+	github.com/opencharly/plugin-init/candy/plugin-init v0.2026240.1449
 	github.com/opencharly/plugin-installstep/candy/plugin-installstep v0.2026237.1424
 	github.com/opencharly/plugin-interface/candy/plugin-interface v0.2026237.1424
 	github.com/opencharly/plugin-k8sgen/candy/plugin-k8sgen v0.2026237.1424
@@ -102,7 +102,7 @@ require (
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/ollama/ollama v0.32.14 // indirect
-	github.com/opencharly/sdk v0.2026239.1915 // indirect
+	github.com/opencharly/sdk v0.2026240.1439 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
