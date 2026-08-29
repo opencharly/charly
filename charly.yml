@@ -3314,7 +3314,7 @@ marketplace-app:
             - fedora:43
             - fedora
         candy:
-            - '@github.com/opencharly/plugin-marketplace/candy/plugin-marketplace:v2026.241.0124'
+            - '@github.com/opencharly/plugin-marketplace/candy/plugin-marketplace:v2026.241.0710'
 check-marketplace:
     pod:
         image: marketplace-app
