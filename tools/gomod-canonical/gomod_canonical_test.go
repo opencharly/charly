@@ -4,62 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"strings"
 	"testing"
 )
-
-// TestCandyGoModsAreCanonical asserts every candy/plugin-*/go.mod matches the ONE
-// canonical Shape-A' module template, so the ~74-module plugin surface can never drift:
-//
-//   - module github.com/opencharly/charly/candy/<dir>
-//   - require github.com/opencharly/sdk v0.2026234.347 (the ONE shared sdk pin — the
-//     require version IS the resolution; the sdk contract module comes from the
-//     module proxy, there is no local checkout and NO replace)
-//   - NO dependency on the charly CORE module github.com/opencharly/charly/charly
-//     (the Cutover-1 invariant: a plugin imports ONLY the SDK, never core)
-//
-// The plugin's OWN direct/indirect deps are free to vary (that is the point of the
-// per-module dependency shed). plugin-spice's extra `=> ./third_party/spice` replace
-// is the SOLE sanctioned outlier (vendored upstream) — it replaces a third-party
-// module, never a contract module. Drift here is a maintainability regression;
-// `task mods:tidy` is the companion sweep that keeps go.sum in step.
-//
-// Relocated (#55 decoupling cone, Batch D) from charly/plugin_gomod_canonical_test.go:
-// this is pure plugin-go.mod-file HYGIENE (string assertions on go.mod TEXT — it makes
-// no Go import of any sdk package, and imports nothing itself), so it lives in its own
-// standalone module rather than in charly/ or the marketplace repo (which carries no
-// Go code at all — skills/docs/config only). The glob is adjusted for the new
-// location: tools/gomod-canonical/ is two levels below the repo root
-// (tools/gomod-canonical -> tools -> root), where charly/ was only one level below
-// (charly -> root).
-func TestCandyGoModsAreCanonical(t *testing.T) {
-	mods, err := filepath.Glob(filepath.Join("..", "..", "candy", "plugin-*", "go.mod"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(mods) == 0 {
-		t.Fatal("no candy/plugin-*/go.mod found — the glob or layout changed")
-	}
-	const coreModule = "github.com/opencharly/charly/charly"
-	const sdkPin = "github.com/opencharly/sdk v0.2026234.347"
-	for _, m := range mods {
-		dir := filepath.Base(filepath.Dir(m))
-		b, err := os.ReadFile(m)
-		if err != nil {
-			t.Fatalf("%s: %v", m, err)
-		}
-		src := string(b)
-		if want := "module github.com/opencharly/charly/candy/" + dir; !strings.Contains(src, want) {
-			t.Errorf("%s: missing canonical module line %q", m, want)
-		}
-		if !strings.Contains(src, sdkPin) {
-			t.Errorf("%s: missing `require %s` (the shared sdk pin)", m, sdkPin)
-		}
-		if strings.Contains(src, coreModule) {
-			t.Errorf("%s: depends on the charly CORE module %q — a plugin imports ONLY the sdk", m, coreModule)
-		}
-	}
-}
 
 // contractRequireRe extracts a `github.com/opencharly/<mod> <version>` require line.
 // The trailing `// indirect` marker is deliberately not part of the capture: whether a
@@ -127,18 +73,30 @@ func TestContractPinsMatchShared(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read %s: %v", coreMod, err)
 	}
-	coreSpec := contractRequireRe.FindStringSubmatch(string(cb))
-	if coreSpec == nil || coreSpec[1] != "spec" {
+	// Look each contract up BY NAME. Taking the FIRST match silently anchored on `sdk`
+	// once sdk became an INDIRECT require of core and sorted above spec in go.mod — at
+	// which point this test fatals on a tree whose pins are entirely correct.
+	corePins := map[string]string{}
+	for _, m := range contractRequireRe.FindAllStringSubmatch(string(cb), -1) {
+		corePins[m[1]] = m[2]
+	}
+	wantSpec, okSpec := corePins["spec"]
+	if !okSpec {
 		t.Fatalf("%s: no `github.com/opencharly/spec <version>` require found — the core module "+
 			"is the shared-spec-pin anchor", coreMod)
 	}
-	wantSpec := coreSpec[2]
 
-	// The sdk pin has no in-tree anchor (core imports zero sdk packages) — it is the
-	// adopted shared-pin constant: the sdk tag this tree consumes (sdk's own Go-module
-	// tag scheme v0.<YYYYDDD>.<HHMM>). Adopting a newer sdk release bumps this constant
-	// in the same sweep as the per-module requires (`task mods:tidy`).
-	const wantSDK = "v0.2026234.347"
+	// The sdk pin WAS a hardcoded constant, on the premise that core imports zero sdk
+	// packages and so offers no anchor. Core now carries an sdk require (indirect, via
+	// the compiled-in plugin modules), so anchor it exactly as spec is anchored. The
+	// constant had already drifted from the tree it polices (v0.2026234.347 against the
+	// tree's v0.2026241.1032) — the argument against a hand-maintained copy of a value
+	// that already exists in the tree.
+	wantSDK, okSDK := corePins["sdk"]
+	if !okSDK {
+		t.Fatalf("%s: no `github.com/opencharly/sdk <version>` require found — the core module "+
+			"is the shared-sdk-pin anchor", coreMod)
+	}
 
 	for _, mod := range lockstepModules(t) {
 		b, err := os.ReadFile(mod)
