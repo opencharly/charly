@@ -20,9 +20,11 @@ var contractReplaceRe = regexp.MustCompile(`(?m)^replace github\.com/opencharly/
 
 // lockstepModules returns every in-repo module that requires either contract module —
 // the exact set `task mods:tidy` sweeps. The glob is deliberately NOT `candy/plugin-*`:
-// that shape misses `candy/generate-packages` (a candy module that is not a plugin) and
-// the `tools/golden-*` fixture modules, and all three were found broken by exactly that
-// blind spot.
+// that shape misses `tools/generate-packages` (the command-plugin re-export shim — a candy
+// module that is not a plugin, and no longer under candy/ at all) and the `tools/golden-*`
+// fixture modules, and all three were found broken by exactly that blind spot. The shim was
+// MOVED into a directory this glob already covers precisely so the move could not
+// re-open it.
 func lockstepModules(t *testing.T) []string {
 	t.Helper()
 	var out []string

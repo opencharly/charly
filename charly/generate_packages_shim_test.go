@@ -1,6 +1,6 @@
 package main
 
-// generate_packages_shim_test.go — candy/generate-packages is the superproject's THIN
+// generate_packages_shim_test.go — tools/generate-packages is the superproject's THIN
 // RE-EXPORT SHIM for the out-of-tree `charly generate-packages` command plugin
 // (opencharly/plugin-generate-packages). It is what makes the verb resolvable from a
 // charly CHECKOUT: resolveCommandPluginBinary consults the baked plugin map FIRST and
@@ -27,9 +27,9 @@ import (
 )
 
 const (
-	shimCandyYML  = "../candy/generate-packages/charly.yml"
-	shimServeMain = "../candy/generate-packages/cmd/serve/main.go"
-	shimGoMod     = "../candy/generate-packages/go.mod"
+	shimCandyYML  = "../tools/generate-packages/charly.yml"
+	shimServeMain = "../tools/generate-packages/cmd/serve/main.go"
+	shimGoMod     = "../tools/generate-packages/go.mod"
 
 	// shimWord is the CLI verb. The distro-repo workflows drop a prebuilt plugin whose
 	// committed .providers manifest carries exactly this string, so the shim's declared
