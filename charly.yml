@@ -22,11 +22,11 @@ import:
     # self-contained (import: []) and cachyos imports the `arch` namespace; none
     # imports main back (they reach main's shared candies via @github refs), so the
     # former main↔cachyos / main↔fedora mutual cycles are dissolved.
-    - arch: '@github.com/opencharly/distro-arch:v2026.229.1615'
-    - cachyos: '@github.com/opencharly/distro-cachyos:v2026.229.1634'
-    - debian: '@github.com/opencharly/distro-debian:v2026.226.1807'
-    - fedora: '@github.com/opencharly/distro-fedora:v2026.229.1620'
-    - ubuntu: '@github.com/opencharly/distro-ubuntu:v2026.226.1833'
+    - arch: '@github.com/opencharly/distro-arch:v2026.241.0311'
+    - cachyos: '@github.com/opencharly/distro-cachyos:v2026.241.0323'
+    - debian: '@github.com/opencharly/distro-debian:v2026.241.0514'
+    - fedora: '@github.com/opencharly/distro-fedora:v2026.241.0424'
+    - ubuntu: '@github.com/opencharly/distro-ubuntu:v2026.241.0514'
 # Main owns NO boxes after the 2026-06 box inversion — only the shared candy
 # library + the inline check/vm/local/kubernetes orchestration. Discover candies only.
 discover:
@@ -831,7 +831,7 @@ check-k8s-deploy-app:
             - fedora:43
             - fedora
         candy:
-            - check-keepalive
+            - '@github.com/opencharly/pod-check-keepalive:v2026.239.1625'
             - '@github.com/opencharly/pod-os-layer:v2026.237.457'
 # =============================================================================
 # check-k8s-deploy — disposable proof of the EXTERNALIZED deploy:kubernetes SUBSTRATE
@@ -1308,7 +1308,7 @@ check-group-app:
             applies INSIDE the disposable eval VM over kit.NestedExecutor and the marker lands
             in the guest, never on the operator's host.
         candy:
-            - check-group-layer
+            - '@github.com/opencharly/layer-check-group-layer:v2026.239.1626'
 check-group:
     group:
         disposable: true
@@ -1365,7 +1365,7 @@ check-structkind-app:
             check-structkind-layer (drops /etc/check-structkind-marker in the guest) so the
             structural-kind member has a deterministic, collision-free deploy effect.
         candy:
-            - check-structkind-layer
+            - '@github.com/opencharly/layer-check-structkind-layer:v2026.239.1620'
 check-structkind:
     examplestructkind:
         disposable: true
@@ -1421,7 +1421,7 @@ check-substrate-app:
             fold arm (C2-substrate). Composes check-substrate-layer (drops /etc/check-substrate-marker
             in the guest) so the member has a deterministic, collision-free deploy effect.
         candy:
-            - check-substrate-layer
+            - '@github.com/opencharly/layer-check-substrate-layer:v2026.240.0118'
 check-substrate:
     vm:
         from: eval-vm
@@ -2664,7 +2664,7 @@ check-builder-local-app:
             builder fixture candy check-builder-npm so the bed exercises the builder DEPLOY leg
             (runVenueBuilderStep → runVenueHomeArtifactBuilder) inside the eval VM guest venue.
         candy:
-            - check-builder-npm
+            - '@github.com/opencharly/layer-check-builder-npm:v2026.239.1633'
 # =================================================================
 # check-udev-local — R10 witness for the externalized `charly udev` COMMAND
 # (candy/plugin-udev, command:udev) — the first externalizable-command precedent.
@@ -3541,7 +3541,7 @@ agentteams-manager:
             - -c
             - /etc/supervisord.conf
         candy:
-            - '@github.com/opencharly/pod-agentteams-manager:v2026.237.804'
+            - '@github.com/opencharly/pod-agentteams-manager:v2026.239.1603'
 agentteams-worker:
     candy:
         version: 2026.224.0600
@@ -3569,7 +3569,7 @@ agentteams-worker:
             - -c
             - /etc/supervisord.conf
         candy:
-            - '@github.com/opencharly/pod-agentteams-worker:v2026.237.804'
+            - '@github.com/opencharly/pod-agentteams-worker:v2026.239.1600'
 check-agentteams-pod:
     pod:
         image: agentteams
